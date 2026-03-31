@@ -1,0 +1,11 @@
+node_modules
+.pnpm-store
+dist
+build
+.next
+out
+.env
+.env.local
+.env.*.local
+*.log
+.DS_Store

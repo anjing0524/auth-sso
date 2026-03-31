@@ -1,0 +1,28 @@
+{
+  "name": "@auth-sso/config",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Auth-SSO 共享配置：TypeScript、ESLint、环境变量",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./typescript": "./typescript.json",
+    "./eslint": "./eslint.json"
+  },
+  "files": [
+    "src",
+    "typescript.json",
+    "eslint.json"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.8.0"
+  }
+}

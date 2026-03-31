@@ -1,0 +1,12 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "cd ../.. && pnpm install && pnpm --filter @auth-sso/idp build",
+  "devCommand": "pnpm dev",
+  "installCommand": "cd ../.. && pnpm install",
+  "framework": "nextjs",
+  "outputDirectory": ".next",
+  "regions": ["hkg1"],
+  "env": {
+    "BETTER_AUTH_URL": "https://idp.auth-sso.vercel.app"
+  }
+}

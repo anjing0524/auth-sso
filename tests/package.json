@@ -1,0 +1,18 @@
+{
+  "name": "@auth-sso/tests",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Auth-SSO 自动化测试套件",
+  "scripts": {
+    "test": "node runner.js",
+    "test:smoke": "node smoke.test.js",
+    "test:auth": "node auth.test.js",
+    "test:permission": "node permission.test.js",
+    "test:session": "node session.test.js",
+    "test:security": "node security.test.js",
+    "test:sso": "node sso.test.js"
+  },
+  "dependencies": {
+    "jose": "^6"
+  }
+}

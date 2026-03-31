@@ -1,0 +1,89 @@
+# ============================================
+# Auth-SSO 开发环境 Docker Compose 配置
+# ============================================
+# 使用方法：
+#   启动服务: docker-compose up -d
+#   停止服务: docker-compose down
+#   查看日志: docker-compose logs -f
+#   重置数据: docker-compose down -v
+# ============================================
+
+services:
+  # ============================================
+  # PostgreSQL 数据库
+  # ============================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: auth-sso-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: auth_sso_idp
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - auth-sso-network
+
+  # ============================================
+  # Redis 缓存/Session 存储
+  # ============================================
+  redis:
+    image: redis:7-alpine
+    container_name: auth-sso-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - auth-sso-network
+
+  # ============================================
+  # Redis Commander (可选 - Redis 可视化管理工具)
+  # 访问地址: http://localhost:6380
+  # ============================================
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: auth-sso-redis-commander
+    restart: unless-stopped
+    environment:
+      REDIS_HOSTS: local:redis:6379
+    ports:
+      - "6380:8081"
+    depends_on:
+      - redis
+    profiles:
+      - tools
+    networks:
+      - auth-sso-network
+
+# ============================================
+# 网络配置
+# ============================================
+networks:
+  auth-sso-network:
+    driver: bridge
+
+# ============================================
+# 数据卷配置
+# ============================================
+volumes:
+  postgres_data:
+    name: auth-sso-postgres-data
+  redis_data:
+    name: auth-sso-redis-data
