@@ -30,8 +30,11 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
-.env*
+# env files - 永远不要提交敏感配置
+.env
+.env.*
+!.env.example
+!.env.*.example
 
 # vercel
 .vercel

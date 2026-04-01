@@ -7,13 +7,22 @@
     "dev": "pnpm -r --parallel run dev",
     "dev:portal": "pnpm --filter @auth-sso/portal dev",
     "dev:idp": "pnpm --filter @auth-sso/idp dev",
+    "dev:demo": "pnpm --filter @auth-sso/demo-app dev",
     "build": "pnpm -r build",
+    "build:idp": "pnpm --filter @auth-sso/idp build",
+    "build:portal": "pnpm --filter @auth-sso/portal build",
+    "build:demo": "pnpm --filter @auth-sso/demo-app build",
     "lint": "pnpm -r lint",
     "typecheck": "pnpm -r typecheck",
     "db:generate": "pnpm --filter @auth-sso/idp db:generate",
     "db:migrate": "pnpm --filter @auth-sso/idp db:migrate",
     "db:push": "pnpm --filter @auth-sso/idp db:push",
-    "clean": "pnpm -r clean"
+    "db:studio": "pnpm --filter @auth-sso/idp db:studio",
+    "db:seed": "pnpm --filter @auth-sso/idp db:seed",
+    "setup:env": "echo '请手动复制 .env.example 文件到 .env.local 并配置'",
+    "start:services": "cd tests && ./start-services.sh",
+    "clean": "pnpm -r clean",
+    "clean:all": "pnpm -r clean && rm -rf node_modules .pnpm-store"
   },
   "engines": {
     "node": ">=20.0.0"

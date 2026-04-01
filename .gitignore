@@ -4,9 +4,20 @@ dist
 build
 .next
 out
-.env
-.env.local
-.env.*.local
 *.log
 .DS_Store
 .vercel
+
+# Environment variables - 永远不要提交
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Local env files
+*.local
+.env*.local
+
+# Vercel
+.vercel
+.turbo
