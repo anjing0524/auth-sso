@@ -111,20 +111,30 @@ export const auth = betterAuth({
       trustedClients: [
         {
           clientId: 'portal',
-          clientSecret: 'portal-secret',
+          clientSecret: process.env.PORTAL_CLIENT_SECRET || 'portal-secret',
           name: 'Portal',
           type: 'web',
-          redirectUrls: ['http://localhost:4000/api/auth/callback'],
+          redirectUrls: [
+            // 本地开发环境
+            'http://localhost:4000/api/auth/callback',
+            // 生产环境（通过环境变量配置）
+            process.env.PORTAL_REDIRECT_URL || 'https://portal.longlongago.sit/api/auth/callback',
+          ].filter(Boolean),
           metadata: {},
           disabled: false,
           skipConsent: true,
         },
         {
           clientId: 'demo-app',
-          clientSecret: 'demo-app-secret',
+          clientSecret: process.env.DEMO_APP_CLIENT_SECRET || 'demo-app-secret',
           name: 'Demo App',
           type: 'web',
-          redirectUrls: ['http://localhost:4002/auth/callback'],
+          redirectUrls: [
+            // 本地开发环境
+            'http://localhost:4002/auth/callback',
+            // 生产环境（通过环境变量配置）
+            process.env.DEMO_APP_REDIRECT_URL || 'https://demo.longlongago.sit/auth/callback',
+          ].filter(Boolean),
           metadata: {},
           disabled: false,
           skipConsent: true,
