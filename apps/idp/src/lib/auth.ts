@@ -82,6 +82,8 @@ export const auth = betterAuth({
             'http://localhost:4000/api/auth/callback',
           ].filter((url): url is string => !!url),
           skipConsent: true,
+          disabled: false,
+          metadata: {},
         },
         {
           clientId: 'demo-app',
@@ -93,6 +95,8 @@ export const auth = betterAuth({
             'http://localhost:4002/auth/callback',
           ].filter((url): url is string => !!url),
           skipConsent: true,
+          disabled: false,
+          metadata: {},
         },
       ],
     }),

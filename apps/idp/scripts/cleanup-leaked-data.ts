@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import { db } from '../src/db';
-import * as schema from '../db/schema';
+import * as schema from '../src/db/schema';
 import { sql } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 
