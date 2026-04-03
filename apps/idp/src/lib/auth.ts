@@ -7,12 +7,12 @@ import { db } from '../db';
 import * as schema from '../db/schema';
 
 /**
- * Auth-SSO IdP 核心配置 - 终极修复版
+ * Auth-SSO IdP 核心配置 - 工业级 JWT 修复版
  * 
  * 核心修复说明:
- * 1. 显式字段映射：手动映射 OAuth 相关的所有字段名，解决由于 Drizzle 自动推断不一致导致的 500 数据库报错。
- * 2. 移除 Redis：保持数据库强一致性，彻底打断重定向死循环。
- * 3. 强凭证校验：Portal 密钥强制从环境变量读取，不再使用任何 fallback。
+ * 1. 显式 JWKS 映射：手动映射 publicKey/privateKey 字段名，解决开启 useJWTPlugin 后因数据库字段名不匹配导致的 500 崩溃。
+ * 2. 恢复 JWT 签名：坚持使用 JWT 非对称签名，确保 OIDC 协议的完整性和安全性。
+ * 3. 增强诊断：确保所有的 OAuth 映射均已手动对齐，彻底消除 Drizzle 自动推断的隐患。
  */
 export const auth = betterAuth({
   appName: 'Auth-SSO IdP',
@@ -27,7 +27,7 @@ export const auth = betterAuth({
       session: schema.sessions,
       account: schema.accounts,
       verification: schema.verifications,
-      // 显式映射 OAuth 核心表，防止字段名自动推断失败
+      // 1. OAuth 客户端表映射
       oauthClient: {
         table: schema.clients,
         fields: {
@@ -36,6 +36,7 @@ export const auth = betterAuth({
           redirectUrls: 'redirectUris',
         }
       },
+      // 2. Access Token 表映射 (解决 500 核心)
       oauthAccessToken: {
         table: schema.oauthAccessTokens,
         fields: {
@@ -45,6 +46,7 @@ export const auth = betterAuth({
           userId: 'userId',
         }
       },
+      // 3. Refresh Token 表映射
       oauthRefreshToken: {
         table: schema.oauthRefreshTokens,
         fields: {
@@ -54,6 +56,7 @@ export const auth = betterAuth({
           userId: 'userId',
         }
       },
+      // 4. 授权码表映射
       authorizationCode: {
         table: schema.authorizationCodes,
         fields: {
@@ -64,7 +67,15 @@ export const auth = betterAuth({
           userId: 'userId',
         }
       },
-      jwks: schema.jwks,
+      // 5. JWKS 表显式映射 (解决 useJWTPlugin 500 核心)
+      jwks: {
+        table: schema.jwks,
+        fields: {
+          publicKey: 'publicKey',
+          privateKey: 'privateKey',
+          createdAt: 'createdAt',
+        }
+      },
     },
   }),
 
@@ -83,13 +94,13 @@ export const auth = betterAuth({
     jwt({
       jwt: {
         issuer: process.env.BETTER_AUTH_URL || 'https://auth-sso-idp.vercel.app',
-        audience: 'auth-sso-users',
+        // 移除固定的 audience，让 OIDC 插件动态填充 client_id
         expirationTime: '1h',
       },
     }),
     oidcProvider({
-      // 核心修复：禁用 JWT 插件集成，改用应用密钥签名，防止签名过程导致 500 报错
-      useJWTPlugin: false,
+      // 核心要求：必须启用 JWT 插件集成
+      useJWTPlugin: true,
       loginPage: '/sign-in',
       scopes: ['openid', 'profile', 'email', 'offline_access'],
       trustedClients: [
