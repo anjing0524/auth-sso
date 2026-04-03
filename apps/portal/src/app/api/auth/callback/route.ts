@@ -75,19 +75,28 @@ export async function GET(request: NextRequest) {
     }
 
     // 使用授权码换取 Token
+    const idpTokenUrl = new URL('/api/auth/oauth2/token', oauthConfig.idpUrl).toString();
+    console.log('[Callback] Exchanging code for token at:', idpTokenUrl);
+    
     const tokenResponse = await exchangeCodeForToken(code, stateData.verifier);
+    const statusCode = tokenResponse.status;
+    console.log('[Callback] Token response status:', statusCode);
 
     if (!tokenResponse.ok) {
-      const errorData = await tokenResponse.json();
-      console.error('[Callback] Token exchange failed:', errorData);
+      const errorText = await tokenResponse.text();
+      console.error('[Callback] Token exchange failed. Status:', statusCode, 'Body:', errorText);
       return NextResponse.redirect(
-        new URL('/login?error=token_exchange_failed', request.url)
+        new URL(`/login?error=token_exchange_failed&status=${statusCode}&details=${encodeURIComponent(errorText)}`, request.url)
       );
     }
 
-    const tokens = await tokenResponse.json();
+    const tokenText = await tokenResponse.text();
+    console.log('[Callback] Token response body (first 50 chars):', tokenText.substring(0, 50));
+    const tokens = JSON.parse(tokenText);
+    console.log('[Callback] Token exchange success');
 
     // 获取用户信息
+    console.log('[Callback] Fetching user info from:', new URL('/api/auth/oauth2/userinfo', oauthConfig.idpUrl).toString());
     const userinfoResponse = await fetch(
       new URL('/api/auth/oauth2/userinfo', oauthConfig.idpUrl).toString(),
       {
@@ -96,18 +105,29 @@ export async function GET(request: NextRequest) {
         },
       }
     );
+    console.log('[Callback] User info response status:', userinfoResponse.status);
 
     let userInfo: { email: string; name: string; picture?: string } | undefined;
     if (userinfoResponse.ok) {
-      const userinfo = await userinfoResponse.json();
-      userInfo = {
-        email: userinfo.email,
-        name: userinfo.name || userinfo.email,
-        picture: userinfo.picture,
-      };
+      const userinfoText = await userinfoResponse.text();
+      console.log('[Callback] User info response body:', userinfoText);
+      try {
+        const userinfo = JSON.parse(userinfoText);
+        userInfo = {
+          email: userinfo.email,
+          name: userinfo.name || userinfo.email,
+          picture: userinfo.picture,
+        };
+      } catch (e) {
+        console.error('[Callback] Failed to parse user info JSON:', e);
+      }
+    } else {
+      const errorText = await userinfoResponse.text();
+      console.warn('[Callback] User info fetch failed. Status:', userinfoResponse.status, 'Body:', errorText);
     }
 
     // 创建 Session
+    console.log('[Callback] Creating session for:', userInfo?.email);
     const session = await createSession({
       userId: userInfo?.email || 'unknown',
       accessToken: tokens.access_token,
@@ -115,6 +135,7 @@ export async function GET(request: NextRequest) {
       expiresIn: tokens.expires_in || 3600,
       userInfo,
     });
+    console.log('[Callback] Session created:', session.id);
 
     // 创建响应并设置 Session Cookie
     const redirectUrl = new URL(stateData.redirect || '/', request.url);
