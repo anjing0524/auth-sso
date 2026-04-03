@@ -1,29 +1,24 @@
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { jwt, oidcProvider } from 'better-auth/plugins';
-import { redisStorage } from '@better-auth/redis-storage';
 import bcrypt from 'bcryptjs';
 
 import { db } from '../db';
 import * as schema from '../db/schema';
-import { getRedis } from './redis';
 
 /**
- * Auth-SSO IdP 核心配置 - 生产正式版
+ * Auth-SSO IdP 核心配置 - 终极修复版
  * 
- * 变更记录:
- * 1. 恢复 Redis 二级存储：作为 Session 缓存提升性能，但移除自定义前缀冲突。
- * 2. 移除 cookiePrefix：确保 Better Auth 及其插件在处理重定向时的 Session 识别一致性。
- * 3. 规范 issuer 配置：确保与 baseURL 一致以符合 OIDC 标准。
- * 4. 增加了对已登录用户的 Session 预检测（在 sign-in/page.tsx 中）。
+ * 核心修复说明:
+ * 1. 显式字段映射：手动映射 OAuth 相关的所有字段名，解决由于 Drizzle 自动推断不一致导致的 500 数据库报错。
+ * 2. 移除 Redis：保持数据库强一致性，彻底打断重定向死循环。
+ * 3. 强凭证校验：Portal 密钥强制从环境变量读取，不再使用任何 fallback。
  */
 export const auth = betterAuth({
   appName: 'Auth-SSO IdP',
-  // 基础 URL 配置，生产环境必须通过 BETTER_AUTH_URL 覆盖
-  baseURL: process.env.BETTER_AUTH_URL || 'http://localhost:4001',
+  baseURL: process.env.BETTER_AUTH_URL || 'https://auth-sso-idp.vercel.app',
   secret: process.env.BETTER_AUTH_SECRET || 'your-better-auth-secret-min-32-chars-long',
 
-  // 核心数据库存储 - 保持数据强一致性
   database: drizzleAdapter(db, {
     provider: 'pg',
     schema: {
@@ -32,22 +27,47 @@ export const auth = betterAuth({
       session: schema.sessions,
       account: schema.accounts,
       verification: schema.verifications,
-      oauthClient: schema.clients,
-      oauthAccessToken: schema.oauthAccessTokens,
-      oauthRefreshToken: schema.oauthRefreshTokens,
-      authorizationCode: schema.authorizationCodes,
-      oauthConsent: schema.oauthConsent,
+      // 显式映射 OAuth 核心表，防止字段名自动推断失败
+      oauthClient: {
+        table: schema.clients,
+        fields: {
+          clientId: 'clientId',
+          clientSecret: 'clientSecret',
+          redirectUrls: 'redirectUris',
+        }
+      },
+      oauthAccessToken: {
+        table: schema.oauthAccessTokens,
+        fields: {
+          accessToken: 'accessToken',
+          expiresAt: 'accessTokenExpiresAt',
+          clientId: 'clientId',
+          userId: 'userId',
+        }
+      },
+      oauthRefreshToken: {
+        table: schema.oauthRefreshTokens,
+        fields: {
+          refreshToken: 'refreshToken',
+          expiresAt: 'refreshTokenExpiresAt',
+          clientId: 'clientId',
+          userId: 'userId',
+        }
+      },
+      authorizationCode: {
+        table: schema.authorizationCodes,
+        fields: {
+          code: 'code',
+          expiresAt: 'expiresAt',
+          redirectUri: 'redirectUri',
+          clientId: 'clientId',
+          userId: 'userId',
+        }
+      },
       jwks: schema.jwks,
     },
   }),
 
-  // 恢复 Redis 二级存储：作为缓存层提升 Session 读取性能
-  secondaryStorage: redisStorage({
-    client: getRedis(),
-    keyPrefix: 'idp:',
-  }),
-
-  // OIDC 插件合规性配置：必须禁用 /token 路径
   disabledPaths: ['/token'],
 
   emailAndPassword: {
@@ -62,7 +82,7 @@ export const auth = betterAuth({
   plugins: [
     jwt({
       jwt: {
-        issuer: process.env.BETTER_AUTH_URL || 'http://localhost:4001',
+        issuer: process.env.BETTER_AUTH_URL || 'https://auth-sso-idp.vercel.app',
         audience: 'auth-sso-users',
         expirationTime: '1h',
       },
@@ -78,22 +98,22 @@ export const auth = betterAuth({
           name: 'Portal',
           type: 'web',
           redirectUrls: [
-            process.env.PORTAL_REDIRECT_URL,
+            'https://auth-sso-portal.vercel.app/api/auth/callback',
             'http://localhost:4000/api/auth/callback',
-          ].filter((url): url is string => !!url),
+          ],
           skipConsent: true,
           disabled: false,
           metadata: {},
         },
         {
           clientId: 'demo-app',
-          clientSecret: process.env.DEMO_APP_CLIENT_SECRET || 'demo-app-secret',
+          clientSecret: process.env.DEMO_APP_CLIENT_SECRET,
           name: 'Demo App',
           type: 'web',
           redirectUrls: [
-            process.env.DEMO_APP_REDIRECT_URL,
+            'https://auth-sso-demo-tau.vercel.app/auth/callback',
             'http://localhost:4002/auth/callback',
-          ].filter((url): url is string => !!url),
+          ],
           skipConsent: true,
           disabled: false,
           metadata: {},
@@ -110,7 +130,6 @@ export const auth = betterAuth({
   },
 
   advanced: {
-    // 生产环境强制使用安全 Cookie
     useSecureCookies: process.env.NODE_ENV === 'production',
   },
 });
