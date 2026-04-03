@@ -88,7 +88,8 @@ export const auth = betterAuth({
       },
     }),
     oidcProvider({
-      useJWTPlugin: true,
+      // 核心修复：禁用 JWT 插件集成，改用应用密钥签名，防止签名过程导致 500 报错
+      useJWTPlugin: false,
       loginPage: '/sign-in',
       scopes: ['openid', 'profile', 'email', 'offline_access'],
       trustedClients: [
