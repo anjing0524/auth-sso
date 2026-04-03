@@ -36,10 +36,17 @@ async function update() {
     'http://localhost:4000/api/auth/callback'
   ];
   
+  // 获取最新的强随机密钥（从环境变量读取）
+  const portalSecret = process.env.PORTAL_CLIENT_SECRET;
+  if (!portalSecret) {
+    console.warn('⚠️ PORTAL_CLIENT_SECRET is not defined. Skipping portal secret update.');
+  }
+
   await db.update(schema.clients)
     .set({
       redirectUris: JSON.stringify(portalRedirectUris),
-      homepageUrl: 'https://auth-sso-portal.vercel.app'
+      homepageUrl: 'https://auth-sso-portal.vercel.app',
+      ...(portalSecret ? { clientSecret: portalSecret } : {})
     })
     .where(eq(schema.clients.clientId, 'portal'));
 

@@ -74,7 +74,7 @@ export const auth = betterAuth({
       trustedClients: [
         {
           clientId: 'portal',
-          clientSecret: process.env.PORTAL_CLIENT_SECRET || 'portal-secret',
+          clientSecret: process.env.PORTAL_CLIENT_SECRET,
           name: 'Portal',
           type: 'web',
           redirectUrls: [
