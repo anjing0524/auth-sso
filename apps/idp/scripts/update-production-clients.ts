@@ -44,7 +44,7 @@ async function update() {
 
   await db.update(schema.clients)
     .set({
-      redirectUris: JSON.stringify(portalRedirectUris),
+      redirectUrls: JSON.stringify(portalRedirectUris),
       homepageUrl: 'https://auth-sso-portal.vercel.app',
       ...(portalSecret ? { clientSecret: portalSecret } : {})
     })
@@ -60,7 +60,7 @@ async function update() {
   
   await db.update(schema.clients)
     .set({
-      redirectUris: JSON.stringify(demoRedirectUris),
+      redirectUrls: JSON.stringify(demoRedirectUris),
       homepageUrl: 'https://auth-sso-demo-tau.vercel.app'
     })
     .where(eq(schema.clients.clientId, 'demo-app'));

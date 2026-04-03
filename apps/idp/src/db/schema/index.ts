@@ -274,11 +274,11 @@ export const clients = pgTable('clients', {
   name: text('name').notNull(),
   clientId: text('client_id').notNull().unique(),
   clientSecret: text('client_secret'),
-  redirectUris: text('redirect_uris').notNull(), // JSON string array
+  redirectUrls: text('redirect_uris').notNull(), // 更改 TS 属性名为 redirectUrls 匹配 Better Auth
   grantTypes: text('grant_types').notNull().default('["authorization_code","refresh_token"]'), // JSON string array
   scopes: text('scopes').notNull().default('openid profile email offline_access'), // Space-separated string
   homepageUrl: text('homepage_url'),
-  logoUrl: text('logo_url'),
+  icon: text('logo_url'), // 更改 TS 属性名为 icon 匹配 Better Auth
   accessTokenTtl: integer('access_token_ttl').default(3600),
   refreshTokenTtl: integer('refresh_token_ttl').default(604800),
   status: clientStatusEnum('status').notNull().default('ACTIVE'),
@@ -420,6 +420,7 @@ export const oauthConsent = pgTable('oauth_consent', {
     .references(() => clients.id, { onDelete: 'cascade' }),
   referenceId: text('reference_id'),
   scopes: text('scopes').notNull(), // Comma-separated list of scopes
+  consentGiven: boolean('consent_given'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });

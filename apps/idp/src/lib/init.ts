@@ -43,7 +43,7 @@ export async function initializeTestData(): Promise<void> {
     name: 'Portal',
     clientId: 'portal',
     clientSecret: 'portal-secret',
-    redirectUris: JSON.stringify(['http://localhost:4000/api/auth/callback']),
+    redirectUrls: JSON.stringify(['http://localhost:4000/api/auth/callback']),
     grantTypes: JSON.stringify(['authorization_code', 'refresh_token']),
     scopes: 'openid profile email offline_access',
     homepageUrl: 'http://localhost:4000',

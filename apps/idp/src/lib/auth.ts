@@ -5,14 +5,12 @@ import bcrypt from 'bcryptjs';
 
 import { db } from '../db';
 import * as schema from '../db/schema';
-import * as pluginSchema from '../db/auth-plugin-schema';
 
 /**
- * Auth-SSO IdP 核心配置 - 终极解耦版
+ * Auth-SSO IdP 核心配置 - 架构整洁版
  * 
- * 核心修复说明:
- * 1. 彻底解决 500 报错：抛弃有 Bug 的字段映射（{ table, fields }），直接使用原生的中间 Schema (`auth-plugin-schema.ts`)。这使得 Better-Auth 读取时是其预期的字段名，而写入数据库时是正确的真实列名。
- * 2. 数据层完美对齐：确保 OAuth 流程中产生的数据准确存入 PostgreSQL 对应列。
+ * 完全对齐 Drizzle Schema 与 Better-Auth OIDC 插件期望的数据结构，
+ * 抛弃所有“中间件转换”与“强行映射”，回归架构设计的最初本源。
  */
 export const auth = betterAuth({
   appName: 'Auth-SSO IdP',
@@ -23,24 +21,21 @@ export const auth = betterAuth({
     provider: 'pg',
     schema: {
       ...schema,
-      // Core tables
+      // 核心表映射
       user: schema.users,
       session: schema.sessions,
       account: schema.accounts,
       verification: schema.verifications,
       
-      // Plugin tables - 使用中间 Schema 确保字段名 100% 吻合 Better-Auth 预期
-      oauthApplication: pluginSchema.oauthApplication,
-      oauthAccessToken: pluginSchema.oauthAccessToken,
-      oauthConsent: pluginSchema.oauthConsent,
-      jwks: pluginSchema.jwks,
-      
-      // 注意：Better Auth v1.5 OIDC 插件不默认使用 authorizationCode 数据库表，
-      // 若出现问题，我们仍然保留 Drizzle 映射
-      authorizationCode: schema.authorizationCodes,
+      // OIDC 插件表映射（表内的属性名现已通过 Schema 修正完全匹配 Better-Auth 默认预期）
+      oauthApplication: schema.clients,
+      oauthAccessToken: schema.oauthAccessTokens,
+      oauthConsent: schema.oauthConsent,
+      jwks: schema.jwks,
     },
   }),
 
+  // 必须禁用 /token 路径以符合 OIDC 插件合规性
   disabledPaths: ['/token'],
 
   emailAndPassword: {
@@ -69,7 +64,7 @@ export const auth = betterAuth({
           clientSecret: process.env.PORTAL_CLIENT_SECRET,
           name: 'Portal',
           type: 'web',
-          redirectUrls: ['https://auth-sso-portal.vercel.app/api/auth/callback'],
+          redirectUrls: ['https://auth-sso-portal.vercel.app/api/auth/callback', 'http://localhost:4000/api/auth/callback'],
           skipConsent: true,
           disabled: false,
           metadata: {},
@@ -79,7 +74,7 @@ export const auth = betterAuth({
           clientSecret: process.env.DEMO_APP_CLIENT_SECRET,
           name: 'Demo App',
           type: 'web',
-          redirectUrls: ['https://auth-sso-demo-tau.vercel.app/auth/callback'],
+          redirectUrls: ['https://auth-sso-demo-tau.vercel.app/auth/callback', 'http://localhost:4002/auth/callback'],
           skipConsent: true,
           disabled: false,
           metadata: {},
