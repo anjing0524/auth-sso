@@ -1,13 +1,36 @@
 import 'dotenv/config';
 import { db } from '../src/db';
-import * as schema from '../src/db/schema';
+import * as schema from '../db/schema';
 import { eq } from 'drizzle-orm';
 import bcrypt from 'bcryptjs';
 
+/**
+ * 生产环境数据库更新脚本
+ * 修复：不再硬编码密码，通过环境变量 INITIAL_ADMIN_PASSWORD 读取
+ */
 async function update() {
   console.log('🚀 Updating production data in database...');
 
-  // Update Portal Client
+  // 从环境变量读取密码，避免泄露
+  const adminPassword = process.env.INITIAL_ADMIN_PASSWORD;
+  
+  if (!adminPassword) {
+    console.warn('⚠️ INITIAL_ADMIN_PASSWORD is not defined. Skipping password update for security.');
+  } else {
+    const hashedPassword = await bcrypt.hash(adminPassword, 10);
+    const adminUser = await db.query.users.findFirst({
+      where: eq(schema.users.username, 'admin')
+    });
+
+    if (adminUser) {
+      await db.update(schema.accounts)
+        .set({ password: hashedPassword })
+        .where(eq(schema.accounts.userId, adminUser.id));
+      console.log('✅ Updated admin user password securely');
+    }
+  }
+
+  // 更新 Portal Client
   const portalRedirectUris = [
     'https://auth-sso-portal.vercel.app/api/auth/callback',
     'http://localhost:4000/api/auth/callback'
@@ -22,7 +45,7 @@ async function update() {
 
   console.log('✅ Updated portal client redirect URIs');
 
-  // Update Demo App Client
+  // 更新 Demo App Client
   const demoRedirectUris = [
     'https://auth-sso-demo-tau.vercel.app/auth/callback',
     'http://localhost:4002/auth/callback'
@@ -36,22 +59,6 @@ async function update() {
     .where(eq(schema.clients.clientId, 'demo-app'));
 
   console.log('✅ Updated demo-app client redirect URIs');
-
-  // Update Admin User Password
-  const hashedPassword = await bcrypt.hash('test123456', 10);
-  const adminUser = await db.query.users.findFirst({
-    where: eq(schema.users.username, 'admin')
-  });
-
-  if (adminUser) {
-    await db.update(schema.accounts)
-      .set({ password: hashedPassword })
-      .where(eq(schema.accounts.userId, adminUser.id));
-    console.log('✅ Updated admin user password');
-  } else {
-    console.log('⚠️ Admin user not found, skipping password update');
-  }
-
   console.log('✨ Update complete!');
   process.exit(0);
 }
