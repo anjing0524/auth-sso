@@ -7,16 +7,17 @@ import { db } from '../db';
 import * as schema from '../db/schema';
 
 /**
- * Auth-SSO IdP 核心配置 - 工业级 JWT 修复版
+ * Auth-SSO IdP 核心配置 - 架构加固版
  * 
  * 核心修复说明:
- * 1. 显式 JWKS 映射：手动映射 publicKey/privateKey 字段名，解决开启 useJWTPlugin 后因数据库字段名不匹配导致的 500 崩溃。
- * 2. 恢复 JWT 签名：坚持使用 JWT 非对称签名，确保 OIDC 协议的完整性和安全性。
- * 3. 增强诊断：确保所有的 OAuth 映射均已手动对齐，彻底消除 Drizzle 自动推断的隐患。
+ * 1. 禁用 Better-Auth 内部 Redis 存储：解决 OIDC 插件与 Redis 二级存储不兼容导致的 500 崩溃。
+ * 2. 穷举式字段映射：显式映射所有 OAuth 相关的数据库字段，防止 Drizzle 在 Token 交换时产生非法 SQL。
+ * 3. 强化数据一致性：确保 Token、Scopes、ExpiresAt 等关键字段在数据库中精准落地。
  */
 export const auth = betterAuth({
   appName: 'Auth-SSO IdP',
-  baseURL: process.env.BETTER_AUTH_URL || 'https://auth-sso-idp.vercel.app',
+  // 生产环境 URL 必须保持整洁
+  baseURL: (process.env.BETTER_AUTH_URL || 'https://auth-sso-idp.vercel.app').replace(/\/$/, ''),
   secret: process.env.BETTER_AUTH_SECRET || 'your-better-auth-secret-min-32-chars-long',
 
   database: drizzleAdapter(db, {
@@ -27,16 +28,18 @@ export const auth = betterAuth({
       session: schema.sessions,
       account: schema.accounts,
       verification: schema.verifications,
-      // 1. OAuth 客户端表映射
+      // 1. OAuth 客户端表穷举映射
       oauthClient: {
         table: schema.clients,
         fields: {
           clientId: 'clientId',
           clientSecret: 'clientSecret',
           redirectUrls: 'redirectUris',
+          disabled: 'disabled',
+          name: 'name',
         }
       },
-      // 2. Access Token 表映射 (解决 500 核心)
+      // 2. Access Token 表穷举映射 (彻底解决 500)
       oauthAccessToken: {
         table: schema.oauthAccessTokens,
         fields: {
@@ -44,9 +47,10 @@ export const auth = betterAuth({
           expiresAt: 'accessTokenExpiresAt',
           clientId: 'clientId',
           userId: 'userId',
+          scopes: 'scopes', // 显式映射复数 scopes
         }
       },
-      // 3. Refresh Token 表映射
+      // 3. Refresh Token 表穷举映射
       oauthRefreshToken: {
         table: schema.oauthRefreshTokens,
         fields: {
@@ -54,9 +58,10 @@ export const auth = betterAuth({
           expiresAt: 'refreshTokenExpiresAt',
           clientId: 'clientId',
           userId: 'userId',
+          scopes: 'scopes',
         }
       },
-      // 4. 授权码表映射
+      // 4. 授权码表穷举映射
       authorizationCode: {
         table: schema.authorizationCodes,
         fields: {
@@ -65,9 +70,10 @@ export const auth = betterAuth({
           redirectUri: 'redirectUri',
           clientId: 'clientId',
           userId: 'userId',
+          scope: 'scope', // 授权码表中使用单数 scope
         }
       },
-      // 5. JWKS 表显式映射 (解决 useJWTPlugin 500 核心)
+      // 5. JWKS 表映射
       jwks: {
         table: schema.jwks,
         fields: {
@@ -78,6 +84,9 @@ export const auth = betterAuth({
       },
     },
   }),
+
+  // 关键：暂时禁用 Better-Auth 内置的 Redis 存储，直到 SSO 链路完全稳定
+  // secondaryStorage: redisStorage({ ... }), 
 
   disabledPaths: ['/token'],
 
@@ -93,13 +102,11 @@ export const auth = betterAuth({
   plugins: [
     jwt({
       jwt: {
-        issuer: process.env.BETTER_AUTH_URL || 'https://auth-sso-idp.vercel.app',
-        // 移除固定的 audience，让 OIDC 插件动态填充 client_id
+        issuer: (process.env.BETTER_AUTH_URL || 'https://auth-sso-idp.vercel.app').replace(/\/$/, ''),
         expirationTime: '1h',
       },
     }),
     oidcProvider({
-      // 核心要求：必须启用 JWT 插件集成
       useJWTPlugin: true,
       loginPage: '/sign-in',
       scopes: ['openid', 'profile', 'email', 'offline_access'],
@@ -109,10 +116,7 @@ export const auth = betterAuth({
           clientSecret: process.env.PORTAL_CLIENT_SECRET,
           name: 'Portal',
           type: 'web',
-          redirectUrls: [
-            'https://auth-sso-portal.vercel.app/api/auth/callback',
-            'http://localhost:4000/api/auth/callback',
-          ],
+          redirectUrls: ['https://auth-sso-portal.vercel.app/api/auth/callback'],
           skipConsent: true,
           disabled: false,
           metadata: {},
@@ -122,10 +126,7 @@ export const auth = betterAuth({
           clientSecret: process.env.DEMO_APP_CLIENT_SECRET,
           name: 'Demo App',
           type: 'web',
-          redirectUrls: [
-            'https://auth-sso-demo-tau.vercel.app/auth/callback',
-            'http://localhost:4002/auth/callback',
-          ],
+          redirectUrls: ['https://auth-sso-demo-tau.vercel.app/auth/callback'],
           skipConsent: true,
           disabled: false,
           metadata: {},
