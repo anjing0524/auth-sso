@@ -2,7 +2,7 @@
  * 登出 API
  * POST /api/auth/logout - 登出当前用户
  */
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { oauthConfig, buildLogoutUrl } from '@/lib/oauth';
 import { getSession, clearSession } from '@/lib/session';
 
@@ -12,9 +12,9 @@ export const runtime = 'nodejs';
  * POST /api/auth/logout
  * 登出当前用户
  */
-export async function POST(request: NextRequest) {
+export async function POST() {
   try {
-    const session = await getSession();
+    await getSession();
 
     // 清除本地 Session
     await clearSession();
@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
  * GET /api/auth/logout
  * 执行登出并重定向
  */
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     // 清除本地 Session
     await clearSession();

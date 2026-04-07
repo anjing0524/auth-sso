@@ -2,7 +2,7 @@
  * 用户信息 API
  * GET /api/me - 获取当前登录用户信息
  */
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { getSession } from '@/lib/session';
 
 export const runtime = 'nodejs';
@@ -11,7 +11,7 @@ export const runtime = 'nodejs';
  * GET /api/me
  * 获取当前登录用户信息
  */
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     const session = await getSession();
 

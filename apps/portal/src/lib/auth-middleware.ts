@@ -218,17 +218,25 @@ export async function checkDataScope(
       if (!context.deptId) return false;
       if (context.deptId === targetDeptId) return true;
 
-      // 使用递归查询判断 targetDeptId 是否为 context.deptId 的子部门
-      const result = await sql`
-        WITH RECURSIVE sub_depts AS (
-          SELECT id FROM departments WHERE id = ${context.deptId}
-          UNION ALL
-          SELECT d.id FROM departments d
-          INNER JOIN sub_depts sd ON d.parent_id = sd.id
-        )
-        SELECT 1 FROM sub_depts WHERE id = ${targetDeptId}
-      `;
-      return result.length > 0;
+      try {
+        // 使用递归查询判断 targetDeptId 是否为 context.deptId 的子部门
+        // 限制递归深度为 10 层，防止死循环
+        const result = await sql`
+          WITH RECURSIVE sub_depts AS (
+            SELECT id, 1 as depth FROM departments WHERE id = ${context.deptId}
+            UNION ALL
+            SELECT d.id, sd.depth + 1 FROM departments d
+            INNER JOIN sub_depts sd ON d.parent_id = sd.id
+            WHERE sd.depth < 10
+          )
+          SELECT 1 FROM sub_depts WHERE id = ${targetDeptId}
+        `;
+        return result.length > 0;
+      } catch (error) {
+        console.error('[DataScope] DEPT_AND_SUB query error:', error);
+        // 查询失败时回退到仅检查当前部门，确保安全
+        return context.deptId === targetDeptId;
+      }
     }
 
     case 'CUSTOM': {
@@ -269,17 +277,24 @@ export async function getDataScopeFilter(
   if (context.dataScopeType === 'DEPT_AND_SUB') {
     if (!context.deptId) return { type: 'LIST', deptIds: [] };
 
-    // 递归获取所有子部门 ID
-    const result = await sql`
-      WITH RECURSIVE sub_depts AS (
-        SELECT id FROM departments WHERE id = ${context.deptId}
-        UNION ALL
-        SELECT d.id FROM departments d
-        INNER JOIN sub_depts sd ON d.parent_id = sd.id
-      )
-      SELECT id FROM sub_depts
-    `;
-    return { type: 'LIST', deptIds: result.map((r: any) => r.id) };
+    try {
+      // 递归获取所有子部门 ID，限制深度为 10
+      const result = await sql`
+        WITH RECURSIVE sub_depts AS (
+          SELECT id, 1 as depth FROM departments WHERE id = ${context.deptId}
+          UNION ALL
+          SELECT d.id, sd.depth + 1 FROM departments d
+          INNER JOIN sub_depts sd ON d.parent_id = sd.id
+          WHERE sd.depth < 10
+        )
+        SELECT id FROM sub_depts
+      `;
+      return { type: 'LIST', deptIds: result.map((r: any) => r.id) };
+    } catch (error) {
+      console.error('[DataScope] getDataScopeFilter query error:', error);
+      // 查询失败时回退到仅包含当前部门
+      return { type: 'LIST', deptIds: [context.deptId] };
+    }
   }
 
   if (context.dataScopeType === 'CUSTOM') {

@@ -3,19 +3,20 @@
  * 演示 SSO 登录流程
  */
 import { cookies } from 'next/headers';
-import Link from 'next/link';
 
 export const dynamic = 'force-dynamic';
 
 export default async function HomePage() {
   const cookieStore = await cookies();
   const sessionCookie = cookieStore.get('demo_session');
+  // eslint-disable-next-line react-hooks/purity
+  const now = Date.now();
 
   let user = null;
   if (sessionCookie) {
     try {
       const session = JSON.parse(sessionCookie.value);
-      if (Date.now() < session.expiresAt) {
+      if (now < session.expiresAt) {
         user = session;
       }
     } catch {
@@ -110,7 +111,7 @@ export default async function HomePage() {
               <div className="bg-gray-50 rounded-lg p-6">
                 <h3 className="text-lg font-medium text-gray-900 mb-4">SSO 测试说明</h3>
                 <ol className="list-decimal list-inside space-y-2 text-gray-600">
-                  <li>点击下方"SSO 登录"按钮</li>
+                  <li>点击下方&quot;SSO 登录&quot;按钮</li>
                   <li>如果已在 Portal 登录，将自动跳回并完成认证（SSO）</li>
                   <li>如果未在 Portal 登录，将跳转到 IdP 登录页</li>
                   <li>登录成功后自动返回此页面</li>

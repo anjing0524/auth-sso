@@ -92,9 +92,9 @@ export async function POST(
       }
 
       // 开启事务处理
-      await sql.begin(async sql => {
+      await sql.begin(async (tx: any) => {
         // 1. 删除旧的关联
-        await sql`
+        await tx`
           DELETE FROM role_data_scopes WHERE role_id = ${roleId}
         `;
 
@@ -107,8 +107,8 @@ export async function POST(
             created_at: new Date(),
           }));
 
-          await sql`
-            INSERT INTO role_data_scopes ${sql(values, 'id', 'role_id', 'dept_id', 'created_at')}
+          await tx`
+            INSERT INTO role_data_scopes ${tx(values, 'id', 'role_id', 'dept_id', 'created_at')}
           `;
         }
       });

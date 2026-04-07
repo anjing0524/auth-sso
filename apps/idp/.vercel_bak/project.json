@@ -1,0 +1,16 @@
+{
+  "projectId": "prj_87jkFkNMesEUWpzZLl8y9pO3hJhd",
+  "orgId": "team_bDn4IyqPNMK75N8FSQwbN7XP",
+  "projectName": "auth-sso-idp",
+  "settings": {
+    "createdAt": 1775010280242,
+    "framework": "nextjs",
+    "devCommand": null,
+    "installCommand": null,
+    "buildCommand": null,
+    "outputDirectory": null,
+    "rootDirectory": "apps/idp",
+    "directoryListing": false,
+    "nodeVersion": "24.x"
+  }
+}

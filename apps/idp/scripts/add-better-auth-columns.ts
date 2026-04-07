@@ -23,11 +23,11 @@ async function main() {
     try {
       await sql.unsafe(`ALTER TABLE oauth_access_tokens ADD COLUMN IF NOT EXISTS ${col}`);
       console.log(`Added ${colName} column to oauth_access_tokens`);
-    } catch (e: any) {
-      if (e.message?.includes('already exists') || e.message?.includes('duplicate')) {
+    } catch (e) {
+      if ((e as Error).message?.includes('already exists') || (e as Error).message?.includes('duplicate')) {
         console.log(`${colName} column already exists in oauth_access_tokens`);
       } else {
-        console.error(`Error adding ${colName} column:`, e.message);
+        console.error(`Error adding ${colName} column:`, (e as Error).message);
       }
     }
   }
@@ -43,11 +43,11 @@ async function main() {
     try {
       await sql.unsafe(`ALTER TABLE oauth_refresh_tokens ADD COLUMN IF NOT EXISTS ${col}`);
       console.log(`Added ${colName} column to oauth_refresh_tokens`);
-    } catch (e: any) {
-      if (e.message?.includes('already exists') || e.message?.includes('duplicate')) {
+    } catch (e) {
+      if ((e as Error).message?.includes('already exists') || (e as Error).message?.includes('duplicate')) {
         console.log(`${colName} column already exists in oauth_refresh_tokens`);
       } else {
-        console.error(`Error adding ${colName} column:`, e.message);
+        console.error(`Error adding ${colName} column:`, (e as Error).message);
       }
     }
   }

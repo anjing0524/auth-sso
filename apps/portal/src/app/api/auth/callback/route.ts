@@ -95,29 +95,31 @@ export async function GET(request: NextRequest) {
     const tokens = JSON.parse(tokenText);
     console.log('[Callback] Token exchange success');
 
-    // 校验 id_token 中的 nonce
-    if (tokens.id_token) {
-      try {
-        const decoded = decodeJwt(tokens.id_token);
-        console.log('[Callback] id_token nonce:', decoded.nonce);
-        console.log('[Callback] Expected nonce:', stateData.nonce);
+    // 校验 id_token 中的 nonce (OIDC 安全加固)
+    if (!tokens.id_token) {
+      console.error('[Callback] No id_token returned in OIDC flow');
+      return NextResponse.redirect(
+        new URL('/login?error=missing_id_token', request.url)
+      );
+    }
 
-        if (decoded.nonce !== stateData.nonce) {
-          console.error('[Callback] Nonce mismatch');
-          return NextResponse.redirect(
-            new URL('/login?error=nonce_mismatch', request.url)
-          );
-        }
-        console.log('[Callback] Nonce verification passed');
-      } catch (e) {
-        console.error('[Callback] Failed to decode id_token:', e);
-        return NextResponse.json(
-          { error: 'invalid_id_token', message: '无效的 id_token' },
-          { status: 400 }
+    try {
+      const decoded = decodeJwt(tokens.id_token);
+      console.log('[Callback] id_token nonce:', decoded.nonce);
+      console.log('[Callback] Expected nonce:', stateData.nonce);
+
+      if (!decoded.nonce || decoded.nonce !== stateData.nonce) {
+        console.error('[Callback] Nonce mismatch or missing');
+        return NextResponse.redirect(
+          new URL('/login?error=nonce_mismatch', request.url)
         );
       }
-    } else {
-      console.warn('[Callback] No id_token returned, skipping nonce check');
+      console.log('[Callback] Nonce verification passed');
+    } catch (e) {
+      console.error('[Callback] Failed to decode id_token:', e);
+      return NextResponse.redirect(
+        new URL('/login?error=invalid_id_token', request.url)
+      );
     }
 
     // 获取用户信息

@@ -6,7 +6,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { sql } from '@/lib/db';
-import { withPermission } from '@/lib/auth-middleware';
+import { withPermission, checkDataScope, getDataScopeFilter } from '@/lib/auth-middleware';
 
 export const runtime = 'nodejs';
 
@@ -20,7 +20,7 @@ interface RouteParams {
  * 权限要求: user:read
  */
 export async function GET(request: NextRequest, { params }: RouteParams) {
-  return withPermission(request, { permissions: ['user:read'] }, async () => {
+  return withPermission(request, { permissions: ['user:read'] }, async (adminUserId) => {
     const { id } = await params;
 
     // 查询用户
@@ -51,6 +51,26 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     }
 
     const user = users[0];
+
+    // 数据范围检查
+    if (user.dept_id) {
+      const hasScope = await checkDataScope(adminUserId, user.dept_id);
+      if (!hasScope) {
+        return NextResponse.json(
+          { error: 'forbidden', message: '无权查看该用户' },
+          { status: 403 }
+        );
+      }
+    } else {
+      // 如果目标用户没有部门，检查管理员是否拥有全量权限
+      const filter = await getDataScopeFilter(adminUserId);
+      if (filter.type !== 'ALL') {
+        return NextResponse.json(
+          { error: 'forbidden', message: '无权查看无部门用户' },
+          { status: 403 }
+        );
+      }
+    }
 
     // 查询用户角色
     const roles = await sql`
@@ -92,21 +112,53 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
  * 权限要求: user:update
  */
 export async function PUT(request: NextRequest, { params }: RouteParams) {
-  return withPermission(request, { permissions: ['user:update'] }, async () => {
+  return withPermission(request, { permissions: ['user:update'] }, async (adminUserId) => {
     const { id } = await params;
     const body = await request.json();
     const { name, email, status, deptId, avatarUrl } = body;
 
     // 检查用户是否存在
-    const existing = await sql`
-      SELECT id FROM users WHERE id = ${id} OR public_id = ${id}
+    const users = await sql`
+      SELECT id, dept_id FROM users WHERE id = ${id} OR public_id = ${id}
     `;
 
-    if (existing.length === 0) {
+    if (users.length === 0) {
       return NextResponse.json(
         { error: 'not_found', message: '用户不存在' },
         { status: 404 }
       );
+    }
+
+    const existingUser = users[0];
+
+    // 数据范围检查：修改用户前，用户必须在当前管理员的数据范围内
+    if (existingUser.dept_id) {
+      const hasScope = await checkDataScope(adminUserId, existingUser.dept_id);
+      if (!hasScope) {
+        return NextResponse.json(
+          { error: 'forbidden', message: '无权修改该用户' },
+          { status: 403 }
+        );
+      }
+    } else {
+      const filter = await getDataScopeFilter(adminUserId);
+      if (filter.type !== 'ALL') {
+        return NextResponse.json(
+          { error: 'forbidden', message: '无权修改无部门用户' },
+          { status: 403 }
+        );
+      }
+    }
+
+    // 如果尝试将用户移至新部门，检查新部门是否在范围内
+    if (deptId && deptId !== existingUser.dept_id) {
+      const hasNewScope = await checkDataScope(adminUserId, deptId);
+      if (!hasNewScope) {
+        return NextResponse.json(
+          { error: 'forbidden', message: '无权将用户移至该部门' },
+          { status: 403 }
+        );
+      }
     }
 
     // 更新用户
@@ -116,10 +168,10 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         name = COALESCE(${name}, name),
         email = COALESCE(${email}, email),
         status = COALESCE(${status}, status),
-        dept_id = ${deptId || null},
-        avatar_url = ${avatarUrl || null},
+        dept_id = ${deptId !== undefined ? (deptId || null) : existingUser.dept_id},
+        avatar_url = COALESCE(${avatarUrl}, avatar_url),
         updated_at = NOW()
-      WHERE id = ${existing[0].id}
+      WHERE id = ${existingUser.id}
     `;
 
     return NextResponse.json({ success: true });
@@ -132,23 +184,44 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
  * 权限要求: user:delete
  */
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
-  return withPermission(request, { permissions: ['user:delete'] }, async () => {
+  return withPermission(request, { permissions: ['user:delete'] }, async (adminUserId) => {
     const { id } = await params;
 
     // 检查用户是否存在
-    const existing = await sql`
-      SELECT id FROM users WHERE id = ${id} OR public_id = ${id}
+    const users = await sql`
+      SELECT id, dept_id FROM users WHERE id = ${id} OR public_id = ${id}
     `;
 
-    if (existing.length === 0) {
+    if (users.length === 0) {
       return NextResponse.json(
         { error: 'not_found', message: '用户不存在' },
         { status: 404 }
       );
     }
 
+    const existingUser = users[0];
+
+    // 数据范围检查
+    if (existingUser.dept_id) {
+      const hasScope = await checkDataScope(adminUserId, existingUser.dept_id);
+      if (!hasScope) {
+        return NextResponse.json(
+          { error: 'forbidden', message: '无权删除该用户' },
+          { status: 403 }
+        );
+      }
+    } else {
+      const filter = await getDataScopeFilter(adminUserId);
+      if (filter.type !== 'ALL') {
+        return NextResponse.json(
+          { error: 'forbidden', message: '无权删除无部门用户' },
+          { status: 403 }
+        );
+      }
+    }
+
     // 删除用户（级联删除关联数据）
-    await sql`DELETE FROM users WHERE id = ${existing[0].id}`;
+    await sql`DELETE FROM users WHERE id = ${existingUser.id}`;
 
     return NextResponse.json({ success: true });
   });
