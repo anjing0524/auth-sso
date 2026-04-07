@@ -1,7 +1,7 @@
 ---
 title: RBAC 数据范围补全与认证安全加固
 type: feat
-status: active
+status: completed
 date: 2026-04-07
 origin: conductor/2026-04-03-001-feat-rbac-data-scope-refinement-plan.md
 ---

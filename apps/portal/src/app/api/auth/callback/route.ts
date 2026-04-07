@@ -8,6 +8,7 @@ import {
   createSession,
   setSessionCookie,
 } from '@/lib/session';
+import { decodeJwt } from 'jose';
 
 export const runtime = 'nodejs';
 
