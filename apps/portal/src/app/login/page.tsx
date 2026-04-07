@@ -25,12 +25,12 @@ export default function LoginPage() {
               点击下方按钮登录，将跳转到统一身份认证平台进行认证
             </p>
 
-            <Link
+            <a
               href="/api/auth/login"
               className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
             >
               使用统一身份登录
-            </Link>
+            </a>
           </div>
 
           {/* 说明 */}

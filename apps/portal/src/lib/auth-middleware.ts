@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession, getSessionIdFromCookie } from './session';
 import { getUserPermissionContext } from './permissions';
+import { sql } from './db';
 
 /**
  * 权限检查选项
@@ -209,24 +210,88 @@ export async function checkDataScope(
       return true;
 
     case 'SELF':
+    case 'DEPT':
       // 只能访问自己部门的数据
       return context.deptId === targetDeptId;
 
-    case 'DEPT':
-      // 可以访问本部门数据
-      return context.deptId === targetDeptId;
+    case 'DEPT_AND_SUB': {
+      if (!context.deptId) return false;
+      if (context.deptId === targetDeptId) return true;
 
-    case 'DEPT_AND_SUB':
-      // 可以访问本部门及下级部门数据（需要查询部门层级）
-      // TODO: 实现部门层级查询
-      return context.deptId === targetDeptId;
+      // 使用递归查询判断 targetDeptId 是否为 context.deptId 的子部门
+      const result = await sql`
+        WITH RECURSIVE sub_depts AS (
+          SELECT id FROM departments WHERE id = ${context.deptId}
+          UNION ALL
+          SELECT d.id FROM departments d
+          INNER JOIN sub_depts sd ON d.parent_id = sd.id
+        )
+        SELECT 1 FROM sub_depts WHERE id = ${targetDeptId}
+      `;
+      return result.length > 0;
+    }
 
-    case 'CUSTOM':
-      // 自定义数据范围（需要查询 role_data_scopes 表）
-      // TODO: 实现自定义数据范围查询
-      return false;
+    case 'CUSTOM': {
+      // 查询角色自定义数据范围表
+      const roleIds = context.roles.map(r => r.id);
+      if (roleIds.length === 0) return false;
+
+      const result = await sql`
+        SELECT 1 FROM role_data_scopes 
+        WHERE role_id IN ${sql(roleIds)} AND dept_id = ${targetDeptId}
+      `;
+      return result.length > 0;
+    }
 
     default:
       return false;
   }
+}
+
+/**
+ * 获取用户的数据范围过滤器
+ * 返回允许访问的部门 ID 列表，或者返回 'ALL' 表示不限制
+ */
+export async function getDataScopeFilter(
+  userId: string
+): Promise<{ type: 'ALL' | 'LIST'; deptIds?: string[] }> {
+  const context = await getUserPermissionContext(userId);
+  if (!context) return { type: 'LIST', deptIds: [] };
+
+  if (context.dataScopeType === 'ALL') {
+    return { type: 'ALL' };
+  }
+
+  if (context.dataScopeType === 'SELF' || context.dataScopeType === 'DEPT') {
+    return { type: 'LIST', deptIds: context.deptId ? [context.deptId] : [] };
+  }
+
+  if (context.dataScopeType === 'DEPT_AND_SUB') {
+    if (!context.deptId) return { type: 'LIST', deptIds: [] };
+
+    // 递归获取所有子部门 ID
+    const result = await sql`
+      WITH RECURSIVE sub_depts AS (
+        SELECT id FROM departments WHERE id = ${context.deptId}
+        UNION ALL
+        SELECT d.id FROM departments d
+        INNER JOIN sub_depts sd ON d.parent_id = sd.id
+      )
+      SELECT id FROM sub_depts
+    `;
+    return { type: 'LIST', deptIds: result.map((r: any) => r.id) };
+  }
+
+  if (context.dataScopeType === 'CUSTOM') {
+    const roleIds = context.roles.map(r => r.id);
+    if (roleIds.length === 0) return { type: 'LIST', deptIds: [] };
+
+    const result = await sql`
+      SELECT DISTINCT dept_id FROM role_data_scopes 
+      WHERE role_id IN ${sql(roleIds)}
+    `;
+    return { type: 'LIST', deptIds: result.map((r: any) => r.dept_id) };
+  }
+
+  return { type: 'LIST', deptIds: [] };
 }

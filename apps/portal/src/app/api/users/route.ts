@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { sql } from '@/lib/db';
 import { randomBytes } from 'crypto';
-import { withPermission } from '@/lib/auth-middleware';
+import { withPermission, getDataScopeFilter, checkDataScope } from '@/lib/auth-middleware';
 
 export const runtime = 'nodejs';
 
@@ -23,7 +23,7 @@ function generateId(length: number = 20): string {
  * 权限要求: user:list
  */
 export async function GET(request: NextRequest) {
-  return withPermission(request, { permissions: ['user:list'] }, async () => {
+  return withPermission(request, { permissions: ['user:list'] }, async (userId) => {
     const searchParams = request.nextUrl.searchParams;
     const page = parseInt(searchParams.get('page') || '1', 10);
     const pageSize = parseInt(searchParams.get('pageSize') || '20', 10);
@@ -33,23 +33,54 @@ export async function GET(request: NextRequest) {
 
     const offset = (page - 1) * pageSize;
 
+    // 获取数据范围过滤器
+    const scopeFilter = await getDataScopeFilter(userId);
+
     // 构建查询条件
     const conditions: string[] = [];
     if (keyword) {
-      conditions.push(`(name ILIKE '%${keyword.replace(/'/g, "''")}%' OR email ILIKE '%${keyword.replace(/'/g, "''")}%' OR username ILIKE '%${keyword.replace(/'/g, "''")}%')`);
+      conditions.push(`(u.name ILIKE '%${keyword.replace(/'/g, "''")}%' OR u.email ILIKE '%${keyword.replace(/'/g, "''")}%' OR u.username ILIKE '%${keyword.replace(/'/g, "''")}%')`);
     }
     if (status) {
-      conditions.push(`status = '${status}'`);
+      conditions.push(`u.status = '${status}'`);
     }
-    if (deptId) {
-      conditions.push(`dept_id = '${deptId}'`);
+    
+    // 部门筛选与数据范围过滤的交集处理
+    if (scopeFilter.type === 'LIST') {
+      const allowedDeptIds = scopeFilter.deptIds || [];
+      if (allowedDeptIds.length === 0) {
+        // 如果没有允许的部门，返回空结果
+        return NextResponse.json({
+          data: [],
+          pagination: { page, pageSize, total: 0, totalPages: 0 },
+        });
+      }
+
+      if (deptId) {
+        // 如果指定了部门，检查该部门是否在允许范围内
+        if (allowedDeptIds.includes(deptId)) {
+          conditions.push(`u.dept_id = '${deptId}'`);
+        } else {
+          // 请求的部门不在数据范围内
+          return NextResponse.json({
+            data: [],
+            pagination: { page, pageSize, total: 0, totalPages: 0 },
+          });
+        }
+      } else {
+        // 自动限制在数据范围内
+        conditions.push(`u.dept_id IN ${sql(allowedDeptIds)}`);
+      }
+    } else if (deptId) {
+      // ALL 权限且指定了部门
+      conditions.push(`u.dept_id = '${deptId}'`);
     }
 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
     // 查询总数
     const countResult = await sql`
-      SELECT COUNT(*) as total FROM users ${sql.unsafe(whereClause)}
+      SELECT COUNT(*) as total FROM users u ${sql.unsafe(whereClause)}
     `;
     const total = parseInt(countResult[0]?.total || '0', 10);
 
@@ -104,7 +135,7 @@ export async function GET(request: NextRequest) {
  * 权限要求: user:create
  */
 export async function POST(request: NextRequest) {
-  return withPermission(request, { permissions: ['user:create'] }, async () => {
+  return withPermission(request, { permissions: ['user:create'] }, async (adminUserId) => {
     const body = await request.json();
     const { username, email, name, password, deptId, status = 'ACTIVE' } = body;
 
@@ -114,6 +145,17 @@ export async function POST(request: NextRequest) {
         { error: 'invalid_params', message: '缺少必填字段' },
         { status: 400 }
       );
+    }
+
+    // 数据范围检查：创建用户时目标部门必须在当前管理员的管辖范围内
+    if (deptId) {
+      const hasScope = await checkDataScope(adminUserId, deptId);
+      if (!hasScope) {
+        return NextResponse.json(
+          { error: 'forbidden', message: '无权在该部门创建用户' },
+          { status: 403 }
+        );
+      }
     }
 
     // 检查用户名是否已存在

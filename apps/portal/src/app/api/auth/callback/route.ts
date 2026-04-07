@@ -7,7 +7,6 @@ import { oauthConfig } from '@/lib/auth-client';
 import {
   createSession,
   setSessionCookie,
-  SESSION_CONFIG,
 } from '@/lib/session';
 
 export const runtime = 'nodejs';
@@ -94,6 +93,31 @@ export async function GET(request: NextRequest) {
     console.log('[Callback] Token response body (first 50 chars):', tokenText.substring(0, 50));
     const tokens = JSON.parse(tokenText);
     console.log('[Callback] Token exchange success');
+
+    // 校验 id_token 中的 nonce
+    if (tokens.id_token) {
+      try {
+        const decoded = decodeJwt(tokens.id_token);
+        console.log('[Callback] id_token nonce:', decoded.nonce);
+        console.log('[Callback] Expected nonce:', stateData.nonce);
+
+        if (decoded.nonce !== stateData.nonce) {
+          console.error('[Callback] Nonce mismatch');
+          return NextResponse.redirect(
+            new URL('/login?error=nonce_mismatch', request.url)
+          );
+        }
+        console.log('[Callback] Nonce verification passed');
+      } catch (e) {
+        console.error('[Callback] Failed to decode id_token:', e);
+        return NextResponse.json(
+          { error: 'invalid_id_token', message: '无效的 id_token' },
+          { status: 400 }
+        );
+      }
+    } else {
+      console.warn('[Callback] No id_token returned, skipping nonce check');
+    }
 
     // 获取用户信息
     console.log('[Callback] Fetching user info from:', new URL('/api/auth/oauth2/userinfo', oauthConfig.idpUrl).toString());

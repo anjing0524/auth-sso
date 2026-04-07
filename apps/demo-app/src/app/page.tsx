@@ -84,7 +84,7 @@ export default async function HomePage() {
                   登出
                 </a>
                 <a
-                  href="http://localhost:4000"
+                  href={process.env.NEXT_PUBLIC_PORTAL_URL || "http://localhost:4000"}
                   className="flex-1 inline-flex items-center justify-center px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                 >
                   <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -128,7 +128,7 @@ export default async function HomePage() {
                   SSO 登录
                 </a>
                 <a
-                  href="http://localhost:4000"
+                  href={process.env.NEXT_PUBLIC_PORTAL_URL || "http://localhost:4000"}
                   className="flex-1 inline-flex items-center justify-center px-4 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
                 >
                   <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -166,7 +166,7 @@ export default async function HomePage() {
         {/* Footer */}
         <footer className="mt-16 text-center text-gray-500 text-sm">
           <p>Demo App - SSO 测试应用</p>
-          <p className="mt-1">运行在 http://localhost:4002</p>
+          <p className="mt-1">运行在 {process.env.APP_URL || "http://localhost:4002"}</p>
         </footer>
       </div>
     </div>

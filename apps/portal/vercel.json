@@ -1,6 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "installCommand": "cd ../.. && pnpm install --no-frozen-lockfile",
-  "buildCommand": "pnpm --filter @auth-sso/portal build",
+  "installCommand": "pnpm install",
+  "buildCommand": "pnpm build",
   "outputDirectory": ".next"
 }
