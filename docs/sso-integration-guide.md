@@ -110,7 +110,16 @@ export async function GET(request: Request) {
 
   const tokens = await tokenResponse.json();
 
-  // 3. 获取用户信息
+  // 3. 验证 id_token nonce (如果包含 id_token)
+  if (tokens.id_token) {
+    const { decodeJwt } = await import('jose'); // 使用 jose 或类似库
+    const decoded = decodeJwt(tokens.id_token);
+    if (decoded.nonce !== savedState.nonce) {
+      throw new Error('Nonce mismatch');
+    }
+  }
+
+  // 4. 获取用户信息
   const userResponse = await fetch('http://localhost:4001/api/auth/userinfo', {
     headers: { Authorization: `Bearer ${tokens.access_token}` },
   });
@@ -200,7 +209,7 @@ function base64UrlEncode(buffer: Uint8Array): string {
 
 1. **必须使用 PKCE** - 防止授权码拦截攻击
 2. **必须验证 state** - 防止 CSRF 攻击
-3. **必须验证 nonce** - 防止重放攻击
+3. **必须验证 nonce** - 防止重放攻击。IdP 会在 id_token 中包含 nonce，回调处理时必须严格校验其值与发起登录时生成的值一致。Auth-SSO Portal 已实现强制 Nonce 校验。
 4. **Token 不应暴露给客户端** - access_token 应存储在 HttpOnly Cookie 或服务端 Session
 5. **HTTPS** - 生产环境必须使用 HTTPS
 6. **回调地址白名单** - 只能注册预先定义的回调地址

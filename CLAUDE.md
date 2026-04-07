@@ -104,8 +104,11 @@ Required environment variables documented in `docs/vercel-dashboard-deployment.m
 - `apps/idp/src/lib/auth.ts` - Better Auth configuration with OIDC Provider
 - `apps/idp/src/lib/redis.ts` - Redis client for session storage
 - `apps/idp/drizzle.config.ts` - Drizzle ORM configuration
-- `apps/portal/src/lib/auth-client.ts` - Portal's OAuth client
-- `apps/demo-app/src/lib/oauth.ts` - Demo app OAuth configuration
+- `apps/portal/src/app/api/roles/[id]/data-scopes/route.ts` - Role data scope management API
+- `apps/portal/src/app/api/auth/callback/route.ts` - OAuth callback with nonce hardening
+- `apps/portal/src/lib/auth-middleware.ts` - RBAC check with data scope and recursion limits
+- `tests/data-scope.test.js` - Data scope integration tests
+- `tests/auth-security.test.js` - Auth security and nonce tests
 
 ## Tech Stack
 
