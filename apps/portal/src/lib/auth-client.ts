@@ -17,12 +17,12 @@ export const authClient = createAuthClient({
  */
 export const oauthConfig = {
   // IdP 配置
-  idpUrl: process.env.NEXT_PUBLIC_IDP_URL || 'http://localhost:4001',
-  clientId: process.env.NEXT_PUBLIC_CLIENT_ID || 'portal',
+  idpUrl: (process.env.NEXT_PUBLIC_IDP_URL || 'http://localhost:4001').trim(),
+  clientId: (process.env.NEXT_PUBLIC_CLIENT_ID || 'portal').trim(),
   clientSecret: process.env.IDP_CLIENT_SECRET,
 
   // 回调 URL
-  redirectUri: process.env.NEXT_PUBLIC_REDIRECT_URI || 'http://localhost:4000/api/auth/callback',
+  redirectUri: (process.env.NEXT_PUBLIC_REDIRECT_URI || 'http://localhost:4000/api/auth/callback').trim(),
 
   // OAuth Scopes
   scopes: ['openid', 'profile', 'email', 'offline_access'],
