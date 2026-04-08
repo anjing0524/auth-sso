@@ -18,7 +18,7 @@ function generateId(length: number = 20): string {
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const { id: roleId } = await params;
 
@@ -63,7 +63,7 @@ export async function GET(
  */
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const { id: roleId } = await params;
 
@@ -130,7 +130,7 @@ export async function POST(
  */
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const { id: roleId } = await params;
   const searchParams = request.nextUrl.searchParams;
