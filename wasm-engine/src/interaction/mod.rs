@@ -2,32 +2,27 @@
 //!
 //! 处理鼠标拖动、缩放、点击检测等交互
 
+pub mod drag;
+pub mod hit;
+pub mod zoom;
+
+pub use drag::{DragHandler, DragState};
+pub use hit::HitTester;
+pub use zoom::{Viewport, ZoomHandler};
+
+use crate::data::NodeData;
+
 /// 交互处理器
 /// 管理用户与图的交互状态
 pub struct InteractionHandler {
-    /// 当前拖动的节点 ID
-    dragged_node: Option<u32>,
+    /// 拖动处理器
+    drag: DragHandler,
 
-    /// 悬停的节点 ID
-    hovered_node: Option<u32>,
+    /// 缩放处理器
+    zoom: ZoomHandler,
 
-    /// 选中的节点 ID
-    selected_node: Option<u32>,
-
-    /// 缩放级别
-    zoom: f32,
-
-    /// 平移偏移 X
-    pan_x: f32,
-
-    /// 平移偏移 Y
-    pan_y: f32,
-
-    /// 画布宽度
-    canvas_width: f32,
-
-    /// 画布高度
-    canvas_height: f32,
+    /// 点击检测器
+    hit: HitTester,
 }
 
 impl Default for InteractionHandler {
@@ -40,81 +35,116 @@ impl InteractionHandler {
     /// 创建新的交互处理器
     pub fn new() -> Self {
         Self {
-            dragged_node: None,
-            hovered_node: None,
-            selected_node: None,
-            zoom: 1.0,
-            pan_x: 0.0,
-            pan_y: 0.0,
-            canvas_width: 800.0,
-            canvas_height: 600.0,
+            drag: DragHandler::new(),
+            zoom: ZoomHandler::new(),
+            hit: HitTester::new(),
+        }
+    }
+
+    /// 处理鼠标按下
+    pub fn on_mouse_down(&mut self, screen_x: f32, screen_y: f32, is_pan: bool) {
+        if is_pan {
+            self.zoom.start_pan(screen_x, screen_y);
         }
     }
 
     /// 处理鼠标移动
-    pub fn on_mouse_move(&mut self, _x: f32, _y: f32) {
-        // TODO: 实现鼠标移动处理
-    }
-
-    /// 处理鼠标按下
-    pub fn on_mouse_down(&mut self, _x: f32, _y: f32) {
-        // TODO: 实现鼠标按下处理
+    pub fn on_mouse_move(&mut self, screen_x: f32, screen_y: f32) {
+        // 更新平移
+        self.zoom.update_pan(screen_x, screen_y);
     }
 
     /// 处理鼠标释放
     pub fn on_mouse_up(&mut self) {
-        self.dragged_node = None;
+        self.drag.end_drag();
+        self.zoom.end_pan();
     }
 
     /// 处理滚轮缩放
-    pub fn on_wheel(&mut self, _delta: f32) {
-        // TODO: 实现缩放处理
+    pub fn on_wheel(&mut self, delta: f32, screen_x: f32, screen_y: f32) {
+        self.zoom.wheel_zoom(delta, screen_x, screen_y);
+    }
+
+    /// 开始拖动节点
+    pub fn start_drag(&mut self, node_id: u32, node_x: f32, node_y: f32, mouse_x: f32, mouse_y: f32) {
+        self.drag.start_drag(node_id, node_x, node_y, mouse_x, mouse_y);
+    }
+
+    /// 更新拖动位置
+    pub fn update_drag(&mut self, mouse_x: f32, mouse_y: f32) -> Option<(u32, f32, f32)> {
+        self.drag.update_drag(mouse_x, mouse_y)
+    }
+
+    /// 结束拖动
+    pub fn end_drag(&mut self) {
+        self.drag.end_drag();
+    }
+
+    /// 检查是否正在拖动
+    pub fn is_dragging(&self) -> bool {
+        self.drag.is_dragging()
     }
 
     /// 点击检测
-    /// 返回点击位置的节点 ID（如果有）
-    pub fn hit_test(&self, _x: f32, _y: f32) -> Option<u32> {
-        // TODO: 实现点击检测
-        None
+    pub fn hit_test(&mut self, nodes: &[NodeData], world_x: f32, world_y: f32) -> Option<u32> {
+        self.hit.hit_test(nodes, world_x, world_y)
     }
 
     /// 获取悬停节点
     pub fn get_hovered_node(&self) -> Option<u32> {
-        self.hovered_node
+        self.hit.hovered_node()
+    }
+
+    /// 清除悬停
+    pub fn clear_hover(&mut self) {
+        self.hit.clear_hover();
+    }
+
+    /// 选中节点
+    pub fn select_node(&mut self, node_id: Option<u32>) {
+        self.hit.select_node(node_id);
     }
 
     /// 获取选中节点
     pub fn get_selected_node(&self) -> Option<u32> {
-        self.selected_node
+        self.hit.selected_node()
     }
 
-    /// 设置画布尺寸
-    pub fn set_canvas_size(&mut self, width: f32, height: f32) {
-        self.canvas_width = width;
-        self.canvas_height = height;
+    /// 获取视口
+    pub fn viewport(&self) -> &Viewport {
+        self.zoom.viewport()
+    }
+
+    /// 获取可变视口
+    pub fn viewport_mut(&mut self) -> &mut Viewport {
+        self.zoom.viewport_mut()
+    }
+
+    /// 获取缩放级别
+    pub fn get_zoom(&self) -> f32 {
+        self.viewport().zoom
+    }
+
+    /// 获取平移
+    pub fn get_pan(&self) -> (f32, f32) {
+        let vp = self.viewport();
+        (vp.pan_x, vp.pan_y)
     }
 
     /// 屏幕坐标转世界坐标
     pub fn screen_to_world(&self, screen_x: f32, screen_y: f32) -> (f32, f32) {
-        let world_x = (screen_x - self.canvas_width / 2.0) / self.zoom + self.pan_x;
-        let world_y = (screen_y - self.canvas_height / 2.0) / self.zoom + self.pan_y;
-        (world_x, world_y)
+        let vp = self.viewport();
+        vp.screen_to_world(screen_x, screen_y)
     }
 
     /// 世界坐标转屏幕坐标
     pub fn world_to_screen(&self, world_x: f32, world_y: f32) -> (f32, f32) {
-        let screen_x = (world_x - self.pan_x) * self.zoom + self.canvas_width / 2.0;
-        let screen_y = (world_y - self.pan_y) * self.zoom + self.canvas_height / 2.0;
-        (screen_x, screen_y)
+        let vp = self.viewport();
+        vp.world_to_screen(world_x, world_y)
     }
 
-    /// 获取当前缩放级别
-    pub fn get_zoom(&self) -> f32 {
-        self.zoom
-    }
-
-    /// 获取当前平移偏移
-    pub fn get_pan(&self) -> (f32, f32) {
-        (self.pan_x, self.pan_y)
+    /// 设置画布尺寸
+    pub fn set_canvas_size(&mut self, width: f32, height: f32) {
+        self.zoom.viewport_mut().set_size(width, height);
     }
 }
