@@ -84,6 +84,12 @@ export const SYSTEM_PERMISSIONS = {
   VIEW_DASHBOARD: 'system:view_dashboard',
 } as const;
 
+// ========== 客户关系图权限 ==========
+export const CUSTOMER_GRAPH_PERMISSIONS = {
+  VIEW: 'customer_graph:view',
+  EXPORT: 'customer_graph:export',
+} as const;
+
 // 所有权限码列表
 export const ALL_PERMISSIONS = [
   ...Object.values(USER_PERMISSIONS),
@@ -95,6 +101,7 @@ export const ALL_PERMISSIONS = [
   ...Object.values(AUDIT_PERMISSIONS),
   ...Object.values(LOGIN_LOG_PERMISSIONS),
   ...Object.values(SYSTEM_PERMISSIONS),
+  ...Object.values(CUSTOMER_GRAPH_PERMISSIONS),
 ] as const;
 
 // 权限分组
@@ -134,5 +141,9 @@ export const PERMISSION_GROUPS = {
   SYSTEM: {
     name: '系统管理',
     permissions: Object.values(SYSTEM_PERMISSIONS),
+  },
+  CUSTOMER_GRAPH: {
+    name: '客户关系图',
+    permissions: Object.values(CUSTOMER_GRAPH_PERMISSIONS),
   },
 } as const;
