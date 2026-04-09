@@ -1,42 +1,66 @@
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { jwt, oidcProvider } from 'better-auth/plugins';
+import { redisStorage } from '@better-auth/redis-storage';
+import Redis from 'ioredis';
 import bcrypt from 'bcryptjs';
 
 import { db } from '../db';
 import * as schema from '../db/schema';
 
+// 固定生产环境 URL
+const currentBaseURL = 'https://auth-sso-idp.vercel.app';
+
 /**
- * Auth-SSO IdP 核心配置 - 架构整洁版
- * 
- * 完全对齐 Drizzle Schema 与 Better-Auth OIDC 插件期望的数据结构，
- * 抛弃所有“中间件转换”与“强行映射”，回归架构设计的最初本源。
+ * Redis 客户端配置 (极致稳定性)
+ */
+let redis: Redis | null = null;
+try {
+  if (process.env.REDIS_URL) {
+    redis = new Redis(process.env.REDIS_URL, {
+      maxRetriesPerRequest: 0,
+      connectTimeout: 5000,
+      lazyConnect: true,
+    });
+  }
+} catch (e) {
+  console.error('[Auth] Failed to initialize Redis client:', e);
+}
+
+/**
+ * Auth-SSO IdP 核心配置
+ * 回归数据库驱动，通过 Drizzle Schema 建立映射，消除代码冗余。
  */
 export const auth = betterAuth({
   appName: 'Auth-SSO IdP',
-  baseURL: (process.env.BETTER_AUTH_URL || 'https://auth-sso-idp.vercel.app').replace(/\/$/, ''),
-  secret: process.env.BETTER_AUTH_SECRET || 'your-better-auth-secret-min-32-chars-long',
+  baseURL: currentBaseURL,
+  secret: process.env.BETTER_AUTH_SECRET,
+
+  // 100% 信任 Redis 处理动态状态（Session/Token）
+  ...(redis ? {
+    secondaryStorage: redisStorage({
+      client: redis,
+      keyPrefix: 'auth-sso:',
+    }),
+  } : {}),
 
   database: drizzleAdapter(db, {
     provider: 'pg',
     schema: {
       ...schema,
-      // 核心表映射
       user: schema.users,
       session: schema.sessions,
       account: schema.accounts,
       verification: schema.verifications,
-      
-      // OIDC 插件表映射（表内的属性名现已通过 Schema 修正完全匹配 Better-Auth 默认预期）
+      // 核心 OIDC 映射：Schema 已内置 skipConsent -> skip_consent 等映射
       oauthApplication: schema.clients,
       oauthAccessToken: schema.oauthAccessTokens,
+      oauthRefreshToken: schema.oauthRefreshTokens,
+      oauthAuthorizationCode: schema.authorizationCodes,
       oauthConsent: schema.oauthConsent,
       jwks: schema.jwks,
     },
   }),
-
-  // 必须禁用 /token 路径以符合 OIDC 插件合规性
-  disabledPaths: ['/token'],
 
   emailAndPassword: {
     enabled: true,
@@ -50,7 +74,7 @@ export const auth = betterAuth({
   plugins: [
     jwt({
       jwt: {
-        issuer: (process.env.BETTER_AUTH_URL || 'https://auth-sso-idp.vercel.app').replace(/\/$/, ''),
+        issuer: currentBaseURL,
         expirationTime: '1h',
       },
     }),
@@ -58,36 +82,14 @@ export const auth = betterAuth({
       useJWTPlugin: true,
       loginPage: '/sign-in',
       scopes: ['openid', 'profile', 'email', 'offline_access'],
-      trustedClients: [
-        {
-          clientId: 'portal',
-          clientSecret: process.env.PORTAL_CLIENT_SECRET,
-          name: 'Portal',
-          type: 'web',
-          redirectUrls: ['https://auth-sso-portal.vercel.app/api/auth/callback', 'http://localhost:4000/api/auth/callback'],
-          skipConsent: true,
-          disabled: false,
-          metadata: {},
-        },
-        {
-          clientId: 'demo-app',
-          clientSecret: process.env.DEMO_APP_CLIENT_SECRET,
-          name: 'Demo App',
-          type: 'web',
-          redirectUrls: ['https://auth-sso-demo-tau.vercel.app/auth/callback', 'http://localhost:4002/auth/callback'],
-          skipConsent: true,
-          disabled: false,
-          metadata: {},
-        },
-      ],
+      // 100% 数据库驱动，移除静态 trustedClients。
+      // 插件现在能通过 schema.clients.skipConsent 映射自动发现数据库中的 true 值。
+      trustedClients: [],
     }),
   ],
 
   user: {
     modelName: 'users',
-    additionalFields: {
-      publicId: { type: 'string', required: true, unique: true },
-    },
   },
 
   advanced: {
