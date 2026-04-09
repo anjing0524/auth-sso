@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 /// GPU 对齐的节点数据
 /// 用于传输到 GPU Storage Buffer
 #[repr(C)]
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct NodeData {
     /// 节点位置 X 坐标
     pub x: f32,

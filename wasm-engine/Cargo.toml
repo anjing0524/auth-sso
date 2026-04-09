@@ -30,6 +30,9 @@ serde-wasm-bindgen = "0.6"
 # Graph data structure
 petgraph = "0.6"
 
+# GPU data layout
+bytemuck = { version = "1", features = ["derive"] }
+
 # Utilities
 console_error_panic_hook = "0.1"
 

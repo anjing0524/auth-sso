@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 /// GPU 对齐的边数据
 /// 用于传输到 GPU Storage Buffer
 #[repr(C)]
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct EdgeData {
     /// 源节点 ID
     pub source_id: u32,
