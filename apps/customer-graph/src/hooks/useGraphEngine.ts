@@ -42,55 +42,71 @@ export function useGraphEngine({
   const lastSimTimeRef = useRef<number>(0);
   const isRunningRef = useRef(false);
 
+  // 使用 ref 存储 engine 和配置，避免 animate 函数依赖变化
+  const engineRef = useRef(engine);
+  const autoRenderRef = useRef(autoRender);
+  const autoSimulateRef = useRef(autoSimulate);
+  const simulationRateRef = useRef(simulationRate);
+
+  // 更新 refs
+  useEffect(() => {
+    engineRef.current = engine;
+    autoRenderRef.current = autoRender;
+    autoSimulateRef.current = autoSimulate;
+    simulationRateRef.current = simulationRate;
+  }, [engine, autoRender, autoSimulate, simulationRate]);
+
   // 执行一次模拟步骤
   const stepSimulation = useCallback(() => {
-    if (engine) {
-      engine.step_simulation();
+    if (engineRef.current) {
+      engineRef.current.step_simulation();
     }
-  }, [engine]);
+  }, []);
 
   // 渲染一帧
   const render = useCallback(() => {
-    if (engine) {
-      engine.render();
+    if (engineRef.current) {
+      engineRef.current.render();
     }
-  }, [engine]);
+  }, []);
 
-  // 动画循环
-  const animate = useCallback(
-    (timestamp: number) => {
-      if (!engine || !isRunningRef.current) return;
+  // 动画循环 - 使用 ref 引用自身，避免依赖问题
+  const animateRef = useRef<((timestamp: number) => void) | null>(null);
+
+  useEffect(() => {
+    animateRef.current = (timestamp: number) => {
+      const currentEngine = engineRef.current;
+      if (!currentEngine || !isRunningRef.current) return;
 
       // 执行模拟步骤（限制帧率）
-      if (autoSimulate) {
+      if (autoSimulateRef.current) {
         const elapsed = timestamp - lastSimTimeRef.current;
-        const targetInterval = 1000 / simulationRate;
+        const targetInterval = 1000 / simulationRateRef.current;
 
         if (elapsed >= targetInterval) {
-          engine.step_simulation();
+          currentEngine.step_simulation();
           lastSimTimeRef.current = timestamp;
         }
       }
 
       // 渲染
-      if (autoRender) {
-        engine.render();
+      if (autoRenderRef.current) {
+        currentEngine.render();
       }
 
       // 继续循环
-      animationRef.current = requestAnimationFrame(animate);
-    },
-    [engine, autoRender, autoSimulate, simulationRate]
-  );
+      animationRef.current = requestAnimationFrame((ts) => animateRef.current?.(ts));
+    };
+  }, []);
 
   // 开始动画循环
   const startAnimation = useCallback(() => {
-    if (!engine) return;
+    if (!engineRef.current) return;
 
     isRunningRef.current = true;
     lastSimTimeRef.current = performance.now();
-    animationRef.current = requestAnimationFrame(animate);
-  }, [engine, animate]);
+    animationRef.current = requestAnimationFrame((ts) => animateRef.current?.(ts));
+  }, []);
 
   // 停止动画循环
   const stopAnimation = useCallback(() => {
@@ -103,20 +119,17 @@ export function useGraphEngine({
 
   // 重置视口
   const resetViewport = useCallback(() => {
-    if (engine) {
-      engine.reset_viewport();
+    if (engineRef.current) {
+      engineRef.current.reset_viewport();
     }
-  }, [engine]);
+  }, []);
 
   // 适配视图
-  const fitToView = useCallback(
-    (padding = 50) => {
-      if (engine) {
-        engine.fit_to_view(padding);
-      }
-    },
-    [engine]
-  );
+  const fitToView = useCallback((padding = 50) => {
+    if (engineRef.current) {
+      engineRef.current.fit_to_view(padding);
+    }
+  }, []);
 
   // 引擎变化时重新启动动画
   useEffect(() => {

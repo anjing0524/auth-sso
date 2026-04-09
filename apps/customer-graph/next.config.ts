@@ -20,6 +20,34 @@ const nextConfig: NextConfig = {
         },
       ],
     },
+    // WASM 文件专用 Headers
+    {
+      source: '/wasm/:path*.wasm',
+      headers: [
+        {
+          key: 'Content-Type',
+          value: 'application/wasm',
+        },
+        {
+          key: 'Cache-Control',
+          value: 'public, max-age=31536000, immutable',
+        },
+      ],
+    },
+    // WASM glue JS 文件
+    {
+      source: '/wasm/:path*.js',
+      headers: [
+        {
+          key: 'Content-Type',
+          value: 'application/javascript',
+        },
+        {
+          key: 'Cache-Control',
+          value: 'public, max-age=31536000, immutable',
+        },
+      ],
+    },
   ],
   // Vercel deployment configuration for monorepo
   output: 'standalone',

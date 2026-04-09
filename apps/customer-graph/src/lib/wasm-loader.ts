@@ -6,7 +6,6 @@
 
 // WASM 模块类型定义
 export interface GraphEngineWasm {
-  new (): GraphEngineWasm;
   init(canvas: HTMLCanvasElement): Promise<void>;
   load_data(nodes: unknown, edges: unknown): Promise<void>;
   step_simulation(): void;
@@ -37,9 +36,14 @@ export interface GraphEngineWasm {
   destroy(): void;
 }
 
+// WASM 模块构造函数类型
+interface GraphEngineWasmConstructor {
+  new (): GraphEngineWasm;
+}
+
 // WASM 模块导出类型
 interface WasmModule {
-  GraphEngineWasm: GraphEngineWasm;
+  GraphEngineWasm: GraphEngineWasmConstructor;
   is_webgpu_supported(): boolean;
   get_version(): string;
 }
@@ -161,7 +165,7 @@ export async function createGraphEngine(
       message: 'Loading engine...',
     });
 
-    const module = await loadWasmModule((p) => {
+    const wasmMod = await loadWasmModule((p) => {
       onProgress?.({
         ...p,
         progress: 20 + p.progress * 0.6,
@@ -174,7 +178,7 @@ export async function createGraphEngine(
       message: 'Initializing GPU...',
     });
 
-    const engine = new module.GraphEngineWasm();
+    const engine = new wasmMod.GraphEngineWasm();
 
     await engine.init(canvas);
 
