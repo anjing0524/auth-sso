@@ -90,11 +90,11 @@ pnpm start:services
 
 ## 文档指引
 
-- [产品需求 (docs/PRD.md)](docs/PRD.md) - 核心功能、业务范围与用户模型
-- [系统架构 (docs/ARCHITECTURE.md)](docs/ARCHITECTURE.md) - 系统组成、技术选型、认证与 SSO 流程
-- [数据库设计 (docs/DATABASE.md)](docs/DATABASE.md) - 数据模型、存储落位与物理规范
-- [接口契约 (docs/API.md)](docs/API.md) - 核心接口清单与字段级契约
-- [项目计划与里程碑 (docs/PROJECT_PLAN.md)](docs/PROJECT_PLAN.md) - 研发进度与关键里程碑
+- [产品需求 (docs/spec/PRD.md)](docs/spec/PRD.md) - 核心功能、业务范围与用户模型
+- [系统架构 (docs/spec/ARCHITECTURE.md)](docs/spec/ARCHITECTURE.md) - 系统组成、技术选型、认证与 SSO 流程
+- [数据库设计 (docs/spec/DATABASE.md)](docs/spec/DATABASE.md) - 数据模型、存储落位与物理规范
+- [接口契约 (docs/spec/API.md)](docs/spec/API.md) - 核心接口清单与字段级契约
+- [项目计划与里程碑 (docs/spec/PROJECT_PLAN.md)](docs/spec/PROJECT_PLAN.md) - 研发进度与关键里程碑
 - [设计规范 (DESIGN.md)](DESIGN.md) - UI/UX 规范与品牌定义
 - [SSO 集成指南 (docs/sso-integration-guide.md)](docs/sso-integration-guide.md) - 子应用接入流程
 - [环境变量详细说明 (docs/environment-variables.md)](docs/environment-variables.md)
