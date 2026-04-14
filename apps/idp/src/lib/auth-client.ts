@@ -1,5 +1,9 @@
 import { createAuthClient } from 'better-auth/react';
+import { oidcClient } from 'better-auth/client/plugins';
 
 export const authClient = createAuthClient({
-  baseURL: process.env.BETTER_AUTH_URL || window.location.origin,
+  baseURL: process.env.BETTER_AUTH_URL || (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:4001'),
+  plugins: [
+    oidcClient(),
+  ],
 });

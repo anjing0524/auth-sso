@@ -3,6 +3,7 @@
  * 使用 Redis 存储 Session，支持 idle timeout 和 absolute timeout
  */
 import { cookies } from 'next/headers';
+import { NextResponse } from 'next/server';
 import { getRedis } from './redis';
 import { randomBytes } from 'crypto';
 
@@ -206,11 +207,14 @@ export async function getSessionIdFromCookie(): Promise<string | null> {
 /**
  * 设置 Session Cookie
  */
-export function setSessionCookie(response: Response, sessionId: string): void {
-  response.headers.append(
-    'Set-Cookie',
-    `${SESSION_CONFIG.cookieName}=${sessionId}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${Math.ceil(SESSION_CONFIG.absoluteTimeoutMs / 1000)}${process.env.NODE_ENV === 'production' ? '; Secure' : ''}`
-  );
+export function setSessionCookie(response: NextResponse, sessionId: string): void {
+  response.cookies.set(SESSION_CONFIG.cookieName, sessionId, {
+    path: '/',
+    httpOnly: true,
+    sameSite: 'lax',
+    maxAge: Math.ceil(SESSION_CONFIG.absoluteTimeoutMs / 1000),
+    secure: process.env.NODE_ENV === 'production',
+  });
 }
 
 /**

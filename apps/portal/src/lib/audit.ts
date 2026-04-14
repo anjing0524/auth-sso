@@ -2,7 +2,7 @@
  * 审计日志工具
  * 用于记录用户操作、登录事件、权限变更等审计信息
  */
-import { sql } from '@/lib/db';
+import { db, schema } from '@/lib/db';
 import { randomBytes } from 'crypto';
 
 /**
@@ -83,21 +83,17 @@ export async function logLoginEvent(params: LoginLogParams): Promise<void> {
   try {
     const id = generateId(20);
 
-    await sql`
-      INSERT INTO login_logs (
-        id, user_id, username, event_type, ip, user_agent, location, fail_reason, created_at
-      ) VALUES (
-        ${id},
-        ${params.userId || null},
-        ${params.username},
-        ${params.eventType},
-        ${params.ip || null},
-        ${params.userAgent || null},
-        ${params.location || null},
-        ${params.failReason || null},
-        NOW()
-      )
-    `;
+    await db.insert(schema.loginLogs).values({
+      id,
+      userId: params.userId ?? null,
+      username: params.username,
+      eventType: params.eventType,
+      ip: params.ip ?? null,
+      userAgent: params.userAgent ?? null,
+      location: params.location ?? null,
+      failReason: params.failReason ?? null,
+      createdAt: new Date(),
+    });
   } catch (error) {
     // 审计日志写入失败不应影响主流程
     console.error('[Audit] Failed to log login event:', error);
@@ -111,25 +107,21 @@ export async function logAuditEvent(params: AuditLogParams): Promise<void> {
   try {
     const id = generateId(20);
 
-    await sql`
-      INSERT INTO audit_logs (
-        id, user_id, username, operation, method, url, params, ip, user_agent, status, duration, error_msg, created_at
-      ) VALUES (
-        ${id},
-        ${params.userId || null},
-        ${params.username || null},
-        ${params.operation},
-        ${params.method || null},
-        ${params.url || null},
-        ${params.params || null},
-        ${params.ip || null},
-        ${params.userAgent || null},
-        ${params.status || null},
-        ${params.duration || null},
-        ${params.errorMsg || null},
-        NOW()
-      )
-    `;
+    await db.insert(schema.auditLogs).values({
+      id,
+      userId: params.userId ?? null,
+      username: params.username ?? null,
+      operation: params.operation,
+      method: params.method ?? null,
+      url: params.url ?? null,
+      params: params.params ?? null,
+      ip: params.ip ?? null,
+      userAgent: params.userAgent ?? null,
+      status: params.status ?? null,
+      duration: params.duration ?? null,
+      errorMsg: params.errorMsg ?? null,
+      createdAt: new Date(),
+    });
   } catch (error) {
     // 审计日志写入失败不应影响主流程
     console.error('[Audit] Failed to log audit event:', error);

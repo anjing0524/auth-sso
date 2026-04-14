@@ -5,7 +5,8 @@
  * DELETE /api/users/[id] - 删除用户
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { sql } from '@/lib/db';
+import { db, schema } from '@/lib/db';
+import { eq, or } from 'drizzle-orm';
 import { withPermission, checkDataScope, getDataScopeFilter } from '@/lib/auth-middleware';
 
 export const runtime = 'nodejs';
@@ -24,24 +25,23 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const { id } = await params;
 
     // 查询用户
-    const users = await sql`
-      SELECT
-        u.id,
-        u.public_id,
-        u.username,
-        u.email,
-        u.name,
-        u.avatar_url,
-        u.status,
-        u.dept_id,
-        d.name as dept_name,
-        u.created_at,
-        u.updated_at,
-        u.last_login_at
-      FROM users u
-      LEFT JOIN departments d ON u.dept_id = d.id
-      WHERE u.id = ${id} OR u.public_id = ${id}
-    `;
+    const users = await db.select({
+      id: schema.users.id,
+      publicId: schema.users.publicId,
+      username: schema.users.username,
+      email: schema.users.email,
+      name: schema.users.name,
+      avatarUrl: schema.users.avatarUrl,
+      status: schema.users.status,
+      deptId: schema.users.deptId,
+      deptName: schema.departments.name,
+      createdAt: schema.users.createdAt,
+      updatedAt: schema.users.updatedAt,
+      lastLoginAt: schema.users.lastLoginAt,
+    })
+    .from(schema.users)
+    .leftJoin(schema.departments, eq(schema.users.deptId, schema.departments.id))
+    .where(or(eq(schema.users.id, id), eq(schema.users.publicId, id)));
 
     if (users.length === 0) {
       return NextResponse.json(
@@ -50,11 +50,11 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    const user = users[0];
+    const user = users[0]!;
 
     // 数据范围检查
-    if (user.dept_id) {
-      const hasScope = await checkDataScope(adminUserId, user.dept_id);
+    if (user.deptId) {
+      const hasScope = await checkDataScope(adminUserId, user.deptId);
       if (!hasScope) {
         return NextResponse.json(
           { error: 'forbidden', message: '无权查看该用户' },
@@ -62,7 +62,6 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         );
       }
     } else {
-      // 如果目标用户没有部门，检查管理员是否拥有全量权限
       const filter = await getDataScopeFilter(adminUserId);
       if (filter.type !== 'ALL') {
         return NextResponse.json(
@@ -73,30 +72,34 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     }
 
     // 查询用户角色
-    const roles = await sql`
-      SELECT r.id, r.public_id, r.code, r.name, r.description
-      FROM roles r
-      JOIN user_roles ur ON r.id = ur.role_id
-      WHERE ur.user_id = ${user.id}
-    `;
+    const roles = await db.select({
+      id: schema.roles.id,
+      publicId: schema.roles.publicId,
+      code: schema.roles.code,
+      name: schema.roles.name,
+      description: schema.roles.description,
+    })
+    .from(schema.roles)
+    .innerJoin(schema.userRoles, eq(schema.roles.id, schema.userRoles.roleId))
+    .where(eq(schema.userRoles.userId, user.id));
 
     return NextResponse.json({
       data: {
         id: user.id,
-        publicId: user.public_id,
+        publicId: user.publicId,
         username: user.username,
         email: user.email,
         name: user.name,
-        avatarUrl: user.avatar_url,
+        avatarUrl: user.avatarUrl,
         status: user.status,
-        deptId: user.dept_id,
-        deptName: user.dept_name,
-        createdAt: user.created_at,
-        updatedAt: user.updated_at,
-        lastLoginAt: user.last_login_at,
+        deptId: user.deptId,
+        deptName: user.deptName,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt,
+        lastLoginAt: user.lastLoginAt,
         roles: roles.map(r => ({
           id: r.id,
-          publicId: r.public_id,
+          publicId: r.publicId,
           code: r.code,
           name: r.name,
           description: r.description,
@@ -118,9 +121,9 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     const { name, email, status, deptId, avatarUrl } = body;
 
     // 检查用户是否存在
-    const users = await sql`
-      SELECT id, dept_id FROM users WHERE id = ${id} OR public_id = ${id}
-    `;
+    const users = await db.select()
+      .from(schema.users)
+      .where(or(eq(schema.users.id, id), eq(schema.users.publicId, id)));
 
     if (users.length === 0) {
       return NextResponse.json(
@@ -129,11 +132,11 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    const existingUser = users[0];
+    const existingUser = users[0]!;
 
     // 数据范围检查：修改用户前，用户必须在当前管理员的数据范围内
-    if (existingUser.dept_id) {
-      const hasScope = await checkDataScope(adminUserId, existingUser.dept_id);
+    if (existingUser.deptId) {
+      const hasScope = await checkDataScope(adminUserId, existingUser.deptId);
       if (!hasScope) {
         return NextResponse.json(
           { error: 'forbidden', message: '无权修改该用户' },
@@ -151,7 +154,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     }
 
     // 如果尝试将用户移至新部门，检查新部门是否在范围内
-    if (deptId && deptId !== existingUser.dept_id) {
+    if (deptId && deptId !== existingUser.deptId) {
       const hasNewScope = await checkDataScope(adminUserId, deptId);
       if (!hasNewScope) {
         return NextResponse.json(
@@ -162,17 +165,16 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     }
 
     // 更新用户
-    await sql`
-      UPDATE users
-      SET
-        name = COALESCE(${name}, name),
-        email = COALESCE(${email}, email),
-        status = COALESCE(${status}, status),
-        dept_id = ${deptId !== undefined ? (deptId || null) : existingUser.dept_id},
-        avatar_url = COALESCE(${avatarUrl}, avatar_url),
-        updated_at = NOW()
-      WHERE id = ${existingUser.id}
-    `;
+    await db.update(schema.users)
+      .set({
+        name: name ?? existingUser.name,
+        email: email ?? existingUser.email,
+        status: status ?? existingUser.status,
+        deptId: deptId !== undefined ? (deptId || null) : existingUser.deptId,
+        avatarUrl: avatarUrl ?? existingUser.avatarUrl,
+        updatedAt: new Date(),
+      })
+      .where(eq(schema.users.id, existingUser.id));
 
     return NextResponse.json({ success: true });
   });
@@ -188,9 +190,9 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     const { id } = await params;
 
     // 检查用户是否存在
-    const users = await sql`
-      SELECT id, dept_id FROM users WHERE id = ${id} OR public_id = ${id}
-    `;
+    const users = await db.select()
+      .from(schema.users)
+      .where(or(eq(schema.users.id, id), eq(schema.users.publicId, id)));
 
     if (users.length === 0) {
       return NextResponse.json(
@@ -199,11 +201,11 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    const existingUser = users[0];
+    const existingUser = users[0]!;
 
     // 数据范围检查
-    if (existingUser.dept_id) {
-      const hasScope = await checkDataScope(adminUserId, existingUser.dept_id);
+    if (existingUser.deptId) {
+      const hasScope = await checkDataScope(adminUserId, existingUser.deptId);
       if (!hasScope) {
         return NextResponse.json(
           { error: 'forbidden', message: '无权删除该用户' },
@@ -221,7 +223,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     }
 
     // 删除用户（级联删除关联数据）
-    await sql`DELETE FROM users WHERE id = ${existingUser.id}`;
+    await db.delete(schema.users).where(eq(schema.users.id, existingUser.id));
 
     return NextResponse.json({ success: true });
   });

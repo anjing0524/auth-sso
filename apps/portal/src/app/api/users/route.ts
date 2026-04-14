@@ -4,7 +4,8 @@
  * POST /api/users - 创建用户
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { sql } from '@/lib/db';
+import { db, schema } from '@/lib/db';
+import { eq, or, ilike, inArray, desc, sql as drizzleSql } from 'drizzle-orm';
 import { randomBytes } from 'crypto';
 import { withPermission, getDataScopeFilter, checkDataScope } from '@/lib/auth-middleware';
 
@@ -36,20 +37,44 @@ export async function GET(request: NextRequest) {
     // 获取数据范围过滤器
     const scopeFilter = await getDataScopeFilter(userId);
 
-    // 构建查询条件
-    const conditions: string[] = [];
+    // 构建基础查询
+    let query = db.select({
+      id: schema.users.id,
+      publicId: schema.users.publicId,
+      username: schema.users.username,
+      email: schema.users.email,
+      name: schema.users.name,
+      avatarUrl: schema.users.avatarUrl,
+      status: schema.users.status,
+      deptId: schema.users.deptId,
+      deptName: schema.departments.name,
+      createdAt: schema.users.createdAt,
+      lastLoginAt: schema.users.lastLoginAt,
+    })
+    .from(schema.users)
+    .leftJoin(schema.departments, eq(schema.users.deptId, schema.departments.id));
+
+    // 构建条件
+    const conditions = [];
+
     if (keyword) {
-      conditions.push(`(u.name ILIKE '%${keyword.replace(/'/g, "''")}%' OR u.email ILIKE '%${keyword.replace(/'/g, "''")}%' OR u.username ILIKE '%${keyword.replace(/'/g, "''")}%')`);
+      conditions.push(
+        or(
+          ilike(schema.users.name, `%${keyword}%`),
+          ilike(schema.users.email, `%${keyword}%`),
+          ilike(schema.users.username, `%${keyword}%`)
+        )
+      );
     }
+
     if (status) {
-      conditions.push(`u.status = '${status}'`);
+      conditions.push(eq(schema.users.status, status as 'ACTIVE' | 'DISABLED' | 'LOCKED'));
     }
-    
+
     // 部门筛选与数据范围过滤的交集处理
     if (scopeFilter.type === 'LIST') {
       const allowedDeptIds = scopeFilter.deptIds || [];
       if (allowedDeptIds.length === 0) {
-        // 如果没有允许的部门，返回空结果
         return NextResponse.json({
           data: [],
           pagination: { page, pageSize, total: 0, totalPages: 0 },
@@ -57,67 +82,47 @@ export async function GET(request: NextRequest) {
       }
 
       if (deptId) {
-        // 如果指定了部门，检查该部门是否在允许范围内
         if (allowedDeptIds.includes(deptId)) {
-          conditions.push(`u.dept_id = '${deptId}'`);
+          conditions.push(eq(schema.users.deptId, deptId));
         } else {
-          // 请求的部门不在数据范围内
           return NextResponse.json({
             data: [],
             pagination: { page, pageSize, total: 0, totalPages: 0 },
           });
         }
       } else {
-        // 自动限制在数据范围内
-        conditions.push(`u.dept_id IN ${sql(allowedDeptIds)}`);
+        conditions.push(inArray(schema.users.deptId, allowedDeptIds));
       }
     } else if (deptId) {
-      // ALL 权限且指定了部门
-      conditions.push(`u.dept_id = '${deptId}'`);
+      conditions.push(eq(schema.users.deptId, deptId));
     }
 
-    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+    // 执行查询
+    const users = await query
+      .where(conditions.length > 0 ? drizzleSql`${drizzleSql.join(conditions.map((c, i) => i === 0 ? c : drizzleSql` AND ${c}`))}` : undefined)
+      .orderBy(desc(schema.users.createdAt))
+      .limit(pageSize)
+      .offset(offset);
 
-    // 查询总数
-    const countResult = await sql`
-      SELECT COUNT(*) as total FROM users u ${sql.unsafe(whereClause)}
-    `;
-    const total = parseInt(countResult[0]?.total || '0', 10);
-
-    // 查询用户列表
-    const users = await sql`
-      SELECT
-        u.id,
-        u.public_id,
-        u.username,
-        u.email,
-        u.name,
-        u.avatar_url,
-        u.status,
-        u.dept_id,
-        d.name as dept_name,
-        u.created_at,
-        u.last_login_at
-      FROM users u
-      LEFT JOIN departments d ON u.dept_id = d.id
-      ${sql.unsafe(whereClause)}
-      ORDER BY u.created_at DESC
-      LIMIT ${pageSize} OFFSET ${offset}
-    `;
+    // 获取总数
+    const countResult = await db.select({ count: drizzleSql`COUNT(*)::int` })
+      .from(schema.users)
+      .where(conditions.length > 0 ? drizzleSql`${drizzleSql.join(conditions.map((c, i) => i === 0 ? c : drizzleSql` AND ${c}`))}` : undefined);
+    const total = Number(countResult[0]?.count ?? 0);
 
     return NextResponse.json({
       data: users.map(u => ({
         id: u.id,
-        publicId: u.public_id,
+        publicId: u.publicId,
         username: u.username,
         email: u.email,
         name: u.name,
-        avatarUrl: u.avatar_url,
+        avatarUrl: u.avatarUrl,
         status: u.status,
-        deptId: u.dept_id,
-        deptName: u.dept_name,
-        createdAt: u.created_at,
-        lastLoginAt: u.last_login_at,
+        deptId: u.deptId,
+        deptName: u.deptName,
+        createdAt: u.createdAt,
+        lastLoginAt: u.lastLoginAt,
       })),
       pagination: {
         page,
@@ -159,9 +164,9 @@ export async function POST(request: NextRequest) {
     }
 
     // 检查用户名是否已存在
-    const existingUser = await sql`
-      SELECT id FROM users WHERE username = ${username} OR email = ${email}
-    `;
+    const existingUser = await db.select()
+      .from(schema.users)
+      .where(or(eq(schema.users.username, username), eq(schema.users.email, email)));
 
     if (existingUser.length > 0) {
       return NextResponse.json(
@@ -175,10 +180,18 @@ export async function POST(request: NextRequest) {
     const publicId = `user_${generateId(8)}`;
 
     // 创建用户
-    await sql`
-      INSERT INTO users (id, public_id, username, email, name, password, status, dept_id, created_at, updated_at)
-      VALUES (${id}, ${publicId}, ${username}, ${email}, ${name}, ${password}, ${status}, ${deptId || null}, NOW(), NOW())
-    `;
+    await db.insert(schema.users).values({
+      id,
+      publicId,
+      username,
+      email,
+      name,
+      password,
+      status: status as 'ACTIVE' | 'DISABLED' | 'LOCKED',
+      deptId: deptId ?? null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
 
     return NextResponse.json({
       success: true,

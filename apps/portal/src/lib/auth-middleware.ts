@@ -5,7 +5,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession, getSessionIdFromCookie } from './session';
 import { getUserPermissionContext } from './permissions';
-import { sql } from './db';
+import { db, schema } from '@/lib/db';
+import { eq, inArray, sql as drizzleSql } from 'drizzle-orm';
 
 /**
  * 权限检查选项
@@ -221,7 +222,7 @@ export async function checkDataScope(
       try {
         // 使用递归查询判断 targetDeptId 是否为 context.deptId 的子部门
         // 限制递归深度为 10 层，防止死循环
-        const result = await sql`
+        const result = await db.execute(drizzleSql`
           WITH RECURSIVE sub_depts AS (
             SELECT id, 1 as depth FROM departments WHERE id = ${context.deptId}
             UNION ALL
@@ -230,8 +231,8 @@ export async function checkDataScope(
             WHERE sd.depth < 10
           )
           SELECT 1 FROM sub_depts WHERE id = ${targetDeptId}
-        `;
-        return result.length > 0;
+        `);
+        return result.rows.length > 0;
       } catch (error) {
         console.error('[DataScope] DEPT_AND_SUB query error:', error);
         // 查询失败时回退到仅检查当前部门，确保安全
@@ -244,10 +245,12 @@ export async function checkDataScope(
       const roleIds = context.roles.map(r => r.id);
       if (roleIds.length === 0) return false;
 
-      const result = await sql`
-        SELECT 1 FROM role_data_scopes 
-        WHERE role_id IN ${sql(roleIds)} AND dept_id = ${targetDeptId}
-      `;
+      const result = await db.select()
+        .from(schema.roleDataScopes)
+        .where(
+          drizzleSql`${schema.roleDataScopes.roleId} IN ${drizzleSql.raw(`(${roleIds.map(id => `'${id}'`).join(',')})`)} AND ${schema.roleDataScopes.deptId} = ${targetDeptId}`
+        );
+
       return result.length > 0;
     }
 
@@ -279,7 +282,7 @@ export async function getDataScopeFilter(
 
     try {
       // 递归获取所有子部门 ID，限制深度为 10
-      const result = await sql`
+      const result = await db.execute(drizzleSql`
         WITH RECURSIVE sub_depts AS (
           SELECT id, 1 as depth FROM departments WHERE id = ${context.deptId}
           UNION ALL
@@ -288,8 +291,8 @@ export async function getDataScopeFilter(
           WHERE sd.depth < 10
         )
         SELECT id FROM sub_depts
-      `;
-      return { type: 'LIST', deptIds: result.map((r: any) => r.id) };
+      `);
+      return { type: 'LIST', deptIds: result.rows.map((r: any) => r.id) };
     } catch (error) {
       console.error('[DataScope] getDataScopeFilter query error:', error);
       // 查询失败时回退到仅包含当前部门
@@ -301,11 +304,11 @@ export async function getDataScopeFilter(
     const roleIds = context.roles.map(r => r.id);
     if (roleIds.length === 0) return { type: 'LIST', deptIds: [] };
 
-    const result = await sql`
-      SELECT DISTINCT dept_id FROM role_data_scopes 
-      WHERE role_id IN ${sql(roleIds)}
-    `;
-    return { type: 'LIST', deptIds: result.map((r: any) => r.dept_id) };
+    const result = await db.selectDistinct({ deptId: schema.roleDataScopes.deptId })
+      .from(schema.roleDataScopes)
+      .where(inArray(schema.roleDataScopes.roleId, roleIds));
+
+    return { type: 'LIST', deptIds: result.map(r => r.deptId) };
   }
 
   return { type: 'LIST', deptIds: [] };

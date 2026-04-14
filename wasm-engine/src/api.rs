@@ -99,6 +99,11 @@ impl GraphEngineWasm {
             .init(&self.gpu_context)
             .map_err(|e| JsValue::from_str(&e))?;
 
+        // 创建绑定组（只需创建一次）
+        self.pipeline
+            .create_bind_group(&self.gpu_context, &self.uniform_buffer)
+            .map_err(|e| JsValue::from_str(&e))?;
+
         // 初始化力导向模拟器（使用 CPU 模式）
         self.simulator.set_mode(SimulationMode::Cpu);
         self.simulator
@@ -168,12 +173,7 @@ impl GraphEngineWasm {
             self.uniform_buffer.upload(queue);
         }
 
-        // 创建绑定组
-        self.pipeline
-            .create_bind_group(&self.gpu_context, &self.uniform_buffer)
-            .map_err(|e| JsValue::from_str(&e))?;
-
-        // 渲染
+        // 渲染（绑定组在 init 时已创建）
         self.pipeline
             .render(&self.gpu_context, &self.instances)
             .map_err(|e| JsValue::from_str(&e))?;
@@ -376,10 +376,13 @@ impl Default for GraphEngineWasm {
 /// 检查 WebGPU 支持
 #[wasm_bindgen]
 pub fn is_webgpu_supported() -> bool {
-    // 检查 navigator.gpu 是否存在
+    // 检查 navigator.gpu 是否存在且不为 undefined
     if let Some(window) = web_sys::window() {
         if let Ok(navigator) = js_sys::Reflect::get(&window, &JsValue::from_str("navigator")) {
-            return js_sys::Reflect::get(&navigator, &JsValue::from_str("gpu")).is_ok();
+            if let Ok(gpu) = js_sys::Reflect::get(&navigator, &JsValue::from_str("gpu")) {
+                // 检查 gpu 是否不是 undefined 或 null
+                return !gpu.is_undefined() && !gpu.is_null();
+            }
         }
     }
     false

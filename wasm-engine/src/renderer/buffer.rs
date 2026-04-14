@@ -173,8 +173,10 @@ pub struct UniformData {
     pub pan_x: f32,
     /// 平移 Y
     pub pan_y: f32,
-    /// 填充
-    pub _padding: [f32; 3],
+    /// 填充字段（对齐到 32 字节）
+    pub _pad1: f32,
+    pub _pad2: f32,
+    pub _pad3: f32,
 }
 
 impl Default for UniformData {
@@ -185,7 +187,9 @@ impl Default for UniformData {
             zoom: 1.0,
             pan_x: 0.0,
             pan_y: 0.0,
-            _padding: [0.0; 3],
+            _pad1: 0.0,
+            _pad2: 0.0,
+            _pad3: 0.0,
         }
     }
 }

@@ -20,12 +20,6 @@ pub struct RenderPipeline {
 
     /// 绑定组
     bind_group: Option<wgpu::BindGroup>,
-
-    /// 顶点缓冲区（单位圆形）
-    circle_vertex_buffer: Option<wgpu::Buffer>,
-
-    /// 顶点数量
-    circle_vertex_count: u32,
 }
 
 impl Default for RenderPipeline {
@@ -42,8 +36,6 @@ impl RenderPipeline {
             edge_pipeline: None,
             bind_group_layout: None,
             bind_group: None,
-            circle_vertex_buffer: None,
-            circle_vertex_count: 0,
         }
     }
 
@@ -52,6 +44,10 @@ impl RenderPipeline {
         let device = gpu_context
             .device()
             .ok_or("GPU device not initialized")?;
+
+        let surface_format = gpu_context
+            .surface_format()
+            .ok_or("Surface format not initialized")?;
 
         // 创建绑定组布局
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -95,7 +91,7 @@ impl RenderPipeline {
                 module: &node_shader,
                 entry_point: Some("fs_node"),
                 targets: &[Some(wgpu::ColorTargetState {
-                    format: wgpu::TextureFormat::Bgra8UnormSrgb,
+                    format: surface_format,
                     blend: Some(wgpu::BlendState::ALPHA_BLENDING),
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
@@ -137,7 +133,7 @@ impl RenderPipeline {
                 module: &edge_shader,
                 entry_point: Some("fs_edge"),
                 targets: &[Some(wgpu::ColorTargetState {
-                    format: wgpu::TextureFormat::Bgra8UnormSrgb,
+                    format: surface_format,
                     blend: Some(wgpu::BlendState::ALPHA_BLENDING),
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
@@ -162,25 +158,9 @@ impl RenderPipeline {
             cache: None,
         });
 
-        // 创建单位圆顶点（用于实例化节点）
-        let circle_vertices = Self::create_circle_vertices(32);
-        let vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Circle Vertex Buffer"),
-            size: (circle_vertices.len() * std::mem::size_of::<[f32; 2]>()) as u64,
-            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-
-        // 上传顶点数据
-        let queue = gpu_context.queue().ok_or("GPU queue not initialized")?;
-        let bytes: &[u8] = bytemuck::cast_slice(&circle_vertices);
-        queue.write_buffer(&vertex_buffer, 0, bytes);
-
         self.node_pipeline = Some(node_pipeline);
         self.edge_pipeline = Some(edge_pipeline);
         self.bind_group_layout = Some(bind_group_layout);
-        self.circle_vertex_buffer = Some(vertex_buffer);
-        self.circle_vertex_count = circle_vertices.len() as u32;
 
         Ok(())
     }
@@ -217,22 +197,6 @@ impl RenderPipeline {
         Ok(())
     }
 
-    /// 创建单位圆顶点
-    fn create_circle_vertices(segments: u32) -> Vec<[f32; 2]> {
-        let mut vertices = Vec::with_capacity(segments as usize + 2);
-
-        // 中心点
-        vertices.push([0.0, 0.0]);
-
-        // 圆周上的点
-        for i in 0..=segments {
-            let angle = (i as f32 / segments as f32) * std::f32::consts::TAU;
-            vertices.push([angle.cos(), angle.sin()]);
-        }
-
-        vertices
-    }
-
     /// 渲染帧
     pub fn render(
         &self,
@@ -261,11 +225,6 @@ impl RenderPipeline {
             .bind_group
             .as_ref()
             .ok_or("Bind group not initialized")?;
-
-        let circle_buffer = self
-            .circle_vertex_buffer
-            .as_ref()
-            .ok_or("Circle vertex buffer not initialized")?;
 
         let node_instance_buffer = instance_manager
             .node_buffer()
@@ -341,11 +300,11 @@ impl RenderPipeline {
             // 绘制节点（实例化）
             render_pass.set_pipeline(node_pipeline);
             render_pass.set_bind_group(0, bind_group, &[]);
-            render_pass.set_vertex_buffer(0, circle_buffer.slice(..));
-            render_pass.set_vertex_buffer(1, node_instance_buffer.slice(..));
+            render_pass.set_vertex_buffer(0, node_instance_buffer.slice(..));
 
             let node_count = instance_manager.node_count();
-            render_pass.draw(0..self.circle_vertex_count, 0..node_count);
+            // 每个节点绘制一个圆形（中心 + 32 段 + 闭合点 = 34 顶点）
+            render_pass.draw(0..34, 0..node_count);
         }
 
         // 提交命令
@@ -362,7 +321,6 @@ impl RenderPipeline {
         self.edge_pipeline = None;
         self.bind_group_layout = None;
         self.bind_group = None;
-        self.circle_vertex_buffer = None;
     }
 }
 

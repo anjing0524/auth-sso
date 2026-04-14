@@ -1,7 +1,14 @@
+/**
+ * 角色数据范围 API
+ * GET /api/roles/[id]/data-scopes - 获取角色的自定义数据范围
+ * POST /api/roles/[id]/data-scopes - 批量更新角色的自定义数据范围
+ * DELETE /api/roles/[id]/data-scopes - 移除特定部门关联
+ */
 import { NextRequest, NextResponse } from 'next/server';
-import { sql } from '@/lib/db';
-import { withPermission } from '@/lib/auth-middleware';
+import { db, schema } from '@/lib/db';
+import { eq } from 'drizzle-orm';
 import { randomBytes } from 'crypto';
+import { withPermission } from '@/lib/auth-middleware';
 
 export const runtime = 'nodejs';
 
@@ -24,9 +31,9 @@ export async function GET(
 
   return withPermission(request, { permissions: ['role:read'] }, async () => {
     // 检查角色是否存在
-    const roleResult = await sql`
-      SELECT id FROM roles WHERE id = ${roleId}
-    `;
+    const roleResult = await db.select()
+      .from(schema.roles)
+      .where(eq(schema.roles.id, roleId));
 
     if (roleResult.length === 0) {
       return NextResponse.json(
@@ -36,21 +43,20 @@ export async function GET(
     }
 
     // 查询关联的部门
-    const dataScopes = await sql`
-      SELECT 
-        rds.dept_id,
-        d.name as dept_name,
-        d.public_id as dept_public_id
-      FROM role_data_scopes rds
-      JOIN departments d ON rds.dept_id = d.id
-      WHERE rds.role_id = ${roleId}
-    `;
+    const dataScopes = await db.select({
+      deptId: schema.roleDataScopes.deptId,
+      deptName: schema.departments.name,
+      deptPublicId: schema.departments.publicId,
+    })
+    .from(schema.roleDataScopes)
+    .innerJoin(schema.departments, eq(schema.roleDataScopes.deptId, schema.departments.id))
+    .where(eq(schema.roleDataScopes.roleId, roleId));
 
     return NextResponse.json({
       data: dataScopes.map(ds => ({
-        deptId: ds.dept_id,
-        deptName: ds.dept_name,
-        deptPublicId: ds.dept_public_id,
+        deptId: ds.deptId,
+        deptName: ds.deptName,
+        deptPublicId: ds.deptPublicId,
       })),
     });
   });
@@ -80,9 +86,9 @@ export async function POST(
       }
 
       // 检查角色是否存在
-      const roleResult = await sql`
-        SELECT id FROM roles WHERE id = ${roleId}
-      `;
+      const roleResult = await db.select()
+        .from(schema.roles)
+        .where(eq(schema.roles.id, roleId));
 
       if (roleResult.length === 0) {
         return NextResponse.json(
@@ -91,25 +97,20 @@ export async function POST(
         );
       }
 
-      // 开启事务处理
-      await sql.begin(async (tx: any) => {
+      // 使用事务处理
+      await db.transaction(async (tx) => {
         // 1. 删除旧的关联
-        await tx`
-          DELETE FROM role_data_scopes WHERE role_id = ${roleId}
-        `;
+        await tx.delete(schema.roleDataScopes).where(eq(schema.roleDataScopes.roleId, roleId));
 
         // 2. 插入新的关联
         if (deptIds.length > 0) {
           const values = deptIds.map(deptId => ({
             id: generateId(20),
-            role_id: roleId,
-            dept_id: deptId,
-            created_at: new Date(),
+            roleId,
+            deptId,
+            createdAt: new Date(),
           }));
-
-          await tx`
-            INSERT INTO role_data_scopes ${tx(values, 'id', 'role_id', 'dept_id', 'created_at')}
-          `;
+          await tx.insert(schema.roleDataScopes).values(values);
         }
       });
 
@@ -126,7 +127,7 @@ export async function POST(
 
 /**
  * DELETE /api/roles/[id]/data-scopes
- * 移除特定的部门关联（可选，通常 POST 批量更新已足够）
+ * 移除特定的部门关联
  */
 export async function DELETE(
   request: NextRequest,
@@ -144,10 +145,8 @@ export async function DELETE(
   }
 
   return withPermission(request, { permissions: ['role:update'] }, async () => {
-    await sql`
-      DELETE FROM role_data_scopes 
-      WHERE role_id = ${roleId} AND dept_id = ${deptId}
-    `;
+    await db.delete(schema.roleDataScopes)
+      .where(eq(schema.roleDataScopes.roleId, roleId));
 
     return NextResponse.json({ success: true });
   });

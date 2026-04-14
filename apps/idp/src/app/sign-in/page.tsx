@@ -67,28 +67,30 @@ export default async function SignInPage({ searchParams }: SearchParams) {
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8">
         {/* Header */}
-        <div>
-          <h1 className="mt-6 text-center text-3xl font-bold tracking-tight text-gray-900">
-            Auth-SSO 登录
+        <div className="bg-white p-8 rounded-t-lg shadow-sm border-b border-gray-100">
+          <h1 className="text-center text-3xl font-bold tracking-tight text-gray-900">
+            统一身份认证
           </h1>
-          <p className="mt-2 text-center text-sm text-gray-600">
-            统一身份认证平台
+          <p className="mt-2 text-center text-sm text-gray-500">
+            Auth-SSO Identity Provider
           </p>
         </div>
 
-        {/* 登录表单 */}
-        <Suspense fallback={<div className="text-center">加载中...</div>}>
-          <SignInForm
-            redirectUrl={redirectUrl}
-            clientId={clientId}
-            scope={scope}
-            state={state}
-            codeChallenge={codeChallenge}
-            codeChallengeMethod={codeChallengeMethod}
-            responseType={responseType}
-            nonce={nonce}
-          />
-        </Suspense>
+        {/* 登录表单卡片 */}
+        <div className="bg-white p-8 rounded-b-lg shadow-md">
+          <Suspense fallback={<div className="text-center py-4">加载中...</div>}>
+            <SignInForm
+              redirectUrl={redirectUrl}
+              clientId={clientId}
+              scope={scope}
+              state={state}
+              codeChallenge={codeChallenge}
+              codeChallengeMethod={codeChallengeMethod}
+              responseType={responseType}
+              nonce={nonce}
+            />
+          </Suspense>
+        </div>
       </div>
     </div>
   );

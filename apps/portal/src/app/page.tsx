@@ -3,8 +3,20 @@
  * Auth-SSO 管理门户入口页面
  */
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
+import { getSessionIdFromCookie, getSession } from '@/lib/session';
 
-export default function HomePage() {
+export default async function HomePage() {
+  // 检查登录状态
+  const sessionId = await getSessionIdFromCookie();
+  if (sessionId) {
+    const session = await getSession(sessionId);
+    if (session) {
+      // 已登录，重定向到 Dashboard
+      redirect('/dashboard');
+    }
+  }
+
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-blue-50 to-indigo-100">
       {/* 导航栏 */}

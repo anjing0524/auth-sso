@@ -4,7 +4,8 @@
  * POST /api/permissions - 创建权限
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { sql } from '@/lib/db';
+import { db, schema } from '@/lib/db';
+import { eq, asc } from 'drizzle-orm';
 import { withPermission } from '@/lib/auth-middleware';
 
 export const runtime = 'nodejs';
@@ -14,44 +15,35 @@ export const runtime = 'nodejs';
  * 获取权限列表
  */
 export async function GET(request: NextRequest) {
-  return withPermission(request, { permissions: ['permission:list'] }, async (userId) => {
+  return withPermission(request, { permissions: ['permission:list'] }, async () => {
     try {
       const searchParams = request.nextUrl.searchParams;
       const type = searchParams.get('type') || '';
 
-      const whereClause = type ? `WHERE type = '${type}'` : '';
+      // 构建条件
+      const conditions = [];
+      if (type) {
+        conditions.push(eq(schema.permissions.type, type as 'MENU' | 'API' | 'DATA'));
+      }
 
-      const permissions = await sql`
-        SELECT
-          p.id,
-          p.public_id,
-          p.name,
-          p.code,
-          p.type,
-          p.resource,
-          p.action,
-          p.parent_id,
-          p.status,
-          p.sort,
-          p.created_at
-        FROM permissions p
-        ${sql.unsafe(whereClause)}
-        ORDER BY p.sort ASC, p.created_at ASC
-      `;
+      const permissions = await db.select()
+        .from(schema.permissions)
+        .where(conditions.length > 0 ? conditions[0] : undefined)
+        .orderBy(asc(schema.permissions.sort), asc(schema.permissions.createdAt));
 
       return NextResponse.json({
-        data: permissions.map((p: any) => ({
+        data: permissions.map(p => ({
           id: p.id,
-          publicId: p.public_id,
+          publicId: p.publicId,
           name: p.name,
           code: p.code,
           type: p.type,
           resource: p.resource,
           action: p.action,
-          parentId: p.parent_id,
+          parentId: p.parentId,
           status: p.status,
           sort: p.sort,
-          createdAt: p.created_at,
+          createdAt: p.createdAt,
         })),
       });
     } catch (error) {
@@ -69,7 +61,7 @@ export async function GET(request: NextRequest) {
  * 创建权限
  */
 export async function POST(request: NextRequest) {
-  return withPermission(request, { permissions: ['permission:create'] }, async (userId) => {
+  return withPermission(request, { permissions: ['permission:create'] }, async () => {
     try {
       const body = await request.json();
       const { name, code, type = 'API', resource, action, parentId, sort = 0, status = 'ACTIVE' } = body;
@@ -82,9 +74,9 @@ export async function POST(request: NextRequest) {
       }
 
       // 检查编码是否已存在
-      const existing = await sql`
-        SELECT id FROM permissions WHERE code = ${code}
-      `;
+      const existing = await db.select()
+        .from(schema.permissions)
+        .where(eq(schema.permissions.code, code));
 
       if (existing.length > 0) {
         return NextResponse.json(
@@ -93,13 +85,23 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const id = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      const id = crypto.randomUUID();
       const publicId = `perm_${Date.now().toString(36)}`;
 
-      await sql`
-        INSERT INTO permissions (id, public_id, name, code, type, resource, action, parent_id, sort, status, created_at, updated_at)
-        VALUES (${id}, ${publicId}, ${name}, ${code}, ${type}, ${resource || null}, ${action || null}, ${parentId || null}, ${sort}, ${status}, NOW(), NOW())
-      `;
+      await db.insert(schema.permissions).values({
+        id,
+        publicId,
+        name,
+        code,
+        type: type as 'MENU' | 'API' | 'DATA',
+        resource: resource ?? null,
+        action: action ?? null,
+        parentId: parentId ?? null,
+        sort,
+        status: status as 'ACTIVE' | 'DISABLED',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
 
       return NextResponse.json({
         success: true,

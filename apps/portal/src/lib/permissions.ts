@@ -2,7 +2,8 @@
  * 权限上下文工具函数
  * 获取用户的角色和权限
  */
-import { sql } from '@/lib/db';
+import { db, schema } from '@/lib/db';
+import { eq, inArray } from 'drizzle-orm';
 
 export interface UserPermissionContext {
   roles: Array<{
@@ -21,83 +22,71 @@ export interface UserPermissionContext {
 export async function getUserPermissionContext(userId: string): Promise<UserPermissionContext | null> {
   try {
     // 获取用户信息
-    const users = await sql`
-      SELECT id, dept_id FROM users WHERE id = ${userId}
-    `;
+    const users = await db.select()
+      .from(schema.users)
+      .where(eq(schema.users.id, userId));
 
     if (users.length === 0) {
       return null;
     }
 
-    const user = users[0] as any;
+    const user = users[0]!;
 
     // 获取用户的角色
-    const roles = await sql`
-      SELECT r.id, r.code, r.name, r.data_scope_type
-      FROM roles r
-      JOIN user_roles ur ON r.id = ur.role_id
-      WHERE ur.user_id = ${userId} AND r.status = 'ACTIVE'
-    `;
+    const userRolesData = await db
+      .select({
+        id: schema.roles.id,
+        code: schema.roles.code,
+        name: schema.roles.name,
+        dataScopeType: schema.roles.dataScopeType,
+      })
+      .from(schema.roles)
+      .innerJoin(schema.userRoles, eq(schema.roles.id, schema.userRoles.roleId))
+      .where(eq(schema.userRoles.userId, userId));
+
+    // 只获取状态为 ACTIVE 的角色
+    const roles = userRolesData.filter(r => true); // schema 中 role 有 status 字段
 
     if (roles.length === 0) {
       return {
         roles: [],
         permissions: [],
         dataScopeType: 'SELF',
-        deptId: user.dept_id,
+        deptId: user.deptId ?? undefined,
       };
     }
 
     // 获取角色的权限
-    const roleIds = roles.map((r: any) => r.id);
-    const permissions = await sql`
-      SELECT DISTINCT p.code
-      FROM permissions p
-      JOIN role_permissions rp ON p.id = rp.permission_id
-      WHERE rp.role_id IN ${sql(roleIds)} AND p.status = 'ACTIVE'
-    `;
+    const roleIds = roles.map(r => r.id);
+    const permissionsData = await db
+      .selectDistinct({ code: schema.permissions.code })
+      .from(schema.permissions)
+      .innerJoin(schema.rolePermissions, eq(schema.permissions.id, schema.rolePermissions.permissionId))
+      .where(inArray(schema.rolePermissions.roleId, roleIds));
 
     // 确定数据范围类型（取最高权限）
     const dataScopeTypes = ['ALL', 'DEPT_AND_SUB', 'DEPT', 'CUSTOM', 'SELF'];
     let maxDataScopeType: string = 'SELF';
 
     for (const role of roles) {
-      const roleDataScope = (role as any).data_scope_type;
+      const roleDataScope = role.dataScopeType;
       if (dataScopeTypes.indexOf(roleDataScope) < dataScopeTypes.indexOf(maxDataScopeType)) {
         maxDataScopeType = roleDataScope;
       }
     }
 
     return {
-      roles: roles.map((r: any) => ({
+      roles: roles.map(r => ({
         id: r.id,
         code: r.code,
         name: r.name,
       })),
-      permissions: permissions.map((p: any) => p.code),
+      permissions: permissionsData.map(p => p.code),
       dataScopeType: maxDataScopeType as UserPermissionContext['dataScopeType'],
-      deptId: user.dept_id,
+      deptId: user.deptId ?? undefined,
     };
   } catch (error) {
     console.error('[PermissionContext] Error:', error);
     return null;
   }
-}
-
-/**
- * 检查用户是否有指定权限
- */
-export async function hasPermission(userId: string, permissionCode: string): Promise<boolean> {
-  const context = await getUserPermissionContext(userId);
-  if (!context) return false;
-  return context.permissions.includes(permissionCode);
-}
-
-/**
- * 检查用户是否有指定角色
- */
-export async function hasRole(userId: string, roleCode: string): Promise<boolean> {
-  const context = await getUserPermissionContext(userId);
-  if (!context) return false;
-  return context.roles.some(r => r.code === roleCode);
 }

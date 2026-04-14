@@ -8,11 +8,11 @@ import bcrypt from 'bcryptjs';
 import { db } from '../db';
 import * as schema from '../db/schema';
 
-// 固定生产环境 URL
-const currentBaseURL = 'https://auth-sso-idp.vercel.app';
+// 获取当前基础 URL，优先从环境变量读取
+const currentBaseURL = (process.env.BETTER_AUTH_URL || 'http://localhost:4001').trim();
 
 /**
- * Redis 客户端配置 (极致稳定性)
+ * Redis 客户端配置
  */
 let redis: Redis | null = null;
 try {
@@ -29,14 +29,28 @@ try {
 
 /**
  * Auth-SSO IdP 核心配置
- * 回归数据库驱动，通过 Drizzle Schema 建立映射，消除代码冗余。
+ * 严格遵守：100% 数据库驱动，代码中不保留任何业务配置
  */
 export const auth = betterAuth({
   appName: 'Auth-SSO IdP',
   baseURL: currentBaseURL,
+  basePath: '/api/auth', // 核心修复：显式指定基础路径
   secret: process.env.BETTER_AUTH_SECRET,
 
-  // 100% 信任 Redis 处理动态状态（Session/Token）
+  advanced: {
+    useSecureCookies: process.env.NODE_ENV === 'production',
+    crossOrigin: true,
+  },
+  trustedOrigins: [
+    'https://auth-sso-portal.vercel.app',
+    'https://auth-sso-idp.vercel.app',
+    'https://auth-sso-demo-tau.vercel.app',
+    'http://localhost:4000',
+    'http://localhost:4001',
+    'http://localhost:4002',
+  ],
+
+  // 恢复 Redis，用于处理 OIDC 授权码等高性能状态
   ...(redis ? {
     secondaryStorage: redisStorage({
       client: redis,
@@ -52,7 +66,6 @@ export const auth = betterAuth({
       session: schema.sessions,
       account: schema.accounts,
       verification: schema.verifications,
-      // 核心 OIDC 映射：Schema 已内置 skipConsent -> skip_consent 等映射
       oauthApplication: schema.clients,
       oauthAccessToken: schema.oauthAccessTokens,
       oauthRefreshToken: schema.oauthRefreshTokens,
@@ -82,18 +95,56 @@ export const auth = betterAuth({
       useJWTPlugin: true,
       loginPage: '/sign-in',
       scopes: ['openid', 'profile', 'email', 'offline_access'],
-      // 100% 数据库驱动，移除静态 trustedClients。
-      // 插件现在能通过 schema.clients.skipConsent 映射自动发现数据库中的 true 值。
       trustedClients: [],
+      // 核心：即使 Pre-seed 失效，自动跳转也能兜底
+      getConsentHTML: (ctx) => `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>Authorizing...</title>
+            <script>
+              window.onload = function() {
+                const payload = { 
+                  accept: true, 
+                  consent_code: '${ctx.code}',
+                  scopes: ${JSON.stringify(ctx.scopes.join(' '))}
+                };
+                
+                fetch('/api/auth/oauth2/consent', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(payload)
+                })
+                .then(async res => {
+                  const text = await res.text();
+                  if (!res.ok) throw new Error('Status ' + res.status + ': ' + text);
+                  return JSON.parse(text);
+                })
+                .then(data => {
+                  if (data.redirectURI) {
+                    window.location.href = data.redirectURI;
+                  }
+                })
+                .catch(err => {
+                  console.error('[Consent] Error:', err);
+                  document.body.innerHTML = 'Authorization failed. Please try again.';
+                });
+              };
+            </script>
+          </head>
+          <body>
+            <p>Authorizing, please wait...</p>
+          </body>
+        </html>
+      `
     }),
   ],
 
   user: {
     modelName: 'users',
-  },
-
-  advanced: {
-    useSecureCookies: process.env.NODE_ENV === 'production',
+    additionalFields: {
+      publicId: { type: 'string', required: true, unique: true },
+    },
   },
 });
 

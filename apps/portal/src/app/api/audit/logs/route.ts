@@ -3,7 +3,8 @@
  * GET /api/audit/logs - 获取操作审计日志列表
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { sql } from '@/lib/db';
+import { db, schema } from '@/lib/db';
+import { eq, desc, sql as drizzleSql } from 'drizzle-orm';
 import { withPermission } from '@/lib/auth-middleware';
 
 export const runtime = 'nodejs';
@@ -11,15 +12,6 @@ export const runtime = 'nodejs';
 /**
  * GET /api/audit/logs
  * 获取操作审计日志列表
- * 权限要求: audit:read
- *
- * Query 参数:
- * - page: 页码，默认 1
- * - pageSize: 每页数量，默认 20
- * - userId: 用户 ID 筛选
- * - operation: 操作类型筛选
- * - startDate: 开始日期
- * - endDate: 结束日期
  */
 export async function GET(request: NextRequest) {
   return withPermission(request, { permissions: ['audit:read'] }, async () => {
@@ -33,66 +25,50 @@ export async function GET(request: NextRequest) {
 
     const offset = (page - 1) * pageSize;
 
-    // 构建查询条件
-    const conditions: string[] = [];
+    // 构建条件
+    const conditions = [];
     if (userId) {
-      conditions.push(`user_id = '${userId.replace(/'/g, "''")}'`);
+      conditions.push(eq(schema.auditLogs.userId, userId));
     }
     if (operation) {
-      conditions.push(`operation = '${operation.replace(/'/g, "''")}'`);
+      conditions.push(eq(schema.auditLogs.operation, operation));
     }
     if (startDate) {
-      conditions.push(`created_at >= '${startDate.replace(/'/g, "''")}'`);
+      conditions.push(drizzleSql`${schema.auditLogs.createdAt} >= ${startDate}`);
     }
     if (endDate) {
-      conditions.push(`created_at <= '${endDate.replace(/'/g, "''")} 23:59:59'`);
+      conditions.push(drizzleSql`${schema.auditLogs.createdAt} <= ${endDate} 23:59:59`);
     }
 
-    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-
     // 查询总数
-    const countResult = await sql`
-      SELECT COUNT(*) as total FROM audit_logs ${sql.unsafe(whereClause)}
-    `;
-    const total = parseInt(countResult[0]?.total || '0', 10);
+    const countResult = await db.select({ count: drizzleSql`COUNT(*)::int` })
+      .from(schema.auditLogs)
+      .where(conditions.length > 0 ? drizzleSql`${conditions.join(' AND ')}` : undefined);
+    const total = Number(countResult[0]?.count ?? 0);
 
     // 查询日志列表
-    const logs = await sql`
-      SELECT
-        id,
-        user_id,
-        username,
-        operation,
-        method,
-        url,
-        params,
-        ip,
-        user_agent,
-        status,
-        duration,
-        error_msg,
-        created_at
-      FROM audit_logs
-      ${sql.unsafe(whereClause)}
-      ORDER BY created_at DESC
-      LIMIT ${pageSize} OFFSET ${offset}
-    `;
+    const logs = await db.select()
+      .from(schema.auditLogs)
+      .where(conditions.length > 0 ? drizzleSql`${conditions.join(' AND ')}` : undefined)
+      .orderBy(desc(schema.auditLogs.createdAt))
+      .limit(pageSize)
+      .offset(offset);
 
     return NextResponse.json({
-      data: logs.map((log: any) => ({
+      data: logs.map(log => ({
         id: log.id,
-        userId: log.user_id,
+        userId: log.userId,
         username: log.username,
         operation: log.operation,
         method: log.method,
         url: log.url,
         params: log.params,
         ip: log.ip,
-        userAgent: log.user_agent,
+        userAgent: log.userAgent,
         status: log.status,
         duration: log.duration,
-        errorMsg: log.error_msg,
-        createdAt: log.created_at,
+        errorMsg: log.errorMsg,
+        createdAt: log.createdAt,
       })),
       pagination: {
         page,

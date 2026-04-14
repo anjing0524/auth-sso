@@ -230,7 +230,7 @@ impl InstanceManager {
         self.edge_instances.len() as u32
     }
 
-    /// 节点实例顶点缓冲区布局
+    /// 节点实例顶点缓冲区布局（slot 0）
     pub fn node_vertex_buffer_layout() -> wgpu::VertexBufferLayout<'static> {
         wgpu::VertexBufferLayout {
             array_stride: std::mem::size_of::<NodeInstance>() as wgpu::BufferAddress,

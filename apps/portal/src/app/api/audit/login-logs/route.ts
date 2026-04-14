@@ -3,7 +3,8 @@
  * GET /api/audit/login-logs - 获取登录日志列表
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { sql } from '@/lib/db';
+import { db, schema } from '@/lib/db';
+import { eq, desc, sql as drizzleSql } from 'drizzle-orm';
 import { withPermission } from '@/lib/auth-middleware';
 
 export const runtime = 'nodejs';
@@ -11,15 +12,6 @@ export const runtime = 'nodejs';
 /**
  * GET /api/audit/login-logs
  * 获取登录日志列表
- * 权限要求: audit:read
- *
- * Query 参数:
- * - page: 页码，默认 1
- * - pageSize: 每页数量，默认 20
- * - userId: 用户 ID 筛选
- * - eventType: 事件类型筛选
- * - startDate: 开始日期
- * - endDate: 结束日期
  */
 export async function GET(request: NextRequest) {
   return withPermission(request, { permissions: ['audit:read'] }, async () => {
@@ -33,58 +25,46 @@ export async function GET(request: NextRequest) {
 
     const offset = (page - 1) * pageSize;
 
-    // 构建查询条件
-    const conditions: string[] = [];
+    // 构建条件
+    const conditions = [];
     if (userId) {
-      conditions.push(`user_id = '${userId.replace(/'/g, "''")}'`);
+      conditions.push(eq(schema.loginLogs.userId, userId));
     }
     if (eventType) {
-      conditions.push(`event_type = '${eventType.replace(/'/g, "''")}'`);
+      conditions.push(eq(schema.loginLogs.eventType, eventType));
     }
     if (startDate) {
-      conditions.push(`created_at >= '${startDate.replace(/'/g, "''")}'`);
+      conditions.push(drizzleSql`${schema.loginLogs.createdAt} >= ${startDate}`);
     }
     if (endDate) {
-      conditions.push(`created_at <= '${endDate.replace(/'/g, "''")} 23:59:59'`);
+      conditions.push(drizzleSql`${schema.loginLogs.createdAt} <= ${endDate} 23:59:59`);
     }
 
-    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-
     // 查询总数
-    const countResult = await sql`
-      SELECT COUNT(*) as total FROM login_logs ${sql.unsafe(whereClause)}
-    `;
-    const total = parseInt(countResult[0]?.total || '0', 10);
+    const countResult = await db.select({ count: drizzleSql`COUNT(*)::int` })
+      .from(schema.loginLogs)
+      .where(conditions.length > 0 ? drizzleSql`${conditions.join(' AND ')}` : undefined);
+    const total = Number(countResult[0]?.count ?? 0);
 
     // 查询日志列表
-    const logs = await sql`
-      SELECT
-        id,
-        user_id,
-        username,
-        event_type,
-        ip,
-        user_agent,
-        location,
-        fail_reason,
-        created_at
-      FROM login_logs
-      ${sql.unsafe(whereClause)}
-      ORDER BY created_at DESC
-      LIMIT ${pageSize} OFFSET ${offset}
-    `;
+    const logs = await db.select()
+      .from(schema.loginLogs)
+      .where(conditions.length > 0 ? drizzleSql`${conditions.join(' AND ')}` : undefined)
+      .orderBy(desc(schema.loginLogs.createdAt))
+      .limit(pageSize)
+      .offset(offset);
 
     return NextResponse.json({
-      data: logs.map((log: any) => ({
+      data: logs.map(log => ({
         id: log.id,
-        userId: log.user_id,
+        userId: log.userId,
         username: log.username,
-        eventType: log.event_type,
+        eventType: log.eventType,
         ip: log.ip,
-        userAgent: log.user_agent,
+        userAgent: log.userAgent,
         location: log.location,
-        failReason: log.fail_reason,
-        createdAt: log.created_at,
+        failReason: log.failReason,
+        createdAt: log.createdAt,
       })),
       pagination: {
         page,
