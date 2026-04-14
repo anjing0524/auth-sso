@@ -32,10 +32,10 @@ Auth-SSO is a unified identity and access management (IAM) system built on top o
 Browser
   -> Portal (BFF)
        -> Redis (Portal Sessions)
-       -> PostgreSQL (Portal Core Data)
+       -> PostgreSQL (Portal Core Domain)
   -> IdP (Better Auth)
        -> Redis (IdP Sessions)
-       -> PostgreSQL (IdP Auth Data)
+       -> PostgreSQL (Auth Domain)
   -> Sub-Applications (OIDC Clients)
        -> IdP (Authorize/Token)
 ```
@@ -50,8 +50,9 @@ Browser
   - Provide Login, Authorization, and Token endpoints.
   - Maintain the "IdP Session" (idp_session cookie) for SSO.
 - **Database**:
-  - `portal_core` schema: Business-level RBAC and organizational data.
-  - `idp_auth` schema: Better Auth internal persistence (users, accounts, refresh tokens).
+  - **Shared Database**: For performance and deployment simplicity, all domains share a single PostgreSQL database.
+  - **Portal Domain**: Business-level RBAC and organizational data.
+  - **Auth Domain**: Better Auth internal persistence (users, accounts, refresh tokens).
 
 ---
 

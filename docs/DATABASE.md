@@ -7,11 +7,11 @@ Status: Released
 
 ## 1. Storage Architecture
 
-Auth-SSO utilizes a hybrid storage approach with PostgreSQL and Redis.
+Auth-SSO utilizes a hybrid storage approach with PostgreSQL and Redis. For simplicity, deployment efficiency (especially in Serverless environments), and cross-domain data consistency, all entities reside in a **single physical PostgreSQL database**, while maintaining a strict **logical separation**.
 
-### 1.1 PostgreSQL Schemas
-- **`portal_core`**: Contains business logic data such as users, organizational structure, RBAC, and client configurations.
-- **`idp_auth`**: Contains identity provider data managed by Better Auth, including authentication credentials, accounts, and session metadata.
+### 1.1 Logical Data Domains
+- **Portal Domain**: Contains business logic data such as users, organizational structure, RBAC, and client configurations.
+- **Identity & Auth Domain**: Contains authentication credentials, accounts, and session metadata managed by Better Auth.
 
 ### 1.2 Redis Keyspaces
 - **`portal:*`**: Stores active Portal sessions and temporary authentication transaction contexts.
@@ -23,29 +23,29 @@ Auth-SSO utilizes a hybrid storage approach with PostgreSQL and Redis.
 
 - **Tables**: Plural snake_case (e.g., `users`, `roles`).
 - **Columns**: Snake_case (e.g., `first_name`, `created_at`).
-- **Primary Keys**: Internal `id bigint` (identity) for relations, and external `public_id varchar(64)` for API/UI visibility.
+- **Primary Keys**: Internal `id` (text/uuid) for relations, and external `public_id varchar(64)` for API/UI visibility.
 - **Foreign Keys**: Reference the internal `id`.
 - **Relationship Tables**: Named as `table1_table2_rel`.
 
 ---
 
-## 3. Core Entities (portal_core)
+## 3. Portal Domain Entities
 
 ### 3.1 Users (`users`)
-- **Primary Key**: `id bigint`
+- **Primary Key**: `id` (text)
 - **External ID**: `public_id varchar(64) unique` (e.g., `u_abc123`)
 - **Username**: `username varchar(64) unique`
 - **Status**: `ACTIVE`, `DISABLED`, `LOCKED`
 - **Audit**: `created_at`, `updated_at`, `deleted_at`
 
 ### 3.2 Departments (`departments`)
-- **Primary Key**: `id bigint`
+- **Primary Key**: `id` (text)
 - **External ID**: `public_id varchar(64) unique` (e.g., `d_abc123`)
-- **Parent**: `parent_id bigint` (self-reference)
+- **Parent**: `parent_id` (self-reference)
 - **Hierarchy**: `ancestors varchar(512)` (materialized path)
 
 ### 3.3 Roles (`roles`)
-- **Primary Key**: `id bigint`
+- **Primary Key**: `id` (text)
 - **External ID**: `public_id varchar(64) unique` (e.g., `r_abc123`)
 - **Code**: `code varchar(64) unique` (e.g., `admin`, `editor`)
 - **Data Scope**: `ALL`, `DEPT`, `DEPT_AND_SUB`, `SELF`, `CUSTOM`
@@ -61,9 +61,9 @@ Auth-SSO utilizes a hybrid storage approach with PostgreSQL and Redis.
 
 ---
 
-## 4. Better Auth (idp_auth)
+## 4. Identity & Auth Domain
 
-These tables are managed by Better Auth migrations:
+These tables are managed by Better Auth migrations and share the same database:
 - **`user`**: Stores authentication-level user data.
 - **`account`**: Links authentication methods (e.g., email/password).
 - **`session`**: Better Auth internal session tracking.

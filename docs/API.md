@@ -37,6 +37,11 @@ Status: Released
 - `NOT_FOUND`: Resource does not exist.
 - `INTERNAL_ERROR`: Unexpected server error.
 
+### 1.4 ID Convention
+- **Public IDs**: All IDs exposed in the API (path parameters, request bodies, responses) are strings (`public_id`), e.g., `u_abc123`.
+- **Internal IDs**: Database primary keys also use strings (UUIDs) for consistency across environments.
+- **Opacity**: Frontend and external consumers never interact with internal database primary keys.
+
 ---
 
 ## 2. Authentication APIs (Portal)
@@ -73,21 +78,21 @@ Log out and invalidate current Portal and IdP sessions.
 Requires `portal_session` and relevant permission codes.
 
 ### 3.1 User Management
-- `GET /api/admin/users`: List users (Paginated).
-- `POST /api/admin/users`: Create a new user.
-- `GET /api/admin/users/:id`: Get user details.
-- `PUT /api/admin/users/:id`: Update user profile/roles.
-- `POST /api/admin/users/:id/reset-password`: Reset password.
+- `GET /api/users`: List users (Paginated).
+- `POST /api/users`: Create a new user.
+- `GET /api/users/:id`: Get user details.
+- `PUT /api/users/:id`: Update user profile/roles.
+- `POST /api/users/:id/reset-password`: Reset password.
 
 ### 3.2 Role & Permission Management
-- `GET /api/admin/roles`: List roles.
-- `POST /api/admin/roles`: Create a role with specific permission IDs.
-- `GET /api/admin/permissions`: List all available permission codes.
+- `GET /api/roles`: List roles.
+- `POST /api/roles`: Create a role with specific permission IDs.
+- `GET /api/permissions`: List all available permission codes.
 
 ### 3.3 Client Management
-- `GET /api/admin/clients`: List OAuth clients.
-- `POST /api/admin/clients`: Register a new OAuth client.
-- `POST /api/admin/clients/:id/rotate-secret`: Generate a new client secret.
+- `GET /api/clients`: List OAuth clients.
+- `POST /api/clients`: Register a new OAuth client.
+- `POST /api/clients/:id/rotate-secret`: Generate a new client secret.
 
 ---
 
