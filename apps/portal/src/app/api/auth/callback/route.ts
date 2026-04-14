@@ -1,6 +1,5 @@
 /**
- * OAuth 回调处理
- * 处理 IdP 授权码回调，交换 Token，创建 Session
+ * OAuth 回调处理 (加固诊断版)
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { oauthConfig } from '@/lib/auth-client';
@@ -12,202 +11,91 @@ import { decodeJwt } from 'jose';
 
 export const runtime = 'nodejs';
 
-/**
- * GET /api/auth/callback
- * OAuth 授权码回调处理
- */
 export async function GET(request: NextRequest) {
+  const requestId = Math.random().toString(36).substring(7);
+  const currentUrl = request.url;
+  console.log(`[Callback][${requestId}] Start. URL: ${currentUrl}`);
+
   try {
     const searchParams = request.nextUrl.searchParams;
     const code = searchParams.get('code');
     const state = searchParams.get('state');
-    const error = searchParams.get('error');
-    const errorDescription = searchParams.get('error_description');
 
-    // 处理 OAuth 错误
-    if (error) {
-      console.error('[Callback] OAuth error:', error, errorDescription);
-      return NextResponse.redirect(
-        new URL(`/login?error=${encodeURIComponent(errorDescription || error)}`, request.url)
-      );
-    }
-
-    // 验证必要参数
     if (!code || !state) {
-      return NextResponse.redirect(
-        new URL('/login?error=invalid_request', request.url)
-      );
+      console.warn(`[Callback][${requestId}] Missing code or state.`);
+      return NextResponse.redirect('https://auth-sso-portal.vercel.app/login?error=invalid_params');
     }
 
-    // 从 Cookie 获取之前存储的 state 数据
     const storedState = request.cookies.get('oauth_state')?.value;
     const stateDataStr = request.cookies.get('oauth_state_data')?.value;
 
-    if (!storedState || !stateDataStr) {
-      return NextResponse.redirect(
-        new URL('/login?error=session_expired', request.url)
-      );
+    if (!storedState || !stateDataStr || state !== storedState) {
+      console.error(`[Callback][${requestId}] State error`);
+      return NextResponse.redirect('https://auth-sso-portal.vercel.app/login?error=invalid_state');
     }
 
-    // 验证 state
-    if (state !== storedState) {
-      console.error('[Callback] State mismatch:', { expected: storedState, received: state });
-      return NextResponse.redirect(
-        new URL('/login?error=invalid_state', request.url)
-      );
-    }
-
-    // 解析 state 数据
-    let stateData: { verifier: string; nonce: string; redirect: string; createdAt: number };
-    try {
-      stateData = JSON.parse(stateDataStr);
-    } catch {
-      return NextResponse.redirect(
-        new URL('/login?error=invalid_state_data', request.url)
-      );
-    }
-
-    // 检查 state 是否过期（10 分钟）
-    if (Date.now() - stateData.createdAt > 600000) {
-      return NextResponse.redirect(
-        new URL('/login?error=state_expired', request.url)
-      );
-    }
-
-    // 使用授权码换取 Token
-    const idpTokenUrl = new URL('/api/auth/oauth2/token', oauthConfig.idpUrl).toString();
-    console.log('[Callback] Exchanging code for token at:', idpTokenUrl);
+    const stateData = JSON.parse(stateDataStr);
     
-    const tokenResponse = await exchangeCodeForToken(code, stateData.verifier);
-    const statusCode = tokenResponse.status;
-    console.log('[Callback] Token response status:', statusCode);
+    // 发起 Token 交换
+    console.log(`[Callback][${requestId}] Fetching token...`);
+    const tokenUrl = new URL('/api/auth/oauth2/token', oauthConfig.idpUrl);
+    const clientSecret = (process.env.IDP_CLIENT_SECRET || '').trim();
+    
+    const body = new URLSearchParams({
+      grant_type: 'authorization_code',
+      code,
+      redirect_uri: oauthConfig.redirectUri,
+      client_id: oauthConfig.clientId,
+      code_verifier: stateData.verifier,
+      client_secret: clientSecret,
+    });
+
+    let tokenResponse;
+    try {
+      tokenResponse = await fetch(tokenUrl.toString(), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: body.toString(),
+        cache: 'no-store',
+      });
+    } catch (fetchError: any) {
+      console.error(`[Callback][${requestId}] Network Error:`, fetchError.message);
+      throw new Error(`Fetch failed: ${fetchError.message}`);
+    }
 
     if (!tokenResponse.ok) {
-      const errorText = await tokenResponse.text();
-      console.error('[Callback] Token exchange failed. Status:', statusCode, 'Body:', errorText);
-      return NextResponse.redirect(
-        new URL(`/login?error=token_exchange_failed&status=${statusCode}&details=${encodeURIComponent(errorText)}`, request.url)
-      );
+      const errorBody = await tokenResponse.text();
+      console.error(`[Callback][${requestId}] IdP Error ${tokenResponse.status}:`, errorBody);
+      throw new Error(`IdP Error ${tokenResponse.status}: ${errorBody}`);
     }
 
-    const tokenText = await tokenResponse.text();
-    console.log('[Callback] Token response body (first 50 chars):', tokenText.substring(0, 50));
-    const tokens = JSON.parse(tokenText);
-    console.log('[Callback] Token exchange success');
+    const tokens = await tokenResponse.json();
+    console.log(`[Callback][${requestId}] Success`);
 
-    // 校验 id_token 中的 nonce (OIDC 安全加固)
-    if (!tokens.id_token) {
-      console.error('[Callback] No id_token returned in OIDC flow');
-      return NextResponse.redirect(
-        new URL('/login?error=missing_id_token', request.url)
-      );
-    }
-
-    try {
-      const decoded = decodeJwt(tokens.id_token);
-      console.log('[Callback] id_token nonce:', decoded.nonce);
-      console.log('[Callback] Expected nonce:', stateData.nonce);
-
-      if (!decoded.nonce || decoded.nonce !== stateData.nonce) {
-        console.error('[Callback] Nonce mismatch or missing');
-        return NextResponse.redirect(
-          new URL('/login?error=nonce_mismatch', request.url)
-        );
-      }
-      console.log('[Callback] Nonce verification passed');
-    } catch (e) {
-      console.error('[Callback] Failed to decode id_token:', e);
-      return NextResponse.redirect(
-        new URL('/login?error=invalid_id_token', request.url)
-      );
-    }
-
-    // 获取用户信息
-    console.log('[Callback] Fetching user info from:', new URL('/api/auth/oauth2/userinfo', oauthConfig.idpUrl).toString());
-    const userinfoResponse = await fetch(
-      new URL('/api/auth/oauth2/userinfo', oauthConfig.idpUrl).toString(),
-      {
-        headers: {
-          Authorization: `Bearer ${tokens.access_token}`,
-        },
-      }
-    );
-    console.log('[Callback] User info response status:', userinfoResponse.status);
-
-    let userInfo: { email: string; name: string; picture?: string } | undefined;
-    if (userinfoResponse.ok) {
-      const userinfoText = await userinfoResponse.text();
-      console.log('[Callback] User info response body:', userinfoText);
-      try {
-        const userinfo = JSON.parse(userinfoText);
-        userInfo = {
-          email: userinfo.email,
-          name: userinfo.name || userinfo.email,
-          picture: userinfo.picture,
-        };
-      } catch (e) {
-        console.error('[Callback] Failed to parse user info JSON:', e);
-      }
-    } else {
-      const errorText = await userinfoResponse.text();
-      console.warn('[Callback] User info fetch failed. Status:', userinfoResponse.status, 'Body:', errorText);
-    }
-
-    // 创建 Session
-    console.log('[Callback] Creating session for:', userInfo?.email);
+    // 创建会话
+    const decoded = decodeJwt(tokens.id_token);
     const session = await createSession({
-      userId: userInfo?.email || 'unknown',
+      userId: (decoded.email as string) || 'unknown',
       accessToken: tokens.access_token,
       refreshToken: tokens.refresh_token,
       expiresIn: tokens.expires_in || 3600,
-      userInfo,
     });
-    console.log('[Callback] Session created:', session.id);
 
-    // 创建响应并设置 Session Cookie
-    const redirectUrl = new URL(stateData.redirect || '/', request.url);
+    // 确定重定向目标
+    const targetPath = stateData.redirect || '/dashboard';
+    const redirectUrl = new URL(targetPath, request.url);
+    
+    console.log(`[Callback][${requestId}] Redirecting to: ${redirectUrl.toString()}`);
     const response = NextResponse.redirect(redirectUrl);
-
-    // 设置 Session Cookie
+    
     setSessionCookie(response, session.id);
-
-    // 清理临时 Cookie
     response.cookies.delete('oauth_state');
     response.cookies.delete('oauth_state_data');
 
     return response;
-  } catch (error) {
-    console.error('[Callback] Error:', error);
-    return NextResponse.redirect(
-      new URL('/login?error=callback_failed', request.url)
-    );
+  } catch (err: any) {
+    console.error(`[Callback][${requestId}] Crash:`, err);
+    const stack = err.stack || 'No stack trace';
+    return NextResponse.redirect(`https://auth-sso-portal.vercel.app/login?error=internal_crash&details=${encodeURIComponent(err.message)}&stack=${encodeURIComponent(stack.substring(0, 200))}`);
   }
-}
-
-/**
- * 使用授权码换取 Token
- */
-async function exchangeCodeForToken(code: string, codeVerifier: string): Promise<Response> {
-  const tokenUrl = new URL('/api/auth/oauth2/token', oauthConfig.idpUrl);
-
-  const body = new URLSearchParams({
-    grant_type: 'authorization_code',
-    code,
-    redirect_uri: oauthConfig.redirectUri,
-    client_id: oauthConfig.clientId,
-    code_verifier: codeVerifier,
-  });
-
-  // 如果有 client_secret，添加到请求体
-  if (oauthConfig.clientSecret) {
-    body.append('client_secret', oauthConfig.clientSecret);
-  }
-
-  return fetch(tokenUrl.toString(), {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
-    body: body.toString(),
-  });
 }

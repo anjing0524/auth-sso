@@ -1,76 +1,52 @@
 import 'dotenv/config';
-import { db } from '../src/db';
+import { drizzle } from 'drizzle-orm/postgres-js';
+import postgres from 'postgres';
 import * as schema from '../src/db/schema';
 import { eq } from 'drizzle-orm';
-import bcrypt from 'bcryptjs';
 
-/**
- * 生产环境数据库更新脚本
- * 修复：不再硬编码密码，通过环境变量 INITIAL_ADMIN_PASSWORD 读取
- */
-async function update() {
-  console.log('🚀 Updating production data in database...');
+async function updateClients() {
+  console.log('🔄 Updating production clients...');
+  const connectionString = process.env.DATABASE_URL;
+  if (!connectionString) {
+    throw new Error('DATABASE_URL is not set');
+  }
+  const client = postgres(connectionString, { ssl: 'require' });
+  const db = drizzle(client, { schema });
 
-  // 从环境变量读取密码，避免泄露
-  const adminPassword = process.env.INITIAL_ADMIN_PASSWORD;
-  
-  if (!adminPassword) {
-    console.warn('⚠️ INITIAL_ADMIN_PASSWORD is not defined. Skipping password update for security.');
-  } else {
-    const hashedPassword = await bcrypt.hash(adminPassword, 10);
-    const adminUser = await db.query.users.findFirst({
-      where: eq(schema.users.username, 'admin')
-    });
+  try {
+    const portalClientId = 'cl_portal_k8s2n1';
+    const portalSecret = process.env.PORTAL_CLIENT_SECRET;
+    const demoClientId = 'cl_demo_j9m3p5';
+    const demoSecret = process.env.DEMO_APP_CLIENT_SECRET;
 
-    if (adminUser) {
-      await db.update(schema.accounts)
-        .set({ password: hashedPassword })
-        .where(eq(schema.accounts.userId, adminUser.id));
-      console.log('✅ Updated admin user password securely');
+    if (portalSecret) {
+      await db.update(schema.clients)
+        .set({
+          name: 'Portal 用户管理门户',
+          clientId: portalClientId,
+          clientSecret: portalSecret,
+          redirectUrls: 'https://auth-sso-portal.vercel.app/api/auth/callback,http://localhost:4000/api/auth/callback'
+        })
+        .where(eq(schema.clients.clientId, 'portal')); // 第一次使用旧的查找，之后改为 ID 查找
+      console.log(`✅ Portal client updated. ID: ${portalClientId}`);
     }
+
+    if (demoSecret) {
+      await db.update(schema.clients)
+        .set({
+          name: 'Demo App 示例应用',
+          clientId: demoClientId,
+          clientSecret: demoSecret,
+          redirectUrls: 'https://auth-sso-demo-tau.vercel.app/auth/callback,http://localhost:4002/auth/callback'
+        })
+        .where(eq(schema.clients.clientId, 'demo-app'));
+      console.log(`✅ Demo App client updated. ID: ${demoClientId}`);
+    }
+
+    console.log('✨ Update complete!');
+  } finally {
+    await client.end();
   }
-
-  // 更新 Portal Client
-  const portalRedirectUris = [
-    'https://auth-sso-portal.vercel.app/api/auth/callback',
-    'http://localhost:4000/api/auth/callback'
-  ];
-  
-  // 获取最新的强随机密钥（从环境变量读取）
-  const portalSecret = process.env.PORTAL_CLIENT_SECRET;
-  if (!portalSecret) {
-    console.warn('⚠️ PORTAL_CLIENT_SECRET is not defined. Skipping portal secret update.');
-  }
-
-  await db.update(schema.clients)
-    .set({
-      redirectUrls: JSON.stringify(portalRedirectUris),
-      homepageUrl: 'https://auth-sso-portal.vercel.app',
-      ...(portalSecret ? { clientSecret: portalSecret } : {})
-    })
-    .where(eq(schema.clients.clientId, 'portal'));
-
-  console.log('✅ Updated portal client redirect URIs');
-
-  // 更新 Demo App Client
-  const demoRedirectUris = [
-    'https://auth-sso-demo-tau.vercel.app/auth/callback',
-    'http://localhost:4002/auth/callback'
-  ];
-  
-  await db.update(schema.clients)
-    .set({
-      redirectUrls: JSON.stringify(demoRedirectUris),
-      homepageUrl: 'https://auth-sso-demo-tau.vercel.app'
-    })
-    .where(eq(schema.clients.clientId, 'demo-app'));
-
-  console.log('✅ Updated demo-app client redirect URIs');
-  console.log('✨ Update complete!');
-  process.exit(0);
 }
 
-update().catch((err) => {
-  console.error('❌ Update failed:', err);
-  process.exit(1);
-});
+updateClients().catch(console.error);

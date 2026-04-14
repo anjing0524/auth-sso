@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useRef, useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { GraphEngineWasm } from '../lib/wasm-loader';
 import { useGraphEngine } from '../hooks/useGraphEngine';
 
@@ -11,16 +11,14 @@ export interface GraphCanvasProps {
   className?: string;
   /** 是否自动开始模拟 */
   autoSimulate?: boolean;
-  /** 初始数据加载回调 */
-  onDataLoad?: () => void;
   /** 节点点击回调 */
   onNodeClick?: (nodeId: number | null) => void;
 }
 
 /**
- * 图可视化 Canvas 组件
+ * 图可视化交互组件
  *
- * 托管 WASM 驱动的 WebGPU Canvas，处理交互事件
+ * 处理交互事件和动画，canvas 由 WasmLoader 提供
  */
 export function GraphCanvas({
   engine,
@@ -28,8 +26,6 @@ export function GraphCanvas({
   autoSimulate = true,
   onNodeClick,
 }: GraphCanvasProps) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [hoveredNode, setHoveredNode] = useState<number | null>(null);
 
@@ -40,29 +36,9 @@ export function GraphCanvas({
     autoSimulate,
   });
 
-  // 处理 Canvas 尺寸变化
-  const handleResize = useCallback(() => {
-    if (!containerRef.current || !canvasRef.current) return;
-
-    const { width, height } = containerRef.current.getBoundingClientRect();
-    const dpr = window.devicePixelRatio || 1;
-
-    // 设置 Canvas 尺寸
-    canvasRef.current.width = width * dpr;
-    canvasRef.current.height = height * dpr;
-    canvasRef.current.style.width = `${width}px`;
-    canvasRef.current.style.height = `${height}px`;
-
-    // 通知引擎
-    engine.resize(width, height);
-  }, [engine]);
-
   // 初始化
   useEffect(() => {
     if (!engine) return;
-
-    // 设置初始尺寸
-    handleResize();
 
     // 开始动画循环
     startAnimation();
@@ -75,29 +51,15 @@ export function GraphCanvas({
     return () => {
       stopAnimation();
     };
-  }, [engine, handleResize, startAnimation, stopAnimation, fitToView]);
-
-  // 监听容器尺寸变化
-  useEffect(() => {
-    if (!containerRef.current) return;
-
-    const resizeObserver = new ResizeObserver(() => {
-      handleResize();
-    });
-
-    resizeObserver.observe(containerRef.current);
-
-    return () => {
-      resizeObserver.disconnect();
-    };
-  }, [handleResize]);
+  }, [engine, startAnimation, stopAnimation, fitToView]);
 
   // 鼠标事件处理
   const handleMouseDown = useCallback(
-    (e: React.MouseEvent<HTMLCanvasElement>) => {
-      if (!canvasRef.current) return;
+    (e: React.MouseEvent) => {
+      const target = e.target as HTMLCanvasElement;
+      if (!target || target.tagName !== 'CANVAS') return;
 
-      const rect = canvasRef.current.getBoundingClientRect();
+      const rect = target.getBoundingClientRect();
       const x = e.clientX - rect.left;
       const y = e.clientY - rect.top;
 
@@ -122,10 +84,11 @@ export function GraphCanvas({
   );
 
   const handleMouseMove = useCallback(
-    (e: React.MouseEvent<HTMLCanvasElement>) => {
-      if (!canvasRef.current) return;
+    (e: React.MouseEvent) => {
+      const target = e.target as HTMLCanvasElement;
+      if (!target || target.tagName !== 'CANVAS') return;
 
-      const rect = canvasRef.current.getBoundingClientRect();
+      const rect = target.getBoundingClientRect();
       const x = e.clientX - rect.left;
       const y = e.clientY - rect.top;
 
@@ -138,14 +101,12 @@ export function GraphCanvas({
       }
 
       // 更新 Canvas 光标
-      if (canvasRef.current) {
-        if (isDragging) {
-          canvasRef.current.style.cursor = 'grabbing';
-        } else if (hoveredNode !== null) {
-          canvasRef.current.style.cursor = 'pointer';
-        } else {
-          canvasRef.current.style.cursor = 'default';
-        }
+      if (isDragging) {
+        target.style.cursor = 'grabbing';
+      } else if (hoveredNode !== null) {
+        target.style.cursor = 'pointer';
+      } else {
+        target.style.cursor = 'default';
       }
     },
     [engine, isDragging, hoveredNode]
@@ -171,10 +132,11 @@ export function GraphCanvas({
   }, [engine]);
 
   const handleWheel = useCallback(
-    (e: React.WheelEvent<HTMLCanvasElement>) => {
-      if (!canvasRef.current) return;
+    (e: React.WheelEvent) => {
+      const target = e.target as HTMLCanvasElement;
+      if (!target || target.tagName !== 'CANVAS') return;
 
-      const rect = canvasRef.current.getBoundingClientRect();
+      const rect = target.getBoundingClientRect();
       const x = e.clientX - rect.left;
       const y = e.clientY - rect.top;
 
@@ -210,22 +172,16 @@ export function GraphCanvas({
 
   return (
     <div
-      ref={containerRef}
-      className={`relative w-full h-full ${className}`}
+      className={`absolute inset-0 ${className}`}
       tabIndex={0}
       onKeyDown={handleKeyDown}
+      onMouseDown={handleMouseDown}
+      onMouseMove={handleMouseMove}
+      onMouseUp={handleMouseUp}
+      onMouseLeave={handleMouseLeave}
+      onWheel={handleWheel}
+      onContextMenu={(e) => e.preventDefault()}
     >
-      <canvas
-        ref={canvasRef}
-        className="w-full h-full outline-none"
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseLeave}
-        onWheel={handleWheel}
-        onContextMenu={(e) => e.preventDefault()}
-      />
-
       {/* 悬停节点提示 */}
       {hoveredNode !== null && !isDragging && (
         <div className="absolute top-2 left-2 bg-gray-800/80 text-xs px-2 py-1 rounded text-gray-300">

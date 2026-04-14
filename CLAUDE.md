@@ -11,6 +11,7 @@ Auth-SSO is an enterprise unified identity authentication platform implementing 
 - **apps/demo-app** - Demo SSO Client (port 4002) - Tests SSO integration
 - **packages/contracts** - Shared types, error codes, permission codes, OIDC constants
 - **packages/config** - Shared TypeScript/ESLint configuration
+- **docs/solutions** - Documented solutions to past problems (bugs, best practices), organized by category with YAML frontmatter (`module`, `tags`, `problem_type`). Relevant when implementing or debugging in documented areas.
 
 ## Development Commands
 

@@ -66,6 +66,11 @@ export function useGraphEngine({
   // 渲染一帧
   const render = useCallback(() => {
     if (engineRef.current) {
+      // 跳过没有数据的渲染
+      const nodeCount = engineRef.current.get_node_count();
+      if (nodeCount === 0) {
+        return;
+      }
       engineRef.current.render();
     }
   }, []);
@@ -91,7 +96,10 @@ export function useGraphEngine({
 
       // 渲染
       if (autoRenderRef.current) {
-        currentEngine.render();
+        // 跳过没有数据的渲染
+        if (currentEngine.get_node_count() > 0) {
+          currentEngine.render();
+        }
       }
 
       // 继续循环

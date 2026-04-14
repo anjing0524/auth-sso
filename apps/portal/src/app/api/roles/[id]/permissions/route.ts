@@ -4,7 +4,8 @@
  * POST /api/roles/[id]/permissions - 为角色分配权限
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { sql } from '@/lib/db';
+import { db, schema } from '@/lib/db';
+import { eq, or } from 'drizzle-orm';
 import { withPermission } from '@/lib/auth-middleware';
 
 export const runtime = 'nodejs';
@@ -21,33 +22,31 @@ export async function GET(
   return withPermission(request, { permissions: ['role:read'] }, async () => {
     const { id } = await params;
 
-    const permissions = await sql`
-      SELECT
-        p.id,
-        p.public_id,
-        p.code,
-        p.name,
-        p.type,
-        p.resource,
-        p.action,
-        rp.created_at as assigned_at
-      FROM permissions p
-      JOIN role_permissions rp ON p.id = rp.permission_id
-      JOIN roles r ON rp.role_id = r.id
-      WHERE r.id = ${id} OR r.public_id = ${id}
-      ORDER BY p.type, p.sort
-    `;
+    const permissions = await db.select({
+      id: schema.permissions.id,
+      publicId: schema.permissions.publicId,
+      code: schema.permissions.code,
+      name: schema.permissions.name,
+      type: schema.permissions.type,
+      resource: schema.permissions.resource,
+      action: schema.permissions.action,
+      assignedAt: schema.rolePermissions.createdAt,
+    })
+    .from(schema.permissions)
+    .innerJoin(schema.rolePermissions, eq(schema.permissions.id, schema.rolePermissions.permissionId))
+    .innerJoin(schema.roles, eq(schema.rolePermissions.roleId, schema.roles.id))
+    .where(or(eq(schema.roles.id, id), eq(schema.roles.publicId, id)));
 
     return NextResponse.json({
-      data: permissions.map((p: any) => ({
+      data: permissions.map(p => ({
         id: p.id,
-        publicId: p.public_id,
+        publicId: p.publicId,
         code: p.code,
         name: p.name,
         type: p.type,
         resource: p.resource,
         action: p.action,
-        assignedAt: p.assigned_at,
+        assignedAt: p.assignedAt,
       })),
     });
   });
@@ -75,9 +74,9 @@ export async function POST(
     }
 
     // 获取角色ID
-    const roles = await sql`
-      SELECT id FROM roles WHERE id = ${id} OR public_id = ${id}
-    `;
+    const roles = await db.select()
+      .from(schema.roles)
+      .where(or(eq(schema.roles.id, id), eq(schema.roles.publicId, id)));
 
     if (roles.length === 0) {
       return NextResponse.json(
@@ -86,18 +85,20 @@ export async function POST(
       );
     }
 
-    const roleId = roles[0].id;
+    const roleId = roles[0]!.id;
 
     // 删除现有的权限绑定
-    await sql`DELETE FROM role_permissions WHERE role_id = ${roleId}`;
+    await db.delete(schema.rolePermissions).where(eq(schema.rolePermissions.roleId, roleId));
 
     // 插入新的权限绑定
-    for (const permissionId of permissionIds) {
-      const rpId = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-      await sql`
-        INSERT INTO role_permissions (id, role_id, permission_id, created_at)
-        VALUES (${rpId}, ${roleId}, ${permissionId}, NOW())
-      `;
+    if (permissionIds.length > 0) {
+      const rolePermissionsData = permissionIds.map(permissionId => ({
+        id: crypto.randomUUID(),
+        roleId,
+        permissionId,
+        createdAt: new Date(),
+      }));
+      await db.insert(schema.rolePermissions).values(rolePermissionsData);
     }
 
     return NextResponse.json({ success: true, assignedCount: permissionIds.length });

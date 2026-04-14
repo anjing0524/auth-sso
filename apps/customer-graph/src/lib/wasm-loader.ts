@@ -43,6 +43,7 @@ interface GraphEngineWasmConstructor {
 
 // WASM 模块导出类型
 interface WasmModule {
+  default?: () => Promise<void>;
   GraphEngineWasm: GraphEngineWasmConstructor;
   is_webgpu_supported(): boolean;
   get_version(): string;
@@ -98,11 +99,20 @@ export async function loadWasmModule(
         message: 'Loading WASM module...',
       });
 
-      // 动态导入 WASM 模块
-      const wasmPath = '/wasm/graph_engine.js';
+      // 动态导入 WASM 模块 (ES module)
+      // 添加版本参数破坏缓存
+      const wasmPath = `/wasm/graph_engine.js?v=${Date.now()}`;
 
-      // 使用 script 标签加载
-      await loadScript(wasmPath);
+      console.log('[WASM] Loading module from:', wasmPath);
+
+      // 使用动态 import 加载 ES module
+      const exports = await import(
+        /* webpackIgnore: true */
+        /* @vite-ignore */
+        wasmPath
+      );
+
+      console.log('[WASM] Module loaded, exports:', Object.keys(exports));
 
       onProgress?.({
         state: 'loading',
@@ -110,12 +120,29 @@ export async function loadWasmModule(
         message: 'Initializing WASM...',
       });
 
-      // 获取导出
-      const exports = (window as Window & { graph_engine?: WasmModule })
-        .graph_engine;
-
       if (!exports) {
-        throw new Error('WASM module exports not found');
+        throw new Error('WASM module exports is null');
+      }
+
+      if (!exports.GraphEngineWasm) {
+        throw new Error('GraphEngineWasm not found in exports');
+      }
+
+      // 调用 default 初始化函数（如果存在）
+      if (typeof exports.default === 'function') {
+        console.log('[WASM] Calling default init function...');
+        try {
+          // 传入带有版本参数的 WASM 文件路径，破坏缓存
+          const wasmPathWithVersion = `/wasm/graph_engine_bg.wasm?v=${Date.now()}`;
+          console.log('[WASM] Loading WASM binary from:', wasmPathWithVersion);
+          await exports.default(wasmPathWithVersion);
+          console.log('[WASM] Default init complete');
+        } catch (initError) {
+          console.error('[WASM] Default init failed:', initError);
+          throw initError;
+        }
+      } else {
+        console.log('[WASM] No default init function, skipping');
       }
 
       onProgress?.({
@@ -124,31 +151,22 @@ export async function loadWasmModule(
         message: 'WASM ready',
       });
 
-      wasmModule = exports;
+      wasmModule = exports as WasmModule;
       return wasmModule;
     } catch (error) {
+      console.error('[WASM] Load failed:', error);
       wasmLoadPromise = null;
+      onProgress?.({
+        state: 'error',
+        progress: 0,
+        message: 'WASM load failed',
+        error: error instanceof Error ? error.message : String(error),
+      });
       throw error;
     }
   })();
 
   return wasmLoadPromise;
-}
-
-/**
- * 加载脚本
- */
-function loadScript(src: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const script = document.createElement('script');
-    script.src = src;
-    script.async = true;
-
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error(`Failed to load script: ${src}`));
-
-    document.head.appendChild(script);
-  });
 }
 
 /**
@@ -178,9 +196,12 @@ export async function createGraphEngine(
       message: 'Initializing GPU...',
     });
 
+    console.log('[WASM] Creating GraphEngineWasm instance...');
     const engine = new wasmMod.GraphEngineWasm();
+    console.log('[WASM] Instance created, calling init...');
 
     await engine.init(canvas);
+    console.log('[WASM] Engine init complete');
 
     onProgress?.({
       state: 'ready',
@@ -190,6 +211,7 @@ export async function createGraphEngine(
 
     return engine;
   } catch (error) {
+    console.error('[WASM] createGraphEngine failed:', error);
     onProgress?.({
       state: 'error',
       progress: 0,
@@ -204,12 +226,12 @@ export async function createGraphEngine(
  * 获取 WASM 版本
  */
 export function getWasmVersion(): string {
-  return wasmModule?.get_version() ?? 'unknown';
+  return wasmModule?.get_version?.() ?? 'unknown';
 }
 
 /**
  * 检查是否支持 WebGPU
  */
 export function isWebGpuSupported(): boolean {
-  return wasmModule?.is_webgpu_supported() ?? false;
+  return wasmModule?.is_webgpu_supported?.() ?? false;
 }

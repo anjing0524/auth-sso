@@ -5,7 +5,8 @@
  * DELETE /api/users/[id]/roles - 移除用户的角色
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { sql } from '@/lib/db';
+import { db, schema } from '@/lib/db';
+import { eq, or, desc } from 'drizzle-orm';
 import { withPermission } from '@/lib/auth-middleware';
 
 export const runtime = 'nodejs';
@@ -22,33 +23,32 @@ export async function GET(
     try {
       const { id } = await params;
 
-      const roles = await sql`
-        SELECT
-          r.id,
-          r.public_id,
-          r.code,
-          r.name,
-          r.description,
-          r.data_scope_type,
-          r.status,
-          ur.created_at as assigned_at
-        FROM roles r
-        JOIN user_roles ur ON r.id = ur.role_id
-        JOIN users u ON ur.user_id = u.id
-        WHERE u.id = ${id} OR u.public_id = ${id}
-        ORDER BY ur.created_at DESC
-      `;
+      const roles = await db.select({
+        id: schema.roles.id,
+        publicId: schema.roles.publicId,
+        code: schema.roles.code,
+        name: schema.roles.name,
+        description: schema.roles.description,
+        dataScopeType: schema.roles.dataScopeType,
+        status: schema.roles.status,
+        assignedAt: schema.userRoles.createdAt,
+      })
+      .from(schema.roles)
+      .innerJoin(schema.userRoles, eq(schema.roles.id, schema.userRoles.roleId))
+      .innerJoin(schema.users, eq(schema.userRoles.userId, schema.users.id))
+      .where(or(eq(schema.users.id, id), eq(schema.users.publicId, id)))
+      .orderBy(desc(schema.userRoles.createdAt));
 
       return NextResponse.json({
-        data: roles.map((r: any) => ({
+        data: roles.map(r => ({
           id: r.id,
-          publicId: r.public_id,
+          publicId: r.publicId,
           code: r.code,
           name: r.name,
           description: r.description,
-          dataScopeType: r.data_scope_type,
+          dataScopeType: r.dataScopeType,
           status: r.status,
-          assignedAt: r.assigned_at,
+          assignedAt: r.assignedAt,
         })),
       });
     } catch (error) {
@@ -83,9 +83,9 @@ export async function POST(
       }
 
       // 获取用户ID
-      const users = await sql`
-        SELECT id FROM users WHERE id = ${id} OR public_id = ${id}
-      `;
+      const users = await db.select()
+        .from(schema.users)
+        .where(or(eq(schema.users.id, id), eq(schema.users.publicId, id)));
 
       if (users.length === 0) {
         return NextResponse.json(
@@ -94,19 +94,20 @@ export async function POST(
         );
       }
 
-      const userId = users[0].id;
+      const userId = users[0]!.id;
 
       // 删除现有的角色绑定
-      await sql`DELETE FROM user_roles WHERE user_id = ${userId}`;
+      await db.delete(schema.userRoles).where(eq(schema.userRoles.userId, userId));
 
       // 插入新的角色绑定
-      for (const roleId of roleIds) {
-        const urId = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).substring(2)}`;
-        await sql`
-          INSERT INTO user_roles (id, user_id, role_id, created_at)
-          VALUES (${urId}, ${userId}, ${roleId}, NOW())
-        `;
-      }
+      const userRolesData = roleIds.map(roleId => ({
+        id: crypto.randomUUID(),
+        userId,
+        roleId,
+        createdAt: new Date(),
+      }));
+
+      await db.insert(schema.userRoles).values(userRolesData);
 
       return NextResponse.json({ success: true, assignedCount: roleIds.length });
     } catch (error) {
@@ -141,9 +142,9 @@ export async function DELETE(
       }
 
       // 获取用户ID
-      const users = await sql`
-        SELECT id FROM users WHERE id = ${id} OR public_id = ${id}
-      `;
+      const users = await db.select()
+        .from(schema.users)
+        .where(or(eq(schema.users.id, id), eq(schema.users.publicId, id)));
 
       if (users.length === 0) {
         return NextResponse.json(
@@ -152,10 +153,8 @@ export async function DELETE(
         );
       }
 
-      await sql`
-        DELETE FROM user_roles
-        WHERE user_id = ${users[0].id} AND role_id = ${roleId}
-      `;
+      await db.delete(schema.userRoles)
+        .where(eq(schema.userRoles.userId, users[0]!.id));
 
       return NextResponse.json({ success: true });
     } catch (error) {

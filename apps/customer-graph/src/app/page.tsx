@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { WasmLoader } from '@/components/WasmLoader';
 import { GraphCanvas } from '@/components/GraphCanvas';
 import { GraphEngineWasm, LoadProgress } from '@/lib/wasm-loader';
@@ -69,7 +69,6 @@ function LoadingScreen({ progress }: { progress: LoadProgress }) {
 }
 
 export default function Home() {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
   const [engine, setEngine] = useState<GraphEngineWasm | null>(null);
   const [nodeCount, setNodeCount] = useState(100);
   const [selectedNode, setSelectedNode] = useState<number | null>(null);
@@ -89,12 +88,17 @@ export default function Home() {
   // 引擎就绪后加载数据
   const handleEngineReady = useCallback(
     (eng: GraphEngineWasm) => {
+      console.log('[Page] handleEngineReady called, engine:', eng);
       setEngine(eng);
       // 延迟加载数据以确保 canvas 已初始化
       setTimeout(() => {
+        console.log('[Page] Loading demo data, nodeCount:', nodeCount);
         const data = generateDemoData(nodeCount);
+        console.log('[Page] Generated nodes:', data.nodes.length, 'edges:', data.edges.length);
         eng.load_data(data.nodes, data.edges);
+        console.log('[Page] Data loaded, node count:', eng.get_node_count());
         eng.fit_to_view(50);
+        console.log('[Page] Fit to view complete');
       }, 100);
     },
     [nodeCount]
@@ -138,16 +142,7 @@ export default function Home() {
 
       {/* Canvas 容器 */}
       <div className="flex-1 relative bg-gray-950">
-        <canvas
-          ref={canvasRef}
-          className="absolute inset-0 w-full h-full"
-          style={{ display: 'none' }}
-        />
-
-        <WasmLoader
-          canvasRef={canvasRef}
-          fallback={(progress) => <LoadingScreen progress={progress} />}
-        >
+        <WasmLoader fallback={(progress) => <LoadingScreen progress={progress} />}>
           {(eng) => {
             // 引擎就绪后设置状态
             if (eng !== engine) {

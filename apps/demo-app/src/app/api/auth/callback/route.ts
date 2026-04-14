@@ -95,10 +95,10 @@ export async function GET(request: NextRequest) {
     // 重定向到目标页面
     const redirectUrl = oauthState.redirect || '/';
     return NextResponse.redirect(new URL(redirectUrl, oauthConfig.appUrl));
-  } catch (error) {
+  } catch (error: any) {
     console.error('[DemoApp] Callback Error:', error);
     return NextResponse.redirect(
-      new URL('/?error=callback_failed', oauthConfig.appUrl)
+      new URL(`/?error=callback_failed&details=${encodeURIComponent(error.message)}`, oauthConfig.appUrl)
     );
   }
 }
@@ -107,28 +107,32 @@ export async function GET(request: NextRequest) {
  * 用授权码换取 Token
  */
 async function exchangeCodeForToken(code: string, codeVerifier: string): Promise<TokenResponse> {
-  const response = await fetch(oauthConfig.tokenEndpoint, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
-    body: new URLSearchParams({
-      grant_type: 'authorization_code',
-      code,
-      redirect_uri: oauthConfig.redirectUri,
-      client_id: oauthConfig.clientId,
-      client_secret: oauthConfig.clientSecret,
-      code_verifier: codeVerifier,
-    }).toString(),
-  });
+  try {
+    const response = await fetch(oauthConfig.tokenEndpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({
+        grant_type: 'authorization_code',
+        code,
+        redirect_uri: oauthConfig.redirectUri,
+        client_id: oauthConfig.clientId,
+        client_secret: oauthConfig.clientSecret,
+        code_verifier: codeVerifier,
+      }).toString(),
+    });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('[DemoApp] Token exchange failed:', response.status, errorText);
-    throw new Error('Token exchange failed');
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('[DemoApp] Token exchange failed:', response.status, errorText);
+      throw new Error(`Token exchange failed (${response.status}): ${errorText}`);
+    }
+
+    return response.json();
+  } catch (e: any) {
+    throw new Error(`Exchange Error: ${e.message}`);
   }
-
-  return response.json();
 }
 
 /**

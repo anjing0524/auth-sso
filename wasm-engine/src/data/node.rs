@@ -43,7 +43,8 @@ pub struct NodeData {
     pub degree: u32,
 
     /// 填充字段，确保 64 字节对齐
-    _padding: [f32; 2],
+    #[serde(default)]
+    pub _padding: [f32; 2],
 }
 
 impl Default for NodeData {

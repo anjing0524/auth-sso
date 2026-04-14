@@ -5,7 +5,8 @@
  * DELETE /api/departments/[id] - 删除部门
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { sql } from '@/lib/db';
+import { db, schema } from '@/lib/db';
+import { eq } from 'drizzle-orm';
 import { withPermission } from '@/lib/auth-middleware';
 
 export const runtime = 'nodejs';
@@ -23,26 +24,25 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   return withPermission(request, { permissions: ['department:read'] }, async () => {
     const { id } = await params;
 
-    const result = await sql`
-      SELECT id, public_id, parent_id, name, code, sort, status, created_at
-      FROM departments WHERE id = ${id}
-    `;
+    const result = await db.select()
+      .from(schema.departments)
+      .where(eq(schema.departments.id, id));
 
     if (result.length === 0) {
       return NextResponse.json({ error: 'not_found', message: '部门不存在' }, { status: 404 });
     }
 
-    const d = result[0];
+    const d = result[0]!;
     return NextResponse.json({
       data: {
         id: d.id,
-        publicId: d.public_id,
-        parentId: d.parent_id,
+        publicId: d.publicId,
+        parentId: d.parentId,
         name: d.name,
         code: d.code,
         sort: d.sort,
         status: d.status,
-        createdAt: d.created_at,
+        createdAt: d.createdAt,
       },
     });
   });
@@ -59,22 +59,14 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     const body = await request.json();
     const { name, code, parentId, sort, status } = body;
 
-    const updates: string[] = [];
-    if (name !== undefined) updates.push(`name = '${name.replace(/'/g, "''")}'`);
-    if (code !== undefined) updates.push(`code = ${code ? `'${code.replace(/'/g, "''")}'` : 'NULL'}`);
-    if (parentId !== undefined) updates.push(`parent_id = ${parentId ? `'${parentId}'` : 'NULL'}`);
-    if (sort !== undefined) updates.push(`sort = ${sort}`);
-    if (status !== undefined) updates.push(`status = '${status}'`);
+    const updateData: Record<string, any> = { updatedAt: new Date() };
+    if (name !== undefined) updateData.name = name;
+    if (code !== undefined) updateData.code = code;
+    if (parentId !== undefined) updateData.parentId = parentId || null;
+    if (sort !== undefined) updateData.sort = sort;
+    if (status !== undefined) updateData.status = status;
 
-    if (updates.length === 0) {
-      return NextResponse.json({ error: 'no_updates', message: '没有需要更新的字段' }, { status: 400 });
-    }
-
-    updates.push('updated_at = NOW()');
-
-    await sql`
-      UPDATE departments SET ${sql.unsafe(updates.join(', '))} WHERE id = ${id}
-    `;
+    await db.update(schema.departments).set(updateData).where(eq(schema.departments.id, id));
 
     return NextResponse.json({ success: true });
   });
@@ -90,15 +82,16 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     const { id } = await params;
 
     // 检查是否有子部门
-    const children = await sql`
-      SELECT id FROM departments WHERE parent_id = ${id} LIMIT 1
-    `;
+    const children = await db.select()
+      .from(schema.departments)
+      .where(eq(schema.departments.parentId, id))
+      .limit(1);
 
     if (children.length > 0) {
       return NextResponse.json({ error: 'has_children', message: '该部门下有子部门，无法删除' }, { status: 400 });
     }
 
-    await sql`DELETE FROM departments WHERE id = ${id}`;
+    await db.delete(schema.departments).where(eq(schema.departments.id, id));
 
     return NextResponse.json({ success: true, message: '部门已删除' });
   });

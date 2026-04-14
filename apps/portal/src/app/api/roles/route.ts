@@ -4,7 +4,8 @@
  * POST /api/roles - 创建角色
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { sql } from '@/lib/db';
+import { db, schema } from '@/lib/db';
+import { eq, or, ilike, asc, desc } from 'drizzle-orm';
 import { withPermission } from '@/lib/auth-middleware';
 
 export const runtime = 'nodejs';
@@ -20,45 +21,38 @@ export async function GET(request: NextRequest) {
     const keyword = searchParams.get('keyword') || '';
     const status = searchParams.get('status') || '';
 
-    const conditions: string[] = [];
+    // 构建条件
+    const conditions = [];
     if (keyword) {
-      conditions.push(`(name ILIKE '%${keyword.replace(/'/g, "''")}%' OR code ILIKE '%${keyword.replace(/'/g, "''")}%')`);
+      conditions.push(
+        or(
+          ilike(schema.roles.name, `%${keyword}%`),
+          ilike(schema.roles.code, `%${keyword}%`)
+        )
+      );
     }
     if (status) {
-      conditions.push(`status = '${status}'`);
+      conditions.push(eq(schema.roles.status, status as 'ACTIVE' | 'DISABLED'));
     }
 
-    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-
-    const roles = await sql`
-      SELECT
-        r.id,
-        r.public_id,
-        r.name,
-        r.code,
-        r.description,
-        r.data_scope_type,
-        r.is_system,
-        r.status,
-        r.sort,
-        r.created_at
-      FROM roles r
-      ${sql.unsafe(whereClause)}
-      ORDER BY r.sort ASC, r.created_at DESC
-    `;
+    // 查询角色
+    const roles = await db.select()
+      .from(schema.roles)
+      .where(conditions.length > 0 ? conditions.reduce((acc, c) => acc ? eq(acc as any, c as any) : c) : undefined)
+      .orderBy(asc(schema.roles.sort), desc(schema.roles.createdAt));
 
     return NextResponse.json({
-      data: roles.map((r: any) => ({
+      data: roles.map(r => ({
         id: r.id,
-        publicId: r.public_id,
+        publicId: r.publicId,
         name: r.name,
         code: r.code,
         description: r.description,
-        dataScopeType: r.data_scope_type,
-        isSystem: r.is_system,
+        dataScopeType: r.dataScopeType,
+        isSystem: r.isSystem,
         status: r.status,
         sort: r.sort,
-        createdAt: r.created_at,
+        createdAt: r.createdAt,
       })),
     });
   });
@@ -82,9 +76,9 @@ export async function POST(request: NextRequest) {
     }
 
     // 检查编码是否已存在
-    const existing = await sql`
-      SELECT id FROM roles WHERE code = ${code}
-    `;
+    const existing = await db.select()
+      .from(schema.roles)
+      .where(eq(schema.roles.code, code));
 
     if (existing.length > 0) {
       return NextResponse.json(
@@ -93,13 +87,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const id = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+    const id = crypto.randomUUID();
     const publicId = `role_${Date.now().toString(36)}`;
 
-    await sql`
-      INSERT INTO roles (id, public_id, name, code, description, data_scope_type, sort, status, created_at, updated_at)
-      VALUES (${id}, ${publicId}, ${name}, ${code}, ${description || null}, ${dataScopeType}, ${sort}, ${status}, NOW(), NOW())
-    `;
+    await db.insert(schema.roles).values({
+      id,
+      publicId,
+      name,
+      code,
+      description: description ?? null,
+      dataScopeType: dataScopeType as 'ALL' | 'DEPT' | 'DEPT_AND_SUB' | 'SELF' | 'CUSTOM',
+      sort,
+      status: status as 'ACTIVE' | 'DISABLED',
+      isSystem: false,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
 
     return NextResponse.json({
       success: true,

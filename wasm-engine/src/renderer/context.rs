@@ -17,6 +17,9 @@ pub struct GpuContext {
     /// 配置的表面
     surface: Option<wgpu::Surface<'static>>,
 
+    /// 表面格式
+    surface_format: Option<wgpu::TextureFormat>,
+
     /// 是否已初始化
     initialized: bool,
 }
@@ -34,6 +37,7 @@ impl GpuContext {
             device: None,
             queue: None,
             surface: None,
+            surface_format: None,
             initialized: false,
         }
     }
@@ -61,14 +65,28 @@ impl GpuContext {
             .map_err(|e| format!("Failed to create surface: {:?}", e))?;
 
         // 请求适配器 - wgpu 29 返回 Result
-        let adapter = instance
+        // 先尝试正常请求，如果失败则使用 forceFallbackAdapter
+        let adapter = match instance
             .request_adapter(&wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::HighPerformance,
                 compatible_surface: Some(&surface),
                 force_fallback_adapter: false,
             })
             .await
-            .map_err(|_| "No suitable GPU adapter found. Please use Chrome or Edge browser.")?;
+        {
+            Ok(adapter) => adapter,
+            Err(_) => {
+                // 尝试使用 fallback adapter
+                instance
+                    .request_adapter(&wgpu::RequestAdapterOptions {
+                        power_preference: wgpu::PowerPreference::LowPower,
+                        compatible_surface: Some(&surface),
+                        force_fallback_adapter: true,
+                    })
+                    .await
+                    .map_err(|_| "No suitable GPU adapter found. Please use Chrome or Edge browser.")?
+            }
+        };
 
         // 请求设备 - wgpu 29 API
         let (device, queue) = adapter
@@ -91,12 +109,38 @@ impl GpuContext {
         };
 
         let surface_caps = surface.get_capabilities(&adapter);
+
+        // 选择可用的表面格式 - 优先选择 SRGB，但不强制
         let surface_format = surface_caps
             .formats
             .iter()
             .copied()
-            .find(|f| matches!(f, wgpu::TextureFormat::Bgra8UnormSrgb))
-            .unwrap_or(surface_caps.formats[0]);
+            .find(|f| matches!(f, wgpu::TextureFormat::Rgba8UnormSrgb))
+            .or_else(|| {
+                surface_caps
+                    .formats
+                    .iter()
+                    .copied()
+                    .find(|f| matches!(f, wgpu::TextureFormat::Bgra8UnormSrgb))
+            })
+            .or_else(|| {
+                surface_caps
+                    .formats
+                    .iter()
+                    .copied()
+                    .find(|f| matches!(f, wgpu::TextureFormat::Rgba8Unorm))
+            })
+            .or_else(|| {
+                surface_caps
+                    .formats
+                    .iter()
+                    .copied()
+                    .find(|f| matches!(f, wgpu::TextureFormat::Bgra8Unorm))
+            })
+            .unwrap_or_else(|| {
+                // 使用第一个可用格式
+                surface_caps.formats[0]
+            });
 
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
@@ -114,6 +158,7 @@ impl GpuContext {
         self.device = Some(device);
         self.queue = Some(queue);
         self.surface = Some(surface);
+        self.surface_format = Some(surface_format);
         self.initialized = true;
 
         Ok(())
@@ -134,6 +179,11 @@ impl GpuContext {
         self.surface.as_ref()
     }
 
+    /// 获取表面格式
+    pub fn surface_format(&self) -> Option<wgpu::TextureFormat> {
+        self.surface_format
+    }
+
     /// 检查是否已初始化
     pub fn is_initialized(&self) -> bool {
         self.initialized
@@ -141,10 +191,12 @@ impl GpuContext {
 
     /// 调整大小
     pub fn resize(&mut self, width: u32, height: u32) {
-        if let (Some(surface), Some(device)) = (&self.surface, &self.device) {
+        if let (Some(surface), Some(device), Some(format)) =
+            (&self.surface, &self.device, self.surface_format)
+        {
             let config = wgpu::SurfaceConfiguration {
                 usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-                format: wgpu::TextureFormat::Bgra8UnormSrgb,
+                format,
                 width,
                 height,
                 present_mode: wgpu::PresentMode::AutoVsync,
@@ -161,6 +213,7 @@ impl GpuContext {
         self.device = None;
         self.queue = None;
         self.surface = None;
+        self.surface_format = None;
         self.initialized = false;
     }
 }

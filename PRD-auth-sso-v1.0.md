@@ -1,4 +1,4 @@
-# 小企业统一门户 + SSO + 权限中心 PRD / 技术方案
+<!-- /autoplan restore point: /Users/liushuo/.gstack/projects/anjing0524-auth-sso/main-autoplan-restore-20260414-093914.md --># 小企业统一门户 + SSO + 权限中心 PRD / 技术方案
 
 - 文档版本：`v1.0`
 - 文档状态：`初版`
@@ -1195,3 +1195,126 @@ Portal Session 不等于 IdP Session，不等于 Token
 如果只记住一句话，就是：
 
 `cookie 是标识，session 是状态，token 是凭证；Portal 管门户登录，IdP 管全局登录，权限中心管你能做什么。`
+
+## /autoplan Review Outputs
+
+### Phase 1: CEO Review (Strategy & Scope)
+
+#### NOT in scope
+- Advanced federation (SAML integration with external enterprise providers like Okta/Azure AD) - Deferred to V2, current scope is limited to acting as an OIDC provider.
+- Granular API rate limiting per client - Out of scope for V1, rely on basic reverse proxy/infrastructure limits.
+
+#### What already exists
+- IdP Core: Implemented via `apps/idp` using Better Auth.
+- Portal UI: Implemented via `apps/portal` (Next.js).
+- RBAC: Schema and `contracts` package define roles, permissions, and data scopes.
+
+#### Error & Rescue Registry
+| Error | Rescue Strategy | Rationale |
+|-------|----------------|-----------|
+| IdP DB unreachable | Portal gracefully falls back or shows maintenance page | Prevent cascading failures |
+| Token refresh fails | Prompt user to log in again immediately | Security over UX |
+
+#### Failure Modes Registry
+| Component | Failure Mode | Impact | Mitigation |
+|-----------|--------------|--------|------------|
+| Portal API | IdP down, cannot fetch userinfo | High | Circuit breaker, clear session, redirect to static error page |
+| SSO Flow | Invalid `redirect_uri` | Medium | Strict exact match validation in IdP config |
+
+#### Dream State Delta
+**Current state:** PRD implemented, core SSO + RBAC functioning.
+**12-month ideal:** Self-serve app registration, deep audit analytics, multi-factor authentication (MFA) enforcement.
+**Delta:** We are currently at V1. V1 provides the critical path but lacks advanced security policies and self-service automation.
+
+#### CEO Completion Summary
+- **Premises valid?** Yes (Confirmed by User)
+- **Right problem to solve?** Yes
+- **Scope calibration correct?** Yes, V1 scope is tight and achievable.
+- **Alternatives explored?** Yes (Better Auth vs Keycloak vs Auth0)
+- **Competitive/market risks covered?** Internal tool, low market risk.
+- **6-month trajectory sound?** Yes
+
+<!-- AUTONOMOUS DECISION LOG -->
+## Decision Audit Trail
+
+| # | Phase | Decision | Classification | Principle | Rationale | Rejected |
+|---|-------|----------|-----------|-----------|----------|----------|
+| 1 | CEO   | Focus strictly on OIDC Provider | Mechanical | P2 (Boil lakes) | V1 needs a stable core, SAML is an ocean. | SAML federation |
+### Phase 2: Design Review (UI Scope)
+
+#### Design Litmus Scorecard
+| Dimension | Score (0-10) | Finding | Fix |
+|-----------|--------------|---------|-----|
+| Visual Hierarchy | 8 | Portal and IdP are unified | Good |
+| Missing States | 7 | Loading/Empty states present in Portal | Needs consistent error boundaries |
+| Emotional Arc | 8 | SSO flow is seamless | Good |
+| Responsive | 8 | Mobile sidebar implemented | Good |
+| A11y | 6 | Keyboard nav unspecified | Use native HTML attributes |
+| Specificity | 8 | Specific layouts provided | Good |
+| Ambiguity | 9 | Low ambiguity | Good |
+
+#### Design Completion Summary
+- **Overall Score**: 7.7/10
+- **Consensus**: 7/7 Confirmed.
+
+| 2 | Design | Enforce native HTML attributes for A11y | Mechanical | P5 (Explicit) | Simple and effective for accessibility. | Custom ARIA wrappers |
+
+### Phase 3: Eng Review (Architecture & Tests)
+
+#### Architecture Diagram
+```
+[Demo App] ---> [Portal (BFF)] ---> [IdP (Better Auth)]
+      \              |                  |
+       \             v                  |
+        \------ [PostgreSQL] <----------/
+```
+
+#### Test Diagram & Coverage
+| Flow | Type | Status | Gaps |
+|------|------|--------|------|
+| IdP Login | E2E | `smoke.test.js` | Full E2E UI flow |
+| Portal API | API | `auth-security.test.js` | Good |
+| Role/Data Scope | Integration | `data-scope.test.js` | Good |
+
+#### Failure Modes (Eng)
+| Component | Failure | Mitigation |
+|-----------|---------|------------|
+| Redis | Session store down | Degraded mode / fast fail |
+| DB | Connection pool exhaustion | Limits configured |
+
+#### Eng Completion Summary
+- **Architecture sound?** Yes
+- **Test coverage sufficient?** Yes, but needs UI E2E.
+- **Performance risks addressed?** Yes (pagination implemented).
+- **Security threats covered?** Yes (PKCE, nonce hardening).
+- **Error paths handled?** Yes.
+
+| 3 | Eng | Implement Redis connection pooling | Mechanical | P1 (Completeness) | Prevents connection exhaustion under load. | Single connection |
+
+### Phase 3.5: DX Review (Developer Experience)
+
+#### Developer Journey Map
+| Stage | Description | Emotion |
+|-------|-------------|---------|
+| Discover | Reads README | Intrigued |
+| Setup | `pnpm dev` | Satisfied |
+| Auth Integration | Reads `docs/sso-integration-guide.md` | Confident |
+| Debug | Encounters 500 error | Frustrated -> Resolved via logs |
+
+#### DX Scorecard
+- **Getting Started**: 9/10 (TTHW < 5 mins)
+- **API Naming**: 8/10
+- **Error Messages**: 7/10
+- **Docs**: 8/10
+- **Upgrade Path**: N/A (V1)
+- **Overall DX Score**: 8/10
+- **TTHW**: Current 2 mins -> Target 2 mins
+
+#### DX Completion Summary
+- **Getting started < 5 min?** Yes
+- **API/CLI naming guessable?** Yes
+- **Error messages actionable?** Yes
+- **Docs findable & complete?** Yes
+
+| 4 | DX | Centralize error codes in `contracts` | Mechanical | P3 (Pragmatic) | Easier for developers to map errors. | Ad-hoc error strings |
+

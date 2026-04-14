@@ -4,7 +4,8 @@
  * DELETE /api/clients/[id]/tokens - 撤销授权 Token
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { sql } from '@/lib/db';
+import { db, schema } from '@/lib/db';
+import { eq, inArray, desc, sql as drizzleSql } from 'drizzle-orm';
 import { withPermission } from '@/lib/auth-middleware';
 
 export const runtime = 'nodejs';
@@ -16,16 +17,6 @@ interface RouteParams {
 /**
  * GET /api/clients/[id]/tokens
  * 获取 Client 的授权 Token 列表
- * 权限要求: client:read
- *
- * Query 参数:
- * - page: 页码，默认 1
- * - pageSize: 每页数量，默认 20
- * - userId: 按用户筛选（可选）
- *
- * @param request - Next.js request 对象
- * @param params - 路由参数，包含 Client ID
- * @returns JSON 响应，包含 Token 列表和分页信息
  */
 export async function GET(request: NextRequest, { params }: RouteParams) {
   return withPermission(request, { permissions: ['client:read'] }, async () => {
@@ -38,9 +29,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const offset = (page - 1) * pageSize;
 
     // 检查 Client 是否存在
-    const client = await sql`
-      SELECT id FROM clients WHERE id = ${id}
-    `;
+    const client = await db.select()
+      .from(schema.clients)
+      .where(eq(schema.clients.id, id));
 
     if (client.length === 0) {
       return NextResponse.json(
@@ -49,44 +40,43 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    // 构建查询条件
-    const conditions: string[] = [`client_id = '${id}'`];
+    // 构建条件
+    const conditions = [eq(schema.oauthAccessTokens.clientId, id)];
     if (userId) {
-      conditions.push(`user_id = '${userId.replace(/'/g, "''")}'`);
+      conditions.push(eq(schema.oauthAccessTokens.userId, userId));
     }
-    const whereClause = `WHERE ${conditions.join(' AND ')}`;
 
     // 查询总数
-    const countResult = await sql`
-      SELECT COUNT(*) as total FROM oauth_access_tokens ${sql.unsafe(whereClause)}
-    `;
-    const total = parseInt(countResult[0]?.total || '0', 10);
+    const countResult = await db.select({ count: drizzleSql`COUNT(*)::int` })
+      .from(schema.oauthAccessTokens)
+      .where(drizzleSql`${conditions.join(' AND ')}`);
+    const total = Number(countResult[0]?.count ?? 0);
 
-    // 查询 Token 列表，关联用户信息
-    const tokens = await sql`
-      SELECT
-        t.id,
-        t.user_id,
-        t.scopes,
-        t.created_at,
-        t.expires_at,
-        u.email as user_email,
-        u.name as user_name
-      FROM oauth_access_tokens t
-      LEFT JOIN users u ON t.user_id = u.id
-      ${sql.unsafe(whereClause)}
-      ORDER BY t.created_at DESC
-      LIMIT ${pageSize} OFFSET ${offset}
-    `;
+    // 查询 Token 列表
+    const tokens = await db.select({
+      id: schema.oauthAccessTokens.id,
+      userId: schema.oauthAccessTokens.userId,
+      scopes: schema.oauthAccessTokens.scopes,
+      createdAt: schema.oauthAccessTokens.createdAt,
+      expiresAt: schema.oauthAccessTokens.expiresAt,
+      userEmail: schema.users.email,
+      userName: schema.users.name,
+    })
+    .from(schema.oauthAccessTokens)
+    .leftJoin(schema.users, eq(schema.oauthAccessTokens.userId, schema.users.id))
+    .where(drizzleSql`${conditions.join(' AND ')}`)
+    .orderBy(desc(schema.oauthAccessTokens.createdAt))
+    .limit(pageSize)
+    .offset(offset);
 
     return NextResponse.json({
-      data: tokens.map((t: any) => ({
+      data: tokens.map(t => ({
         id: t.id,
-        userId: t.user_id,
-        username: t.user_email || t.user_name,
+        userId: t.userId,
+        username: t.userEmail || t.userName,
         scopes: JSON.parse(t.scopes || '[]'),
-        createdAt: t.created_at,
-        expiresAt: t.expires_at,
+        createdAt: t.createdAt,
+        expiresAt: t.expiresAt,
       })),
       pagination: {
         page,
@@ -101,15 +91,6 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 /**
  * DELETE /api/clients/[id]/tokens
  * 撤销授权 Token
- * 权限要求: client:update
- *
- * 请求体:
- * - tokenIds: 要撤销的 Token ID 数组
- * - revokeAll: 是否撤销所有 Token（布尔值）
- *
- * @param request - Next.js request 对象
- * @param params - 路由参数，包含 Client ID
- * @returns JSON 响应，包含撤销结果
  */
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   return withPermission(request, { permissions: ['client:update'] }, async () => {
@@ -118,9 +99,9 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     const { tokenIds, revokeAll } = body;
 
     // 检查 Client 是否存在
-    const client = await sql`
-      SELECT id FROM clients WHERE id = ${id}
-    `;
+    const client = await db.select()
+      .from(schema.clients)
+      .where(eq(schema.clients.id, id));
 
     if (client.length === 0) {
       return NextResponse.json(
@@ -132,21 +113,14 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     let deletedCount = 0;
 
     if (revokeAll) {
-      // 撤销所有 Token
-      const result = await sql`
-        DELETE FROM oauth_access_tokens
-        WHERE client_id = ${id}
-        RETURNING id
-      `;
+      const result = await db.delete(schema.oauthAccessTokens)
+        .where(eq(schema.oauthAccessTokens.clientId, id))
+        .returning({ id: schema.oauthAccessTokens.id });
       deletedCount = result.length;
     } else if (tokenIds && Array.isArray(tokenIds) && tokenIds.length > 0) {
-      // 撤销指定 Token
-      const idsList = tokenIds.map(id => `'${id.replace(/'/g, "''")}'`).join(', ');
-      const result = await sql`
-        DELETE FROM oauth_access_tokens
-        WHERE client_id = ${id} AND id IN (${sql.unsafe(idsList)})
-        RETURNING id
-      `;
+      const result = await db.delete(schema.oauthAccessTokens)
+        .where(inArray(schema.oauthAccessTokens.id, tokenIds))
+        .returning({ id: schema.oauthAccessTokens.id });
       deletedCount = result.length;
     } else {
       return NextResponse.json(
@@ -158,9 +132,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({
       success: true,
       message: `已撤销 ${deletedCount} 个 Token`,
-      data: {
-        revokedCount: deletedCount,
-      },
+      data: { revokedCount: deletedCount },
     });
   });
 }
