@@ -49,15 +49,17 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 调用 IdP 登出端点，清除 IdP Session
+    // 调用 IdP 登出端点，清除 IdP Session (SSO 全局登出)
     if (accessToken) {
       try {
-        const idpLogoutUrl = new URL('/api/auth/sign-out', oauthConfig.idpUrl);
+        const idpLogoutUrl = new URL('/api/auth/sign-out-sso', oauthConfig.idpUrl);
         await fetch(idpLogoutUrl.toString(), {
           method: 'POST',
           headers: {
-            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${accessToken}`,
           },
+          body: JSON.stringify({}),
         });
       } catch (error) {
         console.error('[Logout] Failed to sign out from IdP:', error);

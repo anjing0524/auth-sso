@@ -1,6 +1,6 @@
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
-import { jwt, oidcProvider } from 'better-auth/plugins';
+import { jwt, oidcProvider, bearer } from 'better-auth/plugins';
 import { redisStorage } from '@better-auth/redis-storage';
 import Redis from 'ioredis';
 import bcrypt from 'bcryptjs';
@@ -9,12 +9,13 @@ import { db } from '../db';
 import * as schema from '../db/schema';
 
 // 获取当前基础 URL，优先从环境变量读取
+console.log('[Auth] All BETTER_AUTH env vars:', Object.keys(process.env).filter(k => k.startsWith('BETTER_AUTH')).reduce((obj, key) => ({ ...obj, [key]: process.env[key] }), {}));
 const currentBaseURL = (process.env.BETTER_AUTH_URL || 'http://localhost:4001').trim();
 
 /**
  * Redis 客户端配置
  */
-let redis: Redis | null = null;
+export let redis: Redis | null = null;
 try {
   if (process.env.REDIS_URL) {
     redis = new Redis(process.env.REDIS_URL, {
@@ -48,6 +49,12 @@ export const auth = betterAuth({
     'http://localhost:4000',
     'http://localhost:4001',
     'http://localhost:4002',
+    'http://localhost:4100',
+    'http://localhost:4101',
+    'http://localhost:4102',
+    'http://127.0.0.1:4100',
+    'http://127.0.0.1:4101',
+    'http://127.0.0.1:4102',
   ],
 
   // 恢复 Redis，用于处理 OIDC 授权码等高性能状态
@@ -85,6 +92,7 @@ export const auth = betterAuth({
   },
 
   plugins: [
+    bearer(),
     jwt({
       jwt: {
         issuer: currentBaseURL,

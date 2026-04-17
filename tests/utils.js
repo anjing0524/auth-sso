@@ -4,6 +4,7 @@
  */
 
 const config = require('./config');
+const crypto = require('crypto');
 
 /**
  * 测试结果收集器 - Test result collector
@@ -61,7 +62,7 @@ class TestReporter {
     // 打印汇总
     console.log('\n' + '-'.repeat(60));
     console.log(`总计: ${this.results.length} | 通过: ${this.passed} | 失败: ${this.failed} | 跳过: ${this.skipped}`);
-    console.log(`通过率: ${((this.passed / this.results.length) * 100).toFixed(1)}%`);
+    console.log(`通过率: ${this.results.length > 0 ? ((this.passed / this.results.length) * 100).toFixed(1) : 0}%`);
     console.log('='.repeat(60) + '\n');
 
     return this.failed === 0;
@@ -77,7 +78,7 @@ class TestReporter {
         passed: this.passed,
         failed: this.failed,
         skipped: this.skipped,
-        passRate: ((this.passed / this.results.length) * 100).toFixed(1)
+        passRate: this.results.length > 0 ? ((this.passed / this.results.length) * 100).toFixed(1) : 0
       },
       results: this.results,
       timestamp: new Date().toISOString()
@@ -93,14 +94,20 @@ class HttpClient {
    * 发送GET请求 - Send GET request
    * @param {string} url - URL
    * @param {object} headers - Headers
-   * @returns {Promise<{status, headers, body}>}
+   * @returns {Promise<{status, headers, body, duration, cookies}>}
    */
   async get(url, headers = {}) {
     const start = Date.now();
     try {
+      const urlObj = new URL(url);
+      const defaultOrigin = urlObj.port === '4001' ? config.IDP_URL : config.PORTAL_URL;
+
       const response = await fetch(url, {
         method: 'GET',
-        headers: { ...headers },
+        headers: { 
+          'Origin': defaultOrigin,
+          ...headers 
+        },
         redirect: 'manual' // 不自动跟随重定向
       });
       const body = await this.parseBody(response);
@@ -108,7 +115,8 @@ class HttpClient {
         status: response.status,
         headers: this.headersToObject(response.headers),
         body,
-        duration: Date.now() - start
+        duration: Date.now() - start,
+        cookies: this.extractCookies(response.headers)
       };
     } catch (error) {
       throw new Error(`GET ${url} failed: ${error.message}`);
@@ -118,20 +126,25 @@ class HttpClient {
   /**
    * 发送POST请求 - Send POST request
    * @param {string} url - URL
-   * @param {object} body - Body
+   * @param {object|string} body - Body
    * @param {object} headers - Headers
-   * @returns {Promise<{status, headers, body}>}
+   * @returns {Promise<{status, headers, body, duration, cookies}>}
    */
   async post(url, body = {}, headers = {}) {
     const start = Date.now();
     try {
+      const isForm = headers['Content-Type'] === 'application/x-www-form-urlencoded';
+      const urlObj = new URL(url);
+      const defaultOrigin = urlObj.port === '4001' ? config.IDP_URL : config.PORTAL_URL;
+
       const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Origin': defaultOrigin,
           ...headers
         },
-        body: JSON.stringify(body),
+        body: typeof body === 'string' ? body : (isForm ? body.toString() : JSON.stringify(body)),
         redirect: 'manual'
       });
       const responseBody = await this.parseBody(response);
@@ -139,22 +152,28 @@ class HttpClient {
         status: response.status,
         headers: this.headersToObject(response.headers),
         body: responseBody,
-        duration: Date.now() - start
+        duration: Date.now() - start,
+        cookies: this.extractCookies(response.headers)
       };
     } catch (error) {
       throw new Error(`POST ${url} failed: ${error.message}`);
     }
   }
 
-  /**
-   * 解析响应体 - Parse response body
-   */
   async parseBody(response) {
     const contentType = response.headers.get('content-type') || '';
-    if (contentType.includes('application/json')) {
-      return await response.json();
+    try {
+      if (contentType.includes('application/json')) {
+        const body = await response.json();
+        // console.log(`DEBUG JSON Body:`, JSON.stringify(body).substring(0, 100));
+        return body;
+      }
+      const text = await response.text();
+      // console.log(`DEBUG Text Body:`, text.substring(0, 100));
+      return text;
+    } catch (e) {
+      return null;
     }
-    return await response.text();
   }
 
   /**
@@ -166,6 +185,34 @@ class HttpClient {
       obj[key] = value;
     });
     return obj;
+  }
+
+  /**
+   * 提取Cookies - Extract cookies
+   */
+  extractCookies(headers) {
+    const cookies = [];
+    
+    // 优先使用标准 API
+    if (typeof headers.getSetCookie === 'function') {
+      const setCookie = headers.getSetCookie();
+      if (setCookie && setCookie.length > 0) {
+        cookies.push(...setCookie);
+      }
+    }
+    
+    // 备选方案：手动解析 header
+    if (cookies.length === 0) {
+      const rawSetCookie = headers.get('set-cookie');
+      if (rawSetCookie) {
+        // fetch 可能会将多个 set-cookie 合并成逗号分隔的字符串，这在处理包含日期的 Cookie 时非常棘手
+        // 这里的逻辑需要非常小心，或者依赖 getSetCookie
+        const parts = rawSetCookie.split(/,(?=\s*[a-zA-Z0-9_]+=)/);
+        cookies.push(...parts);
+      }
+    }
+    
+    return cookies;
   }
 }
 
@@ -192,7 +239,7 @@ class Assert {
    * @param {string} message - 消息
    */
   includes(container, value, message = '') {
-    if (!container.includes(value)) {
+    if (!container || !container.includes(value)) {
       throw new Error(`${message}: Expected ${container} to include ${value}`);
     }
   }
@@ -217,10 +264,10 @@ class Assert {
    * @param {string} message - 消息
    */
   redirect(status, location, expectedLocation, message = '') {
-    if (status !== 302 && status !== 301) {
+    if (status !== 302 && status !== 301 && status !== 307 && status !== 308) {
       throw new Error(`${message}: Expected redirect status, got ${status}`);
     }
-    if (!location.includes(expectedLocation)) {
+    if (!location || !location.includes(expectedLocation)) {
       throw new Error(`${message}: Expected redirect to ${expectedLocation}, got ${location}`);
     }
   }
@@ -255,7 +302,7 @@ class Assert {
    * @param {string} message - 消息
    */
   type(value, type, message = '') {
-    if (typeof value !== type) {
+    if (typeof value !== type && !(type === 'array' && Array.isArray(value))) {
       throw new Error(`${message}: Expected type ${type}, got ${typeof value}`);
     }
   }
@@ -270,23 +317,25 @@ class CookieManager {
   }
 
   /**
-   * 从响应中提取Cookie - Extract cookies from response
-   * @param {object} headers - 响应headers
+   * 从响应或Cookie列表中提取Cookie - Extract cookies
+   * @param {object|string[]} source - 响应headers或Cookie数组
    */
-  extract(headers) {
-    const setCookie = headers['set-cookie'];
-    if (setCookie) {
-      // 解析set-cookie header
-      const cookies = Array.isArray(setCookie) ? setCookie : [setCookie];
-      cookies.forEach(cookie => {
-        const parts = cookie.split(';')[0].split('=');
-        if (parts.length >= 2) {
-          const name = parts[0].trim();
-          const value = parts[1].trim();
-          this.cookies[name] = value;
-        }
-      });
+  extract(source) {
+    let cookies = [];
+    if (Array.isArray(source)) {
+      cookies = source;
+    } else if (source && source['set-cookie']) {
+      cookies = Array.isArray(source['set-cookie']) ? source['set-cookie'] : [source['set-cookie']];
     }
+
+    cookies.forEach(cookie => {
+      const parts = cookie.split(';')[0].split('=');
+      if (parts.length >= 2) {
+        const name = parts[0].trim();
+        const value = parts[1].trim();
+        this.cookies[name] = value;
+      }
+    });
   }
 
   /**
@@ -343,6 +392,138 @@ class TestRunner {
       const duration = Date.now() - start;
       this.reporter.record(testId, testName, 'FAIL', error.message, duration);
     }
+  }
+
+  /**
+   * 登录到IdP - Login to IdP
+   * @param {string} email - 邮箱
+   * @param {string} password - 密码
+   * @returns {Promise<Record<string, string>>} Session cookies
+   */
+  async loginIdP(email = config.TEST_USER.email, password = config.TEST_USER.password) {
+    const response = await this.http.post(`${config.IDP_URL}/api/auth/sign-in/email`, {
+      email,
+      password
+    });
+
+    if (response.status !== 200) {
+      throw new Error(`IdP Login failed: ${response.status}`);
+    }
+
+    const cookies = new CookieManager();
+    cookies.extract(response.cookies);
+    return cookies;
+  }
+
+  /**
+   * 执行完整的OAuth登录流程 - Perform full OAuth flow
+   * @param {string} appUrl - 应用URL (Portal or Demo)
+   * @param {string} clientId - Client ID
+   * @param {CookieManager} existingIdpCookies - 可选的现有 IdP Cookies
+   * @returns {Promise<CookieManager>} App session cookies
+   */
+  async performOAuthFlow(appUrl, clientId, existingIdpCookies = null) {
+    // 1. 获取Portal登录重定向
+    const loginInit = await this.http.get(`${appUrl}/api/auth/login`);
+    if (loginInit.status !== 302 && loginInit.status !== 307) {
+      throw new Error(`OAuth Init failed: ${loginInit.status}`);
+    }
+
+    const authUrl = loginInit.headers['location'];
+    if (!authUrl) {
+      throw new Error(`No Location header in OAuth Init response from ${appUrl}/api/auth/login`);
+    }
+    // console.log(`DEBUG: OAuth Auth URL: ${authUrl}`);
+    
+    const portalCookies = new CookieManager();
+    portalCookies.extract(loginInit.cookies);
+
+    // 2. 登录IdP (如果没有提供)
+    const idpCookies = existingIdpCookies || await this.loginIdP();
+
+    // 3. 执行授权请求
+    const authRes = await this.http.get(authUrl, {
+      Cookie: idpCookies.getHeader()
+    });
+
+    let callbackUrl;
+
+    if (authRes.status === 302 || authRes.status === 307) {
+      callbackUrl = authRes.headers['location'];
+    } else if (authRes.status === 200) {
+      const body = authRes.body;
+      
+      // 情况1: 直接返回JSON重定向 (当 skipConsent: true 时)
+      if (body && body.redirect && body.url) {
+        callbackUrl = body.url;
+      } 
+      // 情况2: 返回 Consent HTML 页面
+      else {
+        const bodyStr = typeof body === 'string' ? body : JSON.stringify(body);
+        if (bodyStr && bodyStr.includes('consent_code')) {
+          const consentCodeMatch = bodyStr.match(/consent_code: '([^']+)'/);
+          if (consentCodeMatch) {
+            // console.log(`DEBUG: Found consent_code: ${consentCodeMatch[1]}`);
+            const consentRes = await this.http.post(`${config.IDP_URL}/api/auth/oauth2/consent`, {
+              accept: true,
+              consent_code: consentCodeMatch[1],
+              scopes: "openid profile email offline_access"
+            }, {
+              Cookie: idpCookies.getHeader()
+            });
+            
+            // console.log(`DEBUG: Consent POST response:`, JSON.stringify(consentRes.body));
+            
+            if (consentRes.status === 200 && consentRes.body && (consentRes.body.redirectURI || consentRes.body.url)) {
+              callbackUrl = consentRes.body.redirectURI || consentRes.body.url;
+            } else {
+              console.log(`DEBUG: Consent POST failed or missing redirectURI. Status: ${consentRes.status}, Body:`, JSON.stringify(consentRes.body));
+            }
+          }
+        }
+      }
+    }
+
+    if (!callbackUrl) {
+      throw new Error(`OAuth Authorization failed to get callback URL. Status: ${authRes.status}, Body: ${JSON.stringify(authRes.body)}`);
+    }
+
+    // 4. 执行回调到App
+    const callbackRes = await this.http.get(callbackUrl, {
+      Cookie: portalCookies.getHeader()
+    });
+
+    // console.log(`DEBUG: Callback Response Status: ${callbackRes.status}`);
+    // console.log(`DEBUG: Callback Response Cookies:`, JSON.stringify(callbackRes.cookies));
+
+    if (callbackRes.status !== 302 && callbackRes.status !== 307 && callbackRes.status !== 200) {
+      throw new Error(`OAuth Callback failed with status ${callbackRes.status}`);
+    }
+
+    // 提取最终的应用Session Cookie
+    const finalCookies = new CookieManager();
+    finalCookies.extract(portalCookies.cookies); // 包含state cookie
+    finalCookies.extract(callbackRes.cookies); // 包含session cookie
+
+    const hasSession = Object.keys(finalCookies.cookies).some(name => 
+      name.includes('session') || name.includes('auth') || name.includes('token')
+    );
+    if (!hasSession) {
+       console.log(`DEBUG: NO SESSION COOKIE FOUND in callback response. Headers:`, JSON.stringify(callbackRes.headers));
+    }
+
+    // 如果是200，可能是由于跳转被拦截，但实际上已经设置了Cookie
+    return finalCookies;
+
+  }
+
+  /**
+   * 生成PKCE参数 - Generate PKCE parameters
+   */
+  generatePKCE() {
+    const verifier = crypto.randomBytes(32).toString('base64url');
+    const challenge = crypto.createHash('sha256').update(verifier).digest('base64url');
+    return { verifier, challenge };
   }
 
   /**

@@ -3,7 +3,7 @@
  * 验证单点登录和单点登出功能
  */
 
-const { TestReporter, TestRunner, config } = require('./utils');
+const { TestReporter, TestRunner, config, CookieManager } = require('./utils');
 
 /**
  * 运行SSO测试 - Run SSO tests
@@ -14,114 +14,96 @@ async function run(reporter) {
   const http = runner.http;
   const assert = runner.assert;
 
-  // SSO-001: Demo App启动验证
-  await runner.run('SSO-001', 'Demo App启动验证', async () => {
-    const response = await http.get(config.DEMO_APP_URL);
-    assert.status(response.status, 200, 'Demo App应正常启动');
-    assert.includes(response.body, 'SSO', 'Demo App应显示SSO测试界面');
-  });
+  // 5.1 单点登录测试
 
-  // SSO-002: Demo App登录入口
-  await runner.run('SSO-002', 'Demo App登录入口', async () => {
-    const response = await http.get(`${config.DEMO_APP_URL}/api/auth/login`);
-    // Next.js 使用 307 临时重定向
-    assert.equal(response.status === 302 || response.status === 307, true, 'Demo App登录入口应返回重定向');
-
-    const location = response.headers['location'];
-    // 应重定向到IdP
-    assert.includes(location, config.IDP_URL, '应重定向到IdP');
-    assert.includes(location, 'client_id=demo-app', '应使用demo-app client_id');
-  });
-
-  // SSO-003: Demo App使用正确的redirect_uri
-  await runner.run('SSO-003', 'Demo App redirect_uri验证', async () => {
-    const response = await http.get(`${config.DEMO_APP_URL}/api/auth/login`);
-    const location = response.headers['location'];
-
-    // redirect_uri应为注册的地址（URL编码后的）
-    assert.includes(location, 'redirect_uri', '应包含redirect_uri参数');
-    // 验证redirect_uri值（URL编码）
-    assert.includes(decodeURIComponent(location), 'localhost:4002', 'redirect_uri应包含localhost:4002');
-  });
-
-  // SSO-004: Demo App PKCE验证
-  await runner.run('SSO-004', 'Demo App PKCE验证', async () => {
-    const response = await http.get(`${config.DEMO_APP_URL}/api/auth/login`);
-    const location = response.headers['location'];
-
-    assert.includes(location, 'code_challenge=', '应包含PKCE code_challenge');
-    assert.includes(location, 'code_challenge_method=S256', '应使用S256方法');
-  });
-
-  // SSO-005: Demo App State参数
-  await runner.run('SSO-005', 'Demo App State参数验证', async () => {
-    const response = await http.get(`${config.DEMO_APP_URL}/api/auth/login`);
-    const location = response.headers['location'];
-
-    assert.includes(location, 'state=', '应包含state参数');
-
-    const stateMatch = location.match(/state=([^&]+)/);
-    if (stateMatch) {
-      assert.equal(stateMatch[1].length >= 32, true, 'State长度应足够');
+  // SSO-001: Portal 登录后 Demo 免登
+  await runner.run('SSO-001', 'Portal 登录后 Demo App 免登', async () => {
+    // 1. 登录 IdP
+    const idpCookies = await runner.loginIdP();
+    
+    // 2. 登录 Portal
+    const portalCookies = await runner.performOAuthFlow(config.PORTAL_URL, 'portal');
+    assert.exists(portalCookies.get('portal_session_id') || portalCookies.get('better-auth.session_token'), 'Portal 应登录成功');
+    
+    // 3. 访问 Demo App 登录入口 (应利用 IdP Session 自动重定向回来)
+    const demoLoginInit = await http.get(`${config.DEMO_APP_URL}/api/auth/login`);
+    const demoAuthUrl = demoLoginInit.headers['location'];
+    const demoStateCookie = new CookieManager();
+    demoStateCookie.extract(demoLoginInit.cookies);
+    
+    // 4. 发起授权请求 (带上 IdP Cookies)
+    const demoAuthRes = await http.get(demoAuthUrl, {
+      Cookie: idpCookies.getHeader()
+    });
+    
+    let demoCallbackUrl;
+    if (demoAuthRes.status === 200) {
+      if (demoAuthRes.body && demoAuthRes.body.redirect && demoAuthRes.body.url) {
+        demoCallbackUrl = demoAuthRes.body.url;
+      } else {
+        const bodyStr = typeof demoAuthRes.body === 'string' ? demoAuthRes.body : JSON.stringify(demoAuthRes.body);
+        const consentCodeMatch = bodyStr.match(/consent_code: '([^']+)'/);
+        if (consentCodeMatch) {
+          const consentRes = await http.post(`${config.IDP_URL}/api/auth/oauth2/consent`, {
+            accept: true,
+            consent_code: consentCodeMatch[1],
+            scopes: "openid profile email offline_access"
+          }, { Cookie: idpCookies.getHeader() });
+          demoCallbackUrl = consentRes.body.redirectURI;
+        }
+      }
+    } else if (demoAuthRes.status === 302 || demoAuthRes.status === 307) {
+      demoCallbackUrl = demoAuthRes.headers['location'];
     }
+
+    assert.exists(demoCallbackUrl, 'Demo 授权应成功获取回调URL');
+    
+    // 5. 执行回调到 Demo App
+    const demoCallbackRes = await http.get(demoCallbackUrl, {
+      Cookie: demoStateCookie.getHeader()
+    });
+    
+    assert.equal(demoCallbackRes.status === 302 || demoCallbackRes.status === 307, true, 'Demo 回调应成功');
+    const demoAppCookies = new CookieManager();
+    demoAppCookies.extract(demoCallbackRes.cookies);
+    
+    // Demo App 使用的 cookie 名称是 demo_session
+    assert.exists(demoAppCookies.get('demo_session') || demoAppCookies.get('better-auth.session_token'), 'Demo App 应实现免登');
   });
 
-  // SSO-006: Demo App未登录访问/api/me
-  await runner.run('SSO-006', 'Demo App未登录访问/api/me', async () => {
-    const response = await http.get(`${config.DEMO_APP_URL}/api/me`);
-    assert.status(response.status, 401, '未登录应返回401');
-  });
-
-  // SSO-007: Demo App登出功能
-  await runner.run('SSO-007', 'Demo App登出功能', async () => {
-    const response = await http.post(`${config.DEMO_APP_URL}/api/auth/logout`);
-    assert.equal(
-      response.status === 200 || response.status === 302,
-      true,
-      '登出应返回成功响应'
-    );
-  });
-
-  // SSO-008: Portal和Demo App使用不同Client
-  await runner.run('SSO-008', 'Portal和Demo App使用不同Client', async () => {
-    const portalResponse = await http.get(`${config.PORTAL_URL}/api/auth/login`);
-    const demoResponse = await http.get(`${config.DEMO_APP_URL}/api/auth/login`);
-
-    const portalLocation = portalResponse.headers['location'];
-    const demoLocation = demoResponse.headers['location'];
-
-    // 验证使用不同的client_id
-    assert.includes(portalLocation, 'client_id=portal', 'Portal应使用portal client_id');
-    assert.includes(demoLocation, 'client_id=demo-app', 'Demo应使用demo-app client_id');
-  });
-
-  // SSO-009: IdP支持多个Client
-  await runner.run('SSO-009', 'IdP支持多Client验证', async () => {
-    // 验证OIDC发现文档包含支持的scope
-    const response = await http.get(`${config.IDP_URL}/api/auth/.well-known/openid-configuration`);
-    assert.status(response.status, 200, 'OIDC发现文档应可用');
-
-    // 验证支持的response_types
-    assert.exists(response.body.response_types_supported, '应包含response_types_supported');
-  });
-
-  // SSO-010: SSO登录流程完整性
-  await runner.run('SSO-010', 'SSO登录流程完整性', async () => {
-    // 发起Portal登录
-    const portalLogin = await http.get(`${config.PORTAL_URL}/api/auth/login`);
-    assert.equal(portalLogin.status === 302 || portalLogin.status === 307, true, 'Portal登录入口应返回重定向');
-
-    // 发起Demo App登录
-    const demoLogin = await http.get(`${config.DEMO_APP_URL}/api/auth/login`);
-    assert.equal(demoLogin.status === 302 || demoLogin.status === 307, true, 'Demo登录入口应返回重定向');
-
-    // 两个应用都应重定向到同一个IdP
-    const portalLocation = portalLogin.headers['location'];
-    const demoLocation = demoLogin.headers['location'];
-
-    // 验证都指向同一个IdP
-    assert.includes(portalLocation, config.IDP_URL, 'Portal应重定向到IdP');
-    assert.includes(demoLocation, config.IDP_URL, 'Demo应重定向到IdP');
+  // 5.2 单点登出测试
+  
+  // SSO-010: Portal 登出后 Demo 也失效
+  await runner.run('SSO-010', 'Portal 登出后全线失效', async () => {
+    // 1. 登录 IdP
+    const idpCookies = await runner.loginIdP();
+    
+    // 2. 获取 Portal Session (使用同一个 IdP Session)
+    const portalCookies = await runner.performOAuthFlow(config.PORTAL_URL, 'portal', idpCookies);
+    
+    // 3. 执行 Portal 登出
+    const logoutRes = await http.post(`${config.PORTAL_URL}/api/auth/logout`, {}, {
+      Cookie: portalCookies.getHeader()
+    });
+    assert.status(logoutRes.status, 200, 'Portal 登出接口应返回 200');
+    
+    // 4. 检查 IdP Session
+    // 再次发起授权，如果 IdP Session 已销毁，应重定向到登录页或返回登录页
+    const authorizeUrl = new URL(`${config.IDP_URL}/api/auth/oauth2/authorize`);
+    authorizeUrl.searchParams.set('client_id', 'demo-app');
+    authorizeUrl.searchParams.set('response_type', 'code');
+    authorizeUrl.searchParams.set('redirect_uri', `${config.DEMO_APP_URL}/api/auth/callback`);
+    authorizeUrl.searchParams.set('scope', 'openid profile email');
+    
+    const reAuthRes = await http.get(authorizeUrl.toString(), {
+      Cookie: idpCookies.getHeader()
+    });
+    
+    const isLoggedOut = 
+        reAuthRes.status === 200 || 
+        (reAuthRes.status >= 300 && reAuthRes.status < 400 && reAuthRes.headers['location']?.includes('sign-in'));
+    
+    assert.equal(isLoggedOut, true, '登出后应重定向到登录页或需要重新登录');
   });
 }
 

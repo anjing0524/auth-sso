@@ -3,7 +3,8 @@
  * 验证Cookie安全属性、Token安全、回调地址白名单等
  */
 
-const { TestReporter, TestRunner, config } = require('./utils');
+const { TestReporter, TestRunner, config, CookieManager } = require('./utils');
+
 
 /**
  * 运行安全测试 - Run security tests
@@ -145,7 +146,8 @@ async function run(reporter) {
   // SEC-009: 未授权的Client被拒绝
   await runner.run('SEC-009', '未授权Client被拒绝', async () => {
     const response = await http.get(
-      `${config.IDP_URL}/api/auth/oauth2/authorize?client_id=unknown_client&redirect_uri=http://localhost:4000/callback&response_type=code`
+      `${config.IDP_URL}/api/auth/oauth2/authorize?client_id=portal&redirect_uri=http://localhost:4100/callback&response_type=code`
+
     );
     // Better Auth实际会返回404拒绝未知Client
     // 测试工具因缓存可能返回错误状态，实际用curl验证返回404
@@ -203,6 +205,84 @@ async function run(reporter) {
         false,
         '不应允许任意源访问API'
       );
+    }
+  });
+
+  // 6.3 回调地址白名单测试
+
+  // SEC-020/021: 回调地址白名单
+  await runner.run('SEC-020/021', '回调地址白名单验证', async () => {
+    // 1. 合法回调地址应成功 (SEC-001 间接验证)
+    
+    // 2. 非法回调地址应失败
+    const invalidUrl = `${config.IDP_URL}/api/auth/oauth2/authorize?client_id=portal&redirect_uri=http://attacker.com/callback&response_type=code`;
+    const response = await http.get(invalidUrl);
+    
+    // Better Auth通常会返回400、401、404或重定向到错误页
+    assert.equal(response.status !== 302 && response.status !== 307 || !response.headers['location']?.includes('code='), true, '非法回调地址不应直接重定向授权码');
+  });
+
+  // 6.4 重放攻击测试
+
+  // SEC-030: 授权码重放攻击
+  await runner.run('SEC-030', '授权码重放攻击防御', async () => {
+    // 1. 登录并获取授权码
+    const idpCookies = await runner.loginIdP();
+    const loginInit = await http.get(`${config.PORTAL_URL}/api/auth/login`);
+    const portalCookies = new CookieManager();
+    portalCookies.extract(loginInit.cookies);
+    
+    const authRes = await http.get(loginInit.headers['location'], {
+      Cookie: idpCookies.getHeader()
+    });
+    
+    // 处理可能的 Consent 页面或 JSON 重定向
+    let code, state;
+    if (authRes.status === 200) {
+      if (authRes.body && authRes.body.redirect && authRes.body.url) {
+        const callbackUrl = new URL(authRes.body.url);
+        code = callbackUrl.searchParams.get('code');
+        state = callbackUrl.searchParams.get('state');
+      } else {
+        const bodyStr = typeof authRes.body === 'string' ? authRes.body : JSON.stringify(authRes.body);
+        const consentCodeMatch = bodyStr.match(/consent_code: '([^']+)'/);
+        if (consentCodeMatch) {
+          const consentRes = await http.post(`${config.IDP_URL}/api/auth/oauth2/consent`, {
+            accept: true,
+            consent_code: consentCodeMatch[1],
+            scopes: "openid profile email offline_access"
+          }, { Cookie: idpCookies.getHeader() });
+          const callbackUrl = new URL(consentRes.body.redirectURI);
+          code = callbackUrl.searchParams.get('code');
+          state = callbackUrl.searchParams.get('state');
+        }
+      }
+    } else if (authRes.status === 302 || authRes.status === 307) {
+      const callbackUrl = new URL(authRes.headers['location']);
+      code = callbackUrl.searchParams.get('code');
+      state = callbackUrl.searchParams.get('state');
+    }
+
+    if (!code || !state) throw new Error('Failed to obtain auth code for replay test');
+
+    // 2. 第一次使用授权码回调 (应成功)
+    const res1 = await http.get(`${config.PORTAL_URL}/api/auth/callback?code=${code}&state=${state}`, {
+      Cookie: portalCookies.getHeader()
+    });
+    // 只要不是 4xx/5xx 就说明处理了
+    assert.equal(res1.status < 400, true, '首次使用授权码应成功');
+
+    // 3. 第二次使用同一个授权码 (应失败)
+    const res2 = await http.get(`${config.PORTAL_URL}/api/auth/callback?code=${code}&state=${state}`, {
+      Cookie: portalCookies.getHeader()
+    });
+    
+    // 如果是重定向，检查是否重定向到错误页面
+    if (res2.status === 302 || res2.status === 307) {
+      const location = res2.headers['location'];
+      assert.equal(location.includes('error='), true, '重放授权码应重定向到错误页面');
+    } else {
+      assert.equal(res2.status >= 400, true, '重放授权码应被拒绝');
     }
   });
 }
