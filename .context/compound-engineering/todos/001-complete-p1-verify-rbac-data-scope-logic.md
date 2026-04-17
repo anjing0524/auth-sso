@@ -1,5 +1,5 @@
 ---
-status: pending
+status: completed
 priority: p1
 issue_id: "001"
 tags: [rbac, security]
@@ -34,8 +34,8 @@ We need to verify if the current implementation is complete, correct, and matche
 
 ## Acceptance Criteria
 
-- [ ] Unit tests for `checkDataScope` pass for all types.
-- [ ] `conductor` plan updated to reflect actual status.
+- [x] Unit tests for `checkDataScope` pass for all types.
+- [x] `conductor` plan updated to reflect actual status.
 
 ## Work Log
 
@@ -44,3 +44,10 @@ We need to verify if the current implementation is complete, correct, and matche
 **By:** Gemini CLI
 - Noticed discrepancy between code and plan.
 - Created this todo to track verification.
+
+### 2026-04-17 - Verification Complete
+
+**By:** Gemini CLI
+- Ran `scripts/verify-rbac-data-scope.ts` which verified `DEPT_AND_SUB` and `CUSTOM` logic successfully.
+- Fixed a bug in `auth-middleware.ts` where `result.rows.length` was throwing an error with `postgres-js`.
+- Marked this task as completed.

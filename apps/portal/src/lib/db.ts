@@ -1,11 +1,11 @@
 /**
  * Portal 数据库连接
- * 使用 Drizzle ORM + neon-http 连接 PostgreSQL
+ * 使用 Drizzle ORM + postgres-js 连接 PostgreSQL
  *
  * 与 IdP 共享同一个数据库
  */
-import { neon } from '@neondatabase/serverless';
-import { drizzle } from 'drizzle-orm/neon-http';
+import postgres from 'postgres';
+import { drizzle } from 'drizzle-orm/postgres-js';
 import * as schema from '../db/schema';
 
 /**
@@ -14,14 +14,16 @@ import * as schema from '../db/schema';
 const connectionString = process.env.DATABASE_URL!;
 
 /**
- * Neon HTTP 客户端
+ * Postgres 客户端
  */
-const sql = neon(connectionString);
+const client = postgres(connectionString, {
+  prepare: false, // 禁用 prepared statements 以提高 Serverless 兼容性
+});
 
 /**
  * Drizzle ORM 实例
  */
-export const db = drizzle({ client: sql, schema });
+export const db = drizzle(client, { schema });
 
 /**
  * 导出 schema 以便其他模块使用

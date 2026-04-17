@@ -72,6 +72,7 @@ export async function checkPermission(
     // 2. 获取权限上下文
     const permissionContext = await getUserPermissionContext(session.userId);
     if (!permissionContext) {
+      console.error('[PermissionCheck] Failed to get permission context for userId:', session.userId);
       return {
         authorized: false,
         error: '无法获取用户权限',
@@ -141,8 +142,8 @@ export async function checkPermission(
       authorized: true,
       userId: session.userId,
     };
-  } catch (error) {
-    console.error('[PermissionCheck] Error:', error);
+  } catch (error: any) {
+    console.error('[PermissionCheck] Error:', error.message, error.stack);
     return {
       authorized: false,
       error: '权限检查失败',
@@ -170,16 +171,24 @@ export async function withPermission(
   options: PermissionCheckOptions,
   handler: (userId: string) => Promise<NextResponse>
 ): Promise<NextResponse> {
-  const check = await checkPermission(request, options);
+  try {
+    const check = await checkPermission(request, options);
 
-  if (!check.authorized) {
+    if (!check.authorized) {
+      return NextResponse.json(
+        { error: 'forbidden', message: check.error },
+        { status: check.statusCode }
+      );
+    }
+
+    return await handler(check.userId!);
+  } catch (error: any) {
+    console.error('[withPermission] Execution error:', error.message, error.stack);
     return NextResponse.json(
-      { error: 'forbidden', message: check.error },
-      { status: check.statusCode }
+      { error: 'internal_error', message: '服务执行异常' },
+      { status: 500 }
     );
   }
-
-  return handler(check.userId!);
 }
 
 /**
@@ -232,7 +241,8 @@ export async function checkDataScope(
           )
           SELECT 1 FROM sub_depts WHERE id = ${targetDeptId}
         `);
-        return result.rows.length > 0;
+        const rows = (result as any).rows || result;
+        return rows.length > 0;
       } catch (error) {
         console.error('[DataScope] DEPT_AND_SUB query error:', error);
         // 查询失败时回退到仅检查当前部门，确保安全
@@ -292,9 +302,11 @@ export async function getDataScopeFilter(
         )
         SELECT id FROM sub_depts
       `);
-      return { type: 'LIST', deptIds: result.rows.map((r: any) => r.id) };
-    } catch (error) {
-      console.error('[DataScope] getDataScopeFilter query error:', error);
+      const rows = (result as any).rows || result;
+      console.log('[DataScope] Query result rows count:', rows?.length || 0);
+      return { type: 'LIST', deptIds: rows.map((r: any) => r.id) };
+    } catch (error: any) {
+      console.error('[DataScope] getDataScopeFilter query error:', error.message, error.stack);
       // 查询失败时回退到仅包含当前部门
       return { type: 'LIST', deptIds: [context.deptId] };
     }

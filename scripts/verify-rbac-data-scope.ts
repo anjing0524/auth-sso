@@ -1,5 +1,6 @@
 import { checkDataScope } from '../apps/portal/src/lib/auth-middleware';
-import { sql } from '../apps/portal/src/lib/db';
+import { db } from '../apps/portal/src/lib/db';
+import { sql } from 'drizzle-orm';
 
 /**
  * 验证 RBAC 数据范围逻辑
@@ -16,21 +17,21 @@ async function verify() {
     const testRoleId = 'role_test_custom';
 
     console.log('正在清理旧测试数据...');
-    await sql`DELETE FROM role_data_scopes WHERE role_id = ${testRoleId}`;
-    await sql`DELETE FROM user_roles WHERE user_id = ${testUserId}`;
-    await sql`DELETE FROM roles WHERE id = ${testRoleId}`;
-    await sql`DELETE FROM users WHERE id = ${testUserId}`;
-    await sql`DELETE FROM departments WHERE id IN (${subDeptId}, ${otherDeptId}, ${testDeptId})`;
+    await db.execute(sql`DELETE FROM role_data_scopes WHERE role_id = ${testRoleId}`);
+    await db.execute(sql`DELETE FROM user_roles WHERE user_id = ${testUserId}`);
+    await db.execute(sql`DELETE FROM roles WHERE id = ${testRoleId}`);
+    await db.execute(sql`DELETE FROM users WHERE id = ${testUserId}`);
+    await db.execute(sql`DELETE FROM departments WHERE id IN (${subDeptId}, ${otherDeptId}, ${testDeptId})`);
 
     console.log('正在创建测试部门...');
-    await sql`INSERT INTO departments (id, public_id, name, parent_id) VALUES (${testDeptId}, 'pub_root', 'Root Dept', NULL)`;
-    await sql`INSERT INTO departments (id, public_id, name, parent_id) VALUES (${subDeptId}, 'pub_sub', 'Sub Dept', ${testDeptId})`;
-    await sql`INSERT INTO departments (id, public_id, name, parent_id) VALUES (${otherDeptId}, 'pub_other', 'Other Dept', NULL)`;
+    await db.execute(sql`INSERT INTO departments (id, public_id, name, parent_id) VALUES (${testDeptId}, 'pub_root', 'Root Dept', NULL)`);
+    await db.execute(sql`INSERT INTO departments (id, public_id, name, parent_id) VALUES (${subDeptId}, 'pub_sub', 'Sub Dept', ${testDeptId})`);
+    await db.execute(sql`INSERT INTO departments (id, public_id, name, parent_id) VALUES (${otherDeptId}, 'pub_other', 'Other Dept', NULL)`);
 
     console.log('正在创建测试用户与角色...');
-    await sql`INSERT INTO users (id, public_id, username, name, dept_id) VALUES (${testUserId}, 'pub_user', 'test_rbac', 'Test RBAC', ${testDeptId})`;
-    await sql`INSERT INTO roles (id, public_id, name, code, data_scope_type) VALUES (${testRoleId}, 'pub_role', 'Custom Role', 'CUSTOM_ROLE', 'DEPT_AND_SUB')`;
-    await sql`INSERT INTO user_roles (id, user_id, role_id) VALUES ('ur_test', ${testUserId}, ${testRoleId})`;
+    await db.execute(sql`INSERT INTO users (id, public_id, username, name, dept_id) VALUES (${testUserId}, 'pub_user', 'test_rbac', 'Test RBAC', ${testDeptId})`);
+    await db.execute(sql`INSERT INTO roles (id, public_id, name, code, data_scope_type) VALUES (${testRoleId}, 'pub_role', 'Custom Role', 'CUSTOM_ROLE', 'DEPT_AND_SUB')`);
+    await db.execute(sql`INSERT INTO user_roles (id, user_id, role_id) VALUES ('ur_test', ${testUserId}, ${testRoleId})`);
 
     // 2. 验证 DEPT_AND_SUB
     console.log('\n[验证 DEPT_AND_SUB]');
@@ -42,8 +43,8 @@ async function verify() {
 
     // 3. 验证 CUSTOM
     console.log('\n[验证 CUSTOM]');
-    await sql`UPDATE roles SET data_scope_type = 'CUSTOM' WHERE id = ${testRoleId}`;
-    await sql`INSERT INTO role_data_scopes (id, role_id, dept_id) VALUES ('rds_test', ${testRoleId}, ${otherDeptId})`;
+    await db.execute(sql`UPDATE roles SET data_scope_type = 'CUSTOM' WHERE id = ${testRoleId}`);
+    await db.execute(sql`INSERT INTO role_data_scopes (id, role_id, dept_id) VALUES ('rds_test', ${testRoleId}, ${otherDeptId})`);
 
     const isCustomValid = await checkDataScope(testUserId, otherDeptId);
     console.log(`- 访问自定义授权部门: ${isCustomValid ? '✅ 通过' : '❌ 失败'}`);
@@ -55,11 +56,11 @@ async function verify() {
 
     // 4. 清理
     console.log('正在清理测试数据...');
-    await sql`DELETE FROM role_data_scopes WHERE role_id = ${testRoleId}`;
-    await sql`DELETE FROM user_roles WHERE user_id = ${testUserId}`;
-    await sql`DELETE FROM roles WHERE id = ${testRoleId}`;
-    await sql`DELETE FROM users WHERE id = ${testUserId}`;
-    await sql`DELETE FROM departments WHERE id IN (${subDeptId}, ${otherDeptId}, ${testDeptId})`;
+    await db.execute(sql`DELETE FROM role_data_scopes WHERE role_id = ${testRoleId}`);
+    await db.execute(sql`DELETE FROM user_roles WHERE user_id = ${testUserId}`);
+    await db.execute(sql`DELETE FROM roles WHERE id = ${testRoleId}`);
+    await db.execute(sql`DELETE FROM users WHERE id = ${testUserId}`);
+    await db.execute(sql`DELETE FROM departments WHERE id IN (${subDeptId}, ${otherDeptId}, ${testDeptId})`);
 
   } catch (error) {
     console.error('验证过程中出错:', error);

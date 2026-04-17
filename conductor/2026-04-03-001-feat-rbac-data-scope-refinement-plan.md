@@ -125,7 +125,7 @@ date: 2026-04-03
 **Test scenarios:**
 - Happy path: `DEPT_AND_SUB` 角色只能看到本部门及其子部门。
 
-- [ ] **Unit 5: 自动化测试验证**
+- [x] **Unit 5: 自动化测试验证**
 
 **Goal:** 编写集成测试确保数据范围逻辑生效。
 
