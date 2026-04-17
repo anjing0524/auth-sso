@@ -5,7 +5,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { db, schema } from '@/lib/db';
-import { eq, or, ilike, asc, desc } from 'drizzle-orm';
+import { eq, or, ilike, asc, desc, and } from 'drizzle-orm';
 import { withPermission } from '@/lib/auth-middleware';
 
 export const runtime = 'nodejs';
@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
     // 查询角色
     const roles = await db.select()
       .from(schema.roles)
-      .where(conditions.length > 0 ? conditions.reduce((acc, c) => acc ? eq(acc as any, c as any) : c) : undefined)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
       .orderBy(asc(schema.roles.sort), desc(schema.roles.createdAt));
 
     return NextResponse.json({

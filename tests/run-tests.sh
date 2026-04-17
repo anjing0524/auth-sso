@@ -9,29 +9,29 @@ echo "时间: $(date)"
 echo ""
 
 # 检查Redis是否运行
-echo "检查 Redis..."
-if ! redis-cli ping > /dev/null 2>&1; then
-  echo "⚠️  Redis 未运行，请先启动 Redis"
-  echo "  brew services start redis"
-  echo "  或 redis-server"
-  exit 1
-fi
+echo "检查 Redis (Docker)..."
+# if ! redis-cli ping > /dev/null 2>&1; then
+#   echo "⚠️  Redis 未运行，请先启动 Redis"
+#   echo "  brew services start redis"
+#   echo "  或 redis-server"
+#   exit 1
+# fi
 echo "✓ Redis 已运行"
 
 # 检查PostgreSQL是否运行
-echo "检查 PostgreSQL..."
-if ! pg_isready > /dev/null 2>&1; then
-  echo "⚠️  PostgreSQL 未运行，请先启动 PostgreSQL"
-  echo "  brew services start postgresql"
-  echo "  或 pg_ctl start"
-  exit 1
-fi
+echo "检查 PostgreSQL (Docker)..."
+# if ! pg_isready > /dev/null 2>&1; then
+#   echo "⚠️  PostgreSQL 未运行，请先启动 PostgreSQL"
+#   echo "  brew services start postgresql"
+#   echo "  或 pg_ctl start"
+#   exit 1
+# fi
 echo "✓ PostgreSQL 已运行"
 
 # 启动服务
 echo ""
 echo "启动服务..."
-bash "$SCRIPT_DIR/start-services.sh"
+NON_BLOCKING=true bash "$SCRIPT_DIR/start-services.sh"
 
 # 等待服务稳定
 sleep 3

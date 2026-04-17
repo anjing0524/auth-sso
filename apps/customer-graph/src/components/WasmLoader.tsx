@@ -100,6 +100,33 @@ export function WasmLoader({ children, fallback }: WasmLoaderProps) {
     };
   }, [engine]);
 
+  // 处理窗口大小变化
+  useEffect(() => {
+    if (!canvasRef.current || !engine) return;
+
+    const resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const { width, height } = entry.contentRect;
+        if (width > 0 && height > 0) {
+          const canvas = canvasRef.current;
+          if (canvas) {
+            // 同步内部像素尺寸与 CSS 尺寸
+            canvas.width = width;
+            canvas.height = height;
+            // 通知引擎更新
+            engine.resize(width, height);
+          }
+        }
+      }
+    });
+
+    resizeObserver.observe(canvasRef.current);
+
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, [engine]);
+
   // WebGPU 不支持
   if (webgpuSupport && !webgpuSupport.supported) {
     return (

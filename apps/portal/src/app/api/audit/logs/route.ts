@@ -4,7 +4,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { db, schema } from '@/lib/db';
-import { eq, desc, sql as drizzleSql } from 'drizzle-orm';
+import { eq, desc, and, sql as drizzleSql } from 'drizzle-orm';
 import { withPermission } from '@/lib/auth-middleware';
 
 export const runtime = 'nodejs';
@@ -43,13 +43,13 @@ export async function GET(request: NextRequest) {
     // 查询总数
     const countResult = await db.select({ count: drizzleSql`COUNT(*)::int` })
       .from(schema.auditLogs)
-      .where(conditions.length > 0 ? drizzleSql`${conditions.join(' AND ')}` : undefined);
+      .where(conditions.length > 0 ? and(...conditions) : undefined);
     const total = Number(countResult[0]?.count ?? 0);
 
     // 查询日志列表
     const logs = await db.select()
       .from(schema.auditLogs)
-      .where(conditions.length > 0 ? drizzleSql`${conditions.join(' AND ')}` : undefined)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
       .orderBy(desc(schema.auditLogs.createdAt))
       .limit(pageSize)
       .offset(offset);

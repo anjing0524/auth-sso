@@ -1,0 +1,22 @@
+
+> @auth-sso/idp@1.0.0 dev /Users/liushuo/code/干了科技/auth-sso/apps/idp
+> next dev -p 4005
+
+⚠ You are using a non-standard "NODE_ENV" value in your environment. This creates inconsistencies in the project and is strongly advised against. Read more: https://nextjs.org/docs/messages/non-standard-node-env
+▲ Next.js 16.2.1 (Turbopack)
+- Local:         http://localhost:4005
+- Network:       http://192.168.60.66:4005
+- Environments: .env.local
+✓ Ready in 1082ms
+⨯ Another next dev server is already running.
+
+- Local:        http://localhost:4001
+- PID:          82823
+- Dir:          /Users/liushuo/code/干了科技/auth-sso/apps/idp
+- Log:          .next/dev/logs/next-development.log
+
+Run kill 82823 to stop it.
+[?25h
+/Users/liushuo/code/干了科技/auth-sso/apps/idp:
+ ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL  @auth-sso/idp@1.0.0 dev: `next dev -p 4005`
+Exit status 1

@@ -5,7 +5,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { db, schema } from '@/lib/db';
-import { ilike, eq, or, desc, sql as drizzleSql } from 'drizzle-orm';
+import { ilike, eq, or, desc, and, sql as drizzleSql } from 'drizzle-orm';
 import { randomBytes } from 'crypto';
 import { withPermission } from '@/lib/auth-middleware';
 
@@ -63,31 +63,44 @@ export async function GET(request: NextRequest) {
     // 查询总数
     const countResult = await db.select({ count: drizzleSql`COUNT(*)::int` })
       .from(schema.clients)
-      .where(conditions.length > 0 ? conditions.reduce((acc, c) => acc ? drizzleSql`${acc} AND ${c}` : c) : undefined);
+      .where(conditions.length > 0 ? and(...conditions) : undefined);
     const total = Number(countResult[0]?.count ?? 0);
 
     // 查询列表
     const clients = await db.select()
       .from(schema.clients)
-      .where(conditions.length > 0 ? conditions.reduce((acc, c) => acc ? drizzleSql`${acc} AND ${c}` : c) : undefined)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
       .orderBy(desc(schema.clients.createdAt))
       .limit(pageSize)
       .offset(offset);
 
     return NextResponse.json({
-      data: clients.map(c => ({
-        id: c.id,
-        publicId: c.publicId,
-        name: c.name,
-        clientId: c.clientId,
-        redirectUris: JSON.parse(c.redirectUrls || '[]'),
-        scopes: c.scopes,
-        homepageUrl: c.homepageUrl,
-        logoUrl: c.icon,
-        status: c.status,
-        createdAt: c.createdAt,
-        updatedAt: c.updatedAt,
-      })),
+      data: clients.map(c => {
+        let redirectUris = [];
+        try {
+          if (c.redirectUrls.startsWith('[')) {
+            redirectUris = JSON.parse(c.redirectUrls);
+          } else {
+            redirectUris = c.redirectUrls.split(',').map(u => u.trim());
+          }
+        } catch (e) {
+          redirectUris = [c.redirectUrls];
+        }
+
+        return {
+          id: c.id,
+          publicId: c.publicId,
+          name: c.name,
+          clientId: c.clientId,
+          redirectUris,
+          scopes: c.scopes,
+          homepageUrl: c.homepageUrl,
+          logoUrl: c.icon,
+          status: c.status,
+          createdAt: c.createdAt,
+          updatedAt: c.updatedAt,
+        };
+      }),
       pagination: {
         page,
         pageSize,

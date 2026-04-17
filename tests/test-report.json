@@ -1,7 +1,7 @@
 {
   "summary": {
-    "total": 66,
-    "passed": 66,
+    "total": 50,
+    "passed": 50,
     "failed": 0,
     "skipped": 0,
     "passRate": "100.0"
@@ -12,352 +12,176 @@
       "testName": "Portal启动测试",
       "status": "PASS",
       "message": "",
-      "duration": 121,
-      "timestamp": "2026-03-31T02:03:14.462Z"
+      "duration": 144,
+      "timestamp": "2026-04-17T06:19:45.815Z"
     },
     {
       "testId": "SM-002",
       "testName": "IdP启动测试",
       "status": "PASS",
       "message": "",
-      "duration": 52,
-      "timestamp": "2026-03-31T02:03:14.514Z"
+      "duration": 87,
+      "timestamp": "2026-04-17T06:19:45.902Z"
     },
     {
       "testId": "SM-003",
       "testName": "DemoApp启动测试",
       "status": "PASS",
       "message": "",
-      "duration": 57,
-      "timestamp": "2026-03-31T02:03:14.571Z"
+      "duration": 52,
+      "timestamp": "2026-04-17T06:19:45.954Z"
     },
     {
       "testId": "SM-004",
-      "testName": "IdP健康检查端点",
+      "testName": "数据库连接测试",
       "status": "PASS",
       "message": "",
-      "duration": 15,
-      "timestamp": "2026-03-31T02:03:14.586Z"
+      "duration": 21,
+      "timestamp": "2026-04-17T06:19:45.975Z"
     },
     {
       "testId": "SM-005",
-      "testName": "Portal API端点可用性",
-      "status": "PASS",
-      "message": "",
-      "duration": 7,
-      "timestamp": "2026-03-31T02:03:14.593Z"
-    },
-    {
-      "testId": "SM-006",
-      "testName": "OIDC发现端点",
-      "status": "PASS",
-      "message": "",
-      "duration": 13,
-      "timestamp": "2026-03-31T02:03:14.606Z"
-    },
-    {
-      "testId": "SM-007",
-      "testName": "JWKS端点",
-      "status": "PASS",
-      "message": "",
-      "duration": 59,
-      "timestamp": "2026-03-31T02:03:14.665Z"
-    },
-    {
-      "testId": "SM-008",
-      "testName": "用户管理API端点",
-      "status": "PASS",
-      "message": "",
-      "duration": 10,
-      "timestamp": "2026-03-31T02:03:14.675Z"
-    },
-    {
-      "testId": "SM-009",
-      "testName": "角色管理API端点",
-      "status": "PASS",
-      "message": "",
-      "duration": 13,
-      "timestamp": "2026-03-31T02:03:14.688Z"
-    },
-    {
-      "testId": "SM-010",
-      "testName": "部门管理API端点",
-      "status": "PASS",
-      "message": "",
-      "duration": 11,
-      "timestamp": "2026-03-31T02:03:14.699Z"
-    },
-    {
-      "testId": "SM-011",
-      "testName": "Client管理API端点",
-      "status": "PASS",
-      "message": "",
-      "duration": 9,
-      "timestamp": "2026-03-31T02:03:14.708Z"
-    },
-    {
-      "testId": "SM-012",
-      "testName": "权限管理API端点",
-      "status": "PASS",
-      "message": "",
-      "duration": 10,
-      "timestamp": "2026-03-31T02:03:14.718Z"
-    },
-    {
-      "testId": "AUTH-001",
-      "testName": "登录入口返回重定向到IdP",
-      "status": "PASS",
-      "message": "",
-      "duration": 6,
-      "timestamp": "2026-03-31T02:03:14.725Z"
-    },
-    {
-      "testId": "AUTH-002",
-      "testName": "State参数生成验证",
-      "status": "PASS",
-      "message": "",
-      "duration": 9,
-      "timestamp": "2026-03-31T02:03:14.734Z"
-    },
-    {
-      "testId": "AUTH-003",
-      "testName": "PKCE参数验证",
-      "status": "PASS",
-      "message": "",
-      "duration": 7,
-      "timestamp": "2026-03-31T02:03:14.741Z"
-    },
-    {
-      "testId": "AUTH-004",
-      "testName": "IdP登录页面可访问",
-      "status": "PASS",
-      "message": "",
-      "duration": 67,
-      "timestamp": "2026-03-31T02:03:14.808Z"
-    },
-    {
-      "testId": "AUTH-005",
-      "testName": "错误state被拒绝",
-      "status": "PASS",
-      "message": "",
-      "duration": 6,
-      "timestamp": "2026-03-31T02:03:14.814Z"
-    },
-    {
-      "testId": "AUTH-006",
-      "testName": "登出功能验证",
-      "status": "PASS",
-      "message": "",
-      "duration": 11,
-      "timestamp": "2026-03-31T02:03:14.825Z"
-    },
-    {
-      "testId": "AUTH-007",
-      "testName": "Token刷新失败处理",
-      "status": "PASS",
-      "message": "",
-      "duration": 9,
-      "timestamp": "2026-03-31T02:03:14.834Z"
-    },
-    {
-      "testId": "AUTH-008",
-      "testName": "权限上下文API",
-      "status": "PASS",
-      "message": "",
-      "duration": 8,
-      "timestamp": "2026-03-31T02:03:14.842Z"
-    },
-    {
-      "testId": "AUTH-009",
-      "testName": "登录响应时间",
-      "status": "PASS",
-      "message": "",
-      "duration": 11,
-      "timestamp": "2026-03-31T02:03:14.853Z"
-    },
-    {
-      "testId": "AUTH-010",
-      "testName": "OIDC authorize端点",
-      "status": "PASS",
-      "message": "",
-      "duration": 13,
-      "timestamp": "2026-03-31T02:03:14.866Z"
-    },
-    {
-      "testId": "PERM-001",
-      "testName": "未登录访问API返回401",
-      "status": "PASS",
-      "message": "",
-      "duration": 35,
-      "timestamp": "2026-03-31T02:03:14.902Z"
-    },
-    {
-      "testId": "PERM-002",
-      "testName": "权限API需要权限码",
-      "status": "PASS",
-      "message": "",
-      "duration": 7,
-      "timestamp": "2026-03-31T02:03:14.909Z"
-    },
-    {
-      "testId": "PERM-003",
-      "testName": "用户API需要user:list权限",
-      "status": "PASS",
-      "message": "",
-      "duration": 8,
-      "timestamp": "2026-03-31T02:03:14.917Z"
-    },
-    {
-      "testId": "PERM-004",
-      "testName": "角色API需要role:list权限",
-      "status": "PASS",
-      "message": "",
-      "duration": 8,
-      "timestamp": "2026-03-31T02:03:14.925Z"
-    },
-    {
-      "testId": "PERM-005",
-      "testName": "部门API需要dept:list权限",
-      "status": "PASS",
-      "message": "",
-      "duration": 8,
-      "timestamp": "2026-03-31T02:03:14.933Z"
-    },
-    {
-      "testId": "PERM-006",
-      "testName": "Client API需要client:list权限",
-      "status": "PASS",
-      "message": "",
-      "duration": 8,
-      "timestamp": "2026-03-31T02:03:14.941Z"
-    },
-    {
-      "testId": "PERM-007",
-      "testName": "POST请求需要创建权限",
-      "status": "PASS",
-      "message": "",
-      "duration": 8,
-      "timestamp": "2026-03-31T02:03:14.949Z"
-    },
-    {
-      "testId": "PERM-008",
-      "testName": "单个资源访问权限",
-      "status": "PASS",
-      "message": "",
-      "duration": 13,
-      "timestamp": "2026-03-31T02:03:14.962Z"
-    },
-    {
-      "testId": "PERM-009",
-      "testName": "角色权限绑定API",
+      "testName": "Redis连接测试",
       "status": "PASS",
       "message": "",
       "duration": 15,
-      "timestamp": "2026-03-31T02:03:14.977Z"
+      "timestamp": "2026-04-17T06:19:45.990Z"
     },
     {
-      "testId": "PERM-010",
-      "testName": "用户角色绑定API",
+      "testId": "SM-010",
+      "testName": "用户登录功能测试",
       "status": "PASS",
       "message": "",
-      "duration": 22,
-      "timestamp": "2026-03-31T02:03:14.999Z"
+      "duration": 425,
+      "timestamp": "2026-04-17T06:19:46.415Z"
     },
     {
-      "testId": "PERM-011",
-      "testName": "审计日志API权限",
+      "testId": "SM-011",
+      "testName": "用户信息获取测试",
+      "status": "PASS",
+      "message": "",
+      "duration": 52,
+      "timestamp": "2026-04-17T06:19:46.467Z"
+    },
+    {
+      "testId": "SM-012",
+      "testName": "用户登出功能测试",
+      "status": "PASS",
+      "message": "",
+      "duration": 288,
+      "timestamp": "2026-04-17T06:19:46.755Z"
+    },
+    {
+      "testId": "SM-020",
+      "testName": "OIDC发现端点验证",
+      "status": "PASS",
+      "message": "",
+      "duration": 10,
+      "timestamp": "2026-04-17T06:19:46.765Z"
+    },
+    {
+      "testId": "AUTH-001",
+      "testName": "未登录访问受保护页面重定向到IdP",
+      "status": "PASS",
+      "message": "",
+      "duration": 9,
+      "timestamp": "2026-04-17T06:19:46.775Z"
+    },
+    {
+      "testId": "AUTH-OAUTH-FLOW",
+      "testName": "OAuth 完整认证流程验证",
+      "status": "PASS",
+      "message": "",
+      "duration": 243,
+      "timestamp": "2026-04-17T06:19:47.018Z"
+    },
+    {
+      "testId": "AUTH-011",
+      "testName": "错误State验证",
+      "status": "PASS",
+      "message": "",
+      "duration": 9,
+      "timestamp": "2026-04-17T06:19:47.027Z"
+    },
+    {
+      "testId": "AUTH-013",
+      "testName": "PKCE参数验证",
       "status": "PASS",
       "message": "",
       "duration": 14,
-      "timestamp": "2026-03-31T02:03:15.013Z"
+      "timestamp": "2026-04-17T06:19:47.041Z"
     },
     {
-      "testId": "PERM-012",
-      "testName": "登录日志API权限",
+      "testId": "AUTH-020/021",
+      "testName": "Portal与IdP登出同步",
+      "status": "PASS",
+      "message": "",
+      "duration": 483,
+      "timestamp": "2026-04-17T06:19:47.524Z"
+    },
+    {
+      "testId": "PERM-003",
+      "testName": "未登录访问 API 返回 401",
       "status": "PASS",
       "message": "",
       "duration": 9,
-      "timestamp": "2026-03-31T02:03:15.022Z"
+      "timestamp": "2026-04-17T06:19:47.534Z"
     },
     {
-      "testId": "SESS-001",
-      "testName": "无Session访问返回401",
+      "testId": "PERM-002",
+      "testName": "有权限用户访问 API",
       "status": "PASS",
       "message": "",
-      "duration": 12,
-      "timestamp": "2026-03-31T02:03:15.035Z"
+      "duration": 310,
+      "timestamp": "2026-04-17T06:19:47.844Z"
     },
     {
-      "testId": "SESS-002",
-      "testName": "无Session Cookie",
+      "testId": "PERM-004",
+      "testName": "POST请求权限检查",
       "status": "PASS",
       "message": "",
-      "duration": 8,
-      "timestamp": "2026-03-31T02:03:15.043Z"
+      "duration": 391,
+      "timestamp": "2026-04-17T06:19:48.235Z"
+    },
+    {
+      "testId": "PERM-020",
+      "testName": "角色变更即时生效验证",
+      "status": "PASS",
+      "message": "",
+      "duration": 0,
+      "timestamp": "2026-04-17T06:19:48.235Z"
+    },
+    {
+      "testId": "SESS-001/002",
+      "testName": "Session存储与内容验证",
+      "status": "PASS",
+      "message": "",
+      "duration": 414,
+      "timestamp": "2026-04-17T06:19:48.649Z"
     },
     {
       "testId": "SESS-003",
-      "testName": "登录初始化OAuth流程",
-      "status": "PASS",
-      "message": "",
-      "duration": 8,
-      "timestamp": "2026-03-31T02:03:15.051Z"
-    },
-    {
-      "testId": "SESS-004",
-      "testName": "OAuth state Cookie属性",
+      "testName": "Session Cookie属性验证",
       "status": "PASS",
       "message": "",
       "duration": 7,
-      "timestamp": "2026-03-31T02:03:15.058Z"
-    },
-    {
-      "testId": "SESS-005",
-      "testName": "登出清除Session",
-      "status": "PASS",
-      "message": "",
-      "duration": 74,
-      "timestamp": "2026-03-31T02:03:15.132Z"
-    },
-    {
-      "testId": "SESS-006",
-      "testName": "未登录访问管理页面",
-      "status": "PASS",
-      "message": "",
-      "duration": 93,
-      "timestamp": "2026-03-31T02:03:15.225Z"
-    },
-    {
-      "testId": "SESS-007",
-      "testName": "Token过期处理",
-      "status": "PASS",
-      "message": "",
-      "duration": 11,
-      "timestamp": "2026-03-31T02:03:15.236Z"
-    },
-    {
-      "testId": "SESS-008",
-      "testName": "错误Session格式处理",
-      "status": "PASS",
-      "message": "",
-      "duration": 9,
-      "timestamp": "2026-03-31T02:03:15.245Z"
-    },
-    {
-      "testId": "SESS-009",
-      "testName": "空Session ID处理",
-      "status": "PASS",
-      "message": "",
-      "duration": 11,
-      "timestamp": "2026-03-31T02:03:15.256Z"
+      "timestamp": "2026-04-17T06:19:48.656Z"
     },
     {
       "testId": "SESS-010",
-      "testName": "IdP Session状态检查",
+      "testName": "过期Session访问验证",
       "status": "PASS",
       "message": "",
-      "duration": 11,
-      "timestamp": "2026-03-31T02:03:15.267Z"
+      "duration": 8,
+      "timestamp": "2026-04-17T06:19:48.664Z"
+    },
+    {
+      "testId": "SESS-012",
+      "testName": "Session活跃续期验证",
+      "status": "PASS",
+      "message": "",
+      "duration": 40,
+      "timestamp": "2026-04-17T06:19:48.704Z"
     },
     {
       "testId": "SEC-001",
@@ -365,39 +189,39 @@
       "status": "PASS",
       "message": "",
       "duration": 6,
-      "timestamp": "2026-03-31T02:03:15.274Z"
+      "timestamp": "2026-04-17T06:19:48.711Z"
     },
     {
       "testId": "SEC-002",
       "testName": "Session Cookie HttpOnly属性",
       "status": "PASS",
       "message": "",
-      "duration": 10,
-      "timestamp": "2026-03-31T02:03:15.284Z"
+      "duration": 42,
+      "timestamp": "2026-04-17T06:19:48.753Z"
     },
     {
       "testId": "SEC-003",
       "testName": "Session Cookie SameSite属性",
       "status": "PASS",
       "message": "",
-      "duration": 7,
-      "timestamp": "2026-03-31T02:03:15.291Z"
+      "duration": 8,
+      "timestamp": "2026-04-17T06:19:48.761Z"
     },
     {
       "testId": "SEC-004",
       "testName": "State参数长度安全",
       "status": "PASS",
       "message": "",
-      "duration": 142,
-      "timestamp": "2026-03-31T02:03:15.433Z"
+      "duration": 28,
+      "timestamp": "2026-04-17T06:19:48.789Z"
     },
     {
       "testId": "SEC-005",
       "testName": "PKCE使用S256方法",
       "status": "PASS",
       "message": "",
-      "duration": 6,
-      "timestamp": "2026-03-31T02:03:15.439Z"
+      "duration": 9,
+      "timestamp": "2026-04-17T06:19:48.798Z"
     },
     {
       "testId": "SEC-006",
@@ -405,15 +229,15 @@
       "status": "PASS",
       "message": "",
       "duration": 0,
-      "timestamp": "2026-03-31T02:03:15.439Z"
+      "timestamp": "2026-04-17T06:19:48.798Z"
     },
     {
       "testId": "SEC-007",
       "testName": "JWKS端点安全验证",
       "status": "PASS",
       "message": "",
-      "duration": 13,
-      "timestamp": "2026-03-31T02:03:15.452Z"
+      "duration": 14,
+      "timestamp": "2026-04-17T06:19:48.812Z"
     },
     {
       "testId": "SEC-008",
@@ -421,15 +245,15 @@
       "status": "PASS",
       "message": "",
       "duration": 9,
-      "timestamp": "2026-03-31T02:03:15.462Z"
+      "timestamp": "2026-04-17T06:19:48.821Z"
     },
     {
       "testId": "SEC-009",
       "testName": "未授权Client被拒绝",
       "status": "PASS",
       "message": "",
-      "duration": 11,
-      "timestamp": "2026-03-31T02:03:15.473Z"
+      "duration": 12,
+      "timestamp": "2026-04-17T06:19:48.833Z"
     },
     {
       "testId": "SEC-010",
@@ -437,7 +261,7 @@
       "status": "PASS",
       "message": "",
       "duration": 12,
-      "timestamp": "2026-03-31T02:03:15.485Z"
+      "timestamp": "2026-04-17T06:19:48.845Z"
     },
     {
       "testId": "SEC-011",
@@ -445,96 +269,144 @@
       "status": "PASS",
       "message": "",
       "duration": 6,
-      "timestamp": "2026-03-31T02:03:15.491Z"
+      "timestamp": "2026-04-17T06:19:48.851Z"
     },
     {
       "testId": "SEC-012",
       "testName": "CORS策略",
       "status": "PASS",
       "message": "",
-      "duration": 7,
-      "timestamp": "2026-03-31T02:03:15.498Z"
+      "duration": 10,
+      "timestamp": "2026-04-17T06:19:48.861Z"
+    },
+    {
+      "testId": "SEC-020/021",
+      "testName": "回调地址白名单验证",
+      "status": "PASS",
+      "message": "",
+      "duration": 13,
+      "timestamp": "2026-04-17T06:19:48.874Z"
+    },
+    {
+      "testId": "SEC-030",
+      "testName": "授权码重放攻击防御",
+      "status": "PASS",
+      "message": "",
+      "duration": 848,
+      "timestamp": "2026-04-17T06:19:49.722Z"
     },
     {
       "testId": "SSO-001",
-      "testName": "Demo App启动验证",
+      "testName": "Portal 登录后 Demo App 免登",
       "status": "PASS",
       "message": "",
-      "duration": 46,
-      "timestamp": "2026-03-31T02:03:15.545Z"
-    },
-    {
-      "testId": "SSO-002",
-      "testName": "Demo App登录入口",
-      "status": "PASS",
-      "message": "",
-      "duration": 7,
-      "timestamp": "2026-03-31T02:03:15.552Z"
-    },
-    {
-      "testId": "SSO-003",
-      "testName": "Demo App redirect_uri验证",
-      "status": "PASS",
-      "message": "",
-      "duration": 10,
-      "timestamp": "2026-03-31T02:03:15.562Z"
-    },
-    {
-      "testId": "SSO-004",
-      "testName": "Demo App PKCE验证",
-      "status": "PASS",
-      "message": "",
-      "duration": 8,
-      "timestamp": "2026-03-31T02:03:15.570Z"
-    },
-    {
-      "testId": "SSO-005",
-      "testName": "Demo App State参数验证",
-      "status": "PASS",
-      "message": "",
-      "duration": 8,
-      "timestamp": "2026-03-31T02:03:15.578Z"
-    },
-    {
-      "testId": "SSO-006",
-      "testName": "Demo App未登录访问/api/me",
-      "status": "PASS",
-      "message": "",
-      "duration": 7,
-      "timestamp": "2026-03-31T02:03:15.585Z"
-    },
-    {
-      "testId": "SSO-007",
-      "testName": "Demo App登出功能",
-      "status": "PASS",
-      "message": "",
-      "duration": 8,
-      "timestamp": "2026-03-31T02:03:15.593Z"
-    },
-    {
-      "testId": "SSO-008",
-      "testName": "Portal和Demo App使用不同Client",
-      "status": "PASS",
-      "message": "",
-      "duration": 15,
-      "timestamp": "2026-03-31T02:03:15.608Z"
-    },
-    {
-      "testId": "SSO-009",
-      "testName": "IdP支持多Client验证",
-      "status": "PASS",
-      "message": "",
-      "duration": 9,
-      "timestamp": "2026-03-31T02:03:15.617Z"
+      "duration": 967,
+      "timestamp": "2026-04-17T06:19:50.689Z"
     },
     {
       "testId": "SSO-010",
-      "testName": "SSO登录流程完整性",
+      "testName": "Portal 登出后全线失效",
       "status": "PASS",
       "message": "",
-      "duration": 17,
-      "timestamp": "2026-03-31T02:03:15.634Z"
+      "duration": 798,
+      "timestamp": "2026-04-17T06:19:51.487Z"
+    },
+    {
+      "testId": "PERF-001",
+      "testName": "登录初始跳转性能",
+      "status": "PASS",
+      "message": "",
+      "duration": 6,
+      "timestamp": "2026-04-17T06:19:51.495Z"
+    },
+    {
+      "testId": "PERF-002",
+      "testName": "完整 OAuth 流程性能",
+      "status": "PASS",
+      "message": "",
+      "duration": 222,
+      "timestamp": "2026-04-17T06:19:51.717Z"
+    },
+    {
+      "testId": "PERF-003",
+      "testName": "Session 查询性能",
+      "status": "PASS",
+      "message": "",
+      "duration": 303,
+      "timestamp": "2026-04-17T06:19:52.020Z"
+    },
+    {
+      "testId": "BUS-PRE",
+      "testName": "管理员登录获取Session",
+      "status": "PASS",
+      "message": "",
+      "duration": 264,
+      "timestamp": "2026-04-17T06:19:52.285Z"
+    },
+    {
+      "testId": "BUS-USER-001",
+      "testName": "获取用户列表",
+      "status": "PASS",
+      "message": "",
+      "duration": 32,
+      "timestamp": "2026-04-17T06:19:52.317Z"
+    },
+    {
+      "testId": "BUS-USER-002",
+      "testName": "创建新用户",
+      "status": "PASS",
+      "message": "",
+      "duration": 27,
+      "timestamp": "2026-04-17T06:19:52.344Z"
+    },
+    {
+      "testId": "BUS-ROLE-001",
+      "testName": "获取角色列表",
+      "status": "PASS",
+      "message": "",
+      "duration": 24,
+      "timestamp": "2026-04-17T06:19:52.368Z"
+    },
+    {
+      "testId": "BUS-ROLE-002",
+      "testName": "创建新角色",
+      "status": "PASS",
+      "message": "",
+      "duration": 51,
+      "timestamp": "2026-04-17T06:19:52.419Z"
+    },
+    {
+      "testId": "BUS-APP-001",
+      "testName": "获取应用列表",
+      "status": "PASS",
+      "message": "",
+      "duration": 56,
+      "timestamp": "2026-04-17T06:19:52.475Z"
+    },
+    {
+      "testId": "BUS-APP-002",
+      "testName": "注册新SSO应用",
+      "status": "PASS",
+      "message": "",
+      "duration": 51,
+      "timestamp": "2026-04-17T06:19:52.526Z"
+    },
+    {
+      "testId": "BUS-AUDIT-001",
+      "testName": "查询登录日志",
+      "status": "PASS",
+      "message": "",
+      "duration": 39,
+      "timestamp": "2026-04-17T06:19:52.565Z"
+    },
+    {
+      "testId": "BUS-AUDIT-002",
+      "testName": "查询操作日志",
+      "status": "PASS",
+      "message": "",
+      "duration": 28,
+      "timestamp": "2026-04-17T06:19:52.593Z"
     }
   ],
-  "timestamp": "2026-03-31T02:03:15.637Z"
+  "timestamp": "2026-04-17T06:19:52.683Z"
 }

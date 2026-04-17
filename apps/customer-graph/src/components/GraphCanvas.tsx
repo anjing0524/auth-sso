@@ -56,8 +56,8 @@ export function GraphCanvas({
   // 鼠标事件处理
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
-      const target = e.target as HTMLCanvasElement;
-      if (!target || target.tagName !== 'CANVAS') return;
+      const target = e.currentTarget as HTMLElement;
+      if (!target) return;
 
       const rect = target.getBoundingClientRect();
       const x = e.clientX - rect.left;
@@ -85,8 +85,8 @@ export function GraphCanvas({
 
   const handleMouseMove = useCallback(
     (e: React.MouseEvent) => {
-      const target = e.target as HTMLCanvasElement;
-      if (!target || target.tagName !== 'CANVAS') return;
+      const target = e.currentTarget as HTMLElement;
+      if (!target) return;
 
       const rect = target.getBoundingClientRect();
       const x = e.clientX - rect.left;
@@ -133,8 +133,8 @@ export function GraphCanvas({
 
   const handleWheel = useCallback(
     (e: React.WheelEvent) => {
-      const target = e.target as HTMLCanvasElement;
-      if (!target || target.tagName !== 'CANVAS') return;
+      const target = e.currentTarget as HTMLElement;
+      if (!target) return;
 
       const rect = target.getBoundingClientRect();
       const x = e.clientX - rect.left;

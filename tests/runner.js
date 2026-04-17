@@ -14,8 +14,12 @@ const TEST_FILES = [
   'permission.test.js',
   'session.test.js',
   'security.test.js',
-  'sso.test.js'
+  'sso.test.js',
+  'performance.test.js',
+  'business.test.js'
 ];
+
+
 
 /**
  * 运行所有测试 - Run all tests

@@ -303,8 +303,8 @@ impl RenderPipeline {
             render_pass.set_vertex_buffer(0, node_instance_buffer.slice(..));
 
             let node_count = instance_manager.node_count();
-            // 每个节点绘制一个圆形（中心 + 32 段 + 闭合点 = 34 顶点）
-            render_pass.draw(0..34, 0..node_count);
+            // 每个节点绘制一个圆形（32个三角形，每个三角形3个顶点 = 96顶点）
+            render_pass.draw(0..96, 0..node_count);
         }
 
         // 提交命令

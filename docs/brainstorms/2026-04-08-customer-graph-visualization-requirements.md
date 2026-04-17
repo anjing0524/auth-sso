@@ -1,260 +1,135 @@
 ---
 date: 2026-04-08
-topic: customer-graph-visualization
+topic: futures-orderbook-visualization
 ---
 
-# 客户关系图可视化引擎
+# 期货合约全档位订单簿可视化引擎
 
 ## Problem Frame
 
-企业需要直观展示客户之间的关联关系图谱。10,000+ 节点 + 10,000+ 边的大规模关系图，要求布局自然、无重叠、拖动流畅。
+金融交易领域需要直观展示期货合约的全档位订单簿（Market-by-Order, MBO数据），帮助交易员和分析师洞察微观市场结构和流动性。不同于传统的按价格聚合的深度图（Market-by-Price），本需求要求展示每一个独立的订单，真实反映挂单队列的细粒度排队情况。
 
-**关键洞察**：大图可视化的核心挑战不是渲染性能，而是**可理解性**——人类认知容量有限（约 7±2 项目同时跟踪），需要聚类、过滤、渐进式披露来辅助理解。
+**关键挑战**：
+1. **视觉呈现**：如何在有限的屏幕空间内，以左中右结构清晰地展示价格阶梯以及挂在该价格上的海量独立订单方块，并清晰展示具体单量。
+2. **渲染性能**：全档位订单数据量极大（数千个价格档位，数万至十万级订单），且更新频率极高，传统的 DOM/Canvas 方案极易出现性能瓶颈。
 
 ## Technical Approach
 
-**选定方案**：Rust + wgpu + WebGPU + WASM（业界最高性能方案）
+**选定方案**：Rust + wgpu + WebGPU + WASM（高性能渲染方案）
 
 ### 性能对比
 
-| 指标 | Rust/WASM/WebGPU | Sigma.js (WebGL) | Cytoscape.js |
-|------|------------------|------------------|--------------|
-| 渲染引擎 | WebGPU Compute Shader | WebGL | Canvas/WebGL |
-| 布局计算 | GPU 并行计算 | Web Worker (CPU) | CPU |
-| 理论节点上限 | 100K+ | 50K | 10K-30K |
-| 布局收敛时间 | <1s (GPU) | 3-5s | 5-10s |
-| 包体积 | ~500KB (WASM) | ~200KB | ~300KB |
-| Safari 支持 | ❌ WebGPU 不可用 | ✅ | ✅ |
+| 指标 | Rust/WASM/WebGPU | Canvas 2D | DOM/HTML |
+|------|------------------|-----------|----------|
+| 渲染引擎 | WebGPU Instanced Rendering | Canvas API | DOM Tree |
+| 布局计算 | GPU 并行 / WASM 极速直接计算 | 主线程 CPU | 浏览器排版引擎 |
+| 理论方块上限 | 100K+ | ~10K | ~2K |
+| 渲染延迟 | <1ms | 5-10ms | >16ms |
 
 **选择理由**：
-1. GPU Compute Shader 实现真正的并行力导向计算
-2. 空间网格加速在 GPU 上效率最高
-3. 未来可扩展到 100K+ 节点规模
-4. 单次 draw call + Instanced Rendering = 最高渲染效率
+1. 单次 Draw Call + Instanced Rendering 能够以最高效的方式绘制成千上万个代表订单的方块。
+2. 布局计算由复杂的力导向迭代转变为**绝对位置直接映射**，性能大幅提升，数据更新后可瞬间计算并传入 GPU。
+3. 即使在极高频的市场数据刷新下，也能保持 60 FPS 满帧运行。
 
-### 兼容性策略
+## Data Structure & Layout (核心数据结构设计)
 
-WebGPU 浏览器支持：Chrome 113+、Edge 113+、Firefox 实验性、Safari 不支持
+**布局原则：抛弃所有力导向和斥力计算，直接基于数据索引映射为绝对屏幕/世界坐标。**
 
-**降级方案**：检测 WebGPU 支持，不支持时显示提示页面，引导用户使用 Chrome/Edge 浏览器访问。暂不实现 WebGL 降级（开发成本翻倍），后续迭代可考虑。
+- **价格轴 (Y轴)**:
+  - 每一个价格 Tick（如 0.2）对应一个固定的 Y 坐标偏移量。
+  - 根据最高/最低价格，直接计算出每个价格节点方块（Center Block）的 `Y` 坐标。
+- **订单队列 (X轴)**:
+  - 左侧卖单（Asks）：挂单序列按时间优先排序，位于对应价格的同行。第 `i` 个订单的 `X` 坐标 = `- (横向基础偏移 + i * (固定方块宽度 + 间距))`。
+  - 右侧买单（Bids）：第 `j` 个订单的 `X` 坐标 = `+ (横向基础偏移 + j * (固定方块宽度 + 间距))`。
+  
+**数据结构设计**：
+```rust
+struct OrderBlock {
+    id: u64,
+    price_tick: u32,  // 用于映射 Y 坐标
+    queue_index: u32, // 用于映射 X 坐标偏移
+    volume: u32,      // 用于内部文字渲染显示
+    timestamp: u64,   // 用于计算颜色深浅（时间衰减）
+    is_ask: bool,     // 决定在左侧还是右侧
+}
+```
 
 ## Requirements
 
-**核心可视化**
-- R1. 支持上万节点（10,000+）和上万边（10,000+）同时渲染
-- R2. GPU Compute Shader 实现力导向布局算法，有关系的节点互相吸引，无关系的互相排斥
-- R3. 碰撞检测与推开（GPU 并行计算）
-- R4. 布局自然收敛，初始布局稳定后可交互
-
-**可理解性（大图必备）**
-- R5. **聚类视图**：缩小时自动聚合相似节点为超级节点，显示聚类规模
-- R6. **渐进式披露**：初始显示核心节点（度数 Top 100），随缩放逐步展开
-- R7. **节点视觉编码**：
-  - 节点大小 = 关联边数量（度数）
-  - 节点颜色 = 客户类型（可选分类）
-  - 选中/悬停节点高亮显示
-- R8. **关联高亮**：点击节点时高亮其所有邻居节点和边
+**核心可视化与布局**
+- R1. **左中右布局框架**：视图分为三列。
+  - **中间列**：价格阶梯（价格节点方块），按价格从高到低垂直排列，必须保持价格的连续性。
+  - **左侧列（卖单）**：对应价格的卖出订单队列。横向排列，每一个订单对应一个独立方块。
+  - **右侧列（买单）**：对应价格的买入订单队列。横向排列，每一个订单对应一个独立方块。
+- R2. **海量渲染能力**：支持同时渲染至少 50,000+ 独立订单方块，保证 60 FPS 流畅度。
+- R3. **视觉编码**：
+  - **方块尺寸**：所有订单方块**固定宽度和高度**。
+  - **数量标记**：订单方块内部使用**数字文本**直接标记该订单的委托手数（量）。由于 Instanced Rendering 渲染文字较为复杂，可采用位图字体（Bitmap Font / Texture Atlas）在 Shader 中结合 Instance Data 进行批量文字渲染。
+  - **颜色映射**：颜色深浅映射订单的挂单时间（越早挂单颜色越深/亮），买卖单使用不同色系（如左侧卖单绿色/红色，右侧买单红色/绿色，支持配置）。
 
 **交互功能**
-- R9. 鼠标拖动单个节点，实时更新布局（GPU 回传位置）
-- R10. 滚轮/双指缩放画布，鼠标拖动平移
-- R11. 悬停显示节点详情面板：
-  - 客户名称、ID
-  - 关联客户数量
-  - 主要关联类型
-  - "查看档案" 按钮（跳转客户详情页）
-- R12. 搜索定位节点（按名称/ID），支持模糊匹配
-- R13. 过滤显示子集：
-  - 按客户类型过滤
-  - 按关联数量过滤（≥N 条关系）
-  - 按数据来源过滤
+- R4. **垂直滚动浏览（核心）**：支持鼠标滚轮或触控板上下平滑滚动，浏览不同价格档位。
+- R5. **横向平移与缩放**：支持横向平移查看超长排队订单，支持整体缩放。
+- R6. **悬停高亮与详情**：鼠标悬停在订单方块上时，高亮该方块并弹出详情面板：订单 ID、报单时间、委托价格、委托手数等。
+- R7. **价格快速定位**：支持输入价格快速跳转定位到对应的价格档位节点。
 
 **性能约束**
-- R14. 布局计算在 GPU 完成（Compute Shader），不阻塞主线程
-- R15. 空间网格加速，斥力计算复杂度 O(n)
-- R16. 单次 draw call 绘制全部节点（Instanced Rendering）
-- R17. 60 FPS 渲染响应
+- R8. 采用 Instanced Rendering 技术同时绘制方块和文字。
+- R9. 数据更新和视图重绘不能引起主线程卡顿。
 
 **数据与认证**
-- R18. 数据源为外部 API 导入（格式见下方契约）
-- R19. 集成现有 IdP SSO 认证：
-  - 访问权限：已登录的 Portal 用户
-  - 数据范围：用户可见的客户关系数据（根据 RBAC 权限）
-- R20. 外部 API 认证：Portal 后端代理调用，使用服务端凭证
+- R10. 数据源为外部 MBO 数据 API 或 WebSocket 推送。
+- R11. 集成现有 IdP SSO 认证。
 
-**加载与错误处理**
-- R21. 加载状态：WASM 加载进度条、API 请求中、GPU 初始化中、布局计算中
-- R22. 错误状态：
-  - API 失败：显示重试按钮
-  - WebGPU 不支持：显示浏览器兼容性提示，引导使用 Chrome/Edge
-  - GPU 初始化失败：显示错误信息
-- R23. 空状态：无数据时显示"暂无客户关系数据"提示
-- R24. 搜索/过滤无结果：显示"未找到匹配的客户"提示
-
-**部署**
-- R25. 新建 Next.js 应用 `apps/customer-graph`
-- R26. WASM 引擎编译为独立 crate `wasm-engine/`
-- R27. Vercel 统一部署，包含 Rust 编译步骤
+**错误处理与降级**
+- R12. WebGPU 不支持时显示提示页面，引导用户使用 Chrome/Edge 浏览器访问。
+- R13. 无数据时显示"暂无订单数据"提示。
 
 ## Success Criteria
 
-- 10,000 节点 + 10,000 边数据集可流畅渲染（60 FPS）
-- 节点拖动响应延迟 < 16ms
-- 初始布局收敛时间 < 5 秒（GPU 加速）
-- 用户可在 30 秒内找到目标客户节点（搜索 + 过滤 + 聚类）
-- WASM 包体积 < 500KB（压缩后）
-- Chrome/Edge 浏览器完全支持
+- 满载 50,000 个订单方块时，滚动和缩放保持 60 FPS。
+- 文本标签（订单量）清晰可见，不引发额外的严重性能损耗。
+- 数据刷新延迟 < 16ms。
+- 能够清晰展现买卖盘的不平衡以及大单的排队位置。
 
 ## Scope Boundaries
 
-- 不实现边（连线）的动态样式或权重可视化（统一灰色细线）
-- 不支持实时数据推送更新（页面刷新获取最新数据）
-- 不实现图编辑功能（添加/删除节点/边）
-- 不支持多图同时显示或图切换
-- 不支持移动端触摸交互（后续迭代）
-- 不实现 WebGL 降级（仅支持 WebGPU 浏览器）
+- 当前迭代暂不接入真实的高频 WebSocket 市场数据源，先通过 API 拉取静态切片数据或轮询。
+- 不支持图表内的订单直接交易（纯展示）。
 
 ## Key Decisions
 
 - **技术栈**: Rust + wgpu + WebGPU + WASM
-- **渲染引擎**: WebGPU Compute Shader + Instanced Rendering
-- **布局算法**: GPU 并行力导向（自定义实现）
-- **加速策略**: 空间网格划分 + GPU 并行斥力计算
-- **开发节奏**: WASM 引擎核心先行，再对接 Next.js 前端
+- **布局算法**: 绝对坐标直接映射（不使用任何力导向/物理引擎计算）。
+- **文字渲染**: 使用 Bitmap Font Texture Atlas + Instanced Rendering 批量绘制方块内的数字。
+- **降级策略**: 不实现 WebGL 降级。
 
 ## External API Contract
 
-**Endpoint**: `GET /api/customer-relationships`
-
-**Request Headers**:
-```
-Authorization: Bearer <portal-session-token>
-```
+**Endpoint**: `GET /api/futures/orderbook`
 
 **Response**:
 ```json
 {
-  "nodes": [
+  "instrument_id": "IF2309",
+  "timestamp": 1690000000000,
+  "tick_size": 0.2,
+  "prices": [
     {
-      "id": "customer-001",
-      "label": "客户名称",
-      "type": "enterprise|individual",
-      "metadata": {
-        "relationshipCount": 15,
-        "primaryIndustry": "行业"
-      }
-    }
-  ],
-  "edges": [
+      "price": 3800.2,
+      "asks": [
+        { "order_id": "a1", "volume": 10, "time": 1690000000001 },
+        { "order_id": "a2", "volume": 5, "time": 1690000000005 }
+      ],
+      "bids": []
+    },
     {
-      "source": "customer-001",
-      "target": "customer-002",
-      "type": "partnership|investment|supply"
+      "price": 3800.0,
+      "asks": [],
+      "bids": [
+        { "order_id": "b1", "volume": 20, "time": 1690000000002 }
+      ]
     }
-  ],
-  "meta": {
-    "totalNodes": 10500,
-    "totalEdges": 12000,
-    "lastUpdated": "2026-04-08T10:00:00Z"
-  }
+  ]
 }
 ```
-
-## Dependencies / Assumptions
-
-- 用户浏览器支持 WebGPU（Chrome 113+、Edge 113+），Safari 用户需使用其他浏览器
-- 外部 API 响应时间 < 3 秒
-- IdP Portal 已部署并运行，可复用 OAuth Client 配置
-- 客户数据已在 IdP 或外部系统中维护
-- 开发团队具备 Rust 开发能力或愿意学习
-
-## Outstanding Questions
-
-### Resolve Before Planning
-
-- [Affects R11] 点击跳转的客户档案页面路径是 Portal 内部页面还是外部系统？需要确认 URL 格式
-- [Affects R27] Vercel 构建镜像是否包含 Rust 工具链？是否需要自定义构建步骤？
-
-### Deferred to Planning
-
-- [Affects R5] 聚类算法选择（Louvain 社区发现 vs K-Means vs 手动分组）
-- [Affects R13] 过滤条件的具体维度由业务方确认
-- [Affects R9] WASM 与 Next.js 的通信桥接方案（wasm-bindgen API 设计）
-- [Affects R16] 边（连线）的渲染策略：Line List 还是 Storage Buffer 动态生成
-
-## User Flow
-
-```mermaid
-flowchart TB
-    A[用户登录 Portal] --> B[访问客户关系图页面]
-    B --> C{WebGPU 支持?}
-    C -->|是| D[加载 WASM 引擎]
-    C -->|否| E[显示浏览器兼容提示]
-    D --> F{API 请求}
-    F -->|成功| G[初始化 GPU Buffer]
-    F -->|失败| H[显示错误 + 重试]
-    G --> I[运行力导向布局]
-    I --> J[渲染图视图]
-
-    J --> K[用户交互]
-    K -->|拖动节点| L[GPU 更新位置]
-    L --> I
-    K -->|缩放平移| M[调整视图矩阵]
-    M --> J
-    K -->|点击节点| N[显示详情面板]
-    N --> O{查看档案}
-    O -->|是| P[跳转客户详情页]
-    O -->|否| N
-    K -->|搜索过滤| Q[筛选节点集合]
-    Q --> G
-```
-
-## Architecture Overview
-
-```
-apps/customer-graph/
-├── src/                          # Next.js 前端
-│   ├── app/
-│   │   ├── page.tsx             # 图可视化页面
-│   │   ├── layout.tsx           # 布局（含 Portal Header）
-│   │   └── api/
-│   │       └── graph/
-│   │           └── route.ts     # 代理外部 API（隐藏凭证）
-│   ├── components/
-│   │   ├── GraphCanvas.tsx      # WebGPU 图画布
-│   │   ├── NodeDetailPanel.tsx  # 节点详情面板
-│   │   ├── SearchFilter.tsx     # 搜索过滤组件
-│   │   ├── GraphControls.tsx    # 缩放/布局控制
-│   │   └── WebGPUNotSupported.tsx # 浏览器兼容提示
-│   ├── lib/
-│   │   └── webgpu-check.ts      # WebGPU 支持检测
-│   └── wasm/
-│       └── graph_engine.js      # wasm-pack 输出
-│
-wasm-engine/                     # Rust 项目（独立 crate）
-├── Cargo.toml
-├── src/
-│   ├── lib.rs                   # WASM 导出入口
-│   ├── simulation/              # 力导向算法
-│   │   ├── force.rs             # 引力/斥力计算
-│   │   ├── collision.rs         # 碰撞检测
-│   │   ├── grid.rs              # 空间网格加速
-│   │   └── physics.rs           # 物理模拟主循环
-│   ├── renderer/                # wgpu 渲染
-│   │   ├── pipeline.rs          # 渲染管线
-│   │   ├── shader.wgsl          # WGSL 着色器
-│   │   └── instance.rs          # 实例化绘制
-│   ├── interaction/             # 交互处理
-│   │   ├── drag.rs              # 拖动逻辑
-│   │   ├── zoom.rs              # 缩放平移
-│   │   └── hit.rs               # 点击检测
-│   └── data/                    # 数据结构
-│       ├── node.rs              # 节点定义
-│       ├── edge.rs              # 边定义
-│       └── graph.rs             # 图结构
-└── vercel.json                  # Vercel 构建配置（Rust 工具链）
-```
-
-## Next Steps
-
-→ `/ce:plan` for structured implementation planning

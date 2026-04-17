@@ -5,7 +5,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { db, schema } from '@/lib/db';
-import { eq, or, ilike, inArray, desc, sql as drizzleSql } from 'drizzle-orm';
+import { eq, or, ilike, inArray, desc, and, sql as drizzleSql } from 'drizzle-orm';
 import { randomBytes } from 'crypto';
 import { withPermission, getDataScopeFilter, checkDataScope } from '@/lib/auth-middleware';
 
@@ -99,7 +99,7 @@ export async function GET(request: NextRequest) {
 
     // 执行查询
     const users = await query
-      .where(conditions.length > 0 ? drizzleSql`${drizzleSql.join(conditions.map((c, i) => i === 0 ? c : drizzleSql` AND ${c}`))}` : undefined)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
       .orderBy(desc(schema.users.createdAt))
       .limit(pageSize)
       .offset(offset);
@@ -107,7 +107,7 @@ export async function GET(request: NextRequest) {
     // 获取总数
     const countResult = await db.select({ count: drizzleSql`COUNT(*)::int` })
       .from(schema.users)
-      .where(conditions.length > 0 ? drizzleSql`${drizzleSql.join(conditions.map((c, i) => i === 0 ? c : drizzleSql` AND ${c}`))}` : undefined);
+      .where(conditions.length > 0 ? and(...conditions) : undefined);
     const total = Number(countResult[0]?.count ?? 0);
 
     return NextResponse.json({

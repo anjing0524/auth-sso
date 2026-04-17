@@ -5,12 +5,12 @@
 
 export const oauthConfig = {
   // IdP 端点配置
-  issuer: process.env.OAUTH_ISSUER || 'http://localhost:4001',
-  authorizationEndpoint: process.env.OAUTH_AUTH_ENDPOINT || 'http://localhost:4001/api/auth/oauth2/authorize',
-  tokenEndpoint: process.env.OAUTH_TOKEN_ENDPOINT || 'http://localhost:4001/api/auth/oauth2/token',
-  userInfoEndpoint: process.env.OAUTH_USERINFO_ENDPOINT || 'http://localhost:4001/api/auth/oauth2/userinfo',
-  jwksEndpoint: process.env.OAUTH_JWKS_ENDPOINT || 'http://localhost:4001/api/auth/oauth2/jwks',
-  endSessionEndpoint: process.env.OAUTH_LOGOUT_ENDPOINT || 'http://localhost:4001/api/auth/sign-out',
+  issuer: process.env.OAUTH_ISSUER || 'http://127.0.0.1:4101',
+  authorizationEndpoint: process.env.OAUTH_AUTH_ENDPOINT || 'http://127.0.0.1:4101/api/auth/oauth2/authorize',
+  tokenEndpoint: process.env.OAUTH_TOKEN_ENDPOINT || 'http://127.0.0.1:4101/api/auth/oauth2/token',
+  userInfoEndpoint: process.env.OAUTH_USERINFO_ENDPOINT || 'http://127.0.0.1:4101/api/auth/oauth2/userinfo',
+  jwksEndpoint: process.env.OAUTH_JWKS_ENDPOINT || 'http://127.0.0.1:4101/api/auth/oauth2/jwks',
+  endSessionEndpoint: process.env.OAUTH_LOGOUT_ENDPOINT || 'http://127.0.0.1:4101/api/auth/sign-out',
 
   // Client 配置
   clientId: process.env.OAUTH_CLIENT_ID || 'cl_demo_h_-Tat_G',

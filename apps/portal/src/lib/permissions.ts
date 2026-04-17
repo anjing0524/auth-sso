@@ -85,8 +85,8 @@ export async function getUserPermissionContext(userId: string): Promise<UserPerm
       dataScopeType: maxDataScopeType as UserPermissionContext['dataScopeType'],
       deptId: user.deptId ?? undefined,
     };
-  } catch (error) {
-    console.error('[PermissionContext] Error:', error);
+  } catch (error: any) {
+    console.error('[PermissionContext] Error:', error.message, error.stack);
     return null;
   }
 }

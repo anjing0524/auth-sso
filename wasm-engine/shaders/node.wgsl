@@ -43,7 +43,7 @@ fn world_to_screen(pos: vec2<f32>) -> vec2<f32> {
 }
 
 // 单位圆顶点（由 CPU 传入）
-// 这里我们使用顶点索引生成三角形扇形
+// 这里我们使用顶点索引生成三角形列表 (TriangleList)
 @vertex
 fn vs_node(
     @builtin(vertex_index) vertex_index: u32,
@@ -57,18 +57,22 @@ fn vs_node(
     let size = instance.size;
     let color = instance.color;
 
-    // 计算单位圆上的顶点位置
-    // 顶点 0 是中心，后续顶点是圆周上的点
     var vertex_pos: vec2<f32>;
 
-    if (vertex_index == 0u) {
+    let segments = 32u;
+    let triangle_index = vertex_index / 3u;
+    let vertex_in_triangle = vertex_index % 3u;
+
+    if (vertex_in_triangle == 0u) {
         // 中心点
         vertex_pos = pos;
         output.uv = vec2<f32>(0.0, 0.0);
     } else {
         // 圆周上的点
-        let segments = 32u;
-        let angle = f32(vertex_index - 1u) / f32(segments) * 6.28318530718;
+        // 如果 vertex_in_triangle == 1，则对应 triangle_index
+        // 如果 vertex_in_triangle == 2，则对应 triangle_index + 1
+        let segment_index = triangle_index + (vertex_in_triangle - 1u);
+        let angle = f32(segment_index) / f32(segments) * 6.28318530718;
         let circle_offset = vec2<f32>(cos(angle), sin(angle)) * size * uniforms.zoom;
 
         // 在世界空间中计算位置
