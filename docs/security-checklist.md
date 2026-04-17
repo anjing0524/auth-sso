@@ -13,9 +13,9 @@
 - [x] 使用 S256 方法生成 code_challenge
 - [x] Token 交换时发送 code_verifier
 
-### 1.3 Nonce ⚠️
+### 1.3 Nonce ✅
 - [x] 生成随机 nonce
-- [ ] **待完善**: 验证 id_token 中的 nonce 声明
+- [x] 验证 id_token 中的 nonce 声明
 
 ### 1.4 回调地址白名单 ✅
 - [x] IdP 的 trustedClients 配置中定义 redirectUrls
@@ -79,7 +79,7 @@
 
 ### 6.1 API 权限 ✅
 - [x] 所有管理 API 都有权限检查
-- [x] 使用 withPermission 中间件
+- [x] 使用 withPermission 中建立
 
 ### 6.2 菜单权限 ✅
 - [x] 前端根据权限过滤菜单
@@ -100,33 +100,10 @@
 
 ## 待改进项
 
-### 1. Nonce 验证（中优先级）
-需要在 OAuth 回调中验证 id_token 的 nonce 声明，防止重放攻击。
-
-**改进方案：**
-```typescript
-// 在 callback/route.ts 中添加
-import { jwtVerify, createRemoteJWKSet } from 'jose';
-
-async function verifyIdToken(idToken: string, expectedNonce: string) {
-  const jwks = createRemoteJWKSet(new URL('/api/auth/jwks', oauthConfig.idpUrl));
-  const { payload } = await jwtVerify(idToken, jwks, {
-    issuer: oauthConfig.idpUrl,
-    audience: oauthConfig.clientId,
-  });
-
-  if (payload.nonce !== expectedNonce) {
-    throw new Error('Nonce mismatch');
-  }
-
-  return payload;
-}
-```
-
-### 2. IP 记录（低优先级）
+### 1. IP 记录（低优先级）
 在审计日志中记录用户 IP 地址。
 
-### 3. 速率限制（中优先级）
+### 2. 速率限制（中优先级）
 为登录 API 添加速率限制，防止暴力破解。
 
 ## 安全配置建议

@@ -1,5 +1,5 @@
 ---
-status: pending
+status: completed
 priority: p2
 issue_id: "002"
 tags: [rbac, api]
@@ -14,23 +14,23 @@ The system lacks an API to manage custom data scopes for roles. This is required
 
 ## Findings
 
-- `role_data_scopes` table exists in schema but no API endpoints are found to manage it.
-- Requirement R3 in RBAC plan: "Provide management API for role custom data scopes".
+- `role_data_scopes` table exists in schema but no API endpoints were initially found to manage it.
+- Upon investigation, `apps/portal/src/app/api/roles/[id]/data-scopes/route.ts` was already created but had a bug in the `DELETE` method.
 
 ## Proposed Solutions
 
 ### Option 1: Create CRUD API for role_data_scopes
 
-**Approach:** Implement GET/POST/DELETE endpoints in `apps/portal/src/app/api/roles/[id]/data-scopes/route.ts`.
+**Approach:** Implement/Fix GET/POST/DELETE endpoints in `apps/portal/src/app/api/roles/[id]/data-scopes/route.ts`.
 
 **Effort:** 2-3 hours
 **Risk:** Low
 
 ## Acceptance Criteria
 
-- [ ] API can list data scopes for a role.
-- [ ] API can add/remove departments for a role's custom scope.
-- [ ] Proper permission checks on these management APIs.
+- [x] API can list data scopes for a role.
+- [x] API can add/remove departments for a role's custom scope.
+- [x] Proper permission checks on these management APIs.
 
 ## Work Log
 
@@ -38,3 +38,12 @@ The system lacks an API to manage custom data scopes for roles. This is required
 
 **By:** Gemini CLI
 - Identified missing management API for custom data scopes.
+
+### 2026-04-17 - Implementation & Fix
+
+**By:** Gemini CLI
+- Verified existing implementation in `apps/portal/src/app/api/roles/[id]/data-scopes/route.ts`.
+- Fixed a critical bug in `DELETE` method where it failed to filter by `deptId`, resulting in all associations being deleted.
+- Standardized ID generation using `randomUUID()`.
+- Verified logic with `scripts/verify-role-data-scope-mgmt.ts`.
+

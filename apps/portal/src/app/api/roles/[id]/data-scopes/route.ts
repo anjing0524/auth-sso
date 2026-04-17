@@ -6,8 +6,8 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { db, schema } from '@/lib/db';
-import { eq } from 'drizzle-orm';
-import { randomBytes } from 'crypto';
+import { eq, and } from 'drizzle-orm';
+import { randomBytes, randomUUID } from 'crypto';
 import { withPermission } from '@/lib/auth-middleware';
 
 export const runtime = 'nodejs';
@@ -15,8 +15,8 @@ export const runtime = 'nodejs';
 /**
  * 生成随机 ID
  */
-function generateId(length: number = 20): string {
-  return randomBytes(length).toString('hex').slice(0, length);
+function generateId(): string {
+  return randomUUID();
 }
 
 /**
@@ -105,7 +105,7 @@ export async function POST(
         // 2. 插入新的关联
         if (deptIds.length > 0) {
           const values = deptIds.map(deptId => ({
-            id: generateId(20),
+            id: generateId(),
             roleId,
             deptId,
             createdAt: new Date(),
@@ -146,7 +146,12 @@ export async function DELETE(
 
   return withPermission(request, { permissions: ['role:update'] }, async () => {
     await db.delete(schema.roleDataScopes)
-      .where(eq(schema.roleDataScopes.roleId, roleId));
+      .where(
+        and(
+          eq(schema.roleDataScopes.roleId, roleId),
+          eq(schema.roleDataScopes.deptId, deptId)
+        )
+      );
 
     return NextResponse.json({ success: true });
   });

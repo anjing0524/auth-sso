@@ -5,8 +5,8 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { db, schema } from '@/lib/db';
-import { asc } from 'drizzle-orm';
-import { withPermission } from '@/lib/auth-middleware';
+import { asc, inArray } from 'drizzle-orm';
+import { withPermission, getDataScopeFilter, checkDataScope } from '@/lib/auth-middleware';
 
 export const runtime = 'nodejs';
 
@@ -16,10 +16,22 @@ export const runtime = 'nodejs';
  * 权限要求: department:list
  */
 export async function GET(request: NextRequest) {
-  return withPermission(request, { permissions: ['department:list'] }, async () => {
-    // 查询所有部门
-    const departments = await db.select()
-      .from(schema.departments)
+  return withPermission(request, { permissions: ['department:list'] }, async (userId) => {
+    // 获取数据范围过滤器
+    const scopeFilter = await getDataScopeFilter(userId);
+
+    // 查询部门
+    let query = db.select().from(schema.departments);
+    
+    if (scopeFilter.type === 'LIST') {
+      const allowedDeptIds = scopeFilter.deptIds || [];
+      if (allowedDeptIds.length === 0) {
+        return NextResponse.json({ data: [] });
+      }
+      query = query.where(inArray(schema.departments.id, allowedDeptIds)) as any;
+    }
+
+    const departments = await query
       .orderBy(asc(schema.departments.sort), asc(schema.departments.createdAt));
 
     // 构建树形结构
@@ -42,9 +54,11 @@ export async function GET(request: NextRequest) {
 
     departments.forEach((dept) => {
       const node = deptMap.get(dept.id);
+      // 只有当父部门也在当前返回的列表中时，才作为子节点归入
       if (dept.parentId && deptMap.has(dept.parentId)) {
         deptMap.get(dept.parentId).children.push(node);
       } else {
+        // 否则作为根节点（即使它在数据库里有父节点，但在授权范围内它是顶级可见节点）
         roots.push(node);
       }
     });
@@ -59,7 +73,7 @@ export async function GET(request: NextRequest) {
  * 权限要求: department:create
  */
 export async function POST(request: NextRequest) {
-  return withPermission(request, { permissions: ['department:create'] }, async () => {
+  return withPermission(request, { permissions: ['department:create'] }, async (userId) => {
     const body = await request.json();
     const { name, code, parentId, sort = 0, status = 'ACTIVE' } = body;
 
@@ -68,6 +82,26 @@ export async function POST(request: NextRequest) {
         { error: 'invalid_params', message: '部门名称不能为空' },
         { status: 400 }
       );
+    }
+
+    // 数据范围检查：如果指定了父部门，父部门必须在当前用户管辖范围内
+    if (parentId) {
+      const hasScope = await checkDataScope(userId, parentId);
+      if (!hasScope) {
+        return NextResponse.json(
+          { error: 'forbidden', message: '无权在指定部门下创建子部门' },
+          { status: 403 }
+        );
+      }
+    } else {
+      // 创建顶级部门通常需要全局权限
+      const filter = await getDataScopeFilter(userId);
+      if (filter.type !== 'ALL') {
+        return NextResponse.json(
+          { error: 'forbidden', message: '无权创建顶级部门' },
+          { status: 403 }
+        );
+      }
     }
 
     const id = crypto.randomUUID();

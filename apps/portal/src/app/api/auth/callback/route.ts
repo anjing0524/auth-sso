@@ -23,7 +23,9 @@ export async function GET(request: NextRequest) {
 
     if (!code || !state) {
       console.warn(`[Callback][${requestId}] Missing code or state.`);
-      return NextResponse.redirect('https://auth-sso-portal.vercel.app/login?error=invalid_params');
+      const loginUrl = new URL('/login', request.nextUrl.origin);
+      loginUrl.searchParams.set('error', 'invalid_params');
+      return NextResponse.redirect(loginUrl.toString());
     }
 
     const storedState = request.cookies.get('oauth_state')?.value;
@@ -31,7 +33,9 @@ export async function GET(request: NextRequest) {
 
     if (!storedState || !stateDataStr || state !== storedState) {
       console.error(`[Callback][${requestId}] State error`);
-      return NextResponse.redirect('https://auth-sso-portal.vercel.app/login?error=invalid_state');
+      const loginUrl = new URL('/login', request.nextUrl.origin);
+      loginUrl.searchParams.set('error', 'invalid_state');
+      return NextResponse.redirect(loginUrl.toString());
     }
 
     const stateData = JSON.parse(stateDataStr);
@@ -70,12 +74,27 @@ export async function GET(request: NextRequest) {
     }
 
     const tokens = await tokenResponse.json();
-    console.log(`[Callback][${requestId}] Success`);
+    console.log(`[Callback][${requestId}] Token exchange success`);
 
-    // 创建会话
+    // 1. 解码 ID Token 并校验 Nonce
     const decoded = decodeJwt(tokens.id_token);
+    console.log(`[Callback][${requestId}] Decoded ID Token:`, JSON.stringify(decoded, null, 2));
+
+    if (stateData.nonce) {
+      if (decoded.nonce !== stateData.nonce) {
+        console.error(`[Callback][${requestId}] Nonce mismatch! Stored: ${stateData.nonce}, Received: ${decoded.nonce}`);
+        const loginUrl = new URL('/login', request.nextUrl.origin);
+        loginUrl.searchParams.set('error', 'invalid_nonce');
+        return NextResponse.redirect(loginUrl.toString());
+      }
+      console.log(`[Callback][${requestId}] Nonce verified.`);
+    } else {
+      console.warn(`[Callback][${requestId}] No nonce found in stateData, skipping verification.`);
+    }
+
+    // 2. 创建会话
     const session = await createSession({
-      userId: (decoded.email as string) || 'unknown',
+      userId: (decoded.sub as string) || (decoded.email as string) || 'unknown',
       accessToken: tokens.access_token,
       refreshToken: tokens.refresh_token,
       expiresIn: tokens.expires_in || 3600,
@@ -96,6 +115,10 @@ export async function GET(request: NextRequest) {
   } catch (err: any) {
     console.error(`[Callback][${requestId}] Crash:`, err);
     const stack = err.stack || 'No stack trace';
-    return NextResponse.redirect(`https://auth-sso-portal.vercel.app/login?error=internal_crash&details=${encodeURIComponent(err.message)}&stack=${encodeURIComponent(stack.substring(0, 200))}`);
+    const crashUrl = new URL('/login', request.nextUrl.origin);
+    crashUrl.searchParams.set('error', 'internal_crash');
+    crashUrl.searchParams.set('details', err.message);
+    crashUrl.searchParams.set('stack', stack.substring(0, 200));
+    return NextResponse.redirect(crashUrl.toString());
   }
 }

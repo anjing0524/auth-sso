@@ -112,7 +112,7 @@ date: 2026-04-03
 - Happy path: `DEPT` 角色只能看到本部门用户。
 - Happy path: `SELF` 角色只能看到自己。
 
-- [ ] **Unit 4: 部门管理 API 安全加固**
+- [x] **Unit 4: 部门管理 API 安全加固**
 
 **Goal:** 限制用户只能看到其权限范围内的部门。
 
@@ -120,7 +120,7 @@ date: 2026-04-03
 - Modify: `apps/portal/src/app/api/departments/route.ts`
 
 **Approach:**
-- 类似于用户管理，对 `GET /api/departments` 进行过滤。
+- 类似于用户管理，对 `GET /api/departments` 进行过滤。 已完成集成与校验。
 
 **Test scenarios:**
 - Happy path: `DEPT_AND_SUB` 角色只能看到本部门及其子部门。
