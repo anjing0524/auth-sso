@@ -9,18 +9,21 @@ Status: Released
 
 Auth-SSO is a unified identity and access management (IAM) system built on top of `Next.js` and `Better Auth`. It consists of two primary applications and a set of shared libraries.
 
-- **`apps/portal` (Portal)**: The user-facing management console and BFF (Backend for Frontend). It manages business logic, organizational structure, and RBAC.
+- **`apps/portal` (Portal)**: The user-facing management console and BFF (Backend for Frontend). It manages business logic, organizational structure, and RBAC with granular data scope filtering.
 - **`apps/idp` (IdP)**: The identity provider, implemented using Better Auth. It handles authentication, OIDC flows, and IdP session management.
+- **`apps/customer-graph` (Graph)**: A GPU-accelerated visualization service (Next.js + WASM) for demonstrating RBAC data scope relationships.
+- **`wasm-engine` (WASM)**: A Rust-based high-performance engine for relationship calculations.
 
 ---
 
 ## 2. Technical Stack
 
-- **Framework**: Next.js 15+ (App Router, Route Handlers).
+- **Framework**: Next.js 16 (App Router, Turbopack).
 - **Identity Engine**: [Better Auth](https://better-auth.com/) (Email/Password, OAuth 2.1 Provider).
 - **Database**: PostgreSQL 16+.
 - **ORM**: Drizzle ORM.
 - **Session Cache**: Redis (for both Portal and IdP sessions).
+- **Compute**: WebAssembly (WASM) / Rust for high-performance graph processing.
 - **Styling**: Tailwind CSS 4, shadcn/ui.
 - **Language**: TypeScript.
 
@@ -36,6 +39,8 @@ Browser
   -> IdP (Better Auth)
        -> Redis (IdP Sessions)
        -> PostgreSQL (Auth Domain)
+  -> Customer Graph (Visualization)
+       -> WASM Engine (Relationship Logic)
   -> Sub-Applications (OIDC Clients)
        -> IdP (Authorize/Token)
 ```
@@ -44,6 +49,7 @@ Browser
 - **Portal**:
   - Act as an OIDC client for IdP.
   - Manage Users, Departments, Roles, and Permissions.
+  - Implement RBAC with Data Scope (ALL, DEPT, DEPT_AND_SUB, SELF, CUSTOM).
   - Maintain the "Portal Session" (portal_session cookie).
 - **IdP**:
   - Act as the central OIDC Provider.
@@ -53,6 +59,9 @@ Browser
   - **Shared Database**: For performance and deployment simplicity, all domains share a single PostgreSQL database.
   - **Portal Domain**: Business-level RBAC and organizational data.
   - **Auth Domain**: Better Auth internal persistence (users, accounts, refresh tokens).
+- **WASM Engine**:
+  - Perform complex graph traversal and relationship filtering in the browser.
+  - Offload heavy compute from the main thread.
 
 ---
 

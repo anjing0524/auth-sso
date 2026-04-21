@@ -9,7 +9,7 @@ Auth-SSO is an enterprise unified identity authentication platform implementing 
 - **apps/idp** - Identity Provider (port 4001) - Better Auth with OIDC Provider plugin
 - **apps/portal** - Admin Portal (port 4000) - User/role/permission management and Dashboard
 - **apps/demo-app** - Demo SSO Client (port 4002) - Tests SSO integration
-- **apps/customer-graph** - GPU Graph Visualization (port 4005) - RBAC Data Scope demonstration
+- **apps/customer-graph** - GPU Graph Visualization (port 4003) - RBAC Data Scope demonstration
 - **packages/contracts** - Shared types, error codes, permission codes, OIDC constants
 - **packages/config** - Shared TypeScript/ESLint configuration
 
@@ -23,7 +23,7 @@ pnpm dev
 pnpm --filter @auth-sso/idp dev      # IdP on port 4001
 pnpm --filter @auth-sso/portal dev   # Portal on port 4000
 pnpm --filter @auth-sso/demo-app dev # Demo on port 4002
-pnpm --filter @auth-sso/customer-graph dev # Graph on port 4005
+pnpm --filter @auth-sso/customer-graph dev # Graph on port 4003
 ```
 
 ## Key Files
@@ -34,6 +34,7 @@ pnpm --filter @auth-sso/customer-graph dev # Graph on port 4005
 - `apps/portal/src/lib/auth-middleware.ts` - RBAC check with data scope filtering
 - `apps/portal/src/lib/session.ts` - Redis-backed portal session management
 - `tests/data-scope.test.js` - Data scope integration tests
+- `tests/tdd-prd-all.test.js` - Master TDD validation suite
 
 ## Tech Stack
 

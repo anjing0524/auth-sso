@@ -9,7 +9,8 @@
   - **实时概览**: 动态展示用户、角色、应用及部门的统计指标。
   - **最近动态**: 集成操作审计日志，实时监控系统活动。
   - **智能重定向**: 登录后自动跳转至 `/dashboard`；已登录用户访问首页时自动感知并跳转。
-- **RBAC 权限体系**: 支持数据范围（Data Scope）过滤，包含全部、本部门、本人等多种数据访问模式。
+- **关系图谱 (Customer Graph)**: GPU 加速的客户关系可视化，直观展示 RBAC 数据范围。
+- **RBAC 权限体系**: 支持数据范围（Data Scope）过滤，包含全部、本部门、本部门及下属部门、本人及自定义范围。
 - **审计日志**: 提供完整的登录日志与操作审计追踪。
 
 ## 项目结构
@@ -19,22 +20,24 @@ auth-sso/
 ├── apps/
 │   ├── idp/           # 身份提供者 (Identity Provider) - 端口 4001
 │   ├── portal/        # 管理门户 (Portal) - 端口 4000
-│   └── demo-app/      # SSO 演示应用 - 端口 4002
+│   ├── demo-app/      # SSO 演示应用 - 端口 4002
+│   └── customer-graph/ # 关系图谱演示 - 端口 4003
 ├── packages/
 │   ├── contracts/     # 共享类型定义、错误码、权限码契约
 │   └── config/        # 共享 TypeScript/ESLint/PostCSS 配置
-├── tests/             # 自动化测试脚本 (API, SSO, Security)
+├── tests/             # 自动化测试脚本 (API, SSO, Security, RBAC)
 └── docs/              # 项目文档与 SOP
 ```
 
 ## 技术栈
 
-- **Next.js 15/16** - React 核心框架
+- **Next.js 16** - React 核心框架
 - **Better Auth** - 身份认证基座，扩展 OIDC Provider
 - **Drizzle ORM** - 类型安全的数据库操作层
 - **PostgreSQL** - 结构化数据存储
 - **Redis** - 高性能 Session 与缓存存储
 - **Tailwind CSS 4** - 现代 UI 样式系统
+- **WASM / Rust** - 用于高性能图形计算 (wasm-engine)
 - **pnpm** - 高效的包管理工具
 
 ## 快速开始
@@ -94,6 +97,7 @@ pnpm start:services
 - [系统架构 (docs/spec/ARCHITECTURE.md)](docs/spec/ARCHITECTURE.md) - 系统组成、技术选型、认证与 SSO 流程
 - [数据库设计 (docs/spec/DATABASE.md)](docs/spec/DATABASE.md) - 数据模型、存储落位与物理规范
 - [接口契约 (docs/spec/API.md)](docs/spec/API.md) - 核心接口清单与字段级契约
+- [测试驱动开发计划 (docs/spec/TDD-MASTER-PLAN.md)](docs/spec/TDD-MASTER-PLAN.md) - 自动化测试覆盖与质量保证方案
 - [项目计划与里程碑 (docs/spec/PROJECT_PLAN.md)](docs/spec/PROJECT_PLAN.md) - 研发进度与关键里程碑
 - [设计规范 (DESIGN.md)](DESIGN.md) - UI/UX 规范与品牌定义
 - [SSO 集成指南 (docs/sso-integration-guide.md)](docs/sso-integration-guide.md) - 子应用接入流程

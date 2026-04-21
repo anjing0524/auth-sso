@@ -45,6 +45,21 @@ IDP_CLIENT_SECRET=portal-secret
 SESSION_SECRET=your-session-secret-min-32-chars
 ```
 
+### Customer Graph (apps/customer-graph/.env.local)
+
+```bash
+# 应用配置
+NEXT_PUBLIC_APP_URL=http://localhost:4003
+
+# IdP 连接
+NEXT_PUBLIC_IDP_URL=http://localhost:4001
+NEXT_PUBLIC_CLIENT_ID=customer-graph
+IDP_CLIENT_SECRET=customer-graph-secret
+
+# Redis
+REDIS_URL=redis://localhost:6379
+```
+
 ### Demo App (apps/demo-app/.env.local)
 
 ```bash

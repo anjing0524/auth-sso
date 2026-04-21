@@ -79,17 +79,25 @@ Requires `portal_session` and relevant permission codes.
 
 ### 3.1 User Management
 - `GET /api/users`: List users (Paginated).
+  - **Query Params**: `page`, `pageSize`, `search`, `deptId`.
+  - **Data Scope**: Results are automatically filtered by the current user's data scope (ALL, DEPT, etc.).
 - `POST /api/users`: Create a new user.
 - `GET /api/users/:id`: Get user details.
 - `PUT /api/users/:id`: Update user profile/roles.
 - `POST /api/users/:id/reset-password`: Reset password.
 
-### 3.2 Role & Permission Management
-- `GET /api/roles`: List roles.
-- `POST /api/roles`: Create a role with specific permission IDs.
-- `GET /api/permissions`: List all available permission codes.
+### 3.2 Department Management
+- `GET /api/departments`: List departments (Tree structure).
+- `POST /api/departments`: Create a new department.
+- `GET /api/departments/:id`: Get department details.
 
-### 3.3 Client Management
+### 3.3 Role & Permission Management
+- `GET /api/roles`: List roles.
+- `POST /api/roles`: Create a role with specific permission IDs and data scope.
+- `GET /api/permissions`: List all available permission codes.
+- `GET /api/roles/:id/permissions`: Get permissions assigned to a role.
+
+### 3.4 Client Management
 - `GET /api/clients`: List OAuth clients.
 - `POST /api/clients`: Register a new OAuth client.
 - `POST /api/clients/:id/rotate-secret`: Generate a new client secret.
