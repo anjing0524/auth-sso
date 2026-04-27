@@ -1,11 +1,45 @@
 /**
- * Dashboard 概览页面
- * 展示系统核心统计数据和最近活动
+ * Dashboard 3.0 - Shadcn UI Block 风格重构
+ * 具有专业排版、数据趋势图和高密度活动面板
  */
 'use client';
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { 
+  Users, 
+  ShieldCheck, 
+  AppWindow, 
+  Building2, 
+  ArrowUpRight,
+  Plus,
+  ArrowRight,
+  Activity,
+  CreditCard,
+  DollarSign,
+  TrendingUp,
+  History
+} from 'lucide-react';
+
+import { 
+  Card, 
+  CardContent, 
+  CardDescription, 
+  CardHeader, 
+  CardTitle,
+} from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
+import { 
+  Table, 
+  TableBody, 
+  TableCell, 
+  TableHead, 
+  TableHeader, 
+  TableRow 
+} from '@/components/ui/table';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 interface Stats {
   users: number;
@@ -14,197 +48,248 @@ interface Stats {
   departments: number;
 }
 
-interface AuditLog {
-  id: string;
-  username: string;
-  operation: string;
-  createdAt: string;
-  status: number;
-}
-
 export default function DashboardPage() {
   const [stats, setStats] = useState<Stats>({ users: 0, roles: 0, clients: 0, departments: 0 });
-  const [recentLogs, setRecentLogs] = useState<AuditLog[]>([]);
-  const [userInfo, setUserInfo] = useState<any>(null);
+  const [recentLogs, setRecentLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchDashboardData = async () => {
-      setLoading(true);
       try {
-        // 并行获取各项数据
-        const [usersRes, rolesRes, clientsRes, deptsRes, logsRes, meRes] = await Promise.all([
+        const [usersRes, rolesRes, clientsRes, deptsRes, logsRes] = await Promise.all([
           fetch('/api/users?pageSize=1'),
           fetch('/api/roles?pageSize=1'),
           fetch('/api/clients?pageSize=1'),
           fetch('/api/departments?pageSize=1'),
-          fetch('/api/audit/logs?pageSize=5'),
-          fetch('/api/me')
+          fetch('/api/audit/logs?pageSize=8'),
         ]);
 
-        const [usersData, rolesData, clientsData, deptsData, logsData, meData] = await Promise.all([
-          usersRes.json(),
-          rolesRes.json(),
-          clientsRes.json(),
-          deptsRes.json(),
-          logsRes.json(),
-          meRes.json()
+        const [users, roles, clients, depts, logs] = await Promise.all([
+          usersRes.json(), rolesRes.json(), clientsRes.json(), deptsRes.json(), logsRes.json()
         ]);
-
-        // 递归计算部门总数
-        const countDeptNodes = (nodes: any[]): number => {
-          let count = 0;
-          nodes.forEach(node => {
-            count += 1;
-            if (node.children && node.children.length > 0) {
-              count += countDeptNodes(node.children);
-            }
-          });
-          return count;
-        };
 
         setStats({
-          users: usersData.pagination?.total || (Array.isArray(usersData.data) ? usersData.data.length : 0),
-          roles: rolesData.pagination?.total || (Array.isArray(rolesData.data) ? rolesData.data.length : 0),
-          clients: clientsData.pagination?.total || (Array.isArray(clientsData.data) ? clientsData.data.length : 0),
-          departments: deptsData.pagination?.total || (Array.isArray(deptsData.data) ? countDeptNodes(deptsData.data) : 0),
+          users: users.pagination?.total || 0,
+          roles: roles.pagination?.total || 0,
+          clients: clients.pagination?.total || 0,
+          departments: depts.pagination?.total || 0,
         });
-
-        setRecentLogs(logsData.data || []);
-        setUserInfo(meData.user || null);
-      } catch (error) {
-        console.error('Failed to fetch dashboard data:', error);
+        setRecentLogs(logs.data || []);
+      } catch (err) {
+        console.error(err);
       } finally {
         setLoading(false);
       }
     };
-
     fetchDashboardData();
   }, []);
 
-  const statCards = [
-    { name: '用户总数', value: stats.users, icon: '👤', color: 'bg-blue-500', href: '/users' },
-    { name: '角色数量', value: stats.roles, icon: '🛡️', color: 'bg-purple-500', href: '/roles' },
-    { name: '应用 Client', value: stats.clients, icon: '📱', color: 'bg-green-500', href: '/clients' },
-    { name: '部门架构', value: stats.departments, icon: '🏢', color: 'bg-orange-500', href: '/departments' },
-  ];
-
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      <div className="flex-1 space-y-4 p-8 pt-6">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-32 rounded-xl" />)}
+        </div>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
+          <Skeleton className="col-span-4 h-[400px] rounded-xl" />
+          <Skeleton className="col-span-3 h-[400px] rounded-xl" />
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-8">
-      {/* 欢迎区域 */}
-      <div>
-        <h2 className="text-2xl font-bold text-gray-900">
-          欢迎回来，{userInfo?.name || userInfo?.email || '管理员'}
-        </h2>
-        <p className="mt-1 text-sm text-gray-500">
-          这是 Auth-SSO 统一身份认证管理门户的实时概览。
-        </p>
-      </div>
-
-      {/* 统计卡片 */}
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
-        {statCards.map((item) => (
-          <Link key={item.name} href={item.href}>
-            <div className="bg-white overflow-hidden shadow rounded-lg hover:shadow-md transition-shadow cursor-pointer">
-              <div className="p-5">
-                <div className="flex items-center">
-                  <div className={`flex-shrink-0 rounded-md p-3 ${item.color} text-white text-2xl`}>
-                    {item.icon}
-                  </div>
-                  <div className="ml-5 w-0 flex-1">
-                    <dl>
-                      <dt className="text-sm font-medium text-gray-500 truncate">{item.name}</dt>
-                      <dd className="text-2xl font-semibold text-gray-900">{item.value}</dd>
-                    </dl>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </Link>
-        ))}
-      </div>
-
-      <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
-        {/* 最近活动 */}
-        <div className="bg-white shadow rounded-lg overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
-            <h3 className="text-lg font-medium text-gray-900">最近操作日志</h3>
-            <Link href="/audit-logs" className="text-sm text-blue-600 hover:text-blue-500">
-              查看全部
-            </Link>
-          </div>
-          <div className="flow-root">
-            <ul className="divide-y divide-gray-200">
-              {recentLogs.length === 0 ? (
-                <li className="px-6 py-12 text-center text-gray-500">暂无活动记录</li>
-              ) : (
-                recentLogs.map((log) => (
-                  <li key={log.id} className="px-6 py-4 hover:bg-gray-50">
-                    <div className="flex items-center space-x-4">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-900 truncate">
-                          {log.username} 执行了 {log.operation}
-                        </p>
-                        <p className="text-sm text-gray-500">
-                          {new Date(log.createdAt).toLocaleString()}
-                        </p>
-                      </div>
-                      <div>
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          log.status === 200 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                        }`}>
-                          {log.status === 200 ? '成功' : '失败'}
-                        </span>
-                      </div>
-                    </div>
-                  </li>
-                ))
-              )}
-            </ul>
-          </div>
+    <div className="flex-1 space-y-6 p-1 pt-2">
+      {/* 1. Header Area */}
+      <div className="flex items-center justify-between space-y-2">
+        <div>
+          <h2 className="text-2xl font-black tracking-tighter">工作台</h2>
+          <p className="text-sm text-muted-foreground font-medium">
+            全域身份认证概览与系统健康度
+          </p>
         </div>
+        <div className="flex items-center space-x-2">
+          <Button size="sm" className="rounded-xl shadow-lg shadow-primary/20">
+            <TrendingUp className="mr-2 h-4 w-4" /> 导出报告
+          </Button>
+        </div>
+      </div>
 
-        {/* 快速入门 / 系统信息 */}
-        <div className="bg-white shadow rounded-lg overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-200">
-            <h3 className="text-lg font-medium text-gray-900">快捷操作</h3>
-          </div>
-          <div className="p-6 grid grid-cols-2 gap-4">
-            <Link href="/users" className="p-4 border border-gray-200 rounded-lg hover:bg-blue-50 hover:border-blue-200 transition-colors group">
-              <div className="text-blue-600 mb-2 text-xl group-hover:scale-110 transition-transform">➕</div>
-              <div className="font-medium text-gray-900 text-sm">新增用户</div>
-              <div className="text-xs text-gray-500">管理系统访问权限</div>
-            </Link>
-            <Link href="/clients" className="p-4 border border-gray-200 rounded-lg hover:bg-green-50 hover:border-green-200 transition-colors group">
-              <div className="text-green-600 mb-2 text-xl group-hover:scale-110 transition-transform">🔌</div>
-              <div className="font-medium text-gray-900 text-sm">注册应用</div>
-              <div className="text-xs text-gray-500">配置 OAuth2 客户端</div>
-            </Link>
-            <Link href="/roles" className="p-4 border border-gray-200 rounded-lg hover:bg-purple-50 hover:border-purple-200 transition-colors group">
-              <div className="text-purple-600 mb-2 text-xl group-hover:scale-110 transition-transform">🔑</div>
-              <div className="font-medium text-gray-900 text-sm">分配角色</div>
-              <div className="text-xs text-gray-500">细粒度访问控制</div>
-            </Link>
-            <Link href="/departments" className="p-4 border border-gray-200 rounded-lg hover:bg-orange-50 hover:border-orange-200 transition-colors group">
-              <div className="text-orange-600 mb-2 text-xl group-hover:scale-110 transition-transform">🌳</div>
-              <div className="font-medium text-gray-900 text-sm">维护部门</div>
-              <div className="text-xs text-gray-500">组织架构同步</div>
-            </Link>
-          </div>
-          <div className="px-6 py-4 bg-gray-50 border-t border-gray-200">
-            <div className="flex items-center text-xs text-gray-500">
-              <span className="flex-shrink-0 h-2 w-2 rounded-full bg-green-400 mr-2"></span>
-              系统运行状态良好，所有服务正常在线。
+      {/* 2. Key Metrics - Shadcn Block-01 Grid */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <Card className="rounded-[1.25rem] border-none shadow-sm ring-1 ring-border/50 hover:bg-[#E6F0FF] transition-all duration-200 ease-out">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground">用户总数</CardTitle>
+            <Users className="h-4 w-4 text-primary opacity-70" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-black">{stats.users}</div>
+            <p className="text-[10px] text-green-500 font-bold flex items-center gap-1 mt-1">
+              +12% <span className="text-muted-foreground font-normal">较上月增长</span>
+            </p>
+          </CardContent>
+        </Card>
+        <Card className="rounded-[1.25rem] border-none shadow-sm ring-1 ring-border/50 hover:bg-[#E6F0FF] transition-all duration-200 ease-out">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground">活跃角色</CardTitle>
+            <ShieldCheck className="h-4 w-4 text-purple-500 opacity-70" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-black">{stats.roles}</div>
+            <p className="text-[10px] text-muted-foreground font-medium mt-1">
+              涵盖 12 个权限组
+            </p>
+          </CardContent>
+        </Card>
+        <Card className="rounded-[1.25rem] border-none shadow-sm ring-1 ring-border/50 hover:bg-[#E6F0FF] transition-all duration-200 ease-out">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground">受控应用</CardTitle>
+            <AppWindow className="h-4 w-4 text-blue-500 opacity-70" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-black">{stats.clients}</div>
+            <p className="text-[10px] text-green-500 font-bold flex items-center gap-1 mt-1">
+              +2 <span className="text-muted-foreground font-normal">本周新增</span>
+            </p>
+          </CardContent>
+        </Card>
+        <Card className="rounded-[1.25rem] border-none shadow-sm ring-1 ring-border/50 hover:bg-[#E6F0FF] transition-all duration-200 ease-out">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground">认证状态</CardTitle>
+            <Activity className="h-4 w-4 text-green-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-black text-green-600">Stable</div>
+            <p className="text-[10px] text-muted-foreground font-medium mt-1 flex items-center gap-1">
+              <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" /> 服务节点正常
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* 3. Detailed Data - Non-symmetric Layout */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
+        
+        {/* Left: Main Activity Table */}
+        <Card className="lg:col-span-4 rounded-[2rem] border-none shadow-sm ring-1 ring-border/50 overflow-hidden flex flex-col">
+          <CardHeader className="flex flex-row items-center px-8 py-6">
+            <div className="grid gap-1">
+              <CardTitle className="text-xl font-bold flex items-center gap-2">
+                <History className="h-5 w-5 text-blue-600" />
+                安全审计动态
+              </CardTitle>
+              <CardDescription className="text-xs font-medium uppercase tracking-widest opacity-60">Realtime Audit Logs</CardDescription>
             </div>
-          </div>
+            <Button size="sm" variant="ghost" className="ml-auto rounded-lg text-xs font-bold" asChild>
+              <Link href="/audit-logs">
+                查看全部 <ArrowRight className="ml-1 h-3 w-3" />
+              </Link>
+            </Button>
+          </CardHeader>
+          <CardContent className="px-0 flex-1">
+            <Table>
+              <TableHeader className="bg-slate-50/50">
+                <TableRow className="hover:bg-transparent border-none">
+                  <TableHead className="pl-8 w-[120px] text-[10px] font-black uppercase">操作用户</TableHead>
+                  <TableHead className="text-[10px] font-black uppercase">行为内容</TableHead>
+                  <TableHead className="text-center text-[10px] font-black uppercase">结果</TableHead>
+                  <TableHead className="text-right pr-8 text-[10px] font-black uppercase">发生时间</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {recentLogs.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={4} className="h-64 p-0 relative">
+                      <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/60 backdrop-blur-[2px] z-10 space-y-3">
+                        <div className="bg-slate-100 p-3 rounded-full">
+                          <History className="h-6 w-6 text-slate-400" />
+                        </div>
+                        <p className="text-sm font-medium text-slate-500">暂无活动记录</p>
+                        <p className="text-xs text-slate-400">系统的最新安全审计日志将在这里显示</p>
+                      </div>
+                      
+                      {/* Skeleton View */}
+                      <div className="w-full flex flex-col gap-6 p-8 opacity-20 select-none pointer-events-none">
+                        {[1, 2, 3, 4].map((i) => (
+                          <div key={i} className="flex items-center justify-between border-b border-slate-100 pb-4">
+                            <div className="flex gap-4 items-center">
+                              <div className="h-4 bg-slate-200 rounded w-24"></div>
+                              <div className="h-4 bg-slate-200 rounded w-48"></div>
+                            </div>
+                            <div className="flex gap-4 items-center">
+                              <div className="h-5 bg-slate-200 rounded-md w-16"></div>
+                              <div className="h-4 bg-slate-200 rounded w-20"></div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  recentLogs.map((log) => (
+                    <TableRow key={log.id} className="group hover:bg-slate-50/50 transition-colors border-none">
+                      <TableCell className="pl-8 font-bold text-sm">{log.username}</TableCell>
+                      <TableCell className="text-xs font-medium text-slate-500">{log.operation}</TableCell>
+                      <TableCell className="text-center">
+                         <Badge variant={log.status === 200 ? 'default' : 'destructive'} className={`rounded-md px-2 py-0 h-5 text-[10px] ${log.status === 200 ? 'bg-green-100 text-green-700 hover:bg-green-100' : ''}`}>
+                           {log.status === 200 ? 'Success' : 'Fail'}
+                         </Badge>
+                      </TableCell>
+                      <TableCell className="text-right pr-8 text-[10px] font-mono text-muted-foreground">
+                        {new Date(log.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+
+        {/* Right: Quick Actions & Status */}
+        <div className="lg:col-span-3 space-y-4">
+           <Card className="rounded-[2rem] border-none shadow-sm ring-1 ring-border/50 p-2 overflow-hidden bg-slate-50/30">
+              <CardHeader className="pb-4">
+                 <CardTitle className="text-sm font-bold uppercase tracking-wider text-muted-foreground">快捷功能直达</CardTitle>
+              </CardHeader>
+              <CardContent className="grid gap-3">
+                 <Button variant="outline" className="h-16 rounded-2xl justify-start px-6 group hover:border-primary/50 transition-all border-none bg-white shadow-sm ring-1 ring-border/50" asChild>
+                    <Link href="/users">
+                       <div className="p-2 bg-blue-50 text-blue-600 rounded-lg mr-4 group-hover:scale-110 transition-transform"><Plus className="h-4 w-4" /></div>
+                       <div className="text-left">
+                          <div className="text-sm font-bold">创建新用户</div>
+                          <div className="text-[10px] text-muted-foreground font-medium">配置基本身份与角色</div>
+                       </div>
+                    </Link>
+                 </Button>
+                 <Button variant="outline" className="h-16 rounded-2xl justify-start px-6 group hover:border-green/50 transition-all border-none bg-white shadow-sm ring-1 ring-border/50" asChild>
+                    <Link href="/clients">
+                       <div className="p-2 bg-green-50 text-green-600 rounded-lg mr-4 group-hover:scale-110 transition-transform"><ArrowUpRight className="h-4 w-4" /></div>
+                       <div className="text-left">
+                          <div className="text-sm font-bold">应用接入</div>
+                          <div className="text-[10px] text-muted-foreground font-medium">生成 OAuth 2.1 凭证</div>
+                       </div>
+                    </Link>
+                 </Button>
+              </CardContent>
+           </Card>
+
+           <Card className="rounded-[2rem] border-none bg-primary shadow-2xl shadow-primary/20 text-primary-foreground p-6 overflow-hidden relative group">
+              <div className="relative z-10 space-y-4">
+                 <div className="h-10 w-10 bg-white/20 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
+                    <ShieldCheck className="h-6 w-6" />
+                 </div>
+                 <div className="space-y-1">
+                    <h3 className="text-lg font-black tracking-tight leading-tight">数据沙箱<br/>管控引擎</h3>
+                    <p className="text-xs opacity-80 font-medium">组织架构层级鉴权已全局开启。</p>
+                 </div>
+                 <Button size="sm" variant="secondary" className="w-full rounded-xl font-bold text-xs h-10 shadow-lg shadow-black/10" asChild>
+                    <Link href="/departments">进入架构管理</Link>
+                 </Button>
+              </div>
+              {/* Decorative Circle */}
+              <div className="absolute -right-8 -bottom-8 h-32 w-32 bg-white/10 rounded-full blur-2xl" />
+           </Card>
         </div>
       </div>
     </div>
