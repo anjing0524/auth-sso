@@ -404,11 +404,10 @@ export default function MenusPage() {
                           <p className="text-sm text-slate-500 mt-1">{keyword ? '请尝试更换搜索词' : '创建菜单以构建系统导航结构'}</p>
                         </div>
                         {!keyword && (
-                          <Button onClick={() => setIsAddOpen(true)} className="rounded-xl px-6 mt-2 shadow-lg shadow-primary/20">
+                          <Button onClick={() => setIsFormOpen(true)} className="rounded-xl px-6 mt-2 shadow-lg shadow-primary/20">
                             <Plus className="mr-2 h-4 w-4" /> 创建第一个菜单
                           </Button>
-                        )}
-                      </div>
+                        )}                      </div>
                     </TableCell>
                   </TableRow>
                 ) : (                  renderRows(menuTree)

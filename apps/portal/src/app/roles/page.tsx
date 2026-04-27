@@ -101,7 +101,7 @@ export default function RolesPage() {
 
   // 新增角色状态
   const [isAddOpen, setIsAddOpen] = useState(false);
-  const [newRole, setNewRole] = useState({ name: '', code: '', dataScopeType: 'SELF' as const });
+  const [newRole, setNewRole] = useState({ name: '', code: '', dataScopeType: 'SELF' as Role['dataScopeType'] });
 
   const fetchRoles = useCallback(async () => {
     setLoading(true);
