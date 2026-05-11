@@ -5,8 +5,10 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { db, schema } from '@/lib/db';
-import { eq, or } from 'drizzle-orm';
+import { eq, desc, inArray, or } from 'drizzle-orm';
 import { withPermission } from '@/lib/auth-middleware';
+import crypto from 'crypto';
+
 
 export const runtime = 'nodejs';
 

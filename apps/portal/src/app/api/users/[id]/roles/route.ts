@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db, schema } from '@/lib/db';
 import { eq, or, desc } from 'drizzle-orm';
 import { withPermission } from '@/lib/auth-middleware';
+import crypto from 'crypto';
 
 export const runtime = 'nodejs';
 
@@ -75,6 +76,8 @@ export async function POST(
       const body = await request.json();
       const { roleIds } = body;
 
+      console.log(`[UserRoles] Assigning roles for user ID/PublicID: ${id}`, { roleIds });
+
       if (!Array.isArray(roleIds) || roleIds.length === 0) {
         return NextResponse.json(
           { error: 'invalid_params', message: '角色ID列表不能为空' },
@@ -88,6 +91,7 @@ export async function POST(
         .where(or(eq(schema.users.id, id), eq(schema.users.publicId, id)));
 
       if (users.length === 0) {
+        console.warn(`[UserRoles] User not found: ${id}`);
         return NextResponse.json(
           { error: 'not_found', message: '用户不存在' },
           { status: 404 }
@@ -95,6 +99,7 @@ export async function POST(
       }
 
       const userId = users[0]!.id;
+      console.log(`[UserRoles] Found real userId: ${userId}`);
 
       // 删除现有的角色绑定
       await db.delete(schema.userRoles).where(eq(schema.userRoles.userId, userId));
@@ -110,10 +115,10 @@ export async function POST(
       await db.insert(schema.userRoles).values(userRolesData);
 
       return NextResponse.json({ success: true, assignedCount: roleIds.length });
-    } catch (error) {
-      console.error('[UserRoles] POST Error:', error);
+    } catch (error: any) {
+      console.error('[UserRoles] POST Error:', error.message, error.stack);
       return NextResponse.json(
-        { error: 'internal_error', message: '分配角色失败' },
+        { error: 'internal_error', message: `分配角色失败: ${error.message}` },
         { status: 500 }
       );
     }

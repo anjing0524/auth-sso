@@ -9,7 +9,6 @@
   - **实时概览**: 动态展示用户、角色、应用及部门的统计指标。
   - **最近动态**: 集成操作审计日志，实时监控系统活动。
   - **智能重定向**: 登录后自动跳转至 `/dashboard`；已登录用户访问首页时自动感知并跳转。
-- **关系图谱 (Customer Graph)**: GPU 加速的客户关系可视化，直观展示 RBAC 数据范围。
 - **RBAC 权限体系**: 支持数据范围（Data Scope）过滤，包含全部、本部门、本部门及下属部门、本人及自定义范围。
 - **审计日志**: 提供完整的登录日志与操作审计追踪。
 
@@ -20,8 +19,7 @@ auth-sso/
 ├── apps/
 │   ├── idp/           # 身份提供者 (Identity Provider) - 端口 4001
 │   ├── portal/        # 管理门户 (Portal) - 端口 4000
-│   ├── demo-app/      # SSO 演示应用 - 端口 4002
-│   └── customer-graph/ # 关系图谱演示 - 端口 4003
+│   └── demo-app/      # SSO 演示应用 - 端口 4002
 ├── packages/
 │   ├── contracts/     # 共享类型定义、错误码、权限码契约
 │   └── config/        # 共享 TypeScript/ESLint/PostCSS 配置
@@ -37,7 +35,6 @@ auth-sso/
 - **PostgreSQL** - 结构化数据存储
 - **Redis** - 高性能 Session 与缓存存储
 - **Tailwind CSS 4** - 现代 UI 样式系统
-- **WASM / Rust** - 用于高性能图形计算 (wasm-engine)
 - **pnpm** - 高效的包管理工具
 
 ## 快速开始

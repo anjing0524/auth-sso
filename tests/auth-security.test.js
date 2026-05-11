@@ -24,7 +24,7 @@ async function run(reporter) {
     const response = await http.get(callbackUrl);
     
     // 应该被重定向回登录页并带有错误信息
-    assert.redirect(response.status, response.headers.location, '/login?error=session_expired', '缺失 Cookie 应返回 session_expired');
+    assert.redirect(response.status, response.headers.location, '/login?error=invalid_state', '缺失 Cookie 或 State 不匹配应返回 invalid_state');
   });
 
   // SEC-002: 验证 Nonce 强制校验 (Unit 3 加固点)

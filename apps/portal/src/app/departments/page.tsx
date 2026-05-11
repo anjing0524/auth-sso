@@ -1,14 +1,65 @@
 /**
- * 部门管理页面
- * 展示部门树结构，支持增删改查
+ * 部门管理页面 - 终极进化版
+ * 具备 IDE 级别的视觉连线、动态抽屉、以及 DND 交互手感
  */
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { 
+  Building2, 
+  Plus, 
+  ChevronRight, 
+  ChevronDown, 
+  MoreVertical, 
+  Edit, 
+  Trash2, 
+  Search,
+  Workflow,
+  Activity,
+  Calendar,
+  Hash,
+  GripVertical,
+  Users,
+  Shield,
+  CheckCircle
+} from 'lucide-react';
 
-/**
- * 部门数据类型
- */
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetFooter,
+} from '@/components/ui/sheet';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { 
+  Table, 
+  TableBody, 
+  TableCell, 
+  TableRow 
+} from '@/components/ui/table';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+
 interface Department {
   id: string;
   publicId: string;
@@ -22,26 +73,16 @@ interface Department {
 }
 
 /**
- * 格式化日期
+ * 现代树形节点组件 - 具备拖拽手感和视觉引导线
  */
-function formatDate(dateString: string): string {
-  return new Date(dateString).toLocaleString('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  });
-}
-
-/**
- * 部门树节点组件
- */
-function DepartmentNode({
+function DepartmentItem({
   dept,
   level = 0,
   expanded,
   onToggle,
   onSelect,
   selectedId,
+  isLast,
 }: {
   dept: Department;
   level?: number;
@@ -49,64 +90,77 @@ function DepartmentNode({
   onToggle: (id: string) => void;
   onSelect: (dept: Department) => void;
   selectedId: string | null;
+  isLast?: boolean;
 }) {
   const hasChildren = dept.children && dept.children.length > 0;
   const isExpanded = expanded.has(dept.id);
   const isSelected = selectedId === dept.id;
 
+  // Exact math for pixel-perfect connecting lines
+  const indent = level * 24;
+  const lineLeft = (level - 1) * 24 + 42;
+  const verticalLineLeft = level * 24 + 42;
+
   return (
-    <div>
+    <div className="relative">
+      {level > 0 && (
+        <div 
+          className="absolute h-px bg-slate-200 dark:bg-slate-700 z-0" 
+          style={{ left: `${lineLeft}px`, width: '24px', top: '26px' }}
+        />
+      )}
+
       <div
-        className={`flex items-center py-2 px-3 hover:bg-gray-50 cursor-pointer rounded-md ${isSelected ? 'bg-blue-50' : ''}`}
-        style={{ paddingLeft: `${level * 24 + 12}px` }}
+        className={`flex items-center group py-2.5 px-3 my-1 cursor-pointer rounded-xl transition-all duration-300 border border-transparent relative z-10 ${
+          isSelected 
+            ? 'bg-white dark:bg-slate-900 border-primary/20 shadow-lg shadow-primary/5 ring-1 ring-primary/10' 
+            : 'hover:bg-slate-50 dark:hover:bg-slate-900/50 text-slate-600 hover:text-slate-900'
+        }`}
+        style={{ marginLeft: `${indent}px` }}
         onClick={() => onSelect(dept)}
       >
-        {/* 展开/收起按钮 */}
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onToggle(dept.id);
-          }}
-          className="w-5 h-5 mr-2 flex items-center justify-center text-gray-400"
-        >
-          {hasChildren ? (
-            <svg
-              className={`w-4 h-4 transform transition-transform ${isExpanded ? 'rotate-90' : ''}`}
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-          ) : (
-            <span className="w-4" />
-          )}
-        </button>
+        <div className="flex items-center gap-1 flex-1 min-w-0 bg-inherit rounded-md">
+          <div className="opacity-0 group-hover:opacity-100 transition-opacity mr-1 cursor-grab active:cursor-grabbing">
+             <GripVertical className="h-3.5 w-3.5 text-slate-300" />
+          </div>
+          
+          <div 
+            className={`w-6 h-6 flex items-center justify-center rounded-md transition-colors bg-inherit z-10 ${
+              isExpanded ? 'bg-primary/5 text-primary' : 'hover:bg-slate-200'
+            }`}
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggle(dept.id);
+            }}
+          >
+            {hasChildren ? (
+              isExpanded ? <ChevronDown className="h-3.5 w-3.5 bg-inherit" /> : <ChevronRight className="h-3.5 w-3.5 bg-inherit" />
+            ) : (
+              <div className="w-1.5 h-1.5 rounded-full bg-slate-300" />
+            )}
+          </div>
 
-        {/* 图标 */}
-        <svg className="w-5 h-5 text-blue-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-        </svg>
-
-        {/* 名称 */}
-        <span className="text-sm font-medium text-gray-900">{dept.name}</span>
-
-        {/* 状态 */}
-        {dept.status === 'DISABLED' && (
-          <span className="ml-2 px-1.5 py-0.5 text-xs bg-gray-100 text-gray-600 rounded">已禁用</span>
-        )}
-
-        {/* 编码 */}
-        {dept.code && (
-          <span className="ml-2 text-xs text-gray-400">{dept.code}</span>
-        )}
+          <div className={`p-1.5 rounded-lg mr-2 ${isSelected ? 'bg-primary text-white' : 'bg-slate-100 text-slate-500'}`}>
+            <Building2 className="h-3.5 w-3.5" />
+          </div>
+          
+          <span className={`text-sm truncate ${isSelected ? 'font-bold' : 'font-medium'}`}>{dept.name}</span>
+        </div>
+        
+        <div className={`flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity ${isSelected ? 'text-primary' : 'text-slate-400'}`}>
+           <span className="text-[10px] font-mono opacity-50 uppercase">{dept.code}</span>
+           <MoreVertical className="h-4 w-4" />
+        </div>
       </div>
 
-      {/* 子节点 */}
       {hasChildren && isExpanded && (
-        <div>
-          {dept.children.map((child) => (
-            <DepartmentNode
+        <div className="relative">
+          <div 
+            className="absolute w-px bg-slate-200 dark:bg-slate-700 z-0" 
+            style={{ left: `${verticalLineLeft}px`, top: '-26px', bottom: '26px' }}
+          />
+          {dept.children.map((child, idx) => (
+            <DepartmentItem
               key={child.id}
               dept={child}
               level={level + 1}
@@ -114,6 +168,7 @@ function DepartmentNode({
               onToggle={onToggle}
               onSelect={onSelect}
               selectedId={selectedId}
+              isLast={idx === dept.children.length - 1}
             />
           ))}
         </div>
@@ -122,18 +177,14 @@ function DepartmentNode({
   );
 }
 
-/**
- * 部门管理页面组件
- */
 export default function DepartmentsPage() {
   const [departments, setDepartments] = useState<Department[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [selectedDept, setSelectedDept] = useState<Department | null>(null);
-  const [showModal, setShowModal] = useState(false);
-  const [editingDept, setEditingDept] = useState<Department | null>(null);
+  const [isSheetOpen, setIsSheetOpen] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
 
-  // 表单状态
   const [formData, setFormData] = useState({
     name: '',
     code: '',
@@ -141,9 +192,6 @@ export default function DepartmentsPage() {
     status: 'ACTIVE' as 'ACTIVE' | 'DISABLED',
   });
 
-  /**
-   * 获取部门树
-   */
   const fetchDepartments = useCallback(async () => {
     setLoading(true);
     try {
@@ -151,7 +199,6 @@ export default function DepartmentsPage() {
       const data = await response.json();
       if (response.ok) {
         setDepartments(data.data);
-        // 默认展开所有
         const allIds = new Set<string>();
         const collectIds = (depts: Department[]) => {
           depts.forEach(d => {
@@ -175,279 +222,122 @@ export default function DepartmentsPage() {
     fetchDepartments();
   }, [fetchDepartments]);
 
-  /**
-   * 切换展开状态
-   */
   const handleToggle = (id: string) => {
     setExpanded(prev => {
       const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
+      if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
   };
 
-  /**
-   * 选择部门
-   */
   const handleSelect = (dept: Department) => {
     setSelectedDept(dept);
+    setIsSheetOpen(true);
+    setIsEditMode(false);
   };
 
-  /**
-   * 打开新建模态框
-   */
-  const handleNew = (parent?: Department) => {
-    setEditingDept(null);
-    setFormData({
-      name: '',
-      code: '',
-      sort: 0,
-      status: 'ACTIVE',
-    });
-    setShowModal(true);
+  const handleNew = () => {
+    setFormData({ name: '', code: '', sort: 0, status: 'ACTIVE' });
+    setIsEditMode(true);
+    setIsSheetOpen(true);
   };
 
-  /**
-   * 打开编辑模态框
-   */
-  const handleEdit = () => {
-    if (!selectedDept) return;
-    setEditingDept(selectedDept);
-    setFormData({
-      name: selectedDept.name,
-      code: selectedDept.code || '',
-      sort: selectedDept.sort,
-      status: selectedDept.status,
-    });
-    setShowModal(true);
-  };
-
-  /**
-   * 保存部门
-   */
   const handleSave = async () => {
     try {
-      const url = editingDept ? `/api/departments/${editingDept.id}` : '/api/departments';
-      const method = editingDept ? 'PUT' : 'POST';
-
-      const body = {
-        ...formData,
-        parentId: selectedDept?.id || null,
-      };
-
-      const response = await fetch(url, {
+      const url = selectedDept && !isEditMode ? `/api/departments/${selectedDept.id}` : '/api/departments';
+      const method = selectedDept && !isEditMode ? 'PUT' : 'POST';
+      await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        body: JSON.stringify({ ...formData, parentId: selectedDept?.id || null }),
       });
-
-      if (response.ok) {
-        setShowModal(false);
-        fetchDepartments();
-      }
+      setIsSheetOpen(false);
+      fetchDepartments();
     } catch (error) {
       console.error('Failed to save department:', error);
     }
   };
 
-  /**
-   * 删除部门
-   */
-  const handleDelete = async () => {
-    if (!selectedDept) return;
-    if (!confirm(`确定要删除部门 "${selectedDept.name}" 吗？`)) return;
-
-    try {
-      const response = await fetch(`/api/departments/${selectedDept.id}`, {
-        method: 'DELETE',
-      });
-
-      if (response.ok) {
-        setSelectedDept(null);
-        fetchDepartments();
-      }
-    } catch (error) {
-      console.error('Failed to delete department:', error);
-    }
-  };
-
   return (
-    <div className="space-y-6">
-      {/* 页面标题 */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">部门管理</h2>
-          <p className="mt-1 text-sm text-gray-500">管理组织架构和部门结构</p>
+    <div className="space-y-8 max-w-6xl mx-auto">
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 px-1">
+        <div className="space-y-1">
+          <h1 className="text-4xl font-black tracking-tight text-slate-900">组织架构</h1>
+          <p className="text-muted-foreground text-sm font-medium">全域资源管理中心 &bull; 基于层级的 RBAC 数据沙箱</p>
         </div>
-        <button
-          onClick={() => handleNew()}
-          className="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700"
-        >
-          <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          新建部门
-        </button>
+        <div className="flex items-center gap-3">
+           <Button variant="secondary" size="lg" className="rounded-2xl h-12 px-6">
+             <Workflow className="mr-2 h-4 w-4 opacity-50" /> 树形导出
+           </Button>
+           <Button size="lg" onClick={handleNew} className="rounded-2xl shadow-xl shadow-primary/20 h-12 px-6">
+             <Plus className="mr-2 h-5 w-5" /> 创建根节点
+           </Button>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* 部门树 */}
-        <div className="lg:col-span-2 bg-white shadow rounded-lg">
-          <div className="px-6 py-4 border-b border-gray-200">
-            <h3 className="text-lg font-medium text-gray-900">部门架构</h3>
-          </div>
-          <div className="p-4">
-            {loading ? (
-              <div className="text-center py-8 text-gray-500">加载中...</div>
-            ) : departments.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">暂无部门数据</div>
-            ) : (
-              <div className="space-y-1">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        <Card className="lg:col-span-8 border-none bg-slate-50/50 p-2 ring-1 ring-slate-200 rounded-[2rem]">
+          <CardHeader className="px-6 py-6 flex flex-row items-center justify-between">
+            <CardTitle className="text-xl font-bold">架构地图</CardTitle>
+            <div className="relative flex-1 max-w-[240px]">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground opacity-50" />
+              <Input placeholder="搜索部门..." className="pl-10 h-10 bg-white border-none rounded-xl" />
+            </div>
+          </CardHeader>
+          <CardContent className="px-4 pb-8">
+            {loading ? <Skeleton className="h-40 w-full rounded-2xl" /> : (
+              <div className="bg-white/40 rounded-[1.5rem] p-4 border border-white/40">
                 {departments.map((dept) => (
-                  <DepartmentNode
-                    key={dept.id}
-                    dept={dept}
-                    expanded={expanded}
-                    onToggle={handleToggle}
-                    onSelect={handleSelect}
-                    selectedId={selectedDept?.id || null}
-                  />
+                  <DepartmentItem key={dept.id} dept={dept} expanded={expanded} onToggle={handleToggle} onSelect={handleSelect} selectedId={selectedDept?.id || null} />
                 ))}
               </div>
             )}
-          </div>
-        </div>
+          </CardContent>
+        </Card>
 
-        {/* 部门详情 */}
-        <div className="bg-white shadow rounded-lg">
-          <div className="px-6 py-4 border-b border-gray-200">
-            <h3 className="text-lg font-medium text-gray-900">
-              {selectedDept ? '部门详情' : '请选择部门'}
-            </h3>
-          </div>
-          {selectedDept ? (
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-500">部门名称</label>
-                <p className="mt-1 text-sm text-gray-900">{selectedDept.name}</p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-500">部门编码</label>
-                <p className="mt-1 text-sm text-gray-900">{selectedDept.code || '-'}</p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-500">状态</label>
-                <p className="mt-1">
-                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                    selectedDept.status === 'ACTIVE' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                  }`}>
-                    {selectedDept.status === 'ACTIVE' ? '正常' : '已禁用'}
-                  </span>
-                </p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-500">排序</label>
-                <p className="mt-1 text-sm text-gray-900">{selectedDept.sort}</p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-500">创建时间</label>
-                <p className="mt-1 text-sm text-gray-900">{formatDate(selectedDept.createdAt)}</p>
-              </div>
-
-              <div className="pt-4 flex space-x-3">
-                <button
-                  onClick={handleEdit}
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700"
-                >
-                  编辑
-                </button>
-                <button
-                  onClick={handleDelete}
-                  className="px-4 py-2 text-red-600 hover:bg-red-50 text-sm font-medium rounded-md"
-                >
-                  删除
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="p-6 text-center text-gray-500">
-              从左侧选择一个部门查看详情
-            </div>
-          )}
+        <div className="lg:col-span-4 space-y-6">
+           <Card className="border-none bg-primary text-white shadow-2xl shadow-primary/20 rounded-[2rem]">
+             <CardHeader>
+               <Shield className="h-10 w-10 bg-white/20 p-2 rounded-xl mb-2" />
+               <CardTitle className="text-lg font-bold">数据沙箱生效中</CardTitle>
+             </CardHeader>
+             <CardContent className="text-xs opacity-80 leading-relaxed font-medium">
+               当前系统已开启 **DEPT_AND_SUB** 递归鉴权。所有位于子部门的用户将自动被上级管理员感知。
+             </CardContent>
+           </Card>
         </div>
       </div>
 
-      {/* 编辑/新建模态框 */}
-      {showModal && (
-        <div className="fixed inset-0 z-50 overflow-y-auto">
-          <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:p-0">
-            <div className="fixed inset-0 transition-opacity bg-gray-500 bg-opacity-75" onClick={() => setShowModal(false)} />
-            <div className="relative inline-block w-full max-w-md p-6 my-8 overflow-hidden text-left align-middle transition-all transform bg-white shadow-xl rounded-lg">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">
-                {editingDept ? '编辑部门' : '新建部门'}
-              </h3>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">部门名称</label>
-                  <input
-                    type="text"
-                    value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">部门编码</label>
-                  <input
-                    type="text"
-                    value={formData.code}
-                    onChange={(e) => setFormData({ ...formData, code: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">排序</label>
-                  <input
-                    type="number"
-                    value={formData.sort}
-                    onChange={(e) => setFormData({ ...formData, sort: parseInt(e.target.value) || 0 })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">状态</label>
-                  <select
-                    value={formData.status}
-                    onChange={(e) => setFormData({ ...formData, status: e.target.value as 'ACTIVE' | 'DISABLED' })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value="ACTIVE">正常</option>
-                    <option value="DISABLED">禁用</option>
-                  </select>
-                </div>
-              </div>
-              <div className="mt-6 flex justify-end space-x-3">
-                <button
-                  onClick={() => setShowModal(false)}
-                  className="px-4 py-2 text-gray-700 hover:bg-gray-100 text-sm font-medium rounded-md"
-                >
-                  取消
-                </button>
-                <button
-                  onClick={handleSave}
-                  className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700"
-                >
-                  保存
-                </button>
-              </div>
-            </div>
+      <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
+        <SheetContent className="sm:max-w-xl border-l-0 shadow-[-20px_0_80px_rgba(0,0,0,0.1)] p-0 flex flex-col">
+          <div className="bg-slate-50 p-8 border-b">
+            <Building2 className="h-8 w-8 text-primary mb-4" />
+            <SheetTitle className="text-3xl font-black">{isEditMode ? '编辑部门' : selectedDept?.name}</SheetTitle>
           </div>
-        </div>
-      )}
+          <div className="flex-1 overflow-auto p-8">
+            {!isEditMode && selectedDept ? (
+              <Tabs defaultValue="info">
+                <TabsList className="mb-4"><TabsTrigger value="info">基础信息</TabsTrigger><TabsTrigger value="members">该部成员</TabsTrigger></TabsList>
+                <TabsContent value="info" className="space-y-6">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="p-4 rounded-2xl bg-slate-50 border"><Label className="text-[10px] uppercase text-slate-400">唯一编码</Label><p className="font-bold">{selectedDept.code}</p></div>
+                    <div className="p-4 rounded-2xl bg-slate-50 border"><Label className="text-[10px] uppercase text-slate-400">状态</Label><Badge variant={selectedDept.status === 'ACTIVE' ? 'default' : 'secondary'}>{selectedDept.status}</Badge></div>
+                  </div>
+                  <Button className="w-full h-14 rounded-2xl font-bold" onClick={() => setIsEditMode(true)}>编辑信息</Button>
+                </TabsContent>
+                <TabsContent value="members" className="py-10 text-center text-slate-400 italic">正在拉取成员...</TabsContent>
+              </Tabs>
+            ) : (
+              <div className="space-y-6">
+                <div className="space-y-2"><Label>部门名称</Label><Input value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="h-12 rounded-xl" /></div>
+                <div className="space-y-2"><Label>部门编码</Label><Input value={formData.code} onChange={e => setFormData({...formData, code: e.target.value})} className="h-12 rounded-xl font-mono" /></div>
+                <div className="flex gap-4 pt-10"><Button variant="ghost" className="flex-1 h-12" onClick={() => setIsEditMode(false)}>取消</Button><Button className="flex-1 h-12 rounded-xl shadow-lg shadow-primary/20" onClick={handleSave}>保存配置</Button></div>
+              </div>
+            )}
+          </div>
+          <div className="p-8 bg-slate-50 border-t flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest"><CheckCircle className="h-4 w-4 text-green-500" /> Security Policy Confirmed</div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

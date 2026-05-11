@@ -8,7 +8,9 @@ const fs = require('fs');
 const path = require('path');
 
 // 测试文件列表 - Test file list
-const TEST_FILES = [
+const DEFAULT_TEST_FILES = ['detailed-logic.test.js',
+  'tdd-prd-all.test.js',
+  'department.test.js',
   'smoke.test.js',
   'auth.test.js',
   'permission.test.js',
@@ -16,18 +18,24 @@ const TEST_FILES = [
   'security.test.js',
   'sso.test.js',
   'performance.test.js',
-  'business.test.js'
+  'business.test.js',
+  'data-scope.test.js',
+  'auth-security.test.js'
 ];
 
-
+// 从命令行获取要运行的文件
+const args = process.argv.slice(2);
+const TEST_FILES = args.length > 0 ? args : DEFAULT_TEST_FILES;
 
 /**
  * 运行所有测试 - Run all tests
  */
 async function runAllTests() {
   console.log('\n🚀 Auth-SSO 自动化测试套件启动\n');
+  if (args.length > 0) {
+    console.log('🎯 运行特定测试文件:', args.join(', '));
+  }
   console.log('测试时间:', new Date().toISOString());
-  console.log('');
 
   const totalReporter = new TestReporter();
 

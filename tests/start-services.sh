@@ -112,7 +112,10 @@ echo -e "${YELLOW}🚀 启动服务...${NC}\n"
 # 启动 IdP (先启动，因为 Portal 和 Demo 依赖它)
 echo -e "${YELLOW}▶️  启动 IdP (http://127.0.0.1:4101)...${NC}"
 cd "$PROJECT_ROOT/apps/idp"
-LOG_LEVEL=debug pnpm dev > /tmp/idp.log 2>&1 &
+# 注入测试环境变量
+LOG_LEVEL=debug \
+BETTER_AUTH_URL=http://localhost:4101 \
+pnpm dev -p 4101 > /tmp/idp.log 2>&1 &
 IDP_PID=$!
 echo "   PID: $IDP_PID"
 
@@ -127,7 +130,12 @@ wait_for_service "http://127.0.0.1:4101/api/auth/ok" "IdP" || {
 # 启动 Portal
 echo -e "${YELLOW}▶️  启动 Portal (http://127.0.0.1:4100)...${NC}"
 cd "$PROJECT_ROOT/apps/portal"
-LOG_LEVEL=debug pnpm dev > /tmp/portal.log 2>&1 &
+# 注入测试环境变量，确保连接到正确的 IdP
+LOG_LEVEL=debug \
+NEXT_PUBLIC_IDP_URL=http://localhost:4101 \
+NEXT_PUBLIC_APP_URL=http://localhost:4100 \
+NEXT_PUBLIC_REDIRECT_URI=http://localhost:4100/api/auth/callback \
+pnpm dev -p 4100 > /tmp/portal.log 2>&1 &
 PORTAL_PID=$!
 echo "   PID: $PORTAL_PID"
 
@@ -141,7 +149,11 @@ wait_for_service "http://127.0.0.1:4100" "Portal" || {
 # 启动 Demo App
 echo -e "${YELLOW}▶️  启动 Demo App (http://127.0.0.1:4102)...${NC}"
 cd "$PROJECT_ROOT/apps/demo-app"
-pnpm dev > /tmp/demo-app.log 2>&1 &
+# 注入测试环境变量
+OAUTH_ISSUER=http://localhost:4101 \
+OAUTH_REDIRECT_URI=http://localhost:4102/api/auth/callback \
+APP_URL=http://localhost:4102 \
+pnpm dev -p 4102 > /tmp/demo-app.log 2>&1 &
 DEMO_PID=$!
 echo "   PID: $DEMO_PID"
 

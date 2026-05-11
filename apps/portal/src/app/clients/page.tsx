@@ -1,15 +1,48 @@
 /**
- * Client 列表页面
- * 展示所有 OAuth Client，支持搜索、筛选和分页
+ * Client 列表页面 - 现代化重构版
+ * 基于 shadcn/ui Table，提供高密度的应用管理视图
  */
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
+import { 
+  AppWindow, 
+  Plus, 
+  Search, 
+  Copy, 
+  ExternalLink, 
+  MoreHorizontal, 
+  Edit, 
+  Trash2, 
+  Globe,
+  Lock,
+  Check
+} from 'lucide-react';
 
-/**
- * Client 数据类型
- */
+import { 
+  Table, 
+  TableBody, 
+  TableCell, 
+  TableHead, 
+  TableHeader, 
+  TableRow 
+} from '@/components/ui/table';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Skeleton } from '@/components/ui/skeleton';
+import { 
+  DropdownMenu, 
+  DropdownMenuContent, 
+  DropdownMenuItem, 
+  DropdownMenuLabel, 
+  DropdownMenuSeparator, 
+  DropdownMenuTrigger 
+} from '@/components/ui/dropdown-menu';
+
 interface Client {
   id: string;
   publicId: string;
@@ -24,357 +57,196 @@ interface Client {
   updatedAt: string;
 }
 
-/**
- * 分页信息类型
- */
-interface Pagination {
-  page: number;
-  pageSize: number;
-  total: number;
-  totalPages: number;
-}
-
-/**
- * 复制文本到剪贴板
- */
-async function copyToClipboard(text: string): Promise<void> {
-  try {
-    await navigator.clipboard.writeText(text);
-  } catch {
-    // Fallback for older browsers
-    const textarea = document.createElement('textarea');
-    textarea.value = text;
-    document.body.appendChild(textarea);
-    textarea.select();
-    document.execCommand('copy');
-    document.body.removeChild(textarea);
-  }
-}
-
-/**
- * 格式化日期
- */
-function formatDate(dateString: string): string {
-  return new Date(dateString).toLocaleString('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
-
-/**
- * Client 状态徽章
- */
-function StatusBadge({ status }: { status: 'ACTIVE' | 'DISABLED' }) {
-  return (
-    <span
-      className={`
-        inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
-        ${status === 'ACTIVE'
-          ? 'bg-green-100 text-green-800'
-          : 'bg-gray-100 text-gray-800'
-        }
-      `}
-    >
-      {status === 'ACTIVE' ? '已启用' : '已禁用'}
-    </span>
-  );
-}
-
-/**
- * Client 列表页面组件
- */
 export default function ClientsPage() {
   const [clients, setClients] = useState<Client[]>([]);
-  const [pagination, setPagination] = useState<Pagination>({
-    page: 1,
-    pageSize: 20,
-    total: 0,
-    totalPages: 0,
-  });
-  const [keyword, setKeyword] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
   const [loading, setLoading] = useState(true);
+  const [keyword, setKeyword] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  /**
-   * 获取 Client 列表
-   */
   const fetchClients = useCallback(async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({
-        page: pagination.page.toString(),
-        pageSize: pagination.pageSize.toString(),
-      });
-      if (keyword) params.append('keyword', keyword);
-      if (statusFilter) params.append('status', statusFilter);
-
-      const response = await fetch(`/api/clients?${params.toString()}`);
+      const response = await fetch(`/api/clients${keyword ? `?keyword=${keyword}` : ''}`);
       const data = await response.json();
-
-      if (response.ok) {
-        setClients(data.data);
-        setPagination(data.pagination);
-      }
+      if (response.ok) setClients(data.data);
     } catch (error) {
       console.error('Failed to fetch clients:', error);
     } finally {
       setLoading(false);
     }
-  }, [pagination.page, pagination.pageSize, keyword, statusFilter]);
+  }, [keyword]);
 
   useEffect(() => {
     fetchClients();
   }, [fetchClients]);
 
-  /**
-   * 处理搜索
-   */
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    setPagination(prev => ({ ...prev, page: 1 }));
-    fetchClients();
-  };
-
-  /**
-   * 处理复制 Client ID
-   */
-  const handleCopyId = async (clientId: string, id: string) => {
-    await copyToClipboard(clientId);
+  const handleCopy = (text: string, id: string) => {
+    navigator.clipboard.writeText(text);
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  /**
-   * 处理禁用/启用 Client
-   */
-  const handleToggleStatus = async (client: Client) => {
-    const newStatus = client.status === 'ACTIVE' ? 'DISABLED' : 'ACTIVE';
-    try {
-      const response = await fetch(`/api/clients/${client.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: newStatus }),
-      });
-
-      if (response.ok) {
-        fetchClients();
-      }
-    } catch (error) {
-      console.error('Failed to toggle status:', error);
-    }
-  };
-
   return (
-    <div className="space-y-6">
-      {/* 页面标题和操作按钮 */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">OAuth Client 管理</h2>
-          <p className="mt-1 text-sm text-gray-500">
-            管理所有 OAuth 应用客户端，配置授权参数
-          </p>
+    <div className="space-y-8 pb-10">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 px-1">
+        <div className="space-y-1">
+          <h1 className="text-3xl font-bold tracking-tight">应用管理</h1>
+          <p className="text-muted-foreground text-sm">注册 OAuth 2.1 客户端，配置重定向策略与安全密钥。</p>
         </div>
-        <Link
-          href="/clients/new"
-          className="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-        >
-          <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          新建 Client
-        </Link>
+        <Button asChild className="rounded-xl h-11 px-6 shadow-lg shadow-primary/20">
+          <Link href="/clients/new">
+            <Plus className="mr-2 h-4 w-4" /> 注册新应用
+          </Link>
+        </Button>
       </div>
 
-      {/* 搜索和筛选 */}
-      <div className="bg-white shadow rounded-lg">
-        <form onSubmit={handleSearch} className="p-4 sm:p-6 border-b border-gray-200">
-          <div className="flex flex-col sm:flex-row gap-4">
-            <div className="flex-1">
-              <label htmlFor="keyword" className="sr-only">搜索</label>
-              <input
-                type="text"
-                id="keyword"
+      <Card className="border-none shadow-sm ring-1 ring-border/50 overflow-hidden rounded-[1.5rem]">
+        <CardHeader className="bg-slate-50/50 dark:bg-slate-900/50 border-b py-6 px-8">
+          <div className="flex flex-col md:flex-row gap-6 items-center justify-between">
+            <div className="relative w-full md:w-96">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground opacity-50" />
+              <Input
+                placeholder="搜索应用名称或 Client ID..."
+                className="pl-10 bg-white dark:bg-slate-950 border-none rounded-xl h-11 shadow-inner"
                 value={keyword}
-                onChange={(e) => setKeyword(e.target.value)}
-                placeholder="搜索名称或 Client ID..."
-                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                onChange={e => setKeyword(e.target.value)}
               />
             </div>
-            <div className="sm:w-48">
-              <label htmlFor="status" className="sr-only">状态</label>
-              <select
-                id="status"
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="">全部状态</option>
-                <option value="ACTIVE">已启用</option>
-                <option value="DISABLED">已禁用</option>
-              </select>
+            <div className="flex items-center gap-4 text-xs text-muted-foreground">
+               <div className="flex items-center gap-1.5">
+                  <div className="h-2 w-2 rounded-full bg-green-500" />
+                  <span>已启用: {clients.filter(c => c.status === 'ACTIVE').length}</span>
+               </div>
+               <div className="flex items-center gap-1.5">
+                  <div className="h-2 w-2 rounded-full bg-slate-300" />
+                  <span>已禁用: {clients.filter(c => c.status === 'DISABLED').length}</span>
+               </div>
             </div>
-            <button
-              type="submit"
-              className="px-4 py-2 bg-gray-100 text-gray-700 font-medium rounded-md hover:bg-gray-200"
-            >
-              搜索
-            </button>
           </div>
-        </form>
-
-        {/* Client 列表表格 */}
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  名称
-                </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Client ID
-                </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  回调地址
-                </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  状态
-                </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  创建时间
-                </th>
-                <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  操作
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+        </CardHeader>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader className="bg-slate-50/30">
+              <TableRow>
+                <TableHead className="pl-8 w-[280px]">应用详情</TableHead>
+                <TableHead>身份标识 (Client ID)</TableHead>
+                <TableHead>回调白名单 (Redirect URIs)</TableHead>
+                <TableHead>运行状态</TableHead>
+                <TableHead className="text-right pr-8">操作</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {loading ? (
-                <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
-                    加载中...
-                  </td>
-                </tr>
+                Array.from({ length: 3 }).map((_, i) => (
+                  <TableRow key={i}>
+                    <TableCell className="pl-8"><div className="flex gap-3"><Skeleton className="h-10 w-10 rounded-lg" /><div className="space-y-2"><Skeleton className="h-4 w-24" /><Skeleton className="h-3 w-32" /></div></div></TableCell>
+                    <TableCell><Skeleton className="h-6 w-32 rounded" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-48" /></TableCell>
+                    <TableCell><Skeleton className="h-6 w-16 rounded-full" /></TableCell>
+                    <TableCell className="text-right pr-8"><Skeleton className="ml-auto h-8 w-8 rounded-md" /></TableCell>
+                  </TableRow>
+                ))
               ) : clients.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
-                    暂无数据
-                  </td>
-                </tr>
+                <TableRow>
+                  <TableCell colSpan={5} className="h-64 text-center text-muted-foreground">
+                    未找到已注册的 OAuth 应用
+                  </TableCell>
+                </TableRow>
               ) : (
                 clients.map((client) => (
-                  <tr key={client.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        {client.logoUrl ? (
-                          <img src={client.logoUrl} alt="" className="w-8 h-8 rounded mr-3" />
-                        ) : (
-                          <div className="w-8 h-8 rounded bg-blue-100 flex items-center justify-center mr-3">
-                            <span className="text-blue-600 font-medium text-sm">
-                              {client.name.charAt(0).toUpperCase()}
-                            </span>
+                  <TableRow key={client.id} className="group hover:bg-slate-50/50 transition-colors">
+                    <TableCell className="pl-8 py-5">
+                      <div className="flex items-center gap-4">
+                        <div className="relative">
+                          <Avatar className="h-11 w-11 rounded-xl ring-2 ring-background shadow-sm border border-border/40">
+                            <AvatarImage src={client.logoUrl || ''} />
+                            <AvatarFallback className="bg-gradient-to-br from-slate-100 to-slate-200 text-slate-500 font-black text-xs uppercase">
+                              {client.name.substring(0, 2)}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="absolute -bottom-1 -right-1 h-4 w-4 bg-white dark:bg-slate-900 rounded-full flex items-center justify-center ring-1 ring-border/20 shadow-sm">
+                             <Globe className="h-2.5 w-2.5 text-blue-500" />
                           </div>
-                        )}
-                        <div>
-                          <div className="text-sm font-medium text-gray-900">{client.name}</div>
-                          {client.homepageUrl && (
-                            <a href={client.homepageUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline">
-                              {client.homepageUrl}
-                            </a>
+                        </div>
+                        <div className="flex flex-col gap-0.5">
+                          <span className="font-bold text-sm leading-tight text-slate-900 group-hover:text-primary transition-colors">{client.name}</span>
+                          {client.homepageUrl ? (
+                             <a href={client.homepageUrl} target="_blank" className="text-[10px] text-muted-foreground hover:text-blue-600 flex items-center gap-1 transition-colors">
+                               {client.homepageUrl} <ExternalLink className="h-2 w-2" />
+                             </a>
+                          ) : (
+                             <span className="text-[10px] text-slate-400">Internal Application</span>
                           )}
                         </div>
                       </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center space-x-2">
-                        <code className="text-sm text-gray-600 bg-gray-100 px-2 py-1 rounded">
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <code className="text-[11px] font-mono bg-slate-100 dark:bg-slate-800 text-slate-600 px-2 py-1 rounded-lg border border-slate-200/50">
                           {client.clientId}
                         </code>
-                        <button
-                          onClick={() => handleCopyId(client.clientId, client.id)}
-                          className="text-gray-400 hover:text-gray-600"
-                          title="复制"
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-7 w-7 rounded-md hover:bg-white hover:shadow-sm transition-all"
+                          onClick={() => handleCopy(client.clientId, client.id)}
                         >
-                          {copiedId === client.id ? (
-                            <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                            </svg>
-                          ) : (
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                            </svg>
-                          )}
-                        </button>
+                          {copiedId === client.id ? <Check className="h-3 w-3 text-green-600" /> : <Copy className="h-3 w-3 text-slate-400" />}
+                        </Button>
                       </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="max-w-xs truncate text-sm text-gray-500">
-                        {client.redirectUris.map((uri, i) => (
-                          <span key={i}>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap gap-1 max-w-[200px]">
+                        {client.redirectUris.slice(0, 1).map((uri, i) => (
+                          <Badge key={i} variant="outline" className="text-[10px] font-mono py-0 h-5 border-slate-200 bg-white shadow-sm font-medium">
                             {uri}
-                            {i < client.redirectUris.length - 1 && ', '}
-                          </span>
+                          </Badge>
                         ))}
+                        {client.redirectUris.length > 1 && (
+                          <Badge variant="secondary" className="text-[10px] py-0 h-5">+{client.redirectUris.length - 1}</Badge>
+                        )}
                       </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <StatusBadge status={client.status} />
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {formatDate(client.createdAt)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
-                      <Link
-                        href={`/clients/${client.id}`}
-                        className="text-blue-600 hover:text-blue-900"
+                    </TableCell>
+                    <TableCell>
+                      <Badge 
+                        variant={client.status === 'ACTIVE' ? 'success' : 'secondary'}
+                        className="px-2.5 py-0.5 font-bold tracking-wider text-[10px]"
                       >
-                        编辑
-                      </Link>
-                      <button
-                        onClick={() => handleToggleStatus(client)}
-                        className={`text-${client.status === 'ACTIVE' ? 'red' : 'green'}-600 hover:text-${client.status === 'ACTIVE' ? 'red' : 'green'}-900`}
-                      >
-                        {client.status === 'ACTIVE' ? '禁用' : '启用'}
-                      </button>
-                    </td>
-                  </tr>
+                        {client.status === 'ACTIVE' ? 'ACTIVE' : 'DISABLED'}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right pr-8">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl hover:bg-white hover:shadow-md transition-all">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-48 rounded-xl p-2 shadow-2xl">
+                          <DropdownMenuLabel className="text-[10px] font-bold uppercase tracking-widest text-slate-400 px-2 py-1.5">应用操作</DropdownMenuLabel>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem asChild className="rounded-lg cursor-pointer">
+                            <Link href={`/clients/${client.id}`} className="flex items-center gap-2 py-2">
+                              <Edit className="h-4 w-4 text-blue-500" /> 编辑 OAuth 配置
+                            </Link>
+                          </DropdownMenuItem>
+                          <DropdownMenuItem className="rounded-lg cursor-pointer">
+                            <Lock className="h-4 w-4 text-orange-500" /> 重置 Secret
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem className="rounded-lg cursor-pointer text-destructive focus:bg-destructive/5 focus:text-destructive">
+                            <Trash2 className="h-4 w-4 mr-2" /> 注销该应用
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
                 ))
               )}
-            </tbody>
-          </table>
-        </div>
-
-        {/* 分页 */}
-        {pagination.totalPages > 1 && (
-          <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
-            <div className="text-sm text-gray-500">
-              共 {pagination.total} 条记录
-            </div>
-            <div className="flex space-x-2">
-              <button
-                onClick={() => setPagination(prev => ({ ...prev, page: prev.page - 1 }))}
-                disabled={pagination.page === 1}
-                className="px-3 py-1 rounded border border-gray-300 text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
-              >
-                上一页
-              </button>
-              <span className="px-3 py-1 text-sm text-gray-600">
-                {pagination.page} / {pagination.totalPages}
-              </span>
-              <button
-                onClick={() => setPagination(prev => ({ ...prev, page: prev.page + 1 }))}
-                disabled={pagination.page === pagination.totalPages}
-                className="px-3 py-1 rounded border border-gray-300 text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
-              >
-                下一页
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
     </div>
   );
 }

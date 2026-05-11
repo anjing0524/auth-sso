@@ -80,6 +80,16 @@ export async function checkPermission(
       };
     }
 
+    // 2.5 超级管理员绕过
+    const userRoleCodes = permissionContext.roles.map(r => r.code);
+    const isSuper = userRoleCodes.includes('ADMIN') || userRoleCodes.includes('SUPER_ADMIN');
+    if (isSuper) {
+      return {
+        authorized: true,
+        userId: session.userId,
+      };
+    }
+
     // 3. 检查权限
     if (options.permissions && options.permissions.length > 0) {
       const userPermissions = permissionContext.permissions;
@@ -271,11 +281,11 @@ export async function checkDataScope(
 
 /**
  * 获取用户的数据范围过滤器
- * 返回允许访问的部门 ID 列表，或者返回 'ALL' 表示不限制
+ * 返回允许访问的部门 ID 列表，或者返回 'ALL' 表示不限制，或者 'SELF' 表示仅本人
  */
 export async function getDataScopeFilter(
   userId: string
-): Promise<{ type: 'ALL' | 'LIST'; deptIds?: string[] }> {
+): Promise<{ type: 'ALL' | 'LIST' | 'SELF'; deptIds?: string[] }> {
   const context = await getUserPermissionContext(userId);
   if (!context) return { type: 'LIST', deptIds: [] };
 
@@ -283,7 +293,11 @@ export async function getDataScopeFilter(
     return { type: 'ALL' };
   }
 
-  if (context.dataScopeType === 'SELF' || context.dataScopeType === 'DEPT') {
+  if (context.dataScopeType === 'SELF') {
+    return { type: 'SELF' };
+  }
+
+  if (context.dataScopeType === 'DEPT') {
     return { type: 'LIST', deptIds: context.deptId ? [context.deptId] : [] };
   }
 

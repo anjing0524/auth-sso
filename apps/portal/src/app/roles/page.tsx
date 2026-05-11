@@ -45,13 +45,13 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Skeleton } from '@/components/ui/skeleton';
 import { 
-  Dialog, 
-  DialogContent, 
-  DialogHeader, 
-  DialogTitle, 
-  DialogFooter,
-  DialogDescription
-} from '@/components/ui/dialog';
+  Sheet, 
+  SheetContent, 
+  SheetHeader, 
+  SheetTitle, 
+  SheetDescription,
+  SheetFooter
+} from '@/components/ui/sheet';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
@@ -62,6 +62,13 @@ interface Role {
   code: string;
   dataScopeType: 'ALL' | 'DEPT' | 'DEPT_AND_SUB' | 'SELF' | 'CUSTOM';
   status: 'ACTIVE' | 'DISABLED';
+}
+
+interface Pagination {
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
 }
 
 interface Permission {
@@ -91,6 +98,7 @@ const DATA_SCOPE_CONFIG: Record<string, { label: string, color: string }> = {
 
 export default function RolesPage() {
   const [roles, setRoles] = useState<Role[]>([]);
+  const [pagination, setPagination] = useState<Pagination>({ total: 0, page: 1, pageSize: 10, totalPages: 0 });
   const [permissions, setPermissions] = useState<Permission[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [rolePermissions, setRolePermissions] = useState<Set<string>>(new Set());
@@ -99,17 +107,18 @@ export default function RolesPage() {
   const [selectedRole, setSelectedRole] = useState<Role | null>(null);
   const [keyword, setKeyword] = useState('');
 
-  // 新增角色状态
-  const [isAddOpen, setIsAddOpen] = useState(false);
+  // 新增角色状态 (Drawer/Sheet)
+  const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [newRole, setNewRole] = useState({ name: '', code: '', dataScopeType: 'SELF' as Role['dataScopeType'] });
 
-  const fetchRoles = useCallback(async () => {
+  const fetchRoles = useCallback(async (page = 1) => {
     setLoading(true);
     try {
-      const response = await fetch(`/api/roles${keyword ? `?keyword=${keyword}` : ''}`);
+      const response = await fetch(`/api/roles?page=${page}&pageSize=10${keyword ? `&keyword=${keyword}` : ''}`);
       const data = await response.json();
       if (response.ok) {
         setRoles(data.data);
+        setPagination(data.pagination);
         if (data.data.length > 0 && !selectedRole) {
           setSelectedRole(data.data[0]);
           fetchRolePermissions(data.data[0].id);
@@ -185,9 +194,9 @@ export default function RolesPage() {
       });
       if (response.ok) {
         toast.success('角色创建成功');
-        setIsAddOpen(false);
+        setIsSheetOpen(false);
         setNewRole({ name: '', code: '', dataScopeType: 'SELF' });
-        fetchRoles();
+        fetchRoles(1);
       } else {
         const err = await response.json();
         toast.error(err.message || '创建失败');
@@ -264,59 +273,71 @@ export default function RolesPage() {
           <h1 className="text-2xl font-bold tracking-tight text-slate-900">角色权限</h1>
           <p className="text-muted-foreground text-sm font-medium">定义访问策略、分配功能权限及数据查询范围。</p>
         </div>
-        <Button className="rounded-xl h-11 px-6 shadow-lg shadow-primary/20" onClick={() => setIsAddOpen(true)}>
+        <Button className="rounded-xl h-11 px-6 shadow-lg shadow-primary/20" onClick={() => setIsSheetOpen(true)}>
           <Plus className="mr-2 h-4 w-4" /> 新建角色
         </Button>
       </div>
 
-      {/* 新建角色对话框 */}
-      <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-        <DialogContent className="sm:max-w-[425px] rounded-[2rem]">
-          <DialogHeader>
-            <DialogTitle className="text-2xl font-black">新建系统角色</DialogTitle>
-            <DialogDescription>定义新的安全角色及其默认数据访问范围。</DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-6 py-4">
+      {/* 新建角色抽屉 (Sheet) */}
+      <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
+        <SheetContent className="sm:max-w-[450px]">
+          <SheetHeader className="pb-6 border-b">
+            <SheetTitle className="text-2xl font-black">新建系统角色</SheetTitle>
+            <SheetDescription>定义新的安全角色及其默认数据访问范围。</SheetDescription>
+          </SheetHeader>
+          <div className="grid gap-6 py-8">
             <div className="space-y-2">
-              <Label className="font-bold">角色名称</Label>
+              <Label className="font-bold text-slate-700">角色名称</Label>
               <Input 
+                className="h-11 rounded-xl"
                 placeholder="例如：运营专员" 
                 value={newRole.name} 
                 onChange={e => setNewRole({...newRole, name: e.target.value})}
               />
             </div>
             <div className="space-y-2">
-              <Label className="font-bold">角色编码 (唯一标识)</Label>
+              <Label className="font-bold text-slate-700">角色编码 (唯一标识)</Label>
               <Input 
+                className="h-11 rounded-xl font-mono"
                 placeholder="例如：OPERATOR" 
                 value={newRole.code}
                 onChange={e => setNewRole({...newRole, code: e.target.value.toUpperCase()})}
               />
+              <p className="text-[11px] text-muted-foreground italic px-1">通常使用大写字母和下划线，如: ADMIN_VIEWER</p>
             </div>
-            <div className="space-y-2">
-              <Label className="font-bold">默认数据范围</Label>
-              <Select value={newRole.dataScopeType} onValueChange={(v: any) => setNewRole({...newRole, dataScopeType: v})}>
-                <SelectTrigger className="rounded-xl h-11">
-                  <SelectValue placeholder="选择范围" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ALL">全量数据</SelectItem>
-                  <SelectItem value="DEPT">本部门</SelectItem>
-                  <SelectItem value="SELF">仅本人</SelectItem>
-                </SelectContent>
-                </Select>
-                <p className="text-[12px] text-gray-500 mt-1">
-                {newRole.dataScopeType === 'ALL' ? '可以访问系统内所有数据' : 
-                 newRole.dataScopeType === 'DEPT' ? '仅能访问所在部门及子部门的数据' : 
-                 newRole.dataScopeType === 'SELF' ? '仅能访问自己创建的数据' : '请选择数据范围以限制该角色权限'}
-                </p>
-                </div>
-                </div>          <DialogFooter>
-            <Button variant="ghost" onClick={() => setIsAddOpen(false)}>取消</Button>
-            <Button onClick={handleCreateRole} className="rounded-xl px-8">确认创建</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            <div className="space-y-4 pt-2">
+              <div className="flex items-center justify-between">
+                <Label className="font-bold text-slate-700">默认数据范围</Label>
+                <Badge variant="secondary" className="text-[10px] uppercase tracking-tighter">Required</Badge>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                {['ALL', 'DEPT', 'DEPT_AND_SUB', 'SELF'].map((type) => (
+                  <div 
+                    key={type}
+                    onClick={() => setNewRole({...newRole, dataScopeType: type as any})}
+                    className={`p-3 rounded-xl border-2 cursor-pointer transition-all ${
+                      newRole.dataScopeType === type 
+                        ? 'border-primary bg-primary/5 ring-4 ring-primary/5' 
+                        : 'border-slate-100 hover:border-slate-200 bg-slate-50/50'
+                    }`}
+                  >
+                    <div className="font-bold text-xs mb-1">
+                      {type === 'ALL' ? '全量数据' : type === 'DEPT' ? '本部门' : type === 'DEPT_AND_SUB' ? '本部门及子部' : '仅本人'}
+                    </div>
+                    <div className="text-[10px] text-muted-foreground leading-tight">
+                      {type === 'ALL' ? '无限制访问' : type === 'DEPT' ? '限制同级部门' : type === 'DEPT_AND_SUB' ? '向下穿透' : '极高隐私'}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+          <SheetFooter className="absolute bottom-0 left-0 right-0 p-6 border-t bg-slate-50/50">
+            <Button variant="ghost" className="flex-1 rounded-xl" onClick={() => setIsSheetOpen(false)}>取消</Button>
+            <Button onClick={handleCreateRole} className="flex-1 rounded-xl shadow-lg shadow-primary/20">确认创建</Button>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
 
       <div className="flex-1 grid grid-cols-12 gap-8 min-h-0">
         {/* 左侧角色列表 */}
@@ -329,20 +350,12 @@ export default function RolesPage() {
               value={keyword}
               onChange={(e) => setKeyword(e.target.value)}
             />
-            {keyword && (
-              <button 
-                onClick={() => setKeyword('')} 
-                className="absolute right-3 top-3 text-slate-400 hover:text-slate-600 transition-colors"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            )}
           </div>          
-          <Card className="flex-1 border-none shadow-sm ring-1 ring-border/50 overflow-hidden rounded-[1.5rem]">
-            <CardContent className="p-2 space-y-1 overflow-auto h-full max-h-[600px]">
+          <Card className="flex-1 border-none shadow-sm ring-1 ring-border/50 overflow-hidden rounded-[1.5rem] flex flex-col">
+            <CardContent className="p-2 space-y-1 overflow-auto flex-1">
               {loading && roles.length === 0 ? (
                 Array.from({ length: 6 }).map((_, i) => (
-                  <div key={i} className="p-4 flex gap-4 items-center">
+                  <div key={i} className="p-4 flex gap-4 items-center opacity-40">
                     <Skeleton className="h-10 w-10 rounded-xl" />
                     <div className="flex-1 space-y-2">
                       <Skeleton className="h-4 w-24" />
@@ -350,6 +363,11 @@ export default function RolesPage() {
                     </div>
                   </div>
                 ))
+              ) : roles.length === 0 ? (
+                <div className="h-full flex flex-col items-center justify-center py-20 opacity-40">
+                  <ShieldAlert className="h-12 w-12 text-slate-300 mb-4" />
+                  <p className="text-sm font-bold text-slate-500">未找到任何角色</p>
+                </div>
               ) : (
                 roles.map((role) => (
                   <div 
@@ -390,6 +408,33 @@ export default function RolesPage() {
                 ))
               )}
             </CardContent>
+            {/* 分页控制器 */}
+            <div className="p-3 border-t bg-slate-50/50 flex items-center justify-between">
+               <span className="text-[10px] font-bold text-slate-400">TOTAL {pagination.total}</span>
+               <div className="flex gap-1">
+                 <Button 
+                   variant="outline" 
+                   size="icon" 
+                   className="h-7 w-7 rounded-lg" 
+                   disabled={pagination.page <= 1}
+                   onClick={() => fetchRoles(pagination.page - 1)}
+                 >
+                   <ChevronRight className="h-3 w-3 rotate-180" />
+                 </Button>
+                 <div className="h-7 px-2 flex items-center bg-white border rounded-lg text-[10px] font-black">
+                   {pagination.page} / {pagination.totalPages || 1}
+                 </div>
+                 <Button 
+                   variant="outline" 
+                   size="icon" 
+                   className="h-7 w-7 rounded-lg"
+                   disabled={pagination.page >= pagination.totalPages}
+                   onClick={() => fetchRoles(pagination.page + 1)}
+                 >
+                   <ChevronRight className="h-3 w-3" />
+                 </Button>
+               </div>
+            </div>
           </Card>
         </div>
 
@@ -420,80 +465,95 @@ export default function RolesPage() {
                          <TableHead className="text-right pr-6">授权状态</TableHead>
                        </TableRow>
                      </TableHeader>
-                     <TableBody>
-                       {Object.entries(permissionsByType).map(([type, perms]) => (
-                         <React.Fragment key={type}>
-                           <TableRow className="bg-slate-100/30 hover:bg-slate-100/30 border-none">
-                             <TableCell colSpan={4} className="py-2 pl-6">
-                               <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
-                                 {type === 'MENU' ? '功能菜单' : type === 'API' ? '接口调用' : '数据沙箱'}
-                               </span>
-                             </TableCell>
-                           </TableRow>
-                           {perms.map(p => (
-                             <TableRow key={p.id} className="group hover:bg-slate-50/80 transition-colors">
-                               <TableCell className="pl-6 font-semibold text-sm">{p.name}</TableCell>
-                               <TableCell>
-                                 <div className="flex items-center gap-2 opacity-60">
-                                    {type === 'MENU' ? <Globe className="h-3 w-3" /> : <Database className="h-3 w-3" />}
-                                    <span className="text-xs">{p.type}</span>
-                                 </div>
-                               </TableCell>
-                               <TableCell>
-                                 <code className="text-[10px] bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-slate-500 font-mono">
-                                   {p.code}
-                                 </code>
-                               </TableCell>
-                               <TableCell className="text-right pr-6">
-                                 <Button 
-                                   variant={rolePermissions.has(p.id) ? 'success' : 'outline'} 
-                                   size="sm"
-                                   className={`h-7 w-20 text-[10px] font-bold rounded-lg transition-all ${rolePermissions.has(p.id) ? 'shadow-lg shadow-green-500/10' : 'opacity-40 hover:opacity-100'}`}
-                                   onClick={() => togglePermission(p.id)}
-                                 >
-                                   {rolePermissions.has(p.id) ? '已授予' : '未授权'}
-                                 </Button>
-                               </TableCell>
-                             </TableRow>
-                           ))}
-                         </React.Fragment>
-                       ))}
+                      <TableBody>
+                        {Object.keys(permissionsByType).length === 0 && clients.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={4} className="h-40 text-center opacity-40">
+                              <Settings2 className="h-8 w-8 mx-auto mb-2 text-slate-300" />
+                              <p className="text-xs font-bold text-slate-500">暂无可选权限或应用资源</p>
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          <>
+                            {Object.entries(permissionsByType).map(([type, perms]) => (
+                              <React.Fragment key={type}>
+                                <TableRow className="bg-slate-100/30 hover:bg-slate-100/30 border-none">
+                                  <TableCell colSpan={4} className="py-2 pl-6">
+                                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
+                                      {type === 'MENU' ? '功能菜单' : type === 'API' ? '接口调用' : '数据沙箱'}
+                                    </span>
+                                  </TableCell>
+                                </TableRow>
+                                {perms.map(p => (
+                                  <TableRow key={p.id} className="group hover:bg-slate-50/80 transition-colors">
+                                    <TableCell className="pl-6 font-semibold text-sm">{p.name}</TableCell>
+                                    <TableCell>
+                                      <div className="flex items-center gap-2 opacity-60">
+                                         {type === 'MENU' ? <Globe className="h-3 w-3" /> : <Database className="h-3 w-3" />}
+                                         <span className="text-xs">{p.type}</span>
+                                      </div>
+                                    </TableCell>
+                                    <TableCell>
+                                      <code className="text-[10px] bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-slate-500 font-mono">
+                                        {p.code}
+                                      </code>
+                                    </TableCell>
+                                    <TableCell className="text-right pr-6">
+                                      <Button 
+                                        variant={rolePermissions.has(p.id) ? 'success' : 'outline'} 
+                                        size="sm"
+                                        className={`h-7 w-20 text-[10px] font-bold rounded-lg transition-all ${rolePermissions.has(p.id) ? 'shadow-lg shadow-green-500/10' : 'opacity-40 hover:opacity-100'}`}
+                                        onClick={() => togglePermission(p.id)}
+                                      >
+                                        {rolePermissions.has(p.id) ? '已授予' : '未授权'}
+                                      </Button>
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                              </React.Fragment>
+                            ))}
 
-                       {/* 应用授权 */}
-                       <TableRow className="bg-slate-100/30 hover:bg-slate-100/30 border-none">
-                         <TableCell colSpan={4} className="py-2 pl-6">
-                           <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
-                             受信任应用 (客户端)
-                           </span>
-                         </TableCell>
-                       </TableRow>
-                       {clients.map(c => (
-                         <TableRow key={c.id} className="group hover:bg-slate-50/80 transition-colors">
-                           <TableCell className="pl-6 font-semibold text-sm">{c.name}</TableCell>
-                           <TableCell>
-                             <div className="flex items-center gap-2 opacity-60">
-                                <Shield className="h-3 w-3" />
-                                <span className="text-xs">CLIENT</span>
-                             </div>
-                           </TableCell>
-                           <TableCell>
-                             <code className="text-[10px] bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-slate-500 font-mono">
-                               {c.clientId}
-                             </code>
-                           </TableCell>
-                           <TableCell className="text-right pr-6">
-                             <Button 
-                               variant={roleClients.has(c.clientId) ? 'success' : 'outline'} 
-                               size="sm"
-                               className={`h-7 w-20 text-[10px] font-bold rounded-lg transition-all ${roleClients.has(c.clientId) ? 'shadow-lg shadow-green-500/10' : 'opacity-40 hover:opacity-100'}`}
-                               onClick={() => toggleClient(c.clientId)}
-                             >
-                               {roleClients.has(c.clientId) ? '可访问' : '无权访问'}
-                             </Button>
-                           </TableCell>
-                         </TableRow>
-                       ))}
-                     </TableBody>
+                            {/* 应用授权 */}
+                            {clients.length > 0 && (
+                              <>
+                                <TableRow className="bg-slate-100/30 hover:bg-slate-100/30 border-none">
+                                  <TableCell colSpan={4} className="py-2 pl-6">
+                                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
+                                      受信任应用 (客户端)
+                                    </span>
+                                  </TableCell>
+                                </TableRow>
+                                {clients.map(c => (
+                                  <TableRow key={c.id} className="group hover:bg-slate-50/80 transition-colors">
+                                    <TableCell className="pl-6 font-semibold text-sm">{c.name}</TableCell>
+                                    <TableCell>
+                                      <div className="flex items-center gap-2 opacity-60">
+                                         <Shield className="h-3 w-3" />
+                                         <span className="text-xs">CLIENT</span>
+                                      </div>
+                                    </TableCell>
+                                    <TableCell>
+                                      <code className="text-[10px] bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-slate-500 font-mono">
+                                        {c.clientId}
+                                      </code>
+                                    </TableCell>
+                                    <TableCell className="text-right pr-6">
+                                      <Button 
+                                        variant={roleClients.has(c.clientId) ? 'success' : 'outline'} 
+                                        size="sm"
+                                        className={`h-7 w-20 text-[10px] font-bold rounded-lg transition-all ${roleClients.has(c.clientId) ? 'shadow-lg shadow-green-500/10' : 'opacity-40 hover:opacity-100'}`}
+                                        onClick={() => toggleClient(c.clientId)}
+                                      >
+                                        {roleClients.has(c.clientId) ? '可访问' : '无权访问'}
+                                      </Button>
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                              </>
+                            )}
+                          </>
+                        )}
+                      </TableBody>
                    </Table>
                  </div>
               </CardContent>

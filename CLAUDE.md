@@ -35,6 +35,7 @@ pnpm --filter @auth-sso/customer-graph dev # Graph on port 4003
 - `apps/portal/src/lib/session.ts` - Redis-backed portal session management
 - `tests/data-scope.test.js` - Data scope integration tests
 - `tests/tdd-prd-all.test.js` - Master TDD validation suite
+- `docs/solutions/` - Documented solutions to past problems (bugs, best practices, patterns) with YAML frontmatter.
 
 ## Tech Stack
 

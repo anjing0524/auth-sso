@@ -28,6 +28,7 @@
     "drizzle-orm": "^0.45.1",
     "ioredis": "^5.10.1",
     "jose": "^6.2.2",
+    "lucide-react": "^1.8.0",
     "nanoid": "^5.1.7",
     "next": "16.2.1",
     "postgres": "^3.4.8",

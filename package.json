@@ -19,6 +19,7 @@
     "db:push": "pnpm --filter @auth-sso/idp db:push",
     "db:studio": "pnpm --filter @auth-sso/idp db:studio",
     "db:seed": "pnpm --filter @auth-sso/idp db:seed",
+    "infra:up": "docker-compose up -d",
     "setup:env": "echo '请手动复制 .env.example 文件到 .env.local 并配置'",
     "start:services": "cd tests && ./start-services.sh",
     "clean": "pnpm -r clean",

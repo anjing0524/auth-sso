@@ -80,6 +80,14 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
     const d = existing[0]!;
 
+    // 防循环引用检查：父部门不能设为自己
+    if (parentId && (parentId === d.id || parentId === d.publicId)) {
+      return NextResponse.json(
+        { error: 'circular_reference', message: '不能将父部门设为自己' },
+        { status: 400 }
+      );
+    }
+
     // 数据范围检查：修改部门前，目标部门必须在当前用户管辖范围内
     const hasScope = await checkDataScope(userId, d.id);
     if (!hasScope) {

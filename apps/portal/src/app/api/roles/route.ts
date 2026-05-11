@@ -5,8 +5,9 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { db, schema } from '@/lib/db';
-import { eq, or, ilike, asc, desc, and } from 'drizzle-orm';
+import { eq, or, ilike, asc, desc, and, sql } from 'drizzle-orm';
 import { withPermission } from '@/lib/auth-middleware';
+import crypto from 'crypto';
 
 export const runtime = 'nodejs';
 
@@ -20,6 +21,9 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const keyword = searchParams.get('keyword') || '';
     const status = searchParams.get('status') || '';
+    const page = parseInt(searchParams.get('page') || '1');
+    const pageSize = parseInt(searchParams.get('pageSize') || '10');
+    const offset = (page - 1) * pageSize;
 
     // 构建条件
     const conditions = [];
@@ -35,11 +39,21 @@ export async function GET(request: NextRequest) {
       conditions.push(eq(schema.roles.status, status as 'ACTIVE' | 'DISABLED'));
     }
 
-    // 查询角色
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+    // 简化统计逻辑，避免复杂的 sql 聚合导致的 Drizzle 内部递归错误
+    const allRoles = await db.select({ id: schema.roles.id })
+      .from(schema.roles)
+      .where(whereClause);
+    const total = allRoles.length;
+
+    // 分页查询角色
     const roles = await db.select()
       .from(schema.roles)
-      .where(conditions.length > 0 ? and(...conditions) : undefined)
-      .orderBy(asc(schema.roles.sort), desc(schema.roles.createdAt));
+      .where(whereClause)
+      .orderBy(asc(schema.roles.sort), desc(schema.roles.createdAt))
+      .limit(pageSize)
+      .offset(offset);
 
     return NextResponse.json({
       data: roles.map(r => ({
@@ -54,6 +68,12 @@ export async function GET(request: NextRequest) {
         sort: r.sort,
         createdAt: r.createdAt,
       })),
+      pagination: {
+        total,
+        page,
+        pageSize,
+        totalPages: Math.ceil(total / pageSize)
+      }
     });
   });
 }

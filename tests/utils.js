@@ -160,6 +160,75 @@ class HttpClient {
     }
   }
 
+  /**
+   * 发送PUT请求 - Send PUT request
+   * @param {string} url - URL
+   * @param {object} body - 请求体
+   * @param {object} headers - Headers
+   * @returns {Promise<{status, headers, body, duration, cookies}>}
+   */
+  async put(url, body = {}, headers = {}) {
+    const start = Date.now();
+    try {
+      const urlObj = new URL(url);
+      const defaultOrigin = urlObj.port === '4001' ? config.IDP_URL : config.PORTAL_URL;
+
+      const response = await fetch(url, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Origin': defaultOrigin,
+          ...headers
+        },
+        body: JSON.stringify(body),
+        redirect: 'manual'
+      });
+      const responseBody = await this.parseBody(response);
+      return {
+        status: response.status,
+        headers: this.headersToObject(response.headers),
+        body: responseBody,
+        duration: Date.now() - start,
+        cookies: this.extractCookies(response.headers)
+      };
+    } catch (error) {
+      throw new Error(`PUT ${url} failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * 发送DELETE请求 - Send DELETE request
+   * @param {string} url - URL
+   * @param {object} headers - Headers
+   * @returns {Promise<{status, headers, body, duration, cookies}>}
+   */
+  async delete(url, headers = {}) {
+    const start = Date.now();
+    try {
+      const urlObj = new URL(url);
+      const defaultOrigin = urlObj.port === '4001' ? config.IDP_URL : config.PORTAL_URL;
+
+      const response = await fetch(url, {
+        method: 'DELETE',
+        headers: {
+          'Origin': defaultOrigin,
+          ...headers
+        },
+        redirect: 'manual'
+      });
+      const responseBody = await this.parseBody(response);
+      return {
+        status: response.status,
+        headers: this.headersToObject(response.headers),
+        body: responseBody,
+        duration: Date.now() - start,
+        cookies: this.extractCookies(response.headers)
+      };
+    } catch (error) {
+      throw new Error(`DELETE ${url} failed: ${error.message}`);
+    }
+  }
+
   async parseBody(response) {
     const contentType = response.headers.get('content-type') || '';
     try {

@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db, schema } from '@/lib/db';
 import { asc, inArray } from 'drizzle-orm';
 import { withPermission, getDataScopeFilter, checkDataScope } from '@/lib/auth-middleware';
+import crypto from 'crypto';
 
 export const runtime = 'nodejs';
 

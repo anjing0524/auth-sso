@@ -103,7 +103,10 @@ export const auth = betterAuth({
       useJWTPlugin: true,
       loginPage: '/sign-in',
       scopes: ['openid', 'profile', 'email', 'offline_access'],
-      trustedClients: [],
+      trustedClients: [
+        { clientId: 'portal', name: 'Auth-SSO Portal', redirectUrls: [process.env.PORTAL_REDIRECT_URI || 'http://localhost:4100/api/auth/callback'], type: 'public', disabled: false, metadata: {} },
+        { clientId: 'demo-app', name: 'Demo App', redirectUrls: [process.env.DEMO_APP_REDIRECT_URI || 'http://localhost:4102/api/auth/callback'], type: 'public', disabled: false, metadata: {} }
+      ],
       // 核心：即使 Pre-seed 失效，自动跳转也能兜底
       getConsentHTML: (ctx) => `
         <!DOCTYPE html>
@@ -118,30 +121,27 @@ export const auth = betterAuth({
                   scopes: ${JSON.stringify(ctx.scopes.join(' '))}
                 };
                 
+                console.log('[Consent] Auto-submitting...', payload);
                 fetch('/api/auth/oauth2/consent', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify(payload)
                 })
                 .then(async res => {
-                  const text = await res.text();
-                  if (!res.ok) throw new Error('Status ' + res.status + ': ' + text);
-                  return JSON.parse(text);
-                })
-                .then(data => {
-                  if (data.redirectURI) {
-                    window.location.href = data.redirectURI;
+                  const data = await res.json();
+                  console.log('[Consent] Response:', data);
+                  if (data.redirectURI || data.url) {
+                    window.location.href = data.redirectURI || data.url;
                   }
                 })
                 .catch(err => {
                   console.error('[Consent] Error:', err);
-                  document.body.innerHTML = 'Authorization failed. Please try again.';
                 });
               };
             </script>
           </head>
           <body>
-            <p>Authorizing, please wait...</p>
+            <p>Authorizing ${ctx.clientName || 'Application'}, please wait...</p>
           </body>
         </html>
       `

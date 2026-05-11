@@ -248,6 +248,13 @@ export const roleDataScopes = pgTable('role_data_scopes', {
   createdAt: timestamp('created_at').notNull().defaultNow(),
 });
 
+export const roleClients = pgTable('role_clients', {
+  id: text('id').primaryKey(),
+  roleId: text('role_id').notNull().references(() => roles.id, { onDelete: 'cascade' }),
+  clientId: text('client_id').notNull().references(() => clients.clientId, { onDelete: 'cascade' }),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+
 export const auditLogs = pgTable('audit_logs', {
   id: text('id').primaryKey(),
   userId: text('user_id'),
@@ -282,6 +289,7 @@ export const menus = pgTable('menus', {
   parentId: text('parent_id'),
   name: text('name').notNull(),
   path: text('path'),
+  permissionCode: text('permission_code'),
   icon: text('icon'),
   component: text('component'),
   visible: boolean('visible').default(true),

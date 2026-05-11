@@ -1,3 +1,4 @@
+<!-- /autoplan restore point: /Users/liushuo/.gstack/projects/anjing0524-auth-sso/main-autoplan-restore-20260417-151519.md -->
 # 2026-04-07-001-feat-rbac-data-scope-and-auth-security-hardening-plan-REVISION.md
 
 ---
