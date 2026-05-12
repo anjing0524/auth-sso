@@ -192,6 +192,9 @@ export default function DepartmentsPage() {
     status: 'ACTIVE' as 'ACTIVE' | 'DISABLED',
   });
 
+  const [members, setMembers] = useState<any[]>([]);
+  const [membersLoading, setMembersLoading] = useState(false);
+
   const fetchDepartments = useCallback(async () => {
     setLoading(true);
     try {
@@ -230,10 +233,23 @@ export default function DepartmentsPage() {
     });
   };
 
-  const handleSelect = (dept: Department) => {
+  const handleSelect = async (dept: Department) => {
     setSelectedDept(dept);
     setIsSheetOpen(true);
     setIsEditMode(false);
+    // 拉取部门成员
+    setMembersLoading(true);
+    try {
+      const res = await fetch(`/api/departments/${dept.id}/members`);
+      if (res.ok) {
+        const data = await res.json();
+        setMembers(data.data || []);
+      }
+    } catch {
+      setMembers([]);
+    } finally {
+      setMembersLoading(false);
+    }
   };
 
   const handleNew = () => {
@@ -325,7 +341,43 @@ export default function DepartmentsPage() {
                   </div>
                   <Button className="w-full h-14 rounded-2xl font-bold" onClick={() => setIsEditMode(true)}>编辑信息</Button>
                 </TabsContent>
-                <TabsContent value="members" className="py-10 text-center text-slate-400 italic">正在拉取成员...</TabsContent>
+                <TabsContent value="members" className="space-y-3 pt-2">
+                  {membersLoading ? (
+                    <div className="space-y-2">
+                      {Array.from({ length: 3 }).map((_, i) => (
+                        <div key={i} className="flex items-center gap-3 p-3 rounded-xl bg-slate-50">
+                          <Skeleton className="h-8 w-8 rounded-full" />
+                          <div className="space-y-1 flex-1">
+                            <Skeleton className="h-3 w-24" />
+                            <Skeleton className="h-3 w-32" />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : members.length === 0 ? (
+                    <div className="py-12 text-center text-slate-400 text-sm italic">该部门暂无成员</div>
+                  ) : (
+                    <div className="space-y-2">
+                      {members.map(m => (
+                        <div key={m.id} className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100">
+                          <div className="h-8 w-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold flex-shrink-0">
+                            {m.name?.charAt(0) || 'U'}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-bold text-sm text-slate-800 truncate">{m.name}</p>
+                            <p className="text-[11px] text-slate-400 truncate">{m.email}</p>
+                          </div>
+                          <Badge
+                            variant={m.status === 'ACTIVE' ? 'default' : 'secondary'}
+                            className="text-[10px] flex-shrink-0"
+                          >
+                            {m.status === 'ACTIVE' ? '在职' : '停用'}
+                          </Badge>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </TabsContent>
               </Tabs>
             ) : (
               <div className="space-y-6">
