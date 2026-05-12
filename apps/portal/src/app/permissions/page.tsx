@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { PermissionGuard } from '@/components/ui/permission-guard';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -194,9 +195,11 @@ export default function PermissionsPage() {
           <h1 className="text-2xl font-bold tracking-tight text-slate-900">权限管理</h1>
           <p className="text-muted-foreground text-sm font-medium">维护系统细粒度权限标识，实现功能与数据的精准管控。</p>
         </div>
-        <Button className="rounded-xl h-11 px-6 shadow-lg shadow-primary/20" onClick={() => { setFormPerm({name:'', code:'', type:'API'}); setIsAddOpen(true); }}>
-          <Plus className="mr-2 h-4 w-4" /> 新增权限
-        </Button>
+        <PermissionGuard permission="permission:create">
+          <Button className="rounded-xl h-11 px-6 shadow-lg shadow-primary/20" onClick={() => { setFormPerm({name:'', code:'', type:'API'}); setIsAddOpen(true); }}>
+            <Plus className="mr-2 h-4 w-4" /> 新增权限
+          </Button>
+        </PermissionGuard>
       </div>
 
       {/* 新增/编辑对话框 */}

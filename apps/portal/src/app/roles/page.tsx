@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { PermissionGuard } from '@/components/ui/permission-guard';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -273,9 +274,11 @@ export default function RolesPage() {
           <h1 className="text-2xl font-bold tracking-tight text-slate-900">角色权限</h1>
           <p className="text-muted-foreground text-sm font-medium">定义访问策略、分配功能权限及数据查询范围。</p>
         </div>
-        <Button className="rounded-xl h-11 px-6 shadow-lg shadow-primary/20" onClick={() => setIsSheetOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" /> 新建角色
-        </Button>
+        <PermissionGuard permission="role:create">
+          <Button className="rounded-xl h-11 px-6 shadow-lg shadow-primary/20" onClick={() => setIsSheetOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" /> 新建角色
+          </Button>
+        </PermissionGuard>
       </div>
 
       {/* 新建角色抽屉 (Sheet) */}

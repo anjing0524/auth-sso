@@ -20,14 +20,15 @@ import {
   X
 } from 'lucide-react';
 
-import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableHead, 
-  TableHeader, 
-  TableRow 
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow
 } from '@/components/ui/table';
+import { PermissionGuard } from '@/components/ui/permission-guard';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -179,9 +180,11 @@ export default function UsersPage() {
             查看和管理系统内的所有用户账户及权限。
           </p>
         </div>
-        <Button className="rounded-xl h-11 px-6 shadow-lg shadow-primary/20" onClick={() => setIsSheetOpen(true)}>
-          <UserPlus className="mr-2 h-4 w-4" /> 新增用户
-        </Button>
+        <PermissionGuard permission="user:create">
+          <Button className="rounded-xl h-11 px-6 shadow-lg shadow-primary/20" onClick={() => setIsSheetOpen(true)}>
+            <UserPlus className="mr-2 h-4 w-4" /> 新增用户
+          </Button>
+        </PermissionGuard>
       </div>
 
       {/* 新建用户抽屉 (Sheet) */}
