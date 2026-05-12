@@ -1,59 +1,59 @@
 {
   "summary": {
     "total": 8,
-    "passed": 2,
-    "failed": 6,
+    "passed": 8,
+    "failed": 0,
     "skipped": 0,
-    "passRate": "25.0"
+    "passRate": "100.0"
   },
   "results": [
     {
       "testId": "TDD-AUTH-001",
       "testName": "User Login: 支持邮箱密码验证",
-      "status": "FAIL",
-      "message": "POST http://localhost:4101/api/auth/sign-in/email failed: fetch failed",
-      "duration": 55,
-      "timestamp": "2026-05-11T05:44:22.469Z"
+      "status": "PASS",
+      "message": "",
+      "duration": 4035,
+      "timestamp": "2026-05-11T06:33:37.212Z"
     },
     {
       "testId": "TDD-AUTH-002",
       "testName": "SSO Flow: Portal 无缝登录并保持 IdP Session",
-      "status": "FAIL",
-      "message": "GET http://localhost:4100/api/auth/login failed: fetch failed",
-      "duration": 5,
-      "timestamp": "2026-05-11T05:44:22.474Z"
+      "status": "PASS",
+      "message": "",
+      "duration": 1155,
+      "timestamp": "2026-05-11T06:33:38.367Z"
     },
     {
       "testId": "TDD-RBAC-001",
       "testName": "Department: 层级树结构 (创建根与子部门)",
-      "status": "FAIL",
-      "message": "POST http://localhost:4100/api/departments failed: fetch failed",
-      "duration": 4,
-      "timestamp": "2026-05-11T05:44:22.478Z"
+      "status": "PASS",
+      "message": "",
+      "duration": 463,
+      "timestamp": "2026-05-11T06:33:38.830Z"
     },
     {
       "testId": "TDD-RBAC-002",
       "testName": "Role & Data Scopes: 支持 5 种数据范围定义",
-      "status": "FAIL",
-      "message": "POST http://localhost:4100/api/roles failed: fetch failed",
-      "duration": 5,
-      "timestamp": "2026-05-11T05:44:22.483Z"
+      "status": "PASS",
+      "message": "",
+      "duration": 135,
+      "timestamp": "2026-05-11T06:33:38.965Z"
     },
     {
       "testId": "TDD-RBAC-003",
       "testName": "User Management: 分配部门与状态控制",
-      "status": "FAIL",
-      "message": "POST http://localhost:4100/api/users failed: fetch failed",
-      "duration": 5,
-      "timestamp": "2026-05-11T05:44:22.488Z"
+      "status": "PASS",
+      "message": "",
+      "duration": 542,
+      "timestamp": "2026-05-11T06:33:39.507Z"
     },
     {
       "testId": "TDD-APP-001",
       "testName": "Client Registration: 注册 OAuth 2.1 客户端",
-      "status": "FAIL",
-      "message": "POST http://localhost:4100/api/clients failed: fetch failed",
-      "duration": 12,
-      "timestamp": "2026-05-11T05:44:22.500Z"
+      "status": "PASS",
+      "message": "",
+      "duration": 144,
+      "timestamp": "2026-05-11T06:33:39.651Z"
     },
     {
       "testId": "TDD-SEC-001",
@@ -61,16 +61,16 @@
       "status": "PASS",
       "message": "",
       "duration": 0,
-      "timestamp": "2026-05-11T05:44:22.501Z"
+      "timestamp": "2026-05-11T06:33:39.651Z"
     },
     {
       "testId": "TDD-CLEANUP",
       "testName": "清理 TDD 生成的数据",
       "status": "PASS",
       "message": "",
-      "duration": 0,
-      "timestamp": "2026-05-11T05:44:22.501Z"
+      "duration": 6486,
+      "timestamp": "2026-05-11T06:33:46.137Z"
     }
   ],
-  "timestamp": "2026-05-11T05:44:22.526Z"
+  "timestamp": "2026-05-11T06:33:46.139Z"
 }
