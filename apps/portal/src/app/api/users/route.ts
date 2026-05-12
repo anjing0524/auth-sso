@@ -5,7 +5,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { db, schema } from '@/lib/db';
-import { eq, or, ilike, inArray, desc, and, sql as drizzleSql } from 'drizzle-orm';
+import { eq, ne, or, ilike, inArray, desc, and, sql as drizzleSql } from 'drizzle-orm';
 import { randomBytes } from 'crypto';
 import { withPermission, getDataScopeFilter, checkDataScope } from '@/lib/auth-middleware';
 import bcrypt from 'bcryptjs';
@@ -56,7 +56,7 @@ export async function GET(request: NextRequest) {
     .leftJoin(schema.departments, eq(schema.users.deptId, schema.departments.id));
 
     // 构建条件
-    const conditions = [];
+    const conditions = [ne(schema.users.status, 'DELETED')];
 
     if (keyword) {
       conditions.push(

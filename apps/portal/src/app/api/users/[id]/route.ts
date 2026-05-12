@@ -222,9 +222,14 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       }
     }
 
-    // 删除用户（级联删除关联数据）
-    await db.delete(schema.users).where(eq(schema.users.id, existingUser.id));
+    // 逻辑删除用户：将状态设为 'DELETED'
+    await db.update(schema.users)
+      .set({ 
+        status: 'DELETED',
+        updatedAt: new Date()
+      })
+      .where(eq(schema.users.id, existingUser.id));
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, message: '用户已逻辑删除' });
   });
 }
