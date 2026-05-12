@@ -12,7 +12,7 @@ import { relations } from 'drizzle-orm';
 // 枚举定义 (严格对齐 Portal)
 // ============================================
 
-export const userStatusEnum = pgEnum('user_status', ['ACTIVE', 'DISABLED', 'LOCKED']);
+export const userStatusEnum = pgEnum('user_status', ['ACTIVE', 'DISABLED', 'LOCKED', 'DELETED']);
 export const entityStatusEnum = pgEnum('entity_status', ['ACTIVE', 'DISABLED']);
 export const dataScopeTypeEnum = pgEnum('data_scope_type', [
   'ALL',

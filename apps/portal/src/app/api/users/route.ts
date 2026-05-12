@@ -59,13 +59,12 @@ export async function GET(request: NextRequest) {
     const conditions = [ne(schema.users.status, 'DELETED')];
 
     if (keyword) {
-      conditions.push(
-        or(
-          ilike(schema.users.name, `%${keyword}%`),
-          ilike(schema.users.email, `%${keyword}%`),
-          ilike(schema.users.username, `%${keyword}%`)
-        )
+      const searchFilter = or(
+        ilike(schema.users.name, `%${keyword}%`),
+        ilike(schema.users.email, `%${keyword}%`),
+        ilike(schema.users.username, `%${keyword}%`)
       );
+      if (searchFilter) conditions.push(searchFilter);
     }
 
     if (status) {
