@@ -12,7 +12,7 @@ import { relations } from 'drizzle-orm';
 // 枚举定义 (严格对齐 Portal)
 // ============================================
 
-export const userStatusEnum = pgEnum('user_status', ['ACTIVE', 'DISABLED', 'LOCKED']);
+export const userStatusEnum = pgEnum('user_status', ['ACTIVE', 'DISABLED', 'LOCKED', 'DELETED']);
 export const entityStatusEnum = pgEnum('entity_status', ['ACTIVE', 'DISABLED']);
 export const dataScopeTypeEnum = pgEnum('data_scope_type', [
   'ALL',
@@ -22,6 +22,7 @@ export const dataScopeTypeEnum = pgEnum('data_scope_type', [
   'CUSTOM',
 ]);
 export const permissionTypeEnum = pgEnum('permission_type', ['MENU', 'API', 'DATA']);
+export const menuTypeEnum = pgEnum('menu_type', ['DIRECTORY', 'MENU', 'BUTTON']);
 export const clientTypeEnum = pgEnum('client_type', ['confidential', 'public']);
 export const clientStatusEnum = pgEnum('client_status', ['ACTIVE', 'DISABLED']);
 
@@ -293,6 +294,7 @@ export const menus = pgTable('menus', {
   component: text('component'),
   visible: boolean('visible').default(true),
   sort: integer('sort').default(0),
+  menuType: menuTypeEnum('menu_type').notNull().default('MENU'),
   status: text('status').notNull().default('ACTIVE'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),

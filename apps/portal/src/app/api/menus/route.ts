@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
   return withPermission(request, { permissions: ['menu:create'] }, async () => {
     try {
       const body = await request.json();
-      const { name, path, permissionCode, parentId, icon, sort = 0, visible = true, status = 'ACTIVE' } = body;
+      const { name, path, permissionCode, parentId, icon, sort = 0, visible = true, status = 'ACTIVE', menuType = 'MENU' } = body;
 
       if (!name) {
         return NextResponse.json({ error: 'invalid_params', message: '菜单名称不能为空' }, { status: 400 });
@@ -55,6 +55,7 @@ export async function POST(request: NextRequest) {
         icon: icon ?? null,
         sort,
         visible,
+        menuType: menuType as 'DIRECTORY' | 'MENU' | 'BUTTON',
         status: status as 'ACTIVE' | 'DISABLED',
         createdAt: new Date(),
         updatedAt: new Date(),

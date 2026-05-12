@@ -64,6 +64,7 @@ interface MenuItem {
   icon: string | null;
   visible: boolean;
   sort: number;
+  menuType: 'DIRECTORY' | 'MENU' | 'BUTTON';
   status: 'ACTIVE' | 'DISABLED';
   children?: MenuItem[];
 }
@@ -84,13 +85,14 @@ export default function MenusPage() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [editingMenu, setEditingMenu] = useState<MenuItem | null>(null);
-  const [formMenu, setFormMenu] = useState({ 
-    name: '', 
-    path: '', 
-    permissionCode: '', 
+  const [formMenu, setFormMenu] = useState({
+    name: '',
+    path: '',
+    permissionCode: '',
     parentId: null as string | null,
     sort: 0,
-    visible: true 
+    visible: true,
+    menuType: 'MENU' as 'DIRECTORY' | 'MENU' | 'BUTTON',
   });
 
   const fetchMenus = useCallback(async () => {
@@ -150,19 +152,20 @@ export default function MenusPage() {
 
   const openAdd = (parentId: string | null = null) => {
     setEditingMenu(null);
-    setFormMenu({ name: '', path: '', permissionCode: '', parentId, sort: 0, visible: true });
+    setFormMenu({ name: '', path: '', permissionCode: '', parentId, sort: 0, visible: true, menuType: 'MENU' });
     setIsFormOpen(true);
   };
 
   const openEdit = (m: MenuItem) => {
     setEditingMenu(m);
-    setFormMenu({ 
-      name: m.name, 
-      path: m.path || '', 
-      permissionCode: m.permissionCode || '', 
+    setFormMenu({
+      name: m.name,
+      path: m.path || '',
+      permissionCode: m.permissionCode || '',
       parentId: m.parentId,
       sort: m.sort,
-      visible: m.visible 
+      visible: m.visible,
+      menuType: m.menuType || 'MENU',
     });
     setIsFormOpen(true);
   };
@@ -233,6 +236,11 @@ export default function MenusPage() {
             ) : (
               <span className="text-[10px] text-slate-300 italic">未绑定</span>
             )}
+          </TableCell>
+          <TableCell>
+            {item.menuType === 'DIRECTORY' && <Badge variant="outline" className="text-[10px] bg-indigo-50 text-indigo-600 border-indigo-100">目录</Badge>}
+            {item.menuType === 'MENU' && <Badge variant="outline" className="text-[10px] bg-blue-50 text-blue-600 border-blue-100">菜单</Badge>}
+            {item.menuType === 'BUTTON' && <Badge variant="outline" className="text-[10px] bg-orange-50 text-orange-600 border-orange-100">按钮</Badge>}
           </TableCell>
           <TableCell>
             {item.visible ? (
@@ -318,6 +326,22 @@ export default function MenusPage() {
               <Label className="font-bold">权限标识 (Permission Code)</Label>
               <Input placeholder="system:menu:view" value={formMenu.permissionCode} onChange={e => setFormMenu({...formMenu, permissionCode: e.target.value})} />
             </div>
+            <div className="space-y-2">
+              <Label className="font-bold">菜单类型</Label>
+              <Select
+                value={formMenu.menuType}
+                onValueChange={(v: any) => setFormMenu({ ...formMenu, menuType: v })}
+              >
+                <SelectTrigger className="rounded-xl h-10">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="DIRECTORY">目录（一级分组，无路由）</SelectItem>
+                  <SelectItem value="MENU">菜单（含路由的页面入口）</SelectItem>
+                  <SelectItem value="BUTTON">按钮（功能操作，不展示在侧边栏）</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             <div className="flex items-center gap-2">
                <Label className="font-bold">侧边栏显示</Label>
                <Select value={formMenu.visible ? 'YES' : 'NO'} onValueChange={(v) => setFormMenu({...formMenu, visible: v === 'YES'})}>
@@ -375,6 +399,7 @@ export default function MenusPage() {
                   <TableHead className="pl-8">菜单名称</TableHead>
                   <TableHead>路由路径</TableHead>
                   <TableHead>权限标识</TableHead>
+                  <TableHead>类型</TableHead>
                   <TableHead>显示状态</TableHead>
                   <TableHead className="text-center w-[80px]">排序</TableHead>
                   <TableHead className="text-right pr-8">操作</TableHead>
@@ -394,7 +419,7 @@ export default function MenusPage() {
                   ))
                 ) : filteredMenus.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="h-64 text-center">
+                    <TableCell colSpan={7} className="h-64 text-center">
                       <div className="flex flex-col items-center justify-center space-y-4">
                         <div className="bg-primary/10 p-4 rounded-full">
                           <MenuIcon className="h-8 w-8 text-primary" />
