@@ -21,25 +21,32 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const [userInfo, setUserInfo] = useState<any>(null);
+  const [dynamicMenus, setDynamicMenus] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const pathname = usePathname();
 
   useEffect(() => {
-    const fetchMe = async () => {
+    async function fetchData() {
       try {
-        const response = await fetch('/api/me');
-        if (response.ok) {
-          const data = await response.json();
-          // 保存完整的用户信息，包括 permissions
+        const [meRes, menusRes] = await Promise.all([
+          fetch('/api/me'),
+          fetch('/api/me/menus'),
+        ]);
+        if (meRes.ok) {
+          const data = await meRes.json();
           setUserInfo(data);
         }
+        if (menusRes.ok) {
+          const data = await menusRes.json();
+          setDynamicMenus(data.data || []);
+        }
       } catch (error) {
-        console.error('Failed to fetch user info:', error);
+        console.error('Failed to fetch layout data:', error);
       } finally {
         setLoading(false);
       }
-    };
-    fetchMe();
+    }
+    fetchData();
   }, []);
 
   // 生成面包屑
@@ -79,7 +86,7 @@ export default function DashboardLayout({
 
   return (
     <SidebarProvider defaultOpen={true}>
-      <AppSidebar user={userInfo} />
+      <AppSidebar user={userInfo} dynamicMenus={dynamicMenus} />
       <SidebarInset>
         <header className="flex h-16 shrink-0 items-center gap-2 border-b bg-background px-6 sticky top-0 z-10">
           <SidebarTrigger className="-ml-1" />

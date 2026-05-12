@@ -49,13 +49,12 @@ const DynamicIcon = ({ name, className }: { name: string; className?: string }) 
   return <IconComponent className={className} />;
 };
 
-export function AppSidebar({ user }: { user: any }) {
+export function AppSidebar({ user, dynamicMenus = [] }: { user: any; dynamicMenus?: any[] }) {
   const pathname = usePathname();
-  const rawMenus = user?.menus || [];
   const userData = user?.user || {};
 
-  // 强制 Fallback: 无论后端是否返回，系统管理菜单必须存在
-  const menus = [
+  // 内置菜单作为兜底，当数据库为空时使用
+  const fallbackMenus = [
     { id: 'dash', title: '工作台', url: '/dashboard', icon: 'LayoutDashboard' },
     { id: 'user', title: '用户管理', url: '/users', icon: 'Users' },
     { id: 'dept', title: '组织架构', url: '/departments', icon: 'Building2' },
@@ -65,8 +64,8 @@ export function AppSidebar({ user }: { user: any }) {
     { id: 'audit', title: '安全审计', url: '/audit-logs', icon: 'ShieldAlert' },
   ];
 
-  // 如果后端有自定义菜单，则进行合并（这里暂时以内置为准，确保 UI 尊严）
-  const displayMenus = rawMenus.length > 0 ? rawMenus : menus;
+  // dynamicMenus 来自 /api/me/menus，已按权限过滤；为空则用内置菜单兜底
+  const displayMenus = dynamicMenus.length > 0 ? dynamicMenus : fallbackMenus;
 
   return (
     <Sidebar collapsible="icon" className="border-r border-border/40 bg-slate-50/50 dark:bg-slate-950/50">
@@ -99,7 +98,7 @@ export function AppSidebar({ user }: { user: any }) {
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu className="gap-1">
-              {menus.map((item: any) => {
+              {displayMenus.map((item: any) => {
                 const hasChildren = item.children && item.children.length > 0;
                 const isActive = pathname === item.url || (item.url !== '/' && pathname.startsWith(item.url));
 
