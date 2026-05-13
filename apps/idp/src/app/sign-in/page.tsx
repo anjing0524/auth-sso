@@ -42,7 +42,7 @@ export default async function SignInPage({ searchParams }: SearchParams) {
 
   // 如果已登录，且有 OAuth 参数，直接去授权
   if (session && clientId) {
-    const authUrl = new URL('/api/auth/oauth2/authorize', 'http://localhost:4001'); // 仅用于构造
+    const authUrl = new URL('/api/auth/oauth2/authorize', process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:4101'); // 仅用于构造
     authUrl.searchParams.set('client_id', clientId);
     authUrl.searchParams.set('redirect_uri', redirectUrl);
     authUrl.searchParams.set('response_type', responseType || 'code');

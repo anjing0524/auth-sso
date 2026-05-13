@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 
-export default function ConsentPage() {
+function ConsentContent() {
   const searchParams = useSearchParams();
   const consentCode = searchParams.get('consent_code');
   const scope = searchParams.get('scope') || '';
@@ -39,5 +39,13 @@ export default function ConsentPage() {
         <p className="text-gray-500">正在为您安全重定向，请稍候...</p>
       </div>
     </div>
+  );
+}
+
+export default function ConsentPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center min-h-screen">Loading...</div>}>
+      <ConsentContent />
+    </Suspense>
   );
 }

@@ -50,31 +50,35 @@ async function main() {
 
     // 3. 创建 Portal Client
     console.log('Creating clients...');
+    const portalRedirectUri = process.env.PORTAL_REDIRECT_URI || 'http://localhost:4100/auth/callback,http://localhost:4100/api/auth/callback,http://127.0.0.1:4100/auth/callback,http://127.0.0.1:4100/api/auth/callback';
     await db.insert(schema.clients).values({
       id: generateId(),
       publicId: 'cli_portal',
       name: 'Auth-SSO Portal',
       clientId: 'portal',
       clientSecret: 'portal-secret',
-      redirectUrls: 'http://localhost:4100/auth/callback,http://localhost:4100/api/auth/callback,http://127.0.0.1:4100/auth/callback,http://127.0.0.1:4100/api/auth/callback',
+      redirectUrls: portalRedirectUri,
       grantTypes: 'authorization_code,refresh_token',
       scopes: 'openid profile email offline_access',
       status: 'ACTIVE',
       skipConsent: true,
+      requirePkce: true,
     });
 
     // 4. 创建 Demo App Client
+    const demoRedirectUri = process.env.DEMO_APP_REDIRECT_URI || 'http://localhost:4102/auth/callback,http://localhost:4102/api/auth/callback,http://127.0.0.1:4102/auth/callback,http://127.0.0.1:4102/api/auth/callback';
     await db.insert(schema.clients).values({
       id: generateId(),
       publicId: 'cli_demo',
       name: 'Demo SSO App',
       clientId: 'demo-app',
       clientSecret: 'demo-app-secret',
-      redirectUrls: 'http://localhost:4102/auth/callback,http://localhost:4102/api/auth/callback,http://127.0.0.1:4102/auth/callback,http://127.0.0.1:4102/api/auth/callback',
+      redirectUrls: demoRedirectUri,
       grantTypes: 'authorization_code,refresh_token',
       scopes: 'openid profile email offline_access',
       status: 'ACTIVE',
       skipConsent: true,
+      requirePkce: true,
     });
 
     // 5. 创建默认部门
