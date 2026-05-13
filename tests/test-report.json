@@ -1,76 +1,124 @@
 {
   "summary": {
-    "total": 8,
-    "passed": 8,
+    "total": 14,
+    "passed": 14,
     "failed": 0,
     "skipped": 0,
     "passRate": "100.0"
   },
   "results": [
     {
-      "testId": "TDD-AUTH-001",
-      "testName": "User Login: 支持邮箱密码验证",
+      "testId": "SEC-001",
+      "testName": "OAuth安全参数完整性",
       "status": "PASS",
       "message": "",
-      "duration": 4035,
-      "timestamp": "2026-05-11T06:33:37.212Z"
+      "duration": 56,
+      "timestamp": "2026-05-13T01:17:20.436Z"
     },
     {
-      "testId": "TDD-AUTH-002",
-      "testName": "SSO Flow: Portal 无缝登录并保持 IdP Session",
+      "testId": "SEC-002",
+      "testName": "Session Cookie HttpOnly属性",
       "status": "PASS",
       "message": "",
-      "duration": 1155,
-      "timestamp": "2026-05-11T06:33:38.367Z"
+      "duration": 11,
+      "timestamp": "2026-05-13T01:17:20.447Z"
     },
     {
-      "testId": "TDD-RBAC-001",
-      "testName": "Department: 层级树结构 (创建根与子部门)",
+      "testId": "SEC-003",
+      "testName": "Session Cookie SameSite属性",
       "status": "PASS",
       "message": "",
-      "duration": 463,
-      "timestamp": "2026-05-11T06:33:38.830Z"
+      "duration": 11,
+      "timestamp": "2026-05-13T01:17:20.458Z"
     },
     {
-      "testId": "TDD-RBAC-002",
-      "testName": "Role & Data Scopes: 支持 5 种数据范围定义",
+      "testId": "SEC-004",
+      "testName": "State参数长度安全",
       "status": "PASS",
       "message": "",
-      "duration": 135,
-      "timestamp": "2026-05-11T06:33:38.965Z"
+      "duration": 8,
+      "timestamp": "2026-05-13T01:17:20.466Z"
     },
     {
-      "testId": "TDD-RBAC-003",
-      "testName": "User Management: 分配部门与状态控制",
+      "testId": "SEC-005",
+      "testName": "PKCE使用S256方法",
       "status": "PASS",
       "message": "",
-      "duration": 542,
-      "timestamp": "2026-05-11T06:33:39.507Z"
+      "duration": 9,
+      "timestamp": "2026-05-13T01:17:20.475Z"
     },
     {
-      "testId": "TDD-APP-001",
-      "testName": "Client Registration: 注册 OAuth 2.1 客户端",
-      "status": "PASS",
-      "message": "",
-      "duration": 144,
-      "timestamp": "2026-05-11T06:33:39.651Z"
-    },
-    {
-      "testId": "TDD-SEC-001",
-      "testName": "Session Security: Cookie HttpOnly & SameSite=Lax 验证",
+      "testId": "SEC-006",
+      "testName": "非法回调地址被拒绝",
       "status": "PASS",
       "message": "",
       "duration": 0,
-      "timestamp": "2026-05-11T06:33:39.651Z"
+      "timestamp": "2026-05-13T01:17:20.475Z"
     },
     {
-      "testId": "TDD-CLEANUP",
-      "testName": "清理 TDD 生成的数据",
+      "testId": "SEC-007",
+      "testName": "JWKS端点安全验证",
       "status": "PASS",
       "message": "",
-      "duration": 6486,
-      "timestamp": "2026-05-11T06:33:46.137Z"
+      "duration": 554,
+      "timestamp": "2026-05-13T01:17:21.029Z"
+    },
+    {
+      "testId": "SEC-008",
+      "testName": "OIDC发现文档验证",
+      "status": "PASS",
+      "message": "",
+      "duration": 16,
+      "timestamp": "2026-05-13T01:17:21.045Z"
+    },
+    {
+      "testId": "SEC-009",
+      "testName": "未授权Client被拒绝",
+      "status": "PASS",
+      "message": "",
+      "duration": 41,
+      "timestamp": "2026-05-13T01:17:21.086Z"
+    },
+    {
+      "testId": "SEC-010",
+      "testName": "State参数唯一性",
+      "status": "PASS",
+      "message": "",
+      "duration": 20,
+      "timestamp": "2026-05-13T01:17:21.106Z"
+    },
+    {
+      "testId": "SEC-011",
+      "testName": "错误响应安全",
+      "status": "PASS",
+      "message": "",
+      "duration": 14,
+      "timestamp": "2026-05-13T01:17:21.120Z"
+    },
+    {
+      "testId": "SEC-012",
+      "testName": "CORS策略",
+      "status": "PASS",
+      "message": "",
+      "duration": 9,
+      "timestamp": "2026-05-13T01:17:21.129Z"
+    },
+    {
+      "testId": "SEC-020/021",
+      "testName": "回调地址白名单验证",
+      "status": "PASS",
+      "message": "",
+      "duration": 121,
+      "timestamp": "2026-05-13T01:17:21.250Z"
+    },
+    {
+      "testId": "SEC-030",
+      "testName": "授权码重放攻击防御",
+      "status": "PASS",
+      "message": "",
+      "duration": 1350,
+      "timestamp": "2026-05-13T01:17:22.600Z"
     }
   ],
-  "timestamp": "2026-05-11T06:33:46.139Z"
+  "timestamp": "2026-05-13T01:17:22.602Z"
 }

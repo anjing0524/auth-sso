@@ -1,27 +1,17 @@
 const { TestRunner, config } = require('./utils');
-
-async function debug() {
-  const runner = new TestRunner({ record: () => {} });
-  const http = runner.http;
-  
-  console.log('1. Initializing OAuth from Portal...');
-  const init = await http.get(`${config.PORTAL_URL}/api/auth/login`);
-  const authUrl = init.headers['location'];
-  console.log('Auth URL:', authUrl);
-  
-  console.log('2. Logging into IdP...');
+async function run() {
+  const runner = new TestRunner();
   const idpCookies = await runner.loginIdP();
+  console.log("Logged into IdP. Cookies:", idpCookies.getHeader());
   
-  console.log('3. Sending Authorization request...');
-  const authRes = await http.get(authUrl, {
+  const loginInit = await runner.http.get(`${config.PORTAL_URL}/api/auth/login`);
+  console.log("Portal login URL:", loginInit.headers['location']);
+  
+  const authRes = await runner.http.get(loginInit.headers['location'], {
     Cookie: idpCookies.getHeader()
   });
-  
-  console.log('Status:', authRes.status);
-  console.log('Content-Type:', authRes.headers['content-type']);
-  console.log('Body Preview:', typeof authRes.body === 'string' ? authRes.body.substring(0, 500) : JSON.stringify(authRes.body));
-  
-  process.exit(0);
+  console.log("Auth Response Status:", authRes.status);
+  console.log("Auth Response Body:", typeof authRes.body === 'string' ? authRes.body : JSON.stringify(authRes.body));
+  console.log("Auth Response Headers:", authRes.headers);
 }
-
-debug();
+run().catch(console.error);

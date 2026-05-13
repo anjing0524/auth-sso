@@ -5,9 +5,9 @@
 
 module.exports = {
   // 服务端口配置 - Service port configuration
-  PORTAL_URL: 'http://localhost:4100',
-  IDP_URL: 'http://localhost:4101',
-  DEMO_APP_URL: 'http://localhost:4102',
+  PORTAL_URL: 'http://127.0.0.1:4100',
+  IDP_URL: 'http://127.0.0.1:4101',
+  DEMO_APP_URL: 'http://127.0.0.1:4102',
 
 
   // 测试用户配置 - Test user configuration

@@ -102,49 +102,11 @@ export const auth = betterAuth({
     oidcProvider({
       useJWTPlugin: true,
       loginPage: '/sign-in',
+      consentPage: '/oauth/consent', // 必须提供，否则 better-auth 会抛出 500
       scopes: ['openid', 'profile', 'email', 'offline_access'],
-      trustedClients: [
-        { clientId: 'portal', name: 'Auth-SSO Portal', redirectUrls: [process.env.PORTAL_REDIRECT_URI || 'http://localhost:4100/api/auth/callback'], type: 'public', disabled: false, metadata: {} },
-        { clientId: 'demo-app', name: 'Demo App', redirectUrls: [process.env.DEMO_APP_REDIRECT_URI || 'http://localhost:4102/api/auth/callback'], type: 'public', disabled: false, metadata: {} }
-      ],
-      // 核心：即使 Pre-seed 失效，自动跳转也能兜底
-      getConsentHTML: (ctx) => `
-        <!DOCTYPE html>
-        <html>
-          <head>
-            <title>Authorizing...</title>
-            <script>
-              window.onload = function() {
-                const payload = { 
-                  accept: true, 
-                  consent_code: '${ctx.code}',
-                  scopes: ${JSON.stringify(ctx.scopes.join(' '))}
-                };
-                
-                console.log('[Consent] Auto-submitting...', payload);
-                fetch('/api/auth/oauth2/consent', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify(payload)
-                })
-                .then(async res => {
-                  const data = await res.json();
-                  console.log('[Consent] Response:', data);
-                  if (data.redirectURI || data.url) {
-                    window.location.href = data.redirectURI || data.url;
-                  }
-                })
-                .catch(err => {
-                  console.error('[Consent] Error:', err);
-                });
-              };
-            </script>
-          </head>
-          <body>
-            <p>Authorizing ${ctx.clientName || 'Application'}, please wait...</p>
-          </body>
-        </html>
-      `
+      // 强制 OAuth 2.1 级别的安全管控
+      requirePKCE: true,
+      allowPlainCodeChallengeMethod: false,
     }),
   ],
 

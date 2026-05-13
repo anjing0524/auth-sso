@@ -240,9 +240,26 @@ async function run(reporter) {
     let code, state;
     if (authRes.status === 200) {
       if (authRes.body && authRes.body.redirect && authRes.body.url) {
-        const callbackUrl = new URL(authRes.body.url);
-        code = callbackUrl.searchParams.get('code');
-        state = callbackUrl.searchParams.get('state');
+        if (authRes.body.url.includes('/oauth/consent')) {
+          const consentUrl = new URL(authRes.body.url, config.IDP_URL);
+          const consentCode = consentUrl.searchParams.get('consent_code');
+          if (consentCode) {
+            const consentRes = await http.post(`${config.IDP_URL}/api/auth/oauth2/consent`, {
+              accept: true,
+              consent_code: consentCode,
+              scopes: "openid profile email offline_access"
+            }, { Cookie: idpCookies.getHeader() });
+            
+            const redirectStr = consentRes.body.redirectURI || consentRes.body.url;
+            const callbackUrl = new URL(redirectStr);
+            code = callbackUrl.searchParams.get('code');
+            state = callbackUrl.searchParams.get('state');
+          }
+        } else {
+          const callbackUrl = new URL(authRes.body.url);
+          code = callbackUrl.searchParams.get('code');
+          state = callbackUrl.searchParams.get('state');
+        }
       } else {
         const bodyStr = typeof authRes.body === 'string' ? authRes.body : JSON.stringify(authRes.body);
         const consentCodeMatch = bodyStr.match(/consent_code: '([^']+)'/);

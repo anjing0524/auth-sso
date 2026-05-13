@@ -111,6 +111,7 @@ export const clients = pgTable('clients', {
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
   disabled: boolean('disabled').default(false),
   skipConsent: boolean('skip_consent').default(false), // 核心：控制静默授权
+  requirePkce: boolean('require_pkce').default(true), // OAuth 2.1: 强制 PKCE
   userId: text('user_id'),
 });
 
