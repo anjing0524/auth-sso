@@ -47,7 +47,7 @@ export default defineConfig({
   // 多 webServer 配置：启动所有服务
   webServer: [
     {
-      command: 'pnpm --filter @auth-sso/idp dev',
+      command: 'pnpm db:seed && pnpm --filter @auth-sso/idp dev',
       url: 'http://127.0.0.1:4101',
       name: 'IdP',
       timeout: 120_000,
