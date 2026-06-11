@@ -4,13 +4,23 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-async-trait = "0.1.89"
-env_logger = "0.11.10"
-http = "1.4.0"
-log = "0.4.29"
+async-trait = "0.1"
+env_logger = "0.11"
+log = "0.4"
 pingora = { version = "0.8.0", features = ["openssl"] }
 pingora-core = { version = "0.8.0", features = ["openssl"] }
 pingora-http = "0.8.0"
 pingora-load-balancing = { version = "0.8.0", features = ["openssl"] }
 pingora-proxy = { version = "0.8.0", features = ["openssl"] }
-openssl = { version = "0.10.68", features = ["vendored"] }
+openssl = { version = "0.10", features = ["vendored"] }
+
+# JWT 验签：ES256 JWKS 非对称验签
+jsonwebtoken = "9"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# 异步 HTTP 客户端（定时拉取 JWKS 公钥）
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+
+# 异步运行时（JWKS 刷新任务 + RwLock）
+tokio = { version = "1", features = ["sync", "time", "rt-multi-thread", "macros"] }
