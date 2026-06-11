@@ -17,4 +17,6 @@ export {
   createTestRequest,
   createAuthenticatedRequest,
   parseResponseJson,
+  createMockFetch,
 } from './test-utils';
+export { createMockDb } from './mock-db';
