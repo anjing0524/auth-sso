@@ -95,10 +95,12 @@ export async function GET(request: NextRequest) {
     // 重定向到目标页面
     const redirectUrl = oauthState.redirect || '/';
     return NextResponse.redirect(new URL(redirectUrl, oauthConfig.appUrl));
-  } catch (error: any) {
+  } catch (error: unknown) {
+    // 捕获并处理 OAuth 回调阶段抛出的异常，采用类型守卫安全提取错误消息
     console.error('[DemoApp] Callback Error:', error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
     return NextResponse.redirect(
-      new URL(`/?error=callback_failed&details=${encodeURIComponent(error.message)}`, oauthConfig.appUrl)
+      new URL(`/?error=callback_failed&details=${encodeURIComponent(errorMessage)}`, oauthConfig.appUrl)
     );
   }
 }
@@ -130,8 +132,10 @@ async function exchangeCodeForToken(code: string, codeVerifier: string): Promise
     }
 
     return response.json();
-  } catch (e: any) {
-    throw new Error(`Exchange Error: ${e.message}`);
+  } catch (e: unknown) {
+    // 捕获授权码交换过程中的通信/格式异常，进行类型安全的错误解构与包装
+    const errorMessage = e instanceof Error ? e.message : String(e);
+    throw new Error(`Exchange Error: ${errorMessage}`);
   }
 }
 

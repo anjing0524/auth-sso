@@ -5,8 +5,8 @@
 
 set -e
 
-PORTAL_URL="http://localhost:4000"
-IDP_URL="http://localhost:4001"
+PORTAL_URL="http://127.0.0.1:4100"
+IDP_URL="http://127.0.0.1:4101"
 
 # 颜色输出
 RED='\033[0;31m'
@@ -17,7 +17,7 @@ NC='\033[0m' # No Color
 
 # 测试账号
 TEST_EMAIL="admin@example.com"
-TEST_PASSWORD="test123456"
+TEST_PASSWORD="Admin@123456"
 
 echo "======================================"
 echo "M5 SSO Access 验证"
@@ -27,18 +27,20 @@ echo "======================================"
 check_services() {
     echo -e "\n${YELLOW}检查服务状态...${NC}"
 
-    if curl -s --max-time 2 "$PORTAL_URL/api/me" > /dev/null 2>&1; then
-        echo -e "${GREEN}✓ Portal 服务运行中 (port 4000)${NC}"
+    if curl -v --max-time 5 "$PORTAL_URL/api/me" > /tmp/curl_portal.log 2>&1; then
+        echo -e "${GREEN}✓ Portal 服务运行中 (port 4100)${NC}"
     else
-        echo -e "${RED}✗ Portal 服务未运行 (port 4000)${NC}"
+        echo -e "${RED}✗ Portal 服务未运行 (port 4100)${NC}"
+        cat /tmp/curl_portal.log
         echo "请先启动 Portal: cd apps/portal && pnpm dev"
         exit 1
     fi
 
-    if curl -s --max-time 2 "$IDP_URL/api/auth/ok" > /dev/null 2>&1; then
-        echo -e "${GREEN}✓ IdP 服务运行中 (port 4001)${NC}"
+    if curl -v --max-time 5 "$IDP_URL/api/auth/ok" > /tmp/curl_idp.log 2>&1; then
+        echo -e "${GREEN}✓ IdP 服务运行中 (port 4101)${NC}"
     else
-        echo -e "${RED}✗ IdP 服务未运行 (port 4001)${NC}"
+        echo -e "${RED}✗ IdP 服务未运行 (port 4101)${NC}"
+        cat /tmp/curl_idp.log
         echo "请先启动 IdP: cd apps/idp && pnpm dev"
         exit 1
     fi
@@ -187,27 +189,27 @@ test_logout_endpoint() {
     return 0
 }
 
-# M5-7: 权限 API 测试
+# M5-7: 权限 API 安全性测试
 test_permission_apis() {
-    echo -e "\n${YELLOW}[M5-7] 权限 API 测试${NC}"
+    echo -e "\n${YELLOW}[M5-7] 权限 API 安全性测试${NC}"
 
-    # 测试角色 API
-    echo "  测试角色 API..."
-    ROLES_RESPONSE=$(curl -s "$PORTAL_URL/api/roles")
-    if echo "$ROLES_RESPONSE" | grep -q '"data"'; then
-        echo -e "  ${GREEN}✓ 角色列表 API 正常${NC}"
+    # 测试角色 API (未登录应返回 401)
+    echo "  测试角色 API (未登录)..."
+    ROLES_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$PORTAL_URL/api/roles")
+    if [ "$ROLES_STATUS" = "401" ]; then
+        echo -e "  ${GREEN}✓ 角色列表 API 已受保护 (401)${NC}"
     else
-        echo -e "  ${RED}✗ 角色列表 API 失败${NC}"
+        echo -e "  ${RED}✗ 角色列表 API 未受保护 (HTTP $ROLES_STATUS)${NC}"
         return 1
     fi
 
-    # 测试权限 API
-    echo "  测试权限 API..."
-    PERMS_RESPONSE=$(curl -s "$PORTAL_URL/api/permissions")
-    if echo "$PERMS_RESPONSE" | grep -q '"data"'; then
-        echo -e "  ${GREEN}✓ 权限列表 API 正常${NC}"
+    # 测试权限 API (未登录应返回 401)
+    echo "  测试权限 API (未登录)..."
+    PERMS_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$PORTAL_URL/api/permissions")
+    if [ "$PERMS_STATUS" = "401" ]; then
+        echo -e "  ${GREEN}✓ 权限列表 API 已受保护 (401)${NC}"
     else
-        echo -e "  ${RED}✗ 权限列表 API 失败${NC}"
+        echo -e "  ${RED}✗ 权限列表 API 未受保护 (HTTP $PERMS_STATUS)${NC}"
         return 1
     fi
 

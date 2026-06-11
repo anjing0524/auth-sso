@@ -8,13 +8,23 @@ import {
   setSessionCookie,
 } from '@/lib/session';
 import { decodeJwt } from 'jose';
+import { logLoginEvent, getClientIP } from '@/lib/audit';
+import { generateRequestId } from '@/lib/crypto';
+import { COMMON_ERRORS } from '@auth-sso/contracts';
 
 export const runtime = 'nodejs';
 
+/**
+ * GET /api/auth/callback
+ * 处理身份提供端 (IdP) 返回的授权码和 State 状态，发起 Token 交换并创建 Portal 本地会话，实现 SSO 单点登录回调。
+ * 
+ * @param request 客户端发起的 NextRequest 回调请求实例
+ * @returns NextResponse.redirect 重定向响应
+ */
 export async function GET(request: NextRequest) {
-  const requestId = Math.random().toString(36).substring(7);
-  const currentUrl = request.url;
-  console.log(`[Callback][${requestId}] Start. URL: ${currentUrl}`);
+  // 使用全局 crypto 工具库生成的 RequestId 替代不安全的 Math.random，捍卫 DRY 与安全性
+  const requestId = generateRequestId();
+  console.log(`[Callback][${requestId}] 收到 OAuth 回调请求`);
 
   try {
     const searchParams = request.nextUrl.searchParams;
@@ -22,7 +32,7 @@ export async function GET(request: NextRequest) {
     const state = searchParams.get('state');
 
     if (!code || !state) {
-      console.warn(`[Callback][${requestId}] Missing code or state.`);
+      console.warn(`[Callback][${requestId}] 参数缺失: code 或 state 不存在`);
       const loginUrl = new URL('/login', request.nextUrl.origin);
       loginUrl.searchParams.set('error', 'invalid_params');
       return NextResponse.redirect(loginUrl.toString());
@@ -32,7 +42,7 @@ export async function GET(request: NextRequest) {
     const stateDataStr = request.cookies.get('oauth_state_data')?.value;
 
     if (!storedState || !stateDataStr || state !== storedState) {
-      console.error(`[Callback][${requestId}] State error`);
+      console.error(`[Callback][${requestId}] State 状态校验失败`);
       const loginUrl = new URL('/login', request.nextUrl.origin);
       loginUrl.searchParams.set('error', 'invalid_state');
       return NextResponse.redirect(loginUrl.toString());
@@ -41,7 +51,6 @@ export async function GET(request: NextRequest) {
     const stateData = JSON.parse(stateDataStr);
     
     // 发起 Token 交换
-    console.log(`[Callback][${requestId}] Fetching token...`);
     const tokenUrl = new URL('/api/auth/oauth2/token', oauthConfig.idpUrl);
     const clientSecret = (process.env.IDP_CLIENT_SECRET || '').trim();
     
@@ -62,37 +71,34 @@ export async function GET(request: NextRequest) {
         body: body.toString(),
         cache: 'no-store',
       });
-    } catch (fetchError: any) {
-      console.error(`[Callback][${requestId}] Network Error:`, fetchError.message);
-      throw new Error(`Fetch failed: ${fetchError.message}`);
+    } catch (fetchError: unknown) {
+      const fetchErrorMessage = fetchError instanceof Error ? fetchError.message : String(fetchError);
+      console.error(`[Callback][${requestId}] 网络通信异常:`, fetchErrorMessage);
+      throw new Error(`Fetch failed: ${fetchErrorMessage}`);
     }
 
     if (!tokenResponse.ok) {
       const errorBody = await tokenResponse.text();
-      console.error(`[Callback][${requestId}] IdP Error ${tokenResponse.status}:`, errorBody);
+      console.error(`[Callback][${requestId}] IdP 响应异常 ${tokenResponse.status}:`, errorBody);
       throw new Error(`IdP Error ${tokenResponse.status}: ${errorBody}`);
     }
 
     const tokens = await tokenResponse.json();
-    console.log(`[Callback][${requestId}] Token exchange success`);
+    console.log(`[Callback][${requestId}] Token 交换成功`);
 
     // 1. 解码 ID Token 并校验 Nonce
     const decoded = decodeJwt(tokens.id_token);
-    console.log(`[Callback][${requestId}] Decoded ID Token:`, JSON.stringify(decoded, null, 2));
 
     if (stateData.nonce) {
       if (decoded.nonce !== stateData.nonce) {
-        console.error(`[Callback][${requestId}] Nonce mismatch! Stored: ${stateData.nonce}, Received: ${decoded.nonce}`);
+        console.error(`[Callback][${requestId}] Nonce 不匹配!`);
         const loginUrl = new URL('/login', request.nextUrl.origin);
         loginUrl.searchParams.set('error', 'invalid_nonce');
         return NextResponse.redirect(loginUrl.toString());
       }
-      console.log(`[Callback][${requestId}] Nonce verified.`);
-    } else {
-      console.warn(`[Callback][${requestId}] No nonce found in stateData, skipping verification.`);
     }
 
-    // 2. 创建会话
+    // 2. 创建 Portal 会话
     const session = await createSession({
       userId: (decoded.sub as string) || (decoded.email as string) || 'unknown',
       accessToken: tokens.access_token,
@@ -100,11 +106,22 @@ export async function GET(request: NextRequest) {
       expiresIn: tokens.expires_in || 3600,
     });
 
-    // 确定重定向目标
+    // 3. 异步记录登录日志
+    await logLoginEvent({
+      userId: session.userId,
+      username: (decoded.email as string) || (decoded.name as string) || session.userId,
+      eventType: 'LOGIN_SUCCESS',
+      ip: getClientIP(request),
+      userAgent: request.headers.get('user-agent') || undefined,
+    }).catch(err => {
+      console.error(`[Callback][${requestId}] 记录登录审计日志失败:`, err);
+    });
+
+    // 4. 重定向至原页面或控制台首页
     const targetPath = stateData.redirect || '/dashboard';
     const redirectUrl = new URL(targetPath, request.url);
     
-    console.log(`[Callback][${requestId}] Redirecting to: ${redirectUrl.toString()}`);
+    console.log(`[Callback][${requestId}] 重定向跳转至: ${targetPath}`);
     const response = NextResponse.redirect(redirectUrl);
     
     setSessionCookie(response, session.id);
@@ -112,13 +129,15 @@ export async function GET(request: NextRequest) {
     response.cookies.delete('oauth_state_data');
 
     return response;
-  } catch (err: any) {
-    console.error(`[Callback][${requestId}] Crash:`, err);
-    const stack = err.stack || 'No stack trace';
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? (error.stack || 'No stack trace') : 'No stack trace';
+    console.error(`[Callback][${requestId}] 回调流程崩溃: ${errorMessage}`, errorStack);
+    
+    // 安全防爆线：前台 URL 仅携带通用且安全的 internal_crash，物理性切断 details 和 stack 明文，防止服务器资产泄露
     const crashUrl = new URL('/login', request.nextUrl.origin);
     crashUrl.searchParams.set('error', 'internal_crash');
-    crashUrl.searchParams.set('details', err.message);
-    crashUrl.searchParams.set('stack', stack.substring(0, 200));
     return NextResponse.redirect(crashUrl.toString());
   }
 }
+

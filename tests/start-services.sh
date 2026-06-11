@@ -114,6 +114,7 @@ echo -e "${YELLOW}▶️  启动 IdP (http://127.0.0.1:4101)...${NC}"
 cd "$PROJECT_ROOT/apps/idp"
 # 注入测试环境变量
 LOG_LEVEL=debug \
+DISABLE_RATE_LIMIT=true \
 BETTER_AUTH_URL=http://localhost:4101 \
 pnpm dev -p 4101 > /tmp/idp.log 2>&1 &
 IDP_PID=$!

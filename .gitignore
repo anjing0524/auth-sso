@@ -4,7 +4,10 @@ dist
 build
 .next
 out
+# Logs and temp files
 *.log
+*_logs.txt
+*.tar
 .DS_Store
 .vercel
 

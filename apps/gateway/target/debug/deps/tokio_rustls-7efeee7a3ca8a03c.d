@@ -1,0 +1,9 @@
+/Users/liushuo/code/干了科技/auth-sso/apps/gateway/target/debug/deps/tokio_rustls-7efeee7a3ca8a03c.d: /Users/liushuo/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/tokio-rustls-0.26.4/src/lib.rs /Users/liushuo/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/tokio-rustls-0.26.4/src/client.rs /Users/liushuo/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/tokio-rustls-0.26.4/src/common/mod.rs /Users/liushuo/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/tokio-rustls-0.26.4/src/common/handshake.rs /Users/liushuo/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/tokio-rustls-0.26.4/src/server.rs
+
+/Users/liushuo/code/干了科技/auth-sso/apps/gateway/target/debug/deps/libtokio_rustls-7efeee7a3ca8a03c.rmeta: /Users/liushuo/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/tokio-rustls-0.26.4/src/lib.rs /Users/liushuo/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/tokio-rustls-0.26.4/src/client.rs /Users/liushuo/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/tokio-rustls-0.26.4/src/common/mod.rs /Users/liushuo/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/tokio-rustls-0.26.4/src/common/handshake.rs /Users/liushuo/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/tokio-rustls-0.26.4/src/server.rs
+
+/Users/liushuo/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/tokio-rustls-0.26.4/src/lib.rs:
+/Users/liushuo/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/tokio-rustls-0.26.4/src/client.rs:
+/Users/liushuo/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/tokio-rustls-0.26.4/src/common/mod.rs:
+/Users/liushuo/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/tokio-rustls-0.26.4/src/common/handshake.rs:
+/Users/liushuo/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/tokio-rustls-0.26.4/src/server.rs:

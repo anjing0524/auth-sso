@@ -1,0 +1,10 @@
+/Users/liushuo/code/干了科技/auth-sso/apps/gateway/target/release/deps/foldhash-9a79e2ee5143cbd0.d: /Users/liushuo/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/foldhash-0.2.0/src/lib.rs /Users/liushuo/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/foldhash-0.2.0/src/fast.rs /Users/liushuo/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/foldhash-0.2.0/src/quality.rs /Users/liushuo/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/foldhash-0.2.0/src/seed.rs
+
+/Users/liushuo/code/干了科技/auth-sso/apps/gateway/target/release/deps/libfoldhash-9a79e2ee5143cbd0.rlib: /Users/liushuo/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/foldhash-0.2.0/src/lib.rs /Users/liushuo/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/foldhash-0.2.0/src/fast.rs /Users/liushuo/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/foldhash-0.2.0/src/quality.rs /Users/liushuo/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/foldhash-0.2.0/src/seed.rs
+
+/Users/liushuo/code/干了科技/auth-sso/apps/gateway/target/release/deps/libfoldhash-9a79e2ee5143cbd0.rmeta: /Users/liushuo/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/foldhash-0.2.0/src/lib.rs /Users/liushuo/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/foldhash-0.2.0/src/fast.rs /Users/liushuo/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/foldhash-0.2.0/src/quality.rs /Users/liushuo/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/foldhash-0.2.0/src/seed.rs
+
+/Users/liushuo/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/foldhash-0.2.0/src/lib.rs:
+/Users/liushuo/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/foldhash-0.2.0/src/fast.rs:
+/Users/liushuo/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/foldhash-0.2.0/src/quality.rs:
+/Users/liushuo/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/foldhash-0.2.0/src/seed.rs:

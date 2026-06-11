@@ -1,0 +1,123 @@
+# ==============================================================================
+# Auth-SSO 本地全栈验证 Docker Compose 配置
+# ==============================================================================
+# 用途：在本机完整构建并验证 idp、portal、gateway 三个服务
+# 前提：auth-sso_auth-sso-network 网络及 postgres、redis 容器已启动
+#       运行命令: docker compose up -d (开发环境基础设施)
+# 启动命令: docker compose -f docker-compose.local.yml up -d --build
+# ==============================================================================
+
+services:
+  # ============================================
+  # Identity Provider (IdP) - 本地构建
+  # ============================================
+  idp:
+    build:
+      context: .
+      dockerfile: apps/idp/Dockerfile
+      args:
+        BETTER_AUTH_URL: https://idp.localhost:18443
+        NEXT_PUBLIC_APP_URL: https://idp.localhost:18443
+    container_name: auth-sso-idp-local
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      # 连接到本地已运行的 postgres 容器（通过共享网络）
+      DATABASE_URL: postgresql://postgres:postgres@auth-sso-postgres:5432/auth_sso_idp
+      REDIS_URL: redis://auth-sso-redis:6379
+      BETTER_AUTH_SECRET: universal_secret_for_testing_123
+      BETTER_AUTH_URL: https://idp.localhost:18443
+      JWT_SECRET: universal_jwt_secret_for_testing_123
+      JWT_ISSUER: auth-sso
+      PORTAL_CLIENT_SECRET: portal-secret
+      SESSION_MAX_AGE_SEC: "604800"
+    expose:
+      - "4001"
+    ports:
+      # 同时暴露到宿主机，方便直接调试
+      - "4101:4001"
+    networks:
+      - auth-sso-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ============================================
+  # Portal (Management) - 本地构建
+  # ============================================
+  portal:
+    build:
+      context: .
+      dockerfile: apps/portal/Dockerfile
+      args:
+        NEXT_PUBLIC_APP_URL: https://portal.localhost:18443
+        NEXT_PUBLIC_IDP_URL: https://idp.localhost:18443
+        NEXT_PUBLIC_REDIRECT_URI: https://portal.localhost:18443/api/auth/callback
+    container_name: auth-sso-portal-local
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://postgres:postgres@auth-sso-postgres:5432/auth_sso_idp
+      REDIS_URL: redis://auth-sso-redis:6379
+      BETTER_AUTH_SECRET: universal_secret_for_testing_123
+      BETTER_AUTH_URL: https://idp.localhost:18443
+      NEXT_PUBLIC_IDP_URL: https://idp.localhost:18443
+      NEXT_PUBLIC_APP_URL: https://portal.localhost:18443
+      NEXT_PUBLIC_REDIRECT_URI: https://portal.localhost:18443/api/auth/callback
+      IDP_CLIENT_SECRET: portal-secret
+    expose:
+      - "4000"
+    ports:
+      - "4100:4000"
+    networks:
+      - auth-sso-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ============================================
+  # Pingora 信创网关 - 本地构建（使用本地自签名证书）
+  # ============================================
+  gateway:
+    build:
+      context: .
+      dockerfile: apps/gateway/Dockerfile
+    container_name: auth-sso-gateway-local
+    restart: unless-stopped
+    environment:
+      RUST_LOG: info
+      SSL_CERT_PATH: /etc/gateway/ssl/fullchain.pem
+      SSL_KEY_PATH: /etc/gateway/ssl/privkey.pem
+      GATEWAY_PORT: "80"
+      GATEWAY_SSL_PORT: "443"
+      # 使用 Docker 容器内部服务名称寻址
+      IDP_UPSTREAM: idp:4001
+      PORTAL_UPSTREAM: portal:4000
+    ports:
+      - "18080:80"
+      - "18443:443"
+    volumes:
+      # 挂载本地自签名证书进行测试
+      - /tmp/gw-ssl:/etc/gateway/ssl:ro
+    depends_on:
+      - idp
+      - portal
+    networks:
+      - auth-sso-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+# ============================================
+# 接入已运行的基础设施网络（外部网络，不重新创建）
+# ============================================
+networks:
+  auth-sso-network:
+    external: true
+    name: auth-sso_auth-sso-network

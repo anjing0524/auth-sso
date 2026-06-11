@@ -49,25 +49,43 @@ const isProduction = process.env.NODE_ENV === 'production';
  * Redis 客户端实例
  */
 let redisClient: RedisClient | null = null;
+let rawIoredisClient: Redis | null = null;
+
+/**
+ * 获取原生的 ioredis 客户端实例
+ * 专门供 Better Auth 等外部插件/适配器复用现成的连接，防止 TCP 连接冗余
+ */
+export function getRawIoredisClient(): Redis | null {
+  if (isProduction) {
+    return null;
+  }
+  if (!rawIoredisClient) {
+    const url = process.env.REDIS_URL || 'redis://localhost:6379';
+    rawIoredisClient = new Redis(url, {
+      maxRetriesPerRequest: 0, // 严格遵守 Better Auth Redis 驱动的最佳实践限制
+      connectTimeout: 5000,
+      lazyConnect: true,
+    });
+
+    rawIoredisClient.on('error', (err) => {
+      console.error('[Redis] Raw ioredis connection error:', err);
+    });
+
+    rawIoredisClient.on('connect', () => {
+      console.log('[Redis] Raw ioredis Connected');
+    });
+  }
+  return rawIoredisClient;
+}
 
 /**
  * 创建 ioredis 客户端 (本地开发)
  */
 function createIoredisClient(): RedisClient {
-  const url = process.env.REDIS_URL || 'redis://localhost:6379';
-  const client = new Redis(url, {
-    maxRetriesPerRequest: 3,
-    retryStrategy: () => 100,
-    lazyConnect: true,
-  });
-
-  client.on('error', (err) => {
-    console.error('[Redis] Connection error:', err);
-  });
-
-  client.on('connect', () => {
-    console.log('[Redis] Connected');
-  });
+  const client = getRawIoredisClient();
+  if (!client) {
+    throw new Error('[Redis] Failed to initialize raw ioredis client');
+  }
 
   // ioredis API 直接匹配 RedisClient 接口
   return {
@@ -190,6 +208,10 @@ export async function closeRedis(): Promise<void> {
   if (redisClient) {
     await redisClient.quit();
     redisClient = null;
+  }
+  if (rawIoredisClient) {
+    await rawIoredisClient.quit();
+    rawIoredisClient = null;
   }
 }
 

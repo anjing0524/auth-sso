@@ -412,9 +412,107 @@ box-shadow: 0 12px 24px -8px rgba(0, 102, 255, 0.15);
 
 ---
 
+## 技术架构与核心安全设计
+
+### 1. OIDC 强拦截与状态双重防卫机制
+
+在 Auth-SSO 系统中，为了防范“账户中途被停用/锁定，但仍可利用旧会话进入子系统”以及“普通用户越权访问未授权子应用”的经典安全漏洞，IdP 在授权码发放阶段实施了双重强拦截防卫：
+- **实时状态核准**：每次 OAuth 授权请求均会实时穿透查询数据库中用户的最新状态（Active/Disabled/Locked），对非 Active 状态进行强行阻断。
+- **动态应用准入**：除超级管理员（SUPER_ADMIN）外，普通用户必须绑定了包含目标客户端的角色关系，否则拒绝准入并重定向至未授权错误页。
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Browser as 浏览器
+    participant Portal as 门户 (BFF)
+    participant IDP as Better Auth (IdP)
+    participant DB as PostgreSQL 数据库
+
+    Browser->>IDP: 1. 访问子应用 -> 重定向到 IdP /oauth2/authorize
+    Note over Browser,IDP: 浏览器自动携带 idp_session Cookie
+    activate IDP
+    IDP->>DB: 2. 检查 OAuth 客户端状态 (ACTIVE/disabled)
+    DB-->>IDP: 客户端状态有效
+    IDP->>DB: 3. 查询当前登录用户的最新状态 (schema.users.status)
+    DB-->>IDP: 返回状态 (例如：LOCKED 锁定)
+    alt 账号状态非 ACTIVE 或被停用
+        IDP-->>Browser: 4a. 强行阻断！重定向到 /error?error=user_inactive
+    else 账号状态正常 (ACTIVE)
+        IDP->>DB: 5. 获取用户拥有的角色，并过滤非 ACTIVE 角色
+        DB-->>IDP: 返回活跃角色列表
+        alt 角色为管理员 (ADMIN / SUPER_ADMIN)
+            IDP-->>Browser: 6a. 绕过授权关系校验，发放授权码
+        else 普通用户角色
+            IDP->>DB: 7. 检查角色客户端关联 (role_clients)
+            DB-->>IDP: 检查无绑定关系
+            alt 未授权
+                IDP-->>Browser: 8a. 强行拦截！重定向到 /error?error=unauthorized_client
+            else 已授权
+                IDP-->>Browser: 8b. 静默跳过同意页 (skipConsent) -> 返回 auth_code
+            end
+        end
+    end
+    deactivate IDP
+```
+
+### 2. 数据沙箱部门级联与 CTE 递归防死循环
+
+为了支撑精细化数据隔离需求（`ALL` / `DEPT` / `DEPT_AND_SUB` / `SELF` / `CUSTOM`），系统在底层 ORM 执行 SQL 时强制通过中间件注入沙箱判定。
+在 `DEPT_AND_SUB` （本部门及子部门）的层级检索中，采用 PostgreSQL 的 `WITH RECURSIVE` 递归查询，并引入了“双重安全防爆与 Fail-Safe 降级”策略，从根源上杜绝因脏数据导致无限递归拖垮数据库的隐患（Infinite Loop DoS）：
+
+```mermaid
+graph TD
+    A[调用 checkDataScope] --> B{角色 DataScopeType?}
+    B -->|ALL| C[直接返回 true - 允许访问]
+    B -->|SELF / DEPT| D[校验 context.deptId === targetDeptId]
+    B -->|CUSTOM| E[查询 role_data_scopes 是否存在绑定关系]
+    B -->|DEPT_AND_SUB| F[执行 WITH RECURSIVE SQL 递归查询]
+    F --> G{层级深度 depth < 10 ?}
+    G -->|Yes| H[向上继续查找父子关系]
+    G -->|No| I[触发防爆截断 - 拦截循环递归]
+    H --> J{找到匹配?}
+    J -->|Yes| K[返回 true]
+    J -->|No| L[返回 false]
+    I --> M[Fail-Safe 回退模式: 降级为 context.deptId === targetDeptId 校验]
+```
+
+### 3. 核心技术亮点沉淀
+
+#### 3.1 递归深度截断与 Fail-Safe 闭环 (安全纵深防御)
+在通过 `DEPT_AND_SUB` 递归检查子部门时，系统编写了非常专业的递归 CTE：
+```sql
+WITH RECURSIVE sub_depts AS (
+  SELECT id, 1 as depth FROM departments WHERE id = ${context.deptId}
+  UNION ALL
+  SELECT d.id, sd.depth + 1 FROM departments d
+  INNER JOIN sub_depts sd ON d.parent_id = sd.id
+  WHERE sd.depth < 10
+)
+```
+1. **防爆截断**：通过 `sd.depth < 10` 的强制限制，在底层预防了因组织架构环形引用而导致数据库进程彻底死锁的灾难。
+2. **Fail-Safe 降级**：若发生任何未预料的底层数据库报错，系统会自动捕获异常并降级回退至 `context.deptId === targetDeptId` 的严格比对，确保安全防线的可用性。
+
+#### 3.2 “孤儿节点自动升顶”优化 (树状渲染容错)
+在数据沙箱隔离模式下，当上级部门由于越权被隐藏时，直接使用 `parentId` 会导致子部门在前端“彻底失联且无法渲染”。
+系统在构建部门树时动态校验：**如果某个节点的父节点不在用户的授权数据范围内，该子节点自动升级成为当前虚拟树的“根节点（Root）”进行渲染**，优雅解决了经典的树状 RBAC 渲染遗失缺陷。
+
+#### 3.3 部门强一致性完整约束 (防脏数据)
+在部门信息的更新和删除事务中引入强关联拦截：
+1. **防自引用死循环**：`PUT` 更新接口严格拦截了 `parentId === id` 的操作，防止部门认自己做“父亲”的死循环。
+2. **级联拦截保护**：`DELETE` 删除时，前置检索是否有子部门，若存在子节点则强制拦截并返回错误代码，防范了物理删除产生破坏性“数据孤儿”。
+
+### 4. 前端权限页面级强拦截防卫
+
+为防御未授权用户或 Session 超时用户越权窥探管理系统的 UI 布局框架，前端实施了页面级鉴权拦截：
+- **主动式 401 拦截**：在 `DashboardLayout` 组件的 React `useEffect` 初始化中，并发拉取 `/api/me` 和 `/api/me/menus` 接口。若获取账户上下文时 API 返回 `401 Unauthorized` 状态，前端拦截器将强行阻断页面渲染并清空状态。
+- **连贯体验 (callbackUrl) 流转**：在触发 401 拦截时，前端会自动将当前访问的完整路径（`pathname + search`）进行安全编码为 `callbackUrl` 附加在重定向地址中。登录页接收此参数并动态拼接到 OAuth 授权接口的 `redirect` 中，从而保障用户在身份验证成功后能够平滑、无缝地回弹至原本访问的目标页面。
+
+---
+
 ## 更新日志
 
 | 日期 | 版本 | 变更 |
 |------|------|------|
+| 2026-05-20 | v2.1 | 增补 OIDC 强拦截与数据沙箱核心架构设计图；修复并补充前端页面级 401 拦截与带 callbackUrl 的重定向体验方案 |
 | 2026-03-24 | v2.0 | 更新主色为 #0066FF；引入 Geist 字体；新增动效系统；新增暗黑模式 |
 | 2026-03-24 | v1.0 | 初始设计系统定义 |

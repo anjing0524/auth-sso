@@ -1,0 +1,9 @@
+/Users/liushuo/code/干了科技/auth-sso/apps/gateway/target/debug/deps/pingora_header_serde-06e379962a1a42ce.d: /Users/liushuo/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/pingora-header-serde-0.8.0/src/lib.rs /Users/liushuo/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/pingora-header-serde-0.8.0/src/dict.rs /Users/liushuo/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/pingora-header-serde-0.8.0/src/thread_zstd.rs
+
+/Users/liushuo/code/干了科技/auth-sso/apps/gateway/target/debug/deps/libpingora_header_serde-06e379962a1a42ce.rlib: /Users/liushuo/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/pingora-header-serde-0.8.0/src/lib.rs /Users/liushuo/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/pingora-header-serde-0.8.0/src/dict.rs /Users/liushuo/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/pingora-header-serde-0.8.0/src/thread_zstd.rs
+
+/Users/liushuo/code/干了科技/auth-sso/apps/gateway/target/debug/deps/libpingora_header_serde-06e379962a1a42ce.rmeta: /Users/liushuo/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/pingora-header-serde-0.8.0/src/lib.rs /Users/liushuo/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/pingora-header-serde-0.8.0/src/dict.rs /Users/liushuo/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/pingora-header-serde-0.8.0/src/thread_zstd.rs
+
+/Users/liushuo/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/pingora-header-serde-0.8.0/src/lib.rs:
+/Users/liushuo/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/pingora-header-serde-0.8.0/src/dict.rs:
+/Users/liushuo/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/pingora-header-serde-0.8.0/src/thread_zstd.rs:

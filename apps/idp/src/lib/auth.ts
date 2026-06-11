@@ -2,31 +2,18 @@ import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { jwt, oidcProvider, bearer } from 'better-auth/plugins';
 import { redisStorage } from '@better-auth/redis-storage';
-import Redis from 'ioredis';
 import bcrypt from 'bcryptjs';
 
 import { db } from '../db';
 import * as schema from '../db/schema';
+import { getRawIoredisClient } from './redis';
 
-// 获取当前基础 URL，优先从环境变量读取
-console.log('[Auth] All BETTER_AUTH env vars:', Object.keys(process.env).filter(k => k.startsWith('BETTER_AUTH')).reduce((obj, key) => ({ ...obj, [key]: process.env[key] }), {}));
 const currentBaseURL = (process.env.BETTER_AUTH_URL || 'http://localhost:4001').trim();
 
 /**
- * Redis 客户端配置
+ * Redis 客户端配置：直接复用单例物理连接，杜绝多余 TCP 连接闲置
  */
-export let redis: Redis | null = null;
-try {
-  if (process.env.REDIS_URL) {
-    redis = new Redis(process.env.REDIS_URL, {
-      maxRetriesPerRequest: 0,
-      connectTimeout: 5000,
-      lazyConnect: true,
-    });
-  }
-} catch (e) {
-  console.error('[Auth] Failed to initialize Redis client:', e);
-}
+export const redis = getRawIoredisClient();
 
 /**
  * Auth-SSO IdP 核心配置
@@ -37,6 +24,31 @@ export const auth = betterAuth({
   baseURL: currentBaseURL,
   basePath: '/api/auth', // 核心修复：显式指定基础路径
   secret: process.env.BETTER_AUTH_SECRET,
+
+  rateLimit: {
+    // 支持通过环境变量 DISABLE_RATE_LIMIT 快速开关速率限制，防止日常调试或集成压测时频繁触发 429 阻断
+    enabled: process.env.DISABLE_RATE_LIMIT === 'true' ? false : true,
+    window: 60, // 60s
+    max: 100,
+    customRules: {
+      "/sign-in/email": {
+        window: 60,
+        max: 5,
+      },
+      "/sign-up/email": {
+        window: 60,
+        max: 3,
+      },
+      "/oauth2/authorize": {
+        window: 60,
+        max: 30,
+      },
+      "/oauth2/token": {
+        window: 60,
+        max: 20,
+      },
+    },
+  },
 
   advanced: {
     useSecureCookies: process.env.NODE_ENV === 'production',

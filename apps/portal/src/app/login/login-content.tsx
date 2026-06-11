@@ -19,6 +19,8 @@ export default function LoginContent() {
   const searchParams = useSearchParams();
   const error = searchParams.get('error');
   const status = searchParams.get('status');
+  // 提取 callbackUrl 重定向参数以保障登录成功后能够顺滑回弹，提升用户体验
+  const callbackUrl = searchParams.get('callbackUrl') || searchParams.get('redirect') || '';
 
   const getErrorMessage = (err: string | null) => {
     switch (err) {
@@ -73,7 +75,7 @@ export default function LoginContent() {
             </div>
 
             <Button className="w-full h-12 text-md font-medium group transition-all" asChild>
-              <a href="/api/auth/login">
+              <a href={callbackUrl ? `/api/auth/login?redirect=${encodeURIComponent(callbackUrl)}` : "/api/auth/login"}>
                 {error ? '重新尝试登录' : '使用统一身份登录'}
                 <ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform" />
               </a>

@@ -1,0 +1,17 @@
+.git
+.github
+node_modules
+**/node_modules
+target
+**/target
+.next
+**/.next
+dist
+**/dist
+*.log
+.DS_Store
+.gemini
+.claude
+.antigravitycli
+.context
+python-slim.tar

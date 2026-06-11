@@ -26,12 +26,24 @@ export default function DashboardLayout({
   const pathname = usePathname();
 
   useEffect(() => {
+    /**
+     * 异步拉取用户权限上下文以及动态菜单数据
+     * 若检测到会话失效 (401 状态码)，将进行带回调的安全重定向拦截
+     */
     async function fetchData() {
       try {
         const [meRes, menusRes] = await Promise.all([
           fetch('/api/me'),
           fetch('/api/me/menus'),
         ]);
+
+        // 安全防御：如果用户未登录或会话超时返回 401 状态，则携带当前页面 callbackUrl 强行跳转至登录页，防止暴露管理界面布局框架
+        if (meRes.status === 401) {
+          const callbackUrl = encodeURIComponent(window.location.pathname + window.location.search);
+          window.location.href = `/login?callbackUrl=${callbackUrl}`;
+          return;
+        }
+
         if (meRes.ok) {
           const data = await meRes.json();
           setUserInfo(data);

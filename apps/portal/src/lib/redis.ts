@@ -21,6 +21,15 @@ interface RedisClient {
   del(key: string): Promise<number>;
   keys(pattern: string): Promise<string[]>;
   quit(): Promise<void>;
+
+  // 集合与过期命令，用于在线会话反向映射索引
+  sadd(key: string, member: string): Promise<number>;
+  srem(key: string, member: string): Promise<number>;
+  smembers(key: string): Promise<string[]>;
+  expire(key: string, seconds: number): Promise<number>;
+
+  // Pipeline 批处理命令，用于多会话批量物理注销
+  pipeline(): any;
 }
 
 /**
@@ -64,6 +73,11 @@ function createIoredisClient(): RedisClient {
     quit: async () => {
       await client.quit();
     },
+    sadd: (key, member) => client.sadd(key, member),
+    srem: (key, member) => client.srem(key, member),
+    smembers: (key) => client.smembers(key),
+    expire: (key, seconds) => client.expire(key, seconds),
+    pipeline: () => client.pipeline(),
   };
 }
 
@@ -101,6 +115,25 @@ function createUpstashClient(): RedisClient {
     },
     quit: async () => {
       // Upstash 是 HTTP 客户端，无需关闭连接
+    },
+    sadd: async (key, member) => {
+      const result = await client.sadd(key, member);
+      return result ?? 0;
+    },
+    srem: async (key, member) => {
+      const result = await client.srem(key, member);
+      return result ?? 0;
+    },
+    smembers: async (key) => {
+      const result = await client.smembers<string[]>(key);
+      return result ?? [];
+    },
+    expire: async (key, seconds) => {
+      const result = await client.expire(key, seconds);
+      return result ?? 0;
+    },
+    pipeline: () => {
+      return client.pipeline();
     },
   };
 }

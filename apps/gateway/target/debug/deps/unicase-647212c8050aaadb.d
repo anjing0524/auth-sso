@@ -1,0 +1,10 @@
+/Users/liushuo/code/干了科技/auth-sso/apps/gateway/target/debug/deps/unicase-647212c8050aaadb.d: /Users/liushuo/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/unicase-2.9.0/src/lib.rs /Users/liushuo/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/unicase-2.9.0/src/ascii.rs /Users/liushuo/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/unicase-2.9.0/src/unicode/mod.rs /Users/liushuo/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/unicase-2.9.0/src/unicode/map.rs
+
+/Users/liushuo/code/干了科技/auth-sso/apps/gateway/target/debug/deps/libunicase-647212c8050aaadb.rlib: /Users/liushuo/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/unicase-2.9.0/src/lib.rs /Users/liushuo/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/unicase-2.9.0/src/ascii.rs /Users/liushuo/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/unicase-2.9.0/src/unicode/mod.rs /Users/liushuo/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/unicase-2.9.0/src/unicode/map.rs
+
+/Users/liushuo/code/干了科技/auth-sso/apps/gateway/target/debug/deps/libunicase-647212c8050aaadb.rmeta: /Users/liushuo/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/unicase-2.9.0/src/lib.rs /Users/liushuo/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/unicase-2.9.0/src/ascii.rs /Users/liushuo/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/unicase-2.9.0/src/unicode/mod.rs /Users/liushuo/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/unicase-2.9.0/src/unicode/map.rs
+
+/Users/liushuo/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/unicase-2.9.0/src/lib.rs:
+/Users/liushuo/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/unicase-2.9.0/src/ascii.rs:
+/Users/liushuo/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/unicase-2.9.0/src/unicode/mod.rs:
+/Users/liushuo/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/unicase-2.9.0/src/unicode/map.rs:

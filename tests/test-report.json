@@ -1,51 +1,331 @@
 {
   "summary": {
-    "total": 14,
-    "passed": 14,
-    "failed": 0,
+    "total": 62,
+    "passed": 34,
+    "failed": 28,
     "skipped": 0,
-    "passRate": "100.0"
+    "passRate": "54.8"
   },
   "results": [
+    {
+      "testId": "DET-PRE",
+      "testName": "管理员登录",
+      "status": "FAIL",
+      "message": "OAuth Authorization failed to get callback URL. Status: 400, Body: {\"message\":\"Invalid redirect URI\"}",
+      "duration": 7688,
+      "timestamp": "2026-05-22T08:39:44.536Z"
+    },
+    {
+      "testId": "DET-USER-001",
+      "testName": "邮箱唯一性校验: 重复邮箱应报错",
+      "status": "FAIL",
+      "message": "应返回 400 Bad Request: Expected status 400, got 401",
+      "duration": 1102,
+      "timestamp": "2026-05-22T08:39:45.638Z"
+    },
+    {
+      "testId": "DET-DEPT-001",
+      "testName": "防循环引用: 不能将父部门设为自己",
+      "status": "FAIL",
+      "message": "Cannot read properties of undefined (reading 'id')",
+      "duration": 848,
+      "timestamp": "2026-05-22T08:39:46.486Z"
+    },
+    {
+      "testId": "DET-AUTH-001",
+      "testName": "状态拦截: DISABLED 用户无法登录",
+      "status": "PASS",
+      "message": "",
+      "duration": 3246,
+      "timestamp": "2026-05-22T08:39:49.732Z"
+    },
+    {
+      "testId": "TDD-AUTH-001",
+      "testName": "User Login: 支持邮箱密码验证",
+      "status": "PASS",
+      "message": "",
+      "duration": 7451,
+      "timestamp": "2026-05-22T08:39:57.188Z"
+    },
+    {
+      "testId": "TDD-AUTH-002",
+      "testName": "SSO Flow: Portal 无缝登录并保持 IdP Session",
+      "status": "FAIL",
+      "message": "OAuth Authorization failed to get callback URL. Status: 400, Body: {\"message\":\"Invalid redirect URI\"}",
+      "duration": 588,
+      "timestamp": "2026-05-22T08:39:57.776Z"
+    },
+    {
+      "testId": "TDD-RBAC-001",
+      "testName": "Department: 层级树结构 (创建根与子部门)",
+      "status": "FAIL",
+      "message": "创建根部门成功: Expected status 200, got 401",
+      "duration": 26,
+      "timestamp": "2026-05-22T08:39:57.802Z"
+    },
+    {
+      "testId": "TDD-RBAC-002",
+      "testName": "Role & Data Scopes: 支持 5 种数据范围定义",
+      "status": "FAIL",
+      "message": "创建角色成功: Expected status 200, got 401",
+      "duration": 1201,
+      "timestamp": "2026-05-22T08:39:59.003Z"
+    },
+    {
+      "testId": "TDD-RBAC-003",
+      "testName": "User Management: 分配部门与状态控制",
+      "status": "FAIL",
+      "message": "创建用户成功: Expected status 200, got 401",
+      "duration": 795,
+      "timestamp": "2026-05-22T08:39:59.798Z"
+    },
+    {
+      "testId": "TDD-APP-001",
+      "testName": "Client Registration: 注册 OAuth 2.1 客户端",
+      "status": "FAIL",
+      "message": "客户端注册成功: Expected status 200, got 401",
+      "duration": 1679,
+      "timestamp": "2026-05-22T08:40:01.477Z"
+    },
+    {
+      "testId": "TDD-SEC-001",
+      "testName": "Session Security: Cookie HttpOnly & SameSite=Lax 验证",
+      "status": "PASS",
+      "message": "",
+      "duration": 0,
+      "timestamp": "2026-05-22T08:40:01.477Z"
+    },
+    {
+      "testId": "TDD-CLEANUP",
+      "testName": "清理 TDD 生成的数据",
+      "status": "PASS",
+      "message": "",
+      "duration": 1,
+      "timestamp": "2026-05-22T08:40:01.478Z"
+    },
+    {
+      "testId": "DEP-PRE",
+      "testName": "管理员登录",
+      "status": "FAIL",
+      "message": "OAuth Authorization failed to get callback URL. Status: 400, Body: {\"message\":\"Invalid redirect URI\"}",
+      "duration": 6413,
+      "timestamp": "2026-05-22T08:40:07.893Z"
+    },
+    {
+      "testId": "SM-001",
+      "testName": "Portal启动测试",
+      "status": "PASS",
+      "message": "",
+      "duration": 13713,
+      "timestamp": "2026-05-22T08:40:21.609Z"
+    },
+    {
+      "testId": "SM-002",
+      "testName": "IdP启动测试",
+      "status": "PASS",
+      "message": "",
+      "duration": 2753,
+      "timestamp": "2026-05-22T08:40:24.362Z"
+    },
+    {
+      "testId": "SM-003",
+      "testName": "DemoApp启动测试",
+      "status": "PASS",
+      "message": "",
+      "duration": 197,
+      "timestamp": "2026-05-22T08:40:24.559Z"
+    },
+    {
+      "testId": "SM-004",
+      "testName": "数据库连接测试",
+      "status": "PASS",
+      "message": "",
+      "duration": 36,
+      "timestamp": "2026-05-22T08:40:24.595Z"
+    },
+    {
+      "testId": "SM-005",
+      "testName": "Redis连接测试",
+      "status": "PASS",
+      "message": "",
+      "duration": 39,
+      "timestamp": "2026-05-22T08:40:24.634Z"
+    },
+    {
+      "testId": "SM-010",
+      "testName": "用户登录功能测试",
+      "status": "FAIL",
+      "message": "OAuth Authorization failed to get callback URL. Status: 400, Body: {\"message\":\"Invalid redirect URI\"}",
+      "duration": 797,
+      "timestamp": "2026-05-22T08:40:25.431Z"
+    },
+    {
+      "testId": "SM-011",
+      "testName": "用户信息获取测试",
+      "status": "FAIL",
+      "message": "需先登录成功",
+      "duration": 0,
+      "timestamp": "2026-05-22T08:40:25.431Z"
+    },
+    {
+      "testId": "SM-012",
+      "testName": "用户登出功能测试",
+      "status": "FAIL",
+      "message": "需先登录成功",
+      "duration": 1,
+      "timestamp": "2026-05-22T08:40:25.432Z"
+    },
+    {
+      "testId": "SM-020",
+      "testName": "OIDC发现端点验证",
+      "status": "PASS",
+      "message": "",
+      "duration": 25,
+      "timestamp": "2026-05-22T08:40:25.457Z"
+    },
+    {
+      "testId": "AUTH-001",
+      "testName": "未登录访问受保护页面重定向到IdP",
+      "status": "PASS",
+      "message": "",
+      "duration": 112,
+      "timestamp": "2026-05-22T08:40:25.571Z"
+    },
+    {
+      "testId": "AUTH-OAUTH-FLOW",
+      "testName": "OAuth 完整认证流程验证",
+      "status": "FAIL",
+      "message": "OAuth Authorization failed to get callback URL. Status: 400, Body: {\"message\":\"Invalid redirect URI\"}",
+      "duration": 437,
+      "timestamp": "2026-05-22T08:40:26.008Z"
+    },
+    {
+      "testId": "AUTH-011",
+      "testName": "错误State验证",
+      "status": "PASS",
+      "message": "",
+      "duration": 92,
+      "timestamp": "2026-05-22T08:40:26.100Z"
+    },
+    {
+      "testId": "AUTH-013",
+      "testName": "PKCE参数验证",
+      "status": "PASS",
+      "message": "",
+      "duration": 25,
+      "timestamp": "2026-05-22T08:40:26.125Z"
+    },
+    {
+      "testId": "AUTH-020/021",
+      "testName": "Portal与IdP登出同步",
+      "status": "FAIL",
+      "message": "OAuth Authorization failed to get callback URL. Status: 400, Body: {\"message\":\"Invalid redirect URI\"}",
+      "duration": 389,
+      "timestamp": "2026-05-22T08:40:26.514Z"
+    },
+    {
+      "testId": "PERM-003",
+      "testName": "未登录访问 API 返回 401",
+      "status": "PASS",
+      "message": "",
+      "duration": 37,
+      "timestamp": "2026-05-22T08:40:26.552Z"
+    },
+    {
+      "testId": "PERM-002",
+      "testName": "有权限用户访问 API",
+      "status": "FAIL",
+      "message": "OAuth Authorization failed to get callback URL. Status: 400, Body: {\"message\":\"Invalid redirect URI\"}",
+      "duration": 754,
+      "timestamp": "2026-05-22T08:40:27.306Z"
+    },
+    {
+      "testId": "PERM-004",
+      "testName": "POST请求权限检查",
+      "status": "FAIL",
+      "message": "OAuth Authorization failed to get callback URL. Status: 400, Body: {\"message\":\"Invalid redirect URI\"}",
+      "duration": 513,
+      "timestamp": "2026-05-22T08:40:27.819Z"
+    },
+    {
+      "testId": "PERM-020",
+      "testName": "角色变更即时生效验证",
+      "status": "PASS",
+      "message": "",
+      "duration": 0,
+      "timestamp": "2026-05-22T08:40:27.819Z"
+    },
+    {
+      "testId": "SESS-001/002",
+      "testName": "Session存储与内容验证",
+      "status": "FAIL",
+      "message": "OAuth Authorization failed to get callback URL. Status: 400, Body: {\"message\":\"Invalid redirect URI\"}",
+      "duration": 705,
+      "timestamp": "2026-05-22T08:40:28.527Z"
+    },
+    {
+      "testId": "SESS-003",
+      "testName": "Session Cookie属性验证",
+      "status": "PASS",
+      "message": "",
+      "duration": 8,
+      "timestamp": "2026-05-22T08:40:28.535Z"
+    },
+    {
+      "testId": "SESS-010",
+      "testName": "过期Session访问验证",
+      "status": "PASS",
+      "message": "",
+      "duration": 39,
+      "timestamp": "2026-05-22T08:40:28.574Z"
+    },
+    {
+      "testId": "SESS-012",
+      "testName": "Session活跃续期验证",
+      "status": "FAIL",
+      "message": "需先登录",
+      "duration": 0,
+      "timestamp": "2026-05-22T08:40:28.574Z"
+    },
     {
       "testId": "SEC-001",
       "testName": "OAuth安全参数完整性",
       "status": "PASS",
       "message": "",
-      "duration": 56,
-      "timestamp": "2026-05-13T01:17:20.436Z"
+      "duration": 14,
+      "timestamp": "2026-05-22T08:40:28.590Z"
     },
     {
       "testId": "SEC-002",
       "testName": "Session Cookie HttpOnly属性",
       "status": "PASS",
       "message": "",
-      "duration": 11,
-      "timestamp": "2026-05-13T01:17:20.447Z"
+      "duration": 35,
+      "timestamp": "2026-05-22T08:40:28.625Z"
     },
     {
       "testId": "SEC-003",
       "testName": "Session Cookie SameSite属性",
       "status": "PASS",
       "message": "",
-      "duration": 11,
-      "timestamp": "2026-05-13T01:17:20.458Z"
+      "duration": 10,
+      "timestamp": "2026-05-22T08:40:28.635Z"
     },
     {
       "testId": "SEC-004",
       "testName": "State参数长度安全",
       "status": "PASS",
       "message": "",
-      "duration": 8,
-      "timestamp": "2026-05-13T01:17:20.466Z"
+      "duration": 11,
+      "timestamp": "2026-05-22T08:40:28.646Z"
     },
     {
       "testId": "SEC-005",
       "testName": "PKCE使用S256方法",
       "status": "PASS",
       "message": "",
-      "duration": 9,
-      "timestamp": "2026-05-13T01:17:20.475Z"
+      "duration": 11,
+      "timestamp": "2026-05-22T08:40:28.657Z"
     },
     {
       "testId": "SEC-006",
@@ -53,72 +333,176 @@
       "status": "PASS",
       "message": "",
       "duration": 0,
-      "timestamp": "2026-05-13T01:17:20.475Z"
+      "timestamp": "2026-05-22T08:40:28.657Z"
     },
     {
       "testId": "SEC-007",
       "testName": "JWKS端点安全验证",
       "status": "PASS",
       "message": "",
-      "duration": 554,
-      "timestamp": "2026-05-13T01:17:21.029Z"
+      "duration": 66,
+      "timestamp": "2026-05-22T08:40:28.724Z"
     },
     {
       "testId": "SEC-008",
       "testName": "OIDC发现文档验证",
       "status": "PASS",
       "message": "",
-      "duration": 16,
-      "timestamp": "2026-05-13T01:17:21.045Z"
+      "duration": 78,
+      "timestamp": "2026-05-22T08:40:28.802Z"
     },
     {
       "testId": "SEC-009",
       "testName": "未授权Client被拒绝",
       "status": "PASS",
       "message": "",
-      "duration": 41,
-      "timestamp": "2026-05-13T01:17:21.086Z"
+      "duration": 69,
+      "timestamp": "2026-05-22T08:40:28.871Z"
     },
     {
       "testId": "SEC-010",
       "testName": "State参数唯一性",
       "status": "PASS",
       "message": "",
-      "duration": 20,
-      "timestamp": "2026-05-13T01:17:21.106Z"
+      "duration": 28,
+      "timestamp": "2026-05-22T08:40:28.899Z"
     },
     {
       "testId": "SEC-011",
       "testName": "错误响应安全",
       "status": "PASS",
       "message": "",
-      "duration": 14,
-      "timestamp": "2026-05-13T01:17:21.120Z"
+      "duration": 39,
+      "timestamp": "2026-05-22T08:40:28.938Z"
     },
     {
       "testId": "SEC-012",
       "testName": "CORS策略",
       "status": "PASS",
       "message": "",
-      "duration": 9,
-      "timestamp": "2026-05-13T01:17:21.129Z"
+      "duration": 82,
+      "timestamp": "2026-05-22T08:40:29.020Z"
     },
     {
       "testId": "SEC-020/021",
       "testName": "回调地址白名单验证",
       "status": "PASS",
       "message": "",
-      "duration": 121,
-      "timestamp": "2026-05-13T01:17:21.250Z"
+      "duration": 77,
+      "timestamp": "2026-05-22T08:40:29.097Z"
     },
     {
       "testId": "SEC-030",
       "testName": "授权码重放攻击防御",
+      "status": "FAIL",
+      "message": "Failed to obtain auth code for replay test",
+      "duration": 905,
+      "timestamp": "2026-05-22T08:40:30.002Z"
+    },
+    {
+      "testId": "SSO-001",
+      "testName": "Portal 登录后 Demo App 免登",
+      "status": "FAIL",
+      "message": "OAuth Authorization failed to get callback URL. Status: 400, Body: {\"message\":\"Invalid redirect URI\"}",
+      "duration": 1916,
+      "timestamp": "2026-05-22T08:40:31.920Z"
+    },
+    {
+      "testId": "SSO-010",
+      "testName": "Portal 登出后全线失效",
+      "status": "FAIL",
+      "message": "OAuth Authorization failed to get callback URL. Status: 400, Body: {\"message\":\"Invalid redirect URI\"}",
+      "duration": 639,
+      "timestamp": "2026-05-22T08:40:32.559Z"
+    },
+    {
+      "testId": "PERF-001",
+      "testName": "登录初始跳转性能",
       "status": "PASS",
       "message": "",
-      "duration": 1350,
-      "timestamp": "2026-05-13T01:17:22.600Z"
+      "duration": 22,
+      "timestamp": "2026-05-22T08:40:32.582Z"
+    },
+    {
+      "testId": "PERF-002",
+      "testName": "完整 OAuth 流程性能",
+      "status": "FAIL",
+      "message": "OAuth Authorization failed to get callback URL. Status: 400, Body: {\"message\":\"Invalid redirect URI\"}",
+      "duration": 818,
+      "timestamp": "2026-05-22T08:40:33.400Z"
+    },
+    {
+      "testId": "PERF-003",
+      "testName": "Session 查询性能",
+      "status": "FAIL",
+      "message": "OAuth Authorization failed to get callback URL. Status: 400, Body: {\"message\":\"Invalid redirect URI\"}",
+      "duration": 1204,
+      "timestamp": "2026-05-22T08:40:34.604Z"
+    },
+    {
+      "testId": "BUS-PRE",
+      "testName": "管理员登录获取Session",
+      "status": "FAIL",
+      "message": "OAuth Authorization failed to get callback URL. Status: 400, Body: {\"message\":\"Invalid redirect URI\"}",
+      "duration": 887,
+      "timestamp": "2026-05-22T08:40:35.492Z"
+    },
+    {
+      "testId": "SCOPE-INIT",
+      "testName": "管理员登录初始化",
+      "status": "FAIL",
+      "message": "OAuth Authorization failed to get callback URL. Status: 400, Body: {\"message\":\"Invalid redirect URI\"}",
+      "duration": 688,
+      "timestamp": "2026-05-22T08:40:36.181Z"
+    },
+    {
+      "testId": "SCOPE-001",
+      "testName": "验证管理员（ALL）可获取完整用户列表",
+      "status": "FAIL",
+      "message": "需先登录成功",
+      "duration": 0,
+      "timestamp": "2026-05-22T08:40:36.181Z"
+    },
+    {
+      "testId": "SCOPE-002",
+      "testName": "验证数据范围过滤器计算",
+      "status": "FAIL",
+      "message": "需先登录成功",
+      "duration": 0,
+      "timestamp": "2026-05-22T08:40:36.181Z"
+    },
+    {
+      "testId": "SCOPE-003",
+      "testName": "验证无权访问他人的敏感操作",
+      "status": "FAIL",
+      "message": "Cannot read properties of undefined (reading 'getHeader')",
+      "duration": 0,
+      "timestamp": "2026-05-22T08:40:36.181Z"
+    },
+    {
+      "testId": "SCOPE-004",
+      "testName": "验证 CUSTOM 逻辑注入点",
+      "status": "PASS",
+      "message": "",
+      "duration": 0,
+      "timestamp": "2026-05-22T08:40:36.181Z"
+    },
+    {
+      "testId": "SEC-001",
+      "testName": "验证 OIDC Nonce 不匹配时拒绝回调",
+      "status": "PASS",
+      "message": "",
+      "duration": 12,
+      "timestamp": "2026-05-22T08:40:36.194Z"
+    },
+    {
+      "testId": "SEC-002",
+      "testName": "验证 Nonce 强制校验",
+      "status": "PASS",
+      "message": "",
+      "duration": 0,
+      "timestamp": "2026-05-22T08:40:36.194Z"
     }
   ],
-  "timestamp": "2026-05-13T01:17:22.602Z"
+  "timestamp": "2026-05-22T08:40:36.196Z"
 }

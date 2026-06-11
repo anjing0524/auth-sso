@@ -1,30 +1,38 @@
 /**
- * 单个用户操作 API
- * GET /api/users/[id] - 获取用户详情
- * PUT /api/users/[id] - 更新用户
- * DELETE /api/users/[id] - 删除用户
+ * 单个用户操作 API 路由处理器
+ * @module apps/portal/api/users/[id]
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { db, schema } from '@/lib/db';
 import { eq, or } from 'drizzle-orm';
 import { withPermission, checkDataScope, getDataScopeFilter } from '@/lib/auth-middleware';
+import { clearUserPermissionCache } from '@/lib/permissions';
+import { revokeUserSessions } from '@/lib/session';
+import { COMMON_ERRORS, USER_ERRORS, UserStatus } from '@auth-sso/contracts';
 
 export const runtime = 'nodejs';
 
+/**
+ * 路由参数定义
+ */
 interface RouteParams {
   params: Promise<{ id: string }>;
 }
 
 /**
  * GET /api/users/[id]
- * 获取用户详情（含角色）
+ * 获取特定用户的详细信息（包含其分配的角色列表）
  * 权限要求: user:read
+ * 
+ * @param request Next.js 请求对象
+ * @param params 路由参数 (Promise<{ id: string }>)
+ * @returns 用户详情及角色列表 JSON 响应
  */
 export async function GET(request: NextRequest, { params }: RouteParams) {
   return withPermission(request, { permissions: ['user:read'] }, async (adminUserId) => {
     const { id } = await params;
 
-    // 查询用户
+    // 联合部门表查询用户信息
     const users = await db.select({
       id: schema.users.id,
       publicId: schema.users.publicId,
@@ -45,19 +53,19 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
     if (users.length === 0) {
       return NextResponse.json(
-        { error: 'not_found', message: '用户不存在' },
+        { error: USER_ERRORS.USER_NOT_FOUND, message: '用户不存在' }, 
         { status: 404 }
       );
     }
 
     const user = users[0]!;
 
-    // 数据范围检查
+    // 数据范围检查：管理员必须有权限查看该部门下的用户
     if (user.deptId) {
       const hasScope = await checkDataScope(adminUserId, user.deptId);
       if (!hasScope) {
         return NextResponse.json(
-          { error: 'forbidden', message: '无权查看该用户' },
+          { error: COMMON_ERRORS.FORBIDDEN, message: '无权查看该用户' }, 
           { status: 403 }
         );
       }
@@ -65,13 +73,13 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       const filter = await getDataScopeFilter(adminUserId);
       if (filter.type !== 'ALL') {
         return NextResponse.json(
-          { error: 'forbidden', message: '无权查看无部门用户' },
+          { error: COMMON_ERRORS.FORBIDDEN, message: '无权查看无部门用户' }, 
           { status: 403 }
         );
       }
     }
 
-    // 查询用户角色
+    // 查询该用户当前所分配的所有角色
     const roles = await db.select({
       id: schema.roles.id,
       publicId: schema.roles.publicId,
@@ -111,8 +119,12 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
 /**
  * PUT /api/users/[id]
- * 更新用户
+ * 更新指定用户的信息
  * 权限要求: user:update
+ * 
+ * @param request Next.js 请求对象
+ * @param params 路由参数 (Promise<{ id: string }>)
+ * @returns 操作结果 JSON 响应
  */
 export async function PUT(request: NextRequest, { params }: RouteParams) {
   return withPermission(request, { permissions: ['user:update'] }, async (adminUserId) => {
@@ -127,7 +139,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
     if (users.length === 0) {
       return NextResponse.json(
-        { error: 'not_found', message: '用户不存在' },
+        { error: USER_ERRORS.USER_NOT_FOUND, message: '用户不存在' }, 
         { status: 404 }
       );
     }
@@ -139,7 +151,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       const hasScope = await checkDataScope(adminUserId, existingUser.deptId);
       if (!hasScope) {
         return NextResponse.json(
-          { error: 'forbidden', message: '无权修改该用户' },
+          { error: COMMON_ERRORS.FORBIDDEN, message: '无权修改该用户' }, 
           { status: 403 }
         );
       }
@@ -147,7 +159,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       const filter = await getDataScopeFilter(adminUserId);
       if (filter.type !== 'ALL') {
         return NextResponse.json(
-          { error: 'forbidden', message: '无权修改无部门用户' },
+          { error: COMMON_ERRORS.FORBIDDEN, message: '无权修改无部门用户' }, 
           { status: 403 }
         );
       }
@@ -158,23 +170,32 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       const hasNewScope = await checkDataScope(adminUserId, deptId);
       if (!hasNewScope) {
         return NextResponse.json(
-          { error: 'forbidden', message: '无权将用户移至该部门' },
+          { error: COMMON_ERRORS.FORBIDDEN, message: '无权将用户移至该部门' }, 
           { status: 403 }
         );
       }
     }
 
-    // 更新用户
+    // 更新用户数据，严格限制类型
     await db.update(schema.users)
       .set({
         name: name ?? existingUser.name,
         email: email ?? existingUser.email,
-        status: status ?? existingUser.status,
+        status: status !== undefined ? (status as UserStatus) : existingUser.status,
         deptId: deptId !== undefined ? (deptId || null) : existingUser.deptId,
         avatarUrl: avatarUrl ?? existingUser.avatarUrl,
         updatedAt: new Date(),
       })
       .where(eq(schema.users.id, existingUser.id));
+
+    // 联动清除受影响用户的权限缓存，保障强一致性
+    await clearUserPermissionCache(existingUser.id);
+
+    // 如果最新状态为非激活 (ACTIVE) 状态，强行秒级踢出该用户的所有分布式在线 Session 物理会话
+    const newStatus = status !== undefined ? (status as UserStatus) : existingUser.status;
+    if (newStatus !== 'ACTIVE') {
+      await revokeUserSessions(existingUser.id);
+    }
 
     return NextResponse.json({ success: true });
   });
@@ -182,8 +203,12 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
 /**
  * DELETE /api/users/[id]
- * 删除用户
+ * 逻辑删除特定用户（将状态变更为 DELETED）
  * 权限要求: user:delete
+ * 
+ * @param request Next.js 请求对象
+ * @param params 路由参数 (Promise<{ id: string }>)
+ * @returns 操作结果 JSON 响应
  */
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   return withPermission(request, { permissions: ['user:delete'] }, async (adminUserId) => {
@@ -196,7 +221,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
 
     if (users.length === 0) {
       return NextResponse.json(
-        { error: 'not_found', message: '用户不存在' },
+        { error: USER_ERRORS.USER_NOT_FOUND, message: '用户不存在' }, 
         { status: 404 }
       );
     }
@@ -208,7 +233,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       const hasScope = await checkDataScope(adminUserId, existingUser.deptId);
       if (!hasScope) {
         return NextResponse.json(
-          { error: 'forbidden', message: '无权删除该用户' },
+          { error: COMMON_ERRORS.FORBIDDEN, message: '无权删除该用户' }, 
           { status: 403 }
         );
       }
@@ -216,7 +241,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       const filter = await getDataScopeFilter(adminUserId);
       if (filter.type !== 'ALL') {
         return NextResponse.json(
-          { error: 'forbidden', message: '无权删除无部门用户' },
+          { error: COMMON_ERRORS.FORBIDDEN, message: '无权删除无部门用户' }, 
           { status: 403 }
         );
       }
@@ -229,6 +254,12 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
         updatedAt: new Date()
       })
       .where(eq(schema.users.id, existingUser.id));
+
+    // 联动清除受影响用户的权限缓存，保障强一致性
+    await clearUserPermissionCache(existingUser.id);
+
+    // 逻辑删除后，强行物理注销该用户所有的分布式活跃会话，保障极致安全，消灭悬空凭证
+    await revokeUserSessions(existingUser.id);
 
     return NextResponse.json({ success: true, message: '用户已逻辑删除' });
   });

@@ -7,21 +7,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db, schema } from '@/lib/db';
 import { eq, and } from 'drizzle-orm';
-import { randomBytes, randomUUID } from 'crypto';
 import { withPermission } from '@/lib/auth-middleware';
+import { generateUUID } from '@/lib/crypto';
+import { COMMON_ERRORS, ROLE_ERRORS } from '@auth-sso/contracts';
 
 export const runtime = 'nodejs';
 
 /**
- * 生成随机 ID
- */
-function generateId(): string {
-  return randomUUID();
-}
-
-/**
  * GET /api/roles/[id]/data-scopes
- * 获取指定角色的自定义数据范围（部门列表）
+ * 获取指定角色的自定义数据范围（关联部门列表）
+ * 
+ * @param request NextRequest 请求对象
+ * @param params 动态路由参数，包含角色 ID
+ * @returns 关联部门列表的 JSON 响应
  */
 export async function GET(
   request: NextRequest,
@@ -37,7 +35,7 @@ export async function GET(
 
     if (roleResult.length === 0) {
       return NextResponse.json(
-        { error: 'not_found', message: '角色不存在' },
+        { error: ROLE_ERRORS.ROLE_NOT_FOUND, message: '角色不存在' },
         { status: 404 }
       );
     }
@@ -64,8 +62,11 @@ export async function GET(
 
 /**
  * POST /api/roles/[id]/data-scopes
- * 批量更新角色的自定义数据范围
- * 采用先删后增策略
+ * 批量更新角色的自定义数据范围 (先删后增的事务强一致性操作)
+ * 
+ * @param request NextRequest 请求对象，Payload 包含部门 ID 数组
+ * @param params 动态路由参数，包含角色 ID
+ * @returns 批量更新操作成功与否的 JSON 响应
  */
 export async function POST(
   request: NextRequest,
@@ -80,7 +81,7 @@ export async function POST(
 
       if (!Array.isArray(deptIds)) {
         return NextResponse.json(
-          { error: 'invalid_params', message: 'deptIds 必须是数组' },
+          { error: COMMON_ERRORS.VALIDATION_ERROR, message: 'deptIds 必须是数组' },
           { status: 400 }
         );
       }
@@ -92,12 +93,12 @@ export async function POST(
 
       if (roleResult.length === 0) {
         return NextResponse.json(
-          { error: 'not_found', message: '角色不存在' },
+          { error: ROLE_ERRORS.ROLE_NOT_FOUND, message: '角色不存在' },
           { status: 404 }
         );
       }
 
-      // 使用事务处理
+      // 使用事务处理，保障批量写入强一致性，防范半损状态
       await db.transaction(async (tx) => {
         // 1. 删除旧的关联
         await tx.delete(schema.roleDataScopes).where(eq(schema.roleDataScopes.roleId, roleId));
@@ -105,7 +106,7 @@ export async function POST(
         // 2. 插入新的关联
         if (deptIds.length > 0) {
           const values = deptIds.map(deptId => ({
-            id: generateId(),
+            id: generateUUID(), // 静态导入并使用全局统一的 crypto 工具，保障 DRY
             roleId,
             deptId,
             createdAt: new Date(),
@@ -118,7 +119,7 @@ export async function POST(
     } catch (error) {
       console.error('[RoleDataScope] Update error:', error);
       return NextResponse.json(
-        { error: 'internal_error', message: '更新失败' },
+        { error: COMMON_ERRORS.INTERNAL_ERROR, message: '更新失败' },
         { status: 500 }
       );
     }
@@ -127,7 +128,11 @@ export async function POST(
 
 /**
  * DELETE /api/roles/[id]/data-scopes
- * 移除特定的部门关联
+ * 移除特定的角色-部门自定义范围关联
+ * 
+ * @param request NextRequest 请求对象，Query 中包含待删除关联的 deptId
+ * @param params 动态路由参数，包含角色 ID
+ * @returns 移除成功与否的 JSON 响应
  */
 export async function DELETE(
   request: NextRequest,
@@ -139,7 +144,7 @@ export async function DELETE(
 
   if (!deptId) {
     return NextResponse.json(
-      { error: 'invalid_params', message: '缺少 deptId 参数' },
+      { error: COMMON_ERRORS.INVALID_REQUEST, message: '缺少 deptId 参数' },
       { status: 400 }
     );
   }

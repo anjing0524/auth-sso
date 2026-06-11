@@ -1,3 +1,5 @@
+import './load-env';
+
 import { db } from '../src/db';
 import * as schema from '../src/db/schema';
 import bcrypt from 'bcryptjs';
@@ -34,7 +36,6 @@ async function main() {
       username: 'admin',
       email: 'admin@example.com',
       name: '系统管理员',
-      password: adminPassword,
       passwordHash: adminPassword,
       status: 'ACTIVE',
     });
@@ -50,7 +51,14 @@ async function main() {
 
     // 3. 创建 Portal Client
     console.log('Creating clients...');
-    const portalRedirectUri = process.env.PORTAL_REDIRECT_URI || 'http://localhost:4100/auth/callback,http://localhost:4100/api/auth/callback,http://127.0.0.1:4100/auth/callback,http://127.0.0.1:4100/api/auth/callback';
+    const portalRedirectUri = process.env.PORTAL_REDIRECT_URL 
+      ? JSON.stringify(process.env.PORTAL_REDIRECT_URL.split(',').map(u => u.trim()))
+      : JSON.stringify([
+          'http://localhost:4100/auth/callback',
+          'http://localhost:4100/api/auth/callback',
+          'http://127.0.0.1:4100/auth/callback',
+          'http://127.0.0.1:4100/api/auth/callback'
+        ]);
     await db.insert(schema.clients).values({
       id: generateId(),
       publicId: 'cli_portal',
@@ -66,7 +74,14 @@ async function main() {
     });
 
     // 4. 创建 Demo App Client
-    const demoRedirectUri = process.env.DEMO_APP_REDIRECT_URI || 'http://localhost:4102/auth/callback,http://localhost:4102/api/auth/callback,http://127.0.0.1:4102/auth/callback,http://127.0.0.1:4102/api/auth/callback';
+    const demoRedirectUri = process.env.DEMO_APP_REDIRECT_URL 
+      ? JSON.stringify(process.env.DEMO_APP_REDIRECT_URL.split(',').map(u => u.trim()))
+      : JSON.stringify([
+          'http://localhost:4102/auth/callback',
+          'http://localhost:4102/api/auth/callback',
+          'http://127.0.0.1:4102/auth/callback',
+          'http://127.0.0.1:4102/api/auth/callback'
+        ]);
     await db.insert(schema.clients).values({
       id: generateId(),
       publicId: 'cli_demo',

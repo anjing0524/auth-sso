@@ -1,91 +1,43 @@
-# Auth-SSO 开发环境
+# Auth-SSO 生产环境 Docker 部署方案
 
-## 快速启动
+## 1. 架构说明
+本方案采用 Docker Compose 进行手动部署。包含以下组件：
+- **IdP (Identity Provider)**: 身份提供者，运行在 4001 端口。
+- **Portal (Management)**: 统一管理后台，运行在 4000 端口。
+- **PostgreSQL**: 核心数据库，不对公网暴露 5432 端口。
+- **Redis**: 缓存与 Session 存储，不对公网暴露 6379 端口。
 
-### 1. 启动基础设施服务
-
-```bash
-# 启动 PostgreSQL 和 Redis
-docker-compose up -d
-
-# 查看服务状态
-docker-compose ps
-
-# 查看日志
-docker-compose logs -f
+## 2. 目录结构
+```text
+/opt/auth-sso/
+├── docker-compose.yml
+├── .env.prod
+└── data/
+    ├── postgres/
+    └── redis/
 ```
 
-### 2. 初始化数据库
+## 3. 安全加固特性
+- **信创合规**: 使用 Rust (Pingora) 自研网关替代 Nginx，消除闭源/厂商依赖风险。
+- **HTTPS 强制**: 网关已配置 80 -> 443 自动跳转。
+- **IP 记录**: 已在代码层面实现 `x-forwarded-for` 解析，网关已配置协议转发。
 
-```bash
-# 生成数据库迁移
-pnpm db:generate
+## 4. 部署步骤
+1. 安装 Docker & Docker Compose。
+2. 配置域名解析：将 `idp.yourdomain.com` 和 `portal.yourdomain.com` 指向服务器 IP。
+3. 获取 SSL 证书（推荐使用 Certbot）：
+   ```bash
+   docker run -it --rm --name certbot \
+     -v "$(pwd)/data/certbot/conf:/etc/letsencrypt" \
+     -v "$(pwd)/data/certbot/www:/var/www/certbot" \
+     certbot/certbot certonly --webroot -w /var/www/certbot \
+     -d idp.yourdomain.com -d portal.yourdomain.com
+   ```
+4. 证书目录映射：确保证书文件位于 `data/certbot/conf/live/yourdomain.com/` 下。
+5. 启动服务：`docker-compose -f docker-compose.prod.yml up -d --build`。
+6. 数据库初始化：`docker exec -i auth-sso-postgres psql -U postgres < init-db.sql`。
 
-# 推送 Schema 到数据库
-pnpm db:push
-```
+## 5. 注意事项 (IMPORTANT)
+- **HTTPS 协议**: 在 `.env.prod` 中，`BETTER_AUTH_URL` 和 `NEXT_PUBLIC_APP_URL` 必须以 `https://` 开头。
+- **代理透传**: Nginx 必须转发 `X-Forwarded-Proto: https`，否则 Better Auth 会因协议不匹配拒绝签发 Cookie。
 
-### 3. 启动应用
-
-```bash
-# 启动 IdP (端口 3001)
-pnpm dev:idp
-
-# 启动 Portal (端口 3000)
-pnpm dev:portal
-
-# 同时启动两者
-pnpm dev
-```
-
-## 服务地址
-
-| 服务 | 地址 | 说明 |
-|------|------|------|
-| Portal | http://localhost:3000 | 管理门户 |
-| IdP | http://localhost:3001 | 身份提供者 |
-| PostgreSQL | localhost:5432 | 数据库 |
-| Redis | localhost:6379 | 缓存/Session |
-
-## 可选工具
-
-```bash
-# 启动 Redis 管理界面 (http://localhost:6380)
-docker-compose --profile tools up -d redis-commander
-```
-
-## 常用命令
-
-```bash
-# 停止所有服务
-docker-compose down
-
-# 重置所有数据（删除数据卷）
-docker-compose down -v
-
-# 进入 PostgreSQL 命令行
-docker exec -it auth-sso-postgres psql -U postgres
-
-# 进入 Redis 命令行
-docker exec -it auth-sso-redis redis-cli
-```
-
-## 测试账户
-
-初始化脚本会创建以下测试账户：
-
-| 用户名 | 密码 | 说明 |
-|--------|------|------|
-| admin | test123456 | 系统管理员 |
-
-## OAuth Client 配置
-
-| Client ID | Client Secret | Redirect URI |
-|-----------|---------------|--------------|
-| portal | portal-secret | http://localhost:3000/api/auth/callback |
-
-## 环境变量
-
-环境变量已配置在对应的 `.env` 文件中：
-- `apps/idp/.env` - IdP 配置
-- `apps/portal/.env` - Portal 配置

@@ -1,13 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { oauthConfig } from '@/lib/auth-client';
-import crypto from 'crypto';
+import { COMMON_ERRORS } from '@auth-sso/contracts';
+import {
+  generateCodeVerifier,
+  generateCodeChallenge,
+  generateState,
+  generateNonce,
+} from '@/lib/crypto';
 
 // 使用 Node.js runtime
 export const runtime = 'nodejs';
 
 /**
- * GET /api/auth/login
- * 发起 OAuth 授权流程
+ * 发起 OIDC 授权码登录流程
+ * 生成 PKCE Verifier/Challenge、OIDC State/Nonce 因子，并通过安全 Cookie 存入客户端，最后重定向至 IdP 授权端点。
+ * 
+ * @param request 客户端发起的 NextRequest 请求实例
+ * @returns NextResponse 重定向响应，或错误 JSON
  */
 export async function GET(request: NextRequest) {
   console.log('[Login] Initializing login flow...');
@@ -15,7 +24,7 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const redirect = searchParams.get('redirect') || '/';
 
-    // 1. 生成 PKCE 参数 - 使用更稳健的同步方法
+    // 1. 生成 PKCE 参数 - 静态导入并使用全局 crypto 统一密码学方法，保障 DRY 原则
     const codeVerifier = generateCodeVerifier();
     const codeChallenge = generateCodeChallenge(codeVerifier);
     const state = generateState();
@@ -58,29 +67,22 @@ export async function GET(request: NextRequest) {
     });
 
     return response;
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('[Login] Fatal error during login initialization:', error);
-    // 返回更清晰的错误响应，防止前端静默失败
-    return new NextResponse('Login Initialization Failed: ' + (error as Error).message, { status: 500 });
+    // 错误优雅脱敏并前台 JSON 契约化，捍卫前台安全防爆线，杜绝 information leak
+    return NextResponse.json(
+      { error: COMMON_ERRORS.INTERNAL_ERROR, message: '登录初始化失败，请稍后重试' },
+      { status: 500 }
+    );
   }
 }
 
-function generateCodeVerifier(): string {
-  return crypto.randomBytes(48).toString('base64url');
-}
-
-function generateCodeChallenge(verifier: string): string {
-  return crypto.createHash('sha256').update(verifier).digest('base64url');
-}
-
-function generateState(): string {
-  return crypto.randomBytes(32).toString('hex');
-}
-
-function generateNonce(): string {
-  return crypto.randomBytes(16).toString('hex');
-}
-
+/**
+ * 构建 OIDC 授权重定向 URL
+ * 
+ * @param params 授权所需的 state、nonce 和 PKCE challenge
+ * @returns 完整的 IdP 授权重定向 URL 字符串
+ */
 function buildAuthorizationUrl(params: {
   codeChallenge: string;
   state: string;
@@ -101,3 +103,4 @@ function buildAuthorizationUrl(params: {
 
   return url.toString();
 }
+
