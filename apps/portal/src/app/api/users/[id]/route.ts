@@ -7,7 +7,9 @@ import { db, schema } from '@/lib/db';
 import { eq, or } from 'drizzle-orm';
 import { withPermission, checkDataScope, getDataScopeFilter } from '@/lib/auth-middleware';
 import { clearUserPermissionCache } from '@/lib/permissions';
-import { revokeUserSessions } from '@/lib/session';
+// 注意：JWT Cookie 无状态架构下，不再使用 Redis Session 批量踢人
+// 用户封禁/密码修改后，当前 Access Token 将在自然过期后失效（默认 1h）
+// 如需即时失效，需在调用处获取用户 Token 的 jti 并调用 revokeJti()
 import { COMMON_ERRORS, USER_ERRORS, UserStatus } from '@auth-sso/contracts';
 
 export const runtime = 'nodejs';
@@ -194,7 +196,9 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     // 如果最新状态为非激活 (ACTIVE) 状态，强行秒级踢出该用户的所有分布式在线 Session 物理会话
     const newStatus = status !== undefined ? (status as UserStatus) : existingUser.status;
     if (newStatus !== 'ACTIVE') {
-      await revokeUserSessions(existingUser.id);
+      // JWT 无状态架构：用户禁用后 Token 在过期时间内仍有效（最长 1h）
+      // 如需即时踢出，需在前端发起强制登出或等待 Token 自然过期
+      // await revokeUserSessions(existingUser.id); // 已废弃（Redis Session 模式）
     }
 
     return NextResponse.json({ success: true });
@@ -259,7 +263,8 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     await clearUserPermissionCache(existingUser.id);
 
     // 逻辑删除后，强行物理注销该用户所有的分布式活跃会话，保障极致安全，消灭悬空凭证
-    await revokeUserSessions(existingUser.id);
+    // JWT 无状态架构：密码修改后 Token 在过期时间内仍有效（最长 1h）
+    // await revokeUserSessions(existingUser.id); // 已废弃（Redis Session 模式）
 
     return NextResponse.json({ success: true, message: '用户已逻辑删除' });
   });

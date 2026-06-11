@@ -4,14 +4,14 @@
  */
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { getSessionIdFromCookie, getSession } from '@/lib/session';
+import { getJwtFromCookie, verifyJwt } from '@/lib/session';
 
 export default async function HomePage() {
-  // 检查登录状态
-  const sessionId = await getSessionIdFromCookie();
-  if (sessionId) {
-    const session = await getSession(sessionId);
-    if (session) {
+  // 检查登录状态：验签 portal_jwt_token Cookie
+  const token = await getJwtFromCookie();
+  if (token) {
+    const claims = await verifyJwt(token);
+    if (claims) {
       // 已登录，重定向到 Dashboard
       redirect('/dashboard');
     }

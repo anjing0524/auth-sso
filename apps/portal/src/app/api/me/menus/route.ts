@@ -4,7 +4,7 @@
  * GET /api/me/menus - 返回当前登录用户经权限过滤后的树形菜单结构（仅限侧边栏可见菜单，排除了按钮级权限项）
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { getSessionIdFromCookie, getSession } from '@/lib/session';
+import { getJwtFromCookie, verifyJwt } from '@/lib/session';
 import { getUserPermissionContext } from '@/lib/permissions';
 import { db, schema } from '@/lib/db';
 import { asc, eq } from 'drizzle-orm';
@@ -48,17 +48,17 @@ function buildTree(items: SidebarMenuItem[], parentId: string | null = null): Si
  */
 export async function GET(request: NextRequest) {
   try {
-    // 1. 验证 Session 会话合法性
-    const sessionId = await getSessionIdFromCookie();
-    if (!sessionId) {
+    // 1. 从 JWT Cookie 验签获取用户身份
+    const token = await getJwtFromCookie();
+    if (!token) {
       return NextResponse.json(
         { error: COMMON_ERRORS.UNAUTHORIZED, message: '未登录' },
         { status: 401 }
       );
     }
 
-    const session = await getSession(sessionId);
-    if (!session) {
+    const claims = await verifyJwt(token);
+    if (!claims) {
       return NextResponse.json(
         { error: COMMON_ERRORS.UNAUTHORIZED, message: '登录已过期' },
         { status: 401 }
@@ -66,7 +66,7 @@ export async function GET(request: NextRequest) {
     }
 
     // 2. 联动查询获取当前用户的角色及权限集上下文
-    const ctx = await getUserPermissionContext(session.userId);
+    const ctx = await getUserPermissionContext(claims.sub);
     if (!ctx) {
       return NextResponse.json(
         { error: COMMON_ERRORS.INTERNAL_ERROR, message: '无法获取用户权限上下文' },
