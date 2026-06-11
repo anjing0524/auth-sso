@@ -24,18 +24,92 @@ pnpm --filter @auth-sso/idp dev      # IdP on port 4001
 pnpm --filter @auth-sso/portal dev   # Portal on port 4000
 pnpm --filter @auth-sso/demo-app dev # Demo on port 4002
 pnpm --filter @auth-sso/customer-graph dev # Graph on port 4003
+
+# 测试体系 (Vitest + Playwright + Traceability)
+pnpm test                  # 全量 Vitest 测试
+pnpm test:api              # API 层测试（Mock DB/Redis）
+pnpm test:components       # 组件层测试（jsdom）
+pnpm test:e2e              # Playwright E2E 端到端测试
+pnpm test:report           # 需求追溯性覆盖率报告
+pnpm test:report --threshold 90  # 检查覆盖率 >= 90%
 ```
 
-## Key Files
 
-- `apps/idp/src/lib/auth.ts` - Better Auth configuration with OIDC Provider
-- `apps/portal/src/app/dashboard/page.tsx` - Admin analytics dashboard
-- `apps/portal/src/app/api/auth/callback/route.ts` - OAuth callback with intelligent redirection
-- `apps/portal/src/lib/auth-middleware.ts` - RBAC check with data scope filtering
-- `apps/portal/src/lib/session.ts` - Redis-backed portal session management
-- `tests/data-scope.test.js` - Data scope integration tests
-- `tests/tdd-prd-all.test.js` - Master TDD validation suite
-- `docs/solutions/` - Documented solutions to past problems (bugs, best practices, patterns) with YAML frontmatter.
+## Test Architecture
+
+Tests follow a layered strategy — fast, isolated unit tests at the bottom, integration-style API tests in the middle, and full-browser E2E at the top.
+
+### Layer 1: Unit / Component Tests
+
+- **Location**: `apps/*/__tests__/components/`, `apps/*/__tests__/smoke.test.ts`
+- **Framework**: Vitest with `jsdom` environment
+- **Scope**: Component rendering, user interactions, helper functions
+- **Mocks**: All external dependencies (auth, API calls, DB)
+- **Run**: `pnpm test:components`
+
+### Layer 2: API Tests
+
+- **Location**: `apps/*/__tests__/api/*.test.ts`
+- **Framework**: Vitest with `@vitest-environment node`
+- **Scope**: API route handlers — request validation, auth enforcement, CRUD logic, data scope filtering
+- **Mocks**: DB via `vi.mock()`, Redis via `@/lib/redis`, auth middleware via `vi.mock('@/lib/auth-middleware')`
+- **Run**: `pnpm test:api`
+
+### Layer 3: E2E Tests
+
+- **Location**: `tests/e2e/*.spec.ts`
+- **Framework**: Playwright on Chromium
+- **Scope**: Full OAuth 2.1 flow, SSO cross-app login/logout, RBAC enforcement in browser
+- **Setup**: Three `webServer` entries (IdP + Portal + Demo App) with DB push + seed
+- **Run**: `pnpm test:e2e`
+
+### Traceability
+
+- **Script**: `tests/traceability/generate-report.mjs`
+- **Reports**: `tests/traceability/coverage-report.md`
+- **Mechanism**: Scans test files for `@req` annotations (file-level and line-level), matches against `docs/spec/REQUIREMENTS_MATRIX.md`, generates coverage report
+- **CI Gate**: `pnpm test:report --threshold 90` (exits 1 if coverage < 90%)
+
+### `@req` Annotation Convention
+
+Every test file SHOULD annotate which requirements it covers:
+
+- File-level (JSDoc block):
+  ```
+   * @req AUTH-001~005
+   * @req D-PRM-L, D-PRM-C, D-PRM-U, D-PRM-D
+  ```
+- Line-level (inline, for specific test cases):
+  ```
+  // @req AUTH-001
+  it('缺少 code 参数时重定向到登录页', async () => { ... });
+  ```
+
+Supported formats:
+- Single ID: `@req A-NAV-01`
+- Comma-separated: `@req D-PRM-L, D-PRM-C, D-PRM-U, D-PRM-D`
+- Range: `@req AUTH-001~005` expands to AUTH-001 ... AUTH-005
+- Slash alternation: `@req F-DEP-L/C/U/D` expands to F-DEP-L, F-DEP-C, F-DEP-U, F-DEP-D
+- Mixed: `@req F-DEP-L/C/U/D, SCOPE-001~005`
+
+### Key Test Files
+
+- `apps/portal/__tests__/api/auth-callback.test.ts` — OAuth 回调验证
+- `apps/portal/__tests__/api/session-lifecycle.test.ts` — Session TTL 与刷新
+- `apps/portal/__tests__/api/sso-security.test.ts` — PKCE/State/Nonce 安全
+- `apps/portal/__tests__/api/data-scope.test.ts` — 数据范围过滤
+- `apps/portal/__tests__/api/permission-api.test.ts` — 权限 CRUD
+- `apps/portal/__tests__/api/role-api.test.ts` — 角色 + 权限绑定
+- `apps/portal/__tests__/api/user-api.test.ts` — 用户 CRUD
+- `apps/portal/__tests__/api/department-api.test.ts` — 部门 CRUD
+- `apps/portal/__tests__/api/client-api.test.ts` — OAuth Client CRUD
+- `apps/portal/__tests__/api/menu-api.test.ts` — 菜单 CRUD
+- `apps/portal/__tests__/api/audit-logging.test.ts` — 审计日志
+- `apps/idp/__tests__/api/oauth-authorize.test.ts` — IdP 授权端点
+- `apps/idp/__tests__/api/sign-out-sso.test.ts` — SSO 登出
+- `tests/e2e/auth-flow.spec.ts` — E2E 认证流程
+- `tests/e2e/sso-cross-app.spec.ts` — E2E 跨应用 SSO
+- `tests/e2e/rbac-enforcement.spec.ts` — E2E RBAC 验证
 
 ## Tech Stack
 
