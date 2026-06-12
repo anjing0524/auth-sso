@@ -50,7 +50,7 @@ export interface PermissionCheckResult {
  * @returns 鉴权通过状态或精细化失败提示
  */
 export async function checkPermission(
-  request: NextRequest,
+  request: NextRequest | Headers | undefined,
   options: PermissionCheckOptions
 ): Promise<PermissionCheckResult> {
   try {
@@ -69,8 +69,18 @@ export async function checkPermission(
     // 2. 如果无 JWT 或校验失败，尝试通过 Better Auth 本地 Session 获取身份
     if (!userId) {
       const { auth } = await import('./auth'); // 避免循环依赖，采用动态导入
+      
+      let headersInit: HeadersInit | undefined = undefined;
+      if (request) {
+        if (request instanceof Headers) {
+          headersInit = request;
+        } else {
+          headersInit = request.headers;
+        }
+      }
+
       const session = await auth.api.getSession({
-        headers: request.headers,
+        headers: headersInit || {},
       });
       if (session && session.user) {
         userId = session.user.id;
