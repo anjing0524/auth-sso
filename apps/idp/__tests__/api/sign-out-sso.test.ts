@@ -70,6 +70,16 @@ const {
         return () => ({
           values: () => ({ then: (resolve: Function) => resolve([{ id: 'mock-id' }]) }),
         });
+      if (prop === 'transaction')
+        return async (cb: any) => {
+          const tx = new Proxy({} as any, {
+            get(_t2: any, p: string) {
+              if (p === 'delete') return () => ({ where: () => ({ then: (r: Function) => r([1]) }) });
+              return () => ({ where: () => ({ then: (r: Function) => r([1]) }) });
+            },
+          });
+          return cb(tx);
+        };
       return undefined;
     },
   });
@@ -159,7 +169,7 @@ describe('SSO Sign-Out (IdP)', () => {
       expect(response.status).toBe(401);
 
       const body = await response.json();
-      expect(body.error).toBe('unauthorized');
+      expect(body.error).toBe('AUTH_SSO_1002');
     });
 
     it('Authorization header 不是 Bearer 格式返回 401', async () => {

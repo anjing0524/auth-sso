@@ -51,6 +51,18 @@ const { db, setQueryResult, resetDb, mockWithPermission } = vi.hoisted(() => {
             where: () => ({ then: (resolve: Function) => resolve([1]) }),
           }),
         });
+      if (prop === 'transaction') return async (cb: Function) => {
+        const tx = new Proxy({} as any, {
+          get(_t2: any, p: string) {
+            if (p === 'select') return () => createChain();
+            if (p === 'insert') return () => ({ values: (d: any) => ({ then: (r: Function) => r([{ ...d, id: 'mock-tx-id' }]) }) });
+            if (p === 'update') return () => ({ set: () => ({ where: () => ({ then: (r: Function) => r([1]) }) }) });
+            if (p === 'delete') return () => ({ where: () => ({ then: (r: Function) => r([1]) }) });
+            return undefined;
+          },
+        });
+        return cb(tx);
+      };
       if (prop === 'delete')
         return () => ({
           where: () => ({ then: (resolve: Function) => resolve([1]) }),
@@ -94,6 +106,7 @@ vi.mock('@/lib/auth-middleware', () => ({
 
 vi.mock('@/lib/audit', () => ({
   logAuditEvent: vi.fn(async () => {}),
+  getClientIP: vi.fn(() => '127.0.0.1'),
 }));
 
 vi.mock('@/lib/redis', () => ({}));
@@ -181,7 +194,7 @@ describe('Role Management API', () => {
       const body = await response.json();
 
       expect(response.status).toBe(400);
-      expect(body.error).toBe('invalid_params');
+      expect(body.error).toBe('AUTH_SSO_1005');
     });
 
     it('returns 400 when role code already exists', async () => {
@@ -196,7 +209,7 @@ describe('Role Management API', () => {
       const body = await response.json();
 
       expect(response.status).toBe(400);
-      expect(body.error).toBe('role_exists');
+      expect(body.error).toBe('AUTH_SSO_5002');
     });
   });
 
@@ -288,7 +301,7 @@ describe('Role Management API', () => {
 
       expect(response.status).toBe(400);
       const body = await response.json();
-      expect(body.error).toBe('is_system');
+      expect(body.error).toBe('AUTH_SSO_5003');
     });
   });
 
@@ -355,7 +368,7 @@ describe('Role Management API', () => {
       const body = await response.json();
 
       expect(response.status).toBe(400);
-      expect(body.error).toBe('invalid_params');
+      expect(body.error).toBe('AUTH_SSO_1005');
     });
 
     it('returns 404 for nonexistent role', async () => {

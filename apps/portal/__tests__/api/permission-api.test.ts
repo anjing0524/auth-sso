@@ -93,6 +93,7 @@ vi.mock('@/lib/auth-middleware', () => ({ withPermission: mocks.authFn }));
 vi.mock('@/lib/crypto', () => ({
   generateUUID: vi.fn(() => '00000000-0000-4000-8000-000000000001'),
   generatePermissionPublicId: vi.fn(() => 'perm_mock01'),
+  generateRequestId: vi.fn(() => 'req_mock01'),
 }));
 
 import { GET as ListPermissions, POST as CreatePermission } from '@/app/api/permissions/route';
@@ -206,7 +207,7 @@ describe('Permission API', () => {
         body: { name: '用户列表', code: 'user:list' },
       }));
       expect(res.status).toBe(400);
-      expect((await parseResponseJson(res)).error).toBe('permission_exists');
+      expect((await parseResponseJson(res)).error).toBe('AUTH_SSO_6002');
     });
 
     it('缺少 name 和 code 返回 400', async () => {

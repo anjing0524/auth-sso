@@ -199,14 +199,16 @@ describe('checkDataScope', () => {
   });
 
   // @req SCOPE-003
-  it('SELF 类型通过同部门检查，拒绝跨部门', async () => {
+  it('SELF 类型只允许访问本人数据，拒绝他人数据', async () => {
     mockDataScope.permissionContext.dataScopeType = 'SELF';
     mockDataScope.permissionContext.deptId = 'dept-1';
 
-    // 同部门通过
-    expect(await checkDataScope('user-1', 'dept-1')).toBe(true);
-    // 不同部门拒绝
-    expect(await checkDataScope('user-1', 'dept-2')).toBe(false);
+    // 本人数据通过 (userId === targetUserId)
+    expect(await checkDataScope('user-1', 'dept-1', 'user-1')).toBe(true);
+    // 他人数据拒绝
+    expect(await checkDataScope('user-1', 'dept-1', 'user-2')).toBe(false);
+    // 未提供 targetUserId 时拒绝
+    expect(await checkDataScope('user-1', 'dept-1')).toBe(false);
   });
 
   // @req SCOPE-004

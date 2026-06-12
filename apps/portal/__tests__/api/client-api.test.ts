@@ -88,7 +88,7 @@ const mocks = vi.hoisted(() => {
 
 vi.mock('@/lib/db', () => ({ db: mocks.db, schema: mocks.schema }));
 vi.mock('@/lib/auth-middleware', () => ({ withPermission: mocks.authFn }));
-vi.mock('@/lib/audit', () => ({ logAuditEvent: mocks.auditFn }));
+vi.mock('@/lib/audit', () => ({ logAuditEvent: mocks.auditFn, getClientIP: vi.fn(() => '127.0.0.1') }));
 
 import { GET as ListClients, POST as CreateClient } from '@/app/api/clients/route';
 import { GET as GetClient, PUT as UpdateClient, DELETE as DeleteClient } from '@/app/api/clients/[id]/route';
@@ -158,7 +158,7 @@ describe('Client API', () => {
       const req = createTestRequest('/api/clients', { method: 'POST', body: { name: '' } });
       const res = await CreateClient(req);
       expect(res.status).toBe(400);
-      expect((await parseResponseJson(res)).error).toBe('invalid_params');
+      expect((await parseResponseJson(res)).error).toBe('AUTH_SSO_1005');
     });
 
     it('无效的 redirect_uri 格式返回验证错误', async () => {
@@ -169,7 +169,7 @@ describe('Client API', () => {
       const res = await CreateClient(req);
       expect(res.status).toBe(400);
       const body = await parseResponseJson(res);
-      expect(body.error).toBe('invalid_redirect_uri');
+      expect(body.error).toBe('AUTH_SSO_7004');
       expect(body.message).toContain('not-a-valid-url');
     });
   });

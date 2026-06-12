@@ -258,7 +258,7 @@ describe('Department API', () => {
       const body = await parseResponseJson(res);
 
       expect(res.status).toBe(400);
-      expect(body.error).toBe('invalid_params');
+      expect(body.error).toBe('AUTH_SSO_1005');
       expect(body.message).toContain('部门名称');
     });
   });
@@ -317,7 +317,7 @@ describe('Department API', () => {
       const body = await parseResponseJson(res);
 
       expect(res.status).toBe(400);
-      expect(body.error).toBe('circular_reference');
+      expect(body.error).toBe('AUTH_SSO_4006');
     });
   });
 
@@ -356,7 +356,7 @@ describe('Department API', () => {
       const body = await parseResponseJson(res);
 
       expect(res.status).toBe(400);
-      expect(body.error).toBe('has_children');
+      expect(body.error).toBe('AUTH_SSO_4003');
       expect(body.message).toContain('子部门');
     });
   });

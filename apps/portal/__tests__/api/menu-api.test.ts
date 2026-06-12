@@ -197,6 +197,7 @@ describe('Menu API', () => {
 
   describe('PATCH /api/menus/[id]', () => {
     it('更新菜单名称和路径', async () => {
+      mocks.setQueryResult([{ id: 'm1' }]);
       mocks.setRowCountResult(1);
       const body = await parseResponseJson(
         await UpdateMenu(
@@ -208,6 +209,7 @@ describe('Menu API', () => {
     });
 
     it('更新权限绑定和可见性', async () => {
+      mocks.setQueryResult([{ id: 'm1' }]);
       mocks.setRowCountResult(1);
       const body = await parseResponseJson(
         await UpdateMenu(
@@ -219,6 +221,7 @@ describe('Menu API', () => {
     });
 
     it('更新 menuType 和 status', async () => {
+      mocks.setQueryResult([{ id: 'm1' }]);
       mocks.setRowCountResult(1);
       const body = await parseResponseJson(
         await UpdateMenu(
@@ -230,6 +233,7 @@ describe('Menu API', () => {
     });
 
     it('支持 publicId 更新', async () => {
+      mocks.setQueryResult([{ id: 'm1' }]);
       mocks.setRowCountResult(1);
       const body = await parseResponseJson(
         await UpdateMenu(

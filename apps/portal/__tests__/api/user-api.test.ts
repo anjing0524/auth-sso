@@ -134,6 +134,7 @@ vi.mock('bcryptjs', () => ({
 vi.mock('@/lib/audit', () => ({
   logAuditEvent: vi.fn(async () => {}),
   logLoginEvent: vi.fn(async () => {}),
+  getClientIP: vi.fn(() => '127.0.0.1'),
 }));
 
 vi.mock('@/lib/session', () => ({
@@ -277,7 +278,7 @@ describe('User Management API', () => {
       const body = await response.json();
 
       expect(response.status).toBe(400);
-      expect(body.error).toBe('invalid_params');
+      expect(body.error).toBe('AUTH_SSO_1005');
     });
 
     it('returns 400 when email or username already exists', async () => {
@@ -303,7 +304,7 @@ describe('User Management API', () => {
       const body = await response.json();
 
       expect(response.status).toBe(400);
-      expect(body.error).toBe('user_exists');
+      expect(body.error).toBe('AUTH_SSO_3002');
     });
 
     it('returns 403 when deptId is outside data scope', async () => {
@@ -325,7 +326,7 @@ describe('User Management API', () => {
       const body = await response.json();
 
       expect(response.status).toBe(403);
-      expect(body.error).toBe('forbidden');
+      expect(body.error).toBe('AUTH_SSO_1003');
     });
   });
 
