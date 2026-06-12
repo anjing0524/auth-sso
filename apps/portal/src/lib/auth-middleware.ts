@@ -54,19 +54,32 @@ export async function checkPermission(
   options: PermissionCheckOptions
 ): Promise<PermissionCheckResult> {
   try {
-    // 1. 从 Cookie 中读取 JWT
+    let userId: string | null = null;
+    let claims: PortalJwtClaims | null = null;
+
+    // 1. 尝试从 Cookie 中读取 JWT 并校验 (兼容旧有方式)
     const token = await getJwtFromCookie();
-    if (!token) {
+    if (token) {
+      claims = await verifyJwt(token);
+      if (claims) {
+        userId = claims.sub;
+      }
+    }
+
+    // 2. 如果无 JWT 或校验失败，尝试通过 Better Auth 本地 Session 获取身份
+    if (!userId) {
+      const { auth } = await import('./auth'); // 避免循环依赖，采用动态导入
+      const session = await auth.api.getSession({
+        headers: request.headers,
+      });
+      if (session && session.user) {
+        userId = session.user.id;
+      }
+    }
+
+    if (!userId) {
       return { authorized: false, error: '未登录', statusCode: 401 };
     }
-
-    // 2. JWKS 完整验签（校验签名 + exp + iss，同时检查 jti 黑名单）
-    const claims = await verifyJwt(token);
-    if (!claims) {
-      return { authorized: false, error: '登录已过期或无效', statusCode: 401 };
-    }
-
-    const userId = claims.sub;
 
     // 3. 获取用户在 Portal DB 中的细粒度权限上下文
     const permissionContext = await getUserPermissionContext(userId);
@@ -75,13 +88,27 @@ export async function checkPermission(
       return { authorized: false, error: '无法获取用户权限', statusCode: 500 };
     }
 
-    // 4. 超级管理员直接绕过所有检验
+    // 4. 如果是 Session 方式，则需要在此合成 claims 格式以向下兼容
+    if (!claims) {
+      claims = {
+        sub: userId,
+        iss: 'http://localhost:4000',
+        aud: 'portal-client',
+        jti: 'session_' + userId,
+        roles: permissionContext.roles.map(r => r.code),
+        permissions: permissionContext.permissions,
+        deptId: permissionContext.deptId ?? undefined,
+        dataScopeType: permissionContext.dataScopeType,
+      } as PortalJwtClaims;
+    }
+
+    // 5. 超级管理员直接绕过所有检验
     const userRoleCodes = permissionContext.roles.map(r => r.code);
     if (userRoleCodes.includes('ADMIN') || userRoleCodes.includes('SUPER_ADMIN')) {
       return { authorized: true, userId, claims };
     }
 
-    // 5. 权限编码检查
+    // 6. 权限编码检查
     if (options.permissions && options.permissions.length > 0) {
       const userPermissions = permissionContext.permissions;
       const check = options.requireAll
@@ -93,7 +120,7 @@ export async function checkPermission(
       }
     }
 
-    // 6. 角色编码检查
+    // 7. 角色编码检查
     if (options.roles && options.roles.length > 0) {
       const check = options.requireAll
         ? options.roles.every(r => userRoleCodes.includes(r))

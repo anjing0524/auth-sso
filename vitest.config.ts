@@ -10,7 +10,6 @@ export default defineConfig({
   test: {
     projects: [
       './apps/portal/vitest.config.ts',
-      './apps/idp/vitest.config.ts',
     ],
   },
 });

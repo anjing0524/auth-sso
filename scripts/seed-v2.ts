@@ -1,5 +1,5 @@
-import { neon } from '@neondatabase/serverless';
-import { drizzle } from 'drizzle-orm/neon-http';
+import postgres from 'postgres';
+import { drizzle } from 'drizzle-orm/postgres-js';
 import * as schema from '../apps/portal/src/db/schema';
 import crypto from 'crypto';
 
@@ -7,8 +7,8 @@ async function main() {
   console.log('🚀 开始注入工业级测试数据...');
   const url = process.env.DATABASE_URL;
   if (!url) throw new Error('DATABASE_URL is missing');
-  const sql = neon(url);
-  const db = drizzle(sql, { schema });
+  const client = postgres(url);
+  const db = drizzle(client, { schema });
 
   // 1. 清理
   console.log('🧹 清理旧数据...');
@@ -123,6 +123,7 @@ async function main() {
   }
 
   console.log('✅ 测试数据注入完成！');
+  await client.end();
 }
 
 main().catch(console.error);

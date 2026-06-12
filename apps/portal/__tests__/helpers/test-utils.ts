@@ -72,7 +72,7 @@ export function createAuthenticatedRequest(
 ): NextRequest {
   return createTestRequest(path, {
     ...options,
-    cookies: { portal_session_id: sessionId },
+    cookies: { portal_jwt_token: sessionId },
   });
 }
 

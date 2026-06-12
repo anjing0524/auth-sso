@@ -34,55 +34,70 @@ interface UserMenuItem {
  */
 export async function GET(request: NextRequest) {
   try {
-    // 1. 从 Cookie 中读取 JWT
+    let userId: string | null = null;
+    let userinfo: Record<string, any> = {};
+    let expiresAt: number | null = null;
+
+    // 1. 尝试从 Cookie 中读取 JWT 并校验 (兼容旧有方式)
     const token = await getJwtFromCookie();
-    if (!token) {
+    if (token) {
+      const claims = await verifyJwt(token);
+      if (claims) {
+        userId = claims.sub;
+        userinfo = {
+          sub: userId,
+          email: claims.email,
+          name: claims.name,
+        };
+        const tokenPayload = decodeJwtPayload(token);
+        expiresAt = tokenPayload?.exp ? tokenPayload.exp * 1000 : null;
+
+        try {
+          const userinfoUrl = new URL('/api/auth/oauth2/userinfo', oauthConfig.idpUrl);
+          const userinfoRes = await fetch(userinfoUrl.toString(), {
+            headers: { Authorization: `Bearer ${token}` },
+            cache: 'no-store',
+          });
+          if (userinfoRes.ok) {
+            userinfo = await userinfoRes.json();
+          }
+        } catch {
+          console.warn('[Me GET] IdP userinfo 端点调用失败，降级使用 JWT claims 信息');
+        }
+      }
+    }
+
+    // 2. 如果无 JWT，尝试直接获取本地 Better Auth 用户的 Session
+    if (!userId) {
+      const { auth } = await import('@/lib/auth');
+      const session = await auth.api.getSession({
+        headers: request.headers,
+      });
+      if (session && session.user) {
+        userId = session.user.id;
+        userinfo = {
+          sub: session.user.id,
+          email: session.user.email,
+          name: session.user.name,
+          picture: session.user.image,
+          email_verified: session.user.emailVerified,
+        };
+        expiresAt = new Date(session.session.expiresAt).getTime();
+      }
+    }
+
+    if (!userId) {
       return NextResponse.json(
         { error: COMMON_ERRORS.UNAUTHORIZED, message: '未登录' },
         { status: 401 }
       );
     }
 
-    // 2. JWKS 完整验签（包含 jti 黑名单检查）
-    const claims = await verifyJwt(token);
-    if (!claims) {
-      return NextResponse.json(
-        { error: COMMON_ERRORS.UNAUTHORIZED, message: '登录已过期' },
-        { status: 401 }
-      );
-    }
-
-    const userId = claims.sub;
-
-    // 3. 获取 IdP 最新用户基础信息（name/email/picture 等）
-    let userinfo: Record<string, any> = {
-      sub: userId,
-      email: claims.email,
-      name: claims.name,
-    };
-
-    try {
-      const userinfoUrl = new URL('/api/auth/oauth2/userinfo', oauthConfig.idpUrl);
-      const userinfoRes = await fetch(userinfoUrl.toString(), {
-        headers: { Authorization: `Bearer ${token}` },
-        cache: 'no-store',
-      });
-      if (userinfoRes.ok) {
-        userinfo = await userinfoRes.json();
-      }
-    } catch {
-      // 降级使用 JWT claims 中的基础信息，不影响主流程
-      console.warn('[Me GET] IdP userinfo 端点调用失败，降级使用 JWT claims 信息');
-    }
-
-    // 4. 获取 Portal DB 细粒度权限上下文（RBAC + DataScope）
+    // 3. 获取 Portal DB 细粒度权限上下文（RBAC + DataScope）
     const permissionContext = await getUserPermissionContext(userId);
 
-    // 5. 动态过滤菜单树
+    // 4. 动态过滤菜单树
     const menuItems = await getDynamicMenus(permissionContext?.permissions || []);
-
-    // 6. 从 JWT 中读取 Token 过期时间，供前端决定静默刷新时机
-    const tokenPayload = decodeJwtPayload(token);
 
     return NextResponse.json({
       user: {
@@ -90,11 +105,11 @@ export async function GET(request: NextRequest) {
         email: userinfo.email,
         name: userinfo.name,
         picture: userinfo.picture,
-        emailVerified: userinfo.email_verified,
+        emailVerified: userinfo.email_verified || userinfo.emailVerified,
       },
-      // Token 信息（前端用于静默刷新调度）
+      // Token 信息
       tokenInfo: {
-        expiresAt: tokenPayload?.exp ? tokenPayload.exp * 1000 : null,
+        expiresAt,
       },
       // 权限上下文
       permissions: permissionContext?.permissions || [],

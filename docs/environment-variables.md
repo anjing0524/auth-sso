@@ -1,14 +1,5 @@
 # Auth-SSO 环境变量配置指南
 
-## 快速对比
-
-| 环境 | 配置位置 | 说明 |
-|------|---------|------|
-| **本地开发** | 各应用 `.env.local` 文件 | 仅用于本地，不提交到 Git |
-| **Vercel 生产** | Vercel Dashboard > Settings > Environment Variables | 安全存储，支持多环境 |
-
----
-
 ## 本地开发环境变量
 
 ### IdP (apps/idp/.env.local)
@@ -70,21 +61,18 @@ OAUTH_CLIENT_SECRET=demo-app-secret
 
 ---
 
-## Vercel 生产环境变量
+## 生产环境变量
 
 ### IdP 生产环境变量
-
-在 Vercel Dashboard > auth-sso-idp > Settings > Environment Variables 中配置：
 
 | 变量名 | 值 | 说明 |
 |--------|-----|------|
 | `NODE_ENV` | `production` | 生产模式 |
-| `NEXT_PUBLIC_APP_URL` | `https://your-idp-domain.vercel.app` | IdP 公开 URL |
+| `NEXT_PUBLIC_APP_URL` | IdP 公开 URL | 应用访问地址 |
 | `DATABASE_URL` | PostgreSQL 连接字符串 | 使用 SSL |
-| `REDIS_URL` | Upstash Redis URL | Serverless Redis |
-| `REDIS_TOKEN` | Upstash Redis Token | 认证令牌 |
+| `REDIS_URL` | Redis URL | Redis 连接地址 |
 | `BETTER_AUTH_SECRET` | 随机字符串 | `openssl rand -base64 32` |
-| `BETTER_AUTH_URL` | IdP 公开 URL | 与上面相同 |
+| `BETTER_AUTH_URL` | IdP 公开 URL | 与 NEXT_PUBLIC_APP_URL 相同 |
 | `JWT_SECRET` | 随机字符串 | `openssl rand -base64 32` |
 | `PORTAL_CLIENT_SECRET` | 随机字符串 | `openssl rand -hex 32` |
 | `PORTAL_REDIRECT_URL` | Portal 回调 URL | `https://portal/api/auth/callback` |
@@ -96,24 +84,12 @@ OAUTH_CLIENT_SECRET=demo-app-secret
 | 变量名 | 值 | 说明 |
 |--------|-----|------|
 | `NODE_ENV` | `production` | 生产模式 |
-| `NEXT_PUBLIC_APP_URL` | Portal 公开 URL | `https://portal-domain.vercel.app` |
+| `NEXT_PUBLIC_APP_URL` | Portal 公开 URL | 应用访问地址 |
 | `DATABASE_URL` | PostgreSQL 连接字符串 | 使用 SSL |
-| `REDIS_URL` | Upstash Redis URL | Serverless Redis |
-| `REDIS_TOKEN` | Upstash Redis Token | 认证令牌 |
-| `NEXT_PUBLIC_IDP_URL` | IdP 公开 URL | `https://idp-domain.vercel.app` |
+| `REDIS_URL` | Redis URL | Redis 连接地址 |
+| `NEXT_PUBLIC_IDP_URL` | IdP 公开 URL | IdP 访问地址 |
 | `IDP_CLIENT_SECRET` | 与 IdP 配置相同 | `PORTAL_CLIENT_SECRET` 的值 |
 | `SESSION_SECRET` | 随机字符串 | `openssl rand -base64 32` |
-
-### Demo App 生产环境变量
-
-| 变量名 | 值 | 说明 |
-|--------|-----|------|
-| `NODE_ENV` | `production` | 生产模式 |
-| `OAUTH_ISSUER` | IdP 公开 URL | `https://idp-domain.vercel.app` |
-| `OAUTH_CLIENT_ID` | `demo-app` | 固定值 |
-| `OAUTH_CLIENT_SECRET` | 与 IdP 配置相同 | `DEMO_APP_CLIENT_SECRET` 的值 |
-| `OAUTH_REDIRECT_URI` | Demo 回调 URL | `https://demo-domain.vercel.app/auth/callback` |
-| `APP_URL` | Demo 公开 URL | `https://demo-domain.vercel.app` |
 
 ---
 
@@ -137,14 +113,10 @@ openssl rand -hex 32
 
 2. **本地 vs 生产分离**
    - 本地使用 `.env.local`
-   - 生产使用 Vercel Dashboard
+   - 生产通过部署平台的环境变量管理
 
 3. **敏感信息保护**
    - 数据库密码
    - JWT 密钥
    - OAuth Client Secret
    - Session 密钥
-
-4. **Vercel 环境变量自动加密**
-   - 在 Dashboard 中设置的变量自动加密存储
-   - 只有项目成员可以访问

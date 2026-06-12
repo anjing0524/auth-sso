@@ -43,7 +43,7 @@ test.describe('Auth Flow', () => {
       await expect(page.getByText('安全审计动态')).toBeVisible();
     });
 
-    test('登录成功后 /api/me 应返回用户信息和权限', async ({ page, context }) => {
+    test('登录成功后 /api/me 应返回用户信息和权限', async ({ page }) => {
       await loginAsAdmin(page);
 
       // 通过 API request context（共享 browser cookies）验证 /api/me
@@ -101,12 +101,12 @@ test.describe('Auth Flow', () => {
       await expect(page.getByText('登录')).toBeVisible();
     });
 
-    test('登录完成后应包含 Portal Session Cookie', async ({ page }) => {
+    test('登录完成后应包含 Portal JWT Cookie', async ({ page }) => {
       await loginAsAdmin(page);
 
-      // 验证 portal_session_id cookie 已设置
+      // 验证 portal_jwt_token cookie 已设置
       const cookies = await page.context().cookies();
-      const sessionCookie = cookies.find((c) => c.name === 'portal_session_id');
+      const sessionCookie = cookies.find((c) => c.name === 'portal_jwt_token');
       expect(sessionCookie).toBeDefined();
       expect(sessionCookie!.value.length).toBeGreaterThan(0);
     });

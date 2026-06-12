@@ -99,13 +99,13 @@ pnpm start:services
 - [设计规范 (DESIGN.md)](DESIGN.md) - UI/UX 规范与品牌定义
 - [SSO 集成指南 (docs/sso-integration-guide.md)](docs/sso-integration-guide.md) - 子应用接入流程
 - [环境变量详细说明 (docs/environment-variables.md)](docs/environment-variables.md)
-- [Vercel 部署指南 (docs/vercel-dashboard-deployment.md)](docs/vercel-dashboard-deployment.md)
+- [环境变量详细说明 (docs/environment-variables.md)](docs/environment-variables.md)
 
 ## 安全提醒
 
 - 生产环境务必生成强密钥：`openssl rand -base64 32`。
 - 确保 IdP 与 Portal 的 `CLIENT_SECRET` 在生产环境保持同步。
-- 敏感配置请通过 Vercel Dashboard 设置。
+- 敏感配置请通过部署平台的环境变量管理功能设置。
 
 ## License
 

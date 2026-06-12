@@ -6,10 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Auth-SSO is an enterprise unified identity authentication platform implementing SSO (Single Sign-On) with OIDC Provider capabilities. It's a pnpm monorepo containing:
 
-- **apps/idp** - Identity Provider (port 4001) - Better Auth with OIDC Provider plugin
-- **apps/portal** - Admin Portal (port 4000) - User/role/permission management and Dashboard
+- **apps/portal** - Admin Portal & IDP (port 4000) - User/role/permission management, Better Auth OIDC Provider, and Dashboard
 - **apps/demo-app** - Demo SSO Client (port 4002) - Tests SSO integration
-- **apps/customer-graph** - GPU Graph Visualization (port 4003) - RBAC Data Scope demonstration
+- **apps/gateway** - API Gateway (Rust/Pingora) - ES256 JWKS offline verification, Cookie-to-Bearer transformation
 - **packages/contracts** - Shared types, error codes, permission codes, OIDC constants
 - **packages/config** - Shared TypeScript/ESLint configuration
 
@@ -20,10 +19,8 @@ Auth-SSO is an enterprise unified identity authentication platform implementing 
 pnpm dev
 
 # Start specific app
-pnpm --filter @auth-sso/idp dev      # IdP on port 4001
 pnpm --filter @auth-sso/portal dev   # Portal on port 4000
 pnpm --filter @auth-sso/demo-app dev # Demo on port 4002
-pnpm --filter @auth-sso/customer-graph dev # Graph on port 4003
 
 # 测试体系 (Vitest + Playwright + Traceability)
 pnpm test                  # 全量 Vitest 测试
@@ -63,17 +60,9 @@ Tests follow a layered strategy — fast, isolated unit tests at the bottom, int
 - **Setup**: Three `webServer` entries (IdP + Portal + Demo App) with DB push + seed
 - **Run**: `pnpm test:e2e`
 
-### Session 架构（双 Session 体系）
+### Session 架构
 
-系统存在两套独立的 Session 机制，**不可混淆**：
-
-| | IdP Session | Portal Session |
-|---|---|---|
-| **管理方** | Better Auth 原生 | Portal BFF 验签 |
-| **存储** | Redis (`auth-sso:` prefix) | 客户端 Cookie + Redis jti 黑名单 |
-| **关键文件** | `apps/idp/src/lib/auth.ts` | `apps/portal/src/lib/session.ts` |
-| **标识** | `idp_session` cookie | `portal_jwt_token cookie` |
-| **超时** | Better Auth 管理 | JWT exp (1小时) + Refresh Token (7天) |
+由于 IDP 已完全合并进 Portal，系统在本地直接通过 Better Auth 管理会话状态（`better-auth.session_token` Cookie），同时为了兼容原有的无状态架构和外部 OIDC 流程，支持利用 OIDC/JWT 插件在后台校验 `portal_jwt_token`，实现了统一整合。
 
 ### Traceability
 

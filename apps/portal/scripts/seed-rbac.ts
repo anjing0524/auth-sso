@@ -106,7 +106,7 @@ async function bindPermissions(roleId: string, permIds: Record<string, string>):
   }
 }
 
-async function main() {
+export async function main() {
   console.log('🌱 开始 RBAC 数据初始化...');
 
   // 1. 初始化所有权限
@@ -144,7 +144,10 @@ async function main() {
   await client.end();
 }
 
-main().catch(err => {
-  console.error('\n❌ 初始化失败:', err.message);
-  process.exit(1);
-});
+// 仅在直接执行时运行（被其他脚本 import 时不自动执行）
+if (process.argv[1]?.includes('seed-rbac')) {
+  main().catch(err => {
+    console.error('\n❌ 初始化失败:', err.message);
+    process.exit(1);
+  });
+}
