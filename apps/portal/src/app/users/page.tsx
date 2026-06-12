@@ -1,9 +1,9 @@
 /**
- * 用户管理页面 - 纯 API / 前后端分离友好重构版
+ * 用户管理页面 - BFF CQRS 架构落地版
  * 
  * 职责分工：
- * - 本组件为 Server Component，在服务端通过普通查库函数（或未来改后台语言后的 fetch API）获取数据。
- * - 服务端就绪数据后直出渲染，子组件全量采用标准客户端 API (fetch) 进行状态交互，完全移除 Server Actions 绑定。
+ * - 本组件为 Server Component 读模型入口，直接在服务端调用普通获取函数拉取数据，同步直传渲染。
+ * - 客户端子组件通过 Server Actions (actions.ts) 薄 Controller 执行状态改变，实现高内聚开发。
  */
 
 import React from 'react';
@@ -22,14 +22,14 @@ interface PageProps {
 }
 
 export default async function UsersPage({ searchParams }: PageProps) {
-  // 1. 异步读取 URL 查询参数以驱动过滤
+  // 1. 异步读取 URL 查询参数（Next.js App Router 最佳实践）
   const params = await searchParams;
   const keyword = params.keyword || '';
   const status = params.status || 'ALL';
   const page = parseInt(params.page || '1', 10);
   const pageSize = 15; // 固定单页 15 条
 
-  // 2. 阻塞拉取首屏数据（如果将来改成 Go/Java 后台，只需将此处改为 `fetch('https://api/users')`）
+  // 2. 读模型：服务端直接拉取扁平的数据对象 (不做冗余的领域实体转换，保证首屏性能)
   const { data: users, pagination } = await getUsers({
     page,
     pageSize,
@@ -37,7 +37,7 @@ export default async function UsersPage({ searchParams }: PageProps) {
     status,
   });
 
-  // 3. 并行拉取部门列表，供表单下拉选择
+  // 3. 服务端并行预获取部门数据，供新增表单使用
   const departments = await getDepartments();
 
   return (
@@ -51,7 +51,7 @@ export default async function UsersPage({ searchParams }: PageProps) {
           </p>
         </div>
         
-        {/* 新建用户 Drawer：支持传统客户端 API 提交 */}
+        {/* 新建用户 Drawer：支持 React 19 表单 Action 网关 */}
         <CreateUserDrawer departments={departments} />
       </div>
 
@@ -62,7 +62,7 @@ export default async function UsersPage({ searchParams }: PageProps) {
           <UserFilters initialKeyword={keyword} initialStatus={status} />
         </CardHeader>
         <CardContent className="p-0 flex-1 overflow-auto flex flex-col">
-          {/* 同步直出表格，数据流透明易维护 */}
+          {/* 同步直出表格，数据流清晰透明 */}
           <UserTable users={users} pagination={pagination} />
         </CardContent>
       </Card>
