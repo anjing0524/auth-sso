@@ -1,91 +1,91 @@
 {
   "summary": {
     "total": 62,
-    "passed": 34,
-    "failed": 28,
+    "passed": 6,
+    "failed": 56,
     "skipped": 0,
-    "passRate": "54.8"
+    "passRate": "9.7"
   },
   "results": [
     {
       "testId": "DET-PRE",
       "testName": "管理员登录",
       "status": "FAIL",
-      "message": "OAuth Authorization failed to get callback URL. Status: 400, Body: {\"message\":\"Invalid redirect URI\"}",
-      "duration": 7688,
-      "timestamp": "2026-05-22T08:39:44.536Z"
+      "message": "GET http://127.0.0.1:4100/api/auth/login failed: fetch failed",
+      "duration": 50,
+      "timestamp": "2026-06-12T00:30:57.439Z"
     },
     {
       "testId": "DET-USER-001",
       "testName": "邮箱唯一性校验: 重复邮箱应报错",
       "status": "FAIL",
-      "message": "应返回 400 Bad Request: Expected status 400, got 401",
-      "duration": 1102,
-      "timestamp": "2026-05-22T08:39:45.638Z"
+      "message": "POST http://127.0.0.1:4100/api/users failed: fetch failed",
+      "duration": 5,
+      "timestamp": "2026-06-12T00:30:57.444Z"
     },
     {
       "testId": "DET-DEPT-001",
       "testName": "防循环引用: 不能将父部门设为自己",
       "status": "FAIL",
-      "message": "Cannot read properties of undefined (reading 'id')",
-      "duration": 848,
-      "timestamp": "2026-05-22T08:39:46.486Z"
+      "message": "POST http://127.0.0.1:4100/api/departments failed: fetch failed",
+      "duration": 2,
+      "timestamp": "2026-06-12T00:30:57.446Z"
     },
     {
       "testId": "DET-AUTH-001",
       "testName": "状态拦截: DISABLED 用户无法登录",
-      "status": "PASS",
-      "message": "",
-      "duration": 3246,
-      "timestamp": "2026-05-22T08:39:49.732Z"
+      "status": "FAIL",
+      "message": "POST http://127.0.0.1:4100/api/users failed: fetch failed",
+      "duration": 2,
+      "timestamp": "2026-06-12T00:30:57.448Z"
     },
     {
       "testId": "TDD-AUTH-001",
       "testName": "User Login: 支持邮箱密码验证",
-      "status": "PASS",
-      "message": "",
-      "duration": 7451,
-      "timestamp": "2026-05-22T08:39:57.188Z"
+      "status": "FAIL",
+      "message": "POST http://127.0.0.1:4101/api/auth/sign-in/email failed: fetch failed",
+      "duration": 4,
+      "timestamp": "2026-06-12T00:30:57.456Z"
     },
     {
       "testId": "TDD-AUTH-002",
       "testName": "SSO Flow: Portal 无缝登录并保持 IdP Session",
       "status": "FAIL",
-      "message": "OAuth Authorization failed to get callback URL. Status: 400, Body: {\"message\":\"Invalid redirect URI\"}",
-      "duration": 588,
-      "timestamp": "2026-05-22T08:39:57.776Z"
+      "message": "GET http://127.0.0.1:4100/api/auth/login failed: fetch failed",
+      "duration": 1,
+      "timestamp": "2026-06-12T00:30:57.457Z"
     },
     {
       "testId": "TDD-RBAC-001",
       "testName": "Department: 层级树结构 (创建根与子部门)",
       "status": "FAIL",
-      "message": "创建根部门成功: Expected status 200, got 401",
-      "duration": 26,
-      "timestamp": "2026-05-22T08:39:57.802Z"
+      "message": "POST http://127.0.0.1:4100/api/departments failed: fetch failed",
+      "duration": 2,
+      "timestamp": "2026-06-12T00:30:57.459Z"
     },
     {
       "testId": "TDD-RBAC-002",
       "testName": "Role & Data Scopes: 支持 5 种数据范围定义",
       "status": "FAIL",
-      "message": "创建角色成功: Expected status 200, got 401",
-      "duration": 1201,
-      "timestamp": "2026-05-22T08:39:59.003Z"
+      "message": "POST http://127.0.0.1:4100/api/roles failed: fetch failed",
+      "duration": 1,
+      "timestamp": "2026-06-12T00:30:57.460Z"
     },
     {
       "testId": "TDD-RBAC-003",
       "testName": "User Management: 分配部门与状态控制",
       "status": "FAIL",
-      "message": "创建用户成功: Expected status 200, got 401",
-      "duration": 795,
-      "timestamp": "2026-05-22T08:39:59.798Z"
+      "message": "POST http://127.0.0.1:4100/api/users failed: fetch failed",
+      "duration": 2,
+      "timestamp": "2026-06-12T00:30:57.462Z"
     },
     {
       "testId": "TDD-APP-001",
       "testName": "Client Registration: 注册 OAuth 2.1 客户端",
       "status": "FAIL",
-      "message": "客户端注册成功: Expected status 200, got 401",
-      "duration": 1679,
-      "timestamp": "2026-05-22T08:40:01.477Z"
+      "message": "POST http://127.0.0.1:4100/api/clients failed: fetch failed",
+      "duration": 2,
+      "timestamp": "2026-06-12T00:30:57.464Z"
     },
     {
       "testId": "TDD-SEC-001",
@@ -93,71 +93,71 @@
       "status": "PASS",
       "message": "",
       "duration": 0,
-      "timestamp": "2026-05-22T08:40:01.477Z"
+      "timestamp": "2026-06-12T00:30:57.464Z"
     },
     {
       "testId": "TDD-CLEANUP",
       "testName": "清理 TDD 生成的数据",
       "status": "PASS",
       "message": "",
-      "duration": 1,
-      "timestamp": "2026-05-22T08:40:01.478Z"
+      "duration": 0,
+      "timestamp": "2026-06-12T00:30:57.464Z"
     },
     {
       "testId": "DEP-PRE",
       "testName": "管理员登录",
       "status": "FAIL",
-      "message": "OAuth Authorization failed to get callback URL. Status: 400, Body: {\"message\":\"Invalid redirect URI\"}",
-      "duration": 6413,
-      "timestamp": "2026-05-22T08:40:07.893Z"
+      "message": "GET http://127.0.0.1:4100/api/auth/login failed: fetch failed",
+      "duration": 1,
+      "timestamp": "2026-06-12T00:30:57.467Z"
     },
     {
       "testId": "SM-001",
       "testName": "Portal启动测试",
-      "status": "PASS",
-      "message": "",
-      "duration": 13713,
-      "timestamp": "2026-05-22T08:40:21.609Z"
+      "status": "FAIL",
+      "message": "GET http://127.0.0.1:4100 failed: fetch failed",
+      "duration": 1,
+      "timestamp": "2026-06-12T00:30:57.470Z"
     },
     {
       "testId": "SM-002",
       "testName": "IdP启动测试",
-      "status": "PASS",
-      "message": "",
-      "duration": 2753,
-      "timestamp": "2026-05-22T08:40:24.362Z"
+      "status": "FAIL",
+      "message": "GET http://127.0.0.1:4101 failed: fetch failed",
+      "duration": 2,
+      "timestamp": "2026-06-12T00:30:57.472Z"
     },
     {
       "testId": "SM-003",
       "testName": "DemoApp启动测试",
-      "status": "PASS",
-      "message": "",
-      "duration": 197,
-      "timestamp": "2026-05-22T08:40:24.559Z"
+      "status": "FAIL",
+      "message": "GET http://127.0.0.1:4102 failed: fetch failed",
+      "duration": 1,
+      "timestamp": "2026-06-12T00:30:57.473Z"
     },
     {
       "testId": "SM-004",
       "testName": "数据库连接测试",
-      "status": "PASS",
-      "message": "",
-      "duration": 36,
-      "timestamp": "2026-05-22T08:40:24.595Z"
+      "status": "FAIL",
+      "message": "GET http://127.0.0.1:4101/api/auth/ok failed: fetch failed",
+      "duration": 1,
+      "timestamp": "2026-06-12T00:30:57.474Z"
     },
     {
       "testId": "SM-005",
       "testName": "Redis连接测试",
-      "status": "PASS",
-      "message": "",
-      "duration": 39,
-      "timestamp": "2026-05-22T08:40:24.634Z"
+      "status": "FAIL",
+      "message": "GET http://127.0.0.1:4101/api/auth/ok failed: fetch failed",
+      "duration": 1,
+      "timestamp": "2026-06-12T00:30:57.475Z"
     },
     {
       "testId": "SM-010",
       "testName": "用户登录功能测试",
       "status": "FAIL",
-      "message": "OAuth Authorization failed to get callback URL. Status: 400, Body: {\"message\":\"Invalid redirect URI\"}",
-      "duration": 797,
-      "timestamp": "2026-05-22T08:40:25.431Z"
+      "message": "GET http://127.0.0.1:4100/api/auth/login failed: fetch failed",
+      "duration": 2,
+      "timestamp": "2026-06-12T00:30:57.477Z"
     },
     {
       "testId": "SM-011",
@@ -165,87 +165,87 @@
       "status": "FAIL",
       "message": "需先登录成功",
       "duration": 0,
-      "timestamp": "2026-05-22T08:40:25.431Z"
+      "timestamp": "2026-06-12T00:30:57.477Z"
     },
     {
       "testId": "SM-012",
       "testName": "用户登出功能测试",
       "status": "FAIL",
       "message": "需先登录成功",
-      "duration": 1,
-      "timestamp": "2026-05-22T08:40:25.432Z"
+      "duration": 0,
+      "timestamp": "2026-06-12T00:30:57.477Z"
     },
     {
       "testId": "SM-020",
       "testName": "OIDC发现端点验证",
-      "status": "PASS",
-      "message": "",
-      "duration": 25,
-      "timestamp": "2026-05-22T08:40:25.457Z"
+      "status": "FAIL",
+      "message": "GET http://127.0.0.1:4101/api/auth/.well-known/openid-configuration failed: fetch failed",
+      "duration": 1,
+      "timestamp": "2026-06-12T00:30:57.478Z"
     },
     {
       "testId": "AUTH-001",
       "testName": "未登录访问受保护页面重定向到IdP",
-      "status": "PASS",
-      "message": "",
-      "duration": 112,
-      "timestamp": "2026-05-22T08:40:25.571Z"
+      "status": "FAIL",
+      "message": "GET http://127.0.0.1:4100/api/me failed: fetch failed",
+      "duration": 1,
+      "timestamp": "2026-06-12T00:30:57.480Z"
     },
     {
       "testId": "AUTH-OAUTH-FLOW",
       "testName": "OAuth 完整认证流程验证",
       "status": "FAIL",
-      "message": "OAuth Authorization failed to get callback URL. Status: 400, Body: {\"message\":\"Invalid redirect URI\"}",
-      "duration": 437,
-      "timestamp": "2026-05-22T08:40:26.008Z"
+      "message": "GET http://127.0.0.1:4100/api/auth/login failed: fetch failed",
+      "duration": 1,
+      "timestamp": "2026-06-12T00:30:57.481Z"
     },
     {
       "testId": "AUTH-011",
       "testName": "错误State验证",
-      "status": "PASS",
-      "message": "",
-      "duration": 92,
-      "timestamp": "2026-05-22T08:40:26.100Z"
+      "status": "FAIL",
+      "message": "GET http://127.0.0.1:4100/api/auth/callback?code=fake_code&state=wrong_state failed: fetch failed",
+      "duration": 1,
+      "timestamp": "2026-06-12T00:30:57.482Z"
     },
     {
       "testId": "AUTH-013",
       "testName": "PKCE参数验证",
-      "status": "PASS",
-      "message": "",
-      "duration": 25,
-      "timestamp": "2026-05-22T08:40:26.125Z"
+      "status": "FAIL",
+      "message": "GET http://127.0.0.1:4100/api/auth/login failed: fetch failed",
+      "duration": 1,
+      "timestamp": "2026-06-12T00:30:57.483Z"
     },
     {
       "testId": "AUTH-020/021",
       "testName": "Portal与IdP登出同步",
       "status": "FAIL",
-      "message": "OAuth Authorization failed to get callback URL. Status: 400, Body: {\"message\":\"Invalid redirect URI\"}",
-      "duration": 389,
-      "timestamp": "2026-05-22T08:40:26.514Z"
+      "message": "GET http://127.0.0.1:4100/api/auth/login failed: fetch failed",
+      "duration": 0,
+      "timestamp": "2026-06-12T00:30:57.483Z"
     },
     {
       "testId": "PERM-003",
       "testName": "未登录访问 API 返回 401",
-      "status": "PASS",
-      "message": "",
-      "duration": 37,
-      "timestamp": "2026-05-22T08:40:26.552Z"
+      "status": "FAIL",
+      "message": "GET http://127.0.0.1:4100/api/users failed: fetch failed",
+      "duration": 1,
+      "timestamp": "2026-06-12T00:30:57.486Z"
     },
     {
       "testId": "PERM-002",
       "testName": "有权限用户访问 API",
       "status": "FAIL",
-      "message": "OAuth Authorization failed to get callback URL. Status: 400, Body: {\"message\":\"Invalid redirect URI\"}",
-      "duration": 754,
-      "timestamp": "2026-05-22T08:40:27.306Z"
+      "message": "GET http://127.0.0.1:4100/api/auth/login failed: fetch failed",
+      "duration": 1,
+      "timestamp": "2026-06-12T00:30:57.487Z"
     },
     {
       "testId": "PERM-004",
       "testName": "POST请求权限检查",
       "status": "FAIL",
-      "message": "OAuth Authorization failed to get callback URL. Status: 400, Body: {\"message\":\"Invalid redirect URI\"}",
-      "duration": 513,
-      "timestamp": "2026-05-22T08:40:27.819Z"
+      "message": "GET http://127.0.0.1:4100/api/auth/login failed: fetch failed",
+      "duration": 1,
+      "timestamp": "2026-06-12T00:30:57.488Z"
     },
     {
       "testId": "PERM-020",
@@ -253,31 +253,31 @@
       "status": "PASS",
       "message": "",
       "duration": 0,
-      "timestamp": "2026-05-22T08:40:27.819Z"
+      "timestamp": "2026-06-12T00:30:57.488Z"
     },
     {
       "testId": "SESS-001/002",
       "testName": "Session存储与内容验证",
       "status": "FAIL",
-      "message": "OAuth Authorization failed to get callback URL. Status: 400, Body: {\"message\":\"Invalid redirect URI\"}",
-      "duration": 705,
-      "timestamp": "2026-05-22T08:40:28.527Z"
+      "message": "GET http://127.0.0.1:4100/api/auth/login failed: fetch failed",
+      "duration": 0,
+      "timestamp": "2026-06-12T00:30:57.489Z"
     },
     {
       "testId": "SESS-003",
       "testName": "Session Cookie属性验证",
-      "status": "PASS",
-      "message": "",
-      "duration": 8,
-      "timestamp": "2026-05-22T08:40:28.535Z"
+      "status": "FAIL",
+      "message": "GET http://127.0.0.1:4100/api/auth/login failed: fetch failed",
+      "duration": 1,
+      "timestamp": "2026-06-12T00:30:57.491Z"
     },
     {
       "testId": "SESS-010",
       "testName": "过期Session访问验证",
-      "status": "PASS",
-      "message": "",
-      "duration": 39,
-      "timestamp": "2026-05-22T08:40:28.574Z"
+      "status": "FAIL",
+      "message": "GET http://127.0.0.1:4100/api/me failed: fetch failed",
+      "duration": 1,
+      "timestamp": "2026-06-12T00:30:57.492Z"
     },
     {
       "testId": "SESS-012",
@@ -285,47 +285,47 @@
       "status": "FAIL",
       "message": "需先登录",
       "duration": 0,
-      "timestamp": "2026-05-22T08:40:28.574Z"
+      "timestamp": "2026-06-12T00:30:57.492Z"
     },
     {
       "testId": "SEC-001",
       "testName": "OAuth安全参数完整性",
-      "status": "PASS",
-      "message": "",
-      "duration": 14,
-      "timestamp": "2026-05-22T08:40:28.590Z"
+      "status": "FAIL",
+      "message": "GET http://127.0.0.1:4100/api/auth/login failed: fetch failed",
+      "duration": 0,
+      "timestamp": "2026-06-12T00:30:57.494Z"
     },
     {
       "testId": "SEC-002",
       "testName": "Session Cookie HttpOnly属性",
-      "status": "PASS",
-      "message": "",
-      "duration": 35,
-      "timestamp": "2026-05-22T08:40:28.625Z"
+      "status": "FAIL",
+      "message": "GET http://127.0.0.1:4100/api/auth/login failed: fetch failed",
+      "duration": 1,
+      "timestamp": "2026-06-12T00:30:57.495Z"
     },
     {
       "testId": "SEC-003",
       "testName": "Session Cookie SameSite属性",
-      "status": "PASS",
-      "message": "",
-      "duration": 10,
-      "timestamp": "2026-05-22T08:40:28.635Z"
+      "status": "FAIL",
+      "message": "GET http://127.0.0.1:4100/api/auth/login failed: fetch failed",
+      "duration": 2,
+      "timestamp": "2026-06-12T00:30:57.497Z"
     },
     {
       "testId": "SEC-004",
       "testName": "State参数长度安全",
-      "status": "PASS",
-      "message": "",
-      "duration": 11,
-      "timestamp": "2026-05-22T08:40:28.646Z"
+      "status": "FAIL",
+      "message": "GET http://127.0.0.1:4100/api/auth/login failed: fetch failed",
+      "duration": 1,
+      "timestamp": "2026-06-12T00:30:57.498Z"
     },
     {
       "testId": "SEC-005",
       "testName": "PKCE使用S256方法",
-      "status": "PASS",
-      "message": "",
-      "duration": 11,
-      "timestamp": "2026-05-22T08:40:28.657Z"
+      "status": "FAIL",
+      "message": "GET http://127.0.0.1:4100/api/auth/login failed: fetch failed",
+      "duration": 1,
+      "timestamp": "2026-06-12T00:30:57.499Z"
     },
     {
       "testId": "SEC-006",
@@ -333,127 +333,127 @@
       "status": "PASS",
       "message": "",
       "duration": 0,
-      "timestamp": "2026-05-22T08:40:28.657Z"
+      "timestamp": "2026-06-12T00:30:57.499Z"
     },
     {
       "testId": "SEC-007",
       "testName": "JWKS端点安全验证",
-      "status": "PASS",
-      "message": "",
-      "duration": 66,
-      "timestamp": "2026-05-22T08:40:28.724Z"
+      "status": "FAIL",
+      "message": "GET http://127.0.0.1:4101/api/auth/jwks failed: fetch failed",
+      "duration": 0,
+      "timestamp": "2026-06-12T00:30:57.499Z"
     },
     {
       "testId": "SEC-008",
       "testName": "OIDC发现文档验证",
-      "status": "PASS",
-      "message": "",
-      "duration": 78,
-      "timestamp": "2026-05-22T08:40:28.802Z"
+      "status": "FAIL",
+      "message": "GET http://127.0.0.1:4101/api/auth/.well-known/openid-configuration failed: fetch failed",
+      "duration": 1,
+      "timestamp": "2026-06-12T00:30:57.500Z"
     },
     {
       "testId": "SEC-009",
       "testName": "未授权Client被拒绝",
-      "status": "PASS",
-      "message": "",
-      "duration": 69,
-      "timestamp": "2026-05-22T08:40:28.871Z"
+      "status": "FAIL",
+      "message": "GET http://127.0.0.1:4101/api/auth/oauth2/authorize?client_id=portal&redirect_uri=http://localhost:4100/callback&response_type=code failed: fetch failed",
+      "duration": 1,
+      "timestamp": "2026-06-12T00:30:57.501Z"
     },
     {
       "testId": "SEC-010",
       "testName": "State参数唯一性",
-      "status": "PASS",
-      "message": "",
-      "duration": 28,
-      "timestamp": "2026-05-22T08:40:28.899Z"
+      "status": "FAIL",
+      "message": "GET http://127.0.0.1:4100/api/auth/login failed: fetch failed",
+      "duration": 1,
+      "timestamp": "2026-06-12T00:30:57.502Z"
     },
     {
       "testId": "SEC-011",
       "testName": "错误响应安全",
-      "status": "PASS",
-      "message": "",
-      "duration": 39,
-      "timestamp": "2026-05-22T08:40:28.938Z"
+      "status": "FAIL",
+      "message": "GET http://127.0.0.1:4100/api/me failed: fetch failed",
+      "duration": 1,
+      "timestamp": "2026-06-12T00:30:57.503Z"
     },
     {
       "testId": "SEC-012",
       "testName": "CORS策略",
-      "status": "PASS",
-      "message": "",
-      "duration": 82,
-      "timestamp": "2026-05-22T08:40:29.020Z"
+      "status": "FAIL",
+      "message": "GET http://127.0.0.1:4100/api/me failed: fetch failed",
+      "duration": 2,
+      "timestamp": "2026-06-12T00:30:57.505Z"
     },
     {
       "testId": "SEC-020/021",
       "testName": "回调地址白名单验证",
-      "status": "PASS",
-      "message": "",
-      "duration": 77,
-      "timestamp": "2026-05-22T08:40:29.097Z"
+      "status": "FAIL",
+      "message": "GET http://127.0.0.1:4101/api/auth/oauth2/authorize?client_id=portal&redirect_uri=http://attacker.com/callback&response_type=code failed: fetch failed",
+      "duration": 1,
+      "timestamp": "2026-06-12T00:30:57.506Z"
     },
     {
       "testId": "SEC-030",
       "testName": "授权码重放攻击防御",
       "status": "FAIL",
-      "message": "Failed to obtain auth code for replay test",
-      "duration": 905,
-      "timestamp": "2026-05-22T08:40:30.002Z"
+      "message": "POST http://127.0.0.1:4101/api/auth/sign-in/email failed: fetch failed",
+      "duration": 1,
+      "timestamp": "2026-06-12T00:30:57.507Z"
     },
     {
       "testId": "SSO-001",
       "testName": "Portal 登录后 Demo App 免登",
       "status": "FAIL",
-      "message": "OAuth Authorization failed to get callback URL. Status: 400, Body: {\"message\":\"Invalid redirect URI\"}",
-      "duration": 1916,
-      "timestamp": "2026-05-22T08:40:31.920Z"
+      "message": "POST http://127.0.0.1:4101/api/auth/sign-in/email failed: fetch failed",
+      "duration": 1,
+      "timestamp": "2026-06-12T00:30:57.510Z"
     },
     {
       "testId": "SSO-010",
       "testName": "Portal 登出后全线失效",
       "status": "FAIL",
-      "message": "OAuth Authorization failed to get callback URL. Status: 400, Body: {\"message\":\"Invalid redirect URI\"}",
-      "duration": 639,
-      "timestamp": "2026-05-22T08:40:32.559Z"
+      "message": "POST http://127.0.0.1:4101/api/auth/sign-in/email failed: fetch failed",
+      "duration": 1,
+      "timestamp": "2026-06-12T00:30:57.511Z"
     },
     {
       "testId": "PERF-001",
       "testName": "登录初始跳转性能",
-      "status": "PASS",
-      "message": "",
-      "duration": 22,
-      "timestamp": "2026-05-22T08:40:32.582Z"
+      "status": "FAIL",
+      "message": "GET http://127.0.0.1:4100/api/auth/login failed: fetch failed",
+      "duration": 0,
+      "timestamp": "2026-06-12T00:30:57.512Z"
     },
     {
       "testId": "PERF-002",
       "testName": "完整 OAuth 流程性能",
       "status": "FAIL",
-      "message": "OAuth Authorization failed to get callback URL. Status: 400, Body: {\"message\":\"Invalid redirect URI\"}",
-      "duration": 818,
-      "timestamp": "2026-05-22T08:40:33.400Z"
+      "message": "GET http://127.0.0.1:4100/api/auth/login failed: fetch failed",
+      "duration": 1,
+      "timestamp": "2026-06-12T00:30:57.513Z"
     },
     {
       "testId": "PERF-003",
       "testName": "Session 查询性能",
       "status": "FAIL",
-      "message": "OAuth Authorization failed to get callback URL. Status: 400, Body: {\"message\":\"Invalid redirect URI\"}",
-      "duration": 1204,
-      "timestamp": "2026-05-22T08:40:34.604Z"
+      "message": "GET http://127.0.0.1:4100/api/auth/login failed: fetch failed",
+      "duration": 1,
+      "timestamp": "2026-06-12T00:30:57.514Z"
     },
     {
       "testId": "BUS-PRE",
       "testName": "管理员登录获取Session",
       "status": "FAIL",
-      "message": "OAuth Authorization failed to get callback URL. Status: 400, Body: {\"message\":\"Invalid redirect URI\"}",
-      "duration": 887,
-      "timestamp": "2026-05-22T08:40:35.492Z"
+      "message": "GET http://127.0.0.1:4100/api/auth/login failed: fetch failed",
+      "duration": 2,
+      "timestamp": "2026-06-12T00:30:57.517Z"
     },
     {
       "testId": "SCOPE-INIT",
       "testName": "管理员登录初始化",
       "status": "FAIL",
-      "message": "OAuth Authorization failed to get callback URL. Status: 400, Body: {\"message\":\"Invalid redirect URI\"}",
-      "duration": 688,
-      "timestamp": "2026-05-22T08:40:36.181Z"
+      "message": "GET http://127.0.0.1:4100/api/auth/login failed: fetch failed",
+      "duration": 1,
+      "timestamp": "2026-06-12T00:30:57.519Z"
     },
     {
       "testId": "SCOPE-001",
@@ -461,7 +461,7 @@
       "status": "FAIL",
       "message": "需先登录成功",
       "duration": 0,
-      "timestamp": "2026-05-22T08:40:36.181Z"
+      "timestamp": "2026-06-12T00:30:57.519Z"
     },
     {
       "testId": "SCOPE-002",
@@ -469,7 +469,7 @@
       "status": "FAIL",
       "message": "需先登录成功",
       "duration": 0,
-      "timestamp": "2026-05-22T08:40:36.181Z"
+      "timestamp": "2026-06-12T00:30:57.519Z"
     },
     {
       "testId": "SCOPE-003",
@@ -477,7 +477,7 @@
       "status": "FAIL",
       "message": "Cannot read properties of undefined (reading 'getHeader')",
       "duration": 0,
-      "timestamp": "2026-05-22T08:40:36.181Z"
+      "timestamp": "2026-06-12T00:30:57.519Z"
     },
     {
       "testId": "SCOPE-004",
@@ -485,15 +485,15 @@
       "status": "PASS",
       "message": "",
       "duration": 0,
-      "timestamp": "2026-05-22T08:40:36.181Z"
+      "timestamp": "2026-06-12T00:30:57.519Z"
     },
     {
       "testId": "SEC-001",
       "testName": "验证 OIDC Nonce 不匹配时拒绝回调",
-      "status": "PASS",
-      "message": "",
-      "duration": 12,
-      "timestamp": "2026-05-22T08:40:36.194Z"
+      "status": "FAIL",
+      "message": "GET http://127.0.0.1:4100/api/auth/callback?code=test-code&state=test-state failed: fetch failed",
+      "duration": 1,
+      "timestamp": "2026-06-12T00:30:57.521Z"
     },
     {
       "testId": "SEC-002",
@@ -501,8 +501,8 @@
       "status": "PASS",
       "message": "",
       "duration": 0,
-      "timestamp": "2026-05-22T08:40:36.194Z"
+      "timestamp": "2026-06-12T00:30:57.521Z"
     }
   ],
-  "timestamp": "2026-05-22T08:40:36.196Z"
+  "timestamp": "2026-06-12T00:30:57.523Z"
 }
