@@ -1,0 +1,88 @@
+name: Main Branch CI
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    name: E2E Tests + Coverage
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: auth_sso
+          POSTGRES_PASSWORD: auth_sso_dev
+          POSTGRES_DB: auth_sso
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.12.4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '>=20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Push database schema
+        run: pnpm db:push
+        env:
+          DATABASE_URL: postgresql://auth_sso:auth_sso_dev@localhost:5432/auth_sso
+          REDIS_URL: redis://localhost:6379
+
+      - name: Seed database
+        run: pnpm db:seed
+        env:
+          DATABASE_URL: postgresql://auth_sso:auth_sso_dev@localhost:5432/auth_sso
+          REDIS_URL: redis://localhost:6379
+
+      - name: Run E2E tests
+        run: pnpm test:e2e
+        env:
+          DATABASE_URL: postgresql://auth_sso:auth_sso_dev@localhost:5432/auth_sso
+          REDIS_URL: redis://localhost:6379
+          CI: true
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: tests/e2e-report/
+          retention-days: 7
+
+      - name: Run coverage report (threshold 90%)
+        if: always()
+        run: pnpm test:report --threshold 90
