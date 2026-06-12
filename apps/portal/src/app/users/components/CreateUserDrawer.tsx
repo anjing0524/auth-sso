@@ -2,11 +2,11 @@
 
 /**
  * 创建新用户抽屉组件
- * 基于 React 19 useActionState 与 Form Actions
+ * 基于客户端 Fetch 访问 API 路由，易于前后端分离与系统迁移
  */
 
-import React, { useState, useEffect, useActionState, startTransition } from 'react';
-import { useFormStatus } from 'react-dom';
+import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { UserPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -28,24 +28,6 @@ import {
   SelectTrigger, 
   SelectValue 
 } from '@/components/ui/select';
-import { createUserAction } from '../actions';
-
-/**
- * 局部组件：感知表单状态的提交按钮
- * 演示 React 19 useFormStatus 钩子的使用
- */
-function SubmitButton() {
-  const { pending } = useFormStatus();
-  return (
-    <Button 
-      type="submit" 
-      disabled={pending} 
-      className="flex-1 rounded-xl shadow-lg shadow-primary/20"
-    >
-      {pending ? '正在创建...' : '确认创建'}
-    </Button>
-  );
-}
 
 interface CreateUserDrawerProps {
   /** 部门列表，用于下拉选择 */
@@ -53,30 +35,69 @@ interface CreateUserDrawerProps {
 }
 
 export default function CreateUserDrawer({ departments }: CreateUserDrawerProps) {
+  const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  
+  // 表单状态双向绑定
+  const [name, setName] = useState('');
+  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('password123');
   const [deptId, setDeptId] = useState('');
 
-  // 绑定 React 19 的 Action 状态
-  const [state, formAction, isPending] = useActionState(
-    async (prevState: any, formData: FormData) => {
-      // 在提交前，手动将下拉选择框的部门 ID 附加到 FormData
-      formData.set('deptId', deptId);
-      return await createUserAction(prevState, formData);
-    },
-    null
-  );
+  /**
+   * 重置表单状态
+   */
+  const resetForm = () => {
+    setName('');
+    setUsername('');
+    setEmail('');
+    setPassword('password123');
+    setDeptId('');
+  };
 
-  // 感知 Action 结果
-  useEffect(() => {
-    if (!state) return;
-    if (state.success) {
-      toast.success(state.message || '用户创建成功');
-      setIsOpen(false);
-      setDeptId(''); // 重置部门选择
-    } else {
-      toast.error(state.message || '创建用户失败');
+  /**
+   * 客户端提交表单：发起原生 fetch 请求 API 路由
+   */
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name || !username || !email || !password) {
+      return toast.error('请填写完整信息');
     }
-  }, [state]);
+
+    setLoading(true);
+    try {
+      const response = await fetch('/api/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name,
+          username,
+          email,
+          password,
+          deptId: deptId === 'ALL' ? '' : deptId // 转换不分配部门
+        })
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        toast.success('用户创建成功');
+        setIsOpen(false);
+        resetForm();
+        // 关键：利用 Next.js 路由刷新机制，让 Server Component 重新加载最新数据，实现无感局部刷新
+        router.refresh();
+      } else {
+        toast.error(result.message || '创建用户失败');
+      }
+    } catch (error) {
+      console.error('Failed to create user:', error);
+      toast.error('请求失败，请检查网络');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <>
@@ -89,10 +110,12 @@ export default function CreateUserDrawer({ departments }: CreateUserDrawerProps)
         </Button>
       </PermissionGuard>
 
-      <Sheet open={isOpen} onOpenChange={setIsOpen}>
+      <Sheet open={isOpen} onOpenChange={(open) => {
+        setIsOpen(open);
+        if (!open) resetForm();
+      }}>
         <SheetContent className="sm:max-w-[500px]">
-          {/* 将整个表单的提交机制绑定至 formAction */}
-          <form action={formAction} className="h-full flex flex-col justify-between">
+          <form onSubmit={handleSubmit} className="h-full flex flex-col justify-between">
             <div>
               <SheetHeader className="pb-6 border-b">
                 <SheetTitle className="text-2xl font-black text-slate-900">创建新用户</SheetTitle>
@@ -106,7 +129,8 @@ export default function CreateUserDrawer({ departments }: CreateUserDrawerProps)
                   <Label htmlFor="name" className="font-bold text-slate-700">显示名称</Label>
                   <Input 
                     id="name"
-                    name="name"
+                    value={name}
+                    onChange={e => setName(e.target.value)}
                     required
                     className="h-11 rounded-xl focus:ring-2 focus:ring-primary/10 transition-all"
                     placeholder="例如：张三" 
@@ -116,7 +140,8 @@ export default function CreateUserDrawer({ departments }: CreateUserDrawerProps)
                   <Label htmlFor="username" className="font-bold text-slate-700">登录账号 (Username)</Label>
                   <Input 
                     id="username"
-                    name="username"
+                    value={username}
+                    onChange={e => setUsername(e.target.value)}
                     required
                     className="h-11 rounded-xl font-mono"
                     placeholder="例如：zhangsan" 
@@ -126,8 +151,9 @@ export default function CreateUserDrawer({ departments }: CreateUserDrawerProps)
                   <Label htmlFor="email" className="font-bold text-slate-700">电子邮箱</Label>
                   <Input 
                     id="email"
-                    name="email"
                     type="email"
+                    value={email}
+                    onChange={e => setEmail(e.target.value)}
                     required
                     className="h-11 rounded-xl"
                     placeholder="zhangsan@example.com" 
@@ -137,10 +163,10 @@ export default function CreateUserDrawer({ departments }: CreateUserDrawerProps)
                   <Label htmlFor="password" className="font-bold text-slate-700">初始密码</Label>
                   <Input 
                     id="password"
-                    name="password"
                     type="password"
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
                     required
-                    defaultValue="password123"
                     className="h-11 rounded-xl"
                   />
                 </div>
@@ -167,11 +193,17 @@ export default function CreateUserDrawer({ departments }: CreateUserDrawerProps)
                 variant="ghost" 
                 className="flex-1 rounded-xl" 
                 onClick={() => setIsOpen(false)}
-                disabled={isPending}
+                disabled={loading}
               >
                 取消
               </Button>
-              <SubmitButton />
+              <Button 
+                type="submit"
+                disabled={loading}
+                className="flex-1 rounded-xl shadow-lg shadow-primary/20"
+              >
+                {loading ? '正在创建...' : '确认创建'}
+              </Button>
             </SheetFooter>
           </form>
         </SheetContent>

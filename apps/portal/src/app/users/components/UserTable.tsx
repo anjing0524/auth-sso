@@ -2,10 +2,10 @@
 
 /**
  * 用户管理数据表格与分页组件
- * 利用 React 19 use(Promise) 阻塞渲染，配合外层 Suspense 展现极简加载流
+ * 采用标准 Client-side Fetch 请求 API，完全解除 Server Action 依赖，便于后台语言更换
  */
 
-import React, { use, useTransition } from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
@@ -40,7 +40,6 @@ import {
   DropdownMenuSeparator, 
   DropdownMenuTrigger 
 } from '@/components/ui/dropdown-menu';
-import { toggleUserStatusAction } from '../actions';
 
 /**
  * 用户类型定义
@@ -70,18 +69,14 @@ interface Pagination {
 }
 
 interface UserTableProps {
-  /** 
-   * 数据获取的 Promise
-   * React 19 use(Promise) 将直接等待其解析
-   */
-  dataPromise: Promise<{
-    data: User[];
-    pagination: Pagination;
-  }>;
+  /** 用户列表数据 */
+  users: User[];
+  /** 分页信息 */
+  pagination: Pagination;
 }
 
 /**
- * 局部骨架屏组件：在 use(Promise) 挂起时显示
+ * 局部骨架屏组件：在服务端直出获取数据之前（例如配合 Next.js loading.tsx）使用
  */
 export function UserTableSkeleton() {
   return (
@@ -122,28 +117,47 @@ export function UserTableSkeleton() {
   );
 }
 
-export default function UserTable({ dataPromise }: UserTableProps) {
-  // React 19 新特性：直接使用 use() 读取传入的 Promise 结果
-  const { data: users, pagination } = use(dataPromise);
+export default function UserTable({ users, pagination }: UserTableProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  // 用 Transition 处理 Action 触发
-  const [isPending, startTransition] = useTransition();
+  // 本地记录哪一行正在更新状态以展示 Loading 反馈
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
 
   /**
-   * 触发切换状态的 Server Action
+   * 通过客户端 fetch 访问 API 路由，执行用户状态切换
    */
-  const handleToggleStatus = (user: User) => {
-    startTransition(async () => {
-      const res = await toggleUserStatusAction(user.id, user.status);
-      if (res.success) {
-        toast.success(res.message);
+  const handleToggleStatus = async (user: User) => {
+    if (user.status === 'DELETED') {
+      return toast.error('逻辑删除的用户无法更新状态');
+    }
+
+    const newStatus = user.status === 'ACTIVE' ? 'DISABLED' : 'ACTIVE';
+    setUpdatingId(user.id);
+    
+    try {
+      const response = await fetch(`/api/users/${user.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        toast.success(`用户状态已更新为 ${newStatus === 'ACTIVE' ? '正常' : '已禁用'}`);
+        // 关键：通知路由重新拉取最新数据直出，前端无感同步
+        router.refresh();
       } else {
-        toast.error(res.message || '操作失败');
+        toast.error(result.message || '更新状态失败');
       }
-    });
+    } catch (error) {
+      console.error('Failed to toggle user status:', error);
+      toast.error('请求失败，请检查网络');
+    } finally {
+      setUpdatingId(null);
+    }
   };
 
   /**
@@ -156,7 +170,7 @@ export default function UserTable({ dataPromise }: UserTableProps) {
   };
 
   return (
-    <div className={`flex flex-col flex-1 overflow-hidden transition-opacity duration-300 ${isPending ? 'opacity-60 pointer-events-none' : 'opacity-100'}`}>
+    <div className="flex flex-col flex-1 overflow-hidden">
       <div className="flex-1 overflow-auto bg-white border border-slate-100 rounded-[1.5rem] shadow-sm">
         <Table>
           <TableHeader className="bg-slate-50/30 sticky top-0 z-10 backdrop-blur-md">
@@ -182,7 +196,10 @@ export default function UserTable({ dataPromise }: UserTableProps) {
               </TableRow>
             ) : (
               users.map((user) => (
-                <TableRow key={user.id} className="group hover:bg-slate-50/50 transition-colors border-b last:border-none">
+                <TableRow 
+                  key={user.id} 
+                  className={`group hover:bg-slate-50/50 transition-colors border-b last:border-none ${updatingId === user.id ? 'opacity-50 pointer-events-none' : ''}`}
+                >
                   <TableCell className="pl-6 py-4">
                     <div className="flex items-center gap-3">
                       <Avatar className="h-10 w-10 ring-2 ring-background transition-transform duration-300 group-hover:scale-110 shadow-sm">
@@ -219,7 +236,7 @@ export default function UserTable({ dataPromise }: UserTableProps) {
                   <TableCell className="text-right pr-6">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl hover:bg-slate-100 transition-colors">
+                        <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl hover:bg-slate-100 transition-colors" disabled={updatingId === user.id}>
                           <MoreHorizontal className="h-4 w-4" />
                         </Button>
                       </DropdownMenuTrigger>

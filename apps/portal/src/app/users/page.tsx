@@ -1,18 +1,17 @@
 /**
- * 用户管理页面 - React 19 & Next.js App Router 重构版
+ * 用户管理页面 - 纯 API / 前后端分离友好重构版
  * 
  * 职责分工：
- * - 本组件为 Server Component，负责提取 URL Query 并触发服务端数据拉取 Promise。
- * - 用 Suspense + 骨架屏提升页面初次加载体验。
- * - 将子交互与过滤状态分别解耦到 components/ 下的局部组件中。
+ * - 本组件为 Server Component，在服务端通过普通查库函数（或未来改后台语言后的 fetch API）获取数据。
+ * - 服务端就绪数据后直出渲染，子组件全量采用标准客户端 API (fetch) 进行状态交互，完全移除 Server Actions 绑定。
  */
 
-import React, { Suspense } from 'react';
+import React from 'react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
-import { getUsers, getDepartments } from './actions';
+import { getUsers, getDepartments } from './data';
 import UserFilters from './components/UserFilters';
 import CreateUserDrawer from './components/CreateUserDrawer';
-import UserTable, { UserTableSkeleton } from './components/UserTable';
+import UserTable from './components/UserTable';
 
 interface PageProps {
   searchParams: Promise<{
@@ -23,22 +22,22 @@ interface PageProps {
 }
 
 export default async function UsersPage({ searchParams }: PageProps) {
-  // 1. 异步读取 URL 查询参数（Next.js App Router 最佳实践）
+  // 1. 异步读取 URL 查询参数以驱动过滤
   const params = await searchParams;
   const keyword = params.keyword || '';
   const status = params.status || 'ALL';
   const page = parseInt(params.page || '1', 10);
-  const pageSize = 15; // 固定单页 15 条数据
+  const pageSize = 15; // 固定单页 15 条
 
-  // 2. 发起数据获取的 Promise (不加 await，允许并行拉取并传递给 Client 挂起渲染)
-  const usersPromise = getUsers({
+  // 2. 阻塞拉取首屏数据（如果将来改成 Go/Java 后台，只需将此处改为 `fetch('https://api/users')`）
+  const { data: users, pagination } = await getUsers({
     page,
     pageSize,
     keyword,
     status,
   });
 
-  // 3. 服务端并行预获取部门数据，供新增表单使用
+  // 3. 并行拉取部门列表，供表单下拉选择
   const departments = await getDepartments();
 
   return (
@@ -52,21 +51,19 @@ export default async function UsersPage({ searchParams }: PageProps) {
           </p>
         </div>
         
-        {/* 新建用户 Drawer：支持 React 19 表单 Action */}
+        {/* 新建用户 Drawer：支持传统客户端 API 提交 */}
         <CreateUserDrawer departments={departments} />
       </div>
 
-      {/* 核心卡片容器：上层过滤，下层数据 */}
+      {/* 核心卡片容器 */}
       <Card className="flex-1 border-none shadow-sm ring-1 ring-border/50 overflow-hidden rounded-[1.5rem] flex flex-col bg-white">
         <CardHeader className="bg-slate-50/50 dark:bg-slate-900/50 py-4 px-6 border-b">
           {/* 筛选过滤组件 */}
           <UserFilters initialKeyword={keyword} initialStatus={status} />
         </CardHeader>
         <CardContent className="p-0 flex-1 overflow-auto flex flex-col">
-          {/* 异步边界：在数据 Promise 尚未 resolve 时渲染骨架屏 */}
-          <Suspense fallback={<UserTableSkeleton />}>
-            <UserTable dataPromise={usersPromise} />
-          </Suspense>
+          {/* 同步直出表格，数据流透明易维护 */}
+          <UserTable users={users} pagination={pagination} />
         </CardContent>
       </Card>
     </div>
