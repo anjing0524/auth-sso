@@ -1,17 +1,16 @@
 /**
  * Auth-SSO 环境变量配置
  * @module @auth-sso/config/env
+ *
+ * 架构说明：IDP 已合并进 Portal，所有认证功能由 Portal 统一管理。
+ * Portal 自身即是 OIDC Provider（Better Auth + oauthProvider 插件），
+ * Demo App 等第三方应用直接对接 Portal 进行 OAuth/OIDC 认证。
  */
 
 import { z } from 'zod';
 
 /**
- * 服务环境类型
- */
-export type ServiceEnv = 'portal' | 'idp';
-
-/**
- * 基础环境变量 Schema（所有服务共享）
+ * 基础环境变量 Schema
  */
 const baseEnvSchema = z.object({
   // 运行环境
@@ -28,37 +27,20 @@ const baseEnvSchema = z.object({
 });
 
 /**
- * Portal 环境变量 Schema
+ * Portal 环境变量 Schema（含 OIDC Provider 配置）
  */
 const portalEnvSchema = baseEnvSchema.extend({
-  // Portal 特有配置
+  // Portal 应用配置
   NEXT_PUBLIC_APP_NAME: z.string().default('Auth-SSO Portal'),
   NEXT_PUBLIC_APP_URL: z.string().url(),
 
-  // IdP 配置（Portal 作为 Client）
-  IDP_URL: z.string().url(),
-  IDP_CLIENT_ID: z.string(),
-  IDP_CLIENT_SECRET: z.string(),
-
-  // Session 配置
-  SESSION_SECRET: z.string().min(32),
-});
-
-/**
- * IdP 环境变量 Schema
- */
-const idpEnvSchema = baseEnvSchema.extend({
-  // IdP 特有配置
-  NEXT_PUBLIC_APP_NAME: z.string().default('Auth-SSO IdP'),
-  NEXT_PUBLIC_APP_URL: z.string().url(),
-
-  // Better Auth 配置
+  // Better Auth 配置（Portal 自身即是 OIDC Provider）
   BETTER_AUTH_SECRET: z.string().min(32),
   BETTER_AUTH_URL: z.string().url(),
 
-  // JWT 配置
-  JWT_SECRET: z.string().min(32),
-  JWT_ISSUER: z.string().default('auth-sso'),
+  // 用于 demo-app 等客户端接入的 OAuth Client 凭证（由 Portal 的 OIDC Provider 签发）
+  PORTAL_CLIENT_ID: z.string().optional(),
+  PORTAL_CLIENT_SECRET: z.string().optional(),
 
   // Session 配置
   SESSION_MAX_AGE_SEC: z.coerce.number().default(604800), // 7 days
@@ -69,7 +51,6 @@ const idpEnvSchema = baseEnvSchema.extend({
  * 环境变量解析结果类型
  */
 export type PortalEnv = z.infer<typeof portalEnvSchema>;
-export type IdPEnv = z.infer<typeof idpEnvSchema>;
 
 /**
  * 解析并验证 Portal 环境变量
@@ -79,25 +60,10 @@ export function parsePortalEnv(env: Record<string, string | undefined>): PortalE
 }
 
 /**
- * 解析并验证 IdP 环境变量
+ * 获取 Portal 环境配置
  */
-export function parseIdPEnv(env: Record<string, string | undefined>): IdPEnv {
-  return idpEnvSchema.parse(env);
-}
-
-/**
- * 获取服务环境配置
- */
-export function getEnvConfig(service: 'portal'): PortalEnv;
-export function getEnvConfig(service: 'idp'): IdPEnv;
-export function getEnvConfig(service: ServiceEnv): PortalEnv | IdPEnv {
-  const env = process.env;
-
-  if (service === 'portal') {
-    return parsePortalEnv(env as Record<string, string | undefined>);
-  }
-
-  return parseIdPEnv(env as Record<string, string | undefined>);
+export function getEnvConfig(): PortalEnv {
+  return parsePortalEnv(process.env as Record<string, string | undefined>);
 }
 
 /**
@@ -105,10 +71,9 @@ export function getEnvConfig(service: ServiceEnv): PortalEnv | IdPEnv {
  */
 export class EnvValidationError extends Error {
   constructor(
-    public readonly service: ServiceEnv,
     public readonly issues: z.ZodIssue[]
   ) {
-    const message = `Invalid environment variables for ${service}:\n${issues
+    const message = `Invalid environment variables for Portal:\n${issues
       .map((i) => `  - ${i.path.join('.')}: ${i.message}`)
       .join('\n')}`;
     super(message);
@@ -120,16 +85,14 @@ export class EnvValidationError extends Error {
  * 安全获取环境变量（开发时辅助）
  */
 export function safeGetEnv(
-  env: Record<string, string | undefined>,
-  service: ServiceEnv
-): { success: true; data: PortalEnv | IdPEnv } | { success: false; error: EnvValidationError } {
+  env: Record<string, string | undefined>
+): { success: true; data: PortalEnv } | { success: false; error: EnvValidationError } {
   try {
-    const schema = service === 'portal' ? portalEnvSchema : idpEnvSchema;
-    const data = schema.parse(env);
+    const data = portalEnvSchema.parse(env);
     return { success: true, data };
   } catch (err: unknown) {
     if (err instanceof z.ZodError) {
-      return { success: false, error: new EnvValidationError(service, err.issues) };
+      return { success: false, error: new EnvValidationError(err.issues) };
     }
     throw err;
   }

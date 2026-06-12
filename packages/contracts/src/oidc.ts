@@ -131,7 +131,7 @@ export interface IntrospectResponse {
 }
 
 // 授权码 Redis Key
-export const AUTH_CODE_KEY = (code: string) => `idp:auth_code:${code}`;
+export const AUTH_CODE_KEY = (code: string) => `portal:auth_code:${code}`;
 
 // PKCE 验证数据
 export interface PKCEData {
@@ -144,4 +144,4 @@ export interface PKCEData {
 }
 
 // PKCE 数据 Redis Key
-export const PKCE_KEY = (code: string) => `idp:pkce:${code}`;
+export const PKCE_KEY = (code: string) => `portal:pkce:${code}`;

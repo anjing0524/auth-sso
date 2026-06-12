@@ -16,10 +16,10 @@ use tokio::sync::RwLock;
  * Auth-SSO 去中心化安全网关 - 基于 Pingora (0.8.0 + OpenSSL)
  *
  * 核心功能：
- * 1. SNI 域名分发路由（idp.* → IdP, portal.* → Portal，其余 → 微服务集群）
+ * 1. SNI 域名分发路由（idp.* / portal.* → Portal，Portal 自身即是 OIDC Provider）
  * 2. portal_jwt_token Cookie 提取 + ES256 JWKS 离线验签（100% 无网络 I/O）
  * 3. Cookie 剥离 + Authorization: Bearer Token 注入（下发给内网微服务）
- * 4. JWKS 公钥后台定时刷新（每 5 分钟，支持 IdP 密钥轮换）
+ * 4. JWKS 公钥后台定时刷新（每 5 分钟，支持 Portal 密钥轮换）
  * 5. 全局 HTTPS 安全加固与强制 HTTP→HTTPS 301 重定向
  */
 
@@ -61,10 +61,10 @@ impl JwksCache {
     }
 
     /**
-     * 从 IdP JWKS 端点拉取公钥并更新缓存
+     * 从 Portal JWKS 端点拉取公钥并更新缓存
      * 生产环境应按 JWT Header 的 kid 字段匹配对应公钥
      *
-     * @param jwks_url IdP 的 JWKS 端点 URL（如 https://idp.xxx.com/.well-known/jwks）
+     * @param jwks_url Portal 的 JWKS 端点 URL（如 https://portal.xxx.com/.well-known/jwks）
      */
     pub async fn refresh(&self, jwks_url: &str) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let resp = reqwest::get(jwks_url).await?;
@@ -92,7 +92,7 @@ struct Gateway {
     portal_lb: Arc<LoadBalancer<RoundRobin>>,
     /// JWKS 公钥缓存（由 main 中的后台任务每 5 分钟刷新）
     jwks_cache: Arc<JwksCache>,
-    /// IdP 的 JWT issuer（校验 iss claim）
+    /// Portal OIDC Provider 的 JWT issuer（校验 iss claim）
     idp_issuer: String,
 }
 
@@ -148,7 +148,7 @@ impl ProxyHttp for Gateway {
         let path = session.req_header().uri.path();
         let host = session.get_header("Host").and_then(|h| h.to_str().ok()).unwrap_or("");
 
-        // 1. 放行：IdP 自身所有请求 + Portal OIDC 相关路由 + JWKS 端点
+        // 1. 放行：Portal OIDC 认证路由 + 静态资源 + JWKS 端点
         if host.starts_with("idp.")
             || path.starts_with("/api/auth/")
             || path.starts_with("/oauth2/")
@@ -289,7 +289,7 @@ fn main() {
     // 启动 tokio 运行时以支持 JWKS 后台刷新任务
     let rt = tokio::runtime::Runtime::new().expect("tokio Runtime 初始化失败");
 
-    // 启动 JWKS 后台定时刷新任务（每 5 分钟拉取一次，支持 IdP 密钥轮换）
+    // 启动 JWKS 后台定时刷新任务（每 5 分钟拉取一次，支持 Portal 密钥轮换）
     let cache_for_task = Arc::clone(&jwks_cache);
     let jwks_url_clone = jwks_url.clone();
     rt.spawn(async move {

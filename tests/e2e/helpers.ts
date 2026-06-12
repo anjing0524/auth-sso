@@ -3,7 +3,7 @@
  * Shared helpers for Playwright E2E tests
  *
  * 提供可复用的 Page Object 模式：登录/登出/用户创建
- * 测试凭证与 seed 数据一致（apps/idp/scripts/seed.ts）
+ * 测试凭证与 seed 数据一致（scripts/seed-v2.ts）
  */
 
 import { Page, expect } from '@playwright/test';
@@ -21,7 +21,6 @@ export const RESTRICTED_USER = {
 
 // ─── 服务 URL ─────────────────────────────────────────
 export const PORTAL_URL = 'http://127.0.0.1:4100';
-export const IDP_URL = 'http://127.0.0.1:4101';
 export const DEMO_APP_URL = 'http://127.0.0.1:4102';
 
 // ─── 登录 / 登出 辅助函数 ────────────────────────────
@@ -30,8 +29,8 @@ export const DEMO_APP_URL = 'http://127.0.0.1:4102';
  * 以管理员身份完成完整的 OAuth 登录流程
  *
  * Flow:
- *   Portal /login → 点击 SSO 登录 → IdP OAuth authorize →
- *   IdP /sign-in → 填写凭证 → 提交 → IdP 授权 →
+ *   Portal /login → 点击 SSO 登录 → Portal OAuth authorize →
+ *   Portal /sign-in → 填写凭证 → 提交 → Portal 授权 →
  *   Portal callback → Portal /dashboard
  */
 export async function loginAsAdmin(page: Page): Promise<void> {
@@ -49,7 +48,7 @@ export async function loginAsUser(page: Page, email: string, password: string): 
   // 2. 点击 SSO 登录按钮，触发 OAuth 跳转
   await page.click('a[href="/api/auth/login"]');
 
-  // 3. 等待重定向到 IdP 登录页
+  // 3. 等待重定向到 Portal 登录页
   //    Better Auth 未登录时会将请求转为 /sign-in 页面
   await page.waitForURL(/\/sign-in/, { timeout: 20_000 });
 
@@ -68,11 +67,11 @@ export async function loginAsUser(page: Page, email: string, password: string): 
  * 登出当前用户
  *
  * 调用 Portal GET /api/auth/logout 清除 Portal Session，
- * 随后重定向到 IdP sign-in（SSO 登出）
+ * 随后重定向到 Portal sign-in（SSO 登出）
  */
 export async function logout(page: Page): Promise<void> {
   await page.goto('/api/auth/logout');
-  // 登出后会被重定向到 IdP sign-in 页
+  // 登出后会被重定向到 Portal sign-in 页
   await page.waitForURL(/\/sign-in/, { timeout: 15_000 });
 }
 

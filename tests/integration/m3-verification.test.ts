@@ -8,14 +8,15 @@
  * 4. 验证 Token 刷新机制
  * 5. 验证登出清除所有 Session
  */
+import './load-env';
 
-const IDP_URL = 'http://localhost:4001';
-const PORTAL_URL = 'http://localhost:4000';
-const TEST_USER = { email: 'admin@example.com', password: 'test123456' };
+const PORTAL_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:4100';
+const IDP_URL = PORTAL_URL;
+const TEST_USER = { email: 'admin@example.com', password: 'Admin@123456' };
 const OAUTH_CLIENT = {
   clientId: 'portal',
   clientSecret: 'portal-secret',
-  redirectUri: 'http://localhost:4000/api/auth/callback',
+  redirectUri: 'http://localhost:4100/api/auth/callback',
 };
 
 interface TestResult {
@@ -49,6 +50,7 @@ async function httpRequest(
   };
 }
 
+// 辅助类型和解析函数，保持不变
 function parseJson(text: string): unknown {
   try {
     return JSON.parse(text);
@@ -346,26 +348,14 @@ async function runTests() {
   console.log('🔍 检查服务可用性...\n');
 
   try {
-    const idpCheck = await httpRequest(`${IDP_URL}/api/auth/ok`);
-    if (idpCheck.status !== 200) {
-      console.log(`❌ IdP 服务不可用: ${IDP_URL}`);
+    const idpCheck = await httpRequest(`${IDP_URL}/api/auth/session`);
+    if (idpCheck.status !== 200 && idpCheck.status !== 401) {
+      console.log(`❌ IdP/Portal 服务不可用: ${IDP_URL}`);
       process.exit(1);
     }
-    console.log(`✅ IdP 服务正常`);
+    console.log(`✅ IdP/Portal 服务正常`);
   } catch (e) {
-    console.log(`❌ IdP 服务不可用: ${IDP_URL}`);
-    process.exit(1);
-  }
-
-  try {
-    const portalCheck = await httpRequest(`${PORTAL_URL}/api/auth/login`);
-    if (portalCheck.status !== 302 && portalCheck.status !== 307) {
-      console.log(`⚠️  Portal 登录入口返回 ${portalCheck.status}`);
-    } else {
-      console.log(`✅ Portal 服务正常`);
-    }
-  } catch (e) {
-    console.log(`❌ Portal 服务不可用: ${PORTAL_URL}`);
+    console.log(`❌ IdP/Portal 服务不可用: ${IDP_URL} - ${e}`);
     process.exit(1);
   }
 

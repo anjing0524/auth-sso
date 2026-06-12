@@ -20,7 +20,6 @@ import {
   ADMIN_EMAIL,
   ADMIN_PASSWORD,
   PORTAL_URL,
-  IDP_URL,
 } from './helpers';
 
 test.describe('Auth Flow', () => {
@@ -76,7 +75,7 @@ test.describe('Auth Flow', () => {
 
   // ─── Edge Cases ────────────────────────────────────
   test.describe('Edge Cases', () => {
-    test('错误密码应在 IdP 登录页显示错误信息，不重定向', async ({ page }) => {
+    test('错误密码应在 Portal 登录页显示错误信息，不重定向', async ({ page }) => {
       // 发起 OAuth 登录流程
       await page.goto('/login');
       await page.click('a[href="/api/auth/login"]');
@@ -87,7 +86,7 @@ test.describe('Auth Flow', () => {
       await page.fill('#password', 'WrongPassword999!');
       await page.click('button[type="submit"]');
 
-      // 验证错误提示出现（不重定向，仍停留在 IdP 登录页）
+      // 验证错误提示出现（不重定向，仍停留在 Portal 登录页）
       await expect(page.getByText(/登录失败|错误/i)).toBeVisible({ timeout: 10_000 });
       // URL 应仍包含 /sign-in（未被重定向回 Portal）
       expect(page.url()).toContain('/sign-in');

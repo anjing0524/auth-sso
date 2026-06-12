@@ -12,7 +12,7 @@
 
 ## OAuth 2.1 配置
 
-### IdP 端点
+### Portal OIDC Provider 端点
 
 | 端点 | 地址 | 说明 |
 |------|------|------|
@@ -36,7 +36,7 @@
 
 ### 步骤 1：注册 Client
 
-联系管理员在 IdP 中注册您的应用：
+联系管理员在 Portal 中注册您的 OAuth Client：
 
 ```typescript
 // 需要提供的信息
@@ -65,7 +65,7 @@ const codeChallenge = await generateCodeChallenge(codeVerifier);
 saveOAuthState({ state, nonce, codeVerifier });
 
 // 3. 构建授权 URL
-const authUrl = new URL('http://localhost:4001/api/auth/authorize');
+const authUrl = new URL('http://localhost:4000/api/auth/authorize');
 authUrl.searchParams.set('client_id', 'your-client-id');
 authUrl.searchParams.set('redirect_uri', 'http://localhost:YOUR_PORT/auth/callback');
 authUrl.searchParams.set('response_type', 'code');
@@ -95,7 +95,7 @@ export async function GET(request: Request) {
   }
 
   // 2. 用授权码换取 Token
-  const tokenResponse = await fetch('http://localhost:4001/api/auth/token', {
+  const tokenResponse = await fetch('http://localhost:4000/api/auth/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
@@ -120,7 +120,7 @@ export async function GET(request: Request) {
   }
 
   // 4. 获取用户信息
-  const userResponse = await fetch('http://localhost:4001/api/auth/userinfo', {
+  const userResponse = await fetch('http://localhost:4000/api/auth/userinfo', {
     headers: { Authorization: `Bearer ${tokens.access_token}` },
   });
   const user = await userResponse.json();
@@ -141,8 +141,8 @@ export async function GET() {
   // 1. 清除本地 Session
   clearSession();
 
-  // 2. 重定向到 IdP 登出端点
-  const logoutUrl = new URL('http://localhost:4001/api/auth/sign-out');
+  // 2. 重定向到 Portal OIDC Provider 登出端点
+  const logoutUrl = new URL('http://localhost:4000/api/auth/sign-out');
   logoutUrl.searchParams.set('post_logout_redirect_uri', 'http://localhost:YOUR_PORT');
   return Response.redirect(logoutUrl);
 }
@@ -186,30 +186,30 @@ function base64UrlEncode(buffer: Uint8Array): string {
 ### 单点登录
 
 1. 用户首次访问 App A
-2. App A 重定向到 IdP 授权端点
-3. 用户在 IdP 登录
-4. IdP 创建 Session，重定向回 App A
+2. App A 重定向到 Portal OIDC Provider 授权端点
+3. 用户在 Portal OIDC Provider 登录
+4. Portal OIDC Provider 创建 Session，重定向回 App A
 5. App A 获取 Token 和用户信息
 
 当用户访问 App B 时：
-1. App B 重定向到 IdP 授权端点
-2. IdP 检测到已有有效 Session
-3. IdP 直接返回授权码，无需重新登录
+1. App B 重定向到 Portal OIDC Provider 授权端点
+2. Portal OIDC Provider 检测到已有有效 Session
+3. Portal OIDC Provider 直接返回授权码，无需重新登录
 4. App B 获取 Token 和用户信息
 
 ### 单点登出
 
 1. 用户在任一应用发起登出
 2. 应用清除本地 Session
-3. 重定向到 IdP 登出端点
-4. IdP 清除 IdP Session
+3. 重定向到 Portal OIDC Provider 登出端点
+4. Portal OIDC Provider 清除 Portal OIDC Provider Session
 5. 所有应用都需重新登录
 
 ## 安全要求
 
 1. **必须使用 PKCE** - 防止授权码拦截攻击
 2. **必须验证 state** - 防止 CSRF 攻击
-3. **必须验证 nonce** - 防止重放攻击。IdP 会在 id_token 中包含 nonce，回调处理时必须严格校验其值与发起登录时生成的值一致。Auth-SSO Portal 已实现强制 Nonce 校验。
+3. **必须验证 nonce** - 防止重放攻击。Portal OIDC Provider 会在 id_token 中包含 nonce，回调处理时必须严格校验其值与发起登录时生成的值一致。Auth-SSO Portal 已实现强制 Nonce 校验。
 4. **Token 不应暴露给客户端** - access_token 应存储在 HttpOnly Cookie 或服务端 Session
 5. **HTTPS** - 生产环境必须使用 HTTPS
 6. **回调地址白名单** - 只能注册预先定义的回调地址
@@ -227,9 +227,9 @@ function base64UrlEncode(buffer: Uint8Array): string {
 
 ## 测试清单
 
-- [ ] 未登录时能正确跳转到 IdP 登录页
+- [ ] 未登录时能正确跳转到 Portal OIDC Provider 登录页
 - [ ] 登录成功后能正确获取用户信息
-- [ ] 已登录 IdP 时能自动完成 SSO 认证
+- [ ] 已登录 Portal OIDC Provider 时能自动完成 SSO 认证
 - [ ] 登出后无法继续访问受保护资源
 - [ ] Portal 登出后子应用需重新登录
 - [ ] 错误的 state/nonce 能被正确拒绝

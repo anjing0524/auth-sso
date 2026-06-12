@@ -1,7 +1,7 @@
 # Auth-SSO 生产环境部署经验总结 (SOP)
 
 ## 1. 项目结构与部署策略
-本项目为 Monorepo 结构，包含 IdP、Portal、Demo App 和 Customer Graph 四个应用。
+本项目为 Monorepo 结构，包含 Portal OIDC Provider、Portal、Demo App 和 Customer Graph 四个应用。
 
 ## 2. 核心问题修复记录
 

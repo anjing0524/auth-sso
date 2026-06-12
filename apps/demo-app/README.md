@@ -85,10 +85,10 @@ APP_URL=http://localhost:4002
 
 ### 1. 注册 Client
 
-在 IdP 中注册新的 OAuth Client：
+在 Portal 中注册新的 OAuth Client：
 
 ```typescript
-// apps/idp/src/lib/auth.ts
+// apps/portal/src/lib/auth.ts
 trustedClients: [
   {
     clientId: 'your-app',

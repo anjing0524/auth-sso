@@ -25,17 +25,17 @@ export const JWT_COOKIE_NAME = 'portal_jwt_token';
 export const REFRESH_COOKIE_NAME = 'portal_refresh_token';
 
 // ────────────────────────────────────────────────────────────
-// JWT 声明类型（与 IdP 签发内容对齐）
+// JWT 声明类型（与 Better Auth 签发内容对齐）
 // ────────────────────────────────────────────────────────────
 
 /**
  * Portal JWT 载荷声明（扩展自 JWTPayload）
- * 与 IdP（Better Auth）签发的 Access Token claims 字段对齐
+ * 与 Portal（Better Auth OIDC Provider）签发的 Access Token claims 字段对齐
  */
 export interface PortalJwtClaims extends JWTPayload {
   /** 用户唯一标识（格式：usr_xxxx） */
   sub: string;
-  /** Token 签发者（idp 地址） */
+  /** Token 签发者（Portal/OIDC Provider 地址） */
   iss: string;
   /** Token 目标受众（portal-client） */
   aud: string | string[];
@@ -43,7 +43,7 @@ export interface PortalJwtClaims extends JWTPayload {
   jti: string;
   /** 用户角色编码列表 */
   roles?: string[];
-  /** 用户权限编码列表（由 IdP 在登录时根据角色动态注入） */
+  /** 用户权限编码列表（登录时根据角色动态注入） */
   permissions?: string[];
   /** 用户所在部门 ID */
   deptId?: string;
@@ -55,7 +55,7 @@ export interface PortalJwtClaims extends JWTPayload {
 // JWKS 远端公钥集（jose 内部自动缓存 + 定期刷新）
 // ────────────────────────────────────────────────────────────
 
-/** 懒初始化的 JWKS 远端公钥集，用于验签 IdP 签发的 JWT */
+/** 懒初始化的 JWKS 远端公钥集，用于验签 Portal OIDC Provider 签发的 JWT */
 let jwksSet: ReturnType<typeof createRemoteJWKSet> | null = null;
 
 /**
@@ -64,7 +64,7 @@ let jwksSet: ReturnType<typeof createRemoteJWKSet> | null = null;
  */
 function getJwksSet() {
   if (!jwksSet) {
-    const jwksUri = (process.env.IDP_JWKS_URI || 'http://localhost:4101/api/auth/.well-known/jwks').trim();
+    const jwksUri = (process.env.PORTAL_JWKS_URI || 'http://localhost:4100/api/auth/.well-known/jwks').trim();
     jwksSet = createRemoteJWKSet(new URL(jwksUri));
   }
   return jwksSet;
@@ -79,8 +79,8 @@ function getJwksSet() {
  * 在 OIDC 回调成功后由 Portal BFF 调用
  *
  * @param response NextResponse 响应对象
- * @param accessToken IdP 签发的 JWT Access Token 字符串
- * @param refreshToken IdP 签发的 Refresh Token 字符串
+ * @param accessToken Portal OIDC Provider 签发的 JWT Access Token 字符串
+ * @param refreshToken Portal OIDC Provider 签发的 Refresh Token 字符串
  * @param accessTokenExpiresIn Access Token 有效期（秒），用于设置 Cookie maxAge
  */
 export function setJwtCookies(
@@ -171,9 +171,9 @@ export async function getRefreshTokenFromCookie(): Promise<string | null> {
 export async function verifyJwt(token: string): Promise<PortalJwtClaims | null> {
   try {
     const { payload } = await jwtVerify<PortalJwtClaims>(token, getJwksSet(), {
-      issuer: (process.env.IDP_ISSUER || 'http://localhost:4101').trim(),
+      issuer: (process.env.PORTAL_ISSUER || 'http://localhost:4100').trim(),
       // aud 根据环境配置，Portal 作为 OIDC Client 会收到 aud = clientId
-      // 此处不强制校验 aud，由 IdP oidcProvider 自行处理（Better Auth 已在 token 端点做校验）
+      // 此处不强制校验 aud，由 Portal oidcProvider 自行处理（Better Auth 已在 token 端点做校验）
     });
 
     // 检查 jti 是否在黑名单（用于管理员紧急踢人场景）

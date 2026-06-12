@@ -3,7 +3,7 @@
  * SSO Cross-App — U9 Layered Test Verification
  *
  * 验证 Portal 登录后，Demo App 可通过 SSO 自动完成认证；
- * Portal 登出后，IdP Session 失效，Demo App 需要重新登录。
+ * Portal 登出后，Portal Session 失效，Demo App 需要重新登录。
  *
  * @req SSO-CROSS-APP
  * @req SSO-DIRECT-ACCESS
@@ -30,7 +30,7 @@ test.describe('SSO Cross-App', () => {
       // 1. 在 Portal 完成登录
       await loginAsAdmin(page);
 
-      // 确认 IdP Session Cookie 已设置（在 127.0.0.1:4101 域）
+      // 确认 Portal Session Cookie 已设置（在 127.0.0.1:4100 域）
       const allCookies = await context.cookies();
       const idpSessionCookies = allCookies.filter(
         (c) => c.domain.includes('127.0.0.1') && c.name.includes('session') && c.value.length > 0,
@@ -45,10 +45,10 @@ test.describe('SSO Cross-App', () => {
       await expect(demoPage.getByText('Demo App - SSO 测试')).toBeVisible({ timeout: 10_000 });
       await expect(demoPage.getByText('SSO 登录')).toBeVisible();
 
-      // 3. 点击 SSO 登录 → 期望自动完成认证（不进入 IdP 登录页）
+      // 3. 点击 SSO 登录 → 期望自动完成认证（不进入登录页）
       await demoPage.click('a[href="/api/auth/login"]');
 
-      // 由于 IdP Session 有效，OAuth 流程应自动完成并重定向回 Demo App
+      // 由于 Portal Session 有效，OAuth 流程应自动完成并重定向回 Demo App
       // 等待 URL 回到 Demo App（非 /sign-in）
       await demoPage.waitForURL((url) => {
         return url.hostname === '127.0.0.1' && url.port === '4102';
@@ -78,14 +78,14 @@ test.describe('SSO Cross-App', () => {
       await expect(page.getByText('SSO 登录')).toBeVisible();
     });
 
-    test('未登录用户从 Demo App 发起 SSO 登录应跳到 IdP 登录页', async ({ page }) => {
+    test('未登录用户从 Demo App 发起 SSO 登录应跳到 Portal 登录页', async ({ page }) => {
       // @req SSO-DIRECT-ACCESS
       await clearAllCookies(page);
 
       await page.goto(DEMO_APP_URL);
       await page.click('a[href="/api/auth/login"]');
 
-      // 无 IdP Session → 应跳转到 IdP sign-in 页面
+      // 无 Portal Session → 应跳转到 Portal sign-in 页面
       await page.waitForURL(/\/sign-in/, { timeout: 15_000 });
       // 登录表单应可见
       await expect(page.locator('#email')).toBeVisible();
@@ -94,16 +94,16 @@ test.describe('SSO Cross-App', () => {
 
   // ─── Edge: Portal 登出 → Demo App SSO 失效 ═══════════
   test.describe('Logout Propagation', () => {
-    test('Portal 登出后 IdP Session 被销毁，Demo App SSO 需重新登录', async ({ page, context }) => {
+    test('Portal 登出后 Session 被销毁，Demo App SSO 需重新登录', async ({ page, context }) => {
       // @req SSO-LOGOUT-PROPAGATION
       // @req G-SEC-INT
 
       // 1. Portal 登录
       await loginAsAdmin(page);
 
-      // 2. 登出 Portal（清除 IdP Session）
+      // 2. 登出 Portal（清除 Portal Session）
       await logout(page);
-      // 登出后应位于 IdP sign-in 页
+      // 登出后应位于 Portal sign-in 页
       await expect(page.locator('#email')).toBeVisible({ timeout: 10_000 });
       await expect(page.getByText('统一身份认证')).toBeVisible();
 
@@ -112,7 +112,7 @@ test.describe('SSO Cross-App', () => {
       await demoPage.goto(DEMO_APP_URL);
       await demoPage.click('a[href="/api/auth/login"]');
 
-      // IdP Session 已被销毁 → 应跳转到 IdP sign-in 页
+      // Portal Session 已被销毁 → 应跳转到 Portal sign-in 页
       await demoPage.waitForURL(/\/sign-in/, { timeout: 15_000 });
       await expect(demoPage.locator('#email')).toBeVisible();
     });

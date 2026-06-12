@@ -256,9 +256,9 @@ describe('Mock 基础设施', () => {
 
     it('匹配 URL 返回 JSON 响应', async () => {
       const mockFn = createMockFetch({
-        'https://idp.example.com/token': { json: { access_token: 'mock-token' } },
+        'https://portal.example.com/token': { json: { access_token: 'mock-token' } },
       });
-      const response = await mockFn('https://idp.example.com/token');
+      const response = await mockFn('https://portal.example.com/token');
       expect(response.status).toBe(200);
       const json = await response.json();
       expect(json.access_token).toBe('mock-token');
@@ -272,17 +272,17 @@ describe('Mock 基础设施', () => {
 
     it('error 模式抛出异常（模拟网络错误）', async () => {
       const mockFn = createMockFetch({
-        'https://idp.example.com/down': { error: 'NETWORK_ERROR' },
+        'https://portal.example.com/down': { error: 'NETWORK_ERROR' },
       });
-      await expect(mockFn('https://idp.example.com/down')).rejects.toThrow('NETWORK_ERROR');
+      await expect(mockFn('https://portal.example.com/down')).rejects.toThrow('NETWORK_ERROR');
     });
 
     it('最长前缀匹配', async () => {
       const mockFn = createMockFetch({
-        'https://idp.example.com/oauth2': { json: { default: true } },
-        'https://idp.example.com/oauth2/token': { json: { access_token: 'specific' } },
+        'https://portal.example.com/oauth2': { json: { default: true } },
+        'https://portal.example.com/oauth2/token': { json: { access_token: 'specific' } },
       });
-      const response = await mockFn('https://idp.example.com/oauth2/token');
+      const response = await mockFn('https://portal.example.com/oauth2/token');
       const json = await response.json();
       expect(json.access_token).toBe('specific');
     });

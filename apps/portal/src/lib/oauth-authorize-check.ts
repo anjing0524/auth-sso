@@ -1,5 +1,5 @@
 /**
- * IdP OAuth 授权准入检查（纯函数，独立于 HTTP/DB）
+ * OAuth 授权准入检查（纯函数，独立于 HTTP/DB）
  * 从 oauth2/authorize/route.ts 提取，便于单元测试
  */
 

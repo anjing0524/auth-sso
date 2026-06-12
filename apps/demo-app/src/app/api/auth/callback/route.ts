@@ -1,6 +1,6 @@
 /**
  * OAuth 回调处理 API
- * GET /api/auth/callback - 处理 IdP 回调
+ * GET /api/auth/callback - 处理 Portal OIDC 回调
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { oauthConfig } from '@/lib/oauth';

@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
     // 构建授权 URL
     const authUrl = buildAuthorizationUrl(state, codeChallenge, nonce);
 
-    // 重定向到 IdP 授权页面
+    // 重定向到 Portal OIDC Provider 授权页面
     return NextResponse.redirect(authUrl);
   } catch (error) {
     console.error('[DemoApp] Login Error:', error);

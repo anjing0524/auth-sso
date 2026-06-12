@@ -59,7 +59,7 @@ cd /opt/apps/portal
 git fetch origin
 git checkout v1.0.0
 
-# IdP
+# Portal OIDC Provider
 cd /opt/apps/idp
 git fetch origin
 git checkout v1.0.0
@@ -72,7 +72,7 @@ git checkout v1.0.0
 cd /opt/apps/portal
 pnpm install
 
-# IdP
+# Portal OIDC Provider
 cd /opt/apps/idp
 pnpm install
 ```
@@ -92,7 +92,7 @@ pnpm drizzle-kit push
 cd /opt/apps/portal
 pnpm build
 
-# IdP
+# Portal OIDC Provider
 cd /opt/apps/idp
 pnpm build
 ```
@@ -117,8 +117,8 @@ pm2 start idp
 # 验证 Portal
 curl https://portal.example.com/api/me
 
-# 验证 IdP
-curl https://idp.example.com/api/auth/ok
+# 验证 Portal OIDC Provider
+curl https://portal.example.com/api/auth/ok
 ```
 
 ---
@@ -144,7 +144,7 @@ curl https://idp.example.com/api/auth/ok
 ### 3.3 发布后检查（发布后 30 分钟）
 
 - [ ] Portal 功能正常
-- [ ] IdP 功能正常
+- [ ] Portal OIDC Provider 功能正常
 - [ ] 登录功能正常
 - [ ] SSO 功能正常
 - [ ] 监控正常
@@ -216,7 +216,7 @@ sleep 10
 # 8. 验证服务
 echo "[8/8] 验证服务..."
 curl -sf https://portal.example.com/api/me > /dev/null && echo "Portal: OK" || echo "Portal: FAILED"
-curl -sf https://idp.example.com/api/auth/ok > /dev/null && echo "IdP: OK" || echo "IdP: FAILED"
+curl -sf https://portal.example.com/api/auth/ok > /dev/null && echo "Portal OIDC Provider: OK" || echo "Portal OIDC Provider: FAILED"
 
 echo "=== 发布完成 ==="
 ```
@@ -240,7 +240,7 @@ module.exports = {
   }]
 };
 
-// ecosystem.config.js (IdP)
+// ecosystem.config.js (Portal OIDC Provider)
 module.exports = {
   apps: [{
     name: 'idp',
@@ -272,7 +272,7 @@ echo "=== 功能验证 ==="
 # 1. 健康检查
 echo "1. 健康检查..."
 curl -sf https://portal.example.com/api/me || exit 1
-curl -sf https://idp.example.com/api/auth/ok || exit 1
+curl -sf https://portal.example.com/api/auth/ok || exit 1
 
 # 2. 登录测试
 echo "2. 登录测试..."

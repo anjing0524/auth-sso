@@ -5,29 +5,8 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1774405611646,
-      "tag": "0000_glorious_bastion",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1776819549507,
-      "tag": "0001_perfect_punisher",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1778489300759,
-      "tag": "0002_add_menu_type",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1778584699920,
-      "tag": "0003_familiar_molly_hayes",
+      "when": 1781244172980,
+      "tag": "0000_last_la_nuit",
       "breakpoints": true
     }
   ]

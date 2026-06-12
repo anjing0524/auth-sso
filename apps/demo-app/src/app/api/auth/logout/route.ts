@@ -19,7 +19,7 @@ export async function POST() {
     // 清除本地 Session
     await clearSession();
 
-    // 构建 IdP 登出 URL
+    // 构建 Portal SSO 登出 URL
     const logoutUrl = buildLogoutUrl(oauthConfig.appUrl);
 
     return NextResponse.json({
@@ -44,7 +44,7 @@ export async function GET() {
     // 清除本地 Session
     await clearSession();
 
-    // 构建 IdP 登出 URL 并重定向
+    // 构建 Portal SSO 登出 URL 并重定向
     const logoutUrl = buildLogoutUrl(oauthConfig.appUrl);
 
     return NextResponse.redirect(logoutUrl);

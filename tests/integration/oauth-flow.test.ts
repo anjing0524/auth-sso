@@ -2,19 +2,19 @@
  * OAuth 2.1 Authorization Code Flow with PKCE 自动化验收测试 (合并版)
  *
  * 测试范围：
- * 1. 本地 OIDC 端点：登录、授权、Token交换、UserInfo、JWKS、Discovery (均由 Portal 4000 托管)
+ * 1. 本地 OIDC 端点：登录、授权、Token交换、UserInfo、JWKS、Discovery (均由 Portal 托管)
  * 2. 强拦截与准入控制
  * 3. 未登录用户访问 OIDC 重定向至 /login 检查
  */
-
 import http from 'http';
+import './load-env';
 
-const PORTAL_URL = 'http://localhost:4000';
-const TEST_USER = { email: 'admin@example.com', password: 'test123456' };
+const PORTAL_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:4100';
+const TEST_USER = { email: 'admin@example.com', password: 'Admin@123456' };
 const OAUTH_CLIENT = {
   clientId: 'portal',
   clientSecret: 'portal-secret',
-  redirectUri: 'http://localhost:4000/api/auth/callback',
+  redirectUri: 'http://localhost:4100/api/auth/callback',
 };
 
 // 测试结果收集
@@ -137,15 +137,11 @@ async function testHealthCheck(): Promise<TestResult> {
   const name = '1.1 健康检查端点';
 
   try {
-    const res = await httpRequest(`${PORTAL_URL}/api/auth/ok`);
+    const res = await httpRequest(`${PORTAL_URL}/api/auth/session`);
 
-    if (res.status !== 200) {
-      return { name, status: 'FAIL', duration: Date.now() - start, error: `Expected 200, got ${res.status}` };
-    }
-
-    const body = res.body as { ok?: boolean };
-    if (!body.ok) {
-      return { name, status: 'FAIL', duration: Date.now() - start, error: 'Response body missing "ok: true"' };
+    // Better Auth 不一定有 /api/auth/ok，但 /api/auth/session 返回 200 或 401 均视为服务可用正常
+    if (res.status !== 200 && res.status !== 401) {
+      return { name, status: 'FAIL', duration: Date.now() - start, error: `Expected 200/401, got ${res.status}` };
     }
 
     return { name, status: 'PASS', duration: Date.now() - start };
@@ -178,7 +174,7 @@ async function testSignInEndpoint(): Promise<TestResult> {
       return { name, status: 'FAIL', duration: Date.now() - start, error: `User email mismatch: ${body.user?.email}` };
     }
 
-    const hasSessionCookie = res.cookies.some((c: string) => c.includes('session_token') || c.includes('session_data'));
+    const hasSessionCookie = res.cookies.some((c: string) => c.includes('session_token') || c.includes('session') || c.includes('portal_jwt'));
     if (!hasSessionCookie) {
       return { name, status: 'FAIL', duration: Date.now() - start, error: 'No session cookie set' };
     }

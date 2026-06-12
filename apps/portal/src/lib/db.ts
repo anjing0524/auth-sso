@@ -2,7 +2,8 @@
  * Portal 数据库连接
  * 使用 Drizzle ORM + postgres-js 连接 PostgreSQL
  *
- * 与 IdP 共享同一个数据库
+ * Portal 自身即是 OIDC Provider，所有认证、会话、授权数据
+ * 均与业务数据存储在同一个数据库中
  */
 import postgres from 'postgres';
 import { drizzle } from 'drizzle-orm/postgres-js';

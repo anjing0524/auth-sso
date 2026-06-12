@@ -2,8 +2,8 @@
 
 ## 1. 架构说明
 本方案采用 Docker Compose 进行手动部署。包含以下组件：
-- **IdP (Identity Provider)**: 身份提供者，运行在 4001 端口。
-- **Portal (Management)**: 统一管理后台，运行在 4000 端口。
+- **Portal (含 OIDC Provider)**: 管理后台 + 统一身份认证中心，运行在 4000 端口。
+- **Gateway (Pingora)**: Rust 自研网关，HTTPS 终结 + JWT 验签。
 - **PostgreSQL**: 核心数据库，不对公网暴露 5432 端口。
 - **Redis**: 缓存与 Session 存储，不对公网暴露 6379 端口。
 
@@ -24,14 +24,14 @@
 
 ## 4. 部署步骤
 1. 安装 Docker & Docker Compose。
-2. 配置域名解析：将 `idp.yourdomain.com` 和 `portal.yourdomain.com` 指向服务器 IP。
+2. 配置域名解析：将 `portal.yourdomain.com` 指向服务器 IP（IDP 已合并进 Portal）。
 3. 获取 SSL 证书（推荐使用 Certbot）：
    ```bash
    docker run -it --rm --name certbot \
      -v "$(pwd)/data/certbot/conf:/etc/letsencrypt" \
      -v "$(pwd)/data/certbot/www:/var/www/certbot" \
      certbot/certbot certonly --webroot -w /var/www/certbot \
-     -d idp.yourdomain.com -d portal.yourdomain.com
+     -d portal.yourdomain.com
    ```
 4. 证书目录映射：确保证书文件位于 `data/certbot/conf/live/yourdomain.com/` 下。
 5. 启动服务：`docker-compose -f docker-compose.prod.yml up -d --build`。

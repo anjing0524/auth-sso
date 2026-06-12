@@ -113,7 +113,7 @@ export default async function HomePage() {
                 <ol className="list-decimal list-inside space-y-2 text-gray-600">
                   <li>点击下方&quot;SSO 登录&quot;按钮</li>
                   <li>如果已在 Portal 登录，将自动跳回并完成认证（SSO）</li>
-                  <li>如果未在 Portal 登录，将跳转到 IdP 登录页</li>
+                  <li>如果未在 Portal 登录，将跳转到 Portal 登录页</li>
                   <li>登录成功后自动返回此页面</li>
                 </ol>
               </div>
@@ -159,7 +159,7 @@ export default async function HomePage() {
           <div className="bg-white rounded-xl shadow p-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-2">SSO</h3>
             <p className="text-gray-600 text-sm">
-              已登录 IdP 的用户可自动完成认证，无需重新登录
+              已登录 Portal 的用户可自动完成认证，无需重新登录
             </p>
           </div>
         </section>

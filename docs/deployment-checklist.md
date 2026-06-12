@@ -33,11 +33,11 @@
 # 应用配置
 NODE_ENV=production
 NEXT_PUBLIC_APP_URL=https://portal.example.com
-NEXT_PUBLIC_IDP_URL=https://idp.example.com
+NEXT_PUBLIC_PORTAL_URL=https://portal.example.com
 
 # OAuth 配置
 NEXT_PUBLIC_CLIENT_ID=portal
-IDP_CLIENT_SECRET=<your-secret>
+PORTAL_CLIENT_SECRET=<your-secret>
 
 # Session 配置
 SESSION_IDLE_TIMEOUT_MS=1800000
@@ -50,12 +50,12 @@ REDIS_URL=redis://localhost:6379
 DATABASE_URL=postgresql://user:pass@localhost:5432/auth_sso
 ```
 
-#### IdP 必需配置
+#### Portal OIDC Provider 必需配置
 
 ```env
 # Better Auth 配置
 BETTER_AUTH_SECRET=<min-32-chars-secret>
-BETTER_AUTH_URL=https://idp.example.com
+BETTER_AUTH_URL=https://portal.example.com
 
 # Session 配置
 SESSION_MAX_AGE_SEC=604800
@@ -102,7 +102,7 @@ DATABASE_URL=postgresql://user:pass@localhost:5432/auth_sso
 | 服务 | 端口 | 状态 |
 |------|------|------|
 | Portal | 443 (HTTPS) | [ ] |
-| IdP | 443 (HTTPS) | [ ] |
+| Portal OIDC Provider | 443 (HTTPS) | [ ] |
 | PostgreSQL | 5432 (内网) | [ ] |
 | Redis | 6379 (内网) | [ ] |
 

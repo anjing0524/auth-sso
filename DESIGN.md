@@ -425,34 +425,34 @@ sequenceDiagram
     autonumber
     actor Browser as 浏览器
     participant Portal as 门户 (BFF)
-    participant IDP as Better Auth (IdP)
+    participant Portal as Portal (Better Auth OIDC Provider)
     participant DB as PostgreSQL 数据库
 
-    Browser->>IDP: 1. 访问子应用 -> 重定向到 IdP /oauth2/authorize
-    Note over Browser,IDP: 浏览器自动携带 idp_session Cookie
-    activate IDP
-    IDP->>DB: 2. 检查 OAuth 客户端状态 (ACTIVE/disabled)
-    DB-->>IDP: 客户端状态有效
-    IDP->>DB: 3. 查询当前登录用户的最新状态 (schema.users.status)
-    DB-->>IDP: 返回状态 (例如：LOCKED 锁定)
+    Browser->>Portal: 1. 访问子应用 -> 重定向到 IdP /oauth2/authorize
+    Note over Browser,Portal: 浏览器自动携带 idp_session Cookie
+    activate Portal
+    Portal->>DB: 2. 检查 OAuth 客户端状态 (ACTIVE/disabled)
+    DB-->>Portal: 客户端状态有效
+    Portal->>DB: 3. 查询当前登录用户的最新状态 (schema.users.status)
+    DB-->>Portal: 返回状态 (例如：LOCKED 锁定)
     alt 账号状态非 ACTIVE 或被停用
-        IDP-->>Browser: 4a. 强行阻断！重定向到 /error?error=user_inactive
+        Portal-->>Browser: 4a. 强行阻断！重定向到 /error?error=user_inactive
     else 账号状态正常 (ACTIVE)
-        IDP->>DB: 5. 获取用户拥有的角色，并过滤非 ACTIVE 角色
-        DB-->>IDP: 返回活跃角色列表
+        Portal->>DB: 5. 获取用户拥有的角色，并过滤非 ACTIVE 角色
+        DB-->>Portal: 返回活跃角色列表
         alt 角色为管理员 (ADMIN / SUPER_ADMIN)
-            IDP-->>Browser: 6a. 绕过授权关系校验，发放授权码
+            Portal-->>Browser: 6a. 绕过授权关系校验，发放授权码
         else 普通用户角色
-            IDP->>DB: 7. 检查角色客户端关联 (role_clients)
-            DB-->>IDP: 检查无绑定关系
+            Portal->>DB: 7. 检查角色客户端关联 (role_clients)
+            DB-->>Portal: 检查无绑定关系
             alt 未授权
-                IDP-->>Browser: 8a. 强行拦截！重定向到 /error?error=unauthorized_client
+                Portal-->>Browser: 8a. 强行拦截！重定向到 /error?error=unauthorized_client
             else 已授权
-                IDP-->>Browser: 8b. 静默跳过同意页 (skipConsent) -> 返回 auth_code
+                Portal-->>Browser: 8b. 静默跳过同意页 (skipConsent) -> 返回 auth_code
             end
         end
     end
-    deactivate IDP
+    deactivate Portal
 ```
 
 ### 2. 数据沙箱部门级联与 CTE 递归防死循环

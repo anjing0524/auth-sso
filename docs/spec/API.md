@@ -1,6 +1,6 @@
 # API Specification - Auth-SSO
 
-Version: v2.0
+Version: v3.0
 Status: Released
 
 ---
@@ -8,8 +8,7 @@ Status: Released
 ## 1. Global Conventions
 
 ### 1.1 Base URL
-- **Portal API**: `https://portal.example.com/api`
-- **IdP OIDC API**: `https://idp.example.com`
+- **Portal API (含 OIDC Provider)**: `https://portal.example.com/api`
 
 ### 1.2 Common Response
 **Success (200 OK)**:
@@ -70,13 +69,13 @@ Retrieve currently logged-in user profile, permissions, and menu list.
 ```
 
 ### 2.2 `GET /api/auth/login`
-Initialize login flow. Generates PKCE parameters (code_verifier, code_challenge, state, nonce), stores them in HttpOnly Cookies, and redirects to IdP `/authorize` endpoint.
+Initialize login flow. Generates PKCE parameters (code_verifier, code_challenge, state, nonce), stores them in HttpOnly Cookies, and redirects to Portal OIDC Provider `/authorize` endpoint.
 - **Query Params**: `redirect` (Optional, relative path).
 
 ### 2.3 `POST /api/auth/logout`
 Log out and invalidate current session:
 1. Decodes the current `portal_jwt_token` and adds its `jti` to the Redis blacklist (immediate revocation).
-2. Revokes the Refresh Token at the IdP `/oauth2/revoke` endpoint.
+2. Revokes the Refresh Token at the Portal OIDC Provider `/oauth2/revoke` endpoint.
 3. Clears both `portal_jwt_token` and `portal_refresh_token` Cookies.
 
 ### 2.4 `POST /api/auth/refresh`
@@ -130,7 +129,7 @@ Requires `portal_jwt_token` HttpOnly Cookie and relevant permission codes. All r
 
 ---
 
-## 4. OIDC Provider APIs (IdP)
+## 4. OIDC Provider APIs (内建于 Portal)
 
 Standard OIDC/OAuth 2.1 endpoints. **All endpoints below are provided by Better Auth's built-in OIDC Provider plugin** via the catch-all route (`/api/auth/[...all]`), except where noted as custom.
 

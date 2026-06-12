@@ -4,33 +4,37 @@
 
 ## 核心能力
 
-- **统一身份认证 (IdP)**: 提供基于 OIDC/OAuth 2.1 的认证服务，支持 PKCE 流程，确保认证安全。
-- **管理门户 (Portal)**: 
+- **统一身份认证 (OIDC Provider)**: Portal 内建 Better Auth OIDC Provider，支持 OAuth 2.1 PKCE 流程，确保认证安全。
+- **管理门户 (Portal)**:
   - **实时概览**: 动态展示用户、角色、应用及部门的统计指标。
   - **最近动态**: 集成操作审计日志，实时监控系统活动。
   - **智能重定向**: 登录后自动跳转至 `/dashboard`；已登录用户访问首页时自动感知并跳转。
 - **RBAC 权限体系**: 支持数据范围（Data Scope）过滤，包含全部、本部门、本部门及下属部门、本人及自定义范围。
 - **审计日志**: 提供完整的登录日志与操作审计追踪。
+- **信创网关**: 自研 Pingora (Rust) 网关，ES256 JWKS 离线验签，Cookie-to-Bearer 令牌转换。
 
 ## 项目结构
 
 ```
 auth-sso/
 ├── apps/
-│   ├── idp/           # 身份提供者 (Identity Provider) - 端口 4001
-│   ├── portal/        # 管理门户 (Portal) - 端口 4000
-│   └── demo-app/      # SSO 演示应用 - 端口 4002
+│   ├── gateway/       # 信创网关 (Pingora/Rust) — HTTPS 终结 + JWT 验签
+│   ├── portal/        # 管理门户 + OIDC Provider (含认证中心) — 端口 4000
+│   └── demo-app/      # SSO 演示应用 — 端口 4002
 ├── packages/
 │   ├── contracts/     # 共享类型定义、错误码、权限码契约
-│   └── config/        # 共享 TypeScript/ESLint/PostCSS 配置
-├── tests/             # 自动化测试脚本 (API, SSO, Security, RBAC)
+│   └── config/        # 共享 TypeScript/ESLint 配置
+├── tests/             # 自动化测试脚本 (API, SSO, Security, RBAC, E2E)
 └── docs/              # 项目文档与 SOP
 ```
+
+> **架构说明**: IDP (身份提供者) 已合并进 Portal。Portal 自身即是 OIDC Provider，不再需要独立的 IDP 服务。
 
 ## 技术栈
 
 - **Next.js 16** - React 核心框架
 - **Better Auth** - 身份认证基座，扩展 OIDC Provider
+- **Pingora** - 自研 Rust 网关 (HTTPS 终结 + JWT 验签)
 - **Drizzle ORM** - 类型安全的数据库操作层
 - **PostgreSQL** - 结构化数据存储
 - **Redis** - 高性能 Session 与缓存存储
@@ -48,25 +52,20 @@ pnpm install
 ### 2. 配置环境变量
 
 ```bash
-# IdP
-cp apps/idp/.env.example apps/idp/.env.local
-# 编辑 .env.local，配置 DATABASE_URL 和 REDIS_URL
-
-# Portal
+# Portal (含 OIDC Provider)
 cp apps/portal/.env.example apps/portal/.env.local
-# 编辑 .env.local，配置 IDP 连接 (默认 localhost:4001)
+# 编辑 .env.local，配置 DATABASE_URL、REDIS_URL、BETTER_AUTH_SECRET 等
 ```
 
 ### 3. 启动服务
 
 ```bash
-# 一键启动所有服务 (IdP, Portal, Demo App)
+# 一键启动所有服务 (Portal, Demo App)
 pnpm dev
 ```
 
 访问地址:
-- **IdP (认证中心)**: http://localhost:4001
-- **Portal (管理门户)**: http://localhost:4000
+- **Portal (管理门户 + 认证中心)**: http://localhost:4000
 - **Demo App (演示应用)**: http://localhost:4002
 
 ### 4. 数据库初始化
@@ -81,11 +80,14 @@ pnpm db:seed
 
 ## 自动化测试
 
-项目内置了完整的冒烟测试与 SSO 流程验证：
+项目内置了完整的分层测试体系与需求追溯：
 
 ```bash
-# 运行所有自动化测试
-pnpm start:services
+pnpm test                 # 全量 Vitest 测试
+pnpm test:api             # API 层测试
+pnpm test:components      # 组件层测试
+pnpm test:e2e             # Playwright E2E 端到端测试
+pnpm test:report          # 需求追溯性覆盖率报告
 ```
 
 ## 文档指引
@@ -99,12 +101,10 @@ pnpm start:services
 - [设计规范 (DESIGN.md)](DESIGN.md) - UI/UX 规范与品牌定义
 - [SSO 集成指南 (docs/sso-integration-guide.md)](docs/sso-integration-guide.md) - 子应用接入流程
 - [环境变量详细说明 (docs/environment-variables.md)](docs/environment-variables.md)
-- [环境变量详细说明 (docs/environment-variables.md)](docs/environment-variables.md)
 
 ## 安全提醒
 
 - 生产环境务必生成强密钥：`openssl rand -base64 32`。
-- 确保 IdP 与 Portal 的 `CLIENT_SECRET` 在生产环境保持同步。
 - 敏感配置请通过部署平台的环境变量管理功能设置。
 
 ## License

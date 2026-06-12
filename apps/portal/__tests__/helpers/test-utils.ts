@@ -95,9 +95,9 @@ export async function parseResponseJson<T = any>(response: Response): Promise<T>
  *
  * @example
  * const mockFetch = createMockFetch({
- *   'https://idp.example.com/oauth2/token': { json: { access_token: 'mock-token' } },
- *   'https://idp.example.com/oauth2/userinfo': { json: { email: 'test@example.com' } },
- *   'https://idp.example.com/error': { error: 'NETWORK_ERROR' },
+ *   'https://portal.example.com/oauth2/token': { json: { access_token: 'mock-token' } },
+ *   'https://portal.example.com/oauth2/userinfo': { json: { email: 'test@example.com' } },
+ *   'https://portal.example.com/error': { error: 'NETWORK_ERROR' },
  * });
  * vi.spyOn(globalThis, 'fetch').mockImplementation(mockFetch);
  */

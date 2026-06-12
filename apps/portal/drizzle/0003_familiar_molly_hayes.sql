@@ -1,1 +1,0 @@
-ALTER TABLE "clients" ADD COLUMN "require_pkce" boolean DEFAULT true;

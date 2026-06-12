@@ -20,11 +20,12 @@ const currentBaseURL = (
 export const redis = getRawIoredisClient();
 
 /**
- * Auth-SSO 统一身份中心 (Portal 托管版 IDP) 核心配置
- * 100% 数据库驱动，与 Portal 共享同一个数据源
+ * Auth-SSO 统一身份中心 核心配置
+ * Portal 自身即是 OIDC Provider，集成 Better Auth + oauthProvider 插件
+ * 数据库驱动，所有认证数据存储在同一个 PostgreSQL 实例
  */
 export const auth = betterAuth({
-  appName: 'Auth-SSO Portal IDP',
+  appName: 'Auth-SSO Portal',
   baseURL: currentBaseURL,
   basePath: '/api/auth', // 显式指定基础路径为 /api/auth
   secret: process.env.BETTER_AUTH_SECRET,
@@ -60,16 +61,12 @@ export const auth = betterAuth({
   },
   trustedOrigins: [
     'https://auth-sso-portal.vercel.app',
-    'https://auth-sso-idp.vercel.app',
     'https://auth-sso-demo-tau.vercel.app',
     'http://localhost:4000',
-    'http://localhost:4001',
     'http://localhost:4002',
     'http://localhost:4100',
-    'http://localhost:4101',
     'http://localhost:4102',
     'http://127.0.0.1:4100',
-    'http://127.0.0.1:4101',
     'http://127.0.0.1:4102',
   ],
 

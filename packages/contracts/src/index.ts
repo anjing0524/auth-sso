@@ -135,8 +135,8 @@ export interface PortalSessionInfo extends SessionInfo {
   userAgent?: string;
 }
 
-// IdP Session 信息
-export interface IdPSessionInfo extends SessionInfo {
+// Portal Session 扩展（含 OIDC 签发信息）
+export interface PortalSessionFull extends SessionInfo {
   subject: string;
 }
 

@@ -1,7 +1,7 @@
 # ==============================================================================
 # Auth-SSO 本地全栈验证 Docker Compose 配置
 # ==============================================================================
-# 用途：在本机完整构建并验证 idp、portal、gateway 三个服务
+# 用途：在本机完整构建并验证 portal、gateway 两个服务
 # 前提：auth-sso_auth-sso-network 网络及 postgres、redis 容器已启动
 #       运行命令: docker compose up -d (开发环境基础设施)
 # 启动命令: docker compose -f docker-compose.local.yml up -d --build

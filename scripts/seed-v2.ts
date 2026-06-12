@@ -78,7 +78,7 @@ async function main() {
     name: '系统管理员',
     email: 'admin@example.com',
     username: 'admin',
-    password: 'password_hash', // 这里由于测试环境，我们假设 IdP 处理 hash
+    password: 'password_hash', // 测试环境，由 Portal (Better Auth) 处理密码哈希
     status: 'ACTIVE',
     deptId: root.id,
   }).returning();

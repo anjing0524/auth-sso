@@ -120,7 +120,7 @@ redis-server /etc/redis/redis.conf
 # 清除所有 Portal Session
 redis-cli KEYS "portal:session:*" | xargs redis-cli DEL
 
-# 清除所有 IdP Session
+# 清除所有 Portal OIDC Provider Session
 redis-cli KEYS "idp:session:*" | xargs redis-cli DEL
 ```
 
@@ -151,7 +151,7 @@ pm2 start portal
 curl https://portal.example.com/api/me
 ```
 
-### 5.2 IdP 回滚
+### 5.2 Portal OIDC Provider 回滚
 
 ```bash
 # 1. 停止当前服务
@@ -171,7 +171,7 @@ pnpm build
 pm2 start idp
 
 # 6. 验证服务
-curl https://idp.example.com/api/auth/ok
+curl https://portal.example.com/api/auth/ok
 ```
 
 ---
@@ -217,7 +217,7 @@ pm2 start all
 echo "验证服务..."
 sleep 5
 curl -s https://portal.example.com/api/me || echo "Portal 异常"
-curl -s https://idp.example.com/api/auth/ok || echo "IdP 异常"
+curl -s https://portal.example.com/api/auth/ok || echo "Portal OIDC Provider 异常"
 
 echo "=== 回滚完成 ==="
 ```

@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Auth-SSO is an enterprise unified identity authentication platform implementing SSO (Single Sign-On) with OIDC Provider capabilities. It's a pnpm monorepo containing:
 
-- **apps/portal** - Admin Portal & IDP (port 4000) - User/role/permission management, Better Auth OIDC Provider, and Dashboard
+- **apps/portal** - Admin Portal & OIDC Provider (port 4000) - User/role/permission management, Better Auth OIDC Provider, and Dashboard. IDP functionality is fully integrated into Portal.
 - **apps/demo-app** - Demo SSO Client (port 4002) - Tests SSO integration
 - **apps/gateway** - API Gateway (Rust/Pingora) - ES256 JWKS offline verification, Cookie-to-Bearer transformation
 - **packages/contracts** - Shared types, error codes, permission codes, OIDC constants
@@ -57,7 +57,7 @@ Tests follow a layered strategy — fast, isolated unit tests at the bottom, int
 - **Location**: `tests/e2e/*.spec.ts`
 - **Framework**: Playwright on Chromium
 - **Scope**: Full OAuth 2.1 flow, SSO cross-app login/logout, RBAC enforcement in browser
-- **Setup**: Three `webServer` entries (IdP + Portal + Demo App) with DB push + seed
+- **Setup**: Two `webServer` entries (Portal + Demo App) with DB push + seed
 - **Run**: `pnpm test:e2e`
 
 ### Session 架构
@@ -106,8 +106,7 @@ Supported formats:
 - `apps/portal/__tests__/api/client-api.test.ts` — OAuth Client CRUD
 - `apps/portal/__tests__/api/menu-api.test.ts` — 菜单 CRUD
 - `apps/portal/__tests__/api/audit-logging.test.ts` — 审计日志
-- `apps/idp/__tests__/api/oauth-authorize.test.ts` — IdP 授权端点
-- `apps/idp/__tests__/api/sign-out-sso.test.ts` — SSO 登出
+- `apps/portal/__tests__/api/me-endpoints.test.ts` — 当前用户 API
 - `tests/e2e/auth-flow.spec.ts` — E2E 认证流程
 - `tests/e2e/sso-cross-app.spec.ts` — E2E 跨应用 SSO
 - `tests/e2e/rbac-enforcement.spec.ts` — E2E RBAC 验证

@@ -2,7 +2,7 @@
 
 ## 本地开发环境变量
 
-### IdP (apps/idp/.env.local)
+### Portal OIDC Provider (apps/idp/.env.local)
 
 ```bash
 # 数据库 - 本地 PostgreSQL
@@ -28,9 +28,9 @@ DATABASE_URL=postgresql://postgres:postgres@localhost:5432/auth_sso_portal
 # Redis
 REDIS_URL=redis://localhost:6379
 
-# IdP 连接
-NEXT_PUBLIC_IDP_URL=http://localhost:4001
-IDP_CLIENT_SECRET=portal-secret
+# Portal OIDC Provider 连接
+NEXT_PUBLIC_PORTAL_URL=http://localhost:4001
+PORTAL_CLIENT_SECRET=portal-secret
 
 # Session - 生成: openssl rand -base64 32
 SESSION_SECRET=your-session-secret-min-32-chars
@@ -42,10 +42,10 @@ SESSION_SECRET=your-session-secret-min-32-chars
 # 应用配置
 NEXT_PUBLIC_APP_URL=http://localhost:4003
 
-# IdP 连接
-NEXT_PUBLIC_IDP_URL=http://localhost:4001
+# Portal OIDC Provider 连接
+NEXT_PUBLIC_PORTAL_URL=http://localhost:4001
 NEXT_PUBLIC_CLIENT_ID=customer-graph
-IDP_CLIENT_SECRET=customer-graph-secret
+PORTAL_CLIENT_SECRET=customer-graph-secret
 
 # Redis
 REDIS_URL=redis://localhost:6379
@@ -63,16 +63,16 @@ OAUTH_CLIENT_SECRET=demo-app-secret
 
 ## 生产环境变量
 
-### IdP 生产环境变量
+### Portal OIDC Provider 生产环境变量
 
 | 变量名 | 值 | 说明 |
 |--------|-----|------|
 | `NODE_ENV` | `production` | 生产模式 |
-| `NEXT_PUBLIC_APP_URL` | IdP 公开 URL | 应用访问地址 |
+| `NEXT_PUBLIC_APP_URL` | Portal OIDC Provider 公开 URL | 应用访问地址 |
 | `DATABASE_URL` | PostgreSQL 连接字符串 | 使用 SSL |
 | `REDIS_URL` | Redis URL | Redis 连接地址 |
 | `BETTER_AUTH_SECRET` | 随机字符串 | `openssl rand -base64 32` |
-| `BETTER_AUTH_URL` | IdP 公开 URL | 与 NEXT_PUBLIC_APP_URL 相同 |
+| `BETTER_AUTH_URL` | Portal OIDC Provider 公开 URL | 与 NEXT_PUBLIC_APP_URL 相同 |
 | `JWT_SECRET` | 随机字符串 | `openssl rand -base64 32` |
 | `PORTAL_CLIENT_SECRET` | 随机字符串 | `openssl rand -hex 32` |
 | `PORTAL_REDIRECT_URL` | Portal 回调 URL | `https://portal/api/auth/callback` |
@@ -87,8 +87,8 @@ OAUTH_CLIENT_SECRET=demo-app-secret
 | `NEXT_PUBLIC_APP_URL` | Portal 公开 URL | 应用访问地址 |
 | `DATABASE_URL` | PostgreSQL 连接字符串 | 使用 SSL |
 | `REDIS_URL` | Redis URL | Redis 连接地址 |
-| `NEXT_PUBLIC_IDP_URL` | IdP 公开 URL | IdP 访问地址 |
-| `IDP_CLIENT_SECRET` | 与 IdP 配置相同 | `PORTAL_CLIENT_SECRET` 的值 |
+| `NEXT_PUBLIC_PORTAL_URL` | Portal OIDC Provider 公开 URL | Portal OIDC Provider 访问地址 |
+| `PORTAL_CLIENT_SECRET` | 与 Portal OIDC Provider 配置相同 | `PORTAL_CLIENT_SECRET` 的值 |
 | `SESSION_SECRET` | 随机字符串 | `openssl rand -base64 32` |
 
 ---

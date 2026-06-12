@@ -1,6 +1,6 @@
 /**
  * Portal OAuth 客户端配置
- * 用于与 IdP 进行 OAuth 2.1 Authorization Code Flow with PKCE
+ * Portal 自身即是 OIDC Provider，此配置用于客户端组件内部认证调用
  */
 import { createAuthClient } from 'better-auth/react';
 
@@ -16,8 +16,8 @@ export const authClient = createAuthClient({
  * OAuth 配置
  */
 export const oauthConfig = {
-  // IdP 配置 (已合并到 Portal，指向 Portal 自身)
-  idpUrl: (process.env.NEXT_PUBLIC_IDP_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:4000').trim(),
+  // OIDC Provider 配置 (Portal 自身即是 IDP)
+  idpUrl: (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:4000').trim(),
   clientId: (process.env.NEXT_PUBLIC_CLIENT_ID || 'portal').trim(),
   clientSecret: process.env.IDP_CLIENT_SECRET,
 
