@@ -22,7 +22,7 @@ Auth-SSO is a unified identity and access management (IAM) system built on top o
 - **Identity Engine**: [Better Auth](https://better-auth.com/) (Email/Password, OAuth 2.1 Provider).
 - **Database**: PostgreSQL 16+.
 - **ORM**: Drizzle ORM.
-- **Session Cache**: Redis (for both Portal and IdP sessions).
+- **Session Cache**: Redis (for IdP sessions and Portal JTI blocklist).
 - **Compute**: WebAssembly (WASM) / Rust for high-performance graph processing.
 - **Styling**: Tailwind CSS 4, shadcn/ui.
 - **Language**: TypeScript.
@@ -34,7 +34,7 @@ Auth-SSO is a unified identity and access management (IAM) system built on top o
 ```text
 Browser
   -> Portal (BFF)
-       -> Redis (Portal Sessions)
+       -> Redis (Portal JTI Blocklist)
        -> PostgreSQL (Portal Core Domain)
   -> IdP (Better Auth)
        -> Redis (IdP Sessions)
@@ -73,8 +73,8 @@ Browser
 3. User logs in at IdP (using email/password).
 4. IdP redirects back to Portal `/callback` with an authorization `code`.
 5. Portal exchanges `code` for `id_token` and `access_token` via IdP `/token`.
-6. Portal establishes a **Portal Session** in Redis.
-7. Portal returns a `portal_session` cookie to the browser.
+6. Portal BFF receives tokens and skips Redis session creation.
+7. Portal BFF sets HttpOnly Cookies portal_jwt_token and portal_refresh_token to the browser.
 
 ### 4.2 Single Sign-On (SSO) Flow
 1. User accesses a Sub-Application (e.g., `apps/demo-app`).
@@ -88,13 +88,13 @@ Browser
 ## 5. Session Management
 
 ### 5.1 Dual-Session Model
-- **Portal Session**: Represents the user's login state for the management portal.
+- **Portal Session (Stateless JWT)**: Represents the stateless user claims signed by the IdP and stored inside portal_jwt_token.
 - **IdP Session**: Represents the user's global login state across all SSO-integrated applications.
 
 ### 5.2 Timeout Strategies
 - **Idle Timeout**: Session expires after a period of inactivity (e.g., 30 mins).
 - **Absolute Timeout**: Session must be re-authenticated after a fixed period (e.g., 8 hours).
-- **Refresh Token**: Used by the Portal BFF to keep the `access_token` alive without user interaction, up until the Portal Session expires.
+- **Refresh Token**: Used by the Portal BFF via /api/auth/refresh to request new JWT from the IdP.
 
 ---
 

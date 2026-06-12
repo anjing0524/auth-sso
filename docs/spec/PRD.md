@@ -55,7 +55,7 @@ This document defines the requirements for a unified portal and Single Sign-On (
 - **User Login**: Support email/username and password authentication.
 - **SSO Flow**: Seamless login for sub-applications using the IdP session.
 - **Password Management**: Reset and change password capabilities.
-- **Logout**: Concurrent invalidation of Portal and IdP sessions.
+- **Logout**: Concurrent invalidation of Portal JWT cookies, JTI revocation, and IdP session.
 
 ### 4.2 Permission Center (RBAC)
 - **User Management**: CRUD operations, status control (Active/Disabled/Locked).
@@ -87,7 +87,7 @@ This document defines the requirements for a unified portal and Single Sign-On (
 ### 6.1 Performance
 - **Portal Metadata**: `/api/me` response time P95 < 200ms.
 - **Login Flow**: Complete flow from login start to portal home P95 < 1.5s.
-- **Scalability**: Support hundreds of concurrent sessions in Redis.
+- **Scalability**: Support stateless JWT validation with local JWKS, leveraging Redis only for emergency JTI revocation.
 
 ### 6.2 Security
 - **Data Protection**: All communications over HTTPS.

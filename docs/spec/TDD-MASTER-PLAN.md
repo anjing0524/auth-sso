@@ -19,7 +19,7 @@
     *   **断言**: 页面应显示 "登录失败: Invalid credentials" 的红色警告框。
 
 ### 需求 2: SSO 流程 (无缝登录)
-*   **API TDD (`TDD-AUTH-002`)**: 携带 IdP Session 请求 Portal `/api/auth/login`。断言最终成功获取 `portal_session_id`。
+*   **API TDD (`TDD-AUTH-002`)**: 携带 IdP Session 请求 Portal `/api/auth/login`。断言最终成功在 Cookie 中写入 `portal_jwt_token`。
 *   **UI TDD (`UI-AUTH-002`)**:
     *   **测试动作**: 浏览器打开 Portal，跳转 IdP 完成登录后，新开 Tab 打开 Demo App。
     *   **断言**: Demo App 页面无需再次展示登录框，应直接渲染欢迎界面。
@@ -68,7 +68,7 @@
 *   **API TDD (`SEC-001~030`)**: （已包含在 57 项测试中）断言所有 OAuth 重定向必须使用 PKCE (S256)。断言 State 不匹配时拒绝登录。断言 Session Cookies 携带 HttpOnly 和 SameSite=Lax 属性。
 *   **UI TDD (`UI-SEC-001`)**:
     *   **测试动作**: 在浏览器控制台中执行 `document.cookie`。
-    *   **断言**: 无法读取到 `idp_session` 或 `portal_session_id`，证明 HttpOnly 生效，免受 XSS 攻击窃取。
+    *   **断言**: 无法读取到 `idp_session` 或 `portal_jwt_token`，证明 HttpOnly 生效，免受 XSS 攻击窃取。
 
 ---
 

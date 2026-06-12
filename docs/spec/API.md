@@ -71,11 +71,29 @@ Initialize login flow. Redirects to IdP.
 ### 2.3 `POST /api/auth/logout`
 Log out and invalidate current Portal and IdP sessions.
 
+### 2.4 `POST /api/auth/refresh`
+Silently refreshes the user's portal_jwt_token HttpOnly Cookie using portal_refresh_token.
+
+**Request**:
+- Header: Cookie containing `portal_refresh_token` (Path=/api/auth/refresh).
+
+**Success Data (200 OK)**:
+```json
+{
+  "code": "OK",
+  "message": "success",
+  "data": {
+    "expiresAt": 1718080000
+  }
+}
+```
+Set-Cookie header will contain a new `portal_jwt_token`.
+
 ---
 
 ## 3. Administrative APIs (Portal)
 
-Requires `portal_session` and relevant permission codes.
+Requires `portal_jwt_token` HttpOnly Cookie and relevant permission codes.
 
 ### 3.1 User Management
 - `GET /api/users`: List users (Paginated).

@@ -63,6 +63,18 @@ Tests follow a layered strategy — fast, isolated unit tests at the bottom, int
 - **Setup**: Three `webServer` entries (IdP + Portal + Demo App) with DB push + seed
 - **Run**: `pnpm test:e2e`
 
+### Session 架构（双 Session 体系）
+
+系统存在两套独立的 Session 机制，**不可混淆**：
+
+| | IdP Session | Portal Session |
+|---|---|---|
+| **管理方** | Better Auth 原生 | Portal BFF 验签 |
+| **存储** | Redis (`auth-sso:` prefix) | 客户端 Cookie + Redis jti 黑名单 |
+| **关键文件** | `apps/idp/src/lib/auth.ts` | `apps/portal/src/lib/session.ts` |
+| **标识** | `idp_session` cookie | `portal_jwt_token cookie` |
+| **超时** | Better Auth 管理 | JWT exp (1小时) + Refresh Token (7天) |
+
 ### Traceability
 
 - **Script**: `tests/traceability/generate-report.mjs`
