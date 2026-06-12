@@ -41,13 +41,13 @@ describe('Mock 基础设施', () => {
     });
 
     it('keys 通配符匹配', async () => {
-      await store.setex('portal:session:abc', 60, '{}');
-      await store.setex('portal:session:def', 60, '{}');
+      await store.setex('portal:jti_blocklist:jti-abc', 60, '1');
+      await store.setex('portal:jti_blocklist:jti-def', 60, '1');
       await store.setex('other:key', 60, 'x');
 
-      const keys = await store.keys('portal:session:*');
+      const keys = await store.keys('portal:jti_blocklist:*');
       expect(keys).toHaveLength(2);
-      expect(keys.every(k => k.startsWith('portal:session:'))).toBe(true);
+      expect(keys.every(k => k.startsWith('portal:jti_blocklist:'))).toBe(true);
     });
 
     it('pipeline 批处理', async () => {
@@ -151,7 +151,7 @@ describe('Mock 基础设施', () => {
 
     it('createAuthenticatedRequest 带 Session Cookie', () => {
       const req = createAuthenticatedRequest('/api/me');
-      expect(req.headers.get('cookie')).toContain('portal_session_id=session-123');
+      expect(req.headers.get('cookie')).toContain('portal_jwt_token=session-123');
     });
   });
 

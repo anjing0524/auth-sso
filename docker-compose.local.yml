@@ -9,43 +9,7 @@
 
 services:
   # ============================================
-  # Identity Provider (IdP) - 本地构建
-  # ============================================
-  idp:
-    build:
-      context: .
-      dockerfile: apps/idp/Dockerfile
-      args:
-        BETTER_AUTH_URL: https://idp.localhost:18443
-        NEXT_PUBLIC_APP_URL: https://idp.localhost:18443
-    container_name: auth-sso-idp-local
-    restart: unless-stopped
-    environment:
-      NODE_ENV: production
-      # 连接到本地已运行的 postgres 容器（通过共享网络）
-      DATABASE_URL: postgresql://postgres:postgres@auth-sso-postgres:5432/auth_sso_idp
-      REDIS_URL: redis://auth-sso-redis:6379
-      BETTER_AUTH_SECRET: universal_secret_for_testing_123
-      BETTER_AUTH_URL: https://idp.localhost:18443
-      JWT_SECRET: universal_jwt_secret_for_testing_123
-      JWT_ISSUER: auth-sso
-      PORTAL_CLIENT_SECRET: portal-secret
-      SESSION_MAX_AGE_SEC: "604800"
-    expose:
-      - "4001"
-    ports:
-      # 同时暴露到宿主机，方便直接调试
-      - "4101:4001"
-    networks:
-      - auth-sso-network
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-
-  # ============================================
-  # Portal (Management) - 本地构建
+  # Portal (Management + IDP) - 本地构建
   # ============================================
   portal:
     build:
@@ -53,8 +17,6 @@ services:
       dockerfile: apps/portal/Dockerfile
       args:
         NEXT_PUBLIC_APP_URL: https://portal.localhost:18443
-        NEXT_PUBLIC_IDP_URL: https://idp.localhost:18443
-        NEXT_PUBLIC_REDIRECT_URI: https://portal.localhost:18443/api/auth/callback
     container_name: auth-sso-portal-local
     restart: unless-stopped
     environment:
@@ -62,11 +24,8 @@ services:
       DATABASE_URL: postgresql://postgres:postgres@auth-sso-postgres:5432/auth_sso_idp
       REDIS_URL: redis://auth-sso-redis:6379
       BETTER_AUTH_SECRET: universal_secret_for_testing_123
-      BETTER_AUTH_URL: https://idp.localhost:18443
-      NEXT_PUBLIC_IDP_URL: https://idp.localhost:18443
+      BETTER_AUTH_URL: https://portal.localhost:18443
       NEXT_PUBLIC_APP_URL: https://portal.localhost:18443
-      NEXT_PUBLIC_REDIRECT_URI: https://portal.localhost:18443/api/auth/callback
-      IDP_CLIENT_SECRET: portal-secret
     expose:
       - "4000"
     ports:
@@ -94,8 +53,8 @@ services:
       SSL_KEY_PATH: /etc/gateway/ssl/privkey.pem
       GATEWAY_PORT: "80"
       GATEWAY_SSL_PORT: "443"
-      # 使用 Docker 容器内部服务名称寻址
-      IDP_UPSTREAM: idp:4001
+      # 使用 Docker 容器内部服务名称寻址 (均指向 portal)
+      IDP_UPSTREAM: portal:4000
       PORTAL_UPSTREAM: portal:4000
     ports:
       - "18080:80"
@@ -104,7 +63,6 @@ services:
       # 挂载本地自签名证书进行测试
       - /tmp/gw-ssl:/etc/gateway/ssl:ro
     depends_on:
-      - idp
       - portal
     networks:
       - auth-sso-network

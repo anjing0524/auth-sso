@@ -16,12 +16,12 @@ export const authClient = createAuthClient({
  * OAuth 配置
  */
 export const oauthConfig = {
-  // IdP 配置
-  idpUrl: (process.env.NEXT_PUBLIC_IDP_URL || 'http://localhost:4001').trim(),
+  // IdP 配置 (已合并到 Portal，指向 Portal 自身)
+  idpUrl: (process.env.NEXT_PUBLIC_IDP_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:4000').trim(),
   clientId: (process.env.NEXT_PUBLIC_CLIENT_ID || 'portal').trim(),
   clientSecret: process.env.IDP_CLIENT_SECRET,
 
-  // 回调 URL
+  // 回调 URL (已合并，本地登录实际上不需要此回调，但保留结构)
   redirectUri: (process.env.NEXT_PUBLIC_REDIRECT_URI || 'http://localhost:4000/api/auth/callback').trim(),
 
   // OAuth Scopes

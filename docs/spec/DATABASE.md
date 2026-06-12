@@ -1,6 +1,6 @@
 # Database Design - Auth-SSO
 
-Version: v1.0
+Version: v2.0
 Status: Released
 
 ---
@@ -14,8 +14,12 @@ Auth-SSO utilizes a hybrid storage approach with PostgreSQL and Redis. For simpl
 - **Identity & Auth Domain**: Contains authentication credentials, accounts, and session metadata managed by Better Auth.
 
 ### 1.2 Redis Keyspaces
-- **`portal:*`**: Stores active Portal sessions and temporary authentication transaction contexts.
-- **`idp:*`**: Stores active IdP sessions for cross-application SSO.
+
+| Keyspace Prefix | Purpose | Managed By |
+| --- | --- | --- |
+| `auth-sso:` | IdP sessions and auth state (Better Auth secondaryStorage) | Better Auth |
+| `portal:jti_blocklist:` | JWT jti emergency revocation blacklist | Portal BFF |
+| `portal:user_perms:` | User permission context cache (TTL: 300s) | Portal BFF |
 
 ---
 
@@ -73,31 +77,34 @@ These tables are managed by Better Auth migrations and share the same database:
 
 ## 5. Redis Key Structures
 
-### 5.1 Portal Session
-**Key**: `portal:sess:{sessionId}`
-**Value (JSON)**:
-```json
-{
-  "sessionId": "sess_123",
-  "userId": "u_1",
-  "accessToken": "...",
-  "refreshToken": "...",
-  "absoluteExpiresAt": "ISO-TIMESTAMP",
-  "lastAccessAt": "ISO-TIMESTAMP"
-}
-```
+### 5.1 Portal jti Blacklist (Emergency Revocation)
 
-### 5.2 IdP Session
-**Key**: `idp:sess:{sessionId}`
-**Value (JSON)**:
+**Key**: `portal:jti_blocklist:{jti}`
+**Value**: `1`
+**TTL**: Remaining lifetime of the JWT (token exp - current time), minimum 1 second.
+**Purpose**: Enables immediate token invalidation for account bans, password changes, and forced logouts. The TTL auto-expires the key when the token would have naturally expired, preventing unbounded Redis growth.
+
+### 5.2 Portal Permission Context Cache
+
+**Key**: `portal:user_perms:{userId}`
+**Value** (JSON):
 ```json
 {
-  "sessionId": "idp_123",
-  "userId": "u_1",
-  "subject": "sub_123",
-  "expiresAt": "ISO-TIMESTAMP"
+  "roles": [
+    { "id": "role_1", "code": "admin", "name": "Administrator" }
+  ],
+  "permissions": ["user:list", "user:create", "role:assign"],
+  "dataScopeType": "ALL",
+  "deptId": "dept_001"
 }
 ```
+**TTL**: 300 seconds (5 minutes).
+**Purpose**: Caches the user's role/permission/data-scope context to avoid repeated DB queries on every API request. Gracefully degrades to direct DB queries on Redis failure.
+
+### 5.3 IdP Session Storage
+
+**Key**: `auth-sso:{sessionToken}` (managed by Better Auth secondaryStorage)
+**Purpose**: Better Auth uses Redis as secondary storage for IdP sessions, authorization codes, and other high-performance state. Key prefix is configured via `redisStorage({ keyPrefix: 'auth-sso:' })`.
 
 ---
 
@@ -106,3 +113,4 @@ These tables are managed by Better Auth migrations and share the same database:
 1. **Logical Deletion**: Primary business tables use `deleted_at` for soft deletes.
 2. **Indexing**: Indexes are placed on `username`, `client_id`, `public_id`, and foreign key columns (`dept_id`, `user_id`).
 3. **Partial Unique Indexes**: Used for nullable fields that must be unique when present (e.g., `email`, `mobile`).
+4. **Shared Database (v1.0)**: Both Portal and IdP domains share the same PostgreSQL instance for deployment simplicity. The IdP authorization endpoint queries Portal domain tables (`roles`, `roleClients`) directly. This coupling is acknowledged and acceptable for v1.0.

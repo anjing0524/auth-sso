@@ -2,14 +2,9 @@
  * Redis 客户端配置
  * 用于 Portal Session 存储
  *
- * 环境适配:
- * - 本地开发 (NODE_ENV=development): 使用 ioredis 连接 Docker Redis
- * - 生产环境 (NODE_ENV=production): 使用 @upstash/redis 连接 Upstash KV
- *
- * 统一接口: 两种客户端都暴露相同的 API (get, setex, del, keys, quit)
+ * 统一使用 ioredis 连接 Redis
  */
 import Redis from 'ioredis';
-import { Redis as UpstashRedis } from '@upstash/redis';
 
 /**
  * 统一的 Redis 客户端接口
@@ -30,20 +25,41 @@ interface RedisClient {
 
   // Pipeline 批处理命令，用于多会话批量物理注销
   pipeline(): any;
+  exists(key: string): Promise<number>;
 }
-
-/**
- * 判断是否为生产环境
- */
-const isProduction = process.env.NODE_ENV === 'production';
 
 /**
  * Redis 客户端实例
  */
 let redisClient: RedisClient | null = null;
+let rawIoredisClient: Redis | null = null;
 
 /**
- * 创建 ioredis 客户端 (本地开发)
+ * 获取原生的 ioredis 客户端实例
+ * 专门供 Better Auth 等外部插件/适配器复用现成的连接，防止 TCP 连接冗余
+ */
+export function getRawIoredisClient(): Redis | null {
+  if (!rawIoredisClient) {
+    const url = process.env.REDIS_URL || 'redis://localhost:6379';
+    rawIoredisClient = new Redis(url, {
+      maxRetriesPerRequest: 0, // 严格遵守 Better Auth Redis 驱动的最佳实践限制
+      connectTimeout: 5000,
+      lazyConnect: true,
+    });
+
+    rawIoredisClient.on('error', (err) => {
+      console.error('[Redis] Raw ioredis connection error:', err);
+    });
+
+    rawIoredisClient.on('connect', () => {
+      console.log('[Redis] Raw ioredis Connected');
+    });
+  }
+  return rawIoredisClient;
+}
+
+/**
+ * 创建 ioredis 客户端
  */
 function createIoredisClient(): RedisClient {
   const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
@@ -52,7 +68,7 @@ function createIoredisClient(): RedisClient {
   const client = new Redis(redisUrl, {
     maxRetriesPerRequest: 3,
     lazyConnect: true,
-    // 核心修复：如果是 rediss:// 协议，启用 TLS
+    // 如果是 rediss:// 协议，启用 TLS
     tls: redisUrl.startsWith('rediss://') ? {} : undefined,
   });
 
@@ -78,63 +94,7 @@ function createIoredisClient(): RedisClient {
     smembers: (key) => client.smembers(key),
     expire: (key, seconds) => client.expire(key, seconds),
     pipeline: () => client.pipeline(),
-  };
-}
-
-/**
- * 创建 Upstash Redis 客户端 (生产环境)
- */
-function createUpstashClient(): RedisClient {
-  console.log('[Redis] Initializing Upstash Redis');
-
-  const client = new UpstashRedis({
-    url: process.env.KV_REST_API_URL!,
-    token: process.env.KV_REST_API_TOKEN!,
-  });
-
-  // Upstash Redis API 适配为统一接口
-  return {
-    get: async (key) => {
-      const result = await client.get<string>(key);
-      return result ?? null;
-    },
-    setex: async (key, seconds, value) => {
-      // Upstash 使用 set + ex 选项替代 setex
-      await client.set(key, value, { ex: seconds });
-      return 'OK';
-    },
-    del: async (key) => {
-      const result = await client.del(key);
-      return result ?? 0;
-    },
-    keys: async (_pattern) => {
-      // Upstash 不支持 keys 命令，返回空数组
-      // 注意: 生产环境应避免使用 keys，改用 scan 或预知的 key
-      console.warn('[Redis] Upstash does not support keys command, returning empty array');
-      return [];
-    },
-    quit: async () => {
-      // Upstash 是 HTTP 客户端，无需关闭连接
-    },
-    sadd: async (key, member) => {
-      const result = await client.sadd(key, member);
-      return result ?? 0;
-    },
-    srem: async (key, member) => {
-      const result = await client.srem(key, member);
-      return result ?? 0;
-    },
-    smembers: async (key) => {
-      const result = await client.smembers<string[]>(key);
-      return result ?? [];
-    },
-    expire: async (key, seconds) => {
-      const result = await client.expire(key, seconds);
-      return result ?? 0;
-    },
-    pipeline: () => {
-      return client.pipeline();
-    },
+    exists: (key) => client.exists(key),
   };
 }
 
@@ -143,9 +103,7 @@ function createUpstashClient(): RedisClient {
  */
 export function getRedis(): RedisClient {
   if (!redisClient) {
-    // 核心修复：如果 KV_REST_API_URL 缺失，回退到 REDIS_URL (ioredis)
-    const hasUpstash = process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN;
-    redisClient = (isProduction && hasUpstash) ? createUpstashClient() : createIoredisClient();
+    redisClient = createIoredisClient();
   }
   return redisClient;
 }
@@ -157,5 +115,9 @@ export async function closeRedis(): Promise<void> {
   if (redisClient) {
     await redisClient.quit();
     redisClient = null;
+  }
+  if (rawIoredisClient) {
+    await rawIoredisClient.quit();
+    rawIoredisClient = null;
   }
 }
