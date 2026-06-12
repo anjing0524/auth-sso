@@ -1,9 +1,0 @@
-/Users/liushuo/code/干了科技/auth-sso/apps/gateway/target/release/deps/zstd_sys-acc2913f889a230d.d: /Users/liushuo/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/zstd-sys-2.0.16+zstd.1.5.7/src/lib.rs /Users/liushuo/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/zstd-sys-2.0.16+zstd.1.5.7/src/bindings_zstd.rs /Users/liushuo/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/zstd-sys-2.0.16+zstd.1.5.7/src/bindings_zdict.rs
-
-/Users/liushuo/code/干了科技/auth-sso/apps/gateway/target/release/deps/libzstd_sys-acc2913f889a230d.rlib: /Users/liushuo/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/zstd-sys-2.0.16+zstd.1.5.7/src/lib.rs /Users/liushuo/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/zstd-sys-2.0.16+zstd.1.5.7/src/bindings_zstd.rs /Users/liushuo/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/zstd-sys-2.0.16+zstd.1.5.7/src/bindings_zdict.rs
-
-/Users/liushuo/code/干了科技/auth-sso/apps/gateway/target/release/deps/libzstd_sys-acc2913f889a230d.rmeta: /Users/liushuo/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/zstd-sys-2.0.16+zstd.1.5.7/src/lib.rs /Users/liushuo/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/zstd-sys-2.0.16+zstd.1.5.7/src/bindings_zstd.rs /Users/liushuo/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/zstd-sys-2.0.16+zstd.1.5.7/src/bindings_zdict.rs
-
-/Users/liushuo/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/zstd-sys-2.0.16+zstd.1.5.7/src/lib.rs:
-/Users/liushuo/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/zstd-sys-2.0.16+zstd.1.5.7/src/bindings_zstd.rs:
-/Users/liushuo/.cargo/registry/src/mirrors.tuna.tsinghua.edu.cn-4dc01642fd091eda/zstd-sys-2.0.16+zstd.1.5.7/src/bindings_zdict.rs:

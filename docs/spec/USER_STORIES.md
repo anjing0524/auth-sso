@@ -1251,7 +1251,288 @@ JWT payload 包含以下 claims：
 
 ---
 
-## 10. 跨模块权限校验故事
+## 10. OIDC 协议层补充故事
+
+### US-OIDC-01：OIDC Discovery 端点
+
+**作为** Demo App 开发者，
+**我** 访问 `GET /api/auth/.well-known/openid-configuration` 获取 IdP 的 OIDC 配置文档，
+**以便** 自动发现授权端点、Token 端点、JWKS 端点和支持的 Scope。
+
+**验收标准：**
+1. 返回标准 OIDC Discovery 文档（JSON）
+2. 包含 `authorization_endpoint`、`token_endpoint`、`jwks_uri`、`userinfo_endpoint`
+3. 包含 `scopes_supported`（openid, profile, email）
+4. 包含 `code_challenge_methods_supported`（S256）
+5. 无需认证即可访问（公开端点）
+
+---
+
+### US-OIDC-02：JWKS 公钥端点
+
+**作为** Gateway（Rust/Pingora）或下游微服务，
+**我** 访问 `GET /api/auth/jwks` 获取 IdP 的 ES256 公钥，
+**以便** 离线验证 JWT 签名，无需网络 I/O。
+
+**验收标准：**
+1. 返回标准 JWKS 格式（JSON Web Key Set）
+2. 包含 ES256 公钥（`kty: EC`, `crv: P-256`）
+3. 包含 `kid`（Key ID）用于匹配 JWT Header 中的 `kid`
+4. 无需认证即可访问（公开端点）
+5. Gateway 缓存 JWKS 公钥，TTL 内不重复请求
+
+---
+
+### US-OIDC-03：UserInfo 端点
+
+**作为** Demo App 后端，
+**我** 携带 Access Token 调用 `GET /api/auth/oauth2/userinfo` 获取用户信息，
+**以便** 根据 `sub` 和 `email` 等字段识别用户身份。
+
+**验收标准：**
+1. 请求 Header 包含 `Authorization: Bearer <access_token>`
+2. 返回用户基本信息：`sub`（用户 ID）、`email`、`name`
+3. Token 过期或无效时返回 401
+4. 用户 DISABLED 状态时返回错误
+
+---
+
+### US-OIDC-04：Token Introspection 端点
+
+**作为** 下游微服务，
+**我** 调用 `POST /api/auth/oauth2/introspect` 检查 Token 的有效性，
+**以便** 确认 Access Token 是否仍有效（未过期、未撤销）。
+
+**验收标准：**
+1. 请求包含 `token` 参数和客户端凭证
+2. 有效 Token 返回 `{ "active": true, "sub": "...", "exp": ..., "scope": "..." }`
+3. 已撤销/过期 Token 返回 `{ "active": false }`
+4. jti 在黑名单中的 Token 返回 `{ "active": false }`
+
+---
+
+### US-OIDC-05：OAuth 错误场景 — 授权码已使用
+
+**作为** 攻击者尝试重放授权码，
+**当** 同一个 `code` 被第二次提交到 Token 端点时，
+**IdP** 返回 `invalid_grant` 错误。
+
+**验收标准：**
+1. 授权码一次性使用，第二次提交返回 `invalid_grant`
+2. 第一次正常交换不受影响
+
+---
+
+### US-OIDC-06：OAuth 错误场景 — 授权码过期
+
+**作为** Portal BFF，
+**当** 收到 IdP 回调后延迟超过 60 秒才调用 Token 端点时，
+**IdP** 返回 `invalid_grant` 错误（授权码已过期）。
+
+**验收标准：**
+1. 授权码有效期 60 秒（IdP 配置）
+2. 超时后返回错误，Portal BFF 向用户展示「登录超时，请重试」
+3. 需要重新发起登录流程
+
+---
+
+### US-OIDC-07：OAuth 错误场景 — 错误的 Redirect URI
+
+**作为** 攻击者尝试篡改回调地址，
+**当** Token 请求中的 `redirect_uri` 与授权请求中的不一致时，
+**IdP** 返回 `invalid_grant` 错误。
+
+**验收标准：**
+1. `redirect_uri` 严格匹配（必须完全一致，包括末尾斜杠）
+2. 不匹配时拒绝 Token 交换
+3. 不泄露任何用户信息
+
+---
+
+### US-OIDC-08：OAuth 错误场景 — 错误的 Client Secret
+
+**作为** 攻击者使用泄露但已轮换的 Client Secret，
+**当** 使用旧 Client Secret 调用 Token 端点时，
+**IdP** 返回 `invalid_client` 错误。
+
+**验收标准：**
+1. 仅最新轮换的 Client Secret 有效
+2. 旧 Secret 立即失效
+3. 错误响应不泄露 Client 配置信息
+
+---
+
+### US-OIDC-09：Token Revocation 端点
+
+**作为** Portal BFF（登出流程中），
+**我** 调用 `POST /api/auth/oauth2/revoke` 撤销 Refresh Token，
+**以便** 该 Refresh Token 无法再用于换取新的 Access Token。
+
+**验收标准：**
+1. 请求包含 `token`（Refresh Token）和客户端凭证
+2. 撤销成功后该 Refresh Token 无法再使用
+3. 已撤销的 Access Token 不受影响（仍需 jti 黑名单处理）
+4. 支持撤销 Access Token 和 Refresh Token 两种类型
+
+---
+
+## 11. 自助服务补充故事
+
+### US-SELF-01：用户修改自己的密码
+
+**作为** 拥有 `employee` 角色的赵六，
+**我** 在「个人设置」页面输入旧密码和新密码后提交，
+**以便** 我在知道当前密码的情况下自行修改密码。
+
+**验收标准：**
+1. 需验证旧密码正确性
+2. 新密码需满足密码策略（最小长度、复杂度）
+3. 修改成功后当前 JWT jti 写入 Redis 黑名单（强制重新登录）
+4. 赵六使用新密码重新登录
+5. 此功能不需要任何管理权限，所有已登录用户均可使用
+
+---
+
+### US-SELF-02：查看自己的权限和菜单
+
+**作为** 拥有 `employee` 角色的赵六，
+**我** 访问 `GET /api/me` 后看到自己的用户信息、权限列表和菜单列表，
+**以便** 了解我在系统中能做什么。
+
+**验收标准：**
+1. 返回 `authenticated: true`
+2. `user.permissions` 包含赵六拥有的权限代码数组（如 `["system:view_dashboard"]`）
+3. `menus` 仅包含赵六可见的菜单项
+4. 周八（audit_viewer）的 `menus` 包含审计日志相关菜单
+5. 吴九（无角色）的 `permissions` 为空数组，`menus` 为空数组
+
+---
+
+### US-SELF-03：编辑自己的基本信息
+
+**作为** 拥有 `employee` 角色的赵六，
+**我** 在「个人设置」页面修改自己的邮箱和手机号，
+**以便** 保持个人信息最新。
+
+**验收标准：**
+1. 可修改：邮箱、手机号、头像
+2. 不可修改：用户名、部门、角色（需管理员操作）
+3. 邮箱唯一性校验
+4. 不需要 `user:update` 管理权限（自助服务）
+
+---
+
+## 12. 审计与日志补充故事
+
+### US-AUDIT-01：查看审计日志
+
+> **权限:** `audit:read`
+
+**作为** 拥有 `audit_viewer` 角色的周八，
+**我** 访问审计日志页面，按时间范围和操作类型筛选日志，
+**以便** 追溯系统中的关键操作。
+
+**验收标准：**
+1. 审计日志列表分页展示
+2. 筛选维度：操作人、操作类型（登录/角色变更/权限变更/用户变更）、时间范围、目标对象
+3. 每条日志包含：时间戳、操作人、操作类型、目标对象、变更详情、IP 地址
+4. 张三（super_admin）也能查看审计日志
+
+---
+
+### US-AUDIT-02：导出审计日志
+
+> **权限:** `audit:export`
+
+**作为** 拥有 `audit_viewer` 角色的周八，
+**我** 点击「导出」按钮将筛选后的审计日志导出为 CSV 文件，
+**以便** 进行离线分析或合规存档。
+
+**验收标准：**
+1. 导出内容与当前筛选条件一致
+2. CSV 格式包含所有日志字段
+3. 大量日志时异步导出，避免浏览器超时
+4. 赵六（employee）无 `audit:export` 权限，看不到导出按钮
+
+---
+
+### US-AUDIT-03：查看登录日志
+
+> **权限:** `login_log:read`
+
+**作为** 拥有 `audit_viewer` 角色的周八，
+**我** 访问登录日志页面，查看所有用户的登录历史，
+**以便** 发现异常登录行为。
+
+**验收标准：**
+1. 登录日志列表分页展示
+2. 每条记录包含：用户、登录时间、IP 地址、User-Agent、登录结果（成功/失败）
+3. 支持按用户、时间范围筛选
+4. 登录失败记录也包含在内（用于安全审计）
+
+---
+
+### US-AUDIT-04：导出登录日志
+
+> **权限:** `login_log:export`
+
+**作为** 拥有 `audit_viewer` 角色的周八，
+**我** 点击「导出」将登录日志导出为 CSV，
+**以便** 进行安全审计分析。
+
+**验收标准：**
+1. 导出功能与审计日志导出行为一致
+2. 赵六（employee）无 `login_log:export` 权限
+
+---
+
+## 13. 安全场景补充故事
+
+### US-SEC-01：连续登录失败后账户锁定
+
+**作为** 系统安全策略，
+**当** 同一用户连续 5 次输入错误密码后，
+**该** 用户账户状态自动变更为 `LOCKED`，
+**以便** 防止暴力破解攻击。
+
+**验收标准：**
+1. 连续 5 次错误密码后账户自动锁定
+2. 错误计数器独立于成功登录（成功登录重置计数器）
+3. 锁定后即使输入正确密码也无法登录
+4. 需管理员（张三）手动激活账户才能恢复
+5. 锁定事件写入审计日志
+
+---
+
+### US-SEC-02：并发会话处理
+
+**作为** 在两台设备上同时登录的赵六，
+**我** 在设备 A 上修改密码后，
+**设备** B 上的 JWT jti 被写入 Redis 黑名单，
+**设备** B 的请求返回 401，需要重新登录。
+
+**验收标准：**
+1. 密码修改触发所有现有 JWT 的 jti 写入黑名单
+2. 两台设备上的会话均失效
+3. 两台设备均需使用新密码重新登录
+
+---
+
+### US-SEC-03：密码策略强制执行
+
+**作为** 新创建用户首次登录的张三（管理员创建时设置初始密码），
+**我** 创建新用户时若密码不满足策略要求（最少 8 位、包含大小写字母和数字），
+**系统** 拒绝创建并提示密码策略要求。
+
+**验收标准：**
+1. 密码最小长度 8 位
+2. 必须包含大写字母、小写字母和数字
+3. 不满足策略时在创建对话框/密码修改表单中即时提示
+4. 管理员重置密码同样受策略约束
+
+---
+
+## 14. 跨模块权限校验故事
 
 ### US-CROSS-01：权限缓存与实时生效
 
@@ -1354,7 +1635,123 @@ JWT payload 包含以下 claims：
 
 ---
 
-## 11. 需求追溯矩阵
+## 15. RBAC 边界场景补充故事
+
+### US-RBAC-01：用户部门变更后 DataScope 重算
+
+**作为** 拥有 `super_admin` 角色的张三，
+**我** 将赵六从「后端组」调到「产品部」后，
+**赵六** 的 DataScope（跟随 `employee` 角色的 `SELF`）自动基于新部门生效。
+
+**验收标准：**
+1. 赵六部门变更后，下次 API 请求的数据范围基于「产品部」
+2. 李四（org_admin，管理技术部）不再在用户列表中看到赵六
+3. 王五（dept_manager，管理产品部）开始在用户列表中看到赵六
+4. 若赵六角色有 `DEPT` DataScope，则自动切换到新产品部的数据范围
+
+---
+
+### US-RBAC-02：删除仍关联用户的角色
+
+**作为** 拥有 `super_admin` 角色的张三，
+**我** 尝试删除仍关联 3 个用户的 `dept_manager` 角色时，
+**系统** 提示需先解除用户绑定，或提供「强制删除并清除用户角色关联」选项。
+
+**验收标准：**
+1. 删除前检查角色关联用户数
+2. 若有关联用户，弹出警告：「角色「部门经理」当前关联 3 个用户：王五、XXX、XXX。确认删除将同时解除这些用户的角色绑定。」
+3. 确认后角色删除，用户角色关联同步清除
+4. 受影响用户的 JWT jti 写入 Redis 黑名单，需重新登录
+5. 受影响用户重新登录后权限减少
+
+---
+
+### US-RBAC-03：删除仍被角色引用的权限
+
+**作为** 拥有 `super_admin` 角色的张三，
+**我** 尝试删除被 `dept_manager` 角色引用的 `user:read` 权限时，
+**系统** 提示需先从角色中移除该权限。
+
+**验收标准：**
+1. 删除前检查权限关联角色数
+2. 若被引用，警告：「权限 `user:read` 被 2 个角色引用：dept_manager、org_admin。删除将从这些角色中移除该权限。」
+3. 确认后权限删除，角色权限关联同步清除
+4. 受影响用户的权限缓存被清除（Redis TTL 或主动失效）
+
+---
+
+### US-RBAC-04：多角色 DataScope 冲突解决
+
+**作为** 拥有 `super_admin` 角色的张三，
+**我** 给赵六同时分配 `dept_manager`（DataScope: `DEPT`）和 `employee`（DataScope: `SELF`）两个角色，
+**系统** 取最大权限的 DataScope（`DEPT`），而非 `SELF`。
+
+**验收标准：**
+1. 多角色 DataScope 优先级：`ALL` > `DEPT_AND_SUB` > `DEPT` > `CUSTOM` > `SELF`
+2. 赵六的最终 DataScope 为 `DEPT`（取最大值）
+3. JWT claims 中包含两个角色的所有权限并集
+4. 侧边栏展示两个角色对应的所有菜单
+
+---
+
+## 16. 菜单按钮级权限补充故事
+
+### US-MNU-BTN-01：菜单类型 — 目录
+
+**作为** 拥有 `super_admin` 角色的张三，
+**我** 创建一个「目录」类型的菜单项「系统管理」，它不对应具体页面，仅作为子菜单的分组容器，
+**以便** 侧边栏展示可展开的分组。
+
+**验收标准：**
+1. 目录类型菜单不渲染页面，仅渲染展开箭头
+2. 点击目录时展开/收起子菜单，不触发路由跳转
+3. 目录的权限绑定决定整个分组是否可见
+
+---
+
+### US-MNU-BTN-02：菜单类型 — 页面
+
+**作为** 拥有 `super_admin` 角色的张三，
+**我** 创建一个「页面」类型的菜单项「用户管理」，绑定路由 `/admin/users` 和权限 `user:list`，
+**以便** 点击后导航到用户管理页面。
+
+**验收标准：**
+1. 页面类型菜单点击后跳转到绑定的路由
+2. 只有拥有 `user:list` 权限的用户能看到此菜单
+3. 直接访问 `/admin/users` 时，无权限用户被 403 拦截
+
+---
+
+### US-MNU-BTN-03：按钮级权限控制
+
+**作为** 拥有 `super_admin` 角色的张三，
+**我** 在用户管理页面配置按钮级权限：`user:create`（新建按钮）、`user:delete`（删除按钮）、`user:reset_password`（重置密码按钮），
+**以便** 不同角色看到不同的操作按钮。
+
+**验收标准：**
+1. 按钮级权限是 `API` 类型权限，与菜单权限分离
+2. 王五（有 `user:list`、`user:read`、`user:update`）能看到用户列表和编辑按钮，但看不到「新建」和「删除」按钮
+3. 赵六（仅有 `system:view_dashboard`）看不到任何操作按钮
+4. 前端根据 `GET /api/me` 返回的 `permissions` 数组动态渲染/隐藏按钮
+5. 后端 API 同样校验权限（前端隐藏仅是 UX 优化，非安全边界）
+
+---
+
+### US-MNU-BTN-04：隐藏菜单仍可通过 URL 直接访问
+
+**作为** 拥有 `super_admin` 角色的张三，
+**我** 将「邮件配置」菜单设为「隐藏」后，
+**菜单** 不在侧边栏显示，但知道 URL 的管理员仍可直接访问 `/admin/email-config`。
+
+**验收标准：**
+1. 隐藏菜单不出现在侧边栏
+2. 直接输入 URL 仍可访问（前提是有对应权限）
+3. 无权限用户直接输入 URL 返回 403
+4. 隐藏仅影响导航可见性，不影响路由和权限校验
+
+---
+
+## 17. 需求追溯矩阵
 
 | 需求 ID | 覆盖的用户故事 |
 | :--- | :--- |
@@ -1371,22 +1768,22 @@ JWT payload 包含以下 claims：
 | **C-ROL-L** | US-C-01 |
 | **C-ROL-C** | US-C-02 |
 | **C-ROL-U** | US-C-03, US-C-06, US-C-07 |
-| **C-ROL-D** | US-C-04 |
+| **C-ROL-D** | US-C-04, US-RBAC-02 |
 | **C-ROL-PA** | US-C-05 |
 | **C-ROL-CA** | US-C-06 |
-| **C-ROL-DS** | US-C-07 |
+| **C-ROL-DS** | US-C-07, US-CROSS-07 |
 | **D-PRM-L** | US-D-01 |
 | **D-PRM-C** | US-D-02 |
 | **D-PRM-U** | US-D-03 |
-| **D-PRM-D** | US-D-04 |
+| **D-PRM-D** | US-D-04, US-RBAC-03 |
 | **E-MNU-L** | US-E-01 |
-| **E-MNU-C** | US-E-02 |
+| **E-MNU-C** | US-E-02, US-MNU-BTN-01, US-MNU-BTN-02 |
 | **E-MNU-U** | US-E-03, US-E-05 |
 | **E-MNU-D** | US-E-04 |
-| **E-MNU-PB** | US-E-05 |
+| **E-MNU-PB** | US-E-05, US-MNU-BTN-03 |
 | **F-DEP-L** | US-F-01 |
 | **F-DEP-C** | US-F-02 |
-| **F-DEP-U** | US-F-03 |
+| **F-DEP-U** | US-F-03, US-RBAC-01 |
 | **F-DEP-D** | US-F-04 |
 | **G-CLT-L** | US-G-01 |
 | **G-CLT-C** | US-G-02 |
@@ -1424,41 +1821,41 @@ JWT payload 包含以下 claims：
 
 ---
 
-## 12. 权限代码覆盖矩阵
+## 18. 权限代码覆盖矩阵
 
 | 权限代码 | 覆盖的用户故事 |
 | :--- | :--- |
-| `user:list` | US-B-01, US-B-02, US-B-03, US-B-04, US-B-05, US-B-06 |
-| `user:create` | US-B-07, US-B-08 |
-| `user:read` | US-B-09 |
-| `user:update` | US-B-10, US-B-12 |
-| `user:delete` | US-B-11 |
+| `user:list` | US-B-01, US-B-02, US-B-03, US-B-04, US-B-05, US-B-06, US-RBAC-01 |
+| `user:create` | US-B-07, US-B-08, US-MNU-BTN-03 |
+| `user:read` | US-B-09, US-MNU-BTN-03 |
+| `user:update` | US-B-10, US-B-12, US-MNU-BTN-03 |
+| `user:delete` | US-B-11, US-MNU-BTN-03 |
 | `user:manage` | US-B-01 (隐含) |
-| `user:reset_password` | US-B-14 |
+| `user:reset_password` | US-B-14, US-MNU-BTN-03 |
 | `user:assign_role` | US-B-13 |
 | `department:list` | US-F-01 |
 | `department:create` | US-F-02 |
 | `department:read` | US-F-01 |
-| `department:update` | US-F-03 |
+| `department:update` | US-F-03, US-RBAC-01 |
 | `department:delete` | US-F-04 |
 | `department:manage` | US-F-01 (隐含) |
 | `role:list` | US-C-01 |
 | `role:create` | US-C-02 |
 | `role:read` | US-C-01 |
-| `role:update` | US-C-03, US-C-06, US-C-07 |
-| `role:delete` | US-C-04 |
+| `role:update` | US-C-03, US-C-06, US-C-07, US-RBAC-02 |
+| `role:delete` | US-C-04, US-RBAC-02 |
 | `role:manage` | US-C-01 (隐含) |
-| `role:assign_permission` | US-C-05 |
+| `role:assign_permission` | US-C-05, US-RBAC-03 |
 | `permission:list` | US-D-01 |
 | `permission:create` | US-D-02 |
 | `permission:read` | US-D-01 |
 | `permission:update` | US-D-03 |
-| `permission:delete` | US-D-04 |
+| `permission:delete` | US-D-04, US-RBAC-03 |
 | `permission:manage` | US-D-01 (隐含) |
 | `menu:list` | US-E-01 |
-| `menu:create` | US-E-02 |
+| `menu:create` | US-E-02, US-MNU-BTN-01, US-MNU-BTN-02 |
 | `menu:read` | US-E-01 |
-| `menu:update` | US-E-03, US-E-05 |
+| `menu:update` | US-E-03, US-E-05, US-MNU-BTN-04 |
 | `menu:delete` | US-E-04 |
 | `menu:manage` | US-E-01 (隐含) |
 | `client:list` | US-G-01 |
@@ -1467,12 +1864,66 @@ JWT payload 包含以下 claims：
 | `client:update` | US-G-03 |
 | `client:delete` | US-G-04 |
 | `client:manage` | US-G-01 (隐含) |
-| `client:rotate_secret` | US-G-07 |
-| `audit:read` | US-CROSS-06 |
-| `audit:export` | US-CROSS-06 |
-| `login_log:read` | _(审计员角色相关)_ |
-| `login_log:export` | _(审计员角色相关)_ |
+| `client:rotate_secret` | US-G-07, US-OIDC-08 |
+| `audit:read` | US-CROSS-06, US-AUDIT-01 |
+| `audit:export` | US-CROSS-06, US-AUDIT-02 |
+| `login_log:read` | US-AUDIT-03 |
+| `login_log:export` | US-AUDIT-04 |
 | `system:manage` | US-A-01 (隐含) |
-| `system:view_dashboard` | US-A-05 |
-| `customer_graph:view` | _(客户关系图相关)_ |
-| `customer_graph:export` | _(客户关系图相关)_ |
+| `system:view_dashboard` | US-A-05, US-SELF-02 |
+| `customer_graph:view` | _(客户关系图模块)_ |
+| `customer_graph:export` | _(客户关系图模块)_ |
+
+---
+
+## 19. API Endpoint 覆盖矩阵
+
+| API Endpoint | 覆盖的用户故事 |
+| :--- | :--- |
+| `GET /api/me` | US-SELF-02 |
+| `GET /api/me/permissions` | US-SELF-02 |
+| `GET /api/me/menus` | US-SELF-02, US-A-01, US-A-02, US-A-03 |
+| `GET /api/auth/login` | US-H-AUTH-01, US-H-AUTH-09 |
+| `POST /api/auth/logout` | US-H-SSO-04, US-H-SSO-06 |
+| `POST /api/auth/refresh` | US-H-SESS-04, US-H-SESS-05, US-H-SESS-06, US-H-SESS-07 |
+| `GET /api/users` | US-B-01, US-B-02, US-B-03, US-B-04, US-B-05, US-B-06 |
+| `POST /api/users` | US-B-07, US-B-08 |
+| `GET /api/users/:id` | US-B-09 |
+| `PUT /api/users/:id` | US-B-10, US-RBAC-01 |
+| `DELETE /api/users/:id` | US-B-11 |
+| `POST /api/users/:id/reset-password` | US-B-14 |
+| `POST /api/users/:id/roles` | US-B-13, US-RBAC-04 |
+| `GET /api/roles` | US-C-01 |
+| `POST /api/roles` | US-C-02 |
+| `GET /api/roles/:id` | US-C-01 |
+| `PUT /api/roles/:id` | US-C-03, US-RBAC-02 |
+| `DELETE /api/roles/:id` | US-C-04, US-RBAC-02 |
+| `GET /api/roles/:id/permissions` | US-C-05 |
+| `PUT /api/roles/:id/permissions` | US-C-05, US-RBAC-03 |
+| `GET /api/roles/:id/data-scopes` | US-C-07, US-CROSS-07 |
+| `PUT /api/roles/:id/data-scopes` | US-C-07, US-CROSS-07 |
+| `GET /api/roles/:id/clients` | US-C-06 |
+| `PUT /api/roles/:id/clients` | US-C-06 |
+| `GET /api/permissions` | US-D-01 |
+| `POST /api/permissions` | US-D-02 |
+| `PUT /api/permissions/:id` | US-D-03 |
+| `DELETE /api/permissions/:id` | US-D-04, US-RBAC-03 |
+| `GET /api/departments` | US-F-01 |
+| `POST /api/departments` | US-F-02 |
+| `GET /api/departments/:id` | US-F-01 |
+| `PUT /api/departments/:id` | US-F-03 |
+| `DELETE /api/departments/:id` | US-F-04 |
+| `GET /api/clients` | US-G-01 |
+| `POST /api/clients` | US-G-02 |
+| `GET /api/clients/:id` | US-G-01 |
+| `PUT /api/clients/:id` | US-G-03 |
+| `DELETE /api/clients/:id` | US-G-04 |
+| `POST /api/clients/:id/secret` | US-G-07 |
+| `GET /api/audit/logs` | US-AUDIT-01, US-CROSS-06 |
+| `GET /api/audit/login-logs` | US-AUDIT-03 |
+| `GET /api/auth/.well-known/openid-configuration` | US-OIDC-01 |
+| `GET /api/auth/jwks` | US-OIDC-02, US-CROSS-04 |
+| `GET /api/auth/oauth2/userinfo` | US-OIDC-03 |
+| `POST /api/auth/oauth2/introspect` | US-OIDC-04 |
+| `POST /api/auth/oauth2/revoke` | US-OIDC-09, US-H-SSO-06 |
+| `POST /api/auth/sign-out-sso` | US-H-SSO-04, US-H-SSO-05, US-H-SSO-06 |
