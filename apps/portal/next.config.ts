@@ -1,6 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // 启用 Cache Components (Next.js 16)：读路径可用 "use cache" 持久化缓存 (R10 / §3.6)
+  cacheComponents: true,
+
   // 启用standalone输出以支持Vercel部署
   output: "standalone",
 

@@ -7,13 +7,14 @@ import {
   integer,
 } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
+import { USER_STATUS_VALUES, ENTITY_STATUS_VALUES } from '@auth-sso/contracts';
 
 // ============================================
 // 枚举定义 (严格对齐 Portal)
 // ============================================
 
-export const userStatusEnum = pgEnum('user_status', ['ACTIVE', 'DISABLED', 'LOCKED', 'DELETED']);
-export const entityStatusEnum = pgEnum('entity_status', ['ACTIVE', 'DISABLED']);
+export const userStatusEnum = pgEnum('user_status', USER_STATUS_VALUES as unknown as [string, ...string[]]);
+export const entityStatusEnum = pgEnum('entity_status', ENTITY_STATUS_VALUES as unknown as [string, ...string[]]);
 export const dataScopeTypeEnum = pgEnum('data_scope_type', [
   'ALL',
   'DEPT',
@@ -300,3 +301,19 @@ export const menus = pgTable('menus', {
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
+
+// ============================================
+// 编译期类型同步守卫 (Domain ↔ Drizzle 不漂移)
+// ============================================
+import type { User } from '@/domain/user/types';
+import type { UserStatus } from '@auth-sso/contracts';
+
+type UserRow = typeof users.$inferSelect;
+
+// 守卫 1：Drizzle 行类型必须兼容 Domain 实体（新增 DB 列时此处报错 → 提示更新 interface User）
+// deptName: JOIN 计算字段、createdAt: Date vs Temporal.Instant 类型差异，排除
+type _UserRowCompatible = UserRow extends Omit<User, 'deptName' | 'createdAt'> ? true : never;
+
+// 守卫 2：Drizzle 物理枚举取值必须与 contracts 枚举值完全对齐
+type _UserStatusInRow = UserRow['status'] extends UserStatus ? true : never;
+type _UserStatusInDomain = UserStatus extends UserRow['status'] ? true : never;

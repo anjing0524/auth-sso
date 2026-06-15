@@ -5,7 +5,7 @@
  * 采用 React 19 useTransition 绑定 Server Action Controller，安全下沉领域逻辑
  */
 
-import React, { useTransition } from 'react';
+import { useOptimistic, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
@@ -123,20 +123,24 @@ export default function UserTable({ users, pagination }: UserTableProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  // 用 Transition 处理 Action 触发与状态捕获
-  const [isPending, startTransition] = useTransition();
+  // useOptimistic: 状态切换立即反映在 UI，失败自动回退
+  const [optimisticUsers, setOptimisticUser] = useOptimistic(
+    users,
+    (state, toggledId: string) =>
+      state.map((u) =>
+        u.id === toggledId
+          ? { ...u, status: (u.status === 'ACTIVE' ? 'DISABLED' : 'ACTIVE') as User['status'] }
+          : u,
+      ),
+  );
 
-  /**
-   * 触发切换状态的 Server Action Controller
-   */
+  const [, startTransition] = useTransition();
+
   const handleToggleStatus = (user: User) => {
     startTransition(async () => {
-      const res = await toggleUserStatusAction(user.id, user.status);
-      if (res.success) {
-        toast.success(res.message);
-      } else {
-        toast.error(res.message || '操作失败');
-      }
+      setOptimisticUser(user.id); // 即时翻转 UI
+      const res = await toggleUserStatusAction(user.id);
+      if (!res.success) toast.error(res.message || '操作失败');
     });
   };
 
@@ -150,7 +154,7 @@ export default function UserTable({ users, pagination }: UserTableProps) {
   };
 
   return (
-    <div className={`flex flex-col flex-1 overflow-hidden transition-opacity duration-300 ${isPending ? 'opacity-60 pointer-events-none' : 'opacity-100'}`}>
+    <div className="flex flex-col flex-1 overflow-hidden">
       <div className="flex-1 overflow-auto bg-white border border-slate-100 rounded-[1.5rem] shadow-sm">
         <Table>
           <TableHeader className="bg-slate-50/30 sticky top-0 z-10 backdrop-blur-md">
@@ -163,7 +167,7 @@ export default function UserTable({ users, pagination }: UserTableProps) {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {users.length === 0 ? (
+            {optimisticUsers.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={5} className="h-64 text-center">
                   <div className="flex flex-col items-center justify-center space-y-2 opacity-40">
@@ -175,7 +179,7 @@ export default function UserTable({ users, pagination }: UserTableProps) {
                 </TableCell>
               </TableRow>
             ) : (
-              users.map((user) => (
+              optimisticUsers.map((user) => (
                 <TableRow key={user.id} className="group hover:bg-slate-50/50 transition-colors border-b last:border-none">
                   <TableCell className="pl-6 py-4">
                     <div className="flex items-center gap-3">

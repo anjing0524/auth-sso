@@ -6,8 +6,9 @@
  * - 客户端子组件通过 Server Actions (actions.ts) 薄 Controller 执行状态改变，实现高内聚开发。
  */
 
-import React from 'react';
+import { headers } from 'next/headers';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { checkPermission } from '@/lib/auth-middleware';
 import { getUsers, getDepartments } from './data';
 import UserFilters from './components/UserFilters';
 import CreateUserDrawer from './components/CreateUserDrawer';
@@ -22,6 +23,16 @@ interface PageProps {
 }
 
 export default async function UsersPage({ searchParams }: PageProps) {
+  // 0. 鉴权：缓存作用域外完成身份校验与权限检查（R10 / §3.6）
+  const auth = await checkPermission(await headers(), { permissions: ['user:list'] });
+  if (!auth.authorized || !auth.userId) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <p className="text-red-500">未授权访问或权限不足</p>
+      </div>
+    );
+  }
+
   // 1. 异步读取 URL 查询参数（Next.js App Router 最佳实践）
   const params = await searchParams;
   const keyword = params.keyword || '';
@@ -30,7 +41,7 @@ export default async function UsersPage({ searchParams }: PageProps) {
   const pageSize = 15; // 固定单页 15 条
 
   // 2. 读模型：服务端直接拉取扁平的数据对象 (不做冗余的领域实体转换，保证首屏性能)
-  const { data: users, pagination } = await getUsers({
+  const { data: users, pagination } = await getUsers(auth.userId, {
     page,
     pageSize,
     keyword,
