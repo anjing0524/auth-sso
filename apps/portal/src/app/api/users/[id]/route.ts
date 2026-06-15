@@ -1,40 +1,27 @@
 /**
- * 单个用户操作 API 路由处理器
+ * 单个用户操作 API 路由处理器（仅保留 REST 读模型）
  * @module apps/portal/api/users/[id]
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { db, schema } from '@/lib/db';
 import { eq, or } from 'drizzle-orm';
 import { withPermission, checkDataScope, getDataScopeFilter } from '@/lib/auth-middleware';
-import { clearUserPermissionCache } from '@/lib/permissions';
-// 注意：JWT Cookie 无状态架构下，不再使用 Redis Session 批量踢人
-// 用户封禁/密码修改后，当前 Access Token 将在自然过期后失效（默认 1h）
-// 如需即时失效，需在调用处获取用户 Token 的 jti 并调用 revokeJti()
-import { COMMON_ERRORS, USER_ERRORS, UserStatus } from '@auth-sso/contracts';
+import { COMMON_ERRORS, USER_ERRORS } from '@auth-sso/contracts';
 
 export const runtime = 'nodejs';
 
-/**
- * 路由参数定义
- */
 interface RouteParams {
   params: Promise<{ id: string }>;
 }
 
 /**
- * GET /api/users/[id]
- * 获取特定用户的详细信息（包含其分配的角色列表）
+ * GET /api/users/[id] — 获取用户详情及角色列表
  * 权限要求: user:read
- * 
- * @param request Next.js 请求对象
- * @param params 路由参数 (Promise<{ id: string }>)
- * @returns 用户详情及角色列表 JSON 响应
  */
 export async function GET(request: NextRequest, { params }: RouteParams) {
   return withPermission(request, { permissions: ['user:read'] }, async (adminUserId) => {
     const { id } = await params;
 
-    // 联合部门表查询用户信息
     const users = await db.select({
       id: schema.users.id,
       publicId: schema.users.publicId,
@@ -55,33 +42,33 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
     if (users.length === 0) {
       return NextResponse.json(
-        { error: USER_ERRORS.USER_NOT_FOUND, message: '用户不存在' }, 
-        { status: 404 }
+        { error: USER_ERRORS.USER_NOT_FOUND, message: '用户不存在' },
+        { status: 404 },
       );
     }
 
     const user = users[0]!;
 
-    // 数据范围检查：管理员必须有权限查看该部门下的用户
+    // 数据范围检查：管理员必须有权限查看该用户所属部门
     if (user.deptId) {
       const hasScope = await checkDataScope(adminUserId, user.deptId);
       if (!hasScope) {
         return NextResponse.json(
-          { error: COMMON_ERRORS.FORBIDDEN, message: '无权查看该用户' }, 
-          { status: 403 }
+          { error: COMMON_ERRORS.FORBIDDEN, message: '无权查看该用户' },
+          { status: 403 },
         );
       }
     } else {
       const filter = await getDataScopeFilter(adminUserId);
       if (filter.type !== 'ALL') {
         return NextResponse.json(
-          { error: COMMON_ERRORS.FORBIDDEN, message: '无权查看无部门用户' }, 
-          { status: 403 }
+          { error: COMMON_ERRORS.FORBIDDEN, message: '无权查看无部门用户' },
+          { status: 403 },
         );
       }
     }
 
-    // 查询该用户当前所分配的所有角色
+    // 获取用户角色
     const roles = await db.select({
       id: schema.roles.id,
       publicId: schema.roles.publicId,
@@ -95,177 +82,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
     return NextResponse.json({
       data: {
-        id: user.id,
-        publicId: user.publicId,
-        username: user.username,
-        email: user.email,
-        name: user.name,
-        avatarUrl: user.avatarUrl,
-        status: user.status,
-        deptId: user.deptId,
-        deptName: user.deptName,
-        createdAt: user.createdAt,
-        updatedAt: user.updatedAt,
-        lastLoginAt: user.lastLoginAt,
-        roles: roles.map(r => ({
-          id: r.id,
-          publicId: r.publicId,
-          code: r.code,
-          name: r.name,
-          description: r.description,
-        })),
+        ...user,
+        roles: roles.map((r) => ({ ...r })),
       },
     });
-  });
-}
-
-/**
- * PUT /api/users/[id]
- * 更新指定用户的信息
- * 权限要求: user:update
- * 
- * @param request Next.js 请求对象
- * @param params 路由参数 (Promise<{ id: string }>)
- * @returns 操作结果 JSON 响应
- */
-export async function PUT(request: NextRequest, { params }: RouteParams) {
-  return withPermission(request, { permissions: ['user:update'] }, async (adminUserId) => {
-    const { id } = await params;
-    const body = await request.json();
-    const { name, email, status, deptId, avatarUrl } = body;
-
-    // 检查用户是否存在
-    const users = await db.select()
-      .from(schema.users)
-      .where(or(eq(schema.users.id, id), eq(schema.users.publicId, id)));
-
-    if (users.length === 0) {
-      return NextResponse.json(
-        { error: USER_ERRORS.USER_NOT_FOUND, message: '用户不存在' }, 
-        { status: 404 }
-      );
-    }
-
-    const existingUser = users[0]!;
-
-    // 数据范围检查：修改用户前，用户必须在当前管理员的数据范围内
-    if (existingUser.deptId) {
-      const hasScope = await checkDataScope(adminUserId, existingUser.deptId);
-      if (!hasScope) {
-        return NextResponse.json(
-          { error: COMMON_ERRORS.FORBIDDEN, message: '无权修改该用户' }, 
-          { status: 403 }
-        );
-      }
-    } else {
-      const filter = await getDataScopeFilter(adminUserId);
-      if (filter.type !== 'ALL') {
-        return NextResponse.json(
-          { error: COMMON_ERRORS.FORBIDDEN, message: '无权修改无部门用户' }, 
-          { status: 403 }
-        );
-      }
-    }
-
-    // 如果尝试将用户移至新部门，检查新部门是否在范围内
-    if (deptId && deptId !== existingUser.deptId) {
-      const hasNewScope = await checkDataScope(adminUserId, deptId);
-      if (!hasNewScope) {
-        return NextResponse.json(
-          { error: COMMON_ERRORS.FORBIDDEN, message: '无权将用户移至该部门' }, 
-          { status: 403 }
-        );
-      }
-    }
-
-    // 更新用户数据，严格限制类型
-    await db.update(schema.users)
-      .set({
-        name: name ?? existingUser.name,
-        email: email ?? existingUser.email,
-        status: status !== undefined ? (status as UserStatus) : existingUser.status,
-        deptId: deptId !== undefined ? (deptId || null) : existingUser.deptId,
-        avatarUrl: avatarUrl ?? existingUser.avatarUrl,
-        updatedAt: new Date(),
-      })
-      .where(eq(schema.users.id, existingUser.id));
-
-    // 联动清除受影响用户的权限缓存，保障强一致性
-    await clearUserPermissionCache(existingUser.id);
-
-    // 如果最新状态为非激活 (ACTIVE) 状态，强行秒级踢出该用户的所有分布式在线 Session 物理会话
-    const newStatus = status !== undefined ? (status as UserStatus) : existingUser.status;
-    if (newStatus !== 'ACTIVE') {
-      // JWT 无状态架构：用户禁用后 Token 在过期时间内仍有效（最长 1h）
-      // 如需即时踢出，需在前端发起强制登出或等待 Token 自然过期
-      // await revokeUserSessions(existingUser.id); // 已废弃（Redis Session 模式）
-    }
-
-    return NextResponse.json({ success: true });
-  });
-}
-
-/**
- * DELETE /api/users/[id]
- * 逻辑删除特定用户（将状态变更为 DELETED）
- * 权限要求: user:delete
- * 
- * @param request Next.js 请求对象
- * @param params 路由参数 (Promise<{ id: string }>)
- * @returns 操作结果 JSON 响应
- */
-export async function DELETE(request: NextRequest, { params }: RouteParams) {
-  return withPermission(request, { permissions: ['user:delete'] }, async (adminUserId) => {
-    const { id } = await params;
-
-    // 检查用户是否存在
-    const users = await db.select()
-      .from(schema.users)
-      .where(or(eq(schema.users.id, id), eq(schema.users.publicId, id)));
-
-    if (users.length === 0) {
-      return NextResponse.json(
-        { error: USER_ERRORS.USER_NOT_FOUND, message: '用户不存在' }, 
-        { status: 404 }
-      );
-    }
-
-    const existingUser = users[0]!;
-
-    // 数据范围检查
-    if (existingUser.deptId) {
-      const hasScope = await checkDataScope(adminUserId, existingUser.deptId);
-      if (!hasScope) {
-        return NextResponse.json(
-          { error: COMMON_ERRORS.FORBIDDEN, message: '无权删除该用户' }, 
-          { status: 403 }
-        );
-      }
-    } else {
-      const filter = await getDataScopeFilter(adminUserId);
-      if (filter.type !== 'ALL') {
-        return NextResponse.json(
-          { error: COMMON_ERRORS.FORBIDDEN, message: '无权删除无部门用户' }, 
-          { status: 403 }
-        );
-      }
-    }
-
-    // 逻辑删除用户：将状态设为 'DELETED'
-    await db.update(schema.users)
-      .set({ 
-        status: 'DELETED',
-        updatedAt: new Date()
-      })
-      .where(eq(schema.users.id, existingUser.id));
-
-    // 联动清除受影响用户的权限缓存，保障强一致性
-    await clearUserPermissionCache(existingUser.id);
-
-    // 逻辑删除后，强行物理注销该用户所有的分布式活跃会话，保障极致安全，消灭悬空凭证
-    // JWT 无状态架构：密码修改后 Token 在过期时间内仍有效（最长 1h）
-    // await revokeUserSessions(existingUser.id); // 已废弃（Redis Session 模式）
-
-    return NextResponse.json({ success: true, message: '用户已逻辑删除' });
   });
 }

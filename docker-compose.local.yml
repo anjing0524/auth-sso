@@ -53,8 +53,6 @@ services:
       SSL_KEY_PATH: /etc/gateway/ssl/privkey.pem
       GATEWAY_PORT: "80"
       GATEWAY_SSL_PORT: "443"
-      # 使用 Docker 容器内部服务名称寻址 (均指向 portal)
-      IDP_UPSTREAM: portal:4000
       PORTAL_UPSTREAM: portal:4000
     ports:
       - "18080:80"

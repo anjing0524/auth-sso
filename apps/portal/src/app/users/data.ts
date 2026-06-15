@@ -1,85 +1,62 @@
 /**
- * 用户管理数据获取辅助函数（仅在服务端执行，非 Server Action）
+ * 用户管理读模型数据获取 (Read Model)
+ *
+ * 仅在服务端执行（非 Server Action）。使用 lib/user-queries.ts 共享查询模块
+ * 消除与 route.ts 的重复代码。
+ *
+ * 缓存策略 (Next.js 16 Cache Components, R10 / §3.6)：
+ * - 使用 "use cache" 指令实现跨请求持久化缓存
+ * - 身份鉴权 (headers/cookies) 必须在缓存作用域外完成，userId 作为参数注入
+ *   ——严禁在 use cache 作用域内访问 request-scoped 动态 API
+ * - cacheTag 标签化，写操作通过 revalidateTag('users-list') 精确失效
  */
 
+import { cacheLife, cacheTag } from 'next/cache';
 import { db, schema } from '@/lib/db';
-import { eq, ne, or, ilike, inArray, desc, and, sql as drizzleSql } from 'drizzle-orm';
-import { checkPermission, getDataScopeFilter } from '@/lib/auth-middleware';
+import { eq, desc, and, sql as drizzleSql } from 'drizzle-orm';
+import { getDataScopeFilter } from '@/lib/auth-middleware';
 import { UserStatus } from '@auth-sso/contracts';
-import { headers } from 'next/headers';
+import {
+  USER_LIST_COLUMNS,
+  buildUserListConditions,
+  isScopeDenied,
+} from '@/lib/user-queries';
 
 /**
  * 分页与过滤获取用户列表
- * 
- * @param params 过滤与分页参数
- * @returns 用户列表数据及分页信息
+ *
+ * @param userId 当前操作者用户 ID（调用方在缓存作用域外完成鉴权后注入）
+ * @param params 分页与过滤参数
+ * @returns 用户列表数据及分页信息（纯 JSON 可序列化）
  */
-export async function getUsers(params: {
-  page: number;
-  pageSize: number;
-  keyword: string;
-  status: string;
-}) {
-  // 1. 鉴权：检查当前用户是否具有用户列表查看权限
-  const check = await checkPermission(await headers(), { permissions: ['user:list'] });
-  if (!check.authorized || !check.userId) {
-    throw new Error('未授权访问或权限不足');
+export async function getUsers(
+  userId: string,
+  params: {
+    page: number;
+    pageSize: number;
+    keyword: string;
+    status: string;
   }
+) {
+  'use cache';
+  cacheLife('minutes');
+  cacheTag('users-list');
 
   const { page, pageSize, keyword, status } = params;
   const offset = (page - 1) * pageSize;
+  const scopeFilter = await getDataScopeFilter(userId);
 
-  // 2. 获取数据范围过滤规则
-  const scopeFilter = await getDataScopeFilter(check.userId);
+  if (isScopeDenied(scopeFilter)) {
+    return { data: [], pagination: { page, pageSize, total: 0, totalPages: 0 } };
+  }
 
-  // 3. 构建查询
+  const conditions = buildUserListConditions({ keyword, status, scopeFilter, userId });
+
   const query = db
-    .select({
-      id: schema.users.id,
-      publicId: schema.users.publicId,
-      username: schema.users.username,
-      email: schema.users.email,
-      name: schema.users.name,
-      avatarUrl: schema.users.avatarUrl,
-      status: schema.users.status,
-      deptId: schema.users.deptId,
-      deptName: schema.departments.name,
-      createdAt: schema.users.createdAt,
-      lastLoginAt: schema.users.lastLoginAt,
-    })
+    .select(USER_LIST_COLUMNS)
     .from(schema.users)
     .leftJoin(schema.departments, eq(schema.users.deptId, schema.departments.id));
 
-  // 默认排除逻辑删除的用户
-  const conditions = [ne(schema.users.status, 'DELETED')];
-
-  if (keyword) {
-    const searchFilter = or(
-      ilike(schema.users.name, `%${keyword}%`),
-      ilike(schema.users.email, `%${keyword}%`),
-      ilike(schema.users.username, `%${keyword}%`)
-    );
-    if (searchFilter) {
-      conditions.push(searchFilter);
-    }
-  }
-
-  if (status && status !== 'ALL') {
-    conditions.push(eq(schema.users.status, status as UserStatus));
-  }
-
-  // 应用数据范围过滤
-  if (scopeFilter.type === 'LIST') {
-    const allowedDeptIds = scopeFilter.deptIds || [];
-    if (allowedDeptIds.length === 0) {
-      return { data: [], pagination: { page, pageSize, total: 0, totalPages: 0 } };
-    }
-    conditions.push(inArray(schema.users.deptId, allowedDeptIds));
-  } else if (scopeFilter.type === 'SELF') {
-    conditions.push(eq(schema.users.id, check.userId));
-  }
-
-  // 4. 执行数据查询与计数查询
   const users = await query
     .where(and(...conditions))
     .orderBy(desc(schema.users.createdAt))
@@ -95,45 +72,27 @@ export async function getUsers(params: {
 
   return {
     data: users.map((u) => ({
-      id: u.id,
-      publicId: u.publicId,
-      username: u.username,
-      email: u.email,
+      ...u,
+      status: u.status as UserStatus,
       name: u.name || u.username || 'Unknown',
-      avatarUrl: u.avatarUrl,
-      status: u.status,
-      deptId: u.deptId,
       deptName: u.deptName || '未分配',
       createdAt: u.createdAt.toISOString(),
       lastLoginAt: u.lastLoginAt ? u.lastLoginAt.toISOString() : null,
     })),
-    pagination: {
-      page,
-      pageSize,
-      total,
-      totalPages: Math.ceil(total / pageSize),
-    },
+    pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) },
   };
 }
 
 /**
  * 获取所有部门列表（用于下拉选择）
- * 
- * @returns 部门列表简要信息
  */
 export async function getDepartments() {
-  try {
-    const list = await db
-      .select({
-        id: schema.departments.id,
-        name: schema.departments.name,
-      })
-      .from(schema.departments)
-      .orderBy(schema.departments.name);
+  'use cache';
+  cacheLife('hours');
+  cacheTag('departments');
 
-    return list;
-  } catch (error) {
-    console.error('[getDepartments] Error:', error);
-    return [];
-  }
+  return await db
+    .select({ id: schema.departments.id, name: schema.departments.name })
+    .from(schema.departments)
+    .orderBy(schema.departments.name);
 }

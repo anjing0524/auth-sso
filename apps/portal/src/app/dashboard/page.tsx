@@ -1,22 +1,17 @@
 /**
- * Dashboard 3.0 - Shadcn UI Block 风格重构
+ * Dashboard 3.0 - Server Component 重构
  * 具有专业排版、数据趋势图和高密度活动面板
  */
-'use client';
-
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import Link from 'next/link';
 import { 
   Users, 
   ShieldCheck, 
   AppWindow, 
-  Building2, 
-  ArrowUpRight,
   Plus,
   ArrowRight,
+  ArrowUpRight,
   Activity,
-  CreditCard,
-  DollarSign,
   TrendingUp,
   History
 } from 'lucide-react';
@@ -30,7 +25,6 @@ import {
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Skeleton } from '@/components/ui/skeleton';
 import { 
   Table, 
   TableBody, 
@@ -39,64 +33,41 @@ import {
   TableHeader, 
   TableRow 
 } from '@/components/ui/table';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
-interface Stats {
-  users: number;
-  roles: number;
-  clients: number;
-  departments: number;
-}
+import { db, schema } from '@/lib/db';
+import { eq, ne, desc, sql } from 'drizzle-orm';
 
-export default function DashboardPage() {
-  const [stats, setStats] = useState<Stats>({ users: 0, roles: 0, clients: 0, departments: 0 });
-  const [recentLogs, setRecentLogs] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+export const revalidate = 0; // 不缓存，每次都动态计算以体现最新状态
 
-  useEffect(() => {
-    const fetchDashboardData = async () => {
-      try {
-        const [usersRes, rolesRes, clientsRes, deptsRes, logsRes] = await Promise.all([
-          fetch('/api/users?pageSize=1'),
-          fetch('/api/roles?pageSize=1'),
-          fetch('/api/clients?pageSize=1'),
-          fetch('/api/departments?pageSize=1'),
-          fetch('/api/audit/logs?pageSize=8'),
-        ]);
+export default async function DashboardPage() {
+  // 服务端直调 Drizzle 数据库拉取核心指标与安全日志
+  const [
+    [usersCount],
+    [rolesCount],
+    [clientsCount],
+    recentLogs
+  ] = await Promise.all([
+    db.select({ count: sql`COUNT(*)::int` }).from(schema.users).where(ne(schema.users.status, 'DELETED')),
+    db.select({ count: sql`COUNT(*)::int` }).from(schema.roles),
+    db.select({ count: sql`COUNT(*)::int` }).from(schema.clients),
+    db.select({
+      id: schema.auditLogs.id,
+      username: schema.users.username,
+      operation: schema.auditLogs.operation,
+      status: schema.auditLogs.status,
+      createdAt: schema.auditLogs.createdAt,
+    })
+      .from(schema.auditLogs)
+      .leftJoin(schema.users, eq(schema.auditLogs.userId, schema.users.id))
+      .orderBy(desc(schema.auditLogs.createdAt))
+      .limit(8)
+  ]);
 
-        const [users, roles, clients, depts, logs] = await Promise.all([
-          usersRes.json(), rolesRes.json(), clientsRes.json(), deptsRes.json(), logsRes.json()
-        ]);
-
-        setStats({
-          users: users.pagination?.total || 0,
-          roles: roles.pagination?.total || 0,
-          clients: clients.pagination?.total || 0,
-          departments: depts.pagination?.total || 0,
-        });
-        setRecentLogs(logs.data || []);
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchDashboardData();
-  }, []);
-
-  if (loading) {
-    return (
-      <div className="flex-1 space-y-4 p-8 pt-6">
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-32 rounded-xl" />)}
-        </div>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-          <Skeleton className="col-span-4 h-[400px] rounded-xl" />
-          <Skeleton className="col-span-3 h-[400px] rounded-xl" />
-        </div>
-      </div>
-    );
-  }
+  const stats = {
+    users: Number(usersCount?.count || 0),
+    roles: Number(rolesCount?.count || 0),
+    clients: Number(clientsCount?.count || 0),
+  };
 
   return (
     <div className="flex-1 space-y-6 p-1 pt-2">
@@ -207,39 +178,28 @@ export default function DashboardPage() {
                         <p className="text-sm font-medium text-slate-500">暂无活动记录</p>
                         <p className="text-xs text-slate-400">系统的最新安全审计日志将在这里显示</p>
                       </div>
-                      
-                      {/* Skeleton View */}
-                      <div className="w-full flex flex-col gap-6 p-8 opacity-20 select-none pointer-events-none">
-                        {[1, 2, 3, 4].map((i) => (
-                          <div key={i} className="flex items-center justify-between border-b border-slate-100 pb-4">
-                            <div className="flex gap-4 items-center">
-                              <div className="h-4 bg-slate-200 rounded w-24"></div>
-                              <div className="h-4 bg-slate-200 rounded w-48"></div>
-                            </div>
-                            <div className="flex gap-4 items-center">
-                              <div className="h-5 bg-slate-200 rounded-md w-16"></div>
-                              <div className="h-4 bg-slate-200 rounded w-20"></div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
                     </TableCell>
                   </TableRow>
                 ) : (
-                  recentLogs.map((log) => (
-                    <TableRow key={log.id} className="group hover:bg-slate-50/50 transition-colors border-none">
-                      <TableCell className="pl-8 font-bold text-sm">{log.username}</TableCell>
-                      <TableCell className="text-xs font-medium text-slate-500">{log.operation}</TableCell>
-                      <TableCell className="text-center">
-                         <Badge variant={log.status === 200 ? 'default' : 'destructive'} className={`rounded-md px-2 py-0 h-5 text-[10px] ${log.status === 200 ? 'bg-green-100 text-green-700 hover:bg-green-100' : ''}`}>
-                           {log.status === 200 ? 'Success' : 'Fail'}
-                         </Badge>
-                      </TableCell>
-                      <TableCell className="text-right pr-8 text-[10px] font-mono text-muted-foreground">
-                        {new Date(log.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </TableCell>
-                    </TableRow>
-                  ))
+                  recentLogs.map((log) => {
+                    const date = new Date(log.createdAt);
+                    const timeStr = `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+
+                    return (
+                      <TableRow key={log.id} className="group hover:bg-slate-50/50 transition-colors border-none">
+                        <TableCell className="pl-8 font-bold text-sm">{log.username || 'Unknown'}</TableCell>
+                        <TableCell className="text-xs font-medium text-slate-500">{log.operation}</TableCell>
+                        <TableCell className="text-center">
+                           <Badge variant={log.status === 200 ? 'default' : 'destructive'} className={`rounded-md px-2 py-0 h-5 text-[10px] ${log.status === 200 ? 'bg-green-100 text-green-700 hover:bg-green-100' : ''}`}>
+                             {log.status === 200 ? 'Success' : 'Fail'}
+                           </Badge>
+                        </TableCell>
+                        <TableCell className="text-right pr-8 text-[10px] font-mono text-muted-foreground">
+                          {timeStr}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
                 )}
               </TableBody>
             </Table>

@@ -97,7 +97,6 @@ services:
       - SSL_KEY_PATH=$${SSL_KEY_PATH:-/etc/gateway/ssl/live/portal.yourdomain.com/privkey.pem}
       - GATEWAY_PORT=$${GATEWAY_PORT:-80}
       - GATEWAY_SSL_PORT=$${GATEWAY_SSL_PORT:-443}
-      - IDP_UPSTREAM=$${IDP_UPSTREAM:-portal:4000}
       - PORTAL_UPSTREAM=$${PORTAL_UPSTREAM:-portal:4000}
     ports:
       - "80:80"

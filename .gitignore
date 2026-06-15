@@ -26,3 +26,6 @@ out
 .turbo
 .gstack/
 .worktrees
+
+# gateway
+apps/gateway/target

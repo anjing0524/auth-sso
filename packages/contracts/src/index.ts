@@ -3,11 +3,13 @@
  * @module @auth-sso/contracts
  */
 
-// 用户状态
-export type UserStatus = 'ACTIVE' | 'DISABLED' | 'LOCKED';
+// 用户状态唯一真相源值数组
+export const USER_STATUS_VALUES = ['ACTIVE', 'DISABLED', 'LOCKED', 'DELETED'] as const;
+export type UserStatus = typeof USER_STATUS_VALUES[number];
 
-// 部门/角色/权限/菜单/Client 状态
-export type EntityStatus = 'ACTIVE' | 'DISABLED';
+// 部门/角色/权限/菜单/Client 状态唯一真相源值数组
+export const ENTITY_STATUS_VALUES = ['ACTIVE', 'DISABLED'] as const;
+export type EntityStatus = typeof ENTITY_STATUS_VALUES[number];
 
 // 数据范围类型
 export type DataScopeType = 'ALL' | 'DEPT' | 'DEPT_AND_SUB' | 'SELF' | 'CUSTOM';
@@ -158,6 +160,23 @@ export interface UserInfoResponse {
   email_verified?: boolean;
   picture?: string;
 }
+
+// API 响应类型契约 (Controller 层统一返回格式)
+type ApiSuccess<T> = {
+  success: true;
+  data: T;
+  pagination?: { page: number; pageSize: number; total: number; totalPages: number };
+  message?: string;
+};
+
+type ApiError = {
+  success: false;
+  error: string;
+  message: string;
+};
+
+/** 统一 API 响应类型 — Controller 层唯一返回值契约 */
+export type ApiResponse<T> = ApiSuccess<T> | ApiError;
 
 // 导出所有类型
 export * from './errors';

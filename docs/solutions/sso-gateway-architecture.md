@@ -140,7 +140,18 @@ reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-feature
 tokio = { version = "1", features = ["sync", "time"] }
 ```
 
-### 3.2 Pingora 网关核心改造（ES256 + JWKS + Cookie 提取）
+### 3.2 Rust 源码模块结构
+
+```
+apps/gateway/src/
+├── main.rs       # 入口：环境配置加载、服务器初始化、JWKS 后台刷新
+├── claims.rs     # JWT 载荷核心声明（Claims 结构体）
+├── jwks.rs       # JWKS 公钥缓存（JwksCache 结构体 + refresh 方法）
+├── gateway.rs    # 网关代理核心（Gateway 结构体 + ProxyHttp trait 实现）
+└── redirect.rs   # HTTP→HTTPS 重定向服务（RedirectService + ProxyHttp 实现）
+```
+
+### 3.3 Pingora 网关核心实现（ES256 + JWKS + Cookie 提取）
 
 ```rust
 use async_trait::async_trait;
@@ -193,12 +204,12 @@ impl JwksCache {
 }
 
 struct Gateway {
-    idp_lb: Arc<pingora_load_balancing::LoadBalancer<pingora_load_balancing::selection::RoundRobin>>,
+    /// Portal 上游负载均衡器（Portal 已合并 IdP，统一代理入口）
     portal_lb: Arc<pingora_load_balancing::LoadBalancer<pingora_load_balancing::selection::RoundRobin>>,
     /// 共享的 JWKS 公钥缓存（由 main 函数中后台任务定时刷新）
     jwks_cache: Arc<JwksCache>,
-    /// IdP 签发者（用于 iss claim 校验）
-    idp_issuer: String,
+    /// Portal OIDC Provider 的 JWT 签发者（用于 iss claim 校验）
+    issuer: String,
     /// 本网关服务的 audience（用于 aud claim 校验）
     audience: String,
 }
@@ -265,7 +276,7 @@ impl ProxyHttp for Gateway {
 
         // 4. 构建 ES256 校验参数（严格校验 iss 与 aud，防止跨服务 Token 重放攻击）
         let mut validation = Validation::new(Algorithm::ES256);
-        validation.set_issuer(&[&self.idp_issuer]);
+        validation.set_issuer(&[&self.issuer]);
         validation.set_audience(&[&self.audience]);
 
         match decode::<Claims>(&token, decoding_key, &validation) {
@@ -310,7 +321,7 @@ impl ProxyHttp for Gateway {
 }
 ```
 
-### 3.3 main 函数中的 JWKS 公钥后台定时刷新
+### 3.4 main 函数中的 JWKS 公钥后台定时刷新
 
 ```rust
 // 在 main() 中启动后台异步任务，每 5 分钟刷新一次 JWKS 公钥缓存
@@ -318,8 +329,8 @@ impl ProxyHttp for Gateway {
 
 let jwks_cache = JwksCache::new();
 let cache_clone = Arc::clone(&jwks_cache);
-let jwks_url = env::var("IDP_JWKS_URL")
-    .unwrap_or_else(|_| "http://localhost:4101/.well-known/jwks".to_string());
+let jwks_url = env::var("PORTAL_JWKS_URL")
+    .unwrap_or_else(|_| "http://localhost:4000/api/auth/.well-known/jwks".to_string());
 
 tokio::spawn(async move {
     loop {
@@ -365,7 +376,7 @@ export class PermissionsGuard implements CanActivate, OnModuleInit {
    * jose 的 createRemoteJWKSet 会自动缓存并定期刷新公钥
    */
   onModuleInit() {
-    const jwksUri = process.env.IDP_JWKS_URI ?? 'http://localhost:4101/.well-known/jwks';
+    const jwksUri = process.env.PORTAL_JWKS_URI ?? 'http://localhost:4000/api/auth/.well-known/jwks';
     this.JWKS = createRemoteJWKSet(new URL(jwksUri));
   }
 
@@ -388,7 +399,7 @@ export class PermissionsGuard implements CanActivate, OnModuleInit {
       // 使用 jose 完整验签：校验签名 + exp + iss + aud
       // 内网微服务信任 IdP 的 JWKS，独立验签，不依赖网关
       const { payload } = await jwtVerify<AppClaims>(token, this.JWKS, {
-        issuer: process.env.IDP_ISSUER ?? 'http://localhost:4101',
+        issuer: process.env.PORTAL_ISSUER ?? 'http://localhost:4000',
         audience: process.env.SERVICE_AUDIENCE ?? 'order-service',
         algorithms: ['ES256'],
       });
