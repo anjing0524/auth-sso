@@ -1,0 +1,24 @@
+# ==============================================================================
+# Auth-SSO 信创安全网关 生产/本地通用配置文件
+# ==============================================================================
+
+[gateway]
+# 网关监听的 HTTP 端口（用以强转重定向至 HTTPS）
+port = 18080
+
+# 网关监听的 HTTPS 业务代理端口
+ssl_port = 18443
+
+# TLS/SSL 证书文件路径
+ssl_cert_path = "/tmp/gateway/ssl/fullchain.pem"
+ssl_key_path = "/tmp/gateway/ssl/privkey.pem"
+
+[portal]
+# Next.js BFF (Portal/IdP) 上游负载均衡代理入口地址
+upstream = "127.0.0.1:4000"
+
+# OIDC 公钥拉取端点，定时刷新公钥用于离线解密验签
+jwks_url = "http://127.0.0.1:4000/api/auth/.well-known/jwks"
+
+# OIDC 声明 Issuer (iss) 校验标志
+issuer = "http://localhost:4000"

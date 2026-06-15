@@ -1,172 +1,159 @@
 ---
-date: 2026-06-12
+date: 2026-06-15
 topic: portal-ddd-architecture
+updated: 2026-06-15 (评估修订: Next.js 16 适配、错误映射层、Auth Guard、数据范围去重)
 ---
 
-# Portal DDD 架构重构
+# Portal DDD 架构重构需求
 
 ## Summary
 
-将 Portal 后端重构为纯领域层 + 薄 Controller 的 DDD 架构。领域层函数式 + Branded Types、零依赖 Next.js；Controller 层复用现有 REST Route Handler，同时在表单交互场景引入 Server Actions 做浏览器侧 Controller，两者都只做参数适配并调用相同的领域函数；基础设施层用 Drizzle 实现仓储接口。
+将 Portal 后端重构为**"Zod校验门禁 + 领域纯函数业务规则 + Drizzle数据库直调"**的极简大前端架构。我们推行**“单控制器选型原则”**：对于本系统内部页面交互调用的写业务，一律只开发 Server Action，彻底禁止同时开发重复的 REST 路由；只有在涉及外部集成、程序化脚本或 SSO 跨域开放服务时，才开发 Route API 控制器。这消除了多余的 Repository 接口、Mapper 映射、DI 工厂以及无意义的控制层重复开发。
+
+本需求已针对 **Next.js 16 + React 19 + Node.js 26** 进行修订，涵盖 Cache Components（`use cache` 指令）、Middleware → Proxy 重命名、Server Function 安全模型等关键变化。
 
 ---
 
 ## Problem Frame
 
-当前 Portal 存在三类架构问题：
+当前 Portal 存在四类架构问题：
 
-**1. 领域逻辑耦合在框架层。** 以 Users 为例，读路径 `data.ts` 把鉴权检查、Drizzle 查询、数据映射写在一起——需要 mock `next/headers` 才能测试。写路径 27 个 REST Route Handler（`app/api/*/route.ts`）内联了 Drizzle 查询、数据范围过滤、审计日志和响应格式化。无论是读还是写，领域逻辑都无法脱离 Next.js 独立测试。
+**1. 领域逻辑耦合在框架层。** 以 Users 为例，写路径和读路径混合了鉴权、数据范围过滤和业务规则。Controller 中存在字段 merge 策略（`??` 链）和状态硬编码（`status: 'DELETED'`）等本应属于领域层的业务规则。领域逻辑都无法脱离 Next.js 独立快速测试。
 
-**2. 多个 BC 的 page.tsx 是纯 Client Component 巨石。** roles（26K）、menus（18K）、permissions（17K）、departments（15K）的 page.tsx 全部以 `'use client'` 开头——它们是 UI 组件拆分问题，不是后端领域逻辑耦合问题。但其中内联的数据获取、状态管理和业务规则判断仍然不可测试。
+**2. 多个 BC 的 page.tsx 是纯 Client Component 巨石。** roles、menus、permissions、departments 的 page.tsx 全部以 `'use client'` 开头，内联了复杂的数据获取与业务逻辑。
 
-**3. `lib/` 目录职责不清。** 12 个文件混在一起——有纯领域逻辑（permissions.ts 的角色-权限查询）、有基础设施（redis.ts、db.ts）、有框架适配（auth-middleware.ts 混了 Cookie 读取和权限规则）。
+**3. `lib/` 目录职责不清，鉴权模块臃肿。** `auth-middleware.ts` 约 350 行，混杂了 JWT 验证、Session 回退、权限编码检查、角色检查、数据范围检查（含递归 CTE）等多种职责。数据范围过滤逻辑在多个读路径中重复编写。
 
-**目标：** 建立清晰的领域层/基础设施层/表现层三层分离，让领域逻辑可独立测试。对于 Client Component 巨石，通过组件拆分和自定义 hooks 提取来缩小文件体积，再逐步将其中隐含的业务规则下沉到领域层。
+**4. 缓存策略未适配 Next.js 16。** 仍使用 `React.cache()`（仅请求级去重）而非 Next.js 16 的 `"use cache"` 持久化缓存。错误处理在各 Controller 中 ad-hoc 重复，缺少统一的领域错误 → HTTP 响应映射层。
+
+**目标：** 建立清晰的“Zod 校验门禁 -> 领域纯函数业务规则 -> Drizzle 数据库直调”的流转链路，确保业务核心逻辑完全可独立测试（毫秒级）。消除代码重复，统一横切关注点。
 
 ---
 
 ## Actors
 
-- A1. **后端开发者**：编写和维护领域逻辑、仓储实现、Server Actions
-- A2. **前端开发者**：编写 Server Components 和 Client Components，通过薄 Controller 获取数据
-- A3. **测试编写者**：为领域层写单元测试、为仓储写集成测试、为 Controller 写 API 测试
+- A1. **后端/全栈开发者**：编写和维护领域纯函数、单控制器（仅供内部的 Server Action，或供外部的 REST Route Handler）、Drizzle 数据库直调。
+- A2. **前端开发者**：编写 Server Components（直接使用 Drizzle 查询）和 Client Components（通过 Server Action 写数据）。
+- A3. **测试编写者**：编写领域层的高速单元测试与端到端的集成测试。
 
 ---
 
 ## Key Flows
 
-- F1. **新增一个业务操作（以"创建用户"为例）**
-  - **Trigger:** 管理员在用户管理页提交创建表单
-  - **Actors:** A1, A2
+- F1. **新增一个写操作（以"创建用户"为例）**
+  - **Trigger:** 管理员在用户管理页提交创建表单。
+  - **Actors:** A1, A2.
   - **Steps:**
-    1. `CreateUserDrawer.tsx` 调用 Server Action `createUserAction(prevState, formData)`（浏览器侧）或 POST `/api/users`（Gateway/外部客户端）
-    2. Controller 层解析 FormData 为 DTO，调用鉴权
-    3. Controller 层调领域函数 `createUser(props)` 构建用户对象
-    4. Controller 层调 `userRepo.save(user)` 持久化
-    5. Controller 层调 `revalidatePath('/users')`（Server Action）或返回 JSON 响应（Route Handler）
-  - **Outcome:** 用户创建成功，列表页自动刷新
-  - **Covered by:** R1, R2, R3, R7, R9
+    1. 根据选型矩阵判定：该操作仅服务于内部页面，故 `CreateUserDrawer.tsx` 仅触发调用 Server Action `createUserAction`（严禁编写重复的 POST `/api/users` 路由，除非该路由需要对外提供开放同步服务）。
+    2. Controller 执行 Zod 门禁校验与权限校验（通过 `withAuth` 包装器强制统一）。
+    3. Controller 使用 `db.transaction()` 包裹"查重 + 插入"步骤，保证原子性。
+    4. Controller 调用领域纯函数（如 `createUser`）计算出最新的领域实体模型。
+    5. Controller 使用 Drizzle 直调（`tx.insert`）将实体持久化到数据库。
+    6. Action 通过 `updateTag('users-list')` 精确失效读缓存（或降级使用 `revalidatePath('/users')`）。
+  - **Outcome:** 用户创建成功，列表页自动刷新。
+  - **Covered by:** R1, R3, R9, R20, R22
 
-- F2. **为领域逻辑写单元测试**
-  - **Trigger:** 开发者修改了用户激活/禁用规则
-  - **Actors:** A3
+- F2. **为领域核心规则写单元测试**
+  - **Trigger:** 开发者修改了用户激活/禁用的业务规则。
+  - **Actors:** A3.
   - **Steps:**
-    1. 在 `__tests__/domain/user.test.ts` 中写纯函数测试
-    2. 测试不依赖任何框架，直接 import 领域函数
-    3. 构造输入，断言输出
-  - **Outcome:** 秒级反馈，无需启动 Next.js
-  - **Covered by:** R12
+    1. 在 `__tests__/domain/user.test.ts` 中针对领域纯函数编写测试。
+    2. 测试不依赖任何数据库和 Next.js 运行时，直接运行并于毫秒级反馈。
+  - **Outcome:** 纯函数单元测试在毫秒级内跑完，无需 mock 任何数据库和框架服务。
 
-- F3. **将现有巨石 page.tsx 拆分为新架构**
-  - **Trigger:** 准备重构 roles BC
-  - **Actors:** A1
+- F3. **重构现有巨石 page.tsx**
+  - **Trigger:** 准备重构 roles BC。
+  - **Actors:** A1.
   - **Steps:**
-    1. 从旧 page.tsx 提取领域逻辑 → `domain/role/role.ts`
-    2. 提取数据访问 → `infrastructure/persistence/drizzle-role-repo.ts`
-    3. 创建薄 Controller → `app/roles/_actions.ts`（仅用于写操作）
-    4. page.tsx 改为 Server Component，直接调领域函数或仓储查询获取数据（读操作）
-    5. 提取 Client Components → `app/roles/components/`（UI 交互）
-    6. 旧 page.tsx 删除
-  - **Outcome:** roles BC 与 users BC 架构一致，可独立测试
-  - **Covered by:** R4, R5
+    1. 从旧 page.tsx 中剥离业务判断逻辑，下沉至 `domain/role/role.ts` 纯函数中。
+    2. 在 page.tsx (Server Component) 或是专门的查询 helper 中，直接使用 Drizzle 调取只读扁平对象（读模型）。
+    3. 写操作提取到 actions 中作为薄 Controller，使用 Zod 做入参检验，调领域函数并 Drizzle 直调写入。
+  - **Outcome:** roles BC 的读写路径分离，代码易读易维护。
 
 ---
 
 ## Requirements
 
-> 本需求按三阶段组织，对应 Key Decision #5 "首选更简单的替代方案，迭代到全量 DDD"。每个 BC 完成 Phase 1 后评估是否进入后续阶段。
+### 核心规范要求
 
-### Phase 1 — 必须：纯函数提取
+- R1. **领域层零依赖框架**：`domain/` 目录下的代码严禁 import 任何框架模块（如 `next/*`）或第三方持久化模块（如 `drizzle-orm`），只使用原生 TS 和基础库。
+- R2. **入参 Zod 唯一门禁**：所有控制器（Server Actions / Route Handlers）的外部输入必须首先通过 Zod Schema 解析（不手写 `if (!field)`），校验成功即获得强类型保障，失败则立刻中止。
+- R3. **核心业务下沉纯函数**：状态机切换、行为计算、数据转换必须下沉为输入输出皆为 Plain Object 的**纯函数**。
+- R8. **错误结构化表达**：统一使用领域错误类型体系（`DomainError` 的各派生子类，如 `BusinessRuleViolationError`）来表达业务规则冲突，严禁裸 `throw new Error()`。
+- R9. **薄 Controller 职责约束**：Controller 限制在 20 行以内。只能进行三件事：Zod 门禁校验、调用领域纯函数、Drizzle 数据库直调持久化。
 
-- R1. 领域层必须零依赖 Next.js——不 import `next/headers`、`next/cache`、`next/server`、`server-only`
-- R3. 聚合根的领域行为定义为纯函数（`createUser`、`activateUser`、`disableUser`），输入输出为 plain object，不含副作用
-- R8. Redis 缓存逻辑封装在基础设施层，不直接出现在领域函数中
+### 表现层与测试
 
-**Phase 1 验收标准：** 领域函数可在纯 Node 环境（`vitest --environment node`）中直接 import 并测试，无需 mock 任何 Next.js API。若该 BC 在此阶段已达成可测试性目标且代码质量可接受，后续阶段可跳过。
+- R10. **读写分离与读路径直调**：只读查询直接调用 Drizzle 执行，无需经过领域层或任何 Repository 接口封装。启用 `cacheComponents` 后使用 `"use cache"` + `cacheLife()` 实现跨请求持久化缓存，配合 `cacheTag()` 标签化精确失效。未启用时降级使用 `React.cache()` 实现请求级去重。
+- R12. **极致高频 TDD**：领域层核心业务必须配备纯单元测试（`vitest`），严禁在单测中引入 mock 数据库或框架的行为。
+- R19. **架构边界自动化守护**：使用 `eslint-plugin-boundaries` 强拦截非法导入（例如领域层 import 了 Drizzle 或 Next.js 模块），违反者 CI 直接挂掉。
 
-### Phase 2 — 按需：Repository 接口 + 基础设施
+### 横切关注点与防腐层（2026-06-15 评估新增）
 
-- R4. 仓储接口（`UserRepository`、`RoleRepository` 等）在领域层定义为 TypeScript interface，方法签名只用领域类型，不暴露 ORM 细节
-- R5. 每个 BC 的领域目录结构统一为 `types.ts`（Zod schema + 基础类型）、`<entity>.ts`（聚合根函数）、`repository.ts`（接口）
-- R6. 仓储实现放在 `infrastructure/persistence/`，用 Drizzle ORM 实现领域层定义的 Repository 接口，负责领域对象 ↔ DB 行的双向映射
-- R7. 鉴权适配器（`infrastructure/auth/`）封装 Better Auth API 调用，对外暴露 `requireAuth(permissions)` 等纯接口，领域层不感知 Better Auth
-
-**Phase 2 验收标准：** Controller 层不再直接 import Drizzle 或 Better Auth——所有数据访问通过 Repository 接口，所有鉴权通过适配器。
-
-### Phase 3 — 条件：Branded Types
-
-- R2. 当某个 BC 出现因纯 string ID 导致的类型混淆 Bug（如用 UserId 误传给 RoleId 参数且未被 TypeScript 捕获），对该 BC 引入 Branded Types（`UserId`、`RoleId` 等）并用 Zod schema 做边界校验。未出现此类 Bug 的 BC 继续使用 plain string ID
-
-**Phase 3 验收标准：** 引入 Branded Types 后，原本会被 TypeScript 放行的跨类型 ID 误传变为编译期错误。
-
-### 表现层
-
-- R9. Controller 层（REST Route Handler 和 Server Actions）的职责：(a) 解包 HTTP 参数（FormData/Request）并调用鉴权适配器；(b) 调用领域函数执行业务逻辑；(c) 通过仓储接口持久化变更；(d) revalidatePath（Server Action）或返回 JSON 响应（Route Handler）。不包含 SQL 查询或业务规则判断
-- R10. Server Components（`page.tsx`）作为读模型直接调领域函数或仓储查询获取数据，不做数据变更
-- R11. Client Components 放在 `components/` 目录下，通过 Server Actions 触发写操作，通过 props 接收只读数据
-
-### 测试体系
-
-- R12. 领域层测试为纯单元测试：直接 import 领域函数和 Zod schema，不 mock 任何外部依赖
-- R13. 仓储实现测试为集成测试：连接测试数据库，验证 Drizzle 查询与领域类型的映射正确性
-- R14. Controller 测试（API 层）mock 仓储接口和鉴权适配器，验证 Server Action 的参数校验和返回格式
-- R15. 每个 BC 的领域测试文件带有 `@req` 标注，关联需求矩阵中的对应需求 ID
-
-### 迁移策略
-
-- R16. 迁移必须以 BC 为单位渐进进行，每次只重构一个有界上下文，确保现有测试不退化。跨 BC 依赖（如 `userRoles`、`rolePermissions`、`getDataScopeFilter()`）通过以下策略处理：(a) 仓储实现内部直接查询 Drizzle schema 处理跨表关联，不等待被引用 BC 的迁移；(b) 每个 BC 迁移完成后，其 Repository 接口成为被引用方的官方 API；(c) 迁移中的 Context 同时存在新旧代码——旧路径继续可用，新路径逐步替换
-- R17. Users BC 作为第一个参考实现——将其现有 `data.ts`（读路径）和 `app/api/users/route.ts`（写路径）中的领域逻辑下沉到 `domain/user/`，同时将 Route Handler 改造为调用领域函数的薄 Controller，行为不变
-- R18. 迁移顺序：Users（参考实现，含 Route Handler 改造）→ Roles → Permissions → Departments → Clients → Menus → 清理 `lib/` 冗余代码。每个 BC 迁移时同步处理其对应的 Route Handler 文件
+- R20. **统一错误映射出口**：Controller 层统一通过 `mapDomainError(err)` 将领域错误转为 HTTP 响应，严禁在各 Controller 中手写 `if (err instanceof XxxError)` 分支。映射函数位于 `domain/shared/error-mapping.ts`，属于纯横切关注点，无副作用。
+- R21. **三层鉴权防御（Gateway 验签 + Proxy CSRF + withAuth 精细鉴权）**：Gateway 做 JWT 离线验签，Proxy 做 CSRF，Server Action 层通过 `withAuth(permissions, handler)` 做精细"是否有权限"检查（需 DB 查询）。Gateway/Proxy 不可访问 Drizzle，不得在其中做 DB 依赖的权限校验。
+- R22. **Controller 显式事务包裹**：涉及多表或多步骤写操作（如"查重 + 插入"、"读取 + 更新"）的 Controller 必须使用 `db.transaction()` 包裹，事务内所有操作使用 `tx` 实例，严禁混用全局 `db`。
+- R23. **数据范围过滤统一抽取**：所有读路径（`data.ts`、GET Route）中**严禁**重复编写 `scopeFilter.type` 分支逻辑。必须抽取 `applyDataScopeFilter(query, scopeFilter, userId)` 工具函数，集中管理数据范围过滤条件构建。
+- R24. **鉴权中间件拆分**：`auth-middleware.ts` 拆分为 `lib/auth/verify-jwt.ts`（身份验证）、`lib/auth/check-permission.ts`（权限/角色检查）、`lib/auth/data-scope.ts`（数据范围过滤）。`auth-middleware.ts` 保留为统一入口，组合子模块。
+- R25. **Server Action 入参类型安全**：Server Action 的入参不得使用 `any` 类型（如 `firstArg: any`），必须定义明确的 Zod Schema 并通过 `z.infer` 推导类型。双签名兼容（`FormData` vs plain object）通过函数重载或明确的类型守卫实现。
+- R26. **类型单一真相源，消除 Zod/Drizzle/TS 三层重复**：枚举值集合（如 `UserStatus` 的合法值）只在 `@auth-sso/contracts` 中以 `as const` 数组定义一次。`domain/` 中的 `z.enum()` 和 `db/` 中的 `pgEnum()` 均从 contracts 导入同一数组派生。**废除 `XxxPropsSchema`**（如 `UserPropsSchema`），Domain 实体改用纯 `interface`，与 Drizzle `$inferSelect` 的兼容性由 `db/schema.ts` 中的编译期类型守卫保证。严禁在 domain/ 或 db/ 中手写枚举字面量。
 
 ---
 
 ## Acceptance Examples
 
-- AE1. **Covers R1, R2.** Given `domain/user/user.ts`，when `import { createUser } from '@/domain/user/user'` 在纯 Node 环境执行，then import 成功且不触发任何 Next.js 模块加载错误。
-- AE2. **Covers R9.** Given `app/users/_actions.ts` 中的 `createUserAction`，when 其被调用，then 函数体不超过 20 行，不包含任何 SQL 查询或业务规则判断。
-- AE3. **Covers R12.** Given `__tests__/domain/user.test.ts`，when 运行 `vitest --environment node`（非 jsdom），then 测试在 100ms 内完成，且不需要 mock `next/headers` 或 `next/cache`。
-- AE4. **Covers R17.** Given Users BC 重构完成，when 运行 `pnpm test:api` 中 Users 相关的测试用例，then 全部通过，且测试文件的修改仅限于 import 路径变更和领域值构造适配（如 `UserId` 类型构造）。现有测试的 HTTP 语义和断言逻辑不受影响。
-- AE5. **Covers R9（REST Handler 瘦身）.** Given `app/api/roles/route.ts` 重构完成，when 检查其 GET/POST handler 的 import 和函数体，then 不直接 import Drizzle（`drizzle-orm`）、`@/lib/permissions`、`@/lib/audit`——数据访问通过 Repository 接口，权限检查通过鉴权适配器，审计通过审计服务。
+- AE1. **Covers R1.** Given `domain/user/user.ts`，when `import { createUser } from '@/domain/user/user'`，then 可以在任意纯 TypeScript / Node 环境下无缝加载，无任何 Next.js 报错。
+- AE2. **Covers R9.** Given `createUserAction`，when 检查其行数和逻辑，then 其函数体不超过 20 行，仅包含 Zod 校验、领域纯函数调用和 Drizzle 直接写库操作，没有包含内联的业务规则计算（如状态机状态转移）。
+- AE3. **Covers R12.** 当运行 `vitest` 测试 `__tests__/domain/user.test.ts` 时，单测无需 mock `db` 或 `headers`，并且在 20ms 内跑完。
+- AE4. **Covers R19.** 如果开发者尝试在 `domain/user/user.ts` 中 `import { db } from '@/lib/db'`，运行 `pnpm lint` 时 ESLint 将抛出边界阻断错误。
+- AE5. **Covers R8.** 调用 `toggleUserStatus` 处理已被逻辑删除的用户，能够捕获到具体的 `BusinessRuleViolationError` 异常，而非普通的 `Error`。
+- AE6. **Covers R20.** 当 Controller 的 catch 块捕获到任何领域错误时，调用 `mapDomainError(err)` 即可获得 `{ status, error, message }` 的统一映射结果，无需手写 `instanceof` 分支。
+- AE7. **Covers R21.** 新的 Server Action 只需声明 `export const createXAction = withAuth({ permissions: ['x:create'] }, async (input) => { ... })` 即可自动获得鉴权 + 错误映射能力。
+- AE8. **Covers R23.** 任意读路径中的数据范围过滤只需调用 `applyDataScopeFilter(baseConditions, scopeFilter, userId)` 一行代码，不再出现 5 行以上的 `if/else if` 分支。
+- AE9. **Covers R26.** 新增一个 `UserStatus` 枚举值（如 `SUSPENDED`）时，只需在 `@auth-sso/contracts` 的 `USER_STATUS_VALUES` 数组中追加一项。`domain/` 的 `z.enum(USER_STATUS_VALUES)` 和 `db/` 的 `pgEnum('user_status', USER_STATUS_VALUES)` 自动获得新值，无需同步修改其他文件。
 
 ---
 
 ## Success Criteria
 
-- 每个 BC 的领域层函数可以被独立导入和测试，无需启动 Next.js 进程
-- 所有现有 API 测试用例在重构后保持通过，行为不变
-- `lib/` 目录最终只保留跨 BC 的共享胶水代码（db.ts、auth.ts、audit.ts），文件数从 12 降到 6 以内
-- roles、permissions、menus、departments 的 page.tsx 从当前 15K~26K 降到 5K 以内
+- 限界上下文中的业务逻辑完全下沉为纯函数，单元测试完全摆脱数据库 and 框架依赖。
+- 写控制器中完全消除了 Repository 接口、Mapper 映射和 DI 工厂的间接抽象代码，开发效率大幅提升。
+- `lib/` 目录归位，只保留真正的全局通用工具。`infrastructure/` 独立存放有副作用的外部适配器。
+- `auth-middleware.ts` 拆分为独立子模块（身份验证 / 权限检查 / 数据范围），代码行数显著下降。
+- 所有读路径的数据范围过滤统一通过 `applyDataScopeFilter` 执行，零重复分支代码。
+- 所有 Controller 的错误处理统一通过 `mapDomainError` 映射，零 ad-hoc `instanceof` 分支。
+- 读路径数据获取升级为 `"use cache"` 持久化缓存（或完成迁移评估）。
 
 ---
 
 ## Scope Boundaries
 
-- 不碰认证基础设施（Better Auth、JWT、session.ts）——它们作为外部服务被基础设施层封装
-- 不改 packages/contracts 的结构——现有共享类型和错误码保持不变
-- 不改变用户体验和 UI 外观——这是纯后端架构重构
-- 不迁移 E2E 测试——E2E 覆盖的关键路径不受影响
-- 不引入 DI 容器或 IoC 框架——依赖通过模块级导入和函数参数显式传递
-- 不创建抽象基类或通用 Repository 模式——每个 BC 的 Repository 接口独立定义
-- REST Route Handler 保留为对外 API 契约——它们会被改造为调用领域函数的薄 Controller，但 HTTP 接口签名和行为不变。Gateway 和外部客户端的程序化访问不受影响
+- **不碰认证基础设施**：Better Auth 的逻辑保持在外部。
+- **不碰 UI 外观**：重构仅在表现层薄 Controller 与领域层、持久化层中进行。
+- **不设仓储防腐**：彻底废弃 Repository、DI、Mapper 和工厂模式，不为“可能发生的更换数据库”增加无用复杂度。
+- **不设 Branded Types**：ID、状态等均直接使用 `string` 类型。
 
 ---
 
 ## Key Decisions
 
-- **函数式 + Branded Types over 类 + 接口**: TypeScript 社区习惯，不需要 DI 容器，纯函数可直接测试，Branded Types 在编译期提供类型安全而不引入运行时开销
-- **REST Route Handler + Server Actions 双 Controller 模式**: 保留 27 个现有 Route Handler 作为程序化访问（Gateway、外部客户端）的标准 HTTP 接口，同时在表单交互场景新增 Server Actions 利用 revalidatePath 减少样板代码。两者均调用相同的领域函数，避免逻辑重复
-- **每个 BC 独立 Repository 接口 over 通用 BaseRepository**: 避免过早抽象，每个 BC 的数据访问需求不同（Users 需要分页+数据范围过滤，Roles 需要权限绑定）
-- **渐进迁移 over 大爆炸重写**: 以 BC 为单位逐个重构，每个 BC 重构后合并回 main，保证主干始终可部署
-- **首选更简单的替代方案，迭代到全量 DDD**: 第一阶段提取纯函数到独立模块（可脱离 Next.js 测试）；第二阶段引入 Repository 接口和基础设施层；第三阶段按需引入 Branded Types。避免一次性投入全部 DDD 基础设施，仅在简单方案证明不足时增加复杂度
+- **Zod 门禁 + 领域纯函数 + Drizzle 直调**：弃用 Java 式的 Repository + DI + Mapper 三层抽象架构。以大前端最自然的薄 Controller (Server Actions / Route Handlers) 为桥梁，以 Zod 为唯一门禁，Drizzle 为直调持久化，只有业务判断内聚于 Domain 纯函数中。
+- **去除 Branded Types**：基于项目规模的实际考量，取消 Branded Types 带来的强转复杂性，回归普通的 string 传值。
+- **结构化错误映射**：保留并重申领域级结构化错误的使用，但将 Controller 层的错误映射集中到 `mapDomainError` 横切函数中，消除各 Controller 的 ad-hoc `instanceof` 分支。
+- **`use cache` 持久化缓存**：Next.js 16 的 Cache Components 提供比 `React.cache()` 更强大的持久化缓存能力，读路径应优先采用。
+- **Auth Guard 包装器模式**：用 `withAuth` 高阶函数统一 Server Action 的鉴权与错误处理，确保每个新 Action 在编译期就无法跳过安全防线。
+- **基础设施层独立**：`infrastructure/` 与 `lib/` 分离——前者存放有副作用的外部适配器（bcrypt、外部 API 客户端），后者存放纯工具函数（ID 生成、crypto）。
 
 ---
 
 ## Dependencies / Assumptions
 
-- Drizzle ORM 和 postgres-js 继续作为持久化方案
-- Better Auth 的 API（`auth.api.getSession`）保持稳定
-- 当前测试体系（Vitest + @req 标注 + traceability）在重构后继续运作
-- Node.js 环境支持 TypeScript path alias（`@/domain/*`）
+- Drizzle ORM 和 postgres-js 继续作为持久化方案。
+- Better Auth 的 API（`auth.api.getSession`）保持稳定。
+- 当前测试体系（Vitest）在重构后继续运作。
+- Node.js 26 环境支持 TypeScript path alias（`@/domain/*`）。
+- Next.js 16 `cacheComponents: true` 配置可用于 Cache Components 功能。
+- Next.js 16 Middleware → Proxy 重命名已生效，`proxy.ts` 文件约定已就绪。
 
 ---
 
@@ -174,14 +161,6 @@ topic: portal-ddd-architecture
 
 ### Resolve Before Planning
 
-- [Affects Problem Frame][Product] 当前架构是否真的阻碍了交付？需要收集团队的实际痛点数据（Bug 率变化、开发者反馈、测试脆弱性事件）来证明全量 DDD 重构的 ROI
+- [Affects Problem Frame][Product] 当前架构是否真的阻碍了交付？需要收集团队的实际痛点数据（Bug 率变化、开发者反馈、测试脆弱性事件）来证明重构的 ROI。
 
-- [Affects Key Decisions][Product] 7 步迁移的机会成本——列出在这个重构期间会延迟的其他工作（OIDC 功能补全、安全加固、文档等），由团队明确排序
-
-### Deferred to Planning
-
-- [Affects R6][Technical] Drizzle schema 类型与领域类型的双向映射是否统一放在 Repository 实现中，还是抽一个独立的 Mapper 层
-- [Affects R13][Technical] 仓储集成测试用内存数据库（pglite）还是 Docker PostgreSQL
-- [Affects R2][Technical] Branded Types 是否用 `zod` 的 `.brand()` 方法还是手写 `__brand` 标记——需评估两者对 LSP/IDE 体验的影响
-- [Affects Success Criteria][Technical] `lib/` 目录从 12 降到 6 的具体方案——需逐文件审计确定每个文件的归属（迁移到 BC domain、移到 infrastructure/、保留为共享胶水代码、或删除）
-- [Affects R9][Technical] Server Actions "不超过 20 行"的约束需要 CI 检查（如 ESLint `max-lines-per-function` 规则），否则属于空洞声明
+- [Affects Key Decisions][Product] 7 步迁移的机会成本——列出在这个重构期间会延迟的其他工作，由团队明确排序。

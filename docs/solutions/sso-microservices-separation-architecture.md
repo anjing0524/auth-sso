@@ -181,10 +181,10 @@ impl JwksCache {
 }
 
 struct Gateway {
-    idp_lb: Arc<LoadBalancer<RoundRobin>>,
+    /// Portal 上游负载均衡器（Portal 已合并 IdP，统一代理入口）
     portal_lb: Arc<LoadBalancer<RoundRobin>>,
     jwks_cache: Arc<JwksCache>,
-    idp_issuer: String,
+    issuer: String,
     gateway_audience: String,
 }
 
@@ -247,7 +247,7 @@ impl ProxyHttp for Gateway {
 
         // ES256 验签（严格校验 iss 和 aud，防止跨服务 Token 重放攻击）
         let mut validation = Validation::new(Algorithm::ES256);
-        validation.set_issuer(&[&self.idp_issuer]);
+        validation.set_issuer(&[&self.issuer]);
         validation.set_audience(&[&self.gateway_audience]);
 
         match decode::<Claims>(&token, decoding_key, &validation) {
@@ -290,7 +290,7 @@ impl ProxyHttp for Gateway {
 ```rust
 // 在 main() 中启动后台异步线程，每 5 分钟刷新 JWKS 公钥
 let jwks_cache = JwksCache::new();
-let jwks_url = std::env::var("IDP_JWKS_URL")
+let jwks_url = std::env::var("PORTAL_JWKS_URL")
     .unwrap_or_else(|_| "http://localhost:4101/.well-known/jwks".to_string());
 let cache_for_task = Arc::clone(&jwks_cache);
 

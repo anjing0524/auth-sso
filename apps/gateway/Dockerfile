@@ -33,6 +33,9 @@ RUN apk add --no-cache ca-certificates
 # 从构建阶段复制二进制文件
 COPY --from=builder /app/apps/gateway/target/release/gateway /usr/local/bin/gateway
 
+# 复制默认配置文件至工作目录
+COPY apps/gateway/gateway.toml ./gateway.toml
+
 # 创建 SSL 目录挂载点
 RUN mkdir -p /etc/gateway/ssl
 

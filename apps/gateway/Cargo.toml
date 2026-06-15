@@ -24,3 +24,9 @@ reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-feature
 
 # 异步运行时（JWKS 刷新任务 + RwLock）
 tokio = { version = "1", features = ["sync", "time", "rt-multi-thread", "macros"] }
+
+# URL 编码工具（用于生成 callbackUrl）
+urlencoding = "2.1"
+
+# TOML 配置文件反序列化
+toml = "0.8"
