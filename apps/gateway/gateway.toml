@@ -13,6 +13,12 @@ ssl_port = 18443
 ssl_cert_path = "ssl/fullchain.pem"
 ssl_key_path = "ssl/privkey.pem"
 
+# 日志保存目录，默认 "logs"
+log_dir = "logs"
+
+# 日志默认输出级别
+log_level = "info"
+
 [portal]
 # Next.js BFF (Portal/IdP) 上游负载均衡代理入口地址
 upstream = "127.0.0.1:4000"

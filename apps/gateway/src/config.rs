@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::env;
 
 /// 网关服务层配置
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(default)]
 pub struct GatewayConfig {
     /// HTTP 监听端口，用于重定向
@@ -14,6 +14,10 @@ pub struct GatewayConfig {
     pub ssl_cert_path: String,
     /// SSL 密钥路径
     pub ssl_key_path: String,
+    /// 日志保存目录，默认 "logs"
+    pub log_dir: String,
+    /// 日志级别，默认 "info"
+    pub log_level: String,
 }
 
 impl Default for GatewayConfig {
@@ -23,6 +27,8 @@ impl Default for GatewayConfig {
             ssl_port: 18443,
             ssl_cert_path: "ssl/fullchain.pem".to_string(),
             ssl_key_path: "ssl/privkey.pem".to_string(),
+            log_dir: "logs".to_string(),
+            log_level: "info".to_string(),
         }
     }
 }
@@ -86,6 +92,8 @@ impl config::Source for GatewayEnvSource {
             ("GATEWAY_SSL_PORT", "gateway.ssl_port"),
             ("GATEWAY_SSL_CERT_PATH", "gateway.ssl_cert_path"),
             ("GATEWAY_SSL_KEY_PATH", "gateway.ssl_key_path"),
+            ("GATEWAY_LOG_DIR", "gateway.log_dir"),
+            ("GATEWAY_LOG_LEVEL", "gateway.log_level"),
             ("PORTAL_UPSTREAM", "portal.upstream"),
             ("PORTAL_JWKS_URL", "portal.jwks_url"),
             ("PORTAL_ISSUER", "portal.issuer"),
@@ -176,6 +184,8 @@ mod tests {
         let config = Config::default();
         assert_eq!(config.gateway.port, 18080);
         assert_eq!(config.gateway.ssl_port, 18443);
+        assert_eq!(config.gateway.log_dir, "logs");
+        assert_eq!(config.gateway.log_level, "info");
         assert_eq!(config.portal.upstream, "127.0.0.1:4000");
         assert!(
             config
@@ -197,6 +207,8 @@ mod tests {
                 ssl_port = 443
                 ssl_cert_path = "/etc/cert.pem"
                 ssl_key_path = "/etc/key.pem"
+                log_dir = "/var/log/gw"
+                log_level = "debug"
 
                 [portal]
                 upstream = "portal:4000"
@@ -210,6 +222,8 @@ mod tests {
             assert_eq!(config.gateway.port, 80);
             assert_eq!(config.gateway.ssl_port, 443);
             assert_eq!(config.gateway.ssl_cert_path, "/etc/cert.pem");
+            assert_eq!(config.gateway.log_dir, "/var/log/gw");
+            assert_eq!(config.gateway.log_level, "debug");
             assert_eq!(config.portal.upstream, "portal:4000");
             assert_eq!(
                 config.portal.public_paths.unwrap(),
@@ -228,6 +242,8 @@ mod tests {
                 env::set_var("PORTAL_UPSTREAM", "new-portal:5000");
                 env::set_var("PORTAL_PUBLIC_PATHS", "/a,/b,/c");
                 env::set_var("GATEWAY_SSL_CERT_PATH", "/env/cert.pem");
+                env::set_var("GATEWAY_LOG_DIR", "/env/log");
+                env::set_var("GATEWAY_LOG_LEVEL", "warn");
             }
 
             let config = Config::load(file_path);
@@ -239,6 +255,8 @@ mod tests {
             );
             // 验证被环境变量覆盖的证书路径
             assert_eq!(config.gateway.ssl_cert_path, "/env/cert.pem");
+            assert_eq!(config.gateway.log_dir, "/env/log");
+            assert_eq!(config.gateway.log_level, "warn");
             // 验证未被环境变量覆盖的配置依然读取自 toml
             assert_eq!(config.gateway.ssl_port, 443);
 
@@ -248,6 +266,8 @@ mod tests {
                 env::remove_var("PORTAL_UPSTREAM");
                 env::remove_var("PORTAL_PUBLIC_PATHS");
                 env::remove_var("GATEWAY_SSL_CERT_PATH");
+                env::remove_var("GATEWAY_LOG_DIR");
+                env::remove_var("GATEWAY_LOG_LEVEL");
             }
         }
 
@@ -271,6 +291,8 @@ mod tests {
             // 缺失的字段已经被默认值合并填充
             assert_eq!(config.gateway.ssl_port, 18443);
             assert_eq!(config.gateway.ssl_cert_path, "ssl/fullchain.pem");
+            assert_eq!(config.gateway.log_dir, "logs");
+            assert_eq!(config.gateway.log_level, "info");
             assert_eq!(config.portal.issuer, "http://localhost:4000");
             assert!(
                 config
