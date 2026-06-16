@@ -49,9 +49,9 @@ pub struct PortalConfig {
 impl Default for PortalConfig {
     fn default() -> Self {
         Self {
-            upstream: "127.0.0.1:4000".to_string(),
-            jwks_url: "http://127.0.0.1:4000/api/auth/.well-known/jwks".to_string(),
-            issuer: "http://localhost:4000".to_string(),
+            upstream: "127.0.0.1:4100".to_string(),
+            jwks_url: "http://127.0.0.1:4100/api/auth/.well-known/jwks".to_string(),
+            issuer: "http://localhost:4100".to_string(),
             public_paths: Some(vec![
                 "/login".to_string(),
                 "/register".to_string(),
@@ -133,7 +133,7 @@ mod tests {
         assert_eq!(config.gateway.ssl_port, 18443);
         assert_eq!(config.gateway.log_dir, "logs");
         assert_eq!(config.gateway.log_level, "info");
-        assert_eq!(config.portal.upstream, "127.0.0.1:4000");
+        assert_eq!(config.portal.upstream, "127.0.0.1:4100");
         assert!(
             config
                 .portal
@@ -204,7 +204,7 @@ mod tests {
             assert_eq!(config.gateway.ssl_cert_path, "ssl/fullchain.pem");
             assert_eq!(config.gateway.log_dir, "logs");
             assert_eq!(config.gateway.log_level, "info");
-            assert_eq!(config.portal.issuer, "http://localhost:4000");
+            assert_eq!(config.portal.issuer, "http://localhost:4100");
             assert!(
                 config
                     .portal
