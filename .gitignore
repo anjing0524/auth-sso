@@ -29,3 +29,4 @@ out
 
 # gateway
 apps/gateway/target
+apps/gateway/ssl

@@ -10,8 +10,8 @@ port = 18080
 ssl_port = 18443
 
 # TLS/SSL 证书文件路径
-ssl_cert_path = "/tmp/gateway/ssl/fullchain.pem"
-ssl_key_path = "/tmp/gateway/ssl/privkey.pem"
+ssl_cert_path = "ssl/fullchain.pem"
+ssl_key_path = "ssl/privkey.pem"
 
 [portal]
 # Next.js BFF (Portal/IdP) 上游负载均衡代理入口地址

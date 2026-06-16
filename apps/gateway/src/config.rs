@@ -21,8 +21,8 @@ impl Default for GatewayConfig {
         Self {
             port: 18080,
             ssl_port: 18443,
-            ssl_cert_path: "/tmp/gateway/ssl/fullchain.pem".to_string(),
-            ssl_key_path: "/tmp/gateway/ssl/privkey.pem".to_string(),
+            ssl_cert_path: "ssl/fullchain.pem".to_string(),
+            ssl_key_path: "ssl/privkey.pem".to_string(),
         }
     }
 }
@@ -270,10 +270,7 @@ mod tests {
 
             // 缺失的字段已经被默认值合并填充
             assert_eq!(config.gateway.ssl_port, 18443);
-            assert_eq!(
-                config.gateway.ssl_cert_path,
-                "/tmp/gateway/ssl/fullchain.pem"
-            );
+            assert_eq!(config.gateway.ssl_cert_path, "ssl/fullchain.pem");
             assert_eq!(config.portal.issuer, "http://localhost:4000");
             assert!(
                 config
