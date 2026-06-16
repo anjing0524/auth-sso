@@ -847,7 +847,6 @@ dependencies = [
  "config",
  "cookie",
  "jsonwebtoken",
- "log",
  "openssl",
  "pingora",
  "pingora-core",

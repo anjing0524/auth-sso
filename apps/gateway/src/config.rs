@@ -1,6 +1,6 @@
-use log::{error, info};
 use serde::{Deserialize, Serialize};
 use std::env;
+use tracing::{error, info};
 
 /// 网关服务层配置
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
