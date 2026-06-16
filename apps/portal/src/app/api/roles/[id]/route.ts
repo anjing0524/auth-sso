@@ -6,7 +6,7 @@ import { db, schema } from '@/infrastructure/db';
 import { eq } from 'drizzle-orm';
 import { withPermission } from '@/lib/auth';
 import { clearUsersPermissionCache } from '@/lib/permissions';
-import { applyRoleUpdate, toDomainRole, guardNotSystemRole } from '@/domain/role/role';
+import { applyRoleUpdate, roleToUpdateRow, toDomainRole, guardNotSystemRole } from '@/domain/role/role';
 import { UpdateRoleInputSchema } from '@/domain/role/types';
 import { EntityNotFoundError } from '@/domain/shared/errors';
 import { mapDomainError } from '@/domain/shared/error-mapping';
@@ -42,11 +42,8 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     guardNotSystemRole(role);
 
     const updated = applyRoleUpdate(role, parsed.data);
-    await db.update(schema.roles).set({
-      name: updated.name, description: updated.description,
-      dataScopeType: updated.dataScopeType, sort: updated.sort,
-      status: updated.status, updatedAt: new Date(),
-    }).where(eq(schema.roles.id, id));
+    await db.update(schema.roles).set(roleToUpdateRow(updated))
+      .where(eq(schema.roles.id, id));
 
     const boundUsers = await db.select({ userId: schema.userRoles.userId })
       .from(schema.userRoles).where(eq(schema.userRoles.roleId, id));

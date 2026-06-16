@@ -25,6 +25,15 @@ import { generateId } from '@/lib/crypto';
 import { clearUsersPermissionCache } from '@/lib/permissions';
 import type { ApiResponse } from '@auth-sso/contracts';
 
+/** 获取绑定某角色的所有用户 ID，并清除其权限缓存 */
+async function invalidateRoleBoundUsersCache(roleId: string): Promise<void> {
+  const boundUsers = await db.select({ userId: schema.userRoles.userId })
+    .from(schema.userRoles).where(eq(schema.userRoles.roleId, roleId));
+  if (boundUsers.length > 0) {
+    await clearUsersPermissionCache(boundUsers.map(u => u.userId));
+  }
+}
+
 /** 创建角色 */
 export const createRoleAction = withAuth(
   { permissions: ['role:create'] },
@@ -69,12 +78,7 @@ export const updateRoleAction = withAuth(
         .where(eq(schema.roles.id, roleId));
     });
 
-    // 清除所有绑定该角色用户的权限缓存
-    const boundUsers = await db.select({ userId: schema.userRoles.userId })
-      .from(schema.userRoles).where(eq(schema.userRoles.roleId, roleId));
-    if (boundUsers.length > 0) {
-      await clearUsersPermissionCache(boundUsers.map(u => u.userId));
-    }
+    await invalidateRoleBoundUsersCache(roleId);
 
     revalidatePath('/roles');
     return { success: true, data: { id: roleId }, message: '角色更新成功' };
@@ -91,6 +95,7 @@ export const deleteRoleAction = withAuth(
     const role = toDomainRole(row);
     guardNotSystemRole(role);
 
+    // 事务前预先获取绑定用户，事务后清除缓存
     const boundUsers = await db.select({ userId: schema.userRoles.userId })
       .from(schema.userRoles).where(eq(schema.userRoles.roleId, roleId));
 

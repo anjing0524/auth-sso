@@ -1,4 +1,5 @@
 import type { EntityStatus, DataScopeType } from '@auth-sso/contracts';
+import { ENTITY_ACTIVE, DATA_SCOPE_SELF } from '@auth-sso/contracts';
 import type { CreateRoleInput, Role } from './types';
 import { BusinessRuleViolationError } from '../shared/errors';
 
@@ -46,9 +47,9 @@ export function createRole(
     name: input.name,
     code: input.code,
     description: input.description ?? null,
-    dataScopeType: input.dataScopeType ?? 'SELF',
+    dataScopeType: input.dataScopeType ?? DATA_SCOPE_SELF,
     isSystem: false,
-    status: 'ACTIVE',
+    status: ENTITY_ACTIVE,
     sort: input.sort,
     createdAt: Temporal.Now.instant(),
   };

@@ -10,18 +10,24 @@ port = 18080
 ssl_port = 18443
 
 # TLS/SSL 证书文件路径
-ssl_cert_path = "/tmp/gateway/ssl/fullchain.pem"
-ssl_key_path = "/tmp/gateway/ssl/privkey.pem"
+ssl_cert_path = "ssl/fullchain.pem"
+ssl_key_path = "ssl/privkey.pem"
+
+# 日志保存目录，默认 "logs"
+log_dir = "logs"
+
+# 日志默认输出级别
+log_level = "info"
 
 [portal]
 # Next.js BFF (Portal/IdP) 上游负载均衡代理入口地址
-upstream = "127.0.0.1:4000"
+upstream = "127.0.0.1:4100"
 
 # OIDC 公钥拉取端点，定时刷新公钥用于离线解密验签
-jwks_url = "http://127.0.0.1:4000/api/auth/.well-known/jwks"
+jwks_url = "http://127.0.0.1:4100/api/auth/jwks"
 
 # OIDC 声明 Issuer (iss) 校验标志
-issuer = "http://localhost:4000"
+issuer = "http://localhost:4100"
 
 # 免鉴权直接放行的公开路径白名单前缀列表
 public_paths = [

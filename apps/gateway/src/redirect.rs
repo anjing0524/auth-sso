@@ -1,8 +1,8 @@
 use async_trait::async_trait;
-use log::info;
 use pingora_core::prelude::*;
 use pingora_http::ResponseHeader;
 use pingora_proxy::{ProxyHttp, Session};
+use tracing::info;
 
 /// 根据当前请求的主机、路径、Query 参数及 SSL 端口，生成 HTTPS 重定向 Location 网址
 pub fn generate_redirect_location(

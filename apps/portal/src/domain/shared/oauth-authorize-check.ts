@@ -5,6 +5,8 @@
  * @module domain/shared/oauth-authorize-check
  */
 
+import { ENTITY_ACTIVE, ADMIN_ROLE_CODES } from '@auth-sso/contracts';
+
 export interface AuthorizationInput {
   userId: string;
   clientId: string;
@@ -18,7 +20,7 @@ export interface AuthorizationResult {
   message?: string;
 }
 
-const ADMIN_ROLES = new Set(['SUPER_ADMIN', 'ADMIN']);
+const ADMIN_ROLES = new Set<string>(ADMIN_ROLE_CODES);
 
 /**
  * 检查用户是否有权访问指定的 OAuth Client
@@ -32,7 +34,7 @@ const ADMIN_ROLES = new Set(['SUPER_ADMIN', 'ADMIN']);
 export function checkUserClientAccess(input: AuthorizationInput): AuthorizationResult {
   const { clientId, roles, roleClients = [] } = input;
 
-  const activeRoles = roles.filter(r => r.status === 'ACTIVE');
+  const activeRoles = roles.filter(r => r.status === ENTITY_ACTIVE);
   const activeRoleIds = new Set(activeRoles.map(r => r.id));
 
   if (activeRoles.length === 0) {

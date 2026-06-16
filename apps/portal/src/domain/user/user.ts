@@ -1,4 +1,5 @@
 import type { UserStatus } from '@auth-sso/contracts';
+import { USER_ACTIVE, USER_DELETED } from '@auth-sso/contracts';
 import { type CreateUserInput, type User } from './types';
 import { BusinessRuleViolationError } from '../shared/errors';
 
@@ -51,7 +52,7 @@ export function createUser(
     username: input.username,
     email: input.email,
     name: input.name,
-    status: 'ACTIVE',
+    status: USER_ACTIVE,
     deptId: input.deptId || null,
     deptName: null,
     avatarUrl: null,
@@ -67,10 +68,10 @@ export function createUser(
  * @throws BusinessRuleViolationError 当用户已被逻辑删除时
  */
 export function toggleUserStatus(user: User): User {
-  if (user.status === 'DELETED') {
+  if (user.status === USER_DELETED) {
     throw new BusinessRuleViolationError('已逻辑删除的用户无法操作状态');
   }
-  const newStatus: User['status'] = user.status === 'ACTIVE' ? 'DISABLED' : 'ACTIVE';
+  const newStatus: User['status'] = user.status === USER_ACTIVE ? 'DISABLED' : USER_ACTIVE;
   return { ...user, status: newStatus };
 }
 
@@ -82,10 +83,10 @@ export function toggleUserStatus(user: User): User {
  * @throws BusinessRuleViolationError 当用户已被删除时
  */
 export function deleteUser(user: User): User {
-  if (user.status === 'DELETED') {
+  if (user.status === USER_DELETED) {
     throw new BusinessRuleViolationError('用户已被删除，不可重复操作');
   }
-  return { ...user, status: 'DELETED' as const };
+  return { ...user, status: USER_DELETED };
 }
 
 /**
@@ -101,7 +102,7 @@ export function applyUserUpdate(
   user: User,
   patch: Partial<Pick<User, 'name' | 'email' | 'status' | 'deptId' | 'avatarUrl'>>
 ): User {
-  if (user.status === 'DELETED') {
+  if (user.status === USER_DELETED) {
     throw new BusinessRuleViolationError('无法更新已逻辑删除的用户');
   }
   return {

@@ -1,6 +1,5 @@
 use async_trait::async_trait;
 use jsonwebtoken::{Algorithm, Validation, decode, decode_header};
-use log::{debug, error, info, warn};
 use pingora_core::prelude::*;
 use pingora_http::{RequestHeader, ResponseHeader};
 use pingora_load_balancing::LoadBalancer;
@@ -8,6 +7,7 @@ use pingora_load_balancing::selection::RoundRobin;
 use pingora_proxy::{ProxyHttp, Session};
 use std::collections::HashSet;
 use std::sync::Arc;
+use tracing::{debug, error, info, warn};
 
 use crate::claims::Claims;
 use crate::jwks::JwksCache;

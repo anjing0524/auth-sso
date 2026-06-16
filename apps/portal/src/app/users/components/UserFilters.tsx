@@ -5,7 +5,7 @@
  * 采用 URL 查询参数同步过滤状态，天然支持状态分享与浏览器后退
  */
 
-import React, { useState, useEffect, useTransition } from 'react';
+import { useState, useEffect, useTransition } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { Search, X } from 'lucide-react';
 import { Input } from '@/components/ui/input';
@@ -36,13 +36,9 @@ export default function UserFilters({
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
 
-  // 本地 keyword 状态用于快速响应用户输入输入，防抖后同步至 URL
+  // 本地 keyword 状态用于快速响应用户输入，防抖后同步至 URL
+  // 组件通过 key={keyword} 在父组件中强制 re-mount 以响应外部 URL 变化
   const [keyword, setKeyword] = useState(initialKeyword);
-
-  // 当外部传入的初始关键字变化时，同步本地状态
-  useEffect(() => {
-    setKeyword(initialKeyword);
-  }, [initialKeyword]);
 
   /**
    * 辅助方法：生成更新 query 参数后的 URL

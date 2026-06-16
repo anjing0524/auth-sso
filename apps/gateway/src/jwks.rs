@@ -1,9 +1,9 @@
 use jsonwebtoken::DecodingKey;
 use jsonwebtoken::jwk::JwkSet;
-use log::info;
 use std::collections::HashMap;
 use std::fmt;
 use std::sync::Arc;
+use tracing::info;
 
 /// JWKS 获取与解析过程中的强类型错误定义
 #[derive(Debug)]

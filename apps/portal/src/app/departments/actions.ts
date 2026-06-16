@@ -14,9 +14,8 @@ import {
   createDepartment,
   departmentToInsertRow,
   departmentToUpdateRow,
-  applyDepartmentUpdate,
+  applyDepartmentUpdateWithCircularCheck,
   toDomainDepartment,
-  validateNoCircularReference,
 } from '@/domain/department/department';
 import {
   CreateDepartmentInputSchema,
@@ -60,16 +59,10 @@ export const updateDepartmentAction = withAuth(
       if (!row) throw new EntityNotFoundError('Department', deptId);
 
       const dept = toDomainDepartment(row);
+      // 领域纯函数内部处理 parentId 变更检测与环形引用校验
+      const allDepts = await tx.query.departments.findMany();
+      const updated = applyDepartmentUpdateWithCircularCheck(dept, parsed.data, allDepts);
 
-      // 检查环形引用（如果修改了 parentId）
-      if (parsed.data.parentId !== undefined && parsed.data.parentId !== dept.parentId) {
-        if (parsed.data.parentId) {
-          const allDepts = await tx.query.departments.findMany();
-          validateNoCircularReference(dept.id, parsed.data.parentId, allDepts);
-        }
-      }
-
-      const updated = applyDepartmentUpdate(dept, parsed.data);
       await tx.update(schema.departments).set(departmentToUpdateRow(updated))
         .where(eq(schema.departments.id, dept.id));
     });
