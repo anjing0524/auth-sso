@@ -5,7 +5,6 @@ edition = "2024"
 
 [dependencies]
 async-trait = "0.1.81"
-env_logger = "0.11.5"
 log = "0.4.22"
 pingora = { version = "0.8.0", features = ["openssl"] }
 pingora-core = { version = "0.8.0", features = ["openssl"] }
@@ -13,6 +12,11 @@ pingora-http = "0.8.0"
 pingora-load-balancing = { version = "0.8.0", features = ["openssl"] }
 pingora-proxy = { version = "0.8.0", features = ["openssl"] }
 openssl = { version = "0.10.66", features = ["vendored"] }
+
+# Tracing 高性能每日滚动日志
+tracing = "0.1.40"
+tracing-subscriber = { version = "0.3.18", features = ["env-filter", "fmt", "ansi"] }
+tracing-appender = "0.2.3"
 
 # JWT 验签：ES256 JWKS 非对称验签
 jsonwebtoken = "9.3.0"
