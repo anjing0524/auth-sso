@@ -5,9 +5,9 @@
  * DELETE /api/roles/[id]/data-scopes - 移除特定部门关联
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { db, schema } from '@/lib/db';
+import { db, schema } from '@/infrastructure/db';
 import { eq, and } from 'drizzle-orm';
-import { withPermission } from '@/lib/auth-middleware';
+import { withPermission } from '@/lib/auth';
 import { generateUUID } from '@/lib/crypto';
 import { COMMON_ERRORS, ROLE_ERRORS } from '@auth-sso/contracts';
 

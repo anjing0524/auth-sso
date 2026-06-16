@@ -11,14 +11,21 @@ export type UserStatus = typeof USER_STATUS_VALUES[number];
 export const ENTITY_STATUS_VALUES = ['ACTIVE', 'DISABLED'] as const;
 export type EntityStatus = typeof ENTITY_STATUS_VALUES[number];
 
-// 数据范围类型
-export type DataScopeType = 'ALL' | 'DEPT' | 'DEPT_AND_SUB' | 'SELF' | 'CUSTOM';
+// 数据范围类型 — 唯一真相源
+export const DATA_SCOPE_TYPE_VALUES = ['ALL', 'DEPT', 'DEPT_AND_SUB', 'SELF', 'CUSTOM'] as const;
+export type DataScopeType = typeof DATA_SCOPE_TYPE_VALUES[number];
 
-// 权限类型
-export type PermissionType = 'MENU' | 'API' | 'DATA';
+// 权限类型 — 唯一真相源
+export const PERMISSION_TYPE_VALUES = ['MENU', 'API', 'DATA'] as const;
+export type PermissionType = typeof PERMISSION_TYPE_VALUES[number];
 
-// Client 类型
-export type ClientType = 'confidential' | 'public';
+// 菜单类型 — 唯一真相源
+export const MENU_TYPE_VALUES = ['DIRECTORY', 'MENU', 'BUTTON'] as const;
+export type MenuType = typeof MENU_TYPE_VALUES[number];
+
+// Client 类型 — 唯一真相源值数组
+export const CLIENT_TYPE_VALUES = ['confidential', 'public'] as const;
+export type ClientType = typeof CLIENT_TYPE_VALUES[number];
 
 // Grant Type
 export type GrantType = 'authorization_code' | 'refresh_token';
@@ -35,14 +42,14 @@ export type LoginEventType = 'LOGIN_SUCCESS' | 'LOGIN_FAILED' | 'LOGOUT';
 // 用户身份源
 export type IdentityProvider = 'password';
 
-// 外部 ID 前缀
+// 外部 ID 前缀（与 domain 工厂函数保持一致）
 export const PUBLIC_ID_PREFIX = {
-  USER: 'u_',
-  DEPARTMENT: 'd_',
-  ROLE: 'r_',
-  PERMISSION: 'p_',
-  MENU: 'm_',
-  CLIENT: 'c_',
+  USER: 'user_',
+  DEPARTMENT: 'dept_',
+  ROLE: 'role_',
+  PERMISSION: 'perm_',
+  MENU: 'menu_',
+  CLIENT: 'cli_',
 } as const;
 
 // 用户基础信息
@@ -98,23 +105,21 @@ export interface MenuBase {
   status: EntityStatus;
 }
 
-// Client 基础信息
+// Client 基础信息（与 domain Client entity 对齐）
 export interface ClientBase {
   id: string;
   name: string;
   clientId: string;
-  clientType: ClientType;
   homepageUrl?: string;
   status: EntityStatus;
 }
 
-// 权限上下文
-export interface PermissionContext {
-  roles: string[];
+// 用户权限上下文（由 Portal lib/permissions.ts 查询 DB/Redis 后填充）
+export interface UserPermissionContext {
+  roles: Array<{ id: string; code: string; name: string }>;
   permissions: string[];
-  menus: string[];
-  dataScope: DataScopeType;
-  dataScopeDepts?: string[];
+  dataScopeType: DataScopeType;
+  deptId?: string;
 }
 
 // Session 信息

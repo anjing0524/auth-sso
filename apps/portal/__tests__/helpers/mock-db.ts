@@ -53,6 +53,20 @@ export function createMockDb(options: { schema?: Record<string, any> } = {}) {
         if (prop === 'execute') {
           return () => { if (_shouldThrow) throw _shouldThrow; return Promise.resolve(_executeResult); };
         }
+        if (prop === 'query') {
+          return new Proxy({} as any, {
+            get(_t2, _p2: string) {
+              return {
+                findFirst: () => {
+                  const c: any = () => {};
+                  c.then = (resolve: Function) => resolve(_queryResult[0] ?? null);
+                  return c;
+                },
+                findMany: () => createChain(),
+              };
+            },
+          });
+        }
         return undefined;
       },
     });
@@ -77,6 +91,20 @@ export function createMockDb(options: { schema?: Record<string, any> } = {}) {
       }
       if (prop === 'execute') {
         return () => { if (_shouldThrow) throw _shouldThrow; return Promise.resolve(_executeResult); };
+      }
+      if (prop === 'query') {
+        return new Proxy({} as any, {
+          get(_t2, _prop2: string) {
+            return {
+              findFirst: () => {
+                const c: any = () => {};
+                c.then = (resolve: Function) => resolve(_queryResult[0] ?? null);
+                return c;
+              },
+              findMany: () => createChain(),
+            };
+          },
+        });
       }
       if (prop === 'transaction') {
         return async (cb: (tx: any) => Promise<any>) => cb(createTx());

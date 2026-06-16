@@ -7,7 +7,14 @@ import {
   integer,
 } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
-import { USER_STATUS_VALUES, ENTITY_STATUS_VALUES } from '@auth-sso/contracts';
+import {
+  USER_STATUS_VALUES,
+  ENTITY_STATUS_VALUES,
+  DATA_SCOPE_TYPE_VALUES,
+  PERMISSION_TYPE_VALUES,
+  MENU_TYPE_VALUES,
+  CLIENT_TYPE_VALUES,
+} from '@auth-sso/contracts';
 
 // ============================================
 // 枚举定义 (严格对齐 Portal)
@@ -15,17 +22,11 @@ import { USER_STATUS_VALUES, ENTITY_STATUS_VALUES } from '@auth-sso/contracts';
 
 export const userStatusEnum = pgEnum('user_status', USER_STATUS_VALUES as unknown as [string, ...string[]]);
 export const entityStatusEnum = pgEnum('entity_status', ENTITY_STATUS_VALUES as unknown as [string, ...string[]]);
-export const dataScopeTypeEnum = pgEnum('data_scope_type', [
-  'ALL',
-  'DEPT',
-  'DEPT_AND_SUB',
-  'SELF',
-  'CUSTOM',
-]);
-export const permissionTypeEnum = pgEnum('permission_type', ['MENU', 'API', 'DATA']);
-export const menuTypeEnum = pgEnum('menu_type', ['DIRECTORY', 'MENU', 'BUTTON']);
-export const clientTypeEnum = pgEnum('client_type', ['confidential', 'public']);
-export const clientStatusEnum = pgEnum('client_status', ['ACTIVE', 'DISABLED']);
+export const dataScopeTypeEnum = pgEnum('data_scope_type', DATA_SCOPE_TYPE_VALUES as unknown as [string, ...string[]]);
+export const permissionTypeEnum = pgEnum('permission_type', PERMISSION_TYPE_VALUES as unknown as [string, ...string[]]);
+export const menuTypeEnum = pgEnum('menu_type', MENU_TYPE_VALUES as unknown as [string, ...string[]]);
+export const clientTypeEnum = pgEnum('client_type', CLIENT_TYPE_VALUES as unknown as [string, ...string[]]);
+export const clientStatusEnum = pgEnum('client_status', ENTITY_STATUS_VALUES as unknown as [string, ...string[]]);
 
 // ============================================
 // 核心用户表
@@ -297,7 +298,7 @@ export const menus = pgTable('menus', {
   visible: boolean('visible').default(true),
   sort: integer('sort').default(0),
   menuType: menuTypeEnum('menu_type').notNull().default('MENU'),
-  status: text('status').notNull().default('ACTIVE'),
+  status: entityStatusEnum('status').notNull().default('ACTIVE'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
@@ -306,14 +307,45 @@ export const menus = pgTable('menus', {
 // 编译期类型同步守卫 (Domain ↔ Drizzle 不漂移)
 // ============================================
 import type { User } from '@/domain/user/types';
-import type { UserStatus } from '@auth-sso/contracts';
+import type { UserStatus, EntityStatus, DataScopeType, PermissionType, MenuType } from '@auth-sso/contracts';
+import type { Department } from '@/domain/department/types';
+import type { Role } from '@/domain/role/types';
+import type { Permission } from '@/domain/permission/types';
+import type { Menu } from '@/domain/menu/types';
+import type { Client } from '@/domain/client/types';
 
 type UserRow = typeof users.$inferSelect;
+type DeptRow = typeof departments.$inferSelect;
+type RoleRow = typeof roles.$inferSelect;
+type PermRow = typeof permissions.$inferSelect;
+type MenuRow = typeof menus.$inferSelect;
+type ClientRow = typeof clients.$inferSelect;
 
-// 守卫 1：Drizzle 行类型必须兼容 Domain 实体（新增 DB 列时此处报错 → 提示更新 interface User）
-// deptName: JOIN 计算字段、createdAt: Date vs Temporal.Instant 类型差异，排除
+// 守卫 1：Drizzle 行类型必须兼容 Domain 实体（新增 DB 列时此处报错 → 提示更新 interface）
 type _UserRowCompatible = UserRow extends Omit<User, 'deptName' | 'createdAt'> ? true : never;
+type _DeptRowCompatible = DeptRow extends Omit<Department, 'createdAt'> ? true : never;
+type _RoleRowCompatible = RoleRow extends Omit<Role, 'createdAt'> ? true : never;
+type _PermRowCompatible = PermRow extends Omit<Permission, 'createdAt'> ? true : never;
+type _MenuRowCompatible = MenuRow extends Omit<Menu, 'createdAt'> ? true : never;
+type _ClientRowCompatible = ClientRow extends Omit<Client, 'createdAt'> ? true : never;
 
-// 守卫 2：Drizzle 物理枚举取值必须与 contracts 枚举值完全对齐
+// 守卫 2：Drizzle 物理枚举取值必须与 contracts 枚举值完全对齐（双向穷举检查）
 type _UserStatusInRow = UserRow['status'] extends UserStatus ? true : never;
 type _UserStatusInDomain = UserStatus extends UserRow['status'] ? true : never;
+type _DeptStatusInRow = DeptRow['status'] extends EntityStatus ? true : never;
+type _DeptStatusInDomain = EntityStatus extends DeptRow['status'] ? true : never;
+type _RoleStatusInRow = RoleRow['status'] extends EntityStatus ? true : never;
+type _RoleStatusInDomain = EntityStatus extends RoleRow['status'] ? true : never;
+type _RoleScopeInRow = RoleRow['dataScopeType'] extends DataScopeType ? true : never;
+type _RoleScopeInDomain = DataScopeType extends RoleRow['dataScopeType'] ? true : never;
+type _PermStatusInRow = PermRow['status'] extends EntityStatus ? true : never;
+type _PermStatusInDomain = EntityStatus extends PermRow['status'] ? true : never;
+type _PermTypeInRow = PermRow['type'] extends PermissionType ? true : never;
+type _PermTypeInDomain = PermissionType extends PermRow['type'] ? true : never;
+type _MenuStatusInRow = MenuRow['status'] extends EntityStatus ? true : never;
+type _MenuStatusInDomain = EntityStatus extends MenuRow['status'] ? true : never;
+type _MenuTypeInRow = MenuRow['menuType'] extends MenuType ? true : never;
+type _MenuTypeInDomain = MenuType extends MenuRow['menuType'] ? true : never;
+// Client 复用 EntityStatus（client_status 枚举与 entity_status 同源）
+type _ClientStatusInRow = ClientRow['status'] extends EntityStatus ? true : never;
+type _ClientStatusInDomain = EntityStatus extends ClientRow['status'] ? true : never;

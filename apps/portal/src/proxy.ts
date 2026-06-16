@@ -50,7 +50,7 @@ export function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // API 路由放行，由 API 层 (auth-middleware) 自行进行数据库/细粒度鉴权
+  // API 路由放行，由 API 层 (lib/auth) 自行进行数据库/细粒度鉴权
   if (pathname.startsWith('/api/')) {
     return NextResponse.next();
   }

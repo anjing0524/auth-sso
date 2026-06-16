@@ -87,7 +87,7 @@ vi.mock('@/lib/auth-client', () => ({
   },
 }));
 
-vi.mock('@/lib/db', () => ({
+vi.mock('@/infrastructure/db', () => ({
   db: mockDb,
   schema: {
     menus: {},

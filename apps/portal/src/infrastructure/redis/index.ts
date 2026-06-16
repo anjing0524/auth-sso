@@ -1,8 +1,10 @@
 /**
- * Redis 客户端配置
- * 用于 Portal Session 存储
+ * Redis 客户端配置 (Infrastructure Layer)
+ * 用于 Portal Session 存储与权限缓存
  *
  * 统一使用 ioredis 连接 Redis
+ *
+ * @module infrastructure/redis
  */
 import Redis from 'ioredis';
 
@@ -10,7 +12,7 @@ import Redis from 'ioredis';
  * 统一的 Redis 客户端接口
  * 定义 Portal 需要的方法
  */
-interface RedisClient {
+export interface RedisClient {
   get(key: string): Promise<string | null>;
   setex(key: string, seconds: number, value: string): Promise<'OK' | null>;
   del(key: string): Promise<number>;

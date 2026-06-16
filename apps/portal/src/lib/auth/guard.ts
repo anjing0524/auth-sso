@@ -3,17 +3,17 @@ import 'server-only';
 /**
  * Server Action 鉴权与错误映射高阶函数 (Auth Guard Wrapper)
  *
- * 职责：为 Server Action 统一施加“精细鉴权 + 领域错误映射”两道防线，
+ * 职责：为 Server Action 统一施加"精细鉴权 + 领域错误映射"两道防线，
  * 使每个写 Controller 在编译期就无法跳过安全检查（R21 / AE7 / §8.3 第三层防御）。
  *
  * 抽取样板后，被包装的业务函数只需专注：
  *   Zod 门禁校验 → 领域纯函数 → Drizzle 直调
  * 从而将 Controller 函数体收敛至 ≤ 20 行（R9 / 红线 #3）。
  *
- * @module lib/auth-guard
+ * @module lib/auth/guard
  */
 import { headers } from 'next/headers';
-import { checkPermission, type PermissionCheckOptions } from '@/lib/auth-middleware';
+import { checkPermission, type PermissionCheckOptions } from './check-permission';
 import { mapDomainError } from '@/domain/shared/error-mapping';
 import type { ApiResponse } from '@auth-sso/contracts';
 

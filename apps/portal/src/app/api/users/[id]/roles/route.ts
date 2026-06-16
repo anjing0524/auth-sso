@@ -5,9 +5,9 @@
  * DELETE /api/users/[id]/roles - 移除用户的指定角色
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { db, schema } from '@/lib/db';
+import { db, schema } from '@/infrastructure/db';
 import { eq, or, desc, and } from 'drizzle-orm';
-import { withPermission } from '@/lib/auth-middleware';
+import { withPermission } from '@/lib/auth';
 import crypto from 'crypto';
 import { clearUserPermissionCache } from '@/lib/permissions';
 import { COMMON_ERRORS } from '@auth-sso/contracts';

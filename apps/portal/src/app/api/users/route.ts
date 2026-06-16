@@ -3,14 +3,14 @@
  * @module apps/portal/api/users
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { db, schema } from '@/lib/db';
+import { db, schema } from '@/infrastructure/db';
 import { eq, desc, and, sql as drizzleSql } from 'drizzle-orm';
-import { withPermission, getDataScopeFilter } from '@/lib/auth-middleware';
+import { withPermission, getDataScopeFilter } from '@/lib/auth';
 import {
   USER_LIST_COLUMNS,
   buildUserListConditions,
   isScopeDenied,
-} from '@/lib/user-queries';
+} from '@/db/user-queries';
 
 export const runtime = 'nodejs';
 

@@ -34,7 +34,7 @@ import {
   TableRow 
 } from '@/components/ui/table';
 
-import { db, schema } from '@/lib/db';
+import { db, schema } from '@/infrastructure/db';
 import { eq, ne, desc, sql } from 'drizzle-orm';
 
 export const revalidate = 0; // 不缓存，每次都动态计算以体现最新状态

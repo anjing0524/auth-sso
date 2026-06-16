@@ -12,15 +12,15 @@
  */
 
 import { cacheLife, cacheTag } from 'next/cache';
-import { db, schema } from '@/lib/db';
+import { db, schema } from '@/infrastructure/db';
 import { eq, desc, and, sql as drizzleSql } from 'drizzle-orm';
-import { getDataScopeFilter } from '@/lib/auth-middleware';
+import { getDataScopeFilter } from '@/lib/auth';
 import { UserStatus } from '@auth-sso/contracts';
 import {
   USER_LIST_COLUMNS,
   buildUserListConditions,
   isScopeDenied,
-} from '@/lib/user-queries';
+} from '@/db/user-queries';
 
 /**
  * 分页与过滤获取用户列表

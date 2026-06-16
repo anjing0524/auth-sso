@@ -1,7 +1,7 @@
-import { auth } from '@/lib/auth';
+import { auth } from '@/infrastructure/auth/auth-instance';
 import { toNextJsHandler } from 'better-auth/next-js';
 import { NextRequest, NextResponse } from 'next/server';
-import { db, schema } from '@/lib/db';
+import { db, schema } from '@/infrastructure/db';
 import { eq, and, inArray } from 'drizzle-orm';
 
 export const runtime = 'nodejs';

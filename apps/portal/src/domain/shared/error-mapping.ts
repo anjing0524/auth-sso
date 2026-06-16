@@ -12,6 +12,7 @@ import {
   BusinessRuleViolationError,
   DuplicateEntityError,
 } from './errors';
+import { COMMON_ERRORS } from '@auth-sso/contracts';
 
 /** 错误映射结果，可直接用于构造 HTTP 响应 */
 interface ErrorMapping {
@@ -44,5 +45,5 @@ export function mapDomainError(err: unknown): ErrorMapping {
   }
   // 未知异常统一 500（记录日志便于排查）
   console.error('[mapDomainError] 未预期的异常:', err);
-  return { status: 500, error: 'INTERNAL_ERROR', message: '服务器内部错误' };
+  return { status: 500, error: COMMON_ERRORS.INTERNAL_ERROR, message: '服务器内部错误' };
 }

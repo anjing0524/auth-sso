@@ -28,7 +28,7 @@ const { mockGetRedis, mockStore } = vi.hoisted(() => {
 });
 
 // Mock Redis 接口
-vi.mock('@/lib/redis', () => ({
+vi.mock('@/infrastructure/redis', () => ({
   getRedis: () => mockGetRedis(),
 }));
 

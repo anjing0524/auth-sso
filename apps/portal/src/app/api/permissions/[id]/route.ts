@@ -6,9 +6,9 @@
  * DELETE /api/permissions/[id] - 删除权限项 (增加 try-catch 安全网)
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { db, schema } from '@/lib/db';
+import { db, schema } from '@/infrastructure/db';
 import { eq, or } from 'drizzle-orm';
-import { withPermission } from '@/lib/auth-middleware';
+import { withPermission } from '@/lib/auth';
 import { COMMON_ERRORS } from '@auth-sso/contracts';
 
 export const runtime = 'nodejs';

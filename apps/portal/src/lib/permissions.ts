@@ -2,20 +2,13 @@
  * 权限上下文工具函数
  * 获取用户的角色和权限，具备高性能的 Redis 旁路缓存支持
  */
-import { db, schema } from '@/lib/db';
+import { db, schema } from '@/infrastructure/db';
 import { eq, inArray, and } from 'drizzle-orm';
-import { getRedis } from './redis';
+import { getRedis, type RedisClient } from '@/infrastructure/redis';
+import type { DataScopeType, UserPermissionContext } from '@auth-sso/contracts';
 
-export interface UserPermissionContext {
-  roles: Array<{
-    id: string;
-    code: string;
-    name: string;
-  }>;
-  permissions: string[]; // 权限编码列表
-  dataScopeType: 'ALL' | 'DEPT' | 'DEPT_AND_SUB' | 'SELF' | 'CUSTOM';
-  deptId?: string;
-}
+// Re-export 以便其他模块统一导入
+export type { UserPermissionContext };
 
 /**
  * 获取用户的权限上下文
@@ -24,7 +17,7 @@ export interface UserPermissionContext {
  */
 export async function getUserPermissionContext(userId: string): Promise<UserPermissionContext | null> {
   const cacheKey = `portal:user_perms:${userId}`;
-  let redis = null;
+  let redis: RedisClient | null = null;
 
   // 1. 尝试从 Redis 缓存中获取数据
   try {
@@ -105,11 +98,11 @@ export async function getUserPermissionContext(userId: string): Promise<UserPerm
       );
 
     // 5. 确定数据范围类型 (多角色场景下取最高级别的数据权限)
-    const dataScopeTypes = ['ALL', 'DEPT_AND_SUB', 'DEPT', 'CUSTOM', 'SELF'];
-    let maxDataScopeType: string = 'SELF';
+    const dataScopeTypes: DataScopeType[] = ['ALL', 'DEPT_AND_SUB', 'DEPT', 'CUSTOM', 'SELF'];
+    let maxDataScopeType: DataScopeType = 'SELF';
 
     for (const role of roles) {
-      const roleDataScope = role.dataScopeType;
+      const roleDataScope = role.dataScopeType as DataScopeType;
       if (dataScopeTypes.indexOf(roleDataScope) < dataScopeTypes.indexOf(maxDataScopeType)) {
         maxDataScopeType = roleDataScope;
       }
@@ -122,7 +115,7 @@ export async function getUserPermissionContext(userId: string): Promise<UserPerm
         name: r.name,
       })),
       permissions: permissionsData.map(p => p.code),
-      dataScopeType: maxDataScopeType as UserPermissionContext['dataScopeType'],
+      dataScopeType: maxDataScopeType,
       deptId: user.deptId ?? undefined,
     };
 

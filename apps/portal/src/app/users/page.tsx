@@ -8,7 +8,7 @@
 
 import { headers } from 'next/headers';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
-import { checkPermission } from '@/lib/auth-middleware';
+import { checkPermission } from '@/lib/auth';
 import { getUsers, getDepartments } from './data';
 import UserFilters from './components/UserFilters';
 import CreateUserDrawer from './components/CreateUserDrawer';

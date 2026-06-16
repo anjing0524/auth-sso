@@ -4,9 +4,9 @@
  * GET /api/audit/login-logs - 获取用户登录日志列表 (支持分页、多条件过滤、前置日期安全校验)
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { db, schema } from '@/lib/db';
+import { db, schema } from '@/infrastructure/db';
 import { eq, desc, and, gte, lte, sql } from 'drizzle-orm';
-import { withPermission } from '@/lib/auth-middleware';
+import { withPermission } from '@/lib/auth';
 import { COMMON_ERRORS } from '@auth-sso/contracts';
 
 export const runtime = 'nodejs';

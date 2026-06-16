@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db, schema } from '@/lib/db';
+import { db, schema } from '@/infrastructure/db';
 import { eq, and, sql } from 'drizzle-orm';
 import { generateUUID, generatePermissionPublicId } from '@/lib/crypto';
 import { COMMON_ERRORS } from '@auth-sso/contracts';

@@ -97,7 +97,7 @@ const {
     async (_req: any, _opts: any, handler: (userId: string) => Promise<Response>) =>
       handler('admin-user-1'),
   );
-  const mockCheckPermission = vi.fn(async () => ({ authorized: true, userId: 'admin-user-1' }));
+  const mockCheckPermission = vi.fn(async () => ({ authorized: true, userId: 'admin-user-1', error: undefined as string | undefined }));
   const mockCheckDataScope = vi.fn(async () => true);
   const mockGetDataScopeFilter = vi.fn(async () => ({ type: 'ALL' }));
 
@@ -116,7 +116,7 @@ const {
   };
 });
 
-vi.mock('@/lib/db', () => ({
+vi.mock('@/infrastructure/db', () => ({
   db,
   schema: {
     users: {
@@ -131,7 +131,20 @@ vi.mock('@/lib/db', () => ({
   },
 }));
 
-vi.mock('@/lib/auth-middleware', () => ({
+vi.mock('@/lib/auth', () => ({
+  withAuth: (_opts: unknown, fn: Function) => async (...args: unknown[]) => {
+    // 模拟真实 withAuth 的鉴权 + 错误映射行为
+    const check = await mockCheckPermission();
+    if (!check.authorized || !check.userId) {
+      return { success: false, error: 'FORBIDDEN', message: check.error || '权限不足' };
+    }
+    try {
+      return await fn({ userId: check.userId }, ...args);
+    } catch (err: unknown) {
+      const e = err as Error & { code?: string };
+      return { success: false, error: e.code || 'INTERNAL_ERROR', message: e.message || '服务器错误' };
+    }
+  },
   withPermission: mockWithPermission,
   checkPermission: mockCheckPermission,
   checkDataScope: mockCheckDataScope,
@@ -146,7 +159,7 @@ vi.mock('next/headers', () => ({
   headers: vi.fn(async () => new Headers()),
 }));
 
-vi.mock('@/infrastructure/auth/password-service', () => ({
+vi.mock('@/lib/password', () => ({
   hashPassword: vi.fn(async (pw: string) => `hashed_${pw}`),
 }));
 
@@ -296,7 +309,7 @@ describe('User Management API & Actions', () => {
     });
 
     it('returns 403 when checkPermission fails', async () => {
-      mockCheckPermission.mockResolvedValueOnce({ authorized: false, userId: '' });
+      mockCheckPermission.mockResolvedValueOnce({ authorized: false, userId: '', error: '权限不足' });
       const res = await createUserAction(null);
       expect(res.success).toBe(false);
       expect(res.message).toContain('权限不足');

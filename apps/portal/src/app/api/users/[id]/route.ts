@@ -3,9 +3,9 @@
  * @module apps/portal/api/users/[id]
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { db, schema } from '@/lib/db';
+import { db, schema } from '@/infrastructure/db';
 import { eq, or } from 'drizzle-orm';
-import { withPermission, checkDataScope, getDataScopeFilter } from '@/lib/auth-middleware';
+import { withPermission, checkDataScope, getDataScopeFilter } from '@/lib/auth';
 import { COMMON_ERRORS, USER_ERRORS } from '@auth-sso/contracts';
 
 export const runtime = 'nodejs';

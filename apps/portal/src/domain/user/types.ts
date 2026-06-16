@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { USER_STATUS_VALUES, type UserStatus } from '@auth-sso/contracts';
+import { type UserStatus } from '@auth-sso/contracts';
+import { userStatusEnum } from '@/domain/shared/zod-schemas';
 
 /**
  * 用户领域实体接口 (纯 TS interface，替代旧的 UserPropsSchema)
@@ -26,11 +27,6 @@ export interface User {
   /** 创建时间 (UTC 精确时刻，不可变) */
   createdAt: Temporal.Instant;
 }
-
-/**
- * Zod 状态枚举，从唯一真相源导出的常值数组派生
- */
-const userStatusEnum = z.enum(USER_STATUS_VALUES);
 
 /**
  * Server Action 创建用户入参校验 Schema

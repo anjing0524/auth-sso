@@ -9,15 +9,17 @@
  * 涉及“读取 + 更新”的多步骤写操作均用 db.transaction() 显式包裹（R22）。
  */
 import { revalidatePath } from 'next/cache';
-import { db, schema } from '@/lib/db';
+import { db, schema } from '@/infrastructure/db';
 import { eq, or } from 'drizzle-orm';
-import { withAuth, type AuthContext } from '@/lib/auth-guard';
+import { withAuth, type AuthContext } from '@/lib/auth';
 import {
   createUser,
   toggleUserStatus,
   deleteUser,
   applyUserUpdate,
   toDomainUser,
+  userToInsertRow,
+  userToUpdateRow,
 } from '@/domain/user/user';
 import {
   CreateUserInputSchema,
@@ -27,7 +29,7 @@ import {
 } from '@/domain/user/types';
 import { EntityNotFoundError, DuplicateEntityError } from '@/domain/shared/errors';
 import { generateId } from '@/lib/crypto';
-import { hashPassword } from '@/infrastructure/auth/password-service';
+import { hashPassword } from '@/lib/password';
 import { clearUserPermissionCache } from '@/lib/permissions';
 import type { ApiResponse } from '@auth-sso/contracts';
 
@@ -64,11 +66,9 @@ export const createUserAction = withAuth(
       if (existing) throw new DuplicateEntityError('User', 'username/email');
 
       const user = createUser(parsed.data, generateId);
-      // 显式挑选物理列：deptName 为 JOIN 计算字段不入库；createdAt/updatedAt 由 DB defaultNow 填充
       await tx.insert(schema.users).values({
-        id: user.id, publicId: user.publicId, username: user.username,
-        email: user.email, name: user.name, avatarUrl: user.avatarUrl,
-        status: user.status, deptId: user.deptId, passwordHash,
+        ...userToInsertRow(user),
+        passwordHash,
       });
       return user;
     });
@@ -179,10 +179,8 @@ export const updateUserAction = withAuth(
         deptId: parsed.data.deptId,
         avatarUrl: parsed.data.avatarUrl,
       });
-      await tx.update(schema.users).set({
-        name: updated.name, email: updated.email, status: updated.status,
-        deptId: updated.deptId, avatarUrl: updated.avatarUrl, updatedAt: new Date(),
-      }).where(eq(schema.users.id, parsed.data.id));
+      await tx.update(schema.users).set(userToUpdateRow(updated))
+        .where(eq(schema.users.id, parsed.data.id));
     });
 
     await clearUserPermissionCache(parsed.data.id);

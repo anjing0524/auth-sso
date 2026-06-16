@@ -113,3 +113,43 @@ export function applyUserUpdate(
     avatarUrl: patch.avatarUrl ?? user.avatarUrl,
   };
 }
+
+// ────────────────────────────────────────────
+// DB 行转换（统一 Controller 层的列映射，消除重复）
+// ────────────────────────────────────────────
+
+/**
+ * 将领域 User 实体转为 Drizzle insert 行
+ * 仅在创建路径使用，Controller 禁止手写列名映射
+ *
+ * 注意：passwordHash 不在此转换中（需额外传入，涉及 bcrypt 哈希）
+ */
+export function userToInsertRow(u: User) {
+  return {
+    id: u.id,
+    publicId: u.publicId,
+    username: u.username,
+    email: u.email,
+    name: u.name,
+    avatarUrl: u.avatarUrl,
+    status: u.status,
+    deptId: u.deptId,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+}
+
+/**
+ * 将领域 User 实体转为 Drizzle update 行
+ * 仅在更新路径使用，Controller 禁止手写列名映射
+ */
+export function userToUpdateRow(u: User) {
+  return {
+    name: u.name,
+    email: u.email,
+    avatarUrl: u.avatarUrl,
+    status: u.status,
+    deptId: u.deptId,
+    updatedAt: new Date(),
+  };
+}

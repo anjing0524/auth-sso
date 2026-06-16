@@ -4,32 +4,32 @@ import 'server-only';
  * 鉴权统一入口 (Auth Facade)
  *
  * 本文件为组合层，将鉴权能力按职责拆分为三个独立子模块（R24）：
- * - `./auth/verify-jwt`      身份验证（“你是谁”）
- * - `./auth/check-permission` 权限/角色检查（“你能做什么”）
- * - `./auth/data-scope`       数据范围过滤（“你能看哪些数据”）
+ * - `./verify-jwt`           身份验证（"你是谁"）
+ * - `./check-permission`     权限/角色检查（"你能做什么"）
+ * - `./data-scope`           数据范围过滤（"你能看哪些数据"）
  *
- * 此处统一 re-export，保持现有调用方 `import { ... } from '@/lib/auth-middleware'`
- * 的兼容性，避免迁移期的破坏性改动。新增代码建议直接从子模块导入。
+ * 此处统一 re-export，新增代码建议直接从子模块导入。
  *
- * @module lib/auth-middleware
+ * @module lib/auth/facade
  */
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { COMMON_ERRORS } from '@auth-sso/contracts';
-import type { PortalJwtClaims } from './session';
+import { mapDomainError } from '@/domain/shared/error-mapping';
+import type { PortalJwtClaims } from '../session';
 import {
   checkPermission,
   isSuperAdmin,
   type PermissionCheckOptions,
   type PermissionCheckResult,
-} from './auth/check-permission';
+} from './check-permission';
 import {
   checkDataScope,
   getDataScopeFilter,
   applyDataScopeFilter,
-} from './auth/data-scope';
+} from './data-scope';
 
-// 统一透出子模块能力（保持现有调用方兼容）
+// 统一透出子模块能力
 export {
   checkPermission,
   isSuperAdmin,
@@ -64,11 +64,12 @@ export async function withPermission(
     }
 
     return await handler(check.userId!, check.claims!);
-  } catch (error: any) {
-    console.error('[withPermission] 服务执行异常:', error.message, error.stack);
+  } catch (error: unknown) {
+    const mapped = mapDomainError(error);
+    console.error('[AuthFacade] 服务执行异常:', mapped.message, error instanceof Error ? error.stack : '');
     return NextResponse.json(
-      { error: COMMON_ERRORS.INTERNAL_ERROR, message: '服务执行异常' },
-      { status: 500 }
+      { error: mapped.error, message: mapped.message },
+      { status: mapped.status }
     );
   }
 }
