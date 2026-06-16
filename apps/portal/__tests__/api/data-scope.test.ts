@@ -1,7 +1,7 @@
 /**
  * 数据范围（Data Scope）单元测试
  *
- * 覆盖 `auth-middleware.ts` 中全部 5 种数据范围类型的过滤与校验逻辑：
+ * 覆盖 `lib/auth` 中全部 5 种数据范围类型的过滤与校验逻辑：
  * - ALL           - 无限制
  * - DEPT          - 仅本部门
  * - SELF          - 仅本人
@@ -40,7 +40,7 @@ vi.mock('@/lib/permissions', () => ({
   getUserPermissionContext: vi.fn(() => mockDataScope.permissionContext),
 }));
 
-vi.mock('@/lib/db', () => {
+vi.mock('@/infrastructure/db', () => {
   /** 链式查询构建器 */
   function createChain(): any {
     const chain: any = () => {};
@@ -75,7 +75,7 @@ vi.mock('@/lib/db', () => {
 });
 
 // 导入被测试的真实函数（保持 mock 之后导入以确保模块解析正确）
-import { checkDataScope, getDataScopeFilter } from '@/lib/auth-middleware';
+import { checkDataScope, getDataScopeFilter } from '@/lib/auth';
 
 // ── Tests ──────────────────────────────────────────────────────────────────
 

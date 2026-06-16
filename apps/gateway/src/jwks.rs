@@ -69,10 +69,7 @@ impl JwksCache {
     ///
     /// # 参数
     /// * `jwks_url` - Portal 的 JWKS 端点 URL（如 https://portal.xxx.com/.well-known/jwks）
-    pub async fn refresh(
-        &self,
-        jwks_url: &str,
-    ) -> Result<(), JwksError> {
+    pub async fn refresh(&self, jwks_url: &str) -> Result<(), JwksError> {
         // 生产优化：使用复用的 Client 发送请求，且有 5 秒超时保护，避免网络卡死导致协程挂起积压
         let resp = self.client.get(jwks_url).send().await?;
 
@@ -81,10 +78,8 @@ impl JwksCache {
 
         let mut new_keys = HashMap::new();
         for jwk in jwk_set.keys {
-            if let Some(ref kid) = jwk.common.key_id {
-                if let Ok(key) = DecodingKey::from_jwk(&jwk) {
-                    new_keys.insert(kid.clone(), key);
-                }
+            if let (Some(kid), Ok(key)) = (&jwk.common.key_id, DecodingKey::from_jwk(&jwk)) {
+                new_keys.insert(kid.clone(), key);
             }
         }
 
@@ -141,10 +136,8 @@ mod tests {
         let jwk_set: JwkSet = serde_json::from_value(jwks_json).unwrap();
         let mut new_keys = HashMap::new();
         for jwk in jwk_set.keys {
-            if let Some(ref kid) = jwk.common.key_id {
-                if let Ok(key) = DecodingKey::from_jwk(&jwk) {
-                    new_keys.insert(kid.clone(), key);
-                }
+            if let (Some(kid), Ok(key)) = (&jwk.common.key_id, DecodingKey::from_jwk(&jwk)) {
+                new_keys.insert(kid.clone(), key);
             }
         }
 

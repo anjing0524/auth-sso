@@ -4,9 +4,9 @@
  * POST /api/roles/[id]/clients - 为角色分配可访问客户端
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { db, schema } from '@/lib/db';
+import { db, schema } from '@/infrastructure/db';
 import { eq, or } from 'drizzle-orm';
-import { withPermission } from '@/lib/auth-middleware';
+import { withPermission } from '@/lib/auth';
 import crypto from 'crypto';
 import { COMMON_ERRORS } from '@auth-sso/contracts';
 

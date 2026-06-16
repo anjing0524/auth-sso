@@ -51,7 +51,7 @@ export async function resolveIdentity(
 
   // 2. 若无有效 JWT，回退 Better Auth 本地 Session 获取身份
   if (!userId) {
-    const { auth } = await import('../auth'); // 动态导入避免循环依赖
+    const { auth } = await import('@/infrastructure/auth/auth-instance'); // 动态导入避免循环依赖
 
     let headersInit: HeadersInit | undefined;
     if (request) {

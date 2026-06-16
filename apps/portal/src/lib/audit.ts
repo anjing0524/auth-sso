@@ -5,9 +5,10 @@ import 'server-only';
  * 提供对用户登录日志 (LoginLogs) 和核心操作审计日志 (AuditLogs) 的统一入库与装饰器式包装记录。
  * 具备严密的 try-catch 故障隔离，确保存储介质 (如数据库) 异常时绝对不阻塞或干扰核心业务故事链路的顺利运转。
  */
-import { db, schema } from '@/lib/db';
+import { db, schema } from '@/infrastructure/db';
 import { NextRequest } from 'next/server';
-import { generateId } from './crypto';
+import { generateId } from '@/lib/crypto';
+import { type LoginEventType as BaseLoginEventType } from '@auth-sso/contracts';
 
 /**
  * 获取 HTTP 请求的真实客户端 IP 地址
@@ -33,14 +34,13 @@ export function getClientIP(request: NextRequest): string {
 }
 
 /**
- * 登录/认证相关事件类型
+ * 登录/认证相关事件类型（Portal 审计维度）
+ * 在 contracts 通用事件类型基础上扩展 Token 刷新事件
  */
-export type LoginEventType =
-  | 'LOGIN_SUCCESS'         // 登录成功
-  | 'LOGIN_FAILED'          // 登录失败
-  | 'LOGOUT'                // 登出
-  | 'TOKEN_REFRESH'         // Token 刷新成功
-  | 'TOKEN_REFRESH_FAILED'; // Token 刷新失败
+export type PortalLoginEventType =
+  | BaseLoginEventType       // LOGIN_SUCCESS | LOGIN_FAILED | LOGOUT（来自 @auth-sso/contracts）
+  | 'TOKEN_REFRESH'          // Token 刷新成功
+  | 'TOKEN_REFRESH_FAILED';  // Token 刷新失败
 
 /**
  * 核心业务操作审计类型
@@ -75,7 +75,7 @@ export interface LoginLogParams {
   /** 登录尝试所使用的用户名/邮箱 */
   username: string;
   /** 登录事件类型 */
-  eventType: LoginEventType;
+  eventType: PortalLoginEventType;
   /** 客户端 IP 地址 */
   ip?: string;
   /** 客户端 User-Agent */

@@ -12,8 +12,8 @@ import 'server-only';
  */
 import type { NextRequest } from 'next/server';
 import type { PortalJwtClaims } from '../session';
-import type { UserPermissionContext } from '../permissions';
-import { getUserPermissionContext } from '../permissions';
+import type { UserPermissionContext } from '@auth-sso/contracts';
+import { getUserPermissionContext } from '@/lib/permissions';
 import { resolveIdentity } from './verify-jwt';
 
 /**

@@ -3,9 +3,9 @@
  * @module apps/portal/api/menus
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { db, schema } from '@/lib/db';
+import { db, schema } from '@/infrastructure/db';
 import { asc } from 'drizzle-orm';
-import { withPermission } from '@/lib/auth-middleware';
+import { withPermission } from '@/lib/auth';
 import { generateUUID } from '@/lib/crypto';
 import { COMMON_ERRORS, EntityStatus } from '@auth-sso/contracts';
 

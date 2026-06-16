@@ -7,9 +7,9 @@
  * @module apps/portal/api/menus/[id]
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { db, schema } from '@/lib/db';
+import { db, schema } from '@/infrastructure/db';
 import { eq, or } from 'drizzle-orm';
-import { withPermission } from '@/lib/auth-middleware';
+import { withPermission } from '@/lib/auth';
 import { COMMON_ERRORS, EntityStatus } from '@auth-sso/contracts';
 
 export const runtime = 'nodejs';

@@ -2,37 +2,14 @@
  * 数据库表类型集中导出
  *
  * 使用 Drizzle ORM 的 table.$inferSelect / table.$inferInsert
- * 从 schema 自动推断所有表的 Select（读取）和 Insert（写入）类型，
- * 并导出枚举值 TS 类型供业务层使用。
+ * 从 schema 自动推断所有表的 Select（读取）和 Insert（写入）类型。
+ *
+ * ⚠️ 枚举类型（UserStatus / DataScopeType / EntityStatus 等）统一从 @auth-sso/contracts 导入，
+ *    此为唯一真相源，不在本文件中重复导出。
  *
  * @module db/types
  */
 import * as schema from './schema';
-
-// ============================================
-// 枚举值 TS 类型（从 pgEnum 提取联合类型）
-// ============================================
-
-/** 用户状态：ACTIVE | DISABLED | LOCKED | DELETED */
-export type UserStatus = (typeof schema.userStatusEnum.enumValues)[number];
-
-/** 实体状态：ACTIVE | DISABLED */
-export type EntityStatus = (typeof schema.entityStatusEnum.enumValues)[number];
-
-/** 数据范围类型：ALL | DEPT | DEPT_AND_SUB | SELF | CUSTOM */
-export type DataScopeType = (typeof schema.dataScopeTypeEnum.enumValues)[number];
-
-/** 权限类型：MENU | API | DATA */
-export type PermissionType = (typeof schema.permissionTypeEnum.enumValues)[number];
-
-/** 菜单类型：DIRECTORY | MENU | BUTTON */
-export type MenuType = (typeof schema.menuTypeEnum.enumValues)[number];
-
-/** 客户端类型：confidential | public */
-export type ClientType = (typeof schema.clientTypeEnum.enumValues)[number];
-
-/** 客户端状态：ACTIVE | DISABLED */
-export type ClientStatus = (typeof schema.clientStatusEnum.enumValues)[number];
 
 // ============================================
 // 用户核心表

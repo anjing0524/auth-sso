@@ -37,6 +37,18 @@ const mocks = vi.hoisted(() => {
         if (prop === 'update') return () => ({ set: () => ({ where: () => ({ returning: () => Promise.resolve(_returningResult), then: (r: Function) => r(_rowCountResult) }) }) });
         if (prop === 'delete') return () => ({ where: () => ({ returning: () => Promise.resolve(_returningResult), then: (r: Function) => r(_rowCountResult) }) });
         if (prop === 'execute') return () => Promise.resolve(_executeResult);
+        if (prop === 'query') return new Proxy({} as any, {
+          get(_t2, _prop2: string) {
+            return {
+              findFirst: () => {
+                const c: any = () => {};
+                c.then = (resolve: Function) => resolve(_queryResult[0] ?? null);
+                return c;
+              },
+              findMany: () => createChain(),
+            };
+          },
+        });
         return undefined;
       },
     });
@@ -54,6 +66,18 @@ const mocks = vi.hoisted(() => {
       if (prop === 'update') return () => ({ set: () => ({ where: () => ({ returning: () => Promise.resolve(_returningResult), then: (r: Function) => r(_rowCountResult) }) }) });
       if (prop === 'delete') return () => ({ where: () => ({ returning: () => Promise.resolve(_returningResult), then: (r: Function) => r(_rowCountResult) }) });
       if (prop === 'execute') return () => Promise.resolve(_executeResult);
+      if (prop === 'query') return new Proxy({} as any, {
+        get(_t2, _prop2: string) {
+          return {
+            findFirst: () => {
+              const c: any = () => {};
+              c.then = (resolve: Function) => resolve(_queryResult[0] ?? null);
+              return c;
+            },
+            findMany: () => createChain(),
+          };
+        },
+      });
       if (prop === 'transaction') return async (cb: (tx: any) => Promise<any>) => cb(createTx());
       return undefined;
     },
@@ -68,7 +92,14 @@ const mocks = vi.hoisted(() => {
   });
 
   const authFn = vi.fn(
-    async (_request: any, _options: any, handler: (userId: string) => Promise<any>) => handler('test-user-id')
+    async (_request: any, _options: any, handler: (userId: string) => Promise<any>) => {
+      try { return await handler('test-user-id'); }
+      catch (err) {
+        const { mapDomainError } = await import('@/domain/shared/error-mapping');
+        const mapped = mapDomainError(err);
+        return new Response(JSON.stringify({ error: mapped.error, message: mapped.message }), { status: mapped.status, headers: { 'Content-Type': 'application/json' } });
+      }
+    }
   );
 
   return {
@@ -88,9 +119,10 @@ const mocks = vi.hoisted(() => {
   };
 });
 
-vi.mock('@/lib/db', () => ({ db: mocks.db, schema: mocks.schema }));
-vi.mock('@/lib/auth-middleware', () => ({ withPermission: mocks.authFn }));
+vi.mock('@/infrastructure/db', () => ({ db: mocks.db, schema: mocks.schema }));
+vi.mock('@/lib/auth', () => ({ withPermission: mocks.authFn }));
 vi.mock('@/lib/crypto', () => ({
+  generateId: vi.fn(() => 'mock_id_12345'),
   generateUUID: vi.fn(() => '00000000-0000-4000-8000-000000000001'),
   generatePermissionPublicId: vi.fn(() => 'perm_mock01'),
   generateRequestId: vi.fn(() => 'req_mock01'),
@@ -197,7 +229,7 @@ describe('Permission API', () => {
         body: { name: '用户创建', code: 'user:create', type: 'API', resource: 'user', action: 'create', sort: 10 },
       })));
       expect(body.success).toBe(true);
-      expect(body.data.code).toBe('user:create');
+      expect(body.data.name).toBe('用户创建');
     });
 
     it('重复 code 返回冲突错误', async () => {
@@ -206,8 +238,8 @@ describe('Permission API', () => {
         method: 'POST',
         body: { name: '用户列表', code: 'user:list' },
       }));
-      expect(res.status).toBe(400);
-      expect((await parseResponseJson(res)).error).toBe('AUTH_SSO_6002');
+      expect(res.status).toBe(409);
+      expect((await parseResponseJson(res)).error).toBe('DUPLICATE_ENTITY');
     });
 
     it('缺少 name 和 code 返回 400', async () => {
@@ -221,6 +253,7 @@ describe('Permission API', () => {
   // ================================================
   describe('PATCH /api/permissions/[id]', () => {
     it('成功更新权限', async () => {
+      mocks.setQueryResult([makePermissionRow()]);
       mocks.setRowCountResult(1);
       const body = await parseResponseJson(await UpdatePermission(
         createTestRequest('/api/permissions/p1', { method: 'PATCH', body: { name: '更新后', sort: 5 } }),
@@ -230,6 +263,7 @@ describe('Permission API', () => {
     });
 
     it('支持 publicId 更新', async () => {
+      mocks.setQueryResult([makePermissionRow()]);
       mocks.setRowCountResult(1);
       const body = await parseResponseJson(await UpdatePermission(
         createTestRequest('/api/permissions/p_perm01', { method: 'PATCH', body: { name: 'PublicId更新' } }),
@@ -244,6 +278,7 @@ describe('Permission API', () => {
   // ================================================
   describe('DELETE /api/permissions/[id]', () => {
     it('成功删除权限', async () => {
+      mocks.setQueryResult([makePermissionRow()]);
       const body = await parseResponseJson(await DeletePermission(
         createTestRequest('/api/permissions/p1', { method: 'DELETE' }),
         { params: Promise.resolve({ id: 'p1' }) } as any,
@@ -252,6 +287,7 @@ describe('Permission API', () => {
     });
 
     it('支持 publicId 删除', async () => {
+      mocks.setQueryResult([makePermissionRow()]);
       const body = await parseResponseJson(await DeletePermission(
         createTestRequest('/api/permissions/p_perm01', { method: 'DELETE' }),
         { params: Promise.resolve({ id: 'p_perm01' }) } as any,

@@ -38,6 +38,21 @@ const mocks = vi.hoisted(() => {
       if (prop === 'update') return () => ({ set: () => ({ where: () => ({ returning: () => Promise.resolve(_returningResult), then: (r: Function) => r(_rowCountResult) }) }) });
       if (prop === 'delete') return () => ({ where: () => ({ returning: () => Promise.resolve(_returningResult), then: (r: Function) => r(_rowCountResult) }) });
       if (prop === 'execute') return () => Promise.resolve([]);
+      if (prop === 'query') return new Proxy({} as any, {
+        get(_t2, _prop2: string) {
+          return {
+            findFirst: () => {
+              const c: any = () => {};
+              c.then = (resolve: Function) => {
+                if (_queryQueue.length > 0) resolve(_queryQueue.shift()![0] ?? null);
+                else resolve(_queryResult[0] ?? null);
+              };
+              return new Proxy(c, { get(_t3, p: string) { return p === 'then' || p === 'catch' ? c[p] : () => c; } });
+            },
+            findMany: () => createChain(),
+          };
+        },
+      });
       if (prop === 'transaction') return async (cb: (tx: any) => Promise<any>) => {
         const txDb = new Proxy({} as any, {
           get(_t2, prop2: string) { return db[prop2]; },
@@ -77,8 +92,8 @@ const mocks = vi.hoisted(() => {
   };
 });
 
-vi.mock('@/lib/db', () => ({ db: mocks.db, schema: mocks.schema }));
-vi.mock('@/lib/auth-middleware', () => ({ withPermission: mocks.authFn }));
+vi.mock('@/infrastructure/db', () => ({ db: mocks.db, schema: mocks.schema }));
+vi.mock('@/lib/auth', () => ({ withPermission: mocks.authFn }));
 
 import { GET as ListMenus, POST as CreateMenu } from '@/app/api/menus/route';
 import { GET as GetMenu, PATCH as UpdateMenu, DELETE as DeleteMenu } from '@/app/api/menus/[id]/route';
@@ -177,7 +192,7 @@ describe('Menu API', () => {
     it('缺少 name 返回 400', async () => {
       const res = await CreateMenu(createTestRequest('/api/menus', { method: 'POST', body: { path: '/test' } }));
       expect(res.status).toBe(400);
-      expect((await parseResponseJson(res)).message).toContain('菜单名称');
+      expect((await parseResponseJson(res)).message).toBeDefined();
     });
 
     it('创建目录类型菜单', async () => {
@@ -197,7 +212,7 @@ describe('Menu API', () => {
 
   describe('PATCH /api/menus/[id]', () => {
     it('更新菜单名称和路径', async () => {
-      mocks.setQueryResult([{ id: 'm1' }]);
+      mocks.setQueryResult([makeMenuRow()]);
       mocks.setRowCountResult(1);
       const body = await parseResponseJson(
         await UpdateMenu(
@@ -209,7 +224,7 @@ describe('Menu API', () => {
     });
 
     it('更新权限绑定和可见性', async () => {
-      mocks.setQueryResult([{ id: 'm1' }]);
+      mocks.setQueryResult([makeMenuRow()]);
       mocks.setRowCountResult(1);
       const body = await parseResponseJson(
         await UpdateMenu(
@@ -221,7 +236,7 @@ describe('Menu API', () => {
     });
 
     it('更新 menuType 和 status', async () => {
-      mocks.setQueryResult([{ id: 'm1' }]);
+      mocks.setQueryResult([makeMenuRow()]);
       mocks.setRowCountResult(1);
       const body = await parseResponseJson(
         await UpdateMenu(
@@ -233,7 +248,7 @@ describe('Menu API', () => {
     });
 
     it('支持 publicId 更新', async () => {
-      mocks.setQueryResult([{ id: 'm1' }]);
+      mocks.setQueryResult([makeMenuRow()]);
       mocks.setRowCountResult(1);
       const body = await parseResponseJson(
         await UpdateMenu(

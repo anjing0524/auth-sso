@@ -14,8 +14,8 @@ import 'server-only';
  * @module lib/auth/data-scope
  */
 import { type SQL, inArray, eq, and, sql as drizzleSql } from 'drizzle-orm';
-import { db, schema } from '@/lib/db';
-import { getUserPermissionContext } from '../permissions';
+import { db, schema } from '@/infrastructure/db';
+import { getUserPermissionContext } from '@/lib/permissions';
 
 // ────────────────────────────────────────────────────────────
 // 数据范围规则计算

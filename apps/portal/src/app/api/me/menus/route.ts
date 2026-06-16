@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getJwtFromCookie, verifyJwt } from '@/lib/session';
 import { getUserPermissionContext } from '@/lib/permissions';
-import { db, schema } from '@/lib/db';
+import { db, schema } from '@/infrastructure/db';
 import { asc, eq } from 'drizzle-orm';
 import { COMMON_ERRORS } from '@auth-sso/contracts';
 

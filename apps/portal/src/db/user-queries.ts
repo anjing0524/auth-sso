@@ -5,7 +5,7 @@
  * 两类读路径统一通过本模块组合查询条件与响应格式化。
  */
 import { eq, ne, or, ilike, and } from 'drizzle-orm';
-import { schema } from '@/lib/db';
+import { schema } from '@/infrastructure/db';
 import { applyDataScopeFilter } from '@/lib/auth/data-scope';
 import type { UserStatus } from '@auth-sso/contracts';
 

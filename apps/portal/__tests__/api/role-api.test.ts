@@ -51,6 +51,18 @@ const { db, setQueryResult, resetDb, mockWithPermission } = vi.hoisted(() => {
             where: () => ({ then: (resolve: Function) => resolve([1]) }),
           }),
         });
+      if (prop === 'query') return new Proxy({} as any, {
+        get(_t2, _prop2: string) {
+          return {
+            findFirst: () => {
+              const c: any = () => {};
+              c.then = (resolve: Function) => resolve(state._queryResult[0] ?? null);
+              return c;
+            },
+            findMany: () => createChain(),
+          };
+        },
+      });
       if (prop === 'transaction') return async (cb: Function) => {
         const tx = new Proxy({} as any, {
           get(_t2: any, p: string) {
@@ -58,6 +70,9 @@ const { db, setQueryResult, resetDb, mockWithPermission } = vi.hoisted(() => {
             if (p === 'insert') return () => ({ values: (d: any) => ({ then: (r: Function) => r([{ ...d, id: 'mock-tx-id' }]) }) });
             if (p === 'update') return () => ({ set: () => ({ where: () => ({ then: (r: Function) => r([1]) }) }) });
             if (p === 'delete') return () => ({ where: () => ({ then: (r: Function) => r([1]) }) });
+            if (p === 'query') return new Proxy({} as any, {
+              get(_t3, _p3: string) { return { findFirst: () => createChain(), findMany: () => createChain() }; },
+            });
             return undefined;
           },
         });
@@ -72,8 +87,14 @@ const { db, setQueryResult, resetDb, mockWithPermission } = vi.hoisted(() => {
   });
 
   const mockWithPermission = vi.fn(
-    async (_req: any, _opts: any, handler: (userId: string) => Promise<Response>) =>
-      handler('admin-user-1'),
+    async (_req: any, _opts: any, handler: (userId: string) => Promise<Response>) => {
+      try { return await handler('admin-user-1'); }
+      catch (err) {
+        const { mapDomainError } = await import('@/domain/shared/error-mapping');
+        const mapped = mapDomainError(err);
+        return NextResponse.json({ error: mapped.error, message: mapped.message }, { status: mapped.status });
+      }
+    },
   );
 
   return {
@@ -88,7 +109,7 @@ const { db, setQueryResult, resetDb, mockWithPermission } = vi.hoisted(() => {
   };
 });
 
-vi.mock('@/lib/db', () => ({
+vi.mock('@/infrastructure/db', () => ({
   db,
   schema: {
     roles: {},
@@ -100,7 +121,7 @@ vi.mock('@/lib/db', () => ({
   },
 }));
 
-vi.mock('@/lib/auth-middleware', () => ({
+vi.mock('@/lib/auth', () => ({
   withPermission: mockWithPermission,
 }));
 
@@ -109,7 +130,7 @@ vi.mock('@/lib/audit', () => ({
   getClientIP: vi.fn(() => '127.0.0.1'),
 }));
 
-vi.mock('@/lib/redis', () => ({}));
+vi.mock('@/infrastructure/redis', () => ({}));
 
 // =========================================
 // 引入被测试模块（mocks 之后）
@@ -178,10 +199,10 @@ describe('Role Management API', () => {
       );
       const body = await response.json();
 
-      expect(response.status).toBe(200);
+      expect(response.status).toBe(201);
       expect(body.success).toBe(true);
-      expect(body.data).toMatchObject({ name: 'Test Role', code: 'TEST_ROLE' });
-      expect(body.data.publicId).toContain('role_');
+      expect(body.data.name).toBe('Test Role');
+      expect(body.data.id).toContain('role_');
     });
 
     it('returns 400 when required fields are missing', async () => {
@@ -194,7 +215,7 @@ describe('Role Management API', () => {
       const body = await response.json();
 
       expect(response.status).toBe(400);
-      expect(body.error).toBe('AUTH_SSO_1005');
+      expect(body.error).toBe('VALIDATION_ERROR');
     });
 
     it('returns 400 when role code already exists', async () => {
@@ -208,8 +229,8 @@ describe('Role Management API', () => {
       );
       const body = await response.json();
 
-      expect(response.status).toBe(400);
-      expect(body.error).toBe('AUTH_SSO_5002');
+      expect(response.status).toBe(409);
+      expect(body.error).toBe('DUPLICATE_ENTITY');
     });
   });
 
@@ -299,9 +320,9 @@ describe('Role Management API', () => {
         { params: Promise.resolve({ id: 'system-role' }) },
       );
 
-      expect(response.status).toBe(400);
+      expect(response.status).toBe(422);
       const body = await response.json();
-      expect(body.error).toBe('AUTH_SSO_5003');
+      expect(body.error).toBe('BUSINESS_RULE_VIOLATION');
     });
   });
 

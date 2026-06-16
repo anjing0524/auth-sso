@@ -61,20 +61,11 @@ impl Default for PortalConfig {
 }
 
 /// 统一配置结构体，支持从 gateway.toml 解析，支持缺省字段与默认值自动合并
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(default)]
 pub struct Config {
     pub gateway: GatewayConfig,
     pub portal: PortalConfig,
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            gateway: GatewayConfig::default(),
-            portal: PortalConfig::default(),
-        }
-    }
 }
 
 /// 自定义配置源：用于将系统中统一约定的环境变量精确映射到配置结构树上

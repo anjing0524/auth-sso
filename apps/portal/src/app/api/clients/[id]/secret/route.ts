@@ -3,9 +3,9 @@
  * POST /api/clients/[id]/secret - 重新生成 Client Secret
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { db, schema } from '@/lib/db';
+import { db, schema } from '@/infrastructure/db';
 import { eq } from 'drizzle-orm';
-import { withPermission } from '@/lib/auth-middleware';
+import { withPermission } from '@/lib/auth';
 import { generateClientSecret } from '@/lib/crypto';
 import { COMMON_ERRORS } from '@auth-sso/contracts';
 

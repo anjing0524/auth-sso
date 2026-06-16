@@ -45,12 +45,12 @@ vi.mock('@/lib/permissions', () => ({
   getUserPermissionContext: mockGetUserPermissionContext,
 }));
 
-vi.mock('@/lib/db', () => ({
+vi.mock('@/infrastructure/db', () => ({
   db: {},
   schema: {},
 }));
 
-import { checkPermission, withPermission } from '@/lib/auth-middleware';
+import { checkPermission, withPermission } from '@/lib/auth';
 
 describe('Permission Enforcement', () => {
   beforeEach(() => {

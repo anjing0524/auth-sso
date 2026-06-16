@@ -1,32 +1,26 @@
 /**
- * 注册新 OAuth 应用页面
+ * 注册新 OAuth 应用页面 — Client Component 表单
+ * 写操作通过 Server Actions (actions.ts) 直调
  */
 'use client';
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { 
-  ArrowLeft, 
-  Save, 
-  AppWindow,
-  Plus
-} from 'lucide-react';
+import { ArrowLeft, AppWindow, Plus } from 'lucide-react';
 import Link from 'next/link';
-
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { createClientAction } from '../actions';
 
 export default function NewClientPage() {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
-    clientId: '',
-    clientSecret: '',
     redirectUris: '',
     scopes: 'openid profile email',
     homepageUrl: '',
@@ -37,33 +31,30 @@ export default function NewClientPage() {
   });
 
   const handleCreate = async () => {
-    if (!formData.name || !formData.clientId || !formData.redirectUris) {
+    if (!formData.name || !formData.redirectUris) {
       toast.error('请填写必填字段');
       return;
     }
 
     setSaving(true);
-    try {
-      const response = await fetch('/api/clients', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...formData,
-          redirectUris: formData.redirectUris.split('\n').filter(Boolean),
-        }),
-      });
+    const result = await createClientAction({
+      name: formData.name,
+      redirectUris: formData.redirectUris.split('\n').filter(Boolean),
+      scopes: formData.scopes,
+      homepageUrl: formData.homepageUrl || null,
+      logoUrl: formData.logoUrl || null,
+      accessTokenTtl: formData.accessTokenTtl,
+      refreshTokenTtl: formData.refreshTokenTtl,
+      skipConsent: formData.skipConsent,
+    });
 
-      if (response.ok) {
-        toast.success('应用注册成功');
-        router.push('/clients');
-      } else {
-        const error = await response.json();
-        toast.error(error.message || '注册失败');
-      }
-    } catch (error) {
-      toast.error('网络错误');
-    } finally {
-      setSaving(false);
+    setSaving(false);
+
+    if (result.success) {
+      toast.success(result.message || '应用注册成功');
+      router.push('/clients');
+    } else {
+      toast.error(result.message || '注册失败');
     }
   };
 
@@ -81,7 +72,7 @@ export default function NewClientPage() {
         </div>
         <div className="flex gap-3">
           <Button variant="ghost" className="rounded-xl px-6" asChild>
-             <Link href="/clients">取消</Link>
+            <Link href="/clients">取消</Link>
           </Button>
           <Button onClick={handleCreate} disabled={saving} className="rounded-xl px-8 shadow-lg shadow-primary/20">
             {saving ? '注册中...' : <><Plus className="mr-2 h-4 w-4" /> 确认注册</>}
@@ -99,42 +90,24 @@ export default function NewClientPage() {
             </CardHeader>
             <CardContent className="p-8 space-y-6">
               <div className="grid grid-cols-2 gap-8">
-                <div className="space-y-2">
-                  <Label className="font-bold text-slate-700">应用名称 <span className="text-red-500">*</span></Label>
-                  <Input 
-                    placeholder="我的业务系统"
-                    value={formData.name} 
-                    onChange={e => setFormData({...formData, name: e.target.value})}
-                    className="h-11 rounded-xl"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label className="font-bold text-slate-700">Client ID (唯一标识) <span className="text-red-500">*</span></Label>
-                  <Input 
-                    placeholder="my-app"
-                    value={formData.clientId} 
-                    onChange={e => setFormData({...formData, clientId: e.target.value})}
-                    className="h-11 rounded-xl"
-                  />
-                </div>
                 <div className="space-y-2 col-span-2">
-                  <Label className="font-bold text-slate-700">Client Secret (密钥)</Label>
-                  <Input 
-                    type="password"
-                    placeholder="留空则自动生成"
-                    value={formData.clientSecret} 
-                    onChange={e => setFormData({...formData, clientSecret: e.target.value})}
+                  <Label className="font-bold text-slate-700">应用名称 <span className="text-red-500">*</span></Label>
+                  <Input
+                    placeholder="我的业务系统"
+                    value={formData.name}
+                    onChange={e => setFormData({...formData, name: e.target.value})}
                     className="h-11 rounded-xl"
                   />
                 </div>
                 <div className="space-y-2 col-span-2">
                   <Label className="font-bold text-slate-700">回调地址 (Redirect URIs) <span className="text-red-500">*</span></Label>
-                  <Textarea 
-                    placeholder="http://localhost:3000/api/auth/callback&#10;每行一个地址"
-                    value={formData.redirectUris} 
+                  <Textarea
+                    placeholder="http://localhost:3000/api/auth/callback&#10;证书和密钥由系统自动生成"
+                    value={formData.redirectUris}
                     onChange={e => setFormData({...formData, redirectUris: e.target.value})}
                     className="min-h-[100px] rounded-xl"
                   />
+                  <p className="text-xs text-muted-foreground">每行一个地址。Client ID 与 Secret 由系统自动生成，创建成功后展示。</p>
                 </div>
               </div>
             </CardContent>
@@ -144,22 +117,22 @@ export default function NewClientPage() {
         <div className="col-span-4 space-y-6">
           <Card className="border-none shadow-sm ring-1 ring-border/50 rounded-[2rem] overflow-hidden bg-white">
             <CardHeader className="pb-2">
-               <CardTitle className="text-sm font-black uppercase tracking-widest text-slate-400">高级安全设置</CardTitle>
+              <CardTitle className="text-sm font-black uppercase tracking-widest text-slate-400">高级安全设置</CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="space-y-2">
                 <Label className="font-bold text-slate-700">默认权限范围 (Scopes)</Label>
-                <Input 
-                  value={formData.scopes} 
+                <Input
+                  value={formData.scopes}
                   onChange={e => setFormData({...formData, scopes: e.target.value})}
                   className="h-11 rounded-xl"
                 />
               </div>
               <div className="space-y-2">
                 <Label className="font-bold text-slate-700">Access Token TTL (秒)</Label>
-                <Input 
+                <Input
                   type="number"
-                  value={formData.accessTokenTtl} 
+                  value={formData.accessTokenTtl}
                   onChange={e => setFormData({...formData, accessTokenTtl: parseInt(e.target.value)})}
                   className="h-11 rounded-xl"
                 />
@@ -169,7 +142,7 @@ export default function NewClientPage() {
                   type="checkbox"
                   id="skipConsent"
                   checked={formData.skipConsent}
-                  onChange={(e) => setFormData({ ...formData, skipConsent: e.target.checked })}
+                  onChange={e => setFormData({ ...formData, skipConsent: e.target.checked })}
                   className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                 />
                 <label htmlFor="skipConsent" className="text-sm font-medium text-slate-700">

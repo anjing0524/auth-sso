@@ -5,9 +5,9 @@
  * PUT /api/roles/[id]/permissions - 更新角色权限
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { db, schema } from '@/lib/db';
+import { db, schema } from '@/infrastructure/db';
 import { eq, or } from 'drizzle-orm';
-import { withPermission } from '@/lib/auth-middleware';
+import { withPermission } from '@/lib/auth';
 import crypto from 'crypto';
 import { clearUsersPermissionCache } from '@/lib/permissions';
 import { COMMON_ERRORS } from '@auth-sso/contracts';

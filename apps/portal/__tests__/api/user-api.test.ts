@@ -116,7 +116,7 @@ const {
   };
 });
 
-vi.mock('@/lib/db', () => ({
+vi.mock('@/infrastructure/db', () => ({
   db,
   schema: {
     users: {
@@ -131,7 +131,8 @@ vi.mock('@/lib/db', () => ({
   },
 }));
 
-vi.mock('@/lib/auth-middleware', () => ({
+vi.mock('@/lib/auth', () => ({
+  withAuth: (_opts: unknown, fn: Function) => (...args: unknown[]) => fn({ userId: 'test-user-id' }, ...args),
   withPermission: mockWithPermission,
   checkPermission: mockCheckPermission,
   checkDataScope: mockCheckDataScope,
@@ -146,7 +147,7 @@ vi.mock('next/headers', () => ({
   headers: vi.fn(async () => new Headers()),
 }));
 
-vi.mock('@/infrastructure/auth/password-service', () => ({
+vi.mock('@/lib/password', () => ({
   hashPassword: vi.fn(async (pw: string) => `hashed_${pw}`),
 }));
 

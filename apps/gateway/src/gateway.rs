@@ -54,13 +54,12 @@ impl PathMatcher {
         ];
         if let Some(idx) = path.rfind('.') {
             let ext = &path[idx + 1..];
-            if !ext.contains('/') {
-                if STATIC_EXTENSIONS
+            if !ext.contains('/')
+                && STATIC_EXTENSIONS
                     .iter()
                     .any(|&static_ext| ext.eq_ignore_ascii_case(static_ext))
-                  {
-                      return true;
-                  }
+            {
+                return true;
             }
         }
 
@@ -235,8 +234,8 @@ impl ProxyHttp for Gateway {
         let jwt_token = cookie_header.and_then(|header| {
             header.split(';').find_map(|cookie_str| {
                 let trimmed = cookie_str.trim();
-                if trimmed.starts_with("portal_jwt_token=") {
-                    let mut val = &trimmed["portal_jwt_token=".len()..];
+                if let Some(stripped) = trimmed.strip_prefix("portal_jwt_token=") {
+                    let mut val = stripped;
                     // 容错剥离可能的双引号包裹（RFC 6265）
                     if val.starts_with('"') && val.ends_with('"') && val.len() >= 2 {
                         val = &val[1..val.len() - 1];

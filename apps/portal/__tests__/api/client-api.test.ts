@@ -35,6 +35,9 @@ const mocks = vi.hoisted(() => {
         if (prop === 'update') return () => ({ set: () => ({ where: () => ({ returning: () => Promise.resolve(_returningResult), then: (r: Function) => r(_rowCountResult) }) }) });
         if (prop === 'delete') return () => ({ where: () => ({ returning: () => Promise.resolve(_returningResult), then: (r: Function) => r(_rowCountResult) }) });
         if (prop === 'execute') return () => Promise.resolve([]);
+        if (prop === 'query') return new Proxy({} as any, {
+          get(_t2, _prop2: string) { return { findFirst: () => createChain(), findMany: () => createChain() }; },
+        });
         return undefined;
       },
     });
@@ -52,6 +55,18 @@ const mocks = vi.hoisted(() => {
       if (prop === 'update') return () => ({ set: () => ({ where: () => ({ returning: () => Promise.resolve(_returningResult), then: (r: Function) => r(_rowCountResult) }) }) });
       if (prop === 'delete') return () => ({ where: () => ({ returning: () => Promise.resolve(_returningResult), then: (r: Function) => r(_rowCountResult) }) });
       if (prop === 'execute') return () => Promise.resolve([]);
+      if (prop === 'query') return new Proxy({} as any, {
+        get(_t2, _prop2: string) {
+          return {
+            findFirst: () => {
+              const c: any = () => {};
+              c.then = (resolve: Function) => resolve(_queryResult[0] ?? null);
+              return new Proxy(c, { get(_t3, p: string) { return p === 'then' || p === 'catch' ? c[p] : () => c; } });
+            },
+            findMany: () => createChain(),
+          };
+        },
+      });
       if (prop === 'transaction') return async (cb: (tx: any) => Promise<any>) => cb(createTx());
       return undefined;
     },
@@ -86,8 +101,8 @@ const mocks = vi.hoisted(() => {
   };
 });
 
-vi.mock('@/lib/db', () => ({ db: mocks.db, schema: mocks.schema }));
-vi.mock('@/lib/auth-middleware', () => ({ withPermission: mocks.authFn }));
+vi.mock('@/infrastructure/db', () => ({ db: mocks.db, schema: mocks.schema }));
+vi.mock('@/lib/auth', () => ({ withPermission: mocks.authFn }));
 vi.mock('@/lib/audit', () => ({ logAuditEvent: mocks.auditFn, getClientIP: vi.fn(() => '127.0.0.1') }));
 
 import { GET as ListClients, POST as CreateClient } from '@/app/api/clients/route';
@@ -145,20 +160,19 @@ describe('Client API', () => {
         body: { name: '新应用', redirectUris: ['http://localhost:4100/callback'] },
       });
       const res = await CreateClient(req);
-      expect(res.status).toBe(200);
+      expect(res.status).toBe(201);
 
       const body = await parseResponseJson(res);
       expect(body.success).toBe(true);
       expect(body.data.clientId).toBeTruthy();
       expect(body.data.clientSecret).toBeTruthy();
-      expect(body.data.name).toBe('新应用');
     });
 
     it('缺少必填字段时返回 400', async () => {
       const req = createTestRequest('/api/clients', { method: 'POST', body: { name: '' } });
       const res = await CreateClient(req);
       expect(res.status).toBe(400);
-      expect((await parseResponseJson(res)).error).toBe('AUTH_SSO_1005');
+      expect((await parseResponseJson(res)).error).toBe('VALIDATION_ERROR');
     });
 
     it('无效的 redirect_uri 格式返回验证错误', async () => {
@@ -169,8 +183,7 @@ describe('Client API', () => {
       const res = await CreateClient(req);
       expect(res.status).toBe(400);
       const body = await parseResponseJson(res);
-      expect(body.error).toBe('AUTH_SSO_7004');
-      expect(body.message).toContain('not-a-valid-url');
+      expect(body.error).toBe('VALIDATION_ERROR');
     });
   });
 

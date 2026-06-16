@@ -81,7 +81,7 @@ const {
   };
 });
 
-vi.mock('@/lib/db', () => ({
+vi.mock('@/infrastructure/db', () => ({
   db: mockDb,
   schema: {
     auditLogs: {},
@@ -89,11 +89,11 @@ vi.mock('@/lib/db', () => ({
   },
 }));
 
-vi.mock('@/lib/auth-middleware', () => ({
+vi.mock('@/lib/auth', () => ({
   withPermission: mockWithPermission,
 }));
 
-vi.mock('@/lib/redis', () => ({}));
+vi.mock('@/infrastructure/redis', () => ({}));
 
 vi.mock('@/lib/session', () => ({}));
 
