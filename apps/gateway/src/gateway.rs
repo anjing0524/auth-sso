@@ -12,47 +12,72 @@ use std::sync::Arc;
 use crate::claims::Claims;
 use crate::jwks::JwksCache;
 
-/// 校验路径是否为静态资源文件或公开访问的接口与路由
-fn is_public_asset_or_route(
-    path: &str,
-    exact_paths: &HashSet<String>,
-    prefix_paths: &[String],
-) -> bool {
-    // 1. 放行静态资源目录
-    if path.starts_with("/_next/") || path.starts_with("/static/") {
-        return true;
+/// 预分类和高性能过滤的公开路径匹配器
+#[derive(Debug, Clone)]
+pub struct PathMatcher {
+    public_exact_paths: HashSet<String>,
+    public_prefix_paths: Vec<String>,
+}
+
+impl PathMatcher {
+    /// 初始化并对白名单进行分类与高性能前缀排序
+    pub fn new(public_paths: Option<Vec<String>>) -> Self {
+        let mut exact_paths = HashSet::new();
+        let mut prefix_paths = Vec::new();
+        for path in public_paths.unwrap_or_default() {
+            if path.ends_with('/') && path != "/" {
+                prefix_paths.push(path);
+            } else {
+                exact_paths.insert(path);
+            }
+        }
+        // 性能优化：降序排列前缀以尽早触及深度具体路径
+        prefix_paths.sort_by_key(|p| std::cmp::Reverse(p.len()));
+
+        Self {
+            public_exact_paths: exact_paths,
+            public_prefix_paths: prefix_paths,
+        }
     }
 
-    // 2. 放行常见静态资产文件的扩展名（纯字符切片提取，消除 Path 解析与平台依赖性开销）
-    const STATIC_EXTENSIONS: &[&str] = &[
-        "js", "css", "ico", "png", "jpg", "jpeg", "gif", "svg", "woff", "woff2", "ttf", "json",
-        "txt",
-    ];
-    if let Some(idx) = path.rfind('.') {
-        let ext = &path[idx + 1..];
-        if !ext.contains('/') {
-            if STATIC_EXTENSIONS
-                .iter()
-                .any(|&static_ext| ext.eq_ignore_ascii_case(static_ext))
-            {
+    /// 校验当前请求路径是否放行
+    pub fn is_public(&self, path: &str) -> bool {
+        // 1. 放行静态资源目录
+        if path.starts_with("/_next/") || path.starts_with("/static/") {
+            return true;
+        }
+
+        // 2. 常见静态资产文件的扩展名放行
+        const STATIC_EXTENSIONS: &[&str] = &[
+            "js", "css", "ico", "png", "jpg", "jpeg", "gif", "svg", "woff", "woff2", "ttf", "json",
+            "txt",
+        ];
+        if let Some(idx) = path.rfind('.') {
+            let ext = &path[idx + 1..];
+            if !ext.contains('/') {
+                if STATIC_EXTENSIONS
+                    .iter()
+                    .any(|&static_ext| ext.eq_ignore_ascii_case(static_ext))
+                  {
+                      return true;
+                  }
+            }
+        }
+
+        // 3. O(1) 快速精确匹配
+        if self.public_exact_paths.contains(path) {
+            return true;
+        }
+
+        // 4. 动态前缀放行路径匹配
+        for prefix in &self.public_prefix_paths {
+            if path.starts_with(prefix) {
                 return true;
             }
         }
-    }
 
-    // 3. O(1) 快速精确匹配
-    if exact_paths.contains(path) {
-        return true;
+        false
     }
-
-    // 4. 动态匹配前缀放行路径
-    for prefix in prefix_paths {
-        if path.starts_with(prefix) {
-            return true;
-        }
-    }
-
-    false
 }
 
 /// 根据请求的上下文特性，决策是执行 302 重定向至登录页（对于浏览器普通 GET 页面导航）
@@ -77,10 +102,8 @@ pub struct Gateway {
     pub jwks_cache: Arc<JwksCache>,
     /// Portal OIDC Provider 的 JWT issuer（校验 iss claim）
     pub issuer: String,
-    /// 公开免校验精确路径白名单哈希集 (O(1) 匹配优化)
-    pub public_exact_paths: HashSet<String>,
-    /// 公开免校验前缀路径白名单列表
-    pub public_prefix_paths: Vec<String>,
+    /// 公开路径匹配器
+    pub path_matcher: PathMatcher,
 }
 
 impl Gateway {
@@ -202,7 +225,7 @@ impl ProxyHttp for Gateway {
 
     async fn request_filter(&self, session: &mut Session, ctx: &mut Self::CTX) -> Result<bool> {
         let path = session.req_header().uri.path();
-        if is_public_asset_or_route(path, &self.public_exact_paths, &self.public_prefix_paths) {
+        if self.path_matcher.is_public(path) {
             return Ok(false);
         }
 
@@ -282,104 +305,32 @@ mod tests {
             "/oauth2/".to_string(),
             "/.well-known/".to_string(),
         ];
-        let mut exact_paths = HashSet::new();
-        let mut prefix_paths = Vec::new();
-        for path in public_paths {
-            if path.ends_with('/') && path != "/" {
-                prefix_paths.push(path);
-            } else {
-                exact_paths.insert(path);
-            }
-        }
+        let matcher = PathMatcher::new(Some(public_paths));
 
         // 静态目录资产放行
-        assert!(is_public_asset_or_route(
-            "/_next/static/chunks/main.js",
-            &exact_paths,
-            &prefix_paths
-        ));
-        assert!(is_public_asset_or_route(
-            "/static/images/logo.png",
-            &exact_paths,
-            &prefix_paths
-        ));
+        assert!(matcher.is_public("/_next/static/chunks/main.js"));
+        assert!(matcher.is_public("/static/images/logo.png"));
 
         // 静态资源文件扩展名放行
-        assert!(is_public_asset_or_route(
-            "/favicon.ico",
-            &exact_paths,
-            &prefix_paths
-        ));
-        assert!(is_public_asset_or_route(
-            "/logo.PNG",
-            &exact_paths,
-            &prefix_paths
-        )); // 测试大小写不敏感
-        assert!(is_public_asset_or_route(
-            "/robots.txt",
-            &exact_paths,
-            &prefix_paths
-        ));
-        assert!(is_public_asset_or_route(
-            "/site.webmanifest.json",
-            &exact_paths,
-            &prefix_paths
-        ));
+        assert!(matcher.is_public("/favicon.ico"));
+        assert!(matcher.is_public("/logo.PNG")); // 测试大小写不敏感
+        assert!(matcher.is_public("/robots.txt"));
+        assert!(matcher.is_public("/site.webmanifest.json"));
 
         // 公开页面和认证接口放行 (前缀或精确相等)
-        assert!(is_public_asset_or_route(
-            "/login",
-            &exact_paths,
-            &prefix_paths
-        ));
-        assert!(is_public_asset_or_route(
-            "/register",
-            &exact_paths,
-            &prefix_paths
-        ));
-        assert!(is_public_asset_or_route(
-            "/error",
-            &exact_paths,
-            &prefix_paths
-        ));
-        assert!(is_public_asset_or_route("/", &exact_paths, &prefix_paths));
-        assert!(is_public_asset_or_route(
-            "/api/auth/session",
-            &exact_paths,
-            &prefix_paths
-        ));
-        assert!(is_public_asset_or_route(
-            "/oauth2/authorize",
-            &exact_paths,
-            &prefix_paths
-        ));
-        assert!(is_public_asset_or_route(
-            "/.well-known/jwks.json",
-            &exact_paths,
-            &prefix_paths
-        ));
+        assert!(matcher.is_public("/login"));
+        assert!(matcher.is_public("/register"));
+        assert!(matcher.is_public("/error"));
+        assert!(matcher.is_public("/"));
+        assert!(matcher.is_public("/api/auth/session"));
+        assert!(matcher.is_public("/oauth2/authorize"));
+        assert!(matcher.is_public("/.well-known/jwks.json"));
 
         // 受保护的管理页面和路由应该拦截 (返回 false)
-        assert!(!is_public_asset_or_route(
-            "/dashboard",
-            &exact_paths,
-            &prefix_paths
-        ));
-        assert!(!is_public_asset_or_route(
-            "/dashboard/users",
-            &exact_paths,
-            &prefix_paths
-        ));
-        assert!(!is_public_asset_or_route(
-            "/profile",
-            &exact_paths,
-            &prefix_paths
-        ));
-        assert!(!is_public_asset_or_route(
-            "/api/v1/users",
-            &exact_paths,
-            &prefix_paths
-        ));
+        assert!(!matcher.is_public("/dashboard"));
+        assert!(!matcher.is_public("/dashboard/users"));
+        assert!(!matcher.is_public("/profile"));
+        assert!(!matcher.is_public("/api/v1/users"));
     }
 
     #[test]

@@ -5,7 +5,7 @@ mod jwks;
 mod redirect;
 
 use crate::config::Config;
-use crate::gateway::Gateway;
+use crate::gateway::{Gateway, PathMatcher};
 use crate::jwks::JwksCache;
 use crate::redirect::RedirectService;
 use clap::Parser;
@@ -120,18 +120,7 @@ fn main() {
             .expect("❌ 配置的 Portal 上游地址无效"),
     );
 
-    // 预分类公开白名单路径，将精确匹配（哈希检索）和前缀放行分类，实现 O(1) 路由查询性能
-    let mut public_exact_paths = std::collections::HashSet::new();
-    let mut public_prefix_paths = Vec::new();
-    for path in config.portal.public_paths.clone().unwrap_or_default() {
-        if path.ends_with('/') && path != "/" {
-            public_prefix_paths.push(path);
-        } else {
-            public_exact_paths.insert(path);
-        }
-    }
-    // 性能优化：对前缀路径按长度进行降序排序，使较长且具体的路径匹配在循环中尽早触发命中
-    public_prefix_paths.sort_by_key(|p| std::cmp::Reverse(p.len()));
+    let path_matcher = PathMatcher::new(config.portal.public_paths.clone());
 
     // 构建 HTTPS 反向代理服务（含 JWT 验签）
     let mut gateway_proxy = http_proxy_service(
@@ -140,8 +129,7 @@ fn main() {
             portal_lb,
             jwks_cache: Arc::clone(&jwks_cache),
             issuer: config.portal.issuer.clone(),
-            public_exact_paths,
-            public_prefix_paths,
+            path_matcher,
         },
     );
 
