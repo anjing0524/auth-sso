@@ -15,7 +15,7 @@ use pingora_load_balancing::LoadBalancer;
 use pingora_proxy::http_proxy_service;
 use std::sync::Arc;
 use tracing::{error, info, warn};
-use tracing_subscriber::{fmt, prelude::*, EnvFilter};
+use tracing_subscriber::{EnvFilter, fmt, prelude::*};
 
 /// 命令行参数解析结构体 (Clap 声明式解析)
 #[derive(Parser, Debug)]
@@ -39,18 +39,14 @@ fn init_tracing(log_dir: &str, log_level: &str) -> tracing_appender::non_blockin
     let (non_blocking_file, guard) = tracing_appender::non_blocking(file_appender);
 
     // 3. 构建控制台输出 Layer (带 ANSI 颜色渲染)
-    let stdout_layer = fmt::layer()
-        .with_ansi(true)
-        .with_target(true);
+    let stdout_layer = fmt::layer().with_ansi(true).with_target(true);
 
     // 4. 构建文件落地 Layer (去除颜色)
-    let file_layer = fmt::layer()
-        .with_ansi(false)
-        .with_writer(non_blocking_file);
+    let file_layer = fmt::layer().with_ansi(false).with_writer(non_blocking_file);
 
     // 5. 设置日志过滤级
-    let env_filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new(log_level));
+    let env_filter =
+        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(log_level));
 
     // 6. 组合多重 Layer 并注册为系统全局的 Default Dispatcher
     tracing_subscriber::registry()
