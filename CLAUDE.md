@@ -6,11 +6,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Auth-SSO is an enterprise unified identity authentication platform implementing SSO (Single Sign-On) with OIDC Provider capabilities. It's a pnpm monorepo containing:
 
-- **apps/portal** - Admin Portal & OIDC Provider (port 4000) - User/role/permission management, Better Auth OIDC Provider, and Dashboard. IDP functionality is fully integrated into Portal.
-- **apps/demo-app** - Demo SSO Client (port 4002) - Tests SSO integration
+- **apps/portal** - Admin Portal & OIDC Provider (port 4100) - User/role/permission management, Better Auth OIDC Provider, and Dashboard. IDP functionality is fully integrated into Portal.
 - **apps/gateway** - API Gateway (Rust/Pingora) - ES256 JWKS offline verification, Cookie-to-Bearer transformation
 - **packages/contracts** - Shared types, error codes, permission codes, OIDC constants
-- **packages/config** - Shared TypeScript/ESLint configuration
+- **packages/config** - Shared env config (Zod schema + URL derivation), TypeScript/ESLint configuration
 
 ## Development Commands
 
@@ -19,8 +18,7 @@ Auth-SSO is an enterprise unified identity authentication platform implementing 
 pnpm dev
 
 # Start specific app
-pnpm --filter @auth-sso/portal dev   # Portal on port 4000
-pnpm --filter @auth-sso/demo-app dev # Demo on port 4002
+pnpm --filter @auth-sso/portal dev   # Portal on port 4100
 
 # 测试体系 (Vitest + Playwright + Traceability)
 pnpm test                  # 全量 Vitest 测试
@@ -57,7 +55,7 @@ Tests follow a layered strategy — fast, isolated unit tests at the bottom, int
 - **Location**: `tests/e2e/*.spec.ts`
 - **Framework**: Playwright on Chromium
 - **Scope**: Full OAuth 2.1 flow, SSO cross-app login/logout, RBAC enforcement in browser
-- **Setup**: Two `webServer` entries (Portal + Demo App) with DB push + seed
+- **Setup**: Portal webServer entry with DB push + seed
 - **Run**: `pnpm test:e2e`
 
 ### Session 架构

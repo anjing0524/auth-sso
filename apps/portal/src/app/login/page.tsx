@@ -6,6 +6,7 @@ import { Suspense } from 'react';
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { auth } from '@/infrastructure/auth/auth-instance';
+import { getAppBaseURL } from '@/lib/env';
 import LoginForm from './login-form';
 
 interface SearchParams {
@@ -49,7 +50,7 @@ export default async function LoginPage({ searchParams }: SearchParams) {
 
   // 2. 如果已登录，且有 OAuth 参数，直接跳转到授权端点触发授权码发放
   if (session && clientId) {
-    const authUrl = new URL('/api/auth/oauth2/authorize', 'http://localhost:4000'); // 仅用于相对路径构造
+    const authUrl = new URL('/api/auth/oauth2/authorize', getAppBaseURL());
     authUrl.searchParams.set('client_id', clientId);
     authUrl.searchParams.set('redirect_uri', redirectUrl);
     authUrl.searchParams.set('response_type', responseType || 'code');

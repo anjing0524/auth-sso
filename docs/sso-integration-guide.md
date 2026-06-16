@@ -237,4 +237,4 @@ function base64UrlEncode(buffer: Uint8Array): string {
 
 ## 示例代码
 
-完整示例请参考 `apps/demo-app` 目录。
+完整示例请参考 `apps/portal` 中的 OAuth 授权流程实现。

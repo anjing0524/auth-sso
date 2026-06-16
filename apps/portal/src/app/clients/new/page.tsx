@@ -102,7 +102,7 @@ export default function NewClientPage() {
                 <div className="space-y-2 col-span-2">
                   <Label className="font-bold text-slate-700">回调地址 (Redirect URIs) <span className="text-red-500">*</span></Label>
                   <Textarea
-                    placeholder="http://localhost:3000/api/auth/callback&#10;证书和密钥由系统自动生成"
+                    placeholder="https://your-app.example.com/api/auth/callback&#10;证书和密钥由系统自动生成"
                     value={formData.redirectUris}
                     onChange={e => setFormData({...formData, redirectUris: e.target.value})}
                     className="min-h-[100px] rounded-xl"

@@ -7,6 +7,7 @@
  * @module infrastructure/redis
  */
 import Redis from 'ioredis';
+import { getRedisUrl } from '@/lib/env';
 
 /**
  * 统一的 Redis 客户端接口
@@ -42,8 +43,7 @@ let rawIoredisClient: Redis | null = null;
  */
 export function getRawIoredisClient(): Redis | null {
   if (!rawIoredisClient) {
-    const url = process.env.REDIS_URL || 'redis://localhost:6379';
-    rawIoredisClient = new Redis(url, {
+    rawIoredisClient = new Redis(getRedisUrl(), {
       maxRetriesPerRequest: 0, // 严格遵守 Better Auth Redis 驱动的最佳实践限制
       connectTimeout: 5000,
       lazyConnect: true,
@@ -64,7 +64,7 @@ export function getRawIoredisClient(): Redis | null {
  * 创建 ioredis 客户端
  */
 function createIoredisClient(): RedisClient {
-  const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
+  const redisUrl = getRedisUrl();
   console.log('[Redis] Initializing ioredis with URL:', redisUrl.split('@')[1] || 'localhost');
 
   const client = new Redis(redisUrl, {

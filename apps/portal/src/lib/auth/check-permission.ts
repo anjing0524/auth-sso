@@ -15,6 +15,7 @@ import type { PortalJwtClaims } from '../session';
 import type { UserPermissionContext } from '@auth-sso/contracts';
 import { getUserPermissionContext } from '@/lib/permissions';
 import { resolveIdentity } from './verify-jwt';
+import { getAppBaseURL } from '@/lib/env';
 
 /**
  * 权限检查选项接口定义
@@ -51,7 +52,7 @@ export interface PermissionCheckResult {
 function synthesizeClaims(userId: string, ctx: UserPermissionContext): PortalJwtClaims {
   return {
     sub: userId,
-    iss: 'http://localhost:4000',
+    iss: getAppBaseURL(),
     aud: 'portal-client',
     jti: 'session_' + userId,
     roles: ctx.roles.map((r) => r.code),

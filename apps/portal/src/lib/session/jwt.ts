@@ -9,6 +9,7 @@ import { jwtVerify, decodeJwt } from 'jose';
 import { getJwksSet } from './jwks';
 import { type PortalJwtClaims } from './types';
 import { isJtiRevoked } from './revoke';
+import { getIssuer } from '@/lib/env';
 
 /**
  * 完整验签并解析 JWT（使用 JWKS 远端公钥，jose 内部缓存）
@@ -20,7 +21,7 @@ import { isJtiRevoked } from './revoke';
 export async function verifyJwt(token: string): Promise<PortalJwtClaims | null> {
   try {
     const { payload } = await jwtVerify<PortalJwtClaims>(token, getJwksSet(), {
-      issuer: (process.env.PORTAL_ISSUER || 'http://localhost:4100').trim(),
+      issuer: getIssuer(),
     });
 
     // 检查 jti 是否在黑名单（用于管理员紧急踢人场景）

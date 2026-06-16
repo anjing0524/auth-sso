@@ -16,8 +16,6 @@ async function updateClients() {
   try {
     const portalClientId = 'cl_portal_k8s2n1';
     const portalSecret = process.env.PORTAL_CLIENT_SECRET;
-    const demoClientId = 'cl_demo_j9m3p5';
-    const demoSecret = process.env.DEMO_APP_CLIENT_SECRET;
 
     if (portalSecret) {
       await db.update(schema.clients)
@@ -25,22 +23,10 @@ async function updateClients() {
           name: 'Portal 用户管理门户',
           clientId: portalClientId,
           clientSecret: portalSecret,
-          redirectUrls: process.env.PORTAL_REDIRECT_URL || 'http://localhost:4000/api/auth/callback'
+          redirectUrls: process.env.PORTAL_REDIRECT_URL || 'http://localhost:4100/api/auth/callback'
         })
-        .where(eq(schema.clients.clientId, 'portal')); // 第一次使用旧的查找，之后改为 ID 查找
+        .where(eq(schema.clients.clientId, 'portal'));
       console.log(`✅ Portal client updated. ID: ${portalClientId}`);
-    }
-
-    if (demoSecret) {
-      await db.update(schema.clients)
-        .set({
-          name: 'Demo App 示例应用',
-          clientId: demoClientId,
-          clientSecret: demoSecret,
-          redirectUrls: process.env.DEMO_APP_REDIRECT_URL || 'http://localhost:4002/auth/callback'
-        })
-        .where(eq(schema.clients.clientId, 'demo-app'));
-      console.log(`✅ Demo App client updated. ID: ${demoClientId}`);
     }
 
     console.log('✨ Update complete!');

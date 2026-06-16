@@ -7,17 +7,20 @@
  */
 import { createAuthClient } from 'better-auth/react';
 
+/** Portal 默认基础 URL（与 gateway 端口 4100 对齐） */
+const DEFAULT_APP_URL = 'http://localhost:4100';
+
 /** Better Auth 浏览器端客户端实例 */
 export const authClient = createAuthClient({
-  baseURL: process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:4000',
+  baseURL: process.env.NEXT_PUBLIC_APP_URL || DEFAULT_APP_URL,
 });
 
 /** OAuth 配置（Portal 自身即是 OIDC Provider） */
 export const oauthConfig = {
-  idpUrl: (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:4000').trim(),
+  idpUrl: (process.env.NEXT_PUBLIC_APP_URL || DEFAULT_APP_URL).trim(),
   clientId: (process.env.NEXT_PUBLIC_CLIENT_ID || 'portal').trim(),
   clientSecret: process.env.IDP_CLIENT_SECRET,
-  redirectUri: (process.env.NEXT_PUBLIC_REDIRECT_URI || 'http://localhost:4000/api/auth/callback').trim(),
+  redirectUri: (process.env.NEXT_PUBLIC_REDIRECT_URI || `${DEFAULT_APP_URL}/api/auth/callback`).trim(),
   scopes: ['openid', 'profile', 'email', 'offline_access'],
 };
 

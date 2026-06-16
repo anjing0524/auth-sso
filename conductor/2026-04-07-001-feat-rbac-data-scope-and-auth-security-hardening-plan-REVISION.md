@@ -39,7 +39,7 @@ origin: conductor/2026-04-03-001-feat-rbac-data-scope-refinement-plan.md
 ### Unit 1: Fix Type & Lint Errors (Blocker)
 - **File**: `apps/portal/src/app/api/roles/[id]/data-scopes/route.ts`
 - **Change**: 将 `sql.begin(async sql => { ... })` 中的内部 `sql` 重命名为 `tx`，修复类型遮蔽问题。
-- **File**: `apps/demo-app/package.json`
+- **File**: `apps/portal/package.json`
 - **Change**: 修正 `next lint` 脚本路径。
 
 ### Unit 2: Recursion Depth Limit & Error Fallback
@@ -65,6 +65,6 @@ origin: conductor/2026-04-03-001-feat-rbac-data-scope-refinement-plan.md
 ## Verification
 
 - [ ] `pnpm typecheck` 通过（修复 TransactionSql 错误）。
-- [ ] `pnpm lint` 通过（修复 demo-app 路径错误）。
+- [ ] `pnpm lint` 通过。
 - [ ] 自动化测试验证数据范围逻辑（DEPT_AND_SUB, CUSTOM）。
 - [ ] 验证 OIDC Nonce 不匹配时登录失败。

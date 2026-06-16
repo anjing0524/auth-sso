@@ -51,14 +51,6 @@ PORTAL_CLIENT_SECRET=customer-graph-secret
 REDIS_URL=redis://localhost:6379
 ```
 
-### Demo App (apps/demo-app/.env.local)
-
-```bash
-# 可选 - 代码中已有默认值，如需覆盖可配置
-OAUTH_ISSUER=http://localhost:4001
-OAUTH_CLIENT_SECRET=demo-app-secret
-```
-
 ---
 
 ## 生产环境变量

@@ -3,7 +3,6 @@ import { defineConfig, devices } from '@playwright/test';
 /**
  * Playwright E2E 测试配置
  *
- * Monorepo 双 webServer 模式：同时启动 Portal + Demo App
  * IDP 已合并进 Portal，Portal 自身即是 OIDC Provider
  * 支持 headed（开发调试）和 headless（CI）两种模式
  */
@@ -45,19 +44,12 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
     },
   ],
-  // webServer 配置：启动 Portal (含 OIDC Provider) + Demo App
+  // webServer 配置：启动 Portal (含 OIDC Provider)
   webServer: [
     {
       command: 'pnpm db:seed && pnpm --filter @auth-sso/portal dev',
       url: 'http://127.0.0.1:4100',
       name: 'Portal (含 OIDC Provider)',
-      timeout: 120_000,
-      reuseExistingServer: !process.env.CI,
-    },
-    {
-      command: 'pnpm --filter @auth-sso/demo-app dev',
-      url: 'http://127.0.0.1:4102',
-      name: 'Demo App',
       timeout: 120_000,
       reuseExistingServer: !process.env.CI,
     },

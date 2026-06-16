@@ -8,7 +8,7 @@
  */
 import './load-env';
 
-import { db, schema } from '../src/lib/db';
+import { db, schema } from '@/infrastructure/db';
 import bcrypt from 'bcryptjs';
 import { randomBytes } from 'crypto';
 
@@ -84,23 +84,6 @@ async function main() {
       clientId: 'portal',
       clientSecret: process.env.PORTAL_CLIENT_SECRET || 'portal-secret',
       redirectUrls: portalRedirectUrls,
-      grantTypes: '["authorization_code","refresh_token"]',
-      scopes: 'openid profile email offline_access',
-      status: 'ACTIVE',
-      skipConsent: true,
-    });
-
-    const demoRedirectUrls = parseRedirectUrls(
-      process.env.DEMO_APP_REDIRECT_URL,
-      ['http://localhost:4102/auth/callback', 'http://localhost:4102/api/auth/callback'],
-    );
-    await db.insert(schema.clients).values({
-      id: generateId(),
-      publicId: 'cli_demo',
-      name: 'Demo SSO App',
-      clientId: 'demo-app',
-      clientSecret: process.env.DEMO_APP_CLIENT_SECRET || 'demo-app-secret',
-      redirectUrls: demoRedirectUrls,
       grantTypes: '["authorization_code","refresh_token"]',
       scopes: 'openid profile email offline_access',
       status: 'ACTIVE',

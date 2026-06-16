@@ -11,9 +11,8 @@ Auth-SSO is a unified identity and access management (IAM) system built on top o
 
 - **`apps/portal` (Portal)**: The enterprise portal, BFF (Backend for Frontend), and OIDC Provider. Portal itself IS the identity provider — it runs Better Auth with the OIDC Provider plugin, handles user authentication, token issuance (ES256 JWT), manages business logic (RBAC, organizational structure), and writes JWT tokens into HttpOnly Cookies.
 - **`apps/gateway` (Gateway)**: A high-performance API Gateway built with Rust (Pingora). It serves as the unified traffic entry point, performs offline JWT signature verification using cached JWKS public keys, and transforms Cookie-based auth into Bearer tokens for downstream microservices.
-- **`apps/demo-app` (Demo)**: A sample OIDC client application demonstrating SSO integration.
 - **`packages/contracts`**: Shared TypeScript types, error codes, permission codes, and OIDC constants.
-- **`packages/config`**: Shared TypeScript/ESLint configuration.
+- **`packages/config`**: Shared env config (Zod schema + URL derivation), TypeScript/ESLint configuration.
 
 ---
 
@@ -26,7 +25,7 @@ Auth-SSO is a unified identity and access management (IAM) system built on top o
 - **ORM**: Drizzle ORM.
 - **Redis**: jti blocklist (Portal emergency revocation), permission context cache (Portal), Better Auth session storage (secondaryStorage).
 - **Styling**: Tailwind CSS 4, shadcn/ui.
-- **Language**: TypeScript (Portal/Demo), Rust (Gateway).
+- **Language**: TypeScript (Portal), Rust (Gateway).
 
 ---
 
@@ -76,7 +75,7 @@ Browser
 
 ### 4.2 Single Sign-On (SSO) Flow
 
-1. User accesses a Sub-Application (e.g., `apps/demo-app`).
+1. User accesses a Sub-Application (an OIDC client registered with Portal).
 2. Sub-app redirects to Portal `/authorize`.
 3. Browser automatically sends the `idp_session` cookie (Better Auth session).
 4. Portal recognizes the session and redirects back to Sub-app with a `code` (skipping the login UI).

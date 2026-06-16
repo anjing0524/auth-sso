@@ -6,6 +6,7 @@ import 'server-only';
  * @module lib/session/jwks
  */
 import { createRemoteJWKSet } from 'jose';
+import { getJwksUri } from '@/lib/env';
 
 /** 懒初始化的 JWKS 远端公钥集，用于验签 Portal OIDC Provider 签发的 JWT */
 let jwksSet: ReturnType<typeof createRemoteJWKSet> | null = null;
@@ -16,8 +17,7 @@ let jwksSet: ReturnType<typeof createRemoteJWKSet> | null = null;
  */
 export function getJwksSet() {
   if (!jwksSet) {
-    const jwksUri = (process.env.PORTAL_JWKS_URI || 'http://localhost:4100/api/auth/.well-known/jwks').trim();
-    jwksSet = createRemoteJWKSet(new URL(jwksUri));
+    jwksSet = createRemoteJWKSet(new URL(getJwksUri()));
   }
   return jwksSet;
 }

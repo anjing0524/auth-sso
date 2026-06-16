@@ -89,7 +89,7 @@ Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, API.md, ARCHITECTURE.md, DATABASE
 
 | 客户端 | Redirect URI | 授权角色 | 状态 |
 | :--- | :--- | :--- | :--- |
-| **demo-app** | `http://localhost:4002/api/auth/callback` | 全部角色 | ACTIVE |
+| **portal** | `http://localhost:4100/api/auth/callback` | ADMIN | ACTIVE |
 | **erp-app** | `https://erp.example.com/callback` | `super_admin`, `org_admin`, `dept_manager` | ACTIVE |
 | **crm-app** | `https://crm.example.com/callback` | `super_admin`, `org_admin` | ACTIVE |
 | **disabled-app** | `https://disabled.example.com/callback` | — | DISABLED |
@@ -715,7 +715,7 @@ Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, API.md, ARCHITECTURE.md, DATABASE
 > **@req G-CLT-L** | **权限:** `client:list`
 
 **作为** 拥有 `super_admin` 角色的张三或拥有 `app_admin` 角色的孙七，
-**我** 访问客户端管理页面，看到所有 OAuth 客户端（demo-app、erp-app、crm-app、disabled-app），
+**我** 访问客户端管理页面，看到所有 OAuth 客户端（portal、erp-app、crm-app、disabled-app），
 **以便** 我了解和管理接入的应用。
 
 **验收标准：**
@@ -746,7 +746,7 @@ Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, API.md, ARCHITECTURE.md, DATABASE
 > **@req G-CLT-U** | **权限:** `client:update`
 
 **作为** 拥有 `super_admin` 角色的张三，
-**我** 修改 `demo-app` 的 Redirect URI 从 `http://localhost:4002/callback` 改为 `http://localhost:4002/api/auth/callback`，
+**我** 修改 `portal` 的 Redirect URI 从 `http://localhost:4000/callback` 改为 `http://localhost:4100/api/auth/callback`，
 **以便** 回调地址与实际路由一致。
 
 **验收标准：**

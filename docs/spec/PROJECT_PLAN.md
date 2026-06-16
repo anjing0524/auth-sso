@@ -23,7 +23,7 @@ Status: Released
 | **M2** | Core Authentication | ✅ | Build login/callback flow, establish Portal-IdP link. |
 | **M3** | Session Resilience | ✅ | Implement JWT Cookie lifecycle, token refresh, and global logout. |
 | **M4** | Permission Center | ✅ | Complete management UI/APIs for Users/Roles/Clients. |
-| **M5** | SSO Integration | ✅ | Verify SSO flow with demo-app, publish guide. |
+| **M5** | SSO Integration | ✅ | Verify SSO flow, publish guide. |
 | **M6** | Quality & Launch | ✅ | Security hardening, E2E testing, deployment SOP. |
 | **M7** | API Gateway | ✅ | Rust/Pingora gateway with ES256 JWKS offline verification. |
 

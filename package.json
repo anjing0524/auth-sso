@@ -6,10 +6,8 @@
   "scripts": {
     "dev": "pnpm -r --parallel run dev",
     "dev:portal": "pnpm --filter @auth-sso/portal dev",
-    "dev:demo": "pnpm --filter @auth-sso/demo-app dev",
     "build": "pnpm -r build",
     "build:portal": "pnpm --filter @auth-sso/portal build",
-    "build:demo": "pnpm --filter @auth-sso/demo-app build",
     "lint": "pnpm -r lint",
     "typecheck": "pnpm -r typecheck",
     "db:generate": "pnpm --filter @auth-sso/portal db:generate",

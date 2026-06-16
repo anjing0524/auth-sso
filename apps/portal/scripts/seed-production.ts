@@ -178,7 +178,6 @@ async function main() {
   // 校验必要环境变量
   const connectionString = requireEnv('DATABASE_URL');
   const portalSecret = requireEnv('PORTAL_CLIENT_SECRET');
-  const demoSecret = requireEnv('DEMO_APP_CLIENT_SECRET');
   const adminPassword = requireEnv('INITIAL_ADMIN_PASSWORD');
 
   // 判断是否需要 SSL（云端数据库）
@@ -214,19 +213,6 @@ async function main() {
       skipConsent: true,
     });
 
-    const demoRedirectUrls = parseRedirectUrls(
-      process.env.DEMO_APP_REDIRECT_URL,
-      '["http://localhost:4102/auth/callback"]',
-    );
-    await upsertClient(db, {
-      clientId: 'demo-app',
-      name: 'Demo SSO App',
-      clientSecret: demoSecret,
-      redirectUrls: demoRedirectUrls,
-      publicId: 'cli_demo',
-      skipConsent: true,
-    });
-
     // 3. RBAC 初始化（幂等，从 contracts 读取）
     console.log('\n🛡️  初始化 RBAC...');
     const { main: seedRbac } = await import('./seed-rbac');
@@ -235,7 +221,6 @@ async function main() {
     // 4. OAuth Consent 预授权
     console.log('\n✅ 预授权 OAuth Consent...');
     await ensureConsent(db, adminId, 'portal');
-    await ensureConsent(db, adminId, 'demo-app');
 
     console.log('\n✨ 生产环境初始化完成！');
   } finally {

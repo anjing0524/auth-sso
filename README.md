@@ -19,11 +19,10 @@
 auth-sso/
 ├── apps/
 │   ├── gateway/       # 信创网关 (Pingora/Rust) — HTTPS 终结 + JWT 验签
-│   ├── portal/        # 管理门户 + OIDC Provider (含认证中心) — 端口 4000
-│   └── demo-app/      # SSO 演示应用 — 端口 4002
+│   └── portal/        # 管理门户 + OIDC Provider (含认证中心) — 端口 4100
 ├── packages/
 │   ├── contracts/     # 共享类型定义、错误码、权限码契约
-│   └── config/        # 共享 TypeScript/ESLint 配置
+│   └── config/        # 共享 env 配置 (Zod + URL 推导)、TypeScript/ESLint
 ├── tests/             # 自动化测试脚本 (API, SSO, Security, RBAC, E2E)
 └── docs/              # 项目文档与 SOP
 ```
@@ -60,13 +59,12 @@ cp apps/portal/.env.example apps/portal/.env.local
 ### 3. 启动服务
 
 ```bash
-# 一键启动所有服务 (Portal, Demo App)
+# 一键启动 Portal
 pnpm dev
 ```
 
 访问地址:
-- **Portal (管理门户 + 认证中心)**: http://localhost:4000
-- **Demo App (演示应用)**: http://localhost:4002
+- **Portal (管理门户 + 认证中心)**: http://localhost:4100
 
 ### 4. 数据库初始化
 

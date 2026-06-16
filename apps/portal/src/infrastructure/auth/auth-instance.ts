@@ -7,12 +7,9 @@ import bcrypt from 'bcryptjs';
 
 import { db, schema } from '@/infrastructure/db';
 import { getRawIoredisClient } from '@/infrastructure/redis';
+import { getAppBaseURL, getTrustedOrigins } from '@/lib/env';
 
-const currentBaseURL = (
-  process.env.BETTER_AUTH_URL ||
-  process.env.NEXT_PUBLIC_APP_URL ||
-  'http://localhost:4000'
-).trim();
+const currentBaseURL = getAppBaseURL();
 
 /** Redis 客户端实例：直接复用单例物理连接 */
 export const redis = getRawIoredisClient();
@@ -43,13 +40,7 @@ export const auth = betterAuth({
     useSecureCookies: process.env.NODE_ENV === 'production',
     crossOrigin: true,
   },
-  trustedOrigins: [
-    'https://auth-sso-portal.vercel.app',
-    'https://auth-sso-demo-tau.vercel.app',
-    'http://localhost:4000', 'http://localhost:4002',
-    'http://localhost:4100', 'http://localhost:4102',
-    'http://127.0.0.1:4100', 'http://127.0.0.1:4102',
-  ],
+  trustedOrigins: getTrustedOrigins(),
 
   ...(redis ? {
     secondaryStorage: redisStorage({
