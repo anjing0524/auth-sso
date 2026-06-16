@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use log::info;
+use tracing::info;
 use pingora_core::prelude::*;
 use pingora_http::ResponseHeader;
 use pingora_proxy::{ProxyHttp, Session};

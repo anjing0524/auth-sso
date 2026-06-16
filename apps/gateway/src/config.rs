@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::env;
 
 /// 网关服务层配置
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 #[serde(default)]
 pub struct GatewayConfig {
     /// HTTP 监听端口，用于重定向

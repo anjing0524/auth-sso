@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use jsonwebtoken::{Algorithm, Validation, decode, decode_header};
-use log::{debug, error, info, warn};
+use tracing::{debug, error, info, warn};
 use pingora_core::prelude::*;
 use pingora_http::{RequestHeader, ResponseHeader};
 use pingora_load_balancing::LoadBalancer;

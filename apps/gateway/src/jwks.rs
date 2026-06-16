@@ -1,6 +1,6 @@
 use jsonwebtoken::DecodingKey;
 use jsonwebtoken::jwk::JwkSet;
-use log::info;
+use tracing::info;
 use std::collections::HashMap;
 use std::fmt;
 use std::sync::Arc;

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { ShieldCheck, AlertCircle, Lock, Loader2, ArrowRight } from 'lucide-react';
+import { ShieldCheck, AlertCircle, Loader2, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
 
 import { 
@@ -63,7 +63,7 @@ export default function LoginForm({
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsLoading(true);
     setError(null);
@@ -137,13 +137,13 @@ export default function LoginForm({
         
         <form onSubmit={handleSubmit} method="POST">
           <CardContent className="pt-6 space-y-4">
-            {formattedError && (
+            {formattedError ? (
               <Alert variant="destructive" className="animate-in head-shake duration-300">
                 <AlertCircle className="h-4 w-4" />
                 <AlertTitle>登录遇到问题</AlertTitle>
                 <AlertDescription>{formattedError}</AlertDescription>
               </Alert>
-            )}
+            ) : null}
 
             <div className="space-y-2">
               <Label htmlFor="email">账号 (邮箱)</Label>
@@ -153,7 +153,7 @@ export default function LoginForm({
                 placeholder="admin@example.com"
                 required
                 value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
                 disabled={isLoading}
                 className="h-10"
               />
@@ -167,7 +167,7 @@ export default function LoginForm({
                 placeholder="••••••••"
                 required
                 value={formData.password}
-                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
                 disabled={isLoading}
                 className="h-10"
               />

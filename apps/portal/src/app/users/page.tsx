@@ -40,16 +40,11 @@ export default async function UsersPage({ searchParams }: PageProps) {
   const page = parseInt(params.page || '1', 10);
   const pageSize = 15; // 固定单页 15 条
 
-  // 2. 读模型：服务端直接拉取扁平的数据对象 (不做冗余的领域实体转换，保证首屏性能)
-  const { data: users, pagination } = await getUsers(auth.userId, {
-    page,
-    pageSize,
-    keyword,
-    status,
-  });
-
-  // 3. 服务端并行预获取部门数据，供新增表单使用
-  const departments = await getDepartments();
+  // 2. 读模型：并行获取用户列表与部门数据（两者无依赖关系，消除串行瀑布）
+  const [{ data: users, pagination }, departments] = await Promise.all([
+    getUsers(auth.userId, { page, pageSize, keyword, status }),
+    getDepartments(),
+  ]);
 
   return (
     <div className="h-full flex flex-col gap-6 pb-10">
@@ -69,8 +64,8 @@ export default async function UsersPage({ searchParams }: PageProps) {
       {/* 核心卡片容器 */}
       <Card className="flex-1 border-none shadow-sm ring-1 ring-border/50 overflow-hidden rounded-[1.5rem] flex flex-col bg-white">
         <CardHeader className="bg-slate-50/50 dark:bg-slate-900/50 py-4 px-6 border-b">
-          {/* 筛选过滤组件 */}
-          <UserFilters initialKeyword={keyword} initialStatus={status} />
+          {/* 筛选过滤组件：key={keyword} 确保 URL 参数变化时组件正确重置 */}
+          <UserFilters key={keyword} initialKeyword={keyword} initialStatus={status} />
         </CardHeader>
         <CardContent className="p-0 flex-1 overflow-auto flex flex-col">
           {/* 同步直出表格，数据流清晰透明 */}

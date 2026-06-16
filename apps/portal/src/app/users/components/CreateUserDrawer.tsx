@@ -5,7 +5,7 @@
  * 基于 React 19 useActionState 与 Form Actions 绑定薄控制器 Server Action
  */
 
-import React, { useState, useEffect, useActionState } from 'react';
+import { useState, useEffect, useActionState } from 'react';
 import { useFormStatus } from 'react-dom';
 import { toast } from 'sonner';
 import { UserPlus } from 'lucide-react';
@@ -64,7 +64,7 @@ export default function CreateUserDrawer({ departments }: CreateUserDrawerProps)
     null
   );
 
-  // 感知 Action 结果并响应
+  // 感知 Action 结果并响应（依赖原始值避免不必要的 effect 重跑）
   useEffect(() => {
     if (!state) return;
     if (state.success) {
@@ -74,7 +74,7 @@ export default function CreateUserDrawer({ departments }: CreateUserDrawerProps)
     } else {
       toast.error(state.message || '创建用户失败');
     }
-  }, [state]);
+  }, [state?.success, state?.message]);
 
   return (
     <>
