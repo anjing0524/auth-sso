@@ -4,7 +4,6 @@ use log::info;
 use std::collections::HashMap;
 use std::fmt;
 use std::sync::Arc;
-use tokio::sync::RwLock;
 
 /// JWKS 获取与解析过程中的强类型错误定义
 #[derive(Debug)]
@@ -38,7 +37,7 @@ impl From<reqwest::Error> for JwksError {
 /// JWKS 公钥缓存结构体
 /// 使用 RwLock 实现：多个请求并发读，刷新时独占写；内置复用 HTTP 客户端以支持 Keep-Alive 连接与请求超时。
 pub struct JwksCache {
-    pub keys: RwLock<HashMap<String, DecodingKey>>,
+    keys: std::sync::RwLock<HashMap<String, DecodingKey>>,
     pub client: reqwest::Client,
 }
 
@@ -51,9 +50,19 @@ impl JwksCache {
             .unwrap_or_else(|_| reqwest::Client::new());
 
         Arc::new(Self {
-            keys: RwLock::new(HashMap::new()),
+            keys: std::sync::RwLock::new(HashMap::new()),
             client,
         })
+    }
+
+    /// 获取特定 kid 对应的公钥（同步读取）
+    pub fn get_key(&self, kid: &str) -> Option<DecodingKey> {
+        self.keys.read().ok()?.get(kid).cloned()
+    }
+
+    /// 判断当前公钥缓存是否为空
+    pub fn is_empty(&self) -> bool {
+        self.keys.read().map(|k| k.is_empty()).unwrap_or(true)
     }
 
     /// 从 Portal JWKS 端点拉取所有公钥并更新缓存，支持按 kid 匹配
@@ -85,7 +94,10 @@ impl JwksCache {
 
         // 记录长度以在写锁释放前输出日志，避免在释放写锁后重新读锁，规避竞争
         let loaded_count = new_keys.len();
-        *self.keys.write().await = new_keys;
+        {
+            let mut keys_guard = self.keys.write().map_err(|_| JwksError::LockPoisoned)?;
+            *keys_guard = new_keys;
+        }
 
         info!(
             "JWKS 公钥缓存刷新成功，加载了 {} 个 Key，来源: {}",

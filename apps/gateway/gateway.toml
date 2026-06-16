@@ -22,3 +22,14 @@ jwks_url = "http://127.0.0.1:4000/api/auth/.well-known/jwks"
 
 # OIDC 声明 Issuer (iss) 校验标志
 issuer = "http://localhost:4000"
+
+# 免鉴权直接放行的公开路径白名单前缀列表
+public_paths = [
+    "/login",
+    "/register",
+    "/error",
+    "/",
+    "/api/auth/",
+    "/oauth2/",
+    "/.well-known/"
+]

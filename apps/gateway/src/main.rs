@@ -49,10 +49,7 @@ fn start_jwks_background_refresh_task(
                 Err(e) => {
                     error!("❌ JWKS 公钥缓存定时刷新失败: {}", e);
                     // 仅在刷新失败时，才获取读锁判定当前是否已有旧公钥，决定是快速重试还是正常退避
-                    let has_keys = {
-                        let keys = jwks_cache.keys.read().await;
-                        !keys.is_empty()
-                    };
+                    let has_keys = !jwks_cache.is_empty();
                     let sleep_secs = if has_keys { 300 } else { 10 };
                     warn!("⚠️ 网关将在 {} 秒后重试拉取 JWKS...", sleep_secs);
                     tokio::time::sleep(std::time::Duration::from_secs(sleep_secs)).await;
