@@ -1,4 +1,5 @@
 import type { EntityStatus, MenuType } from '@auth-sso/contracts';
+import { ENTITY_ACTIVE, MENU_TYPE_MENU } from '@auth-sso/contracts';
 import type { CreateMenuInput, Menu, MenuTreeNode } from './types';
 import { buildTree } from '@/domain/shared/tree-utils';
 
@@ -54,8 +55,8 @@ export function createMenu(
     icon: input.icon ?? null,
     visible: input.visible ?? true,
     sort: input.sort,
-    menuType: input.menuType ?? 'MENU',
-    status: 'ACTIVE',
+    menuType: input.menuType ?? MENU_TYPE_MENU,
+    status: ENTITY_ACTIVE,
     createdAt: Temporal.Now.instant(),
   };
 }

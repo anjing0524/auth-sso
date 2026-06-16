@@ -1,4 +1,5 @@
 import type { EntityStatus } from '@auth-sso/contracts';
+import { ENTITY_ACTIVE } from '@auth-sso/contracts';
 import type { CreateDepartmentInput, Department, DepartmentTreeNode } from './types';
 import { BusinessRuleViolationError } from '../shared/errors';
 import { buildTree } from '@/domain/shared/tree-utils';
@@ -44,7 +45,7 @@ export function createDepartment(
     name: input.name,
     code: input.code ?? null,
     sort: input.sort,
-    status: 'ACTIVE',
+    status: ENTITY_ACTIVE,
     createdAt: Temporal.Now.instant(),
   };
 }
@@ -95,6 +96,30 @@ export function validateNoCircularReference(
     const parent = allDepts.find(d => d.id === currentId);
     currentId = parent?.parentId ?? null;
   }
+}
+
+/**
+ * 纯函数：带环形引用校验的部门更新 (无副作用)
+ *
+ * 将 parentId 变更检测与环形引用校验从 Controller 层下沉至此，
+ * 使 Controller 只需传入 allDepts 即可完成校验，无需自行编写 if 条件分支。
+ *
+ * @param dept      当前部门实体
+ * @param patch     更新片段
+ * @param allDepts  全部部门列表（用于祖先链追溯）
+ * @returns 更新后的部门实体
+ * @throws BusinessRuleViolationError 当 parentId 变更会产生环形引用时
+ */
+export function applyDepartmentUpdateWithCircularCheck(
+  dept: Department,
+  patch: Partial<Pick<Department, 'name' | 'code' | 'parentId' | 'sort' | 'status'>>,
+  allDepts: Array<{ id: string; parentId: string | null }>,
+): Department {
+  // 检查 parentId 是否发生了变更，且新 parentId 非空
+  if (patch.parentId !== undefined && patch.parentId !== dept.parentId && patch.parentId) {
+    validateNoCircularReference(dept.id, patch.parentId, allDepts);
+  }
+  return applyDepartmentUpdate(dept, patch);
 }
 
 // ────────────────────────────────────────────

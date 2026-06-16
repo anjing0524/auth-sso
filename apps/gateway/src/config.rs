@@ -50,7 +50,7 @@ impl Default for PortalConfig {
     fn default() -> Self {
         Self {
             upstream: "127.0.0.1:4100".to_string(),
-            jwks_url: "http://127.0.0.1:4100/api/auth/.well-known/jwks".to_string(),
+            jwks_url: "http://127.0.0.1:4100/api/auth/jwks".to_string(),
             issuer: "http://localhost:4100".to_string(),
             public_paths: Some(vec![
                 "/login".to_string(),

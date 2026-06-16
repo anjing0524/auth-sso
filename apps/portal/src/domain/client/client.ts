@@ -1,4 +1,5 @@
 import type { EntityStatus } from '@auth-sso/contracts';
+import { ENTITY_ACTIVE } from '@auth-sso/contracts';
 import type { CreateClientInput, Client } from './types';
 
 export type { Client };
@@ -82,7 +83,7 @@ export function createClient(
     logoUrl: input.logoUrl ?? null,
     accessTokenTtl: input.accessTokenTtl,
     refreshTokenTtl: input.refreshTokenTtl,
-    status: 'ACTIVE',
+    status: ENTITY_ACTIVE,
     disabled: false,
     skipConsent: input.skipConsent,
     userId: null,

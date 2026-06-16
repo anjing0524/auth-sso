@@ -24,7 +24,7 @@ log_level = "info"
 upstream = "127.0.0.1:4100"
 
 # OIDC 公钥拉取端点，定时刷新公钥用于离线解密验签
-jwks_url = "http://127.0.0.1:4100/api/auth/.well-known/jwks"
+jwks_url = "http://127.0.0.1:4100/api/auth/jwks"
 
 # OIDC 声明 Issuer (iss) 校验标志
 issuer = "http://localhost:4100"

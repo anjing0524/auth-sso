@@ -31,7 +31,24 @@ import { EntityNotFoundError, DuplicateEntityError } from '@/domain/shared/error
 import { generateId } from '@/lib/crypto';
 import { hashPassword } from '@/lib/password';
 import { clearUserPermissionCache } from '@/lib/permissions';
+import { USER_ACTIVE } from '@auth-sso/contracts';
 import type { ApiResponse } from '@auth-sso/contracts';
+
+/** 获取用户角色与部门（并行查询辅助函数） */
+async function fetchUserRolesAndDept(userId: string, deptId: string | null) {
+  return Promise.all([
+    db.select({
+      id: schema.roles.id, publicId: schema.roles.publicId,
+      code: schema.roles.code, name: schema.roles.name,
+      description: schema.roles.description,
+    }).from(schema.roles)
+      .innerJoin(schema.userRoles, eq(schema.roles.id, schema.userRoles.roleId))
+      .where(eq(schema.userRoles.userId, userId)),
+    deptId
+      ? db.query.departments.findFirst({ where: eq(schema.departments.id, deptId) })
+      : null,
+  ]);
+}
 
 /**
  * 创建新用户 Action Controller
@@ -105,7 +122,7 @@ export const toggleUserStatusAction = withAuth(
     return {
       success: true,
       data: { status: updated.status },
-      message: `用户状态已更新为 ${updated.status === 'ACTIVE' ? '正常' : '已禁用'}`,
+      message: `用户状态已更新为 ${updated.status === USER_ACTIVE ? '正常' : '已禁用'}`,
     };
   },
 );
@@ -124,19 +141,7 @@ export const getUserAction = withAuth(
     const userRow = await db.query.users.findFirst({ where: eq(schema.users.id, parsed.data.id) });
     if (!userRow) throw new EntityNotFoundError('User', parsed.data.id);
 
-    // 并行获取角色与部门（独立查询，无依赖关系）
-    const [roles, dept] = await Promise.all([
-      db.select({
-        id: schema.roles.id, publicId: schema.roles.publicId,
-        code: schema.roles.code, name: schema.roles.name,
-        description: schema.roles.description,
-      }).from(schema.roles)
-        .innerJoin(schema.userRoles, eq(schema.roles.id, schema.userRoles.roleId))
-        .where(eq(schema.userRoles.userId, userRow.id)),
-      userRow.deptId
-        ? db.query.departments.findFirst({ where: eq(schema.departments.id, userRow.deptId) })
-        : null,
-    ]);
+    const [roles, dept] = await fetchUserRolesAndDept(userRow.id, userRow.deptId);
 
     return {
       success: true,

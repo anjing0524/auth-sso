@@ -1,4 +1,5 @@
 import type { EntityStatus, PermissionType } from '@auth-sso/contracts';
+import { ENTITY_ACTIVE, PERMISSION_API } from '@auth-sso/contracts';
 import type { CreatePermissionInput, Permission } from './types';
 
 export type { Permission };
@@ -46,11 +47,11 @@ export function createPermission(
     publicId: `perm_${Date.now().toString(36)}${idGenerator(4)}`,
     name: input.name,
     code: input.code,
-    type: input.type ?? 'API',
+    type: input.type ?? PERMISSION_API,
     resource: input.resource ?? null,
     action: input.action ?? null,
     parentId: input.parentId ?? null,
-    status: 'ACTIVE',
+    status: ENTITY_ACTIVE,
     sort: input.sort,
     createdAt: Temporal.Now.instant(),
   };

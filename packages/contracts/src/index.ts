@@ -42,6 +42,19 @@ export type LoginEventType = 'LOGIN_SUCCESS' | 'LOGIN_FAILED' | 'LOGOUT';
 // 用户身份源
 export type IdentityProvider = 'password';
 
+// ────────────────────────────────────────────
+// 枚举默认值常量（domain 工厂函数使用，消除手写字符串字面量）
+// 所有枚举值的单一真相源仍在 *_VALUES 数组中
+// ────────────────────────────────────────────
+export const USER_ACTIVE: UserStatus = 'ACTIVE';
+export const USER_DELETED: UserStatus = 'DELETED';
+export const ENTITY_ACTIVE: EntityStatus = 'ACTIVE';
+export const DATA_SCOPE_SELF: DataScopeType = 'SELF';
+export const PERMISSION_API: PermissionType = 'API';
+export const MENU_TYPE_MENU: MenuType = 'MENU';
+/** 系统管理员角色编码集合（硬编码业务常量） */
+export const ADMIN_ROLE_CODES = ['SUPER_ADMIN', 'ADMIN'] as const;
+
 // 外部 ID 前缀（与 domain 工厂函数保持一致）
 export const PUBLIC_ID_PREFIX = {
   USER: 'user_',
