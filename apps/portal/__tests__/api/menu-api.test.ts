@@ -95,8 +95,8 @@ const mocks = vi.hoisted(() => {
 vi.mock('@/infrastructure/db', () => ({ db: mocks.db, schema: mocks.schema }));
 vi.mock('@/lib/auth', () => ({ withPermission: mocks.authFn }));
 
-import { GET as ListMenus, POST as CreateMenu } from '@/app/api/menus/route';
-import { GET as GetMenu, PATCH as UpdateMenu, DELETE as DeleteMenu } from '@/app/api/menus/[id]/route';
+import { GET as ListMenus } from '@/app/api/menus/route';
+import { GET as GetMenu } from '@/app/api/menus/[id]/route';
 import { createTestRequest, parseResponseJson } from '../helpers/test-utils';
 
 function makeMenuRow(overrides: Record<string, any> = {}) {
@@ -126,17 +126,18 @@ describe('Menu API', () => {
   });
 
   describe('GET /api/menus', () => {
-    it('返回按 sort 排序的菜单列表，含 permissionCode', async () => {
+    it('返回按 sort 排序的菜单树，含 permissionCode', async () => {
       mocks.setQueryResult([
         makeMenuRow({ id: 'm1', name: '系统管理', permissionCode: 'system:manage', sort: 1 }),
         makeMenuRow({ id: 'm2', publicId: 'm02', name: '用户管理', path: '/users', permissionCode: 'user:list', sort: 2, parentId: 'm1' }),
       ]);
 
       const body = await parseResponseJson(await ListMenus(createTestRequest('/api/menus')));
-      expect(body.data).toHaveLength(2);
-      body.data.forEach((m: any) => {
-        if (m.path) expect(m.permissionCode).toBeDefined();
-      });
+      // 树形结构：1 个根节点（m1），其 children 包含 m2
+      expect(body.data).toHaveLength(1);
+      expect(body.data[0]).toMatchObject({ name: '系统管理' });
+      expect(body.data[0].children).toHaveLength(1);
+      expect(body.data[0].children[0]).toMatchObject({ name: '用户管理', path: '/users' });
     });
 
     it('空列表返回空数组', async () => {
@@ -174,133 +175,6 @@ describe('Menu API', () => {
       mocks.setQueryResult([]);
       const res = await GetMenu(createTestRequest('/api/menus/nx'), { params: Promise.resolve({ id: 'nx' }) } as any);
       expect(res.status).toBe(404);
-    });
-  });
-
-  describe('POST /api/menus', () => {
-    it('成功创建菜单节点', async () => {
-      const body = await parseResponseJson(
-        await CreateMenu(createTestRequest('/api/menus', {
-          method: 'POST',
-          body: { name: '用户列表', path: '/users', permissionCode: 'user:list', parentId: 'm1', sort: 10 },
-        }))
-      );
-      expect(body.success).toBe(true);
-      expect(body.data.name).toBe('用户列表');
-    });
-
-    it('缺少 name 返回 400', async () => {
-      const res = await CreateMenu(createTestRequest('/api/menus', { method: 'POST', body: { path: '/test' } }));
-      expect(res.status).toBe(400);
-      expect((await parseResponseJson(res)).message).toBeDefined();
-    });
-
-    it('创建目录类型菜单', async () => {
-      const body = await parseResponseJson(
-        await CreateMenu(createTestRequest('/api/menus', { method: 'POST', body: { name: '系统设置', menuType: 'DIRECTORY', sort: 0 } }))
-      );
-      expect(body.success).toBe(true);
-    });
-
-    it('创建按钮类型菜单', async () => {
-      const body = await parseResponseJson(
-        await CreateMenu(createTestRequest('/api/menus', { method: 'POST', body: { name: '新增按钮', permissionCode: 'user:create', menuType: 'BUTTON' } }))
-      );
-      expect(body.success).toBe(true);
-    });
-  });
-
-  describe('PATCH /api/menus/[id]', () => {
-    it('更新菜单名称和路径', async () => {
-      mocks.setQueryResult([makeMenuRow()]);
-      mocks.setRowCountResult(1);
-      const body = await parseResponseJson(
-        await UpdateMenu(
-          createTestRequest('/api/menus/m1', { method: 'PATCH', body: { name: '更新后', path: '/new' } }),
-          { params: Promise.resolve({ id: 'm1' }) } as any,
-        )
-      );
-      expect(body.success).toBe(true);
-    });
-
-    it('更新权限绑定和可见性', async () => {
-      mocks.setQueryResult([makeMenuRow()]);
-      mocks.setRowCountResult(1);
-      const body = await parseResponseJson(
-        await UpdateMenu(
-          createTestRequest('/api/menus/m1', { method: 'PATCH', body: { permissionCode: 'user:update', visible: false } }),
-          { params: Promise.resolve({ id: 'm1' }) } as any,
-        )
-      );
-      expect(body.success).toBe(true);
-    });
-
-    it('更新 menuType 和 status', async () => {
-      mocks.setQueryResult([makeMenuRow()]);
-      mocks.setRowCountResult(1);
-      const body = await parseResponseJson(
-        await UpdateMenu(
-          createTestRequest('/api/menus/m1', { method: 'PATCH', body: { menuType: 'BUTTON', status: 'DISABLED' } }),
-          { params: Promise.resolve({ id: 'm1' }) } as any,
-        )
-      );
-      expect(body.success).toBe(true);
-    });
-
-    it('支持 publicId 更新', async () => {
-      mocks.setQueryResult([makeMenuRow()]);
-      mocks.setRowCountResult(1);
-      const body = await parseResponseJson(
-        await UpdateMenu(
-          createTestRequest('/api/menus/m_menu01', { method: 'PATCH', body: { name: '公共ID更新' } }),
-          { params: Promise.resolve({ id: 'm_menu01' }) } as any,
-        )
-      );
-      expect(body.success).toBe(true);
-    });
-  });
-
-  describe('DELETE /api/menus/[id]', () => {
-    it('递归删除菜单及其子项', async () => {
-      // 使用 queryQueue 模拟逐步耗尽的查询：
-      //   query1: 根菜单查找，返回 [{ id: 'm1' }]
-      //   query2: 子菜单查找，返回 [{ id: 'm2' }]
-      //   query3: 子菜单的子菜单，返回 []（无更深层子菜单）
-      mocks.setQueryQueue([
-        [{ id: 'm1' }],
-        [{ id: 'm2' }],
-        [],
-      ]);
-
-      const body = await parseResponseJson(
-        await DeleteMenu(
-          createTestRequest('/api/menus/m1', { method: 'DELETE' }),
-          { params: Promise.resolve({ id: 'm1' }) } as any,
-        )
-      );
-      expect(body.success).toBe(true);
-      expect(body.message).toContain('递归删除');
-    });
-
-    it('不存在的菜单返回 404', async () => {
-      mocks.setQueryResult([]);
-      const res = await DeleteMenu(
-        createTestRequest('/api/menus/nx', { method: 'DELETE' }),
-        { params: Promise.resolve({ id: 'nx' }) } as any,
-      );
-      expect(res.status).toBe(404);
-    });
-
-    it('支持 publicId 删除', async () => {
-      mocks.setQueryQueue([
-        [{ id: 'm1' }],
-        [],
-      ]);
-      await DeleteMenu(
-        createTestRequest('/api/menus/m_menu01', { method: 'DELETE' }),
-        { params: Promise.resolve({ id: 'm_menu01' }) } as any,
-      );
-      // No exception = pass
     });
   });
 });

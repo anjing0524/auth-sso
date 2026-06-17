@@ -34,8 +34,9 @@ urlencoding = "2.1.3"
 # 工业级配置管理库
 config = { version = "0.14.0", features = ["toml"] }
 
-# 工业级 Cookie 解析库
-cookie = "0.18.1"
-
 # 声明式命令行参数解析框架
 clap = { version = "4.5.16", features = ["derive"] }
+
+# 错误处理简化库
+thiserror = "1.0"
+anyhow = "1.0"

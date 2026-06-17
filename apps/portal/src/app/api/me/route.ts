@@ -1,15 +1,19 @@
 /**
- * 获取当前用户信息 API 路由端点
- * GET /api/me - 返回已登录用户的身份、权限上下文及动态菜单树
+ * 获取当前用户信息 API (GET /api/me)
+ *
+ * 纯 JWT Cookie 认证——已移除 Better Auth getSession 回退。
+ *
+ * @route GET /api/me
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { getJwtFromCookie, verifyJwt, decodeJwtPayload } from '@/lib/session';
-import { oauthConfig } from '@/lib/auth/client';
+import { getJwtFromCookie } from '@/lib/session';
+import { verifyAccessToken } from '@/domain/auth/token';
 import { getUserPermissionContext } from '@/lib/permissions';
 import { db, schema } from '@/infrastructure/db';
 import { eq, asc } from 'drizzle-orm';
 import { mapDomainError } from '@/domain/shared/error-mapping';
-import { COMMON_ERRORS } from '@auth-sso/contracts';
+import { COMMON_ERRORS, ENTITY_ACTIVE } from '@auth-sso/contracts';
+import { getUser } from '@/app/users/data';
 
 export const runtime = 'nodejs';
 
@@ -23,50 +27,47 @@ interface SidebarMenuItem {
 
 export async function GET(request: NextRequest) {
   try {
-    let userId: string | null = null;
-    let userinfo: Record<string, any> = {};
-    let expiresAt: number | null = null;
-
+    // 纯 JWT Cookie 认证
     const token = await getJwtFromCookie();
-    if (token) {
-      const claims = await verifyJwt(token);
-      if (claims) {
-        userId = claims.sub;
-        userinfo = { sub: userId, email: claims.email, name: claims.name };
-        const tokenPayload = decodeJwtPayload(token);
-        expiresAt = tokenPayload?.exp ? tokenPayload.exp * 1000 : null;
-        try {
-          const userinfoUrl = new URL('/api/auth/oauth2/userinfo', oauthConfig.idpUrl);
-          const userinfoRes = await fetch(userinfoUrl.toString(), {
-            headers: { Authorization: `Bearer ${token}` }, cache: 'no-store',
-          });
-          if (userinfoRes.ok) userinfo = await userinfoRes.json();
-        } catch {
-          console.warn('[Me GET] IdP userinfo 端点调用失败，降级使用 JWT claims 信息');
-        }
-      }
+    if (!token) {
+      return NextResponse.json(
+        { error: COMMON_ERRORS.UNAUTHORIZED, message: '未登录' },
+        { status: 401 },
+      );
     }
 
-    if (!userId) {
-      const { auth } = await import('@/infrastructure/auth/auth-instance');
-      const session = await auth.api.getSession({ headers: request.headers });
-      if (session?.user) {
-        userId = session.user.id;
-        userinfo = { sub: session.user.id, email: session.user.email, name: session.user.name, picture: session.user.image, email_verified: session.user.emailVerified };
-        expiresAt = new Date(session.session.expiresAt).getTime();
-      }
+    const claims = await verifyAccessToken(token);
+    if (!claims) {
+      return NextResponse.json(
+        { error: COMMON_ERRORS.UNAUTHORIZED, message: '登录已过期' },
+        { status: 401 },
+      );
     }
 
-    if (!userId) {
-      return NextResponse.json({ error: COMMON_ERRORS.UNAUTHORIZED, message: '未登录' }, { status: 401 });
+    const userId = claims.sub;
+
+    // 委托 data.ts 获取用户信息
+    const user = await getUser(userId);
+    if (!user) {
+      return NextResponse.json(
+        { error: COMMON_ERRORS.UNAUTHORIZED, message: '用户不存在' },
+        { status: 401 },
+      );
     }
 
     const permissionContext = await getUserPermissionContext(userId);
-    const menuItems = await getDynamicMenus(permissionContext?.permissions || []);
+    const isAdmin = permissionContext?.roles.some(r => r.code === 'SUPER_ADMIN' || r.code === 'ADMIN') || false;
+    const menuItems = await getDynamicMenus(permissionContext?.permissions || [], isAdmin);
 
     return NextResponse.json({
-      user: { id: userinfo.sub, email: userinfo.email, name: userinfo.name, picture: userinfo.picture, emailVerified: userinfo.email_verified || userinfo.emailVerified },
-      tokenInfo: { expiresAt },
+      user: {
+        id: user.publicId,
+        email: user.email,
+        name: user.name,
+        picture: user.avatarUrl,
+        emailVerified: user.emailVerified,
+      },
+      tokenInfo: { expiresAt: claims.exp ? claims.exp * 1000 : null },
       permissions: permissionContext?.permissions || [],
       roles: permissionContext?.roles || [],
       dataScopeType: permissionContext?.dataScopeType || 'SELF',
@@ -75,20 +76,34 @@ export async function GET(request: NextRequest) {
     });
   } catch (err) {
     const mapped = mapDomainError(err);
-    return NextResponse.json({ error: mapped.error, message: mapped.message }, { status: mapped.status });
+    return NextResponse.json(
+      { error: mapped.error, message: mapped.message },
+      { status: mapped.status },
+    );
   }
 }
 
-async function getDynamicMenus(userPermissions: string[]): Promise<SidebarMenuItem[]> {
-  const allMenus = await db.select().from(schema.menus).where(eq(schema.menus.status, 'ACTIVE')).orderBy(asc(schema.menus.sort));
+async function getDynamicMenus(userPermissions: string[], isAdmin: boolean): Promise<SidebarMenuItem[]> {
+  const allMenus = await db
+    .select()
+    .from(schema.menus)
+    .where(eq(schema.menus.status, ENTITY_ACTIVE))
+    .orderBy(asc(schema.menus.sort));
+
   const buildTree = (parentId: string | null = null): SidebarMenuItem[] => {
     return allMenus
-      .filter(m => m.parentId === parentId && m.visible)
+      .filter((m) => m.parentId === parentId && m.visible && m.menuType !== 'BUTTON')
       .map((m): SidebarMenuItem | null => {
-        const hasPermission = !m.permissionCode || userPermissions.includes(m.permissionCode);
+        const hasPermission = !m.permissionCode || isAdmin || userPermissions.includes(m.permissionCode);
         const children = buildTree(m.id);
         if (!hasPermission && children.length === 0) return null;
-        return { id: m.id, title: m.name, url: m.path || '#', icon: m.icon, children: children.length > 0 ? children : undefined };
+        return {
+          id: m.id,
+          title: m.name,
+          url: m.path || '#',
+          icon: m.icon || 'LayoutGrid',
+          children: children.length > 0 ? children : undefined,
+        };
       })
       .filter((m): m is SidebarMenuItem => m !== null);
   };

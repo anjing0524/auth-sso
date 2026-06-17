@@ -2,12 +2,12 @@
  * Dashboard 3.0 - Server Component 重构
  * 具有专业排版、数据趋势图和高密度活动面板
  */
-import React from 'react';
+import { headers } from 'next/headers';
 import Link from 'next/link';
-import { 
-  Users, 
-  ShieldCheck, 
-  AppWindow, 
+import {
+  Users,
+  ShieldCheck,
+  AppWindow,
   Plus,
   ArrowRight,
   ArrowUpRight,
@@ -16,30 +16,41 @@ import {
   History
 } from 'lucide-react';
 
-import { 
-  Card, 
-  CardContent, 
-  CardDescription, 
-  CardHeader, 
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
   CardTitle,
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableHead, 
-  TableHeader, 
-  TableRow 
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow
 } from '@/components/ui/table';
 
 import { db, schema } from '@/infrastructure/db';
 import { eq, ne, desc, sql } from 'drizzle-orm';
+import { checkPermission } from '@/lib/auth';
 
 export const revalidate = 0; // 不缓存，每次都动态计算以体现最新状态
 
 export default async function DashboardPage() {
+  // 鉴权检查（缓存作用域外完成身份校验）
+  const auth = await checkPermission(await headers(), { permissions: ['dashboard:view'] });
+  if (!auth.authorized || !auth.userId) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <p className="text-red-500">未授权访问或权限不足</p>
+      </div>
+    );
+  }
+
   // 服务端直调 Drizzle 数据库拉取核心指标与安全日志
   const [
     [usersCount],

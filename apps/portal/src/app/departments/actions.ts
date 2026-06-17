@@ -6,7 +6,7 @@
  * 仅执行编排：Zod 门禁 → 领域纯函数 → Drizzle 直调。
  * 鉴权与领域错误映射统一由 withAuth 高阶函数施加。
  */
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, revalidateTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
 import { eq, or } from 'drizzle-orm';
 import { withAuth, type AuthContext } from '@/lib/auth';
@@ -39,6 +39,7 @@ export const createDepartmentAction = withAuth(
     await db.insert(schema.departments).values(departmentToInsertRow(dept));
 
     revalidatePath('/departments');
+    revalidateTag('departments-list', 'minutes');
     return { success: true, data: { id: dept.publicId }, message: '部门创建成功' };
   },
 );
@@ -68,6 +69,7 @@ export const updateDepartmentAction = withAuth(
     });
 
     revalidatePath('/departments');
+    revalidateTag('departments-list', 'minutes');
     return { success: true, data: { id: deptId }, message: '部门更新成功' };
   },
 );
@@ -92,6 +94,7 @@ export const deleteDepartmentAction = withAuth(
     });
 
     revalidatePath('/departments');
+    revalidateTag('departments-list', 'minutes');
     return { success: true, data: { id: deptId }, message: '部门已删除' };
   },
 );

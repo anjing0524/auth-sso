@@ -61,11 +61,11 @@ flowchart TD
     *   **判定标准**：如果一个写业务仅在我们自己内部的页面上调用，**一律只编写 Server Actions (actions.ts)**。严禁为其编写任何重复的 `/api/` 路由接口。
     *   **适用场景**：
         *   **Server Actions**：用于我们自己内部页面的表单提交、按钮点击、删除等操作，直接处理入参 Zod 解析，调用领域纯函数，直调 Drizzle 落库，并通过 `updateTag()` / `revalidatePath()` 刷新缓存，返回 JS plain object 即可。
-        *   **REST Route Handlers**：只有在发生**“外部系统集成（Webhook/Better Auth 回调）”**、**“跨域/子系统用户同步等开放 API 服务”**以及**“运维脚本与 cron 程序化调用”**这 3 种情况时，才允许为相应的写操作编写 API 路由。
+        *   **REST Route Handlers**：只有在发生**”外部系统集成（Webhook/OIDC 回调）”**、**”跨域/子系统用户同步等开放 API 服务”**以及**”运维脚本与 cron 程序化调用”**这 3 种情况时，才允许为相应的写操作编写 API 路由。
     *   **统一规范**：所有控制层函数体**不超过 20 行，不包含一行业务逻辑判断**。
 3.  **领域层 (Domain Layer)**：纯原生 TS 代码，零依赖 Next.js 模块。将所有核心业务规则（状态机转换、权限判定、数据计算与变换）抽象为**纯函数**（Plain Object 输入输出）。错误用**领域级错误类型**表达，由统一的**错误映射横切层**（`mapDomainError`）转换为 HTTP 响应。
 4.  **数据持久化层 (Database Layer)**：不设置 Repository 接口与实现分离，不设 Mapper 转换层与工厂 DI。控制器层在通过 Zod 校验与领域函数处理后，直接调用 Drizzle 语句对数据库进行操作，直接引用由 Drizzle schema 推导出的物理类型，消除不必要的间接抽象层。涉及多表写入时必须在 Controller 层显式使用 `db.transaction()`。
-5.  **基础设施层 (Infrastructure Layer)**：存放数据库连接、Redis 客户端、密码哈希、Better Auth 初始化等**有外部副作用的适配器**。`infrastructure/db/` 和 `infrastructure/redis/` 提供全局单例连接，`infrastructure/auth/` 存放 Better Auth 服务端初始化和密码服务。区别于 `lib/`（纯业务工具与鉴权逻辑）。
+5.  **基础设施层 (Infrastructure Layer)**：存放数据库连接、Redis 客户端、密码哈希等**有外部副作用的适配器**。`infrastructure/db/` 和 `infrastructure/redis/` 提供全局单例连接。区别于 `lib/`（纯业务工具与鉴权逻辑）。
 
 ---
 
@@ -77,8 +77,12 @@ flowchart TD
 src/
 ├── app/users/                  # 1. 表现与应用层 (与 Next.js 强相关)
 │   ├── page.tsx                #   - 路由直出入口 (Server Component 读模型)
-│   ├── data.ts                 #   - 读模型数据拉取辅助器 (使用 Drizzle 直调 + use cache)
-│   └── actions.ts              #   - BFF 控制器：浏览器侧 Server Actions
+│   ├── data.ts                 #   - 【读模型统一入口】所有 SELECT 查询集中于此（不含 'use server'）
+│   │                           #     列表查询用 'use cache' + cacheTag，详情查询不缓存
+│   ├── actions.ts              #   - 【写模型】仅 CUD Server Actions ('use server' + withAuth)
+│   │                           #     禁止只读查询，禁止手写鉴权
+│   ├── components/             #   - 客户端组件（表单、表格等）
+│   └── (api/) route.ts         #   - REST API：GET 委托 data.ts，POST/PUT/DELETE 直接处理
 │
 ├── domain/                     # 2. 纯净领域层 (零依赖 Next.js / Drizzle)
 │   ├── shared/                 #   - 跨 BC 共享定义
@@ -93,7 +97,7 @@ src/
 │
 ├── infrastructure/             # 3. 基础设施层（有状态的连接/实例管理）
 │   ├── auth/
-│   │   └── auth-instance.ts    #   - Better Auth 服务端初始化（OIDC Provider）
+│   │   └── auth-instance.ts    #   - (已移除，改用 domain/auth/token.ts 自实现 JWT 签发)
 │   ├── db/index.ts             #   - Drizzle + postgres-js 数据库连接（全局单例）
 │   └── redis/index.ts          #   - ioredis Redis 客户端（全局单例）
 │
@@ -712,7 +716,7 @@ export default [
 | **权限上下文** | `lib/permissions.ts` | `infrastructure/db`, `infrastructure/redis` | 用户权限上下文获取与缓存（无状态——使用 infra 提供的连接，不管理连接生命周期） | — |
 | **审计日志** | `lib/audit.ts` | `infrastructure/db` | 审计日志入库与高阶装饰器（无状态——使用 infra 提供的连接） | — |
 | **密码工具** | `lib/password.ts` | `bcryptjs` | 密码哈希（与 `lib/crypto.ts` 同质——无状态 crypto 工具） | — |
-| **基础设施** | `infrastructure/*/index.ts` | `lib/`, `domain/`, 第三方 SDK | **有状态**的外部适配器（DB 连接、Redis 客户端、Better Auth 实例初始化）。区别于 lib/：这些模块管理连接/实例生命周期 | `boundaries/element-types` |
+| **基础设施** | `infrastructure/*/index.ts` | `lib/`, `domain/`, 第三方 SDK | **有状态**的外部适配器（DB 连接、Redis 客户端）。区别于 lib/：这些模块管理连接/实例生命周期 | `boundaries/element-types` |
 | **Auth 鉴权** | `lib/auth/*.ts` | `lib/permissions`, `lib/session`, `infrastructure/db` | 鉴权子模块。权限/角色检查使用 lib/ 中的工具和 infra 中的连接。推荐统一从 `@/lib/auth` 导入 | — |
 | **Session/JWT** | `lib/session/*.ts` | `jose`, `infrastructure/redis` | JWT Cookie 读写、验签、jti 撤销。推荐统一从 `@/lib/session` 导入 | — |
 
@@ -732,6 +736,10 @@ export default [
 8. **读路径中重复编写数据范围过滤分支（`if (scopeFilter.type === 'LIST')...`）** —— 必须使用统一的 `applyDataScopeFilter` 工具函数。
 9. **`domain/` 或 `db/` 中手写枚举字面量（`z.enum(['ACTIVE',...])` / `pgEnum('...', ['ACTIVE',...])`）** —— 枚举值必须从 `@auth-sso/contracts` 常值数组派生，单一真相源。
 10. **`domain/` 中保留 `XxxPropsSchema`（如 `UserPropsSchema`）** —— 已废除。Domain 实体用纯 `interface`，不再用 Zod Schema 描述实体全貌。
+11. **API Route GET 处理器中出现直接 `db.select()` / `db.query` DB 调用** —— 读操作必须委托给 `data.ts` 统一读模型，Route 只做鉴权 + 委托。
+12. **`actions.ts` 中存在只读查询函数（如 `getXxxAction`）** —— `actions.ts` 仅保留 CUD 写操作，读归 `data.ts`。
+13. **写操作只调 `revalidatePath` 未调 `revalidateTag`** —— 缓存失效不完整，必须双写失效：`revalidatePath('/xxx')` + `revalidateTag('xxx-list', 'minutes')`。
+14. **`data.ts` 函数使用 `db.query.xxx.findFirst()`** —— 统一使用 `db.select().from().where().limit(1)` 风格，保证测试 mock 兼容性。
 
 ---
 
@@ -814,7 +822,7 @@ export function proxy(request: NextRequest) {
 }
 ```
 
-> **注意**：本地开发环境（无 Gateway）时，Portal 自身通过 `checkPermission` 中的 `verifyJwt` + Better Auth session 回退完成身份验证。Proxy 不需要兜底 JWT 检查——那是 Portal Action 层的职责。
+> **注意**：本地开发环境（无 Gateway）时，Portal 自身通过 `verifyAccessToken`（domain/auth/token.ts）完成 JWT 身份验证。JWT 签发使用 DB 存储的 ES256 密钥对。Proxy 不需要兜底 JWT 检查——那是 Portal Action 层的职责。
 
 ### 8.3 第三层：withAuth Guard 精细鉴权
 

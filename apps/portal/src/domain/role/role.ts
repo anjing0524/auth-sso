@@ -43,7 +43,7 @@ export function createRole(
 ): Role {
   return {
     id: idGenerator(20),
-    publicId: `role_${idGenerator(8)}`,
+    publicId: `role_${idGenerator(16)}`,
     name: input.name,
     code: input.code,
     description: input.description ?? null,
@@ -99,7 +99,7 @@ export function roleToInsertRow(r: Role) {
     isSystem: r.isSystem,
     sort: r.sort,
     status: r.status,
-    createdAt: new Date(),
+    createdAt: new Date(r.createdAt.epochMilliseconds),
     updatedAt: new Date(),
   };
 }

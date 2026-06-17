@@ -15,13 +15,32 @@ import {
 import { usePathname } from 'next/navigation';
 import { Skeleton } from '@/components/ui/skeleton';
 
+/** 用户基本信息类型 */
+interface UserInfo {
+  id: string;
+  name: string;
+  username: string;
+  email?: string;
+  avatarUrl?: string;
+  deptName?: string;
+}
+
+/** 菜单项类型 */
+interface MenuItem {
+  id: string;
+  name: string;
+  path?: string;
+  icon?: string;
+  children?: MenuItem[];
+}
+
 export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const [userInfo, setUserInfo] = useState<any>(null);
-  const [dynamicMenus, setDynamicMenus] = useState<any[]>([]);
+  const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
+  const [dynamicMenus, setDynamicMenus] = useState<MenuItem[]>([]);
   const [loading, setLoading] = useState(true);
   const pathname = usePathname();
 
@@ -32,10 +51,7 @@ export default function DashboardLayout({
      */
     async function fetchData() {
       try {
-        const [meRes, menusRes] = await Promise.all([
-          fetch('/api/me'),
-          fetch('/api/me/menus'),
-        ]);
+        const meRes = await fetch('/api/me');
 
         // 安全防御：如果用户未登录或会话超时返回 401 状态，则携带当前页面 callbackUrl 强行跳转至登录页，防止暴露管理界面布局框架
         if (meRes.status === 401) {
@@ -47,10 +63,7 @@ export default function DashboardLayout({
         if (meRes.ok) {
           const data = await meRes.json();
           setUserInfo(data);
-        }
-        if (menusRes.ok) {
-          const data = await menusRes.json();
-          setDynamicMenus(data.data || []);
+          setDynamicMenus(data.menus || []);
         }
       } catch (error) {
         console.error('Failed to fetch layout data:', error);

@@ -1,7 +1,7 @@
 /**
  * 开发环境全量 Seed 脚本
  *
- * 职责：清空数据库 → 创建管理员用户 + Better Auth 账号 + OAuth 客户端 + 部门
+ * 职责：清空数据库 → 创建管理员用户 + OAuth 客户端 + 部门
  * RBAC 初始化委托给 seed-rbac.ts（幂等，从 @auth-sso/contracts 读取权限定义）
  *
  * 运行: cd apps/portal && DATABASE_URL=<url> tsx scripts/seed.ts
@@ -38,13 +38,11 @@ async function main() {
     await db.delete(schema.userRoles);
     await db.delete(schema.permissions);
     await db.delete(schema.roles);
-    await db.delete(schema.oauthConsent);
-    await db.delete(schema.oauthRefreshTokens);
-    await db.delete(schema.oauthAccessTokens);
+    await db.delete(schema.consents);
+    await db.delete(schema.refreshTokens);
+    await db.delete(schema.accessTokens);
     await db.delete(schema.authorizationCodes);
     await db.delete(schema.clients);
-    await db.delete(schema.accounts);
-    await db.delete(schema.sessions);
     await db.delete(schema.users);
     await db.delete(schema.departments);
 
@@ -60,18 +58,10 @@ async function main() {
       email: 'admin@example.com',
       name: '系统管理员',
       status: 'ACTIVE',
+      passwordHash: adminPassword,
     });
 
-    // 2. 创建管理员账号 (Better Auth 登录必备)
-    await db.insert(schema.accounts).values({
-      id: generateId(),
-      userId: adminId,
-      accountId: 'admin@example.com',
-      providerId: 'credential',
-      password: adminPassword,
-    });
-
-    // 3. 创建 OAuth 客户端（secret 优先从 env 读取，fallback 开发默认值）
+    // 2. 创建 OAuth 客户端
     console.log('Creating clients...');
     const portalRedirectUrls = parseRedirectUrls(
       process.env.PORTAL_REDIRECT_URL,
@@ -84,13 +74,11 @@ async function main() {
       clientId: 'portal',
       clientSecret: process.env.PORTAL_CLIENT_SECRET || 'portal-secret',
       redirectUrls: portalRedirectUrls,
-      grantTypes: '["authorization_code","refresh_token"]',
       scopes: 'openid profile email offline_access',
       status: 'ACTIVE',
-      skipConsent: true,
     });
 
-    // 4. 创建默认部门
+    // 3. 创建默认部门
     await db.insert(schema.departments).values({
       id: generateId(),
       publicId: 'dept_root',
@@ -99,7 +87,7 @@ async function main() {
       status: 'ACTIVE',
     });
 
-    // 5. 委托 seed-rbac 完成 RBAC 初始化（幂等，从 contracts 读取）
+    // 4. 委托 seed-rbac 完成 RBAC 初始化（幂等，从 contracts 读取）
     console.log('\n🛡️  Delegating RBAC initialization to seed-rbac...');
     const { main: seedRbac } = await import('./seed-rbac');
     await seedRbac();

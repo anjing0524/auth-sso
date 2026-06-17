@@ -23,7 +23,6 @@ describe('Client 领域核心规则', () => {
     });
     const client = createClient(input, mockIdGen, mockClientIdGen, mockSecretGen);
     expect(client.status).toBe('ACTIVE');
-    expect(client.disabled).toBe(false);
     expect(client.clientSecret).toBe('test_secret_hex');
     expect(client.redirectUris).toHaveLength(1);
   });
@@ -44,9 +43,8 @@ describe('Client 领域核心规则', () => {
       redirectUris: ['https://old.com'],
     });
     const client = createClient(input, mockIdGen, mockClientIdGen, mockSecretGen);
-    const updated = applyClientUpdate(client, { name: '新名称', skipConsent: true });
+    const updated = applyClientUpdate(client, { name: '新名称' });
     expect(updated.name).toBe('新名称');
-    expect(updated.skipConsent).toBe(true);
     expect(updated.logoUrl).toBeNull(); // 未修改保持原值
   });
 

@@ -23,10 +23,8 @@ log_level = "info"
 # Next.js BFF (Portal/IdP) 上游负载均衡代理入口地址
 upstream = "127.0.0.1:4100"
 
-# OIDC 公钥拉取端点，定时刷新公钥用于离线解密验签
-jwks_url = "http://127.0.0.1:4100/api/auth/jwks"
-
 # OIDC 声明 Issuer (iss) 校验标志
+# JWKS 端点通过 OIDC Discovery 自动发现，无需手动配置
 issuer = "http://localhost:4100"
 
 # 免鉴权直接放行的公开路径白名单前缀列表

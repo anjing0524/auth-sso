@@ -1,78 +1,28 @@
 /**
  * 用户角色绑定 API
- * GET /api/users/[id]/roles - 获取用户的角色
- * POST /api/users/[id]/roles - 为用户分配角色
- * DELETE /api/users/[id]/roles - 移除用户的指定角色
+ * GET /api/users/[id]/roles — 委托 data.ts 获取用户的角色
+ * POST /api/users/[id]/roles — 为用户分配角色
+ * DELETE /api/users/[id]/roles — 移除用户的指定角色
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { db, schema } from '@/infrastructure/db';
-import { eq, or, desc, and } from 'drizzle-orm';
+import { eq, or, and } from 'drizzle-orm';
 import { withPermission } from '@/lib/auth';
 import crypto from 'crypto';
 import { clearUserPermissionCache } from '@/lib/permissions';
 import { COMMON_ERRORS } from '@auth-sso/contracts';
+import { getUserRoles } from '@/app/users/data';
 
 export const runtime = 'nodejs';
 
-/**
- * 路由动态参数接口定义
- */
-interface RouteParams {
-  params: Promise<{ id: string }>;
-}
+interface RouteParams { params: Promise<{ id: string }>; }
 
-/**
- * GET /api/users/[id]/roles
- * 获取用户的角色列表
- * 权限要求: user:read
- *
- * @param request NextRequest 对象
- * @param params 动态路由参数用户 ID (支持 UUID 或 publicId)
- * @returns 用户当前绑定的角色列表响应
- */
-export async function GET(
-  request: NextRequest,
-  { params }: RouteParams
-) {
+/** GET /api/users/[id]/roles — 委托 data.ts */
+export async function GET(request: NextRequest, { params }: RouteParams) {
   return withPermission(request, { permissions: ['user:read'] }, async () => {
-    try {
-      const { id } = await params;
-
-      const roles = await db.select({
-        id: schema.roles.id,
-        publicId: schema.roles.publicId,
-        code: schema.roles.code,
-        name: schema.roles.name,
-        description: schema.roles.description,
-        dataScopeType: schema.roles.dataScopeType,
-        status: schema.roles.status,
-        assignedAt: schema.userRoles.createdAt,
-      })
-      .from(schema.roles)
-      .innerJoin(schema.userRoles, eq(schema.roles.id, schema.userRoles.roleId))
-      .innerJoin(schema.users, eq(schema.userRoles.userId, schema.users.id))
-      .where(or(eq(schema.users.id, id), eq(schema.users.publicId, id)))
-      .orderBy(desc(schema.userRoles.createdAt));
-
-      return NextResponse.json({
-        data: roles.map(r => ({
-          id: r.id,
-          publicId: r.publicId,
-          code: r.code,
-          name: r.name,
-          description: r.description,
-          dataScopeType: r.dataScopeType,
-          status: r.status,
-          assignedAt: r.assignedAt,
-        })),
-      });
-    } catch (error) {
-      console.error('[UserRoles GET] Failed to retrieve roles for user:', error);
-      return NextResponse.json(
-        { error: COMMON_ERRORS.INTERNAL_ERROR, message: '获取用户角色失败' },
-        { status: 500 }
-      );
-    }
+    const { id } = await params;
+    const roles = await getUserRoles(id);
+    return NextResponse.json({ data: roles });
   });
 }
 
@@ -90,59 +40,51 @@ export async function POST(
   { params }: RouteParams
 ) {
   return withPermission(request, { permissions: ['user:update'] }, async () => {
-    try {
-      const { id } = await params;
-      const body = await request.json();
-      const { roleIds } = body;
+    const { id } = await params;
+    const body = await request.json();
+    const { roleIds } = body;
 
-      if (!Array.isArray(roleIds) || roleIds.length === 0) {
-        return NextResponse.json(
-          { error: COMMON_ERRORS.VALIDATION_ERROR, message: '角色ID列表不能为空' },
-          { status: 400 }
-        );
-      }
-
-      // 获取用户ID
-      const users = await db.select()
-        .from(schema.users)
-        .where(or(eq(schema.users.id, id), eq(schema.users.publicId, id)));
-
-      if (users.length === 0) {
-        return NextResponse.json(
-          { error: COMMON_ERRORS.NOT_FOUND, message: '用户不存在' },
-          { status: 404 }
-        );
-      }
-
-      const userId = users[0]!.id;
-
-      // 采用 Drizzle 强一致性事务锁，确保删除旧角色与关联新角色的原子性
-      await db.transaction(async (tx) => {
-        // 1. 删除现有的角色绑定
-        await tx.delete(schema.userRoles).where(eq(schema.userRoles.userId, userId));
-
-        // 2. 插入新的角色绑定
-        const userRolesData = roleIds.map(roleId => ({
-          id: crypto.randomUUID(),
-          userId,
-          roleId,
-          createdAt: new Date(),
-        }));
-
-        await tx.insert(schema.userRoles).values(userRolesData);
-      });
-
-      // 3. 分配角色后主动清除该用户的权限缓存，保障缓存强一致性
-      await clearUserPermissionCache(userId);
-
-      return NextResponse.json({ success: true, assignedCount: roleIds.length });
-    } catch (error) {
-      console.error('[UserRoles POST] Failed to allocate roles to user:', error);
+    if (!Array.isArray(roleIds) || roleIds.length === 0) {
       return NextResponse.json(
-        { error: COMMON_ERRORS.INTERNAL_ERROR, message: '分配角色失败' },
-        { status: 500 }
+        { error: COMMON_ERRORS.VALIDATION_ERROR, message: '角色ID列表不能为空' },
+        { status: 400 }
       );
     }
+
+    // 获取用户ID
+    const users = await db.select()
+      .from(schema.users)
+      .where(or(eq(schema.users.id, id), eq(schema.users.publicId, id)));
+
+    if (users.length === 0) {
+      return NextResponse.json(
+        { error: COMMON_ERRORS.NOT_FOUND, message: '用户不存在' },
+        { status: 404 }
+      );
+    }
+
+    const userId = users[0]!.id;
+
+    // 采用 Drizzle 强一致性事务锁，确保删除旧角色与关联新角色的原子性
+    await db.transaction(async (tx) => {
+      // 1. 删除现有的角色绑定
+      await tx.delete(schema.userRoles).where(eq(schema.userRoles.userId, userId));
+
+      // 2. 插入新的角色绑定
+      const userRolesData = roleIds.map(roleId => ({
+        id: crypto.randomUUID(),
+        userId,
+        roleId,
+        createdAt: new Date(),
+      }));
+
+      await tx.insert(schema.userRoles).values(userRolesData);
+    });
+
+    // 3. 分配角色后主动清除该用户的权限缓存，保障缓存强一致性
+    await clearUserPermissionCache(userId);
+
+    return NextResponse.json({ success: true, assignedCount: roleIds.length });
   });
 }
 
@@ -160,49 +102,41 @@ export async function DELETE(
   { params }: RouteParams
 ) {
   return withPermission(request, { permissions: ['user:update'] }, async () => {
-    try {
-      const { id } = await params;
-      const body = await request.json();
-      const { roleId } = body;
+    const { id } = await params;
+    const body = await request.json();
+    const { roleId } = body;
 
-      if (!roleId) {
-        return NextResponse.json(
-          { error: COMMON_ERRORS.VALIDATION_ERROR, message: '角色ID不能为空' },
-          { status: 400 }
-        );
-      }
-
-      // 获取用户ID
-      const users = await db.select()
-        .from(schema.users)
-        .where(or(eq(schema.users.id, id), eq(schema.users.publicId, id)));
-
-      if (users.length === 0) {
-        return NextResponse.json(
-          { error: COMMON_ERRORS.NOT_FOUND, message: '用户不存在' },
-          { status: 404 }
-        );
-      }
-
-      const userId = users[0]!.id;
-
-      // 🔥 修复点：加入 roleId 的 AND 条件比对进行精准删除，绝不误清空该用户关联的所有其他角色绑定
-      await db.delete(schema.userRoles)
-        .where(and(
-          eq(schema.userRoles.userId, userId),
-          eq(schema.userRoles.roleId, roleId)
-        ));
-
-      // 移除角色后主动清除该用户的权限缓存，保障缓存强一致性
-      await clearUserPermissionCache(userId);
-
-      return NextResponse.json({ success: true });
-    } catch (error) {
-      console.error('[UserRoles DELETE] Failed to remove role from user:', error);
+    if (!roleId) {
       return NextResponse.json(
-        { error: COMMON_ERRORS.INTERNAL_ERROR, message: '移除角色失败' },
-        { status: 500 }
+        { error: COMMON_ERRORS.VALIDATION_ERROR, message: '角色ID不能为空' },
+        { status: 400 }
       );
     }
+
+    // 获取用户ID
+    const users = await db.select()
+      .from(schema.users)
+      .where(or(eq(schema.users.id, id), eq(schema.users.publicId, id)));
+
+    if (users.length === 0) {
+      return NextResponse.json(
+        { error: COMMON_ERRORS.NOT_FOUND, message: '用户不存在' },
+        { status: 404 }
+      );
+    }
+
+    const userId = users[0]!.id;
+
+    // 精准删除：加入 roleId 的 AND 条件比对，绝不误清空该用户关联的所有其他角色绑定
+    await db.delete(schema.userRoles)
+      .where(and(
+        eq(schema.userRoles.userId, userId),
+        eq(schema.userRoles.roleId, roleId)
+      ));
+
+    // 移除角色后主动清除该用户的权限缓存，保障缓存强一致性
+    await clearUserPermissionCache(userId);
+
+    return NextResponse.json({ success: true });
   });
 }

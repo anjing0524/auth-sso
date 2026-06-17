@@ -200,6 +200,84 @@ Domain 实体使用 `Temporal.Instant`。唯一允许 `new Date()` 的地方是 
 | 内部页面表单/按钮 | **Server Actions** (`actions.ts`)，严禁另写 `/api/` 路由 |
 | 外部集成/Webhook/跨域/脚本 | **REST Route Handler** (`route.ts`) |
 
+### 11. 读模型统一收拢 `data.ts`（CQRS 只读层）
+
+`data.ts` 是模块内**唯一的数据库读入口**，所有 SELECT 查询集中于此。必须 `import 'server-only'`（编译期隔离，防止 Client Component 误引用），不含 `'use server'` 指令。
+
+| 层级 | 文件 | 职责 | 调用方 |
+|------|------|------|--------|
+| 读模型 | `data.ts` | 纯数据获取，`'use cache'` + `cacheTag` 缓存 | Server Component / API Route |
+| 写模型 | `actions.ts` | CUD 写操作，`'use server'`，`withAuth` 鉴权 | Server/Client Component |
+| REST 网关 | `route.ts` | GET 委托 `data.ts`，POST/PUT/DELETE 直接处理 | 外部集成/客户端 fetch |
+
+**硬性规则：**
+
+- **API Route GET 处理器禁止直接操作 DB**：必须通过 `withPermission` 鉴权后，委托给 `data.ts` 的同名函数。
+- **`actions.ts` 禁止只读查询**：读操作只在 `data.ts` 中。`actions.ts` 仅保留 CUD 写操作。
+- **Server Component Page 直调 `data.ts`**：通过 `checkPermission()` 鉴权后直接调用 `data.ts` 函数，不走 Server Action。
+- **`data.ts` 不自行鉴权**：鉴权在调用方完成，`data.ts` 通过 `userId` 参数接收身份，内部仅做数据范围过滤。
+
+```typescript
+// ✅ API Route GET 标准模板：鉴权 → 委托 data.ts
+export async function GET(request: NextRequest) {
+  return withPermission(request, { permissions: ['xxx:list'] }, async (userId) => {
+    const params = parseSearchParams(request);
+    const result = await getXxx(userId, params);  // ← 委托 data.ts
+    return NextResponse.json(result);
+  });
+}
+
+// ✅ Server Component Page 标准模板：鉴权 → 直调 data.ts
+export default async function XxxPage({ searchParams }: PageProps) {
+  const auth = await checkPermission(await headers(), { permissions: ['xxx:list'] });
+  if (!auth.authorized) return <Forbidden />;
+  const { data } = await getXxx(auth.userId, params);  // ← 直调 data.ts
+  return <XxxList data={data} />;
+}
+```
+
+### 12. 缓存策略与失效
+
+| 位置 | 机制 | 示例 |
+|------|------|------|
+| `data.ts` 列表查询 | `cacheTag('xxx-list')` + `cacheLife('minutes'\|'hours')` | `cacheTag('users-list')` |
+| `actions.ts` 写操作后 | `revalidatePath('/xxx')` + `revalidateTag('xxx-list', 'minutes')` | 页面缓存 + 数据缓存双失效 |
+
+**规则：** 每个写 Action 必须在 `revalidatePath` 后追加 `revalidateTag`，且 `profile` 参数需与 `data.ts` 中 `cacheLife` 一致。
+
+```typescript
+// ✅ 正确的缓存失效
+export const createXxxAction = withAuth({ permissions: ['xxx:create'] }, async (_ctx, input) => {
+  const result = await db.transaction(async (tx) => { /* ... */ });
+  revalidatePath('/xxx');              // 失效 RSC Payload
+  revalidateTag('xxx-list', 'minutes'); // 失效 data.ts use cache
+  return { success: true, data: result };
+});
+```
+
+### 13. data.ts 函数命名规范
+
+| 函数 | 用途 | 缓存 |
+|------|------|------|
+| `getXxxs(params)` | 分页/过滤列表 | `'use cache'` + `cacheTag` |
+| `getXxxById(id)` | 单实体详情 | 不缓存（保证实时性） |
+| `getXxxRoles(xxxId)` | 关联子资源 | 不缓存 |
+| `getXxxPermissions(xxxId)` | 关联子资源 | 不缓存 |
+
+### 14. API Route 读模型的 DB 查询风格
+
+`data.ts` 中所有查询**必须使用 `db.select()` 风格**，禁止使用 `db.query.xxx.findFirst()`。原因：`db.query` 的 mock 复杂度远高于 `db.select()` 链式调用，不利于测试。
+
+```typescript
+// ✅ db.select() 链式（测试友好）
+const rows = await db.select().from(schema.xxx)
+  .where(or(eq(...), eq(...))).limit(1);
+const row = rows[0];
+
+// ❌ db.query（测试 mock 复杂）
+const row = await db.query.xxx.findFirst({ where: or(...) });
+```
+
 ## Controller 标准骨架
 
 **Server Action（内部页面用）**：`withAuth` 统一处理鉴权 + 错误映射，Action 体内零鉴权/零 catch 样板。
@@ -219,14 +297,28 @@ export const xAction = withAuth({ permissions: ['x:create'] }, async (_ctx, inpu
     return entity;
   });
   revalidatePath('/xxx');
+  revalidateTag('xxx-list', 'minutes');  // 与 data.ts cacheLife 保持一致
   return { success: true, data: result };
 });
 ```
 
-**Route Handler（外部集成/Webhook）**：手动 `checkPermission` + try/catch `mapDomainError`。
+**Route Handler GET（读操作，委托 data.ts）**：
 
 ```typescript
-// Route Handler 骨架
+// Route Handler GET 骨架 — withPermission 鉴权后委托 data.ts
+export async function GET(request: NextRequest) {
+  return withPermission(request, { permissions: ['xxx:list'] }, async () => {
+    const sp = request.nextUrl.searchParams;
+    const result = await getXxx({ /* parse params */ });
+    return NextResponse.json(result);
+  });
+}
+```
+
+**Route Handler POST/PUT/DELETE（写操作，外部集成/Webhook）**：手动 `checkPermission` + try/catch `mapDomainError`。
+
+```typescript
+// Route Handler POST 骨架
 export async function POST(req: NextRequest) {
   const check = await checkPermission(req.headers, { permissions: ['x:create'] });
   if (!check.authorized) return NextResponse.json({ error: 'FORBIDDEN' }, { status: 403 });
@@ -254,6 +346,10 @@ export async function POST(req: NextRequest) {
 | `z.enum(['ACTIVE', 'DISABLED'])` 手写字面量 | 从 contracts 导入 `USER_STATUS_VALUES` 派生 |
 | Action 内手写 `checkPermission(...)` + `catch (err) { mapDomainError(err) }` | 用 `withAuth({ permissions: [...] }, async (input) => { ... })` |
 | `useState(initialUser)` 全量复制 prop | 按编辑/只读维度拆分：可编辑字段进 state，只读字段直接从 prop 读 |
+| API Route GET 手写 Drizzle 查询 | 委托给 `data.ts` 同名函数，Route 只做鉴权 + 委托 |
+| `actions.ts` 中有 `getXxxAction` 只读 Action | 移到 `data.ts` 的 `getXxx(id)` 纯函数 |
+| 写 Action 只调 `revalidatePath` 不调 `revalidateTag` | 追加 `revalidateTag('xxx-list', 'minutes')` |
+| `data.ts` 用 `db.query.xxx.findFirst()` | 改为 `db.select().from().where().limit(1)` 风格 |
 
 ## Red Flags - STOP and Refactor
 
@@ -265,5 +361,10 @@ export async function POST(req: NextRequest) {
 - 多行写入无 `db.transaction()`
 - domain entity 仍使用 `XxxPropsSchema`（应为纯 `interface`）
 - Action 内手写 `checkPermission` + `catch (err) { mapDomainError(err) }` 样板
+- API Route GET 处理器中出现 `db.select()` / `db.query` 直接 DB 调用（应委托 `data.ts`）
+- `actions.ts` 中存在只读查询函数（只能写，读归 `data.ts`）
+- `data.ts` 函数使用 `db.query.xxx.findFirst()`（应用 `db.select()` 风格）
+- 写操作只调 `revalidatePath` 未调 `revalidateTag`（缓存失效不完整）
+- 返回给客户端的 data 中包含 `Temporal.Instant` 而非 ISO 字符串（API Route JSON 序列化兼容性）
 
 > **完整规范详见** `docs/portal-architecture-guidelines.md`（含 React 19 组件模式、安全三层防御、Temporal API 详解、eslint-plugin-boundaries 配置等）。

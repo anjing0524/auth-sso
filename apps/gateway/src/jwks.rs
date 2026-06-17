@@ -1,43 +1,56 @@
+use jsonwebtoken::Algorithm;
 use jsonwebtoken::DecodingKey;
 use jsonwebtoken::jwk::JwkSet;
+use serde::Deserialize;
 use std::collections::HashMap;
-use std::fmt;
 use std::sync::Arc;
-use tracing::info;
+use tracing::{error, info, warn};
 
 /// JWKS 获取与解析过程中的强类型错误定义
-#[derive(Debug)]
+#[derive(thiserror::Error, Debug)]
 pub enum JwksError {
     /// 网络请求或解析 JSON 失败
-    Network(reqwest::Error),
+    #[error("网络或 JSON 解析错误: {0}")]
+    Network(#[from] reqwest::Error),
     /// 响应中不含任何合法的公钥
+    #[error("JWKS 响应中未找到任何有效且可解析的公钥")]
     EmptyKeys,
     /// 读写锁中毒故障
+    #[error("JWKS 读写锁中毒失效")]
     LockPoisoned,
+    /// OIDC Discovery 端点返回的 jwks_uri 缺失
+    #[error("OIDC Discovery 响应中未包含有效的 jwks_uri")]
+    MissingJwksUri,
+    /// jwks_uri 路径解析失败
+    #[error("无法从 jwks_uri 中解析出 JWKS 路径: {0}")]
+    InvalidJwksUri(String),
+    /// 配置的 issuer 与 OIDC Discovery 返回的 issuer 不匹配
+    #[error("Issuer 不匹配: 配置值={configured}, 发现值={discovered}")]
+    IssuerMismatch {
+        configured: String,
+        discovered: String,
+    },
 }
 
-impl fmt::Display for JwksError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            JwksError::Network(e) => write!(f, "网络或 JSON 解析错误: {}", e),
-            JwksError::EmptyKeys => write!(f, "JWKS 响应中未找到任何有效且可解析的公钥"),
-            JwksError::LockPoisoned => write!(f, "JWKS 读写锁中毒失效"),
-        }
-    }
-}
-
-impl std::error::Error for JwksError {}
-
-impl From<reqwest::Error> for JwksError {
-    fn from(err: reqwest::Error) -> Self {
-        JwksError::Network(err)
-    }
+/// OIDC Discovery 元数据 — 从 /.well-known/openid-configuration 提取网关所需字段
+#[derive(Debug, Clone, Deserialize)]
+pub struct OidcMetadata {
+    /// OIDC Provider 的 issuer 标识
+    pub issuer: Option<String>,
+    /// JWKS 公钥端点 URL
+    pub jwks_uri: Option<String>,
+    /// ID Token 签名算法列表
+    #[serde(default)]
+    pub id_token_signing_alg_values_supported: Vec<String>,
 }
 
 /// JWKS 公钥缓存结构体
 /// 使用 RwLock 实现：多个请求并发读，刷新时独占写；内置复用 HTTP 客户端以支持 Keep-Alive 连接与请求超时。
+/// 同时缓存 OIDC Discovery 元数据，用于动态签名算法选择和 issuer 交叉校验。
 pub struct JwksCache {
     keys: std::sync::RwLock<HashMap<String, DecodingKey>>,
+    /// OIDC Discovery 元数据缓存（启动时拉取，每次 JWKS 刷新时同步更新）
+    oidc_metadata: std::sync::RwLock<Option<OidcMetadata>>,
     pub client: reqwest::Client,
 }
 
@@ -51,6 +64,7 @@ impl JwksCache {
 
         Arc::new(Self {
             keys: std::sync::RwLock::new(HashMap::new()),
+            oidc_metadata: std::sync::RwLock::new(None),
             client,
         })
     }
@@ -65,13 +79,131 @@ impl JwksCache {
         self.keys.read().map(|k| k.is_empty()).unwrap_or(true)
     }
 
-    /// 从 Portal JWKS 端点拉取所有公钥并更新缓存，支持按 kid 匹配
+    /// 获取缓存的 OIDC Discovery 元数据中的 issuer
+    pub fn get_discovered_issuer(&self) -> Option<String> {
+        self.oidc_metadata
+            .read()
+            .ok()?
+            .as_ref()
+            .and_then(|m| m.issuer.clone())
+    }
+
+    /// 将 id_token_signing_alg_values_supported 中的字符串算法名转换为 jsonwebtoken::Algorithm
+    /// 仅返回网关支持的算法（ES256/RS256/HS256 等），过滤不支持的算法
+    pub fn get_supported_algorithms(&self) -> Vec<Algorithm> {
+        self.oidc_metadata
+            .read()
+            .ok()
+            .and_then(|guard| {
+                guard.as_ref().map(|m| {
+                    m.id_token_signing_alg_values_supported
+                        .iter()
+                        .filter_map(|alg| match alg.as_str() {
+                            "ES256" => Some(Algorithm::ES256),
+                            "ES384" => Some(Algorithm::ES384),
+                            "RS256" => Some(Algorithm::RS256),
+                            "RS384" => Some(Algorithm::RS384),
+                            "RS512" => Some(Algorithm::RS512),
+                            "PS256" => Some(Algorithm::PS256),
+                            "PS384" => Some(Algorithm::PS384),
+                            "PS512" => Some(Algorithm::PS512),
+                            "HS256" => Some(Algorithm::HS256),
+                            "HS384" => Some(Algorithm::HS384),
+                            "HS512" => Some(Algorithm::HS512),
+                            "EdDSA" => Some(Algorithm::EdDSA),
+                            _ => {
+                                warn!("⚠️  OIDC Discovery 返回不支持的签名算法: {}", alg);
+                                None
+                            }
+                        })
+                        .collect()
+                })
+            })
+            .unwrap_or_default()
+    }
+
+    /// 通过 OIDC Discovery 自动发现 JWKS 端点 URL 并缓存完整 OIDC 元数据
+    ///
+    /// 步骤:
+    /// 1. 请求 `http://{upstream}/.well-known/openid-configuration` 获取 OIDC 元数据
+    /// 2. 缓存完整元数据（issuer、签名算法、各端点 URL）
+    /// 3. 从元数据中提取 `jwks_uri` 的路径部分
+    /// 4. 使用 upstream 作为主机地址重新构造 JWKS URL，确保网关可直接访问内网地址
     ///
     /// # 参数
-    /// * `jwks_url` - Portal 的 JWKS 端点 URL（如 https://portal.xxx.com/.well-known/jwks）
-    pub async fn refresh(&self, jwks_url: &str) -> Result<(), JwksError> {
-        // 生产优化：使用复用的 Client 发送请求，且有 5 秒超时保护，避免网络卡死导致协程挂起积压
-        let resp = self.client.get(jwks_url).send().await?;
+    /// * `upstream` - Portal 上游地址（如 127.0.0.1:4100）
+    async fn discover_oidc_metadata(&self, upstream: &str) -> Result<OidcMetadata, JwksError> {
+        let discovery_url = format!("http://{}/.well-known/openid-configuration", upstream);
+        info!("🔍 通过 OIDC Discovery 获取元数据: {}", discovery_url);
+
+        let resp = self.client.get(&discovery_url).send().await?;
+        let metadata: OidcMetadata = resp.json().await?;
+
+        // 校验必要字段
+        if metadata.jwks_uri.is_none() {
+            return Err(JwksError::MissingJwksUri);
+        }
+        if metadata.issuer.is_none() {
+            warn!("⚠️  OIDC Discovery 响应中未包含 issuer 字段");
+        }
+
+        info!(
+            "📋 OIDC 元数据已获取: issuer={:?}, jwks_uri={:?}, signing_algs={:?}",
+            metadata.issuer, metadata.jwks_uri, metadata.id_token_signing_alg_values_supported
+        );
+
+        // 缓存 OIDC 元数据
+        let _ = std::mem::replace(
+            &mut *self
+                .oidc_metadata
+                .write()
+                .map_err(|_| JwksError::LockPoisoned)?,
+            Some(metadata.clone()),
+        );
+
+        Ok(metadata)
+    }
+
+    /// 从 OIDC 元数据中解析出可达的 JWKS 端点 URL
+    ///
+    /// 步骤:
+    /// 1. 使用 reqwest::Url 解析 OIDC 元数据返回的 jwks_uri
+    /// 2. 提取其 path 和 query 部分，重新拼接上游地址 (upstream)，
+    ///    确保网关通过局域网/内网地址直接拉取公钥，避免经过外网域名绕路
+    ///
+    /// # 参数
+    /// * `upstream` - Portal 上游地址（如 127.0.0.1:4100）
+    /// * `jwks_uri` - OIDC 元数据中包含的原始 jwks_uri 字段
+    fn resolve_jwks_url(upstream: &str, jwks_uri: &str) -> Result<String, JwksError> {
+        let parsed =
+            reqwest::Url::parse(jwks_uri).map_err(|e| JwksError::InvalidJwksUri(e.to_string()))?;
+
+        let path = parsed.path();
+        if let Some(query) = parsed.query() {
+            Ok(format!("http://{}{}?{}", upstream, path, query))
+        } else {
+            Ok(format!("http://{}{}", upstream, path))
+        }
+    }
+
+    /// 通过 OIDC Discovery 自动发现并拉取 JWKS 公钥，同步更新 OIDC 元数据缓存
+    ///
+    /// # 参数
+    /// * `upstream` - Portal 上游地址（如 127.0.0.1:4100）
+    pub async fn refresh(&self, upstream: &str) -> Result<(), JwksError> {
+        // 1. 通过 OIDC Discovery 获取并缓存完整元数据
+        let oidc_metadata = self.discover_oidc_metadata(upstream).await?;
+
+        // 2. 从元数据中解析可达的 JWKS URL
+        let jwks_uri = oidc_metadata
+            .jwks_uri
+            .as_ref()
+            .ok_or(JwksError::MissingJwksUri)?;
+        let jwks_url = Self::resolve_jwks_url(upstream, jwks_uri)?;
+        info!("🔑 使用 JWKS 端点: {}", jwks_url);
+
+        // 3. 拉取 JWKS 公钥集
+        let resp = self.client.get(&jwks_url).send().await?;
 
         // 拥抱 jsonwebtoken 强类型 JwkSet，杜绝动态 Value 反序列化摸索
         let jwk_set: JwkSet = resp.json().await?;
@@ -95,16 +227,150 @@ impl JwksCache {
         }
 
         info!(
-            "JWKS 公钥缓存刷新成功，加载了 {} 个 Key，来源: {}",
-            loaded_count, jwks_url
+            "✅ JWKS 公钥缓存刷新成功，加载了 {} 个 Key (via OIDC Discovery)",
+            loaded_count
         );
         Ok(())
+    }
+
+    /// 验证配置的 issuer 与 OIDC Discovery 返回的 issuer 是否一致
+    ///
+    /// 返回 Ok(()) 表示一致，Err(JwksError::IssuerMismatch) 表示不匹配
+    pub fn validate_issuer(&self, configured_issuer: &str) -> Result<(), JwksError> {
+        let discovered = self.get_discovered_issuer();
+        match discovered {
+            Some(ref d) if d == configured_issuer => {
+                info!("✅ Issuer 校验通过: 配置值与 OIDC Discovery 一致 ({})", d);
+                Ok(())
+            }
+            Some(d) => Err(JwksError::IssuerMismatch {
+                configured: configured_issuer.to_string(),
+                discovered: d,
+            }),
+            None => {
+                warn!("⚠️  OIDC 元数据中无 issuer，跳过校验");
+                Ok(())
+            }
+        }
+    }
+
+    /// 启动 JWKS 后台定时刷新任务，通过 OIDC Discovery 自动发现端点
+    /// 具备空缓存高频重试和成功缓存正常退避机制
+    ///
+    /// # 参数
+    /// * `self` - 自身的 Arc 智能指针
+    /// * `rt` - Tokio 异步运行时句柄
+    /// * `upstream` - Portal 上游地址，用于 OIDC Discovery
+    pub fn start_background_refresh(
+        self: Arc<Self>,
+        rt: &tokio::runtime::Runtime,
+        upstream: String,
+    ) {
+        rt.spawn(async move {
+            // 定时拉取前，仅在后台任务刚启动时，先休眠一次以错开冷启动首次拉取阶段
+            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+
+            loop {
+                match self.refresh(&upstream).await {
+                    Ok(_) => {
+                        info!("✅ JWKS 公钥缓存定时刷新成功");
+                        tokio::time::sleep(std::time::Duration::from_secs(300)).await;
+                    }
+                    Err(e) => {
+                        error!("❌ JWKS 公钥缓存定时刷新失败: {}", e);
+                        // 仅在刷新失败时，才获取读锁判定当前是否已有旧公钥，决定是快速重试还是正常退避
+                        let has_keys = !self.is_empty();
+                        let sleep_secs = if has_keys { 300 } else { 10 };
+                        warn!("⚠️ 网关将在 {} 秒后重试拉取 JWKS...", sleep_secs);
+                        tokio::time::sleep(std::time::Duration::from_secs(sleep_secs)).await;
+                    }
+                }
+            }
+        });
+    }
+
+    #[cfg(test)]
+    pub fn insert_key_for_test(&self, kid: String, key: DecodingKey) {
+        let mut guard = self.keys.write().unwrap();
+        guard.insert(kid, key);
+    }
+
+    #[cfg(test)]
+    pub fn set_metadata_for_test(&self, metadata: OidcMetadata) {
+        let mut guard = self.oidc_metadata.write().unwrap();
+        *guard = Some(metadata);
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_resolve_jwks_url() {
+        // 标准 URL
+        let url =
+            JwksCache::resolve_jwks_url("127.0.0.1:4100", "http://localhost:4100/api/auth/jwks")
+                .unwrap();
+        assert_eq!(url, "http://127.0.0.1:4100/api/auth/jwks");
+
+        // HTTPS issuer URL
+        let url =
+            JwksCache::resolve_jwks_url("portal:4000", "https://sso.example.com/api/auth/jwks")
+                .unwrap();
+        assert_eq!(url, "http://portal:4000/api/auth/jwks");
+
+        // 带端口号的 issuer
+        let url = JwksCache::resolve_jwks_url(
+            "10.0.0.1:8080",
+            "https://auth.example.com:443/.well-known/jwks.json",
+        )
+        .unwrap();
+        assert_eq!(url, "http://10.0.0.1:8080/.well-known/jwks.json");
+    }
+
+    #[test]
+    fn test_oidc_metadata_deserialize() {
+        let json = serde_json::json!({
+            "issuer": "https://sso.example.com",
+            "jwks_uri": "https://sso.example.com/api/auth/jwks",
+            "id_token_signing_alg_values_supported": ["ES256", "RS256"]
+        });
+
+        let metadata: OidcMetadata = serde_json::from_value(json).unwrap();
+        assert_eq!(metadata.issuer.unwrap(), "https://sso.example.com");
+        assert_eq!(
+            metadata.jwks_uri.unwrap(),
+            "https://sso.example.com/api/auth/jwks"
+        );
+        assert_eq!(
+            metadata.id_token_signing_alg_values_supported,
+            vec!["ES256", "RS256"]
+        );
+    }
+
+    #[test]
+    fn test_get_supported_algorithms() {
+        let cache = JwksCache::new();
+        // 模拟写入 OIDC 元数据
+        {
+            let mut guard = cache.oidc_metadata.write().unwrap();
+            *guard = Some(OidcMetadata {
+                issuer: Some("https://sso.example.com".into()),
+                jwks_uri: Some("https://sso.example.com/api/auth/jwks".into()),
+                id_token_signing_alg_values_supported: vec![
+                    "ES256".into(),
+                    "RS256".into(),
+                    "UNKNOWN_ALG".into(),
+                ],
+            });
+        }
+
+        let algs = cache.get_supported_algorithms();
+        assert_eq!(algs.len(), 2);
+        assert!(algs.contains(&Algorithm::ES256));
+        assert!(algs.contains(&Algorithm::RS256));
+    }
 
     #[tokio::test]
     async fn test_jwks_parsing() {

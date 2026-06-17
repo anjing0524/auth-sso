@@ -49,6 +49,7 @@ export type IdentityProvider = 'password';
 export const USER_ACTIVE: UserStatus = 'ACTIVE';
 export const USER_DELETED: UserStatus = 'DELETED';
 export const ENTITY_ACTIVE: EntityStatus = 'ACTIVE';
+export const ENTITY_DISABLED: EntityStatus = 'DISABLED';
 export const DATA_SCOPE_SELF: DataScopeType = 'SELF';
 export const PERMISSION_API: PermissionType = 'API';
 export const MENU_TYPE_MENU: MenuType = 'MENU';

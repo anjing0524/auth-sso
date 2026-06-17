@@ -5,7 +5,7 @@
  * 全部 secret/password 从环境变量读取，无硬编码。
  *
  * 职责：
- *   1. 管理员用户 + Better Auth 账号（upsert）
+ *   1. 管理员用户（upsert）
  *   2. OAuth 客户端（upsert）
  *   3. RBAC 权限/角色初始化（委托 seed-rbac.ts）
  *   4. OAuth Consent 预授权
@@ -45,9 +45,6 @@ function requireEnv(name: string): string {
 // 工具函数
 // ============================================
 
-/**
- * 解析逗号分隔的 redirect URL 列表，序列化为 JSON 字符串
- */
 function parseRedirectUrls(envValue: string | undefined, fallback: string): string {
   if (envValue) {
     return JSON.stringify(envValue.split(',').map(u => u.trim()));
@@ -55,9 +52,6 @@ function parseRedirectUrls(envValue: string | undefined, fallback: string): stri
   return fallback;
 }
 
-/**
- * Upsert 用户：存在则跳过，不存在则创建
- */
 async function upsertAdmin(db: ReturnType<typeof drizzle>, opts: {
   id: string;
   username: string;
@@ -83,30 +77,19 @@ async function upsertAdmin(db: ReturnType<typeof drizzle>, opts: {
     email: opts.email,
     name: opts.name,
     status: 'ACTIVE',
-  });
-
-  await db.insert(schema.accounts).values({
-    id: crypto.randomUUID(),
-    userId: opts.id,
-    accountId: opts.email,
-    providerId: 'credential',
-    password: hashedPassword,
+    passwordHash: hashedPassword,
   });
 
   console.log(`  ✅ 创建管理员: ${opts.username}`);
   return opts.id;
 }
 
-/**
- * Upsert OAuth 客户端：按 clientId 查找，存在则更新 redirectUrls，不存在则创建
- */
 async function upsertClient(db: ReturnType<typeof drizzle>, opts: {
   clientId: string;
   name: string;
   clientSecret: string;
   redirectUrls: string;
   publicId: string;
-  skipConsent?: boolean;
 }): Promise<void> {
   const existing = await db.select({ id: schema.clients.id })
     .from(schema.clients)
@@ -131,35 +114,29 @@ async function upsertClient(db: ReturnType<typeof drizzle>, opts: {
     clientId: opts.clientId,
     clientSecret: opts.clientSecret,
     redirectUrls: opts.redirectUrls,
-    grantTypes: '["authorization_code","refresh_token"]',
     scopes: 'openid profile email offline_access',
     status: 'ACTIVE',
-    skipConsent: opts.skipConsent ?? true,
   });
   console.log(`  ✅ 创建客户端: ${opts.name} (${opts.clientId})`);
 }
 
-/**
- * 确保 OAuth Consent 预授权记录存在
- */
 async function ensureConsent(
   db: ReturnType<typeof drizzle>,
   userId: string,
   clientId: string,
 ): Promise<void> {
-  const existing = await db.select({ id: schema.oauthConsent.id })
-    .from(schema.oauthConsent)
-    .where(eq(schema.oauthConsent.clientId, clientId));
+  const existing = await db.select({ id: schema.consents.id })
+    .from(schema.consents)
+    .where(eq(schema.consents.clientId, clientId));
 
   if (existing.length > 0) {
-    // 更新已有 consent 确保当前用户已授权
-    await db.update(schema.oauthConsent)
+    await db.update(schema.consents)
       .set({ userId, consentGiven: true, updatedAt: new Date() })
-      .where(eq(schema.oauthConsent.clientId, clientId));
+      .where(eq(schema.consents.clientId, clientId));
     return;
   }
 
-  await db.insert(schema.oauthConsent).values({
+  await db.insert(schema.consents).values({
     id: crypto.randomUUID(),
     userId,
     clientId,
@@ -175,12 +152,10 @@ async function ensureConsent(
 async function main() {
   console.log('🌱 生产环境初始化...');
 
-  // 校验必要环境变量
   const connectionString = requireEnv('DATABASE_URL');
   const portalSecret = requireEnv('PORTAL_CLIENT_SECRET');
   const adminPassword = requireEnv('INITIAL_ADMIN_PASSWORD');
 
-  // 判断是否需要 SSL（云端数据库）
   const needsSsl = connectionString.includes('sslmode=require')
     || connectionString.includes('.neon.tech')
     || connectionString.includes('.supabase.co');
@@ -210,7 +185,6 @@ async function main() {
       clientSecret: portalSecret,
       redirectUrls: portalRedirectUrls,
       publicId: 'cli_portal',
-      skipConsent: true,
     });
 
     // 3. RBAC 初始化（幂等，从 contracts 读取）

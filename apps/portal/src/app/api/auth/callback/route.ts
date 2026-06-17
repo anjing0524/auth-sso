@@ -1,0 +1,96 @@
+/**
+ * Portal OAuth Callback (GET /api/auth/callback)
+ *
+ * OAuth 2.1 Authorization Code 流程的最后一步。
+ * 接收 authorize 端点签发的 code → 内部调用 token 端点换取 Token → Set-Cookie → 302 回到目标页。
+ *
+ * Portal 自身也是 OAuth Client（client_id=portal），此端点处理 Portal SPA 的 SSO 回调。
+ *
+ * @route GET /api/auth/callback
+ */
+import { NextRequest, NextResponse } from 'next/server';
+import { getAppBaseURL, getEnvConfig } from '@/lib/env';
+
+export const runtime = 'nodejs';
+
+export async function GET(request: NextRequest) {
+  const url = new URL(request.url);
+  const code = url.searchParams.get('code');
+  const state = url.searchParams.get('state'); // state = 最终目标 URL
+
+  if (!code) {
+    const errorUrl = new URL('/login', url.origin);
+    errorUrl.searchParams.set('error', 'token_exchange_failed');
+    return NextResponse.redirect(errorUrl);
+  }
+
+  // PKCE code_verifier 由 login form 通过 redirect_uri searchParams 传入
+  const codeVerifier = url.searchParams.get('pkce_verifier');
+
+  if (!codeVerifier) {
+    const errorUrl = new URL('/login', url.origin);
+    errorUrl.searchParams.set('error', 'invalid_state');
+    return NextResponse.redirect(errorUrl);
+  }
+
+  // 内部调用 token 端点：用 code + PKCE verifier 换 token
+  const env = getEnvConfig();
+  const portalClientSecret = env.PORTAL_CLIENT_SECRET || 'portal-secret';
+
+  const tokenUrl = new URL('/api/auth/oauth2/token', getAppBaseURL());
+  try {
+    const tokenRes = await fetch(tokenUrl.toString(), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        grant_type: 'authorization_code',
+        code,
+        client_id: 'portal',
+        client_secret: portalClientSecret,
+        redirect_uri: `${url.origin}/api/auth/callback`,
+        code_verifier: codeVerifier,
+      }),
+    });
+
+    if (!tokenRes.ok) {
+      console.error('[Callback] Token 交换失败:', await tokenRes.text());
+      const errorUrl = new URL('/login', url.origin);
+      errorUrl.searchParams.set('error', 'token_exchange_failed');
+      return NextResponse.redirect(errorUrl);
+    }
+
+    const tokens = await tokenRes.json();
+
+    const isProduction = process.env.NODE_ENV === 'production';
+    const targetUrl = state || '/dashboard';
+
+    const response = NextResponse.redirect(new URL(targetUrl, url.origin));
+
+    // Set-Cookie: portal_jwt_token（OAuth 签发的 Access Token，含完整 claims）
+    response.cookies.set('portal_jwt_token', tokens.access_token, {
+      path: '/',
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: 'lax',
+      maxAge: tokens.expires_in || 3600,
+    });
+
+    // Set-Cookie: portal_refresh_token（如果有）
+    if (tokens.refresh_token) {
+      response.cookies.set('portal_refresh_token', tokens.refresh_token, {
+        path: '/api/auth/refresh',
+        httpOnly: true,
+        secure: isProduction,
+        sameSite: 'lax',
+        maxAge: 7 * 24 * 3600,
+      });
+    }
+
+    return response;
+  } catch (err) {
+    console.error('[Callback] Token 交换异常:', err);
+    const errorUrl = new URL('/login', url.origin);
+    errorUrl.searchParams.set('error', 'token_exchange_failed');
+    return NextResponse.redirect(errorUrl);
+  }
+}

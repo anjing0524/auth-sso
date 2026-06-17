@@ -15,8 +15,8 @@
  * @vitest-environment node
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { GET as ListDepartments, POST as CreateDepartment } from '@/app/api/departments/route';
-import { GET as GetDepartment, PUT as UpdateDepartment, DELETE as DeleteDepartment } from '@/app/api/departments/[id]/route';
+import { GET as ListDepartments } from '@/app/api/departments/route';
+import { GET as GetDepartment } from '@/app/api/departments/[id]/route';
 import { GET as GetDepartmentMembers } from '@/app/api/departments/[id]/members/route';
 import { createTestRequest, parseResponseJson } from '../helpers/test-utils';
 
@@ -276,137 +276,7 @@ describe('Department API', () => {
     });
   });
 
-  // ── POST /api/departments ──────────────────────────────────────────────
 
-  describe('POST /api/departments', () => {
-    // @req F-DEP-C
-    it('创建子部门成功', async () => {
-      mockAuthState.checkDataScope.mockResolvedValue(true);
-
-      const req = createTestRequest('/api/departments', {
-        method: 'POST',
-        body: { name: '新子部门', parentId: 'dept-1', code: 'NEW_DEPT' },
-      });
-      const res = await CreateDepartment(req);
-      const body = await parseResponseJson(res);
-
-      expect(res.status).toBe(201);
-      expect(body.success).toBe(true);
-      expect(body.data.name).toBe('新子部门');
-      expect(body.data.id).toBeTruthy();
-    });
-
-    // @req F-DEP-E
-    it('缺少部门名称时返回 400', async () => {
-      const req = createTestRequest('/api/departments', {
-        method: 'POST',
-        body: { code: 'NO_NAME' },
-      });
-      const res = await CreateDepartment(req);
-      const body = await parseResponseJson(res);
-
-      expect(res.status).toBe(400);
-      expect(body.error).toBe('VALIDATION_ERROR');
-      expect(body.message).toBeDefined();
-    });
-  });
-
-  // ── PUT /api/departments/[id] ──────────────────────────────────────────
-
-  describe('PUT /api/departments/[id]', () => {
-    // @req F-DEP-U
-    it('更新部门信息成功', async () => {
-      mockDbState.queryResult = [
-        {
-          id: 'dept-1',
-          publicId: 'd_01',
-          name: '原部门名',
-          parentId: null,
-          code: 'OLD',
-          sort: 0,
-          status: 'ACTIVE',
-          createdAt: new Date('2026-01-01'),
-        },
-      ];
-      mockAuthState.checkDataScope.mockResolvedValue(true);
-
-      const req = createTestRequest('/api/departments/dept-1', {
-        method: 'PUT',
-        body: { name: '新部门名', code: 'NEW_CODE' },
-      });
-      const res = await UpdateDepartment(req, { params: Promise.resolve({ id: 'dept-1' }) });
-      const body = await parseResponseJson(res);
-
-      expect(res.status).toBe(200);
-      expect(body.success).toBe(true);
-      expect(mockAuthState.checkDataScope).toHaveBeenCalledWith('test-user-id', 'dept-1');
-    });
-
-    // @req F-DEP-E
-    it('将父部门设为自己时返回循环引用错误', async () => {
-      mockDbState.queryResult = [
-        {
-          id: 'dept-1',
-          publicId: 'd_01',
-          name: '部门',
-          parentId: null,
-          code: 'DEPT',
-          sort: 0,
-          status: 'ACTIVE',
-          createdAt: new Date('2026-01-01'),
-        },
-      ];
-
-      const req = createTestRequest('/api/departments/dept-1', {
-        method: 'PUT',
-        body: { name: '新名称', parentId: 'dept-1' },
-      });
-      const res = await UpdateDepartment(req, { params: Promise.resolve({ id: 'dept-1' }) });
-      const body = await parseResponseJson(res);
-
-      expect(res.status).toBe(422);
-      expect(body.error).toBe('BUSINESS_RULE_VIOLATION');
-    });
-  });
-
-  // ── DELETE /api/departments/[id] ───────────────────────────────────────
-
-  describe('DELETE /api/departments/[id]', () => {
-    // @req F-DEP-D
-    it('存在子部门时拒绝删除', async () => {
-      // 第一次 select 返回目标部门，第二次 select（检查子部门）返回包含子部门的数据
-      // mock 对两个 select 返回相同结果，子部门 dept-2 确保 children.length > 0
-      mockDbState.queryResult = [
-        {
-          id: 'dept-1',
-          publicId: 'd_01',
-          name: '父部门',
-          parentId: null,
-          code: 'PARENT',
-          sort: 0,
-          status: 'ACTIVE',
-          createdAt: new Date('2026-01-01'),
-        },
-        {
-          id: 'dept-2',
-          publicId: 'd_02',
-          name: '子部门',
-          parentId: 'dept-1',
-          code: 'CHILD',
-          sort: 1,
-          status: 'ACTIVE',
-          createdAt: new Date('2026-01-02'),
-        },
-      ];
-
-      const req = createTestRequest('/api/departments/dept-1', { method: 'DELETE' });
-      const res = await DeleteDepartment(req, { params: Promise.resolve({ id: 'dept-1' }) });
-      const body = await parseResponseJson(res);
-
-      expect(res.status).toBe(422);
-      expect(body.error).toBe('BUSINESS_RULE_VIOLATION');
-    });
-  });
 
   // ── GET /api/departments/[id]/members ──────────────────────────────────
 
@@ -415,7 +285,7 @@ describe('Department API', () => {
     it('返回部门成员列表', async () => {
       // 第一个 select 解析部门 ID，第二个 select 返回成员
       // mock 对两个 select 返回相同结果，确保 id 字段存在即可
-      mockDbState.queryResult = [{ id: 'dept-1' }];
+      mockDbState.queryResult = [{ id: 'dept-1', createdAt: new Date() }];
 
       const req = createTestRequest('/api/departments/dept-1/members');
       const res = await GetDepartmentMembers(req, { params: Promise.resolve({ id: 'dept-1' }) });

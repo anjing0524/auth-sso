@@ -22,7 +22,7 @@ This document defines the requirements for a unified portal and Single Sign-On (
 ## 2. Product Scope
 
 ### 2.1 In Scope
-- Core Identity Provider (IdP) using Better Auth.
+- Core Identity Provider (IdP) using custom stateless JWT/JTI token issuance.
 - Next.js-based Management Portal.
 - Standard OIDC/OAuth 2.1 flows (Authorization Code + PKCE).
 - RBAC (Role-Based Access Control) with data scope support.
@@ -78,7 +78,7 @@ This document defines the requirements for a unified portal and Single Sign-On (
    - Accesses "Orders App" -> App redirects to IdP -> IdP recognizes session -> Redirects back with code -> App exchanges code for token -> User is logged in automatically.
 
 2. **Admin User Creation**:
-   - Admin creates a new user in Portal -> User identity is automatically provisioned in IdP -> User receives initial credentials.
+   - Admin creates a new user in Portal -> The user record is created directly in the database -> The user can immediately authenticate with their initial credentials.
 
 ---
 

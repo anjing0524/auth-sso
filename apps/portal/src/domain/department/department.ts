@@ -40,7 +40,7 @@ export function createDepartment(
 ): Department {
   return {
     id: idGenerator(20),
-    publicId: `dept_${idGenerator(8)}`,
+    publicId: `dept_${idGenerator(16)}`,
     parentId: input.parentId ?? null,
     name: input.name,
     code: input.code ?? null,
@@ -136,7 +136,7 @@ export function departmentToInsertRow(d: Department) {
     parentId: d.parentId,
     sort: d.sort,
     status: d.status,
-    createdAt: new Date(),
+    createdAt: new Date(d.createdAt.epochMilliseconds),
     updatedAt: new Date(),
   };
 }

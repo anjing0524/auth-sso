@@ -38,7 +38,10 @@ const {
 
 vi.mock('@/lib/session', () => ({
   getJwtFromCookie: mockGetJwtFromCookie,
-  verifyJwt: mockVerifyJwt,
+}));
+
+vi.mock('@/domain/auth/token', () => ({
+  verifyAccessToken: mockVerifyJwt,
 }));
 
 vi.mock('@/lib/permissions', () => ({

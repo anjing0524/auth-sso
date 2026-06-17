@@ -1,8 +1,8 @@
 # Requirements Coverage Report
 
-Generated: 2026-06-11T09:44:07.134Z
+Generated: 2026-06-17T01:02:10.899Z
 
-**Total:** 35/62 covered (**56.5%**)
+**Total:** 27/63 covered (**42.9%**)
 
 ---
 
@@ -18,17 +18,17 @@ Coverage: **1/3**
 
 ## B: 用户管理 (User Management)
 
-Coverage: **7/7**
+Coverage: **1/7**
 
 | Requirement | Status | Test Files |
 | --- | --- | --- |
-| B-USR-L | ✅ | `apps/portal/__tests__/api/user-api.test.ts` |
-| B-USR-S | ✅ | `apps/portal/__tests__/api/user-api.test.ts` |
-| B-USR-C | ✅ | `apps/portal/__tests__/api/user-api.test.ts` |
-| B-USR-R | ✅ | `apps/portal/__tests__/api/me-endpoints.test.ts`<br>`apps/portal/__tests__/api/user-api.test.ts` |
-| B-USR-U | ✅ | `apps/portal/__tests__/api/user-api.test.ts` |
-| B-USR-D | ✅ | `apps/portal/__tests__/api/user-api.test.ts` |
-| B-USR-ST | ✅ | `apps/portal/__tests__/api/user-api.test.ts` |
+| B-USR-L | ⚠️ | — |
+| B-USR-S | ⚠️ | — |
+| B-USR-C | ⚠️ | — |
+| B-USR-R | ✅ | `apps/portal/__tests__/api/me-endpoints.test.ts` |
+| B-USR-U | ⚠️ | — |
+| B-USR-D | ⚠️ | — |
+| B-USR-ST | ⚠️ | — |
 
 ## C: 角色与授权 (Role & Authorization)
 
@@ -51,9 +51,9 @@ Coverage: **4/4**
 | Requirement | Status | Test Files |
 | --- | --- | --- |
 | D-PRM-L | ✅ | `apps/portal/__tests__/api/permission-api.test.ts` |
-| D-PRM-C | ✅ | `apps/portal/__tests__/api/permission-api.test.ts` |
-| D-PRM-U | ✅ | `apps/portal/__tests__/api/permission-api.test.ts` |
-| D-PRM-D | ✅ | `apps/portal/__tests__/api/permission-api.test.ts` |
+| D-PRM-C | ✅ | `apps/portal/__tests__/api/permission-api.test.ts`<br>`apps/portal/__tests__/domain/permission.test.ts` |
+| D-PRM-U | ✅ | `apps/portal/__tests__/api/permission-api.test.ts`<br>`apps/portal/__tests__/domain/permission.test.ts` |
+| D-PRM-D | ✅ | `apps/portal/__tests__/api/permission-api.test.ts`<br>`apps/portal/__tests__/domain/permission.test.ts` |
 
 ## E: 菜单架构管理 (Menu Management)
 
@@ -88,16 +88,16 @@ Coverage: **5/5**
 | G-CLT-C | ✅ | `apps/portal/__tests__/api/client-api.test.ts` |
 | G-CLT-U | ✅ | `apps/portal/__tests__/api/client-api.test.ts` |
 | G-CLT-D | ✅ | `apps/portal/__tests__/api/client-api.test.ts` |
-| G-SEC-INT | ✅ | `apps/idp/__tests__/api/oauth-authorize.test.ts`<br>`apps/idp/__tests__/api/sign-out-sso.test.ts`<br>`apps/portal/__tests__/api/sso-security.test.ts`<br>`tests/e2e/auth-flow.spec.ts`<br>`tests/e2e/rbac-enforcement.spec.ts`<br>`tests/e2e/sso-cross-app.spec.ts` |
+| G-SEC-INT | ✅ | `tests/e2e/auth-flow.spec.ts`<br>`tests/e2e/rbac-enforcement.spec.ts`<br>`tests/e2e/sso-cross-app.spec.ts` |
 
 ## H: OAuth 2.1 认证流程
 
-Coverage: **2/10**
+Coverage: **0/10**
 
 | Requirement | Status | Test Files |
 | --- | --- | --- |
-| H-AUTH-001 | ✅ | `apps/idp/__tests__/api/oauth-authorize.test.ts` |
-| H-AUTH-002 | ✅ | `apps/idp/__tests__/api/oauth-authorize.test.ts` |
+| H-AUTH-001 | ⚠️ | — |
+| H-AUTH-002 | ⚠️ | — |
 | H-AUTH-003 | ⚠️ | — |
 | H-AUTH-004 | ⚠️ | — |
 | H-AUTH-005 | ⚠️ | — |
@@ -107,9 +107,9 @@ Coverage: **2/10**
 | H-AUTH-013 | ⚠️ | — |
 | H-AUTH-014 | ⚠️ | — |
 
-## H: Portal Session 生命周期
+## H: Portal JWT Cookie 生命周期
 
-Coverage: **0/9**
+Coverage: **0/10**
 
 | Requirement | Status | Test Files |
 | --- | --- | --- |
@@ -122,6 +122,7 @@ Coverage: **0/9**
 | H-SESS-020 | ⚠️ | — |
 | H-SESS-021 | ⚠️ | — |
 | H-SESS-022 | ⚠️ | — |
+| H-SESS-030 | ⚠️ | — |
 
 ## H: 单点登录/登出
 
@@ -142,13 +143,20 @@ Coverage: **0/8**
 
 These IDs appear in `@req` annotations but are not found in the requirements matrix:
 
-- `AUTH-001`
-- `AUTH-002`
-- `AUTH-003`
-- `AUTH-004`
-- `AUTH-005`
 - `B-LOG-D`
 - `B-LOG-L`
+- `D-CLI-C`
+- `D-CLI-D`
+- `D-CLI-U`
+- `D-DEPT-C`
+- `D-DEPT-D`
+- `D-DEPT-U`
+- `D-MEN-C`
+- `D-MEN-D`
+- `D-MEN-U`
+- `D-ROLE-C`
+- `D-ROLE-D`
+- `D-ROLE-U`
 - `F-DEP-E`
 - `F-DEP-M`
 - `SCOPE-001`
@@ -156,8 +164,3 @@ These IDs appear in `@req` annotations but are not found in the requirements mat
 - `SCOPE-003`
 - `SCOPE-004`
 - `SCOPE-005`
-- `SESS-001`
-- `SESS-002`
-- `SESS-003`
-- `SESS-004`
-- `SESS-005`

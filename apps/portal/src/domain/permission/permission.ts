@@ -44,7 +44,7 @@ export function createPermission(
 ): Permission {
   return {
     id: idGenerator(20),
-    publicId: `perm_${Date.now().toString(36)}${idGenerator(4)}`,
+    publicId: `perm_${idGenerator(16)}`,
     name: input.name,
     code: input.code,
     type: input.type ?? PERMISSION_API,
@@ -94,7 +94,7 @@ export function permissionToInsertRow(p: Permission) {
     parentId: p.parentId,
     sort: p.sort,
     status: p.status,
-    createdAt: new Date(),
+    createdAt: new Date(p.createdAt.epochMilliseconds),
     updatedAt: new Date(),
   };
 }

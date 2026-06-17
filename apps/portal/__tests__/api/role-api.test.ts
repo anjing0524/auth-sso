@@ -135,16 +135,9 @@ vi.mock('@/infrastructure/redis', () => ({}));
 // =========================================
 // 引入被测试模块（mocks 之后）
 // =========================================
-import { GET as ListRoles, POST as CreateRole } from '@/app/api/roles/route';
-import {
-  GET as GetRole,
-  PUT as UpdateRole,
-  DELETE as DeleteRole,
-} from '@/app/api/roles/[id]/route';
-import {
-  GET as GetRolePermissions,
-  POST as AssignRolePermissions,
-} from '@/app/api/roles/[id]/permissions/route';
+import { GET as ListRoles } from '@/app/api/roles/route';
+import { GET as GetRole } from '@/app/api/roles/[id]/route';
+import { GET as GetRolePermissions } from '@/app/api/roles/[id]/permissions/route';
 
 describe('Role Management API', () => {
   beforeEach(() => {
@@ -185,54 +178,7 @@ describe('Role Management API', () => {
     });
   });
 
-  // ======== POST /api/roles ========
 
-  describe('POST /api/roles (create)', () => {
-    it('creates role successfully', async () => {
-      setQueryResult([]);
-
-      const response = await CreateRole(
-        createTestRequest('/api/roles', {
-          method: 'POST',
-          body: { name: 'Test Role', code: 'TEST_ROLE', description: 'Test description' },
-        }),
-      );
-      const body = await response.json();
-
-      expect(response.status).toBe(201);
-      expect(body.success).toBe(true);
-      expect(body.data.name).toBe('Test Role');
-      expect(body.data.id).toContain('role_');
-    });
-
-    it('returns 400 when required fields are missing', async () => {
-      const response = await CreateRole(
-        createTestRequest('/api/roles', {
-          method: 'POST',
-          body: { name: 'test' },
-        }),
-      );
-      const body = await response.json();
-
-      expect(response.status).toBe(400);
-      expect(body.error).toBe('VALIDATION_ERROR');
-    });
-
-    it('returns 400 when role code already exists', async () => {
-      setQueryResult([createTestRole({ code: 'DUPLICATE_CODE' })]);
-
-      const response = await CreateRole(
-        createTestRequest('/api/roles', {
-          method: 'POST',
-          body: { name: 'Duplicate Role', code: 'DUPLICATE_CODE' },
-        }),
-      );
-      const body = await response.json();
-
-      expect(response.status).toBe(409);
-      expect(body.error).toBe('DUPLICATE_ENTITY');
-    });
-  });
 
   // ======== GET /api/roles/[id] ========
 
@@ -262,69 +208,7 @@ describe('Role Management API', () => {
     });
   });
 
-  // ======== PUT /api/roles/[id] ========
 
-  describe('PUT /api/roles/[id] (update)', () => {
-    it('updates role name/description', async () => {
-      setQueryResult([createTestRole()]);
-
-      const response = await UpdateRole(
-        createTestRequest('/api/roles/role-1', {
-          method: 'PUT',
-          body: { name: 'Updated Role', description: 'Updated desc' },
-        }),
-        { params: Promise.resolve({ id: 'role-1' }) },
-      );
-      const body = await response.json();
-
-      expect(response.status).toBe(200);
-      expect(body.success).toBe(true);
-    });
-
-    it('returns 404 for nonexistent role', async () => {
-      setQueryResult([]);
-
-      const response = await UpdateRole(
-        createTestRequest('/api/roles/nonexistent', {
-          method: 'PUT',
-          body: { name: 'New Name' },
-        }),
-        { params: Promise.resolve({ id: 'nonexistent' }) },
-      );
-
-      expect(response.status).toBe(404);
-    });
-  });
-
-  // ======== DELETE /api/roles/[id] ========
-
-  describe('DELETE /api/roles/[id] (delete)', () => {
-    it('deletes role successfully', async () => {
-      setQueryResult([createTestRole({ isSystem: false })]);
-
-      const response = await DeleteRole(
-        createTestRequest('/api/roles/role-1', { method: 'DELETE' }),
-        { params: Promise.resolve({ id: 'role-1' }) },
-      );
-      const body = await response.json();
-
-      expect(response.status).toBe(200);
-      expect(body.success).toBe(true);
-    });
-
-    it('returns 400 for system role (isSystem=true)', async () => {
-      setQueryResult([createTestRole({ isSystem: true })]);
-
-      const response = await DeleteRole(
-        createTestRequest('/api/roles/system-role', { method: 'DELETE' }),
-        { params: Promise.resolve({ id: 'system-role' }) },
-      );
-
-      expect(response.status).toBe(422);
-      const body = await response.json();
-      expect(body.error).toBe('BUSINESS_RULE_VIOLATION');
-    });
-  });
 
   // ======== GET /api/roles/[id]/permissions ========
 
@@ -355,55 +239,6 @@ describe('Role Management API', () => {
         resource: 'user',
         action: 'list',
       });
-    });
-  });
-
-  // ======== POST /api/roles/[id]/permissions ========
-
-  describe('POST /api/roles/[id]/permissions', () => {
-    it('binds permissions to role', async () => {
-      setQueryResult([createTestRole()]);
-
-      const response = await AssignRolePermissions(
-        createTestRequest('/api/roles/role-1/permissions', {
-          method: 'POST',
-          body: { permissionIds: ['perm-1', 'perm-2'] },
-        }),
-        { params: Promise.resolve({ id: 'role-1' }) },
-      );
-      const body = await response.json();
-
-      expect(response.status).toBe(200);
-      expect(body.success).toBe(true);
-      expect(body.assignedCount).toBe(2);
-    });
-
-    it('returns 400 for invalid permissionIds format', async () => {
-      const response = await AssignRolePermissions(
-        createTestRequest('/api/roles/role-1/permissions', {
-          method: 'POST',
-          body: { permissionIds: 'not-an-array' },
-        }),
-        { params: Promise.resolve({ id: 'role-1' }) },
-      );
-      const body = await response.json();
-
-      expect(response.status).toBe(400);
-      expect(body.error).toBe('AUTH_SSO_1005');
-    });
-
-    it('returns 404 for nonexistent role', async () => {
-      setQueryResult([]);
-
-      const response = await AssignRolePermissions(
-        createTestRequest('/api/roles/nonexistent/permissions', {
-          method: 'POST',
-          body: { permissionIds: ['perm-1'] },
-        }),
-        { params: Promise.resolve({ id: 'nonexistent' }) },
-      );
-
-      expect(response.status).toBe(404);
     });
   });
 });

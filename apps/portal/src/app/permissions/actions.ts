@@ -3,7 +3,7 @@
 /**
  * 权限管理 Server Actions (BFF 薄 Controller)
  */
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, revalidateTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
 import { eq, or } from 'drizzle-orm';
 import { withAuth, type AuthContext } from '@/lib/auth';
@@ -32,15 +32,21 @@ export const createPermissionAction = withAuth(
       return { success: false, error: 'VALIDATION_ERROR', message: parsed.error.issues[0].message };
     }
 
-    const existing = await db.query.permissions.findFirst({
-      where: eq(schema.permissions.code, parsed.data.code),
-    });
-    if (existing) throw new DuplicateEntityError('Permission', 'code');
+    // 查重 + 插入在事务中原子完成，避免 race condition
+    const perm = await db.transaction(async (tx) => {
+      const existing = await tx.select({ id: schema.permissions.id })
+        .from(schema.permissions)
+        .where(eq(schema.permissions.code, parsed.data.code))
+        .limit(1);
+      if (existing[0]) throw new DuplicateEntityError('Permission', 'code');
 
-    const perm = createPermission(parsed.data, generateId);
-    await db.insert(schema.permissions).values(permissionToInsertRow(perm));
+      const p = createPermission(parsed.data, generateId);
+      await tx.insert(schema.permissions).values(permissionToInsertRow(p));
+      return p;
+    });
 
     revalidatePath('/permissions');
+    revalidateTag('permissions-list', 'hours');
     return { success: true, data: { id: perm.publicId }, message: '权限创建成功' };
   },
 );
@@ -66,6 +72,7 @@ export const updatePermissionAction = withAuth(
       .where(eq(schema.permissions.id, perm.id));
 
     revalidatePath('/permissions');
+    revalidateTag('permissions-list', 'hours');
     return { success: true, data: { id: permId }, message: '权限更新成功' };
   },
 );
@@ -85,6 +92,7 @@ export const deletePermissionAction = withAuth(
     });
 
     revalidatePath('/permissions');
+    revalidateTag('permissions-list', 'hours');
     return { success: true, data: { id: permId }, message: '权限已删除' };
   },
 );

@@ -28,16 +28,13 @@ export function toDomainClient(row: {
   clientId: string;
   clientSecret: string | null;
   redirectUrls: string;
-  grantTypes: string;
   scopes: string;
   homepageUrl: string | null;
   icon: string | null;
   accessTokenTtl: number | null;
   refreshTokenTtl: number | null;
   status: string;
-  disabled: boolean | null;
-  skipConsent: boolean | null;
-  userId: string | null;
+  userId?: string | null;
   createdAt: Date;
 }): Client {
   return {
@@ -47,16 +44,13 @@ export function toDomainClient(row: {
     clientId: row.clientId,
     clientSecret: row.clientSecret,
     redirectUris: parseRedirectUris(row.redirectUrls),
-    grantTypes: row.grantTypes,
     scopes: row.scopes,
     homepageUrl: row.homepageUrl,
     logoUrl: row.icon,
     accessTokenTtl: row.accessTokenTtl ?? 3600,
     refreshTokenTtl: row.refreshTokenTtl ?? 604800,
     status: row.status as EntityStatus,
-    disabled: row.disabled ?? false,
-    skipConsent: row.skipConsent ?? false,
-    userId: row.userId,
+    userId: row.userId ?? null,
     createdAt: Temporal.Instant.fromEpochMilliseconds(row.createdAt.getTime()),
   };
 }
@@ -72,20 +66,17 @@ export function createClient(
 ): Client {
   return {
     id: idGenerator(20),
-    publicId: `cli_${idGenerator(8)}`,
+    publicId: `cli_${idGenerator(16)}`,
     name: input.name,
     clientId: clientIdGenerator(),
     clientSecret: secretGenerator(),
     redirectUris: input.redirectUris,
-    grantTypes: JSON.stringify(['authorization_code', 'refresh_token']),
     scopes: input.scopes,
     homepageUrl: input.homepageUrl ?? null,
     logoUrl: input.logoUrl ?? null,
     accessTokenTtl: input.accessTokenTtl,
     refreshTokenTtl: input.refreshTokenTtl,
     status: ENTITY_ACTIVE,
-    disabled: false,
-    skipConsent: input.skipConsent,
     userId: null,
     createdAt: Temporal.Now.instant(),
   };
@@ -96,7 +87,7 @@ export function createClient(
  */
 export function applyClientUpdate(
   client: Client,
-  patch: Partial<Pick<Client, 'name' | 'redirectUris' | 'scopes' | 'homepageUrl' | 'logoUrl' | 'accessTokenTtl' | 'refreshTokenTtl' | 'skipConsent' | 'status' | 'disabled'>>,
+  patch: Partial<Pick<Client, 'name' | 'redirectUris' | 'scopes' | 'homepageUrl' | 'logoUrl' | 'accessTokenTtl' | 'refreshTokenTtl' | 'status'>>,
 ): Client {
   return {
     ...client,
@@ -107,9 +98,7 @@ export function applyClientUpdate(
     logoUrl: patch.logoUrl !== undefined ? patch.logoUrl : client.logoUrl,
     accessTokenTtl: patch.accessTokenTtl ?? client.accessTokenTtl,
     refreshTokenTtl: patch.refreshTokenTtl ?? client.refreshTokenTtl,
-    skipConsent: patch.skipConsent ?? client.skipConsent,
     status: patch.status ?? client.status,
-    disabled: patch.disabled ?? client.disabled,
   };
 }
 
@@ -117,7 +106,7 @@ export function applyClientUpdate(
 // DB 行转换（统一 Controller 层的列映射，消除重复）
 // ────────────────────────────────────────────
 
-/** 将领域实体转为 Drizzle insert 行（仅用于创建路径） */
+/** 将领域实体转为 Drizzle insert 行 */
 export function clientToInsertRow(c: Client) {
   return {
     id: c.id,
@@ -126,21 +115,18 @@ export function clientToInsertRow(c: Client) {
     clientId: c.clientId,
     clientSecret: c.clientSecret,
     redirectUrls: JSON.stringify(c.redirectUris),
-    grantTypes: c.grantTypes,
     scopes: c.scopes,
     homepageUrl: c.homepageUrl,
     icon: c.logoUrl,
     accessTokenTtl: c.accessTokenTtl,
     refreshTokenTtl: c.refreshTokenTtl,
     status: c.status,
-    disabled: c.disabled,
-    skipConsent: c.skipConsent,
-    createdAt: new Date(),
+    createdAt: new Date(c.createdAt.epochMilliseconds),
     updatedAt: new Date(),
   };
 }
 
-/** 将领域实体转为 Drizzle update 行（仅用于更新路径） */
+/** 将领域实体转为 Drizzle update 行 */
 export function clientToUpdateRow(c: Client) {
   return {
     name: c.name,
@@ -151,8 +137,6 @@ export function clientToUpdateRow(c: Client) {
     accessTokenTtl: c.accessTokenTtl,
     refreshTokenTtl: c.refreshTokenTtl,
     status: c.status,
-    disabled: c.disabled,
-    skipConsent: c.skipConsent,
     updatedAt: new Date(),
   };
 }

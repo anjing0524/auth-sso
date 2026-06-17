@@ -48,7 +48,7 @@ export function createUser(
 ): User {
   return {
     id: idGenerator(20),
-    publicId: `user_${idGenerator(8)}`,
+    publicId: `user_${idGenerator(16)}`,
     username: input.username,
     email: input.email,
     name: input.name,
@@ -135,7 +135,7 @@ export function userToInsertRow(u: User) {
     avatarUrl: u.avatarUrl,
     status: u.status,
     deptId: u.deptId,
-    createdAt: new Date(),
+    createdAt: new Date(u.createdAt.epochMilliseconds),
     updatedAt: new Date(),
   };
 }

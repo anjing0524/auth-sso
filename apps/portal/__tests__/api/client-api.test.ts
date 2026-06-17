@@ -105,10 +105,9 @@ vi.mock('@/infrastructure/db', () => ({ db: mocks.db, schema: mocks.schema }));
 vi.mock('@/lib/auth', () => ({ withPermission: mocks.authFn }));
 vi.mock('@/lib/audit', () => ({ logAuditEvent: mocks.auditFn, getClientIP: vi.fn(() => '127.0.0.1') }));
 
-import { GET as ListClients, POST as CreateClient } from '@/app/api/clients/route';
-import { GET as GetClient, PUT as UpdateClient, DELETE as DeleteClient } from '@/app/api/clients/[id]/route';
-import { POST as RotateSecret } from '@/app/api/clients/[id]/secret/route';
-import { GET as ListTokens, DELETE as RevokeTokens } from '@/app/api/clients/[id]/tokens/route';
+import { GET as ListClients } from '@/app/api/clients/route';
+import { GET as GetClient } from '@/app/api/clients/[id]/route';
+import { GET as ListTokens } from '@/app/api/clients/[id]/tokens/route';
 import { createTestRequest, parseResponseJson } from '../helpers/test-utils';
 
 function makeClientRow(overrides: Record<string, any> = {}) {
@@ -126,8 +125,6 @@ function makeClientRow(overrides: Record<string, any> = {}) {
     accessTokenTtl: 3600,
     refreshTokenTtl: 604800,
     status: 'ACTIVE',
-    disabled: false,
-    skipConsent: false,
     createdAt: new Date('2026-01-01'),
     updatedAt: new Date('2026-01-01'),
     ...overrides,
@@ -151,40 +148,6 @@ describe('Client API', () => {
   beforeEach(() => {
     mocks.reset();
     vi.clearAllMocks();
-  });
-
-  describe('POST /api/clients', () => {
-    it('成功创建 Client，返回 client_id 和 secret（仅一次）', async () => {
-      const req = createTestRequest('/api/clients', {
-        method: 'POST',
-        body: { name: '新应用', redirectUris: ['http://localhost:4100/callback'] },
-      });
-      const res = await CreateClient(req);
-      expect(res.status).toBe(201);
-
-      const body = await parseResponseJson(res);
-      expect(body.success).toBe(true);
-      expect(body.data.clientId).toBeTruthy();
-      expect(body.data.clientSecret).toBeTruthy();
-    });
-
-    it('缺少必填字段时返回 400', async () => {
-      const req = createTestRequest('/api/clients', { method: 'POST', body: { name: '' } });
-      const res = await CreateClient(req);
-      expect(res.status).toBe(400);
-      expect((await parseResponseJson(res)).error).toBe('VALIDATION_ERROR');
-    });
-
-    it('无效的 redirect_uri 格式返回验证错误', async () => {
-      const req = createTestRequest('/api/clients', {
-        method: 'POST',
-        body: { name: '测试应用', redirectUris: ['not-a-valid-url'] },
-      });
-      const res = await CreateClient(req);
-      expect(res.status).toBe(400);
-      const body = await parseResponseJson(res);
-      expect(body.error).toBe('VALIDATION_ERROR');
-    });
   });
 
   describe('GET /api/clients', () => {
@@ -234,85 +197,7 @@ describe('Client API', () => {
     });
   });
 
-  describe('PUT /api/clients/[id]', () => {
-    it('更新重定向 URI 成功', async () => {
-      mocks.setQueryResult([makeClientRow({ redirectUrls: JSON.stringify(['http://localhost:4100/new']) })]);
-      const res = await UpdateClient(
-        createTestRequest('/api/clients/client-1', { method: 'PUT', body: { name: '更新', redirectUris: ['http://localhost:4100/new'] } }),
-        { params: Promise.resolve({ id: 'client-1' }) } as any,
-      );
-      const body = await parseResponseJson(res);
-      expect(body.success).toBe(true);
-      expect(body.data.redirectUris).toContain('http://localhost:4100/new');
-    });
 
-    it('不存在的 Client 返回 404', async () => {
-      mocks.setQueryResult([]);
-      const res = await UpdateClient(createTestRequest('/api/clients/nx', { method: 'PUT', body: { name: 'x' } }), { params: Promise.resolve({ id: 'nx' }) } as any);
-      expect(res.status).toBe(404);
-    });
-
-    it('无效 redirect URI 格式返回验证错误', async () => {
-      mocks.setQueryResult([makeClientRow()]);
-      const res = await UpdateClient(createTestRequest('/api/clients/c1', { method: 'PUT', body: { redirectUris: ['bad'] } }), { params: Promise.resolve({ id: 'c1' }) } as any);
-      expect(res.status).toBe(400);
-    });
-
-    it('更新 status 为 DISABLED 同步设置 disabled=true', async () => {
-      mocks.setQueryResult([makeClientRow({ status: 'DISABLED', disabled: true })]);
-      const body = await parseResponseJson(await UpdateClient(
-        createTestRequest('/api/clients/c1', { method: 'PUT', body: { status: 'DISABLED' } }),
-        { params: Promise.resolve({ id: 'c1' }) } as any,
-      ));
-      expect(body.data.status).toBe('DISABLED');
-      expect(body.data.disabled).toBe(true);
-    });
-  });
-
-  describe('DELETE /api/clients/[id]', () => {
-    it('soft 模式删除 Client', async () => {
-      mocks.setQueryResult([makeClientRow()]);
-      const body = await parseResponseJson(await DeleteClient(
-        createTestRequest('/api/clients/c1', { method: 'DELETE', searchParams: { mode: 'soft' } }),
-        { params: Promise.resolve({ id: 'c1' }) } as any,
-      ));
-      expect(body.message).toContain('已删除');
-    });
-
-    it('默认 disable 模式禁用 Client', async () => {
-      mocks.setQueryResult([makeClientRow()]);
-      const body = await parseResponseJson(await DeleteClient(
-        createTestRequest('/api/clients/c1', { method: 'DELETE' }),
-        { params: Promise.resolve({ id: 'c1' }) } as any,
-      ));
-      expect(body.message).toContain('已禁用');
-      expect(body.data.status).toBe('DISABLED');
-    });
-
-    it('不存在的 Client 返回 404', async () => {
-      mocks.setQueryResult([]);
-      const res = await DeleteClient(createTestRequest('/api/clients/nx', { method: 'DELETE' }), { params: Promise.resolve({ id: 'nx' }) } as any);
-      expect(res.status).toBe(404);
-    });
-  });
-
-  describe('POST /api/clients/[id]/secret', () => {
-    it('成功轮换 Secret', async () => {
-      mocks.setQueryResult([makeClientRow()]);
-      const body = await parseResponseJson(await RotateSecret(
-        createTestRequest('/api/clients/c1/secret', { method: 'POST' }),
-        { params: Promise.resolve({ id: 'c1' }) } as any,
-      ));
-      expect(body.success).toBe(true);
-      expect(body.data.clientSecret).toBeTruthy();
-    });
-
-    it('不存在的 Client 返回 404', async () => {
-      mocks.setQueryResult([]);
-      const res = await RotateSecret(createTestRequest('/api/clients/nx/secret', { method: 'POST' }), { params: Promise.resolve({ id: 'nx' }) } as any);
-      expect(res.status).toBe(404);
-    });
-  });
 
   describe('GET /api/clients/[id]/tokens', () => {
     it('返回分页 Token 列表', async () => {
@@ -330,37 +215,6 @@ describe('Client API', () => {
       mocks.setQueryResult([]);
       const res = await ListTokens(createTestRequest('/api/clients/nx/tokens'), { params: Promise.resolve({ id: 'nx' }) } as any);
       expect(res.status).toBe(404);
-    });
-  });
-
-  describe('DELETE /api/clients/[id]/tokens', () => {
-    it('revokeAll 撤销全部 Token', async () => {
-      mocks.setQueryResult([makeClientRow()]);
-      mocks.setReturningResult([{ id: 't1' }, { id: 't2' }]);
-      const body = await parseResponseJson(await RevokeTokens(
-        createTestRequest('/api/clients/c1/tokens', { method: 'DELETE', body: { revokeAll: true } }),
-        { params: Promise.resolve({ id: 'c1' }) } as any,
-      ));
-      expect(body.data.revokedCount).toBe(2);
-    });
-
-    it('tokenIds 指定撤销', async () => {
-      mocks.setQueryResult([makeClientRow()]);
-      mocks.setReturningResult([{ id: 't1' }]);
-      const body = await parseResponseJson(await RevokeTokens(
-        createTestRequest('/api/clients/c1/tokens', { method: 'DELETE', body: { tokenIds: ['t1'] } }),
-        { params: Promise.resolve({ id: 'c1' }) } as any,
-      ));
-      expect(body.data.revokedCount).toBe(1);
-    });
-
-    it('不传 tokenIds 或 revokeAll 返回 400', async () => {
-      mocks.setQueryResult([makeClientRow()]);
-      const res = await RevokeTokens(
-        createTestRequest('/api/clients/c1/tokens', { method: 'DELETE', body: {} }),
-        { params: Promise.resolve({ id: 'c1' }) } as any,
-      );
-      expect(res.status).toBe(400);
     });
   });
 });

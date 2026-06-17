@@ -128,8 +128,8 @@ vi.mock('@/lib/crypto', () => ({
   generateRequestId: vi.fn(() => 'req_mock01'),
 }));
 
-import { GET as ListPermissions, POST as CreatePermission } from '@/app/api/permissions/route';
-import { GET as GetPermission, PATCH as UpdatePermission, DELETE as DeletePermission } from '@/app/api/permissions/[id]/route';
+import { GET as ListPermissions } from '@/app/api/permissions/route';
+import { GET as GetPermission } from '@/app/api/permissions/[id]/route';
 import { POST as RegisterPermissions } from '@/app/api/permissions/register/route';
 import { createTestRequest, parseResponseJson } from '../helpers/test-utils';
 
@@ -218,83 +218,7 @@ describe('Permission API', () => {
     });
   });
 
-  // ================================================
-  // POST /api/permissions
-  // ================================================
-  describe('POST /api/permissions', () => {
-    it('成功创建权限标识', async () => {
-      mocks.setQueryResult([]); // 重复检查通过
-      const body = await parseResponseJson(await CreatePermission(createTestRequest('/api/permissions', {
-        method: 'POST',
-        body: { name: '用户创建', code: 'user:create', type: 'API', resource: 'user', action: 'create', sort: 10 },
-      })));
-      expect(body.success).toBe(true);
-      expect(body.data.name).toBe('用户创建');
-    });
 
-    it('重复 code 返回冲突错误', async () => {
-      mocks.setQueryResult([makePermissionRow({ code: 'user:list' })]);
-      const res = await CreatePermission(createTestRequest('/api/permissions', {
-        method: 'POST',
-        body: { name: '用户列表', code: 'user:list' },
-      }));
-      expect(res.status).toBe(409);
-      expect((await parseResponseJson(res)).error).toBe('DUPLICATE_ENTITY');
-    });
-
-    it('缺少 name 和 code 返回 400', async () => {
-      const res = await CreatePermission(createTestRequest('/api/permissions', { method: 'POST', body: { type: 'API' } }));
-      expect(res.status).toBe(400);
-    });
-  });
-
-  // ================================================
-  // PATCH /api/permissions/[id]
-  // ================================================
-  describe('PATCH /api/permissions/[id]', () => {
-    it('成功更新权限', async () => {
-      mocks.setQueryResult([makePermissionRow()]);
-      mocks.setRowCountResult(1);
-      const body = await parseResponseJson(await UpdatePermission(
-        createTestRequest('/api/permissions/p1', { method: 'PATCH', body: { name: '更新后', sort: 5 } }),
-        { params: Promise.resolve({ id: 'p1' }) } as any,
-      ));
-      expect(body.success).toBe(true);
-    });
-
-    it('支持 publicId 更新', async () => {
-      mocks.setQueryResult([makePermissionRow()]);
-      mocks.setRowCountResult(1);
-      const body = await parseResponseJson(await UpdatePermission(
-        createTestRequest('/api/permissions/p_perm01', { method: 'PATCH', body: { name: 'PublicId更新' } }),
-        { params: Promise.resolve({ id: 'p_perm01' }) } as any,
-      ));
-      expect(body.success).toBe(true);
-    });
-  });
-
-  // ================================================
-  // DELETE /api/permissions/[id]
-  // ================================================
-  describe('DELETE /api/permissions/[id]', () => {
-    it('成功删除权限', async () => {
-      mocks.setQueryResult([makePermissionRow()]);
-      const body = await parseResponseJson(await DeletePermission(
-        createTestRequest('/api/permissions/p1', { method: 'DELETE' }),
-        { params: Promise.resolve({ id: 'p1' }) } as any,
-      ));
-      expect(body.success).toBe(true);
-    });
-
-    it('支持 publicId 删除', async () => {
-      mocks.setQueryResult([makePermissionRow()]);
-      const body = await parseResponseJson(await DeletePermission(
-        createTestRequest('/api/permissions/p_perm01', { method: 'DELETE' }),
-        { params: Promise.resolve({ id: 'p_perm01' }) } as any,
-      ));
-      expect(body.success).toBe(true);
-    });
-  });
 
   // ================================================
   // POST /api/permissions/register - 权限树同步

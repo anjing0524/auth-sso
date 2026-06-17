@@ -6,6 +6,7 @@
 
 import { useState, useEffect, useCallback, use } from 'react';
 import Link from 'next/link';
+import { updateClientAction, rotateClientSecretAction, revokeClientTokensAction } from '../actions';
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -20,15 +21,12 @@ interface Client {
   name: string;
   clientId: string;
   redirectUris: string[];
-  grantTypes: string[];
   scopes: string;
   homepageUrl: string | null;
   logoUrl: string | null;
   accessTokenTtl: number;
   refreshTokenTtl: number;
   status: 'ACTIVE' | 'DISABLED';
-  disabled: boolean;
-  skipConsent: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -87,7 +85,6 @@ export default function ClientDetailPage({ params }: PageProps) {
     logoUrl: '',
     accessTokenTtl: 3600,
     refreshTokenTtl: 604800,
-    skipConsent: false,
   });
 
   /**
@@ -108,7 +105,6 @@ export default function ClientDetailPage({ params }: PageProps) {
           logoUrl: data.data.logoUrl || '',
           accessTokenTtl: data.data.accessTokenTtl,
           refreshTokenTtl: data.data.refreshTokenTtl,
-          skipConsent: data.data.skipConsent,
         });
       }
     } catch (error) {
@@ -145,24 +141,21 @@ export default function ClientDetailPage({ params }: PageProps) {
     if (!client) return;
     setSaving(true);
     try {
-      const response = await fetch(`/api/clients/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: formData.name,
-          redirectUris: formData.redirectUris.split('\n').filter(Boolean),
-          scopes: formData.scopes,
-          homepageUrl: formData.homepageUrl || null,
-          logoUrl: formData.logoUrl || null,
-          accessTokenTtl: formData.accessTokenTtl,
-          refreshTokenTtl: formData.refreshTokenTtl,
-          skipConsent: formData.skipConsent,
-        }),
+      const res = await updateClientAction(id, {
+        name: formData.name,
+        redirectUris: formData.redirectUris.split('\n').filter(Boolean),
+        scopes: formData.scopes,
+        homepageUrl: formData.homepageUrl || null,
+        logoUrl: formData.logoUrl || null,
+        accessTokenTtl: formData.accessTokenTtl,
+        refreshTokenTtl: formData.refreshTokenTtl,
       });
 
-      if (response.ok) {
+      if (res.success) {
         fetchClient();
         alert('保存成功');
+      } else {
+        alert(res.message || '保存失败');
       }
     } catch (error) {
       console.error('Failed to save:', error);
@@ -179,13 +172,11 @@ export default function ClientDetailPage({ params }: PageProps) {
     if (!confirm('确定要重新生成 Secret 吗？旧的 Secret 将立即失效。')) return;
 
     try {
-      const response = await fetch(`/api/clients/${id}/secret`, {
-        method: 'POST',
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setNewSecret(data.data.clientSecret);
+      const res = await rotateClientSecretAction(id);
+      if (res.success && res.data) {
+        setNewSecret(res.data.clientSecret);
+      } else {
+        alert(res.message || '重新生成 Secret 失败');
       }
     } catch (error) {
       console.error('Failed to regenerate secret:', error);
@@ -200,15 +191,12 @@ export default function ClientDetailPage({ params }: PageProps) {
     if (!confirm('确定要撤销所有授权 Token 吗？')) return;
 
     try {
-      const response = await fetch(`/api/clients/${id}/tokens`, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ revokeAll: true }),
-      });
-
-      if (response.ok) {
+      const res = await revokeClientTokensAction(id, [], true);
+      if (res.success) {
         fetchTokens();
         alert('已撤销所有 Token');
+      } else {
+        alert(res.message || '撤销 Token 失败');
       }
     } catch (error) {
       console.error('Failed to revoke tokens:', error);
@@ -223,14 +211,11 @@ export default function ClientDetailPage({ params }: PageProps) {
     const newStatus = client.status === 'ACTIVE' ? 'DISABLED' : 'ACTIVE';
 
     try {
-      const response = await fetch(`/api/clients/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: newStatus }),
-      });
-
-      if (response.ok) {
+      const res = await updateClientAction(id, { status: newStatus });
+      if (res.success) {
         fetchClient();
+      } else {
+        alert(res.message || '更新状态失败');
       }
     } catch (error) {
       console.error('Failed to toggle status:', error);
@@ -408,20 +393,6 @@ export default function ClientDetailPage({ params }: PageProps) {
                   />
                   <p className="mt-1 text-xs text-gray-500">{formatTTL(formData.refreshTokenTtl)}</p>
                 </div>
-              </div>
-
-              {/* 跳过授权确认 */}
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  id="skipConsent"
-                  checked={formData.skipConsent}
-                  onChange={(e) => setFormData({ ...formData, skipConsent: e.target.checked })}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-                <label htmlFor="skipConsent" className="ml-2 text-sm text-gray-700">
-                  跳过授权确认（受信任的客户端）
-                </label>
               </div>
 
               {/* 保存按钮 */}

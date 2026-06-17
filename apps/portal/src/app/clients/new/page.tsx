@@ -27,7 +27,6 @@ export default function NewClientPage() {
     logoUrl: '',
     accessTokenTtl: 3600,
     refreshTokenTtl: 604800,
-    skipConsent: false,
   });
 
   const handleCreate = async () => {
@@ -45,7 +44,6 @@ export default function NewClientPage() {
       logoUrl: formData.logoUrl || null,
       accessTokenTtl: formData.accessTokenTtl,
       refreshTokenTtl: formData.refreshTokenTtl,
-      skipConsent: formData.skipConsent,
     });
 
     setSaving(false);
@@ -136,18 +134,6 @@ export default function NewClientPage() {
                   onChange={e => setFormData({...formData, accessTokenTtl: parseInt(e.target.value)})}
                   className="h-11 rounded-xl"
                 />
-              </div>
-              <div className="flex items-center space-x-2">
-                <input
-                  type="checkbox"
-                  id="skipConsent"
-                  checked={formData.skipConsent}
-                  onChange={e => setFormData({ ...formData, skipConsent: e.target.checked })}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-                <label htmlFor="skipConsent" className="text-sm font-medium text-slate-700">
-                  跳过用户授权确认
-                </label>
               </div>
             </CardContent>
           </Card>

@@ -3,7 +3,7 @@
 /**
  * 菜单管理 Server Actions (BFF 薄 Controller)
  */
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, revalidateTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
 import { eq, or } from 'drizzle-orm';
 import { withAuth, type AuthContext } from '@/lib/auth';
@@ -36,6 +36,7 @@ export const createMenuAction = withAuth(
     await db.insert(schema.menus).values(menuToInsertRow(menu));
 
     revalidatePath('/menus');
+    revalidateTag('menus-list', 'hours');
     return { success: true, data: { id: menu.publicId }, message: '菜单创建成功' };
   },
 );
@@ -61,6 +62,7 @@ export const updateMenuAction = withAuth(
       .where(eq(schema.menus.id, menu.id));
 
     revalidatePath('/menus');
+    revalidateTag('menus-list', 'hours');
     return { success: true, data: { id: menuId }, message: '菜单更新成功' };
   },
 );
@@ -93,6 +95,7 @@ export const deleteMenuAction = withAuth(
     });
 
     revalidatePath('/menus');
+    revalidateTag('menus-list', 'hours');
     return { success: true, data: { id: menuId }, message: '菜单及其子项已递归删除' };
   },
 );

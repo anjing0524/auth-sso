@@ -11,7 +11,7 @@
 ## 4.1 身份与认证 (Identity & Authentication)
 
 ### 需求 1: 用户登录 (支持邮箱密码)
-*   **API TDD (`TDD-AUTH-001`)**: 向 IdP `/api/auth/sign-in/email` 发送 POST 请求。断言返回 `200` 并在 Cookie 中写入 `better-auth.session_token`。
+*   **API TDD (`TDD-AUTH-001`)**: 向 IdP `/api/auth/login` 发送 POST 请求。断言返回 `200` 并在 Cookie 中写入 `login_session`。
 *   **UI TDD (`UI-AUTH-001`)**:
     *   **测试动作**: 在 `<LoginContent />` 中输入空密码。
     *   **断言**: 页面不应发起请求，应在密码框下显示红色错误提示（前端校验）。
@@ -68,7 +68,7 @@
 *   **API TDD (`SEC-001~030`)**: （已包含在 57 项测试中）断言所有 OAuth 重定向必须使用 PKCE (S256)。断言 State 不匹配时拒绝登录。断言 Session Cookies 携带 HttpOnly 和 SameSite=Lax 属性。
 *   **UI TDD (`UI-SEC-001`)**:
     *   **测试动作**: 在浏览器控制台中执行 `document.cookie`。
-    *   **断言**: 无法读取到 `idp_session` 或 `portal_jwt_token`，证明 HttpOnly 生效，免受 XSS 攻击窃取。
+    *   **断言**: 无法读取到 `login_session` 或 `portal_jwt_token`，证明 HttpOnly 生效，免受 XSS 攻击窃取。
 
 ---
 

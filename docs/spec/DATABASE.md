@@ -7,17 +7,16 @@ Status: Released
 
 ## 1. Storage Architecture
 
-Auth-SSO utilizes a hybrid storage approach with PostgreSQL and Redis. For simplicity, deployment efficiency (especially in Serverless environments), and cross-domain data consistency, all entities reside in a **single physical PostgreSQL database**, while maintaining a strict **logical separation**.
+Auth-SSO utilizes a hybrid storage approach with PostgreSQL and Redis. For simplicity, deployment efficiency, and data consistency, all entities reside in a **single physical PostgreSQL database**, while maintaining a strict **logical separation**.
 
 ### 1.1 Logical Data Domains
-- **Portal Domain**: Contains business logic data such as users, organizational structure, RBAC, and client configurations.
-- **Identity & Auth Domain**: Contains authentication credentials, accounts, and session metadata managed by Better Auth.
+- **Portal Core Domain**: Contains business logic data such as users, organizational structure (departments), menus, audit logs, and RBAC (roles, permissions).
+- **OIDC Provider Domain**: Contains OIDC client configurations, authorization codes, active tokens, consents, and cryptographic key pairs (JWKS).
 
 ### 1.2 Redis Keyspaces
 
 | Keyspace Prefix | Purpose | Managed By |
 | --- | --- | --- |
-| `auth-sso:` | IdP sessions and auth state (Better Auth secondaryStorage) | Better Auth |
 | `portal:jti_blocklist:` | JWT jti emergency revocation blacklist | Portal BFF |
 | `portal:user_perms:` | User permission context cache (TTL: 300s) | Portal BFF |
 
@@ -65,13 +64,61 @@ Auth-SSO utilizes a hybrid storage approach with PostgreSQL and Redis. For simpl
 
 ---
 
-## 4. Identity & Auth Domain
+## 4. OIDC Provider Domain Entities
 
-These tables are managed by Better Auth migrations and share the same database:
-- **`user`**: Stores authentication-level user data.
-- **`account`**: Links authentication methods (e.g., email/password).
-- **`session`**: Better Auth internal session tracking.
-- **`oauth_client` / `oauth_access_token` / `oauth_refresh_token`**: OIDC Provider plugin tables.
+These tables store OAuth 2.1 and OIDC protocol state:
+
+### 4.1 OAuth Clients (`clients`)
+- **Primary Key**: `id` (text)
+- **External ID**: `public_id` (text)
+- **Client ID**: `client_id` (text, unique)
+- **Client Secret**: `client_secret` (text, nullable)
+- **Redirect URIs**: `redirect_uris` (text, comma-separated)
+- **Scopes**: `scopes` (text)
+- **Status**: `ACTIVE`, `DISABLED` (entity_status enum)
+
+### 4.2 Authorization Codes (`authorization_codes`)
+- **Primary Key**: `id` (text)
+- **Code**: `code` (text, unique)
+- **Client**: `client_id` (foreign key to `clients.id`)
+- **User**: `user_id` (foreign key to `users.id`)
+- **Redirect URI**: `redirect_uri` (text)
+- **Scope**: `scope` (text)
+- **PKCE Challenge**: `code_challenge`, `code_challenge_method`
+- **Expires At**: `expires_at` (timestamp)
+- **Used**: `used` (boolean)
+
+### 4.3 Access Tokens (`access_tokens`)
+- **Primary Key**: `id` (text)
+- **Token Hash**: `token` (text, unique)
+- **Client**: `client_id` (foreign key to `clients.id`)
+- **User**: `user_id` (foreign key to `users.id`)
+- **Scopes**: `scopes` (text)
+- **Expires At**: `expires_at` (timestamp)
+
+### 4.4 Refresh Tokens (`refresh_tokens`)
+- **Primary Key**: `id` (text)
+- **Token Hash**: `token` (text, unique)
+- **Client**: `client_id` (foreign key to `clients.id`)
+- **User**: `user_id` (foreign key to `users.id`)
+- **Scopes**: `scopes` (text)
+- **Revoked**: `revoked` (timestamp, nullable)
+- **Expires At**: `expires_at` (timestamp)
+
+### 4.5 Consents (`consents`)
+- **Primary Key**: `id` (text)
+- **User**: `user_id` (foreign key to `users.id`)
+- **Client**: `client_id` (foreign key to `clients.id`)
+- **Scopes**: `scopes` (text)
+- **Consent Given**: `consent_given` (boolean)
+
+### 4.6 JWKS Keys (`jwks`)
+- **Primary Key**: `id` (text)
+- **Key ID**: `kid` (text, unique)
+- **Algorithm**: `algorithm` (text, default 'ES256')
+- **Public Key**: `public_key` (text, JWK format)
+- **Private Key**: `private_key` (text, JWK format)
+- **Expires At**: `expires_at` (timestamp)
 
 ---
 
@@ -101,11 +148,6 @@ These tables are managed by Better Auth migrations and share the same database:
 **TTL**: 300 seconds (5 minutes).
 **Purpose**: Caches the user's role/permission/data-scope context to avoid repeated DB queries on every API request. Gracefully degrades to direct DB queries on Redis failure.
 
-### 5.3 IdP Session Storage
-
-**Key**: `auth-sso:{sessionToken}` (managed by Better Auth secondaryStorage)
-**Purpose**: Better Auth uses Redis as secondary storage for IdP sessions, authorization codes, and other high-performance state. Key prefix is configured via `redisStorage({ keyPrefix: 'auth-sso:' })`.
-
 ---
 
 ## 6. Implementation Notes
@@ -113,4 +155,4 @@ These tables are managed by Better Auth migrations and share the same database:
 1. **Logical Deletion**: Primary business tables use `deleted_at` for soft deletes.
 2. **Indexing**: Indexes are placed on `username`, `client_id`, `public_id`, and foreign key columns (`dept_id`, `user_id`).
 3. **Partial Unique Indexes**: Used for nullable fields that must be unique when present (e.g., `email`, `mobile`).
-4. **Shared Database (v1.0)**: Both Portal and IdP domains share the same PostgreSQL instance for deployment simplicity. The IdP authorization endpoint queries Portal domain tables (`roles`, `roleClients`) directly. This coupling is acknowledged and acceptable for v1.0.
+4. **Shared Database**: Both Portal Core and OIDC Provider domains share the same physical database for simplicity and referential integrity. The custom authorization logic queries both tables directly.

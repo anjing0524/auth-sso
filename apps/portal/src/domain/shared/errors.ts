@@ -1,3 +1,5 @@
+import { AUTH_ERRORS } from '@auth-sso/contracts';
+
 /**
  * 领域错误类型体系
  * 所有领域异常的根类型，Controller 层据此映射 HTTP 状态码
@@ -30,5 +32,35 @@ export class BusinessRuleViolationError extends DomainError {
 export class DuplicateEntityError extends DomainError {
   constructor(entity: string, field: string) {
     super('DUPLICATE_ENTITY', `${entity} 的 ${field} 已存在`);
+  }
+}
+
+// ── OAuth 2.1 领域错误 ──
+
+/** OAuth Client 无效（不存在 / 已停用 / 密钥不匹配） */
+export class InvalidClientError extends DomainError {
+  constructor(message: string = 'Client 不存在或已停用') {
+    super(AUTH_ERRORS.INVALID_CLIENT, message);
+  }
+}
+
+/** 授权码无效（过期 / 已使用 / redirect_uri 不匹配） */
+export class InvalidGrantError extends DomainError {
+  constructor(message: string) {
+    super(AUTH_ERRORS.INVALID_CODE, message);
+  }
+}
+
+/** PKCE 验证失败（code_verifier 与 code_challenge 不匹配） */
+export class PKCEVerificationError extends DomainError {
+  constructor(message: string = 'PKCE 验证失败') {
+    super(AUTH_ERRORS.PKCE_VERIFICATION_FAILED, message);
+  }
+}
+
+/** OAuth redirect_uri 不在 Client 白名单中 */
+export class InvalidRedirectUriError extends DomainError {
+  constructor(message: string = '回调地址与应用注册的不匹配') {
+    super(AUTH_ERRORS.INVALID_REDIRECT_URI, message);
   }
 }

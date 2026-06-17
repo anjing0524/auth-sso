@@ -68,33 +68,54 @@ Retrieve currently logged-in user profile, permissions, and menu list.
 }
 ```
 
-### 2.2 `GET /api/auth/login`
-Initialize login flow. Generates PKCE parameters (code_verifier, code_challenge, state, nonce), stores them in HttpOnly Cookies, and redirects to Portal OIDC Provider `/authorize` endpoint.
-- **Query Params**: `redirect` (Optional, relative path).
+### 2.2 `POST /api/auth/login`
+Initialize login flow. Validates credentials, issues a temporary `login_session` JWT (5-minute TTL, ES256), and sets it as an HttpOnly Cookie for the authorize endpoint.
+
+**Request Body**:
+```json
+{
+  "email": "user@example.com",
+  "password": "user_password"
+}
+```
+
+**Success Response (200 OK)**:
+```json
+{
+  "success": true
+}
+```
+Set-Cookie header will contain `login_session` (path=/api/auth/oauth2/authorize).
 
 ### 2.3 `POST /api/auth/logout`
 Log out and invalidate current session:
 1. Decodes the current `portal_jwt_token` and adds its `jti` to the Redis blacklist (immediate revocation).
-2. Revokes the Refresh Token at the Portal OIDC Provider `/oauth2/revoke` endpoint.
-3. Clears both `portal_jwt_token` and `portal_refresh_token` Cookies.
+2. Clears the `portal_jwt_token` Cookie.
 
-### 2.4 `POST /api/auth/refresh`
-Silently refreshes the `portal_jwt_token` HttpOnly Cookie using the `portal_refresh_token`.
-
-**Request**:
-- Header: Cookie containing `portal_refresh_token` (Path=/api/auth/refresh).
-
-**Success Data (200 OK)**:
+**Success Response (200 OK)**:
 ```json
 {
-  "code": "OK",
-  "message": "success",
+  "success": true
+}
+```
+Set-Cookie header will clear `portal_jwt_token` (maxAge=0).
+
+### 2.4 `POST /api/auth/refresh`
+Silently refreshes the `portal_jwt_token` HttpOnly Cookie using the `portal_refresh_token` Cookie (Refresh Token Rotation).
+
+**Request**:
+- Cookie containing `portal_refresh_token` (Path=/api/auth/refresh).
+
+**Success Response (200 OK)**:
+```json
+{
+  "success": true,
   "data": {
-    "expiresAt": 1718080000
+    "expiresIn": 3600
   }
 }
 ```
-Set-Cookie header will contain a new `portal_jwt_token`.
+Set-Cookie header will contain updated `portal_jwt_token` and `portal_refresh_token`.
 
 ---
 
@@ -131,15 +152,15 @@ Requires `portal_jwt_token` HttpOnly Cookie and relevant permission codes. All r
 
 ## 4. OIDC Provider APIs (内建于 Portal)
 
-Standard OIDC/OAuth 2.1 endpoints. **All endpoints below are provided by Better Auth's built-in OIDC Provider plugin** via the catch-all route (`/api/auth/[...all]`), except where noted as custom.
+Standard OAuth 2.1 and OIDC endpoints, custom implemented as Next.js Route Handlers:
 
-| Endpoint | Path | Provided By |
-|---|---|---|
-| Authorization | `GET /api/auth/oauth2/authorize` | Custom handler (RBAC pre-check) + Better Auth |
-| Token Exchange | `POST /api/auth/oauth2/token` | Better Auth built-in |
-| Token Revocation | `POST /api/auth/oauth2/revoke` | Better Auth built-in |
-| Token Introspection | `POST /api/auth/oauth2/introspect` | Better Auth built-in |
-| UserInfo | `GET /api/auth/oauth2/userinfo` | Better Auth built-in |
-| JWKS | `GET /api/auth/jwks` | Better Auth JWT plugin |
-| Discovery | `GET /api/auth/.well-known/openid-configuration` | Better Auth built-in |
-| Global SSO Logout | `POST /api/auth/sign-out-sso` | Custom handler |
+| Endpoint | Path | Method | Description |
+|---|---|---|---|
+| OpenID Discovery | `/.well-known/openid-configuration` | GET | Returns OpenID Connect Provider metadata |
+| Authorization | `/api/auth/oauth2/authorize` | GET | Implements Authorization Code + PKCE authorization flow |
+| Token Exchange | `/api/auth/oauth2/token` | POST | Exchanges code for access_token + refresh_token, or performs refresh rotation |
+| UserInfo | `/api/auth/oauth2/userinfo` | GET | Returns claims about the authenticated user |
+| Introspection | `/api/auth/oauth2/introspect` | POST | Decodes and validates active tokens (RFC 7662) |
+| Revocation | `/api/auth/oauth2/revoke` | POST | Revokes active access or refresh tokens (RFC 7009) |
+| JWKS | `/api/auth/jwks` | GET | Exposes public key set (JWK format) for signature verification |
+| Auth Callback | `/api/auth/callback` | GET | Backend callback handler that exchanges auth code and sets cookies |

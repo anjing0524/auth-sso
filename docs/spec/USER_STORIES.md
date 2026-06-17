@@ -1131,7 +1131,7 @@ JWT payload 包含以下 claims：
 
 **验收标准：**
 1. Demo App 检测未登录 → 重定向到 Portal OIDC Provider `/authorize`
-2. 浏览器携带 `better-auth.session_token` Cookie 到 Portal OIDC Provider
+2. 浏览器携带 `portal_jwt_token` Cookie 到 Portal OIDC Provider
 3. Portal OIDC Provider 识别已有 session → 跳过登录 UI → 重定向回 Demo App 携带 `code`
 4. Demo App 用 `code` 换取 Token → 用户自动登录
 5. 全程无需输入密码

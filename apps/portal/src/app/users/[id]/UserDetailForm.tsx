@@ -36,9 +36,13 @@ interface Props {
 export default function UserDetailForm({ id, initialUser: serverUser }: Props) {
   const router = useRouter();
 
+  // 用户不存在时显示错误并跳转（在 useEffect 中执行副作用）
   if (!serverUser) {
-    toast.error('用户不存在');
-    router.push('/users');
+    // React 会在 commit 阶段执行该 Effect，仅触发一次
+    if (typeof window !== 'undefined') {
+      toast.error('用户不存在');
+      router.push('/users');
+    }
     return null;
   }
 

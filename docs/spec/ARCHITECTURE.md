@@ -1,17 +1,18 @@
 # System Architecture - Auth-SSO
 
-Version: v3.0
+Version: v4.0
 Status: Released
+Last Updated: 2026-06-16
 
 ---
 
 ## 1. System Overview
 
-Auth-SSO is a unified identity and access management (IAM) system built on top of `Next.js` and `Better Auth`. It follows a **decentralized, stateless JWT Cookie** architecture with a custom Rust-based API Gateway. The system consists of three primary applications and shared libraries.
+Auth-SSO is a unified identity and access management (IAM) system built on Next.js. It follows a **decentralized, stateless JWT Cookie** architecture with a custom Rust-based API Gateway (Pingora). The system consists of two primary applications and shared packages.
 
-- **`apps/portal` (Portal)**: The enterprise portal, BFF (Backend for Frontend), and OIDC Provider. Portal itself IS the identity provider — it runs Better Auth with the OIDC Provider plugin, handles user authentication, token issuance (ES256 JWT), manages business logic (RBAC, organizational structure), and writes JWT tokens into HttpOnly Cookies.
+- **`apps/portal` (Portal)**: The enterprise portal, BFF (Backend for Frontend), and custom OIDC Provider. Portal itself IS the identity provider — it handles user authentication, token issuance (ES256 JWT using jose and DB-stored JWKS), manages business logic (RBAC, organizational structure), and writes JWT tokens into HttpOnly Cookies.
 - **`apps/gateway` (Gateway)**: A high-performance API Gateway built with Rust (Pingora). It serves as the unified traffic entry point, performs offline JWT signature verification using cached JWKS public keys, and transforms Cookie-based auth into Bearer tokens for downstream microservices.
-- **`packages/contracts`**: Shared TypeScript types, error codes, permission codes, and OIDC constants.
+- **`packages/contracts`**: Shared TypeScript types, error codes, permission codes, OIDC constants. Single source of truth for all enum values.
 - **`packages/config`**: Shared env config (Zod schema + URL derivation), TypeScript/ESLint configuration.
 
 ---
@@ -19,13 +20,15 @@ Auth-SSO is a unified identity and access management (IAM) system built on top o
 ## 2. Technical Stack
 
 - **Framework**: Next.js 16 (App Router, Turbopack).
-- **Identity Engine**: [Better Auth](https://better-auth.com/) (Email/Password, OIDC 2.1 Provider).
+- **Auth Engine**: Custom OIDC Provider implementation — pure JWT Cookie stateless architecture. No Better Auth dependency.
+- **JWT Signing**: ES256 asymmetric keys stored in PostgreSQL (`jwks` table), signed via Web Crypto API (`jose` library).
 - **API Gateway**: Rust + Pingora (ES256 JWKS offline verification, Cookie-to-Bearer transformation).
 - **Database**: PostgreSQL 16+ (shared across Portal auth and business domains).
-- **ORM**: Drizzle ORM.
-- **Redis**: jti blocklist (Portal emergency revocation), permission context cache (Portal), Better Auth session storage (secondaryStorage).
-- **Styling**: Tailwind CSS 4, shadcn/ui.
+- **ORM**: Drizzle ORM (direct query pattern, no repository abstraction).
+- **Redis**: jti blocklist (emergency token revocation) and permission context cache (5-min TTL).
+- **Styling**: Tailwind CSS 4, shadcn/ui components.
 - **Language**: TypeScript (Portal), Rust (Gateway).
+- **Package Manager**: pnpm workspaces.
 
 ---
 
@@ -34,134 +37,152 @@ Auth-SSO is a unified identity and access management (IAM) system built on top o
 ```text
 Browser
   → Gateway (Rust/Pingora)
-       → ES256 offline JWT verification (JWKS cached, zero network I/O)
+       → ES256 offline JWT verification (JWKS cached in-memory)
        → Cookie extraction + Bearer header injection
        → Route to Portal
-  → Portal (BFF + OIDC Provider)
-       → PostgreSQL (Portal Core Domain: RBAC, Org Structure, Auth: users, sessions, tokens)
-       → Redis (jti blocklist, permission cache, Better Auth secondaryStorage)
+  → Portal (BFF + OIDC Provider + Admin UI)
+       → PostgreSQL (Users, Roles, Permissions, Departments, Menus, Clients, JWKS keys, Refresh Tokens)
+       → Redis (jti blocklist, permission context cache)
   → Sub-Applications (OIDC Clients)
-       → Portal OIDC Provider (Authorize/Token)
+       → Portal OIDC Provider (Authorize / Token / UserInfo / Introspect / Revoke)
 ```
 
 ### 3.1 Component Responsibilities
 
 | Component | Core Responsibilities | Must NOT Do |
 | --- | --- | --- |
-| **Portal (BFF + OIDC Provider)** | 1. User credential verification (Better Auth)<br/>2. Issue ES256-signed JWT (Access Token + Refresh Token)<br/>3. Expose `/.well-known/jwks` public key endpoint<br/>4. Maintain sessions for cross-app SSO<br/>5. RBAC pre-check at authorization endpoint<br/>6. Act as OIDC Client for internal SSO<br/>7. Write JWT into HttpOnly Cookies (`portal_jwt_token`, `portal_refresh_token`)<br/>8. Manage Users, Departments, Roles, Permissions<br/>9. Implement RBAC with Data Scope filtering<br/>10. jti blacklist for emergency token revocation | 1. Never store session state in Redis for Portal API auth (stateless JWT)<br/>2. Never expose sensitive tokens to client-side JS |
-| **Gateway (Pingora)** | 1. Unified HTTPS traffic entry point with SNI routing<br/>2. Extract `portal_jwt_token` Cookie, verify via cached JWKS<br/>3. Strip Cookie, inject `Authorization: Bearer <JWT>` for downstream<br/>4. Zero-trust: 100% offline verification, no Redis/DB I/O | 1. Never perform business-level permission checks<br/>2. Never connect to Redis or database<br/>3. Never handle login/redirect logic |
-| **Microservices** | 1. Pure business logic and data persistence<br/>2. Independently verify JWT via Portal JWKS (zero-trust)<br/>3. Enforce interface-level and data-level permission checks | 1. Never implement OIDC Authorization Code / PKCE logic<br/>2. Never manage user sessions directly |
-| **Demo App** | 1. Demonstrate standard OIDC Client integration<br/>2. Test SSO cross-app login/logout flows | — |
+| **Portal** | 1. User credential verification (bcrypt, DB-stored password hash)<br/>2. Issue ES256-signed JWT via DB-stored key pairs<br/>3. Expose `/.well-known/jwks` and `/api/auth/jwks` endpoints<br/>4. OAuth 2.1 + OIDC Provider endpoints (authorize, token, userinfo, introspect, revoke)<br/>5. Write JWT into HttpOnly Cookies (`portal_jwt_token`, `portal_refresh_token`)<br/>6. Manage Users, Departments, Roles, Permissions, Menus, OAuth Clients<br/>7. RBAC with Data Scope filtering (`SELF`, `DEPT`, `DEPT_AND_SUB`, `ALL`)<br/>8. jti blacklist for emergency token revocation | 1. Never store session state in Redis for Portal API auth (stateless JWT)<br/>2. Never expose sensitive tokens to client-side JS |
+| **Gateway** | 1. Unified HTTPS traffic entry point<br/>2. Extract `portal_jwt_token` Cookie, verify via cached JWKS (ES256, offline)<br/>3. Strip Cookie, inject `Authorization: Bearer <JWT>` for downstream<br/>4. Zero-trust: 100% offline verification, no Redis/DB I/O | 1. Never perform business-level permission checks<br/>2. Never connect to Redis or database<br/>3. Never handle login/redirect logic |
 
-### 3.2 Architecture Constraint: Unified Database (v1.0+)
+### 3.2 Portal Internal Architecture (Layered DDD)
 
-> **Architecture note**: The OIDC Provider functionality (formerly a separate IDP service) has been fully merged into Portal. The authorization endpoint (`/api/auth/oauth2/authorize`) now queries Portal domain tables (`users`, `roles`, `userRoles`, `roleClients`) directly within the same application. All data lives in a single PostgreSQL instance managed by Portal.
+```text
+app/ (Controller Layer)
+  ├── Server Actions (actions.ts) — 内部页面表单用, withAuth HOF 统一鉴权
+  ├── Route Handlers (route.ts) — 外部集成/Webhook/OIDC 协议端点
+  └── Data Helpers (data.ts) — 读模型 Drizzle 直调查询
+
+domain/ (Domain Layer — 纯 TS, 零框架依赖)
+  ├── shared/ — DomainError, error-mapping, zod-schemas, tree-utils
+  ├── auth/ — login, password, token (JWT签发/验签), oauth-authorize, types
+  ├── user/ — User CRUD 纯函数, userToInsertRow/UpdateRow
+  ├── role/ — Role CRUD 纯函数
+  ├── permission/ — Permission CRUD 纯函数
+  ├── department/ — Department CRUD + 环形引用检测
+  ├── menu/ — Menu CRUD + 树构建
+  └── client/ — OAuth Client CRUD 纯函数
+
+lib/ (Stateless Utilities)
+  ├── auth/ — withAuth, checkPermission, withPermission, data-scope, pkce, verify-jwt
+  ├── session/ — JWT Cookie 读写, jwks, revoke
+  ├── permissions.ts — 权限上下文查询 + Redis 缓存
+  ├── audit.ts — 审计日志
+  └── crypto.ts — ID/Secret 生成
+
+infrastructure/ (Stateful Adapters)
+  ├── db/ — Drizzle + postgres-js 连接
+  └── redis/ — ioredis 客户端
+```
+
+**Layer Dependency Rules**:
+- `domain/` → zero external dependencies (no next/, react, db, or npm packages except jose/bcryptjs)
+- `lib/` → can import from domain/ and infrastructure/
+- `infrastructure/` → can import from lib/ and domain/
+- `app/` → can import from all layers
 
 ---
 
 ## 4. Authentication & SSO Flows
 
-### 4.1 Portal Login Flow
+### 4.1 Portal Login Flow (OAuth 2.1 Authorization Code + PKCE)
 
-1. User accesses Portal protected page.
-2. Portal BFF (`/api/auth/login`) generates PKCE parameters (code_verifier, code_challenge, state, nonce) and redirects to Portal `/authorize` endpoint.
-3. User logs in at Portal (email/password).
-4. Portal redirects back to Portal `/api/auth/callback` with an authorization `code`.
-5. Portal BFF exchanges `code` for `access_token` (ES256 JWT) and `refresh_token` via Portal `/token` endpoint (Back-Channel).
-6. Portal BFF writes tokens into HttpOnly Cookies:
-   - `portal_jwt_token`: Access Token (HttpOnly, Secure, SameSite=Lax, maxAge = token expires_in)
-   - `portal_refresh_token`: Refresh Token (HttpOnly, Secure, SameSite=Lax, path = `/api/auth/refresh`, maxAge = 7 days)
-7. Portal BFF redirects user to the target page (e.g., `/dashboard`).
+1. User accesses Portal login page (`/login`).
+2. Login form POST → Server Action validates credentials (email + password bcrypt).
+3. On success: signs `login_session` JWT (5-min TTL, ES256), sets as HttpOnly Cookie.
+4. Redirects to `/api/auth/oauth2/authorize` with PKCE parameters (code_challenge, state).
+5. Authorize endpoint validates login_session Cookie, checks user status, issues authorization `code`.
+6. Callback endpoint (`/api/auth/callback`) exchanges `code` for `access_token` + `refresh_token`.
+7. Tokens written to HttpOnly Cookies:
+   - `portal_jwt_token`: Access Token (ES256 JWT, HttpOnly, Secure, SameSite=Lax, maxAge=1h)
+   - `portal_refresh_token`: Refresh Token (HttpOnly, Secure, SameSite=Lax, path=/api/auth/refresh, maxAge=7d)
 
 ### 4.2 Single Sign-On (SSO) Flow
 
-1. User accesses a Sub-Application (an OIDC client registered with Portal).
-2. Sub-app redirects to Portal `/authorize`.
-3. Browser automatically sends the `idp_session` cookie (Better Auth session).
-4. Portal recognizes the session and redirects back to Sub-app with a `code` (skipping the login UI).
-5. Sub-app exchanges `code` for tokens and establishes its own session.
+1. User accesses a Sub-Application (OIDC client registered with Portal).
+2. Sub-app redirects to Portal `/api/auth/oauth2/authorize`.
+3. Browser sends `portal_jwt_token` Cookie if already logged in.
+4. Portal verifies JWT, skips login UI, redirects back with authorization `code`.
+5. Sub-app exchanges `code` for tokens (back-channel) and establishes its own session.
 
 ### 4.3 Gateway Request Flow
 
 1. Browser sends API request with `portal_jwt_token` Cookie.
-2. Gateway extracts JWT from Cookie, verifies signature using cached JWKS public key (ES256, offline, zero network I/O).
-3. On success: Gateway strips Cookie header, injects `Authorization: Bearer <JWT>`, forwards to downstream microservice.
-4. On failure: Gateway returns 401, browser redirects to Portal login.
+2. Gateway extracts JWT from Cookie, verifies signature using in-memory JWKS cache (ES256, offline).
+3. On success: Gateway strips Cookie header, injects `Authorization: Bearer <JWT>`, forwards downstream.
+4. On failure: Gateway returns 401 with `WWW-Authenticate: Bearer` header.
 
 ---
 
-## 5. Session Management
+## 5. Token & Key Management
 
-### 5.1 Dual-Session Model (Stateless Portal + Stateful Portal)
+### 5.1 JWKS Key Management
 
-| | Portal Session | Portal Session |
-|---|---|---|
-| **Manager** | Portal BFF (OIDC Client) | Better Auth native |
-| **Storage** | Stateless JWT in HttpOnly Cookie | Redis (`auth-sso:` prefix via Better Auth secondaryStorage) |
-| **Key Files** | `apps/portal/src/lib/session.ts` | `apps/idp/src/lib/auth.ts` |
-| **Identifier** | `portal_jwt_token` cookie | `better-auth.session_token` cookie |
-| **Timeout** | JWT exp (1h) + Refresh Token (7d) | Better Auth managed |
+- Signing key pairs (ES256) are stored in PostgreSQL `jwks` table (public key + encrypted private key).
+- On first request, if no key exists, a new key pair is generated and persisted.
+- Keys auto-rotate: if the current key is expired (>90 days), a new key pair is generated.
+- Public keys are exposed via `/.well-known/jwks` and `/api/auth/jwks` for Gateway/microservice verification.
 
-### 5.2 Token Lifecycle
+### 5.2 Token Types
 
-| Token Type | Lifetime | Storage | Purpose |
-|---|---|---|---|
-| Access Token (JWT) | 1 hour (Portal OIDC Provider config) | `portal_jwt_token` HttpOnly Cookie | Authentication + Authorization claims |
-| Refresh Token | 7 days (Portal Cookie) | `portal_refresh_token` HttpOnly Cookie (path-restricted) | Silent token renewal via `/api/auth/refresh` |
-| Portal Session | Better Auth managed | Redis (`auth-sso:` prefix) | Cross-application SSO session |
+| Token Type | Signing | Lifetime | Storage | Purpose |
+|---|---|---|---|---|
+| Login Session Token | ES256 JWT | 5 minutes | `login_session` Cookie | Temporary credential passed to authorize endpoint |
+| Access Token | ES256 JWT | 1 hour | `portal_jwt_token` Cookie | Authentication + Authorization (roles, permissions, dataScope) |
+| Refresh Token | Opaque (DB-stored) | 7 days | `portal_refresh_token` Cookie | Silent token renewal via `/api/auth/refresh` |
 
-### 5.3 Token Refresh Mechanism
+### 5.3 Token Refresh
 
-Portal SPA frontend uses a timer to call `/api/auth/refresh` before the Access Token expires (5 minutes prior). On success, Portal BFF obtains a new Access Token from Portal and updates the `portal_jwt_token` Cookie. On failure (Refresh Token expired/revoked), user is redirected to login.
+- Frontend calls `/api/auth/refresh` before Access Token expires.
+- Server validates Refresh Token against DB, rotates (revoke old + issue new).
+- New Access Token + Refresh Token written to Cookies.
+- On failure (expired/revoked), user redirected to login.
 
 ### 5.4 Emergency Revocation (jti Blacklist)
 
-For scenarios requiring immediate token invalidation (account ban, password change, forced logout):
-
-1. Portal writes the JWT's `jti` to Redis with TTL = token's remaining lifetime.
-2. All Portal API routes check the jti blacklist during JWT verification (`verifyJwt()`).
-3. Gateway can subscribe to Redis Pub/Sub for jti broadcasts (optional, for sub-second revocation).
+- When immediate token invalidation is needed (account ban, forced logout):
+  1. JWT's `jti` written to Redis with TTL = token remaining lifetime.
+  2. All JWT verification paths check jti blacklist.
+  3. `revokeUserToken()` → revokes all Refresh Tokens for a user.
 
 ---
 
-## 6. Better Auth Integration
+## 6. OIDC Provider Endpoints
 
-The Portal application (`apps/idp`) uses Better Auth with the following plugins:
-- **Core Auth**: Basic user management and authentication.
-- **Email & Password**: Primary credential provider.
-- **OIDC Provider**: Implements OIDC/OAuth 2.1 endpoints.
-- **JWT**: For signing ID Tokens and providing JWKS.
+All custom-implemented (no Better Auth):
 
-### 6.1 OIDC Endpoints (Provided by Better Auth)
-
-All standard OIDC endpoints are handled by Better Auth's catch-all route (`/api/auth/[...all]`):
-
-| Endpoint | Path | Provided By |
+| Endpoint | Path | Description |
 |---|---|---|
-| Authorization | `/api/auth/oauth2/authorize` | Custom handler + Better Auth fallback |
-| Token Exchange | `/api/auth/oauth2/token` | Better Auth built-in |
-| Token Revocation | `/api/auth/oauth2/revoke` | Better Auth built-in |
-| Token Introspection | `/api/auth/oauth2/introspect` | Better Auth built-in |
-| UserInfo | `/api/auth/oauth2/userinfo` | Better Auth built-in |
-| JWKS | `/api/auth/jwks` | Better Auth JWT plugin |
-| Discovery | `/api/auth/.well-known/openid-configuration` | Better Auth built-in |
-| Global SSO Logout | `/api/auth/sign-out-sso` | Custom handler |
-
-### 6.2 Portal-Portal User Linking
-
-- When a user is created in the Portal, a corresponding identity record is created in the Portal.
-- The `sub` (subject) claim in OIDC tokens links the Portal identity to the business user in the Portal domain.
-- Both domains share a single PostgreSQL database for v1.0 simplicity.
+| Authorization | `GET /api/auth/oauth2/authorize` | OAuth 2.1 Authorization Code flow entry |
+| Token | `POST /api/auth/oauth2/token` | Token exchange (code → access_token + refresh_token) |
+| UserInfo | `GET /api/auth/oauth2/userinfo` | OIDC UserInfo endpoint |
+| Introspection | `POST /api/auth/oauth2/introspect` | Token introspection (RFC 7662) |
+| Revocation | `POST /api/auth/oauth2/revoke` | Token revocation (RFC 7009) |
+| JWKS | `GET /api/auth/jwks` | Public key set for JWT verification |
+| Login | `POST /api/auth/login` | Email/password credential verification |
+| Logout | `POST /api/auth/logout` | Clear cookies + revoke tokens |
+| Callback | `GET /api/auth/callback` | OAuth callback handler |
+| Refresh | `POST /api/auth/refresh` | Token refresh endpoint |
 
 ---
 
 ## 7. Security Principles
 
-1. **PKCE (Proof Key for Code Exchange)**: Mandatory for all authorization code flows (`requirePKCE: true`, S256 only).
-2. **State & Nonce**: Used to prevent CSRF and replay attacks.
+1. **PKCE (S256)**: Mandatory for all authorization code flows.
+2. **State & Nonce**: CSRF and replay attack prevention.
 3. **Cookie Hardening**: `HttpOnly`, `Secure`, `SameSite=Lax` for all auth cookies.
-4. **Token Isolation**: No sensitive tokens (Access/Refresh) are exposed to client-side JavaScript.
-5. **Back-Channel Communication**: Token exchange and refresh occur server-to-server.
-6. **Zero-Trust Architecture**: Gateway and microservices independently verify JWT signatures via JWKS. No service trusts headers from another service without verification.
-7. **Global Logout**: Logging out from Portal invalidates both Portal JWT (jti blacklist) and Portal session, ensuring subsequent SSO attempts require re-authentication.
-8. **Emergency Revocation**: jti blacklist in Redis enables sub-second forced logout without waiting for token expiration.
+4. **Token Isolation**: No sensitive tokens exposed to client-side JavaScript.
+5. **Back-Channel Communication**: Token exchange and refresh are server-to-server.
+6. **Zero-Trust Architecture**: Gateway and microservices independently verify JWT signatures via JWKS.
+7. **Stateless Core**: Portal API auth is 100% stateless JWT — no Redis session lookup.
+8. **jti Blacklist**: Redis-based emergency revocation for immediate token invalidation.
+9. **ES256 Asymmetric Signing**: Private key stored in DB, public key exposed via JWKS. No shared secrets.

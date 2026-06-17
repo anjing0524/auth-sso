@@ -135,11 +135,25 @@ impl Gateway {
         let mut validation = Validation::new(Algorithm::ES256);
         validation.set_issuer(&[&self.issuer]);
 
+        // 通过 OIDC Discovery 动态获取支持的签名算法，替换硬编码的 ES256
+        let discovered_algorithms = self.jwks_cache.get_supported_algorithms();
+        if !discovered_algorithms.is_empty() {
+            validation.algorithms = discovered_algorithms;
+            debug!(
+                "JWT 验签使用 OIDC Discovery 算法: {:?}",
+                validation.algorithms
+            );
+        } else {
+            warn!("⚠️  OIDC 元数据未就绪，回退至默认算法 ES256");
+        }
+
         // 无锁并发进行复杂的密码学 ECDSA 验签计算，消除锁竞争
         match decode::<Claims>(token, &decoding_key, &validation) {
             Ok(token_data) => {
                 debug!("JWT 验签通过: sub={}, kid={}", token_data.claims.sub, kid);
                 ctx.auth_header = Some(format!("Bearer {}", token));
+                ctx.user_id = Some(token_data.claims.sub);
+                ctx.user_jti = Some(token_data.claims.jti);
                 true
             }
             Err(e) => {
@@ -189,6 +203,23 @@ impl Gateway {
             .await?;
         Ok(true)
     }
+} // impl Gateway
+
+/// 零拷贝提取 Cookie 中的 portal_jwt_token 并剥离可能的双引号
+///
+/// # 参数
+/// * `cookie_header` - 原始的 Cookie 请求头字符串
+fn extract_token_from_cookie<'a>(cookie_header: &'a str) -> Option<&'a str> {
+    cookie_header.split(';').find_map(|cookie_str| {
+        let trimmed = cookie_str.trim();
+        trimmed.strip_prefix("portal_jwt_token=").map(|mut val| {
+            // 容错剥离可能的双引号包裹（RFC 6265）
+            if val.starts_with('"') && val.ends_with('"') && val.len() >= 2 {
+                val = &val[1..val.len() - 1];
+            }
+            val
+        })
+    })
 }
 
 /// 网关请求上下文类型，用于在代理的生命周期中传递已解析或已格式化的数据
@@ -196,6 +227,10 @@ impl Gateway {
 pub struct GatewayCtx {
     /// 预格式化好的 Authorization 头部值（例如 "Bearer <token>"）
     pub auth_header: Option<String>,
+    /// 用户 ID (从 JWT Claims.sub 提取，供微服务直接使用)
+    pub user_id: Option<String>,
+    /// JWT 唯一标识 (从 JWT Claims.jti 提取，方便微服务校验拉黑状态)
+    pub user_jti: Option<String>,
 }
 
 #[async_trait]
@@ -217,41 +252,39 @@ impl ProxyHttp for Gateway {
 
         debug!("接收代理请求，Host: {}", host);
 
-        let peer = self.portal_lb.select(b"", 256).unwrap();
+        // 优雅处理上游节点选择失败的异常，避免在极端的无上游节点可用时触发工作线程 Panic 崩溃。
+        // 改为返回 502 错误，保证网关服务整体高可用与容错能力。
+        let peer = self.portal_lb.select(b"", 256).ok_or_else(|| {
+            Error::explain(
+                ErrorType::HTTPStatus(502),
+                "gateway: 无可用 Portal 上游节点，请检查配置文件中的 upstream 设置",
+            )
+        })?;
         debug!("路由至 Portal 上游: {:?}", peer);
         Ok(Box::new(HttpPeer::new(peer, false, "portal".to_string())))
     }
 
     async fn request_filter(&self, session: &mut Session, ctx: &mut Self::CTX) -> Result<bool> {
         let path = session.req_header().uri.path();
+
+        // 1. 白名单放行路由与静态资产
         if self.path_matcher.is_public(path) {
             return Ok(false);
         }
 
-        // 提取 Cookie 头部为局部引用以延长其引用的生命周期，实现 100% 零拷贝的 Token 提取
-        let cookie_header = session.get_header("Cookie").and_then(|v| v.to_str().ok());
+        // 2. 提取 JWT 凭证 (零拷贝解包)
+        let token = session
+            .get_header("Cookie")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|h| extract_token_from_cookie(h));
 
-        let jwt_token = cookie_header.and_then(|header| {
-            header.split(';').find_map(|cookie_str| {
-                let trimmed = cookie_str.trim();
-                if let Some(stripped) = trimmed.strip_prefix("portal_jwt_token=") {
-                    let mut val = stripped;
-                    // 容错剥离可能的双引号包裹（RFC 6265）
-                    if val.starts_with('"') && val.ends_with('"') && val.len() >= 2 {
-                        val = &val[1..val.len() - 1];
-                    }
-                    Some(val)
-                } else {
-                    None
-                }
-            })
-        });
-
-        let token = match jwt_token {
+        let token = match token {
             Some(t) => t,
+            // 未携带凭证，执行鉴权失败阻断
             None => return self.handle_auth_failure(session).await,
         };
 
+        // 3. 执行离线密码学 ES256 签名校验与发行方比对
         if !self.verify_jwt(token, ctx).await {
             return self.handle_auth_failure(session).await;
         }
@@ -275,14 +308,24 @@ impl ProxyHttp for Gateway {
         if is_microservice_route(path) {
             upstream_request.remove_header("Cookie");
             if ctx.auth_header.is_none() {
-                // 核心安全纵深防护：未登录状态下访问微服务，网关侧强行清除 Authorization 头，防止客户端假冒 Bearer 伪造绕过
+                // 核心安全纵深防护：未登录状态下访问微服务，网关侧强行清除可能被伪造的身份 Header
                 upstream_request.remove_header("Authorization");
+                upstream_request.remove_header("X-User-Id");
+                upstream_request.remove_header("X-User-Jti");
             }
         }
 
         if let Some(ref auth_header) = ctx.auth_header {
             // 直接以引用方式写入，消除 format!("Bearer {}", token) 的二次内存分配开销
             upstream_request.insert_header("Authorization", auth_header.as_str())?;
+        }
+
+        // 注入解析出来的安全上下文 Header，后端微服务即可 O(1) 获取用户 ID，免去重复解析 JWT
+        if let Some(ref user_id) = ctx.user_id {
+            upstream_request.insert_header("X-User-Id", user_id.as_str())?;
+        }
+        if let Some(ref user_jti) = ctx.user_jti {
+            upstream_request.insert_header("X-User-Jti", user_jti.as_str())?;
         }
 
         Ok(())
@@ -353,5 +396,205 @@ mod tests {
         assert!(!is_microservice_route("/api/v1/auth/login"));
         assert!(!is_microservice_route("/dashboard"));
         assert!(!is_microservice_route("/_next/data/xxx.json"));
+    }
+
+    #[tokio::test]
+    async fn test_verify_jwt_successful() {
+        use crate::claims::Claims;
+        use crate::jwks::OidcMetadata;
+        use jsonwebtoken::{DecodingKey, EncodingKey, Header, encode};
+
+        // 1. 初始化 JwksCache 与 Gateway
+        let jwks_cache = JwksCache::new();
+        let issuer = "https://sso.example.com".to_string();
+
+        // 模拟 OIDC metadata，配置支持对称加密算法 HS256 进行测试
+        jwks_cache.set_metadata_for_test(OidcMetadata {
+            issuer: Some(issuer.clone()),
+            jwks_uri: Some("https://sso.example.com/api/auth/jwks".into()),
+            id_token_signing_alg_values_supported: vec!["HS256".into()],
+        });
+
+        // 模拟写入公钥缓存（测试时以 HS256 对称密钥替代）
+        let secret = b"super-secret-key-that-is-long-enough-for-hs256";
+        let kid = "key-test-1".to_string();
+        jwks_cache.insert_key_for_test(kid.clone(), DecodingKey::from_secret(secret));
+
+        let portal_lb = Arc::new(LoadBalancer::try_from_iter(["127.0.0.1:4100"]).unwrap());
+        let gateway = Gateway {
+            portal_lb,
+            jwks_cache: Arc::clone(&jwks_cache),
+            issuer: issuer.clone(),
+            path_matcher: PathMatcher::new(None),
+        };
+
+        // 2. 生成合法的 HS256 Token
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        let claims = Claims {
+            sub: "user-123".to_string(),
+            iss: issuer.clone(),
+            exp: (now + 3600) as usize,
+            jti: "jti-123".to_string(),
+        };
+        let mut header = Header::new(Algorithm::HS256);
+        header.kid = Some(kid);
+        let token = encode(&header, &claims, &EncodingKey::from_secret(secret)).unwrap();
+
+        // 3. 执行验签
+        let mut ctx = GatewayCtx::default();
+        let result = gateway.verify_jwt(&token, &mut ctx).await;
+
+        // 4. 断言结果与安全上下文注入
+        assert!(result);
+        assert_eq!(ctx.user_id, Some("user-123".to_string()));
+        assert_eq!(ctx.user_jti, Some("jti-123".to_string()));
+        assert_eq!(ctx.auth_header, Some(format!("Bearer {}", token)));
+    }
+
+    #[tokio::test]
+    async fn test_verify_jwt_expired() {
+        use crate::claims::Claims;
+        use crate::jwks::OidcMetadata;
+        use jsonwebtoken::{DecodingKey, EncodingKey, Header, encode};
+
+        let jwks_cache = JwksCache::new();
+        let issuer = "https://sso.example.com".to_string();
+        jwks_cache.set_metadata_for_test(OidcMetadata {
+            issuer: Some(issuer.clone()),
+            jwks_uri: Some("https://sso.example.com/api/auth/jwks".into()),
+            id_token_signing_alg_values_supported: vec!["HS256".into()],
+        });
+
+        let secret = b"super-secret-key-that-is-long-enough-for-hs256";
+        let kid = "key-test-1".to_string();
+        jwks_cache.insert_key_for_test(kid.clone(), DecodingKey::from_secret(secret));
+
+        let portal_lb = Arc::new(LoadBalancer::try_from_iter(["127.0.0.1:4100"]).unwrap());
+        let gateway = Gateway {
+            portal_lb,
+            jwks_cache: Arc::clone(&jwks_cache),
+            issuer: issuer.clone(),
+            path_matcher: PathMatcher::new(None),
+        };
+
+        // 生成过期 Token
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        let claims = Claims {
+            sub: "user-123".to_string(),
+            iss: issuer.clone(),
+            exp: (now - 600) as usize, // 10分钟前已过期
+            jti: "jti-123".to_string(),
+        };
+        let mut header = Header::new(Algorithm::HS256);
+        header.kid = Some(kid);
+        let token = encode(&header, &claims, &EncodingKey::from_secret(secret)).unwrap();
+
+        let mut ctx = GatewayCtx::default();
+        let result = gateway.verify_jwt(&token, &mut ctx).await;
+
+        // 应验证失败
+        assert!(!result);
+    }
+
+    #[tokio::test]
+    async fn test_verify_jwt_invalid_issuer() {
+        use crate::claims::Claims;
+        use crate::jwks::OidcMetadata;
+        use jsonwebtoken::{DecodingKey, EncodingKey, Header, encode};
+
+        let jwks_cache = JwksCache::new();
+        let issuer = "https://sso.example.com".to_string();
+        jwks_cache.set_metadata_for_test(OidcMetadata {
+            issuer: Some(issuer.clone()),
+            jwks_uri: Some("https://sso.example.com/api/auth/jwks".into()),
+            id_token_signing_alg_values_supported: vec!["HS256".into()],
+        });
+
+        let secret = b"super-secret-key-that-is-long-enough-for-hs256";
+        let kid = "key-test-1".to_string();
+        jwks_cache.insert_key_for_test(kid.clone(), DecodingKey::from_secret(secret));
+
+        let portal_lb = Arc::new(LoadBalancer::try_from_iter(["127.0.0.1:4100"]).unwrap());
+        let gateway = Gateway {
+            portal_lb,
+            jwks_cache: Arc::clone(&jwks_cache),
+            issuer: issuer.clone(),
+            path_matcher: PathMatcher::new(None),
+        };
+
+        // 错误发行方 (issuer)
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        let claims = Claims {
+            sub: "user-123".to_string(),
+            iss: "https://hacker.com".to_string(),
+            exp: (now + 3600) as usize,
+            jti: "jti-123".to_string(),
+        };
+        let mut header = Header::new(Algorithm::HS256);
+        header.kid = Some(kid);
+        let token = encode(&header, &claims, &EncodingKey::from_secret(secret)).unwrap();
+
+        let mut ctx = GatewayCtx::default();
+        let result = gateway.verify_jwt(&token, &mut ctx).await;
+
+        // 应验证失败
+        assert!(!result);
+    }
+
+    #[tokio::test]
+    async fn test_verify_jwt_invalid_kid() {
+        use crate::claims::Claims;
+        use crate::jwks::OidcMetadata;
+        use jsonwebtoken::{DecodingKey, EncodingKey, Header, encode};
+
+        let jwks_cache = JwksCache::new();
+        let issuer = "https://sso.example.com".to_string();
+        jwks_cache.set_metadata_for_test(OidcMetadata {
+            issuer: Some(issuer.clone()),
+            jwks_uri: Some("https://sso.example.com/api/auth/jwks".into()),
+            id_token_signing_alg_values_supported: vec!["HS256".into()],
+        });
+
+        let secret = b"super-secret-key-that-is-long-enough-for-hs256";
+        let kid = "key-test-1".to_string();
+        jwks_cache.insert_key_for_test(kid, DecodingKey::from_secret(secret));
+
+        let portal_lb = Arc::new(LoadBalancer::try_from_iter(["127.0.0.1:4100"]).unwrap());
+        let gateway = Gateway {
+            portal_lb,
+            jwks_cache: Arc::clone(&jwks_cache),
+            issuer: issuer.clone(),
+            path_matcher: PathMatcher::new(None),
+        };
+
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        let claims = Claims {
+            sub: "user-123".to_string(),
+            iss: issuer.clone(),
+            exp: (now + 3600) as usize,
+            jti: "jti-123".to_string(),
+        };
+        let mut header = Header::new(Algorithm::HS256);
+        // 使用一个未在缓存中登记的 kid
+        header.kid = Some("unknown-kid".to_string());
+        let token = encode(&header, &claims, &EncodingKey::from_secret(secret)).unwrap();
+
+        let mut ctx = GatewayCtx::default();
+        let result = gateway.verify_jwt(&token, &mut ctx).await;
+
+        // 应验证失败
+        assert!(!result);
     }
 }

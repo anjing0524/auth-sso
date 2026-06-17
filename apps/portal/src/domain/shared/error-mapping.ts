@@ -11,6 +11,10 @@ import {
   EntityNotFoundError,
   BusinessRuleViolationError,
   DuplicateEntityError,
+  InvalidClientError,
+  InvalidGrantError,
+  PKCEVerificationError,
+  InvalidRedirectUriError,
 } from './errors';
 import { COMMON_ERRORS } from '@auth-sso/contracts';
 
@@ -36,6 +40,18 @@ export function mapDomainError(err: unknown): ErrorMapping {
   }
   if (err instanceof DuplicateEntityError) {
     return { status: 409, error: err.code, message: err.message };
+  }
+  if (err instanceof InvalidClientError) {
+    return { status: 401, error: err.code, message: err.message };
+  }
+  if (err instanceof InvalidGrantError) {
+    return { status: 400, error: err.code, message: err.message };
+  }
+  if (err instanceof PKCEVerificationError) {
+    return { status: 400, error: err.code, message: err.message };
+  }
+  if (err instanceof InvalidRedirectUriError) {
+    return { status: 400, error: err.code, message: err.message };
   }
   if (err instanceof BusinessRuleViolationError) {
     return { status: 422, error: err.code, message: err.message };

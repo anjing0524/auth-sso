@@ -3,7 +3,7 @@
 /**
  * 角色管理 Server Actions (BFF 薄 Controller)
  */
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, revalidateTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
 import { eq } from 'drizzle-orm';
 import { withAuth, type AuthContext } from '@/lib/auth';
@@ -43,16 +43,21 @@ export const createRoleAction = withAuth(
       return { success: false, error: 'VALIDATION_ERROR', message: parsed.error.issues[0].message };
     }
 
-    // 检查编码唯一性
-    const existing = await db.query.roles.findFirst({
-      where: eq(schema.roles.code, parsed.data.code),
-    });
-    if (existing) throw new DuplicateEntityError('Role', 'code');
+    // 查重 + 插入在事务中原子完成，避免 race condition
+    const role = await db.transaction(async (tx) => {
+      const existing = await tx.select({ id: schema.roles.id })
+        .from(schema.roles)
+        .where(eq(schema.roles.code, parsed.data.code))
+        .limit(1);
+      if (existing[0]) throw new DuplicateEntityError('Role', 'code');
 
-    const role = createRole(parsed.data, generateId);
-    await db.insert(schema.roles).values(roleToInsertRow(role));
+      const r = createRole(parsed.data, generateId);
+      await tx.insert(schema.roles).values(roleToInsertRow(r));
+      return r;
+    });
 
     revalidatePath('/roles');
+    revalidateTag('roles-list', 'minutes');
     return { success: true, data: { id: role.publicId }, message: '角色创建成功' };
   },
 );
@@ -81,6 +86,7 @@ export const updateRoleAction = withAuth(
     await invalidateRoleBoundUsersCache(roleId);
 
     revalidatePath('/roles');
+    revalidateTag('roles-list', 'minutes');
     return { success: true, data: { id: roleId }, message: '角色更新成功' };
   },
 );
@@ -110,6 +116,7 @@ export const deleteRoleAction = withAuth(
     }
 
     revalidatePath('/roles');
+    revalidateTag('roles-list', 'minutes');
     return { success: true, data: { id: roleId }, message: '角色已删除' };
   },
 );

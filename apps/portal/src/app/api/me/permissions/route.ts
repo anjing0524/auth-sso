@@ -4,7 +4,8 @@
  * GET /api/me/permissions - 获取当前已登录用户的权限集上下文（包括用户ID、所属角色列表、权限编码集、数据权限范围及部门ID）
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { getJwtFromCookie, verifyJwt } from '@/lib/session';
+import { getJwtFromCookie } from '@/lib/session';
+import { verifyAccessToken } from '@/domain/auth/token';
 import { getUserPermissionContext } from '@/lib/permissions';
 import { COMMON_ERRORS } from '@auth-sso/contracts';
 
@@ -28,7 +29,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const claims = await verifyJwt(token);
+    const claims = await verifyAccessToken(token);
     if (!claims) {
       return NextResponse.json(
         { error: COMMON_ERRORS.UNAUTHORIZED, message: '登录已过期' },

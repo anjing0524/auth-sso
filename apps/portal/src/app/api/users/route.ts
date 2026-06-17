@@ -1,23 +1,15 @@
 /**
- * 用户管理 API 路由处理器（仅保留 REST 读模型）
- * @module apps/portal/api/users
+ * 用户管理 API (REST 薄 Controller)
+ *
+ * GET 读操作委托给 users/data.ts 统一读模型，消除重复 Drizzle 查询。
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { db, schema } from '@/infrastructure/db';
-import { eq, desc, and, sql as drizzleSql } from 'drizzle-orm';
-import { withPermission, getDataScopeFilter } from '@/lib/auth';
-import {
-  USER_LIST_COLUMNS,
-  buildUserListConditions,
-  isScopeDenied,
-} from '@/db/user-queries';
+import { withPermission } from '@/lib/auth';
+import { getUsers } from '@/app/users/data';
 
 export const runtime = 'nodejs';
 
-/**
- * GET /api/users — 获取过滤与分页后的用户列表
- * 权限要求: user:list
- */
+/** GET /api/users — 委托 data.ts 获取过滤与分页的用户列表 */
 export async function GET(request: NextRequest) {
   return withPermission(request, { permissions: ['user:list'] }, async (userId) => {
     const sp = request.nextUrl.searchParams;
@@ -25,44 +17,9 @@ export async function GET(request: NextRequest) {
     const pageSize = parseInt(sp.get('pageSize') || '20', 10);
     const keyword = sp.get('keyword') || '';
     const status = sp.get('status') || '';
-    const deptId = sp.get('deptId') || '';
-    const offset = (page - 1) * pageSize;
+    const deptId = sp.get('deptId') || undefined;
 
-    const scopeFilter = await getDataScopeFilter(userId);
-    if (isScopeDenied(scopeFilter)) {
-      return NextResponse.json({ data: [], pagination: { page, pageSize, total: 0, totalPages: 0 } });
-    }
-
-    const conditions = buildUserListConditions({ keyword, status, scopeFilter, userId });
-
-    // 部门 ID URL 参数二次筛选（在已授权范围内叠加）
-    if (deptId) {
-      conditions.push(eq(schema.users.deptId, deptId));
-    }
-
-    const query = db
-      .select(USER_LIST_COLUMNS)
-      .from(schema.users)
-      .leftJoin(schema.departments, eq(schema.users.deptId, schema.departments.id));
-
-    const users = await query
-      .where(and(...conditions))
-      .orderBy(desc(schema.users.createdAt))
-      .limit(pageSize)
-      .offset(offset);
-
-    const [countRow] = await db
-      .select({ count: drizzleSql`COUNT(*)::int` })
-      .from(schema.users)
-      .where(and(...conditions));
-
-    return NextResponse.json({
-      data: users.map((u) => ({
-        ...u,
-        name: u.name || u.username || 'Unknown',
-        deptName: u.deptName || '未分配',
-      })),
-      pagination: { page, pageSize, total: Number(countRow?.count ?? 0), totalPages: Math.ceil(Number(countRow?.count ?? 0) / pageSize) },
-    });
+    const result = await getUsers(userId, { page, pageSize, keyword, status, deptId });
+    return NextResponse.json(result);
   });
 }

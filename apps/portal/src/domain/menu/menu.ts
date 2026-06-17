@@ -47,7 +47,7 @@ export function createMenu(
 ): Menu {
   return {
     id: idGenerator(20),
-    publicId: `menu_${idGenerator(8)}`,
+    publicId: `menu_${idGenerator(16)}`,
     parentId: input.parentId ?? null,
     name: input.name,
     path: input.path ?? null,
@@ -100,7 +100,7 @@ export function menuToInsertRow(m: Menu) {
     sort: m.sort,
     menuType: m.menuType,
     status: m.status,
-    createdAt: new Date(),
+    createdAt: new Date(m.createdAt.epochMilliseconds),
     updatedAt: new Date(),
   };
 }

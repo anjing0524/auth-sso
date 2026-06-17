@@ -1,14 +1,15 @@
 'use server';
 
 /**
- * 用户管理 Server Actions (BFF 薄 Controller 网关)
+ * 用户管理 Server Actions (BFF 薄 Controller — 仅写操作)
  *
+ * 只读查询统一收拢至 data.ts（读模型 / CQRS），本文件仅保留 CUD 写操作。
  * 仅执行编排 (Orchestration)：Zod 门禁 → 领域纯函数 → Drizzle 直调。
  * 鉴权与领域错误映射统一由 withAuth 高阶函数施加（R21 / R20），
  * 函数体控制在 ≤ 20 行，不含任何内联业务规则判定（R9 / 红线 #2）。
  * 涉及“读取 + 更新”的多步骤写操作均用 db.transaction() 显式包裹（R22）。
  */
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, revalidateTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
 import { eq, or } from 'drizzle-orm';
 import { withAuth, type AuthContext } from '@/lib/auth';
@@ -33,22 +34,6 @@ import { hashPassword } from '@/lib/password';
 import { clearUserPermissionCache } from '@/lib/permissions';
 import { USER_ACTIVE } from '@auth-sso/contracts';
 import type { ApiResponse } from '@auth-sso/contracts';
-
-/** 获取用户角色与部门（并行查询辅助函数） */
-async function fetchUserRolesAndDept(userId: string, deptId: string | null) {
-  return Promise.all([
-    db.select({
-      id: schema.roles.id, publicId: schema.roles.publicId,
-      code: schema.roles.code, name: schema.roles.name,
-      description: schema.roles.description,
-    }).from(schema.roles)
-      .innerJoin(schema.userRoles, eq(schema.roles.id, schema.userRoles.roleId))
-      .where(eq(schema.userRoles.userId, userId)),
-    deptId
-      ? db.query.departments.findFirst({ where: eq(schema.departments.id, deptId) })
-      : null,
-  ]);
-}
 
 /**
  * 创建新用户 Action Controller
@@ -91,6 +76,7 @@ export const createUserAction = withAuth(
     });
 
     revalidatePath('/users');
+    revalidateTag('users-list', 'minutes');
     return { success: true, data: { id: result.publicId }, message: '用户创建成功' };
   },
 );
@@ -119,40 +105,11 @@ export const toggleUserStatusAction = withAuth(
     });
 
     revalidatePath('/users');
+    revalidateTag('users-list', 'minutes');
     return {
       success: true,
       data: { status: updated.status },
       message: `用户状态已更新为 ${updated.status === USER_ACTIVE ? '正常' : '已禁用'}`,
-    };
-  },
-);
-
-/**
- * 获取特定用户详细信息 (用于详情页，读模型直调)
- */
-export const getUserAction = withAuth(
-  { permissions: ['user:read'] },
-  async (_ctx: AuthContext, userIdStr: string): Promise<ApiResponse<Record<string, unknown>>> => {
-    const parsed = UserIdentityInputSchema.safeParse({ id: userIdStr });
-    if (!parsed.success) {
-      return { success: false, error: 'VALIDATION_ERROR', message: parsed.error.issues[0].message };
-    }
-
-    const userRow = await db.query.users.findFirst({ where: eq(schema.users.id, parsed.data.id) });
-    if (!userRow) throw new EntityNotFoundError('User', parsed.data.id);
-
-    const [roles, dept] = await fetchUserRolesAndDept(userRow.id, userRow.deptId);
-
-    return {
-      success: true,
-      data: {
-        ...toDomainUser(userRow),
-        createdAt: userRow.createdAt.toISOString(),
-        updatedAt: userRow.updatedAt?.toISOString(),
-        lastLoginAt: userRow.lastLoginAt?.toISOString(),
-        deptName: dept?.name || null,
-        roles,
-      },
     };
   },
 );
@@ -190,6 +147,7 @@ export const updateUserAction = withAuth(
 
     await clearUserPermissionCache(parsed.data.id);
     revalidatePath('/users');
+    revalidateTag('users-list', 'minutes');
     return { success: true, data: { id: parsed.data.id }, message: '更新成功' };
   },
 );
@@ -218,6 +176,7 @@ export const deleteUserAction = withAuth(
 
     await clearUserPermissionCache(parsed.data.id);
     revalidatePath('/users');
+    revalidateTag('users-list', 'minutes');
     return { success: true, data: { id: parsed.data.id }, message: '用户已逻辑删除' };
   },
 );

@@ -11,7 +11,17 @@ pub fn generate_redirect_location(
     query: Option<&str>,
     ssl_port: u16,
 ) -> String {
-    let host_only = host.split(':').next().unwrap_or(host);
+    // 容错处理：当 Host 头部为 IPv6 格式时（例如 [::1]:18080），
+    // 直接使用 split(':').next() 会错误提取为 "["。我们必须匹配配对的 "]" 以正确截断端口。
+    let host_only = if host.starts_with('[') {
+        if let Some(end_idx) = host.find(']') {
+            &host[..=end_idx]
+        } else {
+            host.split(':').next().unwrap_or(host)
+        }
+    } else {
+        host.split(':').next().unwrap_or(host)
+    };
     let query_len = query.map(|q| q.len() + 1).unwrap_or(0);
     let mut location = String::with_capacity(8 + host_only.len() + 6 + path.len() + query_len);
 
@@ -99,6 +109,16 @@ mod tests {
                 18443
             ),
             "https://localhost:18443/foo?code=123&state=abc"
+        );
+
+        // 测试 IPv6 格式 Host 头（含端口与不含端口）
+        assert_eq!(
+            generate_redirect_location("[::1]:18080", "/foo", None, 18443),
+            "https://[::1]:18443/foo"
+        );
+        assert_eq!(
+            generate_redirect_location("[2001:db8::1]", "/bar", Some("x=1"), 443),
+            "https://[2001:db8::1]/bar?x=1"
         );
     }
 }

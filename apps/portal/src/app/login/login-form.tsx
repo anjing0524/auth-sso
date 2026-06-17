@@ -3,14 +3,14 @@
 import { useState } from 'react';
 import { ShieldCheck, AlertCircle, Loader2, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
-
-import { 
-  Card, 
-  CardContent, 
-  CardDescription, 
-  CardFooter, 
-  CardHeader, 
-  CardTitle 
+import { generateCodeVerifier, generateCodeChallenge } from '@/lib/auth/pkce';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -34,18 +34,12 @@ export default function LoginForm({
   clientId,
   scope,
   state,
-  codeChallenge,
-  codeChallengeMethod,
-  responseType,
   nonce,
   initialError,
 }: LoginFormProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(initialError ?? null);
-  const [formData, setFormData] = useState({
-    email: '',
-    password: '',
-  });
+  const [formData, setFormData] = useState({ email: '', password: '' });
 
   const getErrorMessage = (err: string | null) => {
     if (!err) return null;
@@ -69,46 +63,45 @@ export default function LoginForm({
     setError(null);
 
     try {
-      console.log('[LoginForm] Submitting credentials to local /api/auth/sign-in/email');
-      const response = await fetch('/api/auth/sign-in/email', {
+      const response = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: formData.email,
-          password: formData.password,
-        }),
+        body: JSON.stringify({ email: formData.email, password: formData.password }),
       });
 
       const data = await response.json();
-
-      if (!response.ok) {
-        const errorMsg = data.message || data.error?.message || '登录失败，请检查账号和密码';
-        throw new Error(errorMsg);
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || '登录失败，请检查账号和密码');
       }
 
-      console.log('[LoginForm] Sign-in successful!');
+      // 登录成功 → login_session 已由服务端 Set-Cookie 自动携带
+      // → 生成 PKCE → 走授权码流程
+      const pkceVerifier = generateCodeVerifier();
+      const pkceChallenge = await generateCodeChallenge(pkceVerifier);
 
-      // 登录成功后的路由重定向分流
-      if (clientId) {
-        // 说明是外部应用单点登录（OIDC）重定向过来的，登录成功后跳转到本地授权端点获取 code
-        const authUrl = new URL('/api/auth/oauth2/authorize', window.location.origin);
-        authUrl.searchParams.set('client_id', clientId);
-        authUrl.searchParams.set('redirect_uri', redirectUrl);
-        authUrl.searchParams.set('response_type', responseType || 'code');
-        if (scope) authUrl.searchParams.set('scope', scope);
-        if (state) authUrl.searchParams.set('state', state);
-        if (codeChallenge) authUrl.searchParams.set('code_challenge', codeChallenge);
-        if (codeChallengeMethod) authUrl.searchParams.set('code_challenge_method', codeChallengeMethod);
-        if (nonce) authUrl.searchParams.set('nonce', nonce);
-        
-        window.location.href = authUrl.toString();
-      } else {
-        // 说明是 Portal 自身系统的登录，直接重定向回目标页或 dashboard
-        window.location.href = redirectUrl === '/' ? '/dashboard' : redirectUrl;
-      }
+      const authUrl = new URL('/api/auth/oauth2/authorize', window.location.origin);
+      const effectiveClientId = clientId || 'portal';
+      const effectiveScope = scope || 'openid profile email offline_access';
+
+      // code_verifier 放入 redirect_uri searchParams，authorize 302 时原样带回 callback
+      const effectiveRedirectUri = clientId
+        ? redirectUrl
+        : `${window.location.origin}/api/auth/callback?pkce_verifier=${pkceVerifier}`;
+      const effectiveState = clientId ? (state || '') : redirectUrl;
+
+      authUrl.searchParams.set('client_id', effectiveClientId);
+      authUrl.searchParams.set('redirect_uri', effectiveRedirectUri);
+      authUrl.searchParams.set('response_type', 'code');
+      authUrl.searchParams.set('scope', effectiveScope);
+      authUrl.searchParams.set('state', effectiveState);
+      authUrl.searchParams.set('code_challenge', pkceChallenge);
+      authUrl.searchParams.set('code_challenge_method', 'S256');
+      if (nonce) authUrl.searchParams.set('nonce', nonce);
+
+      window.location.href = authUrl.toString();
     } catch (err) {
       const error = err as Error;
-      console.error('[LoginForm] Sign-in error:', error);
+      console.error('[LoginForm] 登录失败:', error);
       setError(error.message);
     } finally {
       setIsLoading(false);
@@ -119,7 +112,6 @@ export default function LoginForm({
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 dark:bg-slate-950 p-4 transition-colors">
-      {/* 品牌 Logo */}
       <div className="mb-8 flex flex-col items-center gap-2 animate-in fade-in slide-in-from-bottom-4 duration-700">
         <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-lg shadow-primary/20">
           <ShieldCheck className="h-7 w-7" />
@@ -134,7 +126,7 @@ export default function LoginForm({
             {clientId ? `正在授权访问系统: ${clientId}` : '使用您的企业账号登录管理门户'}
           </CardDescription>
         </CardHeader>
-        
+
         <form onSubmit={handleSubmit} method="POST">
           <CardContent className="pt-6 space-y-4">
             {formattedError ? (
@@ -153,7 +145,7 @@ export default function LoginForm({
                 placeholder="admin@example.com"
                 required
                 value={formData.email}
-                onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+                onChange={(e) => setFormData((prev) => ({ ...prev, email: e.target.value }))}
                 disabled={isLoading}
                 className="h-10"
               />
@@ -167,7 +159,7 @@ export default function LoginForm({
                 placeholder="••••••••"
                 required
                 value={formData.password}
-                onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
+                onChange={(e) => setFormData((prev) => ({ ...prev, password: e.target.value }))}
                 disabled={isLoading}
                 className="h-10"
               />
@@ -175,9 +167,9 @@ export default function LoginForm({
           </CardContent>
 
           <CardFooter className="flex flex-col gap-4 border-t bg-slate-50/30 dark:bg-slate-900/20 py-4 mt-6">
-            <Button 
-              type="submit" 
-              className="w-full h-11 text-md font-medium group transition-all" 
+            <Button
+              type="submit"
+              className="w-full h-11 text-md font-medium group transition-all"
               disabled={isLoading}
             >
               {isLoading ? (
@@ -192,7 +184,7 @@ export default function LoginForm({
                 </>
               )}
             </Button>
-            
+
             <div className="text-center text-xs text-muted-foreground w-full">
               <p className="font-mono opacity-60">OpenID Connect 2.1 Standard</p>
             </div>
@@ -200,11 +192,14 @@ export default function LoginForm({
         </form>
       </Card>
 
-      {/* 辅助链接 */}
       <div className="mt-8 flex gap-4 text-sm text-muted-foreground">
-        <Link href="/help" className="hover:text-primary underline-offset-4 hover:underline">帮助中心</Link>
+        <Link href="/help" className="hover:text-primary underline-offset-4 hover:underline">
+          帮助中心
+        </Link>
         <span>&bull;</span>
-        <Link href="/privacy" className="hover:text-primary underline-offset-4 hover:underline">隐私政策</Link>
+        <Link href="/privacy" className="hover:text-primary underline-offset-4 hover:underline">
+          隐私政策
+        </Link>
       </div>
     </div>
   );

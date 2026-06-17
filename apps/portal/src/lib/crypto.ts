@@ -43,5 +43,5 @@ export function generateClientSecret(): string {
  * @returns 带有 'perm_' 前缀的唯一权限 PublicId
  */
 export function generatePermissionPublicId(): string {
-  return `perm_${Date.now().toString(36)}${randomBytes(2).toString('hex')}`;
+  return `perm_${randomUUID()}`;
 }

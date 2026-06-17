@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use tracing::{error, info};
+use tracing::info;
 
 /// 网关服务层配置
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
@@ -37,9 +37,8 @@ impl Default for GatewayConfig {
 #[serde(default)]
 pub struct PortalConfig {
     /// Portal 上游地址，如 portal:4000
+    /// 网关通过此地址进行 OIDC Discovery 自动发现 JWKS 端点
     pub upstream: String,
-    /// Portal 的 JWKS 公钥刷新端点 URL
-    pub jwks_url: String,
     /// Portal 的 OIDC JWT 校验发行者 (iss)
     pub issuer: String,
     /// 网关直接放行、不校验 JWT 的公开路由白名单路径列表
@@ -50,7 +49,6 @@ impl Default for PortalConfig {
     fn default() -> Self {
         Self {
             upstream: "127.0.0.1:4100".to_string(),
-            jwks_url: "http://127.0.0.1:4100/api/auth/jwks".to_string(),
             issuer: "http://localhost:4100".to_string(),
             public_paths: Some(vec![
                 "/login".to_string(),
@@ -74,50 +72,36 @@ pub struct Config {
 }
 
 impl Config {
-    /// 统一配置加载方法：优先从指定文件读取，读取成功但解析失败时 Fail-Fast 强制 panic 报错退出，
+    /// 统一配置加载方法：优先从指定文件读取，读取并反序列化失败时返回 anyhow 错误，
     /// 若配置文件不存在则使用默认配置兜底。缺失的任何字段都将自动使用 Default 合并填充。
     ///
     /// # 参数
     /// * `path` - 配置文件路径
-    pub fn load(path: &str) -> Self {
+    pub fn load(path: &str) -> anyhow::Result<Self> {
+        use anyhow::Context;
         let builder =
             config::Config::builder().add_source(config::File::with_name(path).required(false));
 
-        match builder.build() {
-            Ok(config_build) => match config_build.try_deserialize::<Config>() {
-                Ok(cfg) => {
-                    if std::path::Path::new(path).exists() {
-                        info!(
-                            "✅ 成功从配置文件 {} 加载网关配置 (缺失的字段已自动与默认值合并覆盖)",
-                            path
-                        );
-                    } else {
-                        info!(
-                            "ℹ️ 配置文件 {} 未找到，将使用默认基础配置并应用默认值覆盖",
-                            path
-                        );
-                    }
-                    cfg
-                }
-                Err(e) => {
-                    error!(
-                        "❌ 配置文件 {} 反序列化失败: {:?}，请检查语法格式！",
-                        path, e
-                    );
-                    panic!(
-                        "网关配置文件解析失败，为了避免隐性配置错误运行，安全阻断退出: {:?}",
-                        e
-                    );
-                }
-            },
-            Err(e) => {
-                error!("❌ 配置文件 {} 加载失败: {:?}，请检查语法格式！", path, e);
-                panic!(
-                    "网关配置文件解析失败，为了避免隐性配置错误运行，安全阻断退出: {:?}",
-                    e
-                );
-            }
+        let config_build = builder
+            .build()
+            .with_context(|| format!("加载配置文件 {} 失败", path))?;
+
+        let cfg = config_build
+            .try_deserialize::<Config>()
+            .with_context(|| format!("反序列化配置文件 {} 失败，请检查语法格式", path))?;
+
+        if std::path::Path::new(path).exists() {
+            info!(
+                "✅ 成功从配置文件 {} 加载网关配置 (缺失的字段已自动与默认值合并覆盖)",
+                path
+            );
+        } else {
+            info!(
+                "ℹ️ 配置文件 {} 未找到，将使用默认基础配置并应用默认值覆盖",
+                path
+            );
         }
+        Ok(cfg)
     }
 }
 
@@ -156,16 +140,15 @@ mod tests {
                 ssl_key_path = "/etc/key.pem"
                 log_dir = "/var/log/gw"
                 log_level = "debug"
-
+ 
                 [portal]
                 upstream = "portal:4000"
-                jwks_url = "https://portal/.well-known/jwks"
                 issuer = "https://portal"
                 public_paths = ["/login", "/register", "/custom"]
             "#;
             fs::write(file_path, toml_content).unwrap();
 
-            let config = Config::load(file_path);
+            let config = Config::load(file_path).unwrap();
             assert_eq!(config.gateway.port, 80);
             assert_eq!(config.gateway.ssl_port, 443);
             assert_eq!(config.gateway.ssl_cert_path, "/etc/cert.pem");
@@ -187,13 +170,13 @@ mod tests {
             let toml_partial_content = r#"
                 [gateway]
                 port = 9999
-
+ 
                 [portal]
                 upstream = "partial-portal:3000"
             "#;
             fs::write(file_path, toml_partial_content).unwrap();
 
-            let config = Config::load(file_path);
+            let config = Config::load(file_path).unwrap();
 
             // 配置文件中的字段已被正确读取
             assert_eq!(config.gateway.port, 9999);
@@ -219,7 +202,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "网关配置文件解析失败")]
+    #[should_panic(expected = "反序列化配置文件")]
     fn test_load_fail_fast_on_invalid_toml() {
         let file_path = "./test_invalid_gateway.toml";
         let invalid_toml = r#"
@@ -229,12 +212,12 @@ mod tests {
         fs::write(file_path, invalid_toml).unwrap();
 
         let _result = std::panic::catch_unwind(|| {
-            Config::load(file_path);
+            Config::load(file_path).unwrap();
         });
 
         let _ = fs::remove_file(file_path);
 
         // 重新包装 panic 传递以触发 should_panic
-        panic!("网关配置文件解析失败");
+        panic!("反序列化配置文件");
     }
 }

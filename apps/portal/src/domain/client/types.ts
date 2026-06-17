@@ -4,6 +4,11 @@ import { entityStatusEnum } from '@/domain/shared/zod-schemas';
 
 /**
  * OAuth Client 领域实体接口 (纯 TS interface)
+ *
+ * 已移除 Better Auth 兼容字段：
+ * - grantTypes: 统一使用 authorization_code + refresh_token，不按 client 配置
+ * - skipConsent: 不再支持跳过授权确认
+ * - disabled: 与 status 枚举冗余，统一使用 status
  */
 export interface Client {
   /** 内部 ID */
@@ -18,8 +23,6 @@ export interface Client {
   clientSecret: string | null;
   /** 回调地址列表 */
   redirectUris: string[];
-  /** 授权类型 JSON 字符串 */
-  grantTypes: string;
   /** 授权范围 */
   scopes: string;
   /** 主页 URL */
@@ -32,10 +35,6 @@ export interface Client {
   refreshTokenTtl: number;
   /** 状态 */
   status: EntityStatus;
-  /** 是否禁用 */
-  disabled: boolean;
-  /** 是否跳过授权确认 */
-  skipConsent: boolean;
   /** 所属用户 ID */
   userId: string | null;
   /** 创建时间 */
@@ -51,7 +50,6 @@ export const CreateClientInputSchema = z.object({
   logoUrl: z.string().url().nullable().optional(),
   accessTokenTtl: z.number().int().positive().default(3600),
   refreshTokenTtl: z.number().int().positive().default(604800),
-  skipConsent: z.boolean().default(false),
 });
 
 /** 更新 Client 入参校验 Schema */
@@ -63,9 +61,7 @@ export const UpdateClientInputSchema = z.object({
   logoUrl: z.string().url().nullable().optional(),
   accessTokenTtl: z.number().int().positive().optional(),
   refreshTokenTtl: z.number().int().positive().optional(),
-  skipConsent: z.boolean().optional(),
   status: entityStatusEnum.optional(),
-  disabled: z.boolean().optional(),
 });
 
 export type CreateClientInput = z.infer<typeof CreateClientInputSchema>;
