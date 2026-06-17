@@ -5,7 +5,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { withPermission } from '@/lib/auth';
-import { getDepartments } from '@/app/departments/data';
+import { getDepartments } from '@/app/(dashboard)/departments/data';
 
 export const runtime = 'nodejs';
 

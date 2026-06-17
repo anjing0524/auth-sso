@@ -1,6 +1,5 @@
 'use client';
 
-import * as React from 'react';
 import * as Icons from 'lucide-react';
 import {
   Search,
@@ -49,9 +48,12 @@ const DynamicIcon = ({ name, className }: { name: string; className?: string }) 
   return <IconComponent className={className} />;
 };
 
-export function AppSidebar({ user, dynamicMenus = [] }: { user: any; dynamicMenus?: any[] }) {
+export function AppSidebar({ user, dynamicMenus = [] }: {
+  user: { id?: string; name?: string; email?: string | null; picture?: string | null } | null;
+  dynamicMenus?: { id: string; title: string; url: string; icon: string | null; children?: any[] }[];
+}) {
   const pathname = usePathname();
-  const userData = user?.user || {};
+  const userData = user || {};
 
   // 内置菜单作为兜底，当数据库为空时使用
   const fallbackMenus = [
@@ -164,7 +166,7 @@ export function AppSidebar({ user, dynamicMenus = [] }: { user: any; dynamicMenu
                   className="w-full hover:bg-white hover:shadow-md transition-all duration-300 rounded-2xl h-14 border border-transparent hover:border-border/50"
                 >
                   <Avatar className="h-9 w-9 rounded-xl border-2 border-white dark:border-slate-800 shadow-sm ring-1 ring-border/20">
-                    <AvatarImage src={userData.picture} />
+                    <AvatarImage src={userData.picture ?? undefined} />
                     <AvatarFallback className="bg-gradient-to-br from-blue-500 to-blue-700 text-white text-xs font-black">
                       {userData.name?.charAt(0) || 'U'}
                     </AvatarFallback>

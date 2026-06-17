@@ -9,11 +9,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getJwtFromCookie } from '@/lib/session';
 import { verifyAccessToken } from '@/domain/auth/token';
 import { getUserPermissionContext } from '@/lib/permissions';
-import { db, schema } from '@/infrastructure/db';
-import { eq, asc } from 'drizzle-orm';
 import { mapDomainError } from '@/domain/shared/error-mapping';
-import { COMMON_ERRORS, ENTITY_ACTIVE } from '@auth-sso/contracts';
-import { getUser } from '@/app/users/data';
+import { COMMON_ERRORS } from '@auth-sso/contracts';
+import { getUser } from '@/app/(dashboard)/users/data';
+import { getAllActiveMenus } from '@/app/(dashboard)/menus/data';
 
 export const runtime = 'nodejs';
 
@@ -84,11 +83,8 @@ export async function GET(request: NextRequest) {
 }
 
 async function getDynamicMenus(userPermissions: string[], isAdmin: boolean): Promise<SidebarMenuItem[]> {
-  const allMenus = await db
-    .select()
-    .from(schema.menus)
-    .where(eq(schema.menus.status, ENTITY_ACTIVE))
-    .orderBy(asc(schema.menus.sort));
+  // 复用 data.ts 中 'use cache' 缓存的菜单查询，消除每次 /api/me 的 DB 重复查询
+  const allMenus = await getAllActiveMenus();
 
   const buildTree = (parentId: string | null = null): SidebarMenuItem[] => {
     return allMenus

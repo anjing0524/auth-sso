@@ -11,7 +11,7 @@ import { withPermission } from '@/lib/auth';
 import crypto from 'crypto';
 import { clearUserPermissionCache } from '@/lib/permissions';
 import { COMMON_ERRORS } from '@auth-sso/contracts';
-import { getUserRoles } from '@/app/users/data';
+import { getUserRoles } from '@/app/(dashboard)/users/data';
 
 export const runtime = 'nodejs';
 

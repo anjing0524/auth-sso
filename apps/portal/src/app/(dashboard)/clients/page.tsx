@@ -6,10 +6,8 @@
  * - ClientsTable 为 Client Component，承载浏览器交互（搜索/复制/操作菜单）
  * - 写操作通过 Server Actions (actions.ts) 执行
  */
-import { headers } from 'next/headers';
 import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { checkPermission } from '@/lib/auth';
 import { getClients } from './data';
 import ClientsTable from './components/ClientsTable';
 import Link from 'next/link';
@@ -21,16 +19,6 @@ interface PageProps {
 }
 
 export default async function ClientsPage({ searchParams }: PageProps) {
-  // 权限校验
-  const auth = await checkPermission(await headers(), { permissions: ['client:list'] });
-  if (!auth.authorized || !auth.userId) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <p className="text-red-500">未授权访问或权限不足</p>
-      </div>
-    );
-  }
-
   const params = await searchParams;
   const keyword = params.keyword || '';
 

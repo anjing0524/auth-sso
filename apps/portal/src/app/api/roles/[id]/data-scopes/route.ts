@@ -5,7 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withPermission } from '@/lib/auth';
 import { ROLE_ERRORS } from '@auth-sso/contracts';
-import { getRoleById, getRoleDataScopes } from '@/app/roles/data';
+import { getRoleById, getRoleDataScopes } from '@/app/(dashboard)/roles/data';
 
 export const runtime = 'nodejs';
 

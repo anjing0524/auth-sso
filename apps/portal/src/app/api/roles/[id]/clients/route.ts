@@ -4,7 +4,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { withPermission } from '@/lib/auth';
-import { getRoleClients } from '@/app/roles/data';
+import { getRoleClients } from '@/app/(dashboard)/roles/data';
 
 export const runtime = 'nodejs';
 interface RouteParams { params: Promise<{ id: string }>; }

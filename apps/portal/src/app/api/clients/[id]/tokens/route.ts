@@ -8,7 +8,7 @@ import { db, schema } from '@/infrastructure/db';
 import { eq, inArray, and } from 'drizzle-orm';
 import { withPermission } from '@/lib/auth';
 import { COMMON_ERRORS } from '@auth-sso/contracts';
-import { getClientById, getClientTokens } from '@/app/clients/data';
+import { getClientById, getClientTokens } from '@/app/(dashboard)/clients/data';
 
 export const runtime = 'nodejs';
 

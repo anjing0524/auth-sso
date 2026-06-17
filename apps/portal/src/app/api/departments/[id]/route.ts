@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withPermission, checkDataScope } from '@/lib/auth';
 import { DEPARTMENT_ERRORS, COMMON_ERRORS } from '@auth-sso/contracts';
-import { getDepartmentById } from '@/app/departments/data';
+import { getDepartmentById } from '@/app/(dashboard)/departments/data';
 
 export const runtime = 'nodejs';
 interface RouteParams { params: Promise<{ id: string }>; }

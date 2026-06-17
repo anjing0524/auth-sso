@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withPermission } from '@/lib/auth';
 import { CLIENT_ERRORS } from '@auth-sso/contracts';
-import { getClientById } from '@/app/clients/data';
+import { getClientById } from '@/app/(dashboard)/clients/data';
 
 export const runtime = 'nodejs';
 

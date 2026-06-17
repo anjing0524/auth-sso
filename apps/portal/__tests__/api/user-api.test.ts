@@ -180,7 +180,7 @@ import {
   updateUserAction,
   deleteUserAction,
   toggleUserStatusAction,
-} from '@/app/users/actions';
+} from '@/app/(dashboard)/users/actions';
 
 describe('User Management API & Actions', () => {
   beforeEach(() => {

@@ -109,10 +109,10 @@ export interface TokenResponse {
 // 身份解析
 // ────────────────────────────────────────────
 
-/** 从 JWT Cookie 解析出的用户身份 */
+/** 从 Gateway header 或 JWT Cookie 解析出的用户身份 */
 export interface ResolvedIdentity {
   /** 用户内部唯一标识 ID */
   userId: string;
-  /** JWT 验签后的完整声明 */
-  claims: PortalJwtClaims;
+  /** JWT 验签后的完整声明（Gateway 信任路径时为 null） */
+  claims: PortalJwtClaims | null;
 }

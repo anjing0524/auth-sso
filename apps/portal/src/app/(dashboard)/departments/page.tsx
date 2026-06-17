@@ -1,20 +1,16 @@
 /**
  * 部门管理页面 — Server Component 读模型入口
- * 写操作通过 Server Actions (actions.ts) 执行
+ *
+ * 鉴权由 layout.tsx 统一处理。
  */
-import { headers } from 'next/headers';
 import { Building2 } from 'lucide-react';
-import { checkPermission } from '@/lib/auth';
+import { requirePermission } from '@/lib/auth/require-permission';
 import { getDepartments } from './data';
 import DepartmentTree from './components/DepartmentTree';
 
 export default async function DepartmentsPage() {
-  const auth = await checkPermission(await headers(), { permissions: ['department:list'] });
-  if (!auth.authorized || !auth.userId) {
-    return <div className="flex items-center justify-center h-64"><p className="text-red-500">未授权访问或权限不足</p></div>;
-  }
-
-  const departments = await getDepartments(auth.userId);
+  const userId = (await requirePermission({ permissions: ['department:list'] }))!;
+  const departments = await getDepartments(userId);
 
   return (
     <div className="space-y-8 pb-10">

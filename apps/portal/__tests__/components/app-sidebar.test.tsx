@@ -102,7 +102,7 @@ describe('AppSidebar', () => {
   it('renders user name and email from user prop', () => {
     render(
       <AppSidebar
-        user={{ user: { name: '张三', email: 'zhangsan@test.com' } }}
+        user={{ name: '张三', email: 'zhangsan@test.com' }}
         dynamicMenus={[]}
       />,
     );
@@ -118,21 +118,21 @@ describe('AppSidebar', () => {
       { id: 'dash', title: '仪表盘', url: '/dashboard', icon: 'LayoutDashboard' },
       { id: 'users', title: '用户管理', url: '/users', icon: 'Users' },
     ];
-    render(<AppSidebar user={{ user: { name: 'Admin' } }} dynamicMenus={menus} />);
+    render(<AppSidebar user={{ name: 'Admin' }} dynamicMenus={menus} />);
     expect(screen.getByText('仪表盘')).toBeInTheDocument();
     expect(screen.getByText('用户管理')).toBeInTheDocument();
   });
 
   // ── Fallback menus ────────────────────────────────────────
   it('shows fallback menus when dynamicMenus is empty', () => {
-    render(<AppSidebar user={{ user: { name: 'Admin' } }} dynamicMenus={[]} />);
+    render(<AppSidebar user={{ name: 'Admin' }} dynamicMenus={[]} />);
     expect(screen.getByText('工作台')).toBeInTheDocument();
     expect(screen.getByText('权限配置')).toBeInTheDocument();
     expect(screen.getByText('安全审计')).toBeInTheDocument();
   });
 
   it('shows fallback menus when dynamicMenus is undefined', () => {
-    render(<AppSidebar user={{ user: { name: 'Admin' } }} />);
+    render(<AppSidebar user={{ name: 'Admin' }} />);
     expect(screen.getByText('工作台')).toBeInTheDocument();
     expect(screen.getByText('应用管理')).toBeInTheDocument();
   });
@@ -153,7 +153,7 @@ describe('AppSidebar', () => {
         ],
       },
     ];
-    render(<AppSidebar user={{ user: { name: 'Admin' } }} dynamicMenus={menus} />);
+    render(<AppSidebar user={{ name: 'Admin' }} dynamicMenus={menus} />);
     // "系统设置"同时出现在侧边栏菜单和下拉菜单中
     expect(screen.getAllByText('系统设置').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('个人资料')).toBeInTheDocument();
@@ -162,7 +162,7 @@ describe('AppSidebar', () => {
 
   // ── Empty user → fallback avatar ──────────────────────────
   it('shows fallback avatar "U" when user name is empty', () => {
-    render(<AppSidebar user={{ user: {} }} />);
+    render(<AppSidebar user={{ }} />);
     expect(screen.getByText('U')).toBeInTheDocument();
   });
 
@@ -175,7 +175,7 @@ describe('AppSidebar', () => {
   it('renders user dropdown with profile, settings and logout', () => {
     render(
       <AppSidebar
-        user={{ user: { name: 'Admin', email: 'admin@test.com' } }}
+        user={{ name: 'Admin', email: 'admin@test.com' }}
         dynamicMenus={[]}
       />,
     );
@@ -186,14 +186,14 @@ describe('AppSidebar', () => {
 
   // ── Brand logo ────────────────────────────────────────────
   it('renders brand logo text', () => {
-    render(<AppSidebar user={{ user: { name: 'Admin' } }} />);
+    render(<AppSidebar user={{ name: 'Admin' }} />);
     expect(screen.getByText('Auth-SSO')).toBeInTheDocument();
     expect(screen.getByText('Identity OS')).toBeInTheDocument();
   });
 
   // ── Search input ──────────────────────────────────────────
   it('renders search input placeholder', () => {
-    render(<AppSidebar user={{ user: { name: 'Admin' } }} />);
+    render(<AppSidebar user={{ name: 'Admin' }} />);
     expect(screen.getByPlaceholderText('搜索功能...')).toBeInTheDocument();
   });
 });

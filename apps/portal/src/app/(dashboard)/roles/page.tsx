@@ -2,9 +2,7 @@
  * 角色管理页面 — Server Component 读模型入口
  * 写操作通过 Server Actions (actions.ts) 执行
  */
-import { headers } from 'next/headers';
 import { ShieldCheck } from 'lucide-react';
-import { checkPermission } from '@/lib/auth';
 import { getRoles } from './data';
 import RolesTable from './components/RolesTable';
 
@@ -16,11 +14,6 @@ interface PageProps {
 }
 
 export default async function RolesPage({ searchParams }: PageProps) {
-  const auth = await checkPermission(await headers(), { permissions: ['role:list'] });
-  if (!auth.authorized || !auth.userId) {
-    return <div className="flex items-center justify-center h-64"><p className="text-red-500">未授权访问或权限不足</p></div>;
-  }
-
   const params = await searchParams;
   const page = parseInt(params.page || '1', 10);
   const keyword = params.keyword || '';

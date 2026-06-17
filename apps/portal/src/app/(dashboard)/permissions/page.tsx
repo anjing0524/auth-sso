@@ -2,9 +2,7 @@
  * 权限管理页面 — Server Component 读模型入口
  * 写操作通过 Server Actions (actions.ts) 执行
  */
-import { headers } from 'next/headers';
 import { ShieldCheck } from 'lucide-react';
-import { checkPermission } from '@/lib/auth';
 import { getPermissions } from './data';
 import PermissionsTable from './components/PermissionsTable';
 
@@ -15,11 +13,6 @@ interface PageProps {
 }
 
 export default async function PermissionsPage({ searchParams }: PageProps) {
-  const auth = await checkPermission(await headers(), { permissions: ['permission:list'] });
-  if (!auth.authorized || !auth.userId) {
-    return <div className="flex items-center justify-center h-64"><p className="text-red-500">未授权访问或权限不足</p></div>;
-  }
-
   const params = await searchParams;
   const activeTab = params.type || 'ALL';
 

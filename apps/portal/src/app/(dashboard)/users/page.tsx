@@ -1,14 +1,10 @@
 /**
- * 用户管理页面 - BFF CQRS 架构落地版
- * 
- * 职责分工：
- * - 本组件为 Server Component 读模型入口，直接在服务端调用普通获取函数拉取数据，同步直传渲染。
- * - 客户端子组件通过 Server Actions (actions.ts) 薄 Controller 执行状态改变，实现高内聚开发。
+ * 用户管理页面 - Server Component 读模型入口
+ *
+ * 鉴权由 layout.tsx 统一处理，本组件零鉴权样板，专注数据获取与渲染。
  */
-
-import { headers } from 'next/headers';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
-import { checkPermission } from '@/lib/auth';
+import { requirePermission } from '@/lib/auth/require-permission';
 import { getUsers, getDepartments } from './data';
 import UserFilters from './components/UserFilters';
 import CreateUserDrawer from './components/CreateUserDrawer';
@@ -23,32 +19,21 @@ interface PageProps {
 }
 
 export default async function UsersPage({ searchParams }: PageProps) {
-  // 0. 鉴权：缓存作用域外完成身份校验与权限检查（R10 / §3.6）
-  const auth = await checkPermission(await headers(), { permissions: ['user:list'] });
-  if (!auth.authorized || !auth.userId) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <p className="text-red-500">未授权访问或权限不足</p>
-      </div>
-    );
-  }
-
-  // 1. 异步读取 URL 查询参数（Next.js App Router 最佳实践）
   const params = await searchParams;
   const keyword = params.keyword || '';
   const status = params.status || 'ALL';
   const page = parseInt(params.page || '1', 10);
-  const pageSize = 15; // 固定单页 15 条
+  const pageSize = 15;
 
-  // 2. 读模型：并行获取用户列表与部门数据（两者无依赖关系，消除串行瀑布）
+  // requirePermission 由 React.cache 去重，layout 已调用过，此处零额外开销
+  const userId = (await requirePermission({ permissions: ['user:list'] }))!;
   const [{ data: users, pagination }, departments] = await Promise.all([
-    getUsers(auth.userId, { page, pageSize, keyword, status }),
+    getUsers(userId, { page, pageSize, keyword, status }),
     getDepartments(),
   ]);
 
   return (
     <div className="h-full flex flex-col gap-6 pb-10">
-      {/* 头部区块 */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900">用户管理</h1>
@@ -56,19 +41,14 @@ export default async function UsersPage({ searchParams }: PageProps) {
             查看和管理系统内的所有用户账户及权限。
           </p>
         </div>
-        
-        {/* 新建用户 Drawer：支持 React 19 表单 Action 网关 */}
         <CreateUserDrawer departments={departments} />
       </div>
 
-      {/* 核心卡片容器 */}
       <Card className="flex-1 border-none shadow-sm ring-1 ring-border/50 overflow-hidden rounded-[1.5rem] flex flex-col bg-white">
         <CardHeader className="bg-slate-50/50 dark:bg-slate-900/50 py-4 px-6 border-b">
-          {/* 筛选过滤组件：key={keyword} 确保 URL 参数变化时组件正确重置 */}
           <UserFilters key={keyword} initialKeyword={keyword} initialStatus={status} />
         </CardHeader>
         <CardContent className="p-0 flex-1 overflow-auto flex flex-col">
-          {/* 同步直出表格，数据流清晰透明 */}
           <UserTable users={users} pagination={pagination} />
         </CardContent>
       </Card>

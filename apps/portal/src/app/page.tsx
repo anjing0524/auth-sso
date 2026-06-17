@@ -4,17 +4,13 @@
  */
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { getJwtFromCookie, verifyJwt } from '@/lib/session';
+import { resolveIdentity } from '@/lib/auth';
 
 export default async function HomePage() {
-  // 检查登录状态：验签 portal_jwt_token Cookie
-  const token = await getJwtFromCookie();
-  if (token) {
-    const claims = await verifyJwt(token);
-    if (claims) {
-      // 已登录，重定向到 Dashboard
-      redirect('/dashboard');
-    }
+  // 检查登录状态（复用统一身份解析入口）
+  const identity = await resolveIdentity();
+  if (identity) {
+    redirect('/dashboard');
   }
 
   return (

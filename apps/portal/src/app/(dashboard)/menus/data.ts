@@ -26,6 +26,24 @@ export async function getMenus(): Promise<MenuTreeNode[]> {
 }
 
 /**
+ * 获取全量活跃菜单（供侧边栏动态菜单构建使用）。
+ * 与 getMenus 不同，此函数仅返回活跃菜单且按 sort 排序，不含树形结构。
+ * 使用 'use cache' 持久化，menus 变更后通过 revalidateTag('menus-list') 失效。
+ */
+export async function getAllActiveMenus() {
+  'use cache';
+  cacheLife('hours');
+  cacheTag('menus-list');
+
+  const rows = await db.select()
+    .from(schema.menus)
+    .where(eq(schema.menus.status, 'ACTIVE' as const))
+    .orderBy(asc(schema.menus.sort));
+
+  return rows.map(toDomainMenu);
+}
+
+/**
  * 按 ID 获取单个菜单详情（支持内部 ID 和 publicId）
  */
 export async function getMenuById(lookupId: string) {

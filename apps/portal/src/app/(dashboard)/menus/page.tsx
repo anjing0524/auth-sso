@@ -2,18 +2,11 @@
  * 菜单管理页面 — Server Component 读模型入口
  * 写操作通过 Server Actions (actions.ts) 执行
  */
-import { headers } from 'next/headers';
 import { Menu } from 'lucide-react';
-import { checkPermission } from '@/lib/auth';
 import { getMenus } from './data';
 import MenuTree from './components/MenuTree';
 
 export default async function MenusPage() {
-  const auth = await checkPermission(await headers(), { permissions: ['menu:list'] });
-  if (!auth.authorized || !auth.userId) {
-    return <div className="flex items-center justify-center h-64"><p className="text-red-500">未授权访问或权限不足</p></div>;
-  }
-
   const menus = await getMenus();
 
   return (

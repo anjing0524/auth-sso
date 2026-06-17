@@ -21,14 +21,31 @@ import { isJtiRevoked } from '@/lib/session/revoke';
 import type { PortalJwtClaims, RefreshTokenResult } from './types';
 
 // ────────────────────────────────────────────
-// 密钥管理
+// 密钥管理（带模块级内存缓存）
+// JWKS 密钥 90 天轮换一次，缓存 5 分钟避免每次验签都查 DB。
 // ────────────────────────────────────────────
+
+const KEY_CACHE_TTL_MS = 300_000; // 5min
+
+interface CachedSigningKey {
+  keyId: string;
+  privateKey: CryptoKey;
+  publicJwk: JsonWebKey;
+  fetchedAt: number;
+}
+
+let cachedKey: CachedSigningKey | null = null;
 
 async function getActiveSigningKey(): Promise<{
   keyId: string;
   privateKey: CryptoKey;
   publicJwk: JsonWebKey;
 }> {
+  // 缓存命中 → 零 DB 查询
+  if (cachedKey && Date.now() - cachedKey.fetchedAt < KEY_CACHE_TTL_MS) {
+    return cachedKey;
+  }
+
   const rows = await db
     .select()
     .from(schema.jwks)
@@ -48,7 +65,9 @@ async function getActiveSigningKey(): Promise<{
   const publicJwk = JSON.parse(jwk.publicKey) as JsonWebKey;
   const privateKey = await importJWK(privateJwk, 'ES256') as CryptoKey;
 
-  return { keyId: jwk.id, privateKey, publicJwk };
+  // 写入缓存
+  cachedKey = { keyId: jwk.id, privateKey, publicJwk, fetchedAt: Date.now() };
+  return cachedKey;
 }
 
 async function generateAndPersistKeyPair(): Promise<{
@@ -72,7 +91,9 @@ async function generateAndPersistKeyPair(): Promise<{
     expiresAt,
   });
 
-  return { keyId: kid, privateKey, publicJwk };
+  // 新 key 生成后立即更新缓存，下次 getActiveSigningKey 直接命中
+  cachedKey = { keyId: kid, privateKey, publicJwk, fetchedAt: Date.now() };
+  return cachedKey;
 }
 
 // ────────────────────────────────────────────

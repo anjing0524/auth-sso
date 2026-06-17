@@ -5,7 +5,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { withPermission } from '@/lib/auth';
-import { getUsers } from '@/app/users/data';
+import { getUsers } from '@/app/(dashboard)/users/data';
 
 export const runtime = 'nodejs';
 

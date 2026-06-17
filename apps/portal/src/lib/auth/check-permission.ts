@@ -71,11 +71,11 @@ function synthesizeClaims(userId: string, ctx: UserPermissionContext): PortalJwt
  * @returns 鉴权通过状态或精细化失败提示
  */
 export async function checkPermission(
-  request: NextRequest | Headers | undefined,
+  _request: NextRequest | Headers | undefined,
   options: PermissionCheckOptions
 ): Promise<PermissionCheckResult> {
   try {
-    const identity = await resolveIdentity(request);
+    const identity = await resolveIdentity();
     if (!identity) {
       return { authorized: false, error: '未登录', statusCode: 401 };
     }

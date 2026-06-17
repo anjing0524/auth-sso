@@ -29,11 +29,25 @@ domain/ → domain/  ✅    domain/ → ANY OTHER  ❌ (零外部依赖)
 
 ```
 src/
-├── app/{users}/              # 表现层（与 Next.js 耦合）
-│   ├── page.tsx              # Server Component 读入口
-│   ├── data.ts               # Drizzle 直调查询 + "use cache"
-│   ├── actions.ts            # Server Actions（内部写）
-│   └── route.ts              # REST API（仅外部集成/Webhook）
+├── app/
+│   ├── (dashboard)/          # Route Group：统一鉴权 + DashboardLayout
+│   │   ├── layout.tsx        # 唯一一份：登录态校验 + DashboardLayout 包裹
+│   │   ├── users/
+│   │   │   ├── layout.tsx    # requirePermission(['user:list']) — 仅权限声明
+│   │   │   ├── page.tsx      # Server Component 读入口（零鉴权样板）
+│   │   │   ├── data.ts       # Drizzle 直调查询 + "use cache"
+│   │   │   ├── actions.ts    # Server Actions（内部写）
+│   │   │   └── components/   # Client Components
+│   │   ├── roles/            # layout: requirePermission(['role:list'])
+│   │   ├── clients/          # layout: requirePermission(['client:list'])
+│   │   ├── departments/      # layout: requirePermission(['department:list'])
+│   │   ├── permissions/      # layout: requirePermission(['permission:list'])
+│   │   ├── menus/            # layout: requirePermission(['menu:list'])
+│   │   ├── dashboard/        # layout: requirePermission(['dashboard:view'])
+│   │   └── audit-logs/       # layout: requirePermission(['audit:read'])
+│   ├── api/                  # REST API（仅外部集成/Webhook）
+│   │   └── {resource}/route.ts
+│   └── login/                # 公开路由（无鉴权）
 ├── domain/
 │   ├── shared/
 │   │   ├── errors.ts         # DomainError 类型体系
@@ -178,9 +192,39 @@ export const CreateUserInputSchema = z.object({
 
 所有读路径必须使用 `applyDataScopeFilter(query, scopeFilter, userId)`，严禁在各 data.ts 中重复 `if (scopeFilter.type === 'LIST')` 分支。
 
-### 8. Auth Guard 统一鉴权
+### 8. Auth Guard 统一鉴权（三层：layout → withAuth → withPermission）
 
-Server Action 必须用 `withAuth` HOF 包装，严禁在 Action 体内手写 `checkPermission` + `mapDomainError`。
+**Server Component Page 鉴权** — 通过 Route Group `(dashboard)` + `requirePermission` 在 layout 层统一处理，page.tsx 零鉴权样板。
+
+```typescript
+// ✅ app/(dashboard)/layout.tsx — 唯一一份，登录态 + DashboardLayout
+import { resolveIdentity } from '@/lib/auth';
+export default async function DashboardGroupLayout({ children }) {
+  const identity = await resolveIdentity(await headers());
+  if (!identity) redirect('/login');
+  return <DashboardLayout>{children}</DashboardLayout>;
+}
+
+// ✅ app/(dashboard)/users/layout.tsx — 仅 5 行权限声明
+import { requirePermission } from '@/lib/auth/require-permission';
+import { Forbidden } from '@/components/ui/forbidden';
+export default async function UsersLayout({ children }) {
+  const userId = await requirePermission({ permissions: ['user:list'] });
+  if (!userId) return <Forbidden />;
+  return children;
+}
+
+// ✅ app/(dashboard)/users/page.tsx — 零鉴权样板，纯业务
+export default async function UsersPage({ searchParams }) {
+  const userId = (await requirePermission({ permissions: ['user:list'] }))!; // React.cache 命中
+  const { data } = await getUsers(userId, params);
+  return <UserTable data={data} />;
+}
+```
+
+`requirePermission` 基于 `React.cache()`，同请求内 layout 和 page 各自调用时第二次命中缓存，零额外 DB 查询。
+
+**Server Action 鉴权** — `withAuth` HOF，严禁在 Action 体内手写 `checkPermission` + `mapDomainError`。
 
 ```typescript
 // ✅ 正确
@@ -188,6 +232,8 @@ export const myAction = withAuth({ permissions: ['user:create'] }, async (input)
   // 只写业务逻辑，无鉴权/错误处理样板
 });
 ```
+
+**API Route 鉴权** — `withPermission` 包装。
 
 ### 9. Temporal API 替代 `new Date()`
 
@@ -214,8 +260,8 @@ Domain 实体使用 `Temporal.Instant`。唯一允许 `new Date()` 的地方是 
 
 - **API Route GET 处理器禁止直接操作 DB**：必须通过 `withPermission` 鉴权后，委托给 `data.ts` 的同名函数。
 - **`actions.ts` 禁止只读查询**：读操作只在 `data.ts` 中。`actions.ts` 仅保留 CUD 写操作。
-- **Server Component Page 直调 `data.ts`**：通过 `checkPermission()` 鉴权后直接调用 `data.ts` 函数，不走 Server Action。
-- **`data.ts` 不自行鉴权**：鉴权在调用方完成，`data.ts` 通过 `userId` 参数接收身份，内部仅做数据范围过滤。
+- **Server Component Page 直调 `data.ts`**：鉴权由 `layout.tsx` 通过 `requirePermission` 统一处理，page.tsx 零鉴权样板。如需 `userId`，在 page 中再次调用 `requirePermission`（`React.cache` 命中，零额外开销）。
+- **`data.ts` 不自行鉴权**：鉴权在调用方（layout）完成，`data.ts` 通过 `userId` 参数接收身份，内部仅做数据范围过滤。
 
 ```typescript
 // ✅ API Route GET 标准模板：鉴权 → 委托 data.ts
@@ -227,12 +273,25 @@ export async function GET(request: NextRequest) {
   });
 }
 
-// ✅ Server Component Page 标准模板：鉴权 → 直调 data.ts
-export default async function XxxPage({ searchParams }: PageProps) {
-  const auth = await checkPermission(await headers(), { permissions: ['xxx:list'] });
-  if (!auth.authorized) return <Forbidden />;
-  const { data } = await getXxx(auth.userId, params);  // ← 直调 data.ts
+// ✅ Server Component Page 标准模板：layout 鉴权，page 零样板
+// app/(dashboard)/xxx/layout.tsx
+export default async function XxxLayout({ children }) {
+  const userId = await requirePermission({ permissions: ['xxx:list'] });
+  if (!userId) return <Forbidden />;
+  return children;
+}
+// app/(dashboard)/xxx/page.tsx
+export default async function XxxPage({ searchParams }) {
+  const userId = (await requirePermission({ permissions: ['xxx:list'] }))!; // cache 命中
+  const { data } = await getXxx(userId, params);  // ← 直调 data.ts
   return <XxxList data={data} />;
+}
+
+// ❌ 旧模式（已废弃）：page.tsx 手写 checkPermission
+export default async function XxxPage() {
+  const auth = await checkPermission(await headers(), { permissions: ['xxx:list'] });
+  if (!auth.authorized) return <div>未授权</div>;
+  // ...
 }
 ```
 
@@ -345,6 +404,8 @@ export async function POST(req: NextRequest) {
 | 复制粘贴 `if (scopeFilter.type === 'LIST')` | 用 `applyDataScopeFilter()` 工具函数 |
 | `z.enum(['ACTIVE', 'DISABLED'])` 手写字面量 | 从 contracts 导入 `USER_STATUS_VALUES` 派生 |
 | Action 内手写 `checkPermission(...)` + `catch (err) { mapDomainError(err) }` | 用 `withAuth({ permissions: [...] }, async (input) => { ... })` |
+| Page 手写 `checkPermission(await headers(), ...)` 样板 | 在 `app/(dashboard)/xxx/layout.tsx` 中用 `requirePermission()`；page.tsx 零鉴权 |
+| 多个 layout.tsx 重复包裹 `<DashboardLayout>` | 放入 Route Group `(dashboard)/layout.tsx`，统一一份 |
 | `useState(initialUser)` 全量复制 prop | 按编辑/只读维度拆分：可编辑字段进 state，只读字段直接从 prop 读 |
 | API Route GET 手写 Drizzle 查询 | 委托给 `data.ts` 同名函数，Route 只做鉴权 + 委托 |
 | `actions.ts` 中有 `getXxxAction` 只读 Action | 移到 `data.ts` 的 `getXxx(id)` 纯函数 |
@@ -361,6 +422,8 @@ export async function POST(req: NextRequest) {
 - 多行写入无 `db.transaction()`
 - domain entity 仍使用 `XxxPropsSchema`（应为纯 `interface`）
 - Action 内手写 `checkPermission` + `catch (err) { mapDomainError(err) }` 样板
+- Page 手写 `checkPermission(await headers(), ...)` + forbidden 判断（应由 layout.tsx `requirePermission` 统一处理）
+- 多个 layout.tsx 重复包裹 `<DashboardLayout>`（应放入 Route Group `(dashboard)/layout.tsx` 统一一份）
 - API Route GET 处理器中出现 `db.select()` / `db.query` 直接 DB 调用（应委托 `data.ts`）
 - `actions.ts` 中存在只读查询函数（只能写，读归 `data.ts`）
 - `data.ts` 函数使用 `db.query.xxx.findFirst()`（应用 `db.select()` 风格）

@@ -1,6 +1,12 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+/**
+ * Dashboard 布局 — 客户端壳（侧边栏状态、面包屑导航）
+ *
+ * 用户数据和菜单由 Server Component (dashboard)/layout.tsx 服务端获取并通过 props 传入，
+ * 不再在客户端 useEffect + fetch('/api/me')，消灭客户端数据瀑布。
+ */
+import React from 'react';
 import { SidebarProvider, SidebarInset, SidebarTrigger } from '@/components/ui/sidebar';
 import { AppSidebar } from './app-sidebar';
 import { Separator } from '@/components/ui/separator';
@@ -13,72 +19,39 @@ import {
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb';
 import { usePathname } from 'next/navigation';
-import { Skeleton } from '@/components/ui/skeleton';
 
-/** 用户基本信息类型 */
-interface UserInfo {
+/** 侧边栏菜单项 */
+export interface SidebarMenuItem {
   id: string;
-  name: string;
-  username: string;
-  email?: string;
-  avatarUrl?: string;
-  deptName?: string;
+  title: string;
+  url: string;
+  icon: string | null;
+  children?: SidebarMenuItem[];
 }
 
-/** 菜单项类型 */
-interface MenuItem {
-  id: string;
-  name: string;
-  path?: string;
-  icon?: string;
-  children?: MenuItem[];
+/** 服务端传入的用户 + 菜单数据 */
+export interface DashboardProps {
+  user: {
+    id: string;
+    email: string | null;
+    name: string;
+    picture: string | null;
+    emailVerified: boolean | null;
+  };
+  menus: SidebarMenuItem[];
 }
 
 export default function DashboardLayout({
+  user,
+  menus,
   children,
-}: {
-  children: React.ReactNode;
-}) {
-  const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
-  const [dynamicMenus, setDynamicMenus] = useState<MenuItem[]>([]);
-  const [loading, setLoading] = useState(true);
+}: DashboardProps & { children: React.ReactNode }) {
   const pathname = usePathname();
 
-  useEffect(() => {
-    /**
-     * 异步拉取用户权限上下文以及动态菜单数据
-     * 若检测到会话失效 (401 状态码)，将进行带回调的安全重定向拦截
-     */
-    async function fetchData() {
-      try {
-        const meRes = await fetch('/api/me');
-
-        // 安全防御：如果用户未登录或会话超时返回 401 状态，则携带当前页面 callbackUrl 强行跳转至登录页，防止暴露管理界面布局框架
-        if (meRes.status === 401) {
-          const callbackUrl = encodeURIComponent(window.location.pathname + window.location.search);
-          window.location.href = `/login?callbackUrl=${callbackUrl}`;
-          return;
-        }
-
-        if (meRes.ok) {
-          const data = await meRes.json();
-          setUserInfo(data);
-          setDynamicMenus(data.menus || []);
-        }
-      } catch (error) {
-        console.error('Failed to fetch layout data:', error);
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchData();
-  }, []);
-
-  // 生成面包屑
   const getBreadcrumbs = () => {
     const segments = pathname.split('/').filter(Boolean);
     const crumbs = [{ title: '工作台', url: '/dashboard' }];
-    
+
     if (segments[0] !== 'dashboard') {
       const titleMap: Record<string, string> = {
         users: '用户管理',
@@ -92,26 +65,15 @@ export default function DashboardLayout({
       const title = titleMap[segments[0]] || segments[0];
       crumbs.push({ title, url: `/${segments[0]}` });
     }
-    
+
     return crumbs;
   };
 
   const breadcrumbs = getBreadcrumbs();
 
-  if (loading) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-background">
-        <div className="flex flex-col items-center gap-4">
-          <Skeleton className="h-12 w-12 rounded-full" />
-          <Skeleton className="h-4 w-48" />
-        </div>
-      </div>
-    );
-  }
-
   return (
     <SidebarProvider defaultOpen={true}>
-      <AppSidebar user={userInfo} dynamicMenus={dynamicMenus} />
+      <AppSidebar user={user} dynamicMenus={menus} />
       <SidebarInset>
         <header className="flex h-16 shrink-0 items-center gap-2 border-b bg-background px-6 sticky top-0 z-10">
           <SidebarTrigger className="-ml-1" />

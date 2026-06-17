@@ -64,7 +64,6 @@ import {
   clearJwtCookies,
   getJwtFromCookie,
   getRefreshTokenFromCookie,
-  verifyJwt,
   decodeJwtPayload,
   revokeJti,
   isJtiRevoked,
@@ -72,6 +71,7 @@ import {
   JWT_COOKIE_NAME,
   REFRESH_COOKIE_NAME
 } from '@/lib/session';
+import { verifyAccessToken } from '@/domain/auth/token';
 
 describe('JWT Cookie Session Lifecycle', () => {
   beforeEach(() => {
@@ -138,21 +138,21 @@ describe('JWT Cookie Session Lifecycle', () => {
     });
   });
 
-  describe('verifyJwt', () => {
+  describe('verifyAccessToken', () => {
     it('对有效 JWT 成功验签并返回载荷', async () => {
-      const payload = await verifyJwt('valid-jwt');
+      const payload = await verifyAccessToken('valid-jwt');
       expect(payload).toBeTruthy();
       expect(payload!.sub).toBe('usr_1');
     });
 
     it('如果 jti 在黑名单中则返回 null', async () => {
       await revokeJti('jti-123', Math.floor(Date.now() / 1000) + 3600);
-      const payload = await verifyJwt('valid-jwt');
+      const payload = await verifyAccessToken('valid-jwt');
       expect(payload).toBeNull();
     });
 
     it('无效 JWT 返回 null', async () => {
-      const payload = await verifyJwt('invalid-jwt');
+      const payload = await verifyAccessToken('invalid-jwt');
       expect(payload).toBeNull();
     });
   });

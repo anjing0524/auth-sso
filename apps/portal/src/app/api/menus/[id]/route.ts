@@ -9,7 +9,7 @@ import { db, schema } from '@/infrastructure/db';
 import { eq } from 'drizzle-orm';
 import { withPermission } from '@/lib/auth';
 import { COMMON_ERRORS, EntityStatus } from '@auth-sso/contracts';
-import { getMenuById } from '@/app/menus/data';
+import { getMenuById } from '@/app/(dashboard)/menus/data';
 
 export const runtime = 'nodejs';
 
