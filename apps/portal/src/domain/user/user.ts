@@ -136,7 +136,6 @@ export function userToInsertRow(u: User) {
     status: u.status,
     deptId: u.deptId,
     createdAt: new Date(u.createdAt.epochMilliseconds),
-    updatedAt: new Date(),
   };
 }
 
@@ -151,6 +150,5 @@ export function userToUpdateRow(u: User) {
     avatarUrl: u.avatarUrl,
     status: u.status,
     deptId: u.deptId,
-    updatedAt: new Date(),
   };
 }

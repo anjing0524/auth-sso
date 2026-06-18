@@ -137,7 +137,6 @@ export function departmentToInsertRow(d: Department) {
     sort: d.sort,
     status: d.status,
     createdAt: new Date(d.createdAt.epochMilliseconds),
-    updatedAt: new Date(),
   };
 }
 
@@ -149,7 +148,6 @@ export function departmentToUpdateRow(d: Department) {
     parentId: d.parentId,
     sort: d.sort,
     status: d.status,
-    updatedAt: new Date(),
   };
 }
 

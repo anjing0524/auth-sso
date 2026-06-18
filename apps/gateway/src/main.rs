@@ -99,6 +99,36 @@ fn main() -> anyhow::Result<()> {
     // ── 启动 JWKS 后台定时刷新任务（通过 OIDC Discovery 自动发现端点）──
     Arc::clone(&jwks_cache).start_background_refresh(&rt, config.portal.upstream.clone());
 
+    // ── 初始化 Redis 异步连接管理器（用于 jti 黑名单校验，自愈 fail-open） ──
+    let redis_conn = match redis::Client::open(config.redis.url.as_str()) {
+        Ok(client) => {
+            // 利用网关已有的 tokio 运行时异步创建连接管理器
+            match rt.block_on(async { client.get_connection_manager().await }) {
+                Ok(conn) => {
+                    info!(
+                        "✅ 成功连接至 Redis ({}) 并成功构建异步多路复用连接管理器",
+                        config.redis.url
+                    );
+                    Some(conn)
+                }
+                Err(e) => {
+                    error!(
+                        "❌ 创建 Redis 异步连接管理器失败: {}。网关安全策略将进行降级 (fail-open)",
+                        e
+                    );
+                    None
+                }
+            }
+        }
+        Err(e) => {
+            error!(
+                "❌ 无法解析配置的 Redis 连接 URL: {}，错误: {}。网关安全策略将进行降级 (fail-open)",
+                config.redis.url, e
+            );
+            None
+        }
+    };
+
     // ── 初始化 Pingora 服务器 ──
     let mut my_server = Server::new(None).context("❌ 创建 Pingora 服务器失败")?;
     my_server.bootstrap();
@@ -111,7 +141,7 @@ fn main() -> anyhow::Result<()> {
 
     let path_matcher = PathMatcher::new(config.portal.public_paths.clone());
 
-    // 构建 HTTPS 反向代理服务（含 JWT 验签）
+    // 构建 HTTPS 反向代理服务（含 JWT 验签与 Redis jti 黑名单校验）
     let mut gateway_proxy = http_proxy_service(
         &my_server.configuration,
         Gateway {
@@ -119,6 +149,7 @@ fn main() -> anyhow::Result<()> {
             jwks_cache: Arc::clone(&jwks_cache),
             issuer: config.portal.issuer.clone(),
             path_matcher,
+            redis_conn,
         },
     );
 

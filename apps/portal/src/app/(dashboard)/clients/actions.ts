@@ -36,7 +36,7 @@ export const createClientAction = withAuth(
     await db.insert(schema.clients).values(clientToInsertRow(client));
 
     revalidatePath('/clients');
-    revalidateTag('clients-list', 'minutes');
+    revalidateTag('clients-list');
     return {
       success: true,
       data: { id: client.publicId, clientId: client.clientId, clientSecret: client.clientSecret },
@@ -66,7 +66,7 @@ export const updateClientAction = withAuth(
       .where(eq(schema.clients.id, client.id));
 
     revalidatePath('/clients');
-    revalidateTag('clients-list', 'minutes');
+    revalidateTag('clients-list');
     return { success: true, data: { id: clientIdStr }, message: '应用更新成功' };
   },
 );
@@ -83,7 +83,7 @@ export const deleteClientAction = withAuth(
     await db.delete(schema.clients).where(eq(schema.clients.id, row.id));
 
     revalidatePath('/clients');
-    revalidateTag('clients-list', 'minutes');
+    revalidateTag('clients-list');
     return { success: true, data: { id: clientIdStr }, message: '应用已注销' };
   },
 );
@@ -99,12 +99,12 @@ export const rotateClientSecretAction = withAuth(
 
     const newSecret = generateClientSecret();
     await db.update(schema.clients)
-      .set({ clientSecret: newSecret, updatedAt: new Date() })
+      .set({ clientSecret: newSecret })
       .where(eq(schema.clients.id, row.id));
 
     revalidatePath(`/clients/${row.id}`);
     revalidatePath('/clients');
-    revalidateTag('clients-list', 'minutes');
+    revalidateTag('clients-list');
     return { success: true, data: { clientSecret: newSecret }, message: '密钥重新生成成功' };
   },
 );

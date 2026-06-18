@@ -39,7 +39,7 @@ export const createDepartmentAction = withAuth(
     await db.insert(schema.departments).values(departmentToInsertRow(dept));
 
     revalidatePath('/departments');
-    revalidateTag('departments-list', 'minutes');
+    revalidateTag('departments-list');
     return { success: true, data: { id: dept.publicId }, message: '部门创建成功' };
   },
 );
@@ -69,7 +69,7 @@ export const updateDepartmentAction = withAuth(
     });
 
     revalidatePath('/departments');
-    revalidateTag('departments-list', 'minutes');
+    revalidateTag('departments-list');
     return { success: true, data: { id: deptId }, message: '部门更新成功' };
   },
 );
@@ -94,7 +94,7 @@ export const deleteDepartmentAction = withAuth(
     });
 
     revalidatePath('/departments');
-    revalidateTag('departments-list', 'minutes');
+    revalidateTag('departments-list');
     return { success: true, data: { id: deptId }, message: '部门已删除' };
   },
 );

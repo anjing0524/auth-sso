@@ -25,7 +25,7 @@ interface AuditLog {
   operation: string;
   method: string;
   url: string;
-  params: string;
+  params: Record<string, unknown> | null;
   ip: string;
   userAgent: string;
   status: number;
@@ -262,7 +262,7 @@ export default function AuditLogsPage() {
                     </span>
                   </td>
                   <td className="px-6 py-4 text-sm text-gray-500 max-w-xs truncate">
-                    {log.url || log.params || '-'}
+                    {log.url || (log.params ? JSON.stringify(log.params) : '') || '-'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`text-sm ${log.status === 200 ? 'text-green-600' : 'text-red-600'}`}>

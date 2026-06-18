@@ -5,7 +5,7 @@ import 'server-only';
 
 import { cacheLife, cacheTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
-import { eq, ilike, or, asc, desc, and, sql as drizzleSql } from 'drizzle-orm';
+import { eq, ilike, or, asc, desc, and, count } from 'drizzle-orm';
 import type { EntityStatus } from '@auth-sso/contracts';
 
 /**
@@ -38,7 +38,7 @@ export async function getRoles(params: {
   const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
   // 使用 COUNT(*) 聚合查询，避免拉取全部 ID 到内存再统计
-  const countResult = await db.select({ count: drizzleSql`COUNT(*)::int` })
+  const countResult = await db.select({ count: count() })
     .from(schema.roles).where(whereClause);
   const total = Number(countResult[0]?.count ?? 0);
 

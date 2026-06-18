@@ -4,7 +4,7 @@
  * Client 列表表格 — 客户端交互组件
  * 职责：搜索/复制/下拉菜单等浏览器交互，写操作通过 Server Actions 直调
  */
-import React, { useState, useCallback, useTransition } from 'react';
+import React, { useState, useCallback, useTransition, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -58,10 +58,17 @@ export default function ClientsTable({ clients, initialKeyword }: Props) {
     });
   }, [router]);
 
+  const timerRef = useRef<ReturnType<typeof setTimeout>>(null);
+
+  useEffect(() => {
+    return () => { if (timerRef.current) clearTimeout(timerRef.current); };
+  }, []);
+
   const handleCopy = (text: string, id: string) => {
     navigator.clipboard.writeText(text);
     setCopiedId(id);
-    setTimeout(() => setCopiedId(null), 2000);
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => setCopiedId(null), 2000);
   };
 
   const handleDelete = async (clientId: string) => {

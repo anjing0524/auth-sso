@@ -8,7 +8,6 @@ import 'server-only';
  */
 import { getRedis } from '@/infrastructure/redis';
 import { decodeJwtPayload } from './jwt';
-import { getJwtFromCookie } from './cookies';
 
 const JTI_BLOCKLIST_PREFIX = 'portal:jti_blocklist:';
 
@@ -53,9 +52,3 @@ export async function revokeUserToken(accessToken: string): Promise<void> {
   }
 }
 
-/**
- * @deprecated 已迁移至 JWT Cookie 架构，请使用 getJwtFromCookie()
- */
-export async function getSessionIdFromCookie(): Promise<string | null> {
-  return getJwtFromCookie();
-}

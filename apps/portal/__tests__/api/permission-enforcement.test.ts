@@ -40,7 +40,7 @@ vi.mock('@/lib/session', () => ({
   getJwtFromCookie: mockGetJwtFromCookie,
 }));
 
-vi.mock('@/domain/auth/token', () => ({
+vi.mock('@/lib/auth/token', () => ({
   verifyAccessToken: mockVerifyJwt,
 }));
 

@@ -166,7 +166,6 @@ export async function POST(request: NextRequest) {
             sort: p.sort,
             status: 'ACTIVE',
             createdAt: new Date(),
-            updatedAt: new Date(),
           });
           stats.inserted++;
         } else {
@@ -189,7 +188,6 @@ export async function POST(request: NextRequest) {
                 action: p.action ?? null,
                 sort: p.sort,
                 status: 'ACTIVE',
-                updatedAt: new Date(),
               })
               .where(eq(schema.permissions.id, existing.id));
             stats.updated++;
@@ -207,7 +205,6 @@ export async function POST(request: NextRequest) {
           await tx.update(schema.permissions)
             .set({
               status: 'DISABLED',
-              updatedAt: new Date(),
             })
             .where(eq(schema.permissions.id, p.id));
           stats.deprecated++;

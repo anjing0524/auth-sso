@@ -32,6 +32,50 @@ vi.mock('@/infrastructure/redis', () => ({
   getRedis: () => mockGetRedis(),
 }));
 
+// Mock DB 接口，防止 verifyAccessToken 执行真实数据库查询
+vi.mock('@/infrastructure/db', () => {
+  const mockJwkRow = {
+    id: 'mock-kid',
+    publicKey: JSON.stringify({
+      kty: 'EC',
+      crv: 'P-256',
+      x: 'f83OJ3D2xF1Bg8vub9tM1gGPT34Ogv50GI1g9SamyC8',
+      y: 'x_9LH9FHme7alQA9g1y5OB84XJWADnVEhypT5sR-vCs',
+    }),
+    privateKey: JSON.stringify({
+      kty: 'EC',
+      crv: 'P-256',
+      x: 'f83OJ3D2xF1Bg8vub9tM1gGPT34Ogv50GI1g9SamyC8',
+      y: 'x_9LH9FHme7alQA9g1y5OB84XJWADnVEhypT5sR-vCs',
+      d: 'jpsQnnGQmLv7UfFpQ9k8-kH6-4SJyvK2Wj2N2aQeE24',
+    }),
+    createdAt: new Date(),
+    expiresAt: new Date(Date.now() + 3600 * 1000),
+  };
+
+  const createChain = () => {
+    const chain: any = () => {};
+    chain.then = (resolve: Function) => resolve([mockJwkRow]);
+    return new Proxy(chain, {
+      get(target: any, prop: string) {
+        if (prop === 'then' || prop === 'catch') return target[prop];
+        return () => createChain();
+      },
+    });
+  };
+
+  return {
+    db: {
+      select: () => createChain(),
+    },
+    schema: {
+      jwks: {
+        createdAt: 'createdAt',
+      },
+    },
+  };
+});
+
 const store = mockStore;
 
 // Mock next/headers
@@ -52,10 +96,11 @@ vi.mock('jose', () => ({
   }),
   decodeJwt: vi.fn((token) => {
     if (token === 'valid-jwt') {
-      return { sub: 'usr_1', jti: 'jti-123', exp: Math.floor(Date.now() / 1000) + 3600 };
+      return { kid: 'test-kid-1', sub: 'usr_1', jti: 'jti-123', exp: Math.floor(Date.now() / 1000) + 3600 };
     }
     return null;
   }),
+  importJWK: vi.fn(async () => ({})),
   createRemoteJWKSet: vi.fn(() => vi.fn()),
 }));
 
@@ -71,7 +116,7 @@ import {
   JWT_COOKIE_NAME,
   REFRESH_COOKIE_NAME
 } from '@/lib/session';
-import { verifyAccessToken } from '@/domain/auth/token';
+import { verifyAccessToken } from '@/lib/auth/token';
 
 describe('JWT Cookie Session Lifecycle', () => {
   beforeEach(() => {

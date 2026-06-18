@@ -117,7 +117,7 @@ function makeClientRow(overrides: Record<string, any> = {}) {
     name: '测试应用',
     clientId: 'test_client_id',
     clientSecret: 'hashed_secret',
-    redirectUrls: JSON.stringify(['http://localhost:4100/api/auth/callback']),
+    redirectUrls: ['http://localhost:4100/api/auth/callback'],
     grantTypes: JSON.stringify(['authorization_code', 'refresh_token']),
     scopes: 'openid profile email',
     homepageUrl: null,
@@ -171,10 +171,10 @@ describe('Client API', () => {
       expect(body.pagination.total).toBe(0);
     });
 
-    it('redirectUrls 兼容 JSON 和逗号分隔格式', async () => {
+    it('redirectUrls 原生数组直通返回', async () => {
       mocks.setQueryResult([
-        makeClientRow({ count: 2, redirectUrls: '["http://localhost:4100/cb"]' }),
-        makeClientRow({ id: 'client-2', publicId: 'c_cli02', name: 'CSV应用', clientId: 'csv_c', redirectUrls: 'http://localhost:4100/a, http://localhost:4100/b', count: 2 }),
+        makeClientRow({ count: 2, redirectUrls: ['http://localhost:4100/cb'] }),
+        makeClientRow({ id: 'client-2', publicId: 'c_cli02', name: '多回调应用', clientId: 'multi_c', redirectUrls: ['http://localhost:4100/a', 'http://localhost:4100/b'], count: 2 }),
       ]);
       const body = await parseResponseJson(await ListClients(createTestRequest('/api/clients')));
       expect(body.data[0].redirectUris).toEqual(['http://localhost:4100/cb']);

@@ -103,6 +103,8 @@ pub struct Gateway {
     pub issuer: String,
     /// 公开路径匹配器
     pub path_matcher: PathMatcher,
+    /// Redis 异步连接管理器，用于 jti 黑名单校验。若为 None 则跳过校验 (fail-open)
+    pub redis_conn: Option<redis::aio::ConnectionManager>,
 }
 
 impl Gateway {
@@ -151,6 +153,32 @@ impl Gateway {
         match decode::<Claims>(token, &decoding_key, &validation) {
             Ok(token_data) => {
                 debug!("JWT 验签通过: sub={}, kid={}", token_data.claims.sub, kid);
+
+                // 核心安全强化：对已解密且合法的 JWT 执行 jti 异步黑名单校验
+                if let Some(ref conn) = self.redis_conn {
+                    let mut conn = conn.clone();
+                    let jti_key = format!("portal:jti_blocklist:{}", token_data.claims.jti);
+                    match redis::cmd("EXISTS")
+                        .arg(&jti_key)
+                        .query_async::<i32>(&mut conn)
+                        .await
+                    {
+                        Ok(exists) => {
+                            if exists == 1 {
+                                warn!(
+                                    "⚠️ 拒绝访问：JWT 的 jti 已被吊销 (存在于 Redis 黑名单中): jti={}",
+                                    token_data.claims.jti
+                                );
+                                return false;
+                            }
+                        }
+                        Err(e) => {
+                            // 故障自愈/容错设计 (fail-open)：Redis 挂掉时记录错误，但不阻断用户流量，保证系统高可用
+                            error!("❌ Redis 校验 jti 黑名单异常: {:?}，执行安全降级 (放行)", e);
+                        }
+                    }
+                }
+
                 ctx.auth_header = Some(format!("Bearer {}", token));
                 ctx.user_id = Some(token_data.claims.sub);
                 ctx.user_jti = Some(token_data.claims.jti);
@@ -426,6 +454,7 @@ mod tests {
             jwks_cache: Arc::clone(&jwks_cache),
             issuer: issuer.clone(),
             path_matcher: PathMatcher::new(None),
+            redis_conn: None,
         };
 
         // 2. 生成合法的 HS256 Token
@@ -478,6 +507,7 @@ mod tests {
             jwks_cache: Arc::clone(&jwks_cache),
             issuer: issuer.clone(),
             path_matcher: PathMatcher::new(None),
+            redis_conn: None,
         };
 
         // 生成过期 Token
@@ -526,6 +556,7 @@ mod tests {
             jwks_cache: Arc::clone(&jwks_cache),
             issuer: issuer.clone(),
             path_matcher: PathMatcher::new(None),
+            redis_conn: None,
         };
 
         // 错误发行方 (issuer)
@@ -574,6 +605,7 @@ mod tests {
             jwks_cache: Arc::clone(&jwks_cache),
             issuer: issuer.clone(),
             path_matcher: PathMatcher::new(None),
+            redis_conn: None,
         };
 
         let now = std::time::SystemTime::now()

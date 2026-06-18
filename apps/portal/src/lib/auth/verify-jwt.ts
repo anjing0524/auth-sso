@@ -15,7 +15,7 @@ import 'server-only';
 import { cache } from 'react';
 import { headers } from 'next/headers';
 import { getJwtFromCookie } from '../session';
-import { verifyAccessToken } from '@/domain/auth/token';
+import { verifyAccessToken } from '@/lib/auth/token';
 import type { ResolvedIdentity } from '@/domain/auth/types';
 
 export type { ResolvedIdentity };

@@ -7,7 +7,7 @@
  * - Server Action 鉴权 → import { withAuth } from '@/lib/auth'
  * - API Route 鉴权   → import { withPermission } from '@/lib/auth'
  * - 身份验证         → import { resolveIdentity } from '@/lib/auth'
- * - 权限检查         → import { checkPermission, isSuperAdmin } from '@/lib/auth'
+ * - 权限检查         → import { checkPermission } from '@/lib/auth'
  * - 数据范围         → import { getDataScopeFilter, applyDataScopeFilter } from '@/lib/auth'
  *
  * @module lib/auth
@@ -16,7 +16,6 @@ export { withAuth, type AuthContext } from './guard';
 export {
   withPermission,
   checkPermission,
-  isSuperAdmin,
   checkDataScope,
   getDataScopeFilter,
   applyDataScopeFilter,

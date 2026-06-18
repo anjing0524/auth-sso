@@ -9,7 +9,7 @@
 import { NextResponse } from 'next/server';
 import { getJwtFromCookie } from '@/lib/session';
 import { revokeJti } from '@/lib/session/revoke';
-import { verifyAccessToken } from '@/domain/auth/token';
+import { verifyAccessToken } from '@/lib/auth/token';
 
 export const runtime = 'nodejs';
 

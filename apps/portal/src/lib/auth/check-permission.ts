@@ -16,6 +16,7 @@ import type { UserPermissionContext } from '@auth-sso/contracts';
 import { getUserPermissionContext } from '@/lib/permissions';
 import { resolveIdentity } from './verify-jwt';
 import { getAppBaseURL } from '@/lib/env';
+import { ADMIN_ROLE_CODES } from '@auth-sso/contracts';
 
 /**
  * 权限检查选项接口定义
@@ -92,7 +93,7 @@ export async function checkPermission(
     const resolvedClaims = claims ?? synthesizeClaims(userId, ctx);
 
     // 超级管理员直接绕过所有校验
-    if (roleCodes.includes('ADMIN') || roleCodes.includes('SUPER_ADMIN')) {
+    if (roleCodes.some((rc) => (ADMIN_ROLE_CODES as readonly string[]).includes(rc))) {
       return { authorized: true, userId, claims: resolvedClaims };
     }
 
@@ -123,19 +124,3 @@ export async function checkPermission(
   }
 }
 
-/**
- * 检查用户是否有超级管理员权限（基于 DB 角色，不依赖 JWT claims）
- *
- * @param userId 用户唯一标识 ID
- * @returns 是否为超级管理员
- */
-export async function isSuperAdmin(userId: string): Promise<boolean> {
-  try {
-    const ctx = await getUserPermissionContext(userId);
-    if (!ctx) return false;
-    return ctx.roles.some((r) => r.code === 'SUPER_ADMIN' || r.code === 'ADMIN');
-  } catch (error) {
-    console.error('[isSuperAdmin] 查询超级管理员状态失败:', error);
-    return false;
-  }
-}

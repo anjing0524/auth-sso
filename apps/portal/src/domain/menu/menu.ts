@@ -101,7 +101,6 @@ export function menuToInsertRow(m: Menu) {
     menuType: m.menuType,
     status: m.status,
     createdAt: new Date(m.createdAt.epochMilliseconds),
-    updatedAt: new Date(),
   };
 }
 
@@ -117,7 +116,6 @@ export function menuToUpdateRow(m: Menu) {
     visible: m.visible,
     menuType: m.menuType,
     status: m.status,
-    updatedAt: new Date(),
   };
 }
 

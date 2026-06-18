@@ -8,7 +8,6 @@
  */
 import { ENTITY_ACTIVE } from '@auth-sso/contracts';
 import { InvalidClientError, InvalidRedirectUriError } from '@/domain/shared/errors';
-import { parseRedirectUris } from '@/domain/client/client';
 
 /**
  * 校验 OAuth Client 是否存在且处于激活状态
@@ -40,13 +39,12 @@ export function validateClientSecret(
 
 /**
  * 校验 redirect_uri 是否在 Client 注册的白名单中
- * @param redirectUrlsRaw - Client 注册的 redirectUrls JSON 字符串
+ * @param redirectUrls - Client 注册的 redirect URI 数组（PG text[]）
  * @param redirectUri - 请求中的 redirect_uri
  * @throws InvalidRedirectUriError 当 redirect_uri 不在白名单中
  */
-export function validateRedirectUri(redirectUrlsRaw: string, redirectUri: string): void {
-  const allowedUris = parseRedirectUris(redirectUrlsRaw);
-  if (!allowedUris.some((uri) => redirectUri.startsWith(uri))) {
+export function validateRedirectUri(redirectUrls: string[], redirectUri: string): void {
+  if (!redirectUrls.some((uri) => redirectUri.startsWith(uri))) {
     throw new InvalidRedirectUriError();
   }
 }

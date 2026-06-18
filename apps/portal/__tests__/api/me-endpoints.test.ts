@@ -66,12 +66,16 @@ vi.mock('@/lib/session', () => ({
   getJwtFromCookie: mockGetJwtFromCookie,
 }));
 
-vi.mock('@/domain/auth/token', () => ({
+vi.mock('@/lib/auth/token', () => ({
   verifyAccessToken: mockVerifyAccessToken,
 }));
 
 vi.mock('@/lib/permissions', () => ({
   getUserPermissionContext: mockGetUserPermissionContext,
+}));
+
+vi.mock('@/lib/menu-tree', () => ({
+  getDynamicMenuTree: vi.fn().mockResolvedValue([]),
 }));
 
 vi.mock('@/infrastructure/db', () => ({

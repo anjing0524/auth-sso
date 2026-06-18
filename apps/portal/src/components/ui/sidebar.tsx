@@ -630,9 +630,8 @@ const SidebarMenuSkeleton = React.forwardRef<
   HTMLDivElement,
   React.ComponentProps<"div"> & { showIcon?: boolean }
 >(({ className, showIcon = false, ...props }, ref) => {
-  const width = React.useMemo(() => {
-    return `${Math.floor(Math.random() * 40) + 50}%`
-  }, [])
+  // 使用 CSS 变量实现 deterministic 宽度，避免 Math.random() 导致 SSR hydration mismatch
+  const width = "var(--skeleton-width, 75%)"
 
   return (
     <div

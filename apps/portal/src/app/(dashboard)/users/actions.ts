@@ -76,7 +76,7 @@ export const createUserAction = withAuth(
     });
 
     revalidatePath('/users');
-    revalidateTag('users-list', 'minutes');
+    revalidateTag('users-list');
     return { success: true, data: { id: result.publicId }, message: '用户创建成功' };
   },
 );
@@ -99,13 +99,13 @@ export const toggleUserStatusAction = withAuth(
 
       const target = toggleUserStatus(toDomainUser(row));
       await tx.update(schema.users)
-        .set({ status: target.status, updatedAt: new Date() })
+        .set({ status: target.status })
         .where(eq(schema.users.id, parsed.data.id));
       return target;
     });
 
     revalidatePath('/users');
-    revalidateTag('users-list', 'minutes');
+    revalidateTag('users-list');
     return {
       success: true,
       data: { status: updated.status },
@@ -147,7 +147,7 @@ export const updateUserAction = withAuth(
 
     await clearUserPermissionCache(parsed.data.id);
     revalidatePath('/users');
-    revalidateTag('users-list', 'minutes');
+    revalidateTag('users-list');
     return { success: true, data: { id: parsed.data.id }, message: '更新成功' };
   },
 );
@@ -170,13 +170,13 @@ export const deleteUserAction = withAuth(
 
       const deleted = deleteUser(toDomainUser(row));
       await tx.update(schema.users)
-        .set({ status: deleted.status, updatedAt: new Date() })
+        .set({ status: deleted.status })
         .where(eq(schema.users.id, parsed.data.id));
     });
 
     await clearUserPermissionCache(parsed.data.id);
     revalidatePath('/users');
-    revalidateTag('users-list', 'minutes');
+    revalidateTag('users-list');
     return { success: true, data: { id: parsed.data.id }, message: '用户已逻辑删除' };
   },
 );

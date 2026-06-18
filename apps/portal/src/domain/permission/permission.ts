@@ -95,7 +95,6 @@ export function permissionToInsertRow(p: Permission) {
     sort: p.sort,
     status: p.status,
     createdAt: new Date(p.createdAt.epochMilliseconds),
-    updatedAt: new Date(),
   };
 }
 
@@ -110,6 +109,5 @@ export function permissionToUpdateRow(p: Permission) {
     parentId: p.parentId,
     sort: p.sort,
     status: p.status,
-    updatedAt: new Date(),
   };
 }

@@ -1,6 +1,5 @@
 'use client';
 
-import * as Icons from 'lucide-react';
 import {
   Search,
   ChevronRight,
@@ -9,7 +8,20 @@ import {
   User,
   ShieldCheck,
   LayoutGrid,
-  Menu as MenuIcon
+  Menu as MenuIcon,
+  LayoutDashboard,
+  Users,
+  Building2,
+  AppWindow,
+  Menu,
+  ShieldAlert,
+  FileText,
+  Key,
+  Lock,
+  Globe,
+  Bell,
+  HelpCircle,
+  type LucideIcon,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -43,20 +55,50 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 
-const DynamicIcon = ({ name, className }: { name: string; className?: string }) => {
-  const IconComponent = (Icons as any)[name] || LayoutGrid;
-  return <IconComponent className={className} />;
+/** 白名单 icon 名称 → 组件映射（按需加载，避免 bundle 全部 lucide-react icons） */
+const ICON_MAP: Record<string, LucideIcon> = {
+  LayoutGrid,
+  LayoutDashboard,
+  Users,
+  Building2,
+  ShieldCheck,
+  AppWindow,
+  Menu,
+  ShieldAlert,
+  FileText,
+  Key,
+  Lock,
+  Globe,
+  Bell,
+  HelpCircle,
+  Settings,
+  User,
+  Search,
 };
+
+function DynamicIcon({ name, className }: { name: string; className?: string }) {
+  const IconComponent = ICON_MAP[name] || LayoutGrid;
+  return <IconComponent className={className} />;
+}
+
+/** 侧边栏菜单项类型 */
+interface MenuItem {
+  id: string;
+  title: string;
+  url: string;
+  icon: string | null;
+  children?: MenuItem[];
+}
 
 export function AppSidebar({ user, dynamicMenus = [] }: {
   user: { id?: string; name?: string; email?: string | null; picture?: string | null } | null;
-  dynamicMenus?: { id: string; title: string; url: string; icon: string | null; children?: any[] }[];
+  dynamicMenus?: MenuItem[];
 }) {
   const pathname = usePathname();
   const userData = user || {};
 
   // 内置菜单作为兜底，当数据库为空时使用
-  const fallbackMenus = [
+  const fallbackMenus: MenuItem[] = [
     { id: 'dash', title: '工作台', url: '/dashboard', icon: 'LayoutDashboard' },
     { id: 'user', title: '用户管理', url: '/users', icon: 'Users' },
     { id: 'dept', title: '组织架构', url: '/departments', icon: 'Building2' },
@@ -66,8 +108,8 @@ export function AppSidebar({ user, dynamicMenus = [] }: {
     { id: 'audit', title: '安全审计', url: '/audit-logs', icon: 'ShieldAlert' },
   ];
 
-  // dynamicMenus 来自 /api/me/menus，已按权限过滤；为空则用内置菜单兜底
-  const displayMenus = dynamicMenus.length > 0 ? dynamicMenus : fallbackMenus;
+  // dynamicMenus 来自服务端，已按权限过滤；为空则用内置菜单兜底
+  const displayMenus: MenuItem[] = dynamicMenus.length > 0 ? dynamicMenus : fallbackMenus;
 
   return (
     <Sidebar collapsible="icon" className="border-r border-border/40 bg-slate-50/50 dark:bg-slate-950/50">
@@ -82,13 +124,13 @@ export function AppSidebar({ user, dynamicMenus = [] }: {
           </div>
         </Link>
       </SidebarHeader>
-      
+
       <SidebarContent className="px-3 pt-4">
         <div className="px-2 py-2 group-data-[collapsible=icon]:hidden">
           <div className="relative">
             <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-muted-foreground opacity-50" />
-            <Input 
-              placeholder="搜索功能..." 
+            <Input
+              placeholder="搜索功能..."
               className="pl-9 h-9 bg-white dark:bg-slate-900 border-none shadow-inner rounded-xl text-xs focus-visible:ring-1 focus-visible:ring-primary/10"
             />
           </div>
@@ -100,7 +142,7 @@ export function AppSidebar({ user, dynamicMenus = [] }: {
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu className="gap-1">
-              {displayMenus.map((item: any) => {
+              {displayMenus.map((item: MenuItem) => {
                 const hasChildren = item.children && item.children.length > 0;
                 const isActive = pathname === item.url || (item.url !== '/' && pathname.startsWith(item.url));
 
@@ -115,7 +157,7 @@ export function AppSidebar({ user, dynamicMenus = [] }: {
                         </CollapsibleTrigger>
                         <CollapsibleContent>
                           <SidebarMenuSub className="ml-4 border-l-2 border-slate-100 dark:border-slate-800">
-                            {item.children.map((sub: any) => (
+                            {item.children.map((sub: MenuItem) => (
                               <SidebarMenuSubItem key={sub.id}>
                                 <SidebarMenuSubButton asChild isActive={pathname === sub.url} className="h-9 rounded-lg px-4">
                                   <Link href={sub.url}>
@@ -138,8 +180,8 @@ export function AppSidebar({ user, dynamicMenus = [] }: {
                       isActive={isActive}
                       tooltip={item.title}
                       className={`h-11 rounded-xl transition-all duration-300 ${
-                        isActive 
-                          ? 'bg-white dark:bg-slate-900 shadow-md shadow-slate-200/50 dark:shadow-none ring-1 ring-slate-200 dark:ring-slate-800 text-primary' 
+                        isActive
+                          ? 'bg-white dark:bg-slate-900 shadow-md shadow-slate-200/50 dark:shadow-none ring-1 ring-slate-200 dark:ring-slate-800 text-primary'
                           : 'hover:bg-white hover:shadow-sm text-slate-500 hover:text-slate-900'
                       }`}
                     >

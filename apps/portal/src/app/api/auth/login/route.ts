@@ -11,7 +11,7 @@ import { db, schema } from '@/infrastructure/db';
 import { eq } from 'drizzle-orm';
 import { validateLoginCredentials } from '@/domain/auth/login';
 import { verifyPassword } from '@/domain/auth/password';
-import { signLoginSession, LOGIN_SESSION_TTL } from '@/domain/auth/token';
+import { signLoginSession, LOGIN_SESSION_TTL } from '@/lib/auth/token';
 import { EntityNotFoundError, BusinessRuleViolationError } from '@/domain/shared/errors';
 import { mapDomainError } from '@/domain/shared/error-mapping';
 

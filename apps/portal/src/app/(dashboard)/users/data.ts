@@ -16,7 +16,7 @@ import 'server-only';
 
 import { cacheLife, cacheTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
-import { eq, desc, and, sql as drizzleSql, or } from 'drizzle-orm';
+import { eq, desc, and, count, or } from 'drizzle-orm';
 import { getDataScopeFilter } from '@/lib/auth';
 import { UserStatus } from '@auth-sso/contracts';
 import {
@@ -74,7 +74,7 @@ export async function getUsers(
     .offset(offset);
 
   const countResult = await db
-    .select({ count: drizzleSql`COUNT(*)::int` })
+    .select({ count: count() })
     .from(schema.users)
     .where(and(...conditions));
 
