@@ -26,6 +26,10 @@ export interface RedisClient {
   smembers(key: string): Promise<string[]>;
   expire(key: string, seconds: number): Promise<number>;
 
+  // Hash 命令，用于 jti→exp 精确映射（批量撤销时计算每个 JTI 的剩余 TTL）
+  hset(key: string, field: string, value: string): Promise<number>;
+  hgetall(key: string): Promise<Record<string, string>>;
+
   // Pipeline 批处理命令，用于多会话批量物理注销
   pipeline(): any;
   exists(key: string): Promise<number>;
@@ -71,6 +75,8 @@ function createIoredisClient(): RedisClient {
     srem: (key, member) => client.srem(key, member),
     smembers: (key) => client.smembers(key),
     expire: (key, seconds) => client.expire(key, seconds),
+    hset: (key, field, value) => client.hset(key, field, value),
+    hgetall: (key) => client.hgetall(key),
     pipeline: () => client.pipeline(),
     exists: (key) => client.exists(key),
   };

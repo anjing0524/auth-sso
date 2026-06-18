@@ -11,7 +11,7 @@ interface RouteParams { params: Promise<{ id: string }>; }
 
 /** GET /api/roles/[id] — 委托 data.ts */
 export async function GET(request: NextRequest, { params }: RouteParams) {
-  return withPermission(request, { permissions: ['role:read'] }, async () => {
+  return withPermission({ permissions: ['role:read'] }, async () => {
     const { id } = await params;
     const role = await getRoleById(id);
     if (!role) return NextResponse.json({ error: ROLE_ERRORS.ROLE_NOT_FOUND, message: '角色不存在' }, { status: 404 });

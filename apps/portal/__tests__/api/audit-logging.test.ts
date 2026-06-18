@@ -64,7 +64,7 @@ const {
   });
 
   const mockWithPermission = vi.fn(
-    async (_req: any, _opts: any, handler: (userId: string) => Promise<Response>) =>
+    async (_options: any, handler: (userId: string) => Promise<Response>) =>
       handler('audit-admin'),
   );
 

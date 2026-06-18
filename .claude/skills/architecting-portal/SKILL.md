@@ -323,19 +323,40 @@ export const createXxxAction = withAuth({ permissions: ['xxx:create'] }, async (
 | `getXxxRoles(xxxId)` | 关联子资源 | 不缓存 |
 | `getXxxPermissions(xxxId)` | 关联子资源 | 不缓存 |
 
-### 14. API Route 读模型的 DB 查询风格
+### 14. data.ts 的 DB 查询风格
 
-`data.ts` 中所有查询**必须使用 `db.select()` 风格**，禁止使用 `db.query.xxx.findFirst()`。原因：`db.query` 的 mock 复杂度远高于 `db.select()` 链式调用，不利于测试。
+**优先 `db.select()` 链式调用**。`db.select()` 的 mock 复杂度低，利于单元测试。
+
+**但 `db.query` 关系查询在以下场景优先使用：**
+- 需要嵌套 JOIN 且一次 DB 往返完成（`with` 深度 ≤2）
+- 结果需要 Drizzle 自动分组为嵌套结构（避免手动 `.filter().map()` 去重）
+- 函数已有 `vi.mock` 级别的 mock 覆盖（非 Drizzle 级别 mock）
 
 ```typescript
-// ✅ db.select() 链式（测试友好）
+// ✅ 简单查询 → db.select() 链式
 const rows = await db.select().from(schema.xxx)
-  .where(or(eq(...), eq(...))).limit(1);
+  .where(eq(schema.xxx.id, id)).limit(1);
 const row = rows[0];
 
-// ❌ db.query（测试 mock 复杂）
-const row = await db.query.xxx.findFirst({ where: or(...) });
+// ✅ 嵌套 JOIN → db.query 关系查询（单次往返 + 自动分组，代码量减半）
+const user = await db.query.users.findFirst({
+  where: eq(schema.users.id, userId),
+  with: {
+    userRoles: { with: { role: { with: { roleClients: true } } } },
+    department: true,
+  },
+});
+
+// ❌ 强行用 db.select() 做嵌套 JOIN → ~35 行手动分组去重，易出错
+const rows = await db.select({ ...15+ fields... })
+  .from(schema.users)
+  .leftJoin(schema.userRoles, ...)
+  .leftJoin(schema.roles, ...)
+  .leftJoin(schema.departments, ...);
+// 然后手动 group：rows.filter(r => r.roleId).map(...) ← 出错高发区
 ```
+
+**判断标准：** 如果 `db.query` with 的嵌套深度 ≤2 且代码行数节省 >30%，优先用 `db.query`。需要 Drizzle 级别 mock 时再改为 `db.select()`。
 
 ## Controller 标准骨架
 
@@ -410,7 +431,7 @@ export async function POST(req: NextRequest) {
 | API Route GET 手写 Drizzle 查询 | 委托给 `data.ts` 同名函数，Route 只做鉴权 + 委托 |
 | `actions.ts` 中有 `getXxxAction` 只读 Action | 移到 `data.ts` 的 `getXxx(id)` 纯函数 |
 | 写 Action 只调 `revalidatePath` 不调 `revalidateTag` | 追加 `revalidateTag('xxx-list', 'minutes')` |
-| `data.ts` 用 `db.query.xxx.findFirst()` | 改为 `db.select().from().where().limit(1)` 风格 |
+| `data.ts` 简单查询用 `db.query.xxx.findFirst()` | 简单查询（无嵌套 JOIN）改为 `db.select().from().where().limit(1)` |
 
 ## Red Flags - STOP and Refactor
 
@@ -426,7 +447,7 @@ export async function POST(req: NextRequest) {
 - 多个 layout.tsx 重复包裹 `<DashboardLayout>`（应放入 Route Group `(dashboard)/layout.tsx` 统一一份）
 - API Route GET 处理器中出现 `db.select()` / `db.query` 直接 DB 调用（应委托 `data.ts`）
 - `actions.ts` 中存在只读查询函数（只能写，读归 `data.ts`）
-- `data.ts` 函数使用 `db.query.xxx.findFirst()`（应用 `db.select()` 风格）
+- `data.ts` 简单查询使用 `db.query.xxx.findFirst()`（无嵌套 JOIN 的场景应用 `db.select()` 风格）
 - 写操作只调 `revalidatePath` 未调 `revalidateTag`（缓存失效不完整）
 - 返回给客户端的 data 中包含 `Temporal.Instant` 而非 ISO 字符串（API Route JSON 序列化兼容性）
 

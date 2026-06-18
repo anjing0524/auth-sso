@@ -73,7 +73,7 @@ const mocks = vi.hoisted(() => {
   });
 
   const authFn = vi.fn(
-    async (_request: any, _options: any, handler: (userId: string) => Promise<any>) => handler('test-user-id')
+    async (_options: any, handler: (userId: string) => Promise<any>) => handler('test-user-id')
   );
 
   // Schema Proxy: any access like schema.clients.id returns {} (prevents "Cannot read properties of undefined")
@@ -117,7 +117,7 @@ function makeClientRow(overrides: Record<string, any> = {}) {
     name: '测试应用',
     clientId: 'test_client_id',
     clientSecret: 'hashed_secret',
-    redirectUrls: ['http://localhost:4100/api/auth/callback'],
+    redirectUris: ['http://localhost:4100/api/auth/callback'],
     grantTypes: JSON.stringify(['authorization_code', 'refresh_token']),
     scopes: 'openid profile email',
     homepageUrl: null,
@@ -173,8 +173,8 @@ describe('Client API', () => {
 
     it('redirectUrls 原生数组直通返回', async () => {
       mocks.setQueryResult([
-        makeClientRow({ count: 2, redirectUrls: ['http://localhost:4100/cb'] }),
-        makeClientRow({ id: 'client-2', publicId: 'c_cli02', name: '多回调应用', clientId: 'multi_c', redirectUrls: ['http://localhost:4100/a', 'http://localhost:4100/b'], count: 2 }),
+        makeClientRow({ count: 2, redirectUris: ['http://localhost:4100/cb'] }),
+        makeClientRow({ id: 'client-2', publicId: 'c_cli02', name: '多回调应用', clientId: 'multi_c', redirectUris: ['http://localhost:4100/a', 'http://localhost:4100/b'], count: 2 }),
       ]);
       const body = await parseResponseJson(await ListClients(createTestRequest('/api/clients')));
       expect(body.data[0].redirectUris).toEqual(['http://localhost:4100/cb']);

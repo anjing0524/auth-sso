@@ -14,7 +14,7 @@ import { eq, and } from 'drizzle-orm';
 import { signAccessToken, issueRefreshToken, rotateRefreshToken, ACCESS_TOKEN_TTL } from '@/lib/auth/token';
 import { validateClientActive, validateClientSecret } from '@/domain/auth/oauth-client';
 import { validateAuthCodeRow, verifyPKCE } from '@/domain/auth/oauth-code';
-import { getUserPermissionContext } from '@/lib/permissions';
+import { getUserPermissionContext, cacheUserPermissionContext } from '@/lib/permissions';
 import { mapDomainError } from '@/domain/shared/error-mapping';
 import { InvalidGrantError } from '@/domain/shared/errors';
 import { z } from 'zod';
@@ -88,10 +88,15 @@ export async function POST(request: NextRequest) {
           sub: authCode.userId,
           roles: permCtx.roles.map((r) => r.code),
           permissions: permCtx.permissions,
-          deptId: permCtx.deptId,
+          deptId: permCtx.deptId ?? '',
           dataScopeType: permCtx.dataScopeType,
         },
         client_id,
+      );
+
+      // 主动写 Redis 权限缓存，TTL 与 Token 对齐，后续请求零 DB 查询
+      cacheUserPermissionContext(authCode.userId, permCtx, ACCESS_TOKEN_TTL).catch((e) =>
+        console.error('[Token] 写权限缓存失败:', e),
       );
 
       // 签发 Refresh Token

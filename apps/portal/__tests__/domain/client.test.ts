@@ -43,17 +43,16 @@ describe('Client 领域核心规则', () => {
     expect(updated.logoUrl).toBeNull(); // 未修改保持原值
   });
 
-  it('toDomainClient 应正确解析 redirectUrls', () => {
+  it('toDomainClient 应正确解析 redirectUris', () => {
     const row = {
       id: 'id1', publicId: 'pub1', name: 'Test App', clientId: 'cli_1',
-      clientSecret: 'secret', redirectUrls: ['https://cb.example.com'],
-      grantTypes: '["authorization_code"]', scopes: 'openid',
-      homepageUrl: null, icon: null, accessTokenTtl: 3600, refreshTokenTtl: 604800,
-      status: 'ACTIVE', disabled: false, skipConsent: false, userId: null,
+      clientSecret: 'secret',      redirectUris: ['http://localhost/callback'], grantTypes: 'authorization_code', scopes: 'openid',
+      homepageUrl: null, logoUrl: null, accessTokenTtl: 3600, refreshTokenTtl: 604800,
+      status: 'ACTIVE' as any, disabled: false, skipConsent: false, userId: null,
       createdAt: new Date('2025-01-01'),
     };
     const client = toDomainClient(row);
-    expect(client.redirectUris).toEqual(['https://cb.example.com']);
+    expect(client.redirectUris).toEqual(['http://localhost/callback']);
     expect(client.accessTokenTtl).toBe(3600);
   });
 });

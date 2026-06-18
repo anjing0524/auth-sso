@@ -6,7 +6,8 @@ import 'server-only';
 import { cacheLife, cacheTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
 import { eq, ilike, or, asc, desc, and, count } from 'drizzle-orm';
-import type { EntityStatus } from '@auth-sso/contracts';
+import { byIdOrPublicId } from '@/db/resolve-id';
+import { asEntityStatus } from '@/lib/type-guards';
 
 /**
  * 分页获取角色列表
@@ -32,7 +33,7 @@ export async function getRoles(params: {
     ));
   }
   if (status) {
-    conditions.push(eq(schema.roles.status, status as EntityStatus));
+    conditions.push(eq(schema.roles.status, asEntityStatus(status)));
   }
 
   const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
@@ -65,7 +66,7 @@ export async function getRoles(params: {
  */
 export async function getRoleById(lookupId: string) {
   const rows = await db.select().from(schema.roles)
-    .where(or(eq(schema.roles.id, lookupId), eq(schema.roles.publicId, lookupId)))
+    .where(byIdOrPublicId('roles', lookupId))
     .limit(1);
   const row = rows[0];
   if (!row) return null;
@@ -88,56 +89,86 @@ export async function getRoleById(lookupId: string) {
  * 获取角色绑定的权限列表
  */
 export async function getRolePermissions(roleId: string) {
-  return db.select({
-    id: schema.permissions.id,
-    publicId: schema.permissions.publicId,
-    code: schema.permissions.code,
-    name: schema.permissions.name,
-    type: schema.permissions.type,
-    resource: schema.permissions.resource,
-    action: schema.permissions.action,
-    assignedAt: schema.rolePermissions.createdAt,
-  })
-    .from(schema.permissions)
-    .innerJoin(schema.rolePermissions, eq(schema.permissions.id, schema.rolePermissions.permissionId))
-    .innerJoin(schema.roles, eq(schema.rolePermissions.roleId, schema.roles.id))
-    .where(or(eq(schema.roles.id, roleId), eq(schema.roles.publicId, roleId)));
+  // 使用 Relational Queries 一次性带出角色及其绑定的权限
+  const role = await db.query.roles.findFirst({
+    where: byIdOrPublicId('roles', roleId),
+    with: {
+      rolePermissions: {
+        with: {
+          permission: true,
+        },
+      },
+    },
+  });
+
+  if (!role) return [];
+
+  return role.rolePermissions
+    .filter(rp => rp.permission !== null)
+    .map(rp => ({
+      id: rp.permission.id,
+      publicId: rp.permission.publicId,
+      code: rp.permission.code,
+      name: rp.permission.name,
+      type: rp.permission.type,
+      resource: rp.permission.resource,
+      action: rp.permission.action,
+      assignedAt: rp.createdAt,
+    }));
 }
 
 /**
  * 获取角色绑定的 OAuth Client 列表
  */
 export async function getRoleClients(roleId: string) {
-  return db.select({
-    id: schema.clients.id,
-    publicId: schema.clients.publicId,
-    name: schema.clients.name,
-    clientId: schema.clients.clientId,
-    redirectUrls: schema.clients.redirectUrls,
-    scopes: schema.clients.scopes,
-    homepageUrl: schema.clients.homepageUrl,
-    logoUrl: schema.clients.icon,
-    status: schema.clients.status,
-    assignedAt: schema.roleClients.createdAt,
-  })
-    .from(schema.clients)
-    .innerJoin(schema.roleClients, eq(schema.clients.id, schema.roleClients.clientId))
-    .innerJoin(schema.roles, eq(schema.roleClients.roleId, schema.roles.id))
-    .where(or(eq(schema.roles.id, roleId), eq(schema.roles.publicId, roleId)));
+  // 使用 Relational Queries 一次性带出角色及其绑定的 Client
+  const role = await db.query.roles.findFirst({
+    where: byIdOrPublicId('roles', roleId),
+    with: {
+      roleClients: {
+        with: {
+          client: true,
+        },
+      },
+    },
+  });
+
+  if (!role) return [];
+
+  return role.roleClients
+    .filter(rc => rc.client !== null)
+    .map(rc => ({
+      id: rc.client.id,
+      publicId: rc.client.publicId,
+      name: rc.client.name,
+      clientId: rc.client.clientId,
+      redirectUris: rc.client.redirectUris,
+      scopes: rc.client.scopes,
+      homepageUrl: rc.client.homepageUrl,
+      logoUrl: rc.client.logoUrl,
+      status: rc.client.status,
+      assignedAt: rc.createdAt,
+    }));
 }
 
 /**
  * 获取角色的数据范围绑定（含部门名称）
  */
 export async function getRoleDataScopes(roleId: string) {
-  return db.select({
-    id: schema.roleDataScopes.id,
-    roleId: schema.roleDataScopes.roleId,
-    deptId: schema.roleDataScopes.deptId,
-    deptName: schema.departments.name,
-    createdAt: schema.roleDataScopes.createdAt,
-  })
-    .from(schema.roleDataScopes)
-    .innerJoin(schema.departments, eq(schema.roleDataScopes.deptId, schema.departments.id))
-    .where(eq(schema.roleDataScopes.roleId, roleId));
+  // 使用 Relational Queries 一次性带出角色绑定的数据范围及关联的部门
+  const rds = await db.query.roleDataScopes.findMany({
+    where: eq(schema.roleDataScopes.roleId, roleId),
+    with: {
+      department: true,
+    },
+  });
+
+  return rds.map(item => ({
+    id: item.id,
+    roleId: item.roleId,
+    deptId: item.deptId,
+    deptName: item.department?.name || null,
+    createdAt: item.createdAt,
+  }));
 }
+

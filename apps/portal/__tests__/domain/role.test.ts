@@ -15,7 +15,7 @@ const mockIdGen = () => 'role_id_12345';
 
 describe('Role 领域核心规则', () => {
   it('应通过工厂函数创建初始状态为 ACTIVE 的角色', () => {
-    const input = CreateRoleInputSchema.parse({ name: '管理员', code: 'ADMIN', dataScopeType: 'ALL', sort: 0 });
+    const input = CreateRoleInputSchema.parse({ name: '管理员', code: 'ADMIN', dataScopeType: 'ALL' as any, sort: 0 });
     const role = createRole(input, mockIdGen);
     expect(role.status).toBe('ACTIVE');
     expect(role.isSystem).toBe(false);
@@ -53,8 +53,8 @@ describe('Role 领域核心规则', () => {
   it('toDomainRole 应正确转换 DB 行', () => {
     const row = {
       id: 'id1', publicId: 'pub1', name: 'Admin', code: 'ADMIN',
-      description: '管理员', dataScopeType: 'ALL',
-      isSystem: true, status: 'ACTIVE', sort: 1,
+      description: '管理员', dataScopeType: 'ALL' as any,
+      isSystem: true, status: 'ACTIVE' as any, sort: 1,
       createdAt: new Date('2025-01-01'),
     };
     const role = toDomainRole(row);

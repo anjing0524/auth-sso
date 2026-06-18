@@ -13,7 +13,7 @@ interface RouteParams { params: Promise<{ id: string }>; }
 
 /** GET /api/departments/[id]/members — 委托 data.ts */
 export async function GET(request: NextRequest, { params }: RouteParams) {
-  return withPermission(request, { permissions: ['user:list'] }, async () => {
+  return withPermission({ permissions: ['user:list'] }, async () => {
     const { id } = await params;
 
     const dept = await getDepartmentById(id);

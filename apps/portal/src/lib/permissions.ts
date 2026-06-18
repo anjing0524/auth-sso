@@ -6,14 +6,21 @@ import { db, schema } from '@/infrastructure/db';
 import { eq, inArray, and } from 'drizzle-orm';
 import { getRedis, type RedisClient } from '@/infrastructure/redis';
 import type { DataScopeType, UserPermissionContext } from '@auth-sso/contracts';
+import { asDataScopeType } from '@/lib/type-guards';
+
+/** 权限缓存 TTL，与 Access Token TTL (3600s) 对齐 */
+const PERM_CACHE_TTL = 3600;
 
 // Re-export 以便其他模块统一导入
 export type { UserPermissionContext };
 
 /**
  * 获取用户的权限上下文
- * 优先读取 Redis 缓存，未命中则查询数据库并写入缓存 (TTL: 300秒)
+ * 优先读取 Redis 缓存，未命中则查询数据库并写入缓存 (TTL: 3600s，与 Access Token 对齐)
  * 具备优雅的降级机制，若 Redis 连接异常则直接回退为数据库查询，保证服务高可用
+ *
+ * Token 签发时已通过 cacheUserPermissionContext 主动预填充缓存，
+ * 正常情况下总是 Redis 命中，零 DB 查询。
  */
 export async function getUserPermissionContext(userId: string): Promise<UserPermissionContext | null> {
   const cacheKey = `portal:user_perms:${userId}`;
@@ -32,16 +39,29 @@ export async function getUserPermissionContext(userId: string): Promise<UserPerm
   }
 
   try {
-    // 2. 从数据库查询用户信息
-    const users = await db.select()
-      .from(schema.users)
-      .where(eq(schema.users.id, userId));
+    // 2. 从数据库级联查询用户、绑定的角色以及各角色的权限列表，降低 DB 往返开销
+    const user = await db.query.users.findFirst({
+      where: eq(schema.users.id, userId),
+      with: {
+        userRoles: {
+          with: {
+            role: {
+              with: {
+                rolePermissions: {
+                  with: {
+                    permission: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
 
-    if (users.length === 0) {
+    if (!user) {
       return null;
     }
-
-    const user = users[0]!;
 
     // 强核准状态约束：如果用户状态不是激活状态 (ACTIVE)，立刻返回 null 拒绝加载权限与角色，防范封禁账号鉴权逃逸漏洞
     if (user.status !== 'ACTIVE') {
@@ -49,21 +69,10 @@ export async function getUserPermissionContext(userId: string): Promise<UserPerm
       return null;
     }
 
-    // 3. 从数据库查询用户的角色
-    const userRolesData = await db
-      .select({
-        id: schema.roles.id,
-        code: schema.roles.code,
-        name: schema.roles.name,
-        dataScopeType: schema.roles.dataScopeType,
-        status: schema.roles.status,
-      })
-      .from(schema.roles)
-      .innerJoin(schema.userRoles, eq(schema.roles.id, schema.userRoles.roleId))
-      .where(eq(schema.userRoles.userId, userId));
-
-    // 过滤出处于激活状态 (ACTIVE) 的角色
-    const roles = userRolesData.filter(r => r.status === 'ACTIVE');
+    // 从嵌套结构中过滤出处于激活状态 (ACTIVE) 的角色
+    const roles = user.userRoles
+      .map(ur => ur.role)
+      .filter((r): r is NonNullable<typeof r> => r !== null && r.status === 'ACTIVE');
 
     if (roles.length === 0) {
       const context: UserPermissionContext = {
@@ -76,7 +85,7 @@ export async function getUserPermissionContext(userId: string): Promise<UserPerm
       // 写入缓存并直接返回
       if (redis) {
         try {
-          await redis.setex(cacheKey, 300, JSON.stringify(context));
+          await redis.setex(cacheKey, PERM_CACHE_TTL, JSON.stringify(context));
         } catch (e) {
           // 仅警告，不影响返回
         }
@@ -84,25 +93,23 @@ export async function getUserPermissionContext(userId: string): Promise<UserPerm
       return context;
     }
 
-    // 4. 从数据库查询角色绑定的激活状态权限列表
-    const roleIds = roles.map(r => r.id);
-    const permissionsData = await db
-      .selectDistinct({ code: schema.permissions.code })
-      .from(schema.permissions)
-      .innerJoin(schema.rolePermissions, eq(schema.permissions.id, schema.rolePermissions.permissionId))
-      .where(
-        and(
-          inArray(schema.rolePermissions.roleId, roleIds),
-          eq(schema.permissions.status, 'ACTIVE')
-        )
-      );
+    // 从激活角色拥有的权限中过滤出激活状态的权限 code（进行去重处理）
+    const activePermissionCodes = Array.from(
+      new Set(
+        roles
+          .flatMap(r => r.rolePermissions)
+          .map(rp => rp.permission)
+          .filter((p): p is NonNullable<typeof p> => p !== null && p.status === 'ACTIVE')
+          .map(p => p.code)
+      )
+    );
 
     // 5. 确定数据范围类型 (多角色场景下取最高级别的数据权限)
     const dataScopeTypes: DataScopeType[] = ['ALL', 'DEPT_AND_SUB', 'DEPT', 'CUSTOM', 'SELF'];
     let maxDataScopeType: DataScopeType = 'SELF';
 
     for (const role of roles) {
-      const roleDataScope = role.dataScopeType as DataScopeType;
+      const roleDataScope = asDataScopeType(role.dataScopeType);
       if (dataScopeTypes.indexOf(roleDataScope) < dataScopeTypes.indexOf(maxDataScopeType)) {
         maxDataScopeType = roleDataScope;
       }
@@ -114,15 +121,15 @@ export async function getUserPermissionContext(userId: string): Promise<UserPerm
         code: r.code,
         name: r.name,
       })),
-      permissions: permissionsData.map(p => p.code),
+      permissions: activePermissionCodes,
       dataScopeType: maxDataScopeType,
       deptId: user.deptId ?? undefined,
     };
 
-    // 6. 将结果回写至 Redis 缓存，设定 5 分钟 (300秒) 的生存周期
+    // 6. 将结果回写至 Redis 缓存，TTL 与 Access Token 对齐
     if (redis) {
       try {
-        await redis.setex(cacheKey, 300, JSON.stringify(context));
+        await redis.setex(cacheKey, PERM_CACHE_TTL, JSON.stringify(context));
       } catch (cacheWriteError: any) {
         console.warn(`[PermissionContext] Redis cache write failed for user ${userId}:`, cacheWriteError.message);
       }
@@ -136,8 +143,44 @@ export async function getUserPermissionContext(userId: string): Promise<UserPerm
 }
 
 /**
- * 清除指定用户的权限上下文缓存
- * 常用于用户基础信息修改、分配新角色等场景
+ * 主动刷新指定用户的权限上下文缓存。
+ * 先删旧缓存 → 查 DB 获取最新数据 → 写入 Redis。
+ * 用于管理员修改用户角色/权限/部门后立即同步缓存，确保受影响用户下次请求零 DB 命中。
+ *
+ * @param userId 用户 ID
+ */
+export async function refreshUserPermissionCache(userId: string): Promise<void> {
+  try {
+    const redis = getRedis();
+    const cacheKey = `portal:user_perms:${userId}`;
+    // 1. 删除旧缓存，强制走 DB 获取最新数据
+    await redis.del(cacheKey);
+    // 2. 查 DB → 自动回写 Redis（TTL = PERM_CACHE_TTL）
+    const ctx = await getUserPermissionContext(userId);
+    if (ctx) {
+      console.log(`[PermissionContext] Refreshed cache for user: ${userId}`);
+    }
+  } catch (error: any) {
+    console.error(`[PermissionContext] Failed to refresh cache for user ${userId}:`, error.message);
+  }
+}
+
+/**
+ * 批量主动刷新指定用户的权限上下文缓存
+ * @param userIds 用户 ID 数组
+ */
+export async function refreshUsersPermissionCache(userIds: string[]): Promise<void> {
+  if (!userIds || userIds.length === 0) return;
+  // 并行刷新，不阻塞管理员操作
+  await Promise.allSettled(
+    userIds.map(id => refreshUserPermissionCache(id))
+  );
+  console.log(`[PermissionContext] Refreshed cache for ${userIds.length} users`);
+}
+
+/**
+ * 清除指定用户的权限上下文缓存（仅删除，不重新填充）
+ * 保留用于强制下线等不需要立即回填的场景
  * @param userId 用户 ID
  */
 export async function clearUserPermissionCache(userId: string): Promise<void> {
@@ -169,5 +212,28 @@ export async function clearUsersPermissionCache(userIds: string[]): Promise<void
     console.log(`[PermissionContext] Batch cleared permissions cache for ${userIds.length} users`);
   } catch (error: any) {
     console.error('[PermissionContext] Failed to batch clear permissions cache:', error.message);
+  }
+}
+
+/**
+ * 主动将权限上下文写入 Redis 缓存，TTL 与 Access Token 对齐。
+ * 在 Token 签发（login / refresh_token grant）时调用，确保后续请求总是 Redis 命中。
+ *
+ * @param userId - 用户内部 ID
+ * @param ctx     - 完整的权限上下文
+ * @param ttl     - 缓存过期秒数，默认与 Access Token TTL 对齐
+ */
+export async function cacheUserPermissionContext(
+  userId: string,
+  ctx: UserPermissionContext,
+  ttl: number = PERM_CACHE_TTL,
+): Promise<void> {
+  try {
+    const redis = getRedis();
+    const cacheKey = `portal:user_perms:${userId}`;
+    await redis.setex(cacheKey, ttl, JSON.stringify(ctx));
+  } catch (error: any) {
+    // 静默降级，不影响 Token 签发主流程
+    console.warn(`[PermissionContext] Failed to cache permissions for user ${userId}:`, error.message);
   }
 }

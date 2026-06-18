@@ -59,6 +59,7 @@ class MockPipeline {
 export class MockRedisStore {
   private store = new Map<string, string>();
   private sets = new Map<string, Set<string>>();
+  private hashes = new Map<string, Map<string, string>>();
   private expiries = new Map<string, number>();
 
   async get(key: string): Promise<string | null> {
@@ -119,9 +120,29 @@ export class MockRedisStore {
   }
 
   async expire(key: string, seconds: number): Promise<number> {
-    if (!this.store.has(key)) return 0;
+    if (!this.store.has(key) && !this.sets.has(key) && !this.hashes.has(key)) return 0;
     this.expiries.set(key, Date.now() + seconds * 1000);
     return 1;
+  }
+
+  async hset(key: string, field: string, value: string): Promise<number> {
+    if (!this.hashes.has(key)) {
+      this.hashes.set(key, new Map());
+    }
+    const hash = this.hashes.get(key)!;
+    const isNew = !hash.has(field);
+    hash.set(field, value);
+    return isNew ? 1 : 0;
+  }
+
+  async hgetall(key: string): Promise<Record<string, string>> {
+    const hash = this.hashes.get(key);
+    if (!hash) return {};
+    const result: Record<string, string> = {};
+    for (const [k, v] of hash) {
+      result[k] = v;
+    }
+    return result;
   }
 
   pipeline(): any {
@@ -155,6 +176,7 @@ export class MockRedisStore {
   clear(): void {
     this.store.clear();
     this.sets.clear();
+    this.hashes.clear();
     this.expiries.clear();
   }
 

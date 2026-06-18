@@ -72,7 +72,7 @@ const mocks = vi.hoisted(() => {
   });
 
   const authFn = vi.fn(
-    async (_request: any, _options: any, handler: (userId: string) => Promise<any>) => handler('test-user-id')
+    async (_options: any, handler: (userId: string) => Promise<any>) => handler('test-user-id')
   );
 
   return {

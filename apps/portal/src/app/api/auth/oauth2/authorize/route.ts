@@ -1,16 +1,15 @@
 /**
  * OAuth 2.1 授权端点 (GET /api/auth/oauth2/authorize)
  *
- * Controller 职责：编排（Zod 校验 → Drizzle 查询 → 领域函数校验 → 写 DB → 重定向）
- * 业务规则判断全部下沉到 domain 纯函数，错误映射统一走 mapDomainError()。
+ * 薄 Controller：仅做编排（校验 → 委托 data 层查询 → 委托 domain 准入检查 → 重定向）。
+ * 业务规则判断全部下沉到 domain 纯函数，数据查询委托 data 层，错误映射统一走 mapDomainError()。
  *
  * @route GET /api/auth/oauth2/authorize
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { db, schema } from '@/infrastructure/db';
-import { eq, inArray } from 'drizzle-orm';
 import { verifyAccessToken } from '@/lib/auth/token';
-import { checkUserClientAccess } from '@/domain/auth/oauth-authorize';
+import { validateAuthorization } from '@/domain/auth/oauth-authorize';
 import { validateClientActive, validateRedirectUri } from '@/domain/auth/oauth-client';
 import { generateId } from '@/lib/crypto';
 import { getAppBaseURL } from '@/lib/env';
@@ -20,7 +19,9 @@ import {
   buildLoginRedirect,
   clearLoginSessionCookie,
 } from '@/lib/oauth-utils';
-import { ENTITY_ACTIVE } from '@auth-sso/contracts';
+import { COOKIE_NAMES } from '@auth-sso/contracts';
+import { getClientByClientId } from '@/app/(dashboard)/clients/data';
+import { getUserWithRoleClients } from './data';
 import { z } from 'zod';
 
 export const runtime = 'nodejs';
@@ -39,7 +40,7 @@ const AuthorizeQuerySchema = z.object({
 
 export async function GET(request: NextRequest) {
   try {
-    // 1. Zod 参数校验（失败则重定向到 error 页）
+    // 1. Zod 参数校验
     const url = new URL(request.url);
     const parsed = AuthorizeQuerySchema.safeParse(Object.fromEntries(url.searchParams));
     if (!parsed.success) {
@@ -49,52 +50,43 @@ export async function GET(request: NextRequest) {
     const { client_id, redirect_uri, scope, state, nonce, code_challenge, code_challenge_method } = parsed.data;
     const appBaseURL = getAppBaseURL();
 
-    // 2. 校验 Client
-    const clientRows = await db.select().from(schema.clients).where(eq(schema.clients.clientId, client_id)).limit(1);
-    validateClientActive(clientRows[0]);
-    const client = clientRows[0]!;
-    validateRedirectUri(client.redirectUrls, redirect_uri);
+    // 2. 校验 Client（委托 data 层查询 + domain 校验）
+    const client = await getClientByClientId(client_id);
+    validateClientActive(client);
+    validateRedirectUri(client!.redirectUris, redirect_uri);
 
-    // 3. 从 Cookie 取 login_session（新鲜登录）或 portal_jwt_token（已登录）
+    // 3. 从 Cookie 取 session 并验签（HTTP 专属逻辑）
     const loginSession =
-      request.cookies.get('login_session')?.value || request.cookies.get('portal_jwt_token')?.value;
+      request.cookies.get(COOKIE_NAMES.LOGIN_SESSION)?.value || request.cookies.get(COOKIE_NAMES.JWT)?.value;
 
-    // 4. 验签 session JWT
     const sessionClaims = loginSession ? await verifyAccessToken(loginSession) : null;
     if (!sessionClaims) {
       return buildLoginRedirect(appBaseURL, { client_id, redirect_uri, scope, state, nonce, code_challenge, code_challenge_method });
     }
 
-    const userId = sessionClaims.sub;
-
-    // 5. 校验用户状态
-    const userRows = await db.select().from(schema.users).where(eq(schema.users.id, userId)).limit(1);
-    if (!userRows[0] || userRows[0].status !== ENTITY_ACTIVE) {
-      return buildOAuthErrorRedirect(request, 'user_inactive', '您的账号已被锁定或禁用，请联系管理员。');
+    // 4. 获取用户 + 角色 + Client 绑定（委托 data 层，单次 DB 往返）
+    const userWithRoles = await getUserWithRoleClients(sessionClaims.sub);
+    if (!userWithRoles) {
+      return buildOAuthErrorRedirect(request, 'user_inactive', '用户不存在。');
     }
 
-    // 6. 角色 + Client 访问权限检查
-    const userRoles = await db
-      .select({ id: schema.roles.id, code: schema.roles.code, status: schema.roles.status })
-      .from(schema.roles)
-      .innerJoin(schema.userRoles, eq(schema.roles.id, schema.userRoles.roleId))
-      .where(eq(schema.userRoles.userId, userId));
-
-    if (userRoles.length === 0) {
-      return buildOAuthErrorRedirect(request, 'no_roles', '您的账号尚未分配任何角色，无法访问系统。');
-    }
-
-    const roleClients = await db
-      .select()
-      .from(schema.roleClients)
-      .where(inArray(schema.roleClients.roleId, userRoles.map((r) => r.id)));
-
-    const accessCheck = checkUserClientAccess({ userId, clientId: client_id, roles: userRoles, roleClients });
+    // 5. 准入检查（委托 domain 纯函数 — 收敛原先 3 段内联业务规则）
+    const accessCheck = validateAuthorization({
+      userId: userWithRoles.id,
+      clientId: client!.id,
+      status: userWithRoles.status,
+      roles: userWithRoles.roles,
+    });
     if (!accessCheck.allowed) {
-      return buildOAuthErrorRedirect(request, accessCheck.errorCode || 'unauthorized_client', accessCheck.message || '', client_id);
+      return buildOAuthErrorRedirect(
+        request,
+        accessCheck.errorCode || 'unauthorized_client',
+        accessCheck.message || '',
+        client_id,
+      );
     }
 
-    // 7. 生成 Authorization Code 并写入 DB
+    // 6. 生成 Authorization Code 并写入 DB
     const code = `auth_code_${generateId(32)}`;
     const codeId = generateId(20);
     const now = new Date();
@@ -103,8 +95,8 @@ export async function GET(request: NextRequest) {
     await db.insert(schema.authorizationCodes).values({
       id: codeId,
       code,
-      clientId: client.id,
-      userId,
+      clientId: client!.id,
+      userId: sessionClaims.sub,
       redirectUri: redirect_uri,
       scope,
       state,
@@ -116,7 +108,7 @@ export async function GET(request: NextRequest) {
       createdAt: now,
     });
 
-    // 8. 302 重定向到 redirect_uri + 清除 login_session 一次性临时凭证
+    // 7. 302 重定向到 redirect_uri + 清除登录一次性临时凭证
     const redirectUrl = new URL(redirect_uri);
     redirectUrl.searchParams.set('code', code);
     redirectUrl.searchParams.set('state', state);

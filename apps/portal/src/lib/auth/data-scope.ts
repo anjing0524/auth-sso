@@ -13,9 +13,109 @@ import 'server-only';
  *
  * @module lib/auth/data-scope
  */
-import { type SQL, inArray, eq, and, sql as drizzleSql } from 'drizzle-orm';
+import { type SQL, inArray, eq, and, or, like } from 'drizzle-orm';
 import { db, schema } from '@/infrastructure/db';
 import { getUserPermissionContext } from '@/lib/permissions';
+import { resolveIdentity } from './verify-jwt';
+import type { DataScopeType } from '@auth-sso/contracts';
+
+// ────────────────────────────────────────────────────────────
+// 数据范围上下文解析（共享）
+// ────────────────────────────────────────────────────────────
+
+/**
+ * 解析后的数据范围上下文
+ *
+ * - `dataScopeType` / `deptId`：决定范围分支
+ * - `fetchRoleIds`：仅 CUSTOM 分支需要（查 role_data_scopes 要角色 ID），懒加载
+ *   避免在 ALL / DEPT / SELF / DEPT_AND_SUB 分支产生额外 I/O
+ *
+ * 角色形状归一化说明：
+ * - Gateway 内存路径下 `claims.roles` 是角色 **code** 数组（见 signAccessToken）
+ * - 持久化 `UserPermissionContext.roles` 是 `{ id, code, name }` 数组
+ * - CUSTOM 需要角色 **ID**，统一通过 `UserPermissionContext.roles` 取 id，
+ *   消除原先对 `typeof roles[0] === 'string'` 的运行时形状嗅探（假兼容）
+ */
+interface ResolvedScope {
+  dataScopeType: DataScopeType;
+  deptId: string;
+  fetchRoleIds: () => Promise<string[]>;
+}
+
+/**
+ * 解析用户的数据范围上下文
+ *
+ * 优先从 Gateway / 已解析的内存凭据（claims）取 dataScopeType / deptId（零 I/O），
+ * 否则回退到持久化权限上下文。角色 ID 始终从权限上下文取，按需懒加载。
+ *
+ * @param userId 当前操作者用户 ID
+ * @returns 数据范围上下文，权限上下文不可用时返回 null
+ */
+async function resolveScope(userId: string): Promise<ResolvedScope | null> {
+  const identity = await resolveIdentity();
+  if (identity && identity.userId === userId) {
+    return {
+      dataScopeType: identity.claims.dataScopeType,
+      deptId: identity.claims.deptId,
+      // 内存快速路径：roleIds 仅 CUSTOM 分支懒加载
+      fetchRoleIds: async () => {
+        const ctx = await getUserPermissionContext(userId);
+        return ctx ? ctx.roles.map((r) => r.id) : [];
+      },
+    };
+  }
+
+  // 兜底：无内存凭据，一次性从权限上下文取全部字段
+  const ctx = await getUserPermissionContext(userId);
+  if (!ctx) return null;
+  const roleIds = ctx.roles.map((r) => r.id);
+  return {
+    dataScopeType: ctx.dataScopeType,
+    deptId: ctx.deptId ?? '',
+    fetchRoleIds: async () => roleIds,
+  };
+}
+
+/**
+ * 通过物化路径 (ancestors) 查询本部门及其全部子部门 ID
+ *
+ * 替代原先的递归 CTE + extractDeptIdsFromExecute（需要兼容三种 db.execute 返回形态），
+ * 直接使用 Drizzle 类型安全查询，无需 any/unknown 类型体操。
+ *
+ * 查询异常时故障安全降级为仅当前部门（Default-Deny 最小权限）。
+ *
+ * @param deptId 根部门 ID
+ * @returns 本部门 + 子部门 ID 列表；异常时返回 `[deptId]`
+ */
+async function getSubDepartmentIds(deptId: string): Promise<string[]> {
+  try {
+    const result = await db
+      .select({ id: schema.departments.id })
+      .from(schema.departments)
+      .where(
+        or(
+          eq(schema.departments.id, deptId),
+          like(schema.departments.ancestors, `${deptId}/%`),
+        ),
+      );
+    return result.map((r) => r.id);
+  } catch (error) {
+    console.error('[DataScope] getSubDepartmentIds 查询异常:', error);
+    return [deptId];
+  }
+}
+
+/**
+ * CUSTOM 范围：按角色 ID 列表查 role_data_scopes，返回去重后的部门 ID 列表
+ */
+async function getCustomDeptIds(roleIds: string[]): Promise<string[]> {
+  if (roleIds.length === 0) return [];
+  const result = await db
+    .selectDistinct({ deptId: schema.roleDataScopes.deptId })
+    .from(schema.roleDataScopes)
+    .where(inArray(schema.roleDataScopes.roleId, roleIds));
+  return result.map((r) => r.deptId);
+}
 
 // ────────────────────────────────────────────────────────────
 // 数据范围规则计算
@@ -77,57 +177,27 @@ export function applyDataScopeFilter(
 export async function getDataScopeFilter(
   userId: string
 ): Promise<{ type: 'ALL' | 'LIST' | 'SELF'; deptIds?: string[] }> {
-  const ctx = await getUserPermissionContext(userId);
-  if (!ctx) return { type: 'LIST', deptIds: [] };
+  const scope = await resolveScope(userId);
+  if (!scope) return { type: 'LIST', deptIds: [] };
 
-  if (ctx.dataScopeType === 'ALL') return { type: 'ALL' };
-  if (ctx.dataScopeType === 'SELF') return { type: 'SELF' };
-  if (ctx.dataScopeType === 'DEPT') {
-    return { type: 'LIST', deptIds: ctx.deptId ? [ctx.deptId] : [] };
-  }
-
-  if (ctx.dataScopeType === 'DEPT_AND_SUB') {
-    if (!ctx.deptId) return { type: 'LIST', deptIds: [] };
-
-    try {
-      const result = await db.execute(drizzleSql`
-        WITH RECURSIVE sub_depts AS (
-          SELECT id, 1 as depth FROM departments WHERE id = ${ctx.deptId}
-          UNION ALL
-          SELECT d.id, sd.depth + 1 FROM departments d
-          INNER JOIN sub_depts sd ON d.parent_id = sd.id
-          WHERE sd.depth < 10
-        )
-        SELECT id FROM sub_depts
-      `);
-
-      const rows = Array.isArray(result)
-        ? result
-        : ((result as any).rows || (result as any).recordset || []);
-
-      const deptIds = rows
-        .map((r: any) => (r && typeof r === 'object' ? (r.id || r.deptId || '') : ''))
-        .filter(Boolean);
-
-      return { type: 'LIST', deptIds };
-    } catch (error: any) {
-      console.error('[DataScope] getDataScopeFilter 查询异常:', error.message);
-      return { type: 'LIST', deptIds: [ctx.deptId] };
+  switch (scope.dataScopeType) {
+    case 'ALL':
+      return { type: 'ALL' };
+    case 'SELF':
+      return { type: 'SELF' };
+    case 'DEPT':
+      return { type: 'LIST', deptIds: scope.deptId ? [scope.deptId] : [] };
+    case 'DEPT_AND_SUB': {
+      if (!scope.deptId) return { type: 'LIST', deptIds: [] };
+      return { type: 'LIST', deptIds: await getSubDepartmentIds(scope.deptId) };
     }
+    case 'CUSTOM': {
+      const roleIds = await scope.fetchRoleIds();
+      return { type: 'LIST', deptIds: await getCustomDeptIds(roleIds) };
+    }
+    default:
+      return { type: 'LIST', deptIds: [] };
   }
-
-  if (ctx.dataScopeType === 'CUSTOM') {
-    const roleIds = ctx.roles.map((r) => r.id);
-    if (roleIds.length === 0) return { type: 'LIST', deptIds: [] };
-
-    const result = await db.selectDistinct({ deptId: schema.roleDataScopes.deptId })
-      .from(schema.roleDataScopes)
-      .where(inArray(schema.roleDataScopes.roleId, roleIds));
-
-    return { type: 'LIST', deptIds: result.map((r) => r.deptId) };
-  }
-
-  return { type: 'LIST', deptIds: [] };
 }
 
 /**
@@ -144,10 +214,10 @@ export async function checkDataScope(
   targetDeptId: string,
   targetUserId?: string
 ): Promise<boolean> {
-  const ctx = await getUserPermissionContext(userId);
-  if (!ctx) return false;
+  const scope = await resolveScope(userId);
+  if (!scope) return false;
 
-  switch (ctx.dataScopeType) {
+  switch (scope.dataScopeType) {
     case 'ALL':
       return true;
 
@@ -156,42 +226,22 @@ export async function checkDataScope(
       return !!targetUserId && userId === targetUserId;
 
     case 'DEPT':
-      return ctx.deptId === targetDeptId;
+      return scope.deptId === targetDeptId;
 
     case 'DEPT_AND_SUB': {
-      if (!ctx.deptId) return false;
-      if (ctx.deptId === targetDeptId) return true;
-
-      try {
-        // 递归 CTE 查询子部门（上限 10 层，防死循环）
-        const result = await db.execute(drizzleSql`
-          WITH RECURSIVE sub_depts AS (
-            SELECT id, 1 as depth FROM departments WHERE id = ${ctx.deptId}
-            UNION ALL
-            SELECT d.id, sd.depth + 1 FROM departments d
-            INNER JOIN sub_depts sd ON d.parent_id = sd.id
-            WHERE sd.depth < 10
-          )
-          SELECT 1 FROM sub_depts WHERE id = ${targetDeptId}
-        `);
-
-        const rows = Array.isArray(result)
-          ? result
-          : ((result as any).rows || (result as any).recordset || []);
-
-        return rows.length > 0;
-      } catch (error) {
-        console.error('[DataScope] DEPT_AND_SUB 查询异常:', error);
-        // 降级回退：仅允许访问当前部门（Default-Deny 最小权限原则）
-        return ctx.deptId === targetDeptId;
-      }
+      if (!scope.deptId) return false;
+      // 同部门直接通过，短路避免 CTE 查询
+      if (scope.deptId === targetDeptId) return true;
+      const ids = await getSubDepartmentIds(scope.deptId);
+      return ids.includes(targetDeptId);
     }
 
     case 'CUSTOM': {
-      const roleIds = ctx.roles.map((r) => r.id);
+      const roleIds = await scope.fetchRoleIds();
       if (roleIds.length === 0) return false;
 
-      const result = await db.select()
+      const result = await db
+        .select()
         .from(schema.roleDataScopes)
         .where(
           and(

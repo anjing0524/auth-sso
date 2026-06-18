@@ -8,6 +8,7 @@
  */
 import { NextResponse } from 'next/server';
 import { db, schema } from '@/infrastructure/db';
+import { mapDomainError } from '@/domain/shared/error-mapping';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -35,7 +36,7 @@ export async function GET() {
 
     return NextResponse.json({ keys });
   } catch (err) {
-    console.error('[JWKS] 获取公钥失败:', err);
-    return NextResponse.json({ error: 'INTERNAL_ERROR', message: '获取公钥失败' }, { status: 500 });
+    const mapped = mapDomainError(err);
+    return NextResponse.json({ error: mapped.error, message: mapped.message }, { status: mapped.status });
   }
 }

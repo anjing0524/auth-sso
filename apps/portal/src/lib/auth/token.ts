@@ -23,7 +23,9 @@ import { db, schema } from '@/infrastructure/db';
 import { eq, and } from 'drizzle-orm';
 import { generateId } from '@/lib/crypto';
 import { getIssuer } from '@/lib/env';
-import { isJtiRevoked } from '@/lib/session/revoke';
+import { isJtiRevoked, trackUserJti, revokeUserAccessByUserId } from '@/lib/session/revoke';
+import { cacheUserPermissionContext } from '@/lib/permissions';
+import { TOKEN_TTL } from '@auth-sso/contracts';
 import type { PortalJwtClaims, RefreshTokenResult } from '@/domain/auth/types';
 
 // ============================================================================
@@ -162,7 +164,7 @@ async function generateAndPersistKeyPair(): Promise<{
 // 仅含 sub，5min TTL，authorize 端点自动从 Cookie 读取
 // ============================================================================
 
-export const LOGIN_SESSION_TTL = 300;
+export const LOGIN_SESSION_TTL = TOKEN_TTL.LOGIN_SESSION;
 
 /**
  * 【server-only async】签发 Login Session Token
@@ -184,7 +186,7 @@ export async function signLoginSession(userId: string): Promise<string> {
     .setIssuedAt()
     .setIssuer(issuer)
     .setAudience('portal-client')
-    .setJti(`login_${generateId(16)}`)
+    .setJti(`jti_${generateId(16)}`)
     .setExpirationTime(Math.floor(Date.now() / 1000) + LOGIN_SESSION_TTL)
     .sign(privateKey);
 }
@@ -193,7 +195,7 @@ export async function signLoginSession(userId: string): Promise<string> {
 // OAuth Access Token — 授权码流程中签发给第三方 Client
 // ============================================================================
 
-export const ACCESS_TOKEN_TTL = 3600; // 1h
+export const ACCESS_TOKEN_TTL = TOKEN_TTL.ACCESS_TOKEN; // 1h
 
 /**
  * 【server-only async】签发 OAuth 2.1 Access Token (ES256 JWT)
@@ -226,6 +228,12 @@ export async function signAccessToken(
     .setJti(jti)
     .setExpirationTime(Math.floor(Date.now() / 1000) + ACCESS_TOKEN_TTL)
     .sign(privateKey);
+
+  // 建立 userId → jti 映射（Token 签发方维护，用于管理员按用户 ID 紧急撤销）
+  // Gateway 仅读取 jti 黑名单，不维护此映射
+  trackUserJti(claims.sub, jti, ACCESS_TOKEN_TTL).catch((e) =>
+    console.error('[Token] 写入 user→jti 映射失败:', e),
+  );
 
   return { token, jti };
 }
@@ -271,7 +279,14 @@ export async function verifyAccessToken(token: string): Promise<PortalJwtClaims 
       return null;
     }
 
-    return payload;
+    // 归一化：确保必填字段有默认值（Token 签发时总是包含，此处为运行时安全兜底）
+    return {
+      ...payload,
+      roles: payload.roles ?? [],
+      permissions: payload.permissions ?? [],
+      deptId: payload.deptId ?? '',
+      dataScopeType: payload.dataScopeType ?? 'SELF',
+    };
   } catch (error) {
     console.warn('[Token] JWT 验签失败:', error instanceof Error ? error.message : error);
     return null;
@@ -282,7 +297,7 @@ export async function verifyAccessToken(token: string): Promise<PortalJwtClaims 
 // Refresh Token — OAuth 2.1 流程专用，长期凭证，支持轮换
 // ============================================================================
 
-export const REFRESH_TOKEN_TTL = 7 * 24 * 3600; // 7d
+export const REFRESH_TOKEN_TTL = TOKEN_TTL.REFRESH_TOKEN; // 7d
 
 /**
  * 【server-only async】签发 Refresh Token 并写入 DB
@@ -370,9 +385,14 @@ export async function rotateRefreshToken(
     sub: rt.userId,
     roles: permCtx.roles.map((r) => r.code),
     permissions: permCtx.permissions,
-    deptId: permCtx.deptId,
+    deptId: permCtx.deptId ?? '',
     dataScopeType: permCtx.dataScopeType,
   });
+
+  // 主动写 Redis 权限缓存，TTL 与 Token 对齐
+  cacheUserPermissionContext(rt.userId, permCtx, ACCESS_TOKEN_TTL).catch((e) =>
+    console.error('[Token] 刷新时写权限缓存失败:', e),
+  );
 
   return { accessToken, refreshToken: newRefreshToken, expiresIn: ACCESS_TOKEN_TTL };
 }
@@ -387,4 +407,9 @@ export async function revokeAllRefreshTokens(userId: string): Promise<void> {
     .set({ revoked: new Date() })
     .where(eq(schema.refreshTokens.userId, userId))
     .execute();
+
+  // 同步撤销所有 Access Token 的 JTI（双层撤销闭环）
+  revokeUserAccessByUserId(userId).then((count) => {
+    if (count > 0) console.info('[Token] 已撤销用户 %s 的 %d 个 Access Token JTI', userId, count);
+  }).catch((e) => console.error('[Token] 撤销用户 Access Token JTI 失败:', e));
 }

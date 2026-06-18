@@ -11,7 +11,7 @@ export const runtime = 'nodejs';
 
 /** GET /api/audit/logs — 委托 data.ts */
 export async function GET(request: NextRequest) {
-  return withPermission(request, { permissions: ['audit:read'] }, async () => {
+  return withPermission({ permissions: ['audit:read'] }, async () => {
     const sp = request.nextUrl.searchParams;
     const result = await getAuditLogs({
       page: parseInt(sp.get('page') || '1', 10),

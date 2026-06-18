@@ -6,7 +6,31 @@ import 'server-only';
 import { cacheLife, cacheTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
 import { ilike, eq, or, desc, and, count } from 'drizzle-orm';
+import { byIdOrPublicId } from '@/db/resolve-id';
 import { ENTITY_STATUS_VALUES, type EntityStatus } from '@auth-sso/contracts';
+import { asEntityStatus } from '@/lib/type-guards';
+
+/**
+ * Client API 响应的 DTO 类型（日期已序列化为 ISO 8601 string）
+ *
+ * 与 domain Client 实体不同：DTO 使用 string 日期，
+ * 供 Client Component 直接从 API 响应消费。
+ */
+export interface ClientDTO {
+  id: string;
+  publicId: string;
+  name: string;
+  clientId: string;
+  redirectUris: string[];
+  scopes: string;
+  homepageUrl: string | null;
+  logoUrl: string | null;
+  accessTokenTtl: number | null;
+  refreshTokenTtl: number | null;
+  status: EntityStatus;
+  createdAt: string;
+  updatedAt: string | null;
+}
 
 /**
  * 分页获取 Client 列表
@@ -31,8 +55,8 @@ export async function getClients(params: {
       ilike(schema.clients.clientId, `%${keyword}%`),
     ));
   }
-  if (status && ENTITY_STATUS_VALUES.includes(status as EntityStatus)) {
-    conditions.push(eq(schema.clients.status, status));
+  if (status && ENTITY_STATUS_VALUES.includes(asEntityStatus(status))) {
+    conditions.push(eq(schema.clients.status, asEntityStatus(status)));
   }
 
   const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
@@ -51,8 +75,8 @@ export async function getClients(params: {
   return {
     data: rows.map(c => ({
       id: c.id, publicId: c.publicId, name: c.name, clientId: c.clientId,
-      redirectUris: c.redirectUrls,
-      scopes: c.scopes, homepageUrl: c.homepageUrl, logoUrl: c.icon,
+      redirectUris: c.redirectUris,
+      scopes: c.scopes, homepageUrl: c.homepageUrl, logoUrl: c.logoUrl,
       status: c.status, createdAt: c.createdAt.toISOString(), updatedAt: c.updatedAt?.toISOString(),
     })),
     pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) },
@@ -64,9 +88,9 @@ export async function getClients(params: {
  *
  * 不使用缓存，确保详情数据实时性。
  */
-export async function getClientById(lookupId: string) {
+export async function getClientById(lookupId: string): Promise<ClientDTO | null> {
   const rows = await db.select().from(schema.clients)
-    .where(or(eq(schema.clients.id, lookupId), eq(schema.clients.publicId, lookupId)))
+    .where(byIdOrPublicId('clients', lookupId))
     .limit(1);
   const row = rows[0];
   if (!row) return null;
@@ -76,16 +100,43 @@ export async function getClientById(lookupId: string) {
     publicId: row.publicId,
     name: row.name,
     clientId: row.clientId,
-    redirectUris: row.redirectUrls,
+    redirectUris: row.redirectUris,
     scopes: row.scopes,
     homepageUrl: row.homepageUrl,
-    logoUrl: row.icon,
+    logoUrl: row.logoUrl,
     accessTokenTtl: row.accessTokenTtl,
     refreshTokenTtl: row.refreshTokenTtl,
     status: row.status,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt?.toISOString() ?? null,
   };
+}
+
+/**
+ * 按 OAuth client_id 查找 Client（供 OAuth 授权/令牌端点使用）
+ *
+ * 与 getClientById 不同：本函数按 client_id 字段查找，
+ * 返回 Drizzle 原始行以便 domain 层做进一步校验（validateClientActive）。
+ * 不使用缓存以保证授权流程的实时性。
+ */
+export async function getClientByClientId(clientId: string) {
+  const rows = await db.select()
+    .from(schema.clients)
+    .where(eq(schema.clients.clientId, clientId))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+/**
+ * Client Token 的 DTO 类型
+ */
+export interface ClientTokenDTO {
+  id: string;
+  userId: string;
+  username: string | undefined;
+  scopes: string[];
+  createdAt: Date;
+  expiresAt: Date | null;
 }
 
 /**
@@ -127,7 +178,8 @@ export async function getClientTokens(
       id: t.id,
       userId: t.userId,
       username: t.userEmail || t.userName,
-      scopes: JSON.parse(t.scopes || '[]'),
+      // OAuth scope 按 RFC 6749 为空格分隔字符串（与 token 签发、introspection 语义一致）
+      scopes: t.scopes ? t.scopes.split(/\s+/).filter(Boolean) : [],
       createdAt: t.createdAt,
       expiresAt: t.expiresAt,
     })),

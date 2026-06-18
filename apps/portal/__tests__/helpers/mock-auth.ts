@@ -15,7 +15,7 @@ import { NextResponse } from 'next/server';
  */
 export function createMockWithPermission(defaultUserId = 'test-user-id') {
   const mockFn = vi.fn(
-    async (_request: any, _options: any, handler: (userId: string) => Promise<NextResponse>) => {
+    async (_options: any, handler: (userId: string) => Promise<NextResponse>) => {
       return handler(defaultUserId);
     }
   );
@@ -42,7 +42,7 @@ export function createMockWithPermission(defaultUserId = 'test-user-id') {
      */
     mockAsUser(userId: string) {
       mockFn.mockImplementationOnce(
-        async (_request: any, _options: any, handler: (userId: string) => Promise<NextResponse>) => {
+        async (_options: any, handler: (userId: string) => Promise<NextResponse>) => {
           return handler(userId);
         }
       );

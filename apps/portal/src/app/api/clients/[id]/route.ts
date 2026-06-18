@@ -14,7 +14,7 @@ interface RouteParams { params: Promise<{ id: string }>; }
 
 /** GET /api/clients/[id] — 委托 data.ts */
 export async function GET(request: NextRequest, { params }: RouteParams) {
-  return withPermission(request, { permissions: ['client:read'] }, async () => {
+  return withPermission({ permissions: ['client:read'] }, async () => {
     const { id } = await params;
     const client = await getClientById(id);
     if (!client) {

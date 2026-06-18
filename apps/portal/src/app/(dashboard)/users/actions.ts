@@ -31,7 +31,7 @@ import {
 import { EntityNotFoundError, DuplicateEntityError } from '@/domain/shared/errors';
 import { generateId } from '@/lib/crypto';
 import { hashPassword } from '@/lib/password';
-import { clearUserPermissionCache } from '@/lib/permissions';
+import { refreshUserPermissionCache } from '@/lib/permissions';
 import { USER_ACTIVE } from '@auth-sso/contracts';
 import type { ApiResponse } from '@auth-sso/contracts';
 
@@ -76,7 +76,7 @@ export const createUserAction = withAuth(
     });
 
     revalidatePath('/users');
-    revalidateTag('users-list');
+    revalidateTag('users-list', 'minutes');
     return { success: true, data: { id: result.publicId }, message: '用户创建成功' };
   },
 );
@@ -85,7 +85,7 @@ export const createUserAction = withAuth(
  * 切换用户启用/禁用状态 Action Controller
  */
 export const toggleUserStatusAction = withAuth(
-  { permissions: ['user:edit'] },
+  { permissions: ['user:update'] },
   async (_ctx: AuthContext, userIdStr: string): Promise<ApiResponse<{ status: string }>> => {
     const parsed = UserIdentityInputSchema.safeParse({ id: userIdStr });
     if (!parsed.success) {
@@ -105,7 +105,7 @@ export const toggleUserStatusAction = withAuth(
     });
 
     revalidatePath('/users');
-    revalidateTag('users-list');
+    revalidateTag('users-list', 'minutes');
     return {
       success: true,
       data: { status: updated.status },
@@ -118,7 +118,7 @@ export const toggleUserStatusAction = withAuth(
  * 更新用户信息 Action Controller
  */
 export const updateUserAction = withAuth(
-  { permissions: ['user:edit'] },
+  { permissions: ['user:update'] },
   async (
     _ctx: AuthContext,
     userIdStr: string,
@@ -145,9 +145,9 @@ export const updateUserAction = withAuth(
         .where(eq(schema.users.id, parsed.data.id));
     });
 
-    await clearUserPermissionCache(parsed.data.id);
+    await refreshUserPermissionCache(parsed.data.id);
     revalidatePath('/users');
-    revalidateTag('users-list');
+    revalidateTag('users-list', 'minutes');
     return { success: true, data: { id: parsed.data.id }, message: '更新成功' };
   },
 );
@@ -174,9 +174,9 @@ export const deleteUserAction = withAuth(
         .where(eq(schema.users.id, parsed.data.id));
     });
 
-    await clearUserPermissionCache(parsed.data.id);
+    await refreshUserPermissionCache(parsed.data.id);
     revalidatePath('/users');
-    revalidateTag('users-list');
+    revalidateTag('users-list', 'minutes');
     return { success: true, data: { id: parsed.data.id }, message: '用户已逻辑删除' };
   },
 );

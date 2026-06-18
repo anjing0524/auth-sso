@@ -5,7 +5,8 @@ import 'server-only';
 
 import { cacheLife, cacheTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
-import { asc, eq, or } from 'drizzle-orm';
+import { asc, eq } from 'drizzle-orm';
+import { byIdOrPublicId } from '@/db/resolve-id';
 import { buildMenuTree, toDomainMenu } from '@/domain/menu/menu';
 import type { MenuTreeNode } from '@/domain/menu/menu';
 
@@ -48,7 +49,7 @@ export async function getAllActiveMenus() {
  */
 export async function getMenuById(lookupId: string) {
   const rows = await db.select().from(schema.menus)
-    .where(or(eq(schema.menus.id, lookupId), eq(schema.menus.publicId, lookupId)))
+    .where(byIdOrPublicId('menus', lookupId))
     .limit(1);
   const row = rows[0];
   if (!row) return null;

@@ -9,12 +9,14 @@ import 'server-only';
 
 import { cacheLife, cacheTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
-import { asc, and, eq, or } from 'drizzle-orm';
+import { asc, and, eq } from 'drizzle-orm';
+import { byIdOrPublicId } from '@/db/resolve-id';
 import type { EntityStatus } from '@auth-sso/contracts';
 import { getDataScopeFilter, applyDataScopeFilter } from '@/lib/auth';
 import { buildDepartmentTree } from '@/domain/department/department';
 import type { DepartmentTreeNode } from '@/domain/department/department';
 import { isScopeDenied } from '@/db/user-queries';
+import { asEntityStatus } from '@/lib/type-guards';
 
 /**
  * 获取当前授权范围内的部门树形结构
@@ -44,18 +46,18 @@ export async function getDepartments(userId: string): Promise<DepartmentTreeNode
   if (scopeFilter.type !== 'ALL') {
     // 有限范围时只返回平面列表
     return rows.map(r => ({
-      id: r.id, publicId: r.publicId, parentId: r.parentId,
+      id: r.id, publicId: r.publicId, parentId: r.parentId, ancestors: r.ancestors,
       name: r.name, code: r.code, sort: r.sort ?? 0,
-      status: r.status as EntityStatus,
+      status: asEntityStatus(r.status),
       createdAt: Temporal.Instant.fromEpochMilliseconds(r.createdAt.getTime()),
       children: [],
     }));
   }
 
   const depts = rows.map(r => ({
-    id: r.id, publicId: r.publicId, parentId: r.parentId,
+    id: r.id, publicId: r.publicId, parentId: r.parentId, ancestors: r.ancestors,
     name: r.name, code: r.code, sort: r.sort ?? 0,
-    status: r.status as EntityStatus,
+    status: asEntityStatus(r.status),
     createdAt: Temporal.Instant.fromEpochMilliseconds(r.createdAt.getTime()),
   }));
 
@@ -67,7 +69,7 @@ export async function getDepartments(userId: string): Promise<DepartmentTreeNode
  */
 export async function getDepartmentById(lookupId: string) {
   const rows = await db.select().from(schema.departments)
-    .where(or(eq(schema.departments.id, lookupId), eq(schema.departments.publicId, lookupId)))
+    .where(byIdOrPublicId('departments', lookupId))
     .limit(1);
   const row = rows[0];
   if (!row) return null;

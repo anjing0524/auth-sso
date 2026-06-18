@@ -4,6 +4,13 @@
  * - auditLogs：敏感操作审计（params 使用 jsonb，支持 DB 层 JSON 查询）
  * - loginLogs：登录事件日志
  *
+ * ## 设计说明
+ *
+ * - userId / username 冗余存储，确保日志在用户被删除后仍可读（审计合规要求）
+ * - userId 不设 FK 约束，避免阻塞用户删除操作
+ * - 日志表为 append-only，不参与业务逻辑关联查询
+ * - 不使用 status 枚举（与业务表不同），所有日志永久保留
+ *
  * @module db/schema/logs
  */
 import { pgTable, text, timestamp, integer, jsonb, index } from 'drizzle-orm/pg-core';

@@ -11,7 +11,7 @@ interface RouteParams { params: Promise<{ id: string }>; }
 
 /** GET /api/roles/[id]/clients — 委托 data.ts */
 export async function GET(request: NextRequest, { params }: RouteParams) {
-  return withPermission(request, { permissions: ['role:read'] }, async () => {
+  return withPermission({ permissions: ['role:read'] }, async () => {
     const { id } = await params;
     const clients = await getRoleClients(id);
     return NextResponse.json({ data: clients });

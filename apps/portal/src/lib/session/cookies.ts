@@ -7,7 +7,8 @@ import 'server-only';
  */
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { JWT_COOKIE_NAME, REFRESH_COOKIE_NAME } from './types';
+import { COOKIE_NAMES } from '@auth-sso/contracts';
+import { TOKEN_TTL } from '@auth-sso/contracts';
 
 /**
  * 将 Access Token 和 Refresh Token 分别写入 HttpOnly Cookie
@@ -17,11 +18,11 @@ export function setJwtCookies(
   response: NextResponse,
   accessToken: string,
   refreshToken: string | undefined,
-  accessTokenExpiresIn: number = 3600
+  accessTokenExpiresIn: number = TOKEN_TTL.ACCESS_TOKEN
 ): void {
   const isProduction = process.env.NODE_ENV === 'production';
 
-  response.cookies.set(JWT_COOKIE_NAME, accessToken, {
+  response.cookies.set(COOKIE_NAMES.JWT, accessToken, {
     path: '/',
     httpOnly: true,
     secure: isProduction,
@@ -30,12 +31,12 @@ export function setJwtCookies(
   });
 
   if (refreshToken) {
-    response.cookies.set(REFRESH_COOKIE_NAME, refreshToken, {
+    response.cookies.set(COOKIE_NAMES.REFRESH, refreshToken, {
       path: '/api/auth/refresh',
       httpOnly: true,
       secure: isProduction,
       sameSite: 'lax',
-      maxAge: 7 * 24 * 60 * 60,
+      maxAge: TOKEN_TTL.REFRESH_TOKEN,
     });
   }
 }
@@ -45,10 +46,10 @@ export function setJwtCookies(
  */
 export function clearJwtCookies(response: Response): void {
   const expiredCookieBase = 'Path=/; HttpOnly; SameSite=Lax; Max-Age=0';
-  response.headers.append('Set-Cookie', `${JWT_COOKIE_NAME}=; ${expiredCookieBase}`);
+  response.headers.append('Set-Cookie', `${COOKIE_NAMES.JWT}=; ${expiredCookieBase}`);
   response.headers.append(
     'Set-Cookie',
-    `${REFRESH_COOKIE_NAME}=; Path=/api/auth/refresh; HttpOnly; SameSite=Lax; Max-Age=0`
+    `${COOKIE_NAMES.REFRESH}=; Path=/api/auth/refresh; HttpOnly; SameSite=Lax; Max-Age=0`
   );
 }
 
@@ -58,7 +59,7 @@ export function clearJwtCookies(response: Response): void {
 export async function getJwtFromCookie(): Promise<string | null> {
   try {
     const cookieStore = await cookies();
-    return cookieStore.get(JWT_COOKIE_NAME)?.value ?? null;
+    return cookieStore.get(COOKIE_NAMES.JWT)?.value ?? null;
   } catch (error) {
     console.error('[Session] Failed to read JWT cookie:', error);
     return null;
@@ -71,7 +72,7 @@ export async function getJwtFromCookie(): Promise<string | null> {
 export async function getRefreshTokenFromCookie(): Promise<string | null> {
   try {
     const cookieStore = await cookies();
-    return cookieStore.get(REFRESH_COOKIE_NAME)?.value ?? null;
+    return cookieStore.get(COOKIE_NAMES.REFRESH)?.value ?? null;
   } catch (error) {
     console.error('[Session] Failed to read refresh token cookie:', error);
     return null;

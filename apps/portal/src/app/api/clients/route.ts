@@ -11,7 +11,7 @@ export const runtime = 'nodejs';
 
 /** GET /api/clients — 委托 data.ts */
 export async function GET(request: NextRequest) {
-  return withPermission(request, { permissions: ['client:list'] }, async () => {
+  return withPermission({ permissions: ['client:list'] }, async () => {
     const sp = request.nextUrl.searchParams;
     const page = parseInt(sp.get('page') || '1', 10);
     const pageSize = parseInt(sp.get('pageSize') || '20', 10);

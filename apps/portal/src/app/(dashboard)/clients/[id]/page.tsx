@@ -7,47 +7,18 @@
 import { useState, useEffect, useCallback, use } from 'react';
 import Link from 'next/link';
 import { updateClientAction, rotateClientSecretAction, revokeClientTokensAction } from '../actions';
+import type { ClientDTO as Client, ClientTokenDTO as Token } from '../data';
 
 interface PageProps {
   params: Promise<{ id: string }>;
 }
 
 /**
- * Client 数据类型
+ * 格式化日期（兼容 Date 对象、ISO 字符串、null）
  */
-interface Client {
-  id: string;
-  publicId: string;
-  name: string;
-  clientId: string;
-  redirectUris: string[];
-  scopes: string;
-  homepageUrl: string | null;
-  logoUrl: string | null;
-  accessTokenTtl: number;
-  refreshTokenTtl: number;
-  status: 'ACTIVE' | 'DISABLED';
-  createdAt: string;
-  updatedAt: string;
-}
-
-/**
- * Token 数据类型
- */
-interface Token {
-  id: string;
-  userId: string;
-  username: string;
-  scopes: string[];
-  createdAt: string;
-  expiresAt: string;
-}
-
-/**
- * 格式化日期
- */
-function formatDate(dateString: string): string {
-  return new Date(dateString).toLocaleString('zh-CN');
+function formatDate(date: Date | string | null): string {
+  if (!date) return '-';
+  return new Date(date).toLocaleString('zh-CN');
 }
 
 /**

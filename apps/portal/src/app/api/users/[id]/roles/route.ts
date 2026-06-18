@@ -7,9 +7,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db, schema } from '@/infrastructure/db';
 import { eq, or, and } from 'drizzle-orm';
+import { byIdOrPublicId } from '@/db/resolve-id';
 import { withPermission } from '@/lib/auth';
 import crypto from 'crypto';
-import { clearUserPermissionCache } from '@/lib/permissions';
+import { refreshUserPermissionCache } from '@/lib/permissions';
 import { COMMON_ERRORS } from '@auth-sso/contracts';
 import { getUserRoles } from '@/app/(dashboard)/users/data';
 
@@ -19,7 +20,7 @@ interface RouteParams { params: Promise<{ id: string }>; }
 
 /** GET /api/users/[id]/roles — 委托 data.ts */
 export async function GET(request: NextRequest, { params }: RouteParams) {
-  return withPermission(request, { permissions: ['user:read'] }, async () => {
+  return withPermission({ permissions: ['user:read'] }, async () => {
     const { id } = await params;
     const roles = await getUserRoles(id);
     return NextResponse.json({ data: roles });
@@ -39,7 +40,7 @@ export async function POST(
   request: NextRequest,
   { params }: RouteParams
 ) {
-  return withPermission(request, { permissions: ['user:update'] }, async () => {
+  return withPermission({ permissions: ['user:update'] }, async () => {
     const { id } = await params;
     const body = await request.json();
     const { roleIds } = body;
@@ -54,7 +55,7 @@ export async function POST(
     // 获取用户ID
     const users = await db.select()
       .from(schema.users)
-      .where(or(eq(schema.users.id, id), eq(schema.users.publicId, id)));
+      .where(byIdOrPublicId('users', id));
 
     if (users.length === 0) {
       return NextResponse.json(
@@ -82,7 +83,7 @@ export async function POST(
     });
 
     // 3. 分配角色后主动清除该用户的权限缓存，保障缓存强一致性
-    await clearUserPermissionCache(userId);
+    await refreshUserPermissionCache(userId);
 
     return NextResponse.json({ success: true, assignedCount: roleIds.length });
   });
@@ -101,7 +102,7 @@ export async function DELETE(
   request: NextRequest,
   { params }: RouteParams
 ) {
-  return withPermission(request, { permissions: ['user:update'] }, async () => {
+  return withPermission({ permissions: ['user:update'] }, async () => {
     const { id } = await params;
     const body = await request.json();
     const { roleId } = body;
@@ -116,7 +117,7 @@ export async function DELETE(
     // 获取用户ID
     const users = await db.select()
       .from(schema.users)
-      .where(or(eq(schema.users.id, id), eq(schema.users.publicId, id)));
+      .where(byIdOrPublicId('users', id));
 
     if (users.length === 0) {
       return NextResponse.json(
@@ -135,7 +136,7 @@ export async function DELETE(
       ));
 
     // 移除角色后主动清除该用户的权限缓存，保障缓存强一致性
-    await clearUserPermissionCache(userId);
+    await refreshUserPermissionCache(userId);
 
     return NextResponse.json({ success: true });
   });

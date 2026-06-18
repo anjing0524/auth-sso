@@ -113,9 +113,8 @@ import {
   revokeJti,
   isJtiRevoked,
   revokeUserToken,
-  JWT_COOKIE_NAME,
-  REFRESH_COOKIE_NAME
 } from '@/lib/session';
+import { COOKIE_NAMES } from '@auth-sso/contracts';
 import { verifyAccessToken } from '@/lib/auth/token';
 
 describe('JWT Cookie Session Lifecycle', () => {
@@ -131,12 +130,12 @@ describe('JWT Cookie Session Lifecycle', () => {
       
       setJwtCookies(response, 'access-token', 'refresh-token', 3600);
       
-      expect(setSpy).toHaveBeenCalledWith(JWT_COOKIE_NAME, 'access-token', expect.objectContaining({
+      expect(setSpy).toHaveBeenCalledWith(COOKIE_NAMES.JWT, 'access-token', expect.objectContaining({
         path: '/',
         httpOnly: true,
         maxAge: 3600,
       }));
-      expect(setSpy).toHaveBeenCalledWith(REFRESH_COOKIE_NAME, 'refresh-token', expect.objectContaining({
+      expect(setSpy).toHaveBeenCalledWith(COOKIE_NAMES.REFRESH, 'refresh-token', expect.objectContaining({
         path: '/api/auth/refresh',
         httpOnly: true,
         maxAge: 7 * 24 * 60 * 60,
@@ -149,16 +148,16 @@ describe('JWT Cookie Session Lifecycle', () => {
       const response = new Response();
       clearJwtCookies(response);
       const setCookies = response.headers.getSetCookie();
-      expect(setCookies.some(c => c.includes(`${JWT_COOKIE_NAME}=;`) && c.includes('Max-Age=0'))).toBe(true);
-      expect(setCookies.some(c => c.includes(`${REFRESH_COOKIE_NAME}=;`) && c.includes('Max-Age=0'))).toBe(true);
+      expect(setCookies.some(c => c.includes(`${COOKIE_NAMES.JWT}=;`) && c.includes('Max-Age=0'))).toBe(true);
+      expect(setCookies.some(c => c.includes(`${COOKIE_NAMES.REFRESH}=;`) && c.includes('Max-Age=0'))).toBe(true);
     });
   });
 
   describe('getJwtFromCookie & getRefreshTokenFromCookie', () => {
     it('从 cookies 接口成功读取 Token', async () => {
       mockCookiesGet.mockImplementation((name) => {
-        if (name === JWT_COOKIE_NAME) return { value: 'jwt-val' };
-        if (name === REFRESH_COOKIE_NAME) return { value: 'refresh-val' };
+        if (name === COOKIE_NAMES.JWT) return { value: 'jwt-val' };
+        if (name === COOKIE_NAMES.REFRESH) return { value: 'refresh-val' };
         return null;
       });
 

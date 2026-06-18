@@ -1,4 +1,3 @@
-import type { EntityStatus } from '@auth-sso/contracts';
 import { ENTITY_ACTIVE } from '@auth-sso/contracts';
 import type { CreateDepartmentInput, Department, DepartmentTreeNode } from './types';
 import { BusinessRuleViolationError } from '../shared/errors';
@@ -7,26 +6,36 @@ import { buildTree } from '@/domain/shared/tree-utils';
 export type { Department, DepartmentTreeNode };
 
 /**
+ * 纯函数：计算物化路径 (ancestors)
+ * 父级 ancestors + 父级 id → 新部门的 ancestors
+ */
+export function computeAncestors(parentId: string, parentAncestors: string | null): string {
+  return parentAncestors ? `${parentAncestors}/${parentId}` : parentId;
+}
+
+/**
  * 将 Drizzle 数据库行转换为领域 Department 实体
  */
 export function toDomainDepartment(row: {
   id: string;
   publicId: string;
   parentId: string | null;
+  ancestors: string | null;
   name: string;
   code: string | null;
   sort: number | null;
-  status: string;
+  status: import('@auth-sso/contracts').EntityStatus;
   createdAt: Date;
 }): Department {
   return {
     id: row.id,
     publicId: row.publicId,
     parentId: row.parentId,
+    ancestors: row.ancestors,
     name: row.name,
     code: row.code,
     sort: row.sort ?? 0,
-    status: row.status as EntityStatus,
+    status: row.status,
     createdAt: Temporal.Instant.fromEpochMilliseconds(row.createdAt.getTime()),
   };
 }
@@ -37,11 +46,14 @@ export function toDomainDepartment(row: {
 export function createDepartment(
   input: CreateDepartmentInput,
   idGenerator: (len: number) => string,
+  parentAncestors: string | null = null,
 ): Department {
+  const ancestors = input.parentId ? computeAncestors(input.parentId, parentAncestors) : null;
   return {
     id: idGenerator(20),
     publicId: `dept_${idGenerator(16)}`,
     parentId: input.parentId ?? null,
+    ancestors,
     name: input.name,
     code: input.code ?? null,
     sort: input.sort,
@@ -52,16 +64,19 @@ export function createDepartment(
 
 /**
  * 纯函数：构建更新后的部门对象 (无副作用)
+ *
+ * 当 parentId 变更时，ancestors 参数必须传入重新计算后的值（调用方负责查询父级 ancestors）。
  */
 export function applyDepartmentUpdate(
   dept: Department,
-  patch: Partial<Pick<Department, 'name' | 'code' | 'parentId' | 'sort' | 'status'>>,
+  patch: Partial<Pick<Department, 'name' | 'code' | 'parentId' | 'sort' | 'status'>> & { ancestors?: string | null },
 ): Department {
   return {
     ...dept,
     name: patch.name ?? dept.name,
     code: patch.code !== undefined ? patch.code : dept.code,
     parentId: patch.parentId !== undefined ? patch.parentId : dept.parentId,
+    ancestors: patch.ancestors !== undefined ? patch.ancestors : dept.ancestors,
     sort: patch.sort ?? dept.sort,
     status: patch.status ?? dept.status,
   };
@@ -112,7 +127,7 @@ export function validateNoCircularReference(
  */
 export function applyDepartmentUpdateWithCircularCheck(
   dept: Department,
-  patch: Partial<Pick<Department, 'name' | 'code' | 'parentId' | 'sort' | 'status'>>,
+  patch: Partial<Pick<Department, 'name' | 'code' | 'parentId' | 'sort' | 'status'>> & { ancestors?: string | null },
   allDepts: Array<{ id: string; parentId: string | null }>,
 ): Department {
   // 检查 parentId 是否发生了变更，且新 parentId 非空
@@ -134,6 +149,7 @@ export function departmentToInsertRow(d: Department) {
     name: d.name,
     code: d.code,
     parentId: d.parentId,
+    ancestors: d.ancestors,
     sort: d.sort,
     status: d.status,
     createdAt: new Date(d.createdAt.epochMilliseconds),
@@ -146,6 +162,7 @@ export function departmentToUpdateRow(d: Department) {
     name: d.name,
     code: d.code,
     parentId: d.parentId,
+    ancestors: d.ancestors,
     sort: d.sort,
     status: d.status,
   };

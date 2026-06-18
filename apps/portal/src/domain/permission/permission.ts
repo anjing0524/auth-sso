@@ -12,11 +12,11 @@ export function toDomainPermission(row: {
   publicId: string;
   name: string;
   code: string;
-  type: string;
+  type: PermissionType;
   resource: string | null;
   action: string | null;
   parentId: string | null;
-  status: string;
+  status: EntityStatus;
   sort: number | null;
   createdAt: Date;
 }): Permission {
@@ -25,11 +25,11 @@ export function toDomainPermission(row: {
     publicId: row.publicId,
     name: row.name,
     code: row.code,
-    type: row.type as PermissionType,
+    type: row.type,
     resource: row.resource,
     action: row.action,
     parentId: row.parentId,
-    status: row.status as EntityStatus,
+    status: row.status,
     sort: row.sort ?? 0,
     createdAt: Temporal.Instant.fromEpochMilliseconds(row.createdAt.getTime()),
   };

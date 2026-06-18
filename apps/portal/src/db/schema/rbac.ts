@@ -7,13 +7,24 @@
  * - roleDataScopes：角色↔部门 数据范围
  * - roleClients：角色↔Client 关联
  *
- * 注：permissions.clientId / roleClients.clientId 存储的是业务 client_id
- * （被 gateway 与权限注册路由直接消费），因此 FK 指向 clients.clientId（unique）。
- * 这是与 DATABASE.md §2「FK 引用 internal id」的刻意例外，避免破坏外部契约。
+ * ## FK 约定说明
+ *
+ * permissions.clientId 和 roleClients.clientId 引用 clients.clientId（业务键）
+ * 而非 clients.id。这是**刻意设计**，原因：
+ *
+ * 1. Gateway (Rust/Pingora) 直接从 permissions 表读取 client_id 用于 JWT 校验，
+ *    它期望的是业务 client_id 而非内部 UUID
+ * 2. 权限注册路由 (POST /api/permissions/register) 使用 Basic Auth 的 client_id
+ *    直接匹配，避免额外的 clients 表查询
+ * 3. clients.client_id 具有 UNIQUE 约束，引用完整性等价于引用 id
+ *
+ * 其他表（access_tokens / refresh_tokens / authorization_codes / consents）
+ * 的 clientId 引用的是 clients.id，因为它们是 OAuth 协议内部流转，
+ * 不暴露给外部系统。
  *
  * @module db/schema/rbac
  */
-import { pgTable, text, timestamp, boolean, integer, index } from 'drizzle-orm/pg-core';
+import { pgTable, text, timestamp, boolean, integer, index, uniqueIndex } from 'drizzle-orm/pg-core';
 import { entityStatusEnum, dataScopeTypeEnum, permissionTypeEnum } from './enums';
 import { clients } from './auth';
 import { departments } from './org';
@@ -70,6 +81,8 @@ export const rolePermissions = pgTable('role_permissions', {
 }, (t) => [
   index('idx_role_permissions_role').on(t.roleId),
   index('idx_role_permissions_permission').on(t.permissionId),
+  // DB 层拦截同一角色重复绑定同一权限（数据完整性）
+  uniqueIndex('ux_role_permissions_role_perm').on(t.roleId, t.permissionId),
 ]);
 
 /**
@@ -83,6 +96,8 @@ export const roleDataScopes = pgTable('role_data_scopes', {
 }, (t) => [
   index('idx_role_data_scopes_role').on(t.roleId),
   index('idx_role_data_scopes_dept').on(t.deptId),
+  // DB 层拦截同一角色重复绑定同一部门数据范围（数据完整性）
+  uniqueIndex('ux_role_data_scopes_role_dept').on(t.roleId, t.deptId),
 ]);
 
 /**
@@ -96,4 +111,6 @@ export const roleClients = pgTable('role_clients', {
 }, (t) => [
   index('idx_role_clients_role').on(t.roleId),
   index('idx_role_clients_client').on(t.clientId),
+  // DB 层拦截同一角色重复绑定同一 Client（数据完整性）
+  uniqueIndex('ux_role_clients_role_client').on(t.roleId, t.clientId),
 ]);

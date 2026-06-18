@@ -9,6 +9,7 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { getAppBaseURL } from '@/lib/env';
 import { verifyAccessToken } from '@/lib/auth/token';
+import { COOKIE_NAMES } from '@auth-sso/contracts';
 import LoginForm from './login-form';
 
 interface SearchParams {
@@ -44,7 +45,7 @@ export default async function LoginPage({ searchParams }: SearchParams) {
 
   // 检查 JWT Cookie 是否有效
   const cookieStore = await cookies();
-  const jwtCookie = cookieStore.get('portal_jwt_token');
+  const jwtCookie = cookieStore.get(COOKIE_NAMES.JWT);
 
   if (jwtCookie?.value) {
     const claims = await verifyAccessToken(jwtCookie.value);

@@ -11,7 +11,7 @@ export const runtime = 'nodejs';
 
 /** GET /api/departments — 委托 data.ts 获取授权范围内的部门树 */
 export async function GET(request: NextRequest) {
-  return withPermission(request, { permissions: ['department:list'] }, async (userId) => {
+  return withPermission({ permissions: ['department:list'] }, async (userId) => {
     const data = await getDepartments(userId);
     return NextResponse.json({ data });
   });

@@ -92,7 +92,7 @@ const mocks = vi.hoisted(() => {
   });
 
   const authFn = vi.fn(
-    async (_request: any, _options: any, handler: (userId: string) => Promise<any>) => {
+    async (_options: any, handler: (userId: string) => Promise<any>) => {
       try { return await handler('test-user-id'); }
       catch (err) {
         const { mapDomainError } = await import('@/domain/shared/error-mapping');

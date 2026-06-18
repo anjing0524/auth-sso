@@ -5,8 +5,9 @@ import 'server-only';
 
 import { cacheLife, cacheTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
-import { eq, asc, and, or } from 'drizzle-orm';
-import type { PermissionType } from '@auth-sso/contracts';
+import { eq, asc, and } from 'drizzle-orm';
+import { byIdOrPublicId } from '@/db/resolve-id';
+import { asPermissionType } from '@/lib/type-guards';
 
 /**
  * 获取权限列表（可按类型过滤）
@@ -18,7 +19,7 @@ export async function getPermissions(type?: string) {
 
   const conditions = [];
   if (type) {
-    conditions.push(eq(schema.permissions.type, type as PermissionType));
+    conditions.push(eq(schema.permissions.type, asPermissionType(type)));
   }
 
   const rows = await db.select()
@@ -39,7 +40,7 @@ export async function getPermissions(type?: string) {
  */
 export async function getPermissionById(lookupId: string) {
   const rows = await db.select().from(schema.permissions)
-    .where(or(eq(schema.permissions.id, lookupId), eq(schema.permissions.publicId, lookupId)))
+    .where(byIdOrPublicId('permissions', lookupId))
     .limit(1);
   const row = rows[0];
   if (!row) return null;

@@ -1,0 +1,34 @@
+__tests__/components/app-sidebar.test.tsx(156,49): error TS2322: Type '{ id: string; title: string; url: string; icon: string; children: { id: string; title: string; url: string; }[]; }[]' is not assignable to type 'MenuItem[]'.
+  Type '{ id: string; title: string; url: string; icon: string; children: { id: string; title: string; url: string; }[]; }' is not assignable to type 'MenuItem'.
+    Types of property 'children' are incompatible.
+      Type '{ id: string; title: string; url: string; }[]' is not assignable to type 'MenuItem[]'.
+        Property 'icon' is missing in type '{ id: string; title: string; url: string; }' but required in type 'MenuItem'.
+__tests__/domain/department.test.ts(80,37): error TS2345: Argument of type '{ id: string; publicId: string; parentId: string; name: string; code: string; sort: number; status: any; createdAt: Date; }' is not assignable to parameter of type '{ id: string; publicId: string; parentId: string | null; ancestors: string | null; name: string; code: string | null; sort: number | null; status: "ACTIVE" | "DISABLED"; createdAt: Date; }'.
+  Property 'ancestors' is missing in type '{ id: string; publicId: string; parentId: string; name: string; code: string; sort: number; status: any; createdAt: Date; }' but required in type '{ id: string; publicId: string; parentId: string | null; ancestors: string | null; name: string; code: string | null; sort: number | null; status: "ACTIVE" | "DISABLED"; createdAt: Date; }'.
+__tests__/domain/permission.test.ts(45,37): error TS2345: Argument of type '{ id: string; publicId: string; name: string; code: string; type: string; resource: string; action: string; parentId: null; status: any; sort: number; createdAt: Date; }' is not assignable to parameter of type '{ id: string; publicId: string; name: string; code: string; type: "MENU" | "API" | "DATA"; resource: string | null; action: string | null; parentId: string | null; status: "ACTIVE" | "DISABLED"; sort: number | null; createdAt: Date; }'.
+  Types of property 'type' are incompatible.
+    Type 'string' is not assignable to type '"MENU" | "API" | "DATA"'.
+src/app/(dashboard)/clients/actions.ts(39,5): error TS2554: Expected 2 arguments, but got 1.
+src/app/(dashboard)/clients/actions.ts(69,5): error TS2554: Expected 2 arguments, but got 1.
+src/app/(dashboard)/clients/actions.ts(86,5): error TS2554: Expected 2 arguments, but got 1.
+src/app/(dashboard)/clients/actions.ts(107,5): error TS2554: Expected 2 arguments, but got 1.
+src/app/(dashboard)/departments/actions.ts(42,5): error TS2554: Expected 2 arguments, but got 1.
+src/app/(dashboard)/departments/actions.ts(72,5): error TS2554: Expected 2 arguments, but got 1.
+src/app/(dashboard)/departments/actions.ts(97,5): error TS2554: Expected 2 arguments, but got 1.
+src/app/(dashboard)/departments/data.ts(46,5): error TS2322: Type '{ id: string; publicId: string; parentId: string | null; name: string; code: string | null; sort: number; status: "ACTIVE" | "DISABLED"; createdAt: Instant; children: never[]; }[]' is not assignable to type 'DepartmentTreeNode[]'.
+  Property 'ancestors' is missing in type '{ id: string; publicId: string; parentId: string | null; name: string; code: string | null; sort: number; status: EntityStatus; createdAt: Temporal.Instant; children: never[]; }' but required in type 'DepartmentTreeNode'.
+src/app/(dashboard)/departments/data.ts(62,30): error TS2345: Argument of type '{ id: string; publicId: string; parentId: string | null; name: string; code: string | null; sort: number; status: "ACTIVE" | "DISABLED"; createdAt: Instant; }[]' is not assignable to parameter of type 'Department[]'.
+  Property 'ancestors' is missing in type '{ id: string; publicId: string; parentId: string | null; name: string; code: string | null; sort: number; status: EntityStatus; createdAt: Temporal.Instant; }' but required in type 'Department'.
+src/app/(dashboard)/menus/actions.ts(39,5): error TS2554: Expected 2 arguments, but got 1.
+src/app/(dashboard)/menus/actions.ts(65,5): error TS2554: Expected 2 arguments, but got 1.
+src/app/(dashboard)/menus/actions.ts(98,5): error TS2554: Expected 2 arguments, but got 1.
+src/app/(dashboard)/permissions/actions.ts(49,5): error TS2554: Expected 2 arguments, but got 1.
+src/app/(dashboard)/permissions/actions.ts(75,5): error TS2554: Expected 2 arguments, but got 1.
+src/app/(dashboard)/permissions/actions.ts(95,5): error TS2554: Expected 2 arguments, but got 1.
+src/app/(dashboard)/roles/actions.ts(60,5): error TS2554: Expected 2 arguments, but got 1.
+src/app/(dashboard)/roles/actions.ts(89,5): error TS2554: Expected 2 arguments, but got 1.
+src/app/(dashboard)/roles/actions.ts(119,5): error TS2554: Expected 2 arguments, but got 1.
+src/app/(dashboard)/users/actions.ts(79,5): error TS2554: Expected 2 arguments, but got 1.
+src/app/(dashboard)/users/actions.ts(108,5): error TS2554: Expected 2 arguments, but got 1.
+src/app/(dashboard)/users/actions.ts(150,5): error TS2554: Expected 2 arguments, but got 1.
+src/app/(dashboard)/users/actions.ts(179,5): error TS2554: Expected 2 arguments, but got 1.

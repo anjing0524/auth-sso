@@ -14,6 +14,7 @@ import { verifyPassword } from '@/domain/auth/password';
 import { signLoginSession, LOGIN_SESSION_TTL } from '@/lib/auth/token';
 import { EntityNotFoundError, BusinessRuleViolationError } from '@/domain/shared/errors';
 import { mapDomainError } from '@/domain/shared/error-mapping';
+import { COOKIE_NAMES } from '@auth-sso/contracts';
 
 export const runtime = 'nodejs';
 
@@ -68,7 +69,7 @@ export async function POST(request: NextRequest) {
 
     const isProduction = process.env.NODE_ENV === 'production';
     const response = NextResponse.json({ success: true });
-    response.cookies.set('login_session', session, {
+    response.cookies.set(COOKIE_NAMES.LOGIN_SESSION, session, {
       path: '/api/auth/oauth2/authorize',
       httpOnly: true,
       secure: isProduction,

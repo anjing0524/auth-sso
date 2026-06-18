@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { COOKIE_NAMES } from '@auth-sso/contracts';
 
 /**
  * 不需要认证即可访问的路径前缀（白名单）
@@ -66,7 +67,7 @@ export function proxy(request: NextRequest) {
   }
 
   // 检查 JWT Cookie 是否存在
-  const jwtToken = request.cookies.get('portal_jwt_token');
+  const jwtToken = request.cookies.get(COOKIE_NAMES.JWT);
 
   if (!jwtToken?.value) {
     const loginUrl = new URL('/login', request.url);

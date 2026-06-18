@@ -9,9 +9,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyAccessToken } from '@/lib/auth/token';
 import { getJwtFromCookie } from '@/lib/session';
-import { db, schema } from '@/infrastructure/db';
-import { eq } from 'drizzle-orm';
 import { mapDomainError } from '@/domain/shared/error-mapping';
+import { getUserProfile } from '@/app/(dashboard)/users/data';
 
 export const runtime = 'nodejs';
 
@@ -32,18 +31,11 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'invalid_token' }, { status: 401 });
     }
 
-    // 查询用户详情
-    const userRows = await db
-      .select()
-      .from(schema.users)
-      .where(eq(schema.users.id, claims.sub))
-      .limit(1);
-
-    if (userRows.length === 0) {
+    // 查询用户档案（委托 data 层，仅取 OIDC 标准字段，不做角色/部门 JOIN）
+    const user = await getUserProfile(claims.sub);
+    if (!user) {
       return NextResponse.json({ error: 'invalid_token' }, { status: 401 });
     }
-
-    const user = userRows[0]!;
 
     return NextResponse.json({
       sub: user.publicId,

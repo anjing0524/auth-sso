@@ -9,7 +9,6 @@
 import { redirect } from 'next/navigation';
 import { resolveIdentity } from '@/lib/auth';
 import { getUser } from '@/app/(dashboard)/users/data';
-import { getUserPermissionContext } from '@/lib/permissions';
 import { getDynamicMenuTree } from '@/lib/menu-tree';
 import { ADMIN_ROLE_CODES } from '@auth-sso/contracts';
 import DashboardLayout from '@/components/layout/DashboardLayout';
@@ -20,14 +19,13 @@ export default async function DashboardGroupLayout({ children }: { children: Rea
     redirect(`/login?callbackUrl=${encodeURIComponent('/dashboard')}`);
   }
 
-  // 并行获取用户数据、权限上下文
-  const [user, permCtx] = await Promise.all([
-    getUser(identity.userId),
-    getUserPermissionContext(identity.userId),
-  ]);
+  // 从 claims 中直接获取角色和权限（Gateway 已验证，零 DB 查询）
+  const { claims } = identity;
+  const isAdmin = claims.roles.some((r) => (ADMIN_ROLE_CODES as readonly string[]).includes(r));
+  const menus = await getDynamicMenuTree(claims.permissions, isAdmin);
 
-  const isAdmin = permCtx?.roles.some((r) => (ADMIN_ROLE_CODES as readonly string[]).includes(r.code)) ?? false;
-  const menus = await getDynamicMenuTree(permCtx?.permissions ?? [], isAdmin);
+  // 并行获取用户数据（仅用于 UI 展示）
+  const user = await getUser(identity.userId);
 
   return (
     <DashboardLayout

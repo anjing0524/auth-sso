@@ -16,7 +16,7 @@ interface RouteParams { params: Promise<{ id: string }>; }
 
 /** GET /api/clients/[id]/tokens — 委托 data.ts */
 export async function GET(request: NextRequest, { params }: RouteParams) {
-  return withPermission(request, { permissions: ['client:read'] }, async () => {
+  return withPermission({ permissions: ['client:read'] }, async () => {
     const { id } = await params;
 
     const client = await getClientById(id);
@@ -36,7 +36,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
 /** DELETE /api/clients/[id]/tokens — 撤销授权 Token */
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
-  return withPermission(request, { permissions: ['client:update'] }, async () => {
+  return withPermission({ permissions: ['client:update'] }, async () => {
     const { id } = await params;
     const body = await request.json();
     const { tokenIds, revokeAll } = body;

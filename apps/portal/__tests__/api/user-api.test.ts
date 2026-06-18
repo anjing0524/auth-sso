@@ -94,7 +94,7 @@ const {
   });
 
   const mockWithPermission = vi.fn(
-    async (_req: any, _opts: any, handler: (userId: string) => Promise<Response>) =>
+    async (_opts: any, handler: (userId: string) => Promise<Response>) =>
       handler('admin-user-1'),
   );
   const mockCheckPermission = vi.fn(async () => ({ authorized: true, userId: 'admin-user-1', error: undefined as string | undefined }));
@@ -167,6 +167,7 @@ vi.mock('@/lib/password', () => ({
 }));
 
 vi.mock('@/lib/permissions', () => ({
+  refreshUserPermissionCache: vi.fn(async () => {}),
   clearUserPermissionCache: vi.fn(async () => {}),
 }));
 

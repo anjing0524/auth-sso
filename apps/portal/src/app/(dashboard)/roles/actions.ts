@@ -22,15 +22,15 @@ import {
 } from '@/domain/role/types';
 import { EntityNotFoundError, DuplicateEntityError } from '@/domain/shared/errors';
 import { generateId } from '@/lib/crypto';
-import { clearUsersPermissionCache } from '@/lib/permissions';
+import { refreshUsersPermissionCache } from '@/lib/permissions';
 import type { ApiResponse } from '@auth-sso/contracts';
 
-/** 获取绑定某角色的所有用户 ID，并清除其权限缓存 */
+/** 获取绑定某角色的所有用户 ID，并主动刷新其权限缓存（删旧 → 查 DB → 写新） */
 async function invalidateRoleBoundUsersCache(roleId: string): Promise<void> {
   const boundUsers = await db.select({ userId: schema.userRoles.userId })
     .from(schema.userRoles).where(eq(schema.userRoles.roleId, roleId));
   if (boundUsers.length > 0) {
-    await clearUsersPermissionCache(boundUsers.map(u => u.userId));
+    await refreshUsersPermissionCache(boundUsers.map(u => u.userId));
   }
 }
 
@@ -57,7 +57,7 @@ export const createRoleAction = withAuth(
     });
 
     revalidatePath('/roles');
-    revalidateTag('roles-list');
+    revalidateTag('roles-list', 'minutes');
     return { success: true, data: { id: role.publicId }, message: '角色创建成功' };
   },
 );
@@ -86,7 +86,7 @@ export const updateRoleAction = withAuth(
     await invalidateRoleBoundUsersCache(roleId);
 
     revalidatePath('/roles');
-    revalidateTag('roles-list');
+    revalidateTag('roles-list', 'minutes');
     return { success: true, data: { id: roleId }, message: '角色更新成功' };
   },
 );
@@ -112,11 +112,11 @@ export const deleteRoleAction = withAuth(
     });
 
     if (boundUsers.length > 0) {
-      await clearUsersPermissionCache(boundUsers.map(u => u.userId));
+      await refreshUsersPermissionCache(boundUsers.map(u => u.userId));
     }
 
     revalidatePath('/roles');
-    revalidateTag('roles-list');
+    revalidateTag('roles-list', 'minutes');
     return { success: true, data: { id: roleId }, message: '角色已删除' };
   },
 );

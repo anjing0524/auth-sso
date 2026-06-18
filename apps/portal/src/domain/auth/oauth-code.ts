@@ -32,7 +32,7 @@ export function validateAuthCodeRow(
   if (row.used) {
     throw new InvalidGrantError('授权码已被使用');
   }
-  if (row.expiresAt < new Date()) {
+  if (Temporal.Instant.fromEpochMilliseconds(row.expiresAt.getTime()) < Temporal.Now.instant()) {
     throw new InvalidGrantError('授权码已过期');
   }
   if (redirectUri && row.redirectUri !== redirectUri) {

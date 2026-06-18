@@ -26,8 +26,10 @@ const {
   mockDb,
   setQueryResult,
   resetDb,
+  mockHeadersGet,
 } = vi.hoisted(() => {
   const state: { _queryResult: any[] } = { _queryResult: [] };
+  const mockHeadersGet = vi.fn().mockReturnValue(null);
 
   const createChain = () => {
     const chain: any = () => {};
@@ -44,6 +46,19 @@ const {
   const mockDb = new Proxy({} as any, {
     get(_t: any, prop: string) {
       if (prop === 'select') return () => createChain();
+      // 支持 Relational Queries：db.query.<table>.findFirst/findMany
+      if (prop === 'query') {
+        return new Proxy({} as any, {
+          get: () => ({
+            findFirst: () => {
+              const c: any = () => {};
+              c.then = (resolve: Function) => resolve(state._queryResult[0] ?? null);
+              return c;
+            },
+            findMany: () => createChain(),
+          }),
+        });
+      }
       return undefined;
     },
   });
@@ -53,6 +68,7 @@ const {
     mockVerifyAccessToken: vi.fn(),
     mockGetUserPermissionContext: vi.fn(),
     mockDb,
+    mockHeadersGet,
     setQueryResult(r: any[]) {
       state._queryResult = r;
     },
@@ -61,6 +77,12 @@ const {
     },
   };
 });
+
+vi.mock('next/headers', () => ({
+  headers: async () => ({
+    get: mockHeadersGet,
+  }),
+}));
 
 vi.mock('@/lib/session', () => ({
   getJwtFromCookie: mockGetJwtFromCookie,
@@ -112,6 +134,10 @@ describe('Me Endpoints', () => {
     jti: 'jti-123',
     iss: 'http://localhost:4101',
     exp: 9999999999,
+    roles: ['ADMIN'],
+    permissions: ['user:list'],
+    deptId: 'dept-1',
+    dataScopeType: 'ALL' as const,
   };
   const mockPermissionContext = createTestPermissionContext();
 
@@ -130,6 +156,8 @@ describe('Me Endpoints', () => {
       createdAt: new Date(),
       updatedAt: new Date(),
       lastLoginAt: new Date(),
+      // getUser 经 Relational Queries 取出，roles 以 userRoles 嵌套结构返回
+      userRoles: [] as Array<{ role: Record<string, any> }>,
       ...overrides,
     };
   }
@@ -137,6 +165,10 @@ describe('Me Endpoints', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     resetDb();
+    mockHeadersGet.mockImplementation(() => null);
+    mockGetJwtFromCookie.mockReset();
+    mockVerifyAccessToken.mockReset();
+    mockGetUserPermissionContext.mockReset();
   });
 
   // ======== GET /api/me ========
@@ -172,6 +204,44 @@ describe('Me Endpoints', () => {
 
       const body = await response.json();
       expect(body.error).toBeDefined();
+    });
+
+    it('通过 Authorization 请求头读取 JWT（无 Gateway 且 Cookie 为空）', async () => {
+      const validJwtStr = 'eyJhbGciOiJFUzI1NiJ9.eyJzdWIiOiJ1c2VyLTEiLCJyb2xlcyI6WyJBRE1JTiJdLCJwZXJtaXNzaW9ucyI6WyJ1c2VyOmxpc3QiXSwiZGVwdElkIjoiZGVwdC0xIiwiZGF0YVNjb3BlVHlwZSI6IkFMTCJ9.signature';
+      mockHeadersGet.mockImplementation((name: string) => {
+        if (name.toLowerCase() === 'authorization') return `Bearer ${validJwtStr}`;
+        return null;
+      });
+      mockGetJwtFromCookie.mockResolvedValueOnce(null);
+      mockVerifyAccessToken.mockResolvedValueOnce(mockClaims);
+      mockGetUserPermissionContext.mockResolvedValueOnce(mockPermissionContext);
+      setQueryResult([makeUserRow(), createTestMenu()]);
+
+      const response = await GetMe(createTestRequest('/api/me'));
+      const body = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(body.user.email).toBe('test@example.com');
+      expect(mockVerifyAccessToken).toHaveBeenCalledWith(validJwtStr);
+    });
+
+    it('在 Gateway 信任路径下通过 Authorization 请求头解析 JWT 且零验签', async () => {
+      const validJwtStr = 'eyJhbGciOiJFUzI1NiJ9.eyJzdWIiOiJ1c2VyLTEiLCJyb2xlcyI6WyJBRE1JTiJdLCJwZXJtaXNzaW9ucyI6WyJ1c2VyOmxpc3QiXSwiZGVwdElkIjoiZGVwdC0xIiwiZGF0YVNjb3BlVHlwZSI6IkFMTCJ9.signature';
+      mockHeadersGet.mockImplementation((name: string) => {
+        if (name.toLowerCase() === 'x-user-id') return 'user-1';
+        if (name.toLowerCase() === 'authorization') return `Bearer ${validJwtStr}`;
+        return null;
+      });
+      mockGetJwtFromCookie.mockResolvedValueOnce(null);
+      mockGetUserPermissionContext.mockResolvedValueOnce(mockPermissionContext);
+      setQueryResult([makeUserRow(), createTestMenu()]);
+
+      const response = await GetMe(createTestRequest('/api/me'));
+      const body = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(body.user.email).toBe('test@example.com');
+      expect(mockVerifyAccessToken).not.toHaveBeenCalled();
     });
 
     it('JWT 验签失败时返回 401', async () => {

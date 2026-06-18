@@ -16,9 +16,9 @@ import 'server-only';
 
 import { cacheLife, cacheTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
-import { eq, desc, and, count, or } from 'drizzle-orm';
-import { getDataScopeFilter } from '@/lib/auth';
-import { UserStatus } from '@auth-sso/contracts';
+import { eq, desc, and, count } from 'drizzle-orm';
+import { byIdOrPublicId } from '@/db/resolve-id';
+
 import {
   USER_LIST_COLUMNS,
   buildUserListConditions,
@@ -33,6 +33,7 @@ import {
  * @returns 用户列表数据及分页信息（纯 JSON 可序列化）
  */
 export async function getUsers(
+  scopeFilter: { type: 'ALL' | 'LIST' | 'SELF'; deptIds?: string[] },
   userId: string,
   params: {
     page: number;
@@ -49,7 +50,7 @@ export async function getUsers(
 
   const { page, pageSize, keyword, status, deptId } = params;
   const offset = (page - 1) * pageSize;
-  const scopeFilter = await getDataScopeFilter(userId);
+
 
   if (isScopeDenied(scopeFilter)) {
     return { data: [], pagination: { page, pageSize, total: 0, totalPages: 0 } };
@@ -83,7 +84,7 @@ export async function getUsers(
   return {
     data: users.map((u) => ({
       ...u,
-      status: u.status as UserStatus,
+      status: u.status,
       name: u.name || u.username || 'Unknown',
       deptName: u.deptName || '未分配',
       createdAt: u.createdAt.toISOString(),
@@ -91,6 +92,30 @@ export async function getUsers(
     })),
     pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) },
   };
+}
+
+/**
+ * OIDC UserInfo 端点专用的轻量用户档案查询
+ *
+ * 仅返回 OIDC 标准字段（sub/name/email/picture/email_verified），
+ * 不做角色/部门 JOIN，适合高频调用的 UserInfo 端点。
+ *
+ * @param userId 用户内部 ID（来自 JWT claims.sub）
+ * @returns 用户档案，不存在时返回 null
+ */
+export async function getUserProfile(userId: string) {
+  const rows = await db
+    .select({
+      publicId: schema.users.publicId,
+      name: schema.users.name,
+      email: schema.users.email,
+      emailVerified: schema.users.emailVerified,
+      avatarUrl: schema.users.avatarUrl,
+    })
+    .from(schema.users)
+    .where(eq(schema.users.id, userId))
+    .limit(1);
+  return rows[0] ?? null;
 }
 
 /**
@@ -103,44 +128,38 @@ export async function getUsers(
  * @returns 用户详情对象，不存在时返回 null
  */
 export async function getUser(lookupId: string) {
-  const userRows = await db.select()
-    .from(schema.users)
-    .where(or(eq(schema.users.id, lookupId), eq(schema.users.publicId, lookupId)))
-    .limit(1);
-  const userRow = userRows[0];
-  if (!userRow) return null;
-
-  // 并行获取角色与部门信息
-  const [roles, dept] = await Promise.all([
-    db.select({
-      id: schema.roles.id,
-      publicId: schema.roles.publicId,
-      code: schema.roles.code,
-      name: schema.roles.name,
-      description: schema.roles.description,
-    }).from(schema.roles)
-      .innerJoin(schema.userRoles, eq(schema.roles.id, schema.userRoles.roleId))
-      .where(eq(schema.userRoles.userId, userRow.id)),
-    userRow.deptId
-      ? db.select().from(schema.departments).where(eq(schema.departments.id, userRow.deptId)).limit(1).then(r => r[0] ?? null)
-      : null,
-  ]);
+  // 使用 Relational Queries 一次性取出用户、角色、部门（FK 已建立，一次 DB 往返）
+  const user = await db.query.users.findFirst({
+    where: byIdOrPublicId('users', lookupId),
+    with: {
+      userRoles: { with: { role: true } },
+      department: true,
+    },
+  });
+  if (!user) return null;
 
   return {
-    id: userRow.id,
-    publicId: userRow.publicId,
-    username: userRow.username,
-    email: userRow.email,
-    name: userRow.name,
-    avatarUrl: userRow.avatarUrl,
-    status: userRow.status,
-    deptId: userRow.deptId,
-    deptName: dept?.name || null,
-    emailVerified: userRow.emailVerified,
-    createdAt: userRow.createdAt.toISOString(),
-    updatedAt: userRow.updatedAt?.toISOString() ?? null,
-    lastLoginAt: userRow.lastLoginAt?.toISOString() ?? null,
-    roles,
+    id: user.id,
+    publicId: user.publicId,
+    username: user.username,
+    email: user.email,
+    name: user.name,
+    avatarUrl: user.avatarUrl,
+    status: user.status,
+    deptId: user.deptId,
+    deptName: user.department?.name || null,
+    emailVerified: user.emailVerified,
+    createdAt: user.createdAt.toISOString(),
+    updatedAt: user.updatedAt?.toISOString() ?? null,
+    lastLoginAt: user.lastLoginAt?.toISOString() ?? null,
+    // 投影为对外契约一致的扁平角色结构（DTO）
+    roles: user.userRoles.map(ur => ({
+      id: ur.role.id,
+      publicId: ur.role.publicId,
+      code: ur.role.code,
+      name: ur.role.name,
+      description: ur.role.description,
+    })),
   };
 }
 
@@ -162,19 +181,31 @@ export async function getDepartments() {
  * 获取用户绑定的角色列表（含分配时间）
  */
 export async function getUserRoles(lookupId: string) {
-  return db.select({
-    id: schema.roles.id,
-    publicId: schema.roles.publicId,
-    code: schema.roles.code,
-    name: schema.roles.name,
-    description: schema.roles.description,
-    dataScopeType: schema.roles.dataScopeType,
-    status: schema.roles.status,
-    assignedAt: schema.userRoles.createdAt,
-  })
-    .from(schema.roles)
-    .innerJoin(schema.userRoles, eq(schema.roles.id, schema.userRoles.roleId))
-    .innerJoin(schema.users, eq(schema.userRoles.userId, schema.users.id))
-    .where(or(eq(schema.users.id, lookupId), eq(schema.users.publicId, lookupId)))
-    .orderBy(desc(schema.userRoles.createdAt));
+  // 使用 Relational Queries 一次性取出用户绑定的角色及分配时间
+  const user = await db.query.users.findFirst({
+    where: byIdOrPublicId('users', lookupId),
+    with: {
+      userRoles: {
+        orderBy: (userRoles, { desc }) => [desc(userRoles.createdAt)],
+        with: {
+          role: true,
+        },
+      },
+    },
+  });
+
+  if (!user) return [];
+
+  return user.userRoles
+    .filter(ur => ur.role !== null)
+    .map(ur => ({
+      id: ur.role.id,
+      publicId: ur.role.publicId,
+      code: ur.role.code,
+      name: ur.role.name,
+      description: ur.role.description,
+      dataScopeType: ur.role.dataScopeType,
+      status: ur.role.status,
+      assignedAt: ur.createdAt,
+    }));
 }

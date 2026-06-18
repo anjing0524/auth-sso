@@ -13,7 +13,7 @@ interface RouteParams { params: Promise<{ id: string }>; }
 
 /** GET /api/departments/[id] — 委托 data.ts */
 export async function GET(request: NextRequest, { params }: RouteParams) {
-  return withPermission(request, { permissions: ['department:read'] }, async (userId) => {
+  return withPermission({ permissions: ['department:read'] }, async (userId) => {
     const { id } = await params;
     const dept = await getDepartmentById(id);
     if (!dept) return NextResponse.json({ error: DEPARTMENT_ERRORS.DEPARTMENT_NOT_FOUND, message: '部门不存在' }, { status: 404 });

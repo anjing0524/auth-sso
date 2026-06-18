@@ -9,7 +9,6 @@ import 'server-only';
  * @module lib/auth/require-permission
  */
 import { cache } from 'react';
-import { headers } from 'next/headers';
 import { checkPermission, type PermissionCheckOptions } from './check-permission';
 
 /**
@@ -20,7 +19,7 @@ import { checkPermission, type PermissionCheckOptions } from './check-permission
  */
 export const requirePermission = cache(
   async (options: PermissionCheckOptions): Promise<string | null> => {
-    const auth = await checkPermission(await headers(), options);
+    const auth = await checkPermission(options);
     return auth.authorized && auth.userId ? auth.userId : null;
   },
 );

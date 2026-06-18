@@ -18,8 +18,8 @@ export function toDomainMenu(row: {
   icon: string | null;
   visible: boolean | null;
   sort: number | null;
-  menuType: string;
-  status: string;
+  menuType: import('@auth-sso/contracts').MenuType;
+  status: import('@auth-sso/contracts').EntityStatus;
   createdAt: Date;
 }): Menu {
   return {
@@ -32,8 +32,8 @@ export function toDomainMenu(row: {
     icon: row.icon,
     visible: row.visible ?? true,
     sort: row.sort ?? 0,
-    menuType: row.menuType as MenuType,
-    status: row.status as EntityStatus,
+    menuType: row.menuType,
+    status: row.status,
     createdAt: Temporal.Instant.fromEpochMilliseconds(row.createdAt.getTime()),
   };
 }

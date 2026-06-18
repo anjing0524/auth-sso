@@ -8,6 +8,7 @@ import { eq, ne, or, ilike, and } from 'drizzle-orm';
 import { schema } from '@/infrastructure/db';
 import { applyDataScopeFilter } from '@/lib/auth/data-scope';
 import type { UserStatus } from '@auth-sso/contracts';
+import { asUserStatus } from '@/lib/type-guards';
 
 /**
  * 用户列表查询通用列选择（11 列 + deptName JOIN 字段）
@@ -54,7 +55,7 @@ export function buildUserListConditions(params: {
 
   // 状态筛选
   if (status && status !== 'ALL') {
-    conditions.push(eq(schema.users.status, status as UserStatus));
+    conditions.push(eq(schema.users.status, asUserStatus(status)));
   }
 
   // 数据范围过滤

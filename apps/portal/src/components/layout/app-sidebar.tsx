@@ -157,7 +157,7 @@ export function AppSidebar({ user, dynamicMenus = [] }: {
                         </CollapsibleTrigger>
                         <CollapsibleContent>
                           <SidebarMenuSub className="ml-4 border-l-2 border-slate-100 dark:border-slate-800">
-                            {item.children.map((sub: MenuItem) => (
+                            {item.children?.map((sub: MenuItem) => (
                               <SidebarMenuSubItem key={sub.id}>
                                 <SidebarMenuSubButton asChild isActive={pathname === sub.url} className="h-9 rounded-lg px-4">
                                   <Link href={sub.url}>

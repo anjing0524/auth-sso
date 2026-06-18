@@ -10,6 +10,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { getAppBaseURL, getEnvConfig } from '@/lib/env';
+import { COOKIE_NAMES, TOKEN_TTL } from '@auth-sso/contracts';
 
 export const runtime = 'nodejs';
 
@@ -67,7 +68,7 @@ export async function GET(request: NextRequest) {
     const response = NextResponse.redirect(new URL(targetUrl, url.origin));
 
     // Set-Cookie: portal_jwt_token（OAuth 签发的 Access Token，含完整 claims）
-    response.cookies.set('portal_jwt_token', tokens.access_token, {
+    response.cookies.set(COOKIE_NAMES.JWT, tokens.access_token, {
       path: '/',
       httpOnly: true,
       secure: isProduction,
@@ -77,12 +78,12 @@ export async function GET(request: NextRequest) {
 
     // Set-Cookie: portal_refresh_token（如果有）
     if (tokens.refresh_token) {
-      response.cookies.set('portal_refresh_token', tokens.refresh_token, {
+      response.cookies.set(COOKIE_NAMES.REFRESH, tokens.refresh_token, {
         path: '/api/auth/refresh',
         httpOnly: true,
         secure: isProduction,
         sameSite: 'lax',
-        maxAge: 7 * 24 * 3600,
+        maxAge: TOKEN_TTL.REFRESH_TOKEN,
       });
     }
 

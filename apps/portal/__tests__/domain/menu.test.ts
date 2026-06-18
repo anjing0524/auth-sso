@@ -57,7 +57,7 @@ describe('Menu 领域核心规则', () => {
       id: 'id1', publicId: 'pub1', parentId: 'parent1',
       name: '用户管理', path: '/users', permissionCode: 'user:list',
       icon: 'Users', visible: true, sort: 10,
-      menuType: 'MENU', status: 'ACTIVE',
+      menuType: 'MENU' as any, status: 'ACTIVE' as any,
       createdAt: new Date('2025-01-01'),
     };
     const menu = toDomainMenu(row);

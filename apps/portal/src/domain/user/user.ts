@@ -17,7 +17,7 @@ export function toDomainUser(row: {
   email: string | null;
   name: string;
   avatarUrl: string | null;
-  status: string;
+  status: UserStatus;
   deptId: string | null;
   createdAt: Date;
 }): User {
@@ -28,7 +28,7 @@ export function toDomainUser(row: {
     email: row.email,
     name: row.name,
     avatarUrl: row.avatarUrl,
-    status: row.status as UserStatus,
+    status: row.status,
     deptId: row.deptId,
     deptName: null,
     createdAt: Temporal.Instant.fromEpochMilliseconds(row.createdAt.getTime()),

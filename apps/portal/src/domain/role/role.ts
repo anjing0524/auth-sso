@@ -14,9 +14,9 @@ export function toDomainRole(row: {
   name: string;
   code: string;
   description: string | null;
-  dataScopeType: string;
+  dataScopeType: DataScopeType;
   isSystem: boolean | null;
-  status: string;
+  status: EntityStatus;
   sort: number | null;
   createdAt: Date;
 }): Role {
@@ -26,9 +26,9 @@ export function toDomainRole(row: {
     name: row.name,
     code: row.code,
     description: row.description,
-    dataScopeType: row.dataScopeType as DataScopeType,
+    dataScopeType: row.dataScopeType,
     isSystem: row.isSystem ?? false,
-    status: row.status as EntityStatus,
+    status: row.status,
     sort: row.sort ?? 0,
     createdAt: Temporal.Instant.fromEpochMilliseconds(row.createdAt.getTime()),
   };

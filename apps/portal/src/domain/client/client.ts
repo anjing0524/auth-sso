@@ -1,4 +1,3 @@
-import type { EntityStatus } from '@auth-sso/contracts';
 import { ENTITY_ACTIVE } from '@auth-sso/contracts';
 import type { CreateClientInput, Client } from './types';
 
@@ -7,7 +6,7 @@ export type { Client };
 /**
  * 将 Drizzle 数据库行转换为领域 Client 实体
  *
- * redirectUrls 已是 PG 原生 text[] 数组，无需应用层解析。
+ * Drizzle 属性名与 Domain 字段名已对齐（redirectUris / logoUrl），无需应用层映射。
  */
 export function toDomainClient(row: {
   id: string;
@@ -15,13 +14,13 @@ export function toDomainClient(row: {
   name: string;
   clientId: string;
   clientSecret: string | null;
-  redirectUrls: string[];
+  redirectUris: string[];
   scopes: string;
   homepageUrl: string | null;
-  icon: string | null;
+  logoUrl: string | null;
   accessTokenTtl: number | null;
   refreshTokenTtl: number | null;
-  status: string;
+  status: import('@auth-sso/contracts').EntityStatus;
   userId?: string | null;
   createdAt: Date;
 }): Client {
@@ -31,13 +30,13 @@ export function toDomainClient(row: {
     name: row.name,
     clientId: row.clientId,
     clientSecret: row.clientSecret,
-    redirectUris: row.redirectUrls,
+    redirectUris: row.redirectUris,
     scopes: row.scopes,
     homepageUrl: row.homepageUrl,
-    logoUrl: row.icon,
+    logoUrl: row.logoUrl,
     accessTokenTtl: row.accessTokenTtl ?? 3600,
     refreshTokenTtl: row.refreshTokenTtl ?? 604800,
-    status: row.status as EntityStatus,
+    status: row.status,
     userId: row.userId ?? null,
     createdAt: Temporal.Instant.fromEpochMilliseconds(row.createdAt.getTime()),
   };
@@ -102,10 +101,10 @@ export function clientToInsertRow(c: Client) {
     name: c.name,
     clientId: c.clientId,
     clientSecret: c.clientSecret,
-    redirectUrls: c.redirectUris,
+    redirectUris: c.redirectUris,
     scopes: c.scopes,
     homepageUrl: c.homepageUrl,
-    icon: c.logoUrl,
+    logoUrl: c.logoUrl,
     accessTokenTtl: c.accessTokenTtl,
     refreshTokenTtl: c.refreshTokenTtl,
     status: c.status,
@@ -117,10 +116,10 @@ export function clientToInsertRow(c: Client) {
 export function clientToUpdateRow(c: Client) {
   return {
     name: c.name,
-    redirectUrls: c.redirectUris,
+    redirectUris: c.redirectUris,
     scopes: c.scopes,
     homepageUrl: c.homepageUrl,
-    icon: c.logoUrl,
+    logoUrl: c.logoUrl,
     accessTokenTtl: c.accessTokenTtl,
     refreshTokenTtl: c.refreshTokenTtl,
     status: c.status,

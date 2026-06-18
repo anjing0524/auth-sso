@@ -21,7 +21,7 @@ describe('Permission 领域核心规则', () => {
   });
 
   it('应支持指定权限类型', () => {
-    const input = CreatePermissionInputSchema.parse({ name: '仪表盘', code: 'dashboard:view', type: 'MENU' });
+    const input = CreatePermissionInputSchema.parse({ name: '仪表盘', code: 'dashboard:view', type: 'MENU' as any });
     const perm = createPermission(input, mockIdGen);
     expect(perm.type).toBe('MENU');
   });
@@ -38,8 +38,8 @@ describe('Permission 领域核心规则', () => {
   it('toDomainPermission 应正确转换 DB 行', () => {
     const row = {
       id: 'id1', publicId: 'pub1', name: '创建用户', code: 'user:create',
-      type: 'API', resource: '/api/users', action: 'create',
-      parentId: null, status: 'ACTIVE', sort: 10,
+      type: 'API' as any, resource: '/api/users', action: 'create',
+      parentId: null, status: 'ACTIVE' as any, sort: 10,
       createdAt: new Date('2025-01-01'),
     };
     const perm = toDomainPermission(row);

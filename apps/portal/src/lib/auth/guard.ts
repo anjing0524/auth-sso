@@ -12,7 +12,6 @@ import 'server-only';
  *
  * @module lib/auth/guard
  */
-import { headers } from 'next/headers';
 import { checkPermission, type PermissionCheckOptions } from './check-permission';
 import { mapDomainError } from '@/domain/shared/error-mapping';
 import type { ApiResponse } from '@auth-sso/contracts';
@@ -46,7 +45,7 @@ export function withAuth<TArgs extends unknown[], TData>(
 ): (...args: TArgs) => Promise<ApiResponse<TData>> {
   return async (...args: TArgs): Promise<ApiResponse<TData>> => {
     // 第一道：精细权限编码/角色校验（实时查 DB + Redis 缓存）
-    const check = await checkPermission(await headers(), options);
+    const check = await checkPermission(options);
     if (!check.authorized || !check.userId) {
       return { success: false, error: check.error || 'FORBIDDEN', message: check.error || '权限不足' };
     }

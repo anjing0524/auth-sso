@@ -82,8 +82,7 @@ describe('Mock 基础设施', () => {
       const { mockFn } = createMockWithPermission('user-42');
       const handler = vi.fn(async (userId: string) => new Response(userId) as any);
 
-      const request = createTestRequest('/api/test');
-      await mockFn(request, {}, handler);
+      await mockFn({}, handler);
 
       expect(handler).toHaveBeenCalledWith('user-42');
     });
@@ -92,8 +91,7 @@ describe('Mock 基础设施', () => {
       const { mockFn, mockUnauthorized } = createMockWithPermission();
       mockUnauthorized(401, '未登录');
 
-      const request = createTestRequest('/api/test');
-      const result = await mockFn(request, {}, async () => new Response('ok') as any);
+      const result = await mockFn({}, async () => new Response('ok') as any);
       expect(result.status).toBe(401);
     });
   });

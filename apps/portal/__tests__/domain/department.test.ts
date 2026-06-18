@@ -74,8 +74,8 @@ describe('Department 领域核心规则', () => {
 
   it('toDomainDepartment 应正确转换 DB 行', () => {
     const row = {
-      id: 'id1', publicId: 'pub1', parentId: 'parent1', name: 'HR',
-      code: 'HR_CODE', sort: 10, status: 'ACTIVE', createdAt: new Date('2025-01-01'),
+      id: 'id1', publicId: 'pub1', parentId: 'parent1', ancestors: null, name: 'HR',
+      code: 'HR_CODE', sort: 10, status: 'ACTIVE' as any, createdAt: new Date('2025-01-01'),
     };
     const dept = toDomainDepartment(row);
     expect(dept.name).toBe('HR');

@@ -16,6 +16,8 @@ export function createTestUser(overrides: Record<string, any> = {}) {
     deptId: 'dept-1',
     createdAt: new Date('2026-01-01'),
     updatedAt: new Date('2026-01-01'),
+    // getUser 经 Relational Queries 取出，roles 以 userRoles 嵌套结构返回
+    userRoles: [] as Array<{ role: Record<string, any> }>,
     ...overrides,
   };
 }

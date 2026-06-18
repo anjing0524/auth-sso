@@ -8,6 +8,7 @@ import 'server-only';
  * @module lib/oauth-utils
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { COOKIE_NAMES } from '@auth-sso/contracts';
 
 /**
  * 构建 OAuth 错误重定向响应 — 将错误信息作为 query params 拼接到 /oauth/error 页面
@@ -36,7 +37,7 @@ export function buildOAuthErrorRedirect(
  */
 export function clearLoginSessionCookie(response: NextResponse): void {
   const isProduction = process.env.NODE_ENV === 'production';
-  response.cookies.set('login_session', '', {
+  response.cookies.set(COOKIE_NAMES.LOGIN_SESSION, '', {
     path: '/api/auth/oauth2/authorize',
     httpOnly: true,
     secure: isProduction,

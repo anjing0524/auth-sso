@@ -11,7 +11,7 @@ import { db, schema } from '@/infrastructure/db';
 import type { AuditParams } from '@/db/schema/logs';
 import { NextRequest } from 'next/server';
 import { generateId } from '@/lib/crypto';
-import { type LoginEventType } from '@auth-sso/contracts';
+import { type LoginEventType, type AuditOperation } from '@auth-sso/contracts';
 
 /**
  * 获取 HTTP 请求的真实客户端 IP 地址
@@ -33,14 +33,7 @@ export function getClientIP(request: NextRequest): string {
   return 'unknown';
 }
 
-/** 审计操作类型 */
-export type AuditOperation =
-  | 'USER_CREATE' | 'USER_UPDATE' | 'USER_DELETE' | 'USER_ROLE_ASSIGN'
-  | 'ROLE_CREATE' | 'ROLE_UPDATE' | 'ROLE_DELETE' | 'ROLE_PERMISSION_ASSIGN'
-  | 'PERMISSION_CREATE' | 'PERMISSION_UPDATE' | 'PERMISSION_DELETE'
-  | 'DEPARTMENT_CREATE' | 'DEPARTMENT_UPDATE' | 'DEPARTMENT_DELETE'
-  | 'CLIENT_CREATE' | 'CLIENT_UPDATE' | 'CLIENT_DELETE' | 'CLIENT_SECRET_REGENERATE'
-  | 'TOKEN_REVOKE';
+// AuditOperation 类型已迁移至 @auth-sso/contracts，此处直接从 contracts 导入使用
 
 export interface LoginLogParams {
   userId?: string;

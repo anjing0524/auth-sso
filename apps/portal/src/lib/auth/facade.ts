@@ -13,7 +13,6 @@ import 'server-only';
  * @module lib/auth/facade
  */
 import { NextResponse } from 'next/server';
-import type { NextRequest } from 'next/server';
 import { COMMON_ERRORS } from '@auth-sso/contracts';
 import { mapDomainError } from '@/domain/shared/error-mapping';
 import type { PortalJwtClaims } from '../session';
@@ -47,12 +46,11 @@ export type { PermissionCheckOptions, PermissionCheckResult };
  * @returns 统一脱敏且契约化的 NextResponse
  */
 export async function withPermission(
-  request: NextRequest,
   options: PermissionCheckOptions,
   handler: (userId: string, claims: PortalJwtClaims) => Promise<NextResponse>
 ): Promise<NextResponse> {
   try {
-    const check = await checkPermission(request, options);
+    const check = await checkPermission(options);
 
     if (!check.authorized) {
       return NextResponse.json(

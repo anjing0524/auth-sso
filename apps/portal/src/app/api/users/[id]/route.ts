@@ -17,7 +17,7 @@ interface RouteParams {
 
 /** GET /api/users/[id] — 委托 data.ts 获取用户详情 */
 export async function GET(request: NextRequest, { params }: RouteParams) {
-  return withPermission(request, { permissions: ['user:read'] }, async (adminUserId) => {
+  return withPermission({ permissions: ['user:read'] }, async (adminUserId) => {
     const { id } = await params;
     const user = await getUser(id);
     if (!user) {

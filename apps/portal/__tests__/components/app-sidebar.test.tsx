@@ -148,8 +148,8 @@ describe('AppSidebar', () => {
         url: '/settings',
         icon: 'Settings',
         children: [
-          { id: 'profile', title: '个人资料', url: '/settings/profile' },
-          { id: 'security', title: '安全设置', url: '/settings/security' },
+          { id: 'profile', title: '个人资料', url: '/settings/profile', icon: '' },
+          { id: 'security', title: '安全设置', url: '/settings/security', icon: '' },
         ],
       },
     ];

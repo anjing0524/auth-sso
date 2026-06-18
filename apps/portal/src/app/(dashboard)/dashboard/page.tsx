@@ -33,40 +33,16 @@ import {
   TableRow
 } from '@/components/ui/table';
 
-import { db, schema } from '@/infrastructure/db';
-import { eq, ne, desc, count } from 'drizzle-orm';
+import { getDashboardStats, getRecentAuditLogs } from './data';
 
-export const revalidate = 0; // 不缓存，每次都动态计算以体现最新状态
+export const dynamic = 'force-dynamic';
 
 export default async function DashboardPage() {
-  // 服务端直调 Drizzle 数据库拉取核心指标与安全日志
-  const [
-    [usersCount],
-    [rolesCount],
-    [clientsCount],
-    recentLogs
-  ] = await Promise.all([
-    db.select({ count: count() }).from(schema.users).where(ne(schema.users.status, 'DELETED')),
-    db.select({ count: count() }).from(schema.roles),
-    db.select({ count: count() }).from(schema.clients),
-    db.select({
-      id: schema.auditLogs.id,
-      username: schema.users.username,
-      operation: schema.auditLogs.operation,
-      status: schema.auditLogs.status,
-      createdAt: schema.auditLogs.createdAt,
-    })
-      .from(schema.auditLogs)
-      .leftJoin(schema.users, eq(schema.auditLogs.userId, schema.users.id))
-      .orderBy(desc(schema.auditLogs.createdAt))
-      .limit(8)
+  // 鉴权由 layout.tsx 统一处理（requirePermission(['dashboard:view'])），本组件零鉴权样板
+  const [stats, recentLogs] = await Promise.all([
+    getDashboardStats(),
+    getRecentAuditLogs(),
   ]);
-
-  const stats = {
-    users: Number(usersCount?.count || 0),
-    roles: Number(rolesCount?.count || 0),
-    clients: Number(clientsCount?.count || 0),
-  };
 
   return (
     <div className="flex-1 space-y-6 p-1 pt-2">

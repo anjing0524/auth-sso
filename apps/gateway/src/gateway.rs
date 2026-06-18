@@ -136,6 +136,7 @@ impl Gateway {
 
         let mut validation = Validation::new(Algorithm::ES256);
         validation.set_issuer(&[&self.issuer]);
+        validation.validate_aud = false; // Gateway 仅校验签名与 issuer，aud 由 Portal 自行校验
 
         // 通过 OIDC Discovery 动态获取支持的签名算法，替换硬编码的 ES256
         let discovered_algorithms = self.jwks_cache.get_supported_algorithms();
@@ -178,6 +179,9 @@ impl Gateway {
                         }
                     }
                 }
+
+                // userId → jti 映射由 Portal（Token 签发方）维护
+                // Gateway 职责：jti 黑名单检查（已完成）+ 注入身份 header
 
                 ctx.auth_header = Some(format!("Bearer {}", token));
                 ctx.user_id = Some(token_data.claims.sub);
@@ -465,8 +469,13 @@ mod tests {
         let claims = Claims {
             sub: "user-123".to_string(),
             iss: issuer.clone(),
+            aud: "portal-client".to_string(),
             exp: (now + 3600) as usize,
             jti: "jti-123".to_string(),
+            roles: vec!["ADMIN".to_string()],
+            permissions: vec!["user:list".to_string()],
+            dept_id: "dept-1".to_string(),
+            data_scope_type: "ALL".to_string(),
         };
         let mut header = Header::new(Algorithm::HS256);
         header.kid = Some(kid);
@@ -518,8 +527,13 @@ mod tests {
         let claims = Claims {
             sub: "user-123".to_string(),
             iss: issuer.clone(),
+            aud: "portal-client".to_string(),
             exp: (now - 600) as usize, // 10分钟前已过期
             jti: "jti-123".to_string(),
+            roles: vec![],
+            permissions: vec![],
+            dept_id: String::new(),
+            data_scope_type: "SELF".to_string(),
         };
         let mut header = Header::new(Algorithm::HS256);
         header.kid = Some(kid);
@@ -567,8 +581,13 @@ mod tests {
         let claims = Claims {
             sub: "user-123".to_string(),
             iss: "https://hacker.com".to_string(),
+            aud: "portal-client".to_string(),
             exp: (now + 3600) as usize,
             jti: "jti-123".to_string(),
+            roles: vec![],
+            permissions: vec![],
+            dept_id: String::new(),
+            data_scope_type: "SELF".to_string(),
         };
         let mut header = Header::new(Algorithm::HS256);
         header.kid = Some(kid);
@@ -615,8 +634,13 @@ mod tests {
         let claims = Claims {
             sub: "user-123".to_string(),
             iss: issuer.clone(),
+            aud: "portal-client".to_string(),
             exp: (now + 3600) as usize,
             jti: "jti-123".to_string(),
+            roles: vec![],
+            permissions: vec![],
+            dept_id: String::new(),
+            data_scope_type: "SELF".to_string(),
         };
         let mut header = Header::new(Algorithm::HS256);
         // 使用一个未在缓存中登记的 kid

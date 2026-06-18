@@ -13,7 +13,7 @@ interface RouteParams { params: Promise<{ id: string }>; }
 
 /** GET /api/permissions/[id] — 委托 data.ts */
 export async function GET(request: NextRequest, { params }: RouteParams) {
-  return withPermission(request, { permissions: ['permission:list'] }, async () => {
+  return withPermission({ permissions: ['permission:list'] }, async () => {
     const { id } = await params;
     const perm = await getPermissionById(id);
     if (!perm) return NextResponse.json({ error: COMMON_ERRORS.NOT_FOUND, message: '权限不存在' }, { status: 404 });

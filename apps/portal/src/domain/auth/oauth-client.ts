@@ -39,12 +39,12 @@ export function validateClientSecret(
 
 /**
  * 校验 redirect_uri 是否在 Client 注册的白名单中
- * @param redirectUrls - Client 注册的 redirect URI 数组（PG text[]）
+ * @param redirectUris - Client 注册的 redirect URI 数组（PG text[]）
  * @param redirectUri - 请求中的 redirect_uri
  * @throws InvalidRedirectUriError 当 redirect_uri 不在白名单中
  */
-export function validateRedirectUri(redirectUrls: string[], redirectUri: string): void {
-  if (!redirectUrls.some((uri) => redirectUri.startsWith(uri))) {
+export function validateRedirectUri(redirectUris: string[], redirectUri: string): void {
+  if (!redirectUris.some((uri) => redirectUri.startsWith(uri))) {
     throw new InvalidRedirectUriError();
   }
 }

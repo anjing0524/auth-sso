@@ -12,6 +12,8 @@ export interface Department {
   publicId: string;
   /** 父部门 ID */
   parentId: string | null;
+  /** 物化路径 (ancestors)，用于高效子树查询。顶级为 null，子级如 'dept_001/dept_002' */
+  ancestors: string | null;
   /** 部门名称 */
   name: string;
   /** 部门编码 */

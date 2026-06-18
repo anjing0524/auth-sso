@@ -4,8 +4,9 @@ import 'server-only';
  * 身份验证子模块 (Identity Verification)
  *
  * 双层策略：
- * 1. Gateway 信任路径 — 读取 X-User-Id header（Gateway 已完成 ES256 离线验签）
- *    适用于：Server Components / Server Actions / API Routes（均在 Gateway 后）
+ * 1. Gateway 信任路径 — 读取 X-User-Id header
+ *    Gateway 已完成 ES256 离线验签 + jti 黑名单校验 + userId→jti 追踪，
+ *    Portal 信任其结果，零验签、零额外 I/O。
  * 2. JWT Cookie 验签 — 兜底路径，适用于本地开发无 Gateway、OAuth 外部端点
  *
  * 使用 React.cache() 实现同请求去重，嵌套 SC layout/page 调用命中缓存。
@@ -16,42 +17,75 @@ import { cache } from 'react';
 import { headers } from 'next/headers';
 import { getJwtFromCookie } from '../session';
 import { verifyAccessToken } from '@/lib/auth/token';
-import type { ResolvedIdentity } from '@/domain/auth/types';
+import { decodeJwtPayload } from '@/lib/session/jwt';
+import { GATEWAY_HEADERS } from '@auth-sso/contracts';
+import type { ResolvedIdentity, PortalJwtClaims } from '@/domain/auth/types';
 
 export type { ResolvedIdentity };
 
+/** Gateway 路径下 claims 缺失时的最小 fallback */
+const EMPTY_CLAIMS: PortalJwtClaims = {
+  sub: '',
+  iss: '',
+  aud: '',
+  jti: '',
+  roles: [],
+  permissions: [],
+  deptId: '',
+  dataScopeType: 'SELF',
+};
+
 /**
  * 从 header 中读取 Gateway 注入的 X-User-Id。
- * Gateway 已完成 ES256 验签 + Cookie 零拷贝解析，Portal 信任其注入的 header。
- * 仅在内网环境下安全——需确保外网无法直接访问 Portal。
+ * Gateway 已完成全套验签，Portal 信任其注入的 header。
  */
 async function getGatewayUserId(): Promise<string | null> {
   try {
     const h = await headers();
-    return h.get('x-user-id') || null;
+    return h.get(GATEWAY_HEADERS.USER_ID) || null;
   } catch {
-    return null; // 本地 dev / 非 HTTP 上下文
+    return null;
   }
+}
+
+/**
+ * 尝试从请求上下文（Authorization 请求头或 Cookie）中提取 JWT
+ */
+async function getJwtFromRequest(): Promise<string | null> {
+  try {
+    const h = await headers();
+    const auth = h.get('Authorization') || h.get('authorization');
+    if (auth && auth.toLowerCase().startsWith('bearer ')) {
+      return auth.substring(7).trim();
+    }
+  } catch {}
+  return getJwtFromCookie();
 }
 
 /**
  * 从当前请求解析用户身份。
  *
- * 优先信任 Gateway X-User-Id → 零验签、零 DB。
- * 兜底 JWT Cookie 验签 → 适用于本地开发无 Gateway 环境。
- *
- * React.cache() 保证同一次 HTTP 请求内嵌套 SC (layout → sub-layout → page) 只执行一次。
+ * 优先信任 Gateway X-User-Id → 从请求中提取 JWT 并快速解码获取完整 claims（不验签，Gateway 已验证）。
+ * 兜底 JWT Cookie/Header 验签 → 适用于本地开发无 Gateway 环境。
  */
 export const resolveIdentity = cache(
   async (): Promise<ResolvedIdentity | null> => {
-    // Layer 1: 信任 Gateway（生产环境主路径，0ms + 0 DB）
     const gatewayUserId = await getGatewayUserId();
+    const token = await getJwtFromRequest();
+
     if (gatewayUserId) {
-      return { userId: gatewayUserId, claims: null };
+      // Gateway 已验证 JWT，Portal 从请求快速解码获取完整 claims
+      if (token) {
+        const claims = decodeJwtPayload(token);
+        if (claims) {
+          return { userId: gatewayUserId, claims };
+        }
+      }
+      // 极端情况：有 X-User-Id 但无 JWT → 降级最小 claims
+      return { userId: gatewayUserId, claims: { ...EMPTY_CLAIMS, sub: gatewayUserId } };
     }
 
-    // Layer 2: JWT Cookie 验签（本地开发兜底）
-    const token = await getJwtFromCookie();
+    // Fallback：无 Gateway，自验签
     if (!token) return null;
 
     const claims = await verifyAccessToken(token);

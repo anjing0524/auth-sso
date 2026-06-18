@@ -19,12 +19,14 @@ export const departments = pgTable('departments', {
   parentId: text('parent_id'),
   name: text('name').notNull(),
   code: text('code'),
+  ancestors: text('ancestors'),  // 物化路径，顶级为 NULL；子树查询: id = X OR ancestors LIKE 'X/%'
   sort: integer('sort').default(0),
   status: entityStatusEnum('status').notNull().default('ACTIVE'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: updatedAtColumn(),
 }, (t) => [
   index('idx_departments_parent').on(t.parentId),
+  index('idx_departments_ancestors').on(t.ancestors),
 ]);
 
 /**

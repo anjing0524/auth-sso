@@ -35,6 +35,28 @@ export const OIDC_SCOPES = {
   OFFLINE_ACCESS: 'offline_access',
 } as const;
 
+// Token 有效期 (秒)
+export const TOKEN_TTL = {
+  /** 登录会话 Token (5 分钟) */
+  LOGIN_SESSION: 300,
+  /** OAuth Access Token (1 小时) */
+  ACCESS_TOKEN: 3600,
+  /** OAuth Refresh Token (7 天) */
+  REFRESH_TOKEN: 7 * 24 * 3600,
+} as const;
+
+// Redis Key 前缀（Portal ↔ Gateway 共享）
+export const REDIS_KEY_PREFIX = {
+  /** JTI 黑名单 Key 前缀 — Gateway + Portal 双重校验 */
+  JTI_BLOCKLIST: 'portal:jti_blocklist:',
+  /** 用户 → JTI 映射 Key 前缀 — Portal 维护 */
+  USER_JTI: 'portal:user_jti:',
+  /** 授权码 Key 前缀 */
+  AUTH_CODE: 'portal:auth_code:',
+  /** PKCE 验证数据 Key 前缀 */
+  PKCE: 'portal:pkce:',
+} as const;
+
 // 默认支持的 Scope
 export const DEFAULT_SCOPES = [
   OIDC_SCOPES.OPENID,

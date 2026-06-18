@@ -1,14 +1,17 @@
 /**
  * 获取当前用户信息 API (GET /api/me)
  *
- * 纯 JWT Cookie 认证——已移除 Better Auth getSession 回退。
+ * 优先信任 Gateway X-User-Id 注入路径（零验签，零额外 I/O）：
+ * - 有 X-User-Id → resolveIdentity 从 Cookie JWT 快速解码 claims（不验签）
+ * - 无 X-User-Id → resolveIdentity 自验签兜底（本地开发场景）
+ *
+ * 权限/角色/数据范围直接从 claims 读取，不再调用 getUserPermissionContext，
+ * 与 (dashboard)/layout.tsx 的处理模式完全对齐。
  *
  * @route GET /api/me
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { getJwtFromCookie } from '@/lib/session';
-import { verifyAccessToken } from '@/lib/auth/token';
-import { getUserPermissionContext } from '@/lib/permissions';
+import { resolveIdentity } from '@/lib/auth';
 import { getDynamicMenuTree } from '@/lib/menu-tree';
 import { mapDomainError } from '@/domain/shared/error-mapping';
 import { COMMON_ERRORS, ADMIN_ROLE_CODES } from '@auth-sso/contracts';
@@ -16,28 +19,25 @@ import { getUser } from '@/app/(dashboard)/users/data';
 
 export const runtime = 'nodejs';
 
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   try {
-    // 纯 JWT Cookie 认证
-    const token = await getJwtFromCookie();
-    if (!token) {
+    // Gateway 已完成 ES256 验签 + jti 黑名单，Portal 信任其注入的 X-User-Id
+    // resolveIdentity: 有 X-User-Id → Cookie 快速解码（零验签）；无则自验签兜底
+    const identity = await resolveIdentity();
+    if (!identity) {
       return NextResponse.json(
         { error: COMMON_ERRORS.UNAUTHORIZED, message: '未登录' },
         { status: 401 },
       );
     }
 
-    const claims = await verifyAccessToken(token);
-    if (!claims) {
-      return NextResponse.json(
-        { error: COMMON_ERRORS.UNAUTHORIZED, message: '登录已过期' },
-        { status: 401 },
-      );
-    }
+    const { userId, claims } = identity;
 
-    const userId = claims.sub;
+    // 从 JWT claims 直取权限/角色（Gateway 已完成验签，零额外 I/O）
+    const isAdmin = claims.roles.some((r) => (ADMIN_ROLE_CODES as readonly string[]).includes(r));
+    const menuItems = await getDynamicMenuTree(claims.permissions, isAdmin);
 
-    // 委托 data.ts 获取用户信息
+    // 并行获取用户 Profile 信息（仅用于 UI 展示）
     const user = await getUser(userId);
     if (!user) {
       return NextResponse.json(
@@ -45,12 +45,6 @@ export async function GET(request: NextRequest) {
         { status: 401 },
       );
     }
-
-    const permissionContext = await getUserPermissionContext(userId);
-    const isAdmin = permissionContext?.roles.some(
-      (r) => (ADMIN_ROLE_CODES as readonly string[]).includes(r.code),
-    ) ?? false;
-    const menuItems = await getDynamicMenuTree(permissionContext?.permissions || [], isAdmin);
 
     return NextResponse.json({
       user: {
@@ -60,11 +54,15 @@ export async function GET(request: NextRequest) {
         picture: user.avatarUrl,
         emailVerified: user.emailVerified,
       },
-      tokenInfo: { expiresAt: claims.exp ? claims.exp * 1000 : null, issuedAt: claims.iat ? claims.iat * 1000 : null },
-      permissions: permissionContext?.permissions || [],
-      roles: permissionContext?.roles || [],
-      dataScopeType: permissionContext?.dataScopeType || 'SELF',
-      deptId: permissionContext?.deptId,
+      tokenInfo: {
+        expiresAt: claims.exp ? claims.exp * 1000 : null,
+        issuedAt: claims.iat ? claims.iat * 1000 : null,
+      },
+      // 从 claims 直取，与 Gateway 验签结果保持一致（不走 DB/Redis）
+      permissions: claims.permissions,
+      roles: claims.roles,
+      dataScopeType: claims.dataScopeType,
+      deptId: claims.deptId || undefined,
       menus: menuItems,
     });
   } catch (err) {

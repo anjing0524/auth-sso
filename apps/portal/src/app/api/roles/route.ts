@@ -11,7 +11,7 @@ export const runtime = 'nodejs';
 
 /** GET /api/roles — 委托 data.ts */
 export async function GET(request: NextRequest) {
-  return withPermission(request, { permissions: ['role:list'] }, async () => {
+  return withPermission({ permissions: ['role:list'] }, async () => {
     const sp = request.nextUrl.searchParams;
     const keyword = sp.get('keyword') || '';
     const status = sp.get('status') || '';

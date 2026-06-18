@@ -6,16 +6,13 @@ import 'server-only';
  * 职责：基于身份验证 (verify-jwt) 解析出的 userId，实时查询 DB + Redis 缓存，
  * 执行细粒度的权限编码、角色校验，以及超级管理员绕过判定。
  *
- * 本模块解决“你能做什么”，依赖 verify-jwt 解决“你是谁”。
+ * 本模块解决"你能做什么"，依赖 verify-jwt 解决"你是谁"。
  *
  * @module lib/auth/check-permission
  */
-import type { NextRequest } from 'next/server';
 import type { PortalJwtClaims } from '../session';
-import type { UserPermissionContext } from '@auth-sso/contracts';
-import { getUserPermissionContext } from '@/lib/permissions';
+
 import { resolveIdentity } from './verify-jwt';
-import { getAppBaseURL } from '@/lib/env';
 import { ADMIN_ROLE_CODES } from '@auth-sso/contracts';
 
 /**
@@ -36,31 +33,10 @@ export interface PermissionCheckOptions {
 export interface PermissionCheckResult {
   authorized: boolean;
   userId?: string;
-  /** 验签通过后的完整 JWT 声明（含 roles/permissions/deptId 等） */
+  /** 验签通过后的完整 JWT 声明 */
   claims?: PortalJwtClaims;
   error?: string;
   statusCode?: number;
-}
-
-/**
- * 在 Session 模式下（claims 为 null）合成一份兼容性 claims，
- * 使下游消费方统一拿到 claims 结构。
- *
- * @param userId     用户 ID
- * @param ctx        用户权限上下文
- * @returns 合成的 PortalJwtClaims
- */
-function synthesizeClaims(userId: string, ctx: UserPermissionContext): PortalJwtClaims {
-  return {
-    sub: userId,
-    iss: getAppBaseURL(),
-    aud: 'portal-client',
-    jti: 'session_' + userId,
-    roles: ctx.roles.map((r) => r.code),
-    permissions: ctx.permissions,
-    deptId: ctx.deptId ?? undefined,
-    dataScopeType: ctx.dataScopeType,
-  } as PortalJwtClaims;
 }
 
 /**
@@ -72,7 +48,6 @@ function synthesizeClaims(userId: string, ctx: UserPermissionContext): PortalJwt
  * @returns 鉴权通过状态或精细化失败提示
  */
 export async function checkPermission(
-  _request: NextRequest | Headers | undefined,
   options: PermissionCheckOptions
 ): Promise<PermissionCheckResult> {
   try {
@@ -82,28 +57,20 @@ export async function checkPermission(
     }
     const { userId, claims } = identity;
 
-    // 获取用户在 Portal DB 中的细粒度权限上下文（Redis 缓存，TTL 5min）
-    const ctx = await getUserPermissionContext(userId);
-    if (!ctx) {
-      console.error('[PermissionCheck] 无法获取用户权限上下文, userId:', userId);
-      return { authorized: false, error: '无法获取用户权限', statusCode: 500 };
-    }
-
-    const roleCodes = ctx.roles.map((r) => r.code);
-    const resolvedClaims = claims ?? synthesizeClaims(userId, ctx);
+    const roleCodes = claims.roles;
 
     // 超级管理员直接绕过所有校验
     if (roleCodes.some((rc) => (ADMIN_ROLE_CODES as readonly string[]).includes(rc))) {
-      return { authorized: true, userId, claims: resolvedClaims };
+      return { authorized: true, userId, claims };
     }
 
     // 权限编码检查
     if (options.permissions && options.permissions.length > 0) {
       const ok = options.requireAll
-        ? options.permissions.every((p) => ctx.permissions.includes(p))
-        : options.permissions.some((p) => ctx.permissions.includes(p));
+        ? options.permissions.every((p) => claims.permissions.includes(p))
+        : options.permissions.some((p) => claims.permissions.includes(p));
       if (!ok) {
-        return { authorized: false, userId, claims: resolvedClaims, error: '权限不足', statusCode: 403 };
+        return { authorized: false, userId, claims, error: '权限不足', statusCode: 403 };
       }
     }
 
@@ -113,14 +80,13 @@ export async function checkPermission(
         ? options.roles.every((r) => roleCodes.includes(r))
         : options.roles.some((r) => roleCodes.includes(r));
       if (!ok) {
-        return { authorized: false, userId, claims: resolvedClaims, error: '角色权限不足', statusCode: 403 };
+        return { authorized: false, userId, claims, error: '角色权限不足', statusCode: 403 };
       }
     }
 
-    return { authorized: true, userId, claims: resolvedClaims };
+    return { authorized: true, userId, claims };
   } catch (error: any) {
     console.error('[PermissionCheck] 鉴权过程异常:', error.message, error.stack);
     return { authorized: false, error: '权限检查失败', statusCode: 500 };
   }
 }
-

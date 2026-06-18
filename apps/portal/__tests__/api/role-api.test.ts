@@ -92,7 +92,7 @@ const { db, setQueryResult, resetDb, mockWithPermission } = vi.hoisted(() => {
   });
 
   const mockWithPermission = vi.fn(
-    async (_req: any, _opts: any, handler: (userId: string) => Promise<Response>) => {
+    async (_options: any, handler: (userId: string) => Promise<Response>) => {
       try { return await handler('admin-user-1'); }
       catch (err) {
         const { mapDomainError } = await import('@/domain/shared/error-mapping');
@@ -221,11 +221,18 @@ describe('Role Management API', () => {
     it('returns bound permissions', async () => {
       setQueryResult([
         {
-          ...createTestPermission({ code: 'user:list', name: 'User List' }),
-          type: 'API',
-          resource: 'user',
-          action: 'list',
-          assignedAt: new Date('2026-01-01'),
+          id: 'role-1',
+          rolePermissions: [
+            {
+              createdAt: new Date('2026-01-01'),
+              permission: {
+                ...createTestPermission({ code: 'user:list', name: 'User List' }),
+                type: 'API',
+                resource: 'user',
+                action: 'list',
+              },
+            },
+          ],
         },
       ]);
 

@@ -23,14 +23,14 @@ export interface PortalJwtClaims extends JWTPayload {
   aud: string | string[];
   /** Token 唯一标识（用于 jti 黑名单撤销） */
   jti: string;
-  /** 用户角色编码列表 */
-  roles?: string[];
-  /** 用户权限编码列表（登录时根据角色动态注入） */
-  permissions?: string[];
+  /** 用户角色编码列表（Token 签发时总是包含） */
+  roles: string[];
+  /** 用户权限编码列表（Token 签发时总是包含） */
+  permissions: string[];
   /** 用户所在部门 ID */
-  deptId?: string;
+  deptId: string;
   /** 数据访问范围类型 */
-  dataScopeType?: DataScopeType;
+  dataScopeType: DataScopeType;
 }
 
 /** Token 轮换结果 */
@@ -48,6 +48,6 @@ export interface RefreshTokenResult {
 export interface ResolvedIdentity {
   /** 用户内部唯一标识 ID */
   userId: string;
-  /** JWT 验签后的完整声明（Gateway 信任路径时为 null） */
-  claims: PortalJwtClaims | null;
+  /** JWT 完整声明（Gateway 路径下从 Cookie 快速解码，自验签路径下完整验证） */
+  claims: PortalJwtClaims;
 }

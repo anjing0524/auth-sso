@@ -11,7 +11,7 @@ export const runtime = 'nodejs';
 
 /** GET /api/roles/[id]/data-scopes — 委托 data.ts */
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  return withPermission(request, { permissions: ['role:read'] }, async () => {
+  return withPermission({ permissions: ['role:read'] }, async () => {
     const { id: roleId } = await params;
 
     const role = await getRoleById(roleId);

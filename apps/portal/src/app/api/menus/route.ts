@@ -11,7 +11,7 @@ export const runtime = 'nodejs';
 
 /** GET /api/menus — 委托 data.ts 获取全量菜单树 */
 export async function GET(request: NextRequest) {
-  return withPermission(request, { permissions: ['menu:list'] }, async () => {
+  return withPermission({ permissions: ['menu:list'] }, async () => {
     const data = await getMenus();
     return NextResponse.json({ data });
   });

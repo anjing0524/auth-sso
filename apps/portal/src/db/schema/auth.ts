@@ -8,7 +8,9 @@
  * - jwks：签名密钥对
  *
  * 注意：scopes 列保持 text 类型 —— OAuth scope 在 RFC 6749 / JWT scope claim 中
- * 本就是空格分隔字符串，是正确的语义而非反模式。
+ * 本就是空格分隔字符串，是正确的语义而非反模式。若未来需要按 scope 查询 client，
+ * 可添加 GENERATED ALWAYS AS (string_to_array(scopes, ' ')) STORED 的 text[] 列 +
+ * GIN 索引来支持高效查询，无需修改现有数据模型。
  *
  * @module db/schema/auth
  */
@@ -20,7 +22,7 @@ import { updatedAtColumn } from './helpers';
 /**
  * OAuth 2.1 客户端应用
  *
- * redirectUrls 使用 PG 原生 text[] 数组类型，无需应用层 JSON.parse/split。
+ * redirectUris 使用 PG 原生 text[] 数组类型，无需应用层 JSON.parse/split。
  */
 export const clients = pgTable('clients', {
   id: text('id').primaryKey(),
@@ -28,10 +30,10 @@ export const clients = pgTable('clients', {
   name: text('name').notNull(),
   clientId: text('client_id').notNull().unique(),
   clientSecret: text('client_secret'),
-  redirectUrls: text('redirect_uris').array().notNull(),
+  redirectUris: text('redirect_uris').array().notNull(),
   scopes: text('scopes').notNull().default('openid profile email offline_access'),
   homepageUrl: text('homepage_url'),
-  icon: text('logo_url'),
+  logoUrl: text('logo_url'),
   accessTokenTtl: integer('access_token_ttl').default(3600),
   refreshTokenTtl: integer('refresh_token_ttl').default(604800),
   status: entityStatusEnum('status').notNull().default('ACTIVE'),

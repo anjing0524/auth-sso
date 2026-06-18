@@ -5,7 +5,8 @@
  */
 import { revalidatePath, revalidateTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
-import { eq, or } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
+import { byIdOrPublicId } from '@/db/resolve-id';
 import { withAuth, type AuthContext } from '@/lib/auth';
 import {
   createPermission,
@@ -46,7 +47,7 @@ export const createPermissionAction = withAuth(
     });
 
     revalidatePath('/permissions');
-    revalidateTag('permissions-list');
+    revalidateTag('permissions-list', 'minutes');
     return { success: true, data: { id: perm.publicId }, message: '权限创建成功' };
   },
 );
@@ -61,7 +62,7 @@ export const updatePermissionAction = withAuth(
     }
 
     const row = await db.query.permissions.findFirst({
-      where: or(eq(schema.permissions.id, permId), eq(schema.permissions.publicId, permId)),
+      where: byIdOrPublicId('permissions', permId),
     });
     if (!row) throw new EntityNotFoundError('Permission', permId);
 
@@ -72,7 +73,7 @@ export const updatePermissionAction = withAuth(
       .where(eq(schema.permissions.id, perm.id));
 
     revalidatePath('/permissions');
-    revalidateTag('permissions-list');
+    revalidateTag('permissions-list', 'minutes');
     return { success: true, data: { id: permId }, message: '权限更新成功' };
   },
 );
@@ -82,7 +83,7 @@ export const deletePermissionAction = withAuth(
   { permissions: ['permission:delete'] },
   async (_ctx: AuthContext, permId: string): Promise<ApiResponse<{ id: string }>> => {
     const row = await db.query.permissions.findFirst({
-      where: or(eq(schema.permissions.id, permId), eq(schema.permissions.publicId, permId)),
+      where: byIdOrPublicId('permissions', permId),
     });
     if (!row) throw new EntityNotFoundError('Permission', permId);
 
@@ -92,7 +93,7 @@ export const deletePermissionAction = withAuth(
     });
 
     revalidatePath('/permissions');
-    revalidateTag('permissions-list');
+    revalidateTag('permissions-list', 'minutes');
     return { success: true, data: { id: permId }, message: '权限已删除' };
   },
 );

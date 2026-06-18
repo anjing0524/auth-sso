@@ -11,7 +11,7 @@ export const runtime = 'nodejs';
 
 /** GET /api/permissions — 委托 data.ts，支持按 type 过滤 */
 export async function GET(request: NextRequest) {
-  return withPermission(request, { permissions: ['permission:list'] }, async () => {
+  return withPermission({ permissions: ['permission:list'] }, async () => {
     const type = request.nextUrl.searchParams.get('type') || undefined;
     const data = await getPermissions(type);
     return NextResponse.json({ data });

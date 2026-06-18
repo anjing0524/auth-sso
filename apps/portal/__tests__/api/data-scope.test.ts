@@ -41,11 +41,17 @@ vi.mock('@/lib/permissions', () => ({
 }));
 
 vi.mock('@/infrastructure/db', () => {
-  /** 链式查询构建器 */
+  /** 链式查询构建器（模拟 Drizzle select / selectDistinct 链式调用） */
   function createChain(): any {
     const chain: any = () => {};
-    chain.then = (resolve: Function) => resolve(mockDbState.queryResult);
-    chain.catch = () => ({ then: (r: Function) => r([]) });
+    chain.then = (resolve: Function) => {
+      if (mockDbState.shouldThrow) throw mockDbState.shouldThrow;
+      return resolve(mockDbState.queryResult);
+    };
+    chain.catch = () => {
+      if (mockDbState.shouldThrow) return { then: (r: Function) => r([]) };
+      return { then: (r: Function) => r(mockDbState.queryResult) };
+    };
     return new Proxy(chain, {
       get(_t, prop: string) {
         if (prop === 'then' || prop === 'catch') return chain[prop as keyof typeof chain];
@@ -58,18 +64,27 @@ vi.mock('@/infrastructure/db', () => {
     db: new Proxy({} as any, {
       get(_t, prop: string) {
         if (prop === 'select' || prop === 'selectDistinct') return () => createChain();
-        if (prop === 'execute') {
-          return () => {
-            if (mockDbState.shouldThrow) throw mockDbState.shouldThrow;
-            return Promise.resolve(mockDbState.executeResult);
-          };
+        if (prop === 'query') {
+          // Drizzle relational query API（users.findFirst / departments.findFirst 等）
+          return new Proxy({} as any, {
+            get(_t2, _tableProp: string) {
+              return new Proxy({} as any, {
+                get(_t3, _methodProp: string) {
+                  return () => {
+                    if (mockDbState.shouldThrow) throw mockDbState.shouldThrow;
+                    return Promise.resolve(mockDbState.queryResult[0] ?? null);
+                  };
+                },
+              });
+            },
+          });
         }
         return undefined;
       },
     }),
     schema: {
-      departments: {},
-      roleDataScopes: {},
+      departments: { id: 'id', ancestors: 'ancestors' },
+      roleDataScopes: { deptId: 'dept_id', roleId: 'role_id' },
     },
   };
 });
@@ -116,17 +131,17 @@ describe('getDataScopeFilter', () => {
   });
 
   // @req SCOPE-004
-  it('DEPT_AND_SUB 通过递归 CTE 查询子部门 ID 列表', async () => {
+  it('DEPT_AND_SUB 通过物化路径 (ancestors) 查询子部门 ID 列表', async () => {
     mockDataScope.permissionContext.dataScopeType = 'DEPT_AND_SUB';
     mockDataScope.permissionContext.deptId = 'dept-1';
-    mockDbState.executeResult = [{ id: 'dept-1' }, { id: 'dept-2' }, { id: 'dept-3' }];
+    mockDbState.queryResult = [{ id: 'dept-1' }, { id: 'dept-2' }, { id: 'dept-3' }];
 
     const result = await getDataScopeFilter('user-1');
     expect(result).toEqual({ type: 'LIST', deptIds: ['dept-1', 'dept-2', 'dept-3'] });
   });
 
   // @req SCOPE-004
-  it('DEPT_AND_SUB 在 db.execute 查询失败时故障安全降级为仅当前部门', async () => {
+  it('DEPT_AND_SUB 在查询失败时故障安全降级为仅当前部门', async () => {
     mockDataScope.permissionContext.dataScopeType = 'DEPT_AND_SUB';
     mockDataScope.permissionContext.deptId = 'dept-1';
     mockDbState.shouldThrow = new Error('DB connection timeout');
@@ -216,20 +231,20 @@ describe('checkDataScope', () => {
     mockDataScope.permissionContext.dataScopeType = 'DEPT_AND_SUB';
     mockDataScope.permissionContext.deptId = 'dept-1';
 
-    // 同部门通过（不涉及 db.execute，直接比对）
+    // 同部门通过（不涉及子部门查询，直接比对）
     expect(await checkDataScope('user-1', 'dept-1')).toBe(true);
 
-    // 子部门通过（需 db.execute 返回子部门记录）
-    mockDbState.executeResult = [{ id: 'dept-2' }];
+    // 子部门通过（通过 ancestors 物化路径查询子部门）
+    mockDbState.queryResult = [{ id: 'dept-2' }];
     expect(await checkDataScope('user-1', 'dept-2')).toBe(true);
 
-    // 非子部门拒绝（execute 返回空）
-    mockDbState.executeResult = [];
+    // 非子部门拒绝（查询返回空）
+    mockDbState.queryResult = [];
     expect(await checkDataScope('user-1', 'dept-999')).toBe(false);
   });
 
   // @req SCOPE-004
-  it('DEPT_AND_SUB 在 db.execute 异常时通过严格部门和失败安全降级', async () => {
+  it('DEPT_AND_SUB 在查询异常时通过严格部门和故障安全降级', async () => {
     mockDataScope.permissionContext.dataScopeType = 'DEPT_AND_SUB';
     mockDataScope.permissionContext.deptId = 'dept-1';
 

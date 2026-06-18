@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db, schema } from '@/infrastructure/db';
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { generateUUID, generatePermissionPublicId } from '@/lib/crypto';
 import { COMMON_ERRORS } from '@auth-sso/contracts';
 
@@ -135,24 +135,28 @@ export async function POST(request: NextRequest) {
         .where(eq(schema.permissions.clientId, clientId));
 
       const dbMap = new Map(dbPermissions.map(p => [p.code, p]));
+
+      // 预分配新增权限的 UUID，构建完整的 code → DB id 映射
+      // 这样 parentId 可以直接在写入时设置正确的值，无需第二阶段回填
       const codeToIdMap = new Map<string, string>();
-      
-      // 初始化已存在的映射关系
-      dbPermissions.forEach(p => {
+      for (const p of dbPermissions) {
         codeToIdMap.set(p.code, p.id);
-      });
+      }
+      for (const p of flatIncoming) {
+        if (!codeToIdMap.has(p.code)) {
+          codeToIdMap.set(p.code, generateUUID());
+        }
+      }
 
       const stats = { inserted: 0, updated: 0, deprecated: 0 };
 
-      // A. 第一阶段：写入新增记录 & 更新已有记录的核心属性（排除 parentId，以防父节点尚未入库）
+      // 单阶段写入：parentId 直接从 codeToIdMap 解析（预分配 ID + 已存在 ID 均已就位）
       const writePromises = flatIncoming.map(async (p) => {
+        const dbParentId = p.parentId ? (codeToIdMap.get(p.parentId) ?? null) : null;
         const existing = dbMap.get(p.code);
         if (!existing) {
-          // 数据库中无记录，执行新增
-          const id = generateUUID();
+          const id = codeToIdMap.get(p.code)!;
           const publicId = generatePermissionPublicId();
-          codeToIdMap.set(p.code, id);
-
           await tx.insert(schema.permissions).values({
             id,
             publicId,
@@ -162,16 +166,16 @@ export async function POST(request: NextRequest) {
             resource: p.resource ?? null,
             action: p.action ?? null,
             clientId,
-            parentId: null, // 第二阶段进行父级 ID 回填
+            parentId: dbParentId,
             sort: p.sort,
             status: 'ACTIVE',
             createdAt: new Date(),
           });
           stats.inserted++;
         } else {
-          // 已有记录，检查属性是否变更
-          codeToIdMap.set(p.code, existing.id);
-          const needsUpdate =
+          // 检查属性或 parentId 是否变更
+          const parentChanged = existing.parentId !== dbParentId;
+          const propsChanged =
             existing.name !== p.name ||
             existing.type !== p.type ||
             existing.resource !== (p.resource ?? null) ||
@@ -179,7 +183,7 @@ export async function POST(request: NextRequest) {
             existing.sort !== p.sort ||
             existing.status !== 'ACTIVE';
 
-          if (needsUpdate) {
+          if (propsChanged || parentChanged) {
             await tx.update(schema.permissions)
               .set({
                 name: p.name,
@@ -188,6 +192,7 @@ export async function POST(request: NextRequest) {
                 action: p.action ?? null,
                 sort: p.sort,
                 status: 'ACTIVE',
+                ...(parentChanged ? { parentId: dbParentId } : {}),
               })
               .where(eq(schema.permissions.id, existing.id));
             stats.updated++;
@@ -197,40 +202,18 @@ export async function POST(request: NextRequest) {
 
       await Promise.all(writePromises);
 
-      // B. 安全红线：执行软删除下线逻辑
+      // 软删除下线：上报中不存在的权限标记为 DISABLED
       const incomingCodesSet = new Set(incomingCodes);
       const deprecatePromises = dbPermissions
         .filter(p => !incomingCodesSet.has(p.code) && p.status === 'ACTIVE')
         .map(async (p) => {
           await tx.update(schema.permissions)
-            .set({
-              status: 'DISABLED',
-            })
+            .set({ status: 'DISABLED' })
             .where(eq(schema.permissions.id, p.id));
           stats.deprecated++;
         });
 
       await Promise.all(deprecatePromises);
-
-      // C. 第二阶段：依据已填充完毕的 codeToIdMap 重新计算并回填真正的 parentId 物理关系
-      const relationPromises = flatIncoming.map(async (p) => {
-        const currentDbId = codeToIdMap.get(p.code);
-        if (!currentDbId) return;
-
-        let dbParentId: string | null = null;
-        if (p.parentId) {
-          dbParentId = codeToIdMap.get(p.parentId) ?? null;
-        }
-
-        const currentRecord = dbMap.get(p.code);
-        if (!currentRecord || currentRecord.parentId !== dbParentId) {
-          await tx.update(schema.permissions)
-            .set({ parentId: dbParentId })
-            .where(eq(schema.permissions.id, currentDbId));
-        }
-      });
-
-      await Promise.all(relationPromises);
 
       return stats;
     });

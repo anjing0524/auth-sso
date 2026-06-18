@@ -8,7 +8,8 @@
  */
 import { revalidatePath, revalidateTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
-import { eq, or } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
+import { byIdOrPublicId } from '@/db/resolve-id';
 import { withAuth, type AuthContext } from '@/lib/auth';
 import {
   createDepartment,
@@ -16,6 +17,7 @@ import {
   departmentToUpdateRow,
   applyDepartmentUpdateWithCircularCheck,
   toDomainDepartment,
+  computeAncestors,
 } from '@/domain/department/department';
 import {
   CreateDepartmentInputSchema,
@@ -26,6 +28,18 @@ import { EntityNotFoundError, BusinessRuleViolationError } from '@/domain/shared
 import { generateId } from '@/lib/crypto';
 import type { ApiResponse } from '@auth-sso/contracts';
 
+/**
+ * 查询父级部门的 ancestors，用于计算新部门的物化路径
+ * @returns 父级的 ancestors（顶级为 null），父级不存在时返回 null
+ */
+async function getParentAncestors(parentId: string): Promise<string | null> {
+  const parent = await db.query.departments.findFirst({
+    where: eq(schema.departments.id, parentId),
+    columns: { id: true, ancestors: true },
+  });
+  return parent?.ancestors ?? null;
+}
+
 /** 创建部门 */
 export const createDepartmentAction = withAuth(
   { permissions: ['department:create'] },
@@ -35,11 +49,16 @@ export const createDepartmentAction = withAuth(
       return { success: false, error: 'VALIDATION_ERROR', message: parsed.error.issues[0].message };
     }
 
-    const dept = createDepartment(parsed.data, generateId);
+    // 查询父级的 ancestors 以计算物化路径
+    const parentAncestors = parsed.data.parentId
+      ? await getParentAncestors(parsed.data.parentId)
+      : null;
+
+    const dept = createDepartment(parsed.data, generateId, parentAncestors);
     await db.insert(schema.departments).values(departmentToInsertRow(dept));
 
     revalidatePath('/departments');
-    revalidateTag('departments-list');
+    revalidateTag('departments-list', 'minutes');
     return { success: true, data: { id: dept.publicId }, message: '部门创建成功' };
   },
 );
@@ -55,21 +74,47 @@ export const updateDepartmentAction = withAuth(
 
     await db.transaction(async (tx) => {
       const row = await tx.query.departments.findFirst({
-        where: or(eq(schema.departments.id, deptId), eq(schema.departments.publicId, deptId)),
+        where: byIdOrPublicId('departments', deptId),
       });
       if (!row) throw new EntityNotFoundError('Department', deptId);
 
       const dept = toDomainDepartment(row);
-      // 领域纯函数内部处理 parentId 变更检测与环形引用校验
       const allDepts = await tx.query.departments.findMany();
-      const updated = applyDepartmentUpdateWithCircularCheck(dept, parsed.data, allDepts);
+
+      // parentId 变更时，使用 domain 层的 computeAncestors 重新计算物化路径
+      const parentChanged = parsed.data.parentId !== undefined && parsed.data.parentId !== dept.parentId;
+      let newAncestors: string | null | undefined;
+      if (parentChanged) {
+        if (parsed.data.parentId) {
+          const parent = allDepts.find(d => d.id === parsed.data.parentId);
+          newAncestors = parent ? computeAncestors(parent.id, parent.ancestors) : null;
+        } else {
+          newAncestors = null; // 移至顶级
+        }
+      }
+
+      const patch = { ...parsed.data, ...(newAncestors !== undefined ? { ancestors: newAncestors } : {}) };
+      const updated = applyDepartmentUpdateWithCircularCheck(dept, patch, allDepts);
 
       await tx.update(schema.departments).set(departmentToUpdateRow(updated))
         .where(eq(schema.departments.id, dept.id));
+
+      // parentId 变更时，级联更新所有子孙节点的 ancestors
+      if (parentChanged) {
+        const oldPrefix = dept.ancestors ? `${dept.ancestors}/${dept.id}` : dept.id;
+        const newPrefix = updated.ancestors ? `${updated.ancestors}/${updated.id}` : updated.id;
+        if (oldPrefix !== newPrefix) {
+          await tx.execute(sql`
+            UPDATE departments
+            SET ancestors = REPLACE(ancestors, ${oldPrefix}, ${newPrefix})
+            WHERE ancestors LIKE ${oldPrefix + '/%'}
+          `);
+        }
+      }
     });
 
     revalidatePath('/departments');
-    revalidateTag('departments-list');
+    revalidateTag('departments-list', 'minutes');
     return { success: true, data: { id: deptId }, message: '部门更新成功' };
   },
 );
@@ -80,7 +125,7 @@ export const deleteDepartmentAction = withAuth(
   async (_ctx: AuthContext, deptId: string): Promise<ApiResponse<{ id: string }>> => {
     await db.transaction(async (tx) => {
       const row = await tx.query.departments.findFirst({
-        where: or(eq(schema.departments.id, deptId), eq(schema.departments.publicId, deptId)),
+        where: byIdOrPublicId('departments', deptId),
       });
       if (!row) throw new EntityNotFoundError('Department', deptId);
 
@@ -94,7 +139,7 @@ export const deleteDepartmentAction = withAuth(
     });
 
     revalidatePath('/departments');
-    revalidateTag('departments-list');
+    revalidateTag('departments-list', 'minutes');
     return { success: true, data: { id: deptId }, message: '部门已删除' };
   },
 );

@@ -5,7 +5,8 @@
  */
 import { revalidatePath, revalidateTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
-import { eq, or, and, inArray } from 'drizzle-orm';
+import { eq, and, inArray } from 'drizzle-orm';
+import { byIdOrPublicId } from '@/db/resolve-id';
 import { withAuth, type AuthContext } from '@/lib/auth';
 import {
   createClient,
@@ -36,7 +37,7 @@ export const createClientAction = withAuth(
     await db.insert(schema.clients).values(clientToInsertRow(client));
 
     revalidatePath('/clients');
-    revalidateTag('clients-list');
+    revalidateTag('clients-list', 'minutes');
     return {
       success: true,
       data: { id: client.publicId, clientId: client.clientId, clientSecret: client.clientSecret },
@@ -55,7 +56,7 @@ export const updateClientAction = withAuth(
     }
 
     const row = await db.query.clients.findFirst({
-      where: or(eq(schema.clients.id, clientIdStr), eq(schema.clients.publicId, clientIdStr)),
+      where: byIdOrPublicId('clients', clientIdStr),
     });
     if (!row) throw new EntityNotFoundError('Client', clientIdStr);
 
@@ -66,7 +67,7 @@ export const updateClientAction = withAuth(
       .where(eq(schema.clients.id, client.id));
 
     revalidatePath('/clients');
-    revalidateTag('clients-list');
+    revalidateTag('clients-list', 'minutes');
     return { success: true, data: { id: clientIdStr }, message: '应用更新成功' };
   },
 );
@@ -76,14 +77,14 @@ export const deleteClientAction = withAuth(
   { permissions: ['client:delete'] },
   async (_ctx: AuthContext, clientIdStr: string): Promise<ApiResponse<{ id: string }>> => {
     const row = await db.query.clients.findFirst({
-      where: or(eq(schema.clients.id, clientIdStr), eq(schema.clients.publicId, clientIdStr)),
+      where: byIdOrPublicId('clients', clientIdStr),
     });
     if (!row) throw new EntityNotFoundError('Client', clientIdStr);
 
     await db.delete(schema.clients).where(eq(schema.clients.id, row.id));
 
     revalidatePath('/clients');
-    revalidateTag('clients-list');
+    revalidateTag('clients-list', 'minutes');
     return { success: true, data: { id: clientIdStr }, message: '应用已注销' };
   },
 );
@@ -93,7 +94,7 @@ export const rotateClientSecretAction = withAuth(
   { permissions: ['client:update'] },
   async (_ctx: AuthContext, clientIdStr: string): Promise<ApiResponse<{ clientSecret: string }>> => {
     const row = await db.query.clients.findFirst({
-      where: or(eq(schema.clients.id, clientIdStr), eq(schema.clients.publicId, clientIdStr)),
+      where: byIdOrPublicId('clients', clientIdStr),
     });
     if (!row) throw new EntityNotFoundError('Client', clientIdStr);
 
@@ -104,7 +105,7 @@ export const rotateClientSecretAction = withAuth(
 
     revalidatePath(`/clients/${row.id}`);
     revalidatePath('/clients');
-    revalidateTag('clients-list');
+    revalidateTag('clients-list', 'minutes');
     return { success: true, data: { clientSecret: newSecret }, message: '密钥重新生成成功' };
   },
 );
@@ -114,7 +115,7 @@ export const revokeClientTokensAction = withAuth(
   { permissions: ['client:update'] },
   async (_ctx: AuthContext, clientIdStr: string, tokenIds: string[], revokeAll: boolean): Promise<ApiResponse<{ revokedCount: number }>> => {
     const row = await db.query.clients.findFirst({
-      where: or(eq(schema.clients.id, clientIdStr), eq(schema.clients.publicId, clientIdStr)),
+      where: byIdOrPublicId('clients', clientIdStr),
     });
     if (!row) throw new EntityNotFoundError('Client', clientIdStr);
 

@@ -12,9 +12,10 @@ import { clients, accessTokens, refreshTokens, consents, authorizationCodes } fr
 import { roles, permissions, rolePermissions, roleDataScopes, roleClients } from './rbac';
 import { departments, menus } from './org';
 
-/** 用户 ↔ 角色（多对多，经 user_roles） */
-export const usersRelations = relations(users, ({ many }) => ({
+/** 用户 ↔ 角色（多对多，经 user_roles）/ 部门 */
+export const usersRelations = relations(users, ({ many, one }) => ({
   userRoles: many(userRoles),
+  department: one(departments, { fields: [users.deptId], references: [departments.id] }),
 }));
 
 export const userRolesRelations = relations(userRoles, ({ one }) => ({

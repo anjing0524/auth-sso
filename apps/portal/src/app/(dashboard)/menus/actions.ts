@@ -5,7 +5,8 @@
  */
 import { revalidatePath, revalidateTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
-import { eq, or } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
+import { byIdOrPublicId } from '@/db/resolve-id';
 import { withAuth, type AuthContext } from '@/lib/auth';
 import {
   createMenu,
@@ -36,7 +37,7 @@ export const createMenuAction = withAuth(
     await db.insert(schema.menus).values(menuToInsertRow(menu));
 
     revalidatePath('/menus');
-    revalidateTag('menus-list');
+    revalidateTag('menus-list', 'minutes');
     return { success: true, data: { id: menu.publicId }, message: '菜单创建成功' };
   },
 );
@@ -51,7 +52,7 @@ export const updateMenuAction = withAuth(
     }
 
     const row = await db.query.menus.findFirst({
-      where: or(eq(schema.menus.id, menuId), eq(schema.menus.publicId, menuId)),
+      where: byIdOrPublicId('menus', menuId),
     });
     if (!row) throw new EntityNotFoundError('Menu', menuId);
 
@@ -62,7 +63,7 @@ export const updateMenuAction = withAuth(
       .where(eq(schema.menus.id, menu.id));
 
     revalidatePath('/menus');
-    revalidateTag('menus-list');
+    revalidateTag('menus-list', 'minutes');
     return { success: true, data: { id: menuId }, message: '菜单更新成功' };
   },
 );
@@ -86,7 +87,7 @@ export const deleteMenuAction = withAuth(
   { permissions: ['menu:delete'] },
   async (_ctx: AuthContext, menuId: string): Promise<ApiResponse<{ id: string }>> => {
     const row = await db.query.menus.findFirst({
-      where: or(eq(schema.menus.id, menuId), eq(schema.menus.publicId, menuId)),
+      where: byIdOrPublicId('menus', menuId),
     });
     if (!row) throw new EntityNotFoundError('Menu', menuId);
 
@@ -95,7 +96,7 @@ export const deleteMenuAction = withAuth(
     });
 
     revalidatePath('/menus');
-    revalidateTag('menus-list');
+    revalidateTag('menus-list', 'minutes');
     return { success: true, data: { id: menuId }, message: '菜单及其子项已递归删除' };
   },
 );

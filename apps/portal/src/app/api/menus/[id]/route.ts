@@ -24,7 +24,7 @@ interface MenuUpdatePayload {
 
 /** GET /api/menus/[id] — 委托 data.ts */
 export async function GET(request: NextRequest, { params }: RouteParams) {
-  return withPermission(request, { permissions: ['menu:list'] }, async () => {
+  return withPermission({ permissions: ['menu:list'] }, async () => {
     const { id } = await params;
     const menu = await getMenuById(id);
     if (!menu) return NextResponse.json({ error: COMMON_ERRORS.NOT_FOUND, message: '菜单不存在' }, { status: 404 });
@@ -34,7 +34,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
 /** PATCH /api/menus/[id] — 修改菜单 */
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
-  return withPermission(request, { permissions: ['menu:update'] }, async () => {
+  return withPermission({ permissions: ['menu:update'] }, async () => {
     const { id } = await params;
     const body = await request.json();
     const { name, path, permissionCode, icon, sort, visible, status, menuType, parentId } = body;
@@ -61,7 +61,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
 /** DELETE /api/menus/[id] — 递归删除菜单 */
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
-  return withPermission(request, { permissions: ['menu:delete'] }, async () => {
+  return withPermission({ permissions: ['menu:delete'] }, async () => {
     const { id } = await params;
     const menu = await getMenuById(id);
     if (!menu) return NextResponse.json({ error: COMMON_ERRORS.NOT_FOUND, message: '菜单不存在' }, { status: 404 });

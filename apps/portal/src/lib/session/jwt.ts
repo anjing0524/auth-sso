@@ -3,8 +3,8 @@ import 'server-only';
 /**
  * JWT 快速解码（不验签，仅用于提取载荷信息）
  *
- * 已废弃 verifyJwt——统一由 lib/auth/token.ts verifyAccessToken + resolveIdentity 替代。
- * decodeJwtPayload 仅用于 revoke.ts 提取 jti/exp。
+ * 验签统一由 lib/auth/token.ts verifyAccessToken + resolveIdentity 负责。
+ * decodeJwtPayload 仅用于 revoke.ts 提取 jti/exp 等不需要验签的场景。
  *
  * @module lib/session/jwt
  */
