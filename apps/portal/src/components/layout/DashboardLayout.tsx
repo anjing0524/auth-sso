@@ -6,7 +6,7 @@
  * 用户数据和菜单由 Server Component (dashboard)/layout.tsx 服务端获取并通过 props 传入，
  * 不再在客户端 useEffect + fetch('/api/me')，消灭客户端数据瀑布。
  */
-import React from 'react';
+import React, { useMemo } from 'react';
 import { SidebarProvider, SidebarInset, SidebarTrigger } from '@/components/ui/sidebar';
 import { AppSidebar } from './app-sidebar';
 import { Separator } from '@/components/ui/separator';
@@ -48,7 +48,7 @@ export default function DashboardLayout({
 }: DashboardProps & { children: React.ReactNode }) {
   const pathname = usePathname();
 
-  const getBreadcrumbs = () => {
+  const breadcrumbs = useMemo(() => {
     const segments = pathname.split('/').filter(Boolean);
     const crumbs = [{ title: '工作台', url: '/dashboard' }];
 
@@ -67,9 +67,7 @@ export default function DashboardLayout({
     }
 
     return crumbs;
-  };
-
-  const breadcrumbs = getBreadcrumbs();
+  }, [pathname]);
 
   return (
     <SidebarProvider defaultOpen={true}>

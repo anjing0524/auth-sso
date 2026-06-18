@@ -9,7 +9,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db, schema } from '@/infrastructure/db';
 import { eq, inArray } from 'drizzle-orm';
-import { verifyAccessToken } from '@/domain/auth/token';
+import { verifyAccessToken } from '@/lib/auth/token';
 import { checkUserClientAccess } from '@/domain/auth/oauth-authorize';
 import { validateClientActive, validateRedirectUri } from '@/domain/auth/oauth-client';
 import { generateId } from '@/lib/crypto';

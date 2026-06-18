@@ -5,7 +5,6 @@ import { describe, it, expect } from 'vitest';
 import {
   createClient,
   applyClientUpdate,
-  parseRedirectUris,
   toDomainClient,
 } from '@/domain/client/client';
 import { CreateClientInputSchema } from '@/domain/client/types';
@@ -27,14 +26,10 @@ describe('Client 领域核心规则', () => {
     expect(client.redirectUris).toHaveLength(1);
   });
 
-  it('parseRedirectUris 应正确解析 JSON 数组', () => {
-    const uris = parseRedirectUris('["https://a.com/cb","https://b.com/cb"]');
-    expect(uris).toEqual(['https://a.com/cb', 'https://b.com/cb']);
-  });
-
-  it('parseRedirectUris 应正确解析逗号分隔字符串', () => {
-    const uris = parseRedirectUris('https://a.com,https://b.com');
-    expect(uris).toEqual(['https://a.com', 'https://b.com']);
+  it('parseRedirectUris 已废弃：redirectUrls 为原生数组', () => {
+    // redirectUrls 现为 PG text[] 原生数组，不再需要字符串解析
+    const uris = ['https://a.com/cb', 'https://b.com/cb'];
+    expect(uris).toHaveLength(2);
   });
 
   it('applyClientUpdate 应正确 merge 字段', () => {
@@ -51,7 +46,7 @@ describe('Client 领域核心规则', () => {
   it('toDomainClient 应正确解析 redirectUrls', () => {
     const row = {
       id: 'id1', publicId: 'pub1', name: 'Test App', clientId: 'cli_1',
-      clientSecret: 'secret', redirectUrls: '["https://cb.example.com"]',
+      clientSecret: 'secret', redirectUrls: ['https://cb.example.com'],
       grantTypes: '["authorization_code"]', scopes: 'openid',
       homepageUrl: null, icon: null, accessTokenTtl: 3600, refreshTokenTtl: 604800,
       status: 'ACTIVE', disabled: false, skipConsent: false, userId: null,

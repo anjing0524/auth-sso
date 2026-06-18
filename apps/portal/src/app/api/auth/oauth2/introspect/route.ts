@@ -6,7 +6,7 @@
  * @route POST /api/auth/oauth2/introspect
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { verifyAccessToken } from '@/domain/auth/token';
+import { verifyAccessToken } from '@/lib/auth/token';
 import { db, schema } from '@/infrastructure/db';
 import { eq } from 'drizzle-orm';
 import { mapDomainError } from '@/domain/shared/error-mapping';

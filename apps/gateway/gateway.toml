@@ -37,3 +37,8 @@ public_paths = [
     "/oauth2/",
     "/.well-known/"
 ]
+
+[redis]
+# Redis 数据库连接配置 (用于 jti 黑名单校验)
+url = "redis://localhost:6379"
+

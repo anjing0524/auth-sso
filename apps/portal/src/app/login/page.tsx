@@ -8,7 +8,7 @@ import { Suspense } from 'react';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { getAppBaseURL } from '@/lib/env';
-import { verifyAccessToken } from '@/domain/auth/token';
+import { verifyAccessToken } from '@/lib/auth/token';
 import LoginForm from './login-form';
 
 interface SearchParams {

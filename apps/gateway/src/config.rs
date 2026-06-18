@@ -63,17 +63,35 @@ impl Default for PortalConfig {
     }
 }
 
+/// Redis 数据库连接配置 (用于 jti 黑名单校验)
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(default)]
+pub struct RedisConfig {
+    /// Redis 连接 URL (例如 redis://127.0.0.1:6379)
+    pub url: String,
+}
+
+impl Default for RedisConfig {
+    fn default() -> Self {
+        Self {
+            url: "redis://127.0.0.1:6379".to_string(),
+        }
+    }
+}
+
 /// 统一配置结构体，支持从 gateway.toml 解析，支持缺省字段与默认值自动合并
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
 #[serde(default)]
 pub struct Config {
     pub gateway: GatewayConfig,
     pub portal: PortalConfig,
+    pub redis: RedisConfig,
 }
 
 impl Config {
     /// 统一配置加载方法：优先从指定文件读取，读取并反序列化失败时返回 anyhow 错误，
     /// 若配置文件不存在则使用默认配置兜底。缺失的任何字段都将自动使用 Default 合并填充。
+    /// 支持从环境变量 REDIS_URL 覆盖 Redis 配置。
     ///
     /// # 参数
     /// * `path` - 配置文件路径
@@ -86,9 +104,14 @@ impl Config {
             .build()
             .with_context(|| format!("加载配置文件 {} 失败", path))?;
 
-        let cfg = config_build
+        let mut cfg = config_build
             .try_deserialize::<Config>()
             .with_context(|| format!("反序列化配置文件 {} 失败，请检查语法格式", path))?;
+
+        // 优先读取系统环境变量 REDIS_URL 覆盖配置
+        if let Ok(env_redis_url) = std::env::var("REDIS_URL") {
+            cfg.redis.url = env_redis_url;
+        }
 
         if std::path::Path::new(path).exists() {
             info!(
@@ -118,6 +141,7 @@ mod tests {
         assert_eq!(config.gateway.log_dir, "logs");
         assert_eq!(config.gateway.log_level, "info");
         assert_eq!(config.portal.upstream, "127.0.0.1:4100");
+        assert_eq!(config.redis.url, "redis://127.0.0.1:6379");
         assert!(
             config
                 .portal
@@ -188,6 +212,7 @@ mod tests {
             assert_eq!(config.gateway.log_dir, "logs");
             assert_eq!(config.gateway.log_level, "info");
             assert_eq!(config.portal.issuer, "http://localhost:4100");
+            assert_eq!(config.redis.url, "redis://127.0.0.1:6379");
             assert!(
                 config
                     .portal
@@ -199,6 +224,18 @@ mod tests {
 
         // 3. 清理临时文件
         let _ = fs::remove_file(file_path);
+    }
+
+    #[test]
+    fn test_redis_env_override() {
+        unsafe {
+            std::env::set_var("REDIS_URL", "redis://hacker-redis:6379");
+        }
+        let config = Config::load("non_exists.toml").unwrap();
+        assert_eq!(config.redis.url, "redis://hacker-redis:6379");
+        unsafe {
+            std::env::remove_var("REDIS_URL");
+        }
     }
 
     #[test]

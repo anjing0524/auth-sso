@@ -11,7 +11,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db, schema } from '@/infrastructure/db';
 import { eq, and } from 'drizzle-orm';
-import { signAccessToken, issueRefreshToken, rotateRefreshToken, ACCESS_TOKEN_TTL } from '@/domain/auth/token';
+import { signAccessToken, issueRefreshToken, rotateRefreshToken, ACCESS_TOKEN_TTL } from '@/lib/auth/token';
 import { validateClientActive, validateClientSecret } from '@/domain/auth/oauth-client';
 import { validateAuthCodeRow, verifyPKCE } from '@/domain/auth/oauth-code';
 import { getUserPermissionContext } from '@/lib/permissions';

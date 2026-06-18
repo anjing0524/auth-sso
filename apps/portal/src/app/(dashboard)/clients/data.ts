@@ -5,8 +5,7 @@ import 'server-only';
 
 import { cacheLife, cacheTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
-import { ilike, eq, or, desc, and, sql as drizzleSql } from 'drizzle-orm';
-import { parseRedirectUris } from '@/domain/client/client';
+import { ilike, eq, or, desc, and, count } from 'drizzle-orm';
 import { ENTITY_STATUS_VALUES, type EntityStatus } from '@auth-sso/contracts';
 
 /**
@@ -38,7 +37,7 @@ export async function getClients(params: {
 
   const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
-  const countResult = await db.select({ count: drizzleSql`COUNT(*)::int` })
+  const countResult = await db.select({ count: count() })
     .from(schema.clients).where(whereClause);
   const total = Number(countResult[0]?.count ?? 0);
 
@@ -52,7 +51,7 @@ export async function getClients(params: {
   return {
     data: rows.map(c => ({
       id: c.id, publicId: c.publicId, name: c.name, clientId: c.clientId,
-      redirectUris: parseRedirectUris(c.redirectUrls),
+      redirectUris: c.redirectUrls,
       scopes: c.scopes, homepageUrl: c.homepageUrl, logoUrl: c.icon,
       status: c.status, createdAt: c.createdAt.toISOString(), updatedAt: c.updatedAt?.toISOString(),
     })),
@@ -77,7 +76,7 @@ export async function getClientById(lookupId: string) {
     publicId: row.publicId,
     name: row.name,
     clientId: row.clientId,
-    redirectUris: parseRedirectUris(row.redirectUrls),
+    redirectUris: row.redirectUrls,
     scopes: row.scopes,
     homepageUrl: row.homepageUrl,
     logoUrl: row.icon,
@@ -102,7 +101,7 @@ export async function getClientTokens(
   const conditions = [eq(schema.accessTokens.clientId, clientId)];
   if (userId) conditions.push(eq(schema.accessTokens.userId, userId));
 
-  const countResult = await db.select({ count: drizzleSql`COUNT(*)::int` })
+  const countResult = await db.select({ count: count() })
     .from(schema.accessTokens)
     .where(and(...conditions));
   const total = Number(countResult[0]?.count ?? 0);

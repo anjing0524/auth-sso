@@ -34,7 +34,7 @@ import {
 } from '@/components/ui/table';
 
 import { db, schema } from '@/infrastructure/db';
-import { eq, ne, desc, sql } from 'drizzle-orm';
+import { eq, ne, desc, count } from 'drizzle-orm';
 
 export const revalidate = 0; // 不缓存，每次都动态计算以体现最新状态
 
@@ -46,9 +46,9 @@ export default async function DashboardPage() {
     [clientsCount],
     recentLogs
   ] = await Promise.all([
-    db.select({ count: sql`COUNT(*)::int` }).from(schema.users).where(ne(schema.users.status, 'DELETED')),
-    db.select({ count: sql`COUNT(*)::int` }).from(schema.roles),
-    db.select({ count: sql`COUNT(*)::int` }).from(schema.clients),
+    db.select({ count: count() }).from(schema.users).where(ne(schema.users.status, 'DELETED')),
+    db.select({ count: count() }).from(schema.roles),
+    db.select({ count: count() }).from(schema.clients),
     db.select({
       id: schema.auditLogs.id,
       username: schema.users.username,
@@ -79,8 +79,8 @@ export default async function DashboardPage() {
           </p>
         </div>
         <div className="flex items-center space-x-2">
-          <Button size="sm" className="rounded-xl shadow-lg shadow-primary/20">
-            <TrendingUp className="mr-2 h-4 w-4" /> 导出报告
+          <Button size="sm" className="rounded-xl shadow-lg shadow-primary/20" asChild>
+            <Link href="/audit-logs"><TrendingUp className="mr-2 h-4 w-4" /> 查看日志</Link>
           </Button>
         </div>
       </div>
@@ -94,9 +94,7 @@ export default async function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-black">{stats.users}</div>
-            <p className="text-[10px] text-green-500 font-bold flex items-center gap-1 mt-1">
-              +12% <span className="text-muted-foreground font-normal">较上月增长</span>
-            </p>
+            <p className="text-[10px] text-muted-foreground font-medium mt-1">活跃用户</p>
           </CardContent>
         </Card>
         <Card className="rounded-[1.25rem] border-none shadow-sm ring-1 ring-border/50 hover:bg-[#E6F0FF] transition-all duration-200 ease-out">
@@ -106,9 +104,7 @@ export default async function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-black">{stats.roles}</div>
-            <p className="text-[10px] text-muted-foreground font-medium mt-1">
-              涵盖 12 个权限组
-            </p>
+            <p className="text-[10px] text-muted-foreground font-medium mt-1">已配置角色</p>
           </CardContent>
         </Card>
         <Card className="rounded-[1.25rem] border-none shadow-sm ring-1 ring-border/50 hover:bg-[#E6F0FF] transition-all duration-200 ease-out">
@@ -118,9 +114,7 @@ export default async function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-black">{stats.clients}</div>
-            <p className="text-[10px] text-green-500 font-bold flex items-center gap-1 mt-1">
-              +2 <span className="text-muted-foreground font-normal">本周新增</span>
-            </p>
+            <p className="text-[10px] text-muted-foreground font-medium mt-1">已注册应用</p>
           </CardContent>
         </Card>
         <Card className="rounded-[1.25rem] border-none shadow-sm ring-1 ring-border/50 hover:bg-[#E6F0FF] transition-all duration-200 ease-out">

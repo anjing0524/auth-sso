@@ -216,7 +216,7 @@ export default function ProfilePage() {
                        <div className="h-12 w-12 rounded-full bg-white flex items-center justify-center shadow-md"><ShieldAlert className="h-6 w-6 text-blue-600" /></div>
                        <div className="flex flex-col">
                          <span className="text-xs font-black uppercase text-slate-400">Established</span>
-                         <span className="text-sm font-black text-slate-800">{new Date(data?.session?.createdAt).toLocaleString()}</span>
+                         <span className="text-sm font-black text-slate-800">{data?.tokenInfo?.issuedAt ? new Date(data.tokenInfo.issuedAt).toLocaleString() : '—'}</span>
                        </div>
                     </div>
                     <Separator orientation="vertical" className="hidden md:block h-10" />
@@ -224,7 +224,7 @@ export default function ProfilePage() {
                        <div className="h-12 w-12 rounded-full bg-white flex items-center justify-center shadow-md"><Calendar className="h-6 w-6 text-orange-600" /></div>
                        <div className="flex flex-col text-right md:text-left">
                          <span className="text-xs font-black uppercase text-slate-400">Expires At</span>
-                         <span className="text-sm font-black text-slate-800">{new Date(data?.session?.expiresAt).toLocaleString()}</span>
+                         <span className="text-sm font-black text-slate-800">{data?.tokenInfo?.expiresAt ? new Date(data.tokenInfo.expiresAt).toLocaleString() : '—'}</span>
                        </div>
                     </div>
                   </div>

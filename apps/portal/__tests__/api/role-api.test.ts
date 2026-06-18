@@ -24,21 +24,26 @@ import { createTestRequest } from '../helpers/test-utils';
 const { db, setQueryResult, resetDb, mockWithPermission } = vi.hoisted(() => {
   const state: { _queryResult: any[] } = { _queryResult: [] };
 
-  const createChain = () => {
+  const createChain = (isCount = false) => {
     const chain: any = () => {};
-    chain.then = (resolve: Function) => resolve(state._queryResult);
+    chain.then = (resolve: Function) => resolve(isCount ? [{ count: state._queryResult.length }] : state._queryResult);
     chain.catch = () => ({ then: (r: Function) => r([]) });
     return new Proxy(chain, {
       get(t: any, prop: string) {
         if (prop === 'then' || prop === 'catch') return t[prop];
-        return () => createChain();
+        return () => createChain(isCount);
       },
     });
   };
 
   const db = new Proxy({} as any, {
     get(_t: any, prop: string) {
-      if (prop === 'select') return () => createChain();
+      if (prop === 'select') {
+        return (arg?: any) => {
+          const isCount = arg && typeof arg === 'object' && 'count' in arg;
+          return createChain(isCount);
+        };
+      }
       if (prop === 'insert')
         return () => ({
           values: (data: any) => ({

@@ -73,13 +73,3 @@ export function isScopeDenied(scopeFilter: { type: 'ALL' | 'LIST' | 'SELF'; dept
   return scopeFilter.type === 'LIST' && (scopeFilter.deptIds || []).length === 0;
 }
 
-/**
- * 统一格式化用户列表行（消除 data.ts 和 route.ts 中不一致的 .map() 响应映射）
- */
-export function formatUserListRow(u: Record<string, any>): Record<string, any> {
-  return {
-    ...u,
-    name: u.name || u.username || 'Unknown',
-    deptName: u.deptName || '未分配',
-  };
-}

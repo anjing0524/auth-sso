@@ -7,7 +7,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { getRefreshTokenFromCookie } from '@/lib/session';
-import { rotateRefreshToken } from '@/domain/auth/token';
+import { rotateRefreshToken } from '@/lib/auth/token';
 
 export const runtime = 'nodejs';
 

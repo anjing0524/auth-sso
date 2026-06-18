@@ -8,7 +8,7 @@
  */
 
 /** base64url 编码（无 padding） */
-export function base64UrlEncode(buffer: Uint8Array): string {
+function base64UrlEncode(buffer: Uint8Array): string {
   const base64 = btoa(String.fromCharCode(...buffer));
   return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
 }
@@ -25,21 +25,4 @@ export async function generateCodeChallenge(verifier: string): Promise<string> {
   const encoder = new TextEncoder();
   const digest = await crypto.subtle.digest('SHA-256', encoder.encode(verifier));
   return base64UrlEncode(new Uint8Array(digest));
-}
-
-/** 生成随机 token（默认 16 字节，用于 state/nonce） */
-export function generateRandomToken(length: number = 16): string {
-  const array = new Uint8Array(length);
-  crypto.getRandomValues(array);
-  return base64UrlEncode(array);
-}
-
-/** 生成随机 state 参数（16 字节） */
-export function generateState(): string {
-  return generateRandomToken(16);
-}
-
-/** 生成随机 nonce 参数（16 字节） */
-export function generateNonce(): string {
-  return generateRandomToken(16);
 }

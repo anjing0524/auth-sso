@@ -7,22 +7,14 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { getJwtFromCookie } from '@/lib/session';
-import { verifyAccessToken } from '@/domain/auth/token';
+import { verifyAccessToken } from '@/lib/auth/token';
 import { getUserPermissionContext } from '@/lib/permissions';
+import { getDynamicMenuTree } from '@/lib/menu-tree';
 import { mapDomainError } from '@/domain/shared/error-mapping';
-import { COMMON_ERRORS } from '@auth-sso/contracts';
+import { COMMON_ERRORS, ADMIN_ROLE_CODES } from '@auth-sso/contracts';
 import { getUser } from '@/app/(dashboard)/users/data';
-import { getAllActiveMenus } from '@/app/(dashboard)/menus/data';
 
 export const runtime = 'nodejs';
-
-interface SidebarMenuItem {
-  id: string;
-  title: string;
-  url: string;
-  icon: string | null;
-  children?: SidebarMenuItem[];
-}
 
 export async function GET(request: NextRequest) {
   try {
@@ -55,8 +47,10 @@ export async function GET(request: NextRequest) {
     }
 
     const permissionContext = await getUserPermissionContext(userId);
-    const isAdmin = permissionContext?.roles.some(r => r.code === 'SUPER_ADMIN' || r.code === 'ADMIN') || false;
-    const menuItems = await getDynamicMenus(permissionContext?.permissions || [], isAdmin);
+    const isAdmin = permissionContext?.roles.some(
+      (r) => (ADMIN_ROLE_CODES as readonly string[]).includes(r.code),
+    ) ?? false;
+    const menuItems = await getDynamicMenuTree(permissionContext?.permissions || [], isAdmin);
 
     return NextResponse.json({
       user: {
@@ -66,7 +60,7 @@ export async function GET(request: NextRequest) {
         picture: user.avatarUrl,
         emailVerified: user.emailVerified,
       },
-      tokenInfo: { expiresAt: claims.exp ? claims.exp * 1000 : null },
+      tokenInfo: { expiresAt: claims.exp ? claims.exp * 1000 : null, issuedAt: claims.iat ? claims.iat * 1000 : null },
       permissions: permissionContext?.permissions || [],
       roles: permissionContext?.roles || [],
       dataScopeType: permissionContext?.dataScopeType || 'SELF',
@@ -80,28 +74,4 @@ export async function GET(request: NextRequest) {
       { status: mapped.status },
     );
   }
-}
-
-async function getDynamicMenus(userPermissions: string[], isAdmin: boolean): Promise<SidebarMenuItem[]> {
-  // 复用 data.ts 中 'use cache' 缓存的菜单查询，消除每次 /api/me 的 DB 重复查询
-  const allMenus = await getAllActiveMenus();
-
-  const buildTree = (parentId: string | null = null): SidebarMenuItem[] => {
-    return allMenus
-      .filter((m) => m.parentId === parentId && m.visible && m.menuType !== 'BUTTON')
-      .map((m): SidebarMenuItem | null => {
-        const hasPermission = !m.permissionCode || isAdmin || userPermissions.includes(m.permissionCode);
-        const children = buildTree(m.id);
-        if (!hasPermission && children.length === 0) return null;
-        return {
-          id: m.id,
-          title: m.name,
-          url: m.path || '#',
-          icon: m.icon || 'LayoutGrid',
-          children: children.length > 0 ? children : undefined,
-        };
-      })
-      .filter((m): m is SidebarMenuItem => m !== null);
-  };
-  return buildTree();
 }

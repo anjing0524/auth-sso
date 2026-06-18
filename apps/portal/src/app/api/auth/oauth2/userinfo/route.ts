@@ -7,7 +7,7 @@
  * @route GET /api/auth/oauth2/userinfo
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { verifyAccessToken } from '@/domain/auth/token';
+import { verifyAccessToken } from '@/lib/auth/token';
 import { getJwtFromCookie } from '@/lib/session';
 import { db, schema } from '@/infrastructure/db';
 import { eq } from 'drizzle-orm';

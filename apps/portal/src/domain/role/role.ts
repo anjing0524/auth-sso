@@ -100,7 +100,6 @@ export function roleToInsertRow(r: Role) {
     sort: r.sort,
     status: r.status,
     createdAt: new Date(r.createdAt.epochMilliseconds),
-    updatedAt: new Date(),
   };
 }
 
@@ -112,6 +111,5 @@ export function roleToUpdateRow(r: Role) {
     dataScopeType: r.dataScopeType,
     sort: r.sort,
     status: r.status,
-    updatedAt: new Date(),
   };
 }

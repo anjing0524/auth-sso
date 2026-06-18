@@ -12,4 +12,4 @@
 export { JWT_COOKIE_NAME, REFRESH_COOKIE_NAME, type PortalJwtClaims } from './types';
 export { setJwtCookies, clearJwtCookies, getJwtFromCookie, getRefreshTokenFromCookie } from './cookies';
 export { decodeJwtPayload } from './jwt';
-export { revokeJti, isJtiRevoked, revokeUserToken, getSessionIdFromCookie } from './revoke';
+export { revokeJti, isJtiRevoked, revokeUserToken } from './revoke';

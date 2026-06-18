@@ -27,7 +27,7 @@ export async function GET() {
       const jwk = JSON.parse(row.publicKey) as JsonWebKey;
       return {
         ...jwk,
-        kid: row.id, // 使用数据库 id 作为 kid
+        kid: row.kid ?? row.id, // 使用 kid 列（与 JWT header.kid 一致），兼容旧数据无 kid 时回退 id
         use: 'sig',
         alg: 'ES256',
       };

@@ -5,6 +5,7 @@
  * DELETE /api/menus/[id] — 递归删除菜单
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { revalidatePath } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
 import { eq } from 'drizzle-orm';
 import { withPermission } from '@/lib/auth';
@@ -18,7 +19,7 @@ interface MenuUpdatePayload {
   name?: string; path?: string | null; permissionCode?: string | null;
   icon?: string | null; sort?: number; visible?: boolean;
   status?: EntityStatus; menuType?: 'DIRECTORY' | 'MENU' | 'BUTTON';
-  parentId?: string | null; updatedAt: Date;
+  parentId?: string | null;
 }
 
 /** GET /api/menus/[id] — 委托 data.ts */
@@ -41,7 +42,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     const menu = await getMenuById(id);
     if (!menu) return NextResponse.json({ error: COMMON_ERRORS.NOT_FOUND, message: '菜单不存在' }, { status: 404 });
 
-    const updateData: MenuUpdatePayload = { updatedAt: new Date() };
+    const updateData: MenuUpdatePayload = {};
     if (name !== undefined) updateData.name = name;
     if (path !== undefined) updateData.path = path;
     if (permissionCode !== undefined) updateData.permissionCode = permissionCode;
@@ -53,6 +54,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     if (parentId !== undefined) updateData.parentId = parentId;
 
     await db.update(schema.menus).set(updateData).where(eq(schema.menus.id, menu.id));
+    revalidatePath('/menus');
     return NextResponse.json({ success: true });
   });
 }
@@ -72,6 +74,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     };
 
     await deleteRecursive(rootId);
+    revalidatePath('/menus');
     return NextResponse.json({ success: true, message: '菜单及其子项已递归删除' });
   });
 }

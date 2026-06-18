@@ -39,9 +39,6 @@ export type TokenType = 'Bearer';
 // 登录事件类型
 export type LoginEventType = 'LOGIN_SUCCESS' | 'LOGIN_FAILED' | 'LOGOUT';
 
-// 用户身份源
-export type IdentityProvider = 'password';
-
 // ────────────────────────────────────────────
 // 枚举默认值常量（domain 工厂函数使用，消除手写字符串字面量）
 // 所有枚举值的单一真相源仍在 *_VALUES 数组中
@@ -66,118 +63,12 @@ export const PUBLIC_ID_PREFIX = {
   CLIENT: 'cli_',
 } as const;
 
-// 用户基础信息
-export interface UserBase {
-  id: string;          // public_id
-  username: string;
-  name: string;
-  email?: string;
-  mobile?: string;
-  status: UserStatus;
-  deptId?: string;
-  avatarUrl?: string;
-}
-
-// 部门基础信息
-export interface DepartmentBase {
-  id: string;
-  parentId?: string;
-  name: string;
-  code?: string;
-  status: EntityStatus;
-}
-
-// 角色基础信息
-export interface RoleBase {
-  id: string;
-  name: string;
-  code: string;
-  dataScope: DataScopeType;
-  status: EntityStatus;
-  isSystem: boolean;
-}
-
-// 权限基础信息
-export interface PermissionBase {
-  id: string;
-  code: string;
-  name: string;
-  type: PermissionType;
-  resource?: string;
-  action?: string;
-  status: EntityStatus;
-}
-
-// 菜单基础信息
-export interface MenuBase {
-  id: string;
-  parentId?: string;
-  name: string;
-  path?: string;
-  icon?: string;
-  visible: boolean;
-  status: EntityStatus;
-}
-
-// Client 基础信息（与 domain Client entity 对齐）
-export interface ClientBase {
-  id: string;
-  name: string;
-  clientId: string;
-  homepageUrl?: string;
-  status: EntityStatus;
-}
-
 // 用户权限上下文（由 Portal lib/permissions.ts 查询 DB/Redis 后填充）
 export interface UserPermissionContext {
   roles: Array<{ id: string; code: string; name: string }>;
   permissions: string[];
   dataScopeType: DataScopeType;
   deptId?: string;
-}
-
-// Session 信息
-export interface SessionInfo {
-  sessionId: string;
-  userPublicId: string;
-  userInternalId: string;
-  createdAt: number;
-  lastAccessAt: number;
-  absoluteExpiresAt: number;
-  idleTimeoutSec: number;
-}
-
-// Portal Session 扩展信息
-export interface PortalSessionInfo extends SessionInfo {
-  accessToken: string;
-  refreshToken: string;
-  idToken: string;
-  ip?: string;
-  userAgent?: string;
-}
-
-// Portal Session 扩展（含 OIDC 签发信息）
-export interface PortalSessionFull extends SessionInfo {
-  subject: string;
-}
-
-// OIDC Token 响应
-export interface TokenResponse {
-  access_token: string;
-  token_type: TokenType;
-  expires_in: number;
-  refresh_token?: string;
-  id_token?: string;
-  scope?: string;
-}
-
-// OIDC UserInfo 响应
-export interface UserInfoResponse {
-  sub: string;
-  name?: string;
-  email?: string;
-  email_verified?: boolean;
-  picture?: string;
 }
 
 // API 响应类型契约 (Controller 层统一返回格式)

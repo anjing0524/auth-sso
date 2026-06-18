@@ -7,18 +7,7 @@
  * @module domain/auth/login
  */
 import { BusinessRuleViolationError } from '@/domain/shared/errors';
-
-/** 登录成功返回的用户基本信息（不含敏感字段） */
-export interface AuthResult {
-  user: {
-    id: string;
-    publicId: string;
-    username: string;
-    name: string;
-    email: string | null;
-    avatarUrl: string | null;
-  };
-}
+import type { UserStatus } from '@auth-sso/contracts';
 
 /**
  * 领域行数据接口 — 用于 validateLoginCredentials
@@ -31,7 +20,7 @@ export interface UserAuthRow {
   email: string | null;
   avatarUrl: string | null;
   passwordHash: string | null;
-  status: string;
+  status: UserStatus;
 }
 
 /**

@@ -35,30 +35,6 @@ export interface RedisClient {
  * Redis 客户端实例
  */
 let redisClient: RedisClient | null = null;
-let rawIoredisClient: Redis | null = null;
-
-/**
- * 获取原生的 ioredis 客户端实例
- * 专门供 Better Auth 等外部插件/适配器复用现成的连接，防止 TCP 连接冗余
- */
-export function getRawIoredisClient(): Redis | null {
-  if (!rawIoredisClient) {
-    rawIoredisClient = new Redis(getRedisUrl(), {
-      maxRetriesPerRequest: 0, // 严格遵守 Better Auth Redis 驱动的最佳实践限制
-      connectTimeout: 5000,
-      lazyConnect: true,
-    });
-
-    rawIoredisClient.on('error', (err) => {
-      console.error('[Redis] Raw ioredis connection error:', err);
-    });
-
-    rawIoredisClient.on('connect', () => {
-      console.log('[Redis] Raw ioredis Connected');
-    });
-  }
-  return rawIoredisClient;
-}
 
 /**
  * 创建 ioredis 客户端
@@ -110,16 +86,3 @@ export function getRedis(): RedisClient {
   return redisClient;
 }
 
-/**
- * 关闭 Redis 连接
- */
-export async function closeRedis(): Promise<void> {
-  if (redisClient) {
-    await redisClient.quit();
-    redisClient = null;
-  }
-  if (rawIoredisClient) {
-    await rawIoredisClient.quit();
-    rawIoredisClient = null;
-  }
-}

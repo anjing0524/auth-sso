@@ -19,7 +19,6 @@ import { mapDomainError } from '@/domain/shared/error-mapping';
 import type { PortalJwtClaims } from '../session';
 import {
   checkPermission,
-  isSuperAdmin,
   type PermissionCheckOptions,
   type PermissionCheckResult,
 } from './check-permission';
@@ -32,7 +31,6 @@ import {
 // 统一透出子模块能力
 export {
   checkPermission,
-  isSuperAdmin,
   checkDataScope,
   getDataScopeFilter,
   applyDataScopeFilter,

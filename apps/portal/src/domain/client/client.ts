@@ -5,21 +5,9 @@ import type { CreateClientInput, Client } from './types';
 export type { Client };
 
 /**
- * 纯函数：解析 redirectUrls 字符串为数组
- */
-export function parseRedirectUris(raw: string): string[] {
-  try {
-    if (raw.startsWith('[')) {
-      return JSON.parse(raw) as string[];
-    }
-    return raw.split(',').map(u => u.trim());
-  } catch {
-    return [raw];
-  }
-}
-
-/**
  * 将 Drizzle 数据库行转换为领域 Client 实体
+ *
+ * redirectUrls 已是 PG 原生 text[] 数组，无需应用层解析。
  */
 export function toDomainClient(row: {
   id: string;
@@ -27,7 +15,7 @@ export function toDomainClient(row: {
   name: string;
   clientId: string;
   clientSecret: string | null;
-  redirectUrls: string;
+  redirectUrls: string[];
   scopes: string;
   homepageUrl: string | null;
   icon: string | null;
@@ -43,7 +31,7 @@ export function toDomainClient(row: {
     name: row.name,
     clientId: row.clientId,
     clientSecret: row.clientSecret,
-    redirectUris: parseRedirectUris(row.redirectUrls),
+    redirectUris: row.redirectUrls,
     scopes: row.scopes,
     homepageUrl: row.homepageUrl,
     logoUrl: row.icon,
@@ -114,7 +102,7 @@ export function clientToInsertRow(c: Client) {
     name: c.name,
     clientId: c.clientId,
     clientSecret: c.clientSecret,
-    redirectUrls: JSON.stringify(c.redirectUris),
+    redirectUrls: c.redirectUris,
     scopes: c.scopes,
     homepageUrl: c.homepageUrl,
     icon: c.logoUrl,
@@ -122,7 +110,6 @@ export function clientToInsertRow(c: Client) {
     refreshTokenTtl: c.refreshTokenTtl,
     status: c.status,
     createdAt: new Date(c.createdAt.epochMilliseconds),
-    updatedAt: new Date(),
   };
 }
 
@@ -130,13 +117,12 @@ export function clientToInsertRow(c: Client) {
 export function clientToUpdateRow(c: Client) {
   return {
     name: c.name,
-    redirectUrls: JSON.stringify(c.redirectUris),
+    redirectUrls: c.redirectUris,
     scopes: c.scopes,
     homepageUrl: c.homepageUrl,
     icon: c.logoUrl,
     accessTokenTtl: c.accessTokenTtl,
     refreshTokenTtl: c.refreshTokenTtl,
     status: c.status,
-    updatedAt: new Date(),
   };
 }

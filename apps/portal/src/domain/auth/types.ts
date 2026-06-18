@@ -33,76 +33,11 @@ export interface PortalJwtClaims extends JWTPayload {
   dataScopeType?: DataScopeType;
 }
 
-/** OIDC ID Token 标准 Claims */
-export interface IDTokenClaims extends JWTPayload {
-  iss: string;
-  sub: string;
-  aud: string;
-  exp: number;
-  iat: number;
-  auth_time?: number;
-  nonce?: string;
-  at_hash?: string;
-  c_hash?: string;
-  name?: string;
-  picture?: string;
-  email?: string;
-  email_verified?: boolean;
-}
-
-// ────────────────────────────────────────────
-// 输入参数
-// ────────────────────────────────────────────
-
-/** 登录请求 */
-export interface LoginInput {
-  email: string;
-  password: string;
-}
-
-/** Token 轮换请求 */
-export interface RefreshTokenInput {
-  refreshToken: string;
-}
-
 /** Token 轮换结果 */
 export interface RefreshTokenResult {
   accessToken: string;
   refreshToken: string;
   expiresIn: number;
-}
-
-/** OAuth 2.1 授权请求参数 */
-export interface AuthorizationRequest {
-  client_id: string;
-  redirect_uri: string;
-  response_type: 'code';
-  scope: string;
-  state: string;
-  nonce?: string;
-  code_challenge: string;
-  code_challenge_method: 'S256';
-}
-
-/** Token 端点请求 */
-export interface TokenRequest {
-  grant_type: 'authorization_code' | 'refresh_token';
-  code?: string;
-  redirect_uri?: string;
-  code_verifier?: string;
-  refresh_token?: string;
-  client_id: string;
-  client_secret?: string;
-}
-
-/** Token 端点响应 */
-export interface TokenResponse {
-  access_token: string;
-  token_type: 'Bearer';
-  expires_in: number;
-  refresh_token?: string;
-  id_token?: string;
-  scope?: string;
 }
 
 // ────────────────────────────────────────────
