@@ -1,5 +1,5 @@
 {
-  "id": "d7252f4c-f5f4-46ac-b70b-6aebe4d46ebe",
+  "id": "269c77ab-7f03-4bdf-89e0-cfc08b8c5cc5",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -1042,7 +1042,12 @@
         }
       },
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "permissions_type_fields_chk": {
+          "name": "permissions_type_fields_chk",
+          "value": "(type IN ('DIRECTORY','PAGE') AND resource IS NULL AND action IS NULL AND client_id IS NULL)\n      OR (type IN ('API','DATA') AND resource IS NOT NULL AND action IS NOT NULL)"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.role_clients": {
@@ -1087,21 +1092,6 @@
             }
           ],
           "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "idx_role_clients_role": {
-          "name": "idx_role_clients_role",
-          "columns": [
-            {
-              "expression": "role_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -1202,21 +1192,6 @@
           "method": "btree",
           "with": {}
         },
-        "idx_role_data_scopes_role": {
-          "name": "idx_role_data_scopes_role",
-          "columns": [
-            {
-              "expression": "role_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
         "idx_role_data_scopes_dept": {
           "name": "idx_role_data_scopes_dept",
           "columns": [
@@ -1309,21 +1284,6 @@
             }
           ],
           "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "idx_role_permissions_role": {
-          "name": "idx_role_permissions_role",
-          "columns": [
-            {
-              "expression": "role_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -1617,7 +1577,7 @@
         },
         "ip": {
           "name": "ip",
-          "type": "varchar(45)",
+          "type": "inet",
           "primaryKey": false,
           "notNull": false
         },
@@ -1739,7 +1699,7 @@
         },
         "ip": {
           "name": "ip",
-          "type": "varchar(45)",
+          "type": "inet",
           "primaryKey": false,
           "notNull": false
         },

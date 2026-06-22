@@ -54,7 +54,7 @@ export const userRoles = pgTable('user_roles', {
   userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   roleId: uuid('role_id').notNull().references(() => roles.id, { onDelete: 'cascade' }),
   createdAt: createdAtColumn(),
-}, (t) => ({
-  pk: uniqueIndex('ux_user_roles_pk').on(t.userId, t.roleId),  // 复合主键（唯一索引即主键）
-  roleIdx: index('idx_user_roles_role').on(t.roleId),
-}));
+}, (t) => [
+  uniqueIndex('ux_user_roles_pk').on(t.userId, t.roleId),  // 复合主键（唯一索引即主键）
+  index('idx_user_roles_role').on(t.roleId),
+]);
