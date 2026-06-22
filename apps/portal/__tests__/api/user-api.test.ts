@@ -240,7 +240,7 @@ describe('User Management API & Actions', () => {
 
   // ======== GET /api/users/[id] ========
   describe('GET /api/users/[id] (detail)', () => {
-    it('returns user detail by public_id', async () => {
+    it('returns user detail by id', async () => {
       setQueryResult([
         createTestUser({ deptName: 'Engineering', code: 'USER' }),
       ]);
@@ -252,7 +252,7 @@ describe('User Management API & Actions', () => {
 
       expect(response.status).toBe(200);
       expect(body.data).toMatchObject({
-        publicId: 'u_abc123',
+        id: 'user-1',
         name: '测试用户',
         email: 'test@example.com',
       });

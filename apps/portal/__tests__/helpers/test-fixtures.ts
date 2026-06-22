@@ -8,12 +8,15 @@
 export function createTestUser(overrides: Record<string, any> = {}) {
   return {
     id: 'user-1',
-    publicId: 'u_abc123',
+    username: 'testuser',
     email: 'test@example.com',
     name: '测试用户',
-    account: 'testuser',
     status: 'ACTIVE',
     deptId: 'dept-1',
+    avatarUrl: null,
+    emailVerified: null,
+    lastLoginAt: null,
+    deletedAt: null,
     createdAt: new Date('2026-01-01'),
     updatedAt: new Date('2026-01-01'),
     // getUser 经 Relational Queries 取出，roles 以 userRoles 嵌套结构返回
