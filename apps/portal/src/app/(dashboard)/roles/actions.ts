@@ -3,7 +3,7 @@
 /**
  * 角色管理 Server Actions (BFF 薄 Controller)
  */
-import { revalidatePath, revalidateTag } from 'next/cache';
+import { revalidatePath, updateTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
 import { eq } from 'drizzle-orm';
 import { withAuth, type AuthContext } from '@/lib/auth';
@@ -57,7 +57,7 @@ export const createRoleAction = withAuth(
     });
 
     revalidatePath('/roles');
-    revalidateTag('roles-list', { expire: 0 });
+    updateTag('roles-list');
     return { success: true, data: { id: role.id }, message: '角色创建成功' };
   },
 );
@@ -86,7 +86,7 @@ export const updateRoleAction = withAuth(
     await invalidateRoleBoundUsersCache(roleId);
 
     revalidatePath('/roles');
-    revalidateTag('roles-list', { expire: 0 });
+    updateTag('roles-list');
     return { success: true, data: { id: roleId }, message: '角色更新成功' };
   },
 );
@@ -116,7 +116,7 @@ export const deleteRoleAction = withAuth(
     }
 
     revalidatePath('/roles');
-    revalidateTag('roles-list', { expire: 0 });
+    updateTag('roles-list');
     return { success: true, data: { id: roleId }, message: '角色已删除' };
   },
 );

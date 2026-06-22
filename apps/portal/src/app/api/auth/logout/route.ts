@@ -57,8 +57,7 @@ export async function POST() {
       await db
         .update(schema.refreshTokens)
         .set({ revoked: new Date() })
-        .where(eq(schema.refreshTokens.tokenHash, refreshToken))
-        .execute();
+        .where(eq(schema.refreshTokens.tokenHash, refreshToken));
     }
 
     // 4. 按用户 ID 撤销全部 Refresh Token（防御纵深）
@@ -66,8 +65,7 @@ export async function POST() {
       await db
         .update(schema.refreshTokens)
         .set({ revoked: new Date() })
-        .where(eq(schema.refreshTokens.userId, userId))
-        .execute();
+        .where(eq(schema.refreshTokens.userId, userId));
     }
   } catch (err) {
     const mapped = mapDomainError(err);

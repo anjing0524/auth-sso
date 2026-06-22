@@ -361,8 +361,7 @@ export async function rotateRefreshToken(
   if (rt.revoked) {
     await db.update(schema.refreshTokens)
       .set({ revoked: new Date() })
-      .where(and(eq(schema.refreshTokens.userId, rt.userId), eq(schema.refreshTokens.clientId, rt.clientId)))
-      .execute();
+      .where(and(eq(schema.refreshTokens.userId, rt.userId), eq(schema.refreshTokens.clientId, rt.clientId)));
     return null;
   }
 
@@ -371,8 +370,7 @@ export async function rotateRefreshToken(
   // 撤销旧 token
   await db.update(schema.refreshTokens)
     .set({ revoked: new Date() })
-    .where(eq(schema.refreshTokens.id, rt.id))
-    .execute();
+    .where(eq(schema.refreshTokens.id, rt.id));
 
   // 签发新 Refresh Token
   const newRefreshToken = await issueRefreshToken(rt.userId, rt.clientId, rt.scopes);
@@ -406,8 +404,7 @@ export async function rotateRefreshToken(
 export async function revokeAllRefreshTokens(userId: string): Promise<void> {
   await db.update(schema.refreshTokens)
     .set({ revoked: new Date() })
-    .where(eq(schema.refreshTokens.userId, userId))
-    .execute();
+    .where(eq(schema.refreshTokens.userId, userId));
 
   // 同步撤销所有 Access Token 的 JTI（双层撤销闭环）
   revokeUserAccessByUserId(userId).then((count) => {

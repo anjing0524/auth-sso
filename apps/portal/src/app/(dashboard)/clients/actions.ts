@@ -3,7 +3,7 @@
 /**
  * Client 管理 Server Actions (BFF 薄 Controller)
  */
-import { revalidatePath, revalidateTag } from 'next/cache';
+import { revalidatePath, updateTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
 import { eq, and, inArray } from 'drizzle-orm';
 import { withAuth, type AuthContext } from '@/lib/auth';
@@ -36,7 +36,7 @@ export const createClientAction = withAuth(
     await db.insert(schema.clients).values(clientToInsertRow(client));
 
     revalidatePath('/clients');
-    revalidateTag('clients-list', { expire: 0 });
+    updateTag('clients-list');
     return {
       success: true,
       data: { id: client.clientId, clientId: client.clientId, clientSecret: client.clientSecret },
@@ -66,7 +66,7 @@ export const updateClientAction = withAuth(
       .where(eq(schema.clients.clientId, client.clientId));
 
     revalidatePath('/clients');
-    revalidateTag('clients-list', { expire: 0 });
+    updateTag('clients-list');
     return { success: true, data: { id: clientIdStr }, message: '应用更新成功' };
   },
 );
@@ -83,7 +83,7 @@ export const deleteClientAction = withAuth(
     await db.delete(schema.clients).where(eq(schema.clients.clientId, row.clientId));
 
     revalidatePath('/clients');
-    revalidateTag('clients-list', { expire: 0 });
+    updateTag('clients-list');
     return { success: true, data: { id: clientIdStr }, message: '应用已注销' };
   },
 );
@@ -104,7 +104,7 @@ export const rotateClientSecretAction = withAuth(
 
     revalidatePath(`/clients/${row.clientId}`);
     revalidatePath('/clients');
-    revalidateTag('clients-list', { expire: 0 });
+    updateTag('clients-list');
     return { success: true, data: { clientSecret: newSecret }, message: '密钥重新生成成功' };
   },
 );

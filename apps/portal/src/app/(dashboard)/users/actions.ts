@@ -7,9 +7,9 @@
  * 仅执行编排 (Orchestration)：Zod 门禁 → 领域纯函数 → Drizzle 直调。
  * 鉴权与领域错误映射统一由 withAuth 高阶函数施加（R21 / R20），
  * 函数体控制在 ≤ 20 行，不含任何内联业务规则判定（R9 / 红线 #2）。
- * 涉及“读取 + 更新”的多步骤写操作均用 db.transaction() 显式包裹（R22）。
+ * 涉及"读取 + 更新"的多步骤写操作均用 db.transaction() 显式包裹（R22）。
  */
-import { revalidatePath, revalidateTag } from 'next/cache';
+import { revalidatePath, updateTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
 import { eq, or } from 'drizzle-orm';
 import { withAuth, type AuthContext } from '@/lib/auth';
@@ -57,18 +57,20 @@ export const createUserAction = withAuth(
       return { success: false, error: 'VALIDATION_ERROR', message: parsed.error.issues[0].message };
     }
 
+    // 应用层归一化：UI 哨兵值 'ALL' → null（Zod 4 已移除 z.preprocess，逻辑上移至 Controller）
+    const input = { ...parsed.data, deptId: parsed.data.deptId === 'ALL' ? null : parsed.data.deptId };
+
     // 密码哈希在事务外完成，避免长时间占用 DB 连接（bcrypt 通常 50-200ms）
-    const passwordHash = await hashPassword(parsed.data.password);
+    const passwordHash = await hashPassword(input.password);
 
     // 查重 + 插入在事务中原子完成（R22）
-    // deptId 已在 Zod .preprocess() 中归一化 ('ALL' → null)，Controller 层不重复判定
     const result = await db.transaction(async (tx) => {
       const existing = await tx.query.users.findFirst({
-        where: or(eq(schema.users.username, parsed.data.username), eq(schema.users.email, parsed.data.email)),
+        where: or(eq(schema.users.username, input.username), eq(schema.users.email, input.email)),
       });
       if (existing) throw new DuplicateEntityError('User', 'username/email');
 
-      const user = createUser(parsed.data, generateUUID);
+      const user = createUser(input, generateUUID);
       await tx.insert(schema.users).values({
         ...userToInsertRow(user),
         passwordHash,
@@ -77,7 +79,7 @@ export const createUserAction = withAuth(
     });
 
     revalidatePath('/users');
-    revalidateTag('users-list', { expire: 0 });
+    updateTag('users-list');
     return { success: true, data: { id: result.id }, message: '用户创建成功' };
   },
 );
@@ -111,7 +113,7 @@ export const toggleUserStatusAction = withAuth(
     );
 
     revalidatePath('/users');
-    revalidateTag('users-list', { expire: 0 });
+    updateTag('users-list');
     return {
       success: true,
       data: { status: updated.status },
@@ -153,7 +155,7 @@ export const updateUserAction = withAuth(
 
     await refreshUserPermissionCache(parsed.data.id);
     revalidatePath('/users');
-    revalidateTag('users-list', { expire: 0 });
+    updateTag('users-list');
     return { success: true, data: { id: parsed.data.id }, message: '更新成功' };
   },
 );
@@ -187,7 +189,7 @@ export const deleteUserAction = withAuth(
 
     await refreshUserPermissionCache(parsed.data.id);
     revalidatePath('/users');
-    revalidateTag('users-list', { expire: 0 });
+    updateTag('users-list');
     return { success: true, data: { id: parsed.data.id }, message: '用户已逻辑删除' };
   },
 );

@@ -16,6 +16,12 @@ interface IncomingPermission {
   type: 'DIRECTORY' | 'PAGE' | 'API' | 'DATA';
   resource?: string;
   action?: string;
+  /** PAGE/DIRECTORY 专属：前端路由路径 */
+  path?: string;
+  /** PAGE/DIRECTORY 专属：菜单图标 */
+  icon?: string;
+  /** PAGE/DIRECTORY 专属：菜单可见性 */
+  visible?: boolean;
   sort?: number;
   children?: IncomingPermission[];
 }
@@ -39,6 +45,9 @@ function flattenPermissions(
       type: node.type,
       resource: node.resource,
       action: node.action,
+      path: node.path,
+      icon: node.icon,
+      visible: node.visible,
       sort: node.sort ?? 0,
       parentId,
     });
@@ -164,6 +173,9 @@ export async function POST(request: NextRequest) {
             type: p.type,
             resource: p.resource ?? null,
             action: p.action ?? null,
+            path: p.path ?? null,
+            icon: p.icon ?? null,
+            visible: p.visible ?? null,
             clientId,
             parentId: dbParentId,
             sort: p.sort,
@@ -179,6 +191,9 @@ export async function POST(request: NextRequest) {
             existing.type !== p.type ||
             existing.resource !== (p.resource ?? null) ||
             existing.action !== (p.action ?? null) ||
+            existing.path !== (p.path ?? null) ||
+            existing.icon !== (p.icon ?? null) ||
+            existing.visible !== (p.visible ?? null) ||
             existing.sort !== p.sort ||
             existing.status !== 'ACTIVE';
 
@@ -189,6 +204,9 @@ export async function POST(request: NextRequest) {
                 type: p.type,
                 resource: p.resource ?? null,
                 action: p.action ?? null,
+                path: p.path ?? null,
+                icon: p.icon ?? null,
+                visible: p.visible ?? null,
                 sort: p.sort,
                 status: 'ACTIVE',
                 ...(parentChanged ? { parentId: dbParentId } : {}),

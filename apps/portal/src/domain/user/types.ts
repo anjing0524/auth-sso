@@ -44,11 +44,8 @@ export const CreateUserInputSchema = z.object({
   email: z.string().email('邮箱格式不合法'),
   /** 密码 */
   password: z.string().min(6, '密码至少6位'),
-  /** 部门 ID（UI 哨兵值 'ALL' 归一化为 null） */
-  deptId: z.preprocess(
-    (v) => (v === 'ALL' ? null : v),
-    z.string().nullable().optional(),
-  ),
+  /** 部门 ID（UI 哨兵值 'ALL' 归一化在应用层处理，保持 Schema 纯粹） */
+  deptId: z.string().nullable().optional(),
 });
 export type CreateUserInput = z.infer<typeof CreateUserInputSchema>;
 

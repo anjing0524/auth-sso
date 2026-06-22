@@ -61,7 +61,7 @@ export async function POST(
 
     // 4. 失效页面缓存与数据缓存（确保用户列表即时反映下线状态）
     revalidatePath('/users');
-    revalidateTag('users-list', { expire: 0 });
+    revalidateTag('users-list', 'max');
 
     return NextResponse.json({
       success: true,

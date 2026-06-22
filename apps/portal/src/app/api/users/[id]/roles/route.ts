@@ -87,7 +87,7 @@ export async function POST(
 
     // 4. 失效页面与数据缓存
     revalidatePath('/users');
-    revalidateTag('users-list', { expire: 0 });
+    revalidateTag('users-list', 'max');
 
     return NextResponse.json({ success: true, assignedCount: roleIds.length });
   });
@@ -144,7 +144,7 @@ export async function DELETE(
 
     // 失效页面与数据缓存
     revalidatePath('/users');
-    revalidateTag('users-list', { expire: 0 });
+    revalidateTag('users-list', 'max');
 
     return NextResponse.json({ success: true });
   });

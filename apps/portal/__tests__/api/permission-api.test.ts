@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => {
   let _returningResult: any[] = [];
   let _rowCountResult = 1;
   let _executeResult: any[] = [];
+  let _inserts: any[] = [];
 
   function createChain(): any {
     const chain: any = () => {};
@@ -29,10 +30,13 @@ const mocks = vi.hoisted(() => {
       get(_t, prop: string) {
         if (prop === 'select' || prop === 'selectDistinct') return () => createChain();
         if (prop === 'insert') return () => ({
-          values: (data: any) => ({
-            returning: () => Promise.resolve(_returningResult.length > 0 ? _returningResult : [{ ...data, id: 'mock-id' }]),
-            then: (resolve: Function) => resolve(_rowCountResult),
-          }),
+          values: (data: any) => {
+            _inserts.push(data);
+            return {
+              returning: () => Promise.resolve(_returningResult.length > 0 ? _returningResult : [{ ...data, id: 'mock-id' }]),
+              then: (resolve: Function) => resolve(_rowCountResult),
+            };
+          },
         });
         if (prop === 'update') return () => ({ set: () => ({ where: () => ({ returning: () => Promise.resolve(_returningResult), then: (r: Function) => r(_rowCountResult) }) }) });
         if (prop === 'delete') return () => ({ where: () => ({ returning: () => Promise.resolve(_returningResult), then: (r: Function) => r(_rowCountResult) }) });
@@ -58,10 +62,13 @@ const mocks = vi.hoisted(() => {
     get(_t, prop: string) {
       if (prop === 'select' || prop === 'selectDistinct') return () => createChain();
       if (prop === 'insert') return () => ({
-        values: (data: any) => ({
-          returning: () => Promise.resolve(_returningResult.length > 0 ? _returningResult : [{ ...data, id: 'mock-id' }]),
-          then: (resolve: Function) => resolve(_rowCountResult),
-        }),
+        values: (data: any) => {
+          _inserts.push(data);
+          return {
+            returning: () => Promise.resolve(_returningResult.length > 0 ? _returningResult : [{ ...data, id: 'mock-id' }]),
+            then: (resolve: Function) => resolve(_rowCountResult),
+          };
+        },
       });
       if (prop === 'update') return () => ({ set: () => ({ where: () => ({ returning: () => Promise.resolve(_returningResult), then: (r: Function) => r(_rowCountResult) }) }) });
       if (prop === 'delete') return () => ({ where: () => ({ returning: () => Promise.resolve(_returningResult), then: (r: Function) => r(_rowCountResult) }) });
@@ -110,11 +117,13 @@ const mocks = vi.hoisted(() => {
     setReturningResult(r: any[]) { _returningResult = r; },
     setRowCountResult(n: number) { _rowCountResult = n; },
     setExecuteResult(r: any[]) { _executeResult = r; },
+    getInserts() { return _inserts; },
     reset() {
       _queryResult = [];
       _returningResult = [];
       _rowCountResult = 1;
       _executeResult = [];
+      _inserts = [];
     },
   };
 });
@@ -308,6 +317,29 @@ describe('Permission API', () => {
         { code: 'user:list', name: '重复', type: 'API' },
       ]));
       expect(res.status).toBe(400);
+    });
+
+    it('PAGE/DIRECTORY 节点的 path/icon/visible 透传落库', async () => {
+      mocks.setQueryResult([makeRegisterClientRow()]);
+      mocks.setExecuteResult([]);
+
+      const body = await parseResponseJson(await RegisterPermissions(createRegisterReq([
+        {
+          code: 'erp:orders', name: '订单', type: 'DIRECTORY', sort: 1,
+          children: [
+            { code: 'erp:order:list', name: '订单列表', type: 'PAGE',
+              path: '/orders', icon: 'orders', visible: true, sort: 1 },
+          ],
+        },
+      ])));
+
+      expect(body.success).toBe(true);
+      const inserts = mocks.getInserts();
+      const pageRow = inserts.find((r: any) => r.code === 'erp:order:list');
+      expect(pageRow).toBeDefined();
+      expect(pageRow.path).toBe('/orders');
+      expect(pageRow.icon).toBe('orders');
+      expect(pageRow.visible).toBe(true);
     });
   });
 });

@@ -3,7 +3,7 @@
 /**
  * 权限管理 Server Actions (BFF 薄 Controller)
  */
-import { revalidatePath, revalidateTag } from 'next/cache';
+import { revalidatePath, updateTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
 import { eq } from 'drizzle-orm';
 import { withAuth, type AuthContext } from '@/lib/auth';
@@ -46,7 +46,7 @@ export const createPermissionAction = withAuth(
     });
 
     revalidatePath('/permissions');
-    revalidateTag('permissions-list', { expire: 0 });
+    updateTag('permissions-list');
     return { success: true, data: { id: perm.id }, message: '权限创建成功' };
   },
 );
@@ -72,7 +72,7 @@ export const updatePermissionAction = withAuth(
       .where(eq(schema.permissions.id, perm.id));
 
     revalidatePath('/permissions');
-    revalidateTag('permissions-list', { expire: 0 });
+    updateTag('permissions-list');
     return { success: true, data: { id: permId }, message: '权限更新成功' };
   },
 );
@@ -92,7 +92,7 @@ export const deletePermissionAction = withAuth(
     });
 
     revalidatePath('/permissions');
-    revalidateTag('permissions-list', { expire: 0 });
+    updateTag('permissions-list');
     return { success: true, data: { id: permId }, message: '权限已删除' };
   },
 );
