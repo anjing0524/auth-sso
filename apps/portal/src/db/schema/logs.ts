@@ -20,7 +20,7 @@
  *
  * @module db/schema/logs
  */
-import { pgTable, uuid, varchar, text, jsonb, smallint, integer, index } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, varchar, text, inet, jsonb, smallint, integer, index } from 'drizzle-orm/pg-core';
 import { loginEventEnum, auditOperationEnum } from './enums';
 import { createdAtColumn } from './helpers';
 
@@ -38,7 +38,7 @@ export const auditLogs = pgTable('audit_logs', {
   method: varchar('method', { length: 10 }),
   url: varchar('url', { length: 500 }),
   params: jsonb('params').$type<AuditParams>(),
-  ip: varchar('ip', { length: 45 }),
+  ip: inet('ip'),
   userAgent: varchar('user_agent', { length: 500 }),
   status: smallint('status'),
   duration: integer('duration'),
@@ -58,7 +58,7 @@ export const loginLogs = pgTable('login_logs', {
   userId: uuid('user_id'),
   username: varchar('username', { length: 50 }).notNull(),
   eventType: loginEventEnum('event_type').notNull(),
-  ip: varchar('ip', { length: 45 }),
+  ip: inet('ip'),
   userAgent: varchar('user_agent', { length: 500 }),
   location: varchar('location', { length: 100 }),
   failReason: text('fail_reason'),
