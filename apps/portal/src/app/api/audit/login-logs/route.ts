@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withPermission } from '@/lib/auth';
 import { getLoginLogs } from '@/app/audit/data';
+import { LOGIN_EVENT_VALUES, type LoginEventType } from '@auth-sso/contracts';
 
 export const runtime = 'nodejs';
 
@@ -13,11 +14,15 @@ export const runtime = 'nodejs';
 export async function GET(request: NextRequest) {
   return withPermission({ permissions: ['audit:read'] }, async () => {
     const sp = request.nextUrl.searchParams;
+    const rawEvent = sp.get('eventType');
+    const eventType = rawEvent && (LOGIN_EVENT_VALUES as readonly string[]).includes(rawEvent)
+      ? (rawEvent as LoginEventType)
+      : undefined;
     const result = await getLoginLogs({
       page: parseInt(sp.get('page') || '1', 10),
       pageSize: parseInt(sp.get('pageSize') || '20', 10),
       userId: sp.get('userId') || undefined,
-      eventType: sp.get('eventType') || undefined,
+      eventType,
       startDate: sp.get('startDate') || undefined,
       endDate: sp.get('endDate') || undefined,
     });
