@@ -13,6 +13,8 @@ interface PermissionGuardProps {
   children: React.ReactNode;
   /** 无权限时的备用渲染，默认不渲染 */
   fallback?: React.ReactNode;
+  /** 当前用户 ID（用于按用户键控权限缓存，防止跨用户泄漏） */
+  userId?: string;
 }
 
 /**
@@ -29,8 +31,9 @@ export function PermissionGuard({
   adminOnly,
   children,
   fallback = null,
+  userId,
 }: PermissionGuardProps) {
-  const { hasPermission, hasRole, isAdmin, loading } = usePermissions();
+  const { hasPermission, hasRole, isAdmin, loading } = usePermissions(userId ?? 'anonymous');
 
   // 加载中不渲染（避免权限闪烁）
   if (loading) return null;

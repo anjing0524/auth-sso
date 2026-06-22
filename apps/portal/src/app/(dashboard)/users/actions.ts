@@ -30,8 +30,9 @@ import {
 } from '@/domain/user/types';
 import { EntityNotFoundError, DuplicateEntityError } from '@/domain/shared/errors';
 import { generateId } from '@/lib/crypto';
-import { hashPassword } from '@/lib/password';
+import { hashPassword } from '@/domain/auth/password';
 import { refreshUserPermissionCache } from '@/lib/permissions';
+import { revokeUserAccessByUserId } from '@/lib/session/revoke';
 import { USER_ACTIVE } from '@auth-sso/contracts';
 import type { ApiResponse } from '@auth-sso/contracts';
 
@@ -76,7 +77,7 @@ export const createUserAction = withAuth(
     });
 
     revalidatePath('/users');
-    revalidateTag('users-list', 'minutes');
+    revalidateTag('users-list');
     return { success: true, data: { id: result.publicId }, message: '用户创建成功' };
   },
 );
@@ -104,8 +105,13 @@ export const toggleUserStatusAction = withAuth(
       return target;
     });
 
+    // 状态变更后撤销该用户所有活跃 JWT（jti 黑名单），确保变更即时生效
+    revokeUserAccessByUserId(parsed.data.id).catch((e) =>
+      console.error('[Users Action] 撤销用户 JWT 失败:', e),
+    );
+
     revalidatePath('/users');
-    revalidateTag('users-list', 'minutes');
+    revalidateTag('users-list');
     return {
       success: true,
       data: { status: updated.status },
@@ -147,7 +153,7 @@ export const updateUserAction = withAuth(
 
     await refreshUserPermissionCache(parsed.data.id);
     revalidatePath('/users');
-    revalidateTag('users-list', 'minutes');
+    revalidateTag('users-list');
     return { success: true, data: { id: parsed.data.id }, message: '更新成功' };
   },
 );
@@ -174,9 +180,14 @@ export const deleteUserAction = withAuth(
         .where(eq(schema.users.id, parsed.data.id));
     });
 
+    // 删除用户后撤销其所有活跃 JWT（jti 黑名单），确保即时下线
+    revokeUserAccessByUserId(parsed.data.id).catch((e) =>
+      console.error('[Users Action] 撤销已删除用户 JWT 失败:', e),
+    );
+
     await refreshUserPermissionCache(parsed.data.id);
     revalidatePath('/users');
-    revalidateTag('users-list', 'minutes');
+    revalidateTag('users-list');
     return { success: true, data: { id: parsed.data.id }, message: '用户已逻辑删除' };
   },
 );

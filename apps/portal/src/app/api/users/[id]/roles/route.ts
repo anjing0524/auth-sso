@@ -5,6 +5,7 @@
  * DELETE /api/users/[id]/roles — 移除用户的指定角色
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { revalidatePath, revalidateTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
 import { eq, or, and } from 'drizzle-orm';
 import { byIdOrPublicId } from '@/db/resolve-id';
@@ -85,6 +86,10 @@ export async function POST(
     // 3. 分配角色后主动清除该用户的权限缓存，保障缓存强一致性
     await refreshUserPermissionCache(userId);
 
+    // 4. 失效页面与数据缓存
+    revalidatePath('/users');
+    revalidateTag('users-list');
+
     return NextResponse.json({ success: true, assignedCount: roleIds.length });
   });
 }
@@ -137,6 +142,10 @@ export async function DELETE(
 
     // 移除角色后主动清除该用户的权限缓存，保障缓存强一致性
     await refreshUserPermissionCache(userId);
+
+    // 失效页面与数据缓存
+    revalidatePath('/users');
+    revalidateTag('users-list');
 
     return NextResponse.json({ success: true });
   });

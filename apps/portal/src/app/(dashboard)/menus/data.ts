@@ -7,6 +7,7 @@ import { cacheLife, cacheTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
 import { asc, eq } from 'drizzle-orm';
 import { byIdOrPublicId } from '@/db/resolve-id';
+import { ENTITY_ACTIVE } from '@auth-sso/contracts';
 import { buildMenuTree, toDomainMenu } from '@/domain/menu/menu';
 import type { MenuTreeNode } from '@/domain/menu/menu';
 
@@ -38,7 +39,7 @@ export async function getAllActiveMenus() {
 
   const rows = await db.select()
     .from(schema.menus)
-    .where(eq(schema.menus.status, 'ACTIVE' as const))
+    .where(eq(schema.menus.status, ENTITY_ACTIVE))
     .orderBy(asc(schema.menus.sort));
 
   return rows.map(toDomainMenu);

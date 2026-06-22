@@ -9,7 +9,7 @@
  */
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import {
@@ -36,15 +36,16 @@ interface Props {
 export default function UserDetailForm({ id, initialUser: serverUser }: Props) {
   const router = useRouter();
 
-  // 用户不存在时显示错误并跳转（在 useEffect 中执行副作用）
-  if (!serverUser) {
-    // React 会在 commit 阶段执行该 Effect，仅触发一次
-    if (typeof window !== 'undefined') {
+  // 用户不存在时：在 useEffect 中执行副作用（toast + 导航），避免在 render 中直接调用
+  // React StrictMode 下 render 可能双触发，副作用统一收敛至 Effect 中是安全的
+  useEffect(() => {
+    if (!serverUser) {
       toast.error('用户不存在');
       router.push('/users');
     }
-    return null;
-  }
+  }, [serverUser, router]);
+
+  if (!serverUser) return null;
 
   // 可编辑字段合并为一个 form state —— 保存后即最新值，无需 prop 同步
   const [form, setForm] = useState({

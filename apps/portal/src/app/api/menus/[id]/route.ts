@@ -5,7 +5,7 @@
  * DELETE /api/menus/[id] — 递归删除菜单
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, revalidateTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
 import { eq } from 'drizzle-orm';
 import { withPermission } from '@/lib/auth';
@@ -59,7 +59,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
   });
 }
 
-/** DELETE /api/menus/[id] — 递归删除菜单 */
+/** DELETE /api/menus/[id] — 递归删除菜单（事务保护，保证树结构一致性） */
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   return withPermission({ permissions: ['menu:delete'] }, async () => {
     const { id } = await params;
@@ -67,14 +67,20 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     if (!menu) return NextResponse.json({ error: COMMON_ERRORS.NOT_FOUND, message: '菜单不存在' }, { status: 404 });
 
     const rootId = menu.id;
-    const deleteRecursive = async (parentId: string) => {
-      const children = await db.select({ id: schema.menus.id }).from(schema.menus).where(eq(schema.menus.parentId, parentId));
-      for (const child of children) await deleteRecursive(child.id);
-      await db.delete(schema.menus).where(eq(schema.menus.id, parentId));
+    // 递归删除子菜单（内部闭包，接收事务 tx 确保所有操作在同一事务中）
+    const deleteRecursive = async (tx: typeof db, parentId: string) => {
+      const children = await tx.select({ id: schema.menus.id }).from(schema.menus).where(eq(schema.menus.parentId, parentId));
+      for (const child of children) await deleteRecursive(tx, child.id);
+      await tx.delete(schema.menus).where(eq(schema.menus.id, parentId));
     };
 
-    await deleteRecursive(rootId);
+    // 用事务包裹整个递归删除，中途失败自动回滚（R22）
+    await db.transaction(async (tx) => {
+      await deleteRecursive(tx, rootId);
+    });
+
     revalidatePath('/menus');
+    revalidateTag('menus-list');
     return NextResponse.json({ success: true, message: '菜单及其子项已递归删除' });
   });
 }

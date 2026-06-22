@@ -3,6 +3,7 @@ import { db, schema } from '@/infrastructure/db';
 import { eq, sql } from 'drizzle-orm';
 import { generateUUID, generatePermissionPublicId } from '@/lib/crypto';
 import { COMMON_ERRORS } from '@auth-sso/contracts';
+import { mapDomainError } from '@/domain/shared/error-mapping';
 
 export const runtime = 'nodejs';
 
@@ -220,10 +221,11 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true, stats: result });
   } catch (error) {
-    console.error('[Permissions Register POST] Failed to sync permissions:', error);
+    const mapped = mapDomainError(error);
+    console.error('[Permissions Register POST] 同步权限树失败:', mapped.message, error instanceof Error ? error.stack : '');
     return NextResponse.json(
-      { error: COMMON_ERRORS.INTERNAL_ERROR, message: '同步权限树失败' },
-      { status: 500 }
+      { error: mapped.error, message: mapped.message },
+      { status: mapped.status },
     );
   }
 }

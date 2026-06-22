@@ -71,6 +71,10 @@ export function toggleUserStatus(user: User): User {
   if (user.status === USER_DELETED) {
     throw new BusinessRuleViolationError('已逻辑删除的用户无法操作状态');
   }
+  // LOCKED 状态不允许直接切换（需通过专门的解锁流程处理），防止管理员误操作绕过锁定机制
+  if (user.status === 'LOCKED') {
+    throw new BusinessRuleViolationError('已锁定的用户无法直接切换状态，请使用解锁功能');
+  }
   const newStatus: User['status'] = user.status === USER_ACTIVE ? 'DISABLED' : USER_ACTIVE;
   return { ...user, status: newStatus };
 }

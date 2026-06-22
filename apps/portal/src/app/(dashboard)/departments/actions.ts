@@ -16,8 +16,8 @@ import {
   departmentToInsertRow,
   departmentToUpdateRow,
   applyDepartmentUpdateWithCircularCheck,
+  resolveParentAncestors,
   toDomainDepartment,
-  computeAncestors,
 } from '@/domain/department/department';
 import {
   CreateDepartmentInputSchema,
@@ -58,7 +58,7 @@ export const createDepartmentAction = withAuth(
     await db.insert(schema.departments).values(departmentToInsertRow(dept));
 
     revalidatePath('/departments');
-    revalidateTag('departments-list', 'minutes');
+    revalidateTag('departments-list');
     return { success: true, data: { id: dept.publicId }, message: '部门创建成功' };
   },
 );
@@ -81,25 +81,17 @@ export const updateDepartmentAction = withAuth(
       const dept = toDomainDepartment(row);
       const allDepts = await tx.query.departments.findMany();
 
-      // parentId 变更时，使用 domain 层的 computeAncestors 重新计算物化路径
-      const parentChanged = parsed.data.parentId !== undefined && parsed.data.parentId !== dept.parentId;
-      let newAncestors: string | null | undefined;
-      if (parentChanged) {
-        if (parsed.data.parentId) {
-          const parent = allDepts.find(d => d.id === parsed.data.parentId);
-          newAncestors = parent ? computeAncestors(parent.id, parent.ancestors) : null;
-        } else {
-          newAncestors = null; // 移至顶级
-        }
-      }
+      // 领域纯函数：parentId 变更时自动计算新 ancestors（消除了 Controller 的 if/else 分支）
+      const newAncestors = resolveParentAncestors(dept, parsed.data.parentId, allDepts);
+      const parentChanged = newAncestors !== undefined;
 
-      const patch = { ...parsed.data, ...(newAncestors !== undefined ? { ancestors: newAncestors } : {}) };
+      const patch = { ...parsed.data, ...(parentChanged ? { ancestors: newAncestors } : {}) };
       const updated = applyDepartmentUpdateWithCircularCheck(dept, patch, allDepts);
 
       await tx.update(schema.departments).set(departmentToUpdateRow(updated))
         .where(eq(schema.departments.id, dept.id));
 
-      // parentId 变更时，级联更新所有子孙节点的 ancestors
+      // parentId 变更时，级联更新所有子孙节点的物化路径（DB 级操作，保留在 Controller）
       if (parentChanged) {
         const oldPrefix = dept.ancestors ? `${dept.ancestors}/${dept.id}` : dept.id;
         const newPrefix = updated.ancestors ? `${updated.ancestors}/${updated.id}` : updated.id;
@@ -114,7 +106,7 @@ export const updateDepartmentAction = withAuth(
     });
 
     revalidatePath('/departments');
-    revalidateTag('departments-list', 'minutes');
+    revalidateTag('departments-list');
     return { success: true, data: { id: deptId }, message: '部门更新成功' };
   },
 );
@@ -139,7 +131,7 @@ export const deleteDepartmentAction = withAuth(
     });
 
     revalidatePath('/departments');
-    revalidateTag('departments-list', 'minutes');
+    revalidateTag('departments-list');
     return { success: true, data: { id: deptId }, message: '部门已删除' };
   },
 );

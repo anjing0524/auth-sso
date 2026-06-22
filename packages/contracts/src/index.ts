@@ -54,6 +54,8 @@ export const LOGIN_EVENT_LABELS: Record<LoginEventType, string> = {
 // 所有枚举值的单一真相源仍在 *_VALUES 数组中
 // ────────────────────────────────────────────
 export const USER_ACTIVE: UserStatus = 'ACTIVE';
+export const USER_DISABLED: UserStatus = 'DISABLED';
+export const USER_LOCKED: UserStatus = 'LOCKED';
 export const USER_DELETED: UserStatus = 'DELETED';
 export const ENTITY_ACTIVE: EntityStatus = 'ACTIVE';
 export const ENTITY_DISABLED: EntityStatus = 'DISABLED';

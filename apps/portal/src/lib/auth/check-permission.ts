@@ -10,6 +10,7 @@ import 'server-only';
  *
  * @module lib/auth/check-permission
  */
+import { cache } from 'react';
 import type { PortalJwtClaims } from '../session';
 
 import { resolveIdentity } from './verify-jwt';
@@ -90,3 +91,19 @@ export async function checkPermission(
     return { authorized: false, error: '权限检查失败', statusCode: 500 };
   }
 }
+
+/**
+ * Server Component 权限守卫 — React.cache() 同请求去重
+ *
+ * 替代每个 page.tsx 中手写的 checkPermission + if (!authorized) 样板。
+ * Layout 和 Page 各自调用时命中缓存，零额外开销。
+ *
+ * @param options 权限检查选项
+ * @returns 鉴权通过返回 userId，失败返回 null
+ */
+export const requirePermission = cache(
+  async (options: PermissionCheckOptions): Promise<string | null> => {
+    const auth = await checkPermission(options);
+    return auth.authorized && auth.userId ? auth.userId : null;
+  },
+);

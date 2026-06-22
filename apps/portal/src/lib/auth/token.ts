@@ -101,10 +101,11 @@ async function getActiveSigningKey(): Promise<{
   privateKey: CryptoKey;
   publicJwk: JsonWebKey;
 }> {
+  // DESC 排序取最新密钥（修复：ASC 导致永远选中旧密钥，密钥轮换形同虚设）
   const rows = await db
     .select()
     .from(schema.jwks)
-    .orderBy(schema.jwks.createdAt)
+    .orderBy(schema.jwks.createdAt, 'desc')
     .limit(1);
 
   if (rows.length === 0) {

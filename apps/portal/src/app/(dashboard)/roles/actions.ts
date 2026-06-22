@@ -57,7 +57,7 @@ export const createRoleAction = withAuth(
     });
 
     revalidatePath('/roles');
-    revalidateTag('roles-list', 'minutes');
+    revalidateTag('roles-list');
     return { success: true, data: { id: role.publicId }, message: '角色创建成功' };
   },
 );
@@ -86,7 +86,7 @@ export const updateRoleAction = withAuth(
     await invalidateRoleBoundUsersCache(roleId);
 
     revalidatePath('/roles');
-    revalidateTag('roles-list', 'minutes');
+    revalidateTag('roles-list');
     return { success: true, data: { id: roleId }, message: '角色更新成功' };
   },
 );
@@ -116,7 +116,7 @@ export const deleteRoleAction = withAuth(
     }
 
     revalidatePath('/roles');
-    revalidateTag('roles-list', 'minutes');
+    revalidateTag('roles-list');
     return { success: true, data: { id: roleId }, message: '角色已删除' };
   },
 );

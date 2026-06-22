@@ -37,7 +37,7 @@ export const createMenuAction = withAuth(
     await db.insert(schema.menus).values(menuToInsertRow(menu));
 
     revalidatePath('/menus');
-    revalidateTag('menus-list', 'minutes');
+    revalidateTag('menus-list');
     return { success: true, data: { id: menu.publicId }, message: '菜单创建成功' };
   },
 );
@@ -63,7 +63,7 @@ export const updateMenuAction = withAuth(
       .where(eq(schema.menus.id, menu.id));
 
     revalidatePath('/menus');
-    revalidateTag('menus-list', 'minutes');
+    revalidateTag('menus-list');
     return { success: true, data: { id: menuId }, message: '菜单更新成功' };
   },
 );
@@ -96,7 +96,7 @@ export const deleteMenuAction = withAuth(
     });
 
     revalidatePath('/menus');
-    revalidateTag('menus-list', 'minutes');
+    revalidateTag('menus-list');
     return { success: true, data: { id: menuId }, message: '菜单及其子项已递归删除' };
   },
 );

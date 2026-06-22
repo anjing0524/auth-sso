@@ -9,52 +9,63 @@ export interface PermissionContext {
   loading: boolean;
 }
 
-// 模块级缓存，同一页面生命周期内只请求一次
-let _cache: PermissionContext | null = null;
-let _promise: Promise<void> | null = null;
+/**
+ * 按用户身份键控的权限缓存（解决跨用户缓存泄漏 B9）
+ *
+ * 使用 userId 作为缓存键，用户切换时自动失效旧缓存。
+ * 单用户内同页面生命周期复用，避免重复请求。
+ */
+const _cacheByUser = new Map<string, PermissionContext>();
+const _pendingByUser = new Map<string, Promise<void>>();
 
-async function fetchPermissions() {
-  if (_promise) return _promise;
-  _promise = fetch('/api/me/permissions')
-    .then(r => r.json())
-    .then(data => {
-      _cache = {
+async function fetchPermissions(userId: string): Promise<void> {
+  const pending = _pendingByUser.get(userId);
+  if (pending) return pending;
+
+  const promise = fetch('/api/me/permissions')
+    .then((r) => r.json())
+    .then((data) => {
+      _cacheByUser.set(userId, {
         roles: data.data?.roles ?? [],
         permissions: data.data?.permissions ?? [],
         loading: false,
-      };
+      });
     })
     .catch(() => {
-      _cache = { roles: [], permissions: [], loading: false };
+      _cacheByUser.set(userId, { roles: [], permissions: [], loading: false });
     })
     .finally(() => {
-      _promise = null; // 清空 promise 以支持重试
+      _pendingByUser.delete(userId);
     });
-  return _promise;
+
+  _pendingByUser.set(userId, promise);
+  return promise;
 }
 
-export function usePermissions() {
+export function usePermissions(userId: string = 'default') {
+  const cached = _cacheByUser.get(userId);
   const [ctx, setCtx] = useState<PermissionContext>(
-    _cache ?? { roles: [], permissions: [], loading: true }
+    cached ?? { roles: [], permissions: [], loading: true },
   );
   const mountedRef = useRef(true);
 
   useEffect(() => {
     mountedRef.current = true;
-    if (_cache && !_cache.loading) {
-      setCtx(_cache);
+    if (cached && !cached.loading) {
+      setCtx(cached);
       return;
     }
-    fetchPermissions().then(() => {
-      if (_cache && mountedRef.current) setCtx({ ..._cache });
+    fetchPermissions(userId).then(() => {
+      const fresh = _cacheByUser.get(userId);
+      if (fresh && mountedRef.current) setCtx({ ...fresh });
     });
     return () => {
       mountedRef.current = false;
     };
-  }, []);
+  }, [userId]);
 
   const isAdmin = useCallback(
-    () => ctx.roles.some(r => (ADMIN_ROLE_CODES as readonly string[]).includes(r.code)),
+    () => ctx.roles.some((r) => (ADMIN_ROLE_CODES as readonly string[]).includes(r.code)),
     [ctx.roles],
   );
 
@@ -64,7 +75,7 @@ export function usePermissions() {
   );
 
   const hasRole = useCallback(
-    (code: string) => ctx.roles.some(r => r.code === code),
+    (code: string) => ctx.roles.some((r) => r.code === code),
     [ctx.roles],
   );
 

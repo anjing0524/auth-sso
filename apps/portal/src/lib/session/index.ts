@@ -9,7 +9,7 @@
  *
  * @module lib/session
  */
-export { type PortalJwtClaims } from './types';
+export { type PortalJwtClaims } from '@/domain/auth/types';
 export { setJwtCookies, clearJwtCookies, getJwtFromCookie, getRefreshTokenFromCookie } from './cookies';
 export { decodeJwtPayload } from './jwt';
 export { revokeJti, isJtiRevoked, revokeUserToken, trackUserJti, revokeUserAccessByUserId } from './revoke';

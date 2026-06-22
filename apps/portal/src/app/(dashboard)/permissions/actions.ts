@@ -47,7 +47,7 @@ export const createPermissionAction = withAuth(
     });
 
     revalidatePath('/permissions');
-    revalidateTag('permissions-list', 'minutes');
+    revalidateTag('permissions-list');
     return { success: true, data: { id: perm.publicId }, message: '权限创建成功' };
   },
 );
@@ -73,7 +73,7 @@ export const updatePermissionAction = withAuth(
       .where(eq(schema.permissions.id, perm.id));
 
     revalidatePath('/permissions');
-    revalidateTag('permissions-list', 'minutes');
+    revalidateTag('permissions-list');
     return { success: true, data: { id: permId }, message: '权限更新成功' };
   },
 );
@@ -93,7 +93,7 @@ export const deletePermissionAction = withAuth(
     });
 
     revalidatePath('/permissions');
-    revalidateTag('permissions-list', 'minutes');
+    revalidateTag('permissions-list');
     return { success: true, data: { id: permId }, message: '权限已删除' };
   },
 );

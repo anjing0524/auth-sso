@@ -4,13 +4,15 @@
  * 鉴权由 layout.tsx 统一处理。
  */
 import { Building2 } from 'lucide-react';
-import { requirePermission } from '@/lib/auth/require-permission';
+import { requirePermission } from '@/lib/auth/check-permission';
+import { getDataScopeFilter } from '@/lib/auth';
 import { getDepartments } from './data';
 import DepartmentTree from './components/DepartmentTree';
 
 export default async function DepartmentsPage() {
   const userId = (await requirePermission({ permissions: ['department:list'] }))!;
-  const departments = await getDepartments(userId);
+  const scopeFilter = await getDataScopeFilter(userId);
+  const departments = await getDepartments(scopeFilter, userId);
 
   return (
     <div className="space-y-8 pb-10">
