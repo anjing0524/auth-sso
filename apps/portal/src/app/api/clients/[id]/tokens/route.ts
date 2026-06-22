@@ -29,7 +29,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const pageSize = parseInt(sp.get('pageSize') || '20', 10);
     const userId = sp.get('userId') || undefined;
 
-    const result = await getClientTokens(client.id, { page, pageSize, userId });
+    const result = await getClientTokens(client.clientId, { page, pageSize, userId });
     return NextResponse.json(result);
   });
 }
@@ -49,12 +49,12 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     let deletedCount = 0;
     if (revokeAll) {
       const result = await db.delete(schema.accessTokens)
-        .where(eq(schema.accessTokens.clientId, client.id))
+        .where(eq(schema.accessTokens.clientId, client.clientId))
         .returning({ id: schema.accessTokens.id });
       deletedCount = result.length;
     } else if (tokenIds && Array.isArray(tokenIds) && tokenIds.length > 0) {
       const result = await db.delete(schema.accessTokens)
-        .where(and(eq(schema.accessTokens.clientId, client.id), inArray(schema.accessTokens.id, tokenIds)))
+        .where(and(eq(schema.accessTokens.clientId, client.clientId), inArray(schema.accessTokens.id, tokenIds)))
         .returning({ id: schema.accessTokens.id });
       deletedCount = result.length;
     } else {

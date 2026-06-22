@@ -4,15 +4,15 @@ import { entityStatusEnum } from '@/domain/shared/zod-schemas';
 
 /**
  * 部门领域实体接口 (纯 TS interface)
+ *
+ * v2 变更：移除 publicId
  */
 export interface Department {
-  /** 内部 ID */
+  /** 内部 ID（UUID） */
   id: string;
-  /** 对外公开展示 ID */
-  publicId: string;
   /** 父部门 ID */
   parentId: string | null;
-  /** 物化路径 (ancestors)，用于高效子树查询。顶级为 null，子级如 'dept_001/dept_002' */
+  /** 物化路径 (ancestors)，用于高效子树查询。顶级为 null */
   ancestors: string | null;
   /** 部门名称 */
   name: string;

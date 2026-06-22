@@ -29,7 +29,7 @@ import {
   type CreateUserInput,
 } from '@/domain/user/types';
 import { EntityNotFoundError, DuplicateEntityError } from '@/domain/shared/errors';
-import { generateId } from '@/lib/crypto';
+import { generateUUID } from '@/lib/crypto';
 import { hashPassword } from '@/domain/auth/password';
 import { refreshUserPermissionCache } from '@/lib/permissions';
 import { revokeUserAccessByUserId } from '@/lib/session/revoke';
@@ -68,7 +68,7 @@ export const createUserAction = withAuth(
       });
       if (existing) throw new DuplicateEntityError('User', 'username/email');
 
-      const user = createUser(parsed.data, generateId);
+      const user = createUser(parsed.data, generateUUID);
       await tx.insert(schema.users).values({
         ...userToInsertRow(user),
         passwordHash,
@@ -77,8 +77,8 @@ export const createUserAction = withAuth(
     });
 
     revalidatePath('/users');
-    revalidateTag('users-list');
-    return { success: true, data: { id: result.publicId }, message: '用户创建成功' };
+    revalidateTag('users-list', { expire: 0 });
+    return { success: true, data: { id: result.id }, message: '用户创建成功' };
   },
 );
 
@@ -111,7 +111,7 @@ export const toggleUserStatusAction = withAuth(
     );
 
     revalidatePath('/users');
-    revalidateTag('users-list');
+    revalidateTag('users-list', { expire: 0 });
     return {
       success: true,
       data: { status: updated.status },
@@ -153,7 +153,7 @@ export const updateUserAction = withAuth(
 
     await refreshUserPermissionCache(parsed.data.id);
     revalidatePath('/users');
-    revalidateTag('users-list');
+    revalidateTag('users-list', { expire: 0 });
     return { success: true, data: { id: parsed.data.id }, message: '更新成功' };
   },
 );
@@ -187,7 +187,7 @@ export const deleteUserAction = withAuth(
 
     await refreshUserPermissionCache(parsed.data.id);
     revalidatePath('/users');
-    revalidateTag('users-list');
+    revalidateTag('users-list', { expire: 0 });
     return { success: true, data: { id: parsed.data.id }, message: '用户已逻辑删除' };
   },
 );

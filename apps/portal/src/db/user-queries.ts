@@ -16,7 +16,7 @@ import { asUserStatus } from '@/lib/type-guards';
  */
 export const USER_LIST_COLUMNS = {
   id: schema.users.id,
-  publicId: schema.users.publicId,
+   
   username: schema.users.username,
   email: schema.users.email,
   name: schema.users.name,

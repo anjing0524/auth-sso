@@ -1,5 +1,5 @@
 {
-  "id": "1b72ed67-90da-495a-8bbd-c6c2432b5f9a",
+  "id": "d7252f4c-f5f4-46ac-b70b-6aebe4d46ebe",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -10,50 +10,51 @@
       "columns": {
         "id": {
           "name": "id",
-          "type": "text",
+          "type": "uuid",
           "primaryKey": true,
-          "notNull": true
+          "notNull": true,
+          "default": "gen_random_uuid()"
         },
-        "token": {
-          "name": "token",
-          "type": "text",
+        "token_hash": {
+          "name": "token_hash",
+          "type": "varchar(64)",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true
         },
         "client_id": {
           "name": "client_id",
-          "type": "text",
+          "type": "varchar(50)",
           "primaryKey": false,
           "notNull": true
         },
         "user_id": {
           "name": "user_id",
-          "type": "text",
+          "type": "uuid",
           "primaryKey": false,
           "notNull": true
         },
         "scopes": {
           "name": "scopes",
-          "type": "text",
+          "type": "varchar(200)",
           "primaryKey": false,
           "notNull": true
         },
         "expires_at": {
           "name": "expires_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true
         },
         "created_at": {
           "name": "created_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
         },
         "updated_at": {
           "name": "updated_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
@@ -92,15 +93,15 @@
         }
       },
       "foreignKeys": {
-        "access_tokens_client_id_clients_id_fk": {
-          "name": "access_tokens_client_id_clients_id_fk",
+        "access_tokens_client_id_clients_client_id_fk": {
+          "name": "access_tokens_client_id_clients_client_id_fk",
           "tableFrom": "access_tokens",
           "tableTo": "clients",
           "columnsFrom": [
             "client_id"
           ],
           "columnsTo": [
-            "id"
+            "client_id"
           ],
           "onDelete": "cascade",
           "onUpdate": "no action"
@@ -121,11 +122,11 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
-        "access_tokens_token_unique": {
-          "name": "access_tokens_token_unique",
+        "access_tokens_token_hash_unique": {
+          "name": "access_tokens_token_hash_unique",
           "nullsNotDistinct": false,
           "columns": [
-            "token"
+            "token_hash"
           ]
         }
       },
@@ -139,55 +140,56 @@
       "columns": {
         "id": {
           "name": "id",
-          "type": "text",
+          "type": "uuid",
           "primaryKey": true,
-          "notNull": true
+          "notNull": true,
+          "default": "gen_random_uuid()"
         },
         "code": {
           "name": "code",
-          "type": "text",
+          "type": "varchar(100)",
           "primaryKey": false,
           "notNull": true
         },
         "client_id": {
           "name": "client_id",
-          "type": "text",
+          "type": "varchar(50)",
           "primaryKey": false,
           "notNull": true
         },
         "user_id": {
           "name": "user_id",
-          "type": "text",
+          "type": "uuid",
           "primaryKey": false,
           "notNull": true
         },
         "redirect_uri": {
           "name": "redirect_uri",
-          "type": "text",
+          "type": "varchar(500)",
           "primaryKey": false,
           "notNull": true
         },
         "scope": {
           "name": "scope",
-          "type": "text",
+          "type": "varchar(200)",
           "primaryKey": false,
           "notNull": true
         },
         "state": {
           "name": "state",
-          "type": "text",
+          "type": "varchar(100)",
           "primaryKey": false,
           "notNull": false
         },
         "nonce": {
           "name": "nonce",
-          "type": "text",
+          "type": "varchar(100)",
           "primaryKey": false,
           "notNull": false
         },
         "code_challenge": {
           "name": "code_challenge",
-          "type": "text",
+          "type": "varchar(100)",
           "primaryKey": false,
           "notNull": false
         },
@@ -201,7 +203,7 @@
         },
         "expires_at": {
           "name": "expires_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true
         },
@@ -214,7 +216,7 @@
         },
         "created_at": {
           "name": "created_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
@@ -222,15 +224,15 @@
       },
       "indexes": {},
       "foreignKeys": {
-        "authorization_codes_client_id_clients_id_fk": {
-          "name": "authorization_codes_client_id_clients_id_fk",
+        "authorization_codes_client_id_clients_client_id_fk": {
+          "name": "authorization_codes_client_id_clients_client_id_fk",
           "tableFrom": "authorization_codes",
           "tableTo": "clients",
           "columnsFrom": [
             "client_id"
           ],
           "columnsTo": [
-            "id"
+            "client_id"
           ],
           "onDelete": "cascade",
           "onUpdate": "no action"
@@ -267,58 +269,46 @@
       "name": "clients",
       "schema": "",
       "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
+        "client_id": {
+          "name": "client_id",
+          "type": "varchar(50)",
           "primaryKey": true,
-          "notNull": true
-        },
-        "public_id": {
-          "name": "public_id",
-          "type": "text",
-          "primaryKey": false,
           "notNull": true
         },
         "name": {
           "name": "name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "client_id": {
-          "name": "client_id",
-          "type": "text",
+          "type": "varchar(100)",
           "primaryKey": false,
           "notNull": true
         },
         "client_secret": {
           "name": "client_secret",
-          "type": "text",
+          "type": "varchar(128)",
           "primaryKey": false,
           "notNull": false
         },
         "redirect_uris": {
           "name": "redirect_uris",
-          "type": "text[]",
+          "type": "varchar(255)[]",
           "primaryKey": false,
           "notNull": true
         },
         "scopes": {
           "name": "scopes",
-          "type": "text",
+          "type": "varchar(200)",
           "primaryKey": false,
           "notNull": true,
           "default": "'openid profile email offline_access'"
         },
         "homepage_url": {
           "name": "homepage_url",
-          "type": "text",
+          "type": "varchar(500)",
           "primaryKey": false,
           "notNull": false
         },
         "logo_url": {
           "name": "logo_url",
-          "type": "text",
+          "type": "varchar(500)",
           "primaryKey": false,
           "notNull": false
         },
@@ -346,14 +336,14 @@
         },
         "created_at": {
           "name": "created_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
         },
         "updated_at": {
           "name": "updated_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
@@ -361,127 +351,6 @@
       },
       "indexes": {},
       "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "clients_public_id_unique": {
-          "name": "clients_public_id_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "public_id"
-          ]
-        },
-        "clients_client_id_unique": {
-          "name": "clients_client_id_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "client_id"
-          ]
-        }
-      },
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.consents": {
-      "name": "consents",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "user_id": {
-          "name": "user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "client_id": {
-          "name": "client_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "scopes": {
-          "name": "scopes",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "consent_given": {
-          "name": "consent_given",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "idx_consents_user_client": {
-          "name": "idx_consents_user_client",
-          "columns": [
-            {
-              "expression": "user_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "client_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "consents_user_id_users_id_fk": {
-          "name": "consents_user_id_users_id_fk",
-          "tableFrom": "consents",
-          "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "consents_client_id_clients_id_fk": {
-          "name": "consents_client_id_clients_id_fk",
-          "tableFrom": "consents",
-          "tableTo": "clients",
-          "columnsFrom": [
-            "client_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -494,20 +363,20 @@
       "columns": {
         "id": {
           "name": "id",
-          "type": "text",
+          "type": "uuid",
           "primaryKey": true,
-          "notNull": true
+          "notNull": true,
+          "default": "gen_random_uuid()"
         },
         "kid": {
           "name": "kid",
-          "type": "text",
+          "type": "varchar(50)",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true
         },
         "algorithm": {
           "name": "algorithm",
-          "type": "jwk_algorithm",
-          "typeSchema": "public",
+          "type": "varchar(10)",
           "primaryKey": false,
           "notNull": false,
           "default": "'ES256'"
@@ -526,14 +395,14 @@
         },
         "created_at": {
           "name": "created_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
         },
         "expires_at": {
           "name": "expires_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
         }
@@ -560,65 +429,66 @@
       "columns": {
         "id": {
           "name": "id",
-          "type": "text",
+          "type": "uuid",
           "primaryKey": true,
-          "notNull": true
+          "notNull": true,
+          "default": "gen_random_uuid()"
         },
-        "token": {
-          "name": "token",
-          "type": "text",
+        "token_hash": {
+          "name": "token_hash",
+          "type": "varchar(64)",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true
         },
         "client_id": {
           "name": "client_id",
-          "type": "text",
+          "type": "varchar(50)",
           "primaryKey": false,
           "notNull": true
         },
         "user_id": {
           "name": "user_id",
-          "type": "text",
+          "type": "uuid",
           "primaryKey": false,
           "notNull": true
         },
         "scopes": {
           "name": "scopes",
-          "type": "text",
+          "type": "varchar(200)",
           "primaryKey": false,
           "notNull": true
         },
         "revoked": {
           "name": "revoked",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
         },
         "auth_time": {
           "name": "auth_time",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
         },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
         "created_at": {
           "name": "created_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
         },
         "updated_at": {
           "name": "updated_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
-        },
-        "expires_at": {
-          "name": "expires_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
         }
       },
       "indexes": {
@@ -654,15 +524,15 @@
         }
       },
       "foreignKeys": {
-        "refresh_tokens_client_id_clients_id_fk": {
-          "name": "refresh_tokens_client_id_clients_id_fk",
+        "refresh_tokens_client_id_clients_client_id_fk": {
+          "name": "refresh_tokens_client_id_clients_client_id_fk",
           "tableFrom": "refresh_tokens",
           "tableTo": "clients",
           "columnsFrom": [
             "client_id"
           ],
           "columnsTo": [
-            "id"
+            "client_id"
           ],
           "onDelete": "cascade",
           "onUpdate": "no action"
@@ -683,11 +553,11 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
-        "refresh_tokens_token_unique": {
-          "name": "refresh_tokens_token_unique",
+        "refresh_tokens_token_hash_unique": {
+          "name": "refresh_tokens_token_hash_unique",
           "nullsNotDistinct": false,
           "columns": [
-            "token"
+            "token_hash"
           ]
         }
       },
@@ -699,44 +569,44 @@
       "name": "user_roles",
       "schema": "",
       "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
         "user_id": {
           "name": "user_id",
-          "type": "text",
+          "type": "uuid",
           "primaryKey": false,
           "notNull": true
         },
         "role_id": {
           "name": "role_id",
-          "type": "text",
+          "type": "uuid",
           "primaryKey": false,
           "notNull": true
         },
         "created_at": {
           "name": "created_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
         }
       },
       "indexes": {
-        "idx_user_roles_user": {
-          "name": "idx_user_roles_user",
+        "ux_user_roles_pk": {
+          "name": "ux_user_roles_pk",
           "columns": [
             {
               "expression": "user_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
+            },
+            {
+              "expression": "role_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
             }
           ],
-          "isUnique": false,
+          "isUnique": true,
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -797,25 +667,20 @@
       "columns": {
         "id": {
           "name": "id",
-          "type": "text",
+          "type": "uuid",
           "primaryKey": true,
-          "notNull": true
-        },
-        "public_id": {
-          "name": "public_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "default": "gen_random_uuid()"
         },
         "username": {
           "name": "username",
-          "type": "text",
+          "type": "varchar(50)",
           "primaryKey": false,
           "notNull": true
         },
         "email": {
           "name": "email",
-          "type": "text",
+          "type": "varchar(255)",
           "primaryKey": false,
           "notNull": false
         },
@@ -823,12 +688,12 @@
           "name": "email_verified",
           "type": "boolean",
           "primaryKey": false,
-          "notNull": false,
+          "notNull": true,
           "default": false
         },
         "mobile": {
           "name": "mobile",
-          "type": "text",
+          "type": "varchar(20)",
           "primaryKey": false,
           "notNull": false
         },
@@ -836,24 +701,24 @@
           "name": "mobile_verified",
           "type": "boolean",
           "primaryKey": false,
-          "notNull": false,
+          "notNull": true,
           "default": false
         },
         "password_hash": {
           "name": "password_hash",
-          "type": "text",
+          "type": "varchar(128)",
           "primaryKey": false,
           "notNull": false
         },
         "name": {
           "name": "name",
-          "type": "text",
+          "type": "varchar(100)",
           "primaryKey": false,
           "notNull": true
         },
         "avatar_url": {
           "name": "avatar_url",
-          "type": "text",
+          "type": "varchar(500)",
           "primaryKey": false,
           "notNull": false
         },
@@ -867,29 +732,41 @@
         },
         "dept_id": {
           "name": "dept_id",
-          "type": "text",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "last_login_at": {
+          "name": "last_login_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "password_changed_at": {
+          "name": "password_changed_at",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
         },
         "created_at": {
           "name": "created_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
         },
         "updated_at": {
           "name": "updated_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
-        },
-        "last_login_at": {
-          "name": "last_login_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
         }
       },
       "indexes": {
@@ -904,6 +781,7 @@
             }
           ],
           "isUnique": false,
+          "where": "\"users\".\"status\" <> 'DELETED'",
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -922,18 +800,40 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "idx_users_deleted_at": {
+          "name": "idx_users_deleted_at",
+          "columns": [
+            {
+              "expression": "deleted_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "users_dept_id_departments_id_fk": {
+          "name": "users_dept_id_departments_id_fk",
+          "tableFrom": "users",
+          "tableTo": "departments",
+          "columnsFrom": [
+            "dept_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
-        "users_public_id_unique": {
-          "name": "users_public_id_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "public_id"
-          ]
-        },
         "users_username_unique": {
           "name": "users_username_unique",
           "nullsNotDistinct": false,
@@ -966,27 +866,28 @@
       "columns": {
         "id": {
           "name": "id",
-          "type": "text",
+          "type": "uuid",
           "primaryKey": true,
-          "notNull": true
+          "notNull": true,
+          "default": "gen_random_uuid()"
         },
-        "public_id": {
-          "name": "public_id",
-          "type": "text",
+        "code": {
+          "name": "code",
+          "type": "varchar(50)",
           "primaryKey": false,
           "notNull": true
         },
         "name": {
           "name": "name",
-          "type": "text",
+          "type": "varchar(100)",
           "primaryKey": false,
           "notNull": true
         },
-        "code": {
-          "name": "code",
+        "description": {
+          "name": "description",
           "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "type": {
           "name": "type",
@@ -996,27 +897,45 @@
           "notNull": true,
           "default": "'API'"
         },
+        "path": {
+          "name": "path",
+          "type": "varchar(200)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "icon": {
+          "name": "icon",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "visible": {
+          "name": "visible",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false
+        },
         "resource": {
           "name": "resource",
-          "type": "text",
+          "type": "varchar(100)",
           "primaryKey": false,
           "notNull": false
         },
         "action": {
           "name": "action",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "parent_id": {
-          "name": "parent_id",
-          "type": "text",
+          "type": "varchar(50)",
           "primaryKey": false,
           "notNull": false
         },
         "client_id": {
           "name": "client_id",
-          "type": "text",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "parent_id": {
+          "name": "parent_id",
+          "type": "uuid",
           "primaryKey": false,
           "notNull": false
         },
@@ -1030,21 +949,21 @@
         },
         "sort": {
           "name": "sort",
-          "type": "integer",
+          "type": "smallint",
           "primaryKey": false,
-          "notNull": false,
+          "notNull": true,
           "default": 0
         },
         "created_at": {
           "name": "created_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
         },
         "updated_at": {
           "name": "updated_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
@@ -1080,6 +999,21 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "idx_permissions_type": {
+          "name": "idx_permissions_type",
+          "columns": [
+            {
+              "expression": "type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -1099,13 +1033,6 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
-        "permissions_public_id_unique": {
-          "name": "permissions_public_id_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "public_id"
-          ]
-        },
         "permissions_code_unique": {
           "name": "permissions_code_unique",
           "nullsNotDistinct": false,
@@ -1122,33 +1049,48 @@
       "name": "role_clients",
       "schema": "",
       "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
         "role_id": {
           "name": "role_id",
-          "type": "text",
+          "type": "uuid",
           "primaryKey": false,
           "notNull": true
         },
         "client_id": {
           "name": "client_id",
-          "type": "text",
+          "type": "varchar(50)",
           "primaryKey": false,
           "notNull": true
         },
         "created_at": {
           "name": "created_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
         }
       },
       "indexes": {
+        "ux_role_clients_pk": {
+          "name": "ux_role_clients_pk",
+          "columns": [
+            {
+              "expression": "role_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "client_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "idx_role_clients_role": {
           "name": "idx_role_clients_role",
           "columns": [
@@ -1218,33 +1160,48 @@
       "name": "role_data_scopes",
       "schema": "",
       "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
         "role_id": {
           "name": "role_id",
-          "type": "text",
+          "type": "uuid",
           "primaryKey": false,
           "notNull": true
         },
         "dept_id": {
           "name": "dept_id",
-          "type": "text",
+          "type": "uuid",
           "primaryKey": false,
           "notNull": true
         },
         "created_at": {
           "name": "created_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
         }
       },
       "indexes": {
+        "ux_role_data_scopes_pk": {
+          "name": "ux_role_data_scopes_pk",
+          "columns": [
+            {
+              "expression": "role_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "dept_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "idx_role_data_scopes_role": {
           "name": "idx_role_data_scopes_role",
           "columns": [
@@ -1314,33 +1271,48 @@
       "name": "role_permissions",
       "schema": "",
       "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
         "role_id": {
           "name": "role_id",
-          "type": "text",
+          "type": "uuid",
           "primaryKey": false,
           "notNull": true
         },
         "permission_id": {
           "name": "permission_id",
-          "type": "text",
+          "type": "uuid",
           "primaryKey": false,
           "notNull": true
         },
         "created_at": {
           "name": "created_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
         }
       },
       "indexes": {
+        "ux_role_permissions_pk": {
+          "name": "ux_role_permissions_pk",
+          "columns": [
+            {
+              "expression": "role_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "permission_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "idx_role_permissions_role": {
           "name": "idx_role_permissions_role",
           "columns": [
@@ -1385,19 +1357,6 @@
           ],
           "onDelete": "cascade",
           "onUpdate": "no action"
-        },
-        "role_permissions_permission_id_permissions_id_fk": {
-          "name": "role_permissions_permission_id_permissions_id_fk",
-          "tableFrom": "role_permissions",
-          "tableTo": "permissions",
-          "columnsFrom": [
-            "permission_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -1412,25 +1371,20 @@
       "columns": {
         "id": {
           "name": "id",
-          "type": "text",
+          "type": "uuid",
           "primaryKey": true,
-          "notNull": true
-        },
-        "public_id": {
-          "name": "public_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "default": "gen_random_uuid()"
         },
         "name": {
           "name": "name",
-          "type": "text",
+          "type": "varchar(100)",
           "primaryKey": false,
           "notNull": true
         },
         "code": {
           "name": "code",
-          "type": "text",
+          "type": "varchar(50)",
           "primaryKey": false,
           "notNull": true
         },
@@ -1452,7 +1406,7 @@
           "name": "is_system",
           "type": "boolean",
           "primaryKey": false,
-          "notNull": false,
+          "notNull": true,
           "default": false
         },
         "status": {
@@ -1465,21 +1419,21 @@
         },
         "sort": {
           "name": "sort",
-          "type": "integer",
+          "type": "smallint",
           "primaryKey": false,
-          "notNull": false,
+          "notNull": true,
           "default": 0
         },
         "created_at": {
           "name": "created_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
         },
         "updated_at": {
           "name": "updated_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
@@ -1489,13 +1443,6 @@
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
-        "roles_public_id_unique": {
-          "name": "roles_public_id_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "public_id"
-          ]
-        },
         "roles_code_unique": {
           "name": "roles_code_unique",
           "nullsNotDistinct": false,
@@ -1514,39 +1461,40 @@
       "columns": {
         "id": {
           "name": "id",
-          "type": "text",
+          "type": "uuid",
           "primaryKey": true,
-          "notNull": true
-        },
-        "public_id": {
-          "name": "public_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "default": "gen_random_uuid()"
         },
         "parent_id": {
           "name": "parent_id",
-          "type": "text",
+          "type": "uuid",
           "primaryKey": false,
           "notNull": false
         },
         "name": {
           "name": "name",
-          "type": "text",
+          "type": "varchar(100)",
           "primaryKey": false,
           "notNull": true
         },
         "code": {
           "name": "code",
-          "type": "text",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ancestors": {
+          "name": "ancestors",
+          "type": "varchar(500)",
           "primaryKey": false,
           "notNull": false
         },
         "sort": {
           "name": "sort",
-          "type": "integer",
+          "type": "smallint",
           "primaryKey": false,
-          "notNull": false,
+          "notNull": true,
           "default": 0
         },
         "status": {
@@ -1559,14 +1507,14 @@
         },
         "created_at": {
           "name": "created_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
         },
         "updated_at": {
           "name": "updated_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
@@ -1587,126 +1535,12 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
-        }
-      },
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "departments_public_id_unique": {
-          "name": "departments_public_id_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "public_id"
-          ]
-        }
-      },
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.menus": {
-      "name": "menus",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
         },
-        "public_id": {
-          "name": "public_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "parent_id": {
-          "name": "parent_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "name": {
-          "name": "name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "path": {
-          "name": "path",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "permission_code": {
-          "name": "permission_code",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "icon": {
-          "name": "icon",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "component": {
-          "name": "component",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "visible": {
-          "name": "visible",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": false,
-          "default": true
-        },
-        "sort": {
-          "name": "sort",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "default": 0
-        },
-        "menu_type": {
-          "name": "menu_type",
-          "type": "menu_type",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'MENU'"
-        },
-        "status": {
-          "name": "status",
-          "type": "entity_status",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'ACTIVE'"
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "idx_menus_parent": {
-          "name": "idx_menus_parent",
+        "idx_departments_ancestors": {
+          "name": "idx_departments_ancestors",
           "columns": [
             {
-              "expression": "parent_id",
+              "expression": "ancestors",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -1721,11 +1555,11 @@
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
-        "menus_public_id_unique": {
-          "name": "menus_public_id_unique",
+        "departments_code_unique": {
+          "name": "departments_code_unique",
           "nullsNotDistinct": false,
           "columns": [
-            "public_id"
+            "code"
           ]
         }
       },
@@ -1739,37 +1573,39 @@
       "columns": {
         "id": {
           "name": "id",
-          "type": "text",
+          "type": "uuid",
           "primaryKey": true,
-          "notNull": true
+          "notNull": true,
+          "default": "gen_random_uuid()"
         },
         "user_id": {
           "name": "user_id",
-          "type": "text",
+          "type": "uuid",
           "primaryKey": false,
           "notNull": false
         },
         "username": {
           "name": "username",
-          "type": "text",
+          "type": "varchar(50)",
           "primaryKey": false,
           "notNull": false
         },
         "operation": {
           "name": "operation",
-          "type": "text",
+          "type": "audit_operation",
+          "typeSchema": "public",
           "primaryKey": false,
           "notNull": true
         },
         "method": {
           "name": "method",
-          "type": "text",
+          "type": "varchar(10)",
           "primaryKey": false,
           "notNull": false
         },
         "url": {
           "name": "url",
-          "type": "text",
+          "type": "varchar(500)",
           "primaryKey": false,
           "notNull": false
         },
@@ -1781,19 +1617,19 @@
         },
         "ip": {
           "name": "ip",
-          "type": "text",
+          "type": "varchar(45)",
           "primaryKey": false,
           "notNull": false
         },
         "user_agent": {
           "name": "user_agent",
-          "type": "text",
+          "type": "varchar(500)",
           "primaryKey": false,
           "notNull": false
         },
         "status": {
           "name": "status",
-          "type": "integer",
+          "type": "smallint",
           "primaryKey": false,
           "notNull": false
         },
@@ -1811,7 +1647,7 @@
         },
         "created_at": {
           "name": "created_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
@@ -1847,6 +1683,21 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "idx_audit_logs_operation": {
+          "name": "idx_audit_logs_operation",
+          "columns": [
+            {
+              "expression": "operation",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {},
@@ -1862,43 +1713,45 @@
       "columns": {
         "id": {
           "name": "id",
-          "type": "text",
+          "type": "uuid",
           "primaryKey": true,
-          "notNull": true
+          "notNull": true,
+          "default": "gen_random_uuid()"
         },
         "user_id": {
           "name": "user_id",
-          "type": "text",
+          "type": "uuid",
           "primaryKey": false,
           "notNull": false
         },
         "username": {
           "name": "username",
-          "type": "text",
+          "type": "varchar(50)",
           "primaryKey": false,
           "notNull": true
         },
         "event_type": {
           "name": "event_type",
-          "type": "text",
+          "type": "login_event",
+          "typeSchema": "public",
           "primaryKey": false,
           "notNull": true
         },
         "ip": {
           "name": "ip",
-          "type": "text",
+          "type": "varchar(45)",
           "primaryKey": false,
           "notNull": false
         },
         "user_agent": {
           "name": "user_agent",
-          "type": "text",
+          "type": "varchar(500)",
           "primaryKey": false,
           "notNull": false
         },
         "location": {
           "name": "location",
-          "type": "text",
+          "type": "varchar(100)",
           "primaryKey": false,
           "notNull": false
         },
@@ -1910,7 +1763,7 @@
         },
         "created_at": {
           "name": "created_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
@@ -1946,6 +1799,21 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "idx_login_logs_event_type": {
+          "name": "idx_login_logs_event_type",
+          "columns": [
+            {
+              "expression": "event_type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {},
@@ -1957,6 +1825,31 @@
     }
   },
   "enums": {
+    "public.audit_operation": {
+      "name": "audit_operation",
+      "schema": "public",
+      "values": [
+        "USER_CREATE",
+        "USER_UPDATE",
+        "USER_DELETE",
+        "USER_ROLE_ASSIGN",
+        "ROLE_CREATE",
+        "ROLE_UPDATE",
+        "ROLE_DELETE",
+        "ROLE_PERMISSION_ASSIGN",
+        "PERMISSION_CREATE",
+        "PERMISSION_UPDATE",
+        "PERMISSION_DELETE",
+        "DEPARTMENT_CREATE",
+        "DEPARTMENT_UPDATE",
+        "DEPARTMENT_DELETE",
+        "CLIENT_CREATE",
+        "CLIENT_UPDATE",
+        "CLIENT_DELETE",
+        "CLIENT_SECRET_REGENERATE",
+        "TOKEN_REVOKE"
+      ]
+    },
     "public.code_challenge_method": {
       "name": "code_challenge_method",
       "schema": "public",
@@ -1990,20 +1883,23 @@
         "ES256"
       ]
     },
-    "public.menu_type": {
-      "name": "menu_type",
+    "public.login_event": {
+      "name": "login_event",
       "schema": "public",
       "values": [
-        "DIRECTORY",
-        "MENU",
-        "BUTTON"
+        "LOGIN_SUCCESS",
+        "LOGIN_FAILED",
+        "LOGOUT",
+        "TOKEN_REFRESH",
+        "TOKEN_REFRESH_FAILED"
       ]
     },
     "public.permission_type": {
       "name": "permission_type",
       "schema": "public",
       "values": [
-        "MENU",
+        "DIRECTORY",
+        "PAGE",
         "API",
         "DATA"
       ]

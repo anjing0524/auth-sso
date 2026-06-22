@@ -6,7 +6,6 @@
 import { revalidatePath, revalidateTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
 import { eq } from 'drizzle-orm';
-import { byIdOrPublicId } from '@/db/resolve-id';
 import { withAuth, type AuthContext } from '@/lib/auth';
 import {
   createPermission,
@@ -21,13 +20,13 @@ import {
   type CreatePermissionInput,
 } from '@/domain/permission/types';
 import { EntityNotFoundError, DuplicateEntityError } from '@/domain/shared/errors';
-import { generateId } from '@/lib/crypto';
+import { generateUUID } from '@/lib/crypto';
 import type { ApiResponse } from '@auth-sso/contracts';
 
 /** 创建权限 */
 export const createPermissionAction = withAuth(
   { permissions: ['permission:create'] },
-  async (_ctx: AuthContext, input: CreatePermissionInput): Promise<ApiResponse<{ id: string }>> => {
+  async (_ctx: AuthContext, input: Record<string, unknown>): Promise<ApiResponse<{ id: string }>> => {
     const parsed = CreatePermissionInputSchema.safeParse(input);
     if (!parsed.success) {
       return { success: false, error: 'VALIDATION_ERROR', message: parsed.error.issues[0].message };
@@ -41,14 +40,14 @@ export const createPermissionAction = withAuth(
         .limit(1);
       if (existing[0]) throw new DuplicateEntityError('Permission', 'code');
 
-      const p = createPermission(parsed.data, generateId);
+      const p = createPermission(parsed.data, generateUUID);
       await tx.insert(schema.permissions).values(permissionToInsertRow(p));
       return p;
     });
 
     revalidatePath('/permissions');
-    revalidateTag('permissions-list');
-    return { success: true, data: { id: perm.publicId }, message: '权限创建成功' };
+    revalidateTag('permissions-list', { expire: 0 });
+    return { success: true, data: { id: perm.id }, message: '权限创建成功' };
   },
 );
 
@@ -62,7 +61,7 @@ export const updatePermissionAction = withAuth(
     }
 
     const row = await db.query.permissions.findFirst({
-      where: byIdOrPublicId('permissions', permId),
+      where: eq(schema.permissions.id, permId),
     });
     if (!row) throw new EntityNotFoundError('Permission', permId);
 
@@ -73,7 +72,7 @@ export const updatePermissionAction = withAuth(
       .where(eq(schema.permissions.id, perm.id));
 
     revalidatePath('/permissions');
-    revalidateTag('permissions-list');
+    revalidateTag('permissions-list', { expire: 0 });
     return { success: true, data: { id: permId }, message: '权限更新成功' };
   },
 );
@@ -83,7 +82,7 @@ export const deletePermissionAction = withAuth(
   { permissions: ['permission:delete'] },
   async (_ctx: AuthContext, permId: string): Promise<ApiResponse<{ id: string }>> => {
     const row = await db.query.permissions.findFirst({
-      where: byIdOrPublicId('permissions', permId),
+      where: eq(schema.permissions.id, permId),
     });
     if (!row) throw new EntityNotFoundError('Permission', permId);
 
@@ -93,7 +92,7 @@ export const deletePermissionAction = withAuth(
     });
 
     revalidatePath('/permissions');
-    revalidateTag('permissions-list');
+    revalidateTag('permissions-list', { expire: 0 });
     return { success: true, data: { id: permId }, message: '权限已删除' };
   },
 );

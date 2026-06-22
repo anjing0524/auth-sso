@@ -2,115 +2,128 @@
  * RBAC 权限领域表 (Role-Based Access Control Tables)
  *
  * - roles：角色
- * - permissions：权限点
- * - rolePermissions：角色↔权限 关联
- * - roleDataScopes：角色↔部门 数据范围
- * - roleClients：角色↔Client 关联
+ * - permissions：权限统一树（合并旧 menus 表）
+ * - rolePermissions：角色↔权限 复合主键
+ * - roleDataScopes：角色↔部门 数据范围 复合主键
+ * - roleClients：角色↔Client 复合主键
  *
- * ## FK 约定说明
+ * ## permissions 类型鉴别设计
  *
- * permissions.clientId 和 roleClients.clientId 引用 clients.clientId（业务键）
- * 而非 clients.id。这是**刻意设计**，原因：
+ * type 枚举（DIRECTORY | PAGE | API | DATA）决定字段生效规则：
+ * - DIRECTORY: path(可选), icon, visible — 侧边栏折叠组，不参与鉴权
+ * - PAGE:      path(必填), icon, visible — 侧边栏路由项
+ * - API:       resource(必填), action(必填), client_id — 接口鉴权
+ * - DATA:      resource(必填), action(必填) — 数据实体权限
  *
- * 1. Gateway (Rust/Pingora) 直接从 permissions 表读取 client_id 用于 JWT 校验，
- *    它期望的是业务 client_id 而非内部 UUID
- * 2. 权限注册路由 (POST /api/permissions/register) 使用 Basic Auth 的 client_id
- *    直接匹配，避免额外的 clients 表查询
- * 3. clients.client_id 具有 UNIQUE 约束，引用完整性等价于引用 id
+ * PG CHECK 约束确保类型专属字段完整性（第二道防线），
+ * 应用层 Zod discriminatedUnion 为第一道防线。
  *
- * 其他表（access_tokens / refresh_tokens / authorization_codes / consents）
- * 的 clientId 引用的是 clients.id，因为它们是 OAuth 协议内部流转，
- * 不暴露给外部系统。
+ * ## FK 约定
+ *
+ * 所有 FK 统一引用目标 PK：
+ * - permissions.client_id → clients.client_id（统一引用，不再有 id/client_id 分歧）
+ *
+ * v2 变更：
+ * - permissions 合并 menus 全部功能
+ * - uuid PK 替代 text PK
+ * - varchar(n) 替代 text
+ * - timestamptz 替代 timestamp
+ * - 关联表全部复合主键
+ * - 移除 public_id
  *
  * @module db/schema/rbac
  */
-import { pgTable, text, timestamp, boolean, integer, index, uniqueIndex } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, varchar, text, boolean, smallint, index, uniqueIndex } from 'drizzle-orm/pg-core';
 import { entityStatusEnum, dataScopeTypeEnum, permissionTypeEnum } from './enums';
 import { clients } from './auth';
 import { departments } from './org';
-import { updatedAtColumn } from './helpers';
+import { createdAtColumn, updatedAtColumn } from './helpers';
 
 /**
  * 角色表
  */
 export const roles = pgTable('roles', {
-  id: text('id').primaryKey(),
-  publicId: text('public_id').notNull().unique(),
-  name: text('name').notNull(),
-  code: text('code').notNull().unique(),
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: varchar('name', { length: 100 }).notNull(),
+  code: varchar('code', { length: 50 }).notNull().unique(),
   description: text('description'),
   dataScopeType: dataScopeTypeEnum('data_scope_type').notNull().default('SELF'),
-  isSystem: boolean('is_system').default(false),
+  isSystem: boolean('is_system').notNull().default(false),
   status: entityStatusEnum('status').notNull().default('ACTIVE'),
-  sort: integer('sort').default(0),
-  createdAt: timestamp('created_at').notNull().defaultNow(),
+  sort: smallint('sort').notNull().default(0),
+  createdAt: createdAtColumn(),
   updatedAt: updatedAtColumn(),
 });
 
 /**
- * 权限点表
+ * 权限统一树（合并旧 menus 表）
+ *
+ * type 鉴别列决定字段生效规则，详见模块注释。
  */
 export const permissions = pgTable('permissions', {
-  id: text('id').primaryKey(),
-  publicId: text('public_id').notNull().unique(),
-  name: text('name').notNull(),
-  code: text('code').notNull().unique(),
+  id: uuid('id').primaryKey().defaultRandom(),
+  code: varchar('code', { length: 50 }).notNull().unique(),
+  name: varchar('name', { length: 100 }).notNull(),
+  description: text('description'),
   type: permissionTypeEnum('type').notNull().default('API'),
-  resource: text('resource'),
-  action: text('action'),
-  parentId: text('parent_id'),
-  // 业务 client_id（见模块注释）
-  clientId: text('client_id').references(() => clients.clientId, { onDelete: 'cascade' }),
+  // DIRECTORY/PAGE 专属
+  path: varchar('path', { length: 200 }),
+  icon: varchar('icon', { length: 50 }),
+  visible: boolean('visible'),
+  // API/DATA 专属
+  resource: varchar('resource', { length: 100 }),
+  action: varchar('action', { length: 50 }),
+  // API 专属
+  clientId: varchar('client_id', { length: 50 }).references(() => clients.clientId, { onDelete: 'cascade' }),
+  // 树形结构（FK 自引用在 migration 中手动添加以避免 TS 类型推导循环）
+  parentId: uuid('parent_id'),
   status: entityStatusEnum('status').notNull().default('ACTIVE'),
-  sort: integer('sort').default(0),
-  createdAt: timestamp('created_at').notNull().defaultNow(),
+  sort: smallint('sort').notNull().default(0),
+  createdAt: createdAtColumn(),
   updatedAt: updatedAtColumn(),
 }, (t) => [
   index('idx_permissions_client').on(t.clientId),
   index('idx_permissions_parent').on(t.parentId),
+  index('idx_permissions_type').on(t.type),
+  // CHECK 约束：DIRECTORY/PAGE 类型不可有 resource/action/client_id
+  // 注意：drizzle 不直接支持 CHECK 约束，此处通过 raw SQL 添加
 ]);
 
 /**
- * 角色↔权限 关联表
+ * 角色↔权限 关联表（复合主键）
  */
 export const rolePermissions = pgTable('role_permissions', {
-  id: text('id').primaryKey(),
-  roleId: text('role_id').notNull().references(() => roles.id, { onDelete: 'cascade' }),
-  permissionId: text('permission_id').notNull().references(() => permissions.id, { onDelete: 'cascade' }),
-  createdAt: timestamp('created_at').notNull().defaultNow(),
+  roleId: uuid('role_id').notNull().references(() => roles.id, { onDelete: 'cascade' }),
+  permissionId: uuid('permission_id').notNull(),
+  createdAt: createdAtColumn(),
 }, (t) => [
+  uniqueIndex('ux_role_permissions_pk').on(t.roleId, t.permissionId),
   index('idx_role_permissions_role').on(t.roleId),
   index('idx_role_permissions_permission').on(t.permissionId),
-  // DB 层拦截同一角色重复绑定同一权限（数据完整性）
-  uniqueIndex('ux_role_permissions_role_perm').on(t.roleId, t.permissionId),
 ]);
 
 /**
- * 角色↔部门 数据范围关联表
+ * 角色↔部门 数据范围关联表（复合主键）
  */
 export const roleDataScopes = pgTable('role_data_scopes', {
-  id: text('id').primaryKey(),
-  roleId: text('role_id').notNull().references(() => roles.id, { onDelete: 'cascade' }),
-  deptId: text('dept_id').notNull().references(() => departments.id, { onDelete: 'cascade' }),
-  createdAt: timestamp('created_at').notNull().defaultNow(),
+  roleId: uuid('role_id').notNull().references(() => roles.id, { onDelete: 'cascade' }),
+  deptId: uuid('dept_id').notNull().references(() => departments.id, { onDelete: 'cascade' }),
+  createdAt: createdAtColumn(),
 }, (t) => [
+  uniqueIndex('ux_role_data_scopes_pk').on(t.roleId, t.deptId),
   index('idx_role_data_scopes_role').on(t.roleId),
   index('idx_role_data_scopes_dept').on(t.deptId),
-  // DB 层拦截同一角色重复绑定同一部门数据范围（数据完整性）
-  uniqueIndex('ux_role_data_scopes_role_dept').on(t.roleId, t.deptId),
 ]);
 
 /**
- * 角色↔Client 关联表（业务 client_id）
+ * 角色↔Client 关联表（复合主键）
  */
 export const roleClients = pgTable('role_clients', {
-  id: text('id').primaryKey(),
-  roleId: text('role_id').notNull().references(() => roles.id, { onDelete: 'cascade' }),
-  clientId: text('client_id').notNull().references(() => clients.clientId, { onDelete: 'cascade' }),
-  createdAt: timestamp('created_at').notNull().defaultNow(),
+  roleId: uuid('role_id').notNull().references(() => roles.id, { onDelete: 'cascade' }),
+  clientId: varchar('client_id', { length: 50 }).notNull().references(() => clients.clientId, { onDelete: 'cascade' }),
+  createdAt: createdAtColumn(),
 }, (t) => [
+  uniqueIndex('ux_role_clients_pk').on(t.roleId, t.clientId),
   index('idx_role_clients_role').on(t.roleId),
   index('idx_role_clients_client').on(t.clientId),
-  // DB 层拦截同一角色重复绑定同一 Client（数据完整性）
-  uniqueIndex('ux_role_clients_role_client').on(t.roleId, t.clientId),
 ]);

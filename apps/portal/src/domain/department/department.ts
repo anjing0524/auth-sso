@@ -18,7 +18,6 @@ export function computeAncestors(parentId: string, parentAncestors: string | nul
  */
 export function toDomainDepartment(row: {
   id: string;
-  publicId: string;
   parentId: string | null;
   ancestors: string | null;
   name: string;
@@ -29,7 +28,6 @@ export function toDomainDepartment(row: {
 }): Department {
   return {
     id: row.id,
-    publicId: row.publicId,
     parentId: row.parentId,
     ancestors: row.ancestors,
     name: row.name,
@@ -45,13 +43,12 @@ export function toDomainDepartment(row: {
  */
 export function createDepartment(
   input: CreateDepartmentInput,
-  idGenerator: (len: number) => string,
+  idGenerator: () => string,
   parentAncestors: string | null = null,
 ): Department {
   const ancestors = input.parentId ? computeAncestors(input.parentId, parentAncestors) : null;
   return {
-    id: idGenerator(20),
-    publicId: `dept_${idGenerator(16)}`,
+    id: idGenerator(),
     parentId: input.parentId ?? null,
     ancestors,
     name: input.name,
@@ -84,11 +81,6 @@ export function applyDepartmentUpdate(
 
 /**
  * 纯函数：检查将部门移至目标父部门是否会产生环形引用
- *
- * @param deptId 当前部门 ID
- * @param newParentId 目标父部门 ID
- * @param allDepts 所有部门列表（用于查找祖先链）
- * @throws BusinessRuleViolationError 如果会产生环形引用
  */
 export function validateNoCircularReference(
   deptId: string,
@@ -98,15 +90,13 @@ export function validateNoCircularReference(
   if (deptId === newParentId) {
     throw new BusinessRuleViolationError('不能将父部门设为自身，这会导致环形死锁');
   }
-
-  // 追溯祖先链：检查 newParentId 是否是 deptId 的后代
   let currentId: string | null = newParentId;
   const visited = new Set<string>();
   while (currentId) {
     if (currentId === deptId) {
       throw new BusinessRuleViolationError('不能将父部门设为其子部门，这会导致环形死锁');
     }
-    if (visited.has(currentId)) break; // 已有环，安全退出
+    if (visited.has(currentId)) break;
     visited.add(currentId);
     const parent = allDepts.find(d => d.id === currentId);
     currentId = parent?.parentId ?? null;
@@ -115,22 +105,12 @@ export function validateNoCircularReference(
 
 /**
  * 纯函数：带环形引用校验的部门更新 (无副作用)
- *
- * 将 parentId 变更检测与环形引用校验从 Controller 层下沉至此，
- * 使 Controller 只需传入 allDepts 即可完成校验，无需自行编写 if 条件分支。
- *
- * @param dept      当前部门实体
- * @param patch     更新片段
- * @param allDepts  全部部门列表（用于祖先链追溯）
- * @returns 更新后的部门实体
- * @throws BusinessRuleViolationError 当 parentId 变更会产生环形引用时
  */
 export function applyDepartmentUpdateWithCircularCheck(
   dept: Department,
   patch: Partial<Pick<Department, 'name' | 'code' | 'parentId' | 'sort' | 'status'>> & { ancestors?: string | null },
   allDepts: Array<{ id: string; parentId: string | null }>,
 ): Department {
-  // 检查 parentId 是否发生了变更，且新 parentId 非空
   if (patch.parentId !== undefined && patch.parentId !== dept.parentId && patch.parentId) {
     validateNoCircularReference(dept.id, patch.parentId, allDepts);
   }
@@ -139,27 +119,14 @@ export function applyDepartmentUpdateWithCircularCheck(
 
 /**
  * 纯函数：当 parentId 变更时，计算新部门的 ancestors 物化路径
- *
- * 将 Controller 层 inlined parentChanged 检测 + newAncestors 计算收敛至此。
- * 返回 null 表示 parentId 未变更；返回字符串表示新的 ancestors 值（null 表示顶级）。
- *
- * @param dept     当前部门实体
- * @param parentId 新的父部门 ID（或 null 表示移至顶级）
- * @param allDepts 全部部门列表（用于查找父级的 ancestors）
- * @returns 新的 ancestors 字符串，null 表示顶级，undefined 表示 parentId 未变更
  */
 export function resolveParentAncestors(
   dept: Department,
   parentId: string | null | undefined,
   allDepts: Array<{ id: string; parentId: string | null; ancestors: string | null }>,
 ): string | null | undefined {
-  // parentId 未传入或未变更 — 无需修改 ancestors
   if (parentId === undefined || parentId === dept.parentId) return undefined;
-
-  // 移至顶级
   if (!parentId) return null;
-
-  // 查询新父级的 ancestors 并计算
   const parent = allDepts.find(d => d.id === parentId);
   return parent ? computeAncestors(parent.id, parent.ancestors) : null;
 }
@@ -172,7 +139,6 @@ export function resolveParentAncestors(
 export function departmentToInsertRow(d: Department) {
   return {
     id: d.id,
-    publicId: d.publicId,
     name: d.name,
     code: d.code,
     parentId: d.parentId,
@@ -197,7 +163,6 @@ export function departmentToUpdateRow(d: Department) {
 
 /**
  * 纯函数：将扁平部门列表构建为树形结构
- * 委托至泛型 buildTree 工具函数
  */
 export function buildDepartmentTree(flatList: Department[]): DepartmentTreeNode[] {
   return buildTree(flatList, 'id', 'parentId');

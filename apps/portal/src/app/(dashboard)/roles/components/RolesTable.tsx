@@ -29,7 +29,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { createRoleAction, updateRoleAction, deleteRoleAction } from '../actions';
 
 interface RoleRow {
-  id: string; publicId: string; name: string; code: string;
+  id: string;  name: string; code: string;
   description: string | null; dataScopeType: string;
   isSystem: boolean; status: string; sort: number; createdAt: string;
 }

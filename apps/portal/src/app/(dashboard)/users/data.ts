@@ -17,7 +17,6 @@ import 'server-only';
 import { cacheLife, cacheTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
 import { eq, desc, and, count } from 'drizzle-orm';
-import { byIdOrPublicId } from '@/db/resolve-id';
 
 import {
   USER_LIST_COLUMNS,
@@ -106,7 +105,7 @@ export async function getUsers(
 export async function getUserProfile(userId: string) {
   const rows = await db
     .select({
-      publicId: schema.users.publicId,
+      id: schema.users.id,
       name: schema.users.name,
       email: schema.users.email,
       emailVerified: schema.users.emailVerified,
@@ -130,7 +129,7 @@ export async function getUserProfile(userId: string) {
 export async function getUser(lookupId: string) {
   // 使用 Relational Queries 一次性取出用户、角色、部门（FK 已建立，一次 DB 往返）
   const user = await db.query.users.findFirst({
-    where: byIdOrPublicId('users', lookupId),
+    where: eq(schema.users.id, lookupId),
     with: {
       userRoles: { with: { role: true } },
       department: true,
@@ -140,7 +139,7 @@ export async function getUser(lookupId: string) {
 
   return {
     id: user.id,
-    publicId: user.publicId,
+    
     username: user.username,
     email: user.email,
     name: user.name,
@@ -155,7 +154,7 @@ export async function getUser(lookupId: string) {
     // 投影为对外契约一致的扁平角色结构（DTO）
     roles: user.userRoles.map(ur => ({
       id: ur.role.id,
-      publicId: ur.role.publicId,
+      
       code: ur.role.code,
       name: ur.role.name,
       description: ur.role.description,
@@ -183,7 +182,7 @@ export async function getDepartments() {
 export async function getUserRoles(lookupId: string) {
   // 使用 Relational Queries 一次性取出用户绑定的角色及分配时间
   const user = await db.query.users.findFirst({
-    where: byIdOrPublicId('users', lookupId),
+    where: eq(schema.users.id, lookupId),
     with: {
       userRoles: {
         orderBy: (userRoles, { desc }) => [desc(userRoles.createdAt)],
@@ -200,7 +199,7 @@ export async function getUserRoles(lookupId: string) {
     .filter(ur => ur.role !== null)
     .map(ur => ({
       id: ur.role.id,
-      publicId: ur.role.publicId,
+      
       code: ur.role.code,
       name: ur.role.name,
       description: ur.role.description,

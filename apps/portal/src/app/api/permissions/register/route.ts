@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db, schema } from '@/infrastructure/db';
 import { eq, sql } from 'drizzle-orm';
-import { generateUUID, generatePermissionPublicId } from '@/lib/crypto';
+import { generateUUID } from '@/lib/crypto';
 import { COMMON_ERRORS } from '@auth-sso/contracts';
 import { mapDomainError } from '@/domain/shared/error-mapping';
 
@@ -13,7 +13,7 @@ export const runtime = 'nodejs';
 interface IncomingPermission {
   code: string;
   name: string;
-  type: 'MENU' | 'API' | 'DATA';
+  type: 'DIRECTORY' | 'PAGE' | 'API' | 'DATA';
   resource?: string;
   action?: string;
   sort?: number;
@@ -157,10 +157,8 @@ export async function POST(request: NextRequest) {
         const existing = dbMap.get(p.code);
         if (!existing) {
           const id = codeToIdMap.get(p.code)!;
-          const publicId = generatePermissionPublicId();
           await tx.insert(schema.permissions).values({
             id,
-            publicId,
             name: p.name,
             code: p.code,
             type: p.type,

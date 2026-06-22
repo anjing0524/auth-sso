@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
       await db
         .update(schema.refreshTokens)
         .set({ revoked: new Date() })
-        .where(eq(schema.refreshTokens.token, token))
+        .where(eq(schema.refreshTokens.tokenHash, token))
         .execute();
     }
 

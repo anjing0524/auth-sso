@@ -30,7 +30,7 @@ export default async function DashboardGroupLayout({ children }: { children: Rea
   return (
     <DashboardLayout
       user={{
-        id: user?.publicId ?? identity.userId,
+        id: user?.id ?? identity.userId,
         email: user?.email ?? null,
         name: user?.name ?? '未知',
         picture: user?.avatarUrl ?? null,

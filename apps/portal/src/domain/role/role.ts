@@ -10,7 +10,6 @@ export type { Role };
  */
 export function toDomainRole(row: {
   id: string;
-  publicId: string;
   name: string;
   code: string;
   description: string | null;
@@ -22,7 +21,6 @@ export function toDomainRole(row: {
 }): Role {
   return {
     id: row.id,
-    publicId: row.publicId,
     name: row.name,
     code: row.code,
     description: row.description,
@@ -39,11 +37,10 @@ export function toDomainRole(row: {
  */
 export function createRole(
   input: CreateRoleInput,
-  idGenerator: (len: number) => string,
+  idGenerator: () => string,
 ): Role {
   return {
-    id: idGenerator(20),
-    publicId: `role_${idGenerator(16)}`,
+    id: idGenerator(),
     name: input.name,
     code: input.code,
     description: input.description ?? null,
@@ -74,8 +71,6 @@ export function applyRoleUpdate(
 
 /**
  * 领域守卫：禁止操作系统内置角色
- *
- * @throws BusinessRuleViolationError 当操作为系统角色时
  */
 export function guardNotSystemRole(role: Role): void {
   if (role.isSystem) {
@@ -91,7 +86,6 @@ export function guardNotSystemRole(role: Role): void {
 export function roleToInsertRow(r: Role) {
   return {
     id: r.id,
-    publicId: r.publicId,
     name: r.name,
     code: r.code,
     description: r.description,

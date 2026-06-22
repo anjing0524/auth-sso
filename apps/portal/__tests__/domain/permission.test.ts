@@ -37,8 +37,9 @@ describe('Permission 领域核心规则', () => {
 
   it('toDomainPermission 应正确转换 DB 行', () => {
     const row = {
-      id: 'id1', publicId: 'pub1', name: '创建用户', code: 'user:create',
-      type: 'API' as any, resource: '/api/users', action: 'create',
+      id: 'p1', name: '测试权限', code: 'test:perm',
+      type: 'API' as any, description: null, path: null, icon: null, visible: null,
+      resource: '/api/users', action: 'create', clientId: null,
       parentId: null, status: 'ACTIVE' as any, sort: 10,
       createdAt: new Date('2025-01-01'),
     };

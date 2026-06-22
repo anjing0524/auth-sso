@@ -28,7 +28,7 @@ import { createDepartmentAction, updateDepartmentAction, deleteDepartmentAction 
 
 interface DeptTreeNode {
   id: string;
-  publicId: string;
+  
   parentId: string | null;
   name: string;
   code: string | null;

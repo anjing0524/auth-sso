@@ -27,7 +27,7 @@ export default async function ProfilePage() {
   return (
     <ProfileClient
       user={user ? {
-        id: user.publicId,
+        id: user.id,
         name: user.name,
         email: user.email ?? '',
         picture: user.avatarUrl,

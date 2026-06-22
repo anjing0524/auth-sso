@@ -3,13 +3,13 @@ import { type UserStatus } from '@auth-sso/contracts';
 import { userStatusEnum } from '@/domain/shared/zod-schemas';
 
 /**
- * 用户领域实体接口 (纯 TS interface，替代旧的 UserPropsSchema)
+ * 用户领域实体接口 (纯 TS interface)
+ *
+ * v2 变更：移除 publicId，新增 deletedAt、passwordChangedAt
  */
 export interface User {
-  /** 内部唯一标识 ID */
+  /** 内部唯一标识 ID（UUID） */
   id: string;
-  /** 外部公开展示用公共 ID */
-  publicId: string;
   /** 登录用户名 */
   username: string;
   /** 邮箱地址 */
@@ -24,6 +24,10 @@ export interface User {
   deptName: string | null;
   /** 头像 URL */
   avatarUrl: string | null;
+  /** 逻辑删除时间（US-B-11） */
+  deletedAt: Temporal.Instant | null;
+  /** 密码最后修改时间（US-SEC-02） */
+  passwordChangedAt: Temporal.Instant | null;
   /** 创建时间 (UTC 精确时刻，不可变) */
   createdAt: Temporal.Instant;
 }
@@ -73,3 +77,4 @@ export const UserIdentityInputSchema = z.object({
   id: z.string().min(1, '用户ID不能为空'),
 });
 
+export type UpdateUserInput = z.infer<typeof UpdateUserInputSchema>;

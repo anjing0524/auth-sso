@@ -15,7 +15,6 @@ describe('User 领域核心规则与工厂单元测试', () => {
   function createTestUser(status: 'ACTIVE' | 'DISABLED' | 'LOCKED' | 'DELETED'): User {
     return {
       id: 'usr_test_1',
-      publicId: 'user_pub_test',
       username: 'test_user',
       email: 'test@example.com',
       name: '测试用户',
@@ -23,6 +22,8 @@ describe('User 领域核心规则与工厂单元测试', () => {
       deptId: 'dept_test_1',
       deptName: '测试部门',
       avatarUrl: null,
+      deletedAt: null,
+      passwordChangedAt: null,
       createdAt: now,
     };
   }
@@ -38,16 +39,12 @@ describe('User 领域核心规则与工厂单元测试', () => {
     };
     
     // 模拟 ID 生成器以保证纯度
-    const mockIdGenerator = (len: number) => {
-      if (len === 20) return 'mocked_userid_20_chars';
-      return 'mockedid';
-    };
+    const mockIdGenerator = () => 'mocked-uuid-1234-5678';
 
     const user = createUser(input, mockIdGenerator);
-    
+
     expect(user.status).toBe('ACTIVE');
-    expect(user.id).toBe('mocked_userid_20_chars');
-    expect(user.publicId).toBe('user_mockedid');
+    expect(user.id).toBe('mocked-uuid-1234-5678');
     expect(user.username).toBe('wangxiaoer');
     expect(user.email).toBe('wang@example.com');
     expect(user.name).toBe('王小二');

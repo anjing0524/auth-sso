@@ -73,7 +73,7 @@ export async function GET(request: NextRequest) {
     // 5. 准入检查（委托 domain 纯函数 — 收敛原先 3 段内联业务规则）
     const accessCheck = validateAuthorization({
       userId: userWithRoles.id,
-      clientId: client!.id,
+      clientId: client!.clientId,
       status: userWithRoles.status,
       roles: userWithRoles.roles,
     });
@@ -95,7 +95,7 @@ export async function GET(request: NextRequest) {
     await db.insert(schema.authorizationCodes).values({
       id: codeId,
       code,
-      clientId: client!.id,
+      clientId: client!.clientId,
       userId: sessionClaims.sub,
       redirectUri: redirect_uri,
       scope,

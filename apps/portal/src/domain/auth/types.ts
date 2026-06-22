@@ -15,7 +15,7 @@ import type { JWTPayload } from 'jose';
 
 /** Portal JWT Access Token 载荷声明 */
 export interface PortalJwtClaims extends JWTPayload {
-  /** 用户唯一标识（public_id 格式） */
+  /** 用户唯一标识（UUID 格式） */
   sub: string;
   /** Token 签发者 */
   iss: string;

@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
       const codeRows = await db
         .select()
         .from(schema.authorizationCodes)
-        .where(and(eq(schema.authorizationCodes.code, code), eq(schema.authorizationCodes.clientId, client.id)))
+        .where(and(eq(schema.authorizationCodes.code, code), eq(schema.authorizationCodes.clientId, client.clientId)))
         .limit(1);
 
       validateAuthCodeRow(codeRows[0], redirect_uri);

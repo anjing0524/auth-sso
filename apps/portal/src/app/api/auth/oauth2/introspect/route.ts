@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
     const rtRows = await db
       .select()
       .from(schema.refreshTokens)
-      .where(eq(schema.refreshTokens.token, token))
+      .where(eq(schema.refreshTokens.tokenHash, token))
       .limit(1);
 
     if (rtRows.length > 0) {

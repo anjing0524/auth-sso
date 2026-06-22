@@ -9,12 +9,16 @@ export type { Permission };
  */
 export function toDomainPermission(row: {
   id: string;
-  publicId: string;
   name: string;
   code: string;
   type: PermissionType;
+  description: string | null;
+  path: string | null;
+  icon: string | null;
+  visible: boolean | null;
   resource: string | null;
   action: string | null;
+  clientId: string | null;
   parentId: string | null;
   status: EntityStatus;
   sort: number | null;
@@ -22,12 +26,16 @@ export function toDomainPermission(row: {
 }): Permission {
   return {
     id: row.id,
-    publicId: row.publicId,
     name: row.name,
     code: row.code,
     type: row.type,
+    description: row.description,
+    path: row.path,
+    icon: row.icon,
+    visible: row.visible,
     resource: row.resource,
     action: row.action,
+    clientId: row.clientId,
     parentId: row.parentId,
     status: row.status,
     sort: row.sort ?? 0,
@@ -40,19 +48,24 @@ export function toDomainPermission(row: {
  */
 export function createPermission(
   input: CreatePermissionInput,
-  idGenerator: (len: number) => string,
+  idGenerator: () => string,
 ): Permission {
+  const inputAny = input as Record<string, unknown>;
   return {
-    id: idGenerator(20),
-    publicId: `perm_${idGenerator(16)}`,
+    id: idGenerator(),
     name: input.name,
     code: input.code,
-    type: input.type ?? PERMISSION_API,
-    resource: input.resource ?? null,
-    action: input.action ?? null,
-    parentId: input.parentId ?? null,
+    type: input.type,
+    description: (inputAny.description as string) ?? null,
+    path: (inputAny.path as string) ?? null,
+    icon: (inputAny.icon as string) ?? null,
+    visible: (inputAny.visible as boolean) ?? null,
+    resource: (inputAny.resource as string) ?? null,
+    action: (inputAny.action as string) ?? null,
+    clientId: (inputAny.clientId as string) ?? null,
+    parentId: (inputAny.parentId as string) ?? null,
     status: ENTITY_ACTIVE,
-    sort: input.sort,
+    sort: (inputAny.sort as number) ?? 0,
     createdAt: Temporal.Now.instant(),
   };
 }
@@ -62,15 +75,20 @@ export function createPermission(
  */
 export function applyPermissionUpdate(
   perm: Permission,
-  patch: Partial<Pick<Permission, 'name' | 'code' | 'type' | 'resource' | 'action' | 'parentId' | 'sort' | 'status'>>,
+  patch: Partial<Pick<Permission, 'name' | 'code' | 'type' | 'description' | 'path' | 'icon' | 'visible' | 'resource' | 'action' | 'clientId' | 'parentId' | 'sort' | 'status'>>,
 ): Permission {
   return {
     ...perm,
     name: patch.name ?? perm.name,
     code: patch.code ?? perm.code,
     type: patch.type ?? perm.type,
+    description: patch.description !== undefined ? patch.description : perm.description,
+    path: patch.path !== undefined ? patch.path : perm.path,
+    icon: patch.icon !== undefined ? patch.icon : perm.icon,
+    visible: patch.visible !== undefined ? patch.visible : perm.visible,
     resource: patch.resource !== undefined ? patch.resource : perm.resource,
     action: patch.action !== undefined ? patch.action : perm.action,
+    clientId: patch.clientId !== undefined ? patch.clientId : perm.clientId,
     parentId: patch.parentId !== undefined ? patch.parentId : perm.parentId,
     sort: patch.sort ?? perm.sort,
     status: patch.status ?? perm.status,
@@ -85,12 +103,16 @@ export function applyPermissionUpdate(
 export function permissionToInsertRow(p: Permission) {
   return {
     id: p.id,
-    publicId: p.publicId,
     name: p.name,
     code: p.code,
     type: p.type,
+    description: p.description,
+    path: p.path,
+    icon: p.icon,
+    visible: p.visible,
     resource: p.resource,
     action: p.action,
+    clientId: p.clientId,
     parentId: p.parentId,
     sort: p.sort,
     status: p.status,
@@ -104,8 +126,13 @@ export function permissionToUpdateRow(p: Permission) {
     name: p.name,
     code: p.code,
     type: p.type,
+    description: p.description,
+    path: p.path,
+    icon: p.icon,
+    visible: p.visible,
     resource: p.resource,
     action: p.action,
+    clientId: p.clientId,
     parentId: p.parentId,
     sort: p.sort,
     status: p.status,

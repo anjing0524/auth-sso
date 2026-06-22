@@ -18,7 +18,6 @@ describe('Department 领域核心规则', () => {
     const dept = createDepartment({ name: '技术部', sort: 1 }, mockIdGen);
     expect(dept.status).toBe('ACTIVE');
     expect(dept.name).toBe('技术部');
-    expect(dept.publicId).toBeDefined();
     expect(dept.parentId).toBeNull();
   });
 
@@ -74,7 +73,7 @@ describe('Department 领域核心规则', () => {
 
   it('toDomainDepartment 应正确转换 DB 行', () => {
     const row = {
-      id: 'id1', publicId: 'pub1', parentId: 'parent1', ancestors: null, name: 'HR',
+      id: 'd1', name: 'HR', parentId: null as string | null, ancestors: null as string | null,
       code: 'HR_CODE', sort: 10, status: 'ACTIVE' as any, createdAt: new Date('2025-01-01'),
     };
     const dept = toDomainDepartment(row);

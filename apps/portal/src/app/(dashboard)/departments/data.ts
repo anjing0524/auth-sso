@@ -11,7 +11,6 @@ import 'server-only';
 import { cacheLife, cacheTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
 import { asc, and, eq } from 'drizzle-orm';
-import { byIdOrPublicId } from '@/db/resolve-id';
 import type { EntityStatus } from '@auth-sso/contracts';
 import { applyDataScopeFilter } from '@/lib/auth';
 import { buildDepartmentTree } from '@/domain/department/department';
@@ -51,7 +50,7 @@ export async function getDepartments(
   if (scopeFilter.type !== 'ALL') {
     // 有限范围时只返回平面列表
     return rows.map(r => ({
-      id: r.id, publicId: r.publicId, parentId: r.parentId, ancestors: r.ancestors,
+      id: r.id, parentId: r.parentId, ancestors: r.ancestors,
       name: r.name, code: r.code, sort: r.sort ?? 0,
       status: asEntityStatus(r.status),
       createdAt: Temporal.Instant.fromEpochMilliseconds(r.createdAt.getTime()),
@@ -60,7 +59,7 @@ export async function getDepartments(
   }
 
   const depts = rows.map(r => ({
-    id: r.id, publicId: r.publicId, parentId: r.parentId, ancestors: r.ancestors,
+    id: r.id, parentId: r.parentId, ancestors: r.ancestors,
     name: r.name, code: r.code, sort: r.sort ?? 0,
     status: asEntityStatus(r.status),
     createdAt: Temporal.Instant.fromEpochMilliseconds(r.createdAt.getTime()),
@@ -70,17 +69,16 @@ export async function getDepartments(
 }
 
 /**
- * 按 ID 获取单个部门详情（支持内部 ID 和 publicId）
+ * 按 ID 获取单个部门详情
  */
 export async function getDepartmentById(lookupId: string) {
   const rows = await db.select().from(schema.departments)
-    .where(byIdOrPublicId('departments', lookupId))
+    .where(eq(schema.departments.id, lookupId))
     .limit(1);
   const row = rows[0];
   if (!row) return null;
   return {
     id: row.id,
-    publicId: row.publicId,
     parentId: row.parentId,
     name: row.name,
     code: row.code,
@@ -96,7 +94,6 @@ export async function getDepartmentById(lookupId: string) {
 export async function getDepartmentMembers(departmentId: string) {
   return db.select({
     id: schema.users.id,
-    publicId: schema.users.publicId,
     name: schema.users.name,
     username: schema.users.username,
     email: schema.users.email,

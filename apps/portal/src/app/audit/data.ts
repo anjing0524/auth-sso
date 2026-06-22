@@ -8,6 +8,7 @@ import 'server-only';
 
 import { db, schema } from '@/infrastructure/db';
 import { eq, desc, and, gte, lte, count } from 'drizzle-orm';
+import type { AuditOperation, LoginEventType } from '@auth-sso/contracts';
 
 /** 日期格式正则：防止 SQL 注入和异常参数穿透 */
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
@@ -66,7 +67,7 @@ async function paginatedSelect<T>(
  */
 export async function getAuditLogs(params: PaginationParams & {
   userId?: string;
-  operation?: string;
+  operation?: AuditOperation;
   startDate?: string;
   endDate?: string;
 }) {
@@ -102,7 +103,7 @@ export async function getAuditLogs(params: PaginationParams & {
  */
 export async function getLoginLogs(params: PaginationParams & {
   userId?: string;
-  eventType?: string;
+  eventType?: LoginEventType;
   startDate?: string;
   endDate?: string;
 }) {

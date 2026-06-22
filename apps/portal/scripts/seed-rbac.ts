@@ -39,7 +39,7 @@ async function seedPermissions(): Promise<Record<string, string>> {
     const id = crypto.randomUUID();
     await db.insert(schema.permissions).values({
       id,
-      publicId: `perm_${i.toString().padStart(3, '0')}_${Date.now().toString(36)}`,
+
       name: PERMISSION_LABELS[code] ?? code,
       code,
       type: 'API',
@@ -74,7 +74,7 @@ async function seedRole(
   const id = crypto.randomUUID();
   await db.insert(schema.roles).values({
     id,
-    publicId: `role_${code.toLowerCase()}`,
+    id: crypto.randomUUID(),
     name,
     code,
     description,

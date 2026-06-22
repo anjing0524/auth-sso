@@ -20,7 +20,7 @@ import 'server-only';
  */
 import { SignJWT, jwtVerify, decodeJwt, importJWK, generateKeyPair, exportJWK } from 'jose';
 import { db, schema } from '@/infrastructure/db';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, desc } from 'drizzle-orm';
 import { generateId } from '@/lib/crypto';
 import { getIssuer } from '@/lib/env';
 import { isJtiRevoked, trackUserJti, revokeUserAccessByUserId } from '@/lib/session/revoke';
@@ -105,7 +105,7 @@ async function getActiveSigningKey(): Promise<{
   const rows = await db
     .select()
     .from(schema.jwks)
-    .orderBy(schema.jwks.createdAt, 'desc')
+    .orderBy(desc(schema.jwks.createdAt))
     .limit(1);
 
   if (rows.length === 0) {
@@ -175,7 +175,7 @@ export const LOGIN_SESSION_TTL = TOKEN_TTL.LOGIN_SESSION;
  * 登录成功后由 login route 调用，结果写入 HttpOnly Cookie。
  * 仅含 sub，5min TTL。不设 portal_jwt_token — Access Token 在 OAuth callback 完成后才颁发。
  *
- * @param userId - 用户 public_id
+ * @param userId - 用户 ID (UUID)
  * @returns ES256 签名的 JWT 字符串
  */
 export async function signLoginSession(userId: string): Promise<string> {
@@ -322,7 +322,7 @@ export async function issueRefreshToken(
 
   await db.insert(schema.refreshTokens).values({
     id,
-    token,
+    tokenHash: token,
     clientId,
     userId,
     scopes,
@@ -351,7 +351,7 @@ export async function rotateRefreshToken(
   const rows = await db
     .select()
     .from(schema.refreshTokens)
-    .where(and(eq(schema.refreshTokens.token, oldRefreshToken), eq(schema.refreshTokens.clientId, clientId)))
+    .where(and(eq(schema.refreshTokens.tokenHash, oldRefreshToken), eq(schema.refreshTokens.clientId, clientId)))
     .limit(1);
 
   if (rows.length === 0) return null;

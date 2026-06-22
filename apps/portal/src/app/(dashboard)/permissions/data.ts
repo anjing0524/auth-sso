@@ -6,7 +6,6 @@ import 'server-only';
 import { cacheLife, cacheTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
 import { eq, asc, and } from 'drizzle-orm';
-import { byIdOrPublicId } from '@/db/resolve-id';
 import { asPermissionType } from '@/lib/type-guards';
 
 /**
@@ -28,8 +27,9 @@ export async function getPermissions(type?: string) {
     .orderBy(asc(schema.permissions.sort), asc(schema.permissions.createdAt));
 
   return rows.map(p => ({
-    id: p.id, publicId: p.publicId, name: p.name, code: p.code,
-    type: p.type, resource: p.resource, action: p.action,
+    id: p.id, name: p.name, code: p.code,
+    type: p.type, path: p.path, icon: p.icon, visible: p.visible,
+    resource: p.resource, action: p.action, clientId: p.clientId,
     parentId: p.parentId, status: p.status, sort: p.sort,
     createdAt: p.createdAt.toISOString(),
   }));
@@ -40,13 +40,14 @@ export async function getPermissions(type?: string) {
  */
 export async function getPermissionById(lookupId: string) {
   const rows = await db.select().from(schema.permissions)
-    .where(byIdOrPublicId('permissions', lookupId))
+    .where(eq(schema.permissions.id, lookupId))
     .limit(1);
   const row = rows[0];
   if (!row) return null;
   return {
-    id: row.id, publicId: row.publicId, name: row.name, code: row.code,
-    type: row.type, resource: row.resource, action: row.action,
+    id: row.id, name: row.name, code: row.code,
+    type: row.type, path: row.path, icon: row.icon, visible: row.visible,
+    resource: row.resource, action: row.action, clientId: row.clientId,
     parentId: row.parentId, status: row.status, sort: row.sort,
     createdAt: row.createdAt.toISOString(),
   };

@@ -21,7 +21,7 @@ import {
   type CreateRoleInput,
 } from '@/domain/role/types';
 import { EntityNotFoundError, DuplicateEntityError } from '@/domain/shared/errors';
-import { generateId } from '@/lib/crypto';
+import { generateUUID } from '@/lib/crypto';
 import { refreshUsersPermissionCache } from '@/lib/permissions';
 import type { ApiResponse } from '@auth-sso/contracts';
 
@@ -51,14 +51,14 @@ export const createRoleAction = withAuth(
         .limit(1);
       if (existing[0]) throw new DuplicateEntityError('Role', 'code');
 
-      const r = createRole(parsed.data, generateId);
+      const r = createRole(parsed.data, generateUUID);
       await tx.insert(schema.roles).values(roleToInsertRow(r));
       return r;
     });
 
     revalidatePath('/roles');
-    revalidateTag('roles-list');
-    return { success: true, data: { id: role.publicId }, message: '角色创建成功' };
+    revalidateTag('roles-list', { expire: 0 });
+    return { success: true, data: { id: role.id }, message: '角色创建成功' };
   },
 );
 
@@ -86,7 +86,7 @@ export const updateRoleAction = withAuth(
     await invalidateRoleBoundUsersCache(roleId);
 
     revalidatePath('/roles');
-    revalidateTag('roles-list');
+    revalidateTag('roles-list', { expire: 0 });
     return { success: true, data: { id: roleId }, message: '角色更新成功' };
   },
 );
@@ -116,7 +116,7 @@ export const deleteRoleAction = withAuth(
     }
 
     revalidatePath('/roles');
-    revalidateTag('roles-list');
+    revalidateTag('roles-list', { expire: 0 });
     return { success: true, data: { id: roleId }, message: '角色已删除' };
   },
 );

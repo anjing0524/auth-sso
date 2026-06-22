@@ -8,7 +8,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { revalidatePath, revalidateTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
 import { eq, or, and } from 'drizzle-orm';
-import { byIdOrPublicId } from '@/db/resolve-id';
 import { withPermission } from '@/lib/auth';
 import crypto from 'crypto';
 import { refreshUserPermissionCache } from '@/lib/permissions';
@@ -56,7 +55,7 @@ export async function POST(
     // 获取用户ID
     const users = await db.select()
       .from(schema.users)
-      .where(byIdOrPublicId('users', id));
+      .where(eq(schema.users.id, id));
 
     if (users.length === 0) {
       return NextResponse.json(
@@ -88,7 +87,7 @@ export async function POST(
 
     // 4. 失效页面与数据缓存
     revalidatePath('/users');
-    revalidateTag('users-list');
+    revalidateTag('users-list', { expire: 0 });
 
     return NextResponse.json({ success: true, assignedCount: roleIds.length });
   });
@@ -122,7 +121,7 @@ export async function DELETE(
     // 获取用户ID
     const users = await db.select()
       .from(schema.users)
-      .where(byIdOrPublicId('users', id));
+      .where(eq(schema.users.id, id));
 
     if (users.length === 0) {
       return NextResponse.json(
@@ -145,7 +144,7 @@ export async function DELETE(
 
     // 失效页面与数据缓存
     revalidatePath('/users');
-    revalidateTag('users-list');
+    revalidateTag('users-list', { expire: 0 });
 
     return NextResponse.json({ success: true });
   });

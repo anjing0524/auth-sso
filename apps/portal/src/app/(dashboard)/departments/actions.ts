@@ -9,7 +9,6 @@
 import { revalidatePath, revalidateTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
 import { eq, sql } from 'drizzle-orm';
-import { byIdOrPublicId } from '@/db/resolve-id';
 import { withAuth, type AuthContext } from '@/lib/auth';
 import {
   createDepartment,
@@ -25,7 +24,7 @@ import {
   type CreateDepartmentInput,
 } from '@/domain/department/types';
 import { EntityNotFoundError, BusinessRuleViolationError } from '@/domain/shared/errors';
-import { generateId } from '@/lib/crypto';
+import { generateUUID } from '@/lib/crypto';
 import type { ApiResponse } from '@auth-sso/contracts';
 
 /**
@@ -54,12 +53,12 @@ export const createDepartmentAction = withAuth(
       ? await getParentAncestors(parsed.data.parentId)
       : null;
 
-    const dept = createDepartment(parsed.data, generateId, parentAncestors);
+    const dept = createDepartment(parsed.data, generateUUID, parentAncestors);
     await db.insert(schema.departments).values(departmentToInsertRow(dept));
 
     revalidatePath('/departments');
-    revalidateTag('departments-list');
-    return { success: true, data: { id: dept.publicId }, message: '部门创建成功' };
+    revalidateTag('departments-list', { expire: 0 });
+    return { success: true, data: { id: dept.id }, message: '部门创建成功' };
   },
 );
 
@@ -74,7 +73,7 @@ export const updateDepartmentAction = withAuth(
 
     await db.transaction(async (tx) => {
       const row = await tx.query.departments.findFirst({
-        where: byIdOrPublicId('departments', deptId),
+        where: eq(schema.departments.id, deptId),
       });
       if (!row) throw new EntityNotFoundError('Department', deptId);
 
@@ -106,7 +105,7 @@ export const updateDepartmentAction = withAuth(
     });
 
     revalidatePath('/departments');
-    revalidateTag('departments-list');
+    revalidateTag('departments-list', { expire: 0 });
     return { success: true, data: { id: deptId }, message: '部门更新成功' };
   },
 );
@@ -117,7 +116,7 @@ export const deleteDepartmentAction = withAuth(
   async (_ctx: AuthContext, deptId: string): Promise<ApiResponse<{ id: string }>> => {
     await db.transaction(async (tx) => {
       const row = await tx.query.departments.findFirst({
-        where: byIdOrPublicId('departments', deptId),
+        where: eq(schema.departments.id, deptId),
       });
       if (!row) throw new EntityNotFoundError('Department', deptId);
 
@@ -131,7 +130,7 @@ export const deleteDepartmentAction = withAuth(
     });
 
     revalidatePath('/departments');
-    revalidateTag('departments-list');
+    revalidateTag('departments-list', { expire: 0 });
     return { success: true, data: { id: deptId }, message: '部门已删除' };
   },
 );

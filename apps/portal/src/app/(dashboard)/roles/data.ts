@@ -6,7 +6,6 @@ import 'server-only';
 import { cacheLife, cacheTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
 import { eq, ilike, or, asc, desc, and, count } from 'drizzle-orm';
-import { byIdOrPublicId } from '@/db/resolve-id';
 import { asEntityStatus } from '@/lib/type-guards';
 
 /**
@@ -52,7 +51,7 @@ export async function getRoles(params: {
 
   return {
     data: rows.map(r => ({
-      id: r.id, publicId: r.publicId, name: r.name, code: r.code,
+      id: r.id, name: r.name, code: r.code,
       description: r.description, dataScopeType: r.dataScopeType,
       isSystem: r.isSystem ?? false, status: r.status, sort: r.sort ?? 0,
       createdAt: r.createdAt.toISOString(),
@@ -66,14 +65,13 @@ export async function getRoles(params: {
  */
 export async function getRoleById(lookupId: string) {
   const rows = await db.select().from(schema.roles)
-    .where(byIdOrPublicId('roles', lookupId))
+    .where(eq(schema.roles.id, lookupId))
     .limit(1);
   const row = rows[0];
   if (!row) return null;
 
   return {
     id: row.id,
-    publicId: row.publicId,
     name: row.name,
     code: row.code,
     description: row.description,
@@ -91,7 +89,7 @@ export async function getRoleById(lookupId: string) {
 export async function getRolePermissions(roleId: string) {
   // 使用 Relational Queries 一次性带出角色及其绑定的权限
   const role = await db.query.roles.findFirst({
-    where: byIdOrPublicId('roles', roleId),
+    where: eq(schema.roles.id, roleId),
     with: {
       rolePermissions: {
         with: {
@@ -107,7 +105,6 @@ export async function getRolePermissions(roleId: string) {
     .filter(rp => rp.permission !== null)
     .map(rp => ({
       id: rp.permission.id,
-      publicId: rp.permission.publicId,
       code: rp.permission.code,
       name: rp.permission.name,
       type: rp.permission.type,
@@ -123,7 +120,7 @@ export async function getRolePermissions(roleId: string) {
 export async function getRoleClients(roleId: string) {
   // 使用 Relational Queries 一次性带出角色及其绑定的 Client
   const role = await db.query.roles.findFirst({
-    where: byIdOrPublicId('roles', roleId),
+    where: eq(schema.roles.id, roleId),
     with: {
       roleClients: {
         with: {
@@ -138,10 +135,8 @@ export async function getRoleClients(roleId: string) {
   return role.roleClients
     .filter(rc => rc.client !== null)
     .map(rc => ({
-      id: rc.client.id,
-      publicId: rc.client.publicId,
-      name: rc.client.name,
       clientId: rc.client.clientId,
+      name: rc.client.name,
       redirectUris: rc.client.redirectUris,
       scopes: rc.client.scopes,
       homepageUrl: rc.client.homepageUrl,
@@ -164,7 +159,6 @@ export async function getRoleDataScopes(roleId: string) {
   });
 
   return rds.map(item => ({
-    id: item.id,
     roleId: item.roleId,
     deptId: item.deptId,
     deptName: item.department?.name || null,

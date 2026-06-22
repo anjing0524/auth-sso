@@ -243,7 +243,7 @@ export default function ClientDetailPage({ params }: PageProps) {
           </Link>
           <div>
             <h2 className="text-2xl font-bold text-gray-900">{client.name}</h2>
-            <p className="text-sm text-gray-500">{client.publicId}</p>
+            <p className="text-sm text-gray-500">{client.clientId}</p>
           </div>
         </div>
         <div className="flex items-center space-x-3">

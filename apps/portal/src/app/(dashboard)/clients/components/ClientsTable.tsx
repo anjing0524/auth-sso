@@ -26,10 +26,8 @@ import {
 import { deleteClientAction } from '../actions';
 
 interface ClientRow {
-  id: string;
-  publicId: string;
-  name: string;
   clientId: string;
+  name: string;
   redirectUris: string[];
   scopes: string;
   homepageUrl: string | null;
@@ -135,7 +133,7 @@ export default function ClientsTable({ clients, initialKeyword }: Props) {
               </TableRow>
             ) : (
               clients.map((client) => (
-                <TableRow key={client.id} className="group hover:bg-slate-50/50 transition-colors">
+                <TableRow key={client.clientId} className="group hover:bg-slate-50/50 transition-colors">
                   <TableCell className="pl-8 py-5">
                     <div className="flex items-center gap-4">
                       <div className="relative">
@@ -170,9 +168,9 @@ export default function ClientsTable({ clients, initialKeyword }: Props) {
                         variant="ghost"
                         size="icon"
                         className="h-7 w-7 rounded-md hover:bg-white hover:shadow-sm transition-all"
-                        onClick={() => handleCopy(client.clientId, client.id)}
+                        onClick={() => handleCopy(client.clientId, client.clientId)}
                       >
-                        {copiedId === client.id ? <Check className="h-3 w-3 text-green-600" /> : <Copy className="h-3 w-3 text-slate-400" />}
+                        {copiedId === client.clientId ? <Check className="h-3 w-3 text-green-600" /> : <Copy className="h-3 w-3 text-slate-400" />}
                       </Button>
                     </div>
                   </TableCell>
@@ -207,19 +205,19 @@ export default function ClientsTable({ clients, initialKeyword }: Props) {
                         <DropdownMenuLabel className="text-[10px] font-bold uppercase tracking-widest text-slate-400 px-2 py-1.5">应用操作</DropdownMenuLabel>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem asChild className="rounded-lg cursor-pointer">
-                          <Link href={`/clients/${client.id}`} className="flex items-center gap-2 py-2">
+                          <Link href={`/clients/${client.clientId}`} className="flex items-center gap-2 py-2">
                             <Edit className="h-4 w-4 text-blue-500" /> 编辑 OAuth 配置
                           </Link>
                         </DropdownMenuItem>
                         <DropdownMenuItem asChild className="rounded-lg cursor-pointer">
-                          <Link href={`/clients/${client.id}`} className="flex items-center gap-2 py-2">
+                          <Link href={`/clients/${client.clientId}`} className="flex items-center gap-2 py-2">
                             <Lock className="h-4 w-4 text-orange-500" /> 管理 Secret & Tokens
                           </Link>
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem
                           className="rounded-lg cursor-pointer text-destructive focus:bg-destructive/5 focus:text-destructive"
-                          onClick={() => handleDelete(client.id)}
+                          onClick={() => handleDelete(client.clientId)}
                         >
                           <Trash2 className="h-4 w-4 mr-2" /> 注销该应用
                         </DropdownMenuItem>

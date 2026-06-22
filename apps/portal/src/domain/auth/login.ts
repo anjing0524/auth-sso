@@ -15,7 +15,6 @@ import type { UserStatus } from '@auth-sso/contracts';
  */
 export interface UserAuthRow {
   id: string;
-  publicId: string;
   username: string;
   name: string;
   email: string | null;
