@@ -305,7 +305,7 @@ Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, API.md, ARCHITECTURE.md, DATABASE
 **验收标准：**
 1. 详情页展示：用户名、姓名、邮箱、手机号、部门、角色列表、状态、创建时间、最近登录
 2. 访问不在 DataScope 范围内的用户详情时返回 404（如李四访问产品部王五的详情）
-3. 用户资料包含 `public_id` 而非内部 `id`
+3. 用户资料使用 `id`（uuid）作为外部标识
 
 ---
 
@@ -510,7 +510,7 @@ Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, API.md, ARCHITECTURE.md, DATABASE
 > **@req D-PRM-L** | **权限:** `permission:list`
 
 **作为** 拥有 `super_admin` 角色的张三，
-**我** 访问权限管理页面，看到按类型（MENU/API/DATA）分组的所有权限 Code，
+**我** 访问权限管理页面，看到按类型（DIRECTORY/PAGE/API/DATA）分组的所有权限 Code，
 **以便** 我了解系统的权限全貌。
 
 **验收标准：**
@@ -530,7 +530,7 @@ Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, API.md, ARCHITECTURE.md, DATABASE
 **以便** 新业务功能的权限标识被注册到系统。
 
 **验收标准：**
-1. 对话框包含：Code（必填，唯一）、名称（必填）、类型（MENU/API/DATA）、描述
+1. 对话框包含：Code（必填，唯一）、名称（必填）、类型（DIRECTORY/PAGE/API/DATA）、描述
 2. Code 重复时提示错误
 3. 创建后权限出现在列表中，可被分配给角色
 
@@ -1631,7 +1631,7 @@ JWT payload 包含以下 claims：
 1. DataScope 选择 `CUSTOM` 时展示部门选择器
 2. 可勾选多个任意部门（不限于当前用户的部门范围）
 3. 拥有该角色的用户查询用户列表时，结果包含所选部门的用户
-4. 存储到 `role_departments` 关联表
+4. 存储到 `role_data_scopes` 关联表（role_id + dept_id 复合主键）
 
 ---
 
