@@ -10,11 +10,7 @@ import './load-env';
 
 import { db, schema } from '@/infrastructure/db';
 import bcrypt from 'bcryptjs';
-import { randomBytes } from 'crypto';
-
-function generateId(length: number = 20): string {
-  return randomBytes(length).toString('hex').slice(0, length);
-}
+import crypto from 'crypto';
 
 /**
  * 解析逗号分隔的 redirect URL 列表，并序列化为 JSON 字符串
@@ -76,7 +72,7 @@ async function main() {
 
     // 3. 创建默认部门
     await db.insert(schema.departments).values({
-      id: generateId(),
+      id: crypto.randomUUID(),
       name: '总公司',
       code: 'ROOT',
       status: 'ACTIVE',
