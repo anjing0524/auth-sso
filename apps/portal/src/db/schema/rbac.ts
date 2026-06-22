@@ -33,7 +33,8 @@
  *
  * @module db/schema/rbac
  */
-import { pgTable, uuid, varchar, text, boolean, smallint, index, uniqueIndex } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, varchar, text, boolean, smallint, index, uniqueIndex, check } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 import { entityStatusEnum, dataScopeTypeEnum, permissionTypeEnum } from './enums';
 import { clients } from './auth';
 import { departments } from './org';
@@ -85,8 +86,13 @@ export const permissions = pgTable('permissions', {
   index('idx_permissions_client').on(t.clientId),
   index('idx_permissions_parent').on(t.parentId),
   index('idx_permissions_type').on(t.type),
-  // CHECK 约束：DIRECTORY/PAGE 类型不可有 resource/action/client_id
-  // 注意：drizzle 不直接支持 CHECK 约束，此处通过 raw SQL 添加
+  // CHECK：DIRECTORY/PAGE 不可有 resource/action/client_id；API/DATA 必有 resource/action
+  // 应用层 Zod discriminatedUnion 为第一道防线，此为 DB 第二道防线
+  check(
+    'permissions_type_fields_chk',
+    sql`(type IN ('DIRECTORY','PAGE') AND resource IS NULL AND action IS NULL AND client_id IS NULL)
+      OR (type IN ('API','DATA') AND resource IS NOT NULL AND action IS NOT NULL)`,
+  ),
 ]);
 
 /**
@@ -98,7 +104,6 @@ export const rolePermissions = pgTable('role_permissions', {
   createdAt: createdAtColumn(),
 }, (t) => [
   uniqueIndex('ux_role_permissions_pk').on(t.roleId, t.permissionId),
-  index('idx_role_permissions_role').on(t.roleId),
   index('idx_role_permissions_permission').on(t.permissionId),
 ]);
 
@@ -111,7 +116,6 @@ export const roleDataScopes = pgTable('role_data_scopes', {
   createdAt: createdAtColumn(),
 }, (t) => [
   uniqueIndex('ux_role_data_scopes_pk').on(t.roleId, t.deptId),
-  index('idx_role_data_scopes_role').on(t.roleId),
   index('idx_role_data_scopes_dept').on(t.deptId),
 ]);
 
@@ -124,6 +128,5 @@ export const roleClients = pgTable('role_clients', {
   createdAt: createdAtColumn(),
 }, (t) => [
   uniqueIndex('ux_role_clients_pk').on(t.roleId, t.clientId),
-  index('idx_role_clients_role').on(t.roleId),
   index('idx_role_clients_client').on(t.clientId),
 ]);
