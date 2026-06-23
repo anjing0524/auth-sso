@@ -1,4 +1,4 @@
-import { randomBytes, randomUUID } from 'crypto';
+import { randomBytes, randomUUID, createHash } from 'crypto';
 
 /**
  * 统一身份认证平台 - 安全工具库
@@ -40,4 +40,18 @@ export function generateClientId(): string {
  */
 export function generateClientSecret(): string {
   return randomBytes(32).toString('hex');
+}
+
+/**
+ * 计算 token 的 SHA256 hex 摘要 — access_tokens.token_hash 的统一算法
+ *
+ * 签发入库（`lib/auth/token.ts`）与撤销删表（`lib/session/revoke.ts`、
+ * `oauth2/revoke` 端点）必须共用此函数，保证「按 token 明文定位行」的算法一致，
+ * 避免各处独立实现 createHash 导致算法漂移后撤销删不到行。
+ *
+ * @param token 原始 token 字符串（JWT 或不透明 token），不存明文
+ * @returns 64 字符小写 hex 摘要，匹配 `access_tokens.token_hash varchar(64)`
+ */
+export function hashToken(token: string): string {
+  return createHash('sha256').update(token).digest('hex');
 }

@@ -92,6 +92,7 @@ export async function POST(request: NextRequest) {
           dataScopeType: permCtx.dataScopeType,
         },
         client_id,
+        { clientId: client_id, scopes: authCode.scope },
       );
 
       // 主动写 Redis 权限缓存，TTL 与 Token 对齐，后续请求零 DB 查询

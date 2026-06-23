@@ -21,7 +21,7 @@ import 'server-only';
 import { SignJWT, jwtVerify, decodeJwt, importJWK, generateKeyPair, exportJWK } from 'jose';
 import { db, schema } from '@/infrastructure/db';
 import { eq, and, desc } from 'drizzle-orm';
-import { generateId } from '@/lib/crypto';
+import { generateId, hashToken } from '@/lib/crypto';
 import { getIssuer } from '@/lib/env';
 import { isJtiRevoked, trackUserJti, revokeUserAccessByUserId } from '@/lib/session/revoke';
 import { cacheUserPermissionContext } from '@/lib/permissions';
@@ -210,6 +210,7 @@ export const ACCESS_TOKEN_TTL = TOKEN_TTL.ACCESS_TOKEN; // 1h
 export async function signAccessToken(
   claims: Pick<PortalJwtClaims, 'sub' | 'roles' | 'permissions' | 'deptId' | 'dataScopeType'>,
   audience: string = 'portal-client',
+  persist?: { clientId: string; scopes?: string },
 ): Promise<{ token: string; jti: string }> {
   const { keyId, privateKey } = await getActiveSigningKey();
   const jti = `jti_${generateId(16)}`;
@@ -235,6 +236,24 @@ export async function signAccessToken(
   trackUserJti(claims.sub, jti, ACCESS_TOKEN_TTL).catch((e) =>
     console.error('[Token] 写入 user→jti 映射失败:', e),
   );
+
+  // 持久化到 access_tokens 表（供 Client 详情页 Token 列表 / 审计查看）
+  // 仅持久化元数据：tokenHash = SHA256(token)，不存 JWT 明文。
+  // 撤销生效仍靠 Redis jti 黑名单（Gateway 离线验签不查 DB）；此处仅做审计可见性，
+  // 失败不阻断签发（认证可用性优先于审计完整性）。
+  if (persist) {
+    try {
+      await db.insert(schema.accessTokens).values({
+        tokenHash: hashToken(token),
+        clientId: persist.clientId,
+        userId: claims.sub,
+        scopes: persist.scopes ?? '',
+        expiresAt: new Date(Date.now() + ACCESS_TOKEN_TTL * 1000),
+      });
+    } catch (e) {
+      console.error('[Token] Access Token 入库失败:', e);
+    }
+  }
 
   return { token, jti };
 }
@@ -380,13 +399,17 @@ export async function rotateRefreshToken(
   const permCtx = await getUserPermissionContext(rt.userId);
   if (!permCtx) return null;
 
-  const { token: accessToken } = await signAccessToken({
-    sub: rt.userId,
-    roles: permCtx.roles.map((r) => r.code),
-    permissions: permCtx.permissions,
-    deptId: permCtx.deptId ?? '',
-    dataScopeType: permCtx.dataScopeType,
-  });
+  const { token: accessToken } = await signAccessToken(
+    {
+      sub: rt.userId,
+      roles: permCtx.roles.map((r) => r.code),
+      permissions: permCtx.permissions,
+      deptId: permCtx.deptId ?? '',
+      dataScopeType: permCtx.dataScopeType,
+    },
+    'portal-client',
+    { clientId: rt.clientId, scopes: rt.scopes },
+  );
 
   // 主动写 Redis 权限缓存，TTL 与 Token 对齐
   cacheUserPermissionContext(rt.userId, permCtx, ACCESS_TOKEN_TTL).catch((e) =>

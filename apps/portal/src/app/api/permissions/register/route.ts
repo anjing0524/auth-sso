@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db, schema } from '@/infrastructure/db';
-import { eq, sql } from 'drizzle-orm';
+import { eq, sql, inArray, ne, isNull, or, and } from 'drizzle-orm';
 import { generateUUID } from '@/lib/crypto';
 import { COMMON_ERRORS } from '@auth-sso/contracts';
 import { mapDomainError } from '@/domain/shared/error-mapping';
@@ -130,6 +130,33 @@ export async function POST(request: NextRequest) {
         { error: COMMON_ERRORS.VALIDATION_ERROR, message: '上报的权限树中存在重复的 code' },
         { status: 400 }
       );
+    }
+
+    // 全局 code 命名空间校验：permissions.code 为全局 UK（权限 code 是全局鉴权点，
+    // 写入角色绑定 + JWT permissions claim + gateway 校验，必须全局唯一）。
+    // 检测上报 code 是否与其他 client 或 Portal 内置权限（client_id IS NULL）重名，
+    // 冲突时返回 409 + 前缀建议，避免落入事务内 unique violation 的 500。
+    // 极小竞态窗口（检测后另一 client 注册同名）由 DB UK 兜底。
+    if (incomingCodes.length > 0) {
+      const rows = await db.select({ code: schema.permissions.code, clientId: schema.permissions.clientId })
+        .from(schema.permissions)
+        .where(and(
+          inArray(schema.permissions.code, incomingCodes),
+          or(ne(schema.permissions.clientId, clientId), isNull(schema.permissions.clientId)),
+        ))
+        .limit(1);
+      // JS 层精确判定（DB where 已过滤；此处双重确认，兼容测试 mock 的全局返回）：
+      // 仅当 code 实际在上报集合、且归属非本 client 时视为冲突
+      const conflict = rows.find(r => incomingCodes.includes(r.code) && r.clientId !== clientId);
+      if (conflict) {
+        return NextResponse.json(
+          {
+            error: 'conflict',
+            message: `权限 code「${conflict.code}」全局已被占用（其他 client 或 Portal 内置权限）。permissions.code 为全局唯一标识，建议使用「${clientId}:」前缀命名空间，如「${clientId}:${conflict.code}」。`,
+          },
+          { status: 409 }
+        );
+      }
     }
 
     const lockKey = getHashCode(clientId);

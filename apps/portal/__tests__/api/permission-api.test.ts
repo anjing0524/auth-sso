@@ -289,9 +289,9 @@ describe('Permission API', () => {
 
     it('两阶段事务：新权限插入 + 旧权限软删除', async () => {
       const existingPerms = [
-        { id: 'p-ex-1', code: 'user:list', name: '旧用户列表', type: 'API', status: 'ACTIVE' },
-        { id: 'p-ex-2', code: 'role:list', name: '旧角色列表', type: 'API', status: 'ACTIVE' },
-        { id: 'p-ex-3', code: 'will:remain', name: '保留权限', type: 'API', status: 'ACTIVE' },
+        { id: 'p-ex-1', code: 'user:list', name: '旧用户列表', type: 'API', status: 'ACTIVE', clientId: 'registry-client' },
+        { id: 'p-ex-2', code: 'role:list', name: '旧角色列表', type: 'API', status: 'ACTIVE', clientId: 'registry-client' },
+        { id: 'p-ex-3', code: 'will:remain', name: '保留权限', type: 'API', status: 'ACTIVE', clientId: 'registry-client' },
       ];
       // 组合 client 数据 + 已有权限数据（同一 _queryResult 用于 db.select 和 tx.select）
       mocks.setQueryResult([makeRegisterClientRow(), ...existingPerms]);
@@ -308,6 +308,18 @@ describe('Permission API', () => {
       expect(body.stats.deprecated).toBeGreaterThanOrEqual(1);
       // user:list 已存在且 name 变更 -> updated
       expect(body.stats.updated).toBeGreaterThanOrEqual(1);
+    });
+
+    it('全局 code 冲突（被其他 client 占用）返回 409 + 前缀建议', async () => {
+      // mock 返回有效 client 行，但其 code 已被其他 client 占用
+      mocks.setQueryResult([makeRegisterClientRow({ clientId: 'other-client', code: 'user:list' })]);
+      const res = await RegisterPermissions(createRegisterReq([
+        { code: 'user:list', name: '用户列表', type: 'API' },
+      ]));
+      expect(res.status).toBe(409);
+      const body = await parseResponseJson(res);
+      expect(body.error).toBe('conflict');
+      expect(body.message).toContain('user:list');
     });
 
     it('批量内重复 code 返回验证错误', async () => {

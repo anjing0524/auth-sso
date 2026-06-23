@@ -10,6 +10,7 @@ import { verifyAccessToken } from '@/lib/auth/token';
 import { revokeJti } from '@/lib/session/revoke';
 import { db, schema } from '@/infrastructure/db';
 import { eq } from 'drizzle-orm';
+import { hashToken } from '@/lib/crypto';
 import { mapDomainError } from '@/domain/shared/error-mapping';
 
 export const runtime = 'nodejs';
@@ -25,11 +26,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({});
     }
 
-    // 尝试撤销 Access Token（jti 黑名单）
+    // 尝试撤销 Access Token（jti 黑名单 + 删 access_tokens 行）
     if (!tokenTypeHint || tokenTypeHint === 'access_token') {
       const claims = await verifyAccessToken(token);
       if (claims?.jti && claims.exp) {
         await revokeJti(claims.jti, claims.exp);
+      }
+      // claims 存在即为有效 access token，同步删除其入库行（UI 列表一致性）
+      if (claims) {
+        try {
+          await db.delete(schema.accessTokens).where(eq(schema.accessTokens.tokenHash, hashToken(token)));
+        } catch (e) {
+          console.error('[Revoke] 删除 access_tokens 失败:', e);
+        }
       }
     }
 
