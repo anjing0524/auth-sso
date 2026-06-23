@@ -314,6 +314,63 @@ export async function verifyAccessToken(token: string): Promise<PortalJwtClaims 
 }
 
 // ============================================================================
+// ID Token — OIDC Core 1.0 Section 2，scope=openid 时签发
+// ============================================================================
+
+/** ID Token TTL（1h），OIDC 规范建议短于 Access Token */
+export const ID_TOKEN_TTL = 3600;
+
+/**
+ * 【server-only async】签发 OIDC ID Token (ES256 JWT)
+ *
+ * 调用方：`app/api/auth/oauth2/token/route.ts`（authorization_code grant → scope 含 openid）
+ *
+ * OIDC Core 1.0 Section 2 要求的 claims：
+ *   iss — Issuer URL（与 Access Token 一致）
+ *   sub — 用户唯一标识
+ *   aud — OAuth client_id（Token 的目标消费方）
+ *   exp — 过期时间（1h）
+ *   iat — 签发时间
+ *   auth_time — 最终用户认证时刻（取 authorization_codes.createdAt）
+ *   nonce — 授权请求传入的 nonce（防重放），仅当请求携带时写入
+ *
+ * @param params.userId   - 用户内部 ID
+ * @param params.clientId - OAuth client_id（JWT aud 声明）
+ * @param params.nonce    - 授权请求携带的 nonce 值（可选）
+ * @param params.authTime - 用户认证时间（authorization_codes.createdAt）
+ * @returns ES256 签名的 ID Token JWT 字符串
+ */
+export async function signIdToken(params: {
+  userId: string;
+  clientId: string;
+  nonce?: string | null;
+  authTime: Date;
+}): Promise<string> {
+  const { keyId, privateKey } = await getActiveSigningKey();
+  const issuer = getIssuer();
+  const now = Math.floor(Date.now() / 1000);
+
+  const payload: Record<string, unknown> = {
+    sub: params.userId,
+    aud: params.clientId,
+    auth_time: Math.floor(params.authTime.getTime() / 1000),
+  };
+
+  if (params.nonce) {
+    payload.nonce = params.nonce;
+  }
+
+  return new SignJWT(payload)
+    .setProtectedHeader({ alg: 'ES256', kid: keyId })
+    .setIssuedAt()
+    .setIssuer(issuer)
+    .setAudience(params.clientId)
+    .setJti(`jti_${generateId(16)}`)
+    .setExpirationTime(now + ID_TOKEN_TTL)
+    .sign(privateKey);
+}
+
+// ============================================================================
 // Refresh Token — OAuth 2.1 流程专用，长期凭证，支持轮换
 // ============================================================================
 

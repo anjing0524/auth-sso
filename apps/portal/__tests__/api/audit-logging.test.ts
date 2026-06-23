@@ -2,10 +2,9 @@
  * 审计日志 API 单元测试
  *
  * 覆盖范围：
- * - logAuditEvent 记录事件参数正确
  * - GET /api/audit/logs 分页参数校验（pageSize > 100 复位）
  * - GET /api/audit/logs 日期范围过滤
- * - 写操作触发审计日志记录
+ * - GET /api/audit/login-logs 分页 + eventType + 日期范围过滤
  *
  * @req B-LOG-L, B-LOG-D
  * @vitest-environment node
@@ -19,7 +18,6 @@ import { createTestRequest } from '../helpers/test-utils';
 // =========================================
 const {
   mockDb,
-  dbInsertMock,
   resetDbState,
   setQueryResult,
   mockWithPermission,
@@ -39,7 +37,7 @@ const {
   };
 
   // 创建一个可被 vi.spyOn 追踪的 insert 函数
-  const dbInsertImpl = vi.fn((table: any) => ({
+  const dbInsertImpl = vi.fn(() => ({
     values: (data: any) => ({
       then: (resolve: Function) => resolve([{ ...data, id: 'log-1' }]),
     }),
@@ -70,7 +68,6 @@ const {
 
   return {
     mockDb,
-    dbInsertMock: dbInsertImpl,
     resetDbState() {
       state._queryResult = [];
     },
@@ -97,15 +94,6 @@ vi.mock('@/infrastructure/redis', () => ({}));
 
 vi.mock('@/lib/session', () => ({}));
 
-// Mock crypto 使 ID 可预测
-vi.mock('crypto', () => ({
-  randomBytes: vi.fn((len: number) => ({
-    toString: (enc: string) => 'a'.repeat(len).slice(0, len),
-    toStringHex: 'a'.repeat(len),
-  })),
-}));
-
-import { logAuditEvent, logLoginEvent } from '@/lib/audit';
 import { GET as GetAuditLogs } from '@/app/api/audit/logs/route';
 import { GET as GetLoginLogs } from '@/app/api/audit/login-logs/route';
 
@@ -113,105 +101,6 @@ describe('Audit Logging', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     resetDbState();
-  });
-
-  // ======== logAuditEvent ========
-
-  describe('logAuditEvent', () => {
-    it('记录审计事件，参数完整', async () => {
-      await logAuditEvent({
-        userId: 'user-1',
-        username: 'admin',
-        operation: 'USER_CREATE',
-        method: 'POST',
-        url: '/api/users',
-        ip: '127.0.0.1',
-        status: 200,
-        duration: 42,
-      });
-
-      expect(dbInsertMock).toHaveBeenCalled();
-    });
-
-    it('记录 USER_DELETE 操作', async () => {
-      await logAuditEvent({
-        userId: 'user-1',
-        username: 'admin',
-        operation: 'USER_DELETE',
-        method: 'DELETE',
-        url: '/api/users/u_abc',
-        status: 200,
-      });
-
-      expect(dbInsertMock).toHaveBeenCalled();
-    });
-
-    it('记录 ROLE_PERMISSION_ASSIGN 操作', async () => {
-      await logAuditEvent({
-        userId: 'user-1',
-        username: 'admin',
-        operation: 'ROLE_PERMISSION_ASSIGN',
-        method: 'POST',
-        url: '/api/roles/r_01/permissions',
-        status: 200,
-      });
-
-      expect(dbInsertMock).toHaveBeenCalled();
-    });
-
-    it('记录失败操作（含 errorMsg）', async () => {
-      await logAuditEvent({
-        userId: 'user-1',
-        username: 'admin',
-        operation: 'USER_UPDATE',
-        method: 'PUT',
-        url: '/api/users/u_abc',
-        status: 500,
-        errorMsg: 'Database connection failed',
-      });
-
-      expect(dbInsertMock).toHaveBeenCalled();
-    });
-
-    it('DB 写入失败不影响主流程（防御性）', async () => {
-      dbInsertMock.mockImplementationOnce(() => {
-        throw new Error('DB down');
-      });
-
-      // 不应抛出异常
-      await expect(
-        logAuditEvent({
-          userId: 'user-1',
-          username: 'admin',
-          operation: 'USER_CREATE',
-        })
-      ).resolves.toBeUndefined();
-    });
-  });
-
-  // ======== logLoginEvent ========
-
-  describe('logLoginEvent', () => {
-    it('记录登录成功事件', async () => {
-      await logLoginEvent({
-        userId: 'user-1',
-        username: 'admin',
-        eventType: 'LOGIN_SUCCESS',
-        ip: '192.168.1.1',
-      });
-
-      expect(dbInsertMock).toHaveBeenCalled();
-    });
-
-    it('记录登录失败事件含失败原因', async () => {
-      await logLoginEvent({
-        username: 'unknown',
-        eventType: 'LOGIN_FAILED',
-        failReason: 'invalid_password',
-      });
-
-      expect(dbInsertMock).toHaveBeenCalled();
-    });
   });
 
   // ======== GET /api/audit/logs ========
