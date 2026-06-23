@@ -43,24 +43,9 @@ const portalEnvSchema = baseEnvSchema.extend({
   // 应用基础 URL
   NEXT_PUBLIC_APP_NAME: z.string().default('Auth-SSO Portal'),
   NEXT_PUBLIC_APP_URL: z.string().url().default(DEV_DEFAULT_BASE_URL),
-  BETTER_AUTH_URL: z.string().url().optional(),
-  BETTER_AUTH_SECRET: z.string().min(32),
 
-  // OIDC Provider 配置（可选，默认从基础 URL 推导）
-  PORTAL_ISSUER: z.string().url().optional(),
-  PORTAL_JWKS_URI: z.string().url().optional(),
-
-  // CORS 信任域（可选，逗号分隔的完整 URL；本地开发自动覆盖常见端口）
-  TRUSTED_ORIGINS: z.string().optional(),
-
-  // OAuth 客户端凭证默认值（Portal 自身作为 OIDC Provider 的内置客户端）
-  NEXT_PUBLIC_CLIENT_ID: z.string().default('portal'),
-  PORTAL_CLIENT_ID: z.string().optional(),
+  // OAuth 客户端凭证（Portal 自身作为 OIDC Provider 的内置客户端）
   PORTAL_CLIENT_SECRET: z.string().optional(),
-
-  // Session 配置
-  SESSION_MAX_AGE_SEC: z.coerce.number().default(604800),   // 7 days
-  SESSION_IDLE_TIMEOUT_SEC: z.coerce.number().default(86400), // 1 day
 });
 
 /** Zod 解析后的环境变量类型 */

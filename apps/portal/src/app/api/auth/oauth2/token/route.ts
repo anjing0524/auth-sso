@@ -11,7 +11,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db, schema } from '@/infrastructure/db';
 import { eq, and } from 'drizzle-orm';
-import { signAccessToken, issueRefreshToken, rotateRefreshToken, ACCESS_TOKEN_TTL } from '@/lib/auth/token';
+import { signAccessToken, signIdToken, issueRefreshToken, rotateRefreshToken, ACCESS_TOKEN_TTL } from '@/lib/auth/token';
 import { validateClientActive, validateClientSecret } from '@/domain/auth/oauth-client';
 import { validateAuthCodeRow, verifyPKCE } from '@/domain/auth/oauth-code';
 import { getUserPermissionContext, cacheUserPermissionContext } from '@/lib/permissions';
@@ -103,11 +103,15 @@ export async function POST(request: NextRequest) {
       // 签发 Refresh Token
       const newRefreshToken = await issueRefreshToken(authCode.userId, client_id, authCode.scope);
 
-      // ID Token（scope 包含 openid 时由独立函数签发）
+      // ID Token（scope 包含 openid 时签发 OIDC 标准 ID Token）
       let idToken: string | undefined;
       if (authCode.scope.includes('openid')) {
-        // TODO: 实现专门的 ID Token 签发函数 signIdToken()
-        idToken = undefined;
+        idToken = await signIdToken({
+          userId: authCode.userId,
+          clientId: client_id,
+          nonce: authCode.nonce,
+          authTime: authCode.createdAt,
+        });
       }
 
       return NextResponse.json({
