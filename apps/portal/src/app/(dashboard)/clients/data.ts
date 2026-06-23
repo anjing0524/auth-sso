@@ -5,7 +5,7 @@ import 'server-only';
 
 import { cacheLife, cacheTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
-import { ilike, eq, or, desc, and, count } from 'drizzle-orm';
+import { ilike, eq, or, desc, and, count, gt } from 'drizzle-orm';
 import { ENTITY_STATUS_VALUES, type EntityStatus } from '@auth-sso/contracts';
 import { asEntityStatus } from '@/lib/type-guards';
 
@@ -144,7 +144,11 @@ export async function getClientTokens(
   const { page, pageSize, userId } = params;
   const offset = (page - 1) * pageSize;
 
-  const conditions = [eq(schema.accessTokens.clientId, clientId)];
+  const conditions = [
+    eq(schema.accessTokens.clientId, clientId),
+    // 仅返回未过期（活跃）token；过期行留存于表以备审计，但不进入列表与计数
+    gt(schema.accessTokens.expiresAt, new Date()),
+  ];
   if (userId) conditions.push(eq(schema.accessTokens.userId, userId));
 
   const countResult = await db.select({ count: count() })
