@@ -17,7 +17,6 @@ import { mapDomainError } from '@/domain/shared/error-mapping';
 import { COMMON_ERRORS, ADMIN_ROLE_CODES } from '@auth-sso/contracts';
 import { getUser } from '@/app/(dashboard)/users/data';
 
-export const runtime = 'nodejs';
 
 export async function GET(_request: NextRequest) {
   try {

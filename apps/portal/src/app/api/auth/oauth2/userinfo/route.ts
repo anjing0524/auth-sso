@@ -12,7 +12,6 @@ import { getJwtFromCookie } from '@/lib/session';
 import { mapDomainError } from '@/domain/shared/error-mapping';
 import { getUserProfile } from '@/app/(dashboard)/users/data';
 
-export const runtime = 'nodejs';
 
 export async function GET(request: NextRequest) {
   try {

@@ -35,7 +35,6 @@ import {
 
 import { getDashboardStats, getRecentAuditLogs } from './data';
 
-export const dynamic = 'force-dynamic';
 
 export default async function DashboardPage() {
   // 鉴权由 layout.tsx 统一处理（requirePermission(['dashboard:view'])），本组件零鉴权样板

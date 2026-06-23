@@ -8,7 +8,6 @@ import { withPermission } from '@/lib/auth';
 import { getAuditLogs } from '@/app/audit/data';
 import { AUDIT_OPERATION_VALUES, type AuditOperation } from '@auth-sso/contracts';
 
-export const runtime = 'nodejs';
 
 /** GET /api/audit/logs — 委托 data.ts */
 export async function GET(request: NextRequest) {

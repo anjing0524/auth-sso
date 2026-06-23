@@ -7,7 +7,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { withPermission } from '@/lib/auth';
 import { getPermissions } from '@/app/(dashboard)/permissions/data';
 
-export const runtime = 'nodejs';
 
 /** GET /api/permissions — 委托 data.ts，支持按 type 过滤 */
 export async function GET(request: NextRequest) {

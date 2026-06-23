@@ -38,29 +38,26 @@ const EMPTY_CLAIMS: PortalJwtClaims = {
 /**
  * 从 header 中读取 Gateway 注入的 X-User-Id。
  * Gateway 已完成全套验签，Portal 信任其注入的 header。
+ *
+ * 不 catch headers() 的异常——构建期 prerendering 中断信号需要自然传播到 <Suspense>，
+ * 请求期 headers() 是平台标准 API，不会 throw。
  */
 async function getGatewayUserId(): Promise<string | null> {
-  try {
-    const h = await headers();
-    return h.get(GATEWAY_HEADERS.USER_ID) || null;
-  } catch (e) {
-    console.error('[Auth] headers() 读取 Gateway User ID 异常:', e);
-    return null;
-  }
+  const h = await headers();
+  return h.get(GATEWAY_HEADERS.USER_ID) || null;
 }
 
 /**
- * 尝试从请求上下文（Authorization 请求头或 Cookie）中提取 JWT
+ * 尝试从请求上下文（Authorization 请求头或 Cookie）中提取 JWT。
+ *
+ * 先查 Authorization header，不存在则回退到 Cookie。
+ * 不 catch——构建期异常由 <Suspense> 静默处理，请求期这些平台 API 不会失败。
  */
 async function getJwtFromRequest(): Promise<string | null> {
-  try {
-    const h = await headers();
-    const auth = h.get('Authorization') || h.get('authorization');
-    if (auth && auth.toLowerCase().startsWith('bearer ')) {
-      return auth.substring(7).trim();
-    }
-  } catch (e) {
-    console.error('[Auth] headers() 读取 JWT 异常，降级至 Cookie 路径:', e);
+  const h = await headers();
+  const auth = h.get('Authorization') || h.get('authorization');
+  if (auth && auth.toLowerCase().startsWith('bearer ')) {
+    return auth.substring(7).trim();
   }
   return getJwtFromCookie();
 }

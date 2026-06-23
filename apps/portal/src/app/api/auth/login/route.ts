@@ -16,7 +16,6 @@ import { EntityNotFoundError, BusinessRuleViolationError } from '@/domain/shared
 import { mapDomainError } from '@/domain/shared/error-mapping';
 import { COOKIE_NAMES } from '@auth-sso/contracts';
 
-export const runtime = 'nodejs';
 
 const LoginSchema = z.object({
   email: z.string().email(),

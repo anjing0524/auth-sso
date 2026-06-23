@@ -18,7 +18,6 @@ import { revokeUserAccessByUserId } from '@/lib/session/revoke';
 import { clearUserPermissionCache } from '@/lib/permissions';
 import { COMMON_ERRORS } from '@auth-sso/contracts';
 
-export const runtime = 'nodejs';
 
 interface RouteParams {
   params: Promise<{ id: string }>;

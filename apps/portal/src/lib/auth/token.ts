@@ -18,10 +18,10 @@ import 'server-only';
  *
  * @module lib/auth/token
  */
-import { SignJWT, jwtVerify, decodeJwt, importJWK, generateKeyPair, exportJWK } from 'jose';
+import { SignJWT, jwtVerify, importJWK, generateKeyPair, exportJWK, decodeProtectedHeader } from 'jose';
 import { db, schema } from '@/infrastructure/db';
 import { eq, and, desc } from 'drizzle-orm';
-import { generateId, hashToken } from '@/lib/crypto';
+import { generateId, generateUUID, hashToken } from '@/lib/crypto';
 import { getIssuer } from '@/lib/env';
 import { isJtiRevoked, trackUserJti, revokeUserAccessByUserId } from '@/lib/session/revoke';
 import { cacheUserPermissionContext } from '@/lib/permissions';
@@ -42,6 +42,9 @@ import type { PortalJwtClaims, RefreshTokenResult } from '@/domain/auth/types';
 // ============================================================================
 
 const KEY_CACHE_TTL_MS = 300_000;
+
+// 进程级互斥锁：防止冷启动时多个并发请求各自生成重复密钥对
+let keyGenLock: Promise<void> = Promise.resolve();
 
 interface CachedSigningKey {
   keyId: string;       // JWT kid header 的值
@@ -96,7 +99,7 @@ async function getSigningKeyByKid(kid: string): Promise<{
  *
  * 优先级：取 jwks 表最新未过期的一行 → 缓存 miss 查 DB → 无可用密钥自动生成
  */
-async function getActiveSigningKey(): Promise<{
+export async function getActiveSigningKey(): Promise<{
   keyId: string;
   privateKey: CryptoKey;
   publicJwk: JsonWebKey;
@@ -108,14 +111,43 @@ async function getActiveSigningKey(): Promise<{
     .orderBy(desc(schema.jwks.createdAt))
     .limit(1);
 
-  if (rows.length === 0) {
-    return generateAndPersistKeyPair();
+  const needsGen = rows.length === 0 || (rows[0]!.expiresAt && new Date(rows[0]!.expiresAt) < new Date());
+
+  if (needsGen) {
+    // 串行化密钥生成，防止冷启动时多个并发请求各自生成重复密钥对
+    const previousLock = keyGenLock;
+    let release: () => void;
+    keyGenLock = new Promise<void>(r => { release = r; });
+    try {
+      await previousLock;
+      // 双重检查：等待锁期间可能有其他请求已生成密钥
+      const recheck = await db
+        .select()
+        .from(schema.jwks)
+        .orderBy(desc(schema.jwks.createdAt))
+        .limit(1);
+      if (recheck.length > 0) {
+        const rjwk = recheck[0]!;
+        if (!rjwk.expiresAt || new Date(rjwk.expiresAt) >= new Date()) {
+          // 已有有效密钥（由并发请求生成），直接使用
+          const rkid = rjwk.kid ?? rjwk.id;
+          const rcached = getCachedKey(rkid);
+          if (rcached) return rcached;
+          const rprivateJwk = JSON.parse(rjwk.privateKey) as JsonWebKey;
+          const rpublicJwk = JSON.parse(rjwk.publicKey) as JsonWebKey;
+          const rprivateKey = await importJWK(rprivateJwk, 'ES256') as CryptoKey;
+          const rentry = { keyId: rkid, privateKey: rprivateKey, publicJwk: rpublicJwk, fetchedAt: Date.now() };
+          keyCache.set(rkid, rentry);
+          return rentry;
+        }
+      }
+      return generateAndPersistKeyPair();
+    } finally {
+      release!();
+    }
   }
 
   const jwk = rows[0]!;
-  if (jwk.expiresAt && new Date(jwk.expiresAt) < new Date()) {
-    return generateAndPersistKeyPair();
-  }
 
   const kid = jwk.kid ?? jwk.id;
   const cached = getCachedKey(kid);
@@ -143,7 +175,7 @@ async function generateAndPersistKeyPair(): Promise<{
   const privateJwk = await exportJWK(privateKey);
 
   const kid = generateId(16);
-  const id = generateId(20);
+  const id = generateUUID();
   const expiresAt = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
 
   await db.insert(schema.jwks).values({
@@ -263,7 +295,7 @@ export async function signAccessToken(
  *
  * 调用方：`lib/auth/verify-jwt.ts` + `app/api/me/route.ts` + oauth2 各 route
  *
- * 步骤：decodeJwt 提取 header.kid → 按 kid 查公钥 → ES256 验签 → issuer 校验 → jti 黑名单检查
+ * 步骤：decodeProtectedHeader 提取 header.kid → 按 kid 查公钥 → ES256 验签 → issuer 校验 → jti 黑名单检查
  * 与 Gateway 的离线验签逻辑对齐：通过 kid 精准匹配密钥，支持轮换后旧 token 仍可验签。
  *
  * @param token - JWT 字符串
@@ -272,8 +304,8 @@ export async function signAccessToken(
 export async function verifyAccessToken(token: string): Promise<PortalJwtClaims | null> {
   try {
     // 1. 不解码验签，仅提取 header.kid 定位公钥（与 Gateway 的 decode_header + get_key 对齐）
-    const header = decodeJwt(token);
-    const kid = header.kid as string | undefined;
+    const header = decodeProtectedHeader(token);
+    const kid = header.kid;
     if (!kid) {
       console.warn('[Token] JWT 缺少 kid header');
       return null;
@@ -391,7 +423,7 @@ export async function issueRefreshToken(
   clientId: string,
   scopes: string = 'openid profile email offline_access',
 ): Promise<string> {
-  const id = generateId(20);
+  const id = generateUUID();
   const token = `rt_${generateId(32)}`;
   const now = new Date();
   const expiresAt = new Date(now.getTime() + REFRESH_TOKEN_TTL * 1000);

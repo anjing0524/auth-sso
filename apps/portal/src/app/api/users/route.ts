@@ -7,7 +7,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { withPermission, getDataScopeFilter } from '@/lib/auth';
 import { getUsers } from '@/app/(dashboard)/users/data';
 
-export const runtime = 'nodejs';
 
 /** GET /api/users — 委托 data.ts 获取过滤与分页的用户列表 */
 export async function GET(request: NextRequest) {

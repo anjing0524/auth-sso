@@ -34,3 +34,4 @@ apps/gateway/logs
 
 test-results
 feat
+tests/e2e-report

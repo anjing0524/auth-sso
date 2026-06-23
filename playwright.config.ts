@@ -29,7 +29,7 @@ export default defineConfig({
   // 全局配置
   use: {
     // 默认测试入口：Portal
-    baseURL: 'http://127.0.0.1:4100',
+    baseURL: 'http://localhost:4100',
     // 截图策略：仅失败时
     screenshot: 'only-on-failure',
     // 录制策略：仅失败时
@@ -48,7 +48,7 @@ export default defineConfig({
   webServer: [
     {
       command: 'pnpm db:seed && pnpm --filter @auth-sso/portal dev',
-      url: 'http://127.0.0.1:4100',
+      url: 'http://localhost:4100',
       name: 'Portal (含 OIDC Provider)',
       timeout: 120_000,
       reuseExistingServer: !process.env.CI,

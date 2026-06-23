@@ -14,7 +14,6 @@ import { refreshUserPermissionCache } from '@/lib/permissions';
 import { COMMON_ERRORS } from '@auth-sso/contracts';
 import { getUserRoles } from '@/app/(dashboard)/users/data';
 
-export const runtime = 'nodejs';
 
 interface RouteParams { params: Promise<{ id: string }>; }
 

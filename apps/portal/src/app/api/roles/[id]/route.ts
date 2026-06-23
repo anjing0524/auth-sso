@@ -6,7 +6,6 @@ import { withPermission } from '@/lib/auth';
 import { ROLE_ERRORS } from '@auth-sso/contracts';
 import { getRoleById } from '@/app/(dashboard)/roles/data';
 
-export const runtime = 'nodejs';
 interface RouteParams { params: Promise<{ id: string }>; }
 
 /** GET /api/roles/[id] — 委托 data.ts */

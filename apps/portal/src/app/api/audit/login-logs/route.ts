@@ -8,7 +8,6 @@ import { withPermission } from '@/lib/auth';
 import { getLoginLogs } from '@/app/audit/data';
 import { LOGIN_EVENT_VALUES, type LoginEventType } from '@auth-sso/contracts';
 
-export const runtime = 'nodejs';
 
 /** GET /api/audit/login-logs — 委托 data.ts */
 export async function GET(request: NextRequest) {

@@ -7,7 +7,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { withPermission } from '@/lib/auth';
 import { getClients } from '@/app/(dashboard)/clients/data';
 
-export const runtime = 'nodejs';
 
 /** GET /api/clients — 委托 data.ts */
 export async function GET(request: NextRequest) {

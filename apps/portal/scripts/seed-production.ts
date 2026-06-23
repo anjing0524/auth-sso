@@ -137,7 +137,7 @@ async function main() {
     // 1. 管理员用户
     console.log('\n👤 初始化管理员...');
     const adminId = await upsertAdmin(db, {
-      id: 'usr_admin_fixed_001',
+      id: '00000000-0000-0000-0000-000000000001',
       username: 'admin',
       email: 'admin@example.com',
       name: '系统管理员',

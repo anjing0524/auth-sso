@@ -13,7 +13,6 @@ import { eq } from 'drizzle-orm';
 import { hashToken } from '@/lib/crypto';
 import { mapDomainError } from '@/domain/shared/error-mapping';
 
-export const runtime = 'nodejs';
 
 export async function POST(request: NextRequest) {
   try {

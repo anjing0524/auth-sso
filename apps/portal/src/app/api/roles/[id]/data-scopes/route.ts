@@ -7,7 +7,6 @@ import { withPermission } from '@/lib/auth';
 import { ROLE_ERRORS } from '@auth-sso/contracts';
 import { getRoleById, getRoleDataScopes } from '@/app/(dashboard)/roles/data';
 
-export const runtime = 'nodejs';
 
 /** GET /api/roles/[id]/data-scopes — 委托 data.ts */
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {

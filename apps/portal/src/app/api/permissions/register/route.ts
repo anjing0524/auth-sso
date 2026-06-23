@@ -5,7 +5,6 @@ import { generateUUID } from '@/lib/crypto';
 import { COMMON_ERRORS } from '@auth-sso/contracts';
 import { mapDomainError } from '@/domain/shared/error-mapping';
 
-export const runtime = 'nodejs';
 
 /**
  * 声明式权限同步的单项数据结构

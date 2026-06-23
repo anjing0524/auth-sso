@@ -20,8 +20,8 @@ export const RESTRICTED_USER = {
 };
 
 // ─── 服务 URL ─────────────────────────────────────────
-export const PORTAL_URL = 'http://127.0.0.1:4100';
-export const DEMO_APP_URL = 'http://127.0.0.1:4102';
+export const PORTAL_URL = 'http://localhost:4100';
+export const DEMO_APP_URL = 'http://localhost:4102';
 
 // ─── 登录 / 登出 辅助函数 ────────────────────────────
 
@@ -43,23 +43,18 @@ export async function loginAsAdmin(page: Page): Promise<void> {
 export async function loginAsUser(page: Page, email: string, password: string): Promise<void> {
   // 1. 打开 Portal 登录页
   await page.goto('/login');
-  await expect(page.getByText('使用统一身份登录')).toBeVisible({ timeout: 10_000 });
+  
+  // 2. 等待邮箱输入框可见，确保表单已加载
+  await expect(page.locator('#email')).toBeVisible({ timeout: 15_000 });
 
-  // 2. 点击 SSO 登录按钮，触发 OAuth 跳转
-  await page.click('a[href="/api/auth/login"]');
-
-  // 3. 等待重定向到 Portal 登录页
-  //    Better Auth 未登录时会将请求转为 /sign-in 页面
-  await page.waitForURL(/\/sign-in/, { timeout: 20_000 });
-
-  // 4. 填写登录表单
+  // 3. 填写登录表单
   await page.fill('#email', email);
   await page.fill('#password', password);
 
-  // 5. 提交表单 —— 表单使用 fetch + window.location.href 跳转
+  // 4. 提交表单 —— 按钮类型为 submit 且上面有 "安全登录" 文本
   await page.click('button[type="submit"]');
 
-  // 6. 等待最终跳转到 Portal dashboard（成功标志）
+  // 5. 等待最终跳转到 Portal dashboard（成功标志）
   await page.waitForURL(/\/dashboard/, { timeout: 25_000 });
 }
 
@@ -67,12 +62,12 @@ export async function loginAsUser(page: Page, email: string, password: string): 
  * 登出当前用户
  *
  * 调用 Portal GET /api/auth/logout 清除 Portal Session，
- * 随后重定向到 Portal sign-in（SSO 登出）
+ * 随后重定向到 Portal /login
  */
 export async function logout(page: Page): Promise<void> {
   await page.goto('/api/auth/logout');
-  // 登出后会被重定向到 Portal sign-in 页
-  await page.waitForURL(/\/sign-in/, { timeout: 15_000 });
+  // 登出后会被重定向到 Portal 登录页
+  await page.waitForURL(/\/login/, { timeout: 15_000 });
 }
 
 /**

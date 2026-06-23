@@ -12,6 +12,7 @@ import { verifyAccessToken } from '@/lib/auth/token';
 import { COOKIE_NAMES } from '@auth-sso/contracts';
 import LoginForm from './login-form';
 
+
 interface SearchParams {
   searchParams: Promise<{
     redirect_url?: string;
@@ -30,7 +31,11 @@ interface SearchParams {
   }>;
 }
 
-export default async function LoginPage({ searchParams }: SearchParams) {
+/**
+ * 登录页面内容组件，处理参数解析、Cookies 校验以及自动重定向逻辑。
+ * 包含获取身份（cookies/headers 等动态操作）的异步逻辑。
+ */
+async function LoginContent({ searchParams }: SearchParams) {
   const params = await searchParams;
 
   const redirectUrl =
@@ -71,6 +76,26 @@ export default async function LoginPage({ searchParams }: SearchParams) {
   }
 
   return (
+    <LoginForm
+      redirectUrl={redirectUrl}
+      clientId={clientId}
+      scope={scope}
+      state={state}
+      codeChallenge={codeChallenge}
+      codeChallengeMethod={codeChallengeMethod}
+      responseType={responseType}
+      nonce={nonce}
+      initialError={params.error || null}
+    />
+  );
+}
+
+/**
+ * Portal 登录页面入口。
+ * 使用 Suspense 包装动态内容组件，防止编译期静态生成因 cookies()/searchParams 报错。
+ */
+export default function LoginPage({ searchParams }: SearchParams) {
+  return (
     <Suspense
       fallback={
         <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950">
@@ -78,17 +103,7 @@ export default async function LoginPage({ searchParams }: SearchParams) {
         </div>
       }
     >
-      <LoginForm
-        redirectUrl={redirectUrl}
-        clientId={clientId}
-        scope={scope}
-        state={state}
-        codeChallenge={codeChallenge}
-        codeChallengeMethod={codeChallengeMethod}
-        responseType={responseType}
-        nonce={nonce}
-        initialError={params.error || null}
-      />
+      <LoginContent searchParams={searchParams} />
     </Suspense>
   );
 }

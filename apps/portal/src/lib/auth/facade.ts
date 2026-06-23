@@ -68,8 +68,12 @@ export async function withPermission(
     }
     return await handler(check.userId, check.claims);
   } catch (error: unknown) {
+    // mapDomainError 统一映射领域错误 → HTTP 语义，内部识别并静默处理 prerendering 中断
     const mapped = mapDomainError(error);
-    console.error('[AuthFacade] 服务执行异常:', mapped.message, error instanceof Error ? error.stack : '');
+    // 非预渲染中断的错误需要记录日志，便于生产环境排查
+    if (mapped.status >= 500) {
+      console.error('[AuthFacade] 服务执行异常:', mapped.message, error instanceof Error ? error.stack : '');
+    }
     return NextResponse.json(
       { error: mapped.error, message: mapped.message },
       { status: mapped.status }

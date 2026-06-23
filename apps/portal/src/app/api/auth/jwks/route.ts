@@ -9,20 +9,17 @@
 import { NextResponse } from 'next/server';
 import { db, schema } from '@/infrastructure/db';
 import { mapDomainError } from '@/domain/shared/error-mapping';
-
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
+import { getActiveSigningKey } from '@/lib/auth/token';
 
 export async function GET() {
   try {
+    // 自动确保数据库中至少有一个活跃的密钥对，防止冷启动时 Gateway 连接 JWKS 死锁
+    await getActiveSigningKey();
+
     const rows = await db
       .select()
       .from(schema.jwks)
       .orderBy(schema.jwks.createdAt);
-
-    if (rows.length === 0) {
-      return NextResponse.json({ keys: [] });
-    }
 
     const keys = rows.map((row) => {
       const jwk = JSON.parse(row.publicKey) as JsonWebKey;

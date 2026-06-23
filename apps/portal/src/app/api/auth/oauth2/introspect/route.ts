@@ -11,7 +11,6 @@ import { db, schema } from '@/infrastructure/db';
 import { eq } from 'drizzle-orm';
 import { mapDomainError } from '@/domain/shared/error-mapping';
 
-export const runtime = 'nodejs';
 
 export async function POST(request: NextRequest) {
   try {

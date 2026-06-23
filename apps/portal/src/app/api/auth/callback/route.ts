@@ -12,7 +12,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAppBaseURL, getEnvConfig } from '@/lib/env';
 import { COOKIE_NAMES, TOKEN_TTL } from '@auth-sso/contracts';
 
-export const runtime = 'nodejs';
 
 export async function GET(request: NextRequest) {
   const url = new URL(request.url);
@@ -63,6 +62,9 @@ export async function GET(request: NextRequest) {
     const tokens = await tokenRes.json();
 
     const isProduction = process.env.NODE_ENV === 'production';
+    // 本地开发/E2E环境下，直连 HTTP 端口时必须降级为 secure: false，否则浏览器会拒绝写入
+    const isLocal = request.headers.get('host')?.includes('localhost') || request.headers.get('host')?.includes('127.0.0.1');
+    const secure = isProduction && !isLocal;
     const targetUrl = state || '/dashboard';
 
     const response = NextResponse.redirect(new URL(targetUrl, url.origin));
@@ -71,7 +73,7 @@ export async function GET(request: NextRequest) {
     response.cookies.set(COOKIE_NAMES.JWT, tokens.access_token, {
       path: '/',
       httpOnly: true,
-      secure: isProduction,
+      secure,
       sameSite: 'lax',
       maxAge: tokens.expires_in || 3600,
     });
@@ -81,7 +83,7 @@ export async function GET(request: NextRequest) {
       response.cookies.set(COOKIE_NAMES.REFRESH, tokens.refresh_token, {
         path: '/api/auth/refresh',
         httpOnly: true,
-        secure: isProduction,
+        secure,
         sameSite: 'lax',
         maxAge: TOKEN_TTL.REFRESH_TOKEN,
       });

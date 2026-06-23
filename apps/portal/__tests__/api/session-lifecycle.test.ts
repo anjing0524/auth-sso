@@ -100,6 +100,12 @@ vi.mock('jose', () => ({
     }
     return null;
   }),
+  decodeProtectedHeader: vi.fn((token) => {
+    if (token === 'valid-jwt') {
+      return { kid: 'test-kid-1', alg: 'ES256' };
+    }
+    throw new Error('Invalid JWT header');
+  }),
   importJWK: vi.fn(async () => ({})),
   createRemoteJWKSet: vi.fn(() => vi.fn()),
 }));

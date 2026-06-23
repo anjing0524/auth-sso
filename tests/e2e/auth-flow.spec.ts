@@ -76,10 +76,9 @@ test.describe('Auth Flow', () => {
   // ─── Edge Cases ────────────────────────────────────
   test.describe('Edge Cases', () => {
     test('错误密码应在 Portal 登录页显示错误信息，不重定向', async ({ page }) => {
-      // 发起 OAuth 登录流程
+      // 直接打开 Portal 登录页
       await page.goto('/login');
-      await page.click('a[href="/api/auth/login"]');
-      await page.waitForURL(/\/sign-in/, { timeout: 15_000 });
+      await expect(page.locator('#email')).toBeVisible({ timeout: 15_000 });
 
       // 输入错误密码
       await page.fill('#email', ADMIN_EMAIL);
@@ -87,17 +86,17 @@ test.describe('Auth Flow', () => {
       await page.click('button[type="submit"]');
 
       // 验证错误提示出现（不重定向，仍停留在 Portal 登录页）
-      await expect(page.getByText(/登录失败|错误/i)).toBeVisible({ timeout: 10_000 });
-      // URL 应仍包含 /sign-in（未被重定向回 Portal）
-      expect(page.url()).toContain('/sign-in');
+      await expect(page.getByText(/登录失败|错误|遇到问题/i)).toBeVisible({ timeout: 10_000 });
+      // URL 应仍包含 /login（未被重定向回 Portal dashboard）
+      expect(page.url()).toContain('/login');
     });
 
-    test('未登录用户访问 Dashboard 应看到初始页面（无法获取受保护数据）', async ({ page }) => {
+    test('未登录用户访问 Dashboard 应重定向到登录页', async ({ page }) => {
       // @req G-SEC-INT
-      await page.goto('/');
-      // 未登录时，首页显示"登录"按钮与产品描述
-      await expect(page.getByText('统一身份认证')).toBeVisible();
-      await expect(page.getByText('登录')).toBeVisible();
+      await page.goto('/dashboard');
+      // 未登录时，应重定向到 /login 页面
+      await page.waitForURL(/\/login/, { timeout: 15_000 });
+      await expect(page.getByText('企业统一身份认证')).toBeVisible();
     });
 
     test('登录完成后应包含 Portal JWT Cookie', async ({ page }) => {

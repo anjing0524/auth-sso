@@ -11,6 +11,7 @@ import './load-env';
 import { db, schema } from '@/infrastructure/db';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
+import { eq } from 'drizzle-orm';
 
 /**
  * 解析逗号分隔的 redirect URL 列表，并序列化为 JSON 字符串
@@ -44,7 +45,7 @@ async function main() {
     // 1. 创建管理员用户
     console.log('Creating admin user...');
     const adminPassword = await bcrypt.hash('Admin@123456', 10);
-    const adminId = 'usr_admin_fixed_001';
+    const adminId = '00000000-0000-0000-0000-000000000001';
 
     await db.insert(schema.users).values({
       id: adminId,
@@ -82,6 +83,24 @@ async function main() {
     console.log('\n🛡️  Delegating RBAC initialization to seed-rbac...');
     const { main: seedRbac } = await import('./seed-rbac');
     await seedRbac();
+
+    // 5. 将系统管理员绑定到 SUPER_ADMIN 角色
+    console.log('🔗 Binding admin user to SUPER_ADMIN role...');
+    const superAdminRole = await db
+      .select({ id: schema.roles.id })
+      .from(schema.roles)
+      .where(eq(schema.roles.code, 'SUPER_ADMIN'))
+      .limit(1);
+
+    if (superAdminRole.length > 0) {
+      await db.insert(schema.userRoles).values({
+        userId: adminId,
+        roleId: superAdminRole[0].id,
+      });
+      console.log('✅ Admin user successfully bound to SUPER_ADMIN role');
+    } else {
+      console.warn('⚠️  SUPER_ADMIN role not found, failed to bind admin user');
+    }
 
     console.log('\n✅ Seeding completed.');
     process.exit(0);

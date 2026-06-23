@@ -8,7 +8,6 @@ import { withPermission } from '@/lib/auth';
 import { COMMON_ERRORS } from '@auth-sso/contracts';
 import { getPermissionById } from '@/app/(dashboard)/permissions/data';
 
-export const runtime = 'nodejs';
 interface RouteParams { params: Promise<{ id: string }>; }
 
 /** GET /api/permissions/[id] — 委托 data.ts */

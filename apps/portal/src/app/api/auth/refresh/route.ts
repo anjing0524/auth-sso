@@ -10,7 +10,6 @@ import { getRefreshTokenFromCookie } from '@/lib/session';
 import { rotateRefreshToken } from '@/lib/auth/token';
 import { COOKIE_NAMES, TOKEN_TTL } from '@auth-sso/contracts';
 
-export const runtime = 'nodejs';
 
 export async function POST(request: NextRequest) {
   try {

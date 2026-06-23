@@ -45,15 +45,24 @@ export function withAuth<TArgs extends unknown[], TData>(
 ): (...args: TArgs) => Promise<ApiResponse<TData>> {
   return async (...args: TArgs): Promise<ApiResponse<TData>> => {
     // 第一道：精细权限编码/角色校验（实时查 DB + Redis 缓存）
-    const check = await checkPermission(options);
-    if (!check.authorized || !check.userId) {
-      return { success: false, error: check.error || 'FORBIDDEN', message: check.error || '权限不足' };
-    }
-
-    // 第二道：领域错误统一映射（mapDomainError 横切层）
+    // checkPermission 可能因 resolveIdentity → headers()/cookies() 抛出异常
+    // （如构建期 prerendering 中断信号），由外层 Suspense 边界统一处理。
+    // 请求期这些平台 API 不会 throw，但异常路径仍需兜底。
     try {
-      return await fn({ userId: check.userId }, ...args);
+      const check = await checkPermission(options);
+      if (!check.authorized || !check.userId) {
+        return { success: false, error: check.error || 'FORBIDDEN', message: check.error || '权限不足' };
+      }
+
+      // 第二道：领域错误统一映射（mapDomainError 横切层）
+      try {
+        return await fn({ userId: check.userId }, ...args);
+      } catch (err: unknown) {
+        const mapped = mapDomainError(err);
+        return { success: false, error: mapped.error, message: mapped.message };
+      }
     } catch (err: unknown) {
+      // checkPermission 自身抛出的异常（非 DomainError，如 resolveIdentity 异常）
       const mapped = mapDomainError(err);
       return { success: false, error: mapped.error, message: mapped.message };
     }

@@ -8,7 +8,6 @@ import { withPermission } from '@/lib/auth';
 import { CLIENT_ERRORS } from '@auth-sso/contracts';
 import { getClientById } from '@/app/(dashboard)/clients/data';
 
-export const runtime = 'nodejs';
 
 interface RouteParams { params: Promise<{ id: string }>; }
 

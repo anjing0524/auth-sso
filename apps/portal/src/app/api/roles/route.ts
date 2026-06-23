@@ -7,7 +7,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { withPermission } from '@/lib/auth';
 import { getRoles } from '@/app/(dashboard)/roles/data';
 
-export const runtime = 'nodejs';
 
 /** GET /api/roles — 委托 data.ts */
 export async function GET(request: NextRequest) {

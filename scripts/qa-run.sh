@@ -67,6 +67,13 @@ stop_services() {
         fi
         rm -f "$GATEWAY_PID_FILE"
     fi
+    log_info "🧹 清理端口 4100 与 18443 的残留进程..."
+    lsof -t -i :4100 | xargs kill 2>/dev/null || true
+    lsof -t -i :18443 | xargs kill 2>/dev/null || true
+    # 等待 2 秒让进程优雅退出，未退出的再强制终止
+    sleep 2
+    lsof -t -i :4100 | xargs kill -9 2>/dev/null || true
+    lsof -t -i :18443 | xargs kill -9 2>/dev/null || true
     log_info "✅ 服务已全部停止"
 }
 
@@ -115,9 +122,19 @@ fi
 # ── 步骤 2: 数据库初始化 ──────────────────────────────────────────────────────
 log_section "步骤 2: 数据库初始化"
 
+# 释放残留进程，优先优雅终止，超时后强制清理
+log_info "🧹 释放端口 4100 与 18443 的旧进程..."
+lsof -t -i :4100 | xargs kill 2>/dev/null || true
+lsof -t -i :18443 | xargs kill 2>/dev/null || true
+sleep 2
+lsof -t -i :4100 | xargs kill -9 2>/dev/null || true
+lsof -t -i :18443 | xargs kill -9 2>/dev/null || true
+
 if $RESET_DB; then
+    log_info "♻️  通过 Docker 清理数据库 Schema..."
+    docker compose exec -T postgres psql -U postgres -d auth_sso_idp -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;" || true
     log_info "♻️  执行数据库 push + seed..."
-    pnpm db:push && log_info "✅ Schema push 完成"
+    pnpm db:push --force && log_info "✅ Schema push 完成"
     pnpm db:seed && log_info "✅ 种子数据写入完成"
 else
     log_info "跳过数据库重置（使用 --reset-db 参数强制重置）"
@@ -129,8 +146,10 @@ log_section "步骤 3: 后台启动 Portal (Next.js :4100)"
 if curl -sf "$PORTAL_URL" > /dev/null 2>&1; then
     log_info "✅ Portal 已在运行 ($PORTAL_URL)"
 else
-    log_info "📦 启动 Portal..."
-    nohup pnpm --filter @auth-sso/portal dev > "$PORTAL_LOG" 2>&1 &
+    log_info "🔨 编译 Portal 生产包..."
+    pnpm --filter @auth-sso/portal build
+    log_info "📦 启动 Portal 生产服务..."
+    nohup pnpm --filter @auth-sso/portal start -p 4100 > "$PORTAL_LOG" 2>&1 &
     echo $! > "$PORTAL_PID_FILE"
     log_info "Portal 进程 PID: $(cat "$PORTAL_PID_FILE")，日志: $PORTAL_LOG"
 

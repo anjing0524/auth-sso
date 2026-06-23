@@ -23,7 +23,6 @@ import { getRefreshTokenFromCookie } from '@/lib/session/cookies';
 import { mapDomainError } from '@/domain/shared/error-mapping';
 import { COOKIE_NAMES } from '@auth-sso/contracts';
 
-export const runtime = 'nodejs';
 
 export async function POST() {
   const response = NextResponse.json({ success: true });

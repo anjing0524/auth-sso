@@ -295,23 +295,50 @@ export default async function XxxPage() {
 }
 ```
 
-### 12. 缓存策略与失效
+### 12. 缓存策略与失效（Next.js 16 Cache Components）
+
+本项目启用 `cacheComponents: true`（`next.config.ts`），**`dynamic` / `revalidate` / `fetchCache` / `dynamicParams` 四个导出已从 v16 移除，不可再用**。
 
 | 位置 | 机制 | 示例 |
 |------|------|------|
-| `data.ts` 列表查询 | `cacheTag('xxx-list')` + `cacheLife('minutes'\|'hours')` | `cacheTag('users-list')` |
-| `actions.ts` 写操作后 | `revalidatePath('/xxx')` + `revalidateTag('xxx-list', 'minutes')` | 页面缓存 + 数据缓存双失效 |
+| `data.ts` 列表查询 | `'use cache'` + `cacheTag('xxx-list')` + `cacheLife('minutes'\|'hours')` | `cacheTag('users-list')` |
+| `actions.ts` 写操作后 | `revalidatePath('/xxx')` + `updateTag('xxx-list')` | 页面 RSC Payload + 数据缓存双失效 |
 
-**规则：** 每个写 Action 必须在 `revalidatePath` 后追加 `revalidateTag`，且 `profile` 参数需与 `data.ts` 中 `cacheLife` 一致。
+**规则：** 每个写 Action 必须在 `revalidatePath` 后追加 `updateTag`（v16 替代原 `revalidateTag` 的即时失效语义），profile 参数与 `data.ts` 中的 `cacheLife` 保持一致。
 
 ```typescript
+import { updateTag } from 'next/cache';
+
 // ✅ 正确的缓存失效
 export const createXxxAction = withAuth({ permissions: ['xxx:create'] }, async (_ctx, input) => {
   const result = await db.transaction(async (tx) => { /* ... */ });
   revalidatePath('/xxx');              // 失效 RSC Payload
-  revalidateTag('xxx-list', 'minutes'); // 失效 data.ts use cache
+  updateTag('xxx-list');               // 即时失效 data.ts use cache（v16 新 API）
   return { success: true, data: result };
 });
+```
+
+**`'use cache'` 硬性约束：缓存作用域内严禁访问 `cookies()` / `headers()` / `searchParams`**。必须在缓存作用域外读取这些动态 API，将值作为函数参数传入：
+
+```typescript
+// ✅ 正确：动态值在缓存外读取 → 作为参数注入
+export async function getUsers(
+  scopeFilter: ScopeFilter,  // 调用方在缓存外从 cookies/headers 提取后传入
+  userId: string,
+  params: { page: number; pageSize: number; keyword: string; status: string }
+) {
+  'use cache';
+  cacheLife('minutes');
+  cacheTag('users-list');
+  // ...内部仅做 DB 查询，不访问 cookies/headers/searchParams
+}
+
+// ❌ 错误：在 'use cache' 内访问 cookies()
+export async function getUsers(params: {...}) {
+  'use cache';
+  const cookieStore = await cookies();  // ← 编译/运行时错误！
+  // ...
+}
 ```
 
 ### 13. data.ts 函数命名规范
@@ -357,6 +384,170 @@ const rows = await db.select({ ...15+ fields... })
 ```
 
 **判断标准：** 如果 `db.query` with 的嵌套深度 ≤2 且代码行数节省 >30%，优先用 `db.query`。需要 Drizzle 级别 mock 时再改为 `db.select()`。
+
+### 15. Next.js 16 `cacheComponents: true` 运行时规则
+
+本项目启用 `cacheComponents: true`（Partial Prerendering / PPR），以下规则必须严格遵守：
+
+#### 15.1 禁用的 Route Segment Config 导出
+
+```typescript
+// ❌ 以下四个导出在 cacheComponents 模式下是编译错误
+export const dynamic = 'force-dynamic';     // Turbopack: "not compatible with cacheComponents"
+export const dynamic = 'force-static';      // 同上
+export const revalidate = 60;               // 同上
+export const fetchCache = 'force-no-store'; // 同上
+export const dynamicParams = false;         // 同上
+
+// ❌ runtime 导出在 Turbopack + cacheComponents 下也是编译错误
+export const runtime = 'nodejs';            // Turbopack: "not compatible with cacheComponents"
+export const runtime = 'edge';              // 且 edge 完全不支持 Cache Components
+```
+
+**API routes 默认就是 Node.js 运行时（且是唯一可用运行时），无需且不能显式声明 `runtime`。**
+
+#### 15.2 动态 API（cookies / headers / searchParams）必须包裹 `<Suspense>`
+
+**原则**：谁直接调用了动态 API，它所在的渲染路径上就必须有 `<Suspense>` 边界。边界会捕获**整个子树**中 throw 的动态 API 中断信号——不只是直接子组件。
+
+判断标准：**该组件自身是否直接调用了 `cookies()` / `headers()` / `searchParams` / `resolveIdentity()`（内部访问上述 API）**。
+
+```
+dashboard 分组（全部被 (dashboard)/layout.tsx 的 <Suspense> 子树覆盖）：
+
+(dashboard)/layout.tsx      → resolveIdentity() → cookies/headers  ✅ 自己包裹 <Suspense>
+   └── (子树内所有 sub-layout 和 page 都受此边界保护)
+       ├── users/layout.tsx     → requirePermission()              （被父 Suspense 覆盖）
+       ├── users/[id]/page.tsx  → await params + DB               （被父 Suspense 覆盖）
+       ├── clients/layout.tsx   → requirePermission()              （被父 Suspense 覆盖）
+       ├── clients/[id]/page    → 'use client' + use(params)      （被父 Suspense 覆盖）
+       └── ...
+
+非 dashboard 分组（不在任何 Suspense 子树内）：
+
+page.tsx                    → resolveIdentity() → cookies/headers  ✅ 需要独立 Suspense
+login/page.tsx              → cookies() 直接调用                   ✅ 需要独立 Suspense
+profile/page.tsx            → resolveIdentity() → cookies/headers  ✅ 需要独立 Suspense
+```
+
+**关键**：`<Suspense>` 边界捕获整个子树的 prerendering 中断——不只是直接子组件。所以 dashboard 下所有 sub-layout 和 page（包括 `'use client'` + `use(params)` 的 `clients/[id]`）都不需要重复包裹。只有**不在任何 Suspense 子树内**的 page（根 `/`、`/login`、`/profile`）才需要自己包裹。
+
+```tsx
+// ✅ 正确模式：静态壳 + 动态内容
+import { Suspense } from 'react';
+
+export default function Page() {
+  return (
+    <Suspense fallback={<Loading />}>
+      <PageContent />
+    </Suspense>
+  );
+}
+
+async function PageContent() {
+  const cookieStore = await cookies();  // ← 动态 API
+  // ...
+}
+```
+
+#### 15.3 `'use cache'` 与动态 API 隔离
+
+`'use cache'` 作用域运行在隔离环境中，**无法访问** `cookies()` / `headers()` / `searchParams`。必须在外层读取后作为参数传入：
+
+```typescript
+// ✅ 正确：layout/page 读取动态值 → 传给 data.ts 的 use cache 函数
+// layout.tsx (动态，有 Suspense 边界)
+async function DashboardContent() {
+  const identity = await resolveIdentity();  // ← cookies/headers 在缓存外
+  const data = await getUsers(scopeFilter, identity.userId, params);  // ← userId 作为参数注入
+}
+
+// data.ts (静态，use cache 可缓存)
+export async function getUsers(scopeFilter, userId, params) {
+  'use cache';
+  // 只能访问参数和 DB，不能访问 cookies/headers
+}
+```
+
+#### 15.4 手动 `<Suspense>` vs `loading.tsx`
+
+##### `loading.tsx` 不包裹 layout
+
+`loading.tsx` 只包裹 `page.js` 及子节点，**不包裹同级的 `layout.js`**。当 layout 访问 cookies/headers 时，`loading.tsx` 完全无效——layout 只能手动 `<Suspense>`。
+
+即使用在 page 上，手动 `<Suspense>` 也更精细：可以把静态部分（header、nav）留在 Suspense 外作为静态壳，只让动态内容 streaming。
+
+##### 不要在工具函数层 catch 动态 API 的异常
+
+`headers()` / `cookies()` 在构建期 throw 的 prerendering 中断信号，**必须**传播到 `<Suspense>` 边界由 React 静默处理。如果在工具函数中用 `try/catch` 拦截并 `console.error`，会产生构建噪音。
+
+```typescript
+// ❌ 错误：catch 拦截了 Suspense 应该处理的 prerendering 信号
+async function getGatewayUserId(): Promise<string | null> {
+  try {
+    const h = await headers();
+    return h.get(GATEWAY_HEADERS.USER_ID) || null;
+  } catch (e) {
+    console.error('[Auth] headers() 异常:', e);  // ← 构建期噪音
+    return null;
+  }
+}
+
+// ✅ 正确：不 catch，让异常自然传播到 Suspense
+// 构建期：throw → Suspense 静默捕获 → 请求时重新渲染
+// 请求期：headers() 是平台标准 API，不会 throw
+async function getGatewayUserId(): Promise<string | null> {
+  const h = await headers();
+  return h.get(GATEWAY_HEADERS.USER_ID) || null;
+}
+```
+
+> 项目中 `verify-jwt.ts` / `cookies.ts` / `error-mapping.ts` 中临时保留了 `isPrerenderingError()` 守卫以兼容现有 try/catch 结构。新增代码或重构时应遵循上述模式（不 catch），逐步淘汰该守卫。
+
+#### 15.5 `connection()` 的正确用途
+
+`connection()` 用于**非确定性操作**（`Math.random()` / `Date.now()` / `crypto.randomUUID()`）需要延迟到请求时的场景，**不是** `cookies()` / `headers()` 的替代方案：
+
+```typescript
+// ✅ connection() 的正确用法：同步 DB 驱动需要 per-request 数据
+import { connection } from 'next/server';
+export async function getVisitorCount() {
+  await connection();  // 显式标记为请求时执行
+  return db.prepare('SELECT value FROM counters').get('visitors');
+}
+
+// ❌ 不要用 connection() 替代 Suspense 包裹 cookies/headers
+// cookies/headers 在 prerendering 时会直接 throw，不是 connection() 能解决的
+```
+
+#### 15.6 构建输出符号解读
+
+```
+○  (Static)             → 完全静态预渲染（无动态 API，无 use cache）
+◐  (Partial Prerender)  → 静态壳 + 动态内容流式注入（有 Suspense 包裹的动态 API）
+ƒ  (Dynamic)            → 完全动态（API routes 或未包裹 Suspense 的动态页面）
+```
+
+**目标：** 所有使用动态 API 的页面应为 `◐`（Partial Prerender），API routes 为 `ƒ`（Dynamic）。
+
+#### 15.7 Proxy（原 Middleware）的职责边界
+
+Proxy 在路由渲染**之前**执行（类似 CDN 边缘网关），职责是轻量级路由守卫：检查 Cookie 存在性、路径白名单、重定向。**不在 Proxy 中做 JWT 验签**——验签是异步 crypto 操作，在 Proxy 层执行会拖慢所有请求。
+
+```typescript
+// ✅ proxy.ts 的正确职责：仅检查 Cookie 存在性 + 路由白名单
+export function proxy(request: NextRequest) {
+  // 白名单放行
+  if (isPublicPath(pathname)) return NextResponse.next();
+  // Cookie 存在性检查（不验签）
+  if (!request.cookies.get(COOKIE_NAMES.JWT)) {
+    return NextResponse.redirect(loginUrl);
+  }
+  return NextResponse.next();
+}
+```
+
+JWT 有效性校验由 `resolveIdentity()`（在 Server Component 的 `<Suspense>` 边界内）完成，不在 Proxy 中重复。
 
 ## Controller 标准骨架
 
@@ -432,6 +623,13 @@ export async function POST(req: NextRequest) {
 | `actions.ts` 中有 `getXxxAction` 只读 Action | 移到 `data.ts` 的 `getXxx(id)` 纯函数 |
 | 写 Action 只调 `revalidatePath` 不调 `revalidateTag` | 追加 `revalidateTag('xxx-list', 'minutes')` |
 | `data.ts` 简单查询用 `db.query.xxx.findFirst()` | 简单查询（无嵌套 JOIN）改为 `db.select().from().where().limit(1)` |
+| 写 Action 只调 `revalidatePath` 不调 `updateTag` | 追加 `updateTag('xxx-list')`（v16 新 API，即时失效） |
+| `'use cache'` 函数内调用 `cookies()` / `headers()` / `searchParams` | 在外层读取后作为函数参数传入（缓存隔离） |
+| 访问 cookies/headers 的 Server Component 未包裹 `<Suspense>` | 静态壳 + 动态内容模式（PPR 要求） |
+| `export const runtime = 'nodejs'` in API route | v16 + cacheComponents + Turbopack 编译错误，移除 |
+| `export const dynamic = 'force-dynamic'` in page/layout | v16 已移除，Turbopack 编译错误，移除 |
+| 将 cookies() / headers() 返回的 Promise 作为 prop 传入 `'use cache'` 组件 | 先 await 提取纯值再传入（防止构建超时 hang） |
+| 用 `connection()` 替代 `<Suspense>` 来包裹 cookies/headers 调用 | `connection()` 仅用于非确定性操作（Math.random 等），与 cookies/headers 机制不同 |
 
 ## Red Flags - STOP and Refactor
 
@@ -448,7 +646,12 @@ export async function POST(req: NextRequest) {
 - API Route GET 处理器中出现 `db.select()` / `db.query` 直接 DB 调用（应委托 `data.ts`）
 - `actions.ts` 中存在只读查询函数（只能写，读归 `data.ts`）
 - `data.ts` 简单查询使用 `db.query.xxx.findFirst()`（无嵌套 JOIN 的场景应用 `db.select()` 风格）
-- 写操作只调 `revalidatePath` 未调 `revalidateTag`（缓存失效不完整）
+- 写操作只调 `revalidatePath` 未调 `updateTag`（v16 缓存失效不完整）
 - 返回给客户端的 data 中包含 `Temporal.Instant` 而非 ISO 字符串（API Route JSON 序列化兼容性）
+- API route 写 `export const runtime = 'nodejs'`（Turbopack + cacheComponents 编译错误）
+- page/layout 写 `export const dynamic = 'force-dynamic'`（v16 编译错误，export 已移除）
+- `'use cache'` 内调用 `cookies()` / `headers()` / `searchParams`（缓存作用域冲突）
+- 访问 cookies/headers 的 Server Component 不在 `<Suspense>` 边界内（PPR prerendering 中断）
+- 将 cookies() 返回的 Promise 作为 prop 传给 `'use cache'` 组件（构建超时 hang）
 
 > **完整规范详见** `docs/portal-architecture-guidelines.md`（含 React 19 组件模式、安全三层防御、Temporal API 详解、eslint-plugin-boundaries 配置等）。

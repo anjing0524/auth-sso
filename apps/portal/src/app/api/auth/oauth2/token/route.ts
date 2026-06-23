@@ -20,7 +20,6 @@ import { InvalidGrantError } from '@/domain/shared/errors';
 import { z } from 'zod';
 import { OAUTH_PARAMS } from '@auth-sso/contracts';
 
-export const runtime = 'nodejs';
 
 const TokenSchema = z.object({
   grant_type: z.enum([OAUTH_PARAMS.GRANT_TYPE_AUTHORIZATION_CODE, OAUTH_PARAMS.GRANT_TYPE_REFRESH_TOKEN]),

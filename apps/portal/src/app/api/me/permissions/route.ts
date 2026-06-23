@@ -12,7 +12,6 @@ import { getUserPermissionContext } from '@/lib/permissions';
 import { mapDomainError } from '@/domain/shared/error-mapping';
 import { COMMON_ERRORS } from '@auth-sso/contracts';
 
-export const runtime = 'nodejs';
 
 export async function GET(_request: NextRequest) {
   try {

@@ -54,27 +54,20 @@ export function clearJwtCookies(response: Response): void {
 }
 
 /**
- * 从当前请求的 Cookie 中读取 Access Token 字符串
+ * 从当前请求的 Cookie 中读取 Access Token 字符串。
+ *
+ * 不 catch cookies() 的异常——构建期 prerendering 中断信号需要自然传播到 <Suspense>，
+ * 请求期 cookies() 是平台标准 API，不会 throw。
  */
 export async function getJwtFromCookie(): Promise<string | null> {
-  try {
-    const cookieStore = await cookies();
-    return cookieStore.get(COOKIE_NAMES.JWT)?.value ?? null;
-  } catch (error) {
-    console.error('[Session] Failed to read JWT cookie:', error);
-    return null;
-  }
+  const cookieStore = await cookies();
+  return cookieStore.get(COOKIE_NAMES.JWT)?.value ?? null;
 }
 
 /**
  * 从当前请求的 Cookie 中读取 Refresh Token 字符串
  */
 export async function getRefreshTokenFromCookie(): Promise<string | null> {
-  try {
-    const cookieStore = await cookies();
-    return cookieStore.get(COOKIE_NAMES.REFRESH)?.value ?? null;
-  } catch (error) {
-    console.error('[Session] Failed to read refresh token cookie:', error);
-    return null;
-  }
+  const cookieStore = await cookies();
+  return cookieStore.get(COOKIE_NAMES.REFRESH)?.value ?? null;
 }

@@ -11,7 +11,7 @@ import { db, schema } from '@/infrastructure/db';
 import { verifyAccessToken } from '@/lib/auth/token';
 import { validateAuthorization } from '@/domain/auth/oauth-authorize';
 import { validateClientActive, validateRedirectUri } from '@/domain/auth/oauth-client';
-import { generateId } from '@/lib/crypto';
+import { generateId, generateUUID } from '@/lib/crypto';
 import { getAppBaseURL } from '@/lib/env';
 import { mapDomainError } from '@/domain/shared/error-mapping';
 import {
@@ -24,8 +24,6 @@ import { getClientByClientId } from '@/app/(dashboard)/clients/data';
 import { getUserWithRoleClients } from './data';
 import { z } from 'zod';
 
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
 
 const AuthorizeQuerySchema = z.object({
   client_id: z.string().min(1),
@@ -88,7 +86,7 @@ export async function GET(request: NextRequest) {
 
     // 6. 生成 Authorization Code 并写入 DB
     const code = `auth_code_${generateId(32)}`;
-    const codeId = generateId(20);
+    const codeId = generateUUID();
     const now = new Date();
     const expiresAt = new Date(now.getTime() + 5 * 60 * 1000);
 

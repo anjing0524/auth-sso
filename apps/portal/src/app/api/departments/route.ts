@@ -7,7 +7,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { withPermission, getDataScopeFilter } from '@/lib/auth';
 import { getDepartments } from '@/app/(dashboard)/departments/data';
 
-export const runtime = 'nodejs';
 
 /** GET /api/departments — 委托 data.ts 获取授权范围内的部门树 */
 export async function GET(request: NextRequest) {

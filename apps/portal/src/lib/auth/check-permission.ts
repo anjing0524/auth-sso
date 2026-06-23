@@ -51,45 +51,43 @@ export interface PermissionCheckResult {
 export async function checkPermission(
   options: PermissionCheckOptions
 ): Promise<PermissionCheckResult> {
-  try {
-    const identity = await resolveIdentity();
-    if (!identity) {
-      return { authorized: false, error: '未登录', statusCode: 401 };
-    }
-    const { userId, claims } = identity;
-
-    const roleCodes = claims.roles;
-
-    // 超级管理员直接绕过所有校验
-    if (roleCodes.some((rc) => (ADMIN_ROLE_CODES as readonly string[]).includes(rc))) {
-      return { authorized: true, userId, claims };
-    }
-
-    // 权限编码检查
-    if (options.permissions && options.permissions.length > 0) {
-      const ok = options.requireAll
-        ? options.permissions.every((p) => claims.permissions.includes(p))
-        : options.permissions.some((p) => claims.permissions.includes(p));
-      if (!ok) {
-        return { authorized: false, userId, claims, error: '权限不足', statusCode: 403 };
-      }
-    }
-
-    // 角色编码检查
-    if (options.roles && options.roles.length > 0) {
-      const ok = options.requireAll
-        ? options.roles.every((r) => roleCodes.includes(r))
-        : options.roles.some((r) => roleCodes.includes(r));
-      if (!ok) {
-        return { authorized: false, userId, claims, error: '角色权限不足', statusCode: 403 };
-      }
-    }
-
-    return { authorized: true, userId, claims };
-  } catch (error: any) {
-    console.error('[PermissionCheck] 鉴权过程异常:', error.message, error.stack);
-    return { authorized: false, error: '权限检查失败', statusCode: 500 };
+  // 不 catch——resolveIdentity() 在构建期可能因 headers()/cookies() 抛出
+  // prerendering 中断信号，该信号需要传播到 <Suspense> 或 mapDomainError()
+  // 由上层统一处理。请求期这些平台 API 不会 throw。
+  const identity = await resolveIdentity();
+  if (!identity) {
+    return { authorized: false, error: '未登录', statusCode: 401 };
   }
+  const { userId, claims } = identity;
+
+  const roleCodes = claims.roles;
+
+  // 超级管理员直接绕过所有校验
+  if (roleCodes.some((rc) => (ADMIN_ROLE_CODES as readonly string[]).includes(rc))) {
+    return { authorized: true, userId, claims };
+  }
+
+  // 权限编码检查
+  if (options.permissions && options.permissions.length > 0) {
+    const ok = options.requireAll
+      ? options.permissions.every((p) => claims.permissions.includes(p))
+      : options.permissions.some((p) => claims.permissions.includes(p));
+    if (!ok) {
+      return { authorized: false, userId, claims, error: '权限不足', statusCode: 403 };
+    }
+  }
+
+  // 角色编码检查
+  if (options.roles && options.roles.length > 0) {
+    const ok = options.requireAll
+      ? options.roles.every((r) => roleCodes.includes(r))
+      : options.roles.some((r) => roleCodes.includes(r));
+    if (!ok) {
+      return { authorized: false, userId, claims, error: '角色权限不足', statusCode: 403 };
+    }
+  }
+
+  return { authorized: true, userId, claims };
 }
 
 /**

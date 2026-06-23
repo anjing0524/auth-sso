@@ -9,7 +9,6 @@ import { withPermission, checkDataScope, getDataScopeFilter } from '@/lib/auth';
 import { COMMON_ERRORS, USER_ERRORS } from '@auth-sso/contracts';
 import { getUser } from '@/app/(dashboard)/users/data';
 
-export const runtime = 'nodejs';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
