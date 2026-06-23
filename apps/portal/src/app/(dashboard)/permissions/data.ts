@@ -36,7 +36,7 @@ export async function getPermissions(type?: string) {
 }
 
 /**
- * 按 ID 获取单个权限详情（支持内部 ID 和 publicId）
+ * 按 ID 获取单个权限详情（内部 UUID）
  */
 export async function getPermissionById(lookupId: string) {
   const rows = await db.select().from(schema.permissions)
