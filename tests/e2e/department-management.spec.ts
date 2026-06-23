@@ -22,7 +22,7 @@ test.describe('Department Management', () => {
     await page.goto('/departments');
 
     // Verify page title
-    await expect(page.getByText('组织架构')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole('heading', { name: '组织架构' })).toBeVisible({ timeout: 10_000 });
 
     // Verify "创建根节点" button exists
     await expect(page.getByRole('button', { name: /创建根节点/ })).toBeVisible();

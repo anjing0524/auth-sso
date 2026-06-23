@@ -21,7 +21,7 @@ test.describe('Client Management', () => {
     await page.goto('/clients');
 
     // Verify page title
-    await expect(page.getByText('应用管理')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole('heading', { name: '应用管理' })).toBeVisible({ timeout: 10_000 });
 
     // Verify table is rendered
     await expect(page.locator('table')).toBeVisible();

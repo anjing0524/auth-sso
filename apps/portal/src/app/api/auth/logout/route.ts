@@ -12,7 +12,7 @@
  *
  * @route POST /api/auth/logout
  */
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { db, schema } from '@/infrastructure/db';
 import { eq } from 'drizzle-orm';
@@ -24,13 +24,9 @@ import { mapDomainError } from '@/domain/shared/error-mapping';
 import { COOKIE_NAMES } from '@auth-sso/contracts';
 
 
-export async function POST() {
-  const response = NextResponse.json({ success: true });
+async function performRevocation(cookieStore: any) {
   let userId: string | undefined;
-
   try {
-    const cookieStore = await cookies();
-
     // 1. 撤销 portal_jwt_token 的 jti（Access Token）
     const jwtToken = cookieStore.get(COOKIE_NAMES.JWT)?.value;
     if (jwtToken) {
@@ -70,8 +66,25 @@ export async function POST() {
     const mapped = mapDomainError(err);
     console.error('[Logout API] 登出异常:', mapped.message, err instanceof Error ? err.stack : '');
   }
+}
 
-  // 无论撤销成功与否，始终清除全部 Cookie（保证客户端状态一致）
+export async function POST() {
+  const cookieStore = await cookies();
+  await performRevocation(cookieStore);
+
+  const response = NextResponse.json({ success: true });
+  response.cookies.set(COOKIE_NAMES.JWT, '', { path: '/', httpOnly: true, sameSite: 'lax', maxAge: 0 });
+  response.cookies.set(COOKIE_NAMES.LOGIN_SESSION, '', { path: '/', httpOnly: true, sameSite: 'lax', maxAge: 0 });
+  response.cookies.set(COOKIE_NAMES.REFRESH, '', { path: '/api/auth/refresh', httpOnly: true, sameSite: 'lax', maxAge: 0 });
+  return response;
+}
+
+export async function GET(request: NextRequest) {
+  const cookieStore = await cookies();
+  await performRevocation(cookieStore);
+
+  const url = new URL(request.url);
+  const response = NextResponse.redirect(new URL('/login', url.origin));
   response.cookies.set(COOKIE_NAMES.JWT, '', { path: '/', httpOnly: true, sameSite: 'lax', maxAge: 0 });
   response.cookies.set(COOKIE_NAMES.LOGIN_SESSION, '', { path: '/', httpOnly: true, sameSite: 'lax', maxAge: 0 });
   response.cookies.set(COOKIE_NAMES.REFRESH, '', { path: '/api/auth/refresh', httpOnly: true, sameSite: 'lax', maxAge: 0 });

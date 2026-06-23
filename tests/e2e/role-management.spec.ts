@@ -22,7 +22,7 @@ test.describe('Role Management', () => {
     await page.goto('/roles');
 
     // Verify page title
-    await expect(page.getByText('角色权限')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole('heading', { name: '角色权限' })).toBeVisible({ timeout: 10_000 });
 
     // Verify role list is rendered (left panel)
     await expect(page.getByPlaceholder('搜索角色名称或编码...')).toBeVisible();

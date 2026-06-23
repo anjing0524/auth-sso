@@ -66,11 +66,15 @@ export async function POST(request: NextRequest) {
     const session = await signLoginSession(user.id);
 
     const isProduction = process.env.NODE_ENV === 'production';
+    // 本地开发/E2E环境下，直连 HTTP 端口时必须降级为 secure: false，否则浏览器会拒绝写入
+    const isLocal = request.headers.get('host')?.includes('localhost') || request.headers.get('host')?.includes('127.0.0.1');
+    const secure = isProduction && !isLocal;
+
     const response = NextResponse.json({ success: true });
     response.cookies.set(COOKIE_NAMES.LOGIN_SESSION, session, {
       path: '/api/auth/oauth2/authorize',
       httpOnly: true,
-      secure: isProduction,
+      secure,
       sameSite: 'lax',
       maxAge: LOGIN_SESSION_TTL,
     });

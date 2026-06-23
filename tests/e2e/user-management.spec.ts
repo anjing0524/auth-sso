@@ -24,7 +24,7 @@ test.describe('User Management', () => {
     await page.goto('/users');
 
     // Verify page title
-    await expect(page.getByText('用户管理')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole('heading', { name: '用户管理' })).toBeVisible({ timeout: 10_000 });
 
     // Verify table is rendered
     await expect(page.locator('table')).toBeVisible();
@@ -131,9 +131,14 @@ test.describe('User Management', () => {
     await page.goto(`/users?keyword=${deleteUsername}`);
     await page.waitForTimeout(1000);
 
-    // Click on the user row to go to detail page
-    // The user name in the table is a link to the detail page
-    await page.locator('table').getByText(deleteName).click();
+    // Click on the action menu button for the newly created user
+    const userMenu = page.locator('table').getByRole('button').first();
+    await userMenu.click();
+
+    // Click "详情/编辑" option in dropdown
+    const detailOption = page.getByText('详情/edit').or(page.getByText('详情/编辑'));
+    await expect(detailOption).toBeVisible({ timeout: 5_000 });
+    await detailOption.click();
     await page.waitForURL(/\/users\//, { timeout: 5_000 });
 
     // Click delete button
@@ -145,6 +150,6 @@ test.describe('User Management', () => {
 
     // Verify redirect back to users list
     await page.waitForURL('/users', { timeout: 10_000 });
-    await expect(page.getByText('用户管理')).toBeVisible();
+    await expect(page.getByRole('heading', { name: '用户管理' })).toBeVisible();
   });
 });

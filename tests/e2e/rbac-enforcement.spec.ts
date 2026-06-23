@@ -39,8 +39,8 @@ test.describe('RBAC Enforcement', () => {
 
       // 到达 Dashboard
       await expect(page).toHaveURL(/\/dashboard/);
-      // 侧边栏应渲染（通过 fallbackMenus 显示所有菜单项）
-      await expect(page.getByText('工作台')).toBeVisible({ timeout: 10_000 });
+      // 侧边栏应渲染 (改用 heading 定位以避免面包屑严格模式冲突)
+      await expect(page.getByRole('heading', { name: '工作台' })).toBeVisible({ timeout: 10_000 });
 
       // 验证 API 级权限：管理员可访问所有受保护端点
       const protectedEndpoints = [
@@ -52,7 +52,7 @@ test.describe('RBAC Enforcement', () => {
       ];
 
       for (const endpoint of protectedEndpoints) {
-        const res = await page.request().get(`${PORTAL_URL}${endpoint}`);
+        const res = await page.request.get(`${PORTAL_URL}${endpoint}`);
         expect(res.ok(), `${endpoint} 应返回 200`).toBeTruthy();
       }
     });
@@ -60,7 +60,7 @@ test.describe('RBAC Enforcement', () => {
     test('管理员应具有全部 seed 权限码', async ({ page }) => {
       await loginAsAdmin(page);
 
-      const meRes = await page.request().get(`${PORTAL_URL}/api/me`);
+      const meRes = await page.request.get(`${PORTAL_URL}/api/me`);
       expect(meRes.ok()).toBeTruthy();
       const meBody = (await meRes.json()) as { permissions: string[] };
 
@@ -120,19 +120,19 @@ test.describe('RBAC Enforcement', () => {
 
       // 受限用户仅有 user:list 权限
       // user:list → 应允许
-      const usersRes = await page.request().get(`${PORTAL_URL}/api/users?pageSize=1`);
+      const usersRes = await page.request.get(`${PORTAL_URL}/api/users?pageSize=1`);
       expect(usersRes.ok(), 'user:list 权限 → /api/users 应允许').toBeTruthy();
 
       // role:list → 应被拒绝 (403)
-      const rolesRes = await page.request().get(`${PORTAL_URL}/api/roles?pageSize=1`);
+      const rolesRes = await page.request.get(`${PORTAL_URL}/api/roles?pageSize=1`);
       expect(rolesRes.status(), '缺少 role:list → /api/roles 应返回 403').toBe(403);
 
       // client:list → 应被拒绝 (403)
-      const clientsRes = await page.request().get(`${PORTAL_URL}/api/clients?pageSize=1`);
+      const clientsRes = await page.request.get(`${PORTAL_URL}/api/clients?pageSize=1`);
       expect(clientsRes.status(), '缺少 client:list → /api/clients 应返回 403').toBe(403);
 
       // permission:list → 应被拒绝 (403)
-      const permsRes = await page.request().get(`${PORTAL_URL}/api/permissions`);
+      const permsRes = await page.request.get(`${PORTAL_URL}/api/permissions`);
       expect(permsRes.status(), '缺少 permission:list → /api/permissions 应返回 403').toBe(403);
     });
 
@@ -143,7 +143,7 @@ test.describe('RBAC Enforcement', () => {
       await loginAsUser(page, restrictedEmail, restrictedPassword);
 
       // 验证 /api/me 返回的权限列表
-      const meRes = await page.request().get(`${PORTAL_URL}/api/me`);
+      const meRes = await page.request.get(`${PORTAL_URL}/api/me`);
       expect(meRes.ok()).toBeTruthy();
       const meBody = (await meRes.json()) as { permissions: string[] };
 
@@ -162,7 +162,7 @@ test.describe('RBAC Enforcement', () => {
 
       const protectedEndpoints = [
         '/api/me',
-        '/api/me/menus',
+        '/api/me/permissions',
         '/api/users',
         '/api/roles',
         '/api/clients',
@@ -172,7 +172,7 @@ test.describe('RBAC Enforcement', () => {
       ];
 
       for (const endpoint of protectedEndpoints) {
-        const res = await page.request().get(`${PORTAL_URL}${endpoint}`);
+        const res = await page.request.get(`${PORTAL_URL}${endpoint}`);
         expect(
           res.status(),
           `${endpoint} 未认证应返回 401，实际 ${res.status()}`,

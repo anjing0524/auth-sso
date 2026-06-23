@@ -20,7 +20,7 @@ test.describe('Menu Management', () => {
     await page.goto('/menus');
 
     // Verify page title
-    await expect(page.getByText('菜单管理')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole('heading', { name: '菜单管理' })).toBeVisible({ timeout: 10_000 });
 
     // Verify table is rendered
     await expect(page.locator('table')).toBeVisible();

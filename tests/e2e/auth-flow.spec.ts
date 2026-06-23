@@ -36,8 +36,8 @@ test.describe('Auth Flow', () => {
 
       // 验证已到达 Dashboard
       await expect(page).toHaveURL(/\/dashboard/);
-      // Dashboard 应渲染概览数据
-      await expect(page.getByText('工作台')).toBeVisible({ timeout: 15_000 });
+      // Dashboard 应渲染概览数据 (改用 heading 定位以避免面包屑严格模式冲突)
+      await expect(page.getByRole('heading', { name: '工作台' })).toBeVisible({ timeout: 15_000 });
       await expect(page.getByText('用户总数')).toBeVisible();
       await expect(page.getByText('安全审计动态')).toBeVisible();
     });
@@ -45,8 +45,8 @@ test.describe('Auth Flow', () => {
     test('登录成功后 /api/me 应返回用户信息和权限', async ({ page }) => {
       await loginAsAdmin(page);
 
-      // 通过 API request context（共享 browser cookies）验证 /api/me
-      const meRes = await page.request().get(`${PORTAL_URL}/api/me`);
+      // 通过 API request context（共享 browser cookies）验证 /api/me (page.request 是只读属性)
+      const meRes = await page.request.get(`${PORTAL_URL}/api/me`);
       expect(meRes.ok()).toBeTruthy();
       const meBody = (await meRes.json()) as { user: { email: string }; permissions: string[] };
       expect(meBody.user.email).toBe(ADMIN_EMAIL);
@@ -60,15 +60,15 @@ test.describe('Auth Flow', () => {
       // @req G-SEC-INT
       await loginAsAdmin(page);
 
-      // 登录后可访问 /api/me
-      const meBefore = await page.request().get(`${PORTAL_URL}/api/me`);
+      // 登录后可访问 /api/me (page.request 是只读属性)
+      const meBefore = await page.request.get(`${PORTAL_URL}/api/me`);
       expect(meBefore.ok()).toBeTruthy();
 
       // 执行登出
       await logout(page);
 
-      // 登出后 Portal session 已被清除，API 应返回 401
-      const meAfter = await page.request().get(`${PORTAL_URL}/api/me`);
+      // 登出后 Portal session 已被清除，API 应返回 401 (page.request 是只读属性)
+      const meAfter = await page.request.get(`${PORTAL_URL}/api/me`);
       expect(meAfter.status()).toBe(401);
     });
   });
@@ -86,7 +86,7 @@ test.describe('Auth Flow', () => {
       await page.click('button[type="submit"]');
 
       // 验证错误提示出现（不重定向，仍停留在 Portal 登录页）
-      await expect(page.getByText(/登录失败|错误|遇到问题/i)).toBeVisible({ timeout: 10_000 });
+      await expect(page.getByText('登录遇到问题')).toBeVisible({ timeout: 10_000 });
       // URL 应仍包含 /login（未被重定向回 Portal dashboard）
       expect(page.url()).toContain('/login');
     });

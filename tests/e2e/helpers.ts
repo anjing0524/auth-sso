@@ -92,7 +92,7 @@ export async function createRestrictedRoleAndUser(page: Page): Promise<{
   userId: string;
   roleId: string;
 }> {
-  const request = page.request();
+  const request = page.request;
 
   // 1. 获取现有权限列表，找到 user:list 权限 ID
   const permsRes = await request.get(`${PORTAL_URL}/api/permissions`);

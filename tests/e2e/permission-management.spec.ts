@@ -20,7 +20,7 @@ test.describe('Permission Management', () => {
     await page.goto('/permissions');
 
     // Verify page title
-    await expect(page.getByText('权限管理')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole('heading', { name: '权限管理' })).toBeVisible({ timeout: 10_000 });
 
     // Verify table is rendered
     await expect(page.locator('table')).toBeVisible();
