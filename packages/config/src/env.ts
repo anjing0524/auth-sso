@@ -44,9 +44,6 @@ const portalEnvSchema = baseEnvSchema.extend({
   NEXT_PUBLIC_APP_NAME: z.string().default('Auth-SSO Portal'),
   NEXT_PUBLIC_APP_URL: z.string().url().default(DEV_DEFAULT_BASE_URL),
 
-  // OIDC Provider 配置（可选，默认从 NEXT_PUBLIC_APP_URL 推导）
-  PORTAL_ISSUER: z.string().url().optional(),
-
   // OAuth 客户端凭证（Portal 自身作为 OIDC Provider 的内置客户端）
   PORTAL_CLIENT_SECRET: z.string().optional(),
 });
