@@ -8,7 +8,7 @@ import React, { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import {
-  ShieldCheck, Plus, Search, MoreHorizontal, Edit, Trash2, Database, Globe, Code,
+  ShieldCheck, Plus, Search, MoreHorizontal, Edit, Trash2, Database, Globe, Code, Folder,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -32,7 +32,7 @@ import { createPermissionAction, updatePermissionAction, deletePermissionAction 
 
 interface PermissionRow {
   id: string;
-  publicId: string;
+  
   name: string;
   code: string;
   type: string;
@@ -48,12 +48,13 @@ interface Props {
 }
 
 const TYPE_ICONS: Record<string, React.ReactNode> = {
-  MENU: <Globe className="h-3 w-3 text-blue-500" />,
-  API: <Code className="h-3 w-3 text-green-500" />,
+	  DIRECTORY: <Folder className="h-3 w-3 text-purple-500" />,
+	  PAGE: <Globe className="h-3 w-3 text-blue-500" />,
+	  API: <Code className="h-3 w-3 text-green-500" />,
   DATA: <Database className="h-3 w-3 text-orange-500" />,
 };
 
-const TABS = ['ALL', 'API', 'MENU', 'DATA'];
+const TABS = ['ALL', 'DIRECTORY', 'PAGE', 'API', 'DATA'];
 
 export default function PermissionsTable({ permissions, activeTab }: Props) {
   const router = useRouter();
@@ -66,7 +67,7 @@ export default function PermissionsTable({ permissions, activeTab }: Props) {
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [selected, setSelected] = useState<PermissionRow | null>(null);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ name: '', code: '', type: 'API' as string });
+  const [form, setForm] = useState({ name: '', code: '', type: 'API' as string, resource: '', action: '' });
 
   const handleTabChange = (tab: string) => {
     startTransition(() => {
@@ -76,16 +77,16 @@ export default function PermissionsTable({ permissions, activeTab }: Props) {
 
   const openEdit = (p: PermissionRow) => {
     setSelected(p);
-    setForm({ name: p.name, code: p.code, type: p.type });
+    setForm({ name: p.name, code: p.code, type: p.type, resource: p.resource || '', action: p.action || '' });
     setIsEditOpen(true);
   };
 
   const handleCreate = async () => {
     if (!form.name || !form.code) { toast.error('请填写完整信息'); return; }
     setSaving(true);
-    const r = await createPermissionAction({ name: form.name, code: form.code, type: form.type as 'API' | 'MENU' | 'DATA', sort: 0 });
+    const r = await createPermissionAction({ name: form.name, code: form.code, type: form.type as 'DIRECTORY' | 'PAGE' | 'API' | 'DATA', resource: form.resource, action: form.action, sort: 0 });
     setSaving(false);
-    if (r.success) { toast.success(r.message); setIsAddOpen(false); setForm({ name: '', code: '', type: 'API' }); router.refresh(); }
+    if (r.success) { toast.success(r.message); setIsAddOpen(false); setForm({ name: '', code: '', type: 'API', resource: '', action: '' }); router.refresh(); }
     else { toast.error(r.message); }
   };
 
@@ -125,7 +126,7 @@ export default function PermissionsTable({ permissions, activeTab }: Props) {
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground opacity-50" />
               <Input placeholder="搜索权限名称或编码..." className="pl-9 h-9 rounded-lg text-sm" value={keyword} onChange={e => setKeyword(e.target.value)} />
             </div>
-            <Button size="sm" className="rounded-lg" onClick={() => { setForm({ name: '', code: '', type: 'API' }); setIsAddOpen(true); }}>
+            <Button size="sm" className="rounded-lg" onClick={() => { setForm({ name: '', code: '', type: 'API', resource: '', action: '' }); setIsAddOpen(true); }}>
               <Plus className="mr-1.5 h-3.5 w-3.5" /> 新增
             </Button>
           </div>
@@ -203,7 +204,7 @@ export default function PermissionsTable({ permissions, activeTab }: Props) {
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="API">API</SelectItem>
-                  <SelectItem value="MENU">MENU</SelectItem>
+                  <SelectItem value="DIRECTORY">DIRECTORY</SelectItem>
                   <SelectItem value="DATA">DATA</SelectItem>
                 </SelectContent>
               </Select>
@@ -229,7 +230,7 @@ export default function PermissionsTable({ permissions, activeTab }: Props) {
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="API">API</SelectItem>
-                  <SelectItem value="MENU">MENU</SelectItem>
+                  <SelectItem value="DIRECTORY">DIRECTORY</SelectItem>
                   <SelectItem value="DATA">DATA</SelectItem>
                 </SelectContent>
               </Select>

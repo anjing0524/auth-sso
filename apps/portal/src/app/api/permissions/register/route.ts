@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db, schema } from '@/infrastructure/db';
 import { eq, sql } from 'drizzle-orm';
-import { generateUUID, generatePermissionPublicId } from '@/lib/crypto';
+import { generateUUID } from '@/lib/crypto';
 import { COMMON_ERRORS } from '@auth-sso/contracts';
+import { mapDomainError } from '@/domain/shared/error-mapping';
 
 export const runtime = 'nodejs';
 
@@ -12,9 +13,15 @@ export const runtime = 'nodejs';
 interface IncomingPermission {
   code: string;
   name: string;
-  type: 'MENU' | 'API' | 'DATA';
+  type: 'DIRECTORY' | 'PAGE' | 'API' | 'DATA';
   resource?: string;
   action?: string;
+  /** PAGE/DIRECTORY 专属：前端路由路径 */
+  path?: string;
+  /** PAGE/DIRECTORY 专属：菜单图标 */
+  icon?: string;
+  /** PAGE/DIRECTORY 专属：菜单可见性 */
+  visible?: boolean;
   sort?: number;
   children?: IncomingPermission[];
 }
@@ -38,6 +45,9 @@ function flattenPermissions(
       type: node.type,
       resource: node.resource,
       action: node.action,
+      path: node.path,
+      icon: node.icon,
+      visible: node.visible,
       sort: node.sort ?? 0,
       parentId,
     });
@@ -156,15 +166,16 @@ export async function POST(request: NextRequest) {
         const existing = dbMap.get(p.code);
         if (!existing) {
           const id = codeToIdMap.get(p.code)!;
-          const publicId = generatePermissionPublicId();
           await tx.insert(schema.permissions).values({
             id,
-            publicId,
             name: p.name,
             code: p.code,
             type: p.type,
             resource: p.resource ?? null,
             action: p.action ?? null,
+            path: p.path ?? null,
+            icon: p.icon ?? null,
+            visible: p.visible ?? null,
             clientId,
             parentId: dbParentId,
             sort: p.sort,
@@ -180,6 +191,9 @@ export async function POST(request: NextRequest) {
             existing.type !== p.type ||
             existing.resource !== (p.resource ?? null) ||
             existing.action !== (p.action ?? null) ||
+            existing.path !== (p.path ?? null) ||
+            existing.icon !== (p.icon ?? null) ||
+            existing.visible !== (p.visible ?? null) ||
             existing.sort !== p.sort ||
             existing.status !== 'ACTIVE';
 
@@ -190,6 +204,9 @@ export async function POST(request: NextRequest) {
                 type: p.type,
                 resource: p.resource ?? null,
                 action: p.action ?? null,
+                path: p.path ?? null,
+                icon: p.icon ?? null,
+                visible: p.visible ?? null,
                 sort: p.sort,
                 status: 'ACTIVE',
                 ...(parentChanged ? { parentId: dbParentId } : {}),
@@ -220,10 +237,11 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true, stats: result });
   } catch (error) {
-    console.error('[Permissions Register POST] Failed to sync permissions:', error);
+    const mapped = mapDomainError(error);
+    console.error('[Permissions Register POST] 同步权限树失败:', mapped.message, error instanceof Error ? error.stack : '');
     return NextResponse.json(
-      { error: COMMON_ERRORS.INTERNAL_ERROR, message: '同步权限树失败' },
-      { status: 500 }
+      { error: mapped.error, message: mapped.message },
+      { status: mapped.status },
     );
   }
 }

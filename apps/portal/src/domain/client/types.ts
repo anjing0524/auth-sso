@@ -5,20 +5,17 @@ import { entityStatusEnum } from '@/domain/shared/zod-schemas';
 /**
  * OAuth Client 领域实体接口 (纯 TS interface)
  *
- * 已移除 Better Auth 兼容字段：
- * - grantTypes: 统一使用 authorization_code + refresh_token，不按 client 配置
- * - skipConsent: 不再支持跳过授权确认
- * - disabled: 与 status 枚举冗余，统一使用 status
+ * clientId 既是 OAuth 业务标识，也是 PK。
+ *
+ * v2 变更：
+ * - 移除 publicId、userId（clients PK 改为 client_id，消除冗余标识符）
+ * - 移除 grantTypes、skipConsent 等旧 Better Auth 兼容字段
  */
 export interface Client {
-  /** 内部 ID */
-  id: string;
-  /** 对外公开展示 ID */
-  publicId: string;
+  /** OAuth Client ID（PK，业务标识） */
+  clientId: string;
   /** 应用名称 */
   name: string;
-  /** OAuth Client ID */
-  clientId: string;
   /** OAuth Client Secret（仅创建时可见） */
   clientSecret: string | null;
   /** 回调地址列表 */
@@ -35,8 +32,6 @@ export interface Client {
   refreshTokenTtl: number;
   /** 状态 */
   status: EntityStatus;
-  /** 所属用户 ID */
-  userId: string | null;
   /** 创建时间 */
   createdAt: Temporal.Instant;
 }

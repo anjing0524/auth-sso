@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
     }
 
     return NextResponse.json({
-      sub: user.publicId,
+      sub: user.id,
       name: user.name,
       email: user.email,
       email_verified: user.emailVerified,

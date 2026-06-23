@@ -10,8 +10,23 @@ import 'server-only';
 import { db, schema } from '@/infrastructure/db';
 import type { AuditParams } from '@/db/schema/logs';
 import { NextRequest } from 'next/server';
-import { generateId } from '@/lib/crypto';
+import { generateUUID } from '@/lib/crypto';
 import { type LoginEventType, type AuditOperation } from '@auth-sso/contracts';
+
+/**
+ * 将请求 IP 规整为可写入 inet 列的合法值。
+ * 代理链取首个 IP；非法/空值返回 null，避免 PG inet 类型写入异常。
+ */
+export function sanitizeIp(ip: string | null | undefined): string | null {
+  if (!ip) return null;
+  const candidate = ip.split(',')[0].trim();
+  const ipv4 = /^(\d{1,3}\.){3}\d{1,3}$/;
+  const ipv6 = /^[0-9a-fA-F:]+$/;
+  if (ipv4.test(candidate) || (candidate.includes(':') && ipv6.test(candidate))) {
+    return candidate;
+  }
+  return null;
+}
 
 /**
  * 获取 HTTP 请求的真实客户端 IP 地址
@@ -66,11 +81,11 @@ export interface AuditLogParams {
 export async function logLoginEvent(params: LoginLogParams): Promise<void> {
   try {
     await db.insert(schema.loginLogs).values({
-      id: generateId(20),
+      id: generateUUID(),
       userId: params.userId ?? null,
       username: params.username,
       eventType: params.eventType,
-      ip: params.ip ?? null,
+      ip: sanitizeIp(params.ip),
       userAgent: params.userAgent ?? null,
       location: params.location ?? null,
       failReason: params.failReason ?? null,
@@ -87,14 +102,14 @@ export async function logLoginEvent(params: LoginLogParams): Promise<void> {
 export async function logAuditEvent(params: AuditLogParams): Promise<void> {
   try {
     await db.insert(schema.auditLogs).values({
-      id: generateId(20),
+      id: generateUUID(),
       userId: params.userId ?? null,
       username: params.username ?? null,
       operation: params.operation,
       method: params.method ?? null,
       url: params.url ?? null,
       params: params.params ?? null,
-      ip: params.ip ?? null,
+      ip: sanitizeIp(params.ip),
       userAgent: params.userAgent ?? null,
       status: params.status ?? null,
       duration: params.duration ?? null,

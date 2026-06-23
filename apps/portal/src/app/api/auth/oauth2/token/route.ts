@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
       const codeRows = await db
         .select()
         .from(schema.authorizationCodes)
-        .where(and(eq(schema.authorizationCodes.code, code), eq(schema.authorizationCodes.clientId, client.id)))
+        .where(and(eq(schema.authorizationCodes.code, code), eq(schema.authorizationCodes.clientId, client.clientId)))
         .limit(1);
 
       validateAuthCodeRow(codeRows[0], redirect_uri);
@@ -74,7 +74,7 @@ export async function POST(request: NextRequest) {
       }
 
       // 标记授权码已使用
-      await db.update(schema.authorizationCodes).set({ used: true }).where(eq(schema.authorizationCodes.id, authCode.id)).execute();
+      await db.update(schema.authorizationCodes).set({ used: true }).where(eq(schema.authorizationCodes.id, authCode.id));
 
       // 获取用户权限上下文（用于 Access Token claims）
       const permCtx = await getUserPermissionContext(authCode.userId);

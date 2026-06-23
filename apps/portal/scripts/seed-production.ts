@@ -72,7 +72,6 @@ async function upsertAdmin(db: ReturnType<typeof drizzle>, opts: {
 
   await db.insert(schema.users).values({
     id: opts.id,
-    publicId: `usr_admin_${crypto.randomUUID().slice(0, 8)}`,
     username: opts.username,
     email: opts.email,
     name: opts.name,
@@ -88,10 +87,9 @@ async function upsertClient(db: ReturnType<typeof drizzle>, opts: {
   clientId: string;
   name: string;
   clientSecret: string;
-  redirectUrls: string;
-  publicId: string;
+  redirectUris: string;
 }): Promise<void> {
-  const existing = await db.select({ id: schema.clients.id })
+  const existing = await db.select({ clientId: schema.clients.clientId })
     .from(schema.clients)
     .where(eq(schema.clients.clientId, opts.clientId));
 
@@ -99,7 +97,7 @@ async function upsertClient(db: ReturnType<typeof drizzle>, opts: {
     await db.update(schema.clients)
       .set({
         clientSecret: opts.clientSecret,
-        redirectUrls: opts.redirectUrls,
+        redirectUris: JSON.parse(opts.redirectUris),
         updatedAt: new Date(),
       })
       .where(eq(schema.clients.clientId, opts.clientId));
@@ -108,41 +106,14 @@ async function upsertClient(db: ReturnType<typeof drizzle>, opts: {
   }
 
   await db.insert(schema.clients).values({
-    id: crypto.randomUUID(),
-    publicId: opts.publicId,
-    name: opts.name,
     clientId: opts.clientId,
+    name: opts.name,
     clientSecret: opts.clientSecret,
-    redirectUrls: opts.redirectUrls,
+    redirectUris: JSON.parse(opts.redirectUris),
     scopes: 'openid profile email offline_access',
     status: 'ACTIVE',
   });
   console.log(`  ✅ 创建客户端: ${opts.name} (${opts.clientId})`);
-}
-
-async function ensureConsent(
-  db: ReturnType<typeof drizzle>,
-  userId: string,
-  clientId: string,
-): Promise<void> {
-  const existing = await db.select({ id: schema.consents.id })
-    .from(schema.consents)
-    .where(eq(schema.consents.clientId, clientId));
-
-  if (existing.length > 0) {
-    await db.update(schema.consents)
-      .set({ userId, consentGiven: true, updatedAt: new Date() })
-      .where(eq(schema.consents.clientId, clientId));
-    return;
-  }
-
-  await db.insert(schema.consents).values({
-    id: crypto.randomUUID(),
-    userId,
-    clientId,
-    scopes: 'openid profile email offline_access',
-    consentGiven: true,
-  });
 }
 
 // ============================================
@@ -183,18 +154,13 @@ async function main() {
       clientId: 'portal',
       name: 'Auth-SSO Portal',
       clientSecret: portalSecret,
-      redirectUrls: portalRedirectUrls,
-      publicId: 'cli_portal',
+      redirectUris: portalRedirectUrls,
     });
 
     // 3. RBAC 初始化（幂等，从 contracts 读取）
     console.log('\n🛡️  初始化 RBAC...');
     const { main: seedRbac } = await import('./seed-rbac');
     await seedRbac();
-
-    // 4. OAuth Consent 预授权
-    console.log('\n✅ 预授权 OAuth Consent...');
-    await ensureConsent(db, adminId, 'portal');
 
     console.log('\n✨ 生产环境初始化完成！');
   } finally {

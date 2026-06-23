@@ -9,7 +9,7 @@ import 'server-only';
  * @module lib/session/jwt
  */
 import { decodeJwt } from 'jose';
-import { type PortalJwtClaims } from './types';
+import { type PortalJwtClaims } from '@/domain/auth/types';
 
 /**
  * 快速解码 JWT 载荷（不验签，仅适用于已经过验签的 token）

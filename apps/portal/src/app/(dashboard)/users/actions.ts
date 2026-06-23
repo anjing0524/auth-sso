@@ -9,7 +9,7 @@
  * 函数体控制在 ≤ 20 行，不含任何内联业务规则判定（R9 / 红线 #2）。
  * 涉及“读取 + 更新”的多步骤写操作均用 db.transaction() 显式包裹（R22）。
  */
-import { revalidatePath, revalidateTag } from 'next/cache';
+import { revalidatePath, updateTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
 import { eq, or } from 'drizzle-orm';
 import { withAuth, type AuthContext } from '@/lib/auth';
@@ -29,9 +29,10 @@ import {
   type CreateUserInput,
 } from '@/domain/user/types';
 import { EntityNotFoundError, DuplicateEntityError } from '@/domain/shared/errors';
-import { generateId } from '@/lib/crypto';
-import { hashPassword } from '@/lib/password';
+import { generateUUID } from '@/lib/crypto';
+import { hashPassword } from '@/domain/auth/password';
 import { refreshUserPermissionCache } from '@/lib/permissions';
+import { revokeUserAccessByUserId } from '@/lib/session/revoke';
 import { USER_ACTIVE } from '@auth-sso/contracts';
 import type { ApiResponse } from '@auth-sso/contracts';
 
@@ -67,7 +68,7 @@ export const createUserAction = withAuth(
       });
       if (existing) throw new DuplicateEntityError('User', 'username/email');
 
-      const user = createUser(parsed.data, generateId);
+      const user = createUser(parsed.data, generateUUID);
       await tx.insert(schema.users).values({
         ...userToInsertRow(user),
         passwordHash,
@@ -76,8 +77,8 @@ export const createUserAction = withAuth(
     });
 
     revalidatePath('/users');
-    revalidateTag('users-list', 'minutes');
-    return { success: true, data: { id: result.publicId }, message: '用户创建成功' };
+    updateTag('users-list');
+    return { success: true, data: { id: result.id }, message: '用户创建成功' };
   },
 );
 
@@ -104,8 +105,13 @@ export const toggleUserStatusAction = withAuth(
       return target;
     });
 
+    // 状态变更后撤销该用户所有活跃 JWT（jti 黑名单），确保变更即时生效
+    revokeUserAccessByUserId(parsed.data.id).catch((e) =>
+      console.error('[Users Action] 撤销用户 JWT 失败:', e),
+    );
+
     revalidatePath('/users');
-    revalidateTag('users-list', 'minutes');
+    updateTag('users-list');
     return {
       success: true,
       data: { status: updated.status },
@@ -147,7 +153,7 @@ export const updateUserAction = withAuth(
 
     await refreshUserPermissionCache(parsed.data.id);
     revalidatePath('/users');
-    revalidateTag('users-list', 'minutes');
+    updateTag('users-list');
     return { success: true, data: { id: parsed.data.id }, message: '更新成功' };
   },
 );
@@ -174,9 +180,14 @@ export const deleteUserAction = withAuth(
         .where(eq(schema.users.id, parsed.data.id));
     });
 
+    // 删除用户后撤销其所有活跃 JWT（jti 黑名单），确保即时下线
+    revokeUserAccessByUserId(parsed.data.id).catch((e) =>
+      console.error('[Users Action] 撤销已删除用户 JWT 失败:', e),
+    );
+
     await refreshUserPermissionCache(parsed.data.id);
     revalidatePath('/users');
-    revalidateTag('users-list', 'minutes');
+    updateTag('users-list');
     return { success: true, data: { id: parsed.data.id }, message: '用户已逻辑删除' };
   },
 );

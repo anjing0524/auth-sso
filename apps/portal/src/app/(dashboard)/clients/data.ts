@@ -6,7 +6,6 @@ import 'server-only';
 import { cacheLife, cacheTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
 import { ilike, eq, or, desc, and, count } from 'drizzle-orm';
-import { byIdOrPublicId } from '@/db/resolve-id';
 import { ENTITY_STATUS_VALUES, type EntityStatus } from '@auth-sso/contracts';
 import { asEntityStatus } from '@/lib/type-guards';
 
@@ -17,10 +16,8 @@ import { asEntityStatus } from '@/lib/type-guards';
  * 供 Client Component 直接从 API 响应消费。
  */
 export interface ClientDTO {
-  id: string;
-  publicId: string;
-  name: string;
   clientId: string;
+  name: string;
   redirectUris: string[];
   scopes: string;
   homepageUrl: string | null;
@@ -74,7 +71,7 @@ export async function getClients(params: {
 
   return {
     data: rows.map(c => ({
-      id: c.id, publicId: c.publicId, name: c.name, clientId: c.clientId,
+      clientId: c.clientId, name: c.name,
       redirectUris: c.redirectUris,
       scopes: c.scopes, homepageUrl: c.homepageUrl, logoUrl: c.logoUrl,
       status: c.status, createdAt: c.createdAt.toISOString(), updatedAt: c.updatedAt?.toISOString(),
@@ -90,16 +87,14 @@ export async function getClients(params: {
  */
 export async function getClientById(lookupId: string): Promise<ClientDTO | null> {
   const rows = await db.select().from(schema.clients)
-    .where(byIdOrPublicId('clients', lookupId))
+    .where(eq(schema.clients.clientId, lookupId))
     .limit(1);
   const row = rows[0];
   if (!row) return null;
 
   return {
-    id: row.id,
-    publicId: row.publicId,
-    name: row.name,
     clientId: row.clientId,
+    name: row.name,
     redirectUris: row.redirectUris,
     scopes: row.scopes,
     homepageUrl: row.homepageUrl,

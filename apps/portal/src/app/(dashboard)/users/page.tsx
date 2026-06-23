@@ -4,7 +4,7 @@
  * 鉴权由 layout.tsx 统一处理，本组件零鉴权样板，专注数据获取与渲染。
  */
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
-import { requirePermission } from '@/lib/auth/require-permission';
+import { requirePermission } from '@/lib/auth/check-permission';
 import { getDataScopeFilter } from '@/lib/auth';
 import { getUsers, getDepartments } from './data';
 import UserFilters from './components/UserFilters';
@@ -18,6 +18,8 @@ interface PageProps {
     status?: string;
   }>;
 }
+
+export const metadata = { title: '用户管理 | Auth-SSO' };
 
 export default async function UsersPage({ searchParams }: PageProps) {
   const params = await searchParams;

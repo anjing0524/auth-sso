@@ -8,22 +8,21 @@ export type { User };
 
 /**
  * 将 Drizzle 数据库行转换为领域 User 实体
- * 处理 Drizzle $inferSelect 中 string 类型到 UserStatus 联合类型的安全转换
  */
 export function toDomainUser(row: {
   id: string;
-  publicId: string;
   username: string;
   email: string | null;
   name: string;
   avatarUrl: string | null;
   status: UserStatus;
   deptId: string | null;
+  deletedAt: Date | null;
+  passwordChangedAt: Date | null;
   createdAt: Date;
 }): User {
   return {
     id: row.id,
-    publicId: row.publicId,
     username: row.username,
     email: row.email,
     name: row.name,
@@ -31,6 +30,8 @@ export function toDomainUser(row: {
     status: row.status,
     deptId: row.deptId,
     deptName: null,
+    deletedAt: row.deletedAt ? Temporal.Instant.fromEpochMilliseconds(row.deletedAt.getTime()) : null,
+    passwordChangedAt: row.passwordChangedAt ? Temporal.Instant.fromEpochMilliseconds(row.passwordChangedAt.getTime()) : null,
     createdAt: Temporal.Instant.fromEpochMilliseconds(row.createdAt.getTime()),
   };
 }
@@ -39,16 +40,15 @@ export function toDomainUser(row: {
  * 工厂函数：构建新用户实体 (无副作用)
  *
  * @param input 经 Zod 校验的创建参数
- * @param idGenerator ID 生成器（通过参数注入，保持纯函数可测试性）
+ * @param idGenerator UUID 生成器（通过参数注入，保持纯函数可测试性）
  * @returns 新用户实体
  */
 export function createUser(
   input: CreateUserInput,
-  idGenerator: (len: number) => string
+  idGenerator: () => string
 ): User {
   return {
-    id: idGenerator(20),
-    publicId: `user_${idGenerator(16)}`,
+    id: idGenerator(),
     username: input.username,
     email: input.email,
     name: input.name,
@@ -56,6 +56,8 @@ export function createUser(
     deptId: input.deptId || null,
     deptName: null,
     avatarUrl: null,
+    deletedAt: null,
+    passwordChangedAt: null,
     createdAt: Temporal.Now.instant(),
   };
 }
@@ -70,6 +72,9 @@ export function createUser(
 export function toggleUserStatus(user: User): User {
   if (user.status === USER_DELETED) {
     throw new BusinessRuleViolationError('已逻辑删除的用户无法操作状态');
+  }
+  if (user.status === 'LOCKED') {
+    throw new BusinessRuleViolationError('已锁定的用户无法直接切换状态，请使用解锁功能');
   }
   const newStatus: User['status'] = user.status === USER_ACTIVE ? 'DISABLED' : USER_ACTIVE;
   return { ...user, status: newStatus };
@@ -86,12 +91,11 @@ export function deleteUser(user: User): User {
   if (user.status === USER_DELETED) {
     throw new BusinessRuleViolationError('用户已被删除，不可重复操作');
   }
-  return { ...user, status: USER_DELETED };
+  return { ...user, status: USER_DELETED, deletedAt: Temporal.Now.instant() };
 }
 
 /**
  * 核心领域纯函数：构建更新后的用户对象 (无副作用)
- * 消除 Controller 中的 ?? 链，收敛修改规则
  *
  * @param user 原始用户对象
  * @param patch 用户属性的修改片段
@@ -128,13 +132,14 @@ export function applyUserUpdate(
 export function userToInsertRow(u: User) {
   return {
     id: u.id,
-    publicId: u.publicId,
     username: u.username,
     email: u.email,
     name: u.name,
     avatarUrl: u.avatarUrl,
     status: u.status,
     deptId: u.deptId,
+    deletedAt: u.deletedAt ? new Date(u.deletedAt.epochMilliseconds) : null,
+    passwordChangedAt: u.passwordChangedAt ? new Date(u.passwordChangedAt.epochMilliseconds) : null,
     createdAt: new Date(u.createdAt.epochMilliseconds),
   };
 }
@@ -150,5 +155,7 @@ export function userToUpdateRow(u: User) {
     avatarUrl: u.avatarUrl,
     status: u.status,
     deptId: u.deptId,
+    deletedAt: u.deletedAt ? new Date(u.deletedAt.epochMilliseconds) : null,
+    passwordChangedAt: u.passwordChangedAt ? new Date(u.passwordChangedAt.epochMilliseconds) : null,
   };
 }

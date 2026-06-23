@@ -47,7 +47,7 @@ import { toggleUserStatusAction } from '../actions';
  */
 interface User {
   id: string;
-  publicId: string;
+  
   username: string;
   email: string | null;
   name: string;

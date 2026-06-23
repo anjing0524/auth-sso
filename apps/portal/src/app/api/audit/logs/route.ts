@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withPermission } from '@/lib/auth';
 import { getAuditLogs } from '@/app/audit/data';
+import { AUDIT_OPERATION_VALUES, type AuditOperation } from '@auth-sso/contracts';
 
 export const runtime = 'nodejs';
 
@@ -13,11 +14,15 @@ export const runtime = 'nodejs';
 export async function GET(request: NextRequest) {
   return withPermission({ permissions: ['audit:read'] }, async () => {
     const sp = request.nextUrl.searchParams;
+    const rawOp = sp.get('operation');
+    const operation = rawOp && (AUDIT_OPERATION_VALUES as readonly string[]).includes(rawOp)
+      ? (rawOp as AuditOperation)
+      : undefined;
     const result = await getAuditLogs({
       page: parseInt(sp.get('page') || '1', 10),
       pageSize: parseInt(sp.get('pageSize') || '20', 10),
       userId: sp.get('userId') || undefined,
-      operation: sp.get('operation') || undefined,
+      operation,
       startDate: sp.get('startDate') || undefined,
       endDate: sp.get('endDate') || undefined,
     });

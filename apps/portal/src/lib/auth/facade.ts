@@ -59,7 +59,14 @@ export async function withPermission(
       );
     }
 
-    return await handler(check.userId!, check.claims!);
+    // checkPermission 保证 authorized 为 true 时 userId 与 claims 均非空（运行时断言兜底）
+    if (!check.userId || !check.claims) {
+      return NextResponse.json(
+        { error: COMMON_ERRORS.INTERNAL_ERROR, message: '鉴权上下文缺失' },
+        { status: 500 },
+      );
+    }
+    return await handler(check.userId, check.claims);
   } catch (error: unknown) {
     const mapped = mapDomainError(error);
     console.error('[AuthFacade] 服务执行异常:', mapped.message, error instanceof Error ? error.stack : '');

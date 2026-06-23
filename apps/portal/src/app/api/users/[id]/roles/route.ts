@@ -5,9 +5,9 @@
  * DELETE /api/users/[id]/roles — 移除用户的指定角色
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { revalidatePath, revalidateTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
 import { eq, or, and } from 'drizzle-orm';
-import { byIdOrPublicId } from '@/db/resolve-id';
 import { withPermission } from '@/lib/auth';
 import crypto from 'crypto';
 import { refreshUserPermissionCache } from '@/lib/permissions';
@@ -55,7 +55,7 @@ export async function POST(
     // 获取用户ID
     const users = await db.select()
       .from(schema.users)
-      .where(byIdOrPublicId('users', id));
+      .where(eq(schema.users.id, id));
 
     if (users.length === 0) {
       return NextResponse.json(
@@ -84,6 +84,10 @@ export async function POST(
 
     // 3. 分配角色后主动清除该用户的权限缓存，保障缓存强一致性
     await refreshUserPermissionCache(userId);
+
+    // 4. 失效页面与数据缓存
+    revalidatePath('/users');
+    revalidateTag('users-list', 'max');
 
     return NextResponse.json({ success: true, assignedCount: roleIds.length });
   });
@@ -117,7 +121,7 @@ export async function DELETE(
     // 获取用户ID
     const users = await db.select()
       .from(schema.users)
-      .where(byIdOrPublicId('users', id));
+      .where(eq(schema.users.id, id));
 
     if (users.length === 0) {
       return NextResponse.json(
@@ -137,6 +141,10 @@ export async function DELETE(
 
     // 移除角色后主动清除该用户的权限缓存，保障缓存强一致性
     await refreshUserPermissionCache(userId);
+
+    // 失效页面与数据缓存
+    revalidatePath('/users');
+    revalidateTag('users-list', 'max');
 
     return NextResponse.json({ success: true });
   });

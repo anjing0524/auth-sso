@@ -7,12 +7,12 @@ import { entityStatusEnum, dataScopeTypeEnum } from '@/domain/shared/zod-schemas
 
 /**
  * 角色领域实体接口 (纯 TS interface)
+ *
+ * v2 变更：移除 publicId
  */
 export interface Role {
-  /** 内部 ID */
+  /** 内部 ID（UUID） */
   id: string;
-  /** 对外公开展示 ID */
-  publicId: string;
   /** 角色名称 */
   name: string;
   /** 角色编码 (唯一标识) */

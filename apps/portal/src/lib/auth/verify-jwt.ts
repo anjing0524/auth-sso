@@ -43,7 +43,8 @@ async function getGatewayUserId(): Promise<string | null> {
   try {
     const h = await headers();
     return h.get(GATEWAY_HEADERS.USER_ID) || null;
-  } catch {
+  } catch (e) {
+    console.error('[Auth] headers() 读取 Gateway User ID 异常:', e);
     return null;
   }
 }
@@ -58,7 +59,9 @@ async function getJwtFromRequest(): Promise<string | null> {
     if (auth && auth.toLowerCase().startsWith('bearer ')) {
       return auth.substring(7).trim();
     }
-  } catch {}
+  } catch (e) {
+    console.error('[Auth] headers() 读取 JWT 异常，降级至 Cookie 路径:', e);
+  }
   return getJwtFromCookie();
 }
 

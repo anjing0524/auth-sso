@@ -15,13 +15,9 @@ export type EntityStatus = typeof ENTITY_STATUS_VALUES[number];
 export const DATA_SCOPE_TYPE_VALUES = ['ALL', 'DEPT', 'DEPT_AND_SUB', 'SELF', 'CUSTOM'] as const;
 export type DataScopeType = typeof DATA_SCOPE_TYPE_VALUES[number];
 
-// 权限类型 — 唯一真相源
-export const PERMISSION_TYPE_VALUES = ['MENU', 'API', 'DATA'] as const;
+// 权限类型 — 唯一真相源（合并旧 permission_type + menu_type，menus 表已合并进 permissions）
+export const PERMISSION_TYPE_VALUES = ['DIRECTORY', 'PAGE', 'API', 'DATA'] as const;
 export type PermissionType = typeof PERMISSION_TYPE_VALUES[number];
-
-// 菜单类型 — 唯一真相源
-export const MENU_TYPE_VALUES = ['DIRECTORY', 'MENU', 'BUTTON'] as const;
-export type MenuType = typeof MENU_TYPE_VALUES[number];
 
 // Client 类型 — 唯一真相源值数组
 export const CLIENT_TYPE_VALUES = ['confidential', 'public'] as const;
@@ -54,12 +50,16 @@ export const LOGIN_EVENT_LABELS: Record<LoginEventType, string> = {
 // 所有枚举值的单一真相源仍在 *_VALUES 数组中
 // ────────────────────────────────────────────
 export const USER_ACTIVE: UserStatus = 'ACTIVE';
+export const USER_DISABLED: UserStatus = 'DISABLED';
+export const USER_LOCKED: UserStatus = 'LOCKED';
 export const USER_DELETED: UserStatus = 'DELETED';
 export const ENTITY_ACTIVE: EntityStatus = 'ACTIVE';
 export const ENTITY_DISABLED: EntityStatus = 'DISABLED';
 export const DATA_SCOPE_SELF: DataScopeType = 'SELF';
 export const PERMISSION_API: PermissionType = 'API';
-export const MENU_TYPE_MENU: MenuType = 'MENU';
+export const PERMISSION_PAGE: PermissionType = 'PAGE';
+export const PERMISSION_DIRECTORY: PermissionType = 'DIRECTORY';
+export const PERMISSION_DATA: PermissionType = 'DATA';
 /** 系统管理员角色编码集合（硬编码业务常量） */
 export const ADMIN_ROLE_CODES = ['SUPER_ADMIN', 'ADMIN'] as const;
 

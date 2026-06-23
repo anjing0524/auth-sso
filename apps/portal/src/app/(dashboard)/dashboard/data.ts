@@ -2,6 +2,7 @@ import 'server-only';
 
 import { db, schema } from '@/infrastructure/db';
 import { eq, ne, desc, count } from 'drizzle-orm';
+import { USER_DELETED } from '@auth-sso/contracts';
 
 export interface DashboardStats {
   users: number;
@@ -22,7 +23,7 @@ export interface RecentAuditLog {
  */
 export async function getDashboardStats(): Promise<DashboardStats> {
   const [[usersCount], [rolesCount], [clientsCount]] = await Promise.all([
-    db.select({ count: count() }).from(schema.users).where(ne(schema.users.status, 'DELETED')),
+    db.select({ count: count() }).from(schema.users).where(ne(schema.users.status, USER_DELETED)),
     db.select({ count: count() }).from(schema.roles),
     db.select({ count: count() }).from(schema.clients),
   ]);

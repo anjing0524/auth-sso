@@ -7,6 +7,7 @@
  * @module domain/auth/login
  */
 import { BusinessRuleViolationError } from '@/domain/shared/errors';
+import { USER_LOCKED, USER_DISABLED, USER_DELETED } from '@auth-sso/contracts';
 import type { UserStatus } from '@auth-sso/contracts';
 
 /**
@@ -14,7 +15,6 @@ import type { UserStatus } from '@auth-sso/contracts';
  */
 export interface UserAuthRow {
   id: string;
-  publicId: string;
   username: string;
   name: string;
   email: string | null;
@@ -33,8 +33,8 @@ export interface UserAuthRow {
  * @throws BusinessRuleViolationError  账号禁用/锁定/删除，或未设置密码
  */
 export function validateLoginCredentials(row: UserAuthRow): void {
-  if (row.status === 'LOCKED') throw new BusinessRuleViolationError('账号已被锁定');
-  if (row.status === 'DISABLED') throw new BusinessRuleViolationError('账号已被禁用');
-  if (row.status === 'DELETED') throw new BusinessRuleViolationError('账号已注销');
+  if (row.status === USER_LOCKED) throw new BusinessRuleViolationError('账号已被锁定');
+  if (row.status === USER_DISABLED) throw new BusinessRuleViolationError('账号已被禁用');
+  if (row.status === USER_DELETED) throw new BusinessRuleViolationError('账号已注销');
   if (!row.passwordHash) throw new BusinessRuleViolationError('账号未设置密码');
 }

@@ -38,8 +38,7 @@ export async function POST(request: NextRequest) {
       await db
         .update(schema.refreshTokens)
         .set({ revoked: new Date() })
-        .where(eq(schema.refreshTokens.token, token))
-        .execute();
+        .where(eq(schema.refreshTokens.tokenHash, token));
     }
 
     // RFC 7009: 始终返回 200

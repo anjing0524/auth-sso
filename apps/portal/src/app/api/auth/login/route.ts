@@ -61,7 +61,6 @@ export async function POST(request: NextRequest) {
     db.update(schema.users)
       .set({ lastLoginAt: new Date() })
       .where(eq(schema.users.id, user.id))
-      .execute()
       .catch((err) => console.error('[Login] 更新 lastLoginAt 失败:', err));
 
     // 6. 签发 Login Session JWT → 写入 Cookie

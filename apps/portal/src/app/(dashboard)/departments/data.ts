@@ -2,7 +2,8 @@
  * 部门管理读模型 (Read Model)
  *
  * 使用 "use cache" + cacheLife/cacheTag 实现持久化缓存。
- * 身份鉴权在缓存作用域外完成，userId 作为参数注入。
+ * scopeFilter 由调用方在缓存作用域外计算后注入（R10 / §3.6），
+ * 严禁在 'use cache' 作用域内访问 headers()/cookies() 等动态 API。
  * Drizzle 返回的 Date 通过 Temporal.Instant.fromEpochMilliseconds() 统一转换（支持 toJSON 序列化）。
  */
 import 'server-only';
@@ -10,9 +11,8 @@ import 'server-only';
 import { cacheLife, cacheTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
 import { asc, and, eq } from 'drizzle-orm';
-import { byIdOrPublicId } from '@/db/resolve-id';
 import type { EntityStatus } from '@auth-sso/contracts';
-import { getDataScopeFilter, applyDataScopeFilter } from '@/lib/auth';
+import { applyDataScopeFilter } from '@/lib/auth';
 import { buildDepartmentTree } from '@/domain/department/department';
 import type { DepartmentTreeNode } from '@/domain/department/department';
 import { isScopeDenied } from '@/db/user-queries';
@@ -20,13 +20,17 @@ import { asEntityStatus } from '@/lib/type-guards';
 
 /**
  * 获取当前授权范围内的部门树形结构
+ *
+ * @param scopeFilter — 由调用方在缓存作用域外通过 getDataScopeFilter(userId) 预先计算的过滤条件
+ * @param userId       — 当前操作者用户 ID（用于范围过滤）
  */
-export async function getDepartments(userId: string): Promise<DepartmentTreeNode[]> {
+export async function getDepartments(
+  scopeFilter: { type: 'ALL' | 'LIST' | 'SELF'; deptIds?: string[] },
+  userId: string,
+): Promise<DepartmentTreeNode[]> {
   'use cache';
   cacheLife('minutes');
   cacheTag('departments-list');
-
-  const scopeFilter = await getDataScopeFilter(userId);
 
   if (isScopeDenied(scopeFilter)) {
     return [];
@@ -46,7 +50,7 @@ export async function getDepartments(userId: string): Promise<DepartmentTreeNode
   if (scopeFilter.type !== 'ALL') {
     // 有限范围时只返回平面列表
     return rows.map(r => ({
-      id: r.id, publicId: r.publicId, parentId: r.parentId, ancestors: r.ancestors,
+      id: r.id, parentId: r.parentId, ancestors: r.ancestors,
       name: r.name, code: r.code, sort: r.sort ?? 0,
       status: asEntityStatus(r.status),
       createdAt: Temporal.Instant.fromEpochMilliseconds(r.createdAt.getTime()),
@@ -55,7 +59,7 @@ export async function getDepartments(userId: string): Promise<DepartmentTreeNode
   }
 
   const depts = rows.map(r => ({
-    id: r.id, publicId: r.publicId, parentId: r.parentId, ancestors: r.ancestors,
+    id: r.id, parentId: r.parentId, ancestors: r.ancestors,
     name: r.name, code: r.code, sort: r.sort ?? 0,
     status: asEntityStatus(r.status),
     createdAt: Temporal.Instant.fromEpochMilliseconds(r.createdAt.getTime()),
@@ -65,17 +69,16 @@ export async function getDepartments(userId: string): Promise<DepartmentTreeNode
 }
 
 /**
- * 按 ID 获取单个部门详情（支持内部 ID 和 publicId）
+ * 按 ID 获取单个部门详情
  */
 export async function getDepartmentById(lookupId: string) {
   const rows = await db.select().from(schema.departments)
-    .where(byIdOrPublicId('departments', lookupId))
+    .where(eq(schema.departments.id, lookupId))
     .limit(1);
   const row = rows[0];
   if (!row) return null;
   return {
     id: row.id,
-    publicId: row.publicId,
     parentId: row.parentId,
     name: row.name,
     code: row.code,
@@ -91,7 +94,6 @@ export async function getDepartmentById(lookupId: string) {
 export async function getDepartmentMembers(departmentId: string) {
   return db.select({
     id: schema.users.id,
-    publicId: schema.users.publicId,
     name: schema.users.name,
     username: schema.users.username,
     email: schema.users.email,

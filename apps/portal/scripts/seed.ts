@@ -10,11 +10,7 @@ import './load-env';
 
 import { db, schema } from '@/infrastructure/db';
 import bcrypt from 'bcryptjs';
-import { randomBytes } from 'crypto';
-
-function generateId(length: number = 20): string {
-  return randomBytes(length).toString('hex').slice(0, length);
-}
+import crypto from 'crypto';
 
 /**
  * 解析逗号分隔的 redirect URL 列表，并序列化为 JSON 字符串
@@ -38,7 +34,6 @@ async function main() {
     await db.delete(schema.userRoles);
     await db.delete(schema.permissions);
     await db.delete(schema.roles);
-    await db.delete(schema.consents);
     await db.delete(schema.refreshTokens);
     await db.delete(schema.accessTokens);
     await db.delete(schema.authorizationCodes);
@@ -53,7 +48,6 @@ async function main() {
 
     await db.insert(schema.users).values({
       id: adminId,
-      publicId: 'usr_admin',
       username: 'admin',
       email: 'admin@example.com',
       name: '系统管理员',
@@ -68,20 +62,17 @@ async function main() {
       ['http://localhost:4100/auth/callback', 'http://localhost:4100/api/auth/callback'],
     );
     await db.insert(schema.clients).values({
-      id: generateId(),
-      publicId: 'cli_portal',
-      name: 'Auth-SSO Portal',
       clientId: 'portal',
+      name: 'Auth-SSO Portal',
       clientSecret: process.env.PORTAL_CLIENT_SECRET || 'portal-secret',
-      redirectUrls: portalRedirectUrls,
+      redirectUris: JSON.parse(portalRedirectUrls),
       scopes: 'openid profile email offline_access',
       status: 'ACTIVE',
     });
 
     // 3. 创建默认部门
     await db.insert(schema.departments).values({
-      id: generateId(),
-      publicId: 'dept_root',
+      id: crypto.randomUUID(),
       name: '总公司',
       code: 'ROOT',
       status: 'ACTIVE',

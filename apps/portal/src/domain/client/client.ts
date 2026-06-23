@@ -5,14 +5,10 @@ export type { Client };
 
 /**
  * 将 Drizzle 数据库行转换为领域 Client 实体
- *
- * Drizzle 属性名与 Domain 字段名已对齐（redirectUris / logoUrl），无需应用层映射。
  */
 export function toDomainClient(row: {
-  id: string;
-  publicId: string;
-  name: string;
   clientId: string;
+  name: string;
   clientSecret: string | null;
   redirectUris: string[];
   scopes: string;
@@ -21,14 +17,11 @@ export function toDomainClient(row: {
   accessTokenTtl: number | null;
   refreshTokenTtl: number | null;
   status: import('@auth-sso/contracts').EntityStatus;
-  userId?: string | null;
   createdAt: Date;
 }): Client {
   return {
-    id: row.id,
-    publicId: row.publicId,
-    name: row.name,
     clientId: row.clientId,
+    name: row.name,
     clientSecret: row.clientSecret,
     redirectUris: row.redirectUris,
     scopes: row.scopes,
@@ -37,7 +30,6 @@ export function toDomainClient(row: {
     accessTokenTtl: row.accessTokenTtl ?? 3600,
     refreshTokenTtl: row.refreshTokenTtl ?? 604800,
     status: row.status,
-    userId: row.userId ?? null,
     createdAt: Temporal.Instant.fromEpochMilliseconds(row.createdAt.getTime()),
   };
 }
@@ -47,15 +39,12 @@ export function toDomainClient(row: {
  */
 export function createClient(
   input: CreateClientInput,
-  idGenerator: (len: number) => string,
   clientIdGenerator: () => string,
   secretGenerator: () => string,
 ): Client {
   return {
-    id: idGenerator(20),
-    publicId: `cli_${idGenerator(16)}`,
-    name: input.name,
     clientId: clientIdGenerator(),
+    name: input.name,
     clientSecret: secretGenerator(),
     redirectUris: input.redirectUris,
     scopes: input.scopes,
@@ -64,7 +53,6 @@ export function createClient(
     accessTokenTtl: input.accessTokenTtl,
     refreshTokenTtl: input.refreshTokenTtl,
     status: ENTITY_ACTIVE,
-    userId: null,
     createdAt: Temporal.Now.instant(),
   };
 }
@@ -96,10 +84,8 @@ export function applyClientUpdate(
 /** 将领域实体转为 Drizzle insert 行 */
 export function clientToInsertRow(c: Client) {
   return {
-    id: c.id,
-    publicId: c.publicId,
-    name: c.name,
     clientId: c.clientId,
+    name: c.name,
     clientSecret: c.clientSecret,
     redirectUris: c.redirectUris,
     scopes: c.scopes,

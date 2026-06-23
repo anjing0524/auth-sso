@@ -5,6 +5,7 @@
 import { db, schema } from '@/infrastructure/db';
 import { eq, inArray, and } from 'drizzle-orm';
 import { getRedis, type RedisClient } from '@/infrastructure/redis';
+import { ENTITY_ACTIVE } from '@auth-sso/contracts';
 import type { DataScopeType, UserPermissionContext } from '@auth-sso/contracts';
 import { asDataScopeType } from '@/lib/type-guards';
 
@@ -64,7 +65,7 @@ export async function getUserPermissionContext(userId: string): Promise<UserPerm
     }
 
     // 强核准状态约束：如果用户状态不是激活状态 (ACTIVE)，立刻返回 null 拒绝加载权限与角色，防范封禁账号鉴权逃逸漏洞
-    if (user.status !== 'ACTIVE') {
+    if (user.status !== ENTITY_ACTIVE) {
       console.warn(`[PermissionContext] Access denied: User ${userId} is not ACTIVE (current status: ${user.status})`);
       return null;
     }
@@ -72,7 +73,7 @@ export async function getUserPermissionContext(userId: string): Promise<UserPerm
     // 从嵌套结构中过滤出处于激活状态 (ACTIVE) 的角色
     const roles = user.userRoles
       .map(ur => ur.role)
-      .filter((r): r is NonNullable<typeof r> => r !== null && r.status === 'ACTIVE');
+      .filter((r): r is NonNullable<typeof r> => r !== null && r.status === ENTITY_ACTIVE);
 
     if (roles.length === 0) {
       const context: UserPermissionContext = {
@@ -99,7 +100,7 @@ export async function getUserPermissionContext(userId: string): Promise<UserPerm
         roles
           .flatMap(r => r.rolePermissions)
           .map(rp => rp.permission)
-          .filter((p): p is NonNullable<typeof p> => p !== null && p.status === 'ACTIVE')
+          .filter((p): p is NonNullable<typeof p> => p !== null && p.status === ENTITY_ACTIVE)
           .map(p => p.code)
       )
     );
@@ -203,13 +204,19 @@ export async function clearUsersPermissionCache(userIds: string[]): Promise<void
   if (!userIds || userIds.length === 0) return;
   try {
     const redis = getRedis();
-    await Promise.all(
+    // 使用 Promise.allSettled：单个用户失败不影响其他用户的缓存清除
+    const results = await Promise.allSettled(
       userIds.map(async (userId) => {
         const cacheKey = `portal:user_perms:${userId}`;
         await redis.del(cacheKey);
-      })
+      }),
     );
-    console.log(`[PermissionContext] Batch cleared permissions cache for ${userIds.length} users`);
+    const failed = results.filter((r) => r.status === 'rejected').length;
+    if (failed > 0) {
+      console.warn(`[PermissionContext] Batch cleared for ${userIds.length} users, ${failed} failed`);
+    } else {
+      console.log(`[PermissionContext] Batch cleared permissions cache for ${userIds.length} users`);
+    }
   } catch (error: any) {
     console.error('[PermissionContext] Failed to batch clear permissions cache:', error.message);
   }

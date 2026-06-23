@@ -7,23 +7,39 @@ import { entityStatusEnum, permissionTypeEnum } from '@/domain/shared/zod-schema
 
 /**
  * 权限领域实体接口 (纯 TS interface)
+ *
+ * 合并了旧 menus 表的功能。
+ * type 鉴别列决定字段生效规则：
+ * - DIRECTORY/PAGE: path, icon, visible（菜单相关）
+ * - API: resource, action, clientId（接口鉴权）
+ * - DATA: resource, action（数据权限）
+ *
+ * v2 变更：移除 publicId，新增 path/icon/visible（合并 menus）
  */
 export interface Permission {
-  /** 内部 ID */
+  /** 内部 ID（UUID） */
   id: string;
-  /** 对外公开展示 ID */
-  publicId: string;
   /** 权限名称 */
   name: string;
   /** 权限编码 (唯一标识) */
   code: string;
-  /** 权限类型 */
+  /** 权限类型（鉴别列） */
   type: PermissionType;
-  /** 资源路径 */
+  /** 描述 */
+  description: string | null;
+  /** 前端路由路径（PAGE 必填） */
+  path: string | null;
+  /** 图标名称（DIRECTORY/PAGE） */
+  icon: string | null;
+  /** 侧边栏可见（DIRECTORY/PAGE） */
+  visible: boolean | null;
+  /** 资源标识（API: 接口路径，DATA: 数据实体） */
   resource: string | null;
-  /** 操作类型 */
+  /** 操作类型（API: HTTP方法，DATA: 读写操作） */
   action: string | null;
-  /** 父权限 ID */
+  /** 归属 OAuth Client（仅 API 类型） */
+  clientId: string | null;
+  /** 父节点 ID（权限树） */
   parentId: string | null;
   /** 状态 */
   status: EntityStatus;
@@ -33,24 +49,76 @@ export interface Permission {
   createdAt: Temporal.Instant;
 }
 
-/** 创建权限入参校验 Schema */
-export const CreatePermissionInputSchema = z.object({
-  name: z.string().min(1, '权限名称不能为空'),
-  code: z.string().min(1, '权限编码不能为空').toLowerCase(),
-  type: permissionTypeEnum.default('API'),
-  resource: z.string().optional(),
-  action: z.string().optional(),
-  parentId: z.string().nullable().optional(),
-  sort: z.number().int().default(0),
-});
+/**
+ * 权限树节点（含子节点引用）
+ */
+export interface PermissionTreeNode extends Permission {
+  children: PermissionTreeNode[];
+}
+
+/** 创建权限入参校验 Schema（基于 type 的 discriminated union） */
+export const CreatePermissionInputSchema = z.discriminatedUnion('type', [
+  // DIRECTORY：菜单目录
+  z.object({
+    type: z.literal('DIRECTORY'),
+    code: z.string().min(1, '权限编码不能为空'),
+    name: z.string().min(1, '权限名称不能为空'),
+    description: z.string().optional(),
+    path: z.string().optional(),
+    icon: z.string().optional(),
+    visible: z.boolean().default(true),
+    parentId: z.string().nullable().optional(),
+    sort: z.number().int().default(0),
+  }),
+  // PAGE：菜单页面
+  z.object({
+    type: z.literal('PAGE'),
+    code: z.string().min(1, '权限编码不能为空'),
+    name: z.string().min(1, '权限名称不能为空'),
+    description: z.string().optional(),
+    path: z.string().min(1, 'PAGE 类型必须指定 path'),
+    icon: z.string().optional(),
+    visible: z.boolean().default(true),
+    parentId: z.string().nullable().optional(),
+    sort: z.number().int().default(0),
+  }),
+  // API：接口权限
+  z.object({
+    type: z.literal('API'),
+    code: z.string().min(1, '权限编码不能为空'),
+    name: z.string().min(1, '权限名称不能为空'),
+    description: z.string().optional(),
+    resource: z.string().min(1, 'API 类型必须指定 resource'),
+    action: z.string().min(1, 'API 类型必须指定 action'),
+    clientId: z.string().optional(),
+    parentId: z.string().nullable().optional(),
+    sort: z.number().int().default(0),
+  }),
+  // DATA：数据权限
+  z.object({
+    type: z.literal('DATA'),
+    code: z.string().min(1, '权限编码不能为空'),
+    name: z.string().min(1, '权限名称不能为空'),
+    description: z.string().optional(),
+    resource: z.string().min(1, 'DATA 类型必须指定 resource'),
+    action: z.string().min(1, 'DATA 类型必须指定 action'),
+    parentId: z.string().nullable().optional(),
+    sort: z.number().int().default(0),
+  }),
+]);
 
 /** 更新权限入参校验 Schema */
 export const UpdatePermissionInputSchema = z.object({
   name: z.string().min(1).optional(),
   code: z.string().min(1).optional(),
   type: permissionTypeEnum.optional(),
+  description: z.string().nullable().optional(),
+  path: z.string().nullable().optional(),
+  icon: z.string().nullable().optional(),
+  visible: z.boolean().optional(),
   resource: z.string().nullable().optional(),
   action: z.string().nullable().optional(),
+  clientId: z.string().nullable().optional(),
   parentId: z.string().nullable().optional(),
   sort: z.number().int().optional(),
   status: entityStatusEnum.optional(),
