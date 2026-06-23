@@ -15,11 +15,11 @@ import crypto from 'crypto';
 /**
  * 解析逗号分隔的 redirect URL 列表，并序列化为 JSON 字符串
  */
-function parseRedirectUrls(envValue: string | undefined, defaults: string[]): string {
+function parseRedirectUrls(envValue: string | undefined, defaults: string[]): string[] {
   if (envValue) {
-    return JSON.stringify(envValue.split(',').map(u => u.trim()));
+    return envValue.split(',').map(u => u.trim());
   }
-  return JSON.stringify(defaults);
+  return defaults;
 }
 
 async function main() {
@@ -65,7 +65,7 @@ async function main() {
       clientId: 'portal',
       name: 'Auth-SSO Portal',
       clientSecret: process.env.PORTAL_CLIENT_SECRET || 'portal-secret',
-      redirectUris: JSON.parse(portalRedirectUrls),
+      redirectUris: portalRedirectUrls,
       scopes: 'openid profile email offline_access',
       status: 'ACTIVE',
     });

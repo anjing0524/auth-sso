@@ -4,8 +4,8 @@
  *
  * 覆盖权限列表展示、创建新权限码
  *
- * @req U10-PERM-LIST
- * @req U10-PERM-CREATE
+ * @req D-PRM-L
+ * @req D-PRM-C
  */
 
 import { test, expect } from '@playwright/test';

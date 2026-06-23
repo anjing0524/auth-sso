@@ -4,9 +4,9 @@
  *
  * 覆盖 Client 列表展示、新建 OAuth 应用、编辑重定向 URI
  *
- * @req U10-CLIENT-LIST
- * @req U10-CLIENT-CREATE
- * @req U10-CLIENT-EDIT
+ * @req G-CLT-L
+ * @req G-CLT-C
+ * @req G-CLT-U
  */
 
 import { test, expect } from '@playwright/test';

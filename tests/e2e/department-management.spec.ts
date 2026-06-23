@@ -4,10 +4,10 @@
  *
  * 覆盖部门树形展示、创建子部门、编辑、删除（含子部门保护）
  *
- * @req U10-DEPT-LIST
- * @req U10-DEPT-CREATE
- * @req U10-DEPT-EDIT
- * @req U10-DEPT-DELETE
+ * @req F-DEP-L
+ * @req F-DEP-C
+ * @req F-DEP-U
+ * @req F-DEP-D
  */
 
 import { test, expect } from '@playwright/test';

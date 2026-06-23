@@ -8,7 +8,6 @@
 import { NextResponse } from 'next/server';
 import { getAppBaseURL } from '@/lib/env';
 
-export const runtime = 'nodejs';
 
 export async function GET() {
   const baseURL = getAppBaseURL();

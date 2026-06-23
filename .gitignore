@@ -31,3 +31,6 @@ out
 apps/gateway/target
 apps/gateway/ssl
 apps/gateway/logs
+
+test-results
+feat

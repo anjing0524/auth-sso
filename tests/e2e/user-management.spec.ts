@@ -4,11 +4,11 @@
  *
  * 覆盖用户管理的增删改查及搜索功能
  *
- * @req U10-USER-LIST
- * @req U10-USER-CREATE
- * @req U10-USER-SEARCH
- * @req U10-USER-EDIT
- * @req U10-USER-DELETE
+ * @req B-USR-L
+ * @req B-USR-C
+ * @req B-USR-S
+ * @req B-USR-U
+ * @req B-USR-D
  */
 
 import { test, expect } from '@playwright/test';

@@ -4,10 +4,10 @@
  *
  * 覆盖角色的增删改查及数据范围配置
  *
- * @req U10-ROLE-LIST
- * @req U10-ROLE-CREATE
- * @req U10-ROLE-EDIT
- * @req U10-ROLE-DELETE
+ * @req C-ROL-L
+ * @req C-ROL-C
+ * @req C-ROL-U
+ * @req C-ROL-D
  */
 
 import { test, expect } from '@playwright/test';

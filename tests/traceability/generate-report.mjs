@@ -80,7 +80,7 @@ function parseRequirementsMatrix(filePath) {
     }
 
     // 提取 **ID** 格式的需求编号（表格内的加粗文本）
-    const boldReqs = line.matchAll(/\*\*([A-Z]-[A-Z]+-[A-Z0-9]+)\*\*/g);
+    const boldReqs = line.matchAll(/\*\*([A-Z0-9]+(?:-[A-Z0-9]+)+)\*\*/g);
     for (const match of boldReqs) {
       const id = match[1];
       allReqs.push({ id, module: currentModule });
@@ -219,7 +219,7 @@ function expandReqString(value) {
     }
 
     // 3) 单 ID: A-NAV-01, G-SEC-INT
-    if (/^[A-Z]-[A-Z]+-[A-Z0-9]+$/.test(part)) {
+    if (/^[A-Z0-9]+(?:-[A-Z0-9]+)+$/.test(part)) {
       ids.push(part);
     }
   }

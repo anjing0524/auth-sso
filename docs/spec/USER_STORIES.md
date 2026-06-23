@@ -1818,6 +1818,41 @@ JWT payload 包含以下 claims：
 | **H-SSO-020** | US-H-SSO-06 |
 | **H-SSO-021** | US-H-SSO-07 |
 | **H-SSO-022** | US-H-SSO-08 |
+| **B-LOG-L** | US-AUDIT-01, US-AUDIT-03 |
+| **B-LOG-D** | US-AUDIT-01 |
+| **F-DEP-E** | US-F-03 |
+| **F-DEP-M** | US-F-01 |
+| **SCOPE-001** | US-B-01, US-B-06 |
+| **SCOPE-002** | US-B-03 |
+| **SCOPE-003** | US-B-02 |
+| **SCOPE-004** | US-B-04 |
+| **SCOPE-005** | US-CROSS-07 |
+| **D-CLI-C** | US-G-02 |
+| **D-CLI-U** | US-G-03 |
+| **D-CLI-D** | US-G-04 |
+| **D-DEPT-C** | US-F-02 |
+| **D-DEPT-U** | US-F-03 |
+| **D-DEPT-D** | US-F-04 |
+| **D-MEN-C** | US-E-02 |
+| **D-MEN-U** | US-E-03 |
+| **D-MEN-D** | US-E-04 |
+| **D-ROLE-C** | US-C-02 |
+| **D-ROLE-U** | US-C-03, US-C-07 |
+| **D-ROLE-D** | US-C-04 |
+| **AUTH-003** | US-CROSS-04 |
+| **AUTH-004** | US-H-AUTH-01 |
+| **AUTH-005** | US-MNU-BTN-03 |
+| **AUTH-006** | US-CROSS-02 |
+| **AUTH-FLOW-HAPPY** | US-H-AUTH-02 |
+| **AUTH-FLOW-LOGOUT** | US-H-SSO-04 |
+| **AUTH-FLOW-WRONG-PASSWORD** | US-H-AUTH-09 |
+| **AUTH-FLOW-PROTECTED-REDIRECT** | US-H-AUTH-01 |
+| **RBAC-ADMIN-FULL-ACCESS** | US-B-01 |
+| **RBAC-RESTRICTED-API** | US-B-05 |
+| **RBAC-UNAUTHORIZED** | US-B-03 |
+| **SSO-CROSS-APP** | US-H-SSO-01 |
+| **SSO-DIRECT-ACCESS** | US-H-SSO-02 |
+| **SSO-LOGOUT-PROPAGATION** | US-H-SSO-04 |
 
 ---
 

@@ -4,8 +4,8 @@
  *
  * 覆盖菜单树形展示、创建菜单节点
  *
- * @req U10-MENU-LIST
- * @req U10-MENU-CREATE
+ * @req E-MNU-L
+ * @req E-MNU-C
  */
 
 import { test, expect } from '@playwright/test';
