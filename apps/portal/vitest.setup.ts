@@ -21,3 +21,11 @@ vi.mock('next/cache', () => ({
   cacheTag: vi.fn(),
 }));
 
+// Mock next/headers：API 测试在 node 环境下运行，headers()/cookies() 不在请求上下文中。
+// 默认返回空 Headers（.get() → null）和空 cookies（.get() → undefined），
+// 使认证检查走兜底逻辑。各测试可按需通过 vi.mocked() 覆盖。
+vi.mock('next/headers', () => ({
+  headers: vi.fn(() => Promise.resolve(new Headers())),
+  cookies: vi.fn(() => Promise.resolve({ get: vi.fn() })),
+}));
+
