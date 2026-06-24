@@ -1850,9 +1850,9 @@ JWT payload 包含以下 claims：
 | **RBAC-ADMIN-FULL-ACCESS** | US-B-01 |
 | **RBAC-RESTRICTED-API** | US-B-05 |
 | **RBAC-UNAUTHORIZED** | US-B-03 |
-| **SSO-CROSS-APP** | US-H-SSO-01 |
-| **SSO-DIRECT-ACCESS** | US-H-SSO-02 |
-| **SSO-LOGOUT-PROPAGATION** | US-H-SSO-04 |
+| **SSO-CROSS-APP** | US-H-SSO-01 [已废弃 - 独立 Demo App 已清理] |
+| **SSO-DIRECT-ACCESS** | US-H-SSO-02 [已废弃 - 独立 Demo App 已清理] |
+| **SSO-LOGOUT-PROPAGATION** | US-H-SSO-04 [已废弃 - 独立 Demo App 已清理] |
 
 ---
 

@@ -4,7 +4,7 @@
 
 ## 核心能力
 
-- **统一身份认证 (OIDC Provider)**: Portal 内建 Better Auth OIDC Provider，支持 OAuth 2.1 PKCE 流程，确保认证安全。
+- **统一身份认证 (OIDC Provider)**: Portal 内建纯自定义 OIDC Provider（基于 `jose` 库，ES256 JWT 无状态签发），支持 OAuth 2.1 + PKCE 授权码流程。
 - **管理门户 (Portal)**:
   - **实时概览**: 动态展示用户、角色、应用及部门的统计指标。
   - **最近动态**: 集成操作审计日志，实时监控系统活动。
@@ -32,7 +32,7 @@ auth-sso/
 ## 技术栈
 
 - **Next.js 16** - React 核心框架
-- **Better Auth** - 身份认证基座，扩展 OIDC Provider
+- **jose (Web Crypto)** - ES256 JWT 签发与验签，密钥对存储于 PostgreSQL
 - **Pingora** - 自研 Rust 网关 (HTTPS 终结 + JWT 验签)
 - **Drizzle ORM** - 类型安全的数据库操作层
 - **PostgreSQL** - 结构化数据存储
@@ -53,7 +53,7 @@ pnpm install
 ```bash
 # Portal (含 OIDC Provider)
 cp apps/portal/.env.example apps/portal/.env.local
-# 编辑 .env.local，配置 DATABASE_URL、REDIS_URL、BETTER_AUTH_SECRET 等
+# 编辑 .env.local，配置 DATABASE_URL、REDIS_URL、PORTAL_CLIENT_SECRET 等
 ```
 
 ### 3. 启动服务
@@ -90,15 +90,15 @@ pnpm test:report          # 需求追溯性覆盖率报告
 
 ## 文档指引
 
-- [产品需求 (docs/spec/PRD.md)](docs/spec/PRD.md) - 核心功能、业务范围与用户模型
-- [系统架构 (docs/spec/ARCHITECTURE.md)](docs/spec/ARCHITECTURE.md) - 系统组成、技术选型、认证与 SSO 流程
-- [数据库设计 (docs/spec/DATABASE.md)](docs/spec/DATABASE.md) - 数据模型、存储落位与物理规范
-- [接口契约 (docs/spec/API.md)](docs/spec/API.md) - 核心接口清单与字段级契约
-- [测试驱动开发计划 (docs/spec/TDD-MASTER-PLAN.md)](docs/spec/TDD-MASTER-PLAN.md) - 自动化测试覆盖与质量保证方案
-- [项目计划与里程碑 (docs/spec/PROJECT_PLAN.md)](docs/spec/PROJECT_PLAN.md) - 研发进度与关键里程碑
-- [设计规范 (DESIGN.md)](DESIGN.md) - UI/UX 规范与品牌定义
-- [SSO 集成指南 (docs/sso-integration-guide.md)](docs/sso-integration-guide.md) - 子应用接入流程
-- [环境变量详细说明 (docs/environment-variables.md)](docs/environment-variables.md)
+- [产品需求 (docs/spec/PRD.md)](docs/spec/PRD.md) — 核心功能、业务范围与用户模型
+- [系统架构 (docs/spec/ARCHITECTURE.md)](docs/spec/ARCHITECTURE.md) — 系统组成、技术选型、认证与 SSO 流程
+- [架构约束指南 (docs/spec/ARCHITECTURE_CONSTRAINTS.md)](docs/spec/ARCHITECTURE_CONSTRAINTS.md) — 代码规范、分层约束与 Code Review 红线
+- [数据库设计 (docs/spec/DATABASE.md)](docs/spec/DATABASE.md) — 数据模型、存储落位与物理规范
+- [接口契约 (docs/spec/API.md)](docs/spec/API.md) — 核心接口清单与字段级契约
+- [需求追踪矩阵 (docs/spec/REQUIREMENTS_MATRIX.md)](docs/spec/REQUIREMENTS_MATRIX.md) — 需求→验收标准全覆盖
+- [用户故事 (docs/spec/USER_STORIES.md)](docs/spec/USER_STORIES.md) — 角色驱动的功能验收场景
+- [Portal 架构规范 (docs/portal-architecture-guidelines.md)](docs/portal-architecture-guidelines.md) — 开发规范、组件模式与 Next.js 16 适配
+- [设计规范 (DESIGN.md)](DESIGN.md) — UI/UX 规范与品牌定义
 
 ## 安全提醒
 

@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.0.1] - 2026-06-24
+
+### Changed
+- **文档体系重构**：`docs/spec/` 重组为 7 份产品交付文档（PRD / 架构设计 / 架构约束 / API 设计 / 数据库设计 / 需求矩阵 / 用户故事）
+- ARCHITECTURE.md 升级至 v5.0，完全对齐实际代码实现（纯自定义 JWT + jose，Portal 即 OIDC Provider）
+- 新增 ARCHITECTURE_CONSTRAINTS.md（13 条核心约束 + 红线检查清单 + Controller 骨架）
+- PRD.md 升级至 v1.1，清理独立 IdP 引用
+- DATABASE.md 升级至 v3.1，吸收 4 份历史数据库审查文档的关键结论
+
+### Removed
+- TDD-MASTER-PLAN.md（过时，已被 REQUIREMENTS_MATRIX.md 覆盖）
+- DATABASE-DBA-REVIEW.md / DATABASE-DRIZZLE-AUDIT.md / DATABASE_FIX_PLAN.md / DATABASE_REDESIGN.md（合并至 DATABASE.md）
+
+### Fixed
+- CLAUDE.md 修正 Session 架构描述（Better Auth → 纯自定义 JWT）
+- packages/config/env.ts 修正架构注释（Better Auth → jose）
+- README.md 清理 Better Auth 引用，更新文档索引
+
 ## [1.1.0.0] - 2026-06-23
 
 ### Added

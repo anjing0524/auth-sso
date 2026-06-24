@@ -60,7 +60,7 @@ Tests follow a layered strategy — fast, isolated unit tests at the bottom, int
 
 ### Session 架构
 
-由于 IDP 已完全合并进 Portal，系统在本地直接通过 Better Auth 管理会话状态（`better-auth.session_token` Cookie），同时为了兼容原有的无状态架构和外部 OIDC 流程，支持利用 OIDC/JWT 插件在后台校验 `portal_jwt_token`，实现了统一整合。
+系统采用**纯自定义无状态 JWT Cookie 架构**。Portal 自身即为 OIDC Provider，通过 `jose` 库实现 ES256 JWT 签发与验签，密钥对存储在 PostgreSQL `jwks` 表中。认证流程基于 OAuth 2.1 Authorization Code + PKCE，登录成功后写入 `portal_jwt_token`（Access Token）和 `portal_refresh_token`（Refresh Token）两个 HttpOnly Cookie。Gateway（Rust/Pingora）通过缓存 JWKS 公钥实现离线 JWT 签名验证，无需访问数据库或 Redis。
 
 ### Traceability
 
@@ -106,7 +106,6 @@ Supported formats:
 - `apps/portal/__tests__/api/audit-logging.test.ts` — 审计日志
 - `apps/portal/__tests__/api/me-endpoints.test.ts` — 当前用户 API
 - `tests/e2e/auth-flow.spec.ts` — E2E 认证流程
-- `tests/e2e/sso-cross-app.spec.ts` — E2E 跨应用 SSO
 - `tests/e2e/rbac-enforcement.spec.ts` — E2E RBAC 验证
 
 ## Tech Stack

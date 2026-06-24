@@ -1,8 +1,10 @@
 # Database Design - Auth-SSO
 
-Version: v3.0
+Version: v3.1
 Status: Released
-Last Updated: 2026-06-18
+Last Updated: 2026-06-24
+
+> **文档合并说明**：本版本吸收了先前独立的 DATABASE-DBA-REVIEW.md、DATABASE-DRIZZLE-AUDIT.md、DATABASE_FIX_PLAN.md、DATABASE_REDESIGN.md 中的关键决策与审查结论。原始审查/修复/重建文档已归档移除，所有有效信息统一在本文件中维护。
 
 ---
 

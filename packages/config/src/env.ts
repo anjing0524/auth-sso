@@ -6,7 +6,7 @@
  * 2. URL 推导函数 — 运行时懒解析，带 dev 默认值，消除各处 localhost 硬编码
  *
  * 架构说明：IDP 已合并进 Portal，所有认证功能由 Portal 统一管理。
- * Portal 自身即是 OIDC Provider（Better Auth + oauthProvider 插件）。
+ * Portal 自身即是 OIDC Provider（纯自定义 JWT 实现，基于 jose 库，密钥对存 DB）。
  *
  * @module @auth-sso/config/env
  */
@@ -138,7 +138,7 @@ export function getJwksUri(): string {
  * 优先级：TRUSTED_ORIGINS env（逗号分隔）> 本地开发默认值
  *
  * 生产环境必须通过 TRUSTED_ORIGINS 显式配置，
- * 本地开发自动覆盖 localhost:4000/4002/4100/4102（含 127.0.0.1 变体）
+ * 本地开发自动覆盖 localhost:4000/4100（含 127.0.0.1 变体）
  */
 export function getTrustedOrigins(): string[] {
   if (e['TRUSTED_ORIGINS']) {
@@ -150,7 +150,7 @@ export function getTrustedOrigins(): string[] {
   const origins = new Set<string>([getAppBaseURL()]);
 
   if (e['NODE_ENV'] !== 'production') {
-    ['4000', '4002', '4100', '4102'].forEach((port) => {
+    ['4000', '4100'].forEach((port) => {
       origins.add(`http://localhost:${port}`);
       origins.add(`http://127.0.0.1:${port}`);
     });

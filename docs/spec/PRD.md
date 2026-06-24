@@ -1,7 +1,8 @@
 # Product Requirements Document (PRD) - Auth-SSO
 
-Version: v1.0
+Version: v1.1
 Status: Released
+Last Updated: 2026-06-24
 Target Audience: Product, Engineering, QA, Operations
 
 ---
@@ -22,12 +23,14 @@ This document defines the requirements for a unified portal and Single Sign-On (
 ## 2. Product Scope
 
 ### 2.1 In Scope
-- Core Identity Provider (IdP) using custom stateless JWT/JTI token issuance.
-- Next.js-based Management Portal.
+- **Unified Portal + OIDC Provider**: Portal 自身即为 OIDC Provider，无需独立 IdP 服务。使用 `jose` 库实现纯自定义 ES256 JWT 无状态签发与认证。
+- Custom stateless JWT/JTI token issuance with Redis-based emergency revocation.
+- Next.js 16-based Management Portal (App Router, Turbopack).
 - Standard OIDC/OAuth 2.1 flows (Authorization Code + PKCE).
-- RBAC (Role-Based Access Control) with data scope support.
+- RBAC (Role-Based Access Control) with data scope support (ALL/DEPT/DEPT_AND_SUB/SELF/CUSTOM).
 - Audit logging for login and administrative actions.
 - Session management with idle and absolute timeouts.
+- Rust/Pingora API Gateway for offline JWT verification and Cookie-to-Bearer transformation.
 
 ### 2.2 Out of Scope
 - Large-scale consumer identity management.
@@ -73,12 +76,12 @@ This document defines the requirements for a unified portal and Single Sign-On (
 
 ## 5. User Journey Examples
 
-1. **Employee Login**:
-   - Accesses Portal -> Redirected to IdP -> Logs in -> Redirected back to Portal with session established.
-   - Accesses "Orders App" -> App redirects to IdP -> IdP recognizes session -> Redirects back with code -> App exchanges code for token -> User is logged in automatically.
+1. **Employee Login（员工登录）**:
+   - 访问 Portal → Portal 展示登录页 → 输入凭证 → Portal 验证并签发 JWT Cookie（`portal_jwt_token`）→ 进入 Dashboard。
+   - 访问子应用（如 ERP）→ 子应用重定向到 Portal OIDC Provider `/authorize` → Portal 识别已有 JWT Cookie → 跳过登录直接签发授权码 → 子应用后端用授权码换取 Token → 用户自动登录。
 
-2. **Admin User Creation**:
-   - Admin creates a new user in Portal -> The user record is created directly in the database -> The user can immediately authenticate with their initial credentials.
+2. **Admin User Creation（管理员创建用户）**:
+   - 管理员在 Portal 中创建新用户 → 用户记录直接写入 PostgreSQL → 用户立即可用初始凭证认证。
 
 ---
 
@@ -99,5 +102,5 @@ This document defines the requirements for a unified portal and Single Sign-On (
 
 ## 7. Versioning & Roadmap
 
-- **v1.0 (Current)**: Core SSO + RBAC + Internal App Integration.
+- **v1.0 (Current)**: Core SSO（Portal 内建 OIDC Provider）+ RBAC + Gateway 离线 JWT 验证 + 内部应用集成。
 - **Future**: MFA (Multi-Factor Authentication), Passkeys, Social Login, Multi-tenancy.
