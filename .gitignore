@@ -32,6 +32,24 @@ apps/gateway/target
 apps/gateway/ssl
 apps/gateway/logs
 
+# Coverage
+coverage
+
+# Certs
+*.pem
+
+# Debug logs (npm/yarn/pnpm)
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# TypeScript incremental build cache
+*.tsbuildinfo
+
+# Next.js auto-generated type declarations
+next-env.d.ts
+
 test-results
 feat
 tests/e2e-report

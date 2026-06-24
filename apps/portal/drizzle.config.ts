@@ -1,13 +1,7 @@
-import { defineConfig } from 'drizzle-kit';
+import { createDrizzleConfig } from '../../drizzle.base';
 import './scripts/load-env';
 
-export default defineConfig({
+export default createDrizzleConfig({
   schema: './src/db/schema/*.ts',
   out: './drizzle',
-  dialect: 'postgresql',
-  dbCredentials: {
-    url: process.env.DATABASE_URL!,
-  },
-  verbose: true,
-  strict: true,
 });

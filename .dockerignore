@@ -14,4 +14,23 @@ dist
 .claude
 .antigravitycli
 .context
+
+# Test artifacts
+test-results
+tests/e2e-report
+coverage
+
+# TypeScript
+*.tsbuildinfo
+
+# Build tools
+.turbo
+.gstack/
+
+# Git worktrees
+.worktrees
+
+# Vercel
+.vercel
+
 python-slim.tar
