@@ -5,11 +5,11 @@
  * 覆盖完整 OAuth 2.1 Authorization Code + PKCE 登录流程，
  * 以及登出、错误凭据、未认证访问等边界场景。
  *
- * @req AUTH-FLOW-HAPPY
- * @req AUTH-FLOW-LOGOUT
- * @req AUTH-FLOW-WRONG-PASSWORD
- * @req AUTH-FLOW-PROTECTED-REDIRECT
- * @req G-SEC-INT
+ * @req H-FLOW-001
+ * @req H-FLOW-002
+ * @req H-FLOW-003
+ * @req H-FLOW-004
+ * @req H-ACL-004
  */
 
 import { test, expect } from '@playwright/test';
@@ -57,7 +57,7 @@ test.describe('Auth Flow', () => {
   // ─── Logout ────────────────────────────────────────
   test.describe('Logout', () => {
     test('登出后 Session 应失效，受保护 API 返回 401', async ({ page }) => {
-      // @req G-SEC-INT
+      // @req H-ACL-004
       await loginAsAdmin(page);
 
       // 登录后可访问 /api/me (page.request 是只读属性)
@@ -92,7 +92,7 @@ test.describe('Auth Flow', () => {
     });
 
     test('未登录用户访问 Dashboard 应重定向到登录页', async ({ page }) => {
-      // @req G-SEC-INT
+      // @req H-ACL-004
       await page.goto('/dashboard');
       // 未登录时，应重定向到 /login 页面
       await page.waitForURL(/\/login/, { timeout: 15_000 });

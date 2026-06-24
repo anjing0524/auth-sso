@@ -11,10 +11,10 @@
  *   2. 通过创建受限角色测试 API 级权限执行
  *   3. 验证未认证请求被正确拒绝
  *
- * @req RBAC-ADMIN-FULL-ACCESS
- * @req RBAC-RESTRICTED-API
- * @req RBAC-UNAUTHORIZED
- * @req G-SEC-INT
+ * @req H-ACL-001
+ * @req H-ACL-002
+ * @req H-ACL-003
+ * @req H-ACL-004
  */
 
 import { test, expect } from '@playwright/test';
@@ -34,7 +34,7 @@ test.describe('RBAC Enforcement', () => {
   // ─── Happy: 管理员全权限访问 ══════════════════════════
   test.describe('Admin Full Access', () => {
     test('管理员登录后应可访问 Dashboard 并加载所有数据', async ({ page }) => {
-      // @req RBAC-ADMIN-FULL-ACCESS
+      // @req H-ACL-001
       await loginAsAdmin(page);
 
       // 到达 Dashboard
@@ -110,8 +110,8 @@ test.describe('RBAC Enforcement', () => {
     });
 
     test('受限用户应无法访问无权限的 API 端点', async ({ page }) => {
-      // @req RBAC-RESTRICTED-API
-      // @req G-SEC-INT
+      // @req H-ACL-002
+      // @req H-ACL-004
       const restrictedEmail = process.env.__TEST_RESTRICTED_EMAIL || RESTRICTED_USER.email;
       const restrictedPassword = process.env.__TEST_RESTRICTED_PASSWORD || RESTRICTED_USER.password;
 
@@ -156,8 +156,8 @@ test.describe('RBAC Enforcement', () => {
   // ─── Edge: 未认证访问 ═════════════════════════════════
   test.describe('Unauthorized Access', () => {
     test('未认证请求应返回 401', async ({ page }) => {
-      // @req RBAC-UNAUTHORIZED
-      // @req G-SEC-INT
+      // @req H-ACL-003
+      // @req H-ACL-004
       await clearAllCookies(page);
 
       const protectedEndpoints = [

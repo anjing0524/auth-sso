@@ -81,7 +81,7 @@ export async function GET(request: NextRequest) {
     // Set-Cookie: portal_refresh_token（如果有）
     if (tokens.refresh_token) {
       response.cookies.set(COOKIE_NAMES.REFRESH, tokens.refresh_token, {
-        path: '/api/auth/refresh',
+        path: '/',
         httpOnly: true,
         secure,
         sameSite: 'lax',

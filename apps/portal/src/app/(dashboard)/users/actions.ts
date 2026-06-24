@@ -136,6 +136,7 @@ export const updateUserAction = withAuth(
     }
 
     // 读取 + 更新在事务中原子完成（R22）；领域纯函数负责字段 merge 策略
+    let deptIdChanged = false;
     await db.transaction(async (tx) => {
       const row = await tx.query.users.findFirst({ where: eq(schema.users.id, parsed.data.id) });
       if (!row) throw new EntityNotFoundError('User', parsed.data.id);
@@ -147,11 +148,18 @@ export const updateUserAction = withAuth(
         deptId: parsed.data.deptId,
         avatarUrl: parsed.data.avatarUrl,
       });
+      // 仅部门归属变化属于数据范围决策变更（影响 dataScope 过滤），需要强制重登
+      deptIdChanged =
+        parsed.data.deptId !== undefined && (row.deptId ?? '') !== (updated.deptId ?? '');
       await tx.update(schema.users).set(userToUpdateRow(updated))
         .where(eq(schema.users.id, parsed.data.id));
     });
 
     await refreshUserPermissionCache(parsed.data.id);
+    // 部门变更 → 撤销现有 Access Token 强制重登，重走 rotateRefreshToken 更新 JWT claims 中的 deptId
+    if (deptIdChanged) {
+      await revokeUserAccessByUserId(parsed.data.id);
+    }
     revalidatePath('/users');
     updateTag('users-list');
     return { success: true, data: { id: parsed.data.id }, message: '更新成功' };

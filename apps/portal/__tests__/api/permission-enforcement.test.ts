@@ -11,7 +11,7 @@
  * - checkPermission 超级管理员绕过
  * - withPermission 包装器正确处理
  *
- * @req AUTH-003, AUTH-005, AUTH-006
+ * @req H-ACL-001, H-ACL-002, H-ACL-005
  * @vitest-environment node
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -24,17 +24,29 @@ const {
   mockGetJwtFromCookie,
   mockVerifyJwt,
   mockGetUserPermissionContext,
+  mockHeadersGet,
 } = vi.hoisted(() => {
   const mockGetJwtFromCookie = vi.fn();
   const mockVerifyJwt = vi.fn();
   const mockGetUserPermissionContext = vi.fn();
+  const mockHeadersGet = vi.fn().mockReturnValue(null);
 
   return {
     mockGetJwtFromCookie,
     mockVerifyJwt,
     mockGetUserPermissionContext,
+    mockHeadersGet,
   };
 });
+
+vi.mock('next/headers', () => ({
+  headers: async () => ({
+    get: mockHeadersGet,
+  }),
+  cookies: async () => ({
+    get: (name: string) => ({ value: 'test-token' }),
+  }),
+}));
 
 vi.mock('@/lib/session', () => ({
   getJwtFromCookie: mockGetJwtFromCookie,
@@ -150,7 +162,7 @@ describe('Permission Enforcement', () => {
       expect(result.authorized).toBe(true);
     });
 
-    // @req AUTH-006
+    // @req H-ACL-005
     it('requireAll 模式：缺少任一权限时返回 403', async () => {
       mockGetJwtFromCookie.mockResolvedValueOnce('valid-token');
       // 仅有 user:list，缺少 audit:read
@@ -313,7 +325,7 @@ describe('Permission Enforcement', () => {
   // ======== withPermission ========
 
   describe('withPermission', () => {
-    // @req AUTH-003
+    // @req H-ACL-001
     it('权限通过时执行 handler 并返回结果', async () => {
       mockGetJwtFromCookie.mockResolvedValueOnce('valid-token');
       mockVerifyJwt.mockResolvedValueOnce(defaultClaims);

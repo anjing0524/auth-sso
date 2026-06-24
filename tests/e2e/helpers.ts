@@ -21,7 +21,6 @@ export const RESTRICTED_USER = {
 
 // ─── 服务 URL ─────────────────────────────────────────
 export const PORTAL_URL = 'http://localhost:4100';
-export const DEMO_APP_URL = 'http://localhost:4102';
 
 // ─── 登录 / 登出 辅助函数 ────────────────────────────
 

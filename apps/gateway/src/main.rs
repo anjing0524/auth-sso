@@ -14,7 +14,7 @@ use pingora_core::listeners::tls::TlsSettings;
 use pingora_core::prelude::*;
 use pingora_load_balancing::LoadBalancer;
 use pingora_proxy::http_proxy_service;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use tracing::{error, info, warn};
 
 /// 命令行参数解析结构体 (Clap 声明式解析)
@@ -49,7 +49,6 @@ fn main() -> anyhow::Result<()> {
     info!("  网关监听端口 (HTTPS): {}", config.gateway.ssl_port);
     info!("  SSL 证书路径: {}", config.gateway.ssl_cert_path);
     info!("  Portal 上游 (OIDC Discovery): {}", config.portal.upstream);
-    info!("  Issuer: {}", config.portal.issuer);
 
     // ── 初始化 JWKS 公钥缓存 ──
     let jwks_cache = JwksCache::new();
@@ -84,17 +83,12 @@ fn main() -> anyhow::Result<()> {
         }
     });
 
-    // ── 交叉校验配置的 issuer 与 OIDC Discovery 返回的 issuer ──
-    match jwks_cache.validate_issuer(&config.portal.issuer) {
-        Ok(()) => {} // issuer 一致，无需操作
-        Err(e) => {
-            error!(
-                "❌ Issuer 校验失败: {}。请检查 gateway.toml 中 portal.issuer 是否与 OIDC Provider 一致",
-                e
-            );
-            std::process::exit(1);
-        }
-    }
+    // ── issuer 由 OIDC Discovery 自动获取 ──
+    let effective_issuer = jwks_cache.get_discovered_issuer().unwrap_or_else(|| {
+        warn!("⚠️ OIDC 元数据中无 issuer，回退到默认值");
+        "http://localhost:4100".to_string()
+    });
+    info!("✅ issuer: {}", effective_issuer);
 
     // ── 启动 JWKS 后台定时刷新任务（通过 OIDC Discovery 自动发现端点）──
     Arc::clone(&jwks_cache).start_background_refresh(&rt, config.portal.upstream.clone());
@@ -141,15 +135,24 @@ fn main() -> anyhow::Result<()> {
 
     let path_matcher = PathMatcher::new(config.portal.public_paths.clone());
 
-    // 构建 HTTPS 反向代理服务（含 JWT 验签与 Redis jti 黑名单校验）
+    // 构建异步 HTTP 客户端（用于向 Portal 发起 token 续签请求）
+    let http_client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(5))
+        .build()
+        .context("❌ 创建 HTTP 客户端失败")?;
+
+    // 构建 HTTPS 反向代理服务（含 JWT 验签、静默续签、Redis jti 黑名单校验）
     let mut gateway_proxy = http_proxy_service(
         &my_server.configuration,
         Gateway {
             portal_lb,
             jwks_cache: Arc::clone(&jwks_cache),
-            issuer: config.portal.issuer.clone(),
+            issuer: effective_issuer,
             path_matcher,
             redis_conn,
+            http_client,
+            upstream_addr: config.portal.upstream.clone(),
+            refresh_dedup: Mutex::new(std::collections::HashMap::new()),
         },
     );
 

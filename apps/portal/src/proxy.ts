@@ -6,7 +6,7 @@ import { COOKIE_NAMES } from '@auth-sso/contracts';
  */
 const PUBLIC_PATHS = [
   '/login',
-  '/oauth',
+  '/oauth2',
   '/.well-known',
 ];
 
@@ -47,6 +47,9 @@ function isSkipPath(pathname: string): boolean {
  *
  * 只检查 portal_jwt_token Cookie 是否存在。
  * 不验证 JWT 有效性——有效性由 API 层的 resolveIdentity() 处理。
+ *
+ * 注意：Access Token 的静默续签由 Gateway（Rust/Pingora）统一完成，
+ * 覆盖 Portal 与所有第三方子应用，不在本层处理。
  */
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;

@@ -13,10 +13,8 @@
  * 必要环境变量：
  *   DATABASE_URL                  — 数据库连接串
  *   PORTAL_CLIENT_SECRET          — Portal 客户端密钥
- *   DEMO_APP_CLIENT_SECRET        — Demo App 客户端密钥
  *   INITIAL_ADMIN_PASSWORD        — 管理员初始密码
  *   PORTAL_REDIRECT_URL           — Portal 回调 URL（逗号分隔）
- *   DEMO_APP_REDIRECT_URL         — Demo App 回调 URL（逗号分隔）
  *
  * 运行: cd apps/portal && DATABASE_URL=<url> tsx scripts/seed-production.ts
  */

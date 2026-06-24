@@ -1,13 +1,55 @@
 # ==============================================================================
 # Auth-SSO 本地全栈验证 Docker Compose 配置
 # ==============================================================================
-# 用途：在本机完整构建并验证 portal、gateway 两个服务
-# 前提：auth-sso_auth-sso-network 网络及 postgres、redis 容器已启动
-#       运行命令: docker compose up -d (开发环境基础设施)
+# 用途：在本机完整构建并验证 portal、gateway、postgres、redis 服务及基础设施
 # 启动命令: docker compose -f docker-compose.local.yml up -d --build
 # ==============================================================================
 
 services:
+  # ============================================
+  # PostgreSQL 数据库
+  # ============================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: auth-sso-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: auth_sso
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - auth-sso-network
+
+  # ============================================
+  # Redis 缓存/Session 存储
+  # ============================================
+  redis:
+    image: redis:7-alpine
+    container_name: auth-sso-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - auth-sso-network
+
   # ============================================
   # Portal (Management + IDP) - 本地构建
   # ============================================
@@ -16,20 +58,23 @@ services:
       context: .
       dockerfile: apps/portal/Dockerfile
       args:
-        NEXT_PUBLIC_APP_URL: https://portal.localhost:18443
+        NEXT_PUBLIC_APP_URL: https://localhost:18443
     container_name: auth-sso-portal-local
     restart: unless-stopped
     environment:
       NODE_ENV: production
-      DATABASE_URL: postgresql://postgres:postgres@auth-sso-postgres:5432/auth_sso_idp
-      REDIS_URL: redis://auth-sso-redis:6379
-      BETTER_AUTH_SECRET: universal_secret_for_testing_123
-      BETTER_AUTH_URL: https://portal.localhost:18443
-      NEXT_PUBLIC_APP_URL: https://portal.localhost:18443
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/auth_sso
+      REDIS_URL: redis://redis:6379
+      NEXT_PUBLIC_APP_URL: https://localhost:18443
     expose:
       - "4000"
     ports:
       - "4100:4000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
       - auth-sso-network
     logging:
@@ -49,17 +94,12 @@ services:
     restart: unless-stopped
     environment:
       RUST_LOG: info
-      SSL_CERT_PATH: /etc/gateway/ssl/fullchain.pem
-      SSL_KEY_PATH: /etc/gateway/ssl/privkey.pem
-      GATEWAY_PORT: "80"
-      GATEWAY_SSL_PORT: "443"
-      PORTAL_UPSTREAM: portal:4000
     ports:
       - "18080:80"
       - "18443:443"
     volumes:
       # 挂载本地自签名证书进行测试
-      - /tmp/gw-ssl:/etc/gateway/ssl:ro
+      - ./apps/gateway/ssl:/etc/gateway/ssl:ro
     depends_on:
       - portal
     networks:
@@ -71,9 +111,17 @@ services:
         max-file: "3"
 
 # ============================================
-# 接入已运行的基础设施网络（外部网络，不重新创建）
+# 网络配置
 # ============================================
 networks:
   auth-sso-network:
-    external: true
-    name: auth-sso_auth-sso-network
+    driver: bridge
+
+# ============================================
+# 数据卷配置
+# ============================================
+volumes:
+  postgres_data:
+    name: auth-sso-postgres-data
+  redis_data:
+    name: auth-sso-redis-data

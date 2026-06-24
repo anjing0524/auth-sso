@@ -1,5 +1,6 @@
 import { defineConfig, mergeConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
+import path from 'path';
 import { sharedVitestConfig } from '../../vitest.base';
 
 export default mergeConfig(
@@ -9,6 +10,9 @@ export default mergeConfig(
     resolve: {
       // Vite 8 原生支持 tsconfig 路径解析，无需 vite-tsconfig-paths 插件
       tsconfigPaths: true,
+      alias: {
+        'server-only': path.resolve(__dirname, './vitest.server-only.mock.ts'),
+      },
     },
     test: {
       // 全局 setup 文件：mock server-only、next/headers、扩展 jest-dom 匹配器

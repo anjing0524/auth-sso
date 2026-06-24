@@ -11,12 +11,7 @@ COPY . .
 RUN pnpm config set registry https://registry.npmmirror.com
 
 ARG NEXT_PUBLIC_APP_URL
-ARG NEXT_PUBLIC_IDP_URL
-ARG NEXT_PUBLIC_REDIRECT_URI
-
 ENV NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL
-ENV NEXT_PUBLIC_IDP_URL=$NEXT_PUBLIC_IDP_URL
-ENV NEXT_PUBLIC_REDIRECT_URI=$NEXT_PUBLIC_REDIRECT_URI
 
 RUN pnpm install --frozen-lockfile
 RUN pnpm --filter @auth-sso/portal build

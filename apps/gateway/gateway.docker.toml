@@ -1,0 +1,29 @@
+# ==============================================================================
+# Auth-SSO 信创安全网关 Docker 环境配置
+# 启动时通过 -c gateway.toml 指定（Dockerfile 中已软链接此文件）
+# ==============================================================================
+
+[gateway]
+port = 80
+ssl_port = 443
+ssl_cert_path = "/etc/gateway/ssl/fullchain.pem"
+ssl_key_path = "/etc/gateway/ssl/privkey.pem"
+log_dir = "logs"
+log_level = "info"
+
+[portal]
+# Portal 容器名:端口（Docker 内置 DNS 解析）
+upstream = "portal:4000"
+# issuer 由 OIDC Discovery 自动获取，无需手动配置
+public_paths = [
+    "/login",
+    "/register",
+    "/error",
+    "/",
+    "/api/auth/",
+    "/oauth2/",
+    "/.well-known/",
+]
+
+[redis]
+url = "redis://redis:6379"

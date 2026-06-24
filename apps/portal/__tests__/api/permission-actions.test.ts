@@ -1,7 +1,7 @@
 /**
  * Permission Server Actions 单元测试
  *
- * @req G-PRM-C, G-PRM-U, G-PRM-D
+ * @req D-PRM-C, D-PRM-U, D-PRM-D
  * @vitest-environment node
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';

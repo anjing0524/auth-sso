@@ -4,7 +4,7 @@
  * 覆盖：login.ts, password.ts, oauth-code.ts, oauth-client.ts, oauth-authorize.ts
  * 纯业务逻辑，零 DB/Redis 依赖。
  *
- * @req AUTH-001~005
+ * @req DC-AUTH-001~004
  * @vitest-environment node
  */
 import { Buffer } from 'node:buffer';

@@ -1,7 +1,7 @@
 /**
  * Role Server Actions 单元测试
  *
- * @req G-ROL-C, G-ROL-U, G-ROL-D
+ * @req DC-ROLE-C, DC-ROLE-U, DC-ROLE-D
  * @vitest-environment node
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';

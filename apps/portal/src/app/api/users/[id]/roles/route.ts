@@ -11,6 +11,7 @@ import { eq, or, and } from 'drizzle-orm';
 import { withPermission } from '@/lib/auth';
 import crypto from 'crypto';
 import { refreshUserPermissionCache } from '@/lib/permissions';
+import { revokeUserAccessByUserId } from '@/lib/session/revoke';
 import { COMMON_ERRORS } from '@auth-sso/contracts';
 import { getUserRoles } from '@/app/(dashboard)/users/data';
 
@@ -84,6 +85,10 @@ export async function POST(
     // 3. 分配角色后主动清除该用户的权限缓存，保障缓存强一致性
     await refreshUserPermissionCache(userId);
 
+    // 3.1 角色绑定属于权限决策变更：撤销该用户现有 Access Token，强制下次请求重登，
+    //     重走 rotateRefreshToken 拿到含新角色的 JWT claims（消除 claims 与缓存双源不一致）
+    await revokeUserAccessByUserId(userId);
+
     // 4. 失效页面与数据缓存
     revalidatePath('/users');
     revalidateTag('users-list', 'max');
@@ -140,6 +145,9 @@ export async function DELETE(
 
     // 移除角色后主动清除该用户的权限缓存，保障缓存强一致性
     await refreshUserPermissionCache(userId);
+
+    // 角色移除属于权限决策变更：强制该用户重登以更新 JWT claims（见 POST 同名注释）
+    await revokeUserAccessByUserId(userId);
 
     // 失效页面与数据缓存
     revalidatePath('/users');

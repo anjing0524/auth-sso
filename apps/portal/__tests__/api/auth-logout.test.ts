@@ -7,7 +7,7 @@
  * - 有 Login Session → 撤销 jti
  * - 错误处理 → 仍清除全部 Cookie（fail-open）
  *
- * @req AUTH-003
+ * @req H-SSO-004
  * @vitest-environment node
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';

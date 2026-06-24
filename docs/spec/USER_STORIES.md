@@ -1,7 +1,8 @@
 # User Stories - Auth-SSO
 
-Version: v1.0
+Version: v2.0
 Status: Released
+Last Updated: 2026-06-24
 Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, API.md, ARCHITECTURE.md, DATABASE.md
 
 ---
@@ -275,7 +276,7 @@ Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, API.md, ARCHITECTURE.md, DATABASE
 1. 对话框包含必填字段：用户名、姓名、初始密码
 2. 用户名和邮箱唯一性校验（重复时提示错误）
 3. 创建成功后列表自动刷新，新用户出现在列表中
-4. Portal OIDC Provider 同步创建对应身份记录（共享 DB 模式下自动完成）
+4. Portal 同步创建对应身份记录（共享 DB 模式下自动完成）
 5. 新用户默认状态为 `ACTIVE`
 
 ---
@@ -352,7 +353,7 @@ Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, API.md, ARCHITECTURE.md, DATABASE
 
 **验收标准：**
 1. 状态切换选项：ACTIVE → DISABLED/LOCKED，DISABLED → ACTIVE，LOCKED → ACTIVE
-2. 陈十状态为 DISABLED 时尝试登录，Portal OIDC Provider 拒绝认证并返回错误
+2. 陈十状态为 DISABLED 时尝试登录，Portal 拒绝认证并返回错误
 3. 激活后陈十可正常登录
 4. 锁定用户（LOCKED）后该用户当前 JWT 的 jti 写入黑名单
 5. 状态变更记录写入审计日志
@@ -482,8 +483,8 @@ Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, API.md, ARCHITECTURE.md, DATABASE
 **验收标准：**
 1. 展示所有 ACTIVE 状态的 OAuth 客户端供勾选
 2. 保存后更新 `role_clients` 关联表
-3. 王五登录 ERP 时 Portal OIDC Provider 授权端点校验通过
-4. 取消勾选后王五登录 ERP 时被 Portal OIDC Provider 拒绝（G-SEC-INT）
+3. 王五登录 ERP 时 Portal 授权端点校验通过
+4. 取消勾选后王五登录 ERP 时被 Portal 拒绝（G-SEC-INT）
 
 ---
 
@@ -776,14 +777,14 @@ Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, API.md, ARCHITECTURE.md, DATABASE
 > **@req G-SEC-INT** | **核心安全需求**
 
 **作为** 拥有 `employee` 角色的赵六，
-**我** 尝试通过 SSO 登录 ERP 系统时，Portal OIDC Provider 授权端点拒绝请求并显示「您没有权限访问该应用」，
+**我** 尝试通过 SSO 登录 ERP 系统时，Portal 授权端点拒绝请求并显示「您没有权限访问该应用」，
 **以便** 未授权用户无法登录不属于自己的系统。
 
 **验收标准：**
-1. 赵六访问 ERP → ERP 重定向到 Portal OIDC Provider → Portal OIDC Provider 校验赵六角色 `employee` 不在 `erp-app` 授权角色列表中 → 拒绝
+1. 赵六访问 ERP → ERP 重定向到 Portal → Portal 校验赵六角色 `employee` 不在 `erp-app` 授权角色列表中 → 拒绝
 2. 返回错误页面：「无权访问该应用，请联系管理员」
 3. 张三（super_admin）和王五（dept_manager）可以正常登录 ERP（在授权角色列表中）
-4. 陈十（DISABLED）尝试任何应用登录时被 Portal OIDC Provider 直接拒绝（账户状态校验优先于角色校验）
+4. 陈十（DISABLED）尝试任何应用登录时被 Portal 直接拒绝（账户状态校验优先于角色校验）
 
 ---
 
@@ -821,18 +822,18 @@ Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, API.md, ARCHITECTURE.md, DATABASE
 
 ### 9.1 OAuth 2.1 认证流程 (H-AUTH)
 
-### US-H-AUTH-01：未登录用户首次访问跳转到 Portal OIDC Provider
+### US-H-AUTH-01：未登录用户首次访问跳转到 Portal
 
 > **@req H-AUTH-001**
 
 **作为** 未登录的吴九，
-**我** 在浏览器输入 `https://portal.example.com/admin/users` 时被自动重定向到 Portal OIDC Provider 登录页，
+**我** 在浏览器输入 `https://portal.example.com/admin/users` 时被自动重定向到 Portal 登录页，
 **以便** 我完成身份认证后才能访问受保护页面。
 
 **验收标准：**
 1. Portal BFF 检测到无 `portal_jwt_token` Cookie
 2. 重定向到 `/api/auth/login`，生成 PKCE 参数并存储到 HttpOnly Cookie
-3. 浏览器最终跳转到 Portal OIDC Provider `/authorize` 端点，展示登录表单
+3. 浏览器最终跳转到 Portal `/authorize` 端点，展示登录表单
 4. 登录成功后重定向回原始请求的页面 `/admin/users`
 
 ---
@@ -841,12 +842,12 @@ Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, API.md, ARCHITECTURE.md, DATABASE
 
 > **@req H-AUTH-002**
 
-**作为** 在 Portal OIDC Provider 登录页输入正确凭证的张三，
+**作为** 在 Portal 登录页输入正确凭证的张三，
 **我** 提交用户名和密码后被重定向回 Portal 并携带 `code` 参数，
 **以便** Portal BFF 用授权码换取 Token。
 
 **验收标准：**
-1. Portal OIDC Provider 验证凭证成功
+1. Portal 验证凭证成功
 2. 重定向到 Portal `/api/auth/callback?code=xxx&state=yyy`
 3. URL 中的 `state` 与 Cookie 中存储的 `state` 一致
 
@@ -857,13 +858,13 @@ Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, API.md, ARCHITECTURE.md, DATABASE
 > **@req H-AUTH-003**
 
 **作为** Portal BFF（服务端），
-**在** 收到 Portal OIDC Provider 回调的 `code` 参数后，
-**通过** Back-Channel（服务端到服务端）向 Portal OIDC Provider `/token` 端点发送 `code` + `code_verifier` + `client_id` + `client_secret`，
+**在** 收到 Portal 回调的 `code` 参数后，
+**通过** Back-Channel（服务端到服务端）向 Portal `/token` 端点发送 `code` + `code_verifier` + `client_id` + `client_secret`，
 **换取** `access_token`（ES256 JWT）和 `refresh_token`。
 
 **验收标准：**
 1. Token 请求使用 HTTPS，参数包含 `grant_type=authorization_code`
-2. Portal OIDC Provider 验证 `code_verifier` 与之前存储的 `code_challenge` 匹配（S256）
+2. Portal 验证 `code_verifier` 与之前存储的 `code_challenge` 匹配（S256）
 3. 返回的 `access_token` 是有效的 ES256 JWT
 4. 返回的 `refresh_token` 可用于后续续签
 5. 整个过程在服务端完成，浏览器不可见
@@ -907,12 +908,12 @@ Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, API.md, ARCHITECTURE.md, DATABASE
 > **@req H-AUTH-010**
 
 **作为** 正常登录的张三，
-**当** Portal OIDC Provider 回调携带的 `state` 参数与 Cookie 中存储的 `state` 完全匹配时，
+**当** Portal 回调携带的 `state` 参数与 Cookie 中存储的 `state` 完全匹配时，
 **登录** 成功完成。
 
 **验收标准：**
 1. `/api/auth/login` 生成的 `state` 存入 HttpOnly Cookie
-2. Portal OIDC Provider 回调 URL 中的 `state` 与 Cookie 一致
+2. Portal 回调 URL 中的 `state` 与 Cookie 一致
 3. Portal BFF 验证通过后继续 Token 交换流程
 4. 验证后清除 state Cookie
 
@@ -923,7 +924,7 @@ Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, API.md, ARCHITECTURE.md, DATABASE
 > **@req H-AUTH-011**
 
 **作为** 攻击者，
-**我** 篡改 Portal OIDC Provider 回调 URL 中的 `state` 参数为 `malicious_state`，
+**我** 篡改 Portal 回调 URL 中的 `state` 参数为 `malicious_state`，
 **结果** Portal BFF 检测到 state 不匹配，返回 `invalid_state` 错误。
 
 **验收标准：**
@@ -938,8 +939,8 @@ Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, API.md, ARCHITECTURE.md, DATABASE
 
 > **@req H-AUTH-012**
 
-**作为** 在 Portal OIDC Provider 登录页停留超过 10 分钟的赵六，
-**当** 赵六完成登录后 Portal OIDC Provider 回调到 Portal 时，
+**作为** 在 Portal 登录页停留超过 10 分钟的赵六，
+**当** 赵六完成登录后 Portal 回调到 Portal 时，
 **Portal** 检测到 state Cookie 已过期（TTL 10min），返回 `invalid_state` 错误。
 
 **验收标准：**
@@ -960,8 +961,8 @@ Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, API.md, ARCHITECTURE.md, DATABASE
 
 **验收标准：**
 1. `/api/auth/login` 生成 `code_verifier`（随机字符串），计算 `code_challenge = BASE64URL(SHA256(code_verifier))`
-2. `code_verifier` 存入 HttpOnly Cookie，`code_challenge` 作为参数发送给 Portal OIDC Provider
-3. Token 交换时 Portal BFF 发送 `code_verifier`，Portal OIDC Provider 验证其 SHA256 与 `code_challenge` 匹配
+2. `code_verifier` 存入 HttpOnly Cookie，`code_challenge` 作为参数发送给 Portal
+3. Token 交换时 Portal BFF 发送 `code_verifier`，Portal 验证其 SHA256 与 `code_challenge` 匹配
 4. 若攻击者截获 `code` 但没有 `code_verifier`，无法完成 Token 交换
 
 ---
@@ -977,7 +978,7 @@ Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, API.md, ARCHITECTURE.md, DATABASE
 **验收标准：**
 1. 授权 URL 包含 `nonce` 参数（随机字符串）
 2. `nonce` 存入 HttpOnly Cookie
-3. Portal OIDC Provider 将 `nonce` 写入 ID Token 的 `nonce` claim
+3. Portal 将 `nonce` 写入 ID Token 的 `nonce` claim
 4. Portal BFF 验证 ID Token 的 `nonce` 与 Cookie 一致
 5. 验证后清除 nonce Cookie
 
@@ -1057,7 +1058,7 @@ JWT payload 包含以下 claims：
 
 **作为** Refresh Token 已过期（超过 7 天未活跃）的赵六，
 **我** 发起 API 请求时收到 401，前端尝试刷新失败，
-**然后** 被重定向到 Portal OIDC Provider 登录页重新认证。
+**然后** 被重定向到 Portal 登录页重新认证。
 
 **验收标准：**
 1. Refresh Token 过期后 `POST /api/auth/refresh` 返回 401
@@ -1097,7 +1098,7 @@ JWT payload 包含以下 claims：
 1. `POST /api/auth/refresh` 返回 401
 2. 前端清除 `portal_jwt_token` 和 `portal_refresh_token` Cookie
 3. 重定向到 `/api/auth/login`
-4. 用户看到 Portal OIDC Provider 登录页，需要重新输入凭证
+4. 用户看到 Portal 登录页，需要重新输入凭证
 
 ---
 
@@ -1121,34 +1122,34 @@ JWT payload 包含以下 claims：
 
 ### 9.3 单点登录/登出 (H-SSO)
 
-### US-H-SSO-01：Portal 已登录 → Demo App 免登
+### US-H-SSO-01：Portal 已登录 → 子应用 (OIDC Client) 免登
 
 > **@req H-SSO-001**
 
 **作为** 已在 Portal 登录的张三，
-**我** 在新标签页访问 Demo App（`http://localhost:4002`），
-**Demo App** 自动完成 SSO 认证，无需重新输入凭证。
+**我** 在新标签页访问 子应用 (OIDC Client)（`http://localhost:4002`），
+**子应用 (OIDC Client)** 自动完成 SSO 认证，无需重新输入凭证。
 
 **验收标准：**
-1. Demo App 检测未登录 → 重定向到 Portal OIDC Provider `/authorize`
-2. 浏览器携带 `portal_jwt_token` Cookie 到 Portal OIDC Provider
-3. Portal OIDC Provider 识别已有 session → 跳过登录 UI → 重定向回 Demo App 携带 `code`
-4. Demo App 用 `code` 换取 Token → 用户自动登录
+1. 子应用 (OIDC Client) 检测未登录 → 重定向到 Portal `/authorize`
+2. 浏览器携带 `portal_jwt_token` Cookie 到 Portal
+3. Portal 识别已有 session → 跳过登录 UI → 重定向回 子应用 (OIDC Client) 携带 `code`
+4. 子应用 (OIDC Client) 用 `code` 换取 Token → 用户自动登录
 5. 全程无需输入密码
 
 ---
 
-### US-H-SSO-02：Demo App 已登录 → Portal 免登
+### US-H-SSO-02：子应用 (OIDC Client) 已登录 → Portal 免登
 
 > **@req H-SSO-002**
 
-**作为** 已在 Demo App 登录的李四，
+**作为** 已在 子应用 (OIDC Client) 登录的李四，
 **我** 在新标签页访问 Portal（`http://localhost:4000`），
 **Portal** 自动完成认证，无需重新登录。
 
 **验收标准：**
-1. Portal 检测无 `portal_jwt_token` → 重定向到 Portal OIDC Provider `/authorize`
-2. Portal OIDC Provider 识别已有 session → 重定向回 Portal 携带 `code`
+1. Portal 检测无 `portal_jwt_token` → 重定向到 Portal `/authorize`
+2. Portal 识别已有 session → 重定向回 Portal 携带 `code`
 3. Portal BFF 用 `code` 换取 Token → 写入 `portal_jwt_token` Cookie
 4. 李四自动登录到 Portal 仪表盘
 5. 全程无需输入密码
@@ -1160,63 +1161,63 @@ JWT payload 包含以下 claims：
 > **@req H-SSO-003**
 
 **作为** 未在任何应用登录的吴九，
-**我** 访问 Demo App 时被重定向到 Portal OIDC Provider 登录页，
+**我** 访问 子应用 (OIDC Client) 时被重定向到 Portal 登录页，
 **以便** 完成身份认证。
 
 **验收标准：**
-1. Demo App → Portal OIDC Provider `/authorize` → Portal OIDC Provider 无 session → 展示登录表单
+1. 子应用 (OIDC Client) → Portal `/authorize` → Portal 无 session → 展示登录表单
 2. 吴九输入凭证后完成认证
-3. 但因吴九无任何角色，Demo App 需根据自身业务决定是否允许访问
+3. 但因吴九无任何角色，子应用 (OIDC Client) 需根据自身业务决定是否允许访问
 
 ---
 
-### US-H-SSO-04：Portal 登出联动 Demo App
+### US-H-SSO-04：Portal 登出联动 子应用 (OIDC Client)
 
 > **@req H-SSO-010**
 
-**作为** 同时在 Portal 和 Demo App 登录的张三，
+**作为** 同时在 Portal 和 子应用 (OIDC Client) 登录的张三，
 **我** 在 Portal 点击「退出登录」后，
 **两个** 应用都需重新登录。
 
 **验收标准：**
 1. Portal 登出流程：
    - JWT jti 写入 Redis 黑名单
-   - Refresh Token 在 Portal OIDC Provider 侧撤销
+   - Refresh Token 在 Portal 侧撤销
    - 清除 `portal_jwt_token` 和 `portal_refresh_token` Cookie
-   - 调用 Portal OIDC Provider `/api/auth/sign-out-sso` 清除 Portal OIDC Provider Session
-2. 张三再访问 Demo App → Demo App 重定向到 Portal OIDC Provider → Portal OIDC Provider 无 session → 展示登录表单
+   - 调用 Portal `/api/auth/sign-out-sso` 清除 Portal Session
+2. 张三再访问 子应用 (OIDC Client) → 子应用 (OIDC Client) 重定向到 Portal → Portal 无 session → 展示登录表单
 3. 两个应用均需重新认证
 
 ---
 
-### US-H-SSO-05：Demo App 登出联动 Portal
+### US-H-SSO-05：子应用 (OIDC Client) 登出联动 Portal
 
 > **@req H-SSO-011**
 
-**作为** 同时在 Portal 和 Demo App 登录的李四，
-**我** 在 Demo App 点击「退出登录」后，
+**作为** 同时在 Portal 和 子应用 (OIDC Client) 登录的李四，
+**我** 在 子应用 (OIDC Client) 点击「退出登录」后，
 **Portal** 也需重新登录。
 
 **验收标准：**
-1. Demo App 登出时调用 Portal OIDC Provider `/api/auth/sign-out-sso`
-2. Portal OIDC Provider Session 被清除
-3. 李四再访问 Portal → Portal 检测 `portal_jwt_token` 虽仍存在但刷新时失败（Portal OIDC Provider session 已清除）
-4. 李四被重定向到 Portal OIDC Provider 登录页
+1. 子应用 (OIDC Client) 登出时调用 Portal `/api/auth/sign-out-sso`
+2. Portal Session 被清除
+3. 李四再访问 Portal → Portal 检测 `portal_jwt_token` 虽仍存在但刷新时失败（Portal session 已清除）
+4. 李四被重定向到 Portal 登录页
 
 ---
 
-### US-H-SSO-06：Portal OIDC Provider Session 清除
+### US-H-SSO-06：Portal Session 清除
 
 > **@req H-SSO-020**
 
 **作为** 执行登出操作的张三，
-**Portal OIDC Provider Session** 被同步清除（Redis 中 `auth-sso:{sessionToken}` 键被删除）。
+**Portal Session** 被同步清除（Redis 中 `auth-sso:{sessionToken}` 键被删除）。
 
 **验收标准：**
 1. Portal 调用 `POST /api/auth/logout` 后：
    - JWT jti 写入 Redis 黑名单 `portal:jti_blocklist:{jti}`
-   - Refresh Token 撤销（Portal OIDC Provider `/oauth2/revoke`）
-   - Portal OIDC Provider Session 清除（`POST /api/auth/sign-out-sso` → Redis 删除 `auth-sso:{sessionToken}`）
+   - Refresh Token 撤销（Portal `/oauth2/revoke`）
+   - Portal Session 清除（`POST /api/auth/sign-out-sso` → Redis 删除 `auth-sso:{sessionToken}`）
 2. 所有认证状态被彻底清除
 
 ---
@@ -1226,12 +1227,12 @@ JWT payload 包含以下 claims：
 > **@req H-SSO-021**
 
 **作为** 刚登出的张三，
-**我** 尝试访问 `/admin/users` 时被重定向到 Portal OIDC Provider 登录页，
+**我** 尝试访问 `/admin/users` 时被重定向到 Portal 登录页，
 **以便** 确保登出后无法绕过认证。
 
 **验收标准：**
 1. 无 `portal_jwt_token` Cookie → Portal BFF 检测未认证
-2. 重定向到 `/api/auth/login` → Portal OIDC Provider 登录页
+2. 重定向到 `/api/auth/login` → Portal 登录页
 3. 不会展示任何受保护页面内容
 
 ---
@@ -1241,12 +1242,12 @@ JWT payload 包含以下 claims：
 > **@req H-SSO-022**
 
 **作为** 刚登出的李四，
-**我** 需要重新输入用户名和密码才能完成 Portal OIDC Provider 认证，
+**我** 需要重新输入用户名和密码才能完成 Portal 认证，
 **以便** 重新获得系统访问权限。
 
 **验收标准：**
-1. Portal OIDC Provider 登录页展示用户名/密码表单
-2. 不自动填充或跳过认证（Portal OIDC Provider Session 已清除）
+1. Portal 登录页展示用户名/密码表单
+2. 不自动填充或跳过认证（Portal Session 已清除）
 3. 认证成功后重新建立完整的 Session 链
 
 ---
@@ -1255,7 +1256,7 @@ JWT payload 包含以下 claims：
 
 ### US-OIDC-01：OIDC Discovery 端点
 
-**作为** Demo App 开发者，
+**作为** 子应用 (OIDC Client) 开发者，
 **我** 访问 `GET /api/auth/.well-known/openid-configuration` 获取 IdP 的 OIDC 配置文档，
 **以便** 自动发现授权端点、Token 端点、JWKS 端点和支持的 Scope。
 
@@ -1285,7 +1286,7 @@ JWT payload 包含以下 claims：
 
 ### US-OIDC-03：UserInfo 端点
 
-**作为** Demo App 后端，
+**作为** 子应用 (OIDC Client) 后端，
 **我** 携带 Access Token 调用 `GET /api/auth/oauth2/userinfo` 获取用户信息，
 **以便** 根据 `sub` 和 `email` 等字段识别用户身份。
 
@@ -1594,14 +1595,14 @@ JWT payload 包含以下 claims：
 ### US-CROSS-05：DISABLED 用户登录拒绝
 
 **作为** 账户状态为 DISABLED 的陈十，
-**我** 尝试在 Portal OIDC Provider 登录页输入正确凭证时，
-**Portal OIDC Provider** 拒绝认证并返回错误。
+**我** 尝试在 Portal 登录页输入正确凭证时，
+**Portal** 拒绝认证并返回错误。
 
 **验收标准：**
-1. Portal OIDC Provider 验证凭证正确但检查到用户状态为 DISABLED
+1. Portal 验证凭证正确但检查到用户状态为 DISABLED
 2. 返回错误：「账户已被禁用，请联系管理员」
 3. 不颁发任何 Token
-4. 不创建 Portal OIDC Provider Session
+4. 不创建 Portal Session
 
 ---
 
@@ -1791,10 +1792,11 @@ JWT payload 包含以下 claims：
 | **G-CLT-D** | US-G-04 |
 | **G-SEC-INT** | US-G-05, US-G-06 |
 | **H-AUTH-001** | US-H-AUTH-01 |
-| **H-AUTH-002** | US-H-AUTH-02 |
-| **H-AUTH-003** | US-H-AUTH-03 |
-| **H-AUTH-004** | US-H-AUTH-04 |
-| **H-AUTH-005** | US-H-AUTH-05 |
+| **H-AUTH-002** | US-H-AUTH-01 |
+| **H-AUTH-003** | US-H-AUTH-02 |
+| **H-AUTH-004** | US-H-AUTH-03, US-H-AUTH-04 |
+| **H-AUTH-005** | US-H-AUTH-04 |
+| **H-AUTH-006** | US-H-AUTH-05 |
 | **H-AUTH-010** | US-H-AUTH-06 |
 | **H-AUTH-011** | US-H-AUTH-07 |
 | **H-AUTH-012** | US-H-AUTH-08 |
@@ -1827,6 +1829,9 @@ JWT payload 包含以下 claims：
 | **SCOPE-003** | US-B-02 |
 | **SCOPE-004** | US-B-04 |
 | **SCOPE-005** | US-CROSS-07 |
+| **D-USR-C** | US-B-07 |
+| **D-USR-U** | US-B-10 |
+| **D-USR-D** | US-B-11 |
 | **D-CLI-C** | US-G-02 |
 | **D-CLI-U** | US-G-03 |
 | **D-CLI-D** | US-G-04 |
@@ -1839,6 +1844,8 @@ JWT payload 包含以下 claims：
 | **D-ROLE-C** | US-C-02 |
 | **D-ROLE-U** | US-C-03, US-C-07 |
 | **D-ROLE-D** | US-C-04 |
+| **AUTH-001** | US-H-AUTH-01 |
+| **AUTH-002** | US-H-AUTH-01, US-H-AUTH-02 |
 | **AUTH-003** | US-CROSS-04 |
 | **AUTH-004** | US-H-AUTH-01 |
 | **AUTH-005** | US-MNU-BTN-03 |
@@ -1850,9 +1857,6 @@ JWT payload 包含以下 claims：
 | **RBAC-ADMIN-FULL-ACCESS** | US-B-01 |
 | **RBAC-RESTRICTED-API** | US-B-05 |
 | **RBAC-UNAUTHORIZED** | US-B-03 |
-| **SSO-CROSS-APP** | US-H-SSO-01 [已废弃 - 独立 Demo App 已清理] |
-| **SSO-DIRECT-ACCESS** | US-H-SSO-02 [已废弃 - 独立 Demo App 已清理] |
-| **SSO-LOGOUT-PROPAGATION** | US-H-SSO-04 [已废弃 - 独立 Demo App 已清理] |
 
 ---
 

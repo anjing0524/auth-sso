@@ -23,14 +23,21 @@ import {
 import { EntityNotFoundError, DuplicateEntityError } from '@/domain/shared/errors';
 import { generateUUID } from '@/lib/crypto';
 import { refreshUsersPermissionCache } from '@/lib/permissions';
+import { revokeUsersAccessByUserId } from '@/lib/session/revoke';
 import type { ApiResponse } from '@auth-sso/contracts';
+
+/** 查询绑定某角色的所有用户 ID */
+async function getRoleBoundUserIds(roleId: string): Promise<string[]> {
+  const boundUsers = await db.select({ userId: schema.userRoles.userId })
+    .from(schema.userRoles).where(eq(schema.userRoles.roleId, roleId));
+  return boundUsers.map((u) => u.userId);
+}
 
 /** 获取绑定某角色的所有用户 ID，并主动刷新其权限缓存（删旧 → 查 DB → 写新） */
 async function invalidateRoleBoundUsersCache(roleId: string): Promise<void> {
-  const boundUsers = await db.select({ userId: schema.userRoles.userId })
-    .from(schema.userRoles).where(eq(schema.userRoles.roleId, roleId));
-  if (boundUsers.length > 0) {
-    await refreshUsersPermissionCache(boundUsers.map(u => u.userId));
+  const userIds = await getRoleBoundUserIds(roleId);
+  if (userIds.length > 0) {
+    await refreshUsersPermissionCache(userIds);
   }
 }
 
@@ -71,6 +78,8 @@ export const updateRoleAction = withAuth(
       return { success: false, error: 'VALIDATION_ERROR', message: parsed.error.issues[0].message };
     }
 
+    // 仅当数据范围或角色状态变化时，才需强制绑定用户重登（改名/改描述不影响权限决策）
+    let permissionDecisionChanged = false;
     await db.transaction(async (tx) => {
       const row = await tx.query.roles.findFirst({ where: eq(schema.roles.id, roleId) });
       if (!row) throw new EntityNotFoundError('Role', roleId);
@@ -79,11 +88,21 @@ export const updateRoleAction = withAuth(
       guardNotSystemRole(role);
 
       const updated = applyRoleUpdate(role, parsed.data);
+      permissionDecisionChanged =
+        (parsed.data.dataScopeType !== undefined && role.dataScopeType !== updated.dataScopeType) ||
+        (parsed.data.status !== undefined && role.status !== updated.status);
       await tx.update(schema.roles).set(roleToUpdateRow(updated))
         .where(eq(schema.roles.id, roleId));
     });
 
     await invalidateRoleBoundUsersCache(roleId);
+    // 数据范围/状态变更 → 批量撤销绑定用户的 Access Token，强制重登以更新 JWT claims
+    if (permissionDecisionChanged) {
+      const userIds = await getRoleBoundUserIds(roleId);
+      if (userIds.length > 0) {
+        await revokeUsersAccessByUserId(userIds);
+      }
+    }
 
     revalidatePath('/roles');
     updateTag('roles-list');
@@ -113,6 +132,8 @@ export const deleteRoleAction = withAuth(
 
     if (boundUsers.length > 0) {
       await refreshUsersPermissionCache(boundUsers.map(u => u.userId));
+      // 删除角色属于权限决策变更 → 批量撤销绑定用户 Access Token，强制重登解绑
+      await revokeUsersAccessByUserId(boundUsers.map(u => u.userId));
     }
 
     revalidatePath('/roles');

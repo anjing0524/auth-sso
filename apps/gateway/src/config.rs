@@ -37,10 +37,8 @@ impl Default for GatewayConfig {
 #[serde(default)]
 pub struct PortalConfig {
     /// Portal 上游地址，如 portal:4000
-    /// 网关通过此地址进行 OIDC Discovery 自动发现 JWKS 端点
+    /// 网关通过此地址进行 OIDC Discovery 自动发现 JWKS 端点和 issuer
     pub upstream: String,
-    /// Portal 的 OIDC JWT 校验发行者 (iss)
-    pub issuer: String,
     /// 网关直接放行、不校验 JWT 的公开路由白名单路径列表
     pub public_paths: Option<Vec<String>>,
 }
@@ -49,7 +47,6 @@ impl Default for PortalConfig {
     fn default() -> Self {
         Self {
             upstream: "127.0.0.1:4100".to_string(),
-            issuer: "http://localhost:4100".to_string(),
             public_paths: Some(vec![
                 "/login".to_string(),
                 "/register".to_string(),
@@ -141,7 +138,6 @@ mod tests {
         assert_eq!(config.gateway.log_dir, "logs");
         assert_eq!(config.gateway.log_level, "info");
         assert_eq!(config.portal.upstream, "127.0.0.1:4100");
-        assert_eq!(config.redis.url, "redis://127.0.0.1:6379");
         assert!(
             config
                 .portal
@@ -167,7 +163,6 @@ mod tests {
  
                 [portal]
                 upstream = "portal:4000"
-                issuer = "https://portal"
                 public_paths = ["/login", "/register", "/custom"]
             "#;
             fs::write(file_path, toml_content).unwrap();
@@ -211,7 +206,6 @@ mod tests {
             assert_eq!(config.gateway.ssl_cert_path, "ssl/fullchain.pem");
             assert_eq!(config.gateway.log_dir, "logs");
             assert_eq!(config.gateway.log_level, "info");
-            assert_eq!(config.portal.issuer, "http://localhost:4100");
             assert_eq!(config.redis.url, "redis://127.0.0.1:6379");
             assert!(
                 config

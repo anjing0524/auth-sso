@@ -124,6 +124,26 @@ export async function revokeUserAccessByUserId(userId: string): Promise<number> 
 }
 
 /**
+ * 批量按用户 ID 撤销 Access Token
+ * 用于角色权限/数据范围变更等会影响一批用户的场景，确保受影响用户下次请求被强制重登，
+ * 从而重走 rotateRefreshToken 拿到最新权限（消除 JWT claims 与缓存的双源不一致）。
+ *
+ * 并行撤销，单个用户失败不影响其他用户。
+ *
+ * @param userIds 用户 ID 数组
+ */
+export async function revokeUsersAccessByUserId(userIds: string[]): Promise<void> {
+  if (!userIds || userIds.length === 0) return;
+  const results = await Promise.allSettled(userIds.map((id) => revokeUserAccessByUserId(id)));
+  const failed = results.filter((r) => r.status === 'rejected').length;
+  if (failed > 0) {
+    console.warn(`[Session] Batch revoke for ${userIds.length} users, ${failed} failed`);
+  } else {
+    console.log(`[Session] Batch revoked access for ${userIds.length} users`);
+  }
+}
+
+/**
  * 撤销某个用户当前 JWT 的 jti（需要先解码获取 jti 和 exp）
  * 用于密码修改、账号封禁等需要强制下线的场景
  */

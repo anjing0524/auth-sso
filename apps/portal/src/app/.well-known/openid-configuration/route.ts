@@ -20,6 +20,8 @@ export async function GET() {
     introspection_endpoint: `${baseURL}/api/auth/oauth2/introspect`,
     revocation_endpoint: `${baseURL}/api/auth/oauth2/revoke`,
     jwks_uri: `${baseURL}/api/auth/jwks`,
+    // 自定义字段：Cookie-based Token 静默续签端点（非标准 OIDC，供 Gateway 服务端续签使用）
+    refresh_endpoint: `${baseURL}/api/auth/refresh`,
     scopes_supported: ['openid', 'profile', 'email', 'offline_access'],
     response_types_supported: ['code'],
     grant_types_supported: ['authorization_code', 'refresh_token'],

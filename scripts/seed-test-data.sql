@@ -67,7 +67,6 @@ VALUES
 INSERT INTO clients (client_id, name, client_secret, redirect_uris, scopes, status, created_at, updated_at)
 VALUES
   ('portal',      'Auth-SSO Portal', 'portal-secret-dev',      '{"http://localhost:4100/api/auth/callback"}',                      'openid profile email offline_access', 'ACTIVE',   now(), now()),
-  ('demo-app',    'Demo SSO App',    'demo-app-secret-dev',    '{"http://localhost:4002/api/auth/callback"}',                      'openid profile email offline_access', 'ACTIVE',   now(), now()),
   ('erp-app',     'ERP 系统',        'erp-app-secret-dev',     '{"https://erp.example.com/callback"}',                             'openid profile email offline_access', 'ACTIVE',   now(), now()),
   ('crm-app',     'CRM 系统',        'crm-app-secret-dev',     '{"https://crm.example.com/callback"}',                             'openid profile email offline_access', 'ACTIVE',   now(), now()),
   ('disabled-app','已废弃系统',      'disabled-app-secret-dev','{"https://disabled.example.com/callback"}',                        'openid profile email offline_access', 'DISABLED', now(), now());
@@ -99,16 +98,16 @@ INSERT INTO permissions (id, code, name, type, icon, visible, parent_id, sort, s
 
 -- 5.2 菜单页面 (PAGE) — 侧边栏路由项
 INSERT INTO permissions (id, code, name, type, path, icon, visible, parent_id, sort, status, created_at, updated_at) VALUES
-  ('perm_page_dashboard',  'system:view_dashboard', '仪表盘',     'PAGE', '/dashboard',          'LayoutDashboard', true, 'perm_dir_dashboard', 0, 'ACTIVE', now(), now()),
-  ('perm_page_users',      'user:list',             '用户管理',   'PAGE', '/admin/users',        'Users',           true, 'perm_dir_user_mgmt', 0, 'ACTIVE', now(), now()),
-  ('perm_page_roles',      'role:list',             '角色管理',   'PAGE', '/admin/roles',        'Shield',          true, 'perm_dir_user_mgmt', 1, 'ACTIVE', now(), now()),
-  ('perm_page_permissions','permission:list',       '权限管理',   'PAGE', '/admin/permissions',  'KeyRound',        true, 'perm_dir_user_mgmt', 2, 'ACTIVE', now(), now()),
-  ('perm_page_depts',      'department:list',       '部门管理',   'PAGE', '/admin/departments',  'Building2',       true, 'perm_dir_org',      0, 'ACTIVE', now(), now()),
-  ('perm_page_clients',    'client:list',           '客户端管理', 'PAGE', '/admin/clients',      'AppWindow',       true, 'perm_dir_client',   0, 'ACTIVE', now(), now()),
-  ('perm_page_audit',      'audit:read',            '审计日志',   'PAGE', '/admin/audit',        'FileText',        true, 'perm_dir_audit',    0, 'ACTIVE', now(), now()),
-  ('perm_page_login_log',  'login_log:read',        '登录日志',   'PAGE', '/admin/login-logs',   'LogIn',           true, 'perm_dir_audit',    1, 'ACTIVE', now(), now()),
+  ('perm_page_dashboard',  'menu:dashboard',   '仪表盘',     'PAGE', '/dashboard',          'LayoutDashboard', true, 'perm_dir_dashboard', 0, 'ACTIVE', now(), now()),
+  ('perm_page_users',      'menu:users',       '用户管理',   'PAGE', '/admin/users',        'Users',           true, 'perm_dir_user_mgmt', 0, 'ACTIVE', now(), now()),
+  ('perm_page_roles',      'menu:roles',       '角色管理',   'PAGE', '/admin/roles',        'Shield',          true, 'perm_dir_user_mgmt', 1, 'ACTIVE', now(), now()),
+  ('perm_page_permissions','menu:permissions', '权限管理',   'PAGE', '/admin/permissions',  'KeyRound',        true, 'perm_dir_user_mgmt', 2, 'ACTIVE', now(), now()),
+  ('perm_page_depts',      'menu:departments', '部门管理',   'PAGE', '/admin/departments',  'Building2',       true, 'perm_dir_org',      0, 'ACTIVE', now(), now()),
+  ('perm_page_clients',    'menu:clients',     '客户端管理', 'PAGE', '/admin/clients',      'AppWindow',       true, 'perm_dir_client',   0, 'ACTIVE', now(), now()),
+  ('perm_page_audit',      'menu:audit-logs',  '审计日志',   'PAGE', '/admin/audit',        'FileText',        true, 'perm_dir_audit',    0, 'ACTIVE', now(), now()),
+  ('perm_page_login_log',  'menu:login-logs',  '登录日志',   'PAGE', '/admin/login-logs',   'LogIn',           true, 'perm_dir_audit',    1, 'ACTIVE', now(), now()),
   -- 隐藏页面（测试 US-MNU-BTN-04）
-  ('perm_page_email',      'system:manage',         '邮件配置',   'PAGE', '/admin/email-config', 'Mail',            false,'perm_dir_system',   0, 'ACTIVE', now(), now());
+  ('perm_page_email',      'menu:email',       '邮件配置',   'PAGE', '/admin/email-config', 'Mail',            false,'perm_dir_system',   0, 'ACTIVE', now(), now());
 
 -- 5.3 API 权限点 — 43 个权限码
 INSERT INTO permissions (id, code, name, type, resource, action, parent_id, sort, status, created_at, updated_at) VALUES
@@ -235,17 +234,6 @@ INSERT INTO role_permissions (role_id, permission_id, created_at) VALUES
   ('role_audit_viewer', 'perm_api_login_log_read',     now()),
   ('role_audit_viewer', 'perm_api_login_log_export',   now());
 
--- ============================================================================
--- 8. 角色-客户端关联 (role_clients) — 复合主键 (role_id, client_id)
--- ============================================================================
--- demo-app: 全部角色可访问
-INSERT INTO role_clients (role_id, client_id, created_at) VALUES
-  ('role_super_admin',  'demo-app', now()),
-  ('role_org_admin',    'demo-app', now()),
-  ('role_dept_manager', 'demo-app', now()),
-  ('role_employee',     'demo-app', now()),
-  ('role_app_admin',    'demo-app', now()),
-  ('role_audit_viewer', 'demo-app', now());
 -- erp-app: 仅 super_admin, org_admin, dept_manager
 INSERT INTO role_clients (role_id, client_id, created_at) VALUES
   ('role_super_admin',  'erp-app', now()),

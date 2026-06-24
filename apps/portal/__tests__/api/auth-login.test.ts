@@ -7,7 +7,7 @@
  * - 密码错误 → BusinessRuleViolationError
  * - 登录成功 → 200 + Cookie
  *
- * @req AUTH-001, AUTH-002
+ * @req DC-AUTH-001, DC-AUTH-002
  * @vitest-environment node
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';

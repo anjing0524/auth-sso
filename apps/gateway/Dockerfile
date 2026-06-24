@@ -1,5 +1,5 @@
 # Build stage
-FROM rust:1.86-alpine AS builder
+FROM rust:1.88-alpine AS builder
 
 # 安装构建依赖（添加 alpine-sdk 以及构建 vendored openssl 所需的基础工具）
 RUN apk add --no-cache musl-dev pkgconfig perl make cmake clang-dev clang alpine-sdk
@@ -33,8 +33,8 @@ RUN apk add --no-cache ca-certificates
 # 从构建阶段复制二进制文件
 COPY --from=builder /app/apps/gateway/target/release/gateway /usr/local/bin/gateway
 
-# 复制默认配置文件至工作目录
-COPY apps/gateway/gateway.toml ./gateway.toml
+# 复制 Docker 环境专用配置文件（upstream/issuer/redis 使用 Docker 内部地址）
+COPY apps/gateway/gateway.docker.toml ./gateway.toml
 
 # 创建 SSL 目录挂载点
 RUN mkdir -p /etc/gateway/ssl

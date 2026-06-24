@@ -1,5 +1,5 @@
 import type { UserStatus } from '@auth-sso/contracts';
-import { USER_ACTIVE, USER_DELETED } from '@auth-sso/contracts';
+import { USER_ACTIVE, USER_DELETED, USER_LOCKED, USER_DISABLED } from '@auth-sso/contracts';
 import { type CreateUserInput, type User } from './types';
 import { BusinessRuleViolationError } from '../shared/errors';
 
@@ -73,10 +73,10 @@ export function toggleUserStatus(user: User): User {
   if (user.status === USER_DELETED) {
     throw new BusinessRuleViolationError('已逻辑删除的用户无法操作状态');
   }
-  if (user.status === 'LOCKED') {
+  if (user.status === USER_LOCKED) {
     throw new BusinessRuleViolationError('已锁定的用户无法直接切换状态，请使用解锁功能');
   }
-  const newStatus: User['status'] = user.status === USER_ACTIVE ? 'DISABLED' : USER_ACTIVE;
+  const newStatus: User['status'] = user.status === USER_ACTIVE ? USER_DISABLED : USER_ACTIVE;
   return { ...user, status: newStatus };
 }
 

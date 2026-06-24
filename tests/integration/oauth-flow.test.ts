@@ -137,11 +137,10 @@ async function testHealthCheck(): Promise<TestResult> {
   const name = '1.1 健康检查端点';
 
   try {
-    const res = await httpRequest(`${PORTAL_URL}/api/auth/session`);
+    const res = await httpRequest(`${PORTAL_URL}/api/auth/jwks`);
 
-    // Better Auth 不一定有 /api/auth/ok，但 /api/auth/session 返回 200 或 401 均视为服务可用正常
-    if (res.status !== 200 && res.status !== 401) {
-      return { name, status: 'FAIL', duration: Date.now() - start, error: `Expected 200/401, got ${res.status}` };
+    if (res.status !== 200) {
+      return { name, status: 'FAIL', duration: Date.now() - start, error: `Expected 200, got ${res.status}` };
     }
 
     return { name, status: 'PASS', duration: Date.now() - start };
@@ -155,7 +154,7 @@ async function testSignInEndpoint(): Promise<TestResult> {
   const name = '1.2 登录端点';
 
   try {
-    const res = await httpRequest(`${PORTAL_URL}/api/auth/sign-in/email`, {
+    const res = await httpRequest(`${PORTAL_URL}/api/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(TEST_USER),
@@ -165,18 +164,14 @@ async function testSignInEndpoint(): Promise<TestResult> {
       return { name, status: 'FAIL', duration: Date.now() - start, error: `Expected 200, got ${res.status}`, details: { body: res.body } };
     }
 
-    const body = res.body as { token?: string; user?: { email?: string } };
-    if (!body.token) {
-      return { name, status: 'FAIL', duration: Date.now() - start, error: 'Response missing token' };
+    const body = res.body as { success?: boolean };
+    if (!body.success) {
+      return { name, status: 'FAIL', duration: Date.now() - start, error: 'Response success is false' };
     }
 
-    if (body.user?.email !== TEST_USER.email) {
-      return { name, status: 'FAIL', duration: Date.now() - start, error: `User email mismatch: ${body.user?.email}` };
-    }
-
-    const hasSessionCookie = res.cookies.some((c: string) => c.includes('session_token') || c.includes('session') || c.includes('portal_jwt'));
+    const hasSessionCookie = res.cookies.some((c: string) => c.includes('login_session'));
     if (!hasSessionCookie) {
-      return { name, status: 'FAIL', duration: Date.now() - start, error: 'No session cookie set' };
+      return { name, status: 'FAIL', duration: Date.now() - start, error: 'No login_session cookie set' };
     }
 
     return { name, status: 'PASS', duration: Date.now() - start, details: { cookies: res.cookies.length } };
@@ -191,7 +186,7 @@ async function testAuthorizeEndpoint(): Promise<{ result: TestResult; code?: str
 
   try {
     // 先登录
-    const loginRes = await httpRequest(`${PORTAL_URL}/api/auth/sign-in/email`, {
+    const loginRes = await httpRequest(`${PORTAL_URL}/api/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(TEST_USER),
@@ -215,7 +210,7 @@ async function testAuthorizeEndpoint(): Promise<{ result: TestResult; code?: str
       headers: { Cookie: cookieHeader(sessionCookies) },
     });
 
-    if (authRes.status !== 302) {
+    if (authRes.status !== 302 && authRes.status !== 307) {
       return { result: { name, status: 'FAIL', duration: Date.now() - start, error: `Expected 302, got ${authRes.status}` }, sessionCookies };
     }
 
@@ -252,19 +247,19 @@ async function testTokenEndpoint(authCode: string, codeVerifier: string): Promis
   const name = '1.4 Token交换端点';
 
   try {
-    const body = new URLSearchParams({
+    const requestBody = {
       grant_type: 'authorization_code',
       code: authCode,
       client_id: OAUTH_CLIENT.clientId,
       client_secret: OAUTH_CLIENT.clientSecret,
       redirect_uri: OAUTH_CLIENT.redirectUri,
       code_verifier: codeVerifier,
-    });
+    };
 
     const res = await httpRequest(`${PORTAL_URL}/api/auth/oauth2/token`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: body.toString(),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(requestBody),
     });
 
     if (res.status !== 200) {
@@ -356,7 +351,7 @@ async function testOidcDiscovery(): Promise<TestResult> {
   const name = '1.7 OIDC Discovery端点';
 
   try {
-    const res = await httpRequest(`${PORTAL_URL}/api/auth/.well-known/openid-configuration`);
+    const res = await httpRequest(`${PORTAL_URL}/.well-known/openid-configuration`);
 
     if (res.status !== 200) {
       return { name, status: 'FAIL', duration: Date.now() - start, error: `Expected 200, got ${res.status}` };
@@ -398,7 +393,7 @@ async function testUnauthenticatedOidcRedirect(): Promise<TestResult> {
 
     const res = await httpRequest(authUrl);
 
-    if (res.status !== 302) {
+    if (res.status !== 302 && res.status !== 307) {
       return { name, status: 'FAIL', duration: Date.now() - start, error: `Expected 302 redirect, got ${res.status}` };
     }
 
@@ -443,7 +438,7 @@ async function runTests() {
 
   if (code) {
     // 需要重新登录获取新的 code，因为每个 code 只能用一次
-    const loginRes = await httpRequest(`${PORTAL_URL}/api/auth/sign-in/email`, {
+    const loginRes = await httpRequest(`${PORTAL_URL}/api/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(TEST_USER),

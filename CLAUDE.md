@@ -1,3 +1,5 @@
+@AGENTS.md
+
 # CLAUDE.md
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
@@ -28,7 +30,6 @@ pnpm test:e2e              # Playwright E2E 端到端测试
 pnpm test:report           # 需求追溯性覆盖率报告
 pnpm test:report --threshold 90  # 检查覆盖率 >= 90%
 ```
-
 
 ## Test Architecture
 
@@ -85,6 +86,7 @@ Every test file SHOULD annotate which requirements it covers:
   ```
 
 Supported formats:
+
 - Single ID: `@req A-NAV-01`
 - Comma-separated: `@req D-PRM-L, D-PRM-C, D-PRM-U, D-PRM-D`
 - Range: `@req AUTH-001~005` expands to AUTH-001 ... AUTH-005
@@ -116,6 +118,7 @@ Supported formats:
 - Redis (ioredis) for session storage
 - Tailwind CSS 4
 - pnpm workspaces
+
 ## Skill routing
 
 When the user's request matches an available skill, ALWAYS invoke it using the Skill
@@ -123,6 +126,7 @@ tool as your FIRST action. Do NOT answer directly, do NOT use other tools first.
 The skill has specialized workflows that produce better results than ad-hoc answers.
 
 Key routing rules:
+
 - Product ideas, "is this worth building", brainstorming → invoke office-hours
 - Bugs, errors, "why is this broken", 500 errors → invoke investigate
 - Ship, deploy, push, create PR → invoke ship
@@ -130,6 +134,8 @@ Key routing rules:
 - Code review, check my diff → invoke review
 - Update docs after shipping → invoke document-release
 - Weekly retro → invoke retro
+- Spec docs maintenance, PRD update, requirements matrix → invoke spec-docs
+- Portal architecture, Server Actions, domain logic → invoke architecting-portal
 - Design system, brand → invoke design-consultation
 - Visual audit, design polish → invoke design-review
 - Architecture review → invoke plan-eng-review

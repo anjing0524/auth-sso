@@ -123,12 +123,12 @@ export function getIssuer(): string {
 /**
  * JWKS 端点完整 URL
  *
- * 优先级：PORTAL_JWKS_URI > 拼接 {baseURL}/api/auth/.well-known/jwks
+ * 优先级：PORTAL_JWKS_URI > 拼接 {baseURL}/api/auth/jwks
  */
 export function getJwksUri(): string {
   return (
     e['PORTAL_JWKS_URI'] ||
-    `${getAppBaseURL()}/api/auth/.well-known/jwks`
+    `${getAppBaseURL()}/api/auth/jwks`
   ).trim();
 }
 

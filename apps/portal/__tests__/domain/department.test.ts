@@ -1,5 +1,5 @@
 /**
- * @req D-DEPT-C, D-DEPT-U, D-DEPT-D
+ * @req DC-DEPT-C, DC-DEPT-U, DC-DEPT-D
  */
 import { describe, it, expect } from 'vitest';
 import {

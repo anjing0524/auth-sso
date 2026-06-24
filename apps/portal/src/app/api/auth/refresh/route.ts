@@ -1,9 +1,9 @@
 /**
- * Token 刷新 API (POST /api/auth/refresh)
+ * Token 刷新 API (POST /)
  *
  * Refresh Token Rotation：消耗旧 RT，签发新 AT + RT。
  *
- * @route POST /api/auth/refresh
+ * @route POST /
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { getRefreshTokenFromCookie } from '@/lib/session';
@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
       );
       // 清除无效 Cookie
       response.cookies.set(COOKIE_NAMES.JWT, '', { path: '/', httpOnly: true, sameSite: 'lax', maxAge: 0 });
-      response.cookies.set(COOKIE_NAMES.REFRESH, '', { path: '/api/auth/refresh', httpOnly: true, sameSite: 'lax', maxAge: 0 });
+      response.cookies.set(COOKIE_NAMES.REFRESH, '', { path: '/', httpOnly: true, sameSite: 'lax', maxAge: 0 });
       return response;
     }
 
@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
     });
 
     response.cookies.set(COOKIE_NAMES.REFRESH, result.refreshToken, {
-      path: '/api/auth/refresh',
+      path: '/',
       httpOnly: true,
       secure,
       sameSite: 'lax',

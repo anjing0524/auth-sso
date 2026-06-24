@@ -1,5 +1,5 @@
 /**
- * @req D-ROLE-C, D-ROLE-U, D-ROLE-D
+ * @req DC-ROLE-C, DC-ROLE-U, DC-ROLE-D
  */
 import { describe, it, expect } from 'vitest';
 import {

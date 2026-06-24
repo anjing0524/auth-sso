@@ -1,12 +1,14 @@
 use async_trait::async_trait;
+use base64::Engine;
 use jsonwebtoken::{Algorithm, Validation, decode, decode_header};
 use pingora_core::prelude::*;
 use pingora_http::{RequestHeader, ResponseHeader};
 use pingora_load_balancing::LoadBalancer;
 use pingora_load_balancing::selection::RoundRobin;
 use pingora_proxy::{ProxyHttp, Session};
-use std::collections::HashSet;
-use std::sync::Arc;
+use std::collections::{HashMap, HashSet};
+use std::sync::{Arc, Mutex};
+use std::time::Instant;
 use tracing::{debug, error, info, warn};
 
 use crate::claims::Claims;
@@ -93,6 +95,81 @@ fn is_microservice_route(path: &str) -> bool {
     path.starts_with("/api/v1/") && !path.starts_with("/api/v1/auth/")
 }
 
+/// Access Token 剩余有效期低于此阈值（秒）时触发静默续签
+const REFRESH_THRESHOLD_SEC: i64 = 300;
+
+/// 同用户续签去重窗口（秒），防止并发请求反复轮换 Refresh Token
+const REFRESH_DEDUP_SEC: u64 = 30;
+
+/// 从 Cookie 头部中提取 portal_refresh_token 的值（零拷贝）
+fn extract_refresh_token_from_cookie<'a>(cookie_header: &'a str) -> Option<&'a str> {
+    cookie_header.split(';').find_map(|cookie_str| {
+        let trimmed = cookie_str.trim();
+        trimmed
+            .strip_prefix("portal_refresh_token=")
+            .map(|mut val| {
+                if val.starts_with('"') && val.ends_with('"') && val.len() >= 2 {
+                    val = &val[1..val.len() - 1];
+                }
+                val
+            })
+    })
+}
+
+/// 裸解 JWT payload（不验签），用于从新签发的 AT 中提取 sub / jti
+fn decode_jwt_payload(token: &str) -> Option<Claims> {
+    let parts: Vec<&str> = token.split('.').collect();
+    if parts.len() != 3 {
+        return None;
+    }
+    let payload_bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
+        .decode(parts[1])
+        .ok()?;
+    serde_json::from_slice::<Claims>(&payload_bytes).ok()
+}
+
+/// 从 Set-Cookie 头中提取指定 cookie 的值（仅匹配首个分号前的 name=value 段）
+fn extract_cookie_value<'a>(set_cookie: &'a str, name: &str) -> Option<&'a str> {
+    let first_segment = set_cookie.split(';').next()?;
+    let trimmed = first_segment.trim();
+    let prefix = format!("{}=", name);
+    trimmed.strip_prefix(&prefix)
+}
+
+/// 从 Cookie 头中移除指定 cookie
+fn remove_cookie_from_header(cookie_header: &str, cookie_name: &str) -> String {
+    let prefix = format!("{}=", cookie_name);
+    cookie_header
+        .split(';')
+        .map(|s| s.trim())
+        .filter(|part| !part.starts_with(&prefix))
+        .collect::<Vec<&str>>()
+        .join("; ")
+}
+
+/// 替换 Cookie 头中指定 cookie 的值；若不存在则追加
+fn replace_cookie_in_header(cookie_header: &str, cookie_name: &str, new_value: &str) -> String {
+    let prefix = format!("{}=", cookie_name);
+    let mut found = false;
+    let parts: Vec<String> = cookie_header
+        .split(';')
+        .map(|s| s.trim())
+        .map(|part| {
+            if part.starts_with(&prefix) {
+                found = true;
+                format!("{}={}", cookie_name, new_value)
+            } else {
+                part.to_string()
+            }
+        })
+        .collect();
+    if found {
+        parts.join("; ")
+    } else {
+        format!("{}; {}={}", parts.join("; "), cookie_name, new_value)
+    }
+}
+
 /// Auth-SSO 去中心化安全网关 - 基于 Pingora (0.8.0 + OpenSSL)
 pub struct Gateway {
     /// Portal 上游负载均衡器（Portal 已合并 IdP，统一代理入口）
@@ -105,6 +182,12 @@ pub struct Gateway {
     pub path_matcher: PathMatcher,
     /// Redis 异步连接管理器，用于 jti 黑名单校验。若为 None 则跳过校验 (fail-open)
     pub redis_conn: Option<redis::aio::ConnectionManager>,
+    /// 异步 HTTP 客户端（用于向 Portal 发起 token 续签请求）
+    pub http_client: reqwest::Client,
+    /// Portal 内网上游地址（如 127.0.0.1:4100），构造续签 URL
+    pub upstream_addr: String,
+    /// 进程内续签去重缓存：key = user sub，value = (new_at, new_rt, timestamp)
+    pub refresh_dedup: Mutex<HashMap<String, (String, String, Instant)>>,
 }
 
 impl Gateway {
@@ -235,6 +318,90 @@ impl Gateway {
             .await?;
         Ok(true)
     }
+
+    /// 向 Portal 发起 Access Token 静默续签（请求 B）
+    ///
+    /// 上行：Gateway → Portal  POST /api/auth/refresh + Cookie: portal_refresh_token={rt}
+    /// 下行：Portal → Gateway  响应 Set-Cookie 含新 AT + RT
+    ///
+    /// 返回 Some((new_at, new_rt)) 或 None（续签失败不阻断请求）
+    async fn try_refresh_token(&self, refresh_token: &str, sub: &str) -> Option<(String, String)> {
+        // 1. 检查进程内去重缓存（30s 内同用户复用结果，防止并发轮换）
+        {
+            let cache = self.refresh_dedup.lock().unwrap();
+            if let Some((at, rt, ts)) = cache.get(sub) {
+                if ts.elapsed().as_secs() < REFRESH_DEDUP_SEC {
+                    debug!("续签去重命中: sub={}", sub);
+                    return Some((at.clone(), rt.clone()));
+                }
+            }
+        }
+
+        // 2. 向 Portal 发起续签请求（URL 通过 OIDC Discovery 动态获取，回退到默认路径）
+        let url = self
+            .jwks_cache
+            .get_refresh_endpoint()
+            .and_then(|endpoint| {
+                crate::jwks::JwksCache::resolve_jwks_url(&self.upstream_addr, &endpoint).ok()
+            })
+            .unwrap_or_else(|| format!("http://{}/api/auth/refresh", self.upstream_addr));
+        debug!("发起静默续签: url={}, sub={}", url, sub);
+
+        let response = self
+            .http_client
+            .post(&url)
+            .header("Cookie", format!("portal_refresh_token={}", refresh_token))
+            .send()
+            .await;
+
+        match response {
+            Ok(resp) if resp.status().is_success() => {
+                // 3. 解析响应 Set-Cookie 头，提取新 AT / RT
+                let mut new_at = None;
+                let mut new_rt = None;
+
+                for header_value in resp.headers().get_all("set-cookie").iter() {
+                    if let Ok(cookie_str) = header_value.to_str() {
+                        if let Some(val) = extract_cookie_value(cookie_str, "portal_jwt_token") {
+                            new_at = Some(val.to_string());
+                        }
+                        if let Some(val) = extract_cookie_value(cookie_str, "portal_refresh_token")
+                        {
+                            new_rt = Some(val.to_string());
+                        }
+                    }
+                }
+
+                if let (Some(at), Some(rt)) = (new_at, new_rt) {
+                    info!("静默续签成功: sub={}", sub);
+                    // 4. 更新去重缓存
+                    {
+                        let mut cache = self.refresh_dedup.lock().unwrap();
+                        if cache.len() > 1000 {
+                            cache.clear();
+                        }
+                        cache.insert(sub.to_string(), (at.clone(), rt.clone(), Instant::now()));
+                    }
+                    Some((at, rt))
+                } else {
+                    warn!("续签响应缺少预期的 Set-Cookie 头: sub={}", sub);
+                    None
+                }
+            }
+            Ok(resp) => {
+                warn!(
+                    "续签请求被 Portal 拒绝: status={}, sub={}",
+                    resp.status(),
+                    sub
+                );
+                None
+            }
+            Err(e) => {
+                warn!("续签请求网络错误: {}, sub={}", e, sub);
+                None
+            }
+        }
+    }
 } // impl Gateway
 
 /// 零拷贝提取 Cookie 中的 portal_jwt_token 并剥离可能的双引号
@@ -263,6 +430,8 @@ pub struct GatewayCtx {
     pub user_id: Option<String>,
     /// JWT 唯一标识 (从 JWT Claims.jti 提取，方便微服务校验拉黑状态)
     pub user_jti: Option<String>,
+    /// 续签得到的新 Token 对 (new_access_token, new_refresh_token)
+    pub refreshed_tokens: Option<(String, String)>,
 }
 
 #[async_trait]
@@ -299,7 +468,7 @@ impl ProxyHttp for Gateway {
     async fn request_filter(&self, session: &mut Session, ctx: &mut Self::CTX) -> Result<bool> {
         let path = session.req_header().uri.path();
 
-        // 1. 白名单放行路由与静态资产
+        // 1. 白名单放行路由与静态资产（不验签、不续签、不剥离 Cookie）
         if self.path_matcher.is_public(path) {
             return Ok(false);
         }
@@ -321,6 +490,35 @@ impl ProxyHttp for Gateway {
             return self.handle_auth_failure(session).await;
         }
 
+        // 4. 检查 Access Token 是否即将过期，若是则静默续签
+        let now_sec = std::time::SystemTime::now()
+            .duration_since(std::time::SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
+
+        let needs_refresh = decode_jwt_payload(token)
+            .map(|claims| claims.exp as i64 - now_sec < REFRESH_THRESHOLD_SEC)
+            .unwrap_or(false);
+
+        if needs_refresh {
+            let cookie_header = session.get_header("Cookie").and_then(|v| v.to_str().ok());
+
+            let refresh_token = cookie_header.and_then(|h| extract_refresh_token_from_cookie(h));
+
+            if let (Some(rt), Some(sub)) = (refresh_token, &ctx.user_id) {
+                if let Some((new_at, new_rt)) = self.try_refresh_token(rt, sub).await {
+                    // 解码新 AT 的 payload，更新 ctx 中的身份信息
+                    if let Some(new_claims) = decode_jwt_payload(&new_at) {
+                        ctx.auth_header = Some(format!("Bearer {}", new_at));
+                        ctx.user_id = Some(new_claims.sub);
+                        ctx.user_jti = Some(new_claims.jti);
+                        ctx.refreshed_tokens = Some((new_at, new_rt));
+                    }
+                }
+                // 续签失败：静默继续，旧 AT 仍有效
+            }
+        }
+
         Ok(false)
     }
 
@@ -337,22 +535,38 @@ impl ProxyHttp for Gateway {
         }
 
         let path = session.req_header().uri.path();
+
+        // 微服务路由：移除全部 Cookie，清除伪造的身份 Header
         if is_microservice_route(path) {
             upstream_request.remove_header("Cookie");
             if ctx.auth_header.is_none() {
-                // 核心安全纵深防护：未登录状态下访问微服务，网关侧强行清除可能被伪造的身份 Header
                 upstream_request.remove_header("Authorization");
                 upstream_request.remove_header("X-User-Id");
                 upstream_request.remove_header("X-User-Jti");
             }
+        } else if !self.path_matcher.is_public(path) {
+            // 非公开路径（Gateway 已验签）：剥离 RT cookie，必要时替换 AT
+            // 读取当前 Cookie 头
+            if let Some(cookie_val) = upstream_request.headers.get("Cookie") {
+                if let Ok(cookie_str) = cookie_val.to_str() {
+                    // 剥离 portal_refresh_token（RT 不应暴露给 Portal 的非 refresh 端点）
+                    let mut new_cookie =
+                        remove_cookie_from_header(cookie_str, "portal_refresh_token");
+                    // 若续签成功，替换 portal_jwt_token 为新 AT
+                    if let Some((ref new_at, _)) = ctx.refreshed_tokens {
+                        new_cookie =
+                            replace_cookie_in_header(&new_cookie, "portal_jwt_token", new_at);
+                    }
+                    upstream_request.insert_header("Cookie", new_cookie)?;
+                }
+            }
         }
+        // 公开路径（含 /api/auth/refresh）：Cookie 透传，不做任何修改
 
         if let Some(ref auth_header) = ctx.auth_header {
-            // 直接以引用方式写入，消除 format!("Bearer {}", token) 的二次内存分配开销
             upstream_request.insert_header("Authorization", auth_header.as_str())?;
         }
 
-        // 注入解析出来的安全上下文 Header，后端微服务即可 O(1) 获取用户 ID，免去重复解析 JWT
         if let Some(ref user_id) = ctx.user_id {
             upstream_request.insert_header("X-User-Id", user_id.as_str())?;
         }
@@ -360,6 +574,39 @@ impl ProxyHttp for Gateway {
             upstream_request.insert_header("X-User-Jti", user_jti.as_str())?;
         }
 
+        Ok(())
+    }
+
+    /// 下行响应过滤：若在 request_filter 中完成了续签，则将新 Token 以 Set-Cookie 下发给浏览器
+    async fn response_filter(
+        &self,
+        session: &mut Session,
+        upstream_response: &mut ResponseHeader,
+        ctx: &mut Self::CTX,
+    ) -> Result<()> {
+        if let Some((ref new_at, ref new_rt)) = ctx.refreshed_tokens {
+            // Secure 标记：非 localhost 时启用（与 Portal 的 cookie 设置逻辑一致）
+            let host = session
+                .get_header("Host")
+                .and_then(|h| h.to_str().ok())
+                .unwrap_or("");
+            let secure = !host.contains("localhost") && !host.contains("127.0.0.1");
+            let secure_str = if secure { "; Secure" } else { "" };
+
+            let at_cookie = format!(
+                "portal_jwt_token={}; Path=/; HttpOnly; SameSite=Lax; Max-Age=3600{}",
+                new_at, secure_str
+            );
+            let rt_cookie = format!(
+                "portal_refresh_token={}; Path=/; HttpOnly; SameSite=Lax; Max-Age=604800{}",
+                new_rt, secure_str
+            );
+
+            upstream_response.append_header("Set-Cookie", at_cookie)?;
+            upstream_response.append_header("Set-Cookie", rt_cookie)?;
+
+            info!("下行注入续签 Set-Cookie: sub={:?}", ctx.user_id);
+        }
         Ok(())
     }
 }
@@ -445,6 +692,7 @@ mod tests {
             issuer: Some(issuer.clone()),
             jwks_uri: Some("https://sso.example.com/api/auth/jwks".into()),
             id_token_signing_alg_values_supported: vec!["HS256".into()],
+            refresh_endpoint: None,
         });
 
         // 模拟写入公钥缓存（测试时以 HS256 对称密钥替代）
@@ -459,6 +707,9 @@ mod tests {
             issuer: issuer.clone(),
             path_matcher: PathMatcher::new(None),
             redis_conn: None,
+            http_client: reqwest::Client::new(),
+            upstream_addr: "127.0.0.1:4100".to_string(),
+            refresh_dedup: Mutex::new(HashMap::new()),
         };
 
         // 2. 生成合法的 HS256 Token
@@ -504,6 +755,7 @@ mod tests {
             issuer: Some(issuer.clone()),
             jwks_uri: Some("https://sso.example.com/api/auth/jwks".into()),
             id_token_signing_alg_values_supported: vec!["HS256".into()],
+            refresh_endpoint: None,
         });
 
         let secret = b"super-secret-key-that-is-long-enough-for-hs256";
@@ -517,6 +769,9 @@ mod tests {
             issuer: issuer.clone(),
             path_matcher: PathMatcher::new(None),
             redis_conn: None,
+            http_client: reqwest::Client::new(),
+            upstream_addr: "127.0.0.1:4100".to_string(),
+            refresh_dedup: Mutex::new(HashMap::new()),
         };
 
         // 生成过期 Token
@@ -558,6 +813,7 @@ mod tests {
             issuer: Some(issuer.clone()),
             jwks_uri: Some("https://sso.example.com/api/auth/jwks".into()),
             id_token_signing_alg_values_supported: vec!["HS256".into()],
+            refresh_endpoint: None,
         });
 
         let secret = b"super-secret-key-that-is-long-enough-for-hs256";
@@ -571,6 +827,9 @@ mod tests {
             issuer: issuer.clone(),
             path_matcher: PathMatcher::new(None),
             redis_conn: None,
+            http_client: reqwest::Client::new(),
+            upstream_addr: "127.0.0.1:4100".to_string(),
+            refresh_dedup: Mutex::new(HashMap::new()),
         };
 
         // 错误发行方 (issuer)
@@ -600,6 +859,96 @@ mod tests {
         assert!(!result);
     }
 
+    #[test]
+    fn test_extract_refresh_token_from_cookie() {
+        let header = "portal_jwt_token=abc.def; portal_refresh_token=rrr.ttt; other=val";
+        assert_eq!(extract_refresh_token_from_cookie(header), Some("rrr.ttt"));
+        // 无双引号剥离
+        assert_eq!(
+            extract_refresh_token_from_cookie("portal_refresh_token=simple"),
+            Some("simple")
+        );
+        // RT 不存在
+        assert_eq!(
+            extract_refresh_token_from_cookie("portal_jwt_token=abc; other=val"),
+            None
+        );
+    }
+
+    #[test]
+    fn test_extract_cookie_value() {
+        let set_cookie =
+            "portal_jwt_token=eyJ.xxx; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=3600";
+        assert_eq!(
+            extract_cookie_value(set_cookie, "portal_jwt_token"),
+            Some("eyJ.xxx")
+        );
+        assert_eq!(
+            extract_cookie_value(set_cookie, "portal_refresh_token"),
+            None
+        );
+    }
+
+    #[test]
+    fn test_remove_cookie_from_header() {
+        let header = "portal_jwt_token=abc; portal_refresh_token=rrr; other=val";
+        let result = remove_cookie_from_header(header, "portal_refresh_token");
+        assert!(result.contains("portal_jwt_token=abc"));
+        assert!(result.contains("other=val"));
+        assert!(!result.contains("portal_refresh_token"));
+    }
+
+    #[test]
+    fn test_replace_cookie_in_header() {
+        let header = "portal_jwt_token=old; portal_refresh_token=rrr";
+        let result = replace_cookie_in_header(header, "portal_jwt_token", "new");
+        assert!(result.contains("portal_jwt_token=new"));
+        assert!(!result.contains("portal_jwt_token=old"));
+        assert!(result.contains("portal_refresh_token=rrr"));
+    }
+
+    #[test]
+    fn test_replace_cookie_append_when_missing() {
+        let header = "portal_refresh_token=rrr";
+        let result = replace_cookie_in_header(header, "portal_jwt_token", "new");
+        assert!(result.contains("portal_jwt_token=new"));
+        assert!(result.contains("portal_refresh_token=rrr"));
+    }
+
+    #[test]
+    fn test_decode_jwt_payload() {
+        use jsonwebtoken::{EncodingKey, Header, encode};
+        let secret = b"sufficiently-long-secret-key-for-hs256!!";
+        let claims = Claims {
+            sub: "user-1".to_string(),
+            iss: "test".to_string(),
+            aud: "test".to_string(),
+            exp: 9999999999usize,
+            jti: "jti-1".to_string(),
+            roles: vec!["ADMIN".to_string()],
+            permissions: vec!["read".to_string()],
+            dept_id: "dept-1".to_string(),
+            data_scope_type: "ALL".to_string(),
+        };
+        let token = encode(
+            &Header::new(Algorithm::HS256),
+            &claims,
+            &EncodingKey::from_secret(secret),
+        )
+        .unwrap();
+        let decoded = decode_jwt_payload(&token).unwrap();
+        assert_eq!(decoded.sub, "user-1");
+        assert_eq!(decoded.exp, 9999999999usize);
+        assert_eq!(decoded.jti, "jti-1");
+        assert_eq!(decoded.roles, vec!["ADMIN"]);
+    }
+
+    #[test]
+    fn test_decode_jwt_payload_invalid() {
+        assert!(decode_jwt_payload("not.a.jwt").is_none());
+        assert!(decode_jwt_payload("").is_none());
+    }
+
     #[tokio::test]
     async fn test_verify_jwt_invalid_kid() {
         use crate::claims::Claims;
@@ -612,6 +961,7 @@ mod tests {
             issuer: Some(issuer.clone()),
             jwks_uri: Some("https://sso.example.com/api/auth/jwks".into()),
             id_token_signing_alg_values_supported: vec!["HS256".into()],
+            refresh_endpoint: None,
         });
 
         let secret = b"super-secret-key-that-is-long-enough-for-hs256";
@@ -625,6 +975,9 @@ mod tests {
             issuer: issuer.clone(),
             path_matcher: PathMatcher::new(None),
             redis_conn: None,
+            http_client: reqwest::Client::new(),
+            upstream_addr: "127.0.0.1:4100".to_string(),
+            refresh_dedup: Mutex::new(HashMap::new()),
         };
 
         let now = std::time::SystemTime::now()

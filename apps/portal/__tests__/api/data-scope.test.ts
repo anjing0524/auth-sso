@@ -11,27 +11,41 @@
  * 直接测试 checkDataScope() 和 getDataScopeFilter() 两个公开函数，
  * 通过 mock 依赖（getUserPermissionContext、db）隔离外部影响。
  *
- * @req SCOPE-001~005
+ * @req H-DSCOPE-001~005
  * @vitest-environment node
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // ── Hoisted shared mock state ──────────────────────────────────────────────
 
-const mockDbState = vi.hoisted(() => ({
-  queryResult: [] as any[],
-  executeResult: [] as { id: string }[],
-  shouldThrow: null as Error | null,
+const {
+  mockDbState,
+  mockDataScope,
+  mockHeadersGet,
+} = vi.hoisted(() => ({
+  mockDbState: {
+    queryResult: [] as any[],
+    executeResult: [] as { id: string }[],
+    shouldThrow: null as Error | null,
+  },
+  mockDataScope: {
+    permissionContext: {
+      roles: [{ id: 'role-1', code: 'TEST', name: '测试人员' }],
+      permissions: ['department:list'],
+      dataScopeType: 'ALL' as string,
+      deptId: undefined as string | undefined,
+    },
+  },
+  mockHeadersGet: vi.fn().mockReturnValue(null),
 }));
 
-const mockDataScope = vi.hoisted(() => ({
-  /** 当前权限上下文，每个测试可以修改其引用属性来模拟不同场景 */
-  permissionContext: {
-    roles: [{ id: 'role-1', code: 'TEST', name: '测试人员' }],
-    permissions: ['department:list'],
-    dataScopeType: 'ALL' as string,
-    deptId: undefined as string | undefined,
-  },
+vi.mock('next/headers', () => ({
+  headers: async () => ({
+    get: mockHeadersGet,
+  }),
+  cookies: async () => ({
+    get: (name: string) => ({ value: 'test-token' }),
+  }),
 }));
 
 // ── Module mocks ───────────────────────────────────────────────────────────
@@ -106,13 +120,13 @@ describe('getDataScopeFilter', () => {
     mockDataScope.permissionContext.deptId = undefined;
   });
 
-  // @req SCOPE-001
+  // @req H-DSCOPE-001
   it('ALL 类型返回 { type: "ALL" } 且不限制', async () => {
     const result = await getDataScopeFilter('user-1');
     expect(result).toEqual({ type: 'ALL' });
   });
 
-  // @req SCOPE-002
+  // @req H-DSCOPE-002
   it('DEPT 类型返回当前部门 ID 列表', async () => {
     mockDataScope.permissionContext.dataScopeType = 'DEPT';
     mockDataScope.permissionContext.deptId = 'dept-1';
@@ -121,7 +135,7 @@ describe('getDataScopeFilter', () => {
     expect(result).toEqual({ type: 'LIST', deptIds: ['dept-1'] });
   });
 
-  // @req SCOPE-003
+  // @req H-DSCOPE-003
   it('SELF 类型返回 { type: "SELF" }', async () => {
     mockDataScope.permissionContext.dataScopeType = 'SELF';
     mockDataScope.permissionContext.deptId = 'dept-1';
@@ -130,7 +144,7 @@ describe('getDataScopeFilter', () => {
     expect(result).toEqual({ type: 'SELF' });
   });
 
-  // @req SCOPE-004
+  // @req H-DSCOPE-004
   it('DEPT_AND_SUB 通过物化路径 (ancestors) 查询子部门 ID 列表', async () => {
     mockDataScope.permissionContext.dataScopeType = 'DEPT_AND_SUB';
     mockDataScope.permissionContext.deptId = 'dept-1';
@@ -140,7 +154,7 @@ describe('getDataScopeFilter', () => {
     expect(result).toEqual({ type: 'LIST', deptIds: ['dept-1', 'dept-2', 'dept-3'] });
   });
 
-  // @req SCOPE-004
+  // @req H-DSCOPE-004
   it('DEPT_AND_SUB 在查询失败时故障安全降级为仅当前部门', async () => {
     mockDataScope.permissionContext.dataScopeType = 'DEPT_AND_SUB';
     mockDataScope.permissionContext.deptId = 'dept-1';
@@ -151,7 +165,7 @@ describe('getDataScopeFilter', () => {
     expect(result).toEqual({ type: 'LIST', deptIds: ['dept-1'] });
   });
 
-  // @req SCOPE-005
+  // @req H-DSCOPE-005
   it('CUSTOM 类型从 role_data_scopes 表查询去重部门 ID', async () => {
     mockDataScope.permissionContext.dataScopeType = 'CUSTOM';
     mockDataScope.permissionContext.deptId = 'dept-1';
@@ -193,7 +207,7 @@ describe('checkDataScope', () => {
     mockDataScope.permissionContext.deptId = undefined;
   });
 
-  // @req SCOPE-001
+  // @req H-DSCOPE-001
   it('ALL 类型始终通过数据范围检查', async () => {
     mockDataScope.permissionContext.dataScopeType = 'ALL';
 
@@ -202,7 +216,7 @@ describe('checkDataScope', () => {
     expect(await checkDataScope('user-1', 'any-dept')).toBe(true);
   });
 
-  // @req SCOPE-002
+  // @req H-DSCOPE-002
   it('DEPT 类型通过同部门检查，拒绝跨部门', async () => {
     mockDataScope.permissionContext.dataScopeType = 'DEPT';
     mockDataScope.permissionContext.deptId = 'dept-1';
@@ -213,7 +227,7 @@ describe('checkDataScope', () => {
     expect(await checkDataScope('user-1', 'dept-2')).toBe(false);
   });
 
-  // @req SCOPE-003
+  // @req H-DSCOPE-003
   it('SELF 类型只允许访问本人数据，拒绝他人数据', async () => {
     mockDataScope.permissionContext.dataScopeType = 'SELF';
     mockDataScope.permissionContext.deptId = 'dept-1';
@@ -226,7 +240,7 @@ describe('checkDataScope', () => {
     expect(await checkDataScope('user-1', 'dept-1')).toBe(false);
   });
 
-  // @req SCOPE-004
+  // @req H-DSCOPE-004
   it('DEPT_AND_SUB 通过同部门和子部门检查', async () => {
     mockDataScope.permissionContext.dataScopeType = 'DEPT_AND_SUB';
     mockDataScope.permissionContext.deptId = 'dept-1';
@@ -243,7 +257,7 @@ describe('checkDataScope', () => {
     expect(await checkDataScope('user-1', 'dept-999')).toBe(false);
   });
 
-  // @req SCOPE-004
+  // @req H-DSCOPE-004
   it('DEPT_AND_SUB 在查询异常时通过严格部门和故障安全降级', async () => {
     mockDataScope.permissionContext.dataScopeType = 'DEPT_AND_SUB';
     mockDataScope.permissionContext.deptId = 'dept-1';
@@ -257,7 +271,7 @@ describe('checkDataScope', () => {
     expect(await checkDataScope('user-1', 'dept-2')).toBe(false);
   });
 
-  // @req SCOPE-005
+  // @req H-DSCOPE-005
   it('CUSTOM 类型在 role_data_scopes 中有记录时通过', async () => {
     mockDataScope.permissionContext.dataScopeType = 'CUSTOM';
     mockDataScope.permissionContext.deptId = 'dept-1';

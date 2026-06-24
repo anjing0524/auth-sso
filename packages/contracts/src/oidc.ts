@@ -12,8 +12,8 @@ export const OIDC_ENDPOINTS = {
   INTROSPECT: '/oauth2/introspect',
   REGISTER: '/oauth2/register',
 
-  // JWKS
-  JWKS: '/api/jwks',
+  // JWKS（与 Portal 实际路由 app/api/auth/jwks/route.ts 一致）
+  JWKS: '/api/auth/jwks',
 
   // OIDC Discovery
   OPENID_CONFIGURATION: '/.well-known/openid-configuration',

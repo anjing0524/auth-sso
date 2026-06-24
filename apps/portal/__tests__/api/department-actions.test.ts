@@ -1,7 +1,7 @@
 /**
  * Department Server Actions 单元测试
  *
- * @req G-DEP-C, G-DEP-U, G-DEP-D
+ * @req DC-DEPT-C, DC-DEPT-U, DC-DEPT-D
  * @vitest-environment node
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';

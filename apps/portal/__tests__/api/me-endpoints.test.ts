@@ -6,7 +6,7 @@
  * - GET /api/me/permissions 返回权限列表
  * - GET /api/me 无有效 JWT 返回 401
  *
- * @req B-USR-R, AUTH-004
+ * @req B-USR-R, H-AUTH-001
  * @vitest-environment node
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';

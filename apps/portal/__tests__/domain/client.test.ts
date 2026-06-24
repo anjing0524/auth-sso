@@ -1,5 +1,5 @@
 /**
- * @req D-CLI-C, D-CLI-U, D-CLI-D
+ * @req DC-CLI-C, DC-CLI-U, DC-CLI-D
  */
 import { describe, it, expect } from 'vitest';
 import {

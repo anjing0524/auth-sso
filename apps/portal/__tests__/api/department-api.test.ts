@@ -11,7 +11,7 @@
  * - POST 缺少必填字段
  * - GET 数据范围过滤
  *
- * @req F-DEP-L/C/U/D, SCOPE-001~005
+ * @req F-DEP-L, F-DEP-C, F-DEP-U, F-DEP-D, H-DSCOPE-001~005
  * @vitest-environment node
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -237,7 +237,7 @@ describe('Department API', () => {
       expect(rootB.children).toHaveLength(0);
     });
 
-    // @req F-DEP-L, SCOPE-001
+    // @req F-DEP-L, H-DSCOPE-001
     it('应用数据范围过滤只返回授权范围内部门', async () => {
       mockAuthState.getDataScopeFilter.mockResolvedValue({
         type: 'LIST',

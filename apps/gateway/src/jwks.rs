@@ -24,12 +24,6 @@ pub enum JwksError {
     /// jwks_uri 路径解析失败
     #[error("无法从 jwks_uri 中解析出 JWKS 路径: {0}")]
     InvalidJwksUri(String),
-    /// 配置的 issuer 与 OIDC Discovery 返回的 issuer 不匹配
-    #[error("Issuer 不匹配: 配置值={configured}, 发现值={discovered}")]
-    IssuerMismatch {
-        configured: String,
-        discovered: String,
-    },
 }
 
 /// OIDC Discovery 元数据 — 从 /.well-known/openid-configuration 提取网关所需字段
@@ -42,6 +36,9 @@ pub struct OidcMetadata {
     /// ID Token 签名算法列表
     #[serde(default)]
     pub id_token_signing_alg_values_supported: Vec<String>,
+    /// Cookie-based Token 静默续签端点 URL（自定义字段，非标准 OIDC）
+    #[serde(default)]
+    pub refresh_endpoint: Option<String>,
 }
 
 /// JWKS 公钥缓存结构体
@@ -86,6 +83,16 @@ impl JwksCache {
             .ok()?
             .as_ref()
             .and_then(|m| m.issuer.clone())
+    }
+
+    /// 从缓存的 OIDC Discovery 元数据中获取 refresh_endpoint URL
+    /// 返回 None 表示元数据中未包含该字段（旧版 Portal），调用方应回退到默认路径
+    pub fn get_refresh_endpoint(&self) -> Option<String> {
+        self.oidc_metadata
+            .read()
+            .ok()?
+            .as_ref()
+            .and_then(|m| m.refresh_endpoint.clone())
     }
 
     /// 将 id_token_signing_alg_values_supported 中的字符串算法名转换为 jsonwebtoken::Algorithm
@@ -174,7 +181,7 @@ impl JwksCache {
     /// # 参数
     /// * `upstream` - Portal 上游地址（如 127.0.0.1:4100）
     /// * `jwks_uri` - OIDC 元数据中包含的原始 jwks_uri 字段
-    fn resolve_jwks_url(upstream: &str, jwks_uri: &str) -> Result<String, JwksError> {
+    pub(crate) fn resolve_jwks_url(upstream: &str, jwks_uri: &str) -> Result<String, JwksError> {
         let parsed =
             reqwest::Url::parse(jwks_uri).map_err(|e| JwksError::InvalidJwksUri(e.to_string()))?;
 
@@ -231,27 +238,6 @@ impl JwksCache {
             loaded_count
         );
         Ok(())
-    }
-
-    /// 验证配置的 issuer 与 OIDC Discovery 返回的 issuer 是否一致
-    ///
-    /// 返回 Ok(()) 表示一致，Err(JwksError::IssuerMismatch) 表示不匹配
-    pub fn validate_issuer(&self, configured_issuer: &str) -> Result<(), JwksError> {
-        let discovered = self.get_discovered_issuer();
-        match discovered {
-            Some(ref d) if d == configured_issuer => {
-                info!("✅ Issuer 校验通过: 配置值与 OIDC Discovery 一致 ({})", d);
-                Ok(())
-            }
-            Some(d) => Err(JwksError::IssuerMismatch {
-                configured: configured_issuer.to_string(),
-                discovered: d,
-            }),
-            None => {
-                warn!("⚠️  OIDC 元数据中无 issuer，跳过校验");
-                Ok(())
-            }
-        }
     }
 
     /// 启动 JWKS 后台定时刷新任务，通过 OIDC Discovery 自动发现端点
@@ -363,6 +349,7 @@ mod tests {
                     "RS256".into(),
                     "UNKNOWN_ALG".into(),
                 ],
+                refresh_endpoint: None,
             });
         }
 

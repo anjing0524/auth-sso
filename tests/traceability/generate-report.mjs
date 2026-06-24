@@ -34,6 +34,7 @@ const TEST_SOURCE_DIRS = [
 ];
 
 const REQUIREMENTS_MATRIX_PATH = path.join(ROOT, 'docs', 'spec', 'REQUIREMENTS_MATRIX.md');
+const ARCHITECTURE_CONSTRAINTS_PATH = path.join(ROOT, 'docs', 'spec', 'ARCHITECTURE_CONSTRAINTS.md');
 
 const IGNORE_DIRS = new Set([
   'node_modules',
@@ -422,6 +423,15 @@ function main() {
   console.log(`Parsing requirements matrix...`);
   const { allReqs, modules } = parseRequirementsMatrix(REQUIREMENTS_MATRIX_PATH);
   console.log(`  Found ${allReqs.length} requirements across ${modules.length} modules`);
+
+  // 解析架构约束（含 DC-* 领域模型约束 ID）
+  if (fs.existsSync(ARCHITECTURE_CONSTRAINTS_PATH)) {
+    const { allReqs: archReqs, modules: archModules } = parseRequirementsMatrix(ARCHITECTURE_CONSTRAINTS_PATH);
+    for (const r of archReqs) allReqs.push(r);
+    for (const m of archModules) modules.push(m);
+    console.log(`  + ${archReqs.length} architecture constraint IDs from ARCHITECTURE_CONSTRAINTS.md`);
+  }
+
   for (const mod of modules) {
     console.log(`    ${mod.name}: ${mod.reqs.length} reqs`);
   }

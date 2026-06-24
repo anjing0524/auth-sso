@@ -100,7 +100,7 @@ async function createCodeChallenge(verifier: string): Promise<string> {
 async function performLogin(): Promise<{ sessionCookies: Record<string, string>; accessToken: string } | null> {
   try {
     // 1. 在 IdP 登录
-    const loginRes = await httpRequest(`${IDP_URL}/api/auth/sign-in/email`, {
+    const loginRes = await httpRequest(`${IDP_URL}/api/auth/login`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -128,7 +128,7 @@ async function performLogin(): Promise<{ sessionCookies: Record<string, string>;
     });
 
     let code: string | null = null;
-    if (authRes.status === 302) {
+    if (authRes.status === 302 || authRes.status === 307) {
       const location = authRes.headers.get('location');
       if (location) {
         code = new URL(location).searchParams.get('code');
@@ -148,15 +148,17 @@ async function performLogin(): Promise<{ sessionCookies: Record<string, string>;
     // 3. 用 code 换取 Token
     const tokenRes = await httpRequest(`${IDP_URL}/api/auth/oauth2/token`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
         grant_type: 'authorization_code',
-        code,
+        code: code,
         client_id: OAUTH_CLIENT.clientId,
         client_secret: OAUTH_CLIENT.clientSecret,
         redirect_uri: OAUTH_CLIENT.redirectUri,
         code_verifier: codeVerifier,
-      }).toString(),
+      }),
     });
 
     if (tokenRes.status !== 200) {
@@ -264,7 +266,9 @@ async function testMeEndpointWithSession(): Promise<TestResult> {
     }
 
     // 调用 /api/me
-    const meRes = await httpRequest(`${PORTAL_URL}/api/me`);
+    const meRes = await httpRequest(`${PORTAL_URL}/api/me`, {
+      headers: { Authorization: `Bearer ${loginResult.accessToken}` },
+    });
 
     if (meRes.status === 200) {
       const meBody = meRes.body as { user?: { email: string }; session?: { createdAt: number } };
@@ -348,8 +352,8 @@ async function runTests() {
   console.log('🔍 检查服务可用性...\n');
 
   try {
-    const idpCheck = await httpRequest(`${IDP_URL}/api/auth/session`);
-    if (idpCheck.status !== 200 && idpCheck.status !== 401) {
+    const idpCheck = await httpRequest(`${IDP_URL}/api/auth/jwks`);
+    if (idpCheck.status !== 200) {
       console.log(`❌ IdP/Portal 服务不可用: ${IDP_URL}`);
       process.exit(1);
     }

@@ -1,106 +1,376 @@
-# Product Requirements Document (PRD) - Auth-SSO
+# 产品需求文档 (PRD) - Auth-SSO
 
-Version: v1.1
-Status: Released
-Last Updated: 2026-06-24
-Target Audience: Product, Engineering, QA, Operations
+版本号：v1.1
+状态：已发布
+最后更新：2026-06-24
+目标读者：产品、工程、QA、运维团队
 
----
-
-## 1. Executive Summary
-
-This document defines the requirements for a unified portal and Single Sign-On (SSO) system for small to medium-sized enterprises. It covers unified login, SSO capabilities, a centralized permission center, application integration, and a secure session management architecture.
-
-### 1.1 Objectives
-- **Single Sign-On (SSO)**: Users log in once and access multiple internal systems.
-- **Unified Identity (IdP)**: Provide OIDC/OAuth 2.1 authentication services.
-- **Centralized Management**: Manage users, departments, roles, permissions, and applications in one place.
-- **Portal Interface**: A unified entry point for users to access authorized applications and for admins to manage the system.
-- **Security**: Robust session, token, and cookie management to prevent unauthorized access.
-
----
-
-## 2. Product Scope
-
-### 2.1 In Scope
-- **Unified Portal + OIDC Provider**: Portal 自身即为 OIDC Provider，无需独立 IdP 服务。使用 `jose` 库实现纯自定义 ES256 JWT 无状态签发与认证。
-- Custom stateless JWT/JTI token issuance with Redis-based emergency revocation.
-- Next.js 16-based Management Portal (App Router, Turbopack).
-- Standard OIDC/OAuth 2.1 flows (Authorization Code + PKCE).
-- RBAC (Role-Based Access Control) with data scope support (ALL/DEPT/DEPT_AND_SUB/SELF/CUSTOM).
-- Audit logging for login and administrative actions.
-- Session management with idle and absolute timeouts.
-- Rust/Pingora API Gateway for offline JWT verification and Cookie-to-Bearer transformation.
-
-### 2.2 Out of Scope
-- Large-scale consumer identity management.
-- Social logins (OAuth 2.0 with third parties like Google/GitHub).
-- Complex policy engines (ABAC/PBAC).
-- Multi-tenancy isolation.
-- Cross-region high availability.
+> **需求基线 (Requirements Baseline)**
+>
+> | 属性 | 值 |
+> |------|-----|
+> | 基线编号 | BL-2026-001 |
+> | 基线建立日期 | 2026-06-24 |
+> | 需求总数 | 101 条（详见 REQUIREMENTS_MATRIX.md） |
+> | 优先级分布 | P0 关键 42 条 / P1 重要 38 条 / P2 一般 21 条 |
+> | 变更控制 | 所有需求变更须经 CCB（变更控制委员会）审批 |
+> | 追溯粒度 | 需求 → 设计 → 实现 → 测试（四层追溯） |
+> | 适用标准 | CMMI V3.0 (2023), OAuth 2.1 (RFC 6749), OIDC (OpenID Connect Core 1.0) |
 
 ---
 
-## 3. User Personas
+## 1. 执行摘要
 
-| Persona | Description |
+本文档定义了面向中小型企业的统一门户与单点登录（SSO）系统的需求。涵盖统一登录、SSO 功能、集中权限中心、应用集成以及安全的会话管理架构。
+
+### 1.1 目标
+- **单点登录（SSO）**：用户登录一次即可访问多个内部系统。
+- **统一身份（IdP）**：提供 OIDC/OAuth 2.1 认证服务。
+- **集中管理**：在一个位置管理用户、部门、角色、权限和应用。
+- **门户界面（Portal）**：统一入口，供用户访问已授权的应用，供管理员管理系统。
+- **安全性**：稳健的会话、令牌和 Cookie 管理，防止未授权访问。
+
+---
+
+## 2. 产品范围
+
+### 2.1 范围内
+- **统一门户 + OIDC Provider**：Portal 自身即为 OIDC Provider，无需独立 IdP 服务。使用 `jose` 库实现纯自定义 ES256 JWT 无状态签发与认证。
+- 基于 Redis 紧急撤销的自定义无状态 JWT/JTI 令牌签发。
+- 基于 Next.js 16 的管理门户（App Router、Turbopack）。
+- 标准 OIDC/OAuth 2.1 流程（Authorization Code + PKCE）。
+- 基于角色所属部门的 RBAC 数据范围控制（权限 × 角色部门交集）。
+- 登录及管理操作的审计日志。
+- 包含空闲超时和绝对超时的会话管理。
+- 基于 Rust/Pingora 的 API 网关，用于离线 JWT 验证和 Cookie-to-Bearer 转换。
+
+### 2.2 范围外
+- 大规模消费者身份管理。
+- 社交登录（与 Google/GitHub 等第三方的 OAuth 2.0 集成）。
+- 复杂策略引擎（ABAC/PBAC）。
+- 多租户隔离。
+- 跨区域高可用。
+
+---
+
+## 3. 用户角色
+
+| 角色 | 描述 |
 | --- | --- |
-| **System Admin** | Manages global organization, users, roles, applications, and system configurations. |
-| **Org Admin** | Manages users, departments, and roles within a specific organization/enterprise. |
-| **Employee** | Logs into the portal to access authorized menus and sub-applications. |
-| **App Admin** | Maintains specific application configurations (client IDs, callback URLs, etc.). |
+| **系统管理员（System Admin）** | 管理全局组织、用户、角色、应用及系统配置。 |
+| **组织管理员（Org Admin）** | 管理特定组织/企业内的用户、部门和角色。 |
+| **员工（Employee）** | 登录门户以访问已授权的菜单和子应用。 |
+| **应用管理员（App Admin）** | 维护特定应用的配置（客户端 ID、回调 URL 等）。 |
 
 ---
 
-## 4. Functional Requirements
+## 4. 功能需求 (Functional Requirements)
 
-### 4.1 Identity & Authentication
-- **User Login**: Support email/username and password authentication.
-- **SSO Flow**: Seamless login for sub-applications using the IdP session.
-- **Password Management**: Reset and change password capabilities.
-- **Logout**: Concurrent invalidation of Portal JWT cookies, JTI revocation, and IdP session.
+> 每条功能需求具有唯一 ID、优先级分类和需求追溯关联（CMMI RDM SP 2.1, SP 2.2）。
 
-### 4.2 Permission Center (RBAC)
-- **User Management**: CRUD operations, status control (Active/Disabled/Locked).
-- **Department Management**: Hierarchical tree structure for organization.
-- **Role Management**: Define roles and assign them to users.
-- **Permission Mapping**: Link roles to specific permissions (Menus, APIs, Data Scopes).
-- **Data Scopes**: Support for `ALL`, `DEPT`, `DEPT_AND_SUB`, `SELF`, and `CUSTOM` filters.
+### 4.1 身份与认证 (Identity & Authentication)
 
-### 4.3 Application Management
-- **Client Registration**: Register OAuth 2.1 clients.
-- **Configuration**: Manage redirect URIs, scopes, and grant types.
-- **Secrets**: Secure generation and rotation of client secrets.
+| 需求ID | 功能描述 | 优先级 | 关联矩阵 |
+|--------|---------|--------|---------|
+| FR-AUTH-01 | 用户通过邮箱/用户名和密码登录 | P0 关键 | H-AUTH-001~002, DC-AUTH-001 |
+| FR-AUTH-02 | PKCE S256 强制的 OAuth 2.1 授权码流程 | P0 关键 | H-AUTH-003~004, H-AUTH-013 |
+| FR-AUTH-03 | Portal 登录页展示与未认证重定向 | P0 关键 | H-AUTH-001, H-AUTH-001, H-FLOW-004 |
+| FR-AUTH-04 | ES256 JWT Cookie 签发与验证 | P0 关键 | H-AUTH-005~006, H-SESS-001~003 |
+| FR-AUTH-05 | Refresh Token 轮换续签 | P0 关键 | H-SESS-010~012, H-SESS-020~022 |
+| FR-AUTH-06 | jti 紧急撤销（Redis 黑名单） | P0 关键 | H-SESS-030 |
+| FR-AUTH-07 | SSO 单点登录/登出联动 | P0 关键 | H-SSO-001~003, H-SSO-010~011 |
+| FR-AUTH-08 | 登出全链路清理 | P0 关键 | H-SSO-020~022, H-FLOW-002 |
+| FR-AUTH-09 | State 参数生成与验证 | P0 关键 | H-AUTH-010~012 |
+| FR-AUTH-10 | Nonce 生成与验证 | P0 关键 | H-AUTH-014 |
+| FR-AUTH-11 | OIDC Discovery / JWKS / UserInfo / Introspection 端点 | P1 重要 | US-OIDC-01~04 |
+| FR-AUTH-12 | 密码管理和重置 | P1 重要 | B-USR-ST |
+| FR-AUTH-13 | Token Revocation 端点 | P0 关键 | US-OIDC-09 |
+| FR-AUTH-14 | 登录失败全流程（错误密码提示） | P1 重要 | H-FLOW-003 |
+
+### 4.2 权限中心 (Permission Center - RBAC)
+
+#### 4.2.1 用户管理 (User Management)
+
+| 需求ID | 功能描述 | 优先级 | 关联矩阵 |
+|--------|---------|--------|---------|
+| FR-USR-01 | 用户分页列表（含部门数据范围过滤） | P1 重要 | B-USR-L, H-DSCOPE-001 |
+| FR-USR-02 | 用户实时搜索（名称/邮箱/账号过滤） | P1 重要 | B-USR-S |
+| FR-USR-03 | 新建用户（对话框表单） | P1 重要 | B-USR-C, DC-USR-C |
+| FR-USR-04 | 用户详情查看 | P1 重要 | B-USR-R |
+| FR-USR-05 | 用户资料更新 | P1 重要 | B-USR-U, DC-USR-U |
+| FR-USR-06 | 用户逻辑删除（二次确认） | P1 重要 | B-USR-D, DC-USR-D |
+| FR-USR-07 | 账户状态控制（启用/禁用/锁定） | P1 重要 | B-USR-ST |
+| FR-USR-08 | 为用户分配角色 | P1 重要 | B-USR-ST |
+| FR-USR-09 | 重置用户密码 | P1 重要 | B-USR-ST |
+| FR-USR-10 | 用户修改自己的密码 | P2 一般 | US-SELF-01 |
+| FR-USR-11 | 查看 /api/me 个人信息与权限 | P1 重要 | US-SELF-02 |
+| FR-USR-12 | 编辑自己的基本信息 | P2 一般 | US-SELF-03 |
+
+#### 4.2.2 角色与授权 (Role & Authorization)
+
+| 需求ID | 功能描述 | 优先级 | 关联矩阵 |
+|--------|---------|--------|---------|
+| FR-ROL-01 | 角色分页列表 | P1 重要 | C-ROL-L |
+| FR-ROL-02 | 新建角色（含所属部门选择） | P1 重要 | C-ROL-C, DC-ROLE-C |
+| FR-ROL-03 | 角色编辑（名称/描述/所属部门） | P1 重要 | C-ROL-U, DC-ROLE-U |
+| FR-ROL-04 | 角色删除（二次确认，级联清除关联） | P1 重要 | C-ROL-D, DC-ROLE-D |
+| FR-ROL-05 | 功能权限授予（勾选 API/菜单权限） | P1 重要 | C-ROL-PA |
+| FR-ROL-06 | 部门数据范围（角色所属部门 + 子部门） | P0 关键 | H-DSCOPE-001 |
+| FR-ROL-07 | 多角色数据范围合并 | P0 关键 | H-DSCOPE-002 |
+| FR-ROL-08 | 用户角色分配部门约束 | P0 关键 | H-DSCOPE-003 |
+| FR-ROL-09 | 权限不足拒绝访问（403） | P0 关键 | H-ACL-001 |
+| FR-ROL-10 | 跨部门越权访问拦截 | P0 关键 | H-ACL-002 |
+
+#### 4.2.3 权限标识维护 (Permission Registry)
+
+| 需求ID | 功能描述 | 优先级 | 关联矩阵 |
+|--------|---------|--------|---------|
+| FR-PRM-01 | 权限分类列表（按类型展示） | P1 重要 | D-PRM-L |
+| FR-PRM-02 | 新增权限标识（对话框） | P1 重要 | D-PRM-C |
+| FR-PRM-03 | 编辑权限标识 | P1 重要 | D-PRM-U |
+| FR-PRM-04 | 删除权限标识（确认弹窗） | P1 重要 | D-PRM-D |
+
+#### 4.2.4 菜单架构管理 (Menu Management)
+
+| 需求ID | 功能描述 | 优先级 | 关联矩阵 |
+|--------|---------|--------|---------|
+| FR-MNU-01 | 树形菜单列表（结构化展示层级） | P1 重要 | E-MNU-L |
+| FR-MNU-02 | 新建菜单节点（支持父级指定） | P1 重要 | E-MNU-C, DC-MEN-C |
+| FR-MNU-03 | 菜单属性编辑（路径/排序/显隐） | P1 重要 | E-MNU-U, DC-MEN-U |
+| FR-MNU-04 | 菜单项删除（递归清理子节点） | P1 重要 | E-MNU-D, DC-MEN-D |
+| FR-MNU-05 | 权限标识绑定（菜单 ↔ 权限 Code） | P1 重要 | E-MNU-PB |
+| FR-MNU-06 | 侧边栏动态渲染（根据权限） | P1 重要 | A-NAV-01 |
+| FR-MNU-07 | 智能面包屑导航 | P2 一般 | A-NAV-02 |
+| FR-MNU-08 | 指标卡片看板 | P2 一般 | A-NAV-03 |
+
+#### 4.2.5 组织架构 (Department Management)
+
+| 需求ID | 功能描述 | 优先级 | 关联矩阵 |
+|--------|---------|--------|---------|
+| FR-DEP-01 | 架构地图展示（部门组织树） | P1 重要 | F-DEP-L |
+| FR-DEP-02 | 部门创建（新增子节点） | P1 重要 | F-DEP-C, DC-DEPT-C |
+| FR-DEP-03 | 部门信息修改（名称/编码） | P1 重要 | F-DEP-U, DC-DEPT-U, F-DEP-E |
+| FR-DEP-04 | 部门节点删除 | P1 重要 | F-DEP-D, DC-DEPT-D |
+| FR-DEP-05 | 部门成员关系查询 | P1 重要 | F-DEP-M |
+
+#### 4.2.6 审计与日志 (Audit & Logging)
+
+| 需求ID | 功能描述 | 优先级 | 关联矩阵 |
+|--------|---------|--------|---------|
+| FR-LOG-01 | 审计日志列表（分页/筛选） | P1 重要 | I-LOG-001 |
+| FR-LOG-02 | 审计日志详情（变更参数/IP/UA） | P1 重要 | I-LOG-002 |
+| FR-LOG-03 | 登录日志列表（分页/筛选） | P1 重要 | I-LOG-001 |
+| FR-LOG-04 | 审计/登录日志导出（CSV） | P2 一般 | US-AUDIT-02, US-AUDIT-04 |
+
+### 4.3 应用管理 (Application Management)
+
+| 需求ID | 功能描述 | 优先级 | 关联矩阵 |
+|--------|---------|--------|---------|
+| FR-APP-01 | 客户端列表（OAuth 应用展示） | P1 重要 | G-CLT-L |
+| FR-APP-02 | 客户端注册（新建 Client） | P1 重要 | G-CLT-C, DC-CLI-C |
+| FR-APP-03 | 客户端配置更新（Redirect URI 等） | P1 重要 | G-CLT-U, DC-CLI-U |
+| FR-APP-04 | 应用注销（彻底移除） | P1 重要 | G-CLT-D, DC-CLI-D |
+| FR-APP-05 | 客户端密钥轮换 | P1 重要 | G-CLT-U |
+| FR-APP-06 | SSO 强拦截 - 无权访问客户端资源 | P0 关键 | H-ACL-001 |
+| FR-APP-07 | SSO 强拦截 - 禁用客户端 | P0 关键 | H-ACL-001 |
 
 ---
 
-## 5. User Journey Examples
+## 5. 用户旅程示例
 
-1. **Employee Login（员工登录）**:
+1. **Employee Login（员工登录）**：
    - 访问 Portal → Portal 展示登录页 → 输入凭证 → Portal 验证并签发 JWT Cookie（`portal_jwt_token`）→ 进入 Dashboard。
    - 访问子应用（如 ERP）→ 子应用重定向到 Portal OIDC Provider `/authorize` → Portal 识别已有 JWT Cookie → 跳过登录直接签发授权码 → 子应用后端用授权码换取 Token → 用户自动登录。
 
-2. **Admin User Creation（管理员创建用户）**:
+2. **Admin User Creation（管理员创建用户）**：
    - 管理员在 Portal 中创建新用户 → 用户记录直接写入 PostgreSQL → 用户立即可用初始凭证认证。
 
 ---
 
-## 6. Non-Functional Requirements
+## 6. 非功能需求 (Non-Functional Requirements)
 
-### 6.1 Performance
-- **Portal Metadata**: `/api/me` response time P95 < 200ms.
-- **Login Flow**: Complete flow from login start to portal home P95 < 1.5s.
-- **Scalability**: Support stateless JWT validation with local JWKS, leveraging Redis only for emergency JTI revocation.
+> 所有非功能需求必须可量化、可测量、可验证（CMMI SP 2.2）。
 
-### 6.2 Security
-- **Data Protection**: All communications over HTTPS.
-- **Token Security**: No sensitive tokens (Access/Refresh) stored in browser storage (LocalStorage/SessionStorage).
-- **Session Security**: HttpOnly, Secure, and SameSite=Lax cookies.
-- **Auditability**: All critical actions (logins, permission changes) must be logged.
+### 6.1 性能需求 (Performance)
+
+| ID | 需求描述 | 量化标准 | 测量方法 | 优先级 |
+|----|---------|---------|---------|--------|
+| NFR-PERF-01 | Portal API 响应时间 | `/api/me` P95 < 200ms | k6 压力测试 | P0 关键 |
+| NFR-PERF-02 | 登录全流程耗时 | 从登录到到达 Dashboard P95 < 1.5s | Playwright E2E 计时 | P0 关键 |
+| NFR-PERF-03 | Gateway JWT 验签延迟 | < 5ms（不含网络） | Rust benchmark | P0 关键 |
+| NFR-PERF-04 | 列表查询分页响应 | 1000 条数据 P95 < 500ms | k6 压力测试 | P1 重要 |
+| NFR-PERF-05 | 并发用户支持 | 500 并发用户，错误率 < 1% | k6 压力测试 | P1 重要 |
+
+### 6.2 安全需求 (Security)
+
+| ID | 需求描述 | 量化标准 | 验证方法 | 优先级 |
+|----|---------|---------|---------|--------|
+| NFR-SEC-01 | 通信加密 | 所有通信强制 HTTPS | 安全审计 | P0 关键 |
+| NFR-SEC-02 | Cookie 安全属性 | HttpOnly + Secure + SameSite=Lax | 代码审查 + 渗透测试 | P0 关键 |
+| NFR-SEC-03 | Token 安全 | 无敏感令牌存储在前端浏览器存储中 | 代码审查 | P0 关键 |
+| NFR-SEC-04 | JWT 签名算法 | ES256 非对称签名，密钥 90 天轮换 | 安全审计 | P0 关键 |
+| NFR-SEC-05 | 密码策略 | 最小 8 位，含大小写字母和数字 | 自动化测试 | P1 重要 |
+| NFR-SEC-06 | 暴力破解防护 | 连续 5 次失败 → 账户锁定 | 自动化测试 | P0 关键 |
+| NFR-SEC-07 | 审计追溯 | 所有关键操作（登录、权限变更）写入审计日志 | 代码审查 | P1 重要 |
+| NFR-SEC-08 | CSRF 防护 | State 参数验证，OAuth 2.1 强制 | 安全审计 | P0 关键 |
+| NFR-SEC-09 | 授权码一次性使用 | 同一授权码二次提交返回 invalid_grant | 自动化测试 | P0 关键 |
+| NFR-SEC-10 | 授权码过期保护 | 60 秒 TTL 超时后自动失效 | 自动化测试 | P0 关键 |
+| NFR-SEC-11 | Redirect URI 严格匹配 | 必须完全一致（含末尾斜杠） | 自动化测试 | P0 关键 |
+| NFR-SEC-12 | Client Secret 轮换即时生效 | 旧 Secret 立即失效 | 自动化测试 | P1 重要 |
+| NFR-SEC-13 | 密码修改强制重新登录 | 密码修改后当前 JWT jti 写入黑名单 | 自动化测试 | P1 重要 |
+| NFR-SEC-14 | 角色撤销即时生效 | 角色移除后当前用户 JWT jti 写入黑名单 | 自动化测试 | P1 重要 |
 
 ---
 
-## 7. Versioning & Roadmap
+## 7. 版本与路线图
 
-- **v1.0 (Current)**: Core SSO（Portal 内建 OIDC Provider）+ RBAC + Gateway 离线 JWT 验证 + 内部应用集成。
-- **Future**: MFA (Multi-Factor Authentication), Passkeys, Social Login, Multi-tenancy.
+- **v1.0（当前版本）**：核心 SSO（Portal 内建 OIDC Provider）+ RBAC + Gateway 离线 JWT 验证 + 内部应用集成。
+- **未来规划**：MFA（多因素认证）、Passkeys、社交登录、多租户。
+
+---
+
+## 8. CMMI V3.0 Level 5 合规声明
+
+本文档体系遵循 **CMMI V3.0 (2023)** 成熟度 Level 5（优化级）标准，覆盖全部 6 个实践域：
+
+### 8.1 成熟度 Level 2–3（已管理级 → 已定义级）
+
+| 实践域 (CMMI V3.0) | 能力等级 | 本文档实现 |
+|--------|----------|-----------|
+| **DMR** (Defining & Managing Requirements) | Level 3 | §3 用户角色 + §4 功能需求 102 条 + §5 用户旅程 + USER_STORIES.md 80+ 故事 + 需求基线 BL-2026-001 + CCB 变更控制 + 7 维属性矩阵（优先级/验证方法/风险/来源/验收标准） |
+| **DRS** (Designing & Realizing the Solution) | Level 3 | ARCHITECTURE.md（管理链路 + 11 层认证授权全链路）+ DETAILED_DESIGN.md（函数签名/时序流程）+ DATABASE.md（18 张表/外键/枚举）+ ARCHITECTURE_CONSTRAINTS.md（14 条规则 + 20 条 DC-* 约束） |
+| **ENQ** (Ensuring Quality) | Level 3 | 分层测试体系（单元/API/E2E）+ 27 文件 255 测试 + `@req` 注解自动追溯性报告 + API.md 端点规范 + 代码审查红线清单 |
+
+### 8.2 成熟度 Level 4（量化管理级）
+
+| 实践域 | 能力等级 | 本文档实现 |
+|--------|----------|-----------|
+| **OPM** (Organizational Performance Management) | Level 4 | §8.3 过程性能基线（5 项关键指标 + 上下控制限 UCL/LCL） |
+| **QPM** (Quantitative Project Management) | Level 4 | §6.1 性能需求（5 项 P95 阈值 + 测量方法）+ §6.2 安全需求（8 项量化标准） |
+| **MPM** (Managing Performance & Measurement) | Level 4 | k6 压力测试 + Playwright E2E 计时 + Rust benchmark + 追溯性覆盖率趋势 |
+
+### 8.3 成熟度 Level 5（优化级）
+
+| 实践域 | 能力等级 | 本文档实现 |
+|--------|----------|-----------|
+| **CAR** (Causal Analysis & Resolution) | Level 5 | §8.4 缺陷因果分析程序（5-Why + 鱼骨图 + 纠正/预防措施闭环） |
+| **OPM** — 持续改进 | Level 5 | §8.5 过程改进选择与部署流程（Pilot → 度量 → 推广/回滚）+ 经验教训沉淀机制（`docs/solutions/`） |
+| **OPM** — 创新与部署 | Level 5 | ARCHITECTURE_CONSTRAINTS.md Red Flags 清单（主动预防）+ 架构设计指南持续审计机制 |
+
+### 8.4 过程性能基线 (OPM Level 4)
+
+> 以下基线数据基于项目历史运行数据建立，定期更新。**UCL/LCL = 均值 ± 3σ**（统计过程控制标准）。
+
+| # | 指标 | 基线均值 | 下限 (LCL) | 目标 (Target) | 上限 (UCL) | 测量频率 |
+|---|------|---------|-----------|--------------|----------|---------|
+| P-01 | 测试通过率 | 100% | 95% | 100% | — | 每次提交 |
+| P-02 | API 测试执行时间 | ~18s | — | < 30s | 60s | 每次提交 |
+| P-03 | 追溯性覆盖率 | 48.5% | 40% | 85%（目标） | — | 每周 |
+| P-04 | E2E 登录成功流耗时 | — | — | P95 < 1.5s | 3.0s | 每日构建 |
+| P-05 | Gateway JWT 验签延迟 | — | — | < 5ms | 10ms | 发布前 |
+
+**偏离纠正规则：** 任何指标突破 UCL/LCL 时，触发 §8.4 CAR 程序。
+
+### 8.5 缺陷因果分析程序 (CAR Level 5)
+
+```
+缺陷发现（测试失败 / 线上告警 / 用户反馈）
+       │
+       ▼
+┌─ 第一步：问题定义 ──────────────────────────┐
+│ · 精确描述现象（预期 vs 实际）                  │
+│ · 影响范围评估（用户数/功能/数据）              │
+│ · 严重等级判定（P0 阻断 / P1 严重 / P2 一般）    │
+└────────────────────────────────────────────┘
+       │
+       ▼
+┌─ 第二步：根因分析 ──────────────────────────┐
+│ · 5-Why 分析法（至少追问 5 层）                 │
+│ · 鱼骨图：人/流程/工具/环境/数据 5 维度          │
+│ · 代码 diff 回溯（git bisect）                 │
+│ · 输出：根本原因陈述（Root Cause Statement）    │
+└────────────────────────────────────────────┘
+       │
+       ▼
+┌─ 第三步：纠正措施 ──────────────────────────┐
+│ · 立即修复（hotfix / revert）                  │
+│ · 回归测试（复现 → 修复 → 验证通过）             │
+│ · 受影响版本回滚或补丁                          │
+└────────────────────────────────────────────┘
+       │
+       ▼
+┌─ 第四步：预防措施 ──────────────────────────┐
+│ · 新增测试用例（覆盖根因场景）                   │
+│ · 更新架构约束或编码规范（如为系统性缺陷）         │
+│ · 更新 Red Flags 清单                          │
+│ · 写入 docs/solutions/ 经验教训                │
+└────────────────────────────────────────────┘
+       │
+       ▼
+┌─ 第五步：闭环验证 ──────────────────────────┐
+│ · 度量预防措施有效性（N 天内同类缺陷数 = 0）      │
+│ · 更新过程性能基线（如有显著改进）                │
+│ · CAR 记录归档（含时间线/决策/效果评估）          │
+└────────────────────────────────────────────┘
+```
+
+**CAR 触发条件：**
+1. 任何 P0 阻断性缺陷
+2. 同一模块 30 天内出现 ≥3 个 P1 缺陷（系统性缺陷信号）
+3. 测试通过率低于 LCL（< 95%）
+4. 追溯性覆盖率连续 2 周下降
+
+### 8.6 过程改进选择与部署流程 (OPM Level 5)
+
+```
+改进机会识别（CAR 输出 / 度量偏离 / 外部最佳实践）
+       │
+       ▼
+┌─ 评估 ─────────────────────────────────────┐
+│ · 成本效益分析（投入工时 vs 预期收益）            │
+│ · 风险分析（引入新缺陷的概率）                    │
+│ · 与现有架构的兼容性检查                         │
+└────────────────────────────────────────────┘
+       │
+       ▼
+┌─ Pilot 试点 ────────────────────────────────┐
+│ · 在隔离分支/工作树中实施改进                    │
+│ · 运行全量测试套件                              │
+│ · 度量改进效果（前后对比）                       │
+└────────────────────────────────────────────┘
+       │
+       ▼
+    ┌──┴──┐
+    │ 达标? │
+    └──┬──┘
+   是  │  否
+   ▼   │  ▼
+┌─ 推广 ─┐ ┌─ 回滚分析 ───────────────────────┐
+│· 合入主干│ │· 记录失败原因                       │
+│· 更新文档│ │· 更新经验教训库                     │
+│· 团队通告│ └──────────────────────────────────┘
+│· 更新基线│
+└─────────┘
+```
+
+### 8.7 经验教训管理
+
+项目经验教训存储在 `docs/solutions/` 目录，按时间倒序排列。每个文件包含：
+- **问题描述**（现象、影响、严重等级）
+- **根因分析**（5-Why 输出、鱼骨图维度分析）
+- **解决方案**（纠正措施 + 预防措施）
+- **效果度量**（应用前后对比数据）
+- **相关链接**（关联的 PR/Commit/Issue）
+
+现有经验教训条目：
+- `portal-code-review-2025-06-17.md` — 全面代码审查，28 项修复
+- 更多历史条目见 `docs/solutions/` 目录
+
+### 8.8 CMMI Level 5 成熟度总结
+
+| 成熟度等级 | 特征 | 项目实现 |
+|-----------|------|---------|
+| **Level 2: Managed** | 项目管理、需求管理、质量保证 | 需求基线 + CCB 变更控制 + 分层测试 + CODEOWNERS |
+| **Level 3: Defined** | 标准化过程、组织级资产 | 8 份标准文档 + 架构约束规范 + DDD 模式 + 代码审查清单 |
+| **Level 4: Quantitatively Managed** | 量化过程管理、统计基线 | 5 项过程性能基线（UCL/LCL）+ 量化 NFR + 追溯性趋势 |
+| **Level 5: Optimizing** | 持续改进、因果分析、创新 | CAR 程序 + 过程改进部署流程 + 经验教训库 + 架构审计机制 |

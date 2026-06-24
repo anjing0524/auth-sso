@@ -1,7 +1,7 @@
 /**
  * User Server Actions 单元测试
  *
- * @req G-USR-C, G-USR-U, G-USR-D
+ * @req DC-USR-C, DC-USR-U, DC-USR-D
  * @vitest-environment node
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';

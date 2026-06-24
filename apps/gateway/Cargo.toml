@@ -40,6 +40,9 @@ config = { version = "0.14.0", features = ["toml"] }
 # 声明式命令行参数解析框架
 clap = { version = "4.5.16", features = ["derive"] }
 
+# Base64 编解码（裸解 JWT payload 用）
+base64 = "0.22"
+
 # 错误处理简化库
 thiserror = "1.0"
 anyhow = "1.0"
