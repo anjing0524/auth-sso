@@ -5,7 +5,7 @@
  */
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { requirePermission } from '@/lib/auth/check-permission';
-import { getDataScopeFilter } from '@/lib/auth';
+import { getUserRoleDeptIds } from '@/lib/auth';
 import { getUsers, getDepartments } from './data';
 import UserFilters from './components/UserFilters';
 import CreateUserDrawer from './components/CreateUserDrawer';
@@ -30,9 +30,9 @@ export default async function UsersPage({ searchParams }: PageProps) {
 
   // requirePermission 由 React.cache 去重，layout 已调用过，此处零额外开销
   const userId = (await requirePermission({ permissions: ['user:list'] }))!;
-  const scopeFilter = await getDataScopeFilter(userId);
+  const deptIds = await getUserRoleDeptIds(userId);
   const [{ data: users, pagination }, departments] = await Promise.all([
-    getUsers(scopeFilter, userId, { page, pageSize, keyword, status }),
+    getUsers(deptIds, userId, { page, pageSize, keyword, status }),
     getDepartments(),
   ]);
 

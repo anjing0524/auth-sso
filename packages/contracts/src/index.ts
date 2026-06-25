@@ -11,10 +11,6 @@ export type UserStatus = typeof USER_STATUS_VALUES[number];
 export const ENTITY_STATUS_VALUES = ['ACTIVE', 'DISABLED'] as const;
 export type EntityStatus = typeof ENTITY_STATUS_VALUES[number];
 
-// 数据范围类型 — 唯一真相源
-export const DATA_SCOPE_TYPE_VALUES = ['ALL', 'DEPT', 'DEPT_AND_SUB', 'SELF', 'CUSTOM'] as const;
-export type DataScopeType = typeof DATA_SCOPE_TYPE_VALUES[number];
-
 // 权限类型 — 唯一真相源（合并旧 permission_type + menu_type，menus 表已合并进 permissions）
 export const PERMISSION_TYPE_VALUES = ['DIRECTORY', 'PAGE', 'API', 'DATA'] as const;
 export type PermissionType = typeof PERMISSION_TYPE_VALUES[number];
@@ -55,7 +51,6 @@ export const USER_LOCKED: UserStatus = 'LOCKED';
 export const USER_DELETED: UserStatus = 'DELETED';
 export const ENTITY_ACTIVE: EntityStatus = 'ACTIVE';
 export const ENTITY_DISABLED: EntityStatus = 'DISABLED';
-export const DATA_SCOPE_SELF: DataScopeType = 'SELF';
 export const PERMISSION_API: PermissionType = 'API';
 export const PERMISSION_PAGE: PermissionType = 'PAGE';
 export const PERMISSION_DIRECTORY: PermissionType = 'DIRECTORY';
@@ -129,8 +124,8 @@ export const AUDIT_OPERATION_LABELS: Record<AuditOperation, string> = {
 export interface UserPermissionContext {
   roles: Array<{ id: string; code: string; name: string }>;
   permissions: string[];
-  dataScopeType: DataScopeType;
-  deptId?: string;
+  /** 用户所有角色所属部门（含子树展开）的 ID 列表 */
+  deptIds: string[];
 }
 
 // API 响应类型契约 (Controller 层统一返回格式)

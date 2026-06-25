@@ -41,14 +41,12 @@ interface ProfileClientProps {
   };
   permissions: string[];
   roles: Array<{ code: string; name: string }>;
-  dataScopeType: string;
 }
 
 export default function ProfileClient({
   user,
   permissions,
   roles,
-  dataScopeType,
 }: ProfileClientProps) {
   if (!user) {
     return (
@@ -57,6 +55,8 @@ export default function ProfileClient({
       </div>
     );
   }
+
+  const isAdmin = roles.some(r => r.code === 'SUPER_ADMIN' || r.code === 'ADMIN');
 
   return (
     <div className="max-w-6xl mx-auto space-y-10 pb-16 animate-in fade-in duration-700">
@@ -87,7 +87,7 @@ export default function ProfileClient({
                 {user.name}
               </h1>
               <Badge className="bg-primary text-white border-none px-3 py-1 rounded-full font-bold text-[10px] uppercase tracking-widest shadow-lg shadow-primary/20">
-                {dataScopeType === 'ALL' ? 'Administrator' : 'Verified Staff'}
+                {isAdmin ? 'Administrator' : 'Verified Staff'}
               </Badge>
             </div>
             <p className="flex items-center justify-center md:justify-start gap-2 text-slate-500 font-medium italic">

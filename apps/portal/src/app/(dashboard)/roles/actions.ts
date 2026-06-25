@@ -14,6 +14,7 @@ import {
   applyRoleUpdate,
   toDomainRole,
   guardNotSystemRole,
+  hasRolePermissionImpact,
 } from '@/domain/role/role';
 import {
   CreateRoleInputSchema,
@@ -50,7 +51,7 @@ export const createRoleAction = withAuth(
       return { success: false, error: 'VALIDATION_ERROR', message: parsed.error.issues[0].message };
     }
 
-    // 查重 + 插入在事务中原子完成，避免 race condition
+    // 查重 + 插入在事务中原子完成，避免 race condition（deptId 由 FK 约束保证完整性）
     const role = await db.transaction(async (tx) => {
       const existing = await tx.select({ id: schema.roles.id })
         .from(schema.roles)
@@ -78,30 +79,20 @@ export const updateRoleAction = withAuth(
       return { success: false, error: 'VALIDATION_ERROR', message: parsed.error.issues[0].message };
     }
 
-    // 仅当数据范围或角色状态变化时，才需强制绑定用户重登（改名/改描述不影响权限决策）
-    let permissionDecisionChanged = false;
+    let permissionChanged = false;
     await db.transaction(async (tx) => {
       const row = await tx.query.roles.findFirst({ where: eq(schema.roles.id, roleId) });
       if (!row) throw new EntityNotFoundError('Role', roleId);
-
       const role = toDomainRole(row);
       guardNotSystemRole(role);
-
       const updated = applyRoleUpdate(role, parsed.data);
-      permissionDecisionChanged =
-        (parsed.data.dataScopeType !== undefined && role.dataScopeType !== updated.dataScopeType) ||
-        (parsed.data.status !== undefined && role.status !== updated.status);
-      await tx.update(schema.roles).set(roleToUpdateRow(updated))
-        .where(eq(schema.roles.id, roleId));
+      permissionChanged = hasRolePermissionImpact(role, updated);
+      await tx.update(schema.roles).set(roleToUpdateRow(updated)).where(eq(schema.roles.id, roleId));
     });
-
     await invalidateRoleBoundUsersCache(roleId);
-    // 数据范围/状态变更 → 批量撤销绑定用户的 Access Token，强制重登以更新 JWT claims
-    if (permissionDecisionChanged) {
+    if (permissionChanged) {
       const userIds = await getRoleBoundUserIds(roleId);
-      if (userIds.length > 0) {
-        await revokeUsersAccessByUserId(userIds);
-      }
+      if (userIds.length > 0) await revokeUsersAccessByUserId(userIds);
     }
 
     revalidatePath('/roles');

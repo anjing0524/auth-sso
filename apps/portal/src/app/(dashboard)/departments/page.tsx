@@ -5,14 +5,14 @@
  */
 import { Building2 } from 'lucide-react';
 import { requirePermission } from '@/lib/auth/check-permission';
-import { getDataScopeFilter } from '@/lib/auth';
+import { getUserRoleDeptIds } from '@/lib/auth';
 import { getDepartments } from './data';
 import DepartmentTree from './components/DepartmentTree';
 
 export default async function DepartmentsPage() {
   const userId = (await requirePermission({ permissions: ['department:list'] }))!;
-  const scopeFilter = await getDataScopeFilter(userId);
-  const departments = await getDepartments(scopeFilter, userId);
+  const deptIds = await getUserRoleDeptIds(userId);
+  const departments = await getDepartments(deptIds, userId);
 
   return (
     <div className="space-y-8 pb-10">

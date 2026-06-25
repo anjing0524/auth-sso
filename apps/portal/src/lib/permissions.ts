@@ -5,9 +5,8 @@
 import { db, schema } from '@/infrastructure/db';
 import { eq, inArray, and } from 'drizzle-orm';
 import { getRedis, type RedisClient } from '@/infrastructure/redis';
-import { ENTITY_ACTIVE } from '@auth-sso/contracts';
-import type { DataScopeType, UserPermissionContext } from '@auth-sso/contracts';
-import { asDataScopeType } from '@/lib/type-guards';
+import { ENTITY_ACTIVE, REDIS_KEY_PREFIX } from '@auth-sso/contracts';
+import type { UserPermissionContext } from '@auth-sso/contracts';
 
 /** 权限缓存 TTL，与 Access Token TTL (3600s) 对齐 */
 const PERM_CACHE_TTL = 3600;
@@ -24,7 +23,7 @@ export type { UserPermissionContext };
  * 正常情况下总是 Redis 命中，零 DB 查询。
  */
 export async function getUserPermissionContext(userId: string): Promise<UserPermissionContext | null> {
-  const cacheKey = `portal:user_perms:${userId}`;
+  const cacheKey = `${REDIS_KEY_PREFIX.USER_PERMS}${userId}`;
   let redis: RedisClient | null = null;
 
   // 1. 尝试从 Redis 缓存中获取数据
@@ -79,8 +78,7 @@ export async function getUserPermissionContext(userId: string): Promise<UserPerm
       const context: UserPermissionContext = {
         roles: [],
         permissions: [],
-        dataScopeType: 'SELF',
-        deptId: user.deptId ?? undefined,
+        deptIds: [],
       };
 
       // 写入缓存并直接返回
@@ -105,16 +103,14 @@ export async function getUserPermissionContext(userId: string): Promise<UserPerm
       )
     );
 
-    // 5. 确定数据范围类型 (多角色场景下取最高级别的数据权限)
-    const dataScopeTypes: DataScopeType[] = ['ALL', 'DEPT_AND_SUB', 'DEPT', 'CUSTOM', 'SELF'];
-    let maxDataScopeType: DataScopeType = 'SELF';
-
-    for (const role of roles) {
-      const roleDataScope = asDataScopeType(role.dataScopeType);
-      if (dataScopeTypes.indexOf(roleDataScope) < dataScopeTypes.indexOf(maxDataScopeType)) {
-        maxDataScopeType = roleDataScope;
-      }
-    }
+    // v3.2: 收集所有角色的所属部门 ID，去重（子树展开在 Token 签发 / getUserRoleDeptIds 时完成）
+    const deptIds = Array.from(
+      new Set(
+        roles
+          .map(r => r.deptId)
+          .filter((id): id is string => !!id),
+      ),
+    );
 
     const context: UserPermissionContext = {
       roles: roles.map(r => ({
@@ -123,8 +119,7 @@ export async function getUserPermissionContext(userId: string): Promise<UserPerm
         name: r.name,
       })),
       permissions: activePermissionCodes,
-      dataScopeType: maxDataScopeType,
-      deptId: user.deptId ?? undefined,
+      deptIds,
     };
 
     // 6. 将结果回写至 Redis 缓存，TTL 与 Access Token 对齐
@@ -153,7 +148,7 @@ export async function getUserPermissionContext(userId: string): Promise<UserPerm
 export async function refreshUserPermissionCache(userId: string): Promise<void> {
   try {
     const redis = getRedis();
-    const cacheKey = `portal:user_perms:${userId}`;
+    const cacheKey = `${REDIS_KEY_PREFIX.USER_PERMS}${userId}`;
     // 1. 删除旧缓存，强制走 DB 获取最新数据
     await redis.del(cacheKey);
     // 2. 查 DB → 自动回写 Redis（TTL = PERM_CACHE_TTL）
@@ -187,7 +182,7 @@ export async function refreshUsersPermissionCache(userIds: string[]): Promise<vo
 export async function clearUserPermissionCache(userId: string): Promise<void> {
   try {
     const redis = getRedis();
-    const cacheKey = `portal:user_perms:${userId}`;
+    const cacheKey = `${REDIS_KEY_PREFIX.USER_PERMS}${userId}`;
     await redis.del(cacheKey);
     console.log(`[PermissionContext] Cleared permissions cache for user: ${userId}`);
   } catch (error: any) {
@@ -207,7 +202,7 @@ export async function clearUsersPermissionCache(userIds: string[]): Promise<void
     // 使用 Promise.allSettled：单个用户失败不影响其他用户的缓存清除
     const results = await Promise.allSettled(
       userIds.map(async (userId) => {
-        const cacheKey = `portal:user_perms:${userId}`;
+        const cacheKey = `${REDIS_KEY_PREFIX.USER_PERMS}${userId}`;
         await redis.del(cacheKey);
       }),
     );
@@ -237,7 +232,7 @@ export async function cacheUserPermissionContext(
 ): Promise<void> {
   try {
     const redis = getRedis();
-    const cacheKey = `portal:user_perms:${userId}`;
+    const cacheKey = `${REDIS_KEY_PREFIX.USER_PERMS}${userId}`;
     await redis.setex(cacheKey, ttl, JSON.stringify(ctx));
   } catch (error: any) {
     // 静默降级，不影响 Token 签发主流程

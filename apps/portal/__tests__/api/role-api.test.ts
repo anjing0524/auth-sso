@@ -153,9 +153,9 @@ describe('Role Management API', () => {
   // ======== GET /api/roles ========
 
   describe('GET /api/roles (list)', () => {
-    it('returns role list with dataScopeType', async () => {
+    it('returns role list with deptId', async () => {
       setQueryResult([
-        createTestRole({ name: 'Admin', code: 'ADMIN', dataScopeType: 'ALL' }),
+        createTestRole({ name: 'Admin', code: 'ADMIN', deptId: 'dept-1' }),
       ]);
 
       const response = await ListRoles(createTestRequest('/api/roles'));
@@ -166,7 +166,7 @@ describe('Role Management API', () => {
       expect(body.data[0]).toMatchObject({
         name: 'Admin',
         code: 'ADMIN',
-        dataScopeType: 'ALL',
+        deptId: 'dept-1',
       });
       expect(body.pagination).toBeDefined();
       expect(body.pagination.total).toBe(1);
@@ -190,7 +190,7 @@ describe('Role Management API', () => {
   describe('GET /api/roles/[id] (detail)', () => {
     it('returns role detail', async () => {
       setQueryResult([
-        createTestRole({ name: 'Admin', dataScopeType: 'ALL' }),
+        createTestRole({ name: 'Admin', deptId: 'dept-1' }),
       ]);
 
       const response = await GetRole(createTestRequest('/api/roles/role-1'), {
@@ -199,7 +199,7 @@ describe('Role Management API', () => {
       const body = await response.json();
 
       expect(response.status).toBe(200);
-      expect(body.data).toMatchObject({ name: 'Admin', dataScopeType: 'ALL' });
+      expect(body.data).toMatchObject({ name: 'Admin', deptId: 'dept-1' });
     });
 
     it('returns 404 for nonexistent role', async () => {

@@ -26,6 +26,14 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(errorUrl);
   }
 
+  // H-AUTH-010: state 参数存在性校验（OAuth 2.1 PKCE §7.6 提供 CSRF 保护，此为纵深防御）
+  if (!state) {
+    const errorUrl = new URL('/login', publicBase);
+    errorUrl.searchParams.set('error', 'invalid_state');
+    return NextResponse.redirect(errorUrl);
+  }
+
+  // PKCE code_verifier 由 login form 通过 redirect_uri searchParams 传入
   const codeVerifier = url.searchParams.get('pkce_verifier');
   if (!codeVerifier) {
     const errorUrl = new URL('/login', publicBase);
@@ -35,7 +43,13 @@ export async function GET(request: NextRequest) {
 
   // 内部调用 token 端点：用 code + PKCE verifier 换 token
   const env = getEnvConfig();
-  const portalClientSecret = env.PORTAL_CLIENT_SECRET || 'portal-secret';
+  const portalClientSecret = env.PORTAL_CLIENT_SECRET;
+  if (!portalClientSecret) {
+    console.error('[Callback] 缺少 PORTAL_CLIENT_SECRET 环境变量');
+    const errorUrl = new URL('/login', publicBase);
+    errorUrl.searchParams.set('error', 'token_exchange_failed');
+    return NextResponse.redirect(errorUrl);
+  }
   const internalBase = process.env.PORTAL_INTERNAL_URL || `http://127.0.0.1:${process.env.PORT || 4000}`;
 
   // redirect_uri 必须与 authorize 请求一致（含 pkce_verifier），否则 token 端点精确比对失败
@@ -82,9 +96,10 @@ export async function GET(request: NextRequest) {
       maxAge: tokens.expires_in || 3600,
     });
 
+    // Set-Cookie: portal_refresh_token（路径隔离仅限 /api/auth/refresh）
     if (tokens.refresh_token) {
       response.cookies.set(COOKIE_NAMES.REFRESH, tokens.refresh_token, {
-        path: '/',
+        path: '/api/auth/refresh',
         httpOnly: true,
         secure,
         sameSite: 'lax',

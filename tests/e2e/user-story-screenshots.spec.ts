@@ -2,6 +2,14 @@ import { test, expect } from '@playwright/test';
 import path from 'path';
 import { loginAsUser, logout, clearAllCookies } from './helpers';
 
+/**
+ * 用户故事截图测试
+ *
+ * @req H-FLOW-001, H-FLOW-002, H-FLOW-003, H-FLOW-004
+ * @req H-AUTH-001, H-AUTH-002, H-AUTH-005, H-AUTH-006
+ * @req B-USR-L, B-USR-C
+ */
+
 // 截图保存路径
 const SCREENSHOT_DIR = '/Users/liushuo/.gemini/antigravity-cli/brain/3c5d860b-2ddb-4662-8d17-d2f8d9036798';
 

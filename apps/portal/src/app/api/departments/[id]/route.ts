@@ -4,7 +4,7 @@
  * GET 读操作委托给 departments/data.ts 统一读模型。
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { withPermission, checkDataScope } from '@/lib/auth';
+import { withPermission, getUserRoleDeptIds } from '@/lib/auth';
 import { DEPARTMENT_ERRORS, COMMON_ERRORS } from '@auth-sso/contracts';
 import { getDepartmentById } from '@/app/(dashboard)/departments/data';
 
@@ -17,8 +17,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const dept = await getDepartmentById(id);
     if (!dept) return NextResponse.json({ error: DEPARTMENT_ERRORS.DEPARTMENT_NOT_FOUND, message: '部门不存在' }, { status: 404 });
 
-    const hasScope = await checkDataScope(userId, dept.id);
-    if (!hasScope) return NextResponse.json({ error: COMMON_ERRORS.FORBIDDEN, message: '无权访问该部门' }, { status: 403 });
+    const deptIds = await getUserRoleDeptIds(userId);
+    if (deptIds.length === 0 || !deptIds.includes(dept.id)) return NextResponse.json({ error: COMMON_ERRORS.FORBIDDEN, message: '无权访问该部门' }, { status: 403 });
 
     return NextResponse.json({ data: { ...dept, createdAt: dept.createdAt.toString() } });
   });

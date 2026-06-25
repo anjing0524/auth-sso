@@ -60,8 +60,7 @@ export async function GET(_request: NextRequest) {
       // 从 claims 直取，与 Gateway 验签结果保持一致（不走 DB/Redis）
       permissions: claims.permissions,
       roles: claims.roles,
-      dataScopeType: claims.dataScopeType,
-      deptId: claims.deptId || undefined,
+      deptIds: claims.deptIds,
       menus: menuItems,
     });
   } catch (err) {

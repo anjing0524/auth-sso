@@ -124,7 +124,7 @@ describe('Mock 基础设施', () => {
 
     it('createTestPermissionContext 默认管理员', () => {
       const ctx = createTestPermissionContext();
-      expect(ctx.dataScopeType).toBe('ALL');
+      expect(ctx.deptIds).toEqual(['dept-1']);
       expect(ctx.permissions).toContain('user:list');
     });
   });

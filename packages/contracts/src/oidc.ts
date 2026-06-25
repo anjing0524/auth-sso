@@ -55,6 +55,8 @@ export const REDIS_KEY_PREFIX = {
   AUTH_CODE: 'portal:auth_code:',
   /** PKCE 验证数据 Key 前缀 */
   PKCE: 'portal:pkce:',
+  /** 用户权限上下文缓存 Key 前缀 */
+  USER_PERMS: 'portal:user_perms:',
 } as const;
 
 // 默认支持的 Scope

@@ -16,11 +16,13 @@ import { withAuth, type AuthContext } from '@/lib/auth';
 import {
   createUser,
   toggleUserStatus,
+  unlockUser,
   deleteUser,
   applyUserUpdate,
   toDomainUser,
   userToInsertRow,
   userToUpdateRow,
+  hasDeptChanged,
 } from '@/domain/user/user';
 import {
   CreateUserInputSchema,
@@ -121,6 +123,38 @@ export const toggleUserStatusAction = withAuth(
 );
 
 /**
+ * 解锁被锁定用户 Action Controller (B-USR-ST)
+ */
+export const unlockUserAction = withAuth(
+  { permissions: ['user:update'] },
+  async (_ctx: AuthContext, userIdStr: string): Promise<ApiResponse<{ status: string }>> => {
+    const parsed = UserIdentityInputSchema.safeParse({ id: userIdStr });
+    if (!parsed.success) {
+      return { success: false, error: 'VALIDATION_ERROR', message: parsed.error.issues[0].message };
+    }
+
+    const updated = await db.transaction(async (tx) => {
+      const row = await tx.query.users.findFirst({ where: eq(schema.users.id, parsed.data.id) });
+      if (!row) throw new EntityNotFoundError('User', parsed.data.id);
+
+      const target = unlockUser(toDomainUser(row));
+      await tx.update(schema.users)
+        .set({ status: target.status })
+        .where(eq(schema.users.id, parsed.data.id));
+      return target;
+    });
+
+    revalidatePath('/users');
+    updateTag('users-list');
+    return {
+      success: true,
+      data: { status: updated.status },
+      message: '用户已解锁',
+    };
+  },
+);
+
+/**
  * 更新用户信息 Action Controller
  */
 export const updateUserAction = withAuth(
@@ -135,31 +169,21 @@ export const updateUserAction = withAuth(
       return { success: false, error: 'VALIDATION_ERROR', message: parsed.error.issues[0].message };
     }
 
-    // 读取 + 更新在事务中原子完成（R22）；领域纯函数负责字段 merge 策略
     let deptIdChanged = false;
     await db.transaction(async (tx) => {
       const row = await tx.query.users.findFirst({ where: eq(schema.users.id, parsed.data.id) });
       if (!row) throw new EntityNotFoundError('User', parsed.data.id);
 
       const updated = applyUserUpdate(toDomainUser(row), {
-        name: parsed.data.name,
-        email: parsed.data.email,
-        status: parsed.data.status,
-        deptId: parsed.data.deptId,
+        name: parsed.data.name, email: parsed.data.email,
+        status: parsed.data.status, deptId: parsed.data.deptId,
         avatarUrl: parsed.data.avatarUrl,
       });
-      // 仅部门归属变化属于数据范围决策变更（影响 dataScope 过滤），需要强制重登
-      deptIdChanged =
-        parsed.data.deptId !== undefined && (row.deptId ?? '') !== (updated.deptId ?? '');
-      await tx.update(schema.users).set(userToUpdateRow(updated))
-        .where(eq(schema.users.id, parsed.data.id));
+      deptIdChanged = hasDeptChanged(row.deptId, parsed.data.deptId);
+      await tx.update(schema.users).set(userToUpdateRow(updated)).where(eq(schema.users.id, parsed.data.id));
     });
-
     await refreshUserPermissionCache(parsed.data.id);
-    // 部门变更 → 撤销现有 Access Token 强制重登，重走 rotateRefreshToken 更新 JWT claims 中的 deptId
-    if (deptIdChanged) {
-      await revokeUserAccessByUserId(parsed.data.id);
-    }
+    if (deptIdChanged) await revokeUserAccessByUserId(parsed.data.id);
     revalidatePath('/users');
     updateTag('users-list');
     return { success: true, data: { id: parsed.data.id }, message: '更新成功' };
@@ -197,5 +221,46 @@ export const deleteUserAction = withAuth(
     revalidatePath('/users');
     updateTag('users-list');
     return { success: true, data: { id: parsed.data.id }, message: '用户已逻辑删除' };
+  },
+);
+
+/**
+ * 重置用户密码 Action Controller (B-USR-PW)
+ *
+ * 管理员为指定用户重置密码，重置后该用户所有活跃会话立即失效。
+ */
+export const resetPasswordAction = withAuth(
+  { permissions: ['user:update'] },
+  async (_ctx: AuthContext, userIdStr: string, newPassword: string): Promise<ApiResponse<{ id: string }>> => {
+    const parsed = UserIdentityInputSchema.safeParse({ id: userIdStr });
+    if (!parsed.success) {
+      return { success: false, error: 'VALIDATION_ERROR', message: parsed.error.issues[0].message };
+    }
+    if (!newPassword || newPassword.length < 8) {
+      return { success: false, error: 'VALIDATION_ERROR', message: '密码至少8位，须包含大小写字母和数字' };
+    }
+    if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(newPassword)) {
+      return { success: false, error: 'VALIDATION_ERROR', message: '密码须包含大小写字母和数字' };
+    }
+
+    const passwordHash = await hashPassword(newPassword);
+
+    await db.transaction(async (tx) => {
+      const row = await tx.query.users.findFirst({ where: eq(schema.users.id, parsed.data.id) });
+      if (!row) throw new EntityNotFoundError('User', parsed.data.id);
+
+      await tx.update(schema.users)
+        .set({ passwordHash })
+        .where(eq(schema.users.id, parsed.data.id));
+    });
+
+    // 重置后所有会话失效，用户须用新密码重新登录（B-USR-PW）
+    revokeUserAccessByUserId(parsed.data.id).catch((e) =>
+      console.error('[Users Action] 重置密码后撤销 JWT 失败:', e),
+    );
+
+    revalidatePath('/users');
+    updateTag('users-list');
+    return { success: true, data: { id: parsed.data.id }, message: '密码已重置，该用户所有会话已失效' };
   },
 );

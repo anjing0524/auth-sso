@@ -34,7 +34,7 @@ export function createTestRole(overrides: Record<string, any> = {}) {
     name: '测试角色',
     description: '用于测试的角色',
     status: 'ACTIVE',
-    dataScopeType: 'ALL' as const,
+    deptId: 'dept-1',
     createdAt: new Date('2026-01-01'),
     updatedAt: new Date('2026-01-01'),
     ...overrides,
@@ -133,8 +133,7 @@ export function createTestPermissionContext(overrides: Record<string, any> = {})
   return {
     roles: [{ id: 'role-1', code: 'ADMIN', name: '管理员' }],
     permissions: ['user:list', 'user:create', 'user:update', 'user:delete'],
-    dataScopeType: 'ALL' as const,
-    deptId: undefined,
+    deptIds: ['dept-1'],
     ...overrides,
   };
 }

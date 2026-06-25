@@ -4,7 +4,7 @@
  * GET 读操作委托给 users/data.ts 统一读模型，消除重复 Drizzle 查询。
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { withPermission, getDataScopeFilter } from '@/lib/auth';
+import { withPermission, getUserRoleDeptIds } from '@/lib/auth';
 import { getUsers } from '@/app/(dashboard)/users/data';
 
 
@@ -18,8 +18,8 @@ export async function GET(request: NextRequest) {
     const status = sp.get('status') || '';
     const deptId = sp.get('deptId') || undefined;
 
-    const scopeFilter = await getDataScopeFilter(userId);
-    const result = await getUsers(scopeFilter, userId, { page, pageSize, keyword, status, deptId });
+    const deptIds = await getUserRoleDeptIds(userId);
+    const result = await getUsers(deptIds, userId, { page, pageSize, keyword, status, deptId });
     return NextResponse.json(result);
   });
 }

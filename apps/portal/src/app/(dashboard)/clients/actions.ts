@@ -20,7 +20,7 @@ import {
   type CreateClientInput,
 } from '@/domain/client/types';
 import { EntityNotFoundError } from '@/domain/shared/errors';
-import { generateClientId, generateClientSecret } from '@/lib/crypto';
+import { generateClientId, generateClientSecret, hashClientSecret } from '@/lib/crypto';
 import type { ApiResponse } from '@auth-sso/contracts';
 
 /** 创建 Client */
@@ -32,15 +32,21 @@ export const createClientAction = withAuth(
       return { success: false, error: 'VALIDATION_ERROR', message: parsed.error.issues[0].message };
     }
 
-    const client = createClient(parsed.data, generateClientId, generateClientSecret);
-    await db.insert(schema.clients).values(clientToInsertRow(client));
+    const rawSecret = generateClientSecret();
+    const client = createClient(parsed.data, generateClientId, () => rawSecret);
+    const row = clientToInsertRow(client);
+    // SHA-256 哈希存储，原文不落库（DC-CLI-C）
+    await db.insert(schema.clients).values({
+      ...row,
+      clientSecret: hashClientSecret(rawSecret),
+    });
 
     revalidatePath('/clients');
     updateTag('clients-list');
     return {
       success: true,
-      data: { id: client.clientId, clientId: client.clientId, clientSecret: client.clientSecret },
-      message: '应用注册成功',
+      data: { id: client.clientId, clientId: client.clientId, clientSecret: rawSecret },
+      message: '应用注册成功。Secret 仅显示一次，请妥善保存。',
     };
   },
 );
@@ -54,16 +60,19 @@ export const updateClientAction = withAuth(
       return { success: false, error: 'VALIDATION_ERROR', message: parsed.error.issues[0].message };
     }
 
-    const row = await db.query.clients.findFirst({
-      where: eq(schema.clients.clientId, clientIdStr),
+    const updated = await db.transaction(async (tx) => {
+      const row = await tx.query.clients.findFirst({
+        where: eq(schema.clients.clientId, clientIdStr),
+      });
+      if (!row) throw new EntityNotFoundError('Client', clientIdStr);
+
+      const client = toDomainClient(row);
+      const updated = applyClientUpdate(client, parsed.data);
+
+      await tx.update(schema.clients).set(clientToUpdateRow(updated))
+        .where(eq(schema.clients.clientId, client.clientId));
+      return updated;
     });
-    if (!row) throw new EntityNotFoundError('Client', clientIdStr);
-
-    const client = toDomainClient(row);
-    const updated = applyClientUpdate(client, parsed.data);
-
-    await db.update(schema.clients).set(clientToUpdateRow(updated))
-      .where(eq(schema.clients.clientId, client.clientId));
 
     revalidatePath('/clients');
     updateTag('clients-list');
@@ -75,12 +84,14 @@ export const updateClientAction = withAuth(
 export const deleteClientAction = withAuth(
   { permissions: ['client:delete'] },
   async (_ctx: AuthContext, clientIdStr: string): Promise<ApiResponse<{ id: string }>> => {
-    const row = await db.query.clients.findFirst({
-      where: eq(schema.clients.clientId, clientIdStr),
-    });
-    if (!row) throw new EntityNotFoundError('Client', clientIdStr);
+    await db.transaction(async (tx) => {
+      const row = await tx.query.clients.findFirst({
+        where: eq(schema.clients.clientId, clientIdStr),
+      });
+      if (!row) throw new EntityNotFoundError('Client', clientIdStr);
 
-    await db.delete(schema.clients).where(eq(schema.clients.clientId, row.clientId));
+      await tx.delete(schema.clients).where(eq(schema.clients.clientId, row.clientId));
+    });
 
     revalidatePath('/clients');
     updateTag('clients-list');
@@ -99,7 +110,7 @@ export const rotateClientSecretAction = withAuth(
 
     const newSecret = generateClientSecret();
     await db.update(schema.clients)
-      .set({ clientSecret: newSecret })
+      .set({ clientSecret: hashClientSecret(newSecret) })
       .where(eq(schema.clients.clientId, row.clientId));
 
     revalidatePath(`/clients/${row.clientId}`);

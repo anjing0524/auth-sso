@@ -1,11 +1,11 @@
 /**
  * 用户领域核心模型单元测试 (Functional TDD)
  * 
- * @req R2, R3, R12
+ * @req DC-USR-C, DC-USR-U, DC-USR-D
  * @vitest-environment node
  */
 import { describe, it, expect } from 'vitest';
-import { toggleUserStatus, createUser, deleteUser, applyUserUpdate, User } from '../../src/domain/user/user';
+import { toggleUserStatus, unlockUser, createUser, deleteUser, applyUserUpdate, User } from '../../src/domain/user/user';
 import { BusinessRuleViolationError } from '../../src/domain/shared/errors';
 
 describe('User 领域核心规则与工厂单元测试', () => {
@@ -71,6 +71,28 @@ describe('User 领域核心规则与工厂单元测试', () => {
   it('当已逻辑删除的用户 (DELETED) 切换状态时，必须抛出 BusinessRuleViolationError 拦截', () => {
     const user = createTestUser('DELETED');
     expect(() => toggleUserStatus(user)).toThrow(BusinessRuleViolationError);
+  });
+
+  // 3.1 LOCKED 状态切换 + 解锁流程 (B-USR-ST, DC-USR-ST)
+  it('当已锁定的用户 (LOCKED) 切换状态时，必须抛出 BusinessRuleViolationError（应使用专用解锁）', () => {
+    const user = createTestUser('LOCKED');
+    expect(() => toggleUserStatus(user)).toThrow(BusinessRuleViolationError);
+  });
+
+  it('unlockUser：LOCKED → ACTIVE 解锁成功', () => {
+    const user = createTestUser('LOCKED');
+    const result = unlockUser(user);
+    expect(result.status).toBe('ACTIVE');
+  });
+
+  it('unlockUser：DELETED 用户无法解锁', () => {
+    const user = createTestUser('DELETED');
+    expect(() => unlockUser(user)).toThrow(BusinessRuleViolationError);
+  });
+
+  it('unlockUser：非 LOCKED 用户无需解锁', () => {
+    const user = createTestUser('ACTIVE');
+    expect(() => unlockUser(user)).toThrow(BusinessRuleViolationError);
   });
 
   // 4. 逻辑删除函数测试

@@ -10,9 +10,8 @@ import 'server-only';
 
 import { cacheLife, cacheTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
-import { asc, and, eq } from 'drizzle-orm';
+import { asc, and, eq, inArray } from 'drizzle-orm';
 import type { EntityStatus } from '@auth-sso/contracts';
-import { applyDataScopeFilter } from '@/lib/auth';
 import { buildDepartmentTree } from '@/domain/department/department';
 import type { DepartmentTreeNode } from '@/domain/department/department';
 import { isScopeDenied } from '@/db/user-queries';
@@ -21,42 +20,25 @@ import { asEntityStatus } from '@/lib/type-guards';
 /**
  * 获取当前授权范围内的部门树形结构
  *
- * @param scopeFilter — 由调用方在缓存作用域外通过 getDataScopeFilter(userId) 预先计算的过滤条件
- * @param userId       — 当前操作者用户 ID（用于范围过滤）
+ * @param deptIds — 由调用方在缓存作用域外通过 getUserRoleDeptIds(userId) 预先计算的部门 ID 列表
+ * @param userId  — 当前操作者用户 ID（v3.2: 暂保留参数以维持接口兼容）
  */
 export async function getDepartments(
-  scopeFilter: { type: 'ALL' | 'LIST' | 'SELF'; deptIds?: string[] },
+  deptIds: string[],
   userId: string,
 ): Promise<DepartmentTreeNode[]> {
   'use cache';
   cacheLife('minutes');
   cacheTag('departments-list');
 
-  if (isScopeDenied(scopeFilter)) {
+  if (isScopeDenied(deptIds)) {
     return [];
   }
 
-  const conditions = [];
-  const scopeSQL = applyDataScopeFilter(scopeFilter, schema.departments.id, schema.departments.id, userId);
-  if (scopeSQL === null) return [];
-  if (scopeSQL !== undefined) conditions.push(scopeSQL);
-
   const rows = await db.select()
     .from(schema.departments)
-    .where(conditions.length > 0 ? and(...conditions) : undefined)
+    .where(inArray(schema.departments.id, deptIds))
     .orderBy(asc(schema.departments.sort), asc(schema.departments.createdAt));
-
-  // 构建树：只在 scopeFilter 限制范围内构建
-  if (scopeFilter.type !== 'ALL') {
-    // 有限范围时只返回平面列表
-    return rows.map(r => ({
-      id: r.id, parentId: r.parentId, ancestors: r.ancestors,
-      name: r.name, code: r.code, sort: r.sort ?? 0,
-      status: asEntityStatus(r.status),
-      createdAt: Temporal.Instant.fromEpochMilliseconds(r.createdAt.getTime()),
-      children: [],
-    }));
-  }
 
   const depts = rows.map(r => ({
     id: r.id, parentId: r.parentId, ancestors: r.ancestors,

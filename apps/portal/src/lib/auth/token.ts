@@ -235,12 +235,12 @@ export const ACCESS_TOKEN_TTL = TOKEN_TTL.ACCESS_TOKEN; // 1h
  *
  * 调用方：`app/api/auth/oauth2/token/route.ts`（POST /oauth2/token + refresh_token grant）
  *
- * @param claims   - 含 sub / roles / permissions / deptId / dataScopeType 的载荷
+ * @param claims   - 含 sub / roles / permissions / deptIds 的载荷
  * @param audience - JWT aud 声明，默认 'portal-client'
  * @returns token 字符串 + jti（用于后续撤销）
  */
 export async function signAccessToken(
-  claims: Pick<PortalJwtClaims, 'sub' | 'roles' | 'permissions' | 'deptId' | 'dataScopeType'>,
+  claims: Pick<PortalJwtClaims, 'sub' | 'roles' | 'permissions' | 'deptIds'>,
   audience: string = 'portal-client',
   persist?: { clientId: string; scopes?: string },
 ): Promise<{ token: string; jti: string }> {
@@ -252,8 +252,7 @@ export async function signAccessToken(
     sub: claims.sub,
     roles: claims.roles,
     permissions: claims.permissions,
-    deptId: claims.deptId,
-    dataScopeType: claims.dataScopeType,
+    deptIds: claims.deptIds,
   })
     .setProtectedHeader({ alg: 'ES256', kid: keyId })
     .setIssuedAt()
@@ -336,8 +335,7 @@ export async function verifyAccessToken(token: string): Promise<PortalJwtClaims 
       ...payload,
       roles: payload.roles ?? [],
       permissions: payload.permissions ?? [],
-      deptId: payload.deptId ?? '',
-      dataScopeType: payload.dataScopeType ?? 'SELF',
+      deptIds: payload.deptIds ?? [],
     };
   } catch (error) {
     console.warn('[Token] JWT 验签失败:', error instanceof Error ? error.message : error);
@@ -485,7 +483,11 @@ export async function rotateRefreshToken(
 
   // 获取最新权限上下文并签发新 Access Token
   const { getUserPermissionContext } = await import('@/lib/permissions');
-  const permCtx = await getUserPermissionContext(rt.userId);
+  const { getUserRoleDeptIds } = await import('@/lib/auth/data-scope');
+  const [permCtx, deptIds] = await Promise.all([
+    getUserPermissionContext(rt.userId),
+    getUserRoleDeptIds(rt.userId),
+  ]);
   if (!permCtx) return null;
 
   const { token: accessToken } = await signAccessToken(
@@ -493,8 +495,7 @@ export async function rotateRefreshToken(
       sub: rt.userId,
       roles: permCtx.roles.map((r) => r.code),
       permissions: permCtx.permissions,
-      deptId: permCtx.deptId ?? '',
-      dataScopeType: permCtx.dataScopeType,
+      deptIds,
     },
     'portal-client',
     { clientId: rt.clientId, scopes: rt.scopes },

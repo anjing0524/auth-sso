@@ -137,7 +137,7 @@ describe('Me Endpoints', () => {
     roles: ['ADMIN'],
     permissions: ['user:list'],
     deptId: 'dept-1',
-    dataScopeType: 'ALL' as const,
+    deptIds: ['dept-1'],
   };
   const mockPermissionContext = createTestPermissionContext();
 

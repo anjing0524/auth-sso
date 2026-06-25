@@ -30,8 +30,6 @@ async function main() {
     // 0. 清空现有数据（按外键依赖顺序）
     console.log('Cleaning existing data...');
     await db.delete(schema.rolePermissions);
-    await db.delete(schema.roleDataScopes);
-    await db.delete(schema.roleClients);
     await db.delete(schema.userRoles);
     await db.delete(schema.permissions);
     await db.delete(schema.roles);

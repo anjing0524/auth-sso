@@ -100,15 +100,21 @@ export async function createRestrictedRoleAndUser(page: Page): Promise<{
   const userListPerm = permsData.data.find((p) => p.code === 'user:list');
   expect(userListPerm, 'user:list 权限必须存在于 seed 数据中').toBeDefined();
 
-  // 2. 创建受限角色（code != ADMIN/SUPER_ADMIN，避免超级管理员绕过）
+  // 2. 获取已有部门（v3.2: 角色必须指定所属部门）
+  const deptRes = await request.get(`${PORTAL_URL}/api/departments`);
+  const deptData = (await deptRes.json()) as { data: Array<{ id: string }> };
+  const testDeptId = deptData.data[0]?.id;
+  expect(testDeptId, '至少需要一个部门才能创建角色').toBeDefined();
+
+  // 3. 创建受限角色（code != ADMIN/SUPER_ADMIN，避免超级管理员绕过）
   const roleRes = await request.post(`${PORTAL_URL}/api/roles`, {
-    data: { name: '查看者', code: 'VIEWER', dataScopeType: 'SELF' },
+    data: { name: '查看者', code: 'VIEWER', deptId: testDeptId },
   });
   expect(roleRes.ok()).toBeTruthy();
   const roleBody = (await roleRes.json()) as { data: { id: string } };
   const roleId = roleBody.data.id;
 
-  // 3. 仅赋予 user:list 权限
+  // 4. 仅赋予 user:list 权限
   const permAssignRes = await request.post(
     `${PORTAL_URL}/api/roles/${roleId}/permissions`,
     { data: { permissionIds: [userListPerm.id] } },

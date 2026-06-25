@@ -11,7 +11,6 @@
  */
 import {
   type EntityStatus,
-  type DataScopeType,
   type UserStatus,
   type PermissionType,
 } from '@auth-sso/contracts';
@@ -22,13 +21,6 @@ import {
  */
 export function asEntityStatus(v: string): EntityStatus {
   return v as EntityStatus;
-}
-
-/**
- * 运行时校验 + 收窄为 DataScopeType（ALL | DEPT | DEPT_AND_SUB | SELF | CUSTOM）
- */
-export function asDataScopeType(v: string): DataScopeType {
-  return v as DataScopeType;
 }
 
 /**

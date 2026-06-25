@@ -5,7 +5,7 @@
  * 数据范围检查保留在本层（属于鉴权逻辑，非数据获取逻辑）。
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { withPermission, checkDataScope, getDataScopeFilter } from '@/lib/auth';
+import { withPermission, getUserRoleDeptIds } from '@/lib/auth';
 import { COMMON_ERRORS, USER_ERRORS } from '@auth-sso/contracts';
 import { getUser } from '@/app/(dashboard)/users/data';
 
@@ -27,22 +27,18 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     }
 
     // 数据范围检查：管理员必须有权限查看该用户所属部门
-    if (user.deptId) {
-      const hasScope = await checkDataScope(adminUserId, user.deptId);
-      if (!hasScope) {
-        return NextResponse.json(
-          { error: COMMON_ERRORS.FORBIDDEN, message: '无权查看该用户' },
-          { status: 403 },
-        );
-      }
-    } else {
-      const filter = await getDataScopeFilter(adminUserId);
-      if (filter.type !== 'ALL') {
-        return NextResponse.json(
-          { error: COMMON_ERRORS.FORBIDDEN, message: '无权查看无部门用户' },
-          { status: 403 },
-        );
-      }
+    const deptIds = await getUserRoleDeptIds(adminUserId);
+    if (deptIds.length === 0) {
+      return NextResponse.json(
+        { error: COMMON_ERRORS.FORBIDDEN, message: '无权查看该用户' },
+        { status: 403 },
+      );
+    }
+    if (user.deptId && !deptIds.includes(user.deptId)) {
+      return NextResponse.json(
+        { error: COMMON_ERRORS.FORBIDDEN, message: '无权查看该用户' },
+        { status: 403 },
+      );
     }
 
     return NextResponse.json({ data: user });

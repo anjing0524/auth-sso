@@ -28,7 +28,7 @@ export * from './relations';
 // 编译期类型同步守卫 (Domain ↔ Drizzle 不漂移)
 // ============================================
 import type { User } from '@/domain/user/types';
-import type { EntityStatus, DataScopeType, PermissionType } from '@auth-sso/contracts';
+import type { EntityStatus, PermissionType } from '@auth-sso/contracts';
 import type { Department } from '@/domain/department/types';
 import type { Role } from '@/domain/role/types';
 import type { Permission } from '@/domain/permission/types';
@@ -55,8 +55,6 @@ type _DeptStatusInRow = DeptRow['status'] extends EntityStatus ? true : never;
 type _DeptStatusInDomain = EntityStatus extends DeptRow['status'] ? true : never;
 type _RoleStatusInRow = RoleRow['status'] extends EntityStatus ? true : never;
 type _RoleStatusInDomain = EntityStatus extends RoleRow['status'] ? true : never;
-type _RoleScopeInRow = RoleRow['dataScopeType'] extends DataScopeType ? true : never;
-type _RoleScopeInDomain = DataScopeType extends RoleRow['dataScopeType'] ? true : never;
 type _PermStatusInRow = PermRow['status'] extends EntityStatus ? true : never;
 type _PermStatusInDomain = EntityStatus extends PermRow['status'] ? true : never;
 type _PermTypeInRow = PermRow['type'] extends PermissionType ? true : never;

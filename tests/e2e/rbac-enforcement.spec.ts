@@ -14,7 +14,6 @@
  * @req H-ACL-001
  * @req H-ACL-002
  * @req H-ACL-003
- * @req H-ACL-004
  */
 
 import { test, expect } from '@playwright/test';
@@ -111,7 +110,6 @@ test.describe('RBAC Enforcement', () => {
 
     test('受限用户应无法访问无权限的 API 端点', async ({ page }) => {
       // @req H-ACL-002
-      // @req H-ACL-004
       const restrictedEmail = process.env.__TEST_RESTRICTED_EMAIL || RESTRICTED_USER.email;
       const restrictedPassword = process.env.__TEST_RESTRICTED_PASSWORD || RESTRICTED_USER.password;
 
@@ -157,7 +155,6 @@ test.describe('RBAC Enforcement', () => {
   test.describe('Unauthorized Access', () => {
     test('未认证请求应返回 401', async ({ page }) => {
       // @req H-ACL-003
-      // @req H-ACL-004
       await clearAllCookies(page);
 
       const protectedEndpoints = [

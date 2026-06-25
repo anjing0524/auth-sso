@@ -12,7 +12,7 @@
  */
 import postgres from 'postgres';
 import { drizzle } from 'drizzle-orm/postgres-js';
-import { eq } from 'drizzle-orm';
+import { eq, isNull } from 'drizzle-orm';
 import crypto from 'crypto';
 import * as schema from '../src/db/schema';
 import { ALL_PERMISSIONS, PERMISSION_LABELS } from '@auth-sso/contracts';
@@ -129,7 +129,7 @@ async function seedRole(
   code: string,
   name: string,
   description: string,
-  dataScopeType: 'ALL' | 'SELF',
+  deptId: string,
   sort: number,
 ): Promise<string> {
   const existing = await db.select({ id: schema.roles.id })
@@ -147,7 +147,7 @@ async function seedRole(
     name,
     code,
     description,
-    dataScopeType,
+    deptId,
     isSystem: true,
     status: 'ACTIVE',
     sort,
@@ -189,18 +189,42 @@ export async function main() {
 
   // 3. 初始化系统角色
   console.log('\n🛡️  初始化角色...');
+
+  // 查询根部门（顶层节点，parent_id IS NULL）
+  const rootDept = await db.select({ id: schema.departments.id, name: schema.departments.name })
+    .from(schema.departments)
+    .where(eq(schema.departments.parentId, ''))
+    .limit(1);
+
+  // 如果查不到 parent_id='' 的根部门，尝试查询 parent_id IS NULL
+  if (rootDept.length === 0) {
+    const nullParentDept = await db.select({ id: schema.departments.id, name: schema.departments.name })
+      .from(schema.departments)
+      .where(isNull(schema.departments.parentId))
+      .limit(1);
+    if (nullParentDept.length === 0) {
+      console.error('❌ 未找到任何部门。请先运行主 seed 脚本创建部门。');
+      await client.end();
+      return;
+    }
+    rootDept.push(nullParentDept[0]!);
+  }
+
+  const rootDeptId = rootDept[0]!.id;
+  process.stdout.write(`  📍 根部门: ${rootDept[0]!.name} (${rootDeptId})\n`);
+
   const superAdminId = await seedRole(
     'SUPER_ADMIN',
     '超级管理员',
-    '拥有所有权限，不受数据范围限制',
-    'ALL',
+    '拥有所有权限，管理全平台',
+    rootDeptId,
     0,
   );
   const adminId = await seedRole(
     'ADMIN',
     '系统管理员',
-    '拥有所有权限，数据范围为全量',
-    'ALL',
+    '拥有所有权限，管理全平台',
+    rootDeptId,
     1,
   );
 

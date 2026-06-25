@@ -6,6 +6,7 @@
  *
  * @module domain/auth/oauth-client
  */
+import { createHash } from 'crypto';
 import { ENTITY_ACTIVE } from '@auth-sso/contracts';
 import { InvalidClientError, InvalidRedirectUriError } from '@/domain/shared/errors';
 
@@ -23,17 +24,26 @@ export function validateClientActive(
 }
 
 /**
- * 校验 Client Secret（confidential client 必须提供有效的 secret）
- * @param client - 包含 clientSecret 的 Client 对象
- * @param providedSecret - 请求中携带的 client_secret
+ * 校验 Client Secret（v3.2: SHA-256 哈希比较，原文不入库）
+ *
+ * 存储的是 `SHA256(secret)` 摘要，验证时对提供值做相同哈希后比较。
+ *
+ * @param client - 包含 clientSecret（SHA-256 hex）的 Client 对象
+ * @param providedSecret - 请求中携带的 client_secret 原文
  * @throws InvalidClientError 当 secret 缺失或不匹配
  */
 export function validateClientSecret(
   client: { clientSecret: string | null },
   providedSecret?: string,
 ): void {
-  if (client.clientSecret && (!providedSecret || client.clientSecret !== providedSecret)) {
-    throw new InvalidClientError('客户端密钥缺失或不匹配');
+  if (client.clientSecret) {
+    if (!providedSecret) {
+      throw new InvalidClientError('客户端密钥缺失');
+    }
+    const providedHash = createHash('sha256').update(providedSecret).digest('hex');
+    if (client.clientSecret !== providedHash) {
+      throw new InvalidClientError('客户端密钥不匹配');
+    }
   }
 }
 
