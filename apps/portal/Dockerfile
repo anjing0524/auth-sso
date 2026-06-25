@@ -1,8 +1,8 @@
 # Base image
-FROM node:20-alpine AS base
+FROM node:26-alpine AS base
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
-RUN corepack enable
+RUN npm install -g pnpm@10
 
 FROM base AS builder
 WORKDIR /app
@@ -13,6 +13,7 @@ RUN pnpm config set registry https://registry.npmmirror.com
 ARG NEXT_PUBLIC_APP_URL
 ENV NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL
 
+RUN echo "=== DEBUG: check source ===" && grep "redirectUri\|pkce_verifier" apps/portal/src/app/api/auth/callback/route.ts | head -5
 RUN pnpm install --frozen-lockfile
 RUN pnpm --filter @auth-sso/portal build
 
@@ -32,4 +33,4 @@ USER nextjs
 
 EXPOSE 4000
 ENV PORT=4000
-CMD ["node", "apps/portal/server.js"]
+CMD ["node", "--harmony-temporal", "apps/portal/server.js"]

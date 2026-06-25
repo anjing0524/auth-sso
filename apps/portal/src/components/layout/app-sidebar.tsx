@@ -237,14 +237,14 @@ export function AppSidebar({ user, dynamicMenus = [] }: {
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild className="rounded-xl cursor-pointer">
-                  <Link href="/settings" className="flex items-center gap-3 py-3 px-3 hover:bg-slate-50">
+                  <Link href="/profile" className="flex items-center gap-3 py-3 px-3 hover:bg-slate-50">
                     <div className="p-2 bg-slate-100 text-slate-600 rounded-lg"><Settings className="h-4 w-4" /></div>
                     <span className="font-bold text-sm text-slate-700">系统设置</span>
                   </Link>
                 </DropdownMenuItem>
                 <div className="h-px bg-slate-100 dark:bg-slate-800 my-2 mx-2" />
                 <DropdownMenuItem asChild className="rounded-xl cursor-pointer text-destructive focus:bg-destructive/5 focus:text-destructive">
-                  <a href="/api/auth/sign-out?callbackUrl=/login" className="flex items-center gap-3 py-3 px-3">
+                  <a href="/api/auth/logout?callbackUrl=/login" className="flex items-center gap-3 py-3 px-3">
                     <div className="p-2 bg-destructive/10 text-destructive rounded-lg"><LogOut className="h-4 w-4" /></div>
                     <span className="font-black text-sm uppercase tracking-tight">Sign Out</span>
                   </a>

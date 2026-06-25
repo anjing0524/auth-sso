@@ -99,15 +99,15 @@ INSERT INTO permissions (id, code, name, type, icon, visible, parent_id, sort, s
 -- 5.2 菜单页面 (PAGE) — 侧边栏路由项
 INSERT INTO permissions (id, code, name, type, path, icon, visible, parent_id, sort, status, created_at, updated_at) VALUES
   ('8f9e4759-b452-4b33-dff5-37a2c02f2e98',  'menu:dashboard',   '仪表盘',     'PAGE', '/dashboard',          'LayoutDashboard', true, '1a16cdf1-3bcc-b9fa-01fc-262631ff97bb', 0, 'ACTIVE', now(), now()),
-  ('5f18c278-5d3e-6ded-2785-ca26b7637fba',      'menu:users',       '用户管理',   'PAGE', '/admin/users',        'Users',           true, 'cc56e77a-163e-0ce5-305e-2034f46bafda', 0, 'ACTIVE', now(), now()),
-  ('4690621e-3b74-c30d-aedf-48500979d213',      'menu:roles',       '角色管理',   'PAGE', '/admin/roles',        'Shield',          true, 'cc56e77a-163e-0ce5-305e-2034f46bafda', 1, 'ACTIVE', now(), now()),
-  ('48b029fd-549e-0d61-3d74-768b60787735','menu:permissions', '权限管理',   'PAGE', '/admin/permissions',  'KeyRound',        true, 'cc56e77a-163e-0ce5-305e-2034f46bafda', 2, 'ACTIVE', now(), now()),
-  ('5387447a-43dd-1e64-1d99-a3a610b5faa1',      'menu:departments', '部门管理',   'PAGE', '/admin/departments',  'Building2',       true, 'b6972037-7c19-42e0-5d36-a005e8c04a60',      0, 'ACTIVE', now(), now()),
-  ('5cdda215-b766-975d-0883-425890d5a066',    'menu:clients',     '客户端管理', 'PAGE', '/admin/clients',      'AppWindow',       true, 'c5037b10-2173-91d4-1587-c2bbafd47280',   0, 'ACTIVE', now(), now()),
-  ('61475a5e-9140-8367-8e59-ce13be2d93b9',      'menu:audit-logs',  '审计日志',   'PAGE', '/admin/audit',        'FileText',        true, '0aff0ff5-f7f3-4204-1413-e8b04ae10850',    0, 'ACTIVE', now(), now()),
-  ('96874343-c6b4-7f9e-9a02-4cfde85a33fe',  'menu:login-logs',  '登录日志',   'PAGE', '/admin/login-logs',   'LogIn',           true, '0aff0ff5-f7f3-4204-1413-e8b04ae10850',    1, 'ACTIVE', now(), now()),
+  ('5f18c278-5d3e-6ded-2785-ca26b7637fba',      'menu:users',       '用户管理',   'PAGE', '/users',        'Users',           true, 'cc56e77a-163e-0ce5-305e-2034f46bafda', 0, 'ACTIVE', now(), now()),
+  ('4690621e-3b74-c30d-aedf-48500979d213',      'menu:roles',       '角色管理',   'PAGE', '/roles',        'Shield',          true, 'cc56e77a-163e-0ce5-305e-2034f46bafda', 1, 'ACTIVE', now(), now()),
+  ('48b029fd-549e-0d61-3d74-768b60787735','menu:permissions', '权限管理',   'PAGE', '/permissions',  'KeyRound',        true, 'cc56e77a-163e-0ce5-305e-2034f46bafda', 2, 'ACTIVE', now(), now()),
+  ('5387447a-43dd-1e64-1d99-a3a610b5faa1',      'menu:departments', '部门管理',   'PAGE', '/departments',  'Building2',       true, 'b6972037-7c19-42e0-5d36-a005e8c04a60',      0, 'ACTIVE', now(), now()),
+  ('5cdda215-b766-975d-0883-425890d5a066',    'menu:clients',     '客户端管理', 'PAGE', '/clients',      'AppWindow',       true, 'c5037b10-2173-91d4-1587-c2bbafd47280',   0, 'ACTIVE', now(), now()),
+  ('61475a5e-9140-8367-8e59-ce13be2d93b9',      'menu:audit-logs',  '审计日志',   'PAGE', '/audit-logs',        'FileText',        true, '0aff0ff5-f7f3-4204-1413-e8b04ae10850',    0, 'ACTIVE', now(), now()),
+  ('96874343-c6b4-7f9e-9a02-4cfde85a33fe',  'menu:login-logs',  '登录日志',   'PAGE', '/audit-logs',   'LogIn',           false,'0aff0ff5-f7f3-4204-1413-e8b04ae10850',    1, 'ACTIVE', now(), now()),
   -- 隐藏页面（测试 US-MNU-BTN-04）
-  ('fb3481fa-52a6-1953-e3c7-b96b6b888a18',      'menu:email',       '邮件配置',   'PAGE', '/admin/email-config', 'Mail',            false,'7504dfca-a1fc-c324-575c-e4e3808aa533',   0, 'ACTIVE', now(), now());
+  ('fb3481fa-52a6-1953-e3c7-b96b6b888a18',      'menu:email',       '邮件配置',   'PAGE', '/email-config', 'Mail',            false,'7504dfca-a1fc-c324-575c-e4e3808aa533',   0, 'ACTIVE', now(), now());
 
 -- 5.3 API 权限点 — 43 个权限码
 INSERT INTO permissions (id, code, name, type, resource, action, parent_id, sort, status, created_at, updated_at) VALUES
