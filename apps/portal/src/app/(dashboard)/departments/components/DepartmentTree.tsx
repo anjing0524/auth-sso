@@ -24,6 +24,7 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { EmptyState } from '@/components/shared/empty-state';
 import { createDepartmentAction, updateDepartmentAction, deleteDepartmentAction } from '../actions';
 
 interface DeptTreeNode {
@@ -144,7 +145,9 @@ export default function DepartmentTree({ departments }: Props) {
               </div>
             </div>
           ))}
-          {filtered.length === 0 && <div className="text-center py-16 text-muted-foreground text-sm">暂无部门数据</div>}
+          {filtered.length === 0 && (
+            <EmptyState variant="simple" icon={Building2} title="暂无部门" description="创建组织架构以开始管理" action={{ label: '创建根部门', onClick: () => openAdd() }} />
+          )}
         </div>
       </CardContent>
 

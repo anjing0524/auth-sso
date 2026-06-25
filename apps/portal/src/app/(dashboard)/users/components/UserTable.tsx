@@ -33,14 +33,16 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
-import { 
-  DropdownMenu, 
-  DropdownMenuContent, 
-  DropdownMenuItem, 
-  DropdownMenuLabel, 
-  DropdownMenuSeparator, 
-  DropdownMenuTrigger 
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
+import { DataTable } from '@/components/shared/data-table';
+import { EmptyState } from '@/components/shared/empty-state';
 import { toggleUserStatusAction } from '../actions';
 
 /**
@@ -75,6 +77,8 @@ interface UserTableProps {
   users: User[];
   /** 分页信息 */
   pagination: Pagination;
+  /** 筛选栏区域（传入 DataTable cardHeader） */
+  filters?: React.ReactNode;
 }
 
 /**
@@ -82,7 +86,7 @@ interface UserTableProps {
  */
 export function UserTableSkeleton() {
   return (
-    <div className="border border-slate-100 rounded-xl overflow-hidden bg-white">
+    <div className="border border-slate-100 rounded-[1.5rem] overflow-hidden bg-white">
       <Table>
         <TableHeader className="bg-slate-50/30">
           <TableRow className="border-b">
@@ -119,7 +123,7 @@ export function UserTableSkeleton() {
   );
 }
 
-export default function UserTable({ users, pagination }: UserTableProps) {
+export default function UserTable({ users, pagination, filters }: UserTableProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -162,152 +166,145 @@ export default function UserTable({ users, pagination }: UserTableProps) {
     router.push(`${pathname}?${params.toString()}`);
   };
 
-  return (<>
-    <div className="flex flex-col flex-1 overflow-hidden">
-      <div className="flex-1 overflow-auto bg-white border border-slate-100 rounded-xl shadow-sm">
-        <Table>
-          <TableHeader className="bg-slate-50/30 sticky top-0 z-10 backdrop-blur-md">
-            <TableRow className="border-b">
-              <TableHead className="pl-6 w-[300px] text-[10px] font-black uppercase tracking-widest text-slate-400">用户信息</TableHead>
-              <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400">部门</TableHead>
-              <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400">状态</TableHead>
-              <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400">创建时间</TableHead>
-              <TableHead className="text-right pr-6 text-[10px] font-black uppercase tracking-widest text-slate-400">操作</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {optimisticUsers.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={5} className="h-64 text-center">
-                  <div className="flex flex-col items-center justify-center space-y-2 opacity-40">
-                    <div className="h-12 w-12 rounded-full bg-slate-100 flex items-center justify-center text-slate-400">
-                      <UserPlus className="h-6 w-6" />
-                    </div>
-                    <p className="text-sm font-bold text-slate-500 italic">未找到匹配的用户</p>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ) : (
-              optimisticUsers.map((user) => (
-                <TableRow key={user.id} className="group hover:bg-slate-50/50 transition-colors border-b last:border-none">
-                  <TableCell className="pl-6 py-4">
-                    <div className="flex items-center gap-3">
-                      <Avatar className="h-10 w-10 ring-2 ring-background transition-transform duration-300 group-hover:scale-110 shadow-sm">
-                        <AvatarImage src={user.avatarUrl || ''} />
-                        <AvatarFallback className="bg-primary/5 text-primary text-[10px] font-black uppercase">
-                          {user.name.substring(0, 2)}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="flex flex-col">
-                        <span className="font-bold text-sm leading-tight text-slate-800">{user.name}</span>
-                        <span className="text-[10px] text-muted-foreground font-bold tracking-tight">
-                          {user.username} • {user.email}
-                        </span>
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-1.5 text-xs font-bold text-slate-600">
-                      <Building className="h-3.5 w-3.5 text-slate-300" />
-                      {user.deptName || <span className="text-muted-foreground italic text-[10px] font-medium">未分配</span>}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge 
-                      variant={user.status === 'ACTIVE' ? 'default' : user.status === 'LOCKED' ? 'destructive' : 'secondary'}
-                      className={`px-2 py-0 h-5 text-[10px] font-black rounded-md ${user.status === 'ACTIVE' ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border-none' : ''}`}
-                    >
-                      {user.status === 'ACTIVE' ? '正常' : user.status === 'LOCKED' ? '已锁定' : '已禁用'}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-[10px] text-muted-foreground font-mono font-black">
-                    {new Date(user.createdAt).toLocaleDateString()}
-                  </TableCell>
-                  <TableCell className="text-right pr-6">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl hover:bg-slate-100 transition-colors">
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-48 rounded-2xl p-1 shadow-2xl ring-1 ring-black/5 border-none">
-                        <DropdownMenuLabel className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-3 py-2">用户控制</DropdownMenuLabel>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem asChild className="cursor-pointer rounded-xl mb-1 focus:bg-slate-50">
-                          <Link href={`/users/${user.id}`}>
-                            <Edit className="mr-2 h-4 w-4 opacity-50" /> 详情/编辑
-                          </Link>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          className="cursor-pointer rounded-xl mb-1 focus:bg-slate-50"
-                          onClick={() => { setSelectedUser(user); setRoleDialogOpen(true); }}
-                        >
-                          <Shield className="mr-2 h-4 w-4 opacity-50" /> 分配角色
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem 
-                          className={`cursor-pointer rounded-xl ${user.status === 'ACTIVE' ? 'text-rose-500 hover:bg-rose-50' : 'text-emerald-500 hover:bg-emerald-50'}`}
-                          onClick={() => handleToggleStatus(user)}
-                        >
-                          {user.status === 'ACTIVE' ? (
-                            <><UserMinus className="mr-2 h-4 w-4" /> 禁用账号</>
-                          ) : (
-                            <><UserCheck className="mr-2 h-4 w-4" /> 恢复账号</>
-                          )}
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </div>
+  const columns = [
+    { key: 'user', header: '用户信息', className: 'pl-6 w-[300px]' },
+    { key: 'dept', header: '部门' },
+    { key: 'status', header: '状态' },
+    { key: 'createdAt', header: '创建时间' },
+    { key: 'actions', header: '操作', className: 'text-right pr-6' },
+  ];
 
-      {/* 统一分页器 UI */}
-      <div className="flex items-center justify-between px-6 py-4 bg-slate-50/50 border-t mt-4 rounded-b-[1.5rem]">
-        <p className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">
-          TOTAL RECORDS: <span className="text-slate-900">{pagination.total}</span>
-        </p>
-        <div className="flex gap-1.5">
-          <Button 
-            variant="outline" 
-            size="icon" 
-            className="h-8 w-8 rounded-xl shadow-sm hover:bg-white bg-white border-slate-200" 
-            disabled={pagination.page === 1}
-            onClick={() => handlePageChange(pagination.page - 1)}
-          >
-            <ChevronRight className="h-3.5 w-3.5 rotate-180" />
-          </Button>
-          <div className="flex items-center justify-center text-[10px] font-black px-4 bg-white border border-slate-200 rounded-xl shadow-sm min-w-[60px]">
-            {pagination.page} / {pagination.totalPages || 1}
+  const renderRow = (user: User) => (
+    <TableRow key={user.id} className="group hover:bg-slate-50/50 transition-colors border-b last:border-none">
+      <TableCell className="pl-6 py-4">
+        <div className="flex items-center gap-3">
+          <Avatar className="h-10 w-10 ring-2 ring-background transition-transform duration-300 group-hover:scale-110 shadow-sm">
+            <AvatarImage src={user.avatarUrl || ''} />
+            <AvatarFallback className="bg-primary/5 text-primary text-[10px] font-black uppercase">
+              {user.name.substring(0, 2)}
+            </AvatarFallback>
+          </Avatar>
+          <div className="flex flex-col">
+            <span className="font-bold text-sm leading-tight text-slate-800">{user.name}</span>
+            <span className="text-[10px] text-muted-foreground font-bold tracking-tight">
+              {user.username} • {user.email}
+            </span>
           </div>
-          <Button 
-            variant="outline" 
-            size="icon" 
-            className="h-8 w-8 rounded-xl shadow-sm hover:bg-white bg-white border-slate-200"
-            disabled={pagination.page >= pagination.totalPages}
-            onClick={() => handlePageChange(pagination.page + 1)}
-          >
-            <ChevronRight className="h-3.5 w-3.5" />
-          </Button>
         </div>
+      </TableCell>
+      <TableCell>
+        <div className="flex items-center gap-1.5 text-xs font-bold text-slate-600">
+          <Building className="h-3.5 w-3.5 text-slate-300" />
+          {user.deptName || <span className="text-muted-foreground italic text-[10px] font-medium">未分配</span>}
+        </div>
+      </TableCell>
+      <TableCell>
+        <Badge
+          variant={user.status === 'ACTIVE' ? 'default' : user.status === 'LOCKED' ? 'destructive' : 'secondary'}
+          className={`px-2 py-0 h-5 text-[10px] font-black rounded-md ${user.status === 'ACTIVE' ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border-none' : ''}`}
+        >
+          {user.status === 'ACTIVE' ? '正常' : user.status === 'LOCKED' ? '已锁定' : '已禁用'}
+        </Badge>
+      </TableCell>
+      <TableCell className="text-[10px] text-muted-foreground font-mono font-black">
+        {new Date(user.createdAt).toLocaleDateString()}
+      </TableCell>
+      <TableCell className="text-right pr-6">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl hover:bg-slate-100 transition-colors">
+              <MoreHorizontal className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-48 rounded-2xl p-1 shadow-2xl ring-1 ring-black/5 border-none">
+            <DropdownMenuLabel className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-3 py-2">用户控制</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem asChild className="cursor-pointer rounded-xl mb-1 focus:bg-slate-50">
+              <Link href={`/users/${user.id}`}>
+                <Edit className="mr-2 h-4 w-4 opacity-50" /> 详情/编辑
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              className="cursor-pointer rounded-xl mb-1 focus:bg-slate-50"
+              onClick={() => { setSelectedUser(user); setRoleDialogOpen(true); }}
+            >
+              <Shield className="mr-2 h-4 w-4 opacity-50" /> 分配角色
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              className={`cursor-pointer rounded-xl ${user.status === 'ACTIVE' ? 'text-rose-500 hover:bg-rose-50' : 'text-emerald-500 hover:bg-emerald-50'}`}
+              onClick={() => handleToggleStatus(user)}
+            >
+              {user.status === 'ACTIVE' ? (
+                <><UserMinus className="mr-2 h-4 w-4" /> 禁用账号</>
+              ) : (
+                <><UserCheck className="mr-2 h-4 w-4" /> 恢复账号</>
+              )}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </TableCell>
+    </TableRow>
+  );
+
+  return (<>
+    <DataTable
+      columns={columns}
+      data={optimisticUsers}
+      emptyState={
+        <EmptyState
+          variant="simple"
+          icon={UserPlus}
+          title="暂无用户"
+          description="系统中还没有用户账号"
+        />
+      }
+      renderRow={renderRow}
+      cardHeader={filters}
+    />
+
+    {/* 统一分页器 UI */}
+    <div className="flex items-center justify-between px-6 py-4 bg-slate-50/50 border-t mt-4 rounded-b-[1.5rem]">
+      <p className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">
+        TOTAL RECORDS: <span className="text-slate-900">{pagination.total}</span>
+      </p>
+      <div className="flex gap-1.5">
+        <Button
+          variant="outline"
+          size="icon"
+          className="h-8 w-8 rounded-xl shadow-sm hover:bg-white bg-white border-slate-200"
+          disabled={pagination.page === 1}
+          onClick={() => handlePageChange(pagination.page - 1)}
+        >
+          <ChevronRight className="h-3.5 w-3.5 rotate-180" />
+        </Button>
+        <div className="flex items-center justify-center text-[10px] font-black px-4 bg-white border border-slate-200 rounded-xl shadow-sm min-w-[60px]">
+          {pagination.page} / {pagination.totalPages || 1}
+        </div>
+        <Button
+          variant="outline"
+          size="icon"
+          className="h-8 w-8 rounded-xl shadow-sm hover:bg-white bg-white border-slate-200"
+          disabled={pagination.page >= pagination.totalPages}
+          onClick={() => handlePageChange(pagination.page + 1)}
+        >
+          <ChevronRight className="h-3.5 w-3.5" />
+        </Button>
       </div>
     </div>
 
-      {/* 角色分配对话框 */}
-      {selectedUser && (
-        <AssignRoleDialog
-          open={roleDialogOpen}
-          onOpenChange={(open) => { setRoleDialogOpen(open); if (!open) setSelectedUser(null); }}
-          user={{
-            id: selectedUser.id,
-            name: selectedUser.name,
-            deptId: selectedUser.deptId,
-            deptName: selectedUser.deptName,
-          }}
-        />
-      )}
-    </>);
+    {/* 角色分配对话框 */}
+    {selectedUser && (
+      <AssignRoleDialog
+        open={roleDialogOpen}
+        onOpenChange={(open) => { setRoleDialogOpen(open); if (!open) setSelectedUser(null); }}
+        user={{
+          id: selectedUser.id,
+          name: selectedUser.name,
+          deptId: selectedUser.deptId,
+          deptName: selectedUser.deptName,
+        }}
+      />
+    )}
+  </>);
 }

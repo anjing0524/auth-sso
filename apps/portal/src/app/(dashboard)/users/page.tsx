@@ -3,11 +3,10 @@
  *
  * 鉴权由 layout.tsx 统一处理，本组件零鉴权样板，专注数据获取与渲染。
  */
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { resolveIdentity } from '@/lib/auth';
 import { getUsers, getDepartments } from './data';
 import UserFilters from './components/UserFilters';
-import CreateUserDialog from './components/CreateUserDialog';
+import CreateUserDrawer from './components/CreateUserDrawer';
 import UserTable from './components/UserTable';
 
 interface PageProps {
@@ -46,17 +45,14 @@ export default async function UsersPage({ searchParams }: PageProps) {
             查看和管理系统内的所有用户账户及权限。
           </p>
         </div>
-        <CreateUserDialog departments={departments} />
+        <CreateUserDrawer departments={departments} />
       </div>
 
-      <Card className="flex-1 border-none shadow-sm ring-1 ring-border/50 overflow-hidden rounded-xl flex flex-col bg-white">
-        <CardHeader className="bg-slate-50/50 dark:bg-slate-900/50 py-4 px-6 border-b">
-          <UserFilters key={keyword} initialKeyword={keyword} initialStatus={status} />
-        </CardHeader>
-        <CardContent className="p-0 flex-1 overflow-auto flex flex-col">
-          <UserTable users={users} pagination={pagination} />
-        </CardContent>
-      </Card>
+      <UserTable
+        users={users}
+        pagination={pagination}
+        filters={<UserFilters key={keyword} initialKeyword={keyword} initialStatus={status} />}
+      />
     </div>
   );
 }
