@@ -23,6 +23,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { toast } from 'sonner';
 import { deleteClientAction } from '../actions';
 
 interface ClientRow {
@@ -71,7 +72,12 @@ export default function ClientsTable({ clients, initialKeyword }: Props) {
 
   const handleDelete = async (clientId: string) => {
     if (!confirm('确认注销该应用？此操作不可撤销。')) return;
-    await deleteClientAction(clientId);
+    const res = await deleteClientAction(clientId);
+    if (res?.success) {
+      toast.success(res.message || '应用已注销');
+    } else {
+      toast.error(res?.message || '注销应用失败');
+    }
     router.refresh();
   };
 

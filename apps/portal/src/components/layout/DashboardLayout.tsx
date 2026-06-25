@@ -19,6 +19,8 @@ import {
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb';
 import { usePathname } from 'next/navigation';
+import { Keyboard } from 'lucide-react';
+import { CommandPalette } from '@/components/shared/command-palette';
 
 /** 侧边栏菜单项 */
 export interface SidebarMenuItem {
@@ -72,6 +74,7 @@ export default function DashboardLayout({
   return (
     <SidebarProvider defaultOpen={true}>
       <AppSidebar user={user} dynamicMenus={menus} />
+      <CommandPalette menus={menus} />
       <SidebarInset>
         <header className="flex h-16 shrink-0 items-center gap-2 border-b bg-background px-6 sticky top-0 z-10">
           <SidebarTrigger className="-ml-1" />
@@ -94,6 +97,11 @@ export default function DashboardLayout({
               ))}
             </BreadcrumbList>
           </Breadcrumb>
+          <div className="ml-auto flex items-center gap-2">
+            <kbd className="hidden md:inline-flex h-6 select-none items-center gap-1 rounded border bg-muted px-1.5 text-[10px] font-medium text-muted-foreground">
+              <Keyboard className="h-3 w-3" />K
+            </kbd>
+          </div>
         </header>
         <main className="flex-1 overflow-auto bg-slate-50/50 dark:bg-transparent p-4 lg:p-6">
           <div className="space-y-6 animate-in fade-in duration-500">
