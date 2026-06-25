@@ -80,7 +80,7 @@ export async function POST() {
   return response;
 }
 
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   const cookieStore = await cookies();
   await performRevocation(cookieStore);
 
