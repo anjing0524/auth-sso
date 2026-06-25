@@ -61,7 +61,7 @@ export default function ProfileClient({
   return (
     <div className="max-w-6xl mx-auto space-y-10 pb-16 animate-in fade-in duration-700">
       {/* 1. 顶部身份横幅 */}
-      <div className="group relative overflow-hidden rounded-[2.5rem] bg-white dark:bg-slate-900 border border-border/50 shadow-2xl shadow-slate-200/40 p-8 lg:p-12 transition-all hover:shadow-primary/5">
+      <div className="group relative overflow-hidden rounded-3xl bg-white dark:bg-slate-900 border border-border/50 shadow-2xl shadow-slate-200/40 p-8 lg:p-12 transition-all hover:shadow-primary/5">
         <div className="absolute top-0 right-0 p-8">
           <Button variant="ghost" size="icon" className="rounded-full hover:bg-primary/10 hover:text-primary transition-colors">
             <ArrowUpRight className="h-5 w-5" />
@@ -102,7 +102,7 @@ export default function ProfileClient({
       <div className="grid gap-10 lg:grid-cols-3">
         {/* 2. 左侧：核心凭证卡片 */}
         <div className="lg:col-span-1 space-y-8">
-          <Card className="rounded-[2rem] border-none shadow-sm ring-1 ring-border/50 overflow-hidden bg-slate-50/50">
+          <Card className="rounded-2xl border-none shadow-sm ring-1 ring-border/50 overflow-hidden bg-slate-50/50">
             <CardHeader className="bg-white/50 border-b py-6 px-8">
               <CardTitle className="text-sm font-black uppercase tracking-[0.2em] text-slate-400 flex items-center gap-2">
                 <Fingerprint className="h-4 w-4 text-primary" />
@@ -137,7 +137,7 @@ export default function ProfileClient({
             </CardContent>
           </Card>
 
-          <Card className="rounded-[2rem] border-none shadow-sm ring-1 ring-border/50 overflow-hidden bg-gradient-to-br from-slate-900 to-slate-950 text-white">
+          <Card className="rounded-2xl border-none shadow-sm ring-1 ring-border/50 overflow-hidden bg-gradient-to-br from-slate-900 to-slate-950 text-white">
             <CardHeader className="pb-2">
               <CardTitle className="text-xs font-bold uppercase tracking-widest text-slate-400">Security Summary</CardTitle>
             </CardHeader>
@@ -160,13 +160,13 @@ export default function ProfileClient({
         {/* 3. 右侧：权限矩阵与活动 */}
         <div className="lg:col-span-2">
           <Tabs defaultValue="permissions" className="w-full">
-            <TabsList className="bg-slate-100/50 dark:bg-slate-900/50 p-1.5 rounded-[1.5rem] h-14 w-full grid grid-cols-2 border border-border/40 backdrop-blur-md">
+            <TabsList className="bg-slate-100/50 dark:bg-slate-900/50 p-1.5 rounded-xl h-14 w-full grid grid-cols-2 border border-border/40 backdrop-blur-md">
               <TabsTrigger value="permissions" className="rounded-2xl font-black text-xs uppercase tracking-widest data-[state=active]:bg-white data-[state=active]:shadow-lg data-[state=active]:text-primary transition-all">Permission Matrix</TabsTrigger>
               <TabsTrigger value="security" className="rounded-2xl font-black text-xs uppercase tracking-widest data-[state=active]:bg-white data-[state=active]:shadow-lg data-[state=active]:text-primary transition-all">Session History</TabsTrigger>
             </TabsList>
 
             <TabsContent value="permissions" className="pt-6 animate-in slide-in-from-bottom-4 duration-500">
-              <Card className="rounded-[2rem] border-none shadow-sm ring-1 ring-border/50 overflow-hidden">
+              <Card className="rounded-2xl border-none shadow-sm ring-1 ring-border/50 overflow-hidden">
                 <CardHeader className="px-8 pt-8">
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-2xl font-black tracking-tight flex items-center gap-3">
@@ -180,7 +180,7 @@ export default function ProfileClient({
                 <CardContent className="p-8">
                   <div className="grid gap-3 sm:grid-cols-2">
                     {permissions.map((perm: string) => (
-                      <div key={perm} className="flex items-center justify-between p-4 rounded-[1.25rem] border bg-slate-50/30 hover:border-primary/30 hover:bg-white hover:shadow-xl hover:shadow-primary/5 transition-all duration-300 group">
+                      <div key={perm} className="flex items-center justify-between p-4 rounded-xl border bg-slate-50/30 hover:border-primary/30 hover:bg-white hover:shadow-xl hover:shadow-primary/5 transition-all duration-300 group">
                         <div className="flex items-center gap-3">
                           <div className="h-1.5 w-1.5 rounded-full bg-primary/40 group-hover:bg-primary group-hover:scale-150 transition-all" />
                           <code className="text-xs font-mono font-bold text-slate-600 group-hover:text-primary transition-colors">{perm}</code>
@@ -194,7 +194,7 @@ export default function ProfileClient({
             </TabsContent>
 
             <TabsContent value="security" className="pt-6 animate-in slide-in-from-bottom-4 duration-500">
-              <Card className="rounded-[2rem] border-none shadow-sm ring-1 ring-border/50 overflow-hidden">
+              <Card className="rounded-2xl border-none shadow-sm ring-1 ring-border/50 overflow-hidden">
                 <CardHeader className="px-8 pt-8">
                   <CardTitle className="text-2xl font-black tracking-tight flex items-center gap-3">
                     <Clock className="h-6 w-6 text-orange-500" />
@@ -202,7 +202,7 @@ export default function ProfileClient({
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-8 space-y-6">
-                  <div className="p-10 text-center border-2 border-dashed border-slate-100 rounded-[2rem]">
+                  <div className="p-10 text-center border-2 border-dashed border-slate-100 rounded-2xl">
                     <Lock className="h-12 w-12 text-slate-200 mx-auto mb-4" />
                     <p className="text-sm font-bold text-slate-400">Device Identity Verification Active</p>
                     <p className="text-[10px] text-slate-300 mt-1 uppercase tracking-widest">Global SSO Node</p>

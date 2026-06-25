@@ -25,8 +25,10 @@ export interface DataTableProps<T> {
   loading?: boolean;
   /** 骨架屏行数 */
   skeletonRows?: number;
-  /** 空状态文本 */
+  /** 空状态文本（emptyState 未传入时的 fallback） */
   emptyText?: string;
+  /** 空状态组件（优先级高于 emptyText） */
+  emptyState?: React.ReactNode;
   /** 渲染单行 */
   renderRow: (item: T) => React.ReactNode;
   /** Card header（搜索栏、统计等），可选 */
@@ -39,11 +41,12 @@ export function DataTable<T>({
   loading = false,
   skeletonRows = 3,
   emptyText = '暂无数据',
+  emptyState,
   renderRow,
   cardHeader,
 }: DataTableProps<T>) {
   return (
-    <Card className="border-none shadow-sm ring-1 ring-border/50 overflow-hidden rounded-[1.5rem]">
+    <Card className="border-none shadow-sm ring-1 ring-border/50 overflow-hidden rounded-xl">
       {cardHeader}
       <CardContent className="p-0">
         <Table>
@@ -68,14 +71,22 @@ export function DataTable<T>({
                 </TableRow>
               ))
             ) : data.length === 0 ? (
-              <TableRow>
-                <TableCell
-                  colSpan={columns.length}
-                  className="h-64 text-center text-muted-foreground"
-                >
-                  {emptyText}
-                </TableCell>
-              </TableRow>
+              emptyState ? (
+                <TableRow>
+                  <TableCell colSpan={columns.length} className="p-0">
+                    {emptyState}
+                  </TableCell>
+                </TableRow>
+              ) : (
+                <TableRow>
+                  <TableCell
+                    colSpan={columns.length}
+                    className="h-64 text-center text-muted-foreground"
+                  >
+                    {emptyText}
+                  </TableCell>
+                </TableRow>
+              )
             ) : (
               data.map((item) => renderRow(item))
             )}

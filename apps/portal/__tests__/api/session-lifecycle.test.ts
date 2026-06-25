@@ -148,7 +148,7 @@ describe('JWT Cookie Session Lifecycle', () => {
         maxAge: 3600,
       }));
       expect(setSpy).toHaveBeenCalledWith(COOKIE_NAMES.REFRESH, 'refresh-token', expect.objectContaining({
-        path: '/api/auth/refresh',
+        path: '/',
         httpOnly: true,
         maxAge: 604800,
       }));

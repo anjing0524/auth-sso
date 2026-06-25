@@ -11,15 +11,6 @@ const PUBLIC_PATHS = [
 ];
 
 /**
- * 公开 API 端点（不需要认证）
- */
-const PUBLIC_API_PATHS = [
-  '/api/auth/login',
-  '/api/auth/jwks',
-  '/api/auth/oauth2',
-];
-
-/**
  * 静态资源和 Next.js 内部路径前缀（直接放行）
  */
 const SKIP_PREFIXES = [
@@ -33,10 +24,6 @@ function isPublicPath(pathname: string): boolean {
   return PUBLIC_PATHS.some((prefix) => pathname.startsWith(prefix));
 }
 
-function isPublicApi(pathname: string): boolean {
-  return PUBLIC_API_PATHS.some((prefix) => pathname.startsWith(prefix));
-}
-
 function isSkipPath(pathname: string): boolean {
   if (pathname === '/') return true;
   return SKIP_PREFIXES.some((prefix) => pathname.startsWith(prefix));
@@ -48,8 +35,9 @@ function isSkipPath(pathname: string): boolean {
  * 只检查 portal_jwt_token Cookie 是否存在。
  * 不验证 JWT 有效性——有效性由 API 层的 resolveIdentity() 处理。
  *
- * 注意：Access Token 的静默续签由 Gateway（Rust/Pingora）统一完成，
- * 覆盖 Portal 与所有第三方子应用，不在本层处理。
+ * 注意：
+ * - Access Token 的静默续签由 Gateway（Rust/Pingora）统一完成，覆盖 Portal 与所有第三方子应用
+ * - 速率限制由 Gateway 层统一处理，Portal 中间件不做限流
  */
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -59,12 +47,7 @@ export function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // 公开 API 放行（自身有鉴权逻辑）
-  if (pathname.startsWith('/api/') && isPublicApi(pathname)) {
-    return NextResponse.next();
-  }
-
-  // 管理 API 放行——由 API 层自行鉴权
+  // API 路由放行——由 API 层自行鉴权
   if (pathname.startsWith('/api/')) {
     return NextResponse.next();
   }

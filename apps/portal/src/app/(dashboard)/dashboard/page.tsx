@@ -33,6 +33,7 @@ import {
   TableRow
 } from '@/components/ui/table';
 
+import { EmptyState } from '@/components/shared/empty-state';
 import { getDashboardStats, getRecentAuditLogs } from './data';
 import { resolveIdentity } from '@/lib/auth/verify-jwt';
 
@@ -46,6 +47,26 @@ export default async function DashboardPage() {
     getDashboardStats(deptIds),
     getRecentAuditLogs(),
   ]);
+
+  // 初次使用引导：用户数为 0 时展示 onboarding 空状态
+  if (stats.users === 0) {
+    return (
+      <div className="flex-1 flex items-center justify-center p-8">
+        <EmptyState
+          variant="onboarding"
+          icon={ShieldCheck}
+          title="欢迎使用 Auth-SSO"
+          description="完成以下步骤以开始管理您的身份平台"
+          steps={[
+            { label: '创建组织架构', href: '/departments' },
+            { label: '创建用户账号', href: '/users' },
+            { label: '配置角色权限', href: '/roles' },
+            { label: '注册 OAuth 应用', href: '/clients' },
+          ]}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="flex-1 space-y-6 p-1 pt-2">
@@ -66,7 +87,7 @@ export default async function DashboardPage() {
 
       {/* 2. Key Metrics - Shadcn Block-01 Grid */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card className="rounded-[1.25rem] border-none shadow-sm ring-1 ring-border/50 hover:bg-[#E6F0FF] transition-all duration-200 ease-out">
+        <Card className="rounded-xl border-none shadow-sm ring-1 ring-border/50 hover:bg-[#E6F0FF] transition-all duration-200 ease-out">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground">用户总数</CardTitle>
             <Users className="h-4 w-4 text-primary opacity-70" />
@@ -76,7 +97,7 @@ export default async function DashboardPage() {
             <p className="text-[10px] text-muted-foreground font-medium mt-1">活跃用户</p>
           </CardContent>
         </Card>
-        <Card className="rounded-[1.25rem] border-none shadow-sm ring-1 ring-border/50 hover:bg-[#E6F0FF] transition-all duration-200 ease-out">
+        <Card className="rounded-xl border-none shadow-sm ring-1 ring-border/50 hover:bg-[#E6F0FF] transition-all duration-200 ease-out">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground">活跃角色</CardTitle>
             <ShieldCheck className="h-4 w-4 text-purple-500 opacity-70" />
@@ -86,7 +107,7 @@ export default async function DashboardPage() {
             <p className="text-[10px] text-muted-foreground font-medium mt-1">已配置角色</p>
           </CardContent>
         </Card>
-        <Card className="rounded-[1.25rem] border-none shadow-sm ring-1 ring-border/50 hover:bg-[#E6F0FF] transition-all duration-200 ease-out">
+        <Card className="rounded-xl border-none shadow-sm ring-1 ring-border/50 hover:bg-[#E6F0FF] transition-all duration-200 ease-out">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground">受控应用</CardTitle>
             <AppWindow className="h-4 w-4 text-blue-500 opacity-70" />
@@ -96,7 +117,7 @@ export default async function DashboardPage() {
             <p className="text-[10px] text-muted-foreground font-medium mt-1">已注册应用</p>
           </CardContent>
         </Card>
-        <Card className="rounded-[1.25rem] border-none shadow-sm ring-1 ring-border/50 hover:bg-[#E6F0FF] transition-all duration-200 ease-out">
+        <Card className="rounded-xl border-none shadow-sm ring-1 ring-border/50 hover:bg-[#E6F0FF] transition-all duration-200 ease-out">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground">认证状态</CardTitle>
             <Activity className="h-4 w-4 text-green-500" />
@@ -114,7 +135,7 @@ export default async function DashboardPage() {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
         
         {/* Left: Main Activity Table */}
-        <Card className="lg:col-span-4 rounded-[2rem] border-none shadow-sm ring-1 ring-border/50 overflow-hidden flex flex-col">
+        <Card className="lg:col-span-4 rounded-2xl border-none shadow-sm ring-1 ring-border/50 overflow-hidden flex flex-col">
           <CardHeader className="flex flex-row items-center px-8 py-6">
             <div className="grid gap-1">
               <CardTitle className="text-xl font-bold flex items-center gap-2">
@@ -180,7 +201,7 @@ export default async function DashboardPage() {
 
         {/* Right: Quick Actions & Status */}
         <div className="lg:col-span-3 space-y-4">
-           <Card className="rounded-[2rem] border-none shadow-sm ring-1 ring-border/50 p-2 overflow-hidden bg-slate-50/30">
+           <Card className="rounded-2xl border-none shadow-sm ring-1 ring-border/50 p-2 overflow-hidden bg-slate-50/30">
               <CardHeader className="pb-4">
                  <CardTitle className="text-sm font-bold uppercase tracking-wider text-muted-foreground">快捷功能直达</CardTitle>
               </CardHeader>
@@ -206,7 +227,7 @@ export default async function DashboardPage() {
               </CardContent>
            </Card>
 
-           <Card className="rounded-[2rem] border-none bg-primary shadow-2xl shadow-primary/20 text-primary-foreground p-6 overflow-hidden relative group">
+           <Card className="rounded-2xl border-none bg-primary shadow-2xl shadow-primary/20 text-primary-foreground p-6 overflow-hidden relative group">
               <div className="relative z-10 space-y-4">
                  <div className="h-10 w-10 bg-white/20 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
                     <ShieldCheck className="h-6 w-6" />
@@ -219,8 +240,6 @@ export default async function DashboardPage() {
                     <Link href="/departments">进入架构管理</Link>
                  </Button>
               </div>
-              {/* Decorative Circle */}
-              <div className="absolute -right-8 -bottom-8 h-32 w-32 bg-white/10 rounded-full blur-2xl" />
            </Card>
         </div>
       </div>

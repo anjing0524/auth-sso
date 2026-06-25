@@ -1,12 +1,11 @@
 'use client';
 
 /**
- * Dashboard 路由组错误边界 (Error Boundary)
+ * 审计日志页错误边界 (Error Boundary)
  *
- * 捕获 Server Component / data.ts 中抛出的未处理异常，
- * 替换默认的 Next.js 错误覆盖层（开发环境黄屏 / 生产环境白屏）。
+ * 捕获审计日志数据获取过程中的未处理异常。
  *
- * @module app/(dashboard)/error
+ * @module app/(dashboard)/audit-logs/error
  */
 import { useEffect } from 'react';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
@@ -18,9 +17,9 @@ interface ErrorProps {
   reset: () => void;
 }
 
-export default function DashboardError({ error, reset }: ErrorProps) {
+export default function AuditLogsError({ error, reset }: ErrorProps) {
   useEffect(() => {
-    console.error('[Dashboard Error Boundary]', error);
+    console.error('[AuditLogs Error Boundary]', error);
   }, [error]);
 
   return (
@@ -30,11 +29,11 @@ export default function DashboardError({ error, reset }: ErrorProps) {
           <div className="mx-auto p-3 bg-amber-50 rounded-2xl w-fit mb-4">
             <AlertTriangle className="h-8 w-8 text-amber-500" />
           </div>
-          <CardTitle className="text-xl font-black">页面加载出错</CardTitle>
+          <CardTitle className="text-xl font-black">审计日志加载失败</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4 pb-8">
           <p className="text-sm text-muted-foreground">
-            服务器在处理请求时遇到了问题，请稍后重试。
+            获取审计日志时遇到问题，请稍后重试。
           </p>
           {error.digest && (
             <code className="text-[10px] font-mono bg-slate-100 px-2 py-1 rounded text-slate-500">

@@ -2,7 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
-## [1.1.0.1] - 2026-06-24
+## [1.1.1.0] - 2026-06-25
+
+### Added
+- **EmptyState 组件**：统一的空状态展示（simple + onboarding 双变体），集成到 DataTable，替代各页面内联纯文字空状态
+- **Command Palette (Cmd+K)**：全局命令面板，200ms debounce 防双击闪烁，搜索菜单项并快速跳转
+- **审计日志页错误/加载边界**：error.tsx + loading.tsx，首次使用引导 Checklist（Dashboard users=0 时显示）
+- **Playwright 视觉回归测试**：登录页、Dashboard、用户列表、审计日志的快照比对
+
+### Changed
+- **CSS 颜色体系统一为 oklch**：删除 hex `--color-*` 变量层，全部颜色值转为 oklch，保留 var() 间接引用确保暗黑模式正常，shadcn `--primary` 前景色语义不变
+- **登录页品牌渐变背景**：bg-slate-50 → `bg-gradient-to-br from-[var(--color-gradient-start)] to-[var(--color-gradient-end)]`，对齐 DESIGN.md
+- **DataTable 迁移**：激活死代码共享组件，4 个表格式列表页（角色/权限/用户/应用）统一使用 DataTable
+- **审计日志页全面重建**：原生 HTML table → shadcn Table + 设计 Token + 暗黑模式（EVENT_TYPE_COLORS 徽章）
+- **全站圆角收敛**：rounded-[1.25rem/1.5rem/2rem] 等任意值 → 规范值 6/8/12/16px（~25 文件）
+- **页面标题统一**：所有 CRUD 页标题使用图标 + 粗体 + 副标题格式
+- **CreateUserDrawer → CreateUserDialog**：操作入口统一为 Dialog（简单表单），废弃 Sheet
+
+### Removed
+- Dashboard 装饰性模糊圆形 blob
+- 侧边栏无用搜索框（Cmd+K 为唯一搜索入口）
+
+### Fixed
+- **ClientsTable toast 反馈补全**：删除操作后显示 sonner toast 通知
+- **UserTable 圆角收敛**：残留的 rounded-[1.5rem] → rounded-xl
 
 ### Changed
 - **文档体系重构**：`docs/spec/` 重组为 7 份产品交付文档（PRD / 架构设计 / 架构约束 / API 设计 / 数据库设计 / 需求矩阵 / 用户故事）

@@ -5,33 +5,33 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  /* 基础颜色 - 基于 DESIGN.md v2.0 */
-  --color-primary: #0066FF;
-  --color-primary-hover: #0052CC;
-  --color-primary-subtle: #E6F0FF;
+  /* 基础颜色 - 基于 DESIGN.md v2.0（hex 值已转为 oklch） */
+  --color-primary: oklch(0.52 0.23 257);
+  --color-primary-hover: oklch(0.43 0.21 257);
+  --color-primary-subtle: oklch(0.95 0.03 250);
 
   /* 背景 */
-  --color-background: #FAFBFC;
-  --color-surface: #FFFFFF;
-  --color-surface-elevated: #FFFFFF;
+  --color-background: oklch(0.99 0.001 253);
+  --color-surface: oklch(1 0 0);
+  --color-surface-elevated: oklch(1 0 0);
 
   /* 文字 */
-  --color-text-primary: #0F172A;
-  --color-text-secondary: #475569;
-  --color-text-muted: #94A3B8;
+  --color-text-primary: oklch(0.18 0.02 260);
+  --color-text-secondary: oklch(0.42 0.03 260);
+  --color-text-muted: oklch(0.68 0.03 250);
 
   /* 边框 */
-  --color-border: #E2E8F0;
+  --color-border: oklch(0.93 0.01 260);
 
   /* 语义 */
-  --color-success: #10B981;
-  --color-warning: #F59E0B;
-  --color-error: #EF4444;
-  --color-info: #3B82F6;
+  --color-success: oklch(0.67 0.17 165);
+  --color-warning: oklch(0.72 0.17 80);
+  --color-error: oklch(0.59 0.22 28);
+  --color-info: oklch(0.55 0.22 257);
 
   /* 品牌渐变 */
-  --color-gradient-start: #0066FF;
-  --color-gradient-end: #003399;
+  --color-gradient-start: oklch(0.52 0.23 257);
+  --color-gradient-end: oklch(0.35 0.17 257);
 
   /* Tailwind 4 变量映射 */
 
@@ -101,14 +101,14 @@
 }
 
 .dark {
-  --color-background: #0F172A;
-  --color-surface: #1E293B;
-  --color-surface-elevated: #334155;
-  --color-text-primary: #F1F5F9;
-  --color-text-secondary: #94A3B8;
-  --color-text-muted: #64748B;
-  --color-primary: #3B82F6;
-  --color-border: #334155;
+  --color-background: oklch(0.18 0.02 260);
+  --color-surface: oklch(0.25 0.03 260);
+  --color-surface-elevated: oklch(0.32 0.03 260);
+  --color-text-primary: oklch(0.96 0.01 260);
+  --color-text-secondary: oklch(0.68 0.03 250);
+  --color-text-muted: oklch(0.52 0.03 250);
+  --color-primary: oklch(0.58 0.20 257);
+  --color-border: oklch(0.32 0.03 260);
 
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
@@ -165,9 +165,9 @@
   --color-info: var(--color-info);
 
   /* 圆角映射 */
-  --radius-sm: 6px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
 
   /* 缓动曲线 */
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);

@@ -3,11 +3,13 @@ mod config;
 mod gateway;
 mod jwks;
 mod logging;
+mod rate_limiter;
 mod redirect;
 
 use crate::config::Config;
 use crate::gateway::{Gateway, PathMatcher};
 use crate::jwks::JwksCache;
+use crate::rate_limiter::RateLimiter;
 use crate::redirect::RedirectService;
 use clap::Parser;
 use pingora_core::listeners::tls::TlsSettings;
@@ -153,6 +155,7 @@ fn main() -> anyhow::Result<()> {
             http_client,
             upstream_addr: config.portal.upstream.clone(),
             refresh_dedup: Mutex::new(std::collections::HashMap::new()),
+            rate_limiter: Arc::new(RateLimiter::new()),
         },
     );
 

@@ -24,6 +24,7 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { EmptyState } from '@/components/shared/empty-state';
 import { createDepartmentAction, updateDepartmentAction, deleteDepartmentAction } from '../actions';
 
 interface DeptTreeNode {
@@ -97,7 +98,7 @@ export default function DepartmentTree({ departments }: Props) {
   const filtered = keyword ? flatList.filter(d => d.name.includes(keyword) || d.code?.includes(keyword)) : flatList;
 
   return (
-    <Card className="border-none shadow-sm ring-1 ring-border/50 overflow-hidden rounded-[1.5rem]">
+    <Card className="border-none shadow-sm ring-1 ring-border/50 overflow-hidden rounded-xl">
       <CardHeader className="bg-slate-50/50 dark:bg-slate-900/50 border-b py-4 px-6">
         <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
           <div className="relative w-full md:w-72">
@@ -144,7 +145,9 @@ export default function DepartmentTree({ departments }: Props) {
               </div>
             </div>
           ))}
-          {filtered.length === 0 && <div className="text-center py-16 text-muted-foreground text-sm">暂无部门数据</div>}
+          {filtered.length === 0 && (
+            <EmptyState variant="simple" icon={Building2} title="暂无部门" description="创建组织架构以开始管理" action={{ label: '创建根部门', onClick: () => openAdd() }} />
+          )}
         </div>
       </CardContent>
 

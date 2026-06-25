@@ -80,7 +80,7 @@ export default function NewClientPage() {
 
       <div className="grid grid-cols-12 gap-8">
         <div className="col-span-8 space-y-8">
-          <Card className="border-none shadow-sm ring-1 ring-border/50 rounded-[2rem] overflow-hidden bg-white">
+          <Card className="border-none shadow-sm ring-1 ring-border/50 rounded-2xl overflow-hidden bg-white">
             <CardHeader className="border-b bg-slate-50/30">
               <CardTitle className="text-lg font-black flex items-center gap-2">
                 <AppWindow className="h-5 w-5 text-primary" /> 基本配置
@@ -113,7 +113,7 @@ export default function NewClientPage() {
         </div>
 
         <div className="col-span-4 space-y-6">
-          <Card className="border-none shadow-sm ring-1 ring-border/50 rounded-[2rem] overflow-hidden bg-white">
+          <Card className="border-none shadow-sm ring-1 ring-border/50 rounded-2xl overflow-hidden bg-white">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-black uppercase tracking-widest text-slate-400">高级安全设置</CardTitle>
             </CardHeader>
