@@ -191,9 +191,4 @@ describe('AppSidebar', () => {
     expect(screen.getByText('Identity OS')).toBeInTheDocument();
   });
 
-  // ── Search input ──────────────────────────────────────────
-  it('renders search input placeholder', () => {
-    render(<AppSidebar user={{ name: 'Admin' }} />);
-    expect(screen.getByPlaceholderText('搜索功能...')).toBeInTheDocument();
-  });
 });

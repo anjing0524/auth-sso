@@ -49,7 +49,7 @@ export default async function UsersPage({ searchParams }: PageProps) {
         <CreateUserDrawer departments={departments} />
       </div>
 
-      <Card className="flex-1 border-none shadow-sm ring-1 ring-border/50 overflow-hidden rounded-[1.5rem] flex flex-col bg-white">
+      <Card className="flex-1 border-none shadow-sm ring-1 ring-border/50 overflow-hidden rounded-xl flex flex-col bg-white">
         <CardHeader className="bg-slate-50/50 dark:bg-slate-900/50 py-4 px-6 border-b">
           <UserFilters key={keyword} initialKeyword={keyword} initialStatus={status} />
         </CardHeader>

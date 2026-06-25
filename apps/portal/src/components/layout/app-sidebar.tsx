@@ -1,7 +1,6 @@
 'use client';
 
 import {
-  Search,
   ChevronRight,
   LogOut,
   Settings,
@@ -48,7 +47,6 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Input } from '@/components/ui/input';
 import {
   Collapsible,
   CollapsibleContent,
@@ -73,7 +71,6 @@ const ICON_MAP: Record<string, LucideIcon> = {
   HelpCircle,
   Settings,
   User,
-  Search,
 };
 
 function DynamicIcon({ name, className }: { name: string; className?: string }) {
@@ -126,16 +123,6 @@ export function AppSidebar({ user, dynamicMenus = [] }: {
       </SidebarHeader>
 
       <SidebarContent className="px-3 pt-4">
-        <div className="px-2 py-2 group-data-[collapsible=icon]:hidden">
-          <div className="relative">
-            <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-muted-foreground opacity-50" />
-            <Input
-              placeholder="搜索功能..."
-              className="pl-9 h-9 bg-white dark:bg-slate-900 border-none shadow-inner rounded-xl text-xs focus-visible:ring-1 focus-visible:ring-primary/10"
-            />
-          </div>
-        </div>
-
         <SidebarGroup>
           <SidebarGroupLabel className="px-4 text-[10px] font-black uppercase tracking-[0.15em] text-slate-400 mb-2 group-data-[collapsible=icon]:hidden">
             System Control
@@ -221,7 +208,7 @@ export function AppSidebar({ user, dynamicMenus = [] }: {
                 </SidebarMenuButton>
               </DropdownMenuTrigger>
               <DropdownMenuContent
-                className="w-64 rounded-[1.5rem] p-3 shadow-2xl border-border/40 animate-in zoom-in-95 duration-300"
+                className="w-64 rounded-xl p-3 shadow-2xl border-border/40 animate-in zoom-in-95 duration-300"
                 side="right"
                 align="end"
                 sideOffset={16}

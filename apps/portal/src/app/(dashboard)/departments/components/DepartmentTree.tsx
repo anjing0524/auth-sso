@@ -97,7 +97,7 @@ export default function DepartmentTree({ departments }: Props) {
   const filtered = keyword ? flatList.filter(d => d.name.includes(keyword) || d.code?.includes(keyword)) : flatList;
 
   return (
-    <Card className="border-none shadow-sm ring-1 ring-border/50 overflow-hidden rounded-[1.5rem]">
+    <Card className="border-none shadow-sm ring-1 ring-border/50 overflow-hidden rounded-xl">
       <CardHeader className="bg-slate-50/50 dark:bg-slate-900/50 border-b py-4 px-6">
         <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
           <div className="relative w-full md:w-72">

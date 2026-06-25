@@ -79,7 +79,7 @@ export default function ClientsTable({ clients, initialKeyword }: Props) {
   const disabledCount = clients.filter(c => c.status === 'DISABLED').length;
 
   return (
-    <Card className="border-none shadow-sm ring-1 ring-border/50 overflow-hidden rounded-[1.5rem]">
+    <Card className="border-none shadow-sm ring-1 ring-border/50 overflow-hidden rounded-xl">
       <CardHeader className="bg-slate-50/50 dark:bg-slate-900/50 border-b py-6 px-8">
         <div className="flex flex-col md:flex-row gap-6 items-center justify-between">
           <div className="relative w-full md:w-96">
