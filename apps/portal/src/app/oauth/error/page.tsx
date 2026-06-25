@@ -13,7 +13,7 @@ function ErrorContent() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8 font-sans">
-      <div className="max-w-md w-full space-y-8 bg-white p-10 rounded-[2rem] shadow-2xl shadow-slate-200/50 border border-slate-100 relative overflow-hidden">
+      <div className="max-w-md w-full space-y-8 bg-white p-10 rounded-2xl shadow-2xl shadow-slate-200/50 border border-slate-100 relative overflow-hidden">
         {/* Brand Header */}
         <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-blue-600 to-indigo-600" />
         

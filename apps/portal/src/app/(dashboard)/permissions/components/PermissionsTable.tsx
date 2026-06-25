@@ -111,7 +111,7 @@ export default function PermissionsTable({ permissions, activeTab }: Props) {
     : permissions;
 
   return (
-    <Card className="border-none shadow-sm ring-1 ring-border/50 overflow-hidden rounded-[1.5rem]">
+    <Card className="border-none shadow-sm ring-1 ring-border/50 overflow-hidden rounded-xl">
       <CardHeader className="bg-slate-50/50 dark:bg-slate-900/50 border-b py-4 px-6">
         <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
           <Tabs value={activeTab} onValueChange={handleTabChange} className="w-auto">

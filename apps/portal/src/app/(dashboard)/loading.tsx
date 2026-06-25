@@ -22,7 +22,7 @@ export default function DashboardLoading() {
       </div>
 
       {/* Content card skeleton */}
-      <Card className="border-none shadow-sm ring-1 ring-border/50 rounded-[1.5rem] overflow-hidden">
+      <Card className="border-none shadow-sm ring-1 ring-border/50 rounded-xl overflow-hidden">
         <CardHeader className="bg-slate-50/50 py-4 px-6 border-b">
           <Skeleton className="h-10 w-full max-w-md rounded-xl" />
         </CardHeader>

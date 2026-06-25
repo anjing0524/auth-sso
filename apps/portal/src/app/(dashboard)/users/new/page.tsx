@@ -67,7 +67,7 @@ export default function NewUserPage() {
       </div>
 
       <div className="max-w-4xl">
-        <Card className="border-none shadow-sm ring-1 ring-border/50 rounded-[2rem] overflow-hidden bg-white mb-20">
+        <Card className="border-none shadow-sm ring-1 ring-border/50 rounded-2xl overflow-hidden bg-white mb-20">
           <CardHeader className="border-b bg-slate-50/30">
             <CardTitle className="text-lg font-black flex items-center gap-2">
               <UserIcon className="h-5 w-5 text-primary" /> 基本资料

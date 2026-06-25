@@ -5,6 +5,7 @@
  * Tab 切换与分页均通过 searchParams 驱动（<Link> 渐进增强，无需 'use client'），
  * 直调 app/audit/data.ts 读模型，消除原先 client → /api/audit/* → data.ts 的双重跳转。
  */
+import { ShieldAlert } from 'lucide-react';
 import Link from 'next/link';
 import { LOGIN_EVENT_LABELS, AUDIT_OPERATION_LABELS } from '@auth-sso/contracts';
 import { getLoginLogs, getAuditLogs } from '@/app/audit/data';
@@ -57,8 +58,11 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-gray-900">审计日志</h1>
+      <div className="space-y-1">
+        <h1 className="text-3xl font-bold tracking-tight flex items-center gap-3">
+          <ShieldAlert className="h-8 w-8 text-primary" /> 审计日志
+        </h1>
+        <p className="text-muted-foreground text-sm">查看系统内所有操作和登录事件的审计记录。</p>
       </div>
 
       {/* Tab 切换 — searchParams 驱动 */}

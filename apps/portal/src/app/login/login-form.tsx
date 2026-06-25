@@ -111,8 +111,8 @@ export default function LoginForm({
   const formattedError = getErrorMessage(error);
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 dark:bg-slate-950 p-4 transition-colors">
-      <div className="mb-8 flex flex-col items-center gap-2 animate-in fade-in slide-in-from-bottom-4 duration-700">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-[var(--color-gradient-start)] to-[var(--color-gradient-end)] p-4 transition-colors">
+      <div className="mb-8 flex flex-col items-center gap-2 animate-in fade-in slide-in-from-bottom-4 duration-700 text-white">
         <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-lg shadow-primary/20">
           <ShieldCheck className="h-7 w-7" />
         </div>

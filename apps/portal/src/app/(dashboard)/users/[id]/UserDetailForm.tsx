@@ -103,7 +103,7 @@ export default function UserDetailForm({ id, initialUser: serverUser }: Props) {
             <DialogTrigger render={<Button variant="destructive" className="rounded-xl px-6 bg-red-50 text-red-600 hover:bg-red-100 border-none shadow-none" />}>
               <Trash2 className="mr-2 h-4 w-4" /> 删除用户
             </DialogTrigger>
-            <DialogContent className="rounded-[2rem]">
+            <DialogContent className="rounded-2xl">
               <DialogHeader>
                 <DialogTitle className="text-xl font-black text-red-600">确认永久删除？</DialogTitle>
                 <DialogDescription>
@@ -123,7 +123,7 @@ export default function UserDetailForm({ id, initialUser: serverUser }: Props) {
       </div>
 
       <div className="grid grid-cols-12 gap-8">
-        <Card className="col-span-8 border-none shadow-sm ring-1 ring-border/50 rounded-[2rem] overflow-hidden bg-white">
+        <Card className="col-span-8 border-none shadow-sm ring-1 ring-border/50 rounded-2xl overflow-hidden bg-white">
           <CardHeader className="border-b bg-slate-50/30">
             <CardTitle className="text-lg font-black flex items-center gap-2">
               <UserIcon className="h-5 w-5 text-primary" /> 基本资料
@@ -161,7 +161,7 @@ export default function UserDetailForm({ id, initialUser: serverUser }: Props) {
         </Card>
 
         <div className="col-span-4 space-y-6">
-          <Card className="border-none shadow-sm ring-1 ring-border/50 rounded-[2rem] overflow-hidden bg-white">
+          <Card className="border-none shadow-sm ring-1 ring-border/50 rounded-2xl overflow-hidden bg-white">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-black uppercase tracking-widest text-slate-400">系统信息</CardTitle>
             </CardHeader>
