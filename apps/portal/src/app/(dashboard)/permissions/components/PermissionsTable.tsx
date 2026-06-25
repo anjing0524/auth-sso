@@ -10,24 +10,24 @@ import { toast } from 'sonner';
 import {
   ShieldCheck, Plus, Search, MoreHorizontal, Edit, Trash2, Database, Globe, Code, Folder,
 } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+  Table, TableCell, TableRow,
 } from '@/components/ui/table';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { DataTable } from '@/components/shared/data-table';
+import { EmptyState } from '@/components/shared/empty-state';
 import { createPermissionAction, updatePermissionAction, deletePermissionAction } from '../actions';
 
 interface PermissionRow {
@@ -110,86 +110,87 @@ export default function PermissionsTable({ permissions, activeTab }: Props) {
     ? permissions.filter(p => p.name.includes(keyword) || p.code.includes(keyword))
     : permissions;
 
-  return (
-    <Card className="border-none shadow-sm ring-1 ring-border/50 overflow-hidden rounded-[1.5rem]">
-      <CardHeader className="bg-slate-50/50 dark:bg-slate-900/50 border-b py-4 px-6">
-        <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
-          <Tabs value={activeTab} onValueChange={handleTabChange} className="w-auto">
-            <TabsList className="h-9">
-              {TABS.map(tab => (
-                <TabsTrigger key={tab} value={tab} className="text-xs px-3">{tab}</TabsTrigger>
-              ))}
-            </TabsList>
-          </Tabs>
-          <div className="flex gap-3 items-center">
-            <div className="relative w-64">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground opacity-50" />
-              <Input placeholder="搜索权限名称或编码..." className="pl-9 h-9 rounded-lg text-sm" value={keyword} onChange={e => setKeyword(e.target.value)} />
-            </div>
-            <Button size="sm" className="rounded-lg" onClick={() => { setForm({ name: '', code: '', type: 'API', resource: '', action: '' }); setIsAddOpen(true); }}>
-              <Plus className="mr-1.5 h-3.5 w-3.5" /> 新增
-            </Button>
+  const columns = [
+    { key: 'name', header: '权限名称', className: 'pl-8' },
+    { key: 'code', header: '权限编码' },
+    { key: 'type', header: '类型' },
+    { key: 'status', header: '状态' },
+    { key: 'actions', header: '操作', className: 'text-right pr-8' },
+  ];
+
+  const cardHeader = (
+    <div className="bg-slate-50/50 dark:bg-slate-900/50 border-b py-4 px-6">
+      <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
+        <Tabs value={activeTab} onValueChange={handleTabChange} className="w-auto">
+          <TabsList className="h-9">
+            {TABS.map(tab => (
+              <TabsTrigger key={tab} value={tab} className="text-xs px-3">{tab}</TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
+        <div className="flex gap-3 items-center">
+          <div className="relative w-64">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground opacity-50" />
+            <Input placeholder="搜索权限名称或编码..." className="pl-9 h-9 rounded-lg text-sm" value={keyword} onChange={e => setKeyword(e.target.value)} />
           </div>
+          <Button size="sm" className="rounded-lg" onClick={() => { setForm({ name: '', code: '', type: 'API', resource: '', action: '' }); setIsAddOpen(true); }}>
+            <Plus className="mr-1.5 h-3.5 w-3.5" /> 新增
+          </Button>
         </div>
-      </CardHeader>
-      <CardContent className="p-0">
-        <Table>
-          <TableHeader className="bg-slate-50/30">
-            <TableRow>
-              <TableHead className="pl-8">权限名称</TableHead>
-              <TableHead>权限编码</TableHead>
-              <TableHead>类型</TableHead>
-              <TableHead>状态</TableHead>
-              <TableHead className="text-right pr-8">操作</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isPending ? (
-              Array.from({ length: 3 }).map((_, i) => (
-                <TableRow key={i}>
-                  <TableCell className="pl-8"><Skeleton className="h-4 w-32" /></TableCell>
-                  <TableCell><Skeleton className="h-4 w-24" /></TableCell>
-                  <TableCell><Skeleton className="h-5 w-12 rounded-full" /></TableCell>
-                  <TableCell><Skeleton className="h-5 w-14 rounded-full" /></TableCell>
-                  <TableCell className="text-right pr-8"><Skeleton className="ml-auto h-8 w-8 rounded-md" /></TableCell>
-                </TableRow>
-              ))
-            ) : (
-              filtered.map(p => (
-                <TableRow key={p.id} className="hover:bg-slate-50/50">
-                  <TableCell className="pl-8 font-medium">{p.name}</TableCell>
-                  <TableCell><code className="text-xs bg-slate-100 px-2 py-0.5 rounded">{p.code}</code></TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className="text-[10px] gap-1">
-                      {TYPE_ICONS[p.type] || null} {p.type}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={p.status === 'ACTIVE' ? 'success' : 'secondary'} className="text-[10px]">{p.status}</Badge>
-                  </TableCell>
-                  <TableCell className="text-right pr-8">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg"><MoreHorizontal className="h-3.5 w-3.5" /></Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-40 rounded-xl p-2">
-                        <DropdownMenuLabel className="text-[10px]">权限操作</DropdownMenuLabel>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem className="rounded-lg cursor-pointer" onClick={() => openEdit(p)}>
-                          <Edit className="h-3.5 w-3.5 mr-2 text-blue-500" /> 编辑
-                        </DropdownMenuItem>
-                        <DropdownMenuItem className="rounded-lg cursor-pointer text-destructive" onClick={() => { setSelected(p); setIsDeleteOpen(true); }}>
-                          <Trash2 className="h-3.5 w-3.5 mr-2" /> 删除
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </CardContent>
+      </div>
+    </div>
+  );
+
+  const renderRow = (p: PermissionRow) => (
+    <TableRow key={p.id} className="hover:bg-slate-50/50">
+      <TableCell className="pl-8 font-medium">{p.name}</TableCell>
+      <TableCell><code className="text-xs bg-slate-100 px-2 py-0.5 rounded">{p.code}</code></TableCell>
+      <TableCell>
+        <Badge variant="outline" className="text-[10px] gap-1">
+          {TYPE_ICONS[p.type] || null} {p.type}
+        </Badge>
+      </TableCell>
+      <TableCell>
+        <Badge variant={p.status === 'ACTIVE' ? 'success' : 'secondary'} className="text-[10px]">{p.status}</Badge>
+      </TableCell>
+      <TableCell className="text-right pr-8">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg"><MoreHorizontal className="h-3.5 w-3.5" /></Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-40 rounded-xl p-2">
+            <DropdownMenuLabel className="text-[10px]">权限操作</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem className="rounded-lg cursor-pointer" onClick={() => openEdit(p)}>
+              <Edit className="h-3.5 w-3.5 mr-2 text-blue-500" /> 编辑
+            </DropdownMenuItem>
+            <DropdownMenuItem className="rounded-lg cursor-pointer text-destructive" onClick={() => { setSelected(p); setIsDeleteOpen(true); }}>
+              <Trash2 className="h-3.5 w-3.5 mr-2" /> 删除
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </TableCell>
+    </TableRow>
+  );
+
+  return (
+    <>
+      <DataTable
+        columns={columns}
+        data={filtered}
+        loading={isPending}
+        emptyState={
+          <EmptyState
+            variant="simple"
+            icon={ShieldCheck}
+            title="暂无权限"
+            description="新增权限点以控制功能访问"
+            action={{ label: '新增权限', onClick: () => { setForm({ name: '', code: '', type: 'API', resource: '', action: '' }); setIsAddOpen(true); } }}
+          />
+        }
+        renderRow={renderRow}
+        cardHeader={cardHeader}
+      />
 
       {/* 新增对话框 */}
       <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
@@ -254,6 +255,6 @@ export default function PermissionsTable({ permissions, activeTab }: Props) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </Card>
+    </>
   );
 }

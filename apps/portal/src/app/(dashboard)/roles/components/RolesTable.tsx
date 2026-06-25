@@ -12,12 +12,11 @@ import { toast } from 'sonner';
 import {
   ShieldCheck, Plus, Search, MoreHorizontal, Edit, Trash2,
 } from 'lucide-react';
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+  Table, TableCell, TableRow,
 } from '@/components/ui/table';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
@@ -28,6 +27,8 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { DataTable } from '@/components/shared/data-table';
+import { EmptyState } from '@/components/shared/empty-state';
 import { createRoleAction, updateRoleAction, deleteRoleAction } from '../actions';
 
 interface RoleRow {
@@ -107,82 +108,91 @@ export default function RolesTable({ roles, pagination, initialKeyword, departme
     </Select>
   );
 
-  return (
-    <Card className="border-none shadow-sm ring-1 ring-border/50 overflow-hidden rounded-[1.5rem]">
-      <CardHeader className="bg-slate-50/50 dark:bg-slate-900/50 border-b py-4 px-6">
-        <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
-          <div className="relative w-full md:w-72">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground opacity-50" />
-            <Input placeholder="搜索角色名称或编码..." className="pl-9 h-9 rounded-lg text-sm" value={keyword} onChange={e => handleSearch(e.target.value)} />
-          </div>
-          <Button size="sm" className="rounded-lg" onClick={() => { setForm({ name: '', code: '', description: '', deptId: getDefaultDeptId(), sort: 0 }); setIsAddOpen(true); }}>
-            <Plus className="mr-1.5 h-3.5 w-3.5" /> 新建角色
-          </Button>
+  const columns = [
+    { key: 'name', header: '角色名称', className: 'pl-8' },
+    { key: 'code', header: '编码' },
+    { key: 'dept', header: '所属部门' },
+    { key: 'status', header: '状态' },
+    { key: 'actions', header: '操作', className: 'text-right pr-8' },
+  ];
+
+  const cardHeader = (
+    <div className="bg-slate-50/50 dark:bg-slate-900/50 border-b py-4 px-6">
+      <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
+        <div className="relative w-full md:w-72">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground opacity-50" />
+          <Input placeholder="搜索角色名称或编码..." className="pl-9 h-9 rounded-lg text-sm" value={keyword} onChange={e => handleSearch(e.target.value)} />
         </div>
-      </CardHeader>
-      <CardContent className="p-0">
-        <Table>
-          <TableHeader className="bg-slate-50/30">
-            <TableRow>
-              <TableHead className="pl-8">角色名称</TableHead>
-              <TableHead>编码</TableHead>
-              <TableHead>所属部门</TableHead>
-              <TableHead>状态</TableHead>
-              <TableHead className="text-right pr-8">操作</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isPending ? (
-              <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">加载中...</TableCell></TableRow>
-            ) : roles.length === 0 ? (
-              <TableRow><TableCell colSpan={5} className="text-center py-16 text-muted-foreground">暂无角色数据</TableCell></TableRow>
-            ) : roles.map(r => (
-              <TableRow key={r.id} className="hover:bg-slate-50/50">
-                <TableCell className="pl-8">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-lg bg-primary/10"><ShieldCheck className="h-4 w-4 text-primary" /></div>
-                    <div>
-                      <span className="font-medium text-sm">{r.name}</span>
-                      {r.isSystem && <Badge variant="outline" className="ml-2 text-[10px]">系统</Badge>}
-                      {r.description && <p className="text-[10px] text-muted-foreground">{r.description}</p>}
-                    </div>
-                  </div>
-                </TableCell>
-                <TableCell><code className="text-xs bg-slate-100 px-2 py-0.5 rounded">{r.code}</code></TableCell>
-                <TableCell><span className="text-xs text-muted-foreground">{getDeptName(r.deptId)}</span></TableCell>
-                <TableCell><Badge variant={r.status === 'ACTIVE' ? 'success' : 'secondary'} className="text-[10px]">{r.status}</Badge></TableCell>
-                <TableCell className="text-right pr-8">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg"><MoreHorizontal className="h-3.5 w-3.5" /></Button></DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-40 rounded-xl p-2">
-                      <DropdownMenuLabel className="text-[10px]">角色操作</DropdownMenuLabel><DropdownMenuSeparator />
-                      <DropdownMenuItem className="rounded-lg cursor-pointer" onClick={() => openEdit(r)}><Edit className="h-3.5 w-3.5 mr-2 text-blue-500" /> 编辑</DropdownMenuItem>
-                      {!r.isSystem && (
-                        <DropdownMenuItem className="rounded-lg cursor-pointer text-destructive" onClick={() => { setSelected(r); handleDelete(); }}>
-                          <Trash2 className="h-3.5 w-3.5 mr-2" /> 删除
-                        </DropdownMenuItem>
-                      )}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-        {pagination.totalPages > 1 && (
-          <div className="flex items-center justify-between px-6 py-3 border-t bg-slate-50/30">
-            <span className="text-xs text-muted-foreground">共 {pagination.total} 条</span>
-            <div className="flex gap-1">
-              {Array.from({ length: pagination.totalPages }).map((_, i) => (
-                <Button key={i} variant={i + 1 === pagination.page ? 'default' : 'ghost'} size="sm" className="h-7 w-7 text-xs rounded-lg"
-                  onClick={() => { const p = new URLSearchParams(window.location.search); p.set('page', String(i + 1)); router.push(`/roles?${p.toString()}`); }}>
-                  {i + 1}
-                </Button>
-              ))}
-            </div>
+        <Button size="sm" className="rounded-lg" onClick={() => { setForm({ name: '', code: '', description: '', deptId: getDefaultDeptId(), sort: 0 }); setIsAddOpen(true); }}>
+          <Plus className="mr-1.5 h-3.5 w-3.5" /> 新建角色
+        </Button>
+      </div>
+    </div>
+  );
+
+  const renderRow = (r: RoleRow) => (
+    <TableRow key={r.id} className="hover:bg-slate-50/50">
+      <TableCell className="pl-8">
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-lg bg-primary/10"><ShieldCheck className="h-4 w-4 text-primary" /></div>
+          <div>
+            <span className="font-medium text-sm">{r.name}</span>
+            {r.isSystem && <Badge variant="outline" className="ml-2 text-[10px]">系统</Badge>}
+            {r.description && <p className="text-[10px] text-muted-foreground">{r.description}</p>}
           </div>
-        )}
-      </CardContent>
+        </div>
+      </TableCell>
+      <TableCell><code className="text-xs bg-slate-100 px-2 py-0.5 rounded">{r.code}</code></TableCell>
+      <TableCell><span className="text-xs text-muted-foreground">{getDeptName(r.deptId)}</span></TableCell>
+      <TableCell><Badge variant={r.status === 'ACTIVE' ? 'success' : 'secondary'} className="text-[10px]">{r.status}</Badge></TableCell>
+      <TableCell className="text-right pr-8">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg"><MoreHorizontal className="h-3.5 w-3.5" /></Button></DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-40 rounded-xl p-2">
+            <DropdownMenuLabel className="text-[10px]">角色操作</DropdownMenuLabel><DropdownMenuSeparator />
+            <DropdownMenuItem className="rounded-lg cursor-pointer" onClick={() => openEdit(r)}><Edit className="h-3.5 w-3.5 mr-2 text-blue-500" /> 编辑</DropdownMenuItem>
+            {!r.isSystem && (
+              <DropdownMenuItem className="rounded-lg cursor-pointer text-destructive" onClick={() => { setSelected(r); handleDelete(); }}>
+                <Trash2 className="h-3.5 w-3.5 mr-2" /> 删除
+              </DropdownMenuItem>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </TableCell>
+    </TableRow>
+  );
+
+  return (
+    <>
+      <DataTable
+        columns={columns}
+        data={roles}
+        loading={isPending}
+        emptyState={
+          <EmptyState
+            variant="simple"
+            icon={ShieldCheck}
+            title="暂无角色"
+            description="创建角色以开始管理权限"
+            action={{ label: '新建角色', onClick: () => { setForm({ name: '', code: '', description: '', deptId: getDefaultDeptId(), sort: 0 }); setIsAddOpen(true); } }}
+          />
+        }
+        renderRow={renderRow}
+        cardHeader={cardHeader}
+      />
+      {pagination.totalPages > 1 && (
+        <div className="flex items-center justify-between px-6 py-3 border-t bg-slate-50/30">
+          <span className="text-xs text-muted-foreground">共 {pagination.total} 条</span>
+          <div className="flex gap-1">
+            {Array.from({ length: pagination.totalPages }).map((_, i) => (
+              <Button key={i} variant={i + 1 === pagination.page ? 'default' : 'ghost'} size="sm" className="h-7 w-7 text-xs rounded-lg"
+                onClick={() => { const p = new URLSearchParams(window.location.search); p.set('page', String(i + 1)); router.push(`/roles?${p.toString()}`); }}>
+                {i + 1}
+              </Button>
+            ))}
+          </div>
+        </div>
+      )}
 
       <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
         <DialogContent className="rounded-2xl">
@@ -207,6 +217,6 @@ export default function RolesTable({ roles, pagination, initialKeyword, departme
           <DialogFooter><Button variant="ghost" onClick={() => setIsEditOpen(false)}>取消</Button><Button onClick={handleUpdate} disabled={saving}>保存</Button></DialogFooter>
         </DialogContent>
       </Dialog>
-    </Card>
+    </>
   );
 }

@@ -33,6 +33,7 @@ import {
   TableRow
 } from '@/components/ui/table';
 
+import { EmptyState } from '@/components/shared/empty-state';
 import { getDashboardStats, getRecentAuditLogs } from './data';
 import { resolveIdentity } from '@/lib/auth/verify-jwt';
 
@@ -46,6 +47,26 @@ export default async function DashboardPage() {
     getDashboardStats(deptIds),
     getRecentAuditLogs(),
   ]);
+
+  // 初次使用引导：用户数为 0 时展示 onboarding 空状态
+  if (stats.users === 0) {
+    return (
+      <div className="flex-1 flex items-center justify-center p-8">
+        <EmptyState
+          variant="onboarding"
+          icon={ShieldCheck}
+          title="欢迎使用 Auth-SSO"
+          description="完成以下步骤以开始管理您的身份平台"
+          steps={[
+            { label: '创建组织架构', href: '/departments' },
+            { label: '创建用户账号', href: '/users' },
+            { label: '配置角色权限', href: '/roles' },
+            { label: '注册 OAuth 应用', href: '/clients' },
+          ]}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="flex-1 space-y-6 p-1 pt-2">
