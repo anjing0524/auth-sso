@@ -6,7 +6,7 @@
 import { resolveIdentity } from '@/lib/auth';
 import { getUsers, getDepartments } from './data';
 import UserFilters from './components/UserFilters';
-import CreateUserDrawer from './components/CreateUserDrawer';
+import CreateUserDialog from './components/CreateUserDialog';
 import UserTable from './components/UserTable';
 
 interface PageProps {
@@ -45,7 +45,7 @@ export default async function UsersPage({ searchParams }: PageProps) {
             查看和管理系统内的所有用户账户及权限。
           </p>
         </div>
-        <CreateUserDrawer departments={departments} />
+        <CreateUserDialog departments={departments} />
       </div>
 
       <UserTable
