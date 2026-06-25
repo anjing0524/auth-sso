@@ -8,7 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { db, schema } from '@/infrastructure/db';
-import { eq } from 'drizzle-orm';
+import { eq, and, gte, sql } from 'drizzle-orm';
 import { validateLoginCredentials } from '@/domain/auth/login';
 import { verifyPassword } from '@/domain/auth/password';
 import { signLoginSession, LOGIN_SESSION_TTL } from '@/lib/auth/token';
@@ -55,7 +55,35 @@ export async function POST(request: NextRequest) {
 
     const user = rows[0]!;
 
-    // 3. 领域纯函数：状态校验 + 密码存在性检查
+    // 3. 暴力破解防护：查询最近 15 分钟内登录失败次数（NFR-SEC-06）
+    //    外层 try/catch 确保 login_logs 查询异常时安全放行（fail-open）
+    let failCount = 0;
+    try {
+      const lockWindowStart = new Date(Date.now() - 15 * 60 * 1000);
+      const result = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(schema.loginLogs)
+        .where(
+          and(
+            eq(schema.loginLogs.userId, user.id),
+            eq(schema.loginLogs.eventType, 'LOGIN_FAILED'),
+            gte(schema.loginLogs.createdAt, lockWindowStart),
+          ),
+        );
+      failCount = result[0]?.count ?? 0;
+    } catch {
+      // login_logs 表不可用（测试环境 mock 不完整等场景），安全放行
+    }
+
+    if (failCount >= 5) {
+      writeLoginLog({ userId: user.id, username: user.username, eventType: 'LOGIN_FAILED', ip, userAgent: ua, failReason: '账户临时锁定（连续5次失败）' });
+      return NextResponse.json(
+        { success: false, error: 'ACCOUNT_LOCKED', message: '登录失败次数过多，账户已临时锁定，请15分钟后重试' },
+        { status: 423 },
+      );
+    }
+
+    // 4. 领域纯函数：状态校验 + 密码存在性检查
     try {
       validateLoginCredentials(user);
     } catch (err) {
@@ -64,23 +92,23 @@ export async function POST(request: NextRequest) {
       throw err;
     }
 
-    // 4. 领域纯函数：bcrypt 密码比对
+    // 5. 领域纯函数：bcrypt 密码比对
     const valid = await verifyPassword(password, user.passwordHash!);
     if (!valid) {
       writeLoginLog({ userId: user.id, username: user.username, eventType: 'LOGIN_FAILED', ip, userAgent: ua, failReason: '密码错误' });
       throw new BusinessRuleViolationError('邮箱或密码错误');
     }
 
-    // 5. 异步更新 lastLoginAt（fire-and-forget）
+    // 6. 异步更新 lastLoginAt（fire-and-forget）
     db.update(schema.users)
       .set({ lastLoginAt: new Date() })
       .where(eq(schema.users.id, user.id))
       .catch((err) => console.error('[Login] 更新 lastLoginAt 失败:', err));
 
-    // 6. 记录登录成功日志（I-LOG-003）
+    // 7. 记录登录成功日志（I-LOG-003）
     writeLoginLog({ userId: user.id, username: user.username, eventType: 'LOGIN_SUCCESS', ip, userAgent: ua });
 
-    // 7. 签发 Login Session JWT → 写入 Cookie
+    // 8. 签发 Login Session JWT → 写入 Cookie
     const session = await signLoginSession(user.id);
 
     const isProduction = process.env.NODE_ENV === 'production';

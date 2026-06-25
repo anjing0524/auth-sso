@@ -11,6 +11,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getRefreshTokenFromCookie, getJwtFromCookie, decodeJwtPayload } from '@/lib/session';
 import { rotateRefreshToken } from '@/lib/auth/token';
 import { COOKIE_NAMES, TOKEN_TTL } from '@auth-sso/contracts';
+import { writeLoginLog, extractClientIP, extractUserAgent } from '@/lib/audit';
 
 /** 刷新阈值（秒）：仅当 Access Token 剩余时间 < 此值时执行刷新 */
 const REFRESH_THRESHOLD = 5 * 60; // 5 minutes
@@ -37,8 +38,16 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // 从当前 AT 中获取用户信息（用于日志）
+    const currentAT = await getJwtFromCookie();
+    const atPayload = currentAT ? decodeJwtPayload(currentAT) : null;
+    const username = atPayload?.sub || 'unknown';
+    const ip = extractClientIP(request.headers);
+    const ua = extractUserAgent(request.headers);
+
     const result = await rotateRefreshToken(refreshToken, 'portal');
     if (!result) {
+      writeLoginLog({ userId: atPayload?.sub, username, eventType: 'TOKEN_REFRESH_FAILED', ip, userAgent: ua, failReason: 'Refresh Token 无效或已过期' });
       const response = NextResponse.json(
         { success: false, error: 'REFRESH_TOKEN_INVALID', message: 'Refresh Token 无效或已过期' },
         { status: 401 },
@@ -48,6 +57,9 @@ export async function POST(request: NextRequest) {
       response.cookies.set(COOKIE_NAMES.REFRESH, '', { path: '/', httpOnly: true, sameSite: 'lax', maxAge: 0 });
       return response;
     }
+
+    // 续签成功 → 记录 TOKEN_REFRESH 日志
+    writeLoginLog({ userId: atPayload?.sub, username, eventType: 'TOKEN_REFRESH', ip, userAgent: ua });
 
     const isProduction = process.env.NODE_ENV === 'production';
     // 本地开发/E2E环境下，直连 HTTP 端口时必须降级为 secure: false，否则浏览器会拒绝写入

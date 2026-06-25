@@ -19,6 +19,7 @@ import { mapDomainError } from '@/domain/shared/error-mapping';
 import { InvalidGrantError } from '@/domain/shared/errors';
 import { z } from 'zod';
 import { OAUTH_PARAMS } from '@auth-sso/contracts';
+import { writeLoginLog, extractClientIP, extractUserAgent } from '@/lib/audit';
 
 
 const TokenSchema = z.object({
@@ -134,8 +135,12 @@ export async function POST(request: NextRequest) {
 
       const result = await rotateRefreshToken(refresh_token, client_id);
       if (!result) {
+        writeLoginLog({ username: client_id, eventType: 'TOKEN_REFRESH_FAILED', ip: extractClientIP(request.headers), userAgent: extractUserAgent(request.headers), failReason: 'Refresh Token 无效或已过期' });
         throw new InvalidGrantError('Refresh Token 无效或已过期');
       }
+
+      // 续签成功 → 记录 TOKEN_REFRESH 日志（I-LOG-003）
+      writeLoginLog({ username: client_id, eventType: 'TOKEN_REFRESH', ip: extractClientIP(request.headers), userAgent: extractUserAgent(request.headers) });
 
       return NextResponse.json({
         access_token: result.accessToken,

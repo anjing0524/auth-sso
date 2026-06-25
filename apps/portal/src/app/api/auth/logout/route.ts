@@ -26,7 +26,7 @@ import { COOKIE_NAMES } from '@auth-sso/contracts';
 import { writeLoginLog, extractClientIP, extractUserAgent } from '@/lib/audit';
 
 
-async function performRevocation(cookieStore: Awaited<ReturnType<typeof cookies>>, headers: Headers) {
+async function performRevocation(cookieStore: Awaited<ReturnType<typeof cookies>>): Promise<{ userId?: string; username?: string }> {
   let userId: string | undefined;
   let username: string | undefined;
   try {
@@ -38,9 +38,16 @@ async function performRevocation(cookieStore: Awaited<ReturnType<typeof cookies>
         await revokeJti(claims.jti, claims.exp);
         userId = claims.sub;
       }
-      // 从 JWT 解码获取 username（不验签，仅用于日志）
-      const payload = decodeJwtPayload(jwtToken);
-      if (payload) username = payload.sub; // 实际 username 在 claims 中不存在，退用 sub
+    }
+
+    // 查询用户名用于日志（轻量主键查询）
+    if (userId) {
+      const user = await db
+        .select({ username: schema.users.username })
+        .from(schema.users)
+        .where(eq(schema.users.id, userId))
+        .limit(1);
+      username = user[0]?.username || userId;
     }
 
     // 2. 撤销 login_session 的 jti（Login Session Token）
@@ -72,27 +79,38 @@ async function performRevocation(cookieStore: Awaited<ReturnType<typeof cookies>
     const mapped = mapDomainError(err);
     console.error('[Logout API] 登出异常:', mapped.message, err instanceof Error ? err.stack : '');
   }
+  return { userId, username };
 }
 
-export async function POST() {
-  const cookieStore = await cookies();
-  await performRevocation(cookieStore);
-
-  const response = NextResponse.json({ success: true });
+function clearAuthCookies(response: NextResponse) {
   response.cookies.set(COOKIE_NAMES.JWT, '', { path: '/', httpOnly: true, sameSite: 'lax', maxAge: 0 });
   response.cookies.set(COOKIE_NAMES.LOGIN_SESSION, '', { path: '/', httpOnly: true, sameSite: 'lax', maxAge: 0 });
   response.cookies.set(COOKIE_NAMES.REFRESH, '', { path: '/', httpOnly: true, sameSite: 'lax', maxAge: 0 });
+}
+
+export async function POST(request: NextRequest) {
+  const cookieStore = await cookies();
+  const { userId, username } = await performRevocation(cookieStore);
+
+  if (userId && username) {
+    writeLoginLog({ userId, username, eventType: 'LOGOUT', ip: extractClientIP(request.headers), userAgent: extractUserAgent(request.headers) });
+  }
+
+  const response = NextResponse.json({ success: true });
+  clearAuthCookies(response);
   return response;
 }
 
-export async function GET(_request: NextRequest) {
+export async function GET(request: NextRequest) {
   const cookieStore = await cookies();
-  await performRevocation(cookieStore);
+  const { userId, username } = await performRevocation(cookieStore);
+
+  if (userId && username) {
+    writeLoginLog({ userId, username, eventType: 'LOGOUT', ip: extractClientIP(request.headers), userAgent: extractUserAgent(request.headers) });
+  }
 
   const publicBase = getAppBaseURL();
   const response = NextResponse.redirect(new URL('/login', publicBase));
-  response.cookies.set(COOKIE_NAMES.JWT, '', { path: '/', httpOnly: true, sameSite: 'lax', maxAge: 0 });
-  response.cookies.set(COOKIE_NAMES.LOGIN_SESSION, '', { path: '/', httpOnly: true, sameSite: 'lax', maxAge: 0 });
-  response.cookies.set(COOKIE_NAMES.REFRESH, '', { path: '/', httpOnly: true, sameSite: 'lax', maxAge: 0 });
+  clearAuthCookies(response);
   return response;
 }

@@ -72,7 +72,10 @@ vi.mock('@/infrastructure/db', () => {
         return () => thenable();  // 任何 db 方法都返回 thenable
       },
     }),
-    schema: { refreshTokens: { tokenHash: 'tokenHash', userId: 'userId', revoked: 'revoked' } },
+    schema: {
+      refreshTokens: { tokenHash: 'tokenHash', userId: 'userId', revoked: 'revoked' },
+      users: { id: 'id', username: 'username' },
+    },
   };
 });
 
@@ -92,6 +95,12 @@ vi.mock('@/lib/session/cookies', () => ({
   getRefreshTokenFromCookie: mockGetRefreshTokenFromCookie,
 }));
 
+vi.mock('@/lib/audit', () => ({
+  writeLoginLog: () => {},
+  extractClientIP: () => null,
+  extractUserAgent: () => null,
+}));
+
 vi.mock('@/domain/shared/error-mapping', () => ({
   mapDomainError: mockMapDomainError,
 }));
@@ -106,6 +115,10 @@ vi.mock('@auth-sso/contracts', () => ({
 
 import { POST } from '@/app/api/auth/logout/route';
 
+function buildPostRequest(): any {
+  return new Request('http://localhost/api/auth/logout', { method: 'POST' });
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   setCookieValues({});
@@ -119,7 +132,7 @@ beforeEach(() => {
 
 describe('POST /api/auth/logout', () => {
   it('无 Cookie 时仍返回 200', async () => {
-    const res = await POST();
+    const res = await POST(buildPostRequest());
     const json = await res.json();
 
     expect(res.status).toBe(200);
@@ -135,7 +148,7 @@ describe('POST /api/auth/logout', () => {
     });
     mockRevokeJti.mockResolvedValueOnce(undefined);
 
-    const res = await POST();
+    const res = await POST(buildPostRequest());
     const json = await res.json();
 
     expect(res.status).toBe(200);
@@ -158,7 +171,7 @@ describe('POST /api/auth/logout', () => {
     });
     mockRevokeJti.mockResolvedValueOnce(undefined);
 
-    const res = await POST();
+    const res = await POST(buildPostRequest());
 
     expect(res.status).toBe(200);
     expect(mockDecodeJwtPayload).toHaveBeenCalledWith('session-jwt');
@@ -169,7 +182,7 @@ describe('POST /api/auth/logout', () => {
     setCookieValues({ portal_jwt_token: 'bad-jwt' });
     mockVerifyAccessToken.mockRejectedValueOnce(new Error('Token invalid'));
 
-    const res = await POST();
+    const res = await POST(buildPostRequest());
     const json = await res.json();
 
     expect(res.status).toBe(200);
@@ -187,7 +200,7 @@ describe('POST /api/auth/logout', () => {
     });
     mockRevokeJti.mockRejectedValueOnce(new Error('Redis down'));
 
-    const res = await POST();
+    const res = await POST(buildPostRequest());
 
     expect(res.status).toBe(200);
     expect(res.cookies.get('portal_jwt_token')?.maxAge).toBe(0);
@@ -197,7 +210,7 @@ describe('POST /api/auth/logout', () => {
     setCookieValues({ login_session: 'session-no-jti' });
     mockDecodeJwtPayload.mockReturnValueOnce({ sub: 'user-uuid' });
 
-    const res = await POST();
+    const res = await POST(buildPostRequest());
 
     expect(res.status).toBe(200);
     expect(mockRevokeJti).not.toHaveBeenCalled();

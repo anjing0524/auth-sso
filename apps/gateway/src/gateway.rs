@@ -13,6 +13,7 @@ use tracing::{debug, error, info, warn};
 
 use crate::claims::Claims;
 use crate::jwks::JwksCache;
+use crate::rate_limiter::RateLimiter;
 
 /// 预分类和高性能过滤的公开路径匹配器
 #[derive(Debug, Clone)]
@@ -188,6 +189,8 @@ pub struct Gateway {
     pub upstream_addr: String,
     /// 进程内续签去重缓存：key = user sub，value = (new_at, new_rt, timestamp)
     pub refresh_dedup: Mutex<HashMap<String, (String, String, Instant)>>,
+    /// 进程内速率限制器：对 /api/auth/ 路径做 IP 限流
+    pub rate_limiter: Arc<RateLimiter>,
 }
 
 impl Gateway {
@@ -432,6 +435,10 @@ pub struct GatewayCtx {
     pub user_jti: Option<String>,
     /// 续签得到的新 Token 对 (new_access_token, new_refresh_token)
     pub refreshed_tokens: Option<(String, String)>,
+    /// 客户端真实 IP（从 X-Forwarded-For 提取，由 Gateway 统一注入）
+    pub client_ip: Option<String>,
+    /// 客户端 User-Agent（由 Gateway 统一注入）
+    pub client_ua: Option<String>,
 }
 
 #[async_trait]
@@ -468,12 +475,44 @@ impl ProxyHttp for Gateway {
     async fn request_filter(&self, session: &mut Session, ctx: &mut Self::CTX) -> Result<bool> {
         let path = session.req_header().uri.path();
 
-        // 1. 白名单放行路由与静态资产（不验签、不续签、不剥离 Cookie）
+        // 0. 提取客户端 IP（优先 X-Forwarded-For）和 User-Agent，统一注入给 Portal
+        ctx.client_ip = session
+            .get_header("X-Forwarded-For")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|s| s.split(',').next().map(|s| s.trim().to_string()));
+        ctx.client_ua = session
+            .get_header("User-Agent")
+            .and_then(|v| v.to_str().ok())
+            .map(|s| s.to_string());
+
+        // 1. 静态资产直接放行（不限流、不验签）
+        if path.starts_with("/_next/") || path.starts_with("/static/") {
+            return Ok(false);
+        }
+
+        // 2. 对 /api/auth/ 路径做 IP 速率限制（防暴力破解 + DDoS）
+        if path.starts_with("/api/auth/") {
+            if let Some(limit) = RateLimiter::select_limit(path) {
+                let ip = ctx.client_ip.as_deref().unwrap_or("unknown");
+                let (allowed, _remaining) = self.rate_limiter.check(ip, limit);
+                if !allowed {
+                    warn!("速率限制触发: ip={}, path={}", ip, path);
+                    let mut header = ResponseHeader::build(429, None)?;
+                    header.insert_header("Retry-After", "60")?;
+                    session
+                        .write_response_header(Box::new(header), true)
+                        .await?;
+                    return Ok(true);
+                }
+            }
+        }
+
+        // 3. 白名单放行路由（不验签、不续签、不剥离 Cookie）
         if self.path_matcher.is_public(path) {
             return Ok(false);
         }
 
-        // 2. 提取 JWT 凭证 (零拷贝解包)
+        // 4. 提取 JWT 凭证 (零拷贝解包)
         let token = session
             .get_header("Cookie")
             .and_then(|v| v.to_str().ok())
@@ -485,12 +524,12 @@ impl ProxyHttp for Gateway {
             None => return self.handle_auth_failure(session).await,
         };
 
-        // 3. 执行离线密码学 ES256 签名校验与发行方比对
+        // 5. 执行离线密码学 ES256 签名校验与发行方比对
         if !self.verify_jwt(token, ctx).await {
             return self.handle_auth_failure(session).await;
         }
 
-        // 4. 检查 Access Token 是否即将过期，若是则静默续签
+        // 6. 检查 Access Token 是否即将过期，若是则静默续签
         let now_sec = std::time::SystemTime::now()
             .duration_since(std::time::SystemTime::UNIX_EPOCH)
             .unwrap()
@@ -572,6 +611,12 @@ impl ProxyHttp for Gateway {
         }
         if let Some(ref user_jti) = ctx.user_jti {
             upstream_request.insert_header("X-User-Jti", user_jti.as_str())?;
+        }
+        if let Some(ref client_ip) = ctx.client_ip {
+            upstream_request.insert_header("X-Client-IP", client_ip.as_str())?;
+        }
+        if let Some(ref client_ua) = ctx.client_ua {
+            upstream_request.insert_header("X-Client-UA", client_ua.as_str())?;
         }
 
         Ok(())
@@ -710,6 +755,7 @@ mod tests {
             http_client: reqwest::Client::new(),
             upstream_addr: "127.0.0.1:4100".to_string(),
             refresh_dedup: Mutex::new(HashMap::new()),
+            rate_limiter: Arc::new(RateLimiter::new()),
         };
 
         // 2. 生成合法的 HS256 Token
@@ -771,6 +817,7 @@ mod tests {
             http_client: reqwest::Client::new(),
             upstream_addr: "127.0.0.1:4100".to_string(),
             refresh_dedup: Mutex::new(HashMap::new()),
+            rate_limiter: Arc::new(RateLimiter::new()),
         };
 
         // 生成过期 Token
@@ -828,6 +875,7 @@ mod tests {
             http_client: reqwest::Client::new(),
             upstream_addr: "127.0.0.1:4100".to_string(),
             refresh_dedup: Mutex::new(HashMap::new()),
+            rate_limiter: Arc::new(RateLimiter::new()),
         };
 
         // 错误发行方 (issuer)
@@ -974,6 +1022,7 @@ mod tests {
             http_client: reqwest::Client::new(),
             upstream_addr: "127.0.0.1:4100".to_string(),
             refresh_dedup: Mutex::new(HashMap::new()),
+            rate_limiter: Arc::new(RateLimiter::new()),
         };
 
         let now = std::time::SystemTime::now()

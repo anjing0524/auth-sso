@@ -40,33 +40,49 @@ export interface WriteLoginLogParams {
  * @param params 登录日志参数
  */
 export function writeLoginLog(params: WriteLoginLogParams): void {
-  db.insert(schema.loginLogs)
-    .values({
-      userId: params.userId || null,
-      username: params.username,
-      eventType: params.eventType,
-      ip: params.ip || null,
-      userAgent: params.userAgent || null,
-      location: params.location || null,
-      failReason: params.failReason || null,
-    })
-    .catch((err) => console.error('[Audit] 写登录日志失败:', err));
+  try {
+    db.insert(schema.loginLogs)
+      .values({
+        userId: params.userId || null,
+        username: params.username,
+        eventType: params.eventType,
+        ip: params.ip || null,
+        userAgent: params.userAgent || null,
+        location: params.location || null,
+        failReason: params.failReason || null,
+      })
+      .catch((err) => console.error('[Audit] 写登录日志失败:', err));
+  } catch (err) {
+    // 同步异常兜底：schema 未定义、DB 未连接等场景
+    // 不影响认证主流程（fire-and-forget 语义）
+    console.error('[Audit] 写登录日志失败 (sync):', err);
+  }
 }
 
 /**
  * 从请求 Headers 中提取客户端 IP
+ *
+ * 优先读取 Gateway 注入的受信 X-Client-IP；
+ * 无 Gateway（本地开发）时回退到 X-Forwarded-For。
  */
 export function extractClientIP(headers: Headers): string | null {
   return (
+    headers.get('X-Client-IP') ||
     headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
-    headers.get('x-real-ip') ||
     null
   );
 }
 
 /**
  * 从请求 Headers 中提取 User-Agent
+ *
+ * 优先读取 Gateway 注入的 X-Client-UA；
+ * 无 Gateway 时回退到原始 User-Agent。
  */
 export function extractUserAgent(headers: Headers): string | null {
-  return headers.get('user-agent') || null;
+  return (
+    headers.get('X-Client-UA') ||
+    headers.get('user-agent') ||
+    null
+  );
 }

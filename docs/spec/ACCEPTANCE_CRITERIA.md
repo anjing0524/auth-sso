@@ -87,15 +87,15 @@
 | **1** | **登录/登出/刷新不写 login_logs** | I-LOG-003 (P0) | 🔴 阻断 | `POST /api/auth/login`、`POST /api/auth/logout`、`POST /api/auth/refresh` 三个端点均不写入 `login_logs` 表。I-LOG-003 明确要求"系统自动记录用户登录/登出"。当前 login_logs 表已定义但无任何写入逻辑。 |
 | **2** | **Refresh Token Cookie Path 不一致** | H-SESS-003 (P0) | 🔴 高 | Portal `cookies.ts:35` 设置 RT path=`/api/auth/refresh`，Gateway `gateway.rs:601` 续签响应设置 RT path=`/`。ARCHITECTURE.md §5.4 写明"RT path 放宽至 `/`"。这三者不一致：Gateway 下发 Path=/，Portal 下发 Path=/api/auth/refresh，导致同一个 RT 的 path 属性取决于谁最后设置。应统一为 Path=/（Gateway 读取）+ 在 upstream_request_filter 中剥离。 |
 | **3** | **登录失败不记录失败事件** | H-FLOW-003 (P0) | 🔴 高 | 错误密码登录不记录 login_logs 的 LOGIN_FAILED 事件，无法支持暴力破解检测和安全审计。同时 NFR-SEC-06 要求的"连续 5 次失败→锁定"也无事件基础。 |
-| **4** | **API.md 存在大量 v3.1 残留** | — | 🔴 高 | API.md §1.7 仍描述 5 种旧 DataScope 类型（ALL/DEPT/DEPT_AND_SUB/SELF/CUSTOM）；§3 所有角色/用户响应示例均含已删除的 `dataScopeType` 字段；权限码残留如 `login_log:read`（应为 `audit:read`）。对外接口文档与实现严重脱节，子应用集成方将基于错误文档开发。 |
-| **5** | **速率限制未实现** | NFR-SEC-06 (P0) | 🔴 高 | API.md §1.8 定义了三级速率限制（通用 60/min、Auth 20/min、Token 30/min），代码中无任何 rate limiting 实现。暴力破解防护依赖此机制。 |
+| ~~4~~ | ~~API.md 存在大量 v3.1 残留~~ | — | ✅ 已删除 | API.md 已删除。API 文档应以源码 Route Handler 中的 JSDoc 注释为准。 |
+| ~~5~~ | ~~速率限制未实现~~ | NFR-SEC-06 (P0) | ✅ 已修复 | Gateway (Rust) `request_filter` 中已实现 `/api/auth/` 路径的 IP 限流（Auth 20/min、Token 30/min）。 |
 
 ### P1 — 生产部署前建议修复（6 项）
 
 | # | 问题 | 关联需求 | 严重程度 | 详情 |
 |---|------|---------|---------|------|
 | **6** | **DETAILED_DESIGN.md §3.1 仍引用旧 DataScope 模型** | — | 🟠 中 | 仍然描述 5 种 DataScope 类型（ALL/DEPT/DEPT_AND_SUB/SELF/CUSTOM）及 `getDataScopeFilter()`/`applyDataScopeFilter()` 函数链，这些在 v3.2 已全部移除。 |
-| **7** | **API.md 权限码与 contracts 不一致** | — | 🟠 中 | API.md §2.5 `/api/me/permissions` 响应含 `dataScopeType`/`deptId`/`customDeptIds`（v3.1 字段），实际 v3.2 只返回 `deptIds` 数组。API.md 权限码表含 `login_log:read`/`login_log:export` 等旧码。 |
+| ~~7~~ | ~~API.md 权限码与 contracts 不一致~~ | — | ✅ 已删除 | API.md 已删除，消除冲突。 |
 | **8** | **审计操作枚举残留旧值** | — | 🟠 中 | DATABASE.md §6 枚举表 `audit_operation` 不含 MENU_CREATE/UPDATE/DELETE（菜单已合并进 permissions），代码实际使用的操作类型需核对。 |
 | **9** | **多个 route.ts 存在 unused 参数警告** | — | 🟠 低 | 诊断发现 8 个文件存在 unused `request`/`adminUserId`/`or` 等参数，虽不影响功能但违反整洁代码规范。 |
 | **10** | **测试文件存在 unused import/变量** | — | 🟠 低 | 5 个测试文件有未使用的 import 或变量声明（详见 TypeScript 诊断）。 |
