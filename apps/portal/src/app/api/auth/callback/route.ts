@@ -98,10 +98,10 @@ export async function GET(request: NextRequest) {
       maxAge: tokens.expires_in || 3600,
     });
 
-    // Set-Cookie: portal_refresh_token（路径隔离仅限 /api/auth/refresh）
+    // Set-Cookie: portal_refresh_token（Path=/ 以便 Gateway 在全路径读取静默续签）
     if (tokens.refresh_token) {
       response.cookies.set(COOKIE_NAMES.REFRESH, tokens.refresh_token, {
-        path: '/api/auth/refresh',
+        path: '/',
         httpOnly: true,
         secure,
         sameSite: 'lax',

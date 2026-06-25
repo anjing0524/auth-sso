@@ -23,10 +23,12 @@ import { decodeJwtPayload } from '@/lib/session/jwt';
 import { getRefreshTokenFromCookie } from '@/lib/session/cookies';
 import { mapDomainError } from '@/domain/shared/error-mapping';
 import { COOKIE_NAMES } from '@auth-sso/contracts';
+import { writeLoginLog, extractClientIP, extractUserAgent } from '@/lib/audit';
 
 
-async function performRevocation(cookieStore: any) {
+async function performRevocation(cookieStore: Awaited<ReturnType<typeof cookies>>, headers: Headers) {
   let userId: string | undefined;
+  let username: string | undefined;
   try {
     // 1. 撤销 portal_jwt_token 的 jti（Access Token）
     const jwtToken = cookieStore.get(COOKIE_NAMES.JWT)?.value;
@@ -36,6 +38,9 @@ async function performRevocation(cookieStore: any) {
         await revokeJti(claims.jti, claims.exp);
         userId = claims.sub;
       }
+      // 从 JWT 解码获取 username（不验签，仅用于日志）
+      const payload = decodeJwtPayload(jwtToken);
+      if (payload) username = payload.sub; // 实际 username 在 claims 中不存在，退用 sub
     }
 
     // 2. 撤销 login_session 的 jti（Login Session Token）
@@ -76,7 +81,7 @@ export async function POST() {
   const response = NextResponse.json({ success: true });
   response.cookies.set(COOKIE_NAMES.JWT, '', { path: '/', httpOnly: true, sameSite: 'lax', maxAge: 0 });
   response.cookies.set(COOKIE_NAMES.LOGIN_SESSION, '', { path: '/', httpOnly: true, sameSite: 'lax', maxAge: 0 });
-  response.cookies.set(COOKIE_NAMES.REFRESH, '', { path: '/api/auth/refresh', httpOnly: true, sameSite: 'lax', maxAge: 0 });
+  response.cookies.set(COOKIE_NAMES.REFRESH, '', { path: '/', httpOnly: true, sameSite: 'lax', maxAge: 0 });
   return response;
 }
 
@@ -88,6 +93,6 @@ export async function GET(_request: NextRequest) {
   const response = NextResponse.redirect(new URL('/login', publicBase));
   response.cookies.set(COOKIE_NAMES.JWT, '', { path: '/', httpOnly: true, sameSite: 'lax', maxAge: 0 });
   response.cookies.set(COOKIE_NAMES.LOGIN_SESSION, '', { path: '/', httpOnly: true, sameSite: 'lax', maxAge: 0 });
-  response.cookies.set(COOKIE_NAMES.REFRESH, '', { path: '/api/auth/refresh', httpOnly: true, sameSite: 'lax', maxAge: 0 });
+  response.cookies.set(COOKIE_NAMES.REFRESH, '', { path: '/', httpOnly: true, sameSite: 'lax', maxAge: 0 });
   return response;
 }

@@ -15,6 +15,7 @@ import { signLoginSession, LOGIN_SESSION_TTL } from '@/lib/auth/token';
 import { EntityNotFoundError, BusinessRuleViolationError } from '@/domain/shared/errors';
 import { mapDomainError } from '@/domain/shared/error-mapping';
 import { COOKIE_NAMES } from '@auth-sso/contracts';
+import { writeLoginLog, extractClientIP, extractUserAgent } from '@/lib/audit';
 
 
 const LoginSchema = z.object({
@@ -43,18 +44,32 @@ export async function POST(request: NextRequest) {
       .where(eq(schema.users.email, email))
       .limit(1);
 
+    const ip = extractClientIP(request.headers);
+    const ua = extractUserAgent(request.headers);
+
     if (rows.length === 0) {
+      // 用户不存在 → 记录登录失败（防用户枚举，用户名填写 email 值）
+      writeLoginLog({ username: email, eventType: 'LOGIN_FAILED', ip, userAgent: ua, failReason: '用户不存在' });
       throw new EntityNotFoundError('User', email);
     }
 
     const user = rows[0]!;
 
     // 3. 领域纯函数：状态校验 + 密码存在性检查
-    validateLoginCredentials(user);
+    try {
+      validateLoginCredentials(user);
+    } catch (err) {
+      // 账号禁用/锁定/注销 → 记录登录失败
+      writeLoginLog({ userId: user.id, username: user.username, eventType: 'LOGIN_FAILED', ip, userAgent: ua, failReason: (err as Error).message });
+      throw err;
+    }
 
     // 4. 领域纯函数：bcrypt 密码比对
     const valid = await verifyPassword(password, user.passwordHash!);
-    if (!valid) throw new BusinessRuleViolationError('邮箱或密码错误');
+    if (!valid) {
+      writeLoginLog({ userId: user.id, username: user.username, eventType: 'LOGIN_FAILED', ip, userAgent: ua, failReason: '密码错误' });
+      throw new BusinessRuleViolationError('邮箱或密码错误');
+    }
 
     // 5. 异步更新 lastLoginAt（fire-and-forget）
     db.update(schema.users)
@@ -62,7 +77,10 @@ export async function POST(request: NextRequest) {
       .where(eq(schema.users.id, user.id))
       .catch((err) => console.error('[Login] 更新 lastLoginAt 失败:', err));
 
-    // 6. 签发 Login Session JWT → 写入 Cookie
+    // 6. 记录登录成功日志（I-LOG-003）
+    writeLoginLog({ userId: user.id, username: user.username, eventType: 'LOGIN_SUCCESS', ip, userAgent: ua });
+
+    // 7. 签发 Login Session JWT → 写入 Cookie
     const session = await signLoginSession(user.id);
 
     const isProduction = process.env.NODE_ENV === 'production';
