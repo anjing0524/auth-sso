@@ -67,10 +67,11 @@ export async function POST(request: NextRequest) {
       validateAuthCodeRow(codeRows[0], redirect_uri);
       const authCode = codeRows[0]!;
 
-      // PKCE 验证
-      if (authCode.codeChallenge && authCode.codeChallengeMethod === 'S256') {
-        await verifyPKCE(code_verifier, authCode.codeChallenge);
+      // PKCE 验证（OAuth 2.1 强制要求：授权码必须携带 code_challenge）
+      if (!authCode.codeChallenge || authCode.codeChallengeMethod !== 'S256') {
+        throw new InvalidGrantError('授权码缺少 PKCE code_challenge');
       }
+      await verifyPKCE(code_verifier!, authCode.codeChallenge);
 
       // 标记授权码已使用
       await db.update(schema.authorizationCodes).set({ used: true }).where(eq(schema.authorizationCodes.id, authCode.id));

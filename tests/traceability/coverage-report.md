@@ -1,8 +1,9 @@
 # Requirements Coverage Report
 
-Generated: 2026-06-24T07:38:59.249Z
+Generated: 2026-06-25T07:59:24.193Z
 
-**Total:** 41/90 covered (**45.6%**)
+**Requirements:** 66/70 covered (**94.3%**)
+**Architecture Constraints:** 17/20 covered
 
 ---
 
@@ -18,22 +19,22 @@ Coverage: **1/3**
 
 ## B: 用户管理 (User Management)
 
-Coverage: **6/8**
+Coverage: **8/8**
 
 | Requirement | Status | Test Files |
 | --- | --- | --- |
-| B-USR-L | ✅ | `tests/e2e/user-management.spec.ts` |
+| B-USR-L | ✅ | `apps/portal/__tests__/api/user-api.test.ts`<br>`tests/e2e/user-management.spec.ts`<br>`tests/e2e/user-story-screenshots.spec.ts` |
 | B-USR-S | ✅ | `tests/e2e/user-management.spec.ts` |
-| B-USR-C | ✅ | `tests/e2e/user-management.spec.ts` |
-| B-USR-R | ✅ | `apps/portal/__tests__/api/me-endpoints.test.ts` |
-| B-USR-U | ✅ | `tests/e2e/user-management.spec.ts` |
-| B-USR-D | ✅ | `tests/e2e/user-management.spec.ts` |
-| B-USR-ST | ⚠️ | — |
-| B-USR-PW | ⚠️ | — |
+| B-USR-C | ✅ | `apps/portal/__tests__/api/user-api.test.ts`<br>`tests/e2e/user-management.spec.ts`<br>`tests/e2e/user-story-screenshots.spec.ts` |
+| B-USR-R | ✅ | `apps/portal/__tests__/api/me-endpoints.test.ts`<br>`apps/portal/__tests__/api/user-api.test.ts` |
+| B-USR-U | ✅ | `apps/portal/__tests__/api/user-api.test.ts`<br>`tests/e2e/user-management.spec.ts` |
+| B-USR-D | ✅ | `apps/portal/__tests__/api/user-api.test.ts`<br>`tests/e2e/user-management.spec.ts` |
+| B-USR-ST | ✅ | `apps/portal/__tests__/api/user-api.test.ts` |
+| B-USR-PW | ✅ | `apps/portal/__tests__/api/user-api.test.ts` |
 
 ## C: 角色与授权 (Role & Authorization)
 
-Coverage: **5/6**
+Coverage: **6/6**
 
 | Requirement | Status | Test Files |
 | --- | --- | --- |
@@ -42,7 +43,7 @@ Coverage: **5/6**
 | C-ROL-U | ✅ | `apps/portal/__tests__/api/role-api.test.ts`<br>`tests/e2e/role-management.spec.ts` |
 | C-ROL-D | ✅ | `apps/portal/__tests__/api/role-api.test.ts`<br>`tests/e2e/role-management.spec.ts` |
 | C-ROL-PA | ✅ | `apps/portal/__tests__/api/role-api.test.ts` |
-| C-ROL-ASGN | ⚠️ | — |
+| C-ROL-ASGN | ✅ | `apps/portal/__tests__/api/role-api.test.ts` |
 
 ## D: 权限管理 (Permission Management)
 
@@ -57,15 +58,15 @@ Coverage: **4/4**
 
 ## E: 菜单管理 (Menu Management)
 
-Coverage: **2/5**
+Coverage: **5/5**
 
 | Requirement | Status | Test Files |
 | --- | --- | --- |
 | E-MNU-L | ✅ | `tests/e2e/menu-management.spec.ts` |
 | E-MNU-C | ✅ | `tests/e2e/menu-management.spec.ts` |
-| E-MNU-U | ⚠️ | — |
-| E-MNU-D | ⚠️ | — |
-| E-MNU-PB | ⚠️ | — |
+| E-MNU-U | ✅ | `apps/portal/__tests__/api/permission-api.test.ts` |
+| E-MNU-D | ✅ | `apps/portal/__tests__/api/permission-api.test.ts` |
+| E-MNU-PB | ✅ | `apps/portal/__tests__/api/permission-api.test.ts` |
 
 ## F: 组织架构 (Department Management)
 
@@ -81,7 +82,7 @@ Coverage: **5/5**
 
 ## G: 应用集成 (Application Integration)
 
-Coverage: **4/5**
+Coverage: **5/5**
 
 | Requirement | Status | Test Files |
 | --- | --- | --- |
@@ -89,31 +90,31 @@ Coverage: **4/5**
 | G-CLT-C | ✅ | `apps/portal/__tests__/api/client-actions.test.ts`<br>`apps/portal/__tests__/api/client-api.test.ts`<br>`tests/e2e/client-management.spec.ts` |
 | G-CLT-U | ✅ | `apps/portal/__tests__/api/client-actions.test.ts`<br>`apps/portal/__tests__/api/client-api.test.ts`<br>`tests/e2e/client-management.spec.ts` |
 | G-CLT-D | ✅ | `apps/portal/__tests__/api/client-actions.test.ts`<br>`apps/portal/__tests__/api/client-api.test.ts` |
-| G-CLT-SEC | ⚠️ | — |
+| G-CLT-SEC | ✅ | `apps/portal/__tests__/api/client-actions.test.ts` |
 
 ## H: 会话管理
 
-Coverage: **0/6**
+Coverage: **6/6**
 
 | Requirement | Status | Test Files |
 | --- | --- | --- |
-| H-SESS-001 | ⚠️ | — |
-| H-SESS-002 | ⚠️ | — |
-| H-SESS-003 | ⚠️ | — |
-| H-SESS-004 | ⚠️ | — |
-| H-SESS-005 | ⚠️ | — |
-| H-SESS-006 | ⚠️ | — |
+| H-SESS-001 | ✅ | `apps/portal/__tests__/api/session-lifecycle.test.ts` |
+| H-SESS-002 | ✅ | `apps/portal/__tests__/api/session-lifecycle.test.ts` |
+| H-SESS-003 | ✅ | `apps/portal/__tests__/api/session-lifecycle.test.ts` |
+| H-SESS-004 | ✅ | `apps/portal/__tests__/api/session-lifecycle.test.ts` |
+| H-SESS-005 | ✅ | `apps/portal/__tests__/api/session-lifecycle.test.ts` |
+| H-SESS-006 | ✅ | `apps/portal/__tests__/api/session-lifecycle.test.ts` |
 
 ## H: 单点登录与登出
 
-Coverage: **1/4**
+Coverage: **4/4**
 
 | Requirement | Status | Test Files |
 | --- | --- | --- |
-| H-SSO-001 | ⚠️ | — |
-| H-SSO-002 | ⚠️ | — |
-| H-SSO-003 | ⚠️ | — |
-| H-SSO-004 | ✅ | `apps/portal/__tests__/api/auth-logout.test.ts` |
+| H-SSO-001 | ✅ | `tests/e2e/auth-flow.spec.ts`<br>`tests/e2e/user-story-screenshots.spec.ts` |
+| H-SSO-002 | ✅ | `tests/e2e/auth-flow.spec.ts`<br>`tests/e2e/user-story-screenshots.spec.ts` |
+| H-SSO-003 | ✅ | `apps/portal/__tests__/api/auth-logout.test.ts` |
+| H-SSO-004 | ✅ | `apps/portal/__tests__/api/auth-logout.test.ts`<br>`apps/portal/__tests__/api/session-lifecycle.test.ts` |
 
 ## H: 数据范围控制
 
@@ -122,25 +123,25 @@ Coverage: **3/3**
 | Requirement | Status | Test Files |
 | --- | --- | --- |
 | H-DSCOPE-001 | ✅ | `apps/portal/__tests__/api/data-scope.test.ts`<br>`apps/portal/__tests__/api/department-api.test.ts` |
-| H-DSCOPE-002 | ✅ | `apps/portal/__tests__/api/data-scope.test.ts` |
-| H-DSCOPE-003 | ✅ | `apps/portal/__tests__/api/data-scope.test.ts` |
+| H-DSCOPE-002 | ✅ | `apps/portal/__tests__/api/data-scope.test.ts`<br>`apps/portal/__tests__/api/department-api.test.ts` |
+| H-DSCOPE-003 | ✅ | `apps/portal/__tests__/api/data-scope.test.ts`<br>`apps/portal/__tests__/api/department-api.test.ts` |
 
 ## H: 用户认证
 
-Coverage: **1/10**
+Coverage: **10/10**
 
 | Requirement | Status | Test Files |
 | --- | --- | --- |
-| H-AUTH-001 | ✅ | `apps/portal/__tests__/api/me-endpoints.test.ts` |
-| H-AUTH-002 | ⚠️ | — |
-| H-AUTH-003 | ⚠️ | — |
-| H-AUTH-004 | ⚠️ | — |
-| H-AUTH-005 | ⚠️ | — |
-| H-AUTH-006 | ⚠️ | — |
-| H-AUTH-010 | ⚠️ | — |
-| H-AUTH-011 | ⚠️ | — |
-| H-AUTH-012 | ⚠️ | — |
-| H-AUTH-013 | ⚠️ | — |
+| H-AUTH-001 | ✅ | `apps/portal/__tests__/api/me-endpoints.test.ts`<br>`tests/e2e/user-story-screenshots.spec.ts` |
+| H-AUTH-002 | ✅ | `apps/portal/__tests__/api/auth-login.test.ts`<br>`tests/e2e/user-story-screenshots.spec.ts` |
+| H-AUTH-003 | ✅ | `apps/portal/__tests__/domain/auth.test.ts` |
+| H-AUTH-004 | ✅ | `apps/portal/__tests__/domain/auth.test.ts` |
+| H-AUTH-005 | ✅ | `tests/e2e/user-story-screenshots.spec.ts` |
+| H-AUTH-006 | ✅ | `apps/portal/__tests__/api/auth-login.test.ts`<br>`tests/e2e/user-story-screenshots.spec.ts` |
+| H-AUTH-010 | ✅ | `apps/portal/__tests__/domain/auth.test.ts` |
+| H-AUTH-011 | ✅ | `apps/portal/__tests__/domain/auth.test.ts` |
+| H-AUTH-012 | ✅ | `tests/e2e/auth-flow.spec.ts` |
+| H-AUTH-013 | ✅ | `tests/e2e/auth-flow.spec.ts` |
 
 ## H: 端到端流程验证
 
@@ -148,10 +149,10 @@ Coverage: **4/4**
 
 | Requirement | Status | Test Files |
 | --- | --- | --- |
-| H-FLOW-001 | ✅ | `tests/e2e/auth-flow.spec.ts` |
-| H-FLOW-002 | ✅ | `tests/e2e/auth-flow.spec.ts` |
-| H-FLOW-003 | ✅ | `tests/e2e/auth-flow.spec.ts` |
-| H-FLOW-004 | ✅ | `tests/e2e/auth-flow.spec.ts` |
+| H-FLOW-001 | ✅ | `tests/e2e/auth-flow.spec.ts`<br>`tests/e2e/user-story-screenshots.spec.ts` |
+| H-FLOW-002 | ✅ | `tests/e2e/auth-flow.spec.ts`<br>`tests/e2e/user-story-screenshots.spec.ts` |
+| H-FLOW-003 | ✅ | `tests/e2e/auth-flow.spec.ts`<br>`tests/e2e/user-story-screenshots.spec.ts` |
+| H-FLOW-004 | ✅ | `tests/e2e/auth-flow.spec.ts`<br>`tests/e2e/user-story-screenshots.spec.ts` |
 
 ## H: 访问控制
 
@@ -161,7 +162,7 @@ Coverage: **3/3**
 | --- | --- | --- |
 | H-ACL-001 | ✅ | `apps/portal/__tests__/api/permission-enforcement.test.ts`<br>`tests/e2e/rbac-enforcement.spec.ts` |
 | H-ACL-002 | ✅ | `apps/portal/__tests__/api/permission-enforcement.test.ts`<br>`tests/e2e/rbac-enforcement.spec.ts` |
-| H-ACL-003 | ✅ | `tests/e2e/rbac-enforcement.spec.ts` |
+| H-ACL-003 | ✅ | `apps/portal/__tests__/api/permission-enforcement.test.ts`<br>`tests/e2e/rbac-enforcement.spec.ts` |
 
 ## I: 审计与日志 (Audit & Logging)
 
@@ -173,14 +174,3 @@ Coverage: **2/4**
 | I-LOG-002 | ✅ | `apps/portal/__tests__/api/audit-logging.test.ts` |
 | I-LOG-003 | ⚠️ | — |
 | I-LOG-004 | ⚠️ | — |
-
-## Unrecognized @req IDs
-
-These IDs appear in `@req` annotations but are not found in the requirements matrix:
-
-- `C-ROL-CA`
-- `C-ROL-DS`
-- `H-ACL-004`
-- `H-ACL-005`
-- `H-DSCOPE-004`
-- `H-DSCOPE-005`

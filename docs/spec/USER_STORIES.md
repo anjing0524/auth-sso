@@ -1,9 +1,11 @@
 # User Stories - Auth-SSO
 
-Version: v2.0
-Status: Released
-Last Updated: 2026-06-24
+Version: v3.2
+Status: Released (角色矩阵 + 正文已同步 v3.2，旧行为以删除线标注)
+Last Updated: 2026-06-25
 Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, API.md, ARCHITECTURE.md, DATABASE.md
+
+> **⚠️ v3.2 术语漂移**：本文档部分 User Story 描述的是 v3.1 的 DataScope 模型（`DEPT`/`DEPT_AND_SUB`/`ALL`/`SELF`/`CUSTOM`、`role_data_scopes` 表）。v3.2 已将这些替换为「角色归属部门（`roles.dept_id`）+ 子树展开」的简化模型。角色矩阵已同步至 v3.2；US-C-02/07、US-CROSS-07、US-RBAC-01/04 等 DataScope 相关 Story 正文已将术语替换为 v3.2 描述，旧行为以 `~~删除线~~` 标注。详见 [RBAC_MODEL_REDESIGN.md](./RBAC_MODEL_REDESIGN.md)。
 
 ---
 
@@ -22,14 +24,14 @@ Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, API.md, ARCHITECTURE.md, DATABASE
 
 ### 1.2 测试用户
 
-| 用户 | 部门 | 角色 | DataScope | 说明 |
+| 用户 | 部门 | 角色 | 数据范围（v3.2: 由角色所属部门决定） | 说明 |
 | :--- | :--- | :--- | :--- | :--- |
-| **张三** | 总部 | `super_admin` | `ALL` | 超级管理员，拥有全部权限 |
-| **李四** | 技术部 | `org_admin` | `DEPT_AND_SUB` | 组织管理员，管理技术部及子部门 |
-| **王五** | 产品部 | `dept_manager` | `DEPT` | 部门经理，仅管理产品部 |
-| **赵六** | 后端组 | `employee` | `SELF` | 普通员工，仅查看自身数据 |
-| **孙七** | 总部 | `app_admin` | `ALL` | 应用管理员，仅管理 OAuth 客户端 |
-| **周八** | 运营部 | `audit_viewer` | `SELF` | 审计员，仅查看审计/登录日志 |
+| **张三** | 总部 | `super_admin` | 全部部门 | 超级管理员，拥有全部权限 |
+| **李四** | 技术部 | `org_admin` | 技术部 + 子部门 | 组织管理员，角色归属技术部 |
+| **王五** | 产品部 | `dept_manager` | 产品部 | 部门经理，角色归属产品部 |
+| **赵六** | 后端组 | `employee` | 后端组 | 普通员工，角色归属后端组 |
+| **孙七** | 总部 | `app_admin` | 全部部门 | 应用管理员，仅管理 OAuth 客户端 |
+| **周八** | 运营部 | `audit_viewer` | 运营部 | 审计员，仅查看审计/登录日志 |
 | **吴九** | 前端组 | _(无角色)_ | — | 新入职员工，无任何权限 |
 | **陈十** | 产品部 | `employee`（DISABLED） | `SELF` | 已禁用账户，不可登录 |
 
@@ -169,7 +171,7 @@ Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, API.md, ARCHITECTURE.md, DATABASE
 
 **验收标准：**
 1. 指标卡片数据正确加载，无空白或 loading 卡死
-2. 数据范围遵循用户 DataScope：张三看到全公司数据，李四看到技术部及子部门数据，王五只看到产品部数据
+2. 数据范围由角色所属部门决定：张三（super_admin）看到全公司，李四（归属技术部）看到技术部及子部门，王五（归属产品部）只看到产品部
 3. 无 `system:view_dashboard` 权限的用户（如吴九）看不到仪表盘
 
 ---
@@ -178,9 +180,9 @@ Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, API.md, ARCHITECTURE.md, DATABASE
 
 ### US-B-01：超级管理员查看全部用户列表
 
-> **@req B-USR-L** | **权限:** `user:list` | **DataScope:** `ALL`
+> **@req B-USR-L** | **权限:** `user:list`
 
-**作为** 拥有 `super_admin` 角色（DataScope: ALL）的张三，
+**作为** 拥有 `super_admin` 角色的张三（超级管理员绕过数据范围限制），
 **我** 访问用户管理页面时看到公司所有用户（包括总部、技术部、前端组、后端组、产品部、运营部的全部成员），
 **以便** 我能全局管理所有用户。
 
@@ -193,26 +195,30 @@ Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, API.md, ARCHITECTURE.md, DATABASE
 
 ### US-B-02：组织管理员查看本部门及子部门用户
 
-> **@req B-USR-L** | **权限:** `user:list` | **DataScope:** `DEPT_AND_SUB`
+> **@req B-USR-L** | **权限:** `user:list`
 
-**作为** 拥有 `org_admin` 角色（DataScope: DEPT_AND_SUB）的李四（隶属技术部），
+**作为** 拥有 `org_admin` 角色（归属技术部）的李四，
 **我** 访问用户管理页面时仅看到技术部及其子部门（前端组、后端组）的用户，
 **以便** 我在职责范围内管理用户，不会看到产品部或运营部的用户。
+
+> ~~v3.1：DataScope: DEPT_AND_SUB~~ → v3.2：角色归属技术部，数据范围 = 技术部 + 子部门（ancestors LIKE 子树展开）。
 
 **验收标准：**
 1. 列表仅展示技术部、前端组、后端组的用户（赵六在列）
 2. 总部、产品部、运营部的用户（王五、周八等）不出现在列表中
-3. 调用 `GET /api/users` 返回数据已按 DataScope 过滤
+3. 调用 `GET /api/users` 返回数据已按 deptIds 过滤
 
 ---
 
 ### US-B-03：部门经理仅查看本部门用户
 
-> **@req B-USR-L** | **权限:** `user:list` | **DataScope:** `DEPT`
+> **@req B-USR-L** | **权限:** `user:list`
 
-**作为** 拥有 `dept_manager` 角色（DataScope: DEPT）的王五（隶属产品部），
-**我** 访问用户管理页面时仅看到产品部的直属用户（不包含子部门），
+**作为** 拥有 `dept_manager` 角色（归属产品部）的王五，
+**我** 访问用户管理页面时仅看到产品部的直属用户，
 **以便** 我管理本部门成员。
+
+> ~~v3.1：DataScope: DEPT~~ → v3.2：角色归属产品部，数据范围 = 产品部（若无需子部门，将角色 dept_id 设在产品部即可，子树展开仅当角色部门有子部门时生效）。
 
 **验收标准：**
 1. 列表仅展示产品部直属用户
@@ -220,17 +226,19 @@ Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, API.md, ARCHITECTURE.md, DATABASE
 
 ---
 
-### US-B-04：普通员工仅查看自己
+### US-B-04：普通员工的数据范围
 
-> **@req B-USR-L** | **权限:** `user:list` | **DataScope:** `SELF`
+> **@req B-USR-L** | **权限:** `user:list`
 
-**作为** 拥有 `employee` 角色（DataScope: SELF）的赵六，
-**我** 访问用户管理页面时仅看到自己一条记录，
-**以便** 我能查看自己的信息但无法浏览其他同事。
+**作为** 拥有 `employee` 角色（归属后端组）的赵六，
+**我** 访问用户管理页面时仅看到后端组的用户，
+**以便** 我能查看本部门同事信息。
+
+> ~~v3.1：DataScope: SELF~~ → v3.2：角色归属后端组，数据范围 = 后端组（含子部门，如有）。不再有「仅自身」的数据范围类型。
 
 **验收标准：**
-1. 列表仅展示赵六本人
-2. 即使使用搜索功能也无法查到其他用户
+1. 列表仅展示后端组用户
+2. 搜索功能无法查到其他部门的用户
 
 ---
 
@@ -260,7 +268,7 @@ Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, API.md, ARCHITECTURE.md, DATABASE
 **验收标准：**
 1. 输入「赵」后 300ms 内触发搜索（debounce）
 2. 结果匹配姓名、邮箱、用户名字段
-3. 搜索结果仍受 DataScope 约束（李四搜索时只返回技术部及子部门的匹配用户）
+3. 搜索结果仍受数据范围约束（李四搜索时只返回技术部及子部门的匹配用户）
 
 ---
 
@@ -305,7 +313,7 @@ Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, API.md, ARCHITECTURE.md, DATABASE
 
 **验收标准：**
 1. 详情页展示：用户名、姓名、邮箱、手机号、部门、角色列表、状态、创建时间、最近登录
-2. 访问不在 DataScope 范围内的用户详情时返回 404（如李四访问产品部王五的详情）
+2. 访问不在数据范围内的用户详情时返回 404（如李四访问产品部王五的详情）
 3. 用户资料使用 `id`（uuid）作为外部标识
 
 ---
@@ -320,7 +328,7 @@ Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, API.md, ARCHITECTURE.md, DATABASE
 
 **验收标准：**
 1. 修改保存成功后详情页即时刷新
-2. 部门变更后，DataScope 为 DEPT 的管理者列表自动反映变化
+2. 部门变更后，归属该部门的管理者列表自动反映变化
 3. 李四（org_admin，管理技术部）也能编辑技术部内用户的资料
 4. 王五（dept_manager）可编辑产品部用户的资料，但不可编辑其他部门用户
 
@@ -371,7 +379,7 @@ Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, API.md, ARCHITECTURE.md, DATABASE
 **验收标准：**
 1. 角色选择器展示系统所有可用角色列表
 2. 保存后赵六的 JWT claims 中 `roles` 字段包含 `dept_manager`
-3. 赵六的 DataScope 更新为 `DEPT`（跟随 `dept_manager` 角色的配置）
+3. 赵六的数据范围跟随新分配角色的所属部门
 4. 赵六的下一次 API 请求即生效（或通过刷新 Token 立即生效）
 
 ---
@@ -403,22 +411,24 @@ Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, API.md, ARCHITECTURE.md, DATABASE
 **以便** 我了解和管理局部角色配置。
 
 **验收标准：**
-1. 角色列表展示：角色名称、Code、描述、DataScope 类型、关联用户数
+1. 角色列表展示：角色名称、Code、描述、所属部门、关联用户数
 2. 李四（org_admin）和赵六（employee）也能看到角色列表（有 `role:list`）
 3. 吴九（无角色）无法访问角色列表页面
 
 ---
 
-### US-C-02：新建角色（含 Code 和 DataScope）
+### US-C-02：新建角色（含部门归属）
 
 > **@req C-ROL-C** | **权限:** `role:create`
 
 **作为** 拥有 `super_admin` 角色的张三，
-**我** 点击「新建角色」，在对话框中填写角色名称「项目经理」、Code `project_manager`、描述、DataScope 选择 `DEPT_AND_SUB`，
-**以便** 为项目管理岗位创建专属角色。
+**我** 点击「新建角色」，在对话框中填写角色名称「项目经理」、Code `project_manager`、描述、所属部门选择「技术部」，
+**以便** 为项目管理岗位创建专属角色，该角色的数据范围自动限定为技术部及子部门。
+
+> ~~v3.1：DataScope 选择 `DEPT_AND_SUB`~~ → v3.2：选择「所属部门」，数据范围由 `roles.dept_id` 隐式决定。
 
 **验收标准：**
-1. 对话框包含：角色名称（必填）、Code（必填，唯一）、描述（选填）、DataScope 类型下拉
+1. 对话框包含：角色名称（必填）、Code（必填，唯一）、描述（选填）、所属部门选择（必填）
 2. Code 重复时提示错误
 3. 创建成功后角色出现在列表中
 4. 李四（无 `role:create`）看不到「新建角色」按钮
@@ -488,19 +498,20 @@ Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, API.md, ARCHITECTURE.md, DATABASE
 
 ---
 
-### US-C-07：修改角色的 DataScope 配置
+### US-C-07：修改角色的所属部门
 
-> **@req C-ROL-DS** | **权限:** `role:update`
+> **@req C-ROL-U** | **权限:** `role:update`
 
 **作为** 拥有 `super_admin` 角色的张三，
-**我** 将 `dept_manager` 角色的 DataScope 从 `DEPT` 修改为 `DEPT_AND_SUB`，
-**以便** 部门经理能管理子部门用户。
+**我** 将 `dept_manager` 角色的所属部门从「产品部」修改为「技术部」，
+**以便** 该角色的数据范围跟随新部门变动。
+
+> ~~v3.1：DataScope 下拉 ALL/DEPT/DEPT_AND_SUB/SELF/CUSTOM~~ → v3.2：修改 `roles.dept_id`，数据范围自动切换为新技术部 + 子部门。
 
 **验收标准：**
-1. DataScope 下拉包含：`ALL`、`DEPT`、`DEPT_AND_SUB`、`SELF`、`CUSTOM`
-2. 选择 `CUSTOM` 时弹出部门选择器，可勾选多个部门
-3. 修改保存后，拥有该角色用户的 API 查询结果范围立即变更
-4. 王五（dept_manager）下次查询用户列表时能看到产品部及其子部门的用户
+1. 角色编辑表单包含「所属部门」下拉选择
+2. 修改保存后，拥有该角色用户的 API 查询结果范围立即跟随新部门变更
+3. 部门变更后，该角色所有用户的数据范围同步更新
 
 ---
 
@@ -721,7 +732,7 @@ Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, API.md, ARCHITECTURE.md, DATABASE
 
 **验收标准：**
 1. 列表展示：客户端名称、Client ID、Redirect URI、授权角色、状态、创建时间
-2. 孙七能看到完整的客户端列表（DataScope: ALL）
+2. 孙七能看到完整的客户端列表（归属总部，数据范围覆盖全公司）
 3. 李四（无 `client:list`）无法访问此页面，侧边栏不显示入口
 
 ---
@@ -1557,7 +1568,7 @@ JWT payload 包含以下 claims：
 
 **验收标准：**
 1. JWT `permissions` 数组包含 `user:list`, `user:create`, ..., `audit:read`, `audit:export`（两个角色的并集）
-2. DataScope 取权限最大的角色值（`DEPT_AND_SUB`）
+2. 数据范围取多角色部门（含子树展开）的并集
 3. 侧边栏展示两个角色对应的所有菜单
 
 ---
@@ -1622,33 +1633,34 @@ JWT payload 包含以下 claims：
 
 ---
 
-### US-CROSS-07：DataScope CUSTOM 自定义部门
+### US-CROSS-07：跨部门数据访问（多角色方案）
+
+> ~~v3.1：DataScope CUSTOM + role_data_scopes 表~~ → v3.2：每个角色只能属于一个部门。跨部门访问通过为用户分配多个角色实现。
 
 **作为** 拥有 `super_admin` 角色的张三，
-**我** 创建一个新角色「跨部门协调员」，DataScope 选择 `CUSTOM`，并勾选「技术部」和「产品部」，
-**以便** 拥有该角色的用户能同时看到两个部门的用户。
+**我** 为赵六分配两个角色——归属「技术部」的 `developer` 和归属「产品部」的 `product_viewer`，
+**以便** 赵六能同时看到两个部门的用户（数据范围取多角色部门的并集）。
 
 **验收标准：**
-1. DataScope 选择 `CUSTOM` 时展示部门选择器
-2. 可勾选多个任意部门（不限于当前用户的部门范围）
-3. 拥有该角色的用户查询用户列表时，结果包含所选部门的用户
-4. 存储到 `role_data_scopes` 关联表（role_id + dept_id 复合主键）
+1. 为用户分配多个不同部门的角色后，用户的数据范围为各部门 ID（含子树展开）的并集
+2. 赵六查询用户列表时，能同时看到技术部（含子部门）和产品部的用户
+3. 移除某个角色后，对应该部门的数据范围立即失效
 
 ---
 
 ## 15. RBAC 边界场景补充故事
 
-### US-RBAC-01：用户部门变更后 DataScope 重算
+### US-RBAC-01：用户部门变更后数据范围重算
 
 **作为** 拥有 `super_admin` 角色的张三，
 **我** 将赵六从「后端组」调到「产品部」后，
-**赵六** 的 DataScope（跟随 `employee` 角色的 `SELF`）自动基于新部门生效。
+**赵六** 的数据范围跟随其角色所属部门自动更新（v3.2：角色的 `dept_id` 不变，但用户可以分配新部门的角色）。
 
 **验收标准：**
-1. 赵六部门变更后，下次 API 请求的数据范围基于「产品部」
+1. 赵六分配到产品部下的角色后，下次 API 请求的数据范围包含产品部（及子部门）
 2. 李四（org_admin，管理技术部）不再在用户列表中看到赵六
 3. 王五（dept_manager，管理产品部）开始在用户列表中看到赵六
-4. 若赵六角色有 `DEPT` DataScope，则自动切换到新产品部的数据范围
+4. 用户换部门后需重新分配属于新部门的角色（R-USER-ROLE 部门约束）
 
 ---
 
@@ -1681,16 +1693,18 @@ JWT payload 包含以下 claims：
 
 ---
 
-### US-RBAC-04：多角色 DataScope 冲突解决
+### US-RBAC-04：多角色数据范围合并（并集）
+
+> ~~v3.1：DataScope 优先级模型（ALL > DEPT_AND_SUB > DEPT > CUSTOM > SELF）~~ → v3.2：数据范围 = 所有角色所属部门（含子树展开）的并集。
 
 **作为** 拥有 `super_admin` 角色的张三，
-**我** 给赵六同时分配 `dept_manager`（DataScope: `DEPT`）和 `employee`（DataScope: `SELF`）两个角色，
-**系统** 取最大权限的 DataScope（`DEPT`），而非 `SELF`。
+**我** 给赵六同时分配归属「产品部」的 `dept_manager` 和归属「后端组」的 `employee` 两个角色，
+**系统** 取两个角色部门的并集作为赵六的数据范围（产品部 + 后端组及各自子部门）。
 
 **验收标准：**
-1. 多角色 DataScope 优先级：`ALL` > `DEPT_AND_SUB` > `DEPT` > `CUSTOM` > `SELF`
-2. 赵六的最终 DataScope 为 `DEPT`（取最大值）
-3. JWT claims 中包含两个角色的所有权限并集
+1. 多角色数据范围 = 所有角色 `dept_id`（含子树展开）的并集，权限取并集
+2. 赵六的最终数据范围为「产品部 + 后端组（及子部门）」
+3. JWT claims 中包含两个角色的所有权限并集和部门 ID 并集
 4. 侧边栏展示两个角色对应的所有菜单
 
 ---

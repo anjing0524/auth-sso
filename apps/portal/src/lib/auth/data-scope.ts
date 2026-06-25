@@ -86,3 +86,30 @@ export async function getUserRoleDeptIds(userId: string): Promise<string[]> {
 
   return Array.from(new Set(allDeptIds.flat()));
 }
+
+/**
+ * 校验管理员是否有权访问目标部门下的数据（同步纯函数，零 I/O）
+ *
+ * 用于敏感写操作（重置密码、强制下线、角色绑定等）的数据范围守卫，
+ * 避免跨部门越权（H-ACL-002 / H-DSCOPE-003）。
+ *
+ * deptIds 应来自 JWT claims.deptIds（已含子树展开），
+ * 或由调用方通过 getUserRoleDeptIds() 预先获取。
+ *
+ * 规则：
+ * - deptIds 为空 → 拒绝（无可见部门）
+ * - 目标无部门（targetDeptId 为 null/undefined）→ 拒绝
+ * - 目标部门不在 deptIds 集合内 → 拒绝
+ *
+ * @param deptIds 管理员可见的部门 ID 列表（已展开子树）
+ * @param targetDeptId 被操作对象所属部门 ID
+ * @returns true 表示有权访问
+ */
+export function canAccessDept(
+  deptIds: string[],
+  targetDeptId: string | null | undefined,
+): boolean {
+  if (!targetDeptId) return false;
+  if (deptIds.length === 0) return false;
+  return deptIds.includes(targetDeptId);
+}

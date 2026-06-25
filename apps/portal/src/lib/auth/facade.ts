@@ -23,12 +23,14 @@ import {
 } from './check-permission';
 import {
   getUserRoleDeptIds,
+  canAccessDept,
 } from './data-scope';
 
 // 统一透出子模块能力
 export {
   checkPermission,
   getUserRoleDeptIds,
+  canAccessDept,
 };
 export type { PermissionCheckOptions, PermissionCheckResult };
 

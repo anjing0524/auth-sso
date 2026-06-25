@@ -72,7 +72,7 @@ async function performDepartmentUpdate(tx: any, deptId: string, patch: Record<st
 
   const dept = toDomainDepartment(row);
   const allDepts = await tx.query.departments.findMany();
-  const newAncestors = resolveParentAncestors(dept, patch.parentId, allDepts);
+  const newAncestors = resolveParentAncestors(dept, patch.parentId as string | null | undefined, allDepts);
   const parentChanged = newAncestors !== undefined;
 
   const mergedPatch = { ...patch, ...(parentChanged ? { ancestors: newAncestors } : {}) };

@@ -48,13 +48,18 @@ export function validateClientSecret(
 }
 
 /**
- * 校验 redirect_uri 是否在 Client 注册的白名单中
+ * 校验 redirect_uri 是否在 Client 注册的白名单中（精确匹配）
+ *
+ * 安全注意：必须使用精确字符串比较，禁止 startsWith 前缀匹配——
+ * 前缀放行会让 `https://app.example.com/cb` 错误地接受 `https://app.example.com/cb.evil.com/...`，
+ * 构成开放重定向风险（OAuth 2.1 安全最佳实践 / RFC 6749 §3.1.2.3）。
+ *
  * @param redirectUris - Client 注册的 redirect URI 数组（PG text[]）
  * @param redirectUri - 请求中的 redirect_uri
  * @throws InvalidRedirectUriError 当 redirect_uri 不在白名单中
  */
 export function validateRedirectUri(redirectUris: string[], redirectUri: string): void {
-  if (!redirectUris.some((uri) => redirectUri.startsWith(uri))) {
+  if (!redirectUris.includes(redirectUri)) {
     throw new InvalidRedirectUriError();
   }
 }

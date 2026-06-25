@@ -5,26 +5,36 @@ import 'server-only';
 
 import { cacheLife, cacheTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
-import { eq, ilike, or, asc, desc, and, count } from 'drizzle-orm';
+import { eq, ilike, or, asc, desc, and, count, inArray } from 'drizzle-orm';
 import { asEntityStatus } from '@/lib/type-guards';
 
 /**
  * 分页获取角色列表
+ *
+ * @param params.deptIds 可选的部门范围过滤（数据范围控制）；为空数组时返回空集
  */
 export async function getRoles(params: {
   page: number;
   pageSize: number;
   keyword: string;
   status: string;
+  deptIds?: string[];
 }) {
   'use cache';
   cacheLife('minutes');
   cacheTag('roles-list');
 
-  const { page, pageSize, keyword, status } = params;
+  const { page, pageSize, keyword, status, deptIds } = params;
   const offset = (page - 1) * pageSize;
 
   const conditions = [];
+  // 数据范围：仅返回管理员可见部门内的角色（H-ACL-002）
+  if (deptIds && deptIds.length === 0) {
+    return { data: [], pagination: { page, pageSize, total: 0, totalPages: 0 } };
+  }
+  if (deptIds && deptIds.length > 0) {
+    conditions.push(inArray(schema.roles.deptId, deptIds));
+  }
   if (keyword) {
     conditions.push(or(
       ilike(schema.roles.name, `%${keyword}%`),

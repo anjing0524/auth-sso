@@ -2,12 +2,14 @@
  * 权限管理 API 单元测试
  *
  * @req D-PRM-L, D-PRM-C, D-PRM-U, D-PRM-D
+ * @req E-MNU-U, E-MNU-D, E-MNU-PB
  * @vitest-environment node
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const mocks = vi.hoisted(() => {
   let _queryResult: any[] = [];
+  let _queryQueue: any[][] = [];
   let _returningResult: any[] = [];
   let _rowCountResult = 1;
   let _executeResult: any[] = [];
@@ -15,7 +17,10 @@ const mocks = vi.hoisted(() => {
 
   function createChain(): any {
     const chain: any = () => {};
-    chain.then = (resolve: Function) => resolve(_queryResult);
+    chain.then = (resolve: Function) => {
+      const result = _queryQueue.length > 0 ? (_queryQueue.shift() ?? _queryResult) : _queryResult;
+      resolve(result);
+    };
     chain.catch = () => ({ then: (r: Function) => r([]) });
     return new Proxy(chain, {
       get(t, prop: string) {
@@ -113,13 +118,15 @@ const mocks = vi.hoisted(() => {
     db,
     schema,
     authFn,
-    setQueryResult(r: any[]) { _queryResult = r; },
+    setQueryResult(r: any[]) { _queryResult = r; _queryQueue = []; },
+    setQueryQueue(q: any[][]) { _queryQueue = q; },
     setReturningResult(r: any[]) { _returningResult = r; },
     setRowCountResult(n: number) { _rowCountResult = n; },
     setExecuteResult(r: any[]) { _executeResult = r; },
     getInserts() { return _inserts; },
     reset() {
       _queryResult = [];
+      _queryQueue = [];
       _returningResult = [];
       _rowCountResult = 1;
       _executeResult = [];
@@ -167,6 +174,7 @@ function makeRegisterClientRow(overrides: Record<string, any> = {}) {
     clientId: 'registry-client',
     clientSecret: 'hash:registry-secret',
     name: '权限注册客户端',
+    status: 'ACTIVE',
     ...overrides,
   };
 }
@@ -268,8 +276,8 @@ describe('Permission API', () => {
     });
 
     it('完整同步权限树成功（新权限全部插入）', async () => {
-      // client 数据用于注册验证 + 事务中权限查询
-      mocks.setQueryResult([makeRegisterClientRow()]);
+      // client 查询 → clientRow；事务内权限查询 → 空（无旧权限）
+      mocks.setQueryQueue([[makeRegisterClientRow()], []]);
       mocks.setExecuteResult([]);
 
       const body = await parseResponseJson(await RegisterPermissions(createRegisterReq([

@@ -96,12 +96,15 @@ export async function checkPermission(
  * 替代每个 page.tsx 中手写的 checkPermission + if (!authorized) 样板。
  * Layout 和 Page 各自调用时命中缓存，零额外开销。
  *
+ * 返回完整鉴权上下文（userId + claims），调用方直接从 claims.deptIds
+ * 获取数据范围，无需再查 DB（消除重复的 getUserRoleDeptIds 查询）。
+ *
  * @param options 权限检查选项
- * @returns 鉴权通过返回 userId，失败返回 null
+ * @returns 鉴权通过返回 { userId, claims }，失败返回 null
  */
 export const requirePermission = cache(
-  async (options: PermissionCheckOptions): Promise<string | null> => {
+  async (options: PermissionCheckOptions): Promise<{ userId: string; claims: PortalJwtClaims } | null> => {
     const auth = await checkPermission(options);
-    return auth.authorized && auth.userId ? auth.userId : null;
+    return auth.authorized && auth.userId && auth.claims ? { userId: auth.userId, claims: auth.claims } : null;
   },
 );

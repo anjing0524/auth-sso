@@ -4,7 +4,7 @@
  * POST /api/users/[id]/reset-password — 管理员重置用户密码，所有活跃会话立即失效
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { withPermission } from '@/lib/auth';
+import { withPermission, canAccessDept } from '@/lib/auth';
 import { db, schema } from '@/infrastructure/db';
 import { eq } from 'drizzle-orm';
 import { hashPassword } from '@/domain/auth/password';
@@ -18,7 +18,7 @@ export async function POST(
   request: NextRequest,
   { params }: RouteParams,
 ) {
-  return withPermission({ permissions: ['user:update'] }, async () => {
+  return withPermission({ permissions: ['user:update'] }, async (adminUserId, claims) => {
     const { id } = await params;
     const body = await request.json();
     const newPassword = body.password as string;
@@ -36,12 +36,28 @@ export async function POST(
       );
     }
 
+    // 数据范围守卫：只能重置本部门（含子部门）范围内用户的密码（H-DSCOPE-003）
+    // deptIds 来自 JWT claims，无需额外 DB 查询
+    const target = await db.query.users.findFirst({
+      where: eq(schema.users.id, id),
+      columns: { id: true, deptId: true },
+    });
+    if (!target) {
+      return NextResponse.json(
+        { error: USER_ERRORS.USER_NOT_FOUND, message: '用户不存在' },
+        { status: 404 },
+      );
+    }
+    if (!canAccessDept(claims.deptIds, target.deptId)) {
+      return NextResponse.json(
+        { error: COMMON_ERRORS.FORBIDDEN, message: '无权操作该用户' },
+        { status: 403 },
+      );
+    }
+
     const passwordHash = await hashPassword(newPassword);
 
     await db.transaction(async (tx) => {
-      const row = await tx.query.users.findFirst({ where: eq(schema.users.id, id) });
-      if (!row) throw Object.assign(new Error('用户不存在'), { code: USER_ERRORS.USER_NOT_FOUND });
-
       await tx.update(schema.users)
         .set({ passwordHash })
         .where(eq(schema.users.id, id));

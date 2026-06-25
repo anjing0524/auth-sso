@@ -34,14 +34,14 @@ import {
 } from '@/components/ui/table';
 
 import { getDashboardStats, getRecentAuditLogs } from './data';
-import { getUserRoleDeptIds } from '@/lib/auth';
 import { resolveIdentity } from '@/lib/auth/verify-jwt';
 
 
 export default async function DashboardPage() {
   // 鉴权由 layout.tsx 统一处理（requirePermission(['dashboard:view'])），本组件零鉴权样板
+  // deptIds 来自 JWT claims（已含子树展开），无需额外 DB 查询
   const identity = await resolveIdentity();
-  const deptIds = identity ? await getUserRoleDeptIds(identity.userId) : [];
+  const deptIds = identity?.claims.deptIds ?? [];
   const [stats, recentLogs] = await Promise.all([
     getDashboardStats(deptIds),
     getRecentAuditLogs(),

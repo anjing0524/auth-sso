@@ -73,14 +73,17 @@ export const resolveIdentity = cache(
     const token = await getJwtFromRequest();
 
     if (gatewayUserId) {
-      // Gateway 已验证 JWT，Portal 从请求快速解码获取完整 claims
+      // Gateway 已验证 JWT 签名 + issuer + jti，Portal 补充 aud 校验（纵深防御）
       if (token) {
         const claims = decodeJwtPayload(token);
-        if (claims) {
+        if (claims && claims.aud === 'portal-client') {
           return { userId: gatewayUserId, claims };
         }
+        if (claims && claims.aud !== 'portal-client') {
+          console.warn('[Auth] Gateway 信任路径 aud 不匹配:', claims.aud);
+        }
       }
-      // 极端情况：有 X-User-Id 但无 JWT → 降级最小 claims
+      // 极端情况：有 X-User-Id 但无有效 JWT → 降级最小 claims
       return { userId: gatewayUserId, claims: { ...EMPTY_CLAIMS, sub: gatewayUserId } };
     }
 

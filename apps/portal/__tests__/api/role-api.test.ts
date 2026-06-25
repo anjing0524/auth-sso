@@ -10,7 +10,7 @@
  * - 角色权限绑定（查询、分配）
  * - 权限检查（403）
  *
- * @req C-ROL-L, C-ROL-C, C-ROL-U, C-ROL-D, C-ROL-PA, C-ROL-CA, C-ROL-DS
+ * @req C-ROL-L, C-ROL-C, C-ROL-U, C-ROL-D, C-ROL-PA, C-ROL-ASGN
  * @vitest-environment node
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -21,7 +21,7 @@ import { createTestRequest } from '../helpers/test-utils';
 // =========================================
 // Mock 基础设施（全部通过 vi.hoisted 初始化）
 // =========================================
-const { db, setQueryResult, resetDb, mockWithPermission } = vi.hoisted(() => {
+const { db, setQueryResult, resetDb, mockWithPermission, mockGetUserRoleDeptIds, mockCanAccessDept } = vi.hoisted(() => {
   const state: { _queryResult: any[] } = { _queryResult: [] };
 
   const createChain = (isCount = false) => {
@@ -91,9 +91,11 @@ const { db, setQueryResult, resetDb, mockWithPermission } = vi.hoisted(() => {
     },
   });
 
+  const MOCK_CLAIMS = { sub: 'admin-user-1', iss: '', aud: 'portal-client', jti: '', roles: [], permissions: [], deptIds: ['dept-1'] };
+
   const mockWithPermission = vi.fn(
-    async (_options: any, handler: (userId: string) => Promise<Response>) => {
-      try { return await handler('admin-user-1'); }
+    async (_options: any, handler: (userId: string, claims: any) => Promise<Response>) => {
+      try { return await handler('admin-user-1', MOCK_CLAIMS); }
       catch (err) {
         const { mapDomainError } = await import('@/domain/shared/error-mapping');
         const mapped = mapDomainError(err);
@@ -101,6 +103,9 @@ const { db, setQueryResult, resetDb, mockWithPermission } = vi.hoisted(() => {
       }
     },
   );
+
+  const mockGetUserRoleDeptIds = vi.fn(async (_userId: string) => ['dept-1']);
+  const mockCanAccessDept = vi.fn((_deptIds: string[], _targetDeptId: string | null | undefined) => true);
 
   return {
     db,
@@ -111,6 +116,8 @@ const { db, setQueryResult, resetDb, mockWithPermission } = vi.hoisted(() => {
       state._queryResult = [];
     },
     mockWithPermission,
+    mockGetUserRoleDeptIds,
+    mockCanAccessDept,
   };
 });
 
@@ -128,6 +135,8 @@ vi.mock('@/infrastructure/db', () => ({
 
 vi.mock('@/lib/auth', () => ({
   withPermission: mockWithPermission,
+  getUserRoleDeptIds: mockGetUserRoleDeptIds,
+  canAccessDept: mockCanAccessDept,
 }));
 
 vi.mock('@/lib/audit', () => ({

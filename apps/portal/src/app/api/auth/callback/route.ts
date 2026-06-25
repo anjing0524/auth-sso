@@ -11,6 +11,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAppBaseURL, getEnvConfig } from '@/lib/env';
 import { COOKIE_NAMES, TOKEN_TTL } from '@auth-sso/contracts';
+import { safeRedirectPath } from '@/lib/oauth-utils';
 
 
 export async function GET(request: NextRequest) {
@@ -84,7 +85,8 @@ export async function GET(request: NextRequest) {
     const isProduction = process.env.NODE_ENV === 'production';
     const isLocal = request.headers.get('host')?.includes('localhost') || request.headers.get('host')?.includes('127.0.0.1');
     const secure = isProduction && !isLocal;
-    const targetUrl = state || '/dashboard';
+    // state 复用为登录后返回路径：必须经同源消毒，防止开放重定向（H-AUTH-010）
+    const targetUrl = safeRedirectPath(state) || '/dashboard';
 
     const response = NextResponse.redirect(new URL(targetUrl, publicBase));
 

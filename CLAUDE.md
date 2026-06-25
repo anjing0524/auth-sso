@@ -61,7 +61,7 @@ Tests follow a layered strategy — fast, isolated unit tests at the bottom, int
 
 ### Session 架构
 
-系统采用**纯自定义无状态 JWT Cookie 架构**。Portal 自身即为 OIDC Provider，通过 `jose` 库实现 ES256 JWT 签发与验签，密钥对存储在 PostgreSQL `jwks` 表中。认证流程基于 OAuth 2.1 Authorization Code + PKCE，登录成功后写入 `portal_jwt_token`（Access Token）和 `portal_refresh_token`（Refresh Token）两个 HttpOnly Cookie。Gateway（Rust/Pingora）通过缓存 JWKS 公钥实现离线 JWT 签名验证，无需访问数据库或 Redis。
+系统采用**纯自定义无状态 JWT Cookie 架构**。Portal 自身即为 OIDC Provider，通过 `jose` 库实现 ES256 JWT 签发与验签，密钥对存储在 PostgreSQL `jwks` 表中。认证流程基于 OAuth 2.1 Authorization Code + PKCE，登录成功后写入 `portal_jwt_token`（Access Token）和 `portal_refresh_token`（Refresh Token）两个 HttpOnly Cookie。Gateway（Rust/Pingora）通过缓存 JWKS 公钥实现离线 JWT 签名验证，验签后查询 Redis jti 黑名单（H-SESS-006 即时失效依赖此，Redis 宕机时 fail-open 放行，撤销的 token 在 AT 自然过期前可用）。
 
 ### Traceability
 
@@ -97,7 +97,7 @@ Supported formats:
 
 - `apps/portal/__tests__/api/auth-callback.test.ts` — OAuth 回调验证
 - `apps/portal/__tests__/api/session-lifecycle.test.ts` — Session TTL 与刷新
-- `apps/portal/__tests__/api/sso-security.test.ts` — PKCE/State/Nonce 安全
+- `apps/portal/__tests__/domain/auth.test.ts` — PKCE/State/Nonce 安全
 - `apps/portal/__tests__/api/data-scope.test.ts` — 数据范围过滤
 - `apps/portal/__tests__/api/permission-api.test.ts` — 权限 CRUD
 - `apps/portal/__tests__/api/role-api.test.ts` — 角色 + 权限绑定

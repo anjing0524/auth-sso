@@ -12,7 +12,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { revalidatePath, revalidateTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
 import { eq, or } from 'drizzle-orm';
-import { withPermission } from '@/lib/auth';
+import { withPermission, canAccessDept } from '@/lib/auth';
 import { revokeAllRefreshTokens } from '@/lib/auth/token';
 import { revokeUserAccessByUserId } from '@/lib/session/revoke';
 import { clearUserPermissionCache } from '@/lib/permissions';
@@ -31,10 +31,10 @@ export async function POST(
   request: NextRequest,
   { params }: RouteParams,
 ) {
-  return withPermission({ permissions: ['user:manage'] }, async () => {
+  return withPermission({ permissions: ['user:manage'] }, async (_adminUserId, claims) => {
     const { id } = await params;
 
-    // 兼容 publicId 和内部 id 查找用户
+    // 按内部 id 查找用户
     const users = await db
       .select()
       .from(schema.users)
@@ -48,6 +48,15 @@ export async function POST(
     }
 
     const userId = users[0]!.id;
+
+    // 数据范围守卫：只能强制下线本部门（含子部门）范围内用户（H-DSCOPE-003）
+    // deptIds 来自 JWT claims，无需额外 DB 查询
+    if (!canAccessDept(claims.deptIds, users[0]!.deptId)) {
+      return NextResponse.json(
+        { error: COMMON_ERRORS.FORBIDDEN, message: '无权操作该用户' },
+        { status: 403 },
+      );
+    }
 
     // 1. 撤销全部 Refresh Token（DB 层，同时触发 JTI 黑名单撤销）
     await revokeAllRefreshTokens(userId);

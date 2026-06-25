@@ -17,6 +17,7 @@ export {
   withPermission,
   checkPermission,
   getUserRoleDeptIds,
+  canAccessDept,
 } from './facade';
 export type { PermissionCheckOptions, PermissionCheckResult } from './check-permission';
 export { requirePermission } from './check-permission';

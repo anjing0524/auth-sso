@@ -5,7 +5,7 @@
  * 数据范围检查保留在本层（属于鉴权逻辑，非数据获取逻辑）。
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { withPermission, getUserRoleDeptIds } from '@/lib/auth';
+import { withPermission, canAccessDept } from '@/lib/auth';
 import { COMMON_ERRORS, USER_ERRORS } from '@auth-sso/contracts';
 import { getUser } from '@/app/(dashboard)/users/data';
 
@@ -16,7 +16,7 @@ interface RouteParams {
 
 /** GET /api/users/[id] — 委托 data.ts 获取用户详情 */
 export async function GET(request: NextRequest, { params }: RouteParams) {
-  return withPermission({ permissions: ['user:read'] }, async (adminUserId) => {
+  return withPermission({ permissions: ['user:read'] }, async (adminUserId, claims) => {
     const { id } = await params;
     const user = await getUser(id);
     if (!user) {
@@ -26,15 +26,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    // 数据范围检查：管理员必须有权限查看该用户所属部门
-    const deptIds = await getUserRoleDeptIds(adminUserId);
-    if (deptIds.length === 0) {
-      return NextResponse.json(
-        { error: COMMON_ERRORS.FORBIDDEN, message: '无权查看该用户' },
-        { status: 403 },
-      );
-    }
-    if (user.deptId && !deptIds.includes(user.deptId)) {
+    // 数据范围检查：管理员只能查看其角色所属部门（含子部门）范围内的用户。
+    // 目标用户无部门时同样拒绝（不属于任何可见范围）。
+    // deptIds 来自 JWT claims（已含子树展开），无需额外 DB 查询。
+    if (!canAccessDept(claims.deptIds, user.deptId)) {
       return NextResponse.json(
         { error: COMMON_ERRORS.FORBIDDEN, message: '无权查看该用户' },
         { status: 403 },

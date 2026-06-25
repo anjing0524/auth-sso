@@ -5,6 +5,7 @@
  * 纯业务逻辑，零 DB/Redis 依赖。
  *
  * @req DC-AUTH-001~004
+ * @req H-AUTH-003, H-AUTH-004, H-AUTH-010, H-AUTH-011
  * @vitest-environment node
  */
 import { Buffer } from 'node:buffer';

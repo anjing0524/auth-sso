@@ -46,6 +46,32 @@ export function clearLoginSessionCookie(response: NextResponse): void {
   });
 }
 
+/**
+ * 校验登录后的返回路径是否为安全的同源相对路径
+ *
+ * Portal 自身 SSO 流程中，OAuth `state` 参数被复用为「登录后返回路径」。
+ * 必须确保它指向应用内部页面，防止开放重定向（如 `//evil.com`、`https://evil.com`、
+ * 反斜杠等协议相对 URL 经 `new URL(state, base)` 解析后跳离本站）。
+ *
+ * CSRF 保护由 PKCE 提供（OAuth 2.1 §7.6），返回路径同源校验是额外的纵深防御。
+ *
+ * @param target 候选返回路径（来自 state 参数）
+ * @returns 经过消毒的安全路径；不安全时返回 null
+ */
+export function safeRedirectPath(target: string | null | undefined): string | null {
+  if (!target) return null;
+  // 必须以单个 / 开头；禁止 //、/\、协议相对/绝对 URL
+  if (!/^\//.test(target) || /^\/{2,}/.test(target) || /^\/\\/.test(target)) return null;
+  try {
+    const resolved = new URL(target, 'http://localhost');
+    // 解析后必须仍是同源相对路径（无 host、无协议）
+    if (resolved.host !== 'localhost') return null;
+    return resolved.pathname + resolved.search + resolved.hash;
+  } catch {
+    return null;
+  }
+}
+
 /** OAuth 授权请求参数（用于重定向到登录页时保留） */
 export interface OAuthAuthorizeParams {
   client_id: string;

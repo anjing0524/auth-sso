@@ -300,7 +300,10 @@ export async function signAccessToken(
  * @param token - JWT 字符串
  * @returns 解析后的 PortalJwtClaims，验签失败或已撤销返回 null
  */
-export async function verifyAccessToken(token: string): Promise<PortalJwtClaims | null> {
+export async function verifyAccessToken(
+  token: string,
+  audience: string = 'portal-client',
+): Promise<PortalJwtClaims | null> {
   try {
     // 1. 不解码验签，仅提取 header.kid 定位公钥（与 Gateway 的 decode_header + get_key 对齐）
     const header = decodeProtectedHeader(token);
@@ -317,10 +320,12 @@ export async function verifyAccessToken(token: string): Promise<PortalJwtClaims 
       return null;
     }
 
-    // 3. ES256 验签
+    // 3. ES256 验签 + issuer + audience 校验
+    //    audience 校验防止跨 client token 混用（H-AUTH-005）
     const publicKey = await importJWK(signingKey.publicJwk, 'ES256') as CryptoKey;
     const { payload } = await jwtVerify<PortalJwtClaims>(token, publicKey, {
       issuer: getIssuer(),
+      audience,
       algorithms: ['ES256'],
     });
 

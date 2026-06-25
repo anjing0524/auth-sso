@@ -4,6 +4,7 @@ import { eq, sql, inArray, ne, isNull, or, and } from 'drizzle-orm';
 import { generateUUID, hashClientSecret } from '@/lib/crypto';
 import { COMMON_ERRORS } from '@auth-sso/contracts';
 import { mapDomainError } from '@/domain/shared/error-mapping';
+import { validateClientActive } from '@/domain/auth/oauth-client';
 
 
 /**
@@ -104,7 +105,12 @@ export async function POST(request: NextRequest) {
     if (!auth) return NextResponse.json({ error: 'Unauthorized', message: '缺少或格式错误的 Basic Auth 凭证' }, { status: 401 });
 
     const clientRecord = await db.select().from(schema.clients).where(eq(schema.clients.clientId, auth.clientId)).limit(1);
-    if (clientRecord.length === 0 || clientRecord[0].clientSecret !== hashClientSecret(auth.clientSecret)) {
+    try {
+      validateClientActive(clientRecord[0]);
+    } catch {
+      return NextResponse.json({ error: 'Forbidden', message: '该应用系统已停用或不存在' }, { status: 403 });
+    }
+    if (clientRecord[0]!.clientSecret !== hashClientSecret(auth.clientSecret)) {
       return NextResponse.json({ error: 'Forbidden', message: 'Client ID 或 Secret 错误' }, { status: 403 });
     }
 

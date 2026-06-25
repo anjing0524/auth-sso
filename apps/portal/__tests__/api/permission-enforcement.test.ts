@@ -11,7 +11,7 @@
  * - checkPermission 超级管理员绕过
  * - withPermission 包装器正确处理
  *
- * @req H-ACL-001, H-ACL-002, H-ACL-005
+ * @req H-ACL-001, H-ACL-002, H-ACL-003
  * @vitest-environment node
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -82,7 +82,6 @@ describe('Permission Enforcement', () => {
     iss: 'http://localhost:4101',
     roles: ['USER'],
     permissions: ['user:list', 'user:read', 'audit:read', 'role:assign'],
-    deptId: 'dept-1',
     deptIds: ['dept-1', 'dept-1a'],
   };
 
@@ -162,7 +161,7 @@ describe('Permission Enforcement', () => {
       expect(result.authorized).toBe(true);
     });
 
-    // @req H-ACL-005
+    // @req H-ACL-003
     it('requireAll 模式：缺少任一权限时返回 403', async () => {
       mockGetJwtFromCookie.mockResolvedValueOnce('valid-token');
       // 仅有 user:list，缺少 audit:read
@@ -304,7 +303,6 @@ describe('Permission Enforcement', () => {
         iss: 'http://localhost:4101',
         roles: ['ADMIN'],
         permissions: ['user:list'],
-        deptId: 'dept-1',
         deptIds: ['dept-1', 'dept-1a'],
       };
       mockGetJwtFromCookie.mockResolvedValueOnce('valid-token');

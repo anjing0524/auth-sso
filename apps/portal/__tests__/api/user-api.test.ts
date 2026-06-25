@@ -93,9 +93,11 @@ const {
     },
   });
 
+  const MOCK_CLAIMS = { sub: 'admin-user-1', iss: '', aud: 'portal-client', jti: '', roles: [], permissions: [], deptIds: ['dept-1'] };
+
   const mockWithPermission = vi.fn(
-    async (_opts: any, handler: (userId: string) => Promise<Response>) =>
-      handler('admin-user-1'),
+    async (_opts: any, handler: (userId: string, claims: any) => Promise<Response>) =>
+      handler('admin-user-1', MOCK_CLAIMS),
   );
   const mockCheckPermission = vi.fn(async () => ({ authorized: true, userId: 'admin-user-1', error: undefined as string | undefined }));
 
@@ -144,7 +146,8 @@ vi.mock('@/lib/auth', () => ({
   withPermission: mockWithPermission,
   checkPermission: mockCheckPermission,
   getUserRoleDeptIds: vi.fn().mockResolvedValue(["dept-1"]),
-  
+  canAccessDept: vi.fn(() => true),
+
 }));
 
 vi.mock('next/cache', () => ({

@@ -3,13 +3,17 @@
  *
  * Refresh Token Rotation：消耗旧 RT，签发新 AT + RT。
  *
+ * 优化：如果当前 Access Token 剩余时间 > 5 分钟，跳过刷新（避免无效的 token 轮换）。
+ *
  * @route POST /
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { getRefreshTokenFromCookie } from '@/lib/session';
+import { getRefreshTokenFromCookie, getJwtFromCookie, decodeJwtPayload } from '@/lib/session';
 import { rotateRefreshToken } from '@/lib/auth/token';
 import { COOKIE_NAMES, TOKEN_TTL } from '@auth-sso/contracts';
 
+/** 刷新阈值（秒）：仅当 Access Token 剩余时间 < 此值时执行刷新 */
+const REFRESH_THRESHOLD = 5 * 60; // 5 minutes
 
 export async function POST(request: NextRequest) {
   try {
@@ -19,6 +23,18 @@ export async function POST(request: NextRequest) {
         { success: false, error: 'REFRESH_TOKEN_MISSING', message: '缺少 Refresh Token' },
         { status: 401 },
       );
+    }
+
+    // 检查当前 Access Token 的剩余时间，避免不必要的 token 轮换（H-SESS-003）
+    const accessToken = await getJwtFromCookie();
+    if (accessToken) {
+      const claims = decodeJwtPayload(accessToken);
+      if (claims?.exp) {
+        const remaining = claims.exp - Math.floor(Date.now() / 1000);
+        if (remaining > REFRESH_THRESHOLD) {
+          return NextResponse.json({ success: true, data: { skipped: true, remaining } });
+        }
+      }
     }
 
     const result = await rotateRefreshToken(refreshToken, 'portal');
@@ -48,7 +64,7 @@ export async function POST(request: NextRequest) {
     });
 
     response.cookies.set(COOKIE_NAMES.REFRESH, result.refreshToken, {
-      path: '/',
+      path: '/api/auth/refresh',
       httpOnly: true,
       secure,
       sameSite: 'lax',

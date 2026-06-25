@@ -5,20 +5,21 @@
  * 采用 React 19 useTransition 绑定 Server Action Controller，安全下沉领域逻辑
  */
 
-import { useOptimistic, useTransition } from 'react';
+import { useState, useOptimistic, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
-import { 
-  UserPlus, 
-  MoreHorizontal, 
-  Edit, 
-  UserMinus, 
+import {
+  UserPlus,
+  MoreHorizontal,
+  Edit,
+  UserMinus,
   UserCheck,
   Shield,
   Building,
   ChevronRight
 } from 'lucide-react';
+import AssignRoleDialog from './AssignRoleDialog';
 
 import {
   Table,
@@ -123,6 +124,10 @@ export default function UserTable({ users, pagination }: UserTableProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
+  // 角色分配对话框状态
+  const [roleDialogOpen, setRoleDialogOpen] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
+
   // useOptimistic: 状态切换立即反映在 UI，失败自动回退
   const [optimisticUsers, setOptimisticUser] = useOptimistic(
     users,
@@ -157,7 +162,7 @@ export default function UserTable({ users, pagination }: UserTableProps) {
     router.push(`${pathname}?${params.toString()}`);
   };
 
-  return (
+  return (<>
     <div className="flex flex-col flex-1 overflow-hidden">
       <div className="flex-1 overflow-auto bg-white border border-slate-100 rounded-[1.5rem] shadow-sm">
         <Table>
@@ -233,7 +238,10 @@ export default function UserTable({ users, pagination }: UserTableProps) {
                             <Edit className="mr-2 h-4 w-4 opacity-50" /> 详情/编辑
                           </Link>
                         </DropdownMenuItem>
-                        <DropdownMenuItem className="cursor-pointer rounded-xl mb-1 focus:bg-slate-50">
+                        <DropdownMenuItem
+                          className="cursor-pointer rounded-xl mb-1 focus:bg-slate-50"
+                          onClick={() => { setSelectedUser(user); setRoleDialogOpen(true); }}
+                        >
                           <Shield className="mr-2 h-4 w-4 opacity-50" /> 分配角色
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
@@ -287,5 +295,19 @@ export default function UserTable({ users, pagination }: UserTableProps) {
         </div>
       </div>
     </div>
-  );
+
+      {/* 角色分配对话框 */}
+      {selectedUser && (
+        <AssignRoleDialog
+          open={roleDialogOpen}
+          onOpenChange={(open) => { setRoleDialogOpen(open); if (!open) setSelectedUser(null); }}
+          user={{
+            id: selectedUser.id,
+            name: selectedUser.name,
+            deptId: selectedUser.deptId,
+            deptName: selectedUser.deptName,
+          }}
+        />
+      )}
+    </>);
 }

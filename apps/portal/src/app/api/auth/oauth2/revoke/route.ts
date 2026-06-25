@@ -12,6 +12,7 @@ import { db, schema } from '@/infrastructure/db';
 import { eq } from 'drizzle-orm';
 import { hashToken } from '@/lib/crypto';
 import { mapDomainError } from '@/domain/shared/error-mapping';
+import { validateClientActive, validateClientSecret } from '@/domain/auth/oauth-client';
 
 
 export async function POST(request: NextRequest) {
@@ -19,6 +20,26 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const token = body.token as string | undefined;
     const tokenTypeHint = body.token_type_hint as string | undefined;
+    const clientId = body.client_id as string | undefined;
+    const clientSecret = body.client_secret as string | undefined;
+
+    // RFC 7009 §2.1：revocation 端点必须校验调用方身份，防止恶意撤销他人令牌（DoS）
+    if (!clientId) {
+      return NextResponse.json(
+        { error: 'invalid_client', error_description: '缺少 client_id' },
+        { status: 401 },
+      );
+    }
+    const clientRows = await db.select().from(schema.clients).where(eq(schema.clients.clientId, clientId)).limit(1);
+    try {
+      validateClientActive(clientRows[0]);
+      validateClientSecret(clientRows[0]!, clientSecret);
+    } catch {
+      return NextResponse.json(
+        { error: 'invalid_client', error_description: '客户端凭证无效' },
+        { status: 401 },
+      );
+    }
 
     // RFC 7009: 即使 token 不存在也返回 200
     if (!token) {

@@ -62,8 +62,17 @@ function parseRequirementsMatrix(filePath) {
   const modules = [];
   const allReqs = [];
   let currentModule = '';
+  let inRequirementsSection = true; // 只在需求表格区域提取 ID，汇总/追溯表不提取
 
   for (const line of lines) {
+    // 遇到「需求汇总」或「追溯关系」章节 → 停止提取需求 ID（后续 **ID** 为非需求条目）
+    if (/^##\s+(需求汇总|追溯关系)/.test(line)) {
+      inRequirementsSection = false;
+      continue;
+    }
+
+    if (!inRequirementsSection) continue;
+
     // 模块标题: ## 模块 A: Portal Infrastructure
     const modMatch = line.match(/^##\s+模块\s+([A-Z]):\s+(.+)/);
     if (modMatch) {
@@ -201,14 +210,15 @@ function expandReqString(value) {
       continue;
     }
 
-    // 2) 范围: AUTH-001~005 → AUTH-001 ... AUTH-005
-    const rangeMatch = part.match(/^([A-Z]+-[A-Z]*\d+)~(\d+)$/);
+    // 2) 范围: H-SESS-001~006 → H-SESS-001 ... H-SESS-006
+    //    支持单/多段: AUTH-001~005, A-NAV-01~03, H-SESS-001~006
+    const rangeMatch = part.match(/^([A-Z]+(?:-[A-Z]+)*-\d+)~(\d+)$/);
     if (rangeMatch) {
-      const baseStr = rangeMatch[1]; // e.g. "AUTH-001", "SCOPE-001"
+      const baseStr = rangeMatch[1]; // e.g. "H-SESS-001"
       const endNum = parseInt(rangeMatch[2], 10);
 
       const dashIdx = baseStr.lastIndexOf('-');
-      const prefix = baseStr.substring(0, dashIdx + 1); // e.g. "AUTH-", "SCOPE-"
+      const prefix = baseStr.substring(0, dashIdx + 1); // e.g. "H-SESS-"
       const startStr = baseStr.substring(dashIdx + 1);  // e.g. "001"
       const startNum = parseInt(startStr, 10);
       const padding = startStr.length;
@@ -232,7 +242,7 @@ function expandReqString(value) {
 //  4. 生成覆盖率报告
 // ======================================================================
 
-function generateReport(requirements, testFiles, threshold) {
+function generateReport(requirements, testFiles, threshold, archReqs = []) {
   // 构建覆盖率映射: reqId -> { coveredBy: [{path, type}] }
   const coverage = {};
   for (const req of requirements) {
@@ -253,9 +263,23 @@ function generateReport(requirements, testFiles, threshold) {
     }
   }
 
-  // 未识别 ID（不在需求矩阵中，但被 @req 引用）
+  // 架构约束覆盖率（单独追踪，不计入需求覆盖率）
+  const archCoverage = {};
+  for (const req of archReqs) {
+    archCoverage[req.id] = { ...req, coveredBy: [] };
+  }
+  for (const file of testFiles) {
+    for (const reqId of file.annotations) {
+      if (archCoverage[reqId]) {
+        archCoverage[reqId].coveredBy.push({ path: file.path, type: file.type });
+      }
+    }
+  }
+  const archCovered = Object.values(archCoverage).filter((r) => r.coveredBy.length > 0).length;
+
+  // 未识别 ID（不在需求矩阵或架构约束中，但被 @req 引用）
   const unrecognized = [...allTestReqIds]
-    .filter((id) => !coverage[id])
+    .filter((id) => !coverage[id] && !archCoverage[id])
     .sort();
 
   // 按模块分组
@@ -310,7 +334,10 @@ function generateReport(requirements, testFiles, threshold) {
 
   const pct = totalReqs > 0 ? ((totalCovered / totalReqs) * 100).toFixed(1) : '0.0';
   lines.push('='.repeat(60));
-  lines.push(`  TOTAL: ${totalCovered}/${totalReqs} (${pct}%)`);
+  lines.push(`  TOTAL (Requirements): ${totalCovered}/${totalReqs} (${pct}%)`);
+  if (archReqs.length > 0) {
+    lines.push(`  Architecture Constraints: ${archCovered}/${archReqs.length} covered`);
+  }
   lines.push('='.repeat(60));
 
   if (unrecognized.length > 0) {
@@ -337,7 +364,8 @@ function generateReport(requirements, testFiles, threshold) {
     '',
     `Generated: ${new Date().toISOString()}`,
     '',
-    `**Total:** ${totalCovered}/${totalReqs} covered (**${pct}%**)`,
+    `**Requirements:** ${totalCovered}/${totalReqs} covered (**${pct}%**)`,
+    ...(archReqs.length > 0 ? [`**Architecture Constraints:** ${archCovered}/${archReqs.length} covered`] : []),
     '',
     '---',
     '',
@@ -424,12 +452,11 @@ function main() {
   const { allReqs, modules } = parseRequirementsMatrix(REQUIREMENTS_MATRIX_PATH);
   console.log(`  Found ${allReqs.length} requirements across ${modules.length} modules`);
 
-  // 解析架构约束（含 DC-* 领域模型约束 ID）
+  // 解析架构约束（含 DC-* 领域模型约束 ID）——单独追踪，不计入需求覆盖率分母
+  let archReqs = [];
   if (fs.existsSync(ARCHITECTURE_CONSTRAINTS_PATH)) {
-    const { allReqs: archReqs, modules: archModules } = parseRequirementsMatrix(ARCHITECTURE_CONSTRAINTS_PATH);
-    for (const r of archReqs) allReqs.push(r);
-    for (const m of archModules) modules.push(m);
-    console.log(`  + ${archReqs.length} architecture constraint IDs from ARCHITECTURE_CONSTRAINTS.md`);
+    archReqs = parseRequirementsMatrix(ARCHITECTURE_CONSTRAINTS_PATH).allReqs;
+    console.log(`  + ${archReqs.length} architecture constraint IDs from ARCHITECTURE_CONSTRAINTS.md (tracked separately)`);
   }
 
   for (const mod of modules) {
@@ -448,7 +475,7 @@ function main() {
 
   // 生成报告
   console.log(`\nGenerating coverage report...\n`);
-  generateReport(allReqs, testFiles, threshold);
+  generateReport(allReqs, testFiles, threshold, archReqs);
 }
 
 main();

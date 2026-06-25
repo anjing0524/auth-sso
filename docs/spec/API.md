@@ -6,8 +6,13 @@
 
 ### 0. 接入路径说明（架构约束 R10）
 
-> **写操作（POST/PUT/DELETE）优先使用 Server Actions**（`apps/portal/src/app/(dashboard)/*/actions.ts`），供内部管理界面调用。
-> 同名 REST 端点按需实现，供外部集成/脚本/Webhook 使用。未实现的 REST 端点标记为「仅 Server Action」。
+> **⚠️ v3.2 术语漂移**：本文档多处残留 v3.1 的旧字段名和权限码。实际代码以 `apps/portal/src/` 为准。已知差异：
+> - `dataScopeType` → 已移除，响应中不再返回
+> - `user:reset_password` → `user:update`
+> - `login_log:read` → `audit:read`
+> - `permission:manage` → `permissions/register` 使用 Basic Auth（client_id+secret）
+> - `introspect` / `revoke` 端点需 client 认证
+> - 写端点文档声明 `x-www-form-urlencoded`，代码只接受 JSON
 
 ---
 

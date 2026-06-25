@@ -8,6 +8,7 @@
  */
 import { NextResponse } from 'next/server';
 import { db, schema } from '@/infrastructure/db';
+import { or, gt, isNull } from 'drizzle-orm';
 import { mapDomainError } from '@/domain/shared/error-mapping';
 import { getActiveSigningKey } from '@/lib/auth/token';
 
@@ -16,9 +17,14 @@ export async function GET() {
     // 自动确保数据库中至少有一个活跃的密钥对，防止冷启动时 Gateway 连接 JWKS 死锁
     await getActiveSigningKey();
 
+    // 仅返回未过期的密钥（expiresAt > now 或 expiresAt 为 NULL 的兜底），避免暴露历史密钥
     const rows = await db
       .select()
       .from(schema.jwks)
+      .where(or(
+        gt(schema.jwks.expiresAt, new Date()),
+        isNull(schema.jwks.expiresAt),
+      ))
       .orderBy(schema.jwks.createdAt);
 
     const keys = rows.map((row) => {

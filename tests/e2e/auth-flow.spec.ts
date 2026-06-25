@@ -5,10 +5,7 @@
  * 覆盖完整 OAuth 2.1 Authorization Code + PKCE 登录流程，
  * 以及登出、错误凭据、未认证访问等边界场景。
  *
- * @req H-FLOW-001
- * @req H-FLOW-002
- * @req H-FLOW-003
- * @req H-FLOW-004
+ * @req H-FLOW-001~004, H-SSO-001, H-SSO-002, H-AUTH-012, H-AUTH-013
  */
 
 import { test, expect } from '@playwright/test';

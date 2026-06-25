@@ -144,10 +144,12 @@ vi.mock('@/infrastructure/db', () => {
   };
 });
 
+const MOCK_CLAIMS = { sub: 'test-user-id', iss: '', aud: 'portal-client', jti: '', roles: [], permissions: [], deptIds: ['dept-1', 'dept-1a'] };
+
 vi.mock('@/lib/auth', () => ({
   withPermission: vi.fn(
-    async (_options: any, handler: (userId: string) => Promise<any>) => {
-      try { return await handler('test-user-id'); }
+    async (_options: any, handler: (userId: string, claims: any) => Promise<any>) => {
+      try { return await handler('test-user-id', MOCK_CLAIMS); }
       catch (err) {
         const { mapDomainError } = await import('@/domain/shared/error-mapping');
         const mapped = mapDomainError(err);
@@ -156,6 +158,7 @@ vi.mock('@/lib/auth', () => ({
     },
   ),
   getUserRoleDeptIds: mockAuthState.getUserRoleDeptIds,
+  canAccessDept: vi.fn((_deptIds: string[], _targetDeptId: string | null | undefined) => true),
 }));
 
 vi.mock('@/lib/crypto', () => ({

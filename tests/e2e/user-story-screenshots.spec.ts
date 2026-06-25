@@ -5,13 +5,13 @@ import { loginAsUser, logout, clearAllCookies } from './helpers';
 /**
  * 用户故事截图测试
  *
- * @req H-FLOW-001, H-FLOW-002, H-FLOW-003, H-FLOW-004
+ * @req H-FLOW-001~004, H-SSO-001, H-SSO-002
  * @req H-AUTH-001, H-AUTH-002, H-AUTH-005, H-AUTH-006
  * @req B-USR-L, B-USR-C
  */
 
 // 截图保存路径
-const SCREENSHOT_DIR = '/Users/liushuo/.gemini/antigravity-cli/brain/3c5d860b-2ddb-4662-8d17-d2f8d9036798';
+const SCREENSHOT_DIR = process.env.SCREENSHOT_DIR || './test-results/screenshots';
 
 // 覆盖默认配置，访问网关的 HTTPS 端口（18443），并忽略自签名证书错误
 test.use({

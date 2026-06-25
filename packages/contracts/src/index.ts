@@ -7,17 +7,13 @@
 export const USER_STATUS_VALUES = ['ACTIVE', 'DISABLED', 'LOCKED', 'DELETED'] as const;
 export type UserStatus = typeof USER_STATUS_VALUES[number];
 
-// 部门/角色/权限/菜单/Client 状态唯一真相源值数组
+// 部门/角色/权限/Client 状态唯一真相源值数组
 export const ENTITY_STATUS_VALUES = ['ACTIVE', 'DISABLED'] as const;
 export type EntityStatus = typeof ENTITY_STATUS_VALUES[number];
 
 // 权限类型 — 唯一真相源（合并旧 permission_type + menu_type，menus 表已合并进 permissions）
 export const PERMISSION_TYPE_VALUES = ['DIRECTORY', 'PAGE', 'API', 'DATA'] as const;
 export type PermissionType = typeof PERMISSION_TYPE_VALUES[number];
-
-// Client 类型 — 唯一真相源值数组
-export const CLIENT_TYPE_VALUES = ['confidential', 'public'] as const;
-export type ClientType = typeof CLIENT_TYPE_VALUES[number];
 
 // Grant Type
 export type GrantType = 'authorization_code' | 'refresh_token';
@@ -64,7 +60,6 @@ export const PUBLIC_ID_PREFIX = {
   DEPARTMENT: 'dept_',
   ROLE: 'role_',
   PERMISSION: 'perm_',
-  MENU: 'menu_',
   CLIENT: 'cli_',
 } as const;
 
