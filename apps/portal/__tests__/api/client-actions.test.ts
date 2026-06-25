@@ -53,7 +53,7 @@ const mocks = vi.hoisted(() => {
 
 vi.mock('@/infrastructure/db', () => ({ db: mocks.mockDb, schema: { clients: {}, accessTokens: {}, refreshTokens: {} } }));
 vi.mock('@/lib/auth', () => ({ withAuth: (_o: any, h: Function) => async (...a: any[]) => h({ userId: 'admin-1', roles: [], permissions: [] }, ...a) }));
-vi.mock('@/lib/crypto', () => ({ generateId: (len = 20) => 'a'.repeat(len), generateClientId: () => 'client_mock1234567890ab', generateClientSecret: () => 's'.repeat(64) }));
+vi.mock('@/lib/crypto', () => ({ generateId: (len = 20) => 'a'.repeat(len), generateClientId: () => 'client_mock1234567890ab', generateClientSecret: () => 's'.repeat(64), hashClientSecret: (s: string) => `hash:${s}` }));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn(), updateTag: vi.fn() }));
 
 import { createClientAction, updateClientAction, deleteClientAction, rotateClientSecretAction, revokeClientTokensAction } from '@/app/(dashboard)/clients/actions';
@@ -100,6 +100,18 @@ describe('Client Server Actions', () => {
       mocks.setRow(clientRow);
       const result: any = await rotateClientSecretAction('client_mock');
       expect(result.success).toBe(true);
+    });
+  });
+
+  describe('rotateClientSecretAction', () => {
+    // @req G-CLT-SEC
+    it('轮换密钥成功 → 返回新 secret', async () => {
+      mocks.setRow(clientRow);
+      const result: any = await rotateClientSecretAction('client_mock');
+      expect(result.success).toBe(true);
+      expect(result.data.clientSecret).toBeDefined();
+      // 验证返回的是原始 secret（64 字符 hex），不是哈希值
+      expect(result.data.clientSecret).toBe('s'.repeat(64));
     });
   });
 

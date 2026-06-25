@@ -60,16 +60,19 @@ export const updatePermissionAction = withAuth(
       return { success: false, error: 'VALIDATION_ERROR', message: parsed.error.issues[0].message };
     }
 
-    const row = await db.query.permissions.findFirst({
-      where: eq(schema.permissions.id, permId),
+    const updated = await db.transaction(async (tx) => {
+      const row = await tx.query.permissions.findFirst({
+        where: eq(schema.permissions.id, permId),
+      });
+      if (!row) throw new EntityNotFoundError('Permission', permId);
+
+      const perm = toDomainPermission(row);
+      const updated = applyPermissionUpdate(perm, parsed.data);
+
+      await tx.update(schema.permissions).set(permissionToUpdateRow(updated))
+        .where(eq(schema.permissions.id, perm.id));
+      return updated;
     });
-    if (!row) throw new EntityNotFoundError('Permission', permId);
-
-    const perm = toDomainPermission(row);
-    const updated = applyPermissionUpdate(perm, parsed.data);
-
-    await db.update(schema.permissions).set(permissionToUpdateRow(updated))
-      .where(eq(schema.permissions.id, perm.id));
 
     revalidatePath('/permissions');
     updateTag('permissions-list');

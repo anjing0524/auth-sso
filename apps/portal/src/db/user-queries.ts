@@ -4,9 +4,8 @@
  * 消除 data.ts 与 api/users/route.ts 之间 ~80 行重复的查询构建逻辑。
  * 两类读路径统一通过本模块组合查询条件与响应格式化。
  */
-import { eq, ne, or, ilike, and } from 'drizzle-orm';
+import { eq, ne, or, ilike, and, inArray } from 'drizzle-orm';
 import { schema } from '@/infrastructure/db';
-import { applyDataScopeFilter } from '@/lib/auth/data-scope';
 import type { UserStatus } from '@auth-sso/contracts';
 import { asUserStatus } from '@/lib/type-guards';
 
@@ -16,7 +15,7 @@ import { asUserStatus } from '@/lib/type-guards';
  */
 export const USER_LIST_COLUMNS = {
   id: schema.users.id,
-   
+
   username: schema.users.username,
   email: schema.users.email,
   name: schema.users.name,
@@ -36,10 +35,10 @@ export const USER_LIST_COLUMNS = {
 export function buildUserListConditions(params: {
   keyword: string;
   status: string;
-  scopeFilter: { type: 'ALL' | 'LIST' | 'SELF'; deptIds?: string[] };
+  deptIds: string[];
   userId: string;
 }) {
-  const { keyword, status, scopeFilter, userId } = params;
+  const { keyword, status, deptIds } = params;
 
   // 默认排除逻辑删除的用户
   const conditions: ReturnType<typeof and>[] = [ne(schema.users.status, 'DELETED')];
@@ -58,10 +57,9 @@ export function buildUserListConditions(params: {
     conditions.push(eq(schema.users.status, asUserStatus(status)));
   }
 
-  // 数据范围过滤
-  const scopeSQL = applyDataScopeFilter(scopeFilter, schema.users.deptId, schema.users.id, userId);
-  if (scopeSQL !== null && scopeSQL !== undefined) {
-    conditions.push(scopeSQL);
+  // 数据范围过滤（v3.2: 直接按部门 ID 列表过滤）
+  if (deptIds.length > 0) {
+    conditions.push(inArray(schema.users.deptId, deptIds));
   }
 
   return conditions;
@@ -70,7 +68,7 @@ export function buildUserListConditions(params: {
 /**
  * 判断数据范围过滤是否导致无权限访问
  */
-export function isScopeDenied(scopeFilter: { type: 'ALL' | 'LIST' | 'SELF'; deptIds?: string[] }): boolean {
-  return scopeFilter.type === 'LIST' && (scopeFilter.deptIds || []).length === 0;
+export function isScopeDenied(deptIds: string[]): boolean {
+  return deptIds.length === 0;
 }
 

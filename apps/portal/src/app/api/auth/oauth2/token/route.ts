@@ -76,19 +76,21 @@ export async function POST(request: NextRequest) {
       await db.update(schema.authorizationCodes).set({ used: true }).where(eq(schema.authorizationCodes.id, authCode.id));
 
       // 获取用户权限上下文（用于 Access Token claims）
-      const permCtx = await getUserPermissionContext(authCode.userId);
+      const [permCtx, deptIds] = await Promise.all([
+        getUserPermissionContext(authCode.userId),
+        import('@/lib/auth/data-scope').then(m => m.getUserRoleDeptIds(authCode.userId)),
+      ]);
       if (!permCtx) {
         throw new InvalidGrantError('无法获取用户权限上下文');
       }
 
-      // 签发 Access Token
+      // 签发 Access Token（deptIds 含子树展开）
       const { token: accessToken } = await signAccessToken(
         {
           sub: authCode.userId,
           roles: permCtx.roles.map((r) => r.code),
           permissions: permCtx.permissions,
-          deptId: permCtx.deptId ?? '',
-          dataScopeType: permCtx.dataScopeType,
+          deptIds,
         },
         client_id,
         { clientId: client_id, scopes: authCode.scope },

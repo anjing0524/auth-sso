@@ -20,7 +20,7 @@ const mocks = vi.hoisted(() => {
   return { mockDb, setRow(r: any) { _row = r; _rows = r ? [r] : []; }, setRows(r: any[]) { _rows = r; _row = r[0]; }, reset() { _row = undefined; _rows = []; } };
 });
 
-vi.mock('@/infrastructure/db', () => ({ db: mocks.mockDb, schema: { roles: {}, userRoles: {}, rolePermissions: {}, roleClients: {} } }));
+vi.mock('@/infrastructure/db', () => ({ db: mocks.mockDb, schema: { roles: {}, userRoles: {}, rolePermissions: {} } }));
 vi.mock('@/lib/auth', () => ({ withAuth: (_o: any, h: Function) => async (...a: any[]) => h({ userId: 'admin-1', roles: [], permissions: [] }, ...a) }));
 vi.mock('@/lib/crypto', () => ({ generateUUID: () => 'aaaa-bbbb-cccc-dddd', generateId: (len = 20) => 'a'.repeat(len) }));
 vi.mock('@/lib/permissions', () => ({ refreshUsersPermissionCache: vi.fn() }));
@@ -29,13 +29,13 @@ vi.mock('next/cache', () => ({ revalidatePath: vi.fn(), updateTag: vi.fn() }));
 import { createRoleAction, updateRoleAction, deleteRoleAction } from '@/app/(dashboard)/roles/actions';
 
 const now = new Date();
-const roleRow = { id: 'role-1', code: 'TEST_ROLE', name: 'Test', isSystem: false, status: 'ACTIVE', dataScopeType: 'ALL' as const, sort: 1, description: '', createdAt: now, updatedAt: now };
+const roleRow = { id: 'role-1', code: 'TEST_ROLE', name: 'Test', isSystem: false, status: 'ACTIVE', deptId: 'a1b2c3d4-e5f6-4789-abcd-ef0123456789', sort: 1, description: '', createdAt: now, updatedAt: now };
 
 describe('Role Server Actions', () => {
   beforeEach(() => { vi.clearAllMocks(); mocks.reset(); });
-  it('createRole: 有效输入 → success', async () => { const r: any = await createRoleAction({ name: 'Test', code: 'TEST', sort: 1, dataScopeType: 'SELF' }); expect(r.success).toBe(true); });
-  it('createRole: 缺 code → VALIDATION_ERROR', async () => { const r: any = await createRoleAction({ name: 'X', code: '', sort: 1, dataScopeType: 'SELF' } as any); expect(r.success).toBe(false); });
+  it('createRole: 有效输入 → success', async () => { const r: any = await createRoleAction({ name: 'Test', code: 'TEST', sort: 1, deptId: 'a1b2c3d4-e5f6-4789-abcd-ef0123456789' }); expect(r.success).toBe(true); });
+  it('createRole: 缺 code → VALIDATION_ERROR', async () => { const r: any = await createRoleAction({ name: 'X', code: '', sort: 1, deptId: 'a1b2c3d4-e5f6-4789-abcd-ef0123456789' } as any); expect(r.success).toBe(false); });
   it('updateRole: 存在 → success', async () => { mocks.setRow(roleRow); const r: any = await updateRoleAction('role-1', { name: 'Updated' } as any); expect(r.success).toBe(true); });
-  it('updateRole: 不存在 → throw', async () => { mocks.reset(); await expect(updateRoleAction('bad', { name: 'X' } as any)).rejects.toThrow(); });
+  it('updateRole: 不存在 → throw', async () => { mocks.reset(); mocks.setRows([{ id: "dept-1" }]); await expect(updateRoleAction('bad', { name: 'X' } as any)).rejects.toThrow(); });
   it('deleteRole: 非系统角色 → success', async () => { mocks.setRow(roleRow); const r: any = await deleteRoleAction('role-1'); expect(r.success).toBe(true); });
 });

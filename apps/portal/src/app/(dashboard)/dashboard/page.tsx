@@ -34,12 +34,16 @@ import {
 } from '@/components/ui/table';
 
 import { getDashboardStats, getRecentAuditLogs } from './data';
+import { getUserRoleDeptIds } from '@/lib/auth';
+import { resolveIdentity } from '@/lib/auth/verify-jwt';
 
 
 export default async function DashboardPage() {
   // 鉴权由 layout.tsx 统一处理（requirePermission(['dashboard:view'])），本组件零鉴权样板
+  const identity = await resolveIdentity();
+  const deptIds = identity ? await getUserRoleDeptIds(identity.userId) : [];
   const [stats, recentLogs] = await Promise.all([
-    getDashboardStats(),
+    getDashboardStats(deptIds),
     getRecentAuditLogs(),
   ]);
 

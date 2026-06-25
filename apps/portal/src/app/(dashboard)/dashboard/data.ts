@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { db, schema } from '@/infrastructure/db';
-import { eq, ne, desc, count } from 'drizzle-orm';
+import { eq, ne, desc, count, inArray, and } from 'drizzle-orm';
 import { USER_DELETED } from '@auth-sso/contracts';
 
 export interface DashboardStats {
@@ -19,12 +19,22 @@ export interface RecentAuditLog {
 }
 
 /**
- * 获取 Dashboard 核心指标（用户数、角色数、客户端数）
+ * 获取 Dashboard 核心指标（v3.2: 用户数和角色数按数据范围过滤）
+ *
+ * @param deptIds 用户可访问的部门 ID 列表（含子树展开）
  */
-export async function getDashboardStats(): Promise<DashboardStats> {
+export async function getDashboardStats(deptIds: string[]): Promise<DashboardStats> {
+  const userWhere = deptIds.length > 0
+    ? [ne(schema.users.status, USER_DELETED), inArray(schema.users.deptId, deptIds)]
+    : [ne(schema.users.status, USER_DELETED)];
+
+  const roleWhere = deptIds.length > 0
+    ? [inArray(schema.roles.deptId, deptIds)]
+    : [];
+
   const [[usersCount], [rolesCount], [clientsCount]] = await Promise.all([
-    db.select({ count: count() }).from(schema.users).where(ne(schema.users.status, USER_DELETED)),
-    db.select({ count: count() }).from(schema.roles),
+    db.select({ count: count() }).from(schema.users).where(and(...userWhere)),
+    db.select({ count: count() }).from(schema.roles).where(roleWhere.length > 0 ? and(...roleWhere) : undefined),
     db.select({ count: count() }).from(schema.clients),
   ]);
 

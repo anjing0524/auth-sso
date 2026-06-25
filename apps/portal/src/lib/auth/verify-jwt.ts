@@ -31,8 +31,7 @@ const EMPTY_CLAIMS: PortalJwtClaims = {
   jti: '',
   roles: [],
   permissions: [],
-  deptId: '',
-  dataScopeType: 'SELF',
+  deptIds: [],
 };
 
 /**

@@ -36,8 +36,8 @@ export async function GET(_request: NextRequest) {
         userId: identity.userId,
         roles: permissionContext.roles,
         permissions: permissionContext.permissions,
-        dataScopeType: permissionContext.dataScopeType,
-        deptId: permissionContext.deptId,
+        // 用户角色直属部门 ID（未展开子树；子树展开的 deptIds 见 JWT claims 或 /api/me）
+        deptIds: permissionContext.deptIds,
       },
     });
   } catch (err) {

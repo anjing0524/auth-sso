@@ -40,7 +40,6 @@ async function ProfileContent() {
       } : null}
       permissions={permCtx?.permissions ?? []}
       roles={permCtx?.roles.map(r => ({ code: r.code, name: r.name })) ?? []}
-      dataScopeType={permCtx?.dataScopeType ?? 'SELF'}
     />
   );
 }

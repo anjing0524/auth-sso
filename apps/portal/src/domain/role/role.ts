@@ -1,5 +1,5 @@
-import type { EntityStatus, DataScopeType } from '@auth-sso/contracts';
-import { ENTITY_ACTIVE, DATA_SCOPE_SELF } from '@auth-sso/contracts';
+import type { EntityStatus } from '@auth-sso/contracts';
+import { ENTITY_ACTIVE } from '@auth-sso/contracts';
 import type { CreateRoleInput, Role } from './types';
 import { BusinessRuleViolationError } from '../shared/errors';
 
@@ -13,7 +13,7 @@ export function toDomainRole(row: {
   name: string;
   code: string;
   description: string | null;
-  dataScopeType: DataScopeType;
+  deptId: string;
   isSystem: boolean | null;
   status: EntityStatus;
   sort: number | null;
@@ -24,7 +24,7 @@ export function toDomainRole(row: {
     name: row.name,
     code: row.code,
     description: row.description,
-    dataScopeType: row.dataScopeType,
+    deptId: row.deptId,
     isSystem: row.isSystem ?? false,
     status: row.status,
     sort: row.sort ?? 0,
@@ -44,7 +44,7 @@ export function createRole(
     name: input.name,
     code: input.code,
     description: input.description ?? null,
-    dataScopeType: input.dataScopeType ?? DATA_SCOPE_SELF,
+    deptId: input.deptId,
     isSystem: false,
     status: ENTITY_ACTIVE,
     sort: input.sort,
@@ -57,13 +57,13 @@ export function createRole(
  */
 export function applyRoleUpdate(
   role: Role,
-  patch: Partial<Pick<Role, 'name' | 'description' | 'dataScopeType' | 'sort' | 'status'>>,
+  patch: Partial<Pick<Role, 'name' | 'description' | 'deptId' | 'sort' | 'status'>>,
 ): Role {
   return {
     ...role,
     name: patch.name ?? role.name,
     description: patch.description !== undefined ? patch.description : role.description,
-    dataScopeType: patch.dataScopeType ?? role.dataScopeType,
+    deptId: patch.deptId ?? role.deptId,
     sort: patch.sort ?? role.sort,
     status: patch.status ?? role.status,
   };
@@ -78,6 +78,16 @@ export function guardNotSystemRole(role: Role): void {
   }
 }
 
+/**
+ * 纯函数：判断角色更新是否影响权限决策（需触发用户重登）
+ */
+export function hasRolePermissionImpact(
+  original: Pick<Role, 'deptId' | 'status'>,
+  updated: Pick<Role, 'deptId' | 'status'>,
+): boolean {
+  return original.deptId !== updated.deptId || original.status !== updated.status;
+}
+
 // ────────────────────────────────────────────
 // DB 行转换（统一 Controller 层的列映射，消除重复）
 // ────────────────────────────────────────────
@@ -89,7 +99,7 @@ export function roleToInsertRow(r: Role) {
     name: r.name,
     code: r.code,
     description: r.description,
-    dataScopeType: r.dataScopeType,
+    deptId: r.deptId,
     isSystem: r.isSystem,
     sort: r.sort,
     status: r.status,
@@ -102,7 +112,7 @@ export function roleToUpdateRow(r: Role) {
   return {
     name: r.name,
     description: r.description,
-    dataScopeType: r.dataScopeType,
+    deptId: r.deptId,
     sort: r.sort,
     status: r.status,
   };

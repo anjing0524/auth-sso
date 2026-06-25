@@ -1,6 +1,9 @@
 /**
  * 登出 API 单元测试 (POST /api/auth/logout)
  *
+ * @req H-SSO-003, H-SSO-004
+ * @vitest-environment node
+ *
  * 覆盖范围：
  * - 无 Cookie → 200（始终成功）
  * - 有 JWT Cookie → 撤销 jti + 清除 Cookie

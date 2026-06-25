@@ -32,7 +32,7 @@ export function setJwtCookies(
 
   if (refreshToken) {
     response.cookies.set(COOKIE_NAMES.REFRESH, refreshToken, {
-      path: '/',
+      path: '/api/auth/refresh',
       httpOnly: true,
       secure: isProduction,
       sameSite: 'lax',
@@ -49,7 +49,7 @@ export function clearJwtCookies(response: Response): void {
   response.headers.append('Set-Cookie', `${COOKIE_NAMES.JWT}=; ${expiredCookieBase}`);
   response.headers.append(
     'Set-Cookie',
-    `${COOKIE_NAMES.REFRESH}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`
+    `${COOKIE_NAMES.REFRESH}=; Path=/api/auth/refresh; HttpOnly; SameSite=Lax; Max-Age=0`
   );
 }
 

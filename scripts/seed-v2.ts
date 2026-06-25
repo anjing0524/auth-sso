@@ -53,7 +53,7 @@ async function main() {
     id: crypto.randomUUID(),
     name: '超级管理员',
     code: 'admin',
-    dataScopeType: 'ALL',
+    deptId: root.id,
     isSystem: true,
   }).returning();
 
@@ -61,14 +61,14 @@ async function main() {
     id: crypto.randomUUID(),
     name: '部门主管',
     code: 'manager',
-    dataScopeType: 'DEPT_AND_SUB',
+    deptId: root.id,
   }).returning();
 
   const [staffRole] = await db.insert(schema.roles).values({
     id: crypto.randomUUID(),
     name: '普通员工',
     code: 'employee',
-    dataScopeType: 'SELF',
+    deptId: root.id,
   }).returning();
 
   // 4. 用户

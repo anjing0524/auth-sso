@@ -4,6 +4,11 @@
 最后更新: 2026-06-24
 状态: 已发布
 
+### 0. 接入路径说明（架构约束 R10）
+
+> **写操作（POST/PUT/DELETE）优先使用 Server Actions**（`apps/portal/src/app/(dashboard)/*/actions.ts`），供内部管理界面调用。
+> 同名 REST 端点按需实现，供外部集成/脚本/Webhook 使用。未实现的 REST 端点标记为「仅 Server Action」。
+
 ---
 
 ## 1. 全局约定
@@ -12,22 +17,32 @@
 - **Portal API（含 OIDC Provider）**: `https://portal.example.com/api`
 
 ### 1.2 通用响应格式
-**成功（200 OK）**:
+
+> **v4.0 更新**：实际实现使用两种响应格式，详见下文。
+
+**Server Action 成功**:
 ```json
-{
-  "code": "OK",
-  "message": "success",
-  "data": {}
-}
+{ "success": true, "data": {}, "message": "操作成功" }
 ```
 
-**错误（4xx/5xx）**:
+**Server Action 失败**:
 ```json
-{
-  "code": "ERROR_CODE",
-  "message": "人类可读的错误描述",
-  "requestId": "req_abc123"
-}
+{ "success": false, "error": "VALIDATION_ERROR", "message": "错误描述" }
+```
+
+**API Route 成功**:
+```json
+{ "data": {} }
+```
+
+**API Route 鉴权失败**:
+```json
+{ "error": "AUTH_SSO_1003", "message": "权限不足" }
+```
+
+**OAuth 端点错误 (RFC 6749)**:
+```json
+{ "error": "invalid_grant", "error_description": "授权码已被使用" }
 ```
 
 ### 1.3 通用错误码
@@ -1092,67 +1107,7 @@ curl -X GET https://portal.example.com/api/roles/r_1/clients \
 }
 ```
 
----
-
-#### `GET /api/roles/:id/data-scopes` -- 获取角色的数据范围
-
-**所需权限**: `role:read`
-
-当角色的 `dataScopeType` 为 `CUSTOM` 时，返回该角色可访问的部门列表。
-
-#### curl 示例
-```bash
-curl -X GET https://portal.example.com/api/roles/r_2/data-scopes \
-  --cookie 'portal_jwt_token=eyJhbGciOiJFUzI1NiIsImtpZCI6InNpZ19rZXlfMDEifQ.eyJzdWIiOiJ1XzEiLCJyb2xlcyI6WyJzdXBlcl9hZG1pbiJdLCJwZXJtaXNzaW9ucyI6WyJyb2xlOnJlYWQiXSwiZGF0YVNjb3BlVHlwZSI6IkFMTCIsImp0aSI6Imp0aV8xMjMiLCJpYXQiOjE3MTc3OTgwMDAsImV4cCI6MTcxNzgwMTYwMH0.hXuJXjtHQhHZ0fpy0zFT2_1uIiCEhGiA8wQpYROdmmzN4qgZFgVl5g9nGq-NBgPYWvYgcegkx8Q_gquWmNk3Qw'
-```
-
-#### 成功响应 (200)
-```json
-{
-  "code": "OK",
-  "message": "success",
-  "data": {
-    "dataScopeType": "CUSTOM",
-    "departmentIds": ["d_2", "d_3", "d_4"],
-    "departments": [
-      { "id": "d_2", "name": "Engineering" },
-      { "id": "d_3", "name": "Frontend Team" },
-      { "id": "d_4", "name": "Backend Team" }
-    ]
-  }
-}
-```
-
----
-
-#### `PUT /api/roles/:id/data-scopes` -- 更新角色的数据范围
-
-**所需权限**: `role:update`
-
-更新 `CUSTOM` 数据范围角色可访问的部门列表。
-
-**请求体**：
-```json
-{
-  "departmentIds": ["d_2", "d_5"]
-}
-```
-
-#### curl 示例
-```bash
-curl -X PUT https://portal.example.com/api/roles/r_2/data-scopes \
-  -H "Content-Type: application/json" \
-  --cookie 'portal_jwt_token=eyJhbGciOiJFUzI1NiIsImtpZCI6InNpZ19rZXlfMDEifQ.eyJzdWIiOiJ1XzEiLCJyb2xlcyI6WyJzdXBlcl9hZG1pbiJdLCJwZXJtaXNzaW9ucyI6WyJyb2xlOnVwZGF0ZSJdLCJkYXRhU2NvcGVUeXBlIjoiQUxMIiwianRpIjoianRpXzEyMyIsImlhdCI6MTcxNzc5ODAwMCwiZXhwIjoxNzE3ODAxNjAwfQ.hXuJXjtHQhHZ0fpy0zFT2_1uIiCEhGiA8wQpYROdmmzN4qgZFgVl5g9nGq-NBgPYWvYgcegkx8Q_gquWmNk3Qw' \
-  -d '{"departmentIds":["d_2","d_5"]}'
-```
-
-#### 成功响应 (200)
-```json
-{
-  "code": "OK",
-  "message": "success"
-}
-```
+> **v3.2 废弃**：`GET/PUT /api/roles/:id/data-scopes` 端点已移除。角色数据范围现由 `roles.dept_id` 隐式决定（含子部门），不再需要独立的 data-scopes 绑定。详见 `RBAC_MODEL_REDESIGN.md`。
 
 ---
 

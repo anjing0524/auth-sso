@@ -81,6 +81,25 @@ export function toggleUserStatus(user: User): User {
 }
 
 /**
+ * 核心领域纯函数：解锁被锁定的用户 (B-USR-ST, DC-USR-ST)
+ *
+ * 仅将 LOCKED → ACTIVE，其他状态拒绝操作。
+ *
+ * @param user 原始用户对象
+ * @returns 解锁后的新用户副本
+ * @throws BusinessRuleViolationError 当用户非 LOCKED 状态时
+ */
+export function unlockUser(user: User): User {
+  if (user.status === USER_DELETED) {
+    throw new BusinessRuleViolationError('已逻辑删除的用户无法解锁');
+  }
+  if (user.status !== USER_LOCKED) {
+    throw new BusinessRuleViolationError('仅被锁定的用户需要解锁');
+  }
+  return { ...user, status: USER_ACTIVE };
+}
+
+/**
  * 核心领域纯函数：逻辑删除用户 (无副作用)
  *
  * @param user 原始用户对象
@@ -117,6 +136,14 @@ export function applyUserUpdate(
     deptId: patch.deptId !== undefined ? patch.deptId : user.deptId,
     avatarUrl: patch.avatarUrl ?? user.avatarUrl,
   };
+}
+
+/**
+ * 纯函数：判断用户更新是否涉及部门变更
+ * 消除 Controller 中的内联 deptId 比对（R1 合规）
+ */
+export function hasDeptChanged(oldDeptId: string | null, newDeptId: string | undefined | null): boolean {
+  return newDeptId !== undefined && (oldDeptId ?? '') !== (newDeptId ?? '');
 }
 
 // ────────────────────────────────────────────

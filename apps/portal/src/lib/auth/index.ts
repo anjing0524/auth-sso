@@ -8,7 +8,7 @@
  * - API Route 鉴权   → import { withPermission } from '@/lib/auth'
  * - 身份验证         → import { resolveIdentity } from '@/lib/auth'
  * - 权限检查         → import { checkPermission } from '@/lib/auth'
- * - 数据范围         → import { getDataScopeFilter, applyDataScopeFilter } from '@/lib/auth'
+ * - 数据范围         → import { getUserRoleDeptIds } from '@/lib/auth'
  *
  * @module lib/auth
  */
@@ -16,9 +16,7 @@ export { withAuth, type AuthContext } from './guard';
 export {
   withPermission,
   checkPermission,
-  checkDataScope,
-  getDataScopeFilter,
-  applyDataScopeFilter,
+  getUserRoleDeptIds,
 } from './facade';
 export type { PermissionCheckOptions, PermissionCheckResult } from './check-permission';
 export { requirePermission } from './check-permission';

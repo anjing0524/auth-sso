@@ -22,17 +22,13 @@ import {
   type PermissionCheckResult,
 } from './check-permission';
 import {
-  checkDataScope,
-  getDataScopeFilter,
-  applyDataScopeFilter,
+  getUserRoleDeptIds,
 } from './data-scope';
 
 // 统一透出子模块能力
 export {
   checkPermission,
-  checkDataScope,
-  getDataScopeFilter,
-  applyDataScopeFilter,
+  getUserRoleDeptIds,
 };
 export type { PermissionCheckOptions, PermissionCheckResult };
 

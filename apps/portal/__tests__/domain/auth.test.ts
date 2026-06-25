@@ -138,19 +138,25 @@ describe('validateClientActive', () => {
   });
 });
 
+// SHA-256 hash of 'my-secret' for v3.2 client secret hash comparison
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { createHash } = require('crypto');
+const VALID_SECRET = 'my-secret';
+const VALID_HASH = createHash('sha256').update(VALID_SECRET).digest('hex');
+
 describe('validateClientSecret', () => {
   it('匹配的 secret → 不抛异常', () => {
-    expect(() => validateClientSecret({ clientSecret: 'my-secret' }, 'my-secret')).not.toThrow();
+    expect(() => validateClientSecret({ clientSecret: VALID_HASH }, VALID_SECRET)).not.toThrow();
   });
 
   it('不匹配的 secret → 抛出 InvalidClientError', () => {
-    expect(() => validateClientSecret({ clientSecret: 'my-secret' }, 'wrong-secret'))
-      .toThrow('客户端密钥缺失或不匹配');
+    expect(() => validateClientSecret({ clientSecret: VALID_HASH }, 'wrong-secret'))
+      .toThrow('客户端密钥不匹配');
   });
 
   it('无 secret 输入 → 抛出 InvalidClientError', () => {
-    expect(() => validateClientSecret({ clientSecret: 'my-secret' }, undefined))
-      .toThrow('客户端密钥缺失或不匹配');
+    expect(() => validateClientSecret({ clientSecret: VALID_HASH }, undefined))
+      .toThrow('客户端密钥缺失');
   });
 });
 
@@ -169,7 +175,7 @@ describe('validateRedirectUri', () => {
 describe('validateAuthorization', () => {
   const activeRole = {
     id: 'role-1', code: 'MEMBER', status: 'ACTIVE',
-    roleClients: [{ roleId: 'role-1', clientId: 'client-1' }],
+    clientIds: ['client-1'],
   };
 
   it('ACTIVE 用户 + 已绑定角色 → 允许', () => {

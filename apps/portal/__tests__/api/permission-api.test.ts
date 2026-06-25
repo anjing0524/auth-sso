@@ -135,6 +135,7 @@ vi.mock('@/lib/crypto', () => ({
   generateUUID: vi.fn(() => '00000000-0000-4000-8000-000000000001'),
   generatePermissionPublicId: vi.fn(() => 'perm_mock01'),
   generateRequestId: vi.fn(() => 'req_mock01'),
+  hashClientSecret: (s: string) => 'hash:' + s,
 }));
 
 import { GET as ListPermissions } from '@/app/api/permissions/route';
@@ -164,7 +165,7 @@ function makeRegisterClientRow(overrides: Record<string, any> = {}) {
   return {
     id: 'reg-client-1',
     clientId: 'registry-client',
-    clientSecret: 'registry-secret',
+    clientSecret: 'hash:registry-secret',
     name: '权限注册客户端',
     ...overrides,
   };

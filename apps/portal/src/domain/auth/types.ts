@@ -6,7 +6,6 @@
  *
  * @module domain/auth/types
  */
-import type { DataScopeType } from '@auth-sso/contracts';
 import type { JWTPayload } from 'jose';
 
 // ────────────────────────────────────────────
@@ -27,10 +26,8 @@ export interface PortalJwtClaims extends JWTPayload {
   roles: string[];
   /** 用户权限编码列表（Token 签发时总是包含） */
   permissions: string[];
-  /** 用户所在部门 ID */
-  deptId: string;
-  /** 数据访问范围类型 */
-  dataScopeType: DataScopeType;
+  /** 用户所有角色所属部门（含子树展开）的 ID 列表（v3.2: 替代 dataScopeType + deptId） */
+  deptIds: string[];
 }
 
 /** Token 轮换结果 */

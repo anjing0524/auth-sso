@@ -83,7 +83,7 @@ describe('Permission Enforcement', () => {
     roles: ['USER'],
     permissions: ['user:list', 'user:read', 'audit:read', 'role:assign'],
     deptId: 'dept-1',
-    dataScopeType: 'ALL',
+    deptIds: ['dept-1', 'dept-1a'],
   };
 
   // ======== checkPermission ========
@@ -118,7 +118,7 @@ describe('Permission Enforcement', () => {
       mockGetUserPermissionContext.mockResolvedValueOnce({
         roles: [{ id: 'role-1', code: 'USER', name: '普通用户' }],
         permissions: ['user:list'],
-        dataScopeType: 'SELF',
+        deptIds: [],
       });
 
       const result = await checkPermission({
@@ -135,7 +135,7 @@ describe('Permission Enforcement', () => {
       mockGetUserPermissionContext.mockResolvedValueOnce({
         roles: [{ id: 'role-1', code: 'USER', name: '普通用户' }],
         permissions: ['user:list', 'audit:read'],
-        dataScopeType: 'SELF',
+        deptIds: [],
       });
 
       const result = await checkPermission({
@@ -152,7 +152,7 @@ describe('Permission Enforcement', () => {
       mockGetUserPermissionContext.mockResolvedValueOnce({
         roles: [{ id: 'role-1', code: 'USER', name: '普通用户' }],
         permissions: ['user:list'],
-        dataScopeType: 'SELF',
+        deptIds: [],
       });
 
       const result = await checkPermission({
@@ -170,7 +170,7 @@ describe('Permission Enforcement', () => {
       mockGetUserPermissionContext.mockResolvedValueOnce({
         roles: [{ id: 'role-1', code: 'USER', name: '普通用户' }],
         permissions: ['user:list'],
-        dataScopeType: 'SELF',
+        deptIds: [],
       });
 
       const result = await checkPermission({
@@ -188,7 +188,7 @@ describe('Permission Enforcement', () => {
       mockGetUserPermissionContext.mockResolvedValueOnce({
         roles: [{ id: 'role-1', code: 'USER', name: '普通用户' }],
         permissions: ['user:list', 'audit:read'],
-        dataScopeType: 'SELF',
+        deptIds: [],
       });
 
       const result = await checkPermission({
@@ -206,7 +206,7 @@ describe('Permission Enforcement', () => {
       mockGetUserPermissionContext.mockResolvedValueOnce({
         roles: [{ id: 'role-1', code: 'ADMIN', name: '管理员' }],
         permissions: [],
-        dataScopeType: 'ALL',
+        deptIds: ['dept-1', 'dept-1a'],
       });
 
       const result = await checkPermission({
@@ -223,7 +223,7 @@ describe('Permission Enforcement', () => {
       mockGetUserPermissionContext.mockResolvedValueOnce({
         roles: [{ id: 'role-1', code: 'USER', name: '普通用户' }],
         permissions: [],
-        dataScopeType: 'SELF',
+        deptIds: [],
       });
 
       const result = await checkPermission({
@@ -240,7 +240,7 @@ describe('Permission Enforcement', () => {
       mockGetUserPermissionContext.mockResolvedValueOnce({
         roles: [{ id: 'role-1', code: 'ADMIN', name: '管理员' }],
         permissions: [],
-        dataScopeType: 'ALL',
+        deptIds: ['dept-1', 'dept-1a'],
       });
 
       const result = await checkPermission({
@@ -257,7 +257,7 @@ describe('Permission Enforcement', () => {
       mockGetUserPermissionContext.mockResolvedValueOnce({
         roles: [{ id: 'role-1', code: 'SUPER_ADMIN', name: '超级管理员' }],
         permissions: [],
-        dataScopeType: 'ALL',
+        deptIds: ['dept-1', 'dept-1a'],
       });
 
       const result = await checkPermission({
@@ -273,7 +273,7 @@ describe('Permission Enforcement', () => {
       mockGetUserPermissionContext.mockResolvedValueOnce({
         roles: [{ id: 'role-1', code: 'USER', name: '普通用户' }],
         permissions: [],
-        dataScopeType: 'SELF',
+        deptIds: [],
       });
 
       const result = await checkPermission({});
@@ -305,14 +305,14 @@ describe('Permission Enforcement', () => {
         roles: ['ADMIN'],
         permissions: ['user:list'],
         deptId: 'dept-1',
-        dataScopeType: 'ALL' as const,
+        deptIds: ['dept-1', 'dept-1a'],
       };
       mockGetJwtFromCookie.mockResolvedValueOnce('valid-token');
       mockVerifyJwt.mockResolvedValueOnce(claims);
       mockGetUserPermissionContext.mockResolvedValueOnce({
         roles: [{ id: 'role-1', code: 'ADMIN', name: '管理员' }],
         permissions: ['user:list'],
-        dataScopeType: 'ALL',
+        deptIds: ['dept-1', 'dept-1a'],
       });
 
       const result = await checkPermission({});
@@ -332,7 +332,7 @@ describe('Permission Enforcement', () => {
       mockGetUserPermissionContext.mockResolvedValueOnce({
         roles: [{ id: 'role-1', code: 'USER', name: '普通用户' }],
         permissions: ['user:list'],
-        dataScopeType: 'SELF',
+        deptIds: [],
       });
 
       const handler = vi.fn(async (userId: string) =>
@@ -357,7 +357,7 @@ describe('Permission Enforcement', () => {
       mockGetUserPermissionContext.mockResolvedValueOnce({
         roles: [{ id: 'role-1', code: 'USER', name: '普通用户' }],
         permissions: ['user:list'],
-        dataScopeType: 'SELF',
+        deptIds: [],
       });
 
       const handler = vi.fn(async () =>
@@ -383,7 +383,7 @@ describe('Permission Enforcement', () => {
       mockGetUserPermissionContext.mockResolvedValueOnce({
         roles: [{ id: 'role-1', code: 'ADMIN', name: '管理员' }],
         permissions: [],
-        dataScopeType: 'ALL',
+        deptIds: ['dept-1', 'dept-1a'],
       });
 
       const handler = vi.fn(async (userId: string) =>
@@ -423,7 +423,7 @@ describe('Permission Enforcement', () => {
       mockGetUserPermissionContext.mockResolvedValueOnce({
         roles: [{ id: 'role-1', code: 'USER', name: '普通用户' }],
         permissions: ['user:list'],
-        dataScopeType: 'SELF',
+        deptIds: [],
       });
 
       const handler = vi.fn(async () => {
@@ -448,7 +448,7 @@ describe('Permission Enforcement', () => {
       mockGetUserPermissionContext.mockResolvedValueOnce({
         roles: [{ id: 'role-1', code: 'SUPER_ADMIN', name: '超级管理员' }],
         permissions: [],
-        dataScopeType: 'ALL',
+        deptIds: ['dept-1', 'dept-1a'],
       });
 
       const handler = vi.fn(async (userId: string) =>

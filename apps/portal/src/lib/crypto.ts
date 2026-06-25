@@ -55,3 +55,16 @@ export function generateClientSecret(): string {
 export function hashToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');
 }
+
+/**
+ * 计算 Client Secret 的 SHA256 哈希 — DC-CLI-C 安全存储要求
+ *
+ * Secret 原文不存入 DB，仅存储哈希值；验证时对明文做相同哈希后比较。
+ * 创建/轮换时返回一次原文，之后不可再获取。
+ *
+ * @param secret 原始 Client Secret 字符串
+ * @returns 64 字符小写 hex 摘要
+ */
+export function hashClientSecret(secret: string): string {
+  return createHash('sha256').update(secret).digest('hex');
+}

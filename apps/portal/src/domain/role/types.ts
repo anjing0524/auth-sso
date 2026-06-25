@@ -1,9 +1,8 @@
 import { z } from 'zod';
 import {
   type EntityStatus,
-  type DataScopeType,
 } from '@auth-sso/contracts';
-import { entityStatusEnum, dataScopeTypeEnum } from '@/domain/shared/zod-schemas';
+import { entityStatusEnum } from '@/domain/shared/zod-schemas';
 
 /**
  * 角色领域实体接口 (纯 TS interface)
@@ -19,8 +18,8 @@ export interface Role {
   code: string;
   /** 角色描述 */
   description: string | null;
-  /** 数据范围类型 */
-  dataScopeType: DataScopeType;
+  /** 角色所属部门 ID（v3.2: 替代 dataScopeType，角色的数据范围由其所属部门决定） */
+  deptId: string;
   /** 是否为系统内置角色 */
   isSystem: boolean;
   /** 状态 */
@@ -36,7 +35,7 @@ export const CreateRoleInputSchema = z.object({
   name: z.string().min(1, '角色名称不能为空'),
   code: z.string().min(1, '角色编码不能为空').toUpperCase(),
   description: z.string().optional(),
-  dataScopeType: dataScopeTypeEnum.default('SELF'),
+  deptId: z.string().uuid('部门ID格式不正确'),
   sort: z.number().int().default(0),
 });
 
@@ -44,7 +43,7 @@ export const CreateRoleInputSchema = z.object({
 export const UpdateRoleInputSchema = z.object({
   name: z.string().min(1).optional(),
   description: z.string().nullable().optional(),
-  dataScopeType: dataScopeTypeEnum.optional(),
+  deptId: z.string().uuid().optional(),
   sort: z.number().int().optional(),
   status: entityStatusEnum.optional(),
 });

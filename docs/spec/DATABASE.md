@@ -137,7 +137,11 @@ WHERE id = :deptId OR ancestors LIKE :deptId || '/%'
 >
 > Gateway（Rust/Pingora）和权限注册端点直接消费 `permissions.clientId`，且期望使用业务 `client_id` 值。由于 `clients.client_id` 具有 UNIQUE 约束，参照完整性与引用内部 `id` 等效。这是唯一有意为之的外键例外——所有其他外键均引用内部 `id`。
 
-### 3.5 菜单表（`menus`）
+### 3.5 菜单表（`menus`）— ⚠️ 已合并进 `permissions` 表
+
+> **v2 变更**：`menus` 表已合并进 `permissions` 表。菜单节点现以 `type = 'DIRECTORY' | 'PAGE'` 存储于 `permissions` 表中，字段语义如下表所示（仅供参考）。实际 DDL 见 `permissions` 表定义。
+
+<del>
 
 | 列名 | 类型 | 约束 | 说明 |
 |--------|------|------------|--------|
@@ -155,6 +159,8 @@ WHERE id = :deptId OR ancestors LIKE :deptId || '/%'
 | `status` | entity_status | 非空，默认 'ACTIVE' | |
 | `created_at` | timestamp | 非空，默认 now() | |
 | `updated_at` | timestamp | 默认 now() | 自动更新 |
+
+</del>
 
 ### 3.6 用户-角色关联表（`user_roles`）
 
@@ -321,8 +327,7 @@ WHERE id = :deptId OR ancestors LIKE :deptId || '/%'
 |-----------|--------|---------|
 | `user_status` | `ACTIVE`、`DISABLED`、`LOCKED`、`DELETED` | users.status |
 | `entity_status` | `ACTIVE`、`DISABLED` | roles、permissions、departments、menus、clients |
-| `permission_type` | `MENU`、`API`、`DATA` | permissions.type |
-| `menu_type` | `DIRECTORY`、`MENU`、`BUTTON` | menus.menu_type |
+| `permission_type` | `DIRECTORY`、`PAGE`、`API`、`DATA` | permissions.type |
 | `jwk_algorithm` | `ES256` | jwks.algorithm |
 | `code_challenge_method` | `S256` | authorization_codes.code_challenge_method |
 

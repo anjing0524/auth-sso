@@ -1,3 +1,9 @@
+/**
+ * JWT Cookie 会话生命周期测试
+ *
+ * @req H-SESS-001~006, H-SSO-004
+ * @vitest-environment node
+ */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextResponse } from 'next/server';
 
@@ -144,7 +150,7 @@ describe('JWT Cookie Session Lifecycle', () => {
       expect(setSpy).toHaveBeenCalledWith(COOKIE_NAMES.REFRESH, 'refresh-token', expect.objectContaining({
         path: '/api/auth/refresh',
         httpOnly: true,
-        maxAge: 7 * 24 * 60 * 60,
+        maxAge: 604800,
       }));
     });
   });

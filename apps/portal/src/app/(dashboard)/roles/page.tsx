@@ -4,6 +4,7 @@
  */
 import { ShieldCheck } from 'lucide-react';
 import { getRoles } from './data';
+import { getDepartments } from '@/app/(dashboard)/users/data';
 import RolesTable from './components/RolesTable';
 
 interface PageProps {
@@ -18,7 +19,10 @@ export default async function RolesPage({ searchParams }: PageProps) {
   const page = parseInt(params.page || '1', 10);
   const keyword = params.keyword || '';
 
-  const { data: roles, pagination } = await getRoles({ page, pageSize: 10, keyword, status: '' });
+  const [{ data: roles, pagination }, departments] = await Promise.all([
+    getRoles({ page, pageSize: 10, keyword, status: '' }),
+    getDepartments(),
+  ]);
 
   return (
     <div className="space-y-8 pb-10">
@@ -31,7 +35,7 @@ export default async function RolesPage({ searchParams }: PageProps) {
         </div>
       </div>
 
-      <RolesTable roles={roles} pagination={pagination} initialKeyword={keyword} />
+      <RolesTable roles={roles} pagination={pagination} initialKeyword={keyword} departments={departments} />
     </div>
   );
 }

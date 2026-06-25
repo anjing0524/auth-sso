@@ -1,5 +1,6 @@
 /**
  * @req DC-ROLE-C, DC-ROLE-U, DC-ROLE-D
+ * v3.2: dataScopeType 已替换为 deptId
  */
 import { describe, it, expect } from 'vitest';
 import {
@@ -15,37 +16,38 @@ const mockIdGen = () => 'role_id_12345';
 
 describe('Role 领域核心规则', () => {
   it('应通过工厂函数创建初始状态为 ACTIVE 的角色', () => {
-    const input = CreateRoleInputSchema.parse({ name: '管理员', code: 'ADMIN', dataScopeType: 'ALL' as any, sort: 0 });
+    const input = CreateRoleInputSchema.parse({ name: '管理员', code: 'ADMIN', deptId: 'a1b2c3d4-e5f6-4789-abcd-ef0123456789', sort: 0 });
     const role = createRole(input, mockIdGen);
     expect(role.status).toBe('ACTIVE');
     expect(role.isSystem).toBe(false);
     expect(role.code).toBe('ADMIN');
+    expect(role.deptId).toBe('a1b2c3d4-e5f6-4789-abcd-ef0123456789');
   });
 
-  it('应使用默认 dataScopeType SELF', () => {
-    const input = CreateRoleInputSchema.parse({ name: '访客', code: 'GUEST' });
-    const role = createRole(input, mockIdGen);
-    expect(role.dataScopeType).toBe('SELF');
+  it('缺少 deptId 时应被 Zod 校验拒绝', () => {
+    const result = CreateRoleInputSchema.safeParse({ name: '访客', code: 'GUEST' });
+    expect(result.success).toBe(false);
   });
 
   it('applyRoleUpdate 应正确 merge 字段', () => {
-    const input = CreateRoleInputSchema.parse({ name: '旧名称', code: 'OLD', dataScopeType: 'SELF' });
+    const input = CreateRoleInputSchema.parse({ name: '旧名称', code: 'OLD', deptId: 'a1b2c3d4-e5f6-4789-abcd-ef0123456789' });
     const role = createRole(input, mockIdGen);
     const updated = applyRoleUpdate(role, { name: '新名称', description: '新描述' });
     expect(updated.name).toBe('新名称');
     expect(updated.description).toBe('新描述');
     expect(updated.code).toBe('OLD'); // 未修改保持原值
+    expect(updated.deptId).toBe('a1b2c3d4-e5f6-4789-abcd-ef0123456789'); // 未修改保持原值
   });
 
   it('guardNotSystemRole 应阻止操作系统角色', () => {
-    const input = CreateRoleInputSchema.parse({ name: '系统角色', code: 'SYS' });
+    const input = CreateRoleInputSchema.parse({ name: '系统角色', code: 'SYS', deptId: 'a1b2c3d4-e5f6-4789-abcd-ef0123456789' });
     const role = createRole(input, mockIdGen);
     const sysRole = { ...role, isSystem: true };
     expect(() => guardNotSystemRole(sysRole)).toThrow(BusinessRuleViolationError);
   });
 
   it('guardNotSystemRole 应允许操作非系统角色', () => {
-    const input = CreateRoleInputSchema.parse({ name: '普通角色', code: 'NORMAL' });
+    const input = CreateRoleInputSchema.parse({ name: '普通角色', code: 'NORMAL', deptId: 'a1b2c3d4-e5f6-4789-abcd-ef0123456789' });
     const role = createRole(input, mockIdGen);
     expect(() => guardNotSystemRole(role)).not.toThrow();
   });
@@ -53,13 +55,13 @@ describe('Role 领域核心规则', () => {
   it('toDomainRole 应正确转换 DB 行', () => {
     const row = {
       id: 'id1', publicId: 'pub1', name: 'Admin', code: 'ADMIN',
-      description: '管理员', dataScopeType: 'ALL' as any,
+      description: '管理员', deptId: 'a1b2c3d4-e5f6-4789-abcd-ef0123456789',
       isSystem: true, status: 'ACTIVE' as any, sort: 1,
       createdAt: new Date('2025-01-01'),
     };
     const role = toDomainRole(row);
     expect(role.name).toBe('Admin');
-    expect(role.dataScopeType).toBe('ALL');
+    expect(role.deptId).toBe('a1b2c3d4-e5f6-4789-abcd-ef0123456789');
     expect(role.isSystem).toBe(true);
   });
 });

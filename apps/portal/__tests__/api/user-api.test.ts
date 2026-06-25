@@ -1,11 +1,13 @@
 /**
  * 用户管理与控制层单元测试
- * 
+ *
  * 覆盖范围：
  * - 用户列表查询 REST API (GET /api/users)
  * - 用户详情查询 REST API (GET /api/users/[id])
  * - 核心写入 Server Actions 流程及入参门禁校验
  *
+ * @req B-USR-L, B-USR-C, B-USR-R, B-USR-U, B-USR-D, B-USR-ST, B-USR-PW
+ * @req DC-USR-C, DC-USR-U, DC-USR-D, DC-USR-ST
  * @vitest-environment node
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -22,8 +24,6 @@ const {
   resetDb,
   mockWithPermission,
   mockCheckPermission,
-  mockCheckDataScope,
-  mockGetDataScopeFilter,
 } = vi.hoisted(() => {
   const state: { _queryResult: any[] } = { _queryResult: [] };
 
@@ -98,8 +98,6 @@ const {
       handler('admin-user-1'),
   );
   const mockCheckPermission = vi.fn(async () => ({ authorized: true, userId: 'admin-user-1', error: undefined as string | undefined }));
-  const mockCheckDataScope = vi.fn(async () => true);
-  const mockGetDataScopeFilter = vi.fn(async () => ({ type: 'ALL' }));
 
   return {
     db,
@@ -111,8 +109,6 @@ const {
     },
     mockWithPermission,
     mockCheckPermission,
-    mockCheckDataScope,
-    mockGetDataScopeFilter,
   };
 });
 
@@ -147,8 +143,8 @@ vi.mock('@/lib/auth', () => ({
   },
   withPermission: mockWithPermission,
   checkPermission: mockCheckPermission,
-  checkDataScope: mockCheckDataScope,
-  getDataScopeFilter: mockGetDataScopeFilter,
+  getUserRoleDeptIds: vi.fn().mockResolvedValue(["dept-1"]),
+  
 }));
 
 vi.mock('next/cache', () => ({
@@ -182,6 +178,8 @@ import {
   updateUserAction,
   deleteUserAction,
   toggleUserStatusAction,
+  unlockUserAction,
+  resetPasswordAction,
 } from '@/app/(dashboard)/users/actions';
 
 describe('User Management API & Actions', () => {
@@ -375,6 +373,56 @@ describe('User Management API & Actions', () => {
       const res = await toggleUserStatusAction('u-1');
       expect(res.success).toBe(false);
       expect(res.message).toContain('已逻辑删除的用户无法操作状态');
+    });
+  });
+
+  describe('unlockUserAction', () => {
+    it('unlocks a LOCKED user', async () => {
+      const lockedUser = {
+        id: 'u-1', publicId: 'user_1', username: 'test',
+        email: 'test@example.com', name: 'Test',
+        status: 'LOCKED', deptId: null, avatarUrl: null, createdAt: new Date(),
+      };
+      setQueryResult([lockedUser]);
+      const res = await unlockUserAction('u-1');
+      expect(res.success).toBe(true);
+      expect(res.message).toContain('已解锁');
+    });
+
+    it('throws error when user is DELETED', async () => {
+      const deletedUser = {
+        id: 'u-1', publicId: 'user_1', username: 'test',
+        email: 'test@example.com', name: 'Test',
+        status: 'DELETED', deptId: null, avatarUrl: null, createdAt: new Date(),
+      };
+      setQueryResult([deletedUser]);
+      const res = await unlockUserAction('u-1');
+      expect(res.success).toBe(false);
+    });
+  });
+
+  describe('resetPasswordAction', () => {
+    it('resets password and returns success', async () => {
+      const user = {
+        id: 'u-1', publicId: 'user_1', username: 'test',
+        email: 'test@example.com', name: 'Test',
+        status: 'ACTIVE', deptId: null, avatarUrl: null, createdAt: new Date(),
+      };
+      setQueryResult([user]);
+      const res = await resetPasswordAction('u-1', 'NewPass1word');
+      expect(res.success).toBe(true);
+      expect(res.message).toContain('密码已重置');
+    });
+
+    it('rejects short password', async () => {
+      const res: any = await resetPasswordAction('u-1', 'short');
+      expect(res.success).toBe(false);
+      expect(res.error).toBe('VALIDATION_ERROR');
+    });
+
+    it('rejects password without uppercase', async () => {
+      const res: any = await resetPasswordAction('u-1', 'alllowercase1');
+      expect(res.success).toBe(false);
     });
   });
 });

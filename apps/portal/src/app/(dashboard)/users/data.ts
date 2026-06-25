@@ -32,7 +32,7 @@ import {
  * @returns 用户列表数据及分页信息（纯 JSON 可序列化）
  */
 export async function getUsers(
-  scopeFilter: { type: 'ALL' | 'LIST' | 'SELF'; deptIds?: string[] },
+  deptIds: string[],
   userId: string,
   params: {
     page: number;
@@ -50,12 +50,11 @@ export async function getUsers(
   const { page, pageSize, keyword, status, deptId } = params;
   const offset = (page - 1) * pageSize;
 
-
-  if (isScopeDenied(scopeFilter)) {
+  if (isScopeDenied(deptIds)) {
     return { data: [], pagination: { page, pageSize, total: 0, totalPages: 0 } };
   }
 
-  const conditions = buildUserListConditions({ keyword, status, scopeFilter, userId });
+  const conditions = buildUserListConditions({ keyword, status, deptIds, userId });
 
   // 部门 ID 二次筛选（在已授权范围内叠加）
   if (deptId) {
@@ -199,11 +198,11 @@ export async function getUserRoles(lookupId: string) {
     .filter(ur => ur.role !== null)
     .map(ur => ({
       id: ur.role.id,
-      
+
       code: ur.role.code,
       name: ur.role.name,
       description: ur.role.description,
-      dataScopeType: ur.role.dataScopeType,
+      deptId: ur.role.deptId,
       status: ur.role.status,
       assignedAt: ur.createdAt,
     }));

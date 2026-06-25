@@ -15,7 +15,6 @@ import { pgEnum } from 'drizzle-orm/pg-core';
 import {
   USER_STATUS_VALUES,
   ENTITY_STATUS_VALUES,
-  DATA_SCOPE_TYPE_VALUES,
   PERMISSION_TYPE_VALUES,
   LOGIN_EVENT_VALUES,
   AUDIT_OPERATION_VALUES,
@@ -26,9 +25,6 @@ export const userStatusEnum = pgEnum('user_status', USER_STATUS_VALUES);
 
 /** 实体通用状态枚举（department/role/permission/client） */
 export const entityStatusEnum = pgEnum('entity_status', ENTITY_STATUS_VALUES);
-
-/** 角色数据范围类型枚举 */
-export const dataScopeTypeEnum = pgEnum('data_scope_type', DATA_SCOPE_TYPE_VALUES);
 
 /** 权限类型枚举（DIRECTORY | PAGE | API | DATA，合并旧 menu_type） */
 export const permissionTypeEnum = pgEnum('permission_type', PERMISSION_TYPE_VALUES);

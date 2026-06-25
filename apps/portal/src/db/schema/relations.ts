@@ -14,7 +14,7 @@
 import { relations } from 'drizzle-orm';
 import { users, userRoles } from './users';
 import { clients, accessTokens, refreshTokens, authorizationCodes } from './auth';
-import { roles, permissions, rolePermissions, roleDataScopes, roleClients } from './rbac';
+import { roles, permissions, rolePermissions } from './rbac';
 import { departments } from './org';
 
 /** 用户 ↔ 角色（多对多，经 user_roles）/ 部门 */
@@ -28,27 +28,16 @@ export const userRolesRelations = relations(userRoles, ({ one }) => ({
   role: one(roles, { fields: [userRoles.roleId], references: [roles.id] }),
 }));
 
-/** 角色 ↔ 权限 / 数据范围 / Client / 用户（多对多） */
-export const rolesRelations = relations(roles, ({ many }) => ({
+/** 角色 ↔ 权限 / 用户 / 所属部门 */
+export const rolesRelations = relations(roles, ({ many, one }) => ({
   userRoles: many(userRoles),
   rolePermissions: many(rolePermissions),
-  roleDataScopes: many(roleDataScopes),
-  roleClients: many(roleClients),
+  department: one(departments, { fields: [roles.deptId], references: [departments.id] }),
 }));
 
 export const rolePermissionsRelations = relations(rolePermissions, ({ one }) => ({
   role: one(roles, { fields: [rolePermissions.roleId], references: [roles.id] }),
   permission: one(permissions, { fields: [rolePermissions.permissionId], references: [permissions.id] }),
-}));
-
-export const roleDataScopesRelations = relations(roleDataScopes, ({ one }) => ({
-  role: one(roles, { fields: [roleDataScopes.roleId], references: [roles.id] }),
-  department: one(departments, { fields: [roleDataScopes.deptId], references: [departments.id] }),
-}));
-
-export const roleClientsRelations = relations(roleClients, ({ one }) => ({
-  role: one(roles, { fields: [roleClients.roleId], references: [roles.id] }),
-  client: one(clients, { fields: [roleClients.clientId], references: [clients.clientId] }),
 }));
 
 /** 权限统一树：自引用父子关系 + 角色关联 + Client 关联 */
@@ -59,12 +48,11 @@ export const permissionsRelations = relations(permissions, ({ one, many }) => ({
   client: one(clients, { fields: [permissions.clientId], references: [clients.clientId] }),
 }));
 
-/** Client ↔ Token / 授权码 / 角色关联 / 权限（统一引用 client_id） */
+/** Client ↔ Token / 授权码 / 权限（统一引用 client_id） */
 export const clientsRelations = relations(clients, ({ many }) => ({
   accessTokens: many(accessTokens),
   refreshTokens: many(refreshTokens),
   authorizationCodes: many(authorizationCodes),
-  roleClients: many(roleClients),
   permissions: many(permissions),
 }));
 
@@ -87,5 +75,4 @@ export const authorizationCodesRelations = relations(authorizationCodes, ({ one 
 export const departmentsRelations = relations(departments, ({ one, many }) => ({
   parent: one(departments, { fields: [departments.parentId], references: [departments.id], relationName: 'department_parent' }),
   children: many(departments, { relationName: 'department_parent' }),
-  roleDataScopes: many(roleDataScopes),
 }));

@@ -1,11 +1,9 @@
 /**
  * RBAC 权限领域表 (Role-Based Access Control Tables)
  *
- * - roles：角色
- * - permissions：权限统一树（合并旧 menus 表）
+ * - roles：角色（v3.2：data_scope_type 已移除，由 dept_id 决定数据范围）
+ * - permissions：权限统一树
  * - rolePermissions：角色↔权限 复合主键
- * - roleDataScopes：角色↔部门 数据范围 复合主键
- * - roleClients：角色↔Client 复合主键
  *
  * ## permissions 类型鉴别设计
  *
@@ -22,20 +20,18 @@
  *
  * 所有 FK 统一引用目标 PK：
  * - permissions.client_id → clients.client_id（统一引用，不再有 id/client_id 分歧）
+ * - roles.dept_id → departments.id（v3.2 新增，角色天生属于一个部门）
  *
- * v2 变更：
- * - permissions 合并 menus 全部功能
- * - uuid PK 替代 text PK
- * - varchar(n) 替代 text
- * - timestamptz 替代 timestamp
- * - 关联表全部复合主键
- * - 移除 public_id
+ * v3.2 变更（RBAC 模型重构）：
+ * - role_data_scopes 表已删除（改为角色 dept_id 决定数据范围）
+ * - role_clients 表已删除（client→permission→role→user 链路已闭环）
+ * - data_scope_type 枚举已删除
  *
  * @module db/schema/rbac
  */
 import { pgTable, uuid, varchar, text, boolean, smallint, index, uniqueIndex, check } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
-import { entityStatusEnum, dataScopeTypeEnum, permissionTypeEnum } from './enums';
+import { entityStatusEnum, permissionTypeEnum } from './enums';
 import { clients } from './auth';
 import { departments } from './org';
 import { createdAtColumn, updatedAtColumn } from './helpers';
@@ -48,7 +44,7 @@ export const roles = pgTable('roles', {
   name: varchar('name', { length: 100 }).notNull(),
   code: varchar('code', { length: 50 }).notNull().unique(),
   description: text('description'),
-  dataScopeType: dataScopeTypeEnum('data_scope_type').notNull().default('SELF'),
+  deptId: uuid('dept_id').notNull().references(() => departments.id, { onDelete: 'cascade' }),
   isSystem: boolean('is_system').notNull().default(false),
   status: entityStatusEnum('status').notNull().default('ACTIVE'),
   sort: smallint('sort').notNull().default(0),
@@ -107,26 +103,3 @@ export const rolePermissions = pgTable('role_permissions', {
   index('idx_role_permissions_permission').on(t.permissionId),
 ]);
 
-/**
- * 角色↔部门 数据范围关联表（复合主键）
- */
-export const roleDataScopes = pgTable('role_data_scopes', {
-  roleId: uuid('role_id').notNull().references(() => roles.id, { onDelete: 'cascade' }),
-  deptId: uuid('dept_id').notNull().references(() => departments.id, { onDelete: 'cascade' }),
-  createdAt: createdAtColumn(),
-}, (t) => [
-  uniqueIndex('ux_role_data_scopes_pk').on(t.roleId, t.deptId),
-  index('idx_role_data_scopes_dept').on(t.deptId),
-]);
-
-/**
- * 角色↔Client 关联表（复合主键）
- */
-export const roleClients = pgTable('role_clients', {
-  roleId: uuid('role_id').notNull().references(() => roles.id, { onDelete: 'cascade' }),
-  clientId: varchar('client_id', { length: 50 }).notNull().references(() => clients.clientId, { onDelete: 'cascade' }),
-  createdAt: createdAtColumn(),
-}, (t) => [
-  uniqueIndex('ux_role_clients_pk').on(t.roleId, t.clientId),
-  index('idx_role_clients_client').on(t.clientId),
-]);

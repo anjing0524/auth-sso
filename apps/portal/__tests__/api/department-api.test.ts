@@ -11,7 +11,7 @@
  * - POST 缺少必填字段
  * - GET 数据范围过滤
  *
- * @req F-DEP-L, F-DEP-C, F-DEP-U, F-DEP-D, H-DSCOPE-001~005
+ * @req F-DEP-L, F-DEP-C, F-DEP-U, F-DEP-D, H-DSCOPE-001~003
  * @vitest-environment node
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -31,8 +31,7 @@ const mockDbState = vi.hoisted(() => ({
 }));
 
 const mockAuthState = vi.hoisted(() => ({
-  checkDataScope: vi.fn().mockResolvedValue(true),
-  getDataScopeFilter: vi.fn().mockResolvedValue({ type: 'ALL' }),
+  getUserRoleDeptIds: vi.fn().mockResolvedValue(['dept-1', 'dept-1a']),
 }));
 
 // ── Module mocks ───────────────────────────────────────────────────────────
@@ -156,9 +155,7 @@ vi.mock('@/lib/auth', () => ({
       }
     },
   ),
-  checkDataScope: mockAuthState.checkDataScope,
-  getDataScopeFilter: mockAuthState.getDataScopeFilter,
-  applyDataScopeFilter: vi.fn(() => undefined),
+  getUserRoleDeptIds: mockAuthState.getUserRoleDeptIds,
 }));
 
 vi.mock('@/lib/crypto', () => ({
@@ -175,8 +172,7 @@ describe('Department API', () => {
     mockDbState.shouldThrow = null;
     vi.clearAllMocks();
     // 恢复默认的 auth mock 行为
-    mockAuthState.checkDataScope.mockResolvedValue(true);
-    mockAuthState.getDataScopeFilter.mockResolvedValue({ type: 'ALL' });
+    mockAuthState.getUserRoleDeptIds.mockResolvedValue(['dept-1', 'dept-1a']);
   });
 
   // ── GET /api/departments ───────────────────────────────────────────────
@@ -239,10 +235,7 @@ describe('Department API', () => {
 
     // @req F-DEP-L, H-DSCOPE-001
     it('应用数据范围过滤只返回授权范围内部门', async () => {
-      mockAuthState.getDataScopeFilter.mockResolvedValue({
-        type: 'LIST',
-        deptIds: ['dept-1'],
-      });
+      mockAuthState.getUserRoleDeptIds.mockResolvedValue(['dept-1']);
 
       mockDbState.queryResult = [
         {

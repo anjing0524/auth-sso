@@ -725,8 +725,7 @@ mod tests {
             jti: "jti-123".to_string(),
             roles: vec!["ADMIN".to_string()],
             permissions: vec!["user:list".to_string()],
-            dept_id: "dept-1".to_string(),
-            data_scope_type: "ALL".to_string(),
+            dept_ids: vec!["dept-1".to_string()],
         };
         let mut header = Header::new(Algorithm::HS256);
         header.kid = Some(kid);
@@ -787,8 +786,7 @@ mod tests {
             jti: "jti-123".to_string(),
             roles: vec![],
             permissions: vec![],
-            dept_id: String::new(),
-            data_scope_type: "SELF".to_string(),
+            dept_ids: vec![],
         };
         let mut header = Header::new(Algorithm::HS256);
         header.kid = Some(kid);
@@ -845,8 +843,7 @@ mod tests {
             jti: "jti-123".to_string(),
             roles: vec![],
             permissions: vec![],
-            dept_id: String::new(),
-            data_scope_type: "SELF".to_string(),
+            dept_ids: vec![],
         };
         let mut header = Header::new(Algorithm::HS256);
         header.kid = Some(kid);
@@ -927,8 +924,7 @@ mod tests {
             jti: "jti-1".to_string(),
             roles: vec!["ADMIN".to_string()],
             permissions: vec!["read".to_string()],
-            dept_id: "dept-1".to_string(),
-            data_scope_type: "ALL".to_string(),
+            dept_ids: vec!["dept-1".to_string()],
         };
         let token = encode(
             &Header::new(Algorithm::HS256),
@@ -992,8 +988,7 @@ mod tests {
             jti: "jti-123".to_string(),
             roles: vec![],
             permissions: vec![],
-            dept_id: String::new(),
-            data_scope_type: "SELF".to_string(),
+            dept_ids: vec![],
         };
         let mut header = Header::new(Algorithm::HS256);
         // 使用一个未在缓存中登记的 kid

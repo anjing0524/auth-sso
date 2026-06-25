@@ -1,6 +1,8 @@
 /**
  * 登录 API 单元测试 (POST /api/auth/login)
  *
+ * @req H-AUTH-002, H-AUTH-006, DC-AUTH-001
+ *
  * 覆盖范围：
  * - Zod 校验失败 → 400
  * - 用户不存在 → EntityNotFoundError
