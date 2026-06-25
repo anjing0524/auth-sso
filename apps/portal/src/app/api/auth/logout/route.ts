@@ -14,6 +14,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
+import { getAppBaseURL } from '@/lib/env';
 import { db, schema } from '@/infrastructure/db';
 import { eq } from 'drizzle-orm';
 import { revokeJti } from '@/lib/session/revoke';
@@ -75,7 +76,7 @@ export async function POST() {
   const response = NextResponse.json({ success: true });
   response.cookies.set(COOKIE_NAMES.JWT, '', { path: '/', httpOnly: true, sameSite: 'lax', maxAge: 0 });
   response.cookies.set(COOKIE_NAMES.LOGIN_SESSION, '', { path: '/', httpOnly: true, sameSite: 'lax', maxAge: 0 });
-  response.cookies.set(COOKIE_NAMES.REFRESH, '', { path: '/api/auth/refresh', httpOnly: true, sameSite: 'lax', maxAge: 0 });
+  response.cookies.set(COOKIE_NAMES.REFRESH, '', { path: '/', httpOnly: true, sameSite: 'lax', maxAge: 0 });
   return response;
 }
 
@@ -83,10 +84,10 @@ export async function GET(request: NextRequest) {
   const cookieStore = await cookies();
   await performRevocation(cookieStore);
 
-  const url = new URL(request.url);
-  const response = NextResponse.redirect(new URL('/login', url.origin));
+  const publicBase = getAppBaseURL();
+  const response = NextResponse.redirect(new URL('/login', publicBase));
   response.cookies.set(COOKIE_NAMES.JWT, '', { path: '/', httpOnly: true, sameSite: 'lax', maxAge: 0 });
   response.cookies.set(COOKIE_NAMES.LOGIN_SESSION, '', { path: '/', httpOnly: true, sameSite: 'lax', maxAge: 0 });
-  response.cookies.set(COOKIE_NAMES.REFRESH, '', { path: '/api/auth/refresh', httpOnly: true, sameSite: 'lax', maxAge: 0 });
+  response.cookies.set(COOKIE_NAMES.REFRESH, '', { path: '/', httpOnly: true, sameSite: 'lax', maxAge: 0 });
   return response;
 }
