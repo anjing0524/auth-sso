@@ -6,7 +6,7 @@ use tracing::{debug, error, info, warn};
 
 use crate::claims::Claims;
 use crate::cookie;
-use crate::jwks::HTTP_CLIENT;
+use crate::http::HTTP_CLIENT;
 use crate::jwks::JwksCache;
 
 /// Access Token 剩余有效期低于此阈值（秒）时触发静默续签

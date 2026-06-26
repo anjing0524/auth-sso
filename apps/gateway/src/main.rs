@@ -3,6 +3,7 @@ mod claims;
 mod config;
 mod cookie;
 mod gateway;
+mod http;
 mod jwks;
 mod logging;
 mod path_matcher;
@@ -70,10 +71,7 @@ fn main() -> anyhow::Result<()> {
     // ── 注册 JWKS 后台定时刷新服务 ──
     let jwks_refresh_svc = background_service(
         "JWKS Refresh Service",
-        crate::jwks::JwksRefreshService {
-            jwks_cache: Arc::clone(&jwks_cache),
-            upstream: upstream.clone(),
-        },
+        crate::jwks::JwksRefreshService::new(Arc::clone(&jwks_cache), upstream.clone()),
     );
     my_server.add_service(jwks_refresh_svc);
 
