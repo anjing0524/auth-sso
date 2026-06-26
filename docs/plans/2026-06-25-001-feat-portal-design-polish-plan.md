@@ -1,3 +1,4 @@
+<!-- /autoplan restore point: /Users/liushuo/.gstack/projects/anjing0524-auth-sso/main-autoplan-restore-20260626-090555.md -->
 ---
 title: Portal Design Polish — 设计债清零与交互一致性
 type: feat
@@ -392,3 +393,290 @@ date: 2026-06-25
 - DESIGN.md: `DESIGN.md` v2.1 — 颜色/字体/间距/圆角/组件规范
 - Test plan: `~/.gstack/projects/anjing0524-auth-sso/liushuo-main-eng-review-test-plan-20260625-134928.md`
 - 原始设计文档: `~/.gstack/projects/anjing0524-auth-sso/liushuo-main-design-20260420-104232.md`
+
+---
+
+## /autoplan CEO Review — 2026-06-26
+
+### Mode: SELECTIVE EXPANSION (auto-decided per autoplan rules)
+
+### Implementation Status at Review Time
+
+Plan is ~85% implemented. U1-U5 are substantially complete. Remaining work: U6 (visual regression tests), 5 shadcn base components with arbitrary border-radius values, DESIGN.md oklch update (deferred).
+
+### Premise Challenge (0A)
+
+| Premise | Status | Notes |
+|---------|--------|-------|
+| "Design debt is blocking release" | **UNCERTAIN** | No user data or analytics to confirm. The product has zero telemetry — we don't know what users actually use or where they struggle. |
+| "Cmd+K should be the only search entry point" | **QUESTIONABLE** | SMB admins are not power users. Removing the sidebar search box removes discoverability for the majority who don't use keyboard shortcuts. |
+| "Dark mode is a requirement for this release" | **OVER-SCOPED** | B2B admin panel used during business hours. Dark mode validation across all pages is deferred anyway — audit log page alone gets it. |
+| "3 visual snapshot tests provide adequate quality coverage" | **INSUFFICIENT** | Snapshots capture rendering but not behavior. They break on every UI change and tend toward baseline rot in CI. |
+
+### Implementation Alternatives (0C-bis)
+
+Since U1-U5 are already implemented, alternatives analysis focuses on remaining work:
+
+**APPROACH A: Complete U6 as planned (visual snapshots)**
+- Effort: S (human: ~2h / CC: ~15min)
+- Risk: Medium — snapshot maintenance burden over time
+- Pros: Fast to implement, catches visual regressions
+- Cons: High false-positive rate in CI, undefined pixel thresholds
+
+**APPROACH B: Replace U6 snapshots with component-level interaction tests**
+- Effort: M (human: ~4h / CC: ~30min)
+- Risk: Low — standard vitest + jsdom, no flakiness
+- Pros: Tests behavior not pixels, no CI maintenance, covers loading/empty/error states
+- Cons: Doesn't catch CSS rendering bugs (but those are rare and caught in QA)
+
+**RECOMMENDATION: B** — Component tests catch what matters (behavior, states) without the CI maintenance tax of pixel-diff snapshots.
+
+### CEO Dual Voices
+
+**Codex:** Unavailable (UTF-8 encoding error in repo path — Chinese characters incompatible with Codex WS header). Proceeding single-model.
+
+**Claude Subagent (CEO — strategic independence):**
+- CRITICAL: Zero analytics/telemetry. Strategic blind spot — flying without instruments.
+- HIGH: DESIGN.md drift vs implementation (oklch vs hex in DESIGN.md v2.1). Documentation debt > visual debt.
+- HIGH: P1 production-readiness items remain unfixed. Polish before stability is wrong ordering.
+- HIGH: U6 visual snapshots will rot in CI without defined thresholds and review discipline.
+- MEDIUM: EmptyState onboarding variant is a stub — steps undefined. Ship or remove.
+- MEDIUM: Cmd+K global shortcut may conflict with browser/OS shortcuts (Cmd+K clears terminal on Mac).
+- MEDIUM: Competitive positioning — framed as "design polish" not "compliance UI."
+
+### CEO Consensus Table
+
+```
+CEO DUAL VOICES — CONSENSUS TABLE:
+═══════════════════════════════════════════════════════════════
+  Dimension                           Claude  Codex  Consensus
+  ──────────────────────────────────── ─────── ─────── ─────────
+  1. Premises valid?                   MIXED   N/A    MIXED
+  2. Right problem to solve?           PARTIAL N/A    PARTIAL
+  3. Scope calibration correct?        YES     N/A    YES
+  4. Alternatives sufficiently explored? NO    N/A    NO
+  5. Competitive/market risks covered? NO      N/A    NO
+  6. 6-month trajectory sound?         CONCERN N/A    CONCERN
+═══════════════════════════════════════════════════════════════
+CONFIRMED = both agree. DISAGREE = models differ.
+N/A = Codex unavailable (path encoding error).
+```
+
+### Scope Expansion — Cherry-Pick Ceremony (SELECTIVE EXPANSION)
+
+Per autoplan auto-decision rules (P1 completeness + P2 boil lakes), the following expansions are evaluated:
+
+**E1: Analytics/Telemetry foundation** — Add `POST /api/telemetry` endpoint with minimal client-side event tracking (page views, feature usage, errors). This unblocks data-driven decisions for all future work.
+- Effort: M (human: ~4h / CC: ~20min)
+- Decision: **DEFER to TODOS.md** — Outside blast radius (new API endpoint, new infra concern). Right problem, wrong PR.
+
+**E2: DESIGN.md oklch update** — Bring DESIGN.md v2.1 color tokens in sync with globals.css reality.
+- Effort: S (human: ~30min / CC: ~5min)
+- Decision: **ACCEPT** — In blast radius (plan already references DESIGN.md). Prevents documentation drift. One file change.
+
+**E3: P1 production-readiness items** — Fix remaining 6 P1 items from acceptance criteria.
+- Effort: M (human: ~3h / CC: ~20min)
+- Decision: **DEFER to TODOS.md** — Outside blast radius. Critical but separate concern.
+
+### Completion Summary
+
+```
++====================================================================+
+|            MEGA PLAN REVIEW — COMPLETION SUMMARY                   |
++====================================================================+
+| Mode selected        | SELECTIVE EXPANSION                         |
+| System Audit         | Plan 85% implemented; globals.css oklch OK  |
+| Step 0               | Premises mixed, alternatives under-explored |
+| Section 1  (Arch)    | 0 issues — CSS-only, no arch changes        |
+| Section 2  (Errors)  | 0 new error paths — UI polish only          |
+| Section 3  (Security)| 0 issues — no new attack surface            |
+| Section 4  (Data/UX) | 1 gap: EmptyState onboarding steps undefined|
+| Section 5  (Quality) | 0 issues — patterns consistent              |
+| Section 6  (Tests)   | 1 gap: U6 snapshots → recommend component   |
+|                      | tests instead (lower maintenance)            |
+| Section 7  (Perf)    | 0 issues — CSS-only changes                 |
+| Section 8  (Observ)  | 1 CRITICAL GAP: zero analytics/telemetry    |
+| Section 9  (Deploy)  | 0 issues — static frontend changes          |
+| Section 10 (Future)  | Reversibility: 5/5 (CSS revert), debt: low  |
+| Section 11 (Design)  | 1 gap: DESIGN.md stale vs oklch impl        |
++--------------------------------------------------------------------+
+| NOT in scope         | written (3 items)                           |
+| What already exists  | written                                     |
+| Dream state delta    | written                                     |
+| Error/rescue registry| 0 methods (no new backend codepaths)        |
+| Failure modes        | 0 (no new backend codepaths)               |
+| TODOS.md updates     | 3 items proposed                            |
+| Scope proposals      | 3 proposed, 1 accepted (E2: DESIGN.md sync) |
+| Outside voice        | Codex unavailable, Claude subagent ran      |
+| Lake Score           | 1/1 recommendations chose complete option   |
+| Diagrams produced    | 0 (no new architecture)                     |
+| Unresolved decisions | 0                                            |
++====================================================================+
+```
+
+### NOT in scope
+- Gateway (Rust/Pingora) changes — confirmed
+- DB Schema changes — confirmed
+- New API endpoints — confirmed
+- Analytics/telemetry system — deferred to TODOS.md (right problem, wrong PR)
+- P1 production-readiness fixes — deferred to TODOS.md (separate concern)
+
+### What already exists
+- `globals.css` already uses oklch values for all `--color-*` variables (U1 done)
+- `DataTable` already has `emptyState` prop (U2 done)
+- `EmptyState` component exists with simple + onboarding variants (U2 done)
+- `CommandPalette` component exists (U5 done)
+- `CreateUserDialog` replaces CreateUserDrawer (U5 done)
+- Login page already has gradient background (U3 done)
+- Audit logs already use shadcn Table (U4 done)
+
+### Dream state delta
+CURRENT: Functional admin panel with inconsistent design tokens → THIS PLAN: Unified oklch color system, shared DataTable, consistent interactions → 12-MONTH IDEAL: Data-driven product with telemetry, customer onboarding docs, demo sandbox, compliance-certified UI.
+
+### Accepted Scope Expansions
+- **E2: DESIGN.md oklch update** — Sync DESIGN.md color tokens with globals.css reality (1 file, ~30min human / ~5min CC)
+
+### Deferred to TODOS.md
+- E1: Analytics/Telemetry foundation
+- E3: P1 production-readiness items
+- DESIGN.md update (already listed as deferred in original plan)
+- Global dark mode validation beyond audit log page
+
+---
+
+## /autoplan Design Review — 2026-06-26
+
+### Design Implementation Audit (actual code, not plan)
+
+Since U1-U5 are implemented, this review audits the actual code against the plan's requirements.
+
+### Findings
+
+| # | Severity | Category | File | Issue |
+|---|----------|----------|------|-------|
+| 1 | **CRITICAL** | Token leak | `CreateUserDialog.tsx` | 8 hardcoded `text-slate-*` / `bg-slate-*` bypassing oklch system |
+| 2 | **CRITICAL** | Token leak | `dashboard/page.tsx:186` | Status badge uses `bg-green-100` (hardcoded, no dark mode) |
+| 3 | **HIGH** | Token leak | `dashboard/page.tsx:90,100,110,120` | Metric cards use `hover:bg-[#E6F0FF]` hex bypassing oklch |
+| 4 | **HIGH** | Error state | Dashboard | Missing `error.tsx` — white screen on data fetch failure |
+| 5 | **HIGH** | Token leak | `data-table.tsx:53` | Header uses `bg-slate-50/30` instead of design token |
+| 6 | **HIGH** | Consistency | Multiple | Border-radius values inconsistent: `rounded-xl` on buttons, `rounded-b-[1.5rem]` in UserTable |
+| 7 | MEDIUM | UX | `login-form.tsx:101` | Login success redirect is abrupt — no transition/confirmation |
+| 8 | MEDIUM | Token leak | `audit-logs/error.tsx:29-31` | Hardcoded `bg-amber-50` / `text-amber-500` |
+| 9 | MEDIUM | Visual | `command-palette.tsx:70` | Menu icons defined in model but not rendered |
+| 10 | LOW | Hierarchy | `login-form.tsx:119` | "Auth-SSO Portal" (tech name) above "企业统一身份认证" (product name) |
+| 11 | LOW | Documentation | `DESIGN.md` | Missing `rounded-2xl` (16px) entry in the radius spec table |
+
+### Design Litmus Scorecard
+
+```
+DESIGN REVIEW — LITMUS SCORECARD:
+═══════════════════════════════════════════════════════════════
+  Check                                    Claude  Codex  Consensus
+  ─────────────────────────────────────── ─────── ─────── ─────────
+  1. Brand unmistakable in first screen?   NO      N/A    NO
+  2. One strong visual anchor?             YES     N/A    YES
+  3. Scannable by headlines only?          YES     N/A    YES
+  4. Each section has one job?             MOSTLY  N/A    MOSTLY
+  5. Cards actually necessary?             YES     N/A    YES
+  6. Motion improves hierarchy?            N/A     N/A    N/A
+  7. Premium without decorative shadows?   YES     N/A    YES
+  ─────────────────────────────────────── ─────── ─────── ─────────
+  Hard rejections triggered:               0       N/A    0
+═══════════════════════════════════════════════════════════════
+```
+
+### Design Score: 6.5/10 → 8/10 (after fixing P1 items)
+- Initial: Solid infrastructure (oklch system, shared DataTable, gradient login) but 2 CRITICAL token leaks in new components
+- Target 10: All components use design tokens, dark mode works on every page, error boundaries catch every data fetch failure
+
+---
+
+## /autoplan Eng Review — 2026-06-26
+
+### Engineering Implementation Audit
+
+### Architecture
+
+Component structure is sound. DataTable is a focused thin wrapper. EmptyState cleanly separates simple/onboarding variants. CommandPalette shares menu props with AppSidebar. No new coupling concerns — all changes are within the existing Portal component tree.
+
+```
+ARCHITECTURE DEPENDENCY GRAPH:
+═══════════════════════════════════════════════════════════════
+  DashboardLayout
+  ├── AppSidebar (menus prop)
+  ├── CommandPalette (menus prop — same source)
+  └── Page Content
+       ├── DataTable ← shared component (4 list pages)
+       │   ├── Card + Table (shadcn)
+       │   ├── Skeleton loading
+       │   └── EmptyState (simple | onboarding)
+       ├── DepartmentTree (custom, not migrated)
+       └── Dashboard widgets (custom, not migrated)
+  
+  globals.css (oklch variables)
+  └── @theme inline → Tailwind color classes
+       └── All components consume via Tailwind classes
+═══════════════════════════════════════════════════════════════
+```
+
+### Findings
+
+| # | Severity | Category | File | Issue |
+|---|----------|----------|------|-------|
+| H1 | **HIGH** | Tests | `__tests__/components/` | All 4 component test files from the plan are MISSING (empty-state, data-table, command-palette, audit-logs) |
+| M1 | MEDIUM | Token leak | `dashboard/page.tsx:90` | Hex `#E6F0FF` hover colors bypassing oklch system |
+| M2 | MEDIUM | Inconsistency | `UserTable.tsx:267` | `rounded-b-[1.5rem]` arbitrary value not converged |
+| M3 | MEDIUM | Error handling | 4 list pages | Missing `error.tsx` boundaries for roles/permissions/users/clients |
+| M4 | MEDIUM | Consistency | `PermissionsTable.tsx:109` | Client-only search filter, not synced to URL (lost on refresh) |
+| M5 | MEDIUM | UX | `command-palette.tsx:71` | Menu item `icon` field silently ignored |
+| L1 | LOW | Token leak | `data-table.tsx:53` | `bg-slate-50/30` instead of design token |
+| L2 | LOW | Token leak | `audit-logs/error.tsx:29` | Hardcoded `bg-amber-50` / `text-amber-500` |
+| L3 | LOW | Tests | `visual-regression.spec.ts:54` | Fragile CSS-substring selector for arbitrary radii |
+| L4 | LOW | Robustness | `command-palette.tsx:53` | flatMap only handles 1 level of nesting |
+| L5 | LOW | Dead code | `UserTable.tsx:87` | Exported `UserTableSkeleton` likely unused |
+
+### Eng Consensus Table
+
+```
+ENG DUAL VOICES — CONSENSUS TABLE:
+═══════════════════════════════════════════════════════════════
+  Dimension                           Claude  Codex  Consensus
+  ──────────────────────────────────── ─────── ─────── ─────────
+  1. Architecture sound?               YES     N/A    YES
+  2. Test coverage sufficient?         NO      N/A    NO
+  3. Performance risks addressed?      YES     N/A    YES
+  4. Security threats covered?         YES     N/A    YES
+  5. Error paths handled?              PARTIAL N/A    PARTIAL
+  6. Deployment risk manageable?       YES     N/A    YES
+═══════════════════════════════════════════════════════════════
+```
+
+### Test Coverage Assessment
+
+| New UX/DATA Flow | Test Type | Covered? | Gap |
+|------------------|-----------|----------|-----|
+| EmptyState simple rendering | Component | NO | Test file missing |
+| EmptyState onboarding rendering | Component | NO | Test file missing |
+| DataTable loading→empty transition | Component | NO | Test file missing |
+| CommandPalette keyboard nav | Component | NO | Test file missing |
+| AuditLogs tab switching | Component | NO | Test file missing |
+| Login page gradient rendering | E2E | YES | visual-regression.spec.ts |
+| Dashboard cards rendering | E2E | YES | visual-regression.spec.ts |
+| Users list DataTable rendering | E2E | YES | visual-regression.spec.ts |
+
+---
+
+## GSTACK REVIEW REPORT
+
+| Review | Trigger | Why | Runs | Status | Findings |
+|--------|---------|-----|------|--------|----------|
+| CEO Review | `/autoplan` | Strategy & scope | 1 | issues_open | 3 proposals: 1 accepted (DESIGN.md sync), 2 deferred (analytics, P1 fixes) |
+| Design Review | `/autoplan` | UI/UX gaps | 1 | issues_open | 11 findings: 2 CRITICAL (token leaks), 4 HIGH, 3 MED, 2 LOW |
+| Eng Review | `/autoplan` | Architecture & tests | 1 | issues_open | 10 findings: 1 HIGH (missing tests), 5 MED, 4 LOW |
+| DX Review | `/autoplan` | DX gaps | 0 | skipped | No developer-facing scope detected |
+
+**CODEX:** Unavailable — UTF-8 encoding error in repo path (Chinese characters incompatible with Codex WS header). All voices Claude-only.
+
+**VERDICT:** CEO + DESIGN + ENG reviews complete. 2 CRITICAL (token leaks in CreateUserDialog + Dashboard status badge), 1 HIGH (missing component tests), 5 MEDIUM issues to fix before ship. No architectural concerns.
+
+NO UNRESOLVED DECISIONS
