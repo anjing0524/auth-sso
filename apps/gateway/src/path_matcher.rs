@@ -62,7 +62,7 @@ impl PathMatcher {
     /// 校验当前请求路径是否放行（无需 JWT 验签）
     ///
     /// 检查顺序：静态资源 → 文件扩展名 → 精确匹配 → 前缀匹配
-    pub fn is_public(&self, path: &str) -> bool {
+    fn is_public(&self, path: &str) -> bool {
         // 1. 放行静态资源目录
         if path.starts_with("/_next/") || path.starts_with("/static/") {
             return true;
