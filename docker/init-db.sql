@@ -5,11 +5,8 @@
 -- IDP 已合并进 Portal，仅需一个数据库
 -- ============================================
 
--- 创建 Portal 统一数据库（含认证 + 业务数据）
-CREATE DATABASE auth_sso;
-
--- 授权 postgres 用户所有权限
-GRANT ALL PRIVILEGES ON DATABASE auth_sso TO postgres;
+-- 创建 Portal 统一数据库（由于 docker-compose 已通过 POSTGRES_DB 自动创建，此处无需重复创建）
+-- GRANT ALL PRIVILEGES ON DATABASE auth_sso TO postgres;
 
 -- 输出创建结果
 \echo '============================================'

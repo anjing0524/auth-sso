@@ -121,25 +121,14 @@ describe('getUserRoleDeptIds', () => {
       ],
     });
 
-    // 第一次 select 调用返回 dept-1 的子树
-    // 第二次 select 调用返回 dept-2 的子树
-    let callCount = 0;
-    const originalSelect = mockDb.db.select;
-    originalSelect.mockImplementation(() => ({
-      from: vi.fn().mockReturnValue({
-        where: vi.fn().mockImplementation(() => {
-          callCount++;
-          if (callCount === 1) {
-            return Promise.resolve([{ id: 'dept-1' }, { id: 'dept-1a' }]);
-          }
-          return Promise.resolve([{ id: 'dept-2' }, { id: 'dept-2a' }, { id: 'dept-1a' }]);
-        }),
-      }),
-    }));
+    // 批量查询：单次 SQL 返回 dept-1 和 dept-2 的全部子树（含交叉重复的 dept-1a）
+    mockDb.setDeptRows([
+      { id: 'dept-1' }, { id: 'dept-1a' },
+      { id: 'dept-2' }, { id: 'dept-2a' }, { id: 'dept-1a' },
+    ]);
 
     const result = await getUserRoleDeptIds('user-1');
     expect(result).toEqual(expect.arrayContaining(['dept-1', 'dept-1a', 'dept-2', 'dept-2a']));
     expect(result.length).toBe(4);
-    expect(callCount).toBe(2);
   });
 });

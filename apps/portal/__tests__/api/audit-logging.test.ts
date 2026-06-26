@@ -6,7 +6,7 @@
  * - GET /api/audit/logs 日期范围过滤
  * - GET /api/audit/login-logs 分页 + eventType + 日期范围过滤
  *
- * @req I-LOG-001, I-LOG-002
+ * @req J-LOG-001, J-LOG-002
  * @vitest-environment node
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';

@@ -23,15 +23,19 @@ export async function POST(
     const body = await request.json();
     const newPassword = body.password as string;
 
-    if (!newPassword || newPassword.length < 8) {
+    // NFR-SEC-05: 密码策略 — 至少 10 位，须包含大写字母、小写字母、数字、特殊字符中至少三类
+    if (!newPassword || newPassword.length < 10) {
       return NextResponse.json(
-        { error: COMMON_ERRORS.VALIDATION_ERROR, message: '密码至少8位，须包含大小写字母和数字' },
+        { error: COMMON_ERRORS.VALIDATION_ERROR, message: '密码至少10位，须包含大小写字母、数字或特殊字符中至少三类' },
         { status: 400 },
       );
     }
-    if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(newPassword)) {
+    // 统计密码字符类别数（大写/小写/数字/特殊字符），至少满足 3 类
+    const categories = [/[a-z]/, /[A-Z]/, /\d/, /[^a-zA-Z\d]/];
+    const matchedCategories = categories.filter((re) => re.test(newPassword)).length;
+    if (matchedCategories < 3) {
       return NextResponse.json(
-        { error: COMMON_ERRORS.VALIDATION_ERROR, message: '密码须包含大小写字母和数字' },
+        { error: COMMON_ERRORS.VALIDATION_ERROR, message: '密码须包含大写字母、小写字母、数字、特殊字符中的至少三类' },
         { status: 400 },
       );
     }

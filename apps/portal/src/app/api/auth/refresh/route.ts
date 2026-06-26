@@ -61,10 +61,7 @@ export async function POST(request: NextRequest) {
     // 续签成功 → 记录 TOKEN_REFRESH 日志
     writeLoginLog({ userId: atPayload?.sub, username, eventType: 'TOKEN_REFRESH', ip, userAgent: ua });
 
-    const isProduction = process.env.NODE_ENV === 'production';
-    // 本地开发/E2E环境下，直连 HTTP 端口时必须降级为 secure: false，否则浏览器会拒绝写入
-    const isLocal = request.headers.get('host')?.includes('localhost') || request.headers.get('host')?.includes('127.0.0.1');
-    const secure = isProduction && !isLocal;
+    const secure = (process.env.NEXT_PUBLIC_APP_URL || '').startsWith('https://');
     const response = NextResponse.json({ success: true, data: { expiresIn: result.expiresIn } });
 
     response.cookies.set(COOKIE_NAMES.JWT, result.accessToken, {

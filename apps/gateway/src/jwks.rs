@@ -3,8 +3,17 @@ use jsonwebtoken::DecodingKey;
 use jsonwebtoken::jwk::JwkSet;
 use serde::Deserialize;
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
+use std::time::Duration;
 use tracing::{error, info, warn};
+
+/// 全局 HTTP 客户端单例（reqwest::Client 内置连接池，应全局复用而非每次创建）
+pub static HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
+    reqwest::Client::builder()
+        .timeout(Duration::from_secs(5))
+        .build()
+        .expect("Failed to initialize global HTTP client")
+});
 
 /// JWKS 获取与解析过程中的强类型错误定义
 #[derive(thiserror::Error, Debug)]
@@ -42,28 +51,22 @@ pub struct OidcMetadata {
 }
 
 /// JWKS 公钥缓存结构体
-/// 使用 RwLock 实现：多个请求并发读，刷新时独占写；内置复用 HTTP 客户端以支持 Keep-Alive 连接与请求超时。
+/// 使用 RwLock 实现：多个请求并发读，刷新时独占写。
 /// 同时缓存 OIDC Discovery 元数据，用于动态签名算法选择和 issuer 交叉校验。
+/// HTTP 客户端由外部注入（全局单例 LazyLock<reqwest::Client>），不内嵌于缓存中。
 pub struct JwksCache {
     keys: std::sync::RwLock<HashMap<String, DecodingKey>>,
     /// OIDC Discovery 元数据缓存（启动时拉取，每次 JWKS 刷新时同步更新）
     oidc_metadata: std::sync::RwLock<Option<OidcMetadata>>,
-    pub client: reqwest::Client,
 }
 
 impl JwksCache {
-    /// 创建空的 JWKS 缓存实例并初始化复用的 HTTP 客户端
-    pub fn new() -> Arc<Self> {
-        let client = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(5))
-            .build()
-            .unwrap_or_else(|_| reqwest::Client::new());
-
-        Arc::new(Self {
+    /// 创建空的 JWKS 缓存实例（返回 Self，由调用方决定是否包装在 Arc 中）
+    pub fn new() -> Self {
+        Self {
             keys: std::sync::RwLock::new(HashMap::new()),
             oidc_metadata: std::sync::RwLock::new(None),
-            client,
-        })
+        }
     }
 
     /// 获取特定 kid 对应的公钥（同步读取）
@@ -129,6 +132,24 @@ impl JwksCache {
             .unwrap_or_default()
     }
 
+    /// 将 JWKS 公钥集写入缓存（sync 和 async 刷新路径的共享内部逻辑）
+    fn store_jwks(&self, jwk_set: &JwkSet) -> Result<usize, JwksError> {
+        let mut new_keys = HashMap::new();
+        for jwk in &jwk_set.keys {
+            if let (Some(kid), Ok(key)) = (&jwk.common.key_id, DecodingKey::from_jwk(jwk)) {
+                new_keys.insert(kid.clone(), key);
+            }
+        }
+
+        if new_keys.is_empty() {
+            return Err(JwksError::EmptyKeys);
+        }
+
+        let count = new_keys.len();
+        *self.keys.write().map_err(|_| JwksError::LockPoisoned)? = new_keys;
+        Ok(count)
+    }
+
     /// 通过 OIDC Discovery 自动发现 JWKS 端点 URL 并缓存完整 OIDC 元数据
     ///
     /// 步骤:
@@ -138,12 +159,17 @@ impl JwksCache {
     /// 4. 使用 upstream 作为主机地址重新构造 JWKS URL，确保网关可直接访问内网地址
     ///
     /// # 参数
+    /// * `client` - 复用的 HTTP 客户端
     /// * `upstream` - Portal 上游地址（如 127.0.0.1:4100）
-    async fn discover_oidc_metadata(&self, upstream: &str) -> Result<OidcMetadata, JwksError> {
+    async fn discover_oidc_metadata(
+        &self,
+        client: &reqwest::Client,
+        upstream: &str,
+    ) -> Result<OidcMetadata, JwksError> {
         let discovery_url = format!("http://{}/.well-known/openid-configuration", upstream);
         info!("🔍 通过 OIDC Discovery 获取元数据: {}", discovery_url);
 
-        let resp = self.client.get(&discovery_url).send().await?;
+        let resp = client.get(&discovery_url).send().await?;
         let metadata: OidcMetadata = resp.json().await?;
 
         // 校验必要字段
@@ -159,14 +185,11 @@ impl JwksCache {
             metadata.issuer, metadata.jwks_uri, metadata.id_token_signing_alg_values_supported
         );
 
-        // 缓存 OIDC 元数据
-        let _ = std::mem::replace(
-            &mut *self
-                .oidc_metadata
-                .write()
-                .map_err(|_| JwksError::LockPoisoned)?,
-            Some(metadata.clone()),
-        );
+        // 缓存 OIDC 元数据（直接赋值，不需 std::mem::replace + clone）
+        *self
+            .oidc_metadata
+            .write()
+            .map_err(|_| JwksError::LockPoisoned)? = Some(metadata.clone());
 
         Ok(metadata)
     }
@@ -196,10 +219,11 @@ impl JwksCache {
     /// 通过 OIDC Discovery 自动发现并拉取 JWKS 公钥，同步更新 OIDC 元数据缓存
     ///
     /// # 参数
+    /// * `client` - 复用的 HTTP 客户端
     /// * `upstream` - Portal 上游地址（如 127.0.0.1:4100）
-    pub async fn refresh(&self, upstream: &str) -> Result<(), JwksError> {
+    pub async fn refresh(&self, client: &reqwest::Client, upstream: &str) -> Result<(), JwksError> {
         // 1. 通过 OIDC Discovery 获取并缓存完整元数据
-        let oidc_metadata = self.discover_oidc_metadata(upstream).await?;
+        let oidc_metadata = self.discover_oidc_metadata(client, upstream).await?;
 
         // 2. 从元数据中解析可达的 JWKS URL
         let jwks_uri = oidc_metadata
@@ -210,65 +234,45 @@ impl JwksCache {
         info!("🔑 使用 JWKS 端点: {}", jwks_url);
 
         // 3. 拉取 JWKS 公钥集
-        let resp = self.client.get(&jwks_url).send().await?;
-
-        // 拥抱 jsonwebtoken 强类型 JwkSet，杜绝动态 Value 反序列化摸索
+        let resp = client.get(&jwks_url).send().await?;
         let jwk_set: JwkSet = resp.json().await?;
-
-        let mut new_keys = HashMap::new();
-        for jwk in jwk_set.keys {
-            if let (Some(kid), Ok(key)) = (&jwk.common.key_id, DecodingKey::from_jwk(&jwk)) {
-                new_keys.insert(kid.clone(), key);
-            }
-        }
-
-        if new_keys.is_empty() {
-            return Err(JwksError::EmptyKeys);
-        }
-
-        // 记录长度以在写锁释放前输出日志，避免在释放写锁后重新读锁，规避竞争
-        let loaded_count = new_keys.len();
-        {
-            let mut keys_guard = self.keys.write().map_err(|_| JwksError::LockPoisoned)?;
-            *keys_guard = new_keys;
-        }
+        let count = self.store_jwks(&jwk_set)?;
 
         info!(
             "✅ JWKS 公钥缓存刷新成功，加载了 {} 个 Key (via OIDC Discovery)",
-            loaded_count
+            count
         );
         Ok(())
     }
 
-    /// 启动 JWKS 后台定时刷新任务，通过 OIDC Discovery 自动发现端点
-    /// 具备空缓存高频重试和成功缓存正常退避机制
+    /// 启动 JWKS 后台定时刷新任务，通过 OIDC Discovery 自动发现端点。
+    ///
+    /// 首次拉取立即执行（非阻塞），后续每 300s 刷新一次。
+    /// 缓存为空时 JWKS 验签自然失败 → Gateway 拒绝请求，直到首次拉取成功。
+    /// 空缓存时拉取失败以 10s 间隔快速重试，成功后恢复 300s 正常间隔。
     ///
     /// # 参数
     /// * `self` - 自身的 Arc 智能指针
-    /// * `rt` - Tokio 异步运行时句柄
+    /// * `handle` - Pingora 的 tokio 运行时句柄
     /// * `upstream` - Portal 上游地址，用于 OIDC Discovery
     pub fn start_background_refresh(
         self: Arc<Self>,
-        rt: &tokio::runtime::Runtime,
+        handle: &tokio::runtime::Handle,
         upstream: String,
     ) {
-        rt.spawn(async move {
-            // 定时拉取前，仅在后台任务刚启动时，先休眠一次以错开冷启动首次拉取阶段
-            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-
+        handle.spawn(async move {
             loop {
-                match self.refresh(&upstream).await {
+                match self.refresh(&HTTP_CLIENT, &upstream).await {
                     Ok(_) => {
                         info!("✅ JWKS 公钥缓存定时刷新成功");
                         tokio::time::sleep(std::time::Duration::from_secs(300)).await;
                     }
                     Err(e) => {
                         error!("❌ JWKS 公钥缓存定时刷新失败: {}", e);
-                        // 仅在刷新失败时，才获取读锁判定当前是否已有旧公钥，决定是快速重试还是正常退避
                         let has_keys = !self.is_empty();
-                        let sleep_secs = if has_keys { 300 } else { 10 };
-                        warn!("⚠️ 网关将在 {} 秒后重试拉取 JWKS...", sleep_secs);
-                        tokio::time::sleep(std::time::Duration::from_secs(sleep_secs)).await;
+                        let retry_delay = if has_keys { 300 } else { 10 };
+                        warn!("⚠️ 网关将在 {} 秒后重试拉取 JWKS...", retry_delay);
+                        tokio::time::sleep(std::time::Duration::from_secs(retry_delay)).await;
                     }
                 }
             }

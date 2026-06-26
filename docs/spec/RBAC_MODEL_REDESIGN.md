@@ -255,7 +255,7 @@ DROP TABLE IF EXISTS role_clients;
 |------|---------------|------|
 | **DATABASE.md** | §3.3 角色表、§3.8~§3.9（删除）、§6 枚举、§7 外键、§8 Redis | ✅ 已更新至 v3.2 |
 | **ARCHITECTURE_CONSTRAINTS.md** | R7（数据范围过滤）、DC-ROLE-C（角色创建约束）、Red Flags | ✅ 已更新 |
-| **REQUIREMENTS_MATRIX.md** | C-ROL-C、C-ROL-DS、C-ROL-ASGN、C-ROL-CA、H-DSCOPE-001~006、H-ACL-001 | ✅ 已更新 |
+| **REQUIREMENTS_MATRIX.md** | C-ROL-C、C-ROL-U、C-ROL-ASGN、H-DSCOPE-001~003、H-ACL-001 | ✅ 已更新 |
 | **DETAILED_DESIGN.md** | §3 数据范围过滤详细设计（重写）、§4 权限缓存结构、§6 JWT claims、函数签名参考 | ✅ 已更新 |
 | **ARCHITECTURE.md** | §4.1 读取链路、§6.1 链路总览第 6 层、§7 JWT 载荷、附录关键文件映射 | ✅ 已更新 |
 | **PRD.md** | §2 产品范围、§4.2.1 用户管理、§4.2.2 角色与授权（FR 表重写）、§4.2.6 应用管理 | ✅ 已更新 |

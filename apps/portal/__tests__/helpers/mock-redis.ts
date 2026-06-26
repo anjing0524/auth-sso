@@ -125,6 +125,25 @@ export class MockRedisStore {
     return 1;
   }
 
+  async incr(key: string): Promise<number> {
+    const current = this.store.has(key) && !this.isExpired(key) ? parseInt(this.store.get(key)!, 10) : 0;
+    if (isNaN(current)) {
+      this.store.set(key, '1');
+      return 1;
+    }
+    const next = current + 1;
+    this.store.set(key, String(next));
+    return next;
+  }
+
+  async exists(key: string): Promise<number> {
+    if (this.isExpired(key)) {
+      this.store.delete(key);
+      return 0;
+    }
+    return this.store.has(key) ? 1 : 0;
+  }
+
   async hset(key: string, field: string, value: string): Promise<number> {
     if (!this.hashes.has(key)) {
       this.hashes.set(key, new Map());

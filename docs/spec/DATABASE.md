@@ -225,7 +225,7 @@ CHECK (
 | 列名 | 类型 | 约束 | 说明 |
 |--------|------|------------|--------|
 | `id` | uuid | 主键，defaultRandom() | |
-| `token_hash` | varchar(64) | 唯一，非空 | 令牌 SHA-256 哈希（不存明文） |
+| `token_hash` | varchar(64) | 唯一，非空 | 访问令牌凭证（设计目标为 SHA-256 哈希；当前实现存储 token 字符串，见 §4.4 技术债务说明） |
 | `client_id` | varchar(50) | 非空，外键 → clients.client_id，ON DELETE CASCADE | |
 | `user_id` | uuid | 非空，外键 → users.id，ON DELETE CASCADE | |
 | `scopes` | varchar(200) | 非空 | 已授予的权限范围 |
@@ -242,7 +242,7 @@ CHECK (
 | 列名 | 类型 | 约束 | 说明 |
 |--------|------|------------|--------|
 | `id` | uuid | 主键，defaultRandom() | |
-| `token_hash` | varchar(64) | 唯一，非空 | 令牌 SHA-256 哈希（不存明文） |
+| `token_hash` | varchar(64) | 唯一，非空 | 刷新令牌凭证（设计目标为 SHA-256 哈希；当前 `issueRefreshToken` 直接写入原始 token 字符串，见 §4.4 技术债务说明） |
 | `client_id` | varchar(50) | 非空，外键 → clients.client_id，ON DELETE CASCADE | |
 | `user_id` | uuid | 非空，外键 → users.id，ON DELETE CASCADE | |
 | `scopes` | varchar(200) | 非空 | |
@@ -256,7 +256,7 @@ CHECK (
 - `idx_refresh_tokens_client`：`client_id`
 - `idx_refresh_tokens_user`：`user_id`
 
-> **⚠️ 技术债务 — token_hash 列命名歧义**：当前代码实现中，`token_hash` 列存储的是明文 RT（`issueRefreshToken` 直接写入原始 token 字符串）而非 SHA-256 哈希。列名与实际行为不符。**已确认技术决策**：保持列名 `token_hash` 不变（保持向后兼容性），将实现层改为存储真正的 `hashToken(token)` 在下一次安全加固迭代中落地。当前功能正常（明文匹配明文），但安全等级待提升。
+> **⚠️ 技术债务 — token_hash 列命名歧义**：`access_tokens.token_hash` 与 `refresh_tokens.token_hash` 两列的设计目标是存储令牌的 SHA-256 哈希（不存明文）。但当前代码实现中，`issueRefreshToken` 直接写入原始 token 字符串（明文），列名与实际行为不符；access_tokens 表当前为可选写入。**已确认技术决策**：保持列名 `token_hash` 不变（向后兼容），在下一次安全加固迭代中将 `issueRefreshToken` / `rotateRefreshToken` / `logout` 三处的写入与查询统一改为 `hashToken(token)`，使实现层与设计目标对齐。当前功能正常（明文匹配明文），但安全等级待提升（列名 `token_hash` 在文档与代码完全对齐前具有误导性）。
 
 ### 4.5 用户授权记录表（`consents`）— 🗑️ 已移除
 
@@ -304,6 +304,12 @@ CHECK (
 - `idx_audit_logs_user`：`user_id`
 - `idx_audit_logs_created`：`created_at`
 - `idx_audit_logs_operation`：`operation`
+
+**防篡改策略（支撑 J-LOG-003「日志不可篡改、不可删除」）**：
+- **仅追加（append-only）**：应用层不提供审计日志的 UPDATE/DELETE 接口；`audit_logs` 仅有 INSERT 路径。
+- **数据库权限收口**：生产环境通过 GRANT 仅授予应用 DB 角色对 `audit_logs` / `login_logs` 的 INSERT/SELECT 权限，显式 REVOKE UPDATE/DELETE（部署脚本约束，见 DC-AUDIT-IMMUTABLE）。
+- **无外键 + 冗余字段**：`user_id`/`username` 无 FK 且冗余存储，保证用户/实体删除后日志仍完整可读、可审计。
+- **完整性校验（推荐增强）**：在高合规场景下可追加行级哈希链（每行存前一行 hash 的累计摘要），任意篡改将破坏链式校验——列为未来增强项。
 
 ### 5.2 登录日志表（`login_logs`）
 

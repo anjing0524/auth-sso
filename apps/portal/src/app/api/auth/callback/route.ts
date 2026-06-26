@@ -82,9 +82,7 @@ export async function GET(request: NextRequest) {
 
     const tokens = await tokenRes.json();
 
-    const isProduction = process.env.NODE_ENV === 'production';
-    const isLocal = request.headers.get('host')?.includes('localhost') || request.headers.get('host')?.includes('127.0.0.1');
-    const secure = isProduction && !isLocal;
+    const secure = (process.env.NEXT_PUBLIC_APP_URL || '').startsWith('https://');
     // state 复用为登录后返回路径：必须经同源消毒，防止开放重定向（H-AUTH-010）
     const targetUrl = safeRedirectPath(state) || '/dashboard';
 

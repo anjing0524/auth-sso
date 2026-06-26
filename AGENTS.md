@@ -13,3 +13,5 @@ use spec-docs skill
 `@docs/spec/*` 文档提供理论支持
 
 修改文档前务必重新阅读，文档可能被多人更新
+
+rust 代码修改后必须修复cargo clippy的所有错误并执行 cargo fmt 格式化

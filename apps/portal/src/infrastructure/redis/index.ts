@@ -33,6 +33,9 @@ export interface RedisClient {
   // Pipeline 批处理命令，用于多会话批量物理注销
   pipeline(): any;
   exists(key: string): Promise<number>;
+
+  // 原子计数器命令（用于暴力破解防护等竞态条件场景）
+  incr(key: string): Promise<number>;
 }
 
 /**
@@ -79,6 +82,7 @@ function createIoredisClient(): RedisClient {
     hgetall: (key) => client.hgetall(key),
     pipeline: () => client.pipeline(),
     exists: (key) => client.exists(key),
+    incr: (key) => client.incr(key),
   };
 }
 

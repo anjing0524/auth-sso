@@ -191,6 +191,41 @@
 
 ---
 
+## 附录: 非功能需求追溯 (NFR Traceability)
+
+> NFR 项定义在 PRD.md §6，此处建立其与设计文档、约束和测试的追溯关系。
+
+### NFR 性能类
+
+| NFR ID | 需求描述 | 量化阈值 | 验证方法 | 架构约束 | 关联测试 |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| NFR-PERF-01 | Portal API 响应时间 | `/api/me` P95 < 200ms | k6 压力测试 | R14（DB 查询规范） | — |
+| NFR-PERF-02 | 登录全流程耗时 | 登录→Dashboard P95 < 1.5s | Playwright E2E 计时 | R8（三层鉴权） | tests/e2e/auth-flow.spec.ts |
+| NFR-PERF-03 | Gateway JWT 验签延迟 | < 5ms（不含网络） | Rust benchmark | — | — |
+| NFR-PERF-04 | 列表查询分页响应 | 1000 条 P95 < 500ms | k6 压力测试 | R12（缓存策略） | — |
+| NFR-PERF-05 | 并发用户支持 | 500 并发，错误率 < 1% | k6 压力测试 | — | — |
+
+### NFR 安全类（归属模块 H）
+
+| NFR ID | 需求描述 | 量化阈值 | 验证方法 | 架构约束 | 关联 Matrix ID |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| NFR-SEC-01 | 通信加密 | 所有通信强制 HTTPS | 安全审计 | R1~R14 架构规则 | H-AUTH-001 |
+| NFR-SEC-02 | Cookie 安全属性 | HttpOnly + Secure + SameSite=Lax | 代码审查 + 渗透测试 | — | H-SESS-001 |
+| NFR-SEC-03 | Token 安全 | 无敏感令牌存前端存储 | 代码审查 | — | H-SESS-001 |
+| NFR-SEC-04 | JWT 签名算法 | ES256 非对称，密钥 90 天轮换 | 安全审计 | — | H-AUTH-005~006 |
+| NFR-SEC-05 | 密码策略 | 最小 8 位，含大小写字母和数字 | 自动化测试 | DC-USR-C | B-USR-C |
+| NFR-SEC-06 | 暴力破解防护 | 5 次失败 → 15min 锁定 | 自动化测试 | — | H-AUTH-002 |
+| NFR-SEC-07 | 审计追溯 | 所有关键操作写入审计日志 | 代码审查 | DC-AUDIT-IMMUTABLE | J-LOG-003 |
+| NFR-SEC-08 | CSRF 防护 | State 参数验证，OAuth 2.1 强制 | 安全审计 | — | H-AUTH-010 |
+| NFR-SEC-09 | 授权码一次性使用 | 二次提交 → invalid_grant | 自动化测试 | DC-AUTH-003 | H-AUTH-004 |
+| NFR-SEC-10 | 授权码过期保护 | 5 分钟 TTL | 自动化测试 | DC-AUTH-003 | H-AUTH-004 |
+| NFR-SEC-11 | Redirect URI 严格匹配 | 完全一致（含末尾斜杠） | 自动化测试 | DC-AUTH-002 | H-AUTH-003 |
+| NFR-SEC-12 | Client Secret 轮换即时生效 | 旧 Secret 立即失效 | 自动化测试 | DC-CLI-U | G-CLT-U |
+| NFR-SEC-13 | 密码修改强制重新登录 | jti 写入黑名单 | 自动化测试 | DC-AUTH-004 | H-SESS-006 |
+| NFR-SEC-14 | 角色撤销即时生效 | 当前用户 jti 写入黑名单 | 自动化测试 | DC-ROLE-D | H-ACL-002 |
+
+---
+
 ## 追溯关系
 
 - **PRD.md**：所有需求的业务来源和优先级依据（含 CMMI Level 5 CAR 程序与过程性能基线）

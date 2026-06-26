@@ -13,32 +13,6 @@ import { db, schema } from '@/infrastructure/db';
 import { ENTITY_ACTIVE } from '@auth-sso/contracts';
 
 /**
- * 通过物化路径 (ancestors) 查询本部门及其全部子部门 ID
- *
- * 查询异常时故障安全降级为仅当前部门（Default-Deny 最小权限）。
- *
- * @param deptId 根部门 ID
- * @returns 本部门 + 子部门 ID 列表；异常时返回 `[deptId]`
- */
-async function getSubDepartmentIds(deptId: string): Promise<string[]> {
-  try {
-    const result = await db
-      .select({ id: schema.departments.id })
-      .from(schema.departments)
-      .where(
-        or(
-          eq(schema.departments.id, deptId),
-          like(schema.departments.ancestors, `${deptId}/%`),
-        ),
-      );
-    return result.map((r) => r.id);
-  } catch (error) {
-    console.error('[DataScope] getSubDepartmentIds 查询异常:', error);
-    return [deptId];
-  }
-}
-
-/**
  * 获取用户可访问的部门 ID 列表（含子树展开）
  *
  * 两步计算逻辑：
@@ -79,12 +53,16 @@ export async function getUserRoleDeptIds(userId: string): Promise<string[]> {
 
   if (roleDeptIds.length === 0) return [];
 
-  // 对每个 dept_id 展开子树，汇总去重
-  const allDeptIds = await Promise.all(
-    roleDeptIds.map(deptId => getSubDepartmentIds(deptId)),
-  );
-
-  return Array.from(new Set(allDeptIds.flat()));
+  // 单次批量 SQL 查询替代 N+1：对每个角色 deptId，匹配部门 id 或 ancestors 包含该 deptId
+  const conditions = roleDeptIds.flatMap((deptId): ReturnType<typeof or>[] => [
+    eq(schema.departments.id, deptId),
+    like(schema.departments.ancestors, `${deptId}/%`),
+  ]);
+  const result = await db
+    .select({ id: schema.departments.id })
+    .from(schema.departments)
+    .where(or(...conditions));
+  return Array.from(new Set(result.map((r) => r.id)));
 }
 
 /**

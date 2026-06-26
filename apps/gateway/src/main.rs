@@ -1,14 +1,20 @@
+mod auth;
 mod claims;
 mod config;
+mod cookie;
 mod gateway;
 mod jwks;
 mod logging;
+mod path_matcher;
 mod rate_limiter;
 mod redirect;
+mod redis;
 
+use crate::auth::AuthService;
 use crate::config::Config;
-use crate::gateway::{Gateway, PathMatcher};
+use crate::gateway::Gateway;
 use crate::jwks::JwksCache;
+use crate::path_matcher::PathMatcher;
 use crate::rate_limiter::RateLimiter;
 use crate::redirect::RedirectService;
 use clap::Parser;
@@ -16,8 +22,8 @@ use pingora_core::listeners::tls::TlsSettings;
 use pingora_core::prelude::*;
 use pingora_load_balancing::LoadBalancer;
 use pingora_proxy::http_proxy_service;
-use std::sync::{Arc, Mutex};
-use tracing::{error, info, warn};
+use std::sync::Arc;
+use tracing::info;
 
 /// 命令行参数解析结构体 (Clap 声明式解析)
 #[derive(Parser, Debug)]
@@ -35,7 +41,6 @@ struct Cli {
 
 use anyhow::Context;
 
-/// Auth-SSO 去中心化安全网关 - 基于 Pingora (0.8.0 + OpenSSL)
 fn main() -> anyhow::Result<()> {
     // ── 声明式命令行参数解析 ──
     let cli = Cli::parse();
@@ -52,110 +57,54 @@ fn main() -> anyhow::Result<()> {
     info!("  SSL 证书路径: {}", config.gateway.ssl_cert_path);
     info!("  Portal 上游 (OIDC Discovery): {}", config.portal.upstream);
 
-    // ── 初始化 JWKS 公钥缓存 ──
-    let jwks_cache = JwksCache::new();
+    // ═══════════════════════════════════════════════════════════════
+    // 阶段 1：同步冷启动 — 无需阻塞等待外部服务
+    // ═══════════════════════════════════════════════════════════════
 
-    // 启动 tokio 运行时以支持 JWKS 定时刷新任务
-    let rt = tokio::runtime::Runtime::new().context("❌ tokio Runtime 初始化失败")?;
+    let upstream = config.portal.upstream.clone();
 
-    // ── 阻塞等待首次 JWKS 刷新完成（通过 OIDC Discovery 自动发现 JWKS 端点），最多等待 10 秒，确保网关启动时公钥就绪 ──
-    let upstream_first = config.portal.upstream.clone();
-    let jwks_cache_first = Arc::clone(&jwks_cache);
-    rt.block_on(async {
-        let mut loaded = false;
-        for attempt in 1..=5 {
-            match jwks_cache_first.refresh(&upstream_first).await {
-                Ok(_) => {
-                    info!("✅ 首次 JWKS 公钥加载成功（第 {} 次尝试）", attempt);
-                    loaded = true;
-                    break;
-                }
-                Err(e) => {
-                    warn!(
-                        "⚠️  首次 JWKS 加载失败（第 {} 次）: {}，2 秒后重试",
-                        attempt, e
-                    );
-                    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-                }
-            }
-        }
-        if !loaded {
-            error!("❌ 首次 JWKS 公钥加载失败：5 次重试后仍无法获取公钥，网关退出");
-            std::process::exit(1);
-        }
-    });
+    // JWKS 缓存在后台异步拉取，不阻塞启动（缓存空时验签自然失败，Gateway 拒绝请求）
+    let jwks_cache = Arc::new(JwksCache::new());
 
-    // ── issuer 由 OIDC Discovery 自动获取 ──
-    let effective_issuer = jwks_cache.get_discovered_issuer().unwrap_or_else(|| {
-        warn!("⚠️ OIDC 元数据中无 issuer，回退到默认值");
-        "http://localhost:4100".to_string()
-    });
-    info!("✅ issuer: {}", effective_issuer);
+    // ═══════════════════════════════════════════════════════════════
+    // 阶段 2：初始化 Pingora 运行时 → 启动后台任务 → 创建 Redis 连接池
+    // ═══════════════════════════════════════════════════════════════
 
-    // ── 启动 JWKS 后台定时刷新任务（通过 OIDC Discovery 自动发现端点）──
-    Arc::clone(&jwks_cache).start_background_refresh(&rt, config.portal.upstream.clone());
-
-    // ── 初始化 Redis 异步连接管理器（用于 jti 黑名单校验，自愈 fail-open） ──
-    let redis_conn = match redis::Client::open(config.redis.url.as_str()) {
-        Ok(client) => {
-            // 利用网关已有的 tokio 运行时异步创建连接管理器
-            match rt.block_on(async { client.get_connection_manager().await }) {
-                Ok(conn) => {
-                    info!(
-                        "✅ 成功连接至 Redis ({}) 并成功构建异步多路复用连接管理器",
-                        config.redis.url
-                    );
-                    Some(conn)
-                }
-                Err(e) => {
-                    error!(
-                        "❌ 创建 Redis 异步连接管理器失败: {}。网关安全策略将进行降级 (fail-open)",
-                        e
-                    );
-                    None
-                }
-            }
-        }
-        Err(e) => {
-            error!(
-                "❌ 无法解析配置的 Redis 连接 URL: {}，错误: {}。网关安全策略将进行降级 (fail-open)",
-                config.redis.url, e
-            );
-            None
-        }
-    };
-
-    // ── 初始化 Pingora 服务器 ──
     let mut my_server = Server::new(None).context("❌ 创建 Pingora 服务器失败")?;
     my_server.bootstrap();
+    // ── 创建用于网关后台任务（JWKS 刷新与 Redis 连接池）的独立 Tokio 运行时 ──
+    let handle = pingora_runtime::current_handle();
 
-    // 配置 Portal 上游负载均衡器（Portal 已合并 IdP，统一代理入口）
+    // ── 启动 JWKS 后台定时刷新（首次拉取立即执行，非阻塞）──
+    Arc::clone(&jwks_cache).start_background_refresh(&handle, upstream.clone());
+
+    // ── 同步创建 Redis 连接池（基础依赖，启动时即建；bb8::Pool 基于 Arc，clone 即共享）──
+    let redis_pool = crate::redis::build_pool_blocking(&handle, config.redis.url.as_str());
+
+    // ═══════════════════════════════════════════════════════════════
+    // 阶段 3：组装服务并启动
+    // ═══════════════════════════════════════════════════════════════
+
     let portal_lb = Arc::new(
-        LoadBalancer::try_from_iter([config.portal.upstream.as_str()])
+        LoadBalancer::try_from_iter([upstream.as_str()])
             .context("❌ 配置的 Portal 上游地址无效")?,
     );
 
     let path_matcher = PathMatcher::new(config.portal.public_paths.clone());
 
-    // 构建异步 HTTP 客户端（用于向 Portal 发起 token 续签请求）
-    let http_client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(5))
-        .build()
-        .context("❌ 创建 HTTP 客户端失败")?;
+    let auth_service = Arc::new(AuthService::new(
+        Arc::clone(&jwks_cache),
+        upstream.clone(),
+        redis_pool.clone(),
+    ));
 
-    // 构建 HTTPS 反向代理服务（含 JWT 验签、静默续签、Redis jti 黑名单校验）
     let mut gateway_proxy = http_proxy_service(
         &my_server.configuration,
         Gateway {
             portal_lb,
-            jwks_cache: Arc::clone(&jwks_cache),
-            issuer: effective_issuer,
+            auth_service,
             path_matcher,
-            redis_conn,
-            http_client,
-            upstream_addr: config.portal.upstream.clone(),
-            refresh_dedup: Mutex::new(std::collections::HashMap::new()),
-            rate_limiter: Arc::new(RateLimiter::new()),
+            limiter: Arc::new(RateLimiter::new(redis_pool)),
         },
     );
 

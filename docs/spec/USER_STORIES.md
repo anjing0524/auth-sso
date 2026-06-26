@@ -482,19 +482,21 @@ Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, ARCHITECTURE.md, DATABASE.md
 
 ---
 
-### US-C-06：控制角色的应用授权
+### US-C-06：控制角色的应用授权（v3.2：通过客户端 API 权限控制）
 
-> **@req C-ROL-CA** | **权限:** `role:update`
+> **@req C-ROL-PA** | **权限:** `role:assign_permission`
 
 **作为** 拥有 `super_admin` 角色的张三，
-**我** 编辑 `dept_manager` 角色，在「应用授权」Tab 中勾选 `erp-app`，
+**我** 编辑 `dept_manager` 角色，为其授予 `erp-app` 客户端注册的 API 权限（如 `erp:access`），
 **以便** 拥有 `dept_manager` 角色的用户（如王五）能通过 SSO 登录 ERP 系统。
 
+> ~~v3.1：通过「应用授权」Tab 勾选客户端，保存到 `role_clients` 关联表~~ → v3.2：`role_clients` 表已删除，应用授权由「权限」承载——每个 OAuth 客户端注册自己的 API 权限（`permissions.client_id`），角色获得该客户端权限即获得该应用访问权（链路：client → permission → role → user）。
+
 **验收标准：**
-1. 展示所有 ACTIVE 状态的 OAuth 客户端供勾选
-2. 保存后更新 `role_clients` 关联表
-3. 王五登录 ERP 时 Portal 授权端点校验通过
-4. 取消勾选后王五登录 ERP 时被 Portal 拒绝（G-SEC-INT）
+1. 角色权限树中展示各 OAuth 客户端注册的 API 权限（按 `client_id` 分组）
+2. 勾选 `erp-app` 的权限后保存到 `role_permissions` 关联表
+3. 王五（拥有 `dept_manager`）登录 ERP 时，Portal 授权端点校验其角色持有该客户端的权限 → 校验通过
+4. 取消该权限后王五登录 ERP 时被 Portal 拒绝（H-ACL-001，返回「无权访问该应用」）
 
 ---
 
@@ -785,23 +787,23 @@ Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, ARCHITECTURE.md, DATABASE.md
 
 ### US-G-05：SSO 强拦截 — 角色未授权应用
 
-> **@req G-SEC-INT** | **核心安全需求**
+> **@req H-ACL-001** | **核心安全需求**
 
 **作为** 拥有 `employee` 角色的赵六，
 **我** 尝试通过 SSO 登录 ERP 系统时，Portal 授权端点拒绝请求并显示「您没有权限访问该应用」，
 **以便** 未授权用户无法登录不属于自己的系统。
 
 **验收标准：**
-1. 赵六访问 ERP → ERP 重定向到 Portal → Portal 校验赵六角色 `employee` 不在 `erp-app` 授权角色列表中 → 拒绝
+1. 赵六访问 ERP → ERP 重定向到 Portal → Portal 校验赵六的角色未持有 `erp-app` 客户端的任何 API 权限 → 拒绝
 2. 返回错误页面：「无权访问该应用，请联系管理员」
-3. 张三（super_admin）和王五（dept_manager）可以正常登录 ERP（在授权角色列表中）
-4. 陈十（DISABLED）尝试任何应用登录时被 Portal 直接拒绝（账户状态校验优先于角色校验）
+3. 张三（super_admin，绕过权限检查）和王五（dept_manager，持有 erp-app 权限）可以正常登录 ERP
+4. 陈十（DISABLED）尝试任何应用登录时被 Portal 直接拒绝（账户状态校验优先于权限校验）
 
 ---
 
 ### US-G-06：SSO 强拦截 — 禁用的客户端
 
-> **@req G-SEC-INT**
+> **@req H-ACL-001**
 
 **作为** 拥有 `super_admin` 角色的张三，
 **我** 尝试通过 SSO 登录 `disabled-app` 时被拒绝，
@@ -892,7 +894,7 @@ Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, ARCHITECTURE.md, DATABASE.md
 
 **验收标准：**
 1. `Set-Cookie: portal_jwt_token=<JWT>; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=3600`
-2. `Set-Cookie: portal_refresh_token=<RT>; HttpOnly; Secure; SameSite=Lax; Path=/api/auth/refresh; Max-Age=604800`
+2. `Set-Cookie: portal_refresh_token=<RT>; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=604800`
 3. 浏览器 DevTools 中可看到两个 Cookie 被正确设置
 4. JavaScript `document.cookie` 无法读取这两个 Cookie（HttpOnly）
 
@@ -932,7 +934,7 @@ Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, ARCHITECTURE.md, DATABASE.md
 
 ### US-H-AUTH-07：State 验证 — 篡改
 
-> **@req H-AUTH-011**
+> **@req H-AUTH-010**
 
 **作为** 攻击者，
 **我** 篡改 Portal 回调 URL 中的 `state` 参数为 `malicious_state`，
@@ -948,7 +950,7 @@ Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, ARCHITECTURE.md, DATABASE.md
 
 ### US-H-AUTH-08：State 过期
 
-> **@req H-AUTH-012**
+> **@req H-AUTH-013**
 
 **作为** 在 Portal 登录页停留超过 10 分钟的赵六，
 **当** 赵六完成登录后 Portal 回调到 Portal 时，
@@ -964,7 +966,7 @@ Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, ARCHITECTURE.md, DATABASE.md
 
 ### US-H-AUTH-09：PKCE 验证
 
-> **@req H-AUTH-013**
+> **@req H-AUTH-011**
 
 **作为** 安全审计人员，
 **我** 验证整个 PKCE 流程（S256），
@@ -980,7 +982,7 @@ Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, ARCHITECTURE.md, DATABASE.md
 
 ### US-H-AUTH-10：Nonce 生成与验证
 
-> **@req H-AUTH-014**
+> **@req H-AUTH-012**
 
 **作为** 安全审计人员，
 **我** 验证 ID Token 中的 `nonce` 参数与授权请求中发送的一致，
@@ -1048,7 +1050,7 @@ JWT payload 包含以下 claims：
 
 ### US-H-SESS-04：Access Token 过期后 API 返回 401
 
-> **@req H-SESS-010**
+> **@req H-SESS-002, H-SESS-003**
 
 **作为** Access Token 已过期的张三，
 **我** 发起 API 请求时收到 401 响应，
@@ -1065,7 +1067,7 @@ JWT payload 包含以下 claims：
 
 ### US-H-SESS-05：Refresh Token 过期后重新登录
 
-> **@req H-SESS-011**
+> **@req H-SESS-004**
 
 **作为** Refresh Token 已过期（超过 7 天未活跃）的赵六，
 **我** 发起 API 请求时收到 401，前端尝试刷新失败，
@@ -1081,7 +1083,7 @@ JWT payload 包含以下 claims：
 
 ### US-H-SESS-06：前端静默续签
 
-> **@req H-SESS-012, H-SESS-020, H-SESS-021**
+> **@req H-SESS-003**
 
 **作为** 正在使用系统的张三，
 **当** Access Token 剩余有效期 < 5 分钟时，
@@ -1099,7 +1101,7 @@ JWT payload 包含以下 claims：
 
 ### US-H-SESS-07：Token 刷新失败处理
 
-> **@req H-SESS-022**
+> **@req H-SESS-005**
 
 **作为** Refresh Token 已失效（被撤销）的张三，
 **前端** 尝试刷新 Token 失败后，
@@ -1115,7 +1117,7 @@ JWT payload 包含以下 claims：
 
 ### US-H-SESS-08：jti 紧急撤销
 
-> **@req H-SESS-030**
+> **@req H-SESS-006**
 
 **作为** 拥有 `super_admin` 角色的张三，
 **我** 在赵六的用户详情页点击「锁定」按钮后，
@@ -1184,58 +1186,62 @@ JWT payload 包含以下 claims：
 
 ### US-H-SSO-04：Portal 登出联动 子应用 (OIDC Client)
 
-> **@req H-SSO-010**
+> **@req H-SSO-003**
 
 **作为** 同时在 Portal 和 子应用 (OIDC Client) 登录的张三，
 **我** 在 Portal 点击「退出登录」后，
 **两个** 应用都需重新登录。
 
 **验收标准：**
-1. Portal 登出流程：
-   - JWT jti 写入 Redis 黑名单
-   - Refresh Token 在 Portal 侧撤销
-   - 清除 `portal_jwt_token` 和 `portal_refresh_token` Cookie
-   - 调用 Portal `/api/auth/sign-out-sso` 清除 Portal Session
-2. 张三再访问 子应用 (OIDC Client) → 子应用 (OIDC Client) 重定向到 Portal → Portal 无 session → 展示登录表单
+1. Portal 登出流程（无状态 JWT，无服务端 Session）：
+   - 当前 Access Token 的 jti 写入 Redis 黑名单（Gateway 与 Portal 双重校验）
+   - 当前用户的 Refresh Token 在 Portal 侧撤销（DB 标记 revoked）
+   - 清除浏览器 `portal_jwt_token` 与 `portal_refresh_token` Cookie
+2. 张三再访问子应用（OIDC Client）→ 子应用携带 Portal 签发的令牌请求 → 经 Gateway 校验 jti 命中黑名单 → 返回 401 → 子应用重定向到 Portal `/authorize` → Portal 无有效 JWT Cookie → 展示登录表单
 3. 两个应用均需重新认证
+
+> **架构说明**：本系统为 100% 无状态 JWT，不维护服务端 Portal Session。SSO 登出联动依赖 jti 黑名单的实时拦截——Gateway 在边缘层校验每个请求的 jti，登出后该 jti 立即失效，从而联动所有依赖该令牌的入口。子应用自身签发的会话由子应用在检测到 401 后自行清除。
 
 ---
 
 ### US-H-SSO-05：子应用 (OIDC Client) 登出联动 Portal
 
-> **@req H-SSO-011**
+> **@req H-SSO-003**
 
 **作为** 同时在 Portal 和 子应用 (OIDC Client) 登录的李四，
 **我** 在 子应用 (OIDC Client) 点击「退出登录」后，
 **Portal** 也需重新登录。
 
 **验收标准：**
-1. 子应用 (OIDC Client) 登出时调用 Portal `/api/auth/sign-out-sso`
-2. Portal Session 被清除
-3. 李四再访问 Portal → Portal 检测 `portal_jwt_token` 虽仍存在但刷新时失败（Portal session 已清除）
-4. 李四被重定向到 Portal 登录页
+1. 子应用（OIDC Client）登出时，通过 OIDC back-channel / front-channel 通知 Portal 撤销该用户的令牌（调用 Portal `POST /api/auth/oauth2/revoke`），Portal 将对应用户的活跃 jti 写入 Redis 黑名单
+2. 李四再访问 Portal → Gateway 校验 `portal_jwt_token` 的 jti 命中黑名单 → 返回 401 → 重定向到 Portal 登录页
+3. 李四被重定向到 Portal 登录页，需重新输入凭证
+
+> **架构说明**：跨应用登出联动的权威机制是 jti 黑名单（而非清除共享 Session）。子应用通过 OAuth Token Revocation 端点通知 Portal，Portal 撤销用户令牌后，Gateway 在下一次请求时即拦截。
 
 ---
 
-### US-H-SSO-06：Portal Session 清除
+### US-H-SSO-06：登出全链路清理
 
-> **@req H-SSO-020**
+> **@req H-SSO-004**
 
 **作为** 执行登出操作的张三，
-**Portal Session** 被同步清除（Redis 中 `auth-sso:{sessionToken}` 键被删除）。
+**系统** 同步完成访问令牌、刷新令牌与浏览器 Cookie 的三项清理。
 
 **验收标准：**
-1. Portal 调用 `POST /api/auth/logout` 后：
-   - JWT jti 写入 Redis 黑名单 `portal:jti_blocklist:{jti}`
-   - Refresh Token 撤销（Portal `/oauth2/revoke`）
-   - Portal Session 清除（`POST /api/auth/sign-out-sso` → Redis 删除 `auth-sso:{sessionToken}`）
-2. 所有认证状态被彻底清除
+1. Portal 调用 `POST /api/auth/logout` 后执行四层撤销：
+   - Access Token jti 写入 Redis 黑名单 `portal:jti_blocklist:{jti}`（TTL = 令牌剩余有效期）
+   - Login Session Token jti 同样写入黑名单
+   - Refresh Token 在 DB 标记 `revoked`
+   - 按用户 ID 批量撤销其全部 Refresh Token（防御纵深）
+2. 浏览器侧三个 Cookie 被清除（`maxAge=0`）：`portal_jwt_token`、`portal_refresh_token`、`login_session`
+3. 所有认证状态被彻底清除；即使撤销操作失败（Redis/DB 异常），Cookie 仍设置为 `maxAge=0`（fail-secure）
 
 ---
 
 ### US-H-SSO-07：登出后受保护页面拦截
 
-> **@req H-SSO-021**
+> **@req H-SSO-003**
 
 **作为** 刚登出的张三，
 **我** 尝试访问 `/admin/users` 时被重定向到 Portal 登录页，
@@ -1250,7 +1256,7 @@ JWT payload 包含以下 claims：
 
 ### US-H-SSO-08：登出后重新登录
 
-> **@req H-SSO-022**
+> **@req H-SSO-003**
 
 **作为** 刚登出的李四，
 **我** 需要重新输入用户名和密码才能完成 Portal 认证，
@@ -1258,8 +1264,8 @@ JWT payload 包含以下 claims：
 
 **验收标准：**
 1. Portal 登录页展示用户名/密码表单
-2. 不自动填充或跳过认证（Portal Session 已清除）
-3. 认证成功后重新建立完整的 Session 链
+2. 不自动填充或跳过认证（原 JWT 已登出并被加入黑名单，浏览器认证 Cookie 已清除）
+3. 认证成功后重新签发新的 JWT 与 Refresh Token，建立新的登录会话
 
 ---
 
@@ -1338,11 +1344,11 @@ JWT payload 包含以下 claims：
 ### US-OIDC-06：OAuth 错误场景 — 授权码过期
 
 **作为** Portal BFF，
-**当** 收到 IdP 回调后延迟超过 60 秒才调用 Token 端点时，
+**当** 收到 IdP 回调后延迟超过 5 分钟才调用 Token 端点时，
 **IdP** 返回 `invalid_grant` 错误（授权码已过期）。
 
 **验收标准：**
-1. 授权码有效期 60 秒（IdP 配置）
+1. 授权码有效期 5 分钟（IdP 配置）
 2. 超时后返回错误，Portal BFF 向用户展示「登录超时，请重试」
 3. 需要重新发起登录流程
 
@@ -1572,7 +1578,7 @@ JWT payload 包含以下 claims：
 
 **验收标准：**
 1. 权限变更写入 DB
-2. Redis 缓存 `portal:user_perms:{userId}` 在 TTL（300s）到期后刷新
+2. Redis 缓存 `portal:user_perms:{userId}` 在 TTL（3600s）到期后刷新
 3. 或主动清除缓存使其即时生效
 4. 王五下次请求时获得新权限
 
@@ -1630,8 +1636,8 @@ JWT payload 包含以下 claims：
 **验收标准：**
 1. Portal 验证凭证正确但检查到用户状态为 DISABLED
 2. 返回错误：「账户已被禁用，请联系管理员」
-3. 不颁发任何 Token
-4. 不创建 Portal Session
+3. 不颁发任何 Token（Access Token / Refresh Token / Login Session 均不签发）
+4. 不写入任何认证 Cookie
 
 ---
 
@@ -1786,109 +1792,80 @@ JWT payload 包含以下 claims：
 
 ## 17. 需求追溯矩阵
 
+> 所有需求 ID 均对齐 REQUIREMENTS_MATRIX.md 的产品需求编号。架构实现约束（DC-\*）归 ARCHITECTURE_CONSTRAINTS.md，不在本表追溯。
+
 | 需求 ID | 覆盖的用户故事 |
 | :--- | :--- |
 | **A-NAV-01** | US-A-01, US-A-02, US-A-03 |
 | **A-NAV-02** | US-A-04 |
 | **A-NAV-03** | US-A-05 |
-| **B-USR-L** | US-B-01, US-B-02, US-B-03, US-B-04, US-B-05 |
+| **B-USR-L** | US-B-01, US-B-02, US-B-03, US-B-04, US-B-05, US-B-06 |
 | **B-USR-S** | US-B-06 |
 | **B-USR-C** | US-B-07, US-B-08 |
 | **B-USR-R** | US-B-09 |
 | **B-USR-U** | US-B-10 |
 | **B-USR-D** | US-B-11 |
-| **B-USR-ST** | US-B-12, US-B-13, US-B-14 |
+| **B-USR-ST** | US-B-12, US-B-13 |
+| **B-USR-PW** | US-B-14, US-SELF-01 |
 | **C-ROL-L** | US-C-01 |
 | **C-ROL-C** | US-C-02 |
-| **C-ROL-U** | US-C-03, US-C-06, US-C-07 |
+| **C-ROL-U** | US-C-03, US-C-07 |
 | **C-ROL-D** | US-C-04, US-RBAC-02 |
-| **C-ROL-PA** | US-C-05 |
-| **C-ROL-CA** | US-C-06 |
-| **C-ROL-DS** | US-C-07, US-CROSS-07 |
+| **C-ROL-PA** | US-C-05, US-C-06, US-RBAC-03 |
+| **C-ROL-ASGN** | US-B-13, US-CROSS-07, US-RBAC-04 |
 | **D-PRM-L** | US-D-01 |
 | **D-PRM-C** | US-D-02 |
 | **D-PRM-U** | US-D-03 |
-| **D-PRM-D** | US-D-04, US-RBAC-03 |
+| **D-PRM-D** | US-D-04 |
 | **E-MNU-L** | US-E-01 |
 | **E-MNU-C** | US-E-02, US-MNU-BTN-01, US-MNU-BTN-02 |
-| **E-MNU-U** | US-E-03, US-E-05 |
+| **E-MNU-U** | US-E-03, US-E-05, US-MNU-BTN-04 |
 | **E-MNU-D** | US-E-04 |
 | **E-MNU-PB** | US-E-05, US-MNU-BTN-03 |
 | **F-DEP-L** | US-F-01 |
 | **F-DEP-C** | US-F-02 |
 | **F-DEP-U** | US-F-03, US-RBAC-01 |
 | **F-DEP-D** | US-F-04 |
+| **F-DEP-M** | US-F-01 |
 | **G-CLT-L** | US-G-01 |
 | **G-CLT-C** | US-G-02 |
-| **G-CLT-U** | US-G-03, US-G-07 |
+| **G-CLT-U** | US-G-03 |
 | **G-CLT-D** | US-G-04 |
-| **G-SEC-INT** | US-G-05, US-G-06 |
+| **G-CLT-SEC** | US-G-07 |
 | **H-AUTH-001** | US-H-AUTH-01 |
-| **H-AUTH-002** | US-H-AUTH-01 |
-| **H-AUTH-003** | US-H-AUTH-02 |
-| **H-AUTH-004** | US-H-AUTH-03, US-H-AUTH-04 |
+| **H-AUTH-002** | US-H-AUTH-02, US-CROSS-05 |
+| **H-AUTH-003** | US-H-AUTH-02, US-H-AUTH-03, US-OIDC-05, US-OIDC-06, US-OIDC-07 |
+| **H-AUTH-004** | US-H-AUTH-03, US-H-AUTH-04, US-OIDC-08 |
 | **H-AUTH-005** | US-H-AUTH-04 |
 | **H-AUTH-006** | US-H-AUTH-05 |
-| **H-AUTH-010** | US-H-AUTH-06 |
-| **H-AUTH-011** | US-H-AUTH-07 |
-| **H-AUTH-012** | US-H-AUTH-08 |
-| **H-AUTH-013** | US-H-AUTH-09 |
-| **H-AUTH-014** | US-H-AUTH-10 |
-| **H-SESS-001** | US-H-SESS-01 |
-| **H-SESS-002** | US-H-SESS-02 |
-| **H-SESS-003** | US-H-SESS-03 |
-| **H-SESS-010** | US-H-SESS-04 |
-| **H-SESS-011** | US-H-SESS-05 |
-| **H-SESS-012** | US-H-SESS-06 |
-| **H-SESS-020** | US-H-SESS-06 |
-| **H-SESS-021** | US-H-SESS-06 |
-| **H-SESS-022** | US-H-SESS-07 |
-| **H-SESS-030** | US-H-SESS-08 |
+| **H-AUTH-010** | US-H-AUTH-06, US-H-AUTH-07 |
+| **H-AUTH-011** | US-H-AUTH-09 |
+| **H-AUTH-012** | US-H-AUTH-10 |
+| **H-AUTH-013** | US-H-AUTH-08 |
+| **H-SESS-001** | US-H-SESS-01, US-H-SESS-02 |
+| **H-SESS-002** | US-H-SESS-02, US-H-SESS-03, US-H-SESS-04 |
+| **H-SESS-003** | US-H-SESS-04, US-H-SESS-06 |
+| **H-SESS-004** | US-H-SESS-05 |
+| **H-SESS-005** | US-H-SESS-07 |
+| **H-SESS-006** | US-H-SESS-08, US-SEC-02, US-CROSS-03 |
 | **H-SSO-001** | US-H-SSO-01 |
-| **H-SSO-002** | US-H-SSO-02 |
-| **H-SSO-003** | US-H-SSO-03 |
-| **H-SSO-010** | US-H-SSO-04 |
-| **H-SSO-011** | US-H-SSO-05 |
-| **H-SSO-020** | US-H-SSO-06 |
-| **H-SSO-021** | US-H-SSO-07 |
-| **H-SSO-022** | US-H-SSO-08 |
-| **B-LOG-L** | US-AUDIT-01, US-AUDIT-03 |
-| **B-LOG-D** | US-AUDIT-01 |
-| **F-DEP-E** | US-F-03 |
-| **F-DEP-M** | US-F-01 |
-| **SCOPE-001** | US-B-01, US-B-06 |
-| **SCOPE-002** | US-B-03 |
-| **SCOPE-003** | US-B-02 |
-| **SCOPE-004** | US-B-04 |
-| **SCOPE-005** | US-CROSS-07 |
-| **D-USR-C** | US-B-07 |
-| **D-USR-U** | US-B-10 |
-| **D-USR-D** | US-B-11 |
-| **D-CLI-C** | US-G-02 |
-| **D-CLI-U** | US-G-03 |
-| **D-CLI-D** | US-G-04 |
-| **D-DEPT-C** | US-F-02 |
-| **D-DEPT-U** | US-F-03 |
-| **D-DEPT-D** | US-F-04 |
-| **D-MEN-C** | US-E-02 |
-| **D-MEN-U** | US-E-03 |
-| **D-MEN-D** | US-E-04 |
-| **D-ROLE-C** | US-C-02 |
-| **D-ROLE-U** | US-C-03, US-C-07 |
-| **D-ROLE-D** | US-C-04 |
-| **AUTH-001** | US-H-AUTH-01 |
-| **AUTH-002** | US-H-AUTH-01, US-H-AUTH-02 |
-| **AUTH-003** | US-CROSS-04 |
-| **AUTH-004** | US-H-AUTH-01 |
-| **AUTH-005** | US-MNU-BTN-03 |
-| **AUTH-006** | US-CROSS-02 |
-| **AUTH-FLOW-HAPPY** | US-H-AUTH-02 |
-| **AUTH-FLOW-LOGOUT** | US-H-SSO-04 |
-| **AUTH-FLOW-WRONG-PASSWORD** | US-H-AUTH-09 |
-| **AUTH-FLOW-PROTECTED-REDIRECT** | US-H-AUTH-01 |
-| **RBAC-ADMIN-FULL-ACCESS** | US-B-01 |
-| **RBAC-RESTRICTED-API** | US-B-05 |
-| **RBAC-UNAUTHORIZED** | US-B-03 |
+| **H-SSO-002** | US-H-SSO-02, US-H-SSO-03 |
+| **H-SSO-003** | US-H-SSO-03, US-H-SSO-04, US-H-SSO-05, US-H-SSO-07, US-H-SSO-08 |
+| **H-SSO-004** | US-H-SSO-04, US-H-SSO-06 |
+| **H-FLOW-001** | US-H-AUTH-02 |
+| **H-FLOW-002** | US-H-SSO-04, US-H-SSO-07 |
+| **H-FLOW-003** | US-H-AUTH-09, US-SEC-01 |
+| **H-FLOW-004** | US-H-AUTH-01 |
+| **H-ACL-001** | US-G-05, US-G-06, US-B-05, US-C-04 |
+| **H-ACL-002** | US-B-02, US-B-03, US-B-04 |
+| **H-ACL-003** | US-MNU-BTN-03 |
+| **H-DSCOPE-001** | US-B-01, US-B-02, US-B-03, US-B-04, US-B-06 |
+| **H-DSCOPE-002** | US-CROSS-02, US-RBAC-04, US-CROSS-07 |
+| **H-DSCOPE-003** | US-C-02, US-CROSS-07 |
+| **J-LOG-001** | US-AUDIT-01 |
+| **J-LOG-002** | US-AUDIT-03 |
+| **J-LOG-003** | US-CROSS-06, US-SEC-01 |
+| **J-LOG-004** | US-AUDIT-02, US-AUDIT-04 |
 
 ---
 
@@ -1952,7 +1929,7 @@ JWT payload 包含以下 claims：
 | `GET /api/me` | US-SELF-02 |
 | `GET /api/me/permissions` | US-SELF-02 |
 | `GET /api/me/menus` | US-SELF-02, US-A-01, US-A-02, US-A-03 |
-| `GET /api/auth/login` | US-H-AUTH-01, US-H-AUTH-09 |
+| `GET /login`（页面路由） | US-H-AUTH-01, US-H-AUTH-09 |
 | `POST /api/auth/logout` | US-H-SSO-04, US-H-SSO-06 |
 | `POST /api/auth/refresh` | US-H-SESS-04, US-H-SESS-05, US-H-SESS-06, US-H-SESS-07 |
 | `GET /api/users` | US-B-01, US-B-02, US-B-03, US-B-04, US-B-05, US-B-06 |
@@ -1968,11 +1945,7 @@ JWT payload 包含以下 claims：
 | `PUT /api/roles/:id` | US-C-03, US-RBAC-02 |
 | `DELETE /api/roles/:id` | US-C-04, US-RBAC-02 |
 | `GET /api/roles/:id/permissions` | US-C-05 |
-| `PUT /api/roles/:id/permissions` | US-C-05, US-RBAC-03 |
-| `GET /api/roles/:id/data-scopes` | US-C-07, US-CROSS-07 |
-| `PUT /api/roles/:id/data-scopes` | US-C-07, US-CROSS-07 |
-| `GET /api/roles/:id/clients` | US-C-06 |
-| `PUT /api/roles/:id/clients` | US-C-06 |
+| `PUT /api/roles/:id/permissions` | US-C-05, US-C-06, US-RBAC-03 |
 | `GET /api/permissions` | US-D-01 |
 | `POST /api/permissions` | US-D-02 |
 | `PUT /api/permissions/:id` | US-D-03 |
@@ -1994,5 +1967,4 @@ JWT payload 包含以下 claims：
 | `GET /api/auth/jwks` | US-OIDC-02, US-CROSS-04 |
 | `GET /api/auth/oauth2/userinfo` | US-OIDC-03 |
 | `POST /api/auth/oauth2/introspect` | US-OIDC-04 |
-| `POST /api/auth/oauth2/revoke` | US-OIDC-09, US-H-SSO-06 |
-| `POST /api/auth/sign-out-sso` | US-H-SSO-04, US-H-SSO-05, US-H-SSO-06 |
+| `POST /api/auth/oauth2/revoke` | US-OIDC-09, US-H-SSO-05, US-H-SSO-06 |

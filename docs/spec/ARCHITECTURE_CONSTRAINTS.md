@@ -467,6 +467,18 @@ export function proxy(request: NextRequest) {
 | **DC-AUTH-003** | Token 交换时，领域层须校验授权码未过期、未被使用、客户端凭证正确、PKCE code_verifier 匹配 | 自动化测试 / 安全审计 | H-AUTH-004 |
 | **DC-AUTH-004** | Token 刷新时，领域层须执行令牌轮换（撤销旧令牌 + 签发新令牌），旧令牌立即失效 | 自动化测试 / 安全审计 | H-SESS-003 |
 
+### DC-AUDIT: 审计日志领域约束
+
+| ID | 约束描述 | 验证方法 | 关联产品需求 |
+| :--- | :--- | :--- | :--- |
+| **DC-AUDIT-IMMUTABLE** | 审计日志为仅追加（append-only）。应用层严禁暴露 `audit_logs`/`login_logs` 的 UPDATE/DELETE 接口；生产部署脚本须对应用 DB 角色 REVOKE 这两张表的 UPDATE/DELETE 权限，仅授 INSERT/SELECT。违反即破坏 J-LOG-003 不可篡改要求 | 代码审查 / 部署脚本校验 | J-LOG-003 |
+| **DC-POLISH-001** | 登录页视觉规范：品牌渐变背景 + 白色卡片，无设计债残留 | E2E 视觉回归 | A-NAV-01 |
+| **DC-POLISH-002** | Dashboard 视觉规范：指标卡片 + 圆角收敛 + 无装饰 blob | E2E 视觉回归 | A-NAV-03 |
+| **DC-POLISH-003** | 用户列表视觉规范：DataTable + EmptyState 正确渲染 | E2E 视觉回归 | B-USR-L |
+| **DC-POLISH-004** | 审计日志视觉规范：shadcn Table + 暗黑模式徽章 | E2E 视觉回归 | J-LOG-001 |
+| **DC-POLISH-005** | 关键页面视觉快照比对基线稳定，无未预期漂移 | E2E 视觉回归 | A-NAV-01 |
+| **DC-POLISH-006** | 视觉回归测试覆盖品牌一致性（配色/字体/间距收敛） | E2E 视觉回归 | A-NAV-01 |
+
 ---
 
 > **本指南与 ARCHITECTURE.md 形成互补：ARCHITECTURE.md 描述"系统是什么样"，本文档定义"代码该怎么写"。两者不一致时以本文档为准。**

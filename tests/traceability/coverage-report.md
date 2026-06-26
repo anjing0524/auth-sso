@@ -1,6 +1,6 @@
 # Requirements Coverage Report
 
-Generated: 2026-06-25T08:17:35.598Z
+Generated: 2026-06-26T02:47:45.717Z
 
 **Requirements:** 66/70 covered (**94.3%**)
 **Architecture Constraints:** 17/20 covered
@@ -53,7 +53,7 @@ Coverage: **4/4**
 | --- | --- | --- |
 | D-PRM-L | ✅ | `apps/portal/__tests__/api/permission-api.test.ts`<br>`tests/e2e/permission-management.spec.ts` |
 | D-PRM-C | ✅ | `apps/portal/__tests__/api/permission-actions.test.ts`<br>`apps/portal/__tests__/api/permission-api.test.ts`<br>`apps/portal/__tests__/domain/permission.test.ts`<br>`tests/e2e/permission-management.spec.ts` |
-| D-PRM-U | ✅ | `apps/portal/__tests__/api/permission-actions.test.ts`<br>`apps/portal/__tests__/api/permission-api.test.ts`<br>`apps/portal/__tests__/domain/permission.test.ts` |
+| D-PRM-U | ✅ | `apps/portal/__tests__/api/permission-actions.test.ts`<br>`apps/portal/__tests__/api/permission-api.test.ts`<br>`apps/portal/__tests__/components/empty-state.test.tsx`<br>`apps/portal/__tests__/domain/permission.test.ts` |
 | D-PRM-D | ✅ | `apps/portal/__tests__/api/permission-actions.test.ts`<br>`apps/portal/__tests__/api/permission-api.test.ts`<br>`apps/portal/__tests__/domain/permission.test.ts` |
 
 ## E: 菜单管理 (Menu Management)
@@ -164,13 +164,24 @@ Coverage: **3/3**
 | H-ACL-002 | ✅ | `apps/portal/__tests__/api/permission-enforcement.test.ts`<br>`tests/e2e/rbac-enforcement.spec.ts` |
 | H-ACL-003 | ✅ | `apps/portal/__tests__/api/permission-enforcement.test.ts`<br>`tests/e2e/rbac-enforcement.spec.ts` |
 
-## I: 审计与日志 (Audit & Logging)
+## J: 审计与日志 (Audit & Logging)
 
 Coverage: **2/4**
 
 | Requirement | Status | Test Files |
 | --- | --- | --- |
-| I-LOG-001 | ✅ | `apps/portal/__tests__/api/audit-logging.test.ts` |
-| I-LOG-002 | ✅ | `apps/portal/__tests__/api/audit-logging.test.ts` |
-| I-LOG-003 | ⚠️ | — |
-| I-LOG-004 | ⚠️ | — |
+| J-LOG-001 | ✅ | `apps/portal/__tests__/api/audit-logging.test.ts` |
+| J-LOG-002 | ✅ | `apps/portal/__tests__/api/audit-logging.test.ts` |
+| J-LOG-003 | ⚠️ | — |
+| J-LOG-004 | ⚠️ | — |
+
+## Unrecognized @req IDs
+
+These IDs appear in `@req` annotations but are not found in the requirements matrix:
+
+- `D-POLISH-001`
+- `D-POLISH-002`
+- `D-POLISH-003`
+- `D-POLISH-004`
+- `D-POLISH-005`
+- `D-POLISH-006`

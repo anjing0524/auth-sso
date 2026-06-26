@@ -763,7 +763,7 @@ SKIP_PREFIXES: /_next, /favicon, /images, /fonts
 | Login Session Token | ES256 JWT | 5 分钟 | 路径隔离 Cookie（`/api/auth/oauth2/authorize`） |
 | Access Token | ES256 JWT | 1 小时 | 含完整 claims（roles, permissions, deptIds），jti 防重放 |
 | ID Token | ES256 JWT | 1 小时 | OIDC Core 1.0 标准，含 nonce 防重放（OAuth 授权请求传入时写入） |
-| Refresh Token | Opaque (DB SHA256) | 7 天 | Token Rotation + 重用检测（级联撤销）、路径隔离 Cookie |
+| Refresh Token | Opaque (DB 存储；设计目标 SHA-256，当前实现为明文，见 DATABASE §4.4 技术债) | 7 天 | Token Rotation + 重用检测（级联撤销）、路径隔离 Cookie |
 | 授权码 | Opaque (DB) | 5 分钟 | 一次性使用（used 标记），PKCE S256 强制绑定 code_challenge |
 
 ### 7.4 Cookie 安全

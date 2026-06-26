@@ -5,7 +5,7 @@
  * DELETE /api/users/[id]/roles — 移除用户的指定角色
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { revalidatePath, revalidateTag } from 'next/cache';
+import { revalidatePath, updateTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
 import { eq, inArray, and } from 'drizzle-orm';
 import { withPermission, canAccessDept } from '@/lib/auth';
@@ -14,7 +14,6 @@ import { refreshUserPermissionCache } from '@/lib/permissions';
 import { revokeUserAccessByUserId } from '@/lib/session/revoke';
 import { COMMON_ERRORS, USER_ERRORS, ENTITY_ACTIVE } from '@auth-sso/contracts';
 import { getUserRoles } from '@/app/(dashboard)/users/data';
-
 
 interface RouteParams { params: Promise<{ id: string }>; }
 
@@ -100,7 +99,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     await refreshUserPermissionCache(userId);
     await revokeUserAccessByUserId(userId);
     revalidatePath('/users');
-    revalidateTag('users-list', 'max');
+    updateTag('users-list');
     return NextResponse.json(result);
   });
 }
@@ -168,7 +167,7 @@ export async function DELETE(
 
     // 失效页面与数据缓存
     revalidatePath('/users');
-    revalidateTag('users-list', 'max');
+    updateTag('users-list');
 
     return NextResponse.json({ success: true });
   });

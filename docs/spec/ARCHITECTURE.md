@@ -257,7 +257,7 @@ Browser → Gateway（验签 + 注入头）
 5. [Portal]      GET /api/auth/oauth2/authorize
                     |- 验证 login_session Cookie
                     |- 验证 PKCE code_challenge（S256）
-                    |- 签发授权码（不透明、数据库存储、1 分钟 TTL）
+                    |- 签发授权码（不透明、数据库存储、5 分钟 TTL）
                     |- 重定向到 callback，携带 ?code=...
 6. [Portal]      GET /api/auth/callback?code=...
                     |- 通过授权码兑换令牌（后端通信，POST 到 /api/auth/oauth2/token）
@@ -575,7 +575,7 @@ revokeUserAccessByUserId(userId)
 | 2 | **State 与 Nonce** | `state` 防止授权回调上的 CSRF 攻击。`nonce` 防止令牌兑换过程中的重放攻击。 |
 | 3 | **Cookie 加固** | 所有认证 Cookie 设置 `HttpOnly`、`Secure`（开发环境下本地降级）、`SameSite=Lax`。 |
 | 4 | **令牌隔离** | 不向客户端 JavaScript 暴露任何敏感令牌。访问令牌在服务端进行兑换。 |
-| 5 | **后端通信** | 令牌兑换（code 兑换令牌）和令牌刷新均为服务端到服务端通信。授权码通过浏览器传输，但一次性使用且生命周期极短（1 分钟）。 |
+| 5 | **后端通信** | 令牌兑换（code 兑换令牌）和令牌刷新均为服务端到服务端通信。授权码通过浏览器传输，但一次性使用且生命周期较短（5 分钟）。 |
 | 6 | **零信任网关** | Gateway 和下游微服务通过 JWKS 独立验证 JWT 签名。不进行信任委托。 |
 | 7 | **无状态核心** | Portal API 认证为 100% 无状态 JWT。热路径上无需查询 Redis 会话。 |
 | 8 | **紧急吊销** | 基于 Redis 的 jti 黑名单，用于安全事件中的即时令牌失效。 |

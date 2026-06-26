@@ -51,6 +51,15 @@
 - 复杂策略引擎（ABAC/PBAC）。
 - 多租户隔离。
 - 跨区域高可用。
+- 自助找回密码（邮箱/短信验证码重置）。当前仅支持管理员重置密码（FR-USR-09）与已知旧密码的自助修改（FR-USR-10）；忘记密码流程列入未来规划（§7）。
+
+### 2.3 系统初始化（Bootstrap）
+
+首次部署时，系统通过种子脚本（`scripts/seed`）创建首个超级管理员账户：
+
+- 内置 `super_admin` 角色归属「总部」根部门（绕过数据范围限制，见 §6 H-ACL）。
+- 种子账户使用环境变量配置的初始用户名/密码，首次登录强制修改密码（password_changed_at 为空时拦截）。
+- 后续 super_admin 的授予通过既有的用户角色分配链路（FR-USR-08）完成，由现有 super_admin 执行。
 
 ---
 
@@ -76,7 +85,7 @@
 | FR-AUTH-01 | 用户通过邮箱/用户名和密码登录 | P0 关键 | H-AUTH-001~002, DC-AUTH-001 |
 | FR-AUTH-02 | PKCE S256 强制的 OAuth 2.1 授权码流程 | P0 关键 | H-AUTH-003~004, H-AUTH-013 |
 | FR-AUTH-03 | Portal 登录页展示与未认证重定向 | P0 关键 | H-AUTH-001, H-FLOW-004 |
-| FR-AUTH-04 | ES256 JWT Cookie 签发与验证 | P0 关键 | H-AUTH-005~006, H-SESS-001~003 |
+| FR-AUTH-04 | ES256 JWT Cookie 签发与验证 | P0 关键 | H-AUTH-005~006, H-SESS-001~002 |
 | FR-AUTH-05 | Refresh Token 轮换续签 | P0 关键 | H-SESS-003, H-SESS-005 |
 | FR-AUTH-06 | jti 紧急撤销（Redis 黑名单） | P0 关键 | H-SESS-006 |
 | FR-AUTH-07 | SSO 单点登录/登出联动 | P0 关键 | H-SSO-001~004 |
@@ -102,7 +111,7 @@
 | FR-USR-06 | 用户逻辑删除（二次确认） | P1 重要 | B-USR-D, DC-USR-D |
 | FR-USR-07 | 账户状态控制（启用/禁用/锁定） | P1 重要 | B-USR-ST |
 | FR-USR-08 | 为用户分配角色 | P1 重要 | B-USR-ST |
-| FR-USR-09 | 重置用户密码 | P1 重要 | B-USR-ST |
+| FR-USR-09 | 重置用户密码 | P1 重要 | B-USR-PW |
 | FR-USR-10 | 用户修改自己的密码 | P2 一般 | US-SELF-01 |
 | FR-USR-11 | 查看 /api/me 个人信息与权限 | P1 重要 | US-SELF-02 |
 | FR-USR-12 | 编辑自己的基本信息 | P2 一般 | US-SELF-03 |
@@ -136,9 +145,9 @@
 | 需求ID | 功能描述 | 优先级 | 关联矩阵 |
 |--------|---------|--------|---------|
 | FR-MNU-01 | 树形菜单列表（结构化展示层级） | P1 重要 | E-MNU-L |
-| FR-MNU-02 | 新建菜单节点（支持父级指定） | P1 重要 | E-MNU-C, DC-MEN-C |
-| FR-MNU-03 | 菜单属性编辑（路径/排序/显隐） | P1 重要 | E-MNU-U, DC-MEN-U |
-| FR-MNU-04 | 菜单项删除（递归清理子节点） | P1 重要 | E-MNU-D, DC-MEN-D |
+| FR-MNU-02 | 新建菜单节点（支持父级指定） | P1 重要 | E-MNU-C, DC-MENU-C |
+| FR-MNU-03 | 菜单属性编辑（路径/排序/显隐） | P1 重要 | E-MNU-U, DC-MENU-U |
+| FR-MNU-04 | 菜单项删除（递归清理子节点） | P1 重要 | E-MNU-D, DC-MENU-D |
 | FR-MNU-05 | 权限标识绑定（菜单 ↔ 权限 Code） | P1 重要 | E-MNU-PB |
 | FR-MNU-06 | 侧边栏动态渲染（根据权限） | P1 重要 | A-NAV-01 |
 | FR-MNU-07 | 智能面包屑导航 | P2 一般 | A-NAV-02 |
@@ -150,7 +159,7 @@
 |--------|---------|--------|---------|
 | FR-DEP-01 | 架构地图展示（部门组织树） | P1 重要 | F-DEP-L |
 | FR-DEP-02 | 部门创建（新增子节点） | P1 重要 | F-DEP-C, DC-DEPT-C |
-| FR-DEP-03 | 部门信息修改（名称/编码） | P1 重要 | F-DEP-U, DC-DEPT-U, F-DEP-E |
+| FR-DEP-03 | 部门信息修改（名称/编码） | P1 重要 | F-DEP-U, DC-DEPT-U |
 | FR-DEP-04 | 部门节点删除 | P1 重要 | F-DEP-D, DC-DEPT-D |
 | FR-DEP-05 | 部门成员关系查询 | P1 重要 | F-DEP-M |
 
@@ -158,9 +167,9 @@
 
 | 需求ID | 功能描述 | 优先级 | 关联矩阵 |
 |--------|---------|--------|---------|
-| FR-LOG-01 | 审计日志列表（分页/筛选） | P1 重要 | I-LOG-001 |
-| FR-LOG-02 | 审计日志详情（变更参数/IP/UA） | P1 重要 | I-LOG-002 |
-| FR-LOG-03 | 登录日志列表（分页/筛选） | P1 重要 | I-LOG-001 |
+| FR-LOG-01 | 审计日志列表（分页/筛选） | P1 重要 | J-LOG-001 |
+| FR-LOG-02 | 审计日志详情（变更参数/IP/UA） | P1 重要 | J-LOG-001 |
+| FR-LOG-03 | 登录日志列表（分页/筛选） | P1 重要 | J-LOG-002 |
 | FR-LOG-04 | 审计/登录日志导出（CSV） | P2 一般 | US-AUDIT-02, US-AUDIT-04 |
 
 
@@ -216,7 +225,7 @@
 | NFR-SEC-07 | 审计追溯 | 所有关键操作（登录、权限变更）写入审计日志 | 代码审查 | P1 重要 |
 | NFR-SEC-08 | CSRF 防护 | State 参数验证，OAuth 2.1 强制 | 安全审计 | P0 关键 |
 | NFR-SEC-09 | 授权码一次性使用 | 同一授权码二次提交返回 invalid_grant | 自动化测试 | P0 关键 |
-| NFR-SEC-10 | 授权码过期保护 | 60 秒 TTL 超时后自动失效 | 自动化测试 | P0 关键 |
+| NFR-SEC-10 | 授权码过期保护 | 5 分钟 TTL 超时后自动失效 | 自动化测试 | P0 关键 |
 | NFR-SEC-11 | Redirect URI 严格匹配 | 必须完全一致（含末尾斜杠） | 自动化测试 | P0 关键 |
 | NFR-SEC-12 | Client Secret 轮换即时生效 | 旧 Secret 立即失效 | 自动化测试 | P1 重要 |
 | NFR-SEC-13 | 密码修改强制重新登录 | 密码修改后当前 JWT jti 写入黑名单 | 自动化测试 | P1 重要 |
@@ -239,8 +248,8 @@
 
 | 实践域 (CMMI V3.0) | 能力等级 | 本文档实现 |
 |--------|----------|-----------|
-| **DMR** (Defining & Managing Requirements) | Level 3 | §3 用户角色 + §4 功能需求 102 条 + §5 用户旅程 + USER_STORIES.md 80+ 故事 + 需求基线 BL-2026-001 + CCB 变更控制 + 7 维属性矩阵（优先级/验证方法/风险/来源/验收标准） |
-| **DRS** (Designing & Realizing the Solution) | Level 3 | ARCHITECTURE.md（管理链路 + 11 层认证授权全链路）+ DETAILED_DESIGN.md（函数签名/时序流程）+ DATABASE.md（18 张表/外键/枚举）+ ARCHITECTURE_CONSTRAINTS.md（14 条规则 + 20 条 DC-* 约束） |
+| **DMR** (Defining & Managing Requirements) | Level 3 | §3 用户角色 + §4 功能需求 64 条（映射至 REQUIREMENTS_MATRIX.md 70 条矩阵条目）+ §5 用户旅程 + USER_STORIES.md 80+ 故事 + 需求基线 BL-2026-001 + CCB 变更控制 + 7 维属性矩阵（优先级/验证方法/风险/来源/验收标准） |
+| **DRS** (Designing & Realizing the Solution) | Level 3 | ARCHITECTURE.md（管理链路 + 11 层认证授权全链路）+ DETAILED_DESIGN.md（函数签名/时序流程）+ DATABASE.md（13 张表/外键/枚举）+ ARCHITECTURE_CONSTRAINTS.md（14 条规则 + 20 条 DC-* 约束） |
 | **ENQ** (Ensuring Quality) | Level 3 | 分层测试体系（单元/API/E2E）+ 27 文件 255 测试 + `@req` 注解自动追溯性报告 + 源码 Route Handler JSDoc 注释为 API 规范实生 + 代码审查红线清单 |
 
 ### 8.2 成熟度 Level 4（量化管理级）
@@ -248,7 +257,7 @@
 | 实践域 | 能力等级 | 本文档实现 |
 |--------|----------|-----------|
 | **OPM** (Organizational Performance Management) | Level 4 | §8.3 过程性能基线（5 项关键指标 + 上下控制限 UCL/LCL） |
-| **QPM** (Quantitative Project Management) | Level 4 | §6.1 性能需求（5 项 P95 阈值 + 测量方法）+ §6.2 安全需求（8 项量化标准） |
+| **QPM** (Quantitative Project Management) | Level 4 | §6.1 性能需求（5 项 P95 阈值 + 测量方法）+ §6.2 安全需求（14 项量化标准） |
 | **MPM** (Managing Performance & Measurement) | Level 4 | k6 压力测试 + Playwright E2E 计时 + Rust benchmark + 追溯性覆盖率趋势 |
 
 ### 8.3 成熟度 Level 5（优化级）
