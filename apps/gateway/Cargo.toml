@@ -8,6 +8,7 @@ async-trait = "0.1.89"
 pingora = { version = "0.8.0", features = ["openssl"] }
 pingora-core = { version = "0.8.0", features = ["openssl"] }
 pingora-http = "0.8.0"
+pingora-limits = "0.8.0"
 pingora-load-balancing = { version = "0.8.0", features = ["openssl"] }
 pingora-proxy = { version = "0.8.0", features = ["openssl"] }
 pingora-runtime = "0.8.0"

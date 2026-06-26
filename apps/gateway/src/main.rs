@@ -10,6 +10,16 @@ mod rate_limiter;
 mod redirect;
 mod redis;
 
+use anyhow::Context;
+use clap::Parser;
+use pingora_core::listeners::tls::TlsSettings;
+use pingora_core::prelude::*;
+use pingora_core::services::background::background_service;
+use pingora_load_balancing::LoadBalancer;
+use pingora_proxy::http_proxy_service;
+use std::sync::Arc;
+use tracing::info;
+
 use crate::auth::AuthService;
 use crate::config::Config;
 use crate::gateway::Gateway;
@@ -17,13 +27,6 @@ use crate::jwks::JwksCache;
 use crate::path_matcher::PathMatcher;
 use crate::rate_limiter::RateLimiter;
 use crate::redirect::RedirectService;
-use clap::Parser;
-use pingora_core::listeners::tls::TlsSettings;
-use pingora_core::prelude::*;
-use pingora_load_balancing::LoadBalancer;
-use pingora_proxy::http_proxy_service;
-use std::sync::Arc;
-use tracing::info;
 
 /// 命令行参数解析结构体 (Clap 声明式解析)
 #[derive(Parser, Debug)]
@@ -38,9 +41,6 @@ struct Cli {
     #[arg(short, long, default_value = "gateway.toml")]
     config: String,
 }
-
-use anyhow::Context;
-use pingora_core::services::background::background_service;
 
 fn main() -> anyhow::Result<()> {
     // ── 声明式命令行参数解析 ──
@@ -78,8 +78,7 @@ fn main() -> anyhow::Result<()> {
     my_server.add_service(jwks_refresh_svc);
 
     let portal_lb = Arc::new(
-        LoadBalancer::try_from_iter([upstream.as_str()])
-            .context("❌ 配置 of Portal 上游地址无效")?,
+        LoadBalancer::try_from_iter([upstream.as_str()]).context("❌ 配置 Portal 上游地址无效")?,
     );
 
     let path_matcher = PathMatcher::new(config.portal.public_paths.clone());

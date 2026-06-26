@@ -235,7 +235,7 @@ impl ProxyHttp for Gateway {
 
         // 3. 速率限制（仅 /api/auth/ 类路径在 limiter 内部命中）
         let ip = ctx.client_ip.as_deref().unwrap_or("unknown");
-        if let Some(false) = self.limiter.check(ip, path).await {
+        if let Some(false) = self.limiter.check(ip, path) {
             warn!("速率限制触发: ip={}, path={}", ip, path);
             let mut header = ResponseHeader::build(429, None)?;
             header.insert_header("Retry-After", "60")?;

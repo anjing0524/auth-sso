@@ -927,6 +927,7 @@ dependencies = [
  "pingora",
  "pingora-core",
  "pingora-http",
+ "pingora-limits",
  "pingora-load-balancing",
  "pingora-proxy",
  "pingora-runtime",
@@ -1972,6 +1973,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0286fb5a0359dca1e2e137dfe14ca4d94f676635a5eae4616bb3d8d4ce06d120"
 dependencies = [
  "crc32fast",
+]
+
+[[package]]
+name = "pingora-limits"
+version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4bafc633ceb95dc8b39a0d1b52d105758ae0913d360ef3a3365a6f6494d0fe17"
+dependencies = [
+ "ahash",
 ]
 
 [[package]]

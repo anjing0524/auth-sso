@@ -31,7 +31,7 @@ pub struct PathMatcher {
 /// 判断请求路径是否发往内网后端微服务
 ///
 /// 规则：以 /api/v1/ 开头且排除 /api/v1/auth/ 登录校验类接口
-pub fn is_microservice_route(path: &str) -> bool {
+fn is_microservice_route(path: &str) -> bool {
     path.starts_with("/api/v1/") && !path.starts_with("/api/v1/auth/")
 }
 
