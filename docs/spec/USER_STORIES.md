@@ -1,8 +1,8 @@
 # User Stories - Auth-SSO
 
-Version: v3.2
-Status: Released (角色矩阵 + 正文已同步 v3.2，旧行为以删除线标注)
-Last Updated: 2026-06-25
+Version: v3.3
+Status: Released (§19 API Endpoint 矩阵对齐 API.md v2.0，移除不存在的 REST 端点)
+Last Updated: 2026-06-26
 Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, ARCHITECTURE.md, DATABASE.md
 
 > **⚠️ v3.2 术语漂移**：本文档部分 User Story 描述的是 v3.1 的 DataScope 模型（`DEPT`/`DEPT_AND_SUB`/`ALL`/`SELF`/`CUSTOM`、`role_data_scopes` 表）。v3.2 已将这些替换为「角色归属部门（`roles.dept_id`）+ 子树展开」的简化模型。角色矩阵已同步至 v3.2；US-C-02/07、US-CROSS-07、US-RBAC-01/04 等 DataScope 相关 Story 正文已将术语替换为 v3.2 描述，旧行为以 `~~删除线~~` 标注。详见 [RBAC_MODEL_REDESIGN.md](./RBAC_MODEL_REDESIGN.md)。
@@ -1924,47 +1924,39 @@ JWT payload 包含以下 claims：
 
 ## 19. API Endpoint 覆盖矩阵
 
+> **v1.1 更新 (2026-06-26):** 对齐 API.md v2.0。CRUD 操作为 Server Action（非 REST），不在此表列出。仅含实际存在的 REST 端点。
+
 | API Endpoint | 覆盖的用户故事 |
 | :--- | :--- |
 | `GET /api/me` | US-SELF-02 |
 | `GET /api/me/permissions` | US-SELF-02 |
-| `GET /api/me/menus` | US-SELF-02, US-A-01, US-A-02, US-A-03 |
 | `GET /login`（页面路由） | US-H-AUTH-01, US-H-AUTH-09 |
 | `POST /api/auth/logout` | US-H-SSO-04, US-H-SSO-06 |
 | `POST /api/auth/refresh` | US-H-SESS-04, US-H-SESS-05, US-H-SESS-06, US-H-SESS-07 |
 | `GET /api/users` | US-B-01, US-B-02, US-B-03, US-B-04, US-B-05, US-B-06 |
-| `POST /api/users` | US-B-07, US-B-08 |
 | `GET /api/users/:id` | US-B-09 |
-| `PUT /api/users/:id` | US-B-10, US-RBAC-01 |
-| `DELETE /api/users/:id` | US-B-11 |
 | `POST /api/users/:id/reset-password` | US-B-14 |
+| `GET /api/users/:id/roles` | US-B-13, US-RBAC-04 |
 | `POST /api/users/:id/roles` | US-B-13, US-RBAC-04 |
+| `DELETE /api/users/:id/roles` | US-B-13, US-RBAC-04 |
+| `POST /api/users/:id/force-logout` | US-H-SSO-04 |
 | `GET /api/roles` | US-C-01 |
-| `POST /api/roles` | US-C-02 |
 | `GET /api/roles/:id` | US-C-01 |
-| `PUT /api/roles/:id` | US-C-03, US-RBAC-02 |
-| `DELETE /api/roles/:id` | US-C-04, US-RBAC-02 |
 | `GET /api/roles/:id/permissions` | US-C-05 |
-| `PUT /api/roles/:id/permissions` | US-C-05, US-C-06, US-RBAC-03 |
 | `GET /api/permissions` | US-D-01 |
-| `POST /api/permissions` | US-D-02 |
-| `PUT /api/permissions/:id` | US-D-03 |
-| `DELETE /api/permissions/:id` | US-D-04, US-RBAC-03 |
+| `GET /api/permissions/:id` | US-D-01 |
+| `POST /api/permissions/register` | US-D-02（系统内部注册） |
 | `GET /api/departments` | US-F-01 |
-| `POST /api/departments` | US-F-02 |
 | `GET /api/departments/:id` | US-F-01 |
-| `PUT /api/departments/:id` | US-F-03 |
-| `DELETE /api/departments/:id` | US-F-04 |
+| `GET /api/departments/:id/members` | US-F-01 |
 | `GET /api/clients` | US-G-01 |
-| `POST /api/clients` | US-G-02 |
 | `GET /api/clients/:id` | US-G-01 |
-| `PUT /api/clients/:id` | US-G-03 |
-| `DELETE /api/clients/:id` | US-G-04 |
-| `POST /api/clients/:id/secret` | US-G-07 |
+| `GET /api/clients/:id/tokens` | US-G-01 |
+| `DELETE /api/clients/:id/tokens` | US-G-05 |
 | `GET /api/audit/logs` | US-AUDIT-01, US-CROSS-06 |
 | `GET /api/audit/login-logs` | US-AUDIT-03 |
-| `GET /api/auth/.well-known/openid-configuration` | US-OIDC-01 |
-| `GET /api/auth/jwks` | US-OIDC-02, US-CROSS-04 |
+| `GET /.well-known/openid-configuration` | US-OIDC-01 |
+| `GET /.well-known/jwks` | US-OIDC-02, US-CROSS-04 |
 | `GET /api/auth/oauth2/userinfo` | US-OIDC-03 |
 | `POST /api/auth/oauth2/introspect` | US-OIDC-04 |
 | `POST /api/auth/oauth2/revoke` | US-OIDC-09, US-H-SSO-05, US-H-SSO-06 |

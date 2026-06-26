@@ -37,7 +37,7 @@ export default function PermissionsError({ error, reset }: ErrorProps) {
               Error ID: {error.digest}
             </code>
           )}
-          <Button onClick={reset} className="rounded-xl px-6 shadow-lg shadow-primary/20">
+          <Button onClick={reset} className="rounded-lg px-6 shadow-lg shadow-primary/20">
             <RefreshCw className="mr-2 h-4 w-4" /> 重试
           </Button>
         </CardContent>

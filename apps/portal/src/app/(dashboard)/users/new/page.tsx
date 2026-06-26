@@ -60,7 +60,7 @@ export default function NewUserPage() {
             <Link href="/users"><ArrowLeft className="h-5 w-5" /></Link>
           </Button>
           <div>
-            <h1 className="text-3xl font-black tracking-tight text-slate-900">新增用户</h1>
+            <h1 className="text-3xl font-black tracking-tight text-foreground">新增用户</h1>
             <p className="text-muted-foreground text-sm font-medium">创建新的系统账户并分配初始角色。</p>
           </div>
         </div>
@@ -68,7 +68,7 @@ export default function NewUserPage() {
 
       <div className="max-w-4xl">
         <Card className="border-none shadow-sm ring-1 ring-border/50 rounded-2xl overflow-hidden bg-white mb-20">
-          <CardHeader className="border-b bg-slate-50/30">
+          <CardHeader className="border-b bg-muted/50">
             <CardTitle className="text-lg font-black flex items-center gap-2">
               <UserIcon className="h-5 w-5 text-primary" /> 基本资料
             </CardTitle>
@@ -77,41 +77,41 @@ export default function NewUserPage() {
           <CardContent className="p-8 space-y-6">
             <div className="grid grid-cols-2 gap-8">
               <div className="space-y-2">
-                <Label className="font-bold text-slate-700">显示名称 <span className="text-red-500">*</span></Label>
+                <Label className="font-bold text-foreground/80">显示名称 <span className="text-destructive">*</span></Label>
                 <Input placeholder="例如：张三" value={formData.name}
                   onChange={e => setFormData({...formData, name: e.target.value})}
-                  className="h-11 rounded-xl focus:ring-2 focus:ring-primary/10" />
+                  className="h-11 rounded-lg focus:ring-2 focus:ring-primary/10" />
               </div>
               <div className="space-y-2">
-                <Label className="font-bold text-slate-700">登录账号 (Username) <span className="text-red-500">*</span></Label>
+                <Label className="font-bold text-foreground/80">登录账号 (Username) <span className="text-destructive">*</span></Label>
                 <Input placeholder="zhangsan" value={formData.username}
                   onChange={e => setFormData({...formData, username: e.target.value})}
-                  className="h-11 rounded-xl focus:ring-2 focus:ring-primary/10" />
+                  className="h-11 rounded-lg focus:ring-2 focus:ring-primary/10" />
               </div>
               <div className="space-y-2">
-                <Label className="font-bold text-slate-700">电子邮箱 <span className="text-red-500">*</span></Label>
+                <Label className="font-bold text-foreground/80">电子邮箱 <span className="text-destructive">*</span></Label>
                 <Input type="email" placeholder="zhangsan@example.com" value={formData.email}
                   onChange={e => setFormData({...formData, email: e.target.value})}
-                  className="h-11 rounded-xl focus:ring-2 focus:ring-primary/10" />
+                  className="h-11 rounded-lg focus:ring-2 focus:ring-primary/10" />
               </div>
               <div className="space-y-2">
-                <Label className="font-bold text-slate-700">初始密码 <span className="text-red-500">*</span></Label>
+                <Label className="font-bold text-foreground/80">初始密码 <span className="text-destructive">*</span></Label>
                 <div className="relative">
                   <Input type={showPassword ? 'text' : 'password'} placeholder="••••••••"
                     value={formData.password}
                     onChange={e => setFormData({...formData, password: e.target.value})}
-                    className="h-11 rounded-xl focus:ring-2 focus:ring-primary/10 pr-10" />
+                    className="h-11 rounded-lg focus:ring-2 focus:ring-primary/10 pr-10" />
                   <button type="button" onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground/70">
                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
               </div>
               <div className="space-y-2">
-                <Label className="font-bold text-slate-700">账户状态</Label>
+                <Label className="font-bold text-foreground/80">账户状态</Label>
                 <Select value={formData.status} onValueChange={(v: any) => setFormData({...formData, status: v})}>
-                  <SelectTrigger className="h-11 rounded-xl"><SelectValue /></SelectTrigger>
-                  <SelectContent className="rounded-xl">
+                  <SelectTrigger className="h-11 rounded-lg"><SelectValue /></SelectTrigger>
+                  <SelectContent className="rounded-lg">
                     <SelectItem value="ACTIVE">正常 (Active)</SelectItem>
                     <SelectItem value="DISABLED">禁用 (Disabled)</SelectItem>
                     <SelectItem value="LOCKED">锁定 (Locked)</SelectItem>
@@ -123,11 +123,11 @@ export default function NewUserPage() {
         </Card>
       </div>
 
-      <div className="fixed bottom-0 left-0 right-0 md:left-64 bg-white/80 backdrop-blur-md border-t border-slate-200 p-4 px-8 flex justify-end gap-4 z-50 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
-        <Button variant="ghost" className="rounded-xl px-6" asChild>
+      <div className="fixed bottom-0 left-0 right-0 md:left-64 bg-card/80 backdrop-blur-md border-t border-border p-4 px-8 flex justify-end gap-4 z-50 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+        <Button variant="ghost" className="rounded-lg px-6" asChild>
           <Link href="/users">取消</Link>
         </Button>
-        <Button onClick={handleCreate} disabled={saving} className="rounded-xl px-8 shadow-lg shadow-primary/20">
+        <Button onClick={handleCreate} disabled={saving} className="rounded-lg px-8 shadow-lg shadow-primary/20">
           {saving ? '创建中...' : <><UserPlus className="mr-2 h-4 w-4" /> 确认创建</>}
         </Button>
       </div>

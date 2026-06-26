@@ -121,7 +121,7 @@ export default function ClientsTable({ clients, initialKeyword }: Props) {
           <div className="relative">
             <Avatar className="h-11 w-11 rounded-xl ring-2 ring-background shadow-sm border border-border/40">
               <AvatarImage src={client.logoUrl || ''} />
-              <AvatarFallback className="bg-gradient-to-br from-slate-100 to-slate-200 text-slate-500 font-black text-xs uppercase">
+              <AvatarFallback className="bg-gradient-to-br from-muted to-muted/50 text-muted-foreground font-black text-xs uppercase">
                 {client.name.substring(0, 2)}
               </AvatarFallback>
             </Avatar>
@@ -130,36 +130,36 @@ export default function ClientsTable({ clients, initialKeyword }: Props) {
             </div>
           </div>
           <div className="flex flex-col gap-0.5">
-            <span className="font-bold text-sm leading-tight text-slate-900 group-hover:text-primary transition-colors">{client.name}</span>
+            <span className="font-bold text-sm leading-tight text-foreground group-hover:text-primary transition-colors">{client.name}</span>
             {client.homepageUrl ? (
               <a href={client.homepageUrl} target="_blank" className="text-[10px] text-muted-foreground hover:text-blue-600 flex items-center gap-1 transition-colors" rel="noreferrer">
                 {client.homepageUrl} <ExternalLink className="h-2 w-2" />
               </a>
             ) : (
-              <span className="text-[10px] text-slate-400">Internal Application</span>
+              <span className="text-[10px] text-muted-foreground">Internal Application</span>
             )}
           </div>
         </div>
       </TableCell>
       <TableCell>
         <div className="flex items-center gap-2">
-          <code className="text-[11px] font-mono bg-slate-100 dark:bg-slate-800 text-slate-600 px-2 py-1 rounded-lg border border-slate-200/50">
+          <code className="text-[11px] font-mono bg-muted text-foreground/70 px-2 py-1 rounded-lg border border-border/50">
             {client.clientId}
           </code>
           <Button
             variant="ghost"
             size="icon"
-            className="h-7 w-7 rounded-md hover:bg-white hover:shadow-sm transition-all"
+            className="h-7 w-7 rounded-md hover:bg-card hover:shadow-sm transition-all"
             onClick={() => handleCopy(client.clientId, client.clientId)}
           >
-            {copiedId === client.clientId ? <Check className="h-3 w-3 text-green-600" /> : <Copy className="h-3 w-3 text-slate-400" />}
+            {copiedId === client.clientId ? <Check className="h-3 w-3 text-success" /> : <Copy className="h-3 w-3 text-muted-foreground" />}
           </Button>
         </div>
       </TableCell>
       <TableCell>
         <div className="flex flex-wrap gap-1 max-w-[200px]">
           {client.redirectUris.slice(0, 1).map((uri, i) => (
-            <Badge key={i} variant="outline" className="text-[10px] font-mono py-0 h-5 border-slate-200 bg-white shadow-sm font-medium">
+            <Badge key={i} variant="outline" className="text-[10px] font-mono py-0 h-5 border-border bg-card shadow-sm font-medium">
               {uri}
             </Badge>
           ))}
@@ -179,12 +179,12 @@ export default function ClientsTable({ clients, initialKeyword }: Props) {
       <TableCell className="text-right pr-8">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl hover:bg-white hover:shadow-md transition-all">
+            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-card hover:shadow-md transition-all">
               <MoreHorizontal className="h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48 rounded-xl p-2 shadow-2xl">
-            <DropdownMenuLabel className="text-[10px] font-bold uppercase tracking-widest text-slate-400 px-2 py-1.5">应用操作</DropdownMenuLabel>
+            <DropdownMenuLabel className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground px-2 py-1.5">应用操作</DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild className="rounded-lg cursor-pointer">
               <Link href={`/clients/${client.clientId}`} className="flex items-center gap-2 py-2">

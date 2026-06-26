@@ -79,7 +79,7 @@ export default async function DashboardPage() {
           </p>
         </div>
         <div className="flex items-center space-x-2">
-          <Button size="sm" className="rounded-xl shadow-lg shadow-primary/20" asChild>
+          <Button size="sm" className="rounded-lg shadow-lg shadow-primary/20" asChild>
             <Link href="/audit-logs"><TrendingUp className="mr-2 h-4 w-4" /> 查看日志</Link>
           </Button>
         </div>
@@ -123,9 +123,9 @@ export default async function DashboardPage() {
             <Activity className="h-4 w-4 text-primary opacity-70" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-black text-green-600">Stable</div>
+            <div className="text-2xl font-black text-success">Stable</div>
             <p className="text-[10px] text-muted-foreground font-medium mt-1 flex items-center gap-1">
-              <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" /> 服务节点正常
+              <span className="h-2 w-2 rounded-full bg-success animate-pulse" /> 服务节点正常
             </p>
           </CardContent>
         </Card>
@@ -139,7 +139,7 @@ export default async function DashboardPage() {
           <CardHeader className="flex flex-row items-center px-8 py-6">
             <div className="grid gap-1">
               <CardTitle className="text-xl font-bold flex items-center gap-2">
-                <History className="h-5 w-5 text-blue-600" />
+                <History className="h-5 w-5 text-info" />
                 安全审计动态
               </CardTitle>
               <CardDescription className="text-xs font-medium uppercase tracking-widest opacity-60">Realtime Audit Logs</CardDescription>
@@ -164,7 +164,7 @@ export default async function DashboardPage() {
                 {recentLogs.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={4} className="h-64 p-0 relative">
-                      <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/60 backdrop-blur-[2px] z-10 space-y-3">
+                      <div className="absolute inset-0 flex flex-col items-center justify-center bg-card/60 backdrop-blur-[2px] z-10 space-y-3">
                         <div className="bg-muted p-3 rounded-full">
                           <History className="h-6 w-6 text-muted-foreground" />
                         </div>
@@ -183,7 +183,7 @@ export default async function DashboardPage() {
                         <TableCell className="pl-8 font-bold text-sm">{log.username || 'Unknown'}</TableCell>
                         <TableCell className="text-xs font-medium text-muted-foreground">{log.operation}</TableCell>
                         <TableCell className="text-center">
-                           <Badge variant={log.status === 200 ? 'default' : 'destructive'} className={`rounded-md px-2 py-0 h-5 text-[10px] ${log.status === 200 ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/30' : ''}`}>
+                           <Badge variant={log.status === 200 ? 'default' : 'destructive'} className={`rounded-md px-2 py-0 h-5 text-[10px] ${log.status === 200 ? 'bg-success/10 text-success dark:bg-success/20 dark:text-success hover:bg-success/20 dark:hover:bg-success/25' : ''}`}>
                              {log.status === 200 ? 'Success' : 'Fail'}
                            </Badge>
                         </TableCell>
@@ -206,18 +206,18 @@ export default async function DashboardPage() {
                  <CardTitle className="text-sm font-bold uppercase tracking-wider text-muted-foreground">快捷功能直达</CardTitle>
               </CardHeader>
               <CardContent className="grid gap-3">
-                 <Button variant="outline" className="h-16 rounded-2xl justify-start px-6 group hover:border-primary/50 transition-all border-none bg-white shadow-sm ring-1 ring-border/50" asChild>
+                 <Button variant="outline" className="h-16 rounded-2xl justify-start px-6 group hover:border-primary/50 transition-all border-none bg-card shadow-sm ring-1 ring-border/50" asChild>
                     <Link href="/users">
-                       <div className="p-2 bg-blue-50 text-blue-600 rounded-lg mr-4 group-hover:scale-110 transition-transform"><Plus className="h-4 w-4" /></div>
+                       <div className="p-2 bg-info/10 text-info rounded-lg mr-4 group-hover:scale-110 transition-transform"><Plus className="h-4 w-4" /></div>
                        <div className="text-left">
                           <div className="text-sm font-bold">创建新用户</div>
                           <div className="text-[10px] text-muted-foreground font-medium">配置基本身份与角色</div>
                        </div>
                     </Link>
                  </Button>
-                 <Button variant="outline" className="h-16 rounded-2xl justify-start px-6 group hover:border-green/50 transition-all border-none bg-white shadow-sm ring-1 ring-border/50" asChild>
+                 <Button variant="outline" className="h-16 rounded-2xl justify-start px-6 group hover:border-success/50 transition-all border-none bg-card shadow-sm ring-1 ring-border/50" asChild>
                     <Link href="/clients">
-                       <div className="p-2 bg-green-50 text-green-600 rounded-lg mr-4 group-hover:scale-110 transition-transform"><ArrowUpRight className="h-4 w-4" /></div>
+                       <div className="p-2 bg-success/10 text-success rounded-lg mr-4 group-hover:scale-110 transition-transform"><ArrowUpRight className="h-4 w-4" /></div>
                        <div className="text-left">
                           <div className="text-sm font-bold">应用接入</div>
                           <div className="text-[10px] text-muted-foreground font-medium">生成 OAuth 2.1 凭证</div>
@@ -236,7 +236,7 @@ export default async function DashboardPage() {
                     <h3 className="text-lg font-black tracking-tight leading-tight">数据沙箱<br/>管控引擎</h3>
                     <p className="text-xs opacity-80 font-medium">组织架构层级鉴权已全局开启。</p>
                  </div>
-                 <Button size="sm" variant="secondary" className="w-full rounded-xl font-bold text-xs h-10 shadow-lg shadow-black/10" asChild>
+                 <Button size="sm" variant="secondary" className="w-full rounded-lg font-bold text-xs h-10 shadow-lg shadow-black/10" asChild>
                     <Link href="/departments">进入架构管理</Link>
                  </Button>
               </div>

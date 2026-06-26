@@ -21,11 +21,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription, DialogTrigger,
 } from '@/components/ui/dialog';
+import AssignRoleDialog from '../components/AssignRoleDialog';
 import { updateUserAction, deleteUserAction } from '../actions';
 
 interface Props {
@@ -55,6 +55,7 @@ export default function UserDetailForm({ id, initialUser: serverUser }: Props) {
   });
   const [saving, setSaving] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [isRoleOpen, setIsRoleOpen] = useState(false);
 
   // 只读展示从 prop 读取 —— router.refresh() 后自动更新
   const username = serverUser.username as string;
@@ -92,15 +93,15 @@ export default function UserDetailForm({ id, initialUser: serverUser }: Props) {
             <Link href="/users"><ArrowLeft className="h-5 w-5" /></Link>
           </Button>
           <div>
-            <h1 className="text-3xl font-black tracking-tight text-slate-900">{form.name}</h1>
+            <h1 className="text-3xl font-black tracking-tight text-foreground">{form.name}</h1>
             <p className="text-muted-foreground text-sm font-medium">
-              账号 ID: <code className="text-xs bg-slate-100 px-1.5 py-0.5 rounded font-mono">{username}</code>
+              账号 ID: <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">{username}</code>
             </p>
           </div>
         </div>
         <div className="flex gap-3">
           <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
-            <DialogTrigger render={<Button variant="destructive" className="rounded-xl px-6 bg-red-50 text-red-600 hover:bg-red-100 border-none shadow-none" />}>
+            <DialogTrigger render={<Button variant="destructive" className="rounded-lg px-6 bg-destructive/10 text-destructive hover:bg-destructive/20 border-none shadow-none" />}>
               <Trash2 className="mr-2 h-4 w-4" /> 删除用户
             </DialogTrigger>
             <DialogContent className="rounded-2xl">
@@ -112,19 +113,26 @@ export default function UserDetailForm({ id, initialUser: serverUser }: Props) {
               </DialogHeader>
               <DialogFooter>
                 <Button variant="ghost" onClick={() => setIsDeleteOpen(false)}>取消</Button>
-                <Button onClick={handleDelete} className="bg-red-600 hover:bg-red-700 rounded-xl px-8">确认删除</Button>
+                <Button onClick={handleDelete} className="bg-destructive hover:bg-destructive/80 rounded-lg px-8">确认删除</Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
-          <Button onClick={handleUpdate} disabled={saving} className="rounded-xl px-8 shadow-lg shadow-primary/20">
+          <Button
+            variant="outline"
+            className="rounded-lg px-6"
+            onClick={() => setIsRoleOpen(true)}
+          >
+            <Shield className="mr-2 h-4 w-4" /> 分配角色
+          </Button>
+          <Button onClick={handleUpdate} disabled={saving} className="rounded-lg px-8 shadow-lg shadow-primary/20">
             {saving ? '保存中...' : <><Save className="mr-2 h-4 w-4" /> 保存更改</>}
           </Button>
         </div>
       </div>
 
       <div className="grid grid-cols-12 gap-8">
-        <Card className="col-span-8 border-none shadow-sm ring-1 ring-border/50 rounded-2xl overflow-hidden bg-white">
-          <CardHeader className="border-b bg-slate-50/30">
+        <Card className="col-span-8 border-none shadow-sm ring-1 ring-border/50 rounded-2xl overflow-hidden bg-card">
+          <CardHeader className="border-b bg-muted/50">
             <CardTitle className="text-lg font-black flex items-center gap-2">
               <UserIcon className="h-5 w-5 text-primary" /> 基本资料
             </CardTitle>
@@ -132,24 +140,24 @@ export default function UserDetailForm({ id, initialUser: serverUser }: Props) {
           <CardContent className="p-8 space-y-6">
             <div className="grid grid-cols-2 gap-8">
               <div className="space-y-2">
-                <Label className="font-bold text-slate-700">显示名称</Label>
+                <Label className="font-bold text-foreground/80">显示名称</Label>
                 <Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })}
-                  className="h-11 rounded-xl focus:ring-2 focus:ring-primary/10" />
+                  className="h-11 rounded-lg focus:ring-2 focus:ring-primary/10" />
               </div>
               <div className="space-y-2">
-                <Label className="font-bold text-slate-700">电子邮箱</Label>
+                <Label className="font-bold text-foreground/80">电子邮箱</Label>
                 <Input value={form.email} onChange={e => setForm({ ...form, email: e.target.value })}
-                  className="h-11 rounded-xl focus:ring-2 focus:ring-primary/10" />
+                  className="h-11 rounded-lg focus:ring-2 focus:ring-primary/10" />
               </div>
               <div className="space-y-2">
-                <Label className="font-bold text-slate-700">登录账号 (Username)</Label>
-                <Input value={username} disabled className="h-11 rounded-xl bg-slate-50 opacity-60" />
+                <Label className="font-bold text-foreground/80">登录账号 (Username)</Label>
+                <Input value={username} disabled className="h-11 rounded-lg bg-muted opacity-60" />
               </div>
               <div className="space-y-2">
-                <Label className="font-bold text-slate-700">账户状态</Label>
+                <Label className="font-bold text-foreground/80">账户状态</Label>
                 <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v })}>
-                  <SelectTrigger className="h-11 rounded-xl"><SelectValue /></SelectTrigger>
-                  <SelectContent className="rounded-xl">
+                  <SelectTrigger className="h-11 rounded-lg"><SelectValue /></SelectTrigger>
+                  <SelectContent className="rounded-lg">
                     <SelectItem value="ACTIVE">正常 (Active)</SelectItem>
                     <SelectItem value="DISABLED">禁用 (Disabled)</SelectItem>
                     <SelectItem value="LOCKED">锁定 (Locked)</SelectItem>
@@ -161,48 +169,65 @@ export default function UserDetailForm({ id, initialUser: serverUser }: Props) {
         </Card>
 
         <div className="col-span-4 space-y-6">
-          <Card className="border-none shadow-sm ring-1 ring-border/50 rounded-2xl overflow-hidden bg-white">
+          <Card className="border-none shadow-sm ring-1 ring-border/50 rounded-2xl overflow-hidden bg-card">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-black uppercase tracking-widest text-slate-400">系统信息</CardTitle>
+              <CardTitle className="text-sm font-black uppercase tracking-widest text-muted-foreground">系统信息</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-slate-100 rounded-lg text-slate-500"><Building className="h-4 w-4" /></div>
+                <div className="p-2 bg-muted rounded-lg text-muted-foreground"><Building className="h-4 w-4" /></div>
                 <div>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase">所属部门</p>
-                  <p className="text-sm font-bold text-slate-700">{deptName || '未分配'}</p>
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase">所属部门</p>
+                  <p className="text-sm font-bold text-foreground/80">{deptName || '未分配'}</p>
                 </div>
               </div>
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-slate-100 rounded-lg text-slate-500"><Calendar className="h-4 w-4" /></div>
+                <div className="p-2 bg-muted rounded-lg text-muted-foreground"><Calendar className="h-4 w-4" /></div>
                 <div>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase">创建于</p>
-                  <p className="text-sm font-bold text-slate-700">{new Date(createdAt).toLocaleString()}</p>
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase">创建于</p>
+                  <p className="text-sm font-bold text-foreground/80">{new Date(createdAt).toLocaleString()}</p>
                 </div>
               </div>
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-slate-100 rounded-lg text-slate-500"><Shield className="h-4 w-4" /></div>
+                <div className="p-2 bg-muted rounded-lg text-muted-foreground"><Shield className="h-4 w-4" /></div>
                 <div>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase">安全角色</p>
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    <Badge variant="secondary" className="bg-primary/5 text-primary border-none rounded-md text-[10px]">系统管理员</Badge>
-                  </div>
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase">安全角色</p>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="rounded-lg text-xs mt-1"
+                    onClick={() => setIsRoleOpen(true)}
+                  >
+                    <Shield className="mr-1 h-3 w-3" /> 管理角色
+                  </Button>
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          <div className="bg-amber-50 border border-amber-100 rounded-3xl p-6 flex gap-4 items-start">
-            <div className="p-2 bg-white rounded-xl shadow-sm text-amber-500"><AlertTriangle className="h-5 w-5" /></div>
+          <div className="bg-warning/10 border border-warning/20 rounded-3xl p-6 flex gap-4 items-start">
+            <div className="p-2 bg-card rounded-xl shadow-sm text-warning"><AlertTriangle className="h-5 w-5" /></div>
             <div className="space-y-1">
-              <h5 className="text-sm font-bold text-amber-800">高风险操作</h5>
-              <p className="text-xs text-amber-700/80 leading-relaxed">
+              <h5 className="text-sm font-bold text-warning">高风险操作</h5>
+              <p className="text-xs text-warning/80 leading-relaxed">
                 禁用或删除用户会立即撤销其在所有接入子系统中的活跃 Session，请谨慎操作。
               </p>
             </div>
           </div>
         </div>
       </div>
+
+      {/* 角色分配对话框 */}
+      <AssignRoleDialog
+        open={isRoleOpen}
+        onOpenChange={setIsRoleOpen}
+        user={{
+          id,
+          name: form.name,
+          deptId: (serverUser.deptId as string) || null,
+          deptName: (serverUser.deptName as string) || null,
+        }}
+      />
     </div>
   );
 }

@@ -85,7 +85,7 @@ export default function UserFilters({
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground opacity-50" />
         <Input
           placeholder="搜索用户名、邮箱或姓名..."
-          className="pl-10 h-11 rounded-xl bg-white border-slate-200 focus:ring-2 focus:ring-primary/10 transition-all"
+          className="pl-10 h-11 rounded-lg bg-card border-border focus:ring-2 focus:ring-primary/10 transition-all"
           value={keyword}
           onChange={(e) => setKeyword(e.target.value)}
         />
@@ -95,7 +95,7 @@ export default function UserFilters({
               setKeyword('');
               applyFilter('keyword', '');
             }} 
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
           >
             <X className="h-4 w-4" />
           </button>
@@ -109,7 +109,7 @@ export default function UserFilters({
           onValueChange={(value) => applyFilter('status', value)}
           disabled={isPending}
         >
-          <SelectTrigger className="w-full md:w-[150px] h-11 rounded-xl shadow-sm border-slate-200 bg-white">
+          <SelectTrigger className="w-full md:w-[150px] h-11 rounded-lg shadow-sm border-border bg-card">
             <SelectValue placeholder="过滤状态" />
           </SelectTrigger>
           <SelectContent className="rounded-xl">

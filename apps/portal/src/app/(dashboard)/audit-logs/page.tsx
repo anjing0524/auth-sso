@@ -19,13 +19,13 @@ import { EmptyState } from '@/components/shared/empty-state';
 
 const PAGE_SIZE = 20;
 
-/** 登录事件 -> 徽章配色（支持暗黑模式） */
+/** 登录事件 -> 徽章配色（使用 design token，支持暗黑模式） */
 const EVENT_TYPE_COLORS: Record<string, string> = {
-  LOGIN_SUCCESS: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
-  LOGIN_FAILED: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
+  LOGIN_SUCCESS: 'bg-success/10 text-success dark:bg-success/20 dark:text-success',
+  LOGIN_FAILED: 'bg-destructive/10 text-destructive dark:bg-destructive/20 dark:text-destructive',
   LOGOUT: 'bg-muted text-muted-foreground',
-  TOKEN_REFRESH: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
-  TOKEN_REFRESH_FAILED: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400',
+  TOKEN_REFRESH: 'bg-info/10 text-info dark:bg-info/20 dark:text-info',
+  TOKEN_REFRESH_FAILED: 'bg-warning/10 text-warning dark:bg-warning/20 dark:text-warning',
 };
 
 interface PageProps {
@@ -90,6 +90,7 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
       {tab === 'login' ? (
         <Card className="border-none shadow-sm ring-1 ring-border/50 overflow-hidden rounded-xl">
           <CardContent className="p-0">
+            <div className="overflow-x-auto">
             <Table>
               <TableHeader className="bg-muted/50">
                 <TableRow>
@@ -135,11 +136,13 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
                 )}
               </TableBody>
             </Table>
+            </div>
           </CardContent>
         </Card>
       ) : (
         <Card className="border-none shadow-sm ring-1 ring-border/50 overflow-hidden rounded-xl">
           <CardContent className="p-0">
+            <div className="overflow-x-auto">
             <Table>
               <TableHeader className="bg-muted/50">
                 <TableRow>
@@ -204,6 +207,7 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
                 )}
               </TableBody>
             </Table>
+            </div>
           </CardContent>
         </Card>
       )}

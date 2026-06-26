@@ -37,7 +37,7 @@ export default function DashboardError({ error, reset }: ErrorProps) {
             服务器在处理请求时遇到了问题，请稍后重试。
           </p>
           {error.digest && (
-            <code className="text-[10px] font-mono bg-slate-100 px-2 py-1 rounded text-slate-500">
+            <code className="text-[10px] font-mono bg-muted px-2 py-1 rounded text-muted-foreground">
               Error ID: {error.digest}
             </code>
           )}

@@ -36,7 +36,7 @@ export default async function ClientsPage({ searchParams }: PageProps) {
           <h1 className="text-3xl font-bold tracking-tight">应用管理</h1>
           <p className="text-muted-foreground text-sm">注册 OAuth 2.1 客户端，配置重定向策略与安全密钥。</p>
         </div>
-        <Button asChild className="rounded-xl h-11 px-6 shadow-lg shadow-primary/20">
+        <Button asChild className="rounded-lg h-10 px-6 shadow-lg shadow-primary/20">
           <Link href="/clients/new">
             <Plus className="mr-2 h-4 w-4" /> 注册新应用
           </Link>

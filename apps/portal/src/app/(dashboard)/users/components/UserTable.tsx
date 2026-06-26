@@ -86,15 +86,15 @@ interface UserTableProps {
  */
 export function UserTableSkeleton() {
   return (
-    <div className="border border-slate-100 rounded-xl overflow-hidden bg-white">
+    <div className="border border-border rounded-xl overflow-hidden bg-card">
       <Table>
-        <TableHeader className="bg-slate-50/30">
+        <TableHeader className="bg-muted/50">
           <TableRow className="border-b">
-            <TableHead className="pl-6 w-[300px] text-[10px] font-black uppercase tracking-widest text-slate-400">用户信息</TableHead>
-            <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400">部门</TableHead>
-            <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400">状态</TableHead>
-            <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400">创建时间</TableHead>
-            <TableHead className="text-right pr-6 text-[10px] font-black uppercase tracking-widest text-slate-400">操作</TableHead>
+            <TableHead className="pl-6 w-[300px] text-[10px] font-black uppercase tracking-widest text-muted-foreground">用户信息</TableHead>
+            <TableHead className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">部门</TableHead>
+            <TableHead className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">状态</TableHead>
+            <TableHead className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">创建时间</TableHead>
+            <TableHead className="text-right pr-6 text-[10px] font-black uppercase tracking-widest text-muted-foreground">操作</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -175,7 +175,7 @@ export default function UserTable({ users, pagination, filters }: UserTableProps
   ];
 
   const renderRow = (user: User) => (
-    <TableRow key={user.id} className="group hover:bg-slate-50/50 transition-colors border-b last:border-none">
+    <TableRow key={user.id} className="group hover:bg-muted/50 transition-colors border-b last:border-none">
       <TableCell className="pl-6 py-4">
         <div className="flex items-center gap-3">
           <Avatar className="h-10 w-10 ring-2 ring-background transition-transform duration-300 group-hover:scale-110 shadow-sm">
@@ -185,7 +185,7 @@ export default function UserTable({ users, pagination, filters }: UserTableProps
             </AvatarFallback>
           </Avatar>
           <div className="flex flex-col">
-            <span className="font-bold text-sm leading-tight text-slate-800">{user.name}</span>
+            <span className="font-bold text-sm leading-tight text-foreground">{user.name}</span>
             <span className="text-[10px] text-muted-foreground font-bold tracking-tight">
               {user.username} • {user.email}
             </span>
@@ -193,15 +193,15 @@ export default function UserTable({ users, pagination, filters }: UserTableProps
         </div>
       </TableCell>
       <TableCell>
-        <div className="flex items-center gap-1.5 text-xs font-bold text-slate-600">
-          <Building className="h-3.5 w-3.5 text-slate-300" />
+        <div className="flex items-center gap-1.5 text-xs font-bold text-foreground/70">
+          <Building className="h-3.5 w-3.5 text-muted-foreground" />
           {user.deptName || <span className="text-muted-foreground italic text-[10px] font-medium">未分配</span>}
         </div>
       </TableCell>
       <TableCell>
         <Badge
           variant={user.status === 'ACTIVE' ? 'default' : user.status === 'LOCKED' ? 'destructive' : 'secondary'}
-          className={`px-2 py-0 h-5 text-[10px] font-black rounded-md ${user.status === 'ACTIVE' ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border-none' : ''}`}
+          className={`px-2 py-0 h-5 text-[10px] font-black rounded-md ${user.status === 'ACTIVE' ? 'bg-success/10 text-success hover:bg-success/20 border-none' : ''}`}
         >
           {user.status === 'ACTIVE' ? '正常' : user.status === 'LOCKED' ? '已锁定' : '已禁用'}
         </Badge>
@@ -212,27 +212,27 @@ export default function UserTable({ users, pagination, filters }: UserTableProps
       <TableCell className="text-right pr-6">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl hover:bg-slate-100 transition-colors">
+            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-muted transition-colors">
               <MoreHorizontal className="h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48 rounded-2xl p-1 shadow-2xl ring-1 ring-black/5 border-none">
-            <DropdownMenuLabel className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-3 py-2">用户控制</DropdownMenuLabel>
+            <DropdownMenuLabel className="text-[9px] font-black text-muted-foreground uppercase tracking-widest px-3 py-2">用户控制</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem asChild className="cursor-pointer rounded-xl mb-1 focus:bg-slate-50">
+            <DropdownMenuItem asChild className="cursor-pointer rounded-xl mb-1 focus:bg-muted">
               <Link href={`/users/${user.id}`}>
                 <Edit className="mr-2 h-4 w-4 opacity-50" /> 详情/编辑
               </Link>
             </DropdownMenuItem>
             <DropdownMenuItem
-              className="cursor-pointer rounded-xl mb-1 focus:bg-slate-50"
+              className="cursor-pointer rounded-xl mb-1 focus:bg-muted"
               onClick={() => { setSelectedUser(user); setRoleDialogOpen(true); }}
             >
               <Shield className="mr-2 h-4 w-4 opacity-50" /> 分配角色
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem
-              className={`cursor-pointer rounded-xl ${user.status === 'ACTIVE' ? 'text-rose-500 hover:bg-rose-50' : 'text-emerald-500 hover:bg-emerald-50'}`}
+              className={`cursor-pointer rounded-xl ${user.status === 'ACTIVE' ? 'text-destructive hover:bg-destructive/10' : 'text-success hover:bg-success/10'}`}
               onClick={() => handleToggleStatus(user)}
             >
               {user.status === 'ACTIVE' ? (
@@ -265,26 +265,26 @@ export default function UserTable({ users, pagination, filters }: UserTableProps
 
     {/* 统一分页器 UI */}
     <div className="flex items-center justify-between px-6 py-4 bg-muted/50 border-t mt-4 rounded-b-xl">
-      <p className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">
-        TOTAL RECORDS: <span className="text-slate-900">{pagination.total}</span>
+      <p className="text-[10px] font-black text-muted-foreground uppercase tracking-tighter">
+        TOTAL RECORDS: <span className="text-foreground">{pagination.total}</span>
       </p>
       <div className="flex gap-1.5">
         <Button
           variant="outline"
           size="icon"
-          className="h-8 w-8 rounded-xl shadow-sm hover:bg-white bg-white border-slate-200"
+          className="h-8 w-8 rounded-lg shadow-sm hover:bg-card bg-card border-border"
           disabled={pagination.page === 1}
           onClick={() => handlePageChange(pagination.page - 1)}
         >
           <ChevronRight className="h-3.5 w-3.5 rotate-180" />
         </Button>
-        <div className="flex items-center justify-center text-[10px] font-black px-4 bg-white border border-slate-200 rounded-xl shadow-sm min-w-[60px]">
+        <div className="flex items-center justify-center text-[10px] font-black px-4 bg-card border border-border rounded-lg shadow-sm min-w-[60px]">
           {pagination.page} / {pagination.totalPages || 1}
         </div>
         <Button
           variant="outline"
           size="icon"
-          className="h-8 w-8 rounded-xl shadow-sm hover:bg-white bg-white border-slate-200"
+          className="h-8 w-8 rounded-lg shadow-sm hover:bg-card bg-card border-border"
           disabled={pagination.page >= pagination.totalPages}
           onClick={() => handlePageChange(pagination.page + 1)}
         >

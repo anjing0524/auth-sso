@@ -270,6 +270,52 @@ focus:ring-2 focus:ring-primary/10
 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200
 ```
 
+### 数据表格 (DataTable)
+
+DataTable 是共享表格组件，所有列表页统一使用。
+
+**表格行密度:**
+
+| 属性 | 值 |
+|------|-----|
+| 行高 | 52px（单行）/ 自动（多行） |
+| 单元格内边距 | 12px 16px (`px-4 py-3`) |
+| 表头字号 | 10px `font-black uppercase tracking-widest` |
+| 表头颜色 | `text-muted-foreground` |
+| 表头背景 | `bg-muted/50` |
+| 数据行字号 | 13px (`text-sm`) |
+| 圆角 | 12px (`rounded-xl`) — 同 Card |
+
+**操作按钮（行内）:**
+
+| 属性 | 值 |
+|------|-----|
+| 尺寸 | 32×32px (`h-8 w-8`) |
+| 圆角 | 8px (`rounded-lg`) |
+| 变体 | `ghost` |
+
+**空状态:**
+
+- 无数据 → `EmptyState` simple variant + 图标 + 描述 + CTA 按钮
+- 首次使用 → `EmptyState` onboarding variant + 步骤 Checklist
+
+**分页器:**
+
+| 属性 | 值 |
+|------|-----|
+| 位置 | 表格底部，`bg-muted/50` 背景 |
+| 页码按钮 | `h-8 w-8 rounded-lg` |
+| 页码指示器 | `bg-card border border-border rounded-lg` |
+
+### 按钮圆角（全局统一）
+
+| 元素 | 圆角 | Tailwind |
+|------|------|----------|
+| 操作/工具栏按钮 | 8px | `rounded-lg` |
+| 卡片容器 | 12px | `rounded-xl` |
+| 对话框 | 16px | `rounded-2xl` |
+| 输入框/表单控件 | 8px | `rounded-lg` |
+
 ### 提示信息 (Alert)
 
 | 类型 | 背景 | 文字 |

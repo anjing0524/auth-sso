@@ -40,8 +40,8 @@ export default async function UsersPage({ searchParams }: PageProps) {
     <div className="h-full flex flex-col gap-6 pb-10">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">用户管理</h1>
-          <p className="text-muted-foreground text-sm font-medium text-slate-500 mt-1">
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">用户管理</h1>
+          <p className="text-muted-foreground text-sm font-medium mt-1">
             查看和管理系统内的所有用户账户及权限。
           </p>
         </div>

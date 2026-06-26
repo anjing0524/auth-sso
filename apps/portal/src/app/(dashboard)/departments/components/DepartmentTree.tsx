@@ -99,7 +99,7 @@ export default function DepartmentTree({ departments }: Props) {
 
   return (
     <Card className="border-none shadow-sm ring-1 ring-border/50 overflow-hidden rounded-xl">
-      <CardHeader className="bg-slate-50/50 dark:bg-slate-900/50 border-b py-4 px-6">
+      <CardHeader className="bg-muted/50/50 dark:bg-slate-900/50 border-b py-4 px-6">
         <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
           <div className="relative w-full md:w-72">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground opacity-50" />
@@ -113,7 +113,7 @@ export default function DepartmentTree({ departments }: Props) {
       <CardContent className="p-0">
         <div className="divide-y">
           {filtered.map(dept => (
-            <div key={dept.id} className="flex items-center gap-3 px-6 py-3 hover:bg-slate-50/50 transition-colors" style={{ paddingLeft: `${24 + dept.depth * 24}px` }}>
+            <div key={dept.id} className="flex items-center gap-3 px-6 py-3 hover:bg-muted/50/50 transition-colors" style={{ paddingLeft: `${24 + dept.depth * 24}px` }}>
               {(dept.children?.length ?? 0) > 0 ? (
                 <Button variant="ghost" size="icon" className="h-6 w-6 rounded" onClick={() => toggleExpand(dept.id)}>
                   {expanded.has(dept.id) ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
@@ -123,7 +123,7 @@ export default function DepartmentTree({ departments }: Props) {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
                   <span className="font-medium text-sm truncate">{dept.name}</span>
-                  {dept.code && <code className="text-[10px] text-slate-400">{dept.code}</code>}
+                  {dept.code && <code className="text-[10px] text-muted-foreground">{dept.code}</code>}
                 </div>
               </div>
               <Badge variant={dept.status === 'ACTIVE' ? 'success' : 'secondary'} className="text-[10px] shrink-0">{dept.status}</Badge>

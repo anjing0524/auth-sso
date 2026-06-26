@@ -120,11 +120,11 @@ export default function AssignRoleDialog({ open, onOpenChange, user }: AssignRol
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[420px]">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-xl font-black text-slate-900">
+          <DialogTitle className="flex items-center gap-2 text-xl font-black text-foreground">
             <Shield className="h-5 w-5 text-primary" />
             分配角色
           </DialogTitle>
-          <DialogDescription className="text-slate-500 font-medium">
+          <DialogDescription className="text-muted-foreground font-medium">
             为用户 <Badge variant="secondary" className="mx-0.5 font-bold">{user.name}</Badge>
             {user.deptName ? <>（{user.deptName}）</> : '（未分配部门）'} 选择角色。
             仅展示该用户所属部门的角色。
@@ -134,7 +134,7 @@ export default function AssignRoleDialog({ open, onOpenChange, user }: AssignRol
         <div className="py-4 max-h-[320px] overflow-y-auto">
           {loading ? (
             <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin text-slate-300" />
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
           ) : roles.length === 0 ? (
             <p className="text-center text-sm text-muted-foreground py-8">
@@ -154,8 +154,8 @@ export default function AssignRoleDialog({ open, onOpenChange, user }: AssignRol
                     onCheckedChange={() => toggleRole(role.id)}
                   />
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-bold text-slate-800 truncate">{role.name}</p>
-                    <p className="text-[10px] font-mono text-slate-400">{role.code}</p>
+                    <p className="text-sm font-bold text-foreground truncate">{role.name}</p>
+                    <p className="text-[10px] font-mono text-muted-foreground">{role.code}</p>
                   </div>
                 </label>
               ))}

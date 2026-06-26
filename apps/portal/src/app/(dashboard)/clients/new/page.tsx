@@ -64,15 +64,15 @@ export default function NewClientPage() {
             <Link href="/clients"><ArrowLeft className="h-5 w-5" /></Link>
           </Button>
           <div>
-            <h1 className="text-3xl font-black tracking-tight text-slate-900">注册新应用</h1>
+            <h1 className="text-3xl font-black tracking-tight text-foreground">注册新应用</h1>
             <p className="text-muted-foreground text-sm font-medium">注册新的 OAuth 2.1 客户端以接入单点登录系统。</p>
           </div>
         </div>
         <div className="flex gap-3">
-          <Button variant="ghost" className="rounded-xl px-6" asChild>
+          <Button variant="ghost" className="rounded-lg px-6" asChild>
             <Link href="/clients">取消</Link>
           </Button>
-          <Button onClick={handleCreate} disabled={saving} className="rounded-xl px-8 shadow-lg shadow-primary/20">
+          <Button onClick={handleCreate} disabled={saving} className="rounded-lg px-8 shadow-lg shadow-primary/20">
             {saving ? '注册中...' : <><Plus className="mr-2 h-4 w-4" /> 确认注册</>}
           </Button>
         </div>
@@ -80,8 +80,8 @@ export default function NewClientPage() {
 
       <div className="grid grid-cols-12 gap-8">
         <div className="col-span-8 space-y-8">
-          <Card className="border-none shadow-sm ring-1 ring-border/50 rounded-2xl overflow-hidden bg-white">
-            <CardHeader className="border-b bg-slate-50/30">
+          <Card className="border-none shadow-sm ring-1 ring-border/50 rounded-2xl overflow-hidden bg-card">
+            <CardHeader className="border-b bg-muted/50">
               <CardTitle className="text-lg font-black flex items-center gap-2">
                 <AppWindow className="h-5 w-5 text-primary" /> 基本配置
               </CardTitle>
@@ -89,21 +89,21 @@ export default function NewClientPage() {
             <CardContent className="p-8 space-y-6">
               <div className="grid grid-cols-2 gap-8">
                 <div className="space-y-2 col-span-2">
-                  <Label className="font-bold text-slate-700">应用名称 <span className="text-red-500">*</span></Label>
+                  <Label className="font-bold text-foreground/80">应用名称 <span className="text-destructive">*</span></Label>
                   <Input
                     placeholder="我的业务系统"
                     value={formData.name}
                     onChange={e => setFormData({...formData, name: e.target.value})}
-                    className="h-11 rounded-xl"
+                    className="h-11 rounded-lg"
                   />
                 </div>
                 <div className="space-y-2 col-span-2">
-                  <Label className="font-bold text-slate-700">回调地址 (Redirect URIs) <span className="text-red-500">*</span></Label>
+                  <Label className="font-bold text-foreground/80">回调地址 (Redirect URIs) <span className="text-destructive">*</span></Label>
                   <Textarea
                     placeholder="https://your-app.example.com/api/auth/callback&#10;证书和密钥由系统自动生成"
                     value={formData.redirectUris}
                     onChange={e => setFormData({...formData, redirectUris: e.target.value})}
-                    className="min-h-[100px] rounded-xl"
+                    className="min-h-[100px] rounded-lg"
                   />
                   <p className="text-xs text-muted-foreground">每行一个地址。Client ID 与 Secret 由系统自动生成，创建成功后展示。</p>
                 </div>
@@ -113,26 +113,26 @@ export default function NewClientPage() {
         </div>
 
         <div className="col-span-4 space-y-6">
-          <Card className="border-none shadow-sm ring-1 ring-border/50 rounded-2xl overflow-hidden bg-white">
+          <Card className="border-none shadow-sm ring-1 ring-border/50 rounded-2xl overflow-hidden bg-card">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-black uppercase tracking-widest text-slate-400">高级安全设置</CardTitle>
+              <CardTitle className="text-sm font-black uppercase tracking-widest text-muted-foreground">高级安全设置</CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="space-y-2">
-                <Label className="font-bold text-slate-700">默认权限范围 (Scopes)</Label>
+                <Label className="font-bold text-foreground/80">默认权限范围 (Scopes)</Label>
                 <Input
                   value={formData.scopes}
                   onChange={e => setFormData({...formData, scopes: e.target.value})}
-                  className="h-11 rounded-xl"
+                  className="h-11 rounded-lg"
                 />
               </div>
               <div className="space-y-2">
-                <Label className="font-bold text-slate-700">Access Token TTL (秒)</Label>
+                <Label className="font-bold text-foreground/80">Access Token TTL (秒)</Label>
                 <Input
                   type="number"
                   value={formData.accessTokenTtl}
                   onChange={e => setFormData({...formData, accessTokenTtl: parseInt(e.target.value)})}
-                  className="h-11 rounded-xl"
+                  className="h-11 rounded-lg"
                 />
               </div>
             </CardContent>

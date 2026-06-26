@@ -3,9 +3,20 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import {
+  LayoutGrid, LayoutDashboard, Users, Building2, ShieldCheck, AppWindow,
+  Menu, ShieldAlert, FileText, Key, Lock, Globe, Bell, HelpCircle, Settings, User,
+  type LucideIcon,
+} from 'lucide-react';
+import {
   CommandDialog, CommandEmpty, CommandGroup, CommandInput,
   CommandItem, CommandList,
 } from '@/components/ui/command';
+
+/** 白名单 icon 名称 → 组件映射（与 app-sidebar 保持同步） */
+const ICON_MAP: Record<string, LucideIcon> = {
+  LayoutGrid, LayoutDashboard, Users, Building2, ShieldCheck, AppWindow,
+  Menu, ShieldAlert, FileText, Key, Lock, Globe, Bell, HelpCircle, Settings, User,
+};
 
 interface MenuItem {
   id: string; title: string; url: string; icon?: string | null;
@@ -49,12 +60,18 @@ export function CommandPalette({ menus }: { menus: MenuItem[] }) {
     router.push(url); // 不等动画
   }, [router]);
 
-  // Helpers to flatten nested menus
-  const flatMenus = menus.flatMap(m =>
-    m.children?.length
-      ? [{ id: m.id, title: m.title, url: m.url }, ...m.children.map(c => ({ id: c.id, title: `${m.title} > ${c.title}`, url: c.url }))]
-      : [{ id: m.id, title: m.title, url: m.url }]
-  );
+  // Helpers to flatten nested menus (recursive for arbitrary depth)
+  const flattenMenus = (items: MenuItem[], prefix = ''): { id: string; title: string; url: string; icon?: string | null }[] =>
+    items.flatMap(m => {
+      const label = prefix ? `${prefix} > ${m.title}` : m.title;
+      const current = { id: m.id, title: label, url: m.url, icon: m.icon };
+      return m.children?.length
+        ? [current, ...flattenMenus(m.children, label)]
+        : [current];
+    });
+
+  // 按 title 字母排序（菜单层级已保留路径前缀作为上下文）
+  const flatMenus = [...flattenMenus(menus)].sort((a, b) => a.title.localeCompare(b.title, 'zh-CN'));
 
   return (
     <CommandDialog open={open} onOpenChange={setOpen}>
@@ -66,11 +83,15 @@ export function CommandPalette({ menus }: { menus: MenuItem[] }) {
           </div>
         </CommandEmpty>
         <CommandGroup heading="导航菜单">
-          {flatMenus.map(item => (
-            <CommandItem key={item.id} onSelect={() => handleSelect(item.url)}>
-              <span>{item.title}</span>
-            </CommandItem>
-          ))}
+          {flatMenus.map(item => {
+            const IconComponent = item.icon ? ICON_MAP[item.icon] : null;
+            return (
+              <CommandItem key={item.id} onSelect={() => handleSelect(item.url)}>
+                {IconComponent && <IconComponent className="mr-2 h-4 w-4 opacity-50" />}
+                <span>{item.title}</span>
+              </CommandItem>
+            );
+          })}
         </CommandGroup>
       </CommandList>
     </CommandDialog>

@@ -39,7 +39,7 @@ function SubmitButton() {
     <Button
       type="submit"
       disabled={pending}
-      className="flex-1 rounded-xl shadow-lg shadow-primary/20"
+      className="flex-1 rounded-lg shadow-lg shadow-primary/20"
     >
       {pending ? '正在创建...' : '确认创建'}
     </Button>
@@ -80,7 +80,7 @@ export default function CreateUserDialog({ departments }: CreateUserDialogProps)
     <>
       <PermissionGuard permission="user:create">
         <Button
-          className="rounded-xl h-11 px-6 shadow-lg shadow-primary/20"
+          className="rounded-lg h-11 px-6 shadow-lg shadow-primary/20"
           onClick={() => setIsOpen(true)}
         >
           <UserPlus className="mr-2 h-4 w-4" /> 新增用户
@@ -104,7 +104,7 @@ export default function CreateUserDialog({ departments }: CreateUserDialogProps)
                   id="name"
                   name="name"
                   required
-                  className="h-11 rounded-xl focus:ring-2 focus:ring-primary/10 transition-all"
+                  className="h-11 rounded-lg focus:ring-2 focus:ring-primary/10 transition-all"
                   placeholder="例如：张三"
                 />
               </div>
@@ -114,7 +114,7 @@ export default function CreateUserDialog({ departments }: CreateUserDialogProps)
                   id="username"
                   name="username"
                   required
-                  className="h-11 rounded-xl font-mono"
+                  className="h-11 rounded-lg font-mono"
                   placeholder="例如：zhangsan"
                 />
               </div>
@@ -125,7 +125,7 @@ export default function CreateUserDialog({ departments }: CreateUserDialogProps)
                   name="email"
                   type="email"
                   required
-                  className="h-11 rounded-xl"
+                  className="h-11 rounded-lg"
                   placeholder="zhangsan@example.com"
                 />
               </div>
@@ -136,17 +136,17 @@ export default function CreateUserDialog({ departments }: CreateUserDialogProps)
                   name="password"
                   type="password"
                   required
-                  defaultValue="password123"
-                  className="h-11 rounded-xl"
+                  defaultValue=""
+                  className="h-11 rounded-lg"
                 />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="deptId" className="font-bold text-foreground">所属部门</Label>
                 <Select value={deptId} onValueChange={setDeptId}>
-                  <SelectTrigger className="h-11 rounded-xl">
+                  <SelectTrigger className="h-11 rounded-lg">
                     <SelectValue placeholder="选择用户所在部门（可选）" />
                   </SelectTrigger>
-                  <SelectContent className="rounded-xl">
+                  <SelectContent className="rounded-lg">
                     <SelectItem value="ALL">不分配部门</SelectItem>
                     {departments.map(dept => (
                       <SelectItem key={dept.id} value={dept.id}>{dept.name}</SelectItem>
@@ -160,7 +160,7 @@ export default function CreateUserDialog({ departments }: CreateUserDialogProps)
               <Button
                 type="button"
                 variant="ghost"
-                className="flex-1 rounded-xl"
+                className="flex-1 rounded-lg"
                 onClick={() => setIsOpen(false)}
                 disabled={isPending}
               >

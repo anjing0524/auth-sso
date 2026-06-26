@@ -666,17 +666,109 @@ ENG DUAL VOICES — CONSENSUS TABLE:
 
 ---
 
+## /autoplan Re-Review — 2026-06-26 (Refresh)
+
+### Implementation Status
+
+Plan is ~90% implemented. U1-U5 substantially complete. Most findings from the initial 2026-06-26 review have been addressed via commits `9f860fe` (token fixes), `c94056a` (error boundaries), `981d206` (component tests). Remaining work: U6 (visual regression tests), 1 partially-fixed CRITICAL token leak (Dashboard bg-green-100), 8 new findings from fresh Eng audit.
+
+### Previous Finding Status (21 total from initial review)
+
+| Status | Count | Details |
+|--------|-------|---------|
+| **FIXED** | 9 | CreateUserDialog tokens, Dashboard hex colors, missing error boundaries (4 pages), data-table bg-slate, audit-logs error tokens, missing component tests (4 files), Dashboard hover hex |
+| **PARTIALLY FIXED** | 2 | Dashboard bg-green-100 badge (has dark variants now but still hardcoded), audit-logs EVENT_TYPE_COLORS (still bg-green-100/bg-red-100 pattern) |
+| **UNFIXED** | 4 | CommandPalette icon rendering, flatMap 1-level limit, visual-regression U6 not yet written, UserTable rounded remnant |
+| **N/A / DEFERRED** | 6 | Border-radius consistency (generalized), login redirect transition, login page hierarchy, DESIGN.md radius spec, PermissionsTable search (fixed), UserTable rounded-b (fixed) |
+
+### New Findings (Fresh Eng Audit — 2026-06-26)
+
+| # | Severity | File | Issue |
+|---|----------|------|-------|
+| N1 | **HIGH** | `UserTable.tsx` | 13+ hardcoded `text-slate-*`/`bg-slate-*` tokens in row/skeleton/pagination templates — missed by initial review |
+| N2 | MEDIUM | `dashboard/page.tsx:126-128` | "认证状态" card: `text-green-600`/`bg-green-500` — hardcoded, no dark mode |
+| N3 | MEDIUM | `dashboard/page.tsx:220` | "应用接入" button: `bg-green-50 text-green-600` — hardcoded |
+| N4 | MEDIUM | `UserTable.tsx` pagination | Pagination buttons: `border-slate-200`/`bg-white` — token leak |
+| N5 | MEDIUM | `UserTable.tsx:89` | Redundant wrapper `<div>` around DataTable — double Card nesting |
+| N6 | MEDIUM | `CreateUserDialog.tsx:139` | `defaultValue="password123"` — production security hygiene |
+| N7 | MEDIUM | `command-palette.tsx:53` | `flatMap` only handles 1 level — deeper nested menu items silently dropped |
+| N8 | LOW | `data-table.tsx:83` | `colSpan={columns.length}` → `colSpan={0}` when columns=[] |
+
+### Fresh CEO Subagent — Strategic Independence
+
+Independent CEO voice (fresh context, no prior review access):
+- **CRITICAL concern: Wrong framing.** "Design debt" is an internal engineering concept. Reframing as "Enterprise Compliance UI" (WCAG 2.1 AA, tenant branding framework, keyboard navigation) yields 10x strategic impact with the same CSS work.
+- **HIGH concern: Priority inversion.** P1 production-readiness items (dead "Assign Role" button A5, refresh endpoint optimization A7) remain unfixed. SCIM configuration and SIEM audit export are enterprise SSO table-stakes. Polish before features is wrong ordering.
+- **HIGH concern: TODOS.md doesn't exist.** Deferred items (E1 analytics, E3 P1 fixes) have no tracking document. They will be forgotten.
+- **MEDIUM concern: Token leak precedent.** U1-U5 output still contains hardcoded colors (Dashboard bg-green-100, UserTable 13+ slate tokens). No CI gate prevents new hardcoded colors.
+- **MEDIUM concern: U6 approach conflict.** CEO review recommends component tests (Approach B), but plan still describes Playwright snapshots. Plan contradicts its own recommendation.
+- **MEDIUM concern: EmptyState onboarding stub.** Onboarding variant exists but steps are undefined — ships as dead UI or incomplete feature.
+
+### CEO Consensus Table (Refresh)
+
+```
+CEO DUAL VOICES — CONSENSUS TABLE (Refresh):
+═══════════════════════════════════════════════════════════════
+  Dimension                           Claude  Codex  Consensus
+  ──────────────────────────────────── ─────── ─────── ─────────
+  1. Premises valid?                   MIXED   N/A    MIXED
+  2. Right problem to solve?           PARTIAL N/A    PARTIAL
+  3. Scope calibration correct?        YES     N/A    YES
+  4. Alternatives sufficiently explored? NO    N/A    NO
+  5. Competitive/market risks covered? NO      N/A    NO
+  6. 6-month trajectory sound?         CONCERN N/A    CONCERN
+═══════════════════════════════════════════════════════════════
+N/A = Codex unavailable (UTF-8 encoding error — Chinese path characters).
+```
+
+### Design Litmus Scorecard (Refresh)
+
+```
+DESIGN REVIEW — LITMUS SCORECARD (Refresh):
+═══════════════════════════════════════════════════════════════
+  Check                                    Claude  Codex  Consensus
+  ─────────────────────────────────────── ─────── ─────── ─────────
+  1. Brand unmistakable in first screen?   NO      N/A    NO
+  2. One strong visual anchor?             YES     N/A    YES
+  3. Scannable by headlines only?          YES     N/A    YES
+  4. Each section has one job?             MOSTLY  N/A    MOSTLY
+  5. Cards actually necessary?             YES     N/A    YES
+  6. Motion improves hierarchy?            N/A     N/A    N/A
+  7. Premium without decorative shadows?   YES     N/A    YES
+  ─────────────────────────────────────── ─────── ─────── ─────────
+  Hard rejections triggered:               0       N/A    0
+═══════════════════════════════════════════════════════════════
+```
+
+### Eng Consensus Table (Refresh)
+
+```
+ENG DUAL VOICES — CONSENSUS TABLE (Refresh):
+═══════════════════════════════════════════════════════════════
+  Dimension                           Claude  Codex  Consensus
+  ──────────────────────────────────── ─────── ─────── ─────────
+  1. Architecture sound?               YES     N/A    YES
+  2. Test coverage sufficient?         PARTIAL N/A    PARTIAL
+  3. Performance risks addressed?      YES     N/A    YES
+  4. Security threats covered?         YES     N/A    YES
+  5. Error paths handled?              PARTIAL N/A    PARTIAL
+  6. Deployment risk manageable?       YES     N/A    YES
+═══════════════════════════════════════════════════════════════
+```
+
+---
+
 ## GSTACK REVIEW REPORT
 
 | Review | Trigger | Why | Runs | Status | Findings |
 |--------|---------|-----|------|--------|----------|
-| CEO Review | `/autoplan` | Strategy & scope | 1 | issues_open | 3 proposals: 1 accepted (DESIGN.md sync), 2 deferred (analytics, P1 fixes) |
-| Design Review | `/autoplan` | UI/UX gaps | 1 | issues_open | 11 findings: 2 CRITICAL (token leaks), 4 HIGH, 3 MED, 2 LOW |
-| Eng Review | `/autoplan` | Architecture & tests | 1 | issues_open | 10 findings: 1 HIGH (missing tests), 5 MED, 4 LOW |
+| CEO Review | `/autoplan` | Strategy & scope | 2 | issues_open | Strategic reframing needed (Enterprise Compliance UI). Priority inversion: features before polish. TODOS.md missing. |
+| Design Review | `/autoplan` | UI/UX gaps | 2 | issues_open | 1 remaining CRITICAL (Dashboard bg-green-100), 3 UNFIXED (icon render, flatMap, U6), 8 NEW from fresh audit |
+| Eng Review | `/autoplan` | Architecture & tests | 2 | issues_open | 8 new findings (1 HIGH: UserTable 13+ token leaks, 6 MED, 1 LOW). Architecture sound. Tests exist but shallow. |
 | DX Review | `/autoplan` | DX gaps | 0 | skipped | No developer-facing scope detected |
 
-**CODEX:** Unavailable — UTF-8 encoding error in repo path (Chinese characters incompatible with Codex WS header). All voices Claude-only.
+**CODEX:** Unavailable — UTF-8 encoding error in repo path (Chinese characters `干了科技` incompatible with Codex WS header). All voices Claude-only.
 
-**VERDICT:** CEO + DESIGN + ENG reviews complete. 2 CRITICAL (token leaks in CreateUserDialog + Dashboard status badge), 1 HIGH (missing component tests), 5 MEDIUM issues to fix before ship. No architectural concerns.
+**VERDICT:** U1-U5 work is solid. 9/21 previous findings fixed. Remaining before ship: 1 CRITICAL partial fix (Dashboard bg-green-100), 1 HIGH new (UserTable 13+ token leaks), 6 MEDIUM new, 4 UNFIXED from initial review. Strategic concern: plan framed as "design polish" vs "enterprise compliance UI" misses competitive positioning opportunity. TODOS.md must be created to track deferred P1 items.
 
 NO UNRESOLVED DECISIONS
