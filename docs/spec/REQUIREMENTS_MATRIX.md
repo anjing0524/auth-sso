@@ -174,6 +174,19 @@
 
 ---
 
+## 模块 K: Portal 设计打磨 (Design Polish)
+
+| ID | 描述 | 优先级 | 验证方法 | 风险 | 来源 | 验收标准 |
+|----|------|--------|----------|------|------|---------|
+| **D-POLISH-001** | 全局 CSS 颜色体系统一为 oklch，移除 hex | P1 | E2E 快照 | 低 | /autoplan | 登录页、Dashboard、用户列表视觉快照匹配 baseline |
+| **D-POLISH-002** | DataTable 共享组件激活 + EmptyState 集成 | P1 | 组件测试 | 中 | /autoplan | 4 个列表页使用 DataTable，空数据展示 EmptyState |
+| **D-POLISH-003** | 审计日志页 shadcn Table + 暗黑模式 | P1 | E2E 快照 | 低 | /autoplan | 双 Tab 渲染正确，暗黑模式徽章可读 |
+| **D-POLISH-004** | 登录页品牌渐变 + 圆角收敛 + 标题规范 | P2 | E2E 快照 | 低 | /autoplan | 渐变背景 + 白色卡片 + 规范圆角值 |
+| **D-POLISH-005** | Command Palette (Cmd+K) + Toast 反馈 | P2 | 组件测试 | 低 | /autoplan | Cmd+K 搜索过滤 + 导航跳转正常 |
+| **D-POLISH-006** | 操作入口统一 (Sheet→Dialog) + 视觉快照防线 | P2 | 组件测试 + E2E | 中 | /autoplan | CreateUserDialog 正常，无 Sheet 残留 |
+
+---
+
 ## 需求汇总
 
 | 模块 | 需求数 | P0 关键 | P1 重要 | P2 一般 |

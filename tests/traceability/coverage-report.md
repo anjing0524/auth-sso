@@ -1,8 +1,8 @@
 # Requirements Coverage Report
 
-Generated: 2026-06-26T08:42:32.251Z
+Generated: 2026-06-26T09:30:39.167Z
 
-**Requirements:** 66/70 covered (**94.3%**)
+**Requirements:** 72/76 covered (**94.7%**)
 **Architecture Constraints:** 17/27 covered
 
 ---
@@ -175,13 +175,15 @@ Coverage: **2/4**
 | J-LOG-003 | ⚠️ | — |
 | J-LOG-004 | ⚠️ | — |
 
-## Unrecognized @req IDs
+## K: Portal 设计打磨 (Design Polish)
 
-These IDs appear in `@req` annotations but are not found in the requirements matrix:
+Coverage: **6/6**
 
-- `D-POLISH-001`
-- `D-POLISH-002`
-- `D-POLISH-003`
-- `D-POLISH-004`
-- `D-POLISH-005`
-- `D-POLISH-006`
+| Requirement | Status | Test Files |
+| --- | --- | --- |
+| D-POLISH-001 | ✅ | `tests/e2e/visual-regression.spec.ts` |
+| D-POLISH-002 | ✅ | `tests/e2e/visual-regression.spec.ts` |
+| D-POLISH-003 | ✅ | `tests/e2e/visual-regression.spec.ts` |
+| D-POLISH-004 | ✅ | `tests/e2e/visual-regression.spec.ts` |
+| D-POLISH-005 | ✅ | `tests/e2e/visual-regression.spec.ts` |
+| D-POLISH-006 | ✅ | `tests/e2e/visual-regression.spec.ts` |
