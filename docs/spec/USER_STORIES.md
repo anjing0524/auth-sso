@@ -3,7 +3,7 @@
 Version: v3.2
 Status: Released (角色矩阵 + 正文已同步 v3.2，旧行为以删除线标注)
 Last Updated: 2026-06-25
-Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, API.md, ARCHITECTURE.md, DATABASE.md
+Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, ARCHITECTURE.md, DATABASE.md
 
 > **⚠️ v3.2 术语漂移**：本文档部分 User Story 描述的是 v3.1 的 DataScope 模型（`DEPT`/`DEPT_AND_SUB`/`ALL`/`SELF`/`CUSTOM`、`role_data_scopes` 表）。v3.2 已将这些替换为「角色归属部门（`roles.dept_id`）+ 子树展开」的简化模型。角色矩阵已同步至 v3.2；US-C-02/07、US-CROSS-07、US-RBAC-01/04 等 DataScope 相关 Story 正文已将术语替换为 v3.2 描述，旧行为以 `~~删除线~~` 标注。详见 [RBAC_MODEL_REDESIGN.md](./RBAC_MODEL_REDESIGN.md)。
 
@@ -33,7 +33,7 @@ Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, API.md, ARCHITECTURE.md, DATABASE
 | **孙七** | 总部 | `app_admin` | 全部部门 | 应用管理员，仅管理 OAuth 客户端 |
 | **周八** | 运营部 | `audit_viewer` | 运营部 | 审计员，仅查看审计/登录日志 |
 | **吴九** | 前端组 | _(无角色)_ | — | 新入职员工，无任何权限 |
-| **陈十** | 产品部 | `employee`（DISABLED） | `SELF` | 已禁用账户，不可登录 |
+| **陈十** | 产品部 | `employee`（DISABLED） | 产品部（已禁用，无法登录） | 已禁用账户，不可登录（v3.2 不再有 SELF 类型，数据范围由角色所属部门决定） |
 
 ### 1.3 角色权限分配明细
 
@@ -1498,9 +1498,10 @@ JWT payload 包含以下 claims：
 
 ---
 
+
 ## 13. 安全场景补充故事
 
-### US-SEC-01：连续登录失败后账户锁定
+### US-SEC-01：连续登录失败后账户锁定与解锁
 
 **作为** 系统安全策略，
 **当** 同一用户连续 5 次输入错误密码后，
@@ -1508,11 +1509,12 @@ JWT payload 包含以下 claims：
 **以便** 防止暴力破解攻击。
 
 **验收标准：**
-1. 连续 5 次错误密码后账户自动锁定
+1. 连续 5 次错误密码后账户自动锁定（`LOCKED` 状态）
 2. 错误计数器独立于成功登录（成功登录重置计数器）
-3. 锁定后即使输入正确密码也无法登录
-4. 需管理员（张三）手动激活账户才能恢复
-5. 锁定事件写入审计日志
+3. 锁定后即使输入正确密码也无法登录，提示：「账户因连续多次密码错误被锁定，请在 15 分钟后重试或联系管理员解锁」
+4. 锁定事件写入审计日志
+5. 解锁途径一：15 分钟自动解除锁定（状态恢复为 ACTIVE）
+6. 解锁途径二：需管理员手动在用户管理页激活账户提前恢复
 
 ---
 
@@ -1541,6 +1543,22 @@ JWT payload 包含以下 claims：
 2. 必须包含大写字母、小写字母和数字
 3. 不满足策略时在创建对话框/密码修改表单中即时提示
 4. 管理员重置密码同样受策略约束
+
+---
+
+### US-SEC-04：OAuth 客户端注销/角色移除后的子系统联动体验
+
+**作为** 已通过 SSO 登录 `erp-app` 的王五，
+**当** 管理员张三撤销了 `erp-app` 客户端或移除了王五的 `dept_manager` 角色后，
+**我** 在 `erp-app` 中的下一次操作将被强制中断并要求重新认证，
+**以便** 确保权限变更实时在所有子系统中生效。
+
+**验收标准：**
+1. 王五的当前 Access Token/Refresh Token jti 被写入 Redis 黑名单
+2. `erp-app` 后续 API 调用（如果有验证）或前端路由刷新时，请求会因为 401 而失败
+3. `erp-app` 拦截到 401，跳转到 Portal `/authorize`
+4. Portal 发现用户会话有效，但目标应用无权访问，向王五展示统一错误页：「您无权访问该应用或应用已停用，请联系管理员」
+5. 王五被迫退出子系统的业务流程，无法继续操作
 
 ---
 
@@ -1924,8 +1942,6 @@ JWT payload 包含以下 claims：
 | `login_log:export` | US-AUDIT-04 |
 | `system:manage` | US-A-01 (隐含) |
 | `system:view_dashboard` | US-A-05, US-SELF-02 |
-| `customer_graph:view` | _(客户关系图模块)_ |
-| `customer_graph:export` | _(客户关系图模块)_ |
 
 ---
 
