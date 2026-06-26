@@ -20,8 +20,6 @@ use crate::redis::RedisPool;
 ///
 /// 非 auth 路径不在此限流（由 Portal 自身处理）。
 pub struct RateLimiter {
-    /// 可选的 Redis 连接池；缺失时仅使用进程内降级限流
-    redis: Option<RedisPool>,
     /// 进程内滑动窗口兜底（per-IP 请求时间戳列表），key = ip
     windows: Mutex<HashMap<String, Vec<Instant>>>,
 }
@@ -91,7 +89,7 @@ static RATE_LIMIT_SCRIPT: LazyLock<Script> = LazyLock::new(|| Script::new(RATE_L
 /// Redis 限流的明确判定结果
 ///
 /// 取代原先 `(bool, usize)` 返回值，消除「最后一个允许名额 (remaining=0)」
-/// 与「Redis 不可用 fail-open」被同一个 `(true, 0)` 表示的歧义。
+/// 与「Redis 不可用 fail-open」被同一个 `(true, 0)` 表示 of 歧义。
 enum RedisVerdict {
     /// 放行
     Allowed,
@@ -102,10 +100,9 @@ enum RedisVerdict {
 }
 
 impl RateLimiter {
-    /// 构造限流器。传入 `None` 表示仅使用进程内降级限流。
-    pub fn new(redis: Option<RedisPool>) -> Self {
+    /// 构造限流器。
+    pub fn new() -> Self {
         Self {
-            redis,
             windows: Mutex::new(HashMap::new()),
         }
     }
@@ -118,7 +115,7 @@ impl RateLimiter {
         let (prefix, config) = config_for(path)?;
 
         // Redis 优先：失败或不可用时回落到进程内限流（fail-open 仅指 Redis 通道本身）
-        if let Some(pool) = self.redis.as_ref() {
+        if let Some(pool) = crate::redis::get_pool().await {
             match Self::check_redis(pool, ip, prefix, config).await {
                 RedisVerdict::Allowed => return Some(true),
                 RedisVerdict::Blocked => return Some(false),

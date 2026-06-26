@@ -1,53 +1,54 @@
-//! Redis 基础设施：连接池类型别名与构造。
-//!
-//! 作为基础设施层独立存在，由 `main.rs` 注入给需要它的模块
-//! （`AuthService` 的 jti 黑名单/续签去重、`RateLimiter` 的分布式限流），
-//! 避免鉴权模块把连接池借给限流模块这类跨关注点耦合。
-
+use std::sync::OnceLock;
 use std::time::Duration;
-
-use tracing::{error, info};
+use tracing::info;
 
 /// bb8 异步 Redis 连接池类型别名 — 全局共享复用
 pub type RedisPool = bb8::Pool<bb8_redis::RedisConnectionManager>;
 
-/// 在指定运行时句柄上同步阻塞地构建 Redis 连接池。
-///
-/// 任何环节失败（URL 非法、连接超时等）均返回 `None` 并记录降级日志，
-/// 由调用方按 fail-open 策略处理。`bb8::Pool` 内部基于 Arc，
-/// 返回值可直接 `.clone()` 分发给多个使用方而共享同一连接池。
-///
-/// # 参数
-/// * `handle` - 任意 tokio 运行时句柄（Pingora 运行时）
-/// * `url` - Redis 连接 URL（如 `redis://127.0.0.1:6379`）
-pub fn build_pool_blocking(handle: &tokio::runtime::Handle, url: &str) -> Option<RedisPool> {
-    let manager = match bb8_redis::RedisConnectionManager::new(url) {
-        Ok(m) => m,
-        Err(e) => {
-            error!(
-                "❌ 无法解析 Redis URL ({}): {}。Redis 相关功能将降级 (fail-open)",
-                url, e
-            );
-            return None;
-        }
-    };
+/// 全局连接池单例（惰性初始化，首次调用 get_pool 时建立）
+static POOL: OnceLock<RedisPool> = OnceLock::new();
 
-    match handle.block_on(
-        bb8::Pool::builder()
-            .max_size(16)
-            .connection_timeout(Duration::from_secs(3))
-            .build(manager),
-    ) {
-        Ok(pool) => {
-            info!("✅ bb8 Redis 连接池初始化成功 (max_size=16)");
-            Some(pool)
-        }
-        Err(e) => {
-            error!(
-                "❌ bb8 Redis 连接池创建失败: {}。Redis 相关功能将降级 (fail-open)",
-                e
-            );
-            None
-        }
+/// 全局 Redis URL（main.rs 启动时通过 init() 写入一次）
+static REDIS_URL: OnceLock<String> = OnceLock::new();
+
+/// 启动时调用一次，注册 Redis URL。
+///
+/// 必须在第一次调用 `get_pool` 之前完成，否则连接池无法初始化。
+pub fn init(url: String) {
+    // 允许重复调用（测试场景），仅第一次生效
+    let _ = REDIS_URL.set(url);
+}
+
+/// 惰性且线程安全地获取全局 Redis 连接池。
+///
+/// 首次调用时根据 `init()` 注册的 URL 异步建立连接池；
+/// 后续调用直接返回已有实例，无任何锁开销。
+///
+/// Redis URL 未注册或连接池创建失败时返回 `None`（fail-open 降级）。
+pub async fn get_pool() -> Option<&'static RedisPool> {
+    // 已初始化：直接返回
+    if let Some(pool) = POOL.get() {
+        return Some(pool);
     }
+
+    // 未初始化：需要 Redis URL
+    let url = REDIS_URL.get()?;
+
+    // 并发情况下多个协程可能同时到达此处，
+    // get_or_try_init 不可用（OnceLock 无此方法），
+    // 用 tokio::sync::OnceCell 实现真正的异步 once 初始化。
+    // 这里采用简单策略：谁先 build 成功谁写入，后来者直接拿已有值。
+    info!("🔄 正在惰性创建 bb8 Redis 连接池...");
+    let manager = bb8_redis::RedisConnectionManager::new(url.as_str()).ok()?;
+
+    let pool = bb8::Pool::builder()
+        .max_size(16)
+        .connection_timeout(Duration::from_secs(3))
+        .build(manager)
+        .await
+        .ok()?;
+
+    // 写入失败说明另一个协程已经抢先写入，直接取已有值
+    let _ = POOL.set(pool);
+    POOL.get()
 }

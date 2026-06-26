@@ -8,7 +8,6 @@ use crate::claims::Claims;
 use crate::cookie;
 use crate::jwks::HTTP_CLIENT;
 use crate::jwks::JwksCache;
-use crate::redis::RedisPool;
 
 /// Access Token 剩余有效期低于此阈值（秒）时触发静默续签
 pub const REFRESH_THRESHOLD_SEC: i64 = 300;
@@ -45,19 +44,13 @@ pub struct AuthService {
     jwks_cache: Arc<JwksCache>,
     /// Portal 上游地址，用于构造 refresh_endpoint 回退 URL
     upstream: String,
-    redis_pool: Option<RedisPool>,
 }
 
 impl AuthService {
-    pub fn new(
-        jwks_cache: Arc<JwksCache>,
-        upstream: String,
-        redis_pool: Option<RedisPool>,
-    ) -> Self {
+    pub fn new(jwks_cache: Arc<JwksCache>, upstream: String) -> Self {
         Self {
             jwks_cache,
             upstream,
-            redis_pool,
         }
     }
 
@@ -147,7 +140,7 @@ impl AuthService {
 
     /// 检查 jti 是否在黑名单中（已吊销），失败时 fail-open 放行
     async fn check_jti_not_revoked(&self, jti: &str) -> bool {
-        let pool = match self.redis_pool.as_ref() {
+        let pool = match crate::redis::get_pool().await {
             Some(p) => p,
             None => return true, // 无 Redis → fail-open
         };
@@ -256,7 +249,7 @@ impl AuthService {
 
     /// 通过 Redis 检查续签去重缓存（30s 窗口内同用户复用结果）
     async fn check_refresh_dedup(&self, sub: &str) -> Option<RefreshedTokens> {
-        let pool = self.redis_pool.as_ref()?;
+        let pool = crate::redis::get_pool().await?;
         let mut conn = pool.get().await.ok()?;
         let key = format!("{}{}", REFRESH_DEDUP_PREFIX, sub);
         let cached: Option<String> = redis::cmd("GET")
@@ -275,7 +268,7 @@ impl AuthService {
 
     /// 向 Redis 写入续签去重缓存（SET NX EX，原子去重 + 自动过期）
     async fn set_refresh_dedup(&self, sub: &str, tokens: &RefreshedTokens) {
-        if let Some(ref pool) = self.redis_pool
+        if let Some(pool) = crate::redis::get_pool().await
             && let Ok(mut conn) = pool.get().await
         {
             let key = format!("{}{}", REFRESH_DEDUP_PREFIX, sub);
@@ -327,7 +320,7 @@ mod tests {
     use crate::jwks::OidcMetadata;
 
     fn make_test_auth_service(jwks_cache: &Arc<JwksCache>) -> AuthService {
-        AuthService::new(Arc::clone(jwks_cache), "127.0.0.1:4100".to_string(), None)
+        AuthService::new(Arc::clone(jwks_cache), "127.0.0.1:4100".to_string())
     }
 
     /// 生成测试用 HS256 JWT
