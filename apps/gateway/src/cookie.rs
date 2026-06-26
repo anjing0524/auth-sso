@@ -28,14 +28,10 @@
 /// ```
 pub fn extract_from_header<'a>(cookie_header: &'a str, name: &str) -> Option<&'a str> {
     cookie_header.split(';').find_map(|cookie_str| {
-        let trimmed = cookie_str.trim();
+        let trimmed = cookie_str.trim_start();
         // 零分配：strip_prefix 两次 — 先匹配名称，再剥离 '='
         let val = trimmed.strip_prefix(name)?.strip_prefix('=')?;
-        if val.starts_with('"') && val.ends_with('"') && val.len() >= 2 {
-            Some(&val[1..val.len() - 1])
-        } else {
-            Some(val)
-        }
+        Some(val.strip_prefix('"').and_then(|v| v.strip_suffix('"')).unwrap_or(val))
     })
 }
 
@@ -55,8 +51,8 @@ pub fn extract_from_header<'a>(cookie_header: &'a str, name: &str) -> Option<&'a
 /// ```
 pub fn extract_from_set_cookie<'a>(set_cookie: &'a str, name: &str) -> Option<&'a str> {
     let first_segment = set_cookie.split(';').next()?;
-    let trimmed = first_segment.trim();
-    trimmed.strip_prefix(name)?.strip_prefix('=')
+    let val = first_segment.trim_start().strip_prefix(name)?.strip_prefix('=')?;
+    Some(val.strip_prefix('"').and_then(|v| v.strip_suffix('"')).unwrap_or(val))
 }
 
 /// 从 Cookie 头部中移除指定名称的 cookie
@@ -67,12 +63,17 @@ pub fn extract_from_set_cookie<'a>(set_cookie: &'a str, name: &str) -> Option<&'
 /// * `cookie_header` - 原始 Cookie 头
 /// * `cookie_name` - 要移除的 cookie 名称
 pub fn remove_from_header(cookie_header: &str, cookie_name: &str) -> String {
-    let prefix = cookie_name.to_owned() + "=";
     cookie_header
         .split(';')
-        .map(|s| s.trim())
-        .filter(|part| !part.starts_with(&prefix))
-        .collect::<Vec<&str>>()
+        .filter_map(|s| {
+            let trimmed = s.trim_start();
+            if trimmed.starts_with(cookie_name) && trimmed[cookie_name.len()..].starts_with('=') {
+                None
+            } else {
+                Some(trimmed)
+            }
+        })
+        .collect::<Vec<_>>()
         .join("; ")
 }
 
@@ -85,25 +86,24 @@ pub fn remove_from_header(cookie_header: &str, cookie_name: &str) -> String {
 /// * `cookie_name` - 要替换的 cookie 名称
 /// * `new_value` - 新的 cookie 值
 pub fn replace_in_header(cookie_header: &str, cookie_name: &str, new_value: &str) -> String {
-    let prefix = cookie_name.to_owned() + "=";
     let mut found = false;
-    let parts: Vec<String> = cookie_header
+    let mut parts: Vec<String> = cookie_header
         .split(';')
-        .map(|s| s.trim())
-        .map(|part| {
-            if part.starts_with(&prefix) {
+        .map(|s| {
+            let trimmed = s.trim_start();
+            if trimmed.starts_with(cookie_name) && trimmed[cookie_name.len()..].starts_with('=') {
                 found = true;
-                cookie_name.to_owned() + "=" + new_value
+                format!("{}={}", cookie_name, new_value)
             } else {
-                part.to_string()
+                trimmed.to_string()
             }
         })
         .collect();
-    if found {
-        parts.join("; ")
-    } else {
-        parts.join("; ") + "; " + cookie_name + "=" + new_value
+
+    if !found {
+        parts.push(format!("{}={}", cookie_name, new_value));
     }
+    parts.join("; ")
 }
 
 #[cfg(test)]

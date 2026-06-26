@@ -99,9 +99,11 @@ export function AppSidebar({ user, dynamicMenus = [] }: {
     { id: 'dash', title: '工作台', url: '/dashboard', icon: 'LayoutDashboard' },
     { id: 'user', title: '用户管理', url: '/users', icon: 'Users' },
     { id: 'dept', title: '组织架构', url: '/departments', icon: 'Building2' },
-    { id: 'role', title: '权限配置', url: '/roles', icon: 'ShieldCheck' },
+    { id: 'perm-center', title: '权限中心', url: '', icon: 'ShieldCheck', children: [
+      { id: 'role', title: '角色管理', url: '/roles', icon: 'Shield' },
+      { id: 'perm', title: '权限管理', url: '/permissions', icon: 'Key' },
+    ]},
     { id: 'app', title: '应用管理', url: '/clients', icon: 'AppWindow' },
-    { id: 'menu', title: '菜单配置', url: '/menus', icon: 'Menu' },
     { id: 'audit', title: '安全审计', url: '/audit-logs', icon: 'ShieldAlert' },
   ];
 
@@ -109,15 +111,15 @@ export function AppSidebar({ user, dynamicMenus = [] }: {
   const displayMenus: MenuItem[] = dynamicMenus.length > 0 ? dynamicMenus : fallbackMenus;
 
   return (
-    <Sidebar collapsible="icon" className="border-r border-border/40 bg-slate-50/50 dark:bg-slate-950/50">
+    <Sidebar collapsible="icon" className="border-r border-border/40 bg-muted/30">
       <SidebarHeader className="h-16 flex flex-col justify-center px-4">
         <Link href="/" className="flex items-center gap-3 px-2 group">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 to-indigo-700 text-primary-foreground shadow-xl shadow-blue-500/20 group-hover:scale-105 transition-all duration-300">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-primary-hover text-primary-foreground shadow-xl shadow-primary/20 group-hover:scale-105 transition-all duration-300">
             <ShieldCheck className="h-6 w-6" />
           </div>
           <div className="flex flex-col group-data-[collapsible=icon]:hidden">
-            <span className="font-black text-lg leading-tight tracking-tight text-slate-900 dark:text-white">Auth-SSO</span>
-            <span className="text-[10px] uppercase tracking-[0.2em] text-blue-600/70 font-black">Identity OS</span>
+            <span className="font-black text-lg leading-tight tracking-tight text-foreground">Auth-SSO</span>
+            <span className="text-[10px] uppercase tracking-[0.2em] text-primary/70 font-black">Identity OS</span>
           </div>
         </Link>
       </SidebarHeader>

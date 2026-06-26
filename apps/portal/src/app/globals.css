@@ -33,6 +33,13 @@
   --color-gradient-start: oklch(0.52 0.23 257);
   --color-gradient-end: oklch(0.35 0.17 257);
 
+  /* 租户品牌自定义（可通过管理后台覆盖，默认继承品牌色） */
+  --tenant-logo-url: none;
+  --tenant-primary: var(--color-primary);
+  --tenant-login-bg-start: var(--color-gradient-start);
+  --tenant-login-bg-end: var(--color-gradient-end);
+  --tenant-login-title: 'Auth-SSO';
+
   /* Tailwind 4 变量映射 */
 
   --background: oklch(1 0 0);

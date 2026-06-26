@@ -7,7 +7,7 @@
  *
  * v2 — shadcn Table + 设计 Token + 暗黑模式支持
  */
-import { ShieldAlert, FileText } from 'lucide-react';
+import { ShieldAlert, FileText, Download } from 'lucide-react';
 import Link from 'next/link';
 import { LOGIN_EVENT_LABELS, AUDIT_OPERATION_LABELS } from '@auth-sso/contracts';
 import { getLoginLogs, getAuditLogs } from '@/app/audit/data';
@@ -71,6 +71,20 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
             <ShieldAlert className="h-8 w-8 text-primary" /> 审计日志
           </h1>
           <p className="text-muted-foreground text-sm">追踪系统登录记录与管理员操作行为。</p>
+        </div>
+        <div className="flex gap-2">
+          <a
+            href="/api/audit/export?type=login"
+            className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium hover:bg-muted transition-colors"
+          >
+            <Download className="h-4 w-4" /> 导出登录日志 CSV
+          </a>
+          <a
+            href="/api/audit/export?type=operation"
+            className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium hover:bg-muted transition-colors"
+          >
+            <Download className="h-4 w-4" /> 导出操作日志 CSV
+          </a>
         </div>
       </div>
 

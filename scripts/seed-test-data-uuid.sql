@@ -21,8 +21,6 @@ BEGIN;
 -- 0. 清理已有测试数据（按外键依赖逆序）
 -- ============================================================================
 DELETE FROM role_permissions;
-DELETE FROM role_data_scopes;
-DELETE FROM role_clients;
 DELETE FROM user_roles;
 DELETE FROM permissions;
 DELETE FROM roles;
@@ -74,14 +72,14 @@ VALUES
 -- ============================================================================
 -- 4. 角色 (roles)
 -- ============================================================================
-INSERT INTO roles (id, name, code, description, data_scope_type, is_system, status, sort, created_at, updated_at)
+INSERT INTO roles (id, name, code, description, dept_id, is_system, status, sort, created_at, updated_at)
 VALUES
-  ('91e47d8a-0df5-e7c7-d2d1-faf35e24fe5a',  '超级管理员', 'SUPER_ADMIN',  '拥有全部权限，不受数据范围限制',              'ALL',          true,  'ACTIVE', 0, now(), now()),
-  ('0c20de86-8e7c-8148-2a43-91bfba639cee',    '组织管理员', 'ORG_ADMIN',    '管理指定部门及子部门的用户和配置',            'DEPT_AND_SUB', false, 'ACTIVE', 1, now(), now()),
-  ('6964a379-1528-db7d-aa6a-d120e140047c', '部门经理',   'DEPT_MANAGER', '管理本部门用户',                              'DEPT',         false, 'ACTIVE', 2, now(), now()),
-  ('b4f0e996-62f9-6592-4610-0f07a9478efc',     '普通员工',   'EMPLOYEE',     '仅查看个人数据',                              'SELF',         false, 'ACTIVE', 3, now(), now()),
-  ('fe98c776-6e05-04cc-0445-ea07d298405c',    '应用管理员', 'APP_ADMIN',    '管理 OAuth 客户端接入',                        'ALL',          false, 'ACTIVE', 4, now(), now()),
-  ('522b2129-18fc-7425-e026-701958925732', '审计员',     'AUDIT_VIEWER', '查看审计日志和登录日志',                        'SELF',         false, 'ACTIVE', 5, now(), now());
+  ('91e47d8a-0df5-e7c7-d2d1-faf35e24fe5a',  '超级管理员', 'SUPER_ADMIN',  '拥有全部权限，不受数据范围限制',              '4b24f88a-2e66-73f0-b15b-f0387ef5a9bc',          true,  'ACTIVE', 0, now(), now()),
+  ('0c20de86-8e7c-8148-2a43-91bfba639cee',    '组织管理员', 'ORG_ADMIN',    '管理指定部门及子部门的用户和配置',            '4b24f88a-2e66-73f0-b15b-f0387ef5a9bc', false, 'ACTIVE', 1, now(), now()),
+  ('6964a379-1528-db7d-aa6a-d120e140047c', '部门经理',   'DEPT_MANAGER', '管理本部门用户',                              '4b24f88a-2e66-73f0-b15b-f0387ef5a9bc',         false, 'ACTIVE', 2, now(), now()),
+  ('b4f0e996-62f9-6592-4610-0f07a9478efc',     '普通员工',   'EMPLOYEE',     '仅查看个人数据',                              '4b24f88a-2e66-73f0-b15b-f0387ef5a9bc',         false, 'ACTIVE', 3, now(), now()),
+  ('fe98c776-6e05-04cc-0445-ea07d298405c',    '应用管理员', 'APP_ADMIN',    '管理 OAuth 客户端接入',                        '4b24f88a-2e66-73f0-b15b-f0387ef5a9bc',          false, 'ACTIVE', 4, now(), now()),
+  ('522b2129-18fc-7425-e026-701958925732', '审计员',     'AUDIT_VIEWER', '查看审计日志和登录日志',                        '4b24f88a-2e66-73f0-b15b-f0387ef5a9bc',         false, 'ACTIVE', 5, now(), now());
 
 -- ============================================================================
 -- 5. 权限统一树 (permissions) — type: DIRECTORY | PAGE | API | DATA
@@ -234,15 +232,7 @@ INSERT INTO role_permissions (role_id, permission_id, created_at) VALUES
   ('522b2129-18fc-7425-e026-701958925732', '71d5fb9a-d1c4-91e5-9ed8-43758736a812',     now()),
   ('522b2129-18fc-7425-e026-701958925732', '0064c653-432a-ec27-0f0b-8bae168b00fd',   now());
 
--- erp-app: 仅 super_admin, org_admin, dept_manager
-INSERT INTO role_clients (role_id, client_id, created_at) VALUES
-  ('91e47d8a-0df5-e7c7-d2d1-faf35e24fe5a',  'erp-app', now()),
-  ('0c20de86-8e7c-8148-2a43-91bfba639cee',    'erp-app', now()),
-  ('6964a379-1528-db7d-aa6a-d120e140047c', 'erp-app', now());
--- crm-app: 仅 super_admin, org_admin
-INSERT INTO role_clients (role_id, client_id, created_at) VALUES
-  ('91e47d8a-0df5-e7c7-d2d1-faf35e24fe5a',  'crm-app', now()),
-  ('0c20de86-8e7c-8148-2a43-91bfba639cee',    'crm-app', now());
+
 
 -- ============================================================================
 -- 9. 审计日志样例 (audit_logs)

@@ -127,7 +127,7 @@ describe('AppSidebar', () => {
   it('shows fallback menus when dynamicMenus is empty', () => {
     render(<AppSidebar user={{ name: 'Admin' }} dynamicMenus={[]} />);
     expect(screen.getByText('工作台')).toBeInTheDocument();
-    expect(screen.getByText('权限配置')).toBeInTheDocument();
+    expect(screen.getByText('权限中心')).toBeInTheDocument();
     expect(screen.getByText('安全审计')).toBeInTheDocument();
   });
 

@@ -193,21 +193,13 @@ export async function main() {
   // 查询根部门（顶层节点，parent_id IS NULL）
   const rootDept = await db.select({ id: schema.departments.id, name: schema.departments.name })
     .from(schema.departments)
-    .where(eq(schema.departments.parentId, ''))
+    .where(isNull(schema.departments.parentId))
     .limit(1);
 
-  // 如果查不到 parent_id='' 的根部门，尝试查询 parent_id IS NULL
   if (rootDept.length === 0) {
-    const nullParentDept = await db.select({ id: schema.departments.id, name: schema.departments.name })
-      .from(schema.departments)
-      .where(isNull(schema.departments.parentId))
-      .limit(1);
-    if (nullParentDept.length === 0) {
-      console.error('❌ 未找到任何部门。请先运行主 seed 脚本创建部门。');
-      await client.end();
-      return;
-    }
-    rootDept.push(nullParentDept[0]!);
+    console.error('❌ 未找到任何部门。请先运行主 seed 脚本创建部门。');
+    await client.end();
+    return;
   }
 
   const rootDeptId = rootDept[0]!.id;

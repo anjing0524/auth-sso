@@ -73,6 +73,10 @@ export default function DashboardLayout({
 
   return (
     <SidebarProvider defaultOpen={true}>
+      {/* WCAG 2.1 AA: skip-link — 键盘用户快速跳过导航 */}
+      <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:rounded-lg focus:bg-primary focus:text-primary-foreground focus:px-4 focus:py-2 focus:text-sm focus:font-bold focus:shadow-lg">
+        跳转到主内容
+      </a>
       <AppSidebar user={user} dynamicMenus={menus} />
       <CommandPalette menus={menus} />
       <SidebarInset>
@@ -103,7 +107,7 @@ export default function DashboardLayout({
             </kbd>
           </div>
         </header>
-        <main className="flex-1 overflow-auto bg-slate-50/50 dark:bg-transparent p-4 lg:p-6">
+        <main id="main-content" className="flex-1 overflow-auto bg-muted/30 p-4 lg:p-6">
           <div className="space-y-6 animate-in fade-in duration-500">
             {children}
           </div>

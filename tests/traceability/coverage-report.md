@@ -1,9 +1,9 @@
 # Requirements Coverage Report
 
-Generated: 2026-06-26T02:47:45.717Z
+Generated: 2026-06-26T08:42:32.251Z
 
 **Requirements:** 66/70 covered (**94.3%**)
-**Architecture Constraints:** 17/20 covered
+**Architecture Constraints:** 17/27 covered
 
 ---
 
