@@ -45,6 +45,8 @@ interface PermissionRow {
 interface Props {
   permissions: PermissionRow[];
   activeTab: string;
+  /** URL 同步的搜索关键词初始值 */
+  initialKeyword?: string;
 }
 
 const TYPE_ICONS: Record<string, React.ReactNode> = {
@@ -56,9 +58,9 @@ const TYPE_ICONS: Record<string, React.ReactNode> = {
 
 const TABS = ['ALL', 'DIRECTORY', 'PAGE', 'API', 'DATA'];
 
-export default function PermissionsTable({ permissions, activeTab }: Props) {
+export default function PermissionsTable({ permissions, activeTab, initialKeyword = '' }: Props) {
   const router = useRouter();
-  const [keyword, setKeyword] = useState('');
+  const [keyword, setKeyword] = useState(initialKeyword);
   const [isPending, startTransition] = useTransition();
 
   // 弹窗
@@ -73,6 +75,15 @@ export default function PermissionsTable({ permissions, activeTab }: Props) {
     startTransition(() => {
       router.push(`/permissions${tab !== 'ALL' ? `?type=${tab}` : ''}`);
     });
+  };
+
+  /** 搜索关键词同步到 URL searchParams（遵循 RolesTable 模式） */
+  const handleSearch = (value: string) => {
+    setKeyword(value);
+    const params = new URLSearchParams(window.location.search);
+    if (value) params.set('keyword', value);
+    else params.delete('keyword');
+    startTransition(() => router.push(`/permissions${params.toString() ? `?${params.toString()}` : ''}`));
   };
 
   const openEdit = (p: PermissionRow) => {
@@ -131,7 +142,7 @@ export default function PermissionsTable({ permissions, activeTab }: Props) {
         <div className="flex gap-3 items-center">
           <div className="relative w-64">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground opacity-50" />
-            <Input placeholder="搜索权限名称或编码..." className="pl-9 h-9 rounded-lg text-sm" value={keyword} onChange={e => setKeyword(e.target.value)} />
+            <Input placeholder="搜索权限名称或编码..." className="pl-9 h-9 rounded-lg text-sm" value={keyword} onChange={e => handleSearch(e.target.value)} />
           </div>
           <Button size="sm" className="rounded-lg" onClick={() => { setForm({ name: '', code: '', type: 'API', resource: '', action: '' }); setIsAddOpen(true); }}>
             <Plus className="mr-1.5 h-3.5 w-3.5" /> 新增

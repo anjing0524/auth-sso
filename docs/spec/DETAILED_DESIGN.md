@@ -20,10 +20,10 @@
    - [withPermission API Route 守卫](#25-withpermission-api-route-守卫)
    - [权限检查逻辑](#26-权限检查逻辑)
 3. [数据范围过滤详细设计](#3-数据范围过滤详细设计)
-   - [DataScope 类型与 SQL 映射](#31-datascope-类型与-sql-映射)
+   - [数据范围模型](#31-数据范围模型)
    - [getUserRoleDeptIds 函数](#32-getuserroledeptids-函数)
    - [使用模式](#33-使用模式)
-   - [多角色 DataScope 优先级](#34-多角色-datascope-优先级)
+   - [子树展开实现](#34-子树展开实现)
 4. [缓存策略详细设计](#4-缓存策略详细设计)
    - [Next.js 16 缓存组件](#41-nextjs-16-缓存组件)
    - [权限上下文缓存](#42-权限上下文缓存)
@@ -83,8 +83,9 @@ Portal 运行 OAuth 2.1 Authorization Code + PKCE 流程。Portal 既是 BFF 也
      │                    │  6. validateLogin     │
      │                    │     Credentials()     │
      │                    │  7. verifyPassword()  │
-     │                    │     (bcrypt)          │
-     │                    │  8. signLoginSession  │
+     │                    │     (bcrypt校验并处理5次失败锁定) │
+     │                    │  8. 记录 login_log      │
+     │                    │  9. signLoginSession  │
      │                    │     (ES256, 5min)     │
      │                    │                      │
      │  9. Set-Cookie:    │                      │
@@ -129,7 +130,7 @@ Portal 运行 OAuth 2.1 Authorization Code + PKCE 流程。Portal 既是 BFF 也
      │                    │                      │
      │ 22. Set-Cookie:    │                      │
      │     portal_jwt_token (1h)                 │
-     │     portal_refresh_token (7d)             │
+     │     portal_refresh_token (path=/, 7d)     │
      │     302 → /dashboard                      │
      │◄───────────────────┤                      │
 ```
@@ -137,7 +138,7 @@ Portal 运行 OAuth 2.1 Authorization Code + PKCE 流程。Portal 既是 BFF 也
 **关键实现细节**:
 
 - **步骤 1-2**: `apps/portal/src/proxy.ts` — `proxy()` 函数检测 `portal_jwt_token` Cookie 是否存在。仅做存在性检查，不做 JWT 验签。路径白名单放行 `/login`、`/oauth`、`/api/auth/`、`/_next/`、静态资源等。
-- **步骤 3-8**: `apps/portal/src/app/api/auth/login/route.ts` — Controller 层。Zod 校验输入 → 查询用户 → `validateLoginCredentials()`（纯函数检查 DELETED/DISABLED/LOCKED 状态） → `verifyPassword()`（bcryptjs） → `signLoginSession()`（签发 Login Session JWT，5min TTL）。
+- **步骤 3-9**: `apps/portal/src/app/api/auth/login/route.ts` — Controller 层。Zod 校验输入 → 查询用户 → `validateLoginCredentials()`（纯函数检查 DELETED/DISABLED/LOCKED 状态） → `verifyPassword()`（bcryptjs，失败处理 5 次自动锁定逻辑） → 记录审计表 `login_logs` → `signLoginSession()`（签发 Login Session JWT，5min TTL）。
 - **步骤 10-17**: `apps/portal/src/app/api/auth/oauth2/authorize/route.ts` — `buildLoginRedirect()` 将 OAuth 参数（client_id, redirect_uri, code_challenge, state, nonce）编码到 `/login` URL，login form 在凭证验证成功后读取这些参数重新发起 authorize 请求。
 - **步骤 14**: `apps/portal/src/app/api/auth/oauth2/authorize/data.ts` — `getUserWithRoleClients()` 使用 Drizzle 关系查询，单次 DB 往返完成 4 层嵌套 JOIN（users → userRoles → roles → roleClients）。
 - **步骤 15**: `apps/portal/src/domain/auth/oauth-authorize.ts` — `validateAuthorization()` 纯函数：用户状态检查 → 有效角色筛选 → Client 绑定检查。Admin 角色（SUPER_ADMIN/ADMIN）绕过 Client 绑定检查。
@@ -204,6 +205,8 @@ Access Token（1h）过期前 5 分钟，前端定时器触发静默刷新。
      │                        │  b. 撤销旧RT        │
      │                        │  c. 签发新RT+AT     │
      │                        │  d. 重写权限缓存    │
+     │                        │  e. 记录 login_log  │
+     │                        │     (TOKEN_REFRESH) │
      │                        │                     │
      │ 4. Set-Cookie:         │                     │
      │    portal_jwt_token(新) │                     │
@@ -215,8 +218,8 @@ Access Token（1h）过期前 5 分钟，前端定时器触发静默刷新。
 
 - **安全**: `rotateRefreshToken()` 执行 **Refresh Token Rotation**。每次刷新都签发新 RT，旧 RT 立即标记 `revoked`。
 - **防重放**: 已撤销的 RT 被用于刷新时，触发**级联撤销**：该用户在该 Client 下的**所有** Refresh Token 均被标记 `revoked`。这防止了 RT 泄露后的重放攻击。
-- **Cookie 路径隔离**: `portal_refresh_token` 的 Cookie path 设为 `/api/auth/refresh`，限制其仅在该 API 调用时发送。
-- **失败处理**: RT 无效或过期时，清除所有 auth Cookie（`maxAge=0`），浏览器重定向到登录页。
+- **Cookie 路径隔离**: `portal_refresh_token` 的 Cookie path 设为 `/`，以便 Gateway 在全路径读取。Gateway 转发给 Portal 的非 /refresh 请求时会剥离此 Cookie，确保其仅在 Gateway 和 Portal 之间流动时对 Portal 只在 /refresh 端点可见。
+- **失败处理**: RT 无效或过期时，记录 `login_log` (TOKEN_REFRESH_FAILED)，并清除所有 auth Cookie（`maxAge=0`），浏览器重定向到登录页。
 
 ### 1.4 登出流程
 
@@ -234,7 +237,9 @@ POST /api/auth/logout
   ├─ 4. 按用户ID撤销全部Refresh Token
   │     (防御纵深，杜绝遗漏)
   │
-  └─ 5. 清除三个Cookie:
+  ├─ 5. 记录 login_log (LOGOUT)
+  │
+  └─ 6. 清除三个Cookie:
        portal_jwt_token
        login_session
        portal_refresh_token
@@ -246,6 +251,7 @@ POST /api/auth/logout
 2. **Login Session Token jti**: 同样写入 Redis 黑名单，防止竞态条件下被重放。
 3. **Refresh Token 撤销**: DB 中对应行标记 `revoked = new Date()`。
 4. **按用户 ID 全量撤销**: `revoke AllRefreshTokens(userId)` 确保无遗漏。同时 `revokeUserAccessByUserId(userId)` 通过 Redis Hash `portal:user_jti:{userId}` 读取该用户所有活跃 JTI，逐一写入黑名单。
+5. **审计日志**: 写入 `login_logs` 表，`event_type = LOGOUT`。
 
 **Cookie 清除**: 即使撤销操作失败（Redis/DB 异常），三个 Cookie 依然设置为 `maxAge=0`，保证客户端状态一致性。这是**失败安全（fail-secure）**设计。
 
@@ -767,7 +773,7 @@ SKIP_PREFIXES: /_next, /favicon, /images, /fonts
 | Cookie | Path | HttpOnly | Secure | SameSite | 用途 |
 |--------|------|----------|--------|----------|------|
 | `portal_jwt_token` | `/` | true | 生产环境 | Lax | 认证主 Cookie |
-| `portal_refresh_token` | `/api/auth/refresh` | true | 生产环境 | Lax | 静默续签 |
+| `portal_refresh_token` | `/` | true | 生产环境 | Lax | 静默续签（path=`/` 以便 Gateway 在全路径读取；Gateway 在转发非 /refresh 请求时会剥离此 Cookie） |
 | `login_session` | `/api/auth/oauth2/authorize` | true | 生产环境 | Lax | 登录临时凭证 |
 
 **Secure 降级**: 本地开发（`localhost`/`127.0.0.1`）时 `secure` 设为 `false`，允许 HTTP 直连。

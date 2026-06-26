@@ -1,11 +1,12 @@
 'use client';
 
 /**
- * 审计日志页错误边界 (Error Boundary)
+ * Dashboard 错误边界 (Error Boundary)
  *
- * 捕获审计日志数据获取过程中的未处理异常。
+ * 捕获 Dashboard 数据获取过程中的未处理异常。
+ * 遵循 audit-logs/error.tsx 模式。
  *
- * @module app/(dashboard)/audit-logs/error
+ * @module app/(dashboard)/dashboard/error
  */
 import { useEffect } from 'react';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
@@ -17,9 +18,9 @@ interface ErrorProps {
   reset: () => void;
 }
 
-export default function AuditLogsError({ error, reset }: ErrorProps) {
+export default function DashboardError({ error, reset }: ErrorProps) {
   useEffect(() => {
-    console.error('[AuditLogs Error Boundary]', error);
+    console.error('[Dashboard Error Boundary]', error);
   }, [error]);
 
   return (
@@ -29,11 +30,11 @@ export default function AuditLogsError({ error, reset }: ErrorProps) {
           <div className="mx-auto p-3 bg-warning/10 rounded-2xl w-fit mb-4">
             <AlertTriangle className="h-8 w-8 text-warning" />
           </div>
-          <CardTitle className="text-xl font-black">审计日志加载失败</CardTitle>
+          <CardTitle className="text-xl font-black">工作台加载失败</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4 pb-8">
           <p className="text-sm text-muted-foreground">
-            获取审计日志时遇到问题，请稍后重试。
+            获取工作台数据时遇到问题，请稍后重试。
           </p>
           {error.digest && (
             <code className="text-[10px] font-mono bg-muted px-2 py-1 rounded text-muted-foreground">

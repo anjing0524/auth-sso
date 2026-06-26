@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.1.1] - 2026-06-26
+
+### Fixed
+- **CreateUserDialog 硬编码颜色修复**：8 处 `text-slate-*`/`bg-slate-50` → oklch design tokens（`text-foreground`/`text-muted-foreground`/`bg-muted`），暗黑模式兼容
+- **Dashboard hex 颜色泄漏修复**：4 处 `hover:bg-[#E6F0FF]` → `hover:bg-primary-subtle`、图标硬编码色 → `text-primary`、status badge 增加暗黑模式支持、audit table `bg-slate-*` → `bg-muted`
+- **DataTable 表头 token 泄漏**：`bg-slate-50/30` → `bg-muted/50`
+- **UserTable 圆角残值**：`rounded-b-[1.5rem]` → `rounded-b-xl`
+- **审计日志 error.tsx token 泄漏**：`bg-amber-50`/`text-amber-500` → `bg-warning/10`/`text-warning`
+- **PermissionsTable 搜索 URL 同步**：客户端过滤 → URL searchParams 同步（对齐 RolesTable 模式），搜索状态支持刷新恢复
+
+### Added
+- **5 个 Dashboard 页面 error boundaries**：Dashboard/Roles/Permissions/Users/Clients 均添加 error.tsx，防止数据获取失败白屏
+- **4 个组件测试文件**：EmptyState (7 用例)、DataTable (5 用例)、CommandPalette (3 用例)、AuditLogs (3 用例)，全部通过
+
+### Changed
+- **DESIGN.md v2.2**：颜色体系全量迁移至 oklch，hex 色值表替换为 oklch 值 + Token 引用，圆角系统扩增 `rounded-2xl` (16px)
+- **autoplan 审查报告**：plan 文件更新 CEO+Design+Eng 三轮审查结果
+
 ## [1.1.1.0] - 2026-06-25
 
 ### Added

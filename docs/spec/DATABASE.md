@@ -256,6 +256,8 @@ CHECK (
 - `idx_refresh_tokens_client`：`client_id`
 - `idx_refresh_tokens_user`：`user_id`
 
+> **⚠️ 技术债务 — token_hash 列命名歧义**：当前代码实现中，`token_hash` 列存储的是明文 RT（`issueRefreshToken` 直接写入原始 token 字符串）而非 SHA-256 哈希。列名与实际行为不符。**已确认技术决策**：保持列名 `token_hash` 不变（保持向后兼容性），将实现层改为存储真正的 `hashToken(token)` 在下一次安全加固迭代中落地。当前功能正常（明文匹配明文），但安全等级待提升。
+
 ### 4.5 用户授权记录表（`consents`）— 🗑️ 已移除
 
 > **v3.x 变更**：`consents` 表已从当前 Schema 中移除，用户授权逻辑已简化。

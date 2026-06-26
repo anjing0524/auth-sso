@@ -264,7 +264,7 @@ export default function UserTable({ users, pagination, filters }: UserTableProps
     />
 
     {/* 统一分页器 UI */}
-    <div className="flex items-center justify-between px-6 py-4 bg-slate-50/50 border-t mt-4 rounded-b-[1.5rem]">
+    <div className="flex items-center justify-between px-6 py-4 bg-muted/50 border-t mt-4 rounded-b-xl">
       <p className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">
         TOTAL RECORDS: <span className="text-slate-900">{pagination.total}</span>
       </p>

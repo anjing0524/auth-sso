@@ -11,8 +11,9 @@
 > |------|-----|
 > | 基线编号 | BL-2026-001 |
 > | 基线建立日期 | 2026-06-24 |
-> | 需求总数 | 101 条（详见 REQUIREMENTS_MATRIX.md） |
-> | 优先级分布 | P0 关键 42 条 / P1 重要 38 条 / P2 一般 21 条 |
+> | 需求总数 | 70 条（仅含产品功能需求，详见 REQUIREMENTS_MATRIX.md） |
+> | 优先级分布 | P0 关键 28 条 / P1 重要 31 条 / P2 一般 11 条 |
+> | 统计口径 | 仅统计产品功能需求（WHAT）；架构实现约束（DC-xxx）见 ARCHITECTURE_CONSTRAINTS.md（不包含在本统计中） |
 > | 变更控制 | 所有需求变更须经 CCB（变更控制委员会）审批 |
 > | 追溯粒度 | 需求 → 设计 → 实现 → 测试（四层追溯） |
 > | 适用标准 | CMMI V3.0 (2023), OAuth 2.1 (RFC 6749), OIDC (OpenID Connect Core 1.0) |
@@ -74,14 +75,14 @@
 |--------|---------|--------|---------|
 | FR-AUTH-01 | 用户通过邮箱/用户名和密码登录 | P0 关键 | H-AUTH-001~002, DC-AUTH-001 |
 | FR-AUTH-02 | PKCE S256 强制的 OAuth 2.1 授权码流程 | P0 关键 | H-AUTH-003~004, H-AUTH-013 |
-| FR-AUTH-03 | Portal 登录页展示与未认证重定向 | P0 关键 | H-AUTH-001, H-AUTH-001, H-FLOW-004 |
+| FR-AUTH-03 | Portal 登录页展示与未认证重定向 | P0 关键 | H-AUTH-001, H-FLOW-004 |
 | FR-AUTH-04 | ES256 JWT Cookie 签发与验证 | P0 关键 | H-AUTH-005~006, H-SESS-001~003 |
-| FR-AUTH-05 | Refresh Token 轮换续签 | P0 关键 | H-SESS-010~012, H-SESS-020~022 |
-| FR-AUTH-06 | jti 紧急撤销（Redis 黑名单） | P0 关键 | H-SESS-030 |
-| FR-AUTH-07 | SSO 单点登录/登出联动 | P0 关键 | H-SSO-001~003, H-SSO-010~011 |
-| FR-AUTH-08 | 登出全链路清理 | P0 关键 | H-SSO-020~022, H-FLOW-002 |
-| FR-AUTH-09 | State 参数生成与验证 | P0 关键 | H-AUTH-010~012 |
-| FR-AUTH-10 | Nonce 生成与验证 | P0 关键 | H-AUTH-014 |
+| FR-AUTH-05 | Refresh Token 轮换续签 | P0 关键 | H-SESS-003, H-SESS-005 |
+| FR-AUTH-06 | jti 紧急撤销（Redis 黑名单） | P0 关键 | H-SESS-006 |
+| FR-AUTH-07 | SSO 单点登录/登出联动 | P0 关键 | H-SSO-001~004 |
+| FR-AUTH-08 | 登出全链路清理 | P0 关键 | H-SSO-004, H-FLOW-002 |
+| FR-AUTH-09 | State 参数生成与验证 | P0 关键 | H-AUTH-010, H-AUTH-013 |
+| FR-AUTH-10 | Nonce 生成与验证 | P0 关键 | H-AUTH-012 |
 | FR-AUTH-11 | OIDC Discovery / JWKS / UserInfo / Introspection 端点 | P1 重要 | US-OIDC-01~04 |
 | FR-AUTH-12 | 密码管理和重置 | P1 重要 | B-USR-ST |
 | FR-AUTH-13 | Token Revocation 端点 | P0 关键 | US-OIDC-09 |
@@ -162,6 +163,7 @@
 | FR-LOG-03 | 登录日志列表（分页/筛选） | P1 重要 | I-LOG-001 |
 | FR-LOG-04 | 审计/登录日志导出（CSV） | P2 一般 | US-AUDIT-02, US-AUDIT-04 |
 
+
 ### 4.3 应用管理 (Application Management)
 
 | 需求ID | 功能描述 | 优先级 | 关联矩阵 |
@@ -210,7 +212,7 @@
 | NFR-SEC-03 | Token 安全 | 无敏感令牌存储在前端浏览器存储中 | 代码审查 | P0 关键 |
 | NFR-SEC-04 | JWT 签名算法 | ES256 非对称签名，密钥 90 天轮换 | 安全审计 | P0 关键 |
 | NFR-SEC-05 | 密码策略 | 最小 8 位，含大小写字母和数字 | 自动化测试 | P1 重要 |
-| NFR-SEC-06 | 暴力破解防护 | 连续 5 次失败 → 账户锁定 | 自动化测试 | P0 关键 |
+| NFR-SEC-06 | 暴力破解防护 | 连续 5 次失败 → 账户锁定（15分钟自动解锁或管理员手工解锁） | 自动化测试 | P0 关键 |
 | NFR-SEC-07 | 审计追溯 | 所有关键操作（登录、权限变更）写入审计日志 | 代码审查 | P1 重要 |
 | NFR-SEC-08 | CSRF 防护 | State 参数验证，OAuth 2.1 强制 | 安全审计 | P0 关键 |
 | NFR-SEC-09 | 授权码一次性使用 | 同一授权码二次提交返回 invalid_grant | 自动化测试 | P0 关键 |
@@ -239,7 +241,7 @@
 |--------|----------|-----------|
 | **DMR** (Defining & Managing Requirements) | Level 3 | §3 用户角色 + §4 功能需求 102 条 + §5 用户旅程 + USER_STORIES.md 80+ 故事 + 需求基线 BL-2026-001 + CCB 变更控制 + 7 维属性矩阵（优先级/验证方法/风险/来源/验收标准） |
 | **DRS** (Designing & Realizing the Solution) | Level 3 | ARCHITECTURE.md（管理链路 + 11 层认证授权全链路）+ DETAILED_DESIGN.md（函数签名/时序流程）+ DATABASE.md（18 张表/外键/枚举）+ ARCHITECTURE_CONSTRAINTS.md（14 条规则 + 20 条 DC-* 约束） |
-| **ENQ** (Ensuring Quality) | Level 3 | 分层测试体系（单元/API/E2E）+ 27 文件 255 测试 + `@req` 注解自动追溯性报告 + API.md 端点规范 + 代码审查红线清单 |
+| **ENQ** (Ensuring Quality) | Level 3 | 分层测试体系（单元/API/E2E）+ 27 文件 255 测试 + `@req` 注解自动追溯性报告 + 源码 Route Handler JSDoc 注释为 API 规范实生 + 代码审查红线清单 |
 
 ### 8.2 成熟度 Level 4（量化管理级）
 

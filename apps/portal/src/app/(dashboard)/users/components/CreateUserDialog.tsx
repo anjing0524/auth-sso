@@ -91,15 +91,15 @@ export default function CreateUserDialog({ departments }: CreateUserDialogProps)
         <DialogContent className="sm:max-w-[500px] rounded-2xl">
           <form action={formAction}>
             <DialogHeader className="pb-6 border-b">
-              <DialogTitle className="text-2xl font-black text-slate-900">创建新用户</DialogTitle>
-              <DialogDescription className="text-slate-500 font-medium">
+              <DialogTitle className="text-2xl font-black text-foreground">创建新用户</DialogTitle>
+              <DialogDescription className="text-muted-foreground font-medium">
                 输入用户的基本信息以创建新的系统账号。
               </DialogDescription>
             </DialogHeader>
 
             <div className="grid gap-6 py-8">
               <div className="space-y-2">
-                <Label htmlFor="name" className="font-bold text-slate-700">显示名称</Label>
+                <Label htmlFor="name" className="font-bold text-foreground">显示名称</Label>
                 <Input
                   id="name"
                   name="name"
@@ -109,7 +109,7 @@ export default function CreateUserDialog({ departments }: CreateUserDialogProps)
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="username" className="font-bold text-slate-700">登录账号 (Username)</Label>
+                <Label htmlFor="username" className="font-bold text-foreground">登录账号 (Username)</Label>
                 <Input
                   id="username"
                   name="username"
@@ -119,7 +119,7 @@ export default function CreateUserDialog({ departments }: CreateUserDialogProps)
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="email" className="font-bold text-slate-700">电子邮箱</Label>
+                <Label htmlFor="email" className="font-bold text-foreground">电子邮箱</Label>
                 <Input
                   id="email"
                   name="email"
@@ -130,7 +130,7 @@ export default function CreateUserDialog({ departments }: CreateUserDialogProps)
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="password" className="font-bold text-slate-700">初始密码</Label>
+                <Label htmlFor="password" className="font-bold text-foreground">初始密码</Label>
                 <Input
                   id="password"
                   name="password"
@@ -141,7 +141,7 @@ export default function CreateUserDialog({ departments }: CreateUserDialogProps)
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="deptId" className="font-bold text-slate-700">所属部门</Label>
+                <Label htmlFor="deptId" className="font-bold text-foreground">所属部门</Label>
                 <Select value={deptId} onValueChange={setDeptId}>
                   <SelectTrigger className="h-11 rounded-xl">
                     <SelectValue placeholder="选择用户所在部门（可选）" />
@@ -156,7 +156,7 @@ export default function CreateUserDialog({ departments }: CreateUserDialogProps)
               </div>
             </div>
 
-            <DialogFooter className="border-t bg-slate-50/50 flex gap-3 pt-4">
+            <DialogFooter className="border-t bg-muted/50 flex gap-3 pt-4">
               <Button
                 type="button"
                 variant="ghost"

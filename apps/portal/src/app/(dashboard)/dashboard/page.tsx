@@ -87,7 +87,7 @@ export default async function DashboardPage() {
 
       {/* 2. Key Metrics - Shadcn Block-01 Grid */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card className="rounded-xl border-none shadow-sm ring-1 ring-border/50 hover:bg-[#E6F0FF] transition-all duration-200 ease-out">
+        <Card className="rounded-xl border-none shadow-sm ring-1 ring-border/50 hover:bg-primary-subtle transition-all duration-200 ease-out">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground">用户总数</CardTitle>
             <Users className="h-4 w-4 text-primary opacity-70" />
@@ -97,30 +97,30 @@ export default async function DashboardPage() {
             <p className="text-[10px] text-muted-foreground font-medium mt-1">活跃用户</p>
           </CardContent>
         </Card>
-        <Card className="rounded-xl border-none shadow-sm ring-1 ring-border/50 hover:bg-[#E6F0FF] transition-all duration-200 ease-out">
+        <Card className="rounded-xl border-none shadow-sm ring-1 ring-border/50 hover:bg-primary-subtle transition-all duration-200 ease-out">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground">活跃角色</CardTitle>
-            <ShieldCheck className="h-4 w-4 text-purple-500 opacity-70" />
+            <ShieldCheck className="h-4 w-4 text-primary opacity-70" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-black">{stats.roles}</div>
             <p className="text-[10px] text-muted-foreground font-medium mt-1">已配置角色</p>
           </CardContent>
         </Card>
-        <Card className="rounded-xl border-none shadow-sm ring-1 ring-border/50 hover:bg-[#E6F0FF] transition-all duration-200 ease-out">
+        <Card className="rounded-xl border-none shadow-sm ring-1 ring-border/50 hover:bg-primary-subtle transition-all duration-200 ease-out">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground">受控应用</CardTitle>
-            <AppWindow className="h-4 w-4 text-blue-500 opacity-70" />
+            <AppWindow className="h-4 w-4 text-primary opacity-70" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-black">{stats.clients}</div>
             <p className="text-[10px] text-muted-foreground font-medium mt-1">已注册应用</p>
           </CardContent>
         </Card>
-        <Card className="rounded-xl border-none shadow-sm ring-1 ring-border/50 hover:bg-[#E6F0FF] transition-all duration-200 ease-out">
+        <Card className="rounded-xl border-none shadow-sm ring-1 ring-border/50 hover:bg-primary-subtle transition-all duration-200 ease-out">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground">认证状态</CardTitle>
-            <Activity className="h-4 w-4 text-green-500" />
+            <Activity className="h-4 w-4 text-primary opacity-70" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-black text-green-600">Stable</div>
@@ -152,7 +152,7 @@ export default async function DashboardPage() {
           </CardHeader>
           <CardContent className="px-0 flex-1">
             <Table>
-              <TableHeader className="bg-slate-50/50">
+              <TableHeader className="bg-muted/50">
                 <TableRow className="hover:bg-transparent border-none">
                   <TableHead className="pl-8 w-[120px] text-[10px] font-black uppercase">操作用户</TableHead>
                   <TableHead className="text-[10px] font-black uppercase">行为内容</TableHead>
@@ -165,11 +165,11 @@ export default async function DashboardPage() {
                   <TableRow>
                     <TableCell colSpan={4} className="h-64 p-0 relative">
                       <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/60 backdrop-blur-[2px] z-10 space-y-3">
-                        <div className="bg-slate-100 p-3 rounded-full">
-                          <History className="h-6 w-6 text-slate-400" />
+                        <div className="bg-muted p-3 rounded-full">
+                          <History className="h-6 w-6 text-muted-foreground" />
                         </div>
-                        <p className="text-sm font-medium text-slate-500">暂无活动记录</p>
-                        <p className="text-xs text-slate-400">系统的最新安全审计日志将在这里显示</p>
+                        <p className="text-sm font-medium text-muted-foreground">暂无活动记录</p>
+                        <p className="text-xs text-muted-foreground/70">系统的最新安全审计日志将在这里显示</p>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -179,11 +179,11 @@ export default async function DashboardPage() {
                     const timeStr = `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
 
                     return (
-                      <TableRow key={log.id} className="group hover:bg-slate-50/50 transition-colors border-none">
+                      <TableRow key={log.id} className="group hover:bg-muted/50 transition-colors border-none">
                         <TableCell className="pl-8 font-bold text-sm">{log.username || 'Unknown'}</TableCell>
-                        <TableCell className="text-xs font-medium text-slate-500">{log.operation}</TableCell>
+                        <TableCell className="text-xs font-medium text-muted-foreground">{log.operation}</TableCell>
                         <TableCell className="text-center">
-                           <Badge variant={log.status === 200 ? 'default' : 'destructive'} className={`rounded-md px-2 py-0 h-5 text-[10px] ${log.status === 200 ? 'bg-green-100 text-green-700 hover:bg-green-100' : ''}`}>
+                           <Badge variant={log.status === 200 ? 'default' : 'destructive'} className={`rounded-md px-2 py-0 h-5 text-[10px] ${log.status === 200 ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/30' : ''}`}>
                              {log.status === 200 ? 'Success' : 'Fail'}
                            </Badge>
                         </TableCell>
@@ -201,7 +201,7 @@ export default async function DashboardPage() {
 
         {/* Right: Quick Actions & Status */}
         <div className="lg:col-span-3 space-y-4">
-           <Card className="rounded-2xl border-none shadow-sm ring-1 ring-border/50 p-2 overflow-hidden bg-slate-50/30">
+           <Card className="rounded-2xl border-none shadow-sm ring-1 ring-border/50 p-2 overflow-hidden bg-muted/50">
               <CardHeader className="pb-4">
                  <CardTitle className="text-sm font-bold uppercase tracking-wider text-muted-foreground">快捷功能直达</CardTitle>
               </CardHeader>

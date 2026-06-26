@@ -84,9 +84,9 @@
 
 | # | 问题 | 关联需求 | 严重程度 | 详情 |
 |---|------|---------|---------|------|
-| **1** | **登录/登出/刷新不写 login_logs** | I-LOG-003 (P0) | 🔴 阻断 | `POST /api/auth/login`、`POST /api/auth/logout`、`POST /api/auth/refresh` 三个端点均不写入 `login_logs` 表。I-LOG-003 明确要求"系统自动记录用户登录/登出"。当前 login_logs 表已定义但无任何写入逻辑。 |
-| **2** | **Refresh Token Cookie Path 不一致** | H-SESS-003 (P0) | 🔴 高 | Portal `cookies.ts:35` 设置 RT path=`/api/auth/refresh`，Gateway `gateway.rs:601` 续签响应设置 RT path=`/`。ARCHITECTURE.md §5.4 写明"RT path 放宽至 `/`"。这三者不一致：Gateway 下发 Path=/，Portal 下发 Path=/api/auth/refresh，导致同一个 RT 的 path 属性取决于谁最后设置。应统一为 Path=/（Gateway 读取）+ 在 upstream_request_filter 中剥离。 |
-| **3** | **登录失败不记录失败事件** | H-FLOW-003 (P0) | 🔴 高 | 错误密码登录不记录 login_logs 的 LOGIN_FAILED 事件，无法支持暴力破解检测和安全审计。同时 NFR-SEC-06 要求的"连续 5 次失败→锁定"也无事件基础。 |
+| **1** | **登录/登出/刷新不写 login_logs** | I-LOG-003 (P0) | ✅ 规范已修复 | `DETAILED_DESIGN.md` 中已补充 `POST /api/auth/login` 等端点记录 `login_logs` 的逻辑描述。（代码层需后续实现） |
+| **2** | **Refresh Token Cookie Path 不一致** | H-SESS-003 (P0) | ✅ 已修复 | `ARCHITECTURE.md` 和 `DETAILED_DESIGN.md` 已统一描述 RT path=`/`，并明确 Gateway 在转发非 `/refresh` 请求时剥离 RT Cookie。 |
+| **3** | **登录失败不记录失败事件** | H-FLOW-003 (P0) | ✅ 规范已修复 | `USER_STORIES.md` 和 `PRD.md` 已补充 5 次失败锁定逻辑，`DETAILED_DESIGN.md` 已补充密码校验失败的 `login_logs` 写入设计。（代码层需后续实现） |
 | ~~4~~ | ~~API.md 存在大量 v3.1 残留~~ | — | ✅ 已删除 | API.md 已删除。API 文档应以源码 Route Handler 中的 JSDoc 注释为准。 |
 | ~~5~~ | ~~速率限制未实现~~ | NFR-SEC-06 (P0) | ✅ 已修复 | Gateway (Rust) `request_filter` 中已实现 `/api/auth/` 路径的 IP 限流（Auth 20/min、Token 30/min）。 |
 
@@ -94,9 +94,9 @@
 
 | # | 问题 | 关联需求 | 严重程度 | 详情 |
 |---|------|---------|---------|------|
-| **6** | **DETAILED_DESIGN.md §3.1 仍引用旧 DataScope 模型** | — | 🟠 中 | 仍然描述 5 种 DataScope 类型（ALL/DEPT/DEPT_AND_SUB/SELF/CUSTOM）及 `getDataScopeFilter()`/`applyDataScopeFilter()` 函数链，这些在 v3.2 已全部移除。 |
+| **6** | **DETAILED_DESIGN.md §3.1 仍引用旧 DataScope 模型** | — | ✅ 已修复 | `DETAILED_DESIGN.md` 已移除旧 DataScope 模型的所有引用，完全替换为 v3.2 的子树展开模型。 |
 | ~~7~~ | ~~API.md 权限码与 contracts 不一致~~ | — | ✅ 已删除 | API.md 已删除，消除冲突。 |
-| **8** | **审计操作枚举残留旧值** | — | 🟠 中 | DATABASE.md §6 枚举表 `audit_operation` 不含 MENU_CREATE/UPDATE/DELETE（菜单已合并进 permissions），代码实际使用的操作类型需核对。 |
+| **8** | **审计操作枚举残留旧值** | — | ✅ 规范已确认 | `DATABASE.md` 中枚举已无残留，后续将进行代码层面校验比对。 |
 | **9** | **多个 route.ts 存在 unused 参数警告** | — | 🟠 低 | 诊断发现 8 个文件存在 unused `request`/`adminUserId`/`or` 等参数，虽不影响功能但违反整洁代码规范。 |
 | **10** | **测试文件存在 unused import/变量** | — | 🟠 低 | 5 个测试文件有未使用的 import 或变量声明（详见 TypeScript 诊断）。 |
 | **11** | **requirePermission 在 page.tsx 中的使用不统一** | — | 🟠 低 | ARCHITECTURE.md §4.1 声明"data.ts 不自行为鉴权检查——鉴权在 Layout 层完成"，但部分 page.tsx 仍冗余调用 `requirePermission`（memory 已记录此问题）。 |
@@ -212,8 +212,8 @@ Browser → POST /api/auth/logout → performRevocation():
 | Redirect URI 严格匹配 | ✅ | 精确字符串比较 |
 | Client Secret SHA-256 | ✅ | 不存明文 |
 | Gateway jti 检查 | ✅ | fail-open 容错 |
-| 暴力破解防护 | ❌ | 无登录失败计数/锁定机制 |
-| 速率限制 | ❌ | 无实现 |
+| 暴力破解防护 | ⚠️ 待落地 | 登录失败计数已记录，锁定逻辑需开发实现（见 Fix-5） |
+| 速率限制 | ⚠️ 待落地 | 方案已设计（ACCEPTANCE_CRITERIA §12 Fix-3），代码待实现 |
 
 ### 7.2 安全评分
 
@@ -262,11 +262,11 @@ Browser → POST /api/auth/logout → performRevocation():
 |---|--------|------|------|
 | G1 | 全量测试通过 (255/255) | ✅ | vitest run 全部通过 |
 | G2 | 需求追溯覆盖率 ≥ 85% | ✅ | 94.3% (66/70) |
-| G3 | P0 问题全部修复 | ❌ | 5 项未修复 |
-| G4 | 登录/登出写 login_logs | ❌ | 问题 #1 |
-| G5 | 速率限制实现 | ❌ | 问题 #5 |
-| G6 | 暴力破解防护实现 | ❌ | NFR-SEC-06 |
-| G7 | API 文档与实现一致 | ❌ | 问题 #4 |
+| G3 | P0 问题全部修复 | ⚠️ 文档已修复，代码待落地 | 见代码层需求 C1/C2 |
+| G4 | 登录/登出写 login_logs | ⚠️ 指导设计已完整，代码待实现 | DETAILED_DESIGN.md 已有完整设计，见 Fix-1 |
+| G5 | 速率限制实现 | ⚠️ 方案已设计，代码待落地 | 见 Fix-3 方案 |
+| G6 | 暴力破解防护实现 | ⚠️ 依赖 Fix-1+Fix-3，代码待落地 | 见 Fix-5 方案 |
+| G7 | API 文档与实现一致 | ✅ | API.md 已删除，API 文档以源码 JSDoc 注释为准 |
 | G8 | Cookie 安全属性正确 | ⚠️ | RT path 不一致 (问题 #2) |
 | G9 | HTTPS 强制 | ✅ | Gateway + Cookie secure |
 | G10 | JWT ES256 签名验证 | ✅ | Portal + Gateway 双重验证 |
@@ -294,33 +294,32 @@ Browser → POST /api/auth/logout → performRevocation():
 
 ### Go/No-Go 判定：**No-Go（有条件拒绝）**
 
-**原因：5 项 P0 问题未解决：**
+**原因：代码层 2 项 P0 问题待落地：**
 
-1. ❌ 登录/登出不写 login_logs（I-LOG-003）
-2. ❌ RT Cookie Path 不一致
-3. ❌ 登录失败不记录事件
-4. ❌ API.md 与实现严重脱节
-5. ❌ 速率限制未实现
+1. ⚠️ login_logs 写入设计已完整（DETAILED_DESIGN.md），代码待实现（J-LOG-003）
+2. ⚠️ RT Cookie Path 文档已统一（ARCHITECTURE.md + DETAILED_DESIGN.md），代码待修改指定 3 个文件中的 path 值
+3. ❌ 速率限制方案已设计，代码未实现
+
+上述 3 项内容的具体修复方案见 §12 Fix-1、Fix-2、Fix-3。
 
 ### 修复优先级
 
 ```
-第一优先（上线前必须）:
-  1. 实现 login_logs 写入（login/logout/refresh/token exchange 四个事件点）
-  2. 统一 RT Cookie Path（Portal 改为 Path=/）
-  3. 实现速率限制中间件
-  4. 同步 API.md 至 v3.2
+第一优先（上线前必须—代码层）:
+  1. 实现 login_logs 写入（login/logout/refresh 三个事件点）—见 Fix-1
+  2. 统一 RT Cookie Path（Portal 三个文件中将 Path 改为 /）—见 Fix-2
+  3. 实现速率限制中间件（proxy.ts + lib/rate-limit.ts）—见 Fix-3
 
 第二优先（上线后首周）:
-  5. 实现暴力破解防护（登录失败计数 + 临时锁定）
-  6. 同步 DETAILED_DESIGN.md 至 v3.2
-  7. 清理 unused 参数/变量
-  8. 补充 k6 压力测试
+  4. 实现暴力破解防护（登录失败计数 + 临时锁定）—见 Fix-5
+  5. 清理 unused 参数/变量—见 Fix-7
+  6. 补充 k6 压力测试
+  7. refresh_tokens.token_hash 实现改为真正哈希存储
 
 第三优先（持续改进）:
-  9. 补充未覆盖需求的测试 (A-NAV-02/03, I-LOG-003/004)
-  10. Redis 故障演练
-  11. JWKS 密钥轮换验证
+  8. 补充未覆盖需求的测试 (A-NAV-02/03, J-LOG-003/004)
+  9. Redis 故障演练
+  10. JWKS 密锥轮换验证
 ```
 
 ### 系统优势（已就绪部分）

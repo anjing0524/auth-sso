@@ -1,7 +1,7 @@
 # Auth-SSO 设计系统
 
-版本: v2.0
-最后更新: 2026-03-24
+版本: v2.2
+最后更新: 2026-06-26
 
 ---
 
@@ -20,93 +20,61 @@
 
 ## 颜色系统
 
-### 主色调 (Primary)
+> **v2.2 更新 (2026-06-26):** 全站颜色体系已统一为 oklch。以下 oklch 值与 `apps/portal/src/app/globals.css` 保持同步。
+> 组件中应使用 Tailwind 工具类（`bg-primary-subtle`、`text-muted-foreground` 等），禁止硬编码 hex 或 oklch 原始值。
 
-| 名称 | Hex 值 | 用途 |
-|------|--------|------|
-| primary-50 | #E6F0FF | 浅背景、悬停态 |
-| primary-100 | #CCE0FF | 禁用背景 |
-| primary-200 | #99C2FF | - |
-| primary-300 | #66A3FF | - |
-| primary-400 | #3385FF | - |
-| primary-500 | #0066FF | 主品牌色 |
-| primary-600 | #0052CC | 悬停态 |
-| primary-700 | #003D99 | 激活态 |
-| primary-800 | #002966 | - |
-| primary-900 | #001433 | - |
+### 品牌色 (Brand — oklch)
+| 变量名 | oklch 值 | 用途 |
+|--------|---------|------|
+| `--color-primary` | `oklch(0.52 0.23 257)` | 品牌蓝 — 按钮、链接、强调色 |
+| `--color-primary-hover` | `oklch(0.43 0.21 257)` | 悬停/激活态 |
+| `--color-primary-subtle` | `oklch(0.95 0.03 250)` | 浅背景、卡片悬停 |
 
-### 中性色 (Neutral)
+### 背景色 (Background — oklch)
+| 变量名 | 浅色模式 | 暗黑模式 | 用途 |
+|--------|---------|---------|------|
+| `--color-background` | `oklch(0.99 0.001 253)` | `oklch(0.18 0.02 260)` | 页面底色 |
+| `--color-surface` | `oklch(1 0 0)` | `oklch(0.25 0.03 260)` | 卡片/面板背景 |
+| `--color-surface-elevated` | `oklch(1 0 0)` | `oklch(0.32 0.03 260)` | 浮层/弹窗背景 |
 
-| 名称 | Hex 值 | 用途 |
-|------|--------|------|
-| gray-50 | #FAFBFC | 背景底色 |
-| gray-100 | #F1F5F9 | 卡片背景 |
-| gray-200 | #E2E8F0 | 边框 |
-| gray-300 | #CBD5E1 | - |
-| gray-400 | #94A3B8 | 禁用文字 |
-| gray-500 | #64748B | 次要文字 |
-| gray-600 | #475569 | - |
-| gray-700 | #334155 | 正文 |
-| gray-800 | #1E293B | - |
-| gray-900 | #0F172A | 标题 |
+### 文字色 (Text — oklch)
+| 变量名 | 浅色模式 | 暗黑模式 | 用途 |
+|--------|---------|---------|------|
+| `--color-text-primary` | `oklch(0.18 0.02 260)` | `oklch(0.96 0.01 260)` | 标题、正文 |
+| `--color-text-secondary` | `oklch(0.42 0.03 260)` | `oklch(0.68 0.03 250)` | 次要文字 |
+| `--color-text-muted` | `oklch(0.68 0.03 250)` | `oklch(0.52 0.03 250)` | 辅助/禁用文字 |
 
-### 语义色 (Semantic)
+### 语义色 (Semantic — oklch)
+| 变量名 | oklch 值 | 用途 |
+|--------|---------|------|
+| `--color-success` | `oklch(0.67 0.17 165)` | 成功状态 |
+| `--color-warning` | `oklch(0.72 0.17 80)` | 警告状态 |
+| `--color-error` | `oklch(0.59 0.22 28)` | 错误状态 |
+| `--color-info` | `oklch(0.55 0.22 257)` | 信息状态 |
 
-| 名称 | Hex 值 | 用途 |
-|------|--------|------|
-| success | #10B981 | 成功状态 |
-| warning | #F59E0B | 警告状态 |
-| error | #EF4444 | 错误状态 |
-| info | #3B82F6 | 信息状态 |
+### 边框 & 渐变
+| 变量名 | 浅色模式 | 暗黑模式 | 用途 |
+|--------|---------|---------|------|
+| `--color-border` | `oklch(0.93 0.01 260)` | `oklch(0.32 0.03 260)` | 边框、分割线 |
+| `--color-gradient-start` | `oklch(0.52 0.23 257)` | — | 登录页渐变起点 |
+| `--color-gradient-end` | `oklch(0.35 0.17 257)` | — | 登录页渐变终点 |
 
-### CSS 变量 (浅色模式)
+### shadcn 基础体系（不可修改）
 
-```css
-:root {
-  /* 主色 */
-  --color-primary: #0066FF;
-  --color-primary-hover: #0052CC;
-  --color-primary-subtle: #E6F0FF;
+以下 shadcn 变量控制 UI 组件前景/背景语义，`--primary` 是**前景文本色**（非品牌蓝），不应修改：
 
-  /* 背景 */
-  --color-background: #FAFBFC;
-  --color-surface: #FFFFFF;
-  --color-surface-elevated: #FFFFFF;
-
-  /* 文字 */
-  --color-text-primary: #0F172A;
-  --color-text-secondary: #475569;
-  --color-text-muted: #94A3B8;
-
-  /* 边框 */
-  --color-border: #E2E8F0;
-
-  /* 语义 */
-  --color-success: #10B981;
-  --color-warning: #F59E0B;
-  --color-error: #EF4444;
-  --color-info: #3B82F6;
-
-  /* 品牌渐变 (登录页背景) */
-  --color-gradient-start: #0066FF;
-  --color-gradient-end: #003399;
-}
+```
+--primary:         oklch(0.205 0 0)   (浅色) / oklch(0.922 0 0) (暗黑)
+--primary-foreground: oklch(0.985 0 0) (浅色) / oklch(0.205 0 0) (暗黑)
+--muted:           oklch(0.97 0 0)    (浅色) / oklch(0.269 0 0) (暗黑)
+--muted-foreground: oklch(0.556 0 0)  (浅色) / oklch(0.708 0 0) (暗黑)
 ```
 
-### CSS 变量 (暗黑模式)
+### 使用规则
 
-```css
-.dark {
-  --color-background: #0F172A;
-  --color-surface: #1E293B;
-  --color-surface-elevated: #334155;
-  --color-text-primary: #F1F5F9;
-  --color-text-secondary: #94A3B8;
-  --color-text-muted: #64748B;
-  --color-primary: #3B82F6;
-  --color-border: #334155;
-}
-```
+- **组件中始终使用 Tailwind class**（`bg-primary-subtle`、`text-muted-foreground`），不直接引用 CSS 变量
+- **禁止硬编码 hex 或 oklch 原始值**在 TSX 中（如 `bg-[#E6F0FF]`）——这绕过暗黑模式切换
+- **设计新组件时**，颜色选择从已有 design token 中选取，不新增任意颜色值
 
 ---
 
@@ -187,12 +155,13 @@
 
 采用分层圆角，避免视觉单调：
 
-| 名称 | 值 | 用途 |
-|------|-----|------|
-| sm | 6px | 标签、小按钮 |
-| md | 8px | 按钮、输入框 |
-| lg | 12px | 卡片、面板 |
-| full | 9999px | 徽章、头像 |
+| 名称 | 值 | Tailwind | 用途 |
+|------|-----|----------|------|
+| sm | 6px | `rounded-lg` | 标签、小按钮 |
+| md | 8px | `rounded-lg` (shadcn default) | 按钮、输入框 |
+| lg | 12px | `rounded-xl` | 卡片、面板、指标卡 |
+| xl | 16px | `rounded-2xl` | 模态框、推广卡片、侧边栏 |
+| full | 9999px | `rounded-full` | 徽章、头像 |
 
 ---
 
@@ -272,34 +241,33 @@
 
 **状态:**
 
-| 状态 | 边框颜色 | 背景 |
-|------|---------|------|
-| default | #E2E8F0 | #FAFBFC |
-| focus | #0066FF + 外发光 | #FFFFFF |
-| error | #EF4444 | #FEF2F2 |
-| disabled | #E2E8F0 | #F1F5F9 |
+| 状态 | 边框色 Token | 背景 Token |
+|------|------------|----------|
+| default | `border-border` | `bg-muted/50` |
+| focus | `ring-2 ring-primary/10` | `bg-card` |
+| error | `border-destructive` | `bg-destructive/10` |
+| disabled | `border-border` | `bg-muted` |
 
 **聚焦外发光:**
 
 ```css
-box-shadow: 0 0 0 3px var(--color-primary-subtle);
+focus:ring-2 focus:ring-primary/10
 ```
 
 ### 卡片
 
 | 属性 | 值 |
 |------|-----|
-| 背景 | var(--color-surface) |
-| 边框 | 1px solid var(--color-border) |
-| 圆角 | 12px |
-| 阴影 | 无 (扁平设计) |
+| 背景 | `bg-card` |
+| 边框 | `ring-1 ring-border/50` |
+| 圆角 | 12px (`rounded-xl`) |
+| 阴影 | 无或 `shadow-sm` |
 | 内边距 | 24px |
 
 **悬停态 (可选):**
 
 ```css
-transform: translateY(-4px);
-box-shadow: 0 12px 24px -8px rgba(0, 102, 255, 0.15);
+hover:shadow-md hover:-translate-y-0.5 transition-all duration-200
 ```
 
 ### 提示信息 (Alert)
@@ -513,6 +481,7 @@ WITH RECURSIVE sub_depts AS (
 
 | 日期 | 版本 | 变更 |
 |------|------|------|
+| 2026-06-26 | v2.2 | 颜色体系全量迁移至 oklch（globals.css 同步）；圆角系统扩增 `rounded-2xl` (16px)；组件规范引用 design token 替代 hex |
 | 2026-05-20 | v2.1 | 增补 OIDC 强拦截与数据沙箱核心架构设计图；修复并补充前端页面级 401 拦截与带 callbackUrl 的重定向体验方案 |
 | 2026-03-24 | v2.0 | 更新主色为 #0066FF；引入 Geist 字体；新增动效系统；新增暗黑模式 |
 | 2026-03-24 | v1.0 | 初始设计系统定义 |
