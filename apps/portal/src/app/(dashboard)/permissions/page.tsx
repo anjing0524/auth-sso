@@ -9,12 +9,14 @@ import PermissionsTable from './components/PermissionsTable';
 interface PageProps {
   searchParams: Promise<{
     type?: string;
+    keyword?: string;
   }>;
 }
 
 export default async function PermissionsPage({ searchParams }: PageProps) {
   const params = await searchParams;
   const activeTab = params.type || 'ALL';
+  const keyword = params.keyword || '';
 
   const permissions = await getPermissions(activeTab !== 'ALL' ? activeTab : undefined);
 
@@ -29,7 +31,7 @@ export default async function PermissionsPage({ searchParams }: PageProps) {
         </div>
       </div>
 
-      <PermissionsTable permissions={permissions} activeTab={activeTab} />
+      <PermissionsTable permissions={permissions} activeTab={activeTab} initialKeyword={keyword} />
     </div>
   );
 }

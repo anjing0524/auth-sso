@@ -50,7 +50,7 @@ export function DataTable<T>({
       {cardHeader}
       <CardContent className="p-0">
         <Table>
-          <TableHeader className="bg-slate-50/30">
+          <TableHeader className="bg-muted/50">
             <TableRow>
               {columns.map((col) => (
                 <TableHead key={col.key} className={col.className}>
