@@ -60,26 +60,88 @@ pub struct RefreshedTokens {
 ///
 /// issuer 与 refresh_endpoint 从 JWKS 缓存（OIDC Discovery 元数据）动态获取，
 /// 不在构造时固化，避免阻塞启动。issuer 仅在元数据就绪后参与校验；
-/// refresh_endpoint 未就绪时回退到 `{upstream}/api/auth/refresh`。
+/// refresh_endpoint 未就绪时回退到首个 upstream 的 `/api/auth/refresh`。
 pub struct AuthService {
     jwks_cache: Arc<JwksCache>,
-    /// Portal 上游地址，用于构造 refresh_endpoint 回退 URL
-    upstream: String,
+    /// Portal 上游地址列表，用于构造 refresh_endpoint 回退 URL（取首个）
+    upstreams: Vec<String>,
 }
 
 impl AuthService {
-    pub fn new(jwks_cache: Arc<JwksCache>, upstream: String) -> Self {
+    pub fn new(jwks_cache: Arc<JwksCache>, upstreams: Vec<String>) -> Self {
         Self {
             jwks_cache,
-            upstream,
+            upstreams,
         }
     }
 
-    /// 续签端点 URL：优先使用缓存中预拼装好的 URL，未就绪时回退默认路径
-    fn refresh_endpoint(&self) -> Arc<str> {
-        self.jwks_cache
-            .get_refresh_endpoint()
-            .unwrap_or_else(|| Arc::from(format!("http://{}/api/auth/refresh", self.upstream)))
+    /// 续签端点 URL：优先使用 OIDC Discovery 缓存中预拼装好的 URL，
+    /// 未就绪时返回 None（调用方应遍历 upstream 逐一尝试默认路径）
+    fn refresh_endpoint(&self) -> Option<Arc<str>> {
+        self.jwks_cache.get_refresh_endpoint()
+    }
+
+    /// 向指定续签端点发起一次 POST 请求，解析响应 Set-Cookie 提取新 Token 对
+    async fn try_refresh_at_endpoint(
+        &self,
+        endpoint: &str,
+        refresh_token: &str,
+        sub: &str,
+    ) -> Option<RefreshedTokens> {
+        debug!("发起静默续签: url={}, sub={}", endpoint, sub);
+        let response = HTTP_CLIENT
+            .post(endpoint)
+            .header(
+                "Cookie",
+                format!("{}={}", cookie::REFRESH_COOKIE, refresh_token),
+            )
+            .send()
+            .await;
+
+        match response {
+            Ok(resp) if resp.status().is_success() => {
+                let mut new_at = None;
+                let mut new_rt = None;
+
+                for header_value in resp.headers().get_all("set-cookie").iter() {
+                    if let Ok(cookie_str) = header_value.to_str() {
+                        if let Some(val) =
+                            cookie::extract_from_set_cookie(cookie_str, cookie::ACCESS_COOKIE)
+                        {
+                            new_at = Some(val.to_string());
+                        }
+                        if let Some(val) =
+                            cookie::extract_from_set_cookie(cookie_str, cookie::REFRESH_COOKIE)
+                        {
+                            new_rt = Some(val.to_string());
+                        }
+                    }
+                }
+
+                match (new_at, new_rt) {
+                    (Some(access), Some(refresh)) => {
+                        info!("静默续签成功: sub={}", sub);
+                        Some(RefreshedTokens { access, refresh })
+                    }
+                    _ => {
+                        warn!("续签响应缺少预期的 Set-Cookie 头: sub={}", sub);
+                        None
+                    }
+                }
+            }
+            Ok(resp) => {
+                warn!(
+                    "续签请求被 Portal 拒绝: status={}, sub={}",
+                    resp.status(),
+                    sub
+                );
+                None
+            }
+            Err(e) => {
+                warn!("续签请求网络错误: {}, sub={}", e, sub);
+                None
+            }
+        }
     }
 
     /// 对 JWT Token 进行离线密码学验签（ES256 等 OIDC Discovery 返回的算法）
@@ -132,7 +194,7 @@ impl AuthService {
 
                 let now = std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap()
+                    .unwrap_or_default()
                     .as_secs() as usize;
 
                 if token_data.claims.exp < now {
@@ -186,9 +248,7 @@ impl AuthService {
 
     /// 向 Portal 发起 Access Token 静默续签
     ///
-    /// 上行: Gateway → Portal  POST <refresh_endpoint>
-    /// 下行: Portal → Gateway  Set-Cookie 含新 AT + RT
-    ///
+    /// 先尝试 OIDC Discovery 缓存的主端点，失败后遍历全部 upstream 逐一回退。
     /// 通过 Redis 实现 30s 跨实例去重，避免并发请求反复轮换 Refresh Token。
     /// 返回 `Some(RefreshedTokens)` 或 `None`（续签失败不阻断请求，旧 AT 仍有效）。
     pub async fn try_refresh_token(
@@ -202,76 +262,51 @@ impl AuthService {
             return Some(cached);
         }
 
-        // 2. 向 Portal 发起续签请求
-        let endpoint = self.refresh_endpoint();
-        debug!("发起静默续签: url={}, sub={}", endpoint, sub);
-        let response = HTTP_CLIENT
-            .post(&*endpoint)
-            .header(
-                "Cookie",
-                format!("{}={}", cookie::REFRESH_COOKIE, refresh_token),
-            )
-            .send()
-            .await;
+        // 2. 尝试主端点（来自 OIDC Discovery 缓存）
+        if let Some(primary) = self.refresh_endpoint()
+            && let Some(tokens) = self
+                .try_refresh_at_endpoint(&primary, refresh_token, sub)
+                .await
+        {
+            self.set_refresh_dedup(sub, &tokens).await;
+            return Some(tokens);
+        }
 
-        match response {
-            Ok(resp) if resp.status().is_success() => {
-                // 3. 解析响应 Set-Cookie 头，提取新 AT / RT
-                let mut new_at = None;
-                let mut new_rt = None;
+        // 3. 缓存未就绪或主端点失败 → 遍历全部 upstream 的默认续签路径逐一回退
+        if self.upstreams.is_empty() {
+            warn!(
+                "无法续签: OIDC 元数据未就绪且未配置任何 upstream，放弃续签 sub={}",
+                sub
+            );
+            return None;
+        }
 
-                for header_value in resp.headers().get_all("set-cookie").iter() {
-                    if let Ok(cookie_str) = header_value.to_str() {
-                        if let Some(val) =
-                            cookie::extract_from_set_cookie(cookie_str, cookie::ACCESS_COOKIE)
-                        {
-                            new_at = Some(val.to_string());
-                        }
-                        if let Some(val) =
-                            cookie::extract_from_set_cookie(cookie_str, cookie::REFRESH_COOKIE)
-                        {
-                            new_rt = Some(val.to_string());
-                        }
-                    }
-                }
-
-                match (new_at, new_rt) {
-                    (Some(access), Some(refresh)) => {
-                        info!("静默续签成功: sub={}", sub);
-                        let tokens = RefreshedTokens { access, refresh };
-                        self.set_refresh_dedup(sub, &tokens).await;
-                        Some(tokens)
-                    }
-                    _ => {
-                        warn!("续签响应缺少预期的 Set-Cookie 头: sub={}", sub);
-                        None
-                    }
-                }
-            }
-            Ok(resp) => {
-                warn!(
-                    "续签请求被 Portal 拒绝: status={}, sub={}",
-                    resp.status(),
-                    sub
-                );
-                None
-            }
-            Err(e) => {
-                warn!("续签请求网络错误: {}, sub={}", e, sub);
-                None
+        for upstream in &self.upstreams {
+            let fallback_url = format!("http://{}/api/auth/refresh", upstream);
+            if let Some(tokens) = self
+                .try_refresh_at_endpoint(&fallback_url, refresh_token, sub)
+                .await
+            {
+                self.set_refresh_dedup(sub, &tokens).await;
+                return Some(tokens);
             }
         }
+
+        None
     }
 
     /// 通过 Redis 检查续签去重缓存（30s 窗口内同用户复用结果）
     async fn check_refresh_dedup(&self, sub: &str) -> Option<RefreshedTokens> {
         let mut conn = redis_conn().await?;
         let key = format!("{}{}", REFRESH_DEDUP_PREFIX, sub);
-        let cached: Option<String> = redis::cmd("GET")
-            .arg(&key)
-            .query_async(&mut *conn)
-            .await
-            .ok()?;
+        let cached: Option<String> = match redis::cmd("GET").arg(&key).query_async(&mut *conn).await
+        {
+            Ok(v) => v,
+            Err(e) => {
+                warn!("Redis 续签去重查询失败: {:?}", e);
+                return None;
+            }
+        };
         let cached = cached?;
         let (access, refresh) = cached.split_once('|')?;
         Some(RefreshedTokens {
@@ -285,14 +320,17 @@ impl AuthService {
         if let Some(mut conn) = redis_conn().await {
             let key = format!("{}{}", REFRESH_DEDUP_PREFIX, sub);
             let value = format!("{}|{}", tokens.access, tokens.refresh);
-            let _: Result<(), _> = redis::cmd("SET")
+            if let Err(e) = redis::cmd("SET")
                 .arg(&key)
                 .arg(&value)
                 .arg("NX")
                 .arg("EX")
                 .arg(REFRESH_DEDUP_SEC as i64)
-                .query_async(&mut *conn)
-                .await;
+                .query_async::<()>(&mut *conn)
+                .await
+            {
+                warn!("Redis 续签去重写入失败: {:?}", e);
+            }
         }
     }
 }
@@ -302,7 +340,15 @@ impl AuthService {
 /// 续签去重路径复用此 helper；安全相关的 jti 黑名单检查因需保留独立的降级日志，
 /// 仍显式处理连接获取（见 `check_jti_not_revoked`）。
 async fn redis_conn() -> Option<bb8::PooledConnection<'static, bb8_redis::RedisConnectionManager>> {
-    crate::redis::get_pool()?.get().await.ok()
+    crate::redis::get_pool()
+        .or_else(|| {
+            warn!("Redis 连接池未就绪，续签去重降级");
+            None
+        })?
+        .get()
+        .await
+        .map_err(|e| warn!("Redis 连接获取失败，续签去重降级: {:?}", e))
+        .ok()
 }
 
 /// 裸解 JWT payload（不验签），从 Base64 编码的 payload 段提取 Claims
@@ -326,7 +372,7 @@ mod tests {
     use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, encode};
 
     fn make_test_auth_service(jwks_cache: &Arc<JwksCache>) -> AuthService {
-        AuthService::new(Arc::clone(jwks_cache), "127.0.0.1:4100".to_string())
+        AuthService::new(Arc::clone(jwks_cache), vec!["127.0.0.1:4100".to_string()])
     }
 
     /// 生成测试用 HS256 JWT

@@ -11,16 +11,13 @@ fn generate_redirect_location(
     query: Option<&str>,
     ssl_port: u16,
 ) -> String {
-    // 容错处理：当 Host 头部为 IPv6 格式时（例如 [::1]:18080），
-    // 直接使用 split(':').next() 会错误提取为 "["。我们必须匹配配对的 "]" 以正确截断端口。
+    // 从 Host 头中剥离端口号：
+    // - IPv6 格式如 [::1]:18080 → 找到 ] 截取 [::1]
+    // - 普通格式如 localhost:18080 → 找到 : 截取 localhost
     let host_only = if host.starts_with('[') {
-        if let Some(end_idx) = host.find(']') {
-            &host[..=end_idx]
-        } else {
-            host.split(':').next().unwrap_or(host)
-        }
+        host.find(']').map_or(host, |end| &host[..=end])
     } else {
-        host.split(':').next().unwrap_or(host)
+        host.find(':').map_or(host, |i| &host[..i])
     };
     let query_len = query.map(|q| q.len() + 1).unwrap_or(0);
     let mut location = String::with_capacity(8 + host_only.len() + 6 + path.len() + query_len);
@@ -61,7 +58,6 @@ impl ProxyHttp for RedirectService {
         let location = generate_redirect_location(host, path, query, self.ssl_port);
 
         info!("HTTP → HTTPS 重定向: {}", location);
-        // 生产优化：去除 unwrap()，使用 ? 优雅传播首部构建与写入错误
         let mut header = ResponseHeader::build(301, None)?;
         header.insert_header("Location", location)?;
         session.set_keepalive(None);

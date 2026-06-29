@@ -7,7 +7,7 @@ use pingora_core::services::background::BackgroundService;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
-use tracing::{info, warn};
+use tracing::{error, info, warn};
 
 use crate::http::HTTP_CLIENT;
 
@@ -20,6 +20,9 @@ pub enum JwksError {
     /// 响应中不含任何合法的公钥
     #[error("JWKS 响应中未找到任何有效且可解析的公钥")]
     EmptyKeys,
+    /// 未配置任何上游地址，无法执行 OIDC Discovery
+    #[error("未配置任何上游地址，无法执行 OIDC Discovery")]
+    NoUpstreams,
     /// 读写锁中毒故障
     #[error("JWKS 读写锁中毒失效")]
     LockPoisoned,
@@ -29,6 +32,13 @@ pub enum JwksError {
     /// jwks_uri 路径解析失败
     #[error("无法从 jwks_uri 中解析出 JWKS 路径: {0}")]
     InvalidJwksUri(String),
+}
+
+/// OIDC Discovery 拉取结果 — 不含公钥，待 JWKS 公钥也拉取成功后一并原子写入缓存
+struct OidcDiscovery {
+    validation: Validation,
+    refresh_endpoint: Option<Arc<str>>,
+    jwks_uri: String,
 }
 
 /// OIDC 元数据结构体，将公钥映射与 OIDC 校验配置统一存放，提供极高的并发原子读取性能
@@ -79,7 +89,13 @@ impl JwksCache {
 
     /// 获取特定 kid 对应的公钥（同步读取）
     pub fn get_key(&self, kid: &str) -> Option<DecodingKey> {
-        self.inner.read().ok()?.keys.get(kid).cloned()
+        match self.inner.read() {
+            Ok(guard) => guard.keys.get(kid).cloned(),
+            Err(e) => {
+                error!("JWKS 读写锁中毒 (get_key): {:?}", e);
+                None
+            }
+        }
     }
 
     /// 判断当前公钥缓存是否为空
@@ -87,7 +103,10 @@ impl JwksCache {
         self.inner
             .read()
             .map(|guard| guard.keys.is_empty())
-            .unwrap_or(true)
+            .unwrap_or_else(|e| {
+                error!("JWKS 读写锁中毒 (is_empty): {:?}", e);
+                true
+            })
     }
 
     /// 获取预构建的 OIDC 校验配置
@@ -97,6 +116,9 @@ impl JwksCache {
             .ok()
             .and_then(|guard| guard.validation.clone().into())
             .unwrap_or_else(|| {
+                error!(
+                    "JWKS 读写锁中毒 (get_validation)，回退到默认 Validation — JWT 验签可能异常"
+                );
                 let mut validation = Validation::new(Algorithm::ES256);
                 validation.validate_aud = false;
                 validation.validate_exp = false;
@@ -106,7 +128,13 @@ impl JwksCache {
 
     /// 获取缓存的 Token 刷新接口端点 URL (只读共享指针)
     pub fn get_refresh_endpoint(&self) -> Option<Arc<str>> {
-        self.inner.read().ok()?.refresh_endpoint.clone()
+        match self.inner.read() {
+            Ok(guard) => guard.refresh_endpoint.clone(),
+            Err(e) => {
+                error!("JWKS 读写锁中毒 (get_refresh_endpoint): {:?}", e);
+                None
+            }
+        }
     }
 
     /// 将单个 OIDC 字符串算法名转为 `Algorithm`；不支持的算法记录告警并返回 None
@@ -131,26 +159,11 @@ impl JwksCache {
         }
     }
 
-    /// 将 JWKS 公钥集写入缓存
-    fn store_jwks(&self, jwk_set: &JwkSet) -> Result<usize, JwksError> {
-        let mut new_keys = HashMap::new();
-        for jwk in &jwk_set.keys {
-            if let (Some(kid), Ok(key)) = (&jwk.common.key_id, DecodingKey::from_jwk(jwk)) {
-                new_keys.insert(kid.clone(), key);
-            }
-        }
-
-        if new_keys.is_empty() {
-            return Err(JwksError::EmptyKeys);
-        }
-
-        let count = new_keys.len();
-        let mut guard = self.inner.write().map_err(|_| JwksError::LockPoisoned)?;
-        guard.keys = new_keys;
-        Ok(count)
-    }
-
-    async fn discover_oidc_metadata(&self, upstream: &str) -> Result<String, JwksError> {
+    /// 拉取 OIDC Discovery 元数据并解析，不写入缓存（纯读取 + 解析）
+    ///
+    /// 返回解析后的 validation、refresh_endpoint 和 jwks_uri，
+    /// 待 JWKS 公钥也拉取成功后由 `apply_discovery` 一并原子写入。
+    async fn fetch_oidc_metadata(&self, upstream: &str) -> Result<OidcDiscovery, JwksError> {
         let discovery_url = format!("http://{}/.well-known/openid-configuration", upstream);
         info!("🔍 通过 OIDC Discovery 获取元数据: {}", discovery_url);
 
@@ -174,8 +187,7 @@ impl JwksCache {
             issuer, jwks_uri, signing_algs_val
         );
 
-        // 预解析相关字段并写入缓存结构体
-        let mut guard = self.inner.write().map_err(|_| JwksError::LockPoisoned)?;
+        // 预解析 validation（不写缓存，仅返回）
         let mut validation = Validation::new(Algorithm::ES256);
         validation.validate_aud = false;
         validation.validate_exp = false;
@@ -189,18 +201,40 @@ impl JwksCache {
                 .filter_map(Self::parse_algorithm)
                 .collect();
         }
-        guard.validation = validation;
 
-        // 预解析并缓存已拼装好的刷新端点内网可达 URL
-        guard.refresh_endpoint = match metadata_val
+        // 预解析 refresh_endpoint 路径（不写缓存，仅返回原始路径）
+        let refresh_endpoint = metadata_val
             .get("refresh_endpoint")
             .and_then(|v| v.as_str())
-        {
-            Some(ep) => Self::resolve_jwks_url(upstream, ep).ok().map(Arc::from),
-            None => None,
-        };
+            .and_then(|ep| {
+                Self::resolve_jwks_url(upstream, ep)
+                    .map_err(|e| warn!("OIDC refresh_endpoint URL 解析失败，跳过: {}", e))
+                    .ok()
+            })
+            .map(Arc::from);
 
-        Ok(jwks_uri.to_string())
+        Ok(OidcDiscovery {
+            validation,
+            refresh_endpoint,
+            jwks_uri: jwks_uri.to_string(),
+        })
+    }
+
+    /// 原子写入 OIDC 元数据 + JWKS 公钥，一次写锁完成所有变更
+    fn apply_discovery(
+        &self,
+        discovery: OidcDiscovery,
+        new_keys: HashMap<String, DecodingKey>,
+    ) -> Result<usize, JwksError> {
+        if new_keys.is_empty() {
+            return Err(JwksError::EmptyKeys);
+        }
+        let count = new_keys.len();
+        let mut guard = self.inner.write().map_err(|_| JwksError::LockPoisoned)?;
+        guard.keys = new_keys;
+        guard.validation = discovery.validation;
+        guard.refresh_endpoint = discovery.refresh_endpoint;
+        Ok(count)
     }
 
     /// 从 OIDC 元数据中解析出可达的 JWKS 端点 URL
@@ -220,22 +254,33 @@ impl JwksCache {
         }
     }
 
-    /// 通过 OIDC Discovery 自动发现并拉取 JWKS 公钥，同步更新 OIDC 元数据缓存
+    /// 通过 OIDC Discovery 自动发现并拉取 JWKS 公钥，原子更新 OIDC 元数据缓存
+    ///
+    /// 先拉取 OIDC 元数据和 JWKS 公钥，全部成功后才一次性写锁写入，
+    /// 避免元数据已更新而公钥拉取失败导致的不一致状态。
     ///
     /// # 参数
     /// * `upstream` - Portal 上游地址（如 127.0.0.1:4100）
     pub async fn refresh(&self, upstream: &str) -> Result<(), JwksError> {
-        // 1. 通过 OIDC Discovery 获取并缓存完整元数据，返回 jwks_uri
-        let jwks_uri = self.discover_oidc_metadata(upstream).await?;
+        // 1. 拉取 OIDC Discovery 元数据（不写缓存）
+        let discovery = self.fetch_oidc_metadata(upstream).await?;
 
         // 2. 从元数据中解析可达的 JWKS URL
-        let jwks_url = Self::resolve_jwks_url(upstream, &jwks_uri)?;
+        let jwks_url = Self::resolve_jwks_url(upstream, &discovery.jwks_uri)?;
         info!("🔑 使用 JWKS 端点: {}", jwks_url);
 
-        // 3. 拉取 JWKS 公钥集
+        // 3. 拉取并解析 JWKS 公钥集
         let resp = HTTP_CLIENT.get(&jwks_url).send().await?;
         let jwk_set: JwkSet = resp.json().await?;
-        let count = self.store_jwks(&jwk_set)?;
+        let mut new_keys = HashMap::new();
+        for jwk in &jwk_set.keys {
+            if let (Some(kid), Ok(key)) = (&jwk.common.key_id, DecodingKey::from_jwk(jwk)) {
+                new_keys.insert(kid.clone(), key);
+            }
+        }
+
+        // 4. 原子写入：元数据 + 公钥一并提交
+        let count = self.apply_discovery(discovery, new_keys)?;
 
         info!(
             "✅ JWKS 公钥缓存刷新成功，加载了 {} 个 Key (via OIDC Discovery)",
@@ -269,15 +314,37 @@ impl JwksCache {
 // ── JWKS 后台定时刷新服务 ──
 pub struct JwksRefreshService {
     jwks_cache: Arc<JwksCache>,
-    upstream: String,
+    /// Portal 上游地址列表，OIDC Discovery 逐个尝试直到成功
+    upstreams: Vec<String>,
 }
 
 impl JwksRefreshService {
-    pub fn new(jwks_cache: Arc<JwksCache>, upstream: String) -> Self {
+    pub fn new(jwks_cache: Arc<JwksCache>, upstreams: Vec<String>) -> Self {
         Self {
             jwks_cache,
-            upstream,
+            upstreams,
         }
+    }
+
+    /// 遍历所有上游地址，逐个尝试 OIDC Discovery，任一成功即返回
+    async fn try_refresh_from_any(&self) -> Result<(), JwksError> {
+        if self.upstreams.is_empty() {
+            warn!("⚠️ 未配置任何上游地址，无法执行 OIDC Discovery");
+            return Err(JwksError::NoUpstreams);
+        }
+
+        let mut last_err = None;
+        for upstream in &self.upstreams {
+            info!("🔍 通过上游 {} 尝试 OIDC Discovery...", upstream);
+            match self.jwks_cache.refresh(upstream).await {
+                Ok(()) => return Ok(()),
+                Err(e) => {
+                    warn!("  ✗ {} 不可达: {}", upstream, e);
+                    last_err = Some(e);
+                }
+            }
+        }
+        Err(last_err.unwrap_or(JwksError::NoUpstreams))
     }
 }
 
@@ -285,14 +352,14 @@ impl JwksRefreshService {
 impl BackgroundService for JwksRefreshService {
     async fn start(&self, mut shutdown: ShutdownWatch) {
         loop {
-            // 刷新结果仅决定下一次轮询间隔：成功 5min，失败则视缓存是否为空退避（空 10s / 非空 5min）
-            let delay_secs = match self.jwks_cache.refresh(&self.upstream).await {
+            // 逐个尝试所有 upstream 直到 OIDC Discovery + JWKS 拉取成功
+            let delay_secs = match self.try_refresh_from_any().await {
                 Ok(()) => {
                     info!("✅ JWKS 公钥缓存定时刷新成功");
                     300
                 }
                 Err(e) => {
-                    tracing::error!("❌ JWKS 公钥缓存定时刷新失败: {}", e);
+                    tracing::error!("❌ 所有上游节点的 JWKS 公钥刷新均失败: {}", e);
                     let retry_delay = if self.jwks_cache.is_empty() { 10 } else { 300 };
                     warn!("⚠️ 网关将在 {} 秒后重试拉取 JWKS...", retry_delay);
                     retry_delay

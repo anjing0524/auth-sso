@@ -21,6 +21,7 @@ log_level = "info"
 
 [portal]
 # Next.js BFF (Portal/IdP) 上游负载均衡代理入口地址
+# 支持逗号分隔多个地址实现 RoundRobin 负载均衡，例如 "portal:4000,portal:4001,portal:4002"
 upstream = "127.0.0.1:4100"
 
 # issuer 通过 OIDC Discovery 自动获取，无需配置

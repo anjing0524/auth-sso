@@ -36,11 +36,26 @@ impl Default for GatewayConfig {
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 #[serde(default)]
 pub struct PortalConfig {
-    /// Portal 上游地址，如 portal:4000
+    /// Portal 上游地址，支持逗号分隔多个地址实现负载均衡，如 portal:4000,portal:4001
     /// 网关通过此地址进行 OIDC Discovery 自动发现 JWKS 端点和 issuer
     pub upstream: String,
     /// 网关直接放行、不校验 JWT 的公开路由白名单路径列表
     pub public_paths: Vec<String>,
+}
+
+impl PortalConfig {
+    /// 将逗号分隔的上游地址解析为独立地址列表
+    ///
+    /// 每个地址去除首尾空白，空字符串会被自动过滤。
+    /// 例如 "portal:4000, portal:4001" → ["portal:4000", "portal:4001"]
+    pub fn upstreams(&self) -> Vec<String> {
+        self.upstream
+            .split(',')
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(String::from)
+            .collect()
+    }
 }
 
 impl Default for PortalConfig {
@@ -131,6 +146,59 @@ mod tests {
     use std::fs;
 
     #[test]
+    fn test_upstreams_single() {
+        let portal = PortalConfig {
+            upstream: "127.0.0.1:4100".to_string(),
+            ..Default::default()
+        };
+        assert_eq!(portal.upstreams(), vec!["127.0.0.1:4100".to_string()]);
+    }
+
+    #[test]
+    fn test_upstreams_multiple() {
+        let portal = PortalConfig {
+            upstream: "portal:4000, portal:4001, portal:4002".to_string(),
+            ..Default::default()
+        };
+        assert_eq!(
+            portal.upstreams(),
+            vec![
+                "portal:4000".to_string(),
+                "portal:4001".to_string(),
+                "portal:4002".to_string()
+            ]
+        );
+    }
+
+    #[test]
+    fn test_upstreams_trims_whitespace() {
+        let portal = PortalConfig {
+            upstream: "  host1:80 , host2:81  ,host3:82".to_string(),
+            ..Default::default()
+        };
+        assert_eq!(
+            portal.upstreams(),
+            vec![
+                "host1:80".to_string(),
+                "host2:81".to_string(),
+                "host3:82".to_string()
+            ]
+        );
+    }
+
+    #[test]
+    fn test_upstreams_filters_empty() {
+        let portal = PortalConfig {
+            upstream: "host1:80,,host2:81".to_string(),
+            ..Default::default()
+        };
+        assert_eq!(
+            portal.upstreams(),
+            vec!["host1:80".to_string(), "host2:81".to_string()]
+        );
+    }
+
+    #[test]
     fn test_load_default_config() {
         let config = Config::default();
         assert_eq!(config.gateway.port, 18080);
@@ -138,6 +206,10 @@ mod tests {
         assert_eq!(config.gateway.log_dir, "logs");
         assert_eq!(config.gateway.log_level, "info");
         assert_eq!(config.portal.upstream, "127.0.0.1:4100");
+        assert_eq!(
+            config.portal.upstreams(),
+            vec!["127.0.0.1:4100".to_string()]
+        );
         assert!(config.portal.public_paths.contains(&"/login".to_string()));
     }
 
