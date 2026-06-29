@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use base64::Engine;
-use jsonwebtoken::{Algorithm, Validation, decode, decode_header};
+use jsonwebtoken::{decode, decode_header};
 use tracing::{debug, error, info, warn};
 
 use crate::claims::Claims;
@@ -58,8 +58,9 @@ pub struct RefreshedTokens {
 
 /// 认证服务：封装 JWT 验签、jti 黑名单检查、Token 静默续签
 ///
-/// issuer 和 refresh_endpoint 从 JWKS 缓存（OIDC Discovery 元数据）动态获取，
-/// 不在构造时固化，避免阻塞启动。首次 JWKS 拉取未完成时使用合理默认值。
+/// issuer 与 refresh_endpoint 从 JWKS 缓存（OIDC Discovery 元数据）动态获取，
+/// 不在构造时固化，避免阻塞启动。issuer 仅在元数据就绪后参与校验；
+/// refresh_endpoint 未就绪时回退到 `{upstream}/api/auth/refresh`。
 pub struct AuthService {
     jwks_cache: Arc<JwksCache>,
     /// Portal 上游地址，用于构造 refresh_endpoint 回退 URL
@@ -74,20 +75,11 @@ impl AuthService {
         }
     }
 
-    /// issuer：优先从 OIDC Discovery 缓存读取，未就绪时回退默认值
-    fn issuer(&self) -> String {
-        self.jwks_cache.get_discovered_issuer().unwrap_or_else(|| {
-            warn!("⚠️ OIDC 元数据未就绪，使用默认 issuer");
-            "http://localhost:4100".to_string()
-        })
-    }
-
-    /// 续签端点 URL：优先从 OIDC Discovery 缓存读取，未就绪时回退默认路径
-    fn refresh_endpoint(&self) -> String {
+    /// 续签端点 URL：优先使用缓存中预拼装好的 URL，未就绪时回退默认路径
+    fn refresh_endpoint(&self) -> Arc<str> {
         self.jwks_cache
             .get_refresh_endpoint()
-            .and_then(|ep| JwksCache::resolve_jwks_url(&self.upstream, &ep).ok())
-            .unwrap_or_else(|| format!("http://{}/api/auth/refresh", self.upstream))
+            .unwrap_or_else(|| Arc::from(format!("http://{}/api/auth/refresh", self.upstream)))
     }
 
     /// 对 JWT Token 进行离线密码学验签（ES256 等 OIDC Discovery 返回的算法）
@@ -121,22 +113,8 @@ impl AuthService {
             }
         };
 
-        let mut validation = Validation::new(Algorithm::ES256);
-        validation.set_issuer(&[&self.issuer()]);
-        validation.validate_aud = false; // Gateway 仅校验签名与 issuer，aud 由 Portal 自行校验
-        validation.validate_exp = false; // 🔴 关键：关闭自带的过期强校验，允许我们在下一步识别出“合法但过期”的 Token 以触发 RT 续签
-
-        // 通过 OIDC Discovery 动态获取支持的签名算法
-        let discovered_algorithms = self.jwks_cache.get_supported_algorithms();
-        if !discovered_algorithms.is_empty() {
-            validation.algorithms = discovered_algorithms;
-            debug!(
-                "JWT 验签使用 OIDC Discovery 算法: {:?}",
-                validation.algorithms
-            );
-        } else {
-            warn!("⚠️  OIDC 元数据未就绪，回退至默认算法 ES256");
-        }
+        // 核心性能优化：直接获取预先拼装好的 Validation 结构体，实现零动态分配与零拷贝
+        let validation = self.jwks_cache.get_validation();
 
         match decode::<Claims>(token, &decoding_key, &validation) {
             Ok(token_data) => {
@@ -175,7 +153,7 @@ impl AuthService {
 
     /// 检查 jti 是否在黑名单中（已吊销），失败时 fail-open 放行
     async fn check_jti_not_revoked(&self, jti: &str) -> bool {
-        let pool = match crate::redis::get_pool().await {
+        let pool = match crate::redis::get_pool() {
             Some(p) => p,
             None => return true, // 无 Redis → fail-open
         };
@@ -228,8 +206,11 @@ impl AuthService {
         let endpoint = self.refresh_endpoint();
         debug!("发起静默续签: url={}, sub={}", endpoint, sub);
         let response = HTTP_CLIENT
-            .post(&endpoint)
-            .header("Cookie", format!("portal_refresh_token={}", refresh_token))
+            .post(&*endpoint)
+            .header(
+                "Cookie",
+                format!("{}={}", cookie::REFRESH_COOKIE, refresh_token),
+            )
             .send()
             .await;
 
@@ -242,12 +223,12 @@ impl AuthService {
                 for header_value in resp.headers().get_all("set-cookie").iter() {
                     if let Ok(cookie_str) = header_value.to_str() {
                         if let Some(val) =
-                            cookie::extract_from_set_cookie(cookie_str, "portal_jwt_token")
+                            cookie::extract_from_set_cookie(cookie_str, cookie::ACCESS_COOKIE)
                         {
                             new_at = Some(val.to_string());
                         }
                         if let Some(val) =
-                            cookie::extract_from_set_cookie(cookie_str, "portal_refresh_token")
+                            cookie::extract_from_set_cookie(cookie_str, cookie::REFRESH_COOKIE)
                         {
                             new_rt = Some(val.to_string());
                         }
@@ -321,7 +302,7 @@ impl AuthService {
 /// 续签去重路径复用此 helper；安全相关的 jti 黑名单检查因需保留独立的降级日志，
 /// 仍显式处理连接获取（见 `check_jti_not_revoked`）。
 async fn redis_conn() -> Option<bb8::PooledConnection<'static, bb8_redis::RedisConnectionManager>> {
-    crate::redis::get_pool().await?.get().await.ok()
+    crate::redis::get_pool()?.get().await.ok()
 }
 
 /// 裸解 JWT payload（不验签），从 Base64 编码的 payload 段提取 Claims
@@ -342,9 +323,7 @@ pub fn decode_jwt_payload(token: &str) -> Option<Claims> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use jsonwebtoken::{DecodingKey, EncodingKey, Header, encode};
-
-    use crate::jwks::OidcMetadata;
+    use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, encode};
 
     fn make_test_auth_service(jwks_cache: &Arc<JwksCache>) -> AuthService {
         AuthService::new(Arc::clone(jwks_cache), "127.0.0.1:4100".to_string())
@@ -383,12 +362,7 @@ mod tests {
         let jwks_cache = Arc::new(JwksCache::new());
         let issuer = "https://sso.example.com";
 
-        jwks_cache.set_metadata_for_test(OidcMetadata {
-            issuer: Some(issuer.to_string()),
-            jwks_uri: Some("https://sso.example.com/api/auth/jwks".into()),
-            id_token_signing_alg_values_supported: vec!["HS256".into()],
-            refresh_endpoint: None,
-        });
+        jwks_cache.set_metadata_for_test(issuer, &["HS256"]);
 
         let secret = b"super-secret-key-that-is-long-enough-for-hs256";
         let kid = "key-test-1";
@@ -410,12 +384,7 @@ mod tests {
         let jwks_cache = Arc::new(JwksCache::new());
         let issuer = "https://sso.example.com";
 
-        jwks_cache.set_metadata_for_test(OidcMetadata {
-            issuer: Some(issuer.to_string()),
-            jwks_uri: Some("https://sso.example.com/api/auth/jwks".into()),
-            id_token_signing_alg_values_supported: vec!["HS256".into()],
-            refresh_endpoint: None,
-        });
+        jwks_cache.set_metadata_for_test(issuer, &["HS256"]);
 
         let secret = b"super-secret-key-that-is-long-enough-for-hs256";
         let kid = "key-test-1";
@@ -433,12 +402,7 @@ mod tests {
         let jwks_cache = Arc::new(JwksCache::new());
         let issuer = "https://sso.example.com";
 
-        jwks_cache.set_metadata_for_test(OidcMetadata {
-            issuer: Some(issuer.to_string()),
-            jwks_uri: Some("https://sso.example.com/api/auth/jwks".into()),
-            id_token_signing_alg_values_supported: vec!["HS256".into()],
-            refresh_endpoint: None,
-        });
+        jwks_cache.set_metadata_for_test(issuer, &["HS256"]);
 
         let secret = b"super-secret-key-that-is-long-enough-for-hs256";
         let kid = "key-test-1";
@@ -464,12 +428,7 @@ mod tests {
         let jwks_cache = Arc::new(JwksCache::new());
         let issuer = "https://sso.example.com";
 
-        jwks_cache.set_metadata_for_test(OidcMetadata {
-            issuer: Some(issuer.to_string()),
-            jwks_uri: Some("https://sso.example.com/api/auth/jwks".into()),
-            id_token_signing_alg_values_supported: vec!["HS256".into()],
-            refresh_endpoint: None,
-        });
+        jwks_cache.set_metadata_for_test(issuer, &["HS256"]);
 
         let secret = b"super-secret-key-that-is-long-enough-for-hs256";
         // 注册 key-test-1，但 token 使用 unknown-kid
