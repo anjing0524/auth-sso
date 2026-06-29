@@ -3,68 +3,14 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use pingora_core::prelude::*;
 use pingora_http::{RequestHeader, ResponseHeader};
-use pingora_load_balancing::LoadBalancer;
-use pingora_load_balancing::selection::RoundRobin;
 use pingora_proxy::{ProxyHttp, Session};
-use tracing::{debug, info, warn};
+use tracing::debug;
 
-use crate::auth::{AuthService, RefreshedTokens, VerifyResult};
+use crate::app_context::AppContext;
+use crate::auth::RefreshedTokens;
 use crate::cookie;
-use crate::path_matcher::{PathClass, PathMatcher};
-use crate::rate_limiter::RateLimiter;
-
-/// 根据请求上下文决策鉴权失败时的响应方式：
-/// — 浏览器普通页面导航 → 302 重定向至登录页
-/// — API / RSC / Server Action → 401 直接拦截
-fn should_redirect_to_login(method: &str, accept: &str, has_rsc: bool) -> bool {
-    let is_get = method.eq_ignore_ascii_case("GET");
-    let is_html = accept.contains("text/html");
-    is_get && is_html && !has_rsc
-}
-
-/// 鉴权失败统一响应处理（302 重定向 或 401 拦截）
-///
-/// 不依赖 Gateway 状态，作为纯函数处理 HTTP 响应。
-/// 返回 `Ok(true)` 表示已写回响应，调用方应据此短路。
-async fn respond_auth_failure(session: &mut Session) -> Result<bool> {
-    let method = session.req_header().method.as_str();
-    let accept = session
-        .get_header("Accept")
-        .and_then(|h| h.to_str().ok())
-        .unwrap_or("");
-    let has_rsc = session.get_header("RSC").is_some() || session.get_header("rsc").is_some();
-
-    if should_redirect_to_login(method, accept, has_rsc) {
-        let path = session.req_header().uri.path();
-        let mut current_url = path.to_owned();
-        if let Some(query) = session.req_header().uri.query() {
-            current_url.push('?');
-            current_url.push_str(query);
-        }
-        let callback_url = urlencoding::encode(&current_url);
-        let redirect_url = format!("/login?callbackUrl={}", callback_url);
-
-        info!(
-            "页面未授权 GET 导航，网关执行 302 重定向至: {}",
-            redirect_url
-        );
-        let mut header = ResponseHeader::build(302, None)?;
-        header.insert_header("Location", redirect_url)?;
-        session.set_keepalive(None);
-        session
-            .write_response_header(Box::new(header), true)
-            .await?;
-        return Ok(true);
-    }
-
-    info!("接口或异步 RPC 未授权访问，网关执行 401 强拦截");
-    let mut header = ResponseHeader::build(401, None)?;
-    header.insert_header("WWW-Authenticate", "Bearer")?;
-    session
-        .write_response_header(Box::new(header), true)
-        .await?;
-    Ok(true)
-}
+use crate::http_ext::SessionExt;
+use crate::path_matcher::PathClass;
 
 /// 从 Session 提取指定请求头的字符串值
 fn header_str<'s>(session: &'s Session, name: &str) -> Option<&'s str> {
@@ -83,16 +29,25 @@ fn insert_opt_header(
     Ok(())
 }
 
+/// 网关请求拦截控制流结果
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum FilterResult {
+    /// 继续执行后继步骤
+    Continue,
+    /// 拦截并短路请求流程（已经在内部向客户端响应了相应状态码与内容）
+    Break,
+}
+
 /// 已通过验签的请求身份 — Authorization 头、用户 ID、jti 三者同生共死，
 /// 作为一个整体在请求生命周期中流转（验签成功一起注入，续签成功一起覆盖）。
 #[derive(Clone, Debug)]
 pub struct Identity {
     /// 预格式化的 Authorization 头部值（例如 "Bearer <token>"）
-    auth_header: String,
+    pub auth_header: String,
     /// 用户 ID（从 JWT Claims.sub 提取）
-    user_id: String,
+    pub user_id: String,
     /// JWT 唯一标识（从 JWT Claims.jti 提取）
-    user_jti: String,
+    pub user_jti: String,
 }
 
 /// 网关请求上下文类型，用于在代理生命周期中传递已解析的身份与分类信息
@@ -112,86 +67,23 @@ pub struct GatewayCtx {
 
 impl GatewayCtx {
     /// 是否已通过验签（即上行应注入身份 Header）
-    fn is_authenticated(&self) -> bool {
+    pub fn is_authenticated(&self) -> bool {
         self.identity.is_some()
     }
 }
 
 /// Auth-SSO 去中心化安全网关 — 基于 Pingora (0.8.0 + OpenSSL)
 ///
-/// 负责代理编排：路由分类 → 限流 → 认证委托 → 请求转发。
-/// JWT 验签、续签逻辑委托给 `AuthService`；限流由自包含的 `RateLimiter` 处理。
+/// 负责代理编排：路由分类 → 限流检查 → 鉴权与静默续签 → 请求转发。
+///
+/// 整体架构设计遵循 KISS 极简原则：限流、鉴权的具体策略解耦在各自的 Filter 模块函数中，
+/// 核心执行流在 `request_filter` 中通过最简单的静态函数顺序直接调用，无任何泛型、虚表及 `Box` 堆开销。
 pub struct Gateway {
-    /// Portal 上游负载均衡器
-    pub portal_lb: Arc<LoadBalancer<RoundRobin>>,
-    /// 认证服务（JWT 验签 + Token 续签 + jti 黑名单）
-    pub auth_service: Arc<AuthService>,
-    /// 公开路径匹配器
-    pub path_matcher: PathMatcher,
-    /// 速率限制器（内部自带 Redis + 进程内降级）
-    pub limiter: Arc<RateLimiter>,
+    /// 全局应用依赖容器
+    pub app: Arc<AppContext>,
 }
 
 impl Gateway {
-    /// 执行 JWT 验签与静默续签，把身份信息写入 ctx。
-    ///
-    /// 返回 `Ok(true)` 表示鉴权失败并已写回 302/401 响应，调用方应短路；
-    /// 返回 `Ok(false)` 表示已认证（或为白名单放行路径），可继续转发。
-    async fn authenticate(&self, session: &mut Session, ctx: &mut GatewayCtx) -> Result<bool> {
-        let cookie_header = session.get_header("Cookie").and_then(|v| v.to_str().ok());
-
-        let token = match cookie_header
-            .and_then(|h| cookie::extract_from_header(h, cookie::ACCESS_COOKIE))
-        {
-            Some(t) => t,
-            None => return respond_auth_failure(session).await,
-        };
-
-        let verified_result = match self.auth_service.verify_jwt(token).await {
-            Some(v) => v,
-            None => return respond_auth_failure(session).await,
-        };
-
-        // 先用旧 Token 的身份填充 ctx；续签成功后在下方被新身份整体覆盖
-        let verified = verified_result.verified();
-        ctx.identity = Some(Identity {
-            auth_header: format!("Bearer {}", token),
-            user_id: verified.user_id.clone(),
-            user_jti: verified.jti.clone(),
-        });
-
-        // 完全有效 → 直接放行
-        if matches!(verified_result, VerifyResult::Valid(_)) {
-            return Ok(false);
-        }
-
-        // NeedsRefresh / Expired：尽力静默续签（刷新身份并下行新 Cookie）
-        let mut refreshed = false;
-        if let Some(rt) =
-            cookie_header.and_then(|h| cookie::extract_from_header(h, cookie::REFRESH_COOKIE))
-            && let Some(new_tokens) = self
-                .auth_service
-                .try_refresh_token(rt, &verified.user_id)
-                .await
-            && let Some(new_claims) = crate::auth::decode_jwt_payload(&new_tokens.access)
-        {
-            ctx.identity = Some(Identity {
-                auth_header: format!("Bearer {}", new_tokens.access),
-                user_id: new_claims.sub,
-                user_jti: new_claims.jti,
-            });
-            ctx.refreshed_tokens = Some(new_tokens);
-            refreshed = true;
-        }
-
-        // 仅「已过期且续签失败」才阻断；NeedsRefresh 续签失败时旧 AT 仍有效，放行
-        if matches!(verified_result, VerifyResult::Expired(_)) && !refreshed {
-            return respond_auth_failure(session).await;
-        }
-
-        Ok(false)
-    }
-
     /// 根据 ctx 重写发往上游的 Cookie：微服务剥离全部，受保护路径剥离 RT 并替换 AT。
     fn rewrite_upstream_cookies(&self, upstream_request: &mut RequestHeader, ctx: &GatewayCtx) {
         match ctx.path_class {
@@ -217,7 +109,7 @@ impl Gateway {
                     );
                 }
                 if let Err(e) = upstream_request.insert_header("Cookie", new_cookie) {
-                    warn!("重写上游 Cookie 失败: {:?}", e);
+                    tracing::warn!("重写上游 Cookie 失败: {:?}", e);
                 }
             }
             // 静态 / 公开路径：Cookie 透传，不做修改
@@ -242,7 +134,7 @@ impl ProxyHttp for Gateway {
         let host = header_str(session, "Host").unwrap_or("");
         debug!("接收代理请求，Host: {}", host);
 
-        let peer = self.portal_lb.select(b"", 256).ok_or_else(|| {
+        let peer = self.app.portal_lb.select(b"", 256).ok_or_else(|| {
             Error::explain(
                 ErrorType::HTTPStatus(502),
                 "gateway: 无可用 Portal 上游节点，请检查配置文件中的 upstream 设置",
@@ -256,38 +148,33 @@ impl ProxyHttp for Gateway {
     async fn request_filter(&self, session: &mut Session, ctx: &mut Self::CTX) -> Result<bool> {
         let path = session.req_header().uri.path();
 
-        // 0. 提取客户端 IP（优先 X-Forwarded-For）和 User-Agent
-        ctx.client_ip = header_str(session, "X-Forwarded-For")
-            .and_then(|s| s.split(',').next().map(|s| s.trim().to_string()));
+        // 0. 提取客户端 IP 与 User-Agent 并缓存在上下文中，后续步骤共享
+        ctx.client_ip = session.client_ip();
         ctx.client_ua = header_str(session, "User-Agent").map(|s| s.to_string());
 
-        // 1. 一次分类，贯穿后续 upstream 阶段
-        ctx.path_class = self.path_matcher.classify(path);
+        // 1. 进行路径分类
+        ctx.path_class = self.app.path_matcher.classify(path);
 
-        // 2. 静态资源：跳过限流与验签
+        // 2. 静态资源直接快速放行（无需限流、鉴权）
         if ctx.path_class == PathClass::Static {
             return Ok(false);
         }
 
-        // 3. 速率限制（仅 /api/auth/ 类路径在 limiter 内部命中）
-        let ip = ctx.client_ip.as_deref().unwrap_or("unknown");
-        if let Some(false) = self.limiter.check(ip, path) {
-            warn!("速率限制触发: ip={}, path={}", ip, path);
-            let mut header = ResponseHeader::build(429, None)?;
-            header.insert_header("Retry-After", "60")?;
-            session
-                .write_response_header(Box::new(header), true)
-                .await?;
+        // 3. 限流校验
+        if let FilterResult::Break =
+            crate::rate_limit_filter::check_rate_limit(session, ctx, &self.app).await?
+        {
             return Ok(true);
         }
 
-        // 4. 白名单公开路径：跳过验签
+        // 4. 白名单公开路由跳过鉴权
         if ctx.path_class == PathClass::Public {
             return Ok(false);
         }
 
-        // 5. 委托验签 + 静默续签；authenticate 返回 true 表示已写回失败响应
-        if self.authenticate(session, ctx).await? {
+        // 5. 鉴权与静默续签校验
+        if let FilterResult::Break = crate::auth_filter::check_auth(session, ctx, &self.app).await?
+        {
             return Ok(true);
         }
 
@@ -360,28 +247,10 @@ impl ProxyHttp for Gateway {
         upstream_response.append_header("Set-Cookie", at_cookie)?;
         upstream_response.append_header("Set-Cookie", rt_cookie)?;
 
-        info!(
+        tracing::info!(
             "下行注入续签 Set-Cookie: sub={:?}",
             ctx.identity.as_ref().map(|i| &i.user_id)
         );
         Ok(())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_should_redirect_to_login() {
-        assert!(should_redirect_to_login(
-            "GET",
-            "text/html,application/xhtml+xml",
-            false
-        ));
-        assert!(should_redirect_to_login("get", "text/html", false));
-        assert!(!should_redirect_to_login("POST", "text/html", false));
-        assert!(!should_redirect_to_login("GET", "application/json", false));
-        assert!(!should_redirect_to_login("GET", "text/html", true));
     }
 }

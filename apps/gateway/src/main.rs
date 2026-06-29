@@ -1,12 +1,16 @@
+mod app_context;
 mod auth;
+mod auth_filter;
 mod claims;
 mod config;
 mod cookie;
 mod gateway;
 mod http;
+mod http_ext;
 mod jwks;
 mod logging;
 mod path_matcher;
+mod rate_limit_filter;
 mod rate_limiter;
 mod redirect;
 mod redis;
@@ -16,17 +20,12 @@ use clap::Parser;
 use pingora_core::listeners::tls::TlsSettings;
 use pingora_core::prelude::*;
 use pingora_core::services::background::background_service;
-use pingora_load_balancing::LoadBalancer;
 use pingora_proxy::http_proxy_service;
 use std::sync::Arc;
 use tracing::info;
 
-use crate::auth::AuthService;
 use crate::config::Config;
 use crate::gateway::Gateway;
-use crate::jwks::JwksCache;
-use crate::path_matcher::PathMatcher;
-use crate::rate_limiter::RateLimiter;
 use crate::redirect::RedirectService;
 
 /// 命令行参数解析结构体 (Clap 声明式解析)
@@ -72,7 +71,8 @@ fn main() -> anyhow::Result<()> {
         upstreams
     );
 
-    let jwks_cache = Arc::new(JwksCache::new());
+    // ── 初始化全局应用依赖容器 ──
+    let app_ctx = Arc::new(crate::app_context::AppContext::new(config.clone())?);
 
     let mut my_server = Server::new(None).context("❌ 创建 Pingora 服务器失败")?;
     my_server.bootstrap();
@@ -87,26 +87,17 @@ fn main() -> anyhow::Result<()> {
     // ── 注册 JWKS 后台定时刷新服务（逐个尝试 upstream 直到 OIDC Discovery 成功）──
     let jwks_refresh_svc = background_service(
         "JWKS Refresh Service",
-        crate::jwks::JwksRefreshService::new(Arc::clone(&jwks_cache), upstreams.clone()),
+        crate::jwks::JwksRefreshService::new(
+            Arc::clone(&app_ctx.jwks_cache),
+            app_ctx.config.portal.upstreams(),
+        ),
     );
     let _ = my_server.add_service(jwks_refresh_svc);
-
-    let portal_lb = Arc::new(
-        LoadBalancer::try_from_iter(upstreams.clone())
-            .context("❌ 配置 Portal 上游地址无效，请检查 upstream 字段格式是否正确")?,
-    );
-
-    let path_matcher = PathMatcher::new(config.portal.public_paths.clone());
-
-    let auth_service = Arc::new(AuthService::new(Arc::clone(&jwks_cache), upstreams));
 
     let mut gateway_proxy = http_proxy_service(
         &my_server.configuration,
         Gateway {
-            portal_lb,
-            auth_service,
-            path_matcher,
-            limiter: Arc::new(RateLimiter::new()),
+            app: Arc::clone(&app_ctx),
         },
     );
 
