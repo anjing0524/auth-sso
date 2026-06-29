@@ -140,11 +140,12 @@ impl Gateway {
     async fn authenticate(&self, session: &mut Session, ctx: &mut GatewayCtx) -> Result<bool> {
         let cookie_header = session.get_header("Cookie").and_then(|v| v.to_str().ok());
 
-        let token =
-            match cookie_header.and_then(|h| cookie::extract_from_header(h, "portal_jwt_token")) {
-                Some(t) => t,
-                None => return respond_auth_failure(session).await,
-            };
+        let token = match cookie_header
+            .and_then(|h| cookie::extract_from_header(h, cookie::ACCESS_COOKIE))
+        {
+            Some(t) => t,
+            None => return respond_auth_failure(session).await,
+        };
 
         let verified_result = match self.auth_service.verify_jwt(token).await {
             Some(v) => v,
@@ -167,7 +168,7 @@ impl Gateway {
         // NeedsRefresh / Expired：尽力静默续签（刷新身份并下行新 Cookie）
         let mut refreshed = false;
         if let Some(rt) =
-            cookie_header.and_then(|h| cookie::extract_from_header(h, "portal_refresh_token"))
+            cookie_header.and_then(|h| cookie::extract_from_header(h, cookie::REFRESH_COOKIE))
             && let Some(new_tokens) = self
                 .auth_service
                 .try_refresh_token(rt, &verified.user_id)
@@ -207,11 +208,11 @@ impl Gateway {
                 else {
                     return;
                 };
-                let mut new_cookie = cookie::remove_from_header(cookie_str, "portal_refresh_token");
+                let mut new_cookie = cookie::remove_from_header(cookie_str, cookie::REFRESH_COOKIE);
                 if let Some(ref new_tokens) = ctx.refreshed_tokens {
                     new_cookie = cookie::replace_in_header(
                         &new_cookie,
-                        "portal_jwt_token",
+                        cookie::ACCESS_COOKIE,
                         &new_tokens.access,
                     );
                 }
@@ -248,7 +249,8 @@ impl ProxyHttp for Gateway {
             )
         })?;
         debug!("路由至 Portal 上游: {:?}", peer);
-        Ok(Box::new(HttpPeer::new(peer, false, "portal".to_string())))
+        // tls=false（上行明文 HTTP），SNI 不会被使用，传空字符串避免每请求一次堆分配
+        Ok(Box::new(HttpPeer::new(peer, false, String::new())))
     }
 
     async fn request_filter(&self, session: &mut Session, ctx: &mut Self::CTX) -> Result<bool> {
@@ -304,8 +306,8 @@ impl ProxyHttp for Gateway {
             upstream_request.insert_header("X-Forwarded-Host", host)?;
         }
 
-        // 微服务路由额外清除伪造的身份 Header（未通过验签时）
-        if ctx.path_class == PathClass::Microservice && !ctx.is_authenticated() {
+        // 全路径净化：未通过验签时，强力清除上行请求中可能由客户端伪造的身份 Header，实现全域零信任安全防伪造
+        if !ctx.is_authenticated() {
             upstream_request.remove_header("Authorization");
             upstream_request.remove_header("X-User-Id");
             upstream_request.remove_header("X-User-Jti");
@@ -343,12 +345,16 @@ impl ProxyHttp for Gateway {
         let secure_str = if secure { "; Secure" } else { "" };
 
         let at_cookie = format!(
-            "portal_jwt_token={}; Path=/; HttpOnly; SameSite=Lax; Max-Age=3600{}",
-            new_tokens.access, secure_str
+            "{}={}; Path=/; HttpOnly; SameSite=Lax; Max-Age=3600{}",
+            cookie::ACCESS_COOKIE,
+            new_tokens.access,
+            secure_str
         );
         let rt_cookie = format!(
-            "portal_refresh_token={}; Path=/; HttpOnly; SameSite=Lax; Max-Age=604800{}",
-            new_tokens.refresh, secure_str
+            "{}={}; Path=/; HttpOnly; SameSite=Lax; Max-Age=604800{}",
+            cookie::REFRESH_COOKIE,
+            new_tokens.refresh,
+            secure_str
         );
 
         upstream_response.append_header("Set-Cookie", at_cookie)?;

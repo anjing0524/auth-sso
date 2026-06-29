@@ -62,18 +62,22 @@ fn main() -> anyhow::Result<()> {
     let upstream = config.portal.upstream.clone();
     let jwks_cache = Arc::new(JwksCache::new());
 
-    // ── 注册 Redis URL（全局单例，连接池在首次使用时惰性建立）──
-    crate::redis::init(config.redis.url.clone());
-
     let mut my_server = Server::new(None).context("❌ 创建 Pingora 服务器失败")?;
     my_server.bootstrap();
+
+    // ── Redis 初始化 Service（利用 Pingora Service 生命周期预热连接，失败直接 exit）──
+    let redis_init_svc = background_service(
+        "Redis Init",
+        crate::redis::RedisInitService::new(config.redis.url.clone()),
+    );
+    let redis_handle = my_server.add_service(redis_init_svc);
 
     // ── 注册 JWKS 后台定时刷新服务 ──
     let jwks_refresh_svc = background_service(
         "JWKS Refresh Service",
         crate::jwks::JwksRefreshService::new(Arc::clone(&jwks_cache), upstream.clone()),
     );
-    my_server.add_service(jwks_refresh_svc);
+    let _ = my_server.add_service(jwks_refresh_svc);
 
     let portal_lb = Arc::new(
         LoadBalancer::try_from_iter([upstream.as_str()]).context("❌ 配置 Portal 上游地址无效")?,
@@ -99,7 +103,8 @@ fn main() -> anyhow::Result<()> {
 
     let ssl_bind_address = format!("0.0.0.0:{}", config.gateway.ssl_port);
     gateway_proxy.add_tls_with_settings(&ssl_bind_address, None, tls_settings);
-    my_server.add_service(gateway_proxy);
+    let gateway_handle = my_server.add_service(gateway_proxy);
+    gateway_handle.add_dependency(&redis_handle);
     info!("✅ HTTPS 代理服务监听于: {}", ssl_bind_address);
 
     // HTTP → HTTPS 强制重定向服务
@@ -111,11 +116,9 @@ fn main() -> anyhow::Result<()> {
     );
     let http_bind_address = format!("0.0.0.0:{}", config.gateway.port);
     redirect_proxy.add_tcp(&http_bind_address);
-    my_server.add_service(redirect_proxy);
+    let _ = my_server.add_service(redirect_proxy);
     info!("✅ HTTP 重定向服务监听于: {}", http_bind_address);
 
     info!("🚀 SSO 去中心化网关已完全就绪，开始处理流量...");
     my_server.run_forever();
-    #[allow(unreachable_code)]
-    Ok(())
 }

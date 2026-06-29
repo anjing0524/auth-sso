@@ -40,10 +40,10 @@ impl PathMatcher {
     ///
     /// # 参数
     /// * `public_paths` - 配置的白名单路径列表，以 `/` 结尾的视为前缀匹配
-    pub fn new(public_paths: Option<Vec<String>>) -> Self {
+    pub fn new(public_paths: Vec<String>) -> Self {
         let mut exact_paths = HashSet::new();
         let mut prefix_paths = Vec::new();
-        for path in public_paths.unwrap_or_default() {
+        for path in public_paths {
             if path.ends_with('/') && path != "/" {
                 prefix_paths.push(path);
             } else {
@@ -136,7 +136,7 @@ mod tests {
             "/oauth2/".to_string(),
             "/.well-known/".to_string(),
         ];
-        let matcher = PathMatcher::new(Some(public_paths));
+        let matcher = PathMatcher::new(public_paths);
 
         // 静态目录资产放行
         assert!(matcher.is_public("/_next/static/chunks/main.js"));
@@ -166,11 +166,11 @@ mod tests {
 
     #[test]
     fn test_classify() {
-        let matcher = PathMatcher::new(Some(vec![
+        let matcher = PathMatcher::new(vec![
             "/login".to_string(),
             "/".to_string(),
             "/api/auth/".to_string(),
-        ]));
+        ]);
 
         // 静态资源目录
         assert_eq!(matcher.classify("/_next/static/main.js"), PathClass::Static);

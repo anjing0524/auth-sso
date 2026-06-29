@@ -40,14 +40,14 @@ pub struct PortalConfig {
     /// 网关通过此地址进行 OIDC Discovery 自动发现 JWKS 端点和 issuer
     pub upstream: String,
     /// 网关直接放行、不校验 JWT 的公开路由白名单路径列表
-    pub public_paths: Option<Vec<String>>,
+    pub public_paths: Vec<String>,
 }
 
 impl Default for PortalConfig {
     fn default() -> Self {
         Self {
             upstream: "127.0.0.1:4100".to_string(),
-            public_paths: Some(vec![
+            public_paths: vec![
                 "/login".to_string(),
                 "/register".to_string(),
                 "/error".to_string(),
@@ -55,7 +55,7 @@ impl Default for PortalConfig {
                 "/api/auth/".to_string(),
                 "/oauth2/".to_string(),
                 "/.well-known/".to_string(),
-            ]),
+            ],
         }
     }
 }
@@ -138,13 +138,7 @@ mod tests {
         assert_eq!(config.gateway.log_dir, "logs");
         assert_eq!(config.gateway.log_level, "info");
         assert_eq!(config.portal.upstream, "127.0.0.1:4100");
-        assert!(
-            config
-                .portal
-                .public_paths
-                .unwrap()
-                .contains(&"/login".to_string())
-        );
+        assert!(config.portal.public_paths.contains(&"/login".to_string()));
     }
 
     #[test]
@@ -175,7 +169,7 @@ mod tests {
             assert_eq!(config.gateway.log_level, "debug");
             assert_eq!(config.portal.upstream, "portal:4000");
             assert_eq!(
-                config.portal.public_paths.unwrap(),
+                config.portal.public_paths,
                 vec![
                     "/login".to_string(),
                     "/register".to_string(),
@@ -207,13 +201,7 @@ mod tests {
             assert_eq!(config.gateway.log_dir, "logs");
             assert_eq!(config.gateway.log_level, "info");
             assert_eq!(config.redis.url, "redis://127.0.0.1:6379");
-            assert!(
-                config
-                    .portal
-                    .public_paths
-                    .unwrap()
-                    .contains(&"/login".to_string())
-            );
+            assert!(config.portal.public_paths.contains(&"/login".to_string()));
         }
 
         // 3. 清理临时文件

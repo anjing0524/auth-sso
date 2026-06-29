@@ -1,16 +1,30 @@
-/// Cookie 头解析与操作工具（零拷贝 + 零分配，适配网关热路径）
+//! Cookie 头解析与操作工具（零拷贝 + 零分配，适配网关热路径）
+//!
+//! 所有提取函数返回的字符串切片引用自原始 Cookie 头部，避免不必要的内存分配。
+//!
+//! # Cookie 名称约定（与 @auth-sso/contracts 保持同步）
+//!
+//! | 本模块常量 | @auth-sso/contracts 常量 | 说明 |
+//! |-----------|-------------------------|------|
+//! | [`ACCESS_COOKIE`] | `COOKIE_NAMES.JWT` | Access Token Cookie |
+//! | [`REFRESH_COOKIE`] | `COOKIE_NAMES.REFRESH` | Refresh Token Cookie |
+//!
+//! ⚠️ 修改 Cookie 名称时，只需改本模块的 `ACCESS_COOKIE` / `REFRESH_COOKIE`，
+//! 并同步 `packages/contracts/src/index.ts` 中的 `COOKIE_NAMES`。
+
+/// Access Token Cookie 名称（与 @auth-sso/contracts `COOKIE_NAMES.JWT` 同步）
+pub const ACCESS_COOKIE: &str = "portal_jwt_token";
+/// Refresh Token Cookie 名称（与 @auth-sso/contracts `COOKIE_NAMES.REFRESH` 同步）
+pub const REFRESH_COOKIE: &str = "portal_refresh_token";
+
+/// 判定并截取一个 cookie 片段的值：匹配 `name=` 前缀后返回其后的值切片，否则 None
 ///
-/// 所有提取函数返回的字符串切片引用自原始 Cookie 头部，避免不必要的内存分配。
-///
-/// # Cookie 名称约定（与 @auth-sso/contracts 保持同步）
-///
-/// | 本模块使用 | @auth-sso/contracts 常量 | 说明 |
-/// |-----------|-------------------------|------|
-/// | `portal_jwt_token` | `COOKIE_NAMES.JWT` | Access Token Cookie |
-/// | `portal_refresh_token` | `COOKIE_NAMES.REFRESH` | Refresh Token Cookie |
-///
-/// ⚠️ 修改 Cookie 名称时，必须同步更新 `packages/contracts/src/index.ts` 中的
-/// `COOKIE_NAMES` 常量和本模块中的字符串字面量。
+/// 统一 `extract_from_header` / `extract_from_set_cookie` / `remove_from_header` /
+/// `replace_in_header` 对 "name=" 前缀的匹配逻辑，零分配、无裸索引切片。
+fn cookie_value<'a>(seg: &'a str, name: &str) -> Option<&'a str> {
+    seg.strip_prefix(name)?.strip_prefix('=')
+}
+
 /// 从请求 Cookie 头部中提取指定名称的 cookie 值（零拷贝）
 ///
 /// 容错处理双引号包裹的值（RFC 6265 兼容）。
@@ -27,12 +41,9 @@
 /// assert_eq!(cookie::extract_from_header(header, "portal_jwt_token"), Some("abc.def"));
 /// ```
 pub fn extract_from_header<'a>(cookie_header: &'a str, name: &str) -> Option<&'a str> {
-    cookie_header.split(';').find_map(|cookie_str| {
-        let trimmed = cookie_str.trim_start();
-        // 零分配：strip_prefix 两次 — 先匹配名称，再剥离 '='
-        let val = trimmed.strip_prefix(name)?.strip_prefix('=')?;
-        Some(strip_quotes(val))
-    })
+    cookie_header
+        .split(';')
+        .find_map(|s| cookie_value(s.trim_start(), name).map(strip_quotes))
 }
 
 /// 从 Set-Cookie 响应头中提取指定 cookie 的值（仅匹配首个分号前的 name=value 段）
@@ -50,12 +61,8 @@ pub fn extract_from_header<'a>(cookie_header: &'a str, name: &str) -> Option<&'a
 /// assert_eq!(cookie::extract_from_set_cookie(sc, "portal_jwt_token"), Some("eyJ.xxx"));
 /// ```
 pub fn extract_from_set_cookie<'a>(set_cookie: &'a str, name: &str) -> Option<&'a str> {
-    let first_segment = set_cookie.split(';').next()?;
-    let val = first_segment
-        .trim_start()
-        .strip_prefix(name)?
-        .strip_prefix('=')?;
-    Some(strip_quotes(val))
+    let first_segment = set_cookie.split(';').next()?.trim_start();
+    cookie_value(first_segment, name).map(strip_quotes)
 }
 
 /// 剥离 cookie 值两端的双引号（RFC 6265 兼容），零分配
@@ -67,29 +74,32 @@ fn strip_quotes(val: &str) -> &str {
 
 /// 从 Cookie 头部中移除指定名称的 cookie
 ///
-/// 用于在上行请求中剥离不应透传给 Portal 的 cookie（如 refresh_token）。
+/// 采用单次内存分配方式重构，规避中间 Vec 集合分配，提升高并发下的执行效率。
 ///
 /// # 参数
 /// * `cookie_header` - 原始 Cookie 头
 /// * `cookie_name` - 要移除的 cookie 名称
 pub fn remove_from_header(cookie_header: &str, cookie_name: &str) -> String {
-    cookie_header
-        .split(';')
-        .filter_map(|s| {
-            let trimmed = s.trim_start();
-            if trimmed.starts_with(cookie_name) && trimmed[cookie_name.len()..].starts_with('=') {
-                None
-            } else {
-                Some(trimmed)
-            }
-        })
-        .collect::<Vec<_>>()
-        .join("; ")
+    let mut result = String::with_capacity(cookie_header.len());
+    let mut first = true;
+
+    for s in cookie_header.split(';') {
+        let trimmed = s.trim_start();
+        if cookie_value(trimmed, cookie_name).is_some() {
+            continue;
+        }
+        if !first {
+            result.push_str("; ");
+        }
+        result.push_str(trimmed);
+        first = false;
+    }
+    result
 }
 
 /// 替换 Cookie 头部中指定 cookie 的值；若不存在则追加
 ///
-/// 用于续签成功后更新上行请求中的 portal_jwt_token。
+/// 采用预估容量的单次内存分配设计，省去 Vec 及各个分段 String 的分配开销。
 ///
 /// # 参数
 /// * `cookie_header` - 原始 Cookie 头
@@ -97,23 +107,36 @@ pub fn remove_from_header(cookie_header: &str, cookie_name: &str) -> String {
 /// * `new_value` - 新的 cookie 值
 pub fn replace_in_header(cookie_header: &str, cookie_name: &str, new_value: &str) -> String {
     let mut found = false;
-    let mut parts: Vec<String> = cookie_header
-        .split(';')
-        .map(|s| {
-            let trimmed = s.trim_start();
-            if trimmed.starts_with(cookie_name) && trimmed[cookie_name.len()..].starts_with('=') {
-                found = true;
-                format!("{}={}", cookie_name, new_value)
-            } else {
-                trimmed.to_string()
-            }
-        })
-        .collect();
+    // 预估新 Cookie 串的长度，防止 String 在追加时多次 resize
+    let estimated_cap = cookie_header.len() + cookie_name.len() + new_value.len() + 2;
+    let mut result = String::with_capacity(estimated_cap);
+    let mut first = true;
+
+    for s in cookie_header.split(';') {
+        let trimmed = s.trim_start();
+        if !first {
+            result.push_str("; ");
+        }
+        if cookie_value(trimmed, cookie_name).is_some() {
+            found = true;
+            result.push_str(cookie_name);
+            result.push('=');
+            result.push_str(new_value);
+        } else {
+            result.push_str(trimmed);
+        }
+        first = false;
+    }
 
     if !found {
-        parts.push(format!("{}={}", cookie_name, new_value));
+        if !first {
+            result.push_str("; ");
+        }
+        result.push_str(cookie_name);
+        result.push('=');
+        result.push_str(new_value);
     }
-    parts.join("; ")
+    result
 }
 
 #[cfg(test)]
