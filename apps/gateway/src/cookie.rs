@@ -31,7 +31,7 @@ pub fn extract_from_header<'a>(cookie_header: &'a str, name: &str) -> Option<&'a
         let trimmed = cookie_str.trim_start();
         // 零分配：strip_prefix 两次 — 先匹配名称，再剥离 '='
         let val = trimmed.strip_prefix(name)?.strip_prefix('=')?;
-        Some(val.strip_prefix('"').and_then(|v| v.strip_suffix('"')).unwrap_or(val))
+        Some(strip_quotes(val))
     })
 }
 
@@ -51,8 +51,18 @@ pub fn extract_from_header<'a>(cookie_header: &'a str, name: &str) -> Option<&'a
 /// ```
 pub fn extract_from_set_cookie<'a>(set_cookie: &'a str, name: &str) -> Option<&'a str> {
     let first_segment = set_cookie.split(';').next()?;
-    let val = first_segment.trim_start().strip_prefix(name)?.strip_prefix('=')?;
-    Some(val.strip_prefix('"').and_then(|v| v.strip_suffix('"')).unwrap_or(val))
+    let val = first_segment
+        .trim_start()
+        .strip_prefix(name)?
+        .strip_prefix('=')?;
+    Some(strip_quotes(val))
+}
+
+/// 剥离 cookie 值两端的双引号（RFC 6265 兼容），零分配
+fn strip_quotes(val: &str) -> &str {
+    val.strip_prefix('"')
+        .and_then(|v| v.strip_suffix('"'))
+        .unwrap_or(val)
 }
 
 /// 从 Cookie 头部中移除指定名称的 cookie

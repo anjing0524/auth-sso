@@ -27,6 +27,26 @@ pub struct VerifiedToken {
     pub jti: String,
 }
 
+/// JWT 验签与过期状态
+#[derive(Debug)]
+pub enum VerifyResult {
+    /// 签名有效且未过期
+    Valid(VerifiedToken),
+    /// 签名有效，即将过期（触发静默续签窗口）
+    NeedsRefresh(VerifiedToken),
+    /// 签名有效，但已完全过期（必须强制通过 Refresh Token 续签，否则 401）
+    Expired(VerifiedToken),
+}
+
+impl VerifyResult {
+    /// 借用内部已验签的身份信息（三种状态携带同一份 `VerifiedToken`）
+    pub fn verified(&self) -> &VerifiedToken {
+        match self {
+            VerifyResult::Valid(v) | VerifyResult::NeedsRefresh(v) | VerifyResult::Expired(v) => v,
+        }
+    }
+}
+
 /// 静默续签得到的新 Token 对
 #[derive(Debug, Clone)]
 pub struct RefreshedTokens {
@@ -74,9 +94,9 @@ impl AuthService {
     ///
     /// 流程：解析 JWT 头部获取 kid → 从 JWKS 缓存查找公钥 → 验签 + issuer 校验 → jti 黑名单检查
     ///
-    /// 返回 `VerifiedToken` 表示验签通过，`None` 表示任一环节失败。
+    /// 返回 `VerifyResult` 表示验签（签名部分）通过，内部区分是否过期。
     /// Redis 不可用时 jti 黑名单检查 fail-open（放行），通过 tracing 记录降级事件。
-    pub async fn verify_jwt(&self, token: &str) -> Option<VerifiedToken> {
+    pub async fn verify_jwt(&self, token: &str) -> Option<VerifyResult> {
         let header = match decode_header(token) {
             Ok(h) => h,
             Err(e) => {
@@ -104,6 +124,7 @@ impl AuthService {
         let mut validation = Validation::new(Algorithm::ES256);
         validation.set_issuer(&[&self.issuer()]);
         validation.validate_aud = false; // Gateway 仅校验签名与 issuer，aud 由 Portal 自行校验
+        validation.validate_exp = false; // 🔴 关键：关闭自带的过期强校验，允许我们在下一步识别出“合法但过期”的 Token 以触发 RT 续签
 
         // 通过 OIDC Discovery 动态获取支持的签名算法
         let discovered_algorithms = self.jwks_cache.get_supported_algorithms();
@@ -126,10 +147,24 @@ impl AuthService {
                     return None;
                 }
 
-                Some(VerifiedToken {
+                let verified = VerifiedToken {
                     user_id: token_data.claims.sub,
                     jti: token_data.claims.jti,
-                })
+                };
+
+                let now = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs() as usize;
+
+                if token_data.claims.exp < now {
+                    Some(VerifyResult::Expired(verified))
+                } else if token_data.claims.exp.saturating_sub(now) < REFRESH_THRESHOLD_SEC as usize
+                {
+                    Some(VerifyResult::NeedsRefresh(verified))
+                } else {
+                    Some(VerifyResult::Valid(verified))
+                }
             }
             Err(e) => {
                 warn!("JWT 载荷校验失败: {:?}", e);
@@ -249,28 +284,24 @@ impl AuthService {
 
     /// 通过 Redis 检查续签去重缓存（30s 窗口内同用户复用结果）
     async fn check_refresh_dedup(&self, sub: &str) -> Option<RefreshedTokens> {
-        let pool = crate::redis::get_pool().await?;
-        let mut conn = pool.get().await.ok()?;
+        let mut conn = redis_conn().await?;
         let key = format!("{}{}", REFRESH_DEDUP_PREFIX, sub);
         let cached: Option<String> = redis::cmd("GET")
             .arg(&key)
             .query_async(&mut *conn)
             .await
             .ok()?;
-        cached.and_then(|v| {
-            let (access, refresh) = v.split_once('|')?;
-            Some(RefreshedTokens {
-                access: access.to_string(),
-                refresh: refresh.to_string(),
-            })
+        let cached = cached?;
+        let (access, refresh) = cached.split_once('|')?;
+        Some(RefreshedTokens {
+            access: access.to_string(),
+            refresh: refresh.to_string(),
         })
     }
 
     /// 向 Redis 写入续签去重缓存（SET NX EX，原子去重 + 自动过期）
     async fn set_refresh_dedup(&self, sub: &str, tokens: &RefreshedTokens) {
-        if let Some(pool) = crate::redis::get_pool().await
-            && let Ok(mut conn) = pool.get().await
-        {
+        if let Some(mut conn) = redis_conn().await {
             let key = format!("{}{}", REFRESH_DEDUP_PREFIX, sub);
             let value = format!("{}|{}", tokens.access, tokens.refresh);
             let _: Result<(), _> = redis::cmd("SET")
@@ -283,6 +314,14 @@ impl AuthService {
                 .await;
         }
     }
+}
+
+/// 获取一条 Redis 连接；连接池未就绪或取连接失败时返回 None
+///
+/// 续签去重路径复用此 helper；安全相关的 jti 黑名单检查因需保留独立的降级日志，
+/// 仍显式处理连接获取（见 `check_jti_not_revoked`）。
+async fn redis_conn() -> Option<bb8::PooledConnection<'static, bb8_redis::RedisConnectionManager>> {
+    crate::redis::get_pool().await?.get().await.ok()
 }
 
 /// 裸解 JWT payload（不验签），从 Base64 编码的 payload 段提取 Claims
@@ -298,18 +337,6 @@ pub fn decode_jwt_payload(token: &str) -> Option<Claims> {
         .decode(parts[1])
         .ok()?;
     serde_json::from_slice::<Claims>(&payload_bytes).ok()
-}
-
-/// 判断 Access Token 是否即将过期（剩余有效期 < REFRESH_THRESHOLD_SEC）
-pub fn needs_refresh(token: &str) -> bool {
-    let now_sec = std::time::SystemTime::now()
-        .duration_since(std::time::SystemTime::UNIX_EPOCH)
-        .unwrap()
-        .as_secs() as i64;
-
-    decode_jwt_payload(token)
-        .map(|claims| claims.exp as i64 - now_sec < REFRESH_THRESHOLD_SEC)
-        .unwrap_or(false)
 }
 
 #[cfg(test)]
@@ -371,10 +398,11 @@ mod tests {
         let token = make_test_token(kid, secret, issuer, "user-123", "jti-123", 3600);
 
         let result = auth_service.verify_jwt(&token).await;
-        assert!(result.is_some());
-        let verified = result.unwrap();
-        assert_eq!(verified.user_id, "user-123");
-        assert_eq!(verified.jti, "jti-123");
+        assert!(matches!(result, Some(VerifyResult::Valid(_))));
+        if let Some(VerifyResult::Valid(v)) = result {
+            assert_eq!(v.user_id, "user-123");
+            assert_eq!(v.jti, "jti-123");
+        }
     }
 
     #[tokio::test]
@@ -397,7 +425,7 @@ mod tests {
         let token = make_test_token(kid, secret, issuer, "user-123", "jti-123", -600);
 
         let result = auth_service.verify_jwt(&token).await;
-        assert!(result.is_none());
+        assert!(matches!(result, Some(VerifyResult::Expired(_))));
     }
 
     #[tokio::test]
@@ -484,52 +512,5 @@ mod tests {
     fn test_decode_jwt_payload_invalid() {
         assert!(decode_jwt_payload("not.a.jwt").is_none());
         assert!(decode_jwt_payload("").is_none());
-    }
-
-    #[test]
-    fn test_needs_refresh() {
-        let secret = b"sufficiently-long-secret-key-for-hs256!!";
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::SystemTime::UNIX_EPOCH)
-            .unwrap()
-            .as_secs() as usize;
-
-        // 即将过期的 token（60 秒后）
-        let claims_near_expiry = Claims {
-            sub: "user-1".to_string(),
-            iss: "test".to_string(),
-            aud: "test".to_string(),
-            exp: now + 60,
-            jti: "jti-1".to_string(),
-            roles: vec![],
-            permissions: vec![],
-            dept_ids: vec![],
-        };
-        let token_near = encode(
-            &Header::new(Algorithm::HS256),
-            &claims_near_expiry,
-            &EncodingKey::from_secret(secret),
-        )
-        .unwrap();
-        assert!(needs_refresh(&token_near));
-
-        // 长期有效的 token（1 小时后）
-        let claims_far = Claims {
-            sub: "user-1".to_string(),
-            iss: "test".to_string(),
-            aud: "test".to_string(),
-            exp: now + 3600,
-            jti: "jti-1".to_string(),
-            roles: vec![],
-            permissions: vec![],
-            dept_ids: vec![],
-        };
-        let token_far = encode(
-            &Header::new(Algorithm::HS256),
-            &claims_far,
-            &EncodingKey::from_secret(secret),
-        )
-        .unwrap();
-        assert!(!needs_refresh(&token_far));
     }
 }

@@ -8,7 +8,7 @@ use pingora_load_balancing::selection::RoundRobin;
 use pingora_proxy::{ProxyHttp, Session};
 use tracing::{debug, info, warn};
 
-use crate::auth::{self, AuthService, RefreshedTokens};
+use crate::auth::{AuthService, RefreshedTokens, VerifyResult};
 use crate::cookie;
 use crate::path_matcher::{PathClass, PathMatcher};
 use crate::rate_limiter::RateLimiter;
@@ -71,17 +71,37 @@ fn header_str<'s>(session: &'s Session, name: &str) -> Option<&'s str> {
     session.get_header(name).and_then(|h| h.to_str().ok())
 }
 
+/// 当 `value` 为 `Some` 时向请求头注入；`None` 视为 no-op
+fn insert_opt_header(
+    req: &mut RequestHeader,
+    name: &'static str,
+    value: &Option<String>,
+) -> Result<()> {
+    if let Some(v) = value {
+        req.insert_header(name, v.as_str())?;
+    }
+    Ok(())
+}
+
+/// 已通过验签的请求身份 — Authorization 头、用户 ID、jti 三者同生共死，
+/// 作为一个整体在请求生命周期中流转（验签成功一起注入，续签成功一起覆盖）。
+#[derive(Clone, Debug)]
+pub struct Identity {
+    /// 预格式化的 Authorization 头部值（例如 "Bearer <token>"）
+    auth_header: String,
+    /// 用户 ID（从 JWT Claims.sub 提取）
+    user_id: String,
+    /// JWT 唯一标识（从 JWT Claims.jti 提取）
+    user_jti: String,
+}
+
 /// 网关请求上下文类型，用于在代理生命周期中传递已解析的身份与分类信息
 #[derive(Default, Debug)]
 pub struct GatewayCtx {
     /// 当前请求的路径分类（在 request_filter 中一次计算，upstream 阶段复用）
     pub path_class: PathClass,
-    /// 预格式化的 Authorization 头部值（例如 "Bearer <token>"）
-    pub auth_header: Option<String>,
-    /// 用户 ID（从 JWT Claims.sub 提取）
-    pub user_id: Option<String>,
-    /// JWT 唯一标识（从 JWT Claims.jti 提取）
-    pub user_jti: Option<String>,
+    /// 已验签身份（None 表示未通过验签的白名单/静态路径）
+    pub identity: Option<Identity>,
     /// 续签得到的新 Token（若在本次请求中触发了静默续签）
     pub refreshed_tokens: Option<RefreshedTokens>,
     /// 客户端真实 IP（从 X-Forwarded-For 提取）
@@ -93,7 +113,7 @@ pub struct GatewayCtx {
 impl GatewayCtx {
     /// 是否已通过验签（即上行应注入身份 Header）
     fn is_authenticated(&self) -> bool {
-        self.auth_header.is_some()
+        self.identity.is_some()
     }
 }
 
@@ -126,32 +146,46 @@ impl Gateway {
                 None => return respond_auth_failure(session).await,
             };
 
-        // 委托 AuthService 执行离线密码学 ES256 验签 + jti 黑名单检查
-        let verified = match self.auth_service.verify_jwt(token).await {
+        let verified_result = match self.auth_service.verify_jwt(token).await {
             Some(v) => v,
             None => return respond_auth_failure(session).await,
         };
 
-        ctx.auth_header = Some(format!("Bearer {}", token));
-        ctx.user_id = Some(verified.user_id);
-        ctx.user_jti = Some(verified.jti);
+        // 先用旧 Token 的身份填充 ctx；续签成功后在下方被新身份整体覆盖
+        let verified = verified_result.verified();
+        ctx.identity = Some(Identity {
+            auth_header: format!("Bearer {}", token),
+            user_id: verified.user_id.clone(),
+            user_jti: verified.jti.clone(),
+        });
 
-        // Access Token 即将过期 → 静默续签（失败不阻断，旧 AT 仍有效）
-        if auth::needs_refresh(token)
-            && let Some(rt) =
-                cookie_header.and_then(|h| cookie::extract_from_header(h, "portal_refresh_token"))
+        // 完全有效 → 直接放行
+        if matches!(verified_result, VerifyResult::Valid(_)) {
+            return Ok(false);
+        }
+
+        // NeedsRefresh / Expired：尽力静默续签（刷新身份并下行新 Cookie）
+        let mut refreshed = false;
+        if let Some(rt) =
+            cookie_header.and_then(|h| cookie::extract_from_header(h, "portal_refresh_token"))
             && let Some(new_tokens) = self
                 .auth_service
-                .try_refresh_token(rt, ctx.user_id.as_deref().unwrap())
+                .try_refresh_token(rt, &verified.user_id)
                 .await
+            && let Some(new_claims) = crate::auth::decode_jwt_payload(&new_tokens.access)
         {
-            // 解码新 AT 的 payload，更新 ctx 中的身份信息
-            if let Some(new_claims) = auth::decode_jwt_payload(&new_tokens.access) {
-                ctx.auth_header = Some(format!("Bearer {}", new_tokens.access));
-                ctx.user_id = Some(new_claims.sub);
-                ctx.user_jti = Some(new_claims.jti);
-                ctx.refreshed_tokens = Some(new_tokens);
-            }
+            ctx.identity = Some(Identity {
+                auth_header: format!("Bearer {}", new_tokens.access),
+                user_id: new_claims.sub,
+                user_jti: new_claims.jti,
+            });
+            ctx.refreshed_tokens = Some(new_tokens);
+            refreshed = true;
+        }
+
+        // 仅「已过期且续签失败」才阻断；NeedsRefresh 续签失败时旧 AT 仍有效，放行
+        if matches!(verified_result, VerifyResult::Expired(_)) && !refreshed {
+            return respond_auth_failure(session).await;
         }
 
         Ok(false)
@@ -280,22 +314,15 @@ impl ProxyHttp for Gateway {
         // 按路径分类重写上行 Cookie
         self.rewrite_upstream_cookies(upstream_request, ctx);
 
-        // 注入身份信息 Header（白名单/静态路径 ctx 为空，此处自然为 no-op）
-        if let Some(ref auth_header) = ctx.auth_header {
-            upstream_request.insert_header("Authorization", auth_header.as_str())?;
+        // 注入身份信息 Header：identity 三项同生共死，一起注入；
+        // client_ip / client_ua 独立可选。白名单/静态路径 ctx.identity 为 None，自然 no-op。
+        if let Some(id) = &ctx.identity {
+            upstream_request.insert_header("Authorization", id.auth_header.as_str())?;
+            upstream_request.insert_header("X-User-Id", id.user_id.as_str())?;
+            upstream_request.insert_header("X-User-Jti", id.user_jti.as_str())?;
         }
-        if let Some(ref user_id) = ctx.user_id {
-            upstream_request.insert_header("X-User-Id", user_id.as_str())?;
-        }
-        if let Some(ref user_jti) = ctx.user_jti {
-            upstream_request.insert_header("X-User-Jti", user_jti.as_str())?;
-        }
-        if let Some(ref client_ip) = ctx.client_ip {
-            upstream_request.insert_header("X-Client-IP", client_ip.as_str())?;
-        }
-        if let Some(ref client_ua) = ctx.client_ua {
-            upstream_request.insert_header("X-Client-UA", client_ua.as_str())?;
-        }
+        insert_opt_header(upstream_request, "X-Client-IP", &ctx.client_ip)?;
+        insert_opt_header(upstream_request, "X-Client-UA", &ctx.client_ua)?;
 
         Ok(())
     }
@@ -327,7 +354,10 @@ impl ProxyHttp for Gateway {
         upstream_response.append_header("Set-Cookie", at_cookie)?;
         upstream_response.append_header("Set-Cookie", rt_cookie)?;
 
-        info!("下行注入续签 Set-Cookie: sub={:?}", ctx.user_id);
+        info!(
+            "下行注入续签 Set-Cookie: sub={:?}",
+            ctx.identity.as_ref().map(|i| &i.user_id)
+        );
         Ok(())
     }
 }

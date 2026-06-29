@@ -81,55 +81,52 @@ impl JwksCache {
 
     /// 获取缓存的 OIDC Discovery 元数据中的 issuer
     pub fn get_discovered_issuer(&self) -> Option<String> {
-        self.oidc_metadata
-            .read()
-            .ok()?
-            .as_ref()
-            .and_then(|m| m.issuer.clone())
+        self.with_metadata(|m| m.issuer.clone()).flatten()
     }
 
     /// 从缓存 of OIDC Discovery 元数据中获取 refresh_endpoint URL
     /// 返回 None 表示元数据中未包含该字段（旧版 Portal），调用方应回退到默认路径
     pub fn get_refresh_endpoint(&self) -> Option<String> {
-        self.oidc_metadata
-            .read()
-            .ok()?
-            .as_ref()
-            .and_then(|m| m.refresh_endpoint.clone())
+        self.with_metadata(|m| m.refresh_endpoint.clone()).flatten()
     }
 
     /// 将 id_token_signing_alg_values_supported 中的字符串算法名转换为 jsonwebtoken::Algorithm
     /// 仅返回网关支持的算法（ES256/RS256/HS256 等），过滤不支持的算法
     pub fn get_supported_algorithms(&self) -> Vec<Algorithm> {
-        self.oidc_metadata
-            .read()
-            .ok()
-            .and_then(|guard| {
-                guard.as_ref().map(|m| {
-                    m.id_token_signing_alg_values_supported
-                        .iter()
-                        .filter_map(|alg| match alg.as_str() {
-                            "ES256" => Some(Algorithm::ES256),
-                            "ES384" => Some(Algorithm::ES384),
-                            "RS256" => Some(Algorithm::RS256),
-                            "RS384" => Some(Algorithm::RS384),
-                            "RS512" => Some(Algorithm::RS512),
-                            "PS256" => Some(Algorithm::PS256),
-                            "PS384" => Some(Algorithm::PS384),
-                            "PS512" => Some(Algorithm::PS512),
-                            "HS256" => Some(Algorithm::HS256),
-                            "HS384" => Some(Algorithm::HS384),
-                            "HS512" => Some(Algorithm::HS512),
-                            "EdDSA" => Some(Algorithm::EdDSA),
-                            _ => {
-                                warn!("⚠️  OIDC Discovery 返回不支持的签名算法: {}", alg);
-                                None
-                            }
-                        })
-                        .collect()
-                })
-            })
-            .unwrap_or_default()
+        self.with_metadata(|m| {
+            m.id_token_signing_alg_values_supported
+                .iter()
+                .filter_map(|alg| Self::parse_algorithm(alg))
+                .collect()
+        })
+        .unwrap_or_default()
+    }
+
+    /// 在 OIDC 元数据缓存上做一次只读映射；元数据未就绪或锁中毒时返回 None
+    fn with_metadata<T>(&self, f: impl FnOnce(&OidcMetadata) -> T) -> Option<T> {
+        Some(f(self.oidc_metadata.read().ok()?.as_ref()?))
+    }
+
+    /// 将单个 OIDC 字符串算法名转为 `Algorithm`；不支持的算法记录告警并返回 None
+    fn parse_algorithm(alg: &str) -> Option<Algorithm> {
+        match alg {
+            "ES256" => Some(Algorithm::ES256),
+            "ES384" => Some(Algorithm::ES384),
+            "RS256" => Some(Algorithm::RS256),
+            "RS384" => Some(Algorithm::RS384),
+            "RS512" => Some(Algorithm::RS512),
+            "PS256" => Some(Algorithm::PS256),
+            "PS384" => Some(Algorithm::PS384),
+            "PS512" => Some(Algorithm::PS512),
+            "HS256" => Some(Algorithm::HS256),
+            "HS384" => Some(Algorithm::HS384),
+            "HS512" => Some(Algorithm::HS512),
+            "EdDSA" => Some(Algorithm::EdDSA),
+            _ => {
+                warn!("⚠️  OIDC Discovery 返回不支持的签名算法: {}", alg);
+                None
+            }
+        }
     }
 
     /// 将 JWKS 公钥集写入缓存（sync 和 async 刷新路径 of 共享内部逻辑）
@@ -271,29 +268,27 @@ impl JwksRefreshService {
 impl pingora_core::services::background::BackgroundService for JwksRefreshService {
     async fn start(&self, mut shutdown: pingora_core::server::ShutdownWatch) {
         loop {
-            match self.jwks_cache.refresh(&self.upstream).await {
-                Ok(_) => {
+            // 刷新结果仅决定下一次轮询间隔：成功 5min，失败则视缓存是否为空退避（空 10s / 非空 5min）
+            let delay_secs = match self.jwks_cache.refresh(&self.upstream).await {
+                Ok(()) => {
                     info!("✅ JWKS 公钥缓存定时刷新成功");
-                    tokio::select! {
-                        _ = shutdown.changed() => {
-                            info!("JWKS 刷新服务收到退出信号...");
-                            break;
-                        }
-                        _ = tokio::time::sleep(Duration::from_secs(300)) => {}
-                    }
+                    300
                 }
                 Err(e) => {
                     tracing::error!("❌ JWKS 公钥缓存定时刷新失败: {}", e);
                     let retry_delay = if self.jwks_cache.is_empty() { 10 } else { 300 };
                     warn!("⚠️ 网关将在 {} 秒后重试拉取 JWKS...", retry_delay);
-                    tokio::select! {
-                        _ = shutdown.changed() => {
-                            info!("JWKS 刷新服务收到退出信号...");
-                            break;
-                        }
-                        _ = tokio::time::sleep(Duration::from_secs(retry_delay)) => {}
-                    }
+                    retry_delay
                 }
+            };
+
+            // 等待下一轮，或收到关停信号即退出
+            tokio::select! {
+                _ = shutdown.changed() => {
+                    info!("JWKS 刷新服务收到退出信号...");
+                    break;
+                }
+                _ = tokio::time::sleep(Duration::from_secs(delay_secs)) => {}
             }
         }
     }
