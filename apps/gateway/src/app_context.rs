@@ -25,6 +25,12 @@ pub struct AppContext {
 
 impl AppContext {
     /// 实例化全局应用容器，自动构建所有业务组件，实现开箱即用与一键式拼装
+    ///
+    /// # 参数
+    /// * `config` - 从 `gateway.toml` 加载的完整配置
+    ///
+    /// # 错误
+    /// 在 Portal 上游地址无效或无法解析时返回 `anyhow::Error`
     pub fn new(config: Config) -> anyhow::Result<Self> {
         let upstreams = config.portal.upstreams();
 

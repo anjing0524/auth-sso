@@ -3,7 +3,6 @@ use crate::auth::VerifyResult;
 use crate::cookie;
 use crate::gateway::{FilterResult, GatewayCtx, Identity};
 use crate::http_ext::SessionExt;
-use crate::path_matcher::PathClass;
 use pingora_core::Result;
 use pingora_proxy::Session;
 use tracing::info;
@@ -24,7 +23,7 @@ async fn respond_auth_failure(session: &mut Session) -> Result<FilterResult> {
         .get_header("Accept")
         .and_then(|h| h.to_str().ok())
         .unwrap_or("");
-    let has_rsc = session.get_header("RSC").is_some() || session.get_header("rsc").is_some();
+    let has_rsc = session.get_header("RSC").is_some();
 
     if should_redirect_to_login(method, accept, has_rsc) {
         let path = session.req_header().uri.path();
@@ -51,21 +50,23 @@ async fn respond_auth_failure(session: &mut Session) -> Result<FilterResult> {
 
 /// 鉴权与静默续签校验逻辑，保障路由访问安全并提供平滑的会话刷新。
 ///
-/// 返回 `FilterResult::Break` 时表示未授权，且在内部已向客户端写回了 302/401 响应。
+/// 仅在 `request_filter` 中经过 Static/Public 前置跳过之后才被调用，
+/// 因此本函数只处理受保护路径（Protected / Microservice）。
+///
+/// 返回 `FilterResult::Break` 时表示未授权，且在内部向客户端写回了 302/401 响应。
 pub async fn check_auth(
     session: &mut Session,
     ctx: &mut GatewayCtx,
     app: &AppContext,
 ) -> Result<FilterResult> {
-    // 静态资源与公开路由白名单：直接跳过鉴权
-    if ctx.path_class == PathClass::Static || ctx.path_class == PathClass::Public {
-        return Ok(FilterResult::Continue);
-    }
+    // 一次性提取 Cookie 头，后续 ACCESS / REFRESH 共用，避免重复线性扫描 + UTF-8 校验
+    let cookie_header = session.get_header("Cookie").and_then(|v| v.to_str().ok());
 
-    let token = match session.get_cookie(cookie::ACCESS_COOKIE) {
-        Some(t) => t,
-        None => return respond_auth_failure(session).await,
-    };
+    let token =
+        match cookie_header.and_then(|h| cookie::extract_from_header(h, cookie::ACCESS_COOKIE)) {
+            Some(t) => t,
+            None => return respond_auth_failure(session).await,
+        };
 
     let verified_result: VerifyResult = match app.auth_service.verify_jwt(token).await {
         Some(v) => v,
@@ -87,7 +88,8 @@ pub async fn check_auth(
 
     // NeedsRefresh / Expired：尽力静默续签（刷新身份并下行新 Cookie）
     let mut refreshed = false;
-    if let Some(rt) = session.get_cookie(cookie::REFRESH_COOKIE)
+    if let Some(rt) =
+        cookie_header.and_then(|h| cookie::extract_from_header(h, cookie::REFRESH_COOKIE))
         && let Some(new_tokens) = app
             .auth_service
             .try_refresh_token(rt, &verified.user_id)

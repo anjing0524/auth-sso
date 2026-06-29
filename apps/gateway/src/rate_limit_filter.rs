@@ -1,7 +1,6 @@
 use crate::app_context::AppContext;
 use crate::gateway::{FilterResult, GatewayCtx};
 use crate::http_ext::SessionExt;
-use crate::path_matcher::PathClass;
 use pingora_core::Result;
 use pingora_proxy::Session;
 use tracing::warn;
@@ -14,11 +13,6 @@ pub async fn check_rate_limit(
     ctx: &mut GatewayCtx,
     app: &AppContext,
 ) -> Result<FilterResult> {
-    // 静态资源直接跳过限流
-    if ctx.path_class == PathClass::Static {
-        return Ok(FilterResult::Continue);
-    }
-
     let path = session.req_header().uri.path();
     let ip = ctx.client_ip.as_deref().unwrap_or("unknown");
 

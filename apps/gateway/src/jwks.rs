@@ -36,7 +36,7 @@ pub enum JwksError {
 
 /// OIDC Discovery 拉取结果 — 不含公钥，待 JWKS 公钥也拉取成功后一并原子写入缓存
 struct OidcDiscovery {
-    validation: Validation,
+    validation: Arc<Validation>,
     refresh_endpoint: Option<Arc<str>>,
     jwks_uri: String,
 }
@@ -46,8 +46,8 @@ struct OidcDiscovery {
 struct OidcMetadata {
     /// kid -> 公钥映射表
     keys: HashMap<String, DecodingKey>,
-    /// 预构建的 JWT 校验配置，彻底消除热路径上的动态构建与内存分配
-    validation: Validation,
+    /// 预构建的 JWT 校验配置（Arc 共享引用，热路径仅原子引用计数递增，零拷贝）
+    validation: Arc<Validation>,
     /// Token 刷新接口端点 URL (已解析为完整内网 URL)
     refresh_endpoint: Option<Arc<str>>,
 }
@@ -59,7 +59,7 @@ impl Default for OidcMetadata {
         validation.validate_exp = false;
         Self {
             keys: HashMap::new(),
-            validation,
+            validation: Arc::new(validation),
             refresh_endpoint: None,
         }
     }
@@ -109,12 +109,12 @@ impl JwksCache {
             })
     }
 
-    /// 获取预构建的 OIDC 校验配置
-    pub fn get_validation(&self) -> Validation {
+    /// 获取预构建的 OIDC 校验配置（Arc 共享引用，热路径原子引用计数递增，零拷贝）
+    pub fn get_validation(&self) -> Arc<Validation> {
         self.inner
             .read()
             .ok()
-            .and_then(|guard| guard.validation.clone().into())
+            .map(|guard| Arc::clone(&guard.validation))
             .unwrap_or_else(|| {
                 error!(
                     "JWKS 读写锁中毒 (get_validation)，回退到默认 Validation — JWT 验签可能异常"
@@ -122,7 +122,7 @@ impl JwksCache {
                 let mut validation = Validation::new(Algorithm::ES256);
                 validation.validate_aud = false;
                 validation.validate_exp = false;
-                validation
+                Arc::new(validation)
             })
     }
 
@@ -214,7 +214,7 @@ impl JwksCache {
             .map(Arc::from);
 
         Ok(OidcDiscovery {
-            validation,
+            validation: Arc::new(validation),
             refresh_endpoint,
             jwks_uri: jwks_uri.to_string(),
         })
@@ -306,7 +306,7 @@ impl JwksCache {
             .iter()
             .filter_map(|&alg| Self::parse_algorithm(alg))
             .collect();
-        guard.validation = validation;
+        guard.validation = Arc::new(validation);
         guard.refresh_endpoint = None;
     }
 }
