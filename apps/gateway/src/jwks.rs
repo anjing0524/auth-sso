@@ -312,13 +312,19 @@ impl JwksCache {
         Ok(())
     }
 
-    #[cfg(test)]
+    /// 用于测试和基准测试的公钥注入方法。
+    ///
+    /// 仅在测试/benchmark 中使用，生产代码切勿调用。
+    #[doc(hidden)]
     pub fn insert_key_for_test(&self, kid: String, key: DecodingKey) {
         let mut guard = self.inner.write().unwrap();
         guard.keys.insert(kid, key);
     }
 
-    #[cfg(test)]
+    /// 用于测试和基准测试的元数据设置方法。
+    ///
+    /// 仅在测试/benchmark 中使用，生产代码切勿调用。
+    #[doc(hidden)]
     pub fn set_metadata_for_test(&self, issuer: &str, supported_algs: &[&str]) {
         let mut guard = self.inner.write().unwrap();
         let mut validation = Validation::new(Algorithm::ES256);

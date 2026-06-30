@@ -61,3 +61,31 @@ base64 = "0.22.1"
 thiserror = "2.0.18"
 anyhow = "1.0.103"
 
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"], default-features = false }
+
+[[bench]]
+name = "cookie_bench"
+harness = false
+path = "benches/cookie_bench.rs"
+
+[[bench]]
+name = "path_classify_bench"
+harness = false
+path = "benches/path_classify_bench.rs"
+
+[[bench]]
+name = "jwt_payload_bench"
+harness = false
+path = "benches/jwt_payload_bench.rs"
+
+[[bench]]
+name = "rate_limit_bench"
+harness = false
+path = "benches/rate_limit_bench.rs"
+
+[[bench]]
+name = "jwks_cache_bench"
+harness = false
+path = "benches/jwks_cache_bench.rs"
+

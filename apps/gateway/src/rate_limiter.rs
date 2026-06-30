@@ -38,7 +38,17 @@ const OIDC_TOKEN_MAX: isize = 30;
 /// - `None` — 路径未命中任何限流级别，直接放行
 /// - `Some(true)` — 未超限，放行
 /// - `Some(false)` — 已超限，应返回 429
-fn is_over_limit(ip: &str, path: &str) -> Option<bool> {
+///
+/// # Examples
+///
+/// ```
+/// # use gateway::rate_limiter::is_over_limit;
+/// assert!(is_over_limit("10.0.0.1", "/").is_none());
+/// let result = is_over_limit("10.0.0.2", "/api/auth/oauth2/token");
+/// assert!(result.is_some());
+/// assert_eq!(result, Some(true)); // 首次请求未超限
+/// ```
+pub fn is_over_limit(ip: &str, path: &str) -> Option<bool> {
     // Rate::observe 要求 T: Hash + Sized，传入 &&str 使 T = &str（Sized）
     if path == "/api/auth/oauth2/token" {
         let count = OIDC_TOKEN_RATE.observe(&ip, 1);

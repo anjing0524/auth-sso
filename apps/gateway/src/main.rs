@@ -1,17 +1,3 @@
-mod auth;
-mod authenticate;
-mod config;
-mod cookie;
-mod gateway;
-mod http;
-mod jwks;
-mod logging;
-mod metrics;
-mod path_matcher;
-mod rate_limiter;
-mod redirect;
-mod redis;
-
 use anyhow::Context;
 use clap::Parser;
 use pingora_core::listeners::tls::TlsSettings;
@@ -22,12 +8,12 @@ use pingora_proxy::http_proxy_service;
 use std::sync::Arc;
 use tracing::info;
 
-use crate::auth::{JwtVerifier, TokenRefresher};
-use crate::config::{Config, Upstreams};
-use crate::gateway::Gateway;
-use crate::jwks::JwksCache;
-use crate::path_matcher::PathMatcher;
-use crate::redirect::RedirectService;
+use gateway::auth::{JwtVerifier, TokenRefresher};
+use gateway::config::{Config, Upstreams};
+use gateway::gateway::Gateway;
+use gateway::jwks::JwksCache;
+use gateway::path_matcher::PathMatcher;
+use gateway::redirect::RedirectService;
 
 /// 命令行参数解析结构体 (Clap 声明式解析)
 #[derive(Parser, Debug)]
@@ -49,7 +35,7 @@ fn main() -> anyhow::Result<()> {
     let config = Config::load(&cli.config).context("❌ 无法加载网关配置文件")?;
 
     // ── 初始化 Tracing 日志系统 (控制台 + 每日滚动文件) ──
-    let _guard = logging::init_tracing(&config.gateway.log_dir, &config.gateway.log_level);
+    let _guard = gateway::logging::init_tracing(&config.gateway.log_dir, &config.gateway.log_level);
 
     info!("🚀 SSO 去中心化安全网关启动中 (Pingora 0.8.0 + ES256 JWKS 验签)...");
 
@@ -89,14 +75,14 @@ fn main() -> anyhow::Result<()> {
     // ── Redis 初始化 Service（利用 Pingora Service 生命周期预热连接，失败直接 exit）──
     let redis_init_svc = background_service(
         "Redis Init",
-        crate::redis::RedisInitService::new(config.redis.url.clone()),
+        gateway::redis::RedisInitService::new(config.redis.url.clone()),
     );
     let redis_handle = my_server.add_service(redis_init_svc);
 
     // ── 注册 JWKS 后台定时刷新服务（逐个尝试 upstream 直到 OIDC Discovery 成功）──
     let jwks_refresh_svc = background_service(
         "JWKS Refresh Service",
-        crate::jwks::JwksRefreshService::new(Arc::clone(&jwks_cache), Arc::clone(&upstreams)),
+        gateway::jwks::JwksRefreshService::new(Arc::clone(&jwks_cache), Arc::clone(&upstreams)),
     );
     let _ = my_server.add_service(jwks_refresh_svc);
 

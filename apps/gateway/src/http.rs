@@ -22,7 +22,8 @@ pub static HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
 /// 针对 Pingora Session 的高阶 HTTP 操作扩展特质
 ///
 /// 仅用于为外部类型 `Session` 添加方法，从不进行动态分发。
-/// 使用原生 `async fn` 零开销，避免 `#[async_trait]` 的 `Box` 堆分配。
+/// 手动 desugar async fn → `impl Future` 以精确控制 `Send` 约束。
+/// 避免 `#[async_trait]` 的 `Box` 堆分配，零开销。
 pub trait SessionExt {
     /// 提取真实客户端 IP（优先从 X-Forwarded-For 的首个 IP 提取）
     fn client_ip(&self) -> Option<&str>;
@@ -31,16 +32,22 @@ pub trait SessionExt {
     ///
     /// # 参数
     /// * `location` - 重定向目标 URL
-    async fn respond_302(&mut self, location: &str) -> Result<()>;
+    fn respond_302(
+        &mut self,
+        location: &str,
+    ) -> impl std::future::Future<Output = Result<()>> + Send;
 
     /// 发送 401 Unauthorized 响应并注入 Bearer WWW-Authenticate 头部
-    async fn respond_401(&mut self) -> Result<()>;
+    fn respond_401(&mut self) -> impl std::future::Future<Output = Result<()>> + Send;
 
     /// 发送 429 Too Many Requests 响应并注入 Retry-After 头部
     ///
     /// # 参数
     /// * `retry_after_secs` - 客户端应等待的秒数
-    async fn respond_429(&mut self, retry_after_secs: u64) -> Result<()>;
+    fn respond_429(
+        &mut self,
+        retry_after_secs: u64,
+    ) -> impl std::future::Future<Output = Result<()>> + Send;
 }
 
 impl SessionExt for Session {
