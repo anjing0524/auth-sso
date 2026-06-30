@@ -32,7 +32,7 @@ fn insert_opt_header(
 
 /// 已通过验签的请求身份 — Authorization 头、用户 ID、jti 三者同生共死，
 /// 作为一个整体在请求生命周期中流转（验签成功一起注入，续签成功一起覆盖）。
-#[derive(Clone, Debug)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Identity {
     /// 预格式化的 Authorization 头部值（例如 "Bearer <token>"）
     pub auth_header: String,
@@ -55,6 +55,14 @@ pub struct GatewayCtx {
 
 impl GatewayCtx {
     /// 是否已通过验签（即上行应注入身份 Header）
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use gateway::gateway::GatewayCtx;
+    /// let ctx = GatewayCtx::default();
+    /// assert!(!ctx.is_authenticated());
+    /// ```
     pub fn is_authenticated(&self) -> bool {
         self.identity.is_some()
     }
@@ -95,6 +103,26 @@ impl std::fmt::Debug for Gateway {
 
 impl Gateway {
     /// 创建网关实例。
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// # use std::sync::Arc;
+    /// # use gateway::path_matcher::PathMatcher;
+    /// # use gateway::auth::{JwtVerifier, TokenRefresher};
+    /// # use gateway::config::Upstreams;
+    /// # use gateway::jwks::JwksCache;
+    /// # use pingora_load_balancing::LoadBalancer;
+    /// let jwks = Arc::new(JwksCache::new());
+    /// let ups = Arc::new(Upstreams::from_config("127.0.0.1:4100"));
+    /// let lb = Arc::new(LoadBalancer::try_from_iter(ups.iter()).unwrap());
+    /// let gw = Gateway::new(
+    ///     PathMatcher::default(),
+    ///     lb,
+    ///     JwtVerifier::new(Arc::clone(&jwks)),
+    ///     TokenRefresher::new(Arc::clone(&jwks), Arc::clone(&ups)),
+    /// );
+    /// ```
     pub fn new(
         path_matcher: PathMatcher,
         portal_lb: Arc<LoadBalancer<RoundRobin>>,

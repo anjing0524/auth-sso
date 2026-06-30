@@ -20,7 +20,7 @@ pub enum PathClass {
 ///
 /// 将白名单中的路径分为精确匹配（O(1)）和前缀匹配两类，
 /// 结合静态资源放行规则，在网关热路径上实现低延迟路径分类。
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct PathMatcher {
     /// 精确匹配路径集合（如 "/login"、"/"）
     public_exact_paths: HashSet<String>,
@@ -103,6 +103,15 @@ impl PathMatcher {
     ///
     /// 取代原先在 request_filter / upstream_request_filter 中
     /// 反复 `starts_with` 与重复 `is_public` 的散点判断。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use gateway::path_matcher::{PathMatcher, PathClass};
+    /// let m = PathMatcher::new(vec!["/login".into(), "/api/auth/".into()]);
+    /// assert_eq!(m.classify("/login"), PathClass::Public);
+    /// assert_eq!(m.classify("/dashboard"), PathClass::Protected);
+    /// ```
     pub fn classify(&self, path: &str) -> PathClass {
         // 1. 静态资源目录优先：需跳过限流
         if path.starts_with("/_next/") || path.starts_with("/static/") {

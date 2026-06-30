@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize};
 
 /// JWT 载荷完整声明（Portal signAccessToken 签发时总是包含全部字段）。
 /// v3.2: dept_id + data_scope_type 替换为 dept_ids (string[])
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Claims {
     pub sub: String,
@@ -52,7 +52,7 @@ pub enum TokenExpiry {
 }
 
 /// 验签结果：身份信息 + 有效期状态（数据和判别分离，无需 into_verified 两步消费）
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TokenStatus {
     pub token: VerifiedToken,
     pub expiry: TokenExpiry,
@@ -70,6 +70,14 @@ pub struct RefreshedTokens {
 /// 裸解 JWT payload（不验签），从 Base64 编码的 payload 段提取 Claims。
 ///
 /// ⚠️ 不进行任何密码学验证，不可用于安全决策。
+///
+/// # Examples
+///
+/// ```
+/// # use gateway::auth::decode_jwt_payload;
+/// // 格式错误的 token 返回 None
+/// assert!(decode_jwt_payload("not.a.jwt").is_none());
+/// ```
 pub fn decode_jwt_payload(token: &str) -> Option<Claims> {
     let parts: Vec<&str> = token.split('.').collect();
     if parts.len() != 3 {

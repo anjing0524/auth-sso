@@ -79,6 +79,21 @@ async fn try_refresh_session(
 /// 1. 提取 Cookie 中的 AT → 验签
 /// 2. Valid → 放行；NeedsRefresh / Expired → 尝试续签
 /// 3. Expired 且续签失败 → 拒绝；其余 → 放行
+///
+/// # Errors
+///
+/// 仅在底层 I/O 操作（读取请求头、写入响应）失败时返回错误，
+/// 鉴权逻辑本身不产生错误（通过 `respond_auth_failure` 处理）。
+///
+/// # Examples
+///
+/// ```ignore
+/// // 在 request_filter 中调用：
+/// if authenticate::check(session, ctx, &jwt_verifier, &token_refresher).await? {
+///     return Ok(true); // 鉴权失败，已响应 302/401
+/// }
+/// // 鉴权通过，继续处理请求
+/// ```
 pub async fn check(
     session: &mut Session,
     ctx: &mut GatewayCtx,

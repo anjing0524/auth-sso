@@ -64,6 +64,13 @@ async fn get_conn() -> Option<bb8::PooledConnection<'static, bb8_redis::RedisCon
 }
 
 /// 检查 key 是否存在于 Redis（EXISTS 命令），fail-open 返回 false
+///
+/// # Examples
+///
+/// ```ignore
+/// // Redis 不可用或连接池未就绪时返回 false（安全降级）
+/// let found = redis::exists("portal:jti_blocklist:some-jti").await;
+/// ```
 pub async fn exists(key: &str) -> bool {
     let Some(mut conn) = get_conn().await else {
         return false;
@@ -83,6 +90,12 @@ pub async fn exists(key: &str) -> bool {
 }
 
 /// 从 Redis 获取一个字符串值（GET 命令），fail-open 返回 None
+///
+/// # Examples
+///
+/// ```ignore
+/// let cached = redis::get("portal:refresh_dedup:user-1").await;
+/// ```
 pub async fn get(key: &str) -> Option<String> {
     let mut conn = get_conn().await?;
     match redis::cmd("GET").arg(key).query_async(&mut *conn).await {

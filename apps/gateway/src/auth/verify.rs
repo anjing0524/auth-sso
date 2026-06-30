@@ -35,6 +35,18 @@ impl JwtVerifier {
     /// → jti 黑名单检查 → 判定过期状态。
     ///
     /// Redis 不可用时 jti 黑名单检查 fail-open（放行）。
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// # use std::sync::Arc;
+    /// # use gateway::jwks::JwksCache;
+    /// # use gateway::auth::JwtVerifier;
+    /// let cache = Arc::new(JwksCache::new());
+    /// let verifier = JwtVerifier::new(cache);
+    /// // 无效 token 返回 None
+    /// assert!(verifier.verify("invalid").await.is_none());
+    /// ```
     pub async fn verify(&self, token: &str) -> Option<TokenStatus> {
         let header = match decode_header(token) {
             Ok(h) => h,

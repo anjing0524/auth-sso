@@ -88,6 +88,14 @@ impl Default for JwksCache {
 
 impl JwksCache {
     /// 创建空的 JWKS 缓存实例
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use gateway::jwks::JwksCache;
+    /// let cache = JwksCache::new();
+    /// assert!(cache.is_empty());
+    /// ```
     pub fn new() -> Self {
         Self {
             inner: std::sync::RwLock::new(OidcMetadata::default()),
@@ -95,6 +103,14 @@ impl JwksCache {
     }
 
     /// 获取特定 kid 对应的公钥（同步读取）
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use gateway::jwks::JwksCache;
+    /// let cache = JwksCache::new();
+    /// assert!(cache.key("nonexistent").is_none());
+    /// ```
     pub fn key(&self, kid: &str) -> Option<DecodingKey> {
         match self.inner.read() {
             Ok(guard) => guard.keys.get(kid).cloned(),
@@ -329,6 +345,7 @@ const JWKS_INIT_RETRY_SECS: u64 = 10;
 /// 渐进式退避延迟表（秒）：索引为连续失败次数 - 1
 const JWKS_BACKOFF_SECS: &[u64] = &[30, 60, 120, 300];
 
+#[derive(Debug)]
 pub struct JwksRefreshService {
     jwks_cache: Arc<JwksCache>,
     /// Portal 上游地址列表（Arc 共享，与 AuthService 复用同一实例）

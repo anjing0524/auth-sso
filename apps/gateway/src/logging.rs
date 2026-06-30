@@ -3,6 +3,13 @@ use tracing_subscriber::{EnvFilter, fmt, prelude::*};
 /// 初始化 Tracing 日志系统
 /// 建立 Stdout 与每日滚动文件的双 Layer 订阅机制，并返回非阻塞缓冲写入 Guard
 ///
+/// # Examples
+///
+/// ```ignore
+/// // 在 main 中调用，返回的 guard 需 held 到进程退出
+/// let _guard = init_tracing("logs", "info");
+/// ```
+///
 /// # 参数
 /// * `log_dir` - 日志存储目录
 /// * `log_level` - 日志输出级别（如 "info", "debug"）

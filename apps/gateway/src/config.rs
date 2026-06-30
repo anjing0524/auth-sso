@@ -74,6 +74,14 @@ pub struct Upstreams {
 
 impl Upstreams {
     /// 从逗号分隔的原始配置字符串构建
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use gateway::config::Upstreams;
+    /// let ups = Upstreams::from_config("host1:80, host2:81");
+    /// assert_eq!(ups.len(), 2);
+    /// ```
     pub fn from_config(raw: &str) -> Self {
         let addresses = raw
             .split(',')
@@ -129,6 +137,17 @@ impl Config {
     /// 统一配置加载方法：优先从指定文件读取，读取并反序列化失败时返回 anyhow 错误，
     /// 若配置文件不存在则使用默认配置兜底。缺失的任何字段都将自动使用 Default 合并填充。
     /// 支持从环境变量 REDIS_URL 覆盖 Redis 配置。
+    ///
+    /// # Errors
+    ///
+    /// 配置文件存在但解析/反序列化失败时返回错误。文件不存在时静默使用默认值。
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// let config = Config::load("gateway.toml")?;
+    /// println!("HTTPS port: {}", config.gateway.ssl_port);
+    /// ```
     ///
     /// # 参数
     /// * `path` - 配置文件路径

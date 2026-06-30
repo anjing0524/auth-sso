@@ -58,6 +58,19 @@ fn is_over_limit(ip: &str, path: &str) -> Option<bool> {
 /// 返回值遵循 Pingora 原生 `Result<bool>` 协议：
 /// - `Ok(true)` — 已响应 429，上层应短路
 /// - `Ok(false)` — 未触发限流，继续处理
+///
+/// # Errors
+///
+/// 仅在写入 429 响应体失败时返回 I/O 错误。
+///
+/// # Examples
+///
+/// ```ignore
+/// // 在 request_filter 热路径上调用：
+/// if rate_limiter::check(session).await? {
+///     return Ok(true); // 已触发限流，短路
+/// }
+/// ```
 pub async fn check(session: &mut Session) -> Result<bool> {
     let path = session.req_header().uri.path();
     let ip = session.client_ip().unwrap_or("unknown");

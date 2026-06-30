@@ -41,6 +41,20 @@ impl TokenRefresher {
     /// 向 Portal 发起 Access Token 静默续签。
     ///
     /// 返回 `Some(RefreshedTokens)` 或 `None`（续签失败不阻断请求，旧 AT 仍有效）。
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// # use std::sync::Arc;
+    /// # use gateway::jwks::JwksCache;
+    /// # use gateway::config::Upstreams;
+    /// # use gateway::auth::TokenRefresher;
+    /// let cache = Arc::new(JwksCache::new());
+    /// let ups = Arc::new(Upstreams::from_config("127.0.0.1:4100"));
+    /// let refresher = TokenRefresher::new(cache, ups);
+    /// // 服务未启动时续签返回 None
+    /// // let tokens = refresher.try_refresh("rt_value", "user-1").await;
+    /// ```
     pub async fn try_refresh(&self, refresh_token: &str, sub: &str) -> Option<RefreshedTokens> {
         // 1. Redis 去重检查（30s 窗口，跨实例共享）
         if let Some(cached) = self.check_dedup(sub).await {
