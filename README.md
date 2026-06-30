@@ -66,6 +66,16 @@ pnpm dev
 访问地址:
 - **Portal (管理门户 + 认证中心)**: http://localhost:4100
 
+```bash
+# 启动 Gateway 信创网关 (可选)
+cd apps/gateway
+cargo run
+```
+
+网关访问地址 (代理至 Portal):
+- **HTTP**: http://localhost:19080
+- **HTTPS**: https://localhost:19443
+
 ### 4. 数据库初始化
 
 ```bash
@@ -95,6 +105,7 @@ pnpm test:report          # 需求追溯性覆盖率报告
 - [架构约束指南 (docs/spec/ARCHITECTURE_CONSTRAINTS.md)](docs/spec/ARCHITECTURE_CONSTRAINTS.md) — 代码规范、分层约束与 Code Review 红线
 - [数据库设计 (docs/spec/DATABASE.md)](docs/spec/DATABASE.md) — 数据模型、存储落位与物理规范
 - [接口契约 (docs/spec/API.md)](docs/spec/API.md) — 核心接口清单与字段级契约
+- [第三方集成说明 (docs/spec/third-party-integration.md)](docs/spec/third-party-integration.md) — 企微、飞书、钉钉等三方登录集成规范
 - [需求追踪矩阵 (docs/spec/REQUIREMENTS_MATRIX.md)](docs/spec/REQUIREMENTS_MATRIX.md) — 需求→验收标准全覆盖
 - [用户故事 (docs/spec/USER_STORIES.md)](docs/spec/USER_STORIES.md) — 角色驱动的功能验收场景
 - [Portal 架构规范 (docs/portal-architecture-guidelines.md)](docs/portal-architecture-guidelines.md) — 开发规范、组件模式与 Next.js 16 适配
