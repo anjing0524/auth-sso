@@ -42,8 +42,74 @@ async fn init_async(url: &str) -> anyhow::Result<()> {
 ///
 /// 运行在请求的热路径上，此函数为同步无锁获取。
 /// 返回 `None` 表示连接池未建立（正常启动流程中不会发生）。
-pub fn get_pool() -> Option<&'static RedisPool> {
+pub fn pool() -> Option<&'static RedisPool> {
     POOL.get()
+}
+
+// ── Redis 命令辅助函数 ──
+//
+// 以下函数封装了「获取连接 → 执行命令 → 错误处理」的通用模式，
+// 统一采用 fail-open（降级放行）语义：Redis 不可用时返回安全默认值。
+
+/// 获取一条 Redis 连接；连接池未就绪或获取失败时返回 None。
+async fn get_conn() -> Option<bb8::PooledConnection<'static, bb8_redis::RedisConnectionManager>> {
+    let pool = pool().or_else(|| {
+        tracing::warn!("Redis 连接池未就绪，降级");
+        None
+    })?;
+    pool.get()
+        .await
+        .map_err(|e| tracing::warn!("Redis 连接获取失败，降级: {:?}", e))
+        .ok()
+}
+
+/// 检查 key 是否存在于 Redis（EXISTS 命令），fail-open 返回 false
+pub async fn exists(key: &str) -> bool {
+    let Some(mut conn) = get_conn().await else {
+        return false;
+    };
+    match redis::cmd("EXISTS")
+        .arg(key)
+        .query_async::<i32>(&mut *conn)
+        .await
+    {
+        Ok(0) => false,
+        Ok(_) => true,
+        Err(e) => {
+            tracing::error!("❌ Redis EXISTS 异常: {:?}，执行安全降级 (返回 false)", e);
+            false
+        }
+    }
+}
+
+/// 从 Redis 获取一个字符串值（GET 命令），fail-open 返回 None
+pub async fn get(key: &str) -> Option<String> {
+    let mut conn = get_conn().await?;
+    match redis::cmd("GET").arg(key).query_async(&mut *conn).await {
+        Ok(v) => v,
+        Err(e) => {
+            tracing::warn!("Redis GET 异常: {:?}，降级返回 None", e);
+            None
+        }
+    }
+}
+
+/// 原子写入 Redis（SET key value NX EX ttl），fail-open 静默忽略
+pub async fn set_nx_ex(key: &str, value: &str, ttl_secs: u64) {
+    let Some(mut conn) = get_conn().await else {
+        return;
+    };
+    if let Err(e) = redis::cmd("SET")
+        .arg(key)
+        .arg(value)
+        .arg("NX")
+        .arg("EX")
+        .arg(ttl_secs as i64)
+        .query_async::<()>(&mut *conn)
+        .await
+    {
+        tracing::warn!("Redis SET NX EX 异常: {:?}，降级忽略", e);
+    }
 }
 
 // ── Redis 初始化 Service ──
@@ -53,6 +119,7 @@ pub fn get_pool() -> Option<&'static RedisPool> {
 /// 覆盖 `start_with_ready_notifier` 以**先完成初始化、再通知就绪**，
 /// 确保声明了依赖此 Service 的下游服务（如 Gateway Proxy）在 Redis 完全就绪前
 /// 不会接收流量。初始化失败直接 `process::exit(1)`，阻止网关带错上线。
+#[derive(Debug)]
 pub struct RedisInitService {
     url: String,
 }

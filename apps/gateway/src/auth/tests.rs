@@ -1,8 +1,12 @@
+use std::sync::Arc;
+
 use super::*;
+// Claims is defined in super (auth/mod.rs)
+use crate::jwks::JwksCache;
 use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, encode};
 
-fn make_test_auth_service(jwks_cache: &Arc<JwksCache>) -> AuthService {
-    AuthService::new(Arc::clone(jwks_cache), vec!["127.0.0.1:4100".to_string()])
+fn make_test_verifier(jwks_cache: &Arc<JwksCache>) -> JwtVerifier {
+    JwtVerifier::new(Arc::clone(jwks_cache))
 }
 
 /// 生成测试用 HS256 JWT
@@ -44,15 +48,16 @@ async fn test_verify_jwt_successful() {
     let kid = "key-test-1";
     jwks_cache.insert_key_for_test(kid.to_string(), DecodingKey::from_secret(secret));
 
-    let auth_service = make_test_auth_service(&jwks_cache);
+    let verifier = make_test_verifier(&jwks_cache);
     let token = make_test_token(kid, secret, issuer, "user-123", "jti-123", 3600);
 
-    let result = auth_service.verify_jwt(&token).await;
-    assert!(matches!(result, Some(VerifyResult::Valid(_))));
-    if let Some(VerifyResult::Valid(v)) = result {
-        assert_eq!(v.user_id, "user-123");
-        assert_eq!(v.jti, "jti-123");
-    }
+    let result = verifier.verify(&token).await;
+    let Some(status) = result else {
+        panic!("expected valid token");
+    };
+    assert!(matches!(status.expiry, TokenExpiry::Valid));
+    assert_eq!(status.token.user_id, "user-123");
+    assert_eq!(status.token.jti, "jti-123");
 }
 
 #[tokio::test]
@@ -66,11 +71,17 @@ async fn test_verify_jwt_expired() {
     let kid = "key-test-1";
     jwks_cache.insert_key_for_test(kid.to_string(), DecodingKey::from_secret(secret));
 
-    let auth_service = make_test_auth_service(&jwks_cache);
+    let verifier = make_test_verifier(&jwks_cache);
     let token = make_test_token(kid, secret, issuer, "user-123", "jti-123", -600);
 
-    let result = auth_service.verify_jwt(&token).await;
-    assert!(matches!(result, Some(VerifyResult::Expired(_))));
+    let result = verifier.verify(&token).await;
+    assert!(matches!(
+        result,
+        Some(TokenStatus {
+            expiry: TokenExpiry::Expired,
+            ..
+        })
+    ));
 }
 
 #[tokio::test]
@@ -84,7 +95,7 @@ async fn test_verify_jwt_invalid_issuer() {
     let kid = "key-test-1";
     jwks_cache.insert_key_for_test(kid.to_string(), DecodingKey::from_secret(secret));
 
-    let auth_service = make_test_auth_service(&jwks_cache);
+    let verifier = make_test_verifier(&jwks_cache);
     // 使用错误的 issuer 签发 token
     let token = make_test_token(
         kid,
@@ -95,7 +106,7 @@ async fn test_verify_jwt_invalid_issuer() {
         3600,
     );
 
-    let result = auth_service.verify_jwt(&token).await;
+    let result = verifier.verify(&token).await;
     assert!(result.is_none());
 }
 
@@ -110,10 +121,10 @@ async fn test_verify_jwt_invalid_kid() {
     // 注册 key-test-1，但 token 使用 unknown-kid
     jwks_cache.insert_key_for_test("key-test-1".to_string(), DecodingKey::from_secret(secret));
 
-    let auth_service = make_test_auth_service(&jwks_cache);
+    let verifier = make_test_verifier(&jwks_cache);
     let token = make_test_token("unknown-kid", secret, issuer, "user-123", "jti-123", 3600);
 
-    let result = auth_service.verify_jwt(&token).await;
+    let result = verifier.verify(&token).await;
     assert!(result.is_none());
 }
 

@@ -38,8 +38,16 @@ fn generate_redirect_location(
 
 /// HTTP → HTTPS 强制重定向服务
 /// 监听 HTTP 端口，将所有 HTTP 请求以 301 重定向至 HTTPS
+#[derive(Debug)]
 pub struct RedirectService {
-    pub ssl_port: u16,
+    ssl_port: u16,
+}
+
+impl RedirectService {
+    /// 创建重定向服务实例。
+    pub fn new(ssl_port: u16) -> Self {
+        Self { ssl_port }
+    }
 }
 
 #[async_trait]

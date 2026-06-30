@@ -20,7 +20,7 @@ pub enum PathClass {
 ///
 /// 将白名单中的路径分为精确匹配（O(1)）和前缀匹配两类，
 /// 结合静态资源放行规则，在网关热路径上实现低延迟路径分类。
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PathMatcher {
     /// 精确匹配路径集合（如 "/login"、"/"）
     public_exact_paths: HashSet<String>,

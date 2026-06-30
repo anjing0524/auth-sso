@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use tracing::info;
 
 /// 网关服务层配置
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 #[serde(default)]
 pub struct GatewayConfig {
     /// HTTP 监听端口，用于重定向
@@ -33,7 +33,7 @@ impl Default for GatewayConfig {
 }
 
 /// Portal 上游及 OIDC 鉴权配置
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 #[serde(default)]
 pub struct PortalConfig {
     /// Portal 上游地址，支持逗号分隔多个地址实现负载均衡，如 portal:4000,portal:4001
@@ -43,20 +43,7 @@ pub struct PortalConfig {
     pub public_paths: Vec<String>,
 }
 
-impl PortalConfig {
-    /// 将逗号分隔的上游地址解析为独立地址列表
-    ///
-    /// 每个地址去除首尾空白，空字符串会被自动过滤。
-    /// 例如 "portal:4000, portal:4001" → ["portal:4000", "portal:4001"]
-    pub fn upstreams(&self) -> Vec<String> {
-        self.upstream
-            .split(',')
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-            .map(String::from)
-            .collect()
-    }
-}
+// upstreams 解析逻辑已迁移至 Upstreams::from_config()
 
 impl Default for PortalConfig {
     fn default() -> Self {
@@ -75,8 +62,46 @@ impl Default for PortalConfig {
     }
 }
 
+// ── 统一 Upstreams 管理 ──
+
+/// 上游地址列表（不可变，通过 Arc 在多个消费者间零拷贝共享）。
+///
+/// 替代原先各处独立 clone 的 `Vec<String>`，统一管理上游地址的解析和访问。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Upstreams {
+    addresses: Vec<String>,
+}
+
+impl Upstreams {
+    /// 从逗号分隔的原始配置字符串构建
+    pub fn from_config(raw: &str) -> Self {
+        let addresses = raw
+            .split(',')
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(String::from)
+            .collect();
+        Self { addresses }
+    }
+
+    /// 迭代所有上游地址
+    pub fn iter(&self) -> impl Iterator<Item = &str> {
+        self.addresses.iter().map(|s| s.as_str())
+    }
+
+    /// 上游数量
+    pub fn len(&self) -> usize {
+        self.addresses.len()
+    }
+
+    /// 是否为空
+    pub fn is_empty(&self) -> bool {
+        self.addresses.is_empty()
+    }
+}
+
 /// Redis 数据库连接配置 (用于 jti 黑名单校验)
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 #[serde(default)]
 pub struct RedisConfig {
     /// Redis 连接 URL (例如 redis://127.0.0.1:6379)
@@ -92,7 +117,7 @@ impl Default for RedisConfig {
 }
 
 /// 统一配置结构体，支持从 gateway.toml 解析，支持缺省字段与默认值自动合并
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(default)]
 pub struct Config {
     pub gateway: GatewayConfig,
@@ -145,57 +170,40 @@ mod tests {
     use super::*;
     use std::fs;
 
+    // ── Upstreams 解析测试 ──
+
+    fn upstreams_iter(up: &Upstreams) -> Vec<String> {
+        up.iter().map(String::from).collect::<Vec<_>>()
+    }
+
     #[test]
     fn test_upstreams_single() {
-        let portal = PortalConfig {
-            upstream: "127.0.0.1:4100".to_string(),
-            ..Default::default()
-        };
-        assert_eq!(portal.upstreams(), vec!["127.0.0.1:4100".to_string()]);
+        let up = Upstreams::from_config("127.0.0.1:4100");
+        assert_eq!(upstreams_iter(&up), vec!["127.0.0.1:4100"]);
     }
 
     #[test]
     fn test_upstreams_multiple() {
-        let portal = PortalConfig {
-            upstream: "portal:4000, portal:4001, portal:4002".to_string(),
-            ..Default::default()
-        };
+        let up = Upstreams::from_config("portal:4000, portal:4001, portal:4002");
         assert_eq!(
-            portal.upstreams(),
-            vec![
-                "portal:4000".to_string(),
-                "portal:4001".to_string(),
-                "portal:4002".to_string()
-            ]
+            upstreams_iter(&up),
+            vec!["portal:4000", "portal:4001", "portal:4002"]
         );
     }
 
     #[test]
     fn test_upstreams_trims_whitespace() {
-        let portal = PortalConfig {
-            upstream: "  host1:80 , host2:81  ,host3:82".to_string(),
-            ..Default::default()
-        };
+        let up = Upstreams::from_config("  host1:80 , host2:81  ,host3:82");
         assert_eq!(
-            portal.upstreams(),
-            vec![
-                "host1:80".to_string(),
-                "host2:81".to_string(),
-                "host3:82".to_string()
-            ]
+            upstreams_iter(&up),
+            vec!["host1:80", "host2:81", "host3:82"]
         );
     }
 
     #[test]
     fn test_upstreams_filters_empty() {
-        let portal = PortalConfig {
-            upstream: "host1:80,,host2:81".to_string(),
-            ..Default::default()
-        };
-        assert_eq!(
-            portal.upstreams(),
-            vec!["host1:80".to_string(), "host2:81".to_string()]
-        );
+        let up = Upstreams::from_config("host1:80,,host2:81");
+        assert_eq!(upstreams_iter(&up), vec!["host1:80", "host2:81"]);
     }
 
     #[test]
@@ -206,10 +214,8 @@ mod tests {
         assert_eq!(config.gateway.log_dir, "logs");
         assert_eq!(config.gateway.log_level, "info");
         assert_eq!(config.portal.upstream, "127.0.0.1:4100");
-        assert_eq!(
-            config.portal.upstreams(),
-            vec!["127.0.0.1:4100".to_string()]
-        );
+        let up = Upstreams::from_config(&config.portal.upstream);
+        assert_eq!(upstreams_iter(&up), vec!["127.0.0.1:4100"]);
         assert!(config.portal.public_paths.contains(&"/login".to_string()));
     }
 

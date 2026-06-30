@@ -49,7 +49,7 @@ fn test_get_supported_algorithms() {
         &["ES256", "RS256", "UNKNOWN_ALG"],
     );
 
-    let validation = cache.get_validation();
+    let validation = cache.validation();
     assert_eq!(validation.algorithms.len(), 2);
     assert!(validation.algorithms.contains(&Algorithm::ES256));
     assert!(validation.algorithms.contains(&Algorithm::RS256));

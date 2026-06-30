@@ -2,6 +2,10 @@
 name = "gateway"
 version = "0.1.0"
 edition = "2024"
+description = "SSO 去中心化安全网关 - 基于 Pingora + ES256 JWKS 离线验签"
+license = "MIT"
+repository = "https://github.com/auth-sso/auth-sso"
+authors = ["Auth-SSO Team"]
 
 [dependencies]
 async-trait = "0.1.89"

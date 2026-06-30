@@ -1,16 +1,13 @@
-mod app_context;
 mod auth;
-mod auth_filter;
-mod claims;
+mod authenticate;
 mod config;
 mod cookie;
 mod gateway;
 mod http;
-mod http_ext;
 mod jwks;
 mod logging;
+mod metrics;
 mod path_matcher;
-mod rate_limit_filter;
 mod rate_limiter;
 mod redirect;
 mod redis;
@@ -20,12 +17,16 @@ use clap::Parser;
 use pingora_core::listeners::tls::TlsSettings;
 use pingora_core::prelude::*;
 use pingora_core::services::background::background_service;
+use pingora_load_balancing::LoadBalancer;
 use pingora_proxy::http_proxy_service;
 use std::sync::Arc;
 use tracing::info;
 
-use crate::config::Config;
+use crate::auth::{JwtVerifier, TokenRefresher};
+use crate::config::{Config, Upstreams};
 use crate::gateway::Gateway;
+use crate::jwks::JwksCache;
+use crate::path_matcher::PathMatcher;
 use crate::redirect::RedirectService;
 
 /// 命令行参数解析结构体 (Clap 声明式解析)
@@ -52,14 +53,24 @@ fn main() -> anyhow::Result<()> {
 
     info!("🚀 SSO 去中心化安全网关启动中 (Pingora 0.8.0 + ES256 JWKS 验签)...");
 
-    let upstreams = config.portal.upstreams();
+    // ── 构建共享组件 ──
+    let upstreams = Arc::new(Upstreams::from_config(&config.portal.upstream));
 
-    // 快速失败：空 upstream 配置无法处理任何请求，应启动时报错而非静默 502
+    // 快速失败：空 upstream 配置无法处理任何请求
     if upstreams.is_empty() {
         anyhow::bail!(
             "❌ 未配置任何 Portal 上游地址（portal.upstream 为空），请在配置文件中设置有效的 upstream"
         );
     }
+
+    let jwks_cache = Arc::new(JwksCache::new());
+    let jwt_verifier = JwtVerifier::new(Arc::clone(&jwks_cache));
+    let token_refresher = TokenRefresher::new(Arc::clone(&jwks_cache), Arc::clone(&upstreams));
+    let portal_lb = Arc::new(
+        LoadBalancer::try_from_iter(upstreams.iter())
+            .map_err(|e| anyhow::anyhow!("配置 Portal 上游负载均衡器失败: {:?}", e))?,
+    );
+    let path_matcher = PathMatcher::new(config.portal.public_paths.clone());
 
     info!("配置加载完成:");
     info!("  网关监听端口 (HTTP): {}", config.gateway.port);
@@ -71,9 +82,7 @@ fn main() -> anyhow::Result<()> {
         upstreams
     );
 
-    // ── 初始化全局应用依赖容器 ──
-    let app_ctx = Arc::new(crate::app_context::AppContext::new(config.clone())?);
-
+    // ── Pingora 服务器启动 ──
     let mut my_server = Server::new(None).context("❌ 创建 Pingora 服务器失败")?;
     my_server.bootstrap();
 
@@ -87,18 +96,14 @@ fn main() -> anyhow::Result<()> {
     // ── 注册 JWKS 后台定时刷新服务（逐个尝试 upstream 直到 OIDC Discovery 成功）──
     let jwks_refresh_svc = background_service(
         "JWKS Refresh Service",
-        crate::jwks::JwksRefreshService::new(
-            Arc::clone(&app_ctx.jwks_cache),
-            app_ctx.config.portal.upstreams(),
-        ),
+        crate::jwks::JwksRefreshService::new(Arc::clone(&jwks_cache), Arc::clone(&upstreams)),
     );
     let _ = my_server.add_service(jwks_refresh_svc);
 
+    // ── Gateway 代理服务（精准依赖注入，无上帝对象）──
     let mut gateway_proxy = http_proxy_service(
         &my_server.configuration,
-        Gateway {
-            app: Arc::clone(&app_ctx),
-        },
+        Gateway::new(path_matcher, portal_lb, jwt_verifier, token_refresher),
     );
 
     let mut tls_settings =
@@ -116,9 +121,7 @@ fn main() -> anyhow::Result<()> {
     // HTTP → HTTPS 强制重定向服务
     let mut redirect_proxy = http_proxy_service(
         &my_server.configuration,
-        RedirectService {
-            ssl_port: config.gateway.ssl_port,
-        },
+        RedirectService::new(config.gateway.ssl_port),
     );
     let http_bind_address = format!("0.0.0.0:{}", config.gateway.port);
     redirect_proxy.add_tcp(&http_bind_address);

@@ -9,6 +9,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tracing::{error, info, warn};
 
+use crate::config::Upstreams;
 use crate::http::HTTP_CLIENT;
 
 /// JWKS 获取与解析过程中的强类型错误定义
@@ -73,6 +74,12 @@ pub struct JwksCache {
     inner: std::sync::RwLock<OidcMetadata>,
 }
 
+impl std::fmt::Debug for JwksCache {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("JwksCache").finish_non_exhaustive()
+    }
+}
+
 impl Default for JwksCache {
     fn default() -> Self {
         Self::new()
@@ -88,7 +95,7 @@ impl JwksCache {
     }
 
     /// 获取特定 kid 对应的公钥（同步读取）
-    pub fn get_key(&self, kid: &str) -> Option<DecodingKey> {
+    pub fn key(&self, kid: &str) -> Option<DecodingKey> {
         match self.inner.read() {
             Ok(guard) => guard.keys.get(kid).cloned(),
             Err(e) => {
@@ -110,7 +117,7 @@ impl JwksCache {
     }
 
     /// 获取预构建的 OIDC 校验配置（Arc 共享引用，热路径原子引用计数递增，零拷贝）
-    pub fn get_validation(&self) -> Arc<Validation> {
+    pub fn validation(&self) -> Arc<Validation> {
         self.inner
             .read()
             .ok()
@@ -127,7 +134,7 @@ impl JwksCache {
     }
 
     /// 获取缓存的 Token 刷新接口端点 URL (只读共享指针)
-    pub fn get_refresh_endpoint(&self) -> Option<Arc<str>> {
+    pub fn refresh_endpoint(&self) -> Option<Arc<str>> {
         match self.inner.read() {
             Ok(guard) => guard.refresh_endpoint.clone(),
             Err(e) => {
@@ -312,18 +319,56 @@ impl JwksCache {
 }
 
 // ── JWKS 后台定时刷新服务 ──
+
+/// JWKS 刷新成功后的标准间隔（5 分钟）
+const JWKS_REFRESH_INTERVAL_SECS: u64 = 300;
+
+/// 缓存为空时的重试间隔（快速初始化）
+const JWKS_INIT_RETRY_SECS: u64 = 10;
+
+/// 渐进式退避延迟表（秒）：索引为连续失败次数 - 1
+const JWKS_BACKOFF_SECS: &[u64] = &[30, 60, 120, 300];
+
 pub struct JwksRefreshService {
     jwks_cache: Arc<JwksCache>,
-    /// Portal 上游地址列表，OIDC Discovery 逐个尝试直到成功
-    upstreams: Vec<String>,
+    /// Portal 上游地址列表（Arc 共享，与 AuthService 复用同一实例）
+    upstreams: Arc<Upstreams>,
+    /// 连续失败计数器（AtomicU64 支持内部可变性，用于 start(&self) 中的渐进退避）
+    consecutive_failures: std::sync::atomic::AtomicU64,
 }
 
 impl JwksRefreshService {
-    pub fn new(jwks_cache: Arc<JwksCache>, upstreams: Vec<String>) -> Self {
+    pub fn new(jwks_cache: Arc<JwksCache>, upstreams: Arc<Upstreams>) -> Self {
         Self {
             jwks_cache,
             upstreams,
+            consecutive_failures: std::sync::atomic::AtomicU64::new(0),
         }
+    }
+
+    /// 计算当前应等待的退避延迟（秒）。
+    ///
+    /// - 刷新成功 → 重置计数器，返回标准间隔
+    /// - 刷新失败 + 缓存为空 → 快速重试（10s，不计入连续失败）
+    /// - 刷新失败 + 缓存非空 → 渐进式退避（30s → 60s → 120s → 300s max）
+    fn backoff_delay(&self, success: bool) -> u64 {
+        if success {
+            self.consecutive_failures
+                .store(0, std::sync::atomic::Ordering::Relaxed);
+            return JWKS_REFRESH_INTERVAL_SECS;
+        }
+        if self.jwks_cache.is_empty() {
+            // 缓存为空：快速重试，不计入渐进退避
+            return JWKS_INIT_RETRY_SECS;
+        }
+        let failures = self
+            .consecutive_failures
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+            + 1;
+        let idx = (failures as usize)
+            .saturating_sub(1)
+            .min(JWKS_BACKOFF_SECS.len() - 1);
+        JWKS_BACKOFF_SECS[idx]
     }
 
     /// 遍历所有上游地址，逐个尝试 OIDC Discovery，任一成功即返回
@@ -334,7 +379,7 @@ impl JwksRefreshService {
         }
 
         let mut last_err = None;
-        for upstream in &self.upstreams {
+        for upstream in self.upstreams.iter() {
             info!("🔍 通过上游 {} 尝试 OIDC Discovery...", upstream);
             match self.jwks_cache.refresh(upstream).await {
                 Ok(()) => return Ok(()),
@@ -352,17 +397,24 @@ impl JwksRefreshService {
 impl BackgroundService for JwksRefreshService {
     async fn start(&self, mut shutdown: ShutdownWatch) {
         loop {
-            // 逐个尝试所有 upstream 直到 OIDC Discovery + JWKS 拉取成功
-            let delay_secs = match self.try_refresh_from_any().await {
+            let result = self.try_refresh_from_any().await;
+            let delay_secs = match &result {
                 Ok(()) => {
                     info!("✅ JWKS 公钥缓存定时刷新成功");
-                    300
+                    crate::metrics::log_snapshot();
+                    self.backoff_delay(true)
                 }
                 Err(e) => {
                     tracing::error!("❌ 所有上游节点的 JWKS 公钥刷新均失败: {}", e);
-                    let retry_delay = if self.jwks_cache.is_empty() { 10 } else { 300 };
-                    warn!("⚠️ 网关将在 {} 秒后重试拉取 JWKS...", retry_delay);
-                    retry_delay
+                    let delay = self.backoff_delay(false);
+                    let failures = self
+                        .consecutive_failures
+                        .load(std::sync::atomic::Ordering::Relaxed);
+                    warn!(
+                        "⚠️ 网关将在 {} 秒后重试拉取 JWKS（连续失败 {} 次）...",
+                        delay, failures
+                    );
+                    delay
                 }
             };
 

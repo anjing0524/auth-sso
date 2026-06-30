@@ -15,3 +15,5 @@ use spec-docs skill
 修改文档前务必重新阅读，文档可能被多人更新
 
 rust 代码修改后必须修复cargo clippy的所有错误并执行 cargo fmt 格式化
+
+rust 代码遵循 https://rust-lang.github.io/api-guidelines/checklist.html

@@ -3,14 +3,15 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use pingora_core::prelude::*;
 use pingora_http::{RequestHeader, ResponseHeader};
+use pingora_load_balancing::LoadBalancer;
+use pingora_load_balancing::selection::RoundRobin;
 use pingora_proxy::{ProxyHttp, Session};
 use tracing::debug;
 
-use crate::app_context::AppContext;
-use crate::auth::RefreshedTokens;
+use crate::auth::{JwtVerifier, RefreshedTokens, TokenRefresher};
 use crate::cookie;
-use crate::http_ext::SessionExt;
-use crate::path_matcher::PathClass;
+use crate::http::SessionExt;
+use crate::path_matcher::{PathClass, PathMatcher};
 
 /// 从 Session 提取指定请求头的字符串值
 fn header_str<'s>(session: &'s Session, name: &str) -> Option<&'s str> {
@@ -21,21 +22,12 @@ fn header_str<'s>(session: &'s Session, name: &str) -> Option<&'s str> {
 fn insert_opt_header(
     req: &mut RequestHeader,
     name: &'static str,
-    value: &Option<String>,
+    value: Option<&str>,
 ) -> Result<()> {
     if let Some(v) = value {
-        req.insert_header(name, v.as_str())?;
+        req.insert_header(name, v)?;
     }
     Ok(())
-}
-
-/// 网关请求拦截控制流结果
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub enum FilterResult {
-    /// 继续执行后继步骤
-    Continue,
-    /// 拦截并短路请求流程（已经在内部向客户端响应了相应状态码与内容）
-    Break,
 }
 
 /// 已通过验签的请求身份 — Authorization 头、用户 ID、jti 三者同生共死，
@@ -59,10 +51,6 @@ pub struct GatewayCtx {
     pub identity: Option<Identity>,
     /// 续签得到的新 Token（若在本次请求中触发了静默续签）
     pub refreshed_tokens: Option<RefreshedTokens>,
-    /// 客户端真实 IP（从 X-Forwarded-For 提取）
-    pub client_ip: Option<String>,
-    /// 客户端 User-Agent
-    pub client_ua: Option<String>,
 }
 
 impl GatewayCtx {
@@ -76,14 +64,51 @@ impl GatewayCtx {
 ///
 /// 负责代理编排：路由分类 → 限流检查 → 鉴权与静默续签 → 请求转发。
 ///
-/// 整体架构设计遵循 KISS 极简原则：限流、鉴权的具体策略解耦在各自的 Filter 模块函数中，
-/// 核心执行流在 `request_filter` 中通过最简单的静态函数顺序直接调用，无任何泛型、虚表及 `Box` 堆开销。
+/// 结构体字段按需持有具体依赖：
+/// - [`PathMatcher`] — 路径分类（一次计算，生命周期共享）
+/// - [`LoadBalancer`] — 上游负载均衡（RoundRobin）
+/// - [`JwtVerifier`] — JWT 密码学验签 + jti 黑名单
+/// - [`TokenRefresher`] — HTTP 静默续签 + Redis 去重
+///
+/// 限流器为模块级函数 [`crate::rate_limiter::check`]，无需注入。
 pub struct Gateway {
-    /// 全局应用依赖容器
-    pub app: Arc<AppContext>,
+    /// 白名单路径匹配器
+    path_matcher: PathMatcher,
+    /// Portal 上游负载均衡器
+    portal_lb: Arc<LoadBalancer<RoundRobin>>,
+    /// JWT 验签器
+    jwt_verifier: JwtVerifier,
+    /// Token 续签器
+    token_refresher: TokenRefresher,
+}
+
+impl std::fmt::Debug for Gateway {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Gateway")
+            .field("path_matcher", &self.path_matcher)
+            .field("portal_lb", &"LoadBalancer<RoundRobin>")
+            .field("jwt_verifier", &self.jwt_verifier)
+            .field("token_refresher", &self.token_refresher)
+            .finish()
+    }
 }
 
 impl Gateway {
+    /// 创建网关实例。
+    pub fn new(
+        path_matcher: PathMatcher,
+        portal_lb: Arc<LoadBalancer<RoundRobin>>,
+        jwt_verifier: JwtVerifier,
+        token_refresher: TokenRefresher,
+    ) -> Self {
+        Self {
+            path_matcher,
+            portal_lb,
+            jwt_verifier,
+            token_refresher,
+        }
+    }
+
     /// 根据 ctx 重写发往上游的 Cookie：微服务剥离全部，受保护路径剥离 RT 并替换 AT。
     fn rewrite_upstream_cookies(&self, upstream_request: &mut RequestHeader, ctx: &GatewayCtx) {
         match ctx.path_class {
@@ -134,7 +159,7 @@ impl ProxyHttp for Gateway {
         let host = header_str(session, "Host").unwrap_or("");
         debug!("接收代理请求，Host: {}", host);
 
-        let peer = self.app.portal_lb.select(b"", 256).ok_or_else(|| {
+        let peer = self.portal_lb.select(b"", 256).ok_or_else(|| {
             Error::explain(
                 ErrorType::HTTPStatus(502),
                 "gateway: 无可用 Portal 上游节点，请检查配置文件中的 upstream 设置",
@@ -146,14 +171,11 @@ impl ProxyHttp for Gateway {
     }
 
     async fn request_filter(&self, session: &mut Session, ctx: &mut Self::CTX) -> Result<bool> {
+        crate::metrics::inc_requests();
         let path = session.req_header().uri.path();
 
-        // 0. 提取客户端 IP 与 User-Agent 并缓存在上下文中，后续步骤共享
-        ctx.client_ip = session.client_ip();
-        ctx.client_ua = header_str(session, "User-Agent").map(|s| s.to_string());
-
         // 1. 进行路径分类
-        ctx.path_class = self.app.path_matcher.classify(path);
+        ctx.path_class = self.path_matcher.classify(path);
 
         // 2. 静态资源直接快速放行（无需限流、鉴权）
         if ctx.path_class == PathClass::Static {
@@ -161,9 +183,7 @@ impl ProxyHttp for Gateway {
         }
 
         // 3. 限流校验
-        if let FilterResult::Break =
-            crate::rate_limit_filter::check_rate_limit(session, ctx, &self.app).await?
-        {
+        if crate::rate_limiter::check(session).await? {
             return Ok(true);
         }
 
@@ -173,7 +193,8 @@ impl ProxyHttp for Gateway {
         }
 
         // 5. 鉴权与静默续签校验
-        if let FilterResult::Break = crate::auth_filter::check_auth(session, ctx, &self.app).await?
+        if crate::authenticate::check(session, ctx, &self.jwt_verifier, &self.token_refresher)
+            .await?
         {
             return Ok(true);
         }
@@ -210,8 +231,12 @@ impl ProxyHttp for Gateway {
             upstream_request.insert_header("X-User-Id", id.user_id.as_str())?;
             upstream_request.insert_header("X-User-Jti", id.user_jti.as_str())?;
         }
-        insert_opt_header(upstream_request, "X-Client-IP", &ctx.client_ip)?;
-        insert_opt_header(upstream_request, "X-Client-UA", &ctx.client_ua)?;
+        insert_opt_header(upstream_request, "X-Client-IP", session.client_ip())?;
+        insert_opt_header(
+            upstream_request,
+            "X-Client-UA",
+            header_str(session, "User-Agent"),
+        )?;
 
         Ok(())
     }
