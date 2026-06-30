@@ -37,6 +37,7 @@ fn cookie_value<'a>(seg: &'a str, name: &str) -> Option<&'a str> {
 ///
 /// # 示例
 /// ```
+/// use gateway::cookie;
 /// let header = "portal_jwt_token=abc.def; other=val";
 /// assert_eq!(cookie::extract_from_header(header, "portal_jwt_token"), Some("abc.def"));
 /// ```
@@ -57,6 +58,7 @@ pub fn extract_from_header<'a>(cookie_header: &'a str, name: &str) -> Option<&'a
 ///
 /// # 示例
 /// ```
+/// use gateway::cookie;
 /// let sc = "portal_jwt_token=eyJ.xxx; Path=/; HttpOnly; Secure; Max-Age=3600";
 /// assert_eq!(cookie::extract_from_set_cookie(sc, "portal_jwt_token"), Some("eyJ.xxx"));
 /// ```

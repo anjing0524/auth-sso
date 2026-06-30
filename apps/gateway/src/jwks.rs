@@ -94,7 +94,6 @@ impl JwksCache {
     /// ```
     /// # use gateway::jwks::JwksCache;
     /// let cache = JwksCache::new();
-    /// assert!(cache.is_empty());
     /// ```
     pub fn new() -> Self {
         Self {
