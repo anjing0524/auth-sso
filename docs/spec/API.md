@@ -657,14 +657,17 @@ GET /api/audit/logs?page=1&pageSize=20
 
 ## 11. Gateway 注入头
 
-Gateway（Rust/Pingora）验证 JWT 后向下游注入以下头：
+Gateway（Rust/Pingora）完成 JWT 离线验签后，向下游 Portal / 微服务注入以下身份头（三者"同生共死"：验签通过一起注入，续签成功一起覆盖）：
 
 | Header | 值 | 说明 |
 |--------|-----|------|
-| `X-Auth-User-ID` | `<uuid>` | 用户 ID |
-| `X-Auth-Username` | `admin` | 用户名 |
-| `X-Auth-Email` | `admin@example.com` | 邮箱 |
-| `X-Auth-Dept-IDs` | `<uuid1>,<uuid2>` | 用户所属部门 ID 列表（含子部门） |
+| `Authorization` | `Bearer <JWT>` | 原始 Access Token，供 Portal 自行解码获取完整 claims |
+| `X-User-Id` | `<uuid>` | 用户 ID（取自 JWT `sub`），子系统据此查 Redis 获取权限上下文 |
+| `X-User-Jti` | `<uuid>` | JWT 唯一标识（取自 JWT `jti`），用于审计与吊销追踪 |
+
+> **注意**：用户名、邮箱、部门 ID 列表（`deptIds`）等扩展属性**不在网关注入头中**。这些数据随 Portal 登录时预热至 Redis 的 `UserPermissionContext`（Key: `sso:user_perms:{userId}`），子系统通过 `X-User-Id` 向 Redis 查询获取。详见 [`third-party-integration.md`](./third-party-integration.md)。
+
+零信任净化：对于未通过验签的请求，网关会**强制移除**客户端可能伪造的 `Authorization`、`X-User-Id`、`X-User-Jti` 头，确保下游仅接收网关背书的身份。
 
 ---
 

@@ -27,8 +27,8 @@ export default function DashboardError({ error, reset }: ErrorProps) {
     <div className="flex items-center justify-center min-h-[60vh] p-8">
       <Card className="max-w-md w-full border-none shadow-sm ring-1 ring-border/50 rounded-2xl overflow-hidden text-center">
         <CardHeader className="pb-2 pt-8">
-          <div className="mx-auto p-3 bg-amber-50 rounded-2xl w-fit mb-4">
-            <AlertTriangle className="h-8 w-8 text-amber-500" />
+          <div className="mx-auto p-3 bg-warning/10 rounded-2xl w-fit mb-4">
+            <AlertTriangle className="h-8 w-8 text-warning" />
           </div>
           <CardTitle className="text-xl font-black">页面加载出错</CardTitle>
         </CardHeader>

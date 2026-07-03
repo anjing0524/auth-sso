@@ -8,7 +8,7 @@ pub mod refresh;
 pub mod verify;
 
 pub use refresh::TokenRefresher;
-pub use verify::JwtVerifier;
+pub use verify::{JwtVerifier, VerifyError};
 
 use base64::Engine;
 use serde::{Deserialize, Serialize};
@@ -23,13 +23,27 @@ pub struct Claims {
     pub sub: String,
     pub iss: String,
     pub aud: String,
-    pub exp: usize,
+    /// 过期时间（Unix 秒）。JWT NumericDate 是 64 位无符号整数，
+    /// 使用 `u64` 而非平台依赖宽度的 `usize`，与 `Duration::as_secs()` 返回类型一致。
+    pub exp: u64,
     pub jti: String,
     pub roles: Vec<String>,
     pub permissions: Vec<String>,
     /// 用户所有角色所属部门（含子树展开）的 ID 列表
     pub dept_ids: Vec<String>,
 }
+
+// ── Token 生命周期常量（必须与 Portal 签发端对齐）──
+
+/// Access Token 的 Cookie Max-Age（秒）— 与 Portal `signAccessToken` 过期时间同步。
+///
+/// 用于网关 `response_filter` 下发续签后的新 AT。修改时务必同步 Portal 侧。
+pub const ACCESS_TOKEN_MAX_AGE_SEC: u64 = 3600;
+
+/// Refresh Token 的 Cookie Max-Age（秒）— 与 Portal `signRefreshToken` 过期时间同步。
+///
+/// 用于网关 `response_filter` 下发续签后的新 RT。修改时务必同步 Portal 侧。
+pub const REFRESH_TOKEN_MAX_AGE_SEC: u64 = 604800;
 
 // ── 共享类型 ──
 
@@ -79,12 +93,20 @@ pub struct RefreshedTokens {
 /// assert!(decode_jwt_payload("not.a.jwt").is_none());
 /// ```
 pub fn decode_jwt_payload(token: &str) -> Option<Claims> {
-    let parts: Vec<&str> = token.split('.').collect();
-    if parts.len() != 3 {
-        return None;
-    }
+    // JWT 由 header.payload.signature 三段组成。用迭代器元组匹配零分配地校验
+    // "恰好三段"，并取中段 payload；多余或不足均返回 None。
+    let mut segments = token.split('.');
+    let payload = match (
+        segments.next(),
+        segments.next(),
+        segments.next(),
+        segments.next(),
+    ) {
+        (Some(_), Some(payload), Some(_), None) => payload,
+        _ => return None,
+    };
     let payload_bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
-        .decode(parts[1])
+        .decode(payload)
         .ok()?;
     serde_json::from_slice::<Claims>(&payload_bytes).ok()
 }

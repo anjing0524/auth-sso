@@ -8,7 +8,7 @@
 //! - 路径分类与 Cookie 处理 ([`path_matcher`], [`cookie`])
 //! - 进程内速率限制 ([`rate_limiter`])
 //! - 配置管理与上游管理 ([`config`])
-//! - 无锁全局指标计数 ([`metrics`])
+//! - 无锁全局指标计数（内部模块 `metrics`，非公共 API）
 //! - HTTP → HTTPS 重定向服务 ([`redirect`])
 //!
 //! # Examples
@@ -23,14 +23,14 @@
 //! ```
 
 pub mod auth;
-pub mod authenticate;
+pub(crate) mod authenticate;
 pub mod config;
 pub mod cookie;
 pub mod gateway;
-pub mod http;
+pub(crate) mod http;
 pub mod jwks;
 pub mod logging;
-pub mod metrics;
+pub(crate) mod metrics;
 pub mod path_matcher;
 pub mod rate_limiter;
 pub mod redirect;

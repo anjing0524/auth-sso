@@ -29,6 +29,16 @@
   --color-error: oklch(0.59 0.22 28);
   --color-info: oklch(0.55 0.22 257);
 
+  /* shadcn 语义色（bg-success / text-success 等） */
+  --success: oklch(0.67 0.17 165);
+  --success-foreground: oklch(1 0 0);
+  --warning: oklch(0.72 0.17 80);
+  --warning-foreground: oklch(0.2 0.03 80);
+  --error: var(--destructive);
+  --error-foreground: var(--destructive-foreground);
+  --info: oklch(0.55 0.22 257);
+  --info-foreground: oklch(1 0 0);
+
   /* 品牌渐变 */
   --color-gradient-start: oklch(0.52 0.23 257);
   --color-gradient-end: oklch(0.35 0.17 257);
@@ -54,6 +64,11 @@
 
   --popover-foreground: oklch(0.145 0 0);
 
+  /* 
+    重要：--primary 是 shadcn 前景色（near-black），用于文字/图标。
+    品牌蓝色是 --color-primary，用于背景等。使用 bg-primary 渲染的是黑色，不是品牌蓝。
+    正确的品牌蓝用法：bg-color-primary、text-color-primary
+   */
   --primary: oklch(0.205 0 0);
 
   --primary-foreground: oklch(0.985 0 0);
@@ -148,6 +163,14 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+
+  /* 语义色暗黑覆盖 */
+  --success: oklch(0.58 0.15 165);
+  --success-foreground: oklch(1 0 0);
+  --warning: oklch(0.62 0.14 75);
+  --warning-foreground: oklch(0.95 0.03 80);
+  --info: oklch(0.48 0.19 257);
+  --info-foreground: oklch(1 0 0);
 }
 
 @theme inline {
@@ -170,6 +193,16 @@
   --color-warning: var(--color-warning);
   --color-error: var(--color-error);
   --color-info: var(--color-info);
+
+  /* shadcn 语义色（bg-success / text-success / bg-warning / text-warning 等） */
+  --success: var(--success);
+  --success-foreground: var(--success-foreground);
+  --warning: var(--warning);
+  --warning-foreground: var(--warning-foreground);
+  --error: var(--error);
+  --error-foreground: var(--error-foreground);
+  --info: var(--info);
+  --info-foreground: var(--info-foreground);
 
   /* 圆角映射 */
   --radius-sm: 0.375rem;

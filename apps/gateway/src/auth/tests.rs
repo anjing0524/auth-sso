@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use super::*;
 // Claims is defined in super (auth/mod.rs)
+use super::VerifyError;
 use crate::jwks::JwksCache;
 use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, encode};
 
@@ -26,7 +27,7 @@ fn make_test_token(
         sub: sub.to_string(),
         iss: issuer.to_string(),
         aud: "portal-client".to_string(),
-        exp: (now as i64 + exp_offset_sec) as usize,
+        exp: (now as i64 + exp_offset_sec) as u64,
         jti: jti.to_string(),
         roles: vec!["ADMIN".to_string()],
         permissions: vec!["user:list".to_string()],
@@ -52,9 +53,7 @@ async fn test_verify_jwt_successful() {
     let token = make_test_token(kid, secret, issuer, "user-123", "jti-123", 3600);
 
     let result = verifier.verify(&token).await;
-    let Some(status) = result else {
-        panic!("expected valid token");
-    };
+    let status = result.expect("expected valid token");
     assert!(matches!(status.expiry, TokenExpiry::Valid));
     assert_eq!(status.token.user_id, "user-123");
     assert_eq!(status.token.jti, "jti-123");
@@ -77,7 +76,7 @@ async fn test_verify_jwt_expired() {
     let result = verifier.verify(&token).await;
     assert!(matches!(
         result,
-        Some(TokenStatus {
+        Ok(TokenStatus {
             expiry: TokenExpiry::Expired,
             ..
         })
@@ -107,7 +106,7 @@ async fn test_verify_jwt_invalid_issuer() {
     );
 
     let result = verifier.verify(&token).await;
-    assert!(result.is_none());
+    assert!(matches!(result, Err(VerifyError::InvalidToken(_))));
 }
 
 #[tokio::test]
@@ -125,7 +124,7 @@ async fn test_verify_jwt_invalid_kid() {
     let token = make_test_token("unknown-kid", secret, issuer, "user-123", "jti-123", 3600);
 
     let result = verifier.verify(&token).await;
-    assert!(result.is_none());
+    assert!(matches!(result, Err(VerifyError::UnknownKid(k)) if k == "unknown-kid"));
 }
 
 #[test]
@@ -135,7 +134,7 @@ fn test_decode_jwt_payload() {
         sub: "user-1".to_string(),
         iss: "test".to_string(),
         aud: "test".to_string(),
-        exp: 9999999999usize,
+        exp: 9999999999u64,
         jti: "jti-1".to_string(),
         roles: vec!["ADMIN".to_string()],
         permissions: vec!["read".to_string()],
@@ -149,7 +148,7 @@ fn test_decode_jwt_payload() {
     .unwrap();
     let decoded = decode_jwt_payload(&token).unwrap();
     assert_eq!(decoded.sub, "user-1");
-    assert_eq!(decoded.exp, 9999999999usize);
+    assert_eq!(decoded.exp, 9999999999u64);
     assert_eq!(decoded.jti, "jti-1");
     assert_eq!(decoded.roles, vec!["ADMIN"]);
 }

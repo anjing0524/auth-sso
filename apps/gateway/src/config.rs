@@ -1,8 +1,8 @@
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use tracing::info;
 
 /// 网关服务层配置
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[derive(Debug, Deserialize, Clone)]
 #[serde(default)]
 pub struct GatewayConfig {
     /// HTTP 监听端口，用于重定向
@@ -33,7 +33,7 @@ impl Default for GatewayConfig {
 }
 
 /// Portal 上游及 OIDC 鉴权配置
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[derive(Debug, Deserialize, Clone)]
 #[serde(default)]
 pub struct PortalConfig {
     /// Portal 上游地址，支持逗号分隔多个地址实现负载均衡，如 portal:4000,portal:4001
@@ -67,7 +67,7 @@ impl Default for PortalConfig {
 /// 上游地址列表（不可变，通过 Arc 在多个消费者间零拷贝共享）。
 ///
 /// 替代原先各处独立 clone 的 `Vec<String>`，统一管理上游地址的解析和访问。
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct Upstreams {
     addresses: Vec<String>,
 }
@@ -109,7 +109,7 @@ impl Upstreams {
 }
 
 /// Redis 数据库连接配置 (用于 jti 黑名单校验)
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[derive(Debug, Deserialize, Clone)]
 #[serde(default)]
 pub struct RedisConfig {
     /// Redis 连接 URL (例如 redis://127.0.0.1:6379)
@@ -125,7 +125,7 @@ impl Default for RedisConfig {
 }
 
 /// 统一配置结构体，支持从 gateway.toml 解析，支持缺省字段与默认值自动合并
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Deserialize, Clone, Default)]
 #[serde(default)]
 pub struct Config {
     pub gateway: GatewayConfig,
@@ -153,6 +153,9 @@ impl Config {
     /// * `path` - 配置文件路径
     pub fn load(path: &str) -> anyhow::Result<Self> {
         use anyhow::Context;
+
+        let file_exists = std::path::Path::new(path).exists();
+
         let builder =
             config::Config::builder().add_source(config::File::with_name(path).required(false));
 
@@ -164,12 +167,10 @@ impl Config {
             .try_deserialize::<Config>()
             .with_context(|| format!("反序列化配置文件 {} 失败，请检查语法格式", path))?;
 
-        // 优先读取系统环境变量 REDIS_URL 覆盖配置
-        if let Ok(env_redis_url) = std::env::var("REDIS_URL") {
-            cfg.redis.url = env_redis_url;
-        }
+        // 环境变量覆盖：REDIS_URL 优先于配置文件中的 redis.url
+        cfg.redis.url = resolve_redis_url(&cfg.redis.url, std::env::var("REDIS_URL").ok());
 
-        if std::path::Path::new(path).exists() {
+        if file_exists {
             info!(
                 "✅ 成功从配置文件 {} 加载网关配置 (缺失的字段已自动与默认值合并覆盖)",
                 path
@@ -182,6 +183,15 @@ impl Config {
         }
         Ok(cfg)
     }
+}
+
+/// 解析最终的 Redis URL：环境变量 `REDIS_URL`（`env_value`）优先于配置文件值。
+///
+/// 纯函数，无副作用，便于确定性单测。`Config::load` 在调用处传入
+/// `std::env::var("REDIS_URL").ok()`，把"读取环境"与"覆盖判定"解耦——
+/// 后者完全确定，不依赖全局可变状态。
+fn resolve_redis_url(config_value: &str, env_value: Option<String>) -> String {
+    env_value.unwrap_or_else(|| config_value.to_string())
 }
 
 #[cfg(test)]
@@ -306,34 +316,35 @@ mod tests {
     }
 
     #[test]
-    fn test_redis_env_override() {
-        unsafe {
-            std::env::set_var("REDIS_URL", "redis://hacker-redis:6379");
-        }
-        let config = Config::load("non_exists.toml").unwrap();
-        assert_eq!(config.redis.url, "redis://hacker-redis:6379");
-        unsafe {
-            std::env::remove_var("REDIS_URL");
-        }
+    fn resolve_redis_url_prefers_env_when_set() {
+        // env 设置时覆盖配置值（确定性：不读取真实 env）
+        assert_eq!(
+            resolve_redis_url("redis://cfg:6379", Some("redis://env:6380".to_string())),
+            "redis://env:6380",
+            "REDIS_URL 已设置时应覆盖配置文件值"
+        );
     }
 
     #[test]
-    #[should_panic(expected = "反序列化配置文件")]
-    fn test_load_fail_fast_on_invalid_toml() {
+    fn resolve_redis_url_falls_back_to_config_when_env_unset() {
+        // env 未设置时保持配置值
+        assert_eq!(
+            resolve_redis_url("redis://cfg:6379", None),
+            "redis://cfg:6379",
+            "REDIS_URL 未设置时应保持配置文件值"
+        );
+    }
+
+    #[test]
+    fn load_rejects_invalid_toml() {
         let file_path = "./test_invalid_gateway.toml";
         let invalid_toml = r#"
             [gateway]
             port = "not-a-number" # 格式类型错误，会导致解析失败
         "#;
         fs::write(file_path, invalid_toml).unwrap();
-
-        let _result = std::panic::catch_unwind(|| {
-            Config::load(file_path).unwrap();
-        });
-
+        let result = Config::load(file_path);
         let _ = fs::remove_file(file_path);
-
-        // 重新包装 panic 传递以触发 should_panic
-        panic!("反序列化配置文件");
+        assert!(result.is_err(), "非法 TOML 必须返回错误，而非静默成功");
     }
 }

@@ -3,20 +3,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  LayoutGrid, LayoutDashboard, Users, Building2, ShieldCheck, AppWindow,
-  Menu, ShieldAlert, FileText, Key, Lock, Globe, Bell, HelpCircle, Settings, User,
-  type LucideIcon,
-} from 'lucide-react';
-import {
   CommandDialog, CommandEmpty, CommandGroup, CommandInput,
   CommandItem, CommandList,
 } from '@/components/ui/command';
-
-/** 白名单 icon 名称 → 组件映射（与 app-sidebar 保持同步） */
-const ICON_MAP: Record<string, LucideIcon> = {
-  LayoutGrid, LayoutDashboard, Users, Building2, ShieldCheck, AppWindow,
-  Menu, ShieldAlert, FileText, Key, Lock, Globe, Bell, HelpCircle, Settings, User,
-};
+import { ICON_MAP } from '@/lib/icon-map';
 
 interface MenuItem {
   id: string; title: string; url: string; icon?: string | null;

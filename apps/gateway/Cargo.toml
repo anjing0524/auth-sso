@@ -31,6 +31,9 @@ openssl = { version = "0.10.81", features = ["vendored"] }
 # ── 异步 HTTP 客户端（续签请求 + 首次 JWKS 同步拉取）──
 reqwest = { version = "0.12.7", features = ["json", "rustls-tls"], default-features = false }
 
+# ── 整数 → 字符串零分配格式化（429 Retry-After 头）──
+itoa = "1.0"
+
 # ── JWT 验签：ES256 JWKS 非对称验签 ──
 jsonwebtoken = "9.3.0"
 serde = { version = "1.0.228", features = ["derive"] }

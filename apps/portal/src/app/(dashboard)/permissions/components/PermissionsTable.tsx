@@ -130,7 +130,7 @@ export default function PermissionsTable({ permissions, activeTab, initialKeywor
   ];
 
   const cardHeader = (
-    <div className="bg-slate-50/50 dark:bg-slate-900/50 border-b py-4 px-6">
+    <div className="bg-muted/50 border-b py-4 px-6">
       <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
         <Tabs value={activeTab} onValueChange={handleTabChange} className="w-auto">
           <TabsList className="h-9">
@@ -153,9 +153,9 @@ export default function PermissionsTable({ permissions, activeTab, initialKeywor
   );
 
   const renderRow = (p: PermissionRow) => (
-    <TableRow key={p.id} className="hover:bg-slate-50/50">
+    <TableRow key={p.id} className="hover:bg-muted/50">
       <TableCell className="pl-8 font-medium">{p.name}</TableCell>
-      <TableCell><code className="text-xs bg-slate-100 px-2 py-0.5 rounded">{p.code}</code></TableCell>
+      <TableCell><code className="text-xs bg-muted px-2 py-0.5 rounded">{p.code}</code></TableCell>
       <TableCell>
         <Badge variant="outline" className="text-[10px] gap-1">
           {TYPE_ICONS[p.type] || null} {p.type}
@@ -173,7 +173,7 @@ export default function PermissionsTable({ permissions, activeTab, initialKeywor
             <DropdownMenuLabel className="text-[10px]">权限操作</DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem className="rounded-lg cursor-pointer" onClick={() => openEdit(p)}>
-              <Edit className="h-3.5 w-3.5 mr-2 text-blue-500" /> 编辑
+              <Edit className="h-3.5 w-3.5 mr-2 text-primary" /> 编辑
             </DropdownMenuItem>
             <DropdownMenuItem className="rounded-lg cursor-pointer text-destructive" onClick={() => { setSelected(p); setIsDeleteOpen(true); }}>
               <Trash2 className="h-3.5 w-3.5 mr-2" /> 删除

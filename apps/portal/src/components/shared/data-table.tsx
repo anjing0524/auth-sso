@@ -73,14 +73,14 @@ export function DataTable<T>({
             ) : data.length === 0 ? (
               emptyState ? (
                 <TableRow>
-                  <TableCell colSpan={columns.length} className="p-0">
+                  <TableCell colSpan={Math.max(1, columns.length)} className="p-0">
                     {emptyState}
                   </TableCell>
                 </TableRow>
               ) : (
                 <TableRow>
                   <TableCell
-                    colSpan={columns.length}
+                    colSpan={Math.max(1, columns.length)}
                     className="h-64 text-center text-muted-foreground"
                   >
                     {emptyText}

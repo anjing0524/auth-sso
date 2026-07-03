@@ -996,6 +996,7 @@ dependencies = [
  "clap",
  "config",
  "criterion",
+ "itoa",
  "jsonwebtoken",
  "openssl",
  "pingora-core",

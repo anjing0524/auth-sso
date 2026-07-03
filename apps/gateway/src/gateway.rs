@@ -8,10 +8,19 @@ use pingora_load_balancing::selection::RoundRobin;
 use pingora_proxy::{ProxyHttp, Session};
 use tracing::debug;
 
-use crate::auth::{JwtVerifier, RefreshedTokens, TokenRefresher};
+use crate::auth::{
+    ACCESS_TOKEN_MAX_AGE_SEC, JwtVerifier, REFRESH_TOKEN_MAX_AGE_SEC, RefreshedTokens,
+    TokenRefresher,
+};
 use crate::cookie;
-use crate::http::SessionExt;
+use crate::http::{SessionExt, is_secure_host};
 use crate::path_matcher::{PathClass, PathMatcher};
+
+/// Pingora `LoadBalancer::select` 的第二参数为选择输入的哈希键；
+/// 传 `b""` 表示纯轮询（不做一致性哈希），256 为保留的总权重占位。
+///
+/// 见 pingora-load-balancing 0.8 `select(&self, key: &[u8], total_weight: usize)`。
+const UPSTREAM_SELECT_WEIGHT: usize = 256;
 
 /// 从 Session 提取指定请求头的字符串值
 fn header_str<'s>(session: &'s Session, name: &str) -> Option<&'s str> {
@@ -30,11 +39,20 @@ fn insert_opt_header(
     Ok(())
 }
 
+/// 构造一个续签后的会话 Cookie 字符串（`Set-Cookie` 头值）。
+///
+/// 统一 AT/RT 两段 `format!` 的重复构造：相同属性（`Path=/; HttpOnly; SameSite=Lax`），
+/// 仅 cookie 名、值、Max-Age 与 Secure 标记不同。
+fn build_session_cookie(name: &str, value: &str, max_age: u64, secure: bool) -> String {
+    let secure_str = if secure { "; Secure" } else { "" };
+    format!("{name}={value}; Path=/; HttpOnly; SameSite=Lax; Max-Age={max_age}{secure_str}")
+}
+
 /// 已通过验签的请求身份 — Authorization 头、用户 ID、jti 三者同生共死，
 /// 作为一个整体在请求生命周期中流转（验签成功一起注入，续签成功一起覆盖）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Identity {
-    /// 预格式化的 Authorization 头部值（例如 "Bearer <token>"）
+    /// 预格式化的 Authorization 头部值（例如 `Bearer <token>`）
     pub auth_header: String,
     /// 用户 ID（从 JWT Claims.sub 提取）
     pub user_id: String,
@@ -187,14 +205,17 @@ impl ProxyHttp for Gateway {
         let host = header_str(session, "Host").unwrap_or("");
         debug!("接收代理请求，Host: {}", host);
 
-        let peer = self.portal_lb.select(b"", 256).ok_or_else(|| {
-            Error::explain(
-                ErrorType::HTTPStatus(502),
-                "gateway: 无可用 Portal 上游节点，请检查配置文件中的 upstream 设置",
-            )
-        })?;
+        let peer = self
+            .portal_lb
+            .select(b"", UPSTREAM_SELECT_WEIGHT)
+            .ok_or_else(|| {
+                Error::explain(
+                    ErrorType::HTTPStatus(502),
+                    "gateway: 无可用 Portal 上游节点，请检查配置文件中的 upstream 设置",
+                )
+            })?;
         debug!("路由至 Portal 上游: {:?}", peer);
-        // tls=false（上行明文 HTTP），SNI 不会被使用，传空字符串避免每请求一次堆分配
+        // tls=false（上行明文 HTTP）：SNI 不会被使用，空 String 零分配
         Ok(Box::new(HttpPeer::new(peer, false, String::new())))
     }
 
@@ -281,20 +302,19 @@ impl ProxyHttp for Gateway {
         };
 
         let host = header_str(session, "Host").unwrap_or("");
-        let secure = !host.contains("localhost") && !host.contains("127.0.0.1");
-        let secure_str = if secure { "; Secure" } else { "" };
+        let secure = is_secure_host(host);
 
-        let at_cookie = format!(
-            "{}={}; Path=/; HttpOnly; SameSite=Lax; Max-Age=3600{}",
+        let at_cookie = build_session_cookie(
             cookie::ACCESS_COOKIE,
-            new_tokens.access,
-            secure_str
+            &new_tokens.access,
+            ACCESS_TOKEN_MAX_AGE_SEC,
+            secure,
         );
-        let rt_cookie = format!(
-            "{}={}; Path=/; HttpOnly; SameSite=Lax; Max-Age=604800{}",
+        let rt_cookie = build_session_cookie(
             cookie::REFRESH_COOKIE,
-            new_tokens.refresh,
-            secure_str
+            &new_tokens.refresh,
+            REFRESH_TOKEN_MAX_AGE_SEC,
+            secure,
         );
 
         upstream_response.append_header("Set-Cookie", at_cookie)?;

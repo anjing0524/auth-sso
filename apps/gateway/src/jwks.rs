@@ -42,6 +42,20 @@ struct OidcDiscovery {
     jwks_uri: String,
 }
 
+/// 构造网关统一的 JWT 校验基线配置：ES256 算法、不校验 aud/exp。
+///
+/// exp 由网关自行判定（`Valid`/`NearlyExpired`/`Expired` 三态），故关闭
+/// jsonwebtoken 的内置 exp 校验；aud 的校验职责在 Portal 侧。issuer 与算法
+/// 列表由调用方在 OIDC Discovery 后追加设置。
+///
+/// 提取此函数以消除原先散落在 4 处的相同三行构造，规避配置漂移风险。
+fn base_validation() -> Validation {
+    let mut validation = Validation::new(Algorithm::ES256);
+    validation.validate_aud = false;
+    validation.validate_exp = false;
+    validation
+}
+
 /// OIDC 元数据结构体，将公钥映射与 OIDC 校验配置统一存放，提供极高的并发原子读取性能
 #[derive(Clone)]
 struct OidcMetadata {
@@ -55,12 +69,9 @@ struct OidcMetadata {
 
 impl Default for OidcMetadata {
     fn default() -> Self {
-        let mut validation = Validation::new(Algorithm::ES256);
-        validation.validate_aud = false;
-        validation.validate_exp = false;
         Self {
             keys: HashMap::new(),
-            validation: Arc::new(validation),
+            validation: Arc::new(base_validation()),
             refresh_endpoint: None,
         }
     }
@@ -141,10 +152,7 @@ impl JwksCache {
                 error!(
                     "JWKS 读写锁中毒 (get_validation)，回退到默认 Validation — JWT 验签可能异常"
                 );
-                let mut validation = Validation::new(Algorithm::ES256);
-                validation.validate_aud = false;
-                validation.validate_exp = false;
-                Arc::new(validation)
+                Arc::new(base_validation())
             })
     }
 
@@ -209,10 +217,8 @@ impl JwksCache {
             issuer, jwks_uri, signing_algs_val
         );
 
-        // 预解析 validation（不写缓存，仅返回）
-        let mut validation = Validation::new(Algorithm::ES256);
-        validation.validate_aud = false;
-        validation.validate_exp = false;
+        // 预解析 validation（不写缓存，仅返回）：以基线配置起步，追加 issuer 与算法
+        let mut validation = base_validation();
         if let Some(iss) = issuer {
             validation.set_issuer(&[iss]);
         }
@@ -326,9 +332,7 @@ impl JwksCache {
     #[doc(hidden)]
     pub fn set_metadata_for_test(&self, issuer: &str, supported_algs: &[&str]) {
         let mut guard = self.inner.write().unwrap();
-        let mut validation = Validation::new(Algorithm::ES256);
-        validation.validate_aud = false;
-        validation.validate_exp = false;
+        let mut validation = base_validation();
         validation.set_issuer(&[issuer]);
         validation.algorithms = supported_algs
             .iter()

@@ -89,24 +89,24 @@ export default function ClientsTable({ clients, initialKeyword }: Props) {
   ];
 
   const cardHeader = (
-    <div className="bg-slate-50/50 dark:bg-slate-900/50 border-b py-6 px-8">
+    <div className="bg-muted/50 border-b py-6 px-8">
       <div className="flex flex-col md:flex-row gap-6 items-center justify-between">
         <div className="relative w-full md:w-96">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground opacity-50" />
           <Input
             placeholder="搜索应用名称或 Client ID..."
-            className="pl-10 bg-white dark:bg-slate-950 border-none rounded-xl h-11 shadow-inner"
+            className="pl-10 bg-card border-none rounded-xl h-11 shadow-inner"
             value={keyword}
             onChange={e => handleSearch(e.target.value)}
           />
         </div>
         <div className="flex items-center gap-4 text-xs text-muted-foreground">
           <div className="flex items-center gap-1.5">
-            <div className="h-2 w-2 rounded-full bg-green-500" />
+            <div className="h-2 w-2 rounded-full bg-success" />
             <span>已启用: {activeCount}</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <div className="h-2 w-2 rounded-full bg-slate-300" />
+            <div className="h-2 w-2 rounded-full bg-muted-foreground/30" />
             <span>已禁用: {disabledCount}</span>
           </div>
         </div>
@@ -115,7 +115,7 @@ export default function ClientsTable({ clients, initialKeyword }: Props) {
   );
 
   const renderRow = (client: ClientRow) => (
-    <TableRow key={client.clientId} className="group hover:bg-slate-50/50 transition-colors">
+    <TableRow key={client.clientId} className="group hover:bg-muted/50 transition-colors">
       <TableCell className="pl-8 py-5">
         <div className="flex items-center gap-4">
           <div className="relative">
@@ -125,14 +125,14 @@ export default function ClientsTable({ clients, initialKeyword }: Props) {
                 {client.name.substring(0, 2)}
               </AvatarFallback>
             </Avatar>
-            <div className="absolute -bottom-1 -right-1 h-4 w-4 bg-white dark:bg-slate-900 rounded-full flex items-center justify-center ring-1 ring-border/20 shadow-sm">
-              <Globe className="h-2.5 w-2.5 text-blue-500" />
+            <div className="absolute -bottom-1 -right-1 h-4 w-4 bg-card rounded-full flex items-center justify-center ring-1 ring-border/20 shadow-sm">
+              <Globe className="h-2.5 w-2.5 text-primary" />
             </div>
           </div>
           <div className="flex flex-col gap-0.5">
             <span className="font-bold text-sm leading-tight text-foreground group-hover:text-primary transition-colors">{client.name}</span>
             {client.homepageUrl ? (
-              <a href={client.homepageUrl} target="_blank" className="text-[10px] text-muted-foreground hover:text-blue-600 flex items-center gap-1 transition-colors" rel="noreferrer">
+              <a href={client.homepageUrl} target="_blank"                 className="text-[10px] text-muted-foreground hover:text-primary flex items-center gap-1 transition-colors" rel="noreferrer">
                 {client.homepageUrl} <ExternalLink className="h-2 w-2" />
               </a>
             ) : (
@@ -188,7 +188,7 @@ export default function ClientsTable({ clients, initialKeyword }: Props) {
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild className="rounded-lg cursor-pointer">
               <Link href={`/clients/${client.clientId}`} className="flex items-center gap-2 py-2">
-                <Edit className="h-4 w-4 text-blue-500" /> 编辑 OAuth 配置
+                <Edit className="h-4 w-4 text-primary" /> 编辑 OAuth 配置
               </Link>
             </DropdownMenuItem>
             <DropdownMenuItem asChild className="rounded-lg cursor-pointer">

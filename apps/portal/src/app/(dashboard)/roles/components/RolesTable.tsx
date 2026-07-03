@@ -117,7 +117,7 @@ export default function RolesTable({ roles, pagination, initialKeyword, departme
   ];
 
   const cardHeader = (
-    <div className="bg-slate-50/50 dark:bg-slate-900/50 border-b py-4 px-6">
+    <div className="bg-muted/50 border-b py-4 px-6">
       <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
         <div className="relative w-full md:w-72">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground opacity-50" />
@@ -131,7 +131,7 @@ export default function RolesTable({ roles, pagination, initialKeyword, departme
   );
 
   const renderRow = (r: RoleRow) => (
-    <TableRow key={r.id} className="hover:bg-slate-50/50">
+    <TableRow key={r.id} className="hover:bg-muted/50">
       <TableCell className="pl-8">
         <div className="flex items-center gap-3">
           <div className="p-2 rounded-lg bg-primary/10"><ShieldCheck className="h-4 w-4 text-primary" /></div>
@@ -142,7 +142,7 @@ export default function RolesTable({ roles, pagination, initialKeyword, departme
           </div>
         </div>
       </TableCell>
-      <TableCell><code className="text-xs bg-slate-100 px-2 py-0.5 rounded">{r.code}</code></TableCell>
+      <TableCell><code className="text-xs bg-muted px-2 py-0.5 rounded">{r.code}</code></TableCell>
       <TableCell><span className="text-xs text-muted-foreground">{getDeptName(r.deptId)}</span></TableCell>
       <TableCell><Badge variant={r.status === 'ACTIVE' ? 'success' : 'secondary'} className="text-[10px]">{r.status}</Badge></TableCell>
       <TableCell className="text-right pr-8">
@@ -150,7 +150,7 @@ export default function RolesTable({ roles, pagination, initialKeyword, departme
           <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg"><MoreHorizontal className="h-3.5 w-3.5" /></Button></DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-40 rounded-xl p-2">
             <DropdownMenuLabel className="text-[10px]">角色操作</DropdownMenuLabel><DropdownMenuSeparator />
-            <DropdownMenuItem className="rounded-lg cursor-pointer" onClick={() => openEdit(r)}><Edit className="h-3.5 w-3.5 mr-2 text-blue-500" /> 编辑</DropdownMenuItem>
+            <DropdownMenuItem className="rounded-lg cursor-pointer" onClick={() => openEdit(r)}><Edit className="h-3.5 w-3.5 mr-2 text-primary" /> 编辑</DropdownMenuItem>
             {!r.isSystem && (
               <DropdownMenuItem className="rounded-lg cursor-pointer text-destructive" onClick={() => { setSelected(r); handleDelete(); }}>
                 <Trash2 className="h-3.5 w-3.5 mr-2" /> 删除
@@ -181,7 +181,7 @@ export default function RolesTable({ roles, pagination, initialKeyword, departme
         cardHeader={cardHeader}
       />
       {pagination.totalPages > 1 && (
-        <div className="flex items-center justify-between px-6 py-3 border-t bg-slate-50/30">
+        <div className="flex items-center justify-between px-6 py-3 border-t bg-muted/50">
           <span className="text-xs text-muted-foreground">共 {pagination.total} 条</span>
           <div className="flex gap-1">
             {Array.from({ length: pagination.totalPages }).map((_, i) => (

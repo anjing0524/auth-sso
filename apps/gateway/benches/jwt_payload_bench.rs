@@ -14,7 +14,7 @@ fn make_test_jwt(sub: &str, jti: &str) -> String {
         sub: sub.to_string(),
         iss: "https://sso.example.com".to_string(),
         aud: "portal-client".to_string(),
-        exp: 9999999999usize,
+        exp: 9999999999u64,
         jti: jti.to_string(),
         roles: vec!["ADMIN".to_string(), "USER".to_string()],
         permissions: vec![

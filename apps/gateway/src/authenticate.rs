@@ -4,7 +4,7 @@ use crate::gateway::{GatewayCtx, Identity};
 use crate::http::SessionExt;
 use pingora_core::Result;
 use pingora_proxy::Session;
-use tracing::info;
+use tracing::{info, warn};
 
 // ── 鉴权失败响应 ──
 
@@ -108,13 +108,17 @@ pub async fn check(
         return respond_auth_failure(session).await;
     };
 
-    // 2. 验签
-    let Some(TokenStatus {
+    // 2. 验签：失败原因以强类型 VerifyError 呈现，统一短路到 302/401（业务语义不变），
+    //    但日志现在携带可结构化过滤的具体失败类别。
+    let TokenStatus {
         token: verified,
         expiry,
-    }) = verifier.verify(token).await
-    else {
-        return respond_auth_failure(session).await;
+    } = match verifier.verify(token).await {
+        Ok(status) => status,
+        Err(e) => {
+            warn!(error = %e, "JWT 验签失败");
+            return respond_auth_failure(session).await;
+        }
     };
 
     // 3. 写入当前身份到 ctx

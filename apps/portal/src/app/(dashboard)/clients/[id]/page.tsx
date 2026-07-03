@@ -151,7 +151,7 @@ export default function ClientDetailPage({ params }: PageProps) {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-64">
-        <div className="text-gray-500">加载中...</div>
+        <div className="text-muted-foreground">加载中...</div>
       </div>
     );
   }
@@ -159,8 +159,8 @@ export default function ClientDetailPage({ params }: PageProps) {
   if (!client) {
     return (
       <div className="text-center py-12">
-        <p className="text-gray-500">Client 不存在</p>
-        <Link href="/clients" className="mt-4 text-blue-600 hover:underline">
+        <p className="text-muted-foreground">Client 不存在</p>
+        <Link href="/clients" className="mt-4 text-primary hover:underline">
           返回列表
         </Link>
       </div>
@@ -172,27 +172,27 @@ export default function ClientDetailPage({ params }: PageProps) {
       {/* 页面标题 */}
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-4">
-          <Link href="/clients" className="text-gray-400 hover:text-gray-600">
+          <Link href="/clients" className="text-muted-foreground hover:text-foreground">
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
           </Link>
           <div>
-            <h2 className="text-2xl font-bold text-gray-900">{client.name}</h2>
-            <p className="text-sm text-gray-500">{client.clientId}</p>
+            <h2 className="text-2xl font-bold text-foreground">{client.name}</h2>
+            <p className="text-sm text-muted-foreground">{client.clientId}</p>
           </div>
         </div>
       </div>
 
       {/* 标签页 */}
-      <div className="border-b border-gray-200">
+      <div className="border-b border-border">
         <nav className="-mb-px flex space-x-8">
           <button
             onClick={() => setActiveTab('info')}
             className={`py-4 px-1 border-b-2 font-medium text-sm ${
               activeTab === 'info'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                ? 'border-primary text-primary'
+                : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
             }`}
           >
             基本信息
@@ -201,8 +201,8 @@ export default function ClientDetailPage({ params }: PageProps) {
             onClick={() => setActiveTab('tokens')}
             className={`py-4 px-1 border-b-2 font-medium text-sm ${
               activeTab === 'tokens'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                ? 'border-primary text-primary'
+                : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
             }`}
           >
             授权记录

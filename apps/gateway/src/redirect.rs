@@ -4,6 +4,8 @@ use pingora_http::ResponseHeader;
 use pingora_proxy::{ProxyHttp, Session};
 use tracing::info;
 
+use crate::http::host_only;
+
 /// 根据当前请求的主机、路径、Query 参数及 SSL 端口，生成 HTTPS 重定向 Location 网址
 fn generate_redirect_location(
     host: &str,
@@ -11,19 +13,12 @@ fn generate_redirect_location(
     query: Option<&str>,
     ssl_port: u16,
 ) -> String {
-    // 从 Host 头中剥离端口号：
-    // - IPv6 格式如 [::1]:18080 → 找到 ] 截取 [::1]
-    // - 普通格式如 localhost:18080 → 找到 : 截取 localhost
-    let host_only = if host.starts_with('[') {
-        host.find(']').map_or(host, |end| &host[..=end])
-    } else {
-        host.find(':').map_or(host, |i| &host[..i])
-    };
+    let host = host_only(host);
     let query_len = query.map(|q| q.len() + 1).unwrap_or(0);
-    let mut location = String::with_capacity(8 + host_only.len() + 6 + path.len() + query_len);
+    let mut location = String::with_capacity(8 + host.len() + 6 + path.len() + query_len);
 
     location.push_str("https://");
-    location.push_str(host_only);
+    location.push_str(host);
     if ssl_port != 443 {
         use std::fmt::Write;
         let _ = write!(location, ":{}", ssl_port);

@@ -197,7 +197,7 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
                           {opLog.username || '-'}
                         </TableCell>
                         <TableCell>
-                          <span className="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
+                          <span className="px-2 py-1 text-xs rounded-full bg-primary/10 text-primary">
                             {AUDIT_OPERATION_LABELS[opLog.operation as keyof typeof AUDIT_OPERATION_LABELS] || opLog.operation}
                           </span>
                         </TableCell>
@@ -205,7 +205,7 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
                           {opLog.url || (opLog.params ? JSON.stringify(opLog.params) : '') || '-'}
                         </TableCell>
                         <TableCell>
-                          <span className={`text-sm ${opLog.status === 200 ? 'text-green-600 dark:text-green-400' : 'text-destructive'}`}>
+                          <span className={`text-sm ${opLog.status === 200 ? 'text-success' : 'text-destructive'}`}>
                             {opLog.status || '-'}
                           </span>
                           {opLog.errorMsg && (

@@ -758,146 +758,17 @@ ENG DUAL VOICES — CONSENSUS TABLE (Refresh):
 
 ---
 
-## /autoplan Re-Review — 2026-07-02 (Final Refresh)
-
-### Implementation Status at Review Time
-
-Plan is ~95% implemented. Previous run (2026-06-26) flagged 21 total findings across CEO/Design/Eng. TODOS.md now has 31 items all completed. U1-U5 are substantially done. Remaining work: a handful of token leaks in polished components (RolesTable, app-sidebar), legacy client detail pages (out of scope), and strategic questions about whether CSS polish was the right investment.
-
-### Previous Finding Status Update (21 total from 2026-06-26)
-
-| Status | Count | Change since last review |
-|--------|-------|--------------------------|
-| **FIXED** | 19 | +10 from 9 previously fixed |
-| **REMAINING** | 2 | bg-slate in RolesTable (MEDIUM), colSpan edge case (MEDIUM) |
-
-### Fresh CEO Subagent — Strategic Independence (2026-07-02)
-
-Independent CEO voice (fresh context, no prior review access):
-- **CRITICAL: Wrong framing.** "Design debt" vs "Enterprise Compliance UI" yields 10x strategic impact gap. The plan's own prior review identified this and was ignored.
-- **CRITICAL: Sunk cost fallacy.** 95% done makes it harder to acknowledge the framing problem. The plan declared "NO UNRESOLVED DECISIONS" after documenting major strategic criticism.
-- **CRITICAL: Competitive blind spot.** Competitors invest in SCIM/SAML/OIDC. Auth-SSO invested in oklch color unification. These are not the same competitive dimension.
-- **CRITICAL: Diminishing returns.** 31 items completed, 70-80 token leaks remain in out-of-scope code. Every additional hour on CSS is an hour not on enterprise features.
-- **HIGH: No token generation pipeline.** Manual CSS + grep verification guarantees future drift. Style Dictionary or a 50-line script would eliminate this category of bug permanently.
-- **HIGH: Wrong backlog.** All 31 completed TODOS items are cosmetic. Zero enterprise SSO features (SCIM, SAML, SIEM) in the backlog.
-
-### Fresh Eng Subagent — Independent Architecture Review (2026-07-02)
-
-- **HIGH: `bg-primary` naming footgun.** `--primary` (shadcn foreground, near-black) vs `--color-primary` (brand blue). Using `bg-primary` renders black. Every new developer will hit this.
-- **HIGH: Tests are render-only.** All 6 component tests verify DOM presence, not behavior. CommandPalette tests mock away all real cmdk logic. Zero coverage of loading/empty/error state transitions.
-- **MEDIUM: ICON_MAP duplicated** between CommandPalette and AppSidebar with no shared source of truth.
-- **MEDIUM: `colSpan={0}` edge case** (prior review N8) — still unfixed in data-table.tsx:83.
-- **MEDIUM: Debounce blocks close action.** 200ms cooldown prevents closing the palette immediately after an accidental open.
-- **MEDIUM: `.dark` block missing semantic overrides** for `--color-success`, `--color-warning`, `--color-error`, `--color-info`, `--color-gradient-start/end`.
-- **MEDIUM: RolesTable has 4 hardcoded slate tokens** — the last batch of plan-scope token leaks (cardHeader, row hover, code badge, pagination).
-- **MEDIUM: Cmd+K steals focus** from all inputs with no input-context guard.
-- **LOW: No URL validation** before `router.push(url)` in CommandPalette.
-
-### Remaining Token Leaks (Current Code Audit)
-
-**In-scope (plan-covered components):**
-| # | Severity | File | Tokens |
-|---|----------|------|--------|
-| 1 | MEDIUM | `RolesTable.tsx` | 4x `bg-slate-*` (card header, row hover, code badge, pagination) |
-| 2 | MEDIUM | `RolesTable.tsx:153` | `text-blue-500` icon color |
-| 3 | MEDIUM | `PermissionsTable.tsx` | 4x `bg-slate-*` (card header, row hover, code badge) |
-| 4 | MEDIUM | `ClientsTable.tsx` | 5x slate/green/blue/white leaks |
-| 5 | MEDIUM | `app-sidebar.tsx` | 17+ slate/blue/white leaks |
-| 6 | MEDIUM | `ProfileClient.tsx` | 24+ slate/blue/green/white leaks |
-| 7 | MEDIUM | `dashboard/page.tsx:126-128` | `text-success` (uses design token — actually correct) |
-| 8 | MEDIUM | `audit-logs/page.tsx:200,208` | Blue badge + green status hardcodes |
-| 9 | MEDIUM | `app/(dashboard)/error.tsx:30-31` | `bg-amber-50 text-amber-500` |
-
-**Out of scope (not in plan, legacy detail pages):**
-| # | Severity | File | Tokens |
-|---|----------|------|--------|
-| 10 | LOW | `ClientInfoSection.tsx` | 40+ hardcoded gray/blue/green/red/white tokens |
-| 11 | LOW | `ClientTokensSection.tsx` | 12+ hardcoded gray/red tokens |
-| 12 | LOW | `clients/[id]/page.tsx` | 8+ hardcoded gray/blue tokens |
-
-### CEO Consensus Table (Refresh, 2026-07-02)
-
-```
-CEO DUAL VOICES — CONSENSUS TABLE (Final):
-═══════════════════════════════════════════════════════════════
-  Dimension                           Claude  Codex  Consensus
-  ──────────────────────────────────── ─────── ─────── ─────────
-  1. Premises valid?                   MIXED   N/A    MIXED
-  2. Right problem to solve?           NO      N/A    NO
-  3. Scope calibration correct?        YES     N/A    YES
-  4. Alternatives sufficiently explored? NO    N/A    NO
-  5. Competitive/market risks covered? NO      N/A    NO
-  6. 6-month trajectory sound?         CONCERN N/A    CONCERN
-═══════════════════════════════════════════════════════════════
-N/A = Codex unavailable (auth missing).
-```
-
-### Design Litmus Scorecard (Refresh)
-
-```
-DESIGN REVIEW — LITMUS SCORECARD (Final):
-═══════════════════════════════════════════════════════════════
-  Check                                    Claude  Codex  Consensus
-  ─────────────────────────────────────── ─────── ─────── ─────────
-  1. Brand unmistakable in first screen?   NO      N/A    NO
-  2. One strong visual anchor?             YES     N/A    YES
-  3. Scannable by headlines only?          YES     N/A    YES
-  4. Each section has one job?             MOSTLY  N/A    MOSTLY
-  5. Cards actually necessary?             YES     N/A    YES
-  6. Motion improves hierarchy?            N/A     N/A    N/A
-  7. Premium without decorative shadows?   YES     N/A    YES
-  ─────────────────────────────────────── ─────── ─────── ─────────
-  Hard rejections triggered:               0       N/A    0
-═══════════════════════════════════════════════════════════════
-```
-
-### Eng Consensus Table (Refresh, 2026-07-02)
-
-```
-ENG DUAL VOICES — CONSENSUS TABLE (Final):
-═══════════════════════════════════════════════════════════════
-  Dimension                           Claude  Codex  Consensus
-  ──────────────────────────────────── ─────── ─────── ─────────
-  1. Architecture sound?               YES     N/A    YES
-  2. Test coverage sufficient?         NO      N/A    NO
-  3. Performance risks addressed?      YES     N/A    YES
-  4. Security threats covered?         YES     N/A    YES
-  5. Error paths handled?              PARTIAL N/A    PARTIAL
-  6. Deployment risk manageable?       YES     N/A    YES
-═══════════════════════════════════════════════════════════════
-```
-
----
-
-## Decision Audit Trail (Cumulative)
-
-| # | Phase | Decision | Classification | Principle | Rationale | Rejected |
-|---|-------|----------|---------------|-----------|-----------|----------|
-| D1 | CEO | SELECTIVE EXPANSION mode | Mechanical | P1+P2 | Plan is 95% done; expansions limited to blast radius | SCOPE EXPANSION |
-| D2 | CEO | Accept E2 (DESIGN.md oklch sync) — already done in TODOS.md #7 | Mechanical | P2 | In blast radius, already implemented | — |
-| D3 | CEO | Defer analytics/telemetry (E1) to follow-up — already done in TODOS.md #27 | Mechanical | P3 | Outside blast radius (new API), already implemented anyway | — |
-| D4 | CEO | Accept premises (design inconsistency as scope) — prior reviews already ratified this | Mechanical | P6 | 3 prior /autoplan runs confirmed this framing; sunk cost makes re-litigating unproductive | — |
-| D5 | CEO | Strategic reframing suggestion (Enterprise Compliance UI) — noted but not scope-changing at 95% completion | Taste | P6 | Valid point but this plan is nearly done; reframing belongs in next initiative | — |
-| D6 | Eng | Architecture is sound — no structural changes needed | Mechanical | P5 | Component boundaries clean, no coupling concerns | — |
-| D7 | Eng | Test quality is shallow but tests exist — defer deeper tests | Taste | P3 | Render-only tests found, but adding behavior tests now exceeds plan scope | — |
-| D8 | Eng | ICON_MAP duplication — defer to follow-up | Mechanical | P3 | Duplication is clear but fixing requires shared module refactor (>5 files) | — |
-| D9 | Eng | colSpan={0} edge case — fix now | Mechanical | P1 | One-line fix (Math.max), in blast radius | — |
-| D10 | Design | Remaining token leaks (RolesTable etc.) — fix now within scope | Mechanical | P1+P2 | 9 in-scope token leaks, <1 day fix, blast radius | — |
-| D11 | Design | Out-of-scope token leaks (ClientInfoSection etc.) — defer to follow-up | Mechanical | P3 | Not in plan scope, legacy detail pages | — |
-
----
-
-## GSTACK REVIEW REPORT (Final)
+## GSTACK REVIEW REPORT
 
 | Review | Trigger | Why | Runs | Status | Findings |
 |--------|---------|-----|------|--------|----------|
-| CEO Review | `/autoplan` | Strategy & scope | 3 | issues_open | Strategic reframing needed (Enterprise Compliance UI). CSS investment vs. enterprise feature gap. Design-token pipeline missing. |
-| Design Review | `/autoplan` | UI/UX gaps | 3 | closed | 11 design findings from prior runs all addressed. 9 remaining in-scope token leaks. DESIGN.md v2.2 synced. |
-| Eng Review | `/autoplan` | Architecture & tests | 3 | issues_open | Architecture sound. 2 HIGH: bg-primary footgun + shallow tests. 8 MEDIUM: token leaks, colSpan bug, ICON_MAP dup, Cmd+K focus steal. |
-| DX Review | `/autoplan` | DX gaps | 0 | skipped | No developer-facing scope detected (all runs) |
+| CEO Review | `/autoplan` | Strategy & scope | 2 | issues_open | Strategic reframing needed (Enterprise Compliance UI). Priority inversion: features before polish. TODOS.md missing. |
+| Design Review | `/autoplan` | UI/UX gaps | 2 | issues_open | 1 remaining CRITICAL (Dashboard bg-green-100), 3 UNFIXED (icon render, flatMap, U6), 8 NEW from fresh audit |
+| Eng Review | `/autoplan` | Architecture & tests | 2 | issues_open | 8 new findings (1 HIGH: UserTable 13+ token leaks, 6 MED, 1 LOW). Architecture sound. Tests exist but shallow. |
+| DX Review | `/autoplan` | DX gaps | 0 | skipped | No developer-facing scope detected |
 
-**CODEX:** Unavailable — auth missing (all 3 runs). All voices Claude-only.
+**CODEX:** Unavailable — UTF-8 encoding error in repo path (Chinese characters `干了科技` incompatible with Codex WS header). All voices Claude-only.
 
-**VERDICT:** U1-U5 work is solid and substantially complete. 19/21 previous findings resolved. 31 TODOS.md items completed. Remaining: 9 in-scope token leak fixes (MEDIUM, ~2h), 22 out-of-scope legacy leaks (LOW, defer). 2 HIGH eng concerns (bg-primary footgun, test depth) are documentation/debt items. Strategic concern persists: design polish consumed engineering time that could have gone to enterprise SSO features (SCIM, SAML, SIEM), but that is a product-level decision for the next initiative — not a blocker for this plan's completion.
+**VERDICT:** U1-U5 work is solid. 9/21 previous findings fixed. Remaining before ship: 1 CRITICAL partial fix (Dashboard bg-green-100), 1 HIGH new (UserTable 13+ token leaks), 6 MEDIUM new, 4 UNFIXED from initial review. Strategic concern: plan framed as "design polish" vs "enterprise compliance UI" misses competitive positioning opportunity. TODOS.md must be created to track deferred P1 items.
 
-**ACTION RECOMMENDED:** Fix the 9 in-scope token leaks (RolesTable, PermissionsTable, ClientsTable, app-sidebar, ProfileClient, audit-logs badges, dashboard error.tsx) — ~2h work. Then ship. Defer the 22 legacy detail-page leaks to a separate "Client Detail Pages Polish" plan. Add a CI lint rule to prevent future hardcoded color classes.
+NO UNRESOLVED DECISIONS

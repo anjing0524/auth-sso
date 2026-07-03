@@ -31,33 +31,54 @@ const AUTH_MAX: isize = 20;
 /// Token 端点限流阈值：30 req/min
 const OIDC_TOKEN_MAX: isize = 30;
 
-// ── 内部纯函数：判断是否超限 ──
+// ── 内部纯函数：判定限流结果 ──
 
-/// 检查指定 IP 对该路径的请求是否超限（同步，无 IO）。
+/// 限流判定结果。
 ///
-/// - `None` — 路径未命中任何限流级别，直接放行
-/// - `Some(true)` — 未超限，放行
-/// - `Some(false)` — 已超限，应返回 429
+/// 取代原先的 `Option<bool>` 三态反范式（`None`/`Some(true)`/`Some(false)`），
+/// 用具名变体让调用点自文档化，并杜绝 `Some(true)` 被误用为"已超限"的风险。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RateDecision {
+    /// 该路径未配置限流，直接放行（不消耗任何计数）。
+    Untracked,
+    /// 命中限流窗口且当前计数未超限，允许通过。
+    Allowed,
+    /// 已超过窗口阈值，应返回 429。
+    Blocked,
+}
+
+/// 观察指定 IP 对该路径的一次请求，返回限流判定（同步，无 IO）。
+///
+/// 仅对认证相关端点（`/api/auth/oauth2/token` 与 `/api/auth/*`）生效；
+/// 其余路径返回 [`RateDecision::Untracked`]，不触碰任何计数器。
 ///
 /// # Examples
 ///
 /// ```
-/// # use gateway::rate_limiter::is_over_limit;
-/// assert!(is_over_limit("10.0.0.1", "/").is_none());
-/// let result = is_over_limit("10.0.0.2", "/api/auth/oauth2/token");
-/// assert!(result.is_some());
-/// assert_eq!(result, Some(true)); // 首次请求未超限
+/// # use gateway::rate_limiter::{observe, RateDecision};
+/// // 非限流路径
+/// assert_eq!(observe("10.0.0.1", "/"), RateDecision::Untracked);
+/// // 首次请求未超限
+/// assert_eq!(observe("10.0.0.2", "/api/auth/oauth2/token"), RateDecision::Allowed);
 /// ```
-pub fn is_over_limit(ip: &str, path: &str) -> Option<bool> {
+pub fn observe(ip: &str, path: &str) -> RateDecision {
     // Rate::observe 要求 T: Hash + Sized，传入 &&str 使 T = &str（Sized）
     if path == "/api/auth/oauth2/token" {
         let count = OIDC_TOKEN_RATE.observe(&ip, 1);
-        Some(count <= OIDC_TOKEN_MAX)
+        if count <= OIDC_TOKEN_MAX {
+            RateDecision::Allowed
+        } else {
+            RateDecision::Blocked
+        }
     } else if path.starts_with("/api/auth/") {
         let count = AUTH_RATE.observe(&ip, 1);
-        Some(count <= AUTH_MAX)
+        if count <= AUTH_MAX {
+            RateDecision::Allowed
+        } else {
+            RateDecision::Blocked
+        }
     } else {
-        None
+        RateDecision::Untracked
     }
 }
 
@@ -85,7 +106,7 @@ pub async fn check(session: &mut Session) -> Result<bool> {
     let path = session.req_header().uri.path();
     let ip = session.client_ip().unwrap_or("unknown");
 
-    if let Some(false) = is_over_limit(ip, path) {
+    if matches!(observe(ip, path), RateDecision::Blocked) {
         warn!("速率限制触发: ip={}, path={}", ip, path);
         crate::metrics::inc_rate_limited();
         session.respond_429(60).await?;
