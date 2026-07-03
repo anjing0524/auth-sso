@@ -35,3 +35,8 @@ pub mod path_matcher;
 pub mod rate_limiter;
 pub mod redirect;
 pub mod redis;
+pub mod router;
+
+// 重导出常用类型
+pub use gateway::Gateway;
+pub use router::Router;

@@ -1,12 +1,8 @@
-use std::sync::Arc;
-
 use async_trait::async_trait;
 use pingora_core::prelude::*;
 use pingora_http::{RequestHeader, ResponseHeader};
-use pingora_load_balancing::LoadBalancer;
-use pingora_load_balancing::selection::RoundRobin;
 use pingora_proxy::{ProxyHttp, Session};
-use tracing::debug;
+use tracing::{debug, warn};
 
 use crate::auth::{
     ACCESS_TOKEN_MAX_AGE_SEC, JwtVerifier, REFRESH_TOKEN_MAX_AGE_SEC, RefreshedTokens,
@@ -15,6 +11,7 @@ use crate::auth::{
 use crate::cookie;
 use crate::http::{SessionExt, is_secure_host};
 use crate::path_matcher::{PathClass, PathMatcher};
+use crate::router::Router;
 
 /// Pingora `LoadBalancer::select` 的第二参数为选择输入的哈希键；
 /// 传 `b""` 表示纯轮询（不做一致性哈希），256 为保留的总权重占位。
@@ -37,6 +34,70 @@ fn insert_opt_header(
         req.insert_header(name, v)?;
     }
     Ok(())
+}
+
+/// 判断某请求头是否属于「身份相关」头，应在转发前剥离。
+///
+/// 采用**黑名单兜底**策略：除少数显式允许的代理标准头外，
+/// 所有 `X-` 前缀头 + `Authorization` 一律剥离。
+/// 这样未来新增任何 `X-` 身份头（如 `X-Auth-Token`、`X-Session-Id`、
+/// `X-Token`、`X-Admin` 等）都默认被剥离，无需同步维护白名单——
+/// 这是零信任的核心防线，下游收到的身份信息 100% 由 gateway 权威注入。
+///
+/// **保留**的头（非身份语义，必须显式放行）：
+/// - `X-Forwarded-*`（代理链路标准头，见 RFC 7239）
+/// - `X-Request-Id` / `X-Correlation-Id`（链路追踪）
+/// - `X-Real-IP`（代理客户端 IP，部分下游依赖）
+///
+/// `X-Client-IP` / `X-Client-UA` 虽由 gateway 注入，但属身份语义，
+/// 仍剥离后重新注入——不在此放行清单中。
+fn is_identity_header(name_lower: &str) -> bool {
+    // Authorization 始终剥离（由 gateway 按验签结果重新注入）
+    if name_lower == "authorization" {
+        return true;
+    }
+    // 非 X- 前缀头不剥离（Accept、Cookie、Host 等业务头）
+    if !name_lower.starts_with("x-") {
+        return false;
+    }
+    // 显式放行的代理标准头（非身份语义）
+    if name_lower.starts_with("x-forwarded-")
+        || name_lower == "x-request-id"
+        || name_lower == "x-correlation-id"
+        || name_lower == "x-real-ip"
+    {
+        return false;
+    }
+    // 其余所有 X- 前缀头默认剥离（黑名单兜底）
+    true
+}
+
+/// 零信任前置清洗：剥离上行请求中所有「身份相关」头。
+///
+/// 无论请求是否通过验签，都先清空客户端可能伪造的身份头，
+/// 再由后续注入逻辑按验签结果权威写入。这样下游收到的身份信息
+/// 100% 来自 gateway，杜绝伪造透传。
+///
+/// 因 Pingora `RequestHeader` 借用限制，先经只读 `map` 收集待删头名，
+/// 再逐个 `remove_header`（替换语义，删除该名下所有同名头）。
+fn strip_identity_headers(req: &mut RequestHeader) {
+    let mut to_remove: Vec<String> = Vec::new();
+    // map 是只读遍历（统一 H1 case 敏感 / H2 大小写无关两种表示）
+    let _ = req.map(|variant, _| {
+        let name_lower: String = match variant {
+            pingora_http::HeaderNameVariant::Case(cn) => std::str::from_utf8(cn.as_slice())
+                .unwrap_or("")
+                .to_ascii_lowercase(),
+            pingora_http::HeaderNameVariant::Titled(s) => s.to_ascii_lowercase(),
+        };
+        if is_identity_header(&name_lower) {
+            to_remove.push(name_lower);
+        }
+        Ok(())
+    });
+    for name in to_remove {
+        req.remove_header(name.as_str());
+    }
 }
 
 /// 构造一个续签后的会话 Cookie 字符串（`Set-Cookie` 头值）。
@@ -92,16 +153,16 @@ impl GatewayCtx {
 ///
 /// 结构体字段按需持有具体依赖：
 /// - [`PathMatcher`] — 路径分类（一次计算，生命周期共享）
-/// - [`LoadBalancer`] — 上游负载均衡（RoundRobin）
+/// - [`Router`] — 前缀路由表（前缀 → upstream_name → LB），一次匹配即得上游
 /// - [`JwtVerifier`] — JWT 密码学验签 + jti 黑名单
 /// - [`TokenRefresher`] — HTTP 静默续签 + Redis 去重
 ///
 /// 限流器为模块级函数 [`crate::rate_limiter::check`]，无需注入。
 pub struct Gateway {
-    /// 白名单路径匹配器
+    /// 白名单/公开路径匹配器（鉴权决策使用，不参与路由）
     path_matcher: PathMatcher,
-    /// Portal 上游负载均衡器
-    portal_lb: Arc<LoadBalancer<RoundRobin>>,
+    /// 前缀路由表（前缀 → name → LB）
+    router: Router,
     /// JWT 验签器
     jwt_verifier: JwtVerifier,
     /// Token 续签器
@@ -111,8 +172,7 @@ pub struct Gateway {
 impl std::fmt::Debug for Gateway {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Gateway")
-            .field("path_matcher", &self.path_matcher)
-            .field("portal_lb", &"LoadBalancer<RoundRobin>")
+            .field("router", &self.router)
             .field("jwt_verifier", &self.jwt_verifier)
             .field("token_refresher", &self.token_refresher)
             .finish()
@@ -126,6 +186,8 @@ impl Gateway {
     ///
     /// ```ignore
     /// # use std::sync::Arc;
+    /// # use gateway::gateway::Gateway;
+    /// # use gateway::router::Router;
     /// # use gateway::path_matcher::PathMatcher;
     /// # use gateway::auth::{JwtVerifier, TokenRefresher};
     /// # use gateway::config::Upstreams;
@@ -134,22 +196,23 @@ impl Gateway {
     /// let jwks = Arc::new(JwksCache::new());
     /// let ups = Arc::new(Upstreams::from_config("127.0.0.1:4100"));
     /// let lb = Arc::new(LoadBalancer::try_from_iter(ups.iter()).unwrap());
+    /// let router = Router::new(vec![("/".to_string(), lb)]);
     /// let gw = Gateway::new(
     ///     PathMatcher::default(),
-    ///     lb,
+    ///     router,
     ///     JwtVerifier::new(Arc::clone(&jwks)),
     ///     TokenRefresher::new(Arc::clone(&jwks), Arc::clone(&ups)),
     /// );
     /// ```
     pub fn new(
         path_matcher: PathMatcher,
-        portal_lb: Arc<LoadBalancer<RoundRobin>>,
+        router: Router,
         jwt_verifier: JwtVerifier,
         token_refresher: TokenRefresher,
     ) -> Self {
         Self {
             path_matcher,
-            portal_lb,
+            router,
             jwt_verifier,
             token_refresher,
         }
@@ -180,7 +243,7 @@ impl Gateway {
                     );
                 }
                 if let Err(e) = upstream_request.insert_header("Cookie", new_cookie) {
-                    tracing::warn!("重写上游 Cookie 失败: {:?}", e);
+                    warn!("重写上游 Cookie 失败: {:?}", e);
                 }
             }
             // 静态 / 公开路径：Cookie 透传，不做修改
@@ -202,20 +265,21 @@ impl ProxyHttp for Gateway {
         session: &mut Session,
         _ctx: &mut Self::CTX,
     ) -> Result<Box<HttpPeer>> {
+        let path = session.req_header().uri.path();
+        let (name, lb) = self.router.resolve(path);
         let host = header_str(session, "Host").unwrap_or("");
-        debug!("接收代理请求，Host: {}", host);
+        debug!(
+            "接收代理请求，Host: {}，路径: {} → upstream={}",
+            host, path, name
+        );
 
-        let peer = self
-            .portal_lb
-            .select(b"", UPSTREAM_SELECT_WEIGHT)
-            .ok_or_else(|| {
-                Error::explain(
-                    ErrorType::HTTPStatus(502),
-                    "gateway: 无可用 Portal 上游节点，请检查配置文件中的 upstream 设置",
-                )
-            })?;
-        debug!("路由至 Portal 上游: {:?}", peer);
-        // tls=false（上行明文 HTTP）：SNI 不会被使用，空 String 零分配
+        let peer = lb.select(b"", UPSTREAM_SELECT_WEIGHT).ok_or_else(|| {
+            Error::explain(
+                ErrorType::HTTPStatus(502),
+                format!("gateway: upstream \"{}\" 无可用节点", name),
+            )
+        })?;
+        debug!("路由至 upstream \"{}\": {:?}", name, peer);
         Ok(Box::new(HttpPeer::new(peer, false, String::new())))
     }
 
@@ -263,12 +327,10 @@ impl ProxyHttp for Gateway {
             upstream_request.insert_header("X-Forwarded-Host", host)?;
         }
 
-        // 全路径净化：未通过验签时，强力清除上行请求中可能由客户端伪造的身份 Header，实现全域零信任安全防伪造
-        if !ctx.is_authenticated() {
-            upstream_request.remove_header("Authorization");
-            upstream_request.remove_header("X-User-Id");
-            upstream_request.remove_header("X-User-Jti");
-        }
+        // 零信任前置清洗：无条件剥离客户端可能伪造的所有身份相关头
+        // （Authorization / X-User-* / X-Roles / X-Permissions / X-Client-*），
+        // 再由下方按验签结果权威注入。下游收到的身份信息 100% 来自 gateway。
+        strip_identity_headers(upstream_request);
 
         // 按路径分类重写上行 Cookie
         self.rewrite_upstream_cookies(upstream_request, ctx);
@@ -325,5 +387,104 @@ impl ProxyHttp for Gateway {
             ctx.identity.as_ref().map(|i| &i.user_id)
         );
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn is_identity_header_strips_known_and_unknown_x_headers() {
+        // 已知身份头：剥离
+        assert!(is_identity_header("authorization"));
+        assert!(is_identity_header("x-user-id"));
+        assert!(is_identity_header("x-user-jti"));
+        assert!(is_identity_header("x-user-name"));
+        assert!(is_identity_header("x-roles"));
+        assert!(is_identity_header("x-permissions"));
+        assert!(is_identity_header("x-client-ip"));
+        assert!(is_identity_header("x-client-ua"));
+
+        // 黑名单兜底的核心价值：未来可能出现的身份头也默认剥离
+        assert!(is_identity_header("x-auth-token"));
+        assert!(is_identity_header("x-session-id"));
+        assert!(is_identity_header("x-token"));
+        assert!(is_identity_header("x-admin"));
+        assert!(is_identity_header("x-is-admin"));
+    }
+
+    #[test]
+    fn is_identity_header_preserves_proxy_and_business_headers() {
+        // 代理标准头：保留（显式放行清单）
+        assert!(!is_identity_header("x-forwarded-for"));
+        assert!(!is_identity_header("x-forwarded-host"));
+        assert!(!is_identity_header("x-forwarded-proto"));
+        assert!(!is_identity_header("x-request-id"));
+        assert!(!is_identity_header("x-correlation-id"));
+        assert!(!is_identity_header("x-real-ip"));
+
+        // 非 X- 业务头：保留
+        assert!(!is_identity_header("accept"));
+        assert!(!is_identity_header("cookie"));
+        assert!(!is_identity_header("host"));
+        assert!(!is_identity_header("content-type"));
+    }
+
+    /// 构造一个带若干伪造身份头 + 代理标准头的请求，验证 strip 后仅保留放行头
+    #[test]
+    fn strip_identity_headers_removes_forged_but_keeps_proxy_headers() {
+        let mut req = RequestHeader::build("GET", b"/", Some(64)).unwrap();
+        // 客户端伪造的身份头（含黑名单兜底覆盖的未知变体）
+        req.insert_header("X-User-Id", "forged-admin").unwrap();
+        req.insert_header("X-Roles", "admin").unwrap();
+        req.insert_header("Authorization", "Bearer forged").unwrap();
+        req.insert_header("X-Client-IP", "forged-ip").unwrap();
+        req.insert_header("X-Auth-Token", "forged-token").unwrap();
+        req.insert_header("X-Session-Id", "forged-session").unwrap();
+        // 应保留的头（代理标准 + 业务头）
+        req.insert_header("Accept", "text/html").unwrap();
+        req.insert_header("X-Forwarded-For", "10.0.0.1").unwrap();
+        req.insert_header("X-Request-Id", "trace-123").unwrap();
+        req.insert_header("X-Real-IP", "203.0.113.5").unwrap();
+
+        strip_identity_headers(&mut req);
+
+        // 伪造身份头已剥离（含黑名单兜底的 X-Auth-Token / X-Session-Id）
+        assert!(
+            req.headers.get("x-user-id").is_none(),
+            "X-User-Id 必须被剥离"
+        );
+        assert!(req.headers.get("x-roles").is_none(), "X-Roles 必须被剥离");
+        assert!(
+            req.headers.get("authorization").is_none(),
+            "Authorization 必须被剥离"
+        );
+        assert!(
+            req.headers.get("x-client-ip").is_none(),
+            "X-Client-IP 必须被剥离"
+        );
+        assert!(
+            req.headers.get("x-auth-token").is_none(),
+            "X-Auth-Token 必须被剥离（黑名单兜底）"
+        );
+        assert!(
+            req.headers.get("x-session-id").is_none(),
+            "X-Session-Id 必须被剥离（黑名单兜底）"
+        );
+        // 代理标准头 + 业务头保留
+        assert!(req.headers.get("accept").is_some(), "Accept 不应被剥离");
+        assert!(
+            req.headers.get("x-forwarded-for").is_some(),
+            "X-Forwarded-For 是代理标准头，不应被剥离"
+        );
+        assert!(
+            req.headers.get("x-request-id").is_some(),
+            "X-Request-Id 是链路追踪头，不应被剥离"
+        );
+        assert!(
+            req.headers.get("x-real-ip").is_some(),
+            "X-Real-IP 是代理客户端 IP 头，不应被剥离"
+        );
     }
 }

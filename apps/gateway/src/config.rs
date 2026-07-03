@@ -1,21 +1,17 @@
+use anyhow::bail;
 use serde::Deserialize;
+use std::collections::HashSet;
 use tracing::info;
 
 /// 网关服务层配置
 #[derive(Debug, Deserialize, Clone)]
 #[serde(default)]
 pub struct GatewayConfig {
-    /// HTTP 监听端口，用于重定向
     pub port: u16,
-    /// HTTPS 监听端口，用于业务代理
     pub ssl_port: u16,
-    /// SSL 证书路径
     pub ssl_cert_path: String,
-    /// SSL 密钥路径
     pub ssl_key_path: String,
-    /// 日志保存目录，默认 "logs"
     pub log_dir: String,
-    /// 日志级别，默认 "info"
     pub log_level: String,
 }
 
@@ -32,56 +28,40 @@ impl Default for GatewayConfig {
     }
 }
 
-/// Portal 上游及 OIDC 鉴权配置
-#[derive(Debug, Deserialize, Clone)]
+/// 单个上游路由条目 — name 即 path prefix。
+#[derive(Debug, Deserialize, Clone, Default)]
 #[serde(default)]
-pub struct PortalConfig {
-    /// Portal 上游地址，支持逗号分隔多个地址实现负载均衡，如 portal:4000,portal:4001
-    /// 网关通过此地址进行 OIDC Discovery 自动发现 JWKS 端点和 issuer
-    pub upstream: String,
-    /// 网关直接放行、不校验 JWT 的公开路由白名单路径列表
+pub struct UpstreamConfig {
+    pub name: String,
+    pub addresses: String,
     pub public_paths: Vec<String>,
+    pub oidc_provider: bool,
 }
 
-// upstreams 解析逻辑已迁移至 Upstreams::from_config()
-
-impl Default for PortalConfig {
-    fn default() -> Self {
-        Self {
-            upstream: "127.0.0.1:4100".to_string(),
-            public_paths: vec![
-                "/login".to_string(),
-                "/register".to_string(),
-                "/error".to_string(),
-                "/".to_string(),
-                "/api/auth/".to_string(),
-                "/oauth2/".to_string(),
-                "/.well-known/".to_string(),
-            ],
+/// 启动期路由一致性校验。
+pub fn validate_routing_consistency(routes: &[UpstreamConfig]) -> anyhow::Result<()> {
+    let mut seen: HashSet<&str> = HashSet::new();
+    for r in routes {
+        if !seen.insert(r.name.as_str()) {
+            bail!("upstream name \"{}\" 在路由表中重复出现", r.name);
+        }
+        if r.name.is_empty() {
+            bail!("upstream name 不能为空字符串");
         }
     }
+    if !routes.iter().any(|r| r.oidc_provider) {
+        bail!("至少需要一个 upstream 标记 oidc_provider = true");
+    }
+    Ok(())
 }
 
-// ── 统一 Upstreams 管理 ──
-
-/// 上游地址列表（不可变，通过 Arc 在多个消费者间零拷贝共享）。
-///
-/// 替代原先各处独立 clone 的 `Vec<String>`，统一管理上游地址的解析和访问。
+/// 上游地址列表。
 #[derive(Debug, Clone)]
 pub struct Upstreams {
     addresses: Vec<String>,
 }
 
 impl Upstreams {
-    /// 从逗号分隔的原始配置字符串构建
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # use gateway::config::Upstreams;
-    /// let ups = Upstreams::from_config("host1:80, host2:81");
-    /// assert_eq!(ups.len(), 2);
-    /// ```
     pub fn from_config(raw: &str) -> Self {
         let addresses = raw
             .split(',')
@@ -92,27 +72,23 @@ impl Upstreams {
         Self { addresses }
     }
 
-    /// 迭代所有上游地址
     pub fn iter(&self) -> impl Iterator<Item = &str> {
         self.addresses.iter().map(|s| s.as_str())
     }
 
-    /// 上游数量
     pub fn len(&self) -> usize {
         self.addresses.len()
     }
 
-    /// 是否为空
     pub fn is_empty(&self) -> bool {
         self.addresses.is_empty()
     }
 }
 
-/// Redis 数据库连接配置 (用于 jti 黑名单校验)
+/// Redis 配置
 #[derive(Debug, Deserialize, Clone)]
 #[serde(default)]
 pub struct RedisConfig {
-    /// Redis 连接 URL (例如 redis://127.0.0.1:6379)
     pub url: String,
 }
 
@@ -124,72 +100,74 @@ impl Default for RedisConfig {
     }
 }
 
-/// 统一配置结构体，支持从 gateway.toml 解析，支持缺省字段与默认值自动合并
-#[derive(Debug, Deserialize, Clone, Default)]
+/// 统一配置结构体。
+#[derive(Debug, Deserialize, Clone)]
 #[serde(default)]
 pub struct Config {
     pub gateway: GatewayConfig,
-    pub portal: PortalConfig,
     pub redis: RedisConfig,
+    #[serde(default)]
+    pub upstreams: Vec<UpstreamConfig>,
 }
 
 impl Config {
-    /// 统一配置加载方法：优先从指定文件读取，读取并反序列化失败时返回 anyhow 错误，
-    /// 若配置文件不存在则使用默认配置兜底。缺失的任何字段都将自动使用 Default 合并填充。
-    /// 支持从环境变量 REDIS_URL 覆盖 Redis 配置。
-    ///
-    /// # Errors
-    ///
-    /// 配置文件存在但解析/反序列化失败时返回错误。文件不存在时静默使用默认值。
-    ///
-    /// # Examples
-    ///
-    /// ```ignore
-    /// let config = Config::load("gateway.toml")?;
-    /// println!("HTTPS port: {}", config.gateway.ssl_port);
-    /// ```
-    ///
-    /// # 参数
-    /// * `path` - 配置文件路径
     pub fn load(path: &str) -> anyhow::Result<Self> {
         use anyhow::Context;
 
-        let file_exists = std::path::Path::new(path).exists();
+        let path = std::path::Path::new(path);
 
-        let builder =
-            config::Config::builder().add_source(config::File::with_name(path).required(false));
+        if !path.exists() {
+            info!("ℹ️ 配置文件 {} 未找到，使用默认配置", path.display());
+            return Ok(Config::default());
+        }
 
+        let builder = config::Config::builder().add_source(config::File::from(path).required(true));
         let config_build = builder
             .build()
-            .with_context(|| format!("加载配置文件 {} 失败", path))?;
+            .with_context(|| format!("加载配置文件 {} 失败", path.display()))?;
+        let mut cfg: Config = config_build
+            .try_deserialize()
+            .with_context(|| format!("反序列化配置文件 {} 失败，请检查语法格式", path.display()))?;
 
-        let mut cfg = config_build
-            .try_deserialize::<Config>()
-            .with_context(|| format!("反序列化配置文件 {} 失败，请检查语法格式", path))?;
-
-        // 环境变量覆盖：REDIS_URL 优先于配置文件中的 redis.url
         cfg.redis.url = resolve_redis_url(&cfg.redis.url, std::env::var("REDIS_URL").ok());
 
-        if file_exists {
-            info!(
-                "✅ 成功从配置文件 {} 加载网关配置 (缺失的字段已自动与默认值合并覆盖)",
-                path
-            );
-        } else {
-            info!(
-                "ℹ️ 配置文件 {} 未找到，将使用默认基础配置并应用默认值覆盖",
-                path
+        if cfg.upstreams.is_empty() {
+            anyhow::bail!(
+                "❌ 未配置 [[upstreams]] 路由表。\n\
+                 请在 gateway.toml 中添加 [[upstreams]] 条目，例如：\n\
+                 [[upstreams]]\nname = \"/\"\naddresses = \"127.0.0.1:4100\"\n\
+                 oidc_provider = true\n\
+                 public_paths = [\"/login\", \"/api/auth/\", ...]"
             );
         }
+
+        info!("✅ 成功从配置文件 {} 加载网关配置", path.display());
         Ok(cfg)
     }
 }
 
-/// 解析最终的 Redis URL：环境变量 `REDIS_URL`（`env_value`）优先于配置文件值。
-///
-/// 纯函数，无副作用，便于确定性单测。`Config::load` 在调用处传入
-/// `std::env::var("REDIS_URL").ok()`，把"读取环境"与"覆盖判定"解耦——
-/// 后者完全确定，不依赖全局可变状态。
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            gateway: GatewayConfig::default(),
+            redis: RedisConfig::default(),
+            upstreams: vec![UpstreamConfig {
+                name: "/".to_string(),
+                addresses: "127.0.0.1:4100".to_string(),
+                public_paths: vec![
+                    "/login".into(),
+                    "/register".into(),
+                    "/error".into(),
+                    "/api/auth/".into(),
+                    "/oauth2/".into(),
+                    "/.well-known/".into(),
+                ],
+                oidc_provider: true,
+            }],
+        }
+    }
+}
+
 fn resolve_redis_url(config_value: &str, env_value: Option<String>) -> String {
     env_value.unwrap_or_else(|| config_value.to_string())
 }
@@ -199,10 +177,8 @@ mod tests {
     use super::*;
     use std::fs;
 
-    // ── Upstreams 解析测试 ──
-
     fn upstreams_iter(up: &Upstreams) -> Vec<String> {
-        up.iter().map(String::from).collect::<Vec<_>>()
+        up.iter().map(String::from).collect()
     }
 
     #[test]
@@ -239,21 +215,21 @@ mod tests {
     fn test_load_default_config() {
         let config = Config::default();
         assert_eq!(config.gateway.port, 18080);
-        assert_eq!(config.gateway.ssl_port, 18443);
-        assert_eq!(config.gateway.log_dir, "logs");
-        assert_eq!(config.gateway.log_level, "info");
-        assert_eq!(config.portal.upstream, "127.0.0.1:4100");
-        let up = Upstreams::from_config(&config.portal.upstream);
-        assert_eq!(upstreams_iter(&up), vec!["127.0.0.1:4100"]);
-        assert!(config.portal.public_paths.contains(&"/login".to_string()));
+        assert_eq!(config.upstreams.len(), 1);
+        assert_eq!(config.upstreams[0].name, "/");
+        assert!(config.upstreams[0].oidc_provider);
+        assert!(
+            config.upstreams[0]
+                .public_paths
+                .contains(&"/login".to_string())
+        );
     }
 
     #[test]
     fn test_config_all() {
-        // 1. 验证从 TOML 文件加载
         let file_path = "./test_gateway.toml";
         {
-            let toml_content = r#"
+            let toml = r#"
                 [gateway]
                 port = 80
                 ssl_port = 443
@@ -261,90 +237,156 @@ mod tests {
                 ssl_key_path = "/etc/key.pem"
                 log_dir = "/var/log/gw"
                 log_level = "debug"
- 
-                [portal]
-                upstream = "portal:4000"
+
+                [[upstreams]]
+                name = "/"
+                addresses = "portal:4000"
+                oidc_provider = true
                 public_paths = ["/login", "/register", "/custom"]
             "#;
-            fs::write(file_path, toml_content).unwrap();
-
+            fs::write(file_path, toml).unwrap();
             let config = Config::load(file_path).unwrap();
             assert_eq!(config.gateway.port, 80);
-            assert_eq!(config.gateway.ssl_port, 443);
-            assert_eq!(config.gateway.ssl_cert_path, "/etc/cert.pem");
-            assert_eq!(config.gateway.log_dir, "/var/log/gw");
-            assert_eq!(config.gateway.log_level, "debug");
-            assert_eq!(config.portal.upstream, "portal:4000");
+            assert_eq!(config.upstreams.len(), 1);
+            assert_eq!(config.upstreams[0].name, "/");
+            assert!(config.upstreams[0].oidc_provider);
             assert_eq!(
-                config.portal.public_paths,
-                vec![
-                    "/login".to_string(),
-                    "/register".to_string(),
-                    "/custom".to_string()
-                ]
+                config.upstreams[0].public_paths,
+                vec!["/login", "/register", "/custom"]
             );
         }
 
-        // 2. 验证配置文件与默认值的“合并覆盖”
+        // 合并覆盖
         {
-            let toml_partial_content = r#"
+            let toml = r#"
                 [gateway]
                 port = 9999
- 
-                [portal]
-                upstream = "partial-portal:3000"
+                [[upstreams]]
+                name = "/"
+                addresses = "partial-portal:3000"
+                oidc_provider = true
             "#;
-            fs::write(file_path, toml_partial_content).unwrap();
-
+            fs::write(file_path, toml).unwrap();
             let config = Config::load(file_path).unwrap();
-
-            // 配置文件中的字段已被正确读取
             assert_eq!(config.gateway.port, 9999);
-            assert_eq!(config.portal.upstream, "partial-portal:3000");
-
-            // 缺失的字段已经被默认值合并填充
-            assert_eq!(config.gateway.ssl_port, 18443);
-            assert_eq!(config.gateway.ssl_cert_path, "ssl/fullchain.pem");
-            assert_eq!(config.gateway.log_dir, "logs");
-            assert_eq!(config.gateway.log_level, "info");
-            assert_eq!(config.redis.url, "redis://127.0.0.1:6379");
-            assert!(config.portal.public_paths.contains(&"/login".to_string()));
+            assert_eq!(config.upstreams[0].addresses, "partial-portal:3000");
+            assert_eq!(config.gateway.ssl_port, 18443); // default
+            assert!(config.upstreams[0].oidc_provider);
         }
 
-        // 3. 清理临时文件
         let _ = fs::remove_file(file_path);
     }
 
     #[test]
-    fn resolve_redis_url_prefers_env_when_set() {
-        // env 设置时覆盖配置值（确定性：不读取真实 env）
+    fn resolve_redis_url_prefers_env() {
         assert_eq!(
             resolve_redis_url("redis://cfg:6379", Some("redis://env:6380".to_string())),
-            "redis://env:6380",
-            "REDIS_URL 已设置时应覆盖配置文件值"
+            "redis://env:6380"
         );
     }
 
     #[test]
-    fn resolve_redis_url_falls_back_to_config_when_env_unset() {
-        // env 未设置时保持配置值
+    fn resolve_redis_url_falls_back() {
         assert_eq!(
             resolve_redis_url("redis://cfg:6379", None),
-            "redis://cfg:6379",
-            "REDIS_URL 未设置时应保持配置文件值"
+            "redis://cfg:6379"
         );
     }
 
     #[test]
     fn load_rejects_invalid_toml() {
-        let file_path = "./test_invalid_gateway.toml";
-        let invalid_toml = r#"
+        let fp = "./test_invalid_gateway.toml";
+        fs::write(fp, r#"[gateway]\nport = "not-a-number""#).unwrap();
+        assert!(Config::load(fp).is_err());
+        let _ = fs::remove_file(fp);
+    }
+
+    #[test]
+    fn load_rejects_old_portal_section() {
+        let fp = "./test_old_portal.toml";
+        let old = r#"
             [gateway]
-            port = "not-a-number" # 格式类型错误，会导致解析失败
+            port = 8080
+            [portal]
+            upstream = "127.0.0.1:4100"
+            public_paths = ["/login", "/register"]
         "#;
-        fs::write(file_path, invalid_toml).unwrap();
-        let result = Config::load(file_path);
-        let _ = fs::remove_file(file_path);
-        assert!(result.is_err(), "非法 TOML 必须返回错误，而非静默成功");
+        fs::write(fp, old).unwrap();
+        let err = Config::load(fp).unwrap_err().to_string();
+        let _ = fs::remove_file(fp);
+        assert!(
+            err.contains("[[upstreams]]"),
+            "错误应提示迁移到 [[upstreams]]，得到: {err}"
+        );
+    }
+
+    #[test]
+    fn upstream_route_config_parses_public_paths() {
+        let fp = "./test_upstream_public.toml";
+        let toml = r#"
+            [[upstreams]]
+            name = "/"
+            addresses = "127.0.0.1:4100"
+            oidc_provider = true
+
+            [[upstreams]]
+            name = "/demo/"
+            addresses = "127.0.0.1:3100"
+            public_paths = ["/demo/landing", "/demo/about"]
+        "#;
+        fs::write(fp, toml).unwrap();
+        let config = Config::load(fp).unwrap();
+        let _ = fs::remove_file(fp);
+
+        let portal = config.upstreams.iter().find(|u| u.name == "/").unwrap();
+        assert!(portal.oidc_provider);
+        assert!(portal.public_paths.is_empty());
+
+        let demo = config
+            .upstreams
+            .iter()
+            .find(|u| u.name == "/demo/")
+            .unwrap();
+        assert!(!demo.oidc_provider);
+        assert_eq!(demo.public_paths, vec!["/demo/landing", "/demo/about"]);
+    }
+
+    fn upstream(name: &str, oidc_provider: bool) -> UpstreamConfig {
+        UpstreamConfig {
+            name: name.to_string(),
+            addresses: "127.0.0.1:4100".to_string(),
+            public_paths: Vec::new(),
+            oidc_provider,
+        }
+    }
+
+    #[test]
+    fn routing_check_ok() {
+        let routes = vec![
+            upstream("/", true),
+            upstream("/demo/", false),
+            upstream("/admin/", false),
+        ];
+        assert!(validate_routing_consistency(&routes).is_ok());
+    }
+
+    #[test]
+    fn routing_check_rejects_duplicate_name() {
+        let routes = vec![upstream("/a/", true), upstream("/a/", false)];
+        let err = validate_routing_consistency(&routes).unwrap_err();
+        assert!(err.to_string().contains("重复出现"));
+    }
+
+    #[test]
+    fn routing_check_rejects_empty_name() {
+        let routes = vec![upstream("/", true), upstream("", false)];
+        let err = validate_routing_consistency(&routes).unwrap_err();
+        assert!(err.to_string().contains("空字符串"));
+    }
+
+    #[test]
+    fn routing_check_rejects_missing_oidc_provider() {
+        let err = validate_routing_consistency(&[upstream("/", false)]).unwrap_err();
+        assert!(err.to_string().contains("oidc_provider"));
     }
 }

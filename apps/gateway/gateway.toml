@@ -3,43 +3,37 @@
 # ==============================================================================
 
 [gateway]
-# 网关监听的 HTTP 端口（用以强转重定向至 HTTPS）
 port = 19080
-
-# 网关监听的 HTTPS 业务代理端口
 ssl_port = 19443
-
-# TLS/SSL 证书文件路径
 ssl_cert_path = "ssl/fullchain.pem"
 ssl_key_path = "ssl/privkey.pem"
-
-# 日志保存目录，默认 "logs"
 log_dir = "logs"
-
-# 日志默认输出级别
 log_level = "info"
 
-[portal]
-# Next.js BFF (Portal/IdP) 上游负载均衡代理入口地址
-# 支持逗号分隔多个地址实现 RoundRobin 负载均衡，例如 "portal:4000,portal:4001,portal:4002"
-upstream = "127.0.0.1:4100"
+[redis]
+url = "redis://localhost:6379"
 
-# issuer 通过 OIDC Discovery 自动获取，无需配置
-# JWKS 端点同样通过 OIDC Discovery 自动发现
+# ==============================================================================
+# 多 Upstream 路由表 — name 即 path prefix，按长度降序最长匹配。
+# ==============================================================================
 
-# 免鉴权直接放行的公开路径白名单前缀列表
+[[upstreams]]
+name = "/"
+addresses = "127.0.0.1:4100"
+oidc_provider = true
 public_paths = [
     "/login",
     "/register",
     "/error",
-    "/",
     "/api/auth/",
     "/oauth2/",
     "/.well-known/",
+    "/",
     "/_next/",
     "/favicon.ico",
 ]
 
-[redis]
-# Redis 数据库连接配置 (用于 jti 黑名单校验)
-url = "redis://localhost:6379"
+# [[upstreams]]
+# name = "/demo/"
+# addresses = "127.0.0.1:3100"
+# public_paths = ["/demo/landing"]
