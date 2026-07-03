@@ -5,7 +5,9 @@
 //!
 //! 分类优先级：Static → Public → Microservice → Protected (default)
 
-use criterion::{Criterion, black_box, criterion_group, criterion_main};
+use std::hint::black_box;
+
+use criterion::{Criterion, criterion_group, criterion_main};
 use gateway::path_matcher::{PathClass, PathMatcher};
 
 /// 构建一个与生产配置一致的 PathMatcher 实例

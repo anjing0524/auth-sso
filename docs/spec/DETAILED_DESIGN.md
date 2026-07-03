@@ -640,11 +640,15 @@ Gateway 基于 Pingora (0.8.0)，是一个反向代理 + 安全网关，提供 H
        │
        ├─ 2. upstream_request_filter()
        │      ├─ 注入 X-Forwarded-Proto/Host
-       │      ├─ 微服务路由(/api/v1/*): 剥离Cookie,注入Bearer+UserId+Jti
-       │      └─ Portal路由: Cookie原样透传
+       │      ├─ 零信任清洗：无条件剥离所有 X-* 身份头
+       │      │     （黑名单兜底，仅放行 X-Forwarded-*/X-Request-Id/X-Correlation-Id/X-Real-IP）
+       │      ├─ 按验签结果权威注入身份头（Authorization/X-User-Id/X-User-Jti/X-Client-IP/X-Client-UA）
+       │      └─ 按路径分类重写上行 Cookie（微服务剥除全部 / 受保护路径剥除 RT）
        │
        └─ 3. upstream_peer()
-              └─ Portal负载均衡(RoundRobin)
+              ├─ Router.resolve(path) → 按路径前缀匹配 [[upstreams]] 路由表
+              └─ 从 upstream_map 选定 LoadBalancer<RoundRobin> 取节点
+                 （未匹配任何前缀时 fallback 到第一个 upstream）
 ```
 
 ### 6.2 JWT 验证流程
@@ -658,7 +662,7 @@ Gateway 基于 Pingora (0.8.0)，是一个反向代理 + 安全网关，提供 H
    - `validation.set_issuer()` 校验 `iss` 与配置的 issuer 一致。
    - `validate_aud = false` — Gateway 仅校验签名与 issuer，aud 交由 Portal 自行校验。
 4. **jti 黑名单检查**: Redis `EXISTS portal:jti_blocklist:{jti}`。Redis 不可用时**故障开放（fail-open）**——记录错误但不阻断请求。
-5. **通过**: 将 `Authorization: Bearer <token>`、`X-User-Id`、`X-User-Jti` 注入到上游请求。
+5. **通过**: 将 `Authorization: Bearer <token>`、`X-User-Id`、`X-User-Jti`、`X-Client-IP`、`X-Client-UA` 注入到上游请求。
 
 **handle_auth_failure()** 根据请求类型决定响应:
 - **浏览器 GET 页面导航**（`Accept: text/html`，无 RSC header）: 302 重定向到 `/login?callbackUrl=...`
@@ -1056,10 +1060,18 @@ export function hashToken(token: string): string
 | `gateway.ssl_key_path` | - | TLS 密钥路径 |
 | `gateway.log_dir` | - | 日志目录 |
 | `gateway.log_level` | `'info'` | 日志级别 |
-| `portal.upstream` | - | Portal 上游地址（如 `127.0.0.1:4100`） |
+| `portal.upstream` | - | Portal 上游地址（如 `127.0.0.1:4100`），**仅用于 JWKS 刷新 + Token 续签，不参与请求转发路由** |
 | `portal.issuer` | - | JWT issuer 标识（与 Portal issuer 必须一致） |
-| `portal.public_paths` | - | 公开路径白名单列表 |
+| `portal.public_paths` | - | 全局公开路径白名单列表（所有应用共享） |
 | `redis.url` | - | Redis 连接 URL（用于 jti 黑名单） |
+
+**多 Upstream 路由表** (`[[upstreams]]`，请求转发路由，与 `portal.upstream` 相互独立):
+
+| 配置项 | 必填 | 描述 |
+|--------|------|------|
+| `upstreams[].name` | 是 | 上游应用名称（用于日志与路由查找，如 `portal`、`demo-app`） |
+| `upstreams[].addresses` | 是 | 上游地址，逗号分隔多个节点做 RoundRobin 负载均衡（如 `127.0.0.1:4100,127.0.0.1:4101`） |
+| `upstreams[].path_prefixes` | 否 | 匹配此上游的路径前缀列表（如 `["/demo/"]`）；自上而下首个匹配生效，未匹配任何前缀走第一个 upstream（fallback） |
 
 ---
 

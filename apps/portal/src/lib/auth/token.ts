@@ -459,29 +459,61 @@ export async function rotateRefreshToken(
   oldRefreshToken: string,
   clientId: string,
 ): Promise<RefreshTokenResult | null> {
-  const rows = await db
-    .select()
-    .from(schema.refreshTokens)
-    .where(and(eq(schema.refreshTokens.tokenHash, oldRefreshToken), eq(schema.refreshTokens.clientId, clientId)))
-    .limit(1);
+  // 事务 + FOR UPDATE 行锁：串行化对同一条 RT 的并发轮换。
+  // 多应用/多标签页并发续签时，第二个请求会被阻塞到第一个提交，
+  // 随后读到 revoked=true → 触发级联吊销 → 返回 null，避免重复签发与误触发级联吊销。
+  // 仅锁定「读 RT → 校验 revoked → 撤销旧 RT」这三步（争用核心）；
+  // 签发新 RT/AT 等不涉及对旧 RT 争用，放事务外执行。
+  const lockedRt = await db.transaction(async (tx) => {
+    // join clients 取 isInternal，用于决定续签后 AT 的 audience
+    // （不靠 clientId 字符串比较判断是否为内部客户端）
+    const rows = await tx
+      .select({
+        rt: schema.refreshTokens,
+        isInternal: schema.clients.isInternal,
+      })
+      .from(schema.refreshTokens)
+      .innerJoin(schema.clients, eq(schema.refreshTokens.clientId, schema.clients.clientId))
+      .where(
+        and(
+          eq(schema.refreshTokens.tokenHash, oldRefreshToken),
+          eq(schema.refreshTokens.clientId, clientId),
+        ),
+      )
+      .for('update') // SELECT ... FOR UPDATE，锁住该行直到事务提交
+      .limit(1);
 
-  if (rows.length === 0) return null;
-  const rt = rows[0]!;
+    if (rows.length === 0) return null;
+    const { rt, isInternal } = rows[0]!;
 
-  // 已撤销 → 级联撤销该用户在此 Client 下的所有 token（防盗用）
-  if (rt.revoked) {
-    await db.update(schema.refreshTokens)
+    // 已撤销 → 级联撤销该用户在此 Client 下的所有 token（防盗用）
+    if (rt.revoked) {
+      await tx
+        .update(schema.refreshTokens)
+        .set({ revoked: new Date() })
+        .where(
+          and(
+            eq(schema.refreshTokens.userId, rt.userId),
+            eq(schema.refreshTokens.clientId, rt.clientId),
+          ),
+        );
+      return null;
+    }
+
+    if (rt.expiresAt && new Date(rt.expiresAt) < new Date()) return null;
+
+    // 撤销旧 token
+    await tx
+      .update(schema.refreshTokens)
       .set({ revoked: new Date() })
-      .where(and(eq(schema.refreshTokens.userId, rt.userId), eq(schema.refreshTokens.clientId, rt.clientId)));
-    return null;
-  }
+      .where(eq(schema.refreshTokens.id, rt.id));
 
-  if (rt.expiresAt && new Date(rt.expiresAt) < new Date()) return null;
+    return { rt, isInternal };
+  });
 
-  // 撤销旧 token
-  await db.update(schema.refreshTokens)
-    .set({ revoked: new Date() })
-    .where(eq(schema.refreshTokens.id, rt.id));
+  // 事务返回 null：RT 不存在 / 已撤销（级联吊销）/ 已过期
+  if (!lockedRt) return null;
+  const { rt, isInternal } = lockedRt;
 
   // 签发新 Refresh Token
   const newRefreshToken = await issueRefreshToken(rt.userId, rt.clientId, rt.scopes);
@@ -495,6 +527,10 @@ export async function rotateRefreshToken(
   ]);
   if (!permCtx) return null;
 
+  // aud 语义：内部客户端（Portal 自身会话，isInternal=true）用 'portal-client'；
+  // 第三方 OAuth Client 续签时沿用其 client_id，保持与授权码首签一致。
+  // 判断依据是 clients.isInternal 结构化标记，而非 clientId 字符串比较。
+  const audience = isInternal ? 'portal-client' : rt.clientId;
   const { token: accessToken } = await signAccessToken(
     {
       sub: rt.userId,
@@ -502,7 +538,7 @@ export async function rotateRefreshToken(
       permissions: permCtx.permissions,
       deptIds,
     },
-    'portal-client',
+    audience,
     { clientId: rt.clientId, scopes: rt.scopes },
   );
 

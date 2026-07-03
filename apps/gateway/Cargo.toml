@@ -17,11 +17,11 @@ authors = ["Auth-SSO Team"]
 tokio = { version = "1.52.3", features = ["time", "rt", "macros"] }
 
 # ── Pingora 网关核心 ──
-pingora-core = { version = "0.8.0", features = ["openssl"] }
-pingora-http = "0.8.0"
-pingora-limits = "0.8.0"
-pingora-load-balancing = { version = "0.8.0", features = ["openssl"] }
-pingora-proxy = { version = "0.8.0", features = ["openssl"] }
+pingora-core = { version = "0.8.1", features = ["openssl"] }
+pingora-http = "0.8.1"
+pingora-limits = "0.8.1"
+pingora-load-balancing = { version = "0.8.1", features = ["openssl"] }
+pingora-proxy = { version = "0.8.1", features = ["openssl"] }
 
 # TLS: vendored OpenSSL（Docker 构建从源码编译静态链接）。
 # 注意：尽管 src/ 中无直接 use openssl::，此依赖通过 openssl-sys/vendored
@@ -63,7 +63,7 @@ anyhow = "1.0.103"
 async-trait = "0.1.89"
 
 [dev-dependencies]
-criterion = { version = "0.5", features = ["html_reports"], default-features = false }
+criterion = { version = "0.8", features = ["html_reports"], default-features = false }
 
 # ── 编译优化配置 ──
 

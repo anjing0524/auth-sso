@@ -3,7 +3,9 @@
 //! 测试 `decode_jwt_payload` 的性能 —— 在续签路径上裸解新的 Access Token payload
 //! 以提取 `sub` 和 `jti`，无需密码学验签。
 
-use criterion::{Criterion, black_box, criterion_group, criterion_main};
+use std::hint::black_box;
+
+use criterion::{Criterion, criterion_group, criterion_main};
 use gateway::auth::Claims;
 use gateway::auth::decode_jwt_payload;
 use jsonwebtoken::{Algorithm, EncodingKey, Header, encode};

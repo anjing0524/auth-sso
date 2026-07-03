@@ -4,7 +4,9 @@
 //! 基于 `pingora-limits` 的 `Rate`（无锁双桶滑动窗口），
 //! 在认证端点的热路径上每条请求都会执行一次。
 
-use criterion::{Criterion, black_box, criterion_group, criterion_main};
+use std::hint::black_box;
+
+use criterion::{Criterion, criterion_group, criterion_main};
 use gateway::rate_limiter::observe;
 
 fn bench_auth_endpoint_rate_check(c: &mut Criterion) {

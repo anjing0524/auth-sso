@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Added
+- 多 upstream 路由表（`[[upstreams]]`），支持按路径前缀将请求路由到不同上游应用
+- 启动期 `validate_routing_consistency()` 路由一致性校验，检测路径前缀交叉覆盖、上下游不一致等配置错误
+
+### Changed
+- `[portal].public_paths` 语义收窄为全局白名单——仅保留登录/注册/认证等全局必须公开端点；各应用独立的公开路径移至 `[[upstreams]].public_paths`
+- Docker 配置文件 `gateway.docker.toml` 对齐生产配置结构，Portal upstream 条目新增 `public_paths`
+
+### Security
+- 零信任身份头剥离策略从精确匹配 4 个头强化为黑名单兜底——无条件剥离所有 `X-*` 头（仅显式放行 `X-Forwarded-*` / `X-Request-Id` / `X-Correlation-Id` / `X-Real-IP`）。下游收到的身份信息 100% 来自 Gateway 权威注入，杜绝客户端伪造透传
+
 ## [1.1.1.1] - 2026-06-26
 
 ### Fixed

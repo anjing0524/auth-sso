@@ -67,6 +67,7 @@ async function main() {
       redirectUris: portalRedirectUrls,
       scopes: 'openid profile email offline_access',
       status: 'ACTIVE',
+      isInternal: true,
     });
 
     // 3. 创建默认部门

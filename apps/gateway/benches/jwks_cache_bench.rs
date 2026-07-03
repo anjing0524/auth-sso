@@ -6,9 +6,10 @@
 //!
 //! 这些操作使用 `RwLock::read()`，在高并发场景下是主要的同步点。
 
+use std::hint::black_box;
 use std::sync::Arc;
 
-use criterion::{Criterion, black_box, criterion_group, criterion_main};
+use criterion::{Criterion, criterion_group, criterion_main};
 use gateway::jwks::JwksCache;
 use jsonwebtoken::DecodingKey;
 

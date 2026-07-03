@@ -8,7 +8,9 @@
 //! 这些操作在每次请求中至少执行一次（验签路径），
 //! 高并发场景下对延迟有显著影响。
 
-use criterion::{Criterion, black_box, criterion_group, criterion_main};
+use std::hint::black_box;
+
+use criterion::{Criterion, criterion_group, criterion_main};
 use gateway::cookie;
 
 /// 典型的生产环境 Cookie 头部（含 Access Token、Refresh Token、其他 Cookie）
