@@ -15,6 +15,7 @@ import type { PortalJwtClaims } from '../session';
 
 import { resolveIdentity } from './verify-jwt';
 import { ADMIN_ROLE_CODES } from '@auth-sso/contracts';
+import type { AuditOperation } from '@auth-sso/contracts';
 
 /**
  * 权限检查选项接口定义
@@ -26,6 +27,12 @@ export interface PermissionCheckOptions {
   roles?: string[];
   /** 为 true 时要求满足所有权限/角色，默认 false（满足任一即可） */
   requireAll?: boolean;
+  /**
+   * 审计操作类型（可选）。
+   * 声明后，withAuth / withPermission 包装器在业务函数成功执行后
+   * 自动 fire-and-forget 写入 audit_logs（DC-AUDIT-IMMUTABLE / NFR-SEC-07）。
+   */
+  audit?: AuditOperation;
 }
 
 /**

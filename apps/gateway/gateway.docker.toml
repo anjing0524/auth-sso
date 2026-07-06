@@ -32,3 +32,8 @@ public_paths = [
     "/_next/",
     "/favicon.ico",
 ]
+
+[[upstreams]]
+name = "/demo/"
+addresses = "demo:3000"
+public_paths = ["/demo/landing"]

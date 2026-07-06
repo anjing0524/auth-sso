@@ -67,7 +67,8 @@ export async function POST(request: NextRequest) {
       await db
         .update(schema.refreshTokens)
         .set({ revoked: new Date() })
-        .where(eq(schema.refreshTokens.tokenHash, token));
+        // tokenHash 存储的是 SHA256(token)，查询时需同样 hash 匹配
+        .where(eq(schema.refreshTokens.tokenHash, hashToken(token)));
     }
 
     // RFC 7009: 始终返回 200

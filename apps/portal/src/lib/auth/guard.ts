@@ -14,7 +14,9 @@ import 'server-only';
  */
 import { checkPermission, type PermissionCheckOptions } from './check-permission';
 import { mapDomainError } from '@/domain/shared/error-mapping';
-import type { ApiResponse } from '@auth-sso/contracts';
+import { writeAuditLog } from '@/lib/audit';
+import { headers } from 'next/headers';
+import type { AuditOperation, ApiResponse } from '@auth-sso/contracts';
 
 /**
  * 鉴权通过后注入给业务函数的上下文
@@ -56,7 +58,12 @@ export function withAuth<TArgs extends unknown[], TData>(
 
       // 第二道：领域错误统一映射（mapDomainError 横切层）
       try {
-        return await fn({ userId: check.userId }, ...args);
+        const res = await fn({ userId: check.userId }, ...args);
+        // 审计拦截：业务成功 + 声明了 audit 操作 → fire-and-forget 写 audit_logs
+        if (res.success && options.audit) {
+          recordAudit(check.userId, options.audit);
+        }
+        return res;
       } catch (err: unknown) {
         const mapped = mapDomainError(err);
         return { success: false, error: mapped.error, message: mapped.message };
@@ -67,4 +74,28 @@ export function withAuth<TArgs extends unknown[], TData>(
       return { success: false, error: mapped.error, message: mapped.message };
     }
   };
+}
+
+/**
+ * 审计日志 fire-and-forget 写入（Server Action 路径专用）
+ *
+ * 从 next/headers 读取请求元数据（与 resolveIdentity 同一请求上下文，
+ * resolveIdentity 已成功意味着 headers() 可用），提取操作者 IP/UA/方法/URL。
+ */
+async function recordAudit(userId: string, operation: AuditOperation): Promise<void> {
+  try {
+    const h = await headers();
+    const { extractClientIP, extractUserAgent } = await import('@/lib/audit');
+    writeAuditLog({
+      userId,
+      operation,
+      method: h.get('x-action-method') || 'ACTION',
+      url: h.get('x-action-path') || null,
+      ip: extractClientIP(h),
+      userAgent: extractUserAgent(h),
+      status: 200,
+    });
+  } catch {
+    // 审计写入失败不影响业务（fire-and-forget 语义）
+  }
 }

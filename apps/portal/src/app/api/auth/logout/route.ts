@@ -24,6 +24,7 @@ import { getRefreshTokenFromCookie } from '@/lib/session/cookies';
 import { mapDomainError } from '@/domain/shared/error-mapping';
 import { COOKIE_NAMES } from '@auth-sso/contracts';
 import { writeLoginLog, extractClientIP, extractUserAgent } from '@/lib/audit';
+import { hashToken } from '@/lib/crypto';
 
 async function performRevocation(cookieStore: Awaited<ReturnType<typeof cookies>>): Promise<{ userId?: string; username?: string }> {
   let userId: string | undefined;
@@ -48,7 +49,8 @@ async function performRevocation(cookieStore: Awaited<ReturnType<typeof cookies>
       await db
         .update(schema.refreshTokens)
         .set({ revoked: new Date() })
-        .where(eq(schema.refreshTokens.tokenHash, refreshToken));
+        // tokenHash 存储的是 SHA256(token)，查询时需同样 hash 匹配
+        .where(eq(schema.refreshTokens.tokenHash, hashToken(refreshToken)));
     }
 
     // 3. Redis: jti 黑名单写入（Gateway 离线验签即时拦截）

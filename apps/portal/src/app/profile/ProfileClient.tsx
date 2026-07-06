@@ -6,8 +6,10 @@
  * 采用 Stripe/GitHub 风格的卡片式详情布局。
  * 数据由 Server Component (page.tsx) 通过 props 注入，
  * 不再使用 useEffect + fetch('/api/me') 的客户端数据瀑布。
+ *
+ * v2：新增修改密码 / 编辑资料 Dialog（FR-USR-10 / FR-USR-12）
  */
-import React from 'react';
+import React, { useTransition } from 'react';
 import {
   Mail,
   ShieldCheck,
@@ -19,7 +21,7 @@ import {
   Lock,
   ChevronRight,
   Activity,
-  ArrowUpRight,
+  Pencil,
 } from 'lucide-react';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -29,6 +31,17 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import { updateOwnProfileAction, changeOwnPasswordAction } from './actions';
+import { toast } from 'sonner';
 
 interface ProfileClientProps {
   user: null | {
@@ -41,6 +54,204 @@ interface ProfileClientProps {
   };
   permissions: string[];
   roles: Array<{ code: string; name: string }>;
+}
+
+/**
+ * 修改密码 Dialog 组件
+ */
+function ChangePasswordDialog() {
+  const [open, setOpen] = React.useState(false);
+  const [isPending, startTransition] = useTransition();
+  const [form, setForm] = React.useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: '',
+  });
+
+  /** 处理表单字段变更 */
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+  };
+
+  /** 提交修改密码 */
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (form.newPassword !== form.confirmPassword) {
+      toast.error('两次输入的新密码不一致');
+      return;
+    }
+    startTransition(async () => {
+      const res = await changeOwnPasswordAction({
+        currentPassword: form.currentPassword,
+        newPassword: form.newPassword,
+      });
+      if (res.success) {
+        toast.success(res.message ?? '密码已更新，请重新登录');
+        setOpen(false);
+        // 服务端已失效会话，短暂延迟后刷新页面引导用户重登
+        setTimeout(() => window.location.assign('/login'), 1500);
+      } else {
+        toast.error(res.message ?? '修改失败');
+      }
+    });
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger>
+        <Button
+          id="btn-change-password"
+          className="w-full bg-background text-foreground hover:bg-muted rounded-xl font-bold mt-4 shadow-xl shadow-black/20 h-11"
+        >
+          <Lock className="h-4 w-4 mr-2" />
+          修改密码
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Lock className="h-5 w-5 text-primary" />
+            修改登录密码
+          </DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4 py-2">
+          <div className="space-y-1.5">
+            <Label htmlFor="currentPassword">当前密码</Label>
+            <Input
+              id="currentPassword"
+              name="currentPassword"
+              type="password"
+              autoComplete="current-password"
+              placeholder="输入当前密码"
+              value={form.currentPassword}
+              onChange={handleChange}
+              required
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="newPassword">新密码</Label>
+            <Input
+              id="newPassword"
+              name="newPassword"
+              type="password"
+              autoComplete="new-password"
+              placeholder="至少8位，含大小写字母和数字"
+              value={form.newPassword}
+              onChange={handleChange}
+              required
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="confirmPassword">确认新密码</Label>
+            <Input
+              id="confirmPassword"
+              name="confirmPassword"
+              type="password"
+              autoComplete="new-password"
+              placeholder="再次输入新密码"
+              value={form.confirmPassword}
+              onChange={handleChange}
+              required
+            />
+          </div>
+          <DialogFooter className="pt-2">
+            <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={isPending}>
+              取消
+            </Button>
+            <Button type="submit" disabled={isPending} id="btn-change-password-submit">
+              {isPending ? '修改中...' : '确认修改'}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
+ * 编辑资料 Dialog 组件
+ */
+function EditProfileDialog({ user }: { user: NonNullable<ProfileClientProps['user']> }) {
+  const [open, setOpen] = React.useState(false);
+  const [isPending, startTransition] = useTransition();
+  const [form, setForm] = React.useState({ name: user.name, email: user.email });
+
+  /** 处理表单字段变更 */
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+  };
+
+  /** 提交资料更新 */
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    startTransition(async () => {
+      const res = await updateOwnProfileAction(form);
+      if (res.success) {
+        toast.success(res.message ?? '资料已更新');
+        setOpen(false);
+      } else {
+        toast.error(res.message ?? '更新失败');
+      }
+    });
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger>
+        <Button
+          id="btn-edit-profile"
+          variant="ghost"
+          size="icon"
+          className="rounded-full hover:bg-primary/10 hover:text-primary transition-colors"
+          title="编辑资料"
+        >
+          <Pencil className="h-5 w-5" />
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Pencil className="h-5 w-5 text-primary" />
+            编辑个人资料
+          </DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4 py-2">
+          <div className="space-y-1.5">
+            <Label htmlFor="profile-name">姓名</Label>
+            <Input
+              id="profile-name"
+              name="name"
+              type="text"
+              placeholder="显示姓名"
+              value={form.name}
+              onChange={handleChange}
+              required
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="profile-email">邮箱</Label>
+            <Input
+              id="profile-email"
+              name="email"
+              type="email"
+              placeholder="邮箱地址"
+              value={form.email}
+              onChange={handleChange}
+              required
+            />
+          </div>
+          <DialogFooter className="pt-2">
+            <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={isPending}>
+              取消
+            </Button>
+            <Button type="submit" disabled={isPending} id="btn-edit-profile-submit">
+              {isPending ? '保存中...' : '保存'}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
 }
 
 export default function ProfileClient({
@@ -63,9 +274,8 @@ export default function ProfileClient({
       {/* 1. 顶部身份横幅 */}
       <div className="group relative overflow-hidden rounded-3xl bg-card border border-border/50 shadow-2xl p-8 lg:p-12 transition-all hover:shadow-primary/5">
         <div className="absolute top-0 right-0 p-8">
-          <Button variant="ghost" size="icon" className="rounded-full hover:bg-primary/10 hover:text-primary transition-colors">
-            <ArrowUpRight className="h-5 w-5" />
-          </Button>
+          {/* 编辑资料触发按钮 */}
+          <EditProfileDialog user={user} />
         </div>
 
         <div className="flex flex-col md:flex-row items-center gap-8 relative z-10 text-center md:text-left">
@@ -150,9 +360,8 @@ export default function ProfileClient({
                 <span className="text-sm opacity-60">Access Permissions</span>
                 <span className="text-sm font-black">{permissions.length}</span>
               </div>
-              <Button className="w-full bg-background text-foreground hover:bg-muted rounded-xl font-bold mt-4 shadow-xl shadow-black/20 h-11">
-                Security Checkup
-              </Button>
+              {/* FR-USR-10：自助修改密码入口 */}
+              <ChangePasswordDialog />
             </CardContent>
           </Card>
         </div>

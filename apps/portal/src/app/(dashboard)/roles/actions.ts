@@ -44,7 +44,7 @@ async function invalidateRoleBoundUsersCache(roleId: string): Promise<void> {
 
 /** 创建角色 */
 export const createRoleAction = withAuth(
-  { permissions: ['role:create'] },
+  { permissions: ['role:create'], audit: 'ROLE_CREATE' },
   async (_ctx: AuthContext, input: CreateRoleInput): Promise<ApiResponse<{ id: string }>> => {
     const parsed = CreateRoleInputSchema.safeParse(input);
     if (!parsed.success) {
@@ -72,7 +72,7 @@ export const createRoleAction = withAuth(
 
 /** 更新角色 */
 export const updateRoleAction = withAuth(
-  { permissions: ['role:update'] },
+  { permissions: ['role:update'], audit: 'ROLE_UPDATE' },
   async (_ctx: AuthContext, roleId: string, input: Record<string, unknown>): Promise<ApiResponse<{ id: string }>> => {
     const parsed = UpdateRoleInputSchema.safeParse(input);
     if (!parsed.success) {
@@ -103,7 +103,7 @@ export const updateRoleAction = withAuth(
 
 /** 删除角色 */
 export const deleteRoleAction = withAuth(
-  { permissions: ['role:delete'] },
+  { permissions: ['role:delete'], audit: 'ROLE_DELETE' },
   async (_ctx: AuthContext, roleId: string): Promise<ApiResponse<{ id: string }>> => {
     const row = await db.query.roles.findFirst({ where: eq(schema.roles.id, roleId) });
     if (!row) throw new EntityNotFoundError('Role', roleId);

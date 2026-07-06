@@ -25,7 +25,7 @@ import type { ApiResponse } from '@auth-sso/contracts';
 
 /** 创建 Client */
 export const createClientAction = withAuth(
-  { permissions: ['client:create'] },
+  { permissions: ['client:create'], audit: 'CLIENT_CREATE' },
   async (_ctx: AuthContext, input: CreateClientInput): Promise<ApiResponse<{ id: string; clientId: string; clientSecret: string | null }>> => {
     const parsed = CreateClientInputSchema.safeParse(input);
     if (!parsed.success) {
@@ -53,7 +53,7 @@ export const createClientAction = withAuth(
 
 /** 更新 Client */
 export const updateClientAction = withAuth(
-  { permissions: ['client:update'] },
+  { permissions: ['client:update'], audit: 'CLIENT_UPDATE' },
   async (_ctx: AuthContext, clientIdStr: string, input: Record<string, unknown>): Promise<ApiResponse<{ id: string }>> => {
     const parsed = UpdateClientInputSchema.safeParse(input);
     if (!parsed.success) {
@@ -82,7 +82,7 @@ export const updateClientAction = withAuth(
 
 /** 删除 Client */
 export const deleteClientAction = withAuth(
-  { permissions: ['client:delete'] },
+  { permissions: ['client:delete'], audit: 'CLIENT_DELETE' },
   async (_ctx: AuthContext, clientIdStr: string): Promise<ApiResponse<{ id: string }>> => {
     await db.transaction(async (tx) => {
       const row = await tx.query.clients.findFirst({
@@ -101,7 +101,7 @@ export const deleteClientAction = withAuth(
 
 /** 重新生成 Client Secret */
 export const rotateClientSecretAction = withAuth(
-  { permissions: ['client:update'] },
+  { permissions: ['client:update'], audit: 'CLIENT_SECRET_REGENERATE' },
   async (_ctx: AuthContext, clientIdStr: string): Promise<ApiResponse<{ clientSecret: string }>> => {
     const row = await db.query.clients.findFirst({
       where: eq(schema.clients.clientId, clientIdStr),
@@ -122,7 +122,7 @@ export const rotateClientSecretAction = withAuth(
 
 /** 撤销 Client Token */
 export const revokeClientTokensAction = withAuth(
-  { permissions: ['client:update'] },
+  { permissions: ['client:update'], audit: 'TOKEN_REVOKE' },
   async (_ctx: AuthContext, clientIdStr: string, tokenIds: string[], revokeAll: boolean): Promise<ApiResponse<{ revokedCount: number }>> => {
     const row = await db.query.clients.findFirst({
       where: eq(schema.clients.clientId, clientIdStr),

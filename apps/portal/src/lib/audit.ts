@@ -9,7 +9,7 @@ import 'server-only';
  * @module lib/audit
  */
 import { db, schema } from '@/infrastructure/db';
-import type { LoginEventType } from '@auth-sso/contracts';
+import type { AuditOperation, LoginEventType } from '@auth-sso/contracts';
 
 /**
  * 登录日志写入参数
@@ -56,6 +56,64 @@ export function writeLoginLog(params: WriteLoginLogParams): void {
     // 同步异常兜底：schema 未定义、DB 未连接等场景
     // 不影响认证主流程（fire-and-forget 语义）
     console.error('[Audit] 写登录日志失败 (sync):', err);
+  }
+}
+
+/**
+ * 操作审计日志写入参数
+ */
+export interface WriteAuditLogParams {
+  /** 操作者用户 ID */
+  userId: string;
+  /** 操作者用户名（冗余存储，确保用户删除后日志仍可读） */
+  username?: string | null;
+  /** 审计操作类型 */
+  operation: AuditOperation;
+  /** HTTP 方法 */
+  method?: string | null;
+  /** 请求 URL */
+  url?: string | null;
+  /** 业务参数（jsonb，统一拦截层无法感知，需调用方自行传入） */
+  params?: Record<string, unknown> | null;
+  /** 客户端 IP 地址 */
+  ip?: string | null;
+  /** 客户端 User-Agent */
+  userAgent?: string | null;
+  /** 操作结果状态码（成功记 200） */
+  status?: number | null;
+  /** 耗时（毫秒） */
+  duration?: number | null;
+  /** 错误信息（失败时填写） */
+  errorMsg?: string | null;
+}
+
+/**
+ * 写操作审计日志（fire-and-forget，不阻塞主流程）
+ *
+ * 写入失败仅记录 console.error，不影响业务结果。
+ * 用于满足 DC-AUDIT-IMMUTABLE / FR-LOG-01~03 / NFR-SEC-07。
+ *
+ * @param params 审计日志参数
+ */
+export function writeAuditLog(params: WriteAuditLogParams): void {
+  try {
+    db.insert(schema.auditLogs)
+      .values({
+        userId: params.userId,
+        username: params.username || null,
+        operation: params.operation,
+        method: params.method || null,
+        url: params.url || null,
+        params: params.params || null,
+        ip: params.ip || null,
+        userAgent: params.userAgent || null,
+        status: params.status ?? null,
+        duration: params.duration ?? null,
+        errorMsg: params.errorMsg || null,
+      })
+      .catch((err) => console.error('[Audit] 写审计日志失败:', err));
+  } catch (err) {
+    console.error('[Audit] 写审计日志失败 (sync):', err);
   }
 }
 

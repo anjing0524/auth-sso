@@ -46,7 +46,7 @@ import type { ApiResponse } from '@auth-sso/contracts';
  * - React 19 Form Action：createUserAction(null, formData)
  */
 export const createUserAction = withAuth(
-  { permissions: ['user:create'] },
+  { permissions: ['user:create'], audit: 'USER_CREATE' },
   async (
     _ctx: AuthContext,
     firstArg: CreateUserInput | null | undefined,
@@ -88,7 +88,7 @@ export const createUserAction = withAuth(
  * 切换用户启用/禁用状态 Action Controller
  */
 export const toggleUserStatusAction = withAuth(
-  { permissions: ['user:update'] },
+  { permissions: ['user:update'], audit: 'USER_UPDATE' },
   async (_ctx: AuthContext, userIdStr: string): Promise<ApiResponse<{ status: string }>> => {
     const parsed = UserIdentityInputSchema.safeParse({ id: userIdStr });
     if (!parsed.success) {
@@ -126,7 +126,7 @@ export const toggleUserStatusAction = withAuth(
  * 解锁被锁定用户 Action Controller (B-USR-ST)
  */
 export const unlockUserAction = withAuth(
-  { permissions: ['user:update'] },
+  { permissions: ['user:update'], audit: 'USER_UPDATE' },
   async (_ctx: AuthContext, userIdStr: string): Promise<ApiResponse<{ status: string }>> => {
     const parsed = UserIdentityInputSchema.safeParse({ id: userIdStr });
     if (!parsed.success) {
@@ -158,7 +158,7 @@ export const unlockUserAction = withAuth(
  * 更新用户信息 Action Controller
  */
 export const updateUserAction = withAuth(
-  { permissions: ['user:update'] },
+  { permissions: ['user:update'], audit: 'USER_UPDATE' },
   async (
     _ctx: AuthContext,
     userIdStr: string,
@@ -194,7 +194,7 @@ export const updateUserAction = withAuth(
  * 逻辑删除用户 Action Controller
  */
 export const deleteUserAction = withAuth(
-  { permissions: ['user:delete'] },
+  { permissions: ['user:delete'], audit: 'USER_DELETE' },
   async (_ctx: AuthContext, userIdStr: string): Promise<ApiResponse<{ id: string }>> => {
     const parsed = UserIdentityInputSchema.safeParse({ id: userIdStr });
     if (!parsed.success) {
@@ -230,7 +230,7 @@ export const deleteUserAction = withAuth(
  * 管理员为指定用户重置密码，重置后该用户所有活跃会话立即失效。
  */
 export const resetPasswordAction = withAuth(
-  { permissions: ['user:update'] },
+  { permissions: ['user:update'], audit: 'TOKEN_REVOKE' },
   async (_ctx: AuthContext, userIdStr: string, newPassword: string): Promise<ApiResponse<{ id: string }>> => {
     const parsed = UserIdentityInputSchema.safeParse({ id: userIdStr });
     if (!parsed.success) {

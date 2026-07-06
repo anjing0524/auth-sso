@@ -433,7 +433,8 @@ export async function issueRefreshToken(
 
   await db.insert(schema.refreshTokens).values({
     id,
-    tokenHash: token,
+    // 仅存 SHA256(token)，明文 token 仅返回给调用方，不落库（见 hashToken）
+    tokenHash: hashToken(token),
     clientId,
     userId,
     scopes,
@@ -476,7 +477,8 @@ export async function rotateRefreshToken(
       .innerJoin(schema.clients, eq(schema.refreshTokens.clientId, schema.clients.clientId))
       .where(
         and(
-          eq(schema.refreshTokens.tokenHash, oldRefreshToken),
+          // 查询时同样使用 SHA256(token)，与写入保持一致
+          eq(schema.refreshTokens.tokenHash, hashToken(oldRefreshToken)),
           eq(schema.refreshTokens.clientId, clientId),
         ),
       )

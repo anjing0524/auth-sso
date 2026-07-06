@@ -20,9 +20,9 @@ importers:
 
   apps/demo-app:
     dependencies:
-      jose:
-        specifier: ^6.2.3
-        version: 6.2.3
+      ioredis:
+        specifier: ^5.11.1
+        version: 5.11.1
       next:
         specifier: 16.2.9
         version: 16.2.9(@babel/core@7.29.7)(@opentelemetry/api@1.9.0)(@playwright/test@1.60.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
@@ -32,9 +32,6 @@ importers:
       react-dom:
         specifier: 19.2.7
         version: 19.2.7(react@19.2.7)
-      zod:
-        specifier: ^4.4.3
-        version: 4.4.3
     devDependencies:
       '@types/node':
         specifier: ^26.0.0

@@ -9,6 +9,7 @@ import { revalidatePath, updateTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
 import { eq, inArray, and } from 'drizzle-orm';
 import { withPermission, canAccessDept } from '@/lib/auth';
+import { writeAuditLog, extractClientIP, extractUserAgent } from '@/lib/audit';
 import crypto from 'crypto';
 import { refreshUserPermissionCache } from '@/lib/permissions';
 import { revokeUserAccessByUserId } from '@/lib/session/revoke';
@@ -49,7 +50,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
  * POST /api/users/[id]/roles — 为用户分配角色（v3.2: R-USER-ROLE 部门约束）
  */
 export async function POST(request: NextRequest, { params }: RouteParams) {
-  return withPermission({ permissions: ['user:update'] }, async (_adminUserId, claims) => {
+  return withPermission({ permissions: ['user:update'] }, async (adminUserId, claims) => {
     const { id } = await params;
     const body = await request.json();
     const { roleIds } = body;
@@ -100,6 +101,16 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     await revokeUserAccessByUserId(userId);
     revalidatePath('/users');
     updateTag('users-list');
+    writeAuditLog({
+      userId: adminUserId,
+      operation: 'USER_ROLE_ASSIGN',
+      method: 'POST',
+      url: request.url,
+      params: { targetUserId: userId, roleIds },
+      ip: extractClientIP(request.headers),
+      userAgent: extractUserAgent(request.headers),
+      status: 200,
+    });
     return NextResponse.json(result);
   });
 }
@@ -117,7 +128,7 @@ export async function DELETE(
   request: NextRequest,
   { params }: RouteParams
 ) {
-  return withPermission({ permissions: ['user:update'] }, async (_adminUserId, claims) => {
+  return withPermission({ permissions: ['user:update'] }, async (adminUserId, claims) => {
     const { id } = await params;
     const body = await request.json();
     const { roleId } = body;
@@ -168,6 +179,17 @@ export async function DELETE(
     // 失效页面与数据缓存
     revalidatePath('/users');
     updateTag('users-list');
+
+    writeAuditLog({
+      userId: adminUserId,
+      operation: 'USER_ROLE_ASSIGN', // 移除角色与分配角色同属一类安全操作
+      method: 'DELETE',
+      url: request.url,
+      params: { targetUserId: userId, roleId },
+      ip: extractClientIP(request.headers),
+      userAgent: extractUserAgent(request.headers),
+      status: 200,
+    });
 
     return NextResponse.json({ success: true });
   });

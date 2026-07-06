@@ -9,6 +9,7 @@ import { eq, inArray, and } from 'drizzle-orm';
 import { withPermission } from '@/lib/auth';
 import { COMMON_ERRORS } from '@auth-sso/contracts';
 import { getClientById, getClientTokens } from '@/app/(dashboard)/clients/data';
+import { writeAuditLog, extractClientIP, extractUserAgent } from '@/lib/audit';
 
 
 interface RouteParams { params: Promise<{ id: string }>; }
@@ -35,7 +36,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
 /** DELETE /api/clients/[id]/tokens — 撤销授权 Token */
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
-  return withPermission({ permissions: ['client:update'] }, async () => {
+  return withPermission({ permissions: ['client:update'] }, async (adminUserId) => {
     const { id } = await params;
     const body = await request.json();
     const { tokenIds, revokeAll } = body;
@@ -59,6 +60,23 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     } else {
       return NextResponse.json({ error: COMMON_ERRORS.VALIDATION_ERROR, message: '请提供 tokenIds 或 revokeAll' }, { status: 400 });
     }
+
+    writeAuditLog({
+      userId: adminUserId,
+      operation: 'TOKEN_REVOKE',
+      method: 'DELETE',
+      url: request.url,
+      params: { 
+        targetId: client.clientId,
+        targetName: client.name,
+        revokeAll, 
+        tokenIds, 
+        revokedCount: deletedCount 
+      },
+      ip: extractClientIP(request.headers),
+      userAgent: extractUserAgent(request.headers),
+      status: 200,
+    });
 
     return NextResponse.json({ success: true, message: `已撤销 ${deletedCount} 个 Token`, data: { revokedCount: deletedCount } });
   });

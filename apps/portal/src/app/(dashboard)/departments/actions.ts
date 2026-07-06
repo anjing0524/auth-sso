@@ -41,7 +41,7 @@ async function getParentAncestors(parentId: string): Promise<string | null> {
 
 /** 创建部门 */
 export const createDepartmentAction = withAuth(
-  { permissions: ['department:create'] },
+  { permissions: ['department:create'], audit: 'DEPARTMENT_CREATE' },
   async (_ctx: AuthContext, input: CreateDepartmentInput): Promise<ApiResponse<{ id: string }>> => {
     const parsed = CreateDepartmentInputSchema.safeParse(input);
     if (!parsed.success) {
@@ -90,7 +90,7 @@ async function performDepartmentUpdate(tx: any, deptId: string, patch: Record<st
 
 /** 更新部门 */
 export const updateDepartmentAction = withAuth(
-  { permissions: ['department:update'] },
+  { permissions: ['department:update'], audit: 'DEPARTMENT_UPDATE' },
   async (_ctx: AuthContext, deptId: string, input: Record<string, unknown>): Promise<ApiResponse<{ id: string }>> => {
     const parsed = UpdateDepartmentInputSchema.safeParse(input);
     if (!parsed.success) {
@@ -105,7 +105,7 @@ export const updateDepartmentAction = withAuth(
 
 /** 删除部门 */
 export const deleteDepartmentAction = withAuth(
-  { permissions: ['department:delete'] },
+  { permissions: ['department:delete'], audit: 'DEPARTMENT_DELETE' },
   async (_ctx: AuthContext, deptId: string): Promise<ApiResponse<{ id: string }>> => {
     await db.transaction(async (tx) => {
       const row = await tx.query.departments.findFirst({

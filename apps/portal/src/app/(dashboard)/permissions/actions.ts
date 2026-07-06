@@ -25,7 +25,7 @@ import type { ApiResponse } from '@auth-sso/contracts';
 
 /** 创建权限 */
 export const createPermissionAction = withAuth(
-  { permissions: ['permission:create'] },
+  { permissions: ['permission:create'], audit: 'PERMISSION_CREATE' },
   async (_ctx: AuthContext, input: Record<string, unknown>): Promise<ApiResponse<{ id: string }>> => {
     const parsed = CreatePermissionInputSchema.safeParse(input);
     if (!parsed.success) {
@@ -53,7 +53,7 @@ export const createPermissionAction = withAuth(
 
 /** 更新权限 */
 export const updatePermissionAction = withAuth(
-  { permissions: ['permission:update'] },
+  { permissions: ['permission:update'], audit: 'PERMISSION_UPDATE' },
   async (_ctx: AuthContext, permId: string, input: Record<string, unknown>): Promise<ApiResponse<{ id: string }>> => {
     const parsed = UpdatePermissionInputSchema.safeParse(input);
     if (!parsed.success) {
@@ -82,7 +82,7 @@ export const updatePermissionAction = withAuth(
 
 /** 删除权限 */
 export const deletePermissionAction = withAuth(
-  { permissions: ['permission:delete'] },
+  { permissions: ['permission:delete'], audit: 'PERMISSION_DELETE' },
   async (_ctx: AuthContext, permId: string): Promise<ApiResponse<{ id: string }>> => {
     const row = await db.query.permissions.findFirst({
       where: eq(schema.permissions.id, permId),

@@ -33,7 +33,7 @@ public_paths = [
     "/favicon.ico",
 ]
 
-# [[upstreams]]
-# name = "/demo/"
-# addresses = "127.0.0.1:3100"
-# public_paths = ["/demo/landing"]
+[[upstreams]]
+name = "/demo/"
+addresses = "127.0.0.1:3100"
+public_paths = ["/demo/landing"]

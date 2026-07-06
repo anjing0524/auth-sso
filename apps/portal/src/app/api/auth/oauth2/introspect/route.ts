@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyAccessToken } from '@/lib/auth/token';
 import { db, schema } from '@/infrastructure/db';
 import { eq } from 'drizzle-orm';
+import { hashToken } from '@/lib/crypto';
 import { mapDomainError } from '@/domain/shared/error-mapping';
 import { validateClientActive, validateClientSecret } from '@/domain/auth/oauth-client';
 
@@ -58,11 +59,11 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // 尝试作为 Refresh Token 查询
+    // 尝试作为 Refresh Token 查询（tokenHash 存 SHA256，查询时需同样 hash）
     const rtRows = await db
       .select()
       .from(schema.refreshTokens)
-      .where(eq(schema.refreshTokens.tokenHash, token))
+      .where(eq(schema.refreshTokens.tokenHash, hashToken(token)))
       .limit(1);
 
     if (rtRows.length > 0) {

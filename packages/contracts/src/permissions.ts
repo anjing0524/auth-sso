@@ -52,16 +52,6 @@ export const PERMISSION_PERMISSIONS = {
   MANAGE: 'permission:manage',
 } as const;
 
-// ========== 菜单管理权限 ==========
-export const MENU_PERMISSIONS = {
-  LIST: 'menu:list',
-  CREATE: 'menu:create',
-  READ: 'menu:read',
-  UPDATE: 'menu:update',
-  DELETE: 'menu:delete',
-  MANAGE: 'menu:manage',
-} as const;
-
 // ========== Client 管理权限 ==========
 export const CLIENT_PERMISSIONS = {
   LIST: 'client:list',
@@ -91,24 +81,17 @@ export const SYSTEM_PERMISSIONS = {
   VIEW_DASHBOARD: 'system:view_dashboard',
 } as const;
 
-// ========== 客户关系图权限 ==========
-export const CUSTOMER_GRAPH_PERMISSIONS = {
-  VIEW: 'customer_graph:view',
-  EXPORT: 'customer_graph:export',
-} as const;
-
 // 所有权限码列表（用于 seed 脚本遍历）
+// 注：MENU_PERMISSIONS / CUSTOMER_GRAPH_PERMISSIONS 已删除（无对应功能实现）
 export const ALL_PERMISSIONS = [
   ...Object.values(USER_PERMISSIONS),
   ...Object.values(DEPARTMENT_PERMISSIONS),
   ...Object.values(ROLE_PERMISSIONS),
   ...Object.values(PERMISSION_PERMISSIONS),
-  ...Object.values(MENU_PERMISSIONS),
   ...Object.values(CLIENT_PERMISSIONS),
   ...Object.values(AUDIT_PERMISSIONS),
   ...Object.values(LOGIN_LOG_PERMISSIONS),
   ...Object.values(SYSTEM_PERMISSIONS),
-  ...Object.values(CUSTOMER_GRAPH_PERMISSIONS),
 ] as const;
 
 // 权限分组（用于 UI 展示）
@@ -117,12 +100,10 @@ export const PERMISSION_GROUPS = {
   DEPARTMENT: { name: '部门管理', permissions: Object.values(DEPARTMENT_PERMISSIONS) },
   ROLE: { name: '角色管理', permissions: Object.values(ROLE_PERMISSIONS) },
   PERMISSION: { name: '权限管理', permissions: Object.values(PERMISSION_PERMISSIONS) },
-  MENU: { name: '菜单管理', permissions: Object.values(MENU_PERMISSIONS) },
   CLIENT: { name: 'Client 管理', permissions: Object.values(CLIENT_PERMISSIONS) },
   AUDIT: { name: '审计日志', permissions: Object.values(AUDIT_PERMISSIONS) },
   LOGIN_LOG: { name: '登录日志', permissions: Object.values(LOGIN_LOG_PERMISSIONS) },
   SYSTEM: { name: '系统管理', permissions: Object.values(SYSTEM_PERMISSIONS) },
-  CUSTOMER_GRAPH: { name: '客户关系图', permissions: Object.values(CUSTOMER_GRAPH_PERMISSIONS) },
 } as const;
 
 // 权限中文名映射（seed 脚本使用）
@@ -154,12 +135,6 @@ export const PERMISSION_LABELS: Record<string, string> = {
   'permission:update': '修改权限',
   'permission:delete': '删除权限',
   'permission:manage': '权限管理',
-  'menu:list': '查看菜单列表',
-  'menu:create': '创建菜单',
-  'menu:read': '查看菜单详情',
-  'menu:update': '修改菜单',
-  'menu:delete': '删除菜单',
-  'menu:manage': '菜单管理',
   'client:list': '查看应用列表',
   'client:create': '创建应用',
   'client:read': '查看应用详情',
@@ -173,6 +148,4 @@ export const PERMISSION_LABELS: Record<string, string> = {
   'login_log:export': '导出登录日志',
   'system:manage': '系统管理',
   'system:view_dashboard': '查看仪表盘',
-  'customer_graph:view': '查看客户关系图',
-  'customer_graph:export': '导出客户关系图',
 };
