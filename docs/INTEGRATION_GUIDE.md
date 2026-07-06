@@ -61,28 +61,30 @@ pnpm dev:demo            # http://localhost:3100
 
 要验证 Gateway → Demo App 的代理链路，需在路由表（`[[upstreams]]`）中声明按路径前缀路由到 Demo App。
 
-> **⚠️ 常见误区**：不要在 `[portal].upstream` 里用逗号追加 Demo App 地址做"负载均衡"。
-> `[portal].upstream`（见 `gateway.toml` 的 `[portal]` 节）**仅用于 JWKS 公钥刷新和 Token 续签**，不参与请求转发路由。
-> 在它里面混入 Demo App 地址会导致续签请求随机打到无 `/api/auth/refresh` 端点的 Demo App，触发静默登出。
-> 请求转发走的是下面的 `[[upstreams]]` 路由表，两者相互独立。
+> **配置模型**：每个 `[[upstreams]]` 条目的 `name` 字段**同时就是路径前缀**（"name 即 prefix"），无需额外的 `path_prefixes` 字段。
+> 标记 `oidc_provider = true` 的条目同时充当 JWKS 公钥刷新与 Token 续签的目标（指向 Portal）；其余条目仅参与请求转发。
 
 编辑 `apps/gateway/gateway.toml`，在路由表中为每个后端应用声明独立的 `[[upstreams]]` 条目：
 
 ```toml
-[portal]
-# 仅用于 JWKS 刷新 + Token 续签，不参与请求转发路由（保持单 Portal 地址）
-upstream = "127.0.0.1:4100"
+# ── 路由表：name 即 path prefix，按长度降序最长前缀匹配 ──
 
-# ── 请求转发路由表：按 path_prefixes 路由到不同后端应用 ──
+# Portal：根前缀 + OIDC 提供方（JWKS 刷新与 Token 续签的来源）
 [[upstreams]]
-name = "portal"
+name = "/"
 addresses = "127.0.0.1:4100"
-path_prefixes = ["/", "/login", "/api/auth/", "/oauth2/", "/.well-known/", "/_next/", "/dashboard", ...]
+oidc_provider = true
+public_paths = [
+    "/login", "/register", "/error", "/",
+    "/api/auth/", "/oauth2/", "/.well-known/",
+    "/_next/", "/favicon.ico",
+]
 
+# Demo App：子前缀，独立后端
 [[upstreams]]
-name = "demo-app"
+name = "/demo/"
 addresses = "127.0.0.1:3100"
-path_prefixes = ["/demo/"]
+public_paths = ["/demo/landing"]
 ```
 
 然后：
@@ -90,7 +92,7 @@ path_prefixes = ["/demo/"]
 2. 查看 `X-User-Id` Header 是否存在（由 Gateway 验签后注入）
 3. 确认 Redis 权限数据已缓存（`portal:user_perms:{userId}`）
 
-> 路由匹配规则：自上而下首个匹配的 `path_prefixes` 生效；不匹配任何前缀的请求走第一个 upstream（fallback）。
+> 路由匹配规则：按 `name` 长度**最长前缀优先**；未匹配任何前缀的请求 fallback 到最短前缀 upstream（通常为 `/`）。
 
 ## 验证检查清单
 

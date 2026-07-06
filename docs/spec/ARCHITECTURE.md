@@ -63,7 +63,7 @@ Portal（BFF + OIDC 提供商 + 管理后台 UI）
 | 组件 | 核心职责 | 禁止行为 |
 |---|---|---|
 | **Portal** | （1）用户凭据验证（bcrypt、数据库存储的密码哈希）。（2）通过数据库存储的密钥对签发 ES256 签名的 JWT。（3）暴露 `/.well-known/jwks` 和 `/api/auth/jwks` 端点。（4）OAuth 2.1 + OIDC 提供商端点（authorize、token、userinfo、introspect、revoke）。（5）将 JWT 写入 HttpOnly Cookie（`portal_jwt_token`、`portal_refresh_token`）。（6）管理用户、部门、角色、权限、OAuth 客户端。（7）基于角色所属部门的 RBAC 数据范围过滤（权限 × 角色部门交集）。（8）用于紧急令牌吊销的 jti 黑名单。（9）审计日志 | 绝不在 Redis 中存储 Portal API 认证的会话状态（无状态 JWT）。绝不向客户端 JavaScript 暴露敏感令牌 |
-| **Gateway** | （1）统一 HTTPS 流量入口。（2）提取 `portal_jwt_token` Cookie，通过缓存的 JWKS 验证（ES256、离线）。（3）移除 Cookie，为下游注入 `Authorization: Bearer <JWT>` 头。（4）零信任：100% 离线验证，无需 Redis/DB 的 I/O 操作。（5）按路径前缀将请求路由到多个上游应用（经 `[[upstreams]]` 路由表，支持 Portal + 子应用） | 绝不执行业务层面的权限检查。绝不连接 Redis 或数据库。绝不处理登录/重定向逻辑 |
+| **Gateway** | （1）统一 HTTPS 流量入口。（2）提取 `portal_jwt_token` Cookie，通过缓存的 JWKS 验证（ES256、离线）。（3）移除 Cookie，为下游注入 `Authorization: Bearer <JWT>` 头。（4）jti 黑名单检查：验签通过后查询 Redis（`portal:jti_blocklist:{jti}`），Redis 不可用时故障开放（fail-open）。（5）按路径前缀将请求路由到多个上游应用（经 `[[upstreams]]` 路由表，支持 Portal + 子应用） | 绝不执行业务层面的权限检查。绝不连接业务数据库（仅查 Redis jti 黑名单）。绝不处理登录/重定向逻辑 |
 
 ### 3.2 Portal 内部架构（分层领域驱动设计 DDD）
 
@@ -281,7 +281,7 @@ Browser → Gateway（验签 + 注入头）
 
 1. 浏览器发送携带 `portal_jwt_token` Cookie 的 API 请求。
 2. Gateway 从 Cookie 头中提取 JWT。
-3. Gateway 使用内存中的 JWKS 缓存验证 JWT 签名（ES256、100% 离线）。
+3. Gateway 使用内存中的 JWKS 缓存验证 JWT 签名（ES256、离线），随后查询 Redis jti 黑名单（fail-open）。
 4. 验证成功：移除 Cookie 头，注入 `Authorization: Bearer <JWT>`，转发到下游服务。
 5. 验证失败：返回 `401`，附带 `WWW-Authenticate: Bearer` 头。
 
@@ -298,7 +298,7 @@ Browser → Gateway（验签 + 注入头）
 
 1. Gateway `request_filter` 验签 AT → 得到 `claims.exp`。
 2. 当 `exp - now < 300s`（`REFRESH_THRESHOLD_SEC`）且 `portal_refresh_token` Cookie 存在时发起请求 B。
-3. 请求 B：Gateway 向 `http://{portal.upstream}/api/auth/refresh` 发 POST，携带 `Cookie: portal_refresh_token={rt}`——Portal 内部校验 + 轮换（`rotateRefreshToken`），并**重读最新权限上下文重签 AT**。
+3. 请求 B：Gateway 向 `http://{oidc_provider upstream}/api/auth/refresh` 发 POST，携带 `Cookie: portal_refresh_token={rt}`——Portal 内部校验 + 轮换（`rotateRefreshToken`），并**重读最新权限上下文重签 AT**。
 4. 续签成功 → 解码新 AT payload（不验签）提取 sub/jti → 更新 ctx 中的 `Authorization` / `X-User-Id` / `X-User-Jti`。
 5. `upstream_request_filter` 中：
    - **公开路径**（含 `/api/auth/refresh`）：Cookie 透传，不做修改。
@@ -318,7 +318,7 @@ Browser → Gateway（验签 + 注入头）
 > 安全性：
 > - `portal_refresh_token` 为 HttpOnly + SameSite=Lax，path 放宽至 `/` 以便 Gateway 在全路径读取。
 > - Gateway 在转发给 Portal 时**剥离 RT cookie**，RT 只存在于 浏览器 ↔ Gateway 之间，Portal 的非 refresh 端点永远看不到 RT。
-> - Gateway → Portal 的续签请求走内网 HTTP（`portal.upstream`），不经公网。
+> - Gateway → Portal 的续签请求走内网 HTTP（路由表中 `oidc_provider = true` 的 upstream 地址），不经公网。
 
 ---
 
