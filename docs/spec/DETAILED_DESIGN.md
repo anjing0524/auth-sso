@@ -646,9 +646,9 @@ Gateway 基于 Pingora (0.8.0)，是一个反向代理 + 安全网关，提供 H
        │      └─ 按路径分类重写上行 Cookie（微服务剥除全部 / 受保护路径剥除 RT）
        │
        └─ 3. upstream_peer()
-              ├─ Router.resolve(path) → 按路径前缀匹配 [[upstreams]] 路由表
-              └─ 从 upstream_map 选定 LoadBalancer<RoundRobin> 取节点
-                 （未匹配任何前缀时 fallback 到第一个 upstream）
+              ├─ Router.resolve(path) → 按 name 长度最长前缀匹配 [[upstreams]] 路由表（name 即 prefix）
+              └─ 从选定 LoadBalancer<RoundRobin> 取节点
+                 （未匹配任何前缀时 fallback 到最短前缀 upstream，通常为 `/`）
 ```
 
 ### 6.2 JWT 验证流程
@@ -1060,18 +1060,18 @@ export function hashToken(token: string): string
 | `gateway.ssl_key_path` | - | TLS 密钥路径 |
 | `gateway.log_dir` | - | 日志目录 |
 | `gateway.log_level` | `'info'` | 日志级别 |
-| `portal.upstream` | - | Portal 上游地址（如 `127.0.0.1:4100`），**仅用于 JWKS 刷新 + Token 续签，不参与请求转发路由** |
-| `portal.issuer` | - | JWT issuer 标识（与 Portal issuer 必须一致） |
-| `portal.public_paths` | - | 全局公开路径白名单列表（所有应用共享） |
 | `redis.url` | - | Redis 连接 URL（用于 jti 黑名单） |
 
-**多 Upstream 路由表** (`[[upstreams]]`，请求转发路由，与 `portal.upstream` 相互独立):
+> JWT `issuer` 与签名算法**非配置项**，由 Gateway 启动时通过 OIDC Discovery（`/.well-known/openid-configuration`）从 `oidc_provider = true` 的 upstream 动态获取，写入 JWT 校验 `validation`。
+
+**多 Upstream 路由表** (`[[upstreams]]`，name 即 path prefix，按长度降序最长前缀匹配):
 
 | 配置项 | 必填 | 描述 |
 |--------|------|------|
-| `upstreams[].name` | 是 | 上游应用名称（用于日志与路由查找，如 `portal`、`demo-app`） |
+| `upstreams[].name` | 是 | 路径前缀，同时作为 upstream 标识（如 `/`、`/demo/`）。启动期校验唯一与非空 |
 | `upstreams[].addresses` | 是 | 上游地址，逗号分隔多个节点做 RoundRobin 负载均衡（如 `127.0.0.1:4100,127.0.0.1:4101`） |
-| `upstreams[].path_prefixes` | 否 | 匹配此上游的路径前缀列表（如 `["/demo/"]`）；自上而下首个匹配生效，未匹配任何前缀走第一个 upstream（fallback） |
+| `upstreams[].public_paths` | 否 | 该 upstream 的公开路径白名单；启动时跨所有 upstream 聚合为全局 `PathMatcher` |
+| `upstreams[].oidc_provider` | 否 | 标记此 upstream 提供 JWKS 与 Token 续签端点；路由表内**有且仅有一个**为 `true`（启动期校验） |
 
 ---
 
