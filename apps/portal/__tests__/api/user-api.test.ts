@@ -130,6 +130,10 @@ vi.mock('@/infrastructure/db', () => ({
 }));
 
 vi.mock('@/lib/auth', () => ({
+  resolveIdentity: vi.fn(async () => ({ claims: { deptIds: ['dept-1'] } })),
+  logServerDataRead: vi.fn(async () => {}),
+  canAccessDept: vi.fn(() => true),
+
   withAuth: (_opts: unknown, fn: Function) => async (...args: unknown[]) => {
     // 模拟真实 withAuth 的鉴权 + 错误映射行为
     const check = await mockCheckPermission();

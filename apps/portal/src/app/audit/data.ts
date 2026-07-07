@@ -129,3 +129,42 @@ export async function getLoginLogs(params: PaginationParams & {
     createdAt: log.createdAt,
   }));
 }
+
+/**
+ * 分页获取访问日志（读操作合规追溯）
+ *
+ * 用于回答"谁查看了哪条敏感数据"。复用 audit:read 权限（不新建权限码）。
+ */
+export async function getAccessLogs(params: PaginationParams & {
+  userId?: string;
+  resourceType?: string;
+  resourceId?: string;
+  startDate?: string;
+  endDate?: string;
+}) {
+  const conditions: ReturnType<typeof eq>[] = [];
+  if (params.userId) conditions.push(eq(schema.accessLogs.userId, params.userId));
+  if (params.resourceType) conditions.push(eq(schema.accessLogs.resourceType, params.resourceType));
+  if (params.resourceId) conditions.push(eq(schema.accessLogs.resourceId, params.resourceId));
+  if (params.startDate && DATE_REGEX.test(params.startDate)) {
+    conditions.push(gte(schema.accessLogs.createdAt, new Date(`${params.startDate}T00:00:00`)));
+  }
+  if (params.endDate && DATE_REGEX.test(params.endDate)) {
+    conditions.push(lte(schema.accessLogs.createdAt, new Date(`${params.endDate}T23:59:59.999`)));
+  }
+
+  return paginatedSelect(schema.accessLogs, schema.accessLogs.createdAt, conditions, params, (log) => ({
+    id: log.id,
+    userId: log.userId,
+    username: log.username,
+    method: log.method,
+    path: log.path,
+    resourceType: log.resourceType,
+    resourceId: log.resourceId,
+    ip: log.ip,
+    userAgent: log.userAgent,
+    status: log.status,
+    duration: log.duration,
+    createdAt: log.createdAt,
+  }));
+}

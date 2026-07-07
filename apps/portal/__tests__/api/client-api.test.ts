@@ -102,7 +102,11 @@ const mocks = vi.hoisted(() => {
 });
 
 vi.mock('@/infrastructure/db', () => ({ db: mocks.db, schema: mocks.schema }));
-vi.mock('@/lib/auth', () => ({ withPermission: mocks.authFn }));
+vi.mock('@/lib/auth', () => ({
+  resolveIdentity: vi.fn(async () => ({ claims: { deptIds: ['dept-1'] } })),
+  logServerDataRead: vi.fn(async () => {}),
+  canAccessDept: vi.fn(() => true),
+ withPermission: mocks.authFn }));
 vi.mock('@/lib/audit', () => ({ logAuditEvent: mocks.auditFn, getClientIP: vi.fn(() => '127.0.0.1') }));
 
 import { GET as ListClients } from '@/app/api/clients/route';

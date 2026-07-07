@@ -337,6 +337,26 @@ GET /api/me/permissions
 
 > **注意：** 菜单数据由 DashboardLayout 客户端通过 `getUserMenus()` 函数调用获取（Server Component 级），无独立 `/api/me/menus` REST 端点。
 
+### 4.3 自助修改个人资料（🔧 Server Action）
+
+`updateOwnProfileAction` — 由 Portal 个人资料页（`/profile`）调用，登录用户本人即可，无需额外权限。
+
+**可修改字段：** `name`、`email`、`avatarUrl`（不允许修改 `status` / `deptId` / 角色，防止越权）。
+
+**目标用户锁定：** 由 `withAuth` 注入的 `ctx.userId` 决定，调用方无法指定其他用户 ID（防 IDOR）。
+
+### 4.4 自助修改密码（🔧 Server Action）
+
+`changeOwnPasswordAction` — 由 Portal 个人资料页调用，登录用户本人即可。
+
+**流程：**
+1. 校验 `currentPassword`（`verifyPassword` 比对 bcrypt 哈希），不匹配返回 `VALIDATION_ERROR`。
+2. 校验 `newPassword` 满足密码策略（与 `CreateUserInputSchema` 一致）。
+3. `hashPassword(newPassword)` 后写入 `users.passwordHash`，同时更新 `passwordChangedAt`。
+4. **失效当前用户所有活跃会话**（`revokeUserAccessByUserId`），用户需用新密码重新登录（NFR-SEC-13）。
+
+**审计：** 自动记录 `TOKEN_REVOKE` 操作（由 `withAuth` 拦截）。
+
 ---
 
 ## 5. 用户管理
@@ -506,11 +526,11 @@ GET /api/roles/:id/permissions
 GET /api/permissions?page=1&pageSize=50
 ```
 
-**权限：** `perm:list`
+**权限：** `permission:list`
 
 ### 7.2 创建权限（🔧 Server Action）
 
-`createPermissionAction` — 由 Portal 创建权限弹窗调用，权限 `perm:create`。
+`createPermissionAction` — 由 Portal 创建权限弹窗调用，权限 `permission:create`。
 
 ### 7.3 查看权限详情（REST）
 
@@ -518,15 +538,15 @@ GET /api/permissions?page=1&pageSize=50
 GET /api/permissions/:id
 ```
 
-**权限：** `perm:read`
+**权限：** `permission:read`
 
 ### 7.4 更新权限（🔧 Server Action）
 
-`updatePermissionAction` — 由 Portal 调用，权限 `perm:update`。
+`updatePermissionAction` — 由 Portal 调用，权限 `permission:update`。
 
 ### 7.5 删除权限（🔧 Server Action）
 
-`deletePermissionAction` — 由 Portal 调用，权限 `perm:delete`。
+`deletePermissionAction` — 由 Portal 调用，权限 `permission:delete`。
 
 ### 7.6 注册权限（REST — 系统内部）
 
@@ -550,11 +570,11 @@ POST /api/permissions/register
 GET /api/departments
 ```
 
-**权限：** `dept:list`
+**权限：** `department:list`
 
 ### 8.2 创建部门（🔧 Server Action）
 
-`createDepartmentAction` — 由 Portal 创建部门弹窗调用，权限 `dept:create`。
+`createDepartmentAction` — 由 Portal 创建部门弹窗调用，权限 `department:create`。
 
 ### 8.3 查看部门详情（REST）
 
@@ -562,15 +582,15 @@ GET /api/departments
 GET /api/departments/:id
 ```
 
-**权限：** `dept:read`
+**权限：** `department:read`
 
 ### 8.4 更新部门（🔧 Server Action）
 
-`updateDepartmentAction` — 由 Portal 调用，权限 `dept:update`。
+`updateDepartmentAction` — 由 Portal 调用，权限 `department:update`。
 
 ### 8.5 删除部门（🔧 Server Action）
 
-`deleteDepartmentAction` — 由 Portal 调用，权限 `dept:delete`。
+`deleteDepartmentAction` — 由 Portal 调用，权限 `department:delete`。
 
 ### 8.6 部门成员（REST）
 
@@ -578,7 +598,7 @@ GET /api/departments/:id
 GET /api/departments/:id/members
 ```
 
-**权限：** `dept:read`
+**权限：** `department:read`
 
 ---
 

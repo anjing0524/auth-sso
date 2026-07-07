@@ -7,6 +7,7 @@ import { cacheLife, cacheTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
 import { eq, asc, and } from 'drizzle-orm';
 import { asPermissionType } from '@/lib/type-guards';
+import { logServerDataRead } from '@/lib/auth';
 
 /**
  * 获取权限列表（可按类型过滤）
@@ -44,6 +45,9 @@ export async function getPermissionById(lookupId: string) {
     .limit(1);
   const row = rows[0];
   if (!row) return null;
+
+  await logServerDataRead('permission', lookupId);
+
   return {
     id: row.id, name: row.name, code: row.code,
     type: row.type, path: row.path, icon: row.icon, visible: row.visible,

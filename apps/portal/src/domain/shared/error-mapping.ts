@@ -15,6 +15,7 @@ import {
   InvalidGrantError,
   PKCEVerificationError,
   InvalidRedirectUriError,
+  ForbiddenError,
 } from './errors';
 import { COMMON_ERRORS } from '@auth-sso/contracts';
 
@@ -54,6 +55,9 @@ export function mapDomainError(err: unknown): ErrorMapping {
 
   if (err instanceof EntityNotFoundError) {
     return { status: 404, error: err.code, message: err.message };
+  }
+  if (err instanceof ForbiddenError) {
+    return { status: 403, error: err.code, message: err.message };
   }
   if (err instanceof DuplicateEntityError) {
     return { status: 409, error: err.code, message: err.message };

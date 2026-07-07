@@ -338,7 +338,7 @@ describe('Permission Enforcement', () => {
       );
 
       const response = await withPermission(
-        
+
         { permissions: ['user:list'] },
         handler
       );
@@ -404,7 +404,7 @@ describe('Permission Enforcement', () => {
       const handler = vi.fn(async () => NextResponse.json({ success: true }));
 
       const response = await withPermission(
-        
+
         { permissions: ['user:list'] },
         handler
       );
@@ -429,7 +429,7 @@ describe('Permission Enforcement', () => {
       });
 
       const response = await withPermission(
-        
+
         { permissions: ['user:list'] },
         handler
       );

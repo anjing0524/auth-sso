@@ -144,3 +144,51 @@ export function extractUserAgent(headers: Headers): string | null {
     null
   );
 }
+
+// ========================================
+// 访问日志（access_logs — 读操作合规追溯）
+// ========================================
+
+/**
+ * 访问日志写入参数
+ */
+export interface WriteAccessLogParams {
+  userId: string;
+  username?: string | null;
+  method: string;
+  path: string;
+  resourceType?: string | null;
+  resourceId?: string | null;
+  ip?: string | null;
+  userAgent?: string | null;
+  status?: number | null;
+  duration?: number | null;
+}
+
+/**
+ * 写访问日志（fire-and-forget）
+ *
+ * 记录所有 GET 敏感数据访问，用于合规追溯"谁查看了哪条数据"。
+ */
+export function writeAccessLog(params: WriteAccessLogParams): void {
+  try {
+    db.insert(schema.accessLogs)
+      .values({
+        userId: params.userId,
+        username: params.username || null,
+        method: params.method,
+        path: params.path,
+        resourceType: params.resourceType || null,
+        resourceId: params.resourceId || null,
+        ip: params.ip || null,
+        userAgent: params.userAgent || null,
+        status: params.status ?? null,
+        duration: params.duration ?? null,
+      })
+      .catch((err) => console.error('[Audit] 写访问日志失败:', err));
+  } catch (err) {
+    console.error('[Audit] 写访问日志失败 (sync):', err);
+  }
+}
+
+

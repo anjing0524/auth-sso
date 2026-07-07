@@ -147,6 +147,10 @@ vi.mock('@/infrastructure/db', () => {
 const MOCK_CLAIMS = { sub: 'test-user-id', iss: '', aud: 'portal-client', jti: '', roles: [], permissions: [], deptIds: ['dept-1', 'dept-1a'] };
 
 vi.mock('@/lib/auth', () => ({
+  resolveIdentity: vi.fn(async () => ({ claims: { deptIds: ['dept-1'] } })),
+  logServerDataRead: vi.fn(async () => {}),
+  canAccessDept: vi.fn(() => true),
+
   withPermission: vi.fn(
     async (_options: any, handler: (userId: string, claims: any) => Promise<any>) => {
       try { return await handler('test-user-id', MOCK_CLAIMS); }

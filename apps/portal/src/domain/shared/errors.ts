@@ -35,6 +35,13 @@ export class DuplicateEntityError extends DomainError {
   }
 }
 
+/** 无权限错误 */
+export class ForbiddenError extends DomainError {
+  constructor(message: string = '超出数据权限范围') {
+    super('FORBIDDEN', message);
+  }
+}
+
 // ── OAuth 2.1 领域错误 ──
 
 /** OAuth Client 无效（不存在 / 已停用 / 密钥不匹配） */

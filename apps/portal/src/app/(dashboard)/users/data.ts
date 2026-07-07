@@ -17,6 +17,8 @@ import 'server-only';
 import { cacheLife, cacheTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
 import { eq, desc, and, count } from 'drizzle-orm';
+import { resolveIdentity, canAccessDept, logServerDataRead } from '@/lib/auth';
+import { ForbiddenError } from '@/domain/shared/errors';
 
 import {
   USER_LIST_COLUMNS,
@@ -120,12 +122,15 @@ export async function getUserProfile(userId: string) {
  * 获取单个用户详情（含角色列表与部门信息）
  *
  * 不使用缓存，确保详情数据实时性。
- * 调用方（Page / API Route）负责鉴权与数据范围检查。
+ * 已内置底层越权校验（IDOR 防护）与访问日志（Access Log）自动记录。
  *
  * @param lookupId 用户 ID 或 publicId
  * @returns 用户详情对象，不存在时返回 null
  */
 export async function getUser(lookupId: string) {
+  const identity = await resolveIdentity();
+  if (!identity) throw new Error('Unauthorized');
+
   // 使用 Relational Queries 一次性取出用户、角色、部门（FK 已建立，一次 DB 往返）
   const user = await db.query.users.findFirst({
     where: eq(schema.users.id, lookupId),
@@ -135,6 +140,12 @@ export async function getUser(lookupId: string) {
     },
   });
   if (!user) return null;
+
+  if (identity.userId !== lookupId && !canAccessDept(identity.claims.deptIds, user.deptId)) {
+    throw new ForbiddenError('超出数据权限范围');
+  }
+
+  await logServerDataRead('user', lookupId);
 
   return {
     id: user.id,
@@ -179,6 +190,9 @@ export async function getDepartments() {
  * 获取用户绑定的角色列表（含分配时间）
  */
 export async function getUserRoles(lookupId: string) {
+  const identity = await resolveIdentity();
+  if (!identity) throw new Error('Unauthorized');
+
   // 使用 Relational Queries 一次性取出用户绑定的角色及分配时间
   const user = await db.query.users.findFirst({
     where: eq(schema.users.id, lookupId),
@@ -193,6 +207,11 @@ export async function getUserRoles(lookupId: string) {
   });
 
   if (!user) return [];
+
+  if (identity.userId !== lookupId && !canAccessDept(identity.claims.deptIds, user.deptId)) {
+    throw new ForbiddenError('超出数据权限范围');
+  }
+  await logServerDataRead('user_roles', lookupId);
 
   return user.userRoles
     .filter(ur => ur.role !== null)

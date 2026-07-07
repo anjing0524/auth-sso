@@ -52,7 +52,11 @@ const mocks = vi.hoisted(() => {
 });
 
 vi.mock('@/infrastructure/db', () => ({ db: mocks.mockDb, schema: { clients: {}, accessTokens: {}, refreshTokens: {} } }));
-vi.mock('@/lib/auth', () => ({ withAuth: (_o: any, h: Function) => async (...a: any[]) => h({ userId: 'admin-1', roles: [], permissions: [] }, ...a) }));
+vi.mock('@/lib/auth', () => ({
+  resolveIdentity: vi.fn(async () => ({ claims: { deptIds: ['dept-1'] } })),
+  logServerDataRead: vi.fn(async () => {}),
+  canAccessDept: vi.fn(() => true),
+ withAuth: (_o: any, h: Function) => async (...a: any[]) => h({ userId: 'admin-1', roles: [], permissions: [] }, ...a) }));
 vi.mock('@/lib/crypto', () => ({ generateId: (len = 20) => 'a'.repeat(len), generateClientId: () => 'client_mock1234567890ab', generateClientSecret: () => 's'.repeat(64), hashClientSecret: (s: string) => `hash:${s}` }));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn(), updateTag: vi.fn() }));
 

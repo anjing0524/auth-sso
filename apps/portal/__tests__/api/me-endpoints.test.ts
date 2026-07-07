@@ -88,6 +88,7 @@ vi.mock('@/lib/session', () => ({
   getJwtFromCookie: mockGetJwtFromCookie,
 }));
 
+vi.mock('@/lib/auth', async (importOriginal) => { const actual = await importOriginal(); return { ...actual, logServerDataRead: vi.fn(async () => {}) }; });
 vi.mock('@/lib/auth/token', () => ({
   verifyAccessToken: mockVerifyAccessToken,
 }));
@@ -175,8 +176,8 @@ describe('Me Endpoints', () => {
 
   describe('GET /api/me', () => {
     it('返回用户信息（含 JWT 验证通过）', async () => {
-      mockGetJwtFromCookie.mockResolvedValueOnce('valid-jwt-token');
-      mockVerifyAccessToken.mockResolvedValueOnce(mockClaims);
+      mockGetJwtFromCookie.mockResolvedValue('valid-jwt-token');
+      mockVerifyAccessToken.mockResolvedValue(mockClaims);
       mockGetUserPermissionContext.mockResolvedValueOnce(mockPermissionContext);
       // 模拟用户查询 + 菜单查询
       setQueryResult([makeUserRow(), createTestMenu()]);
@@ -197,7 +198,7 @@ describe('Me Endpoints', () => {
     });
 
     it('无 JWT Cookie 时返回 401', async () => {
-      mockGetJwtFromCookie.mockResolvedValueOnce(null);
+      mockGetJwtFromCookie.mockResolvedValue(null);
 
       const response = await GetMe(createTestRequest('/api/me'));
       expect(response.status).toBe(401);
@@ -212,8 +213,8 @@ describe('Me Endpoints', () => {
         if (name.toLowerCase() === 'authorization') return `Bearer ${validJwtStr}`;
         return null;
       });
-      mockGetJwtFromCookie.mockResolvedValueOnce(null);
-      mockVerifyAccessToken.mockResolvedValueOnce(mockClaims);
+      mockGetJwtFromCookie.mockResolvedValue(null);
+      mockVerifyAccessToken.mockResolvedValue(mockClaims);
       mockGetUserPermissionContext.mockResolvedValueOnce(mockPermissionContext);
       setQueryResult([makeUserRow(), createTestMenu()]);
 
@@ -232,7 +233,7 @@ describe('Me Endpoints', () => {
         if (name.toLowerCase() === 'authorization') return `Bearer ${validJwtStr}`;
         return null;
       });
-      mockGetJwtFromCookie.mockResolvedValueOnce(null);
+      mockGetJwtFromCookie.mockResolvedValue(null);
       mockGetUserPermissionContext.mockResolvedValueOnce(mockPermissionContext);
       setQueryResult([makeUserRow(), createTestMenu()]);
 
@@ -245,16 +246,16 @@ describe('Me Endpoints', () => {
     });
 
     it('JWT 验签失败时返回 401', async () => {
-      mockGetJwtFromCookie.mockResolvedValueOnce('invalid-token');
-      mockVerifyAccessToken.mockResolvedValueOnce(null);
+      mockGetJwtFromCookie.mockResolvedValue('invalid-token');
+      mockVerifyAccessToken.mockResolvedValue(null);
 
       const response = await GetMe(createTestRequest('/api/me'));
       expect(response.status).toBe(401);
     });
 
     it('权限上下文为空时仍返回用户信息', async () => {
-      mockGetJwtFromCookie.mockResolvedValueOnce('valid-jwt-token');
-      mockVerifyAccessToken.mockResolvedValueOnce(mockClaims);
+      mockGetJwtFromCookie.mockResolvedValue('valid-jwt-token');
+      mockVerifyAccessToken.mockResolvedValue(mockClaims);
       // 权限上下文为 null
       mockGetUserPermissionContext.mockResolvedValueOnce(null);
       setQueryResult([makeUserRow()]);
@@ -265,8 +266,8 @@ describe('Me Endpoints', () => {
     });
 
     it('返回 tokenInfo.expiresAt 用于前端静默刷新调度', async () => {
-      mockGetJwtFromCookie.mockResolvedValueOnce('valid-jwt-token');
-      mockVerifyAccessToken.mockResolvedValueOnce({
+      mockGetJwtFromCookie.mockResolvedValue('valid-jwt-token');
+      mockVerifyAccessToken.mockResolvedValue({
         ...mockClaims,
         exp: 2000000000,
       });
@@ -285,8 +286,8 @@ describe('Me Endpoints', () => {
 
   describe('GET /api/me/permissions', () => {
     it('返回用户权限上下文', async () => {
-      mockGetJwtFromCookie.mockResolvedValueOnce('valid-jwt-token');
-      mockVerifyAccessToken.mockResolvedValueOnce(mockClaims);
+      mockGetJwtFromCookie.mockResolvedValue('valid-jwt-token');
+      mockVerifyAccessToken.mockResolvedValue(mockClaims);
       mockGetUserPermissionContext.mockResolvedValueOnce(mockPermissionContext);
 
       const response = await GetMePermissions(createTestRequest('/api/me/permissions'));
@@ -300,23 +301,23 @@ describe('Me Endpoints', () => {
     });
 
     it('无 JWT 时返回 401', async () => {
-      mockGetJwtFromCookie.mockResolvedValueOnce(null);
+      mockGetJwtFromCookie.mockResolvedValue(null);
 
       const response = await GetMePermissions(createTestRequest('/api/me/permissions'));
       expect(response.status).toBe(401);
     });
 
     it('JWT 无效时返回 401', async () => {
-      mockGetJwtFromCookie.mockResolvedValueOnce('invalid-token');
-      mockVerifyAccessToken.mockResolvedValueOnce(null);
+      mockGetJwtFromCookie.mockResolvedValue('invalid-token');
+      mockVerifyAccessToken.mockResolvedValue(null);
 
       const response = await GetMePermissions(createTestRequest('/api/me/permissions'));
       expect(response.status).toBe(401);
     });
 
     it('权限上下文获取失败时返回 500', async () => {
-      mockGetJwtFromCookie.mockResolvedValueOnce('valid-jwt-token');
-      mockVerifyAccessToken.mockResolvedValueOnce(mockClaims);
+      mockGetJwtFromCookie.mockResolvedValue('valid-jwt-token');
+      mockVerifyAccessToken.mockResolvedValue(mockClaims);
       mockGetUserPermissionContext.mockResolvedValueOnce(null);
 
       const response = await GetMePermissions(createTestRequest('/api/me/permissions'));

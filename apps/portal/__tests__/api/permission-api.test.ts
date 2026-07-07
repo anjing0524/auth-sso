@@ -136,7 +136,11 @@ const mocks = vi.hoisted(() => {
 });
 
 vi.mock('@/infrastructure/db', () => ({ db: mocks.db, schema: mocks.schema }));
-vi.mock('@/lib/auth', () => ({ withPermission: mocks.authFn }));
+vi.mock('@/lib/auth', () => ({
+  resolveIdentity: vi.fn(async () => ({ claims: { deptIds: ['dept-1'] } })),
+  logServerDataRead: vi.fn(async () => {}),
+  canAccessDept: vi.fn(() => true),
+ withPermission: mocks.authFn }));
 vi.mock('@/lib/crypto', () => ({
   generateId: vi.fn(() => 'mock_id_12345'),
   generateUUID: vi.fn(() => '00000000-0000-4000-8000-000000000001'),

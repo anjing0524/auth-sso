@@ -87,6 +87,10 @@ vi.mock('@/infrastructure/db', () => ({
 }));
 
 vi.mock('@/lib/auth', () => ({
+  resolveIdentity: vi.fn(async () => ({ claims: { deptIds: ['dept-1'] } })),
+  logServerDataRead: vi.fn(async () => {}),
+  canAccessDept: vi.fn(() => true),
+
   withPermission: mockWithPermission,
 }));
 

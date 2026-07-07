@@ -8,6 +8,7 @@ import { db, schema } from '@/infrastructure/db';
 import { ilike, eq, or, desc, and, count, gt } from 'drizzle-orm';
 import { ENTITY_STATUS_VALUES, type EntityStatus } from '@auth-sso/contracts';
 import { asEntityStatus } from '@/lib/type-guards';
+import { logServerDataRead } from '@/lib/auth';
 
 /**
  * Client API 响应的 DTO 类型（日期已序列化为 ISO 8601 string）
@@ -92,6 +93,8 @@ export async function getClientById(lookupId: string): Promise<ClientDTO | null>
   const row = rows[0];
   if (!row) return null;
 
+  await logServerDataRead('client', lookupId);
+
   return {
     clientId: row.clientId,
     name: row.name,
@@ -143,6 +146,8 @@ export async function getClientTokens(
 ) {
   const { page, pageSize, userId } = params;
   const offset = (page - 1) * pageSize;
+
+  await logServerDataRead('client_tokens', clientId);
 
   const conditions = [
     eq(schema.accessTokens.clientId, clientId),
