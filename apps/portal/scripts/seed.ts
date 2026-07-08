@@ -40,6 +40,15 @@ async function main() {
     await db.delete(schema.users);
     await db.delete(schema.departments);
 
+    // 3. 创建默认部门
+    const defaultDeptId = crypto.randomUUID();
+    await db.insert(schema.departments).values({
+      id: defaultDeptId,
+      name: '总公司',
+      code: 'ROOT',
+      status: 'ACTIVE',
+    });
+
     // 1. 创建管理员用户
     console.log('Creating admin user...');
     const adminPassword = await bcrypt.hash('Admin@123456', 10);
@@ -52,6 +61,7 @@ async function main() {
       name: '系统管理员',
       status: 'ACTIVE',
       passwordHash: adminPassword,
+      deptId: defaultDeptId,
     });
 
     // 2. 创建 OAuth 客户端
@@ -63,19 +73,11 @@ async function main() {
     await db.insert(schema.clients).values({
       clientId: 'portal',
       name: 'Auth-SSO Portal',
-      clientSecret: process.env.PORTAL_CLIENT_SECRET || 'portal-secret',
+      clientSecret: crypto.createHash('sha256').update(process.env.PORTAL_CLIENT_SECRET || 'portal-secret').digest('hex'),
       redirectUris: portalRedirectUrls,
       scopes: 'openid profile email offline_access',
       status: 'ACTIVE',
       isInternal: true,
-    });
-
-    // 3. 创建默认部门
-    await db.insert(schema.departments).values({
-      id: crypto.randomUUID(),
-      name: '总公司',
-      code: 'ROOT',
-      status: 'ACTIVE',
     });
 
     // 4. 委托 seed-rbac 完成 RBAC 初始化（幂等，从 contracts 读取）

@@ -31,6 +31,7 @@ pub(crate) mod http;
 pub mod jwks;
 pub mod logging;
 pub(crate) mod metrics;
+pub mod oauth;
 pub mod path_matcher;
 pub mod rate_limiter;
 pub mod redirect;

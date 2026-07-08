@@ -69,8 +69,16 @@ export const COOKIE_NAMES = {
   JWT: 'portal_jwt_token',
   /** OAuth 2.1 Refresh Token，仅在 Portal BFF 内部读写 */
   REFRESH: 'portal_refresh_token',
-  /** 登录后临时会话 Token (5min TTL)，仅含 sub */
+  /** 登录后临时会话 Token (5min TTL)，仅含 sub，Path=/api/auth/oauth2/authorize */
   LOGIN_SESSION: 'login_session',
+  /** PKCE code_verifier（Client SSR 生成，HttpOnly），callback 读取后传给 /token */
+  PKCE_VERIFIER: 'pkce_verifier',
+  /** OAuth 2.1 state（Client SSR 生成，随机值），callback 校验 Cookie↔Query 一致性 */
+  OAUTH_STATE: 'oauth_state',
+  /** OIDC nonce（Client SSR 生成），callback 校验 id_token.nonce↔Cookie 一致性 */
+  OAUTH_NONCE: 'oauth_nonce',
+  /** 登录后回跳路径（Client SSR 记录），callback 经 safeRedirectPath 消毒后跳转 */
+  RETURN_TO: 'return_to',
 } as const;
 
 // Gateway 注入的请求头名称

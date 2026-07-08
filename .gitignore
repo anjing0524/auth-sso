@@ -54,3 +54,6 @@ test-results
 feat
 tests/e2e-report
 .claude/worktrees/
+
+data
+test-mcp

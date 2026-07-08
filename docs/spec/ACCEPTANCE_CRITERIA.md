@@ -114,7 +114,7 @@
 | 层 | 组件 | 验证结果 | 备注 |
 |----|------|---------|------|
 | 1 | Gateway (Rust/Pingora) | ✅ 正确 | ES256 离线验签 + kid 匹配 + jti 黑名单 + 续签 |
-| 2 | proxy.ts | ✅ 正确 | Cookie 存在性检查 + 白名单 |
+| 2 | proxy.ts | ✅ 正确 | Cookie 存在性检查 + 白名单兜底（PKCE/OAuth 已上移到 Gateway） |
 | 3 | resolveIdentity() | ✅ 正确 | Gateway 信任路径 + 自验签 fallback |
 | 4 | 鉴权守卫 (withAuth/withPermission/requirePermission) | ✅ 正确 | 三种形态覆盖 SC/SA/Route |
 | 5 | checkPermission() | ✅ 正确 | Admin 绕过 + 权限码/角色匹配 |
@@ -663,24 +663,29 @@ async function checkBruteForce(userId: string): Promise<boolean> {
 
 在第二轮深度链路追踪中，额外发现以下问题：
 
-### 13.1 `callback/route.ts` 中 pkce_verifier 通过 redirect_uri query param 传递（非标准）
+### 13.1 `callback/route.ts` 中 pkce_verifier 通过 redirect_uri query param 传递（非标准）✅ 已修复
 
-**位置：** `apps/portal/src/app/api/auth/callback/route.ts:57-58`
+**位置：** `apps/portal/src/app/api/auth/callback/route.ts`
+
+**状态：** 已修复（2026-07-08）。当前 `callback/route.ts` 已将 `code_verifier` 作为 token 请求的**独立 body 字段**传递，`redirect_uri` 不再附加任何动态 query 参数。PKCE verifier 由 proxy.ts 写入 HttpOnly Cookie（Path=/api/auth/callback），callback 从 Cookie 读取后作为独立 body 字段传给 /token：
 
 ```typescript
+// 现状：redirect_uri 保持纯净，code_verifier 作为独立字段
 const redirectUri = new URL('/api/auth/callback', publicBase);
-redirectUri.searchParams.set('pkce_verifier', codeVerifier);
+// ...
+body: JSON.stringify({
+  grant_type: 'authorization_code',
+  code,
+  client_id: 'portal',
+  client_secret: portalClientSecret,
+  redirect_uri: redirectUri.toString(),
+  code_verifier: codeVerifier,  // ← 独立 body 字段，符合 OAuth 2.1
+}),
 ```
 
-**分析：** callback 端点在构造 token 请求时，将 `code_verifier` 附加到 `redirect_uri` 的 query string 上。token 端点的 `validateAuthCodeRow()` 会对比传入的 `redirect_uri` 与 `authorization_codes.redirect_uri` 的值。
+同时也引入 session_id 中间层（Redis `portal:auth_req:`）隔离 OAuth 参数，避免 code_challenge/state/nonce 出现在 /login URL 中。callback 中 state 校验改为 Cookie↔Query 一致性比较；nonce 校验改为 id_token.nonce↔Cookie 比对。
 
-**风险：** 
-- 如果 authorize 端点存储的 `redirect_uri` 不含 `?pkce_verifier=...`，而 callback 传入的包含，则精确匹配会失败
-- 实际能正常工作的原因是：login form 在构造 authorize URL 时已将 `redirect_uri` 设为含 `?pkce_verifier=...` 的完整 URL，所以 DB 中存的也是含 query param 的版本
-
-**影响：** 低风险，但非标准做法。OAuth 2.1 规范要求 `code_verifier` 作为独立参数传递，而非编码在 `redirect_uri` 中。
-
-**建议：** 不阻塞上线，但应在后续迭代中将 `code_verifier` 改为独立的 body 参数（token 端点的 Zod schema 已支持 `code_verifier` 字段）。
+**历史分析（保留备查）：** 早期版本 callback 端点曾将 `code_verifier` 附加到 `redirect_uri` 的 query string 上。该做法非标准但功能正常（DB 中 AuthorizationCode.redirect_uri 存储的是含 query param 的完整 URL，token 端点精确比对通过）。已在 2026-07-08 重构中清偿。
 
 ### 13.2 `login/route.ts` 中 lastLoginAt 更新使用 fire-and-forget 存在竞态风险
 

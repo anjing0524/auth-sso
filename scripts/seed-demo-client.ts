@@ -40,13 +40,11 @@ async function main() {
 
   const rawSecret = crypto.randomBytes(32).toString('hex');
   await db.insert(schema.clients).values({
-    id: crypto.randomUUID(),
     clientId: DEMO_CLIENT_ID,
-    clientName: DEMO_CLIENT_NAME,
+    name: DEMO_CLIENT_NAME,
     clientSecret: hashClientSecret(rawSecret),
     redirectUris: DEMO_REDIRECT_URIS,
-    grantTypes: ['authorization_code', 'refresh_token'],
-    scopes: ['openid', 'profile'],
+    scopes: 'openid profile',
     status: 'ACTIVE',
     createdAt: new Date(),
     updatedAt: new Date(),

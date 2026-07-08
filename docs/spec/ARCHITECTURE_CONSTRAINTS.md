@@ -392,24 +392,27 @@ export async function POST(request: NextRequest) {
 
 ## 五、proxy.ts 职责边界
 
-`apps/portal/src/proxy.ts` 是 Next.js 中间件级的请求守卫，其职责严格限定为：
+`apps/portal/src/proxy.ts` 是 Next.js Proxy 层，PKCE 生成已上移到 Gateway（Rust/Pingora）统一完成。proxy.ts 职责简化为：
 
 - **做**: Cookie 存在性检查（检查 `portal_jwt_token` 是否存在）
-- **做**: 路径白名单放行（`/login`、`/oauth`、`/_next`、API 公开端点）
+- **做**: 路径白名单放行（`/login`、`/oauth2`、`/.well-known`、`/api/`、`/_next`、静态资源）
 - **不做**: JWT 签名验证（由 API 层的 `resolveIdentity()` 处理）
+- **不做**: PKCE 生成、OAuth 授权链路由（由 Gateway 统一完成）
 - **不做**: 业务鉴权或角色/权限判定（由 `lib/auth/` 三层体系处理）
-- **不做**: 任何数据库或 Redis 查询
 
 ```typescript
-// proxy.ts —— 只检查 Cookie 存在与否，不验签
-export function proxy(request: NextRequest) {
+// proxy.ts — 纯 JWT 存在性检查，无 PKCE 逻辑
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  if (isPublicPath(pathname)) return NextResponse.next();        // 白名单放行
+  if (isPublicPath(pathname) || isSkipPath(pathname) || pathname.startsWith('/api/')) {
+    return NextResponse.next();
+  }
   const jwt = request.cookies.get(COOKIE_NAMES.JWT);
-  if (!jwt?.value) return NextResponse.redirect(new URL('/login', request.url));  // 跳登录
+  if (!jwt?.value) {
+    return NextResponse.redirect(new URL('/login', request.url));
+  }
   return NextResponse.next();
 }
-```
 
 ---
 

@@ -58,7 +58,7 @@
 
 ### 1.1 Portal 登录流程（完整时序）
 
-Portal 运行 OAuth 2.1 Authorization Code + PKCE 流程。Portal 既是 BFF 也是 OIDC Provider，登录流程在单进程内完成，无需跨服务重定向。
+Portal 自身作为 OAuth 2.1 Client，PKCE 在 proxy.ts（Next.js Proxy 层）生成，浏览器 JavaScript 零接触敏感凭证。
 
 ```
 ┌─────────┐          ┌─────────┐          ┌──────────────┐
@@ -69,82 +69,97 @@ Portal 运行 OAuth 2.1 Authorization Code + PKCE 流程。Portal 既是 BFF 也
      │  1. GET /dashboard │                      │
      ├───────────────────►│                      │
      │                    │                      │
-     │  2. proxy.ts: Cookie无portal_jwt_token    │
-     │  302 → /login      │                      │
+     │  2. proxy.ts: 无 portal_jwt_token Cookie  │
+     │     生成 PKCE(code_verifier/challenge)    │
+     │     生成 state(随机, CSRF) + nonce(重放)   │
+     │     return_to = 原始路径                    │
+     │     种 4 个 HttpOnly Cookie:              │
+     │     pkce_verifier + oauth_state           │
+     │     + oauth_nonce + return_to             │
+     │     (Path=/api/auth/callback, TTL 5min)   │
+     │     302 → /authorize?client_id=portal     │
+     │     &code_challenge=xxx&state=xxx&nonce=xxx│
+     ├───────────────────►│                      │
+     │                    │  3. authorize 端点:   │
+     │                    │  无 login_session /   │
+     │                    │  portal_jwt_token     │
+     │                    │  → 暂存 OAuth 参数到  │
+     │                    │  Redis:               │
+     │                    │  portal:auth_req:{sid}│
+     │                    │  (TTL 5min)           │
+     │  302 /login?       │                      │
+     │  session_id=sid    │                      │
      │◄───────────────────┤                      │
      │                    │                      │
-     │  3. 提交 Email+Password                   │
+     │  4. 提交 Email+Password                   │
      │  POST /api/auth/login                     │
+     │  { email, password, session_id: sid }     │
      ├───────────────────►│                      │
-     │                    │  4. Zod 校验          │
-     │                    │  5. SELECT users      │
-     │                    ├─────────────────────►│
-     │                    │◄─────────────────────┤
-     │                    │  6. validateLogin     │
-     │                    │     Credentials()     │
-     │                    │  7. verifyPassword()  │
-     │                    │     (bcrypt校验并处理5次失败锁定) │
-     │                    │  8. 记录 login_log      │
-     │                    │  9. signLoginSession  │
-     │                    │     (ES256, 5min)     │
+     │                    │  5. 校验凭证 + 签发   │
+     │                    │  login_session JWT    │
+     │                    │  (5min, ES256)        │
      │                    │                      │
-     │  9. Set-Cookie:    │                      │
-     │     login_session  │                      │
+     │  JSON { success,   │                      │
+     │    redirect:        │                      │
+     │    "/api/auth/      │                      │
+     │    oauth2/authorize │                      │
+     │    ?session_id=sid" │                      │
+     │  }                 │                      │
+     │  + Set-Cookie:      │                      │
+     │    login_session    │                      │
      │◄───────────────────┤                      │
      │                    │                      │
-     │ 10. 客户端JS跳转    │                      │
-     │     GET /api/auth/oauth2/authorize        │
-     │     ?response_type=code&client_id=portal  │
-     │     &code_challenge=S256...               │
+     │  6. JS 导航到       │                      │
+     │  /authorize?        │                      │
+     │  session_id=sid     │                      │
+     │  (Cookie 自动携带   │                      │
+     │   login_session)    │                      │
      ├───────────────────►│                      │
-     │                    │ 11. Zod 参数校验      │
-     │                    │ 12. 验证Client状态    │
-     │                    │ 13. 验证login_session │
-     │                    │     Cookie → JWT验签  │
-     │                    │ 14. getUserWithRole   │
-     │                    │     Clients() ← DB   │
+     │                    │  7. 从 Redis 恢复     │
+     │                    │  OAuth 参数            │
+     │                    │  验 login_session     │
+     │                    │  准入检查 + 签发 code │
      │                    ├─────────────────────►│
      │                    │◄─────────────────────┤
-     │                    │ 15. validateAuthoriza │
-     │                    │     tion() - 准入检查  │
-     │                    │ 16. 生成授权码 + 写入DB│
-     │                    ├─────────────────────►│
-     │                    │ 17. 302 → callback    │
-     │                    │     ?code=auth_code_xx│
+     │  302 /api/auth/    │                      │
+     │  callback?code=xxx │                      │
+     │  &state=xxx        │                      │
      │◄───────────────────┤                      │
      │                    │                      │
-     │ 18. GET /api/auth/callback                │
-     │     ?code=...&pkce_verifier=...           │
+     │  8. GET /api/auth/  │                      │
+     │  callback?code=xxx  │                      │
+     │  Cookies:           │                      │
+     │  pkce_verifier,     │                      │
+     │  oauth_state,       │                      │
+     │  oauth_nonce,       │                      │
+     │  return_to          │                      │
      ├───────────────────►│                      │
-     │                    │ 19. 内部POST /oauth2/ │
-     │                    │     token (back-channel)│
-     │                    ├──────────────────────┤
-     │                    │ 20. token端点:       │
-     │                    │     验证code+PKCE    │
-     │                    │     签发AT+RT+IDT    │
+     │                    │  9. 校验 state Cookie │
+     │                    │  ↔ URL query 一致性   │
+     │                    │  内部 POST /token     │
+     │                    │  (code_verifier 独立  │
+     │                    │   body 字段)          │
+     │                    │  PKCE 验证通过        │
+     │                    │  校验 nonce ↔         │
+     │                    │  id_token.nonce       │
+     │                    │  签发 AT + RT         │
+     │                    │  清理 4 个临时 Cookie │
      │                    ├─────────────────────►│
      │                    │◄─────────────────────┤
-     │                    │ 21. 缓存权限上下文到   │
-     │                    │     Redis            │
-     │                    ├─────────────────────►│
-     │                    │                      │
-     │ 22. Set-Cookie:    │                      │
-     │     portal_jwt_token (1h)                 │
-     │     portal_refresh_token (path=/, 7d)     │
-     │     302 → /dashboard                      │
+     │  Set-Cookie:       │                      │
+     │  portal_jwt_token  │                      │
+     │  portal_refresh_   │                      │
+     │  token             │                      │
+     │  302 → return_to   │                      │
      │◄───────────────────┤                      │
 ```
 
 **关键实现细节**:
 
-- **步骤 1-2**: `apps/portal/src/proxy.ts` — `proxy()` 函数检测 `portal_jwt_token` Cookie 是否存在。仅做存在性检查，不做 JWT 验签。路径白名单放行 `/login`、`/oauth`、`/api/auth/`、`/_next/`、静态资源等。
-- **步骤 3-9**: `apps/portal/src/app/api/auth/login/route.ts` — Controller 层。Zod 校验输入 → 查询用户 → `validateLoginCredentials()`（纯函数检查 DELETED/DISABLED/LOCKED 状态） → `verifyPassword()`（bcryptjs，失败处理 5 次自动锁定逻辑） → 记录审计表 `login_logs` → `signLoginSession()`（签发 Login Session JWT，5min TTL）。
-- **步骤 10-17**: `apps/portal/src/app/api/auth/oauth2/authorize/route.ts` — `buildLoginRedirect()` 将 OAuth 参数（client_id, redirect_uri, code_challenge, state, nonce）编码到 `/login` URL，login form 在凭证验证成功后读取这些参数重新发起 authorize 请求。
-- **步骤 14**: `apps/portal/src/app/api/auth/oauth2/authorize/data.ts` — `getUserWithRoleClients()` 使用 Drizzle 关系查询，单次 DB 往返完成 4 层嵌套 JOIN（users → userRoles → roles → roleClients）。
-- **步骤 15**: `apps/portal/src/domain/auth/oauth-authorize.ts` — `validateAuthorization()` 纯函数：用户状态检查 → 有效角色筛选 → Client 绑定检查。Admin 角色（SUPER_ADMIN/ADMIN）绕过 Client 绑定检查。
-- **步骤 16**: 授权码以 `auth_code_` 前缀 + 32 位随机 hex 生成，写入 `authorization_codes` 表，TTL 5 分钟，used 标记一次性使用。
-- **步骤 19-20**: `apps/portal/src/app/api/auth/callback/route.ts` 通过 `fetch()` 内部调用 `/api/auth/oauth2/token`，不经过浏览器。`apps/portal/src/app/api/auth/oauth2/token/route.ts` 处理 `grant_type=authorization_code`：验证授权码 → PKCE S256 验证（SHA256(code_verifier) base64url vs code_challenge） → 获取权限上下文 → `signAccessToken()` + `issueRefreshToken()` + `signIdToken()`（scope 包含 openid 时）。
-- **步骤 21**: `cacheUserPermissionContext()` 在 Token 签发时主动写入 Redis，TTL 与 Access Token 对齐（3600s），确保后续请求零 DB 查询。
+- **步骤 1-2**: Gateway（Rust/Pingora）`request_filter` — 检测 HTML GET + 无 JWT + upstream 配置了 oauth → 生成 PKCE (code_verifier + code_challenge)、state (CSRF)、nonce (OIDC)、记录 return_to → Set-Cookie: 4 个 HttpOnly Cookie (Path=/api/auth/callback, TTL 5min) → 302 /authorize。PKCE 私钥全程在 HttpOnly Cookie 中，浏览器 JS 不可读。
+- **步骤 3**: `apps/portal/src/app/api/auth/oauth2/authorize/route.ts` — authorize 端点。（分支 B：完整 query params）无登录会话时，将 OAuth 参数暂存 Redis (portal:auth_req:{sid}, TTL 5min) → 302 /login?session_id={sid}。（分支 A：带 session_id 参数）从 Redis 恢复参数 + 验 login_session → 签发 code → 一次性消费 Redis key。
+- **步骤 4-6**: `apps/portal/src/app/api/auth/login/route.ts` — 当 body 包含 session_id 时，返回 JSON { success: true, redirect: "/api/auth/oauth2/authorize?session_id={sid}" } + Set-Cookie login_session。前端 JS 导航到 redirect URL。
+- **步骤 8-9**: `apps/portal/src/app/api/auth/callback/route.ts` — 读 4 个 HttpOnly Cookie；state 校验（Cookie↔Query 一致性）；内部 POST /token（code_verifier 为独立 body 字段）；nonce 校验（id_token.nonce↔Cookie）；清除 4 个临时 Cookie；种 portal_jwt_token + portal_refresh_token。redirect 使用 return_to Cookie（不再复用 state）。
 
 ### 1.2 SSO 单点登录流程
 
@@ -651,7 +666,51 @@ Gateway 基于 Pingora (0.8.0)，是一个反向代理 + 安全网关，提供 H
                  （未匹配任何前缀时 fallback 到最短前缀 upstream，通常为 `/`）
 ```
 
-### 6.2 JWT 验证流程
+### 6.2 Gateway OAuth 2.1 Client 层
+
+**v5.2 新增** — Gateway 统一承担所有下游应用的 OAuth Client 职责，下游应用零 OAuth 代码。
+
+**PKCE 生成与 /authorize 重定向**：
+
+```
+1. [浏览器]     GET /dashboard（无 JWT）
+2. [Gateway]    检测 HTML GET + 无 JWT + upstream 配置了 oauth
+                  |- 生成 PKCE (code_verifier + code_challenge)
+                  |- 生成 state (CSRF) + nonce (OIDC)
+                  |- Set-Cookie: pkce_verifier + oauth_state + oauth_nonce + return_to
+                  |- 302 → /api/auth/oauth2/authorize?client_id=xxx&code_challenge=...
+```
+
+**OAuth callback 拦截**（仅对非 OIDC Provider 的 upstream 生效）：
+
+Portal 自身作为 OIDC Provider，callback 由 Portal 的 `/api/auth/callback` 端点自行处理。Gateway 仅拦截**第三方下游应用**（如 ERP、CRM）的 callback——当 upstream 配置了 `oauth.client_secret` 时：
+
+```
+7. [Gateway]    GET {callback_path}?code=xxx&state=xxx
+                  |- ① CSRF 校验：Cookie.oauth_state == Query.state
+                  |- ② 提取 PKCE verifier（Cookie）
+                  |- ③ 提取 nonce（Cookie）
+                  |- ④ POST /api/auth/oauth2/token（code_verifier 为独立 body 字段）
+                  |- ⑤ 校验 id_token.nonce == Cookie.nonce
+                  |- ⑥ Set-Cookie: portal_jwt_token + portal_refresh_token
+                  |- ⑦ Clear 4 个临时 OAuth Cookie（maxAge=0）
+                  |- ⑧ 302 → return_to
+```
+
+未配置 secret 时 callback 透传，Gateway 注入 `X-OAuth-Code-Verifier` header 供下游自行完成 token 交换。
+
+**Gateway 配置模型**：
+
+```toml
+[[upstreams]]
+name = "/erp/"
+addresses = "erp:3000"
+# Gateway 代为执行 OAuth 2.1 Client 全流程
+[upstreams.oauth]
+client_id = "erp-app"
+client_secret = "$ERP_CLIENT_SECRET"   # 有 secret → Gateway 代换 token
+callback_path = "/api/auth/callback"   # 默认值，可不写
+```
 
 `apps/gateway/src/gateway.rs` — `verify_jwt()` 方法:
 
@@ -736,13 +795,13 @@ SKIP_PREFIXES: /_next, /favicon, /images, /fonts
 
 | 层 | 组件 | 职责 | 失败模式 |
 |----|------|------|---------|
-| 边缘 | Gateway (Rust/Pingora) | JWT ES256 签名验证、jti 黑名单检查、Cookie 剥离 | API 401, 页面 302 重定向 |
-| 中间件 | proxy.ts | Cookie 存在性检查、路径白名单 | 页面 302 重定向到登录页 |
+| 边缘 | Gateway (Rust/Pingora) | JWT ES256 签名验证、jti 黑名单检查、Cookie 剥离、**PKCE 生成 + 回调拦截** | 302 /authorize 或 401 |
+| 路由 | proxy.ts | Cookie 存在性检查、路径白名单 | 302 /login |
 | 应用 | resolveIdentity + withAuth / requirePermission / withPermission | JWT 验签（无 Gateway 时）、权限编码校验 | 401/403 JSON 或 Forbidden 组件 |
 
 **防御流程**:
-1. Gateway 验证 JWT 签名 → 通过后注入 `X-User-Id` → Portal 信任此 header 免验签。
-2. 无 Gateway 时（本地开发），Portal 自验签 `portal_jwt_token` Cookie。
+1. Gateway 验证 JWT 签名 → 通过后注入 `X-User-Id` → Portal 信任此 header 免验签。无 JWT 时 Gateway 统一生成 PKCE → 302 /authorize。
+2. Portal proxy.ts 仅做 Cookie 存在性兜底检查（Gateway 已处理 PKCE 链路）。
 3. API/Server Action 层进行精细权限编码校验。
 
 ### 7.2 密钥管理
@@ -776,9 +835,13 @@ SKIP_PREFIXES: /_next, /favicon, /images, /fonts
 
 | Cookie | Path | HttpOnly | Secure | SameSite | 用途 |
 |--------|------|----------|--------|----------|------|
-| `portal_jwt_token` | `/` | true | 生产环境 | Lax | 认证主 Cookie |
-| `portal_refresh_token` | `/` | true | 生产环境 | Lax | 静默续签（path=`/` 以便 Gateway 在全路径读取；Gateway 在转发非 /refresh 请求时会剥离此 Cookie） |
-| `login_session` | `/api/auth/oauth2/authorize` | true | 生产环境 | Lax | 登录临时凭证 |
+| `portal_jwt_token` | `/` | true | 生产环境 | Lax | 认证主 Cookie（ES256 JWT，1h） |
+| `portal_refresh_token` | `/` | true | 生产环境 | Lax | 静默续签（path=`/` 以便 Gateway 在全路径读取；Gateway 转发时剥离） |
+| `login_session` | `/api/auth/oauth2/authorize` | true | 生产环境 | Lax | 登录→authorize 临时桥接（ES256 JWT，5min，一次性消费） |
+| `pkce_verifier`（临时） | `/api/auth/callback` | true | 生产环境 | Lax | PKCE code_verifier（OAuth Client 生成，callback 读取后传给 /token） |
+| `oauth_state`（临时） | `/api/auth/callback` | true | 生产环境 | Lax | CSRF state 随机值（callback 校验 Cookie↔Query 一致性后清除） |
+| `oauth_nonce`（临时） | `/api/auth/callback` | true | 生产环境 | Lax | OIDC nonce（callback 校验 id_token.nonce↔Cookie 一致性后清除） |
+| `return_to`（临时） | `/api/auth/callback` | true | 生产环境 | Lax | 登录后回跳路径（callback 经 safeRedirectPath 消毒后跳转） |
 
 **Secure 降级**: 本地开发（`localhost`/`127.0.0.1`）时 `secure` 设为 `false`，允许 HTTP 直连。
 

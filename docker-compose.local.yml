@@ -66,6 +66,7 @@ services:
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/auth_sso
       REDIS_URL: redis://redis:6379
       NEXT_PUBLIC_APP_URL: https://localhost:18443
+      PORTAL_CLIENT_SECRET: portal-secret
       # Docker 内 Next.js 不监听 127.0.0.1，内部调用需通过 Docker 服务名
       PORTAL_INTERNAL_URL: http://portal:4000
     expose:

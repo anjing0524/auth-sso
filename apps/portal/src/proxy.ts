@@ -30,34 +30,24 @@ function isSkipPath(pathname: string): boolean {
 }
 
 /**
- * Next.js Proxy 路由守卫：纯 JWT Cookie 认证
+ * Next.js Proxy 路由守卫。
  *
- * 只检查 portal_jwt_token Cookie 是否存在。
- * 不验证 JWT 有效性——有效性由 API 层的 resolveIdentity() 处理。
- *
- * 注意：
- * - Access Token 的静默续签由 Gateway（Rust/Pingora）统一完成，覆盖 Portal 与所有第三方子应用
- * - 速率限制由 Gateway 层统一处理，Portal 中间件不做限流
+ * PKCE 生成 + OAuth 2.1 授权链路由 Gateway（Rust/Pingora）统一完成。
+ * proxy.ts 仅检查 JWT Cookie 存在性——有 JWT 放行，无 JWT 透传。
  */
-export function proxy(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // 白名单路径直接放行
-  if (isPublicPath(pathname) || isSkipPath(pathname)) {
+  if (isPublicPath(pathname) || isSkipPath(pathname) || pathname.startsWith('/api/')) {
     return NextResponse.next();
   }
 
-  // API 路由放行——由 API 层自行鉴权
-  if (pathname.startsWith('/api/')) {
-    return NextResponse.next();
-  }
-
-  // 检查 JWT Cookie 是否存在
   const jwtToken = request.cookies.get(COOKIE_NAMES.JWT);
 
   if (!jwtToken?.value) {
+    // Gateway 已在边缘层拦截无 JWT 的 HTML 页面导航，生成 PKCE 并 302 /authorize。
+    // 若请求到达此处，说明 Gateway 未配置或已穿透——透传给下游自行处理。
     const loginUrl = new URL('/login', request.url);
-    loginUrl.searchParams.set('callbackUrl', pathname);
     return NextResponse.redirect(loginUrl);
   }
 

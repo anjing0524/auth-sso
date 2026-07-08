@@ -32,6 +32,9 @@ public_paths = [
     "/_next/",
     "/favicon.ico",
 ]
+# PKCE 生成 client_id（仅此字段，不配置 secret——Portal 自身 callback 由 Portal 自行处理）
+[upstreams.oauth]
+client_id = "portal"
 
 [[upstreams]]
 name = "/demo/"

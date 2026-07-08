@@ -8,7 +8,14 @@ use tracing::{info, warn};
 
 // ── 鉴权失败响应 ──
 
-/// 根据请求特征选择 302 重定向或 401 拦截
+/// 根据请求特征决定拦截策略：
+/// - HTML 页面导航（GET + text/html + 无 RSC）：不拦截，透传给 Portal
+///   → Portal proxy.ts 作为 OAuth Client 生成 PKCE → 302 /authorize → 标准 OAuth 2.1 链路
+/// - API/RSC/POST 请求：返回 401
+///
+/// 透传而非 Gateway 自身 302 的原因：proxy.ts 需要在跳转 /authorize 之前生成
+/// PKCE/state/nonce 并写入 HttpOnly Cookie（Path=/api/auth/callback），这些操作
+/// 无法在 Rust 网关层完成——Cookie 必须在 Portal 域名下由 Next.js 写入。
 async fn respond_auth_failure(session: &mut Session) -> Result<bool> {
     let is_get = session
         .req_header()
@@ -22,20 +29,13 @@ async fn respond_auth_failure(session: &mut Session) -> Result<bool> {
     let is_rsc = session.get_header("RSC").is_some();
 
     if is_get && is_html && !is_rsc {
-        let path = session.req_header().uri.path();
-        let mut url = path.to_owned();
-        if let Some(q) = session.req_header().uri.query() {
-            url.push('?');
-            url.push_str(q);
-        }
-        let location = format!("/login?callbackUrl={}", urlencoding::encode(&url));
-        info!("未授权页面导航 → 302 {}", location);
-        session.respond_302(&location).await?;
-    } else {
-        info!("未授权 API 请求 → 401");
-        session.respond_401().await?;
+        // 页面导航 → 不拦截，透传给 Portal 由 proxy.ts 处理 OAuth 重定向
+        info!("未授权页面导航 → 透传 Portal（proxy.ts 将生成 PKCE 并跳转 /authorize）");
+        return Ok(false);
     }
 
+    info!("未授权 API/RSC 请求 → 401");
+    session.respond_401().await?;
     crate::metrics::inc_auth_failures();
     Ok(true)
 }
@@ -100,10 +100,25 @@ pub async fn check(
     verifier: &JwtVerifier,
     refresher: &TokenRefresher,
 ) -> Result<bool> {
-    let cookie_header = session.get_header("Cookie").and_then(|v| v.to_str().ok());
+    // 1. 获取所有 cookie 并拼接到一起 (处理 HTTP/2 多 Cookie 头)
+    let mut cookie_header_str = String::new();
+    for cookie_val in session.req_header().headers.get_all("cookie").iter() {
+        if let Ok(h) = cookie_val.to_str() {
+            if !cookie_header_str.is_empty() {
+                cookie_header_str.push_str("; ");
+            }
+            cookie_header_str.push_str(h);
+        }
+    }
+    let cookie_header = if cookie_header_str.is_empty() {
+        None
+    } else {
+        Some(cookie_header_str.as_str())
+    };
 
-    // 1. 提取 AT
+    // 提取 AT
     let token = cookie_header.and_then(|h| cookie::extract_from_header(h, cookie::ACCESS_COOKIE));
+
     let Some(token) = token else {
         return respond_auth_failure(session).await;
     };
@@ -143,10 +158,10 @@ pub async fn check(
     Ok(false)
 }
 
-// 302 vs 401 决策矩阵（respond_auth_failure 内联）：
+// 302 vs 401 vs 透传 决策矩阵（respond_auth_failure 内联）：
 //   | Method | Accept          | RSC  | 结果 |
 //   |--------|-----------------|------|------|
-//   | GET    | text/html       | 无   | 302  |
+//   | GET    | text/html       | 无   | 透传（Portal proxy.ts 生成 PKCE → /authorize） |
 //   | POST   | text/html       | 无   | 401  |
 //   | GET    | application/json| 无   | 401  |
 //   | GET    | text/html       | 有   | 401  |

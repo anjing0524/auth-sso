@@ -26,6 +26,10 @@ rust 代码遵循 https://rust-lang.github.io/api-guidelines/checklist.html
 
 优先思考，优选考虑适合的数据结构，优先获取最新相关文档
 
+## 必须
+
+架构必须足够清晰，架构污染零容忍
+
 ## 1. Think Before Coding
 
 **Don't assume. Don't hide confusion. Surface tradeoffs.**

@@ -86,6 +86,8 @@ export async function POST(request: NextRequest) {
         throw new InvalidGrantError('无法获取用户权限上下文');
       }
 
+      const audience = client.isInternal ? 'portal-client' : client_id;
+
       // 签发 Access Token（deptIds 含子树展开）
       const { token: accessToken } = await signAccessToken(
         {
@@ -94,7 +96,7 @@ export async function POST(request: NextRequest) {
           permissions: permCtx.permissions,
           deptIds,
         },
-        client_id,
+        audience,
         { clientId: client_id, scopes: authCode.scope },
       );
 

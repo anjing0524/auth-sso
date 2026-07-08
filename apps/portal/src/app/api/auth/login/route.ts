@@ -3,6 +3,11 @@
  *
  * Controller 编排：Zod 门禁 → DB 查询 → 领域纯函数校验 → bcrypt → lastLoginAt → JWT 签发 → Cookie
  *
+ * 响应分流（按 body 是否含 session_id）：
+ * - 有 session_id → JSON { success, redirect } + Set-Cookie login_session
+ *   （前端拿到 redirect 后手动导航；Set-Cookie 已由浏览器存储，导航到 authorize 时携带 login_session）
+ * - 无 session_id → JSON { success } + Set-Cookie login_session（兼容旧 fetch 链路）
+ *
  * @route POST /api/auth/login
  */
 import { NextRequest, NextResponse } from 'next/server';
@@ -25,6 +30,8 @@ const FAIL_COUNT_KEY_PREFIX = 'portal:login_fail:';
 const LoginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(1),
+  /** authorize 端点下发的不透明会话 ID；存在时走 OAuth 标准链路（接续 authorize） */
+  session_id: z.string().optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -39,7 +46,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { email, password } = parsed.data;
+    const { email, password, session_id } = parsed.data;
 
     // 2. DB 查询用户
     const rows = await db
@@ -148,7 +155,17 @@ export async function POST(request: NextRequest) {
 
     const secure = (process.env.NEXT_PUBLIC_APP_URL || '').startsWith('https://');
 
-    const response = NextResponse.json({ success: true });
+    // 响应分流：
+    // - 有 session_id → JSON { success, redirect }（前端 fetch 拿到 redirect 后手动导航，
+    //   Set-Cookie 已由浏览器存储，导航到 authorize 时会携带 login_session）
+    // - 无 session_id → JSON { success }（兼容旧链路）
+    const redirectPath = session_id
+      ? `/api/auth/oauth2/authorize?session_id=${session_id}`
+      : null;
+
+    const response = NextResponse.json(
+      redirectPath ? { success: true, redirect: redirectPath } : { success: true },
+    );
     response.cookies.set(COOKIE_NAMES.LOGIN_SESSION, session, {
       path: '/api/auth/oauth2/authorize',
       httpOnly: true,

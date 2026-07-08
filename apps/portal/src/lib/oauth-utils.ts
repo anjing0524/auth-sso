@@ -9,6 +9,7 @@ import 'server-only';
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { COOKIE_NAMES } from '@auth-sso/contracts';
+import { getAppBaseURL } from '@/lib/env';
 
 /**
  * 构建 OAuth 错误重定向响应 — 将错误信息作为 query params 拼接到 /oauth/error 页面
@@ -24,7 +25,7 @@ export function buildOAuthErrorRedirect(
   message: string,
   clientId?: string,
 ): NextResponse {
-  const errorUrl = new URL('/oauth/error', new URL(request.url).origin);
+  const errorUrl = new URL('/oauth/error', getAppBaseURL());
   errorUrl.searchParams.set('error', errorCode);
   errorUrl.searchParams.set('message', message);
   if (clientId) errorUrl.searchParams.set('client_id', clientId);
@@ -49,13 +50,11 @@ export function clearLoginSessionCookie(response: NextResponse): void {
 /**
  * 校验登录后的返回路径是否为安全的同源相对路径
  *
- * Portal 自身 SSO 流程中，OAuth `state` 参数被复用为「登录后返回路径」。
+ * 返回路径从 return_to Cookie 读取（由 proxy.ts 写入），
  * 必须确保它指向应用内部页面，防止开放重定向（如 `//evil.com`、`https://evil.com`、
- * 反斜杠等协议相对 URL 经 `new URL(state, base)` 解析后跳离本站）。
+ * 反斜杠等协议相对 URL 经 `new URL(target, base)` 解析后跳离本站）。
  *
- * CSRF 保护由 PKCE 提供（OAuth 2.1 §7.6），返回路径同源校验是额外的纵深防御。
- *
- * @param target 候选返回路径（来自 state 参数）
+ * @param target 候选返回路径（来自 return_to Cookie）
  * @returns 经过消毒的安全路径；不安全时返回 null
  */
 export function safeRedirectPath(target: string | null | undefined): string | null {
@@ -72,34 +71,22 @@ export function safeRedirectPath(target: string | null | undefined): string | nu
   }
 }
 
-/** OAuth 授权请求参数（用于重定向到登录页时保留） */
-export interface OAuthAuthorizeParams {
-  client_id: string;
-  redirect_uri: string;
-  scope: string;
-  state: string;
-  nonce?: string;
-  code_challenge: string;
-  code_challenge_method: string;
-}
-
 /**
- * 构建「重定向到登录页」响应 — Session 无效时保留所有 OAuth 参数
+ * 构建「重定向到登录页」响应 — 未登录时只传不透明的 session_id
+ *
+ * OAuth 授权参数（client_id/redirect_uri/code_challenge/state/nonce）已暂存到 Redis
+ * （key=portal:auth_req:{sessionId}），不进入 /login URL，避免敏感参数泄露到浏览器历史
+ * 和 Referer 头。
+ *
  * @param appBaseUrl - 应用基础 URL（用于构建绝对路径）
- * @param params - OAuth 授权参数
- * @returns 302 重定向到 /login 的 NextResponse
+ * @param sessionId - authorize 端点生成的不透明会话 ID
+ * @returns 302 重定向到 /login?session_id={sessionId} 的 NextResponse
  */
-export function buildLoginRedirect(
+export function buildLoginPageRedirect(
   appBaseUrl: string,
-  params: OAuthAuthorizeParams,
+  sessionId: string,
 ): NextResponse {
   const loginUrl = new URL('/login', appBaseUrl);
-  loginUrl.searchParams.set('client_id', params.client_id);
-  loginUrl.searchParams.set('redirect_uri', params.redirect_uri);
-  loginUrl.searchParams.set('scope', params.scope);
-  loginUrl.searchParams.set('state', params.state);
-  if (params.nonce) loginUrl.searchParams.set('nonce', params.nonce);
-  loginUrl.searchParams.set('code_challenge', params.code_challenge);
-  loginUrl.searchParams.set('code_challenge_method', params.code_challenge_method);
+  loginUrl.searchParams.set('session_id', sessionId);
   return NextResponse.redirect(loginUrl);
 }

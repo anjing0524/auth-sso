@@ -57,6 +57,8 @@ export const REDIS_KEY_PREFIX = {
   PKCE: 'portal:pkce:',
   /** 用户权限上下文缓存 Key 前缀 */
   USER_PERMS: 'portal:user_perms:',
+  /** 授权请求参数暂存 Key 前缀 — authorize 未登录时存 OAuth params，登录后恢复（5min TTL） */
+  AUTH_REQUEST: 'portal:auth_req:',
 } as const;
 
 // 默认支持的 Scope

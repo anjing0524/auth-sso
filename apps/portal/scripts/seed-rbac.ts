@@ -44,12 +44,12 @@ function parseResourceAction(code: string): { resource: string; action: string }
 /** Portal 菜单种子（PAGE 类型，驱动侧边栏动态渲染） */
 const PORTAL_MENUS = [
   { code: 'menu:dashboard', name: '首页', path: '/dashboard', icon: 'LayoutDashboard', sort: 0 },
-  { code: 'menu:users', name: '用户管理', path: '/dashboard/users', icon: 'Users', sort: 1 },
-  { code: 'menu:roles', name: '角色管理', path: '/dashboard/roles', icon: 'Shield', sort: 2 },
-  { code: 'menu:permissions', name: '权限管理', path: '/dashboard/permissions', icon: 'Key', sort: 3 },
-  { code: 'menu:departments', name: '部门管理', path: '/dashboard/departments', icon: 'Building2', sort: 4 },
-  { code: 'menu:clients', name: '客户端管理', path: '/dashboard/clients', icon: 'Server', sort: 5 },
-  { code: 'menu:audit-logs', name: '审计日志', path: '/dashboard/audit-logs', icon: 'FileText', sort: 6 },
+  { code: 'menu:users', name: '用户管理', path: '/users', icon: 'Users', sort: 1 },
+  { code: 'menu:roles', name: '角色管理', path: '/roles', icon: 'Shield', sort: 2 },
+  { code: 'menu:permissions', name: '权限管理', path: '/permissions', icon: 'Key', sort: 3 },
+  { code: 'menu:departments', name: '部门管理', path: '/departments', icon: 'Building2', sort: 4 },
+  { code: 'menu:clients', name: '客户端管理', path: '/clients', icon: 'Server', sort: 5 },
+  { code: 'menu:audit-logs', name: '审计日志', path: '/audit-logs', icon: 'FileText', sort: 6 },
 ];
 
 async function seedApiPermissions(): Promise<string[]> {

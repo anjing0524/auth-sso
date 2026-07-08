@@ -18,8 +18,8 @@
 ### 阶段一：统一登录与全局 Token 签发 (Authentication)
 
 1.  用户在未登录状态下访问子系统（例如财务系统：`finance.company.com`）。
-2.  **Pingora 网关**拦截请求，发现缺少有效的 Token Cookie，立刻返回 `302 Redirect`，引导用户前往 `sso.company.com/login` 统一登录页。
-3.  用户在 SSO Portal 成功验证账号密码。
+2.  **Pingora 网关**拦截请求，发现缺少有效的 Token Cookie，**直接生成 PKCE + Set-Cookie → 302 重定向到 `/api/auth/oauth2/authorize`**，启动标准 OAuth 2.1 授权码流程。
+3.  用户在 SSO Portal 的登录页面成功验证账号密码。
 4.  **SSO 服务端**执行关键操作：
     *   **组装权限**：级联查询数据库，收集该用户所属角色的全部 `permissions` 字符串和 `deptIds`。
     *   **写入 Redis**：将包含具体权限的 `UserPermissionContext` 全量压入 Redis（Key: `sso:user_perms:{userId}`，TTL 与 Token 对齐）。

@@ -45,13 +45,13 @@ export default defineConfig({
     },
   ],
   // webServer 配置：启动 Portal (含 OIDC Provider)
-  webServer: [
-    {
-      command: 'pnpm db:seed && pnpm --filter @auth-sso/portal dev',
-      url: 'http://localhost:4100',
-      name: 'Portal (含 OIDC Provider)',
-      timeout: 120_000,
-      reuseExistingServer: !process.env.CI,
-    },
-  ],
+  // webServer: [
+  //   {
+  //     command: 'pnpm db:seed && pnpm --filter @auth-sso/portal dev',
+  //     url: 'http://localhost:4100',
+  //     name: 'Portal (含 OIDC Provider)',
+  //     timeout: 120_000,
+  //     reuseExistingServer: !process.env.CI,
+  //   },
+  // ],
 });

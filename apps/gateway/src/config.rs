@@ -36,6 +36,27 @@ pub struct UpstreamConfig {
     pub addresses: String,
     pub public_paths: Vec<String>,
     pub oidc_provider: bool,
+    /// 可选的 OAuth 2.1 Client 配置。
+    /// 配置后 Gateway 将为该上游代为执行 PKCE 生成 + Token 交换（无感 SSO）。
+    /// 未配置时 Gateway 仅生成 PKCE，callback 透传给下游自行处理。
+    pub oauth: Option<OAuthConfig>,
+}
+
+/// 单个上游的 OAuth 2.1 客户端配置
+#[derive(Debug, Deserialize, Clone)]
+pub struct OAuthConfig {
+    /// OAuth 2.1 client_id（在 Portal 中注册的客户端标识符）
+    pub client_id: String,
+    /// OAuth 2.1 client_secret。存在时 Gateway 代为拦截 callback + POST /token
+    /// 换取 Token 并下发给浏览器；不存在时 callback 透传给下游。
+    pub client_secret: Option<String>,
+    /// Gateway 需拦截的 OAuth callback 路径（相对路径，如 /api/auth/callback）
+    #[serde(default = "default_callback_path")]
+    pub callback_path: String,
+}
+
+fn default_callback_path() -> String {
+    "/api/auth/callback".to_string()
 }
 
 /// 启动期路由一致性校验。
@@ -163,6 +184,7 @@ impl Default for Config {
                     "/.well-known/".into(),
                 ],
                 oidc_provider: true,
+                oauth: None,
             }],
         }
     }
@@ -357,6 +379,7 @@ mod tests {
             addresses: "127.0.0.1:4100".to_string(),
             public_paths: Vec::new(),
             oidc_provider,
+            oauth: None,
         }
     }
 

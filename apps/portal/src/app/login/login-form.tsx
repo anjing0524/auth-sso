@@ -3,7 +3,6 @@
 import { useState } from 'react';
 import { ShieldCheck, AlertCircle, Loader2, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
-import { generateCodeVerifier, generateCodeChallenge } from '@/lib/auth/pkce';
 import {
   Card,
   CardContent,
@@ -18,25 +17,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
 interface LoginFormProps {
-  redirectUrl: string;
-  clientId?: string;
-  scope?: string;
-  state?: string;
-  codeChallenge?: string;
-  codeChallengeMethod?: string;
-  responseType?: string;
-  nonce?: string;
+  /** authorize 端点下发的不透明会话 ID（OAuth 标准链路）；为空表示无 OAuth 上下文 */
+  sessionId?: string;
   initialError?: string | null;
 }
 
-export default function LoginForm({
-  redirectUrl,
-  clientId,
-  scope,
-  state,
-  nonce,
-  initialError,
-}: LoginFormProps) {
+export default function LoginForm({ sessionId, initialError }: LoginFormProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(initialError ?? null);
   const [formData, setFormData] = useState({ email: '', password: '' });
@@ -47,7 +33,10 @@ export default function LoginForm({
       case 'token_exchange_failed':
         return '登录令牌交换失败，请联系管理员。';
       case 'invalid_state':
+      case 'csrf_mismatch':
         return '登录状态校验失败，请刷新重试。';
+      case 'nonce_mismatch':
+        return '登录凭证校验失败，请刷新重试。';
       case 'session_expired':
         return '会话已过期，请重新登录。';
       case 'access_denied':
@@ -63,10 +52,13 @@ export default function LoginForm({
     setError(null);
 
     try {
+      const body: Record<string, string> = { email: formData.email, password: formData.password };
+      if (sessionId) body.session_id = sessionId;
+
       const response = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: formData.email, password: formData.password }),
+        body: JSON.stringify(body),
       });
 
       const data = await response.json();
@@ -74,31 +66,14 @@ export default function LoginForm({
         throw new Error(data.message || '登录失败，请检查账号和密码');
       }
 
-      // 登录成功 → login_session 已由服务端 Set-Cookie 自动携带
-      // → 生成 PKCE → 走授权码流程
-      const pkceVerifier = generateCodeVerifier();
-      const pkceChallenge = await generateCodeChallenge(pkceVerifier);
-
-      const authUrl = new URL('/api/auth/oauth2/authorize', window.location.origin);
-      const effectiveClientId = clientId || 'portal';
-      const effectiveScope = scope || 'openid profile email offline_access';
-
-      // code_verifier 放入 redirect_uri searchParams，authorize 302 时原样带回 callback
-      const effectiveRedirectUri = clientId
-        ? redirectUrl
-        : `${window.location.origin}/api/auth/callback?pkce_verifier=${pkceVerifier}`;
-      const effectiveState = clientId ? (state || '') : redirectUrl;
-
-      authUrl.searchParams.set('client_id', effectiveClientId);
-      authUrl.searchParams.set('redirect_uri', effectiveRedirectUri);
-      authUrl.searchParams.set('response_type', 'code');
-      authUrl.searchParams.set('scope', effectiveScope);
-      authUrl.searchParams.set('state', effectiveState);
-      authUrl.searchParams.set('code_challenge', pkceChallenge);
-      authUrl.searchParams.set('code_challenge_method', 'S256');
-      if (nonce) authUrl.searchParams.set('nonce', nonce);
-
-      window.location.href = authUrl.toString();
+      // 登录成功：login_session 已由 Set-Cookie 写入浏览器（HttpOnly，JS 不可读但已存储）
+      // - 有 redirect（OAuth 标准链路）→ 导航到 authorize，浏览器自动携带 login_session
+      // - 无 redirect → 默认跳后台（页面侧由后续导航触发完整 OAuth 流程）
+      if (data.redirect) {
+        window.location.href = data.redirect;
+      } else {
+        window.location.href = '/dashboard';
+      }
     } catch (err) {
       const error = err as Error;
       console.error('[LoginForm] 登录失败:', error);
@@ -123,11 +98,11 @@ export default function LoginForm({
         <CardHeader className="space-y-1 text-center bg-slate-50/50 dark:bg-slate-900/50 border-b py-6">
           <CardTitle className="text-2xl">企业统一身份认证</CardTitle>
           <CardDescription>
-            {clientId ? `正在授权访问系统: ${clientId}` : '使用您的企业账号登录管理门户'}
+            {sessionId ? '正在完成 OAuth 授权登录' : '使用您的企业账号登录管理门户'}
           </CardDescription>
         </CardHeader>
 
-        <form onSubmit={handleSubmit} method="POST">
+        <form onSubmit={handleSubmit}>
           <CardContent className="pt-6 space-y-4">
             {formattedError ? (
               <Alert variant="destructive" className="animate-in head-shake duration-300">

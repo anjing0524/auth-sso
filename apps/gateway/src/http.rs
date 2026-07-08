@@ -65,17 +65,15 @@ pub trait SessionExt {
     /// 提取真实客户端 IP（优先从 X-Forwarded-For 的首个 IP 提取）
     fn client_ip(&self) -> Option<&str>;
 
-    /// 发送 302 重定向响应并关闭 Keep-Alive 连接
-    ///
-    /// # 参数
-    /// * `location` - 重定向目标 URL
-    fn respond_302(
-        &mut self,
-        location: &str,
-    ) -> impl std::future::Future<Output = Result<()>> + Send;
-
     /// 发送 401 Unauthorized 响应并注入 Bearer WWW-Authenticate 头部
     fn respond_401(&mut self) -> impl std::future::Future<Output = Result<()>> + Send;
+
+    /// 发送 302 重定向响应（含 Set-Cookie 头列表）
+    fn respond_302_with_cookies(
+        &mut self,
+        location: &str,
+        cookies: &[String],
+    ) -> impl std::future::Future<Output = Result<()>> + Send;
 
     /// 发送 429 Too Many Requests 响应并注入 Retry-After 头部
     ///
@@ -94,16 +92,19 @@ impl SessionExt for Session {
             .and_then(|s| s.split(',').next().map(|s| s.trim()))
     }
 
-    async fn respond_302(&mut self, location: &str) -> Result<()> {
-        let mut header = ResponseHeader::build(302, None)?;
-        header.insert_header("Location", location)?;
-        self.set_keepalive(None);
-        self.write_response_header(Box::new(header), true).await
-    }
-
     async fn respond_401(&mut self) -> Result<()> {
         let mut header = ResponseHeader::build(401, None)?;
         header.insert_header("WWW-Authenticate", "Bearer")?;
+        self.write_response_header(Box::new(header), true).await
+    }
+
+    async fn respond_302_with_cookies(&mut self, location: &str, cookies: &[String]) -> Result<()> {
+        let mut header = ResponseHeader::build(302, None)?;
+        header.insert_header("Location", location)?;
+        for cookie in cookies {
+            header.append_header("Set-Cookie", cookie.as_str())?;
+        }
+        self.set_keepalive(None);
         self.write_response_header(Box::new(header), true).await
     }
 
