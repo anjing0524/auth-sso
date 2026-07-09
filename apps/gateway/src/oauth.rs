@@ -8,7 +8,6 @@
 
 use base64::Engine;
 use sha2::{Digest, Sha256};
-use uuid::Uuid;
 
 use crate::auth::{ACCESS_TOKEN_MAX_AGE_SEC, REFRESH_TOKEN_MAX_AGE_SEC};
 use crate::config::OAuthConfig;
@@ -43,16 +42,29 @@ const RETURN_TO_COOKIE: &str = "return_to";
 /// 临时 OAuth Cookie 的 TTL（秒）— 与 authorization_code 5min 对齐
 const OAUTH_COOKIE_MAX_AGE: u64 = 300;
 
+// ── 密码学随机生成 ──
+
+/// 从系统 CSPRNG（getrandom）取 `N` 字节随机数，base64url 无 padding 编码为字符串。
+///
+/// PKCE verifier、OAuth state、OIDC nonce 三者都依赖不可预测性，统一走此函数。
+/// `getrandom` 在 Linux 用 getrandom(2)、macOS 用 SecRandomCopyBytes、
+/// Windows 用 BCryptGenRandom，均为内核级 CSPRNG。
+fn random_token<const N: usize>() -> String {
+    let mut bytes = [0u8; N];
+    // 系统熵池枯竭属不可恢复故障，直接 panic 而非降级（降级 = 可预测 token = 安全漏洞）
+    getrandom::fill(&mut bytes).expect("系统 CSPRNG 不可用");
+    base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(bytes)
+}
+
 // ── PKCE 生成 ──
 
-/// 生成 PKCE code_verifier（43 字符随机字符串，符合 RFC 7636 §4.1）
+/// 生成 PKCE code_verifier（43 字符，符合 RFC 7636 §4.1 规定的 43–128 字符范围）。
 ///
-/// 使用 UUID v4 作为熵源（122 bit），去除连字符得到 32 字符 hex 字符串，
-/// 满足 code_verifier 的最小长度要求（43 字符的 base64url 编码）。
-/// Portal 侧 generateCodeVerifier() 使用 `crypto.getRandomValues(new Uint8Array(32))`，
-/// 44 字符 base64url。本函数与之等效：UUID v4 提供足够熵。
+/// 32 字节（256 bit）经 base64url 编码得到 43 字符——即 RFC 下限对应的熵量。
+/// 与 Portal `generateCodeVerifier()`（32 字节 `crypto.getRandomValues` → base64url）
+/// 实现等价；challenge 仅校验 SHA256 哈希，两端完全自洽。
 pub fn generate_code_verifier() -> String {
-    Uuid::new_v4().to_string().replace('-', "") // 32 chars hex
+    random_token::<32>()
 }
 
 /// 生成 PKCE S256 code_challenge
@@ -73,9 +85,9 @@ pub fn generate_pkce() -> PkcePair {
     }
 }
 
-/// 生成随机 OAuth state + nonce 值（Web Crypto 等效：crypto.randomUUID()）
-fn generate_random_state() -> String {
-    Uuid::new_v4().to_string()
+/// 生成随机 OAuth state / OIDC nonce（32 字节 → 43 字符，256 bit 不可预测）。
+fn random_state() -> String {
+    random_token::<32>()
 }
 
 // ── OAuth State ──
@@ -103,8 +115,8 @@ pub fn build_oauth_state(
     OAuthState {
         code_verifier: pkce.verifier,
         code_challenge: pkce.challenge,
-        state: generate_random_state(),
-        nonce: generate_random_state(),
+        state: random_state(),
+        nonce: random_state(),
         return_to: return_to.to_string(),
         client_id: oauth_config.client_id.clone(),
         redirect_uri,
@@ -261,9 +273,13 @@ mod tests {
     #[test]
     fn pkce_verifier_length() {
         let v = generate_code_verifier();
-        assert_eq!(v.len(), 32);
-        // 仅十六进制字符
-        assert!(v.chars().all(|c| c.is_ascii_hexdigit()));
+        // RFC 7636 §4.1：43–128 字符；32 字节 base64url = 43 字符
+        assert_eq!(v.len(), 43);
+        // base64url 字母表（含 '-','_'）
+        assert!(
+            v.chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+        );
     }
 
     #[test]

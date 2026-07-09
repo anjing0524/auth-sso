@@ -5,10 +5,7 @@ use pingora_proxy::{ProxyHttp, Session};
 use std::sync::Arc;
 use tracing::{debug, info, warn};
 
-use crate::auth::{
-    ACCESS_TOKEN_MAX_AGE_SEC, JwtVerifier, REFRESH_TOKEN_MAX_AGE_SEC, RefreshedTokens,
-    TokenRefresher,
-};
+use crate::auth::{JwtVerifier, RefreshedTokens, TokenRefresher};
 use crate::config::{OAuthConfig, Upstreams};
 use crate::cookie;
 use crate::http::{SessionExt, is_html_page_navigation, is_secure_host};
@@ -28,7 +25,7 @@ fn header_str<'s>(session: &'s Session, name: &str) -> Option<&'s str> {
 }
 
 /// 获取请求的 Host，优先从 HTTP/2 authority 或 Host 头中提取以保证包含端口号
-fn get_host<'s>(session: &'s Session) -> &'s str {
+fn get_host(session: &Session) -> &str {
     if let Some(auth) = session.req_header().uri.authority() {
         return auth.as_str();
     }
@@ -120,15 +117,6 @@ fn strip_identity_headers(req: &mut RequestHeader) {
     }
 }
 
-/// 构造一个续签后的会话 Cookie 字符串（`Set-Cookie` 头值）。
-///
-/// 统一 AT/RT 两段 `format!` 的重复构造：相同属性（`Path=/; HttpOnly; SameSite=Lax`），
-/// 仅 cookie 名、值、Max-Age 与 Secure 标记不同。
-fn build_session_cookie(name: &str, value: &str, max_age: u64, secure: bool) -> String {
-    let secure_str = if secure { "; Secure" } else { "" };
-    format!("{name}={value}; Path=/; HttpOnly; SameSite=Lax; Max-Age={max_age}{secure_str}")
-}
-
 /// 已通过验签的请求身份 — Authorization 头、用户 ID、jti 三者同生共死，
 /// 作为一个整体在请求生命周期中流转（验签成功一起注入，续签成功一起覆盖）。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -152,8 +140,6 @@ pub struct GatewayCtx {
     pub refreshed_tokens: Option<RefreshedTokens>,
     /// OAuth callback 透传状态（无 client_secret 的 upstream 回调时设置）
     pub oauth_passthrough_verifier: Option<String>,
-    /// 以 resolved upstream name 缓存的 OAuth 配置（request_filter 中一次性解析，后续复用）
-    pub resolved_oauth: Option<OAuthConfig>,
 }
 
 impl GatewayCtx {
@@ -338,12 +324,13 @@ impl Gateway {
         client_secret: &str,
         redirect_uri: &str,
     ) -> Result<TokenExchangeResult> {
-        // 从 OIDC Provider upstream 选择一个节点
-        let node = self
-            .oidc_provider_upstream
-            .iter()
-            .next()
-            .unwrap_or("127.0.0.1:4000");
+        // 从 OIDC Provider upstream 选择一个节点（启动期已保证非空，见 main.rs）
+        let node = self.oidc_provider_upstream.iter().next().ok_or_else(|| {
+            Error::explain(
+                ErrorType::HTTPStatus(502),
+                "OIDC Provider 无可用节点，无法执行 Token 交换".to_string(),
+            )
+        })?;
         let token_url = format!("http://{node}/api/auth/oauth2/token");
 
         let body = oauth::build_token_exchange_body(
@@ -353,8 +340,7 @@ impl Gateway {
             client_secret,
             redirect_uri,
         );
-        let client = reqwest::Client::new();
-        let resp = client
+        let resp = crate::http::HTTP_CLIENT
             .post(&token_url)
             .header("Content-Type", "application/json")
             .json(&body)
@@ -596,7 +582,6 @@ impl ProxyHttp for Gateway {
 
         // 4. 按路径解析当前请求所属 upstream 的 OAuth 配置
         let (upstream_name, oauth_config) = self.resolve_oauth(&path);
-        ctx.resolved_oauth = oauth_config.cloned();
 
         // 5. OAuth callback 拦截 — 仅对非 OIDC Provider 的下游 upstream 生效。
         //    Portal（oidc_provider = true）自有 callback，Gateway 不透传代劳。
@@ -720,21 +705,10 @@ impl ProxyHttp for Gateway {
         let host = get_host(session);
         let secure = is_secure_host(host);
 
-        let at_cookie = build_session_cookie(
-            cookie::ACCESS_COOKIE,
-            &new_tokens.access,
-            ACCESS_TOKEN_MAX_AGE_SEC,
-            secure,
-        );
-        let rt_cookie = build_session_cookie(
-            cookie::REFRESH_COOKIE,
-            &new_tokens.refresh,
-            REFRESH_TOKEN_MAX_AGE_SEC,
-            secure,
-        );
-
-        upstream_response.append_header("Set-Cookie", at_cookie)?;
-        upstream_response.append_header("Set-Cookie", rt_cookie)?;
+        for cookie in oauth::build_session_cookies(&new_tokens.access, &new_tokens.refresh, secure)
+        {
+            upstream_response.append_header("Set-Cookie", cookie.as_str())?;
+        }
 
         tracing::info!(
             "下行注入续签 Set-Cookie: sub={:?}",
