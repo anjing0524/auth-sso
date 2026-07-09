@@ -89,7 +89,9 @@ pub fn build_oauth_state(
     let pkce = generate_pkce();
     let redirect_uri = format!(
         "{}://{}{}",
-        if origin_host.starts_with("localhost") || origin_host.starts_with("127.") {
+        if (origin_host.starts_with("localhost") || origin_host.starts_with("127."))
+            && !origin_host.contains("18443")
+        {
             "http"
         } else {
             "https"

@@ -25,6 +25,7 @@ public_paths = [
     "/login",
     "/register",
     "/error",
+    "/oauth/error",
     "/api/auth/",
     "/oauth2/",
     "/.well-known/",

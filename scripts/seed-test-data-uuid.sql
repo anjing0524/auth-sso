@@ -64,10 +64,10 @@ VALUES
 -- ============================================================================
 INSERT INTO clients (client_id, name, client_secret, redirect_uris, scopes, status, created_at, updated_at)
 VALUES
-  ('portal',      'Auth-SSO Portal', 'portal-secret-dev',      '{"http://localhost:4100/api/auth/callback"}',                      'openid profile email offline_access', 'ACTIVE',   now(), now()),
-  ('erp-app',     'ERP 系统',        'erp-app-secret-dev',     '{"https://erp.example.com/callback"}',                             'openid profile email offline_access', 'ACTIVE',   now(), now()),
-  ('crm-app',     'CRM 系统',        'crm-app-secret-dev',     '{"https://crm.example.com/callback"}',                             'openid profile email offline_access', 'ACTIVE',   now(), now()),
-  ('disabled-app','已废弃系统',      'disabled-app-secret-dev','{"https://disabled.example.com/callback"}',                        'openid profile email offline_access', 'DISABLED', now(), now());
+  ('portal',      'Auth-SSO Portal', '9792ab9d5299bb82a4b403da1bfa99def25e8884e678dd67281da34aedf5e881',      '{"http://localhost:4100/api/auth/callback", "https://localhost:18443/api/auth/callback"}',                      'openid profile email offline_access', 'ACTIVE',   now(), now()),
+  ('erp-app',     'ERP 系统',        '14dd5a089d2bfcbb4c46e659292bc3c0c9ac1a3a351f2ec52285d03692598a52',     '{"https://erp.example.com/callback"}',                             'openid profile email offline_access', 'ACTIVE',   now(), now()),
+  ('crm-app',     'CRM 系统',        '79c030b3dc699aeb5f23b2fb17e094e6c4816174776c2cf0b18798549ae9d5c1',     '{"https://crm.example.com/callback"}',                             'openid profile email offline_access', 'ACTIVE',   now(), now()),
+  ('disabled-app','已废弃系统',      'c3337b78c13d8ce24dc1407f29c1149eeca7c244a15dc3d7c35999c3af3d7ae1','{"https://disabled.example.com/callback"}',                        'openid profile email offline_access', 'DISABLED', now(), now());
 
 -- ============================================================================
 -- 4. 角色 (roles)
@@ -253,5 +253,10 @@ INSERT INTO login_logs (id, user_id, username, event_type, ip, user_agent, locat
   ('e204b1e2-afb4-ba83-1ede-fb1e802682c9','99a9b8ac-acff-42b9-655c-ecafc798e64e',   'wujiu',   'LOGIN_SUCCESS','172.16.0.1','Chrome/120','深圳',NULL,   now()-interval'5 hours'),
   ('13605b98-3f22-b3c0-82f4-1e16438b7970','6afd0197-a580-8cb1-ac34-9d83e44e8e02', 'zhaoliu', 'LOGIN_FAILED', '192.168.1.20','Edge/120',NULL,  '密码错误',now()-interval'1 hour'),
   ('7906cd6b-23d1-4079-c31a-b35cd7004ba0','6afd0197-a580-8cb1-ac34-9d83e44e8e02', 'zhaoliu', 'LOGIN_SUCCESS','192.168.1.20','Edge/120','广州',NULL,   now()-interval'55 minutes');
+
+
+-- 绑定 API 权限的 client_id 以激活非管理员用户的 OIDC 授权准入 (v3.2 规范)
+UPDATE permissions SET client_id = 'portal' WHERE code = 'system:view_dashboard';
+UPDATE permissions SET client_id = 'portal' WHERE code = 'audit:read';
 
 COMMIT;

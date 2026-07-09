@@ -8,6 +8,7 @@ WORKDIR /app
 
 # 复制 gateway 子项目的 Cargo 配置
 COPY apps/gateway/Cargo.toml apps/gateway/Cargo.lock ./apps/gateway/
+COPY apps/gateway/benches ./apps/gateway/benches
 
 # 复制整个项目根目录的 Cargo.lock，如果存在（这里我们是 monorepo，有 apps/gateway/Cargo.lock）
 # 将工作目录切换到网关
@@ -15,7 +16,7 @@ WORKDIR /app/apps/gateway
 
 # 创建一个假的 main.rs 以构建和缓存依赖项
 RUN mkdir src && echo "fn main() {}" > src/main.rs
-RUN cargo build --release
+RUN cargo build --release --bin gateway
 RUN rm -rf src
 
 # 复制真正的源码并重新编译
