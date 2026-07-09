@@ -6,29 +6,33 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 <!-- END:nextjs-agent-rules -->
 
-# 永远保持中文对话 所有对话提问都需要中文
+## 永远保持中文对话 所有对话提问都需要中文
 
 use architecting-portal skill
-
 use spec-docs skill
-
 `@docs/spec/*` 文档提供理论支持
-
-修改文档前务必重新阅读，文档可能被多人更新
-
-rust 代码修改后必须修复cargo clippy的所有错误并执行 cargo fmt 格式化
-
-rust 代码遵循 https://rust-lang.github.io/api-guidelines/checklist.html
 
 当前 Rust 版本环境约定（Rust 1.93.0+）：对于需要多线程并发调度（Send 约束）的 Trait 异步方法，必须采用“零开销异步 Trait”最佳实践：在 Trait 定义中使用 `-> impl std::future::Future<Output = T> + Send` 进行严格的线程安全约束，并在 `impl` 实现块中直接使用 `async fn` 语法以保持代码简洁。坚决避免引入 `#[async_trait]` 带来的 Box 堆分配开销。
 
 ## 优先
 
-优先思考，优选考虑适合的数据结构，优先获取最新相关文档
+优先深度思考，
+优选考虑适合的数据结构和内存管理
+优先WebSearch获取最新相关文档
 
 ## 必须
 
 架构必须足够清晰，架构污染零容忍
+修复问题必须总结-审阅-修订同类问题，沉淀到docs/solution，记录为最佳实践
+修改文档前必须重新阅读，文档可能被多人更新
+rust 代码修改后必须修复 `cargo clippy`的所有错误并执行 `cargo fmt` 格式化
+rust 代码必须遵循 `https://rust-lang.github.io/api-guidelines/checklist.html`
+使用`roadmap`记录系统完成情况
+
+## 禁止
+
+禁止反复修改同一行代码、微调参数
+禁止只考虑兼容方案而不思考全局最佳理论方案
 
 ## 1. Think Before Coding
 
