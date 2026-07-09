@@ -12,7 +12,7 @@ interface RouteParams { params: Promise<{ id: string }>; }
 export async function GET(request: NextRequest, { params }: RouteParams) {
   return withPermission({ permissions: ['role:read'] }, async (_adminUserId, claims) => {
     const { id } = await params;
-    const role = await getRoleById(id);
+    const role = await getRoleById(id, claims.deptIds);
     if (!role) return NextResponse.json({ error: ROLE_ERRORS.ROLE_NOT_FOUND, message: '角色不存在' }, { status: 404 });
     // 数据范围：管理员只能查看其可见部门内的角色（H-ACL-002）
     // deptIds 来自 JWT claims，无需额外 DB 查询

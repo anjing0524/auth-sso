@@ -205,6 +205,47 @@ pub fn build_clear_oauth_cookies(secure: bool) -> Vec<String> {
     ]
 }
 
+// ── 重定向消毒 ──
+
+/// 验证 return_to 是否为同源相对路径（防开放重定向）。
+///
+/// 三条预检：
+/// 1. 非空、以单 `/` 开头
+/// 2. 非 `//`（协议相对 URL）或 `/\`（反斜杠绕过）
+/// 3. `reqwest::Url::parse("http://localhost" + target)` 后 host 仍为 `localhost`
+///
+/// 与 Portal `safeRedirectPath` (`oauth-utils.ts:60-72`) 等价。
+pub fn safe_redirect_path(target: &str) -> Option<String> {
+    if target.is_empty() {
+        return None;
+    }
+    // 必须以单个 `/` 开头，禁止 `//`（协议相对）和 `/\`（反斜杠绕过）
+    if !target.starts_with('/') || target.starts_with("//") || target.starts_with("/\\") {
+        return None;
+    }
+    // URL 解析同源校验
+    let base = "http://localhost";
+    let url = reqwest::Url::parse(&format!("{}{}", base, target)).ok()?;
+    if url.host_str() != Some("localhost") {
+        return None;
+    }
+    // 拼接 path + query + fragment 作为消毒结果
+    let mut result = url.path().to_string();
+    if let Some(q) = url.query() {
+        result.push('?');
+        result.push_str(q);
+    }
+    if let Some(f) = url.fragment() {
+        result.push('#');
+        result.push_str(f);
+    }
+    // 保留前导 `/`（path 方法去掉连续斜杠，但合法路径始终以 `/` 开头）
+    if result.is_empty() {
+        result.push('/');
+    }
+    Some(result)
+}
+
 // ── Cookie 提取（用于 callback 拦截）──
 
 /// 从 Cookie 头部提取 pkce_verifier 值
@@ -333,5 +374,22 @@ mod tests {
     fn extract_pkce_verifier_quoted() {
         let header = "pkce_verifier=\"abc123\"";
         assert_eq!(extract_pkce_verifier(header), Some("abc123"));
+    }
+
+    #[test]
+    fn safe_redirect_path_valid() {
+        assert_eq!(safe_redirect_path("/"), Some("/".into()));
+        assert_eq!(safe_redirect_path("/dashboard"), Some("/dashboard".into()));
+        assert_eq!(safe_redirect_path("/a/b?c=d#e"), Some("/a/b?c=d#e".into()));
+    }
+
+    #[test]
+    fn safe_redirect_path_rejects_open_redirects() {
+        assert_eq!(safe_redirect_path("//evil.com"), None);
+        assert_eq!(safe_redirect_path("/\\evil.com"), None);
+        assert_eq!(safe_redirect_path("http://evil.com"), None);
+        assert_eq!(safe_redirect_path("https://evil.com/path"), None);
+        assert_eq!(safe_redirect_path(""), None);
+        assert_eq!(safe_redirect_path("javascript:alert(1)"), None);
     }
 }

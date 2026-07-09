@@ -17,7 +17,7 @@ import { cookies } from 'next/headers';
 import { getAppBaseURL } from '@/lib/env';
 import { db, schema } from '@/infrastructure/db';
 import { eq } from 'drizzle-orm';
-import { revokeJti } from '@/lib/session/revoke';
+import { revokeJti, revokeUserAccessByUserId } from '@/lib/session/revoke';
 import { verifyAccessToken } from '@/lib/auth/token';
 import { decodeJwtPayload } from '@/lib/session/jwt';
 import { getRefreshTokenFromCookie } from '@/lib/session/cookies';
@@ -80,9 +80,16 @@ async function performRevocation(cookieStore: Awaited<ReturnType<typeof cookies>
       } catch (e) {
         console.error('[Logout API] 批量撤销 Refresh Token 失败:', e);
       }
+
+      // 5. 批量撤销所有活跃 Access Token（jti 黑名单写入 + 清除 user→jti 映射）
+      try {
+        await revokeUserAccessByUserId(userId);
+      } catch (e) {
+        console.error('[Logout API] 批量撤销 Access Token 失败:', e);
+      }
     }
 
-    // 5. DB: 查询用户名用于日志（撤销完成后查询，失败不阻断）
+    // 6. DB: 查询用户名用于日志（撤销完成后查询，失败不阻断）
     if (userId) {
       try {
         const user = await db

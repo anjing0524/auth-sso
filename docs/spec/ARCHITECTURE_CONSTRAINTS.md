@@ -95,8 +95,6 @@ export const userStatusEnum = pgEnum('user_status', USER_STATUS_VALUES);  // ✅
 export const userStatusEnum = pgEnum('user_status', ['ACTIVE', 'DISABLED']);  // 缺少 LOCKED/DELETED
 ```
 
-> **实际代码注意**：`domain/user/user.ts` 中 `toggleUserStatus` 函数第 76 行使用了字符串字面量 `user.status === 'LOCKED'` 而非导入常量 `USER_LOCKED`。虽然运行时值一致，但从严格合规角度应统一改为导入常量。该处为已知的轻微偏差，不影响功能正确性。
-
 ### R5. 领域实体为纯 TypeScript interface
 
 领域实体使用纯 `interface`，**不是** Zod Schema。Zod Schema 仅用于输入校验。

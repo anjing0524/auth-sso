@@ -29,17 +29,17 @@ describe('validateLoginCredentials', () => {
     expect(() => validateLoginCredentials(baseUser)).not.toThrow();
   });
 
-  it('LOCKED 状态 → 抛出 BusinessRuleViolationError', () => {
+  it('LOCKED 状态 → 抛出 AccountStatusError', () => {
     expect(() => validateLoginCredentials({ ...baseUser, status: 'LOCKED' as const }))
       .toThrow('账号已被锁定');
   });
 
-  it('DISABLED 状态 → 抛出 BusinessRuleViolationError', () => {
+  it('DISABLED 状态 → 抛出 AccountStatusError', () => {
     expect(() => validateLoginCredentials({ ...baseUser, status: 'DISABLED' as const }))
       .toThrow('账号已被禁用');
   });
 
-  it('DELETED 状态 → 抛出 BusinessRuleViolationError', () => {
+  it('DELETED 状态 → 抛出 AccountStatusError', () => {
     expect(() => validateLoginCredentials({ ...baseUser, status: 'DELETED' as const }))
       .toThrow('账号已注销');
   });

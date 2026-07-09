@@ -42,6 +42,22 @@ export class ForbiddenError extends DomainError {
   }
 }
 
+// ── 登录认证领域错误 ──
+
+/** 登录凭据无效（用户名/邮箱不存在或密码错误，统一返回以防用户枚举） */
+export class InvalidCredentialsError extends DomainError {
+  constructor(message: string = '邮箱或密码错误') {
+    super(AUTH_ERRORS.INVALID_CREDENTIALS, message);
+  }
+}
+
+/** 账号状态异常（禁用/锁定/已删除），按具体 code 区分 */
+export class AccountStatusError extends DomainError {
+  constructor(code: string, message: string) {
+    super(code, message);
+  }
+}
+
 // ── OAuth 2.1 领域错误 ──
 
 /** OAuth Client 无效（不存在 / 已停用 / 密钥不匹配） */

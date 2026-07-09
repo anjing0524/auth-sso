@@ -101,7 +101,7 @@ export const deleteClientAction = withAuth(
 
 /** 重新生成 Client Secret */
 export const rotateClientSecretAction = withAuth(
-  { permissions: ['client:update'], audit: 'CLIENT_SECRET_REGENERATE' },
+  { permissions: ['client:rotate_secret'], audit: 'CLIENT_SECRET_REGENERATE' },
   async (_ctx: AuthContext, clientIdStr: string): Promise<ApiResponse<{ clientSecret: string }>> => {
     const row = await db.query.clients.findFirst({
       where: eq(schema.clients.clientId, clientIdStr),

@@ -302,7 +302,7 @@ export async function signAccessToken(
  */
 export async function verifyAccessToken(
   token: string,
-  audience: string = 'portal-client',
+  audience: string | null = 'portal-client',
 ): Promise<PortalJwtClaims | null> {
   try {
     // 1. 不解码验签，仅提取 header.kid 定位公钥（与 Gateway 的 decode_header + get_key 对齐）
@@ -320,14 +320,16 @@ export async function verifyAccessToken(
       return null;
     }
 
-    // 3. ES256 验签 + issuer + audience 校验
-    //    audience 校验防止跨 client token 混用（H-AUTH-005）
+    // 3. ES256 验签 + issuer + audience 校验（audience 为 null 时跳过，用于 UserInfo 等不区分 client 的场景）
     const publicKey = await importJWK(signingKey.publicJwk, 'ES256') as CryptoKey;
-    const { payload } = await jwtVerify<PortalJwtClaims>(token, publicKey, {
+    const verifyOpts: { issuer: string; algorithms: string[]; audience?: string } = {
       issuer: getIssuer(),
-      audience,
       algorithms: ['ES256'],
-    });
+    };
+    if (audience !== null) {
+      verifyOpts.audience = audience;
+    }
+    const { payload } = await jwtVerify<PortalJwtClaims>(token, publicKey, verifyOpts);
 
     // 4. jti 黑名单检查
     if (payload.jti && (await isJtiRevoked(payload.jti))) {

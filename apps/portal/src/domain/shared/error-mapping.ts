@@ -16,6 +16,8 @@ import {
   PKCEVerificationError,
   InvalidRedirectUriError,
   ForbiddenError,
+  InvalidCredentialsError,
+  AccountStatusError,
 } from './errors';
 import { COMMON_ERRORS } from '@auth-sso/contracts';
 
@@ -57,6 +59,14 @@ export function mapDomainError(err: unknown): ErrorMapping {
     return { status: 404, error: err.code, message: err.message };
   }
   if (err instanceof ForbiddenError) {
+    return { status: 403, error: err.code, message: err.message };
+  }
+  // 登录凭据无效 → 401（统一防用户枚举）
+  if (err instanceof InvalidCredentialsError) {
+    return { status: 401, error: err.code, message: err.message };
+  }
+  // 账号状态异常（禁用/锁定/已删除）→ 403
+  if (err instanceof AccountStatusError) {
     return { status: 403, error: err.code, message: err.message };
   }
   if (err instanceof DuplicateEntityError) {

@@ -1,8 +1,6 @@
 CREATE TYPE "public"."audit_operation" AS ENUM('USER_CREATE', 'USER_UPDATE', 'USER_DELETE', 'USER_ROLE_ASSIGN', 'ROLE_CREATE', 'ROLE_UPDATE', 'ROLE_DELETE', 'ROLE_PERMISSION_ASSIGN', 'PERMISSION_CREATE', 'PERMISSION_UPDATE', 'PERMISSION_DELETE', 'DEPARTMENT_CREATE', 'DEPARTMENT_UPDATE', 'DEPARTMENT_DELETE', 'CLIENT_CREATE', 'CLIENT_UPDATE', 'CLIENT_DELETE', 'CLIENT_SECRET_REGENERATE', 'TOKEN_REVOKE');--> statement-breakpoint
 CREATE TYPE "public"."code_challenge_method" AS ENUM('S256');--> statement-breakpoint
-CREATE TYPE "public"."data_scope_type" AS ENUM('ALL', 'DEPT', 'DEPT_AND_SUB', 'SELF', 'CUSTOM');--> statement-breakpoint
 CREATE TYPE "public"."entity_status" AS ENUM('ACTIVE', 'DISABLED');--> statement-breakpoint
-CREATE TYPE "public"."jwk_algorithm" AS ENUM('ES256');--> statement-breakpoint
 CREATE TYPE "public"."login_event" AS ENUM('LOGIN_SUCCESS', 'LOGIN_FAILED', 'LOGOUT', 'TOKEN_REFRESH', 'TOKEN_REFRESH_FAILED');--> statement-breakpoint
 CREATE TYPE "public"."permission_type" AS ENUM('DIRECTORY', 'PAGE', 'API', 'DATA');--> statement-breakpoint
 CREATE TYPE "public"."user_status" AS ENUM('ACTIVE', 'DISABLED', 'LOCKED', 'DELETED');--> statement-breakpoint
@@ -46,6 +44,7 @@ CREATE TABLE "clients" (
 	"access_token_ttl" integer DEFAULT 3600,
 	"refresh_token_ttl" integer DEFAULT 604800,
 	"status" "entity_status" DEFAULT 'ACTIVE' NOT NULL,
+	"is_internal" boolean DEFAULT false NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
@@ -125,18 +124,6 @@ CREATE TABLE "permissions" (
       OR (type IN ('API','DATA') AND resource IS NOT NULL AND action IS NOT NULL))
 );
 --> statement-breakpoint
-CREATE TABLE "role_clients" (
-	"role_id" uuid NOT NULL,
-	"client_id" varchar(50) NOT NULL,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL
-);
---> statement-breakpoint
-CREATE TABLE "role_data_scopes" (
-	"role_id" uuid NOT NULL,
-	"dept_id" uuid NOT NULL,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL
-);
---> statement-breakpoint
 CREATE TABLE "role_permissions" (
 	"role_id" uuid NOT NULL,
 	"permission_id" uuid NOT NULL,
@@ -148,7 +135,7 @@ CREATE TABLE "roles" (
 	"name" varchar(100) NOT NULL,
 	"code" varchar(50) NOT NULL,
 	"description" text,
-	"data_scope_type" "data_scope_type" DEFAULT 'SELF' NOT NULL,
+	"dept_id" uuid NOT NULL,
 	"is_system" boolean DEFAULT false NOT NULL,
 	"status" "entity_status" DEFAULT 'ACTIVE' NOT NULL,
 	"sort" smallint DEFAULT 0 NOT NULL,
@@ -168,6 +155,21 @@ CREATE TABLE "departments" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "departments_code_unique" UNIQUE("code")
+);
+--> statement-breakpoint
+CREATE TABLE "access_logs" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"user_id" uuid,
+	"username" varchar(50),
+	"method" varchar(10) NOT NULL,
+	"path" varchar(500) NOT NULL,
+	"resource_type" varchar(50),
+	"resource_id" varchar(64),
+	"ip" "inet",
+	"user_agent" varchar(500),
+	"status" smallint,
+	"duration" integer,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "audit_logs" (
@@ -208,11 +210,8 @@ ALTER TABLE "user_roles" ADD CONSTRAINT "user_roles_user_id_users_id_fk" FOREIGN
 ALTER TABLE "user_roles" ADD CONSTRAINT "user_roles_role_id_roles_id_fk" FOREIGN KEY ("role_id") REFERENCES "public"."roles"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "users" ADD CONSTRAINT "users_dept_id_departments_id_fk" FOREIGN KEY ("dept_id") REFERENCES "public"."departments"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "permissions" ADD CONSTRAINT "permissions_client_id_clients_client_id_fk" FOREIGN KEY ("client_id") REFERENCES "public"."clients"("client_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "role_clients" ADD CONSTRAINT "role_clients_role_id_roles_id_fk" FOREIGN KEY ("role_id") REFERENCES "public"."roles"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "role_clients" ADD CONSTRAINT "role_clients_client_id_clients_client_id_fk" FOREIGN KEY ("client_id") REFERENCES "public"."clients"("client_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "role_data_scopes" ADD CONSTRAINT "role_data_scopes_role_id_roles_id_fk" FOREIGN KEY ("role_id") REFERENCES "public"."roles"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "role_data_scopes" ADD CONSTRAINT "role_data_scopes_dept_id_departments_id_fk" FOREIGN KEY ("dept_id") REFERENCES "public"."departments"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "role_permissions" ADD CONSTRAINT "role_permissions_role_id_roles_id_fk" FOREIGN KEY ("role_id") REFERENCES "public"."roles"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "roles" ADD CONSTRAINT "roles_dept_id_departments_id_fk" FOREIGN KEY ("dept_id") REFERENCES "public"."departments"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "idx_access_tokens_client" ON "access_tokens" USING btree ("client_id");--> statement-breakpoint
 CREATE INDEX "idx_access_tokens_user" ON "access_tokens" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX "idx_refresh_tokens_client" ON "refresh_tokens" USING btree ("client_id");--> statement-breakpoint
@@ -225,14 +224,13 @@ CREATE INDEX "idx_users_deleted_at" ON "users" USING btree ("deleted_at");--> st
 CREATE INDEX "idx_permissions_client" ON "permissions" USING btree ("client_id");--> statement-breakpoint
 CREATE INDEX "idx_permissions_parent" ON "permissions" USING btree ("parent_id");--> statement-breakpoint
 CREATE INDEX "idx_permissions_type" ON "permissions" USING btree ("type");--> statement-breakpoint
-CREATE UNIQUE INDEX "ux_role_clients_pk" ON "role_clients" USING btree ("role_id","client_id");--> statement-breakpoint
-CREATE INDEX "idx_role_clients_client" ON "role_clients" USING btree ("client_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "ux_role_data_scopes_pk" ON "role_data_scopes" USING btree ("role_id","dept_id");--> statement-breakpoint
-CREATE INDEX "idx_role_data_scopes_dept" ON "role_data_scopes" USING btree ("dept_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "ux_role_permissions_pk" ON "role_permissions" USING btree ("role_id","permission_id");--> statement-breakpoint
 CREATE INDEX "idx_role_permissions_permission" ON "role_permissions" USING btree ("permission_id");--> statement-breakpoint
 CREATE INDEX "idx_departments_parent" ON "departments" USING btree ("parent_id");--> statement-breakpoint
 CREATE INDEX "idx_departments_ancestors" ON "departments" USING btree ("ancestors");--> statement-breakpoint
+CREATE INDEX "idx_access_logs_user" ON "access_logs" USING btree ("user_id");--> statement-breakpoint
+CREATE INDEX "idx_access_logs_created" ON "access_logs" USING btree ("created_at");--> statement-breakpoint
+CREATE INDEX "idx_access_logs_resource" ON "access_logs" USING btree ("resource_type","resource_id");--> statement-breakpoint
 CREATE INDEX "idx_audit_logs_user" ON "audit_logs" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX "idx_audit_logs_created" ON "audit_logs" USING btree ("created_at");--> statement-breakpoint
 CREATE INDEX "idx_audit_logs_operation" ON "audit_logs" USING btree ("operation");--> statement-breakpoint

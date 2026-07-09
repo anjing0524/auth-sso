@@ -18,7 +18,7 @@ export async function POST(
   request: NextRequest,
   { params }: RouteParams,
 ) {
-  return withPermission({ permissions: ['user:update'] }, async (adminUserId, claims) => {
+  return withPermission({ permissions: ['user:reset_password'] }, async (adminUserId, claims) => {
     const { id } = await params;
     const body = await request.json();
     const newPassword = body.password as string;

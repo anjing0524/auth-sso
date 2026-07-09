@@ -30,11 +30,12 @@ import {
   UserIdentityInputSchema,
   type CreateUserInput,
 } from '@/domain/user/types';
-import { EntityNotFoundError, DuplicateEntityError } from '@/domain/shared/errors';
+import { EntityNotFoundError, DuplicateEntityError, ForbiddenError } from '@/domain/shared/errors';
 import { generateUUID } from '@/lib/crypto';
 import { hashPassword } from '@/domain/auth/password';
 import { refreshUserPermissionCache } from '@/lib/permissions';
 import { revokeUserAccessByUserId } from '@/lib/session/revoke';
+import { canAccessDept } from '@/lib/auth';
 import { USER_ACTIVE } from '@auth-sso/contracts';
 import type { ApiResponse } from '@auth-sso/contracts';
 
@@ -48,7 +49,7 @@ import type { ApiResponse } from '@auth-sso/contracts';
 export const createUserAction = withAuth(
   { permissions: ['user:create'], audit: 'USER_CREATE' },
   async (
-    _ctx: AuthContext,
+    ctx: AuthContext,
     firstArg: CreateUserInput | null | undefined,
     secondArg?: FormData,
   ): Promise<ApiResponse<{ id: string }>> => {
@@ -57,6 +58,11 @@ export const createUserAction = withAuth(
     const parsed = CreateUserInputSchema.safeParse(rawInput);
     if (!parsed.success) {
       return { success: false, error: 'VALIDATION_ERROR', message: parsed.error.issues[0].message };
+    }
+
+    // 数据范围校验：目标部门必须在操作者可访问范围内（R7 / H-ACL-002）
+    if (parsed.data.deptId && !canAccessDept(ctx.claims.deptIds, parsed.data.deptId)) {
+      throw new ForbiddenError('无权在指定部门下创建用户');
     }
 
     // 密码哈希在事务外完成，避免长时间占用 DB 连接（bcrypt 通常 50-200ms）
@@ -89,7 +95,7 @@ export const createUserAction = withAuth(
  */
 export const toggleUserStatusAction = withAuth(
   { permissions: ['user:update'], audit: 'USER_UPDATE' },
-  async (_ctx: AuthContext, userIdStr: string): Promise<ApiResponse<{ status: string }>> => {
+  async (ctx: AuthContext, userIdStr: string): Promise<ApiResponse<{ status: string }>> => {
     const parsed = UserIdentityInputSchema.safeParse({ id: userIdStr });
     if (!parsed.success) {
       return { success: false, error: 'VALIDATION_ERROR', message: parsed.error.issues[0].message };
@@ -99,6 +105,8 @@ export const toggleUserStatusAction = withAuth(
     const updated = await db.transaction(async (tx) => {
       const row = await tx.query.users.findFirst({ where: eq(schema.users.id, parsed.data.id) });
       if (!row) throw new EntityNotFoundError('User', parsed.data.id);
+      // 数据范围校验：目标用户部门必须在操作者可访问范围内（R7 / H-ACL-002）
+      if (!canAccessDept(ctx.claims.deptIds, row.deptId)) throw new ForbiddenError('无权操作该部门的用户');
 
       const target = toggleUserStatus(toDomainUser(row));
       await tx.update(schema.users)
@@ -127,7 +135,7 @@ export const toggleUserStatusAction = withAuth(
  */
 export const unlockUserAction = withAuth(
   { permissions: ['user:update'], audit: 'USER_UPDATE' },
-  async (_ctx: AuthContext, userIdStr: string): Promise<ApiResponse<{ status: string }>> => {
+  async (ctx: AuthContext, userIdStr: string): Promise<ApiResponse<{ status: string }>> => {
     const parsed = UserIdentityInputSchema.safeParse({ id: userIdStr });
     if (!parsed.success) {
       return { success: false, error: 'VALIDATION_ERROR', message: parsed.error.issues[0].message };
@@ -136,6 +144,7 @@ export const unlockUserAction = withAuth(
     const updated = await db.transaction(async (tx) => {
       const row = await tx.query.users.findFirst({ where: eq(schema.users.id, parsed.data.id) });
       if (!row) throw new EntityNotFoundError('User', parsed.data.id);
+      if (!canAccessDept(ctx.claims.deptIds, row.deptId)) throw new ForbiddenError('无权操作该部门的用户');
 
       const target = unlockUser(toDomainUser(row));
       await tx.update(schema.users)
@@ -160,7 +169,7 @@ export const unlockUserAction = withAuth(
 export const updateUserAction = withAuth(
   { permissions: ['user:update'], audit: 'USER_UPDATE' },
   async (
-    _ctx: AuthContext,
+    ctx: AuthContext,
     userIdStr: string,
     input: Record<string, unknown>,
   ): Promise<ApiResponse<{ id: string }>> => {
@@ -173,6 +182,11 @@ export const updateUserAction = withAuth(
     await db.transaction(async (tx) => {
       const row = await tx.query.users.findFirst({ where: eq(schema.users.id, parsed.data.id) });
       if (!row) throw new EntityNotFoundError('User', parsed.data.id);
+      // 校验目标用户当前部门 + 拟变更目标部门均在操作者可访问范围内
+      if (!canAccessDept(ctx.claims.deptIds, row.deptId)) throw new ForbiddenError('无权操作该部门的用户');
+      if (parsed.data.deptId && !canAccessDept(ctx.claims.deptIds, parsed.data.deptId)) {
+        throw new ForbiddenError('无权将用户迁移至该部门');
+      }
 
       const updated = applyUserUpdate(toDomainUser(row), {
         name: parsed.data.name, email: parsed.data.email,
@@ -195,7 +209,7 @@ export const updateUserAction = withAuth(
  */
 export const deleteUserAction = withAuth(
   { permissions: ['user:delete'], audit: 'USER_DELETE' },
-  async (_ctx: AuthContext, userIdStr: string): Promise<ApiResponse<{ id: string }>> => {
+  async (ctx: AuthContext, userIdStr: string): Promise<ApiResponse<{ id: string }>> => {
     const parsed = UserIdentityInputSchema.safeParse({ id: userIdStr });
     if (!parsed.success) {
       return { success: false, error: 'VALIDATION_ERROR', message: parsed.error.issues[0].message };
@@ -205,6 +219,7 @@ export const deleteUserAction = withAuth(
     await db.transaction(async (tx) => {
       const row = await tx.query.users.findFirst({ where: eq(schema.users.id, parsed.data.id) });
       if (!row) throw new EntityNotFoundError('User', parsed.data.id);
+      if (!canAccessDept(ctx.claims.deptIds, row.deptId)) throw new ForbiddenError('无权操作该部门的用户');
 
       const deleted = deleteUser(toDomainUser(row));
       await tx.update(schema.users)
@@ -230,8 +245,8 @@ export const deleteUserAction = withAuth(
  * 管理员为指定用户重置密码，重置后该用户所有活跃会话立即失效。
  */
 export const resetPasswordAction = withAuth(
-  { permissions: ['user:update'], audit: 'TOKEN_REVOKE' },
-  async (_ctx: AuthContext, userIdStr: string, newPassword: string): Promise<ApiResponse<{ id: string }>> => {
+  { permissions: ['user:reset_password'], audit: 'TOKEN_REVOKE' },
+  async (ctx: AuthContext, userIdStr: string, newPassword: string): Promise<ApiResponse<{ id: string }>> => {
     const parsed = UserIdentityInputSchema.safeParse({ id: userIdStr });
     if (!parsed.success) {
       return { success: false, error: 'VALIDATION_ERROR', message: parsed.error.issues[0].message };
@@ -248,6 +263,7 @@ export const resetPasswordAction = withAuth(
     await db.transaction(async (tx) => {
       const row = await tx.query.users.findFirst({ where: eq(schema.users.id, parsed.data.id) });
       if (!row) throw new EntityNotFoundError('User', parsed.data.id);
+      if (!canAccessDept(ctx.claims.deptIds, row.deptId)) throw new ForbiddenError('无权操作该部门的用户');
 
       await tx.update(schema.users)
         .set({ passwordHash })

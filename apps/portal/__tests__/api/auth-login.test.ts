@@ -151,30 +151,30 @@ describe('POST /api/auth/login', () => {
     expect(json.success).toBe(false);
   });
 
-  it('用户不存在时返回域错误', async () => {
+  it('用户不存在时返回 401 INVALID_CREDENTIALS（防用户枚举）', async () => {
     setDbRows([]);
     mockValidateLoginCredentials.mockImplementation(() => {});
     mockMapDomainError.mockReturnValueOnce({
-      status: 404,
-      error: 'ENTITY_NOT_FOUND',
-      message: 'User not found',
+      status: 401,
+      error: 'AUTH_SSO_2002',
+      message: '邮箱或密码错误',
     });
 
     const req = buildLoginRequest({ email: 'notfound@example.com', password: 'test123' });
     const res = await POST(req);
     const json = await res.json();
 
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(401);
     expect(json.success).toBe(false);
   });
 
-  it('密码错误时返回 401', async () => {
+  it('密码错误时返回 401 INVALID_CREDENTIALS', async () => {
     setDbRows([{ id: 'u1', email: 'user@example.com', passwordHash: '$2b$...', status: 'ACTIVE' }]);
     mockValidateLoginCredentials.mockImplementation(() => {});
     mockVerifyPassword.mockResolvedValueOnce(false);
     mockMapDomainError.mockReturnValueOnce({
       status: 401,
-      error: 'BUSINESS_RULE_VIOLATION',
+      error: 'AUTH_SSO_2002',
       message: '邮箱或密码错误',
     });
 

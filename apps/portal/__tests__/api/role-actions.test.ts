@@ -17,15 +17,15 @@ const mocks = vi.hoisted(() => {
   const queryProxy = new Proxy({} as any, { get() { return { findFirst: () => single() }; } });
   function makeTx() { return new Proxy({} as any, { get(_t, p: string) { if (p === 'select') return () => list(); if (p === 'insert') return insert; if (p === 'update') return update; if (p === 'delete') return del; if (p === 'query') return queryProxy; return undefined; } }); }
   const mockDb = new Proxy({} as any, { get(_t, p: string) { if (p === 'select') return () => list(); if (p === 'insert') return insert; if (p === 'update') return update; if (p === 'delete') return del; if (p === 'transaction') return (h: Function) => h(makeTx()); if (p === 'query') return queryProxy; return undefined; } });
-  return { mockDb, setRow(r: any) { _row = r; _rows = r ? [r] : []; }, setRows(r: any[]) { _rows = r; _row = r[0]; }, reset() { _row = undefined; _rows = []; } };
+  return { mockDb, setRow(r: any) { _row = r; _rows = r ? [r] : []; }, setRows(r: any[]) { _rows = r; _row = r[0]; }, setDeptRow(r: any) { _row = r; }, reset() { _row = undefined; _rows = []; } };
 });
 
-vi.mock('@/infrastructure/db', () => ({ db: mocks.mockDb, schema: { roles: {}, userRoles: {}, rolePermissions: {} } }));
+vi.mock('@/infrastructure/db', () => ({ db: mocks.mockDb, schema: { roles: {}, userRoles: {}, rolePermissions: {}, departments: { id: {}, status: {} } } }));
 vi.mock('@/lib/auth', () => ({
   resolveIdentity: vi.fn(async () => ({ claims: { deptIds: ['dept-1'] } })),
   logServerDataRead: vi.fn(async () => {}),
   canAccessDept: vi.fn(() => true),
- withAuth: (_o: any, h: Function) => async (...a: any[]) => h({ userId: 'admin-1', roles: [], permissions: [] }, ...a) }));
+ withAuth: (_o: any, h: Function) => async (...a: any[]) => h({ userId: 'admin-1', claims: { deptIds: ['dept-1'], permissions: [], roles: [] } }, ...a) }));
 vi.mock('@/lib/crypto', () => ({ generateUUID: () => 'aaaa-bbbb-cccc-dddd', generateId: (len = 20) => 'a'.repeat(len) }));
 vi.mock('@/lib/permissions', () => ({ refreshUsersPermissionCache: vi.fn() }));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn(), updateTag: vi.fn() }));
@@ -37,7 +37,7 @@ const roleRow = { id: 'role-1', code: 'TEST_ROLE', name: 'Test', isSystem: false
 
 describe('Role Server Actions', () => {
   beforeEach(() => { vi.clearAllMocks(); mocks.reset(); });
-  it('createRole: 有效输入 → success', async () => { const r: any = await createRoleAction({ name: 'Test', code: 'TEST', sort: 1, deptId: 'a1b2c3d4-e5f6-4789-abcd-ef0123456789' }); expect(r.success).toBe(true); });
+  it('createRole: 有效输入 → success', async () => { mocks.setDeptRow({ id: 'a1b2c3d4-e5f6-4789-abcd-ef0123456789', status: 'ACTIVE' }); const r: any = await createRoleAction({ name: 'Test', code: 'TEST', sort: 1, deptId: 'a1b2c3d4-e5f6-4789-abcd-ef0123456789' }); expect(r.success).toBe(true); });
   it('createRole: 缺 code → VALIDATION_ERROR', async () => { const r: any = await createRoleAction({ name: 'X', code: '', sort: 1, deptId: 'a1b2c3d4-e5f6-4789-abcd-ef0123456789' } as any); expect(r.success).toBe(false); });
   it('updateRole: 存在 → success', async () => { mocks.setRow(roleRow); const r: any = await updateRoleAction('role-1', { name: 'Updated' } as any); expect(r.success).toBe(true); });
   it('updateRole: 不存在 → throw', async () => { mocks.reset(); mocks.setRows([{ id: "dept-1" }]); await expect(updateRoleAction('bad', { name: 'X' } as any)).rejects.toThrow(); });

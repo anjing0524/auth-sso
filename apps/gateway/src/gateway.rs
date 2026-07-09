@@ -420,8 +420,10 @@ impl Gateway {
         // ③ nonce
         let cookie_nonce = oauth::extract_oauth_nonce(ck);
 
-        // ④ return_to
-        let return_to = oauth::extract_return_to(ck).unwrap_or("/");
+        // ④ return_to（同源消毒，防开放重定向）
+        let return_to = oauth::extract_return_to(ck)
+            .and_then(oauth::safe_redirect_path)
+            .unwrap_or_else(|| "/".to_string());
 
         // ⑤ POST /token（code_verifier 为独立 body 字段）
         let Some(ref secret) = oauth.client_secret else {
@@ -477,7 +479,7 @@ impl Gateway {
             upstream_name, return_to
         );
         session
-            .respond_302_with_cookies(return_to, &[session_cookies, clear_cookies].concat())
+            .respond_302_with_cookies(&return_to, &[session_cookies, clear_cookies].concat())
             .await?;
         Ok(true)
     }

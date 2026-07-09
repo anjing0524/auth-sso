@@ -24,7 +24,7 @@ vi.mock('@/lib/auth', () => ({
   resolveIdentity: vi.fn(async () => ({ claims: { deptIds: ['dept-1'] } })),
   logServerDataRead: vi.fn(async () => {}),
   canAccessDept: vi.fn(() => true),
- withAuth: (_o: any, h: Function) => async (...a: any[]) => h({ userId: 'admin-1' }, ...a) }));
+ withAuth: (_o: any, h: Function) => async (...a: any[]) => h({ userId: 'admin-1', claims: { deptIds: ['dept-1'], permissions: [], roles: [] } }, ...a) }));
 vi.mock('@/lib/crypto', () => ({ generateUUID: () => 'aaaa-bbbb-cccc-dddd', generateId: () => 'a'.repeat(20) }));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn(), updateTag: vi.fn() }));
 

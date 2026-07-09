@@ -8,14 +8,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { withPermission } from '@/lib/auth';
 import { getRolePermissions } from '@/app/(dashboard)/roles/data';
 
-
 interface RouteParams { params: Promise<{ id: string }>; }
 
-/** GET /api/roles/[id]/permissions — 委托 data.ts */
+/** GET /api/roles/[id]/permissions — 委托 data.ts，deptIds 由 claims 传入做数据范围校验 */
 export async function GET(request: NextRequest, { params }: RouteParams) {
-  return withPermission({ permissions: ['role:read'] }, async () => {
+  return withPermission({ permissions: ['role:read'] }, async (_userId, claims) => {
     const { id } = await params;
-    const permissions = await getRolePermissions(id);
+    const permissions = await getRolePermissions(id, claims.deptIds);
     return NextResponse.json({ data: permissions });
   });
 }

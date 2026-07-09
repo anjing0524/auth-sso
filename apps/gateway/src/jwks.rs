@@ -217,18 +217,14 @@ impl JwksCache {
             issuer, jwks_uri, signing_algs_val
         );
 
-        // 预解析 validation（不写缓存，仅返回）：以基线配置起步，追加 issuer 与算法
+        // 预解析 validation（不写缓存，仅返回）：基线配置 + issuer + ES256 硬锁
         let mut validation = base_validation();
         if let Some(iss) = issuer {
             validation.set_issuer(&[iss]);
         }
-        if let Some(arr) = signing_algs_val.and_then(|v| v.as_array()) {
-            validation.algorithms = arr
-                .iter()
-                .filter_map(|v| v.as_str())
-                .filter_map(Self::parse_algorithm)
-                .collect();
-        }
+        // 硬锁 ES256 非对称签名，不从 OIDC Discovery 动态填充算法列表
+        // （防 alg 混淆攻击：若 discovery 被篡改声明 HS256 可降级为对称签名）
+        validation.algorithms = vec![jsonwebtoken::Algorithm::ES256];
 
         // 预解析 refresh_endpoint 路径（不写缓存，仅返回原始路径）
         let refresh_endpoint = metadata_val

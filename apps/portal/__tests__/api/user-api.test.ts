@@ -141,7 +141,7 @@ vi.mock('@/lib/auth', () => ({
       return { success: false, error: 'FORBIDDEN', message: check.error || '权限不足' };
     }
     try {
-      return await fn({ userId: check.userId }, ...args);
+      return await fn({ userId: check.userId, claims: { deptIds: ['dept-1'], permissions: [], roles: [] } }, ...args);
     } catch (err: unknown) {
       const e = err as Error & { code?: string };
       return { success: false, error: e.code || 'INTERNAL_ERROR', message: e.message || '服务器错误' };

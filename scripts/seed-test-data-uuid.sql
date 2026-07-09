@@ -62,12 +62,12 @@ VALUES
 -- ============================================================================
 -- 3. OAuth 客户端 (clients) — client_id 为 PK
 -- ============================================================================
-INSERT INTO clients (client_id, name, client_secret, redirect_uris, scopes, status, created_at, updated_at)
+INSERT INTO clients (client_id, name, client_secret, redirect_uris, scopes, status, is_internal, created_at, updated_at)
 VALUES
-  ('portal',      'Auth-SSO Portal', '9792ab9d5299bb82a4b403da1bfa99def25e8884e678dd67281da34aedf5e881',      '{"http://localhost:4100/api/auth/callback", "https://localhost:18443/api/auth/callback"}',                      'openid profile email offline_access', 'ACTIVE',   now(), now()),
-  ('erp-app',     'ERP 系统',        '14dd5a089d2bfcbb4c46e659292bc3c0c9ac1a3a351f2ec52285d03692598a52',     '{"https://erp.example.com/callback"}',                             'openid profile email offline_access', 'ACTIVE',   now(), now()),
-  ('crm-app',     'CRM 系统',        '79c030b3dc699aeb5f23b2fb17e094e6c4816174776c2cf0b18798549ae9d5c1',     '{"https://crm.example.com/callback"}',                             'openid profile email offline_access', 'ACTIVE',   now(), now()),
-  ('disabled-app','已废弃系统',      'c3337b78c13d8ce24dc1407f29c1149eeca7c244a15dc3d7c35999c3af3d7ae1','{"https://disabled.example.com/callback"}',                        'openid profile email offline_access', 'DISABLED', now(), now());
+  ('portal',      'Auth-SSO Portal', '9792ab9d5299bb82a4b403da1bfa99def25e8884e678dd67281da34aedf5e881',      '{"http://localhost:4100/api/auth/callback", "https://localhost:18443/api/auth/callback"}',                      'openid profile email offline_access', 'ACTIVE',   true,  now(), now()),
+  ('erp-app',     'ERP 系统',        '14dd5a089d2bfcbb4c46e659292bc3c0c9ac1a3a351f2ec52285d03692598a52',     '{"https://erp.example.com/callback"}',                             'openid profile email offline_access', 'ACTIVE',   false, now(), now()),
+  ('crm-app',     'CRM 系统',        '79c030b3dc699aeb5f23b2fb17e094e6c4816174776c2cf0b18798549ae9d5c1',     '{"https://crm.example.com/callback"}',                             'openid profile email offline_access', 'ACTIVE',   false, now(), now()),
+  ('disabled-app','已废弃系统',      'c3337b78c13d8ce24dc1407f29c1149eeca7c244a15dc3d7c35999c3af3d7ae1','{"https://disabled.example.com/callback"}',                        'openid profile email offline_access', 'DISABLED', false, now(), now());
 
 -- ============================================================================
 -- 4. 角色 (roles)
@@ -117,38 +117,43 @@ INSERT INTO permissions (id, code, name, type, resource, action, parent_id, sort
   ('8bbde3a0-713c-f0e4-bc07-1df4f377d41b',        'user:manage',        '用户管理',  'API', 'user', 'manage',        '5f18c278-5d3e-6ded-2785-ca26b7637fba', 4, 'ACTIVE', now(), now()),
   ('28bd03e3-6c7f-fd22-e214-f0a2728a89c7','user:reset_password','重置密码',  'API', 'user', 'reset_password','5f18c278-5d3e-6ded-2785-ca26b7637fba', 5, 'ACTIVE', now(), now()),
   ('089ea296-7349-db24-6526-2b21d9afe26d',   'user:assign_role',   '分配角色',  'API', 'user', 'assign_role',   '5f18c278-5d3e-6ded-2785-ca26b7637fba', 6, 'ACTIVE', now(), now()),
-  -- 部门管理 (6)
+  ('dd100000-fa00-4111-a111-0e158d0cc001',          'user:list',          '用户列表',  'API', 'user', 'list',          '5f18c278-5d3e-6ded-2785-ca26b7637fba', 7, 'ACTIVE', now(), now()),
+  -- 部门管理 (7)
   ('2d7bcb4b-ebcd-0a63-d5da-85460d466794',  'department:create',  '创建部门',  'API', 'department', 'create',  '5387447a-43dd-1e64-1d99-a3a610b5faa1', 0, 'ACTIVE', now(), now()),
   ('053afff7-e297-f2ba-6455-f47fbbeddd1e',    'department:read',    '查看部门详情','API','department', 'read',    '5387447a-43dd-1e64-1d99-a3a610b5faa1', 1, 'ACTIVE', now(), now()),
   ('33c9734b-ed03-a3d9-30f6-45fa52f617a1',  'department:update',  '修改部门',  'API', 'department', 'update',  '5387447a-43dd-1e64-1d99-a3a610b5faa1', 2, 'ACTIVE', now(), now()),
   ('57b5c8c0-5bb8-f143-ee37-2abf6667ddc3',  'department:delete',  '删除部门',  'API', 'department', 'delete',  '5387447a-43dd-1e64-1d99-a3a610b5faa1', 3, 'ACTIVE', now(), now()),
   ('ef284ab5-62b5-1193-eadd-eecf24b3cf85',  'department:manage',  '部门管理',  'API', 'department', 'manage',  '5387447a-43dd-1e64-1d99-a3a610b5faa1', 4, 'ACTIVE', now(), now()),
-  -- 角色管理 (7)
+  ('dd200000-fa00-4222-a222-0e158d0cc002',   'department:list',   '部门列表',  'API', 'department', 'list',    '5387447a-43dd-1e64-1d99-a3a610b5faa1', 5, 'ACTIVE', now(), now()),
+  -- 角色管理 (8)
   ('b8d3cd73-d0ef-7687-ac3d-a426d00ab2bc',            'role:create',            '创建角色',  'API', 'role', 'create',            '4690621e-3b74-c30d-aedf-48500979d213', 0, 'ACTIVE', now(), now()),
   ('9e990abf-52f6-304c-f63f-fdc43e9f839f',              'role:read',              '查看角色详情','API','role', 'read',             '4690621e-3b74-c30d-aedf-48500979d213', 1, 'ACTIVE', now(), now()),
   ('e976dc1a-860e-7218-af0b-d0cff73e611d',            'role:update',            '修改角色',  'API', 'role', 'update',            '4690621e-3b74-c30d-aedf-48500979d213', 2, 'ACTIVE', now(), now()),
   ('22982a9a-3d05-4dd8-ecb0-43ae56428e80',            'role:delete',            '删除角色',  'API', 'role', 'delete',            '4690621e-3b74-c30d-aedf-48500979d213', 3, 'ACTIVE', now(), now()),
   ('35ef9061-4bcb-4129-9f60-ef055cd6fbdd',            'role:manage',            '角色管理',  'API', 'role', 'manage',            '4690621e-3b74-c30d-aedf-48500979d213', 4, 'ACTIVE', now(), now()),
   ('472b873b-eb97-a8e3-5b55-588e061658af', 'role:assign_permission', '分配权限',  'API', 'role', 'assign_permission', '4690621e-3b74-c30d-aedf-48500979d213', 5, 'ACTIVE', now(), now()),
-  -- 权限管理 (6)
+  ('dd300000-fa00-4333-a333-0e158d0cc003',             'role:list',             '角色列表',  'API', 'role', 'list',             '4690621e-3b74-c30d-aedf-48500979d213', 6, 'ACTIVE', now(), now()),
+  -- 权限管理 (7)
   ('a7786281-b035-875a-7174-e47a81a02a36',  'permission:create',  '创建权限',  'API', 'permission', 'create',  '48b029fd-549e-0d61-3d74-768b60787735', 0, 'ACTIVE', now(), now()),
   ('788a2cbb-bd01-0d42-71ce-15dd27894610',    'permission:read',    '查看权限详情','API','permission', 'read',    '48b029fd-549e-0d61-3d74-768b60787735', 1, 'ACTIVE', now(), now()),
   ('98e6aabb-e20f-7fb0-ab01-c57b33c9794c',  'permission:update',  '修改权限',  'API', 'permission', 'update',  '48b029fd-549e-0d61-3d74-768b60787735', 2, 'ACTIVE', now(), now()),
   ('9a3918b5-18f4-5cc9-61d9-8c1b355a08e7',  'permission:delete',  '删除权限',  'API', 'permission', 'delete',  '48b029fd-549e-0d61-3d74-768b60787735', 3, 'ACTIVE', now(), now()),
   ('5f9e95a4-e55f-48b0-0fe5-8de422084133',  'permission:manage',  '权限管理',  'API', 'permission', 'manage',  '48b029fd-549e-0d61-3d74-768b60787735', 4, 'ACTIVE', now(), now()),
+  ('dd400000-fa00-4444-a444-0e158d0cc004',   'permission:list',   '权限列表',  'API', 'permission', 'list',    '48b029fd-549e-0d61-3d74-768b60787735', 5, 'ACTIVE', now(), now()),
   -- 菜单管理 (6) — 现在由 permissions 统一管理
   ('09394290-a6fd-7a19-5528-22d957859e87',  'menu:create',  '创建菜单项', 'API', 'permission', 'create',  '48b029fd-549e-0d61-3d74-768b60787735', 5, 'ACTIVE', now(), now()),
   ('d814e85b-6976-9a8e-b04a-5b372f5694b4',    'menu:read',    '查看菜单详情','API','permission', 'read',    '48b029fd-549e-0d61-3d74-768b60787735', 6, 'ACTIVE', now(), now()),
   ('e1a1f1d2-a17b-5068-493a-8a8a3b711dfe',  'menu:update',  '修改菜单项', 'API', 'permission', 'update',  '48b029fd-549e-0d61-3d74-768b60787735', 7, 'ACTIVE', now(), now()),
   ('5430ad85-808b-7710-92fd-1264977e6ee9',  'menu:delete',  '删除菜单项', 'API', 'permission', 'delete',  '48b029fd-549e-0d61-3d74-768b60787735', 8, 'ACTIVE', now(), now()),
   ('4c479681-0e08-00d7-1feb-90626123a6e6',  'menu:manage',  '菜单管理',   'API', 'permission', 'manage',  '48b029fd-549e-0d61-3d74-768b60787735', 9, 'ACTIVE', now(), now()),
-  -- 客户端管理 (7)
+  -- 客户端管理 (8)
   ('63f2e157-5b51-e91b-97e4-1680b2d023b1',        'client:create',        '创建应用',  'API', 'client', 'create',         '5cdda215-b766-975d-0883-425890d5a066', 0, 'ACTIVE', now(), now()),
   ('e65672dd-1e28-4bab-23c5-f8646300c5c6',          'client:read',          '查看应用详情','API','client', 'read',          '5cdda215-b766-975d-0883-425890d5a066', 1, 'ACTIVE', now(), now()),
   ('702c0773-d819-ef22-fa13-35b096c7a888',        'client:update',        '修改应用',  'API', 'client', 'update',         '5cdda215-b766-975d-0883-425890d5a066', 2, 'ACTIVE', now(), now()),
   ('d79ed634-f438-0cde-4437-13159c6cf929',        'client:delete',        '删除应用',  'API', 'client', 'delete',         '5cdda215-b766-975d-0883-425890d5a066', 3, 'ACTIVE', now(), now()),
   ('3fe595f1-5b40-1645-c361-fbcaf3a3430b',        'client:manage',        '应用管理',  'API', 'client', 'manage',         '5cdda215-b766-975d-0883-425890d5a066', 4, 'ACTIVE', now(), now()),
   ('2e80c103-9667-8405-cf12-6d19f37ee95d', 'client:rotate_secret', '轮换密钥',  'API', 'client', 'rotate_secret',  '5cdda215-b766-975d-0883-425890d5a066', 5, 'ACTIVE', now(), now()),
+  ('dd500000-fa00-4555-a555-0e158d0cc005',          'client:list',          '应用列表',  'API', 'client', 'list',          '5cdda215-b766-975d-0883-425890d5a066', 6, 'ACTIVE', now(), now()),
   -- 审计日志 (2)
   ('286f00fa-c59b-3ae7-8074-cbccc8038477',   'audit:read',   '查看审计日志', 'API', 'audit', 'read',   '61475a5e-9140-8367-8e59-ce13be2d93b9', 0, 'ACTIVE', now(), now()),
   ('51ee2b64-1566-63ae-9883-cafa2c534b33', 'audit:export', '导出审计日志', 'API', 'audit', 'export', '61475a5e-9140-8367-8e59-ce13be2d93b9', 1, 'ACTIVE', now(), now()),
@@ -157,10 +162,7 @@ INSERT INTO permissions (id, code, name, type, resource, action, parent_id, sort
   ('0064c653-432a-ec27-0f0b-8bae168b00fd', 'login_log:export', '导出登录日志', 'API', 'login_log', 'export', '96874343-c6b4-7f9e-9a02-4cfde85a33fe', 1, 'ACTIVE', now(), now()),
   -- 系统管理 (2)
   ('2e577d7f-c813-922f-19f1-51596c563638',         'system:manage',         '系统管理',  'API', 'system', 'manage',         NULL, 0, 'ACTIVE', now(), now()),
-  ('125cf492-8d3a-1d62-9c1f-0e579b4f34db', 'system:view_dashboard', '查看仪表盘','API', 'system', 'view_dashboard', NULL, 1, 'ACTIVE', now(), now()),
-  -- 客户关系图 (2)
-  ('2848a06d-c625-768d-c503-c90b6aeb0f52',   'customer_graph:view',   '查看客户关系图','API', 'customer_graph', 'view',  NULL, 0, 'ACTIVE', now(), now()),
-  ('84304377-9412-8a4b-64de-30f3dd55f753', 'customer_graph:export', '导出客户关系图','API', 'customer_graph', 'export',NULL, 1, 'ACTIVE', now(), now());
+  ('125cf492-8d3a-1d62-9c1f-0e579b4f34db', 'system:view_dashboard', '查看仪表盘','API', 'system', 'view_dashboard', NULL, 1, 'ACTIVE', now(), now());
 
 -- ============================================================================
 -- 6. 用户-角色关联 (user_roles) — 复合主键 (user_id, role_id)

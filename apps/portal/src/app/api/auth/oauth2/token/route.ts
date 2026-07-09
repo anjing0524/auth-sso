@@ -20,6 +20,7 @@ import { InvalidGrantError } from '@/domain/shared/errors';
 import { z } from 'zod';
 import { OAUTH_PARAMS } from '@auth-sso/contracts';
 import { writeLoginLog, extractClientIP, extractUserAgent } from '@/lib/audit';
+import { parseOAuthBody } from '@/lib/auth/oauth-body';
 
 
 const TokenSchema = z.object({
@@ -34,8 +35,8 @@ const TokenSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
-    // 1. Zod 门禁
-    const body = await request.json();
+    // 1. Zod 门禁（兼容 JSON 与 form-urlencoded，RFC 6749 §2.3）
+    const body = await parseOAuthBody(request);
     const parsed = TokenSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json(
@@ -50,7 +51,6 @@ export async function POST(request: NextRequest) {
     const clientRows = await db.select().from(schema.clients).where(eq(schema.clients.clientId, client_id)).limit(1);
     validateClientActive(clientRows[0]);
     const client = clientRows[0]!;
-    console.log('[DEBUG] Token Endpoint client info:', { clientId: client.clientId, isInternal: client.isInternal, raw: client });
     validateClientSecret(client, client_secret);
 
     // ── grant_type: authorization_code ──

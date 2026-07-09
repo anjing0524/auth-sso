@@ -17,7 +17,7 @@ import 'server-only';
 import { cacheLife, cacheTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
 import { eq, desc, and, count } from 'drizzle-orm';
-import { resolveIdentity, canAccessDept, logServerDataRead } from '@/lib/auth';
+import { canAccessDept, logServerDataRead } from '@/lib/auth';
 import { ForbiddenError } from '@/domain/shared/errors';
 
 import {
@@ -125,12 +125,10 @@ export async function getUserProfile(userId: string) {
  * 已内置底层越权校验（IDOR 防护）与访问日志（Access Log）自动记录。
  *
  * @param lookupId 用户 ID 或 publicId
+ * @param deptIds  操作者数据范围（API Route 通过 JWT claims 传入；Server Component 自查询场景可不传，跳过数据范围检查）
  * @returns 用户详情对象，不存在时返回 null
  */
-export async function getUser(lookupId: string) {
-  const identity = await resolveIdentity();
-  if (!identity) throw new Error('Unauthorized');
-
+export async function getUser(lookupId: string, deptIds?: string[]) {
   // 使用 Relational Queries 一次性取出用户、角色、部门（FK 已建立，一次 DB 往返）
   const user = await db.query.users.findFirst({
     where: eq(schema.users.id, lookupId),
@@ -141,7 +139,8 @@ export async function getUser(lookupId: string) {
   });
   if (!user) return null;
 
-  if (identity.userId !== lookupId && !canAccessDept(identity.claims.deptIds, user.deptId)) {
+  // 数据范围检查（deptIds 由调用方通过 JWT claims 传入，data.ts 不做鉴权）
+  if (deptIds !== undefined && !canAccessDept(deptIds, user.deptId)) {
     throw new ForbiddenError('超出数据权限范围');
   }
 
@@ -188,11 +187,11 @@ export async function getDepartments() {
 
 /**
  * 获取用户绑定的角色列表（含分配时间）
+ *
+ * @param lookupId 用户 ID
+ * @param deptIds  操作者数据范围（可选：API Route 传入；Server Component 自查询不传）
  */
-export async function getUserRoles(lookupId: string) {
-  const identity = await resolveIdentity();
-  if (!identity) throw new Error('Unauthorized');
-
+export async function getUserRoles(lookupId: string, deptIds?: string[]) {
   // 使用 Relational Queries 一次性取出用户绑定的角色及分配时间
   const user = await db.query.users.findFirst({
     where: eq(schema.users.id, lookupId),
@@ -208,7 +207,8 @@ export async function getUserRoles(lookupId: string) {
 
   if (!user) return [];
 
-  if (identity.userId !== lookupId && !canAccessDept(identity.claims.deptIds, user.deptId)) {
+  // 数据范围检查（deptIds 由调用方通过 JWT claims 传入，data.ts 不做鉴权）
+  if (deptIds !== undefined && !canAccessDept(deptIds, user.deptId)) {
     throw new ForbiddenError('超出数据权限范围');
   }
   await logServerDataRead('user_roles', lookupId);

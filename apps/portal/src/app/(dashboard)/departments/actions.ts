@@ -23,8 +23,9 @@ import {
   UpdateDepartmentInputSchema,
   type CreateDepartmentInput,
 } from '@/domain/department/types';
-import { EntityNotFoundError, BusinessRuleViolationError } from '@/domain/shared/errors';
+import { EntityNotFoundError, BusinessRuleViolationError, ForbiddenError } from '@/domain/shared/errors';
 import { generateUUID } from '@/lib/crypto';
+import { canAccessDept } from '@/lib/auth';
 import type { ApiResponse } from '@auth-sso/contracts';
 
 /**
@@ -42,10 +43,15 @@ async function getParentAncestors(parentId: string): Promise<string | null> {
 /** 创建部门 */
 export const createDepartmentAction = withAuth(
   { permissions: ['department:create'], audit: 'DEPARTMENT_CREATE' },
-  async (_ctx: AuthContext, input: CreateDepartmentInput): Promise<ApiResponse<{ id: string }>> => {
+  async (ctx: AuthContext, input: CreateDepartmentInput): Promise<ApiResponse<{ id: string }>> => {
     const parsed = CreateDepartmentInputSchema.safeParse(input);
     if (!parsed.success) {
       return { success: false, error: 'VALIDATION_ERROR', message: parsed.error.issues[0].message };
+    }
+
+    // 数据范围校验：父部门必须在操作者可访问范围内（顶级部门 parentId 为 null 时放行）
+    if (parsed.data.parentId && !canAccessDept(ctx.claims.deptIds, parsed.data.parentId)) {
+      throw new ForbiddenError('无权在指定父部门下创建子部门');
     }
 
     // 查询父级的 ancestors 以计算物化路径
@@ -91,12 +97,21 @@ async function performDepartmentUpdate(tx: any, deptId: string, patch: Record<st
 /** 更新部门 */
 export const updateDepartmentAction = withAuth(
   { permissions: ['department:update'], audit: 'DEPARTMENT_UPDATE' },
-  async (_ctx: AuthContext, deptId: string, input: Record<string, unknown>): Promise<ApiResponse<{ id: string }>> => {
+  async (ctx: AuthContext, deptId: string, input: Record<string, unknown>): Promise<ApiResponse<{ id: string }>> => {
     const parsed = UpdateDepartmentInputSchema.safeParse(input);
     if (!parsed.success) {
       return { success: false, error: 'VALIDATION_ERROR', message: parsed.error.issues[0].message };
     }
-    await db.transaction((tx) => performDepartmentUpdate(tx, deptId, parsed.data));
+    await db.transaction(async (tx) => {
+      // 数据范围校验：目标部门 + 拟变更父部门均在操作者可访问范围内
+      const row = await tx.query.departments.findFirst({ where: eq(schema.departments.id, deptId) });
+      if (!row) throw new EntityNotFoundError('Department', deptId);
+      if (!canAccessDept(ctx.claims.deptIds, row.id)) throw new ForbiddenError('无权操作该部门');
+      if (parsed.data.parentId && !canAccessDept(ctx.claims.deptIds, parsed.data.parentId)) {
+        throw new ForbiddenError('无权将部门迁移至该父部门');
+      }
+      await performDepartmentUpdate(tx, deptId, parsed.data);
+    });
     revalidatePath('/departments');
     updateTag('departments-list');
     return { success: true, data: { id: deptId }, message: '部门更新成功' };
@@ -106,12 +121,14 @@ export const updateDepartmentAction = withAuth(
 /** 删除部门 */
 export const deleteDepartmentAction = withAuth(
   { permissions: ['department:delete'], audit: 'DEPARTMENT_DELETE' },
-  async (_ctx: AuthContext, deptId: string): Promise<ApiResponse<{ id: string }>> => {
+  async (ctx: AuthContext, deptId: string): Promise<ApiResponse<{ id: string }>> => {
     await db.transaction(async (tx) => {
       const row = await tx.query.departments.findFirst({
         where: eq(schema.departments.id, deptId),
       });
       if (!row) throw new EntityNotFoundError('Department', deptId);
+      // 数据范围校验：目标部门必须在操作者可访问范围内
+      if (!canAccessDept(ctx.claims.deptIds, row.id)) throw new ForbiddenError('无权操作该部门');
 
       // 检查是否有子部门
       const children = await tx.query.departments.findFirst({

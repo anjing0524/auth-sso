@@ -28,17 +28,20 @@
 
 ### 1.3 响应格式
 
-所有 API 返回统一 JSON 格式：
+所有 API 响应为 JSON 格式，按操作类型分为两类：
 
+**写操作（CUD）**：
 ```json
-// 成功响应
-{ "success": true, "data": { ... } }
+{ "success": true, "data": {...}, "message": "操作描述" }
+{ "success": false, "error": "ERROR_CODE", "message": "错误描述" }
+```
 
-// 列表响应
-{ "success": true, "data": [...], "total": 100, "page": 1, "pageSize": 20 }
-
-// 错误响应
-{ "success": false, "error": "ERROR_CODE", "message": "人类可读的中文错误描述" }
+**读操作（列表/详情）**：
+```json
+// 列表
+{ "data": [...], "pagination": { "page": 1, "pageSize": 20, "total": 100, "totalPages": 5 } }
+// 详情
+{ "data": {...} }
 ```
 
 HTTP 状态码遵循 REST 惯例：
@@ -86,7 +89,7 @@ POST /api/auth/login
 **请求体（JSON）：**
 ```json
 {
-  "username": "admin",
+  "email": "admin@example.com",
   "password": "SecureP@ss1"
 }
 ```
@@ -170,7 +173,6 @@ GET /.well-known/openid-configuration
 ### 3.2 JWKS 公钥集
 
 ```
-GET /.well-known/jwks
 GET /api/auth/jwks
 ```
 
@@ -237,10 +239,13 @@ Authorization: Bearer <access_token>
   "sub": "<user_id>",
   "name": "张三",
   "preferred_username": "zhangsan",
+  "picture": "https://example.com/avatar.png",
   "email": "zhangsan@example.com",
   "email_verified": true
 }
 ```
+
+> **注意：** `preferred_username` 字段当前实现中未包含在 userinfo 响应内。
 
 ### 3.6 Introspection 端点
 
@@ -298,22 +303,24 @@ GET /api/me
 
 **认证：** Cookie `portal_jwt_token` 或 `Authorization: Bearer <JWT>`
 
-**响应：**
+**响应（无 success 包裹）：**
 ```json
 {
-  "success": true,
-  "data": {
+  "user": {
     "id": "<uuid>",
-    "username": "admin",
     "email": "admin@example.com",
     "name": "系统管理员",
-    "avatarUrl": null,
-    "status": "ACTIVE",
-    "deptId": "<uuid>",
-    "deptName": "总公司",
-    "roles": ["SUPER_ADMIN"],
-    "permissions": ["user:list", "user:create", "..."]
-  }
+    "picture": "https://example.com/avatar.png",
+    "emailVerified": false
+  },
+  "tokenInfo": {
+    "expiresAt": 1234567890000,
+    "issuedAt": 1234567890000
+  },
+  "permissions": ["user:list", "user:create", "..."],
+  "roles": ["SUPER_ADMIN"],
+  "deptIds": ["<uuid>", "..."],
+  "menus": [...]
 }
 ```
 
@@ -323,11 +330,11 @@ GET /api/me
 GET /api/me/permissions
 ```
 
-**响应：**
+**响应（无 success 包裹）：**
 ```json
 {
-  "success": true,
   "data": {
+    "userId": "<uuid>",
     "roles": ["SUPER_ADMIN"],
     "permissions": ["user:list", "user:create", "user:read", "..."],
     "deptIds": ["<uuid>", "..."]
@@ -374,7 +381,6 @@ GET /api/users?page=1&pageSize=20&keyword=张三&status=ACTIVE&deptId=<uuid>
 **响应：**
 ```json
 {
-  "success": true,
   "data": [
     {
       "id": "<uuid>",
@@ -458,7 +464,7 @@ POST   /api/users/:id/roles   — 添加角色
 DELETE /api/users/:id/roles   — 移除角色
 ```
 
-**权限：** `user:assign_role`
+**权限：** `user:read` (GET) / `user:assign_role` (POST, DELETE)
 
 ### 5.10 强制下线用户（REST）
 
@@ -466,7 +472,7 @@ DELETE /api/users/:id/roles   — 移除角色
 POST /api/users/:id/force-logout
 ```
 
-**权限：** `user:update`
+**权限：** `user:manage`
 
 **行为：** 撤销目标用户所有活跃 Token（jti 入黑名单）。
 
@@ -554,7 +560,7 @@ GET /api/permissions/:id
 POST /api/permissions/register
 ```
 
-**权限：** 仅系统管理员
+**认证：** HTTP Basic Auth（`Authorization: Basic <base64>`），仅限 `is_internal=true` 的 Client
 
 **用途：** 批量注册/同步权限码到数据库。
 

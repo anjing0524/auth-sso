@@ -9,7 +9,7 @@ import { eq, ilike, or, asc, desc, and, count, inArray } from 'drizzle-orm';
 
 import { ForbiddenError } from '@/domain/shared/errors';
 import { asEntityStatus } from '@/lib/type-guards';
-import { resolveIdentity, canAccessDept, logServerDataRead } from '@/lib/auth';
+import { canAccessDept, logServerDataRead } from '@/lib/auth';
 
 /**
  * 分页获取角色列表
@@ -75,18 +75,19 @@ export async function getRoles(params: {
 
 /**
  * 按 ID 获取单个角色详情（支持内部 ID 和 publicId）
+ *
+ * @param lookupId 角色 ID
+ * @param deptIds  操作者数据范围（可选：API Route 传入；Server Component 自查询不传）
  */
-export async function getRoleById(lookupId: string) {
-  const identity = await resolveIdentity();
-  if (!identity) throw new Error('Unauthorized');
-
+export async function getRoleById(lookupId: string, deptIds?: string[]) {
   const rows = await db.select().from(schema.roles)
     .where(eq(schema.roles.id, lookupId))
     .limit(1);
   const row = rows[0];
   if (!row) return null;
 
-  if (!canAccessDept(identity.claims.deptIds, row.deptId)) {
+  // 数据范围检查（deptIds 由调用方通过 JWT claims 传入，data.ts 不做鉴权）
+  if (deptIds !== undefined && !canAccessDept(deptIds, row.deptId)) {
     throw new ForbiddenError('超出数据权限范围');
   }
 
@@ -107,11 +108,11 @@ export async function getRoleById(lookupId: string) {
 
 /**
  * 获取角色绑定的权限列表
+ *
+ * @param roleId  角色 ID
+ * @param deptIds 操作者数据范围（可选：API Route 传入；Server Component 自查询不传）
  */
-export async function getRolePermissions(roleId: string) {
-  const identity = await resolveIdentity();
-  if (!identity) throw new Error('Unauthorized');
-
+export async function getRolePermissions(roleId: string, deptIds?: string[]) {
   // 使用 Relational Queries 一次性带出角色及其绑定的权限
   const role = await db.query.roles.findFirst({
     where: eq(schema.roles.id, roleId),
@@ -126,7 +127,8 @@ export async function getRolePermissions(roleId: string) {
 
   if (!role) return [];
 
-  if (!canAccessDept(identity.claims.deptIds, role.deptId)) {
+  // 数据范围检查（deptIds 由调用方通过 JWT claims 传入，data.ts 不做鉴权）
+  if (deptIds !== undefined && !canAccessDept(deptIds, role.deptId)) {
     throw new ForbiddenError('超出数据权限范围');
   }
   await logServerDataRead('role_permissions', roleId);

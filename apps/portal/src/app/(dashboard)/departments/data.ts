@@ -16,7 +16,7 @@ import { buildDepartmentTree } from '@/domain/department/department';
 import type { DepartmentTreeNode } from '@/domain/department/department';
 import { isScopeDenied } from '@/db/user-queries';
 import { asEntityStatus } from '@/lib/type-guards';
-import { resolveIdentity, canAccessDept, logServerDataRead } from '@/lib/auth';
+import { canAccessDept, logServerDataRead } from '@/lib/auth';
 
 import { ForbiddenError } from '@/domain/shared/errors';
 
@@ -55,18 +55,19 @@ export async function getDepartments(
 
 /**
  * 按 ID 获取单个部门详情
+ *
+ * @param lookupId 部门 ID
+ * @param deptIds  操作者数据范围（可选：API Route 传入；Server Component 自查询不传）
  */
-export async function getDepartmentById(lookupId: string) {
-  const identity = await resolveIdentity();
-  if (!identity) throw new Error('Unauthorized');
-
+export async function getDepartmentById(lookupId: string, deptIds?: string[]) {
   const rows = await db.select().from(schema.departments)
     .where(eq(schema.departments.id, lookupId))
     .limit(1);
   const row = rows[0];
   if (!row) return null;
 
-  if (!canAccessDept(identity.claims.deptIds, row.id)) {
+  // 数据范围检查（deptIds 由调用方通过 JWT claims 传入，data.ts 不做鉴权）
+  if (deptIds !== undefined && !canAccessDept(deptIds, row.id)) {
     throw new ForbiddenError('超出数据权限范围');
   }
   await logServerDataRead('department', lookupId);
@@ -84,12 +85,13 @@ export async function getDepartmentById(lookupId: string) {
 
 /**
  * 获取部门下的成员列表
+ *
+ * @param departmentId 部门 ID
+ * @param deptIds      操作者数据范围（可选：API Route 传入；Server Component 自查询不传）
  */
-export async function getDepartmentMembers(departmentId: string) {
-  const identity = await resolveIdentity();
-  if (!identity) throw new Error('Unauthorized');
-
-  if (!canAccessDept(identity.claims.deptIds, departmentId)) {
+export async function getDepartmentMembers(departmentId: string, deptIds?: string[]) {
+  // 数据范围检查（deptIds 由调用方通过 JWT claims 传入，data.ts 不做鉴权）
+  if (deptIds !== undefined && !canAccessDept(deptIds, departmentId)) {
     throw new ForbiddenError('超出数据权限范围');
   }
   await logServerDataRead('department_members', departmentId);

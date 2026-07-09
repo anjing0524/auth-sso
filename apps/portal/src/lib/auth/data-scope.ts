@@ -56,7 +56,7 @@ export async function getUserRoleDeptIds(userId: string): Promise<string[]> {
   // 单次批量 SQL 查询替代 N+1：对每个角色 deptId，匹配部门 id 或 ancestors 包含该 deptId
   const conditions = roleDeptIds.flatMap((deptId): ReturnType<typeof or>[] => [
     eq(schema.departments.id, deptId),
-    like(schema.departments.ancestors, `%${deptId}%`),
+    like(schema.departments.ancestors, `${deptId}/%`),
   ]);
   const result = await db
     .select({ id: schema.departments.id })

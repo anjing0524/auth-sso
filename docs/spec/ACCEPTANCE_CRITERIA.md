@@ -272,7 +272,7 @@ Browser → POST /api/auth/logout → performRevocation():
 | G4 | 登录/登出写 login_logs | ✅ | login/logout/refresh 全部写入 login_logs（v2.1 已落地） |
 | G5 | 速率限制实现 | ✅ | Gateway (Rust) `/api/auth/` 限流：Auth 20/min + Token 30/min |
 | G6 | 暴力破解防护实现 | ✅ | Redis INCR 原子计数 + 5 次失败/15min 锁定（v2.1 TOCTOU 修复） |
-| G7 | API 文档与实现一致 | ✅ | `docs/spec/API.md` v1.0 已创建，整合全部端点 |
+| G7 | API 文档与实现一致 | ⚠️ 2026-07-09 修复中 | `docs/spec/API.md` v2.0 存在多处偏差（响应格式、权限码、端点路由），本轮审计修复中 |
 | G8 | Cookie 安全属性正确 | ✅ | RT path 统一为 `/`，secure 基于 `NEXT_PUBLIC_APP_URL` 判断 |
 | G9 | HTTPS 强制 | ✅ | Gateway + Cookie secure |
 | G10 | JWT ES256 签名验证 | ✅ | Portal + Gateway 双重验证 |
@@ -298,11 +298,11 @@ Browser → POST /api/auth/logout → performRevocation():
 
 ## 11. 总体裁定
 
-### Go/No-Go 判定：**Go（条件满足 ✅）**
+### Go/No-Go 判定：**Conditional Hold（2026-07-09 审计发现追加 P0 项）**
 
 **v2.1 更新：前轮所有 P0 阻塞项已修复并代码落地（login_logs 写入、RT Path 统一、速率限制、暴力破解防护），**
 **新增发现 Gateway 生产配置缺陷（GW-1 Redis 密码、GW-2 证书路径）和 TOCTOU 竞态条件（S1）均已修复。**
-**系统满足生产部署条件。**
+**2026-07-09 审计：发现 49 项文档与代码偏差（P0 6 项/P1 ~20 项/P2 ~23 项），核心修复项已完成，系统降级为 Conditional Hold 待二次验收。**
 
 ### 修复优先级（v2.1 更新）
 
@@ -334,6 +334,24 @@ Browser → POST /api/auth/logout → performRevocation():
 - ✅ v3.2 RBAC 模型简化有效，数据范围过滤逻辑清晰
 - ✅ DDD 四层架构 + CQRS 读写分离，代码组织良好
 - ✅ 11 层认证授权链路设计清晰，纵深防御完整
+
+### 2026-07-09 审计修复摘要
+
+本轮审计（`spec-alignment-audit-2026-07-09.md`）发现 49 项文档与代码偏差，核心修复项如下：
+
+| 等级 | 数量 | 修复状态 | 关键变更 |
+|------|------|---------|---------|
+| **P0** | 6 项 | ✅ 已完成 | 响应格式重写（区分读/写）、Gateway PKCE 主体纠正、Token 刷新链路对齐、权限码细化（user:manage / user:assign_role）、/.well-known/jwks 删除、登录契约对齐（email 替代 username） |
+| **P1** | ~20 项 | ✅ 已完成 | /api/me 结构对齐、token_hash 声明修正、is_internal 字段补全、access_logs 表文档化、jwk_algorithm 伪枚举清理、R4 已知偏差移除 |
+| **P2** | ~23 项 | 📋 确认一致 | §5.8 user:reset_password、§7.3 permission:read、§8.6 department:read 等权限码已与实际代码一致 |
+
+**核心变更总结**：
+- **迁移基线重建**：ARCHITECTURE_CONSTRAINTS.md R4 偏差注释已移除（代码已全部使用常量）
+- **权限码细化**：`user:update` → `user:manage`（强制下线）；`user:assign_role` 拆分为 GET `user:read` + POST/DELETE `user:assign_role`
+- **Server Action 越权守卫**：permissions/register 从"仅系统管理员"改为 HTTP Basic Auth（is_internal=true Client）
+- **登录契约对齐**：请求体 `username` → `email`（代码实际使用 email 登录）
+- **Gateway return_to 消毒**：DETAILED_DESIGN.md 明确 Proxy.ts 仅检查 Cookie 存在性，PKCE 全流程由 Gateway 接管
+- **算法硬锁**：DATABASE.md 删除 `jwk_algorithm` 伪枚举（代码中 algorithm 列实际为 varchar(10)）
 
 ---
 

@@ -58,8 +58,11 @@ export function buildUserListConditions(params: {
   }
 
   // 数据范围过滤（v3.2: 直接按部门 ID 列表过滤）
+  // 空 deptIds → fail-closed：添加恒假条件防止无意中返回全表数据
   if (deptIds.length > 0) {
     conditions.push(inArray(schema.users.deptId, deptIds));
+  } else {
+    conditions.push(eq(schema.users.id, '__none__'));
   }
 
   return conditions;

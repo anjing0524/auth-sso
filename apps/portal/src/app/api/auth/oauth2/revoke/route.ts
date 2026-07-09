@@ -13,15 +13,16 @@ import { eq } from 'drizzle-orm';
 import { hashToken } from '@/lib/crypto';
 import { mapDomainError } from '@/domain/shared/error-mapping';
 import { validateClientActive, validateClientSecret } from '@/domain/auth/oauth-client';
+import { parseOAuthBody } from '@/lib/auth/oauth-body';
 
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const token = body.token as string | undefined;
-    const tokenTypeHint = body.token_type_hint as string | undefined;
-    const clientId = body.client_id as string | undefined;
-    const clientSecret = body.client_secret as string | undefined;
+    const body = await parseOAuthBody(request);
+    const token = body.token;
+    const tokenTypeHint = body.token_type_hint;
+    const clientId = body.client_id;
+    const clientSecret = body.client_secret;
 
     // RFC 7009 §2.1：revocation 端点必须校验调用方身份，防止恶意撤销他人令牌（DoS）
     if (!clientId) {

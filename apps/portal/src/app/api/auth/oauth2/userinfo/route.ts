@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'invalid_token' }, { status: 401 });
     }
 
-    const claims = await verifyAccessToken(token);
+    const claims = await verifyAccessToken(token, null); // UserInfo 不校验 audience（多 client 通用端点）
     if (!claims) {
       return NextResponse.json({ error: 'invalid_token' }, { status: 401 });
     }

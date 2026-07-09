@@ -10,6 +10,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getRefreshTokenFromCookie, getJwtFromCookie, decodeJwtPayload } from '@/lib/session';
 import { rotateRefreshToken } from '@/lib/auth/token';
+import { mapDomainError } from '@/domain/shared/error-mapping';
 import { COOKIE_NAMES, TOKEN_TTL } from '@auth-sso/contracts';
 import { writeLoginLog, extractClientIP, extractUserAgent } from '@/lib/audit';
 
@@ -82,10 +83,10 @@ export async function POST(request: NextRequest) {
 
     return response;
   } catch (err) {
-    console.error('[Refresh API] 刷新失败:', err);
+    const mapped = mapDomainError(err);
     return NextResponse.json(
-      { success: false, error: 'INTERNAL_ERROR', message: 'Token 刷新失败' },
-      { status: 500 },
+      { success: false, error: mapped.error, message: mapped.message },
+      { status: mapped.status },
     );
   }
 }

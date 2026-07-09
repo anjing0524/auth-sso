@@ -18,7 +18,7 @@ interface RouteParams {
 export async function GET(request: NextRequest, { params }: RouteParams) {
   return withPermission({ permissions: ['user:read'] }, async (adminUserId, claims) => {
     const { id } = await params;
-    const user = await getUser(id);
+    const user = await getUser(id, claims.deptIds);
     if (!user) {
       return NextResponse.json(
         { error: USER_ERRORS.USER_NOT_FOUND, message: '用户不存在' },

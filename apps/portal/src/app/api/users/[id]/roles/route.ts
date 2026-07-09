@@ -41,7 +41,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     if (!canAccessDept(claims.deptIds, target.deptId)) {
       return NextResponse.json({ error: COMMON_ERRORS.FORBIDDEN, message: '无权查看该用户' }, { status: 403 });
     }
-    const roles = await getUserRoles(id);
+    const roles = await getUserRoles(id, claims.deptIds);
     return NextResponse.json({ data: roles });
   });
 }
@@ -50,7 +50,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
  * POST /api/users/[id]/roles — 为用户分配角色（v3.2: R-USER-ROLE 部门约束）
  */
 export async function POST(request: NextRequest, { params }: RouteParams) {
-  return withPermission({ permissions: ['user:update'] }, async (adminUserId, claims) => {
+  return withPermission({ permissions: ['user:assign_role'] }, async (adminUserId, claims) => {
     const { id } = await params;
     const body = await request.json();
     const { roleIds } = body;
@@ -128,7 +128,7 @@ export async function DELETE(
   request: NextRequest,
   { params }: RouteParams
 ) {
-  return withPermission({ permissions: ['user:update'] }, async (adminUserId, claims) => {
+  return withPermission({ permissions: ['user:assign_role'] }, async (adminUserId, claims) => {
     const { id } = await params;
     const body = await request.json();
     const { roleId } = body;

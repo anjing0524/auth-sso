@@ -35,8 +35,5 @@ export const loginEventEnum = pgEnum('login_event', LOGIN_EVENT_VALUES);
 /** 审计操作类型枚举（替代 audit_logs 裸 text） */
 export const auditOperationEnum = pgEnum('audit_operation', AUDIT_OPERATION_VALUES);
 
-/** JWKS 签名算法枚举 */
-export const jwkAlgorithmEnum = pgEnum('jwk_algorithm', ['ES256']);
-
 /** PKCE code_challenge_method 枚举 (RFC 7636) */
 export const codeChallengeMethodEnum = pgEnum('code_challenge_method', ['S256']);

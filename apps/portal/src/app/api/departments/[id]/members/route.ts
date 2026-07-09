@@ -12,10 +12,10 @@ interface RouteParams { params: Promise<{ id: string }>; }
 
 /** GET /api/departments/[id]/members — 委托 data.ts */
 export async function GET(request: NextRequest, { params }: RouteParams) {
-  return withPermission({ permissions: ['user:list'] }, async (_userId, claims) => {
+  return withPermission({ permissions: ['department:read'] }, async (_userId, claims) => {
     const { id } = await params;
 
-    const dept = await getDepartmentById(id);
+    const dept = await getDepartmentById(id, claims.deptIds);
     if (!dept) return NextResponse.json({ error: COMMON_ERRORS.NOT_FOUND, message: '部门不存在' }, { status: 404 });
 
     // v3.2: 数据范围校验 — 只能查看授权范围内的部门成员
@@ -24,7 +24,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: COMMON_ERRORS.FORBIDDEN, message: '无权查看该部门成员' }, { status: 403 });
     }
 
-    const members = await getDepartmentMembers(dept.id);
+    const members = await getDepartmentMembers(dept.id, claims.deptIds);
     return NextResponse.json({ data: members });
   });
 }

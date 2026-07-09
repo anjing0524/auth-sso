@@ -12,14 +12,15 @@ import { eq } from 'drizzle-orm';
 import { hashToken } from '@/lib/crypto';
 import { mapDomainError } from '@/domain/shared/error-mapping';
 import { validateClientActive, validateClientSecret } from '@/domain/auth/oauth-client';
+import { parseOAuthBody } from '@/lib/auth/oauth-body';
 
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const token = body.token as string | undefined;
-    const clientId = body.client_id as string | undefined;
-    const clientSecret = body.client_secret as string | undefined;
+    const body = await parseOAuthBody(request);
+    const token = body.token;
+    const clientId = body.client_id;
+    const clientSecret = body.client_secret;
 
     // RFC 7662 §2.1：introspection 端点必须校验调用方身份（client credentials）
     if (!clientId) {
@@ -46,10 +47,17 @@ export async function POST(request: NextRequest) {
     // 尝试作为 Access Token 验签
     const claims = await verifyAccessToken(token);
     if (claims) {
+      // client_id / scope 取自 access_tokens DB 行（签发时持久化），而非 JWT claims（aud 语义 ≠ client_id）
+      const atRows = await db
+        .select({ clientId: schema.accessTokens.clientId, scopes: schema.accessTokens.scopes })
+        .from(schema.accessTokens)
+        .where(eq(schema.accessTokens.tokenHash, hashToken(token)))
+        .limit(1);
+      const atRow = atRows[0];
       return NextResponse.json({
         active: true,
-        scope: claims.permissions?.join(' ') || '',
-        client_id: (typeof claims.aud === 'string' ? claims.aud : claims.aud?.[0]) || '',
+        scope: atRow?.scopes || '',
+        client_id: atRow?.clientId || '',
         sub: claims.sub,
         token_type: 'Bearer',
         exp: claims.exp,

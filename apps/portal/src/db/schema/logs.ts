@@ -15,7 +15,7 @@
  * - id text → uuid PK，默认 gen_random_uuid()
  * - operation → auditOperationEnum（替代裸 text）
  * - eventType → loginEventEnum（替代裸 text）
- * - ip text → varchar(45)（加长度约束，可 cast 为 inet）
+ * - ip → inet
  * - timestamp → timestamptz
  *
  * @module db/schema/logs

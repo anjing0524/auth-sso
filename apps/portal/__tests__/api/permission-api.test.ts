@@ -179,6 +179,7 @@ function makeRegisterClientRow(overrides: Record<string, any> = {}) {
     clientSecret: 'hash:registry-secret',
     name: '权限注册客户端',
     status: 'ACTIVE',
+    isInternal: true,
     ...overrides,
   };
 }

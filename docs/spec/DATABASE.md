@@ -197,6 +197,7 @@ CHECK (
 | `access_token_ttl` | integer | 默认 3600 | Access Token 有效期（秒） |
 | `refresh_token_ttl` | integer | 默认 604800 | Refresh Token 有效期（秒） |
 | `status` | entity_status | 非空，默认 'ACTIVE' | |
+| `is_internal` | boolean | 默认 false | 区分 Portal 内部客户端与第三方，决定 AT audience |
 | `created_at` | timestamptz | 非空，默认 now() | |
 | `updated_at` | timestamptz | 非空，默认 now()，自动更新 | |
 
@@ -225,7 +226,7 @@ CHECK (
 | 列名 | 类型 | 约束 | 说明 |
 |--------|------|------------|--------|
 | `id` | uuid | 主键，defaultRandom() | |
-| `token_hash` | varchar(64) | 唯一，非空 | 访问令牌凭证（设计目标为 SHA-256 哈希；当前实现存储 token 字符串，见 §4.4 技术债务说明） |
+| `token_hash` | varchar(64) | 唯一，非空 | 访问令牌 SHA-256 哈希（不存明文） |
 | `client_id` | varchar(50) | 非空，外键 → clients.client_id，ON DELETE CASCADE | |
 | `user_id` | uuid | 非空，外键 → users.id，ON DELETE CASCADE | |
 | `scopes` | varchar(200) | 非空 | 已授予的权限范围 |
@@ -242,7 +243,7 @@ CHECK (
 | 列名 | 类型 | 约束 | 说明 |
 |--------|------|------------|--------|
 | `id` | uuid | 主键，defaultRandom() | |
-| `token_hash` | varchar(64) | 唯一，非空 | 刷新令牌凭证（设计目标为 SHA-256 哈希；当前 `issueRefreshToken` 直接写入原始 token 字符串，见 §4.4 技术债务说明） |
+| `token_hash` | varchar(64) | 唯一，非空 | 刷新令牌 SHA-256 哈希（不存明文） |
 | `client_id` | varchar(50) | 非空，外键 → clients.client_id，ON DELETE CASCADE | |
 | `user_id` | uuid | 非空，外键 → users.id，ON DELETE CASCADE | |
 | `scopes` | varchar(200) | 非空 | |
@@ -255,8 +256,6 @@ CHECK (
 **索引**：
 - `idx_refresh_tokens_client`：`client_id`
 - `idx_refresh_tokens_user`：`user_id`
-
-> **⚠️ 技术债务 — token_hash 列命名歧义**：`access_tokens.token_hash` 与 `refresh_tokens.token_hash` 两列的设计目标是存储令牌的 SHA-256 哈希（不存明文）。但当前代码实现中，`issueRefreshToken` 直接写入原始 token 字符串（明文），列名与实际行为不符；access_tokens 表当前为可选写入。**已确认技术决策**：保持列名 `token_hash` 不变（向后兼容），在下一次安全加固迭代中将 `issueRefreshToken` / `rotateRefreshToken` / `logout` 三处的写入与查询统一改为 `hashToken(token)`，使实现层与设计目标对齐。当前功能正常（明文匹配明文），但安全等级待提升（列名 `token_hash` 在文档与代码完全对齐前具有误导性）。
 
 ### 4.5 用户授权记录表（`consents`）— 🗑️ 已移除
 
@@ -332,6 +331,32 @@ CHECK (
 - `idx_login_logs_created`：`created_at`
 - `idx_login_logs_event_type`：`event_type`
 
+### 5.3 访问日志表（`access_logs`）
+
+仅追加的读操作访问日志（GET 敏感数据查看），按月分区保留 180 天。**无外键约束** —— 原因同审计日志。
+
+| 列名 | 类型 | 约束 | 说明 |
+|--------|------|------------|--------|
+| `id` | uuid | 主键，defaultRandom() | |
+| `user_id` | uuid | | 操作用户 ID（无 FK） |
+| `username` | varchar(50) | | 操作用户名（冗余副本） |
+| `method` | varchar(10) | 非空 | HTTP 方法 |
+| `path` | varchar(500) | 非空 | 请求路径 |
+| `resource_type` | varchar(50) | | 资源类型（如 users, roles） |
+| `resource_id` | varchar(64) | | 资源 ID |
+| `ip` | inet | | 客户端 IP 地址 |
+| `user_agent` | varchar(500) | | |
+| `status` | smallint | | HTTP 响应状态码 |
+| `duration` | integer | | 请求时长（毫秒） |
+| `created_at` | timestamptz | 非空，默认 now() | |
+
+**索引**：
+- `idx_access_logs_user`：`user_id`
+- `idx_access_logs_created`：`created_at`
+- `idx_access_logs_resource`：`(resource_type, resource_id)`
+
+> **分区策略**：生产环境按月分区（`PARTITION BY RANGE created_at`），由 0004 migration 手动创建分区表，Drizzle schema 仅用于类型推导。
+
 ---
 
 ## 6. PostgreSQL 枚举定义
@@ -343,7 +368,6 @@ CHECK (
 | `permission_type` | `DIRECTORY`、`PAGE`、`API`、`DATA` | permissions.type |
 | `login_event` | `LOGIN_SUCCESS`、`LOGIN_FAILED`、`LOGOUT`、`TOKEN_REFRESH`、`TOKEN_REFRESH_FAILED` | login_logs.event_type |
 | `audit_operation` | `USER_CREATE`、`USER_UPDATE`、`USER_DELETE`、`USER_ROLE_ASSIGN`、`ROLE_CREATE`、`ROLE_UPDATE`、`ROLE_DELETE`、`ROLE_PERMISSION_ASSIGN`、`PERMISSION_CREATE`、`PERMISSION_UPDATE`、`PERMISSION_DELETE`、`DEPARTMENT_CREATE`、`DEPARTMENT_UPDATE`、`DEPARTMENT_DELETE`、`CLIENT_CREATE`、`CLIENT_UPDATE`、`CLIENT_DELETE`、`CLIENT_SECRET_REGENERATE`、`TOKEN_REVOKE` | audit_logs.operation |
-| `jwk_algorithm` | `ES256` | jwks.algorithm |
 | `code_challenge_method` | `S256` | authorization_codes.code_challenge_method |
 
 > **v3.2 已移除的枚举**：`data_scope_type`（`ALL`/`DEPT`/`DEPT_AND_SUB`/`SELF`/`CUSTOM`）、`menu_type`（`DIRECTORY`/`MENU`/`BUTTON`）。

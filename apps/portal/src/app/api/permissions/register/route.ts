@@ -113,6 +113,10 @@ export async function POST(request: NextRequest) {
     if (clientRecord[0]!.clientSecret !== hashClientSecret(auth.clientSecret)) {
       return NextResponse.json({ error: 'Forbidden', message: 'Client ID 或 Secret 错误' }, { status: 403 });
     }
+    // 仅允许 Portal 内部系统 Client 调用（is_internal=true），杜绝任意注册 Client 提权注册权限
+    if (!clientRecord[0]!.isInternal) {
+      return NextResponse.json({ error: 'Forbidden', message: '该端点仅限内部系统 Client 调用' }, { status: 403 });
+    }
 
     const body = await request.json();
     const tree: IncomingPermission[] = body.permissions;

@@ -14,7 +14,7 @@ interface RouteParams { params: Promise<{ id: string }>; }
 export async function GET(request: NextRequest, { params }: RouteParams) {
   return withPermission({ permissions: ['department:read'] }, async (_userId, claims) => {
     const { id } = await params;
-    const dept = await getDepartmentById(id);
+    const dept = await getDepartmentById(id, claims.deptIds);
     if (!dept) return NextResponse.json({ error: DEPARTMENT_ERRORS.DEPARTMENT_NOT_FOUND, message: '部门不存在' }, { status: 404 });
 
     // 数据范围：deptIds 来自 JWT claims，无需额外 DB 查询

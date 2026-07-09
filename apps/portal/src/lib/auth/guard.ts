@@ -17,13 +17,20 @@ import { mapDomainError } from '@/domain/shared/error-mapping';
 import { writeAuditLog } from '@/lib/audit';
 import { headers } from 'next/headers';
 import type { AuditOperation, ApiResponse } from '@auth-sso/contracts';
+import type { PortalJwtClaims } from '../session';
 
 /**
  * 鉴权通过后注入给业务函数的上下文
+ *
+ * 携带 `claims`（含 `deptIds` 子树展开结果），使 Server Action 能执行
+ * 与 API Route 等价的数据范围校验（canAccessDept），消除"双 Controller
+ * 路径安全强度不一致"的越权风险（R7 / H-ACL-002）。
  */
 export interface AuthContext {
   /** 当前操作者用户 ID（已通过权限校验） */
   userId: string;
+  /** 操作者 JWT claims（含 roles/permissions/deptIds） */
+  claims: PortalJwtClaims;
 }
 
 /**
@@ -56,9 +63,14 @@ export function withAuth<TArgs extends unknown[], TData>(
         return { success: false, error: check.error || 'FORBIDDEN', message: check.error || '权限不足' };
       }
 
+      // checkPermission 保证 authorized 为 true 时 claims 非空（与 withPermission 对齐的运行时兜底）
+      if (!check.claims) {
+        return { success: false, error: 'INTERNAL_ERROR', message: '鉴权上下文缺失' };
+      }
+
       // 第二道：领域错误统一映射（mapDomainError 横切层）
       try {
-        const res = await fn({ userId: check.userId }, ...args);
+        const res = await fn({ userId: check.userId, claims: check.claims }, ...args);
         // 审计拦截：业务成功 + 声明了 audit 操作 → fire-and-forget 写 audit_logs
         if (res.success && options.audit) {
           recordAudit(check.userId, options.audit);
