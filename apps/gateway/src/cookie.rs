@@ -1,21 +1,31 @@
 //! Cookie 头解析与操作工具（零拷贝 + 零分配，适配网关热路径）
-//!
-//! 所有提取函数返回的字符串切片引用自原始 Cookie 头部，避免不必要的内存分配。
-//!
-//! # Cookie 名称约定（与 @auth-sso/contracts 保持同步）
-//!
-//! | 本模块常量 | @auth-sso/contracts 常量 | 说明 |
-//! |-----------|-------------------------|------|
-//! | [`ACCESS_COOKIE`] | `COOKIE_NAMES.JWT` | Access Token Cookie |
-//! | [`REFRESH_COOKIE`] | `COOKIE_NAMES.REFRESH` | Refresh Token Cookie |
-//!
-//! ⚠️ 修改 Cookie 名称时，只需改本模块的 `ACCESS_COOKIE` / `REFRESH_COOKIE`，
-//! 并同步 `packages/contracts/src/index.ts` 中的 `COOKIE_NAMES`。
+
+use pingora_http::RequestHeader;
 
 /// Access Token Cookie 名称（与 @auth-sso/contracts `COOKIE_NAMES.JWT` 同步）
 pub const ACCESS_COOKIE: &str = "portal_jwt_token";
 /// Refresh Token Cookie 名称（与 @auth-sso/contracts `COOKIE_NAMES.REFRESH` 同步）
 pub const REFRESH_COOKIE: &str = "portal_refresh_token";
+
+/// 拼合 HTTP/2 多 Cookie 头为单个字符串（兼容 H1/H2）
+///
+/// 处理 HTTP/2 下多个 `Cookie` 头字段的情况，合并为以 `; ` 分隔的单个字符串。
+pub fn collapse_cookie_header(req: &RequestHeader) -> Option<String> {
+    let mut result = String::new();
+    for cookie_val in req.headers.get_all("cookie").iter() {
+        if let Ok(h) = cookie_val.to_str() {
+            if !result.is_empty() {
+                result.push_str("; ");
+            }
+            result.push_str(h);
+        }
+    }
+    if result.is_empty() {
+        None
+    } else {
+        Some(result)
+    }
+}
 
 /// 判定并截取一个 cookie 片段的值：匹配 `name=` 前缀后返回其后的值切片，否则 None
 ///

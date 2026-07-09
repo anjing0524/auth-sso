@@ -1,7 +1,7 @@
 use crate::auth::{JwtVerifier, TokenExpiry, TokenRefresher, TokenStatus};
 use crate::cookie;
 use crate::gateway::{GatewayCtx, Identity};
-use crate::http::SessionExt;
+use crate::http::{SessionExt, is_html_page_navigation};
 use pingora_core::Result;
 use pingora_proxy::Session;
 use tracing::{info, warn};
@@ -17,19 +17,7 @@ use tracing::{info, warn};
 /// PKCE/state/nonce 并写入 HttpOnly Cookie（Path=/api/auth/callback），这些操作
 /// 无法在 Rust 网关层完成——Cookie 必须在 Portal 域名下由 Next.js 写入。
 async fn respond_auth_failure(session: &mut Session) -> Result<bool> {
-    let is_get = session
-        .req_header()
-        .method
-        .as_str()
-        .eq_ignore_ascii_case("GET");
-    let is_html = session
-        .get_header("Accept")
-        .and_then(|h| h.to_str().ok())
-        .is_some_and(|a| a.contains("text/html"));
-    let is_rsc = session.get_header("RSC").is_some();
-
-    if is_get && is_html && !is_rsc {
-        // 页面导航 → 不拦截，透传给 Portal 由 proxy.ts 处理 OAuth 重定向
+    if is_html_page_navigation(session.req_header()) {
         info!("未授权页面导航 → 透传 Portal（proxy.ts 将生成 PKCE 并跳转 /authorize）");
         return Ok(false);
     }
@@ -100,23 +88,9 @@ pub async fn check(
     verifier: &JwtVerifier,
     refresher: &TokenRefresher,
 ) -> Result<bool> {
-    // 1. 获取所有 cookie 并拼接到一起 (处理 HTTP/2 多 Cookie 头)
-    let mut cookie_header_str = String::new();
-    for cookie_val in session.req_header().headers.get_all("cookie").iter() {
-        if let Ok(h) = cookie_val.to_str() {
-            if !cookie_header_str.is_empty() {
-                cookie_header_str.push_str("; ");
-            }
-            cookie_header_str.push_str(h);
-        }
-    }
-    let cookie_header = if cookie_header_str.is_empty() {
-        None
-    } else {
-        Some(cookie_header_str.as_str())
-    };
+    let cookie_header = cookie::collapse_cookie_header(session.req_header());
+    let cookie_header = cookie_header.as_deref();
 
-    // 提取 AT
     let token = cookie_header.and_then(|h| cookie::extract_from_header(h, cookie::ACCESS_COOKIE));
 
     let Some(token) = token else {

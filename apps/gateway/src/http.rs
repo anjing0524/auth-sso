@@ -4,7 +4,7 @@ use std::sync::LazyLock;
 use std::time::Duration;
 
 use pingora_core::Result;
-use pingora_http::ResponseHeader;
+use pingora_http::{RequestHeader, ResponseHeader};
 use pingora_proxy::Session;
 
 // ── Host 头解析 ──
@@ -34,12 +34,20 @@ pub fn host_only(host: &str) -> &str {
 }
 
 /// 判定 `Host` 头是否指向本地开发环境，从而决定 Cookie 是否省略 `Secure` 标记。
-///
-/// 取代原先 `!host.contains("localhost") && !host.contains("127.0.0.1")` 的子串匹配
-/// ——后者会把 `notlocalhost.x`、`2127.0.0.1` 误判为本地，且漏掉 IPv6 回环 `::1`。
-/// 此处先剥离端口再精确比对主机名。
 pub fn is_secure_host(host: &str) -> bool {
     !matches!(host_only(host), "localhost" | "127.0.0.1" | "[::1]" | "::1")
+}
+
+/// 判断请求是否为 HTML 页面导航（GET + Accept: text/html + 无 RSC header）
+pub fn is_html_page_navigation(req: &RequestHeader) -> bool {
+    let is_get = req.method.as_str().eq_ignore_ascii_case("GET");
+    let is_html = req
+        .headers
+        .get("Accept")
+        .and_then(|h| h.to_str().ok())
+        .is_some_and(|a| a.contains("text/html"));
+    let is_rsc = req.headers.get("RSC").is_some();
+    is_get && is_html && !is_rsc
 }
 
 // ── 全局 HTTP 客户端 ──

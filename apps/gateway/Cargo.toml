@@ -4,37 +4,24 @@ version = "0.1.0"
 edition = "2024"
 description = "SSO 去中心化安全网关 - 基于 Pingora + ES256 JWKS 离线验签"
 license = "MIT"
-homepage = "https://github.com/auth-sso/auth-sso"
-documentation = "https://github.com/auth-sso/auth-sso"
 repository = "https://github.com/auth-sso/auth-sso"
 keywords = ["sso", "gateway", "oidc", "jwt", "pingora"]
 categories = ["authentication", "web-programming::http-server"]
-authors = ["Auth-SSO Team"]
 
 [dependencies]
-# ── 异步运行时 ──
-# tokio::sync 未使用（全局同步原语均来自 std::sync）
 tokio = { version = "1.52.3", features = ["time", "rt", "macros"] }
 
-# ── Pingora 网关核心 ──
 pingora-core = { version = "0.8.1", features = ["openssl"] }
 pingora-http = "0.8.1"
 pingora-limits = "0.8.1"
 pingora-load-balancing = { version = "0.8.1", features = ["openssl"] }
 pingora-proxy = { version = "0.8.1", features = ["openssl"] }
 
-# TLS: vendored OpenSSL（Docker 构建从源码编译静态链接）。
-# 注意：尽管 src/ 中无直接 use openssl::，此依赖通过 openssl-sys/vendored
-# 传播给 pingora-* crate，移除会导致 Alpine/Debian 容器中找不到系统 libssl。
 openssl = { version = "0.10.81", features = ["vendored"] }
 
-# ── 异步 HTTP 客户端（续签请求 + 首次 JWKS 同步拉取）──
 reqwest = { version = "0.12.7", features = ["json", "rustls-tls"], default-features = false }
 
-# ── 整数 → 字符串零分配格式化（429 Retry-After 头）──
 itoa = "1.0"
-
-# ── JWT 验签：ES256 JWKS 非对称验签 ──
 jsonwebtoken = "9.3.0"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.150"
@@ -42,40 +29,33 @@ base64 = "0.22.1"
 sha2 = "0.10"
 uuid = { version = "1", features = ["v4"] }
 
-# ── Redis 客户端（jti 黑名单 + 续签去重 + 分布式限流）──
 redis = { version = "1", features = ["aio"] }
 bb8 = "0.9"
 bb8-redis = "0.26"
 
-# ── Tracing 高性能每日滚动日志 ──
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter", "fmt", "ansi"] }
 tracing-appender = "0.2.5"
 
-# ── 配置管理 ──
 config = { version = "0.14.0", features = ["toml"] }
 clap = { version = "4.6.1", features = ["derive"] }
 urlencoding = "2.1.3"
 
-# ── 错误处理 ──
 thiserror = "2.0.18"
 anyhow = "1.0.103"
 
-# ── 异步兼容层（Pingora ProxyHttp/BackgroundService trait 要求 #[async_trait]）──
 async-trait = "0.1.89"
 
 [dev-dependencies]
 criterion = { version = "0.8", features = ["html_reports"], default-features = false }
 
-# ── 编译优化配置 ──
-
 [profile.release]
 opt-level = 3
 lto = "thin"
 codegen-units = 1
-debug = 1          # 仅行号表，panic 时可定位到文件:行号（二进制增量 ~2-5%）
-strip = "debuginfo" # 剥离 DWARF 段，保留符号表使 backtrace 可读
-panic = "unwind"    # 保持 unwind：Pingora 可捕获单请求 panic，避免整进程退出
+debug = 1
+strip = "debuginfo"
+panic = "unwind"
 
 [profile.dev]
 opt-level = 0
@@ -85,29 +65,24 @@ debug = true
 opt-level = 3
 lto = "thin"
 codegen-units = 1
-debug = 1           # 保留行号表便于 perf/flamegraph 性能分析
+debug = 1
 
 [[bench]]
 name = "cookie_bench"
 harness = false
-path = "benches/cookie_bench.rs"
 
 [[bench]]
 name = "path_classify_bench"
 harness = false
-path = "benches/path_classify_bench.rs"
 
 [[bench]]
 name = "jwt_payload_bench"
 harness = false
-path = "benches/jwt_payload_bench.rs"
 
 [[bench]]
 name = "rate_limit_bench"
 harness = false
-path = "benches/rate_limit_bench.rs"
 
 [[bench]]
 name = "jwks_cache_bench"
 harness = false
-path = "benches/jwks_cache_bench.rs"

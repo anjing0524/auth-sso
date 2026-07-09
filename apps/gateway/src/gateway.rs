@@ -11,7 +11,7 @@ use crate::auth::{
 };
 use crate::config::{OAuthConfig, Upstreams};
 use crate::cookie;
-use crate::http::{SessionExt, is_secure_host};
+use crate::http::{SessionExt, is_html_page_navigation, is_secure_host};
 use crate::oauth;
 use crate::path_matcher::{PathClass, PathMatcher};
 use crate::router::Router;
@@ -25,6 +25,23 @@ const UPSTREAM_SELECT_WEIGHT: usize = 256;
 /// 从 Session 提取指定请求头的字符串值
 fn header_str<'s>(session: &'s Session, name: &str) -> Option<&'s str> {
     session.get_header(name).and_then(|h| h.to_str().ok())
+}
+
+/// 获取请求的 Host，优先从 HTTP/2 authority 或 Host 头中提取以保证包含端口号
+fn get_host<'s>(session: &'s Session) -> &'s str {
+    if let Some(auth) = session.req_header().uri.authority() {
+        return auth.as_str();
+    }
+    if let Some(auth) = session
+        .get_header(":authority")
+        .and_then(|h| h.to_str().ok())
+    {
+        return auth;
+    }
+    if let Some(host) = session.get_header("Host").and_then(|h| h.to_str().ok()) {
+        return host;
+    }
+    "localhost"
 }
 
 /// 当 `value` 为 `Some` 时向请求头注入；`None` 视为 no-op
@@ -162,6 +179,33 @@ struct TokenExchangeResult {
     id_token: Option<String>,
 }
 
+/// 从 query string 提取指定参数值，零分配简单解析
+fn query_param<'a>(query: &'a str, key: &str) -> Option<&'a str> {
+    let key_eq = key.as_bytes();
+    let query_bytes = query.as_bytes();
+    let len = query_bytes.len();
+    let klen = key_eq.len();
+    let mut i = 0;
+    while i < len {
+        if i + klen < len
+            && query_bytes[i..i + klen].eq_ignore_ascii_case(key_eq)
+            && query_bytes[i + klen] == b'='
+        {
+            let val_start = i + klen + 1;
+            let val_end = query_bytes[val_start..]
+                .iter()
+                .position(|&b| b == b'&')
+                .map_or(len, |p| val_start + p);
+            return std::str::from_utf8(&query_bytes[val_start..val_end]).ok();
+        }
+        i += query_bytes[i..]
+            .iter()
+            .position(|&b| b == b'&')
+            .map_or(len - i, |p| p + 1);
+    }
+    None
+}
+
 /// Auth-SSO 去中心化安全网关 — 基于 Pingora (0.8.0 + OpenSSL)
 ///
 /// 负责代理编排：路由分类 → 限流检查 → OAuth 2.1 Client 层（PKCE + callback 拦截）
@@ -176,6 +220,7 @@ struct TokenExchangeResult {
 /// - `oidc_provider_upstream` — OIDC Provider 的 upstream nodes（用于 /token 调用）
 ///
 /// 限流器为模块级函数 [`crate::rate_limiter::check`]，无需注入。
+#[derive(Debug)]
 pub struct Gateway {
     path_matcher: PathMatcher,
     router: Router,
@@ -187,16 +232,6 @@ pub struct Gateway {
     oidc_provider_name: String,
     /// OIDC Provider 的上游地址列表（用于 POST /token 等内部调用）
     oidc_provider_upstream: Arc<Upstreams>,
-}
-
-impl std::fmt::Debug for Gateway {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Gateway")
-            .field("router", &self.router)
-            .field("jwt_verifier", &self.jwt_verifier)
-            .field("token_refresher", &self.token_refresher)
-            .finish()
-    }
 }
 
 impl Gateway {
@@ -249,57 +284,12 @@ impl Gateway {
     /// 按请求路径解析对应的 OAuth 配置，返回 `(upstream_name, Option<&OAuthConfig>)`。
     fn resolve_oauth<'a>(&'a self, path: &str) -> (&'a str, Option<&'a OAuthConfig>) {
         for (name, oauth) in self.upstream_oauth.iter() {
-            let s: &str = name;
-            if path.starts_with(s) {
-                return (s, oauth.as_ref());
+            if path.starts_with(name.as_str()) {
+                return (name, oauth.as_ref());
             }
         }
         let default_name: &str = &self.upstream_oauth[0].0;
         (default_name, self.upstream_oauth[0].1.as_ref())
-    }
-
-    /// 拼合 HTTP/2 多 Cookie 头为单个字符串（复用于 OAuth + 鉴权路径）
-    fn collapse_cookies(&self, session: &Session) -> Option<String> {
-        let mut result = String::new();
-        for cookie_val in session.req_header().headers.get_all("cookie").iter() {
-            if let Ok(h) = cookie_val.to_str() {
-                if !result.is_empty() {
-                    result.push_str("; ");
-                }
-                result.push_str(h);
-            }
-        }
-        if result.is_empty() {
-            None
-        } else {
-            Some(result)
-        }
-    }
-
-    /// 从 query string 提取指定参数值（零分配简单解析）
-    fn query_param<'a>(&self, query: &'a str, key: &str) -> Option<&'a str> {
-        let prefix = format!("{key}=");
-        for pair in query.split('&') {
-            if let Some(v) = pair.strip_prefix(&prefix) {
-                return Some(v);
-            }
-        }
-        None
-    }
-
-    /// 判断是否为 HTML 页面导航请求（GET + Accept: text/html + 无 RSC header）
-    fn is_html_page_navigation(&self, session: &Session) -> bool {
-        let is_get = session
-            .req_header()
-            .method
-            .as_str()
-            .eq_ignore_ascii_case("GET");
-        let is_html = session
-            .get_header("Accept")
-            .and_then(|h| h.to_str().ok())
-            .is_some_and(|a| a.contains("text/html"));
-        let is_rsc = session.get_header("RSC").is_some();
-        is_get && is_html && !is_rsc
     }
 
     /// 无 JWT 页面导航 → 生成 PKCE + Cookie → 302 /authorize
@@ -309,10 +299,7 @@ impl Gateway {
         oauth: &OAuthConfig,
         return_to: &str,
     ) -> Result<bool> {
-        let host = session
-            .get_header("Host")
-            .and_then(|h| h.to_str().ok())
-            .unwrap_or("localhost");
+        let host = get_host(session);
 
         let state = oauth::build_oauth_state(oauth, host, return_to);
         let secure = is_secure_host(host);
@@ -410,7 +397,7 @@ impl Gateway {
         state_param: &str,
         upstream_name: &str,
     ) -> Result<bool> {
-        let host = header_str(session, "Host").unwrap_or("localhost");
+        let host = get_host(session);
         let ck = match cookie_header.as_deref() {
             Some(c) => c,
             None => {
@@ -568,7 +555,7 @@ impl ProxyHttp for Gateway {
     ) -> Result<Box<HttpPeer>> {
         let path = session.req_header().uri.path();
         let (name, lb) = self.router.resolve(path);
-        let host = header_str(session, "Host").unwrap_or("");
+        let host = get_host(session);
         debug!(
             "接收代理请求，Host: {}，路径: {} → upstream={}",
             host, path, name
@@ -591,8 +578,8 @@ impl ProxyHttp for Gateway {
         // —— 提取所有不可变数据（之后 session 仅作 mut 操作）——
         let path = session.req_header().uri.path().to_owned();
         let query = session.req_header().uri.query().unwrap_or("").to_owned();
-        let cookie_header = self.collapse_cookies(session);
-        let is_html_nav = self.is_html_page_navigation(session);
+        let cookie_header = cookie::collapse_cookie_header(session.req_header());
+        let is_html_nav = is_html_page_navigation(session.req_header());
 
         // 1. 进行路径分类
         ctx.path_class = self.path_matcher.classify(&path);
@@ -619,8 +606,8 @@ impl ProxyHttp for Gateway {
             let is_callback = path == oauth.callback_path
                 || path.starts_with(&format!("{}/", oauth.callback_path));
             if is_callback {
-                let code = self.query_param(&query, "code");
-                let state = self.query_param(&query, "state");
+                let code = query_param(&query, "code");
+                let state = query_param(&query, "state");
                 if let (Some(code), Some(state)) = (code, state) {
                     if oauth.client_secret.is_some() {
                         return self
@@ -730,7 +717,7 @@ impl ProxyHttp for Gateway {
             return Ok(());
         };
 
-        let host = header_str(session, "Host").unwrap_or("");
+        let host = get_host(session);
         let secure = is_secure_host(host);
 
         let at_cookie = build_session_cookie(
