@@ -16,9 +16,7 @@ import { buildDepartmentTree } from '@/domain/department/department';
 import type { DepartmentTreeNode } from '@/domain/department/department';
 import { isScopeDenied } from '@/db/user-queries';
 import { asEntityStatus } from '@/lib/type-guards';
-import { canAccessDept, logServerDataRead } from '@/lib/auth';
 
-import { ForbiddenError } from '@/domain/shared/errors';
 
 /**
  * 获取当前授权范围内的部门树形结构
@@ -59,18 +57,12 @@ export async function getDepartments(
  * @param lookupId 部门 ID
  * @param deptIds  操作者数据范围（可选：API Route 传入；Server Component 自查询不传）
  */
-export async function getDepartmentById(lookupId: string, deptIds?: string[]) {
+export async function getDepartmentById(lookupId: string) {
   const rows = await db.select().from(schema.departments)
     .where(eq(schema.departments.id, lookupId))
     .limit(1);
   const row = rows[0];
   if (!row) return null;
-
-  // 数据范围检查（deptIds 由调用方通过 JWT claims 传入，data.ts 不做鉴权）
-  if (deptIds !== undefined && !canAccessDept(deptIds, row.id)) {
-    throw new ForbiddenError('超出数据权限范围');
-  }
-  await logServerDataRead('department', lookupId);
 
   return {
     id: row.id,
@@ -89,13 +81,7 @@ export async function getDepartmentById(lookupId: string, deptIds?: string[]) {
  * @param departmentId 部门 ID
  * @param deptIds      操作者数据范围（可选：API Route 传入；Server Component 自查询不传）
  */
-export async function getDepartmentMembers(departmentId: string, deptIds?: string[]) {
-  // 数据范围检查（deptIds 由调用方通过 JWT claims 传入，data.ts 不做鉴权）
-  if (deptIds !== undefined && !canAccessDept(deptIds, departmentId)) {
-    throw new ForbiddenError('超出数据权限范围');
-  }
-  await logServerDataRead('department_members', departmentId);
-
+export async function getDepartmentMembers(departmentId: string) {
   return db.select({
     id: schema.users.id,
     name: schema.users.name,

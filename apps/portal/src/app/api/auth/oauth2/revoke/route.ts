@@ -72,11 +72,14 @@ export async function POST(request: NextRequest) {
         .where(eq(schema.refreshTokens.tokenHash, hashToken(token)));
     }
 
-    // RFC 7009: 始终返回 200
-    return NextResponse.json({});
   } catch (err) {
-    // RFC 7009: 异常时仍返回 200，但统一日志输出
-    mapDomainError(err);
+    // RFC 7009: 异常时仍返回 200，但进行日志输出，避免堆栈丢失
+    const mapped = mapDomainError(err);
+    console.error('[OAuth2 Revoke] Exception details:', {
+      error: mapped.error,
+      message: mapped.message,
+      stack: err instanceof Error ? err.stack : String(err),
+    });
     return NextResponse.json({});
   }
 }

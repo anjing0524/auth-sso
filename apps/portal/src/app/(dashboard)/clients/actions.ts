@@ -35,10 +35,10 @@ export const createClientAction = withAuth(
     const rawSecret = generateClientSecret();
     const client = createClient(parsed.data, generateClientId, () => rawSecret);
     const row = clientToInsertRow(client);
-    // SHA-256 哈希存储，原文不落库（DC-CLI-C）
+    // bcrypt 哈希存储，原文不落库（DC-CLI-C）
     await db.insert(schema.clients).values({
       ...row,
-      clientSecret: hashClientSecret(rawSecret),
+      clientSecret: await hashClientSecret(rawSecret),
     });
 
     revalidatePath('/clients');
@@ -110,7 +110,7 @@ export const rotateClientSecretAction = withAuth(
 
     const newSecret = generateClientSecret();
     await db.update(schema.clients)
-      .set({ clientSecret: hashClientSecret(newSecret) })
+      .set({ clientSecret: await hashClientSecret(newSecret) })
       .where(eq(schema.clients.clientId, row.clientId));
 
     revalidatePath(`/clients/${row.clientId}`);

@@ -86,6 +86,12 @@ vi.mock('@/domain/auth/password', () => ({
   verifyPassword: mockVerifyPassword,
 }));
 
+vi.mock('@/domain/auth/brute-force', () => ({
+  checkBruteForce: vi.fn(async () => ({ locked: false, message: '' })),
+  incrementBruteForce: vi.fn(async () => {}),
+  clearBruteForceCounter: vi.fn(async () => {}),
+}));
+
 vi.mock('@/lib/auth/token', () => ({
   signLoginSession: mockSignLoginSession,
   LOGIN_SESSION_TTL: 300,

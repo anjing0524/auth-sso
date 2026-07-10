@@ -8,6 +8,13 @@
       "when": 1783578204385,
       "tag": "0000_swift_rumiko_fujikawa",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1783668290103,
+      "tag": "0001_careless_swordsman",
+      "breakpoints": true
     }
   ]
 }

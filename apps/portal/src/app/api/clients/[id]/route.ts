@@ -4,7 +4,7 @@
  * GET 读操作委托给 clients/data.ts 统一读模型。
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { withPermission } from '@/lib/auth';
+import { withPermission, logServerDataRead } from '@/lib/auth';
 import { CLIENT_ERRORS } from '@auth-sso/contracts';
 import { getClientById } from '@/app/(dashboard)/clients/data';
 
@@ -19,6 +19,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     if (!client) {
       return NextResponse.json({ error: CLIENT_ERRORS.CLIENT_NOT_FOUND, message: 'Client 不存在' }, { status: 404 });
     }
-    return NextResponse.json({ data: client });
+
+    // 记录访问日志
+    await logServerDataRead('client', id);
+
+    return NextResponse.json({ success: true, data: client });
   });
 }

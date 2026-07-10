@@ -6,7 +6,8 @@
  *
  * @module domain/auth/oauth-client
  */
-import { createHash } from 'crypto';
+import { createHash, timingSafeEqual } from 'crypto';
+import bcrypt from 'bcryptjs';
 import { ENTITY_ACTIVE } from '@auth-sso/contracts';
 import { InvalidClientError, InvalidRedirectUriError } from '@/domain/shared/errors';
 
@@ -24,11 +25,13 @@ export function validateClientActive(
 }
 
 /**
- * 校验 Client Secret（v3.2: SHA-256 哈希比较，原文不入库）
+ * 校验 Client Secret（兼容 SHA-256 遗留数据与 bcrypt 新数据，均作定时安全比较）
  *
- * 存储的是 `SHA256(secret)` 摘要，验证时对提供值做相同哈希后比较。
+ * 验证时对提供值根据 DB hash 类型进行比对：
+ * 1. 若为 bcrypt，使用 compareSync；
+ * 2. 若为 SHA-256（64位 hex），使用 timingSafeEqual。
  *
- * @param client - 包含 clientSecret（SHA-256 hex）的 Client 对象
+ * @param client - 包含 clientSecret 的 Client 对象
  * @param providedSecret - 请求中携带的 client_secret 原文
  * @throws InvalidClientError 当 secret 缺失或不匹配
  */
@@ -40,8 +43,23 @@ export function validateClientSecret(
     if (!providedSecret) {
       throw new InvalidClientError('客户端密钥缺失');
     }
-    const providedHash = createHash('sha256').update(providedSecret).digest('hex');
-    if (client.clientSecret !== providedHash) {
+    let matched = false;
+    if (
+      client.clientSecret.startsWith('$2a$') ||
+      client.clientSecret.startsWith('$2b$') ||
+      client.clientSecret.startsWith('$2y$')
+    ) {
+      matched = bcrypt.compareSync(providedSecret, client.clientSecret);
+    } else {
+      // 兼容老数据 SHA-256，采用 timingSafeEqual 进行定时安全比较
+      const providedHash = createHash('sha256').update(providedSecret).digest('hex');
+      const bufA = Buffer.from(client.clientSecret, 'hex');
+      const bufB = Buffer.from(providedHash, 'hex');
+      if (bufA.length === bufB.length) {
+        matched = timingSafeEqual(bufA, bufB);
+      }
+    }
+    if (!matched) {
       throw new InvalidClientError('客户端密钥不匹配');
     }
   }

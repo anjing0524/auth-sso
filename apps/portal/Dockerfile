@@ -13,7 +13,6 @@ RUN pnpm config set registry https://registry.npmmirror.com
 ARG NEXT_PUBLIC_APP_URL
 ENV NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL
 
-RUN echo "=== DEBUG: check source ===" && grep "redirectUri\|pkce_verifier" apps/portal/src/app/api/auth/callback/route.ts | head -5
 RUN pnpm install --frozen-lockfile
 RUN pnpm --filter @auth-sso/portal build
 

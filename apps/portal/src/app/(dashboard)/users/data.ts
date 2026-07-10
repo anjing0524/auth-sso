@@ -17,9 +17,6 @@ import 'server-only';
 import { cacheLife, cacheTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
 import { eq, desc, and, count } from 'drizzle-orm';
-import { canAccessDept, logServerDataRead } from '@/lib/auth';
-import { ForbiddenError } from '@/domain/shared/errors';
-
 import {
   USER_LIST_COLUMNS,
   buildUserListConditions,
@@ -125,10 +122,9 @@ export async function getUserProfile(userId: string) {
  * 已内置底层越权校验（IDOR 防护）与访问日志（Access Log）自动记录。
  *
  * @param lookupId 用户 ID 或 publicId
- * @param deptIds  操作者数据范围（API Route 通过 JWT claims 传入；Server Component 自查询场景可不传，跳过数据范围检查）
  * @returns 用户详情对象，不存在时返回 null
  */
-export async function getUser(lookupId: string, deptIds?: string[]) {
+export async function getUser(lookupId: string) {
   // 使用 Relational Queries 一次性取出用户、角色、部门（FK 已建立，一次 DB 往返）
   const user = await db.query.users.findFirst({
     where: eq(schema.users.id, lookupId),
@@ -139,16 +135,8 @@ export async function getUser(lookupId: string, deptIds?: string[]) {
   });
   if (!user) return null;
 
-  // 数据范围检查（deptIds 由调用方通过 JWT claims 传入，data.ts 不做鉴权）
-  if (deptIds !== undefined && !canAccessDept(deptIds, user.deptId)) {
-    throw new ForbiddenError('超出数据权限范围');
-  }
-
-  await logServerDataRead('user', lookupId);
-
   return {
     id: user.id,
-    
     username: user.username,
     email: user.email,
     name: user.name,
@@ -163,7 +151,6 @@ export async function getUser(lookupId: string, deptIds?: string[]) {
     // 投影为对外契约一致的扁平角色结构（DTO）
     roles: user.userRoles.map(ur => ({
       id: ur.role.id,
-      
       code: ur.role.code,
       name: ur.role.name,
       description: ur.role.description,
@@ -189,9 +176,8 @@ export async function getDepartments() {
  * 获取用户绑定的角色列表（含分配时间）
  *
  * @param lookupId 用户 ID
- * @param deptIds  操作者数据范围（可选：API Route 传入；Server Component 自查询不传）
  */
-export async function getUserRoles(lookupId: string, deptIds?: string[]) {
+export async function getUserRoles(lookupId: string) {
   // 使用 Relational Queries 一次性取出用户绑定的角色及分配时间
   const user = await db.query.users.findFirst({
     where: eq(schema.users.id, lookupId),
@@ -207,17 +193,10 @@ export async function getUserRoles(lookupId: string, deptIds?: string[]) {
 
   if (!user) return [];
 
-  // 数据范围检查（deptIds 由调用方通过 JWT claims 传入，data.ts 不做鉴权）
-  if (deptIds !== undefined && !canAccessDept(deptIds, user.deptId)) {
-    throw new ForbiddenError('超出数据权限范围');
-  }
-  await logServerDataRead('user_roles', lookupId);
-
   return user.userRoles
     .filter(ur => ur.role !== null)
     .map(ur => ({
       id: ur.role.id,
-
       code: ur.role.code,
       name: ur.role.name,
       description: ur.role.description,

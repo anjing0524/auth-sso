@@ -15,7 +15,7 @@ import bcrypt from 'bcryptjs';
  * 12 rounds 约耗时 250ms（取决于硬件），对登录/改密低频操作可接受，
  * 同时显著提升离线爆破难度（相比 10 rounds 提升约 4 倍）。
  */
-const BCRYPT_ROUNDS = 12;
+const BCRYPT_ROUNDS = process.env.NODE_ENV === 'test' ? 4 : 12;
 
 /**
  * 对原始密码进行 bcrypt 哈希

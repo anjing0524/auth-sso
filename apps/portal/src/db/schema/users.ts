@@ -27,9 +27,9 @@ import { createdAtColumn, updatedAtColumn } from './helpers';
 export const users = pgTable('users', {
   id: uuid('id').primaryKey().defaultRandom(),
   username: varchar('username', { length: 50 }).notNull().unique(),
-  email: varchar('email', { length: 255 }).unique(),
+  email: varchar('email', { length: 255 }),
   emailVerified: boolean('email_verified').notNull().default(false),
-  mobile: varchar('mobile', { length: 20 }).unique(),
+  mobile: varchar('mobile', { length: 20 }),
   mobileVerified: boolean('mobile_verified').notNull().default(false),
   passwordHash: varchar('password_hash', { length: 128 }),
   /**
@@ -50,6 +50,8 @@ export const users = pgTable('users', {
   index('idx_users_status').on(t.status).where(sql`${t.status} <> 'DELETED'`),
   index('idx_users_dept').on(t.deptId),
   index('idx_users_deleted_at').on(t.deletedAt),
+  uniqueIndex('ux_users_email').on(t.email).where(sql`${t.deletedAt} IS NULL`),
+  uniqueIndex('ux_users_mobile').on(t.mobile).where(sql`${t.deletedAt} IS NULL`),
 ]);
 
 /**

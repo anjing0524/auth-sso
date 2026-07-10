@@ -29,7 +29,7 @@
  *
  * @module db/schema/rbac
  */
-import { pgTable, uuid, varchar, text, boolean, smallint, index, uniqueIndex, check } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, varchar, text, boolean, smallint, index, uniqueIndex, check, type AnyPgColumn } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { entityStatusEnum, permissionTypeEnum } from './enums';
 import { clients } from './auth';
@@ -72,8 +72,8 @@ export const permissions = pgTable('permissions', {
   action: varchar('action', { length: 50 }),
   // API 专属
   clientId: varchar('client_id', { length: 50 }).references(() => clients.clientId, { onDelete: 'cascade' }),
-  // 树形结构（FK 自引用在 migration 中手动添加以避免 TS 类型推导循环）
-  parentId: uuid('parent_id'),
+  // 树形结构（FK 自引用）
+  parentId: uuid('parent_id').references((): AnyPgColumn => permissions.id, { onDelete: 'cascade' }),
   status: entityStatusEnum('status').notNull().default('ACTIVE'),
   sort: smallint('sort').notNull().default(0),
   createdAt: createdAtColumn(),
@@ -96,7 +96,7 @@ export const permissions = pgTable('permissions', {
  */
 export const rolePermissions = pgTable('role_permissions', {
   roleId: uuid('role_id').notNull().references(() => roles.id, { onDelete: 'cascade' }),
-  permissionId: uuid('permission_id').notNull(),
+  permissionId: uuid('permission_id').notNull().references(() => permissions.id, { onDelete: 'cascade' }),
   createdAt: createdAtColumn(),
 }, (t) => [
   uniqueIndex('ux_role_permissions_pk').on(t.roleId, t.permissionId),

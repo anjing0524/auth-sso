@@ -63,30 +63,22 @@ async fn get_conn() -> Option<bb8::PooledConnection<'static, bb8_redis::RedisCon
         .ok()
 }
 
-/// 检查 key 是否存在于 Redis（EXISTS 命令），fail-open 返回 false
+/// 检查 key 是否存在于 Redis（EXISTS 命令）
 ///
 /// # Examples
 ///
 /// ```ignore
-/// // Redis 不可用或连接池未就绪时返回 false（安全降级）
-/// let found = redis::exists("portal:jti_blocklist:some-jti").await;
+/// let found = redis::exists("portal:jti_blocklist:some-jti").await?;
 /// ```
-pub async fn exists(key: &str) -> bool {
-    let Some(mut conn) = get_conn().await else {
-        return false;
-    };
-    match redis::cmd("EXISTS")
+pub async fn exists(key: &str) -> anyhow::Result<bool> {
+    let pool = pool().context("Redis 连接池未就绪")?;
+    let mut conn = pool.get().await.context("Redis 连接获取失败")?;
+    let count: i32 = redis::cmd("EXISTS")
         .arg(key)
-        .query_async::<i32>(&mut *conn)
+        .query_async(&mut *conn)
         .await
-    {
-        Ok(0) => false,
-        Ok(_) => true,
-        Err(e) => {
-            tracing::error!("❌ Redis EXISTS 异常: {:?}，执行安全降级 (返回 false)", e);
-            false
-        }
-    }
+        .context("Redis EXISTS 命令执行失败")?;
+    Ok(count > 0)
 }
 
 /// 从 Redis 获取一个字符串值（GET 命令），fail-open 返回 None

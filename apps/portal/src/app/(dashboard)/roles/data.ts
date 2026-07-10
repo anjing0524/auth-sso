@@ -7,9 +7,7 @@ import { cacheLife, cacheTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
 import { eq, ilike, or, asc, desc, and, count, inArray } from 'drizzle-orm';
 
-import { ForbiddenError } from '@/domain/shared/errors';
 import { asEntityStatus } from '@/lib/type-guards';
-import { canAccessDept, logServerDataRead } from '@/lib/auth';
 
 /**
  * 分页获取角色列表
@@ -79,19 +77,12 @@ export async function getRoles(params: {
  * @param lookupId 角色 ID
  * @param deptIds  操作者数据范围（可选：API Route 传入；Server Component 自查询不传）
  */
-export async function getRoleById(lookupId: string, deptIds?: string[]) {
+export async function getRoleById(lookupId: string) {
   const rows = await db.select().from(schema.roles)
     .where(eq(schema.roles.id, lookupId))
     .limit(1);
   const row = rows[0];
   if (!row) return null;
-
-  // 数据范围检查（deptIds 由调用方通过 JWT claims 传入，data.ts 不做鉴权）
-  if (deptIds !== undefined && !canAccessDept(deptIds, row.deptId)) {
-    throw new ForbiddenError('超出数据权限范围');
-  }
-
-  await logServerDataRead('role', lookupId);
 
   return {
     id: row.id,
@@ -112,7 +103,7 @@ export async function getRoleById(lookupId: string, deptIds?: string[]) {
  * @param roleId  角色 ID
  * @param deptIds 操作者数据范围（可选：API Route 传入；Server Component 自查询不传）
  */
-export async function getRolePermissions(roleId: string, deptIds?: string[]) {
+export async function getRolePermissions(roleId: string) {
   // 使用 Relational Queries 一次性带出角色及其绑定的权限
   const role = await db.query.roles.findFirst({
     where: eq(schema.roles.id, roleId),
@@ -126,12 +117,6 @@ export async function getRolePermissions(roleId: string, deptIds?: string[]) {
   });
 
   if (!role) return [];
-
-  // 数据范围检查（deptIds 由调用方通过 JWT claims 传入，data.ts 不做鉴权）
-  if (deptIds !== undefined && !canAccessDept(deptIds, role.deptId)) {
-    throw new ForbiddenError('超出数据权限范围');
-  }
-  await logServerDataRead('role_permissions', roleId);
 
   return role.rolePermissions
     .filter(rp => rp.permission !== null)

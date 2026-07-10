@@ -12,12 +12,17 @@ import { getClients } from '@/app/(dashboard)/clients/data';
 export async function GET(request: NextRequest) {
   return withPermission({ permissions: ['client:list'] }, async () => {
     const sp = request.nextUrl.searchParams;
-    const page = parseInt(sp.get('page') || '1', 10);
-    const pageSize = parseInt(sp.get('pageSize') || '20', 10);
+    const page = Math.max(1, parseInt(sp.get('page') || '1', 10));
+    const rawPageSize = parseInt(sp.get('pageSize') || '20', 10);
+    const pageSize = Math.min(100, Math.max(1, rawPageSize));
     const keyword = sp.get('keyword') || '';
     const status = sp.get('status') || '';
 
     const result = await getClients({ page, pageSize, keyword, status });
-    return NextResponse.json(result);
+    return NextResponse.json({
+      success: true,
+      data: result.data,
+      pagination: result.pagination,
+    });
   });
 }

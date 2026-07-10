@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db, schema } from '@/infrastructure/db';
 import { eq, inArray, and } from 'drizzle-orm';
-import { withPermission } from '@/lib/auth';
+import { withPermission, logServerDataRead } from '@/lib/auth';
 import { COMMON_ERRORS } from '@auth-sso/contracts';
 import { getClientById, getClientTokens } from '@/app/(dashboard)/clients/data';
 import { writeAuditLog, extractClientIP, extractUserAgent } from '@/lib/audit';
@@ -25,12 +25,18 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     }
 
     const sp = request.nextUrl.searchParams;
-    const page = parseInt(sp.get('page') || '1', 10);
-    const pageSize = parseInt(sp.get('pageSize') || '20', 10);
+    const page = Math.max(1, parseInt(sp.get('page') || '1', 10));
+    const rawPageSize = parseInt(sp.get('pageSize') || '20', 10);
+    const pageSize = Math.min(100, Math.max(1, rawPageSize));
     const userId = sp.get('userId') || undefined;
 
     const result = await getClientTokens(client.clientId, { page, pageSize, userId });
-    return NextResponse.json(result);
+    await logServerDataRead('client_tokens', client.clientId);
+    return NextResponse.json({
+      success: true,
+      data: result.data,
+      pagination: result.pagination,
+    });
   });
 }
 

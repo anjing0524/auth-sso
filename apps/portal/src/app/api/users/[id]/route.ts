@@ -5,7 +5,7 @@
  * 数据范围检查保留在本层（属于鉴权逻辑，非数据获取逻辑）。
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { withPermission, canAccessDept } from '@/lib/auth';
+import { withPermission, canAccessDept, logServerDataRead } from '@/lib/auth';
 import { COMMON_ERRORS, USER_ERRORS } from '@auth-sso/contracts';
 import { getUser } from '@/app/(dashboard)/users/data';
 
@@ -18,7 +18,7 @@ interface RouteParams {
 export async function GET(request: NextRequest, { params }: RouteParams) {
   return withPermission({ permissions: ['user:read'] }, async (adminUserId, claims) => {
     const { id } = await params;
-    const user = await getUser(id, claims.deptIds);
+    const user = await getUser(id);
     if (!user) {
       return NextResponse.json(
         { error: USER_ERRORS.USER_NOT_FOUND, message: '用户不存在' },
@@ -36,6 +36,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    return NextResponse.json({ data: user });
+    // 在 API 契约层记录读取日志，切断 data 层的反向依赖
+    await logServerDataRead('user', id);
+
+    return NextResponse.json({ success: true, data: user });
   });
 }

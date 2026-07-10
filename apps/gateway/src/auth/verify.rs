@@ -41,6 +41,9 @@ pub enum VerifyError {
     /// JWT 的 `jti` 已被吊销（命中 Redis 黑名单）。
     #[error("jti 已被吊销: {0}")]
     RevokedJti(String),
+    /// JTI 校验服务异常（Redis 连接故障，fail-close）。
+    #[error("JTI 校验服务不可用: {0}")]
+    JtiServiceUnavailable(#[source] anyhow::Error),
 }
 
 /// JWT 离线密码学验签器。
@@ -102,9 +105,21 @@ impl JwtVerifier {
         })?;
         debug!("JWT 验签通过: sub={}, kid={}", token_data.claims.sub, kid);
 
-        // 4. jti 黑名单检查（Redis fail-open）
-        if !self.check_jti(&token_data.claims.jti).await {
-            return Err(VerifyError::RevokedJti(token_data.claims.jti.clone()));
+        // 4. jti 黑名单检查（Redis fail-close）
+        match self.check_jti(&token_data.claims.jti).await {
+            Ok(true) => {
+                warn!(
+                    "⚠️ 拒绝访问：JWT 的 jti 已被吊销: jti={}",
+                    token_data.claims.jti
+                );
+                crate::metrics::inc_jti_revoked();
+                return Err(VerifyError::RevokedJti(token_data.claims.jti.clone()));
+            }
+            Ok(false) => {}
+            Err(e) => {
+                tracing::error!("❌ Gateway 黑名单检查异常 (fail-close): {:?}", e);
+                return Err(VerifyError::JtiServiceUnavailable(e));
+            }
         }
 
         // 5. 判定过期状态
@@ -130,17 +145,14 @@ impl JwtVerifier {
         })
     }
 
-    /// 检查 jti 是否在黑名单中（已吊销），Redis 不可用时 fail-open 放行。
-    ///
-    /// 返回 `true` 表示未吊销（放行），`false` 表示已吊销（应拒绝）。
-    async fn check_jti(&self, jti: &str) -> bool {
+    #[cfg(test)]
+    async fn check_jti(&self, _jti: &str) -> anyhow::Result<bool> {
+        Ok(false)
+    }
+
+    #[cfg(not(test))]
+    async fn check_jti(&self, jti: &str) -> anyhow::Result<bool> {
         let jti_key = format!("portal:jti_blocklist:{}", jti);
-        if crate::redis::exists(&jti_key).await {
-            warn!("⚠️ 拒绝访问：JWT 的 jti 已被吊销: jti={}", jti);
-            crate::metrics::inc_jti_revoked();
-            false
-        } else {
-            true
-        }
+        crate::redis::exists(&jti_key).await
     }
 }

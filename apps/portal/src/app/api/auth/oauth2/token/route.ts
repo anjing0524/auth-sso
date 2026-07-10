@@ -19,7 +19,7 @@ import { resolveTokenClaims } from '@/lib/auth/permissions-context';
 import { mapDomainError } from '@/domain/shared/error-mapping';
 import { InvalidGrantError } from '@/domain/shared/errors';
 import { z } from 'zod';
-import { OAUTH_PARAMS } from '@auth-sso/contracts';
+import { OAUTH_PARAMS, AUTH_ERRORS } from '@auth-sso/contracts';
 import { writeLoginLog, extractClientIP, extractUserAgent } from '@/lib/audit';
 import { parseOAuthBody } from '@/lib/auth/oauth-body';
 
@@ -155,8 +155,23 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'unsupported_grant_type' }, { status: 400 });
   } catch (err) {
     const mapped = mapDomainError(err);
+    
+    // 映射为符合 RFC 6749 规范的标准 OAuth2 错误码
+    let oauthError = 'invalid_request';
+    if (mapped.error === AUTH_ERRORS.INVALID_CLIENT) {
+      oauthError = 'invalid_client';
+    } else if (
+      mapped.error === AUTH_ERRORS.INVALID_CODE ||
+      mapped.error === AUTH_ERRORS.PKCE_VERIFICATION_FAILED ||
+      mapped.error === AUTH_ERRORS.INVALID_REDIRECT_URI
+    ) {
+      oauthError = 'invalid_grant';
+    } else if (mapped.error === AUTH_ERRORS.UNSUPPORTED_GRANT_TYPE) {
+      oauthError = 'unsupported_grant_type';
+    }
+
     return NextResponse.json(
-      { error: mapped.error, error_description: mapped.message },
+      { error: oauthError, error_description: mapped.message },
       { status: mapped.status },
     );
   }

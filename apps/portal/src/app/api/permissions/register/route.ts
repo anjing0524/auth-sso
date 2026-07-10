@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db, schema } from '@/infrastructure/db';
 import { eq, sql, inArray, ne, isNull, or, and } from 'drizzle-orm';
-import { generateUUID, hashClientSecret } from '@/lib/crypto';
+import { generateUUID } from '@/lib/crypto';
 import { COMMON_ERRORS } from '@auth-sso/contracts';
 import { mapDomainError } from '@/domain/shared/error-mapping';
-import { validateClientActive } from '@/domain/auth/oauth-client';
+import { validateClientActive, validateClientSecret } from '@/domain/auth/oauth-client';
 
 
 /**
@@ -110,7 +110,9 @@ export async function POST(request: NextRequest) {
     } catch {
       return NextResponse.json({ error: 'Forbidden', message: '该应用系统已停用或不存在' }, { status: 403 });
     }
-    if (clientRecord[0]!.clientSecret !== hashClientSecret(auth.clientSecret)) {
+    try {
+      validateClientSecret(clientRecord[0]!, auth.clientSecret);
+    } catch {
       return NextResponse.json({ error: 'Forbidden', message: 'Client ID 或 Secret 错误' }, { status: 403 });
     }
     // 仅允许 Portal 内部系统 Client 调用（is_internal=true），杜绝任意注册 Client 提权注册权限

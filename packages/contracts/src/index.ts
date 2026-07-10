@@ -85,6 +85,8 @@ export const COOKIE_NAMES = {
 export const GATEWAY_HEADERS = {
   /** Gateway 验签后注入的用户 ID header（Portal 信任路径免验签） */
   USER_ID: 'x-user-id',
+  /** Gateway 验签后注入的用户名 header（可选，用于日志/审计） */
+  USER_NAME: 'x-user-name',
   /** Gateway 验签后注入的 JWT 唯一标识 jti header */
   USER_JTI: 'x-user-jti',
 } as const;

@@ -1,4 +1,5 @@
 import { randomBytes, randomUUID, createHash } from 'crypto';
+import bcrypt from 'bcryptjs';
 
 /**
  * 统一身份认证平台 - 安全工具库
@@ -57,14 +58,14 @@ export function hashToken(token: string): string {
 }
 
 /**
- * 计算 Client Secret 的 SHA256 哈希 — DC-CLI-C 安全存储要求
+ * 计算 Client Secret 的 bcrypt 哈希 — DC-CLI-C 安全存储要求
  *
  * Secret 原文不存入 DB，仅存储哈希值；验证时对明文做相同哈希后比较。
  * 创建/轮换时返回一次原文，之后不可再获取。
  *
  * @param secret 原始 Client Secret 字符串
- * @returns 64 字符小写 hex 摘要
+ * @returns bcrypt 哈希摘要 (异步)
  */
-export function hashClientSecret(secret: string): string {
-  return createHash('sha256').update(secret).digest('hex');
+export async function hashClientSecret(secret: string): Promise<string> {
+  return bcrypt.hash(secret, 12);
 }

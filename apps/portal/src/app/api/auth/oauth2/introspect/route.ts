@@ -88,10 +88,14 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    return NextResponse.json({ active: false });
   } catch (err) {
-    // RFC 7662: 异常时仍返回 { active: false }，但统一日志输出
-    mapDomainError(err);
+    // RFC 7662: 异常时仍返回 { active: false }，但进行日志输出，避免堆栈丢失
+    const mapped = mapDomainError(err);
+    console.error('[OAuth2 Introspect] Exception details:', {
+      error: mapped.error,
+      message: mapped.message,
+      stack: err instanceof Error ? err.stack : String(err),
+    });
     return NextResponse.json({ active: false });
   }
 }

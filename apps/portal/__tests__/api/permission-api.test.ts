@@ -149,6 +149,9 @@ vi.mock('@/lib/crypto', () => ({
   hashClientSecret: (s: string) => 'hash:' + s,
 }));
 
+import { createHash } from 'crypto';
+const REAL_HASH = createHash('sha256').update('registry-secret').digest('hex');
+
 import { GET as ListPermissions } from '@/app/api/permissions/route';
 import { GET as GetPermission } from '@/app/api/permissions/[id]/route';
 import { POST as RegisterPermissions } from '@/app/api/permissions/register/route';
@@ -176,7 +179,7 @@ function makeRegisterClientRow(overrides: Record<string, any> = {}) {
   return {
     id: 'reg-client-1',
     clientId: 'registry-client',
-    clientSecret: 'hash:registry-secret',
+    clientSecret: REAL_HASH,
     name: '权限注册客户端',
     status: 'ACTIVE',
     isInternal: true,

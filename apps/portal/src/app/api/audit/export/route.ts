@@ -21,20 +21,32 @@ export async function GET(request: NextRequest) {
       let csv: string;
       const pagination = { page: 1, pageSize: 10000 };
 
+      // 将单元格值转为 RFC 4180 安全的 CSV 字段（含公式注入防护）
+      const csvEscape = (v: unknown): string => {
+        const s = String(v ?? '');
+        // CSV 公式注入防护：以 = + - @ 开头的字段加 tab 前缀，阻止 Excel 执行
+        const escaped = /^[=+\-@\t\r]/.test(s) ? '\t' + s : s;
+        // 含逗号、双引号、换行符的字段用双引号包裹
+        if (/[",\n\r]/.test(escaped)) {
+          return '"' + escaped.replace(/"/g, '""') + '"';
+        }
+        return escaped;
+      };
+
       if (type === 'login') {
         const logs = await getLoginLogs(pagination);
-        csv = '﻿' + [
+        csv = '\uFEFF' + [
           '时间,用户,事件类型,IP地址,User-Agent,失败原因',
           ...logs.data.map((l: Record<string, unknown>) =>
-            [l.createdAt, l.username, l.eventType, l.ip, (l.userAgent as string || '').replace(/,/g, ' '), l.failReason || ''].join(',')
+            [l.createdAt, l.username, l.eventType, l.ip, l.userAgent, l.failReason].map(csvEscape).join(',')
           ),
         ].join('\n');
       } else {
         const logs = await getAuditLogs(pagination);
-        csv = '﻿' + [
+        csv = '\uFEFF' + [
           '时间,操作人,操作类型,目标资源,详情,IP地址',
           ...logs.data.map((l: Record<string, unknown>) =>
-            [l.createdAt, l.operator || l.username, l.operation, l.resource, (l.detail as string || '').replace(/,/g, ' '), l.ip || ''].join(',')
+            [l.createdAt, l.operator || l.username, l.operation, l.resource, l.detail, l.ip].map(csvEscape).join(',')
           ),
         ].join('\n');
       }

@@ -14,12 +14,17 @@ export async function GET(request: NextRequest) {
     const sp = request.nextUrl.searchParams;
     const keyword = sp.get('keyword') || '';
     const status = sp.get('status') || '';
-    const page = parseInt(sp.get('page') || '1', 10);
-    const pageSize = parseInt(sp.get('pageSize') || '10', 10);
+    const page = Math.max(1, parseInt(sp.get('page') || '1', 10));
+    const rawPageSize = parseInt(sp.get('pageSize') || '10', 10);
+    const pageSize = Math.min(100, Math.max(1, rawPageSize));
 
     // 数据范围：仅返回管理员可见部门内的角色（H-ACL-002）
     // deptIds 来自 JWT claims（已含子树展开），无需额外 DB 查询
     const result = await getRoles({ page, pageSize, keyword, status, deptIds: claims.deptIds });
-    return NextResponse.json(result);
+    return NextResponse.json({
+      success: true,
+      data: result.data,
+      pagination: result.pagination,
+    });
   });
 }

@@ -8,7 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { revalidatePath, updateTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
 import { eq, inArray, and } from 'drizzle-orm';
-import { withPermission, canAccessDept } from '@/lib/auth';
+import { withPermission, canAccessDept, logServerDataRead } from '@/lib/auth';
 import { writeAuditLog, extractClientIP, extractUserAgent } from '@/lib/audit';
 import crypto from 'crypto';
 import { refreshUserPermissionCache } from '@/lib/permissions';
@@ -41,8 +41,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     if (!canAccessDept(claims.deptIds, target.deptId)) {
       return NextResponse.json({ error: COMMON_ERRORS.FORBIDDEN, message: '无权查看该用户' }, { status: 403 });
     }
-    const roles = await getUserRoles(id, claims.deptIds);
-    return NextResponse.json({ data: roles });
+    const roles = await getUserRoles(id);
+    await logServerDataRead('user_roles', id);
+    return NextResponse.json({ success: true, data: roles });
   });
 }
 

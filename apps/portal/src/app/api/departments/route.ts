@@ -13,6 +13,9 @@ export async function GET(request: NextRequest) {
   return withPermission({ permissions: ['department:list'] }, async (userId, claims) => {
     // deptIds 来自 JWT claims（已含子树展开），无需额外 DB 查询
     const data = await getDepartments(claims.deptIds, userId);
-    return NextResponse.json({ data });
+    return NextResponse.json({
+      success: true,
+      data,
+    });
   });
 }

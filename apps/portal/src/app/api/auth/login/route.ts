@@ -12,7 +12,7 @@ import { db, schema } from '@/infrastructure/db';
 import { eq } from 'drizzle-orm';
 import { validateLoginCredentials } from '@/domain/auth/login';
 import { verifyPassword } from '@/domain/auth/password';
-import { checkBruteForce, clearBruteForceCounter } from '@/domain/auth/brute-force';
+import { checkBruteForce, clearBruteForceCounter, incrementBruteForce } from '@/domain/auth/brute-force';
 import { signLoginSession, LOGIN_SESSION_TTL } from '@/lib/auth/token';
 import { InvalidCredentialsError } from '@/domain/shared/errors';
 import { mapDomainError } from '@/domain/shared/error-mapping';
@@ -66,6 +66,8 @@ export async function POST(request: NextRequest) {
     }
     const valid = await verifyPassword(password, user.passwordHash!);
     if (!valid) {
+      // 密码错误，增加暴力破解失败计数
+      await incrementBruteForce(user.id);
       writeLoginLog({ userId: user.id, username: user.username, eventType: 'LOGIN_FAILED', ip, userAgent: ua, failReason: '密码错误' });
       throw new InvalidCredentialsError();
     }
