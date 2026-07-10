@@ -14,6 +14,7 @@ export {
   getIssuer,
   getJwksUri,
   getTrustedOrigins,
+  getGatewaySharedSecret,
   getRedisUrl,
   getEnvConfig,
   parsePortalEnv,

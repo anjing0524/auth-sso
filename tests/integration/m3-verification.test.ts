@@ -196,30 +196,34 @@ async function testSessionInRedis(): Promise<TestResult> {
       return { name, status: 'FAIL', duration: Date.now() - start, error: 'Login failed' };
     }
 
-    // 验证 /api/me 返回用户信息
+    // 使用登录获得的真实 Cookie 访问 /api/me，而非伪造 Cookie
     const meRes = await httpRequest(`${PORTAL_URL}/api/me`, {
-      headers: { Cookie: `portal_session_id=test` },
+      headers: {
+        Cookie: buildCookieHeader(loginResult.sessionCookies),
+        Authorization: `Bearer ${loginResult.accessToken}`,
+      },
     });
 
-    // 检查响应中是否包含 session 信息
-    if (meRes.status === 200) {
-      const meBody = meRes.body as { session?: { createdAt: number } };
-      if (meBody.session?.createdAt) {
-        return { name, status: 'PASS', duration: Date.now() - start };
-      }
+    // 严格断言：必须返回 200 且用户 email 匹配登录账号
+    if (meRes.status !== 200) {
+      return {
+        name,
+        status: 'FAIL',
+        duration: Date.now() - start,
+        error: `Expected 200, got ${meRes.status}`,
+      };
+    }
+    const meBody = meRes.body as { user?: { email?: string } };
+    if (meBody.user?.email !== TEST_USER.email) {
+      return {
+        name,
+        status: 'FAIL',
+        duration: Date.now() - start,
+        error: `User email mismatch: expected ${TEST_USER.email}, got ${meBody.user?.email}`,
+      };
     }
 
-    // 即使返回 401，也说明 Session 机制在工作
-    if (meRes.status === 401 || meRes.status === 200) {
-      return { name, status: 'PASS', duration: Date.now() - start };
-    }
-
-    return {
-      name,
-      status: 'FAIL',
-      duration: Date.now() - start,
-      error: `Unexpected status: ${meRes.status}`,
-    };
+    return { name, status: 'PASS', duration: Date.now() - start };
   } catch (e) {
     return { name, status: 'FAIL', duration: Date.now() - start, error: String(e) };
   }
@@ -227,7 +231,7 @@ async function testSessionInRedis(): Promise<TestResult> {
 
 async function testLogoutClearsSession(): Promise<TestResult> {
   const start = Date.now();
-  const name = 'M3-2: 登出清除 Session';
+  const name = 'M3-2: 登出清除 Session（携带真实会话 Cookie）';
 
   try {
     const loginResult = await performLogin();
@@ -235,9 +239,13 @@ async function testLogoutClearsSession(): Promise<TestResult> {
       return { name, status: 'FAIL', duration: Date.now() - start, error: 'Login failed' };
     }
 
-    // 执行登出
+    // 关键：登出必须携带登录获得的真实会话 Cookie，而非匿名请求
     const logoutRes = await httpRequest(`${PORTAL_URL}/api/auth/logout`, {
       method: 'POST',
+      headers: {
+        Cookie: buildCookieHeader(loginResult.sessionCookies),
+        Authorization: `Bearer ${loginResult.accessToken}`,
+      },
     });
 
     if (logoutRes.status !== 200) {
@@ -249,7 +257,21 @@ async function testLogoutClearsSession(): Promise<TestResult> {
       };
     }
 
-    return { name, status: 'PASS', duration: Date.now() - start };
+    // 严格验证：登出后用同一 access token 访问 /api/me 应返回 401（token 已失效）
+    const meAfterLogout = await httpRequest(`${PORTAL_URL}/api/me`, {
+      headers: { Authorization: `Bearer ${loginResult.accessToken}` },
+    });
+
+    if (meAfterLogout.status === 401) {
+      return { name, status: 'PASS', duration: Date.now() - start };
+    }
+
+    return {
+      name,
+      status: 'FAIL',
+      duration: Date.now() - start,
+      error: `Token should be revoked after logout, but /api/me returned ${meAfterLogout.status}`,
+    };
   } catch (e) {
     return { name, status: 'FAIL', duration: Date.now() - start, error: String(e) };
   }
@@ -317,10 +339,10 @@ async function testUnauthorizedWithoutSession(): Promise<TestResult> {
 
 async function testMultipleLogins(): Promise<TestResult> {
   const start = Date.now();
-  const name = 'M3-5: 多次登录创建独立 Session';
+  const name = 'M3-5: 多次登录创建独立 Session（token 互不相同）';
 
   try {
-    // 登录两次
+    // 登录两次，获取各自的 access token
     const login1 = await performLogin();
     const login2 = await performLogin();
 
@@ -328,7 +350,33 @@ async function testMultipleLogins(): Promise<TestResult> {
       return { name, status: 'FAIL', duration: Date.now() - start, error: 'Login failed' };
     }
 
-    // 两次登录应该成功
+    // 严格验证：两次登录签发的 access token 必须不同（jti 唯一）
+    if (login1.accessToken === login2.accessToken) {
+      return {
+        name,
+        status: 'FAIL',
+        duration: Date.now() - start,
+        error: 'Two logins produced identical access tokens (jti not unique)',
+      };
+    }
+
+    // 两个 token 都应能通过 /api/me 认证
+    const me1 = await httpRequest(`${PORTAL_URL}/api/me`, {
+      headers: { Authorization: `Bearer ${login1.accessToken}` },
+    });
+    const me2 = await httpRequest(`${PORTAL_URL}/api/me`, {
+      headers: { Authorization: `Bearer ${login2.accessToken}` },
+    });
+
+    if (me1.status !== 200 || me2.status !== 200) {
+      return {
+        name,
+        status: 'FAIL',
+        duration: Date.now() - start,
+        error: `Tokens not independently valid: me1=${me1.status}, me2=${me2.status}`,
+      };
+    }
+
     return { name, status: 'PASS', duration: Date.now() - start };
   } catch (e) {
     return { name, status: 'FAIL', duration: Date.now() - start, error: String(e) };

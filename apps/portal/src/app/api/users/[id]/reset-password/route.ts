@@ -7,10 +7,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { withPermission, canAccessDept } from '@/lib/auth';
 import { db, schema } from '@/infrastructure/db';
 import { eq } from 'drizzle-orm';
-import { hashPassword } from '@/domain/auth/password';
+import { hashPassword, isPasswordReused, pushPasswordHistory } from '@/domain/auth/password';
 import { COMMON_ERRORS, USER_ERRORS } from '@auth-sso/contracts';
 import { revokeUserAccessByUserId } from '@/lib/session/revoke';
 import { refreshUserPermissionCache } from '@/lib/permissions';
+import { validatePassword } from '@/domain/shared/zod-schemas';
 
 interface RouteParams { params: Promise<{ id: string }>; }
 
@@ -23,28 +24,20 @@ export async function POST(
     const body = await request.json();
     const newPassword = body.password as string;
 
-    // NFR-SEC-05: 密码策略 — 至少 10 位，须包含大写字母、小写字母、数字、特殊字符中至少三类
-    if (!newPassword || newPassword.length < 10) {
+    // NFR-SEC-05: 密码策略统一校验（单一真相源 — domain/shared/zod-schemas.ts PasswordSchema）
+    const passwordError = validatePassword(newPassword);
+    if (passwordError) {
       return NextResponse.json(
-        { error: COMMON_ERRORS.VALIDATION_ERROR, message: '密码至少10位，须包含大小写字母、数字或特殊字符中至少三类' },
-        { status: 400 },
-      );
-    }
-    // 统计密码字符类别数（大写/小写/数字/特殊字符），至少满足 3 类
-    const categories = [/[a-z]/, /[A-Z]/, /\d/, /[^a-zA-Z\d]/];
-    const matchedCategories = categories.filter((re) => re.test(newPassword)).length;
-    if (matchedCategories < 3) {
-      return NextResponse.json(
-        { error: COMMON_ERRORS.VALIDATION_ERROR, message: '密码须包含大写字母、小写字母、数字、特殊字符中的至少三类' },
+        { error: COMMON_ERRORS.VALIDATION_ERROR, message: passwordError },
         { status: 400 },
       );
     }
 
     // 数据范围守卫：只能重置本部门（含子部门）范围内用户的密码（H-DSCOPE-003）
-    // deptIds 来自 JWT claims，无需额外 DB 查询
+    // 同时读取 passwordHistory 用于 NFR-SEC-15 校验
     const target = await db.query.users.findFirst({
       where: eq(schema.users.id, id),
-      columns: { id: true, deptId: true },
+      columns: { id: true, deptId: true, passwordHash: true, passwordHistory: true },
     });
     if (!target) {
       return NextResponse.json(
@@ -59,11 +52,20 @@ export async function POST(
       );
     }
 
+    // NFR-SEC-15: 禁止重用最近 5 次密码
+    if (await isPasswordReused(newPassword, target.passwordHistory ?? null)) {
+      return NextResponse.json(
+        { error: COMMON_ERRORS.VALIDATION_ERROR, message: '新密码不能与该用户最近使用过的密码相同' },
+        { status: 400 },
+      );
+    }
+
     const passwordHash = await hashPassword(newPassword);
+    const newHistory = pushPasswordHistory(target.passwordHistory ?? null, target.passwordHash ?? '');
 
     await db.transaction(async (tx) => {
       await tx.update(schema.users)
-        .set({ passwordHash })
+        .set({ passwordHash, passwordHistory: newHistory })
         .where(eq(schema.users.id, id));
     });
 

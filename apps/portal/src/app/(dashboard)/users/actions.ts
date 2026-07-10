@@ -30,9 +30,10 @@ import {
   UserIdentityInputSchema,
   type CreateUserInput,
 } from '@/domain/user/types';
+import { validatePassword } from '@/domain/shared/zod-schemas';
 import { EntityNotFoundError, DuplicateEntityError, ForbiddenError } from '@/domain/shared/errors';
 import { generateUUID } from '@/lib/crypto';
-import { hashPassword } from '@/domain/auth/password';
+import { hashPassword, isPasswordReused, pushPasswordHistory } from '@/domain/auth/password';
 import { refreshUserPermissionCache } from '@/lib/permissions';
 import { revokeUserAccessByUserId } from '@/lib/session/revoke';
 import { canAccessDept } from '@/lib/auth';
@@ -251,11 +252,12 @@ export const resetPasswordAction = withAuth(
     if (!parsed.success) {
       return { success: false, error: 'VALIDATION_ERROR', message: parsed.error.issues[0].message };
     }
-    if (!newPassword || newPassword.length < 8) {
-      return { success: false, error: 'VALIDATION_ERROR', message: '密码至少8位，须包含大小写字母和数字' };
+    if (!newPassword) {
+      return { success: false, error: 'VALIDATION_ERROR', message: '密码不能为空' };
     }
-    if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(newPassword)) {
-      return { success: false, error: 'VALIDATION_ERROR', message: '密码须包含大小写字母和数字' };
+    const passwordError = validatePassword(newPassword);
+    if (passwordError) {
+      return { success: false, error: 'VALIDATION_ERROR', message: passwordError };
     }
 
     const passwordHash = await hashPassword(newPassword);
@@ -265,8 +267,14 @@ export const resetPasswordAction = withAuth(
       if (!row) throw new EntityNotFoundError('User', parsed.data.id);
       if (!canAccessDept(ctx.claims.deptIds, row.deptId)) throw new ForbiddenError('无权操作该部门的用户');
 
+      // NFR-SEC-15: 禁止重用最近 5 次密码
+      if (await isPasswordReused(newPassword, row.passwordHistory ?? null)) {
+        throw new Error('新密码不能与该用户最近使用过的密码相同');
+      }
+
+      const newHistory = pushPasswordHistory(row.passwordHistory ?? null, row.passwordHash ?? '');
       await tx.update(schema.users)
-        .set({ passwordHash })
+        .set({ passwordHash, passwordHistory: newHistory })
         .where(eq(schema.users.id, parsed.data.id));
     });
 

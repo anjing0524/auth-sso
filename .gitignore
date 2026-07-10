@@ -57,3 +57,6 @@ tests/e2e-report
 
 data
 test-mcp
+
+# Agent run cache & plans
+.zcode/

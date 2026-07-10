@@ -12,6 +12,20 @@ use crate::http::{SessionExt, is_html_page_navigation, is_secure_host};
 use crate::oauth;
 use crate::path_matcher::{PathClass, PathMatcher};
 use crate::router::Router;
+use hmac::{Hmac, Mac};
+use sha2::Sha256;
+
+type HmacSha256 = Hmac<Sha256>;
+
+/// 计算 HMAC-SHA256 并以十六进制字符串返回。
+/// 用于 Gateway → Portal 信任路径签名。
+fn compute_hmac_sha256_hex(secret: &str, payload: &str) -> String {
+    let mut mac =
+        HmacSha256::new_from_slice(secret.as_bytes()).expect("HMAC-SHA256 应从任意长度的密钥创建");
+    mac.update(payload.as_bytes());
+    let result = mac.finalize();
+    hex::encode(result.into_bytes())
+}
 
 /// Pingora `LoadBalancer::select` 的第二参数为选择输入的哈希键；
 /// 传 `b""` 表示纯轮询（不做一致性哈希），256 为保留的总权重占位。
@@ -218,6 +232,8 @@ pub struct Gateway {
     oidc_provider_name: String,
     /// OIDC Provider 的上游地址列表（用于 POST /token 等内部调用）
     oidc_provider_upstream: Arc<Upstreams>,
+    /// 与 Portal 共享的 HMAC 密钥（Option 表示未启用 HMAC 签名）
+    gateway_shared_secret: Option<String>,
 }
 
 impl Gateway {
@@ -245,6 +261,7 @@ impl Gateway {
     ///     TokenRefresher::new(Arc::clone(&jwks), Arc::clone(&ups)),
     /// );
     /// ```
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         path_matcher: PathMatcher,
         router: Router,
@@ -253,6 +270,7 @@ impl Gateway {
         mut upstream_oauth: Vec<(String, Option<OAuthConfig>)>,
         oidc_provider_name: String,
         oidc_provider_upstream: Arc<Upstreams>,
+        gateway_shared_secret: Option<String>,
     ) -> Self {
         upstream_oauth.sort_by(|a, b| b.0.len().cmp(&a.0.len()));
 
@@ -264,6 +282,7 @@ impl Gateway {
             upstream_oauth,
             oidc_provider_name,
             oidc_provider_upstream,
+            gateway_shared_secret,
         }
     }
 
@@ -679,6 +698,20 @@ impl ProxyHttp for Gateway {
             upstream_request.insert_header("Authorization", id.auth_header.as_str())?;
             upstream_request.insert_header("X-User-Id", id.user_id.as_str())?;
             upstream_request.insert_header("X-User-Jti", id.user_jti.as_str())?;
+
+            // HMAC 签名：Gateway 用共享密钥对 (timestamp + userId + jti) 签名，
+            // Portal 端验证此签名以确认请求确实来自受信任的 Gateway（替代 IP 白名单）。
+            if let Some(ref secret) = self.gateway_shared_secret {
+                let ts = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs()
+                    .to_string();
+                let payload = format!("{}:{}:{}", ts, id.user_id, id.user_jti);
+                let sig = compute_hmac_sha256_hex(secret, &payload);
+                upstream_request.insert_header("X-Gateway-Timestamp", ts.as_str())?;
+                upstream_request.insert_header("X-Gateway-Signature", sig.as_str())?;
+            }
         }
         insert_opt_header(upstream_request, "X-Client-IP", session.client_ip())?;
         insert_opt_header(

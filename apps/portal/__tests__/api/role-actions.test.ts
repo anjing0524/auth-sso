@@ -3,6 +3,13 @@
  *
  * @req DC-ROLE-C, DC-ROLE-U, DC-ROLE-D
  * @vitest-environment node
+ *
+ * 注：本文件刻意保留内联 Proxy DB mock，未迁移到 helpers/mock-db 的 createMockDb。
+ * 原因：createRole 测试在同一事务内需要 findFirst（部门存在性校验，返回 dept 行）
+ * 与 select（code 查重，返回 []）返回「不同」结果。createMockDb 将 findFirst 与
+ * select 绑定到同一个 _queryResult，无法在同一次调用中区分两者；强行统一会使
+ * 查重 select 命中 dept 行 → 误抛 DuplicateEntityError，破坏现有断言。
+ * setDeptRow / setRows 也正是为此分离 _row（findFirst）与 _rows（select）而设计。
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 

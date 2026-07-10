@@ -126,6 +126,7 @@ fn main() -> anyhow::Result<()> {
                 .collect(),
             oidc_provider_name,
             portal_upstreams,
+            config.gateway.gateway_shared_secret.clone(),
         ),
     );
 

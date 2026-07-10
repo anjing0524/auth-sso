@@ -1,5 +1,7 @@
 # 子系统与第三方自研应用接入指南 (基于统一网关鉴权)
 
+> 版本：v1.1 | 状态：正式发布 | 最后更新：2026-07-10
+
 本文档详细描述了企业内部自研子系统（或受信任的第三方应用）如何接入 Auth-SSO 统一门户，并实现极速、无痛的权限管理。
 
 ## 1. 核心设计理念：边缘鉴权 + 全局缓存
@@ -22,7 +24,7 @@
 3.  用户在 SSO Portal 的登录页面成功验证账号密码。
 4.  **SSO 服务端**执行关键操作：
     *   **组装权限**：级联查询数据库，收集该用户所属角色的全部 `permissions` 字符串和 `deptIds`。
-    *   **写入 Redis**：将包含具体权限的 `UserPermissionContext` 全量压入 Redis（Key: `sso:user_perms:{userId}`，TTL 与 Token 对齐）。
+    *   **写入 Redis**：将包含具体权限的 `UserPermissionContext` 全量压入 Redis（Key: `portal:user_perms:{userId}`，TTL 与 Token 对齐）。
     *   **签发 Token**：签发一个基础 JWT（仅需包含 `userId` 等最基础身份信息，避免 Header 膨胀）。
     *   **种下 Cookie**：将 JWT 写入浏览器 Cookie，并将 Domain 设置为顶级泛域名（`Domain=.company.com`）。
 5.  SSO Portal 将页面重定向回刚才的业务地址 `finance.company.com`。
@@ -46,8 +48,7 @@
     *   拦截器在执行真正的业务逻辑前，向同内网的 **Redis** 发起极轻量查询，获取该用户的权限字典。
     *   代码层仅进行字符串校验，如 `@RequirePermission("order:delete")`，通过即放行，拒绝则抛出 HTTP 403。
 *   **前端菜单动态渲染**：
-    *   财务系统前端 SPA 在初始化时，携带全局 Cookie 调用 SSO Portal 的开放 API：`GET api.company.com/sso/my-menus?sys=finance`。
-    *   SSO Portal 返回专属财务系统的菜单结构，前端基于此动态注册路由与按钮显示。
+    *   前端菜单由子系统前端初始化时调用 Portal 的 `/api/me` 接口获取用户信息，或通过 Gateway 注入的 X-User-Id 自行查询权限渲染。Portal 不提供独立的 `/sso/my-menus` REST 端点。
 
 ---
 

@@ -93,6 +93,12 @@ vi.mock('@/lib/auth/token', () => ({
   verifyAccessToken: mockVerifyAccessToken,
 }));
 
+// 信任路径测试走开发模式（无 HMAC 共享密钥），依赖 X-Forwarded-For 存在性
+vi.mock('@/lib/env', async (importOriginal) => {
+  const actual = await importOriginal();
+  return { ...actual, getGatewaySharedSecret: () => null };
+});
+
 vi.mock('@/lib/permissions', () => ({
   getUserPermissionContext: mockGetUserPermissionContext,
 }));
@@ -230,6 +236,7 @@ describe('Me Endpoints', () => {
       const validJwtStr = 'eyJhbGciOiJFUzI1NiJ9.eyJzdWIiOiJ1c2VyLTEiLCJyb2xlcyI6WyJBRE1JTiJdLCJwZXJtaXNzaW9ucyI6WyJ1c2VyOmxpc3QiXSwiZGVwdElkIjoiZGVwdC0xIiwiZGF0YVNjb3BlVHlwZSI6IkFMTCJ9.signature';
       mockHeadersGet.mockImplementation((name: string) => {
         if (name.toLowerCase() === 'x-user-id') return 'user-1';
+        if (name.toLowerCase() === 'x-forwarded-for') return '10.0.0.1';
         if (name.toLowerCase() === 'authorization') return `Bearer ${validJwtStr}`;
         return null;
       });

@@ -25,6 +25,7 @@ import { generateId, generateUUID, hashToken } from '@/lib/crypto';
 import { getIssuer } from '@/lib/env';
 import { isJtiRevoked, trackUserJti, revokeUserAccessByUserId } from '@/lib/session/revoke';
 import { cacheUserPermissionContext } from '@/lib/permissions';
+import { resolveTokenClaims } from '@/lib/auth/permissions-context';
 import { TOKEN_TTL } from '@auth-sso/contracts';
 import type { PortalJwtClaims, RefreshTokenResult } from '@/domain/auth/types';
 
@@ -49,7 +50,8 @@ let keyGenLock: Promise<void> = Promise.resolve();
 interface CachedSigningKey {
   keyId: string;       // JWT kid header 的值
   privateKey: CryptoKey; // jose.CryptoKey，内存中可直接签名
-  publicJwk: JsonWebKey; // JWK 公钥，验签时 importJWK 后使用
+  publicKey: CryptoKey;  // jose.CryptoKey（importJWK 后），验签热路径零重复导入
+  publicJwk: JsonWebKey; // JWK 公钥（JWKS 端点返回用）
   fetchedAt: number;
 }
 
@@ -71,6 +73,7 @@ function getCachedKey(kid: string): CachedSigningKey | undefined {
 async function getSigningKeyByKid(kid: string): Promise<{
   keyId: string;
   privateKey: CryptoKey;
+  publicKey: CryptoKey;
   publicJwk: JsonWebKey;
 } | null> {
   const cached = getCachedKey(kid);
@@ -88,8 +91,9 @@ async function getSigningKeyByKid(kid: string): Promise<{
   const privateJwk = JSON.parse(row.privateKey) as JsonWebKey;
   const publicJwk = JSON.parse(row.publicKey) as JsonWebKey;
   const privateKey = await importJWK(privateJwk, 'ES256') as CryptoKey;
+  const publicKey = await importJWK(publicJwk, 'ES256') as CryptoKey;
 
-  const entry = { keyId: row.kid ?? row.id, privateKey, publicJwk, fetchedAt: Date.now() };
+  const entry = { keyId: row.kid ?? row.id, privateKey, publicKey, publicJwk, fetchedAt: Date.now() };
   keyCache.set(kid, entry);
   return entry;
 }
@@ -102,6 +106,7 @@ async function getSigningKeyByKid(kid: string): Promise<{
 export async function getActiveSigningKey(): Promise<{
   keyId: string;
   privateKey: CryptoKey;
+  publicKey: CryptoKey;
   publicJwk: JsonWebKey;
 }> {
   // DESC 排序取最新密钥（修复：ASC 导致永远选中旧密钥，密钥轮换形同虚设）
@@ -136,7 +141,8 @@ export async function getActiveSigningKey(): Promise<{
           const rprivateJwk = JSON.parse(rjwk.privateKey) as JsonWebKey;
           const rpublicJwk = JSON.parse(rjwk.publicKey) as JsonWebKey;
           const rprivateKey = await importJWK(rprivateJwk, 'ES256') as CryptoKey;
-          const rentry = { keyId: rkid, privateKey: rprivateKey, publicJwk: rpublicJwk, fetchedAt: Date.now() };
+          const rpublicKey = await importJWK(rpublicJwk, 'ES256') as CryptoKey;
+          const rentry = { keyId: rkid, privateKey: rprivateKey, publicKey: rpublicKey, publicJwk: rpublicJwk, fetchedAt: Date.now() };
           keyCache.set(rkid, rentry);
           return rentry;
         }
@@ -156,8 +162,9 @@ export async function getActiveSigningKey(): Promise<{
   const privateJwk = JSON.parse(jwk.privateKey) as JsonWebKey;
   const publicJwk = JSON.parse(jwk.publicKey) as JsonWebKey;
   const privateKey = await importJWK(privateJwk, 'ES256') as CryptoKey;
+  const publicKey = await importJWK(publicJwk, 'ES256') as CryptoKey;
 
-  const entry = { keyId: kid, privateKey, publicJwk, fetchedAt: Date.now() };
+  const entry = { keyId: kid, privateKey, publicKey, publicJwk, fetchedAt: Date.now() };
   keyCache.set(kid, entry);
   return entry;
 }
@@ -168,6 +175,7 @@ export async function getActiveSigningKey(): Promise<{
 async function generateAndPersistKeyPair(): Promise<{
   keyId: string;
   privateKey: CryptoKey;
+  publicKey: CryptoKey;
   publicJwk: JsonWebKey;
 }> {
   const { publicKey, privateKey } = await generateKeyPair('ES256', { extractable: true });
@@ -187,7 +195,9 @@ async function generateAndPersistKeyPair(): Promise<{
     expiresAt,
   });
 
-  const entry = { keyId: kid, privateKey, publicJwk, fetchedAt: Date.now() };
+  // 生成密钥对后立即 importJWK 得到可缓存的 CryptoKey（exportJWK 返回的是 JWK 不是 CryptoKey）
+  const importedPublicKey = await importJWK(publicJwk, 'ES256') as CryptoKey;
+  const entry = { keyId: kid, privateKey, publicKey: importedPublicKey, publicJwk, fetchedAt: Date.now() };
   keyCache.set(kid, entry);
   return entry;
 }
@@ -321,7 +331,7 @@ export async function verifyAccessToken(
     }
 
     // 3. ES256 验签 + issuer + audience 校验（audience 为 null 时跳过，用于 UserInfo 等不区分 client 的场景）
-    const publicKey = await importJWK(signingKey.publicJwk, 'ES256') as CryptoKey;
+    // 直接使用缓存的 publicKey（CryptoKey），避免热路径重复 importJWK 开销
     const verifyOpts: { issuer: string; algorithms: string[]; audience?: string } = {
       issuer: getIssuer(),
       algorithms: ['ES256'],
@@ -329,7 +339,7 @@ export async function verifyAccessToken(
     if (audience !== null) {
       verifyOpts.audience = audience;
     }
-    const { payload } = await jwtVerify<PortalJwtClaims>(token, publicKey, verifyOpts);
+    const { payload } = await jwtVerify<PortalJwtClaims>(token, signingKey.publicKey, verifyOpts);
 
     // 4. jti 黑名单检查
     if (payload.jti && (await isJtiRevoked(payload.jti))) {
@@ -522,14 +532,10 @@ export async function rotateRefreshToken(
   // 签发新 Refresh Token
   const newRefreshToken = await issueRefreshToken(rt.userId, rt.clientId, rt.scopes);
 
-  // 获取最新权限上下文并签发新 Access Token
-  const { getUserPermissionContext } = await import('@/lib/permissions');
-  const { getUserRoleDeptIds } = await import('@/lib/auth/data-scope');
-  const [permCtx, deptIds] = await Promise.all([
-    getUserPermissionContext(rt.userId),
-    getUserRoleDeptIds(rt.userId),
-  ]);
-  if (!permCtx) return null;
+  // 获取最新权限上下文并签发新 Access Token（静态 import 中间层，消除循环依赖）
+  const resolved = await resolveTokenClaims(rt.userId);
+  if (!resolved) return null;
+  const { permCtx, deptIds } = resolved;
 
   // aud 语义：内部客户端（Portal 自身会话，isInternal=true）用 'portal-client'；
   // 第三方 OAuth Client 续签时沿用其 client_id，保持与授权码首签一致。

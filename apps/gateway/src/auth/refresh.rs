@@ -57,16 +57,20 @@ impl TokenRefresher {
     /// ```
     pub async fn try_refresh(&self, refresh_token: &str, sub: &str) -> Option<RefreshedTokens> {
         // 1. Redis 去重检查（30s 窗口，跨实例共享）
-        if let Some(cached) = self.check_dedup(sub).await {
+        //
+        // 去重缓存仅存标记（sub 的 SHA-256），不存 token 明文，避免 Redis 内
+        // 出现可用 token 的泄露面。命中标记的并发请求放弃续签（旧 AT 仍有效，
+        // 下次请求会再试，多数场景能自愈）。
+        if self.check_dedup(sub).await {
             debug!("续签去重命中 (Redis): sub={}", sub);
-            return Some(cached);
+            return None;
         }
 
         // 2. 尝试主端点（来自 OIDC Discovery 缓存）
         if let Some(primary) = self.primary_endpoint()
             && let Some(tokens) = self.try_endpoint(&primary, refresh_token, sub).await
         {
-            self.set_dedup(sub, &tokens).await;
+            self.set_dedup(sub).await;
             return Some(tokens);
         }
 
@@ -83,7 +87,7 @@ impl TokenRefresher {
         for upstream in self.upstreams.iter() {
             let fallback_url = format!("http://{}/api/auth/refresh", upstream);
             if let Some(tokens) = self.try_endpoint(&fallback_url, refresh_token, sub).await {
-                self.set_dedup(sub, &tokens).await;
+                self.set_dedup(sub).await;
                 return Some(tokens);
             }
         }
@@ -161,21 +165,19 @@ impl TokenRefresher {
         }
     }
 
-    /// Redis 续签去重：检查 30s 窗口内同用户是否已有缓存
-    async fn check_dedup(&self, sub: &str) -> Option<RefreshedTokens> {
+    /// Redis 续签去重：检查 30s 窗口内同用户是否已有续签进行中
+    ///
+    /// 返回 true 表示已有续签在窗口内完成（应跳过本次续签）。
+    async fn check_dedup(&self, sub: &str) -> bool {
         let key = format!("{}{}", REFRESH_DEDUP_PREFIX, sub);
-        let cached = crate::redis::get(&key).await?;
-        let (access, refresh) = cached.split_once('|')?;
-        Some(RefreshedTokens {
-            access: access.to_string(),
-            refresh: refresh.to_string(),
-        })
+        crate::redis::get(&key).await.is_some()
     }
 
-    /// Redis 续签去重：写入缓存（SET NX EX，原子去重 + 自动过期）
-    async fn set_dedup(&self, sub: &str, tokens: &RefreshedTokens) {
+    /// Redis 续签去重：写入标记（SET NX EX，原子去重 + 自动过期）
+    ///
+    /// 仅存固定标记值 "1"，不包含任何 token 明文，消除 Redis 中的 token 泄露面。
+    async fn set_dedup(&self, sub: &str) {
         let key = format!("{}{}", REFRESH_DEDUP_PREFIX, sub);
-        let value = format!("{}|{}", tokens.access, tokens.refresh);
-        crate::redis::set_nx_ex(&key, &value, REFRESH_DEDUP_SEC).await;
+        crate::redis::set_nx_ex(&key, "1", REFRESH_DEDUP_SEC).await;
     }
 }

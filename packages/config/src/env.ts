@@ -46,6 +46,12 @@ const portalEnvSchema = baseEnvSchema.extend({
 
   // OAuth 客户端凭证（Portal 自身作为 OIDC Provider 的内置客户端）
   PORTAL_CLIENT_SECRET: z.string().optional(),
+
+  // Gateway 信任路径 HMAC 共享密钥。Gateway 在上游转发时对 (timestamp + userId + jti)
+  // 计算 HMAC-SHA256 签名并注入 X-Gateway-Signature / X-Gateway-Timestamp 头，
+  // Portal 验证此签名以确认请求确实来自受信任的 Gateway（取代不可靠的 IP 白名单）。
+  // 生产环境必须配置；未配置时跳过 HMAC 校验并输出警告（兼容本地开发）。
+  GATEWAY_SHARED_SECRET: z.string().optional(),
 });
 
 /** Zod 解析后的环境变量类型 */
@@ -164,4 +170,17 @@ export function getTrustedOrigins(): string[] {
  */
 export function getRedisUrl(): string {
   return (e['REDIS_URL'] || 'redis://localhost:6379').trim();
+}
+
+/**
+ * Gateway 信任路径 HMAC 共享密钥。
+ *
+ * 用于验证上游请求中的 X-Gateway-Signature 头——
+ * Gateway 在上游转发时用此密钥对 (timestamp + userId + jti) 计算 HMAC-SHA256，
+ * Portal 端重新计算并比对，以确认请求确实来自受信任的 Gateway。
+ *
+ * 未配置时返回 null——调用方须跳过 HMAC 校验（兼容本地开发）。
+ */
+export function getGatewaySharedSecret(): string | null {
+  return (e['GATEWAY_SHARED_SECRET'] || null);
 }

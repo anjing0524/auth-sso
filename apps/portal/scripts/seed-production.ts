@@ -24,7 +24,7 @@ import postgres from 'postgres';
 import * as schema from '../src/db/schema';
 import { eq } from 'drizzle-orm';
 import bcrypt from 'bcryptjs';
-import crypto from 'crypto';
+import { hashClientSecret } from '../src/lib/crypto';
 
 // ============================================
 // 环境变量校验
@@ -88,6 +88,9 @@ async function upsertClient(db: ReturnType<typeof drizzle>, opts: {
   redirectUris: string;
   isInternal?: boolean;
 }): Promise<void> {
+  // 统一存储 SHA-256 哈希（与 seed.ts / validateClientSecret 保持一致，原文不入库）
+  const clientSecretHash = hashClientSecret(opts.clientSecret);
+
   const existing = await db.select({ clientId: schema.clients.clientId })
     .from(schema.clients)
     .where(eq(schema.clients.clientId, opts.clientId));
@@ -95,7 +98,7 @@ async function upsertClient(db: ReturnType<typeof drizzle>, opts: {
   if (existing.length > 0) {
     await db.update(schema.clients)
       .set({
-        clientSecret: opts.clientSecret,
+        clientSecret: clientSecretHash,
         redirectUris: JSON.parse(opts.redirectUris),
         isInternal: opts.isInternal ?? false,
         updatedAt: new Date(),
@@ -108,7 +111,7 @@ async function upsertClient(db: ReturnType<typeof drizzle>, opts: {
   await db.insert(schema.clients).values({
     clientId: opts.clientId,
     name: opts.name,
-    clientSecret: opts.clientSecret,
+    clientSecret: clientSecretHash,
     redirectUris: JSON.parse(opts.redirectUris),
     scopes: 'openid profile email offline_access',
     status: 'ACTIVE',

@@ -548,9 +548,9 @@ revokeUserAccessByUserId(userId)
 ### 7.1 JWKS 密钥管理
 
 - **密钥生成**：首次请求时，如果 `jwks` 表中不存在密钥对，则生成 ES256（ECDSA P-256）密钥对。
-- **存储**：私钥在 PostgreSQL 中加密存储。公钥以明文 JWK 格式存储。
+- **存储**：私钥以 JWK JSON 格式存储在 PostgreSQL `jwks` 表中（明文存储，安全依赖 DB 访问控制与网络隔离）。生产环境建议启用 PostgreSQL TDE 或应用层加密（KMS 主密钥）进一步加固。公钥以明文 JWK 格式存储。
 - **轮换**：如果活跃密钥的使用时间超过 90 天，则生成新的密钥对，并成为主要签名密钥。
-- **暴露**：公钥通过 `GET /.well-known/jwks`（OIDC 发现端点）和 `GET /api/auth/jwks`（直接访问）提供服务。
+- **暴露**：公钥通过 `GET /.well-known/openid-configuration`（OIDC Discovery 声明 `jwks_uri`）和 `GET /api/auth/jwks`（直接访问）提供服务。
 - **Gateway 消费**：Gateway 在启动时获取 JWKS 并缓存在内存中。定期刷新。每次请求零 I/O 操作。
 
 ### 7.2 令牌类型
@@ -605,7 +605,7 @@ revokeUserAccessByUserId(userId)
 | 6 | **零信任网关** | Gateway 和下游微服务通过 JWKS 独立验证 JWT 签名。不进行信任委托。 |
 | 7 | **无状态核心** | Portal API 认证为 100% 无状态 JWT。热路径上无需查询 Redis 会话。 |
 | 8 | **紧急吊销** | 基于 Redis 的 jti 黑名单，用于安全事件中的即时令牌失效。 |
-| 9 | **ES256 非对称签名** | 私钥加密存储在 PostgreSQL 中。公钥通过 JWKS 暴露。服务之间不共享密钥。 |
+| 9 | **ES256 非对称签名** | 私钥以 JWK 格式存储在 PostgreSQL 中（安全依赖 DB 访问控制）。公钥通过 JWKS 暴露。服务之间不共享密钥。 |
 | 10 | **审计追踪** | 所有认证敏感操作（登录、登出、令牌刷新、权限变更）都记录在 `audit_logs` 表中。 |
 
 ---

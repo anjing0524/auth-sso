@@ -110,8 +110,11 @@ async function performRevocation(cookieStore: Awaited<ReturnType<typeof cookies>
 }
 
 function clearAuthCookies(response: NextResponse) {
+  // Path 必须与写入时完全一致，浏览器才会删除 Cookie：
+  // - JWT / REFRESH 写在 path='/'，清除也用 '/'
+  // - LOGIN_SESSION 写在 path='/api/auth/oauth2/authorize'（见 login/route.ts），清除须用同 Path
   response.cookies.set(COOKIE_NAMES.JWT, '', { path: '/', httpOnly: true, sameSite: 'lax', maxAge: 0 });
-  response.cookies.set(COOKIE_NAMES.LOGIN_SESSION, '', { path: '/', httpOnly: true, sameSite: 'lax', maxAge: 0 });
+  response.cookies.set(COOKIE_NAMES.LOGIN_SESSION, '', { path: '/api/auth/oauth2/authorize', httpOnly: true, sameSite: 'lax', maxAge: 0 });
   response.cookies.set(COOKIE_NAMES.REFRESH, '', { path: '/', httpOnly: true, sameSite: 'lax', maxAge: 0 });
 }
 

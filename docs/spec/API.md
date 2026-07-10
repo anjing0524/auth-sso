@@ -151,10 +151,12 @@ POST /api/auth/refresh
 ### 2.4 OAuth 回调
 
 ```
-GET /api/auth/callback?code=<authorization_code>&state=<state>&pkce_verifier=<code_verifier>
+GET /api/auth/callback?code=<authorization_code>&state=<state>
 ```
 
 **认证：** 无需（OAuth 2.1 Authorization Code + PKCE 流程的第二步）
+
+**PKCE code_verifier 传递：** `code_verifier` 不通过 query 参数传递，而是由 Gateway 在 authorize 重定向时写入 `pkce_verifier` HttpOnly Cookie，callback 时从该 Cookie 读取。
 
 **行为：** 验证 code + PKCE + state → 签发 JWT → 设置 Cookie → 重定向到 `/dashboard`。
 
@@ -769,11 +771,12 @@ export const { handlers, auth } = NextAuth({
 
 ## 14. 限流策略
 
-| 端点 | 限制 | 窗口 |
-|------|------|------|
-| `POST /api/auth/login` | 10 次 | 1 分钟 |
-| `POST /api/auth/refresh` | 30 次 | 1 分钟 |
-| `POST /api/auth/oauth2/token` | 60 次 | 1 分钟 |
-| 管理 API 写操作 | 100 次 | 1 分钟 |
+| 端点 | 限制 | 窗口 | 实施层 |
+|------|------|------|--------|
+| `POST /api/auth/login` / `POST /api/auth/refresh` | 20 次（共享计数器） | 1 分钟 | Gateway |
+| `POST /api/auth/oauth2/token` | 30 次 | 1 分钟 | Gateway |
+| 管理 API 写操作 | 100 次 | 1 分钟 | Portal |
+
+> 注：login 与 refresh 在 Gateway 共享同一个 20/min 计数器（均为 `/api/auth/*` 前缀）；token 端点独立计数。Gateway 为单容器进程内限流，多实例部署时实际阈值按实例数线性放大。
 
 超出限制返回 `429 Too Many Requests`。

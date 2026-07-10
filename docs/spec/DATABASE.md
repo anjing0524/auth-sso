@@ -223,6 +223,8 @@ CHECK (
 
 ### 4.3 访问令牌表（`access_tokens`）
 
+> **当前用途**：预留表（Reserved）。当前无状态 JWT 架构下，Access Token 的紧急撤销通过 Redis jti 黑名单实现，不写此表。保留供未来有状态 Token 场景（如 Token Introspection 缓存、审计统计）。
+
 | 列名 | 类型 | 约束 | 说明 |
 |--------|------|------------|--------|
 | `id` | uuid | 主键，defaultRandom() | |

@@ -34,7 +34,11 @@ export async function storeAuthRequest(
 }
 
 /**
- * 读取暂存的授权请求参数
+ * 读取并原子删除暂存的授权请求参数（GETDEL）
+ *
+ * 使用 Redis GETDEL 命令实现「读取 + 删除」原子操作，杜绝并发回跳重复消费
+ * 同一 session_id 的竞态窗口（原先 get + 异步 del 之间存在被重复读取的间隙）。
+ *
  * @param sessionId - authorize 生成的会话 ID
  * @returns 参数对象；不存在或反序列化失败时返回 null
  */
@@ -42,7 +46,7 @@ export async function getStoredAuthRequest(
   sessionId: string,
 ): Promise<StoredAuthRequest | null> {
   const key = `${REDIS_KEY_PREFIX.AUTH_REQUEST}${sessionId}`;
-  const raw = await getRedis().get(key);
+  const raw = await getRedis().getdel(key);
   if (!raw) return null;
   try {
     return JSON.parse(raw) as StoredAuthRequest;
@@ -52,9 +56,11 @@ export async function getStoredAuthRequest(
 }
 
 /**
- * 删除暂存的授权请求参数（一次性消费：签发 code 后立即调用）
+ * 显式删除暂存的授权请求参数（幂等兜底）
  *
- * fire-and-forget：删除失败不影响主流程（key 有 5min TTL 会自动过期）。
+ * 正常流程下 getStoredAuthRequest 已通过 GETDEL 原子删除，无需再调用此函数。
+ * 保留供异常恢复 / 回滚场景显式清理使用。幂等：key 不存在时 del 返回 0。
+ *
  * @param sessionId - authorize 生成的会话 ID
  */
 export function deleteStoredAuthRequest(sessionId: string): void {

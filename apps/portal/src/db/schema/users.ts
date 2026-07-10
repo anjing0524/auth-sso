@@ -14,7 +14,7 @@
  *
  * @module db/schema/users
  */
-import { pgTable, uuid, varchar, boolean, timestamp, index, uniqueIndex } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, varchar, boolean, timestamp, index, uniqueIndex, text } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { userStatusEnum } from './enums';
 import { roles } from './rbac';
@@ -32,6 +32,11 @@ export const users = pgTable('users', {
   mobile: varchar('mobile', { length: 20 }).unique(),
   mobileVerified: boolean('mobile_verified').notNull().default(false),
   passwordHash: varchar('password_hash', { length: 128 }),
+  /**
+   * 密码历史（NFR-SEC-15）：存储最近 PASSWORD_HISTORY_MAX 条 bcrypt hash，
+   * 禁止用户重用近期密码。数组按时间倒序（新密码 unshift 到头部，超出上限截断尾部）。
+   */
+  passwordHistory: text('password_history').array(),
   name: varchar('name', { length: 100 }).notNull(),
   avatarUrl: varchar('avatar_url', { length: 500 }),
   status: userStatusEnum('status').notNull().default('ACTIVE'),

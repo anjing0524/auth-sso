@@ -8,8 +8,23 @@ import { getRedis, type RedisClient } from '@/infrastructure/redis';
 import { ENTITY_ACTIVE, REDIS_KEY_PREFIX } from '@auth-sso/contracts';
 import type { UserPermissionContext } from '@auth-sso/contracts';
 
-/** 权限缓存 TTL，与 Access Token TTL (3600s) 对齐 */
-const PERM_CACHE_TTL = 3600;
+/** 权限缓存基准 TTL，与 Access Token TTL (3600s) 对齐 */
+const PERM_CACHE_TTL_BASE = 3600;
+/** TTL 随机抖动范围（±秒），防止大量 Token 同时签发导致缓存同时过期引发雪崩 */
+const PERM_CACHE_TTL_JITTER = 300;
+/** 用户不存在时缓存 null 标记的 TTL（防穿透枚举） */
+const NULL_CACHE_TTL = 60;
+/** null 标记的 Redis Key 后缀 */
+const NULL_CACHE_SUFFIX = ':null';
+
+/**
+ * 计算带随机抖动的缓存 TTL，防止缓存雪崩。
+ * 返回 [base - jitter, base + jitter] 区间内的随机秒数。
+ */
+function jitteredCacheTtl(): number {
+  const delta = Math.floor(Math.random() * (PERM_CACHE_TTL_JITTER * 2 + 1)) - PERM_CACHE_TTL_JITTER;
+  return PERM_CACHE_TTL_BASE + delta;
+}
 
 // Re-export 以便其他模块统一导入
 export type { UserPermissionContext };
@@ -29,6 +44,11 @@ export async function getUserPermissionContext(userId: string): Promise<UserPerm
   // 1. 尝试从 Redis 缓存中获取数据
   try {
     redis = getRedis();
+    // 防穿透：先检查 null 标记（用户不存在时缓存的短 TTL 占位）
+    const nullMarker = await redis.get(`${cacheKey}${NULL_CACHE_SUFFIX}`);
+    if (nullMarker !== null) {
+      return null;
+    }
     const cachedData = await redis.get(cacheKey);
     if (cachedData) {
       return JSON.parse(cachedData) as UserPermissionContext;
@@ -60,6 +80,14 @@ export async function getUserPermissionContext(userId: string): Promise<UserPerm
     });
 
     if (!user) {
+      // 防穿透：缓存 null 标记，避免不存在的 userId 每次都穿透到 DB（60s TTL）
+      if (redis) {
+        try {
+          await redis.setex(`${cacheKey}${NULL_CACHE_SUFFIX}`, NULL_CACHE_TTL, '1');
+        } catch {
+          // 仅警告，不影响返回
+        }
+      }
       return null;
     }
 
@@ -84,7 +112,7 @@ export async function getUserPermissionContext(userId: string): Promise<UserPerm
       // 写入缓存并直接返回
       if (redis) {
         try {
-          await redis.setex(cacheKey, PERM_CACHE_TTL, JSON.stringify(context));
+          await redis.setex(cacheKey, jitteredCacheTtl(), JSON.stringify(context));
         } catch (e) {
           // 仅警告，不影响返回
         }
@@ -125,7 +153,7 @@ export async function getUserPermissionContext(userId: string): Promise<UserPerm
     // 6. 将结果回写至 Redis 缓存，TTL 与 Access Token 对齐
     if (redis) {
       try {
-        await redis.setex(cacheKey, PERM_CACHE_TTL, JSON.stringify(context));
+        await redis.setex(cacheKey, jitteredCacheTtl(), JSON.stringify(context));
       } catch (cacheWriteError: any) {
         console.warn(`[PermissionContext] Redis cache write failed for user ${userId}:`, cacheWriteError.message);
       }
@@ -149,9 +177,9 @@ export async function refreshUserPermissionCache(userId: string): Promise<void> 
   try {
     const redis = getRedis();
     const cacheKey = `${REDIS_KEY_PREFIX.USER_PERMS}${userId}`;
-    // 1. 删除旧缓存，强制走 DB 获取最新数据
-    await redis.del(cacheKey);
-    // 2. 查 DB → 自动回写 Redis（TTL = PERM_CACHE_TTL）
+    // 1. 删除旧缓存 + null 标记，强制走 DB 获取最新数据
+    await redis.del(cacheKey, `${cacheKey}${NULL_CACHE_SUFFIX}`);
+    // 2. 查 DB → 自动回写 Redis（TTL 带随机抖动）
     const ctx = await getUserPermissionContext(userId);
     if (ctx) {
       console.log(`[PermissionContext] Refreshed cache for user: ${userId}`);
@@ -183,7 +211,8 @@ export async function clearUserPermissionCache(userId: string): Promise<void> {
   try {
     const redis = getRedis();
     const cacheKey = `${REDIS_KEY_PREFIX.USER_PERMS}${userId}`;
-    await redis.del(cacheKey);
+    // 同时删除 null 标记，确保下次查询重新走 DB
+    await redis.del(cacheKey, `${cacheKey}${NULL_CACHE_SUFFIX}`);
     console.log(`[PermissionContext] Cleared permissions cache for user: ${userId}`);
   } catch (error: any) {
     console.error(`[PermissionContext] Failed to clear permission cache for user ${userId}:`, error.message);
@@ -203,7 +232,7 @@ export async function clearUsersPermissionCache(userIds: string[]): Promise<void
     const results = await Promise.allSettled(
       userIds.map(async (userId) => {
         const cacheKey = `${REDIS_KEY_PREFIX.USER_PERMS}${userId}`;
-        await redis.del(cacheKey);
+        await redis.del(cacheKey, `${cacheKey}${NULL_CACHE_SUFFIX}`);
       }),
     );
     const failed = results.filter((r) => r.status === 'rejected').length;
@@ -223,12 +252,12 @@ export async function clearUsersPermissionCache(userIds: string[]): Promise<void
  *
  * @param userId - 用户内部 ID
  * @param ctx     - 完整的权限上下文
- * @param ttl     - 缓存过期秒数，默认与 Access Token TTL 对齐
+ * @param ttl     - 缓存基准过期秒数，实际写入时叠加 ±jitter 抖动防雪崩
  */
 export async function cacheUserPermissionContext(
   userId: string,
   ctx: UserPermissionContext,
-  ttl: number = PERM_CACHE_TTL,
+  ttl: number = jitteredCacheTtl(),
 ): Promise<void> {
   try {
     const redis = getRedis();

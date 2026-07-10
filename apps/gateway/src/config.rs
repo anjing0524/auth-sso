@@ -13,6 +13,11 @@ pub struct GatewayConfig {
     pub ssl_key_path: String,
     pub log_dir: String,
     pub log_level: String,
+    /// 与 Portal 共享的 HMAC 密钥。Gateway 在向上游转发时用此密钥对
+    /// (timestamp + user_id + jti) 计算 HMAC-SHA256 签名，注入
+    /// X-Gateway-Signature / X-Gateway-Timestamp 请求头。
+    /// Portal 端验证此签名以确认请求确实来自受信任的 Gateway。
+    pub gateway_shared_secret: Option<String>,
 }
 
 impl Default for GatewayConfig {
@@ -24,6 +29,7 @@ impl Default for GatewayConfig {
             ssl_key_path: "ssl/privkey.pem".to_string(),
             log_dir: "logs".to_string(),
             log_level: "info".to_string(),
+            gateway_shared_secret: None,
         }
     }
 }
@@ -151,6 +157,8 @@ impl Config {
             .with_context(|| format!("反序列化配置文件 {} 失败，请检查语法格式", path.display()))?;
 
         cfg.redis.url = resolve_redis_url(&cfg.redis.url, std::env::var("REDIS_URL").ok());
+        cfg.gateway.gateway_shared_secret =
+            resolve_optional_env(&cfg.gateway.gateway_shared_secret, "GATEWAY_SHARED_SECRET");
 
         if cfg.upstreams.is_empty() {
             anyhow::bail!(
@@ -192,6 +200,13 @@ impl Default for Config {
 
 fn resolve_redis_url(config_value: &str, env_value: Option<String>) -> String {
     env_value.unwrap_or_else(|| config_value.to_string())
+}
+
+/// 优先从环境变量读取可选配置，回退到 TOML 文件值。
+fn resolve_optional_env(config_value: &Option<String>, env_name: &str) -> Option<String> {
+    std::env::var(env_name)
+        .ok()
+        .or_else(|| config_value.clone())
 }
 
 #[cfg(test)]

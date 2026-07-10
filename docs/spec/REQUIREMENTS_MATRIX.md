@@ -236,6 +236,9 @@
 | NFR-SEC-12 | Client Secret 轮换即时生效 | 旧 Secret 立即失效 | 自动化测试 | DC-CLI-U | G-CLT-U |
 | NFR-SEC-13 | 密码修改强制重新登录 | jti 写入黑名单 | 自动化测试 | DC-AUTH-004 | H-SESS-006 |
 | NFR-SEC-14 | 角色撤销即时生效 | 当前用户 jti 写入黑名单 | 自动化测试 | DC-ROLE-D | H-ACL-002 |
+| NFR-SEC-15 | 密码历史禁止重用（最近5次） | 自动化测试 | 中 | PRD §6.2 | users.password_history + domain/auth/password isPasswordReused |
+| NFR-SEC-16 | 会话并发控制（最多3个活跃） | 自动化测试 | 中 | PRD §6.2 | 待实现（jti 计数+驱逐） |
+| NFR-COMP-01 | 审计日志180天保留 | 配置审查 | 低 | PRD §6.3 | access_logs 按月分区 + maintain-access-log-partitions.ts |
 
 ---
 

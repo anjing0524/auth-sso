@@ -74,6 +74,7 @@ services:
       BETTER_AUTH_URL: ${BETTER_AUTH_URL}
       NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL}
       PORTAL_CLIENT_SECRET: ${PORTAL_CLIENT_SECRET}
+      GATEWAY_SHARED_SECRET: ${GATEWAY_SHARED_SECRET}
       NODE_ENV: production
     expose:
       - "4000"
@@ -106,6 +107,7 @@ services:
       - GATEWAY_SSL_PORT=${GATEWAY_SSL_PORT:-443}
       - PORTAL_UPSTREAM=${PORTAL_UPSTREAM:-portal:4000}
       - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
+      - GATEWAY_SHARED_SECRET=${GATEWAY_SHARED_SECRET}
     ports:
       - "80:80"
       - "443:443"

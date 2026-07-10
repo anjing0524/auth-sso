@@ -72,6 +72,10 @@ export const authorizationCodes = pgTable('authorization_codes', {
 /**
  * Access Token (用于 introspection + revocation)
  *
+ * **预留表**：当前无状态 JWT 架构下不使用此表。
+ * JWT 的紧急撤销通过 Redis jti 黑名单实现（`portal:jti_blocklist:{jti}`），
+ * 不需写此表。保留供未来有状态 Token 场景（如 Token Introspection 缓存、审计统计）。
+ *
  * token_hash 存储 SHA256(token)，不可为空。
  */
 export const accessTokens = pgTable('access_tokens', {

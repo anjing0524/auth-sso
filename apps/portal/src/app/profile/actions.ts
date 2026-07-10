@@ -12,9 +12,10 @@ import { revalidatePath } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
 import { eq } from 'drizzle-orm';
 import { withAuth, type AuthContext } from '@/lib/auth';
-import { verifyPassword, hashPassword } from '@/domain/auth/password';
+import { verifyPassword, hashPassword, isPasswordReused, pushPasswordHistory } from '@/domain/auth/password';
 import { revokeUserAccessByUserId } from '@/lib/session/revoke';
 import { EntityNotFoundError } from '@/domain/shared/errors';
+import { PasswordSchema } from '@/domain/shared/zod-schemas';
 import type { ApiResponse } from '@auth-sso/contracts';
 
 /**
@@ -35,10 +36,7 @@ const UpdateOwnProfileSchema = z.object({
  */
 const ChangeOwnPasswordSchema = z.object({
   currentPassword: z.string().min(1, '当前密码不能为空'),
-  newPassword: z
-    .string()
-    .min(8, '新密码至少8位')
-    .regex(/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/, '新密码须包含大小写字母和数字'),
+  newPassword: PasswordSchema,
 });
 
 /**
@@ -99,7 +97,7 @@ export const changeOwnPasswordAction = withAuth(
     // 用 ctx.userId 锁定目标，防止 IDOR
     const row = await db.query.users.findFirst({
       where: eq(schema.users.id, ctx.userId),
-      columns: { id: true, passwordHash: true },
+      columns: { id: true, passwordHash: true, passwordHistory: true },
     });
     if (!row) throw new EntityNotFoundError('User', ctx.userId);
 
@@ -109,11 +107,17 @@ export const changeOwnPasswordAction = withAuth(
       return { success: false, error: 'VALIDATION_ERROR', message: '当前密码错误' };
     }
 
-    // 哈希新密码并更新（同时记录 passwordChangedAt）
+    // NFR-SEC-15: 禁止重用最近 5 次密码
+    if (await isPasswordReused(parsed.data.newPassword, row.passwordHistory ?? null)) {
+      return { success: false, error: 'VALIDATION_ERROR', message: '新密码不能与最近使用过的密码相同' };
+    }
+
+    // 哈希新密码并更新（同时记录 passwordChangedAt + 推入密码历史）
     const newHash = await hashPassword(parsed.data.newPassword);
+    const newHistory = pushPasswordHistory(row.passwordHistory ?? null, row.passwordHash ?? '');
     await db
       .update(schema.users)
-      .set({ passwordHash: newHash, passwordChangedAt: new Date() })
+      .set({ passwordHash: newHash, passwordHistory: newHistory, passwordChangedAt: new Date() })
       .where(eq(schema.users.id, ctx.userId));
 
     // 失效所有会话（含当前），强制重新登录（NFR-SEC-13）

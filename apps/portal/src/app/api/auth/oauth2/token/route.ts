@@ -14,7 +14,8 @@ import { eq, and } from 'drizzle-orm';
 import { signAccessToken, signIdToken, issueRefreshToken, rotateRefreshToken, ACCESS_TOKEN_TTL } from '@/lib/auth/token';
 import { validateClientActive, validateClientSecret } from '@/domain/auth/oauth-client';
 import { validateAuthCodeRow, verifyPKCE } from '@/domain/auth/oauth-code';
-import { getUserPermissionContext, cacheUserPermissionContext } from '@/lib/permissions';
+import { cacheUserPermissionContext } from '@/lib/permissions';
+import { resolveTokenClaims } from '@/lib/auth/permissions-context';
 import { mapDomainError } from '@/domain/shared/error-mapping';
 import { InvalidGrantError } from '@/domain/shared/errors';
 import { z } from 'zod';
@@ -78,14 +79,12 @@ export async function POST(request: NextRequest) {
       // 标记授权码已使用
       await db.update(schema.authorizationCodes).set({ used: true }).where(eq(schema.authorizationCodes.id, authCode.id));
 
-      // 获取用户权限上下文（用于 Access Token claims）
-      const [permCtx, deptIds] = await Promise.all([
-        getUserPermissionContext(authCode.userId),
-        import('@/lib/auth/data-scope').then(m => m.getUserRoleDeptIds(authCode.userId)),
-      ]);
-      if (!permCtx) {
+      // 获取用户权限上下文（用于 Access Token claims）— 通过中间层消除循环依赖
+      const resolved = await resolveTokenClaims(authCode.userId);
+      if (!resolved) {
         throw new InvalidGrantError('无法获取用户权限上下文');
       }
+      const { permCtx, deptIds } = resolved;
 
       const audience = client.isInternal ? 'portal-client' : client_id;
 

@@ -15,8 +15,11 @@ import { getRedisUrl } from '@/lib/env';
  */
 export interface RedisClient {
   get(key: string): Promise<string | null>;
+  /** 原子读取并删除（GETDEL，Redis 6.2+），用于一次性消费场景 */
+  getdel(key: string): Promise<string | null>;
   setex(key: string, seconds: number, value: string): Promise<'OK' | null>;
-  del(key: string): Promise<number>;
+  /** 删除一个或多个 key */
+  del(...keys: string[]): Promise<number>;
   keys(pattern: string): Promise<string[]>;
   quit(): Promise<void>;
 
@@ -68,8 +71,9 @@ function createIoredisClient(): RedisClient {
   // ioredis API 直接匹配 RedisClient 接口
   return {
     get: (key) => client.get(key),
+    getdel: (key) => client.getdel(key),
     setex: (key, seconds, value) => client.setex(key, seconds, value),
-    del: (key) => client.del(key),
+    del: (...keys) => client.del(...keys),
     keys: (pattern) => client.keys(pattern),
     quit: async () => {
       await client.quit();
