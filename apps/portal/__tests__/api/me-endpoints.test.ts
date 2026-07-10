@@ -88,14 +88,14 @@ vi.mock('@/lib/session', () => ({
   getJwtFromCookie: mockGetJwtFromCookie,
 }));
 
-vi.mock('@/lib/auth', async (importOriginal) => { const actual = await importOriginal(); return { ...actual, logServerDataRead: vi.fn(async () => {}) }; });
+vi.mock('@/lib/auth', async (importOriginal) => { const actual = await importOriginal() as Record<string, unknown>; return { ...actual, logServerDataRead: vi.fn(async () => {}) }; });
 vi.mock('@/lib/auth/token', () => ({
   verifyAccessToken: mockVerifyAccessToken,
 }));
 
-// 信任路径测试走开发模式（无 HMAC 共享密钥），依赖 X-Forwarded-For 存在性
+// 信任路径测试：未配置 GATEWAY_SHARED_SECRET 时，Gateway 路径严格拒绝，回退到 JWT 自验签
 vi.mock('@/lib/env', async (importOriginal) => {
-  const actual = await importOriginal();
+  const actual = await importOriginal() as Record<string, unknown>;
   return { ...actual, getGatewaySharedSecret: () => null };
 });
 

@@ -149,7 +149,6 @@ const MOCK_CLAIMS = { sub: 'test-user-id', iss: '', aud: 'portal-client', jti: '
 vi.mock('@/lib/auth', () => ({
   resolveIdentity: vi.fn(async () => ({ claims: { deptIds: ['dept-1'] } })),
   logServerDataRead: vi.fn(async () => {}),
-  canAccessDept: vi.fn(() => true),
 
   withPermission: vi.fn(
     async (_options: any, handler: (userId: string, claims: any) => Promise<any>) => {
@@ -162,6 +161,7 @@ vi.mock('@/lib/auth', () => ({
     },
   ),
   getUserRoleDeptIds: mockAuthState.getUserRoleDeptIds,
+  // 使用更精确的签名，同时去除上方重复定义
   canAccessDept: vi.fn((_deptIds: string[], _targetDeptId: string | null | undefined) => true),
 }));
 
