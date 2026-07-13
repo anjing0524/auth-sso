@@ -148,9 +148,9 @@
 
 | # | 文件:行 | 问题描述 | 等级 | 影响 | 依据 | 复核 |
 |---|---------|---------|:---:|------|------|:---:|
-| 10.1 | `packages/config/src/env.ts:39` | `LOG_LEVEL` 定义但整个 Portal 无代码读取，所有 `console.*` 无条件执行 | **严重** | 无法在生产环境控制日志级别，大量调试日志泄漏到生产 | 全局搜索无读取 LOG_LEVEL 的代码 | ✅ |
-| 10.2 | `lib/permissions.ts` + `lib/auth/token.ts` + `lib/audit.ts` 等多处 | 所有日志为 `console.log('[Module] msg:', ...args)` 非结构化纯文本 | **严重** | 日志系统无法按字段检索/聚合 | 无 JSON 结构化输出 | ✅ |
-| 10.3 | `api/health/route.ts:11-17` | 健康检查仅返回 `{status: 'ok'}`，不探测 DB/Redis 连通性 | 一般 | K8s liveness probe 无法判断服务真正可用 | DB 连接池耗尽时仍响应 200 | ✅ |
+| 10.1 | `packages/config/src/env.ts:39` | ~~`LOG_LEVEL` 定义但无代码读取~~ **【勘误：WIP 已创建 `lib/logger.ts`，`createLogger(component)` 支持 JSON 结构输出 + LOG_LEVEL 过滤 + component 标记，剩余工作是迁移 30 文件 68 处 console.* 调用】** | ~~**严重**~~ | — | 基础设施已就绪，迁移为体力活 | ⚠️已勘误（基础设施已完成） |
+| 10.2 | `lib/permissions.ts` + `lib/auth/token.ts` + `lib/audit.ts` 等多处 | 所有日志为非结构化纯文本，剩余约 30 文件 68 处 console.* 待迁移到 `createLogger()` | 一般 | 日志无法按字段检索/聚合 | 结构化 logger 已就绪，迁移在途 | ⚠️已勘误 |
+| 10.3 | `api/health/route.ts` | ~~健康检查仅返回 `{status: 'ok'}`~~ **【勘误：WIP 已实现完整健康检查，并行探测 DB（SELECT 1）+ Redis（PING），返回 `healthy/degraded/unhealthy` 三态，200/503 状态码】** | ~~一般~~ | — | 实测已实现 DB/Redis 探测 | ⚠️已勘误（已完成） |
 | 10.4 | `lib/auth/server-logger.ts:18-48` | 缺少跨服务 trace-id 传播机制 | 一般 | Gateway↔Portal 请求无法串联排查 | Gateway 注入 X-Client-IP/UA 但无 trace-id | ✅ |
 | 10.5 | `eslint.base.mjs:23` + `lib/permissions.ts` 等多处 | ESLint 禁止 `console.log` 但代码中大量违反，CI 无 lint 步骤 | 一般 | 代码风格不统一 | 有规则不执行 | ✅ |
 
