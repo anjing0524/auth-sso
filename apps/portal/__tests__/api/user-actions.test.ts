@@ -61,6 +61,15 @@ describe('User Server Actions', () => {
       // createUserAction 使用 generateUUID() 生成 ID（mock 返回 'aaaa-bbbb-cccc-dddd'）
       expect(r.data.id).toBeDefined();
       expect(r.message).toBe('用户创建成功');
+
+      // 验证 DB 写入内容：密码已哈希（非明文）、用户名、邮箱正确写入
+      const writes = mockDb.getWrites();
+      const insert = writes.find(w => w.type === 'insert');
+      expect(insert).toBeDefined();
+      expect(insert!.data.passwordHash).toBeDefined();
+      expect(insert!.data.passwordHash).not.toBe('StrongP@ss1'); // 密码已哈希
+      expect(insert!.data.username).toBe('newuser');
+      expect(insert!.data.email).toBe('new@example.com');
     });
 
     it('缺 username → 返回 success: false 并包含错误码', async () => {
@@ -107,6 +116,11 @@ describe('User Server Actions', () => {
       // toggleUserStatus 域逻辑：ACTIVE → DISABLED
       expect(r.data.status).toBe('DISABLED');
       expect(r.message).toContain('已禁用');
+
+      // 验证 DB 写入 status='DISABLED'
+      const updates = mockDb.getWrites().filter(w => w.type === 'update');
+      expect(updates.length).toBeGreaterThanOrEqual(1);
+      expect(updates[0]!.data.status).toBe('DISABLED');
     });
 
     it('DISABLED 用户 → 返回 success: true 且 status 变为 ACTIVE', async () => {

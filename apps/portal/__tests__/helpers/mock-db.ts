@@ -24,8 +24,10 @@ export function createMockDb(options: { schema?: Record<string, unknown> } = {})
   let _rowCountResult = 1;
   let _executeResult: unknown[] = [];
   let _shouldThrow: Error | null = null;
-  /** Drizzle relational query findFirst 的嵌套关联结果（如 { with: { userRoles: { with: { role: ... } } } }） */
+  /** Drizzle relational query findFirst 的嵌套关联结果 */
   let _findFirstNestedResult: unknown = undefined;
+  /** 捕获的写入操作列表（insert.values / update.set），测试用断言验证 */
+  let _writes: Array<{ type: 'insert' | 'update', data: Record<string, unknown> }> = [];
 
   /** 创建链式查询构建器——所有方法返回自身，then() 返回配置数据 */
   function createChain(): unknown {
@@ -70,14 +72,22 @@ export function createMockDb(options: { schema?: Record<string, unknown> } = {})
         if (prop === 'select' || prop === 'selectDistinct') return () => createChain();
         if (prop === 'insert') {
           return () => ({
-            values: (data: any) => ({
-              returning: () => Promise.resolve(_returningResult.length > 0 ? _returningResult : [{ ...data, id: 'mock-id' }]),
-              then: (resolve: Function) => resolve(_rowCountResult),
-            }),
+            values: (data: any) => {
+              _writes.push({ type: 'insert', data });
+              return {
+                returning: () => Promise.resolve(_returningResult.length > 0 ? _returningResult : [{ ...data, id: 'mock-id' }]),
+                then: (resolve: Function) => resolve(_rowCountResult),
+              };
+            },
           });
         }
         if (prop === 'update') {
-          return () => ({ set: () => ({ where: () => ({ returning: () => Promise.resolve(_returningResult), then: (r: Function) => r(_rowCountResult) }) }) });
+          return () => ({
+            set: (data: any) => {
+              _writes.push({ type: 'update', data });
+              return { where: () => ({ returning: () => Promise.resolve(_returningResult), then: (r: Function) => r(_rowCountResult) }) };
+            },
+          });
         }
         if (prop === 'delete') {
           return () => ({ where: () => ({ returning: () => Promise.resolve(_returningResult), then: (r: Function) => r(_rowCountResult) }) });
@@ -96,14 +106,22 @@ export function createMockDb(options: { schema?: Record<string, unknown> } = {})
       if (prop === 'select' || prop === 'selectDistinct') return () => createChain();
       if (prop === 'insert') {
         return () => ({
-          values: (data: any) => ({
-            returning: () => Promise.resolve(_returningResult.length > 0 ? _returningResult : [{ ...data, id: 'mock-id' }]),
-            then: (resolve: Function) => resolve(_rowCountResult),
-          }),
+          values: (data: any) => {
+            _writes.push({ type: 'insert', data });
+            return {
+              returning: () => Promise.resolve(_returningResult.length > 0 ? _returningResult : [{ ...data, id: 'mock-id' }]),
+              then: (resolve: Function) => resolve(_rowCountResult),
+            };
+          },
         });
       }
       if (prop === 'update') {
-        return () => ({ set: () => ({ where: () => ({ returning: () => Promise.resolve(_returningResult), then: (r: Function) => r(_rowCountResult) }) }) });
+        return () => ({
+          set: (data: any) => {
+            _writes.push({ type: 'update', data });
+            return { where: () => ({ returning: () => Promise.resolve(_returningResult), then: (r: Function) => r(_rowCountResult) }) };
+          },
+        });
       }
       if (prop === 'delete') {
         return () => ({ where: () => ({ returning: () => Promise.resolve(_returningResult), then: (r: Function) => r(_rowCountResult) }) });
@@ -136,6 +154,10 @@ export function createMockDb(options: { schema?: Record<string, unknown> } = {})
     setFindFirstNestedResult(r: unknown) { _findFirstNestedResult = r; },
     setThrowError(e: Error) { _shouldThrow = e; },
     clearThrowError() { _shouldThrow = null; },
+    /** 获取自上次 reset 以来捕获的所有 insert.values / update.set 写入数据 */
+    getWrites() { return [..._writes]; },
+    /** 清除写入记录（通常 beforeEach 中与 reset 一起调用） */
+    clearWrites() { _writes = []; },
     reset() {
       _queryResult = [];
       _returningResult = [];
@@ -143,6 +165,7 @@ export function createMockDb(options: { schema?: Record<string, unknown> } = {})
       _executeResult = [];
       _shouldThrow = null;
       _findFirstNestedResult = undefined;
+      _writes = [];
     },
   };
 }
