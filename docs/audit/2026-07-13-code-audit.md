@@ -180,7 +180,7 @@
 | 13.1 | `.github/workflows/pr.yml` + `main.yml` | ~~PR/Main CI 均缺少 `pnpm lint` 和 `pnpm typecheck` 步骤~~ **【勘误：经复核，两个工作流均已包含 `pnpm lint`（pr.yml step5 / main.yml step5）与 `pnpm typecheck`（pr.yml step6 / main.yml step6），本条不成立】** | ~~**严重**~~ | — | 实测 step 序列含 lint + typecheck | ⚠️已勘误（撤销） |
 | 13.2 | `.github/workflows/pr.yml` + `main.yml` | CI 缺少 `pnpm audit` / `cargo audit` 依赖安全扫描（`.github/` 下 grep audit/security/codeql/trivy/snyk 零命中） | 一般 | 已知 CVE 无法自动发现 | 依赖 jose/jsonwebtoken/bcryptjs 等安全敏感包 | ✅ |
 | 13.3 | `apps/portal/Dockerfile:9-16` | Dockerfile 先 `COPY . .` 后 `pnpm install`，每次源码变更使依赖层缓存失效 | 一般 | 每次构建重新下载全部依赖，耗时数分钟 | 标准优化应先 COPY lockfile + install 再 COPY 源码 | ✅ |
-| 13.4 | `apps/portal/tsconfig.json:14-16` | Portal 关闭了 base tsconfig 的 3 个 strict 子选项 | 一般 | 放宽类型安全：数组索引可能返回 undefined 不报错 | noUncheckedIndexedAccess 等三项被覆盖为 false | ✅ |
+| 13.4 | `apps/portal/tsconfig.json:14` | ~~Portal 关闭了 base tsconfig 的 3 个 strict 子选项~~ **【勘误：经实测仅 `noPropertyAccessFromIndexSignature: false` 一项被覆盖（为支持 `process.env['KEY']`），`noUncheckedIndexedAccess` 和 `noImplicitOverride` 均继承 base 的 `true`，审计 13.4 的"3 项"计数有误】** | ~~一般~~ | — | 实测仅 1 项覆盖 | ⚠️已勘误 |
 
 ### 角色14：业务治理（4条，含合并）
 

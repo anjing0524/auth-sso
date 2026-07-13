@@ -50,7 +50,7 @@ export function clearJwtCookies(response: Response): void {
   response.headers.append('Set-Cookie', `${COOKIE_NAMES.JWT}=; ${expiredCookieBase}`);
   response.headers.append(
     'Set-Cookie',
-    `${COOKIE_NAMES.REFRESH}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`
+    `${COOKIE_NAMES.REFRESH}=; ${expiredCookieBase}`,
   );
 }
 
