@@ -1,4 +1,5 @@
 import 'server-only';
+import { getEnvConfig } from '@auth-sso/config';
 
 /**
  * 结构化日志工具 (Structured Logger)
@@ -20,9 +21,15 @@ const LEVEL_ORDER: Record<LogLevel, number> = {
 };
 
 function getConfiguredLevel(): LogLevel {
-  // 从 process.env 或 @auth-sso/config 读取（延迟读取以支持运行时覆盖）
-  const raw = process.env['LOG_LEVEL'];
-  if (raw && raw in LEVEL_ORDER) return raw as LogLevel;
+  // 从 @auth-sso/config 统一校验路径读取 LOG_LEVEL
+  try {
+    const config = getEnvConfig();
+    if (config.LOG_LEVEL && config.LOG_LEVEL in LEVEL_ORDER) return config.LOG_LEVEL;
+  } catch {
+    // 降级：config 包异常时 fallback 到 process.env 直接读取
+    const raw = process.env['LOG_LEVEL'];
+    if (raw && raw in LEVEL_ORDER) return raw as LogLevel;
+  }
   return 'info';
 }
 

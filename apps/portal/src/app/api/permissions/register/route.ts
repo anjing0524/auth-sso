@@ -5,6 +5,7 @@ import { generateUUID } from '@/lib/crypto';
 import { COMMON_ERRORS } from '@auth-sso/contracts';
 import { mapDomainError } from '@/domain/shared/error-mapping';
 import { validateClientActive, validateClientSecret } from '@/domain/auth/oauth-client';
+import { apiError } from '@/lib/response';
 
 
 /**
@@ -102,34 +103,34 @@ async function checkCodeConflicts(incomingCodes: string[], clientId: string): Pr
 export async function POST(request: NextRequest) {
   try {
     const auth = extractBasicAuth(request);
-    if (!auth) return NextResponse.json({ error: COMMON_ERRORS.UNAUTHORIZED, message: '缺少或格式错误的 Basic Auth 凭证' }, { status: 401 });
+    if (!auth) return apiError(COMMON_ERRORS.UNAUTHORIZED, '缺少或格式错误的 Basic Auth 凭证', 401);
 
     const clientRecord = await db.select().from(schema.clients).where(eq(schema.clients.clientId, auth.clientId)).limit(1);
     try {
       validateClientActive(clientRecord[0]);
     } catch {
-      return NextResponse.json({ error: COMMON_ERRORS.FORBIDDEN, message: '该应用系统已停用或不存在' }, { status: 403 });
+      return apiError(COMMON_ERRORS.FORBIDDEN, '该应用系统已停用或不存在', 403);
     }
     try {
       validateClientSecret(clientRecord[0]!, auth.clientSecret);
     } catch {
-      return NextResponse.json({ error: COMMON_ERRORS.FORBIDDEN, message: 'Client ID 或 Secret 错误' }, { status: 403 });
+      return apiError(COMMON_ERRORS.FORBIDDEN, 'Client ID 或 Secret 错误', 403);
     }
     // 仅允许 Portal 内部系统 Client 调用（is_internal=true），杜绝任意注册 Client 提权注册权限
     if (!clientRecord[0]!.isInternal) {
-      return NextResponse.json({ error: COMMON_ERRORS.FORBIDDEN, message: '该端点仅限内部系统 Client 调用' }, { status: 403 });
+      return apiError(COMMON_ERRORS.FORBIDDEN, '该端点仅限内部系统 Client 调用', 403);
     }
 
     const body = await request.json();
     const tree: IncomingPermission[] = body.permissions;
-    if (!tree || !Array.isArray(tree)) return NextResponse.json({ error: COMMON_ERRORS.VALIDATION_ERROR, message: '权限数据须为 permissions 数组' }, { status: 400 });
+    if (!tree || !Array.isArray(tree)) return apiError(COMMON_ERRORS.VALIDATION_ERROR, '权限数据须为 permissions 数组', 400);
 
     const flatIncoming = flattenPermissions(tree);
     const codes = flatIncoming.map(p => p.code);
-    if (new Set(codes).size !== codes.length) return NextResponse.json({ error: COMMON_ERRORS.VALIDATION_ERROR, message: '上报权限树中存在重复 code' }, { status: 400 });
+    if (new Set(codes).size !== codes.length) return apiError(COMMON_ERRORS.VALIDATION_ERROR, '上报权限树中存在重复 code', 400);
 
     const conflictCode = await checkCodeConflicts(codes, auth.clientId);
-    if (conflictCode) return NextResponse.json({ error: 'conflict', message: `权限 code「${conflictCode}」全局已被占用，建议使用「${auth.clientId}:${conflictCode}」前缀` }, { status: 409 });
+    if (conflictCode) return apiError('conflict', `权限 code「${conflictCode}」全局已被占用，建议使用「${auth.clientId}:${conflictCode}」前缀`, 409);
 
     const result = await db.transaction(async (tx) => {
       await tx.execute(sql`SELECT pg_advisory_xact_lock(${getHashCode(auth.clientId)})`);
@@ -139,7 +140,7 @@ export async function POST(request: NextRequest) {
       for (const p of dbPermissions) codeToIdMap.set(p.code, p.id);
       for (const p of flatIncoming) { if (!codeToIdMap.has(p.code)) codeToIdMap.set(p.code, generateUUID()); }
 
-      const stats = { inserted: 0, updated: 0, deprecated: 0 };
+      const syncedCounts = { inserted: 0, updated: 0, deprecated: 0 };
       for (const p of flatIncoming) {
         const parentId = p.parentId ? (codeToIdMap.get(p.parentId) ?? null) : null;
         const existing = dbMap.get(p.code);
@@ -150,7 +151,7 @@ export async function POST(request: NextRequest) {
             icon: p.icon ?? null, visible: p.visible ?? null, clientId: auth.clientId,
             parentId, sort: p.sort, status: 'ACTIVE', createdAt: new Date(),
           });
-          stats.inserted++;
+          syncedCounts.inserted++;
         } else {
           const changed = existing.parentId !== parentId || existing.name !== p.name || existing.type !== p.type ||
             existing.resource !== (p.resource ?? null) || existing.action !== (p.action ?? null) ||
@@ -162,7 +163,7 @@ export async function POST(request: NextRequest) {
               path: p.path ?? null, icon: p.icon ?? null, visible: p.visible ?? null,
               sort: p.sort, status: 'ACTIVE', ...(existing.parentId !== parentId ? { parentId } : {}),
             }).where(eq(schema.permissions.id, existing.id));
-            stats.updated++;
+            syncedCounts.updated++;
           }
         }
       }
@@ -170,15 +171,15 @@ export async function POST(request: NextRequest) {
       for (const p of dbPermissions) {
         if (!incomingSet.has(p.code) && p.status === 'ACTIVE') {
           await tx.update(schema.permissions).set({ status: 'DISABLED' }).where(eq(schema.permissions.id, p.id));
-          stats.deprecated++;
+          syncedCounts.deprecated++;
         }
       }
-      return stats;
+      return syncedCounts;
     });
     return NextResponse.json({ success: true, data: result });
   } catch (error) {
     const mapped = mapDomainError(error);
     console.error('[Permissions Register] 同步失败:', mapped.message);
-    return NextResponse.json({ error: mapped.error, message: mapped.message }, { status: mapped.status });
+    return apiError(mapped.error, mapped.message, mapped.status);
   }
 }

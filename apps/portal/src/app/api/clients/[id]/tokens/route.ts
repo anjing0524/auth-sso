@@ -11,6 +11,7 @@ import { COMMON_ERRORS } from '@auth-sso/contracts';
 import { getClientById, getClientTokens } from '@/app/(dashboard)/clients/data';
 import { writeAuditLog, extractClientIP, extractUserAgent } from '@/lib/audit';
 import { parsePagination } from '@/lib/pagination';
+import { apiError } from '@/lib/response';
 
 
 interface RouteParams { params: Promise<{ id: string }>; }
@@ -22,7 +23,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
     const client = await getClientById(id);
     if (!client) {
-      return NextResponse.json({ error: COMMON_ERRORS.NOT_FOUND, message: 'Client 不存在' }, { status: 404 });
+      return apiError(COMMON_ERRORS.NOT_FOUND, 'Client 不存在', 404);
     }
 
     const sp = request.nextUrl.searchParams;
@@ -48,7 +49,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
 
     const client = await getClientById(id);
     if (!client) {
-      return NextResponse.json({ error: COMMON_ERRORS.NOT_FOUND, message: 'Client 不存在' }, { status: 404 });
+      return apiError(COMMON_ERRORS.NOT_FOUND, 'Client 不存在', 404);
     }
 
     let deletedCount = 0;
@@ -63,7 +64,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
         .returning({ id: schema.accessTokens.id });
       deletedCount = result.length;
     } else {
-      return NextResponse.json({ error: COMMON_ERRORS.VALIDATION_ERROR, message: '请提供 tokenIds 或 revokeAll' }, { status: 400 });
+      return apiError(COMMON_ERRORS.VALIDATION_ERROR, '请提供 tokenIds 或 revokeAll', 400);
     }
 
     writeAuditLog({
