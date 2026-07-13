@@ -67,6 +67,11 @@ function getCachedKey(kid: string): CachedSigningKey | undefined {
   return undefined;
 }
 
+/** 从数据库 JSON 字符串反序列化并导入为 CryptoKey（消除 3 处 JSON.parse + importJWK 重复） */
+async function importKeyFromJwk(jwkStr: string, alg: string = 'ES256'): Promise<CryptoKey> {
+  return await importJWK(JSON.parse(jwkStr) as JsonWebKey, alg) as CryptoKey;
+}
+
 /**
  * 【内部辅助】按 kid 查找签名密钥对 — 缓存命中零 DB，miss 时查 jwks 表
  */
@@ -88,10 +93,9 @@ async function getSigningKeyByKid(kid: string): Promise<{
 
   if (!row) return null;
 
-  const privateJwk = JSON.parse(row.privateKey) as JsonWebKey;
+  const privateKey = await importKeyFromJwk(row.privateKey);
+  const publicKey = await importKeyFromJwk(row.publicKey);
   const publicJwk = JSON.parse(row.publicKey) as JsonWebKey;
-  const privateKey = await importJWK(privateJwk, 'ES256') as CryptoKey;
-  const publicKey = await importJWK(publicJwk, 'ES256') as CryptoKey;
 
   const entry = { keyId: row.kid ?? row.id, privateKey, publicKey, publicJwk, fetchedAt: Date.now() };
   keyCache.set(kid, entry);
@@ -138,10 +142,9 @@ export async function getActiveSigningKey(): Promise<{
           const rkid = rjwk.kid ?? rjwk.id;
           const rcached = getCachedKey(rkid);
           if (rcached) return rcached;
-          const rprivateJwk = JSON.parse(rjwk.privateKey) as JsonWebKey;
+          const rprivateKey = await importKeyFromJwk(rjwk.privateKey);
+          const rpublicKey = await importKeyFromJwk(rjwk.publicKey);
           const rpublicJwk = JSON.parse(rjwk.publicKey) as JsonWebKey;
-          const rprivateKey = await importJWK(rprivateJwk, 'ES256') as CryptoKey;
-          const rpublicKey = await importJWK(rpublicJwk, 'ES256') as CryptoKey;
           const rentry = { keyId: rkid, privateKey: rprivateKey, publicKey: rpublicKey, publicJwk: rpublicJwk, fetchedAt: Date.now() };
           keyCache.set(rkid, rentry);
           return rentry;
@@ -159,10 +162,9 @@ export async function getActiveSigningKey(): Promise<{
   const cached = getCachedKey(kid);
   if (cached) return cached;
 
-  const privateJwk = JSON.parse(jwk.privateKey) as JsonWebKey;
+  const privateKey = await importKeyFromJwk(jwk.privateKey);
+  const publicKey = await importKeyFromJwk(jwk.publicKey);
   const publicJwk = JSON.parse(jwk.publicKey) as JsonWebKey;
-  const privateKey = await importJWK(privateJwk, 'ES256') as CryptoKey;
-  const publicKey = await importJWK(publicJwk, 'ES256') as CryptoKey;
 
   const entry = { keyId: kid, privateKey, publicKey, publicJwk, fetchedAt: Date.now() };
   keyCache.set(kid, entry);
