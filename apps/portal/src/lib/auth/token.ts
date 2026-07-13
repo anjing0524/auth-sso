@@ -1,26 +1,16 @@
 import 'server-only';
 
 /**
- * ## 类型：server-only 异步函数集
+ * Token 签发 / 验签 / 轮换（server-only async 函数集）
  *
- * 本文件所有导出函数均为 **server-only async function**，通过 `import 'server-only'` 编译期隔离。
- * - **不是** API Route Handler（没有 `export async function GET/POST`）
- * - **不是** Server Action（没有 `'use server'` 指令，不直接暴露给客户端）
- * - **不是** Domain 纯函数（依赖 DB/Redis/Crypto，不能放 domain/）
- *
- * ## 调用方
- * API Route（`app/api/auth/`）+ `lib/auth/verify-jwt.ts`
- *
- * ## 职责
- * 1. ES256 JWT 签发与验签（密钥对存 DB，进程内存缓存 5 分钟）
- * 2. OAuth 2.1 Refresh Token 签发 / 轮换 / 撤销
- * 3. jti 黑名单检查（委托 lib/session/revoke.ts）
+ * 本文件处理 JWT 生命周期：LoginSession → AccessToken → ID Token → RefreshToken。
+ * 密钥管理已下沉到 ./token/signing-keys.ts。
  *
  * @module lib/auth/token
  */
-import { SignJWT, jwtVerify, importJWK, generateKeyPair, exportJWK, decodeProtectedHeader } from 'jose';
+import { SignJWT, jwtVerify, decodeProtectedHeader } from 'jose';
 import { db, schema } from '@/infrastructure/db';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 import { generateId, generateUUID, hashToken } from '@/lib/crypto';
 import { getIssuer } from '@/lib/env';
 import { isJtiRevoked, trackUserJti, revokeUserAccessByUserId } from '@/lib/session/revoke';
@@ -28,181 +18,9 @@ import { cacheUserPermissionContext } from '@/lib/permissions';
 import { resolveTokenClaims } from '@/lib/auth/permissions-context';
 import { TOKEN_TTL } from '@auth-sso/contracts';
 import type { PortalJwtClaims, RefreshTokenResult } from '@/domain/auth/types';
-
-// ============================================================================
-// 密钥管理
-//
-// 密钥对存储在 `jwks` 表的一行中：
-//   id         — 20 位行 ID（PK）
-//   kid        — 16 位密钥标识，写入 JWT header.kid，验签方据此定位公钥
-//   publicKey  — JWK 格式公钥 JSON 字符串
-//   privateKey — JWK 格式私钥 JSON 字符串
-//   expiresAt  — 90 天后过期，过期自动生成新对
-//
-// 进程内存缓存 5 分钟，避免每次签发/验签都查 DB。
-// ============================================================================
-
-const KEY_CACHE_TTL_MS = 300_000;
-
-// 进程级互斥锁：防止冷启动时多个并发请求各自生成重复密钥对
-let keyGenLock: Promise<void> = Promise.resolve();
-
-interface CachedSigningKey {
-  keyId: string;       // JWT kid header 的值
-  privateKey: CryptoKey; // jose.CryptoKey，内存中可直接签名
-  publicKey: CryptoKey;  // jose.CryptoKey（importJWK 后），验签热路径零重复导入
-  publicJwk: JsonWebKey; // JWK 公钥（JWKS 端点返回用）
-  fetchedAt: number;
-}
-
-// 缓存改为 Map<kid, CachedSigningKey>，支持多 key 共存（密钥轮换后旧 token 仍可验签）
-const keyCache = new Map<string, CachedSigningKey>();
-
-function getCachedKey(kid: string): CachedSigningKey | undefined {
-  const entry = keyCache.get(kid);
-  if (entry && Date.now() - entry.fetchedAt < KEY_CACHE_TTL_MS) {
-    return entry;
-  }
-  if (entry) keyCache.delete(kid); // 过期清理
-  return undefined;
-}
-
-/** 从数据库 JSON 字符串反序列化并导入为 CryptoKey（消除 3 处 JSON.parse + importJWK 重复） */
-async function importKeyFromJwk(jwkStr: string, alg: string = 'ES256'): Promise<CryptoKey> {
-  return await importJWK(JSON.parse(jwkStr) as JsonWebKey, alg) as CryptoKey;
-}
-
-/**
- * 【内部辅助】按 kid 查找签名密钥对 — 缓存命中零 DB，miss 时查 jwks 表
- */
-async function getSigningKeyByKid(kid: string): Promise<{
-  keyId: string;
-  privateKey: CryptoKey;
-  publicKey: CryptoKey;
-  publicJwk: JsonWebKey;
-} | null> {
-  const cached = getCachedKey(kid);
-  if (cached) return cached;
-
-  const row = await db
-    .select()
-    .from(schema.jwks)
-    .where(eq(schema.jwks.kid, kid))
-    .limit(1)
-    .then(rows => rows[0] ?? null);
-
-  if (!row) return null;
-
-  const privateKey = await importKeyFromJwk(row.privateKey);
-  const publicKey = await importKeyFromJwk(row.publicKey);
-  const publicJwk = JSON.parse(row.publicKey) as JsonWebKey;
-
-  const entry = { keyId: row.kid ?? row.id, privateKey, publicKey, publicJwk, fetchedAt: Date.now() };
-  keyCache.set(kid, entry);
-  return entry;
-}
-
-/**
- * 【内部辅助】获取当前活跃的签名密钥对（用于签发新 token）
- *
- * 优先级：取 jwks 表最新未过期的一行 → 缓存 miss 查 DB → 无可用密钥自动生成
- */
-export async function getActiveSigningKey(): Promise<{
-  keyId: string;
-  privateKey: CryptoKey;
-  publicKey: CryptoKey;
-  publicJwk: JsonWebKey;
-}> {
-  // DESC 排序取最新密钥（修复：ASC 导致永远选中旧密钥，密钥轮换形同虚设）
-  const rows = await db
-    .select()
-    .from(schema.jwks)
-    .orderBy(desc(schema.jwks.createdAt))
-    .limit(1);
-
-  const needsGen = rows.length === 0 || (rows[0]!.expiresAt && new Date(rows[0]!.expiresAt) < new Date());
-
-  if (needsGen) {
-    // 串行化密钥生成，防止冷启动时多个并发请求各自生成重复密钥对
-    const previousLock = keyGenLock;
-    let release: () => void;
-    keyGenLock = new Promise<void>(r => { release = r; });
-    try {
-      await previousLock;
-      // 双重检查：等待锁期间可能有其他请求已生成密钥
-      const recheck = await db
-        .select()
-        .from(schema.jwks)
-        .orderBy(desc(schema.jwks.createdAt))
-        .limit(1);
-      if (recheck.length > 0) {
-        const rjwk = recheck[0]!;
-        if (!rjwk.expiresAt || new Date(rjwk.expiresAt) >= new Date()) {
-          // 已有有效密钥（由并发请求生成），直接使用
-          const rkid = rjwk.kid ?? rjwk.id;
-          const rcached = getCachedKey(rkid);
-          if (rcached) return rcached;
-          const rprivateKey = await importKeyFromJwk(rjwk.privateKey);
-          const rpublicKey = await importKeyFromJwk(rjwk.publicKey);
-          const rpublicJwk = JSON.parse(rjwk.publicKey) as JsonWebKey;
-          const rentry = { keyId: rkid, privateKey: rprivateKey, publicKey: rpublicKey, publicJwk: rpublicJwk, fetchedAt: Date.now() };
-          keyCache.set(rkid, rentry);
-          return rentry;
-        }
-      }
-      return generateAndPersistKeyPair();
-    } finally {
-      release!();
-    }
-  }
-
-  const jwk = rows[0]!;
-
-  const kid = jwk.kid ?? jwk.id;
-  const cached = getCachedKey(kid);
-  if (cached) return cached;
-
-  const privateKey = await importKeyFromJwk(jwk.privateKey);
-  const publicKey = await importKeyFromJwk(jwk.publicKey);
-  const publicJwk = JSON.parse(jwk.publicKey) as JsonWebKey;
-
-  const entry = { keyId: kid, privateKey, publicKey, publicJwk, fetchedAt: Date.now() };
-  keyCache.set(kid, entry);
-  return entry;
-}
-
-/**
- * 【内部辅助】生成新的 ES256 密钥对，写入 jwks 表，加入缓存
- */
-async function generateAndPersistKeyPair(): Promise<{
-  keyId: string;
-  privateKey: CryptoKey;
-  publicKey: CryptoKey;
-  publicJwk: JsonWebKey;
-}> {
-  const { publicKey, privateKey } = await generateKeyPair('ES256', { extractable: true });
-  const publicJwk = await exportJWK(publicKey);
-  const privateJwk = await exportJWK(privateKey);
-
-  const kid = generateId(16);
-  const id = generateUUID();
-  const expiresAt = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
-
-  await db.insert(schema.jwks).values({
-    id,
-    kid,
-    publicKey: JSON.stringify(publicJwk),
-    privateKey: JSON.stringify(privateJwk),
-    createdAt: new Date(),
-    expiresAt,
-  });
-
-  // 生成密钥对后立即 importJWK 得到可缓存的 CryptoKey（exportJWK 返回的是 JWK 不是 CryptoKey）
-  const importedPublicKey = await importJWK(publicJwk, 'ES256') as CryptoKey;
-  const entry = { keyId: kid, privateKey, publicKey: importedPublicKey, publicJwk, fetchedAt: Date.now() };
-  keyCache.set(kid, entry);
-  return entry;
-}
+import { getActiveSigningKey, getSigningKeyByKid } from './token/signing-keys';
+// 保持向后兼容：密钥管理函数仍从 @/lib/auth/token 可导入
+export { getActiveSigningKey, getSigningKeyByKid } from './token/signing-keys';
 
 // ============================================================================
 // Login Session Token — 登录成功后写入 HttpOnly Cookie 的临时凭证
