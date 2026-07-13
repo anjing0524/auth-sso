@@ -6,15 +6,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withPermission } from '@/lib/auth';
 import { getClients } from '@/app/(dashboard)/clients/data';
+import { parsePagination } from '@/lib/pagination';
 
 
 /** GET /api/clients — 委托 data.ts */
 export async function GET(request: NextRequest) {
   return withPermission({ permissions: ['client:list'] }, async () => {
     const sp = request.nextUrl.searchParams;
-    const page = Math.max(1, parseInt(sp.get('page') || '1', 10));
-    const rawPageSize = parseInt(sp.get('pageSize') || '20', 10);
-    const pageSize = Math.min(100, Math.max(1, rawPageSize));
+    const { page, pageSize } = parsePagination(sp);
     const keyword = sp.get('keyword') || '';
     const status = sp.get('status') || '';
 

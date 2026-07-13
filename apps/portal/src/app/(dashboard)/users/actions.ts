@@ -117,9 +117,12 @@ export const toggleUserStatusAction = withAuth(
     });
 
     // 状态变更后撤销该用户所有活跃 JWT（jti 黑名单），确保变更即时生效
-    revokeUserAccessByUserId(parsed.data.id).catch((e) =>
-      console.error('[Users Action] 撤销用户 JWT 失败:', e),
-    );
+    // 关键安全操作必须 await（Redis 不可达时撤销失败会留下有效旧 Token）
+    try {
+      await revokeUserAccessByUserId(parsed.data.id);
+    } catch (e) {
+      console.error('[Users Action] 撤销用户 JWT 失败:', e);
+    }
 
     revalidatePath('/users');
     updateTag('users-list');
@@ -229,9 +232,12 @@ export const deleteUserAction = withAuth(
     });
 
     // 删除用户后撤销其所有活跃 JWT（jti 黑名单），确保即时下线
-    revokeUserAccessByUserId(parsed.data.id).catch((e) =>
-      console.error('[Users Action] 撤销已删除用户 JWT 失败:', e),
-    );
+    // 关键安全操作必须 await（Redis 不可达时撤销失败会留下有效旧 Token）
+    try {
+      await revokeUserAccessByUserId(parsed.data.id);
+    } catch (e) {
+      console.error('[Users Action] 撤销已删除用户 JWT 失败:', e);
+    }
 
     await refreshUserPermissionCache(parsed.data.id);
     revalidatePath('/users');
@@ -280,9 +286,12 @@ export const resetPasswordAction = withAuth(
     });
 
     // 重置后所有会话失效，用户须用新密码重新登录（B-USR-PW）
-    revokeUserAccessByUserId(parsed.data.id).catch((e) =>
-      console.error('[Users Action] 重置密码后撤销 JWT 失败:', e),
-    );
+    // 关键安全操作必须 await（Redis 不可达时撤销失败会留下有效旧 Token）
+    try {
+      await revokeUserAccessByUserId(parsed.data.id);
+    } catch (e) {
+      console.error('[Users Action] 重置密码后撤销 JWT 失败:', e);
+    }
 
     revalidatePath('/users');
     updateTag('users-list');

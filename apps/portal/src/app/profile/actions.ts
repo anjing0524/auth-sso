@@ -121,9 +121,12 @@ export const changeOwnPasswordAction = withAuth(
       .where(eq(schema.users.id, ctx.userId));
 
     // 失效所有会话（含当前），强制重新登录（NFR-SEC-13）
-    revokeUserAccessByUserId(ctx.userId).catch((e) =>
-      console.error('[Profile Action] 改密后撤销会话失败:', e),
-    );
+    // 关键安全操作必须 await（Redis 不可达时撤销失败会留下有效旧 Token）
+    try {
+      await revokeUserAccessByUserId(ctx.userId);
+    } catch (e) {
+      console.error('[Profile Action] 改密后撤销会话失败:', e);
+    }
 
     return { success: true, data: { id: ctx.userId }, message: '密码已更新，请重新登录' };
   },

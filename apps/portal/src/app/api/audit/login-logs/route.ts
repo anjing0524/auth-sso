@@ -7,14 +7,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { withPermission } from '@/lib/auth';
 import { getLoginLogs } from '@/app/audit/data';
 import { LOGIN_EVENT_VALUES, type LoginEventType } from '@auth-sso/contracts';
+import { parsePagination } from '@/lib/pagination';
 
 
 /** GET /api/audit/login-logs — 委托 data.ts */
 export async function GET(request: NextRequest) {
   return withPermission({ permissions: ['audit:read'] }, async () => {
     const sp = request.nextUrl.searchParams;
-    const page = Math.max(1, parseInt(sp.get('page') || '1', 10));
-    const pageSize = Math.min(100, Math.max(1, parseInt(sp.get('pageSize') || '20', 10)));
+    const { page, pageSize } = parsePagination(sp);
     const rawEvent = sp.get('eventType');
     const eventType = rawEvent && (LOGIN_EVENT_VALUES as readonly string[]).includes(rawEvent)
       ? (rawEvent as LoginEventType)

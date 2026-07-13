@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withPermission } from '@/lib/auth';
 import { getRoles } from '@/app/(dashboard)/roles/data';
+import { parsePagination } from '@/lib/pagination';
 
 
 /** GET /api/roles — 委托 data.ts */
@@ -14,9 +15,7 @@ export async function GET(request: NextRequest) {
     const sp = request.nextUrl.searchParams;
     const keyword = sp.get('keyword') || '';
     const status = sp.get('status') || '';
-    const page = Math.max(1, parseInt(sp.get('page') || '1', 10));
-    const rawPageSize = parseInt(sp.get('pageSize') || '20', 10);
-    const pageSize = Math.min(100, Math.max(1, rawPageSize));
+    const { page, pageSize } = parsePagination(sp);
 
     // 数据范围：仅返回管理员可见部门内的角色（H-ACL-002）
     // deptIds 来自 JWT claims（已含子树展开），无需额外 DB 查询

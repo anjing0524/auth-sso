@@ -95,7 +95,7 @@ vi.mock('@/lib/auth/token', () => ({
 
 // 信任路径测试：默认未配置 GATEWAY_SHARED_SECRET（严格拒绝，回退 JWT 自验签）；
 // 信任路径用例可通过 mockGatewaySecret.mockReturnValue 覆盖为有效值
-const { mockGatewaySecret } = vi.hoisted(() => ({ mockGatewaySecret: vi.fn(() => null) }));
+const { mockGatewaySecret } = vi.hoisted(() => ({ mockGatewaySecret: vi.fn<() => string | null>(() => null) }));
 vi.mock('@/lib/env', async (importOriginal) => {
   const actual = await importOriginal() as Record<string, unknown>;
   return { ...actual, getGatewaySharedSecret: mockGatewaySecret };

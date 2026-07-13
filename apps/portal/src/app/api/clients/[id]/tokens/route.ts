@@ -10,6 +10,7 @@ import { withPermission, logServerDataRead } from '@/lib/auth';
 import { COMMON_ERRORS } from '@auth-sso/contracts';
 import { getClientById, getClientTokens } from '@/app/(dashboard)/clients/data';
 import { writeAuditLog, extractClientIP, extractUserAgent } from '@/lib/audit';
+import { parsePagination } from '@/lib/pagination';
 
 
 interface RouteParams { params: Promise<{ id: string }>; }
@@ -25,9 +26,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     }
 
     const sp = request.nextUrl.searchParams;
-    const page = Math.max(1, parseInt(sp.get('page') || '1', 10));
-    const rawPageSize = parseInt(sp.get('pageSize') || '20', 10);
-    const pageSize = Math.min(100, Math.max(1, rawPageSize));
+    const { page, pageSize } = parsePagination(sp);
     const userId = sp.get('userId') || undefined;
 
     const result = await getClientTokens(client.clientId, { page, pageSize, userId });

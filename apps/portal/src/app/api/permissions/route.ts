@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withPermission } from '@/lib/auth';
 import { getPermissions } from '@/app/(dashboard)/permissions/data';
+import { parsePagination } from '@/lib/pagination';
 
 
 /** GET /api/permissions — 委托 data.ts，支持按 type 过滤和分页（内存分页，适配 Next.js 缓存） */
@@ -13,8 +14,7 @@ export async function GET(request: NextRequest) {
   return withPermission({ permissions: ['permission:list'] }, async () => {
     const sp = request.nextUrl.searchParams;
     const type = sp.get('type') || undefined;
-    const page = Math.max(1, parseInt(sp.get('page') || '1', 10));
-    const pageSize = Math.min(100, Math.max(1, parseInt(sp.get('pageSize') || '50', 10)));
+    const { page, pageSize } = parsePagination(sp, 50);
     const allData = await getPermissions(type);
     const total = allData.length;
     const totalPages = Math.ceil(total / pageSize);
