@@ -42,6 +42,7 @@ import {
 } from '@/components/ui/dialog';
 import { updateOwnProfileAction, changeOwnPasswordAction } from './actions';
 import { toast } from 'sonner';
+import { ADMIN_ROLE_CODES } from '@auth-sso/contracts';
 
 interface ProfileClientProps {
   user: null | {
@@ -267,7 +268,7 @@ export default function ProfileClient({
     );
   }
 
-  const isAdmin = roles.some(r => r.code === 'SUPER_ADMIN' || r.code === 'ADMIN');
+  const isAdmin = roles.some(r => (ADMIN_ROLE_CODES as readonly string[]).includes(r.code));
 
   return (
     <div className="max-w-6xl mx-auto space-y-10 pb-16 animate-in fade-in duration-700">

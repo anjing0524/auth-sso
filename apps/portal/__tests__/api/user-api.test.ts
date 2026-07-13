@@ -281,7 +281,7 @@ describe('User Management API & Actions', () => {
         username: 'newactionuser',
         email: 'action@test.com',
         name: 'Action User',
-        password: 'Pass1234',
+        password: 'Pass1234!9',
         deptId: 'dept-1',
       };
 
@@ -296,7 +296,7 @@ describe('User Management API & Actions', () => {
       formData.append('username', 'newactionuser');
       formData.append('email', 'action@test.com');
       formData.append('name', 'Action User');
-      formData.append('password', 'Pass1234');
+      formData.append('password', 'Pass1234!9');
       formData.append('deptId', 'dept-1');
 
       const res = await createUserAction(null, formData);

@@ -50,7 +50,7 @@ export const createRoleAction = withAuth(
   async (ctx: AuthContext, input: CreateRoleInput): Promise<ApiResponse<{ id: string }>> => {
     const parsed = CreateRoleInputSchema.safeParse(input);
     if (!parsed.success) {
-      return { success: false, error: 'VALIDATION_ERROR', message: parsed.error.issues[0].message };
+      return { success: false, error: 'VALIDATION_ERROR', message: parsed.error.issues[0]!.message };
     }
 
     // 数据范围校验：角色归属部门必须在操作者可访问范围内（R-ROLE-DEPT / R7）
@@ -93,7 +93,7 @@ export const updateRoleAction = withAuth(
   async (ctx: AuthContext, roleId: string, input: Record<string, unknown>): Promise<ApiResponse<{ id: string }>> => {
     const parsed = UpdateRoleInputSchema.safeParse(input);
     if (!parsed.success) {
-      return { success: false, error: 'VALIDATION_ERROR', message: parsed.error.issues[0].message };
+      return { success: false, error: 'VALIDATION_ERROR', message: parsed.error.issues[0]!.message };
     }
 
     let permissionChanged = false;

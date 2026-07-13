@@ -45,27 +45,29 @@ export function toDomainPermission(row: {
 
 /**
  * 工厂函数：构建新权限实体 (无副作用)
+ *
+ * CreatePermissionInput 为 discriminated union，不同 type 分支有不同的可选字段。
+ * 使用 in 操作符类型守卫安全访问各分支字段，避免 as Record<string, unknown> 断言。
  */
 export function createPermission(
   input: CreatePermissionInput,
   idGenerator: () => string,
 ): Permission {
-  const inputAny = input as Record<string, unknown>;
   return {
     id: idGenerator(),
     name: input.name,
     code: input.code,
     type: input.type,
-    description: (inputAny.description as string) ?? null,
-    path: (inputAny.path as string) ?? null,
-    icon: (inputAny.icon as string) ?? null,
-    visible: (inputAny.visible as boolean) ?? null,
-    resource: (inputAny.resource as string) ?? null,
-    action: (inputAny.action as string) ?? null,
-    clientId: (inputAny.clientId as string) ?? null,
-    parentId: (inputAny.parentId as string) ?? null,
+    description: ('description' in input ? input.description : undefined) ?? null,
+    path: ('path' in input ? input.path : undefined) ?? null,
+    icon: ('icon' in input ? input.icon : undefined) ?? null,
+    visible: ('visible' in input ? input.visible : undefined) ?? null,
+    resource: ('resource' in input ? input.resource : undefined) ?? null,
+    action: ('action' in input ? input.action : undefined) ?? null,
+    clientId: ('clientId' in input ? input.clientId : undefined) ?? null,
+    parentId: ('parentId' in input ? input.parentId : undefined) ?? null,
     status: ENTITY_ACTIVE,
-    sort: (inputAny.sort as number) ?? 0,
+    sort: ('sort' in input ? input.sort : undefined) ?? 0,
     createdAt: Temporal.Now.instant(),
   };
 }

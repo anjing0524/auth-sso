@@ -66,7 +66,7 @@ async function issueCodeAndRedirect(
   userId: string,
 ): Promise<NextResponse> {
   const client = await getClientByClientId(params.clientId);
-  validateClientActive(client);
+  validateClientActive(client ?? undefined);
   validateRedirectUri(client!.redirectUris, params.redirectUri);
 
   const userWithRoles = await getUserWithRoleClients(userId);
@@ -201,7 +201,7 @@ async function handleFullParamsBranch(
 
   // 未登录 → 校验 Client → 暂存参数到 Redis → 302 /login
   const client = await getClientByClientId(client_id);
-  validateClientActive(client);
+  validateClientActive(client ?? undefined);
   validateRedirectUri(client!.redirectUris, redirect_uri);
 
   const newSessionId = generateSessionId();

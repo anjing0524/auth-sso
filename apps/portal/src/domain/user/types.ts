@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { type UserStatus } from '@auth-sso/contracts';
-import { userStatusEnum } from '@/domain/shared/zod-schemas';
+import { userStatusEnum, PasswordSchema } from '@/domain/shared/zod-schemas';
 
 /**
  * 用户领域实体接口 (纯 TS interface)
@@ -34,6 +34,8 @@ export interface User {
 
 /**
  * Server Action 创建用户入参校验 Schema
+ *
+ * 密码校验统一使用全局 PasswordSchema（NFR-SEC-05 单一真相源）。
  */
 export const CreateUserInputSchema = z.object({
   /** 姓名 */
@@ -42,8 +44,8 @@ export const CreateUserInputSchema = z.object({
   username: z.string().min(3, '用户名至少3位'),
   /** 邮箱 */
   email: z.string().email('邮箱格式不合法'),
-  /** 密码 */
-  password: z.string().min(8, '密码至少8位').regex(/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/, '密码须包含大小写字母和数字'),
+  /** 密码：使用全局 PasswordSchema（至少10位，大小写/数字/特殊字符中至少3类） */
+  password: PasswordSchema,
   /** 部门 ID（UI 哨兵值 'ALL' 归一化在应用层处理，保持 Schema 纯粹） */
   deptId: z.string().nullable().optional(),
 });

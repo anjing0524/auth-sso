@@ -10,6 +10,7 @@ import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import { COOKIE_NAMES } from '@auth-sso/contracts';
 import { getAppBaseURL } from '@/lib/env';
+import { isCookieSecure } from '@auth-sso/config';
 
 /**
  * 构建 OAuth 错误重定向响应 — 将错误信息作为 query params 拼接到 /oauth/error 页面
@@ -37,11 +38,11 @@ export function buildOAuthErrorRedirect(
  * @param response - NextResponse 对象，会在此对象上设置清除 Cookie 的 Header
  */
 export function clearLoginSessionCookie(response: NextResponse): void {
-  const isProduction = process.env.NODE_ENV === 'production';
+  const secure = isCookieSecure();
   response.cookies.set(COOKIE_NAMES.LOGIN_SESSION, '', {
     path: '/api/auth/oauth2/authorize',
     httpOnly: true,
-    secure: isProduction,
+    secure,
     sameSite: 'lax',
     maxAge: 0,
   });

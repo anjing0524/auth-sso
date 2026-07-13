@@ -6,14 +6,23 @@ RUN npm install -g pnpm@10
 
 FROM base AS builder
 WORKDIR /app
-COPY . .
-# 针对 Monorepo 只构建特定子应用
+
+# 先复制依赖描述文件 → install → 利用 Docker layer caching（源码变更不重新下载依赖）
+COPY pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY package.json tsconfig.base.json next.base.ts vitest.base.ts ./
+COPY apps/portal/package.json apps/portal/tsconfig.json apps/portal/next.config.ts ./apps/portal/
+COPY packages/contracts/package.json ./packages/contracts/
+COPY packages/config/package.json ./packages/config/
+
 RUN pnpm config set registry https://registry.npmmirror.com
 
 ARG NEXT_PUBLIC_APP_URL
 ENV NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL
 
 RUN pnpm install --frozen-lockfile
+
+# 再复制全部源码 → 构建
+COPY . .
 RUN pnpm --filter @auth-sso/portal build
 
 FROM base AS runner

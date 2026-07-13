@@ -7,8 +7,8 @@ import 'server-only';
  */
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { COOKIE_NAMES } from '@auth-sso/contracts';
-import { TOKEN_TTL } from '@auth-sso/contracts';
+import { COOKIE_NAMES, TOKEN_TTL } from '@auth-sso/contracts';
+import { isCookieSecure } from '@auth-sso/config';
 
 /**
  * 将 Access Token 和 Refresh Token 分别写入 HttpOnly Cookie
@@ -20,21 +20,21 @@ export function setJwtCookies(
   refreshToken: string | undefined,
   accessTokenExpiresIn: number = TOKEN_TTL.ACCESS_TOKEN
 ): void {
-  const isProduction = process.env.NODE_ENV === 'production';
+  const secure = isCookieSecure();
 
   response.cookies.set(COOKIE_NAMES.JWT, accessToken, {
     path: '/',
     httpOnly: true,
-    secure: isProduction,
-    sameSite: 'lax',
-    maxAge: accessTokenExpiresIn,
-  });
+      secure,
+      sameSite: 'lax',
+      maxAge: accessTokenExpiresIn,
+    });
 
-  if (refreshToken) {
-    response.cookies.set(COOKIE_NAMES.REFRESH, refreshToken, {
-      path: '/',
-      httpOnly: true,
-      secure: isProduction,
+    if (refreshToken) {
+      response.cookies.set(COOKIE_NAMES.REFRESH, refreshToken, {
+        path: '/',
+        httpOnly: true,
+        secure,
       sameSite: 'lax',
       maxAge: TOKEN_TTL.REFRESH_TOKEN,
     });
@@ -45,7 +45,8 @@ export function setJwtCookies(
  * 清除 Access Token 和 Refresh Token Cookie（登出时调用）
  */
 export function clearJwtCookies(response: Response): void {
-  const expiredCookieBase = 'Path=/; HttpOnly; SameSite=Lax; Max-Age=0';
+  const secure = isCookieSecure() ? '; Secure' : '';
+  const expiredCookieBase = `Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure}`;
   response.headers.append('Set-Cookie', `${COOKIE_NAMES.JWT}=; ${expiredCookieBase}`);
   response.headers.append(
     'Set-Cookie',

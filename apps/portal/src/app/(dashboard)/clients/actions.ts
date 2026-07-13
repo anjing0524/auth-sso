@@ -29,7 +29,7 @@ export const createClientAction = withAuth(
   async (_ctx: AuthContext, input: CreateClientInput): Promise<ApiResponse<{ id: string; clientId: string; clientSecret: string | null }>> => {
     const parsed = CreateClientInputSchema.safeParse(input);
     if (!parsed.success) {
-      return { success: false, error: 'VALIDATION_ERROR', message: parsed.error.issues[0].message };
+      return { success: false, error: 'VALIDATION_ERROR', message: parsed.error.issues[0]!.message };
     }
 
     const rawSecret = generateClientSecret();
@@ -57,7 +57,7 @@ export const updateClientAction = withAuth(
   async (_ctx: AuthContext, clientIdStr: string, input: Record<string, unknown>): Promise<ApiResponse<{ id: string }>> => {
     const parsed = UpdateClientInputSchema.safeParse(input);
     if (!parsed.success) {
-      return { success: false, error: 'VALIDATION_ERROR', message: parsed.error.issues[0].message };
+      return { success: false, error: 'VALIDATION_ERROR', message: parsed.error.issues[0]!.message };
     }
 
     const updated = await db.transaction(async (tx) => {

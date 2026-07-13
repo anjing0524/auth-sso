@@ -11,8 +11,6 @@
     "allowJs": true,
     "jsx": "react-jsx",
     "incremental": true,
-    "noUncheckedIndexedAccess": false,
-    "noImplicitOverride": false,
     "noPropertyAccessFromIndexSignature": false,
     "declaration": false,
     "declarationMap": false,

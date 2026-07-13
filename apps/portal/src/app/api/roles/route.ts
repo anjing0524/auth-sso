@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
     const keyword = sp.get('keyword') || '';
     const status = sp.get('status') || '';
     const page = Math.max(1, parseInt(sp.get('page') || '1', 10));
-    const rawPageSize = parseInt(sp.get('pageSize') || '10', 10);
+    const rawPageSize = parseInt(sp.get('pageSize') || '20', 10);
     const pageSize = Math.min(100, Math.max(1, rawPageSize));
 
     // 数据范围：仅返回管理员可见部门内的角色（H-ACL-002）

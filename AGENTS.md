@@ -28,11 +28,13 @@ use spec-docs skill
 rust 代码修改后必须修复 `cargo clippy`的所有错误并执行 `cargo fmt` 格式化
 rust 代码必须遵循 `https://rust-lang.github.io/api-guidelines/checklist.html`
 使用`roadmap`记录系统完成情况
+阅读文档务必一次性全读取，文档提到的代码也一次性全读取
 
 ## 禁止
 
 禁止反复修改同一行代码、微调参数
 禁止只考虑兼容方案而不思考全局最佳理论方案
+禁止代码没有读取完整的时候直接向LLM提问
 
 ## 1. Think Before Coding
 

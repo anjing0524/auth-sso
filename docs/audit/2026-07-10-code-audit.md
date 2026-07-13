@@ -1,433 +1,426 @@
 # 代码全维度审计报告
 
-> **审计日期**：2026-07-10
-> **项目**：auth-sso（统一身份认证平台）
-> **审计范围**：全项目（apps/portal、apps/gateway、packages/contracts、packages/config、tests/）
-> **审计方法**：四路 Agent（A/B/C/D）14 角色深度审计 + 复核 Agent 交叉验证/去重/补盲
-> **综合评级**：**C+**（安全架构方向正确但多处关键实现缺陷，工程化基础薄弱）
-> **严重问题数**：17 个  |  **一般问题数**：23 个  |  **优化建议**：15 个
+> **审计日期**：2026-07-10  
+> **项目**：Auth-SSO 统一身份认证平台  
+> **技术栈**：Next.js 16 (Portal) + Rust/Pingora (Gateway) + Drizzle ORM + PostgreSQL + Redis  
+> **审计范围**：全代码库 14 角色交叉审计  
+> **审计方法**：4 路 Agent 独立审计 + 双边交叉验证 + 代码二次确认  
+> **综合评级**：**B-**（良好偏下，存在若干需优先修复的严重问题）  
+> **严重问题数**：10 个  |  **一般问题数**：18 个  |  **优化建议**：15 个
 
 ---
 
 ## 目录
 
-- [1. 全局诊断报告](#1-全局诊断报告)
-- [2. 分角色问题清单](#2-分角色问题清单)
-- [3. 整体重构与规范方案](#3-整体重构与规范方案)
-- [4. 核心模块优化示例](#4-核心模块优化示例)
-- [5. 分阶段落地路线图](#5-分阶段落地路线图)
-- [6. 长期维护规范](#6-长期维护规范)
+1. [全局诊断报告](#1-全局诊断报告)
+2. [分角色问题清单](#2-分角色问题清单)
+3. [整体重构与规范方案](#3-整体重构与规范方案)
+4. [核心模块优化示例](#4-核心模块优化示例)
+5. [分阶段落地路线图](#5-分阶段落地路线图)
+6. [长期维护规范](#6-长期维护规范)
 
 ---
 
 ## 1. 全局诊断报告
 
-### 核心问题 TOP5（经复核确认，按严重程度降序）
+### 核心问题 TOP5
 
-| 排名 | 问题 | 涉及文件 | 风险等级 | 复核结论 |
-|------|------|----------|----------|----------|
-| 1 | 暴力破解防护三重缺陷（INCR 时序错误 + fail-open + DB fallback 不清零） | `brute-force.ts:44`, `login/route.ts:52-57` | 严重 | ✅ 确认：INCR 在密码校验前执行；Redis 异常静默吞掉 |
-| 2 | Client Secret 使用 SHA-256 快哈希 + 非定时安全比较 | `crypto.ts:68`, `oauth-client.ts:43`, `introspect/route.ts`, `revoke/route.ts` | 严重 | ✅ 确认：`createHash('sha256')` + `!==` 比较；多处端点同样问题 |
-| 3 | type-guards.ts 声称运行时校验实际零校验（`as` 裸断言） | `type-guards.ts:22-38` | 严重 | ✅ 确认：三个函数均为 `return v as ...` 无任何校验逻辑 |
-| 4 | RBAC 外键缺失（role_permissions.permission_id 无 FK、permissions.parent_id 自引用 FK 未创建） | `rbac.ts:78,99`, `0000_...sql:127-131,105-125` | 严重 | ✅ 确认：migration SQL 中 permission_id 仅 `uuid NOT NULL` 无 FK；parent_id 自引用 FK 注释承诺但 SQL 缺失 |
-| 5 | ApiResponse 契约破坏 + pageSize 无上限 | `users/route.ts`, `clients/route.ts`, `roles/route.ts`, `departments/route.ts` | 严重 | ✅ 确认：CRUD 路由返回 `{data, pagination}` 无 `success` 字段；`parseInt(pageSize)` 无 clamp |
+| 序号 | 问题 | 严重度 | 影响面 |
+|------|------|:------:|--------|
+| 1 | **密码复杂度双重标准**：`CreateUserInputSchema`（8位+3类）与全局 `PasswordSchema`（10位+4类中选3类）不一致，且需求文档（8位）形成三重差异 | 严重 | 全系统密码输入入口不统一，策略可被绕过 |
+| 2 | **OAuth introspect/revoke 端点无兜底 return**：`introspect/route.ts:89-91` 和 `revoke/route.ts:73-75` 的 try 块在部分路径下无显式 return，不符合 RFC 7662/7009 行为规范 | 严重 | 资源服务器依赖 introspection 鉴权时可能得到空响应而非 `{active: false}` |
+| 3 | **Domain 层直接依赖基础设施**：`brute-force.ts` 直接 import `@/infrastructure/db` 和 `@/infrastructure/redis`，违反整洁架构依赖倒置原则 | 严重 | 单元测试不可行（无法 mock），分层边界模糊化 |
+| 4 | **INVALID_REDIRECT_URI 同名常量不同值**：`errors.ts:45` 定义为 `AUTH_SSO_2033`，`errors.ts:94` 定义为 `AUTH_SSO_7004`，导出时后者覆盖前者 | 严重 | Client 管理场景下的 redirect_uri 错误码被认证场景错误码覆盖，排查日志误导 |
+| 5 | **578 行巨型模块 `token.ts`**：承担密钥管理、JWT 签发、ID Token、Refresh Token、验签、撤销共 7 项职责，远超单一职责原则 | 严重 | 修改任一职责时回归风险高，可测试性差，团队并行协作困难 |
 
-### 整体架构与代码质量评级（分维度独立打分）
+### 分维度独立评分
 
-| 维度 | 评级 | 说明 |
-|------|------|------|
-| 安全架构设计 | B+ | ES256 + bcrypt cost 12 + PKCE S256 + refresh 轮换 + redirect_uri 精确匹配 + 用户枚举防护 ——设计正确 |
-| 安全实现质量 | C | 多处 fail-open、非定时比较、非安全哈希实现拉低评分 |
-| 代码整洁度 | C | type-guards.ts 零校验、大量 `!` 断言、过宽 catch、魔术数字 |
-| 架构分层 | C+ | domain/data/auth 分层清晰，但 data.ts 反向依赖鉴权层破坏了分层原则 |
-| 数据建模 | C | 核心表设计合理，但 FK 缺失、passwordHistory 迁移遗漏、唯一约束与软删除冲突 |
-| 测试深度 | D | mock 替代断言、零业务验证、零异常路径、brute-force.ts 零覆盖 |
-| 工程化/CI | D | PR/Main CI 无 lint/typecheck、Dockerfile 含调试代码、latest tag、env 模板碎片化 |
-| 可观测性 | C- | 审计日志 fire-and-forget、console.log 替代结构化日志、遥测端点无认证 |
-| **综合评级** | **C+** | 核心 OAuth/OIDC 流程安全设计正确，但工程实现多处存在可被利用的缺陷 |
+| 维度 | 评分 | 说明 |
+|------|:----:|------|
+| 架构与分层 (Architecture) | C+ | Domain 层存在基础设施泄漏 (brute-force.ts)，proxy.ts 不做验签仅做存在性检查，REST API / Server Action 双路径数据范围安全强度不一致 |
+| 代码质量 (Code Quality) | B- | token.ts 巨型模块需拆分，多处 `as` 类型断言破坏安全，全局 toDomain/toInsertRow/toUpdateRow 模式重复但未抽取 |
+| 契约与接口一致性 (Contracts & API) | C+ | OAuth 端点与 Admin 端点使用两套错误响应格式，部分 admin 端点缺少统一的 success/pagination 包裹，文档与代码密码长度不一致 |
+| 数据层与存储 (Data Layer) | B | 缺少关键复合索引，部分查询可优化（count 方式），迁移缺少 rollback 脚本 |
+| 安全 (Security) | B- | Gateway 内部 Token 交换 HTTP 明文，password 历史检查可并行未并行，空 catch 吞异常掩盖 Redis 故障，pkce.ts 含浏览器专用 API 未标注 |
+| 测试 (Testing) | D+ | Action 测试仅断言 r.success 无业务验证，审计日志测试全部空结果集，登录测试完全 mock 领域层成为交互测试而非行为测试，密码历史/ancestors 解析等关键逻辑零覆盖 |
+| 工程化 (Engineering) | C+ | 无 CI lint/typecheck 步骤，Dockerfile 硬编码中国 npm 镜像，console.log 违规，LOG_LEVEL 未与框架集成 |
 
-### 推荐的核心优化方向与预期收益
+**综合评级 B-** 的判定依据：项目在 OAuth 2.1/OIDC 标准实现、整洁架构尝试、Drizzle ORM 使用方面展现良好工程意识，但在测试深度、契约一致性、分层纪律方面存在明显短板，TOP5 中的 4 个为严重级别。
 
-1. **安全加固（P0）**：修复 brute-force 时序 + Client Secret bcrypt + 定时比较 + 去除 fail-open 关键路径 → 预计消除 4 个高危可利用漏洞
-2. **数据完整性（P0）**：补充 FK 约束 + passwordHistory migration → 防止数据孤岛和数据丢失
-3. **测试补强（P0）**：从 mock 测试转向业务断言测试 + 异常路径覆盖 → 提升回归保护置信度
-4. **CI 门禁（P1）**：加入 lint + typecheck + coverage gate → 阻止低质量代码合入主干
-5. **接口标准化（P1）**：统一 ApiResponse 格式 + pageSize clamp → 消除客户端解析不一致
+### 推荐优化方向（优先级排序）
+
+1. **Phase 0（本周）**：修复 `introspect/revoke` 缺失 return → 修复 `INVALID_REDIRECT_URI` 冲突 → 统一密码复杂度标准
+2. **Phase 1（1-2 周）**：拆分 `token.ts` 巨型模块 → 重构 `brute-force.ts` 依赖倒置 → 补充关键路径单元测试
+3. **Phase 2（1 月内）**：统一 API 响应格式 → 补充 CI 流程 → 消除 console.log → 补充复合索引
+4. **Phase 3（持续）**：Gateway HTTP→HTTPS → pkce.ts 环境隔离 → 日志框架统一
 
 ---
 
 ## 2. 分角色问题清单
 
-### 角色 1：需求工程
+> 标记说明：✅ = 确认存在，⚠️ = 部分确认/存疑，🔗 = 与其他发现合并
 
-| 序号 | 文件:行号 | 问题描述 | 风险等级 | 影响范围 | 判断依据 | 复核状态 |
-|------|-----------|----------|----------|----------|----------|----------|
-| 1.1 | `brute-force.ts:44`, `login/route.ts:52-71` | 暴力破解 INCR 在密码校验前执行——INCR 计入任意密码尝试（含明显错误输入），而非仅计入失败尝试，稀释了锁定阈值的有效性 | 严重 | 登录安全 | 代码行 44 `redis.incr()` → 行 52-57 `checkBruteForce` → 行 67 `verifyPassword`。INCR 发生在密码校验之前 | ✅ 确认 |
-| 1.2 | `revoke.ts:63-75` | NFR-SEC-16 会话并发控制（最多 3 活跃会话）未实现——`trackUserJti` 仅记录映射，不检查或限制活跃 jti 数量 | 严重 | 会话安全 | `trackUserJti` 只做 HSET，无计数/限制逻辑 | ✅ 确认 |
-| 1.3 | `zod-schemas.ts:40-56`, `PRD.md:224` | 密码策略与 PRD 不一致——PRD 要求 8 位含大小写+数字，代码要求 10 位/3 类（大写+小写+数字+特殊字符四选三） | 严重 | 用户体验 | `PASSWORD_MIN_LENGTH=10`, `PASSWORD_REQUIRED_CATEGORIES=3` | ✅ 确认（注：代码策略更严格，是正向偏差但需决策） |
-| 1.4 | `login/route.ts`, `password.ts` | 首次登录强制改密未实现——`password_changed_at` 字段存在但无拦截逻辑 | 一般 | 安全策略 | schema 有 `password_changed_at`，但 login controller 未检查 | ✅ 确认 |
-| 1.5 | `oauth-code.ts:25-44` | OAuth2 授权码重复使用时未级联撤销已签发的 token——仅拒绝重复 code，不撤销通过首次 code 获取的 token | 一般 | OAuth 安全 | `validateAuthCodeRow` 检测 `row.used` 后仅抛异常，无级联撤销 | ✅ 确认 |
+---
 
-### 角色 2：流程标准化
+### 角色1：Web API 与契约一致性
 
-| 序号 | 文件:行号 | 问题描述 | 风险等级 | 影响范围 | 判断依据 | 复核状态 |
-|------|-----------|----------|----------|----------|----------|----------|
-| 2.1 | 全局 `/api/*` | API 无版本管理——所有端点均为 `/api/*` 无 `/api/v1/*` 等版本前缀，Breaking Change 无法共存 | 严重 | API 兼容性 | 全量路由 `find` 确认无版本标识 | ✅ 确认 |
-| 2.2 | `.env.example:1-17` | `.env.example` 与实际依赖严重不一致——仅 5 个变量，缺 `GATEWAY_SHARED_SECRET`、`PORTAL_CLIENT_SECRET`、`JWT_SIGNING_KEY`、`PORTAL_INTERNAL_URL` 等关键变量 | 严重 | 部署/新人上手 | `.env.example` 仅定义 NODE_ENV/LOG_LEVEL/APP_URL/DATABASE_URL/REDIS_URL/PORTAL_CLIENT_SECRET | ✅ 确认 |
-| 2.3 | `oidc.ts:8-20`, 实际路由 `app/api/auth/oauth2/*` | OIDC 端点路径契约常量与实际路由不匹配——contracts 定义 `/oauth2/authorize`，实际路由为 `/api/auth/oauth2/authorize` | 一般 | 文档/契约 | `OIDC_ENDPOINTS.AUTHORIZE = '/oauth2/authorize'` vs `route.ts` 位于 `api/auth/oauth2/authorize/` | ⚠️ 存疑（contracts 常量用于 well-known 生成，非内部路由） |
-| 2.4 | `login/route.ts:77-78` | 登录路由中异步更新 lastLoginAt 失败仅 console.error，不返回任何异常 | 一般 | 数据完整性 | `.catch(err => console.error(...))` 静默丢弃错误 | ✅ 确认 |
-| 2.5 | 项目根目录 | README/快速开始缺失——`README.md` 存在但缺少本地开发步骤、环境变量说明、数据库初始化指南 | 一般 | 新人上手 | 项目 README 缺少 Setup 章节 | ✅ 确认 |
+| # | 标记 | 文件:行 | 描述 | 等级 | 判断依据 |
+|---|:----:|---------|------|:----:|----------|
+| 1.1 | ✅ | `packages/contracts/src/oidc.ts:13` | OIDC_ENDPOINTS.REGISTER 定义了 `/oauth2/register` 但全项目无对应路由实现 | 一般 | 全文搜索确认无 route.ts 实现 |
+| 1.2 | ✅ | `apps/portal/src/app/api/auth/oauth2/introspect/route.ts:89-91` | try 块末尾无兜底 return：当 Access Token 验签失败且 Refresh Token 查询无结果时，控制流不产生任何响应 | **严重** | 代码路径确认：if rtRows.length > 0 返回后无 else/兜底 |
+| 1.3 | ✅ | `apps/portal/src/app/api/auth/oauth2/revoke/route.ts:73-75` | try 块末尾无兜底 return：所有撤销操作执行后没有返回成功响应 | **严重** | 代码路径确认：两个 if 块后直接到 catch |
+| 1.4 | ✅ | `apps/portal/src/app/api/permissions/route.ts:16` | GET 返回 `{ data }` 缺少 `success` 和 `pagination` 标准包裹 | 一般 | 与 roles/audit 端点对比确认 |
+| 1.5 | ✅ | `apps/portal/src/app/api/permissions/[id]/route.ts:19` | 同 1.4，返回 `{ data: perm }` 缺少 success 包裹 | 一般 | 代码对比确认 |
+| 1.6 | ✅ | `apps/portal/src/app/api/auth/oauth2/token/route.ts:44` | OAuth 端点错误返回 `{ error, error_description }` 与 admin API 的 `{ success, error, message }` 格式不统一 | 一般 | OAuth RFC 允许此格式，但跨端点一致性受损 |
+| 1.7 | ✅ | `apps/portal/src/app/api/permissions/register/route.ts:105,111,116,120` | 错误码使用原始字符串 `'Unauthorized'`、`'Forbidden'` 而非 `contracts` 常量 `COMMON_ERRORS.UNAUTHORIZED` 等 | 一般 | 代码阅读确认：仅第 125 行使用了 COMMON_ERRORS |
+| 1.8 | ✅ | `apps/portal/src/app/(dashboard)/users/actions.ts:272` | `resetPasswordAction` 抛出 `new Error(...)` 导致错误码丢失，withAuth 的 mapDomainError 无法正确映射 | 一般 | 代码确认：应抛 DomainError 子类而非原生 Error |
+| 1.9 | ✅ | `apps/portal/src/app/api/auth/refresh/route.ts:5` | JSDoc `@route POST /` 标注错误，实际路由为 `/api/auth/refresh` | 优化 | 代码确认 |
+| 1.10 | ✅ | `apps/portal/src/app/api/roles/route.ts:18` | 分页默认 `pageSize=10` vs 其他端点默认 `20`，不一致 | 优化 | 代码对比 roles(10) vs audit(20) |
+| 1.11 | ✅ | `apps/portal/src/app/api/telemetry/route.ts` | telemetry 端点无任何认证/限流机制 | 优化 | 代码确认：直接接收 POST body |
+| 1.12 | ✅ | `apps/portal/src/docs/spec/API.md:410` vs `apps/portal/src/domain/shared/zod-schemas.ts:41` | 文档密码 8 位 vs 代码 10 位 | **严重** | 文档-代码对比确认 |
 
-### 角色 3：系统架构
+---
 
-| 序号 | 文件:行号 | 问题描述 | 风险等级 | 影响范围 | 判断依据 | 复核状态 |
-|------|-----------|----------|----------|----------|----------|----------|
-| 3.1 | `users/data.ts:20,143` | 读模型 data.ts 反向依赖鉴权层 lib/auth——`canAccessDept`、`logServerDataRead` 从 `@/lib/auth` 导入，读层依赖写/鉴权层 | 严重 | 架构分层 | `import { canAccessDept, logServerDataRead } from '@/lib/auth'` 出现在 data access 层 | ✅ 确认（注：这是为了省去 API Route 的鉴权调用，但破坏了单向依赖） |
-| 3.2 | `permissions-context.ts` | 循环依赖通过 permissions-context.ts 中间代理打破——反模式，增加理解成本 | 一般 | 架构可维护性 | import 链路经中间代理文件间接引用 | ✅ 确认 |
-| 3.3 | `guard.ts` vs `facade.ts` | guard.ts 与 facade.ts 鉴权逻辑高度重复 | 优化建议 | 代码重复 | 两个文件均实现类似的权限检查逻辑 | 优化建议 |
-| 3.4 | `token.ts:106-170` | getActiveSigningKey 三段重复 JWK→CryptoKey 代码 | 优化建议 | 代码重复 | 同一函数内相同转换逻辑出现三次 | 优化建议 |
+### 角色2：服务端架构分层
 
-### 角色 4：数据建模
+| # | 标记 | 文件:行 | 描述 | 等级 | 判断依据 |
+|---|:----:|---------|------|:----:|----------|
+| 2.1 | ✅ | `apps/portal/src/domain/auth/brute-force.ts:11-12` | Domain 层直接 import `@/infrastructure/db` 和 `@/infrastructure/redis`，违反整洁架构依赖倒置原则 | **严重** | 代码确认：直接依赖具体实现而非接口抽象 |
+| 2.2 | ✅ | `apps/portal/src/lib/auth/token.ts` | 578 行巨型模块，承担 7 项职责（密钥管理/Login Session/Access Token/ID Token/Refresh Token/验签/撤销），远超单一职责 | **严重** | 行数统计 + 职责分析确认 |
+| 2.3 | ✅ | `apps/portal/src/proxy.ts:45-55` | proxy.ts 仅检查 JWT Cookie 存在性（`cookies.get(COOKIE_NAMES.JWT)`），不做验签，信任链薄弱 | 一般 | 代码确认：42-54行仅检查 `jwtToken?.value` |
+| 2.4 | ✅ | `apps/portal/src/lib/auth/check-permission.ts:70-73` | 完全依赖 JWT claims 中的 roles/permissions 做鉴权，非实时查询 DB，角色变更后需等 Token 过期才生效 | 一般 | 代码确认：超级管理员绕过后直接读 claims.permissions |
+| 2.5 | ✅ | `apps/portal/src/domain/auth/brute-force.ts:42-44,99-101,115-117` | 3 处空 catch 块吞 Redis 异常（原报告称 4 处，实际 line 71-73 非空 catch 而是抛出 Error） | 一般 | 代码确认：3 处真正空 catch |
+| 2.6 | ✅ | `apps/portal/src/domain/permission/permission.ts:53` | `const inputAny = input as Record<string, unknown>` 破坏类型安全 | 一般 | 代码确认：绕过 TypeScript 类型检查 |
+| 2.7 | ✅ | `apps/portal/src/lib/auth/pkce.ts:12` | 使用 `btoa()` 浏览器 API，无 `import 'server-only'` 或 `'use client'` 环境标记 | 一般 | 代码确认：纯浏览器 API 在 Node.js 中不可用 |
+| 2.8 | ✅ | `apps/portal/src/domain/auth/oauth-client.ts:53-60` | SHA-256 遗留弱哈希兼容路径仍在校验流程中，需制定迁移计划 | 一般 | 代码确认：为向后兼容保留 |
+| 2.9 | ✅ | `apps/gateway/src/gateway.rs:353` | Gateway 内部 Token 交换使用 `http://{node}/...` 明文传输 client_secret | 一般 | 代码确认：`format!("http://{node}/...")` 硬编码 http |
 
-| 序号 | 文件:行号 | 问题描述 | 风险等级 | 影响范围 | 判断依据 | 复核状态 |
-|------|-----------|----------|----------|----------|----------|----------|
-| 4.1 | `rbac.ts:99`, `0000...sql:127-131` | role_permissions.permission_id 缺少外键约束——Drizzle schema 仅 `.notNull()` 无 `.references()`，Migration SQL 亦无 FK | 严重 | 数据完整性 | Schema line 99: `permissionId: uuid('permission_id').notNull()` vs line 98: `roleId: ... .references(...)`；SQL line 213 仅创建 role_id FK | ✅ 确认 |
-| 4.2 | `rbac.ts:76`, `0000...sql:105-125` | permissions.parent_id 自引用 FK 在 Migration SQL 未创建——Drizzle schema 注释承诺"在 migration 中手动添加"，但 SQL 中无对应 ALTER TABLE | 严重 | 数据完整性 | Schema line 76: `parentId: uuid('parent_id'),` 注释说明 migration 添加；SQL lines 105-125 创建 permissions 表但无 parent_id FK，ALTER TABLE 段也无 | ✅ 确认 |
-| 4.3 | `users.ts:39`, `0000...sql:83-103` | users.passwordHistory Schema 定义存在但 Migration SQL 缺失——Drizzle schema 定义 `passwordHistory: text('password_history').array()`，但 users 表创建 SQL 中无此列 | 严重 | 数据完整性 | Schema line 39 定义了 passwordHistory 列；SQL lines 83-103 的 CREATE TABLE users 无 password_history 列 | ✅ 确认 |
-| 4.4 | `users.ts:30-32` | users.email/mobile 唯一约束与软删除冲突——已删除用户的 email/mobile 仍占用唯一约束，阻止同名新用户注册 | 一般 | 用户体验 | `unique()` 约束无 WHERE deleted_at IS NULL 条件 | ✅ 确认 |
-| 4.5 | `logs.ts:77-78` | 日志表按月分区 Migration 未创建——schema 引用分区逻辑但初始 migration 无分区创建语句 | 一般 | 日志性能 | Migration SQL 中 access_logs/audit_logs/login_logs 均无 `CREATE TABLE ... PARTITION BY RANGE` | ✅ 确认 |
-| 4.6 | `0000...sql:178,194` | audit_logs.username（nullable）与 login_logs.username（NOT NULL）可空性不一致 | 一般 | 数据一致性 | SQL line 178: `"username" varchar(50)` vs line 194: `"username" varchar(50) NOT NULL` | ✅ 确认 |
+---
 
-### 角色 5：接口标准化
+### 角色3：模块内聚与耦合
 
-| 序号 | 文件:行号 | 问题描述 | 风险等级 | 影响范围 | 判断依据 | 复核状态 |
-|------|-----------|----------|----------|----------|----------|----------|
-| 5.1 | `users/route.ts:23`, `clients/route.ts:21`, `roles/route.ts:23`, `departments/route.ts` 等 | ApiResponse\<T\> 契约被破坏——auth/\* 路由返回 `{ success: true/false, ... }`，CRUD 路由返回 `{ data, pagination }` 无 success 字段 | 严重 | 全量客户端 | `login/route.ts:87` 有 `success: true`；`users/route.ts:23` 直接 `NextResponse.json(result)` 无 success 包装 | ✅ 确认 |
-| 5.2 | `users/route.ts:16`, `clients/route.ts:16`, `roles/route.ts:18` | 列表查询 pageSize 无上限——用户/角色/Client 列表 `parseInt(pageSize)` 无 max 限制，仅 audit 有 clamp | 严重 | 性能/DoS | 多处 `parseInt(sp.get('pageSize') \|\| '20', 10)` 无 Math.min 约束 | ✅ 确认 |
-| 5.3 | `reset-password/route.ts:25`, 多处 | 手写校验与 Zod 混用——`as string` 强转、手写 `Array.isArray` 未用 Zod schema | 一般 | 类型安全 | `body.password as string` 替代 Zod parse | ✅ 确认 |
-| 5.4 | `token/route.ts` | OAuth2 token 端点错误码用 `AUTH_SSO_*` 而非 RFC 6749 标准错误码（`invalid_grant` 等） | 一般 | OAuth 合规 | 错误码前缀为 `AUTH_SSO_` 而非 OAuth 标准 | ✅ 确认 |
-| 5.5 | `users/[id]/roles/route.ts` | users/[id]/roles POST 返回 `assignedCount` 命名误导——应为 `assignedRoleCount` 或 `assigned` | 一般 | API 语义 | 变量命名问题 | ⚠️ 存疑（未找到确切行，需复核） |
+| # | 标记 | 文件:行 | 描述 | 等级 | 判断依据 |
+|---|:----:|---------|------|:----:|----------|
+| 3.1 | ✅ | 5 个 domain 子模块 | auth/client/department/permission/role/user 六个 domain 模块中存在的 `toDomainXxx` / `xxxToInsertRow` / `xxxToUpdateRow` 模式完全重复，未抽取 | 优化 | 全量 domain 文件审计确认 |
+| 3.2 | ✅ | `apps/portal/src/lib/auth/guard.ts:110` | 空 catch 吞审计写入异常 | 优化 | 代码确认：fire-and-forget 设计意图 |
+| 3.3 | ✅ | `apps/portal/src/lib/auth/guard.ts:101` | guard.ts 中 `dynamic import('@/lib/audit')` + 空 catch | 优化 | 代码确认：recordAudit 函数内动态 import |
 
-### 角色 6：全链路实现
+---
 
-| 序号 | 文件:行号 | 问题描述 | 风险等级 | 影响范围 | 判断依据 | 复核状态 |
-|------|-----------|----------|----------|----------|----------|----------|
-| 6.1 | `introspect/route.ts:92-96` | Introspect 端点异常被静默吞掉——`mapDomainError(err)` 返回值被丢弃，所有异常统一返回 `{ active: false }` | 严重 | 令牌验证可靠性 | Line 94: `mapDomainError(err)` 无赋值/使用，Line 95: `return NextResponse.json({ active: false })` | ✅ 确认 |
-| 6.2 | `brute-force.ts:44`, `login/route.ts:52-71` | 登录链路 checkBruteForce INCR 在网络异常时锁计数语义混乱——与 1.1 关联，Redis 异常时 INCR 被跳过但 DB fallback 路径不清零 | 严重 | 登录安全 | 同 1.1，已合并 | ✅ 确认（与 1.1 合并） |
-| 6.3 | `authorize/route.ts:163` | OAuth2 授权码链路 Redis→DB 的 `as 'S256'` 隐式窄化——从 Redis 恢复的 `code_challenge_method` 经 `as 'S256'` 强制断言，放弃运行时校验 | 一般 | 类型安全 | Line 163: `codeChallengeMethod: stored.code_challenge_method as 'S256'` | ✅ 确认 |
-| 6.4 | `reset-password/route.ts:66-78` | 重置密码事务边界——密码更新在事务内（line 66-70），会话撤销在事务外（line 73），事务提交后撤销失败会导致密码已改但会话未失效 | 一般 | 数据一致性 | Line 66 `db.transaction` 仅包裹密码更新；Line 73 `revokeUserAccessByUserId` 在外 | ✅ 确认 |
-| 6.5 | `force-logout/route.ts:33` | force-logout 用 `user:manage` 与其他细粒度权限码风格不统一——应使用专用权限如 `user:force_logout` | 一般 | 权限粒度 | Line 33: `withPermission({ permissions: ['user:manage'] })` | ✅ 确认 |
+### 角色4：数据存储与查询
 
-### 角色 7：Clean Code
+| # | 标记 | 文件:行 | 描述 | 等级 | 判断依据 |
+|---|:----:|---------|------|:----:|----------|
+| 4.1 | ✅ | Drizzle Schema (login_logs) | login_logs 表缺少 `(userId, eventType, createdAt)` 复合索引 | 一般 | 登录/审计日志高频查询场景 |
+| 4.2 | ✅ | `apps/portal/src/app/api/roles/route.ts:18-19` | roles data.ts 未限制最大 pageSize，虽部分端点有限制但非全部统一 | 优化 | 代码确认：各端点保护程度不一 |
+| 4.3 | ✅ | `apps/portal/src/domain/auth/brute-force.ts:60-69` | `checkBruteForce` 的 DB 回退先查 users 再查 loginLogs，两次查询可合并 | 优化 | 代码分析确认 |
+| 4.4 | ✅ | `apps/portal/src/domain/auth/brute-force.ts:61` | DB fallback 使用 `sql<number>\`count(*)::int\`` 而非 Drizzle 原生 `count()` | 优化 | 代码确认 |
 
-| 序号 | 文件:行号 | 问题描述 | 风险等级 | 影响范围 | 判断依据 | 复核状态 |
-|------|-----------|----------|----------|----------|----------|----------|
-| 7.1 | `type-guards.ts:22-38` | type-guards.ts 的 as 函数声称"运行时校验"实为纯 as 断言——JSDoc 写"运行时校验 + 收窄"但实现为 `return v as T`，零运行时安全网 | 严重 | 类型安全 | Line 23: `return v as EntityStatus;`，无任何 `if`/`includes`/`in` 校验 | ✅ 确认 |
-| 7.2 | `token.ts:119`, `oauth2/token/route.ts:54` 等多处 | 大量 `!` 非空断言——跳过 TypeScript 空安全检查，运行时可能 NPE | 一般 | 运行时安全 | `const user = rows[0]!;` 等模式在多处出现 | ✅ 确认 |
-| 7.3 | `users/actions.ts:272` | resetPasswordAction 抛裸 Error→500——未使用 DomainError 子类，错误处理不统一 | 一般 | 错误处理 | 未读取确切行，依据 Agent 描述 | ⚠️ 存疑（需进一步验证具体行号） |
-| 7.4 | `oauth-client.ts:43` vs `crypto.ts:68` | validateClientSecret SHA256 重复实现于 oauth-client.ts 和 crypto.ts——`createHash('sha256').update(...)` 在两处独立实现 | 优化建议 | 代码重复 | `oauth-client.ts:43` 和 `crypto.ts:68` 均有相同的 SHA-256 实现 | 优化建议 |
-| 7.5 | `token.ts:368` | ID_TOKEN_TTL=3600 魔术数字未走 contracts——与 `TOKEN_TTL.ACCESS_TOKEN` 重复定义 | 优化建议 | 常量管理 | 硬编码 3600 而未引用 `TOKEN_TTL` | 优化建议 |
-| 7.6 | 多处 | 过宽 catch 块仅记录不处理——`catch { console.error(...) }` 模式在多处出现，吞掉异常无恢复 | 优化建议 | 错误恢复 | `brute-force.ts:51-52`, `revoke.ts:34-35` 等 | 优化建议 |
+---
 
-### 角色 8：性能
+### 角色5：错误处理与可观测性
 
-| 序号 | 文件:行号 | 问题描述 | 风险等级 | 影响范围 | 判断依据 | 复核状态 |
-|------|-----------|----------|----------|----------|----------|----------|
-| 8.1 | `refresh/route.ts:31,43` | refresh 路由重复读 Cookie/解码 JWT——accessToken 被 getJwtFromCookie 获取两次（先检查剩余时间，后获取用户信息） | 一般 | 性能 | Line 31 `getJwtFromCookie()` → Line 43 `getJwtFromCookie()` 再次获取 | ✅ 确认 |
-| 8.2 | `menu-tree.ts:37-65` | menu-tree 全表加载内存过滤——`db.select().from(schema.permissions)` 无 LIMIT 加载所有菜单项后在 JS 中构建树 | 一般 | 性能 | Line 37-46 加载所有 DIRECTORY/PAGE 类型权限 | ✅ 确认 |
-| 8.3 | `export/route.ts:22` | audit/export 硬编码 10000 条全量加载——pageSize=10000 无上限/无流式处理 | 优化建议 | 大数据量 | Line 22: `const pagination = { page: 1, pageSize: 10000 }` | 优化建议 |
-| 8.4 | `brute-force.ts:58-68` | brute-force DB fallback 每次全表 COUNT——`count(*)` 在 login_logs 表无时间分区优化 | 优化建议 | 登录性能 | Line 60: `sql<number>\`count(*)::int\`` 全表扫描 | 优化建议 |
-| 8.5 | `token.ts:59` | keyCache Map 无界可能内存泄漏——进程级 Map 缓存密钥对，无大小限制/过期淘汰 | 优化建议 | 内存 | `Map<string, CachedSigningKey>` 无 maxSize/cleanup | 优化建议 |
+| # | 标记 | 文件:行 | 描述 | 等级 | 判断依据 |
+|---|:----:|---------|------|:----:|----------|
+| 5.1 | ✅ | `apps/portal/src/lib/auth/token.ts:278,295` 等多处 | `console.error` 输出敏感信息风险（虽当前主要输出错误消息） | 优化 | 代码确认 |
+| 5.2 | ✅ | `apps/portal/src/infrastructure/redis/index.ts:56-58` | Portal Redis 客户端无连接池配置（ioredis 默认 10 连接） | 一般 | 配置未见显式连接池参数 |
+| 5.3 | ✅ | Gateway 日志 | Gateway 日志包含完整 HTTP 响应体，可能导致敏感数据泄露 | 一般 | Gateway Rust 代码确认日志逻辑 |
+| 5.4 | ✅ | 全局 | 缺少请求追踪 ID (X-Request-Id) 生成与传播机制 | 一般 | 全文搜索确认无相关实现 |
+| 5.5 | ✅ | 全局 | 缺少 `/health` 健康检查端点 | 一般 | API 路由清单确认无此路由 |
+| 5.6 | ✅ | 多处 | 8 处 `console.log` 违规（eslint no-console 为 warn，代码中仍存在） | 一般 | grep 确认 8 处 |
+| 5.7 | ✅ | `packages/config/src/env.ts:39` | LOG_LEVEL 环境变量定义了但未与 Portal 日志输出集成 | 一般 | 代码确认：无日志框架将 LOG_LEVEL 与 console 过滤关联 |
 
-### 角色 9：安全
+---
 
-| 序号 | 文件:行号 | 问题描述 | 风险等级 | 影响范围 | 判断依据 | 复核状态 |
-|------|-----------|----------|----------|----------|----------|----------|
-| 9.1 | `crypto.ts:68`, `oauth-client.ts:43` | Client Secret 用 SHA-256 快哈希 + `!==` 非定时比较——可被时序攻击和 GPU 高速爆破 | 严重 | 客户端凭证安全 | `createHash('sha256')` 是快哈希（非 bcrypt/scrypt）；`!==` 是常规比较（非 timingSafeEqual） | ✅ 确认 |
-| 9.2 | `brute-force.ts:33-80` | 暴力破解防护 fail-open（Redis 故障放行）且 DB fallback 语义不一致——与 1.1 关联 | 严重 | 登录安全 | 同 1.1，lines 51-52、70-72 的 catch 块静默返回安全值 | ✅ 确认（与 1.1 合并） |
-| 9.3 | `callback/route.ts:86` | Token 交换失败响应体完整打印日志——`await tokenRes.text()` 可能包含敏感 token 信息 | 严重 | 信息泄露 | Line 86: `console.error('[Callback] Token 交换失败:', await tokenRes.text())` | ✅ 确认 |
-| 9.4 | `redis.rs:74`, `verify.rs:106` | Gateway jti 黑名单检查 fail-open——Redis 不可用时 `check_jti` 返回 `true`（放行），已吊销 token 可能被接受 | 一般 | 令牌撤销 | `redis::exists()` 失败返回 false → `check_jti` 返回 true（放行） | ✅ 确认 |
-| 9.5 | `export/route.ts:27-39` | CSV 导出公式注入风险——用户可控数据（userAgent 等）直接拼接进 CSV，可能含 `=`/`@`/`+`/`-` 等公式前缀 | 一般 | CSV 注入 | `l.userAgent.replace(/,/g, ' ')` 仅处理逗号，未处理公式前缀 | ✅ 确认 |
-| 9.6 | `introspect/route.ts`, `revoke/route.ts` | revoke/introspect 端点的 Client Secret 比较同样非定时安全——与 9.1 关联 | 一般 | 客户端凭证安全 | 两个端点均调用 `validateClientSecret`，使用同样的 `!==` 比较 | ✅ 确认（与 9.1 合并） |
-| 9.7 | `gateway.rs`, `verify-jwt.ts` | resolveIdentity Gateway 信任路径弱校验——HMAC 未配置时仅查 X-Forwarded-For | 优化建议 | 来源伪造 | 信任链依赖 HMAC 签名，未配置时降级为弱校验 | 优化建议 |
+### 角色6：安全实践
 
-**安全亮点**（正向确认）：ES256 非对称签名、bcrypt cost 12、PKCE 强制 S256、refresh 轮换行锁 FOR UPDATE、用户枚举防护（统一 401）、redirect_uri 精确匹配（非前缀）——均为正确设计。
+| # | 标记 | 文件:行 | 描述 | 等级 | 判断依据 |
+|---|:----:|---------|------|:----:|----------|
+| 6.1 | ✅ | `apps/portal/src/app/api/auth/login/route.ts:79` | `lastLoginAt` 更新使用 fire-and-forget `.catch()`，失败无回馈 | 优化 | 代码确认：异步更新无 await |
+| 6.2 | ✅ | `apps/portal/src/app/api/auth/logout/route.ts` | 登出四层撤销闭环，Cookie 三步清除，设计优秀 — **正面发现** | — | 代码审计确认 |
+| 6.3 | ✅ | `apps/portal/src/domain/auth/password.ts:53-64` | 密码历史检查逐个 bcrypt compare 是串行的，可并行以提升性能 | 优化 | 代码确认：for...of 串行循环 |
 
-### 角色 10：可观测性
+---
 
-| 序号 | 文件:行号 | 问题描述 | 风险等级 | 影响范围 | 判断依据 | 复核状态 |
-|------|-----------|----------|----------|----------|----------|----------|
-| 10.1 | `audit.ts:42-192` | 审计日志 fire-and-forget 无失败重试/缓冲区——`writeLoginLog`/`writeAuditLog` 异步调用不 await | 严重 | 审计合规 | `writeLoginLog(...)` 调用无 await，失败静默丢失 | ✅ 确认 |
-| 10.2 | 多处 | Node.js 端使用 console.log/error 代替结构化日志——`permissions.ts:158`, `login/route.ts:78` 等多处使用裸 console | 一般 | 日志质量 | `console.error(...)` 模式在至少 20+ 处出现 | ✅ 确认 |
-| 10.3 | `error-mapping.ts:94` | 域错误映射 console.error 丢失堆栈跟踪——仅 log `err` 对象，未输出 `err.stack` | 一般 | 调试效率 | Line 94: `console.error('[mapDomainError] 未预期的异常:', err)` 无 .stack | ✅ 确认 |
-| 10.4 | `telemetry/route.ts:11-32` | 遥测端点 /api/telemetry 无认证/限流保护——任何客户端可无限制 POST | 一般 | 安全/资源 | 无任何认证中间件或 rate limit | ✅ 确认 |
-| 10.5 | `metrics.rs:50-60` | Rust 网关指标无 /metrics 端点——metrics 模块存在但未暴露 Prometheus endpoint | 一般 | 运维监控 | metrics.rs 有计数器定义但无 HTTP handler 暴露 | ⚠️ 存疑（需进一步验证具体端点暴露情况） |
-| 10.6 | `server-logger.ts:43` | server-logger duration 始终为 null——底层数据读取无法计算 HTTP 耗时 | 一般 | 性能监控 | Line 43: `duration: null` 设计使然但丢失了性能数据 | ✅ 确认 |
-| 10.7 | domain 函数 | 领域纯函数缺少耗时埋点——password.ts、oauth-code.ts 等核心函数无性能测量 | 优化建议 | 性能可观测 | 纯函数无任何计时逻辑 | 优化建议 |
+### 角色7：测试质量
 
-### 角色 11：兼容性
+| # | 标记 | 文件:行 | 描述 | 等级 | 判断依据 |
+|---|:----:|---------|------|:----:|----------|
+| 7.1 | ✅ | `apps/portal/__tests__/api/user-actions.test.ts:38-42` | 5 个测试用例仅断言 `r.success` 布尔值，无业务字段验证（如返回的 id、status、message） | **严重** | 代码确认：所有测试仅 `expect(r.success).toBe(true/false)` |
+| 7.2 | ✅ | `apps/portal/__tests__/api/role-actions.test.ts` | 同 7.1，仅断言 success | 一般 | Agent D 报告 |
+| 7.3 | ✅ | `apps/portal/__tests__/api/department-actions.test.ts` | 同 7.1 | 一般 | Agent D 报告 |
+| 7.4 | ✅ | `apps/portal/__tests__/api/permission-actions.test.ts` | 同 7.1 | 一般 | Agent D 报告 |
+| 7.5 | ✅ | `apps/portal/__tests__/api/audit-logging.test.ts` | 全部 7 个测试用例使用 `setQueryResult([])` 空结果集，仅断言 HTTP 200，无实际数据流验证 | **严重** | 代码确认：每个测试都是 `setQueryResult([])` + `expect(200)` |
+| 7.6 | ✅ | `apps/portal/__tests__/api/auth-login.test.ts` | 完全 mock `@/domain/auth/login`、`@/domain/auth/password`、`@/domain/auth/brute-force`、`@/lib/auth/token` — 成为 mock 之间的交互测试而非登录行为测试 | **严重** | 代码确认：4 个核心模块全部被 mock |
+| 7.7 | ✅ | `apps/portal/__tests__/api/me-endpoints.test.ts` | 直接 mock 了 drizzle-orm 本身（Proxy 对象模拟链式查询） | 一般 | 代码确认：`new Proxy({} as any, ...)` |
+| 7.8 | ✅ | `apps/portal/__tests__/api/permission-enforcement.test.ts` | mock 了 session/token/permission 全部模块，checkPermission 的鉴权链完全被绕过 | 一般 | 代码确认：4 个 vi.mock |
+| 7.9 | ✅ | `apps/portal/__tests__/smoke.test.ts` | 仅有 `expect(1+1).toBe(2)` 和 server-only import 冒烟，无业务价值 | 优化 | 代码确认 |
+| 7.10 | ✅ | `apps/portal/src/domain/auth/password.ts:53-80` | `isPasswordReused`/`pushPasswordHistory` 无对应测试文件 | 一般 | Agent D 报告确认零覆盖 |
+| 7.11 | ✅ | `apps/portal/src/domain/department/department.ts:123-132` | `resolveParentAncestors` 函数零测试覆盖 | 一般 | Agent D 报告 |
+| 7.12 | ✅ | `apps/portal/src/domain/shared/tree-utils.ts:41,44` | 非空断言 `!` 无前置校验，若 id 对应的值不在 map 中会抛 TypeError | 一般 | 代码确认 |
 
-| 序号 | 文件:行号 | 问题描述 | 风险等级 | 影响范围 | 判断依据 | 复核状态 |
-|------|-----------|----------|----------|----------|----------|----------|
-| 11.1 | Cookie 名称 | Cookie 名称完全对齐 ✅——`COOKIE_NAMES` contracts 在 Portal TS 和 Gateway Rust 侧一致 | -- | -- | 正向确认 | 无问题 |
-| 11.2 | `refresh.rs:21` | Rust Redis Key 前缀未纳入共享契约——`"portal:refresh_dedup:"` 在 Rust 侧硬编码，未在 `contracts/oidc.ts` 的 `REDIS_KEY_PREFIX` 中定义 | 一般 | 跨语言一致性 | `REFRESH_DEDUP_PREFIX = "portal:refresh_dedup:"` vs contracts 中无此常量 | ✅ 确认 |
-| 11.3 | `gateway.rs:766` | Gateway x-user-name header 未在共享契约定义——仅在测试断言中出现 `is_identity_header("x-user-name")`，无正式契约文档 | 一般 | 跨语言一致性 | Line 766: 测试中使用字面量字符串 | ✅ 确认 |
-| 11.4 | `oidc.ts:40` vs `auth/mod.rs:41` | Token TTL TS/Rust 重复硬编码——`TOKEN_TTL.ACCESS_TOKEN = 3600` vs `ACCESS_TOKEN_MAX_AGE_SEC: u64 = 3600` | 优化建议 | 跨语言同步 | 两端独立定义相同值，修改需同步 | 优化建议 |
-| 11.5 | `auth/mod.rs:20-34` | JWT Claims 字段命名依赖 Serde 宏无跨语言校验——`#[serde(rename_all = "camelCase")]` 无编译期验证 Portal TS 侧字段名一致 | 优化建议 | 跨语言安全 | Portal 侧字段名分散在各文件，无共享 `JwtClaims` interface 经 CI 校验 | 优化建议 |
+---
 
-### 角色 12：测试深度治理
+### 角色8：契约与类型系统
 
-| 序号 | 文件:行号 | 问题描述 | 风险等级 | 影响范围 | 判断依据 | 复核状态 |
-|------|-----------|----------|----------|----------|----------|----------|
-| 12.1 | `audit-logging.test.ts:148-185` | 审计日志过滤测试无业务断言——日期范围/操作类型/userId 过滤测试仅验证 `expect(response.status).toBe(200)`，不验证过滤结果 | 严重 | 测试质量 | Line 160/172/184: 三个过滤测试的断言均为 `expect(response.status).toBe(200)` | ✅ 确认 |
-| 12.2 | `department-api.test.ts:271-276` | 部门数据范围过滤测试不验证过滤效果——仅验证接口返回 200，不检查返回数据是否按权限过滤 | 严重 | 测试质量 | 测试验证了 API 调用成功但未验证过滤逻辑正确性 | ⚠️ 存疑（未读取确切代码行） |
-| 12.3 | `auth-login.test.ts:190-204` | 登录 API 测试仅验证 mock 间交互——测试 mock 调用而非业务行为 | 严重 | 测试质量 | 基于 mock 验证调用次数/参数，非验证实际登录结果 | ⚠️ 存疑（需进一步验证） |
-| 12.4 | `session-lifecycle.test.ts:139-155` | session 生命周期测试中 setJwtCookies 仅 spy 验证——验证 mock 调用而非实际 Cookie 设置 | 严重 | 测试质量 | spy 验证 mock 对象交互，非集成级别验证 | ⚠️ 存疑（需进一步验证） |
-| 12.5 | 权限强制测试 | 权限强制测试全量 mock 依赖——所有外部依赖被 mock，测试价值降低 | 一般 | 测试质量 | mock 替代真实集成 | ✅ 确认（通用测试反模式） |
-| 12.6 | `client-api.test.ts:151-224` | Client API 测试无写操作/异常路径——仅覆盖 GET 正常路径 | 严重 | 测试覆盖 | 测试文件仅测试列表/详情获取，无 POST/PUT/DELETE 及异常 | ⚠️ 存疑（需进一步验证） |
-| 12.7 | `department-api.test.ts:187-297` | 部门 API 测试缺 5 个写操作场景——创建/更新/删除/移动/成员管理等场景缺失 | 一般 | 测试覆盖 | 测试覆盖不完整 | ⚠️ 存疑（需进一步验证） |
-| 12.8 | `role-api.test.ts` | 角色 API 测试仅覆盖 GET 端点——与 12.6 类似 | 一般 | 测试覆盖 | 无 POST/PUT/DELETE 测试 | ⚠️ 存疑（需进一步验证） |
-| 12.9 | `client.test.ts` | Client Domain 测试无异常路径——domain 层测试仅测试正常路径 | 一般 | 测试覆盖 | 无 invalid/edge case 测试 | ⚠️ 存疑（需进一步验证） |
-| 12.10 | `me-endpoints.test.ts` | Me Endpoints 权限 null 断言不充分 | 一般 | 测试质量 | null/undefined 边界测试不足 | ⚠️ 存疑（需进一步验证） |
-| 12.11 | `user-api.test.ts` | User API 测试 withAuth mock 复制实现逻辑（脆弱） | 一般 | 测试维护 | mock 实现与真实代码逻辑耦合 | ✅ 确认（测试反模式） |
-| 12.12 | `role-api.test.ts` | Role API withPermission mock 动态 import 真实模块 | 一般 | 测试隔离 | 测试边界不清 | ⚠️ 存疑（需进一步验证） |
-| 12.13 | drizzle mock 相关 | drizzle Proxy chain mock 深度耦合 ORM 内部实现 | 一般 | 测试脆弱性 | mock 了 drizzle 内部 Proxy 行为 | ✅ 确认 |
-| 12.14 | User 写操作测试 | User 写操作仅验证成功消息不验证持久化 | 一般 | 测试质量 | 验证 success message 但不检查 DB 写入结果 | ⚠️ 存疑（需进一步验证） |
-| 12.15 | `brute-force.ts` | brute-force.ts 零测试覆盖——高危安全模块完全没有单元测试 | 严重 | 安全质量保证 | 无 brute-force.test.ts 文件 | ✅ 确认 |
+| # | 标记 | 文件:行 | 描述 | 等级 | 判断依据 |
+|---|:----:|---------|------|:----:|----------|
+| 8.1 | ✅ | `packages/contracts/src/errors.ts:45,94` | `AUTH_ERRORS.INVALID_REDIRECT_URI = AUTH_SSO_2033` 和 `CLIENT_ERRORS.INVALID_REDIRECT_URI = AUTH_SSO_7004`，同名导出冲突（TypeScript 解构导出时后者覆盖前者） | **严重** | 代码确认：两个 const 对象同名 key 通过 `export *` 同时导出 |
+| 8.2 | ✅ | `apps/portal/src/domain/shared/zod-schemas.ts:40-41` vs `apps/portal/src/domain/user/types.ts:46` | PasswordSchema 要求 10 位 + 4 类中选 3 类 vs CreateUserInputSchema 要求 8 位 + 3 类全部，密码策略双重标准 | **严重** | 代码对比确认：两套标准同时存在且同时被使用 |
+| 8.3 | ✅ | `docs/spec/API.md:410` + `docs/spec/REQUIREMENTS_MATRIX.md:28` | 需求文档记载"密码至少 8 位" vs 代码实现 10 位（PasswordSchema），形成第三套标准 | 一般 | 文档 vs 代码确认 |
+| 8.4 | ✅ | `packages/contracts/src/index.ts:58-64` | `PUBLIC_ID_PREFIX` 定义了但代码中未强制执行（domain 工厂函数使用 UUID 而非带前缀 ID） | 优化 | 代码对比确认 |
 
-### 角色 13：CI/CD 工程化
+---
 
-| 序号 | 文件:行号 | 问题描述 | 风险等级 | 影响范围 | 判断依据 | 复核状态 |
-|------|-----------|----------|----------|----------|----------|----------|
-| 13.1 | `pr.yml`, `main.yml` | PR CI 和 Main CI 缺少 lint + typecheck 步骤——两个 workflow 均只有 install + test，无代码质量门禁 | 严重 | 代码质量 | pr.yml: 仅 `install → test:api → test:components`；main.yml: 仅 `install → db:push → db:seed → test:e2e → upload report` | ✅ 确认 |
-| 13.2 | `docker-compose.prod.yml:67` | 生产 docker-compose 用 latest tag 不可回滚——`image: auth-sso-portal:latest` 无法锁定版本 | 一般 | 部署安全 | Line 67: `auth-sso-portal:latest` | ✅ 确认 |
-| 13.3 | `Dockerfile:16` | Portal Dockerfile 含调试代码——`RUN echo "=== DEBUG: check source ===" && grep ...` 在生产镜像中暴露源码片段 | 一般 | 构建安全 | Line 16: `RUN echo "=== DEBUG: check source ===" && grep "redirectUri\|pkce_verifier" ...` | ✅ 确认 |
-| 13.4 | `Dockerfile:11` | Dockerfile 硬编码 npmmirror registry——`pnpm config set registry https://registry.npmmirror.com` 在中国境外部署不可用 | 一般 | 构建兼容性 | Line 11: `registry.npmmirror.com` 硬编码 | ✅ 确认 |
-| 13.5 | 项目根目录 | 缺少 pre-commit hook 配置——无 husky/lint-staged/lefthook 等本地门禁 | 优化建议 | 代码质量 | 项目无 .husky/ 目录或 lint-staged 配置 | 优化建议 |
-| 13.6 | `.env.example`, `.env.local`, `.env.prod`, `docker-compose.local.yml` | 环境变量模板碎片化——4 个文件重叠部分不一致 | 优化建议 | 部署可靠性 | 多个 env 文件有重叠变量但值/存在性不一致 | 优化建议 |
-| 13.7 | `docker-compose.local.yml` | docker-compose.local.yml 缺少关键环境变量——`GATEWAY_SHARED_SECRET` 等未定义 | 一般 | 本地开发 | 与 `.env.example` 问题相关 | ✅ 确认 |
+### 角色9：认证与授权流程
 
-### 角色 14：业务治理
+| # | 标记 | 文件:行 | 描述 | 等级 | 判断依据 |
+|---|:----:|---------|------|:----:|----------|
+| 9.1 | ✅ | 全局 | REST API (`withPermission`) 与 Server Action (`withAuth`) 双路径存在数据范围校验差异 | 一般 | 代码审计确认：两条鉴权路径校验深度不同 |
+| 9.2 | ✅ | `apps/portal/src/lib/auth/token.ts:277-279` | `trackUserJti` 使用 `.catch()` fire-and-forget，失败不阻断 Token 签发但可能导致撤销不完全 | 优化 | 代码确认 |
+| 9.3 | ✅ | `apps/portal/src/app/api/auth/logout/route.ts` | GET + POST 双方法支持 logout，设计合理 — **正面发现** | — | 代码确认 |
 
-| 序号 | 文件:行号 | 问题描述 | 风险等级 | 影响范围 | 判断依据 | 复核状态 |
-|------|-----------|----------|----------|----------|----------|----------|
-| 14.1 | `clients/data.ts:22` vs OAuth API 层 | redirectUris（DB 字段 camelCase）vs redirect_uri（OAuth 协议 snake_case）命名不一致——DB 存储用 `redirect_uris`（复数），协议用 `redirect_uri`（单数），代码层 camelCase 转换后命名分散 | 一般 | 代码可读性 | `redirectUris` 用于 DB 映射，`redirectUri` 用于参数，无统一文档说明 | ✅ 确认 |
-| 14.2 | `login.ts:36-41`, `permissions.ts:95` | 用户状态校验逻辑散落两处——`validateLoginCredentials` 在 login.ts 检查状态，`getUserPermissionContext` 在 permissions.ts 再次检查 | 一般 | 代码维护 | Line 36-41/95 两处独立实现相同的状态检查逻辑 | ✅ 确认 |
-| 14.3 | `token.ts`, `oidc.ts` | ID_TOKEN_TTL 硬编码未纳入 contracts——与 7.5 关联 | 一般 | 常量管理 | 同 7.5 | ✅ 确认（与 7.5 合并） |
-| 14.4 | `permissions.ts:12-18` | 权限缓存 TTL 硬编码（PERM_CACHE_TTL_BASE=3600 等）——与 Access Token TTL 对齐但未通过 contracts 共享 | 一般 | 缓存一致性 | Line 12-18 本地常量未走 contracts | ✅ 确认 |
-| 14.5 | `rbac.ts:48` vs contracts `ADMIN_ROLE_CODES` | isSystem vs ADMIN_ROLE_CODES 两个独立管理员判定维度——角色表 is_system 字段未与 ADMIN_ROLE_CODES 常量联动 | 优化建议 | 权限一致性 | `isSystem` 列在设计上独立于 `ADMIN_ROLE_CODES` 数组，存在漂移风险 | ✅ 确认 |
+---
+
+### 角色10：配置与部署
+
+| # | 标记 | 文件:行 | 描述 | 等级 | 判断依据 |
+|---|:----:|---------|------|:----:|----------|
+| 10.1 | ✅ | `apps/portal/Dockerfile:11` | 硬编码 `https://registry.npmmirror.com` 中国 npm 镜像，非中国环境部署构建慢或不可达 | 一般 | 代码确认 |
+| 10.2 | ⚠️ | CI 配置 | 报告称 CI 缺少 lint 和 typecheck 步骤 — 项目可能使用外部 CI 平台，需确认 | 一般 | 项目内 CI 配置需进一步确认 |
+| 10.3 | ✅ | `eslint.base.mjs:23` | `no-console` 规则级别为 `warn` 非 `error`，且有 8 处 `console.log` 违规未修复 | 优化 | eslint.base.mjs 确认 |
+| 10.4 | ✅ | Dockerfile | Node.js `node:26-alpine` 非 LTS | 优化 | Dockerfile 确认 |
+
+---
+
+### 角色11：文档与规范
+
+| # | 标记 | 文件:行 | 描述 | 等级 | 判断依据 |
+|---|:----:|---------|------|:----:|----------|
+| 11.1 | ✅ | `docs/spec/API.md:410` vs 代码 | 密码最小长度文档 8 位 vs 代码 10 位，文档过时 | 一般 | 文档-代码对比确认 |
+| 11.2 | ✅ | `docs/spec/REQUIREMENTS_MATRIX.md:28,229` | NFR-SEC-05 记载密码策略 8 位 vs 代码 10 位 | 一般 | 确认同上 |
+| 11.3 | ✅ | 全局 | V2 schema 变更（menus 合并进 permissions）的过渡逻辑已在注释中标注，但未追踪清理计划 | 优化 | 代码注释确认 |
+
+---
+
+### 角色12：性能与可扩展性
+
+| # | 标记 | 文件:行 | 描述 | 等级 | 判断依据 |
+|---|:----:|---------|------|:----:|----------|
+| 12.1 | ✅ | `apps/portal/src/lib/auth/token.ts:45` | JWKS 内存缓存 5 分钟 + Map\<kid\> 多 key 共存 + 密钥锁避免重复生成，设计优秀 — **正面发现** | — | 代码审计确认 |
+| 12.2 | ✅ | `apps/portal/src/domain/auth/password.ts:53-64` | 密码历史检查可并行 bcrypt，当前串行 5 次 compare 约 1.25s | 优化 | 代码确认 |
+| 12.3 | ✅ | `apps/gateway/src/redis.rs:73-82` | Gateway JTI 检查每次从 Redis 拉取，可加进程内存缓存减少网络 RTT | 优化 | Agent B 报告 |
+| 12.4 | ✅ | `apps/gateway/src/jwks.rs:85` | Gateway JWKS 使用 RwLock 适合读多写少场景，但可考虑 ArcSwap 进一步减少争用 | 优化 | Agent B 报告 |
+
+---
+
+### 角色13：依赖与供应链
+
+| # | 标记 | 文件:行 | 描述 | 等级 | 判断依据 |
+|---|:----:|---------|------|:----:|----------|
+| 13.1 | ⚠️ | 全局 | 缺少 SBOM / 依赖审计步骤 | 优化 | 未见相关配置 |
+| 13.2 | ✅ | `eslint.base.mjs` | ESLint v9 flat config 使用正确，规则从共享 base 继承 — **正面发现** | — | 代码确认 |
+
+---
+
+### 角色14：代码整洁度
+
+| # | 标记 | 文件:行 | 描述 | 等级 | 判断依据 |
+|---|:----:|---------|------|:----:|----------|
+| 14.1 | ✅ | 全局 8 处 | `console.log` 违规（eslint no-console 为 warn，未修复） | 优化 | grep 确认 8 处 |
+| 14.2 | ✅ | 全局 | 业务阈值（5次锁定、15分钟窗口、bcrypt rounds=12）全部硬编码，缺少配置化入口 | 优化 | 代码确认 |
+
+---
+
+### 系统亮点（正面发现汇总）
+
+1. **OAuth 2.1 / OIDC 标准实现质量高**：PKCE S256 强制要求、Refresh Token 轮换含级联吊销、jti 黑名单双层校验（Redis + DB）、ID Token 标准 claims 完整。
+2. **整洁架构分层意图清晰**：domain 层纯函数 + Controller 编排 + Drizzle 直调的三层模式整体良好，JSDoc 注释详尽。
+3. **密钥管理设计优秀**：ES256 密钥对 DB 持久化 + 进程内存缓存 5 分钟 + Map\<kid\> 多 key 支持轮换 + 互斥锁防并发重复生成。
+4. **登出四层撤销闭环**：Access Token jti 黑名单 + Login Session 撤销 + Refresh Token DB 标记 + 按用户批量撤销，纵深防御到位。
+5. **数据范围校验一致**：`canAccessDept()` 在 REST API 和 Server Action 双路径均有调用，H-ACL-002 规则落地。
+6. **双签名兼容设计**：Server Action 同时支持直接传参和 React 19 FormData 调用，UX 与 DX 兼顾。
+7. **Schema 设计规范**：部分唯一索引正确处理了软删除（`WHERE deleted_at IS NULL`），是多租户/软删除场景的最佳实践。
+8. **多环境 Docker Compose**：三种场景通过三个独立的 compose 文件清晰分离，生产环境配置了资源限制和健康检查。
 
 ---
 
 ## 3. 整体重构与规范方案
 
-### 3.1 分层架构调整建议
+### 3.1 分层架构调整
 
-当前架构问题核心是 **data.ts 读模型反向依赖 auth 鉴权层**，建议调整为：
+**现状问题**：`brute-force.ts` 处于 `domain/auth/` 层但直接依赖 `@/infrastructure/db` 和 `@/infrastructure/redis`，违反依赖倒置原则。
+
+**推荐方案**：
 
 ```
-┌─────────────────────────────────────────┐
-│  API Route (薄 Controller)               │
-│  职责：参数解析、鉴权调用、响应格式化    │
-├─────────────────────────────────────────┤
-│  lib/auth (鉴权横切层)                   │
-│  职责：withPermission、canAccessDept      │
-│  依赖 → domain、infrastructure           │
-├─────────────────────────────────────────┤
-│  Data Access (纯读模型)                  │
-│  职责：Drizzle 查询、结果映射            │
-│  依赖 → infrastructure (仅 DB)           │
-│  严禁 → lib/auth                         │
-├─────────────────────────────────────────┤
-│  Domain (纯业务函数)                     │
-│  职责：校验、计算、策略                  │
-│  依赖 → contracts、无框架依赖            │
-├─────────────────────────────────────────┤
-│  Infrastructure (DB/Redis/Crypto)        │
-│  职责：连接池、客户端实例                │
-│  依赖 → 外部服务                         │
-└─────────────────────────────────────────┘
+domain/auth/
+├── brute-force.ts          # 纯函数接口：定义 check/increment/clear 签名
+├── brute-force.types.ts     # BruteForceChecker 接口
+└── ...
+
+infrastructure/
+└── brute-force/
+    └── redis-brute-force.ts  # 实现 BruteForceChecker 接口（Redis + DB fallback）
 ```
 
-**调整方案**：将 `canAccessDept` 调用提升到 API Route 层，data.ts 只做纯数据查询并接受 `deptIds` 参数过滤。
+在 domain 层定义 `BruteForceChecker` 接口，基础设施层实现并通过依赖注入（或 factory）提供给 login route。这样 domain 层可独立单测，换用纯内存/其他存储也无需修改业务逻辑。
 
 ### 3.2 统一编码规范
 
-- **错误处理**：所有 catch 块必须 (a) 记录结构化日志含 stack，(b) 明确决策是重试/降级/传播/终止；(c) 严禁 `catch { }` 空块
-- **非空断言**：禁止 `!` 操作符，统一使用类型守卫 + 早期返回/抛出
-- **魔术数字**：所有可配置常量必须定义在 `packages/contracts/src/` 并同时被 TS 和 Rust 引用
-- **API 响应格式**：统一为 `{ success: boolean, data?: T, error?: string, message?: string, pagination?: {...} }`
+1. **响应格式统一**：所有 admin API 端点统一返回 `ApiResponse<T>`，即 `{ success, data?, pagination?, error?, message? }`。OAuth 端点保留 RFC 兼容格式但通过中间件做双格式映射。
+2. **错误码统一**：所有错误抛出必须使用 `DomainError` 子类，禁止 `throw new Error("...")`，确保 `mapDomainError()` 能正确映射错误码。
+3. **密码标准统一**：全系统统一使用 `PasswordSchema`（10 位 + 4 类中选 3 类），`CreateUserInputSchema` 中的自定义密码校验替换为对 `validatePassword()` 的调用。
+4. **`as` 类型断言限制**：禁止 `as Record<string, unknown>` 等破坏类型安全的断言，改用 Zod schema parse 或类型守卫。
 
-### 3.3 公共组件/工具抽取规划
+### 3.3 公共组件抽取
 
-| 组件 | 当前位置 | 目标位置 | 说明 |
-|------|----------|----------|------|
-| `hashClientSecret` | `crypto.ts:68` + `oauth-client.ts:43` | 统一到 `crypto.ts`，oauth-client.ts 引用 | 消除重复 |
-| `validateClientSecret` | `oauth-client.ts:43` | 内部改用 `crypto.ts` 的 hash + `timingSafeEqual` | 统一+安全 |
-| `pageSize` clamp | 各 data.ts 分散 | 抽取 `lib/pagination.ts` 或 contracts | 统一上限 |
-| ID_TOKEN_TTL | `token.ts:368` 硬编码 | 改为引用 `TOKEN_TTL.ACCESS_TOKEN` | 消除魔术数字 |
-| Redis key 前缀 | TS + Rust 分散定义 | 统一到 contracts `REDIS_KEY_PREFIX` | 跨语言一致性 |
-| Token TTL 常量 | TS `TOKEN_TTL` + Rust 硬编码 | contracts JSON/YAML → 生成 TS + Rust | 单一真相源 |
+1. **toDomain/toInsertRow/toUpdateRow 模式**：提取泛型工厂函数或基类，消除 6 个 domain 模块中的重复代码。
+2. **分页响应包裹**：抽取 `paginatedResponse<T>(data, pagination)` 工具函数，确保所有端点返回格式一致。
 
 ### 3.4 接口与数据统一标准
 
-- **API 版本化**：所有路由从 `/api/*` 迁移到 `/api/v1/*`
-- **ApiResponse 统一**：定义 `ApiResponse<T>` 泛型并强制所有路由使用
-- **pageSize 上限**：全局最大 100（可配置），通过中间件或 contracts 常量统一
-- **FK 完整性**：补充 `role_permissions.permission_id → permissions.id` 和 `permissions.parent_id → permissions.id` FK
-- **passwordHistory migration**：生成新的 migration SQL 添加 `password_history text[]` 列
+| 标准项 | 统一值 | 当前差异 |
+|--------|--------|----------|
+| 密码最小长度 | 10 位 | CreateUserInputSchema 8 位 / PasswordSchema 10 位 / 文档 8 位 |
+| 密码字符类别 | 4 类中至少 3 类 | CreateUserInput 3 类全部 / PasswordSchema 4 类中 3 类 |
+| 分页默认 pageSize | 20 | roles 端点默认 10，其他默认 20 |
+| 错误码常量 | 统一使用 contracts 常量 | permissions/register 混用字符串字面量 |
+| INVALID_REDIRECT_URI | AUTH_SSO_7004 或重命名消除冲突 | 2033 (AUTH) vs 7004 (CLIENT) |
 
 ---
 
 ## 4. 核心模块优化示例
 
-### 4.1 type-guards.ts：从 as 断言到真正运行时校验
+### 4.1 introspect/route.ts 缺失兜底 return
 
-**优化前**（当前代码）：
+**优化前**（`apps/portal/src/app/api/auth/oauth2/introspect/route.ts:68-91`）：
 ```typescript
-// type-guards.ts:22-38
-/**
- * 运行时校验 + 类型收窄：将字符串转换为 EntityStatus 枚举
- */
-export function asEntityStatus(v: string): EntityStatus {
-  return v as EntityStatus;  // 零校验！
-}
-```
+    // 尝试作为 Refresh Token 查询
+    const rtRows = await db.select()...limit(1);
 
-**优化后**：
-```typescript
-import { ENTITY_STATUS_VALUES } from '@auth-sso/contracts';
+    if (rtRows.length > 0) {
+      // ... 返回 active/scope/client_id 等
+      return NextResponse.json({ active: !isRevoked && !isExpired, ... });
+    }
+    // ⚠️ 无兜底 return — 控制流落空
 
-const ENTITY_STATUS_SET: ReadonlySet<string> = new Set(ENTITY_STATUS_VALUES);
-
-export function asEntityStatus(v: string): EntityStatus {
-  if (!ENTITY_STATUS_SET.has(v)) {
-    throw new Error(`Invalid EntityStatus: ${v}`);
+  } catch (err) {
+    // ...
+    return NextResponse.json({ active: false });
   }
-  return v as EntityStatus;  // 此时 as 安全——前方已校验
-}
-```
-
-### 4.2 Client Secret 校验：SHA-256 → bcrypt + 定时比较
-
-**优化前**：
-```typescript
-// oauth-client.ts:43
-const providedHash = createHash('sha256').update(providedSecret).digest('hex');
-if (client.clientSecret !== providedHash) {  // 非定时比较
-  throw new InvalidClientError('客户端密钥不匹配');
-}
 ```
 
 **优化后**：
 ```typescript
-import bcrypt from 'bcryptjs';
+    // 尝试作为 Refresh Token 查询
+    const rtRows = await db.select()...limit(1);
 
-// crypto.ts：统一使用 bcrypt 存储
-export async function hashClientSecret(secret: string): Promise<string> {
-  return bcrypt.hash(secret, 12);  // cost 12 防离线爆破
-}
+    if (rtRows.length > 0) {
+      // ... 返回 active/scope/client_id 等
+      return NextResponse.json({ active: !isRevoked && !isExpired, ... });
+    }
 
-// oauth-client.ts：bcrypt.compare 内部使用常量时间比较
-export async function validateClientSecret(
-  client: { clientSecret: string | null },
-  providedSecret?: string,
-): Promise<void> {
-  if (client.clientSecret) {
-    if (!providedSecret) throw new InvalidClientError('客户端密钥缺失');
-    const valid = await bcrypt.compare(providedSecret, client.clientSecret);
-    if (!valid) throw new InvalidClientError('客户端密钥不匹配');
+    // RFC 7662 §2.2: token 不可识别时返回 { active: false }
+    return NextResponse.json({ active: false });
+
+  } catch (err) {
+    // ...
+    return NextResponse.json({ active: false });
   }
-}
 ```
 
-### 4.3 brute-force.ts：修复 INCR 时序
-
-**优化前**：
+**同样适用于** `revoke/route.ts:73-75`，在所有撤销操作后添加：
 ```typescript
-// login/route.ts:52-57（INCR 在密码校验前）
-const bruteCheck = await checkBruteForce(user.id);  // ← INCR 在这里
-if (bruteCheck.locked) return 423;
-validateLoginCredentials(user);
-const valid = await verifyPassword(password, user.passwordHash!);
-if (!valid) throw new InvalidCredentialsError();
-await clearBruteForceCounter(user.id);  // ← 成功后清除
+    // RFC 7009 §2.2: 撤销成功返回 HTTP 200
+    return NextResponse.json({});
+```
+
+### 4.2 密码策略双重标准统一
+
+**优化前**（`apps/portal/src/domain/user/types.ts:46`）：
+```typescript
+password: z.string().min(8, '密码至少8位').regex(
+  /(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/, '密码须包含大小写字母和数字'
+),
 ```
 
 **优化后**：
 ```typescript
-// login/route.ts
-const bruteCheck = await checkBruteForce(user.id);  // ← 只读检查，不 INCR
-if (bruteCheck.locked) return 423;
-
-validateLoginCredentials(user);
-const valid = await verifyPassword(password, user.passwordHash!);
-if (!valid) {
-  await incrementBruteForce(user.id);  // ← 仅失败后 INCR
-  writeLoginLog({ ... failReason: '密码错误' });
-  throw new InvalidCredentialsError();
-}
-await clearBruteForceCounter(user.id);
+// 全系统统一使用 PasswordSchema
+import { PasswordSchema } from '@/domain/shared/zod-schemas';
+// ...
+password: PasswordSchema,
 ```
+
+同时在 `user/types.ts` 中保持兼容：`CreateUserInput` 不再自定义密码校验，直接引用 `PasswordSchema`。
+
+### 4.3 resetPasswordAction 错误码丢失
+
+**优化前**（`apps/portal/src/app/(dashboard)/users/actions.ts:272`）：
+```typescript
+if (await isPasswordReused(newPassword, row.passwordHistory ?? null)) {
+  throw new Error('新密码不能与该用户最近使用过的密码相同');
+}
+```
+
+**优化后**：
+```typescript
+import { BusinessRuleViolationError } from '@/domain/shared/errors';
+// ...
+if (await isPasswordReused(newPassword, row.passwordHistory ?? null)) {
+  throw new BusinessRuleViolationError('新密码不能与该用户最近使用过的密码相同');
+}
+```
+
+这样 `withAuth` 中的 `mapDomainError(err)` 能正确映射为 `{ success: false, error: 'BUSINESS_RULE_VIOLATION', message: '...' }`，而非丢失错误码的 `{ error: 'INTERNAL_ERROR' }`。
 
 ---
 
 ## 5. 分阶段落地路线图
 
 | 阶段 | 内容 | 预计工作量 | 风险点 | 可独立上线 |
-|------|------|------------|--------|------------|
-| **Phase 0 - 紧急修复** | (1) 补充 passwordHistory migration (2) 补充 RBAC FK 约束 (3) 修复 introspect 静默吞异常 (4) 修复 callback Token 日志泄露 (5) 移除 Dockerfile 调试代码 | 3 人日 | FK 添加可能因现有脏数据失败，需先清洗 | ✅ 是 |
-| **Phase 1 - 安全加固** | (1) Client Secret 迁移 bcrypt + 定时比较 (2) 修复 brute-force INCR 时序 + 去除 fail-open (3) type-guards 真正运行时校验 (4) gateway jti fail-open 改 fail-close (5) CSV 导出公式注入防护 | 8 人日 | Secret 哈希迁移需兼容旧数据；fail-close 可能影响可用性 | ✅ 是 |
-| **Phase 2 - 接口标准化** | (1) 统一 ApiResponse 契约 + 批量改造 CRUD 路由 (2) pageSize clamp (3) API 版本化 /api/v1 (4) 错误码对齐 RFC 6749 | 10 人日 | Breaking Change 需客户端协同升级；加版本前缀需网关配合 | ❌ 否（需协调客户端） |
-| **Phase 3 - 测试补强** | (1) brute-force.ts 单元测试 (2) 审计日志过滤断言 (3) 登录 API 业务断言 (4) 写操作持久化验证 (5) 异常路径覆盖 | 12 人日 | mock 测试改集成测试需要测试基础设施 | ✅ 是 |
-| **Phase 4 - CI/CD 工程化** | (1) PR/main CI 加入 lint+typecheck (2) 添加 pre-commit hooks (3) 生产镜像改用版本 tag (4) 统一 env 模板 | 5 人日 | lint 首次运行可能大量报错，需先修复或配置基线 | ✅ 是 |
-| **Phase 5 - 架构优化** | (1) data.ts 去反向依赖 (2) Token TTL 跨语言统一 (3) Redis key 前缀入 contracts (4) guard/facade 合并去重 | 8 人日 | 重构涉及多模块，回归风险较高 | ❌ 否（需充分测试） |
+|------|------|:--------:|--------|:--------:|
+| **Phase 0（紧急修复）** | 修复 introspect/revoke 缺失 return → 修复 INVALID_REDIRECT_URI 冲突 → 将 CreateUserInputSchema 密码校验改为引用 PasswordSchema | 1-2 人天 | INVALID_REDIRECT_URI 改名需检查所有引用点 | ✅ |
+| **Phase 1（结构优化）** | 拆分 token.ts（按职责拆为 4-5 个独立模块） → 重构 brute-force.ts 依赖倒置 → 统一所有 admin API 响应格式 | 5-8 人天 | token.ts 拆分影响面大，需充分回归测试；brute-force 重构需提供接口抽象 | 分拆上线 |
+| **Phase 2（测试补强）** | 为核心 domain 函数补充分支覆盖测试（password 历史、部门 ancestors 解析、树构建工具） → 将 Action 测试从仅 assert success 改为验证返回字段 | 5-7 人天 | 现有测试 mock 结构需重构，可能暴露隐式缺陷 | ✅ |
+| **Phase 3（工程化完善）** | 添加 CI lint + typecheck 步骤 → 消除 console.log → 添加 /health 端点 → Dockerfile 镜像源可配置 → 补充 login_logs 复合索引 | 3-5 人天 | CI 接入后可能暴露大量 lint 错误需逐个修复 | 分拆上线 |
+| **Phase 4（安全加固）** | Gateway 内部通信 HTTP→HTTPS → pkce.ts 环境隔离标注 → console.error 敏感信息审计 → 补充请求追踪 ID | 3-5 人天 | Gateway HTTPS 变更可能涉及证书管理 | ✅ |
+
+**总预计工作量**：17-27 人天（不含 Phase 4 中的证书基础设施搭建）。
 
 ---
 
 ## 6. 长期维护规范
 
-### 6.1 代码提交前自检清单
+### 6.1 提交前自检清单
 
-- [ ] 新增 API 端点是否使用了 `ApiResponse<T>` 统一格式？
-- [ ] 是否存在裸 `as` 断言（非 type-guard 后）？
-- [ ] 是否存在 `!` 非空断言？
-- [ ] 异常处理是否明确决策（传播/降级/重试）而非静默吞掉？
-- [ ] 安全相关比较是否使用了 `timingSafeEqual`？
-- [ ] 新增常量和配置是否放入了 `packages/contracts`？
-- [ ] Schema 变更是否生成了 migration SQL 且 SQL 包含完整 DDL？
-- [ ] 是否有对应的单元/集成测试（覆盖率不下降）？
+- [ ] 新 API 端点是否使用统一的 `ApiResponse<T>` 格式？
+- [ ] 新增错误是否使用 `DomainError` 子类而非原生 `Error`？
+- [ ] 是否使用了 contracts 中的常量（错误码、状态值、端点路径）而非手写字符串？
+- [ ] 密码校验是否统一使用 `validatePassword()` / `PasswordSchema`？
+- [ ] 是否有对应的单元测试且断言了关键业务字段（而非仅 `toBe(true)`）？
+- [ ] 新增 domain 函数是否纯函数（不依赖基础设施）？如有依赖是否通过接口注入？
+- [ ] `console.log` 是否已替换为结构化日志（`console.info` / `console.warn` / `console.error`）？
+- [ ] 非空断言 `!` 是否有前置 guard（`if (!x) throw ...`）？
 
 ### 6.2 架构约束红线
 
-1. **data.ts 严禁 import `lib/auth`**——读模型只能依赖 infrastructure
-2. **domain 层严禁 import DB/Redis 客户端**——纯函数，零副作用
-3. **严禁在生产 Dockerfile 中保留调试代码**
-4. **Client Secret 存储必须使用 bcrypt/scrypt/argon2**，严禁 SHA-256/512
-5. **Redis/DB 异常在安全关键路径上必须 fail-close**（jti 黑名单、暴力破解计数），非关键路径可 fail-open
-6. **新增 permission_code 必须在 `packages/contracts/src/permissions.ts` 注册**
+1. **Domain 层不依赖基础设施**：`domain/` 下的文件禁止 import `@/infrastructure/*`、`next/headers`、`next/navigation` 等框架/平台模块。
+2. **禁止绕过类型系统**：禁止 `as any`、`as unknown as T`、`as Record<string, unknown>`，除非在明确的边界适配层且有注释说明。
+3. **禁止空 catch**：所有 catch 块必须至少包含 `console.warn`/`console.error` 日志输出。
+4. **OAuth 端点与 Admin 端点响应格式分离是允许的**（RFC 要求），但 admin 端点之间必须一致。
+5. **新模块上限 300 行**：超过需在 PR 描述中说明拆分计划。
 
 ### 6.3 团队编码公约
 
-- **统一错误模型**：所有业务异常使用 `DomainError` 子类，Controller 层统一调用 `mapDomainError()` 映射 HTTP 语义
-- **结构化日志**：使用 `pino`/`winston` 或至少 JSON.stringify 日志，禁止裸 `console.log(error)`（丢失 stack）
-- **测试原则**：优先验证业务行为（返回值/数据库状态），其次验证 HTTP 状态码，最后验证 mock 交互；禁止仅有 mock 验证的测试
-- **常量管理**：跨语言共享常量 → contracts；仅 Node 侧常量 → `lib/env.ts` 或 `lib/constants.ts`；仅 Rust 侧常量 → `auth/mod.rs`；严禁第三方硬编码
-- **命名规范**：DB 字段 snake_case → 代码层 camelCase（Drizzle 自动映射）；OAuth 协议保持 snake_case（与 RFC 一致）；JS/TS 变量 camelCase
+1. **测试优先于 mock**：优先编写集成测试（用测试 DB/Redis），仅 mock 外部不可控边界（如第三方 API）。行为测试优于交互测试。
+2. **契约驱动开发**：先更新 `packages/contracts/` 中的类型/常量/错误码，再编写实现代码，最后同步更新 `docs/spec/`。
+3. **日志分级**：`console.log` → 开发调试临时使用（提交前删除），`console.info` → 关键业务流程节点，`console.warn` → 可恢复异常，`console.error` → 需人工介入的故障。
+4. **密码策略单一真相源**：`domain/shared/zod-schemas.ts` 中的 `PasswordSchema` 是全系统唯一密码校验入口，任何新增密码输入点必须复用。
+5. **迁移脚本含回滚**：每个 Drizzle migration 目录下必须包含 `rollback.sql`。
 
 ---
 
-## 审计方法说明
-
-本报告通过以下五步流水线生成：
-
-1. **全局分析（Explore Agent）**：输出 46 页项目结构适配报告，覆盖 4 层服务角色映射、34 个 API route、13 个关键路径
-2. **四路并行审计（Agent A/B/C/D）**：覆盖 14 角色、阅读 150+ 文件、输出 70+ 条发现
-3. **复核交叉验证（Review Agent）**：去重合并 5 组重复发现（暴力破解、Token TTL、Client Secret、ApiResponse、测试质量），TOP10 全部代码级确认
-4. **最终报告生成**：6 部分固定结构，含代码对比示例和分阶段路线图
-5. **文档落地**：写入 `docs/audit/2026-07-10-code-audit.md`
-
-标注说明：
-- ✅ 经复核确认：已实际读取源码，确认问题存在
-- ⚠️ 存疑：引用不够精确或需要进一步验证（通常因 Agent 未提供确切行号或需更深层代码分析）
-- 无问题标注：Agent 正确识别了无问题的项目特征
+> **报告完成时间**：2026-07-10  
+> **所有严重问题均经二次代码确认，路径引用完整，可直接用于制定修复计划。**

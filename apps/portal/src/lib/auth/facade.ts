@@ -54,7 +54,7 @@ export async function withPermission(
 
     if (!check.authorized) {
       return NextResponse.json(
-        { error: COMMON_ERRORS.FORBIDDEN, message: check.error },
+        { success: false, error: COMMON_ERRORS.FORBIDDEN, message: check.error },
         { status: check.statusCode }
       );
     }
@@ -62,7 +62,7 @@ export async function withPermission(
     // checkPermission 保证 authorized 为 true 时 userId 与 claims 均非空（运行时断言兜底）
     if (!check.userId || !check.claims) {
       return NextResponse.json(
-        { error: COMMON_ERRORS.INTERNAL_ERROR, message: '鉴权上下文缺失' },
+        { success: false, error: COMMON_ERRORS.INTERNAL_ERROR, message: '鉴权上下文缺失' },
         { status: 500 },
       );
     }
@@ -76,7 +76,7 @@ export async function withPermission(
       console.error('[AuthFacade] 服务执行异常:', mapped.message, error instanceof Error ? error.stack : '');
     }
     return NextResponse.json(
-      { error: mapped.error, message: mapped.message },
+      { success: false, error: mapped.error, message: mapped.message },
       { status: mapped.status }
     );
   }

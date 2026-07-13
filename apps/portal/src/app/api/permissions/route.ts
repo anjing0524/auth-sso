@@ -8,11 +8,22 @@ import { withPermission } from '@/lib/auth';
 import { getPermissions } from '@/app/(dashboard)/permissions/data';
 
 
-/** GET /api/permissions — 委托 data.ts，支持按 type 过滤 */
+/** GET /api/permissions — 委托 data.ts，支持按 type 过滤和分页（内存分页，适配 Next.js 缓存） */
 export async function GET(request: NextRequest) {
   return withPermission({ permissions: ['permission:list'] }, async () => {
-    const type = request.nextUrl.searchParams.get('type') || undefined;
-    const data = await getPermissions(type);
-    return NextResponse.json({ data });
+    const sp = request.nextUrl.searchParams;
+    const type = sp.get('type') || undefined;
+    const page = Math.max(1, parseInt(sp.get('page') || '1', 10));
+    const pageSize = Math.min(100, Math.max(1, parseInt(sp.get('pageSize') || '50', 10)));
+    const allData = await getPermissions(type);
+    const total = allData.length;
+    const totalPages = Math.ceil(total / pageSize);
+    const offset = (page - 1) * pageSize;
+    const data = allData.slice(offset, offset + pageSize);
+    return NextResponse.json({
+      success: true,
+      data,
+      pagination: { page, pageSize, total, totalPages },
+    });
   });
 }

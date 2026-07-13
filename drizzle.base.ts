@@ -19,7 +19,7 @@ export function createDrizzleConfig(opts: { schema: string; out: string }) {
     out: opts.out,
     dialect: /** @type {'postgresql'} */ ('postgresql'),
     dbCredentials: {
-      url: process.env.DATABASE_URL!,
+      url: process.env['DATABASE_URL']!,
     },
     verbose: true,
     strict: true,

@@ -69,13 +69,17 @@ export async function POST(
         .where(eq(schema.users.id, id));
     });
 
-    // 重置后所有会话立即失效
-    revokeUserAccessByUserId(id).catch((e) =>
-      console.error('[ResetPassword] 撤销 JWT 失败:', e),
-    );
-    refreshUserPermissionCache(id).catch((e) =>
-      console.error('[ResetPassword] 刷新缓存失败:', e),
-    );
+    // 重置后所有会话立即失效（关键安全操作，必须 await 确保执行）
+    try {
+      await revokeUserAccessByUserId(id);
+    } catch (e) {
+      console.error('[ResetPassword] 撤销 JWT 失败:', e);
+    }
+    try {
+      await refreshUserPermissionCache(id);
+    } catch (e) {
+      console.error('[ResetPassword] 刷新缓存失败:', e);
+    }
 
     return NextResponse.json({ success: true, message: '密码已重置，该用户所有会话已失效' });
   });

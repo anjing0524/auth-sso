@@ -10,6 +10,33 @@ import 'server-only';
  */
 import { db, schema } from '@/infrastructure/db';
 import type { AuditOperation, LoginEventType } from '@auth-sso/contracts';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('Audit');
+
+/**
+ * 通用日志写入工厂 — 消除 writeLoginLog / writeAuditLog / writeAccessLog 的三次结构重复
+ *
+ * @param table       - Drizzle 表对象
+ * @param tag         - 日志标签（用于错误输出）
+ * @param buildValues - 将参数映射为表字段的值工厂
+ */
+function createLogWriter<TParams>(
+  table: typeof schema.loginLogs | typeof schema.auditLogs | typeof schema.accessLogs,
+  tag: string,
+  buildValues: (params: TParams) => Record<string, unknown>,
+): (params: TParams) => void {
+  return (params: TParams) => {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (db.insert as any)(table)
+        .values(buildValues(params))
+        .catch((err: Error) => log.error(`写${tag}日志失败`, { error: err.message }));
+    } catch (err) {
+      log.error(`写${tag}日志失败 (sync)`, { error: (err as Error).message });
+    }
+  };
+}
 
 /**
  * 登录日志写入参数
@@ -34,30 +61,22 @@ export interface WriteLoginLogParams {
 /**
  * 写登录日志（fire-and-forget，不阻塞主流程）
  *
- * 写入失败仅记录 console.error，不影响认证结果。
+ * 写入失败仅记录结构化日志，不影响认证结果。
  * 用于满足 I-LOG-003「关键操作自动记录」需求。
- *
- * @param params 登录日志参数
  */
-export function writeLoginLog(params: WriteLoginLogParams): void {
-  try {
-    db.insert(schema.loginLogs)
-      .values({
-        userId: params.userId || null,
-        username: params.username,
-        eventType: params.eventType,
-        ip: params.ip || null,
-        userAgent: params.userAgent || null,
-        location: params.location || null,
-        failReason: params.failReason || null,
-      })
-      .catch((err) => console.error('[Audit] 写登录日志失败:', err));
-  } catch (err) {
-    // 同步异常兜底：schema 未定义、DB 未连接等场景
-    // 不影响认证主流程（fire-and-forget 语义）
-    console.error('[Audit] 写登录日志失败 (sync):', err);
-  }
-}
+export const writeLoginLog = createLogWriter<WriteLoginLogParams>(
+  schema.loginLogs,
+  '登录日志',
+  (params) => ({
+    userId: params.userId || null,
+    username: params.username,
+    eventType: params.eventType,
+    ip: params.ip || null,
+    userAgent: params.userAgent || null,
+    location: params.location || null,
+    failReason: params.failReason || null,
+  }),
+);
 
 /**
  * 操作审计日志写入参数
@@ -90,32 +109,25 @@ export interface WriteAuditLogParams {
 /**
  * 写操作审计日志（fire-and-forget，不阻塞主流程）
  *
- * 写入失败仅记录 console.error，不影响业务结果。
  * 用于满足 DC-AUDIT-IMMUTABLE / FR-LOG-01~03 / NFR-SEC-07。
- *
- * @param params 审计日志参数
  */
-export function writeAuditLog(params: WriteAuditLogParams): void {
-  try {
-    db.insert(schema.auditLogs)
-      .values({
-        userId: params.userId,
-        username: params.username || null,
-        operation: params.operation,
-        method: params.method || null,
-        url: params.url || null,
-        params: params.params || null,
-        ip: params.ip || null,
-        userAgent: params.userAgent || null,
-        status: params.status ?? null,
-        duration: params.duration ?? null,
-        errorMsg: params.errorMsg || null,
-      })
-      .catch((err) => console.error('[Audit] 写审计日志失败:', err));
-  } catch (err) {
-    console.error('[Audit] 写审计日志失败 (sync):', err);
-  }
-}
+export const writeAuditLog = createLogWriter<WriteAuditLogParams>(
+  schema.auditLogs,
+  '审计日志',
+  (params) => ({
+    userId: params.userId,
+    username: params.username || null,
+    operation: params.operation,
+    method: params.method || null,
+    url: params.url || null,
+    params: params.params || null,
+    ip: params.ip || null,
+    userAgent: params.userAgent || null,
+    status: params.status ?? null,
+    duration: params.duration ?? null,
+    errorMsg: params.errorMsg || null,
+  }),
+);
 
 /**
  * 从请求 Headers 中提取客户端 IP
@@ -170,25 +182,21 @@ export interface WriteAccessLogParams {
  *
  * 记录所有 GET 敏感数据访问，用于合规追溯"谁查看了哪条数据"。
  */
-export function writeAccessLog(params: WriteAccessLogParams): void {
-  try {
-    db.insert(schema.accessLogs)
-      .values({
-        userId: params.userId,
-        username: params.username || null,
-        method: params.method,
-        path: params.path,
-        resourceType: params.resourceType || null,
-        resourceId: params.resourceId || null,
-        ip: params.ip || null,
-        userAgent: params.userAgent || null,
-        status: params.status ?? null,
-        duration: params.duration ?? null,
-      })
-      .catch((err) => console.error('[Audit] 写访问日志失败:', err));
-  } catch (err) {
-    console.error('[Audit] 写访问日志失败 (sync):', err);
-  }
-}
+export const writeAccessLog = createLogWriter<WriteAccessLogParams>(
+  schema.accessLogs,
+  '访问日志',
+  (params) => ({
+    userId: params.userId,
+    username: params.username || null,
+    method: params.method,
+    path: params.path,
+    resourceType: params.resourceType || null,
+    resourceId: params.resourceId || null,
+    ip: params.ip || null,
+    userAgent: params.userAgent || null,
+    status: params.status ?? null,
+    duration: params.duration ?? null,
+  }),
+);
 
 

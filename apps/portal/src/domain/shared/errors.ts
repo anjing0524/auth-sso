@@ -84,6 +84,6 @@ export class PKCEVerificationError extends DomainError {
 /** OAuth redirect_uri 不在 Client 白名单中 */
 export class InvalidRedirectUriError extends DomainError {
   constructor(message: string = '回调地址与应用注册的不匹配') {
-    super(AUTH_ERRORS.INVALID_REDIRECT_URI, message);
+    super(AUTH_ERRORS.OAUTH_INVALID_REDIRECT_URI, message);
   }
 }

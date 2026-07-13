@@ -53,7 +53,7 @@ export const updateOwnProfileAction = withAuth(
   ): Promise<ApiResponse<{ id: string }>> => {
     const parsed = UpdateOwnProfileSchema.safeParse(input);
     if (!parsed.success) {
-      return { success: false, error: 'VALIDATION_ERROR', message: parsed.error.issues[0].message };
+      return { success: false, error: 'VALIDATION_ERROR', message: parsed.error.issues[0]!.message };
     }
 
     // 用 ctx.userId 锁定目标，防止 IDOR
@@ -62,9 +62,9 @@ export const updateOwnProfileAction = withAuth(
 
     // 仅更新有值的字段（partial update）
     const updates: Record<string, unknown> = {};
-    if (parsed.data.name !== undefined) updates.name = parsed.data.name;
-    if (parsed.data.email !== undefined) updates.email = parsed.data.email;
-    if ('avatarUrl' in parsed.data) updates.avatarUrl = parsed.data.avatarUrl ?? null;
+    if (parsed.data.name !== undefined) updates['name'] = parsed.data.name;
+    if (parsed.data.email !== undefined) updates['email'] = parsed.data.email;
+    if ('avatarUrl' in parsed.data) updates['avatarUrl'] = parsed.data.avatarUrl ?? null;
 
     if (Object.keys(updates).length === 0) {
       return { success: true, data: { id: ctx.userId }, message: '无内容变更' };
@@ -91,7 +91,7 @@ export const changeOwnPasswordAction = withAuth(
   ): Promise<ApiResponse<{ id: string }>> => {
     const parsed = ChangeOwnPasswordSchema.safeParse(input);
     if (!parsed.success) {
-      return { success: false, error: 'VALIDATION_ERROR', message: parsed.error.issues[0].message };
+      return { success: false, error: 'VALIDATION_ERROR', message: parsed.error.issues[0]!.message };
     }
 
     // 用 ctx.userId 锁定目标，防止 IDOR

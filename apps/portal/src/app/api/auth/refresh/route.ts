@@ -1,11 +1,11 @@
 /**
- * Token 刷新 API (POST /)
+ * Token 刷新 API (POST /api/auth/refresh)
  *
  * Refresh Token Rotation：消耗旧 RT，签发新 AT + RT。
  *
  * 优化：如果当前 Access Token 剩余时间 > 5 分钟，跳过刷新（避免无效的 token 轮换）。
  *
- * @route POST /
+ * @route POST /api/auth/refresh
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { getRefreshTokenFromCookie, getJwtFromCookie, decodeJwtPayload } from '@/lib/session';
@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
     // 续签成功 → 记录 TOKEN_REFRESH 日志
     writeLoginLog({ userId: atPayload?.sub, username, eventType: 'TOKEN_REFRESH', ip, userAgent: ua });
 
-    const secure = (process.env.NEXT_PUBLIC_APP_URL || '').startsWith('https://');
+    const secure = (process.env['NEXT_PUBLIC_APP_URL'] || '').startsWith('https://');
     const response = NextResponse.json({ success: true, data: { expiresIn: result.expiresIn } });
 
     response.cookies.set(COOKIE_NAMES.JWT, result.accessToken, {

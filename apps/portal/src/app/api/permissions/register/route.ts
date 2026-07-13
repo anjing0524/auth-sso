@@ -77,7 +77,7 @@ function getHashCode(str: string): number {
 function extractBasicAuth(request: NextRequest): { clientId: string; clientSecret: string } | null {
   const auth = request.headers.get('Authorization');
   if (!auth?.startsWith('Basic ')) return null;
-  const credentials = Buffer.from(auth.split(' ')[1], 'base64').toString('utf-8');
+  const credentials = Buffer.from(auth.split(' ')[1]!, 'base64').toString('utf-8');
   const [id, secret] = credentials.split(':');
   return (id && secret) ? { clientId: id, clientSecret: secret } : null;
 }
@@ -102,22 +102,22 @@ async function checkCodeConflicts(incomingCodes: string[], clientId: string): Pr
 export async function POST(request: NextRequest) {
   try {
     const auth = extractBasicAuth(request);
-    if (!auth) return NextResponse.json({ error: 'Unauthorized', message: '缺少或格式错误的 Basic Auth 凭证' }, { status: 401 });
+    if (!auth) return NextResponse.json({ error: COMMON_ERRORS.UNAUTHORIZED, message: '缺少或格式错误的 Basic Auth 凭证' }, { status: 401 });
 
     const clientRecord = await db.select().from(schema.clients).where(eq(schema.clients.clientId, auth.clientId)).limit(1);
     try {
       validateClientActive(clientRecord[0]);
     } catch {
-      return NextResponse.json({ error: 'Forbidden', message: '该应用系统已停用或不存在' }, { status: 403 });
+      return NextResponse.json({ error: COMMON_ERRORS.FORBIDDEN, message: '该应用系统已停用或不存在' }, { status: 403 });
     }
     try {
       validateClientSecret(clientRecord[0]!, auth.clientSecret);
     } catch {
-      return NextResponse.json({ error: 'Forbidden', message: 'Client ID 或 Secret 错误' }, { status: 403 });
+      return NextResponse.json({ error: COMMON_ERRORS.FORBIDDEN, message: 'Client ID 或 Secret 错误' }, { status: 403 });
     }
     // 仅允许 Portal 内部系统 Client 调用（is_internal=true），杜绝任意注册 Client 提权注册权限
     if (!clientRecord[0]!.isInternal) {
-      return NextResponse.json({ error: 'Forbidden', message: '该端点仅限内部系统 Client 调用' }, { status: 403 });
+      return NextResponse.json({ error: COMMON_ERRORS.FORBIDDEN, message: '该端点仅限内部系统 Client 调用' }, { status: 403 });
     }
 
     const body = await request.json();
@@ -175,7 +175,7 @@ export async function POST(request: NextRequest) {
       }
       return stats;
     });
-    return NextResponse.json({ success: true, stats: result });
+    return NextResponse.json({ success: true, data: result });
   } catch (error) {
     const mapped = mapDomainError(error);
     console.error('[Permissions Register] 同步失败:', mapped.message);

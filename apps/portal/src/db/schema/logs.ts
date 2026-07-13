@@ -67,6 +67,8 @@ export const loginLogs = pgTable('login_logs', {
   index('idx_login_logs_user').on(t.userId),
   index('idx_login_logs_created').on(t.createdAt),
   index('idx_login_logs_event_type').on(t.eventType),
+  // 复合索引：暴力破解防护 DB 回退查询（userId + eventType + createdAt）高频使用
+  index('idx_login_logs_user_event_created').on(t.userId, t.eventType, t.createdAt),
 ]);
 
 /**

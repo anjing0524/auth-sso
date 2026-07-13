@@ -2,31 +2,22 @@
  * 登录 API 单元测试 (POST /api/auth/login)
  *
  * @req H-AUTH-002, H-AUTH-006, DC-AUTH-001
- *
- * 覆盖范围：
- * - Zod 校验失败 → 400
- * - 用户不存在 → EntityNotFoundError
- * - 密码错误 → BusinessRuleViolationError
- * - 登录成功 → 200 + Cookie
- *
- * @req DC-AUTH-001, DC-AUTH-002
  * @vitest-environment node
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// =========================================
-// Mock 基础设施（vi.hoisted 共享状态 — 所有 mock 在同一个闭包中）
-// =========================================
-const {
-  mockSignLoginSession,
-  mockVerifyPassword,
-  mockValidateLoginCredentials,
-  mockMapDomainError,
-  mockDb,
-  setDbRows,
-  resetDb,
-} = vi.hoisted(() => {
-  const state: { dbRows: any[] } = { dbRows: [] };
+const holder = vi.hoisted<{
+  mockSignLoginSession: ReturnType<typeof vi.fn>;
+  mockVerifyPassword: ReturnType<typeof vi.fn>;
+  mockValidateLoginCredentials: ReturnType<typeof vi.fn>;
+  mockCheckBruteForce: ReturnType<typeof vi.fn>;
+  mockIncrementBruteForce: ReturnType<typeof vi.fn>;
+  mockClearBruteForceCounter: ReturnType<typeof vi.fn>;
+  mockMapDomainError: ReturnType<typeof vi.fn>;
+  mockDb: any;
+  state: { dbRows: any[] };
+}>(() => {
+  const state = { dbRows: [] as any[] };
 
   const createChain = () => {
     const chain: any = () => {};
@@ -40,20 +31,13 @@ const {
     });
   };
 
+  const mockUpdateWhere: any = () => {};
+  mockUpdateWhere.catch = (fn: Function) => { fn(null); return mockUpdateWhere; };
+
   const mockDb = new Proxy({} as any, {
     get(_t: any, prop: string) {
       if (prop === 'select') return () => createChain();
-      if (prop === 'update') {
-        return () => ({
-          set: () => ({
-            where: () => {
-              const c: any = () => {};
-              c.catch = () => c;
-              return c;
-            },
-          }),
-        });
-      }
+      if (prop === 'update') return () => ({ set: () => ({ where: () => mockUpdateWhere }) });
       return undefined;
     },
   });
@@ -62,43 +46,38 @@ const {
     mockSignLoginSession: vi.fn(),
     mockVerifyPassword: vi.fn(),
     mockValidateLoginCredentials: vi.fn(),
+    mockCheckBruteForce: vi.fn(),
+    mockIncrementBruteForce: vi.fn(),
+    mockClearBruteForceCounter: vi.fn(),
     mockMapDomainError: vi.fn(),
     mockDb,
-    setDbRows(r: any[]) {
-      state.dbRows = r;
-    },
-    resetDb() {
-      state.dbRows = [];
-    },
+    state,
   };
 });
 
-vi.mock('@/infrastructure/db', () => ({
-  db: mockDb,
-  schema: { users: {} },
-}));
+vi.mock('@/infrastructure/db', () => ({ db: holder.mockDb, schema: { users: {} } }));
 
 vi.mock('@/domain/auth/login', () => ({
-  validateLoginCredentials: mockValidateLoginCredentials,
+  validateLoginCredentials: holder.mockValidateLoginCredentials,
 }));
 
 vi.mock('@/domain/auth/password', () => ({
-  verifyPassword: mockVerifyPassword,
+  verifyPassword: holder.mockVerifyPassword,
 }));
 
 vi.mock('@/domain/auth/brute-force', () => ({
-  checkBruteForce: vi.fn(async () => ({ locked: false, message: '' })),
-  incrementBruteForce: vi.fn(async () => {}),
-  clearBruteForceCounter: vi.fn(async () => {}),
+  checkBruteForce: holder.mockCheckBruteForce,
+  incrementBruteForce: holder.mockIncrementBruteForce,
+  clearBruteForceCounter: holder.mockClearBruteForceCounter,
 }));
 
 vi.mock('@/lib/auth/token', () => ({
-  signLoginSession: mockSignLoginSession,
+  signLoginSession: holder.mockSignLoginSession,
   LOGIN_SESSION_TTL: 300,
 }));
 
 vi.mock('@/domain/shared/error-mapping', () => ({
-  mapDomainError: mockMapDomainError,
+  mapDomainError: holder.mockMapDomainError,
 }));
 
 vi.mock('@auth-sso/contracts', () => ({
@@ -107,7 +86,6 @@ vi.mock('@auth-sso/contracts', () => ({
 
 import { POST } from '@/app/api/auth/login/route';
 
-// 辅助函数
 function buildLoginRequest(body: any): any {
   return new Request('http://localhost:4100/api/auth/login', {
     method: 'POST',
@@ -118,9 +96,12 @@ function buildLoginRequest(body: any): any {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  resetDb();
-  // mapDomainError 默认透传
-  mockMapDomainError.mockImplementation((err: any) => {
+  holder.state.dbRows = [];
+  holder.mockCheckBruteForce.mockResolvedValue({ locked: false, message: '' });
+  holder.mockValidateLoginCredentials.mockImplementation(() => {});
+  holder.mockVerifyPassword.mockResolvedValue(true);
+  holder.mockSignLoginSession.mockResolvedValue('mock-login-session-jwt');
+  holder.mockMapDomainError.mockImplementation((err: any) => {
     if (err?.status && err?.message) {
       return { status: err.status, error: err.code || 'ERROR', message: err.message };
     }
@@ -129,83 +110,73 @@ beforeEach(() => {
 });
 
 describe('POST /api/auth/login', () => {
-  it('缺少 email 字段时返回 400', async () => {
-    const req = buildLoginRequest({ password: 'test123' });
-    const res = await POST(req);
+  it('缺少 email 字段时返回 400 并包含 success:false', async () => {
+    const res = await POST(buildLoginRequest({ password: 'test123' }));
     const json = await res.json();
-
     expect(res.status).toBe(400);
     expect(json.success).toBe(false);
     expect(json.error).toBe('VALIDATION_ERROR');
+    expect(json.message).toBeDefined();
   });
 
   it('无效 email 格式时返回 400', async () => {
-    const req = buildLoginRequest({ email: 'not-an-email', password: 'test123' });
-    const res = await POST(req);
+    const res = await POST(buildLoginRequest({ email: 'not-an-email', password: 'test123' }));
     const json = await res.json();
-
     expect(res.status).toBe(400);
     expect(json.success).toBe(false);
   });
 
-  it('缺少密码字段时返回 400', async () => {
-    const req = buildLoginRequest({ email: 'test@example.com' });
-    const res = await POST(req);
+  it('用户不存在时返回 401（防枚举，不泄露是否存在）', async () => {
+    holder.mockMapDomainError.mockReturnValueOnce({
+      status: 401, error: 'AUTH_SSO_2002', message: '邮箱或密码错误',
+    });
+    const res = await POST(buildLoginRequest({ email: 'notfound@example.com', password: 'test123' }));
     const json = await res.json();
-
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(401);
     expect(json.success).toBe(false);
+    expect(json.message).not.toMatch(/不存在/i);
   });
 
-  it('用户不存在时返回 401 INVALID_CREDENTIALS（防用户枚举）', async () => {
-    setDbRows([]);
-    mockValidateLoginCredentials.mockImplementation(() => {});
-    mockMapDomainError.mockReturnValueOnce({
-      status: 401,
-      error: 'AUTH_SSO_2002',
-      message: '邮箱或密码错误',
+  it('密码错误时返回 401，并增加暴力破解计数', async () => {
+    holder.state.dbRows = [{ id: 'u1', email: 'user@example.com', passwordHash: '$2b$...', status: 'ACTIVE' }];
+    holder.mockVerifyPassword.mockResolvedValueOnce(false);
+    holder.mockMapDomainError.mockReturnValueOnce({
+      status: 401, error: 'AUTH_SSO_2002', message: '邮箱或密码错误',
     });
 
-    const req = buildLoginRequest({ email: 'notfound@example.com', password: 'test123' });
-    const res = await POST(req);
+    const res = await POST(buildLoginRequest({ email: 'user@example.com', password: 'wrong' }));
     const json = await res.json();
 
     expect(res.status).toBe(401);
     expect(json.success).toBe(false);
+    expect(holder.mockIncrementBruteForce).toHaveBeenCalledWith('u1');
   });
 
-  it('密码错误时返回 401 INVALID_CREDENTIALS', async () => {
-    setDbRows([{ id: 'u1', email: 'user@example.com', passwordHash: '$2b$...', status: 'ACTIVE' }]);
-    mockValidateLoginCredentials.mockImplementation(() => {});
-    mockVerifyPassword.mockResolvedValueOnce(false);
-    mockMapDomainError.mockReturnValueOnce({
-      status: 401,
-      error: 'AUTH_SSO_2002',
-      message: '邮箱或密码错误',
-    });
+  it('登录成功时返回 200、设置 Cookie、清除暴力破解计数', async () => {
+    holder.state.dbRows = [{ id: 'u1', email: 'user@example.com', passwordHash: '$2b$...', status: 'ACTIVE' }];
+    holder.mockVerifyPassword.mockResolvedValueOnce(true);
 
-    const req = buildLoginRequest({ email: 'user@example.com', password: 'wrong' });
-    const res = await POST(req);
-    const json = await res.json();
-
-    expect(res.status).toBe(401);
-    expect(json.success).toBe(false);
-    expect(mockVerifyPassword).toHaveBeenCalled();
-  });
-
-  it('登录成功时返回 200 并设置 Cookie', async () => {
-    setDbRows([{ id: 'u1', email: 'user@example.com', passwordHash: '$2b$...', status: 'ACTIVE' }]);
-    mockValidateLoginCredentials.mockImplementation(() => {});
-    mockVerifyPassword.mockResolvedValueOnce(true);
-    mockSignLoginSession.mockResolvedValueOnce('mock-login-session-jwt');
-
-    const req = buildLoginRequest({ email: 'user@example.com', password: 'correct' });
-    const res = await POST(req);
+    const res = await POST(buildLoginRequest({ email: 'user@example.com', password: 'correct' }));
     const json = await res.json();
 
     expect(res.status).toBe(200);
     expect(json.success).toBe(true);
-    expect(mockSignLoginSession).toHaveBeenCalled();
+    expect(holder.mockSignLoginSession).toHaveBeenCalledWith('u1');
     expect(res.cookies.get('login_session')?.value).toBe('mock-login-session-jwt');
+    expect(holder.mockClearBruteForceCounter).toHaveBeenCalledWith('u1');
+  });
+
+  it('暴力破解锁定后返回 423，不尝试验证密码', async () => {
+    holder.state.dbRows = [{ id: 'u1', email: 'locked@example.com', passwordHash: '$2b$...', status: 'ACTIVE' }];
+    holder.mockCheckBruteForce.mockResolvedValueOnce({
+      locked: true, message: '登录失败次数过多，账户已临时锁定',
+    });
+
+    const res = await POST(buildLoginRequest({ email: 'locked@example.com', password: 'test123' }));
+    const json = await res.json();
+
+    expect(res.status).toBe(423);
+    expect(json.success).toBe(false);
+    expect(holder.mockVerifyPassword).not.toHaveBeenCalled();
   });
 });

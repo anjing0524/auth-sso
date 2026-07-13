@@ -7,6 +7,9 @@ import { eq, inArray, and } from 'drizzle-orm';
 import { getRedis, type RedisClient } from '@/infrastructure/redis';
 import { ENTITY_ACTIVE, REDIS_KEY_PREFIX } from '@auth-sso/contracts';
 import type { UserPermissionContext } from '@auth-sso/contracts';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('PermissionContext');
 
 /** 权限缓存基准 TTL，与 Access Token TTL (3600s) 对齐 */
 const PERM_CACHE_TTL_BASE = 3600;
@@ -55,21 +58,28 @@ export async function getUserPermissionContext(userId: string): Promise<UserPerm
     }
   } catch (cacheError: any) {
     // 降级容错：Redis 异常时不阻断核心鉴权业务，仅记录日志并继续查库
-    console.warn(`[PermissionContext] Redis cache read failed for user ${userId}, falling back to DB:`, cacheError.message);
+    log.warn(`Redis cache read failed for user ${userId}, falling back to DB`, { error: cacheError.message });
   }
 
   try {
-    // 2. 从数据库级联查询用户、绑定的角色以及各角色的权限列表，降低 DB 往返开销
+    // 2. 从数据库级联查询用户、绑定的角色以及各角色的权限列表，降低 DB 往返开销。
+    // 使用 columns 仅选必要字段，减少 4 层嵌套关联的数据传输量。
     const user = await db.query.users.findFirst({
       where: eq(schema.users.id, userId),
+      columns: { id: true, status: true },
       with: {
         userRoles: {
+          columns: { roleId: true },
           with: {
             role: {
+              columns: { id: true, code: true, name: true, deptId: true, status: true },
               with: {
                 rolePermissions: {
+                  columns: { permissionId: true },
                   with: {
-                    permission: true,
+                    permission: {
+                      columns: { id: true, code: true, status: true },
+                    },
                   },
                 },
               },
@@ -93,7 +103,7 @@ export async function getUserPermissionContext(userId: string): Promise<UserPerm
 
     // 强核准状态约束：如果用户状态不是激活状态 (ACTIVE)，立刻返回 null 拒绝加载权限与角色，防范封禁账号鉴权逃逸漏洞
     if (user.status !== ENTITY_ACTIVE) {
-      console.warn(`[PermissionContext] Access denied: User ${userId} is not ACTIVE (current status: ${user.status})`);
+      log.warn(`Access denied: User ${userId} is not ACTIVE`, { status: user.status });
       return null;
     }
 
@@ -155,13 +165,13 @@ export async function getUserPermissionContext(userId: string): Promise<UserPerm
       try {
         await redis.setex(cacheKey, jitteredCacheTtl(), JSON.stringify(context));
       } catch (cacheWriteError: any) {
-        console.warn(`[PermissionContext] Redis cache write failed for user ${userId}:`, cacheWriteError.message);
+        log.warn(`Redis cache write failed for user ${userId}`, { error: cacheWriteError.message });
       }
     }
 
     return context;
   } catch (error: any) {
-    console.error('[PermissionContext] Database query error:', error.message, error.stack);
+    log.error('Database query error', { error: error.message, stack: error.stack });
     return null;
   }
 }
@@ -182,10 +192,10 @@ export async function refreshUserPermissionCache(userId: string): Promise<void> 
     // 2. 查 DB → 自动回写 Redis（TTL 带随机抖动）
     const ctx = await getUserPermissionContext(userId);
     if (ctx) {
-      console.log(`[PermissionContext] Refreshed cache for user: ${userId}`);
+      log.info(`Refreshed cache for user`, { userId });
     }
   } catch (error: any) {
-    console.error(`[PermissionContext] Failed to refresh cache for user ${userId}:`, error.message);
+    log.error(`Failed to refresh cache for user`, { userId, error: error.message });
   }
 }
 
@@ -199,7 +209,7 @@ export async function refreshUsersPermissionCache(userIds: string[]): Promise<vo
   await Promise.allSettled(
     userIds.map(id => refreshUserPermissionCache(id))
   );
-  console.log(`[PermissionContext] Refreshed cache for ${userIds.length} users`);
+  log.info(`Refreshed cache for ${userIds.length} users`);
 }
 
 /**
@@ -213,9 +223,9 @@ export async function clearUserPermissionCache(userId: string): Promise<void> {
     const cacheKey = `${REDIS_KEY_PREFIX.USER_PERMS}${userId}`;
     // 同时删除 null 标记，确保下次查询重新走 DB
     await redis.del(cacheKey, `${cacheKey}${NULL_CACHE_SUFFIX}`);
-    console.log(`[PermissionContext] Cleared permissions cache for user: ${userId}`);
+    log.info(`Cleared permissions cache for user`, { userId });
   } catch (error: any) {
-    console.error(`[PermissionContext] Failed to clear permission cache for user ${userId}:`, error.message);
+    log.error(`Failed to clear permission cache for user`, { userId, error: error.message });
   }
 }
 
@@ -237,12 +247,12 @@ export async function clearUsersPermissionCache(userIds: string[]): Promise<void
     );
     const failed = results.filter((r) => r.status === 'rejected').length;
     if (failed > 0) {
-      console.warn(`[PermissionContext] Batch cleared for ${userIds.length} users, ${failed} failed`);
+      log.warn(`Batch cleared for ${userIds.length} users, ${failed} failed`);
     } else {
-      console.log(`[PermissionContext] Batch cleared permissions cache for ${userIds.length} users`);
+      log.info(`Batch cleared permissions cache for ${userIds.length} users`);
     }
   } catch (error: any) {
-    console.error('[PermissionContext] Failed to batch clear permissions cache:', error.message);
+    log.error('Failed to batch clear permissions cache', { error: error.message });
   }
 }
 
@@ -265,6 +275,6 @@ export async function cacheUserPermissionContext(
     await redis.setex(cacheKey, ttl, JSON.stringify(ctx));
   } catch (error: any) {
     // 静默降级，不影响 Token 签发主流程
-    console.warn(`[PermissionContext] Failed to cache permissions for user ${userId}:`, error.message);
+    log.warn(`Failed to cache permissions for user`, { userId, error: error.message });
   }
 }

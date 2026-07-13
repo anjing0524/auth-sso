@@ -64,7 +64,7 @@ export default function DashboardLayout({
         permissions: '权限管理',
         menus: '菜单配置',
       };
-      const title = titleMap[segments[0]] || segments[0];
+      const title = titleMap[segments[0]!] || segments[0] || '';
       crumbs.push({ title, url: `/${segments[0]}` });
     }
 

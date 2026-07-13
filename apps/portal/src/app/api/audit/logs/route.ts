@@ -13,18 +13,20 @@ import { AUDIT_OPERATION_VALUES, type AuditOperation } from '@auth-sso/contracts
 export async function GET(request: NextRequest) {
   return withPermission({ permissions: ['audit:read'] }, async () => {
     const sp = request.nextUrl.searchParams;
+    const page = Math.max(1, parseInt(sp.get('page') || '1', 10));
+    const pageSize = Math.min(100, Math.max(1, parseInt(sp.get('pageSize') || '20', 10)));
     const rawOp = sp.get('operation');
     const operation = rawOp && (AUDIT_OPERATION_VALUES as readonly string[]).includes(rawOp)
       ? (rawOp as AuditOperation)
       : undefined;
     const result = await getAuditLogs({
-      page: parseInt(sp.get('page') || '1', 10),
-      pageSize: parseInt(sp.get('pageSize') || '20', 10),
+      page,
+      pageSize,
       userId: sp.get('userId') || undefined,
       operation,
       startDate: sp.get('startDate') || undefined,
       endDate: sp.get('endDate') || undefined,
     });
-    return NextResponse.json(result);
+    return NextResponse.json({ success: true, data: result.data, pagination: result.pagination });
   });
 }

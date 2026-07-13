@@ -28,7 +28,14 @@ import type { ResolvedIdentity, PortalJwtClaims } from '@/domain/auth/types';
 
 export type { ResolvedIdentity };
 
-/** Gateway 路径下 claims 缺失时的最小 fallback */
+/**
+ * Gateway 信任路径下 claims 缺失时的最小 fallback。
+ *
+ * 空字符串（sub/iss/aud/jti）是 Gateway 信任路径的占位哨兵值——
+ * 表示这些字段未由 JWT 解析获取，而是由 Gateway 的 X-User-Id 等头注入。
+ * 下游消费者（如数据范围守卫）需自行检查并处理空值，
+ * 不应将空字符串与真实 JWT claims 混淆。
+ */
 const EMPTY_CLAIMS: PortalJwtClaims = {
   sub: '',
   iss: '',
@@ -186,7 +193,9 @@ export const resolveIdentity = cache(
             console.warn('[Auth] Gateway 信任路径 aud 不匹配:', claims.aud);
           }
         }
-        // 极端情况：有 X-User-Id 但无有效 JWT → 降级最小 claims
+        // 极端情况：有 X-User-Id 但无有效 JWT → 降级最小 claims。
+        // EMPTY_CLAIMS 的 sub/iss/aud/jti 为空字符串哨兵值，仅 sub 由 Gateway userId 填充。
+        // 下游消费方（如 canAccessDept）需自行处理空 aud/jti，不可假设必填字段非空。
         return { userId: gatewayUserId, claims: { ...EMPTY_CLAIMS, sub: gatewayUserId } };
       }
     }

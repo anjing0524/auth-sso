@@ -15,7 +15,7 @@ import bcrypt from 'bcryptjs';
  * 12 rounds 约耗时 250ms（取决于硬件），对登录/改密低频操作可接受，
  * 同时显著提升离线爆破难度（相比 10 rounds 提升约 4 倍）。
  */
-const BCRYPT_ROUNDS = process.env.NODE_ENV === 'test' ? 4 : 12;
+const BCRYPT_ROUNDS = process.env['NODE_ENV'] === 'test' ? 4 : 12;
 
 /**
  * 对原始密码进行 bcrypt 哈希
@@ -55,13 +55,11 @@ export async function isPasswordReused(
   history: string[] | null,
 ): Promise<boolean> {
   if (!history || history.length === 0) return false;
-  // 逐个比对历史 hash，任一匹配即判定重复
-  for (const oldHash of history) {
-    if (await bcrypt.compare(newPassword, oldHash)) {
-      return true;
-    }
-  }
-  return false;
+  // 并行比对历史 hash，提升性能（5次串行约 1.25s → 并行约 250ms）
+  const results = await Promise.all(
+    history.map((oldHash) => bcrypt.compare(newPassword, oldHash)),
+  );
+  return results.some(Boolean);
 }
 
 /**

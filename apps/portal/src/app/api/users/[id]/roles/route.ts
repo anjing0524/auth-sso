@@ -76,7 +76,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         where: eq(schema.users.id, id),
         columns: { id: true, deptId: true },
       });
-      if (!userRow) return { error: USER_ERRORS.USER_NOT_FOUND, status: 404 } as const;
+      if (!userRow) return { error: USER_ERRORS.USER_NOT_FOUND, message: '用户不存在', status: 404 } as const;
 
       // 事务内二次数据范围守卫：防止用户部门在极短时间差内被篡改至管理员管辖范围之外（TOCTOU 并发越权）
       if (!canAccessDept(claims.deptIds, userRow.deptId)) {

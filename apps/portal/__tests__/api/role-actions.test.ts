@@ -3,13 +3,6 @@
  *
  * @req DC-ROLE-C, DC-ROLE-U, DC-ROLE-D
  * @vitest-environment node
- *
- * 注：本文件刻意保留内联 Proxy DB mock，未迁移到 helpers/mock-db 的 createMockDb。
- * 原因：createRole 测试在同一事务内需要 findFirst（部门存在性校验，返回 dept 行）
- * 与 select（code 查重，返回 []）返回「不同」结果。createMockDb 将 findFirst 与
- * select 绑定到同一个 _queryResult，无法在同一次调用中区分两者；强行统一会使
- * 查重 select 命中 dept 行 → 误抛 DuplicateEntityError，破坏现有断言。
- * setDeptRow / setRows 也正是为此分离 _row（findFirst）与 _rows（select）而设计。
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
@@ -33,7 +26,7 @@ vi.mock('@/lib/auth', () => ({
   logServerDataRead: vi.fn(async () => {}),
   canAccessDept: vi.fn(() => true),
  withAuth: (_o: any, h: Function) => async (...a: any[]) => h({ userId: 'admin-1', claims: { deptIds: ['dept-1'], permissions: [], roles: [] } }, ...a) }));
-vi.mock('@/lib/crypto', () => ({ generateUUID: () => 'aaaa-bbbb-cccc-dddd', generateId: (len = 20) => 'a'.repeat(len) }));
+vi.mock('@/lib/crypto', () => ({ generateUUID: () => 'aaaa-bbbb-cccc-dddd', generateId: (_len?: number) => 'a'.repeat(20) }));
 vi.mock('@/lib/permissions', () => ({ refreshUsersPermissionCache: vi.fn() }));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn(), updateTag: vi.fn() }));
 
@@ -44,9 +37,39 @@ const roleRow = { id: 'role-1', code: 'TEST_ROLE', name: 'Test', isSystem: false
 
 describe('Role Server Actions', () => {
   beforeEach(() => { vi.clearAllMocks(); mocks.reset(); });
-  it('createRole: 有效输入 → success', async () => { mocks.setDeptRow({ id: 'a1b2c3d4-e5f6-4789-abcd-ef0123456789', status: 'ACTIVE' }); const r: any = await createRoleAction({ name: 'Test', code: 'TEST', sort: 1, deptId: 'a1b2c3d4-e5f6-4789-abcd-ef0123456789' }); expect(r.success).toBe(true); });
-  it('createRole: 缺 code → VALIDATION_ERROR', async () => { const r: any = await createRoleAction({ name: 'X', code: '', sort: 1, deptId: 'a1b2c3d4-e5f6-4789-abcd-ef0123456789' } as any); expect(r.success).toBe(false); });
-  it('updateRole: 存在 → success', async () => { mocks.setRow(roleRow); const r: any = await updateRoleAction('role-1', { name: 'Updated' } as any); expect(r.success).toBe(true); });
-  it('updateRole: 不存在 → throw', async () => { mocks.reset(); mocks.setRows([{ id: "dept-1" }]); await expect(updateRoleAction('bad', { name: 'X' } as any)).rejects.toThrow(); });
-  it('deleteRole: 非系统角色 → success', async () => { mocks.setRow(roleRow); const r: any = await deleteRoleAction('role-1'); expect(r.success).toBe(true); });
+
+  it('createRole: 有效输入 → success 且返回完整数据', async () => {
+    mocks.setDeptRow({ id: 'a1b2c3d4-e5f6-4789-abcd-ef0123456789', status: 'ACTIVE' });
+    const r: any = await createRoleAction({ name: 'Test', code: 'TEST', sort: 1, deptId: 'a1b2c3d4-e5f6-4789-abcd-ef0123456789' });
+    expect(r.success).toBe(true);
+    expect(r.data).toBeDefined();
+    expect(r.data.id).toBeDefined();
+  });
+
+  it('createRole: 缺 code → VALIDATION_ERROR 并包含错误码', async () => {
+    const r: any = await createRoleAction({ name: 'X', code: '', sort: 1, deptId: 'a1b2c3d4-e5f6-4789-abcd-ef0123456789' } as any);
+    expect(r.success).toBe(false);
+    expect(r.error).toBe('VALIDATION_ERROR');
+    expect(r.message).toBeDefined();
+  });
+
+  it('updateRole: 存在 → success 且返回更新后数据', async () => {
+    mocks.setRow(roleRow);
+    const r: any = await updateRoleAction('role-1', { name: 'Updated' } as any);
+    expect(r.success).toBe(true);
+    expect(r.data).toBeDefined();
+  });
+
+  it('updateRole: 不存在 → throw EntityNotFoundError', async () => {
+    mocks.reset();
+    mocks.setRows([{ id: 'dept-1' }]);
+    await expect(updateRoleAction('bad', { name: 'X' } as any)).rejects.toThrow();
+  });
+
+  it('deleteRole: 非系统角色 → success 且包含确认消息', async () => {
+    mocks.setRow(roleRow);
+    const r: any = await deleteRoleAction('role-1');
+    expect(r.success).toBe(true);
+    expect(r.message).toBeDefined();
+  });
 });

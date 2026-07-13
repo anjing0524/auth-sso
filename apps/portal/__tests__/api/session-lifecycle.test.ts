@@ -153,6 +153,28 @@ describe('JWT Cookie Session Lifecycle', () => {
         maxAge: 604800,
       }));
     });
+
+    it('Cookie 包含 sameSite=lax 防 CSRF', () => {
+      const response = NextResponse.next();
+      const setSpy = vi.spyOn(response.cookies, 'set');
+      
+      setJwtCookies(response, 'access-token', undefined, 3600);
+      
+      expect(setSpy).toHaveBeenCalledWith(COOKIE_NAMES.JWT, 'access-token', expect.objectContaining({
+        sameSite: 'lax',
+      }));
+    });
+
+    it('无 refresh token 时不设置 REFRESH Cookie', () => {
+      const response = NextResponse.next();
+      const setSpy = vi.spyOn(response.cookies, 'set');
+      
+      setJwtCookies(response, 'access-token', undefined, 3600);
+      
+      // 仅设置 JWT cookie，不设置 REFRESH cookie
+      const refreshCalls = setSpy.mock.calls.filter((c: any) => c[0] === COOKIE_NAMES.REFRESH);
+      expect(refreshCalls).toHaveLength(0);
+    });
   });
 
   describe('clearJwtCookies', () => {
@@ -178,6 +200,13 @@ describe('JWT Cookie Session Lifecycle', () => {
 
       expect(jwt).toBe('jwt-val');
       expect(refresh).toBe('refresh-val');
+    });
+
+    it('Cookie 不存在时返回 null', async () => {
+      mockCookiesGet.mockReturnValue(null);
+
+      const jwt = await getJwtFromCookie();
+      expect(jwt).toBeNull();
     });
   });
 
@@ -211,6 +240,11 @@ describe('JWT Cookie Session Lifecycle', () => {
       const payload = await verifyAccessToken('invalid-jwt');
       expect(payload).toBeNull();
     });
+
+    it('恶意/畸形 token 返回 null 不抛异常', async () => {
+      const payload = await verifyAccessToken('');
+      expect(payload).toBeNull();
+    });
   });
 
   describe('decodeJwtPayload', () => {
@@ -218,6 +252,11 @@ describe('JWT Cookie Session Lifecycle', () => {
       const payload = decodeJwtPayload('valid-jwt');
       expect(payload).toBeTruthy();
       expect(payload!.sub).toBe('usr_1');
+    });
+
+    it('无效 token 返回 null', () => {
+      const payload = decodeJwtPayload('invalid-token');
+      expect(payload).toBeNull();
     });
   });
 });

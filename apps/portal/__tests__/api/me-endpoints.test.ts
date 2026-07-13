@@ -93,10 +93,12 @@ vi.mock('@/lib/auth/token', () => ({
   verifyAccessToken: mockVerifyAccessToken,
 }));
 
-// 信任路径测试：未配置 GATEWAY_SHARED_SECRET 时，Gateway 路径严格拒绝，回退到 JWT 自验签
+// 信任路径测试：默认未配置 GATEWAY_SHARED_SECRET（严格拒绝，回退 JWT 自验签）；
+// 信任路径用例可通过 mockGatewaySecret.mockReturnValue 覆盖为有效值
+const { mockGatewaySecret } = vi.hoisted(() => ({ mockGatewaySecret: vi.fn(() => null) }));
 vi.mock('@/lib/env', async (importOriginal) => {
   const actual = await importOriginal() as Record<string, unknown>;
-  return { ...actual, getGatewaySharedSecret: () => null };
+  return { ...actual, getGatewaySharedSecret: mockGatewaySecret };
 });
 
 vi.mock('@/lib/permissions', () => ({
@@ -233,9 +235,23 @@ describe('Me Endpoints', () => {
     });
 
     it('在 Gateway 信任路径下通过 Authorization 请求头解析 JWT 且零验签', async () => {
-      const validJwtStr = 'eyJhbGciOiJFUzI1NiJ9.eyJzdWIiOiJ1c2VyLTEiLCJyb2xlcyI6WyJBRE1JTiJdLCJwZXJtaXNzaW9ucyI6WyJ1c2VyOmxpc3QiXSwiZGVwdElkIjoiZGVwdC0xIiwiZGF0YVNjb3BlVHlwZSI6IkFMTCJ9.signature';
+      // 模拟有效 Gateway 信任路径：配置共享密钥 + 提供匹配的 HMAC 签名头
+      const secret = 'test-shared-secret';
+      mockGatewaySecret.mockReturnValue(secret);
+      const ts = Math.floor(Date.now() / 1000).toString();
+      const jti = 'gateway-jti';
+      const validJwtStr = 'eyJhbGciOiJFUzI1NiJ9.eyJzdWIiOiJ1c2VyLTEiLCJyb2xlcyI6WyJBRE1JTiJdLCJwZXJtaXNzaW9ucyI6WyJ1c2VyOmxpc3QiLCJkZXB0SWQiOiJkZXB0LTEiLCJkYXRhU2NvcGVUeXBlIjoiQUxMIn0.signature';
+      // HMAC-SHA256("${ts}:${userId}:${jti}")，与生产代码 verify-jwt.ts:computeHmacHex 同算法
+      const enc = new TextEncoder();
+      const key = await crypto.subtle.importKey('raw', enc.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+      const sigBuf = await crypto.subtle.sign('HMAC', key, enc.encode(`${ts}:user-1:${jti}`));
+      const signature = Array.from(new Uint8Array(sigBuf)).map((b) => b.toString(16).padStart(2, '0')).join('');
+
       mockHeadersGet.mockImplementation((name: string) => {
         if (name.toLowerCase() === 'x-user-id') return 'user-1';
+        if (name.toLowerCase() === 'x-user-jti') return jti;
+        if (name.toLowerCase() === 'x-gateway-signature') return signature;
+        if (name.toLowerCase() === 'x-gateway-timestamp') return ts;
         if (name.toLowerCase() === 'x-forwarded-for') return '10.0.0.1';
         if (name.toLowerCase() === 'authorization') return `Bearer ${validJwtStr}`;
         return null;
@@ -250,6 +266,7 @@ describe('Me Endpoints', () => {
       expect(response.status).toBe(200);
       expect(body.user.email).toBe('test@example.com');
       expect(mockVerifyAccessToken).not.toHaveBeenCalled();
+      mockGatewaySecret.mockReturnValue(null);
     });
 
     it('JWT 验签失败时返回 401', async () => {

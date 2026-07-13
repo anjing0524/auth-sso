@@ -62,7 +62,7 @@ export async function GET(request: NextRequest) {
     console.error('[Callback] 缺少 PORTAL_CLIENT_SECRET 环境变量');
     return errorRedirect(publicBase, 'token_exchange_failed');
   }
-  const internalBase = process.env.PORTAL_INTERNAL_URL || `http://127.0.0.1:${process.env.PORT || 4000}`;
+  const internalBase = process.env['PORTAL_INTERNAL_URL'] || `http://127.0.0.1:${process.env['PORT'] || 4000}`;
 
   // redirect_uri 必须与 authorize 请求一致（不附加动态参数）
   const redirectUri = new URL('/api/auth/callback', publicBase).toString();
@@ -102,7 +102,7 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const secure = (process.env.NEXT_PUBLIC_APP_URL || '').startsWith('https://');
+    const secure = (process.env['NEXT_PUBLIC_APP_URL'] || '').startsWith('https://');
     // 回跳路径从 return_to Cookie 取（不再复用 state），经同源消毒防开放重定向
     const targetUrl = safeRedirectPath(returnTo) || '/dashboard';
 

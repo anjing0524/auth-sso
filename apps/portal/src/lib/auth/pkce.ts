@@ -1,8 +1,12 @@
+'use client';
+
 /**
  * PKCE (Proof Key for Code Exchange) 工具函数
  *
  * OAuth 2.1 标准要求使用 PKCE (S256)，无论 public 还是 confidential client。
- * 浏览器端使用 Web Crypto API，服务端可替换为 Node crypto。
+ *
+ * ⚠️ 此模块使用浏览器专用 Web Crypto API（btoa、crypto.getRandomValues、crypto.subtle），
+ * 仅可在客户端组件中使用，禁止在 Server Action / API Route / 服务端组件中 import。
  *
  * @module lib/auth/pkce
  */

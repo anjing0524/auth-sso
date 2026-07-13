@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
     const parsed = LoginSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json(
-        { success: false, error: 'VALIDATION_ERROR', message: parsed.error.issues[0].message },
+        { success: false, error: 'VALIDATION_ERROR', message: parsed.error.issues[0]!.message },
         { status: 400 },
       );
     }
@@ -75,14 +75,17 @@ export async function POST(request: NextRequest) {
     // 5. 密码通过 → 清除暴力破解计数器
     await clearBruteForceCounter(user.id);
 
-    // 6. 异步更新 lastLoginAt + 记录成功日志
-    db.update(schema.users).set({ lastLoginAt: new Date() }).where(eq(schema.users.id, user.id))
-      .catch((err) => console.error('[Login] 更新 lastLoginAt 失败:', err));
+    // 6. 更新 lastLoginAt + 记录成功日志（await 确保审计时间准确）
+    try {
+      await db.update(schema.users).set({ lastLoginAt: new Date() }).where(eq(schema.users.id, user.id));
+    } catch (err) {
+      console.error('[Login] 更新 lastLoginAt 失败:', err);
+    }
     writeLoginLog({ userId: user.id, username: user.username, eventType: 'LOGIN_SUCCESS', ip, userAgent: ua });
 
     // 7. 签发 Login Session JWT → Cookie
     const session = await signLoginSession(user.id);
-    const secure = (process.env.NEXT_PUBLIC_APP_URL || '').startsWith('https://');
+    const secure = (process.env['NEXT_PUBLIC_APP_URL'] || '').startsWith('https://');
     const redirectPath = session_id ? `/api/auth/oauth2/authorize?session_id=${session_id}` : null;
 
     const response = NextResponse.json(

@@ -72,6 +72,9 @@ export async function POST(request: NextRequest) {
         .where(eq(schema.refreshTokens.tokenHash, hashToken(token)));
     }
 
+    // RFC 7009 §2.2: 撤销成功（或 token 不存在）时均返回 HTTP 200
+    return NextResponse.json({});
+
   } catch (err) {
     // RFC 7009: 异常时仍返回 200，但进行日志输出，避免堆栈丢失
     const mapped = mapDomainError(err);

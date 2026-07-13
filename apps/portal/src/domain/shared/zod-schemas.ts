@@ -33,8 +33,8 @@ export const permissionTypeEnum = z.enum(PERMISSION_TYPE_VALUES);
  * 全系统所有密码输入（管理员重置、自助改密、API 重置）必须通过此 schema 校验，
  * 禁止在各调用点重复实现密码规则，避免策略漂移。
  *
- * 规则：
- *   - 至少 10 位
+ * 规则（与 API.md 1.4 节需求矩阵 B-USR-C 对齐）：
+ *   - 至少 10 位（注：API 文档初次编写时定为 8 位，经安全评审后提升至 10 位）
  *   - 大写字母 / 小写字母 / 数字 / 特殊字符 中至少包含 3 类
  */
 export const PASSWORD_MIN_LENGTH = 10;

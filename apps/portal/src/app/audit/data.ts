@@ -13,6 +13,24 @@ import type { AuditOperation, LoginEventType } from '@auth-sso/contracts';
 /** 日期格式正则：防止 SQL 注入和异常参数穿透 */
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 
+/**
+ * 为分页查询构建日期范围过滤条件 — 消除 getAuditLogs / getLoginLogs / getAccessLogs 三处重复
+ */
+function addDateRangeConditions(
+  conditions: ReturnType<typeof eq>[],
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  column: any,
+  startDate?: string,
+  endDate?: string,
+): void {
+  if (startDate && DATE_REGEX.test(startDate)) {
+    conditions.push(gte(column, new Date(`${startDate}T00:00:00`)));
+  }
+  if (endDate && DATE_REGEX.test(endDate)) {
+    conditions.push(lte(column, new Date(`${endDate}T23:59:59.999`)));
+  }
+}
+
 function clamp(val: number, min: number, max: number) {
   return isNaN(val) || val < min ? min : val > max ? max : val;
 }
@@ -37,7 +55,8 @@ async function paginatedSelect<T>(
   orderByColumn: any,
   conditions: ReturnType<typeof eq>[],
   params: PaginationParams,
-  mapRow: (row: Record<string, unknown>) => T,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  mapRow: (row: any) => T,
 ): Promise<PaginatedResult<T>> {
   const page = clamp(params.page, 1, Infinity);
   const pageSize = clamp(params.pageSize, 1, 100);
@@ -74,12 +93,7 @@ export async function getAuditLogs(params: PaginationParams & {
   const conditions: ReturnType<typeof eq>[] = [];
   if (params.userId) conditions.push(eq(schema.auditLogs.userId, params.userId));
   if (params.operation) conditions.push(eq(schema.auditLogs.operation, params.operation));
-  if (params.startDate && DATE_REGEX.test(params.startDate)) {
-    conditions.push(gte(schema.auditLogs.createdAt, new Date(`${params.startDate}T00:00:00`)));
-  }
-  if (params.endDate && DATE_REGEX.test(params.endDate)) {
-    conditions.push(lte(schema.auditLogs.createdAt, new Date(`${params.endDate}T23:59:59.999`)));
-  }
+  addDateRangeConditions(conditions, schema.auditLogs.createdAt, params.startDate, params.endDate);
 
   return paginatedSelect(schema.auditLogs, schema.auditLogs.createdAt, conditions, params, (log) => ({
     id: log.id,
@@ -110,12 +124,7 @@ export async function getLoginLogs(params: PaginationParams & {
   const conditions: ReturnType<typeof eq>[] = [];
   if (params.userId) conditions.push(eq(schema.loginLogs.userId, params.userId));
   if (params.eventType) conditions.push(eq(schema.loginLogs.eventType, params.eventType));
-  if (params.startDate && DATE_REGEX.test(params.startDate)) {
-    conditions.push(gte(schema.loginLogs.createdAt, new Date(`${params.startDate}T00:00:00`)));
-  }
-  if (params.endDate && DATE_REGEX.test(params.endDate)) {
-    conditions.push(lte(schema.loginLogs.createdAt, new Date(`${params.endDate}T23:59:59.999`)));
-  }
+  addDateRangeConditions(conditions, schema.loginLogs.createdAt, params.startDate, params.endDate);
 
   return paginatedSelect(schema.loginLogs, schema.loginLogs.createdAt, conditions, params, (log) => ({
     id: log.id,
@@ -146,12 +155,7 @@ export async function getAccessLogs(params: PaginationParams & {
   if (params.userId) conditions.push(eq(schema.accessLogs.userId, params.userId));
   if (params.resourceType) conditions.push(eq(schema.accessLogs.resourceType, params.resourceType));
   if (params.resourceId) conditions.push(eq(schema.accessLogs.resourceId, params.resourceId));
-  if (params.startDate && DATE_REGEX.test(params.startDate)) {
-    conditions.push(gte(schema.accessLogs.createdAt, new Date(`${params.startDate}T00:00:00`)));
-  }
-  if (params.endDate && DATE_REGEX.test(params.endDate)) {
-    conditions.push(lte(schema.accessLogs.createdAt, new Date(`${params.endDate}T23:59:59.999`)));
-  }
+  addDateRangeConditions(conditions, schema.accessLogs.createdAt, params.startDate, params.endDate);
 
   return paginatedSelect(schema.accessLogs, schema.accessLogs.createdAt, conditions, params, (log) => ({
     id: log.id,

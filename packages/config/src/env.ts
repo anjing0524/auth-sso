@@ -52,7 +52,25 @@ const portalEnvSchema = baseEnvSchema.extend({
   // Portal 验证此签名以确认请求确实来自受信任的 Gateway（取代不可靠的 IP 白名单）。
   // 生产环境必须配置；未配置时跳过 HMAC 校验并输出警告（兼容本地开发）。
   GATEWAY_SHARED_SECRET: z.string().optional(),
+
+  // Cookie Secure 标志 — 独立于 NODE_ENV 的安全配置。
+  // 默认跟随 NODE_ENV（production → true），但允许显式覆盖（如 HTTPS 反向代理的 dev 环境）。
+  COOKIE_SECURE: z
+    .enum(['true', 'false'])
+    .optional()
+    .transform((v) => (v === undefined ? undefined : v === 'true')),
 });
+
+/** 安全配置（非环境变量注入，运行时从 portalEnv 派生） */
+export function isCookieSecure(env?: Partial<PortalEnv>): boolean {
+  const raw = env?.COOKIE_SECURE ?? process.env['COOKIE_SECURE'];
+  if (raw === undefined) {
+    // 默认：生产环境开启 Secure，开发/测试环境关闭
+    return (env?.NODE_ENV ?? process.env['NODE_ENV']) === 'production';
+  }
+  // COOKIE_SECURE 可能已是 Zod transform 后的 boolean，或 process.env 的字符串
+  return raw === true || raw === 'true';
+}
 
 /** Zod 解析后的环境变量类型 */
 export type PortalEnv = z.infer<typeof portalEnvSchema>;

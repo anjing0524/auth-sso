@@ -274,9 +274,11 @@ export async function signAccessToken(
 
   // 建立 userId → jti 映射（Token 签发方维护，用于管理员按用户 ID 紧急撤销）
   // Gateway 仅读取 jti 黑名单，不维护此映射
-  trackUserJti(claims.sub, jti, ACCESS_TOKEN_TTL).catch((e) =>
-    console.error('[Token] 写入 user→jti 映射失败:', e),
-  );
+  try {
+    await trackUserJti(claims.sub, jti, ACCESS_TOKEN_TTL);
+  } catch (e) {
+    console.error('[Token] 写入 user→jti 映射失败:', e);
+  }
 
   // 持久化到 access_tokens 表（供 Client 详情页 Token 列表 / 审计查看）
   // 仅持久化元数据：tokenHash = SHA256(token)，不存 JWT 明文。
@@ -404,7 +406,7 @@ export async function signIdToken(params: {
   };
 
   if (params.nonce) {
-    payload.nonce = params.nonce;
+    payload['nonce'] = params.nonce;
   }
 
   return new SignJWT(payload)
@@ -553,9 +555,11 @@ export async function rotateRefreshToken(
   );
 
   // 主动写 Redis 权限缓存，TTL 与 Token 对齐
-  cacheUserPermissionContext(rt.userId, permCtx, ACCESS_TOKEN_TTL).catch((e) =>
-    console.error('[Token] 刷新时写权限缓存失败:', e),
-  );
+  try {
+    await cacheUserPermissionContext(rt.userId, permCtx, ACCESS_TOKEN_TTL);
+  } catch (e) {
+    console.error('[Token] 刷新时写权限缓存失败:', e);
+  }
 
   return { accessToken, refreshToken: newRefreshToken, expiresIn: ACCESS_TOKEN_TTL };
 }
@@ -571,7 +575,10 @@ export async function revokeAllRefreshTokens(userId: string): Promise<void> {
     .where(eq(schema.refreshTokens.userId, userId));
 
   // 同步撤销所有 Access Token 的 JTI（双层撤销闭环）
-  revokeUserAccessByUserId(userId).then((count) => {
+  try {
+    const count = await revokeUserAccessByUserId(userId);
     if (count > 0) console.info('[Token] 已撤销用户 %s 的 %d 个 Access Token JTI', userId, count);
-  }).catch((e) => console.error('[Token] 撤销用户 Access Token JTI 失败:', e));
+  } catch (e) {
+    console.error('[Token] 撤销用户 Access Token JTI 失败:', e);
+  }
 }

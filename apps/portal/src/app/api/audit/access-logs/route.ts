@@ -13,15 +13,17 @@ import { getAccessLogs } from '@/app/audit/data';
 export async function GET(request: NextRequest) {
   return withPermission({ permissions: ['audit:read'] }, async () => {
     const sp = request.nextUrl.searchParams;
+    const page = Math.max(1, parseInt(sp.get('page') || '1', 10));
+    const pageSize = Math.min(100, Math.max(1, parseInt(sp.get('pageSize') || '20', 10)));
     const result = await getAccessLogs({
-      page: parseInt(sp.get('page') || '1', 10),
-      pageSize: parseInt(sp.get('pageSize') || '20', 10),
+      page,
+      pageSize,
       userId: sp.get('userId') || undefined,
       resourceType: sp.get('resourceType') || undefined,
       resourceId: sp.get('resourceId') || undefined,
       startDate: sp.get('startDate') || undefined,
       endDate: sp.get('endDate') || undefined,
     });
-    return NextResponse.json(result);
+    return NextResponse.json({ success: true, data: result.data, pagination: result.pagination });
   });
 }

@@ -7,17 +7,39 @@
  * @route POST /api/telemetry
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
+
+const TelemetrySchema = z.object({
+  type: z.string().min(1).max(64),
+  path: z.string().max(256),
+  userId: z.string().max(64).optional(),
+  meta: z.record(z.string(), z.unknown()).optional(),
+});
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
+    // 请求体大小限制：遥测事件不应超过 8KB
+    const contentLength = parseInt(request.headers.get('content-length') || '0', 10);
+    if (contentLength > 8192) {
+      return NextResponse.json({ success: false, error: 'PAYLOAD_TOO_LARGE' }, { status: 413 });
+    }
 
+    const rawBody = await request.json();
+    const parsed = TelemetrySchema.safeParse(rawBody);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { success: false, error: 'VALIDATION_ERROR', message: parsed.error.issues[0]!.message },
+        { status: 400 },
+      );
+    }
+
+    const { type, path, userId, meta } = parsed.data;
     const event = {
       ts: new Date().toISOString(),
-      type: body.type || 'unknown',
-      path: body.path || '',
-      userId: body.userId || 'anonymous',
-      meta: body.meta || {},
+      type,
+      path,
+      userId: userId || 'anonymous',
+      meta: meta || {},
       ip: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || '',
       ua: request.headers.get('user-agent') || '',
     };

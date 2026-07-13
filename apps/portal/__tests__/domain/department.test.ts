@@ -66,9 +66,9 @@ describe('Department 领域核心规则', () => {
     ];
     const tree = buildDepartmentTree(depts);
     expect(tree).toHaveLength(1);
-    expect(tree[0].name).toBe('根部门');
-    expect(tree[0].children).toHaveLength(1);
-    expect(tree[0].children[0].name).toBe('子部门');
+    expect(tree[0]!.name).toBe('根部门');
+    expect(tree[0]!.children).toHaveLength(1);
+    expect(tree[0]!.children![0]!.name).toBe('子部门');
   });
 
   it('toDomainDepartment 应正确转换 DB 行', () => {

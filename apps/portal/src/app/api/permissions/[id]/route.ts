@@ -16,6 +16,6 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const { id } = await params;
     const perm = await getPermissionById(id);
     if (!perm) return NextResponse.json({ error: COMMON_ERRORS.NOT_FOUND, message: '权限不存在' }, { status: 404 });
-    return NextResponse.json({ data: perm });
+    return NextResponse.json({ success: true, data: perm });
   });
 }

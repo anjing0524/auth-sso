@@ -12,7 +12,7 @@ import { drizzle } from 'drizzle-orm/postgres-js';
 import * as schema from '../../db/schema';
 
 /** 数据库连接配置 */
-const connectionString = process.env.DATABASE_URL!;
+const connectionString = process.env['DATABASE_URL']!;
 
 /** Postgres 客户端 */
 const client = postgres(connectionString, {

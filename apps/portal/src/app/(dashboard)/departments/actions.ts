@@ -46,7 +46,7 @@ export const createDepartmentAction = withAuth(
   async (ctx: AuthContext, input: CreateDepartmentInput): Promise<ApiResponse<{ id: string }>> => {
     const parsed = CreateDepartmentInputSchema.safeParse(input);
     if (!parsed.success) {
-      return { success: false, error: 'VALIDATION_ERROR', message: parsed.error.issues[0].message };
+      return { success: false, error: 'VALIDATION_ERROR', message: parsed.error.issues[0]!.message };
     }
 
     // 数据范围校验：父部门必须在操作者可访问范围内（顶级部门 parentId 为 null 时放行）
@@ -100,7 +100,7 @@ export const updateDepartmentAction = withAuth(
   async (ctx: AuthContext, deptId: string, input: Record<string, unknown>): Promise<ApiResponse<{ id: string }>> => {
     const parsed = UpdateDepartmentInputSchema.safeParse(input);
     if (!parsed.success) {
-      return { success: false, error: 'VALIDATION_ERROR', message: parsed.error.issues[0].message };
+      return { success: false, error: 'VALIDATION_ERROR', message: parsed.error.issues[0]!.message };
     }
     await db.transaction(async (tx) => {
       // 数据范围校验：目标部门 + 拟变更父部门均在操作者可访问范围内

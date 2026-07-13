@@ -21,4 +21,70 @@
 
 ## 变更记录
 
+- 2026-07-13: 新增"审计驱动待办（基于 2026-07-13-code-audit.md，经代码实证勘误）"区块
 - 2026-07-10: 初始化路线图，对齐 v1.1 交付状态
+
+## 审计驱动待办（基于 2026-07-13-code-audit.md）
+
+> 下表条目均经过对 HEAD 代码的实证复核；审计报告本身的 3 处事实错误（13.1 CI、2.1 audit success、6.1 遗漏项）已在报告中勘误，此处不再重复。
+
+### P0 紧急修复（安全 / 可独立上线）
+
+| # | 状态 | 任务 | 文件:行 | 来源发现 |
+|---|:--:|------|---------|:--:|
+| A0-1 | 🔲 | fire-and-forget → await（复核遗漏的 4 处安全关键调用） | `app/(dashboard)/users/actions.ts:120,232,282` + `app/profile/actions.ts:124` | 6.1 勘误 |
+| A0-2 | ✅ | `revokeAllRefreshTokens` JTI 撤销 fire-and-forget（工作树已修复） | `lib/auth/token.ts:568-577` | 7.4（升级为严重） |
+| A0-3 | 🔲 | CI 增补 `pnpm audit` / `cargo audit` 依赖安全扫描 | `.github/workflows/*` | 13.2 |
+| A0-4 | 🔲 | permissions 列表接口补分页（page/pageSize/pagination） | `api/permissions/route.ts` + `permissions/data.ts` | 5.2 |
+| A0-5 | 🔲 | 分页参数统一校验 + 提取 `MAX_PAGE_SIZE` 常量 | `contracts` + 4 个路由 | 5.1 |
+
+### P1 规范统一
+
+| # | 状态 | 任务 | 文件:行 | 来源发现 |
+|---|:--:|------|---------|:--:|
+| A1-1 | 🔲 | facade.ts 错误响应补 `success: false`（统一 ApiResponse 契约） | `lib/auth/facade.ts:56-59,64-67,78-81` | 2.1 |
+| A1-2 | 🔲 | register 路由成功响应用 `data` 替代 `stats` | `api/permissions/register/route.ts:178` | 2.1 |
+| A1-3 | 🔲 | `LOG_LEVEL` 生效 + 全量日志结构化 | `packages/config/src/env.ts:39` + Portal 全局 | 10.1, 10.2 |
+| A1-4 | 🔲 | 管理员角色硬编码改为引用 `ADMIN_ROLE_CODES` | `app/profile/ProfileClient.tsx:270` | 11.1 |
+
+### P2 公共抽取
+
+| # | 状态 | 任务 | 文件 | 来源发现 |
+|---|:--:|------|------|:--:|
+| A2-1 | 🔲 | 审计日志写入抽取公共工厂（消除 3 次重复） | `lib/audit.ts` | 7.2 |
+| A2-2 | 🔲 | 分页参数解析工具 `parsePagination()` | 新建 `lib/pagination.ts` | 14.5 |
+| A2-3 | 🔲 | 日期范围过滤条件构建工具 | `app/audit/data.ts` | 14.2 |
+| A2-4 | 🔲 | 密钥导入模式去重（`importJwk`） | `lib/auth/token.ts` | 3.4 |
+
+### P3 架构优化
+
+| # | 状态 | 任务 | 文件（实测行数） | 来源发现 |
+|---|:--:|------|------|:--:|
+| A3-1 | 🔲 | 拆分 token.ts（584 行 → sign/keys/rotate/revoke 四模块） | `lib/auth/token.ts` | 3.1 |
+| A3-2 | 🔲 | 分离 gateway.rs 的 OAuth client 逻辑（853 行） | `gateway/src/gateway.rs` | 3.2 |
+| A3-3 | 🔲 | facade.ts 解耦 NextResponse（业务层返回结果对象） | `lib/auth/facade.ts` | 3.5 |
+| A3-4 | 🔲 | 健康检查加 DB/Redis 连通性探测 | `api/health/route.ts` | 10.3 |
+
+### P4 质量防护
+
+| # | 状态 | 任务 | 文件 | 来源发现 |
+|---|:--:|------|------|:--:|
+| A4-1 | 🔲 | 重写虚假覆盖率测试（audit-logging、user-actions 等） | `__tests__/api/*` | 12.1-12.3 |
+| A4-2 | 🔲 | 补充 CRUD write 路径集成测试 | `tests/integration/` | 12.6 |
+| A4-3 | 🔲 | auth-login 测试降低 mock 粒度，真实测密码验证 | `__tests__/api/auth-login.test.ts` | 12.4 |
+| A4-4 | 🔲 | session-lifecycle 测试恢复 jose 真实验签 | `__tests__/api/session-lifecycle.test.ts` | 12.5 |
+
+### P5 细节清洁
+
+| # | 状态 | 任务 | 文件 | 来源发现 |
+|---|:--:|------|------|:--:|
+| A5-1 | 🔲 | Dockerfile 层缓存优化（先 COPY lockfile 后 install） | `apps/portal/Dockerfile` | 13.3 |
+| A5-2 | 🔲 | 恢复 tsconfig 3 个 strict 子选项 | `apps/portal/tsconfig.json:14-16` | 13.4 |
+| A5-3 | 🔲 | PortalJwtClaims 跨语言契约（JSON Schema 权威定义） | `domain/auth/types.ts` + `gateway/auth/mod.rs` | 7.5 |
+| A5-4 | 🔲 | trace-id 跨服务传播 | `lib/auth/server-logger.ts` | 10.4 |
+| A5-5 | 🔲 | Cookie Secure 增加独立配置（非仅依赖 NODE_ENV） | `lib/session/cookies.ts` | 9.3 |
+| A5-6 | 🔲 | 文档版本号统一 | `docs/spec/API.md` 等 | 2.4 |
+
+### 状态图例
+
+- 🔲 待处理 ｜ ⏳ 进行中 ｜ ✅ 已完成 ｜ ⚠️ 有阻塞

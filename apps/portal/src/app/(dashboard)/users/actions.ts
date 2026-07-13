@@ -31,7 +31,7 @@ import {
   type CreateUserInput,
 } from '@/domain/user/types';
 import { validatePassword } from '@/domain/shared/zod-schemas';
-import { EntityNotFoundError, DuplicateEntityError, ForbiddenError } from '@/domain/shared/errors';
+import { EntityNotFoundError, DuplicateEntityError, ForbiddenError, BusinessRuleViolationError } from '@/domain/shared/errors';
 import { generateUUID } from '@/lib/crypto';
 import { hashPassword, isPasswordReused, pushPasswordHistory } from '@/domain/auth/password';
 import { refreshUserPermissionCache } from '@/lib/permissions';
@@ -58,7 +58,7 @@ export const createUserAction = withAuth(
     const rawInput = secondArg !== undefined ? Object.fromEntries(secondArg) : firstArg;
     const parsed = CreateUserInputSchema.safeParse(rawInput);
     if (!parsed.success) {
-      return { success: false, error: 'VALIDATION_ERROR', message: parsed.error.issues[0].message };
+      return { success: false, error: 'VALIDATION_ERROR', message: parsed.error.issues[0]!.message };
     }
 
     // 数据范围校验：目标部门必须在操作者可访问范围内（R7 / H-ACL-002）
@@ -99,7 +99,7 @@ export const toggleUserStatusAction = withAuth(
   async (ctx: AuthContext, userIdStr: string): Promise<ApiResponse<{ status: string }>> => {
     const parsed = UserIdentityInputSchema.safeParse({ id: userIdStr });
     if (!parsed.success) {
-      return { success: false, error: 'VALIDATION_ERROR', message: parsed.error.issues[0].message };
+      return { success: false, error: 'VALIDATION_ERROR', message: parsed.error.issues[0]!.message };
     }
 
     // 读取 + 更新在事务中原子完成（R22）
@@ -139,7 +139,7 @@ export const unlockUserAction = withAuth(
   async (ctx: AuthContext, userIdStr: string): Promise<ApiResponse<{ status: string }>> => {
     const parsed = UserIdentityInputSchema.safeParse({ id: userIdStr });
     if (!parsed.success) {
-      return { success: false, error: 'VALIDATION_ERROR', message: parsed.error.issues[0].message };
+      return { success: false, error: 'VALIDATION_ERROR', message: parsed.error.issues[0]!.message };
     }
 
     const updated = await db.transaction(async (tx) => {
@@ -176,7 +176,7 @@ export const updateUserAction = withAuth(
   ): Promise<ApiResponse<{ id: string }>> => {
     const parsed = UpdateUserInputSchema.safeParse({ id: userIdStr, ...input });
     if (!parsed.success) {
-      return { success: false, error: 'VALIDATION_ERROR', message: parsed.error.issues[0].message };
+      return { success: false, error: 'VALIDATION_ERROR', message: parsed.error.issues[0]!.message };
     }
 
     let deptIdChanged = false;
@@ -213,7 +213,7 @@ export const deleteUserAction = withAuth(
   async (ctx: AuthContext, userIdStr: string): Promise<ApiResponse<{ id: string }>> => {
     const parsed = UserIdentityInputSchema.safeParse({ id: userIdStr });
     if (!parsed.success) {
-      return { success: false, error: 'VALIDATION_ERROR', message: parsed.error.issues[0].message };
+      return { success: false, error: 'VALIDATION_ERROR', message: parsed.error.issues[0]!.message };
     }
 
     // 读取 + 更新在事务中原子完成（R22）；领域纯函数执行删除规则校验
@@ -250,7 +250,7 @@ export const resetPasswordAction = withAuth(
   async (ctx: AuthContext, userIdStr: string, newPassword: string): Promise<ApiResponse<{ id: string }>> => {
     const parsed = UserIdentityInputSchema.safeParse({ id: userIdStr });
     if (!parsed.success) {
-      return { success: false, error: 'VALIDATION_ERROR', message: parsed.error.issues[0].message };
+      return { success: false, error: 'VALIDATION_ERROR', message: parsed.error.issues[0]!.message };
     }
     if (!newPassword) {
       return { success: false, error: 'VALIDATION_ERROR', message: '密码不能为空' };
@@ -269,7 +269,8 @@ export const resetPasswordAction = withAuth(
 
       // NFR-SEC-15: 禁止重用最近 5 次密码
       if (await isPasswordReused(newPassword, row.passwordHistory ?? null)) {
-        throw new Error('新密码不能与该用户最近使用过的密码相同');
+        // 使用 BusinessRuleViolationError 而非原生 Error，确保 mapDomainError 能正确映射错误码
+        throw new BusinessRuleViolationError('新密码不能与该用户最近使用过的密码相同');
       }
 
       const newHistory = pushPasswordHistory(row.passwordHistory ?? null, row.passwordHash ?? '');

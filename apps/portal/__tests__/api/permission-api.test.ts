@@ -209,10 +209,10 @@ describe('Permission API', () => {
     });
 
     it('支持 type 过滤', async () => {
-      mocks.setQueryResult([makePermissionRow({ code: 'role:list', type: 'MENU' })]);
-      const body = await parseResponseJson(await ListPermissions(createTestRequest('/api/permissions', { searchParams: { type: 'MENU' } })));
+      mocks.setQueryResult([makePermissionRow({ code: 'role:list', type: 'API' })]);
+      const body = await parseResponseJson(await ListPermissions(createTestRequest('/api/permissions', { searchParams: { type: 'API' } })));
       expect(body.data).toHaveLength(1);
-      expect(body.data[0].type).toBe('MENU');
+      expect(body.data[0].type).toBe('API');
     });
 
     it('空列表返回空数组', async () => {
@@ -298,10 +298,10 @@ describe('Permission API', () => {
       ])));
 
       expect(body.success).toBe(true);
-      expect(body.stats).toBeDefined();
-      expect(body.stats.inserted).toBe(4);
-      expect(body.stats.updated).toBe(0);
-      expect(body.stats.deprecated).toBe(0);
+      expect(body.data).toBeDefined();
+      expect(body.data.inserted).toBe(4);
+      expect(body.data.updated).toBe(0);
+      expect(body.data.deprecated).toBe(0);
     });
 
     it('两阶段事务：新权限插入 + 旧权限软删除', async () => {
@@ -320,11 +320,11 @@ describe('Permission API', () => {
       ])));
 
       expect(body.success).toBe(true);
-      expect(body.stats.inserted).toBe(0);
+      expect(body.data.inserted).toBe(0);
       // role:list 不包含在传入树中且 status=ACTIVE -> deprecated
-      expect(body.stats.deprecated).toBeGreaterThanOrEqual(1);
+      expect(body.data.deprecated).toBeGreaterThanOrEqual(1);
       // user:list 已存在且 name 变更 -> updated
-      expect(body.stats.updated).toBeGreaterThanOrEqual(1);
+      expect(body.data.updated).toBeGreaterThanOrEqual(1);
     });
 
     it('全局 code 冲突（被其他 client 占用）返回 409 + 前缀建议', async () => {

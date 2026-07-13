@@ -101,9 +101,11 @@ export async function POST(request: NextRequest) {
       );
 
       // 主动写 Redis 权限缓存，TTL 与 Token 对齐，后续请求零 DB 查询
-      cacheUserPermissionContext(authCode.userId, permCtx, ACCESS_TOKEN_TTL).catch((e) =>
-        console.error('[Token] 写权限缓存失败:', e),
-      );
+      try {
+        await cacheUserPermissionContext(authCode.userId, permCtx, ACCESS_TOKEN_TTL);
+      } catch (e) {
+        console.error('[Token] 写权限缓存失败:', e);
+      }
 
       // 签发 Refresh Token
       const newRefreshToken = await issueRefreshToken(authCode.userId, client_id, authCode.scope);
@@ -163,7 +165,7 @@ export async function POST(request: NextRequest) {
     } else if (
       mapped.error === AUTH_ERRORS.INVALID_CODE ||
       mapped.error === AUTH_ERRORS.PKCE_VERIFICATION_FAILED ||
-      mapped.error === AUTH_ERRORS.INVALID_REDIRECT_URI
+      mapped.error === AUTH_ERRORS.OAUTH_INVALID_REDIRECT_URI
     ) {
       oauthError = 'invalid_grant';
     } else if (mapped.error === AUTH_ERRORS.UNSUPPORTED_GRANT_TYPE) {

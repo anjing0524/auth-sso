@@ -88,6 +88,9 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    // RFC 7662 §2.2: token 不可识别时返回 { active: false }，不得返回错误
+    return NextResponse.json({ active: false });
+
   } catch (err) {
     // RFC 7662: 异常时仍返回 { active: false }，但进行日志输出，避免堆栈丢失
     const mapped = mapDomainError(err);

@@ -81,6 +81,9 @@ export const COOKIE_NAMES = {
   RETURN_TO: 'return_to',
 } as const;
 
+/** 列表分页最大 pageSize，Controller 层统一引用（防资源耗尽） */
+export const MAX_PAGE_SIZE = 100;
+
 // Gateway 注入的请求头名称
 export const GATEWAY_HEADERS = {
   /** Gateway 验签后注入的用户 ID header（Portal 信任路径免验签） */
