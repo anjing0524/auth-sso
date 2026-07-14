@@ -25,7 +25,7 @@ export async function GET(_request: NextRequest) {
     const identity = await resolveIdentity();
     if (!identity) {
       return NextResponse.json(
-        { error: COMMON_ERRORS.UNAUTHORIZED, message: '未登录' },
+        { success: false, error: COMMON_ERRORS.UNAUTHORIZED, message: '未登录' },
         { status: 401 },
       );
     }
@@ -40,7 +40,7 @@ export async function GET(_request: NextRequest) {
     const user = await getUser(userId);
     if (!user) {
       return NextResponse.json(
-        { error: COMMON_ERRORS.UNAUTHORIZED, message: '用户不存在' },
+        { success: false, error: COMMON_ERRORS.UNAUTHORIZED, message: '用户不存在' },
         { status: 401 },
       );
     }
@@ -66,7 +66,7 @@ export async function GET(_request: NextRequest) {
   } catch (err) {
     const mapped = mapDomainError(err);
     return NextResponse.json(
-      { error: mapped.error, message: mapped.message },
+      { success: false, error: mapped.error, message: mapped.message },
       { status: mapped.status },
     );
   }

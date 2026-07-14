@@ -16,6 +16,9 @@ import { eq } from 'drizzle-orm';
 import { hashToken } from '@/lib/crypto';
 import { decodeJwtPayload } from './jwt';
 import { REDIS_KEY_PREFIX } from '@auth-sso/contracts';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('Session');
 
 const JTI_BLOCKLIST_PREFIX = REDIS_KEY_PREFIX.JTI_BLOCKLIST;
 const USER_JTI_PREFIX = REDIS_KEY_PREFIX.USER_JTI;
@@ -31,7 +34,7 @@ export async function revokeJti(jti: string, tokenExp: number): Promise<void> {
     const ttl = Math.max(tokenExp - Math.floor(Date.now() / 1000), 1);
     await redis.setex(`${JTI_BLOCKLIST_PREFIX}${jti}`, ttl, '1');
   } catch (error) {
-    console.error('[Session] 写入 jti 黑名单失败:', error);
+    log.error('写入 jti 黑名单失败', { error: (error as Error).message });
   }
 }
 
@@ -45,7 +48,7 @@ export async function isJtiRevoked(jti: string): Promise<boolean> {
     const result = await redis.exists(`${JTI_BLOCKLIST_PREFIX}${jti}`);
     return result === 1;
   } catch (error) {
-    console.error('[Session] 查询 jti 黑名单失败:', error);
+    log.error('查询 jti 黑名单失败', { error: (error as Error).message });
     return false;
   }
 }
@@ -70,7 +73,7 @@ export async function trackUserJti(userId: string, jti: string, ttl: number): Pr
     await redis.hset(key, jti, String(exp));
     await redis.expire(key, Math.max(ttl, 1));
   } catch (error) {
-    console.error('[Session] 写入 user→jti 映射失败:', error);
+    log.error('写入 user→jti 映射失败', { error: (error as Error).message });
   }
 }
 
@@ -113,12 +116,12 @@ export async function revokeUserAccessByUserId(userId: string): Promise<number> 
     try {
       await db.delete(schema.accessTokens).where(eq(schema.accessTokens.userId, userId));
     } catch (e) {
-      console.error('[Session] 删除用户 access_tokens 失败:', e);
+      log.error('删除用户 access_tokens 失败', { error: (e as Error).message });
     }
 
     return entries.length;
   } catch (error) {
-    console.error('[Session] 按用户 ID 撤销 JTI 失败:', error);
+    log.error('按用户 ID 撤销 JTI 失败', { error: (error as Error).message });
     return 0;
   }
 }
@@ -137,9 +140,9 @@ export async function revokeUsersAccessByUserId(userIds: string[]): Promise<void
   const results = await Promise.allSettled(userIds.map((id) => revokeUserAccessByUserId(id)));
   const failed = results.filter((r) => r.status === 'rejected').length;
   if (failed > 0) {
-    console.warn(`[Session] Batch revoke for ${userIds.length} users, ${failed} failed`);
+    log.warn(`批量撤销 ${userIds.length} 个用户，${failed} 个失败`);
   } else {
-    console.log(`[Session] Batch revoked access for ${userIds.length} users`);
+    log.info(`批量撤销 ${userIds.length} 个用户成功`);
   }
 }
 
@@ -156,7 +159,7 @@ export async function revokeUserToken(accessToken: string): Promise<void> {
   try {
     await db.delete(schema.accessTokens).where(eq(schema.accessTokens.tokenHash, hashToken(accessToken)));
   } catch (e) {
-    console.error('[Session] 删除 access_tokens 失败:', e);
+    log.error('删除 access_tokens 失败', { error: (e as Error).message });
   }
 }
 

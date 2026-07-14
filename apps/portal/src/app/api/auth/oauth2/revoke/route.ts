@@ -12,8 +12,11 @@ import { db, schema } from '@/infrastructure/db';
 import { eq } from 'drizzle-orm';
 import { hashToken } from '@/lib/crypto';
 import { mapDomainError } from '@/domain/shared/error-mapping';
-import { validateClientActive, validateClientSecret } from '@/domain/auth/oauth-client';
 import { parseOAuthBody } from '@/lib/auth/oauth-body';
+import { authenticateOAuthClient } from '@/lib/auth/oauth-helpers';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('Revoke');
 
 
 export async function POST(request: NextRequest) {
@@ -31,10 +34,8 @@ export async function POST(request: NextRequest) {
         { status: 401 },
       );
     }
-    const clientRows = await db.select().from(schema.clients).where(eq(schema.clients.clientId, clientId)).limit(1);
     try {
-      validateClientActive(clientRows[0]);
-      validateClientSecret(clientRows[0]!, clientSecret);
+      await authenticateOAuthClient(clientId, clientSecret);
     } catch {
       return NextResponse.json(
         { error: 'invalid_client', error_description: '客户端凭证无效' },
@@ -58,7 +59,7 @@ export async function POST(request: NextRequest) {
         try {
           await db.delete(schema.accessTokens).where(eq(schema.accessTokens.tokenHash, hashToken(token)));
         } catch (e) {
-          console.error('[Revoke] 删除 access_tokens 失败:', e);
+          log.error('删除 access_tokens 失败', { error: (e as Error).message });
         }
       }
     }
@@ -76,13 +77,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({});
 
   } catch (err) {
-    // RFC 7009: 异常时仍返回 200，但进行日志输出，避免堆栈丢失
+    // RFC 7009: 异常时仍返回 200，结构化日志记录不含堆栈（防信息泄露）
     const mapped = mapDomainError(err);
-    console.error('[OAuth2 Revoke] Exception details:', {
-      error: mapped.error,
-      message: mapped.message,
-      stack: err instanceof Error ? err.stack : String(err),
-    });
+    log.error('Exception', { error: mapped.error, message: mapped.message });
     return NextResponse.json({});
   }
 }

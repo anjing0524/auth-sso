@@ -36,8 +36,12 @@ import { generateUUID } from '@/lib/crypto';
 import { hashPassword, isPasswordReused, pushPasswordHistory } from '@/domain/auth/password';
 import { refreshUserPermissionCache } from '@/lib/permissions';
 import { revokeUserAccessByUserId } from '@/lib/session/revoke';
+import { resetBruteForceCounter } from '@/domain/auth/brute-force';
 import { canAccessDept } from '@/lib/auth';
-import { USER_ACTIVE } from '@auth-sso/contracts';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('UsersAction');
+import { COMMON_ERRORS, USER_ACTIVE } from '@auth-sso/contracts';
 import type { ApiResponse } from '@auth-sso/contracts';
 
 /**
@@ -58,7 +62,7 @@ export const createUserAction = withAuth(
     const rawInput = secondArg !== undefined ? Object.fromEntries(secondArg) : firstArg;
     const parsed = CreateUserInputSchema.safeParse(rawInput);
     if (!parsed.success) {
-      return { success: false, error: 'VALIDATION_ERROR', message: parsed.error.issues[0]!.message };
+      return { success: false, error: COMMON_ERRORS.VALIDATION_ERROR, message: parsed.error.issues[0]!.message };
     }
 
     // 数据范围校验：目标部门必须在操作者可访问范围内（R7 / H-ACL-002）
@@ -99,7 +103,7 @@ export const toggleUserStatusAction = withAuth(
   async (ctx: AuthContext, userIdStr: string): Promise<ApiResponse<{ status: string }>> => {
     const parsed = UserIdentityInputSchema.safeParse({ id: userIdStr });
     if (!parsed.success) {
-      return { success: false, error: 'VALIDATION_ERROR', message: parsed.error.issues[0]!.message };
+      return { success: false, error: COMMON_ERRORS.VALIDATION_ERROR, message: parsed.error.issues[0]!.message };
     }
 
     // 读取 + 更新在事务中原子完成（R22）
@@ -121,7 +125,7 @@ export const toggleUserStatusAction = withAuth(
     try {
       await revokeUserAccessByUserId(parsed.data.id);
     } catch (e) {
-      console.error('[Users Action] 撤销用户 JWT 失败:', e);
+      log.error('撤销用户 JWT 失败', { error: (e as Error).message });
     }
 
     revalidatePath('/users');
@@ -142,7 +146,7 @@ export const unlockUserAction = withAuth(
   async (ctx: AuthContext, userIdStr: string): Promise<ApiResponse<{ status: string }>> => {
     const parsed = UserIdentityInputSchema.safeParse({ id: userIdStr });
     if (!parsed.success) {
-      return { success: false, error: 'VALIDATION_ERROR', message: parsed.error.issues[0]!.message };
+      return { success: false, error: COMMON_ERRORS.VALIDATION_ERROR, message: parsed.error.issues[0]!.message };
     }
 
     const updated = await db.transaction(async (tx) => {
@@ -159,6 +163,14 @@ export const unlockUserAction = withAuth(
 
     revalidatePath('/users');
     updateTag('users-list');
+
+    // 清除暴力破解 Redis 计数器（管理员解锁需同步清除，否则窗口期内仍被锁定）
+    try {
+      await resetBruteForceCounter(parsed.data.id);
+    } catch {
+      // 清除失败不阻塞解锁操作
+    }
+
     return {
       success: true,
       data: { status: updated.status },
@@ -179,7 +191,7 @@ export const updateUserAction = withAuth(
   ): Promise<ApiResponse<{ id: string }>> => {
     const parsed = UpdateUserInputSchema.safeParse({ id: userIdStr, ...input });
     if (!parsed.success) {
-      return { success: false, error: 'VALIDATION_ERROR', message: parsed.error.issues[0]!.message };
+      return { success: false, error: COMMON_ERRORS.VALIDATION_ERROR, message: parsed.error.issues[0]!.message };
     }
 
     let deptIdChanged = false;
@@ -216,7 +228,7 @@ export const deleteUserAction = withAuth(
   async (ctx: AuthContext, userIdStr: string): Promise<ApiResponse<{ id: string }>> => {
     const parsed = UserIdentityInputSchema.safeParse({ id: userIdStr });
     if (!parsed.success) {
-      return { success: false, error: 'VALIDATION_ERROR', message: parsed.error.issues[0]!.message };
+      return { success: false, error: COMMON_ERRORS.VALIDATION_ERROR, message: parsed.error.issues[0]!.message };
     }
 
     // 读取 + 更新在事务中原子完成（R22）；领域纯函数执行删除规则校验
@@ -236,7 +248,7 @@ export const deleteUserAction = withAuth(
     try {
       await revokeUserAccessByUserId(parsed.data.id);
     } catch (e) {
-      console.error('[Users Action] 撤销已删除用户 JWT 失败:', e);
+      log.error('撤销已删除用户 JWT 失败', { error: (e as Error).message });
     }
 
     await refreshUserPermissionCache(parsed.data.id);
@@ -256,14 +268,14 @@ export const resetPasswordAction = withAuth(
   async (ctx: AuthContext, userIdStr: string, newPassword: string): Promise<ApiResponse<{ id: string }>> => {
     const parsed = UserIdentityInputSchema.safeParse({ id: userIdStr });
     if (!parsed.success) {
-      return { success: false, error: 'VALIDATION_ERROR', message: parsed.error.issues[0]!.message };
+      return { success: false, error: COMMON_ERRORS.VALIDATION_ERROR, message: parsed.error.issues[0]!.message };
     }
     if (!newPassword) {
-      return { success: false, error: 'VALIDATION_ERROR', message: '密码不能为空' };
+      return { success: false, error: COMMON_ERRORS.VALIDATION_ERROR, message: '密码不能为空' };
     }
     const passwordError = validatePassword(newPassword);
     if (passwordError) {
-      return { success: false, error: 'VALIDATION_ERROR', message: passwordError };
+      return { success: false, error: COMMON_ERRORS.VALIDATION_ERROR, message: passwordError };
     }
 
     const passwordHash = await hashPassword(newPassword);
@@ -290,7 +302,7 @@ export const resetPasswordAction = withAuth(
     try {
       await revokeUserAccessByUserId(parsed.data.id);
     } catch (e) {
-      console.error('[Users Action] 重置密码后撤销 JWT 失败:', e);
+      log.error('重置密码后撤销 JWT 失败', { error: (e as Error).message });
     }
 
     revalidatePath('/users');

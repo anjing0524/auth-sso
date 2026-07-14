@@ -7,6 +7,8 @@ use std::sync::OnceLock;
 use std::time::Duration;
 use tracing::{error, info};
 
+use crate::config::RedisConfig;
+
 /// bb8 异步 Redis 连接池类型别名 — 全局共享复用
 pub type RedisPool = bb8::Pool<bb8_redis::RedisConnectionManager>;
 
@@ -18,16 +20,22 @@ static POOL: OnceLock<RedisPool> = OnceLock::new();
 /// 使用 `build()` 真正建立 Redis 连接（而非 `build_unchecked` 的空壳），
 /// 在 `connection_timeout` 内连不上则直接失败。由 [`RedisInitService`] 在
 /// Pingora Service 生命周期中调用，调用方负责 fail-fast。
-async fn init_async(url: &str) -> anyhow::Result<()> {
-    info!("🔄 正在异步初始化 bb8 Redis 连接池 (url={})", url);
-    let manager = bb8_redis::RedisConnectionManager::new(url).context("Redis URL 解析失败")?;
+async fn init_async(cfg: &RedisConfig) -> anyhow::Result<()> {
+    // 日志中仅输出主机信息，避免凭据泄漏
+    let masked_url = cfg.url.split('@').next_back().unwrap_or("localhost");
+    info!(
+        "🔄 正在异步初始化 bb8 Redis 连接池 (host={}, max_size={})",
+        masked_url, cfg.pool_max_size
+    );
+    let manager =
+        bb8_redis::RedisConnectionManager::new(cfg.url.as_str()).context("Redis URL 解析失败")?;
 
     let pool = bb8::Pool::builder()
-        .max_size(16)
-        .min_idle(Some(4))
-        .max_lifetime(Some(Duration::from_secs(1800)))
-        .idle_timeout(Some(Duration::from_secs(300)))
-        .connection_timeout(Duration::from_secs(3))
+        .max_size(cfg.pool_max_size)
+        .min_idle(Some(cfg.pool_min_idle))
+        .max_lifetime(Some(Duration::from_secs(cfg.pool_max_lifetime_sec)))
+        .idle_timeout(Some(Duration::from_secs(cfg.pool_idle_timeout_sec)))
+        .connection_timeout(Duration::from_secs(cfg.pool_connection_timeout_sec))
         .build(manager)
         .await
         .context("Redis 连接池 build 失败，无法连接到 Redis")?;
@@ -63,22 +71,37 @@ async fn get_conn() -> Option<bb8::PooledConnection<'static, bb8_redis::RedisCon
         .ok()
 }
 
-/// 检查 key 是否存在于 Redis（EXISTS 命令）
+/// 检查 key 是否存在于 Redis（EXISTS 命令），fail-open：Redis 不可用时返回 false
+///
+/// 与其他 Redis 辅助函数（`get`/`set_nx_ex`）保持一致的 fail-open 语义：
+/// Redis 不可用时降级放行，避免全站拒绝。
 ///
 /// # Examples
 ///
 /// ```ignore
-/// let found = redis::exists("portal:jti_blocklist:some-jti").await?;
+/// if redis::exists("portal:jti_blocklist:some-jti").await {
+///     // key 存在（Redis 可用时）
+/// }
 /// ```
-pub async fn exists(key: &str) -> anyhow::Result<bool> {
-    let pool = pool().context("Redis 连接池未就绪")?;
-    let mut conn = pool.get().await.context("Redis 连接获取失败")?;
-    let count: i32 = redis::cmd("EXISTS")
+pub async fn exists(key: &str) -> bool {
+    let mut conn = match get_conn().await {
+        Some(c) => c,
+        None => {
+            tracing::warn!("Redis EXISTS 降级返回 false（连接池未就绪）");
+            return false;
+        }
+    };
+    match redis::cmd("EXISTS")
         .arg(key)
-        .query_async(&mut *conn)
+        .query_async::<i32>(&mut *conn)
         .await
-        .context("Redis EXISTS 命令执行失败")?;
-    Ok(count > 0)
+    {
+        Ok(count) => count > 0,
+        Err(e) => {
+            tracing::warn!("Redis EXISTS 异常: {:?}，降级返回 false", e);
+            false
+        }
+    }
 }
 
 /// 从 Redis 获取一个字符串值（GET 命令），fail-open 返回 None
@@ -126,12 +149,12 @@ pub async fn set_nx_ex(key: &str, value: &str, ttl_secs: u64) {
 /// 不会接收流量。初始化失败直接 `process::exit(1)`，阻止网关带错上线。
 #[derive(Debug)]
 pub struct RedisInitService {
-    url: String,
+    config: RedisConfig,
 }
 
 impl RedisInitService {
-    pub fn new(url: String) -> Self {
-        Self { url }
+    pub fn new(config: RedisConfig) -> Self {
+        Self { config }
     }
 }
 
@@ -142,7 +165,7 @@ impl BackgroundService for RedisInitService {
         _shutdown: ShutdownWatch,
         ready_notifier: ServiceReadyNotifier,
     ) {
-        if let Err(e) = init_async(&self.url).await {
+        if let Err(e) = init_async(&self.config).await {
             error!("❌ Redis 初始化失败，终止启动: {:?}", e);
             std::process::exit(1);
         }

@@ -24,15 +24,13 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '>=26'
-          cache: 'pnpm'
+          node-version: "26"
+          cache: "pnpm"
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Run dependency audit
-        # 检查已知 CVE。首次引入用 continue-on-error 观察基线，待基线清零后移除该软策略。
-        continue-on-error: true
         run: pnpm audit --prod --audit-level=high
 
       - name: Run lint
@@ -48,7 +46,7 @@ jobs:
         run: pnpm test:components
 
   gateway-audit:
-    name: Gateway Cargo Audit
+    name: Gateway Checks (clippy + fmt + test + audit)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -59,6 +57,8 @@ jobs:
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
 
       - name: Cache cargo registry
         uses: actions/cache@v4
@@ -67,12 +67,19 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             apps/gateway/target
-          key: cargo-audit-${{ runner.os }}-${{ hashFiles('apps/gateway/Cargo.lock') }}
+          key: cargo-${{ runner.os }}-${{ hashFiles('apps/gateway/Cargo.lock') }}
+
+      - name: Run cargo fmt --check
+        run: cargo fmt --all -- --check
+
+      - name: Run cargo clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: Run cargo test
+        run: cargo test
 
       - name: Install cargo-audit
         run: cargo install cargo-audit --locked
 
       - name: Run cargo audit
-        # 检查已知 CVE。首次引入用 continue-on-error 观察基线，待基线清零后移除。
-        continue-on-error: true
         run: cargo audit

@@ -105,6 +105,7 @@ export async function getUserProfile(userId: string) {
     .select({
       id: schema.users.id,
       name: schema.users.name,
+      username: schema.users.username,
       email: schema.users.email,
       emailVerified: schema.users.emailVerified,
       avatarUrl: schema.users.avatarUrl,

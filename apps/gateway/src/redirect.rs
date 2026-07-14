@@ -71,7 +71,10 @@ impl ProxyHttp for RedirectService {
     }
 
     async fn upstream_peer(&self, _session: &mut Session, _ctx: &mut ()) -> Result<Box<HttpPeer>> {
-        unreachable!()
+        Err(Error::explain(
+            ErrorType::HTTPStatus(500),
+            "RedirectService 不应处理 upstream 请求（配置错误）",
+        ))
     }
 }
 

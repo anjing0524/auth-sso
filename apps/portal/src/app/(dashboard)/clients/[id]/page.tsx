@@ -11,6 +11,9 @@ import { updateClientAction, rotateClientSecretAction, revokeClientTokensAction 
 import type { ClientDTO as Client, ClientTokenDTO as Token } from '../data';
 import { ClientInfoSection } from './components/ClientInfoSection';
 import { ClientTokensSection } from './components/ClientTokensSection';
+import { createClientLogger } from '@/lib/logger-client';
+
+const log = createClientLogger('ClientDetailPage');
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -53,7 +56,7 @@ export default function ClientDetailPage({ params }: PageProps) {
         });
       }
     } catch (error) {
-      console.error('Failed to fetch client:', error);
+      log.error('获取客户端信息失败', { error: (error as Error).message });
     } finally {
       setLoading(false);
     }
@@ -67,7 +70,7 @@ export default function ClientDetailPage({ params }: PageProps) {
         setTokens(data.data);
       }
     } catch (error) {
-      console.error('Failed to fetch tokens:', error);
+      log.error('获取 Token 列表失败', { error: (error as Error).message });
     }
   }, [id]);
 
@@ -96,7 +99,7 @@ export default function ClientDetailPage({ params }: PageProps) {
         alert(res.message || '保存失败');
       }
     } catch (error) {
-      console.error('Failed to save:', error);
+      log.error('保存客户端失败', { error: (error as Error).message });
       alert('保存失败');
     } finally {
       setSaving(false);
@@ -113,7 +116,7 @@ export default function ClientDetailPage({ params }: PageProps) {
         alert(res.message || '重新生成 Secret 失败');
       }
     } catch (error) {
-      console.error('Failed to regenerate secret:', error);
+      log.error('重新生成 Secret 失败', { error: (error as Error).message });
       alert('重新生成 Secret 失败');
     }
   };
@@ -129,7 +132,7 @@ export default function ClientDetailPage({ params }: PageProps) {
         alert(res.message || '撤销 Token 失败');
       }
     } catch (error) {
-      console.error('Failed to revoke tokens:', error);
+      log.error('撤销 Token 失败', { error: (error as Error).message });
     }
   };
 
@@ -228,7 +231,7 @@ export default function ClientDetailPage({ params }: PageProps) {
               if (res.success) fetchClient();
               else alert(res.message || '更新状态失败');
             } catch (error) {
-              console.error('Failed to toggle status:', error);
+              log.error('切换客户端状态失败', { error: (error as Error).message });
             }
           }}
           onCopy={copyToClipboard}

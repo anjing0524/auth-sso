@@ -21,7 +21,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const user = await getUser(id);
     if (!user) {
       return NextResponse.json(
-        { error: USER_ERRORS.USER_NOT_FOUND, message: '用户不存在' },
+        { success: false, error: USER_ERRORS.USER_NOT_FOUND, message: '用户不存在' },
         { status: 404 },
       );
     }
@@ -31,7 +31,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     // deptIds 来自 JWT claims（已含子树展开），无需额外 DB 查询。
     if (!canAccessDept(claims.deptIds, user.deptId)) {
       return NextResponse.json(
-        { error: COMMON_ERRORS.FORBIDDEN, message: '无权查看该用户' },
+        { success: false, error: COMMON_ERRORS.FORBIDDEN, message: '无权查看该用户' },
         { status: 403 },
       );
     }

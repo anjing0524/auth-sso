@@ -16,7 +16,7 @@ import { checkPermission, type PermissionCheckOptions } from './check-permission
 import { mapDomainError } from '@/domain/shared/error-mapping';
 import { writeAuditLog } from '@/lib/audit';
 import { headers } from 'next/headers';
-import type { AuditOperation, ApiResponse } from '@auth-sso/contracts';
+import { COMMON_ERRORS, type AuditOperation, type ApiResponse } from '@auth-sso/contracts';
 import type { PortalJwtClaims } from '../session';
 
 /**
@@ -60,12 +60,12 @@ export function withAuth<TArgs extends unknown[], TData>(
     try {
       const check = await checkPermission(options);
       if (!check.authorized || !check.userId) {
-        return { success: false, error: check.error || 'FORBIDDEN', message: check.error || '权限不足' };
+        return { success: false, error: check.error || COMMON_ERRORS.FORBIDDEN, message: check.error || '权限不足' };
       }
 
       // checkPermission 保证 authorized 为 true 时 claims 非空（与 withPermission 对齐的运行时兜底）
       if (!check.claims) {
-        return { success: false, error: 'INTERNAL_ERROR', message: '鉴权上下文缺失' };
+        return { success: false, error: COMMON_ERRORS.INTERNAL_ERROR, message: '鉴权上下文缺失' };
       }
 
       // 第二道：领域错误统一映射（mapDomainError 横切层）

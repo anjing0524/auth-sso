@@ -85,7 +85,11 @@ impl TokenRefresher {
         }
 
         for upstream in self.upstreams.iter() {
-            let fallback_url = format!("http://{}/api/auth/refresh", upstream);
+            let fallback_url = format!(
+                "{}://{}/api/auth/refresh",
+                crate::gateway::upstream_scheme(),
+                upstream
+            );
             if let Some(tokens) = self.try_endpoint(&fallback_url, refresh_token, sub).await {
                 self.set_dedup(sub).await;
                 return Some(tokens);

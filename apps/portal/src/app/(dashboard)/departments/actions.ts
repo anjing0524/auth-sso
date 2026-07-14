@@ -26,7 +26,7 @@ import {
 import { EntityNotFoundError, BusinessRuleViolationError, ForbiddenError } from '@/domain/shared/errors';
 import { generateUUID } from '@/lib/crypto';
 import { canAccessDept } from '@/lib/auth';
-import type { ApiResponse } from '@auth-sso/contracts';
+import { COMMON_ERRORS, type ApiResponse } from '@auth-sso/contracts';
 
 /**
  * 查询父级部门的 ancestors，用于计算新部门的物化路径
@@ -46,7 +46,7 @@ export const createDepartmentAction = withAuth(
   async (ctx: AuthContext, input: CreateDepartmentInput): Promise<ApiResponse<{ id: string }>> => {
     const parsed = CreateDepartmentInputSchema.safeParse(input);
     if (!parsed.success) {
-      return { success: false, error: 'VALIDATION_ERROR', message: parsed.error.issues[0]!.message };
+      return { success: false, error: COMMON_ERRORS.VALIDATION_ERROR, message: parsed.error.issues[0]!.message };
     }
 
     // 数据范围校验：父部门必须在操作者可访问范围内（顶级部门 parentId 为 null 时放行）
@@ -100,7 +100,7 @@ export const updateDepartmentAction = withAuth(
   async (ctx: AuthContext, deptId: string, input: Record<string, unknown>): Promise<ApiResponse<{ id: string }>> => {
     const parsed = UpdateDepartmentInputSchema.safeParse(input);
     if (!parsed.success) {
-      return { success: false, error: 'VALIDATION_ERROR', message: parsed.error.issues[0]!.message };
+      return { success: false, error: COMMON_ERRORS.VALIDATION_ERROR, message: parsed.error.issues[0]!.message };
     }
     await db.transaction(async (tx) => {
       // 数据范围校验：目标部门 + 拟变更父部门均在操作者可访问范围内

@@ -1,4 +1,4 @@
-import { AUTH_ERRORS } from '@auth-sso/contracts';
+import { AUTH_ERRORS, COMMON_ERRORS } from '@auth-sso/contracts';
 
 /**
  * 领域错误类型体系
@@ -17,28 +17,28 @@ export class DomainError extends Error {
 /** 实体未找到错误 */
 export class EntityNotFoundError extends DomainError {
   constructor(entity: string, id: string) {
-    super('ENTITY_NOT_FOUND', `${entity} [${id}] 不存在`);
+    super(COMMON_ERRORS.NOT_FOUND, `${entity} [${id}] 不存在`);
   }
 }
 
 /** 业务规则违反错误 */
 export class BusinessRuleViolationError extends DomainError {
   constructor(rule: string) {
-    super('BUSINESS_RULE_VIOLATION', rule);
+    super(COMMON_ERRORS.VALIDATION_ERROR, rule);
   }
 }
 
 /** 唯一性冲突错误 */
 export class DuplicateEntityError extends DomainError {
   constructor(entity: string, field: string) {
-    super('DUPLICATE_ENTITY', `${entity} 的 ${field} 已存在`);
+    super(COMMON_ERRORS.VALIDATION_ERROR, `${entity} 的 ${field} 已存在`);
   }
 }
 
 /** 无权限错误 */
 export class ForbiddenError extends DomainError {
   constructor(message: string = '超出数据权限范围') {
-    super('FORBIDDEN', message);
+    super(COMMON_ERRORS.FORBIDDEN, message);
   }
 }
 

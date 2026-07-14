@@ -15,6 +15,9 @@ import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { createClientLogger } from '@/lib/logger-client';
+
+const log = createClientLogger('LoginForm');
 
 interface LoginFormProps {
   /** authorize 端点下发的不透明会话 ID（OAuth 标准链路）；为空表示无 OAuth 上下文 */
@@ -76,7 +79,7 @@ export default function LoginForm({ sessionId, initialError }: LoginFormProps) {
       }
     } catch (err) {
       const error = err as Error;
-      console.error('[LoginForm] 登录失败:', error);
+      log.error('登录失败', { message: error.message });
       setError(error.message);
     } finally {
       setIsLoading(false);

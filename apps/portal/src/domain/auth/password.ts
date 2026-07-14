@@ -40,8 +40,13 @@ export async function verifyPassword(plaintext: string, hash: string): Promise<b
 
 // ── 密码历史（NFR-SEC-15）──────────────────────────────────────────────────
 
-/** 密码历史保留上限（禁止重用最近 N 次密码） */
-export const PASSWORD_HISTORY_MAX = 5;
+/** 密码历史保留上限（禁止重用最近 N 次密码），可通过 PASSWORD_HISTORY_MAX 环境变量覆盖 */
+export const PASSWORD_HISTORY_MAX = (() => {
+  const raw = process.env['PASSWORD_HISTORY_MAX'];
+  const parsed = raw ? parseInt(raw, 10) : 5;
+  if (isNaN(parsed) || parsed < 1) return 5;
+  return parsed;
+})();
 
 /**
  * 检查新密码是否与历史密码重复（NFR-SEC-15）

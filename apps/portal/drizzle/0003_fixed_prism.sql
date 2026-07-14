@@ -1,0 +1,2 @@
+CREATE INDEX "idx_refresh_tokens_expires" ON "refresh_tokens" USING btree ("expires_at");--> statement-breakpoint
+CREATE INDEX "idx_login_logs_user_event_created" ON "login_logs" USING btree ("user_id","event_type","created_at");

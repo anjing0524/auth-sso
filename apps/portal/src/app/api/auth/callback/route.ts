@@ -14,10 +14,13 @@
  * @route GET /api/auth/callback
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { getAppBaseURL, getEnvConfig } from '@/lib/env';
-import { COOKIE_NAMES, TOKEN_TTL } from '@auth-sso/contracts';
+import { getAppBaseURL, getEnvConfig, isCookieSecure } from '@/lib/env';
+import { COOKIE_NAMES, TOKEN_TTL, PORTAL_CLIENT_ID } from '@auth-sso/contracts';
 import { safeRedirectPath } from '@/lib/oauth-utils';
 import { decodeJwtPayload } from '@/lib/session/jwt';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('Callback');
 
 /** 构建登录页错误重定向 */
 function errorRedirect(publicBase: string, errorCode: string): NextResponse {
@@ -59,10 +62,14 @@ export async function GET(request: NextRequest) {
   const env = getEnvConfig();
   const portalClientSecret = env.PORTAL_CLIENT_SECRET;
   if (!portalClientSecret) {
-    console.error('[Callback] 缺少 PORTAL_CLIENT_SECRET 环境变量');
+    log.error('缺少 PORTAL_CLIENT_SECRET 环境变量');
     return errorRedirect(publicBase, 'token_exchange_failed');
   }
-  const internalBase = process.env['PORTAL_INTERNAL_URL'] || `http://127.0.0.1:${process.env['PORT'] || 4000}`;
+  // 内网 URL：优先环境变量（仅允许 localhost/127.0.0.1），否则使用默认值
+  const rawInternal = process.env['PORTAL_INTERNAL_URL'] || `http://127.0.0.1:${process.env['PORT'] || 4000}`;
+  const internalBase = rawInternal.startsWith('http://localhost') || rawInternal.startsWith('http://127.')
+    ? rawInternal
+    : `http://127.0.0.1:${process.env['PORT'] || 4000}`;
 
   // redirect_uri 必须与 authorize 请求一致（不附加动态参数）
   const redirectUri = new URL('/api/auth/callback', publicBase).toString();
@@ -75,7 +82,7 @@ export async function GET(request: NextRequest) {
       body: JSON.stringify({
         grant_type: 'authorization_code',
         code,
-        client_id: 'portal',
+        client_id: PORTAL_CLIENT_ID,
         client_secret: portalClientSecret,
         redirect_uri: redirectUri,
         code_verifier: codeVerifier,
@@ -83,7 +90,7 @@ export async function GET(request: NextRequest) {
     });
 
     if (!tokenRes.ok) {
-      console.error('[Callback] Token 交换失败:', await tokenRes.text());
+      log.error('Token 交换失败', { status: tokenRes.status });
       return errorRedirect(publicBase, 'token_exchange_failed');
     }
 
@@ -102,7 +109,7 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const secure = (process.env['NEXT_PUBLIC_APP_URL'] || '').startsWith('https://');
+    const secure = isCookieSecure();
     // 回跳路径从 return_to Cookie 取（不再复用 state），经同源消毒防开放重定向
     const targetUrl = safeRedirectPath(returnTo) || '/dashboard';
 
@@ -142,7 +149,7 @@ export async function GET(request: NextRequest) {
 
     return response;
   } catch (err) {
-    console.error('[Callback] Token 交换异常:', err);
+    log.error('Token 交换异常', { error: (err as Error).message });
     return errorRedirect(publicBase, 'token_exchange_failed');
   }
 }

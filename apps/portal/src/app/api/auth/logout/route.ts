@@ -18,6 +18,9 @@ import { getAppBaseURL } from '@/lib/env';
 import { db, schema } from '@/infrastructure/db';
 import { eq } from 'drizzle-orm';
 import { revokeJti, revokeUserAccessByUserId } from '@/lib/session/revoke';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('Logout');
 import { verifyAccessToken } from '@/lib/auth/token';
 import { decodeJwtPayload } from '@/lib/session/jwt';
 import { getRefreshTokenFromCookie } from '@/lib/session/cookies';
@@ -78,14 +81,14 @@ async function performRevocation(cookieStore: Awaited<ReturnType<typeof cookies>
           .set({ revoked: new Date() })
           .where(eq(schema.refreshTokens.userId, userId));
       } catch (e) {
-        console.error('[Logout API] 批量撤销 Refresh Token 失败:', e);
+        log.error('批量撤销 Refresh Token 失败', { error: (e as Error).message });
       }
 
       // 5. 批量撤销所有活跃 Access Token（jti 黑名单写入 + 清除 user→jti 映射）
       try {
         await revokeUserAccessByUserId(userId);
       } catch (e) {
-        console.error('[Logout API] 批量撤销 Access Token 失败:', e);
+        log.error('批量撤销 Access Token 失败', { error: (e as Error).message });
       }
     }
 
@@ -104,7 +107,7 @@ async function performRevocation(cookieStore: Awaited<ReturnType<typeof cookies>
     }
   } catch (err) {
     const mapped = mapDomainError(err);
-    console.error('[Logout API] 登出异常:', mapped.message, err instanceof Error ? err.stack : '');
+    log.error('登出异常', { error: mapped.error, message: mapped.message });
   }
   return { userId, username };
 }

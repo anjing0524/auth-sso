@@ -18,7 +18,7 @@ export async function GET(_request: NextRequest) {
     const identity = await resolveIdentity();
     if (!identity) {
       return NextResponse.json(
-        { error: COMMON_ERRORS.UNAUTHORIZED, message: '未登录' },
+        { success: false, error: COMMON_ERRORS.UNAUTHORIZED, message: '未登录' },
         { status: 401 },
       );
     }
@@ -26,7 +26,7 @@ export async function GET(_request: NextRequest) {
     const permissionContext = await getUserPermissionContext(identity.userId);
     if (!permissionContext) {
       return NextResponse.json(
-        { error: COMMON_ERRORS.INTERNAL_ERROR, message: '无法获取用户权限上下文' },
+        { success: false, error: COMMON_ERRORS.INTERNAL_ERROR, message: '无法获取用户权限上下文' },
         { status: 500 },
       );
     }
@@ -43,7 +43,7 @@ export async function GET(_request: NextRequest) {
   } catch (err) {
     const mapped = mapDomainError(err);
     return NextResponse.json(
-      { error: mapped.error, message: mapped.message },
+      { success: false, error: mapped.error, message: mapped.message },
       { status: mapped.status },
     );
   }

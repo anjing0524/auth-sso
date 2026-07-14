@@ -129,7 +129,6 @@ const e = process.env as Record<string, string | undefined>;
  */
 export function getAppBaseURL(): string {
   return (
-    e['BETTER_AUTH_URL'] ||
     e['NEXT_PUBLIC_APP_URL'] ||
     DEV_DEFAULT_BASE_URL
   ).trim().replace(/\/+$/, '');

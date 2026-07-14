@@ -41,9 +41,6 @@ pub enum VerifyError {
     /// JWT 的 `jti` 已被吊销（命中 Redis 黑名单）。
     #[error("jti 已被吊销: {0}")]
     RevokedJti(String),
-    /// JTI 校验服务异常（Redis 连接故障，fail-close）。
-    #[error("JTI 校验服务不可用: {0}")]
-    JtiServiceUnavailable(#[source] anyhow::Error),
 }
 
 /// JWT 离线密码学验签器。
@@ -105,27 +102,20 @@ impl JwtVerifier {
         })?;
         debug!("JWT 验签通过: sub={}, kid={}", token_data.claims.sub, kid);
 
-        // 4. jti 黑名单检查（Redis fail-close）
-        match self.check_jti(&token_data.claims.jti).await {
-            Ok(true) => {
-                warn!(
-                    "⚠️ 拒绝访问：JWT 的 jti 已被吊销: jti={}",
-                    token_data.claims.jti
-                );
-                crate::metrics::inc_jti_revoked();
-                return Err(VerifyError::RevokedJti(token_data.claims.jti.clone()));
-            }
-            Ok(false) => {}
-            Err(e) => {
-                tracing::error!("❌ Gateway 黑名单检查异常 (fail-close): {:?}", e);
-                return Err(VerifyError::JtiServiceUnavailable(e));
-            }
+        // 4. jti 黑名单检查（fail-open：Redis 不可用时放行）
+        if self.check_jti(&token_data.claims.jti).await {
+            warn!(
+                "⚠️ 拒绝访问：JWT 的 jti 已被吊销: jti={}",
+                token_data.claims.jti
+            );
+            crate::metrics::inc_jti_revoked();
+            return Err(VerifyError::RevokedJti(token_data.claims.jti.clone()));
         }
 
         // 5. 判定过期状态
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
+            .expect("系统时钟异常：当前时间早于 Unix epoch")
             .as_secs();
 
         let expiry = if token_data.claims.exp < now {
@@ -145,13 +135,8 @@ impl JwtVerifier {
         })
     }
 
-    #[cfg(test)]
-    async fn check_jti(&self, _jti: &str) -> anyhow::Result<bool> {
-        Ok(false)
-    }
-
-    #[cfg(not(test))]
-    async fn check_jti(&self, jti: &str) -> anyhow::Result<bool> {
+    /// 检查 jti 是否在黑名单中（fail-open：Redis 不可用时返回 false 放行请求）
+    async fn check_jti(&self, jti: &str) -> bool {
         let jti_key = format!("portal:jti_blocklist:{}", jti);
         crate::redis::exists(&jti_key).await
     }

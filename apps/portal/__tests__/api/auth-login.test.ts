@@ -5,6 +5,7 @@
  * @vitest-environment node
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { COMMON_ERRORS } from '@auth-sso/contracts';
 
 const holder = vi.hoisted<{
   mockSignLoginSession: ReturnType<typeof vi.fn>;
@@ -81,6 +82,8 @@ vi.mock('@/domain/shared/error-mapping', () => ({
 }));
 
 vi.mock('@auth-sso/contracts', () => ({
+  COMMON_ERRORS: { VALIDATION_ERROR: 'AUTH_SSO_1005', FORBIDDEN: 'AUTH_SSO_1003', INTERNAL_ERROR: 'AUTH_SSO_1006' },
+  AUTH_ERRORS: { ACCOUNT_LOCKED: 'AUTH_SSO_2004', INVALID_CREDENTIALS: 'AUTH_SSO_2002' },
   COOKIE_NAMES: { LOGIN_SESSION: 'login_session' },
 }));
 
@@ -115,7 +118,7 @@ describe('POST /api/auth/login', () => {
     const json = await res.json();
     expect(res.status).toBe(400);
     expect(json.success).toBe(false);
-    expect(json.error).toBe('VALIDATION_ERROR');
+    expect(json.error).toBe(COMMON_ERRORS.VALIDATION_ERROR);
     expect(json.message).toBeDefined();
   });
 

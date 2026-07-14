@@ -16,7 +16,10 @@ import { verifyPassword, hashPassword, isPasswordReused, pushPasswordHistory } f
 import { revokeUserAccessByUserId } from '@/lib/session/revoke';
 import { EntityNotFoundError } from '@/domain/shared/errors';
 import { PasswordSchema } from '@/domain/shared/zod-schemas';
-import type { ApiResponse } from '@auth-sso/contracts';
+import { COMMON_ERRORS, type ApiResponse } from '@auth-sso/contracts';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('ProfileAction');
 
 /**
  * 自助改资料入参校验 Schema
@@ -53,7 +56,7 @@ export const updateOwnProfileAction = withAuth(
   ): Promise<ApiResponse<{ id: string }>> => {
     const parsed = UpdateOwnProfileSchema.safeParse(input);
     if (!parsed.success) {
-      return { success: false, error: 'VALIDATION_ERROR', message: parsed.error.issues[0]!.message };
+      return { success: false, error: COMMON_ERRORS.VALIDATION_ERROR, message: parsed.error.issues[0]!.message };
     }
 
     // 用 ctx.userId 锁定目标，防止 IDOR
@@ -91,7 +94,7 @@ export const changeOwnPasswordAction = withAuth(
   ): Promise<ApiResponse<{ id: string }>> => {
     const parsed = ChangeOwnPasswordSchema.safeParse(input);
     if (!parsed.success) {
-      return { success: false, error: 'VALIDATION_ERROR', message: parsed.error.issues[0]!.message };
+      return { success: false, error: COMMON_ERRORS.VALIDATION_ERROR, message: parsed.error.issues[0]!.message };
     }
 
     // 用 ctx.userId 锁定目标，防止 IDOR
@@ -104,12 +107,12 @@ export const changeOwnPasswordAction = withAuth(
     // 验证旧密码
     const isValid = await verifyPassword(parsed.data.currentPassword, row.passwordHash ?? '');
     if (!isValid) {
-      return { success: false, error: 'VALIDATION_ERROR', message: '当前密码错误' };
+      return { success: false, error: COMMON_ERRORS.VALIDATION_ERROR, message: '当前密码错误' };
     }
 
     // NFR-SEC-15: 禁止重用最近 5 次密码
     if (await isPasswordReused(parsed.data.newPassword, row.passwordHistory ?? null)) {
-      return { success: false, error: 'VALIDATION_ERROR', message: '新密码不能与最近使用过的密码相同' };
+      return { success: false, error: COMMON_ERRORS.VALIDATION_ERROR, message: '新密码不能与最近使用过的密码相同' };
     }
 
     // 哈希新密码并更新（同时记录 passwordChangedAt + 推入密码历史）
@@ -125,7 +128,7 @@ export const changeOwnPasswordAction = withAuth(
     try {
       await revokeUserAccessByUserId(ctx.userId);
     } catch (e) {
-      console.error('[Profile Action] 改密后撤销会话失败:', e);
+      log.error('改密后撤销会话失败', { error: (e as Error).message });
     }
 
     return { success: true, data: { id: ctx.userId }, message: '密码已更新，请重新登录' };

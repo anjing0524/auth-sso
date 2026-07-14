@@ -59,6 +59,10 @@ export const REDIS_KEY_PREFIX = {
   USER_PERMS: 'portal:user_perms:',
   /** 授权请求参数暂存 Key 前缀 — authorize 未登录时存 OAuth params，登录后恢复（5min TTL） */
   AUTH_REQUEST: 'portal:auth_req:',
+  /** 续签去重 Key 前缀 — Gateway refresh 端点防并发重复续签 */
+  REFRESH_DEDUP: 'portal:refresh_dedup:',
+  /** 登录失败计数 Key 前缀 — 暴力破解防护 */
+  LOGIN_FAIL: 'portal:login_fail:',
 } as const;
 
 // 默认支持的 Scope

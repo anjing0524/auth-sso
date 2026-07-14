@@ -92,7 +92,17 @@ fn random_state() -> String {
 
 // ── OAuth State ──
 
-/// 为指定 upstream 构造完整的 OAuth 2.1 授权请求状态
+/// 判断 host 是否为本机回环地址（精确匹配，防域名前缀绕过）
+fn is_loopback_host(host: &str) -> bool {
+    // 去除端口部分
+    let host_only = host.split(':').next().unwrap_or(host);
+    // 尝试解析为 IP 地址（最可靠的回环判断）
+    if let Ok(ip) = host_only.parse::<std::net::IpAddr>() {
+        return ip.is_loopback();
+    }
+    // 非 IP 地址时精确匹配 localhost（避免 localhost.evil.com 绕过）
+    host_only == "localhost"
+}
 pub fn build_oauth_state(
     oauth_config: &OAuthConfig,
     origin_host: &str,
@@ -101,9 +111,7 @@ pub fn build_oauth_state(
     let pkce = generate_pkce();
     let redirect_uri = format!(
         "{}://{}{}",
-        if (origin_host.starts_with("localhost") || origin_host.starts_with("127."))
-            && !origin_host.contains("18443")
-        {
+        if is_loopback_host(origin_host) {
             "http"
         } else {
             "https"

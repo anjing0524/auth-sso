@@ -6,6 +6,9 @@ import { COMMON_ERRORS } from '@auth-sso/contracts';
 import { mapDomainError } from '@/domain/shared/error-mapping';
 import { validateClientActive, validateClientSecret } from '@/domain/auth/oauth-client';
 import { apiError } from '@/lib/response';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('PermissionsRegister');
 
 
 /**
@@ -179,7 +182,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: true, data: result });
   } catch (error) {
     const mapped = mapDomainError(error);
-    console.error('[Permissions Register] 同步失败:', mapped.message);
+    log.error('同步失败', { error: mapped.error, message: mapped.message });
     return apiError(mapped.error, mapped.message, mapped.status);
   }
 }

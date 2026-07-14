@@ -8,6 +8,9 @@ import { useEffect } from 'react';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { createClientLogger } from '@/lib/logger-client';
+
+const log = createClientLogger('UsersErrorBoundary');
 
 interface ErrorProps {
   error: Error & { digest?: string };
@@ -16,7 +19,7 @@ interface ErrorProps {
 
 export default function UsersError({ error, reset }: ErrorProps) {
   useEffect(() => {
-    console.error('[Users Error Boundary]', error);
+    log.error('用户页面渲染错误', { message: error.message, digest: error.digest });
   }, [error]);
 
   return (

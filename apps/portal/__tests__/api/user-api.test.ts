@@ -12,6 +12,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextResponse } from 'next/server';
+import { COMMON_ERRORS } from '@auth-sso/contracts';
 import { createTestUser } from '../helpers/test-fixtures';
 import { createTestRequest } from '../helpers/test-utils';
 
@@ -423,7 +424,7 @@ describe('User Management API & Actions', () => {
     it('rejects short password', async () => {
       const res: any = await resetPasswordAction('u-1', 'short');
       expect(res.success).toBe(false);
-      expect(res.error).toBe('VALIDATION_ERROR');
+      expect(res.error).toBe(COMMON_ERRORS.VALIDATION_ERROR);
     });
 
     it('rejects password without uppercase', async () => {

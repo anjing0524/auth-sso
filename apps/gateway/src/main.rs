@@ -98,7 +98,7 @@ fn main() -> anyhow::Result<()> {
 
     let redis_init_svc = background_service(
         "Redis Init",
-        gateway::redis::RedisInitService::new(config.redis.url.clone()),
+        gateway::redis::RedisInitService::new(config.redis.clone()),
     );
     let redis_handle = my_server.add_service(redis_init_svc);
 
@@ -107,6 +107,7 @@ fn main() -> anyhow::Result<()> {
         gateway::jwks::JwksRefreshService::new(
             Arc::clone(&jwks_cache),
             Arc::clone(&portal_upstreams),
+            config.gateway.jwks_refresh_interval_secs,
         ),
     );
     let _ = my_server.add_service(jwks_refresh_svc);
@@ -127,6 +128,7 @@ fn main() -> anyhow::Result<()> {
             oidc_provider_name,
             portal_upstreams,
             config.gateway.gateway_shared_secret.clone(),
+            config.gateway.upstream_scheme.clone(),
         ),
     );
 

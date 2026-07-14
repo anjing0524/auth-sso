@@ -194,7 +194,11 @@ impl JwksCache {
     /// 返回解析后的 validation、refresh_endpoint 和 jwks_uri，
     /// 待 JWKS 公钥也拉取成功后由 `apply_discovery` 一并原子写入。
     async fn fetch_oidc_metadata(&self, upstream: &str) -> Result<OidcDiscovery, JwksError> {
-        let discovery_url = format!("http://{}/.well-known/openid-configuration", upstream);
+        let discovery_url = format!(
+            "{}://{}/.well-known/openid-configuration",
+            crate::gateway::upstream_scheme(),
+            upstream
+        );
         info!("🔍 通过 OIDC Discovery 获取元数据: {}", discovery_url);
 
         let resp = HTTP_CLIENT.get(&discovery_url).send().await?;
@@ -272,9 +276,20 @@ impl JwksCache {
 
         let path = parsed.path();
         if let Some(query) = parsed.query() {
-            Ok(format!("http://{}{}?{}", upstream, path, query))
+            Ok(format!(
+                "{}://{}{}?{}",
+                crate::gateway::upstream_scheme(),
+                upstream,
+                path,
+                query
+            ))
         } else {
-            Ok(format!("http://{}{}", upstream, path))
+            Ok(format!(
+                "{}://{}{}",
+                crate::gateway::upstream_scheme(),
+                upstream,
+                path
+            ))
         }
     }
 
@@ -318,7 +333,7 @@ impl JwksCache {
     /// 仅在测试/benchmark 中使用，生产代码切勿调用。
     #[doc(hidden)]
     pub fn insert_key_for_test(&self, kid: String, key: DecodingKey) {
-        let mut guard = self.inner.write().unwrap();
+        let mut guard = self.inner.write().expect("JwksCache RwLock 中毒");
         guard.keys.insert(kid, key);
     }
 
@@ -327,7 +342,7 @@ impl JwksCache {
     /// 仅在测试/benchmark 中使用，生产代码切勿调用。
     #[doc(hidden)]
     pub fn set_metadata_for_test(&self, issuer: &str, supported_algs: &[&str]) {
-        let mut guard = self.inner.write().unwrap();
+        let mut guard = self.inner.write().expect("JwksCache RwLock 中毒");
         let mut validation = base_validation();
         validation.set_issuer(&[issuer]);
         validation.algorithms = supported_algs
@@ -340,9 +355,6 @@ impl JwksCache {
 }
 
 // ── JWKS 后台定时刷新服务 ──
-
-/// JWKS 刷新成功后的标准间隔（5 分钟）
-const JWKS_REFRESH_INTERVAL_SECS: u64 = 300;
 
 /// 缓存为空时的重试间隔（快速初始化）
 const JWKS_INIT_RETRY_SECS: u64 = 10;
@@ -357,14 +369,21 @@ pub struct JwksRefreshService {
     upstreams: Arc<Upstreams>,
     /// 连续失败计数器（AtomicU64 支持内部可变性，用于 start(&self) 中的渐进退避）
     consecutive_failures: std::sync::atomic::AtomicU64,
+    /// 刷新成功后的标准间隔（秒），可通过配置覆盖
+    refresh_interval_secs: u64,
 }
 
 impl JwksRefreshService {
-    pub fn new(jwks_cache: Arc<JwksCache>, upstreams: Arc<Upstreams>) -> Self {
+    pub fn new(
+        jwks_cache: Arc<JwksCache>,
+        upstreams: Arc<Upstreams>,
+        refresh_interval_secs: u64,
+    ) -> Self {
         Self {
             jwks_cache,
             upstreams,
             consecutive_failures: std::sync::atomic::AtomicU64::new(0),
+            refresh_interval_secs,
         }
     }
 
@@ -377,7 +396,7 @@ impl JwksRefreshService {
         if success {
             self.consecutive_failures
                 .store(0, std::sync::atomic::Ordering::Relaxed);
-            return JWKS_REFRESH_INTERVAL_SECS;
+            return self.refresh_interval_secs;
         }
         if self.jwks_cache.is_empty() {
             // 缓存为空：快速重试，不计入渐进退避

@@ -11,8 +11,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getRefreshTokenFromCookie, getJwtFromCookie, decodeJwtPayload } from '@/lib/session';
 import { rotateRefreshToken } from '@/lib/auth/token';
 import { mapDomainError } from '@/domain/shared/error-mapping';
-import { COOKIE_NAMES, TOKEN_TTL } from '@auth-sso/contracts';
+import { AUTH_ERRORS, COOKIE_NAMES, TOKEN_TTL, PORTAL_CLIENT_ID } from '@auth-sso/contracts';
 import { writeLoginLog, extractClientIP, extractUserAgent } from '@/lib/audit';
+import { isCookieSecure } from '@/lib/env';
 
 /** 刷新阈值（秒）：仅当 Access Token 剩余时间 < 此值时执行刷新 */
 const REFRESH_THRESHOLD = 5 * 60; // 5 minutes
@@ -22,7 +23,7 @@ export async function POST(request: NextRequest) {
     const refreshToken = await getRefreshTokenFromCookie();
     if (!refreshToken) {
       return NextResponse.json(
-        { success: false, error: 'REFRESH_TOKEN_MISSING', message: '缺少 Refresh Token' },
+        { success: false, error: AUTH_ERRORS.REFRESH_TOKEN_MISSING, message: '缺少 Refresh Token' },
         { status: 401 },
       );
     }
@@ -46,11 +47,11 @@ export async function POST(request: NextRequest) {
     const ip = extractClientIP(request.headers);
     const ua = extractUserAgent(request.headers);
 
-    const result = await rotateRefreshToken(refreshToken, 'portal');
+    const result = await rotateRefreshToken(refreshToken, PORTAL_CLIENT_ID);
     if (!result) {
       writeLoginLog({ userId: atPayload?.sub, username, eventType: 'TOKEN_REFRESH_FAILED', ip, userAgent: ua, failReason: 'Refresh Token 无效或已过期' });
       const response = NextResponse.json(
-        { success: false, error: 'REFRESH_TOKEN_INVALID', message: 'Refresh Token 无效或已过期' },
+        { success: false, error: AUTH_ERRORS.REFRESH_TOKEN_INVALID, message: 'Refresh Token 无效或已过期' },
         { status: 401 },
       );
       // 清除无效 Cookie
@@ -62,7 +63,7 @@ export async function POST(request: NextRequest) {
     // 续签成功 → 记录 TOKEN_REFRESH 日志
     writeLoginLog({ userId: atPayload?.sub, username, eventType: 'TOKEN_REFRESH', ip, userAgent: ua });
 
-    const secure = (process.env['NEXT_PUBLIC_APP_URL'] || '').startsWith('https://');
+    const secure = isCookieSecure();
     const response = NextResponse.json({ success: true, data: { expiresIn: result.expiresIn } });
 
     response.cookies.set(COOKIE_NAMES.JWT, result.accessToken, {

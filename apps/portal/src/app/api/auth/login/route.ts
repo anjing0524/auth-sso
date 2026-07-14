@@ -16,8 +16,12 @@ import { checkBruteForce, clearBruteForceCounter, incrementBruteForce } from '@/
 import { signLoginSession, LOGIN_SESSION_TTL } from '@/lib/auth/token';
 import { InvalidCredentialsError } from '@/domain/shared/errors';
 import { mapDomainError } from '@/domain/shared/error-mapping';
-import { COOKIE_NAMES } from '@auth-sso/contracts';
+import { AUTH_ERRORS, COMMON_ERRORS, COOKIE_NAMES } from '@auth-sso/contracts';
 import { writeLoginLog, extractClientIP, extractUserAgent } from '@/lib/audit';
+import { isCookieSecure } from '@/lib/env';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('Login');
 
 const LoginSchema = z.object({
   email: z.string().email(),
@@ -32,7 +36,7 @@ export async function POST(request: NextRequest) {
     const parsed = LoginSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json(
-        { success: false, error: 'VALIDATION_ERROR', message: parsed.error.issues[0]!.message },
+        { success: false, error: COMMON_ERRORS.VALIDATION_ERROR, message: parsed.error.issues[0]!.message },
         { status: 400 },
       );
     }
@@ -52,7 +56,7 @@ export async function POST(request: NextRequest) {
     const bruteCheck = await checkBruteForce(user.id);
     if (bruteCheck.locked) {
       return NextResponse.json(
-        { success: false, error: 'ACCOUNT_LOCKED', message: bruteCheck.message },
+        { success: false, error: AUTH_ERRORS.ACCOUNT_LOCKED, message: bruteCheck.message },
         { status: 423 },
       );
     }
@@ -79,13 +83,13 @@ export async function POST(request: NextRequest) {
     try {
       await db.update(schema.users).set({ lastLoginAt: new Date() }).where(eq(schema.users.id, user.id));
     } catch (err) {
-      console.error('[Login] 更新 lastLoginAt 失败:', err);
+      log.error('更新 lastLoginAt 失败，暴力破解 DB 回退路径可能受影响', { userId: user.id, error: (err as Error).message });
     }
     writeLoginLog({ userId: user.id, username: user.username, eventType: 'LOGIN_SUCCESS', ip, userAgent: ua });
 
     // 7. 签发 Login Session JWT → Cookie
     const session = await signLoginSession(user.id);
-    const secure = (process.env['NEXT_PUBLIC_APP_URL'] || '').startsWith('https://');
+    const secure = isCookieSecure();
     const redirectPath = session_id ? `/api/auth/oauth2/authorize?session_id=${session_id}` : null;
 
     const response = NextResponse.json(

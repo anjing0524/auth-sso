@@ -20,6 +20,7 @@ export {
   parsePortalEnv,
   safeGetEnv,
   EnvValidationError,
+  isCookieSecure,
 } from '@auth-sso/config';
 
 export type { PortalEnv } from '@auth-sso/config';

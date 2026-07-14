@@ -19,8 +19,11 @@ import { resolveTokenClaims } from '@/lib/auth/permissions-context';
 import { TOKEN_TTL } from '@auth-sso/contracts';
 import type { PortalJwtClaims, RefreshTokenResult } from '@/domain/auth/types';
 import { getActiveSigningKey, getSigningKeyByKid } from './token/signing-keys';
+import { createLogger } from '@/lib/logger';
 // 保持向后兼容：密钥管理函数仍从 @/lib/auth/token 可导入
 export { getActiveSigningKey, getSigningKeyByKid } from './token/signing-keys';
+
+const log = createLogger('Token');
 
 // ============================================================================
 // Login Session Token — 登录成功后写入 HttpOnly Cookie 的临时凭证
@@ -97,7 +100,7 @@ export async function signAccessToken(
   try {
     await trackUserJti(claims.sub, jti, ACCESS_TOKEN_TTL);
   } catch (e) {
-    console.error('[Token] 写入 user→jti 映射失败:', e);
+    log.error('写入 user→jti 映射失败', { error: (e as Error).message });
   }
 
   // 持久化到 access_tokens 表（供 Client 详情页 Token 列表 / 审计查看）
@@ -114,7 +117,7 @@ export async function signAccessToken(
         expiresAt: new Date(Date.now() + ACCESS_TOKEN_TTL * 1000),
       });
     } catch (e) {
-      console.error('[Token] Access Token 入库失败:', e);
+      log.error('Access Token 入库失败', { error: (e as Error).message });
     }
   }
 
@@ -141,14 +144,14 @@ export async function verifyAccessToken(
     const header = decodeProtectedHeader(token);
     const kid = header.kid;
     if (!kid) {
-      console.warn('[Token] JWT 缺少 kid header');
+      log.warn('JWT 缺少 kid header');
       return null;
     }
 
     // 2. 按 kid 查找公钥
     const signingKey = await getSigningKeyByKid(kid);
     if (!signingKey) {
-      console.warn('[Token] 未找到 kid 对应的密钥:', kid);
+      log.warn('未找到 kid 对应的密钥', { kid });
       return null;
     }
 
@@ -165,7 +168,7 @@ export async function verifyAccessToken(
 
     // 4. jti 黑名单检查
     if (payload.jti && (await isJtiRevoked(payload.jti))) {
-      console.warn('[Token] JWT jti 在黑名单中:', payload.jti);
+      log.warn('JWT jti 在黑名单中', { jti: payload.jti });
       return null;
     }
 
@@ -177,7 +180,7 @@ export async function verifyAccessToken(
       deptIds: payload.deptIds ?? [],
     };
   } catch (error) {
-    console.warn('[Token] JWT 验签失败:', error instanceof Error ? error.message : error);
+    log.warn('JWT 验签失败', { error: (error as Error).message });
     return null;
   }
 }
@@ -186,8 +189,8 @@ export async function verifyAccessToken(
 // ID Token — OIDC Core 1.0 Section 2，scope=openid 时签发
 // ============================================================================
 
-/** ID Token TTL（1h），OIDC 规范建议短于 Access Token */
-export const ID_TOKEN_TTL = 3600;
+/** ID Token TTL（1h），与 Access Token 对齐，OIDC 规范建议短于 Access Token */
+export const ID_TOKEN_TTL = TOKEN_TTL.ACCESS_TOKEN;
 
 /**
  * 【server-only async】签发 OIDC ID Token (ES256 JWT)
@@ -297,8 +300,11 @@ export async function rotateRefreshToken(
   // 事务 + FOR UPDATE 行锁：串行化对同一条 RT 的并发轮换。
   // 多应用/多标签页并发续签时，第二个请求会被阻塞到第一个提交，
   // 随后读到 revoked=true → 触发级联吊销 → 返回 null，避免重复签发与误触发级联吊销。
-  // 仅锁定「读 RT → 校验 revoked → 撤销旧 RT」这三步（争用核心）；
-  // 签发新 RT/AT 等不涉及对旧 RT 争用，放事务外执行。
+  //
+  // 将「撤销旧 RT → 签发新 RT」纳入同一事务，保证原子性：
+  // 若进程在事务提交后崩溃，旧 RT 已撤销 + 新 RT 已写入 → 用户持有新 RT 可续签；
+  // 若进程在事务提交前崩溃，旧 RT 未撤销 → 用户可用旧 RT 重试。
+  // Access Token 签发仍放事务外（AT 为无状态 JWT，崩溃丢失无副作用）。
   const lockedRt = await db.transaction(async (tx) => {
     // join clients 取 isInternal，用于决定续签后 AT 的 audience
     // （不靠 clientId 字符串比较判断是否为内部客户端）
@@ -344,15 +350,26 @@ export async function rotateRefreshToken(
       .set({ revoked: new Date() })
       .where(eq(schema.refreshTokens.id, rt.id));
 
-    return { rt, isInternal };
+    // 在同一事务中签发新 Refresh Token（保证原子性：旧 RT 撤销 + 新 RT 写入）
+    const newRtId = generateUUID();
+    const newRtToken = `rt_${generateId(32)}`;
+    const now = new Date();
+    await tx.insert(schema.refreshTokens).values({
+      id: newRtId,
+      tokenHash: hashToken(newRtToken),
+      clientId: rt.clientId,
+      userId: rt.userId,
+      scopes: rt.scopes,
+      createdAt: now,
+      expiresAt: new Date(now.getTime() + REFRESH_TOKEN_TTL * 1000),
+    });
+
+    return { rt, isInternal, newRefreshToken: newRtToken };
   });
 
   // 事务返回 null：RT 不存在 / 已撤销（级联吊销）/ 已过期
   if (!lockedRt) return null;
-  const { rt, isInternal } = lockedRt;
-
-  // 签发新 Refresh Token
-  const newRefreshToken = await issueRefreshToken(rt.userId, rt.clientId, rt.scopes);
+  const { rt, isInternal, newRefreshToken } = lockedRt;
 
   // 获取最新权限上下文并签发新 Access Token（静态 import 中间层，消除循环依赖）
   const resolved = await resolveTokenClaims(rt.userId);
@@ -378,7 +395,7 @@ export async function rotateRefreshToken(
   try {
     await cacheUserPermissionContext(rt.userId, permCtx, ACCESS_TOKEN_TTL);
   } catch (e) {
-    console.error('[Token] 刷新时写权限缓存失败:', e);
+    log.error('刷新时写权限缓存失败', { error: (e as Error).message });
   }
 
   return { accessToken, refreshToken: newRefreshToken, expiresIn: ACCESS_TOKEN_TTL };
@@ -397,8 +414,8 @@ export async function revokeAllRefreshTokens(userId: string): Promise<void> {
   // 同步撤销所有 Access Token 的 JTI（双层撤销闭环）
   try {
     const count = await revokeUserAccessByUserId(userId);
-    if (count > 0) console.info('[Token] 已撤销用户 %s 的 %d 个 Access Token JTI', userId, count);
+    if (count > 0) log.info('已撤销用户 Access Token JTI', { userId, count });
   } catch (e) {
-    console.error('[Token] 撤销用户 Access Token JTI 失败:', e);
+    log.error('撤销用户 Access Token JTI 失败', { error: (e as Error).message });
   }
 }

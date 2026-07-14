@@ -6,8 +6,11 @@
  *
  * @module infrastructure/redis
  */
-import Redis from 'ioredis';
+import Redis, { type ChainableCommander } from 'ioredis';
 import { getRedisUrl } from '@/lib/env';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('Redis');
 
 /**
  * 统一的 Redis 客户端接口
@@ -34,7 +37,7 @@ export interface RedisClient {
   hgetall(key: string): Promise<Record<string, string>>;
 
   // Pipeline 批处理命令，用于多会话批量物理注销
-  pipeline(): any;
+  pipeline(): ChainableCommander;
   exists(key: string): Promise<number>;
 
   // 原子计数器命令（用于暴力破解防护等竞态条件场景）
@@ -51,7 +54,8 @@ let redisClient: RedisClient | null = null;
  */
 function createIoredisClient(): RedisClient {
   const redisUrl = getRedisUrl();
-  console.log('[Redis] Initializing ioredis with URL:', redisUrl.split('@')[1] || 'localhost');
+  // 日志中仅输出主机信息，避免凭据泄漏
+  log.info('Initializing ioredis', { host: redisUrl.split('@').pop()?.split('/')[0] || 'localhost' });
 
   const client = new Redis(redisUrl, {
     maxRetriesPerRequest: 3,
@@ -61,11 +65,11 @@ function createIoredisClient(): RedisClient {
   });
 
   client.on('error', (err) => {
-    console.error('[Redis] Connection error:', err);
+    log.error('Connection error', { error: err.message });
   });
 
   client.on('connect', () => {
-    console.log('[Redis] Connected');
+    log.info('Connected');
   });
 
   // ioredis API 直接匹配 RedisClient 接口

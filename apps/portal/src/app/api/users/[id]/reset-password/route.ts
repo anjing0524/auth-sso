@@ -12,6 +12,9 @@ import { COMMON_ERRORS, USER_ERRORS } from '@auth-sso/contracts';
 import { revokeUserAccessByUserId } from '@/lib/session/revoke';
 import { refreshUserPermissionCache } from '@/lib/permissions';
 import { validatePassword } from '@/domain/shared/zod-schemas';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('ResetPassword');
 
 interface RouteParams { params: Promise<{ id: string }>; }
 
@@ -73,12 +76,12 @@ export async function POST(
     try {
       await revokeUserAccessByUserId(id);
     } catch (e) {
-      console.error('[ResetPassword] 撤销 JWT 失败:', e);
+      log.error('撤销 JWT 失败', { error: (e as Error).message });
     }
     try {
       await refreshUserPermissionCache(id);
     } catch (e) {
-      console.error('[ResetPassword] 刷新缓存失败:', e);
+      log.error('刷新缓存失败', { error: (e as Error).message });
     }
 
     return NextResponse.json({ success: true, message: '密码已重置，该用户所有会话已失效' });

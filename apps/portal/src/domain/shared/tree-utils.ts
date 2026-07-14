@@ -41,7 +41,6 @@ export function buildTree<
     const node = nodeMap.get(String(item[idKey]));
     if (!node) {
       // 理论上不应发生（第一遍已为所有 item 建立节点），防御性处理
-      console.warn('[buildTree] 节点未在 map 中找到，id:', item[idKey]);
       continue;
     }
     const parentId = item[parentKey] as string | null;
@@ -49,7 +48,6 @@ export function buildTree<
       const parentNode = nodeMap.get(parentId);
       if (!parentNode) {
         // 理论上不应发生，nodeMap.has() 已确认存在
-        console.warn('[buildTree] 父节点未在 map 中找到，parentId:', parentId);
         roots.push(node);
       } else {
         parentNode.children.push(node);

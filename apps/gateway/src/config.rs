@@ -18,6 +18,17 @@ pub struct GatewayConfig {
     /// X-Gateway-Signature / X-Gateway-Timestamp 请求头。
     /// Portal 端验证此签名以确认请求确实来自受信任的 Gateway。
     pub gateway_shared_secret: Option<String>,
+    /// 内部上游请求协议（http 或 https），默认 "http"。
+    /// 内网 mTLS 场景下可设为 "https"。
+    #[serde(default = "default_upstream_scheme")]
+    pub upstream_scheme: String,
+    /// JWKS 刷新成功后的标准间隔（秒，默认 300）。
+    /// 可通过 JWKS_REFRESH_INTERVAL_SECS 环境变量覆盖。
+    pub jwks_refresh_interval_secs: u64,
+}
+
+fn default_upstream_scheme() -> String {
+    "http".to_string()
 }
 
 impl Default for GatewayConfig {
@@ -30,6 +41,8 @@ impl Default for GatewayConfig {
             log_dir: "logs".to_string(),
             log_level: "info".to_string(),
             gateway_shared_secret: None,
+            upstream_scheme: "http".to_string(),
+            jwks_refresh_interval_secs: 300,
         }
     }
 }
@@ -117,12 +130,27 @@ impl Upstreams {
 #[serde(default)]
 pub struct RedisConfig {
     pub url: String,
+    /// 连接池最大连接数（默认 16），可通过 REDIS_POOL_MAX_SIZE 环境变量覆盖
+    pub pool_max_size: u32,
+    /// 连接池最小空闲连接数（默认 4），可通过 REDIS_POOL_MIN_IDLE 环境变量覆盖
+    pub pool_min_idle: u32,
+    /// 连接最大存活时间（秒，默认 1800），可通过 REDIS_POOL_MAX_LIFETIME_SEC 环境变量覆盖
+    pub pool_max_lifetime_sec: u64,
+    /// 空闲连接超时（秒，默认 300），可通过 REDIS_POOL_IDLE_TIMEOUT_SEC 环境变量覆盖
+    pub pool_idle_timeout_sec: u64,
+    /// 连接获取超时（秒，默认 3），可通过 REDIS_POOL_CONNECTION_TIMEOUT_SEC 环境变量覆盖
+    pub pool_connection_timeout_sec: u64,
 }
 
 impl Default for RedisConfig {
     fn default() -> Self {
         Self {
             url: "redis://127.0.0.1:6379".to_string(),
+            pool_max_size: 16,
+            pool_min_idle: 4,
+            pool_max_lifetime_sec: 1800,
+            pool_idle_timeout_sec: 300,
+            pool_connection_timeout_sec: 3,
         }
     }
 }
@@ -159,6 +187,28 @@ impl Config {
         cfg.redis.url = resolve_redis_url(&cfg.redis.url, std::env::var("REDIS_URL").ok());
         cfg.gateway.gateway_shared_secret =
             resolve_optional_env(&cfg.gateway.gateway_shared_secret, "GATEWAY_SHARED_SECRET");
+        cfg.gateway.upstream_scheme =
+            resolve_env_str(&cfg.gateway.upstream_scheme, "UPSTREAM_SCHEME");
+        // Redis 连接池参数 — 环境变量覆盖
+        cfg.redis.pool_max_size = resolve_env_u32(cfg.redis.pool_max_size, "REDIS_POOL_MAX_SIZE");
+        cfg.redis.pool_min_idle = resolve_env_u32(cfg.redis.pool_min_idle, "REDIS_POOL_MIN_IDLE");
+        cfg.redis.pool_max_lifetime_sec = resolve_env_u64(
+            cfg.redis.pool_max_lifetime_sec,
+            "REDIS_POOL_MAX_LIFETIME_SEC",
+        );
+        cfg.redis.pool_idle_timeout_sec = resolve_env_u64(
+            cfg.redis.pool_idle_timeout_sec,
+            "REDIS_POOL_IDLE_TIMEOUT_SEC",
+        );
+        cfg.redis.pool_connection_timeout_sec = resolve_env_u64(
+            cfg.redis.pool_connection_timeout_sec,
+            "REDIS_POOL_CONNECTION_TIMEOUT_SEC",
+        );
+        // JWKS 刷新间隔 — 环境变量覆盖
+        cfg.gateway.jwks_refresh_interval_secs = resolve_env_u64(
+            cfg.gateway.jwks_refresh_interval_secs,
+            "JWKS_REFRESH_INTERVAL_SECS",
+        );
 
         if cfg.upstreams.is_empty() {
             anyhow::bail!(
@@ -207,6 +257,24 @@ fn resolve_optional_env(config_value: &Option<String>, env_name: &str) -> Option
     std::env::var(env_name)
         .ok()
         .or_else(|| config_value.clone())
+}
+
+fn resolve_env_str(config_value: &str, env_name: &str) -> String {
+    std::env::var(env_name).unwrap_or_else(|_| config_value.to_string())
+}
+
+fn resolve_env_u32(default_val: u32, env_name: &str) -> u32 {
+    std::env::var(env_name)
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(default_val)
+}
+
+fn resolve_env_u64(default_val: u64, env_name: &str) -> u64 {
+    std::env::var(env_name)
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(default_val)
 }
 
 #[cfg(test)]

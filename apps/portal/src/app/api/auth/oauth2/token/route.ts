@@ -18,6 +18,9 @@ import { cacheUserPermissionContext } from '@/lib/permissions';
 import { resolveTokenClaims } from '@/lib/auth/permissions-context';
 import { mapDomainError } from '@/domain/shared/error-mapping';
 import { InvalidGrantError } from '@/domain/shared/errors';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('TokenRoute');
 import { z } from 'zod';
 import { OAUTH_PARAMS, AUTH_ERRORS } from '@auth-sso/contracts';
 import { writeLoginLog, extractClientIP, extractUserAgent } from '@/lib/audit';
@@ -104,7 +107,7 @@ export async function POST(request: NextRequest) {
       try {
         await cacheUserPermissionContext(authCode.userId, permCtx, ACCESS_TOKEN_TTL);
       } catch (e) {
-        console.error('[Token] 写权限缓存失败:', e);
+        log.error('写权限缓存失败', { error: (e as Error).message });
       }
 
       // 签发 Refresh Token

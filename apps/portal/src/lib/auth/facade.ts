@@ -8,14 +8,14 @@ import 'server-only';
  * - `./check-permission`     权限/角色检查（"你能做什么"）
  * - `./data-scope`           数据范围过滤（"你能看哪些数据"）
  * - `./server-logger`        底层数据读取访问日志
- *
- * 此处统一 re-export，新增代码建议直接从子模块导入。
- *
- * @module lib/auth/facade
  */
 import { NextResponse } from 'next/server';
 import { COMMON_ERRORS } from '@auth-sso/contracts';
 import { mapDomainError } from '@/domain/shared/error-mapping';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('AuthFacade');
+
 import type { PortalJwtClaims } from '../session';
 import {
   checkPermission,
@@ -73,7 +73,7 @@ export async function withPermission(
     const mapped = mapDomainError(error);
     // 非预渲染中断的错误需要记录日志，便于生产环境排查
     if (mapped.status >= 500) {
-      console.error('[AuthFacade] 服务执行异常:', mapped.message, error instanceof Error ? error.stack : '');
+      log.error('服务执行异常', { error: mapped.error, message: mapped.message });
     }
     return NextResponse.json(
       { success: false, error: mapped.error, message: mapped.message },

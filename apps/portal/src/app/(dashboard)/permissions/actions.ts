@@ -21,7 +21,7 @@ import {
 } from '@/domain/permission/types';
 import { EntityNotFoundError, DuplicateEntityError } from '@/domain/shared/errors';
 import { generateUUID } from '@/lib/crypto';
-import type { ApiResponse } from '@auth-sso/contracts';
+import { COMMON_ERRORS, type ApiResponse } from '@auth-sso/contracts';
 
 /** 创建权限 */
 export const createPermissionAction = withAuth(
@@ -29,7 +29,7 @@ export const createPermissionAction = withAuth(
   async (_ctx: AuthContext, input: Record<string, unknown>): Promise<ApiResponse<{ id: string }>> => {
     const parsed = CreatePermissionInputSchema.safeParse(input);
     if (!parsed.success) {
-      return { success: false, error: 'VALIDATION_ERROR', message: parsed.error.issues[0]!.message };
+      return { success: false, error: COMMON_ERRORS.VALIDATION_ERROR, message: parsed.error.issues[0]!.message };
     }
 
     // 查重 + 插入在事务中原子完成，避免 race condition
@@ -57,7 +57,7 @@ export const updatePermissionAction = withAuth(
   async (_ctx: AuthContext, permId: string, input: Record<string, unknown>): Promise<ApiResponse<{ id: string }>> => {
     const parsed = UpdatePermissionInputSchema.safeParse(input);
     if (!parsed.success) {
-      return { success: false, error: 'VALIDATION_ERROR', message: parsed.error.issues[0]!.message };
+      return { success: false, error: COMMON_ERRORS.VALIDATION_ERROR, message: parsed.error.issues[0]!.message };
     }
 
     const updated = await db.transaction(async (tx) => {

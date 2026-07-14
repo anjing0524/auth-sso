@@ -12,6 +12,9 @@ import { useEffect } from 'react';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { createClientLogger } from '@/lib/logger-client';
+
+const log = createClientLogger('DashboardError');
 
 interface ErrorProps {
   error: Error & { digest?: string };
@@ -20,7 +23,7 @@ interface ErrorProps {
 
 export default function DashboardError({ error, reset }: ErrorProps) {
   useEffect(() => {
-    console.error('[Dashboard Error Boundary]', error);
+    log.error('仪表盘页面渲染错误', { message: error.message, digest: error.digest });
   }, [error]);
 
   return (

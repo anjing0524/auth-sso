@@ -23,8 +23,11 @@ import { getJwtFromCookie } from '../session';
 import { verifyAccessToken } from '@/lib/auth/token';
 import { decodeJwtPayload } from '@/lib/session/jwt';
 import { getGatewaySharedSecret } from '@/lib/env';
-import { GATEWAY_HEADERS } from '@auth-sso/contracts';
+import { GATEWAY_HEADERS, PORTAL_AUD } from '@auth-sso/contracts';
+import { createLogger } from '@/lib/logger';
 import type { ResolvedIdentity, PortalJwtClaims } from '@/domain/auth/types';
+
+const log = createLogger('Auth');
 
 export type { ResolvedIdentity };
 
@@ -46,8 +49,16 @@ const EMPTY_CLAIMS: PortalJwtClaims = {
   deptIds: [],
 };
 
-/** HMAC 签名时间戳容忍窗口（秒），防止时钟偏差导致的误拒绝 */
-const SIGNATURE_TIMESTAMP_WINDOW_SEC = 60;
+/** HMAC 签名时间戳容忍窗口（秒），可通过 SIGNATURE_TIMESTAMP_WINDOW_SEC 环境变量覆盖，防止时钟偏差导致的误拒绝 */
+const SIGNATURE_TIMESTAMP_WINDOW_SEC = (() => {
+  const raw = process.env['SIGNATURE_TIMESTAMP_WINDOW_SEC'];
+  const parsed = raw ? parseInt(raw, 10) : 60;
+  if (isNaN(parsed) || parsed < 1 || parsed > 300) {
+    log.error('SIGNATURE_TIMESTAMP_WINDOW_SEC 配置无效，使用默认值 60', { raw, parsed });
+    return 60;
+  }
+  return parsed;
+})();
 
 /** HMAC-SHA256 签名头名称 */
 const HEADER_SIGNATURE = 'x-gateway-signature';
@@ -88,10 +99,7 @@ async function isRequestFromTrustedGateway(userId: string, jti: string): Promise
 
   // 严格要求：未配置共享密钥则直接拒绝，不走任何降级路径
   if (!secret) {
-    console.warn(
-      '[Auth] GATEWAY_SHARED_SECRET 未配置，Gateway 信任路径不可用。' +
-      '如需启用 Gateway 路径，请在环境变量中配置 GATEWAY_SHARED_SECRET。',
-    );
+    log.warn('GATEWAY_SHARED_SECRET 未配置，Gateway 信任路径不可用');
     return false;
   }
 
@@ -100,25 +108,19 @@ async function isRequestFromTrustedGateway(userId: string, jti: string): Promise
   const timestamp = h.get(HEADER_TIMESTAMP);
 
   if (!signature || !timestamp) {
-    console.warn(
-      '[Auth] GATEWAY_SHARED_SECRET 已配置，但缺少 X-Gateway-Signature 或 X-Gateway-Timestamp。' +
-      '请求可能绕过 Gateway 直连 Portal，已拒绝 Gateway 信任路径。',
-    );
+    log.warn('缺少 X-Gateway-Signature 或 X-Gateway-Timestamp，拒绝 Gateway 信任路径');
     return false;
   }
 
   // 时间戳窗口校验（防重放）
   const ts = parseInt(timestamp, 10);
   if (isNaN(ts)) {
-    console.warn('[Auth] X-Gateway-Timestamp 格式无效:', timestamp);
+    log.warn('X-Gateway-Timestamp 格式无效', { timestamp });
     return false;
   }
   const nowSec = Math.floor(Date.now() / 1000);
   if (Math.abs(nowSec - ts) > SIGNATURE_TIMESTAMP_WINDOW_SEC) {
-    console.warn(
-      `[Auth] X-Gateway-Timestamp 超出窗口 (${SIGNATURE_TIMESTAMP_WINDOW_SEC}s): ` +
-      `now=${nowSec}, ts=${ts}`,
-    );
+    log.warn('X-Gateway-Timestamp 超出窗口', { now: nowSec, ts, window: SIGNATURE_TIMESTAMP_WINDOW_SEC });
     return false;
   }
 
@@ -128,7 +130,7 @@ async function isRequestFromTrustedGateway(userId: string, jti: string): Promise
   const sigBuf = Buffer.from(signature, 'hex');
   const expBuf = Buffer.from(expected, 'hex');
   if (sigBuf.length !== expBuf.length || !timingSafeEqual(sigBuf, expBuf)) {
-    console.warn('[Auth] HMAC 签名不匹配。请求可能被篡改或来自非受信任来源。');
+    log.warn('HMAC 签名不匹配，请求可能被篡改');
     return false;
   }
 
@@ -186,11 +188,11 @@ export const resolveIdentity = cache(
         // Gateway 已验证 JWT 签名 + issuer + jti，Portal 补充 aud 校验（纵深防御）
         if (token) {
           const claims = decodeJwtPayload(token);
-          if (claims && claims.aud === 'portal-client') {
+          if (claims && claims.aud === PORTAL_AUD) {
             return { userId: gatewayUserId, claims };
           }
-          if (claims && claims.aud !== 'portal-client') {
-            console.warn('[Auth] Gateway 信任路径 aud 不匹配:', claims.aud);
+          if (claims && claims.aud !== PORTAL_AUD) {
+            log.warn('Gateway 信任路径 aud 不匹配', { aud: claims.aud });
           }
         }
         // 极端情况：有 X-User-Id 但无有效 JWT → 降级最小 claims。

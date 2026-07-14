@@ -20,7 +20,6 @@ interface HealthCheck {
 interface HealthResponse {
   status: 'healthy' | 'degraded' | 'unhealthy';
   timestamp: string;
-  version: string;
   checks: {
     database: HealthCheck;
     redis: HealthCheck;
@@ -60,7 +59,6 @@ export async function GET() {
   const response: HealthResponse = {
     status: allOk ? 'healthy' : allFail ? 'unhealthy' : 'degraded',
     timestamp: new Date().toISOString(),
-    version: process.env.npm_package_version ?? 'unknown',
     checks: {
       database: dbCheck,
       redis: redisCheck,

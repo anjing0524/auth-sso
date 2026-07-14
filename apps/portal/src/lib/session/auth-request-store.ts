@@ -16,6 +16,9 @@ import { getRedis } from '@/infrastructure/redis';
 import { REDIS_KEY_PREFIX } from '@auth-sso/contracts';
 import type { StoredAuthRequest } from '@/domain/auth/types';
 import { generateId } from '@/lib/crypto';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('AuthRequestStore');
 
 /** TTL 5 分钟，与 authorization_code 生命周期对齐 */
 const AUTH_REQUEST_TTL = 300;
@@ -66,7 +69,7 @@ export async function getStoredAuthRequest(
 export function deleteStoredAuthRequest(sessionId: string): void {
   const key = `${REDIS_KEY_PREFIX.AUTH_REQUEST}${sessionId}`;
   getRedis().del(key).catch((e) => {
-    console.error('[AuthRequestStore] 删除授权请求参数失败:', e);
+    log.error('删除授权请求参数失败', { error: (e as Error).message });
   });
 }
 

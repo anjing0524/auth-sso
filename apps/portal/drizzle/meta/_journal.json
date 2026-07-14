@@ -15,6 +15,20 @@
       "when": 1783668290103,
       "tag": "0001_careless_swordsman",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1752336000000,
+      "tag": "0002_add_login_logs_composite_index",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1783996783963,
+      "tag": "0003_fixed_prism",
+      "breakpoints": true
     }
   ]
 }

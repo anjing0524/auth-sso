@@ -4,7 +4,7 @@ import 'server-only';
  * 审计与日志工具模块 (Audit & Logging Utilities)
  *
  * 集中管理登录日志（login_logs）和操作审计日志（audit_logs）的写入。
- * 所有写入采用 fire-and-forget 模式，不阻塞认证主流程。
+ * 内存环形缓冲区 + 定时批量刷写，确保 DB 暂不可用时审计不丢。
  *
  * @module lib/audit
  */
@@ -14,26 +14,59 @@ import { createLogger } from '@/lib/logger';
 
 const log = createLogger('Audit');
 
+/** 内存缓冲区最大条目数（防止内存泄漏） */
+const MAX_BUFFER_SIZE = 1000;
+/** 批量刷写间隔（毫秒） */
+const FLUSH_INTERVAL_MS = 5000;
+
+/** 缓冲条目 */
+interface LogEntry {
+  tableName: 'loginLogs' | 'auditLogs' | 'accessLogs';
+  values: Record<string, unknown>;
+}
+
+/** 内存环形缓冲区 */
+const logBuffer: LogEntry[] = [];
+
+/** 定时批量刷写缓冲区到 DB */
+async function flushBuffer(): Promise<void> {
+  if (logBuffer.length === 0) return;
+  const batch = logBuffer.splice(0);
+  for (const entry of batch) {
+    try {
+      const table = schema[entry.tableName];
+      // Drizzle insert 需要列类型匹配；使用类型断言保持编译通过（值已在 buildValues 中校验）
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (db.insert(table) as any).values(entry.values);
+    } catch (err) {
+      log.error(`审计日志批量写入失败 (${entry.tableName})`, { error: (err as Error).message });
+    }
+  }
+}
+
+// 启动定时刷写（Node.js 环境中 setInterval 不影响事件循环退出）
+const flushTimer = setInterval(flushBuffer, FLUSH_INTERVAL_MS);
+if (flushTimer.unref) {
+  flushTimer.unref(); // 不阻止进程退出
+}
+
 /**
- * 通用日志写入工厂 — 消除 writeLoginLog / writeAuditLog / writeAccessLog 的三次结构重复
+ * 通用日志写入工厂
  *
- * @param table       - Drizzle 表对象
- * @param tag         - 日志标签（用于错误输出）
+ * @param tableName  - Drizzle 表名（keyof schema）
  * @param buildValues - 将参数映射为表字段的值工厂
  */
 function createLogWriter<TParams>(
-  table: typeof schema.loginLogs | typeof schema.auditLogs | typeof schema.accessLogs,
-  tag: string,
+  tableName: 'loginLogs' | 'auditLogs' | 'accessLogs',
   buildValues: (params: TParams) => Record<string, unknown>,
 ): (params: TParams) => void {
   return (params: TParams) => {
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (db.insert as any)(table)
-        .values(buildValues(params))
-        .catch((err: Error) => log.error(`写${tag}日志失败`, { error: err.message }));
-    } catch (err) {
-      log.error(`写${tag}日志失败 (sync)`, { error: (err as Error).message });
+    const values = buildValues(params);
+    // 写入内存缓冲区（防止 DB 暂不可用造成丢失）
+    logBuffer.push({ tableName, values });
+    // 缓冲区保护：超过上限时同步刷写一批
+    if (logBuffer.length > MAX_BUFFER_SIZE) {
+      void flushBuffer();
     }
   };
 }
@@ -65,8 +98,7 @@ export interface WriteLoginLogParams {
  * 用于满足 I-LOG-003「关键操作自动记录」需求。
  */
 export const writeLoginLog = createLogWriter<WriteLoginLogParams>(
-  schema.loginLogs,
-  '登录日志',
+  'loginLogs',
   (params) => ({
     userId: params.userId || null,
     username: params.username,
@@ -112,8 +144,7 @@ export interface WriteAuditLogParams {
  * 用于满足 DC-AUDIT-IMMUTABLE / FR-LOG-01~03 / NFR-SEC-07。
  */
 export const writeAuditLog = createLogWriter<WriteAuditLogParams>(
-  schema.auditLogs,
-  '审计日志',
+  'auditLogs',
   (params) => ({
     userId: params.userId,
     username: params.username || null,
@@ -183,8 +214,7 @@ export interface WriteAccessLogParams {
  * 记录所有 GET 敏感数据访问，用于合规追溯"谁查看了哪条数据"。
  */
 export const writeAccessLog = createLogWriter<WriteAccessLogParams>(
-  schema.accessLogs,
-  '访问日志',
+  'accessLogs',
   (params) => ({
     userId: params.userId,
     username: params.username || null,

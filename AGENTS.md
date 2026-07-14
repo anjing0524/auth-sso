@@ -11,8 +11,13 @@ This version has breaking changes — APIs, conventions, and file structure may 
 use architecting-portal skill
 use spec-docs skill
 `@docs/spec/*` 文档提供理论支持
-
 当前 Rust 版本环境约定（Rust 1.93.0+）：对于需要多线程并发调度（Send 约束）的 Trait 异步方法，必须采用“零开销异步 Trait”最佳实践：在 Trait 定义中使用 `-> impl std::future::Future<Output = T> + Send` 进行严格的线程安全约束，并在 `impl` 实现块中直接使用 `async fn` 语法以保持代码简洁。坚决避免引入 `#[async_trait]` 带来的 Box 堆分配开销。
+
+## 基础环境
+
+nodejs@26
+nextjs@16
+Rust 1.93.0+
 
 ## 优先
 

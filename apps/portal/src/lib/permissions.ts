@@ -8,6 +8,7 @@ import { getRedis, type RedisClient } from '@/infrastructure/redis';
 import { ENTITY_ACTIVE, REDIS_KEY_PREFIX } from '@auth-sso/contracts';
 import type { UserPermissionContext } from '@auth-sso/contracts';
 import { createLogger } from '@/lib/logger';
+import { randomInt } from 'crypto';
 
 const log = createLogger('PermissionContext');
 
@@ -25,7 +26,7 @@ const NULL_CACHE_SUFFIX = ':null';
  * 返回 [base - jitter, base + jitter] 区间内的随机秒数。
  */
 function jitteredCacheTtl(): number {
-  const delta = Math.floor(Math.random() * (PERM_CACHE_TTL_JITTER * 2 + 1)) - PERM_CACHE_TTL_JITTER;
+  const delta = randomInt(-PERM_CACHE_TTL_JITTER, PERM_CACHE_TTL_JITTER + 1);
   return PERM_CACHE_TTL_BASE + delta;
 }
 
@@ -56,9 +57,9 @@ export async function getUserPermissionContext(userId: string): Promise<UserPerm
     if (cachedData) {
       return JSON.parse(cachedData) as UserPermissionContext;
     }
-  } catch (cacheError: any) {
+  } catch (cacheError: unknown) {
     // 降级容错：Redis 异常时不阻断核心鉴权业务，仅记录日志并继续查库
-    log.warn(`Redis cache read failed for user ${userId}, falling back to DB`, { error: cacheError.message });
+    log.warn(`Redis cache read failed for user ${userId}, falling back to DB`, { error: (cacheError as Error).message });
   }
 
   try {
@@ -164,14 +165,14 @@ export async function getUserPermissionContext(userId: string): Promise<UserPerm
     if (redis) {
       try {
         await redis.setex(cacheKey, jitteredCacheTtl(), JSON.stringify(context));
-      } catch (cacheWriteError: any) {
-        log.warn(`Redis cache write failed for user ${userId}`, { error: cacheWriteError.message });
+          } catch (cacheWriteError: unknown) {
+            log.warn(`Redis cache write failed for user ${userId}`, { error: (cacheWriteError as Error).message });
       }
     }
 
     return context;
-  } catch (error: any) {
-    log.error('Database query error', { error: error.message, stack: error.stack });
+  } catch (error: unknown) {
+    log.error('Database query error', { error: (error as Error).message });
     return null;
   }
 }
@@ -194,8 +195,8 @@ export async function refreshUserPermissionCache(userId: string): Promise<void> 
     if (ctx) {
       log.info(`Refreshed cache for user`, { userId });
     }
-  } catch (error: any) {
-    log.error(`Failed to refresh cache for user`, { userId, error: error.message });
+  } catch (error: unknown) {
+    log.error(`Failed to refresh cache for user`, { userId, error: (error as Error).message });
   }
 }
 
@@ -224,8 +225,8 @@ export async function clearUserPermissionCache(userId: string): Promise<void> {
     // 同时删除 null 标记，确保下次查询重新走 DB
     await redis.del(cacheKey, `${cacheKey}${NULL_CACHE_SUFFIX}`);
     log.info(`Cleared permissions cache for user`, { userId });
-  } catch (error: any) {
-    log.error(`Failed to clear permission cache for user`, { userId, error: error.message });
+  } catch (error: unknown) {
+    log.error(`Failed to clear permission cache for user`, { userId, error: (error as Error).message });
   }
 }
 
@@ -251,8 +252,8 @@ export async function clearUsersPermissionCache(userIds: string[]): Promise<void
     } else {
       log.info(`Batch cleared permissions cache for ${userIds.length} users`);
     }
-  } catch (error: any) {
-    log.error('Failed to batch clear permissions cache', { error: error.message });
+  } catch (error: unknown) {
+    log.error('Failed to batch clear permissions cache', { error: (error as Error).message });
   }
 }
 
@@ -273,8 +274,8 @@ export async function cacheUserPermissionContext(
     const redis = getRedis();
     const cacheKey = `${REDIS_KEY_PREFIX.USER_PERMS}${userId}`;
     await redis.setex(cacheKey, ttl, JSON.stringify(ctx));
-  } catch (error: any) {
+  } catch (error: unknown) {
     // 静默降级，不影响 Token 签发主流程
-    log.warn(`Failed to cache permissions for user`, { userId, error: error.message });
+    log.warn(`Failed to cache permissions for user`, { userId, error: (error as Error).message });
   }
 }

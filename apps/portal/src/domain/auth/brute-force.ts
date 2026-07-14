@@ -14,6 +14,7 @@ import { db, schema } from '@/infrastructure/db';
 import { getRedis } from '@/infrastructure/redis';
 import { eq, and, gte, sql, count } from 'drizzle-orm';
 import { createLogger } from '@/lib/logger';
+import { REDIS_KEY_PREFIX } from '@auth-sso/contracts';
 
 const log = createLogger('BruteForce');
 
@@ -31,7 +32,7 @@ export const BRUTE_FORCE_WINDOW_MINUTES = (() => {
   return parsed > 0 ? parsed : 15;
 })();
 
-const FAIL_COUNT_KEY_PREFIX = 'portal:login_fail:';
+const FAIL_COUNT_KEY_PREFIX = REDIS_KEY_PREFIX.LOGIN_FAIL;
 const WINDOW_SEC = BRUTE_FORCE_WINDOW_MINUTES * 60;
 
 /**
@@ -94,7 +95,7 @@ export async function checkBruteForce(
   }
 
   if (failCount >= BRUTE_FORCE_MAX_ATTEMPTS) {
-    return { locked: true, message: '登录失败次数过多，账户已临时锁定，请15分钟后重试' };
+    return { locked: true, message: `登录失败次数过多，账户已临时锁定，请${BRUTE_FORCE_WINDOW_MINUTES}分钟后重试` };
   }
 
   return { locked: false };
@@ -119,6 +120,18 @@ export async function incrementBruteForce(userId: string): Promise<void> {
     // Redis 故障时不阻断密码错误的反馈，因为 DB 已写登录日志，降级查询时会自动覆盖
     log.warn('递增计数失败（Redis 故障）', { error: err instanceof Error ? err.message : String(err) });
   }
+}
+
+/**
+ * 管理员手工解除暴力破解锁定（清除 Redis 计数器）。
+ *
+ * 与 clearBruteForceCounter 等效，但语义更明确——专供管理员解锁使用，
+ * 区别于密码正确后的自动清零。
+ *
+ * @param userId 用户 ID
+ */
+export async function resetBruteForceCounter(userId: string): Promise<void> {
+  return clearBruteForceCounter(userId);
 }
 
 /**

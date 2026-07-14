@@ -35,33 +35,35 @@ export function validateClientActive(
  * @param providedSecret - 请求中携带的 client_secret 原文
  * @throws InvalidClientError 当 secret 缺失或不匹配
  */
+/** bcrypt 哈希前缀（识别已迁移至 bcrypt 的 Client Secret） */
+const BCRYPT_PREFIXES = ['$2a$', '$2b$', '$2y$'] as const;
+
 export function validateClientSecret(
-  client: { clientSecret: string | null },
+  client: { clientSecret: string | null; isPublic?: boolean | null },
   providedSecret?: string,
 ): void {
-  if (client.clientSecret) {
-    if (!providedSecret) {
-      throw new InvalidClientError('客户端密钥缺失');
+  // fail-secure：若 Client 有机密但 secret 为 null，一律拒绝（防止意外清空导致认证绕过）
+  if (!client.clientSecret) {
+    if (client.isPublic) return; // 公共客户端（如 SPA）无需 client_secret
+    throw new InvalidClientError('客户端密钥未配置');
+  }
+  if (!providedSecret) {
+    throw new InvalidClientError('客户端密钥缺失');
+  }
+  let matched = false;
+  if (BCRYPT_PREFIXES.some((prefix) => client.clientSecret!.startsWith(prefix))) {
+    matched = bcrypt.compareSync(providedSecret, client.clientSecret);
+  } else {
+    // 兼容老数据 SHA-256，采用 timingSafeEqual 进行定时安全比较
+    const providedHash = createHash('sha256').update(providedSecret).digest('hex');
+    const bufA = Buffer.from(client.clientSecret, 'hex');
+    const bufB = Buffer.from(providedHash, 'hex');
+    if (bufA.length === bufB.length) {
+      matched = timingSafeEqual(bufA, bufB);
     }
-    let matched = false;
-    if (
-      client.clientSecret.startsWith('$2a$') ||
-      client.clientSecret.startsWith('$2b$') ||
-      client.clientSecret.startsWith('$2y$')
-    ) {
-      matched = bcrypt.compareSync(providedSecret, client.clientSecret);
-    } else {
-      // 兼容老数据 SHA-256，采用 timingSafeEqual 进行定时安全比较
-      const providedHash = createHash('sha256').update(providedSecret).digest('hex');
-      const bufA = Buffer.from(client.clientSecret, 'hex');
-      const bufB = Buffer.from(providedHash, 'hex');
-      if (bufA.length === bufB.length) {
-        matched = timingSafeEqual(bufA, bufB);
-      }
-    }
-    if (!matched) {
-      throw new InvalidClientError('客户端密钥不匹配');
-    }
+  }
+  if (!matched) {
+    throw new InvalidClientError('客户端密钥不匹配');
   }
 }
 

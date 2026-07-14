@@ -5,6 +5,7 @@
  * @vitest-environment node
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { COMMON_ERRORS } from '@auth-sso/contracts';
 
 const mocks = vi.hoisted(() => {
   let _row: any = undefined;
@@ -49,7 +50,7 @@ describe('Role Server Actions', () => {
   it('createRole: 缺 code → VALIDATION_ERROR 并包含错误码', async () => {
     const r: any = await createRoleAction({ name: 'X', code: '', sort: 1, deptId: 'a1b2c3d4-e5f6-4789-abcd-ef0123456789' } as any);
     expect(r.success).toBe(false);
-    expect(r.error).toBe('VALIDATION_ERROR');
+    expect(r.error).toBe(COMMON_ERRORS.VALIDATION_ERROR);
     expect(r.message).toBeDefined();
   });
 

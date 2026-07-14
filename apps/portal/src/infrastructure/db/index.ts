@@ -10,14 +10,13 @@
 import postgres from 'postgres';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import * as schema from '../../db/schema';
+import { getEnvConfig } from '../../lib/env';
 
-/** 数据库连接配置 */
-const connectionString = process.env['DATABASE_URL']!;
+/** 数据库连接配置 — 通过 Zod 校验的环境变量，确保启动期 fail-fast */
+const connectionString = getEnvConfig().DATABASE_URL;
 
 /** Postgres 客户端 */
-const client = postgres(connectionString, {
-  prepare: false, // 禁用 prepared statements 以提高 Serverless 兼容性
-});
+const client = postgres(connectionString);
 
 /** Drizzle ORM 实例 */
 export const db = drizzle(client, { schema });

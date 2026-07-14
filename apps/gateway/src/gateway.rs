@@ -2,12 +2,20 @@ use async_trait::async_trait;
 use pingora_core::prelude::*;
 use pingora_http::{RequestHeader, ResponseHeader};
 use pingora_proxy::{ProxyHttp, Session};
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use tracing::{debug, info, warn};
 
 use crate::auth::{JwtVerifier, RefreshedTokens, TokenRefresher};
 use crate::config::{OAuthConfig, Upstreams};
 use crate::cookie;
+
+/// 内部上游请求协议（http/https），由 Gateway::new() 初始化后只读
+static UPSTREAM_SCHEME: OnceLock<String> = OnceLock::new();
+
+/// 获取上游请求协议（如 "http" 或 "https"）
+pub fn upstream_scheme() -> &'static str {
+    UPSTREAM_SCHEME.get().map(|s| s.as_str()).unwrap_or("http")
+}
 use crate::http::{SessionExt, is_html_page_navigation, is_secure_host};
 use crate::oauth;
 use crate::path_matcher::{PathClass, PathMatcher};
@@ -234,6 +242,8 @@ pub struct Gateway {
     oidc_provider_upstream: Arc<Upstreams>,
     /// 与 Portal 共享的 HMAC 密钥（Option 表示未启用 HMAC 签名）
     gateway_shared_secret: Option<String>,
+    /// 内部上游请求协议（http/https）
+    upstream_scheme: String,
 }
 
 impl Gateway {
@@ -271,8 +281,12 @@ impl Gateway {
         oidc_provider_name: String,
         oidc_provider_upstream: Arc<Upstreams>,
         gateway_shared_secret: Option<String>,
+        upstream_scheme: String,
     ) -> Self {
         upstream_oauth.sort_by(|a, b| b.0.len().cmp(&a.0.len()));
+
+        // 初始化全局上游协议（供 refresh/jwks 等模块使用）
+        let _ = UPSTREAM_SCHEME.set(upstream_scheme.clone());
 
         Self {
             path_matcher,
@@ -283,6 +297,7 @@ impl Gateway {
             oidc_provider_name,
             oidc_provider_upstream,
             gateway_shared_secret,
+            upstream_scheme,
         }
     }
 
@@ -350,7 +365,7 @@ impl Gateway {
                 "OIDC Provider 无可用节点，无法执行 Token 交换".to_string(),
             )
         })?;
-        let token_url = format!("http://{node}/api/auth/oauth2/token");
+        let token_url = format!("{}://{node}/api/auth/oauth2/token", self.upstream_scheme);
 
         let body = oauth::build_token_exchange_body(
             code,
@@ -385,9 +400,28 @@ impl Gateway {
             )
         })?;
 
+        let access = json["access_token"]
+            .as_str()
+            .filter(|s| !s.is_empty())
+            .ok_or_else(|| {
+                Error::explain(
+                    ErrorType::HTTPStatus(502),
+                    "Token 响应中缺少 access_token 字段".to_string(),
+                )
+            })?;
+        let refresh = json["refresh_token"]
+            .as_str()
+            .filter(|s| !s.is_empty())
+            .ok_or_else(|| {
+                Error::explain(
+                    ErrorType::HTTPStatus(502),
+                    "Token 响应中缺少 refresh_token 字段".to_string(),
+                )
+            })?;
+
         Ok(TokenExchangeResult {
-            access: json["access_token"].as_str().unwrap_or("").to_string(),
-            refresh: json["refresh_token"].as_str().unwrap_or("").to_string(),
+            access: access.to_string(),
+            refresh: refresh.to_string(),
             id_token: json["id_token"].as_str().map(String::from),
         })
     }
@@ -704,7 +738,7 @@ impl ProxyHttp for Gateway {
             if let Some(ref secret) = self.gateway_shared_secret {
                 let ts = std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap_or_default()
+                    .expect("系统时钟异常：当前时间早于 Unix epoch")
                     .as_secs()
                     .to_string();
                 let payload = format!("{}:{}:{}", ts, id.user_id, id.user_jti);
