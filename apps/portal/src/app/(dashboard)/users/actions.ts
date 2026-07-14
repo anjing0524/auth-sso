@@ -270,9 +270,6 @@ export const resetPasswordAction = withAuth(
     if (!parsed.success) {
       return { success: false, error: COMMON_ERRORS.VALIDATION_ERROR, message: parsed.error.issues[0]!.message };
     }
-    if (!newPassword) {
-      return { success: false, error: COMMON_ERRORS.VALIDATION_ERROR, message: '密码不能为空' };
-    }
     const passwordError = validatePassword(newPassword);
     if (passwordError) {
       return { success: false, error: COMMON_ERRORS.VALIDATION_ERROR, message: passwordError };

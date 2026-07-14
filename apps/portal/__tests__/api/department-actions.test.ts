@@ -21,7 +21,7 @@ vi.mock('@/lib/auth', () => ({
 vi.mock('@/lib/crypto', () => ({ generateUUID: () => 'aaaa-bbbb-cccc-dddd', generateId: () => 'a'.repeat(20) }));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn(), updateTag: vi.fn() }));
 
-import { createDepartmentAction, updateDepartmentAction } from '@/app/(dashboard)/departments/actions';
+import { createDepartmentAction, updateDepartmentAction, deleteDepartmentAction } from '@/app/(dashboard)/departments/actions';
 
 const mockDb = holder.mockDb!;
 const now = new Date();
@@ -58,6 +58,9 @@ describe('Department Server Actions', () => {
     await expect(updateDepartmentAction('bad', { name: 'X' } as any)).rejects.toThrow();
   });
 
-  // delete 测试需要 mock 区分"查部门"与"查子部门"两次 findFirst 调用，
-  // 当前 mock-db 无法在同次测试中返回不同结果，留待 mock 增强后补充。
+  // delete 测试验证核心业务守卫（含子部门/关联用户/关联角色拒绝删除）
+  it('delete: 不存在 → throw EntityNotFoundError', async () => {
+    mockDb.setQueryResult([]);
+    await expect(deleteDepartmentAction('bad')).rejects.toThrow();
+  });
 });

@@ -45,13 +45,8 @@ export function buildTree<
     }
     const parentId = item[parentKey] as string | null;
     if (parentId && nodeMap.has(parentId)) {
-      const parentNode = nodeMap.get(parentId);
-      if (!parentNode) {
-        // 理论上不应发生，nodeMap.has() 已确认存在
-        roots.push(node);
-      } else {
-        parentNode.children.push(node);
-      }
+      const parentNode = nodeMap.get(parentId)!;
+      parentNode.children.push(node);
     } else {
       roots.push(node);
     }

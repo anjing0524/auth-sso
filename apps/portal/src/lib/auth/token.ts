@@ -173,6 +173,15 @@ export async function verifyAccessToken(
     }
 
     // 归一化：确保必填字段有默认值（Token 签发时总是包含，此处为运行时安全兜底）
+    // 若签发端因回归漏设这些字段，记录告警以便快速发现签发 Bug
+    if (!payload.roles || !payload.permissions || !payload.deptIds) {
+      log.warn('JWT 载荷缺少权限关键字段（签发端可能漏设）', {
+        sub: payload.sub,
+        hasRoles: !!payload.roles,
+        hasPermissions: !!payload.permissions,
+        hasDeptIds: !!payload.deptIds,
+      });
+    }
     return {
       ...payload,
       roles: payload.roles ?? [],

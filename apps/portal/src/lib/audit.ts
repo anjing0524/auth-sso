@@ -45,9 +45,14 @@ async function flushBuffer(): Promise<void> {
 }
 
 // 启动定时刷写（Node.js 环境中 setInterval 不影响事件循环退出）
-const flushTimer = setInterval(flushBuffer, FLUSH_INTERVAL_MS);
-if (flushTimer.unref) {
-  flushTimer.unref(); // 不阻止进程退出
+// globalThis 防 Next.js 热重载（HMR）重复创建 timer
+const AUDIT_TIMER_KEY = Symbol.for('auth-sso.audit.flushTimer');
+if (!(globalThis as Record<symbol, unknown>)[AUDIT_TIMER_KEY]) {
+  const flushTimer = setInterval(flushBuffer, FLUSH_INTERVAL_MS);
+  if (flushTimer.unref) {
+    flushTimer.unref();
+  }
+  (globalThis as Record<symbol, unknown>)[AUDIT_TIMER_KEY] = flushTimer;
 }
 
 // 进程退出前最后一次 flush，减少优雅关闭时缓冲数据丢失

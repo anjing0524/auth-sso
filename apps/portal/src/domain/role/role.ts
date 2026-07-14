@@ -80,12 +80,20 @@ export function guardNotSystemRole(role: Role): void {
 
 /**
  * 纯函数：判断角色更新是否影响权限决策（需触发用户重登）
+ *
+ * 检测维度：
+ * - 部门变更（数据范围变化）
+ * - 状态变更（ACTIVE → DISABLED）
+ * - 权限绑定变更（Controller 传入，因 role domain 不持有 rolePermissions）
  */
 export function hasRolePermissionImpact(
   original: Pick<Role, 'deptId' | 'status'>,
   updated: Pick<Role, 'deptId' | 'status'>,
+  permissionChanged: boolean = false,
 ): boolean {
-  return original.deptId !== updated.deptId || original.status !== updated.status;
+  return original.deptId !== updated.deptId
+    || original.status !== updated.status
+    || permissionChanged;
 }
 
 // ────────────────────────────────────────────

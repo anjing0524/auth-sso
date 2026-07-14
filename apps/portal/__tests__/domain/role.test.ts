@@ -8,6 +8,9 @@ import {
   applyRoleUpdate,
   guardNotSystemRole,
   toDomainRole,
+  hasRolePermissionImpact,
+  roleToInsertRow,
+  roleToUpdateRow,
 } from '@/domain/role/role';
 import { CreateRoleInputSchema } from '@/domain/role/types';
 import { BusinessRuleViolationError } from '@/domain/shared/errors';
@@ -63,5 +66,47 @@ describe('Role 领域核心规则', () => {
     expect(role.name).toBe('Admin');
     expect(role.deptId).toBe('a1b2c3d4-e5f6-4789-abcd-ef0123456789');
     expect(role.isSystem).toBe(true);
+  });
+});
+
+describe('hasRolePermissionImpact', () => {
+  const base = { deptId: 'dept-a', status: 'ACTIVE' as const };
+
+  it('deptId 变更 → 返回 true', () => {
+    expect(hasRolePermissionImpact(base, { ...base, deptId: 'dept-b' })).toBe(true);
+  });
+
+  it('status 变更 → 返回 true', () => {
+    expect(hasRolePermissionImpact(base, { ...base, status: 'DISABLED' as const })).toBe(true);
+  });
+
+  it('permissionChanged=true → 返回 true（即使 deptId/status 不变）', () => {
+    expect(hasRolePermissionImpact(base, base, true)).toBe(true);
+  });
+
+  it('全部不变 → 返回 false', () => {
+    expect(hasRolePermissionImpact(base, base)).toBe(false);
+  });
+});
+
+describe('row 转换函数', () => {
+  const input = CreateRoleInputSchema.parse({ name: 'Test', code: 'TEST', deptId: 'a1b2c3d4-e5f6-4789-abcd-ef0123456789', sort: 0 });
+  const role = createRole(input, mockIdGen);
+
+  it('roleToInsertRow 应包含所有字段', () => {
+    const row = roleToInsertRow(role);
+    expect(row.id).toBe('role_id_12345');
+    expect(row.name).toBe('Test');
+    expect(row.code).toBe('TEST');
+    expect(row.deptId).toBe('a1b2c3d4-e5f6-4789-abcd-ef0123456789');
+    expect(row.status).toBe('ACTIVE');
+    expect(row.createdAt).toBeInstanceOf(Date);
+  });
+
+  it('roleToUpdateRow 不应包含 id', () => {
+    const row = roleToUpdateRow(role);
+    expect(row).not.toHaveProperty('id');
+    expect(row.name).toBe('Test');
+    expect(row.status).toBe('ACTIVE');
   });
 });

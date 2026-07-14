@@ -37,11 +37,12 @@ async function getRoleBoundUserIds(roleId: string): Promise<string[]> {
 }
 
 /** 获取绑定某角色的所有用户 ID，并主动刷新其权限缓存（删旧 → 查 DB → 写新） */
-async function invalidateRoleBoundUsersCache(roleId: string): Promise<void> {
+async function invalidateRoleBoundUsersCache(roleId: string): Promise<string[]> {
   const userIds = await getRoleBoundUserIds(roleId);
   if (userIds.length > 0) {
     await refreshUsersPermissionCache(userIds);
   }
+  return userIds;
 }
 
 /** 创建角色 */
@@ -111,10 +112,9 @@ export const updateRoleAction = withAuth(
       permissionChanged = hasRolePermissionImpact(role, updated);
       await tx.update(schema.roles).set(roleToUpdateRow(updated)).where(eq(schema.roles.id, roleId));
     });
-    await invalidateRoleBoundUsersCache(roleId);
-    if (permissionChanged) {
-      const userIds = await getRoleBoundUserIds(roleId);
-      if (userIds.length > 0) await revokeUsersAccessByUserId(userIds);
+    const userIds = await invalidateRoleBoundUsersCache(roleId);
+    if (permissionChanged && userIds.length > 0) {
+      await revokeUsersAccessByUserId(userIds);
     }
 
     revalidatePath('/roles');

@@ -21,7 +21,26 @@ import {
 } from '@/domain/permission/types';
 import { EntityNotFoundError, DuplicateEntityError } from '@/domain/shared/errors';
 import { generateUUID } from '@/lib/crypto';
+import { refreshUsersPermissionCache } from '@/lib/permissions';
+import { revokeUsersAccessByUserId } from '@/lib/session/revoke';
 import { COMMON_ERRORS, type ApiResponse } from '@auth-sso/contracts';
+
+async function getAffectedUserIds(permId: string): Promise<string[]> {
+  const rows = await db
+    .select({ userId: schema.userRoles.userId })
+    .from(schema.userRoles)
+    .innerJoin(schema.rolePermissions, eq(schema.rolePermissions.roleId, schema.userRoles.roleId))
+    .where(eq(schema.rolePermissions.permissionId, permId));
+  return [...new Set(rows.map((r) => r.userId))];
+}
+
+async function invalidateAffectedUsersCache(permId: string): Promise<void> {
+  const userIds = await getAffectedUserIds(permId);
+  if (userIds.length > 0) {
+    await refreshUsersPermissionCache(userIds);
+    await revokeUsersAccessByUserId(userIds);
+  }
+}
 
 /** 创建权限 */
 export const createPermissionAction = withAuth(
@@ -74,6 +93,9 @@ export const updatePermissionAction = withAuth(
       return updated;
     });
 
+    // 权限变更影响所有绑定了该权限的角色 → 这些角色的用户权限缓存需刷新
+    await invalidateAffectedUsersCache(permId);
+
     revalidatePath('/permissions');
     updateTag('permissions-list');
     return { success: true, data: { id: permId }, message: '权限更新成功' };
@@ -89,10 +111,18 @@ export const deletePermissionAction = withAuth(
     });
     if (!row) throw new EntityNotFoundError('Permission', permId);
 
+    // 事务前获取受影响的用户 ID（事务中 rolePermissions 会被删除）
+    const affectedUserIds = await getAffectedUserIds(permId);
+
     await db.transaction(async (tx) => {
       await tx.delete(schema.rolePermissions).where(eq(schema.rolePermissions.permissionId, row.id));
       await tx.delete(schema.permissions).where(eq(schema.permissions.id, row.id));
     });
+
+    if (affectedUserIds.length > 0) {
+      await refreshUsersPermissionCache(affectedUserIds);
+      await revokeUsersAccessByUserId(affectedUserIds);
+    }
 
     revalidatePath('/permissions');
     updateTag('permissions-list');

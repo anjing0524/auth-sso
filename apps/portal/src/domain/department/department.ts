@@ -165,5 +165,5 @@ export function departmentToUpdateRow(d: Department) {
  * 纯函数：将扁平部门列表构建为树形结构
  */
 export function buildDepartmentTree(flatList: Department[]): DepartmentTreeNode[] {
-  return buildTree(flatList, 'id', 'parentId');
+  return buildTree(flatList, 'id', 'parentId', 'sort');
 }

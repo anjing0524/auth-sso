@@ -33,37 +33,33 @@ import { hashToken } from '@/lib/crypto';
 async function performRevocation(cookieStore: Awaited<ReturnType<typeof cookies>>): Promise<{ userId?: string; username?: string }> {
   let userId: string | undefined;
   let username: string | undefined;
-  let jti: string | undefined;
-  let jtiExp: number | undefined;
+
+  // 1. 解码 JWT 获取 userId/jti/exp（非关键路径：失败不影响后续撤销步骤）
   try {
-    // 1. 解码 JWT 获取 userId/jti/exp
     const jwtToken = cookieStore.get(COOKIE_NAMES.JWT)?.value;
     if (jwtToken) {
       const claims = await verifyAccessToken(jwtToken);
       if (claims?.sub) {
         userId = claims.sub;
-        jti = claims.jti;
-        jtiExp = claims.exp;
+        const jti = claims.jti;
+        const jtiExp = claims.exp;
+        // jti 黑名单写入（Gateway 离线验签即时拦截）— 每个步骤独立 try/catch
+        if (jti && jtiExp) {
+          try {
+            await revokeJti(jti, jtiExp);
+          } catch (e) {
+            log.error('Access Token jti 撤销失败', { error: (e as Error).message });
+          }
+        }
       }
     }
+  } catch (err) {
+    const mapped = mapDomainError(err);
+    log.error('JWT 解码异常', { error: mapped.error, message: mapped.message });
+  }
 
-    // 2. DB: 标记当前 Refresh Token revoked（阻止 refresh 端点续期）
-    const refreshToken = await getRefreshTokenFromCookie();
-    if (refreshToken) {
-      await db
-        .update(schema.refreshTokens)
-        .set({ revoked: new Date() })
-        // tokenHash 存储的是 SHA256(token)，查询时需同样 hash 匹配
-        .where(eq(schema.refreshTokens.tokenHash, hashToken(refreshToken)));
-    }
-
-    // 3. Redis: jti 黑名单写入（Gateway 离线验签即时拦截）
-    //    先于步骤 4 执行，确保 Token 立即失效。
-    if (jti && jtiExp) {
-      await revokeJti(jti, jtiExp);
-    }
-
-    // 撤销 login_session 的 jti
+  // 2. 撤销 login_session 的 jti（独立 try/catch）
+  try {
     const loginSession = cookieStore.get(COOKIE_NAMES.LOGIN_SESSION)?.value;
     if (loginSession) {
       const payload = decodeJwtPayload(loginSession);
@@ -71,45 +67,53 @@ async function performRevocation(cookieStore: Awaited<ReturnType<typeof cookies>
         await revokeJti(payload.jti, payload.exp);
       }
     }
-
-    // 4. DB: 按用户 ID 撤销全部 Refresh Token（防御纵深，单独 try/catch）
-    //    放在 jti 黑名单之后执行：Redis 是实时拦截线，DB 是续期阻断线，
-    //    两者失败不应互相影响。
-    if (userId) {
-      try {
-        await db
-          .update(schema.refreshTokens)
-          .set({ revoked: new Date() })
-          .where(eq(schema.refreshTokens.userId, userId));
-      } catch (e) {
-        log.error('批量撤销 Refresh Token 失败', { error: (e as Error).message });
-      }
-
-      // 5. 批量撤销所有活跃 Access Token（jti 黑名单写入 + 清除 user→jti 映射）
-      try {
-        await revokeUserAccessByUserId(userId);
-      } catch (e) {
-        log.error('批量撤销 Access Token 失败', { error: (e as Error).message });
-      }
-    }
-
-    // 6. DB: 查询用户名用于日志（撤销完成后查询，失败不阻断）
-    if (userId) {
-      try {
-        const user = await db
-          .select({ username: schema.users.username })
-          .from(schema.users)
-          .where(eq(schema.users.id, userId))
-          .limit(1);
-        username = user[0]?.username || userId;
-      } catch {
-        username = userId;
-      }
-    }
-  } catch (err) {
-    const mapped = mapDomainError(err);
-    log.error('登出异常', { error: mapped.error, message: mapped.message });
+  } catch (e) {
+    log.error('Login Session jti 撤销失败', { error: (e as Error).message });
   }
+
+  // 3. DB: 标记当前 Refresh Token revoked（阻止 refresh 端点续期）
+  try {
+    const refreshToken = await getRefreshTokenFromCookie();
+    if (refreshToken) {
+      await db
+        .update(schema.refreshTokens)
+        .set({ revoked: new Date() })
+        .where(eq(schema.refreshTokens.tokenHash, hashToken(refreshToken)));
+    }
+  } catch (e) {
+    log.error('Refresh Token 撤销失败', { error: (e as Error).message });
+  }
+
+  // 4. DB: 按用户 ID 撤销全部 Refresh Token + 批量撤销 Access Token（防御纵深）
+  if (userId) {
+    try {
+      await db
+        .update(schema.refreshTokens)
+        .set({ revoked: new Date() })
+        .where(eq(schema.refreshTokens.userId, userId));
+    } catch (e) {
+      log.error('批量撤销 Refresh Token 失败', { error: (e as Error).message });
+    }
+
+    try {
+      await revokeUserAccessByUserId(userId);
+    } catch (e) {
+      log.error('批量撤销 Access Token 失败', { error: (e as Error).message });
+    }
+
+    // 5. 查询用户名用于日志（撤销完成后查询，失败不阻断）
+    try {
+      const user = await db
+        .select({ username: schema.users.username })
+        .from(schema.users)
+        .where(eq(schema.users.id, userId))
+        .limit(1);
+      username = user[0]?.username || userId;
+    } catch {
+      username = userId;
+    }
+  }
+
   return { userId, username };
 }
 

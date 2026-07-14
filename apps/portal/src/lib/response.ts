@@ -61,28 +61,3 @@ export function restError(
 ): NextResponse<{ error: string; message: string }> {
   return NextResponse.json({ error: code, message }, { status });
 }
-
-// ===================================================
-// Server Action 响应工厂（actions.ts 专用）
-// 保持与 @auth-sso/contracts ApiResponse<T> 对齐
-// ===================================================
-
-/**
- * Server Action 成功响应。
- */
-export function apiSuccess<T>(
-  data: T,
-  pagination?: PaginationMeta,
-): { success: true; data: T; pagination?: PaginationMeta; message?: string } {
-  return { success: true as const, data, ...(pagination ? { pagination } : {}) };
-}
-
-/**
- * Server Action 错误响应。
- */
-export function apiError(
-  code: string,
-  message: string,
-): { success: false; error: string; message: string } {
-  return { success: false as const, error: code, message };
-}

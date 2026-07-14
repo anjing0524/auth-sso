@@ -70,22 +70,19 @@ describe('Client Server Actions', () => {
   });
 
   describe('rotateClientSecretAction', () => {
-    it('存在的 client → 返回新 secret', async () => {
-      setRow(clientRow);
-      const result: any = await rotateClientSecretAction('client_mock');
-      expect(result.success).toBe(true);
-    });
-  });
-
-  describe('rotateClientSecretAction', () => {
     // @req G-CLT-SEC
-    it('轮换密钥成功 → 返回新 secret', async () => {
+    it('轮换密钥成功 → 返回新 secret 且 DB 写入哈希值', async () => {
       setRow(clientRow);
       const result: any = await rotateClientSecretAction('client_mock');
       expect(result.success).toBe(true);
       expect(result.data.clientSecret).toBeDefined();
-      // 验证返回的是原始 secret（64 字符 hex），不是哈希值
+      // 验证返回的是原始 secret（64 字符），不是哈希值
       expect(result.data.clientSecret).toBe('s'.repeat(64));
+      // 验证 DB 写入了哈希后的密钥（hashClientSecret mock 返回 'hash:xxx'）
+      const writes = mockDb.getWrites();
+      const update = writes.find(w => w.type === 'update');
+      expect(update).toBeDefined();
+      expect(update!.data.clientSecret).toBe('hash:' + 's'.repeat(64));
     });
   });
 

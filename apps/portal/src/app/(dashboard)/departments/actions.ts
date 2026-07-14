@@ -28,18 +28,6 @@ import { generateUUID } from '@/lib/crypto';
 import { canAccessDept } from '@/lib/auth';
 import { COMMON_ERRORS, type ApiResponse } from '@auth-sso/contracts';
 
-/**
- * 查询父级部门的 ancestors，用于计算新部门的物化路径
- * @returns 父级的 ancestors（顶级为 null），父级不存在时返回 null
- */
-async function getParentAncestors(parentId: string): Promise<string | null> {
-  const parent = await db.query.departments.findFirst({
-    where: eq(schema.departments.id, parentId),
-    columns: { id: true, ancestors: true },
-  });
-  return parent?.ancestors ?? null;
-}
-
 /** 创建部门 */
 export const createDepartmentAction = withAuth(
   { permissions: ['department:create'], audit: 'DEPARTMENT_CREATE' },
@@ -54,13 +42,22 @@ export const createDepartmentAction = withAuth(
       throw new ForbiddenError('无权在指定父部门下创建子部门');
     }
 
-    // 查询父级的 ancestors 以计算物化路径
-    const parentAncestors = parsed.data.parentId
-      ? await getParentAncestors(parsed.data.parentId)
-      : null;
+    const dept = await db.transaction(async (tx) => {
+      // 查询父级 ancestors 在事务内完成，消除读-写竞争窗口
+      const parentAncestors = parsed.data.parentId
+        ? await (async () => {
+            const parent = await tx.query.departments.findFirst({
+              where: eq(schema.departments.id, parsed.data.parentId!),
+              columns: { id: true, ancestors: true },
+            });
+            return parent?.ancestors ?? null;
+          })()
+        : null;
 
-    const dept = createDepartment(parsed.data, generateUUID, parentAncestors);
-    await db.insert(schema.departments).values(departmentToInsertRow(dept));
+      const d = createDepartment(parsed.data, generateUUID, parentAncestors);
+      await tx.insert(schema.departments).values(departmentToInsertRow(d));
+      return d;
+    });
 
     revalidatePath('/departments');
     updateTag('departments-list');
