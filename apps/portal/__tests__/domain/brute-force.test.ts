@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { checkBruteForce, incrementBruteForce, clearBruteForceCounter } from '@/domain/auth/brute-force';
+import { checkBruteForce, incrementBruteForce, clearBruteForceCounter } from '@/lib/auth/brute-force';
 
 // ======== Redis Mock ========
 const { redisStore, redisState, mockRedis } = vi.hoisted(() => {

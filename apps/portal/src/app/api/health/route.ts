@@ -10,7 +10,7 @@ import { NextResponse } from 'next/server';
 import { db } from '@/infrastructure/db';
 import { getRedis } from '@/infrastructure/redis';
 import { sql } from 'drizzle-orm';
-import Redis from 'ioredis';
+import type Redis from 'ioredis';
 
 interface HealthCheck {
   status: 'ok' | 'fail';

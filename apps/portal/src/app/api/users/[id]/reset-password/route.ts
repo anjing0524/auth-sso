@@ -3,7 +3,7 @@
  *
  * POST /api/users/[id]/reset-password — 管理员重置用户密码，所有活跃会话立即失效
  */
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest } from 'next/server';
 import { withPermission, canAccessDept } from '@/lib/auth';
 import { db, schema } from '@/infrastructure/db';
 import { eq } from 'drizzle-orm';
@@ -13,6 +13,7 @@ import { revokeUserAccessByUserId } from '@/lib/session/revoke';
 import { refreshUserPermissionCache } from '@/lib/permissions';
 import { validatePassword } from '@/domain/shared/zod-schemas';
 import { createLogger } from '@/lib/logger';
+import { restSuccess, restError } from '@/lib/response';
 
 const log = createLogger('ResetPassword');
 
@@ -30,10 +31,7 @@ export async function POST(
     // NFR-SEC-05: 密码策略统一校验（单一真相源 — domain/shared/zod-schemas.ts PasswordSchema）
     const passwordError = validatePassword(newPassword);
     if (passwordError) {
-      return NextResponse.json(
-        { error: COMMON_ERRORS.VALIDATION_ERROR, message: passwordError },
-        { status: 400 },
-      );
+      return restError(COMMON_ERRORS.VALIDATION_ERROR, passwordError, 400);
     }
 
     // 数据范围守卫：只能重置本部门（含子部门）范围内用户的密码（H-DSCOPE-003）
@@ -43,24 +41,15 @@ export async function POST(
       columns: { id: true, deptId: true, passwordHash: true, passwordHistory: true },
     });
     if (!target) {
-      return NextResponse.json(
-        { error: USER_ERRORS.USER_NOT_FOUND, message: '用户不存在' },
-        { status: 404 },
-      );
+      return restError(USER_ERRORS.USER_NOT_FOUND, '用户不存在', 404);
     }
     if (!canAccessDept(claims.deptIds, target.deptId)) {
-      return NextResponse.json(
-        { error: COMMON_ERRORS.FORBIDDEN, message: '无权操作该用户' },
-        { status: 403 },
-      );
+      return restError(COMMON_ERRORS.FORBIDDEN, '无权操作该用户', 403);
     }
 
     // NFR-SEC-15: 禁止重用最近 5 次密码
     if (await isPasswordReused(newPassword, target.passwordHistory ?? null)) {
-      return NextResponse.json(
-        { error: COMMON_ERRORS.VALIDATION_ERROR, message: '新密码不能与该用户最近使用过的密码相同' },
-        { status: 400 },
-      );
+      return restError(COMMON_ERRORS.VALIDATION_ERROR, '新密码不能与该用户最近使用过的密码相同', 400);
     }
 
     const passwordHash = await hashPassword(newPassword);
@@ -84,6 +73,6 @@ export async function POST(
       log.error('刷新缓存失败', { error: (e as Error).message });
     }
 
-    return NextResponse.json({ success: true, message: '密码已重置，该用户所有会话已失效' });
+    return restSuccess({ message: '密码已重置，该用户所有会话已失效' });
   });
 }

@@ -5,7 +5,7 @@
  * @vitest-environment node
  */
 import { describe, it, expect } from 'vitest';
-import { toggleUserStatus, unlockUser, createUser, deleteUser, applyUserUpdate, User } from '../../src/domain/user/user';
+import { toggleUserStatus, unlockUser, createUser, deleteUser, applyUserUpdate, type User } from '../../src/domain/user/user';
 import { BusinessRuleViolationError } from '../../src/domain/shared/errors';
 
 describe('User 领域核心规则与工厂单元测试', () => {

@@ -136,7 +136,6 @@ describe('POST /api/auth/logout', () => {
     const json = await res.json();
 
     expect(res.status).toBe(200);
-    expect(json.success).toBe(true);
   });
 
   it('有 JWT Cookie 时撤销 jti 并清除 Cookie', async () => {
@@ -152,7 +151,6 @@ describe('POST /api/auth/logout', () => {
     const json = await res.json();
 
     expect(res.status).toBe(200);
-    expect(json.success).toBe(true);
     expect(mockVerifyAccessToken).toHaveBeenCalledWith('valid-jwt');
     expect(mockRevokeJti).toHaveBeenCalledWith('jti-1', expect.any(Number));
 
@@ -186,7 +184,6 @@ describe('POST /api/auth/logout', () => {
     const json = await res.json();
 
     expect(res.status).toBe(200);
-    expect(json.success).toBe(true);
     // 仍然清除全部 Cookie
     expect(res.cookies.get('portal_jwt_token')?.maxAge).toBe(0);
   });

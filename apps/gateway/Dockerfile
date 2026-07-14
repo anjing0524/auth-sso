@@ -25,6 +25,10 @@ RUN touch src/main.rs && cargo build --release
 
 # Runner stage
 FROM alpine:latest
+
+# 创建非 root 用户（安全加固：禁止容器以 root 运行）
+RUN addgroup -S gateway && adduser -S gateway -G gateway
+
 WORKDIR /app
 
 # 安装 ca-certificates 运行时证书支持
@@ -36,12 +40,15 @@ COPY --from=builder /app/apps/gateway/target/release/gateway /usr/local/bin/gate
 # 复制 Docker 环境专用配置文件（upstream/issuer/redis 使用 Docker 内部地址）
 COPY apps/gateway/gateway.docker.toml ./gateway.toml
 
-# 创建 SSL 目录挂载点
-RUN mkdir -p /etc/gateway/ssl
+# 创建 SSL 目录挂载点并授予 gateway 用户权限
+RUN mkdir -p /etc/gateway/ssl && chown -R gateway:gateway /etc/gateway/ssl
 
 EXPOSE 80 443
 
 # 设置日志级别
 ENV RUST_LOG=info
+
+# 切换到非 root 用户运行
+USER gateway
 
 CMD ["gateway"]

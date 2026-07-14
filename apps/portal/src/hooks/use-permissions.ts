@@ -26,8 +26,8 @@ async function fetchPermissions(userId: string): Promise<void> {
     .then((r) => r.json())
     .then((data) => {
       _cacheByUser.set(userId, {
-        roles: data.data?.roles ?? [],
-        permissions: data.data?.permissions ?? [],
+        roles: data?.roles ?? [],
+        permissions: data?.permissions ?? [],
         loading: false,
       });
     })

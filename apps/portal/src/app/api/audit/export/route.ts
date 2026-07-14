@@ -7,7 +7,7 @@
  * @route GET /api/audit/export?type=login|operation
  * @permission audit:export
  */
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 import { getLoginLogs, getAuditLogs } from '@/app/audit/data';
 import { withPermission } from '@/lib/auth';
 

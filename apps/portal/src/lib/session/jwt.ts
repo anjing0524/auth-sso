@@ -27,6 +27,7 @@ export function unsafeDecodeJwtPayload(token: string): PortalJwtClaims | null {
 }
 
 /**
- * @deprecated 请使用 unsafeDecodeJwtPayload（显式标注不验签语义）
+ * @deprecated since v3.2 — remove after 2026-10-14
+ * 请使用 unsafeDecodeJwtPayload（显式标注不验签语义）
  */
 export const decodeJwtPayload = unsafeDecodeJwtPayload;

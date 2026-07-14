@@ -4,12 +4,13 @@
  * POST /api/roles/[id]/permissions — 为角色分配权限
  * PUT /api/roles/[id]/permissions — 更新角色权限
  */
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest } from 'next/server';
 import { withPermission, canAccessDept, logServerDataRead } from '@/lib/auth';
 import { getRolePermissions } from '@/app/(dashboard)/roles/data';
 import { COMMON_ERRORS, ROLE_ERRORS } from '@auth-sso/contracts';
 import { db, schema } from '@/infrastructure/db';
 import { eq } from 'drizzle-orm';
+import { restSuccess, restError } from '@/lib/response';
 
 interface RouteParams { params: Promise<{ id: string }>; }
 
@@ -22,14 +23,14 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       columns: { id: true, deptId: true },
     });
     if (!role) {
-      return NextResponse.json({ error: ROLE_ERRORS.ROLE_NOT_FOUND, message: '角色不存在' }, { status: 404 });
+      return restError(ROLE_ERRORS.ROLE_NOT_FOUND, '角色不存在', 404);
     }
     if (!canAccessDept(claims.deptIds, role.deptId)) {
-      return NextResponse.json({ error: COMMON_ERRORS.FORBIDDEN, message: '无权查看该角色的权限' }, { status: 403 });
+      return restError(COMMON_ERRORS.FORBIDDEN, '无权查看该角色的权限', 403);
     }
 
     const permissions = await getRolePermissions(id);
     await logServerDataRead('role_permissions', id);
-    return NextResponse.json({ success: true, data: permissions });
+    return restSuccess(permissions);
   });
 }

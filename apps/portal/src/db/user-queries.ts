@@ -4,7 +4,7 @@
  * 消除 data.ts 与 api/users/route.ts 之间 ~80 行重复的查询构建逻辑。
  * 两类读路径统一通过本模块组合查询条件与响应格式化。
  */
-import { eq, ne, or, ilike, and, inArray } from 'drizzle-orm';
+import { eq, ne, or, ilike, type and, inArray, sql } from 'drizzle-orm';
 import { schema } from '@/infrastructure/db';
 import type { UserStatus } from '@auth-sso/contracts';
 import { asUserStatus } from '@/lib/type-guards';
@@ -58,11 +58,11 @@ export function buildUserListConditions(params: {
   }
 
   // 数据范围过滤（v3.2: 直接按部门 ID 列表过滤）
-  // 空 deptIds → fail-closed：添加恒假条件防止无意中返回全表数据
+  // 空 deptIds → fail-closed：添加 SQL 恒假条件防止无意中返回全表数据
   if (deptIds.length > 0) {
     conditions.push(inArray(schema.users.deptId, deptIds));
   } else {
-    conditions.push(eq(schema.users.id, '__none__'));
+    conditions.push(sql`FALSE`);
   }
 
   return conditions;

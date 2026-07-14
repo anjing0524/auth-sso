@@ -3,10 +3,11 @@
  *
  * GET 读操作委托给 permissions/data.ts 统一读模型。
  */
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest } from 'next/server';
 import { withPermission } from '@/lib/auth';
 import { COMMON_ERRORS } from '@auth-sso/contracts';
 import { getPermissionById } from '@/app/(dashboard)/permissions/data';
+import { restSuccess, restError } from '@/lib/response';
 
 interface RouteParams { params: Promise<{ id: string }>; }
 
@@ -15,7 +16,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   return withPermission({ permissions: ['permission:read'] }, async () => {
     const { id } = await params;
     const perm = await getPermissionById(id);
-    if (!perm) return NextResponse.json({ error: COMMON_ERRORS.NOT_FOUND, message: '权限不存在' }, { status: 404 });
-    return NextResponse.json({ success: true, data: perm });
+    if (!perm) return restError(COMMON_ERRORS.NOT_FOUND, '权限不存在', 404);
+    return restSuccess(perm);
   });
 }

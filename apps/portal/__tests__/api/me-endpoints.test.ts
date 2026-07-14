@@ -318,10 +318,10 @@ describe('Me Endpoints', () => {
       const body = await response.json();
 
       expect(response.status).toBe(200);
-      expect(body.data.userId).toBe('user-1');
-      expect(body.data.permissions).toContain('user:list');
-      expect(body.data.roles).toHaveLength(1);
-      expect(body.data.roles[0].code).toBe('ADMIN');
+      expect(body.userId).toBe('user-1');
+      expect(body.permissions).toContain('user:list');
+      expect(body.roles).toHaveLength(1);
+      expect(body.roles[0].code).toBe('ADMIN');
     });
 
     it('无 JWT 时返回 401', async () => {

@@ -90,17 +90,21 @@ POST /api/auth/login
 ```json
 {
   "email": "admin@example.com",
-  "password": "SecureP@ss1"
+  "password": "SecureP@ss1",
+  "session_id": "optional-oauth-session-id"
 }
 ```
-
 **成功响应（200）：**
 ```json
-{
-  "success": true,
-  "data": { "redirectUrl": "/dashboard" }
-}
+// OAuth 标准链路（提供了 session_id）：携带 redirect 字段，前端导航到 authorize 端点
+{ "success": true, "redirect": "/api/auth/oauth2/authorize?session_id=xxx" }
+
+// 无 OAuth 上下文（无 session_id）：仅 success:true，前端默认跳转 /dashboard
+{ "success": true }
 ```
+
+**说明：** 登录端点不返回 `data` 包裹——`redirect` 为可选字段（仅 OAuth 链路存在），
+与 `ApiResponse<T>` 格式有所偏离，但作为内部自消费端点，保持与前端 `login-form.tsx` 的一致性是首要约束。
 
 **错误响应（401）：**
 ```json

@@ -3,10 +3,11 @@
  *
  * GET 读操作委托给 clients/data.ts 统一读模型，消除重复 Drizzle 查询。
  */
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest } from 'next/server';
 import { withPermission } from '@/lib/auth';
 import { getClients } from '@/app/(dashboard)/clients/data';
 import { parsePagination } from '@/lib/pagination';
+import { restListSuccess } from '@/lib/response';
 
 
 /** GET /api/clients — 委托 data.ts */
@@ -18,10 +19,6 @@ export async function GET(request: NextRequest) {
     const status = sp.get('status') || '';
 
     const result = await getClients({ page, pageSize, keyword, status });
-    return NextResponse.json({
-      success: true,
-      data: result.data,
-      pagination: result.pagination,
-    });
+    return restListSuccess(result.data, result.pagination);
   });
 }

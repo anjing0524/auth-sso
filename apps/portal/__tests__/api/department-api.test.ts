@@ -225,17 +225,17 @@ describe('Department API', () => {
       const body = await parseResponseJson(res);
 
       expect(res.status).toBe(200);
-      expect(body.data).toHaveLength(2);
+      expect(body).toHaveLength(2);
 
       // 根部门A 包含子部门
-      const rootA = body.data.find((d: any) => d.id === 'dept-1');
+      const rootA = body.find((d: any) => d.id === 'dept-1');
       expect(rootA).toBeDefined();
       expect(rootA.children).toHaveLength(1);
       expect(rootA.children[0].id).toBe('dept-2');
       expect(rootA.children[0].name).toBe('子部门');
 
       // 根部门B 无子部门
-      const rootB = body.data.find((d: any) => d.id === 'dept-3');
+      const rootB = body.find((d: any) => d.id === 'dept-3');
       expect(rootB).toBeDefined();
       expect(rootB.children).toHaveLength(0);
     });
@@ -272,7 +272,7 @@ describe('Department API', () => {
       const body = await parseResponseJson(res);
 
       expect(res.status).toBe(200);
-      expect(Array.isArray(body.data)).toBe(true);
+      expect(Array.isArray(body)).toBe(true);
     });
   });
 
@@ -292,7 +292,7 @@ describe('Department API', () => {
       const body = await parseResponseJson(res);
 
       expect(res.status).toBe(200);
-      expect(Array.isArray(body.data)).toBe(true);
+      expect(Array.isArray(body)).toBe(true);
     });
   });
 });

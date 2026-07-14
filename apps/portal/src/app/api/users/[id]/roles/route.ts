@@ -4,7 +4,7 @@
  * POST /api/users/[id]/roles — 为用户分配角色
  * DELETE /api/users/[id]/roles — 移除用户的指定角色
  */
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest } from 'next/server';
 import { revalidatePath, updateTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
 import { eq, inArray, and } from 'drizzle-orm';
@@ -15,6 +15,7 @@ import { refreshUserPermissionCache } from '@/lib/permissions';
 import { revokeUserAccessByUserId } from '@/lib/session/revoke';
 import { COMMON_ERRORS, USER_ERRORS, ENTITY_ACTIVE } from '@auth-sso/contracts';
 import { getUserRoles } from '@/app/(dashboard)/users/data';
+import { restSuccess, restError } from '@/lib/response';
 
 interface RouteParams { params: Promise<{ id: string }>; }
 
@@ -36,14 +37,14 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       columns: { id: true, deptId: true },
     });
     if (!target) {
-      return NextResponse.json({ error: USER_ERRORS.USER_NOT_FOUND, message: '用户不存在' }, { status: 404 });
+      return restError(USER_ERRORS.USER_NOT_FOUND, '用户不存在', 404);
     }
     if (!canAccessDept(claims.deptIds, target.deptId)) {
-      return NextResponse.json({ error: COMMON_ERRORS.FORBIDDEN, message: '无权查看该用户' }, { status: 403 });
+      return restError(COMMON_ERRORS.FORBIDDEN, '无权查看该用户', 403);
     }
     const roles = await getUserRoles(id);
     await logServerDataRead('user_roles', id);
-    return NextResponse.json({ success: true, data: roles });
+    return restSuccess(roles);
   });
 }
 
@@ -56,18 +57,18 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const body = await request.json();
     const { roleIds } = body;
     if (!Array.isArray(roleIds) || roleIds.length === 0) {
-      return NextResponse.json({ error: COMMON_ERRORS.VALIDATION_ERROR, message: '角色ID列表不能为空' }, { status: 400 });
+      return restError(COMMON_ERRORS.VALIDATION_ERROR, '角色ID列表不能为空', 400);
     }
 
     const users = await db.select().from(schema.users).where(eq(schema.users.id, id));
-    if (users.length === 0) return NextResponse.json({ error: COMMON_ERRORS.NOT_FOUND, message: '用户不存在' }, { status: 404 });
+    if (users.length === 0) return restError(COMMON_ERRORS.NOT_FOUND, '用户不存在', 404);
 
     const userId = users[0]!.id;
 
     // 数据范围守卫：管理员只能操作其部门范围内用户的角色绑定（H-ACL-002）
     // deptIds 来自 JWT claims，无需额外 DB 查询
     if (!canAccessDept(claims.deptIds, users[0]!.deptId)) {
-      return NextResponse.json({ error: COMMON_ERRORS.FORBIDDEN, message: '无权操作该用户' }, { status: 403 });
+      return restError(COMMON_ERRORS.FORBIDDEN, '无权操作该用户', 403);
     }
 
     // 事务内重读用户 deptId + 重验角色部门约束，防止 TOCTOU（H-ACL-002）
@@ -88,14 +89,12 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
       await tx.delete(schema.userRoles).where(eq(schema.userRoles.userId, userRow.id));
       await tx.insert(schema.userRoles).values(roleIds.map(roleId => ({ id: crypto.randomUUID(), userId: userRow.id, roleId, createdAt: new Date() })));
-      return { success: true, assignedCount: roleIds } as const;
+      return { assignedCount: roleIds }; // no as const — avoids type narrowing issues
     });
 
     if ('error' in result) {
-      return NextResponse.json(
-        { error: result.error, message: 'message' in result ? result.message : undefined },
-        { status: result.status },
-      );
+      const { error, message, status } = result as { error: string; message: string; status: number };
+      return restError(error, message, status);
     }
 
     await refreshUserPermissionCache(userId);
@@ -112,7 +111,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       userAgent: extractUserAgent(request.headers),
       status: 200,
     });
-    return NextResponse.json(result);
+    return restSuccess(result);
   });
 }
 
@@ -135,10 +134,7 @@ export async function DELETE(
     const { roleId } = body;
 
     if (!roleId) {
-      return NextResponse.json(
-        { error: COMMON_ERRORS.VALIDATION_ERROR, message: '角色ID不能为空' },
-        { status: 400 }
-      );
+      return restError(COMMON_ERRORS.VALIDATION_ERROR, '角色ID不能为空', 400);
     }
 
     // 获取用户ID
@@ -147,10 +143,7 @@ export async function DELETE(
       .where(eq(schema.users.id, id));
 
     if (users.length === 0) {
-      return NextResponse.json(
-        { error: COMMON_ERRORS.NOT_FOUND, message: '用户不存在' },
-        { status: 404 }
-      );
+      return restError(COMMON_ERRORS.NOT_FOUND, '用户不存在', 404);
     }
 
     const userId = users[0]!.id;
@@ -158,10 +151,7 @@ export async function DELETE(
     // 数据范围守卫：管理员只能操作其部门范围内用户的角色绑定（H-ACL-002）
     // deptIds 来自 JWT claims，无需额外 DB 查询
     if (!canAccessDept(claims.deptIds, users[0]!.deptId)) {
-      return NextResponse.json(
-        { error: COMMON_ERRORS.FORBIDDEN, message: '无权操作该用户' },
-        { status: 403 }
-      );
+      return restError(COMMON_ERRORS.FORBIDDEN, '无权操作该用户', 403);
     }
 
     // 精准删除：加入 roleId 的 AND 条件比对，绝不误清空该用户关联的所有其他角色绑定
@@ -192,6 +182,6 @@ export async function DELETE(
       status: 200,
     });
 
-    return NextResponse.json({ success: true });
+    return restSuccess({});
   });
 }

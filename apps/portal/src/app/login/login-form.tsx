@@ -65,7 +65,7 @@ export default function LoginForm({ sessionId, initialError }: LoginFormProps) {
       });
 
       const data = await response.json();
-      if (!response.ok || !data.success) {
+      if (!response.ok) {
         throw new Error(data.message || '登录失败，请检查账号和密码');
       }
 

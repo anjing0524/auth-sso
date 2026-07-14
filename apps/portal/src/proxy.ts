@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 import { COOKIE_NAMES } from '@auth-sso/contracts';
 
 /**

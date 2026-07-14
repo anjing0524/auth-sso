@@ -12,9 +12,10 @@
  *
  * @route POST /api/auth/logout
  */
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { getAppBaseURL } from '@/lib/env';
+import { safeRedirectPath } from '@/lib/oauth-utils';
 import { db, schema } from '@/infrastructure/db';
 import { eq } from 'drizzle-orm';
 import { revokeJti, revokeUserAccessByUserId } from '@/lib/session/revoke';
@@ -129,11 +130,12 @@ export async function POST(request: NextRequest) {
     writeLoginLog({ userId, username, eventType: 'LOGOUT', ip: extractClientIP(request.headers), userAgent: extractUserAgent(request.headers) });
   }
 
-  const response = NextResponse.json({ success: true });
+  const response = NextResponse.json({});
   clearAuthCookies(response);
   return response;
 }
 
+/** GET /api/auth/logout?back_url=... → 302 重定向（浏览器端直接导航使用） */
 export async function GET(request: NextRequest) {
   const cookieStore = await cookies();
   const { userId, username } = await performRevocation(cookieStore);
@@ -142,8 +144,10 @@ export async function GET(request: NextRequest) {
     writeLoginLog({ userId, username, eventType: 'LOGOUT', ip: extractClientIP(request.headers), userAgent: extractUserAgent(request.headers) });
   }
 
+  const backUrl = new URL(request.url).searchParams.get('back_url');
   const publicBase = getAppBaseURL();
-  const response = NextResponse.redirect(new URL('/login', publicBase));
+  const target = backUrl && safeRedirectPath(backUrl) ? backUrl : '/login';
+  const response = NextResponse.redirect(new URL(target, publicBase));
   clearAuthCookies(response);
   return response;
 }

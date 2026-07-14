@@ -3,10 +3,11 @@
  *
  * GET 读操作委托给 departments/data.ts 统一读模型。
  */
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest } from 'next/server';
 import { withPermission, canAccessDept, logServerDataRead } from '@/lib/auth';
 import { DEPARTMENT_ERRORS, COMMON_ERRORS } from '@auth-sso/contracts';
 import { getDepartmentById } from '@/app/(dashboard)/departments/data';
+import { restSuccess, restError } from '@/lib/response';
 
 interface RouteParams { params: Promise<{ id: string }>; }
 
@@ -15,14 +16,14 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   return withPermission({ permissions: ['department:read'] }, async (_userId, claims) => {
     const { id } = await params;
     const dept = await getDepartmentById(id);
-    if (!dept) return NextResponse.json({ error: DEPARTMENT_ERRORS.DEPARTMENT_NOT_FOUND, message: '部门不存在' }, { status: 404 });
+    if (!dept) return restError(DEPARTMENT_ERRORS.DEPARTMENT_NOT_FOUND, '部门不存在', 404);
 
     // 数据范围：deptIds 来自 JWT claims，无需额外 DB 查询
-    if (!canAccessDept(claims.deptIds, dept.id)) return NextResponse.json({ error: COMMON_ERRORS.FORBIDDEN, message: '无权访问该部门' }, { status: 403 });
+    if (!canAccessDept(claims.deptIds, dept.id)) return restError(COMMON_ERRORS.FORBIDDEN, '无权访问该部门', 403);
 
     // 记录访问日志
     await logServerDataRead('department', id);
 
-    return NextResponse.json({ success: true, data: { ...dept, createdAt: dept.createdAt.toString() } });
+    return restSuccess({ ...dept, createdAt: dept.createdAt.toString() });
   });
 }

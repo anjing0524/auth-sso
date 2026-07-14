@@ -6,7 +6,7 @@
  *
  * @route GET /api/me/permissions
  */
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 import { resolveIdentity } from '@/lib/auth';
 import { getUserPermissionContext } from '@/lib/permissions';
 import { mapDomainError } from '@/domain/shared/error-mapping';
@@ -18,7 +18,7 @@ export async function GET(_request: NextRequest) {
     const identity = await resolveIdentity();
     if (!identity) {
       return NextResponse.json(
-        { success: false, error: COMMON_ERRORS.UNAUTHORIZED, message: '未登录' },
+        { error: COMMON_ERRORS.UNAUTHORIZED, message: '未登录' },
         { status: 401 },
       );
     }
@@ -26,24 +26,22 @@ export async function GET(_request: NextRequest) {
     const permissionContext = await getUserPermissionContext(identity.userId);
     if (!permissionContext) {
       return NextResponse.json(
-        { success: false, error: COMMON_ERRORS.INTERNAL_ERROR, message: '无法获取用户权限上下文' },
+        { error: COMMON_ERRORS.INTERNAL_ERROR, message: '无法获取用户权限上下文' },
         { status: 500 },
       );
     }
 
     return NextResponse.json({
-      data: {
-        userId: identity.userId,
-        roles: permissionContext.roles,
-        permissions: permissionContext.permissions,
-        // 用户角色直属部门 ID（未展开子树；子树展开的 deptIds 见 JWT claims 或 /api/me）
-        deptIds: permissionContext.deptIds,
-      },
+      userId: identity.userId,
+      roles: permissionContext.roles,
+      permissions: permissionContext.permissions,
+      // 用户角色直属部门 ID（未展开子树；子树展开的 deptIds 见 JWT claims 或 /api/me）
+      deptIds: permissionContext.deptIds,
     });
   } catch (err) {
     const mapped = mapDomainError(err);
     return NextResponse.json(
-      { success: false, error: mapped.error, message: mapped.message },
+      { error: mapped.error, message: mapped.message },
       { status: mapped.status },
     );
   }

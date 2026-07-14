@@ -101,3 +101,54 @@ For multi-step tasks, state a brief plan:
 ```
 
 Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
+
+## 项目结构
+
+```
+apps/gateway/      信创网关 (Rust/Pingora) — HTTPS 终结 + ES256 JWKS 离线验签
+apps/portal/       管理门户 + OIDC Provider (Next.js 16) — 端口 4100
+apps/demo-app/     Demo 应用
+packages/contracts/ 共享类型、错误码、权限码、OIDC 常量（枚举值唯一真相源）
+packages/config/    共享 env 配置 (Zod + URL 推导)
+```
+
+## 测试体系 (Vitest 4 Projects 模式)
+
+- Vitest 4.x 使用 `test.projects` 聚合（根 vitest.config.ts → apps/portal/vitest.config.ts），非 `vitest.workspace.ts`
+- jsdom 默认环境；API 测试文件用 `// @vitest-environment node` 行级覆盖
+- Vite 8 原生支持 tsconfig paths 解析（无需 `vite-tsconfig-paths` 插件）
+- API 测试 mock DB（`vi.mock()`）和 Redis；领域层纯函数 TDD 零 mock
+- E2E Playwright 仅 Chromium，baseURL `http://localhost:4100`
+- 需求追溯: 测试文件用 `@req` 注解标记覆盖的需求 ID
+- 共享配置: `vitest.base.ts` (coverage/timeout) + `drizzle.base.ts`
+
+## Portal 架构要点
+
+详见 `docs/portal-architecture-guidelines.md`，以下为关键约束：
+
+- **分层**: `src/app/[bc]/`（page.tsx + data.ts + actions.ts） → `src/domain/`（纯函数） → Drizzle 直调。无 Repository/Mapper 层
+- **单控制器原则**: 内部页面写操作只用 Server Actions（actions.ts），不用 REST API 路由。外部系统/跨域/OIDC 回调才写 route.ts
+- **读模型**: `data.ts` 中用 `"use cache"` + `cacheLife()` + `cacheTag()`（Next.js 16 Cache Components）
+- **Controller 函数 ≤20 行**，不包含业务逻辑判断；`@/` 路径别名 = `src/`
+- **domain 层纯 TS**: 禁止 import `next/*` 或 Drizzle；多表写入必须 `db.transaction()`
+- **枚举值**: 从 `@auth-sso/contracts` 常值数组派生 `z.enum(ARR)` / `pgEnum(...)`，禁止手写字面量
+- **错误处理**: `DomainError` 类体系 + `mapDomainError()` 统一映射，Controller 不手写 `instanceof` 分支
+- **API 响应**: `ApiSuccess<T>` / `ApiError`（定义在 contracts）
+- **三层安全**: Gateway（JWT 离线验签）→ Proxy（CSRF，Next.js 16 中 `proxy.ts` 替代 middleware）→ `withAuth`（精细鉴权，查 DB 实时权限）
+- Portal 自身即 OIDC Provider，ES256 JWT 通过 `jose` 签发，密钥对存 PostgreSQL `jwks` 表
+
+## Gateway (Rust) 要点
+
+- edition = "2024"（注意 `use` 路径变更）
+- Pingora 0.8.1 + OpenSSL（vendored）
+- 需要 `Send` 约束的 Trait 异步方法: `-> impl Future<Output = T> + Send`，禁止 `#[async_trait]`
+- 修改后必须 `cargo clippy --all-targets --all-features -- -D warnings` + `cargo fmt --all -- --check`
+- 遵循 [Rust API 指南](https://rust-lang.github.io/api-guidelines/checklist.html)
+
+## 其他约束
+
+- pnpm@10.12.4，CI 使用 `--frozen-lockfile`
+- ESLint flat config (`eslint.base.mjs`)，`consistent-type-imports` 使用 `inline-type-imports` 风格
+- Next.js 16: Middleware 改名为 Proxy，Server Function 公开可达（三层防御原因）
+- Docker Compose 本地开发: `docker compose up -d`（PostgreSQL 16 + Redis 7）
+- 数据库初始化顺序: `pnpm db:push` → `pnpm db:seed`

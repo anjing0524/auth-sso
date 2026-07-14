@@ -6,13 +6,13 @@
  *
  * @route POST /api/auth/login
  */
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { db, schema } from '@/infrastructure/db';
 import { eq } from 'drizzle-orm';
 import { validateLoginCredentials } from '@/domain/auth/login';
 import { verifyPassword } from '@/domain/auth/password';
-import { checkBruteForce, clearBruteForceCounter, incrementBruteForce } from '@/domain/auth/brute-force';
+import { checkBruteForce, clearBruteForceCounter, incrementBruteForce } from '@/lib/auth/brute-force';
 import { signLoginSession, LOGIN_SESSION_TTL } from '@/lib/auth/token';
 import { InvalidCredentialsError } from '@/domain/shared/errors';
 import { mapDomainError } from '@/domain/shared/error-mapping';
@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
     const parsed = LoginSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json(
-        { success: false, error: COMMON_ERRORS.VALIDATION_ERROR, message: parsed.error.issues[0]!.message },
+        { error: COMMON_ERRORS.VALIDATION_ERROR, message: parsed.error.issues[0]!.message },
         { status: 400 },
       );
     }
@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
     const bruteCheck = await checkBruteForce(user.id);
     if (bruteCheck.locked) {
       return NextResponse.json(
-        { success: false, error: AUTH_ERRORS.ACCOUNT_LOCKED, message: bruteCheck.message },
+        { error: AUTH_ERRORS.ACCOUNT_LOCKED, message: bruteCheck.message },
         { status: 423 },
       );
     }
@@ -93,7 +93,7 @@ export async function POST(request: NextRequest) {
     const redirectPath = session_id ? `/api/auth/oauth2/authorize?session_id=${session_id}` : null;
 
     const response = NextResponse.json(
-      redirectPath ? { success: true, redirect: redirectPath } : { success: true },
+      redirectPath ? { redirect: redirectPath } : {},
     );
     response.cookies.set(COOKIE_NAMES.LOGIN_SESSION, session, {
       path: '/api/auth/oauth2/authorize',
@@ -106,7 +106,7 @@ export async function POST(request: NextRequest) {
   } catch (err) {
     const mapped = mapDomainError(err);
     return NextResponse.json(
-      { success: false, error: mapped.error, message: mapped.message },
+      { error: mapped.error, message: mapped.message },
       { status: mapped.status },
     );
   }

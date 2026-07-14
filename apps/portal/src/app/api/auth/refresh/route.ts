@@ -7,7 +7,7 @@
  *
  * @route POST /api/auth/refresh
  */
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 import { getRefreshTokenFromCookie, getJwtFromCookie, decodeJwtPayload } from '@/lib/session';
 import { rotateRefreshToken } from '@/lib/auth/token';
 import { mapDomainError } from '@/domain/shared/error-mapping';
@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
     const refreshToken = await getRefreshTokenFromCookie();
     if (!refreshToken) {
       return NextResponse.json(
-        { success: false, error: AUTH_ERRORS.REFRESH_TOKEN_MISSING, message: '缺少 Refresh Token' },
+        { error: AUTH_ERRORS.REFRESH_TOKEN_MISSING, message: '缺少 Refresh Token' },
         { status: 401 },
       );
     }
@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
       if (claims?.exp) {
         const remaining = claims.exp - Math.floor(Date.now() / 1000);
         if (remaining > REFRESH_THRESHOLD) {
-          return NextResponse.json({ success: true, data: { skipped: true, remaining } });
+          return NextResponse.json({ skipped: true, remaining });
         }
       }
     }
@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
     if (!result) {
       writeLoginLog({ userId: atPayload?.sub, username, eventType: 'TOKEN_REFRESH_FAILED', ip, userAgent: ua, failReason: 'Refresh Token 无效或已过期' });
       const response = NextResponse.json(
-        { success: false, error: AUTH_ERRORS.REFRESH_TOKEN_INVALID, message: 'Refresh Token 无效或已过期' },
+        { error: AUTH_ERRORS.REFRESH_TOKEN_INVALID, message: 'Refresh Token 无效或已过期' },
         { status: 401 },
       );
       // 清除无效 Cookie
@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
     writeLoginLog({ userId: atPayload?.sub, username, eventType: 'TOKEN_REFRESH', ip, userAgent: ua });
 
     const secure = isCookieSecure();
-    const response = NextResponse.json({ success: true, data: { expiresIn: result.expiresIn } });
+    const response = NextResponse.json({ expiresIn: result.expiresIn });
 
     response.cookies.set(COOKIE_NAMES.JWT, result.accessToken, {
       path: '/',
@@ -86,7 +86,7 @@ export async function POST(request: NextRequest) {
   } catch (err) {
     const mapped = mapDomainError(err);
     return NextResponse.json(
-      { success: false, error: mapped.error, message: mapped.message },
+      { error: mapped.error, message: mapped.message },
       { status: mapped.status },
     );
   }

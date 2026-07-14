@@ -7,7 +7,7 @@ import 'server-only';
  *
  * @module lib/oauth-utils
  */
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 import { COOKIE_NAMES } from '@auth-sso/contracts';
 import { getAppBaseURL } from '@/lib/env';
 import { isCookieSecure } from '@auth-sso/config';

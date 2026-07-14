@@ -5,7 +5,7 @@ import 'server-only';
  *
  * @module lib/session/cookies
  */
-import { NextResponse } from 'next/server';
+import { type NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { COOKIE_NAMES, TOKEN_TTL } from '@auth-sso/contracts';
 import { isCookieSecure } from '@auth-sso/config';

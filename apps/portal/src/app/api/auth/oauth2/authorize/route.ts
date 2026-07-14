@@ -10,7 +10,7 @@
  *
  * @route GET /api/auth/oauth2/authorize
  */
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 import { db, schema } from '@/infrastructure/db';
 import { verifyAccessToken } from '@/lib/auth/token';
 import { validateAuthorization } from '@/domain/auth/oauth-authorize';

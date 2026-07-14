@@ -19,7 +19,7 @@ import {
   InvalidCredentialsError,
   AccountStatusError,
 } from './errors';
-import { COMMON_ERRORS } from '@auth-sso/contracts';
+import { COMMON_ERRORS, AUTH_ERRORS } from '@auth-sso/contracts';
 import { createLogger } from '@/lib/logger';
 
 const log = createLogger('ErrorMapping');
@@ -96,4 +96,22 @@ export function mapDomainError(err: unknown): ErrorMapping {
   // 未知异常统一 500（记录日志便于排查）
   log.error('未预期的异常', { error: err instanceof Error ? err.message : String(err) });
   return { status: 500, error: COMMON_ERRORS.INTERNAL_ERROR, message: '服务器内部错误' };
+}
+
+/** 内部错误码 → OAuth 2.1 标准错误码映射（RFC 6749 §5.2） */
+const OAUTH_ERROR_MAP: Record<string, string> = {
+  [AUTH_ERRORS.INVALID_CLIENT]: 'invalid_client',
+  [AUTH_ERRORS.INVALID_CODE]: 'invalid_grant',
+  [AUTH_ERRORS.PKCE_VERIFICATION_FAILED]: 'invalid_grant',
+  [AUTH_ERRORS.OAUTH_INVALID_REDIRECT_URI]: 'invalid_grant',
+  [AUTH_ERRORS.UNSUPPORTED_GRANT_TYPE]: 'unsupported_grant_type',
+};
+
+/**
+ * 将内部错误码映射为符合 RFC 6749 §5.2 的 OAuth 2.1 标准错误码
+ *
+ * 消除 token 端点中手写 if/else 分支映射，收敛到单一真相源。
+ */
+export function mapToOAuthError(internalError: string): string {
+  return OAUTH_ERROR_MAP[internalError] ?? 'invalid_request';
 }

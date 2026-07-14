@@ -50,6 +50,12 @@ if (flushTimer.unref) {
   flushTimer.unref(); // 不阻止进程退出
 }
 
+// 进程退出前最后一次 flush，减少优雅关闭时缓冲数据丢失
+// SIGTERM/SIGINT 触发（Docker stop / Ctrl+C），进程崩溃（OOM）无法覆盖
+process.on('beforeExit', () => {
+  void flushBuffer();
+});
+
 /**
  * 通用日志写入工厂
  *

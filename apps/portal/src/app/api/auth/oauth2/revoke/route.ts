@@ -5,7 +5,7 @@
  *
  * @route POST /api/auth/oauth2/revoke
  */
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 import { verifyAccessToken } from '@/lib/auth/token';
 import { revokeJti } from '@/lib/session/revoke';
 import { db, schema } from '@/infrastructure/db';

@@ -21,6 +21,8 @@ export const sharedRules = [
       }],
       "prefer-const": "error",
       "no-console": ["warn", { allow: ["warn", "error"] }],
+      "max-lines-per-function": ["warn", { max: 80, skipBlankLines: true, skipComments: true }],
+      "@typescript-eslint/no-explicit-any": "warn",
     },
   },
 ];

@@ -14,7 +14,7 @@ import 'server-only';
  */
 import { checkPermission, type PermissionCheckOptions } from './check-permission';
 import { mapDomainError } from '@/domain/shared/error-mapping';
-import { writeAuditLog } from '@/lib/audit';
+import { writeAuditLog, extractClientIP, extractUserAgent } from '@/lib/audit';
 import { headers } from 'next/headers';
 import { COMMON_ERRORS, type AuditOperation, type ApiResponse } from '@auth-sso/contracts';
 import type { PortalJwtClaims } from '../session';
@@ -97,7 +97,6 @@ export function withAuth<TArgs extends unknown[], TData>(
 async function recordAudit(userId: string, operation: AuditOperation): Promise<void> {
   try {
     const h = await headers();
-    const { extractClientIP, extractUserAgent } = await import('@/lib/audit');
     writeAuditLog({
       userId,
       operation,

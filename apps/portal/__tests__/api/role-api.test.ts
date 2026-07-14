@@ -211,7 +211,7 @@ describe('Role Management API', () => {
       const body = await response.json();
 
       expect(response.status).toBe(200);
-      expect(body.data).toMatchObject({ name: 'Admin', deptId: 'dept-1' });
+      expect(body).toMatchObject({ name: 'Admin', deptId: 'dept-1' });
     });
 
     it('returns 404 for nonexistent role', async () => {
@@ -255,8 +255,8 @@ describe('Role Management API', () => {
       const body = await response.json();
 
       expect(response.status).toBe(200);
-      expect(body.data).toHaveLength(1);
-      expect(body.data[0]).toMatchObject({
+      expect(body).toHaveLength(1);
+      expect(body[0]).toMatchObject({
         code: 'user:list',
         name: 'User List',
         type: 'API',

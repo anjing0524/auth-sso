@@ -13,7 +13,7 @@
  *
  * @route GET /api/auth/callback
  */
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 import { getAppBaseURL, getEnvConfig, isCookieSecure } from '@/lib/env';
 import { COOKIE_NAMES, TOKEN_TTL, PORTAL_CLIENT_ID } from '@auth-sso/contracts';
 import { safeRedirectPath } from '@/lib/oauth-utils';
@@ -96,13 +96,10 @@ export async function GET(request: NextRequest) {
 
     const tokens = await tokenRes.json();
 
-    // ⑤ nonce 校验：Portal 自登录（scope 含 openid）proxy.ts 始终生成 nonce，
-    //    cookieNonce 缺失为异常（不应静默跳过）。
-    //    id_token.nonce 必须等于 Cookie.oauth_nonce（US-H-AUTH-10）
-    if (!cookieNonce) {
-      return errorRedirect(publicBase, 'nonce_missing');
-    }
-    if (tokens.id_token) {
+    // ⑤ nonce 校验：仅 scope 含 openid 时 proxy.ts 写入 oauth_nonce Cookie，
+    //    此时 token 端点会签发 id_token，必须比对 nonce 防重放（US-H-AUTH-10）。
+    //    scope 不含 openid 时不触发 nonce 校验（cookieNonce 合法为 undefined）。
+    if (cookieNonce && tokens.id_token) {
       const idTokenPayload = decodeJwtPayload(tokens.id_token);
       if (idTokenPayload?.nonce !== cookieNonce) {
         return errorRedirect(publicBase, 'nonce_mismatch');

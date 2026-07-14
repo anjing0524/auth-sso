@@ -72,7 +72,9 @@ export const createDepartmentAction = withAuth(
  * 内部辅助：执行部门更新 + 级联 ancestors 路径
  * 提取出 Controller 以减少主函数行数（R1 合规）
  */
-async function performDepartmentUpdate(tx: any, deptId: string, patch: Record<string, unknown>): Promise<void> {
+type DrizzleTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+async function performDepartmentUpdate(tx: DrizzleTransaction, deptId: string, patch: Record<string, unknown>): Promise<void> {
   const row = await tx.query.departments.findFirst({ where: eq(schema.departments.id, deptId) });
   if (!row) throw new EntityNotFoundError('Department', deptId);
 

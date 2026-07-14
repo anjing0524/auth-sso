@@ -3,11 +3,12 @@
  *
  * GET 读操作委托给 audit/data.ts 统一读模型。
  */
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest } from 'next/server';
 import { withPermission } from '@/lib/auth';
 import { getAuditLogs } from '@/app/audit/data';
 import { AUDIT_OPERATION_VALUES, type AuditOperation } from '@auth-sso/contracts';
 import { parsePagination } from '@/lib/pagination';
+import { restListSuccess } from '@/lib/response';
 
 
 /** GET /api/audit/logs — 委托 data.ts */
@@ -27,6 +28,6 @@ export async function GET(request: NextRequest) {
       startDate: sp.get('startDate') || undefined,
       endDate: sp.get('endDate') || undefined,
     });
-    return NextResponse.json({ success: true, data: result.data, pagination: result.pagination });
+    return restListSuccess(result.data, result.pagination);
   });
 }

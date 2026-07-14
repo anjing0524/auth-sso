@@ -161,30 +161,106 @@ db/schema.ts                                  ← 物理存储
 
 ### 2.2 API 响应类型契约
 
-为避免每个 Controller 返回结构不一致，应在 `contracts` 包中定义统一的响应泛型：
+Portal 存在两种根本不同的调用协议，响应格式必须严格区分：
+
+**Server Actions（RPC 风格，actions.ts）**：Server Action 是函数调用，不经过 HTTP 协议层，调用方无法从 HTTP 状态码判断成功/失败。因此必须用返回值中的 `success` 字段承载语义。
+
+**REST HTTP 端点（route.ts）**：HTTP 协议自带状态码（200=成功，4xx/5xx=失败）。在响应体中额外包裹 `{ success: true/false }` 是协议层冗余反模式 — 数据应直接输出。
+
+**OAuth2 端点（/api/auth/oauth2/*）**：遵循 RFC 6749/7662/7009 标准格式，不参与此规范。
+
+```
+                            ┌─────────────────────────────────┐
+                            │  Server Actions (actions.ts)    │
+                            │  → ApiResponse<T>               │
+                            │  成功: { success: true, data }   │
+                            │  失败: { success: false, error,  │
+                            │          message }               │
+                            └─────────────────────────────────┘
+
+  POST /api/users ──────────┐
+  GET  /api/me ─────────────┤
+  POST /api/auth/login ─────┤
+                             ▼
+                            ┌─────────────────────────────────┐
+                            │  REST HTTP 端点 (route.ts)      │
+                            │  → HTTP 状态码 + 数据直出        │
+                            │  成功: 200 + { data, pagination }│
+                            │       或 200 + { user, token }   │
+                            │  失败: 4xx/5xx + { error,        │
+                            │          message }               │
+                            └─────────────────────────────────┘
+
+  /api/auth/oauth2/* ───────┐
+                             ▼
+                            ┌─────────────────────────────────┐
+                            │  OAuth2 端点 (RFC 标准格式)       │
+                            │  { access_token, token_type,     │
+                            │    expires_in, refresh_token }   │
+                            │  { error, error_description }    │
+                            └─────────────────────────────────┘
+```
+
+**Server Action 响应格式**（定义在 `@auth-sso/contracts`）：
 
 ```typescript
-// packages/contracts/src/api-types.ts
+// packages/contracts/src/index.ts
 
-/** 成功响应 */
-export type ApiSuccess<T> = {
+/** 仅适用于 Server Actions（RPC 调用，无 HTTP 状态码语义） */
+type ApiSuccess<T> = {
   success: true;
   data: T;
   pagination?: { page: number; pageSize: number; total: number; totalPages: number };
+  message?: string;
 };
 
-/** 失败响应 */
-export type ApiError = {
+type ApiError = {
   success: false;
   error: string;   // 错误码（如 AUTH_SSO_3002）
-  message: string; // 人类可读的错误描述
+  message: string;
 };
 
-/** 统一 API 响应类型 */
 export type ApiResponse<T> = ApiSuccess<T> | ApiError;
 ```
 
-Server Action 返回 `ApiResponse<T>`，Route Handler 返回 `NextResponse.json(body, { status })`。所有控制器必须遵循此契约，前端可据此做类型安全的响应处理。
+**REST HTTP 响应格式**（`lib/response.ts` 提供工厂函数）：
+
+```typescript
+// lib/response.ts — REST 端点专用工厂
+
+import { NextResponse } from 'next/server';
+
+/** REST 成功 — 数据直出 */
+export function restSuccess<T>(data: T, status?: number): NextResponse<T>
+
+/** REST 列表成功 — 含分页 */
+export function restListSuccess<T>(data: T[], pagination: PaginationMeta, status?: number):
+  NextResponse<{ data: T[]; pagination: PaginationMeta }>
+
+/** REST 错误 — { error, message }，无 success 字段 */
+export function restError(code: string, message: string, status: number):
+  NextResponse<{ error: string; message: string }>
+
+/** Server Action 成功 — 纯对象（非 NextResponse） */
+export function apiSuccess<T>(data: T, pagination?: PaginationMeta):
+  { success: true; data: T; pagination?: PaginationMeta; message?: string }
+
+/** Server Action 错误 — 纯对象（非 NextResponse） */
+export function apiError(code: string, message: string):
+  { success: false; error: string; message: string }
+```
+
+**强制规则**：
+
+| 端点类型 | 成功响应 | 错误响应 | 工厂函数 |
+|---------|---------|---------|---------|
+| REST 列表 GET | `{ data: T[], pagination: P }` | `{ error, message }` + 4xx/5xx | `restListSuccess` / `restError` |
+| REST 详情 GET | 数据直出 | `{ error, message }` + 4xx/5xx | `restSuccess` / `restError` |
+| REST 写操作 | `{ id, message }` 或空 `{}` | `{ error, message }` + 4xx/5xx | `restSuccess` / `restError` |
+| Server Action | `{ success: true, data, message? }` | `{ success: false, error, message }` | `apiSuccess` / `apiError` |
+| OAuth2 | RFC 6749 标准 | RFC 6749 标准 | 不使用工厂函数 |
+
+> **为什么 REST 不用 `{ success: true }` 包裹？** HTTP 200 本身即成功语义。若仍需 `success` 字段确认，则语义上等价于不相信 HTTP 协议 — 这是反模式。Server Actions 作为 RPC 调用，没有 HTTP 协议层可借用，故 `success` 字段必要且正确。
 
 ### 2.3 编译期类型同步守卫（Domain ↔ Drizzle 不漂移）
 
@@ -563,9 +639,11 @@ export async function POST(req: NextRequest) {
       return user;
     });
 
-    return NextResponse.json({ data: { id: result.publicId } }, { status: 201 });
+    // REST 端点：数据直出，HTTP 201 即成功语义，无 { success: true } 包裹
+    return NextResponse.json({ id: result.publicId }, { status: 201 });
   } catch (err: unknown) {
     const mapped = mapDomainError(err);
+    // REST 端点：错误不用 { success: false } 包裹，HTTP 状态码已承载失败语义
     return NextResponse.json({ error: mapped.error, message: mapped.message }, { status: mapped.status });
   }
 }
@@ -716,6 +794,7 @@ export default [
 | **权限上下文** | `lib/permissions.ts` | `infrastructure/db`, `infrastructure/redis` | 用户权限上下文获取与缓存（无状态——使用 infra 提供的连接，不管理连接生命周期） | — |
 | **审计日志** | `lib/audit.ts` | `infrastructure/db` | 审计日志入库与高阶装饰器（无状态——使用 infra 提供的连接） | — |
 | **密码工具** | `lib/password.ts` | `bcryptjs` | 密码哈希（与 `lib/crypto.ts` 同质——无状态 crypto 工具） | — |
+| **响应工厂** | `lib/response.ts` | `next/server` | REST 端点用 `restSuccess`/`restListSuccess`/`restError`（NextResponse）；Server Action 用 `apiSuccess`/`apiError`（纯对象）。严禁混用。 | — |
 | **基础设施** | `infrastructure/*/index.ts` | `lib/`, `domain/`, 第三方 SDK | **有状态**的外部适配器（DB 连接、Redis 客户端）。区别于 lib/：这些模块管理连接/实例生命周期 | `boundaries/element-types` |
 | **Auth 鉴权** | `lib/auth/*.ts` | `lib/permissions`, `lib/session`, `infrastructure/db` | 鉴权子模块。权限/角色检查使用 lib/ 中的工具和 infra 中的连接。推荐统一从 `@/lib/auth` 导入 | — |
 | **Session/JWT** | `lib/session/*.ts` | `jose`, `infrastructure/redis` | JWT Cookie 读写、验签、jti 撤销。推荐统一从 `@/lib/session` 导入 | — |
@@ -740,6 +819,7 @@ export default [
 12. **`actions.ts` 中存在只读查询函数（如 `getXxxAction`）** —— `actions.ts` 仅保留 CUD 写操作，读归 `data.ts`。
 13. **写操作只调 `revalidatePath` 未调 `revalidateTag`** —— 缓存失效不完整，必须双写失效：`revalidatePath('/xxx')` + `revalidateTag('xxx-list', 'minutes')`。
 14. **`data.ts` 函数使用 `db.query.xxx.findFirst()`** —— 统一使用 `db.select().from().where().limit(1)` 风格，保证测试 mock 兼容性。
+15. **REST route.ts 响应体中出现 `success: true` / `success: false`** —— REST HTTP 状态码即成功/失败语义，`{ success, data }` 包裹是协议层冗余反模式。Server Actions 的 `ApiResponse<T>` 格式仅适用于 RPC 调用。
 
 ---
 

@@ -3,10 +3,11 @@
  *
  * GET 读操作委托给 permissions/data.ts 统一读模型，消除重复 Drizzle 查询。
  */
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest } from 'next/server';
 import { withPermission } from '@/lib/auth';
 import { getPermissions } from '@/app/(dashboard)/permissions/data';
 import { parsePagination } from '@/lib/pagination';
+import { restListSuccess } from '@/lib/response';
 
 
 /** GET /api/permissions — 委托 data.ts，支持按 type 过滤和分页（内存分页，适配 Next.js 缓存） */
@@ -20,10 +21,6 @@ export async function GET(request: NextRequest) {
     const totalPages = Math.ceil(total / pageSize);
     const offset = (page - 1) * pageSize;
     const data = allData.slice(offset, offset + pageSize);
-    return NextResponse.json({
-      success: true,
-      data,
-      pagination: { page, pageSize, total, totalPages },
-    });
+    return restListSuccess(data, { page, pageSize, total, totalPages });
   });
 }

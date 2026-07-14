@@ -1,11 +1,11 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest } from 'next/server';
 import { db, schema } from '@/infrastructure/db';
 import { eq, sql, inArray, ne, isNull, or, and } from 'drizzle-orm';
 import { generateUUID } from '@/lib/crypto';
 import { COMMON_ERRORS } from '@auth-sso/contracts';
 import { mapDomainError } from '@/domain/shared/error-mapping';
 import { validateClientActive, validateClientSecret } from '@/domain/auth/oauth-client';
-import { apiError } from '@/lib/response';
+import { restSuccess, restError } from '@/lib/response';
 import { createLogger } from '@/lib/logger';
 
 const log = createLogger('PermissionsRegister');
@@ -106,34 +106,34 @@ async function checkCodeConflicts(incomingCodes: string[], clientId: string): Pr
 export async function POST(request: NextRequest) {
   try {
     const auth = extractBasicAuth(request);
-    if (!auth) return apiError(COMMON_ERRORS.UNAUTHORIZED, '缺少或格式错误的 Basic Auth 凭证', 401);
+    if (!auth) return restError(COMMON_ERRORS.UNAUTHORIZED, '缺少或格式错误的 Basic Auth 凭证', 401);
 
     const clientRecord = await db.select().from(schema.clients).where(eq(schema.clients.clientId, auth.clientId)).limit(1);
     try {
       validateClientActive(clientRecord[0]);
     } catch {
-      return apiError(COMMON_ERRORS.FORBIDDEN, '该应用系统已停用或不存在', 403);
+      return restError(COMMON_ERRORS.FORBIDDEN, '该应用系统已停用或不存在', 403);
     }
     try {
       validateClientSecret(clientRecord[0]!, auth.clientSecret);
     } catch {
-      return apiError(COMMON_ERRORS.FORBIDDEN, 'Client ID 或 Secret 错误', 403);
+      return restError(COMMON_ERRORS.FORBIDDEN, 'Client ID 或 Secret 错误', 403);
     }
     // 仅允许 Portal 内部系统 Client 调用（is_internal=true），杜绝任意注册 Client 提权注册权限
     if (!clientRecord[0]!.isInternal) {
-      return apiError(COMMON_ERRORS.FORBIDDEN, '该端点仅限内部系统 Client 调用', 403);
+      return restError(COMMON_ERRORS.FORBIDDEN, '该端点仅限内部系统 Client 调用', 403);
     }
 
     const body = await request.json();
     const tree: IncomingPermission[] = body.permissions;
-    if (!tree || !Array.isArray(tree)) return apiError(COMMON_ERRORS.VALIDATION_ERROR, '权限数据须为 permissions 数组', 400);
+    if (!tree || !Array.isArray(tree)) return restError(COMMON_ERRORS.VALIDATION_ERROR, '权限数据须为 permissions 数组', 400);
 
     const flatIncoming = flattenPermissions(tree);
     const codes = flatIncoming.map(p => p.code);
-    if (new Set(codes).size !== codes.length) return apiError(COMMON_ERRORS.VALIDATION_ERROR, '上报权限树中存在重复 code', 400);
+    if (new Set(codes).size !== codes.length) return restError(COMMON_ERRORS.VALIDATION_ERROR, '上报权限树中存在重复 code', 400);
 
     const conflictCode = await checkCodeConflicts(codes, auth.clientId);
-    if (conflictCode) return apiError('conflict', `权限 code「${conflictCode}」全局已被占用，建议使用「${auth.clientId}:${conflictCode}」前缀`, 409);
+    if (conflictCode) return restError('conflict', `权限 code「${conflictCode}」全局已被占用，建议使用「${auth.clientId}:${conflictCode}」前缀`, 409);
 
     const result = await db.transaction(async (tx) => {
       await tx.execute(sql`SELECT pg_advisory_xact_lock(${getHashCode(auth.clientId)})`);
@@ -179,10 +179,10 @@ export async function POST(request: NextRequest) {
       }
       return syncedCounts;
     });
-    return NextResponse.json({ success: true, data: result });
+    return restSuccess(result);
   } catch (error) {
     const mapped = mapDomainError(error);
     log.error('同步失败', { error: mapped.error, message: mapped.message });
-    return apiError(mapped.error, mapped.message, mapped.status);
+    return restError(mapped.error, mapped.message, mapped.status);
   }
 }

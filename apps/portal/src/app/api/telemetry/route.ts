@@ -7,7 +7,7 @@
  *
  * @route POST /api/telemetry
  */
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { withPermission } from '@/lib/auth';
 import { COMMON_ERRORS } from '@auth-sso/contracts';
@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
     rawBody = await request.json();
   } catch {
     return NextResponse.json(
-      { success: false, error: COMMON_ERRORS.INVALID_REQUEST, message: '请求体格式错误' },
+      { error: COMMON_ERRORS.INVALID_REQUEST, message: '请求体格式错误' },
       { status: 400 },
     );
   }
@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
   const parsed = TelemetrySchema.safeParse(rawBody);
   if (!parsed.success) {
     return NextResponse.json(
-      { success: false, error: COMMON_ERRORS.VALIDATION_ERROR, message: parsed.error.issues[0]!.message },
+      { error: COMMON_ERRORS.VALIDATION_ERROR, message: parsed.error.issues[0]!.message },
       { status: 400 },
     );
   }
@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
   const contentLength = parseInt(request.headers.get('content-length') || '0', 10);
   if (contentLength > 8192) {
     return NextResponse.json(
-      { success: false, error: COMMON_ERRORS.PAYLOAD_TOO_LARGE, message: '请求体过大' },
+      { error: COMMON_ERRORS.PAYLOAD_TOO_LARGE, message: '请求体过大' },
       { status: 413 },
     );
   }
@@ -63,6 +63,6 @@ export async function POST(request: NextRequest) {
     // 写入 stdout → 由日志采集器（Vector/Fluentd）转发到 SIEM/数据仓库
     console.log(JSON.stringify({ '@telemetry': event }));
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ accepted: true });
   });
 }

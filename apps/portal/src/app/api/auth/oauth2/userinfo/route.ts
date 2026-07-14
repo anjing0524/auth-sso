@@ -6,7 +6,7 @@
  *
  * @route GET /api/auth/oauth2/userinfo
  */
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 import { verifyAccessToken } from '@/lib/auth/token';
 import { getJwtFromCookie } from '@/lib/session';
 import { mapDomainError } from '@/domain/shared/error-mapping';

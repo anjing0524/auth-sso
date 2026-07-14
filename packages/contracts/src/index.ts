@@ -142,7 +142,11 @@ export interface UserPermissionContext {
   deptIds: string[];
 }
 
-// API 响应类型契约 (Controller 层统一返回格式)
+// API 响应类型契约
+//
+// 适用范围：Server Actions（RPC 风格，无 HTTP 状态码可携带错误语义）。
+// REST HTTP 端点不适用 — 直接使用 HTTP 状态码（200=成功 / 4xx/5xx=失败）+ 业务数据作为响应体，
+// `{ success: true, data: T }` 在 REST 场景中是协议层冗余反模式。
 type ApiSuccess<T> = {
   success: true;
   data: T;

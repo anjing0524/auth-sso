@@ -2,13 +2,18 @@ import 'server-only';
 import { NextResponse } from 'next/server';
 
 /**
- * 统一 API 响应工厂
+ * API 响应工厂 — 严格区分 REST HTTP 端点与 Server Action 两种协议。
  *
- * 消除项目中 4 种互不一致的响应格式，所有端点统一使用以下工厂函数。
+ * REST HTTP 端点（route.ts）：
+ *   成功 → HTTP 200 + 业务数据直出（无 success 包裹，HTTP 状态码即成功语义）
+ *   错误 → HTTP 4xx/5xx + { error: string, message: string }
+ *   列表 → { data: T[], pagination: P }
  *
- * 响应契约对齐 @auth-sso/contracts ApiResponse 定义：
- *   成功: { success: true, data: T, pagination?: { page, pageSize, total, totalPages } }
- *   错误: { success: false, error: string, message: string }
+ * Server Actions（actions.ts）：
+ *   使用 ApiResponse<T> = { success: true, data: T } | { success: false, error, message }
+ *   Server Action 是 RPC 调用，无 HTTP 协议层，success 字段承载成功/失败语义。
+ *
+ * OAuth2 端点遵循 RFC 6749 标准格式，不使用本模块。
  *
  * @module lib/response
  */
@@ -21,38 +26,63 @@ export interface PaginationMeta {
   totalPages: number;
 }
 
+// ===================================================
+// REST HTTP 端点工厂（route.ts 专用）
+// ===================================================
+
 /**
- * 构建统一成功响应（符合 ApiSuccess<T> 契约）。
+ * REST 成功响应 — 数据直出，HTTP 200 即成功语义。
  *
- * @param data - 业务数据（ApiSuccess 要求必填 data；无业务数据时传 null 或空对象）
- * @param pagination - 列表分页元信息（可选）
+ * @param data - 业务数据
  * @param status - HTTP 状态码（默认 200）
+ */
+export function restSuccess<T>(data: T, status: number = 200): NextResponse<T> {
+  return NextResponse.json(data as any, { status });
+}
+
+/**
+ * REST 列表成功响应 — 含分页元信息。
+ */
+export function restListSuccess<T>(
+  data: T[],
+  pagination: PaginationMeta,
+  status: number = 200,
+): NextResponse<{ data: T[]; pagination: PaginationMeta }> {
+  return NextResponse.json({ data, pagination }, { status });
+}
+
+/**
+ * REST 错误响应 — { error, message }，无 success 字段。
+ */
+export function restError(
+  code: string,
+  message: string,
+  status: number,
+): NextResponse<{ error: string; message: string }> {
+  return NextResponse.json({ error: code, message }, { status });
+}
+
+// ===================================================
+// Server Action 响应工厂（actions.ts 专用）
+// 保持与 @auth-sso/contracts ApiResponse<T> 对齐
+// ===================================================
+
+/**
+ * Server Action 成功响应。
  */
 export function apiSuccess<T>(
   data: T,
   pagination?: PaginationMeta,
-  status: number = 200,
-): NextResponse<{ success: true; data: T; pagination?: PaginationMeta }> {
-  return NextResponse.json(
-    { success: true as const, data, ...(pagination ? { pagination } : {}) },
-    { status },
-  );
+): { success: true; data: T; pagination?: PaginationMeta; message?: string } {
+  return { success: true as const, data, ...(pagination ? { pagination } : {}) };
 }
 
 /**
- * 构建统一错误响应（符合 ApiError 契约）。
- *
- * @param code - 错误码（来自 @auth-sso/contracts errors.ts）
- * @param message - 人类可读错误描述
- * @param status - HTTP 状态码
+ * Server Action 错误响应。
  */
 export function apiError(
   code: string,
   message: string,
-  status: number,
-): NextResponse<{ success: false; error: string; message: string }> {
-  return NextResponse.json(
-    { success: false as const, error: code, message },
-    { status },
-  );
+): { success: false; error: string; message: string } {
+  return { success: false as const, error: code, message };
 }

@@ -1,4 +1,4 @@
-<!-- /autoplan restore point: /Users/liushuo/.gstack/projects/anjing0524-auth-sso/main-autoplan-restore-20260626-090555.md -->
+<!-- /autoplan restore point: /Users/liushuo/.gstack/projects/auth-sso/main-autoplan-restore-20260714-122550.md -->
 ---
 title: Portal Design Polish — 设计债清零与交互一致性
 type: feat

@@ -256,7 +256,7 @@ describe('User Management API & Actions', () => {
       const body = await response.json();
 
       expect(response.status).toBe(200);
-      expect(body.data).toMatchObject({
+      expect(body).toMatchObject({
         id: 'user-1',
         name: '测试用户',
         email: 'test@example.com',

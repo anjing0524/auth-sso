@@ -191,7 +191,7 @@ describe('Client API', () => {
       mocks.setQueryResult([makeClientRow()]);
       const res = await GetClient(createTestRequest('/api/clients/client-1'), { params: Promise.resolve({ id: 'client-1' }) } as any);
       const body = await parseResponseJson(res);
-      expect(body.data.clientId).toBe('test_client_id');
+      expect(body.clientId).toBe('test_client_id');
     });
 
     it('不存在的 Client 返回 404', async () => {

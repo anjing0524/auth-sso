@@ -36,7 +36,7 @@ import { generateUUID } from '@/lib/crypto';
 import { hashPassword, isPasswordReused, pushPasswordHistory } from '@/domain/auth/password';
 import { refreshUserPermissionCache } from '@/lib/permissions';
 import { revokeUserAccessByUserId } from '@/lib/session/revoke';
-import { resetBruteForceCounter } from '@/domain/auth/brute-force';
+import { resetBruteForceCounter } from '@/lib/auth/brute-force';
 import { canAccessDept } from '@/lib/auth';
 import { createLogger } from '@/lib/logger';
 

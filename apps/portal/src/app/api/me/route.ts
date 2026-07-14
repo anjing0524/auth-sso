@@ -10,7 +10,7 @@
  *
  * @route GET /api/me
  */
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 import { resolveIdentity } from '@/lib/auth';
 import { getDynamicMenuTree } from '@/lib/menu-tree';
 import { mapDomainError } from '@/domain/shared/error-mapping';
@@ -25,7 +25,7 @@ export async function GET(_request: NextRequest) {
     const identity = await resolveIdentity();
     if (!identity) {
       return NextResponse.json(
-        { success: false, error: COMMON_ERRORS.UNAUTHORIZED, message: '未登录' },
+        { error: COMMON_ERRORS.UNAUTHORIZED, message: '未登录' },
         { status: 401 },
       );
     }
@@ -40,7 +40,7 @@ export async function GET(_request: NextRequest) {
     const user = await getUser(userId);
     if (!user) {
       return NextResponse.json(
-        { success: false, error: COMMON_ERRORS.UNAUTHORIZED, message: '用户不存在' },
+        { error: COMMON_ERRORS.UNAUTHORIZED, message: '用户不存在' },
         { status: 401 },
       );
     }
@@ -57,7 +57,6 @@ export async function GET(_request: NextRequest) {
         expiresAt: claims.exp ? claims.exp * 1000 : null,
         issuedAt: claims.iat ? claims.iat * 1000 : null,
       },
-      // 从 claims 直取，与 Gateway 验签结果保持一致（不走 DB/Redis）
       permissions: claims.permissions,
       roles: claims.roles,
       deptIds: claims.deptIds,
@@ -66,7 +65,7 @@ export async function GET(_request: NextRequest) {
   } catch (err) {
     const mapped = mapDomainError(err);
     return NextResponse.json(
-      { success: false, error: mapped.error, message: mapped.message },
+      { error: mapped.error, message: mapped.message },
       { status: mapped.status },
     );
   }

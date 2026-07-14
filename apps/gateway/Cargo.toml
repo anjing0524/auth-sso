@@ -50,6 +50,8 @@ async-trait = "0.1.89"
 
 [dev-dependencies]
 criterion = { version = "0.8", features = ["html_reports"], default-features = false }
+p256 = { version = "0.13", features = ["pem"] }
+rand = "0.8"
 
 [profile.release]
 opt-level = 3

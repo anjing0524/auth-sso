@@ -228,13 +228,13 @@ describe('Permission API', () => {
     it('返回权限详情', async () => {
       mocks.setQueryResult([makePermissionRow()]);
       const body = await parseResponseJson(await GetPermission(createTestRequest('/api/permissions/p1'), { params: Promise.resolve({ id: 'p1' }) } as any));
-      expect(body.data.code).toBe('user:list');
+      expect(body.code).toBe('user:list');
     });
 
     it('支持 publicId', async () => {
       mocks.setQueryResult([makePermissionRow()]);
       const body = await parseResponseJson(await GetPermission(createTestRequest('/api/permissions/p_perm01'), { params: Promise.resolve({ id: 'p_perm01' }) } as any));
-      expect(body.data.code).toBe('user:list');
+      expect(body.code).toBe('user:list');
     });
 
     it('不存在返回 404', async () => {
@@ -288,20 +288,20 @@ describe('Permission API', () => {
       mocks.setQueryQueue([[makeRegisterClientRow()], []]);
       mocks.setExecuteResult([]);
 
-      const body = await parseResponseJson(await RegisterPermissions(createRegisterReq([
+      const res = await RegisterPermissions(createRegisterReq([
         { code: 'user:list', name: '用户列表', type: 'API', resource: 'user', action: 'list', sort: 1 },
         { code: 'user:create', name: '创建用户', type: 'API', resource: 'user', action: 'create', sort: 2 },
         {
           code: 'system', name: '系统管理', type: 'MENU', sort: 0,
           children: [{ code: 'system:config', name: '系统配置', type: 'MENU', sort: 1 }],
         },
-      ])));
+      ]));
+      const body = await parseResponseJson(res);
 
-      expect(body.success).toBe(true);
-      expect(body.data).toBeDefined();
-      expect(body.data.inserted).toBe(4);
-      expect(body.data.updated).toBe(0);
-      expect(body.data.deprecated).toBe(0);
+      expect(res.status).toBe(200);
+      expect(body.inserted).toBe(4);
+      expect(body.updated).toBe(0);
+      expect(body.deprecated).toBe(0);
     });
 
     it('两阶段事务：新权限插入 + 旧权限软删除', async () => {
@@ -314,17 +314,18 @@ describe('Permission API', () => {
       mocks.setQueryResult([makeRegisterClientRow(), ...existingPerms]);
       mocks.setExecuteResult([]);
 
-      const body = await parseResponseJson(await RegisterPermissions(createRegisterReq([
+      const res = await RegisterPermissions(createRegisterReq([
         { code: 'user:list', name: '更新后的用户列表', type: 'API' },
         { code: 'will:remain', name: '保留权限', type: 'API' },
-      ])));
+      ]));
+      const body = await parseResponseJson(res);
 
-      expect(body.success).toBe(true);
-      expect(body.data.inserted).toBe(0);
+      expect(res.status).toBe(200);
+      expect(body.inserted).toBe(0);
       // role:list 不包含在传入树中且 status=ACTIVE -> deprecated
-      expect(body.data.deprecated).toBeGreaterThanOrEqual(1);
+      expect(body.deprecated).toBeGreaterThanOrEqual(1);
       // user:list 已存在且 name 变更 -> updated
-      expect(body.data.updated).toBeGreaterThanOrEqual(1);
+      expect(body.updated).toBeGreaterThanOrEqual(1);
     });
 
     it('全局 code 冲突（被其他 client 占用）返回 409 + 前缀建议', async () => {
@@ -352,7 +353,7 @@ describe('Permission API', () => {
       mocks.setQueryResult([makeRegisterClientRow()]);
       mocks.setExecuteResult([]);
 
-      const body = await parseResponseJson(await RegisterPermissions(createRegisterReq([
+      const res = await RegisterPermissions(createRegisterReq([
         {
           code: 'erp:orders', name: '订单', type: 'DIRECTORY', sort: 1,
           children: [
@@ -360,9 +361,10 @@ describe('Permission API', () => {
               path: '/orders', icon: 'orders', visible: true, sort: 1 },
           ],
         },
-      ])));
+      ]));
+      const body = await parseResponseJson(res);
 
-      expect(body.success).toBe(true);
+      expect(res.status).toBe(200);
       const inserts = mocks.getInserts();
       const pageRow = inserts.find((r: any) => r.code === 'erp:order:list');
       expect(pageRow).toBeDefined();

@@ -8,7 +8,7 @@ import 'server-only';
  *
  * 阈值可通过环境变量 BRUTE_FORCE_MAX_ATTEMPTS / BRUTE_FORCE_WINDOW_MINUTES 覆盖。
  *
- * @module domain/auth/brute-force
+ * @module lib/auth/brute-force
  */
 import { db, schema } from '@/infrastructure/db';
 import { getRedis } from '@/infrastructure/redis';
@@ -88,7 +88,7 @@ export async function checkBruteForce(
           ),
         );
       failCount = result[0]?.count ?? 0;
-    } catch (err) {
+    } catch (_err) {
       // Redis 和 DB 双重不可用，出于安全考量必须 fail-close，阻止登录
       throw new Error('暴力破解防范服务不可用');
     }

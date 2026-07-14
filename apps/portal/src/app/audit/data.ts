@@ -49,7 +49,7 @@ interface PaginatedResult<T> {
  * 通用分页查询 — 消除 getAuditLogs / getLoginLogs 之间 ~50 行重复模板
  * 使用 any 透传以兼容 Drizzle 各表的强类型（内部辅助函数）
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 async function paginatedSelect<T>(
   table: any,
   orderByColumn: any,

@@ -8,7 +8,7 @@
  *
  * @route POST /api/users/[id]/force-logout
  */
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest } from 'next/server';
 import { revalidatePath, updateTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
 import { eq } from 'drizzle-orm';
@@ -17,6 +17,7 @@ import { revokeAllRefreshTokens } from '@/lib/auth/token';
 import { revokeUserAccessByUserId } from '@/lib/session/revoke';
 import { clearUserPermissionCache } from '@/lib/permissions';
 import { COMMON_ERRORS } from '@auth-sso/contracts';
+import { restSuccess, restError } from '@/lib/response';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -40,10 +41,7 @@ export async function POST(
       .where(eq(schema.users.id, id));
 
     if (users.length === 0) {
-      return NextResponse.json(
-        { error: COMMON_ERRORS.NOT_FOUND, message: '用户不存在' },
-        { status: 404 },
-      );
+      return restError(COMMON_ERRORS.NOT_FOUND, '用户不存在', 404);
     }
 
     const userId = users[0]!.id;
@@ -51,10 +49,7 @@ export async function POST(
     // 数据范围守卫：只能强制下线本部门（含子部门）范围内用户（H-DSCOPE-003）
     // deptIds 来自 JWT claims，无需额外 DB 查询
     if (!canAccessDept(claims.deptIds, users[0]!.deptId)) {
-      return NextResponse.json(
-        { error: COMMON_ERRORS.FORBIDDEN, message: '无权操作该用户' },
-        { status: 403 },
-      );
+      return restError(COMMON_ERRORS.FORBIDDEN, '无权操作该用户', 403);
     }
 
     // 1. 撤销全部 Refresh Token（DB 层，同时触发 JTI 黑名单撤销）
@@ -70,8 +65,7 @@ export async function POST(
     revalidatePath('/users');
     updateTag('users-list');
 
-    return NextResponse.json({
-      success: true,
+    return restSuccess({
       userId: id,
       revokedJtiCount,
       message: `已强制下线用户 ${id}，撤销 ${revokedJtiCount} 个 Access Token JTI`,

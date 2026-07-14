@@ -1,19 +1,40 @@
 use std::sync::Arc;
 
-use super::*;
-// Claims is defined in super (auth/mod.rs)
 use super::VerifyError;
+use super::*;
 use crate::jwks::JwksCache;
 use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, encode};
+use p256::ecdsa::SigningKey;
+use p256::pkcs8::EncodePrivateKey;
+use p256::pkcs8::EncodePublicKey;
+
+fn generate_es256_key() -> (String, Vec<u8>, Vec<u8>) {
+    let signing_key = SigningKey::random(&mut rand::thread_rng());
+    let verifying_key = signing_key.verifying_key();
+    let kid = "test-es256-key";
+
+    let private_pem = signing_key
+        .to_pkcs8_pem(p256::pkcs8::LineEnding::LF)
+        .unwrap()
+        .as_bytes()
+        .to_vec();
+    let public_pem = verifying_key
+        .to_public_key_pem(p256::pkcs8::LineEnding::LF)
+        .unwrap()
+        .as_bytes()
+        .to_vec();
+
+    (kid.to_string(), private_pem, public_pem)
+}
 
 fn make_test_verifier(jwks_cache: &Arc<JwksCache>) -> JwtVerifier {
     JwtVerifier::new(Arc::clone(jwks_cache))
 }
 
-/// 生成测试用 HS256 JWT
+/// 生成测试用 ES256 JWT（与生产环境签名算法一致）
 fn make_test_token(
     kid: &str,
-    secret: &[u8],
+    private_key_pem: &[u8],
     issuer: &str,
     sub: &str,
     jti: &str,
@@ -33,24 +54,27 @@ fn make_test_token(
         permissions: vec!["user:list".to_string()],
         dept_ids: vec!["dept-1".to_string()],
     };
-    let mut header = Header::new(Algorithm::HS256);
+    let mut header = Header::new(Algorithm::ES256);
     header.kid = Some(kid.to_string());
-    encode(&header, &claims, &EncodingKey::from_secret(secret)).unwrap()
+    encode(
+        &header,
+        &claims,
+        &EncodingKey::from_ec_pem(private_key_pem).unwrap(),
+    )
+    .unwrap()
 }
 
 #[tokio::test]
-async fn test_verify_jwt_successful() {
+async fn test_verify_es256_jwt_successful() {
     let jwks_cache = Arc::new(JwksCache::new());
     let issuer = "https://sso.example.com";
+    let (kid, private_pem, public_pem) = generate_es256_key();
 
-    jwks_cache.set_metadata_for_test(issuer, &["HS256"]);
-
-    let secret = b"super-secret-key-that-is-long-enough-for-hs256";
-    let kid = "key-test-1";
-    jwks_cache.insert_key_for_test(kid.to_string(), DecodingKey::from_secret(secret));
+    jwks_cache.set_metadata_for_test(issuer, &["ES256"]);
+    jwks_cache.insert_key_for_test(kid.clone(), DecodingKey::from_ec_pem(&public_pem).unwrap());
 
     let verifier = make_test_verifier(&jwks_cache);
-    let token = make_test_token(kid, secret, issuer, "user-123", "jti-123", 3600);
+    let token = make_test_token(&kid, &private_pem, issuer, "user-123", "jti-123", 3600);
 
     let result = verifier.verify(&token).await;
     let status = result.expect("expected valid token");
@@ -60,18 +84,16 @@ async fn test_verify_jwt_successful() {
 }
 
 #[tokio::test]
-async fn test_verify_jwt_expired() {
+async fn test_verify_es256_jwt_expired() {
     let jwks_cache = Arc::new(JwksCache::new());
     let issuer = "https://sso.example.com";
+    let (kid, private_pem, public_pem) = generate_es256_key();
 
-    jwks_cache.set_metadata_for_test(issuer, &["HS256"]);
-
-    let secret = b"super-secret-key-that-is-long-enough-for-hs256";
-    let kid = "key-test-1";
-    jwks_cache.insert_key_for_test(kid.to_string(), DecodingKey::from_secret(secret));
+    jwks_cache.set_metadata_for_test(issuer, &["ES256"]);
+    jwks_cache.insert_key_for_test(kid.clone(), DecodingKey::from_ec_pem(&public_pem).unwrap());
 
     let verifier = make_test_verifier(&jwks_cache);
-    let token = make_test_token(kid, secret, issuer, "user-123", "jti-123", -600);
+    let token = make_test_token(&kid, &private_pem, issuer, "user-123", "jti-123", -600);
 
     let result = verifier.verify(&token).await;
     assert!(matches!(
@@ -84,21 +106,18 @@ async fn test_verify_jwt_expired() {
 }
 
 #[tokio::test]
-async fn test_verify_jwt_invalid_issuer() {
+async fn test_verify_es256_jwt_invalid_issuer() {
     let jwks_cache = Arc::new(JwksCache::new());
     let issuer = "https://sso.example.com";
+    let (kid, private_pem, public_pem) = generate_es256_key();
 
-    jwks_cache.set_metadata_for_test(issuer, &["HS256"]);
-
-    let secret = b"super-secret-key-that-is-long-enough-for-hs256";
-    let kid = "key-test-1";
-    jwks_cache.insert_key_for_test(kid.to_string(), DecodingKey::from_secret(secret));
+    jwks_cache.set_metadata_for_test(issuer, &["ES256"]);
+    jwks_cache.insert_key_for_test(kid.clone(), DecodingKey::from_ec_pem(&public_pem).unwrap());
 
     let verifier = make_test_verifier(&jwks_cache);
-    // 使用错误的 issuer 签发 token
     let token = make_test_token(
-        kid,
-        secret,
+        &kid,
+        &private_pem,
         "https://hacker.com",
         "user-123",
         "jti-123",
@@ -110,26 +129,27 @@ async fn test_verify_jwt_invalid_issuer() {
 }
 
 #[tokio::test]
-async fn test_verify_jwt_invalid_kid() {
+async fn test_verify_es256_jwt_unknown_kid() {
     let jwks_cache = Arc::new(JwksCache::new());
     let issuer = "https://sso.example.com";
+    let (kid, private_pem, public_pem) = generate_es256_key();
 
-    jwks_cache.set_metadata_for_test(issuer, &["HS256"]);
-
-    let secret = b"super-secret-key-that-is-long-enough-for-hs256";
-    // 注册 key-test-1，但 token 使用 unknown-kid
-    jwks_cache.insert_key_for_test("key-test-1".to_string(), DecodingKey::from_secret(secret));
+    jwks_cache.set_metadata_for_test(issuer, &["ES256"]);
+    jwks_cache.insert_key_for_test(
+        "known-key".to_string(),
+        DecodingKey::from_ec_pem(&public_pem).unwrap(),
+    );
 
     let verifier = make_test_verifier(&jwks_cache);
-    let token = make_test_token("unknown-kid", secret, issuer, "user-123", "jti-123", 3600);
+    let token = make_test_token(&kid, &private_pem, issuer, "user-123", "jti-123", 3600);
 
     let result = verifier.verify(&token).await;
-    assert!(matches!(result, Err(VerifyError::UnknownKid(k)) if k == "unknown-kid"));
+    assert!(matches!(result, Err(VerifyError::UnknownKid(k)) if k == kid));
 }
 
 #[test]
 fn test_decode_jwt_payload() {
-    let secret = b"sufficiently-long-secret-key-for-hs256!!";
+    let (kid, private_pem, _public_pem) = generate_es256_key();
     let claims = Claims {
         sub: "user-1".to_string(),
         iss: "test".to_string(),
@@ -140,10 +160,12 @@ fn test_decode_jwt_payload() {
         permissions: vec!["read".to_string()],
         dept_ids: vec!["dept-1".to_string()],
     };
+    let mut header = Header::new(Algorithm::ES256);
+    header.kid = Some(kid);
     let token = encode(
-        &Header::new(Algorithm::HS256),
+        &header,
         &claims,
-        &EncodingKey::from_secret(secret),
+        &EncodingKey::from_ec_pem(&private_pem).unwrap(),
     )
     .unwrap();
     let decoded = decode_jwt_payload(&token).unwrap();
