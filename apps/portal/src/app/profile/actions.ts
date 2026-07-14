@@ -15,6 +15,7 @@ import { withAuth, type AuthContext } from '@/lib/auth';
 import { verifyPassword, hashPassword, isPasswordReused, pushPasswordHistory } from '@/domain/auth/password';
 import { revokeUserAccessByUserId } from '@/lib/session/revoke';
 import { EntityNotFoundError } from '@/domain/shared/errors';
+import { validate } from '@/lib/validation';
 import { PasswordSchema } from '@/domain/shared/zod-schemas';
 import { COMMON_ERRORS, type ApiResponse } from '@auth-sso/contracts';
 import { createLogger } from '@/lib/logger';
@@ -54,10 +55,8 @@ export const updateOwnProfileAction = withAuth(
     ctx: AuthContext,
     input: Record<string, unknown>,
   ): Promise<ApiResponse<{ id: string }>> => {
-    const parsed = UpdateOwnProfileSchema.safeParse(input);
-    if (!parsed.success) {
-      return { success: false, error: COMMON_ERRORS.VALIDATION_ERROR, message: parsed.error.issues[0]!.message };
-    }
+    const v = validate(UpdateOwnProfileSchema, input);
+    if (!v.ok) return v.response;
 
     // 用 ctx.userId 锁定目标，防止 IDOR
     const row = await db.query.users.findFirst({ where: eq(schema.users.id, ctx.userId) });
@@ -65,9 +64,9 @@ export const updateOwnProfileAction = withAuth(
 
     // 仅更新有值的字段（partial update）
     const updates: Record<string, unknown> = {};
-    if (parsed.data.name !== undefined) updates['name'] = parsed.data.name;
-    if (parsed.data.email !== undefined) updates['email'] = parsed.data.email;
-    if ('avatarUrl' in parsed.data) updates['avatarUrl'] = parsed.data.avatarUrl ?? null;
+    if (v.data.name !== undefined) updates['name'] = v.data.name;
+    if (v.data.email !== undefined) updates['email'] = v.data.email;
+    if ('avatarUrl' in v.data) updates['avatarUrl'] = v.data.avatarUrl ?? null;
 
     if (Object.keys(updates).length === 0) {
       return { success: true, data: { id: ctx.userId }, message: '无内容变更' };
@@ -92,10 +91,8 @@ export const changeOwnPasswordAction = withAuth(
     ctx: AuthContext,
     input: Record<string, unknown>,
   ): Promise<ApiResponse<{ id: string }>> => {
-    const parsed = ChangeOwnPasswordSchema.safeParse(input);
-    if (!parsed.success) {
-      return { success: false, error: COMMON_ERRORS.VALIDATION_ERROR, message: parsed.error.issues[0]!.message };
-    }
+    const v = validate(ChangeOwnPasswordSchema, input);
+    if (!v.ok) return v.response;
 
     // 用 ctx.userId 锁定目标，防止 IDOR
     const row = await db.query.users.findFirst({
@@ -105,18 +102,18 @@ export const changeOwnPasswordAction = withAuth(
     if (!row) throw new EntityNotFoundError('User', ctx.userId);
 
     // 验证旧密码
-    const isValid = await verifyPassword(parsed.data.currentPassword, row.passwordHash ?? '');
+    const isValid = await verifyPassword(v.data.currentPassword, row.passwordHash ?? '');
     if (!isValid) {
       return { success: false, error: COMMON_ERRORS.VALIDATION_ERROR, message: '当前密码错误' };
     }
 
     // NFR-SEC-15: 禁止重用最近 5 次密码
-    if (await isPasswordReused(parsed.data.newPassword, row.passwordHistory ?? null)) {
+    if (await isPasswordReused(v.data.newPassword, row.passwordHistory ?? null)) {
       return { success: false, error: COMMON_ERRORS.VALIDATION_ERROR, message: '新密码不能与最近使用过的密码相同' };
     }
 
     // 哈希新密码并更新（同时记录 passwordChangedAt + 推入密码历史）
-    const newHash = await hashPassword(parsed.data.newPassword);
+    const newHash = await hashPassword(v.data.newPassword);
     const newHistory = pushPasswordHistory(row.passwordHistory ?? null, row.passwordHash ?? '');
     await db
       .update(schema.users)

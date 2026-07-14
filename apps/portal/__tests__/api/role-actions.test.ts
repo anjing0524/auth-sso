@@ -7,70 +7,95 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { COMMON_ERRORS } from '@auth-sso/contracts';
 
-const mocks = vi.hoisted(() => {
-  let _row: any = undefined;
-  let _rows: any[] = [];
-  const single = (): any => { const c: any = () => {}; c.then = (r: Function) => r(_row); return c; };
-  const list = (): any => { const c: any = () => {}; c.then = (r: Function) => r(_rows); return new Proxy(c, { get(_t, p: string) { if (p === 'then' || p === 'catch') return c[p as keyof typeof c]; return () => list(); } }); };
-  const insert = () => ({ values: (d: any) => ({ returning: () => Promise.resolve([{ ...d, id: 'mock-id' }]), then: (r: Function) => r(1) }) });
-  const update = () => ({ set: () => ({ where: () => ({ then: (r: Function) => r(1) }) }) });
-  const del = () => ({ where: () => ({ then: (r: Function) => r(1) }) });
-  const queryProxy = new Proxy({} as any, { get() { return { findFirst: () => single() }; } });
-  function makeTx() { return new Proxy({} as any, { get(_t, p: string) { if (p === 'select') return () => list(); if (p === 'insert') return insert; if (p === 'update') return update; if (p === 'delete') return del; if (p === 'query') return queryProxy; return undefined; } }); }
-  const mockDb = new Proxy({} as any, { get(_t, p: string) { if (p === 'select') return () => list(); if (p === 'insert') return insert; if (p === 'update') return update; if (p === 'delete') return del; if (p === 'transaction') return (h: Function) => h(makeTx()); if (p === 'query') return queryProxy; return undefined; } });
-  return { mockDb, setRow(r: any) { _row = r; _rows = r ? [r] : []; }, setRows(r: any[]) { _rows = r; _row = r[0]; }, setDeptRow(r: any) { _row = r; }, reset() { _row = undefined; _rows = []; } };
-});
+const holder = vi.hoisted<{ mockDb: ReturnType<typeof import('@/../__tests__/helpers/mock-db').createMockDb> | null }>(() => ({ mockDb: null }));
 
-vi.mock('@/infrastructure/db', () => ({ db: mocks.mockDb, schema: { roles: {}, userRoles: {}, rolePermissions: {}, departments: { id: {}, status: {} } } }));
+vi.mock('@/infrastructure/db', async () => {
+  const { createMockDb } = await import('@/../__tests__/helpers/mock-db');
+  holder.mockDb = createMockDb();
+  return { db: holder.mockDb.db, schema: { roles: {}, userRoles: {}, rolePermissions: {}, departments: {} } };
+});
 vi.mock('@/lib/auth', () => ({
   resolveIdentity: vi.fn(async () => ({ claims: { deptIds: ['dept-1'] } })),
   logServerDataRead: vi.fn(async () => {}),
   canAccessDept: vi.fn(() => true),
- withAuth: (_o: any, h: Function) => async (...a: any[]) => h({ userId: 'admin-1', claims: { deptIds: ['dept-1'], permissions: [], roles: [] } }, ...a) }));
-vi.mock('@/lib/crypto', () => ({ generateUUID: () => 'aaaa-bbbb-cccc-dddd', generateId: (_len?: number) => 'a'.repeat(20) }));
-vi.mock('@/lib/permissions', () => ({ refreshUsersPermissionCache: vi.fn() }));
+  withAuth: (_o: any, h: Function) => async (...a: any[]) => h({ userId: 'admin-1', claims: { deptIds: ['dept-1'], permissions: [], roles: [] } }, ...a),
+}));
+vi.mock('@/lib/crypto', () => ({ generateUUID: () => 'aaaa-bbbb-cccc-dddd', generateId: () => 'a'.repeat(20) }));
+vi.mock('@/lib/permissions', () => ({ refreshUsersPermissionCache: vi.fn(async () => {}) }));
+vi.mock('@/lib/session/revoke', () => ({ revokeUsersAccessByUserId: vi.fn(async () => {}) }));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn(), updateTag: vi.fn() }));
 
 import { createRoleAction, updateRoleAction, deleteRoleAction } from '@/app/(dashboard)/roles/actions';
 
+const mockDb = holder.mockDb!;
+
 const now = new Date();
-const roleRow = { id: 'role-1', code: 'TEST_ROLE', name: 'Test', isSystem: false, status: 'ACTIVE', deptId: 'a1b2c3d4-e5f6-4789-abcd-ef0123456789', sort: 1, description: '', createdAt: now, updatedAt: now };
+const deptId = 'a1b2c3d4-e5f6-4789-abcd-ef0123456789';
+const roleRow = { id: 'role-1', code: 'TEST_ROLE', name: 'Test', isSystem: false, status: 'ACTIVE', deptId, sort: 1, description: '', createdAt: now, updatedAt: now };
 
 describe('Role Server Actions', () => {
-  beforeEach(() => { vi.clearAllMocks(); mocks.reset(); });
+  beforeEach(() => { vi.clearAllMocks(); mockDb.reset(); });
 
-  it('createRole: 有效输入 → success 且返回完整数据', async () => {
-    mocks.setDeptRow({ id: 'a1b2c3d4-e5f6-4789-abcd-ef0123456789', status: 'ACTIVE' });
-    const r: any = await createRoleAction({ name: 'Test', code: 'TEST', sort: 1, deptId: 'a1b2c3d4-e5f6-4789-abcd-ef0123456789' });
-    expect(r.success).toBe(true);
-    expect(r.data).toBeDefined();
-    expect(r.data.id).toBeDefined();
+  describe('createRoleAction', () => {
+    it('有效输入 → success 且 DB insert 包含 code/name/deptId', async () => {
+      // 部门查询返回 ACTIVE 部门
+      mockDb.setFindFirstNestedResult({ id: deptId, status: 'ACTIVE' });
+      const r: any = await createRoleAction({ name: 'Test', code: 'TEST', sort: 1, deptId });
+      expect(r.success).toBe(true);
+      expect(r.data.id).toBeDefined();
+      const writes = mockDb.getWrites();
+      const insert = writes.find(w => w.type === 'insert');
+      expect(insert).toBeDefined();
+      expect(insert!.data.code).toBe('TEST');
+      expect(insert!.data.name).toBe('Test');
+      expect(insert!.data.deptId).toBe(deptId);
+      expect(insert!.data.status).toBe('ACTIVE');
+    });
+
+    it('缺 code → VALIDATION_ERROR', async () => {
+      const r: any = await createRoleAction({ name: 'X', code: '', sort: 1, deptId } as any);
+      expect(r.success).toBe(false);
+      expect(r.error).toBe(COMMON_ERRORS.VALIDATION_ERROR);
+    });
+
+    it('部门不存在 → throw EntityNotFoundError', async () => {
+      mockDb.setFindFirstNestedResult(null);
+      await expect(createRoleAction({ name: 'X', code: 'XX', sort: 1, deptId })).rejects.toThrow();
+    });
+
+    it('部门已禁用 → throw BusinessRuleViolationError', async () => {
+      mockDb.setFindFirstNestedResult({ id: deptId, status: 'DISABLED' });
+      await expect(createRoleAction({ name: 'X', code: 'XX', sort: 1, deptId })).rejects.toThrow();
+    });
   });
 
-  it('createRole: 缺 code → VALIDATION_ERROR 并包含错误码', async () => {
-    const r: any = await createRoleAction({ name: 'X', code: '', sort: 1, deptId: 'a1b2c3d4-e5f6-4789-abcd-ef0123456789' } as any);
-    expect(r.success).toBe(false);
-    expect(r.error).toBe(COMMON_ERRORS.VALIDATION_ERROR);
-    expect(r.message).toBeDefined();
+  describe('updateRoleAction', () => {
+    it('有效输入 → success 且 DB update 写入 name', async () => {
+      mockDb.setFindFirstNestedResult(roleRow);
+      const r: any = await updateRoleAction('role-1', { name: 'Updated' } as any);
+      expect(r.success).toBe(true);
+      const writes = mockDb.getWrites();
+      const update = writes.find(w => w.type === 'update');
+      expect(update).toBeDefined();
+      expect(update!.data.name).toBe('Updated');
+    });
+
+    it('不存在 → throw EntityNotFoundError', async () => {
+      await expect(updateRoleAction('bad', { name: 'X' } as any)).rejects.toThrow();
+    });
   });
 
-  it('updateRole: 存在 → success 且返回更新后数据', async () => {
-    mocks.setRow(roleRow);
-    const r: any = await updateRoleAction('role-1', { name: 'Updated' } as any);
-    expect(r.success).toBe(true);
-    expect(r.data).toBeDefined();
-  });
+  describe('deleteRoleAction', () => {
+    it('非系统角色 → success 且返回确认消息', async () => {
+      mockDb.setQueryResult([roleRow]);
+      const r: any = await deleteRoleAction('role-1');
+      expect(r.success).toBe(true);
+      expect(r.data.id).toBe('role-1');
+    });
 
-  it('updateRole: 不存在 → throw EntityNotFoundError', async () => {
-    mocks.reset();
-    mocks.setRows([{ id: 'dept-1' }]);
-    await expect(updateRoleAction('bad', { name: 'X' } as any)).rejects.toThrow();
-  });
-
-  it('deleteRole: 非系统角色 → success 且包含确认消息', async () => {
-    mocks.setRow(roleRow);
-    const r: any = await deleteRoleAction('role-1');
-    expect(r.success).toBe(true);
-    expect(r.message).toBeDefined();
+    it('不存在 → throw EntityNotFoundError', async () => {
+      mockDb.setQueryResult([]);
+      await expect(deleteRoleAction('bad')).rejects.toThrow();
+    });
   });
 });

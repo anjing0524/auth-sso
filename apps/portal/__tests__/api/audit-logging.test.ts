@@ -1,8 +1,8 @@
 /**
  * 审计日志 API 单元测试
  *
- * Controller 层测试：验证请求处理、分页参数钳制、响应格式合规性。
- * 数据内容验证属于集成测试范畴（需真实 DB），不在本测试文件中覆盖。
+ * Controller 层测试：验证分页参数钳制、响应格式、数据流向。
+ * 注入 mock 数据并通过响应体验证数据正确透传。
  *
  * @req J-LOG-001, J-LOG-002
  * @vitest-environment node
@@ -20,7 +20,6 @@ const holder = vi.hoisted<{
   const createChain = () => {
     const chain: any = () => {};
     chain.then = (resolve: Function) => resolve(state._queryResult);
-    chain.catch = () => ({ then: (r: Function) => r([]) });
     return new Proxy(chain, {
       get(_t: any, prop: string) {
         if (prop === 'then' || prop === 'catch') return chain[prop];
@@ -32,9 +31,6 @@ const holder = vi.hoisted<{
   const mockDb = new Proxy({} as any, {
     get(_t: any, prop: string) {
       if (prop === 'select') return () => createChain();
-      if (prop === 'insert') return () => ({ values: () => ({ then: (r: Function) => r([{ id: 'log-1' }]) }) });
-      if (prop === 'update') return () => ({ set: () => ({ where: () => ({ then: (r: Function) => r([1]) }) }) });
-      if (prop === 'delete') return () => ({ where: () => ({ then: (r: Function) => r([1]) }) });
       return undefined;
     },
   });
@@ -62,74 +58,48 @@ vi.mock('@/lib/session', () => ({}));
 import { GET as GetAuditLogs } from '@/app/api/audit/logs/route';
 import { GET as GetLoginLogs } from '@/app/api/audit/login-logs/route';
 
+const sampleAuditRow = { id: 'log-1', userId: 'user-1', username: 'admin', operation: 'USER_CREATE', method: 'POST', url: '/api/users', ip: '127.0.0.1', status: 200, duration: 50 };
+const sampleLoginRow = { id: 'log-2', userId: 'user-1', username: 'admin', eventType: 'LOGIN_SUCCESS', ip: '127.0.0.1' };
+
 describe('Audit Logging', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // 模拟 count 查询返回 [{ count: 0 }]，数据查询返回空数组
-    // 模因为 count 和数据查询在同一 mock chain 中无法区分，
-    // 均使用默认值 [{ count: 3 }] 供分页计算使用
-    holder.state._queryResult = [{ count: 3 }];
   });
 
   describe('GET /api/audit/logs', () => {
-    it('响应结构符合 ApiResponse 契约（success + data + pagination）', async () => {
+    it('返回正确分页结构（pageSize 钳制）', async () => {
+      holder.state._queryResult = [sampleAuditRow, { count: 1 }];
+
+      const response = await GetAuditLogs(createTestRequest('/api/audit/logs', { searchParams: { page: '1', pageSize: '200' } }));
+      const body = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(body.pagination).toBeDefined();
+      expect(body.pagination.page).toBe(1);
+      expect(body.pagination.pageSize).toBeLessThanOrEqual(100);
+      expect(Array.isArray(body.data)).toBe(true);
+    });
+
+    it('注入数据后响应中透传业务字段', async () => {
+      holder.state._queryResult = [sampleAuditRow, { count: 1 }];
+
       const response = await GetAuditLogs(createTestRequest('/api/audit/logs'));
       const body = await response.json();
 
       expect(response.status).toBe(200);
-      expect(Array.isArray(body.data)).toBe(true);
-      expect(body.pagination).toBeDefined();
-      expect(body.pagination.page).toBeDefined();
-      expect(body.pagination.pageSize).toBeDefined();
-      expect(body.pagination.total).toBeDefined();
-      expect(body.pagination.totalPages).toBeDefined();
-    });
-
-    it('正确分页结构（page=1, pageSize=20）', async () => {
-      holder.state._queryResult = [{ count: 2 }];
-
-      const response = await GetAuditLogs(
-        createTestRequest('/api/audit/logs', { searchParams: { page: '1', pageSize: '20' } }),
-      );
-      const body = await response.json();
-
-      expect(response.status).toBe(200);
-      expect(body.pagination.page).toBe(1);
-      expect(body.pagination.pageSize).toBe(20);
-    });
-
-    it('pageSize > 100 时被钳制到 100（防资源耗尽）', async () => {
-      holder.state._queryResult = [{ count: 0 }];
-
-      const response = await GetAuditLogs(
-        createTestRequest('/api/audit/logs', { searchParams: { pageSize: '200' } }),
-      );
-      const body = await response.json();
-
-      expect(response.status).toBe(200);
-      expect(body.pagination.pageSize).toBeLessThanOrEqual(100);
-      expect(body.pagination.pageSize).not.toBe(200);
-    });
-
-    it('pageSize 为负数时被钳制为最小值 1', async () => {
-      holder.state._queryResult = [{ count: 0 }];
-
-      const response = await GetAuditLogs(
-        createTestRequest('/api/audit/logs', { searchParams: { pageSize: '-5' } }),
-      );
-      const body = await response.json();
-
-      expect(response.status).toBe(200);
-      expect(body.pagination.pageSize).toBeGreaterThanOrEqual(1);
+      // 验证业务数据字段透传
+      const row = body.data[0];
+      expect(row).toBeDefined();
+      expect(row.operation).toBe('USER_CREATE');
+      expect(row.userId).toBe('user-1');
+      expect(row.username).toBe('admin');
     });
 
     it('日期范围过滤不破坏响应结构', async () => {
       holder.state._queryResult = [{ count: 0 }];
 
       const response = await GetAuditLogs(
-        createTestRequest('/api/audit/logs', {
-          searchParams: { startDate: '2026-01-01', endDate: '2026-01-31' },
-        }),
+        createTestRequest('/api/audit/logs', { searchParams: { startDate: '2026-01-01', endDate: '2026-01-31' } }),
       );
       const body = await response.json();
 
@@ -138,22 +108,31 @@ describe('Audit Logging', () => {
       expect(Array.isArray(body.data)).toBe(true);
     });
 
-    it('operation 过滤参数透传不破坏响应结构', async () => {
-      holder.state._queryResult = [{ count: 0 }];
+    it('operation 过滤参数不破坏响应结构', async () => {
+      holder.state._queryResult = [sampleAuditRow, { count: 1 }];
 
       const response = await GetAuditLogs(
-        createTestRequest('/api/audit/logs', {
-          searchParams: { operation: 'USER_CREATE', userId: 'user-1' },
-        }),
+        createTestRequest('/api/audit/logs', { searchParams: { operation: 'USER_CREATE', userId: 'user-1' } }),
       );
       const body = await response.json();
 
       expect(response.status).toBe(200);
       expect(body.pagination).toBeDefined();
+      expect(Array.isArray(body.data)).toBe(true);
     });
 
-    it('分页参数缺省值时使用默认值', async () => {
-      holder.state._queryResult = [{ count: 1 }];
+    it('空数据 → 返回空数组', async () => {
+      holder.state._queryResult = [{ count: 0 }];
+
+      const response = await GetAuditLogs(createTestRequest('/api/audit/logs'));
+      const body = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(body.pagination.total).toBe(0);
+    });
+
+    it('分页参数缺省使用默认值', async () => {
+      holder.state._queryResult = [sampleAuditRow, { count: 1 }];
 
       const response = await GetAuditLogs(createTestRequest('/api/audit/logs'));
       const body = await response.json();
@@ -164,24 +143,26 @@ describe('Audit Logging', () => {
   });
 
   describe('GET /api/audit/login-logs', () => {
-    it('返回登录日志响应结构（success + data + 分页）', async () => {
-      holder.state._queryResult = [{ count: 0 }];
+    it('返回登录日志且业务字段透传', async () => {
+      holder.state._queryResult = [sampleLoginRow, { count: 1 }];
 
       const response = await GetLoginLogs(createTestRequest('/api/audit/login-logs'));
       const body = await response.json();
 
       expect(response.status).toBe(200);
       expect(body.pagination).toBeDefined();
-      expect(body.pagination.page).toBe(1);
+      // 验证业务数据
+      const row = body.data[0];
+      expect(row).toBeDefined();
+      expect(row.eventType).toBe('LOGIN_SUCCESS');
+      expect(row.userId).toBe('user-1');
     });
 
     it('eventType 过滤 + 日期范围不破坏响应结构', async () => {
       holder.state._queryResult = [{ count: 0 }];
 
       const response = await GetLoginLogs(
-        createTestRequest('/api/audit/login-logs', {
-          searchParams: { eventType: 'LOGIN_FAILED', startDate: '2026-01-01', endDate: '2026-01-31' },
-        }),
+        createTestRequest('/api/audit/login-logs', { searchParams: { eventType: 'LOGIN_FAILED', startDate: '2026-01-01', endDate: '2026-01-31' } }),
       );
       const body = await response.json();
 

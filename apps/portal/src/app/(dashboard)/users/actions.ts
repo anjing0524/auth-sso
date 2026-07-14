@@ -33,6 +33,7 @@ import {
 import { validatePassword } from '@/domain/shared/zod-schemas';
 import { EntityNotFoundError, DuplicateEntityError, ForbiddenError, BusinessRuleViolationError } from '@/domain/shared/errors';
 import { generateUUID } from '@/lib/crypto';
+import { validate } from '@/lib/validation';
 import { hashPassword, isPasswordReused, pushPasswordHistory } from '@/domain/auth/password';
 import { refreshUserPermissionCache } from '@/lib/permissions';
 import { revokeUserAccessByUserId } from '@/lib/session/revoke';
@@ -60,28 +61,26 @@ export const createUserAction = withAuth(
   ): Promise<ApiResponse<{ id: string }>> => {
     // 兼容双签名：FormData 模式时从 FormData 提取原始字段
     const rawInput = secondArg !== undefined ? Object.fromEntries(secondArg) : firstArg;
-    const parsed = CreateUserInputSchema.safeParse(rawInput);
-    if (!parsed.success) {
-      return { success: false, error: COMMON_ERRORS.VALIDATION_ERROR, message: parsed.error.issues[0]!.message };
-    }
+    const v = validate(CreateUserInputSchema, rawInput);
+    if (!v.ok) return v.response;
 
     // 数据范围校验：目标部门必须在操作者可访问范围内（R7 / H-ACL-002）
-    if (parsed.data.deptId && !canAccessDept(ctx.claims.deptIds, parsed.data.deptId)) {
+    if (v.data.deptId && !canAccessDept(ctx.claims.deptIds, v.data.deptId)) {
       throw new ForbiddenError('无权在指定部门下创建用户');
     }
 
     // 密码哈希在事务外完成，避免长时间占用 DB 连接（bcrypt 通常 50-200ms）
-    const passwordHash = await hashPassword(parsed.data.password);
+    const passwordHash = await hashPassword(v.data.password);
 
     // 查重 + 插入在事务中原子完成（R22）
     // deptId 已在 Zod .preprocess() 中归一化 ('ALL' → null)，Controller 层不重复判定
     const result = await db.transaction(async (tx) => {
       const existing = await tx.query.users.findFirst({
-        where: or(eq(schema.users.username, parsed.data.username), eq(schema.users.email, parsed.data.email)),
+        where: or(eq(schema.users.username, v.data.username), eq(schema.users.email, v.data.email)),
       });
       if (existing) throw new DuplicateEntityError('User', 'username/email');
 
-      const user = createUser(parsed.data, generateUUID);
+      const user = createUser(v.data, generateUUID);
       await tx.insert(schema.users).values({
         ...userToInsertRow(user),
         passwordHash,
@@ -101,29 +100,27 @@ export const createUserAction = withAuth(
 export const toggleUserStatusAction = withAuth(
   { permissions: ['user:update'], audit: 'USER_UPDATE' },
   async (ctx: AuthContext, userIdStr: string): Promise<ApiResponse<{ status: string }>> => {
-    const parsed = UserIdentityInputSchema.safeParse({ id: userIdStr });
-    if (!parsed.success) {
-      return { success: false, error: COMMON_ERRORS.VALIDATION_ERROR, message: parsed.error.issues[0]!.message };
-    }
+    const v = validate(UserIdentityInputSchema, { id: userIdStr });
+    if (!v.ok) return v.response;
 
     // 读取 + 更新在事务中原子完成（R22）
     const updated = await db.transaction(async (tx) => {
-      const row = await tx.query.users.findFirst({ where: eq(schema.users.id, parsed.data.id) });
-      if (!row) throw new EntityNotFoundError('User', parsed.data.id);
+      const row = await tx.query.users.findFirst({ where: eq(schema.users.id, v.data.id) });
+      if (!row) throw new EntityNotFoundError('User', v.data.id);
       // 数据范围校验：目标用户部门必须在操作者可访问范围内（R7 / H-ACL-002）
       if (!canAccessDept(ctx.claims.deptIds, row.deptId)) throw new ForbiddenError('无权操作该部门的用户');
 
       const target = toggleUserStatus(toDomainUser(row));
       await tx.update(schema.users)
         .set({ status: target.status })
-        .where(eq(schema.users.id, parsed.data.id));
+        .where(eq(schema.users.id, v.data.id));
       return target;
     });
 
     // 状态变更后撤销该用户所有活跃 JWT（jti 黑名单），确保变更即时生效
     // 关键安全操作必须 await（Redis 不可达时撤销失败会留下有效旧 Token）
     try {
-      await revokeUserAccessByUserId(parsed.data.id);
+      await revokeUserAccessByUserId(v.data.id);
     } catch (e) {
       log.error('撤销用户 JWT 失败', { error: (e as Error).message });
     }
@@ -144,20 +141,18 @@ export const toggleUserStatusAction = withAuth(
 export const unlockUserAction = withAuth(
   { permissions: ['user:update'], audit: 'USER_UPDATE' },
   async (ctx: AuthContext, userIdStr: string): Promise<ApiResponse<{ status: string }>> => {
-    const parsed = UserIdentityInputSchema.safeParse({ id: userIdStr });
-    if (!parsed.success) {
-      return { success: false, error: COMMON_ERRORS.VALIDATION_ERROR, message: parsed.error.issues[0]!.message };
-    }
+    const v = validate(UserIdentityInputSchema, { id: userIdStr });
+    if (!v.ok) return v.response;
 
     const updated = await db.transaction(async (tx) => {
-      const row = await tx.query.users.findFirst({ where: eq(schema.users.id, parsed.data.id) });
-      if (!row) throw new EntityNotFoundError('User', parsed.data.id);
+      const row = await tx.query.users.findFirst({ where: eq(schema.users.id, v.data.id) });
+      if (!row) throw new EntityNotFoundError('User', v.data.id);
       if (!canAccessDept(ctx.claims.deptIds, row.deptId)) throw new ForbiddenError('无权操作该部门的用户');
 
       const target = unlockUser(toDomainUser(row));
       await tx.update(schema.users)
         .set({ status: target.status })
-        .where(eq(schema.users.id, parsed.data.id));
+        .where(eq(schema.users.id, v.data.id));
       return target;
     });
 
@@ -166,7 +161,7 @@ export const unlockUserAction = withAuth(
 
     // 清除暴力破解 Redis 计数器（管理员解锁需同步清除，否则窗口期内仍被锁定）
     try {
-      await resetBruteForceCounter(parsed.data.id);
+      await resetBruteForceCounter(v.data.id);
     } catch {
       // 清除失败不阻塞解锁操作
     }
@@ -189,34 +184,32 @@ export const updateUserAction = withAuth(
     userIdStr: string,
     input: Record<string, unknown>,
   ): Promise<ApiResponse<{ id: string }>> => {
-    const parsed = UpdateUserInputSchema.safeParse({ id: userIdStr, ...input });
-    if (!parsed.success) {
-      return { success: false, error: COMMON_ERRORS.VALIDATION_ERROR, message: parsed.error.issues[0]!.message };
-    }
+    const v = validate(UpdateUserInputSchema, { id: userIdStr, ...input });
+    if (!v.ok) return v.response;
 
     let deptIdChanged = false;
     await db.transaction(async (tx) => {
-      const row = await tx.query.users.findFirst({ where: eq(schema.users.id, parsed.data.id) });
-      if (!row) throw new EntityNotFoundError('User', parsed.data.id);
+      const row = await tx.query.users.findFirst({ where: eq(schema.users.id, v.data.id) });
+      if (!row) throw new EntityNotFoundError('User', v.data.id);
       // 校验目标用户当前部门 + 拟变更目标部门均在操作者可访问范围内
       if (!canAccessDept(ctx.claims.deptIds, row.deptId)) throw new ForbiddenError('无权操作该部门的用户');
-      if (parsed.data.deptId && !canAccessDept(ctx.claims.deptIds, parsed.data.deptId)) {
+      if (v.data.deptId && !canAccessDept(ctx.claims.deptIds, v.data.deptId)) {
         throw new ForbiddenError('无权将用户迁移至该部门');
       }
 
       const updated = applyUserUpdate(toDomainUser(row), {
-        name: parsed.data.name, email: parsed.data.email,
-        status: parsed.data.status, deptId: parsed.data.deptId,
-        avatarUrl: parsed.data.avatarUrl,
+        name: v.data.name, email: v.data.email,
+        status: v.data.status, deptId: v.data.deptId,
+        avatarUrl: v.data.avatarUrl,
       });
-      deptIdChanged = hasDeptChanged(row.deptId, parsed.data.deptId);
-      await tx.update(schema.users).set(userToUpdateRow(updated)).where(eq(schema.users.id, parsed.data.id));
+      deptIdChanged = hasDeptChanged(row.deptId, v.data.deptId);
+      await tx.update(schema.users).set(userToUpdateRow(updated)).where(eq(schema.users.id, v.data.id));
     });
-    await refreshUserPermissionCache(parsed.data.id);
-    if (deptIdChanged) await revokeUserAccessByUserId(parsed.data.id);
+    await refreshUserPermissionCache(v.data.id);
+    if (deptIdChanged) await revokeUserAccessByUserId(v.data.id);
     revalidatePath('/users');
     updateTag('users-list');
-    return { success: true, data: { id: parsed.data.id }, message: '更新成功' };
+    return { success: true, data: { id: v.data.id }, message: '更新成功' };
   },
 );
 
@@ -226,35 +219,33 @@ export const updateUserAction = withAuth(
 export const deleteUserAction = withAuth(
   { permissions: ['user:delete'], audit: 'USER_DELETE' },
   async (ctx: AuthContext, userIdStr: string): Promise<ApiResponse<{ id: string }>> => {
-    const parsed = UserIdentityInputSchema.safeParse({ id: userIdStr });
-    if (!parsed.success) {
-      return { success: false, error: COMMON_ERRORS.VALIDATION_ERROR, message: parsed.error.issues[0]!.message };
-    }
+    const v = validate(UserIdentityInputSchema, { id: userIdStr });
+    if (!v.ok) return v.response;
 
     // 读取 + 更新在事务中原子完成（R22）；领域纯函数执行删除规则校验
     await db.transaction(async (tx) => {
-      const row = await tx.query.users.findFirst({ where: eq(schema.users.id, parsed.data.id) });
-      if (!row) throw new EntityNotFoundError('User', parsed.data.id);
+      const row = await tx.query.users.findFirst({ where: eq(schema.users.id, v.data.id) });
+      if (!row) throw new EntityNotFoundError('User', v.data.id);
       if (!canAccessDept(ctx.claims.deptIds, row.deptId)) throw new ForbiddenError('无权操作该部门的用户');
 
       const deleted = deleteUser(toDomainUser(row));
       await tx.update(schema.users)
         .set({ status: deleted.status })
-        .where(eq(schema.users.id, parsed.data.id));
+        .where(eq(schema.users.id, v.data.id));
     });
 
     // 删除用户后撤销其所有活跃 JWT（jti 黑名单），确保即时下线
     // 关键安全操作必须 await（Redis 不可达时撤销失败会留下有效旧 Token）
     try {
-      await revokeUserAccessByUserId(parsed.data.id);
+      await revokeUserAccessByUserId(v.data.id);
     } catch (e) {
       log.error('撤销已删除用户 JWT 失败', { error: (e as Error).message });
     }
 
-    await refreshUserPermissionCache(parsed.data.id);
+    await refreshUserPermissionCache(v.data.id);
     revalidatePath('/users');
     updateTag('users-list');
-    return { success: true, data: { id: parsed.data.id }, message: '用户已逻辑删除' };
+    return { success: true, data: { id: v.data.id }, message: '用户已逻辑删除' };
   },
 );
 
@@ -266,10 +257,8 @@ export const deleteUserAction = withAuth(
 export const resetPasswordAction = withAuth(
   { permissions: ['user:reset_password'], audit: 'TOKEN_REVOKE' },
   async (ctx: AuthContext, userIdStr: string, newPassword: string): Promise<ApiResponse<{ id: string }>> => {
-    const parsed = UserIdentityInputSchema.safeParse({ id: userIdStr });
-    if (!parsed.success) {
-      return { success: false, error: COMMON_ERRORS.VALIDATION_ERROR, message: parsed.error.issues[0]!.message };
-    }
+    const v = validate(UserIdentityInputSchema, { id: userIdStr });
+    if (!v.ok) return v.response;
     const passwordError = validatePassword(newPassword);
     if (passwordError) {
       return { success: false, error: COMMON_ERRORS.VALIDATION_ERROR, message: passwordError };
@@ -278,8 +267,8 @@ export const resetPasswordAction = withAuth(
     const passwordHash = await hashPassword(newPassword);
 
     await db.transaction(async (tx) => {
-      const row = await tx.query.users.findFirst({ where: eq(schema.users.id, parsed.data.id) });
-      if (!row) throw new EntityNotFoundError('User', parsed.data.id);
+      const row = await tx.query.users.findFirst({ where: eq(schema.users.id, v.data.id) });
+      if (!row) throw new EntityNotFoundError('User', v.data.id);
       if (!canAccessDept(ctx.claims.deptIds, row.deptId)) throw new ForbiddenError('无权操作该部门的用户');
 
       // NFR-SEC-15: 禁止重用最近 5 次密码
@@ -291,19 +280,19 @@ export const resetPasswordAction = withAuth(
       const newHistory = pushPasswordHistory(row.passwordHistory ?? null, row.passwordHash ?? '');
       await tx.update(schema.users)
         .set({ passwordHash, passwordHistory: newHistory })
-        .where(eq(schema.users.id, parsed.data.id));
+        .where(eq(schema.users.id, v.data.id));
     });
 
     // 重置后所有会话失效，用户须用新密码重新登录（B-USR-PW）
     // 关键安全操作必须 await（Redis 不可达时撤销失败会留下有效旧 Token）
     try {
-      await revokeUserAccessByUserId(parsed.data.id);
+      await revokeUserAccessByUserId(v.data.id);
     } catch (e) {
       log.error('重置密码后撤销 JWT 失败', { error: (e as Error).message });
     }
 
     revalidatePath('/users');
     updateTag('users-list');
-    return { success: true, data: { id: parsed.data.id }, message: '密码已重置，该用户所有会话已失效' };
+    return { success: true, data: { id: v.data.id }, message: '密码已重置，该用户所有会话已失效' };
   },
 );

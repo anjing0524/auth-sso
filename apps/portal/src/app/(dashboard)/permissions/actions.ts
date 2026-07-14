@@ -21,9 +21,10 @@ import {
 } from '@/domain/permission/types';
 import { EntityNotFoundError, DuplicateEntityError } from '@/domain/shared/errors';
 import { generateUUID } from '@/lib/crypto';
+import { validate } from '@/lib/validation';
 import { refreshUsersPermissionCache } from '@/lib/permissions';
 import { revokeUsersAccessByUserId } from '@/lib/session/revoke';
-import { COMMON_ERRORS, type ApiResponse } from '@auth-sso/contracts';
+import { type ApiResponse } from '@auth-sso/contracts';
 
 async function getAffectedUserIds(permId: string): Promise<string[]> {
   const rows = await db
@@ -46,20 +47,18 @@ async function invalidateAffectedUsersCache(permId: string): Promise<void> {
 export const createPermissionAction = withAuth(
   { permissions: ['permission:create'], audit: 'PERMISSION_CREATE' },
   async (_ctx: AuthContext, input: Record<string, unknown>): Promise<ApiResponse<{ id: string }>> => {
-    const parsed = CreatePermissionInputSchema.safeParse(input);
-    if (!parsed.success) {
-      return { success: false, error: COMMON_ERRORS.VALIDATION_ERROR, message: parsed.error.issues[0]!.message };
-    }
+    const v = validate(CreatePermissionInputSchema, input);
+    if (!v.ok) return v.response;
 
     // 查重 + 插入在事务中原子完成，避免 race condition
     const perm = await db.transaction(async (tx) => {
       const existing = await tx.select({ id: schema.permissions.id })
         .from(schema.permissions)
-        .where(eq(schema.permissions.code, parsed.data.code))
+        .where(eq(schema.permissions.code, v.data.code))
         .limit(1);
       if (existing[0]) throw new DuplicateEntityError('Permission', 'code');
 
-      const p = createPermission(parsed.data, generateUUID);
+      const p = createPermission(v.data, generateUUID);
       await tx.insert(schema.permissions).values(permissionToInsertRow(p));
       return p;
     });
@@ -74,10 +73,8 @@ export const createPermissionAction = withAuth(
 export const updatePermissionAction = withAuth(
   { permissions: ['permission:update'], audit: 'PERMISSION_UPDATE' },
   async (_ctx: AuthContext, permId: string, input: Record<string, unknown>): Promise<ApiResponse<{ id: string }>> => {
-    const parsed = UpdatePermissionInputSchema.safeParse(input);
-    if (!parsed.success) {
-      return { success: false, error: COMMON_ERRORS.VALIDATION_ERROR, message: parsed.error.issues[0]!.message };
-    }
+    const v = validate(UpdatePermissionInputSchema, input);
+    if (!v.ok) return v.response;
 
     const updated = await db.transaction(async (tx) => {
       const row = await tx.query.permissions.findFirst({
@@ -86,7 +83,7 @@ export const updatePermissionAction = withAuth(
       if (!row) throw new EntityNotFoundError('Permission', permId);
 
       const perm = toDomainPermission(row);
-      const updated = applyPermissionUpdate(perm, parsed.data);
+      const updated = applyPermissionUpdate(perm, v.data);
 
       await tx.update(schema.permissions).set(permissionToUpdateRow(updated))
         .where(eq(schema.permissions.id, perm.id));

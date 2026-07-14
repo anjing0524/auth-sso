@@ -21,19 +21,18 @@ import {
 } from '@/domain/client/types';
 import { EntityNotFoundError } from '@/domain/shared/errors';
 import { generateClientId, generateClientSecret, hashClientSecret } from '@/lib/crypto';
-import { COMMON_ERRORS, type ApiResponse } from '@auth-sso/contracts';
+import { validate } from '@/lib/validation';
+import { type ApiResponse } from '@auth-sso/contracts';
 
 /** 创建 Client */
 export const createClientAction = withAuth(
   { permissions: ['client:create'], audit: 'CLIENT_CREATE' },
   async (_ctx: AuthContext, input: CreateClientInput): Promise<ApiResponse<{ id: string; clientId: string; clientSecret: string | null }>> => {
-    const parsed = CreateClientInputSchema.safeParse(input);
-    if (!parsed.success) {
-      return { success: false, error: COMMON_ERRORS.VALIDATION_ERROR, message: parsed.error.issues[0]!.message };
-    }
+    const v = validate(CreateClientInputSchema, input);
+    if (!v.ok) return v.response;
 
     const rawSecret = generateClientSecret();
-    const client = createClient(parsed.data, generateClientId, () => rawSecret);
+    const client = createClient(v.data, generateClientId, () => rawSecret);
     const row = clientToInsertRow(client);
     // bcrypt 哈希存储，原文不落库（DC-CLI-C）
     await db.insert(schema.clients).values({
@@ -55,10 +54,8 @@ export const createClientAction = withAuth(
 export const updateClientAction = withAuth(
   { permissions: ['client:update'], audit: 'CLIENT_UPDATE' },
   async (_ctx: AuthContext, clientIdStr: string, input: Record<string, unknown>): Promise<ApiResponse<{ id: string }>> => {
-    const parsed = UpdateClientInputSchema.safeParse(input);
-    if (!parsed.success) {
-      return { success: false, error: COMMON_ERRORS.VALIDATION_ERROR, message: parsed.error.issues[0]!.message };
-    }
+    const v = validate(UpdateClientInputSchema, input);
+    if (!v.ok) return v.response;
 
     const updated = await db.transaction(async (tx) => {
       const row = await tx.query.clients.findFirst({
@@ -67,7 +64,7 @@ export const updateClientAction = withAuth(
       if (!row) throw new EntityNotFoundError('Client', clientIdStr);
 
       const client = toDomainClient(row);
-      const updated = applyClientUpdate(client, parsed.data);
+      const updated = applyClientUpdate(client, v.data);
 
       await tx.update(schema.clients).set(clientToUpdateRow(updated))
         .where(eq(schema.clients.clientId, client.clientId));

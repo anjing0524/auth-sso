@@ -25,36 +25,35 @@ import {
 } from '@/domain/department/types';
 import { EntityNotFoundError, BusinessRuleViolationError, ForbiddenError } from '@/domain/shared/errors';
 import { generateUUID } from '@/lib/crypto';
+import { validate } from '@/lib/validation';
 import { canAccessDept } from '@/lib/auth';
-import { COMMON_ERRORS, type ApiResponse } from '@auth-sso/contracts';
+import { type ApiResponse } from '@auth-sso/contracts';
 
 /** 创建部门 */
 export const createDepartmentAction = withAuth(
   { permissions: ['department:create'], audit: 'DEPARTMENT_CREATE' },
   async (ctx: AuthContext, input: CreateDepartmentInput): Promise<ApiResponse<{ id: string }>> => {
-    const parsed = CreateDepartmentInputSchema.safeParse(input);
-    if (!parsed.success) {
-      return { success: false, error: COMMON_ERRORS.VALIDATION_ERROR, message: parsed.error.issues[0]!.message };
-    }
+    const v = validate(CreateDepartmentInputSchema, input);
+    if (!v.ok) return v.response;
 
     // 数据范围校验：父部门必须在操作者可访问范围内（顶级部门 parentId 为 null 时放行）
-    if (parsed.data.parentId && !canAccessDept(ctx.claims.deptIds, parsed.data.parentId)) {
+    if (v.data.parentId && !canAccessDept(ctx.claims.deptIds, v.data.parentId)) {
       throw new ForbiddenError('无权在指定父部门下创建子部门');
     }
 
     const dept = await db.transaction(async (tx) => {
       // 查询父级 ancestors 在事务内完成，消除读-写竞争窗口
-      const parentAncestors = parsed.data.parentId
+      const parentAncestors = v.data.parentId
         ? await (async () => {
             const parent = await tx.query.departments.findFirst({
-              where: eq(schema.departments.id, parsed.data.parentId!),
+              where: eq(schema.departments.id, v.data.parentId!),
               columns: { id: true, ancestors: true },
             });
             return parent?.ancestors ?? null;
           })()
         : null;
 
-      const d = createDepartment(parsed.data, generateUUID, parentAncestors);
+      const d = createDepartment(v.data, generateUUID, parentAncestors);
       await tx.insert(schema.departments).values(departmentToInsertRow(d));
       return d;
     });
@@ -97,19 +96,17 @@ async function performDepartmentUpdate(tx: DrizzleTransaction, deptId: string, p
 export const updateDepartmentAction = withAuth(
   { permissions: ['department:update'], audit: 'DEPARTMENT_UPDATE' },
   async (ctx: AuthContext, deptId: string, input: Record<string, unknown>): Promise<ApiResponse<{ id: string }>> => {
-    const parsed = UpdateDepartmentInputSchema.safeParse(input);
-    if (!parsed.success) {
-      return { success: false, error: COMMON_ERRORS.VALIDATION_ERROR, message: parsed.error.issues[0]!.message };
-    }
+    const v = validate(UpdateDepartmentInputSchema, input);
+    if (!v.ok) return v.response;
     await db.transaction(async (tx) => {
       // 数据范围校验：目标部门 + 拟变更父部门均在操作者可访问范围内
       const row = await tx.query.departments.findFirst({ where: eq(schema.departments.id, deptId) });
       if (!row) throw new EntityNotFoundError('Department', deptId);
       if (!canAccessDept(ctx.claims.deptIds, row.id)) throw new ForbiddenError('无权操作该部门');
-      if (parsed.data.parentId && !canAccessDept(ctx.claims.deptIds, parsed.data.parentId)) {
+      if (v.data.parentId && !canAccessDept(ctx.claims.deptIds, v.data.parentId)) {
         throw new ForbiddenError('无权将部门迁移至该父部门');
       }
-      await performDepartmentUpdate(tx, deptId, parsed.data);
+      await performDepartmentUpdate(tx, deptId, v.data);
     });
     revalidatePath('/departments');
     updateTag('departments-list');
