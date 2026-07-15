@@ -201,7 +201,7 @@ describe('Permission API', () => {
       mocks.setQueryResult([
         makePermissionRow({ code: 'user:list', sort: 1 }),
         makePermissionRow({ id: 'perm-2', publicId: 'p02', code: 'role:list', name: '角色列表', sort: 2 }),
-        makePermissionRow({ id: 'perm-3', publicId: 'p03', code: 'dept:list', type: 'DATA', sort: 3 }),
+        makePermissionRow({ id: 'perm-3', publicId: 'p03', code: 'dept:list', type: 'API', sort: 3 }),
       ]);
       const body = await parseResponseJson(await ListPermissions(createTestRequest('/api/permissions')));
       expect(body.data).toHaveLength(3);

@@ -8,7 +8,7 @@ import React, { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import {
-  ShieldCheck, Plus, Search, MoreHorizontal, Edit, Trash2, Database, Globe, Code, Folder,
+  ShieldCheck, Plus, Search, MoreHorizontal, Edit, Trash2, Globe, Code, Folder,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -50,13 +50,12 @@ interface Props {
 }
 
 const TYPE_ICONS: Record<string, React.ReactNode> = {
-	  DIRECTORY: <Folder className="h-3 w-3 text-purple-500" />,
-	  PAGE: <Globe className="h-3 w-3 text-blue-500" />,
-	  API: <Code className="h-3 w-3 text-green-500" />,
-  DATA: <Database className="h-3 w-3 text-orange-500" />,
+  DIRECTORY: <Folder className="h-3 w-3 text-purple-500" />,
+  PAGE: <Globe className="h-3 w-3 text-blue-500" />,
+  API: <Code className="h-3 w-3 text-green-500" />,
 };
 
-const TABS = ['ALL', 'DIRECTORY', 'PAGE', 'API', 'DATA'];
+const TABS = ['ALL', 'DIRECTORY', 'PAGE', 'API'];
 
 export default function PermissionsTable({ permissions, activeTab, initialKeyword = '' }: Props) {
   const router = useRouter();
@@ -95,7 +94,7 @@ export default function PermissionsTable({ permissions, activeTab, initialKeywor
   const handleCreate = async () => {
     if (!form.name || !form.code) { toast.error('请填写完整信息'); return; }
     setSaving(true);
-    const r = await createPermissionAction({ name: form.name, code: form.code, type: form.type as 'DIRECTORY' | 'PAGE' | 'API' | 'DATA', resource: form.resource, action: form.action, sort: 0 });
+    const r = await createPermissionAction({ name: form.name, code: form.code, type: form.type as 'DIRECTORY' | 'PAGE' | 'API', resource: form.resource, action: form.action, sort: 0 });
     setSaving(false);
     if (r.success) { toast.success(r.message); setIsAddOpen(false); setForm({ name: '', code: '', type: 'API', resource: '', action: '' }); router.refresh(); }
     else { toast.error(r.message); }
@@ -217,7 +216,6 @@ export default function PermissionsTable({ permissions, activeTab, initialKeywor
                 <SelectContent>
                   <SelectItem value="API">API</SelectItem>
                   <SelectItem value="DIRECTORY">DIRECTORY</SelectItem>
-                  <SelectItem value="DATA">DATA</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -243,7 +241,6 @@ export default function PermissionsTable({ permissions, activeTab, initialKeywor
                 <SelectContent>
                   <SelectItem value="API">API</SelectItem>
                   <SelectItem value="DIRECTORY">DIRECTORY</SelectItem>
-                  <SelectItem value="DATA">DATA</SelectItem>
                 </SelectContent>
               </Select>
             </div>

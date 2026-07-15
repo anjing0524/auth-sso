@@ -50,7 +50,7 @@ export function asUserStatus(v: string): UserStatus {
 }
 
 /**
- * 运行时校验 + 收窄为 PermissionType（DIRECTORY | PAGE | API | DATA）
+ * 运行时校验 + 收窄为 PermissionType（DIRECTORY | PAGE | API）
  *
  * @throws {Error} 输入值不在 PERMISSION_TYPE_VALUES 内
  */

@@ -5,7 +5,7 @@
  * contracts 中 VALUES 均为 `as const` 的 readonly tuple，可直接传给 pgEnum。
  *
  * v2 变更：
- * - permissionTypeEnum 值更新为 DIRECTORY | PAGE | API | DATA（合并旧 menu_type）
+ * - permissionTypeEnum 值更新为 DIRECTORY | PAGE | API（合并旧 menu_type）
  * - 新增 loginEventEnum、auditOperationEnum（替代日志表裸 text）
  * - 移除 menuTypeEnum（menus 表已合并进 permissions）
  *
@@ -26,7 +26,7 @@ export const userStatusEnum = pgEnum('user_status', USER_STATUS_VALUES);
 /** 实体通用状态枚举（department/role/permission/client） */
 export const entityStatusEnum = pgEnum('entity_status', ENTITY_STATUS_VALUES);
 
-/** 权限类型枚举（DIRECTORY | PAGE | API | DATA，合并旧 menu_type） */
+/** 权限类型枚举（DIRECTORY | PAGE | API，合并旧 menu_type） */
 export const permissionTypeEnum = pgEnum('permission_type', PERMISSION_TYPE_VALUES);
 
 /** 登录事件类型枚举（替代 login_logs 裸 text） */

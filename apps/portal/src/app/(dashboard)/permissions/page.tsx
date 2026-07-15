@@ -27,7 +27,7 @@ export default async function PermissionsPage({ searchParams }: PageProps) {
           <h1 className="text-3xl font-bold tracking-tight flex items-center gap-3">
             <ShieldCheck className="h-8 w-8 text-primary" /> 权限管理
           </h1>
-          <p className="text-muted-foreground text-sm">管理系统的功能权限点，支持 DIRECTORY/PAGE/API/DATA 四种类型。</p>
+          <p className="text-muted-foreground text-sm">管理系统的功能权限点，支持 DIRECTORY/PAGE/API 三种类型。</p>
         </div>
       </div>
 

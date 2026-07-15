@@ -12,7 +12,6 @@ import { entityStatusEnum, permissionTypeEnum } from '@/domain/shared/zod-schema
  * type 鉴别列决定字段生效规则：
  * - DIRECTORY/PAGE: path, icon, visible（菜单相关）
  * - API: resource, action, clientId（接口鉴权）
- * - DATA: resource, action（数据权限）
  *
  * v2 变更：移除 publicId，新增 path/icon/visible（合并 menus）
  */
@@ -33,9 +32,9 @@ export interface Permission {
   icon: string | null;
   /** 侧边栏可见（DIRECTORY/PAGE） */
   visible: boolean | null;
-  /** 资源标识（API: 接口路径，DATA: 数据实体） */
+  /** 资源标识（API 接口路径） */
   resource: string | null;
-  /** 操作类型（API: HTTP方法，DATA: 读写操作） */
+  /** 操作类型（API HTTP 方法） */
   action: string | null;
   /** 归属 OAuth Client（仅 API 类型） */
   clientId: string | null;
@@ -91,17 +90,6 @@ export const CreatePermissionInputSchema = z.discriminatedUnion('type', [
     resource: z.string().min(1, 'API 类型必须指定 resource'),
     action: z.string().min(1, 'API 类型必须指定 action'),
     clientId: z.string().optional(),
-    parentId: z.string().nullable().optional(),
-    sort: z.number().int().default(0),
-  }),
-  // DATA：数据权限
-  z.object({
-    type: z.literal('DATA'),
-    code: z.string().min(1, '权限编码不能为空'),
-    name: z.string().min(1, '权限名称不能为空'),
-    description: z.string().optional(),
-    resource: z.string().min(1, 'DATA 类型必须指定 resource'),
-    action: z.string().min(1, 'DATA 类型必须指定 action'),
     parentId: z.string().nullable().optional(),
     sort: z.number().int().default(0),
   }),

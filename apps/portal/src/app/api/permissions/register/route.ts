@@ -17,7 +17,7 @@ const log = createLogger('PermissionsRegister');
 interface IncomingPermission {
   code: string;
   name: string;
-  type: 'DIRECTORY' | 'PAGE' | 'API' | 'DATA';
+  type: 'DIRECTORY' | 'PAGE' | 'API';
   resource?: string;
   action?: string;
   /** PAGE/DIRECTORY 专属：前端路由路径 */

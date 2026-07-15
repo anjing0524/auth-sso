@@ -7,11 +7,10 @@
  *
  * ## permissions 类型鉴别设计
  *
- * type 枚举（DIRECTORY | PAGE | API | DATA）决定字段生效规则：
+ * type 枚举（DIRECTORY | PAGE | API）决定字段生效规则：
  * - DIRECTORY: path(可选), icon, visible — 侧边栏折叠组，不参与鉴权
  * - PAGE:      path(必填), icon, visible — 侧边栏路由项
  * - API:       resource(必填), action(必填), client_id — 接口鉴权
- * - DATA:      resource(必填), action(必填) — 数据实体权限
  *
  * PG CHECK 约束确保类型专属字段完整性（第二道防线），
  * 应用层 Zod discriminatedUnion 为第一道防线。
@@ -67,7 +66,7 @@ export const permissions = pgTable('permissions', {
   path: varchar('path', { length: 200 }),
   icon: varchar('icon', { length: 50 }),
   visible: boolean('visible'),
-  // API/DATA 专属
+  // API 专属
   resource: varchar('resource', { length: 100 }),
   action: varchar('action', { length: 50 }),
   // API 专属
@@ -82,12 +81,12 @@ export const permissions = pgTable('permissions', {
   index('idx_permissions_client').on(t.clientId),
   index('idx_permissions_parent').on(t.parentId),
   index('idx_permissions_type').on(t.type),
-  // CHECK：DIRECTORY/PAGE 不可有 resource/action/client_id；API/DATA 必有 resource/action
+  // CHECK：DIRECTORY/PAGE 不可有 resource/action/client_id；API 必有 resource/action
   // 应用层 Zod discriminatedUnion 为第一道防线，此为 DB 第二道防线
   check(
     'permissions_type_fields_chk',
     sql`(type IN ('DIRECTORY','PAGE') AND resource IS NULL AND action IS NULL AND client_id IS NULL)
-      OR (type IN ('API','DATA') AND resource IS NOT NULL AND action IS NOT NULL)`,
+      OR (type = 'API' AND resource IS NOT NULL AND action IS NOT NULL)`,
   ),
 ]);
 

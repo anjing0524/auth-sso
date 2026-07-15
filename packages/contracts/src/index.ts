@@ -12,7 +12,7 @@ export const ENTITY_STATUS_VALUES = ['ACTIVE', 'DISABLED'] as const;
 export type EntityStatus = typeof ENTITY_STATUS_VALUES[number];
 
 // 权限类型 — 唯一真相源（合并旧 permission_type + menu_type，menus 表已合并进 permissions）
-export const PERMISSION_TYPE_VALUES = ['DIRECTORY', 'PAGE', 'API', 'DATA'] as const;
+export const PERMISSION_TYPE_VALUES = ['DIRECTORY', 'PAGE', 'API'] as const;
 export type PermissionType = typeof PERMISSION_TYPE_VALUES[number];
 
 // Grant Type
@@ -50,7 +50,6 @@ export const ENTITY_DISABLED: EntityStatus = 'DISABLED';
 export const PERMISSION_API: PermissionType = 'API';
 export const PERMISSION_PAGE: PermissionType = 'PAGE';
 export const PERMISSION_DIRECTORY: PermissionType = 'DIRECTORY';
-export const PERMISSION_DATA: PermissionType = 'DATA';
 /** 系统管理员角色编码集合（硬编码业务常量） */
 export const ADMIN_ROLE_CODES = ['SUPER_ADMIN', 'ADMIN'] as const;
 

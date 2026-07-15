@@ -6,7 +6,7 @@
  * The single source of truth for enum value arrays remains at auth-sso/contracts.
  *
  * v2 变更：
- * - permissionTypeEnum 更新为 DIRECTORY | PAGE | API | DATA
+ * - permissionTypeEnum 更新为 DIRECTORY | PAGE | API
  * - 移除 menuTypeEnum（menus 已合并进 permissions）
  *
  * @module domain/shared/zod-schemas
@@ -24,7 +24,7 @@ export const userStatusEnum = z.enum(USER_STATUS_VALUES);
 /** Entity status Zod enum (shared by Department, Role, Permission, Client) */
 export const entityStatusEnum = z.enum(ENTITY_STATUS_VALUES);
 
-/** Permission type Zod enum（DIRECTORY | PAGE | API | DATA） */
+/** Permission type Zod enum（DIRECTORY | PAGE | API） */
 export const permissionTypeEnum = z.enum(PERMISSION_TYPE_VALUES);
 
 /**
