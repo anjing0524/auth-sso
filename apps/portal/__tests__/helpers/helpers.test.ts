@@ -4,13 +4,13 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { MockRedisStore, createMockRedis } from './mock-redis';
+import { createTestDbHandle } from './test-db';
 import { createMockWithPermission } from './mock-auth';
 import {
   createTestUser,
   createTestRole,
   createTestPermission,
   createTestDepartment,
-  createTestSession,
   createTestPermissionContext,
 } from './test-fixtures';
 import { createTestRequest, createAuthenticatedRequest } from './test-utils';
@@ -116,12 +116,6 @@ describe('Mock 基础设施', () => {
       expect(createTestDepartment().name).toBe('测试部门');
     });
 
-    it('createTestSession 时间戳合理', () => {
-      const session = createTestSession();
-      expect(session.tokenExpiresAt).toBeGreaterThan(Date.now());
-      expect(session.absoluteExpiresAt).toBeGreaterThan(session.tokenExpiresAt);
-    });
-
     it('createTestPermissionContext 默认管理员', () => {
       const ctx = createTestPermissionContext();
       expect(ctx.deptIds).toEqual(['dept-1']);
@@ -153,93 +147,12 @@ describe('Mock 基础设施', () => {
     });
   });
 
-  describe('createMockDb', () => {
-    let mockDb: ReturnType<typeof import('./mock-db').createMockDb>;
-
-    beforeEach(async () => {
-      const mod = await import('./mock-db');
-      mockDb = mod.createMockDb();
-    });
-
-    it('select().from().where() 返回配置的查询结果', async () => {
-      const users = [{ id: 'u1', name: 'Alice' }, { id: 'u2', name: 'Bob' }];
-      mockDb.setQueryResult(users);
-
-      const result = await mockDb.db.select().from('users').where({});
-      expect(result).toEqual(users);
-    });
-
-    it('select() 列投影模式返回配置结果', async () => {
-      mockDb.setQueryResult([{ deptId: 'd1' }]);
-      const result = await mockDb.db.select({ deptId: 't.deptId' }).from('departments');
-      expect(result).toEqual([{ deptId: 'd1' }]);
-    });
-
-    it('selectDistinct() 返回配置结果', async () => {
-      mockDb.setQueryResult([{ deptId: 'd1' }]);
-      const result = await mockDb.db.selectDistinct({ deptId: 't.deptId' }).from('departments').where({});
-      expect(result).toEqual([{ deptId: 'd1' }]);
-    });
-
-    it('insert().values().returning() 返回插入结果', async () => {
-      mockDb.setInsertResult([{ id: 'new-1', name: 'New' }]);
-      const result = await mockDb.db.insert('users').values({ name: 'New' }).returning();
-      expect(result).toEqual([{ id: 'new-1', name: 'New' }]);
-    });
-
-    it('update().set().where().returning() 返回更新结果', async () => {
-      mockDb.setReturningResult([{ id: 'u1', name: 'Updated' }]);
-      const result = await mockDb.db.update('users').set({ name: 'Updated' }).where({}).returning();
-      expect(result).toEqual([{ id: 'u1', name: 'Updated' }]);
-    });
-
-    it('delete().where() 返回受影响行数', async () => {
-      mockDb.setRowCountResult(1);
-      const result = await mockDb.db.delete('users').where({ id: 'u1' });
-      expect(result).toBe(1);
-    });
-
-    it('execute() 原始 SQL 返回配置结果', async () => {
-      mockDb.setExecuteResult([{ deptId: 'd1' }, { deptId: 'd2' }]);
-      const result = await mockDb.db.execute('WITH RECURSIVE sub_depts AS (...)');
-      expect(result).toEqual([{ deptId: 'd1' }, { deptId: 'd2' }]);
-    });
-
-    it('transaction() 执行回调并返回其 promise 结果', async () => {
-      mockDb.setQueryResult([{ id: 'u1' }]);
-      const result = await mockDb.db.transaction(async (tx: any) => {
-        const rows = await tx.select().from('users');
-        return rows;
-      });
-      expect(result).toEqual([{ id: 'u1' }]);
-    });
-
-    it('transaction 内 tx.execute() 返回配置结果', async () => {
-      mockDb.setExecuteResult([{ deptId: 'd1' }]);
-      const result = await mockDb.db.transaction(async (tx: any) => {
-        return tx.execute('SELECT pg_advisory_xact_lock(1)');
-      });
-      expect(result).toEqual([{ deptId: 'd1' }]);
-    });
-
-    it('reset() 清除全部配置到默认值', async () => {
-      mockDb.setQueryResult([{ id: 'u1' }]);
-      mockDb.reset();
-      const result = await mockDb.db.select().from('users');
-      expect(result).toEqual([]);
-    });
-
-    it('setThrowError 使 execute 抛出异常', async () => {
-      mockDb.setThrowError(new Error('DB error'));
-      let threw = false;
-      try {
-        await mockDb.db.execute('SELECT 1');
-      } catch (e: any) {
-        threw = true;
-        expect(e.message).toBe('DB error');
-      }
-      expect(threw).toBe(true);
-      mockDb.clearThrowError();
+  describe('test-db', () => {
+    it('createTestDbHandle 返回可用句柄', () => {
+      const handle = createTestDbHandle();
+      expect(handle).toBeDefined();
+      expect(typeof handle.cleanup).toBe('function');
+      expect(handle.schema).toBeDefined();
     });
   });
 

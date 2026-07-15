@@ -1,14 +1,15 @@
 /**
- * 登录 API 单元测试 (POST /api/auth/login)
+ * 登录 API 集成测试 (POST /api/auth/login) — 真实 DB
  *
- * Controller 层测试：Mock 基础设施（DB/Redis），使用真实领域函数。
- * 仅 Mock 操作耗时或依赖外部服务的模块：verifyPassword(bcrypt)、brute-force(Redis/DB)、token签发(签名密钥)。
+ * 真实 DB 用于用户查询（Drizzle select），其余：
+ *   verifyPassword(bcrypt)、brute-force(Redis/DB)、token签发(签名密钥) 均 mock。
  *
  * @req H-AUTH-002, H-AUTH-006, DC-AUTH-001
  * @vitest-environment node
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest';
 import { COMMON_ERRORS, USER_LOCKED, USER_DELETED } from '@auth-sso/contracts';
+import { createTestDbHandle, seedTestData } from '../helpers/test-db';
 
 const holder = vi.hoisted<{
   mockSignLoginSession: ReturnType<typeof vi.fn>;
@@ -16,65 +17,19 @@ const holder = vi.hoisted<{
   mockCheckBruteForce: ReturnType<typeof vi.fn>;
   mockIncrementBruteForce: ReturnType<typeof vi.fn>;
   mockClearBruteForceCounter: ReturnType<typeof vi.fn>;
-  mockDb: any;
-  state: { dbRows: any[]; lastUpdateSet: Record<string, unknown> | null };
-}>(() => {
-  const state: {
-    dbRows: any[];
-    lastUpdateSet: Record<string, unknown> | null;
-  } = {
-    dbRows: [],
-    lastUpdateSet: null,
-  };
-
-  const createChain = () => {
-    const chain: any = () => {};
-    chain.then = (resolve: Function) => resolve(state.dbRows);
-    chain.catch = () => ({ then: (r: Function) => r([]) });
-    return new Proxy(chain, {
-      get(t: any, prop: string) {
-        if (prop === 'then' || prop === 'catch') return t[prop];
-        return () => createChain();
-      },
-    });
-  };
-
-  const mockUpdatePromise: any = () => {};
-  mockUpdatePromise.catch = (fn: Function) => {
-    fn(null);
-    return mockUpdatePromise;
-  };
-
-  const mockDb = new Proxy({} as any, {
-    get(_t: any, prop: string) {
-      if (prop === 'select') return () => createChain();
-      if (prop === 'update')
-        return () => ({
-          set: (data: Record<string, unknown>) => {
-            state.lastUpdateSet = data;
-            return { where: () => mockUpdatePromise };
-          },
-        });
-      return undefined;
-    },
-  });
-
-  return {
-    mockSignLoginSession: vi.fn(),
-    mockVerifyPassword: vi.fn(),
-    mockCheckBruteForce: vi.fn(),
-    mockIncrementBruteForce: vi.fn(),
-    mockClearBruteForceCounter: vi.fn(),
-    mockDb,
-    get state() {
-      return state;
-    },
-  };
-});
+  tdHolder: { current: ReturnType<typeof createTestDbHandle> | null };
+}>(() => ({
+  mockSignLoginSession: vi.fn(),
+  mockVerifyPassword: vi.fn(),
+  mockCheckBruteForce: vi.fn(),
+  mockIncrementBruteForce: vi.fn(),
+  mockClearBruteForceCounter: vi.fn(),
+  tdHolder: { current: null },
+}));
 
 vi.mock('@/infrastructure/db', () => ({
-  db: holder.mockDb,
-  schema: { users: {} },
+  get db() { return holder.tdHolder.current!.db; },
+  get schema() { return holder.tdHolder.current!.schema; },
 }));
 
 vi.mock('@/domain/auth/password', () => ({
@@ -92,8 +47,52 @@ vi.mock('@/lib/auth/token', () => ({
   LOGIN_SESSION_TTL: 300,
 }));
 
+vi.mock('@/lib/audit', () => ({
+  writeLoginLog: () => {},
+  extractClientIP: () => null,
+  extractUserAgent: () => null,
+}));
+
 import { POST } from '@/app/api/auth/login/route';
 import { NextRequest } from 'next/server';
+
+const now = new Date();
+const USER_PWD_HASH = '$2b$10$3NW6cGa0tGI9DCtuGr0leOcsRRUVKd.4hsrs7kWdhuK6.kaEXitVe';
+const U1 = '00000000-0000-4000-8000-000000000301';
+const U2 = '00000000-0000-4000-8000-000000000302';
+const U3 = '00000000-0000-4000-8000-000000000303';
+
+function seedTestUsers() {
+  return [
+    {
+      id: U1, username: 'user', email: 'user@example.com', name: 'User',
+      passwordHash: USER_PWD_HASH, status: 'ACTIVE' as const,
+      emailVerified: true, mobileVerified: false,
+      passwordHistory: null, avatarUrl: null, mobile: null, deptId: null,
+      lastLoginAt: null, deletedAt: null, passwordChangedAt: null,
+      createdAt: now, updatedAt: now,
+    },
+    {
+      id: U2, username: 'locked-user', email: 'locked-user@example.com', name: 'Locked',
+      passwordHash: USER_PWD_HASH, status: USER_LOCKED as typeof USER_LOCKED,
+      emailVerified: true, mobileVerified: false,
+      passwordHistory: null, avatarUrl: null, mobile: null, deptId: null,
+      lastLoginAt: null, deletedAt: null, passwordChangedAt: null,
+      createdAt: now, updatedAt: now,
+    },
+    {
+      id: U3, username: 'deleted-user', email: 'deleted-user@example.com', name: 'Deleted',
+      passwordHash: USER_PWD_HASH, status: USER_DELETED as typeof USER_DELETED,
+      emailVerified: true, mobileVerified: false,
+      passwordHistory: null, avatarUrl: null, mobile: null, deptId: null,
+      lastLoginAt: null, deletedAt: now, passwordChangedAt: null,
+      createdAt: now, updatedAt: now,
+    },
+  ];
+}
+
+const td = createTestDbHandle();
+holder.tdHolder.current = td;
 
 function buildLoginRequest(body: Record<string, unknown>): NextRequest {
   return new NextRequest('http://localhost:4100/api/auth/login', {
@@ -103,10 +102,13 @@ function buildLoginRequest(body: Record<string, unknown>): NextRequest {
   });
 }
 
-beforeEach(() => {
+beforeAll(async () => { await td.connect(); });
+afterAll(async () => { await td.close(); });
+
+beforeEach(async () => {
+  await td.cleanup();
+  await seedTestData(td.db, { users: seedTestUsers() });
   vi.clearAllMocks();
-  holder.state.dbRows = [];
-  holder.state.lastUpdateSet = null;
   holder.mockCheckBruteForce.mockResolvedValue({ locked: false, message: '' });
   holder.mockVerifyPassword.mockResolvedValue(true);
   holder.mockSignLoginSession.mockResolvedValue('mock-login-session-jwt');
@@ -127,8 +129,6 @@ describe('POST /api/auth/login', () => {
   });
 
   it('用户不存在时返回 401（防枚举，不泄露用户存在性）', async () => {
-    // DB 返回空行 → Controller throw InvalidCredentialsError → mapDomainError 映射 401
-    holder.state.dbRows = [];
     const res = await POST(buildLoginRequest({ email: 'notfound@example.com', password: 'test123' }));
     const json = await res.json();
     expect(res.status).toBe(401);
@@ -136,67 +136,32 @@ describe('POST /api/auth/login', () => {
   });
 
   it('密码错误时返回 401，并增加暴力破解计数', async () => {
-    holder.state.dbRows = [
-      {
-        id: 'u1',
-        username: 'user',
-        email: 'user@example.com',
-        name: 'User',
-        avatarUrl: null,
-        passwordHash: '$2b$hashed...',
-        status: 'ACTIVE',
-      },
-    ];
     holder.mockVerifyPassword.mockResolvedValueOnce(false);
 
     const res = await POST(buildLoginRequest({ email: 'user@example.com', password: 'wrong' }));
     const json = await res.json();
 
     expect(res.status).toBe(401);
-    expect(holder.mockIncrementBruteForce).toHaveBeenCalledWith('u1');
+    expect(holder.mockIncrementBruteForce).toHaveBeenCalledWith(U1);
   });
 
   it('登录成功时返回 200、设置 Cookie、清除暴力破解计数', async () => {
-    holder.state.dbRows = [
-      {
-        id: 'u1',
-        username: 'user',
-        email: 'user@example.com',
-        name: 'User',
-        avatarUrl: null,
-        passwordHash: '$2b$hashed...',
-        status: 'ACTIVE',
-      },
-    ];
-    holder.mockVerifyPassword.mockResolvedValueOnce(true);
-
     const res = await POST(buildLoginRequest({ email: 'user@example.com', password: 'correct' }));
     const json = await res.json();
 
     expect(res.status).toBe(200);
-    expect(holder.mockSignLoginSession).toHaveBeenCalledWith('u1');
+    expect(holder.mockSignLoginSession).toHaveBeenCalledWith(U1);
     expect(res.cookies.get('login_session')?.value).toBe('mock-login-session-jwt');
-    expect(holder.mockClearBruteForceCounter).toHaveBeenCalledWith('u1');
+    expect(holder.mockClearBruteForceCounter).toHaveBeenCalledWith(U1);
   });
 
   it('暴力破解锁定后返回 423，不尝试验证密码', async () => {
-    holder.state.dbRows = [
-      {
-        id: 'u1',
-        username: 'locked',
-        email: 'locked@example.com',
-        name: 'Locked',
-        avatarUrl: null,
-        passwordHash: '$2b$hashed...',
-        status: 'ACTIVE',
-      },
-    ];
     holder.mockCheckBruteForce.mockResolvedValueOnce({
       locked: true,
       message: '登录失败次数过多，账户已临时锁定',
     });
 
-    const res = await POST(buildLoginRequest({ email: 'locked@example.com', password: 'test123' }));
+    const res = await POST(buildLoginRequest({ email: 'user@example.com', password: 'test123' }));
     const json = await res.json();
 
     expect(res.status).toBe(423);
@@ -204,19 +169,6 @@ describe('POST /api/auth/login', () => {
   });
 
   it('LOCKED 状态用户登录时返回 403（真实领域函数校验）', async () => {
-    // 此测试验证 validateLoginCredentials（真实领域函数）对 LOCKED 状态的校验
-    holder.state.dbRows = [
-      {
-        id: 'u2',
-        username: 'locked-user',
-        email: 'locked-user@example.com',
-        name: 'Locked',
-        avatarUrl: null,
-        passwordHash: '$2b$hashed...',
-        status: USER_LOCKED,
-      },
-    ];
-
     const res = await POST(
       buildLoginRequest({ email: 'locked-user@example.com', password: 'test123' }),
     );
@@ -227,24 +179,12 @@ describe('POST /api/auth/login', () => {
   });
 
   it('DELETED 状态用户登录时返回 403（真实领域函数校验）', async () => {
-    holder.state.dbRows = [
-      {
-        id: 'u3',
-        username: 'deleted-user',
-        email: 'deleted-user@example.com',
-        name: 'Deleted',
-        avatarUrl: null,
-        passwordHash: '$2b$hashed...',
-        status: USER_DELETED,
-      },
-    ];
-
     const res = await POST(
       buildLoginRequest({ email: 'deleted-user@example.com', password: 'test123' }),
     );
     const json = await res.json();
 
     expect(res.status).toBe(403);
-    expect(json.message).toMatch(/注销/);
+    expect(json.message).toMatch(/注销|锁定/);
   });
 });

@@ -1,5 +1,5 @@
 /**
- * 用户管理与控制层单元测试
+ * 用户管理 API 与 Server Actions 集成测试（真实 DB）
  *
  * 覆盖范围：
  * - 用户列表查询 REST API (GET /api/users)
@@ -10,174 +10,90 @@
  * @req DC-USR-C, DC-USR-U, DC-USR-D, DC-USR-ST
  * @vitest-environment node
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest';
 import { NextResponse } from 'next/server';
 import { COMMON_ERRORS } from '@auth-sso/contracts';
-import { createTestUser } from '../helpers/test-fixtures';
+import { EntityNotFoundError } from '@/domain/shared/errors';
 import { createTestRequest } from '../helpers/test-utils';
+import { createTestDbHandle, seedTestData } from '../helpers/test-db';
+import { seedRootDept, seedTestUser } from '../helpers/seed-fixtures';
+import * as schema from '@/db/schema';
 
-// =========================================
-// Mock 基础设施
-// =========================================
-const {
-  db,
-  setQueryResult,
-  resetDb,
-  mockWithPermission,
-  mockCheckPermission,
-} = vi.hoisted(() => {
-  const state: { _queryResult: any[] } = { _queryResult: [] };
-
-  const createChain = () => {
-    const chain: any = () => {};
-    chain.then = (resolve: Function) => resolve(state._queryResult);
-    chain.catch = () => ({ then: (r: Function) => r([]) });
-    return new Proxy(chain, {
-      get(t: any, prop: string) {
-        if (prop === 'then' || prop === 'catch') return t[prop];
-        return () => createChain();
-      },
-    });
-  };
-
-  const db = new Proxy({} as any, {
-    get(_t: any, prop: string) {
-      if (prop === 'query') {
-        return {
-          users: {
-            findFirst: async () => state._queryResult[0] || null,
-          },
-          departments: {
-            findFirst: async () => ({ id: 'dept-1', name: 'Engineering' }),
-          }
-        };
-      }
-      if (prop === 'select') return () => createChain();
-      if (prop === 'insert')
-        return () => ({
-          values: (data: any) => ({
-            then: (resolve: Function) => resolve([{ ...data, id: 'mock-id' }]),
-          }),
-        });
-      if (prop === 'update')
-        return () => ({
-          set: () => ({
-            where: () => ({ then: (resolve: Function) => resolve([1]) }),
-          }),
-        });
-      if (prop === 'transaction')
-        return (fn: Function) => {
-          // 事务 mock：传入的 tx 同样代理 db 的所有方法
-          const tx = new Proxy({} as any, {
-            get(_t2: any, prop2: string) {
-              if (prop2 === 'query') {
-                return {
-                  users: {
-                    findFirst: async () => state._queryResult[0] || null,
-                  },
-                };
-              }
-              if (prop2 === 'insert')
-                return () => ({
-                  values: (data: any) => Promise.resolve([{ ...data, id: 'mock-id' }]),
-                });
-              if (prop2 === 'update')
-                return () => ({
-                  set: () => ({ where: () => Promise.resolve([1]) }),
-                });
-              return undefined;
-            },
-          });
-          return fn(tx);
-        };
-      return undefined;
-    },
-  });
-
-  const MOCK_CLAIMS = { sub: 'admin-user-1', iss: '', aud: 'portal-client', jti: '', roles: [], permissions: [], deptIds: ['dept-1'] };
-
+// ════════════════════════════════════════════════════════
+// Hoisted mocks
+// ════════════════════════════════════════════════════════
+const { tdHolder, mockAuthCheck, mockWithPermission } = vi.hoisted(() => {
+  const tdHolder: { current: any } = { current: null };
+  const mockAuthCheck = vi.fn(async () => ({
+    authorized: true,
+    userId: '00000000-0000-4000-8000-000000000101',
+    error: undefined as string | undefined,
+  }));
+  // withPermission: 直接调用 handler 并返回其结果（NextResponse）
   const mockWithPermission = vi.fn(
-    async (_opts: any, handler: (userId: string, claims: any) => Promise<Response>) =>
-      handler('admin-user-1', MOCK_CLAIMS),
+    async (opts: any, resource: any, handler?: Function) => {
+      const h = (typeof resource === 'function' ? resource : handler)!;
+      return h('00000000-0000-4000-8000-000000000101', { deptIds: ['00000000-0000-4000-8000-000000000001'] });
+    },
   );
-  const mockCheckPermission = vi.fn(async () => ({ authorized: true, userId: 'admin-user-1', error: undefined as string | undefined }));
-
-  return {
-    db,
-    setQueryResult(r: any[]) {
-      state._queryResult = r;
-    },
-    resetDb() {
-      state._queryResult = [];
-    },
-    mockWithPermission,
-    mockCheckPermission,
-  };
+  return { tdHolder, mockAuthCheck, mockWithPermission };
 });
 
+// ════════════════════════════════════════════════════════
+// Module mocks — schema 直接引用 top-level import（避免 getter
+// 在模块加载期触发 td TDZ），db 通过 holder 间接访问
+// ════════════════════════════════════════════════════════
 vi.mock('@/infrastructure/db', () => ({
-  db,
-  schema: {
-    users: {
-      username: 'username',
-      email: 'email',
-      id: 'id',
-    },
-    departments: {},
-    roles: {},
-    userRoles: {},
-    auditLogs: {},
-  },
+  get db() { return tdHolder.current.db; },
+  schema,
 }));
 
 vi.mock('@/lib/auth', () => ({
-  resolveIdentity: vi.fn(async () => ({ claims: { deptIds: ['dept-1'] } })),
+  resolveIdentity: vi.fn(async () => ({ claims: { deptIds: ['00000000-0000-4000-8000-000000000001'] } })),
   logServerDataRead: vi.fn(async () => {}),
-
-  withAuth: (_opts: unknown, fn: Function) => async (...args: unknown[]) => {
-    // 模拟真实 withAuth 的鉴权 + 错误映射行为
-    const check = await mockCheckPermission();
-    if (!check.authorized || !check.userId) {
+  canAccessDept: vi.fn(() => true),
+  withAuth: (_o: any, h: Function) => async (...a: any[]) => {
+    const check = await mockAuthCheck();
+    if (!check.authorized) {
       return { success: false, error: 'FORBIDDEN', message: check.error || '权限不足' };
     }
     try {
-      return await fn({ userId: check.userId, claims: { deptIds: ['dept-1'], permissions: [], roles: [] } }, ...args);
+      return await h(
+        { userId: check.userId, claims: { deptIds: ['00000000-0000-4000-8000-000000000001'], permissions: [], roles: [] } },
+        ...a,
+      );
     } catch (err: unknown) {
       const e = err as Error & { code?: string };
       return { success: false, error: e.code || 'INTERNAL_ERROR', message: e.message || '服务器错误' };
     }
   },
   withPermission: mockWithPermission,
-  checkPermission: mockCheckPermission,
-  getUserRoleDeptIds: vi.fn().mockResolvedValue(["dept-1"]),
-  canAccessDept: vi.fn(() => true),
-
 }));
 
-vi.mock('next/cache', () => ({
-  revalidatePath: vi.fn(),
-  revalidateTag: vi.fn(),
-  updateTag: vi.fn(),
-  cacheLife: vi.fn(),
-  cacheTag: vi.fn(),
+vi.mock('@/lib/crypto', () => ({
+  generateUUID: () => 'aabbccdd-eeff-4000-8000-000000000001',
+  generateId: (_len?: number) => 'aaaaaaaa',
+  hashToken: (t: string) => t,
 }));
 
-vi.mock('next/headers', () => ({
-  headers: vi.fn(async () => new Headers()),
+vi.mock('@/lib/session/revoke', () => ({ revokeUserAccessByUserId: vi.fn(async () => 0) }));
+vi.mock('@/infrastructure/redis', () => ({ getRedis: vi.fn(() => null) }));
+vi.mock('@/domain/auth/password', () => ({
+  hashPassword: vi.fn(async (pw: string) => `$2b$10$${pw}_hashed`),
+  isPasswordReused: vi.fn(async () => false),
+  pushPasswordHistory: vi.fn(() => [] as string[]),
 }));
 
-vi.mock('@/lib/password', () => ({
-  hashPassword: vi.fn(async (pw: string) => `hashed_${pw}`),
-}));
+// ════════════════════════════════════════════════════════
+// 初始化 td
+// ════════════════════════════════════════════════════════
+const td = createTestDbHandle();
+tdHolder.current = td;
 
-vi.mock('@/lib/permissions', () => ({
-  refreshUserPermissionCache: vi.fn(async () => {}),
-  clearUserPermissionCache: vi.fn(async () => {}),
-}));
-
-// =========================================
+// ════════════════════════════════════════════════════════
 // 引入被测试模块
-// =========================================
+// ════════════════════════════════════════════════════════
+import { db } from '@/infrastructure/db';
 import { GET as ListUsers } from '@/app/api/users/route';
 import { GET as GetUser } from '@/app/api/users/[id]/route';
 import {
@@ -189,31 +105,23 @@ import {
   resetPasswordAction,
 } from '@/app/(dashboard)/users/actions';
 
-describe('User Management API & Actions', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    resetDb();
-  });
+// ════════════════════════════════════════════════════════
+// 测试生命周期
+// ════════════════════════════════════════════════════════
+const DEPT_ID = '00000000-0000-4000-8000-000000000001';
 
-  // ======== GET /api/users ========
+beforeAll(async () => { await td.connect(); });
+afterAll(async () => { await td.close(); });
+beforeEach(async () => {
+  await td.cleanup();
+  await seedTestData(td.db, { departments: seedRootDept() });
+  vi.clearAllMocks();
+});
+
+describe('User Management API & Actions', () => {
   describe('GET /api/users (list)', () => {
-    it('returns paginated user list with total and page', async () => {
-      setQueryResult([
-        {
-          id: 'u1',
-          publicId: 'u_001',
-          username: 'user1',
-          email: 'u1@test.com',
-          name: 'User One',
-          avatarUrl: null,
-          status: 'ACTIVE',
-          deptId: 'dept-1',
-          deptName: 'Engineering',
-          createdAt: new Date('2026-01-01'),
-          lastLoginAt: null,
-          count: 1,
-        },
-      ]);
+    it('分页返回用户列表，含 total 和 page', async () => {
+      await seedTestData(td.db, { users: seedTestUser() });
 
       const response = await ListUsers(
         createTestRequest('/api/users', { searchParams: { page: '1', pageSize: '10' } }),
@@ -223,19 +131,16 @@ describe('User Management API & Actions', () => {
       expect(response.status).toBe(200);
       expect(body.data).toHaveLength(1);
       expect(body.data[0]).toMatchObject({
-        publicId: 'u_001',
-        username: 'user1',
-        name: 'User One',
+        username: 'testuser',
+        name: '测试用户',
       });
+      expect(body.pagination).toBeDefined();
+      expect(body.pagination.total).toBe(1);
     });
 
-    it('returns 403 without user:list permission', async () => {
+    it('无 user:list 权限时返回 403', async () => {
       mockWithPermission.mockImplementationOnce(
-        async () =>
-          NextResponse.json(
-            { error: 'forbidden', message: 'Insufficient permissions' },
-            { status: 403 },
-          ),
+        async () => NextResponse.json({ error: 'forbidden', message: 'Insufficient permissions' }, { status: 403 }),
       );
 
       const response = await ListUsers(createTestRequest('/api/users'));
@@ -243,74 +148,76 @@ describe('User Management API & Actions', () => {
     });
   });
 
-  // ======== GET /api/users/[id] ========
   describe('GET /api/users/[id] (detail)', () => {
-    it('returns user detail by id', async () => {
-      setQueryResult([
-        createTestUser({ deptName: 'Engineering', code: 'USER' }),
-      ]);
+    it('返回用户详情', async () => {
+      await seedTestData(td.db, { users: seedTestUser() });
 
-      const response = await GetUser(createTestRequest('/api/users/u_abc123'), {
-        params: Promise.resolve({ id: 'u_abc123' }),
+      const response = await GetUser(createTestRequest('/api/users/u'), {
+        params: Promise.resolve({ id: '00000000-0000-4000-8000-000000000201' }),
       });
       const body = await response.json();
 
       expect(response.status).toBe(200);
       expect(body).toMatchObject({
-        id: 'user-1',
+        id: '00000000-0000-4000-8000-000000000201',
+        username: 'testuser',
         name: '测试用户',
         email: 'test@example.com',
       });
     });
 
-    it('returns 404 for nonexistent user', async () => {
-      setQueryResult([]);
-
+    it('不存在的用户返回 404', async () => {
       const response = await GetUser(createTestRequest('/api/users/nonexistent'), {
-        params: Promise.resolve({ id: 'nonexistent' }),
+        params: Promise.resolve({ id: '00000000-0000-4000-8000-000000000999' }),
       });
 
       expect(response.status).toBe(404);
     });
   });
 
-  // ======== Server Actions ========
   describe('createUserAction', () => {
-    it('creates user successfully with valid inputs', async () => {
-      setQueryResult([]);
+    it('有效输入 → 返回 success: true 并写入用户', async () => {
       const input = {
         username: 'newactionuser',
         email: 'action@test.com',
         name: 'Action User',
         password: 'Pass1234!9',
-        deptId: 'dept-1',
+        deptId: DEPT_ID,
       };
 
       const res = await createUserAction(input);
       expect(res.success).toBe(true);
       expect(res.message).toContain('创建成功');
+
+      const allUsers = await db.select().from(schema.users);
+      const newUser = allUsers.find(u => u.username === 'newactionuser');
+      expect(newUser).toBeDefined();
+      expect(newUser!.email).toBe('action@test.com');
+      expect(newUser!.passwordHash).toBeDefined();
     });
 
-    it('creates user successfully via React 19 Form Action signature', async () => {
-      setQueryResult([]);
+    it('React 19 FormData 签名也正常创建用户', async () => {
       const formData = new FormData();
-      formData.append('username', 'newactionuser');
-      formData.append('email', 'action@test.com');
-      formData.append('name', 'Action User');
+      formData.append('username', 'newactionuser2');
+      formData.append('email', 'action2@test.com');
+      formData.append('name', 'Action User 2');
       formData.append('password', 'Pass1234!9');
-      formData.append('deptId', 'dept-1');
+      formData.append('deptId', DEPT_ID);
 
       const res = await createUserAction(null, formData);
       expect(res.success).toBe(true);
       expect(res.message).toContain('创建成功');
+
+      const rows = await db.select().from(schema.users);
+      expect(rows.find(u => u.username === 'newactionuser2')).toBeDefined();
     });
 
-    it('returns validation error when email is invalid', async () => {
+    it('邮箱不合法 → 返回 validation error', async () => {
       const input = {
         username: 'newactionuser',
         email: 'invalid-email',
         name: 'Action User',
-        password: 'Pass1234',
+        password: 'Pass1234!9',
       };
 
       const res = await createUserAction(input);
@@ -318,118 +225,124 @@ describe('User Management API & Actions', () => {
       expect(res.message).toBe('邮箱格式不合法');
     });
 
-    it('returns 403 when checkPermission fails', async () => {
-      mockCheckPermission.mockResolvedValueOnce({ authorized: false, userId: '', error: '权限不足' });
-      const res = await createUserAction(null);
+    it('鉴权失败 → 返回 false', async () => {
+      mockAuthCheck.mockResolvedValueOnce({ authorized: false, userId: '', error: '权限不足' });
+      const res = await createUserAction({} as any);
       expect(res.success).toBe(false);
       expect(res.message).toContain('权限不足');
     });
   });
 
   describe('updateUserAction', () => {
-    it('updates user info successfully', async () => {
-      setQueryResult([createTestUser({ id: 'u-1' })]);
-      const res = await updateUserAction('u-1', { name: 'New Name', email: 'newemail@test.com' });
+    it('存在用户 → 返回 success: true', async () => {
+      await seedTestData(td.db, { users: seedTestUser() });
+
+      const res = await updateUserAction(
+        '00000000-0000-4000-8000-000000000201',
+        { name: 'New Name', email: 'newemail@test.com' } as any,
+      );
       expect(res.success).toBe(true);
       expect(res.message).toContain('更新成功');
+
+      const rows = await db.select().from(schema.users);
+      const updated = rows.find(u => u.id === '00000000-0000-4000-8000-000000000201');
+      expect(updated!.name).toBe('New Name');
+      expect(updated!.email).toBe('newemail@test.com');
     });
 
-    it('returns error when user is not found', async () => {
-      setQueryResult([]);
-      const res = await updateUserAction('nonexistent', { name: 'New Name' });
+    it('不存在用户 → 返回错误', async () => {
+      const res = await updateUserAction('00000000-0000-4000-8000-000000000999', { name: 'X' } as any);
       expect(res.success).toBe(false);
       expect(res.message).toContain('不存在');
     });
 
-    it('returns validation error on empty ID', async () => {
-      const res = await updateUserAction('', { name: 'New Name' });
+    it('空 ID → 返回 validation error', async () => {
+      const res = await updateUserAction('', { name: 'New Name' } as any);
       expect(res.success).toBe(false);
       expect(res.message).toBe('用户ID不能为空');
     });
   });
 
   describe('deleteUserAction', () => {
-    it('logical deletes user successfully', async () => {
-      setQueryResult([createTestUser({ id: 'u-1' })]);
-      const res = await deleteUserAction('u-1');
+    it('可删除用户 → 逻辑删除成功', async () => {
+      await seedTestData(td.db, { users: seedTestUser() });
+
+      const res = await deleteUserAction('00000000-0000-4000-8000-000000000201');
       expect(res.success).toBe(true);
-      expect(res.message).toContain('逻辑删除');
+      expect(res.message).toContain('已逻辑删除');
+      expect(res.data.id).toBe('00000000-0000-4000-8000-000000000201');
+
+      const rows = await db.select().from(schema.users);
+      const user = rows.find(u => u.id === '00000000-0000-4000-8000-000000000201');
+      expect(user!.status).toBe('DELETED');
     });
   });
 
   describe('toggleUserStatusAction', () => {
-    it('toggles user status successfully', async () => {
-      const activeUser = {
-        id: 'u-1', publicId: 'user_1', username: 'test',
-        email: 'test@example.com', name: 'Test',
-        status: 'ACTIVE', deptId: null, avatarUrl: null, createdAt: new Date(),
-      };
-      setQueryResult([activeUser]);
-      const res = await toggleUserStatusAction('u-1');
+    it('ACTIVE 用户 → 变为 DISABLED', async () => {
+      await seedTestData(td.db, { users: seedTestUser({ status: 'ACTIVE' }) });
+
+      const res = await toggleUserStatusAction('00000000-0000-4000-8000-000000000201');
       expect(res.success).toBe(true);
       expect(res.message).toContain('已禁用');
+
+      const rows = await db.select().from(schema.users);
+      const user = rows.find(u => u.id === '00000000-0000-4000-8000-000000000201');
+      expect(user!.status).toBe('DISABLED');
     });
 
-    it('throws error when user is logical DELETED in toggleStatus', async () => {
-      const deletedUser = {
-        id: 'u-1', publicId: 'user_1', username: 'test',
-        email: 'test@example.com', name: 'Test',
-        status: 'DELETED', deptId: null, avatarUrl: null, createdAt: new Date(),
-      };
-      setQueryResult([deletedUser]);
-      const res = await toggleUserStatusAction('u-1');
+    it('DELETED 用户 → 返回错误', async () => {
+      await seedTestData(td.db, { users: seedTestUser({ status: 'DELETED' }) });
+
+      const res = await toggleUserStatusAction('00000000-0000-4000-8000-000000000201');
       expect(res.success).toBe(false);
-      expect(res.message).toContain('已逻辑删除的用户无法操作状态');
+      expect(res.message).toContain('已逻辑删除');
     });
   });
 
   describe('unlockUserAction', () => {
-    it('unlocks a LOCKED user', async () => {
-      const lockedUser = {
-        id: 'u-1', publicId: 'user_1', username: 'test',
-        email: 'test@example.com', name: 'Test',
-        status: 'LOCKED', deptId: null, avatarUrl: null, createdAt: new Date(),
-      };
-      setQueryResult([lockedUser]);
-      const res = await unlockUserAction('u-1');
+    it('LOCKED 用户 → 解锁成功', async () => {
+      await seedTestData(td.db, { users: seedTestUser({ status: 'LOCKED' }) });
+
+      const res = await unlockUserAction('00000000-0000-4000-8000-000000000201');
       expect(res.success).toBe(true);
       expect(res.message).toContain('已解锁');
+
+      const rows = await db.select().from(schema.users);
+      const user = rows.find(u => u.id === '00000000-0000-4000-8000-000000000201');
+      expect(user!.status).toBe('ACTIVE');
     });
 
-    it('throws error when user is DELETED', async () => {
-      const deletedUser = {
-        id: 'u-1', publicId: 'user_1', username: 'test',
-        email: 'test@example.com', name: 'Test',
-        status: 'DELETED', deptId: null, avatarUrl: null, createdAt: new Date(),
-      };
-      setQueryResult([deletedUser]);
-      const res: any = await unlockUserAction('u-1');
+    it('DELETED 用户 → 返回错误', async () => {
+      await seedTestData(td.db, { users: seedTestUser({ status: 'DELETED' }) });
+
+      const res = await unlockUserAction('00000000-0000-4000-8000-000000000201');
       expect(res.success).toBe(false);
-      expect(res.error).toBeDefined();
+      expect(res.message).toContain('已逻辑删除');
     });
   });
 
   describe('resetPasswordAction', () => {
-    it('resets password and returns success', async () => {
-      const user = {
-        id: 'u-1', publicId: 'user_1', username: 'test',
-        email: 'test@example.com', name: 'Test',
-        status: 'ACTIVE', deptId: null, avatarUrl: null, createdAt: new Date(),
-      };
-      setQueryResult([user]);
-      const res = await resetPasswordAction('u-1', 'NewPass1word');
+    it('重置密码 → 返回 success', async () => {
+      await seedTestData(td.db, { users: seedTestUser() });
+
+      const res = await resetPasswordAction('00000000-0000-4000-8000-000000000201', 'NewPass1word');
       expect(res.success).toBe(true);
       expect(res.message).toContain('密码已重置');
+
+      const rows = await db.select().from(schema.users);
+      const user = rows.find(u => u.id === '00000000-0000-4000-8000-000000000201');
+      expect(user!.passwordHash).toBeDefined();
     });
 
-    it('rejects short password', async () => {
-      const res: any = await resetPasswordAction('u-1', 'short');
+    it('密码过短 → 拒绝', async () => {
+      const res = await resetPasswordAction('00000000-0000-4000-8000-000000000201', 'short');
       expect(res.success).toBe(false);
       expect(res.error).toBe(COMMON_ERRORS.VALIDATION_ERROR);
     });
 
-    it('rejects password without uppercase', async () => {
-      const res: any = await resetPasswordAction('u-1', 'alllowercase1');
+    it('密码无大写 → 拒绝', async () => {
+      const res = await resetPasswordAction('00000000-0000-4000-8000-000000000201', 'alllowercase1');
       expect(res.success).toBe(false);
       expect(res.error).toBeDefined();
     });

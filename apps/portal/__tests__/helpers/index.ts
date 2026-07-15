@@ -8,9 +8,7 @@ export {
   createTestRole,
   createTestPermission,
   createTestDepartment,
-  createTestMenu,
   createTestClient,
-  createTestSession,
   createTestPermissionContext,
 } from './test-fixtures';
 export {
@@ -19,4 +17,14 @@ export {
   parseResponseJson,
   createMockFetch,
 } from './test-utils';
-export { createMockDb } from './mock-db';
+export { createTestDbHandle, seedTestData, type TestDbHandle, type SeedData } from './test-db';
+export {
+  seedRootDept,
+  seedSubDept,
+  seedAdminUser,
+  seedTestUser,
+  seedPortalClient,
+  seedJwks,
+  seedSuperAdminRole,
+  seedUserRoleBinding,
+} from './seed-fixtures';

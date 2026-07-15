@@ -1,57 +1,56 @@
 /**
- * User Server Actions 单元测试
+ * User Server Actions 集成测试（真实 DB）
  *
- * 验证所有 CRUD 操作的返回数据完整性和业务逻辑正确性。
+ * 使用事务回滚隔离，验证所有 CRUD 操作端到端正确性。
  *
  * @req DC-USR-C, DC-USR-U, DC-USR-D
  * @vitest-environment node
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest';
 import { EntityNotFoundError } from '@/domain/shared/errors';
+import { createTestDbHandle, seedTestData } from '../helpers/test-db';
+import { seedRootDept, seedTestUser } from '../helpers/seed-fixtures';
+import * as schema from '@/db/schema';
 
-// ── 共享 DB mock（由 helpers/mock-db 工厂提供） ──────────────────────────
-const holder = vi.hoisted<{ mockDb: ReturnType<typeof import('@/../__tests__/helpers/mock-db').createMockDb> | null }>(() => ({ mockDb: null }));
+// ── 测试数据库 ──────────────────────────────────────
+const td = createTestDbHandle();
 
-vi.mock('@/infrastructure/db', async () => {
-  const { createMockDb } = await import('@/../__tests__/helpers/mock-db');
-  holder.mockDb = createMockDb();
-  return { db: holder.mockDb.db, schema: { users: {}, userRoles: {} } };
-});
+vi.mock('@/infrastructure/db', () => ({
+  get db() { return td.db; },
+  get schema() { return td.schema; },
+}));
 vi.mock('@/lib/auth', () => ({
-  resolveIdentity: vi.fn(async () => ({ claims: { deptIds: ['dept-1'] } })),
+  resolveIdentity: vi.fn(async () => ({ claims: { deptIds: ['00000000-0000-4000-8000-000000000001'] } })),
   logServerDataRead: vi.fn(async () => {}),
   canAccessDept: vi.fn(() => true),
- withAuth: (_o: any, h: Function) => async (...a: any[]) => h({ userId: 'admin-1', claims: { deptIds: ['dept-1'], permissions: [], roles: [] } }, ...a), withPermission: (_o: any, _r: any, h: Function) => async (...a: any[]) => h('admin-1', ...a) }));
-vi.mock('@/lib/crypto', () => ({ generateUUID: () => 'aaaa-bbbb-cccc-dddd', generateId: (_len?: number) => 'aaaaaaaa', hashToken: (t: string) => t }));
-vi.mock('next/cache', () => ({ revalidatePath: vi.fn(), updateTag: vi.fn() }));
+  withAuth: (_o: any, h: Function) => async (...a: any[]) =>
+    h({ userId: '00000000-0000-4000-8000-000000000101', claims: { deptIds: ['00000000-0000-4000-8000-000000000001'], permissions: [], roles: [] } }, ...a),
+  withPermission: (_o: any, _r: any, h: Function) => async (...a: any[]) => h('00000000-0000-4000-8000-000000000101', ...a),
+}));
+vi.mock('@/lib/crypto', () => ({
+  generateUUID: () => 'aabbccdd-eeff-4000-8000-000000000001',
+  generateId: (_len?: number) => 'aaaaaaaa',
+  hashToken: (t: string) => t,
+}));
 vi.mock('@/lib/session/revoke', () => ({ revokeUserAccessByUserId: vi.fn(async () => 0) }));
 vi.mock('@/infrastructure/redis', () => ({}));
 
+import { db } from '@/infrastructure/db';
 import { createUserAction, updateUserAction, toggleUserStatusAction, deleteUserAction } from '@/app/(dashboard)/users/actions';
 
-const mockDb = holder.mockDb!;
+const ADMIN_ID = '00000000-0000-4000-8000-000000000101';
+const DEPT_ID = '00000000-0000-4000-8000-000000000001';
 
-const now = new Date();
-const activeUserRow = {
-  id: 'user-1', username: 'testuser', name: 'Test', email: 'test@example.com',
-  status: 'ACTIVE', passwordHash: '$2a$10$hash', deptId: 'dept-1', avatarUrl: null,
-  emailVerified: null, lastLoginAt: null, deletedAt: null, createdAt: now, updatedAt: now,
-};
+beforeAll(async () => { await td.connect(); });
+afterAll(async () => { await td.close(); });
+beforeEach(async () => {
+  await td.cleanup();
+  await seedTestData(td.db, { departments: seedRootDept() });
+});
 
 describe('User Server Actions', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mockDb.reset();
-  });
-
   describe('createUserAction', () => {
-    it('有效输入 → 返回 success: true 并包含完整用户数据', async () => {
-      mockDb.setReturningResult([{
-        id: 'new-user-id', username: 'newuser', name: 'New User',
-        email: 'new@example.com', status: 'ACTIVE',
-        createdAt: now.toISOString(), updatedAt: now.toISOString(),
-      }]);
-
+    it('有效输入 → 返回 success: true 并写入用户', async () => {
       const r: any = await createUserAction({
         username: 'newuser', name: 'New User',
         password: 'StrongP@ss1', email: 'new@example.com',
@@ -59,18 +58,14 @@ describe('User Server Actions', () => {
 
       expect(r.success).toBe(true);
       expect(r.data).toBeDefined();
-      // createUserAction 使用 generateUUID() 生成 ID（mock 返回 'aaaa-bbbb-cccc-dddd'）
-      expect(r.data.id).toBeDefined();
       expect(r.message).toBe('用户创建成功');
 
-      // 验证 DB 写入内容：密码已哈希（非明文）、用户名、邮箱正确写入
-      const writes = mockDb.getWrites();
-      const insert = writes.find(w => w.type === 'insert');
-      expect(insert).toBeDefined();
-      expect(insert!.data.passwordHash).toBeDefined();
-      expect(insert!.data.passwordHash).not.toBe('StrongP@ss1'); // 密码已哈希
-      expect(insert!.data.username).toBe('newuser');
-      expect(insert!.data.email).toBe('new@example.com');
+      const allUsers = await db.select().from(schema.users);
+      const newUser = allUsers.find(u => u.username === 'newuser');
+      expect(newUser).toBeDefined();
+      expect(newUser!.email).toBe('new@example.com');
+      expect(newUser!.passwordHash).toBeDefined();
+      expect(newUser!.passwordHash).not.toBe('StrongP@ss1');
     });
 
     it('缺 username → 返回 success: false 并包含错误码', async () => {
@@ -85,81 +80,68 @@ describe('User Server Actions', () => {
 
   describe('updateUserAction', () => {
     it('存在用户 → 返回 success: true', async () => {
-      mockDb.setQueryResult([activeUserRow]);
-      mockDb.setRowCountResult(1);
-
-      const r: any = await updateUserAction('user-1', { name: 'Updated Name' } as any);
+      await seedTestData(td.db, { users: seedTestUser() });
+      const r: any = await updateUserAction('00000000-0000-4000-8000-000000000201', { name: 'Updated Name' } as any);
 
       expect(r.success).toBe(true);
       expect(r.message).toBe('更新成功');
       expect(r.data).toBeDefined();
-      expect(r.data.id).toBe('user-1');
+      expect(r.data.id).toBe('00000000-0000-4000-8000-000000000201');
+
+      const rows = await db.select().from(schema.users);
+      const updated = rows.find(u => u.id === '00000000-0000-4000-8000-000000000201');
+      expect(updated!.name).toBe('Updated Name');
     });
 
     it('不存在用户 → 抛出 EntityNotFoundError', async () => {
-      mockDb.setQueryResult([]);
-
       await expect(
-        updateUserAction('nonexistent', { name: 'X' } as any)
+        updateUserAction('00000000-0000-4000-8000-000000000999', { name: 'X' } as any)
       ).rejects.toThrow(EntityNotFoundError);
     });
   });
 
   describe('toggleUserStatusAction', () => {
-    it('ACTIVE 用户 → 返回 success: true 且 status 变为 DISABLED', async () => {
-      mockDb.setQueryResult([{ ...activeUserRow, status: 'ACTIVE' }]);
-      mockDb.setRowCountResult(1);
-
-      const r: any = await toggleUserStatusAction('user-1');
+    it('ACTIVE 用户 → 变为 DISABLED', async () => {
+      await seedTestData(td.db, { users: seedTestUser({ status: 'ACTIVE' }) });
+      const r: any = await toggleUserStatusAction('00000000-0000-4000-8000-000000000201');
 
       expect(r.success).toBe(true);
-      expect(r.data).toBeDefined();
-      // toggleUserStatus 域逻辑：ACTIVE → DISABLED
       expect(r.data.status).toBe('DISABLED');
       expect(r.message).toContain('已禁用');
 
-      // 验证 DB 写入 status='DISABLED'
-      const updates = mockDb.getWrites().filter(w => w.type === 'update');
-      expect(updates.length).toBeGreaterThanOrEqual(1);
-      expect(updates[0]!.data.status).toBe('DISABLED');
+      const rows = await db.select().from(schema.users);
+      const user = rows.find(u => u.id === '00000000-0000-4000-8000-000000000201');
+      expect(user!.status).toBe('DISABLED');
     });
 
-    it('DISABLED 用户 → 返回 success: true 且 status 变为 ACTIVE', async () => {
-      mockDb.setQueryResult([{ ...activeUserRow, status: 'DISABLED' }]);
-      mockDb.setRowCountResult(1);
-
-      const r: any = await toggleUserStatusAction('user-2');
+    it('DISABLED 用户 → 变为 ACTIVE', async () => {
+      await seedTestData(td.db, { users: seedTestUser({ status: 'DISABLED' }) });
+      const r: any = await toggleUserStatusAction('00000000-0000-4000-8000-000000000201');
 
       expect(r.success).toBe(true);
       expect(r.data.status).toBe('ACTIVE');
     });
 
     it('不存在用户 → 抛出错误', async () => {
-      mockDb.setQueryResult([]);
-
       await expect(
-        toggleUserStatusAction('nonexistent')
+        toggleUserStatusAction('00000000-0000-4000-8000-000000000999')
       ).rejects.toThrow(EntityNotFoundError);
     });
   });
 
   describe('deleteUserAction', () => {
     it('可删除用户 → 返回 success: true', async () => {
-      mockDb.setQueryResult([activeUserRow]);
-      mockDb.setRowCountResult(1);
-
-      const r: any = await deleteUserAction('user-1');
+      await seedTestData(td.db, { users: seedTestUser() });
+      const r: any = await deleteUserAction('00000000-0000-4000-8000-000000000201');
 
       expect(r.success).toBe(true);
       expect(r.message).toBe('用户已逻辑删除');
-      expect(r.data.id).toBe('user-1');
+      expect(r.data.id).toBe('00000000-0000-4000-8000-000000000201');
     });
 
     it('不存在用户 → 抛出错误', async () => {
-      mockDb.setQueryResult([]);
-
       await expect(
-        deleteUserAction('nonexistent')
+        deleteUserAction('00000000-0000-4000-8000-000000000999')
       ).rejects.toThrow(EntityNotFoundError);
     });
   });

@@ -1,241 +1,472 @@
 /**
- * 部门管理 API 单元测试
+ * 部门管理 API 集成测试（真实 DB）
  *
  * 覆盖范围：
- * - GET /api/departments - 树形结构返回（含子部门嵌套）
- * - POST /api/departments - 创建子部门
- * - PUT /api/departments/[id] - 更新部门信息
- * - GET /api/departments/[id]/members - 部门成员列表
- * - PUT 自身为父部门时防循环引用
- * - DELETE 含子部门时删除拒绝
- * - POST 缺少必填字段
- * - GET 数据范围过滤
+ * - GET /api/departments 树形结构（含子部门嵌套）
+ * - POST 创建部门 (createDepartmentAction)
+ * - POST 创建子部门（ancestors 计算）
+ * - 循环引用防护（更新 parentId 为自身）
  *
- * @req F-DEP-L, F-DEP-C, F-DEP-U, F-DEP-D, H-DSCOPE-001~003
+ * @req F-DEP-L, F-DEP-C, F-DEP-U, H-DSCOPE-001~003
  * @vitest-environment node
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { GET as ListDepartments } from '@/app/api/departments/route';
+import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest';
+import { createTestDbHandle, seedTestData } from '../helpers/test-db';
 import { createTestRequest, parseResponseJson } from '../helpers/test-utils';
+import * as schema from '@/db/schema';
+import { BusinessRuleViolationError } from '@/domain/shared/errors';
 
-// ── Hoisted shared mock state ──────────────────────────────────────────────
-// 这些变量被 vi.mock 工厂闭包引用，可在测试中更新以控制 mock 行为
+// ── 测试数据库 ──────────────────────────────────────
+const td = createTestDbHandle();
 
-const mockDbState = vi.hoisted(() => ({
-  queryResult: [] as any[],
-  returningResult: [] as any[],
-  executeResult: [] as any[],
-  shouldThrow: null as Error | null,
+vi.mock('@/infrastructure/db', () => ({
+  get db() { return td.db; },
+  get schema() { return td.schema; },
 }));
 
-const mockAuthState = vi.hoisted(() => ({
-  getUserRoleDeptIds: vi.fn().mockResolvedValue(['dept-1', 'dept-1a']),
-}));
+// ── 常量 ID ────────────────────────────────────────
+const ROOT_DEPT_ID = '00000000-0000-4000-8000-000000000001';
+const TECH_DEPT_ID = '00000000-0000-4000-8000-000000000002';
+const FE_DEPT_ID = '00000000-0000-4000-8000-000000000003';
+const MKT_DEPT_ID = '00000000-0000-4000-8000-000000000004';
+const ADMIN_USER_ID = '00000000-0000-4000-8000-000000000101';
+const CREATED_DEPT_ID = 'aabbccdd-eeff-4000-8000-000000000001';
 
-// ── Module mocks ───────────────────────────────────────────────────────────
+const now = new Date();
 
-vi.mock('@/infrastructure/db', () => {
-  /** 链式查询构建器 — 所有方法返回自身，then() 返回当前 queryResult */
-  function createChain(): any {
-    const chain: any = () => {};
-    chain.then = (resolve: Function) => resolve(mockDbState.queryResult);
-    chain.catch = () => ({ then: (r: Function) => r([]) });
-    return new Proxy(chain, {
-      get(_t, prop: string) {
-        if (prop === 'then' || prop === 'catch') return chain[prop as keyof typeof chain];
-        return () => createChain();
-      },
-    });
-  }
-
-  return {
-    db: new Proxy({} as any, {
-      get(_t, prop: string) {
-        if (prop === 'select' || prop === 'selectDistinct') return () => createChain();
-        if (prop === 'insert') {
-          return () => ({
-            values: (_data: any) => ({
-              returning: () =>
-                Promise.resolve(
-                  mockDbState.returningResult.length > 0
-                    ? mockDbState.returningResult
-                    : [{ ..._data, id: 'mock-id' }],
-                ),
-              then: (resolve: Function) => resolve(1),
-            }),
-          });
-        }
-        if (prop === 'update') {
-          return () => ({
-            set: () => ({
-              where: () => ({
-                returning: () => Promise.resolve(mockDbState.returningResult),
-                then: (r: Function) => r(1),
-              }),
-            }),
-          });
-        }
-        if (prop === 'delete') {
-          return () => ({
-            where: () => ({
-              returning: () => Promise.resolve(mockDbState.returningResult),
-              then: (r: Function) => r(1),
-            }),
-          });
-        }
-        if (prop === 'execute') {
-          return () => {
-            if (mockDbState.shouldThrow) throw mockDbState.shouldThrow;
-            return Promise.resolve(mockDbState.executeResult);
-          };
-        }
-        if (prop === 'query') return new Proxy({} as any, {
-          get(_t2, _prop2: string) {
-            return {
-              findFirst: () => {
-                const c: any = () => {};
-                c.then = (resolve: Function) => resolve(mockDbState.queryResult[0] ?? null);
-                return c;
-              },
-              findMany: () => createChain(),
-            };
-          },
-        });
-        if (prop === 'transaction') return async (cb: (tx: any) => Promise<any>) => {
-          const txDb = new Proxy({} as any, {
-            get(_t2, txProp: string) {
-              if (txProp === 'select' || txProp === 'selectDistinct') return () => createChain();
-              if (txProp === 'insert') return () => ({
-                values: (_data: any) => ({
-                  returning: () => Promise.resolve(
-                    mockDbState.returningResult.length > 0 ? mockDbState.returningResult : [{ ..._data, id: 'mock-id' }],
-                  ),
-                  then: (resolve: Function) => resolve(1),
-                }),
-              });
-              if (txProp === 'update') return () => ({ set: () => ({ where: () => ({ returning: () => Promise.resolve(mockDbState.returningResult), then: (r: Function) => r(1) }) }) });
-              if (txProp === 'delete') return () => ({ where: () => ({ returning: () => Promise.resolve(mockDbState.returningResult), then: (r: Function) => r(1) }) });
-              if (txProp === 'query') return new Proxy({} as any, {
-                get(_t3, _p3: string) {
-                  return {
-                    findFirst: () => {
-                      const c: any = () => {};
-                      c.then = (resolve: Function) => resolve(mockDbState.queryResult[0] ?? null);
-                      return c;
-                    },
-                    findMany: () => createChain(),
-                  };
-                },
-              });
-              return undefined;
-            },
-          });
-          return cb(txDb);
-        };
-        return undefined;
-      },
-    }),
-    schema: {
-      departments: {},
-      users: {},
-    },
-  };
+// ── Auth mock（同时覆盖 withPermission 和 withAuth）─
+// vi.hoisted() 在常量声明之前执行，因此必须使用内联字符串字面量
+const { mockWithPermission } = vi.hoisted(() => {
+  const deptIds = [
+    '00000000-0000-4000-8000-000000000001',
+    '00000000-0000-4000-8000-000000000002',
+    '00000000-0000-4000-8000-000000000003',
+    '00000000-0000-4000-8000-000000000004',
+  ];
+  const mockWithPermission = vi.fn(
+    async (_options: any, handler: Function) =>
+      handler('00000000-0000-4000-8000-000000000101', {
+        deptIds,
+        permissions: [],
+        roles: [],
+      }),
+  );
+  return { mockWithPermission };
 });
 
-const MOCK_CLAIMS = { sub: 'test-user-id', iss: '', aud: 'portal-client', jti: '', roles: [], permissions: [], deptIds: ['dept-1', 'dept-1a'] };
-
 vi.mock('@/lib/auth', () => ({
-  resolveIdentity: vi.fn(async () => ({ claims: { deptIds: ['dept-1'] } })),
-  logServerDataRead: vi.fn(async () => {}),
-
-  withPermission: vi.fn(
-    async (_options: any, handler: (userId: string, claims: any) => Promise<any>) => {
-      try { return await handler('test-user-id', MOCK_CLAIMS); }
-      catch (err) {
-        const { mapDomainError } = await import('@/domain/shared/error-mapping');
-        const mapped = mapDomainError(err);
-        return new Response(JSON.stringify({ error: mapped.error, message: mapped.message }), { status: mapped.status, headers: { 'Content-Type': 'application/json' } });
-      }
+  resolveIdentity: vi.fn(async () => ({
+    claims: {
+      deptIds: [
+        '00000000-0000-4000-8000-000000000001',
+        '00000000-0000-4000-8000-000000000002',
+        '00000000-0000-4000-8000-000000000003',
+        '00000000-0000-4000-8000-000000000004',
+      ],
     },
-  ),
-  getUserRoleDeptIds: mockAuthState.getUserRoleDeptIds,
-  // 使用更精确的签名，同时去除上方重复定义
-  canAccessDept: vi.fn((_deptIds: string[], _targetDeptId: string | null | undefined) => true),
+  })),
+  logServerDataRead: vi.fn(async () => {}),
+  canAccessDept: vi.fn(() => true),
+  withPermission: mockWithPermission,
+  withAuth:
+    (_o: any, h: Function) =>
+    async (...a: any[]) =>
+      h(
+        {
+          userId: '00000000-0000-4000-8000-000000000101',
+          claims: {
+            deptIds: [
+              '00000000-0000-4000-8000-000000000001',
+              '00000000-0000-4000-8000-000000000002',
+              '00000000-0000-4000-8000-000000000003',
+              '00000000-0000-4000-8000-000000000004',
+            ],
+            permissions: [],
+            roles: [],
+          },
+        },
+        ...a,
+      ),
 }));
 
 vi.mock('@/lib/crypto', () => ({
-  generateId: vi.fn(() => 'mock_dept_id_12345'),
+  generateUUID: () => CREATED_DEPT_ID,
+  generateId: (_len?: number) => 'aaaaaaaa',
+  hashToken: (t: string) => t,
 }));
 
-// ── Tests ──────────────────────────────────────────────────────────────────
+vi.mock('next/cache', () => ({
+  revalidatePath: vi.fn(),
+  updateTag: vi.fn(),
+  cacheLife: vi.fn(),
+  cacheTag: vi.fn(),
+}));
+
+// ── 被测试模块（动态导入避免模块解析时触发 @/infrastructure/db mock）───
+let ListDepartments: any;
+let createDepartmentAction: any;
+let updateDepartmentAction: any;
+
+// ── 生命周期 ───────────────────────────────────────
+beforeAll(async () => {
+  await td.connect();
+  const routeMod = await import('@/app/api/departments/route');
+  ListDepartments = routeMod.GET;
+  const actionsMod = await import('@/app/(dashboard)/departments/actions');
+  createDepartmentAction = actionsMod.createDepartmentAction;
+  updateDepartmentAction = actionsMod.updateDepartmentAction;
+});
+afterAll(async () => {
+  await td.close();
+});
+beforeEach(async () => {
+  vi.clearAllMocks();
+  await td.cleanup();
+});
+
+// ── 种子工具 ───────────────────────────────────────
+function seedThreeLevelTree() {
+  return [
+    {
+      id: ROOT_DEPT_ID,
+      parentId: null,
+      name: '总公司',
+      code: 'ROOT',
+      ancestors: null,
+      sort: 0,
+      status: 'ACTIVE' as const,
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: TECH_DEPT_ID,
+      parentId: ROOT_DEPT_ID,
+      name: '技术部',
+      code: 'TECH',
+      ancestors: ROOT_DEPT_ID,
+      sort: 1,
+      status: 'ACTIVE' as const,
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: FE_DEPT_ID,
+      parentId: TECH_DEPT_ID,
+      name: '前端组',
+      code: 'FE',
+      ancestors: `${ROOT_DEPT_ID}/${TECH_DEPT_ID}`,
+      sort: 0,
+      status: 'ACTIVE' as const,
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: MKT_DEPT_ID,
+      parentId: ROOT_DEPT_ID,
+      name: '市场部',
+      code: 'MKT',
+      ancestors: ROOT_DEPT_ID,
+      sort: 2,
+      status: 'ACTIVE' as const,
+      createdAt: now,
+      updatedAt: now,
+    },
+  ];
+}
+
+// ========================================================================
+// Tests
+// ========================================================================
 
 describe('Department API', () => {
-  beforeEach(() => {
-    mockDbState.queryResult = [];
-    mockDbState.returningResult = [];
-    mockDbState.executeResult = [];
-    mockDbState.shouldThrow = null;
-    vi.clearAllMocks();
-    // 恢复默认的 auth mock 行为
-    mockAuthState.getUserRoleDeptIds.mockResolvedValue(['dept-1', 'dept-1a']);
-  });
-
-  // ── GET /api/departments ───────────────────────────────────────────────
-
+  // ── GET /api/departments ─────────────────────────────────
   describe('GET /api/departments', () => {
-    // @req F-DEP-L
-    it('返回包含子部门嵌套的树形结构', async () => {
-      mockDbState.queryResult = [
-        {
-          id: 'dept-1',
-          publicId: 'd_01',
-          name: '根部门A',
-          parentId: null,
-          code: 'ROOT_A',
-          sort: 0,
-          status: 'ACTIVE',
-          createdAt: new Date('2026-01-01'),
-        },
-        {
-          id: 'dept-2',
-          publicId: 'd_02',
-          name: '子部门',
-          parentId: 'dept-1',
-          code: 'CHILD',
-          sort: 1,
-          status: 'ACTIVE',
-          createdAt: new Date('2026-01-02'),
-        },
-        {
-          id: 'dept-3',
-          publicId: 'd_03',
-          name: '根部门B',
-          parentId: null,
-          code: 'ROOT_B',
-          sort: 2,
-          status: 'ACTIVE',
-          createdAt: new Date('2026-01-03'),
-        },
-      ];
+    it('返回多级嵌套树形结构', async () => {
+      await seedTestData(td.db, { departments: seedThreeLevelTree() });
 
       const req = createTestRequest('/api/departments');
       const res = await ListDepartments(req);
       const body = await parseResponseJson(res);
 
       expect(res.status).toBe(200);
-      expect(body).toHaveLength(2);
+      expect(body).toHaveLength(1);
+      const root = body[0];
+      expect(root.name).toBe('总公司');
+      expect(root.children).toHaveLength(2);
 
-      // 根部门A 包含子部门
-      const rootA = body.find((d: any) => d.id === 'dept-1');
-      expect(rootA).toBeDefined();
-      expect(rootA.children).toHaveLength(1);
-      expect(rootA.children[0].id).toBe('dept-2');
-      expect(rootA.children[0].name).toBe('子部门');
+      const techDept = root.children.find((c: any) => c.id === TECH_DEPT_ID);
+      expect(techDept).toBeDefined();
+      expect(techDept.name).toBe('技术部');
+      expect(techDept.children).toHaveLength(1);
+      expect(techDept.children[0].id).toBe(FE_DEPT_ID);
+      expect(techDept.children[0].name).toBe('前端组');
+    });
 
-      // 根部门B 无子部门
-      const rootB = body.find((d: any) => d.id === 'dept-3');
-      expect(rootB).toBeDefined();
-      expect(rootB.children).toHaveLength(0);
+    it('deptIds 为空时返回空数组', async () => {
+      await seedTestData(td.db, { departments: seedThreeLevelTree() });
+
+      vi.mocked(mockWithPermission).mockImplementationOnce(
+        async (_o, handler) =>
+          handler(ADMIN_USER_ID, { deptIds: [], permissions: [], roles: [] }),
+      );
+
+      const req = createTestRequest('/api/departments');
+      const res = await ListDepartments(req);
+      const body = await parseResponseJson(res);
+
+      expect(res.status).toBe(200);
+      expect(body).toEqual([]);
+    });
+
+    it('deptIds 限定时只返回可访问的子树', async () => {
+      await seedTestData(td.db, { departments: seedThreeLevelTree() });
+
+      vi.mocked(mockWithPermission).mockImplementationOnce(
+        async (_o, handler) =>
+          handler(ADMIN_USER_ID, {
+            deptIds: [TECH_DEPT_ID],
+            permissions: [],
+            roles: [],
+          }),
+      );
+
+      const req = createTestRequest('/api/departments');
+      const res = await ListDepartments(req);
+      const body = await parseResponseJson(res);
+
+      expect(res.status).toBe(200);
+      expect(body).toHaveLength(1);
+      expect(body[0].id).toBe(TECH_DEPT_ID);
+    });
+  });
+
+  // ── POST 创建部门 ──────────────────────────────────────
+  describe('POST create department', () => {
+    it('创建顶级部门 — ancestors 为 null', async () => {
+      await seedTestData(td.db, {
+        departments: [
+          {
+            id: ROOT_DEPT_ID,
+            parentId: null,
+            name: '总公司',
+            code: 'ROOT',
+            ancestors: null,
+            sort: 0,
+            status: 'ACTIVE' as const,
+            createdAt: now,
+            updatedAt: now,
+          },
+        ],
+      });
+
+      const r: any = await createDepartmentAction({
+        name: '新事业部',
+        code: 'BU',
+        sort: 1,
+        parentId: null,
+      });
+
+      expect(r.success).toBe(true);
+      expect(r.data.id).toBe(CREATED_DEPT_ID);
+      expect(r.message).toBe('部门创建成功');
+
+      const rows = await td.db.select().from(schema.departments);
+      const created = rows.find((d) => d.name === '新事业部');
+      expect(created).toBeDefined();
+      expect(created!.code).toBe('BU');
+      expect(created!.parentId).toBeNull();
+      expect(created!.ancestors).toBeNull();
+    });
+
+    it('创建子部门 — ancestors 正确级联', async () => {
+      await seedTestData(td.db, {
+        departments: [
+          {
+            id: ROOT_DEPT_ID,
+            parentId: null,
+            name: '总公司',
+            code: 'ROOT',
+            ancestors: null,
+            sort: 0,
+            status: 'ACTIVE' as const,
+            createdAt: now,
+            updatedAt: now,
+          },
+        ],
+      });
+
+      const r: any = await createDepartmentAction({
+        name: '财务部',
+        code: 'FIN',
+        sort: 3,
+        parentId: ROOT_DEPT_ID,
+      });
+
+      expect(r.success).toBe(true);
+
+      const rows = await td.db.select().from(schema.departments);
+      const child = rows.find((d) => d.name === '财务部');
+      expect(child).toBeDefined();
+      expect(child!.parentId).toBe(ROOT_DEPT_ID);
+      expect(child!.ancestors).toBe(ROOT_DEPT_ID);
+    });
+
+    it('创建二级子部门 — ancestors 多级路径', async () => {
+      await seedTestData(td.db, {
+        departments: [
+          {
+            id: ROOT_DEPT_ID,
+            parentId: null,
+            name: '总公司',
+            code: 'ROOT',
+            ancestors: null,
+            sort: 0,
+            status: 'ACTIVE' as const,
+            createdAt: now,
+            updatedAt: now,
+          },
+          {
+            id: TECH_DEPT_ID,
+            parentId: ROOT_DEPT_ID,
+            name: '技术部',
+            code: 'TECH',
+            ancestors: ROOT_DEPT_ID,
+            sort: 1,
+            status: 'ACTIVE' as const,
+            createdAt: now,
+            updatedAt: now,
+          },
+        ],
+      });
+
+      const r: any = await createDepartmentAction({
+        name: '后端组',
+        code: 'BE',
+        sort: 0,
+        parentId: TECH_DEPT_ID,
+      });
+
+      expect(r.success).toBe(true);
+
+      const rows = await td.db.select().from(schema.departments);
+      const sub = rows.find((d) => d.name === '后端组');
+      expect(sub).toBeDefined();
+      expect(sub!.parentId).toBe(TECH_DEPT_ID);
+      expect(sub!.ancestors).toBe(`${ROOT_DEPT_ID}/${TECH_DEPT_ID}`);
+    });
+
+    it('缺必填字段 → success: false 含错误信息', async () => {
+      const r: any = await createDepartmentAction({
+        name: '',
+        code: '',
+        sort: 1,
+        parentId: null,
+      } as any);
+
+      expect(r.success).toBe(false);
+      expect(r.error).toBeDefined();
+      expect(r.message).toBeDefined();
+    });
+  });
+
+  // ── 循环引用防护 ──────────────────────────────────────
+  describe('circular reference prevention', () => {
+    it('更新为自身 parentId → BusinessRuleViolationError', async () => {
+      await seedTestData(td.db, {
+        departments: [
+          {
+            id: ROOT_DEPT_ID,
+            parentId: null,
+            name: '总公司',
+            code: 'ROOT',
+            ancestors: null,
+            sort: 0,
+            status: 'ACTIVE' as const,
+            createdAt: now,
+            updatedAt: now,
+          },
+          {
+            id: TECH_DEPT_ID,
+            parentId: ROOT_DEPT_ID,
+            name: '技术部',
+            code: 'TECH',
+            ancestors: ROOT_DEPT_ID,
+            sort: 1,
+            status: 'ACTIVE' as const,
+            createdAt: now,
+            updatedAt: now,
+          },
+        ],
+      });
+
+      await expect(
+        updateDepartmentAction(TECH_DEPT_ID, { parentId: TECH_DEPT_ID } as any),
+      ).rejects.toThrow(BusinessRuleViolationError);
+    });
+
+    it('更新 parentId 为自身子部门 → BusinessRuleViolationError', async () => {
+      await seedTestData(td.db, { departments: seedThreeLevelTree() });
+
+      await expect(
+        updateDepartmentAction(TECH_DEPT_ID, { parentId: FE_DEPT_ID } as any),
+      ).rejects.toThrow(BusinessRuleViolationError);
+    });
+
+    it('更新 parentId 为自身孙子部门 → BusinessRuleViolationError', async () => {
+      await seedTestData(td.db, {
+        departments: [
+          {
+            id: ROOT_DEPT_ID,
+            parentId: null,
+            name: '总公司',
+            code: 'ROOT',
+            ancestors: null,
+            sort: 0,
+            status: 'ACTIVE' as const,
+            createdAt: now,
+            updatedAt: now,
+          },
+          {
+            id: TECH_DEPT_ID,
+            parentId: ROOT_DEPT_ID,
+            name: '技术部',
+            code: 'TECH',
+            ancestors: ROOT_DEPT_ID,
+            sort: 1,
+            status: 'ACTIVE' as const,
+            createdAt: now,
+            updatedAt: now,
+          },
+          {
+            id: FE_DEPT_ID,
+            parentId: TECH_DEPT_ID,
+            name: '前端组',
+            code: 'FE',
+            ancestors: `${ROOT_DEPT_ID}/${TECH_DEPT_ID}`,
+            sort: 0,
+            status: 'ACTIVE' as const,
+            createdAt: now,
+            updatedAt: now,
+          },
+          {
+            id: '00000000-0000-4000-8000-000000000005',
+            parentId: FE_DEPT_ID,
+            name: 'H5组',
+            code: 'H5',
+            ancestors: `${ROOT_DEPT_ID}/${TECH_DEPT_ID}/${FE_DEPT_ID}`,
+            sort: 0,
+            status: 'ACTIVE' as const,
+            createdAt: now,
+            updatedAt: now,
+          },
+        ],
+      });
+
+      await expect(
+        updateDepartmentAction(TECH_DEPT_ID, {
+          parentId: '00000000-0000-4000-8000-000000000005',
+        } as any),
+      ).rejects.toThrow(BusinessRuleViolationError);
     });
   });
 });

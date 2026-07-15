@@ -1,23 +1,29 @@
 /**
- * JWT Cookie 会话生命周期测试
+ * JWT Cookie 会话生命周期测试 — 真实 DB (jwks 表)
+ *
+ * verifyAccessToken 路径需要 jwks 表提供签名公钥，
+ * revokeUserToken 需要 access_tokens 表执行 DELETE。
  *
  * @req H-SESS-001~006, H-SSO-004
  * @vitest-environment node
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest';
 import { NextResponse } from 'next/server';
+import { createTestDbHandle, seedTestData } from '../helpers/test-db';
+import { seedJwks } from '../helpers/seed-fixtures';
 
-// 使用 vi.hoisted 解决 Vitest 模拟提升与局部变量隔离的问题
-const { mockGetRedis, mockStore } = vi.hoisted(() => {
+const { mockGetRedis, mockStore, tdHolder } = vi.hoisted(() => {
   const storeMap = new Map<string, string>();
+
   return {
+    tdHolder: { current: null as ReturnType<typeof createTestDbHandle> | null },
     mockStore: {
       clear: () => storeMap.clear(),
       get: (key: string) => storeMap.get(key),
       set: (key: string, value: string) => storeMap.set(key, value),
     },
     mockGetRedis: () => ({
-      setex: async (key: string, ttl: number, value: string) => {
+      setex: async (key: string, _ttl: number, value: string) => {
         storeMap.set(key, value);
       },
       exists: async (key: string) => {
@@ -29,62 +35,32 @@ const { mockGetRedis, mockStore } = vi.hoisted(() => {
       del: async (key: string) => {
         storeMap.delete(key);
       },
+      hset: async () => 1,
+      hgetall: async () => ({}),
+      expire: async () => 1,
+      pipeline: () => ({
+        setex: function () { return this; },
+        del: function () { return this; },
+        exec: async () => [],
+      }),
     }),
   };
 });
 
-// Mock Redis 接口
+const td = createTestDbHandle();
+tdHolder.current = td;
+
+vi.mock('@/infrastructure/db', () => ({
+  get db() { return tdHolder.current!.db; },
+  get schema() { return tdHolder.current!.schema; },
+}));
+
 vi.mock('@/infrastructure/redis', () => ({
   getRedis: () => mockGetRedis(),
 }));
 
-// Mock DB 接口，防止 verifyAccessToken 执行真实数据库查询
-vi.mock('@/infrastructure/db', () => {
-  const mockJwkRow = {
-    id: 'mock-kid',
-    publicKey: JSON.stringify({
-      kty: 'EC',
-      crv: 'P-256',
-      x: 'f83OJ3D2xF1Bg8vub9tM1gGPT34Ogv50GI1g9SamyC8',
-      y: 'x_9LH9FHme7alQA9g1y5OB84XJWADnVEhypT5sR-vCs',
-    }),
-    privateKey: JSON.stringify({
-      kty: 'EC',
-      crv: 'P-256',
-      x: 'f83OJ3D2xF1Bg8vub9tM1gGPT34Ogv50GI1g9SamyC8',
-      y: 'x_9LH9FHme7alQA9g1y5OB84XJWADnVEhypT5sR-vCs',
-      d: 'jpsQnnGQmLv7UfFpQ9k8-kH6-4SJyvK2Wj2N2aQeE24',
-    }),
-    createdAt: new Date(),
-    expiresAt: new Date(Date.now() + 3600 * 1000),
-  };
-
-  const createChain = () => {
-    const chain: any = () => {};
-    chain.then = (resolve: Function) => resolve([mockJwkRow]);
-    return new Proxy(chain, {
-      get(target: any, prop: string) {
-        if (prop === 'then' || prop === 'catch') return target[prop];
-        return () => createChain();
-      },
-    });
-  };
-
-  return {
-    db: {
-      select: () => createChain(),
-    },
-    schema: {
-      jwks: {
-        createdAt: 'createdAt',
-      },
-    },
-  };
-});
-
 const store = mockStore;
 
-// Mock next/headers
 const mockCookiesGet = vi.fn();
 vi.mock('next/headers', () => ({
   cookies: async () => ({
@@ -92,21 +68,20 @@ vi.mock('next/headers', () => ({
   }),
 }));
 
-// Mock jose
 vi.mock('jose', () => ({
-  jwtVerify: vi.fn(async (token) => {
+  jwtVerify: vi.fn(async (token: string) => {
     if (token === 'valid-jwt') {
-      return { payload: { sub: 'usr_1', jti: 'jti-123', exp: Math.floor(Date.now() / 1000) + 3600 } };
+      return { payload: { sub: 'usr_1', jti: 'jti-123', exp: Math.floor(Date.now() / 1000) + 3600, roles: [], permissions: [], deptIds: [] } };
     }
     throw new Error('Invalid signature');
   }),
-  decodeJwt: vi.fn((token) => {
+  decodeJwt: vi.fn((token: string) => {
     if (token === 'valid-jwt') {
       return { kid: 'test-kid-1', sub: 'usr_1', jti: 'jti-123', exp: Math.floor(Date.now() / 1000) + 3600 };
     }
     return null;
   }),
-  decodeProtectedHeader: vi.fn((token) => {
+  decodeProtectedHeader: vi.fn((token: string) => {
     if (token === 'valid-jwt') {
       return { kid: 'test-kid-1', alg: 'ES256' };
     }
@@ -129,19 +104,26 @@ import {
 import { COOKIE_NAMES } from '@auth-sso/contracts';
 import { verifyAccessToken } from '@/lib/auth/token';
 
-describe('JWT Cookie Session Lifecycle', () => {
-  beforeEach(() => {
-    store.clear();
-    vi.clearAllMocks();
-  });
+beforeAll(async () => { await td.connect(); });
+afterAll(async () => { await td.close(); });
 
+beforeEach(async () => {
+  await td.cleanup();
+  await seedTestData(td.db, {
+    jwks: seedJwks({ kid: 'test-kid-1' }),
+  });
+  store.clear();
+  vi.clearAllMocks();
+});
+
+describe('JWT Cookie Session Lifecycle', () => {
   describe('setJwtCookies', () => {
     it('正确将 JWT 写入 Response Cookie', () => {
       const response = NextResponse.next();
       const setSpy = vi.spyOn(response.cookies, 'set');
-      
+
       setJwtCookies(response, 'access-token', 'refresh-token', 3600);
-      
+
       expect(setSpy).toHaveBeenCalledWith(COOKIE_NAMES.JWT, 'access-token', expect.objectContaining({
         path: '/',
         httpOnly: true,
@@ -157,9 +139,9 @@ describe('JWT Cookie Session Lifecycle', () => {
     it('Cookie 包含 sameSite=lax 防 CSRF', () => {
       const response = NextResponse.next();
       const setSpy = vi.spyOn(response.cookies, 'set');
-      
+
       setJwtCookies(response, 'access-token', undefined, 3600);
-      
+
       expect(setSpy).toHaveBeenCalledWith(COOKIE_NAMES.JWT, 'access-token', expect.objectContaining({
         sameSite: 'lax',
       }));
@@ -168,10 +150,9 @@ describe('JWT Cookie Session Lifecycle', () => {
     it('无 refresh token 时不设置 REFRESH Cookie', () => {
       const response = NextResponse.next();
       const setSpy = vi.spyOn(response.cookies, 'set');
-      
+
       setJwtCookies(response, 'access-token', undefined, 3600);
-      
-      // 仅设置 JWT cookie，不设置 REFRESH cookie
+
       const refreshCalls = setSpy.mock.calls.filter((c: any) => c[0] === COOKIE_NAMES.REFRESH);
       expect(refreshCalls).toHaveLength(0);
     });
@@ -189,7 +170,7 @@ describe('JWT Cookie Session Lifecycle', () => {
 
   describe('getJwtFromCookie & getRefreshTokenFromCookie', () => {
     it('从 cookies 接口成功读取 Token', async () => {
-      mockCookiesGet.mockImplementation((name) => {
+      mockCookiesGet.mockImplementation((name: string) => {
         if (name === COOKIE_NAMES.JWT) return { value: 'jwt-val' };
         if (name === COOKIE_NAMES.REFRESH) return { value: 'refresh-val' };
         return null;

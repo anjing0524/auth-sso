@@ -1,31 +1,25 @@
 /**
- * 登出 API 单元测试 (POST /api/auth/logout)
+ * 登出 API 集成测试 (POST /api/auth/logout) — 真实 DB
+ *
+ * 真实 DB 用于 refresh_tokens 撤销、用户查询等操作。
+ * JWT 验签 / jti 黑名单 (Redis) / Cookie 读取均保持 mock。
  *
  * @req H-SSO-003, H-SSO-004
  * @vitest-environment node
- *
- * 覆盖范围：
- * - 无 Cookie → 200（始终成功）
- * - 有 JWT Cookie → 撤销 jti + 清除 Cookie
- * - 有 Login Session → 撤销 jti
- * - 错误处理 → 仍清除全部 Cookie（fail-open）
- *
- * @req H-SSO-004
- * @vitest-environment node
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest';
+import { createTestDbHandle, seedTestData } from '../helpers/test-db';
 
-// =========================================
-// Mock 基础设施（vi.hoisted 共享状态）
-// =========================================
 const {
   mockVerifyAccessToken,
   mockDecodeJwtPayload,
   mockRevokeJti,
+  mockRevokeUserAccessByUserId,
   mockGetRefreshTokenFromCookie,
   mockMapDomainError,
   getCookieValues,
   setCookieValues,
+  tdHolder,
 } = vi.hoisted(() => {
   const cookieStore: Record<string, string> = {};
 
@@ -33,8 +27,10 @@ const {
     mockVerifyAccessToken: vi.fn(),
     mockDecodeJwtPayload: vi.fn(),
     mockRevokeJti: vi.fn(),
+    mockRevokeUserAccessByUserId: vi.fn(),
     mockGetRefreshTokenFromCookie: vi.fn(),
     mockMapDomainError: vi.fn(),
+    tdHolder: { current: null as ReturnType<typeof createTestDbHandle> | null },
     getCookieValues() {
       return { ...cookieStore };
     },
@@ -45,7 +41,9 @@ const {
   };
 });
 
-// Mock cookies
+const td = createTestDbHandle();
+tdHolder.current = td;
+
 vi.mock('next/headers', () => ({
   cookies: async () => {
     const store = getCookieValues();
@@ -58,29 +56,14 @@ vi.mock('next/headers', () => ({
   },
 }));
 
-// Mock DB
-vi.mock('@/infrastructure/db', () => {
-  const thenable = () => {
-    const o: any = () => {};
-    o.then = (fn: Function) => fn(undefined);
-    return o;
-  };
-
-  return {
-    db: new Proxy({}, {
-      get() {
-        return () => thenable();  // 任何 db 方法都返回 thenable
-      },
-    }),
-    schema: {
-      refreshTokens: { tokenHash: 'tokenHash', userId: 'userId', revoked: 'revoked' },
-      users: { id: 'id', username: 'username' },
-    },
-  };
-});
+vi.mock('@/infrastructure/db', () => ({
+  get db() { return tdHolder.current!.db; },
+  get schema() { return tdHolder.current!.schema; },
+}));
 
 vi.mock('@/lib/session/revoke', () => ({
   revokeJti: mockRevokeJti,
+  revokeUserAccessByUserId: mockRevokeUserAccessByUserId,
 }));
 
 vi.mock('@/lib/auth/token', () => ({
@@ -105,24 +88,44 @@ vi.mock('@/domain/shared/error-mapping', () => ({
   mapDomainError: mockMapDomainError,
 }));
 
-vi.mock('@auth-sso/contracts', () => ({
-  COOKIE_NAMES: {
-    JWT: 'portal_jwt_token',
-    LOGIN_SESSION: 'login_session',
-    REFRESH: 'portal_refresh_token',
-  },
-}));
+vi.mock('@auth-sso/contracts', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@auth-sso/contracts')>();
+  return {
+    ...actual,
+  };
+});
 
 import { POST } from '@/app/api/auth/logout/route';
+
+const now = new Date();
+const TEST_USER_ID = '00000000-0000-4000-8000-000000000301';
+
+function seedTestUsers() {
+  return [{
+    id: TEST_USER_ID, username: 'testuser', email: 'test@example.com', name: 'Test',
+    passwordHash: '$2b$10$3NW6cGa0tGI9DCtuGr0leOcsRRUVKd.4hsrs7kWdhuK6.kaEXitVe',
+    status: 'ACTIVE' as const,
+    emailVerified: true, mobileVerified: false,
+    passwordHistory: null, avatarUrl: null, mobile: null, deptId: null,
+    lastLoginAt: null, deletedAt: null, passwordChangedAt: null,
+    createdAt: now, updatedAt: now,
+  }];
+}
 
 function buildPostRequest(): any {
   return new Request('http://localhost/api/auth/logout', { method: 'POST' });
 }
 
-beforeEach(() => {
+beforeAll(async () => { await td.connect(); });
+afterAll(async () => { await td.close(); });
+
+beforeEach(async () => {
+  await td.cleanup();
+  await seedTestData(td.db, { users: seedTestUsers() });
   vi.clearAllMocks();
   setCookieValues({});
   mockGetRefreshTokenFromCookie.mockResolvedValue(null);
+  mockRevokeUserAccessByUserId.mockResolvedValue(0);
   mockMapDomainError.mockImplementation((err: any) => ({
     status: 500,
     error: 'INTERNAL_ERROR',
@@ -143,7 +146,7 @@ describe('POST /api/auth/logout', () => {
     mockVerifyAccessToken.mockResolvedValueOnce({
       jti: 'jti-1',
       exp: Math.floor(Date.now() / 1000) + 3600,
-      sub: 'user-uuid',
+      sub: TEST_USER_ID,
     });
     mockRevokeJti.mockResolvedValueOnce(undefined);
 
@@ -154,7 +157,6 @@ describe('POST /api/auth/logout', () => {
     expect(mockVerifyAccessToken).toHaveBeenCalledWith('valid-jwt');
     expect(mockRevokeJti).toHaveBeenCalledWith('jti-1', expect.any(Number));
 
-    // 三种 Cookie 均被清除
     expect(res.cookies.get('portal_jwt_token')?.value).toBe('');
     expect(res.cookies.get('portal_jwt_token')?.maxAge).toBe(0);
     expect(res.cookies.get('login_session')?.maxAge).toBe(0);
@@ -184,7 +186,6 @@ describe('POST /api/auth/logout', () => {
     const json = await res.json();
 
     expect(res.status).toBe(200);
-    // 仍然清除全部 Cookie
     expect(res.cookies.get('portal_jwt_token')?.maxAge).toBe(0);
   });
 
@@ -193,7 +194,7 @@ describe('POST /api/auth/logout', () => {
     mockVerifyAccessToken.mockResolvedValueOnce({
       jti: 'jti-fail',
       exp: Math.floor(Date.now() / 1000) + 3600,
-      sub: 'user-uuid',
+      sub: TEST_USER_ID,
     });
     mockRevokeJti.mockRejectedValueOnce(new Error('Redis down'));
 
@@ -205,7 +206,7 @@ describe('POST /api/auth/logout', () => {
 
   it('有 Login Session 但无 jti 时不调用 revokeJti', async () => {
     setCookieValues({ login_session: 'session-no-jti' });
-    mockDecodeJwtPayload.mockReturnValueOnce({ sub: 'user-uuid' });
+    mockDecodeJwtPayload.mockReturnValueOnce({ sub: TEST_USER_ID });
 
     const res = await POST(buildPostRequest());
 

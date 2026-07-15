@@ -16,8 +16,10 @@ END $$;
 -- Step 3: 创建新枚举（不含 DATA）
 CREATE TYPE "permission_type_new" AS ENUM('DIRECTORY', 'PAGE', 'API');
 
--- Step 4: 迁移列类型
+-- Step 4: 迁移列类型（先删 default，改类型，再还原 default）
+ALTER TABLE "permissions" ALTER COLUMN "type" DROP DEFAULT;
 ALTER TABLE "permissions" ALTER COLUMN "type" TYPE "permission_type_new" USING "type"::text::"permission_type_new";
+ALTER TABLE "permissions" ALTER COLUMN "type" SET DEFAULT 'API';
 
 -- Step 5: 删除旧枚举
 DROP TYPE "permission_type";
