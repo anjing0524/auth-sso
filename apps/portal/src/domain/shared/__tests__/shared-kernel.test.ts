@@ -33,7 +33,7 @@ describe('mapDomainError', () => {
   });
 
   it('AccountStatusError → 403', () => {
-    const r = mapDomainError(new AccountStatusError('DISABLED'));
+    const r = mapDomainError(new AccountStatusError('DISABLED', '账号已禁用'));
     expect(r.status).toBe(403);
   });
 

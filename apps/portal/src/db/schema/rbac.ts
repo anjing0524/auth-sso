@@ -10,7 +10,7 @@
  * type 枚举（DIRECTORY | PAGE | API）决定字段生效规则：
  * - DIRECTORY: path(可选), icon, visible — 侧边栏折叠组，不参与鉴权
  * - PAGE:      path(必填), icon, visible — 侧边栏路由项
- * - API:       resource(必填), action(必填), client_id — 接口鉴权
+ * - API:       client_id — 接口鉴权（code 格式 {clientId}:{resource}:{action}，ADR-008）
  *
  * PG CHECK 约束确保类型专属字段完整性（第二道防线），
  * 应用层 Zod discriminatedUnion 为第一道防线。
@@ -58,7 +58,7 @@ export const roles = pgTable('roles', {
  */
 export const permissions = pgTable('permissions', {
   id: uuid('id').primaryKey().defaultRandom(),
-  code: varchar('code', { length: 50 }).notNull().unique(),
+  code: varchar('code', { length: 150 }).notNull().unique(),
   name: varchar('name', { length: 100 }).notNull(),
   description: text('description'),
   type: permissionTypeEnum('type').notNull().default('API'),
@@ -66,10 +66,7 @@ export const permissions = pgTable('permissions', {
   path: varchar('path', { length: 200 }),
   icon: varchar('icon', { length: 50 }),
   visible: boolean('visible'),
-  // API 专属
-  resource: varchar('resource', { length: 100 }),
-  action: varchar('action', { length: 50 }),
-  // API 专属
+  // API 专属 — OAuth Client FK（冗余索引列，code 前缀为首要数据源，ADR-008）
   clientId: varchar('client_id', { length: 50 }).references(() => clients.clientId, { onDelete: 'cascade' }),
   // 树形结构（FK 自引用）
   parentId: uuid('parent_id').references((): AnyPgColumn => permissions.id, { onDelete: 'cascade' }),
@@ -81,12 +78,12 @@ export const permissions = pgTable('permissions', {
   index('idx_permissions_client').on(t.clientId),
   index('idx_permissions_parent').on(t.parentId),
   index('idx_permissions_type').on(t.type),
-  // CHECK：DIRECTORY/PAGE 不可有 resource/action/client_id；API 必有 resource/action
+  // CHECK：DIRECTORY/PAGE 不可有 client_id
   // 应用层 Zod discriminatedUnion 为第一道防线，此为 DB 第二道防线
   check(
     'permissions_type_fields_chk',
-    sql`(type IN ('DIRECTORY','PAGE') AND resource IS NULL AND action IS NULL AND client_id IS NULL)
-      OR (type = 'API' AND resource IS NOT NULL AND action IS NOT NULL)`,
+    sql`(type IN ('DIRECTORY','PAGE') AND client_id IS NULL)
+      OR (type = 'API')`,
   ),
 ]);
 

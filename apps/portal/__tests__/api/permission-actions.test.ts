@@ -18,11 +18,12 @@ vi.mock('@/infrastructure/db', () => ({
   get schema() { return td.schema; },
 }));
 vi.mock('@/lib/auth', () => ({
-  resolveIdentity: vi.fn(async () => ({ claims: { deptIds: ['00000000-0000-4000-8000-000000000001'] } })),
+  resolveIdentity: vi.fn(async () => ({ userId: '00000000-0000-4000-8000-000000000101', claims: { sub: '', iss: '', aud: 'auth-sso', jti: '' } })),
   logServerDataRead: vi.fn(async () => {}),
+  getUserRoleDeptIds: vi.fn().mockResolvedValue([]),
   canAccessDept: vi.fn(() => true),
   withAuth: (_o: any, h: Function) => async (...a: any[]) =>
-    h({ userId: '00000000-0000-4000-8000-000000000101', claims: { deptIds: ['00000000-0000-4000-8000-000000000001'], permissions: [], roles: [] } }, ...a),
+    h({ userId: '00000000-0000-4000-8000-000000000101' }, ...a),
 }));
 vi.mock('@/lib/crypto', () => ({
   generateUUID: () => 'aabbccdd-eeff-4000-8000-000000000001',
@@ -45,9 +46,9 @@ beforeEach(async () => {
 
 describe('Permission Server Actions', () => {
   describe('createPermissionAction', () => {
-    it('有效输入 → DB insert 包含 code/name/resource/action/type', async () => {
+    it('有效输入 → DB insert 包含 code/name/type', async () => {
       const r: any = await createPermissionAction({
-        code: 'NEW', name: 'New Permission', resource: '/api/test', action: 'GET', type: 'API',
+        code: 'NEW', name: 'New Permission', type: 'API',
       } as any);
 
       expect(r.success).toBe(true);
@@ -58,14 +59,12 @@ describe('Permission Server Actions', () => {
       const created = perms.find(p => p.code === 'NEW');
       expect(created).toBeDefined();
       expect(created!.name).toBe('New Permission');
-      expect(created!.resource).toBe('/api/test');
-      expect(created!.action).toBe('GET');
       expect(created!.type).toBe('API');
     });
 
     it('缺 code → 返回 success: false', async () => {
       const r: any = await createPermissionAction({
-        code: '', name: '', resource: '', action: '', type: '',
+        code: '', name: '', type: '',
       } as any);
 
       expect(r.success).toBe(false);

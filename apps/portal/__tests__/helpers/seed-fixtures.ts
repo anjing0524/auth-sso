@@ -25,7 +25,7 @@ export function seedRootDept(): SeedData['departments'] {
 }
 
 /** 子部门 */
-export function seedSubDept(overrides: Partial<SeedData['departments'][0]> = {}): SeedData['departments'] {
+export function seedSubDept(overrides: Partial<NonNullable<SeedData['departments']>[0]> = {}): SeedData['departments'] {
   return [{
     id: '00000000-0000-4000-8000-000000000002',
     parentId: '00000000-0000-4000-8000-000000000001',
@@ -41,7 +41,7 @@ export function seedSubDept(overrides: Partial<SeedData['departments'][0]> = {})
 }
 
 /** 管理员用户 */
-export function seedAdminUser(overrides: Partial<SeedData['users'][0]> = {}): SeedData['users'] {
+export function seedAdminUser(overrides: Partial<NonNullable<SeedData['users']>[0]> = {}): SeedData['users'] {
   return [{
     id: '00000000-0000-4000-8000-000000000101',
     username: 'admin',
@@ -65,7 +65,7 @@ export function seedAdminUser(overrides: Partial<SeedData['users'][0]> = {}): Se
 }
 
 /** 普通用户 */
-export function seedTestUser(overrides: Partial<SeedData['users'][0]> = {}): SeedData['users'] {
+export function seedTestUser(overrides: Partial<NonNullable<SeedData['users']>[0]> = {}): SeedData['users'] {
   return [{
     id: '00000000-0000-4000-8000-000000000201',
     username: 'testuser',
@@ -89,7 +89,7 @@ export function seedTestUser(overrides: Partial<SeedData['users'][0]> = {}): See
 }
 
 /** 系统角色 */
-export function seedSuperAdminRole(overrides: Partial<SeedData['roles'][0]> = {}): SeedData['roles'] {
+export function seedSuperAdminRole(overrides: Partial<NonNullable<SeedData['roles']>[0]> = {}): SeedData['roles'] {
   return [{
     id: '00000000-0000-4000-8000-000000000301',
     name: '超级管理员',
@@ -106,7 +106,7 @@ export function seedSuperAdminRole(overrides: Partial<SeedData['roles'][0]> = {}
 }
 
 /** Portal OAuth Client */
-export function seedPortalClient(overrides: Partial<SeedData['clients'][0]> = {}): SeedData['clients'] {
+export function seedPortalClient(overrides: Partial<NonNullable<SeedData['clients']>[0]> = {}): SeedData['clients'] {
   return [{
     clientId: 'portal',
     name: 'Auth-SSO Portal',
@@ -126,7 +126,7 @@ export function seedPortalClient(overrides: Partial<SeedData['clients'][0]> = {}
 }
 
 /** ES256 JWK 密钥对（用于 JWT 签发/验签测试） */
-export function seedJwks(overrides: Partial<SeedData['jwks'][0]> = {}): SeedData['jwks'] {
+export function seedJwks(overrides: Partial<NonNullable<SeedData['jwks']>[0]> = {}): SeedData['jwks'] {
   return [{
     id: crypto.randomUUID(),
     kid: 'test-kid-001',
@@ -159,14 +159,12 @@ export function seedUserRoleBinding(
 }
 
 /** 通用测试权限（API 类型） */
-export function seedTestPermission(overrides: Partial<SeedData['permissions'][0]> = {}): SeedData['permissions'] {
+export function seedTestPermission(overrides: Partial<NonNullable<SeedData['permissions']>[0]> = {}): SeedData['permissions'] {
   return [{
     id: '00000000-0000-4000-8000-000000000401',
     code: 'TEST_PERM',
     name: 'Test Permission',
     type: 'API',
-    resource: '/api/test',
-    action: 'GET',
     description: '',
     clientId: null,
     parentId: null,

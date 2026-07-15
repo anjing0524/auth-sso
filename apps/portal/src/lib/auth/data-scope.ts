@@ -71,7 +71,7 @@ export async function getUserRoleDeptIds(userId: string): Promise<string[]> {
  * 用于敏感写操作（重置密码、强制下线、角色绑定等）的数据范围守卫，
  * 避免跨部门越权（H-ACL-002 / H-DSCOPE-003）。
  *
- * deptIds 应来自 JWT claims.deptIds（已含子树展开），
+ * deptIds 应通过 getUserRoleDeptIds() 获取（已含子树展开），
  * 或由调用方通过 getUserRoleDeptIds() 预先获取。
  *
  * 规则：

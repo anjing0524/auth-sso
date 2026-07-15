@@ -22,7 +22,7 @@ import * as schema from '@/db/schema';
 // ════════════════════════════════════════════════════════
 // Hoisted mocks
 // ════════════════════════════════════════════════════════
-const { tdHolder, mockAuthCheck, mockWithPermission } = vi.hoisted(() => {
+const { tdHolder, mockAuthCheck, mockWithPermission, mockGetUserRoleDeptIds } = vi.hoisted(() => {
   const tdHolder: { current: any } = { current: null };
   const mockAuthCheck = vi.fn(async () => ({
     authorized: true,
@@ -33,10 +33,11 @@ const { tdHolder, mockAuthCheck, mockWithPermission } = vi.hoisted(() => {
   const mockWithPermission = vi.fn(
     async (opts: any, resource: any, handler?: Function) => {
       const h = (typeof resource === 'function' ? resource : handler)!;
-      return h('00000000-0000-4000-8000-000000000101', { deptIds: ['00000000-0000-4000-8000-000000000001'] });
+      return h('00000000-0000-4000-8000-000000000101');
     },
   );
-  return { tdHolder, mockAuthCheck, mockWithPermission };
+  const mockGetUserRoleDeptIds = vi.fn().mockResolvedValue([]);
+  return { tdHolder, mockAuthCheck, mockWithPermission, mockGetUserRoleDeptIds };
 });
 
 // ════════════════════════════════════════════════════════
@@ -49,8 +50,9 @@ vi.mock('@/infrastructure/db', () => ({
 }));
 
 vi.mock('@/lib/auth', () => ({
-  resolveIdentity: vi.fn(async () => ({ claims: { deptIds: ['00000000-0000-4000-8000-000000000001'] } })),
+  resolveIdentity: vi.fn(async () => ({ userId: '00000000-0000-4000-8000-000000000101', claims: { sub: '', iss: '', aud: 'auth-sso', jti: '' } })),
   logServerDataRead: vi.fn(async () => {}),
+  getUserRoleDeptIds: mockGetUserRoleDeptIds,
   canAccessDept: vi.fn(() => true),
   withAuth: (_o: any, h: Function) => async (...a: any[]) => {
     const check = await mockAuthCheck();
@@ -59,7 +61,7 @@ vi.mock('@/lib/auth', () => ({
     }
     try {
       return await h(
-        { userId: check.userId, claims: { deptIds: ['00000000-0000-4000-8000-000000000001'], permissions: [], roles: [] } },
+        { userId: check.userId },
         ...a,
       );
     } catch (err: unknown) {
@@ -122,6 +124,7 @@ describe('User Management API & Actions', () => {
   describe('GET /api/users (list)', () => {
     it('分页返回用户列表，含 total 和 page', async () => {
       await seedTestData(td.db, { users: seedTestUser() });
+      mockGetUserRoleDeptIds.mockResolvedValueOnce([DEPT_ID]);
 
       const response = await ListUsers(
         createTestRequest('/api/users', { searchParams: { page: '1', pageSize: '10' } }),
@@ -270,7 +273,7 @@ describe('User Management API & Actions', () => {
       const res = await deleteUserAction('00000000-0000-4000-8000-000000000201');
       expect(res.success).toBe(true);
       expect(res.message).toContain('已逻辑删除');
-      expect(res.data.id).toBe('00000000-0000-4000-8000-000000000201');
+      expect((res as any).data.id).toBe('00000000-0000-4000-8000-000000000201');
 
       const rows = await db.select().from(schema.users);
       const user = rows.find(u => u.id === '00000000-0000-4000-8000-000000000201');
@@ -338,13 +341,13 @@ describe('User Management API & Actions', () => {
     it('密码过短 → 拒绝', async () => {
       const res = await resetPasswordAction('00000000-0000-4000-8000-000000000201', 'short');
       expect(res.success).toBe(false);
-      expect(res.error).toBe(COMMON_ERRORS.VALIDATION_ERROR);
+      expect((res as any).error).toBe(COMMON_ERRORS.VALIDATION_ERROR);
     });
 
     it('密码无大写 → 拒绝', async () => {
       const res = await resetPasswordAction('00000000-0000-4000-8000-000000000201', 'alllowercase1');
       expect(res.success).toBe(false);
-      expect(res.error).toBeDefined();
+      expect((res as any).error).toBeDefined();
     });
   });
 });

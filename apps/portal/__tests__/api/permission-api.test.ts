@@ -22,18 +22,15 @@ vi.mock('@/infrastructure/db', () => ({
 
 const { mockWithPermission } = vi.hoisted(() => {
   const mockWithPermission = vi.fn(async (_options: any, handler: Function) => {
-    return handler('00000000-0000-4000-8000-000000000101', {
-      deptIds: ['00000000-0000-4000-8000-000000000001'],
-      permissions: [],
-      roles: [],
-    });
+    return handler('00000000-0000-4000-8000-000000000101');
   });
   return { mockWithPermission };
 });
 
 vi.mock('@/lib/auth', () => ({
-  resolveIdentity: vi.fn(async () => ({ claims: { deptIds: ['00000000-0000-4000-8000-000000000001'] } })),
+  resolveIdentity: vi.fn(async () => ({ userId: '00000000-0000-4000-8000-000000000101', claims: { sub: '', iss: '', aud: 'auth-sso', jti: '' } })),
   logServerDataRead: vi.fn(async () => {}),
+  getUserRoleDeptIds: vi.fn().mockResolvedValue([]),
   canAccessDept: vi.fn(() => true),
   withPermission: mockWithPermission,
 }));
@@ -112,11 +109,9 @@ async function seedOtherClient() {
 async function seedPermission(overrides: Partial<typeof schema.permissions.$inferInsert> = {}) {
   await td.db.insert(schema.permissions).values({
     id: PERM_ID,
-    code: 'user:list',
+    code: 'portal:user:list',
     name: '用户列表',
     type: 'API',
-    resource: 'user',
-    action: 'list',
     status: 'ACTIVE',
     sort: 0,
     createdAt: new Date(),
@@ -141,24 +136,22 @@ describe('Permission API', () => {
   describe('GET /api/permissions', () => {
     it('返回全部权限列表', async () => {
       await seedPermission();
-      await seedPermission({ id: '00000000-0000-4000-8000-000000000402', code: 'role:list', name: '角色列表', sort: 2 });
-      await seedPermission({ id: '00000000-0000-4000-8000-000000000403', code: 'dept:list', name: '部门列表', sort: 3 });
+      await seedPermission({ id: '00000000-0000-4000-8000-000000000402', code: 'portal:role:list', name: '角色列表', sort: 2 });
+      await seedPermission({ id: '00000000-0000-4000-8000-000000000403', code: 'portal:dept:list', name: '部门列表', sort: 3 });
 
       const body = await parseResponseJson(await ListPermissions(createTestRequest('/api/permissions')));
       expect(body.data).toHaveLength(3);
-      expect(body.data[0].code).toBe('user:list');
+      expect(body.data[0].code).toBe('portal:user:list');
     });
 
     it('支持 type 过滤', async () => {
       await seedPermission();
       await td.db.insert(schema.permissions).values({
         id: '00000000-0000-4000-8000-000000000402',
-        code: 'dashboard',
+        code: 'portal:dashboard',
         name: '仪表盘',
         type: 'PAGE',
         path: '/dashboard',
-        resource: null,
-        action: null,
         clientId: null,
         status: 'ACTIVE',
         sort: 1,
@@ -187,7 +180,7 @@ describe('Permission API', () => {
           params: Promise.resolve({ id: PERM_ID }),
         } as any),
       );
-      expect(body.code).toBe('user:list');
+      expect(body.code).toBe('portal:user:list');
     });
 
     it('不存在返回 404', async () => {
@@ -206,7 +199,7 @@ describe('Permission API', () => {
 
     it('Client 不存在返回 403', async () => {
       const res = await RegisterPermissions(
-        createRegisterReq([{ code: 'u:l', name: 'x', type: 'API' }], { clientId: 'bad', clientSecret: 'bad' }),
+        createRegisterReq([{ code: 'portal:u:l', name: 'x', type: 'API' }], { clientId: 'bad', clientSecret: 'bad' }),
       );
       expect(res.status).toBe(403);
     });
@@ -230,10 +223,10 @@ describe('Permission API', () => {
 
       const res = await RegisterPermissions(
         createRegisterReq([
-          { code: 'user:list', name: '用户列表', type: 'API', resource: 'user', action: 'list', sort: 1 },
-          { code: 'user:create', name: '创建用户', type: 'API', resource: 'user', action: 'create', sort: 2 },
-          { code: 'system', name: '系统管理', type: 'API', resource: 'system', action: 'manage', sort: 0 },
-          { code: 'system:config', name: '系统配置', type: 'API', resource: 'system', action: 'config', sort: 1 },
+          { code: 'portal:user:list', name: '用户列表', type: 'API', sort: 1 },
+          { code: 'portal:user:create', name: '创建用户', type: 'API', sort: 2 },
+          { code: 'portal:system', name: '系统管理', type: 'API', sort: 0 },
+          { code: 'portal:system:config', name: '系统配置', type: 'API', sort: 1 },
         ]),
       );
       const body = await parseResponseJson(res);
@@ -250,28 +243,28 @@ describe('Permission API', () => {
       await td.db.insert(schema.permissions).values([
         {
           id: '00000000-0000-4000-8000-000000000411',
-          code: 'user:list', name: '旧用户列表', type: 'API',
-          resource: 'user', action: 'list', clientId: REGISTRY_CLIENT_ID,
+          code: 'portal:user:list', name: '旧用户列表', type: 'API',
+          clientId: REGISTRY_CLIENT_ID,
           status: 'ACTIVE', sort: 0, createdAt: new Date(), updatedAt: new Date(),
         },
         {
           id: '00000000-0000-4000-8000-000000000412',
-          code: 'role:list', name: '旧角色列表', type: 'API',
-          resource: 'role', action: 'list', clientId: REGISTRY_CLIENT_ID,
+          code: 'portal:role:list', name: '旧角色列表', type: 'API',
+          clientId: REGISTRY_CLIENT_ID,
           status: 'ACTIVE', sort: 1, createdAt: new Date(), updatedAt: new Date(),
         },
         {
           id: '00000000-0000-4000-8000-000000000413',
-          code: 'will:remain', name: '保留权限', type: 'API',
-          resource: 'misc', action: 'read', clientId: REGISTRY_CLIENT_ID,
+          code: 'portal:will:remain', name: '保留权限', type: 'API',
+          clientId: REGISTRY_CLIENT_ID,
           status: 'ACTIVE', sort: 2, createdAt: new Date(), updatedAt: new Date(),
         },
       ]);
 
       const res = await RegisterPermissions(
         createRegisterReq([
-          { code: 'user:list', name: '更新后的用户列表', type: 'API', resource: 'user', action: 'list' },
-          { code: 'will:remain', name: '保留权限', type: 'API', resource: 'misc', action: 'read' },
+          { code: 'portal:user:list', name: '更新后的用户列表', type: 'API' },
+          { code: 'portal:will:remain', name: '保留权限', type: 'API' },
         ]),
       );
       const body = await parseResponseJson(res);
@@ -287,26 +280,26 @@ describe('Permission API', () => {
       await seedOtherClient();
       await td.db.insert(schema.permissions).values({
         id: '00000000-0000-4000-8000-000000000421',
-        code: 'user:list', name: '用户列表', type: 'API',
-        resource: 'user', action: 'list', clientId: 'other-client',
+        code: 'portal:user:list', name: '用户列表', type: 'API',
+        clientId: 'other-client',
         status: 'ACTIVE', sort: 0, createdAt: new Date(), updatedAt: new Date(),
       });
 
       const res = await RegisterPermissions(
-        createRegisterReq([{ code: 'user:list', name: '用户列表', type: 'API' }]),
+        createRegisterReq([{ code: 'portal:user:list', name: '用户列表', type: 'API' }]),
       );
       expect(res.status).toBe(409);
       const body = await parseResponseJson(res);
       expect(body.error).toBe('conflict');
-      expect(body.message).toContain('user:list');
+      expect(body.message).toContain('portal:user:list');
     });
 
     it('批量内重复 code 返回验证错误', async () => {
       await seedRegistryClient();
       const res = await RegisterPermissions(
         createRegisterReq([
-          { code: 'user:list', name: '用户列表', type: 'API' },
-          { code: 'user:list', name: '重复', type: 'API' },
+          { code: 'portal:user:list', name: '用户列表', type: 'API' },
+          { code: 'portal:user:list', name: '重复', type: 'API' },
         ]),
       );
       expect(res.status).toBe(400);
@@ -318,9 +311,9 @@ describe('Permission API', () => {
       const res = await RegisterPermissions(
         createRegisterReq([
           {
-            code: 'erp:orders', name: '订单管理', type: 'API', resource: 'erp', action: 'manage', sort: 1,
+            code: 'portal:erp:orders', name: '订单管理', type: 'API', sort: 1,
             children: [
-              { code: 'erp:order:list', name: '订单列表', type: 'API', resource: 'erp', action: 'list', sort: 1 },
+              { code: 'portal:erp:order:list', name: '订单列表', type: 'API', sort: 1 },
             ],
           },
         ]),
@@ -334,8 +327,8 @@ describe('Permission API', () => {
         .select()
         .from(schema.permissions)
         .where(eq(schema.permissions.clientId, REGISTRY_CLIENT_ID));
-      const parent = rows.find((r) => r.code === 'erp:orders');
-      const child = rows.find((r) => r.code === 'erp:order:list');
+      const parent = rows.find((r) => r.code === 'portal:erp:orders');
+      const child = rows.find((r) => r.code === 'portal:erp:order:list');
       expect(parent).toBeDefined();
       expect(child).toBeDefined();
       expect(child!.parentId).toBe(parent!.id);

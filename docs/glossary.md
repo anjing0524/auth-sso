@@ -1,7 +1,7 @@
 # Auth-SSO 领域术语表 (Glossary)
 
 > 本文件记录 Auth-SSO 系统的核心领域概念、有界上下文划分及术语定义。
-> 生成日期: 2026-07-15
+> 最后更新: 2026-07-15 (ADR-006/007/008 生效)
 
 ---
 
@@ -30,8 +30,9 @@
 │                                                     │
 │  ┌──────────────────────────────┐                    │
 │  │ Gateway (边缘安全)            │                    │
-│  │ JWT 离线验签 / OAuth Client  │                    │
+│  │ JWT 离线验签 / 身份注入       │                    │
 │  │ HMAC 信任路径 / 零信任清洗    │                    │
+│  │ ❌ 不管鉴权（ADR-007）        │                    │
 │  └──────────────────────────────┘                    │
 └─────────────────────────────────────────────────────┘
 ```
@@ -51,15 +52,13 @@
 | `password_hash` | bcrypt cost=12 哈希 |
 | `password_history` | 密码历史倒序数组（防重用） |
 | `status` | `ACTIVE` / `DISABLED` / `LOCKED` / `DELETED` |
-| `dept_id` | 所属部门（可空） |
+| `dept_id` | 所属部门（不参与鉴权，创建时必填的归属信息） |
 | `deleted_at` | 软删除时间戳（合规保留，不可恢复） |
 
 **生命周期**：`ACTIVE` → 管理员禁用 → `DISABLED` → 暴力破解锁定 → `LOCKED` → 软删除 → `DELETED`。
 
-**废弃属性**：-（无）
-
 ### Department（部门）
-组织树节点，支持自引用父子关系。
+OBAC 模型中 Role 的命名空间/分组容器，组织树节点。
 
 | 属性 | 说明 |
 |------|------|
@@ -82,55 +81,57 @@
 
 ## Authorization — 授权管理
 
+### OBAC 模型
+Organization-Based Access Control。Department 是 Role 的命名空间容器，角色在部门下创建，用户通过被赋予多个角色获取跨部门权限。**不存在跨部门角色**——跨部门访问通过给用户分配多个角色实现。
+
 ### Role（角色）
-RBAC 权限载体，必须属于一个部门。
+RBAC 权限载体，必须属于一个部门（OBAC 分组容器）。
 
 | 属性 | 说明 |
 |------|------|
 | `id` | UUID 主键 |
 | `name` | 角色名称 |
 | `code` | 角色编码（全局唯一） |
-| `dept_id` | 归属部门（**NOT NULL**，数据范围来源） |
+| `dept_id` | 归属部门（**NOT NULL**，OBAC namespace + 数据范围来源） |
 | `is_system` | 系统预置角色（不可删除/不可修改 code） |
 | `status` | `ACTIVE` / `DISABLED` |
 
-**数据范围语义**：角色归属部门 + 该部门全部子部门 = 拥有该角色的用户可访问的组织范围。
+**数据范围语义**：用户的数据访问范围 = 所有被分配角色的 `dept_id` 子树并集。
 
 **约束**：
-- 不存在"系统角色"可以绕过 RBAC 模型的概念。`is_system` 仅标记不可删除/不可修改。
-- 不存在跨部门角色。跨部门访问通过赋予用户多个角色实现。
-- `ADMIN_ROLE_CODES = ['SUPER_ADMIN', 'ADMIN']` 是系统预置，管理员绕过菜单可见性检查。
-
-**废弃属性**：v3.1 的 `data_scope_type`（已移除）、`role_clients`（已移除）、`role_data_scopes`（已移除）。
+- `ADMIN_ROLE_CODES = ['SUPER_ADMIN', 'ADMIN']` 是系统预置，管理员绕过菜单可见性检查
+- `is_system` 仅标记不可删除/不可修改，非绕过鉴权的概念
 
 ### Permission（权限）
-RBAC 最小授权单元，统一树结构（合并旧 menus 表）。
+RBAC 最小授权单元，统一树结构。权限码采用 `{clientId}:{resource}:{action}` 命名空间格式（ADR-008）。
 
 | 属性 | 说明 |
 |------|------|
 | `id` | UUID 主键 |
-| `code` | 权限码（全局唯一，如 `user:create`、`menu:dashboard`） |
+| `code` | 权限码（全局唯一，如 `portal:user:create`、`portal:menu:users`） |
 | `name` | 显示名称 |
 | `type` | `DIRECTORY` / `PAGE` / `API` |
-| `parent_id` | 父节点（树结构） |
+| `parent_id` | 父节点（全局一棵权限树） |
 | `path` | 前端路由路径（DIRECTORY/PAGE 专属） |
 | `icon` | 菜单图标（DIRECTORY/PAGE 专属） |
 | `visible` | 菜单可见性（DIRECTORY/PAGE 专属） |
-| `resource` | 资源标识（API 专属） |
-| `action` | 操作类型（API 专属） |
-| `client_id` | OAuth Client 关联（API 入选） |
+| `client_id` | OAuth Client FK（冗余列，用于索引查询；code 前缀为首要数据源） |
+| `sort` | smallint 排序 |
 
 **三种 Type 语义**：
 
 | Type | 鉴权参与 | 用途 |
 |------|----------|------|
-| `DIRECTORY` | 否 | 菜单分组折叠节点（如 `dir:用户管理`） |
-| `PAGE` | **是**（通过 `role_permissions` 分配） | 菜单/页面节点（如 `menu:users`） |
-| `API` | **是**（通过 `role_permissions` 分配） | 后端权限码（如 `user:create`） |
+| `DIRECTORY` | 否 | 菜单分组折叠节点 |
+| `PAGE` | **是**（通过 `role_permissions` 分配） | 菜单/页面节点 |
+| `API` | **是**（通过 `role_permissions` 分配） | 后端权限码 |
 
-**菜单可见性算法**：用户拥有某 PAGE 节点下任何子 API 权限 → 该 PAGE 及其 DIR 父节点在菜单中可见。
+**菜单可见性算法**：仅遍历 `type IN ('DIRECTORY', 'PAGE')` 的节点，按 `sort` 排序递归构建树。用户拥有某 PAGE 的 code 权限 → 该 PAGE 可见；无权限但子树有可见子节点 → 保留为不可点击容器。
 
-**废弃属性**：`DATA` type（v3.1 遗留，待清理）。
+**废弃属性**：
+- ~~`resource`~~ — 已删除（ADR-008），code 自包含全部信息
+- ~~`action`~~ — 已删除（ADR-008），code 自包含全部信息
+- ~~`DATA` type~~ — v3.1 遗留，待清理
 
 ### UserRole（用户-角色关联）
 M:N 关联表，复合主键 `(user_id, role_id)`。
@@ -143,7 +144,7 @@ M:N 关联表，复合主键 `(role_id, permission_id)`。
 ## Authentication & OAuth — 认证与 OAuth
 
 ### Client（OAuth 2.1 客户端）
-代表接入 SSO 的应用。
+权限的容器（ADR-008）。代表接入 SSO 的应用，Client 下注册一组 permissions（页面 + API），通过角色分配给用户。
 
 | 属性 | 说明 |
 |------|------|
@@ -154,96 +155,94 @@ M:N 关联表，复合主键 `(role_id, permission_id)`。
 | `access_token_ttl` / `refresh_token_ttl` | token 有效期 |
 | `is_internal` | Portal 自身客户端（不验证 secret） |
 
-**Portal 自身**：`client_id = "portal"`、`is_internal = true`，JWT aud claim = `"portal-client"`。
-
-**废弃属性**：-（无）
+**Portal 自身**：`client_id = "portal"`、`is_internal = true`。
 
 ### AuthorizationCode（授权码）
-OAuth 2.1 authorization_code grant 的一次性授权码。一次性使用（`used` 标记），支持 PKCE S256。
-
-| 字段 | 说明 |
-|------|------|
-| `code` | 唯一授权码 |
-| `code_challenge` / `code_challenge_method` | PKCE 参数 |
-| `expires_at` / `used` | 过期与防重放 |
+OAuth 2.1 authorization_code grant 的一次性授权码。支持 PKCE S256。5min TTL，一次性使用（`used` 标记）。
 
 ### RefreshToken（刷新令牌）
-长期有效的 refresh_token，SHA-256 hash 存储（`token_hash`），支持 rotation + revocation（`revoked` 时间戳标记）。
+用户级别的长期有效 refresh_token（ADR-006 决定去 clientId 作用域）。
+
+| 属性 | 说明 |
+|------|------|
+| `token_hash` | SHA-256 哈希存储（明文不落库） |
+| `user_id` | 所属用户 |
+| `scopes` | 授权范围 |
+| `revoked` | 非空 = 已撤销（时间戳） |
+| `expires_at` | 过期时间（7 天） |
+
+**Rotation**：刷旧 RT → 撤销旧 RT + 签发新 RT + 新 AT（同一 DB 事务）。
+**复用检测**：检测到已撤销 RT 被重复使用 → 级联撤销该用户**所有** RT → 拒绝。
+
+**废弃属性**：
+- ~~`client_id`~~ — 已删除（ADR-006），RT 统一为用户级
 
 ### JWKS（JSON Web Key Set）
 ES256 密钥对存储。
 
 | 字段 | 说明 |
 |------|------|
-| `kid` | 密钥 ID（JWT header 中的 `kid` claim 对应该字段） |
-| `public_key` / `private_key` | PEM 格式密钥对 |
-| `expires_at` | 过期时间 |
+| `kid` | 密钥 ID |
+| `public_key` / `private_key` | JWK 格式密钥对 |
+| `expires_at` | 过期时间（90 天轮换） |
 | `algorithm` | 固定 `ES256` |
 
-**轮换策略**：访问时检查 `expires_at`，过期自动生成新密钥对。Gateway 定时拉取 JWKS 公钥缓存。
-
 ### Session（会话）
-用户登录态。基于无状态 JWT（Access Token）+ Redis jti 黑名单实现撤销。
+用户登录态。基于**最小化无状态 JWT**（ADR-006）+ Redis jti 黑名单实现撤销。
 
 | 概念 | 存储 | 说明 |
 |------|------|------|
-| Access Token (AT) | Cookie `portal_jwt_token` | ES256 JWT，1h 有效期 |
-| Refresh Token (RT) | Cookie `portal_refresh_token` | Opaque token，7d 有效期 |
-| jti 黑名单 | Redis `portal:jti_blocklist:{jti}` | 紧急撤销，AT 过期前强制失效 |
-| 登录会话 | Cookie `login_session` | 临时 token，5min TTL |
+| Access Token (AT) | Cookie `portal_jwt_token` | ES256 JWT，仅含 `sub` + `jti` + 标准 claims，1h 有效期 |
+| Refresh Token (RT) | Cookie `portal_refresh_token` | Opaque token，用户级别，7d 有效期 |
+| jti 黑名单 | Redis `portal:jti_blocklist:{jti}` | 紧急撤销 |
+| 用户权限上下文 | Redis `user:{sub}:perms` | `{roles[], permissions[], deptIds[]}`，子应用自取鉴权 |
 
-**废弃属性**：`access_tokens` 表（预留，当前不使用）。
+**JWT Claims（最小化后）**：
+```typescript
+{
+  sub: string;        // 用户 ID
+  iss: "auth-sso";    // 体系级签发者
+  aud: "auth-sso";    // 体系级受众
+  jti: string;
+  iat: number;
+  exp: number;
+}
+```
 
 ### PKCE (Proof Key for Code Exchange)
-OAuth 2.1 强制安全机制，防止授权码拦截攻击。
-
-Gateway 端使用 CSPRNG 生成 32 字节 `code_verifier`，SHA-256 计算 `code_challenge`。
+OAuth 2.1 强制安全机制。Gateway 端使用 CSPRNG 生成 32 字节 `code_verifier`，SHA-256 计算 `code_challenge`。
 
 ---
 
 ## Audit & Compliance — 审计与合规
 
 ### AuditLog（审计日志）
-Append-only 写操作记录，**无 FK 约束**（user_id/username 冗余，确保用户删除后日志可读）。
+Append-only 写操作记录，**无 FK 约束**（确保用户/实体删除后日志可读）。
 
-| 操作枚举（19 种） | 说明 |
-|------|------|
-| `USER_CREATE/UPDATE/DELETE` | 用户 CRUD |
-| `USER_ROLE_ASSIGN` | 用户-角色分配 |
-| `ROLE_CREATE/UPDATE/DELETE` | 角色 CRUD |
-| `ROLE_PERMISSION_ASSIGN` | 角色-权限分配 |
-| `PERMISSION_CREATE/UPDATE/DELETE` | 权限 CRUD |
-| `DEPARTMENT_CREATE/UPDATE/DELETE` | 部门 CRUD |
-| `CLIENT_CREATE/UPDATE/DELETE` | Client CRUD |
-| `CLIENT_SECRET_REGENERATE` | Client Secret 轮换 |
-| `TOKEN_REVOKE` | Token 撤销 |
+19 种操作类型：`USER_CREATE/UPDATE/DELETE`, `USER_ROLE_ASSIGN`, `ROLE_CREATE/UPDATE/DELETE`, `ROLE_PERMISSION_ASSIGN`, `PERMISSION_CREATE/UPDATE/DELETE`, `DEPARTMENT_CREATE/UPDATE/DELETE`, `CLIENT_CREATE/UPDATE/DELETE`, `CLIENT_SECRET_REGENERATE`, `TOKEN_REVOKE`
 
 ### LoginLog（登录日志）
-Append-only 登录事件记录。
-
-| 事件枚举（5 种） | 说明 |
-|------|------|
-| `LOGIN_SUCCESS` | 登录成功 |
-| `LOGIN_FAILED` | 登录失败（含 fail_reason） |
-| `LOGOUT` | 登出 |
-| `TOKEN_REFRESH` | Token 续签成功 |
-| `TOKEN_REFRESH_FAILED` | Token 续签失败 |
+5 种事件：`LOGIN_SUCCESS`, `LOGIN_FAILED`, `LOGOUT`, `TOKEN_REFRESH`, `TOKEN_REFRESH_FAILED`
 
 ### AccessLog（访问日志）
 读操作访问记录，按月分区，保留 180 天。
 
 ---
 
-## Gateway (Rust) — 边缘安全
+## Gateway (Rust) — 边缘安全（ADR-007 职责收窄）
 
-| 术语 | 说明 |
+| 职责 | 说明 |
 |------|------|
-| **离线验签** | Gateway 本地缓存 JWKS 公钥，不回调 Portal 做 JWT 验证 |
-| **零信任身份头清洗** | 剥离客户端所有 `X-` 前缀头 + `Authorization`，Gateway 权威注入 |
-| **HMAC 信任路径** | `SHA-256(secret, "timestamp:user_id:jti")` → `X-Gateway-Signature` 头 |
-| **Path Class** | 路径分类：Protected / Static / Public / Microservice |
-| **Cookie 重写** | 按 Path Class 剥离/替换/透传 Cookie |
-| **续签去重** | Redis SET NX EX 30s 防并发续签 |
+| **离线验签** | 本地缓存 JWKS 公钥，验 JWT 签名 + exp + jti 黑名单 |
+| **身份注入** | `X-User-Id: {sub}`（纯身份，不做鉴权） |
+| **OAuth Client** | PKCE 生成、/authorize 跳转、/token 透传、Token 续签 |
+| **零信任清洗** | 剥离客户端所有 `X-` 前缀头 + `Authorization`，Gateway 权威注入 |
+
+| ❌ 不做 | 说明 |
+|--------|------|
+| 权限查询 | 不查 Redis 权限数据 |
+| 权限注入 | 不注入 `X-User-Permissions` |
+| 鉴权判断 | 不判断用户是否有某权限 |
 
 ---
 
@@ -251,14 +250,16 @@ Append-only 登录事件记录。
 
 | 术语 | 说明 |
 |------|------|
-| **有界上下文 (BC)** | DDD 术语，系统内一个独立领域模型的边界。当前分为 Identity、Authorization、AuthN/OAuth、Audit、Gateway 5 个 BC |
-| **Server Action** | Next.js 16 的 `"use server"` 函数，用于内部页面的写操作（替代 REST API） |
-| **data.ts** | Next.js 16 Cache Component 读模型，使用 `"use cache"` + `cacheLife()` + `cacheTag()` |
-| **actions.ts** | Server Actions 写模型，包含 `withAuth()` 包装的 `db.transaction()` |
-| **Domain 层** | 纯 TypeScript 函数，零框架依赖，禁止 `import "next/*"` 或 Drizzle |
-| **DomainError** | 领域错误基类，子类化后通过 `mapDomainError()` 统一映射 HTTP |
+| **有界上下文 (BC)** | DDD 术语。当前 5 个 BC：Identity、Authorization、AuthN/OAuth、Audit、Gateway |
+| **OBAC** | Organization-Based Access Control。Department 是 Role 的 namespace，数据范围通过角色部门子树推导 |
+| **权限码命名空间化** | `code = "{clientId}:{resource}:{action}"`（ADR-008） |
+| **JWT 最小化** | AT 仅含 `sub` + `jti` + 标准 claims，鉴权数据在 Redis（ADR-006） |
+| **子应用自取鉴权** | Gateway 只注入身份，子应用从 Redis 自取权限并校验（ADR-007） |
+| **Server Action** | Next.js 16 `"use server"` 函数，内部页面写操作 |
+| **data.ts** | Next.js 16 Cache Component 读模型，`"use cache"` + `cacheLife()` |
+| **Domain 层** | 纯 TypeScript，零框架依赖，禁止 `import "next/*"` |
+| **DomainError** | 领域错误基类，`mapDomainError()` 统一映射 HTTP |
 | **`@auth-sso/contracts`** | 共享包：枚举值、错误码、权限码、OIDC 常量的唯一真相源 |
-| **`@auth-sso/config`** | 共享包：Zod env 校验 + URL 推导 |
 
 ---
 
@@ -266,12 +267,15 @@ Append-only 登录事件记录。
 
 | 概念 | 状态 | 替代方案 |
 |------|------|----------|
-| `DATA` 权限类型 | 废弃，待清理 | ADR-002：数据范围通过角色-部门绑定实现 |
-| `access_tokens` 表 | 预留，不使用 | ADR-004：JWT 无状态 + Redis jti 黑名单 |
-| `menus` 表 (v2) | 已合并至 `permissions` | ADR-001：统一权限树 |
-| `data_scope_type` (v3.1) | 已移除 | ADR-002：角色-部门绑定 |
-| `role_data_scopes` (v3.1) | 已移除 | ADR-002 |
-| `role_clients` (v3.1) | 已移除 | 权限 OIDC 准入通过 `permissions.client_id` |
+| ~~JWT 中 `roles[]`/`permissions[]`/`deptIds[]`~~ | 废弃（ADR-006） | Redis `user:{sub}:perms` |
+| ~~`refresh_tokens.client_id`~~ | 废弃（ADR-006） | RT 统一用户级 |
+| ~~`permissions.resource` / `permissions.action`~~ | 废弃（ADR-008） | code `{clientId}:{resource}:{action}` 自包含 |
+| ~~`DATA` 权限类型~~ | 废弃，待清理 | ADR-002：数据范围通过角色-部门绑定 |
+| ~~`access_tokens` 表~~ | 预留，不使用 | ADR-004：JWT 无状态 + Redis jti 黑名单 |
+| ~~`menus` 表 (v2)~~ | 已合并至 `permissions` | ADR-001：统一权限树 |
+| ~~`data_scope_type` (v3.1)~~ | 已移除 | ADR-002：角色-部门绑定 |
+| ~~`role_data_scopes` (v3.1)~~ | 已移除 | ADR-002 |
+| ~~`role_clients` (v3.1)~~ | 已移除 | 权限 OIDC 准入通过 `permissions.client_id` |
 
 ---
 
@@ -282,6 +286,9 @@ Append-only 登录事件记录。
 - `docs/adr/ADR-003-gateway-as-oauth-client.md`
 - `docs/adr/ADR-004-stateless-jwt-redis-blacklist.md`
 - `docs/adr/ADR-005-three-layer-security-model.md`
+- `docs/adr/ADR-006-jwt-minimization-authz-separation.md`
+- `docs/adr/ADR-007-app-self-authorization.md`
+- `docs/adr/ADR-008-permission-code-namespace.md`
 - `docs/spec/ARCHITECTURE.md`
 - `docs/spec/DATABASE.md`
 - `docs/spec/RBAC_MODEL_REDESIGN.md`

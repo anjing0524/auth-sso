@@ -35,37 +35,22 @@ const CREATED_DEPT_ID = 'aabbccdd-eeff-4000-8000-000000000001';
 const now = new Date();
 
 // ── Auth mock（同时覆盖 withPermission 和 withAuth）─
-// vi.hoisted() 在常量声明之前执行，因此必须使用内联字符串字面量
-const { mockWithPermission } = vi.hoisted(() => {
-  const deptIds = [
-    '00000000-0000-4000-8000-000000000001',
-    '00000000-0000-4000-8000-000000000002',
-    '00000000-0000-4000-8000-000000000003',
-    '00000000-0000-4000-8000-000000000004',
-  ];
+const { mockWithPermission, mockGetUserRoleDeptIds } = vi.hoisted(() => {
   const mockWithPermission = vi.fn(
     async (_options: any, handler: Function) =>
-      handler('00000000-0000-4000-8000-000000000101', {
-        deptIds,
-        permissions: [],
-        roles: [],
-      }),
+      handler('00000000-0000-4000-8000-000000000101'),
   );
-  return { mockWithPermission };
+  const mockGetUserRoleDeptIds = vi.fn().mockResolvedValue([]);
+  return { mockWithPermission, mockGetUserRoleDeptIds };
 });
 
 vi.mock('@/lib/auth', () => ({
   resolveIdentity: vi.fn(async () => ({
-    claims: {
-      deptIds: [
-        '00000000-0000-4000-8000-000000000001',
-        '00000000-0000-4000-8000-000000000002',
-        '00000000-0000-4000-8000-000000000003',
-        '00000000-0000-4000-8000-000000000004',
-      ],
-    },
+    userId: '00000000-0000-4000-8000-000000000101',
+    claims: { sub: '', iss: '', aud: 'auth-sso', jti: '' },
   })),
   logServerDataRead: vi.fn(async () => {}),
+  getUserRoleDeptIds: mockGetUserRoleDeptIds,
   canAccessDept: vi.fn(() => true),
   withPermission: mockWithPermission,
   withAuth:
@@ -74,16 +59,6 @@ vi.mock('@/lib/auth', () => ({
       h(
         {
           userId: '00000000-0000-4000-8000-000000000101',
-          claims: {
-            deptIds: [
-              '00000000-0000-4000-8000-000000000001',
-              '00000000-0000-4000-8000-000000000002',
-              '00000000-0000-4000-8000-000000000003',
-              '00000000-0000-4000-8000-000000000004',
-            ],
-            permissions: [],
-            roles: [],
-          },
         },
         ...a,
       ),
@@ -183,6 +158,9 @@ describe('Department API', () => {
   describe('GET /api/departments', () => {
     it('返回多级嵌套树形结构', async () => {
       await seedTestData(td.db, { departments: seedThreeLevelTree() });
+      mockGetUserRoleDeptIds.mockResolvedValueOnce([
+        ROOT_DEPT_ID, TECH_DEPT_ID, FE_DEPT_ID, MKT_DEPT_ID,
+      ]);
 
       const req = createTestRequest('/api/departments');
       const res = await ListDepartments(req);
@@ -207,7 +185,7 @@ describe('Department API', () => {
 
       vi.mocked(mockWithPermission).mockImplementationOnce(
         async (_o, handler) =>
-          handler(ADMIN_USER_ID, { deptIds: [], permissions: [], roles: [] }),
+          handler(ADMIN_USER_ID, { sub: '', iss: '', aud: 'auth-sso', jti: '' }),
       );
 
       const req = createTestRequest('/api/departments');
@@ -220,15 +198,8 @@ describe('Department API', () => {
 
     it('deptIds 限定时只返回可访问的子树', async () => {
       await seedTestData(td.db, { departments: seedThreeLevelTree() });
+      mockGetUserRoleDeptIds.mockResolvedValueOnce([TECH_DEPT_ID, FE_DEPT_ID]);
 
-      vi.mocked(mockWithPermission).mockImplementationOnce(
-        async (_o, handler) =>
-          handler(ADMIN_USER_ID, {
-            deptIds: [TECH_DEPT_ID],
-            permissions: [],
-            roles: [],
-          }),
-      );
 
       const req = createTestRequest('/api/departments');
       const res = await ListDepartments(req);

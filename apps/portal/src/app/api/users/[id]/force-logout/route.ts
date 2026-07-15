@@ -12,7 +12,7 @@ import { type NextRequest } from 'next/server';
 import { revalidatePath, updateTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
 import { eq } from 'drizzle-orm';
-import { withPermission, canAccessDept } from '@/lib/auth';
+import { withPermission, canAccessDept, getUserRoleDeptIds } from '@/lib/auth';
 import { revokeAllRefreshTokens } from '@/lib/auth/token';
 import { revokeUserAccessByUserId } from '@/lib/session/revoke';
 import { clearUserPermissionCache } from '@/lib/permissions';
@@ -31,7 +31,7 @@ export async function POST(
   request: NextRequest,
   { params }: RouteParams,
 ) {
-  return withPermission({ permissions: ['user:manage'] }, async (_adminUserId, claims) => {
+  return withPermission({ permissions: ['user:manage'] }, async (_adminUserId) => {
     const { id } = await params;
 
     // 按内部 id 查找用户
@@ -46,9 +46,8 @@ export async function POST(
 
     const userId = users[0]!.id;
 
-    // 数据范围守卫：只能强制下线本部门（含子部门）范围内用户（H-DSCOPE-003）
-    // deptIds 来自 JWT claims，无需额外 DB 查询
-    if (!canAccessDept(claims.deptIds, users[0]!.deptId)) {
+    const deptIds = await getUserRoleDeptIds(_adminUserId);
+    if (!canAccessDept(deptIds, users[0]!.deptId)) {
       return restError(COMMON_ERRORS.FORBIDDEN, '无权操作该用户', 403);
     }
 

@@ -26,7 +26,7 @@ import { generateUUID } from '@/lib/crypto';
 import { validate } from '@/lib/validation';
 import { refreshUsersPermissionCache } from '@/lib/permissions';
 import { revokeUsersAccessByUserId } from '@/lib/session/revoke';
-import { canAccessDept } from '@/lib/auth';
+import { canAccessDept, getUserRoleDeptIds } from '@/lib/auth';
 import { ENTITY_ACTIVE } from '@auth-sso/contracts';
 import type { ApiResponse } from '@auth-sso/contracts';
 
@@ -54,7 +54,8 @@ export const createRoleAction = withAuth(
     if (!v.ok) return v.response;
 
     // 数据范围校验：角色归属部门必须在操作者可访问范围内（R-ROLE-DEPT / R7）
-    if (!canAccessDept(ctx.claims.deptIds, v.data.deptId)) {
+    const deptIds = await getUserRoleDeptIds(ctx.userId);
+    if (!canAccessDept(deptIds, v.data.deptId)) {
       throw new ForbiddenError('无权在指定部门下创建角色');
     }
 
@@ -99,8 +100,9 @@ export const updateRoleAction = withAuth(
       const row = await tx.query.roles.findFirst({ where: eq(schema.roles.id, roleId) });
       if (!row) throw new EntityNotFoundError('Role', roleId);
       // 数据范围校验：目标角色归属部门 + 拟变更部门均在操作者可访问范围内
-      if (!canAccessDept(ctx.claims.deptIds, row.deptId)) throw new ForbiddenError('无权操作该部门的角色');
-      if (v.data.deptId && !canAccessDept(ctx.claims.deptIds, v.data.deptId)) {
+      const deptIds = await getUserRoleDeptIds(ctx.userId);
+      if (!canAccessDept(deptIds, row.deptId)) throw new ForbiddenError('无权操作该部门的角色');
+      if (v.data.deptId && !canAccessDept(deptIds, v.data.deptId)) {
         throw new ForbiddenError('无权将角色迁移至该部门');
       }
       const role = toDomainRole(row);
@@ -127,7 +129,8 @@ export const deleteRoleAction = withAuth(
     const row = await db.query.roles.findFirst({ where: eq(schema.roles.id, roleId) });
     if (!row) throw new EntityNotFoundError('Role', roleId);
     // 数据范围校验：目标角色归属部门必须在操作者可访问范围内
-    if (!canAccessDept(ctx.claims.deptIds, row.deptId)) throw new ForbiddenError('无权操作该部门的角色');
+    const deptIds = await getUserRoleDeptIds(ctx.userId);
+    if (!canAccessDept(deptIds, row.deptId)) throw new ForbiddenError('无权操作该部门的角色');
 
     const role = toDomainRole(row);
     guardNotSystemRole(role);

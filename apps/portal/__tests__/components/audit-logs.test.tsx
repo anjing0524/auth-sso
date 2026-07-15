@@ -24,7 +24,7 @@ vi.mock('next/navigation', () => ({
 // Mock auth (audit-logs page 在 layout 层鉴权，但 resolveIdentity 可能间接调用)
 vi.mock('@/lib/auth/verify-jwt', () => ({
   resolveIdentity: vi.fn().mockResolvedValue({
-    claims: { sub: 'user-1', deptIds: [] },
+    claims: { sub: 'user-1', iss: '', aud: 'auth-sso', jti: '' },
   }),
 }));
 

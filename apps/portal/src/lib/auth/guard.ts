@@ -17,7 +17,6 @@ import { mapDomainError } from '@/domain/shared/error-mapping';
 import { writeAuditLog, extractClientIP, extractUserAgent } from '@/lib/audit';
 import { headers } from 'next/headers';
 import { COMMON_ERRORS, type AuditOperation, type ApiResponse } from '@auth-sso/contracts';
-import type { PortalJwtClaims } from '../session';
 
 /**
  * 鉴权通过后注入给业务函数的上下文
@@ -29,8 +28,6 @@ import type { PortalJwtClaims } from '../session';
 export interface AuthContext {
   /** 当前操作者用户 ID（已通过权限校验） */
   userId: string;
-  /** 操作者 JWT claims（含 roles/permissions/deptIds） */
-  claims: PortalJwtClaims;
 }
 
 /**
@@ -63,14 +60,9 @@ export function withAuth<TArgs extends unknown[], TData>(
         return { success: false, error: check.error || COMMON_ERRORS.FORBIDDEN, message: check.error || '权限不足' };
       }
 
-      // checkPermission 保证 authorized 为 true 时 claims 非空（与 withPermission 对齐的运行时兜底）
-      if (!check.claims) {
-        return { success: false, error: COMMON_ERRORS.INTERNAL_ERROR, message: '鉴权上下文缺失' };
-      }
-
       // 第二道：领域错误统一映射（mapDomainError 横切层）
       try {
-        const res = await fn({ userId: check.userId, claims: check.claims }, ...args);
+        const res = await fn({ userId: check.userId }, ...args);
         // 审计拦截：业务成功 + 声明了 audit 操作 → fire-and-forget 写 audit_logs
         if (res.success && options.audit) {
           recordAudit(check.userId, options.audit);

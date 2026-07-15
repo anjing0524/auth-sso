@@ -26,20 +26,18 @@ vi.mock('@/infrastructure/db', () => ({
   get schema() { return td.schema; },
 }));
 
-const { mockWithPermission } = vi.hoisted(() => {
+const { mockWithPermission, mockGetUserRoleDeptIds } = vi.hoisted(() => {
   const mockWithPermission = vi.fn(async (_options: any, handler: Function) => {
-    return handler('00000000-0000-4000-8000-000000000101', {
-      deptIds: ['00000000-0000-4000-8000-000000000001'],
-      permissions: [],
-      roles: [],
-    });
+    return handler('00000000-0000-4000-8000-000000000101');
   });
-  return { mockWithPermission };
+  const mockGetUserRoleDeptIds = vi.fn().mockResolvedValue([]);
+  return { mockWithPermission, mockGetUserRoleDeptIds };
 });
 
 vi.mock('@/lib/auth', () => ({
-  resolveIdentity: vi.fn(async () => ({ claims: { deptIds: ['00000000-0000-4000-8000-000000000001'] } })),
+  resolveIdentity: vi.fn(async () => ({ userId: '00000000-0000-4000-8000-000000000101', claims: { sub: '', iss: '', aud: 'auth-sso', jti: '' } })),
   logServerDataRead: vi.fn(async () => {}),
+  getUserRoleDeptIds: mockGetUserRoleDeptIds,
   canAccessDept: vi.fn(() => true),
   withPermission: mockWithPermission,
 }));
@@ -93,11 +91,9 @@ describe('Role Management API', () => {
   async function seedPermission(overrides: Partial<typeof schema.permissions.$inferInsert> = {}) {
     await td.db.insert(schema.permissions).values({
       id: PERM_ID,
-      code: 'user:list',
+      code: 'portal:user:list',
       name: 'User List',
       type: 'API',
-      resource: 'user',
-      action: 'list',
       status: 'ACTIVE',
       sort: 0,
       ...overrides,
@@ -117,6 +113,7 @@ describe('Role Management API', () => {
   describe('GET /api/roles (list)', () => {
     it('returns role list with pagination', async () => {
       await seedRole();
+      mockGetUserRoleDeptIds.mockResolvedValueOnce([DEPT_ID]);
 
       const response = await ListRoles(createTestRequest('/api/roles'));
       const body = await response.json();
@@ -185,11 +182,9 @@ describe('Role Management API', () => {
       expect(response.status).toBe(200);
       expect(body).toHaveLength(1);
       expect(body[0]).toMatchObject({
-        code: 'user:list',
+        code: 'portal:user:list',
         name: 'User List',
         type: 'API',
-        resource: 'user',
-        action: 'list',
       });
     });
   });

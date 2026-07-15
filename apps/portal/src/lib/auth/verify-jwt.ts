@@ -44,9 +44,6 @@ const EMPTY_CLAIMS: PortalJwtClaims = {
   iss: '',
   aud: '',
   jti: '',
-  roles: [],
-  permissions: [],
-  deptIds: [],
 };
 
 /** HMAC 签名时间戳容忍窗口（秒），可通过 SIGNATURE_TIMESTAMP_WINDOW_SEC 环境变量覆盖，防止时钟偏差导致的误拒绝 */

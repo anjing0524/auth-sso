@@ -71,7 +71,7 @@ vi.mock('next/headers', () => ({
 vi.mock('jose', () => ({
   jwtVerify: vi.fn(async (token: string) => {
     if (token === 'valid-jwt') {
-      return { payload: { sub: 'usr_1', jti: 'jti-123', exp: Math.floor(Date.now() / 1000) + 3600, roles: [], permissions: [], deptIds: [] } };
+      return { payload: { sub: 'usr_1', jti: 'jti-123', iss: '', aud: 'auth-sso', exp: Math.floor(Date.now() / 1000) + 3600 } };
     }
     throw new Error('Invalid signature');
   }),

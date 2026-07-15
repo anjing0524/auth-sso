@@ -50,9 +50,6 @@ fn make_test_token(
         aud: "portal-client".to_string(),
         exp: (now as i64 + exp_offset_sec) as u64,
         jti: jti.to_string(),
-        roles: vec!["ADMIN".to_string()],
-        permissions: vec!["user:list".to_string()],
-        dept_ids: vec!["dept-1".to_string()],
     };
     let mut header = Header::new(Algorithm::ES256);
     header.kid = Some(kid.to_string());
@@ -156,9 +153,6 @@ fn test_decode_jwt_payload() {
         aud: "test".to_string(),
         exp: 9999999999u64,
         jti: "jti-1".to_string(),
-        roles: vec!["ADMIN".to_string()],
-        permissions: vec!["read".to_string()],
-        dept_ids: vec!["dept-1".to_string()],
     };
     let mut header = Header::new(Algorithm::ES256);
     header.kid = Some(kid);
@@ -172,7 +166,6 @@ fn test_decode_jwt_payload() {
     assert_eq!(decoded.sub, "user-1");
     assert_eq!(decoded.exp, 9999999999u64);
     assert_eq!(decoded.jti, "jti-1");
-    assert_eq!(decoded.roles, vec!["ADMIN"]);
 }
 
 #[test]

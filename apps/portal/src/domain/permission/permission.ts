@@ -16,8 +16,6 @@ export function toDomainPermission(row: {
   path: string | null;
   icon: string | null;
   visible: boolean | null;
-  resource: string | null;
-  action: string | null;
   clientId: string | null;
   parentId: string | null;
   status: EntityStatus;
@@ -33,8 +31,6 @@ export function toDomainPermission(row: {
     path: row.path,
     icon: row.icon,
     visible: row.visible,
-    resource: row.resource,
-    action: row.action,
     clientId: row.clientId,
     parentId: row.parentId,
     status: row.status,
@@ -62,8 +58,6 @@ export function createPermission(
     path: ('path' in input ? input.path : undefined) ?? null,
     icon: ('icon' in input ? input.icon : undefined) ?? null,
     visible: ('visible' in input ? input.visible : undefined) ?? null,
-    resource: ('resource' in input ? input.resource : undefined) ?? null,
-    action: ('action' in input ? input.action : undefined) ?? null,
     clientId: ('clientId' in input ? input.clientId : undefined) ?? null,
     parentId: ('parentId' in input ? input.parentId : undefined) ?? null,
     status: ENTITY_ACTIVE,
@@ -77,7 +71,7 @@ export function createPermission(
  */
 export function applyPermissionUpdate(
   perm: Permission,
-  patch: Partial<Pick<Permission, 'name' | 'code' | 'type' | 'description' | 'path' | 'icon' | 'visible' | 'resource' | 'action' | 'clientId' | 'parentId' | 'sort' | 'status'>>,
+  patch: Partial<Pick<Permission, 'name' | 'code' | 'type' | 'description' | 'path' | 'icon' | 'visible' | 'clientId' | 'parentId' | 'sort' | 'status'>>,
 ): Permission {
   return {
     ...perm,
@@ -88,8 +82,6 @@ export function applyPermissionUpdate(
     path: patch.path !== undefined ? patch.path : perm.path,
     icon: patch.icon !== undefined ? patch.icon : perm.icon,
     visible: patch.visible !== undefined ? patch.visible : perm.visible,
-    resource: patch.resource !== undefined ? patch.resource : perm.resource,
-    action: patch.action !== undefined ? patch.action : perm.action,
     clientId: patch.clientId !== undefined ? patch.clientId : perm.clientId,
     parentId: patch.parentId !== undefined ? patch.parentId : perm.parentId,
     sort: patch.sort ?? perm.sort,
@@ -112,8 +104,6 @@ export function permissionToInsertRow(p: Permission) {
     path: p.path,
     icon: p.icon,
     visible: p.visible,
-    resource: p.resource,
-    action: p.action,
     clientId: p.clientId,
     parentId: p.parentId,
     sort: p.sort,
@@ -132,8 +122,6 @@ export function permissionToUpdateRow(p: Permission) {
     path: p.path,
     icon: p.icon,
     visible: p.visible,
-    resource: p.resource,
-    action: p.action,
     clientId: p.clientId,
     parentId: p.parentId,
     sort: p.sort,

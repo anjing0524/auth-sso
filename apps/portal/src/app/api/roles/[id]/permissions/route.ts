@@ -5,7 +5,7 @@
  * PUT /api/roles/[id]/permissions — 更新角色权限
  */
 import { type NextRequest } from 'next/server';
-import { withPermission, canAccessDept, logServerDataRead } from '@/lib/auth';
+import { withPermission, canAccessDept, getUserRoleDeptIds, logServerDataRead } from '@/lib/auth';
 import { getRolePermissions } from '@/app/(dashboard)/roles/data';
 import { COMMON_ERRORS, ROLE_ERRORS } from '@auth-sso/contracts';
 import { db, schema } from '@/infrastructure/db';
@@ -16,7 +16,7 @@ interface RouteParams { params: Promise<{ id: string }>; }
 
 /** GET /api/roles/[id]/permissions — 委托 data.ts，deptIds 由 claims 传入做数据范围校验 */
 export async function GET(request: NextRequest, { params }: RouteParams) {
-  return withPermission({ permissions: ['role:read'] }, async (_userId, claims) => {
+  return withPermission({ permissions: ['role:read'] }, async (_userId) => {
     const { id } = await params;
     const role = await db.query.roles.findFirst({
       where: eq(schema.roles.id, id),
@@ -25,7 +25,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     if (!role) {
       return restError(ROLE_ERRORS.ROLE_NOT_FOUND, '角色不存在', 404);
     }
-    if (!canAccessDept(claims.deptIds, role.deptId)) {
+    const deptIds = await getUserRoleDeptIds(_userId);
+    if (!canAccessDept(deptIds, role.deptId)) {
       return restError(COMMON_ERRORS.FORBIDDEN, '无权查看该角色的权限', 403);
     }
 

@@ -5,14 +5,14 @@
  * - 有 X-User-Id → resolveIdentity 从 Cookie JWT 快速解码 claims（不验签）
  * - 无 X-User-Id → resolveIdentity 自验签兜底（本地开发场景）
  *
- * 权限/角色/数据范围直接从 claims 读取，不再调用 getUserPermissionContext，
- * 与 (dashboard)/layout.tsx 的处理模式完全对齐。
+ * 权限/角色/数据范围从 Redis 获取，与 (dashboard)/layout.tsx 的处理模式完全对齐。
  *
  * @route GET /api/me
  */
 import { type NextRequest, NextResponse } from 'next/server';
 import { resolveIdentity } from '@/lib/auth';
 import { getDynamicMenuTree } from '@/lib/menu-tree';
+import { getUserPermissionContext } from '@/lib/permissions';
 import { mapDomainError } from '@/domain/shared/error-mapping';
 import { COMMON_ERRORS, ADMIN_ROLE_CODES } from '@auth-sso/contracts';
 import { getUser } from '@/app/(dashboard)/users/data';
@@ -32,9 +32,13 @@ export async function GET(_request: NextRequest) {
 
     const { userId, claims } = identity;
 
-    // 从 JWT claims 直取权限/角色（Gateway 已完成验签，零额外 I/O）
-    const isAdmin = claims.roles.some((r) => (ADMIN_ROLE_CODES as readonly string[]).includes(r));
-    const menuItems = await getDynamicMenuTree(claims.permissions, isAdmin);
+    // 从 Redis 获取用户权限上下文
+    const permCtx = await getUserPermissionContext(userId);
+    const roles = permCtx?.roles.map(r => r.code) ?? [];
+    const permissions = permCtx?.permissions ?? [];
+    const deptIds = permCtx?.deptIds ?? [];
+    const isAdmin = roles.some((r) => (ADMIN_ROLE_CODES as readonly string[]).includes(r));
+    const menuItems = await getDynamicMenuTree(permissions, isAdmin);
 
     // 并行获取用户 Profile 信息（仅用于 UI 展示）
     const user = await getUser(userId);
@@ -57,9 +61,9 @@ export async function GET(_request: NextRequest) {
         expiresAt: claims.exp ? claims.exp * 1000 : null,
         issuedAt: claims.iat ? claims.iat * 1000 : null,
       },
-      permissions: claims.permissions,
-      roles: claims.roles,
-      deptIds: claims.deptIds,
+      permissions,
+      roles,
+      deptIds,
       menus: menuItems,
     });
   } catch (err) {

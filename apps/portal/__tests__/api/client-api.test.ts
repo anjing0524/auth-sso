@@ -19,10 +19,11 @@ vi.mock('@/infrastructure/db', () => ({
   get schema() { return td.schema; },
 }));
 vi.mock('@/lib/auth', () => ({
-  resolveIdentity: vi.fn(async () => ({ claims: { deptIds: ['00000000-0000-4000-8000-000000000001'] } })),
+  resolveIdentity: vi.fn(async () => ({ userId: '00000000-0000-4000-8000-000000000101', claims: { sub: '', iss: '', aud: 'auth-sso', jti: '' } })),
   logServerDataRead: vi.fn(async () => {}),
+  getUserRoleDeptIds: vi.fn().mockResolvedValue([]),
   canAccessDept: vi.fn(() => true),
-  withPermission: (_options: any, handler: Function) => handler('00000000-0000-4000-8000-000000000101', { deptIds: ['00000000-0000-4000-8000-000000000001'], permissions: [], roles: [] }),
+  withPermission: (_options: any, handler: Function) => handler('00000000-0000-4000-8000-000000000101'),
 }));
 vi.mock('next/cache', () => ({
   cacheLife: vi.fn(),

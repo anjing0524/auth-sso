@@ -62,7 +62,6 @@ export const accessTokensRelations = relations(accessTokens, ({ one }) => ({
 }));
 
 export const refreshTokensRelations = relations(refreshTokens, ({ one }) => ({
-  client: one(clients, { fields: [refreshTokens.clientId], references: [clients.clientId] }),
   user: one(users, { fields: [refreshTokens.userId], references: [users.id] }),
 }));
 

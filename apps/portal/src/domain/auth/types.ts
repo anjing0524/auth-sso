@@ -22,12 +22,6 @@ export interface PortalJwtClaims extends JWTPayload {
   aud: string | string[];
   /** Token 唯一标识（用于 jti 黑名单撤销） */
   jti: string;
-  /** 用户角色编码列表（Token 签发时总是包含） */
-  roles: string[];
-  /** 用户权限编码列表（Token 签发时总是包含） */
-  permissions: string[];
-  /** 用户所有角色所属部门（含子树展开）的 ID 列表（v3.2: 替代 dataScopeType + deptId） */
-  deptIds: string[];
 }
 
 /** Token 轮换结果 */

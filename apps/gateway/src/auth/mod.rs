@@ -15,22 +15,14 @@ use serde::{Deserialize, Serialize};
 
 // ── JWT Claims ──
 
-/// JWT 载荷完整声明（Portal signAccessToken 签发时总是包含全部字段）。
-/// v3.2: dept_id + data_scope_type 替换为 dept_ids (string[])
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Claims {
     pub sub: String,
     pub iss: String,
     pub aud: String,
-    /// 过期时间（Unix 秒）。JWT NumericDate 是 64 位无符号整数，
-    /// 使用 `u64` 而非平台依赖宽度的 `usize`，与 `Duration::as_secs()` 返回类型一致。
     pub exp: u64,
     pub jti: String,
-    pub roles: Vec<String>,
-    pub permissions: Vec<String>,
-    /// 用户所有角色所属部门（含子树展开）的 ID 列表
-    pub dept_ids: Vec<String>,
 }
 
 // ── Token 生命周期常量（必须与 Portal 签发端对齐）──

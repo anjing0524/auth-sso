@@ -24,11 +24,12 @@ vi.mock('@/infrastructure/db', () => ({
   get schema() { return td.schema; },
 }));
 vi.mock('@/lib/auth', () => ({
-  resolveIdentity: vi.fn(async () => ({ claims: { deptIds: [ROOT_DEPT_ID] } })),
+  resolveIdentity: vi.fn(async () => ({ userId: '00000000-0000-4000-8000-000000000101', claims: { sub: '', iss: '', aud: 'auth-sso', jti: '' } })),
   logServerDataRead: vi.fn(async () => {}),
+  getUserRoleDeptIds: vi.fn().mockResolvedValue([]),
   canAccessDept: vi.fn(() => true),
   withAuth: (_o: any, h: Function) => async (...a: any[]) =>
-    h({ userId: '00000000-0000-4000-8000-000000000101', claims: { deptIds: [ROOT_DEPT_ID], permissions: [], roles: [] } }, ...a),
+    h({ userId: '00000000-0000-4000-8000-000000000101' }, ...a),
 }));
 vi.mock('@/lib/crypto', () => ({
   generateUUID: () => CREATED_DEPT_ID,

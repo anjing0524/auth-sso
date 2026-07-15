@@ -36,6 +36,13 @@
       "when": 1752336000001,
       "tag": "0004_remove_data_permission_type",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1784101569184,
+      "tag": "0005_adr006-permission-namespace",
+      "breakpoints": true
     }
   ]
 }

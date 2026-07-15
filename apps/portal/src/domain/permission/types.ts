@@ -11,16 +11,17 @@ import { entityStatusEnum, permissionTypeEnum } from '@/domain/shared/zod-schema
  * 合并了旧 menus 表的功能。
  * type 鉴别列决定字段生效规则：
  * - DIRECTORY/PAGE: path, icon, visible（菜单相关）
- * - API: resource, action, clientId（接口鉴权）
+ * - API: clientId（接口鉴权），code 格式 {clientId}:{resource}:{action}
  *
  * v2 变更：移除 publicId，新增 path/icon/visible（合并 menus）
+ * v3 变更：移除 resource/action，code 字段已包含完整信息（ADR-008）
  */
 export interface Permission {
   /** 内部 ID（UUID） */
   id: string;
   /** 权限名称 */
   name: string;
-  /** 权限编码 (唯一标识) */
+  /** 权限编码 (唯一标识，API 类型格式 {clientId}:{resource}:{action}) */
   code: string;
   /** 权限类型（鉴别列） */
   type: PermissionType;
@@ -32,10 +33,6 @@ export interface Permission {
   icon: string | null;
   /** 侧边栏可见（DIRECTORY/PAGE） */
   visible: boolean | null;
-  /** 资源标识（API 接口路径） */
-  resource: string | null;
-  /** 操作类型（API HTTP 方法） */
-  action: string | null;
   /** 归属 OAuth Client（仅 API 类型） */
   clientId: string | null;
   /** 父节点 ID（权限树） */
@@ -81,14 +78,12 @@ export const CreatePermissionInputSchema = z.discriminatedUnion('type', [
     parentId: z.string().nullable().optional(),
     sort: z.number().int().default(0),
   }),
-  // API：接口权限
+  // API：接口权限（code 格式 {clientId}:{resource}:{action}）
   z.object({
     type: z.literal('API'),
     code: z.string().min(1, '权限编码不能为空'),
     name: z.string().min(1, '权限名称不能为空'),
     description: z.string().optional(),
-    resource: z.string().min(1, 'API 类型必须指定 resource'),
-    action: z.string().min(1, 'API 类型必须指定 action'),
     clientId: z.string().optional(),
     parentId: z.string().nullable().optional(),
     sort: z.number().int().default(0),
@@ -104,8 +99,6 @@ export const UpdatePermissionInputSchema = z.object({
   path: z.string().nullable().optional(),
   icon: z.string().nullable().optional(),
   visible: z.boolean().optional(),
-  resource: z.string().nullable().optional(),
-  action: z.string().nullable().optional(),
   clientId: z.string().nullable().optional(),
   parentId: z.string().nullable().optional(),
   sort: z.number().int().optional(),

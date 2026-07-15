@@ -50,7 +50,7 @@ export function createTestRole(overrides: Record<string, any> = {}) {
 export function createTestPermission(overrides: Record<string, any> = {}) {
   return {
     id: 'perm-1',
-    code: 'user:list',
+    code: 'portal:user:list',
     name: '用户列表',
     type: 'API',
     resource: 'user',
@@ -99,7 +99,7 @@ export function createTestClient(overrides: Record<string, any> = {}) {
 export function createTestPermissionContext(overrides: Record<string, any> = {}) {
   return {
     roles: [{ id: 'role-1', code: 'ADMIN', name: '管理员' }],
-    permissions: ['user:list', 'user:create', 'user:update', 'user:delete'],
+    permissions: ['portal:user:list', 'portal:user:create', 'portal:user:update', 'portal:user:delete'],
     deptIds: ['dept-1'],
     ...overrides,
   };

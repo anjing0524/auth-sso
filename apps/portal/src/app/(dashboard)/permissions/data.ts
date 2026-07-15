@@ -30,7 +30,7 @@ export async function getPermissions(type?: string) {
   return rows.map(p => ({
     id: p.id, name: p.name, code: p.code,
     type: p.type, path: p.path, icon: p.icon, visible: p.visible,
-    resource: p.resource, action: p.action, clientId: p.clientId,
+    clientId: p.clientId,
     parentId: p.parentId, status: p.status, sort: p.sort,
     createdAt: p.createdAt.toISOString(),
   }));
@@ -51,7 +51,7 @@ export async function getPermissionById(lookupId: string) {
   return {
     id: row.id, name: row.name, code: row.code,
     type: row.type, path: row.path, icon: row.icon, visible: row.visible,
-    resource: row.resource, action: row.action, clientId: row.clientId,
+    clientId: row.clientId,
     parentId: row.parentId, status: row.status, sort: row.sort,
     createdAt: row.createdAt.toISOString(),
   };

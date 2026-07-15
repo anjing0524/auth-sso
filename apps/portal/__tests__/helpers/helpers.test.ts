@@ -112,14 +112,14 @@ describe('Mock 基础设施', () => {
 
     it('createTestRole / Permission / Department', () => {
       expect(createTestRole().code).toBe('TEST_ROLE');
-      expect(createTestPermission().code).toBe('user:list');
+      expect(createTestPermission().code).toBe('portal:user:list');
       expect(createTestDepartment().name).toBe('测试部门');
     });
 
     it('createTestPermissionContext 默认管理员', () => {
       const ctx = createTestPermissionContext();
       expect(ctx.deptIds).toEqual(['dept-1']);
-      expect(ctx.permissions).toContain('user:list');
+      expect(ctx.permissions).toContain('portal:user:list');
     });
   });
 

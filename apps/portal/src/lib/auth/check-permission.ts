@@ -11,10 +11,10 @@ import 'server-only';
  * @module lib/auth/check-permission
  */
 import { cache } from 'react';
-import type { PortalJwtClaims } from '../session';
 
 import { resolveIdentity } from './verify-jwt';
-import { ADMIN_ROLE_CODES } from '@auth-sso/contracts';
+import { getRedis } from '@/infrastructure/redis';
+import { REDIS_KEY_PREFIX, ADMIN_ROLE_CODES } from '@auth-sso/contracts';
 import type { AuditOperation } from '@auth-sso/contracts';
 
 /**
@@ -41,8 +41,6 @@ export interface PermissionCheckOptions {
 export interface PermissionCheckResult {
   authorized: boolean;
   userId?: string;
-  /** 验签通过后的完整 JWT 声明 */
-  claims?: PortalJwtClaims;
   error?: string;
   statusCode?: number;
 }
@@ -58,43 +56,58 @@ export interface PermissionCheckResult {
 export async function checkPermission(
   options: PermissionCheckOptions
 ): Promise<PermissionCheckResult> {
-  // 不 catch——resolveIdentity() 在构建期可能因 headers()/cookies() 抛出
-  // prerendering 中断信号，该信号需要传播到 <Suspense> 或 mapDomainError()
-  // 由上层统一处理。请求期这些平台 API 不会 throw。
   const identity = await resolveIdentity();
   if (!identity) {
     return { authorized: false, error: '未登录', statusCode: 401 };
   }
-  const { userId, claims } = identity;
+  const { userId } = identity;
 
-  const roleCodes = claims.roles;
+  let roles: string[] = [];
+  let permissions: string[] = [];
 
-  // 超级管理员直接绕过所有校验
-  if (roleCodes.some((rc) => (ADMIN_ROLE_CODES as readonly string[]).includes(rc))) {
-    return { authorized: true, userId, claims };
+  try {
+    const redis = getRedis();
+    const cacheKey = `${REDIS_KEY_PREFIX.USER_PERMS}${userId}`;
+    const cached = await redis.get(cacheKey);
+    if (cached) {
+      const ctx = JSON.parse(cached);
+      roles = ctx.roles?.map((r: any) => r.code) ?? [];
+      permissions = ctx.permissions ?? [];
+    } else {
+      const { getUserPermissionContext } = await import('@/lib/permissions');
+      const ctx = await getUserPermissionContext(userId);
+      if (ctx) {
+        roles = ctx.roles.map(r => r.code);
+        permissions = ctx.permissions;
+      }
+    }
+  } catch {
+    return { authorized: false, error: '鉴权服务不可用', statusCode: 503 };
   }
 
-  // 权限编码检查
+  if (roles.some((rc) => (ADMIN_ROLE_CODES as readonly string[]).includes(rc))) {
+    return { authorized: true, userId };
+  }
+
   if (options.permissions && options.permissions.length > 0) {
     const ok = options.requireAll
-      ? options.permissions.every((p) => claims.permissions.includes(p))
-      : options.permissions.some((p) => claims.permissions.includes(p));
+      ? options.permissions.every((p) => permissions.includes(p))
+      : options.permissions.some((p) => permissions.includes(p));
     if (!ok) {
-      return { authorized: false, userId, claims, error: '权限不足', statusCode: 403 };
+      return { authorized: false, userId, error: '权限不足', statusCode: 403 };
     }
   }
 
-  // 角色编码检查
   if (options.roles && options.roles.length > 0) {
     const ok = options.requireAll
-      ? options.roles.every((r) => roleCodes.includes(r))
-      : options.roles.some((r) => roleCodes.includes(r));
+      ? options.roles.every((r) => roles.includes(r))
+      : options.roles.some((r) => roles.includes(r));
     if (!ok) {
-      return { authorized: false, userId, claims, error: '角色权限不足', statusCode: 403 };
+      return { authorized: false, userId, error: '角色权限不足', statusCode: 403 };
     }
   }
 
-  return { authorized: true, userId, claims };
+  return { authorized: true, userId };
 }
 
 /**
@@ -103,15 +116,12 @@ export async function checkPermission(
  * 替代每个 page.tsx 中手写的 checkPermission + if (!authorized) 样板。
  * Layout 和 Page 各自调用时命中缓存，零额外开销。
  *
- * 返回完整鉴权上下文（userId + claims），调用方直接从 claims.deptIds
- * 获取数据范围，无需再查 DB（消除重复的 getUserRoleDeptIds 查询）。
- *
  * @param options 权限检查选项
- * @returns 鉴权通过返回 { userId, claims }，失败返回 null
+ * @returns 鉴权通过返回 { userId }，失败返回 null
  */
 export const requirePermission = cache(
-  async (options: PermissionCheckOptions): Promise<{ userId: string; claims: PortalJwtClaims } | null> => {
+  async (options: PermissionCheckOptions): Promise<{ userId: string } | null> => {
     const auth = await checkPermission(options);
-    return auth.authorized && auth.userId && auth.claims ? { userId: auth.userId, claims: auth.claims } : null;
+    return auth.authorized && auth.userId ? { userId: auth.userId } : null;
   },
 );

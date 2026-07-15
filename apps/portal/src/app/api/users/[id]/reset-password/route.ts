@@ -4,7 +4,7 @@
  * POST /api/users/[id]/reset-password — 管理员重置用户密码，所有活跃会话立即失效
  */
 import { type NextRequest } from 'next/server';
-import { withPermission, canAccessDept } from '@/lib/auth';
+import { withPermission, canAccessDept, getUserRoleDeptIds } from '@/lib/auth';
 import { db, schema } from '@/infrastructure/db';
 import { eq } from 'drizzle-orm';
 import { hashPassword, isPasswordReused, pushPasswordHistory } from '@/domain/auth/password';
@@ -23,7 +23,7 @@ export async function POST(
   request: NextRequest,
   { params }: RouteParams,
 ) {
-  return withPermission({ permissions: ['user:reset_password'] }, async (adminUserId, claims) => {
+  return withPermission({ permissions: ['user:reset_password'] }, async (adminUserId) => {
     const { id } = await params;
     const body = await request.json();
     const newPassword = body.password as string;
@@ -43,7 +43,8 @@ export async function POST(
     if (!target) {
       return restError(USER_ERRORS.USER_NOT_FOUND, '用户不存在', 404);
     }
-    if (!canAccessDept(claims.deptIds, target.deptId)) {
+    const deptIds = await getUserRoleDeptIds(adminUserId);
+    if (!canAccessDept(deptIds, target.deptId)) {
       return restError(COMMON_ERRORS.FORBIDDEN, '无权操作该用户', 403);
     }
 

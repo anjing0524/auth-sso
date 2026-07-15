@@ -3,7 +3,7 @@
  *
  * 鉴权由 layout.tsx 统一处理，本组件零鉴权样板，专注数据获取与渲染。
  */
-import { resolveIdentity } from '@/lib/auth';
+import { resolveIdentity, getUserRoleDeptIds } from '@/lib/auth';
 import { getUsers, getDepartments } from './data';
 import UserFilters from './components/UserFilters';
 import CreateUserDialog from './components/CreateUserDialog';
@@ -27,9 +27,8 @@ export default async function UsersPage({ searchParams }: PageProps) {
   const pageSize = 15;
 
   // 鉴权由 users/layout.tsx 负责（requirePermission(['user:list'])），此处只取身份信息。
-  // deptIds 来自 JWT claims（已含子树展开），无需额外 DB 查询。
   const identity = await resolveIdentity();
-  const deptIds = identity?.claims.deptIds ?? [];
+  const deptIds = identity ? await getUserRoleDeptIds(identity.userId) : [];
   const userId = identity?.userId ?? '';
   const [{ data: users, pagination }, departments] = await Promise.all([
     getUsers(deptIds, userId, { page, pageSize, keyword, status }),

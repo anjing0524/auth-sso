@@ -18,13 +18,6 @@ fn make_test_jwt(sub: &str, jti: &str) -> String {
         aud: "portal-client".to_string(),
         exp: 9999999999u64,
         jti: jti.to_string(),
-        roles: vec!["ADMIN".to_string(), "USER".to_string()],
-        permissions: vec![
-            "user:list".to_string(),
-            "user:read".to_string(),
-            "role:read".to_string(),
-        ],
-        dept_ids: vec!["dept-1".to_string(), "dept-2".to_string()],
     };
     encode(
         &Header::new(Algorithm::HS256),

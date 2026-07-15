@@ -33,6 +33,7 @@ const { mockResolveIdentity } = vi.hoisted(() => ({
 vi.mock('@/lib/auth', () => ({
   resolveIdentity: mockResolveIdentity,
   logServerDataRead: vi.fn(async () => {}),
+  getUserRoleDeptIds: vi.fn().mockResolvedValue([]),
 }));
 
 vi.mock('@/lib/menu-tree', () => ({
@@ -83,12 +84,9 @@ const defaultIdentity = {
     name: '超级管理员',
     jti: 'jti-123',
     iss: 'http://localhost:4101',
-    aud: 'http://localhost:4101',
+    aud: 'auth-sso',
     exp: 9999999999,
     iat: 1000000000,
-    roles: ['SUPER_ADMIN'],
-    permissions: ['user:list', 'user:create', 'user:update', 'user:delete'],
-    deptIds: [DEPT_ID],
   },
 };
 
@@ -101,11 +99,11 @@ beforeEach(async () => {
     users: seedAdminUser(),
     roles: seedSuperAdminRole(),
     permissions: [
-      seedTestPermission({ id: PERM_ID_USER_LIST, code: 'user:list', name: '用户列表', resource: '/api/users', action: 'list' }),
-      seedTestPermission({ id: PERM_ID_USER_CREATE, code: 'user:create', name: '创建用户', resource: '/api/users', action: 'create' }),
-      seedTestPermission({ id: PERM_ID_USER_UPDATE, code: 'user:update', name: '更新用户', resource: '/api/users', action: 'update' }),
-      seedTestPermission({ id: PERM_ID_USER_DELETE, code: 'user:delete', name: '删除用户', resource: '/api/users', action: 'delete' }),
-    ].flat(),
+      ...(seedTestPermission({ id: PERM_ID_USER_LIST, code: 'portal:user:list', name: '用户列表' }) ?? []),
+      ...(seedTestPermission({ id: PERM_ID_USER_CREATE, code: 'portal:user:create', name: '创建用户' }) ?? []),
+      ...(seedTestPermission({ id: PERM_ID_USER_UPDATE, code: 'portal:user:update', name: '更新用户' }) ?? []),
+      ...(seedTestPermission({ id: PERM_ID_USER_DELETE, code: 'portal:user:delete', name: '删除用户' }) ?? []),
+    ],
     userRoles: seedUserRoleBinding(USER_ID, ROLE_ID),
     rolePermissions: [
       { roleId: ROLE_ID, permissionId: PERM_ID_USER_LIST, createdAt: now },
@@ -129,7 +127,7 @@ describe('Me Endpoints', () => {
       expect(body.user.email).toBe('admin@example.com');
       expect(body.tokenInfo).toBeDefined();
       expect(body.permissions).toBeDefined();
-      expect(body.permissions).toContain('user:list');
+      expect(body.permissions).toContain('portal:user:list');
       expect(body.roles).toBeDefined();
       expect(body.roles).toContain('SUPER_ADMIN');
       expect(body.menus).toBeDefined();
@@ -167,8 +165,8 @@ describe('Me Endpoints', () => {
 
       expect(response.status).toBe(200);
       expect(body.userId).toBe(USER_ID);
-      expect(body.permissions).toContain('user:list');
-      expect(body.permissions).toContain('user:create');
+      expect(body.permissions).toContain('portal:user:list');
+      expect(body.permissions).toContain('portal:user:create');
       expect(body.roles).toBeDefined();
       expect(body.roles).toHaveLength(1);
       expect(body.roles[0].code).toBe('SUPER_ADMIN');

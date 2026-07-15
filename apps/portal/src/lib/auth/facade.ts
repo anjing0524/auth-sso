@@ -16,7 +16,6 @@ import { createLogger } from '@/lib/logger';
 
 const log = createLogger('AuthFacade');
 
-import type { PortalJwtClaims } from '../session';
 import {
   checkPermission,
   type PermissionCheckOptions,
@@ -47,7 +46,7 @@ export type { PermissionCheckOptions, PermissionCheckResult };
  */
 export async function withPermission(
   options: PermissionCheckOptions,
-  handler: (userId: string, claims: PortalJwtClaims) => Promise<NextResponse>
+  handler: (userId: string) => Promise<NextResponse>
 ): Promise<NextResponse> {
   try {
     const check = await checkPermission(options);
@@ -59,15 +58,14 @@ export async function withPermission(
       );
     }
 
-    // checkPermission 保证 authorized 为 true 时 userId 与 claims 均非空（运行时断言兜底）
-    if (!check.userId || !check.claims) {
+    if (!check.userId) {
       return NextResponse.json(
         { success: false, error: COMMON_ERRORS.INTERNAL_ERROR, message: '鉴权上下文缺失' },
         { status: 500 },
       );
     }
 
-    return await handler(check.userId, check.claims);
+    return await handler(check.userId);
   } catch (error: unknown) {
     // mapDomainError 统一映射领域错误 → HTTP 语义，内部识别并静默处理 prerendering 中断
     const mapped = mapDomainError(error);

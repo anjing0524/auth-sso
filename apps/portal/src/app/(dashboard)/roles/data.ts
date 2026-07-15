@@ -125,8 +125,6 @@ export async function getRolePermissions(roleId: string) {
       code: rp.permission.code,
       name: rp.permission.name,
       type: rp.permission.type,
-      resource: rp.permission.resource,
-      action: rp.permission.action,
       assignedAt: rp.createdAt,
     }));
 }

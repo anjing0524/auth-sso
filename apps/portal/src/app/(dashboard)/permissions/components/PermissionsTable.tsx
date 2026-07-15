@@ -36,8 +36,6 @@ interface PermissionRow {
   name: string;
   code: string;
   type: string;
-  resource: string | null;
-  action: string | null;
   status: string;
   createdAt: string;
 }
@@ -68,7 +66,7 @@ export default function PermissionsTable({ permissions, activeTab, initialKeywor
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [selected, setSelected] = useState<PermissionRow | null>(null);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ name: '', code: '', type: 'API' as string, resource: '', action: '' });
+  const [form, setForm] = useState({ name: '', code: '', type: 'API' as string });
 
   const handleTabChange = (tab: string) => {
     startTransition(() => {
@@ -87,16 +85,16 @@ export default function PermissionsTable({ permissions, activeTab, initialKeywor
 
   const openEdit = (p: PermissionRow) => {
     setSelected(p);
-    setForm({ name: p.name, code: p.code, type: p.type, resource: p.resource || '', action: p.action || '' });
+    setForm({ name: p.name, code: p.code, type: p.type });
     setIsEditOpen(true);
   };
 
   const handleCreate = async () => {
     if (!form.name || !form.code) { toast.error('请填写完整信息'); return; }
     setSaving(true);
-    const r = await createPermissionAction({ name: form.name, code: form.code, type: form.type as 'DIRECTORY' | 'PAGE' | 'API', resource: form.resource, action: form.action, sort: 0 });
+    const r = await createPermissionAction({ name: form.name, code: form.code, type: form.type as 'DIRECTORY' | 'PAGE' | 'API', sort: 0 });
     setSaving(false);
-    if (r.success) { toast.success(r.message); setIsAddOpen(false); setForm({ name: '', code: '', type: 'API', resource: '', action: '' }); router.refresh(); }
+    if (r.success) { toast.success(r.message); setIsAddOpen(false); setForm({ name: '', code: '', type: 'API' }); router.refresh(); }
     else { toast.error(r.message); }
   };
 
@@ -143,7 +141,7 @@ export default function PermissionsTable({ permissions, activeTab, initialKeywor
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground opacity-50" />
             <Input placeholder="搜索权限名称或编码..." className="pl-9 h-9 rounded-lg text-sm" value={keyword} onChange={e => handleSearch(e.target.value)} />
           </div>
-          <Button size="sm" className="rounded-lg" onClick={() => { setForm({ name: '', code: '', type: 'API', resource: '', action: '' }); setIsAddOpen(true); }}>
+          <Button size="sm" className="rounded-lg" onClick={() => { setForm({ name: '', code: '', type: 'API' }); setIsAddOpen(true); }}>
             <Plus className="mr-1.5 h-3.5 w-3.5" /> 新增
           </Button>
         </div>
@@ -195,7 +193,7 @@ export default function PermissionsTable({ permissions, activeTab, initialKeywor
             icon={ShieldCheck}
             title="暂无权限"
             description="新增权限点以控制功能访问"
-            action={{ label: '新增权限', onClick: () => { setForm({ name: '', code: '', type: 'API', resource: '', action: '' }); setIsAddOpen(true); } }}
+            action={{ label: '新增权限', onClick: () => { setForm({ name: '', code: '', type: 'API' }); setIsAddOpen(true); } }}
           />
         }
         renderRow={renderRow}

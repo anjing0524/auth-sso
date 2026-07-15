@@ -83,7 +83,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         active: !isRevoked && !isExpired,
         scope: rt.scopes,
-        client_id: rt.clientId,
+        client_id: clientId || '',
         sub: rt.userId,
         token_type: 'refresh_token',
       });

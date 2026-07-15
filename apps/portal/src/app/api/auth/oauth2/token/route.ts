@@ -14,13 +14,10 @@ import { eq, and } from 'drizzle-orm';
 import { signAccessToken, signIdToken, issueRefreshToken, rotateRefreshToken, ACCESS_TOKEN_TTL } from '@/lib/auth/token';
 import { validateClientActive, validateClientSecret } from '@/domain/auth/oauth-client';
 import { validateAuthCodeRow, verifyPKCE } from '@/domain/auth/oauth-code';
-import { cacheUserPermissionContext } from '@/lib/permissions';
 import { resolveTokenClaims } from '@/lib/auth/permissions-context';
 import { mapDomainError, mapToOAuthError } from '@/domain/shared/error-mapping';
 import { InvalidGrantError } from '@/domain/shared/errors';
-import { createLogger } from '@/lib/logger';
 
-const log = createLogger('TokenRoute');
 import { z } from 'zod';
 import { OAUTH_PARAMS } from '@auth-sso/contracts';
 import { writeLoginLog, extractClientIP, extractUserAgent } from '@/lib/audit';
@@ -82,36 +79,17 @@ export async function POST(request: NextRequest) {
       // 标记授权码已使用
       await db.update(schema.authorizationCodes).set({ used: true }).where(eq(schema.authorizationCodes.id, authCode.id));
 
-      // 获取用户权限上下文（用于 Access Token claims）— 通过中间层消除循环依赖
+      // 获取用户权限上下文并缓存到 Redis（通过中间层消除循环依赖）
       const resolved = await resolveTokenClaims(authCode.userId);
       if (!resolved) {
         throw new InvalidGrantError('无法获取用户权限上下文');
       }
-      const { permCtx, deptIds } = resolved;
 
-      const audience = client.isInternal ? 'portal-client' : client_id;
-
-      // 签发 Access Token（deptIds 含子树展开）
-      const { token: accessToken } = await signAccessToken(
-        {
-          sub: authCode.userId,
-          roles: permCtx.roles.map((r) => r.code),
-          permissions: permCtx.permissions,
-          deptIds,
-        },
-        audience,
-        { clientId: client_id, scopes: authCode.scope },
-      );
-
-      // 主动写 Redis 权限缓存，TTL 与 Token 对齐，后续请求零 DB 查询
-      try {
-        await cacheUserPermissionContext(authCode.userId, permCtx, ACCESS_TOKEN_TTL);
-      } catch (e) {
-        log.error('写权限缓存失败', { error: (e as Error).message });
-      }
+      // 签发 Access Token
+      const { token: accessToken } = await signAccessToken(authCode.userId);
 
       // 签发 Refresh Token
-      const newRefreshToken = await issueRefreshToken(authCode.userId, client_id, authCode.scope);
+      const newRefreshToken = await issueRefreshToken(authCode.userId, authCode.scope);
 
       // ID Token（scope 包含 openid 时签发 OIDC 标准 ID Token）
       let idToken: string | undefined;
@@ -140,7 +118,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'invalid_request', error_description: '缺少 refresh_token' }, { status: 400 });
       }
 
-      const result = await rotateRefreshToken(refresh_token, client_id);
+      const result = await rotateRefreshToken(refresh_token);
       if (!result) {
         writeLoginLog({ username: client_id, eventType: 'TOKEN_REFRESH_FAILED', ip: extractClientIP(request.headers), userAgent: extractUserAgent(request.headers), failReason: 'Refresh Token 无效或已过期' });
         throw new InvalidGrantError('Refresh Token 无效或已过期');

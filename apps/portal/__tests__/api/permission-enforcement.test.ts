@@ -1,8 +1,8 @@
 /**
- * 权限强制 API 单元测试（JWT Cookie 无状态版，真实 DB）
+ * 权限强制 API 单元测试（JWT Cookie + DB 权限查表）
  *
- * checkPermission / withPermission 读取 JWT claims 中的 permissions/roles 做鉴权决策，
- * 不直查 DB。真实 DB 用于模块解析和 seed 数据一致性（JWT claims 与 DB 角色/权限对齐）。
+ * checkPermission / withPermission 通过 resolveIdentity 解析 JWT → Redis 缓存 / DB 查询
+ * 获取用户角色与权限上下文，执行细粒度鉴权决策。
  *
  * 覆盖范围：
  * - checkPermission 无 JWT Cookie → 401
@@ -77,6 +77,17 @@ const {
   };
 });
 
+// =========================================
+// Mock — permission context（控制 checkPermission 返回的权限/角色）
+// =========================================
+const { mockGetUserPermissionContext } = vi.hoisted(() => ({
+  mockGetUserPermissionContext: vi.fn(),
+}));
+
+vi.mock('@/lib/permissions', () => ({
+  getUserPermissionContext: mockGetUserPermissionContext,
+}));
+
 vi.mock('next/headers', () => ({
   headers: async () => ({
     get: mockHeadersGet,
@@ -120,11 +131,11 @@ function buildFullSeed(): SeedData {
   return {
     departments: seedRootDept(),
     users: [
-      ...seedAdminUser(),
-      ...seedTestUser(),
+      ...(seedAdminUser() ?? []),
+      ...(seedTestUser() ?? []),
     ],
     roles: [
-      ...seedSuperAdminRole(),
+      ...(seedSuperAdminRole() ?? []),
       // ADMIN 角色
       {
         id: ADMIN_ROLE_ID,
@@ -155,11 +166,9 @@ function buildFullSeed(): SeedData {
     permissions: [
       {
         id: PERM_USER_LIST_ID,
-        code: 'user:list',
+        code: 'portal:user:list',
         name: '用户列表',
         type: 'API',
-        resource: '/api/users',
-        action: 'GET',
         clientId: null,
         parentId: null,
         status: 'ACTIVE',
@@ -169,11 +178,9 @@ function buildFullSeed(): SeedData {
       },
       {
         id: PERM_USER_READ_ID,
-        code: 'user:read',
+        code: 'portal:user:read',
         name: '用户详情',
         type: 'API',
-        resource: '/api/users',
-        action: 'GET',
         clientId: null,
         parentId: null,
         status: 'ACTIVE',
@@ -183,11 +190,9 @@ function buildFullSeed(): SeedData {
       },
       {
         id: PERM_AUDIT_READ_ID,
-        code: 'audit:read',
+        code: 'portal:audit:read',
         name: '审计日志读取',
         type: 'API',
-        resource: '/api/audit',
-        action: 'GET',
         clientId: null,
         parentId: null,
         status: 'ACTIVE',
@@ -197,11 +202,9 @@ function buildFullSeed(): SeedData {
       },
       {
         id: PERM_ROLE_ASSIGN_ID,
-        code: 'role:assign',
+        code: 'portal:role:assign',
         name: '角色分配',
         type: 'API',
-        resource: '/api/roles',
-        action: 'POST',
         clientId: null,
         parentId: null,
         status: 'ACTIVE',
@@ -221,7 +224,7 @@ function buildFullSeed(): SeedData {
       { roleId: ADMIN_ROLE_ID, permissionId: PERM_USER_READ_ID, createdAt: now },
       { roleId: ADMIN_ROLE_ID, permissionId: PERM_AUDIT_READ_ID, createdAt: now },
       { roleId: ADMIN_ROLE_ID, permissionId: PERM_ROLE_ASSIGN_ID, createdAt: now },
-      // USER 角色拥有 user:list, user:read, audit:read, role:assign
+      // USER 角色拥有 portal:user:list, portal:user:read, portal:audit:read, portal:role:assign
       { roleId: USER_ROLE_ID, permissionId: PERM_USER_LIST_ID, createdAt: now },
       { roleId: USER_ROLE_ID, permissionId: PERM_USER_READ_ID, createdAt: now },
       { roleId: USER_ROLE_ID, permissionId: PERM_AUDIT_READ_ID, createdAt: now },
@@ -229,8 +232,8 @@ function buildFullSeed(): SeedData {
     ],
     // admin → ADMIN role; testuser → USER role
     userRoles: [
-      ...seedUserRoleBinding(ADMIN_USER_ID, ADMIN_ROLE_ID),
-      ...seedUserRoleBinding(USER_ID, USER_ROLE_ID),
+      ...(seedUserRoleBinding(ADMIN_USER_ID, ADMIN_ROLE_ID) ?? []),
+      ...(seedUserRoleBinding(USER_ID, USER_ROLE_ID) ?? []),
     ],
     jwks: seedJwks(),
   };
@@ -245,6 +248,13 @@ beforeEach(async () => {
   vi.clearAllMocks();
   await td.cleanup();
   await seedTestData(td.db, buildFullSeed());
+
+  // 默认权限上下文：USER 角色 + 全部 4 个权限
+  mockGetUserPermissionContext.mockResolvedValue({
+    roles: [{ id: USER_ROLE_ID, code: 'USER', name: '普通用户' }],
+    permissions: ['portal:user:list', 'portal:user:read', 'portal:audit:read', 'portal:role:assign'],
+    deptIds: [ROOT_DEPT_ID],
+  });
 });
 
 describe('Permission Enforcement', () => {
@@ -256,9 +266,7 @@ describe('Permission Enforcement', () => {
     sub: USER_ID,
     jti: 'jti-123',
     iss: 'http://localhost:4101',
-    roles: ['USER'],
-    permissions: ['user:list', 'user:read', 'audit:read', 'role:assign'],
-    deptIds: [ROOT_DEPT_ID],
+    aud: 'auth-sso',
   };
 
   // ======== checkPermission ========
@@ -268,7 +276,7 @@ describe('Permission Enforcement', () => {
       mockGetJwtFromCookie.mockResolvedValueOnce(null);
 
       const result = await checkPermission({
-        permissions: ['user:list'],
+        permissions: ['portal:user:list'],
       });
 
       expect(result.authorized).toBe(false);
@@ -280,7 +288,7 @@ describe('Permission Enforcement', () => {
       mockVerifyJwt.mockResolvedValueOnce(null);
 
       const result = await checkPermission({
-        permissions: ['user:list'],
+        permissions: ['portal:user:list'],
       });
 
       expect(result.authorized).toBe(false);
@@ -289,10 +297,15 @@ describe('Permission Enforcement', () => {
 
     it('权限上下文中无所需权限时返回 403', async () => {
       mockGetJwtFromCookie.mockResolvedValueOnce('valid-token');
-      mockVerifyJwt.mockResolvedValueOnce({ ...defaultClaims, permissions: ['user:list'] });
+      mockVerifyJwt.mockResolvedValueOnce(defaultClaims);
+      mockGetUserPermissionContext.mockResolvedValueOnce({
+        roles: [{ id: USER_ROLE_ID, code: 'USER', name: '普通用户' }],
+        permissions: ['portal:user:list'],
+        deptIds: [ROOT_DEPT_ID],
+      });
 
       const result = await checkPermission({
-        permissions: ['audit:read'],
+        permissions: ['portal:audit:read'],
       });
 
       expect(result.authorized).toBe(false);
@@ -304,7 +317,7 @@ describe('Permission Enforcement', () => {
       mockVerifyJwt.mockResolvedValueOnce(defaultClaims);
 
       const result = await checkPermission({
-        permissions: ['audit:read'],
+        permissions: ['portal:audit:read'],
       });
 
       expect(result.authorized).toBe(true);
@@ -313,10 +326,10 @@ describe('Permission Enforcement', () => {
 
     it('拥有多个权限中的任一即通过（或逻辑）', async () => {
       mockGetJwtFromCookie.mockResolvedValueOnce('valid-token');
-      mockVerifyJwt.mockResolvedValueOnce({ ...defaultClaims, permissions: ['user:list'] });
+      mockVerifyJwt.mockResolvedValueOnce(defaultClaims);
 
       const result = await checkPermission({
-        permissions: ['audit:read', 'user:list'],
+        permissions: ['portal:audit:read', 'portal:user:list'],
       });
 
       expect(result.authorized).toBe(true);
@@ -325,10 +338,15 @@ describe('Permission Enforcement', () => {
     // @req H-ACL-003
     it('requireAll 模式：缺少任一权限时返回 403', async () => {
       mockGetJwtFromCookie.mockResolvedValueOnce('valid-token');
-      mockVerifyJwt.mockResolvedValueOnce({ ...defaultClaims, permissions: ['user:list'] });
+      mockVerifyJwt.mockResolvedValueOnce(defaultClaims);
+      mockGetUserPermissionContext.mockResolvedValueOnce({
+        roles: [{ id: USER_ROLE_ID, code: 'USER', name: '普通用户' }],
+        permissions: ['portal:user:list'],
+        deptIds: [ROOT_DEPT_ID],
+      });
 
       const result = await checkPermission({
-        permissions: ['user:list', 'audit:read'],
+        permissions: ['portal:user:list', 'portal:audit:read'],
         requireAll: true,
       });
 
@@ -341,7 +359,7 @@ describe('Permission Enforcement', () => {
       mockVerifyJwt.mockResolvedValueOnce(defaultClaims);
 
       const result = await checkPermission({
-        permissions: ['user:list', 'audit:read'],
+        permissions: ['portal:user:list', 'portal:audit:read'],
         requireAll: true,
       });
 
@@ -351,7 +369,12 @@ describe('Permission Enforcement', () => {
 
     it('基于角色的检查：匹配角色时通过', async () => {
       mockGetJwtFromCookie.mockResolvedValueOnce('valid-token');
-      mockVerifyJwt.mockResolvedValueOnce({ ...defaultClaims, roles: ['ADMIN'] });
+      mockVerifyJwt.mockResolvedValueOnce(defaultClaims);
+      mockGetUserPermissionContext.mockResolvedValueOnce({
+        roles: [{ id: ADMIN_ROLE_ID, code: 'ADMIN', name: '管理员' }],
+        permissions: [],
+        deptIds: [ROOT_DEPT_ID],
+      });
 
       const result = await checkPermission({
         roles: ['ADMIN'],
@@ -375,10 +398,15 @@ describe('Permission Enforcement', () => {
 
     it('超级管理员角色（ADMIN）绕过所有权限检查', async () => {
       mockGetJwtFromCookie.mockResolvedValueOnce('valid-token');
-      mockVerifyJwt.mockResolvedValueOnce({ ...defaultClaims, roles: ['ADMIN'] });
+      mockVerifyJwt.mockResolvedValueOnce(defaultClaims);
+      mockGetUserPermissionContext.mockResolvedValueOnce({
+        roles: [{ id: ADMIN_ROLE_ID, code: 'ADMIN', name: '管理员' }],
+        permissions: [],
+        deptIds: [ROOT_DEPT_ID],
+      });
 
       const result = await checkPermission({
-        permissions: ['nonexistent:permission'],
+        permissions: ['portal:nonexistent:permission'],
       });
 
       expect(result.authorized).toBe(true);
@@ -387,10 +415,15 @@ describe('Permission Enforcement', () => {
 
     it('超级管理员角色（SUPER_ADMIN）绕过所有权限检查', async () => {
       mockGetJwtFromCookie.mockResolvedValueOnce('valid-token');
-      mockVerifyJwt.mockResolvedValueOnce({ ...defaultClaims, roles: ['SUPER_ADMIN'] });
+      mockVerifyJwt.mockResolvedValueOnce(defaultClaims);
+      mockGetUserPermissionContext.mockResolvedValueOnce({
+        roles: [{ id: SUPER_ADMIN_ROLE_ID, code: 'SUPER_ADMIN', name: '超级管理员' }],
+        permissions: [],
+        deptIds: [ROOT_DEPT_ID],
+      });
 
       const result = await checkPermission({
-        permissions: ['nonexistent:permission'],
+        permissions: ['portal:nonexistent:permission'],
       });
 
       expect(result.authorized).toBe(true);
@@ -411,21 +444,18 @@ describe('Permission Enforcement', () => {
       mockVerifyJwt.mockResolvedValueOnce(null);
       // verifyAccessToken 返回 null → resolveIdentity 返回 null → 401
       const result = await checkPermission({
-        permissions: ['user:list'],
+        permissions: ['portal:user:list'],
       });
 
       expect(result.authorized).toBe(false);
       expect(result.statusCode).toBe(401);
     });
 
-    it('验签通过的 claims 被传递到 result 中', async () => {
+    it('验签通过返回授权结果', async () => {
       const claims = {
         sub: USER_ID,
         jti: 'jti-123',
         iss: 'http://localhost:4101',
-        roles: ['ADMIN'],
-        permissions: ['user:list'],
-        deptIds: [ROOT_DEPT_ID],
       };
       mockGetJwtFromCookie.mockResolvedValueOnce('valid-token');
       mockVerifyJwt.mockResolvedValueOnce(claims);
@@ -433,7 +463,7 @@ describe('Permission Enforcement', () => {
       const result = await checkPermission({});
 
       expect(result.authorized).toBe(true);
-      expect(result.claims).toEqual(claims);
+      expect(result.userId).toBe(USER_ID);
     });
   });
 
@@ -451,19 +481,24 @@ describe('Permission Enforcement', () => {
 
       const response = await withPermission(
 
-        { permissions: ['user:list'] },
+        { permissions: ['portal:user:list'] },
         handler
       );
 
       expect(response.status).toBe(200);
       const body = await response.json();
       expect(body.data.userId).toBe(USER_ID);
-      expect(handler).toHaveBeenCalledWith(USER_ID, defaultClaims);
+      expect(handler).toHaveBeenCalledWith(USER_ID);
     });
 
     it('权限不通过时返回 403 且不执行 handler', async () => {
       mockGetJwtFromCookie.mockResolvedValueOnce('valid-token');
-      mockVerifyJwt.mockResolvedValueOnce({ ...defaultClaims, permissions: ['user:list'] });
+      mockVerifyJwt.mockResolvedValueOnce(defaultClaims);
+      mockGetUserPermissionContext.mockResolvedValueOnce({
+        roles: [{ id: USER_ROLE_ID, code: 'USER', name: '普通用户' }],
+        permissions: ['portal:user:list'],
+        deptIds: [ROOT_DEPT_ID],
+      });
 
       const handler = vi.fn(async () =>
         NextResponse.json({ success: true })
@@ -471,7 +506,7 @@ describe('Permission Enforcement', () => {
 
       const response = await withPermission(
 
-        { permissions: ['audit:read'] },
+        { permissions: ['portal:audit:read'] },
         handler
       );
 
@@ -483,8 +518,12 @@ describe('Permission Enforcement', () => {
 
     it('角色匹配时执行 handler', async () => {
       mockGetJwtFromCookie.mockResolvedValueOnce('valid-token');
-      const adminClaims = { ...defaultClaims, roles: ['ADMIN'] };
-      mockVerifyJwt.mockResolvedValueOnce(adminClaims);
+      mockVerifyJwt.mockResolvedValueOnce(defaultClaims);
+      mockGetUserPermissionContext.mockResolvedValueOnce({
+        roles: [{ id: ADMIN_ROLE_ID, code: 'ADMIN', name: '管理员' }],
+        permissions: [],
+        deptIds: [ROOT_DEPT_ID],
+      });
 
       const handler = vi.fn(async (userId: string) =>
         NextResponse.json({ success: true, userId })
@@ -497,7 +536,7 @@ describe('Permission Enforcement', () => {
       );
 
       expect(response.status).toBe(200);
-      expect(handler).toHaveBeenCalledWith(USER_ID, adminClaims);
+      expect(handler).toHaveBeenCalledWith(USER_ID);
     });
 
     it('无 Session 时返回 401（forbidden error code）', async () => {
@@ -507,7 +546,7 @@ describe('Permission Enforcement', () => {
 
       const response = await withPermission(
 
-        { permissions: ['user:list'] },
+        { permissions: ['portal:user:list'] },
         handler
       );
 
@@ -527,7 +566,7 @@ describe('Permission Enforcement', () => {
 
       const response = await withPermission(
 
-        { permissions: ['user:list'] },
+        { permissions: ['portal:user:list'] },
         handler
       );
 
@@ -538,8 +577,12 @@ describe('Permission Enforcement', () => {
 
     it('超级管理员角色即使无指定权限也能通过', async () => {
       mockGetJwtFromCookie.mockResolvedValueOnce('valid-token');
-      const superAdminClaims = { ...defaultClaims, roles: ['SUPER_ADMIN'] };
-      mockVerifyJwt.mockResolvedValueOnce(superAdminClaims);
+      mockVerifyJwt.mockResolvedValueOnce(defaultClaims);
+      mockGetUserPermissionContext.mockResolvedValueOnce({
+        roles: [{ id: ADMIN_ROLE_ID, code: 'ADMIN', name: '管理员' }],
+        permissions: [],
+        deptIds: [ROOT_DEPT_ID],
+      });
 
       const handler = vi.fn(async (userId: string) =>
         NextResponse.json({ success: true, userId })
@@ -547,12 +590,12 @@ describe('Permission Enforcement', () => {
 
       const response = await withPermission(
 
-        { permissions: ['anything'] },
+        { permissions: ['portal:anything'] },
         handler
       );
 
       expect(response.status).toBe(200);
-      expect(handler).toHaveBeenCalledWith(USER_ID, superAdminClaims);
+      expect(handler).toHaveBeenCalledWith(USER_ID);
     });
   });
 });

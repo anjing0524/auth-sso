@@ -8,7 +8,7 @@ import { type NextRequest } from 'next/server';
 import { revalidatePath, updateTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
 import { eq, inArray, and } from 'drizzle-orm';
-import { withPermission, canAccessDept, logServerDataRead } from '@/lib/auth';
+import { withPermission, canAccessDept, getUserRoleDeptIds, logServerDataRead } from '@/lib/auth';
 import { writeAuditLog, extractClientIP, extractUserAgent } from '@/lib/audit';
 import crypto from 'crypto';
 import { refreshUserPermissionCache } from '@/lib/permissions';
@@ -30,7 +30,7 @@ async function validateDeptConstraint(userDeptId: string | null, roleIds: string
 
 /** GET /api/users/[id]/roles — 委托 data.ts */
 export async function GET(request: NextRequest, { params }: RouteParams) {
-  return withPermission({ permissions: ['user:read'] }, async (_adminUserId, claims) => {
+  return withPermission({ permissions: ['user:read'] }, async (_adminUserId) => {
     const { id } = await params;
     const target = await db.query.users.findFirst({
       where: eq(schema.users.id, id),
@@ -39,7 +39,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     if (!target) {
       return restError(USER_ERRORS.USER_NOT_FOUND, '用户不存在', 404);
     }
-    if (!canAccessDept(claims.deptIds, target.deptId)) {
+    const deptIds = await getUserRoleDeptIds(_adminUserId);
+    if (!canAccessDept(deptIds, target.deptId)) {
       return restError(COMMON_ERRORS.FORBIDDEN, '无权查看该用户', 403);
     }
     const roles = await getUserRoles(id);
@@ -52,7 +53,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
  * POST /api/users/[id]/roles — 为用户分配角色（v3.2: R-USER-ROLE 部门约束）
  */
 export async function POST(request: NextRequest, { params }: RouteParams) {
-  return withPermission({ permissions: ['user:assign_role'] }, async (adminUserId, claims) => {
+  return withPermission({ permissions: ['user:assign_role'] }, async (adminUserId) => {
     const { id } = await params;
     const body = await request.json();
     const { roleIds } = body;
@@ -65,9 +66,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     const userId = users[0]!.id;
 
-    // 数据范围守卫：管理员只能操作其部门范围内用户的角色绑定（H-ACL-002）
-    // deptIds 来自 JWT claims，无需额外 DB 查询
-    if (!canAccessDept(claims.deptIds, users[0]!.deptId)) {
+    const deptIds = await getUserRoleDeptIds(adminUserId);
+    if (!canAccessDept(deptIds, users[0]!.deptId)) {
       return restError(COMMON_ERRORS.FORBIDDEN, '无权操作该用户', 403);
     }
 
@@ -79,8 +79,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       });
       if (!userRow) return { error: USER_ERRORS.USER_NOT_FOUND, message: '用户不存在', status: 404 } as const;
 
-      // 事务内二次数据范围守卫：防止用户部门在极短时间差内被篡改至管理员管辖范围之外（TOCTOU 并发越权）
-      if (!canAccessDept(claims.deptIds, userRow.deptId)) {
+      if (!canAccessDept(deptIds, userRow.deptId)) {
         return { error: COMMON_ERRORS.FORBIDDEN, message: '无权操作该用户', status: 403 } as const;
       }
 
@@ -128,7 +127,7 @@ export async function DELETE(
   request: NextRequest,
   { params }: RouteParams
 ) {
-  return withPermission({ permissions: ['user:assign_role'] }, async (adminUserId, claims) => {
+  return withPermission({ permissions: ['user:assign_role'] }, async (adminUserId) => {
     const { id } = await params;
     const body = await request.json();
     const { roleId } = body;
@@ -148,9 +147,8 @@ export async function DELETE(
 
     const userId = users[0]!.id;
 
-    // 数据范围守卫：管理员只能操作其部门范围内用户的角色绑定（H-ACL-002）
-    // deptIds 来自 JWT claims，无需额外 DB 查询
-    if (!canAccessDept(claims.deptIds, users[0]!.deptId)) {
+    const deptIds = await getUserRoleDeptIds(adminUserId);
+    if (!canAccessDept(deptIds, users[0]!.deptId)) {
       return restError(COMMON_ERRORS.FORBIDDEN, '无权操作该用户', 403);
     }
 

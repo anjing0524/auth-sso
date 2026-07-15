@@ -94,11 +94,13 @@ export const accessTokens = pgTable('access_tokens', {
 
 /**
  * Refresh Token (用于 rotation + revocation)
+ *
+ * 仅绑定用户，不绑定 Client（user-level refresh token）。
+ * 多客户端共享同一 refresh token，降低存储开销，简化续签逻辑。
  */
 export const refreshTokens = pgTable('refresh_tokens', {
   id: uuid('id').primaryKey().defaultRandom(),
   tokenHash: varchar('token_hash', { length: 64 }).notNull().unique(),
-  clientId: varchar('client_id', { length: 50 }).notNull().references(() => clients.clientId, { onDelete: 'cascade' }),
   userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   scopes: varchar('scopes', { length: 200 }).notNull(),
   revoked: timestamp('revoked', { withTimezone: true }),
@@ -107,7 +109,6 @@ export const refreshTokens = pgTable('refresh_tokens', {
   createdAt: createdAtColumn(),
   updatedAt: updatedAtColumn(),
 }, (t) => [
-  index('idx_refresh_tokens_client').on(t.clientId),
   index('idx_refresh_tokens_user').on(t.userId),
   index('idx_refresh_tokens_expires').on(t.expiresAt),
 ]);

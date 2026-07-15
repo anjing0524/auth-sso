@@ -26,30 +26,15 @@ if (!DATABASE_URL) {
 const client = postgres(DATABASE_URL, { prepare: false });
 const db = drizzle(client, { schema });
 
-/**
- * 从权限 code 解析 resource 和 action
- * 约定格式：{resource}:{action}，如 user:list → resource='user', action='list'
- */
-function parseResourceAction(code: string): { resource: string; action: string } {
-  const idx = code.indexOf(':');
-  if (idx === -1) {
-    return { resource: code, action: 'manage' };
-  }
-  return {
-    resource: code.slice(0, idx),
-    action: code.slice(idx + 1),
-  };
-}
-
 /** Portal 菜单种子（PAGE 类型，驱动侧边栏动态渲染） */
 const PORTAL_MENUS = [
-  { code: 'menu:dashboard', name: '首页', path: '/dashboard', icon: 'LayoutDashboard', sort: 0 },
-  { code: 'menu:users', name: '用户管理', path: '/users', icon: 'Users', sort: 1 },
-  { code: 'menu:roles', name: '角色管理', path: '/roles', icon: 'Shield', sort: 2 },
-  { code: 'menu:permissions', name: '权限管理', path: '/permissions', icon: 'Key', sort: 3 },
-  { code: 'menu:departments', name: '部门管理', path: '/departments', icon: 'Building2', sort: 4 },
-  { code: 'menu:clients', name: '客户端管理', path: '/clients', icon: 'Server', sort: 5 },
-  { code: 'menu:audit-logs', name: '审计日志', path: '/audit-logs', icon: 'FileText', sort: 6 },
+  { code: 'portal:menu:dashboard', name: '首页', path: '/dashboard', icon: 'LayoutDashboard', sort: 0 },
+  { code: 'portal:menu:users', name: '用户管理', path: '/users', icon: 'Users', sort: 1 },
+  { code: 'portal:menu:roles', name: '角色管理', path: '/roles', icon: 'Shield', sort: 2 },
+  { code: 'portal:menu:permissions', name: '权限管理', path: '/permissions', icon: 'Key', sort: 3 },
+  { code: 'portal:menu:departments', name: '部门管理', path: '/departments', icon: 'Building2', sort: 4 },
+  { code: 'portal:menu:clients', name: '客户端管理', path: '/clients', icon: 'Server', sort: 5 },
+  { code: 'portal:menu:audit-logs', name: '审计日志', path: '/audit-logs', icon: 'FileText', sort: 6 },
 ];
 
 async function seedApiPermissions(): Promise<string[]> {
@@ -68,15 +53,12 @@ async function seedApiPermissions(): Promise<string[]> {
       continue;
     }
 
-    const { resource, action } = parseResourceAction(code);
     const id = crypto.randomUUID();
     await db.insert(schema.permissions).values({
       id,
       name: PERMISSION_LABELS[code] ?? code,
       code,
       type: 'API',
-      resource,
-      action,
       sort: i,
       status: 'ACTIVE',
       createdAt: new Date(),

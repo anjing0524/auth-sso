@@ -11,7 +11,7 @@ import { type NextRequest, NextResponse } from 'next/server';
 import { getRefreshTokenFromCookie, getJwtFromCookie, decodeJwtPayload } from '@/lib/session';
 import { rotateRefreshToken } from '@/lib/auth/token';
 import { mapDomainError } from '@/domain/shared/error-mapping';
-import { AUTH_ERRORS, COOKIE_NAMES, TOKEN_TTL, PORTAL_CLIENT_ID } from '@auth-sso/contracts';
+import { AUTH_ERRORS, COOKIE_NAMES, TOKEN_TTL } from '@auth-sso/contracts';
 import { writeLoginLog, extractClientIP, extractUserAgent } from '@/lib/audit';
 import { isCookieSecure } from '@/lib/env';
 
@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
     const ip = extractClientIP(request.headers);
     const ua = extractUserAgent(request.headers);
 
-    const result = await rotateRefreshToken(refreshToken, PORTAL_CLIENT_ID);
+    const result = await rotateRefreshToken(refreshToken);
     if (!result) {
       writeLoginLog({ userId: atPayload?.sub, username, eventType: 'TOKEN_REFRESH_FAILED', ip, userAgent: ua, failReason: 'Refresh Token 无效或已过期' });
       const response = NextResponse.json(

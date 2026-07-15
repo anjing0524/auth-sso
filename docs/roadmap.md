@@ -85,6 +85,87 @@
 | A5-5 | 🔲 | Cookie Secure 增加独立配置（非仅依赖 NODE_ENV） | `lib/session/cookies.ts` | 9.3 |
 | A5-6 | 🔲 | 文档版本号统一 | `docs/spec/API.md` 等 | 2.4 |
 
+---
+
+## ADR-006/007/008 领域重构（2026-07-15 /grilling 产出）
+
+> 详细计划：`docs/plans/2026-07-15-adr-006-007-008-implementation.md`
+
+### Phase 1: Schema & Migrations
+
+| # | 状态 | 任务 | 文件 |
+|---|:--:|------|------|
+| D1-1 | 🔲 | permissions: 删除 `resource`/`action` 列，扩展 `code`→varchar(150)，更新 CHECK | `db/schema/rbac.ts` |
+| D1-2 | 🔲 | refresh_tokens: 删除 `client_id` 列及索引 | `db/schema/auth.ts` |
+| D1-3 | 🔲 | 生成并执行迁移 SQL | Drizzle migration |
+
+### Phase 2: Contracts
+
+| # | 状态 | 任务 | 文件 |
+|---|:--:|------|------|
+| D2-1 | 🔲 | 所有权限常量加 `portal:` 前缀 | `packages/contracts/src/permissions.ts` |
+| D2-2 | 🔲 | `PortalJwtClaims` 最小化（移除 roles/permissions/deptIds） | `domain/auth/types.ts` |
+| D2-3 | 🔲 | OIDC 常量 `iss`/`aud` 改为 `"auth-sso"` | `packages/contracts/src/oidc.ts` |
+
+### Phase 3: JWT Token 签发/验证
+
+| # | 状态 | 任务 | 文件 |
+|---|:--:|------|------|
+| D3-1 | 🔲 | `signAccessToken` 最小化 claims | `lib/auth/token.ts` |
+| D3-2 | 🔲 | `verifyAccessToken` aud/iss 改为 `"auth-sso"` | `lib/auth/token.ts` |
+| D3-3 | 🔲 | `resolveTokenClaims` 不再返回鉴权数据供 JWT 嵌入 | `lib/auth/permissions-context.ts` |
+
+### Phase 4: 权限上下文 Redis 化
+
+| # | 状态 | 任务 | 文件 |
+|---|:--:|------|------|
+| D4-1 | 🔲 | RBAC 变更时主动更新 Redis `user:{sub}:perms` | `lib/permissions.ts` |
+| D4-2 | 🔲 | Token 续签时预填充 Redis 权限缓存 | `lib/permissions.ts` |
+
+### Phase 5: Portal 自身鉴权改造
+
+| # | 状态 | 任务 | 文件 |
+|---|:--:|------|------|
+| D5-1 | 🔲 | `checkPermission` 改为读 Redis | `lib/auth/check-permission.ts` |
+| D5-2 | 🔲 | `withPermission` 移除 claims 注入 | `lib/auth/facade.ts` |
+| D5-3 | 🔲 | `withAuth` AuthContext 简化为 `{ userId }` | `lib/auth/guard.ts` |
+| D5-4 | 🔲 | 所有 Controller/Page 去除 `claims.deptIds` 直接引用，改为 Redis 获取 | `app/(dashboard)/**`, `app/api/**` |
+
+### Phase 6: Refresh Token 去 ClientId
+
+| # | 状态 | 任务 | 文件 |
+|---|:--:|------|------|
+| D6-1 | 🔲 | `issueRefreshToken` 移除 clientId 参数 | `lib/auth/token.ts` |
+| D6-2 | 🔲 | `rotateRefreshToken` 移除 clientId 参数 | `lib/auth/token.ts` |
+| D6-3 | 🔲 | 调用方更新（/token /refresh 端点） | `app/api/auth/oauth2/token/route.ts`, `app/api/auth/refresh/route.ts` |
+
+### Phase 7: Gateway 改造 (Rust)
+
+| # | 状态 | 任务 | 文件 |
+|---|:--:|------|------|
+| D7-1 | 🔲 | Claims 结构体移除 roles/permissions/dept_ids | `gateway/src/auth/mod.rs` |
+| D7-2 | 🔲 | 验签 aud/iss 改为 `"auth-sso"` | `gateway/src/auth/verify.rs` |
+| D7-3 | 🔲 | 移除 X-User-Roles/Permissions/DeptIds 注入 | `gateway/src/gateway.rs` |
+
+### Phase 8: Seed 数据
+
+| # | 状态 | 任务 | 文件 |
+|---|:--:|------|------|
+| D8-1 | 🔲 | 权限 code 加 `portal:` 前缀；删除 resource/action 赋值 | `scripts/seed-rbac.ts` |
+| D8-2 | 🔲 | Portal 菜单 code 加 `portal:` 前缀 | `scripts/seed-rbac.ts` |
+
+### Phase 9: 测试更新
+
+| # | 状态 | 任务 | 文件 |
+|---|:--:|------|------|
+| D9-1 | 🔲 | 鉴权测试适配（mock Redis 替代 JWT claims） | `__tests__/lib/auth/*` |
+| D9-2 | 🔲 | API 测试适配（aud/iss claims 移除） | `__tests__/api/*` |
+| D9-3 | 🔲 | Gateway 测试适配（Claims 结构体） | `apps/gateway/tests/` |
+
+### 变更记录
+
+- 2026-07-15: ADR-006/007/008 产出，领域重构计划制定（来源：/grilling 深度访谈）
+
 ### 状态图例
 
 - 🔲 待处理 ｜ ⏳ 进行中 ｜ ✅ 已完成 ｜ ⚠️ 有阻塞

@@ -18,8 +18,6 @@ interface IncomingPermission {
   code: string;
   name: string;
   type: 'DIRECTORY' | 'PAGE' | 'API';
-  resource?: string;
-  action?: string;
   /** PAGE/DIRECTORY 专属：前端路由路径 */
   path?: string;
   /** PAGE/DIRECTORY 专属：菜单图标 */
@@ -47,8 +45,6 @@ function flattenPermissions(
       code: node.code,
       name: node.name,
       type: node.type,
-      resource: node.resource,
-      action: node.action,
       path: node.path,
       icon: node.icon,
       visible: node.visible,
@@ -150,19 +146,18 @@ export async function POST(request: NextRequest) {
         if (!existing) {
           await tx.insert(schema.permissions).values({
             id: codeToIdMap.get(p.code)!, name: p.name, code: p.code, type: p.type,
-            resource: p.resource ?? null, action: p.action ?? null, path: p.path ?? null,
+            path: p.path ?? null,
             icon: p.icon ?? null, visible: p.visible ?? null, clientId: auth.clientId,
             parentId, sort: p.sort, status: 'ACTIVE', createdAt: new Date(),
           });
           syncedCounts.inserted++;
         } else {
           const changed = existing.parentId !== parentId || existing.name !== p.name || existing.type !== p.type ||
-            existing.resource !== (p.resource ?? null) || existing.action !== (p.action ?? null) ||
             existing.path !== (p.path ?? null) || existing.icon !== (p.icon ?? null) ||
             existing.visible !== (p.visible ?? null) || existing.sort !== p.sort || existing.status !== 'ACTIVE';
           if (changed) {
             await tx.update(schema.permissions).set({
-              name: p.name, type: p.type, resource: p.resource ?? null, action: p.action ?? null,
+              name: p.name, type: p.type,
               path: p.path ?? null, icon: p.icon ?? null, visible: p.visible ?? null,
               sort: p.sort, status: 'ACTIVE', ...(existing.parentId !== parentId ? { parentId } : {}),
             }).where(eq(schema.permissions.id, existing.id));

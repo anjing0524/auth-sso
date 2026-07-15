@@ -14,31 +14,28 @@ import 'server-only';
  *
  * @module lib/auth/permissions-context
  */
-import { getUserPermissionContext } from '@/lib/permissions';
+import { getUserPermissionContext, cacheUserPermissionContext } from '@/lib/permissions';
 import { getUserRoleDeptIds } from '@/lib/auth/data-scope';
-import type { PortalJwtClaims } from '@/domain/auth/types';
-import type { UserPermissionContext } from '@auth-sso/contracts';
 
 /**
- * 解析令牌签发所需的权限上下文（角色权限码 + 部门 ID 子树展开）
+ * 解析令牌签发所需的权限上下文并缓存到 Redis
  *
- * 并行查询权限缓存与数据范围，供 signAccessToken 使用。
+ * 并行查询权限缓存与数据范围，验证用户存在并将权限上下文写入 Redis 缓存，
+ * 供子应用鉴权时零 DB 查询。
  *
  * @param userId 用户 ID
- * @returns 角色权限码列表 + 部门 ID 列表（含子树展开）；用户不存在或无权限时返回 null
+ * @returns true 表示用户存在且权限上下文已缓存；false 表示用户不存在或无权限
  */
 export async function resolveTokenClaims(
   userId: string,
-): Promise<{ permCtx: UserPermissionContext; deptIds: string[] } | null> {
+): Promise<boolean> {
   const [permCtx, deptIds] = await Promise.all([
     getUserPermissionContext(userId),
     getUserRoleDeptIds(userId),
   ]);
-  if (!permCtx) return null;
-  return { permCtx, deptIds };
+  if (!permCtx) return false;
+  try {
+    await cacheUserPermissionContext(userId, permCtx);
+  } catch { /* silent */ }
+  return true;
 }
-
-/**
- * 类型便捷导出：令牌 claims 所需的权限子集
- */
-export type TokenClaims = Pick<PortalJwtClaims, 'sub' | 'roles' | 'permissions' | 'deptIds'>;
