@@ -10,6 +10,7 @@
  */
 import { Buffer } from 'node:buffer';
 import { describe, it, expect } from 'vitest';
+import { PKCEVerificationError } from '@/domain/shared/errors';
 import { validateLoginCredentials } from '@/domain/auth/login';
 import { hashPassword, verifyPassword } from '@/domain/auth/password';
 import { validateAuthCodeRow, verifyPKCE } from '@/domain/auth/oauth-code';
@@ -119,7 +120,7 @@ describe('verifyPKCE', () => {
     const encoder = new TextEncoder();
     const digest = await crypto.subtle.digest('SHA-256', encoder.encode('other-verifier'));
     const challenge = Buffer.from(digest).toString('base64url');
-    await expect(verifyPKCE(verifier, challenge)).rejects.toThrow();
+    await expect(verifyPKCE(verifier, challenge)).rejects.toThrow(PKCEVerificationError);
   });
 });
 

@@ -403,8 +403,9 @@ describe('User Management API & Actions', () => {
         status: 'DELETED', deptId: null, avatarUrl: null, createdAt: new Date(),
       };
       setQueryResult([deletedUser]);
-      const res = await unlockUserAction('u-1');
+      const res: any = await unlockUserAction('u-1');
       expect(res.success).toBe(false);
+      expect(res.error).toBeDefined();
     });
   });
 
@@ -430,6 +431,7 @@ describe('User Management API & Actions', () => {
     it('rejects password without uppercase', async () => {
       const res: any = await resetPasswordAction('u-1', 'alllowercase1');
       expect(res.success).toBe(false);
+      expect(res.error).toBeDefined();
     });
   });
 });

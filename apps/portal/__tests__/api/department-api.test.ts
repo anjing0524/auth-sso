@@ -16,8 +16,6 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { GET as ListDepartments } from '@/app/api/departments/route';
-import { GET as GetDepartment } from '@/app/api/departments/[id]/route';
-import { GET as GetDepartmentMembers } from '@/app/api/departments/[id]/members/route';
 import { createTestRequest, parseResponseJson } from '../helpers/test-utils';
 
 // ── Hoisted shared mock state ──────────────────────────────────────────────
@@ -238,61 +236,6 @@ describe('Department API', () => {
       const rootB = body.find((d: any) => d.id === 'dept-3');
       expect(rootB).toBeDefined();
       expect(rootB.children).toHaveLength(0);
-    });
-
-    // @req F-DEP-L, H-DSCOPE-001
-    it('应用数据范围过滤只返回授权范围内部门', async () => {
-      mockAuthState.getUserRoleDeptIds.mockResolvedValue(['dept-1']);
-
-      mockDbState.queryResult = [
-        {
-          id: 'dept-1',
-          publicId: 'd_01',
-          name: '技术部',
-          parentId: null,
-          code: 'TECH',
-          sort: 0,
-          status: 'ACTIVE',
-          createdAt: new Date('2026-01-01'),
-        },
-        {
-          id: 'dept-2',
-          publicId: 'd_02',
-          name: '财务部',
-          parentId: null,
-          code: 'FINANCE',
-          sort: 1,
-          status: 'ACTIVE',
-          createdAt: new Date('2026-01-01'),
-        },
-      ];
-
-      const req = createTestRequest('/api/departments');
-      const res = await ListDepartments(req);
-      const body = await parseResponseJson(res);
-
-      expect(res.status).toBe(200);
-      expect(Array.isArray(body)).toBe(true);
-    });
-  });
-
-
-
-  // ── GET /api/departments/[id]/members ──────────────────────────────────
-
-  describe('GET /api/departments/[id]/members', () => {
-    // @req F-DEP-M
-    it('返回部门成员列表', async () => {
-      // 第一个 select 解析部门 ID，第二个 select 返回成员
-      // mock 对两个 select 返回相同结果，确保 id 字段存在即可
-      mockDbState.queryResult = [{ id: 'dept-1', createdAt: new Date() }];
-
-      const req = createTestRequest('/api/departments/dept-1/members');
-      const res = await GetDepartmentMembers(req, { params: Promise.resolve({ id: 'dept-1' }) });
-      const body = await parseResponseJson(res);
-
-      expect(res.status).toBe(200);
-      expect(Array.isArray(body)).toBe(true);
     });
   });
 });

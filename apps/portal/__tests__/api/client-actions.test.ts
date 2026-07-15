@@ -5,6 +5,7 @@
  * @vitest-environment node
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { EntityNotFoundError } from '@/domain/shared/errors';
 
 const holder = vi.hoisted<{ mockDb: ReturnType<typeof import('@/../__tests__/helpers/mock-db').createMockDb> | null }>(() => ({ mockDb: null }));
 
@@ -50,6 +51,8 @@ describe('Client Server Actions', () => {
     it('缺少 name → VALIDATION_ERROR', async () => {
       const result: any = await createClientAction({ name: '', redirectUris: ['https://a.example.com/cb'], scopes: 'openid' } as any);
       expect(result.success).toBe(false);
+      expect(result.error).toBeDefined();
+      expect(result.message).toBeDefined();
     });
   });
 
@@ -66,7 +69,7 @@ describe('Client Server Actions', () => {
 
     it('不存在 → throw EntityNotFoundError', async () => {
       mockDb.reset();
-      await expect(updateClientAction('nonexistent', { name: 'X' } as any)).rejects.toThrow();
+      await expect(updateClientAction('nonexistent', { name: 'X' } as any)).rejects.toThrow(EntityNotFoundError);
     });
   });
 
@@ -104,7 +107,7 @@ describe('Client Server Actions', () => {
 
     it('不存在 → throw EntityNotFoundError', async () => {
       mockDb.reset();
-      await expect(revokeClientTokensAction('bad', [], false)).rejects.toThrow();
+      await expect(revokeClientTokensAction('bad', [], false)).rejects.toThrow(EntityNotFoundError);
     });
   });
 });

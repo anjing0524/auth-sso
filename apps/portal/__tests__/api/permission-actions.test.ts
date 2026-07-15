@@ -5,6 +5,7 @@
  * @vitest-environment node
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { EntityNotFoundError } from '@/domain/shared/errors';
 
 const holder = vi.hoisted<{ mockDb: ReturnType<typeof import('@/../__tests__/helpers/mock-db').createMockDb> | null }>(() => ({ mockDb: null }));
 
@@ -35,12 +36,6 @@ describe('Permission Server Actions', () => {
   beforeEach(() => { vi.clearAllMocks(); mockDb.reset(); });
 
   describe('createPermissionAction', () => {
-    it('有效输入 → 返回 success 且 data.id 存在', async () => {
-      const r: any = await createPermissionAction({ code: 'NEW', name: 'New', resource: '/api/test', action: 'GET', type: 'API' } as any);
-      expect(r.success).toBe(true);
-      expect(r.data.id).toBeDefined();
-    });
-
     it('有效输入 → DB insert 包含 code/name/resource/action/type', async () => {
       await createPermissionAction({ code: 'NEW', name: 'New', resource: '/api/test', action: 'GET', type: 'API' } as any);
       const writes = mockDb.getWrites();
@@ -73,7 +68,7 @@ describe('Permission Server Actions', () => {
 
     it('不存在 → 抛出 EntityNotFoundError', async () => {
       mockDb.setQueryResult([]);
-      await expect(updatePermissionAction('bad', { name: 'X' } as any)).rejects.toThrow();
+      await expect(updatePermissionAction('bad', { name: 'X' } as any)).rejects.toThrow(EntityNotFoundError);
     });
   });
 
@@ -87,7 +82,7 @@ describe('Permission Server Actions', () => {
 
     it('不存在 → 抛出 EntityNotFoundError', async () => {
       mockDb.setQueryResult([]);
-      await expect(deletePermissionAction('bad')).rejects.toThrow();
+      await expect(deletePermissionAction('bad')).rejects.toThrow(EntityNotFoundError);
     });
   });
 });

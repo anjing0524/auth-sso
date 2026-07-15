@@ -7,6 +7,7 @@
  * @vitest-environment node
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { EntityNotFoundError } from '@/domain/shared/errors';
 
 // ── 共享 DB mock（由 helpers/mock-db 工厂提供） ──────────────────────────
 const holder = vi.hoisted<{ mockDb: ReturnType<typeof import('@/../__tests__/helpers/mock-db').createMockDb> | null }>(() => ({ mockDb: null }));
@@ -100,7 +101,7 @@ describe('User Server Actions', () => {
 
       await expect(
         updateUserAction('nonexistent', { name: 'X' } as any)
-      ).rejects.toThrow();
+      ).rejects.toThrow(EntityNotFoundError);
     });
   });
 
@@ -138,7 +139,7 @@ describe('User Server Actions', () => {
 
       await expect(
         toggleUserStatusAction('nonexistent')
-      ).rejects.toThrow();
+      ).rejects.toThrow(EntityNotFoundError);
     });
   });
 
@@ -159,7 +160,7 @@ describe('User Server Actions', () => {
 
       await expect(
         deleteUserAction('nonexistent')
-      ).rejects.toThrow();
+      ).rejects.toThrow(EntityNotFoundError);
     });
   });
 });

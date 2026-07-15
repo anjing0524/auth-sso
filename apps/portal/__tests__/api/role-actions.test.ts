@@ -6,6 +6,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { COMMON_ERRORS } from '@auth-sso/contracts';
+import { EntityNotFoundError, BusinessRuleViolationError } from '@/domain/shared/errors';
 
 const holder = vi.hoisted<{ mockDb: ReturnType<typeof import('@/../__tests__/helpers/mock-db').createMockDb> | null }>(() => ({ mockDb: null }));
 
@@ -60,12 +61,12 @@ describe('Role Server Actions', () => {
 
     it('部门不存在 → throw EntityNotFoundError', async () => {
       mockDb.setFindFirstNestedResult(null);
-      await expect(createRoleAction({ name: 'X', code: 'XX', sort: 1, deptId })).rejects.toThrow();
+      await expect(createRoleAction({ name: 'X', code: 'XX', sort: 1, deptId })).rejects.toThrow(EntityNotFoundError);
     });
 
     it('部门已禁用 → throw BusinessRuleViolationError', async () => {
       mockDb.setFindFirstNestedResult({ id: deptId, status: 'DISABLED' });
-      await expect(createRoleAction({ name: 'X', code: 'XX', sort: 1, deptId })).rejects.toThrow();
+      await expect(createRoleAction({ name: 'X', code: 'XX', sort: 1, deptId })).rejects.toThrow(BusinessRuleViolationError);
     });
   });
 
@@ -81,7 +82,7 @@ describe('Role Server Actions', () => {
     });
 
     it('不存在 → throw EntityNotFoundError', async () => {
-      await expect(updateRoleAction('bad', { name: 'X' } as any)).rejects.toThrow();
+      await expect(updateRoleAction('bad', { name: 'X' } as any)).rejects.toThrow(EntityNotFoundError);
     });
   });
 
@@ -95,7 +96,7 @@ describe('Role Server Actions', () => {
 
     it('不存在 → throw EntityNotFoundError', async () => {
       mockDb.setQueryResult([]);
-      await expect(deleteRoleAction('bad')).rejects.toThrow();
+      await expect(deleteRoleAction('bad')).rejects.toThrow(EntityNotFoundError);
     });
   });
 });

@@ -5,6 +5,7 @@
  * @vitest-environment node
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { EntityNotFoundError } from '@/domain/shared/errors';
 
 const holder = vi.hoisted<{ mockDb: ReturnType<typeof import('@/../__tests__/helpers/mock-db').createMockDb> | null }>(() => ({ mockDb: null }));
 
@@ -67,14 +68,14 @@ describe('Department Server Actions', () => {
 
     it('不存在 → throw EntityNotFoundError', async () => {
       mockDb.setQueryResult([]);
-      await expect(updateDepartmentAction('bad', { name: 'X' } as any)).rejects.toThrow();
+      await expect(updateDepartmentAction('bad', { name: 'X' } as any)).rejects.toThrow(EntityNotFoundError);
     });
   });
 
   describe('deleteDepartmentAction', () => {
     it('不存在 → throw EntityNotFoundError', async () => {
       mockDb.setQueryResult([]);
-      await expect(deleteDepartmentAction('bad')).rejects.toThrow();
+      await expect(deleteDepartmentAction('bad')).rejects.toThrow(EntityNotFoundError);
     });
   });
 });
