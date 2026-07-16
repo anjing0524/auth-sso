@@ -24,6 +24,8 @@ export async function GET() {
     end_session_endpoint: `${baseURL}/api/auth/logout`,
     // 自定义字段：Cookie-based Token 静默续签端点（非标准 OIDC，供 Gateway 服务端续签使用）
     refresh_endpoint: `${baseURL}/api/auth/refresh`,
+    // 自定义字段：Gateway 拦截 OAuth callback 的路径（非标准 OIDC，供 Gateway 动态发现）
+    oauth_callback_path: '/api/auth/callback',
     scopes_supported: ['openid', 'profile', 'email', 'offline_access'],
     response_types_supported: ['code'],
     grant_types_supported: ['authorization_code', 'refresh_token'],

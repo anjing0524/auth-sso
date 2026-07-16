@@ -88,15 +88,15 @@ impl JwtVerifier {
         let header = decode_header(token)?;
         let kid = header.kid.ok_or(VerifyError::MissingKid)?;
 
-        // 2. 从 JWKS 缓存查找公钥
-        let decoding_key = self
-            .jwks_cache
-            .key(&kid)
+        // 2. 单次 wait-free 快照：一次原子 load 同时获得 keys + validation，零拷贝
+        let meta = self.jwks_cache.snapshot();
+        let key = meta
+            .keys
+            .get(&kid)
             .ok_or_else(|| VerifyError::UnknownKid(kid.clone()))?;
 
         // 3. 验签 + issuer/algorithm 校验
-        let validation = self.jwks_cache.validation();
-        let token_data = decode::<Claims>(token, &decoding_key, &validation).map_err(|e| {
+        let token_data = decode::<Claims>(token, key, &meta.validation).map_err(|e| {
             warn!("JWT 验签/校验失败: {:?}", e);
             VerifyError::InvalidToken(e)
         })?;

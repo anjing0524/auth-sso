@@ -1,22 +1,4 @@
 import 'server-only';
-import { timingSafeEqual } from 'crypto';
-
-/**
- * 身份验证子模块 (Identity Verification)
- *
- * 双层策略：
- * 1. Gateway 信任路径 — 读取 X-User-Id header（须通过 HMAC 签名校验）
- *    Gateway 已完成 ES256 离线验签 + jti 黑名单校验 + userId→jti 追踪，
- *    并对 (timestamp + userId + jti) 计算 HMAC-SHA256 签名注入请求头。
- *    Portal 验证此签名以确认请求确实来自受信任的 Gateway。
- *    GATEWAY_SHARED_SECRET 为必须配置项，未配置时严格拒绝 Gateway 路径。
- * 2. JWT Cookie 验签 — 兜底路径，适用于本地开发无 Gateway 场景
- *    （直接由 Portal 自验签，不依赖 Gateway 信任链）。
- *
- * 使用 React.cache() 实现同请求去重，嵌套 SC layout/page 调用命中缓存。
- *
- * @module lib/auth/verify-jwt
- */
 import { cache } from 'react';
 import { headers } from 'next/headers';
 import { getJwtFromCookie } from '../session';
@@ -26,6 +8,7 @@ import { getGatewaySharedSecret } from '@/lib/env';
 import { GATEWAY_HEADERS, PORTAL_AUD } from '@auth-sso/contracts';
 import { createLogger } from '@/lib/logger';
 import type { ResolvedIdentity, PortalJwtClaims } from '@/domain/auth/types';
+import { verifySignature, SIGNATURE_TIMESTAMP_WINDOW_SEC } from './gateway-hmac';
 
 const log = createLogger('Auth');
 
@@ -46,38 +29,9 @@ const EMPTY_CLAIMS: PortalJwtClaims = {
   jti: '',
 };
 
-/** HMAC 签名时间戳容忍窗口（秒），可通过 SIGNATURE_TIMESTAMP_WINDOW_SEC 环境变量覆盖，防止时钟偏差导致的误拒绝 */
-const SIGNATURE_TIMESTAMP_WINDOW_SEC = (() => {
-  const raw = process.env['SIGNATURE_TIMESTAMP_WINDOW_SEC'];
-  const parsed = raw ? parseInt(raw, 10) : 60;
-  if (isNaN(parsed) || parsed < 1 || parsed > 300) {
-    log.error('SIGNATURE_TIMESTAMP_WINDOW_SEC 配置无效，使用默认值 60', { raw, parsed });
-    return 60;
-  }
-  return parsed;
-})();
-
 /** HMAC-SHA256 签名头名称 */
 const HEADER_SIGNATURE = 'x-gateway-signature';
 const HEADER_TIMESTAMP = 'x-gateway-timestamp';
-
-/**
- * 使用 Web Crypto API 计算 HMAC-SHA256 并以 hex 字符串返回。
- */
-async function computeHmacHex(secret: string, payload: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const key = await crypto.subtle.importKey(
-    'raw',
-    encoder.encode(secret),
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign'],
-  );
-  const sig = await crypto.subtle.sign('HMAC', key, encoder.encode(payload));
-  return Array.from(new Uint8Array(sig))
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
-}
 
 /**
  * 校验当前请求是否来自受信任的 Gateway。
@@ -85,7 +39,6 @@ async function computeHmacHex(secret: string, payload: string): Promise<string> 
  * 策略（严格模式）：
  * - 必须配置 GATEWAY_SHARED_SECRET，否则直接拒绝 Gateway 信任路径
  * - 配置后校验 HMAC-SHA256 签名 + 时间戳窗口（密码学保证）
- * - HMAC 比对使用 timingSafeEqual 防止时序侧信道攻击
  *
  * 不 catch headers() 的异常——构建期 prerendering 中断信号需要自然传播到 <Suspense>，
  * 请求期 headers() 是平台标准 API，不会 throw。
@@ -109,29 +62,8 @@ async function isRequestFromTrustedGateway(userId: string, jti: string): Promise
     return false;
   }
 
-  // 时间戳窗口校验（防重放）
-  const ts = parseInt(timestamp, 10);
-  if (isNaN(ts)) {
-    log.warn('X-Gateway-Timestamp 格式无效', { timestamp });
-    return false;
-  }
-  const nowSec = Math.floor(Date.now() / 1000);
-  if (Math.abs(nowSec - ts) > SIGNATURE_TIMESTAMP_WINDOW_SEC) {
-    log.warn('X-Gateway-Timestamp 超出窗口', { now: nowSec, ts, window: SIGNATURE_TIMESTAMP_WINDOW_SEC });
-    return false;
-  }
-
-  // HMAC 签名比对：使用常时比较（constant-time comparison）防止时序侧信道攻击
   const payload = `${timestamp}:${userId}:${jti}`;
-  const expected = await computeHmacHex(secret, payload);
-  const sigBuf = Buffer.from(signature, 'hex');
-  const expBuf = Buffer.from(expected, 'hex');
-  if (sigBuf.length !== expBuf.length || !timingSafeEqual(sigBuf, expBuf)) {
-    log.warn('HMAC 签名不匹配，请求可能被篡改');
-    return false;
-  }
-
-  return true;
+  return verifySignature(secret, payload, timestamp, signature, SIGNATURE_TIMESTAMP_WINDOW_SEC);
 }
 
 /**

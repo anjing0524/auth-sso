@@ -1,10 +1,11 @@
 //! JWKS 缓存读取基准测试 (JWKS Cache Read Benchmarks)
 //!
-//! 测试 `JwksCache` 在热路径上的 RwLock 读取性能：
+//! 测试 `JwksCache` 在热路径上的读取性能：
 //! - 根据 kid 查找公钥（每条验签请求执行一次）
 //! - 获取 validation 配置引用（每条验签请求执行一次，Arc 共享）
 //!
-//! 这些操作使用 `RwLock::read()`，在高并发场景下是主要的同步点。
+//! 缓存内部为 `ArcSwap<OidcMetadata>` 快照：读取为 wait-free 原子 load，
+//! 无锁、无中毒可能，高并发下无同步点。
 
 use std::hint::black_box;
 use std::sync::Arc;

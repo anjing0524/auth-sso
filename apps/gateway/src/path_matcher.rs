@@ -2,7 +2,8 @@ use std::collections::HashSet;
 
 /// 路径分类结果 — 一次分类，贯穿 request_filter 与 upstream_request_filter
 ///
-/// 判定优先级自上而下：Static → Public → Microservice → Protected。
+/// 判定优先级自上而下：Static → 显式白名单(Public) → Microservice
+/// → 非 `/api/` 扩展名(Public) → Protected。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum PathClass {
     /// 受保护业务路径：需验签，上行仅剥离 RT Cookie（默认，最安全假设）
@@ -10,7 +11,7 @@ pub enum PathClass {
     Protected,
     /// 静态资源目录（`/_next/`、`/static/`）：跳过限流与验签
     Static,
-    /// 白名单公开路径（含静态资源扩展名）：跳过验签，但可能仍走限流
+    /// 白名单公开路径（含非 `/api/` 的静态资源扩展名）：跳过验签，但可能仍走限流
     Public,
     /// 内网微服务路由（`/api/v1/...`，排除 `/api/v1/auth/`）：需验签，上行剥离全部 Cookie
     Microservice,
@@ -33,6 +34,46 @@ pub struct PathMatcher {
 /// 规则：以 /api/v1/ 开头且排除 /api/v1/auth/ 登录校验类接口
 fn is_microservice_route(path: &str) -> bool {
     path.starts_with("/api/v1/") && !path.starts_with("/api/v1/auth/")
+}
+
+/// 长度分桶 + 栈上小写化的静态扩展名判定（≤5 字节，无堆分配）
+fn is_static_ext(ext: &str) -> bool {
+    if ext.len() > 5 || ext.is_empty() {
+        return false;
+    }
+    let mut buf = [0u8; 5];
+    let lower = &mut buf[..ext.len()];
+    lower.copy_from_slice(ext.as_bytes());
+    lower.make_ascii_lowercase();
+    matches!(
+        &*lower,
+        b"js"
+            | b"css"
+            | b"ico"
+            | b"png"
+            | b"jpg"
+            | b"gif"
+            | b"svg"
+            | b"ttf"
+            | b"txt"
+            | b"json"
+            | b"jpeg"
+            | b"woff"
+    ) || &*lower == b"woff2"
+}
+
+/// 非 /api/ 路径的静态资产扩展名放行（零信任收窄：API 命名空间禁止扩展名旁路）
+fn is_asset_path(path: &str) -> bool {
+    if path.starts_with("/api/") {
+        return false;
+    }
+    match path.rfind('.') {
+        Some(idx) => {
+            let ext = &path[idx + 1..];
+            !ext.contains('/') && is_static_ext(ext)
+        }
+        None => false,
+    }
 }
 
 impl PathMatcher {
@@ -59,50 +100,29 @@ impl PathMatcher {
         }
     }
 
-    /// 校验当前请求路径是否放行（无需 JWT 验签）
-    ///
-    /// 检查顺序：静态资源 → 文件扩展名 → 精确匹配 → 前缀匹配
-    fn is_public(&self, path: &str) -> bool {
-        // 1. 放行静态资源目录
-        if path.starts_with("/_next/") || path.starts_with("/static/") {
-            return true;
-        }
-
-        // 2. 常见静态资产文件的扩展名放行
-        const STATIC_EXTENSIONS: &[&str] = &[
-            "js", "css", "ico", "png", "jpg", "jpeg", "gif", "svg", "woff", "woff2", "ttf", "json",
-            "txt",
-        ];
-        if let Some(idx) = path.rfind('.') {
-            let ext = &path[idx + 1..];
-            if !ext.contains('/')
-                && STATIC_EXTENSIONS
-                    .iter()
-                    .any(|&static_ext| ext.eq_ignore_ascii_case(static_ext))
-            {
-                return true;
-            }
-        }
-
-        // 3. O(1) 快速精确匹配
+    /// 显式白名单命中（exact O(1) + prefix 降序扫描）
+    fn is_whitelisted(&self, path: &str) -> bool {
         if self.public_exact_paths.contains(path) {
             return true;
         }
-
-        // 4. 动态前缀放行路径匹配
-        for prefix in &self.public_prefix_paths {
-            if path.starts_with(prefix) {
-                return true;
-            }
-        }
-
-        false
+        self.public_prefix_paths.iter().any(|p| path.starts_with(p))
     }
 
     /// 对请求路径做一次完整分类，供请求生命周期各阶段复用。
     ///
-    /// 取代原先在 request_filter / upstream_request_filter 中
-    /// 反复 `starts_with` 与重复 `is_public` 的散点判断。
+    /// 分类优先级（自上而下互斥，首个命中即返回）：
+    /// 1. `Static` —— 静态资源目录 `/static/`、`/_next/`（跳过限流与验签）
+    /// 2. `Public`（显式白名单）—— 配置的 exact/prefix 白名单路径（跳过验签）
+    /// 3. `Microservice` —— 内网微服务路由 `/api/v1/...`（需验签，上行剥离全部 Cookie）
+    /// 4. `Public`（扩展名资产）—— 非 `/api/` 路径的静态资源扩展名（跳过验签）
+    /// 5. `Protected` —— 其余路径均视为受保护业务路径（默认，最安全假设）
+    ///
+    /// # 优先级说明
+    /// - 显式白名单**先于** `is_microservice_route()`：
+    ///   如果 `/api/v1/auth/*` 被加入白名单，它以 Public 通过，不会进入 Microservice 分支。
+    /// - 扩展名放行**后于** `Microservice` 且对 `/api/` 命名空间整体禁用：
+    ///   `/api/v1/reports/2024.json` 归类 Microservice（需验签），
+    ///   `/api/reports.json` 归类 Protected（需验签），杜绝扩展名鉴权旁路。
     ///
     /// # Examples
     ///
@@ -113,19 +133,18 @@ impl PathMatcher {
     /// assert_eq!(m.classify("/dashboard"), PathClass::Protected);
     /// ```
     pub fn classify(&self, path: &str) -> PathClass {
-        // 1. 静态资源目录优先：需跳过限流
         if path.starts_with("/_next/") || path.starts_with("/static/") {
             return PathClass::Static;
         }
-        // 2. 白名单 / 静态扩展名：跳过验签
-        if self.is_public(path) {
+        if self.is_whitelisted(path) {
             return PathClass::Public;
         }
-        // 3. 内网微服务路由：上行需剥离全部 Cookie
         if is_microservice_route(path) {
             return PathClass::Microservice;
         }
-        // 4. 其余为受保护业务路径
+        if is_asset_path(path) {
+            return PathClass::Public;
+        }
         PathClass::Protected
     }
 }
@@ -147,30 +166,42 @@ mod tests {
         ];
         let matcher = PathMatcher::new(public_paths);
 
-        // 静态目录资产放行
-        assert!(matcher.is_public("/_next/static/chunks/main.js"));
-        assert!(matcher.is_public("/static/images/logo.png"));
+        // 静态目录资产
+        assert_eq!(
+            matcher.classify("/_next/static/chunks/main.js"),
+            PathClass::Static
+        );
+        assert_eq!(
+            matcher.classify("/static/images/logo.png"),
+            PathClass::Static
+        );
 
-        // 静态资源文件扩展名放行
-        assert!(matcher.is_public("/favicon.ico"));
-        assert!(matcher.is_public("/logo.PNG")); // 测试大小写不敏感
-        assert!(matcher.is_public("/robots.txt"));
-        assert!(matcher.is_public("/site.webmanifest.json"));
+        // 静态资源文件扩展名放行（非 /api/ 路径）
+        assert_eq!(matcher.classify("/favicon.ico"), PathClass::Public);
+        assert_eq!(matcher.classify("/logo.PNG"), PathClass::Public); // 大小写不敏感
+        assert_eq!(matcher.classify("/robots.txt"), PathClass::Public);
+        assert_eq!(
+            matcher.classify("/site.webmanifest.json"),
+            PathClass::Public
+        );
 
         // 公开页面和认证接口放行 (前缀或精确相等)
-        assert!(matcher.is_public("/login"));
-        assert!(matcher.is_public("/register"));
-        assert!(matcher.is_public("/error"));
-        assert!(matcher.is_public("/"));
-        assert!(matcher.is_public("/api/auth/session"));
-        assert!(matcher.is_public("/oauth2/authorize"));
-        assert!(matcher.is_public("/.well-known/jwks.json"));
+        assert_eq!(matcher.classify("/login"), PathClass::Public);
+        assert_eq!(matcher.classify("/register"), PathClass::Public);
+        assert_eq!(matcher.classify("/error"), PathClass::Public);
+        assert_eq!(matcher.classify("/"), PathClass::Public);
+        assert_eq!(matcher.classify("/api/auth/session"), PathClass::Public);
+        assert_eq!(matcher.classify("/oauth2/authorize"), PathClass::Public);
+        assert_eq!(
+            matcher.classify("/.well-known/jwks.json"),
+            PathClass::Public
+        );
 
-        // 受保护的管理页面和路由应该拦截 (返回 false)
-        assert!(!matcher.is_public("/dashboard"));
-        assert!(!matcher.is_public("/dashboard/users"));
-        assert!(!matcher.is_public("/profile"));
-        assert!(!matcher.is_public("/api/v1/users"));
+        // 受保护的管理页面和路由应该拦截
+        assert_eq!(matcher.classify("/dashboard"), PathClass::Protected);
+        assert_eq!(matcher.classify("/dashboard/users"), PathClass::Protected);
+        assert_eq!(matcher.classify("/profile"), PathClass::Protected);
+        assert_eq!(matcher.classify("/api/v1/users"), PathClass::Microservice);
     }
 
     #[test]
@@ -201,6 +232,50 @@ mod tests {
         // 受保护业务路径
         assert_eq!(matcher.classify("/dashboard"), PathClass::Protected);
         assert_eq!(matcher.classify("/profile"), PathClass::Protected);
+    }
+
+    /// B1 回归：扩展名放行不得穿透 /api/ 命名空间的鉴权
+    #[test]
+    fn test_classify_api_extension_no_bypass() {
+        let matcher = PathMatcher::new(vec![
+            "/login".to_string(),
+            "/".to_string(),
+            "/api/auth/".to_string(),
+        ]);
+
+        // /api/v1/**.json → Microservice（需验签，不再被扩展名放行）
+        assert_eq!(
+            matcher.classify("/api/v1/reports/2024.json"),
+            PathClass::Microservice
+        );
+        // /api/**.json（非 v1）→ Protected（需验签）
+        assert_eq!(matcher.classify("/api/reports.json"), PathClass::Protected);
+        // 非 /api/ 的静态资产照常放行（含大小写）
+        assert_eq!(matcher.classify("/logo.png"), PathClass::Public);
+        assert_eq!(matcher.classify("/logo.PNG"), PathClass::Public);
+    }
+
+    #[test]
+    fn test_is_static_ext() {
+        assert!(is_static_ext("js"));
+        assert!(is_static_ext("JSON"));
+        assert!(is_static_ext("woff2"));
+        assert!(is_static_ext("WOFF2"));
+        assert!(!is_static_ext(""));
+        assert!(!is_static_ext("html"));
+        assert!(!is_static_ext("toolong"));
+    }
+
+    #[test]
+    fn test_is_asset_path() {
+        assert!(is_asset_path("/favicon.ico"));
+        assert!(is_asset_path("/assets/logo.svg"));
+        // /api/ 命名空间整体禁止扩展名旁路
+        assert!(!is_asset_path("/api/data.json"));
+        assert!(!is_asset_path("/api/v1/x.png"));
+        // 点号后含 / 不是扩展名
+        assert!(!is_asset_path("/v1.2/path"));
+        assert!(!is_asset_path("/no-extension"));
     }
 
     #[test]

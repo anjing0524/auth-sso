@@ -2,16 +2,23 @@
 //!
 //! Gateway 为每个下游应用统一执行 OAuth Client 职责：
 //! 1. 无 JWT 页面导航 → 生成 PKCE/state/nonce/return_to → Set-Cookie → 302 /authorize
-//! 2. callback 回调 → 从 Cookie 取 verifier → POST /token（若配置了 client_secret）
-//!    → Set-Cookie 下发 token → 302 return_to
-//! 3. callback 透传（无 secret） → 注入 X-OAuth-Code-Verifier header → 透传给下游
+//! 2. callback 回调 → 从 Cookie 取 verifier → POST /token → Set-Cookie 下发 token → 302 return_to
 
 use base64::Engine;
 use sha2::{Digest, Sha256};
+use thiserror::Error;
 
 use crate::auth::{ACCESS_TOKEN_MAX_AGE_SEC, REFRESH_TOKEN_MAX_AGE_SEC};
 use crate::config::OAuthConfig;
 use crate::cookie;
+
+/// OAuth 2.1 Client 层的错误类型
+#[derive(Error, Debug)]
+pub enum OAuthError {
+    /// 系统 CSPRNG 熵池枯竭（无法生成安全的随机 token）
+    #[error("系统 CSPRNG 熵池枯竭: {0}")]
+    EntropyFailure(String),
+}
 
 /// PKCE 一次性密钥对
 #[derive(Debug, Clone)]
@@ -30,6 +37,8 @@ pub struct OAuthState {
     pub return_to: String,
     pub client_id: String,
     pub redirect_uri: String,
+    /// Gateway 拦截 OAuth callback 的路径（如 `/api/auth/callback`）
+    pub callback_path: String,
 }
 
 // ── OAuth 2.1 Client Cookie 名称（必须与 Portal /callback/route.ts 完全一致）──
@@ -49,11 +58,14 @@ const OAUTH_COOKIE_MAX_AGE: u64 = 300;
 /// PKCE verifier、OAuth state、OIDC nonce 三者都依赖不可预测性，统一走此函数。
 /// `getrandom` 在 Linux 用 getrandom(2)、macOS 用 SecRandomCopyBytes、
 /// Windows 用 BCryptGenRandom，均为内核级 CSPRNG。
-fn random_token<const N: usize>() -> String {
+///
+/// # 错误
+/// 系统熵池枯竭时返回 [`OAuthError::EntropyFailure`]——降级生成可预测 token
+/// 是安全漏洞，必须阻止启动或请求处理。
+fn random_token<const N: usize>() -> Result<String, OAuthError> {
     let mut bytes = [0u8; N];
-    // 系统熵池枯竭属不可恢复故障，直接 panic 而非降级（降级 = 可预测 token = 安全漏洞）
-    getrandom::fill(&mut bytes).expect("系统 CSPRNG 不可用");
-    base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(bytes)
+    getrandom::fill(&mut bytes).map_err(|e| OAuthError::EntropyFailure(e.to_string()))?;
+    Ok(base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(bytes))
 }
 
 // ── PKCE 生成 ──
@@ -63,7 +75,7 @@ fn random_token<const N: usize>() -> String {
 /// 32 字节（256 bit）经 base64url 编码得到 43 字符——即 RFC 下限对应的熵量。
 /// 与 Portal `generateCodeVerifier()`（32 字节 `crypto.getRandomValues` → base64url）
 /// 实现等价；challenge 仅校验 SHA256 哈希，两端完全自洽。
-pub fn generate_code_verifier() -> String {
+pub fn generate_code_verifier() -> Result<String, OAuthError> {
     random_token::<32>()
 }
 
@@ -76,105 +88,109 @@ pub fn generate_code_challenge(verifier: &str) -> String {
 }
 
 /// 生成一次性 PKCE 密钥对
-pub fn generate_pkce() -> PkcePair {
-    let verifier = generate_code_verifier();
+pub fn generate_pkce() -> Result<PkcePair, OAuthError> {
+    let verifier = generate_code_verifier()?;
     let challenge = generate_code_challenge(&verifier);
-    PkcePair {
+    Ok(PkcePair {
         verifier,
         challenge,
-    }
+    })
 }
 
 /// 生成随机 OAuth state / OIDC nonce（32 字节 → 43 字符，256 bit 不可预测）。
-fn random_state() -> String {
+fn random_state() -> Result<String, OAuthError> {
     random_token::<32>()
 }
 
 // ── OAuth State ──
 
-/// 判断 host 是否为本机回环地址（精确匹配，防域名前缀绕过）
-fn is_loopback_host(host: &str) -> bool {
-    // 去除端口部分
-    let host_only = host.split(':').next().unwrap_or(host);
-    // 尝试解析为 IP 地址（最可靠的回环判断）
-    if let Ok(ip) = host_only.parse::<std::net::IpAddr>() {
-        return ip.is_loopback();
-    }
-    // 非 IP 地址时精确匹配 localhost（避免 localhost.evil.com 绕过）
-    host_only == "localhost"
+/// 构建 OAuth 2.1 所需的完整 redirect_uri（scheme://host/callback_path）。
+///
+/// 供 `/authorize`（`build_oauth_state`）与 `/token`（`handle_oauth_callback`）两阶段
+/// 共享，确保两处的 redirect_uri 由同一函数计算、逐字节一致——消除 OAuth 交换 400 的漂移面。
+pub fn build_redirect_uri(host: &str, callback_path: &str, secure: bool) -> String {
+    format!(
+        "{}://{}{}",
+        if secure { "https" } else { "http" },
+        host,
+        callback_path,
+    )
 }
+
+/// 构建一次授权请求所需的完整 OAuth state（PKCE + state + nonce + redirect_uri）。
+///
+/// `secure` 由调用方用 [`crate::http::is_secure_host`] 计算一次传入——
+/// `/authorize` 与 `/token` 两阶段的 redirect_uri scheme 由同一函数决定，
+/// 杜绝 OAuth 2.1 redirect_uri 不匹配导致的交换 400。
 pub fn build_oauth_state(
     oauth_config: &OAuthConfig,
     origin_host: &str,
     return_to: &str,
-) -> OAuthState {
-    let pkce = generate_pkce();
-    let redirect_uri = format!(
-        "{}://{}{}",
-        if is_loopback_host(origin_host) {
-            "http"
-        } else {
-            "https"
-        },
-        origin_host,
-        oauth_config.callback_path,
-    );
+    callback_path: &str,
+    secure: bool,
+) -> Result<OAuthState, OAuthError> {
+    let pkce = generate_pkce()?;
+    let redirect_uri = build_redirect_uri(origin_host, callback_path, secure);
 
-    OAuthState {
+    Ok(OAuthState {
         code_verifier: pkce.verifier,
         code_challenge: pkce.challenge,
-        state: random_state(),
-        nonce: random_state(),
+        state: random_state()?,
+        nonce: random_state()?,
         return_to: return_to.to_string(),
         client_id: oauth_config.client_id.clone(),
         redirect_uri,
-    }
+        callback_path: callback_path.to_string(),
+    })
 }
 
 // ── Cookie 构造 ──
 
 /// 构造单个 Set-Cookie 头值
-fn build_set_cookie(name: &str, value: &str, max_age: u64, secure: bool) -> String {
+fn build_set_cookie(name: &str, value: &str, max_age: u64, path: &str, secure: bool) -> String {
     let secure_str = if secure { "; Secure" } else { "" };
-    format!(
-        "{name}={value}; Path=/api/auth/callback; HttpOnly; SameSite=Lax; Max-Age={max_age}{secure_str}"
-    )
+    format!("{name}={value}; Path={path}; HttpOnly; SameSite=Lax; Max-Age={max_age}{secure_str}")
 }
 
 /// 构造 OAuth Client 四个临时 HttpOnly Cookie 的 Set-Cookie 头值列表
 ///
-/// Cookie 列表（与 Portal proxy.ts 生成的完全一致）:
+/// Cookie 列表:
 /// - pkce_verifier   — PKCE code_verifier
 /// - oauth_state     — OAuth state（CSRF 防护）
 /// - oauth_nonce     — OIDC nonce（防重放）
 /// - return_to       — 登录完成后回跳路径
 ///
-/// 所有 Cookie 设置 Path=/api/auth/callback，仅在 callback 端点携带，
+/// Path 从 OIDC Discovery 动态获取，仅在 callback 端点携带，
 /// 5 分钟 TTL 与 authorization_code 对齐。
 pub fn build_oauth_cookies(state: &OAuthState, secure: bool) -> Vec<String> {
+    let path = &state.callback_path;
     vec![
         build_set_cookie(
             PKCE_VERIFIER_COOKIE,
             &state.code_verifier,
             OAUTH_COOKIE_MAX_AGE,
+            path,
             secure,
         ),
         build_set_cookie(
             OAUTH_STATE_COOKIE,
             &state.state,
             OAUTH_COOKIE_MAX_AGE,
+            path,
             secure,
         ),
         build_set_cookie(
             OAUTH_NONCE_COOKIE,
             &state.nonce,
             OAUTH_COOKIE_MAX_AGE,
+            path,
             secure,
         ),
         build_set_cookie(
             RETURN_TO_COOKIE,
             &state.return_to,
             OAUTH_COOKIE_MAX_AGE,
+            path,
             secure,
         ),
     ]
@@ -201,10 +217,9 @@ pub fn build_session_cookies(access_token: &str, refresh_token: &str, secure: bo
 }
 
 /// 清除 4 个临时 OAuth Cookie 的 Set-Cookie 头
-pub fn build_clear_oauth_cookies(secure: bool) -> Vec<String> {
+pub fn build_clear_oauth_cookies(secure: bool, callback_path: &str) -> Vec<String> {
     let secure_str = if secure { "; Secure" } else { "" };
-    let suffix =
-        format!("; Path=/api/auth/callback; HttpOnly; SameSite=Lax; Max-Age=0{secure_str}");
+    let suffix = format!("; Path={callback_path}; HttpOnly; SameSite=Lax; Max-Age=0{secure_str}");
     vec![
         format!("{PKCE_VERIFIER_COOKIE}={suffix}"),
         format!("{OAUTH_STATE_COOKIE}={suffix}"),
@@ -276,7 +291,10 @@ pub fn extract_oauth_state(cookie_header: &str) -> Option<&str> {
     cookie::extract_from_header(cookie_header, OAUTH_STATE_COOKIE)
 }
 
-/// 从 ID Token JWT payload 裸解码 nonce claim（不验签，仅一致性比对）
+/// 从 ID Token JWT payload 解码 nonce claim（不验签，仅一致性比对）。
+///
+/// 使用 `serde_json::Value` 解析 payload JSON，
+/// 替代手写字符串查找——对字段顺序、空白、转义等变体更鲁棒。
 pub fn decode_id_token_nonce(id_token: &str) -> Option<String> {
     let mut segs = id_token.split('.');
     let payload = match (segs.next(), segs.next(), segs.next(), segs.next()) {
@@ -286,13 +304,8 @@ pub fn decode_id_token_nonce(id_token: &str) -> Option<String> {
     let bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
         .decode(payload)
         .ok()?;
-    let s = std::str::from_utf8(&bytes).ok()?;
-    // 极简 JSON 字段提取，无 serde 分配开销
-    let pattern = "\"nonce\":\"";
-    let start = s.find(pattern)? + pattern.len();
-    let rest = &s[start..];
-    let end = rest.find('"')?;
-    Some(rest[..end].to_string())
+    let value: serde_json::Value = serde_json::from_slice(&bytes).ok()?;
+    value.get("nonce")?.as_str().map(String::from)
 }
 
 // ── Token 交换请求体 ──
@@ -321,10 +334,8 @@ mod tests {
 
     #[test]
     fn pkce_verifier_length() {
-        let v = generate_code_verifier();
-        // RFC 7636 §4.1：43–128 字符；32 字节 base64url = 43 字符
+        let v = generate_code_verifier().unwrap();
         assert_eq!(v.len(), 43);
-        // base64url 字母表（含 '-','_'）
         assert!(
             v.chars()
                 .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
@@ -333,7 +344,7 @@ mod tests {
 
     #[test]
     fn pkce_challenge_is_valid_base64url() {
-        let pair = generate_pkce();
+        let pair = generate_pkce().unwrap();
         let decoded = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(&pair.challenge);
         assert!(decoded.is_ok(), "challenge 不是有效的 base64url");
     }
@@ -356,6 +367,7 @@ mod tests {
             return_to: "/".into(),
             client_id: "app".into(),
             redirect_uri: "https://ex.com/cb".into(),
+            callback_path: "/api/auth/callback".into(),
         };
         let cookies = build_oauth_cookies(&state, true);
         assert_eq!(cookies.len(), 4);

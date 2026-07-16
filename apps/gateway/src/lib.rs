@@ -4,9 +4,10 @@
 //!
 //! 本库提供网关的核心可复用组件，包括：
 //! - JWT 密码学验签与静默续签 ([`auth`])
-//! - JWKS 公钥缓存与 OIDC Discovery ([`jwks`])
+//! - JWKS 公钥缓存与 OIDC Discovery（[`jwks`]，ArcSwap 快照，热路径 wait-free 读取）
+//! - 单一前缀路由表（[`router`]，prefix → LB + OAuth 配置，一次匹配全生命周期复用）
 //! - 路径分类与 Cookie 处理 ([`path_matcher`], [`cookie`])
-//! - 进程内速率限制 ([`rate_limiter`])
+//! - 进程内速率限制（[`rate_limiter`]，限流键为 socket 真实客户端 IP，不可伪造）
 //! - 配置管理与上游管理 ([`config`])
 //! - 无锁全局指标计数（内部模块 `metrics`，非公共 API）
 //! - HTTP → HTTPS 重定向服务 ([`redirect`])

@@ -1,3 +1,4 @@
+use arc_swap::ArcSwap;
 use jsonwebtoken::Algorithm;
 use jsonwebtoken::DecodingKey;
 use jsonwebtoken::Validation;
@@ -7,7 +8,7 @@ use pingora_core::services::background::BackgroundService;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
-use tracing::{error, info, warn};
+use tracing::{info, warn};
 
 use crate::config::Upstreams;
 use crate::http::HTTP_CLIENT;
@@ -24,9 +25,6 @@ pub enum JwksError {
     /// 未配置任何上游地址，无法执行 OIDC Discovery
     #[error("未配置任何上游地址，无法执行 OIDC Discovery")]
     NoUpstreams,
-    /// 读写锁中毒故障
-    #[error("JWKS 读写锁中毒失效")]
-    LockPoisoned,
     /// OIDC Discovery 端点返回的 jwks_uri 缺失
     #[error("OIDC Discovery 响应中未包含有效的 jwks_uri")]
     MissingJwksUri,
@@ -40,6 +38,8 @@ struct OidcDiscovery {
     validation: Arc<Validation>,
     refresh_endpoint: Option<Arc<str>>,
     jwks_uri: String,
+    /// Gateway 拦截 OAuth callback 的路径（来自 OIDC Discovery 自定义字段）
+    callback_path: Option<Arc<str>>,
 }
 
 /// 构造网关统一的 JWT 校验基线配置：ES256 算法、不校验 aud/exp。
@@ -56,15 +56,20 @@ fn base_validation() -> Validation {
     validation
 }
 
-/// OIDC 元数据结构体，将公钥映射与 OIDC 校验配置统一存放，提供极高的并发原子读取性能
+/// OIDC 元数据 — 公钥映射 + 校验配置 + Discovery 派生端点的不可变快照。
+///
+/// 整个结构体以 `Arc<OidcMetadata>` 形式存入 [`ArcSwap`]，
+/// 热路径一次 wait-free load 同时获得全部字段，零锁零拷贝。
 #[derive(Clone)]
-struct OidcMetadata {
+pub(crate) struct OidcMetadata {
     /// kid -> 公钥映射表
-    keys: HashMap<String, DecodingKey>,
+    pub(crate) keys: HashMap<String, DecodingKey>,
     /// 预构建的 JWT 校验配置（Arc 共享引用，热路径仅原子引用计数递增，零拷贝）
-    validation: Arc<Validation>,
+    pub(crate) validation: Arc<Validation>,
     /// Token 刷新接口端点 URL (已解析为完整内网 URL)
-    refresh_endpoint: Option<Arc<str>>,
+    pub(crate) refresh_endpoint: Option<Arc<str>>,
+    /// Gateway 拦截 OAuth callback 的路径（来自 OIDC Discovery `oauth_callback_path` 字段）
+    pub(crate) callback_path: Option<Arc<str>>,
 }
 
 impl Default for OidcMetadata {
@@ -73,16 +78,17 @@ impl Default for OidcMetadata {
             keys: HashMap::new(),
             validation: Arc::new(base_validation()),
             refresh_endpoint: None,
+            callback_path: None,
         }
     }
 }
 
 /// JWKS 公钥缓存结构体
 ///
-/// 采用单读写锁（RwLock）设计，内部字段使用 Arc 包装。
-/// 高并发请求验签仅需一次加锁，并以引用计数形式无拷贝获取所需配置，彻底规避热路径上的动态内存分配。
+/// 采用 [`ArcSwap`] 快照设计：读写比极端悬殊（300s 写一次 vs 每请求读），
+/// 热路径 `snapshot()` 为一次 wait-free 原子 load，无锁、无中毒可能、零拷贝。
 pub struct JwksCache {
-    inner: std::sync::RwLock<OidcMetadata>,
+    inner: ArcSwap<OidcMetadata>,
 }
 
 impl std::fmt::Debug for JwksCache {
@@ -108,8 +114,13 @@ impl JwksCache {
     /// ```
     pub fn new() -> Self {
         Self {
-            inner: std::sync::RwLock::new(OidcMetadata::default()),
+            inner: ArcSwap::from_pointee(OidcMetadata::default()),
         }
+    }
+
+    /// 热路径快照：一次 wait-free load 同时获得 keys + validation，零锁零拷贝
+    pub(crate) fn snapshot(&self) -> Arc<OidcMetadata> {
+        self.inner.load_full()
     }
 
     /// 获取特定 kid 对应的公钥（同步读取）
@@ -122,52 +133,43 @@ impl JwksCache {
     /// assert!(cache.key("nonexistent").is_none());
     /// ```
     pub fn key(&self, kid: &str) -> Option<DecodingKey> {
-        match self.inner.read() {
-            Ok(guard) => guard.keys.get(kid).cloned(),
-            Err(e) => {
-                error!("JWKS 读写锁中毒 (get_key): {:?}", e);
-                None
-            }
-        }
-    }
-
-    /// 判断当前公钥缓存是否为空
-    pub(crate) fn is_empty(&self) -> bool {
-        self.inner
-            .read()
-            .map(|guard| guard.keys.is_empty())
-            .unwrap_or_else(|e| {
-                error!("JWKS 读写锁中毒 (is_empty): {:?}", e);
-                true
-            })
+        self.inner.load().keys.get(kid).cloned()
     }
 
     /// 获取预构建的 OIDC 校验配置（Arc 共享引用，热路径原子引用计数递增，零拷贝）
     pub fn validation(&self) -> Arc<Validation> {
-        self.inner
-            .read()
-            .ok()
-            .map(|guard| Arc::clone(&guard.validation))
-            .unwrap_or_else(|| {
-                error!(
-                    "JWKS 读写锁中毒 (get_validation)，回退到默认 Validation — JWT 验签可能异常"
-                );
-                Arc::new(base_validation())
-            })
+        Arc::clone(&self.inner.load().validation)
     }
 
     /// 获取缓存的 Token 刷新接口端点 URL (只读共享指针)
     pub fn refresh_endpoint(&self) -> Option<Arc<str>> {
-        match self.inner.read() {
-            Ok(guard) => guard.refresh_endpoint.clone(),
-            Err(e) => {
-                error!("JWKS 读写锁中毒 (get_refresh_endpoint): {:?}", e);
-                None
-            }
-        }
+        self.inner.load().refresh_endpoint.clone()
     }
 
-    /// 将单个 OIDC 字符串算法名转为 `Algorithm`；不支持的算法记录告警并返回 None
+    /// 获取 OIDC Discovery 中声明的 OAuth callback 路径，缓存未就绪时返回默认值。
+    ///
+    /// 这是 Gateway 自身的 OAuth callback 拦截路径，通过 OIDC Discovery 从 Portal 动态获取，
+    /// 属于 Gateway 本地配置而非 OIDC 标准字段。Portal 在 `.well-known/openid-configuration`
+    /// 中以自定义字段 `oauth_callback_path` 声明此值。
+    pub fn callback_path_or_default(&self) -> Arc<str> {
+        self.inner
+            .load()
+            .callback_path
+            .clone()
+            .unwrap_or_else(|| Arc::from("/api/auth/callback"))
+        // ↑ 兜底值与 Portal Discovery `oauth_callback_path` 声明值
+        // 及 Portal callback 路由路径保持一致；变更时需三方同步
+    }
+
+    /// 判断当前公钥缓存是否为空
+    pub(crate) fn is_empty(&self) -> bool {
+        self.inner.load().keys.is_empty()
+    }
+
+    /// 将单个 OIDC 字符串算法名转为 `Algorithm`；不支持的算法记录告警并返回 None。
+    ///
+    /// 注意：`validation.algorithms` 硬锁为 `ES256` 仅（防 alg 混淆攻击），
+    /// 此函数仅用于测试注入（`set_metadata_for_test`），生产路径不调用。
     fn parse_algorithm(alg: &str) -> Option<Algorithm> {
         match alg {
             "ES256" => Some(Algorithm::ES256),
@@ -183,7 +185,7 @@ impl JwksCache {
             "HS512" => Some(Algorithm::HS512),
             "EdDSA" => Some(Algorithm::EdDSA),
             _ => {
-                warn!("⚠️  OIDC Discovery 返回不支持的签名算法: {}", alg);
+                warn!("OIDC Discovery 返回不支持的签名算法: {}", alg);
                 None
             }
         }
@@ -193,12 +195,16 @@ impl JwksCache {
     ///
     /// 返回解析后的 validation、refresh_endpoint 和 jwks_uri，
     /// 待 JWKS 公钥也拉取成功后由 `apply_discovery` 一并原子写入。
-    async fn fetch_oidc_metadata(&self, upstream: &str) -> Result<OidcDiscovery, JwksError> {
-        let discovery_url = format!(
-            "{}://{}/.well-known/openid-configuration",
-            crate::gateway::upstream_scheme(),
-            upstream
-        );
+    ///
+    /// # 参数
+    /// * `upstream` - Portal 上游地址（如 127.0.0.1:4100）
+    /// * `scheme` - 内部上游请求协议（http/https），启动期显式注入
+    async fn fetch_oidc_metadata(
+        &self,
+        upstream: &str,
+        scheme: &str,
+    ) -> Result<OidcDiscovery, JwksError> {
+        let discovery_url = format!("{}://{}/.well-known/openid-configuration", scheme, upstream);
         info!("🔍 通过 OIDC Discovery 获取元数据: {}", discovery_url);
 
         let resp = HTTP_CLIENT.get(&discovery_url).send().await?;
@@ -235,20 +241,28 @@ impl JwksCache {
             .get("refresh_endpoint")
             .and_then(|v| v.as_str())
             .and_then(|ep| {
-                Self::resolve_jwks_url(upstream, ep)
+                Self::resolve_jwks_url(scheme, upstream, ep)
                     .map_err(|e| warn!("OIDC refresh_endpoint URL 解析失败，跳过: {}", e))
                     .ok()
             })
             .map(Arc::from);
 
+        // 解析 Gateway OAuth callback 拦截路径（来自 OIDC Discovery 自定义字段 oauth_callback_path）
+        let callback_path = metadata_val
+            .get("oauth_callback_path")
+            .and_then(|v| v.as_str())
+            .filter(|p| p.starts_with('/'))
+            .map(Arc::<str>::from);
+
         Ok(OidcDiscovery {
             validation: Arc::new(validation),
             refresh_endpoint,
             jwks_uri: jwks_uri.to_string(),
+            callback_path,
         })
     }
 
-    /// 原子写入 OIDC 元数据 + JWKS 公钥，一次写锁完成所有变更
+    /// 原子写入 OIDC 元数据 + JWKS 公钥，一次 store 完成所有变更
     fn apply_discovery(
         &self,
         discovery: OidcDiscovery,
@@ -258,54 +272,51 @@ impl JwksCache {
             return Err(JwksError::EmptyKeys);
         }
         let count = new_keys.len();
-        let mut guard = self.inner.write().map_err(|_| JwksError::LockPoisoned)?;
-        guard.keys = new_keys;
-        guard.validation = discovery.validation;
-        guard.refresh_endpoint = discovery.refresh_endpoint;
+        self.inner.store(Arc::new(OidcMetadata {
+            keys: new_keys,
+            validation: discovery.validation,
+            refresh_endpoint: discovery.refresh_endpoint,
+            callback_path: discovery.callback_path,
+        }));
         Ok(count)
     }
 
     /// 从 OIDC 元数据中解析出可达的 JWKS 端点 URL
     ///
     /// # 参数
+    /// * `scheme` - 内部上游请求协议（http/https）
     /// * `upstream` - Portal 上游地址（如 127.0.0.1:4100）
     /// * `jwks_uri` - OIDC 元数据中包含的原始 jwks_uri 字段
-    pub(crate) fn resolve_jwks_url(upstream: &str, jwks_uri: &str) -> Result<String, JwksError> {
+    pub(crate) fn resolve_jwks_url(
+        scheme: &str,
+        upstream: &str,
+        jwks_uri: &str,
+    ) -> Result<String, JwksError> {
         let parsed =
             reqwest::Url::parse(jwks_uri).map_err(|e| JwksError::InvalidJwksUri(e.to_string()))?;
 
         let path = parsed.path();
         if let Some(query) = parsed.query() {
-            Ok(format!(
-                "{}://{}{}?{}",
-                crate::gateway::upstream_scheme(),
-                upstream,
-                path,
-                query
-            ))
+            Ok(format!("{}://{}{}?{}", scheme, upstream, path, query))
         } else {
-            Ok(format!(
-                "{}://{}{}",
-                crate::gateway::upstream_scheme(),
-                upstream,
-                path
-            ))
+            Ok(format!("{}://{}{}", scheme, upstream, path))
         }
     }
 
     /// 通过 OIDC Discovery 自动发现并拉取 JWKS 公钥，原子更新 OIDC 元数据缓存
     ///
-    /// 先拉取 OIDC 元数据和 JWKS 公钥，全部成功后才一次性写锁写入，
+    /// 先拉取 OIDC 元数据和 JWKS 公钥，全部成功后才一次性原子 store 写入，
     /// 避免元数据已更新而公钥拉取失败导致的不一致状态。
     ///
     /// # 参数
     /// * `upstream` - Portal 上游地址（如 127.0.0.1:4100）
-    pub async fn refresh(&self, upstream: &str) -> Result<(), JwksError> {
+    /// * `scheme` - 内部上游请求协议（http/https），启动期显式注入
+    pub async fn refresh(&self, upstream: &str, scheme: &str) -> Result<(), JwksError> {
         // 1. 拉取 OIDC Discovery 元数据（不写缓存）
-        let discovery = self.fetch_oidc_metadata(upstream).await?;
+        let discovery = self.fetch_oidc_metadata(upstream, scheme).await?;
 
         // 2. 从元数据中解析可达的 JWKS URL
-        let jwks_url = Self::resolve_jwks_url(upstream, &discovery.jwks_uri)?;
+        let jwks_url = Self::resolve_jwks_url(scheme, upstream, &discovery.jwks_uri)?;
         info!("🔑 使用 JWKS 端点: {}", jwks_url);
 
         // 3. 拉取并解析 JWKS 公钥集
@@ -331,10 +342,12 @@ impl JwksCache {
     /// 用于测试和基准测试的公钥注入方法。
     ///
     /// 仅在测试/benchmark 中使用，生产代码切勿调用。
+    /// 写路径为 load_full → clone → mutate → store（冷路径，拷贝无碍）。
     #[doc(hidden)]
     pub fn insert_key_for_test(&self, kid: String, key: DecodingKey) {
-        let mut guard = self.inner.write().expect("JwksCache RwLock 中毒");
-        guard.keys.insert(kid, key);
+        let mut meta = (*self.inner.load_full()).clone();
+        meta.keys.insert(kid, key);
+        self.inner.store(Arc::new(meta));
     }
 
     /// 用于测试和基准测试的元数据设置方法。
@@ -342,15 +355,17 @@ impl JwksCache {
     /// 仅在测试/benchmark 中使用，生产代码切勿调用。
     #[doc(hidden)]
     pub fn set_metadata_for_test(&self, issuer: &str, supported_algs: &[&str]) {
-        let mut guard = self.inner.write().expect("JwksCache RwLock 中毒");
+        let mut meta = (*self.inner.load_full()).clone();
         let mut validation = base_validation();
         validation.set_issuer(&[issuer]);
         validation.algorithms = supported_algs
             .iter()
             .filter_map(|&alg| Self::parse_algorithm(alg))
             .collect();
-        guard.validation = Arc::new(validation);
-        guard.refresh_endpoint = None;
+        meta.validation = Arc::new(validation);
+        meta.refresh_endpoint = None;
+        meta.callback_path = None;
+        self.inner.store(Arc::new(meta));
     }
 }
 
@@ -367,6 +382,8 @@ pub struct JwksRefreshService {
     jwks_cache: Arc<JwksCache>,
     /// Portal 上游地址列表（Arc 共享，与 AuthService 复用同一实例）
     upstreams: Arc<Upstreams>,
+    /// 内部上游请求协议（http/https），启动期由 main.rs 显式注入
+    upstream_scheme: String,
     /// 连续失败计数器（AtomicU64 支持内部可变性，用于 start(&self) 中的渐进退避）
     consecutive_failures: std::sync::atomic::AtomicU64,
     /// 刷新成功后的标准间隔（秒），可通过配置覆盖
@@ -377,11 +394,13 @@ impl JwksRefreshService {
     pub fn new(
         jwks_cache: Arc<JwksCache>,
         upstreams: Arc<Upstreams>,
+        upstream_scheme: String,
         refresh_interval_secs: u64,
     ) -> Self {
         Self {
             jwks_cache,
             upstreams,
+            upstream_scheme,
             consecutive_failures: std::sync::atomic::AtomicU64::new(0),
             refresh_interval_secs,
         }
@@ -422,7 +441,11 @@ impl JwksRefreshService {
         let mut last_err = None;
         for upstream in self.upstreams.iter() {
             info!("🔍 通过上游 {} 尝试 OIDC Discovery...", upstream);
-            match self.jwks_cache.refresh(upstream).await {
+            match self
+                .jwks_cache
+                .refresh(upstream, &self.upstream_scheme)
+                .await
+            {
                 Ok(()) => return Ok(()),
                 Err(e) => {
                     warn!("  ✗ {} 不可达: {}", upstream, e);

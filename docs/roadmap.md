@@ -21,6 +21,7 @@
 
 ## 变更记录
 
+- 2026-07-16: Gateway 安全修复与性能优化完成（B1-B9/D1-D5/C1-C3/A1-A6，见下方区块）
 - 2026-07-13: 新增"审计驱动待办（基于 2026-07-13-code-audit.md，经代码实证勘误）"区块
 - 2026-07-10: 初始化路线图，对齐 v1.1 交付状态
 
@@ -189,6 +190,29 @@
 | G5-1 | 🔲 | 增补 `AuthDecision` 单元测试 | `gateway/src/auth/tests.rs` |
 | G6-1 | 🔲 | `gateway.toml` + `gateway.docker.toml` 增加必填 `client_secret` | 配置文件 |
 | G7-1 | 🔲 | `cargo clippy` + `cargo fmt` + `cargo test` 全绿验证 | CI |
+
+---
+
+## Gateway 安全修复与性能优化（2026-07-16 审计驱动）
+
+> 计划：`.kilo/plans/1784180149059-gateway-security-fixes.md`；最佳实践沉淀见 `docs/solution/`。
+
+| # | 状态 | 任务 | 审计项 |
+|---|:--:|------|:--:|
+| S1 | ✅ | 扩展名白名单边界收窄（/api/ 命名空间禁止扩展名旁路，优先级降至 Microservice 后） | B1/D5 |
+| S2 | ✅ | 客户端 IP 改用 socket 真实地址；XFF/X-Real-IP/X-Client-IP 权威覆写 | B2/B7 |
+| S3 | ✅ | scheme 判定统一为 `is_secure_host`（IP 解析 + is_loopback），删除重复实现 | B3 |
+| S4 | ✅ | 续签去重改 Redis SET NX EX 前置抢占 + 失败释放（消除 TOCTOU） | B4 |
+| S5 | ✅ | Token 交换跨节点故障转移（网络错误换节点，非 2xx 确定性拒绝） | B5 |
+| S6 | ✅ | PKCE return_to 保留 query | B6 |
+| S7 | ✅ | `query_param` 重写（大小写敏感、零分配）+ IdP error 回调显式处理 | C3/B8/B9 |
+| S8 | ✅ | 单一路由表 RouteEntry（prefix+LB+OAuth 同源）+ 上游 TLS 生效 | D2/A2/A3 |
+| S9 | ✅ | JWKS 缓存 ArcSwap 快照化（删除锁中毒分支）+ upstream_scheme 显式注入 | D1/A1 |
+| S10 | ✅ | Cookie 热路径：ctx 缓存一次 collapse + 单遍重写 + strip 零分配 | D3/C1/C2 |
+| S11 | ✅ | public_paths 归属校验（越界白名单启动期拒绝） | A4 |
+| S12 | ✅ | 删除 get_host `:authority` 死分支；callback 判定零分配 | A6/D4 |
+
+不做（Out of scope）：trusted-proxy 层级配置、Redis 缓存新 AT、C4 Bearer 拼接微优化、分布式限流。
 
 ### 状态图例
 

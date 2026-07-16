@@ -151,6 +151,47 @@ pub fn replace_in_header(cookie_header: &str, cookie_name: &str, new_value: &str
     result
 }
 
+/// 单遍完成：剥离 RT + 可选替换/追加 AT。输入为已 collapse 的 Cookie 头。
+///
+/// 供 `rewrite_upstream_cookies` 的 Protected 分支使用——替代原先
+/// `remove_from_header` + `replace_in_header` 两遍扫描 + 两次分配，
+/// 单次预估容量分配即完成全部重写（O(n)）。
+///
+/// # 参数
+/// * `raw` - 已 collapse 的原始 Cookie 头
+/// * `new_access` - `Some(at)` 时将 AT Cookie 替换为新值（不存在则追加）
+pub fn rewrite_protected_cookies(raw: &str, new_access: Option<&str>) -> String {
+    let mut out = String::with_capacity(raw.len() + 64);
+    let mut replaced = false;
+    for seg in raw.split(';') {
+        let seg = seg.trim_start();
+        if seg.is_empty() || cookie_value(seg, REFRESH_COOKIE).is_some() {
+            continue; // 剥离 RT
+        }
+        if !out.is_empty() {
+            out.push_str("; ");
+        }
+        match (new_access, cookie_value(seg, ACCESS_COOKIE)) {
+            (Some(at), Some(_)) => {
+                out.push_str(ACCESS_COOKIE);
+                out.push('=');
+                out.push_str(at);
+                replaced = true;
+            }
+            _ => out.push_str(seg),
+        }
+    }
+    if let (Some(at), false) = (new_access, replaced) {
+        if !out.is_empty() {
+            out.push_str("; ");
+        }
+        out.push_str(ACCESS_COOKIE);
+        out.push('=');
+        out.push_str(at);
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -224,5 +265,49 @@ mod tests {
         let result = replace_in_header(header, "portal_jwt_token", "new");
         assert!(result.contains("portal_jwt_token=new"));
         assert!(result.contains("portal_refresh_token=rrr"));
+    }
+
+    #[test]
+    fn test_rewrite_protected_cookies_strips_rt_only() {
+        // 仅剥离 RT，无 AT 替换
+        let raw = "portal_jwt_token=abc; portal_refresh_token=rrr; other=val";
+        let result = rewrite_protected_cookies(raw, None);
+        assert_eq!(result, "portal_jwt_token=abc; other=val");
+    }
+
+    #[test]
+    fn test_rewrite_protected_cookies_replaces_at() {
+        // RT 剥离 + AT 替换
+        let raw = "portal_jwt_token=old; portal_refresh_token=rrr; other=val";
+        let result = rewrite_protected_cookies(raw, Some("new-at"));
+        assert_eq!(result, "portal_jwt_token=new-at; other=val");
+    }
+
+    #[test]
+    fn test_rewrite_protected_cookies_appends_missing_at() {
+        // 无 AT 时追加
+        let raw = "portal_refresh_token=rrr; other=val";
+        let result = rewrite_protected_cookies(raw, Some("new-at"));
+        assert_eq!(result, "other=val; portal_jwt_token=new-at");
+    }
+
+    #[test]
+    fn test_rewrite_protected_cookies_empty_input() {
+        assert_eq!(rewrite_protected_cookies("", None), "");
+        assert_eq!(
+            rewrite_protected_cookies("", Some("at")),
+            "portal_jwt_token=at"
+        );
+    }
+
+    #[test]
+    fn test_rewrite_protected_cookies_quoted_values() {
+        // 含引号值：RT 照常剥离，其余段原样保留
+        let raw = "portal_jwt_token=\"abc\"; portal_refresh_token=\"rrr\"; other=\"v\"";
+        let result = rewrite_protected_cookies(raw, None);
+        assert_eq!(result, "portal_jwt_token=\"abc\"; other=\"v\"");
+        // 替换时引号值被新值取代
+        let result = rewrite_protected_cookies(raw, Some("new"));
+        assert_eq!(result, "portal_jwt_token=new; other=\"v\"");
     }
 }

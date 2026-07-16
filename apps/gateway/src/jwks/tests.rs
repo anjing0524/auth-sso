@@ -3,22 +3,40 @@ use super::*;
 #[test]
 fn test_resolve_jwks_url() {
     // 标准 URL
-    let url = JwksCache::resolve_jwks_url("127.0.0.1:4100", "http://localhost:4100/api/auth/jwks")
-        .unwrap();
+    let url = JwksCache::resolve_jwks_url(
+        "http",
+        "127.0.0.1:4100",
+        "http://localhost:4100/api/auth/jwks",
+    )
+    .unwrap();
     assert_eq!(url, "http://127.0.0.1:4100/api/auth/jwks");
 
     // HTTPS issuer URL
-    let url = JwksCache::resolve_jwks_url("portal:4000", "https://sso.example.com/api/auth/jwks")
-        .unwrap();
+    let url = JwksCache::resolve_jwks_url(
+        "http",
+        "portal:4000",
+        "https://sso.example.com/api/auth/jwks",
+    )
+    .unwrap();
     assert_eq!(url, "http://portal:4000/api/auth/jwks");
 
     // 带端口号 of issuer
     let url = JwksCache::resolve_jwks_url(
+        "http",
         "10.0.0.1:8080",
         "https://auth.example.com:443/.well-known/jwks.json",
     )
     .unwrap();
     assert_eq!(url, "http://10.0.0.1:8080/.well-known/jwks.json");
+
+    // 显式注入 https scheme（内网 mTLS 场景）
+    let url = JwksCache::resolve_jwks_url(
+        "https",
+        "portal:4000",
+        "https://sso.example.com/api/auth/jwks",
+    )
+    .unwrap();
+    assert_eq!(url, "https://portal:4000/api/auth/jwks");
 }
 
 #[test]

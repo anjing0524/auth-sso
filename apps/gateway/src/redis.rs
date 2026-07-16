@@ -73,7 +73,7 @@ async fn get_conn() -> Option<bb8::PooledConnection<'static, bb8_redis::RedisCon
 
 /// 检查 key 是否存在于 Redis（EXISTS 命令），fail-open：Redis 不可用时返回 false
 ///
-/// 与其他 Redis 辅助函数（`get`/`set_nx_ex`）保持一致的 fail-open 语义：
+/// 与其他 Redis 辅助函数（`acquire_nx_ex`/`del`）保持一致的 fail-open 语义：
 /// Redis 不可用时降级放行，避免全站拒绝。
 ///
 /// # Examples
@@ -104,39 +104,42 @@ pub async fn exists(key: &str) -> bool {
     }
 }
 
-/// 从 Redis 获取一个字符串值（GET 命令），fail-open 返回 None
+/// SET key value NX EX ttl，返回是否抢占成功。fail-open：Redis 不可用时返回 true（允许续签）。
 ///
-/// # Examples
-///
-/// ```ignore
-/// let cached = redis::get("portal:refresh_dedup:user-1").await;
-/// ```
-pub async fn get(key: &str) -> Option<String> {
-    let mut conn = get_conn().await?;
-    match redis::cmd("GET").arg(key).query_async(&mut *conn).await {
-        Ok(v) => v,
-        Err(e) => {
-            tracing::warn!("Redis GET 异常: {:?}，降级返回 None", e);
-            None
-        }
-    }
-}
-
-/// 原子写入 Redis（SET key value NX EX ttl），fail-open 静默忽略
-pub async fn set_nx_ex(key: &str, value: &str, ttl_secs: u64) {
+/// SET NX 在 key 已存在时返回 nil（`None`），抢占成功时返回 `Some("OK")`——
+/// 「检查 + 写入」在 Redis 服务端单命令原子完成，消除检查-后写的 TOCTOU 窗口。
+pub async fn acquire_nx_ex(key: &str, value: &str, ttl_secs: u64) -> bool {
     let Some(mut conn) = get_conn().await else {
-        return;
+        return true;
     };
-    if let Err(e) = redis::cmd("SET")
+    match redis::cmd("SET")
         .arg(key)
         .arg(value)
         .arg("NX")
         .arg("EX")
         .arg(ttl_secs as i64)
+        .query_async::<Option<String>>(&mut *conn)
+        .await
+    {
+        Ok(reply) => reply.is_some(), // Some("OK") = 抢到
+        Err(e) => {
+            tracing::warn!("Redis SET NX EX 异常: {:?}，降级放行", e);
+            true
+        }
+    }
+}
+
+/// DEL key，fail-open 静默忽略（续签失败时释放去重锁，允许下次立即重试）
+pub async fn del(key: &str) {
+    let Some(mut conn) = get_conn().await else {
+        return;
+    };
+    if let Err(e) = redis::cmd("DEL")
+        .arg(key)
         .query_async::<()>(&mut *conn)
         .await
     {
-        tracing::warn!("Redis SET NX EX 异常: {:?}，降级忽略", e);
+        tracing::warn!("Redis DEL 异常: {:?}，降级忽略", e);
     }
 }
 

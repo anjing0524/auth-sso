@@ -2,37 +2,27 @@ use async_trait::async_trait;
 use pingora_core::prelude::*;
 use pingora_http::{RequestHeader, ResponseHeader};
 use pingora_proxy::{ProxyHttp, Session};
-use std::sync::{Arc, OnceLock};
+use std::sync::Arc;
 use tracing::{debug, info, warn};
 
 use crate::auth::{AuthDecision, JwtVerifier, RefreshedTokens, TokenRefresher};
 use crate::config::{OAuthConfig, Upstreams};
 use crate::cookie;
-
-/// 内部上游请求协议（http/https），由 Gateway::new() 初始化后只读
-static UPSTREAM_SCHEME: OnceLock<String> = OnceLock::new();
-
-/// 获取上游请求协议（如 "http" 或 "https"）
-pub fn upstream_scheme() -> &'static str {
-    UPSTREAM_SCHEME.get().map(|s| s.as_str()).unwrap_or("http")
-}
-use crate::http::{SessionExt, is_html_page_navigation, is_secure_host};
+use crate::http::{SessionExt, hmac_sha256_hex, is_html_page_navigation, is_secure_host};
+use crate::jwks::JwksCache;
 use crate::oauth;
 use crate::path_matcher::{PathClass, PathMatcher};
 use crate::router::Router;
-use hmac::{Hmac, Mac};
-use sha2::Sha256;
 
-type HmacSha256 = Hmac<Sha256>;
-
-/// 计算 HMAC-SHA256 并以十六进制字符串返回。
+/// 计算 HMAC-SHA256 并以十六进制字符串返回（委托 [`crate::http::hmac_sha256_hex`]）。
 /// 用于 Gateway → Portal 信任路径签名。
-fn compute_hmac_sha256_hex(secret: &str, payload: &str) -> String {
-    let mut mac =
-        HmacSha256::new_from_slice(secret.as_bytes()).expect("HMAC-SHA256 应从任意长度的密钥创建");
-    mac.update(payload.as_bytes());
-    let result = mac.finalize();
-    hex::encode(result.into_bytes())
+fn compute_hmac_sha256_hex(secret: &str, payload: &str) -> std::result::Result<String, Box<Error>> {
+    hmac_sha256_hex(secret, payload).ok_or_else(|| {
+        Error::explain(
+            ErrorType::InternalError,
+            "创建 HMAC-SHA256 实例失败".to_string(),
+        )
+    })
 }
 
 /// Pingora `LoadBalancer::select` 的第二参数为选择输入的哈希键；
@@ -47,15 +37,12 @@ fn header_str<'s>(session: &'s Session, name: &str) -> Option<&'s str> {
 }
 
 /// 获取请求的 Host，优先从 HTTP/2 authority 或 Host 头中提取以保证包含端口号
+///
+/// H2 的 `:authority` 伪头由 pingora 归一化进 `uri.authority()`，
+/// 无需（也无法）通过 `get_header(":authority")` 读取。
 fn get_host(session: &Session) -> &str {
     if let Some(auth) = session.req_header().uri.authority() {
         return auth.as_str();
-    }
-    if let Some(auth) = session
-        .get_header(":authority")
-        .and_then(|h| h.to_str().ok())
-    {
-        return auth;
     }
     if let Some(host) = session.get_header("Host").and_then(|h| h.to_str().ok()) {
         return host;
@@ -75,7 +62,15 @@ fn insert_opt_header(
     Ok(())
 }
 
+/// 大小写无关的字节前缀匹配（零分配）
+fn starts_with_ignore_case(name: &[u8], prefix: &[u8]) -> bool {
+    name.len() >= prefix.len() && name[..prefix.len()].eq_ignore_ascii_case(prefix)
+}
+
 /// 判断某请求头是否属于「身份相关」头，应在转发前剥离。
+///
+/// 入参为原始头名字节（H1 保留大小写 / H2 已小写），全程
+/// `eq_ignore_ascii_case` 逐段比较，不构造小写 String（零分配）。
 ///
 /// 采用**黑名单兜底**策略：除少数显式允许的代理标准头外，
 /// 所有 `X-` 前缀头 + `Authorization` 一律剥离。
@@ -84,26 +79,27 @@ fn insert_opt_header(
 /// 这是零信任的核心防线，下游收到的身份信息 100% 由 gateway 权威注入。
 ///
 /// **保留**的头（非身份语义，必须显式放行）：
-/// - `X-Forwarded-*`（代理链路标准头，见 RFC 7239）
+/// - `X-Forwarded-*`（代理链路标准头，见 RFC 7239）——放行后由
+///   `upstream_request_filter` 以 socket 真实地址**权威覆写**，语义安全
 /// - `X-Request-Id` / `X-Correlation-Id`（链路追踪）
-/// - `X-Real-IP`（代理客户端 IP，部分下游依赖）
+/// - `X-Real-IP`（代理客户端 IP，同样随后被权威覆写）
 ///
 /// `X-Client-IP` / `X-Client-UA` 虽由 gateway 注入，但属身份语义，
 /// 仍剥离后重新注入——不在此放行清单中。
-fn is_identity_header(name_lower: &str) -> bool {
+fn is_identity_header(name: &[u8]) -> bool {
     // Authorization 始终剥离（由 gateway 按验签结果重新注入）
-    if name_lower == "authorization" {
+    if name.eq_ignore_ascii_case(b"authorization") {
         return true;
     }
     // 非 X- 前缀头不剥离（Accept、Cookie、Host 等业务头）
-    if !name_lower.starts_with("x-") {
+    if !starts_with_ignore_case(name, b"x-") {
         return false;
     }
     // 显式放行的代理标准头（非身份语义）
-    if name_lower.starts_with("x-forwarded-")
-        || name_lower == "x-request-id"
-        || name_lower == "x-correlation-id"
-        || name_lower == "x-real-ip"
+    if starts_with_ignore_case(name, b"x-forwarded-")
+        || name.eq_ignore_ascii_case(b"x-request-id")
+        || name.eq_ignore_ascii_case(b"x-correlation-id")
+        || name.eq_ignore_ascii_case(b"x-real-ip")
     {
         return false;
     }
@@ -119,18 +115,17 @@ fn is_identity_header(name_lower: &str) -> bool {
 ///
 /// 因 Pingora `RequestHeader` 借用限制，先经只读 `map` 收集待删头名，
 /// 再逐个 `remove_header`（替换语义，删除该名下所有同名头）。
+/// 仅对**命中**的头才分配 owned name（典型请求 0-1 次分配）。
 fn strip_identity_headers(req: &mut RequestHeader) {
     let mut to_remove: Vec<String> = Vec::new();
     // map 是只读遍历（统一 H1 case 敏感 / H2 大小写无关两种表示）
     let _ = req.map(|variant, _| {
-        let name_lower: String = match variant {
-            pingora_http::HeaderNameVariant::Case(cn) => std::str::from_utf8(cn.as_slice())
-                .unwrap_or("")
-                .to_ascii_lowercase(),
-            pingora_http::HeaderNameVariant::Titled(s) => s.to_ascii_lowercase(),
+        let name: &[u8] = match variant {
+            pingora_http::HeaderNameVariant::Case(cn) => cn.as_slice(),
+            pingora_http::HeaderNameVariant::Titled(s) => s.as_bytes(),
         };
-        if is_identity_header(&name_lower) {
-            to_remove.push(name_lower);
+        if is_identity_header(name) {
+            to_remove.push(String::from_utf8_lossy(name).to_ascii_lowercase());
         }
         Ok(())
     });
@@ -156,6 +151,10 @@ pub struct Identity {
 pub struct GatewayCtx {
     /// 当前请求的路径分类（在 request_filter 中一次计算，upstream 阶段复用）
     pub path_class: PathClass,
+    /// 当前请求命中的路由表索引（request_filter 起始处一次解析，upstream_peer 复用）
+    pub route_idx: usize,
+    /// 已 collapse 的 Cookie 请求头（一次拼合，鉴权与上行 Cookie 重写共享）
+    pub cookie_header: Option<String>,
     /// 已验签身份（None 表示未通过验签的白名单/静态路径）
     pub identity: Option<Identity>,
     /// 续签得到的新 Token（若在本次请求中触发了静默续签）
@@ -185,31 +184,11 @@ struct TokenExchangeResult {
     id_token: Option<String>,
 }
 
-/// 从 query string 提取指定参数值，零分配简单解析
+/// 从 query string 提取指定参数值（大小写敏感，符合 RFC 6570 / OAuth 参数语义；零分配）
 fn query_param<'a>(query: &'a str, key: &str) -> Option<&'a str> {
-    let key_eq = key.as_bytes();
-    let query_bytes = query.as_bytes();
-    let len = query_bytes.len();
-    let klen = key_eq.len();
-    let mut i = 0;
-    while i < len {
-        if i + klen < len
-            && query_bytes[i..i + klen].eq_ignore_ascii_case(key_eq)
-            && query_bytes[i + klen] == b'='
-        {
-            let val_start = i + klen + 1;
-            let val_end = query_bytes[val_start..]
-                .iter()
-                .position(|&b| b == b'&')
-                .map_or(len, |p| val_start + p);
-            return std::str::from_utf8(&query_bytes[val_start..val_end]).ok();
-        }
-        i += query_bytes[i..]
-            .iter()
-            .position(|&b| b == b'&')
-            .map_or(len - i, |p| p + 1);
-    }
-    None
+    query
+        .split('&')
+        .find_map(|kv| kv.strip_prefix(key)?.strip_prefix('='))
 }
 
 /// Auth-SSO 去中心化安全网关 — 基于 Pingora (0.8.0 + OpenSSL)
@@ -219,10 +198,9 @@ fn query_param<'a>(query: &'a str, key: &str) -> Option<&'a str> {
 ///
 /// 结构体字段按需持有具体依赖：
 /// - [`PathMatcher`] — 路径分类（一次计算，生命周期共享）
-/// - [`Router`] — 前缀路由表（前缀 → upstream_name → LB），一次匹配即得上游
+/// - [`Router`] — 单一前缀路由表（prefix → LB + OAuth 配置），一次匹配全生命周期复用
 /// - [`JwtVerifier`] — JWT 密码学验签 + jti 黑名单
 /// - [`TokenRefresher`] — HTTP 静默续签 + Redis 去重
-/// - `upstream_oauth` — 按 upstream name 排序的 OAuth Client 配置列表
 /// - `oidc_provider_upstream` — OIDC Provider 的 upstream nodes（用于 /token 调用）
 ///
 /// 限流器为模块级函数 [`crate::rate_limiter::check`]，无需注入。
@@ -232,14 +210,14 @@ pub struct Gateway {
     router: Router,
     jwt_verifier: JwtVerifier,
     token_refresher: TokenRefresher,
-    /// 按 upstream name 排序的 OAuth Client 配置（name 长度降序，与 router 一致）
-    upstream_oauth: Vec<(String, OAuthConfig)>,
     /// OIDC Provider 的上游地址列表（用于 POST /token 等内部调用）
     oidc_provider_upstream: Arc<Upstreams>,
     /// 与 Portal 共享的 HMAC 密钥（Option 表示未启用 HMAC 签名）
     gateway_shared_secret: Option<String>,
     /// 内部上游请求协议（http/https）
     upstream_scheme: String,
+    /// JWKS 公钥缓存 — 用于获取 OIDC Discovery 元数据（callback_path 等）
+    jwks_cache: Arc<JwksCache>,
 }
 
 impl Gateway {
@@ -250,7 +228,7 @@ impl Gateway {
     /// ```ignore
     /// # use std::sync::Arc;
     /// # use gateway::gateway::Gateway;
-    /// # use gateway::router::Router;
+    /// # use gateway::router::{RouteEntry, Router};
     /// # use gateway::path_matcher::PathMatcher;
     /// # use gateway::auth::{JwtVerifier, TokenRefresher};
     /// # use gateway::config::Upstreams;
@@ -259,12 +237,20 @@ impl Gateway {
     /// let jwks = Arc::new(JwksCache::new());
     /// let ups = Arc::new(Upstreams::from_config("127.0.0.1:4100"));
     /// let lb = Arc::new(LoadBalancer::try_from_iter(ups.iter()).unwrap());
-    /// let router = Router::new(vec![("/".to_string(), lb)]);
+    /// let router = Router::new(vec![RouteEntry {
+    ///     prefix: "/".to_string(),
+    ///     lb,
+    ///     oauth: oauth_config,
+    /// }]);
     /// let gw = Gateway::new(
     ///     PathMatcher::default(),
     ///     router,
     ///     JwtVerifier::new(Arc::clone(&jwks)),
-    ///     TokenRefresher::new(Arc::clone(&jwks), Arc::clone(&ups)),
+    ///     TokenRefresher::new(Arc::clone(&jwks), Arc::clone(&ups), "http".to_string(), None),
+    ///     ups,
+    ///     None,
+    ///     "http".to_string(),
+    ///     jwks,
     /// );
     /// ```
     #[allow(clippy::too_many_arguments)]
@@ -273,37 +259,21 @@ impl Gateway {
         router: Router,
         jwt_verifier: JwtVerifier,
         token_refresher: TokenRefresher,
-        mut upstream_oauth: Vec<(String, OAuthConfig)>,
         oidc_provider_upstream: Arc<Upstreams>,
         gateway_shared_secret: Option<String>,
         upstream_scheme: String,
+        jwks_cache: Arc<JwksCache>,
     ) -> Self {
-        upstream_oauth.sort_by(|a, b| b.0.len().cmp(&a.0.len()));
-
-        // 初始化全局上游协议（供 refresh/jwks 等模块使用）
-        let _ = UPSTREAM_SCHEME.set(upstream_scheme.clone());
-
         Self {
             path_matcher,
             router,
             jwt_verifier,
             token_refresher,
-            upstream_oauth,
             oidc_provider_upstream,
             gateway_shared_secret,
             upstream_scheme,
+            jwks_cache,
         }
-    }
-
-    /// 按请求路径解析对应的 OAuth 配置，返回 `(upstream_name, &OAuthConfig)`。
-    fn resolve_oauth<'a>(&'a self, path: &str) -> (&'a str, &'a OAuthConfig) {
-        for (name, oauth) in self.upstream_oauth.iter() {
-            if path.starts_with(name.as_str()) {
-                return (name, oauth);
-            }
-        }
-        let default = &self.upstream_oauth[0];
-        (default.0.as_str(), &default.1)
     }
 
     /// 无 JWT 页面导航 → 生成 PKCE + Cookie → 302 /authorize
@@ -314,9 +284,17 @@ impl Gateway {
         return_to: &str,
     ) -> Result<bool> {
         let host = get_host(session);
-
-        let state = oauth::build_oauth_state(oauth, host, return_to);
         let secure = is_secure_host(host);
+
+        let callback_path = self.jwks_cache.callback_path_or_default();
+
+        let state = oauth::build_oauth_state(oauth, host, return_to, &callback_path, secure)
+            .map_err(|e| {
+                Error::explain(
+                    ErrorType::HTTPStatus(500),
+                    format!("构建 OAuth state 失败: {e}"),
+                )
+            })?;
         let auth_url = format!(
             "https://{}/api/auth/oauth2/authorize?\
             response_type=code&client_id={}&redirect_uri={}&\
@@ -343,7 +321,11 @@ impl Gateway {
         Ok(true)
     }
 
-    /// 内部调用 OIDC Provider 的 POST /api/auth/oauth2/token 进行 code→token 交换
+    /// 内部调用 OIDC Provider 的 POST /api/auth/oauth2/token 进行 code→token 交换。
+    ///
+    /// 故障转移语义：**网络错误**（不可达/超时）→ 尝试下一节点；
+    /// **HTTP 非 2xx**（如 invalid_grant）→ 确定性拒绝，立即返回该错误不重试。
+    /// 所有节点网络失败 → 502。
     async fn do_token_exchange(
         &self,
         code: &str,
@@ -352,15 +334,6 @@ impl Gateway {
         client_secret: &str,
         redirect_uri: &str,
     ) -> Result<TokenExchangeResult> {
-        // 从 OIDC Provider upstream 选择一个节点（启动期已保证非空，见 main.rs）
-        let node = self.oidc_provider_upstream.iter().next().ok_or_else(|| {
-            Error::explain(
-                ErrorType::HTTPStatus(502),
-                "OIDC Provider 无可用节点，无法执行 Token 交换".to_string(),
-            )
-        })?;
-        let token_url = format!("{}://{node}/api/auth/oauth2/token", self.upstream_scheme);
-
         let body = oauth::build_token_exchange_body(
             code,
             code_verifier,
@@ -368,56 +341,70 @@ impl Gateway {
             client_secret,
             redirect_uri,
         );
-        let resp = crate::http::HTTP_CLIENT
-            .post(&token_url)
-            .header("Content-Type", "application/json")
-            .json(&body)
-            .send()
-            .await
-            .map_err(|e| {
-                Error::explain(ErrorType::HTTPStatus(502), format!("Token 端点不可达: {e}"))
+
+        for node in self.oidc_provider_upstream.iter() {
+            let token_url = format!("{}://{node}/api/auth/oauth2/token", self.upstream_scheme);
+            let resp = match crate::http::HTTP_CLIENT
+                .post(&token_url)
+                .header("Content-Type", "application/json")
+                .json(&body)
+                .send()
+                .await
+            {
+                Ok(r) => r,
+                Err(e) => {
+                    warn!("Token 端点不可达: {}: {e}，尝试下一节点", token_url);
+                    continue;
+                }
+            };
+
+            if !resp.status().is_success() {
+                // 确定性拒绝（如 invalid_grant）：换节点重试不会改变结果
+                let status = resp.status().as_u16();
+                let text = resp.text().await.unwrap_or_default();
+                return Err(Error::explain(
+                    ErrorType::HTTPStatus(status),
+                    format!("Token 交换失败 ({}): {text}", status),
+                ));
+            }
+
+            let json: serde_json::Value = resp.json().await.map_err(|e| {
+                Error::explain(
+                    ErrorType::HTTPStatus(502),
+                    format!("Token 响应解析失败: {e}"),
+                )
             })?;
 
-        if !resp.status().is_success() {
-            let status = resp.status().as_u16();
-            let text = resp.text().await.unwrap_or_default();
-            return Err(Error::explain(
-                ErrorType::HTTPStatus(status),
-                format!("Token 交换失败 ({}): {text}", status),
-            ));
+            let access = json["access_token"]
+                .as_str()
+                .filter(|s| !s.is_empty())
+                .ok_or_else(|| {
+                    Error::explain(
+                        ErrorType::HTTPStatus(502),
+                        "Token 响应中缺少 access_token 字段".to_string(),
+                    )
+                })?;
+            let refresh = json["refresh_token"]
+                .as_str()
+                .filter(|s| !s.is_empty())
+                .ok_or_else(|| {
+                    Error::explain(
+                        ErrorType::HTTPStatus(502),
+                        "Token 响应中缺少 refresh_token 字段".to_string(),
+                    )
+                })?;
+
+            return Ok(TokenExchangeResult {
+                access: access.to_string(),
+                refresh: refresh.to_string(),
+                id_token: json["id_token"].as_str().map(String::from),
+            });
         }
 
-        let json: serde_json::Value = resp.json().await.map_err(|e| {
-            Error::explain(
-                ErrorType::HTTPStatus(502),
-                format!("Token 响应解析失败: {e}"),
-            )
-        })?;
-
-        let access = json["access_token"]
-            .as_str()
-            .filter(|s| !s.is_empty())
-            .ok_or_else(|| {
-                Error::explain(
-                    ErrorType::HTTPStatus(502),
-                    "Token 响应中缺少 access_token 字段".to_string(),
-                )
-            })?;
-        let refresh = json["refresh_token"]
-            .as_str()
-            .filter(|s| !s.is_empty())
-            .ok_or_else(|| {
-                Error::explain(
-                    ErrorType::HTTPStatus(502),
-                    "Token 响应中缺少 refresh_token 字段".to_string(),
-                )
-            })?;
-
-        Ok(TokenExchangeResult {
-            access: access.to_string(),
-            refresh: refresh.to_string(),
-            id_token: json["id_token"].as_str().map(String::from),
-        })
+        Err(Error::explain(
+            ErrorType::HTTPStatus(502),
+            "OIDC Provider 所有节点均不可达，无法执行 Token 交换".to_string(),
+        ))
     }
 
     /// OAuth callback 拦截：CSRF state + nonce 校验 + Token 交换 + Cookie 清除
@@ -430,6 +417,7 @@ impl Gateway {
         state_param: &str,
     ) -> Result<bool> {
         let host = get_host(session);
+        let secure = is_secure_host(host);
         let ck = match cookie_header.as_deref() {
             Some(c) => c,
             None => {
@@ -467,16 +455,11 @@ impl Gateway {
             .and_then(oauth::safe_redirect_path)
             .unwrap_or_else(|| "/".to_string());
 
-        let redirect_uri = format!(
-            "{}://{}{}",
-            if is_secure_host(host) {
-                "https"
-            } else {
-                "http"
-            },
-            host,
-            oauth.callback_path,
-        );
+        let callback_path = self.jwks_cache.callback_path_or_default();
+
+        // 与 /authorize 阶段同一函数（oauth::build_redirect_uri）构造，
+        // 保证 OAuth 2.1 两阶段 redirect_uri 逐字节一致
+        let redirect_uri = oauth::build_redirect_uri(host, &callback_path, secure);
 
         let tokens = match self
             .do_token_exchange(
@@ -511,9 +494,8 @@ impl Gateway {
             }
         }
 
-        let secure = is_secure_host(host);
         let session_cookies = oauth::build_session_cookies(&tokens.access, &tokens.refresh, secure);
-        let clear_cookies = oauth::build_clear_oauth_cookies(secure);
+        let clear_cookies = oauth::build_clear_oauth_cookies(secure, &callback_path);
 
         info!(
             "OAuth callback 完成: client={}, return_to={}",
@@ -526,38 +508,24 @@ impl Gateway {
     }
 
     /// 根据 ctx 重写发往上游的 Cookie：微服务剥离全部，受保护路径剥离 RT 并替换 AT。
+    ///
+    /// 输入取 `ctx.cookie_header`（request_filter 起始处一次 collapse 的共享副本），
+    /// 受保护路径经 [`cookie::rewrite_protected_cookies`] 单遍完成剥离 + 替换。
     fn rewrite_upstream_cookies(&self, upstream_request: &mut RequestHeader, ctx: &GatewayCtx) {
         match ctx.path_class {
             // 微服务路由：移除全部 Cookie，避免身份信息泄露给内网后端
             PathClass::Microservice => {
                 upstream_request.remove_header("cookie");
             }
-            // 受保护业务路径：剥离 RT，必要时替换 AT
+            // 受保护业务路径：剥离 RT，必要时替换 AT（单遍状态机）
             PathClass::Protected => {
-                let mut cookie_str = String::new();
-                for cookie_val in upstream_request.headers.get_all("cookie").iter() {
-                    if let Ok(h) = cookie_val.to_str() {
-                        if !cookie_str.is_empty() {
-                            cookie_str.push_str("; ");
-                        }
-                        cookie_str.push_str(h);
-                    }
-                }
-
-                if cookie_str.is_empty() {
+                let Some(raw) = ctx.cookie_header.as_deref() else {
                     return;
-                }
-
-                let mut new_cookie =
-                    cookie::remove_from_header(&cookie_str, cookie::REFRESH_COOKIE);
-                if let Some(ref new_tokens) = ctx.refreshed_tokens {
-                    new_cookie = cookie::replace_in_header(
-                        &new_cookie,
-                        cookie::ACCESS_COOKIE,
-                        &new_tokens.access,
-                    );
-                }
-
+                };
+                let new_cookie = cookie::rewrite_protected_cookies(
+                    raw,
+                    ctx.refreshed_tokens.as_ref().map(|t| t.access.as_str()),
+                );
                 upstream_request.remove_header("cookie");
                 if let Err(e) = upstream_request.insert_header("cookie", new_cookie) {
                     warn!("重写上游 Cookie 失败: {:?}", e);
@@ -580,24 +548,28 @@ impl ProxyHttp for Gateway {
     async fn upstream_peer(
         &self,
         session: &mut Session,
-        _ctx: &mut Self::CTX,
+        ctx: &mut Self::CTX,
     ) -> Result<Box<HttpPeer>> {
         let path = session.req_header().uri.path();
-        let (name, lb) = self.router.resolve(path);
+        let entry = self.router.entry(ctx.route_idx);
         let host = get_host(session);
         debug!(
             "接收代理请求，Host: {}，路径: {} → upstream={}",
-            host, path, name
+            host, path, entry.prefix
         );
 
-        let peer = lb.select(b"", UPSTREAM_SELECT_WEIGHT).ok_or_else(|| {
-            Error::explain(
-                ErrorType::HTTPStatus(502),
-                format!("gateway: upstream \"{}\" 无可用节点", name),
-            )
-        })?;
-        debug!("路由至 upstream \"{}\": {:?}", name, peer);
-        let http_peer = HttpPeer::new(peer, false, host.to_string());
+        let peer = entry
+            .lb
+            .select(b"", UPSTREAM_SELECT_WEIGHT)
+            .ok_or_else(|| {
+                Error::explain(
+                    ErrorType::HTTPStatus(502),
+                    format!("gateway: upstream \"{}\" 无可用节点", entry.prefix),
+                )
+            })?;
+        debug!("路由至 upstream \"{}\": {:?}", entry.prefix, peer);
+        // upstream_scheme = "https" 时主代理路径真正走 TLS（与文档承诺一致）
+        let http_peer = HttpPeer::new(peer, self.upstream_scheme == "https", host.to_string());
         Ok(Box::new(http_peer))
     }
 
@@ -605,8 +577,12 @@ impl ProxyHttp for Gateway {
         crate::metrics::inc_requests();
 
         let path = session.req_header().uri.path().to_owned();
+
+        // 0. 路由解析先于任何 early-return，保证 upstream_peer 恒可用 ctx.route_idx
+        ctx.route_idx = self.router.resolve_idx(&path);
+
         let query = session.req_header().uri.query().unwrap_or("").to_owned();
-        let cookie_header = cookie::collapse_cookie_header(session.req_header());
+        ctx.cookie_header = cookie::collapse_cookie_header(session.req_header());
         let is_html_nav = is_html_page_navigation(session.req_header());
 
         // 1. 路径分类
@@ -622,21 +598,38 @@ impl ProxyHttp for Gateway {
             return Ok(true);
         }
 
-        // 4. 解析 upstream 对应的 OAuth 配置
-        let (_upstream_name, oauth_config) = self.resolve_oauth(&path);
+        // 4. 当前路由的 OAuth 配置（与 LB 同一路由表条目，单一真相源）
+        let oauth_config = &self.router.entry(ctx.route_idx).oauth;
 
         // 5. OAuth callback 拦截
         {
-            let is_callback = path == oauth_config.callback_path
-                || path.starts_with(&format!("{}/", oauth_config.callback_path));
+            let callback_path = self.jwks_cache.callback_path_or_default();
+            let is_callback = path
+                .strip_prefix(callback_path.as_ref())
+                .is_some_and(|rest| rest.is_empty() || rest.starts_with('/'));
             if is_callback {
+                // IdP 显式拒绝（error=access_denied 等）：立即回登录页，不做 code/state 校验
+                if query_param(&query, "error").is_some() {
+                    warn!("OAuth callback 携带 error 参数，重定向登录页");
+                    session
+                        .respond_302_with_cookies("/login?error=oauth_denied", &[])
+                        .await?;
+                    return Ok(true);
+                }
                 let code = query_param(&query, "code");
                 let state = query_param(&query, "state");
                 if let (Some(code), Some(state)) = (code, state) {
                     return self
-                        .handle_oauth_callback(session, oauth_config, &cookie_header, code, state)
+                        .handle_oauth_callback(
+                            session,
+                            oauth_config,
+                            &ctx.cookie_header,
+                            code,
+                            state,
+                        )
                         .await;
                 }
+                warn!("OAuth callback 缺少 code/state，透传上游处理");
             }
         }
 
@@ -658,8 +651,14 @@ impl ProxyHttp for Gateway {
             AuthDecision::Pass => {}
             AuthDecision::Interrupted => return Ok(true),
             AuthDecision::PkceRequired => {
+                // 保留 query，登录完成后完整回跳（如 /orders?page=2&sort=desc）
+                let return_to = if query.is_empty() {
+                    path.clone()
+                } else {
+                    format!("{path}?{query}")
+                };
                 return self
-                    .oauth_authorize_redirect(session, oauth_config, &path)
+                    .oauth_authorize_redirect(session, oauth_config, &return_to)
                     .await;
             }
         }
@@ -687,26 +686,16 @@ impl ProxyHttp for Gateway {
         // 再由下方按验签结果权威注入。下游收到的身份信息 100% 来自 gateway。
         strip_identity_headers(upstream_request);
 
-        if let Some(id) = &ctx.identity {
-            upstream_request.insert_header("Authorization", id.auth_header.as_str())?;
-            upstream_request.insert_header("X-User-Id", id.user_id.as_str())?;
-            upstream_request.insert_header("X-User-Jti", id.user_jti.as_str())?;
-
-            // HMAC 签名：Gateway 用共享密钥对 (timestamp + userId + jti) 签名，
-            // Portal 端验证此签名以确认请求确实来自受信任的 Gateway（替代 IP 白名单）。
-            if let Some(ref secret) = self.gateway_shared_secret {
-                let ts = std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .expect("系统时钟异常：当前时间早于 Unix epoch")
-                    .as_secs()
-                    .to_string();
-                let payload = format!("{}:{}:{}", ts, id.user_id, id.user_jti);
-                let sig = compute_hmac_sha256_hex(secret, &payload);
-                upstream_request.insert_header("X-Gateway-Timestamp", ts.as_str())?;
-                upstream_request.insert_header("X-Gateway-Signature", sig.as_str())?;
-            }
+        // 权威覆写代理头：Gateway 是 TLS 终结第一跳，socket 地址即真实客户端 IP。
+        // 入站 X-Forwarded-For / X-Real-IP 一律覆写而非透传（B2）。
+        let real_ip = session.client_ip();
+        let _ = upstream_request.remove_header("X-Forwarded-For");
+        let _ = upstream_request.remove_header("X-Real-IP");
+        if let Some(ip) = real_ip.as_deref() {
+            upstream_request.insert_header("X-Forwarded-For", ip)?;
+            upstream_request.insert_header("X-Real-IP", ip)?;
+            upstream_request.insert_header("X-Client-IP", ip)?;
         }
-        insert_opt_header(upstream_request, "X-Client-IP", session.client_ip())?;
         insert_opt_header(
             upstream_request,
             "X-Client-UA",
@@ -715,6 +704,34 @@ impl ProxyHttp for Gateway {
 
         // 按路径分类重写上行 Cookie
         self.rewrite_upstream_cookies(upstream_request, ctx);
+
+        if let Some(id) = &ctx.identity {
+            upstream_request.insert_header("Authorization", id.auth_header.as_str())?;
+            upstream_request.insert_header("X-User-Id", id.user_id.as_str())?;
+            upstream_request.insert_header("X-User-Jti", id.user_jti.as_str())?;
+
+            // HMAC 签名：Gateway 用共享密钥对 (timestamp + userId + jti) 签名，
+            // Portal 端验证此签名以确认请求确实来自受信任的 Gateway（替代 IP 白名单）。
+            if let Some(ref secret) = self.gateway_shared_secret {
+                let ts = match std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH) {
+                    Ok(d) => d.as_secs().to_string(),
+                    Err(e) => {
+                        warn!("系统时钟异常，跳过 HMAC 签名: {e}");
+                        return Ok(());
+                    }
+                };
+                let payload = format!("{}:{}:{}", ts, id.user_id, id.user_jti);
+                match compute_hmac_sha256_hex(secret, &payload) {
+                    Ok(sig) => {
+                        upstream_request.insert_header("X-Gateway-Timestamp", ts.as_str())?;
+                        upstream_request.insert_header("X-Gateway-Signature", sig.as_str())?;
+                    }
+                    Err(e) => {
+                        warn!("计算 HMAC 签名失败，跳过: {e}");
+                    }
+                }
+            }
+        }
 
         Ok(())
     }
@@ -753,38 +770,43 @@ mod tests {
     #[test]
     fn is_identity_header_strips_known_and_unknown_x_headers() {
         // 已知身份头：剥离
-        assert!(is_identity_header("authorization"));
-        assert!(is_identity_header("x-user-id"));
-        assert!(is_identity_header("x-user-jti"));
-        assert!(is_identity_header("x-user-name"));
-        assert!(is_identity_header("x-roles"));
-        assert!(is_identity_header("x-permissions"));
-        assert!(is_identity_header("x-client-ip"));
-        assert!(is_identity_header("x-client-ua"));
+        assert!(is_identity_header(b"authorization"));
+        assert!(is_identity_header(b"x-user-id"));
+        assert!(is_identity_header(b"x-user-jti"));
+        assert!(is_identity_header(b"x-user-name"));
+        assert!(is_identity_header(b"x-roles"));
+        assert!(is_identity_header(b"x-permissions"));
+        assert!(is_identity_header(b"x-client-ip"));
+        assert!(is_identity_header(b"x-client-ua"));
 
         // 黑名单兜底的核心价值：未来可能出现的身份头也默认剥离
-        assert!(is_identity_header("x-auth-token"));
-        assert!(is_identity_header("x-session-id"));
-        assert!(is_identity_header("x-token"));
-        assert!(is_identity_header("x-admin"));
-        assert!(is_identity_header("x-is-admin"));
+        assert!(is_identity_header(b"x-auth-token"));
+        assert!(is_identity_header(b"x-session-id"));
+        assert!(is_identity_header(b"x-token"));
+        assert!(is_identity_header(b"x-admin"));
+        assert!(is_identity_header(b"x-is-admin"));
+
+        // 大小写无关（H1 原始头名保留大小写）
+        assert!(is_identity_header(b"Authorization"));
+        assert!(is_identity_header(b"X-User-Id"));
     }
 
     #[test]
     fn is_identity_header_preserves_proxy_and_business_headers() {
-        // 代理标准头：保留（显式放行清单）
-        assert!(!is_identity_header("x-forwarded-for"));
-        assert!(!is_identity_header("x-forwarded-host"));
-        assert!(!is_identity_header("x-forwarded-proto"));
-        assert!(!is_identity_header("x-request-id"));
-        assert!(!is_identity_header("x-correlation-id"));
-        assert!(!is_identity_header("x-real-ip"));
+        // 代理标准头：保留（显式放行清单，随后被权威覆写）
+        assert!(!is_identity_header(b"x-forwarded-for"));
+        assert!(!is_identity_header(b"x-forwarded-host"));
+        assert!(!is_identity_header(b"x-forwarded-proto"));
+        assert!(!is_identity_header(b"x-request-id"));
+        assert!(!is_identity_header(b"x-correlation-id"));
+        assert!(!is_identity_header(b"x-real-ip"));
+        assert!(!is_identity_header(b"X-Forwarded-For"));
 
         // 非 X- 业务头：保留
-        assert!(!is_identity_header("accept"));
-        assert!(!is_identity_header("cookie"));
-        assert!(!is_identity_header("host"));
-        assert!(!is_identity_header("content-type"));
+        assert!(!is_identity_header(b"accept"));
+        assert!(!is_identity_header(b"cookie"));
+        assert!(!is_identity_header(b"host"));
+        assert!(!is_identity_header(b"content-type"));
     }
 
     /// 构造一个带若干伪造身份头 + 代理标准头的请求，验证 strip 后仅保留放行头
@@ -841,6 +863,25 @@ mod tests {
         assert!(
             req.headers.get("x-real-ip").is_some(),
             "X-Real-IP 是代理客户端 IP 头，不应被剥离"
+        );
+    }
+
+    #[test]
+    fn query_param_is_case_sensitive_and_exact() {
+        // 基本提取
+        assert_eq!(query_param("code=abc&state=xyz", "code"), Some("abc"));
+        assert_eq!(query_param("code=abc&state=xyz", "state"), Some("xyz"));
+        // 大小写敏感（OAuth 参数名区分大小写）
+        assert_eq!(query_param("CODE=abc", "code"), None);
+        // 前缀 key 不误匹配（B8 回归：不做子串匹配）
+        assert_eq!(query_param("barcode=1&code=2", "code"), Some("2"));
+        assert_eq!(query_param("codex=1", "code"), None);
+        // 空值与缺失
+        assert_eq!(query_param("code=", "code"), Some(""));
+        assert_eq!(query_param("", "code"), None);
+        assert_eq!(
+            query_param("error=access_denied", "error"),
+            Some("access_denied")
         );
     }
 }

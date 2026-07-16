@@ -33,6 +33,14 @@ const OIDC_TOKEN_MAX: isize = 30;
 
 // ── 内部纯函数：判定限流结果 ──
 
+/// 判定路径是否属于限流追踪范围（认证端点）。
+///
+/// `check()` 的外部守卫与 `observe()` 的内部判定共用一个真相源，
+/// 避免两处独立维护路径谓词引起限流静默失效。
+fn is_tracked_path(path: &str) -> bool {
+    path.starts_with("/api/auth/")
+}
+
 /// 限流判定结果。
 ///
 /// 取代原先的 `Option<bool>` 三态反范式（`None`/`Some(true)`/`Some(false)`），
@@ -70,7 +78,7 @@ pub fn observe(ip: &str, path: &str) -> RateDecision {
         } else {
             RateDecision::Blocked
         }
-    } else if path.starts_with("/api/auth/") {
+    } else if is_tracked_path(path) {
         let count = AUTH_RATE.observe(&ip, 1);
         if count <= AUTH_MAX {
             RateDecision::Allowed
@@ -104,7 +112,13 @@ pub fn observe(ip: &str, path: &str) -> RateDecision {
 /// ```
 pub async fn check(session: &mut Session) -> Result<bool> {
     let path = session.req_header().uri.path();
-    let ip = session.client_ip().unwrap_or("unknown");
+    // 非限流路径零开销：仅认证端点才提取客户端 IP
+    if !is_tracked_path(path) {
+        return Ok(false);
+    }
+    // socket 真实地址（不可伪造）；unwrap_or 仅剩 unix-socket 等边缘场景
+    let ip = session.client_ip();
+    let ip = ip.as_deref().unwrap_or("unknown");
 
     if matches!(observe(ip, path), RateDecision::Blocked) {
         warn!("速率限制触发: ip={}, path={}", ip, path);

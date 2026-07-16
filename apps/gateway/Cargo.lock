@@ -1057,6 +1057,7 @@ name = "gateway"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "arc-swap",
  "async-trait",
  "base64 0.22.1",
  "bb8",

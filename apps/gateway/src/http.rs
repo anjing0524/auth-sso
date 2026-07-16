@@ -3,9 +3,23 @@ use std::str::FromStr;
 use std::sync::LazyLock;
 use std::time::Duration;
 
+use hmac::{Hmac, Mac};
 use pingora_core::Result;
 use pingora_http::{RequestHeader, ResponseHeader};
 use pingora_proxy::Session;
+use sha2::Sha256;
+
+type HmacSha256 = Hmac<Sha256>;
+
+/// 计算 HMAC-SHA256 并以十六进制字符串返回（Gateway → Portal 信任路径统一签名原语）。
+///
+/// 返回 `None` 仅在密钥转 MAC 实例失败时（HMAC 接受任意长度密钥，实践中不发生），
+/// 供 gateway.rs 身份签名与 auth::refresh 续签签名共用，避免重复实现。
+pub(crate) fn hmac_sha256_hex(secret: &str, payload: &str) -> Option<String> {
+    let mut mac = HmacSha256::new_from_slice(secret.as_bytes()).ok()?;
+    mac.update(payload.as_bytes());
+    Some(hex::encode(mac.finalize().into_bytes()))
+}
 
 // ── Host 头解析 ──
 
@@ -33,9 +47,18 @@ pub fn host_only(host: &str) -> &str {
     }
 }
 
-/// 判定 `Host` 头是否指向本地开发环境，从而决定 Cookie 是否省略 `Secure` 标记。
+/// 统一的「本地/回环」判定：IP 解析 + is_loopback（覆盖 127.0.0.0/8、::1），
+/// 非 IP 时精确匹配 localhost。同时供 Cookie Secure 标记与 redirect_uri scheme 决策使用。
 pub fn is_secure_host(host: &str) -> bool {
-    !matches!(host_only(host), "localhost" | "127.0.0.1" | "[::1]" | "::1")
+    let h = host_only(host);
+    let bare = h
+        .strip_prefix('[')
+        .and_then(|s| s.strip_suffix(']'))
+        .unwrap_or(h);
+    if let Ok(ip) = bare.parse::<std::net::IpAddr>() {
+        return !ip.is_loopback();
+    }
+    h != "localhost"
 }
 
 /// 判断请求是否为 HTML 页面导航（GET + Accept: text/html + 无 RSC header）
@@ -52,14 +75,18 @@ pub fn is_html_page_navigation(req: &RequestHeader) -> bool {
 
 // ── 全局 HTTP 客户端 ──
 
-/// 全局 HTTP 客户端单例（reqwest::Client 内置连接池，应全局复用而非每次创建）
+/// 全局 reqwest HTTP 客户端单例（内置连接池，全局复用）。
 ///
 /// 供 `jwks` 和 `auth` 模块共享，统一超时策略（5s 连接超时）。
+///
+/// panic 策略：`reqwest::Client::builder().build()` 仅在 TLS 后端初始化失败时
+/// 返回 `Err`（如系统 CA 证书缺失）。这在网关环境中属于无法恢复的配置错误，
+/// 进程应在此处失败停止（fail-fast），不继续运行。
 pub static HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
     reqwest::Client::builder()
         .timeout(Duration::from_secs(5))
         .build()
-        .expect("❌ 全局 HTTP 客户端初始化失败")
+        .expect("全局 HTTP 客户端初始化失败——检查系统 TLS/CA 证书配置")
 });
 
 // ── Session 扩展 ──
@@ -70,8 +97,9 @@ pub static HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
 /// 手动 desugar async fn → `impl Future` 以精确控制 `Send` 约束。
 /// 避免 `#[async_trait]` 的 `Box` 堆分配，零开销。
 pub trait SessionExt {
-    /// 提取真实客户端 IP（优先从 X-Forwarded-For 的首个 IP 提取）
-    fn client_ip(&self) -> Option<&str>;
+    /// 提取真实客户端 IP（socket 对端地址 — Gateway 为 TLS 终结第一跳，
+    /// 不信任任何入站 `X-Forwarded-For`/`X-Real-IP` 头）
+    fn client_ip(&self) -> Option<String>;
 
     /// 发送 401 Unauthorized 响应并注入 Bearer WWW-Authenticate 头部
     fn respond_401(&mut self) -> impl std::future::Future<Output = Result<()>> + Send;
@@ -94,10 +122,10 @@ pub trait SessionExt {
 }
 
 impl SessionExt for Session {
-    fn client_ip(&self) -> Option<&str> {
-        self.get_header("X-Forwarded-For")
-            .and_then(|h| h.to_str().ok())
-            .and_then(|s| s.split(',').next().map(|s| s.trim()))
+    fn client_ip(&self) -> Option<String> {
+        self.client_addr()
+            .and_then(|a| a.as_inet())
+            .map(|inet| inet.ip().to_string())
     }
 
     async fn respond_401(&mut self) -> Result<()> {
@@ -176,7 +204,11 @@ mod tests {
         assert!(!is_secure_host("127.0.0.1:4100"));
         assert!(!is_secure_host("[::1]"));
         assert!(!is_secure_host("[::1]:18443"));
+        assert!(!is_secure_host("[::1]:443"));
         assert!(!is_secure_host("::1"));
+        // 127.0.0.0/8 整段回环（原精确匹配漏判）
+        assert!(!is_secure_host("127.0.0.2"));
+        assert!(!is_secure_host("127.1.2.3:8080"));
     }
 
     #[test]

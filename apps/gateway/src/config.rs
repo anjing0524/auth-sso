@@ -68,13 +68,6 @@ pub struct OAuthConfig {
     pub client_id: String,
     /// OAuth 2.1 client_secret。Gateway 代为拦截 callback + POST /token 换取 Token 并下发给浏览器。
     pub client_secret: String,
-    /// Gateway 需拦截的 OAuth callback 路径（相对路径，如 /api/auth/callback）
-    #[serde(default = "default_callback_path")]
-    pub callback_path: String,
-}
-
-fn default_callback_path() -> String {
-    "/api/auth/callback".to_string()
 }
 
 /// 启动期路由一致性校验。
@@ -92,6 +85,17 @@ pub fn validate_routing_consistency(routes: &[UpstreamConfig]) -> anyhow::Result
         }
         if r.oauth.client_secret.is_empty() {
             bail!("upstream \"{}\" 的 oauth.client_secret 不能为空", r.name);
+        }
+        // 白名单归属校验：public_path 必须落在自身路由前缀内，
+        // 防止某个 upstream 的配置为其他 upstream 的路径开放免鉴权后门
+        for p in &r.public_paths {
+            if !p.starts_with(&r.name) {
+                bail!(
+                    "upstream \"{}\" 的 public_path \"{}\" 未以自身前缀开头，越界白名单被拒绝",
+                    r.name,
+                    p
+                );
+            }
         }
     }
     if !routes.iter().any(|r| r.oidc_provider) {
@@ -250,7 +254,6 @@ impl Default for Config {
                 oauth: OAuthConfig {
                     client_id: "portal".to_string(),
                     client_secret: String::new(),
-                    callback_path: "/api/auth/callback".to_string(),
                 },
             }],
         }
@@ -490,7 +493,6 @@ mod tests {
             oauth: OAuthConfig {
                 client_id: "test".to_string(),
                 client_secret: "test-secret".to_string(),
-                callback_path: "/api/auth/callback".to_string(),
             },
         }
     }
@@ -523,5 +525,25 @@ mod tests {
     fn routing_check_rejects_missing_oidc_provider() {
         let err = validate_routing_consistency(&[upstream("/", false)]).unwrap_err();
         assert!(err.to_string().contains("oidc_provider"));
+    }
+
+    #[test]
+    fn routing_check_accepts_public_paths_within_own_prefix() {
+        // name = "/" 天然涵盖全部路径；子路由白名单落在自身前缀内
+        let mut portal = upstream("/", true);
+        portal.public_paths = vec!["/login".into(), "/api/auth/".into()];
+        let mut demo = upstream("/demo/", false);
+        demo.public_paths = vec!["/demo/landing".into(), "/demo/about".into()];
+        assert!(validate_routing_consistency(&[portal, demo]).is_ok());
+    }
+
+    #[test]
+    fn routing_check_rejects_public_path_outside_own_prefix() {
+        // /demo/ 声明 /login 白名单 → 越界（为 portal 的路径开免鉴权后门）
+        let portal = upstream("/", true);
+        let mut demo = upstream("/demo/", false);
+        demo.public_paths = vec!["/login".into()];
+        let err = validate_routing_consistency(&[portal, demo]).unwrap_err();
+        assert!(err.to_string().contains("越界白名单"));
     }
 }

@@ -4,7 +4,6 @@ use pingora_core::listeners::tls::TlsSettings;
 use pingora_core::prelude::*;
 use pingora_core::services::background::background_service;
 use pingora_load_balancing::LoadBalancer;
-use pingora_load_balancing::selection::RoundRobin;
 use pingora_proxy::http_proxy_service;
 use std::sync::Arc;
 use tracing::info;
@@ -15,7 +14,7 @@ use gateway::gateway::Gateway;
 use gateway::jwks::JwksCache;
 use gateway::path_matcher::PathMatcher;
 use gateway::redirect::RedirectService;
-use gateway::router::Router;
+use gateway::router::{RouteEntry, Router};
 
 #[derive(Parser, Debug)]
 #[command(name = "gateway", author, version, about = "SSO 去中心化安全网关")]
@@ -38,7 +37,7 @@ fn main() -> anyhow::Result<()> {
     let oidc_entry = upstream_routes
         .iter()
         .find(|u| u.oidc_provider)
-        .expect("validate_routing_consistency 应已保证存在 oidc_provider = true 的 upstream");
+        .ok_or_else(|| anyhow::anyhow!("路由表缺少 oidc_provider = true 的 upstream（validate_routing_consistency 应已保证此点）"))?;
     let portal_upstreams = Arc::new(Upstreams::from_config(&oidc_entry.addresses));
 
     if portal_upstreams.is_empty() {
@@ -50,10 +49,15 @@ fn main() -> anyhow::Result<()> {
 
     let jwks_cache = Arc::new(JwksCache::new());
     let jwt_verifier = JwtVerifier::new(Arc::clone(&jwks_cache));
-    let token_refresher =
-        TokenRefresher::new(Arc::clone(&jwks_cache), Arc::clone(&portal_upstreams));
+    let token_refresher = TokenRefresher::new(
+        Arc::clone(&jwks_cache),
+        Arc::clone(&portal_upstreams),
+        config.gateway.upstream_scheme.clone(),
+        config.gateway.gateway_shared_secret.clone(),
+    );
 
-    let mut entries: Vec<(String, Arc<LoadBalancer<RoundRobin>>)> = Vec::new();
+    // 单一路由表：name/lb/oauth 一次装配（Router 内部按 prefix 长度降序排序）
+    let mut entries: Vec<RouteEntry> = Vec::new();
     for uc in upstream_routes {
         let ups = Upstreams::from_config(&uc.addresses);
         if ups.is_empty() {
@@ -62,7 +66,11 @@ fn main() -> anyhow::Result<()> {
         let lb = Arc::new(LoadBalancer::try_from_iter(ups.iter()).map_err(|e| {
             anyhow::anyhow!("配置 upstream \"{}\" 负载均衡器失败: {:?}", uc.name, e)
         })?);
-        entries.push((uc.name.clone(), lb));
+        entries.push(RouteEntry {
+            prefix: uc.name.clone(),
+            lb,
+            oauth: uc.oauth.clone(),
+        });
     }
     let router = Router::new(entries);
 
@@ -107,6 +115,7 @@ fn main() -> anyhow::Result<()> {
         gateway::jwks::JwksRefreshService::new(
             Arc::clone(&jwks_cache),
             Arc::clone(&portal_upstreams),
+            config.gateway.upstream_scheme.clone(),
             config.gateway.jwks_refresh_interval_secs,
         ),
     );
@@ -119,13 +128,10 @@ fn main() -> anyhow::Result<()> {
             router,
             jwt_verifier,
             token_refresher,
-            upstream_routes
-                .iter()
-                .map(|uc| (uc.name.clone(), uc.oauth.clone()))
-                .collect(),
             portal_upstreams,
             config.gateway.gateway_shared_secret.clone(),
             config.gateway.upstream_scheme.clone(),
+            Arc::clone(&jwks_cache),
         ),
     );
 
