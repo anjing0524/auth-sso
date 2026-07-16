@@ -29,10 +29,6 @@ import { createdAtColumn, updatedAtColumn } from './helpers';
  *
  * client_id 为 PK（OAuth 业务标识），同时是其他表 FK 的统一引用目标。
  * redirectUris 使用 PG 原生 text[] 数组类型。
- *
- * `isInternal` 标记区分 Portal 自身会话客户端（true）与第三方 OAuth 客户端（false）。
- * 续签时据此决定 access token 的 audience：内部客户端用 'portal-client'，
- * 第三方沿用其 client_id —— 避免对 client_id 字符串做字面量比较判断身份。
  */
 export const clients = pgTable('clients', {
   clientId: varchar('client_id', { length: 50 }).primaryKey(),
@@ -45,7 +41,6 @@ export const clients = pgTable('clients', {
   accessTokenTtl: integer('access_token_ttl').default(3600),
   refreshTokenTtl: integer('refresh_token_ttl').default(604800),
   status: entityStatusEnum('status').notNull().default('ACTIVE'),
-  isInternal: boolean('is_internal').notNull().default(false),
   createdAt: createdAtColumn(),
   updatedAt: updatedAtColumn(),
 });

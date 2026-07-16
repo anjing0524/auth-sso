@@ -86,7 +86,6 @@ async function upsertClient(db: ReturnType<typeof drizzle>, opts: {
   name: string;
   clientSecret: string;
   redirectUris: string;
-  isInternal?: boolean;
 }): Promise<void> {
   // 统一存储 SHA-256 哈希（与 seed.ts / validateClientSecret 保持一致，原文不入库）
   const clientSecretHash = hashClientSecret(opts.clientSecret);
@@ -100,7 +99,6 @@ async function upsertClient(db: ReturnType<typeof drizzle>, opts: {
       .set({
         clientSecret: clientSecretHash,
         redirectUris: JSON.parse(opts.redirectUris),
-        isInternal: opts.isInternal ?? false,
         updatedAt: new Date(),
       })
       .where(eq(schema.clients.clientId, opts.clientId));
@@ -115,7 +113,6 @@ async function upsertClient(db: ReturnType<typeof drizzle>, opts: {
     redirectUris: JSON.parse(opts.redirectUris),
     scopes: 'openid profile email offline_access',
     status: 'ACTIVE',
-    isInternal: opts.isInternal ?? false,
   });
   console.log(`  ✅ 创建客户端: ${opts.name} (${opts.clientId})`);
 }
@@ -159,7 +156,6 @@ async function main() {
       name: 'Auth-SSO Portal',
       clientSecret: portalSecret,
       redirectUris: portalRedirectUrls,
-      isInternal: true,
     });
 
     // 3. RBAC 初始化（幂等，从 contracts 读取）

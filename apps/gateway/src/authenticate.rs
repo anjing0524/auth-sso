@@ -1,36 +1,21 @@
-use crate::auth::{JwtVerifier, TokenExpiry, TokenRefresher, TokenStatus};
+use crate::auth::{AuthDecision, JwtVerifier, TokenExpiry, TokenRefresher, TokenStatus};
 use crate::cookie;
 use crate::gateway::{GatewayCtx, Identity};
-use crate::http::{SessionExt, is_html_page_navigation};
+use crate::http::SessionExt;
 use pingora_core::Result;
 use pingora_proxy::Session;
-use tracing::{info, warn};
+use tracing::warn;
 
-// ── 鉴权失败响应 ──
-
-/// 根据请求特征决定拦截策略：
-/// - HTML 页面导航（GET + text/html + 无 RSC）：不拦截，透传给 Portal
-///   → Portal proxy.ts 作为 OAuth Client 生成 PKCE → 302 /authorize → 标准 OAuth 2.1 链路
-/// - API/RSC/POST 请求：返回 401
-///
-/// 透传而非 Gateway 自身 302 的原因：proxy.ts 需要在跳转 /authorize 之前生成
-/// PKCE/state/nonce 并写入 HttpOnly Cookie（Path=/api/auth/callback），这些操作
-/// 无法在 Rust 网关层完成——Cookie 必须在 Portal 域名下由 Next.js 写入。
-async fn respond_auth_failure(session: &mut Session) -> Result<bool> {
-    if is_html_page_navigation(session.req_header()) {
-        info!("未授权页面导航 → 透传 Portal（proxy.ts 将生成 PKCE 并跳转 /authorize）");
-        return Ok(false);
+async fn auth_failure_decision(session: &mut Session, is_html_nav: bool) -> Result<AuthDecision> {
+    if is_html_nav {
+        Ok(AuthDecision::PkceRequired)
+    } else {
+        session.respond_401().await?;
+        crate::metrics::inc_auth_failures();
+        Ok(AuthDecision::Interrupted)
     }
-
-    info!("未授权 API/RSC 请求 → 401");
-    session.respond_401().await?;
-    crate::metrics::inc_auth_failures();
-    Ok(true)
 }
 
-// ── 静默续签 ──
-
-/// 从 Cookie 提取 RT，调 Portal 续签，成功时更新 ctx 并返回 true。
 async fn try_refresh_session(
     cookie_header: Option<&str>,
     ctx: &mut GatewayCtx,
@@ -59,46 +44,22 @@ async fn try_refresh_session(
     true
 }
 
-// ── 主流程 ──
-
-/// 鉴权与静默续签。
-///
-/// 三步：
-/// 1. 提取 Cookie 中的 AT → 验签
-/// 2. Valid → 放行；NeedsRefresh / Expired → 尝试续签
-/// 3. Expired 且续签失败 → 拒绝；其余 → 放行
-///
-/// # Errors
-///
-/// 仅在底层 I/O 操作（读取请求头、写入响应）失败时返回错误，
-/// 鉴权逻辑本身不产生错误（通过 `respond_auth_failure` 处理）。
-///
-/// # Examples
-///
-/// ```ignore
-/// // 在 request_filter 中调用：
-/// if authenticate::check(session, ctx, &jwt_verifier, &token_refresher).await? {
-///     return Ok(true); // 鉴权失败，已响应 302/401
-/// }
-/// // 鉴权通过，继续处理请求
-/// ```
 pub async fn check(
     session: &mut Session,
     ctx: &mut GatewayCtx,
     verifier: &JwtVerifier,
     refresher: &TokenRefresher,
-) -> Result<bool> {
+    is_html_nav: bool,
+) -> Result<AuthDecision> {
     let cookie_header = cookie::collapse_cookie_header(session.req_header());
     let cookie_header = cookie_header.as_deref();
 
     let token = cookie_header.and_then(|h| cookie::extract_from_header(h, cookie::ACCESS_COOKIE));
 
     let Some(token) = token else {
-        return respond_auth_failure(session).await;
+        return auth_failure_decision(session, is_html_nav).await;
     };
 
-    // 2. 验签：失败原因以强类型 VerifyError 呈现，统一短路到 302/401（业务语义不变），
-    //    但日志现在携带可结构化过滤的具体失败类别。
     let TokenStatus {
         token: verified,
         expiry,
@@ -106,37 +67,26 @@ pub async fn check(
         Ok(status) => status,
         Err(e) => {
             warn!(error = %e, "JWT 验签失败");
-            return respond_auth_failure(session).await;
+            return auth_failure_decision(session, is_html_nav).await;
         }
     };
 
-    // 3. 写入当前身份到 ctx
     ctx.identity = Some(Identity {
         auth_header: format!("Bearer {}", token),
         user_id: verified.user_id,
         user_jti: verified.jti,
     });
 
-    // 4. Valid → 直接放行，无需续签
-    if matches!(expiry, TokenExpiry::Valid) {
-        return Ok(false);
+    match expiry {
+        TokenExpiry::Valid => Ok(AuthDecision::Pass),
+        TokenExpiry::NearlyExpired | TokenExpiry::Expired => {
+            let refreshed = try_refresh_session(cookie_header, ctx, refresher).await;
+            match expiry {
+                TokenExpiry::Expired if !refreshed => {
+                    auth_failure_decision(session, is_html_nav).await
+                }
+                _ => Ok(AuthDecision::Pass),
+            }
+        }
     }
-
-    // 5. NearlyExpired / Expired → 尝试续签
-    let refreshed = try_refresh_session(cookie_header, ctx, refresher).await;
-
-    // 6. Expired 且续签失败 → 拒绝；其余 → 放行
-    if matches!(expiry, TokenExpiry::Expired) && !refreshed {
-        return respond_auth_failure(session).await;
-    }
-    Ok(false)
 }
-
-// 302 vs 401 vs 透传 决策矩阵（respond_auth_failure 内联）：
-//   | Method | Accept          | RSC  | 结果 |
-//   |--------|-----------------|------|------|
-//   | GET    | text/html       | 无   | 透传（Portal proxy.ts 生成 PKCE → /authorize） |
-//   | POST   | text/html       | 无   | 401  |
-//   | GET    | application/json| 无   | 401  |
-//   | GET    | text/html       | 有   | 401  |
-//   | *      | *               | *    | 401  |（默认）

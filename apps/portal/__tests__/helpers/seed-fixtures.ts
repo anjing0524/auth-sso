@@ -118,7 +118,6 @@ export function seedPortalClient(overrides: Partial<NonNullable<SeedData['client
     accessTokenTtl: 3600,
     refreshTokenTtl: 604800,
     status: 'ACTIVE',
-    isInternal: true,
     createdAt: now,
     updatedAt: now,
     ...overrides,

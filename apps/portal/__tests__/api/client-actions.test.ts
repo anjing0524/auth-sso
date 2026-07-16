@@ -55,7 +55,6 @@ function seedTestClient(overrides: Record<string, unknown> = {}) {
     accessTokenTtl: 3600,
     refreshTokenTtl: 604800,
     status: 'ACTIVE',
-    isInternal: false,
     createdAt: now,
     updatedAt: now,
     ...overrides,

@@ -87,7 +87,6 @@ export function createTestClient(overrides: Record<string, any> = {}) {
     clientSecret: 'hashed_secret',
     redirectUris: ['http://localhost:4100/api/auth/callback'],
     scopes: 'openid profile',
-    isInternal: false,
     status: 'ACTIVE',
     createdAt: new Date('2026-01-01'),
     updatedAt: new Date('2026-01-01'),

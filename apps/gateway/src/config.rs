@@ -48,17 +48,17 @@ impl Default for GatewayConfig {
 }
 
 /// 单个上游路由条目 — name 即 path prefix。
-#[derive(Debug, Deserialize, Clone, Default)]
-#[serde(default)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct UpstreamConfig {
     pub name: String,
     pub addresses: String,
+    #[serde(default)]
     pub public_paths: Vec<String>,
+    #[serde(default)]
     pub oidc_provider: bool,
-    /// 可选的 OAuth 2.1 Client 配置。
-    /// 配置后 Gateway 将为该上游代为执行 PKCE 生成 + Token 交换（无感 SSO）。
-    /// 未配置时 Gateway 仅生成 PKCE，callback 透传给下游自行处理。
-    pub oauth: Option<OAuthConfig>,
+    /// OAuth 2.1 Client 配置（必填）。
+    /// Gateway 为该上游代为执行 PKCE 生成 + callback 拦截 + Token 交换（无感 SSO）。
+    pub oauth: OAuthConfig,
 }
 
 /// 单个上游的 OAuth 2.1 客户端配置
@@ -66,9 +66,8 @@ pub struct UpstreamConfig {
 pub struct OAuthConfig {
     /// OAuth 2.1 client_id（在 Portal 中注册的客户端标识符）
     pub client_id: String,
-    /// OAuth 2.1 client_secret。存在时 Gateway 代为拦截 callback + POST /token
-    /// 换取 Token 并下发给浏览器；不存在时 callback 透传给下游。
-    pub client_secret: Option<String>,
+    /// OAuth 2.1 client_secret。Gateway 代为拦截 callback + POST /token 换取 Token 并下发给浏览器。
+    pub client_secret: String,
     /// Gateway 需拦截的 OAuth callback 路径（相对路径，如 /api/auth/callback）
     #[serde(default = "default_callback_path")]
     pub callback_path: String,
@@ -87,6 +86,12 @@ pub fn validate_routing_consistency(routes: &[UpstreamConfig]) -> anyhow::Result
         }
         if r.name.is_empty() {
             bail!("upstream name 不能为空字符串");
+        }
+        if r.oauth.client_id.is_empty() {
+            bail!("upstream \"{}\" 的 oauth.client_id 不能为空", r.name);
+        }
+        if r.oauth.client_secret.is_empty() {
+            bail!("upstream \"{}\" 的 oauth.client_secret 不能为空", r.name);
         }
     }
     if !routes.iter().any(|r| r.oidc_provider) {
@@ -242,7 +247,11 @@ impl Default for Config {
                     "/.well-known/".into(),
                 ],
                 oidc_provider: true,
-                oauth: None,
+                oauth: OAuthConfig {
+                    client_id: "portal".to_string(),
+                    client_secret: String::new(),
+                    callback_path: "/api/auth/callback".to_string(),
+                },
             }],
         }
     }
@@ -348,6 +357,10 @@ mod tests {
                 addresses = "portal:4000"
                 oidc_provider = true
                 public_paths = ["/login", "/register", "/custom"]
+
+                [upstreams.oauth]
+                client_id = "portal"
+                client_secret = "portal-secret-123"
             "#;
             fs::write(file_path, toml).unwrap();
             let config = Config::load(file_path).unwrap();
@@ -370,6 +383,10 @@ mod tests {
                 name = "/"
                 addresses = "partial-portal:3000"
                 oidc_provider = true
+
+                [upstreams.oauth]
+                client_id = "portal"
+                client_secret = "portal-secret-override"
             "#;
             fs::write(file_path, toml).unwrap();
             let config = Config::load(file_path).unwrap();
@@ -434,10 +451,18 @@ mod tests {
             addresses = "127.0.0.1:4100"
             oidc_provider = true
 
+            [upstreams.oauth]
+            client_id = "portal"
+            client_secret = "portal-secret"
+
             [[upstreams]]
             name = "/demo/"
             addresses = "127.0.0.1:3100"
             public_paths = ["/demo/landing", "/demo/about"]
+
+            [upstreams.oauth]
+            client_id = "demo"
+            client_secret = "demo-secret"
         "#;
         fs::write(fp, toml).unwrap();
         let config = Config::load(fp).unwrap();
@@ -462,7 +487,11 @@ mod tests {
             addresses: "127.0.0.1:4100".to_string(),
             public_paths: Vec::new(),
             oidc_provider,
-            oauth: None,
+            oauth: OAuthConfig {
+                client_id: "test".to_string(),
+                client_secret: "test-secret".to_string(),
+                callback_path: "/api/auth/callback".to_string(),
+            },
         }
     }
 

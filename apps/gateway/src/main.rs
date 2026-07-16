@@ -112,8 +112,6 @@ fn main() -> anyhow::Result<()> {
     );
     let _ = my_server.add_service(jwks_refresh_svc);
 
-    let oidc_provider_name = oidc_entry.name.clone();
-
     let mut gateway_proxy = http_proxy_service(
         &my_server.configuration,
         Gateway::new(
@@ -125,7 +123,6 @@ fn main() -> anyhow::Result<()> {
                 .iter()
                 .map(|uc| (uc.name.clone(), uc.oauth.clone()))
                 .collect(),
-            oidc_provider_name,
             portal_upstreams,
             config.gateway.gateway_shared_secret.clone(),
             config.gateway.upstream_scheme.clone(),

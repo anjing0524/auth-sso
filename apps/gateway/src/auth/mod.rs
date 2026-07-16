@@ -13,6 +13,19 @@ pub use verify::{JwtVerifier, VerifyError};
 use base64::Engine;
 use serde::{Deserialize, Serialize};
 
+/// `authenticate::check` 的认证决策返回值，三态枚举替代旧 `Result<bool>` 的 boolean blindness。
+///
+/// 编译器强制穷尽匹配 — 新增变体时所有 `match` 分支自动报错，消除运行时漏判风险。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AuthDecision {
+    /// 认证通过，继续代理请求
+    Pass,
+    /// 已向客户端发送响应（如 401），上游请求不再转发
+    Interrupted,
+    /// 无 JWT 的 HTML 页面导航，需生成 PKCE → 302 /authorize
+    PkceRequired,
+}
+
 // ── JWT Claims ──
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

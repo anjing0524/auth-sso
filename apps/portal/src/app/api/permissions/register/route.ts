@@ -115,10 +115,6 @@ export async function POST(request: NextRequest) {
     } catch {
       return restError(COMMON_ERRORS.FORBIDDEN, 'Client ID 或 Secret 错误', 403);
     }
-    // 仅允许 Portal 内部系统 Client 调用（is_internal=true），杜绝任意注册 Client 提权注册权限
-    if (!clientRecord[0]!.isInternal) {
-      return restError(COMMON_ERRORS.FORBIDDEN, '该端点仅限内部系统 Client 调用', 403);
-    }
 
     const body = await request.json();
     const tree: IncomingPermission[] = body.permissions;

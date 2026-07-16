@@ -95,76 +95,100 @@
 
 | # | 状态 | 任务 | 文件 |
 |---|:--:|------|------|
-| D1-1 | 🔲 | permissions: 删除 `resource`/`action` 列，扩展 `code`→varchar(150)，更新 CHECK | `db/schema/rbac.ts` |
-| D1-2 | 🔲 | refresh_tokens: 删除 `client_id` 列及索引 | `db/schema/auth.ts` |
-| D1-3 | 🔲 | 生成并执行迁移 SQL | Drizzle migration |
+| D1-1 | ✅ | permissions: 删除 `resource`/`action` 列，扩展 `code`→varchar(150)，更新 CHECK | `db/schema/rbac.ts` |
+| D1-2 | ✅ | refresh_tokens: 删除 `client_id` 列及索引 | `db/schema/auth.ts` |
+| D1-3 | ✅ | 生成并执行迁移 SQL | Drizzle migration |
 
 ### Phase 2: Contracts
 
 | # | 状态 | 任务 | 文件 |
 |---|:--:|------|------|
-| D2-1 | 🔲 | 所有权限常量加 `portal:` 前缀 | `packages/contracts/src/permissions.ts` |
-| D2-2 | 🔲 | `PortalJwtClaims` 最小化（移除 roles/permissions/deptIds） | `domain/auth/types.ts` |
-| D2-3 | 🔲 | OIDC 常量 `iss`/`aud` 改为 `"auth-sso"` | `packages/contracts/src/oidc.ts` |
+| 0 所有权限常量加 `portal:` 前缀 | `packages/contracts/src/permissions.ts` |
+| 0 `PortalJwtClaims` 最小化（移除 roles/permissions/deptIds） | `domain/auth/types.ts` |
+| 0 OIDC 常量 `iss`/`aud` 改为 `"auth-sso"` | `packages/contracts/src/oidc.ts` |
 
 ### Phase 3: JWT Token 签发/验证
 
 | # | 状态 | 任务 | 文件 |
 |---|:--:|------|------|
-| D3-1 | 🔲 | `signAccessToken` 最小化 claims | `lib/auth/token.ts` |
-| D3-2 | 🔲 | `verifyAccessToken` aud/iss 改为 `"auth-sso"` | `lib/auth/token.ts` |
-| D3-3 | 🔲 | `resolveTokenClaims` 不再返回鉴权数据供 JWT 嵌入 | `lib/auth/permissions-context.ts` |
+| 0 `signAccessToken` 最小化 claims | `lib/auth/token.ts` |
+| 0 `verifyAccessToken` aud/iss 改为 `"auth-sso"` | `lib/auth/token.ts` |
+| 0 `resolveTokenClaims` 不再返回鉴权数据供 JWT 嵌入 | `lib/auth/permissions-context.ts` |
 
 ### Phase 4: 权限上下文 Redis 化
 
 | # | 状态 | 任务 | 文件 |
 |---|:--:|------|------|
-| D4-1 | 🔲 | RBAC 变更时主动更新 Redis `user:{sub}:perms` | `lib/permissions.ts` |
-| D4-2 | 🔲 | Token 续签时预填充 Redis 权限缓存 | `lib/permissions.ts` |
+| 0 RBAC 变更时主动更新 Redis `user:{sub}:perms` | `lib/permissions.ts` |
+| 0 Token 续签时预填充 Redis 权限缓存 | `lib/permissions.ts` |
 
 ### Phase 5: Portal 自身鉴权改造
 
 | # | 状态 | 任务 | 文件 |
 |---|:--:|------|------|
-| D5-1 | 🔲 | `checkPermission` 改为读 Redis | `lib/auth/check-permission.ts` |
-| D5-2 | 🔲 | `withPermission` 移除 claims 注入 | `lib/auth/facade.ts` |
-| D5-3 | 🔲 | `withAuth` AuthContext 简化为 `{ userId }` | `lib/auth/guard.ts` |
-| D5-4 | 🔲 | 所有 Controller/Page 去除 `claims.deptIds` 直接引用，改为 Redis 获取 | `app/(dashboard)/**`, `app/api/**` |
+| 0 `checkPermission` 改为读 Redis | `lib/auth/check-permission.ts` |
+| 0 `withPermission` 移除 claims 注入 | `lib/auth/facade.ts` |
+| 0 `withAuth` AuthContext 简化为 `{ userId }` | `lib/auth/guard.ts` |
+| 0 所有 Controller/Page 去除 `claims.deptIds` 直接引用，改为 Redis 获取 | `app/(dashboard)/**`, `app/api/**` |
 
 ### Phase 6: Refresh Token 去 ClientId
 
 | # | 状态 | 任务 | 文件 |
 |---|:--:|------|------|
-| D6-1 | 🔲 | `issueRefreshToken` 移除 clientId 参数 | `lib/auth/token.ts` |
-| D6-2 | 🔲 | `rotateRefreshToken` 移除 clientId 参数 | `lib/auth/token.ts` |
-| D6-3 | 🔲 | 调用方更新（/token /refresh 端点） | `app/api/auth/oauth2/token/route.ts`, `app/api/auth/refresh/route.ts` |
+| 0 `issueRefreshToken` 移除 clientId 参数 | `lib/auth/token.ts` |
+| 0 `rotateRefreshToken` 移除 clientId 参数 | `lib/auth/token.ts` |
+| 0 调用方更新（/token /refresh 端点） | `app/api/auth/oauth2/token/route.ts`, `app/api/auth/refresh/route.ts` |
 
 ### Phase 7: Gateway 改造 (Rust)
 
 | # | 状态 | 任务 | 文件 |
 |---|:--:|------|------|
-| D7-1 | 🔲 | Claims 结构体移除 roles/permissions/dept_ids | `gateway/src/auth/mod.rs` |
-| D7-2 | 🔲 | 验签 aud/iss 改为 `"auth-sso"` | `gateway/src/auth/verify.rs` |
-| D7-3 | 🔲 | 移除 X-User-Roles/Permissions/DeptIds 注入 | `gateway/src/gateway.rs` |
+| 0 Claims 结构体移除 roles/permissions/dept_ids | `gateway/src/auth/mod.rs` |
+| 0 验签 aud/iss 改为 `"auth-sso"` | `gateway/src/auth/verify.rs` |
+| 0 移除 X-User-Roles/Permissions/DeptIds 注入 | `gateway/src/gateway.rs` |
 
 ### Phase 8: Seed 数据
 
 | # | 状态 | 任务 | 文件 |
 |---|:--:|------|------|
-| D8-1 | 🔲 | 权限 code 加 `portal:` 前缀；删除 resource/action 赋值 | `scripts/seed-rbac.ts` |
-| D8-2 | 🔲 | Portal 菜单 code 加 `portal:` 前缀 | `scripts/seed-rbac.ts` |
+| 0 权限 code 加 `portal:` 前缀；删除 resource/action 赋值 | `scripts/seed-rbac.ts` |
+| 0 Portal 菜单 code 加 `portal:` 前缀 | `scripts/seed-rbac.ts` |
 
 ### Phase 9: 测试更新
 
 | # | 状态 | 任务 | 文件 |
 |---|:--:|------|------|
-| D9-1 | 🔲 | 鉴权测试适配（mock Redis 替代 JWT claims） | `__tests__/lib/auth/*` |
-| D9-2 | 🔲 | API 测试适配（aud/iss claims 移除） | `__tests__/api/*` |
-| D9-3 | 🔲 | Gateway 测试适配（Claims 结构体） | `apps/gateway/tests/` |
+| 0 鉴权测试适配（mock Redis 替代 JWT claims） | `__tests__/lib/auth/*` |
+| 0 API 测试适配（aud/iss claims 移除） | `__tests__/api/*` |
+| 0 Gateway 测试适配（Claims 结构体） | `apps/gateway/tests/` |
 
 ### 变更记录
 
+- 2026-07-16: ADR-006/007/008 全量实现完成，合并 main（75 文件，307 测试全绿）
 - 2026-07-15: ADR-006/007/008 产出，领域重构计划制定（来源：/grilling 深度访谈）
+
+---
+
+## ADR-009 Gateway 重构（2026-07-16 /grilling 产出）
+
+> 详细计划：`docs/plans/2026-07-16-adr-009-gateway-refactor.md`
+
+| # | 状态 | 任务 | 文件 |
+|---|:--:|------|------|
+| G1-1 | 🔲 | 新增 `AuthDecision` 枚举（Pass/Interrupted/PkceRequired） | `gateway/src/auth/mod.rs` |
+| G1-2 | 🔲 | `authenticate::check` 重写：`Result<bool>`→`Result<AuthDecision>`，`match expiry` 替代 `matches!`，删除 `respond_auth_failure` | `gateway/src/authenticate.rs` |
+| G2-1 | 🔲 | 删除 `request_filter` step 7（`hasJwt` Cookie 预判 ~37行） | `gateway/src/gateway.rs` |
+| G2-2 | 🔲 | 删除 callback 中 `oidc_provider_name` 跳过分支 | `gateway/src/gateway.rs` |
+| G2-3 | 🔲 | 删除 callback 透传分支（`client_secret.is_some()` 检查 + passthrough） | `gateway/src/gateway.rs` |
+| G2-4 | 🔲 | step 8 替换为 `match AuthDecision` 统一分支 | `gateway/src/gateway.rs` |
+| G3-1 | 🔲 | `OAuthConfig.client_secret` → `String`（必填），`UpstreamConfig.oauth` → 必填 | `gateway/src/config.rs` |
+| G3-2 | 🔲 | 删除 `Gateway.oidc_provider_name`、`GatewayCtx.oauth_passthrough_verifier` | `gateway/src/gateway.rs` |
+| G3-3 | 🔲 | `resolve_oauth` 返回 `&OAuthConfig`（不再 `Option`） | `gateway/src/gateway.rs` |
+| G4-1 | 🔲 | 删除 `upstream_request_filter` 中 `X-OAuth-Code-Verifier` 注入 | `gateway/src/gateway.rs` |
+| G4-2 | 🔲 | `handle_oauth_callback` 删除 `client_secret.is_some()` 分支 + passthrough | `gateway/src/gateway.rs` |
+| G5-1 | 🔲 | 增补 `AuthDecision` 单元测试 | `gateway/src/auth/tests.rs` |
+| G6-1 | 🔲 | `gateway.toml` + `gateway.docker.toml` 增加必填 `client_secret` | 配置文件 |
+| G7-1 | 🔲 | `cargo clippy` + `cargo fmt` + `cargo test` 全绿验证 | CI |
 
 ### 状态图例
 

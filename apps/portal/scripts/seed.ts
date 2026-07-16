@@ -12,6 +12,7 @@ import { db, schema } from '@/infrastructure/db';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { eq } from 'drizzle-orm';
+import { hashClientSecret } from '../src/lib/crypto';
 
 /**
  * 解析逗号分隔的 redirect URL 列表，并序列化为 JSON 字符串
@@ -70,14 +71,16 @@ async function main() {
       process.env.PORTAL_REDIRECT_URL,
       ['http://localhost:4100/auth/callback', 'http://localhost:4100/api/auth/callback'],
     );
+    const portalSecret = process.env.PORTAL_CLIENT_SECRET || crypto.randomBytes(32).toString('hex');
+    const portalSecretHash = await hashClientSecret(portalSecret);
+    console.log(`\n🔑 Portal client_secret (明文，仅此一次输出，请复制到 gateway.toml): ${portalSecret}\n`);
     await db.insert(schema.clients).values({
       clientId: 'portal',
       name: 'Auth-SSO Portal',
-      clientSecret: crypto.createHash('sha256').update(process.env.PORTAL_CLIENT_SECRET || 'portal-secret').digest('hex'),
+      clientSecret: portalSecretHash,
       redirectUris: portalRedirectUrls,
       scopes: 'openid profile email offline_access',
       status: 'ACTIVE',
-      isInternal: true,
     });
 
     // 4. 委托 seed-rbac 完成 RBAC 初始化（幂等，从 contracts 读取）
