@@ -40,6 +40,7 @@ impl std::fmt::Debug for Router {
 impl Router {
     /// 按 prefix 长度降序排序；启动期已保证非空（main.rs 校验）。
     pub fn new(mut entries: Vec<RouteEntry>) -> Self {
+        assert!(!entries.is_empty(), "Router::new 要求至少一条路由条目");
         entries.sort_by_key(|e| std::cmp::Reverse(e.prefix.len()));
         Self { entries }
     }

@@ -41,6 +41,9 @@ pub enum VerifyError {
     /// JWT 的 `jti` 已被吊销（命中 Redis 黑名单）。
     #[error("jti 已被吊销: {0}")]
     RevokedJti(String),
+    /// 系统时钟异常（当前时间早于 Unix epoch）。
+    #[error("系统时钟异常")]
+    ClockError,
 }
 
 /// JWT 离线密码学验签器。
@@ -115,7 +118,7 @@ impl JwtVerifier {
         // 5. 判定过期状态
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .expect("系统时钟异常：当前时间早于 Unix epoch")
+            .map_err(|_| VerifyError::ClockError)?
             .as_secs();
 
         let expiry = if token_data.claims.exp < now {

@@ -295,12 +295,12 @@ impl Gateway {
                     format!("构建 OAuth state 失败: {e}"),
                 )
             })?;
+        let scheme = if secure { "https" } else { "http" };
         let auth_url = format!(
-            "https://{}/api/auth/oauth2/authorize?\
+            "{scheme}://{host}/api/auth/oauth2/authorize?\
             response_type=code&client_id={}&redirect_uri={}&\
             scope=openid+profile+email+offline_access&code_challenge={}&\
             code_challenge_method=S256&state={}&nonce={}",
-            host,
             state.client_id,
             urlencoding::encode(&state.redirect_uri),
             state.code_challenge,
@@ -712,23 +712,22 @@ impl ProxyHttp for Gateway {
 
             // HMAC 签名：Gateway 用共享密钥对 (timestamp + userId + jti) 签名，
             // Portal 端验证此签名以确认请求确实来自受信任的 Gateway（替代 IP 白名单）。
+            // 时钟异常时仅跳过 HMAC 签名，不影响身份头注入（身份与签名解耦）。
             if let Some(ref secret) = self.gateway_shared_secret {
-                let ts = match std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH) {
-                    Ok(d) => d.as_secs().to_string(),
-                    Err(e) => {
-                        warn!("系统时钟异常，跳过 HMAC 签名: {e}");
-                        return Ok(());
+                if let Ok(d) = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH) {
+                    let ts = d.as_secs().to_string();
+                    let payload = format!("{}:{}:{}", ts, id.user_id, id.user_jti);
+                    match compute_hmac_sha256_hex(secret, &payload) {
+                        Ok(sig) => {
+                            upstream_request.insert_header("X-Gateway-Timestamp", ts.as_str())?;
+                            upstream_request.insert_header("X-Gateway-Signature", sig.as_str())?;
+                        }
+                        Err(e) => {
+                            warn!("计算 HMAC 签名失败，跳过: {e}");
+                        }
                     }
-                };
-                let payload = format!("{}:{}:{}", ts, id.user_id, id.user_jti);
-                match compute_hmac_sha256_hex(secret, &payload) {
-                    Ok(sig) => {
-                        upstream_request.insert_header("X-Gateway-Timestamp", ts.as_str())?;
-                        upstream_request.insert_header("X-Gateway-Signature", sig.as_str())?;
-                    }
-                    Err(e) => {
-                        warn!("计算 HMAC 签名失败，跳过: {e}");
-                    }
+                } else {
+                    warn!("系统时钟异常，跳过 HMAC 签名");
                 }
             }
         }
