@@ -56,10 +56,23 @@ if (!(globalThis as Record<symbol, unknown>)[AUDIT_TIMER_KEY]) {
 }
 
 // 进程退出前最后一次 flush，减少优雅关闭时缓冲数据丢失
-// SIGTERM/SIGINT 触发（Docker stop / Ctrl+C），进程崩溃（OOM）无法覆盖
+
+function gracefulShutdown(signal: string) {
+  log.info(`收到 ${signal} 信号，刷写审计缓冲区后退出`);
+  flushBuffer().finally(() => {
+    process.exit(0);
+  });
+}
+
+// beforeExit：事件循环自然清空时触发（正常退出兜底）
 process.on('beforeExit', () => {
   void flushBuffer();
 });
+
+// SIGTERM（Docker stop）/ SIGINT（Ctrl+C）：显式信号触发时刷写后退出
+process.once('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.once('SIGINT', () => gracefulShutdown('SIGINT'));
+// 进程崩溃（OOM/SIGKILL）无法覆盖 — 极限情况下最多丢失 5s 缓冲窗口的数据
 
 /**
  * 通用日志写入工厂
