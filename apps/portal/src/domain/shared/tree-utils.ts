@@ -19,9 +19,7 @@ export type Tree<T> = T & { children: Tree<T>[] };
  * @param sortKey   可选排序字段名（必须为数字类型），提供后树的每一层按此字段升序
  * @returns 根节点数组（含递归 children 嵌套）
  */
-export function buildTree<
-  T extends Record<string, any>,
->(
+export function buildTree<T>(
   flatList: T[],
   idKey: string & keyof T,
   parentKey: string & keyof T,

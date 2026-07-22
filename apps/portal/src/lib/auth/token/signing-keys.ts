@@ -17,7 +17,7 @@ import 'server-only';
 import { importJWK, generateKeyPair, exportJWK } from 'jose';
 import { db, schema } from '@/infrastructure/db';
 import { eq, desc } from 'drizzle-orm';
-import { generateId, generateUUID } from '@/lib/crypto';
+import { generateId, generateUUID, encryptPrivateKey, decryptPrivateKey } from '@/lib/crypto';
 
 // ============================================================================
 // 常量与缓存
@@ -50,7 +50,8 @@ export function getCachedKey(kid: string): CachedSigningKey | undefined {
 
 /** 从数据库 JSON 字符串反序列化并导入为 CryptoKey（消除 3 处 JSON.parse + importJWK 重复） */
 export async function importKeyFromJwk(jwkStr: string, alg: string = 'ES256'): Promise<CryptoKey> {
-  return await importJWK(JSON.parse(jwkStr) as JsonWebKey, alg) as CryptoKey;
+  const decrypted = decryptPrivateKey(jwkStr);
+  return await importJWK(JSON.parse(decrypted) as JsonWebKey, alg) as CryptoKey;
 }
 
 // ============================================================================
@@ -179,7 +180,7 @@ async function generateAndPersistKeyPair(): Promise<{
     id,
     kid,
     publicKey: JSON.stringify(publicJwk),
-    privateKey: JSON.stringify(privateJwk),
+    privateKey: encryptPrivateKey(JSON.stringify(privateJwk)),
     createdAt: new Date(),
     expiresAt,
   });

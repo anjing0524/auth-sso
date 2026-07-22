@@ -147,18 +147,18 @@ const VALID_SECRET = 'my-secret';
 const VALID_HASH = createHash('sha256').update(VALID_SECRET).digest('hex');
 
 describe('validateClientSecret', () => {
-  it('匹配的 secret → 不抛异常', () => {
-    expect(() => validateClientSecret({ clientSecret: VALID_HASH }, VALID_SECRET)).not.toThrow();
+  it('匹配的 secret → 不抛异常', async () => {
+    await expect(validateClientSecret({ clientSecret: VALID_HASH }, VALID_SECRET)).resolves.toBeUndefined();
   });
 
-  it('不匹配的 secret → 抛出 InvalidClientError', () => {
-    expect(() => validateClientSecret({ clientSecret: VALID_HASH }, 'wrong-secret'))
-      .toThrow('客户端密钥不匹配');
+  it('不匹配的 secret → 抛出 InvalidClientError', async () => {
+    await expect(validateClientSecret({ clientSecret: VALID_HASH }, 'wrong-secret'))
+      .rejects.toThrow('客户端密钥不匹配');
   });
 
-  it('无 secret 输入 → 抛出 InvalidClientError', () => {
-    expect(() => validateClientSecret({ clientSecret: VALID_HASH }, undefined))
-      .toThrow('客户端密钥缺失');
+  it('无 secret 输入 → 抛出 InvalidClientError', async () => {
+    await expect(validateClientSecret({ clientSecret: VALID_HASH }, undefined))
+      .rejects.toThrow('客户端密钥缺失');
   });
 });
 

@@ -53,9 +53,9 @@ impl Router {
             .unwrap_or(self.entries.len() - 1)
     }
 
-    /// 按索引取路由条目（索引来自 `resolve_idx`，恒有效）
-    pub fn entry(&self, idx: usize) -> &RouteEntry {
-        &self.entries[idx]
+    /// 按索引取路由条目（索引来自 `resolve_idx`）
+    pub fn entry(&self, idx: usize) -> Option<&RouteEntry> {
+        self.entries.get(idx)
     }
 }
 
@@ -86,16 +86,16 @@ mod tests {
     fn resolve_longest_prefix_wins() {
         // 构造顺序故意打乱，验证 new() 会按长度降序排序
         let router = make_router(&["/", "/demo/", "/demo/admin/"]);
-        let e = router.entry(router.resolve_idx("/demo/admin/x"));
+        let e = router.entry(router.resolve_idx("/demo/admin/x")).unwrap();
         assert_eq!(e.prefix, "/demo/admin/");
-        let e = router.entry(router.resolve_idx("/demo/landing"));
+        let e = router.entry(router.resolve_idx("/demo/landing")).unwrap();
         assert_eq!(e.prefix, "/demo/");
     }
 
     #[test]
     fn resolve_root_matches_any_slash_path() {
         let router = make_router(&["/", "/demo/"]);
-        let e = router.entry(router.resolve_idx("/dashboard"));
+        let e = router.entry(router.resolve_idx("/dashboard")).unwrap();
         assert_eq!(e.prefix, "/");
     }
 
@@ -104,7 +104,7 @@ mod tests {
         // 不以任何 prefix 开头的路径 → 兜底应返回末条目（最短前缀 "/"），
         // 而非降序排序后的首条目（最长前缀）。
         let router = make_router(&["/", "/demo/"]);
-        let e = router.entry(router.resolve_idx("non-slash-path"));
+        let e = router.entry(router.resolve_idx("non-slash-path")).unwrap();
         assert_eq!(e.prefix, "/");
     }
 
@@ -112,9 +112,9 @@ mod tests {
     fn entry_carries_oauth_config() {
         // 路由条目与 OAuth 配置同源：一次匹配同时得到 LB 与 OAuth Client
         let router = make_router(&["/", "/demo/"]);
-        let e = router.entry(router.resolve_idx("/demo/x"));
+        let e = router.entry(router.resolve_idx("/demo/x")).unwrap();
         assert_eq!(e.oauth.client_id, "client/demo/");
-        let e = router.entry(router.resolve_idx("/dashboard"));
+        let e = router.entry(router.resolve_idx("/dashboard")).unwrap();
         assert_eq!(e.oauth.client_id, "client/");
     }
 }

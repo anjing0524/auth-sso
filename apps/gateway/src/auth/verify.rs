@@ -48,7 +48,7 @@ pub enum VerifyError {
 
 /// JWT 离线密码学验签器。
 ///
-/// 依赖 JWKS 缓存获取公钥，Redis 不可用时 jti 黑名单 fail-open。
+/// 依赖 JWKS 缓存获取公钥，Redis 不可用时 jti 黑名单 fail-close（拒绝请求）。
 #[derive(Debug)]
 pub struct JwtVerifier {
     jwks_cache: Arc<JwksCache>,
@@ -64,7 +64,7 @@ impl JwtVerifier {
     /// 流程：解析 JWT 头部获取 kid → 从 JWKS 缓存查找公钥 → 验签 + issuer 校验
     /// → jti 黑名单检查 → 判定过期状态。
     ///
-    /// Redis 不可用时 jti 黑名单检查 fail-open（放行）。
+    /// Redis 不可用时 jti 黑名单检查 fail-close（拒绝请求）。
     ///
     /// # Errors
     ///
@@ -138,7 +138,7 @@ impl JwtVerifier {
         })
     }
 
-    /// 检查 jti 是否在黑名单中（fail-open：Redis 不可用时返回 false 放行请求）
+    /// 检查 jti 是否在黑名单中（fail-close：Redis 不可用时返回 true 拒绝请求）
     async fn check_jti(&self, jti: &str) -> bool {
         let jti_key = format!("portal:jti_blocklist:{}", jti);
         crate::redis::exists(&jti_key).await

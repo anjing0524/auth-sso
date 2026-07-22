@@ -551,7 +551,12 @@ impl ProxyHttp for Gateway {
         ctx: &mut Self::CTX,
     ) -> Result<Box<HttpPeer>> {
         let path = session.req_header().uri.path();
-        let entry = self.router.entry(ctx.route_idx);
+        let entry = self.router.entry(ctx.route_idx).ok_or_else(|| {
+            Error::explain(
+                ErrorType::HTTPStatus(502),
+                format!("gateway: 路由索引 {} 越界", ctx.route_idx),
+            )
+        })?;
         let host = get_host(session);
         debug!(
             "接收代理请求，Host: {}，路径: {} → upstream={}",
@@ -599,7 +604,13 @@ impl ProxyHttp for Gateway {
         }
 
         // 4. 当前路由的 OAuth 配置（与 LB 同一路由表条目，单一真相源）
-        let oauth_config = &self.router.entry(ctx.route_idx).oauth;
+        let entry = self.router.entry(ctx.route_idx).ok_or_else(|| {
+            Error::explain(
+                ErrorType::HTTPStatus(502),
+                format!("gateway: 路由索引 {} 越界", ctx.route_idx),
+            )
+        })?;
+        let oauth_config = &entry.oauth;
 
         // 5. OAuth callback 拦截
         {

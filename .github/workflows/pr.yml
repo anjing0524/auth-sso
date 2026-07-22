@@ -12,6 +12,29 @@ jobs:
   test:
     name: Unit & Component Tests
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: auth_sso_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -39,11 +62,26 @@ jobs:
       - name: Run typecheck
         run: pnpm typecheck
 
-      - name: Run API tests (mocked)
+      - name: Push DB schema
+        run: pnpm db:push
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/auth_sso_test
+          REDIS_URL: redis://localhost:6379
+          NODE_ENV: test
+
+      - name: Run API tests
         run: pnpm test:api
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/auth_sso_test
+          REDIS_URL: redis://localhost:6379
+          NODE_ENV: test
 
       - name: Run Component tests
         run: pnpm test:components
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/auth_sso_test
+          REDIS_URL: redis://localhost:6379
+          NODE_ENV: test
 
   gateway-audit:
     name: Gateway Checks (clippy + fmt + test + audit)

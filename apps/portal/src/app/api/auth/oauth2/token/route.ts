@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
     const clientRows = await db.select().from(schema.clients).where(eq(schema.clients.clientId, client_id)).limit(1);
     validateClientActive(clientRows[0]);
     const client = clientRows[0]!;
-    validateClientSecret(client, client_secret);
+    await validateClientSecret(client, client_secret);
 
     // ── grant_type: authorization_code ──
     if (grant_type === OAUTH_PARAMS.GRANT_TYPE_AUTHORIZATION_CODE) {

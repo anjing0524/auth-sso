@@ -59,14 +59,19 @@ if (!(globalThis as Record<symbol, unknown>)[AUDIT_TIMER_KEY]) {
 
 function gracefulShutdown(signal: string) {
   log.info(`收到 ${signal} 信号，刷写审计缓冲区后退出`);
+  const timeout = setTimeout(() => {
+    log.warn('审计缓冲区刷写超时（8s），强制退出');
+    process.exit(1);
+  }, 8000);
   flushBuffer().finally(() => {
+    clearTimeout(timeout);
     process.exit(0);
   });
 }
 
 // beforeExit：事件循环自然清空时触发（正常退出兜底）
-process.on('beforeExit', () => {
-  void flushBuffer();
+process.on('beforeExit', async () => {
+  await flushBuffer();
 });
 
 // SIGTERM（Docker stop）/ SIGINT（Ctrl+C）：显式信号触发时刷写后退出

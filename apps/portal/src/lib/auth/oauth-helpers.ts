@@ -32,6 +32,6 @@ export async function authenticateOAuthClient(
     .where(eq(schema.clients.clientId, clientId))
     .limit(1);
   validateClientActive(rows[0]);
-  validateClientSecret(rows[0]!, clientSecret);
+  await validateClientSecret(rows[0]!, clientSecret);
   return rows[0]!;
 }

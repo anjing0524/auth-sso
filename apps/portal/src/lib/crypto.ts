@@ -1,4 +1,4 @@
-import { randomBytes, randomUUID, createHash } from 'crypto';
+import { randomBytes, randomUUID, createHash, createCipheriv, createDecipheriv } from 'crypto';
 import bcrypt from 'bcryptjs';
 
 /**
@@ -68,4 +68,73 @@ export function hashToken(token: string): string {
  */
 export async function hashClientSecret(secret: string): Promise<string> {
   return bcrypt.hash(secret, 12);
+}
+
+// ── JWKS 私钥加密（AES-256-GCM）─────────────────────────────────────
+
+const AES_ALGORITHM = 'aes-256-gcm' as const;
+const IV_LENGTH = 12;
+const AUTH_TAG_LENGTH = 16;
+
+function getEncryptionKey(): Buffer | null {
+  const raw = process.env['JWKS_ENCRYPTION_KEY'];
+  if (!raw || raw.length !== 64) return null;
+  return Buffer.from(raw, 'hex');
+}
+
+/**
+ * AES-256-GCM 加密 JWKS 私钥 JSON 字符串
+ *
+ * 加密后格式（base64 编码）：IV(12 bytes) || ciphertext || authTag(16 bytes)
+ * 若 JWKS_ENCRYPTION_KEY 未配置，返回原文（向后兼容未加密部署）。
+ *
+ * @param plaintext 私钥 JWK JSON 字符串
+ * @returns base64 编码的密文，或原文（未配置加密密钥时）
+ */
+export function encryptPrivateKey(plaintext: string): string {
+  const key = getEncryptionKey();
+  if (!key) return plaintext;
+
+  const iv = randomBytes(IV_LENGTH);
+  const cipher = createCipheriv(AES_ALGORITHM, key, iv, { authTagLength: AUTH_TAG_LENGTH });
+  const encrypted = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
+  const authTag = cipher.getAuthTag();
+  return Buffer.concat([iv, encrypted, authTag]).toString('base64');
+}
+
+/**
+ * AES-256-GCM 解密 JWKS 私钥
+ *
+ * 若密文不以 base64 格式开头（即仍为 JSON 明文），直接返回原文（向后兼容）。
+ *
+ * @param ciphertext base64 密文或 JSON 明文
+ * @returns 私钥 JWK JSON 字符串
+ */
+export function decryptPrivateKey(ciphertext: string): string {
+  const key = getEncryptionKey();
+  if (!key) return ciphertext;
+
+  let buf: Buffer;
+  try {
+    buf = Buffer.from(ciphertext, 'base64');
+  } catch {
+    return ciphertext;
+  }
+
+  // 最小长度校验：IV(12) + authTag(16) + 至少 1 字节密文 = 29
+  if (buf.length < IV_LENGTH + AUTH_TAG_LENGTH + 1) {
+    return ciphertext; // 仍为明文 JSON
+  }
+
+  try {
+    const iv = buf.subarray(0, IV_LENGTH);
+    const authTag = buf.subarray(buf.length - AUTH_TAG_LENGTH);
+    const encrypted = buf.subarray(IV_LENGTH, buf.length - AUTH_TAG_LENGTH);
+
+    const decipher = createDecipheriv(AES_ALGORITHM, key, iv, { authTagLength: AUTH_TAG_LENGTH });
+    decipher.setAuthTag(authTag);
+    return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString('utf8');
+  } catch {
+    return ciphertext; // 解密失败时返回原文（兼容旧数据）
+  }
 }

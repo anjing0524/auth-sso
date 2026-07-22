@@ -11,6 +11,15 @@ import bcrypt from 'bcryptjs';
 import { ENTITY_ACTIVE } from '@auth-sso/contracts';
 import { InvalidClientError, InvalidRedirectUriError } from '@/domain/shared/errors';
 
+/** hex 字符串 → Uint8Array（替代 Buffer.from(hex)） */
+function hexToBytes(hex: string): Uint8Array {
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < bytes.length; i++) {
+    bytes[i] = parseInt(hex.substring(i * 2, i * 2 + 2), 16);
+  }
+  return bytes;
+}
+
 /**
  * 校验 OAuth Client 是否存在且处于激活状态
  * @param clientRow - Drizzle 查询结果（undefined 表示未找到）
@@ -28,7 +37,7 @@ export function validateClientActive(
  * 校验 Client Secret（兼容 SHA-256 遗留数据与 bcrypt 新数据，均作定时安全比较）
  *
  * 验证时对提供值根据 DB hash 类型进行比对：
- * 1. 若为 bcrypt，使用 compareSync；
+ * 1. 若为 bcrypt，使用 async compare；
  * 2. 若为 SHA-256（64位 hex），使用 timingSafeEqual。
  *
  * @param client - 包含 clientSecret 的 Client 对象
@@ -38,13 +47,12 @@ export function validateClientActive(
 /** bcrypt 哈希前缀（识别已迁移至 bcrypt 的 Client Secret） */
 const BCRYPT_PREFIXES = ['$2a$', '$2b$', '$2y$'] as const;
 
-export function validateClientSecret(
+export async function validateClientSecret(
   client: { clientSecret: string | null; isPublic?: boolean | null },
   providedSecret?: string,
-): void {
-  // fail-secure：若 Client 有机密但 secret 为 null，一律拒绝（防止意外清空导致认证绕过）
+): Promise<void> {
   if (!client.clientSecret) {
-    if (client.isPublic) return; // 公共客户端（如 SPA）无需 client_secret
+    if (client.isPublic) return;
     throw new InvalidClientError('客户端密钥未配置');
   }
   if (!providedSecret) {
@@ -52,12 +60,11 @@ export function validateClientSecret(
   }
   let matched = false;
   if (BCRYPT_PREFIXES.some((prefix) => client.clientSecret!.startsWith(prefix))) {
-    matched = bcrypt.compareSync(providedSecret, client.clientSecret);
+    matched = await bcrypt.compare(providedSecret, client.clientSecret);
   } else {
-    // 兼容老数据 SHA-256，采用 timingSafeEqual 进行定时安全比较
     const providedHash = createHash('sha256').update(providedSecret).digest('hex');
-    const bufA = Buffer.from(client.clientSecret, 'hex');
-    const bufB = Buffer.from(providedHash, 'hex');
+    const bufA = hexToBytes(client.clientSecret);
+    const bufB = hexToBytes(providedHash);
     if (bufA.length === bufB.length) {
       matched = timingSafeEqual(bufA, bufB);
     }

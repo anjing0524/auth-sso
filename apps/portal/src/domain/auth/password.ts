@@ -4,27 +4,48 @@
  * 封装 bcrypt 哈希与验证逻辑，纯函数无副作用。
  * 从 Better Auth 的 emailAndPassword.password 配置迁移而来。
  *
+ * 所有接受密码配置的函数均支持显式注入 PasswordConfig，
+ * 未注入时使用模块级默认值（向后兼容）。
+ *
  * @module domain/auth/password
  */
 import bcrypt from 'bcryptjs';
 
-/**
- * bcrypt cost factor。
- *
- * OWASP Password Storage Cheat Sheet (2024+) 建议 bcrypt cost ≥ 12。
- * 12 rounds 约耗时 250ms（取决于硬件），对登录/改密低频操作可接受，
- * 同时显著提升离线爆破难度（相比 10 rounds 提升约 4 倍）。
- */
-const BCRYPT_ROUNDS = process.env['NODE_ENV'] === 'test' ? 4 : 12;
+// ── 配置接口（可注入，供测试使用）─────────────────────────────────────
+
+export interface PasswordConfig {
+  bcryptRounds: number;
+  passwordHistoryMax: number;
+}
+
+export const DEFAULT_PASSWORD_CONFIG: PasswordConfig = {
+  bcryptRounds: 12,
+  passwordHistoryMax: 5,
+};
+
+// ── 模块级默认值（向后兼容：从 process.env 读取，生产代码无需修改调用签名）─
+
+const BCRYPT_ROUNDS = process.env['NODE_ENV'] === 'test' ? 4 : DEFAULT_PASSWORD_CONFIG.bcryptRounds;
+
+export const PASSWORD_HISTORY_MAX = (() => {
+  const raw = process.env['PASSWORD_HISTORY_MAX'];
+  const parsed = raw ? parseInt(raw, 10) : DEFAULT_PASSWORD_CONFIG.passwordHistoryMax;
+  if (isNaN(parsed) || parsed < 1) return DEFAULT_PASSWORD_CONFIG.passwordHistoryMax;
+  return parsed;
+})();
+
+// ── 密码哈希与验证 ─────────────────────────────────────────────────────
 
 /**
  * 对原始密码进行 bcrypt 哈希
  *
- * @param raw 原始明文密码
+ * @param raw    原始明文密码
+ * @param config 可选配置，未传时使用模块级 BCRYPT_ROUNDS（process.env 驱动）
  * @returns 哈希后的密码字符串
  */
-export async function hashPassword(raw: string): Promise<string> {
-  return bcrypt.hash(raw, BCRYPT_ROUNDS);
+export async function hashPassword(raw: string, config?: PasswordConfig): Promise<string> {
+  const rounds = config?.bcryptRounds ?? BCRYPT_ROUNDS;
+  return bcrypt.hash(raw, rounds);
 }
 
 /**
@@ -38,15 +59,7 @@ export async function verifyPassword(plaintext: string, hash: string): Promise<b
   return bcrypt.compare(plaintext, hash);
 }
 
-// ── 密码历史（NFR-SEC-15）──────────────────────────────────────────────────
-
-/** 密码历史保留上限（禁止重用最近 N 次密码），可通过 PASSWORD_HISTORY_MAX 环境变量覆盖 */
-export const PASSWORD_HISTORY_MAX = (() => {
-  const raw = process.env['PASSWORD_HISTORY_MAX'];
-  const parsed = raw ? parseInt(raw, 10) : 5;
-  if (isNaN(parsed) || parsed < 1) return 5;
-  return parsed;
-})();
+// ── 密码历史（NFR-SEC-15）───────────────────────────────────────────────
 
 /**
  * 检查新密码是否与历史密码重复（NFR-SEC-15）
@@ -60,7 +73,6 @@ export async function isPasswordReused(
   history: string[] | null,
 ): Promise<boolean> {
   if (!history || history.length === 0) return false;
-  // 并行比对历史 hash，提升性能（5次串行约 1.25s → 并行约 250ms）
   const results = await Promise.all(
     history.map((oldHash) => bcrypt.compare(newPassword, oldHash)),
   );
@@ -72,12 +84,15 @@ export async function isPasswordReused(
  *
  * @param prevHistory 原历史数组（可能为 null）
  * @param oldHash     本次被替换的旧密码 hash
+ * @param config      可选配置，未传时使用模块级 PASSWORD_HISTORY_MAX
  * @returns 更新后的历史数组（最新在前）
  */
 export function pushPasswordHistory(
   prevHistory: string[] | null,
   oldHash: string,
+  config?: PasswordConfig,
 ): string[] {
+  const max = config?.passwordHistoryMax ?? PASSWORD_HISTORY_MAX;
   const next = prevHistory ? [oldHash, ...prevHistory] : [oldHash];
-  return next.slice(0, PASSWORD_HISTORY_MAX);
+  return next.slice(0, max);
 }

@@ -57,7 +57,8 @@ pub fn pool() -> Option<&'static RedisPool> {
 // ── Redis 命令辅助函数 ──
 //
 // 以下函数封装了「获取连接 → 执行命令 → 错误处理」的通用模式，
-// 统一采用 fail-open（降级放行）语义：Redis 不可用时返回安全默认值。
+// jti 黑名单检查采用 fail-close 语义：Redis 不可用时拒绝请求（安全优先）。
+// 其他辅助函数（acquire_nx_ex / del）保持 fail-open 语义。
 
 /// 获取一条 Redis 连接；连接池未就绪或获取失败时返回 None。
 async fn get_conn() -> Option<bb8::PooledConnection<'static, bb8_redis::RedisConnectionManager>> {
@@ -71,24 +72,27 @@ async fn get_conn() -> Option<bb8::PooledConnection<'static, bb8_redis::RedisCon
         .ok()
 }
 
-/// 检查 key 是否存在于 Redis（EXISTS 命令），fail-open：Redis 不可用时返回 false
+/// 检查 key 是否存在于 Redis（EXISTS 命令），fail-close：Redis 不可用时返回 true
 ///
-/// 与其他 Redis 辅助函数（`acquire_nx_ex`/`del`）保持一致的 fail-open 语义：
-/// Redis 不可用时降级放行，避免全站拒绝。
+/// jti 黑名单专用：Redis 不可用时假定 key 存在（即 jti 已被撤销），
+/// 拒绝请求以保障安全。与 acquire_nx_ex/del 的 fail-open 语义不同——
+/// jti 检查是安全边界，不可降级放行。
 ///
 /// # Examples
 ///
 /// ```ignore
 /// if redis::exists("portal:jti_blocklist:some-jti").await {
-///     // key 存在（Redis 可用时）
+///     // key 存在（Redis 可用时）或 Redis 不可用（fail-close 假定已撤销）
 /// }
 /// ```
 pub async fn exists(key: &str) -> bool {
     let mut conn = match get_conn().await {
         Some(c) => c,
         None => {
-            tracing::warn!("Redis EXISTS 降级返回 false（连接池未就绪）");
-            return false;
+            tracing::warn!(
+                "Redis EXISTS 降级返回 true（fail-close：连接池未就绪，假定 jti 已撤销）"
+            );
+            return true;
         }
     };
     match redis::cmd("EXISTS")
@@ -98,8 +102,8 @@ pub async fn exists(key: &str) -> bool {
     {
         Ok(count) => count > 0,
         Err(e) => {
-            tracing::warn!("Redis EXISTS 异常: {:?}，降级返回 false", e);
-            false
+            tracing::warn!("Redis EXISTS 异常: {:?}，降级返回 true（fail-close）", e);
+            true
         }
     }
 }

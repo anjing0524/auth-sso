@@ -52,7 +52,9 @@ export function validateAuthCodeRow(
 export async function verifyPKCE(codeVerifier: string, codeChallenge: string): Promise<void> {
   const encoder = new TextEncoder();
   const digest = await crypto.subtle.digest('SHA-256', encoder.encode(codeVerifier));
-  const challenge = Buffer.from(digest).toString('base64url');
+  const bytes = new Uint8Array(digest);
+  const binary = String.fromCharCode(...bytes);
+  const challenge = btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
   if (challenge !== codeChallenge) {
     throw new PKCEVerificationError();
   }

@@ -39,17 +39,17 @@ export async function revokeJti(jti: string, tokenExp: number): Promise<void> {
 }
 
 /**
- * 检查 jti 是否已被撤销（在黑名单中）
+ * 检查 jti 是否已被撤销（在黑名单中），fail-close：Redis 不可用时返回 true
  */
 export async function isJtiRevoked(jti: string): Promise<boolean> {
   try {
     const redis = getRedis();
-    if (!redis) return false;
+    if (!redis) return true; // fail-close：Redis 不可用时假定已撤销
     const result = await redis.exists(`${JTI_BLOCKLIST_PREFIX}${jti}`);
     return result === 1;
   } catch (error) {
-    log.error('查询 jti 黑名单失败', { error: (error as Error).message });
-    return false;
+    log.error('查询 jti 黑名单失败，降级返回 true（fail-close）', { error: (error as Error).message });
+    return true;
   }
 }
 

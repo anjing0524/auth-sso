@@ -10,6 +10,7 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { getLoginLogs, getAuditLogs } from '@/app/audit/data';
 import { withPermission } from '@/lib/auth';
+import { MAX_PAGE_SIZE } from '@auth-sso/contracts';
 
 export async function GET(request: NextRequest) {
   return withPermission(
@@ -19,7 +20,7 @@ export async function GET(request: NextRequest) {
       const type = searchParams.get('type') || 'login';
 
       let csv: string;
-      const pagination = { page: 1, pageSize: 10000 };
+      const pagination = { page: 1, pageSize: MAX_PAGE_SIZE };
 
       // 将单元格值转为 RFC 4180 安全的 CSV 字段（含公式注入防护）
       const csvEscape = (v: unknown): string => {

@@ -14,7 +14,7 @@
  *
  * @module db/schema/users
  */
-import { pgTable, uuid, varchar, boolean, timestamp, index, uniqueIndex, text } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, varchar, boolean, timestamp, index, uniqueIndex, text, check } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { userStatusEnum } from './enums';
 import { roles } from './rbac';
@@ -52,6 +52,11 @@ export const users = pgTable('users', {
   index('idx_users_deleted_at').on(t.deletedAt),
   uniqueIndex('ux_users_email').on(t.email).where(sql`${t.deletedAt} IS NULL`),
   uniqueIndex('ux_users_mobile').on(t.mobile).where(sql`${t.deletedAt} IS NULL`),
+  // CHECK：密码历史数组长度上限（DB 第二道防线，上限为应用层 PASSWORD_HISTORY_MAX 的 2 倍兜底）
+  check(
+    'users_password_history_len_chk',
+    sql`password_history IS NULL OR array_length(password_history, 1) <= 10`,
+  ),
 ]);
 
 /**

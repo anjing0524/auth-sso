@@ -15,6 +15,7 @@ import { getDynamicMenuTree } from '@/lib/menu-tree';
 import { getUserPermissionContext } from '@/lib/permissions';
 import { mapDomainError } from '@/domain/shared/error-mapping';
 import { COMMON_ERRORS, ADMIN_ROLE_CODES } from '@auth-sso/contracts';
+import { restSuccess, restError } from '@/lib/response';
 import { getUser } from '@/app/(dashboard)/users/data';
 
 
@@ -24,15 +25,11 @@ export async function GET(_request: NextRequest) {
     // resolveIdentity: 有 X-User-Id → Cookie 快速解码（零验签）；无则自验签兜底
     const identity = await resolveIdentity();
     if (!identity) {
-      return NextResponse.json(
-        { error: COMMON_ERRORS.UNAUTHORIZED, message: '未登录' },
-        { status: 401 },
-      );
+      return restError(COMMON_ERRORS.UNAUTHORIZED, '未登录', 401);
     }
 
     const { userId, claims } = identity;
 
-    // 从 Redis 获取用户权限上下文
     const permCtx = await getUserPermissionContext(userId);
     const roles = permCtx?.roles.map(r => r.code) ?? [];
     const permissions = permCtx?.permissions ?? [];
@@ -40,16 +37,12 @@ export async function GET(_request: NextRequest) {
     const isAdmin = roles.some((r) => (ADMIN_ROLE_CODES as readonly string[]).includes(r));
     const menuItems = await getDynamicMenuTree(permissions, isAdmin);
 
-    // 并行获取用户 Profile 信息（仅用于 UI 展示）
     const user = await getUser(userId);
     if (!user) {
-      return NextResponse.json(
-        { error: COMMON_ERRORS.UNAUTHORIZED, message: '用户不存在' },
-        { status: 401 },
-      );
+      return restError(COMMON_ERRORS.UNAUTHORIZED, '用户不存在', 401);
     }
 
-    return NextResponse.json({
+    return restSuccess({
       user: {
         id: user.id,
         email: user.email,
@@ -68,9 +61,6 @@ export async function GET(_request: NextRequest) {
     });
   } catch (err) {
     const mapped = mapDomainError(err);
-    return NextResponse.json(
-      { error: mapped.error, message: mapped.message },
-      { status: mapped.status },
-    );
+    return restError(mapped.error, mapped.message, mapped.status);
   }
 }

@@ -1,6 +1,14 @@
 import 'server-only';
 import { timingSafeEqual } from 'crypto';
 
+function hexToBytes(hex: string): Uint8Array {
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < bytes.length; i++) {
+    bytes[i] = parseInt(hex.substring(i * 2, i * 2 + 2), 16);
+  }
+  return bytes;
+}
+
 /**
  * Gateway ↔ Portal HMAC-SHA256 签名会话原语（复用 Web Crypto API）。
  *
@@ -57,8 +65,8 @@ export async function verifySignature(
   if (Math.abs(nowSec - tsNum) > windowSec) return false;
 
   const expected = await computeHmacHex(secret, payload);
-  const sigBuf = Buffer.from(sigHex, 'hex');
-  const expBuf = Buffer.from(expected, 'hex');
+  const sigBuf = hexToBytes(sigHex);
+  const expBuf = hexToBytes(expected);
   if (sigBuf.length !== expBuf.length || !timingSafeEqual(sigBuf, expBuf)) return false;
 
   return true;
