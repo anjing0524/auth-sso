@@ -117,7 +117,7 @@ export async function GET(request: NextRequest) {
       httpOnly: true,
       secure,
       sameSite: 'lax',
-      maxAge: tokens.expires_in || 3600,
+      maxAge: tokens.expires_in || TOKEN_TTL.ACCESS_TOKEN,
     });
 
     // Set-Cookie: portal_refresh_token（Path=/ 以便 Gateway 在全路径读取静默续签）

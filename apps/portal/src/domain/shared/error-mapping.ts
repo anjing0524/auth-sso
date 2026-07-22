@@ -6,19 +6,7 @@
  *
  * 设计原则：这是 Controller 层唯一的错误处理入口（防腐关口）。
  */
-import {
-  DomainError,
-  EntityNotFoundError,
-  BusinessRuleViolationError,
-  DuplicateEntityError,
-  InvalidClientError,
-  InvalidGrantError,
-  PKCEVerificationError,
-  InvalidRedirectUriError,
-  ForbiddenError,
-  InvalidCredentialsError,
-  AccountStatusError,
-} from './errors';
+import { DomainError } from './errors';
 import { COMMON_ERRORS, AUTH_ERRORS } from '@auth-sso/contracts';
 import { createLogger } from '@/lib/logger';
 
@@ -33,6 +21,23 @@ interface ErrorMapping {
   /** 人类可读的错误描述 */
   message: string;
 }
+
+/**
+ * DomainError 子类 → HTTP 状态码注册表。
+ * 新增错误类型只需在此追加一行，无需修改 mapDomainError 函数体。
+ */
+const ERROR_STATUS: Record<string, number> = {
+  EntityNotFoundError: 404,
+  ForbiddenError: 403,
+  InvalidCredentialsError: 401,
+  AccountStatusError: 403,
+  DuplicateEntityError: 409,
+  InvalidClientError: 401,
+  InvalidGrantError: 400,
+  PKCEVerificationError: 400,
+  InvalidRedirectUriError: 400,
+  BusinessRuleViolationError: 422,
+};
 
 /**
  * 判断错误是否为 Next.js 构建期（静态预渲染 / Partial Prerendering）的正常中断信号。
@@ -53,47 +58,15 @@ function isPrerenderingError(err: unknown): boolean {
  * @returns 标准化的错误映射结果，可直接返回给客户端
  */
 export function mapDomainError(err: unknown): ErrorMapping {
-  // 预渲染中断信号不是真正的错误——Next.js 会自动回退到请求时渲染
   if (isPrerenderingError(err)) {
     return { status: 500, error: COMMON_ERRORS.INTERNAL_ERROR, message: '服务器内部错误' };
   }
 
-  if (err instanceof EntityNotFoundError) {
-    return { status: 404, error: err.code, message: err.message };
-  }
-  if (err instanceof ForbiddenError) {
-    return { status: 403, error: err.code, message: err.message };
-  }
-  // 登录凭据无效 → 401（统一防用户枚举）
-  if (err instanceof InvalidCredentialsError) {
-    return { status: 401, error: err.code, message: err.message };
-  }
-  // 账号状态异常（禁用/锁定/已删除）→ 403
-  if (err instanceof AccountStatusError) {
-    return { status: 403, error: err.code, message: err.message };
-  }
-  if (err instanceof DuplicateEntityError) {
-    return { status: 409, error: err.code, message: err.message };
-  }
-  if (err instanceof InvalidClientError) {
-    return { status: 401, error: err.code, message: err.message };
-  }
-  if (err instanceof InvalidGrantError) {
-    return { status: 400, error: err.code, message: err.message };
-  }
-  if (err instanceof PKCEVerificationError) {
-    return { status: 400, error: err.code, message: err.message };
-  }
-  if (err instanceof InvalidRedirectUriError) {
-    return { status: 400, error: err.code, message: err.message };
-  }
-  if (err instanceof BusinessRuleViolationError) {
-    return { status: 422, error: err.code, message: err.message };
-  }
   if (err instanceof DomainError) {
-    return { status: 400, error: err.code, message: err.message };
+    const status = ERROR_STATUS[err.constructor.name] ?? 400;
+    return { status, error: err.code, message: err.message };
   }
-  // 未知异常统一 500（记录日志便于排查）
+
   log.error('未预期的异常', { error: err instanceof Error ? err.message : String(err) });
   return { status: 500, error: COMMON_ERRORS.INTERNAL_ERROR, message: '服务器内部错误' };
 }

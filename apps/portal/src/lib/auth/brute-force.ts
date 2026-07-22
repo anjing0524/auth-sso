@@ -147,16 +147,7 @@ export async function incrementBruteForce(userId: string, config?: BruteForceCon
 }
 
 /**
- * 管理员手工解除暴力破解锁定（清除 Redis 计数器）。
- *
- * @param userId 用户 ID
- */
-export async function resetBruteForceCounter(userId: string): Promise<void> {
-  return clearBruteForceCounter(userId);
-}
-
-/**
- * 密码验证成功后清除暴力破解计数器
+ * 清除暴力破解计数器（登录成功后自动清除，或管理员手工解除锁定）。
  *
  * @param userId 用户 ID
  */

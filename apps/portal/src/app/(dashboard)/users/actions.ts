@@ -37,7 +37,7 @@ import { validate } from '@/lib/validation';
 import { hashPassword, isPasswordReused, pushPasswordHistory } from '@/domain/auth/password';
 import { refreshUserPermissionCache } from '@/lib/permissions';
 import { revokeUserAccessByUserId } from '@/lib/session/revoke';
-import { resetBruteForceCounter } from '@/lib/auth/brute-force';
+import { clearBruteForceCounter } from '@/lib/auth/brute-force';
 import { canAccessDept, getUserRoleDeptIds } from '@/lib/auth';
 import { createLogger } from '@/lib/logger';
 
@@ -164,7 +164,7 @@ export const unlockUserAction = withAuth(
 
     // 清除暴力破解 Redis 计数器（管理员解锁需同步清除，否则窗口期内仍被锁定）
     try {
-      await resetBruteForceCounter(v.data.id);
+      await clearBruteForceCounter(v.data.id);
     } catch {
       // 清除失败不阻塞解锁操作
     }

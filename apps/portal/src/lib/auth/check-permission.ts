@@ -89,20 +89,17 @@ export async function checkPermission(
     return { authorized: true, userId };
   }
 
-  if (options.permissions && options.permissions.length > 0) {
-    const ok = options.requireAll
-      ? options.permissions.every((p) => permissions.includes(p))
-      : options.permissions.some((p) => permissions.includes(p));
-    if (!ok) {
+  const checkList = (required: string[], owned: string[], mode: boolean | undefined) =>
+    mode ? required.every((x) => owned.includes(x)) : required.some((x) => owned.includes(x));
+
+  if (options.permissions?.length) {
+    if (!checkList(options.permissions, permissions, options.requireAll)) {
       return { authorized: false, userId, error: '权限不足', statusCode: 403 };
     }
   }
 
-  if (options.roles && options.roles.length > 0) {
-    const ok = options.requireAll
-      ? options.roles.every((r) => roles.includes(r))
-      : options.roles.some((r) => roles.includes(r));
-    if (!ok) {
+  if (options.roles?.length) {
+    if (!checkList(options.roles, roles, options.requireAll)) {
       return { authorized: false, userId, error: '角色权限不足', statusCode: 403 };
     }
   }

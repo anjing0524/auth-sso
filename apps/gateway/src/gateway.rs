@@ -407,6 +407,13 @@ impl Gateway {
         ))
     }
 
+    /// OAuth callback 错误 → 302 重定向到登录页并终止请求处理。
+    async fn oauth_error_redirect(session: &mut Session, reason: &str) -> Result<bool> {
+        let url = format!("/login?error={reason}");
+        session.respond_302_with_cookies(&url, &[]).await?;
+        Ok(true)
+    }
+
     /// OAuth callback 拦截：CSRF state + nonce 校验 + Token 交换 + Cookie 清除
     async fn handle_oauth_callback(
         &self,
@@ -422,10 +429,7 @@ impl Gateway {
             Some(c) => c,
             None => {
                 warn!("OAuth callback 缺少 Cookie");
-                session
-                    .respond_302_with_cookies("/login?error=invalid_state", &[])
-                    .await?;
-                return Ok(true);
+                return Self::oauth_error_redirect(session, "invalid_state").await;
             }
         };
 
@@ -435,18 +439,12 @@ impl Gateway {
                 "OAuth callback CSRF state 不匹配: cookie={:?} query={}",
                 cookie_state, state_param
             );
-            session
-                .respond_302_with_cookies("/login?error=csrf_mismatch", &[])
-                .await?;
-            return Ok(true);
+            return Self::oauth_error_redirect(session, "csrf_mismatch").await;
         }
 
         let Some(verifier) = oauth::extract_pkce_verifier(ck) else {
             warn!("OAuth callback 缺少 pkce_verifier");
-            session
-                .respond_302_with_cookies("/login?error=invalid_state", &[])
-                .await?;
-            return Ok(true);
+            return Self::oauth_error_redirect(session, "invalid_state").await;
         };
 
         let cookie_nonce = oauth::extract_oauth_nonce(ck);
@@ -474,10 +472,7 @@ impl Gateway {
             Ok(t) => t,
             Err(e) => {
                 warn!("Token 交换失败: {:?}", e);
-                session
-                    .respond_302_with_cookies("/login?error=token_exchange_failed", &[])
-                    .await?;
-                return Ok(true);
+                return Self::oauth_error_redirect(session, "token_exchange_failed").await;
             }
         };
 
@@ -487,10 +482,7 @@ impl Gateway {
             let id_nonce = oauth::decode_id_token_nonce(id_token);
             if id_nonce.as_deref() != Some(nonce) {
                 warn!("OAuth callback nonce 不匹配");
-                session
-                    .respond_302_with_cookies("/login?error=nonce_mismatch", &[])
-                    .await?;
-                return Ok(true);
+                return Self::oauth_error_redirect(session, "nonce_mismatch").await;
             }
         }
 

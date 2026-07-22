@@ -3,7 +3,7 @@
  * 获取用户的角色和权限，具备高性能的 Redis 旁路缓存支持
  */
 import { db, schema } from '@/infrastructure/db';
-import { eq, inArray, and } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { getRedis, type RedisClient } from '@/infrastructure/redis';
 import { ENTITY_ACTIVE, REDIS_KEY_PREFIX } from '@auth-sso/contracts';
 import type { UserPermissionContext } from '@auth-sso/contracts';
@@ -32,6 +32,23 @@ function jitteredCacheTtl(): number {
 
 // Re-export 以便其他模块统一导入
 export type { UserPermissionContext };
+
+/**
+ * 静默写入 Redis 缓存（失败不影响主流程）。
+ */
+async function safeSetCache(
+  redis: RedisClient,
+  key: string,
+  ttl: number,
+  value: string,
+  userId: string,
+): Promise<void> {
+  try {
+    await redis.setex(key, ttl, value);
+  } catch (e) {
+    log.warn(`Redis cache write failed for user ${userId}`, { error: (e as Error).message });
+  }
+}
 
 /**
  * 获取用户的权限上下文
@@ -93,11 +110,7 @@ export async function getUserPermissionContext(userId: string): Promise<UserPerm
     if (!user) {
       // 防穿透：缓存 null 标记，避免不存在的 userId 每次都穿透到 DB（60s TTL）
       if (redis) {
-        try {
-          await redis.setex(`${cacheKey}${NULL_CACHE_SUFFIX}`, NULL_CACHE_TTL, '1');
-        } catch {
-          // 仅警告，不影响返回
-        }
+        await safeSetCache(redis, `${cacheKey}${NULL_CACHE_SUFFIX}`, NULL_CACHE_TTL, '1', userId);
       }
       return null;
     }
@@ -122,11 +135,7 @@ export async function getUserPermissionContext(userId: string): Promise<UserPerm
 
       // 写入缓存并直接返回
       if (redis) {
-        try {
-          await redis.setex(cacheKey, jitteredCacheTtl(), JSON.stringify(context));
-        } catch (e) {
-          // 仅警告，不影响返回
-        }
+        await safeSetCache(redis, cacheKey, jitteredCacheTtl(), JSON.stringify(context), userId);
       }
       return context;
     }
@@ -161,13 +170,9 @@ export async function getUserPermissionContext(userId: string): Promise<UserPerm
       deptIds,
     };
 
-    // 6. 将结果回写至 Redis 缓存，TTL 与 Access Token 对齐
+    // 将结果回写至 Redis 缓存，TTL 与 Access Token 对齐
     if (redis) {
-      try {
-        await redis.setex(cacheKey, jitteredCacheTtl(), JSON.stringify(context));
-          } catch (cacheWriteError: unknown) {
-            log.warn(`Redis cache write failed for user ${userId}`, { error: (cacheWriteError as Error).message });
-      }
+      await safeSetCache(redis, cacheKey, jitteredCacheTtl(), JSON.stringify(context), userId);
     }
 
     return context;
@@ -270,12 +275,7 @@ export async function cacheUserPermissionContext(
   ctx: UserPermissionContext,
   ttl: number = jitteredCacheTtl(),
 ): Promise<void> {
-  try {
-    const redis = getRedis();
-    const cacheKey = `${REDIS_KEY_PREFIX.USER_PERMS}${userId}`;
-    await redis.setex(cacheKey, ttl, JSON.stringify(ctx));
-  } catch (error: unknown) {
-    // 静默降级，不影响 Token 签发主流程
-    log.warn(`Failed to cache permissions for user`, { userId, error: (error as Error).message });
-  }
+  const redis = getRedis();
+  const cacheKey = `${REDIS_KEY_PREFIX.USER_PERMS}${userId}`;
+  await safeSetCache(redis, cacheKey, ttl, JSON.stringify(ctx), userId);
 }

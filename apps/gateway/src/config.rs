@@ -199,22 +199,22 @@ impl Config {
         cfg.gateway.upstream_scheme =
             resolve_env_str(&cfg.gateway.upstream_scheme, "UPSTREAM_SCHEME");
         // Redis 连接池参数 — 环境变量覆盖
-        cfg.redis.pool_max_size = resolve_env_u32(cfg.redis.pool_max_size, "REDIS_POOL_MAX_SIZE");
-        cfg.redis.pool_min_idle = resolve_env_u32(cfg.redis.pool_min_idle, "REDIS_POOL_MIN_IDLE");
-        cfg.redis.pool_max_lifetime_sec = resolve_env_u64(
+        cfg.redis.pool_max_size = resolve_env(cfg.redis.pool_max_size, "REDIS_POOL_MAX_SIZE");
+        cfg.redis.pool_min_idle = resolve_env(cfg.redis.pool_min_idle, "REDIS_POOL_MIN_IDLE");
+        cfg.redis.pool_max_lifetime_sec = resolve_env(
             cfg.redis.pool_max_lifetime_sec,
             "REDIS_POOL_MAX_LIFETIME_SEC",
         );
-        cfg.redis.pool_idle_timeout_sec = resolve_env_u64(
+        cfg.redis.pool_idle_timeout_sec = resolve_env(
             cfg.redis.pool_idle_timeout_sec,
             "REDIS_POOL_IDLE_TIMEOUT_SEC",
         );
-        cfg.redis.pool_connection_timeout_sec = resolve_env_u64(
+        cfg.redis.pool_connection_timeout_sec = resolve_env(
             cfg.redis.pool_connection_timeout_sec,
             "REDIS_POOL_CONNECTION_TIMEOUT_SEC",
         );
         // JWKS 刷新间隔 — 环境变量覆盖
-        cfg.gateway.jwks_refresh_interval_secs = resolve_env_u64(
+        cfg.gateway.jwks_refresh_interval_secs = resolve_env(
             cfg.gateway.jwks_refresh_interval_secs,
             "JWKS_REFRESH_INTERVAL_SECS",
         );
@@ -271,22 +271,15 @@ fn resolve_optional_env(config_value: &Option<String>, env_name: &str) -> Option
         .or_else(|| config_value.clone())
 }
 
+fn resolve_env<T: std::str::FromStr>(default_val: T, env_name: &str) -> T {
+    std::env::var(env_name)
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(default_val)
+}
+
 fn resolve_env_str(config_value: &str, env_name: &str) -> String {
     std::env::var(env_name).unwrap_or_else(|_| config_value.to_string())
-}
-
-fn resolve_env_u32(default_val: u32, env_name: &str) -> u32 {
-    std::env::var(env_name)
-        .ok()
-        .and_then(|v| v.parse().ok())
-        .unwrap_or(default_val)
-}
-
-fn resolve_env_u64(default_val: u64, env_name: &str) -> u64 {
-    std::env::var(env_name)
-        .ok()
-        .and_then(|v| v.parse().ok())
-        .unwrap_or(default_val)
 }
 
 #[cfg(test)]
