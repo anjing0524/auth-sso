@@ -2,6 +2,17 @@ import { randomBytes, randomUUID, createHash, createCipheriv, createDecipheriv }
 import bcrypt from 'bcryptjs';
 
 /**
+ * hex 字符串 → Uint8Array（供 timingSafeEqual 前处理，消除 oauth-client / gateway-hmac 重复实现）
+ */
+export function hexToBytes(hex: string): Uint8Array {
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < bytes.length; i++) {
+    bytes[i] = parseInt(hex.substring(i * 2, i * 2 + 2), 16);
+  }
+  return bytes;
+}
+
+/**
  * 统一身份认证平台 - 安全工具库
  * 提供随机ID、OAuth Client ID 以及 Client Secret 的统一生成方法。
  *

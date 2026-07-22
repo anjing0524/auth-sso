@@ -105,7 +105,7 @@ impl JwtVerifier {
         })?;
         debug!("JWT 验签通过: sub={}, kid={}", token_data.claims.sub, kid);
 
-        // 4. jti 黑名单检查（fail-open：Redis 不可用时放行）
+        // 4. jti 黑名单检查（fail-close：Redis 不可用时假定已撤销，拒绝请求）
         if self.check_jti(&token_data.claims.jti).await {
             warn!(
                 "⚠️ 拒绝访问：JWT 的 jti 已被吊销: jti={}",

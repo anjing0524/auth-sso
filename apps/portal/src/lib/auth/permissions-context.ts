@@ -15,12 +15,11 @@ import 'server-only';
  * @module lib/auth/permissions-context
  */
 import { getUserPermissionContext, cacheUserPermissionContext } from '@/lib/permissions';
-import { getUserRoleDeptIds } from '@/lib/auth/data-scope';
 
 /**
  * 解析令牌签发所需的权限上下文并缓存到 Redis
  *
- * 并行查询权限缓存与数据范围，验证用户存在并将权限上下文写入 Redis 缓存，
+ * 查询用户权限上下文，验证用户存在并将权限上下文写入 Redis 缓存，
  * 供子应用鉴权时零 DB 查询。
  *
  * @param userId 用户 ID
@@ -29,10 +28,7 @@ import { getUserRoleDeptIds } from '@/lib/auth/data-scope';
 export async function resolveTokenClaims(
   userId: string,
 ): Promise<boolean> {
-  const [permCtx, deptIds] = await Promise.all([
-    getUserPermissionContext(userId),
-    getUserRoleDeptIds(userId),
-  ]);
+  const permCtx = await getUserPermissionContext(userId);
   if (!permCtx) return false;
   try {
     await cacheUserPermissionContext(userId, permCtx);

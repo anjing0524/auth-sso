@@ -11,9 +11,6 @@ import 'server-only';
  * @module lib/session/revoke
  */
 import { getRedis } from '@/infrastructure/redis';
-import { db, schema } from '@/infrastructure/db';
-import { eq } from 'drizzle-orm';
-import { hashToken } from '@/lib/crypto';
 import { decodeJwtPayload } from './jwt';
 import { REDIS_KEY_PREFIX } from '@auth-sso/contracts';
 import { createLogger } from '@/lib/logger';
@@ -110,15 +107,6 @@ export async function revokeUserAccessByUserId(userId: string): Promise<number> 
     pipeline.del(key);
     await pipeline.exec();
 
-    // 同步删除该用户 access_tokens 行（UI 列表一致性）
-    // 注意：撤销生效靠上方 Redis jti 黑名单（Gateway 离线验签不查 DB）；删表仅为审计可见性，
-    // 失败不阻断撤销（与 trackUserJti 同样的容错策略）。
-    try {
-      await db.delete(schema.accessTokens).where(eq(schema.accessTokens.userId, userId));
-    } catch (e) {
-      log.error('删除用户 access_tokens 失败', { error: (e as Error).message });
-    }
-
     return entries.length;
   } catch (error) {
     log.error('按用户 ID 撤销 JTI 失败', { error: (error as Error).message });
@@ -154,12 +142,6 @@ export async function revokeUserToken(accessToken: string): Promise<void> {
   const payload = decodeJwtPayload(accessToken);
   if (payload?.jti && payload.exp) {
     await revokeJti(payload.jti, payload.exp);
-  }
-  // 同步删除 access_tokens 行（登出场景，单 token 撤销）；失败不阻断撤销
-  try {
-    await db.delete(schema.accessTokens).where(eq(schema.accessTokens.tokenHash, hashToken(accessToken)));
-  } catch (e) {
-    log.error('删除 access_tokens 失败', { error: (e as Error).message });
   }
 }
 
