@@ -121,6 +121,7 @@ export async function POST(request: NextRequest) {
       const result = await rotateRefreshToken(refresh_token);
       if (!result) {
         writeLoginLog({ username: client_id, eventType: 'TOKEN_REFRESH_FAILED', ip: extractClientIP(request.headers), userAgent: extractUserAgent(request.headers), failReason: 'Refresh Token 无效或已过期' });
+        // 注：username 填入 client_id 是因为 TOKEN 端点由 OAuth Client 调用，无真实用户上下文
         throw new InvalidGrantError('Refresh Token 无效或已过期');
       }
 

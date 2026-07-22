@@ -93,7 +93,7 @@ async function getGatewayJti(): Promise<string> {
  */
 async function getJwtFromRequest(): Promise<string | null> {
   const h = await headers();
-  const auth = h.get('Authorization') || h.get('authorization');
+  const auth = h.get('Authorization');
   if (auth && auth.toLowerCase().startsWith('bearer ')) {
     return auth.substring(7).trim();
   }

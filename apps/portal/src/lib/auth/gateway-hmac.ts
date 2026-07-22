@@ -1,13 +1,6 @@
 import 'server-only';
 import { timingSafeEqual } from 'crypto';
-
-function hexToBytes(hex: string): Uint8Array {
-  const bytes = new Uint8Array(hex.length / 2);
-  for (let i = 0; i < bytes.length; i++) {
-    bytes[i] = parseInt(hex.substring(i * 2, i * 2 + 2), 16);
-  }
-  return bytes;
-}
+import { hexToBytes } from '@/lib/crypto';
 
 /**
  * Gateway ↔ Portal HMAC-SHA256 签名会话原语（复用 Web Crypto API）。

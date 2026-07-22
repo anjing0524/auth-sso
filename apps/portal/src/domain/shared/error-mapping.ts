@@ -42,12 +42,21 @@ const ERROR_STATUS: Record<string, number> = {
 /**
  * 判断错误是否为 Next.js 构建期（静态预渲染 / Partial Prerendering）的正常中断信号。
  * React 通过 Suspense 边界正确处理这类异常——它们不是真正的运行时错误。
+ *
+ * Next.js 16 通过 `digest` 属性标记动态函数 bailout，
+ * 同时保留 message 中的描述文本作为回退信号。
  */
 function isPrerenderingError(err: unknown): boolean {
-  return err instanceof Error && (
+  if (!(err instanceof Error)) return false;
+  if ('digest' in err) {
+    const digest = String((err as Record<string, unknown>)['digest']);
+    if (digest.startsWith('DYNAMIC_SERVER_USAGE') || digest.startsWith('BAILOUT_TO_CLIENT_SIDE_RENDERING')) {
+      return true;
+    }
+  }
+  return (
     err.message.includes('prerender') ||
-    err.message.includes('Prerendering') ||
-    err.message.includes('NEXT_PRERENDER')
+    err.message.includes('Prerendering')
   );
 }
 
