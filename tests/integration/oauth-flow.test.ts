@@ -1,6 +1,10 @@
 /**
  * OAuth 2.1 Authorization Code Flow with PKCE 自动化验收测试 (合并版)
  *
+ * @req H-AUTH-003
+ * @req H-AUTH-004
+ * @req H-SSO-001
+ *
  * 测试范围：
  * 1. 本地 OIDC 端点：登录、授权、Token交换、UserInfo、JWKS、Discovery (均由 Portal 托管)
  * 2. 强拦截与准入控制

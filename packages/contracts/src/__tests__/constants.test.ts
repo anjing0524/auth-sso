@@ -1,3 +1,7 @@
+/**
+ * @req R1
+ * @req R4
+ */
 import { describe, it, expect } from 'vitest';
 import {
   COMMON_ERRORS,

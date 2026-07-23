@@ -1,6 +1,9 @@
 /**
  * M3 Session 落地 - 自动化验收测试
  *
+ * @req H-SESS-001~006
+ * @req H-SSO-003
+ *
  * 测试内容：
  * 1. 验证 Session 存储在 Redis
  * 2. 验证 idle timeout 生效

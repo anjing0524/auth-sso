@@ -30,7 +30,8 @@ const ROOT = path.resolve(__dirname, '..', '..');
 // ─── 配置 ───────────────────────────────────────────────────
 const TEST_SOURCE_DIRS = [
   path.join(ROOT, 'apps'),
-  path.join(ROOT, 'tests', 'e2e'),
+  path.join(ROOT, 'packages'),
+  path.join(ROOT, 'tests'),
 ];
 
 const REQUIREMENTS_MATRIX_PATH = path.join(ROOT, 'docs', 'spec', 'REQUIREMENTS_MATRIX.md');

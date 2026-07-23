@@ -1,6 +1,8 @@
 /**
  * PermissionGuard 按钮/区块级权限守卫测试
  *
+ * @req H-ACL-001
+ *
  * 覆盖场景：
  * - 正常：有权限时渲染子元素
  * - 正常：无 permission/role/adminOnly 约束时始终渲染

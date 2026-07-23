@@ -1,6 +1,8 @@
 /**
  * Shared Kernel 测试 — error-mapping + zod-schemas
  *
+ * @req R5
+ * @req R7
  * @vitest-environment node
  */
 import { describe, it, expect } from 'vitest';
