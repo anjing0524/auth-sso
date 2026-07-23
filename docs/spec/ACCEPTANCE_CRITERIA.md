@@ -1,9 +1,9 @@
 # Auth-SSO 生产就绪验收标准 (Production Readiness Acceptance Criteria)
 
-版本：v2.1
+版本：v2.2
 状态：正式发布
-最后更新：2026-06-26
-审查来源：全栈纵深审查（Spec↔实现↔测试五层对齐 + 第二轮深度链路追踪 + 第三轮全面审计）
+最后更新：2026-07-23
+审查来源：全栈纵深审查（Spec↔实现↔测试五层对齐 + 第二轮深度链路追踪 + 第三轮全面审计 + 第四轮文档同步审计）
 
 ---
 
@@ -11,7 +11,7 @@
 
 本文档基于对 `docs/spec/`（9 份规范文档）、`apps/portal/src/`（45+ 实现文件）、`apps/gateway/src/`（7 个 Rust 模块）、`packages/`（共享契约）及 `__tests__/`（27 文件 255 测试）的全面审查，裁定 Auth-SSO 系统的生产就绪程度。
 
-**总体结论：v2.1 更新 — 前轮 P0 已修复，2 项 P1 残留（unused 参数/测试 lint）不影响功能。当前裁定为 Conditional Hold（条件放行），待 §10.1 强制通过项全部确认后转为正式发布。详见 §11 总体裁定。**
+**总体结论：v2.2 更新 — 前轮 P0 全部修复，ADR-009（Gateway 认证流统一）和 ADR-006/007/008（JWT 最小化+自取权限+命名空间化）全量实现。文档同步修复（v2.2 审计）：DATABASE.md 清理 v3.3 残留、API.md 权限码 `portal:` 前缀化、ARCHITECTURE.md Claims 最小化对齐。当前裁定为 Conditional Hold（条件放行），待 §10.1 强制通过项全部确认后转为正式发布。详见 §11 总体裁定。**
 
 ---
 
@@ -48,8 +48,11 @@
 |------|---------|----------|
 | 用户认证 (OAuth 2.1 + PKCE) | ✅ 完整 | — |
 | JWT 签发与验证 | ✅ 完整 | ES256 + JWKS 密钥管理 |
-| Gateway 离线验签 | ✅ 完整 | ES256 + kid 匹配 + jti 黑名单 |
+| Gateway 离线验签 | ✅ 完整 | ES256 + kid 匹配 + jti 黑名单 + AuthDecision 三态（ADR-009） |
 | Token 刷新 (Rotation) | ✅ 完整 | Gateway 静默续签 + Portal fallback |
+| JWT 最小化（ADR-006） | ✅ 完整 | Claims 仅含 sub/iss/aud/jti/iat/exp，鉴权数据全量 Redis 化 |
+| 权限码命名空间化（ADR-008） | ✅ 完整 | 全部 `portal:{resource}:{action}` 格式 |
+| Gateway OAuth callback 统一（ADR-009） | ✅ 完整 | 所有 upstream 含 Portal 自身均走 Gateway callback 拦截 |
 | 登出全链路清理 | ✅ 完整 | jti 黑名单 + Cookie 清除 + RT 撤销 |
 | 用户 CRUD | ✅ 完整 | 数据范围过滤正确 |
 | 角色管理 | ✅ 完整 | dept_id 约束 + 级联逻辑 |
@@ -117,7 +120,7 @@
 | 2 | proxy.ts | ✅ 正确 | Cookie 存在性检查 + 白名单兜底（PKCE/OAuth 已上移到 Gateway） |
 | 3 | resolveIdentity() | ✅ 正确 | Gateway 信任路径 + 自验签 fallback |
 | 4 | 鉴权守卫 (withAuth/withPermission/requirePermission) | ✅ 正确 | 三种形态覆盖 SC/SA/Route |
-| 5 | checkPermission() | ✅ 正确 | Admin 绕过 + 权限码/角色匹配 |
+| 5 | checkPermission() | ✅ 正确 | Admin 绕过 + 权限码/角色匹配（从 Redis 读取鉴权数据，非 JWT claims） |
 | 6 | 数据范围 (getUserRoleDeptIds) | ✅ 正确 | 角色 dept_id + 单次批量 SQL 子树展开（v2.1 优化 N+1 为单查询） |
 | 7 | data.ts/actions.ts/route.ts | ✅ 正确 | CQRS 读模型 + 事务写入 |
 | 8 | Domain 纯函数 | ✅ 正确 | 无框架依赖 |
@@ -218,17 +221,17 @@ Browser → POST /api/auth/logout → performRevocation():
 | Redirect URI 严格匹配 | ✅ | 精确字符串比较 |
 | Client Secret SHA-256 | ✅ | 不存明文 |
 | Gateway jti 检查 | ✅ | fail-open 容错 |
-| 暴力破解防护 | ⚠️ 待落地 | 登录失败计数已记录，锁定逻辑需开发实现（见 Fix-5） |
-| 速率限制 | ⚠️ 待落地 | 方案已设计（ACCEPTANCE_CRITERIA §12 Fix-3），代码待实现 |
+| 暴力破解防护 | ✅ | Redis INCR 原子计数 + 5 次/15min 锁定 |
+| 速率限制 | ✅ | Gateway (Rust) `/api/auth/` 路径限流：Auth 20/min + Token 30/min |
 
 ### 7.2 安全评分
 
-**当前安全等级：B+（良好，有 2 项关键缺失）**
+**当前安全等级：A-（良好，持续改进中）**
 
-主要风险：
-1. 无暴力破解防护 — 攻击者可无限尝试密码
-2. 无速率限制 — 可能被 DDoS 或撞库攻击
-3. 登录事件不记录 — 无法追溯安全事件
+主要改进（v2.2）：
+1. ✅ 暴力破解防护：Redis INCR 原子计数 + 5 次/15min 账户锁定
+2. ✅ 速率限制：Gateway (Rust) `/api/auth/` 路径限流双级
+3. ✅ 登录事件全记录：LOGIN_SUCCESS/LOGIN_FAILED/LOGOUT/TOKEN_REFRESH
 
 ---
 
@@ -298,11 +301,10 @@ Browser → POST /api/auth/logout → performRevocation():
 
 ## 11. 总体裁定
 
-### Go/No-Go 判定：**Conditional Hold（2026-07-09 审计发现追加 P0 项）**
+### Go/No-Go 判定：**Conditional Hold（持续修复中）**
 
-**v2.1 更新：前轮所有 P0 阻塞项已修复并代码落地（login_logs 写入、RT Path 统一、速率限制、暴力破解防护），**
-**新增发现 Gateway 生产配置缺陷（GW-1 Redis 密码、GW-2 证书路径）和 TOCTOU 竞态条件（S1）均已修复。**
-**2026-07-09 审计：发现 49 项文档与代码偏差（P0 6 项/P1 ~20 项/P2 ~23 项），核心修复项已完成，系统降级为 Conditional Hold 待二次验收。**
+**v2.2 更新：前轮全部 P0/P1 已修复。ADR-009（Gateway 认证流统一）和 ADR-006/007/008（JWT 最小化+权限码命名空间化）全量实现并验证通过。**
+**2026-07-23 文档同步审计：修复 4 份文档（DATABASE.md v3.3 schema 残留、API.md 权限码 `portal:` 前缀、ARCHITECTURE.md Claims 描述/文件引用）、更新 5 份 ADR 状态为 implemented。**
 
 ### 修复优先级（v2.1 更新）
 

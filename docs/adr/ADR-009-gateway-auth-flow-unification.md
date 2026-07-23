@@ -2,7 +2,7 @@
 
 | 属性       | 值                                    |
 |------------|---------------------------------------|
-| **状态**   | accepted                              |
+| **状态**   | implemented (2026-07-23)              |
 | **日期**   | 2026-07-16                            |
 | **决策者** | Auth-SSO 团队                         |
 | **影响范围** | Gateway (Rust) — request_filter、authenticate::check、config、GatewayCtx |
