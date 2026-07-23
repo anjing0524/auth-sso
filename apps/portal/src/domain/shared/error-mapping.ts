@@ -8,9 +8,6 @@
  */
 import { DomainError } from './errors';
 import { COMMON_ERRORS, AUTH_ERRORS } from '@auth-sso/contracts';
-import { createLogger } from '@/lib/logger';
-
-const log = createLogger('ErrorMapping');
 
 /** 错误映射结果，可直接用于构造 HTTP 响应 */
 interface ErrorMapping {
@@ -76,7 +73,6 @@ export function mapDomainError(err: unknown): ErrorMapping {
     return { status, error: err.code, message: err.message };
   }
 
-  log.error('未预期的异常', { error: err instanceof Error ? err.message : String(err) });
   return { status: 500, error: COMMON_ERRORS.INTERNAL_ERROR, message: '服务器内部错误' };
 }
 

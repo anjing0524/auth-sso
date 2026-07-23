@@ -9,7 +9,7 @@ import { eq, inArray, and } from 'drizzle-orm';
 import { withPermission, logServerDataRead } from '@/lib/auth';
 import { COMMON_ERRORS } from '@auth-sso/contracts';
 import { getClientById, getClientTokens } from '@/app/(dashboard)/clients/data';
-import { writeAuditLog, extractClientIP, extractUserAgent } from '@/lib/audit';
+import { appendSecurityAudit, extractClientIP, extractUserAgent } from '@/lib/audit';
 import { parsePagination } from '@/lib/pagination';
 import { restSuccess, restListSuccess, restError } from '@/lib/response';
 
@@ -48,36 +48,25 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       return restError(COMMON_ERRORS.NOT_FOUND, 'Client 不存在', 404);
     }
 
-    let deletedCount = 0;
-    if (revokeAll) {
-      const result = await db.delete(schema.accessTokens)
-        .where(eq(schema.accessTokens.clientId, client.clientId))
-        .returning({ id: schema.accessTokens.id });
-      deletedCount = result.length;
-    } else if (tokenIds && Array.isArray(tokenIds) && tokenIds.length > 0) {
-      const result = await db.delete(schema.accessTokens)
-        .where(and(eq(schema.accessTokens.clientId, client.clientId), inArray(schema.accessTokens.id, tokenIds)))
-        .returning({ id: schema.accessTokens.id });
-      deletedCount = result.length;
-    } else {
+    if (!revokeAll && (!tokenIds || !Array.isArray(tokenIds) || tokenIds.length === 0)) {
       return restError(COMMON_ERRORS.VALIDATION_ERROR, '请提供 tokenIds 或 revokeAll', 400);
     }
 
-    writeAuditLog({
-      userId: adminUserId,
-      operation: 'TOKEN_REVOKE',
-      method: 'DELETE',
-      url: request.url,
-      params: { 
-        targetId: client.clientId,
-        targetName: client.name,
-        revokeAll, 
-        tokenIds, 
-        revokedCount: deletedCount 
-      },
-      ip: extractClientIP(request.headers),
-      userAgent: extractUserAgent(request.headers),
-      status: 200,
+    const deletedCount = await db.transaction(async (tx) => {
+      const result = revokeAll
+        ? await tx.delete(schema.accessTokens).where(eq(schema.accessTokens.clientId, client.clientId)).returning({ id: schema.accessTokens.id })
+        : await tx.delete(schema.accessTokens).where(and(eq(schema.accessTokens.clientId, client.clientId), inArray(schema.accessTokens.id, tokenIds))).returning({ id: schema.accessTokens.id });
+      await appendSecurityAudit(tx, {
+        userId: adminUserId,
+        operation: 'TOKEN_REVOKE',
+        method: 'DELETE',
+        url: request.url,
+        params: { targetId: client.clientId, targetName: client.name, revokeAll, tokenIds, revokedCount: result.length },
+        ip: extractClientIP(request.headers),
+        userAgent: extractUserAgent(request.headers),
+        status: 200,
+      });
+      return result.length;
     });
 
     return restSuccess({ message: `已撤销 ${deletedCount} 个 Token`, data: { revokedCount: deletedCount } });

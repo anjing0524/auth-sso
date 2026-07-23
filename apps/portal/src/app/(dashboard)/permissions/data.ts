@@ -5,35 +5,76 @@ import 'server-only';
 
 import { cacheLife, cacheTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
-import { eq, asc, and } from 'drizzle-orm';
+import { eq, asc, count } from 'drizzle-orm';
 import { asPermissionType } from '@/lib/type-guards';
 import { logServerDataRead } from '@/lib/auth';
 
 /**
  * 获取权限列表（可按类型过滤）
  */
-export async function getPermissions(type?: string) {
-  'use cache';
-  cacheLife('hours');
-  cacheTag('permissions-list');
+type PermissionListItem = {
+  id: string;
+  name: string;
+  code: string;
+  type: string;
+  path: string | null;
+  icon: string | null;
+  visible: boolean | null;
+  clientId: string | null;
+  parentId: string | null;
+  status: string;
+  sort: number;
+  createdAt: string;
+};
 
-  const conditions = [];
-  if (type) {
-    conditions.push(eq(schema.permissions.type, asPermissionType(type)));
-  }
-
-  const rows = await db.select()
-    .from(schema.permissions)
-    .where(conditions.length > 0 ? and(...conditions) : undefined)
-    .orderBy(asc(schema.permissions.sort), asc(schema.permissions.createdAt));
-
-  return rows.map(p => ({
+function toPermissionListItem(p: typeof schema.permissions.$inferSelect): PermissionListItem {
+  return {
     id: p.id, name: p.name, code: p.code,
     type: p.type, path: p.path, icon: p.icon, visible: p.visible,
     clientId: p.clientId,
     parentId: p.parentId, status: p.status, sort: p.sort,
     createdAt: p.createdAt.toISOString(),
-  }));
+  };
+}
+
+function buildPermissionConditions(type?: string) {
+  return type ? eq(schema.permissions.type, asPermissionType(type)) : undefined;
+}
+
+export async function getPermissions(type?: string): Promise<PermissionListItem[]> {
+  'use cache';
+  cacheLife('hours');
+  cacheTag('permissions-list');
+
+  const rows = await db.select()
+    .from(schema.permissions)
+    .where(buildPermissionConditions(type))
+    .orderBy(asc(schema.permissions.sort), asc(schema.permissions.createdAt));
+
+  return rows.map(toPermissionListItem);
+}
+
+export async function getPermissionPage({ type, page, pageSize }: {
+  type?: string;
+  page: number;
+  pageSize: number;
+}): Promise<{ data: PermissionListItem[]; pagination: { page: number; pageSize: number; total: number; totalPages: number } }> {
+  'use cache';
+  cacheLife('hours');
+  cacheTag('permissions-list');
+
+  const conditions = buildPermissionConditions(type);
+  const [totalRow] = await db.select({ total: count() }).from(schema.permissions).where(conditions);
+  const total = totalRow?.total ?? 0;
+  const rows = await db.select().from(schema.permissions)
+    .where(conditions)
+    .orderBy(asc(schema.permissions.sort), asc(schema.permissions.createdAt))
+    .limit(pageSize)
+    .offset((page - 1) * pageSize);
+  return {
+    data: rows.map(toPermissionListItem),
+    pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) },
+  };
 }
 
 /**

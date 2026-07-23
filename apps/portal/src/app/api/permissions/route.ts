@@ -5,22 +5,18 @@
  */
 import { type NextRequest } from 'next/server';
 import { withPermission } from '@/lib/auth';
-import { getPermissions } from '@/app/(dashboard)/permissions/data';
+import { getPermissionPage } from '@/app/(dashboard)/permissions/data';
 import { parsePagination } from '@/lib/pagination';
 import { restListSuccess } from '@/lib/response';
 
 
-/** GET /api/permissions — 委托 data.ts，支持按 type 过滤和分页（内存分页，适配 Next.js 缓存） */
+/** GET /api/permissions — 委托 data.ts，支持按 type 过滤和数据库分页 */
 export async function GET(request: NextRequest) {
   return withPermission({ permissions: ['permission:list'] }, async () => {
     const sp = request.nextUrl.searchParams;
     const type = sp.get('type') || undefined;
     const { page, pageSize } = parsePagination(sp, 50);
-    const allData = await getPermissions(type);
-    const total = allData.length;
-    const totalPages = Math.ceil(total / pageSize);
-    const offset = (page - 1) * pageSize;
-    const data = allData.slice(offset, offset + pageSize);
-    return restListSuccess(data, { page, pageSize, total, totalPages });
+    const result = await getPermissionPage({ type, page, pageSize });
+    return restListSuccess(result.data, result.pagination);
   });
 }

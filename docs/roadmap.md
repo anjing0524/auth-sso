@@ -21,6 +21,7 @@
 
 ## 变更记录
 
+- 2026-07-23: 修复角色绑定事务边界、REST 错误契约、权限 SQL 分页与 OIDC 死类型；安全审计改为角色绑定事务内写入，并完成全量 Vitest、lint、typecheck 与 diff 检查。
 - 2026-07-16: Gateway 安全修复与性能优化完成（B1-B9/D1-D5/C1-C3/A1-A6，见下方区块）
 - 2026-07-13: 新增"审计驱动待办（基于 2026-07-13-code-audit.md，经代码实证勘误）"区块
 - 2026-07-10: 初始化路线图，对齐 v1.1 交付状态
@@ -36,7 +37,7 @@
 | A0-1 | 🔲 | fire-and-forget → await（复核遗漏的 4 处安全关键调用） | `app/(dashboard)/users/actions.ts:120,232,282` + `app/profile/actions.ts:124` | 6.1 勘误 |
 | A0-2 | ✅ | `revokeAllRefreshTokens` JTI 撤销 fire-and-forget（工作树已修复） | `lib/auth/token.ts:568-577` | 7.4（升级为严重） |
 | A0-3 | 🔲 | CI 增补 `pnpm audit` / `cargo audit` 依赖安全扫描 | `.github/workflows/*` | 13.2 |
-| A0-4 | 🔲 | permissions 列表接口补分页（page/pageSize/pagination） | `api/permissions/route.ts` + `permissions/data.ts` | 5.2 |
+| A0-4 | ✅ | permissions 列表接口补 SQL 分页（page/pageSize/pagination） | `api/permissions/route.ts` + `permissions/data.ts` | 5.2 |
 | A0-5 | 🔲 | 分页参数统一校验 + 提取 `MAX_PAGE_SIZE` 常量 | `contracts` + 4 个路由 | 5.1 |
 
 ### P1 规范统一

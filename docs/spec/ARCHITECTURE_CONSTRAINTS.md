@@ -483,3 +483,9 @@ export async function proxy(request: NextRequest) {
 ---
 
 > **本指南与 ARCHITECTURE.md 形成互补：ARCHITECTURE.md 描述"系统是什么样"，本文档定义"代码该怎么写"。两者不一致时以本文档为准。**
+
+## 七、Gateway Rust 异步 Trait 边界
+
+项目自定义且需要跨线程调度的异步 Trait，必须使用 `-> impl std::future::Future<Output = T> + Send`；实现块直接使用 `async fn`，禁止引入 `#[async_trait]` 的 Box 分配。
+
+唯一例外是 Pingora 等第三方 Trait 的实现：当上游 Trait 定义要求 `#[async_trait]` 时，可在其适配实现上使用该宏。此例外不得扩展至项目自定义 Trait，也不得作为新增动态分发抽象的理由。

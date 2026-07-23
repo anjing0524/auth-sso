@@ -16,6 +16,7 @@ import { mapDomainError } from '@/domain/shared/error-mapping';
 import { recordActionAudit, recordApiAudit } from '@/lib/audit';
 import { createLogger } from '@/lib/logger';
 import { COMMON_ERRORS, type ApiResponse } from '@auth-sso/contracts';
+import { restError } from '@/lib/response';
 
 const log = createLogger('AuthGuard');
 
@@ -36,9 +37,7 @@ export function withAuth<TArgs extends unknown[], TData>(
 
       try {
         const res = await fn({ userId: check.userId }, ...args);
-        if (res.success && options.audit) {
-          recordActionAudit(check.userId, options.audit);
-        }
+        if (res.success && options.audit) await recordActionAudit(check.userId, options.audit);
         return res;
       } catch (err: unknown) {
         const mapped = mapDomainError(err);
@@ -59,32 +58,21 @@ export async function withPermission(
     const check = await checkPermission(options);
 
     if (!check.authorized) {
-      return NextResponse.json(
-        { success: false, error: COMMON_ERRORS.FORBIDDEN, message: check.error },
-        { status: check.statusCode }
-      );
+      return restError(COMMON_ERRORS.FORBIDDEN, check.error || '权限不足', check.statusCode);
     }
 
     if (!check.userId) {
-      return NextResponse.json(
-        { success: false, error: COMMON_ERRORS.INTERNAL_ERROR, message: '鉴权上下文缺失' },
-        { status: 500 },
-      );
+      return restError(COMMON_ERRORS.INTERNAL_ERROR, '鉴权上下文缺失', 500);
     }
 
     const response = await handler(check.userId);
-    if (options.audit) {
-      recordApiAudit(check.userId, options.audit);
-    }
+    if (options.audit) await recordApiAudit(check.userId, options.audit);
     return response;
   } catch (error: unknown) {
     const mapped = mapDomainError(error);
     if (mapped.status >= 500) {
       log.error('服务执行异常', { error: mapped.error, message: mapped.message });
     }
-    return NextResponse.json(
-      { success: false, error: mapped.error, message: mapped.message },
-      { status: mapped.status }
-    );
+    return restError(mapped.error, mapped.message, mapped.status);
   }
 }

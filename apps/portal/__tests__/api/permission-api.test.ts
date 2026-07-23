@@ -164,6 +164,20 @@ describe('Permission API', () => {
       expect(body.data[0].type).toBe('API');
     });
 
+    it('按请求页返回权限并保留总数', async () => {
+      await seedPermission({ id: '00000000-0000-4000-8000-000000000411', code: 'portal:user:list', sort: 1 });
+      await seedPermission({ id: '00000000-0000-4000-8000-000000000412', code: 'portal:role:list', sort: 2 });
+      await seedPermission({ id: '00000000-0000-4000-8000-000000000413', code: 'portal:department:list', sort: 3 });
+
+      const body = await parseResponseJson(await ListPermissions(
+        createTestRequest('/api/permissions', { searchParams: { page: '2', pageSize: '1' } }),
+      ));
+
+      expect(body.pagination).toEqual({ page: 2, pageSize: 1, total: 3, totalPages: 3 });
+      expect(body.data).toHaveLength(1);
+      expect(body.data[0].code).toBe('portal:role:list');
+    });
+
     it('空列表返回空数组', async () => {
       const body = await parseResponseJson(await ListPermissions(createTestRequest('/api/permissions')));
       expect(body.data).toEqual([]);

@@ -82,22 +82,66 @@ export interface WriteAuditLogParams {
   errorMsg?: string | null;
 }
 
-export function writeAuditLog(params: WriteAuditLogParams): void {
-  fireAndForget(() =>
-    db.insert(schema.auditLogs).values({
-      userId: params.userId,
-      username: params.username || null,
-      operation: params.operation,
-      method: params.method || null,
-      url: params.url || null,
-      params: params.params || null,
-      ip: params.ip || null,
-      userAgent: params.userAgent || null,
-      status: params.status ?? null,
-      duration: params.duration ?? null,
-      errorMsg: params.errorMsg || null,
-    })
-  );
+type DrizzleTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+function toAuditLogRow(params: WriteAuditLogParams) {
+  return {
+    userId: params.userId,
+    username: params.username || null,
+    operation: params.operation,
+    method: params.method || null,
+    url: params.url || null,
+    params: params.params || null,
+    ip: params.ip || null,
+    userAgent: params.userAgent || null,
+    status: params.status ?? null,
+    duration: params.duration ?? null,
+    errorMsg: params.errorMsg || null,
+  };
+}
+
+/**
+ * 将安全审计记录写入业务事务。
+ *
+ * 敏感写操作仅在业务写入与审计记录同时提交时才可向调用方返回成功。
+ */
+export async function appendSecurityAudit(
+  tx: DrizzleTransaction,
+  params: WriteAuditLogParams,
+): Promise<void> {
+  await tx.insert(schema.auditLogs).values(toAuditLogRow(params));
+}
+
+export async function writeAuditLog(params: WriteAuditLogParams): Promise<void> {
+  await db.insert(schema.auditLogs).values(toAuditLogRow(params));
+}
+
+export async function recordActionAudit(userId: string, operation: AuditOperation): Promise<void> {
+  const { headers } = await import('next/headers');
+  const h = await headers();
+  await writeAuditLog({
+    userId,
+    operation,
+    method: h.get('x-action-method') || 'ACTION',
+    url: h.get('x-action-path') || null,
+    ip: extractClientIP(h),
+    userAgent: extractUserAgent(h),
+    status: 200,
+  });
+}
+
+export async function recordApiAudit(userId: string, operation: AuditOperation): Promise<void> {
+  const { headers } = await import('next/headers');
+  const h = await headers();
+  await writeAuditLog({
+    userId,
+    operation,
+    method: h.get('x-action-method') || 'API',
+    url: h.get('x-action-path') || null,
+    ip: extractClientIP(h),
+    userAgent: extractUserAgent(h),
+    status: 200,
+  });
 }
 
 // ========================================
@@ -132,36 +176,6 @@ export function writeAccessLog(params: WriteAccessLogParams): void {
       duration: params.duration ?? null,
     })
   );
-}
-
-// ========================================
-// 共享 audit 写入函数 (guard.ts + facade.ts)
-// ========================================
-
-export async function recordAudit(userId: string, operation: AuditOperation, method: 'ACTION' | 'API'): Promise<void> {
-  try {
-    const { headers } = await import('next/headers');
-    const h = await headers();
-    writeAuditLog({
-      userId,
-      operation,
-      method: h.get('x-action-method') || method,
-      url: h.get('x-action-path') || null,
-      ip: extractClientIP(h),
-      userAgent: extractUserAgent(h),
-      status: 200,
-    });
-  } catch {
-    // fire-and-forget：审计写入失败不影响业务
-  }
-}
-
-export async function recordActionAudit(userId: string, operation: AuditOperation): Promise<void> {
-  return recordAudit(userId, operation, 'ACTION');
-}
-
-export async function recordApiAudit(userId: string, operation: AuditOperation): Promise<void> {
-  return recordAudit(userId, operation, 'API');
 }
 
 // ========================================
