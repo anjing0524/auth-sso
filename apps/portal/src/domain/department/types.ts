@@ -23,7 +23,7 @@ export interface Department {
   /** 状态 */
   status: EntityStatus;
   /** 创建时间 */
-  createdAt: Temporal.Instant;
+  createdAt: Date;
 }
 
 /**

@@ -116,10 +116,7 @@ impl JwtVerifier {
         }
 
         // 5. 判定过期状态
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map_err(|_| VerifyError::ClockError)?
-            .as_secs();
+        let now = crate::http::unix_secs().ok_or(VerifyError::ClockError)?;
 
         let expiry = if token_data.claims.exp < now {
             TokenExpiry::Expired

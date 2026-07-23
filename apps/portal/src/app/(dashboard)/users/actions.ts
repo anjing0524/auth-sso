@@ -19,10 +19,9 @@ import {
   unlockUser,
   deleteUser,
   applyUserUpdate,
-  toDomainUser,
+  hasDeptChanged,
   userToInsertRow,
   userToUpdateRow,
-  hasDeptChanged,
 } from '@/domain/user/user';
 import {
   CreateUserInputSchema,
@@ -112,7 +111,7 @@ export const toggleUserStatusAction = withAuth(
       // 数据范围校验：目标用户部门必须在操作者可访问范围内（R7 / H-ACL-002）
       if (!canAccessDept(deptIds, row.deptId)) throw new ForbiddenError('无权操作该部门的用户');
 
-      const target = toggleUserStatus(toDomainUser(row));
+      const target = toggleUserStatus(row);
       await tx.update(schema.users)
         .set({ status: target.status })
         .where(eq(schema.users.id, v.data.id));
@@ -152,7 +151,7 @@ export const unlockUserAction = withAuth(
       if (!row) throw new EntityNotFoundError('User', v.data.id);
       if (!canAccessDept(deptIds, row.deptId)) throw new ForbiddenError('无权操作该部门的用户');
 
-      const target = unlockUser(toDomainUser(row));
+      const target = unlockUser(row);
       await tx.update(schema.users)
         .set({ status: target.status })
         .where(eq(schema.users.id, v.data.id));
@@ -201,13 +200,14 @@ export const updateUserAction = withAuth(
         throw new ForbiddenError('无权将用户迁移至该部门');
       }
 
-      const updated = applyUserUpdate(toDomainUser(row), {
+      const updated = applyUserUpdate(row, {
         name: v.data.name, email: v.data.email,
         status: v.data.status, deptId: v.data.deptId,
         avatarUrl: v.data.avatarUrl,
       });
       deptIdChanged = hasDeptChanged(row.deptId, v.data.deptId);
-      await tx.update(schema.users).set(userToUpdateRow(updated)).where(eq(schema.users.id, v.data.id));
+      await tx.update(schema.users).set(userToUpdateRow(updated))
+        .where(eq(schema.users.id, v.data.id));
     });
     await refreshUserPermissionCache(v.data.id);
     if (deptIdChanged) await revokeUserAccessByUserId(v.data.id);
@@ -233,7 +233,7 @@ export const deleteUserAction = withAuth(
       if (!row) throw new EntityNotFoundError('User', v.data.id);
       if (!canAccessDept(deptIds, row.deptId)) throw new ForbiddenError('无权操作该部门的用户');
 
-      const deleted = deleteUser(toDomainUser(row));
+      const deleted = deleteUser(row);
       await tx.update(schema.users)
         .set({ status: deleted.status })
         .where(eq(schema.users.id, v.data.id));

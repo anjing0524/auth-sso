@@ -15,15 +15,6 @@ export type EntityStatus = typeof ENTITY_STATUS_VALUES[number];
 export const PERMISSION_TYPE_VALUES = ['DIRECTORY', 'PAGE', 'API'] as const;
 export type PermissionType = typeof PERMISSION_TYPE_VALUES[number];
 
-// Grant Type
-export type GrantType = 'authorization_code' | 'refresh_token';
-
-// OIDC Scope
-export type OIDCScope = 'openid' | 'profile' | 'email' | 'offline_access';
-
-// Token 类型
-export type TokenType = 'Bearer';
-
 // 登录事件类型 — 唯一真相源
 export const LOGIN_EVENT_VALUES = ['LOGIN_SUCCESS', 'LOGIN_FAILED', 'LOGOUT', 'TOKEN_REFRESH', 'TOKEN_REFRESH_FAILED'] as const;
 export type LoginEventType = typeof LOGIN_EVENT_VALUES[number];
@@ -52,15 +43,6 @@ export const PERMISSION_PAGE: PermissionType = 'PAGE';
 export const PERMISSION_DIRECTORY: PermissionType = 'DIRECTORY';
 /** 系统管理员角色编码集合（硬编码业务常量） */
 export const ADMIN_ROLE_CODES = ['SUPER_ADMIN', 'ADMIN'] as const;
-
-// 外部 ID 前缀（与 domain 工厂函数保持一致）
-export const PUBLIC_ID_PREFIX = {
-  USER: 'user_',
-  DEPARTMENT: 'dept_',
-  ROLE: 'role_',
-  PERMISSION: 'perm_',
-  CLIENT: 'cli_',
-} as const;
 
 // Cookie 名称 — Portal 与 Gateway 共享的 HttpOnly Cookie Key
 export const COOKIE_NAMES = {
@@ -146,14 +128,14 @@ export interface UserPermissionContext {
 // 适用范围：Server Actions（RPC 风格，无 HTTP 状态码可携带错误语义）。
 // REST HTTP 端点不适用 — 直接使用 HTTP 状态码（200=成功 / 4xx/5xx=失败）+ 业务数据作为响应体，
 // `{ success: true, data: T }` 在 REST 场景中是协议层冗余反模式。
-type ApiSuccess<T> = {
+export type ApiSuccess<T> = {
   success: true;
   data: T;
   pagination?: { page: number; pageSize: number; total: number; totalPages: number };
   message?: string;
 };
 
-type ApiError = {
+export type ApiError = {
   success: false;
   error: string;
   message: string;

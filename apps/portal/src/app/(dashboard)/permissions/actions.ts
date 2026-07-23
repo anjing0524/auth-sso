@@ -7,17 +7,10 @@ import { revalidatePath, updateTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
 import { eq } from 'drizzle-orm';
 import { withAuth, type AuthContext } from '@/lib/auth';
-import {
-  createPermission,
-  permissionToInsertRow,
-  permissionToUpdateRow,
-  applyPermissionUpdate,
-  toDomainPermission,
-} from '@/domain/permission/permission';
+import { createPermission, applyPermissionUpdate, permissionToInsertRow, permissionToUpdateRow } from '@/domain/permission/permission';
 import {
   CreatePermissionInputSchema,
   UpdatePermissionInputSchema,
-  type CreatePermissionInput,
 } from '@/domain/permission/types';
 import { EntityNotFoundError, DuplicateEntityError } from '@/domain/shared/errors';
 import { generateUUID } from '@/lib/crypto';
@@ -82,11 +75,10 @@ export const updatePermissionAction = withAuth(
       });
       if (!row) throw new EntityNotFoundError('Permission', permId);
 
-      const perm = toDomainPermission(row);
-      const updated = applyPermissionUpdate(perm, v.data);
+      const updated = applyPermissionUpdate(row as Parameters<typeof applyPermissionUpdate>[0], v.data);
 
       await tx.update(schema.permissions).set(permissionToUpdateRow(updated))
-        .where(eq(schema.permissions.id, perm.id));
+        .where(eq(schema.permissions.id, row.id));
       return updated;
     });
 

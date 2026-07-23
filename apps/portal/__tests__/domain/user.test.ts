@@ -10,7 +10,7 @@ import { BusinessRuleViolationError } from '../../src/domain/shared/errors';
 
 describe('User 领域核心规则与工厂单元测试', () => {
   
-  const now = Temporal.Now.instant();
+  const now = new Date();
 
   function createTestUser(status: 'ACTIVE' | 'DISABLED' | 'LOCKED' | 'DELETED'): User {
     return {
@@ -20,7 +20,6 @@ describe('User 领域核心规则与工厂单元测试', () => {
       name: '测试用户',
       status,
       deptId: 'dept_test_1',
-      deptName: '测试部门',
       avatarUrl: null,
       deletedAt: null,
       passwordChangedAt: null,
@@ -49,9 +48,9 @@ describe('User 领域核心规则与工厂单元测试', () => {
     expect(user.email).toBe('wang@example.com');
     expect(user.name).toBe('王小二');
     expect(user.deptId).toBe('dept_test_1');
-    expect(user.createdAt).toBeInstanceOf(Temporal.Instant);
-    // 验证 createdAt 时间接近当前时间（Temporal 不可变、精度纳秒级）
-    expect(Temporal.Instant.compare(user.createdAt, Temporal.Now.instant())).toBeLessThanOrEqual(0);
+    expect(user.createdAt).toBeInstanceOf(Date);
+    // 验证 createdAt 时间接近当前时间
+    expect(user.createdAt.getTime()).toBeLessThanOrEqual(Date.now());
   });
 
   // 2. 状态机切换规则测试

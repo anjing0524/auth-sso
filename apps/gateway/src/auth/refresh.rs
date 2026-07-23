@@ -182,9 +182,9 @@ impl TokenRefresher {
 
         // 签名证明调用方是 Gateway（域分离 payload: "refresh:{ts}"）
         if let Some(ref secret) = self.gateway_shared_secret
-            && let Ok(d) = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
+            && let Some(d) = crate::http::unix_secs()
         {
-            let ts = d.as_secs().to_string();
+            let ts = d.to_string();
             if let Some(sig) = hmac_sha256_hex(secret, &format!("refresh:{ts}")) {
                 request = request
                     .header("X-Gateway-Timestamp", &ts)

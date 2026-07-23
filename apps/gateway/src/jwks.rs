@@ -332,6 +332,7 @@ impl JwksCache {
         // 4. 原子写入：元数据 + 公钥一并提交
         let count = self.apply_discovery(discovery, new_keys)?;
 
+        crate::metrics::record_jwks_refresh_success();
         info!(
             "✅ JWKS 公钥缓存刷新成功，加载了 {} 个 Key (via OIDC Discovery)",
             count
@@ -460,6 +461,33 @@ impl JwksRefreshService {
 #[async_trait::async_trait]
 impl BackgroundService for JwksRefreshService {
     async fn start(&self, mut shutdown: ShutdownWatch) {
+        // 阻塞首次刷新：确保 JWKS 缓存就绪后才启动主事件循环。
+        // 避免 Gateway 在首次 Discovery 完成前就开始接受流量，
+        // 导致所有 JWT 验证因 UnknownKid 而失败。
+        info!("🔍 执行首次 JWKS 刷新，等待缓存就绪...");
+        loop {
+            match self.try_refresh_from_any().await {
+                Ok(()) => {
+                    info!("✅ 首次 JWKS 缓存刷新成功，开始接受流量");
+                    break;
+                }
+                Err(e) => {
+                    warn!(
+                        "⏳ 首次 JWKS 刷新失败: {}，{} 秒后重试...",
+                        e, JWKS_INIT_RETRY_SECS
+                    );
+                    tokio::select! {
+                        _ = shutdown.changed() => {
+                            info!("JWKS 刷新服务在首次刷新期间收到退出信号");
+                            return;
+                        }
+                        _ = tokio::time::sleep(Duration::from_secs(JWKS_INIT_RETRY_SECS)) => {}
+                    }
+                }
+            }
+        }
+
+        // 主事件循环：定时后台刷新
         loop {
             let result = self.try_refresh_from_any().await;
             let delay_secs = match &result {
@@ -482,7 +510,6 @@ impl BackgroundService for JwksRefreshService {
                 }
             };
 
-            // 等待下一轮，或收到关停信号即退出
             tokio::select! {
                 _ = shutdown.changed() => {
                     info!("JWKS 刷新服务收到退出信号...");

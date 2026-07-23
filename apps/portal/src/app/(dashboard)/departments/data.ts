@@ -4,7 +4,7 @@
  * 使用 "use cache" + cacheLife/cacheTag 实现持久化缓存。
  * scopeFilter 由调用方在缓存作用域外计算后注入（R10 / §3.6），
  * 严禁在 'use cache' 作用域内访问 headers()/cookies() 等动态 API。
- * Drizzle 返回的 Date 通过 Temporal.Instant.fromEpochMilliseconds() 统一转换（支持 toJSON 序列化）。
+ * Drizzle 返回的 Date 直接使用（无需 Temporal 转换）。
  */
 import 'server-only';
 
@@ -45,7 +45,7 @@ export async function getDepartments(
     id: r.id, parentId: r.parentId, ancestors: r.ancestors,
     name: r.name, code: r.code, sort: r.sort ?? 0,
     status: asEntityStatus(r.status),
-    createdAt: Temporal.Instant.fromEpochMilliseconds(r.createdAt.getTime()),
+    createdAt: r.createdAt,
   }));
 
   return buildDepartmentTree(depts);
@@ -71,7 +71,7 @@ export async function getDepartmentById(lookupId: string) {
     code: row.code,
     sort: row.sort ?? 0,
     status: row.status,
-    createdAt: Temporal.Instant.fromEpochMilliseconds(row.createdAt.getTime()),
+    createdAt: row.createdAt,
   };
 }
 

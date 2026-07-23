@@ -9,10 +9,9 @@ import { eq, and, inArray } from 'drizzle-orm';
 import { withAuth, type AuthContext } from '@/lib/auth';
 import {
   createClient,
+  applyClientUpdate,
   clientToInsertRow,
   clientToUpdateRow,
-  applyClientUpdate,
-  toDomainClient,
 } from '@/domain/client/client';
 import {
   CreateClientInputSchema,
@@ -33,10 +32,8 @@ export const createClientAction = withAuth(
 
     const rawSecret = generateClientSecret();
     const client = createClient(v.data, generateClientId, () => rawSecret);
-    const row = clientToInsertRow(client);
-    // bcrypt 哈希存储，原文不落库（DC-CLI-C）
     await db.insert(schema.clients).values({
-      ...row,
+      ...clientToInsertRow(client),
       clientSecret: await hashClientSecret(rawSecret),
     });
 
@@ -57,17 +54,28 @@ export const updateClientAction = withAuth(
     const v = validate(UpdateClientInputSchema, input);
     if (!v.ok) return v.response;
 
-    const updated = await db.transaction(async (tx) => {
+    await db.transaction(async (tx) => {
       const row = await tx.query.clients.findFirst({
         where: eq(schema.clients.clientId, clientIdStr),
       });
       if (!row) throw new EntityNotFoundError('Client', clientIdStr);
 
-      const client = toDomainClient(row);
-      const updated = applyClientUpdate(client, v.data);
+      const updated = applyClientUpdate({
+        clientId: row.clientId,
+        name: row.name,
+        clientSecret: row.clientSecret,
+        redirectUris: row.redirectUris,
+        scopes: row.scopes,
+        homepageUrl: row.homepageUrl,
+        logoUrl: row.logoUrl,
+        accessTokenTtl: row.accessTokenTtl,
+        refreshTokenTtl: row.refreshTokenTtl,
+        status: row.status,
+        createdAt: row.createdAt,
+      }, v.data);
 
       await tx.update(schema.clients).set(clientToUpdateRow(updated))
-        .where(eq(schema.clients.clientId, client.clientId));
+        .where(eq(schema.clients.clientId, row.clientId));
       return updated;
     });
 

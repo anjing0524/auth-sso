@@ -3,6 +3,9 @@ import 'server-only';
 import { headers } from 'next/headers';
 import { resolveIdentity } from './verify-jwt';
 import { writeAccessLog, extractClientIP, extractUserAgent } from '@/lib/audit';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('ServerDataRead');
 
 /**
  * 记录底层数据读取 (Server-only / data.ts) 的访问日志
@@ -43,6 +46,6 @@ export async function logServerDataRead(resourceType: string, resourceId: string
       duration: null, // 底层无法精确计算 API 的 HTTP 总耗时
     });
   } catch (err) {
-    console.error('[Audit] 底层数据访问日志记录失败:', err);
+    log.error('底层数据访问日志记录失败', { error: err instanceof Error ? err.message : String(err) });
   }
 }

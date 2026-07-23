@@ -13,7 +13,7 @@ import { db, schema } from '@/infrastructure/db';
 import { eq } from 'drizzle-orm';
 import { generateId, generateUUID, hashToken } from '@/lib/crypto';
 import { isJtiRevoked, trackUserJti, revokeUserAccessByUserId } from '@/lib/session/revoke';
-import { resolveTokenClaims } from '@/lib/auth/permissions-context';
+import { getUserPermissionContext, cacheUserPermissionContext } from '@/lib/permissions';
 import { TOKEN_TTL } from '@auth-sso/contracts';
 import type { PortalJwtClaims, RefreshTokenResult } from '@/domain/auth/types';
 import { getActiveSigningKey, getSigningKeyByKid } from './token/signing-keys';
@@ -295,8 +295,9 @@ export async function rotateRefreshToken(
   if (!lockedRt) return null;
   const { rt, newRefreshToken } = lockedRt;
 
-  const resolved = await resolveTokenClaims(rt.userId);
-  if (!resolved) return null;
+  const permCtx = await getUserPermissionContext(rt.userId);
+  if (!permCtx) return null;
+  await cacheUserPermissionContext(rt.userId, permCtx);
 
   const { token: accessToken } = await signAccessToken(rt.userId);
 

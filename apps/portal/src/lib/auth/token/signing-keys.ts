@@ -54,6 +54,12 @@ export async function importKeyFromJwk(jwkStr: string, alg: string = 'ES256'): P
   return await importJWK(JSON.parse(decrypted) as JsonWebKey, alg) as CryptoKey;
 }
 
+function createAndCacheEntry(kid: string, privateKey: CryptoKey, publicKey: CryptoKey, publicJwk: JsonWebKey): CachedSigningKey {
+  const entry: CachedSigningKey = { keyId: kid, privateKey, publicKey, publicJwk, fetchedAt: Date.now() };
+  keyCache.set(kid, entry);
+  return entry;
+}
+
 // ============================================================================
 // 密钥查询
 // ============================================================================
@@ -83,9 +89,7 @@ export async function getSigningKeyByKid(kid: string): Promise<{
   const publicKey = await importKeyFromJwk(row.publicKey);
   const publicJwk = JSON.parse(row.publicKey) as JsonWebKey;
 
-  const entry = { keyId: row.kid ?? row.id, privateKey, publicKey, publicJwk, fetchedAt: Date.now() };
-  keyCache.set(kid, entry);
-  return entry;
+  return createAndCacheEntry(row.kid ?? row.id, privateKey, publicKey, publicJwk);
 }
 
 /**
@@ -131,8 +135,7 @@ export async function getActiveSigningKey(): Promise<{
           const rprivateKey = await importKeyFromJwk(rjwk.privateKey);
           const rpublicKey = await importKeyFromJwk(rjwk.publicKey);
           const rpublicJwk = JSON.parse(rjwk.publicKey) as JsonWebKey;
-          const rentry = { keyId: rkid, privateKey: rprivateKey, publicKey: rpublicKey, publicJwk: rpublicJwk, fetchedAt: Date.now() };
-          keyCache.set(rkid, rentry);
+          const rentry = createAndCacheEntry(rkid, rprivateKey, rpublicKey, rpublicJwk);
           return rentry;
         }
       }
@@ -152,9 +155,7 @@ export async function getActiveSigningKey(): Promise<{
   const publicKey = await importKeyFromJwk(jwk.publicKey);
   const publicJwk = JSON.parse(jwk.publicKey) as JsonWebKey;
 
-  const entry = { keyId: kid, privateKey, publicKey, publicJwk, fetchedAt: Date.now() };
-  keyCache.set(kid, entry);
-  return entry;
+  return createAndCacheEntry(kid, privateKey, publicKey, publicJwk);
 }
 
 // ============================================================================
@@ -187,7 +188,5 @@ async function generateAndPersistKeyPair(): Promise<{
 
   // importJWK 得到可缓存的 CryptoKey（exportJWK 返回的是 JWK 不是 CryptoKey）
   const importedPublicKey = await importJWK(publicJwk, 'ES256') as CryptoKey;
-  const entry = { keyId: kid, privateKey, publicKey: importedPublicKey, publicJwk, fetchedAt: Date.now() };
-  keyCache.set(kid, entry);
-  return entry;
+  return createAndCacheEntry(kid, privateKey, importedPublicKey, publicJwk);
 }

@@ -273,9 +273,9 @@ export async function clearUsersPermissionCache(userIds: string[]): Promise<void
 export async function cacheUserPermissionContext(
   userId: string,
   ctx: UserPermissionContext,
-  ttl: number = jitteredCacheTtl(),
+  ttl?: number,
 ): Promise<void> {
   const redis = getRedis();
   const cacheKey = `${REDIS_KEY_PREFIX.USER_PERMS}${userId}`;
-  await safeSetCache(redis, cacheKey, ttl, JSON.stringify(ctx), userId);
+  await safeSetCache(redis, cacheKey, ttl ?? jitteredCacheTtl(), JSON.stringify(ctx), userId);
 }

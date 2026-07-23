@@ -5,7 +5,6 @@ import { describe, it, expect } from 'vitest';
 import {
   createClient,
   applyClientUpdate,
-  toDomainClient,
 } from '@/domain/client/client';
 import { CreateClientInputSchema } from '@/domain/client/types';
 
@@ -40,18 +39,5 @@ describe('Client 领域核心规则', () => {
     const updated = applyClientUpdate(client, { name: '新名称' });
     expect(updated.name).toBe('新名称');
     expect(updated.logoUrl).toBeNull(); // 未修改保持原值
-  });
-
-  it('toDomainClient 应正确解析 redirectUris', () => {
-    const row = {
-      clientId: 'cli_1', name: 'Test App',
-      clientSecret: 'secret', redirectUris: ['http://localhost/callback'], scopes: 'openid',
-      homepageUrl: null, logoUrl: null, accessTokenTtl: 3600, refreshTokenTtl: 604800,
-      status: 'ACTIVE' as any, disabled: false, skipConsent: false, userId: null,
-      createdAt: new Date('2025-01-01'),
-    };
-    const client = toDomainClient(row);
-    expect(client.redirectUris).toEqual(['http://localhost/callback']);
-    expect(client.accessTokenTtl).toBe(3600);
   });
 });

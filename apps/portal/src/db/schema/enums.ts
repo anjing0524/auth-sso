@@ -18,6 +18,7 @@ import {
   PERMISSION_TYPE_VALUES,
   LOGIN_EVENT_VALUES,
   AUDIT_OPERATION_VALUES,
+  CODE_CHALLENGE_METHODS_SUPPORTED,
 } from '@auth-sso/contracts';
 
 /** 用户状态枚举 */
@@ -36,4 +37,4 @@ export const loginEventEnum = pgEnum('login_event', LOGIN_EVENT_VALUES);
 export const auditOperationEnum = pgEnum('audit_operation', AUDIT_OPERATION_VALUES);
 
 /** PKCE code_challenge_method 枚举 (RFC 7636) */
-export const codeChallengeMethodEnum = pgEnum('code_challenge_method', ['S256']);
+export const codeChallengeMethodEnum = pgEnum('code_challenge_method', CODE_CHALLENGE_METHODS_SUPPORTED as unknown as [string, ...string[]]);

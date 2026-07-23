@@ -12,18 +12,19 @@ import { eq, sql, count } from 'drizzle-orm';
 import { withAuth, type AuthContext } from '@/lib/auth';
 import {
   createDepartment,
-  departmentToInsertRow,
-  departmentToUpdateRow,
   applyDepartmentUpdateWithCircularCheck,
   resolveParentAncestors,
-  toDomainDepartment,
+  computeAncestorPrefix,
+  validateDepartmentDeletable,
+  departmentToInsertRow,
+  departmentToUpdateRow,
 } from '@/domain/department/department';
 import {
   CreateDepartmentInputSchema,
   UpdateDepartmentInputSchema,
   type CreateDepartmentInput,
 } from '@/domain/department/types';
-import { EntityNotFoundError, BusinessRuleViolationError, ForbiddenError } from '@/domain/shared/errors';
+import { EntityNotFoundError, ForbiddenError } from '@/domain/shared/errors';
 import { generateUUID } from '@/lib/crypto';
 import { validate } from '@/lib/validation';
 import { canAccessDept, getUserRoleDeptIds } from '@/lib/auth';
@@ -75,18 +76,17 @@ async function performDepartmentUpdate(tx: DrizzleTransaction, deptId: string, p
   const row = await tx.query.departments.findFirst({ where: eq(schema.departments.id, deptId) });
   if (!row) throw new EntityNotFoundError('Department', deptId);
 
-  const dept = toDomainDepartment(row);
   const allDepts = await tx.query.departments.findMany();
+  const dept = row;
   const newAncestors = resolveParentAncestors(dept, patch.parentId as string | null | undefined, allDepts);
-  const parentChanged = newAncestors !== undefined;
 
-  const mergedPatch = { ...patch, ...(parentChanged ? { ancestors: newAncestors } : {}) };
-  const updated = applyDepartmentUpdateWithCircularCheck(dept, mergedPatch, allDepts);
-  await tx.update(schema.departments).set(departmentToUpdateRow(updated)).where(eq(schema.departments.id, dept.id));
+  const updated = applyDepartmentUpdateWithCircularCheck(dept, { ...patch, ancestors: newAncestors }, allDepts);
+  await tx.update(schema.departments).set(departmentToUpdateRow(updated))
+    .where(eq(schema.departments.id, dept.id));
 
-  if (parentChanged) {
-    const oldPrefix = dept.ancestors ? `${dept.ancestors}/${dept.id}` : dept.id;
-    const newPrefix = updated.ancestors ? `${updated.ancestors}/${updated.id}` : updated.id;
+  if (newAncestors !== undefined) {
+    const oldPrefix = computeAncestorPrefix(dept.id, dept.ancestors);
+    const newPrefix = computeAncestorPrefix(updated.id, updated.ancestors);
     if (oldPrefix !== newPrefix) {
       await tx.execute(sql`UPDATE departments SET ancestors = REPLACE(ancestors, ${oldPrefix}, ${newPrefix}) WHERE ancestors LIKE ${oldPrefix + '/%'}`);
     }
@@ -133,25 +133,22 @@ export const deleteDepartmentAction = withAuth(
       const children = await tx.query.departments.findFirst({
         where: eq(schema.departments.parentId, row.id),
       });
-      if (children) throw new BusinessRuleViolationError('该部门下有子部门，无法删除');
-
       // v3.2: 检查是否有关联用户（DC-DEPT-D）
-      const userCount = await tx
+      const [userResult] = await tx
         .select({ count: count() })
         .from(schema.users)
         .where(eq(schema.users.deptId, row.id));
-      if (Number(userCount[0]?.count || 0) > 0) {
-        throw new BusinessRuleViolationError('该部门下存在关联用户，无法删除');
-      }
-
       // 检查是否有角色关联（v3.2: roles.dept_id FK）
-      const roleCount = await tx
+      const [roleResult] = await tx
         .select({ count: count() })
         .from(schema.roles)
         .where(eq(schema.roles.deptId, row.id));
-      if (Number(roleCount[0]?.count || 0) > 0) {
-        throw new BusinessRuleViolationError('该部门下存在关联角色，无法删除');
-      }
+
+      validateDepartmentDeletable({
+        hasChildren: !!children,
+        userCount: Number(userResult?.count || 0),
+        roleCount: Number(roleResult?.count || 0),
+      });
 
       await tx.delete(schema.departments).where(eq(schema.departments.id, row.id));
     });

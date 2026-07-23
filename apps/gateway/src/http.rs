@@ -73,6 +73,16 @@ pub fn is_html_page_navigation(req: &RequestHeader) -> bool {
     is_get && is_html && !is_rsc
 }
 
+/// 获取当前 Unix 时间戳（秒），系统时钟异常时返回 `None`。
+///
+/// 统一替代分散在各模块中的 `SystemTime::now().duration_since(UNIX_EPOCH)`。
+pub(crate) fn unix_secs() -> Option<u64> {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .ok()
+        .map(|d| d.as_secs())
+}
+
 // ── 全局 HTTP 客户端 ──
 
 /// 全局 reqwest HTTP 客户端单例（内置连接池，全局复用）。

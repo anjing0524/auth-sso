@@ -18,8 +18,6 @@ export {
   getRedisUrl,
   getEnvConfig,
   parsePortalEnv,
-  safeGetEnv,
-  EnvValidationError,
   isCookieSecure,
 } from '@auth-sso/config';
 

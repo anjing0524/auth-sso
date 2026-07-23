@@ -3,29 +3,21 @@
  * @module @auth-sso/contracts/oidc
  */
 
-// OIDC 端点路径
-export const OIDC_ENDPOINTS = {
-  // Better Auth 默认路径
-  AUTHORIZE: '/oauth2/authorize',
-  TOKEN: '/oauth2/token',
-  USERINFO: '/oauth2/userinfo',
-  INTROSPECT: '/oauth2/introspect',
-  REGISTER: '/oauth2/register',
-
-  // JWKS（与 Portal 实际路由 app/api/auth/jwks/route.ts 一致）
-  JWKS: '/api/auth/jwks',
-
-  // OIDC Discovery
-  OPENID_CONFIGURATION: '/.well-known/openid-configuration',
-} as const;
-
 // OAuth 2.1 参数
 export const OAUTH_PARAMS = {
-  RESPONSE_TYPE: 'code',                    // 授权码模式
-  CODE_CHALLENGE_METHOD: 'S256',            // PKCE 方法
   GRANT_TYPE_AUTHORIZATION_CODE: 'authorization_code',
   GRANT_TYPE_REFRESH_TOKEN: 'refresh_token',
 } as const;
+
+// OIDC Discovery 常量（单一真相源，供 .well-known/openid-configuration 和 DB enum 派生）
+export const RESPONSE_TYPES_SUPPORTED = ['code'] as const;
+export const GRANT_TYPES_SUPPORTED = ['authorization_code', 'refresh_token'] as const;
+export const TOKEN_ENDPOINT_AUTH_METHODS_SUPPORTED = ['client_secret_basic', 'client_secret_post', 'none'] as const;
+export const CODE_CHALLENGE_METHODS_SUPPORTED = ['S256'] as const;
+export const SCOPES_SUPPORTED = ['openid', 'profile', 'email', 'offline_access'] as const;
+export const ID_TOKEN_SIGNING_ALG_VALUES_SUPPORTED = ['ES256'] as const;
+export const SUBJECT_TYPES_SUPPORTED = ['public'] as const;
+export const CLAIMS_SUPPORTED = ['sub', 'iss', 'aud', 'exp', 'iat', 'jti', 'auth_time', 'nonce', 'name', 'preferred_username', 'email', 'email_verified', 'picture'] as const;
 
 // OIDC Scope 定义
 export const OIDC_SCOPES = {
@@ -63,22 +55,6 @@ export const REDIS_KEY_PREFIX = {
   REFRESH_DEDUP: 'portal:refresh_dedup:',
   /** 登录失败计数 Key 前缀 — 暴力破解防护 */
   LOGIN_FAIL: 'portal:login_fail:',
-} as const;
-
-// 默认支持的 Scope
-export const DEFAULT_SCOPES = [
-  OIDC_SCOPES.OPENID,
-  OIDC_SCOPES.PROFILE,
-  OIDC_SCOPES.EMAIL,
-  OIDC_SCOPES.OFFLINE_ACCESS,
-] as const;
-
-// Scope 返回的 Claims
-export const SCOPE_CLAIMS = {
-  [OIDC_SCOPES.OPENID]: ['sub'],
-  [OIDC_SCOPES.PROFILE]: ['name', 'picture', 'given_name', 'family_name'],
-  [OIDC_SCOPES.EMAIL]: ['email', 'email_verified'],
-  [OIDC_SCOPES.OFFLINE_ACCESS]: [],  // Refresh Token
 } as const;
 
 // ID Token 标准 Claims
@@ -160,9 +136,6 @@ export interface IntrospectResponse {
   jti?: string;
 }
 
-// 授权码 Redis Key
-export const AUTH_CODE_KEY = (code: string) => `portal:auth_code:${code}`;
-
 // PKCE 验证数据
 export interface PKCEData {
   code_challenge: string;
@@ -173,5 +146,4 @@ export interface PKCEData {
   expires_at: number;
 }
 
-// PKCE 数据 Redis Key
-export const PKCE_KEY = (code: string) => `portal:pkce:${code}`;
+

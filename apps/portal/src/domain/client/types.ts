@@ -33,7 +33,7 @@ export interface Client {
   /** 状态 */
   status: EntityStatus;
   /** 创建时间 */
-  createdAt: Temporal.Instant;
+  createdAt: Date;
 }
 
 /** 创建 Client 入参校验 Schema */

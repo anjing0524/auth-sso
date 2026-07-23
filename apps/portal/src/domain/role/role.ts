@@ -1,40 +1,9 @@
-import type { EntityStatus } from '@auth-sso/contracts';
-import { ENTITY_ACTIVE } from '@auth-sso/contracts';
 import type { CreateRoleInput, Role } from './types';
+import { ENTITY_ACTIVE } from '@auth-sso/contracts';
 import { BusinessRuleViolationError } from '../shared/errors';
 
 export type { Role };
 
-/**
- * 将 Drizzle 数据库行转换为领域 Role 实体
- */
-export function toDomainRole(row: {
-  id: string;
-  name: string;
-  code: string;
-  description: string | null;
-  deptId: string;
-  isSystem: boolean | null;
-  status: EntityStatus;
-  sort: number | null;
-  createdAt: Date;
-}): Role {
-  return {
-    id: row.id,
-    name: row.name,
-    code: row.code,
-    description: row.description,
-    deptId: row.deptId,
-    isSystem: row.isSystem ?? false,
-    status: row.status,
-    sort: row.sort ?? 0,
-    createdAt: Temporal.Instant.fromEpochMilliseconds(row.createdAt.getTime()),
-  };
-}
-
-/**
- * 工厂函数：构建新角色实体 (无副作用)
- */
 export function createRole(
   input: CreateRoleInput,
   idGenerator: () => string,
@@ -48,13 +17,10 @@ export function createRole(
     isSystem: false,
     status: ENTITY_ACTIVE,
     sort: input.sort,
-    createdAt: Temporal.Now.instant(),
+    createdAt: new Date(),
   };
 }
 
-/**
- * 纯函数：构建更新后的角色对象 (无副作用)
- */
 export function applyRoleUpdate(
   role: Role,
   patch: Partial<Pick<Role, 'name' | 'description' | 'deptId' | 'sort' | 'status'>>,
@@ -69,23 +35,12 @@ export function applyRoleUpdate(
   };
 }
 
-/**
- * 领域守卫：禁止操作系统内置角色
- */
 export function guardNotSystemRole(role: Role): void {
   if (role.isSystem) {
     throw new BusinessRuleViolationError('系统内置角色禁止修改或删除');
   }
 }
 
-/**
- * 纯函数：判断角色更新是否影响权限决策（需触发用户重登）
- *
- * 检测维度：
- * - 部门变更（数据范围变化）
- * - 状态变更（ACTIVE → DISABLED）
- * - 权限绑定变更（Controller 传入，因 role domain 不持有 rolePermissions）
- */
 export function hasRolePermissionImpact(
   original: Pick<Role, 'deptId' | 'status'>,
   updated: Pick<Role, 'deptId' | 'status'>,
@@ -96,11 +51,6 @@ export function hasRolePermissionImpact(
     || permissionChanged;
 }
 
-// ────────────────────────────────────────────
-// DB 行转换（统一 Controller 层的列映射，消除重复）
-// ────────────────────────────────────────────
-
-/** 将领域实体转为 Drizzle insert 行 */
 export function roleToInsertRow(r: Role) {
   return {
     id: r.id,
@@ -111,11 +61,10 @@ export function roleToInsertRow(r: Role) {
     isSystem: r.isSystem,
     sort: r.sort,
     status: r.status,
-    createdAt: new Date(r.createdAt.epochMilliseconds),
+    createdAt: r.createdAt,
   };
 }
 
-/** 将领域实体转为 Drizzle update 行 */
 export function roleToUpdateRow(r: Role) {
   return {
     name: r.name,

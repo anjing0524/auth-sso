@@ -12,8 +12,8 @@ import { hexToBytes } from '@/lib/crypto';
 /** HMAC 签名时间戳容忍窗口（秒），可通过 SIGNATURE_TIMESTAMP_WINDOW_SEC 环境变量覆盖 */
 export const SIGNATURE_TIMESTAMP_WINDOW_SEC = (() => {
   const raw = process.env['SIGNATURE_TIMESTAMP_WINDOW_SEC'];
-  const parsed = raw ? parseInt(raw, 10) : 60;
-  if (isNaN(parsed) || parsed < 1 || parsed > 300) return 60;
+  const parsed = raw ? parseInt(raw, 10) : 30;
+  if (isNaN(parsed) || parsed < 1 || parsed > 300) return 30;
   return parsed;
 })();
 

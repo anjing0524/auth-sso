@@ -8,9 +8,14 @@
  */
 import { createHash, timingSafeEqual } from 'crypto';
 import bcrypt from 'bcryptjs';
-import { hexToBytes } from '@/lib/crypto';
 import { ENTITY_ACTIVE } from '@auth-sso/contracts';
 import { InvalidClientError, InvalidRedirectUriError } from '@/domain/shared/errors';
+
+function hexToBytes(hex: string): Uint8Array {
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < bytes.length; i++) bytes[i] = parseInt(hex.substring(i * 2, i * 2 + 2), 16);
+  return bytes;
+}
 
 /**
  * 校验 OAuth Client 是否存在且处于激活状态

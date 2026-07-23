@@ -86,6 +86,25 @@ pub struct RefreshedTokens {
 
 // ── 工具函数 ──
 
+/// 从 JWT token 中提取 payload 段并 base64url 解码，返回原始字节。
+///
+/// 按 `.` 分割取中段，校验恰好三段格式。不进行任何密码学验证。
+pub(crate) fn jwt_payload_bytes(token: &str) -> Option<Vec<u8>> {
+    let mut segments = token.split('.');
+    let payload = match (
+        segments.next(),
+        segments.next(),
+        segments.next(),
+        segments.next(),
+    ) {
+        (Some(_), Some(payload), Some(_), None) => payload,
+        _ => return None,
+    };
+    base64::engine::general_purpose::URL_SAFE_NO_PAD
+        .decode(payload)
+        .ok()
+}
+
 /// 裸解 JWT payload（不验签），从 Base64 编码的 payload 段提取 Claims。
 ///
 /// ⚠️ 不进行任何密码学验证，不可用于安全决策。
@@ -98,21 +117,7 @@ pub struct RefreshedTokens {
 /// assert!(decode_jwt_payload("not.a.jwt").is_none());
 /// ```
 pub fn decode_jwt_payload(token: &str) -> Option<Claims> {
-    // JWT 由 header.payload.signature 三段组成。用迭代器元组匹配零分配地校验
-    // "恰好三段"，并取中段 payload；多余或不足均返回 None。
-    let mut segments = token.split('.');
-    let payload = match (
-        segments.next(),
-        segments.next(),
-        segments.next(),
-        segments.next(),
-    ) {
-        (Some(_), Some(payload), Some(_), None) => payload,
-        _ => return None,
-    };
-    let payload_bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
-        .decode(payload)
-        .ok()?;
+    let payload_bytes = jwt_payload_bytes(token)?;
     serde_json::from_slice::<Claims>(&payload_bytes).ok()
 }
 

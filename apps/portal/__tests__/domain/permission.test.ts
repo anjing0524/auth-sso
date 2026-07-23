@@ -5,7 +5,6 @@ import { describe, it, expect } from 'vitest';
 import {
   createPermission,
   applyPermissionUpdate,
-  toDomainPermission,
 } from '@/domain/permission/permission';
 import { CreatePermissionInputSchema } from '@/domain/permission/types';
 
@@ -33,18 +32,5 @@ describe('Permission 领域核心规则', () => {
     expect(updated.name).toBe('新名称');
     expect(updated.status).toBe('DISABLED');
     expect(updated.code).toBe('portal:old:code');
-  });
-
-  it('toDomainPermission 应正确转换 DB 行', () => {
-    const row = {
-      id: 'p1', name: '测试权限', code: 'portal:test:perm',
-      type: 'API' as any, description: null, path: null, icon: null, visible: null,
-      clientId: null,
-      parentId: null, status: 'ACTIVE' as any, sort: 10,
-      createdAt: new Date('2025-01-01'),
-    };
-    const perm = toDomainPermission(row);
-    expect(perm.type).toBe('API');
-    expect(perm.code).toBe('portal:test:perm');
   });
 });

@@ -16,6 +16,7 @@ import { resolveIdentity } from './verify-jwt';
 import { getRedis } from '@/infrastructure/redis';
 import { REDIS_KEY_PREFIX, ADMIN_ROLE_CODES } from '@auth-sso/contracts';
 import type { AuditOperation } from '@auth-sso/contracts';
+import { getUserPermissionContext } from '@/lib/permissions';
 
 /**
  * 权限检查选项接口定义
@@ -65,24 +66,32 @@ export async function checkPermission(
   let roles: string[] = [];
   let permissions: string[] = [];
 
+  // Redis 缓存读取（独立 try/catch：失败视为缓存 miss，恢复时继续走 DB 回退）
+  let cached: string | null = null;
   try {
     const redis = getRedis();
     const cacheKey = `${REDIS_KEY_PREFIX.USER_PERMS}${userId}`;
-    const cached = await redis.get(cacheKey);
-    if (cached) {
+    cached = await redis.get(cacheKey);
+  } catch {
+    // Redis 不可用，跳过缓存，进入 DB 回退路径
+  }
+
+  if (cached) {
+    try {
       const ctx = JSON.parse(cached);
       roles = ctx.roles?.map((r: any) => r.code) ?? [];
       permissions = ctx.permissions ?? [];
-    } else {
-      const { getUserPermissionContext } = await import('@/lib/permissions');
-      const ctx = await getUserPermissionContext(userId);
-      if (ctx) {
-        roles = ctx.roles.map(r => r.code);
-        permissions = ctx.permissions;
-      }
+    } catch {
+      // 缓存数据损坏，视为 miss，进入 DB 回退路径
     }
-  } catch {
-    return { authorized: false, error: '鉴权服务不可用', statusCode: 503 };
+  }
+
+  if (roles.length === 0 && permissions.length === 0) {
+    const ctx = await getUserPermissionContext(userId);
+    if (ctx) {
+      roles = ctx.roles.map(r => r.code);
+      permissions = ctx.permissions;
+    }
   }
 
   if (roles.some((rc) => (ADMIN_ROLE_CODES as readonly string[]).includes(rc))) {

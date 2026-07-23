@@ -16,13 +16,8 @@ use crate::router::Router;
 
 /// 计算 HMAC-SHA256 并以十六进制字符串返回（委托 [`crate::http::hmac_sha256_hex`]）。
 /// 用于 Gateway → Portal 信任路径签名。
-fn compute_hmac_sha256_hex(secret: &str, payload: &str) -> std::result::Result<String, Box<Error>> {
-    hmac_sha256_hex(secret, payload).ok_or_else(|| {
-        Error::explain(
-            ErrorType::InternalError,
-            "创建 HMAC-SHA256 实例失败".to_string(),
-        )
-    })
+fn compute_hmac_sha256_hex(secret: &str, payload: &str) -> Option<String> {
+    hmac_sha256_hex(secret, payload)
 }
 
 /// Pingora `LoadBalancer::select` 的第二参数为选择输入的哈希键；
@@ -374,31 +369,7 @@ impl Gateway {
                     format!("Token 响应解析失败: {e}"),
                 )
             })?;
-
-            let access = json["access_token"]
-                .as_str()
-                .filter(|s| !s.is_empty())
-                .ok_or_else(|| {
-                    Error::explain(
-                        ErrorType::HTTPStatus(502),
-                        "Token 响应中缺少 access_token 字段".to_string(),
-                    )
-                })?;
-            let refresh = json["refresh_token"]
-                .as_str()
-                .filter(|s| !s.is_empty())
-                .ok_or_else(|| {
-                    Error::explain(
-                        ErrorType::HTTPStatus(502),
-                        "Token 响应中缺少 refresh_token 字段".to_string(),
-                    )
-                })?;
-
-            return Ok(TokenExchangeResult {
-                access: access.to_string(),
-                refresh: refresh.to_string(),
-                id_token: json["id_token"].as_str().map(String::from),
-            });
+            return parse_token_exchange_response(json);
         }
 
         Err(Error::explain(
@@ -527,6 +498,34 @@ impl Gateway {
             PathClass::Static | PathClass::Public => {}
         }
     }
+}
+
+/// 从 /token 端点 JSON 响应中解析 access_token / refresh_token / id_token。
+fn parse_token_exchange_response(json: serde_json::Value) -> Result<TokenExchangeResult> {
+    let access = json["access_token"]
+        .as_str()
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| {
+            Error::explain(
+                ErrorType::HTTPStatus(502),
+                "Token 响应中缺少 access_token 字段".to_string(),
+            )
+        })?;
+    let refresh = json["refresh_token"]
+        .as_str()
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| {
+            Error::explain(
+                ErrorType::HTTPStatus(502),
+                "Token 响应中缺少 refresh_token 字段".to_string(),
+            )
+        })?;
+
+    Ok(TokenExchangeResult {
+        access: access.to_string(),
+        refresh: refresh.to_string(),
+        id_token: json["id_token"].as_str().map(String::from),
+    })
 }
 
 #[async_trait]
@@ -717,16 +716,16 @@ impl ProxyHttp for Gateway {
             // Portal 端验证此签名以确认请求确实来自受信任的 Gateway（替代 IP 白名单）。
             // 时钟异常时仅跳过 HMAC 签名，不影响身份头注入（身份与签名解耦）。
             if let Some(ref secret) = self.gateway_shared_secret {
-                if let Ok(d) = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH) {
-                    let ts = d.as_secs().to_string();
+                if let Some(d) = crate::http::unix_secs() {
+                    let ts = d.to_string();
                     let payload = format!("{}:{}:{}", ts, id.user_id, id.user_jti);
                     match compute_hmac_sha256_hex(secret, &payload) {
-                        Ok(sig) => {
+                        Some(sig) => {
                             upstream_request.insert_header("X-Gateway-Timestamp", ts.as_str())?;
                             upstream_request.insert_header("X-Gateway-Signature", sig.as_str())?;
                         }
-                        Err(e) => {
-                            warn!("计算 HMAC 签名失败，跳过: {e}");
+                        None => {
+                            warn!("计算 HMAC 签名失败，跳过");
                         }
                     }
                 } else {

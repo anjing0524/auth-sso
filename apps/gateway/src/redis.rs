@@ -68,7 +68,10 @@ async fn get_conn() -> Option<bb8::PooledConnection<'static, bb8_redis::RedisCon
     })?;
     pool.get()
         .await
-        .map_err(|e| tracing::warn!("Redis 连接获取失败，降级: {:?}", e))
+        .map_err(|e| {
+            crate::metrics::inc_redis_acquire_failures();
+            tracing::warn!("Redis 连接获取失败，降级: {:?}", e)
+        })
         .ok()
 }
 
@@ -78,19 +81,20 @@ async fn get_conn() -> Option<bb8::PooledConnection<'static, bb8_redis::RedisCon
 /// 拒绝请求以保障安全。与 acquire_nx_ex/del 的 fail-open 语义不同——
 /// jti 检查是安全边界，不可降级放行。
 ///
-/// # Examples
-///
-/// ```ignore
-/// if redis::exists("portal:jti_blocklist:some-jti").await {
-///     // key 存在（Redis 可用时）或 Redis 不可用（fail-close 假定已撤销）
-/// }
-/// ```
+/// 连接获取包裹在 2s 超时中：超时同样返回 true（fail-close），
+/// 防止慢速 Redis 连接导致任务运行时饿死。
 pub async fn exists(key: &str) -> bool {
-    let mut conn = match get_conn().await {
-        Some(c) => c,
-        None => {
+    let mut conn = match tokio::time::timeout(Duration::from_secs(2), get_conn()).await {
+        Ok(Some(c)) => c,
+        Ok(None) => {
             tracing::warn!(
                 "Redis EXISTS 降级返回 true（fail-close：连接池未就绪，假定 jti 已撤销）"
+            );
+            return true;
+        }
+        Err(_elapsed) => {
+            tracing::warn!(
+                "Redis EXISTS 降级返回 true（fail-close：连接获取超时，假定 jti 已撤销）"
             );
             return true;
         }

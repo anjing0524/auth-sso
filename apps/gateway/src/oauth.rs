@@ -219,12 +219,13 @@ pub fn build_session_cookies(access_token: &str, refresh_token: &str, secure: bo
 /// 清除 4 个临时 OAuth Cookie 的 Set-Cookie 头
 pub fn build_clear_oauth_cookies(secure: bool, callback_path: &str) -> Vec<String> {
     let secure_str = if secure { "; Secure" } else { "" };
-    let suffix = format!("; Path={callback_path}; HttpOnly; SameSite=Lax; Max-Age=0{secure_str}");
+    let cookie_attrs =
+        format!("; Path={callback_path}; HttpOnly; SameSite=Lax; Max-Age=0{secure_str}");
     vec![
-        format!("{PKCE_VERIFIER_COOKIE}={suffix}"),
-        format!("{OAUTH_STATE_COOKIE}={suffix}"),
-        format!("{OAUTH_NONCE_COOKIE}={suffix}"),
-        format!("{RETURN_TO_COOKIE}={suffix}"),
+        format!("{PKCE_VERIFIER_COOKIE}={cookie_attrs}"),
+        format!("{OAUTH_STATE_COOKIE}={cookie_attrs}"),
+        format!("{OAUTH_NONCE_COOKIE}={cookie_attrs}"),
+        format!("{RETURN_TO_COOKIE}={cookie_attrs}"),
     ]
 }
 
@@ -296,14 +297,7 @@ pub fn extract_oauth_state(cookie_header: &str) -> Option<&str> {
 /// 使用 `serde_json::Value` 解析 payload JSON，
 /// 替代手写字符串查找——对字段顺序、空白、转义等变体更鲁棒。
 pub fn decode_id_token_nonce(id_token: &str) -> Option<String> {
-    let mut segs = id_token.split('.');
-    let payload = match (segs.next(), segs.next(), segs.next(), segs.next()) {
-        (Some(_), Some(p), Some(_), None) => p,
-        _ => return None,
-    };
-    let bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
-        .decode(payload)
-        .ok()?;
+    let bytes = crate::auth::jwt_payload_bytes(id_token)?;
     let value: serde_json::Value = serde_json::from_slice(&bytes).ok()?;
     value.get("nonce")?.as_str().map(String::from)
 }

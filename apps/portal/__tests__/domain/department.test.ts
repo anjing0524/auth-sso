@@ -7,7 +7,6 @@ import {
   applyDepartmentUpdate,
   validateNoCircularReference,
   buildDepartmentTree,
-  toDomainDepartment,
 } from '@/domain/department/department';
 import { BusinessRuleViolationError } from '@/domain/shared/errors';
 
@@ -69,16 +68,5 @@ describe('Department 领域核心规则', () => {
     expect(tree[0]!.name).toBe('根部门');
     expect(tree[0]!.children).toHaveLength(1);
     expect(tree[0]!.children![0]!.name).toBe('子部门');
-  });
-
-  it('toDomainDepartment 应正确转换 DB 行', () => {
-    const row = {
-      id: 'd1', name: 'HR', parentId: null as string | null, ancestors: null as string | null,
-      code: 'HR_CODE', sort: 10, status: 'ACTIVE' as any, createdAt: new Date('2025-01-01'),
-    };
-    const dept = toDomainDepartment(row);
-    expect(dept.name).toBe('HR');
-    expect(dept.status).toBe('ACTIVE');
-    expect(dept.sort).toBe(10);
   });
 });

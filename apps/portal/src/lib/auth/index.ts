@@ -12,9 +12,8 @@
  *
  * @module lib/auth
  */
-export { withAuth, type AuthContext } from './guard';
+export { withAuth, withPermission, type AuthContext } from './guard';
 export {
-  withPermission,
   checkPermission,
   getUserRoleDeptIds,
   canAccessDept,

@@ -9,12 +9,11 @@ import { eq } from 'drizzle-orm';
 import { withAuth, type AuthContext } from '@/lib/auth';
 import {
   createRole,
-  roleToInsertRow,
-  roleToUpdateRow,
   applyRoleUpdate,
-  toDomainRole,
   guardNotSystemRole,
   hasRolePermissionImpact,
+  roleToInsertRow,
+  roleToUpdateRow,
 } from '@/domain/role/role';
 import {
   CreateRoleInputSchema,
@@ -105,11 +104,11 @@ export const updateRoleAction = withAuth(
       if (v.data.deptId && !canAccessDept(deptIds, v.data.deptId)) {
         throw new ForbiddenError('无权将角色迁移至该部门');
       }
-      const role = toDomainRole(row);
-      guardNotSystemRole(role);
-      const updated = applyRoleUpdate(role, v.data);
-      permissionChanged = hasRolePermissionImpact(role, updated);
-      await tx.update(schema.roles).set(roleToUpdateRow(updated)).where(eq(schema.roles.id, roleId));
+      guardNotSystemRole(row);
+      const updated = applyRoleUpdate(row, v.data);
+      permissionChanged = hasRolePermissionImpact(row, updated);
+      await tx.update(schema.roles).set(roleToUpdateRow(updated))
+        .where(eq(schema.roles.id, roleId));
     });
     const userIds = await invalidateRoleBoundUsersCache(roleId);
     if (permissionChanged && userIds.length > 0) {
@@ -132,8 +131,7 @@ export const deleteRoleAction = withAuth(
     const deptIds = await getUserRoleDeptIds(ctx.userId);
     if (!canAccessDept(deptIds, row.deptId)) throw new ForbiddenError('无权操作该部门的角色');
 
-    const role = toDomainRole(row);
-    guardNotSystemRole(role);
+    guardNotSystemRole(row);
 
     // 事务前预先获取绑定用户，事务后清除缓存
     const boundUsers = await db.select({ userId: schema.userRoles.userId })

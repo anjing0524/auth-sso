@@ -14,7 +14,7 @@ import { eq, and } from 'drizzle-orm';
 import { signAccessToken, signIdToken, issueRefreshToken, rotateRefreshToken, ACCESS_TOKEN_TTL } from '@/lib/auth/token';
 import { validateClientActive, validateClientSecret } from '@/domain/auth/oauth-client';
 import { validateAuthCodeRow, verifyPKCE } from '@/domain/auth/oauth-code';
-import { resolveTokenClaims } from '@/lib/auth/permissions-context';
+import { getUserPermissionContext, cacheUserPermissionContext } from '@/lib/permissions';
 import { mapDomainError, mapToOAuthError } from '@/domain/shared/error-mapping';
 import { InvalidGrantError } from '@/domain/shared/errors';
 
@@ -80,10 +80,11 @@ export async function POST(request: NextRequest) {
       await db.update(schema.authorizationCodes).set({ used: true }).where(eq(schema.authorizationCodes.id, authCode.id));
 
       // 获取用户权限上下文并缓存到 Redis（通过中间层消除循环依赖）
-      const resolved = await resolveTokenClaims(authCode.userId);
-      if (!resolved) {
+      const permCtx = await getUserPermissionContext(authCode.userId);
+      if (!permCtx) {
         throw new InvalidGrantError('无法获取用户权限上下文');
       }
+      await cacheUserPermissionContext(authCode.userId, permCtx);
 
       // 签发 Access Token
       const { token: accessToken } = await signAccessToken(authCode.userId);

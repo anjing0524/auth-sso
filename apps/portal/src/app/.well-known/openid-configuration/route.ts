@@ -7,6 +7,16 @@
  */
 import { NextResponse } from 'next/server';
 import { getAppBaseURL } from '@/lib/env';
+import {
+  SCOPES_SUPPORTED,
+  RESPONSE_TYPES_SUPPORTED,
+  GRANT_TYPES_SUPPORTED,
+  SUBJECT_TYPES_SUPPORTED,
+  ID_TOKEN_SIGNING_ALG_VALUES_SUPPORTED,
+  TOKEN_ENDPOINT_AUTH_METHODS_SUPPORTED,
+  CODE_CHALLENGE_METHODS_SUPPORTED,
+  CLAIMS_SUPPORTED,
+} from '@auth-sso/contracts';
 
 
 export async function GET() {
@@ -26,14 +36,14 @@ export async function GET() {
     refresh_endpoint: `${baseURL}/api/auth/refresh`,
     // 自定义字段：Gateway 拦截 OAuth callback 的路径（非标准 OIDC，供 Gateway 动态发现）
     oauth_callback_path: '/api/auth/callback',
-    scopes_supported: ['openid', 'profile', 'email', 'offline_access'],
-    response_types_supported: ['code'],
-    grant_types_supported: ['authorization_code', 'refresh_token'],
-    subject_types_supported: ['public'],
-    id_token_signing_alg_values_supported: ['ES256'],
-    token_endpoint_auth_methods_supported: ['client_secret_basic', 'client_secret_post', 'none'],
-    code_challenge_methods_supported: ['S256'],
-    claims_supported: ['sub', 'iss', 'aud', 'exp', 'iat', 'jti', 'auth_time', 'nonce', 'name', 'preferred_username', 'email', 'email_verified', 'picture'],
+    scopes_supported: SCOPES_SUPPORTED,
+    response_types_supported: RESPONSE_TYPES_SUPPORTED,
+    grant_types_supported: GRANT_TYPES_SUPPORTED,
+    subject_types_supported: SUBJECT_TYPES_SUPPORTED,
+    id_token_signing_alg_values_supported: ID_TOKEN_SIGNING_ALG_VALUES_SUPPORTED,
+    token_endpoint_auth_methods_supported: TOKEN_ENDPOINT_AUTH_METHODS_SUPPORTED,
+    code_challenge_methods_supported: CODE_CHALLENGE_METHODS_SUPPORTED,
+    claims_supported: CLAIMS_SUPPORTED,
   };
 
   return NextResponse.json(metadata);

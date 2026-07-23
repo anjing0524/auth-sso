@@ -1,46 +1,14 @@
-import { ENTITY_ACTIVE } from '@auth-sso/contracts';
 import type { CreateDepartmentInput, Department, DepartmentTreeNode } from './types';
+import { ENTITY_ACTIVE } from '@auth-sso/contracts';
 import { BusinessRuleViolationError } from '../shared/errors';
 import { buildTree } from '@/domain/shared/tree-utils';
 
 export type { Department, DepartmentTreeNode };
 
-/**
- * 纯函数：计算物化路径 (ancestors)
- * 父级 ancestors + 父级 id → 新部门的 ancestors
- */
 export function computeAncestors(parentId: string, parentAncestors: string | null): string {
   return parentAncestors ? `${parentAncestors}/${parentId}` : parentId;
 }
 
-/**
- * 将 Drizzle 数据库行转换为领域 Department 实体
- */
-export function toDomainDepartment(row: {
-  id: string;
-  parentId: string | null;
-  ancestors: string | null;
-  name: string;
-  code: string | null;
-  sort: number | null;
-  status: import('@auth-sso/contracts').EntityStatus;
-  createdAt: Date;
-}): Department {
-  return {
-    id: row.id,
-    parentId: row.parentId,
-    ancestors: row.ancestors,
-    name: row.name,
-    code: row.code,
-    sort: row.sort ?? 0,
-    status: row.status,
-    createdAt: Temporal.Instant.fromEpochMilliseconds(row.createdAt.getTime()),
-  };
-}
-
-/**
- * 工厂函数：构建新部门实体 (无副作用)
- */
 export function createDepartment(
   input: CreateDepartmentInput,
   idGenerator: () => string,
@@ -55,15 +23,10 @@ export function createDepartment(
     code: input.code ?? null,
     sort: input.sort,
     status: ENTITY_ACTIVE,
-    createdAt: Temporal.Now.instant(),
+    createdAt: new Date(),
   };
 }
 
-/**
- * 纯函数：构建更新后的部门对象 (无副作用)
- *
- * 当 parentId 变更时，ancestors 参数必须传入重新计算后的值（调用方负责查询父级 ancestors）。
- */
 export function applyDepartmentUpdate(
   dept: Department,
   patch: Partial<Pick<Department, 'name' | 'code' | 'parentId' | 'sort' | 'status'>> & { ancestors?: string | null },
@@ -79,9 +42,6 @@ export function applyDepartmentUpdate(
   };
 }
 
-/**
- * 纯函数：检查将部门移至目标父部门是否会产生环形引用
- */
 export function validateNoCircularReference(
   deptId: string,
   newParentId: string,
@@ -103,9 +63,6 @@ export function validateNoCircularReference(
   }
 }
 
-/**
- * 纯函数：带环形引用校验的部门更新 (无副作用)
- */
 export function applyDepartmentUpdateWithCircularCheck(
   dept: Department,
   patch: Partial<Pick<Department, 'name' | 'code' | 'parentId' | 'sort' | 'status'>> & { ancestors?: string | null },
@@ -117,9 +74,6 @@ export function applyDepartmentUpdateWithCircularCheck(
   return applyDepartmentUpdate(dept, patch);
 }
 
-/**
- * 纯函数：当 parentId 变更时，计算新部门的 ancestors 物化路径
- */
 export function resolveParentAncestors(
   dept: Department,
   parentId: string | null | undefined,
@@ -131,11 +85,20 @@ export function resolveParentAncestors(
   return parent ? computeAncestors(parent.id, parent.ancestors) : null;
 }
 
-// ────────────────────────────────────────────
-// DB 行转换（统一 Controller 层的列映射，消除重复）
-// ────────────────────────────────────────────
+export function buildDepartmentTree(flatList: Department[]): DepartmentTreeNode[] {
+  return buildTree(flatList, 'id', 'parentId', 'sort');
+}
 
-/** 将领域实体转为 Drizzle insert 行 */
+export function computeAncestorPrefix(deptId: string, ancestors: string | null): string {
+  return ancestors ? `${ancestors}/${deptId}` : deptId;
+}
+
+export function validateDepartmentDeletable(checks: { hasChildren: boolean; userCount: number; roleCount: number }): void {
+  if (checks.hasChildren) throw new BusinessRuleViolationError('该部门下有子部门，无法删除');
+  if (checks.userCount > 0) throw new BusinessRuleViolationError('该部门下存在关联用户，无法删除');
+  if (checks.roleCount > 0) throw new BusinessRuleViolationError('该部门下存在关联角色，无法删除');
+}
+
 export function departmentToInsertRow(d: Department) {
   return {
     id: d.id,
@@ -145,11 +108,10 @@ export function departmentToInsertRow(d: Department) {
     ancestors: d.ancestors,
     sort: d.sort,
     status: d.status,
-    createdAt: new Date(d.createdAt.epochMilliseconds),
+    createdAt: d.createdAt,
   };
 }
 
-/** 将领域实体转为 Drizzle update 行 */
 export function departmentToUpdateRow(d: Department) {
   return {
     name: d.name,
@@ -159,11 +121,4 @@ export function departmentToUpdateRow(d: Department) {
     sort: d.sort,
     status: d.status,
   };
-}
-
-/**
- * 纯函数：将扁平部门列表构建为树形结构
- */
-export function buildDepartmentTree(flatList: Department[]): DepartmentTreeNode[] {
-  return buildTree(flatList, 'id', 'parentId', 'sort');
 }
