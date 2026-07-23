@@ -1,3 +1,6 @@
+/**
+ * @req NFR-SEC-06
+ */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { checkBruteForce, incrementBruteForce, clearBruteForceCounter } from '@/lib/auth/brute-force';
 

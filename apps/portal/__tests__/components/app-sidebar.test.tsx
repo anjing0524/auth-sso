@@ -1,6 +1,8 @@
 /**
  * AppSidebar 侧边栏组件测试
  *
+ * @req A-NAV-01
+ *
  * AppSidebar 通过 props 接收 user 和 dynamicMenus，不直接调用 hooks 获取数据。
  * dynamicMenus 为空时使用内置 fallbackMenus 兜底。
  *
