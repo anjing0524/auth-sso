@@ -1,8 +1,9 @@
-# ADR-009 实现计划 — Gateway 认证流统一
+# ADR-009 实现计划 — Gateway 认证流统一（✅ 已实现）
 
-> 日期: 2026-07-16
+> 日期: 2026-07-16 → 2026-07-23 全量完成
 > 来源: `/grilling` — Gateway 重构专题（11 轮追问）
 > 驱动文档: ADR-009
+> 状态: 全部 Phase 1-6 已完成，`cargo clippy` + `cargo fmt` + `cargo test` 全绿验证通过。
 
 ---
 

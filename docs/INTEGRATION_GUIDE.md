@@ -28,24 +28,21 @@ docker compose ps    # 确认 postgres + redis healthy
 ```bash
 # 推送 DB schema + 种子数据
 pnpm --filter @auth-sso/portal db:push
-npx tsx scripts/seed-v2.ts
-
-# 注册 Demo App OAuth Client
-npx tsx scripts/seed-demo-client.ts
+pnpm --filter @auth-sso/portal db:seed
 ```
 
 ## 第三步：启动所有服务
 
 ```bash
-# 终端 1: Portal
-pnpm dev:portal          # http://localhost:4100
+# 终端 1: Portal (http://localhost:4100)
+pnpm dev:portal
 
 # 终端 2: Gateway (预编译二进制)
 ./apps/gateway/target/release/gateway -c apps/gateway/gateway.toml
 # Gateway: HTTP :19080 (→ 302 HTTPS), HTTPS :19443
 
-# 终端 3: Demo App
-pnpm dev:demo            # http://localhost:3100
+# 终端 3: Demo App (http://localhost:3100)
+pnpm dev:demo
 ```
 
 > 浏览器访问 `https://localhost:19443` 时需接受自签名证书（CN=localhost, 有效期至 2036）。

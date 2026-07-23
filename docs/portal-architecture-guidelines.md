@@ -34,7 +34,7 @@ flowchart TD
     end
 
     subgraph "5. 基础设施层 (Infrastructure Layer)"
-        Infra["infrastructure/auth/ | lib/crypto.ts | infrastructure/redis/index.ts<br/>- 密码哈希、Token 签发等外部适配器"]
+        Infra["infrastructure/db/index.ts | infrastructure/redis/index.ts<br/>- DB/Redis 连接管理、有状态外部适配器"]
     end
 
     %% 控制器分发与数据流
@@ -106,17 +106,14 @@ src/
 │   │   ├── index.ts            #     * 统一 Barrel（推荐引入点：import {...} from '@/lib/auth'）
 │   │   ├── facade.ts           #     * withPermission + 子模块 re-export（API Route 用）
 │   │   ├── guard.ts            #     * withAuth HOF（Server Action 用）
-│   │   ├── client.ts           #     * 浏览器端 OAuth 客户端 + PKCE 工具
-│   │   ├── verify-jwt.ts       #     * JWT/Session 身份验证
+│   │   ├── verify-jwt.ts       #   * JWT/Session 身份验证
 │   │   ├── check-permission.ts #     * 权限编码/角色检查（通过 lib/permissions 查 DB）
 │   │   └── data-scope.ts       #     * 数据范围过滤（通过 lib/permissions 查 DB）
 │   ├── session/                #   - JWT/Session 模块（按职责拆分为子模块）
 │   │   ├── index.ts            #     * 统一 Barrel
 │   │   ├── types.ts            #     * Cookie 常量 + PortalJwtClaims
 │   │   ├── cookies.ts          #     * Cookie 读写 (setJwtCookies / getJwtFromCookie)
-│   │   ├── jwks.ts             #     * JWKS 远端公钥集
-│   │   ├── jwt.ts              #     * JWT 验签 (verifyJwt) + 解码 (decodeJwtPayload)
-│   │   └── revoke.ts           #     * jti 黑名单紧急撤销
+│   │   └── revoke.ts           #   * jti 黑名单紧急撤销
 │   ├── permissions.ts          #   - 权限上下文查询与缓存（使用 infra 连接，不管理连接）
 │   ├── audit.ts                #   - 审计日志入库（使用 infra 连接，不管理连接）
 │   ├── crypto.ts               #   - 安全工具（ID/ClientId/Secret 生成）
@@ -240,15 +237,9 @@ export function restListSuccess<T>(data: T[], pagination: PaginationMeta, status
 /** REST 错误 — { error, message }，无 success 字段 */
 export function restError(code: string, message: string, status: number):
   NextResponse<{ error: string; message: string }>
-
-/** Server Action 成功 — 纯对象（非 NextResponse） */
-export function apiSuccess<T>(data: T, pagination?: PaginationMeta):
-  { success: true; data: T; pagination?: PaginationMeta; message?: string }
-
-/** Server Action 错误 — 纯对象（非 NextResponse） */
-export function apiError(code: string, message: string):
-  { success: false; error: string; message: string }
 ```
+
+> **Server Action 直接返回 plain object**：Server Actions 不使用工厂函数，直接返回 `{ success: true, data }` 或 `{ success: false, error, message }` 字面量。`withAuth` HOF 会自动捕获异常并通过 `mapDomainError` 转换为标准错误格式。
 
 **强制规则**：
 
@@ -257,7 +248,7 @@ export function apiError(code: string, message: string):
 | REST 列表 GET | `{ data: T[], pagination: P }` | `{ error, message }` + 4xx/5xx | `restListSuccess` / `restError` |
 | REST 详情 GET | 数据直出 | `{ error, message }` + 4xx/5xx | `restSuccess` / `restError` |
 | REST 写操作 | `{ id, message }` 或空 `{}` | `{ error, message }` + 4xx/5xx | `restSuccess` / `restError` |
-| Server Action | `{ success: true, data, message? }` | `{ success: false, error, message }` | `apiSuccess` / `apiError` |
+| Server Action | `{ success: true, data, message? }` | `{ success: false, error, message }` | 直接返回字面量，`withAuth` HOF 统一处理 |
 | OAuth2 | RFC 6749 标准 | RFC 6749 标准 | 不使用工厂函数 |
 
 > **为什么 REST 不用 `{ success: true }` 包裹？** HTTP 200 本身即成功语义。若仍需 `success` 字段确认，则语义上等价于不相信 HTTP 协议 — 这是反模式。Server Actions 作为 RPC 调用，没有 HTTP 协议层可借用，故 `success` 字段必要且正确。
@@ -561,46 +552,40 @@ export function applyUserUpdate(user: User, patch: Partial<Pick<User, 'name' | '
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { headers } from 'next/headers';
-import { checkPermission } from '@/lib/auth';
+import { withAuth, type AuthContext } from '@/lib/auth';
 import { db } from '@/infrastructure/db';
-import { users } from '@/infrastructure/db/schema';
+import { schema } from '@/infrastructure/db';
 import { eq, or } from 'drizzle-orm';
-import { createUser } from '@/domain/user/user';
+import { createUser, userToInsertRow } from '@/domain/user/user';
 import { CreateUserInputSchema } from '@/domain/user/types';
 import { generateId } from '@/lib/crypto';
-import { hashPassword } from '@/infrastructure/auth/password-service';
+import { hashPassword } from '@/domain/auth/password';
 import { DuplicateEntityError } from '@/domain/shared/errors';
-import { mapDomainError } from '@/domain/shared/error-mapping';
 
-export async function createUserAction(prevState: any, formData: FormData) {
-  const check = await checkPermission(await headers(), { permissions: ['user:create'] });
-  if (!check.authorized) return { success: false, error: 'FORBIDDEN', message: '权限不足' };
+export const createUserAction = withAuth(
+  { permissions: ['portal:user:create'], audit: 'USER_CREATE' },
+  async (ctx: AuthContext, formData: FormData) => {
+    const parsed = CreateUserInputSchema.safeParse(Object.fromEntries(formData));
+    if (!parsed.success) {
+      return { success: false, error: 'VALIDATION_ERROR', message: parsed.error.issues[0].message };
+    }
 
-  const parsed = CreateUserInputSchema.safeParse(Object.fromEntries(formData));
-  if (!parsed.success) return { success: false, error: 'VALIDATION_ERROR', message: parsed.error.issues[0].message };
-
-  try {
-    // 涉及"查重 + 插入"两个步骤，使用事务保证一致性
     const result = await db.transaction(async (tx) => {
-      const existing = await tx.query.users.findFirst({
-        where: or(eq(users.username, parsed.data.username), eq(users.email, parsed.data.email))
-      });
-      if (existing) throw new DuplicateEntityError('User', 'username/email');
+      const existing = await tx.select().from(schema.users)
+        .where(or(eq(schema.users.username, parsed.data.username), eq(schema.users.email, parsed.data.email)))
+        .limit(1);
+      if (existing.length > 0) throw new DuplicateEntityError('User', 'username/email');
 
       const user = createUser(parsed.data, generateId);
       const passwordHash = await hashPassword(parsed.data.password);
-      await tx.insert(users).values({ ...user, passwordHash });
+      await tx.insert(schema.users).values({ ...userToInsertRow(user), passwordHash });
       return user;
     });
 
     revalidatePath('/users');
-    return { success: true, data: { id: result.publicId }, message: '用户创建成功' };
-  } catch (err: unknown) {
-    const mapped = mapDomainError(err);
-    return { success: false, error: mapped.error, message: mapped.message };
+    return { success: true, data: { id: result.id }, message: '用户创建成功' };
   }
-}
+);
 ```
 
 ### 3.5 表现层：REST Route Handler 薄 Controller 示例 (route.ts)
@@ -608,44 +593,38 @@ export async function createUserAction(prevState: any, formData: FormData) {
 ```typescript
 // app/api/users/route.ts (REST API Route Handler)
 import { NextRequest, NextResponse } from 'next/server';
-import { checkPermission } from '@/lib/auth';
+import { withPermission } from '@/lib/auth';
 import { db } from '@/infrastructure/db';
-import { users } from '@/infrastructure/db/schema';
+import { schema } from '@/infrastructure/db';
 import { eq, or } from 'drizzle-orm';
-import { createUser } from '@/domain/user/user';
+import { createUser, userToInsertRow } from '@/domain/user/user';
 import { CreateUserInputSchema } from '@/domain/user/types';
 import { generateId } from '@/lib/crypto';
-import { hashPassword } from '@/infrastructure/auth/password-service';
+import { hashPassword } from '@/domain/auth/password';
 import { DuplicateEntityError } from '@/domain/shared/errors';
-import { mapDomainError } from '@/domain/shared/error-mapping';
 
 export async function POST(req: NextRequest) {
-  const check = await checkPermission(req.headers, { permissions: ['user:create'] });
-  if (!check.authorized) return NextResponse.json({ error: check.error, message: '权限不足' }, { status: 403 });
+  return withPermission({ permissions: ['portal:user:create'] }, async () => {
+    const parsed = CreateUserInputSchema.safeParse(await req.json());
+    if (!parsed.success) {
+      return NextResponse.json({ error: 'VALIDATION_ERROR', message: parsed.error.issues[0].message }, { status: 400 });
+    }
 
-  const parsed = CreateUserInputSchema.safeParse(await req.json());
-  if (!parsed.success) return NextResponse.json({ error: 'VALIDATION_ERROR', message: parsed.error.issues[0].message }, { status: 400 });
-
-  try {
     const result = await db.transaction(async (tx) => {
-      const existing = await tx.query.users.findFirst({
-        where: or(eq(users.username, parsed.data.username), eq(users.email, parsed.data.email))
-      });
-      if (existing) throw new DuplicateEntityError('User', 'username/email');
+      const existing = await tx.select().from(schema.users)
+        .where(or(eq(schema.users.username, parsed.data.username), eq(schema.users.email, parsed.data.email)))
+        .limit(1);
+      if (existing.length > 0) throw new DuplicateEntityError('User', 'username/email');
 
       const user = createUser(parsed.data, generateId);
       const passwordHash = await hashPassword(parsed.data.password);
-      await tx.insert(users).values({ ...user, passwordHash });
+      await tx.insert(schema.users).values({ ...userToInsertRow(user), passwordHash });
       return user;
     });
 
     // REST 端点：数据直出，HTTP 201 即成功语义，无 { success: true } 包裹
-    return NextResponse.json({ id: result.publicId }, { status: 201 });
-  } catch (err: unknown) {
-    const mapped = mapDomainError(err);
-    // REST 端点：错误不用 { success: false } 包裹，HTTP 状态码已承载失败语义
-    return NextResponse.json({ error: mapped.error, message: mapped.message }, { status: mapped.status });
-  }
+    return NextResponse.json({ id: result.id }, { status: 201 });
+  });
 }
 ```
 
@@ -721,12 +700,14 @@ describe('User 领域核心规则 TDD 测试', () => {
 
 ---
 
-## 五、 架构边界自动化守护
+## 五、 架构边界自动化守护（规划中）
+
+> **当前状态**：以下 `eslint-plugin-boundaries` 配置为设计目标，尚未在 ESLint 配置中启用。实际项目中通过 Code Review 人工守护层间依赖方向。如业务代码膨胀后频繁出现层间违规，应优先启用此自动化门禁。
 
 使用 `eslint-plugin-boundaries` 强制层间依赖方向，将架构约束作为 **CI 级硬拦截**：
 
 ```javascript
-// eslint.config.js (architecture boundary rules)
+// eslint.config.mjs (architecture boundary rules — 待启用)
 import boundaries from 'eslint-plugin-boundaries';
 
 export default [
@@ -744,21 +725,11 @@ export default [
       'boundaries/element-types': [2, {
         default: 'disallow',
         rules: [
-          // 领域层：只能 import 领域层自身，零外部依赖
           { from: 'domain', allow: ['domain'] },
-          // 基础设施层：可依赖 lib 和 domain，不可依赖 app
           { from: 'infrastructure', allow: ['infrastructure', 'lib', 'domain'] },
-          // 共享工具层：可依赖 domain、lib 自身、infrastructure（使用已建立的连接）
           { from: 'lib', allow: ['lib', 'domain', 'infrastructure'] },
-          // 表现层：可依赖所有层
           { from: 'app', allow: ['domain', 'lib', 'infrastructure', 'app'] },
         ]
-      }],
-      // Controller 函数体行数限制
-      'max-lines-per-function': ['warn', {
-        max: 25,
-        skipBlankLines: true,
-        skipComments: true
       }],
     }
   }
@@ -793,8 +764,8 @@ export default [
 | **泛型树工具** | `domain/shared/tree-utils.ts` | 仅限纯 TypeScript | `buildTree<T>()` 泛型树构建函数。`buildMenuTree`/`buildDepartmentTree` 均委托至此 | — |
 | **权限上下文** | `lib/permissions.ts` | `infrastructure/db`, `infrastructure/redis` | 用户权限上下文获取与缓存（无状态——使用 infra 提供的连接，不管理连接生命周期） | — |
 | **审计日志** | `lib/audit.ts` | `infrastructure/db` | 审计日志入库与高阶装饰器（无状态——使用 infra 提供的连接） | — |
-| **密码工具** | `lib/password.ts` | `bcryptjs` | 密码哈希（与 `lib/crypto.ts` 同质——无状态 crypto 工具） | — |
-| **响应工厂** | `lib/response.ts` | `next/server` | REST 端点用 `restSuccess`/`restListSuccess`/`restError`（NextResponse）；Server Action 用 `apiSuccess`/`apiError`（纯对象）。严禁混用。 | — |
+| **密码工具** | `domain/auth/password.ts` | `bcryptjs` | 密码哈希/验证/历史比对（领域层纯函数） | — |
+| **响应工厂** | `lib/response.ts` | `next/server` | REST 端点用 `restSuccess`/`restListSuccess`/`restError`（NextResponse）。Server Action 直接返回字面量，`withAuth` HOF 统一处理异常映射。 | — |
 | **基础设施** | `infrastructure/*/index.ts` | `lib/`, `domain/`, 第三方 SDK | **有状态**的外部适配器（DB 连接、Redis 客户端）。区别于 lib/：这些模块管理连接/实例生命周期 | `boundaries/element-types` |
 | **Auth 鉴权** | `lib/auth/*.ts` | `lib/permissions`, `lib/session`, `infrastructure/db` | 鉴权子模块。权限/角色检查使用 lib/ 中的工具和 infra 中的连接。推荐统一从 `@/lib/auth` 导入 | — |
 | **Session/JWT** | `lib/session/*.ts` | `jose`, `infrastructure/redis` | JWT Cookie 读写、验签、jti 撤销。推荐统一从 `@/lib/session` 导入 | — |
@@ -885,20 +856,27 @@ Gateway 代码位于 `apps/gateway/src/main.rs`，核心逻辑已在 `request_fi
 Gateway 承担了主要的身份验证工作后，Proxy 的职责简化为 CSRF 保护：
 
 ```typescript
-// proxy.ts
-import { NextResponse } from 'next/server';
-import type { NextRequest } from 'next/server';
+// src/proxy.ts
+import { type NextRequest, NextResponse } from 'next/server';
+import { COOKIE_NAMES } from '@auth-sso/contracts';
 
-export function proxy(request: NextRequest) {
-  // CSRF：写操作校验 Origin（防止跨站伪造）
-  if (request.method !== 'GET' && request.method !== 'HEAD') {
-    const origin = request.headers.get('origin');
-    const host = request.headers.get('host');
-    if (origin && host && !origin.endsWith(host)) {
-      return NextResponse.json({ error: 'CSRF_INVALID' }, { status: 403 });
-    }
+const PUBLIC_PATHS = ['/login', '/oauth2', '/.well-known'];
+const SKIP_PREFIXES = ['/_next', '/favicon', '/images', '/fonts'];
+
+export async function proxy(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+
+  if (isPublicPath(pathname) || isSkipPath(pathname) || pathname.startsWith('/api/')) {
+    return NextResponse.next();
   }
-  // 身份验证已由 Gateway 完成，Proxy 不做重复工作
+
+  const jwtToken = request.cookies.get(COOKIE_NAMES.JWT);
+  if (!jwtToken?.value) {
+    const loginUrl = new URL('/login', request.url);
+    return NextResponse.redirect(loginUrl);
+  }
+
+  return NextResponse.next();
 }
 ```
 
@@ -1171,36 +1149,18 @@ export const createUserAction = withAuth({ permissions: ['user:create'] }, async
 
 ---
 
-## 十一、 Temporal API 时间处理规范
+## 十一、 时间处理规范
 
-### 11.1 强制规则
+### 11.1 命名规范
 
-项目中 **所有时间值** 必须使用 TC39 Temporal API，禁止 `new Date()`。
+项目中 `createdAt` / `updatedAt` / `deletedAt` 等时间字段使用 Date 类型（来自 Drizzle `$inferSelect` 及 Domain 实体定义）。
 
 | 层 | 规范 | 原因 |
 |----|------|------|
-| **Domain 实体** | `createdAt: Temporal.Instant` | 不可变、纳秒精度、无时区歧义 |
-| **Domain 工厂函数** | `Temporal.Now.instant()` | 纯 UTC 时刻 |
-| **toDomainUser 适配器** | `Date → Temporal.Instant.fromEpochMilliseconds(date.getTime())` | DB 边界转换 |
-| **DB 写入（updatedAt）** | `new Date()` ← 仅此一处例外 | Drizzle `timestamp` 列需要 Date 对象 |
-| **API 序列化** | `.toString()` → ISO 8601 | 与 `Date.toISOString()` 输出兼容，客户端无需改动 |
-| **测试** | `Temporal.Instant.from('2026-01-01T00:00:00Z')` | 精确可控 |
+| **Domain 实体** | `createdAt: Date` | Drizzle 原生类型兼容，减少类型转换开销 |
+| **Domain 工厂函数** | `new Date()` | 简洁、无时区歧义（Node.js Date 为 UTC 时刻） |
+| **DB 写入（updatedAt）** | `new Date()` | Drizzle `timestamp` 列需要 Date 对象 |
+| **前端展示** | `new Date().toLocaleString()` | 浏览器本地化 |
+| **测试** | `new Date('2026-01-01T00:00:00Z')` | 精确可控 |
 
-### 11.2 唯一例外
-
-| 场景 | 保持原样 | 原因 |
-|------|---------|------|
-| Drizzle `$inferSelect` 的 timestamp 列 | `Date` | Drizzle 驱动的类型映射，不变更 |
-| **DB 写入** `updatedAt` / `createdAt` | `new Date()` | Drizzle `timestamp` 列需要 Date 对象，这是**唯一允许**的 `new Date()` 调用点 |
-| `new Date().toLocaleString()` 前端展示 | 保持不变 | 浏览器本地化，与 Temporal 无关 |
-
-> **读模型（data.ts、route.ts）也必须使用 Temporal**：Drizzle 返回的 `Date` 对象应立即通过 `.getTime()` 转换为 `Temporal.Instant`，保持与 Domain 层一致的时间类型。序列化时使用 `.toString()` 输出 ISO 8601。
-
-### 11.3 TypeScript 配置
-
-```json
-// tsconfig.json
-{ "compilerOptions": { "lib": ["esnext", "esnext.temporal"] } }
-```
-
-`esnext.temporal` 必须显式加入 `lib` 数组，`esnext` 不会自动包含。
+> **注意**：Domain 层实体中的 `createdAt: Date` 虽为 `Date` 类型，但在测试中无需 mock 时间戳，直接 `new Date()` 即可。新增时间相关行为逻辑（如过期判定）应提取为纯函数，方便单元测试注入固定时间。
