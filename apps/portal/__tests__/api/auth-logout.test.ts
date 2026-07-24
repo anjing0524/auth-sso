@@ -8,6 +8,7 @@
  * @vitest-environment node
  */
 import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest';
+import type * as Contracts from '@auth-sso/contracts';
 import { createTestDbHandle, seedTestData } from '../helpers/test-db';
 
 const {
@@ -89,7 +90,7 @@ vi.mock('@/domain/shared/error-mapping', () => ({
 }));
 
 vi.mock('@auth-sso/contracts', async (importOriginal) => {
-  const actual = await importOriginal();
+  const actual = await importOriginal<typeof Contracts>();
   return {
     ...actual,
   };

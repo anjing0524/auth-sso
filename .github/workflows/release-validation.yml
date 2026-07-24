@@ -1,0 +1,65 @@
+name: Release Validation
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+concurrency:
+  group: release-validation-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  docker-e2e:
+    name: Docker image and Gateway E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.12.4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '26'
+          cache: pnpm
+
+      - name: Install test runner dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build and start immutable release stack
+        run: docker compose -f docker-compose.e2e.yml up --detach --build --wait --wait-timeout 600
+
+      - name: Install Playwright Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Verify Docker release journey through Gateway
+        run: pnpm test:e2e:release
+        env:
+          E2E_TARGET: docker
+          E2E_BASE_URL: https://127.0.0.1:19443
+          E2E_SKIP_SEED: 'true'
+
+      - name: Collect release evidence
+        if: always()
+        run: docker compose -f docker-compose.e2e.yml logs --no-color > docker-e2e.log
+
+      - name: Upload release evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-e2e-evidence
+          path: |
+            playwright-report/
+            test-results/
+            docker-e2e.log
+          retention-days: 30
+
+      - name: Tear down release stack
+        if: always()
+        run: docker compose -f docker-compose.e2e.yml down --volumes --remove-orphans

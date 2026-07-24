@@ -21,6 +21,11 @@
 
 ## 变更记录
 
+- 2026-07-24: 整理文件归属：用户创建权限守卫下沉至 users 模块、403 视图进入 shared；需求追溯报告改为忽略的本地生成物，消除每次生成带来的工作树噪声。
+- 2026-07-24: 清除四份失效 E2E（过时 REST 写路径、错误 OAuth 回调/PKCE、无 baseline 的视觉快照、以无效授权码伪装安全验证）及其动态 `skip` 伪通过；追溯脚本改为信息清单，不再作为 CI 通过率门禁，真实缺口以 55/76 明示并纳入后续测试补齐。
+- 2026-07-24: 首轮无效入口清理：删除与当前 schema 漂移、无调用方的调试/种子/生产改写脚本及其 `db:clean` 命令；移除被 Docker 发布验收替代的本地 QA 编排与未配置告警脚本。保留 CI 调度的分区维护与性能基准。
+- 2026-07-24: 建立可执行测试防线：PR/Main 的 lint、typecheck、单元/API/组件测试改为阻断门禁；新增 Docker 发布验收栈与标签/手动发布工作流，经 Gateway HTTPS 验证登录、OAuth 回调、Secure Cookie 和登出闭环。
+- 2026-07-24: 新增生产就绪测试与验证框架（`docs/plans/2026-07-24-production-readiness-validation-framework.md`）：统一产品需求、NFR、架构约束、实现、测试与执行证据；将弱 E2E、NFR 追溯、Gateway 全链路、故障与性能演练列为发布前验证重点。
 - 2026-07-24: 合并 PR #24 中经 main 基线复核的测试与 CI 改进：补充 Redis 降级授权覆盖、Gateway ES256 安全验签覆盖、测试基础设施与需求追溯扫描；剔除未能形成有效断言的 E2E 草案。
 - 2026-07-24: 完成全维度审计整治：OAuth scope allow-list/授权码原子领取/UserInfo 最小披露，Gateway issuer 与生产共享密钥约束，唯一数据库基线与分区调度，Controller 权限常量收敛、受控 Prometheus metrics、Temporal 领域时间边界、OAuth 浏览器授权码 E2E，以及 337 项 Vitest 全绿的共享数据库隔离修复。
 - 2026-07-23: ADR-009 Gateway 重构全量完成（G1-G7），全量文档同步审计（14 份文档）；修复角色绑定事务边界、REST 错误契约、权限 SQL 分页与 OIDC 死类型
@@ -68,7 +73,7 @@
 |---|:--:|------|------|:--:|
 | A3-1 | 🔲 | 拆分 token.ts（584 行 → sign/keys/rotate/revoke 四模块） | `lib/auth/token.ts` | 3.1 |
 | A3-2 | 🔲 | 分离 gateway.rs 的 OAuth client 逻辑（853 行） | `gateway/src/gateway.rs` | 3.2 |
-| A3-3 | 🔲 | facade.ts 解耦 NextResponse（业务层返回结果对象） | `lib/auth/facade.ts` | 3.5 |
+| A3-3 | ✅ | 删除无逻辑的 facade re-export，公开入口直接导出实际模块 | `lib/auth/index.ts` | 3.5 |
 | A3-4 | 🔲 | 健康检查加 DB/Redis 连通性探测 | `api/health/route.ts` | 10.3 |
 
 ### P4 质量防护
@@ -76,7 +81,7 @@
 | # | 状态 | 任务 | 文件 | 来源发现 |
 |---|:--:|------|------|:--:|
 | A4-1 | 🔲 | 重写虚假覆盖率测试（audit-logging、user-actions 等） | `__tests__/api/*` | 12.1-12.3 |
-| A4-2 | 🔲 | 补充 CRUD write 路径集成测试 | `tests/integration/` | 12.6 |
+| A4-2 | 🔲 | 补充 CRUD write 路径的受控 API/浏览器集成测试 | `apps/portal/__tests__/api/`、`tests/e2e/` | 12.6 |
 | A4-3 | 🔲 | auth-login 测试降低 mock 粒度，真实测密码验证 | `__tests__/api/auth-login.test.ts` | 12.4 |
 | A4-4 | 🔲 | session-lifecycle 测试恢复 jose 真实验签 | `__tests__/api/session-lifecycle.test.ts` | 12.5 |
 

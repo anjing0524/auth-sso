@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Auth-SSO is an enterprise unified identity authentication platform implementing SSO (Single Sign-On) with OIDC Provider capabilities. It's a pnpm monorepo containing:
 
-- **apps/portal** - Admin Portal & OIDC Provider (port 4100) - User/role/permission management, Better Auth OIDC Provider, and Dashboard. IDP functionality is fully integrated into Portal.
+- **apps/portal** - Admin Portal & OIDC Provider (port 4100) - User/role/permission management, custom OAuth 2.1/OIDC Provider, and Dashboard. IDP functionality is fully integrated into Portal.
 - **apps/gateway** - API Gateway (Rust/Pingora) - ES256 JWKS offline verification, Cookie-to-Bearer transformation
 - **packages/contracts** - Shared types, error codes, permission codes, OIDC constants
 - **packages/config** - Shared env config (Zod schema + URL derivation), TypeScript/ESLint configuration
@@ -28,7 +28,7 @@ pnpm test:api              # API 层测试（Mock DB/Redis）
 pnpm test:components       # 组件层测试（jsdom）
 pnpm test:e2e              # Playwright E2E 端到端测试
 pnpm test:report           # 需求追溯性覆盖率报告
-pnpm test:report --threshold 90  # 检查覆盖率 >= 90%
+pnpm test:report           # 静态需求追溯清单（不等同于实际测试覆盖率）
 ```
 
 ## Test Architecture
@@ -55,8 +55,8 @@ Tests follow a layered strategy — fast, isolated unit tests at the bottom, int
 
 - **Location**: `tests/e2e/*.spec.ts`
 - **Framework**: Playwright on Chromium
-- **Scope**: Full OAuth 2.1 flow, SSO cross-app login/logout, RBAC enforcement in browser
-- **Setup**: Portal webServer entry with DB push + seed
+- **Scope**: 浏览器登录冒烟与 Docker 发布栈的 Gateway→Portal 登录/登出闭环
+- **Setup**: 本地 Portal webServer 或 Docker 发布验收栈
 - **Run**: `pnpm test:e2e`
 
 ### Session 架构
@@ -66,9 +66,9 @@ Tests follow a layered strategy — fast, isolated unit tests at the bottom, int
 ### Traceability
 
 - **Script**: `tests/traceability/generate-report.mjs`
-- **Reports**: `tests/traceability/coverage-report.md`
+- **Reports**: `tests/traceability/.generated/coverage-report.md`（本地生成，不提交）
 - **Mechanism**: Scans test files for `@req` annotations (file-level and line-level), matches against `docs/spec/REQUIREMENTS_MATRIX.md`, generates coverage report
-- **CI Gate**: `pnpm test:report --threshold 90` (exits 1 if coverage < 90%)
+- **CI**: 报告作为需求映射清单生成；实际 Vitest、lint、typecheck 和 Docker 发布验收才是阻断门禁。
 
 ### `@req` Annotation Convention
 
@@ -95,7 +95,8 @@ Supported formats:
 
 ### Key Test Files
 
-- `apps/portal/__tests__/api/auth-callback.test.ts` — OAuth 回调验证
+- `apps/portal/__tests__/api/auth-login.test.ts` — 登录验证与暴力破解防护
+- `apps/portal/__tests__/api/auth-logout.test.ts` — 登出与 Cookie 清理
 - `apps/portal/__tests__/api/session-lifecycle.test.ts` — Session TTL 与刷新
 - `apps/portal/__tests__/domain/auth.test.ts` — PKCE/State/Nonce 安全
 - `apps/portal/__tests__/api/data-scope.test.ts` — 数据范围过滤
@@ -104,16 +105,14 @@ Supported formats:
 - `apps/portal/__tests__/api/user-api.test.ts` — 用户 CRUD
 - `apps/portal/__tests__/api/department-api.test.ts` — 部门 CRUD
 - `apps/portal/__tests__/api/client-api.test.ts` — OAuth Client CRUD
-- `apps/portal/__tests__/api/menu-api.test.ts` — 菜单 CRUD
-- `apps/portal/__tests__/api/audit-logging.test.ts` — 审计日志
 - `apps/portal/__tests__/api/me-endpoints.test.ts` — 当前用户 API
-- `tests/e2e/auth-flow.spec.ts` — E2E 认证流程
-- `tests/e2e/rbac-enforcement.spec.ts` — E2E RBAC 验证
+- `tests/e2e/security.spec.ts` — 未认证令牌拒绝与 OIDC/JWKS 公开端点
+- `tests/e2e/docker-release.spec.ts` — Docker 发布栈完整认证闭环
 
 ## Tech Stack
 
 - Next.js 16 (Turbopack)
-- Better Auth 1.5+ with OIDC Provider plugin
+- 自研 OAuth 2.1 / OIDC Provider（`jose`）
 - Drizzle ORM + PostgreSQL
 - Redis (ioredis) for session storage
 - Tailwind CSS 4

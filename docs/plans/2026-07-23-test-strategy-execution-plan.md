@@ -296,7 +296,7 @@ Cycle 5: 权限与 RBAC (3 tests)
 
 ### 3.5 T5 — 集成验收测试（扩展）
 
-在现有 `tests/integration/` 基础上，新增：
+在受 CI 管控的 `tests/e2e/` Docker 发布验收栈基础上，新增：
 
 ```
 T5-01: Gateway → Portal 全链路（真实 HTTP，经 localhost:19443）
@@ -476,7 +476,7 @@ Phase 0: Mock 基础设施统一化（3 天）
 
 Phase 1: E2E Playwright 搭建（5 天）
   ├── playwright.config.ts
-  ├── scripts/qa-run.sh 增强（自动启动 Portal + Gateway）
+  ├── docker-compose.e2e.yml 统一启动 Portal + Gateway 依赖
   ├── Cycle 1-2 (10 tests): 未认证 → 认证全流程
   ├── CI main.yml 集成 Playwright
   └── 验收: 全绿通过
@@ -545,7 +545,7 @@ Phase 5: CI 门禁加固（2 天）
 
 | 风险 | 概率 | 影响 | 缓解 |
 |------|------|------|------|
-| E2E 测试环境不稳定（Gateway + Portal 双服务） | 中 | 高 | `scripts/qa-run.sh` 健康检查 + 超时重试 + `--retries 2` |
+| E2E 测试环境不稳定（Gateway + Portal 双服务） | 中 | 高 | Docker 发布验收栈健康检查 + Playwright 重试 |
 | 测试 DB TRUNCATE 影响并行执行速度 | 高 | 中 | Phase 0 改为 SAVEPOINT/ROLLBACK 事务隔离 |
 | 追溯报告与代码不同步（`@req` 遗漏） | 中 | 中 | CI 强制追溯率 ≥ 95% 门禁 |
 | Gateway Rust 测试需要真实 PostgreSQL/Redis | 低 | 高 | 当前已验证：JWT 验签 100% 离线，零基础设施依赖 |

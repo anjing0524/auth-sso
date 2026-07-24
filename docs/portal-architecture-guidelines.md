@@ -104,7 +104,6 @@ src/
 ├── lib/                        # 4. 无状态共享工具与鉴权能力
 │   ├── auth/                   #   - 鉴权模块（统一入口 + 子模块）
 │   │   ├── index.ts            #     * 统一 Barrel（推荐引入点：import {...} from '@/lib/auth'）
-│   │   ├── facade.ts           #     * withPermission + 子模块 re-export（API Route 用）
 │   │   ├── guard.ts            #     * withAuth HOF（Server Action 用）
 │   │   ├── verify-jwt.ts       #   * JWT/Session 身份验证
 │   │   ├── check-permission.ts #     * 权限编码/角色检查（通过 lib/permissions 查 DB）

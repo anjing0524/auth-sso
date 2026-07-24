@@ -54,6 +54,7 @@ test-results
 playwright-report
 feat
 tests/e2e-report
+tests/traceability/.generated/
 .claude/worktrees/
 
 data

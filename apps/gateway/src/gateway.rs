@@ -15,12 +15,6 @@ use crate::oauth;
 use crate::path_matcher::{PathClass, PathMatcher};
 use crate::router::Router;
 
-/// 计算 HMAC-SHA256 并以十六进制字符串返回（委托 [`crate::http::hmac_sha256_hex`]）。
-/// 用于 Gateway → Portal 信任路径签名。
-fn compute_hmac_sha256_hex(secret: &str, payload: &str) -> Option<String> {
-    hmac_sha256_hex(secret, payload)
-}
-
 /// Pingora `LoadBalancer::select` 的第二参数为选择输入的哈希键；
 /// 传 `b""` 表示纯轮询（不做一致性哈希），256 为保留的总权重占位。
 ///
@@ -742,7 +736,7 @@ impl ProxyHttp for Gateway {
                 if let Some(d) = crate::http::unix_secs() {
                     let ts = d.to_string();
                     let payload = format!("{}:{}:{}", ts, id.user_id, id.user_jti);
-                    match compute_hmac_sha256_hex(secret, &payload) {
+                    match hmac_sha256_hex(secret, &payload) {
                         Some(sig) => {
                             upstream_request.insert_header("X-Gateway-Timestamp", ts.as_str())?;
                             upstream_request.insert_header("X-Gateway-Signature", sig.as_str())?;

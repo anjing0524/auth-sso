@@ -4,6 +4,10 @@ import { promisify } from 'node:util';
 const execFileAsync = promisify(execFile);
 
 export default async function globalSetup() {
+  if (process.env.E2E_SKIP_SEED === 'true') {
+    return;
+  }
+
   await execFileAsync('pnpm', ['db:seed'], {
     env: {
       ...process.env,

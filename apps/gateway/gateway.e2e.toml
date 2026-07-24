@@ -1,0 +1,32 @@
+# Release acceptance only. These test credentials are seeded by the db-init
+# container and must never be reused by a deployed environment.
+
+[gateway]
+port = 80
+ssl_port = 443
+ssl_cert_path = "/etc/gateway/ssl/fullchain.pem"
+ssl_key_path = "/etc/gateway/ssl/privkey.pem"
+log_dir = "logs"
+log_level = "info"
+gateway_shared_secret = "e2e-gateway-shared-secret"
+
+[redis]
+url = "redis://redis:6379"
+
+[[upstreams]]
+name = "/"
+addresses = "portal:4000"
+oidc_provider = true
+public_paths = [
+    "/",
+    "/login",
+    "/oauth/error",
+    "/api/auth/",
+    "/.well-known/",
+    "/_next/",
+    "/favicon.ico",
+]
+
+[upstreams.oauth]
+client_id = "portal"
+client_secret = "portal-secret"

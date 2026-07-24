@@ -13,7 +13,7 @@
  */
 import { render, screen } from '@testing-library/react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { PermissionGuard } from '@/components/ui/permission-guard';
+import { PermissionGuard } from '@/app/(dashboard)/users/components/permission-guard';
 
 // ── Mock usePermissions ──────────────────────────────────────
 const mockUsePermissions = vi.fn();

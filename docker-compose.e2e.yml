@@ -1,0 +1,98 @@
+# Immutable release acceptance stack. The browser reaches only the Gateway;
+# PostgreSQL, Redis, and Portal remain on the private Compose network.
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: auth_sso
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d auth_sso"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  cert-init:
+    image: alpine:3.21
+    command: sh -c 'cp /source/fullchain.pem /source/privkey.pem /certs/ && chmod 644 /certs/fullchain.pem /certs/privkey.pem'
+    volumes:
+      - ./apps/gateway/ssl:/source:ro
+      - gateway_certs:/certs
+
+  db-init:
+    build:
+      context: .
+      dockerfile: apps/portal/Dockerfile
+      target: builder
+      args:
+        NEXT_PUBLIC_APP_URL: https://127.0.0.1:19443
+    command: sh -c 'pnpm db:push --force && pnpm db:seed'
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/auth_sso
+      REDIS_URL: redis://redis:6379
+      PORTAL_CLIENT_SECRET: portal-secret
+      PORTAL_REDIRECT_URL: https://127.0.0.1:19443/api/auth/callback
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  portal:
+    build:
+      context: .
+      dockerfile: apps/portal/Dockerfile
+      args:
+        NEXT_PUBLIC_APP_URL: https://127.0.0.1:19443
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/auth_sso
+      REDIS_URL: redis://redis:6379
+      NEXT_PUBLIC_APP_URL: https://127.0.0.1:19443
+      PORTAL_REDIRECT_URL: https://127.0.0.1:19443/api/auth/callback
+      PORTAL_CLIENT_SECRET: portal-secret
+      GATEWAY_SHARED_SECRET: e2e-gateway-shared-secret
+      COOKIE_SECURE: "true"
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "node -e 'fetch(\"http://127.0.0.1:4000/api/health\").then(r => process.exit(r.status === 200 ? 0 : 1)).catch(() => process.exit(1))'"]
+      interval: 5s
+      timeout: 3s
+      retries: 24
+
+  gateway:
+    build:
+      context: .
+      dockerfile: apps/gateway/Dockerfile
+    ports:
+      - "19443:443"
+    environment:
+      NODE_ENV: test
+      GATEWAY_SHARED_SECRET: e2e-gateway-shared-secret
+    volumes:
+      - ./apps/gateway/gateway.e2e.toml:/app/gateway.toml:ro
+      - gateway_certs:/etc/gateway/ssl:ro
+    depends_on:
+      portal:
+        condition: service_healthy
+      cert-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-check-certificate -q -O /dev/null https://127.0.0.1:443/login"]
+      interval: 5s
+      timeout: 3s
+      retries: 24
+
+volumes:
+  gateway_certs:

@@ -98,8 +98,8 @@ domain/（领域层 - 纯 TypeScript，零框架依赖）
   |
   v
 lib/（无状态工具层 - 可从 domain/ 导入）
-  |-- auth/         token.ts（JWT 签名/验证）、verify-jwt.ts、pkce.ts、guard.ts、
-  |                 check-permission.ts、data-scope.ts、facade.ts、index.ts
+  |-- auth/         token.ts（JWT 签名/验证）、verify-jwt.ts、guard.ts、
+  |                 check-permission.ts、data-scope.ts、index.ts
   |-- session/      cookies.ts（Cookie 读/写）、revoke.ts
   |-- permissions.ts     权限上下文查询 + Redis 缓存
   |-- crypto.ts          ID/Secret 生成
@@ -649,7 +649,7 @@ auth-sso/
 | `apps/portal/src/lib/auth/guard.ts` | 请求级认证守卫高阶函数（withAuth / withPermission） |
 | `apps/portal/src/lib/auth/check-permission.ts` | 权限校验核心（Redis → DB 级联查询） |
 | `apps/portal/src/lib/auth/data-scope.ts` | 数据范围过滤（getUserRoleDeptIds — 角色部门 + 子树展开） |
-| `apps/portal/src/lib/auth/facade.ts` | 鉴权限中统出入口 |
+| `apps/portal/src/lib/auth/index.ts` | 鉴权公开入口（直接导出子模块） |
 | `apps/portal/src/lib/session/cookies.ts` | Cookie 读/写工具函数 |
 | `apps/portal/src/lib/session/revoke.ts` | jti 黑名单吊销与撤销 |
 | `apps/portal/src/lib/session/auth-request-store.ts` | OAuth 授权参数暂存（Redis portal:auth_req:） |

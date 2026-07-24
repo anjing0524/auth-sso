@@ -8,6 +8,7 @@ WORKDIR /app
 
 # 复制 gateway 子项目的 Cargo 配置
 COPY apps/gateway/Cargo.toml apps/gateway/Cargo.lock ./apps/gateway/
+COPY apps/gateway/benches ./apps/gateway/benches
 
 # 复制整个项目根目录的 Cargo.lock，如果存在（这里我们是 monorepo，有 apps/gateway/Cargo.lock）
 # 将工作目录切换到网关

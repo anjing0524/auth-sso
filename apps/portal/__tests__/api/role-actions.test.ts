@@ -3,7 +3,7 @@
  *
  * 使用 TRUNCATE CASCADE 模式实现测试隔离，验证所有 CRUD 操作端到端正确性。
  *
- * @req DC-ROLE-C, DC-ROLE-U, DC-ROLE-D
+ * @req C-ROL-C, C-ROL-U, C-ROL-D
  * @vitest-environment node
  */
 import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest';

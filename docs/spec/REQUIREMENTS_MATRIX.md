@@ -213,7 +213,7 @@
 | NFR ID | 需求描述 | 量化阈值 | 验证方法 | 架构约束 | 关联测试 |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | NFR-PERF-01 | Portal API 响应时间 | `/api/me` P95 < 200ms | k6 压力测试 | R14（DB 查询规范） | — |
-| NFR-PERF-02 | 登录全流程耗时 | 登录→Dashboard P95 < 1.5s | Playwright E2E 计时 | R8（三层鉴权） | tests/e2e/auth-flow.spec.ts |
+| NFR-PERF-02 | 登录全流程耗时 | 登录→Dashboard P95 < 1.5s | Playwright E2E 计时 | R8（三层鉴权） | 待补真实性能采样 |
 | NFR-PERF-03 | Gateway JWT 验签延迟 | < 5ms（不含网络） | Rust benchmark | — | — |
 | NFR-PERF-04 | 列表查询分页响应 | 1000 条 P95 < 500ms | k6 压力测试 | R12（缓存策略） | — |
 | NFR-PERF-05 | 并发用户支持 | 500 并发，错误率 < 1% | k6 压力测试 | — | — |
@@ -248,7 +248,7 @@
 - **USER_STORIES.md**：每个需求的用户故事覆盖
 - **ARCHITECTURE.md**：安全需求的技术实现架构（11 层认证授权链路）
 - **ARCHITECTURE_CONSTRAINTS.md**：实现层面的编码约束（领域模型校验规则等）
-- **tests/traceability/coverage-report.md**：测试覆盖率报告（自动化生成，趋势受 OPM 过程性能基线监控）
+- **tests/traceability/.generated/coverage-report.md**：需求映射报告（本地自动生成，不提交）
 
 ## CMMI Level 5 闭环机制
 
@@ -256,4 +256,4 @@
 - **过程度量**：测试通过率（基线 100%，LCL 95%）、追溯性覆盖率（目标 85%）受统计过程控制（SPC）监控
 - **持续改进**：P0/P1 缺陷触发 CAR → 预防措施更新架构约束/Red Flags → Pilot → 度量 → 推广/回滚
 - **经验教训**：每次 CAR 输出写入 `docs/solutions/`，作为组织级过程资产积累
-- **tests/traceability/coverage-report.md**：测试覆盖率报告（自动化生成）
+- **tests/traceability/.generated/coverage-report.md**：需求映射报告（本地自动生成）

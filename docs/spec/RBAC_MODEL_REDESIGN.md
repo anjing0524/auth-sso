@@ -159,8 +159,7 @@ const conditions = [inArray(schema.users.deptId, deptIds)];
 | **Domain** | `domain/shared/zod-schemas.ts` | 删 `dataScopeTypeEnum` |
 | **Lib** | `lib/permissions.ts` | `getUserPermissionContext` 改查角色 dept_id + 子树展开；删除 dataScopeType 优先级逻辑 |
 | **Lib** | `lib/auth/data-scope.ts` | 整个文件重构：删除 `getDataScopeFilter`、`applyDataScopeFilter`、`checkDataScope`；新增 `getUserRoleDeptIds` |
-| **Lib** | `lib/auth/facade.ts` | 更新导出：移除旧三函数，导出 `getUserRoleDeptIds` |
-| **Lib** | `lib/auth/index.ts` | 同上 |
+| **Lib** | `lib/auth/index.ts` | 直接导出 `getUserRoleDeptIds`，不引入 facade 层 |
 | **DB** | `db/user-queries.ts` | `buildUserListConditions` 参数改为 `deptIds: string[]` |
 | **App** | `app/(dashboard)/departments/data.ts` | 替换 `applyDataScopeFilter` 为 `inArray(deptIdCol, deptIds)` |
 | **App** | `app/(dashboard)/departments/page.tsx` | 替换 `getDataScopeFilter` 为 `getUserRoleDeptIds` |

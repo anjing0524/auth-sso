@@ -377,7 +377,7 @@ export function withAuth<TArgs extends unknown[], TData>(
 
 ### 2.5 withPermission API Route 守卫
 
-`apps/portal/src/lib/auth/facade.ts` — `withPermission` 包装器
+`apps/portal/src/lib/auth/guard.ts` — `withPermission` 包装器
 
 ```typescript
 export async function withPermission(
@@ -964,7 +964,7 @@ export async function revokeAllRefreshTokens(userId: string): Promise<void>
 export const resolveIdentity: () => Promise<ResolvedIdentity | null>
 ```
 
-**鉴权守卫** (`apps/portal/src/lib/auth/guard.ts` + `facade.ts` + `check-permission.ts`):
+**鉴权守卫** (`apps/portal/src/lib/auth/guard.ts` + `check-permission.ts`):
 
 ```typescript
 export function withAuth<TArgs extends unknown[], TData>(

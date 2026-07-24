@@ -469,9 +469,7 @@ function generateReport(requirements, testFiles, prodFiles, threshold, archReqs 
   console.log(lines.join('\n'));
 
   // ── Markdown 报告 ──
-  const reportDir = path.dirname(
-    path.join(ROOT, 'tests', 'traceability', 'coverage-report.md'),
-  );
+  const reportDir = path.join(ROOT, 'tests', 'traceability', '.generated');
   if (!fs.existsSync(reportDir)) {
     fs.mkdirSync(reportDir, { recursive: true });
   }
@@ -525,7 +523,7 @@ function generateReport(requirements, testFiles, prodFiles, threshold, archReqs 
   }
 
   fs.writeFileSync(reportPath, mdLines.join('\n'), 'utf-8');
-  console.log(`\nDetailed report written to: tests/traceability/coverage-report.md`);
+  console.log(`\nDetailed report written to: tests/traceability/.generated/coverage-report.md`);
 
   // ── 阈值检查 ──
   const numericPct = parseFloat(pct);

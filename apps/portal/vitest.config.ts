@@ -1,11 +1,9 @@
-import { defineConfig, mergeConfig } from 'vitest/config';
+import { defineProject } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 import { sharedVitestConfig } from '../../vitest.base';
 
-export default mergeConfig(
-  sharedVitestConfig,
-  defineConfig({
+export default defineProject({
     plugins: [react()],
     resolve: {
       // Vite 8 原生支持 tsconfig 路径解析，无需 vite-tsconfig-paths 插件
@@ -15,6 +13,7 @@ export default mergeConfig(
       },
     },
     test: {
+      ...sharedVitestConfig,
       // globalSetup：在所有测试前运行 migration
       globalSetup: ['./vitest.globalSetup.ts'],
       // 全局 setup 文件：mock server-only、next/headers、扩展 jest-dom 匹配器
@@ -26,16 +25,10 @@ export default mergeConfig(
       fileParallelism: false,
       // 多个集成测试共享 TRUNCATE 隔离的数据库，必须限制为单一 worker，
       // 否则不同文件会并发写入固定 fixture ID，产生非确定性唯一约束冲突。
-      minWorkers: 1,
       maxWorkers: 1,
       include: [
         'src/**/*.test.{ts,tsx}',
         '__tests__/**/*.test.{ts,tsx}',
       ],
-      // Portal 特有覆盖率范围
-      coverage: {
-        include: ['src/**/*.{ts,tsx}'],
-      },
     },
-  })
-);
+  });

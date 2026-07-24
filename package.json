@@ -14,23 +14,17 @@
     "db:generate": "pnpm --filter @auth-sso/portal db:generate",
     "db:migrate": "pnpm --filter @auth-sso/portal db:migrate",
     "db:push": "pnpm --filter @auth-sso/portal db:push",
-    "db:push:ci": "pnpm --filter @auth-sso/portal db:push --force",
     "db:studio": "pnpm --filter @auth-sso/portal db:studio",
     "db:seed": "pnpm --filter @auth-sso/portal db:seed",
     "infra:up": "docker compose up -d",
-    "setup:env": "echo '请手动复制 .env.example 文件到 .env.local 并配置'",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:api": "vitest run --project @auth-sso/portal",
-    "test:portal": "vitest run --project @auth-sso/portal",
     "test:components": "vitest run --project @auth-sso/portal 'apps/portal/__tests__/components/app-sidebar.test.tsx' 'apps/portal/__tests__/components/permission-guard.test.tsx'",
-    "test:integration:oauth": "tsx tests/integration/oauth-flow.test.ts",
-    "test:integration:m3": "tsx tests/integration/m3-verification.test.ts",
-    "test:integration": "tsx tests/integration/oauth-flow.test.ts && tsx tests/integration/m3-verification.test.ts",
     "test:e2e": "playwright test",
+    "test:e2e:release": "playwright test tests/e2e/docker-release.spec.ts",
     "test:e2e:ui": "playwright test --ui",
-    "test:report": "node tests/traceability/generate-report.mjs",
-    "clean:all": "rm -rf node_modules .pnpm-store"
+    "test:report": "node tests/traceability/generate-report.mjs"
   },
   "engines": {
     "node": ">=20.0.0"

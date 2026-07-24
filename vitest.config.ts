@@ -8,6 +8,14 @@ import { defineConfig } from 'vitest/config';
  */
 export default defineConfig({
   test: {
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'json', 'html'],
+      include: [
+        'apps/portal/src/**/*.{ts,tsx}',
+        'packages/contracts/src/**/*.ts',
+      ],
+    },
     projects: [
       './apps/portal/vitest.config.ts',
       './packages/contracts/vitest.config.ts',

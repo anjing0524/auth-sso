@@ -1,5 +1,5 @@
 import { requirePermission } from '@/lib/auth/check-permission';
-import { Forbidden } from '@/components/ui/forbidden';
+import { Forbidden } from '@/components/shared/forbidden';
 import { AUDIT_PERMISSIONS } from '@auth-sso/contracts';
 
 export default async function AuditLogsLayout({ children }: { children: React.ReactNode }) {

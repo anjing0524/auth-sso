@@ -5,7 +5,7 @@
  * schema 直接引用 @/db/schema（不依赖 @/infrastructure/db 的运行时暴露），
  * db 通过 holder 间接访问以热插拔真实连接。
  *
- * @req R-USER-ROLE, H-ACL-002
+ * @req C-ROL-ASGN, H-ACL-002
  * @vitest-environment node
  */
 import { beforeAll, afterAll, beforeEach, describe, expect, it, vi } from 'vitest';

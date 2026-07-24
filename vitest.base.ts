@@ -8,13 +8,6 @@
  */
 
 export const sharedVitestConfig = {
-  test: {
-    // 覆盖率配置
-    coverage: {
-      provider: /** @type {'v8'} */ ('v8'),
-      reporter: ['text', 'json', 'html'],
-    },
-    // 测试超时（毫秒）
-    testTimeout: 10_000,
-  },
+  // 测试超时（毫秒）
+  testTimeout: 10_000,
 };

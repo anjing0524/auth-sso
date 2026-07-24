@@ -2,7 +2,7 @@
 FROM node:26-alpine AS base
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
-RUN npm install -g pnpm@10
+RUN npm install -g pnpm@10.12.4
 
 FROM base AS builder
 WORKDIR /app
@@ -14,7 +14,9 @@ COPY apps/portal/package.json apps/portal/tsconfig.json apps/portal/next.config.
 COPY packages/contracts/package.json ./packages/contracts/
 COPY packages/config/package.json ./packages/config/
 
-RUN pnpm config set registry https://registry.npmmirror.com
+# The image already installs the version declared in packageManager. Disable
+# pnpm's self-update check before its first invocation to keep builds offline-safe.
+RUN printf 'manage-package-manager-versions=false\nregistry=https://registry.npmmirror.com\n' > .npmrc
 
 ARG NEXT_PUBLIC_APP_URL
 ENV NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL
@@ -41,4 +43,5 @@ USER nextjs
 
 EXPOSE 4000
 ENV PORT=4000
+ENV HOSTNAME=0.0.0.0
 CMD ["node", "--harmony-temporal", "apps/portal/server.js"]
