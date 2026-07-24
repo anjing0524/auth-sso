@@ -52,11 +52,27 @@ pub enum VerifyError {
 #[derive(Debug)]
 pub struct JwtVerifier {
     jwks_cache: Arc<JwksCache>,
+    /// 测试模式：跳过 jti 黑名单检查（Redis pool 未初始化时使用）
+    #[cfg(test)]
+    skip_jti: bool,
 }
 
 impl JwtVerifier {
     pub fn new(jwks_cache: Arc<JwksCache>) -> Self {
-        Self { jwks_cache }
+        Self {
+            jwks_cache,
+            #[cfg(test)]
+            skip_jti: false,
+        }
+    }
+
+    /// 创建不检查 jti 黑名单的验证器（仅用于无 Redis 环境的单元测试）
+    #[cfg(test)]
+    pub fn new_without_jti_check(jwks_cache: Arc<JwksCache>) -> Self {
+        Self {
+            jwks_cache,
+            skip_jti: true,
+        }
     }
 
     /// 对 JWT Token 进行离线密码学验签 + jti 黑名单检查。
@@ -137,6 +153,10 @@ impl JwtVerifier {
 
     /// 检查 jti 是否在黑名单中（fail-close：Redis 不可用时返回 true 拒绝请求）
     async fn check_jti(&self, jti: &str) -> bool {
+        #[cfg(test)]
+        if self.skip_jti {
+            return false;
+        }
         let jti_key = format!("portal:jti_blocklist:{}", jti);
         crate::redis::exists(&jti_key).await
     }

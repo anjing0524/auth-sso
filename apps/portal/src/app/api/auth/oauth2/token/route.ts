@@ -7,6 +7,9 @@
  * Controller 职责：编排（Zod 校验 → Drizzle 查询 → 领域函数校验 → 签发 Token → JSON 响应）
  *
  * @route POST /api/auth/oauth2/token
+ * @impl H-AUTH-003 — OAuth 2.1 授权码流程
+ * @impl H-AUTH-004 — 令牌安全交换（PKCE S256）
+ * @impl H-AUTH-011 — PKCE code_verifier 验证
  */
 import { type NextRequest, NextResponse } from 'next/server';
 import { db, schema } from '@/infrastructure/db';

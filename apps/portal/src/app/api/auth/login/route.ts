@@ -5,6 +5,9 @@
  * 响应分流：有 session_id 走 OAuth 链路，无则兼容旧 fetch 链路。
  *
  * @route POST /api/auth/login
+ * @impl H-AUTH-002 — 邮箱/密码登录认证
+ * @impl NFR-SEC-06 — 暴力破解防护（Redis INCR 原子计数）
+ * @impl J-LOG-003 — 登录日志写入
  */
 import { type NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';

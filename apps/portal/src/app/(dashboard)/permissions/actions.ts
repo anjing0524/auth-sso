@@ -2,6 +2,10 @@
 
 /**
  * 权限管理 Server Actions (BFF 薄 Controller)
+ *
+ * @impl D-PRM-C — 注册新权限
+ * @impl D-PRM-U — 编辑权限信息
+ * @impl D-PRM-D — 删除权限
  */
 import { revalidatePath, updateTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';

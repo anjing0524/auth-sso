@@ -11,6 +11,8 @@
  *   portal_jwt_token + login_session + portal_refresh_token
  *
  * @route POST /api/auth/logout
+ * @impl H-SSO-004 — 全链路登出清理（AT + RT + Cookie）
+ * @impl H-SESS-006 — 账户异常即时失效（jti 黑名单）
  */
 import { type NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';

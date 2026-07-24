@@ -7,7 +7,13 @@
  * 仅执行编排 (Orchestration)：Zod 门禁 → 领域纯函数 → Drizzle 直调。
  * 鉴权与领域错误映射统一由 withAuth 高阶函数施加（R21 / R20），
  * 函数体控制在 ≤ 20 行，不含任何内联业务规则判定（R9 / 红线 #2）。
- * 涉及“读取 + 更新”的多步骤写操作均用 db.transaction() 显式包裹（R22）。
+ * 涉及"读取 + 更新"的多步骤写操作均用 db.transaction() 显式包裹（R22）。
+ *
+ * @impl B-USR-C — 新建用户
+ * @impl B-USR-U — 编辑用户资料
+ * @impl B-USR-D — 删除用户（逻辑删除）
+ * @impl B-USR-ST — 账户状态管理
+ * @impl B-USR-PW — 重置用户密码
  */
 import { revalidatePath, updateTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';

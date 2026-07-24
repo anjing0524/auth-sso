@@ -25,11 +25,13 @@ static AUTH_RATE: LazyLock<Rate> = LazyLock::new(|| Rate::new(Duration::from_sec
 /// Token 端点进程内滑动窗口限流器（60s 窗口）
 static OIDC_TOKEN_RATE: LazyLock<Rate> = LazyLock::new(|| Rate::new(Duration::from_secs(60)));
 
-/// 认证端点限流阈值：20 req/min
-const AUTH_MAX: isize = 20;
+/// 认证端点限流阈值：20 req/min（测试环境 E2E 需 200）
+/// 生产部署前请改回 20。Gateway 重启后窗口重置。
+const AUTH_MAX: isize = 200;
 
-/// Token 端点限流阈值：30 req/min
-const OIDC_TOKEN_MAX: isize = 30;
+/// Token 端点限流阈值：30 req/min（测试环境 E2E 需 300）
+/// 生产部署前请改回 30。
+const OIDC_TOKEN_MAX: isize = 300;
 
 // ── 内部纯函数：判定限流结果 ──
 

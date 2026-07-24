@@ -36,7 +36,7 @@ public_paths = [
 # PKCE 生成 client_id + client_secret（必填，Portal seed 脚本输出明文 secret 后填入此处）
 [upstreams.oauth]
 client_id = "portal"
-client_secret = "请替换为 Portal seed 脚本输出的 client_secret 明文"
+client_secret = "portal-secret"
 
 [[upstreams]]
 name = "/demo/"

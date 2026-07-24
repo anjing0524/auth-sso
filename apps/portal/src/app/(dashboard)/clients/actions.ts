@@ -2,6 +2,11 @@
 
 /**
  * Client 管理 Server Actions (BFF 薄 Controller)
+ *
+ * @impl G-CLT-C — 注册新客户端
+ * @impl G-CLT-U — 编辑客户端配置
+ * @impl G-CLT-D — 注销客户端
+ * @impl G-CLT-SEC — 轮换客户端密钥
  */
 import { revalidatePath, updateTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';

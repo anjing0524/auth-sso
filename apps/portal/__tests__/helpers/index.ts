@@ -4,6 +4,12 @@
 export { MockRedisStore, createMockRedis } from './mock-redis';
 export { createMockWithPermission, createMockCheckPermission } from './mock-auth';
 export {
+  createHoistedHolders,
+  initHoistedHolders,
+  DEFAULT_ADMIN_ID,
+  type HoistedHolders,
+} from './mock-factory';
+export {
   createTestUser,
   createTestRole,
   createTestPermission,
@@ -17,7 +23,7 @@ export {
   parseResponseJson,
   createMockFetch,
 } from './test-utils';
-export { createTestDbHandle, seedTestData, type TestDbHandle, type SeedData } from './test-db';
+export { createTestDbHandle, seedTestData, type TestDbHandle, type TestDbHandleOptions, type SeedData } from './test-db';
 export {
   seedRootDept,
   seedSubDept,
@@ -27,4 +33,5 @@ export {
   seedJwks,
   seedSuperAdminRole,
   seedUserRoleBinding,
+  seedTestPermission,
 } from './seed-fixtures';

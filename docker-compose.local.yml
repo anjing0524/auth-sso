@@ -78,6 +78,12 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "node -e 'require(\"http\").get(\"http://localhost:4000/api/health\", r => { process.exit(r.statusCode === 200 ? 0 : 1) })'"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 30s
     networks:
       - auth-sso-network
     logging:
@@ -104,7 +110,14 @@ services:
       # 挂载本地自签名证书进行测试
       - ./apps/gateway/ssl:/etc/gateway/ssl:ro
     depends_on:
-      - portal
+      portal:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -skf https://localhost:443/login > /dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
     networks:
       - auth-sso-network
     logging:
