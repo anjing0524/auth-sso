@@ -16,7 +16,7 @@ import { test, expect } from '@playwright/test';
 
 const TEST_USER = {
   email: 'admin@example.com',
-  password: 'Admin123!',
+  password: 'Admin@123456',
 };
 
 const LOGIN_SESSION_RE = /login_session=([^;]+)/;

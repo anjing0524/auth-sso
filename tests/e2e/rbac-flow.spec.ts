@@ -14,7 +14,7 @@
  */
 import { test, expect } from '@playwright/test';
 
-const ADMIN_CRED = { email: 'admin@example.com', password: 'Admin123!' };
+const ADMIN_CRED = { email: 'admin@example.com', password: 'Admin@123456' };
 const LOGIN_SESSION_RE = /login_session=([^;]+)/;
 const JWT_RE = /portal_jwt_token=([^;]+)/;
 
