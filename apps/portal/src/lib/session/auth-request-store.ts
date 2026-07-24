@@ -33,7 +33,9 @@ export async function storeAuthRequest(
   params: StoredAuthRequest,
 ): Promise<void> {
   const key = `${REDIS_KEY_PREFIX.AUTH_REQUEST}${sessionId}`;
-  await getRedis().setex(key, AUTH_REQUEST_TTL, JSON.stringify(params));
+  const redis = getRedis();
+  await redis.connect();
+  await redis.setex(key, AUTH_REQUEST_TTL, JSON.stringify(params));
 }
 
 /**
@@ -49,7 +51,9 @@ export async function getStoredAuthRequest(
   sessionId: string,
 ): Promise<StoredAuthRequest | null> {
   const key = `${REDIS_KEY_PREFIX.AUTH_REQUEST}${sessionId}`;
-  const raw = await getRedis().getdel(key);
+  const redis = getRedis();
+  await redis.connect();
+  const raw = await redis.getdel(key);
   if (!raw) return null;
   try {
     return JSON.parse(raw) as StoredAuthRequest;

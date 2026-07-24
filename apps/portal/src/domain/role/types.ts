@@ -27,7 +27,7 @@ export interface Role {
   /** 排序权重 */
   sort: number;
   /** 创建时间 */
-  createdAt: Date;
+  createdAt: Temporal.Instant;
 }
 
 /** 创建角色入参校验 Schema */

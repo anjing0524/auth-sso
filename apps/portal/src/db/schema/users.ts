@@ -14,7 +14,7 @@
  *
  * @module db/schema/users
  */
-import { pgTable, uuid, varchar, boolean, timestamp, index, uniqueIndex, text, check } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, varchar, boolean, timestamp, index, uniqueIndex, text, check, primaryKey } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { userStatusEnum } from './enums';
 import { roles } from './rbac';
@@ -67,6 +67,6 @@ export const userRoles = pgTable('user_roles', {
   roleId: uuid('role_id').notNull().references(() => roles.id, { onDelete: 'cascade' }),
   createdAt: createdAtColumn(),
 }, (t) => [
-  uniqueIndex('ux_user_roles_pk').on(t.userId, t.roleId),  // 复合主键（唯一索引即主键）
+  primaryKey({ columns: [t.userId, t.roleId], name: 'user_roles_pkey' }),
   index('idx_user_roles_role').on(t.roleId),
 ]);

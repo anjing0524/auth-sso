@@ -19,6 +19,7 @@ const log = createLogger('Session');
 
 const JTI_BLOCKLIST_PREFIX = REDIS_KEY_PREFIX.JTI_BLOCKLIST;
 const USER_JTI_PREFIX = REDIS_KEY_PREFIX.USER_JTI;
+const USER_BATCH_SIZE = 50;
 
 /**
  * 将指定 jti 加入 Redis 黑名单
@@ -42,6 +43,7 @@ export async function isJtiRevoked(jti: string): Promise<boolean> {
   try {
     const redis = getRedis();
     if (!redis) return true; // fail-close：Redis 不可用时假定已撤销
+    await redis.connect?.();
     const result = await redis.exists(`${JTI_BLOCKLIST_PREFIX}${jti}`);
     return result === 1;
   } catch (error) {
@@ -119,14 +121,19 @@ export async function revokeUserAccessByUserId(userId: string): Promise<number> 
  * 用于角色权限/数据范围变更等会影响一批用户的场景，确保受影响用户下次请求被强制重登，
  * 从而重走 rotateRefreshToken 拿到最新权限（消除 JWT claims 与缓存的双源不一致）。
  *
- * 并行撤销，单个用户失败不影响其他用户。
+ * 每批最多并发 50 个撤销，单个用户失败不影响其他用户。
  *
  * @param userIds 用户 ID 数组
  */
 export async function revokeUsersAccessByUserId(userIds: string[]): Promise<void> {
   if (!userIds || userIds.length === 0) return;
-  const results = await Promise.allSettled(userIds.map((id) => revokeUserAccessByUserId(id)));
-  const failed = results.filter((r) => r.status === 'rejected').length;
+  let failed = 0;
+  for (let index = 0; index < userIds.length; index += USER_BATCH_SIZE) {
+    const results = await Promise.allSettled(
+      userIds.slice(index, index + USER_BATCH_SIZE).map((id) => revokeUserAccessByUserId(id)),
+    );
+    failed += results.filter((result) => result.status === 'rejected').length;
+  }
   if (failed > 0) {
     log.warn(`批量撤销 ${userIds.length} 个用户，${failed} 个失败`);
   } else {
@@ -144,4 +151,3 @@ export async function revokeUserToken(accessToken: string): Promise<void> {
     await revokeJti(payload.jti, payload.exp);
   }
 }
-

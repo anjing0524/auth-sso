@@ -9,6 +9,9 @@ const nextConfig: NextConfig = {
   // Portal 特有：启用 Cache Components (Next.js 16)
   cacheComponents: true,
 
+  // Playwright 以 127.0.0.1 访问本地 Next 开发服务，显式允许其加载开发资源。
+  allowedDevOrigins: ['127.0.0.1'],
+
   // Portal 特有 headers 与基础 headers 合并
   async headers() {
     const base = (await baseNextConfig.headers?.()) ?? [];

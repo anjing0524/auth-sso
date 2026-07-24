@@ -22,6 +22,7 @@ import {
   CLIENT_PERMISSIONS,
   AUDIT_PERMISSIONS,
   LOGIN_LOG_PERMISSIONS,
+  PORTAL_MENU_PERMISSIONS,
   SYSTEM_PERMISSIONS,
 } from '../permissions';
 import {
@@ -91,6 +92,7 @@ describe('权限码常量', () => {
     AUDIT_PERMISSIONS,
     LOGIN_LOG_PERMISSIONS,
     SYSTEM_PERMISSIONS,
+    PORTAL_MENU_PERMISSIONS,
   ];
 
   it('ALL_PERMISSIONS 长度 = 各组拼接总长度', () => {
@@ -118,6 +120,7 @@ describe('权限码常量', () => {
     expect(groupKeys).toContain('AUDIT');
     expect(groupKeys).toContain('LOGIN_LOG');
     expect(groupKeys).toContain('SYSTEM');
+    expect(groupKeys).toContain('PORTAL_MENU');
   });
 });
 

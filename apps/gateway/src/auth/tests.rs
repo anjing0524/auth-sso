@@ -28,7 +28,7 @@ fn generate_es256_key() -> (String, Vec<u8>, Vec<u8>) {
 }
 
 fn make_test_verifier(jwks_cache: &Arc<JwksCache>) -> JwtVerifier {
-    JwtVerifier::new(Arc::clone(jwks_cache))
+    JwtVerifier::new_without_revocation_for_test(Arc::clone(jwks_cache))
 }
 
 /// 生成测试用 ES256 JWT（与生产环境签名算法一致）
@@ -71,13 +71,20 @@ async fn test_verify_es256_jwt_successful() {
     jwks_cache.insert_key_for_test(kid.clone(), DecodingKey::from_ec_pem(&public_pem).unwrap());
 
     let verifier = make_test_verifier(&jwks_cache);
-    let token = make_test_token(&kid, &private_pem, issuer, "user-123", "jti-123", 3600);
+    let token = make_test_token(
+        &kid,
+        &private_pem,
+        issuer,
+        "user-123",
+        "unit-verify-success-jti",
+        3600,
+    );
 
     let result = verifier.verify(&token).await;
     let status = result.expect("expected valid token");
     assert!(matches!(status.expiry, TokenExpiry::Valid));
     assert_eq!(status.token.user_id, "user-123");
-    assert_eq!(status.token.jti, "jti-123");
+    assert_eq!(status.token.jti, "unit-verify-success-jti");
 }
 
 #[tokio::test]
@@ -90,7 +97,14 @@ async fn test_verify_es256_jwt_expired() {
     jwks_cache.insert_key_for_test(kid.clone(), DecodingKey::from_ec_pem(&public_pem).unwrap());
 
     let verifier = make_test_verifier(&jwks_cache);
-    let token = make_test_token(&kid, &private_pem, issuer, "user-123", "jti-123", -600);
+    let token = make_test_token(
+        &kid,
+        &private_pem,
+        issuer,
+        "user-123",
+        "unit-verify-expired-jti",
+        -600,
+    );
 
     let result = verifier.verify(&token).await;
     assert!(matches!(

@@ -13,7 +13,7 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { db, schema } from '@/infrastructure/db';
 import { verifyAccessToken } from '@/lib/auth/token';
-import { validateAuthorization } from '@/domain/auth/oauth-authorize';
+import { parseScopes, validateAuthorization, validateRequestedScopes } from '@/domain/auth/oauth-authorize';
 import { validateClientActive, validateRedirectUri } from '@/domain/auth/oauth-client';
 import { generateId, generateUUID } from '@/lib/crypto';
 import { getAppBaseURL } from '@/lib/env';
@@ -68,6 +68,7 @@ async function issueCodeAndRedirect(
   const client = await getClientByClientId(params.clientId);
   validateClientActive(client ?? undefined);
   validateRedirectUri(client!.redirectUris, params.redirectUri);
+  validateRequestedScopes(parseScopes(params.scope), parseScopes(client!.scopes));
 
   const userWithRoles = await getUserWithRoleClients(userId);
   if (!userWithRoles) {
@@ -203,6 +204,7 @@ async function handleFullParamsBranch(
   const client = await getClientByClientId(client_id);
   validateClientActive(client ?? undefined);
   validateRedirectUri(client!.redirectUris, redirect_uri);
+  validateRequestedScopes(parseScopes(scope), parseScopes(client!.scopes));
 
   const newSessionId = generateSessionId();
   const stored: StoredAuthRequest = {

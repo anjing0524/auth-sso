@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use bytes::Bytes;
 use pingora_core::prelude::*;
 use pingora_http::{RequestHeader, ResponseHeader};
 use pingora_proxy::{ProxyHttp, Session};
@@ -25,6 +26,8 @@ fn compute_hmac_sha256_hex(secret: &str, payload: &str) -> Option<String> {
 ///
 /// 见 pingora-load-balancing 0.8 `select(&self, key: &[u8], total_weight: usize)`。
 const UPSTREAM_SELECT_WEIGHT: usize = 256;
+const METRICS_PATH: &str = "/__gateway/metrics";
+const METRICS_KEY_HEADER: &str = "X-Gateway-Metrics-Key";
 
 /// 从 Session 提取指定请求头的字符串值
 fn header_str<'s>(session: &'s Session, name: &str) -> Option<&'s str> {
@@ -573,6 +576,26 @@ impl ProxyHttp for Gateway {
         crate::metrics::inc_requests();
 
         let path = session.req_header().uri.path().to_owned();
+
+        if path == METRICS_PATH {
+            let authorized = self.gateway_shared_secret.as_deref().is_some_and(|secret| {
+                header_str(session, METRICS_KEY_HEADER).is_some_and(|provided| provided == secret)
+            });
+            if !authorized {
+                session.respond_401().await?;
+                return Ok(true);
+            }
+            let body = crate::metrics::render_prometheus();
+            let mut header = ResponseHeader::build(200, None)?;
+            header.insert_header("Content-Type", "text/plain; version=0.0.4; charset=utf-8")?;
+            session
+                .write_response_header(Box::new(header), false)
+                .await?;
+            session
+                .write_response_body(Some(Bytes::from(body)), true)
+                .await?;
+            return Ok(true);
+        }
 
         // 0. 路由解析先于任何 early-return，保证 upstream_peer 恒可用 ctx.route_idx
         ctx.route_idx = self.router.resolve_idx(&path);

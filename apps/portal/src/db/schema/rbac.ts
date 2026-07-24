@@ -28,7 +28,7 @@
  *
  * @module db/schema/rbac
  */
-import { pgTable, uuid, varchar, text, boolean, smallint, index, uniqueIndex, check, type AnyPgColumn } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, varchar, text, boolean, smallint, index, check, primaryKey, type AnyPgColumn } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { entityStatusEnum, permissionTypeEnum } from './enums';
 import { clients } from './auth';
@@ -95,7 +95,6 @@ export const rolePermissions = pgTable('role_permissions', {
   permissionId: uuid('permission_id').notNull().references(() => permissions.id, { onDelete: 'cascade' }),
   createdAt: createdAtColumn(),
 }, (t) => [
-  uniqueIndex('ux_role_permissions_pk').on(t.roleId, t.permissionId),
+  primaryKey({ columns: [t.roleId, t.permissionId], name: 'role_permissions_pkey' }),
   index('idx_role_permissions_permission').on(t.permissionId),
 ]);
-

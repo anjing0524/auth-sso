@@ -7,7 +7,7 @@
 import { type NextRequest } from 'next/server';
 import { withPermission, canAccessDept, getUserRoleDeptIds, logServerDataRead } from '@/lib/auth';
 import { getRolePermissions } from '@/app/(dashboard)/roles/data';
-import { COMMON_ERRORS, ROLE_ERRORS } from '@auth-sso/contracts';
+import { COMMON_ERRORS, ROLE_ERRORS, ROLE_PERMISSIONS } from '@auth-sso/contracts';
 import { db, schema } from '@/infrastructure/db';
 import { eq } from 'drizzle-orm';
 import { restSuccess, restError } from '@/lib/response';
@@ -16,7 +16,7 @@ interface RouteParams { params: Promise<{ id: string }>; }
 
 /** GET /api/roles/[id]/permissions — 委托 data.ts，deptIds 由 claims 传入做数据范围校验 */
 export async function GET(request: NextRequest, { params }: RouteParams) {
-  return withPermission({ permissions: ['role:read'] }, async (_userId) => {
+  return withPermission({ permissions: [ROLE_PERMISSIONS.READ] }, async (_userId) => {
     const { id } = await params;
     const role = await db.query.roles.findFirst({
       where: eq(schema.roles.id, id),

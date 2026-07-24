@@ -18,6 +18,7 @@ import {
   validateDepartmentDeletable,
   departmentToInsertRow,
   departmentToUpdateRow,
+  departmentFromPersistence,
 } from '@/domain/department/department';
 import {
   CreateDepartmentInputSchema,
@@ -28,11 +29,11 @@ import { EntityNotFoundError, ForbiddenError } from '@/domain/shared/errors';
 import { generateUUID } from '@/lib/crypto';
 import { validate } from '@/lib/validation';
 import { canAccessDept, getUserRoleDeptIds } from '@/lib/auth';
-import { type ApiResponse } from '@auth-sso/contracts';
+import { DEPARTMENT_PERMISSIONS, type ApiResponse } from '@auth-sso/contracts';
 
 /** 创建部门 */
 export const createDepartmentAction = withAuth(
-  { permissions: ['department:create'], audit: 'DEPARTMENT_CREATE' },
+  { permissions: [DEPARTMENT_PERMISSIONS.CREATE], audit: 'DEPARTMENT_CREATE' },
   async (ctx: AuthContext, input: CreateDepartmentInput): Promise<ApiResponse<{ id: string }>> => {
     const v = validate(CreateDepartmentInputSchema, input);
     if (!v.ok) return v.response;
@@ -77,7 +78,7 @@ async function performDepartmentUpdate(tx: DrizzleTransaction, deptId: string, p
   if (!row) throw new EntityNotFoundError('Department', deptId);
 
   const allDepts = await tx.query.departments.findMany();
-  const dept = row;
+  const dept = departmentFromPersistence(row);
   const newAncestors = resolveParentAncestors(dept, patch.parentId as string | null | undefined, allDepts);
 
   const updated = applyDepartmentUpdateWithCircularCheck(dept, { ...patch, ancestors: newAncestors }, allDepts);
@@ -95,7 +96,7 @@ async function performDepartmentUpdate(tx: DrizzleTransaction, deptId: string, p
 
 /** 更新部门 */
 export const updateDepartmentAction = withAuth(
-  { permissions: ['department:update'], audit: 'DEPARTMENT_UPDATE' },
+  { permissions: [DEPARTMENT_PERMISSIONS.UPDATE], audit: 'DEPARTMENT_UPDATE' },
   async (ctx: AuthContext, deptId: string, input: Record<string, unknown>): Promise<ApiResponse<{ id: string }>> => {
     const v = validate(UpdateDepartmentInputSchema, input);
     if (!v.ok) return v.response;
@@ -118,7 +119,7 @@ export const updateDepartmentAction = withAuth(
 
 /** 删除部门 */
 export const deleteDepartmentAction = withAuth(
-  { permissions: ['department:delete'], audit: 'DEPARTMENT_DELETE' },
+  { permissions: [DEPARTMENT_PERMISSIONS.DELETE], audit: 'DEPARTMENT_DELETE' },
   async (ctx: AuthContext, deptId: string): Promise<ApiResponse<{ id: string }>> => {
     await db.transaction(async (tx) => {
       const row = await tx.query.departments.findFirst({

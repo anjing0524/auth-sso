@@ -1,0 +1,27 @@
+name: Access-log Partition Maintenance
+
+on:
+  schedule:
+    - cron: '0 0 25 * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  maintain:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.12.4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '26'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Maintain current and next access-log partitions
+        run: pnpm --filter @auth-sso/portal db:maintain-partitions
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}

@@ -11,6 +11,7 @@ import { verifyAccessToken } from '@/lib/auth/token';
 import { getJwtFromCookie } from '@/lib/session';
 import { mapDomainError } from '@/domain/shared/error-mapping';
 import { getUserProfile } from '@/app/(dashboard)/users/data';
+import { parseScopes } from '@/domain/auth/oauth-authorize';
 
 
 export async function GET(request: NextRequest) {
@@ -36,14 +37,18 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'invalid_token' }, { status: 401 });
     }
 
-    return NextResponse.json({
-      sub: user.id,
-      name: user.name,
-      preferred_username: user.username,
-      email: user.email,
-      email_verified: user.emailVerified,
-      picture: user.avatarUrl,
-    });
+    const scopes = new Set(parseScopes(claims.scope ?? ''));
+    const response: Record<string, string | boolean | null> = { sub: user.id };
+    if (scopes.has('profile')) {
+      response.name = user.name;
+      response.preferred_username = user.username;
+      response.picture = user.avatarUrl;
+    }
+    if (scopes.has('email')) {
+      response.email = user.email;
+      response.email_verified = user.emailVerified;
+    }
+    return NextResponse.json(response);
   } catch (err) {
     const mapped = mapDomainError(err);
     return NextResponse.json({ error: mapped.error }, { status: mapped.status });

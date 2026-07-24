@@ -23,7 +23,8 @@ export async function GET() {
   const baseURL = getAppBaseURL();
 
   const metadata = {
-    issuer: baseURL,
+    // ADR-006：issuer 是体系级固定标识，与所有 JWT 签发/验签保持一致。
+    issuer: 'auth-sso',
     authorization_endpoint: `${baseURL}/api/auth/oauth2/authorize`,
     token_endpoint: `${baseURL}/api/auth/oauth2/token`,
     userinfo_endpoint: `${baseURL}/api/auth/oauth2/userinfo`,

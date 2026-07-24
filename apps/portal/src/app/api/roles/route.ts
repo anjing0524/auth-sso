@@ -8,11 +8,12 @@ import { withPermission, getUserRoleDeptIds } from '@/lib/auth';
 import { getRoles } from '@/app/(dashboard)/roles/data';
 import { parsePagination } from '@/lib/pagination';
 import { restListSuccess } from '@/lib/response';
+import { ROLE_PERMISSIONS } from '@auth-sso/contracts';
 
 
 /** GET /api/roles — 委托 data.ts */
 export async function GET(request: NextRequest) {
-  return withPermission({ permissions: ['role:list'] }, async (_adminUserId) => {
+  return withPermission({ permissions: [ROLE_PERMISSIONS.LIST] }, async (_adminUserId) => {
     const sp = request.nextUrl.searchParams;
     const keyword = sp.get('keyword') || '';
     const status = sp.get('status') || '';

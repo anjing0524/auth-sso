@@ -51,6 +51,7 @@ yarn-error.log*
 next-env.d.ts
 
 test-results
+playwright-report
 feat
 tests/e2e-report
 .claude/worktrees/

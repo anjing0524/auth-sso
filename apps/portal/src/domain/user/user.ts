@@ -1,6 +1,7 @@
 import { USER_ACTIVE, USER_DISABLED, USER_LOCKED, USER_DELETED } from '@auth-sso/contracts';
 import { type CreateUserInput, type User } from './types';
 import { BusinessRuleViolationError } from '../shared/errors';
+import { dateFromInstant, instantFromDate } from '../shared/time';
 
 export type { User };
 
@@ -18,7 +19,7 @@ export function createUser(
     avatarUrl: null,
     deletedAt: null,
     passwordChangedAt: null,
-    createdAt: new Date(),
+    createdAt: Temporal.Now.instant(),
   };
 }
 
@@ -47,7 +48,7 @@ export function deleteUser(user: User): User {
   if (user.status === USER_DELETED) {
     throw new BusinessRuleViolationError('用户已被删除，不可重复操作');
   }
-  return { ...user, status: USER_DELETED, deletedAt: new Date() };
+  return { ...user, status: USER_DELETED, deletedAt: Temporal.Now.instant() };
 }
 
 export function applyUserUpdate(
@@ -80,9 +81,9 @@ export function userToInsertRow(u: User) {
     avatarUrl: u.avatarUrl,
     status: u.status,
     deptId: u.deptId,
-    deletedAt: u.deletedAt,
-    passwordChangedAt: u.passwordChangedAt,
-    createdAt: u.createdAt,
+    deletedAt: u.deletedAt && dateFromInstant(u.deletedAt),
+    passwordChangedAt: u.passwordChangedAt && dateFromInstant(u.passwordChangedAt),
+    createdAt: dateFromInstant(u.createdAt),
   };
 }
 
@@ -93,7 +94,20 @@ export function userToUpdateRow(u: User) {
     avatarUrl: u.avatarUrl,
     status: u.status,
     deptId: u.deptId,
-    deletedAt: u.deletedAt,
-    passwordChangedAt: u.passwordChangedAt,
+    deletedAt: u.deletedAt && dateFromInstant(u.deletedAt),
+    passwordChangedAt: u.passwordChangedAt && dateFromInstant(u.passwordChangedAt),
+  };
+}
+
+export function userFromPersistence(user: Omit<User, 'deletedAt' | 'passwordChangedAt' | 'createdAt'> & {
+  deletedAt: Date | null;
+  passwordChangedAt: Date | null;
+  createdAt: Date;
+}): User {
+  return {
+    ...user,
+    deletedAt: user.deletedAt && instantFromDate(user.deletedAt),
+    passwordChangedAt: user.passwordChangedAt && instantFromDate(user.passwordChangedAt),
+    createdAt: instantFromDate(user.createdAt),
   };
 }

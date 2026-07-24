@@ -87,3 +87,10 @@ export class InvalidRedirectUriError extends DomainError {
     super(AUTH_ERRORS.OAUTH_INVALID_REDIRECT_URI, message);
   }
 }
+
+/** OAuth scope 不在 Client 注册允许范围内 */
+export class InvalidScopeError extends DomainError {
+  constructor(message: string = '请求的 scope 未获 Client 授权') {
+    super('INVALID_SCOPE', message);
+  }
+}

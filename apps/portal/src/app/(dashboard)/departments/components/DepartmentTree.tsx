@@ -8,7 +8,7 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import {
-  Building2, Plus, ChevronRight, ChevronDown, MoreVertical, Edit, Trash2, Search, Users,
+  Building2, Plus, ChevronRight, ChevronDown, MoreVertical, Edit, Trash2, Search,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -18,12 +18,10 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Skeleton } from '@/components/ui/skeleton';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { EmptyState } from '@/components/shared/empty-state';
 import { createDepartmentAction, updateDepartmentAction, deleteDepartmentAction } from '../actions';
 
@@ -62,7 +60,6 @@ export default function DepartmentTree({ departments }: Props) {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [selected, setSelected] = useState<DeptTreeNode | null>(null);
-  const [parentId, setParentId] = useState<string>('');
   const [form, setForm] = useState({ name: '', code: '', sort: 0, parentId: '' as string | null });
 
   const toggleExpand = (id: string) => {

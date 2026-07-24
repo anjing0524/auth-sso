@@ -10,9 +10,8 @@ import 'server-only';
 
 import { cacheLife, cacheTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
-import { asc, and, eq, inArray } from 'drizzle-orm';
-import type { EntityStatus } from '@auth-sso/contracts';
-import { buildDepartmentTree } from '@/domain/department/department';
+import { asc, eq, inArray } from 'drizzle-orm';
+import { buildDepartmentTree, departmentFromPersistence } from '@/domain/department/department';
 import type { DepartmentTreeNode } from '@/domain/department/department';
 import { isScopeDenied } from '@/db/user-queries';
 import { asEntityStatus } from '@/lib/type-guards';
@@ -26,7 +25,7 @@ import { asEntityStatus } from '@/lib/type-guards';
  */
 export async function getDepartments(
   deptIds: string[],
-  userId: string,
+  _userId: string,
 ): Promise<DepartmentTreeNode[]> {
   'use cache';
   cacheLife('minutes');
@@ -41,7 +40,7 @@ export async function getDepartments(
     .where(inArray(schema.departments.id, deptIds))
     .orderBy(asc(schema.departments.sort), asc(schema.departments.createdAt));
 
-  const depts = rows.map(r => ({
+  const depts = rows.map(r => departmentFromPersistence({
     id: r.id, parentId: r.parentId, ancestors: r.ancestors,
     name: r.name, code: r.code, sort: r.sort ?? 0,
     status: asEntityStatus(r.status),

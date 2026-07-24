@@ -67,13 +67,15 @@ export default function CreateUserDialog({ departments }: CreateUserDialogProps)
   // 感知 Action 结果并响应（依赖原始值避免不必要的 effect 重跑）
   useEffect(() => {
     if (!state) return;
-    if (state.success) {
-      toast.success(state.message || '用户创建成功');
-      setIsOpen(false);
-      setDeptId(''); // 重置部门选择
-    } else {
-      toast.error(state.message || '创建用户失败');
-    }
+    queueMicrotask(() => {
+      if (state.success) {
+        toast.success(state.message || '用户创建成功');
+        setIsOpen(false);
+        setDeptId('');
+      } else {
+        toast.error(state.message || '创建用户失败');
+      }
+    });
   }, [state?.success, state?.message]);
 
   return (

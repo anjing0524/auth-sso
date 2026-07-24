@@ -16,7 +16,8 @@
     "db:studio": "drizzle-kit studio",
     "db:seed": "npx tsx scripts/seed.ts",
     "db:clean": "npx tsx scripts/clean-clients.ts",
-    "db:cleanup": "npx tsx scripts/cleanup-expired-tokens.ts"
+    "db:cleanup": "npx tsx scripts/cleanup-expired-tokens.ts",
+    "db:maintain-partitions": "npx tsx scripts/maintain-access-log-partitions.ts"
   },
   "dependencies": {
     "@auth-sso/config": "workspace:*",

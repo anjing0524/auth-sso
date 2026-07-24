@@ -1,7 +1,7 @@
 /**
  * 用户角色绑定 API 集成测试
  *
- * 注意：使用 tdHolder 模式避免 vi.mock 工厂中引用未初始化变量（TDZ）。
+ * 注意：使用 var 声明测试 DB，避免 vi.mock 工厂中引用未初始化变量（TDZ）。
  * schema 直接引用 @/db/schema（不依赖 @/infrastructure/db 的运行时暴露），
  * db 通过 holder 间接访问以热插拔真实连接。
  *
@@ -10,17 +10,18 @@
  */
 import { beforeAll, afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
-import { createTestDbHandle } from '../helpers/test-db';
-import { seedTestData } from '../helpers/test-db';
-import { seedRootDept, seedTestUser, seedUserRoleBinding } from '../helpers/seed-fixtures';
+import { createTestDbHandle, seedTestData } from '../helpers/test-db';
+import { seedAdminUser, seedRootDept, seedTestUser, seedUserRoleBinding } from '../helpers/seed-fixtures';
 import { createTestRequest } from '../helpers/test-utils';
 import * as schema from '@/db/schema';
 
-const { tdHolder } = vi.hoisted(() => ({ tdHolder: { current: null as any } }));
+// vi.mock 工厂会被提升；使用 var 避免它在 ESM 模块初始化期间触发 TDZ。
+var td = createTestDbHandle();
 
 vi.mock('@/infrastructure/db', () => ({
-  get db() { return tdHolder.current?.db; },
-  schema,
+  get db() { return td.db; },
+  // 查询模块在 import 阶段读取 schema；它不依赖测试数据库连接。
+  get schema() { return schema; },
 }));
 
 vi.mock('@/lib/auth', () => ({
@@ -47,11 +48,7 @@ const OLD_ROLE_ID = '00000000-0000-4000-8000-000000000301';
 const ROLE_ID = '00000000-0000-4000-8000-000000000302';
 const SECOND_ROLE_ID = '00000000-0000-4000-8000-000000000303';
 
-let td: { db: any; schema: any; cleanup: () => Promise<void>; connect: () => Promise<void>; close: () => Promise<void> };
-
 beforeAll(async () => {
-  td = createTestDbHandle();
-  tdHolder.current = td;
   await td.connect();
 });
 afterAll(async () => { await td.close(); });
@@ -61,7 +58,7 @@ beforeEach(async () => {
   await td.cleanup();
   await seedTestData(td.db, {
     departments: seedRootDept(),
-    users: [...seedTestUser(), { ...seedTestUser()[0], id: ADMIN_ID, username: 'admin', email: 'admin@example.com' }],
+    users: [...(seedTestUser() ?? []), ...(seedAdminUser() ?? [])],
     roles: [
       { id: OLD_ROLE_ID, name: '旧角色', code: 'OLD_ROLE', deptId: '00000000-0000-4000-8000-000000000001', isSystem: false, status: 'ACTIVE', sort: 0 },
       { id: ROLE_ID, name: '新角色', code: 'NEW_ROLE', deptId: '00000000-0000-4000-8000-000000000001', isSystem: false, status: 'ACTIVE', sort: 1 },

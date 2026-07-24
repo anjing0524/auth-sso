@@ -182,7 +182,9 @@ impl Config {
 
         if !path.exists() {
             info!("ℹ️ 配置文件 {} 未找到，使用默认配置", path.display());
-            return Ok(Config::default());
+            let cfg = Config::default();
+            validate_production_security(&cfg, std::env::var("NODE_ENV").ok().as_deref())?;
+            return Ok(cfg);
         }
 
         let builder = config::Config::builder().add_source(config::File::from(path).required(true));
@@ -228,6 +230,8 @@ impl Config {
                  public_paths = [\"/login\", \"/api/auth/\", ...]"
             );
         }
+
+        validate_production_security(&cfg, std::env::var("NODE_ENV").ok().as_deref())?;
 
         info!("✅ 成功从配置文件 {} 加载网关配置", path.display());
         Ok(cfg)
@@ -280,6 +284,19 @@ fn resolve_env<T: std::str::FromStr>(default_val: T, env_name: &str) -> T {
 
 fn resolve_env_str(config_value: &str, env_name: &str) -> String {
     std::env::var(env_name).unwrap_or_else(|_| config_value.to_string())
+}
+
+fn validate_production_security(config: &Config, node_env: Option<&str>) -> anyhow::Result<()> {
+    if node_env == Some("production")
+        && config
+            .gateway
+            .gateway_shared_secret
+            .as_deref()
+            .is_none_or(str::is_empty)
+    {
+        bail!("生产环境必须配置 GATEWAY_SHARED_SECRET");
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -409,6 +426,17 @@ mod tests {
             resolve_redis_url("redis://cfg:6379", None),
             "redis://cfg:6379"
         );
+    }
+
+    #[test]
+    fn production_requires_gateway_shared_secret() {
+        let config = Config::default();
+        assert!(validate_production_security(&config, Some("production")).is_err());
+
+        let mut configured = config;
+        configured.gateway.gateway_shared_secret = Some("test-secret".to_string());
+        assert!(validate_production_security(&configured, Some("production")).is_ok());
+        assert!(validate_production_security(&Config::default(), Some("development")).is_ok());
     }
 
     #[test]

@@ -12,7 +12,7 @@ import {
   Search, Copy, ExternalLink, MoreHorizontal, Edit, Trash2, Globe, Check, Lock, AppWindow,
 } from 'lucide-react';
 import {
-  Table, TableCell, TableRow,
+  TableCell, TableRow,
 } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';

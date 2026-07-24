@@ -9,6 +9,22 @@
  * @module domain/auth/oauth-authorize
  */
 import { ENTITY_ACTIVE, ADMIN_ROLE_CODES } from '@auth-sso/contracts';
+import { InvalidScopeError } from '@/domain/shared/errors';
+
+export { InvalidScopeError } from '@/domain/shared/errors';
+
+/** Parse the RFC 6749 space-delimited scope value into unique tokens. */
+export function parseScopes(input: string): string[] {
+  return [...new Set(input.trim().split(/\s+/).filter(Boolean))];
+}
+
+/** Ensure every requested scope was registered for the OAuth client. */
+export function validateRequestedScopes(requested: readonly string[], allowed: readonly string[]): void {
+  const allowedScopes = new Set(allowed);
+  if (requested.some((scope) => !allowedScopes.has(scope))) {
+    throw new InvalidScopeError();
+  }
+}
 
 export interface AuthorizationInput {
   userId: string;

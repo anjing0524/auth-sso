@@ -8,7 +8,7 @@ import { withPermission, canAccessDept, getUserRoleDeptIds } from '@/lib/auth';
 import { db, schema } from '@/infrastructure/db';
 import { eq } from 'drizzle-orm';
 import { hashPassword, isPasswordReused, pushPasswordHistory } from '@/domain/auth/password';
-import { COMMON_ERRORS, USER_ERRORS } from '@auth-sso/contracts';
+import { COMMON_ERRORS, USER_ERRORS, USER_PERMISSIONS } from '@auth-sso/contracts';
 import { revokeUserAccessByUserId } from '@/lib/session/revoke';
 import { refreshUserPermissionCache } from '@/lib/permissions';
 import { validatePassword } from '@/domain/shared/zod-schemas';
@@ -23,7 +23,7 @@ export async function POST(
   request: NextRequest,
   { params }: RouteParams,
 ) {
-  return withPermission({ permissions: ['user:reset_password'] }, async (adminUserId) => {
+  return withPermission({ permissions: [USER_PERMISSIONS.RESET_PASSWORD] }, async (adminUserId) => {
     const { id } = await params;
     const body = await request.json();
     const newPassword = body.password as string;

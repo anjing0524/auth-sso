@@ -10,7 +10,7 @@
 import postgres from 'postgres';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import * as schema from '../../db/schema';
-import { getEnvConfig } from '../../lib/env';
+import { getEnvConfig } from '@auth-sso/config';
 
 /** 数据库连接配置 — 通过 Zod 校验的环境变量，确保启动期 fail-fast */
 const connectionString = getEnvConfig().DATABASE_URL;

@@ -10,9 +10,9 @@ export interface User {
   status: UserStatus;
   deptId: string | null;
   avatarUrl: string | null;
-  deletedAt: Date | null;
-  passwordChangedAt: Date | null;
-  createdAt: Date;
+  deletedAt: Temporal.Instant | null;
+  passwordChangedAt: Temporal.Instant | null;
+  createdAt: Temporal.Instant;
 }
 
 export const CreateUserInputSchema = z.object({

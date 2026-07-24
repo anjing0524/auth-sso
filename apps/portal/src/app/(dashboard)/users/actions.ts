@@ -20,6 +20,7 @@ import {
   deleteUser,
   applyUserUpdate,
   hasDeptChanged,
+  userFromPersistence,
   userToInsertRow,
   userToUpdateRow,
 } from '@/domain/user/user';
@@ -41,7 +42,7 @@ import { canAccessDept, getUserRoleDeptIds } from '@/lib/auth';
 import { createLogger } from '@/lib/logger';
 
 const log = createLogger('UsersAction');
-import { COMMON_ERRORS, USER_ACTIVE } from '@auth-sso/contracts';
+import { COMMON_ERRORS, USER_ACTIVE, USER_PERMISSIONS } from '@auth-sso/contracts';
 import type { ApiResponse } from '@auth-sso/contracts';
 
 /**
@@ -52,7 +53,7 @@ import type { ApiResponse } from '@auth-sso/contracts';
  * - React 19 Form Action：createUserAction(null, formData)
  */
 export const createUserAction = withAuth(
-  { permissions: ['user:create'], audit: 'USER_CREATE' },
+  { permissions: [USER_PERMISSIONS.CREATE], audit: 'USER_CREATE' },
   async (
     ctx: AuthContext,
     firstArg: CreateUserInput | null | undefined,
@@ -98,7 +99,7 @@ export const createUserAction = withAuth(
  * 切换用户启用/禁用状态 Action Controller
  */
 export const toggleUserStatusAction = withAuth(
-  { permissions: ['user:update'], audit: 'USER_UPDATE' },
+  { permissions: [USER_PERMISSIONS.UPDATE], audit: 'USER_UPDATE' },
   async (ctx: AuthContext, userIdStr: string): Promise<ApiResponse<{ status: string }>> => {
     const v = validate(UserIdentityInputSchema, { id: userIdStr });
     if (!v.ok) return v.response;
@@ -111,7 +112,7 @@ export const toggleUserStatusAction = withAuth(
       // 数据范围校验：目标用户部门必须在操作者可访问范围内（R7 / H-ACL-002）
       if (!canAccessDept(deptIds, row.deptId)) throw new ForbiddenError('无权操作该部门的用户');
 
-      const target = toggleUserStatus(row);
+      const target = toggleUserStatus(userFromPersistence(row));
       await tx.update(schema.users)
         .set({ status: target.status })
         .where(eq(schema.users.id, v.data.id));
@@ -140,7 +141,7 @@ export const toggleUserStatusAction = withAuth(
  * 解锁被锁定用户 Action Controller (B-USR-ST)
  */
 export const unlockUserAction = withAuth(
-  { permissions: ['user:update'], audit: 'USER_UPDATE' },
+  { permissions: [USER_PERMISSIONS.UPDATE], audit: 'USER_UPDATE' },
   async (ctx: AuthContext, userIdStr: string): Promise<ApiResponse<{ status: string }>> => {
     const v = validate(UserIdentityInputSchema, { id: userIdStr });
     if (!v.ok) return v.response;
@@ -151,7 +152,7 @@ export const unlockUserAction = withAuth(
       if (!row) throw new EntityNotFoundError('User', v.data.id);
       if (!canAccessDept(deptIds, row.deptId)) throw new ForbiddenError('无权操作该部门的用户');
 
-      const target = unlockUser(row);
+      const target = unlockUser(userFromPersistence(row));
       await tx.update(schema.users)
         .set({ status: target.status })
         .where(eq(schema.users.id, v.data.id));
@@ -180,7 +181,7 @@ export const unlockUserAction = withAuth(
  * 更新用户信息 Action Controller
  */
 export const updateUserAction = withAuth(
-  { permissions: ['user:update'], audit: 'USER_UPDATE' },
+  { permissions: [USER_PERMISSIONS.UPDATE], audit: 'USER_UPDATE' },
   async (
     ctx: AuthContext,
     userIdStr: string,
@@ -200,7 +201,7 @@ export const updateUserAction = withAuth(
         throw new ForbiddenError('无权将用户迁移至该部门');
       }
 
-      const updated = applyUserUpdate(row, {
+      const updated = applyUserUpdate(userFromPersistence(row), {
         name: v.data.name, email: v.data.email,
         status: v.data.status, deptId: v.data.deptId,
         avatarUrl: v.data.avatarUrl,
@@ -221,7 +222,7 @@ export const updateUserAction = withAuth(
  * 逻辑删除用户 Action Controller
  */
 export const deleteUserAction = withAuth(
-  { permissions: ['user:delete'], audit: 'USER_DELETE' },
+  { permissions: [USER_PERMISSIONS.DELETE], audit: 'USER_DELETE' },
   async (ctx: AuthContext, userIdStr: string): Promise<ApiResponse<{ id: string }>> => {
     const v = validate(UserIdentityInputSchema, { id: userIdStr });
     if (!v.ok) return v.response;
@@ -233,7 +234,7 @@ export const deleteUserAction = withAuth(
       if (!row) throw new EntityNotFoundError('User', v.data.id);
       if (!canAccessDept(deptIds, row.deptId)) throw new ForbiddenError('无权操作该部门的用户');
 
-      const deleted = deleteUser(row);
+      const deleted = deleteUser(userFromPersistence(row));
       await tx.update(schema.users)
         .set({ status: deleted.status })
         .where(eq(schema.users.id, v.data.id));
@@ -260,7 +261,7 @@ export const deleteUserAction = withAuth(
  * 管理员为指定用户重置密码，重置后该用户所有活跃会话立即失效。
  */
 export const resetPasswordAction = withAuth(
-  { permissions: ['user:reset_password'], audit: 'TOKEN_REVOKE' },
+  { permissions: [USER_PERMISSIONS.RESET_PASSWORD], audit: 'TOKEN_REVOKE' },
   async (ctx: AuthContext, userIdStr: string, newPassword: string): Promise<ApiResponse<{ id: string }>> => {
     const v = validate(UserIdentityInputSchema, { id: userIdStr });
     if (!v.ok) return v.response;

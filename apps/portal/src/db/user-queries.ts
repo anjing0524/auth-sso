@@ -6,7 +6,6 @@
  */
 import { eq, ne, or, ilike, type and, inArray, sql } from 'drizzle-orm';
 import { schema } from '@/infrastructure/db';
-import type { UserStatus } from '@auth-sso/contracts';
 import { asUserStatus } from '@/lib/type-guards';
 
 /**
@@ -74,4 +73,3 @@ export function buildUserListConditions(params: {
 export function isScopeDenied(deptIds: string[]): boolean {
   return deptIds.length === 0;
 }
-

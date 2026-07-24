@@ -10,7 +10,7 @@ import 'server-only';
  *
  * @module lib/auth/guard
  */
-import { NextResponse } from 'next/server';
+import { type NextResponse } from 'next/server';
 import { checkPermission, type PermissionCheckOptions } from './check-permission';
 import { mapDomainError } from '@/domain/shared/error-mapping';
 import { recordActionAudit, recordApiAudit } from '@/lib/audit';
@@ -58,7 +58,7 @@ export async function withPermission(
     const check = await checkPermission(options);
 
     if (!check.authorized) {
-      return restError(COMMON_ERRORS.FORBIDDEN, check.error || '权限不足', check.statusCode);
+      return restError(COMMON_ERRORS.FORBIDDEN, check.error || '权限不足', check.statusCode ?? 403);
     }
 
     if (!check.userId) {

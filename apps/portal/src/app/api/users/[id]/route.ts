@@ -6,7 +6,7 @@
  */
 import { type NextRequest } from 'next/server';
 import { withPermission, canAccessDept, getUserRoleDeptIds, logServerDataRead } from '@/lib/auth';
-import { COMMON_ERRORS, USER_ERRORS } from '@auth-sso/contracts';
+import { COMMON_ERRORS, USER_ERRORS, USER_PERMISSIONS } from '@auth-sso/contracts';
 import { getUser } from '@/app/(dashboard)/users/data';
 import { restSuccess, restError } from '@/lib/response';
 
@@ -17,7 +17,7 @@ interface RouteParams {
 
 /** GET /api/users/[id] — 委托 data.ts 获取用户详情 */
 export async function GET(request: NextRequest, { params }: RouteParams) {
-  return withPermission({ permissions: ['user:read'] }, async (adminUserId) => {
+  return withPermission({ permissions: [USER_PERMISSIONS.READ] }, async (adminUserId) => {
     const { id } = await params;
     const user = await getUser(id);
     if (!user) {

@@ -10,10 +10,11 @@
  */
 import { type NextRequest, NextResponse } from 'next/server';
 import { db, schema } from '@/infrastructure/db';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, gt } from 'drizzle-orm';
 import { signAccessToken, signIdToken, issueRefreshToken, rotateRefreshToken, ACCESS_TOKEN_TTL } from '@/lib/auth/token';
 import { validateClientActive, validateClientSecret } from '@/domain/auth/oauth-client';
-import { validateAuthCodeRow, verifyPKCE } from '@/domain/auth/oauth-code';
+import { verifyPKCE } from '@/domain/auth/oauth-code';
+import { parseScopes } from '@/domain/auth/oauth-authorize';
 import { getUserPermissionContext, cacheUserPermissionContext } from '@/lib/permissions';
 import { mapDomainError, mapToOAuthError } from '@/domain/shared/error-mapping';
 import { InvalidGrantError } from '@/domain/shared/errors';
@@ -60,15 +61,21 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'invalid_request', error_description: '缺少 code 或 code_verifier' }, { status: 400 });
       }
 
-      // 查找并校验授权码
-      const codeRows = await db
-        .select()
-        .from(schema.authorizationCodes)
-        .where(and(eq(schema.authorizationCodes.code, code), eq(schema.authorizationCodes.clientId, client.clientId)))
-        .limit(1);
-
-      validateAuthCodeRow(codeRows[0], redirect_uri);
-      const authCode = codeRows[0]!;
+      // 原子领取授权码：并发请求中仅一个请求能从 used=false 更新为 used=true。
+      // PKCE 失败后的 code 同样保持已消费，避免离线穷举 verifier。
+      const [authCode] = await db
+        .update(schema.authorizationCodes)
+        .set({ used: true })
+        .where(and(
+          eq(schema.authorizationCodes.code, code),
+          eq(schema.authorizationCodes.clientId, client.clientId),
+          eq(schema.authorizationCodes.used, false),
+          gt(schema.authorizationCodes.expiresAt, new Date()),
+        ))
+        .returning();
+      if (!authCode || (redirect_uri && authCode.redirectUri !== redirect_uri)) {
+        throw new InvalidGrantError('授权码无效、已使用、已过期或 redirect_uri 不匹配');
+      }
 
       // PKCE 验证（OAuth 2.1 强制要求：授权码必须携带 code_challenge）
       if (!authCode.codeChallenge || authCode.codeChallengeMethod !== 'S256') {
@@ -87,14 +94,14 @@ export async function POST(request: NextRequest) {
       await cacheUserPermissionContext(authCode.userId, permCtx);
 
       // 签发 Access Token
-      const { token: accessToken } = await signAccessToken(authCode.userId);
+      const { token: accessToken } = await signAccessToken(authCode.userId, authCode.scope);
 
       // 签发 Refresh Token
       const newRefreshToken = await issueRefreshToken(authCode.userId, authCode.scope);
 
       // ID Token（scope 包含 openid 时签发 OIDC 标准 ID Token）
       let idToken: string | undefined;
-      if (authCode.scope.includes('openid')) {
+      if (parseScopes(authCode.scope).includes('openid')) {
         idToken = await signIdToken({
           userId: authCode.userId,
           clientId: client_id,

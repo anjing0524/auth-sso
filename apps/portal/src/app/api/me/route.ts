@@ -9,7 +9,7 @@
  *
  * @route GET /api/me
  */
-import { type NextRequest, NextResponse } from 'next/server';
+import { type NextRequest } from 'next/server';
 import { resolveIdentity } from '@/lib/auth';
 import { getDynamicMenuTree } from '@/lib/menu-tree';
 import { getUserPermissionContext } from '@/lib/permissions';

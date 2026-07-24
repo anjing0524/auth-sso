@@ -9,11 +9,12 @@ import { withPermission } from '@/lib/auth';
 import { getAccessLogs } from '@/app/audit/data';
 import { parsePagination } from '@/lib/pagination';
 import { restListSuccess } from '@/lib/response';
+import { AUDIT_PERMISSIONS } from '@auth-sso/contracts';
 
 
 /** GET /api/audit/access-logs — 委托 data.ts */
 export async function GET(request: NextRequest) {
-  return withPermission({ permissions: ['audit:read'] }, async () => {
+  return withPermission({ permissions: [AUDIT_PERMISSIONS.READ] }, async () => {
     const sp = request.nextUrl.searchParams;
     const { page, pageSize } = parsePagination(sp);
     const result = await getAccessLogs({

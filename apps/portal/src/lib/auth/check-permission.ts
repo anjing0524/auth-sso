@@ -98,8 +98,9 @@ export async function checkPermission(
     return { authorized: true, userId };
   }
 
-  const checkList = (required: string[], owned: string[], mode: boolean | undefined) =>
-    mode ? required.every((x) => owned.includes(x)) : required.some((x) => owned.includes(x));
+  const checkList = (required: string[], owned: string[], mode: boolean | undefined) => {
+    return mode ? required.every((x) => owned.includes(x)) : required.some((x) => owned.includes(x));
+  };
 
   if (options.permissions?.length) {
     if (!checkList(options.permissions, permissions, options.requireAll)) {

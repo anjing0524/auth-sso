@@ -20,6 +20,19 @@ const PERM_CACHE_TTL_JITTER = 300;
 const NULL_CACHE_TTL = 60;
 /** null 标记的 Redis Key 后缀 */
 const NULL_CACHE_SUFFIX = ':null';
+const USER_BATCH_SIZE = 50;
+
+async function settleUserBatches(
+  userIds: string[],
+  operation: (userId: string) => Promise<void>,
+): Promise<number> {
+  let failed = 0;
+  for (let index = 0; index < userIds.length; index += USER_BATCH_SIZE) {
+    const results = await Promise.allSettled(userIds.slice(index, index + USER_BATCH_SIZE).map(operation));
+    failed += results.filter((result) => result.status === 'rejected').length;
+  }
+  return failed;
+}
 
 /**
  * 计算带随机抖动的缓存 TTL，防止缓存雪崩。
@@ -211,11 +224,8 @@ export async function refreshUserPermissionCache(userId: string): Promise<void> 
  */
 export async function refreshUsersPermissionCache(userIds: string[]): Promise<void> {
   if (!userIds || userIds.length === 0) return;
-  // 并行刷新，不阻塞管理员操作
-  await Promise.allSettled(
-    userIds.map(id => refreshUserPermissionCache(id))
-  );
-  log.info(`Refreshed cache for ${userIds.length} users`);
+  const failed = await settleUserBatches(userIds, refreshUserPermissionCache);
+  log.info(`Refreshed cache for ${userIds.length} users`, { failed });
 }
 
 /**
@@ -244,14 +254,10 @@ export async function clearUsersPermissionCache(userIds: string[]): Promise<void
   if (!userIds || userIds.length === 0) return;
   try {
     const redis = getRedis();
-    // 使用 Promise.allSettled：单个用户失败不影响其他用户的缓存清除
-    const results = await Promise.allSettled(
-      userIds.map(async (userId) => {
-        const cacheKey = `${REDIS_KEY_PREFIX.USER_PERMS}${userId}`;
-        await redis.del(cacheKey, `${cacheKey}${NULL_CACHE_SUFFIX}`);
-      }),
-    );
-    const failed = results.filter((r) => r.status === 'rejected').length;
+    const failed = await settleUserBatches(userIds, async (userId) => {
+      const cacheKey = `${REDIS_KEY_PREFIX.USER_PERMS}${userId}`;
+      await redis.del(cacheKey, `${cacheKey}${NULL_CACHE_SUFFIX}`);
+    });
     if (failed > 0) {
       log.warn(`Batch cleared for ${userIds.length} users, ${failed} failed`);
     } else {

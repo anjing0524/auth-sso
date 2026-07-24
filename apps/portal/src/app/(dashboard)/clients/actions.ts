@@ -10,6 +10,7 @@ import { withAuth, type AuthContext } from '@/lib/auth';
 import {
   createClient,
   applyClientUpdate,
+  clientFromPersistence,
   clientToInsertRow,
   clientToUpdateRow,
 } from '@/domain/client/client';
@@ -21,11 +22,11 @@ import {
 import { EntityNotFoundError } from '@/domain/shared/errors';
 import { generateClientId, generateClientSecret, hashClientSecret } from '@/lib/crypto';
 import { validate } from '@/lib/validation';
-import { type ApiResponse } from '@auth-sso/contracts';
+import { CLIENT_PERMISSIONS, type ApiResponse } from '@auth-sso/contracts';
 
 /** 创建 Client */
 export const createClientAction = withAuth(
-  { permissions: ['client:create'], audit: 'CLIENT_CREATE' },
+  { permissions: [CLIENT_PERMISSIONS.CREATE], audit: 'CLIENT_CREATE' },
   async (_ctx: AuthContext, input: CreateClientInput): Promise<ApiResponse<{ id: string; clientId: string; clientSecret: string | null }>> => {
     const v = validate(CreateClientInputSchema, input);
     if (!v.ok) return v.response;
@@ -49,7 +50,7 @@ export const createClientAction = withAuth(
 
 /** 更新 Client */
 export const updateClientAction = withAuth(
-  { permissions: ['client:update'], audit: 'CLIENT_UPDATE' },
+  { permissions: [CLIENT_PERMISSIONS.UPDATE], audit: 'CLIENT_UPDATE' },
   async (_ctx: AuthContext, clientIdStr: string, input: Record<string, unknown>): Promise<ApiResponse<{ id: string }>> => {
     const v = validate(UpdateClientInputSchema, input);
     if (!v.ok) return v.response;
@@ -60,19 +61,7 @@ export const updateClientAction = withAuth(
       });
       if (!row) throw new EntityNotFoundError('Client', clientIdStr);
 
-      const updated = applyClientUpdate({
-        clientId: row.clientId,
-        name: row.name,
-        clientSecret: row.clientSecret,
-        redirectUris: row.redirectUris,
-        scopes: row.scopes,
-        homepageUrl: row.homepageUrl,
-        logoUrl: row.logoUrl,
-        accessTokenTtl: row.accessTokenTtl,
-        refreshTokenTtl: row.refreshTokenTtl,
-        status: row.status,
-        createdAt: row.createdAt,
-      }, v.data);
+      const updated = applyClientUpdate(clientFromPersistence(row), v.data);
 
       await tx.update(schema.clients).set(clientToUpdateRow(updated))
         .where(eq(schema.clients.clientId, row.clientId));
@@ -87,7 +76,7 @@ export const updateClientAction = withAuth(
 
 /** 删除 Client */
 export const deleteClientAction = withAuth(
-  { permissions: ['client:delete'], audit: 'CLIENT_DELETE' },
+  { permissions: [CLIENT_PERMISSIONS.DELETE], audit: 'CLIENT_DELETE' },
   async (_ctx: AuthContext, clientIdStr: string): Promise<ApiResponse<{ id: string }>> => {
     await db.transaction(async (tx) => {
       const row = await tx.query.clients.findFirst({
@@ -106,7 +95,7 @@ export const deleteClientAction = withAuth(
 
 /** 重新生成 Client Secret */
 export const rotateClientSecretAction = withAuth(
-  { permissions: ['client:rotate_secret'], audit: 'CLIENT_SECRET_REGENERATE' },
+  { permissions: [CLIENT_PERMISSIONS.ROTATE_SECRET], audit: 'CLIENT_SECRET_REGENERATE' },
   async (_ctx: AuthContext, clientIdStr: string): Promise<ApiResponse<{ clientSecret: string }>> => {
     const row = await db.query.clients.findFirst({
       where: eq(schema.clients.clientId, clientIdStr),
@@ -127,7 +116,7 @@ export const rotateClientSecretAction = withAuth(
 
 /** 撤销 Client Token */
 export const revokeClientTokensAction = withAuth(
-  { permissions: ['client:update'], audit: 'TOKEN_REVOKE' },
+  { permissions: [CLIENT_PERMISSIONS.UPDATE], audit: 'TOKEN_REVOKE' },
   async (_ctx: AuthContext, clientIdStr: string, tokenIds: string[], revokeAll: boolean): Promise<ApiResponse<{ revokedCount: number }>> => {
     const row = await db.query.clients.findFirst({
       where: eq(schema.clients.clientId, clientIdStr),

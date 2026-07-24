@@ -1,5 +1,6 @@
 import type { CreateClientInput, Client } from './types';
 import { ENTITY_ACTIVE } from '@auth-sso/contracts';
+import { dateFromInstant, instantFromDate } from '@/domain/shared/time';
 
 export type { Client };
 
@@ -19,7 +20,7 @@ export function createClient(
     accessTokenTtl: input.accessTokenTtl,
     refreshTokenTtl: input.refreshTokenTtl,
     status: ENTITY_ACTIVE,
-    createdAt: new Date(),
+    createdAt: Temporal.Now.instant(),
   };
 }
 
@@ -51,8 +52,12 @@ export function clientToInsertRow(c: Client) {
     accessTokenTtl: c.accessTokenTtl,
     refreshTokenTtl: c.refreshTokenTtl,
     status: c.status,
-    createdAt: c.createdAt,
+    createdAt: dateFromInstant(c.createdAt),
   };
+}
+
+export function clientFromPersistence(client: Omit<Client, 'createdAt'> & { createdAt: Date }): Client {
+  return { ...client, createdAt: instantFromDate(client.createdAt) };
 }
 
 export function clientToUpdateRow(c: Client) {

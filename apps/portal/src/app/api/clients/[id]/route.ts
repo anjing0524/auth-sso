@@ -5,7 +5,7 @@
  */
 import { type NextRequest } from 'next/server';
 import { withPermission, logServerDataRead } from '@/lib/auth';
-import { CLIENT_ERRORS } from '@auth-sso/contracts';
+import { CLIENT_ERRORS, CLIENT_PERMISSIONS } from '@auth-sso/contracts';
 import { getClientById } from '@/app/(dashboard)/clients/data';
 import { restSuccess, restError } from '@/lib/response';
 
@@ -14,7 +14,7 @@ interface RouteParams { params: Promise<{ id: string }>; }
 
 /** GET /api/clients/[id] — 委托 data.ts */
 export async function GET(request: NextRequest, { params }: RouteParams) {
-  return withPermission({ permissions: ['client:read'] }, async () => {
+  return withPermission({ permissions: [CLIENT_PERMISSIONS.READ] }, async () => {
     const { id } = await params;
     const client = await getClientById(id);
     if (!client) {

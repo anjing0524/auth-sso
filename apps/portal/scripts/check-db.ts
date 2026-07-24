@@ -2,7 +2,6 @@ import 'dotenv/config';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import * as schema from '../src/db/schema';
-import { eq } from 'drizzle-orm';
 
 async function checkDb() {
   const connectionString = process.env.DATABASE_URL;

@@ -75,8 +75,10 @@ export default function ClientDetailPage({ params }: PageProps) {
   }, [id]);
 
   useEffect(() => {
-    fetchClient();
-    fetchTokens();
+    queueMicrotask(() => {
+      void fetchClient();
+      void fetchTokens();
+    });
   }, [fetchClient, fetchTokens]);
 
   const handleSave = async () => {

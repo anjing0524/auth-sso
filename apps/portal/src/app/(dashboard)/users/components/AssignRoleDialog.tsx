@@ -78,7 +78,7 @@ export default function AssignRoleDialog({ open, onOpenChange, user }: AssignRol
   }, [open, user.id, user.deptId]);
 
   useEffect(() => {
-    loadData();
+    queueMicrotask(() => { void loadData(); });
   }, [loadData]);
 
   const toggleRole = (roleId: string) => {

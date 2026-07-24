@@ -35,6 +35,15 @@ interface Props {
 
 export default function UserDetailForm({ id, initialUser: serverUser }: Props) {
   const router = useRouter();
+  const user = serverUser ?? {};
+  const [form, setForm] = useState({
+    name: user.name as string,
+    email: (user.email as string) || '',
+    status: (user.status as string) || 'ACTIVE',
+  });
+  const [saving, setSaving] = useState(false);
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [isRoleOpen, setIsRoleOpen] = useState(false);
 
   // 用户不存在时：在 useEffect 中执行副作用（toast + 导航），避免在 render 中直接调用
   // React StrictMode 下 render 可能双触发，副作用统一收敛至 Effect 中是安全的
@@ -46,16 +55,6 @@ export default function UserDetailForm({ id, initialUser: serverUser }: Props) {
   }, [serverUser, router]);
 
   if (!serverUser) return null;
-
-  // 可编辑字段合并为一个 form state —— 保存后即最新值，无需 prop 同步
-  const [form, setForm] = useState({
-    name: serverUser.name as string,
-    email: (serverUser.email as string) || '',
-    status: (serverUser.status as string) || 'ACTIVE',
-  });
-  const [saving, setSaving] = useState(false);
-  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
-  const [isRoleOpen, setIsRoleOpen] = useState(false);
 
   // 只读展示从 prop 读取 —— router.refresh() 后自动更新
   const username = serverUser.username as string;

@@ -6,7 +6,7 @@
  *
  * @route GET /api/me/permissions
  */
-import { type NextRequest, NextResponse } from 'next/server';
+import { type NextRequest } from 'next/server';
 import { resolveIdentity } from '@/lib/auth';
 import { getUserPermissionContext } from '@/lib/permissions';
 import { mapDomainError } from '@/domain/shared/error-mapping';

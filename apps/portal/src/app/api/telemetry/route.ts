@@ -10,17 +10,16 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { withPermission } from '@/lib/auth';
-import { COMMON_ERRORS } from '@auth-sso/contracts';
+import { COMMON_ERRORS, SYSTEM_PERMISSIONS } from '@auth-sso/contracts';
 
 const TelemetrySchema = z.object({
   type: z.string().min(1).max(64),
   path: z.string().max(256),
-  userId: z.string().max(64).optional(),
   meta: z.record(z.string(), z.unknown()).optional(),
 });
 
 export async function POST(request: NextRequest) {
-  return withPermission({ permissions: ['system:view_dashboard'] }, async () => {
+  return withPermission({ permissions: [SYSTEM_PERMISSIONS.VIEW_DASHBOARD] }, async (userId) => {
     const contentLength = parseInt(request.headers.get('content-length') || '0', 10);
     if (contentLength > 8192) {
       return NextResponse.json(
@@ -47,12 +46,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { type, path, userId, meta } = parsed.data;
+    const { type, path, meta } = parsed.data;
     const event = {
       ts: new Date().toISOString(),
       type,
       path,
-      userId: userId || 'anonymous',
+      userId,
       meta: meta || {},
       ip: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || '',
       ua: request.headers.get('user-agent') || '',

@@ -20,7 +20,7 @@
  *
  * @module db/schema/logs
  */
-import { pgTable, uuid, varchar, text, inet, jsonb, smallint, integer, index } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, varchar, text, inet, jsonb, smallint, integer, index, primaryKey } from 'drizzle-orm/pg-core';
 import { loginEventEnum, auditOperationEnum } from './enums';
 import { createdAtColumn } from './helpers';
 
@@ -79,7 +79,7 @@ export const loginLogs = pgTable('login_logs', {
  * Drizzle schema 仅用于类型推导；实际分区表由 0004 migration 手动创建。
  */
 export const accessLogs = pgTable('access_logs', {
-  id: uuid('id').primaryKey().defaultRandom(),
+  id: uuid('id').notNull().defaultRandom(),
   userId: uuid('user_id'),
   username: varchar('username', { length: 50 }),
   method: varchar('method', { length: 10 }).notNull(),
@@ -92,9 +92,10 @@ export const accessLogs = pgTable('access_logs', {
   duration: integer('duration'),
   createdAt: createdAtColumn(),
 }, (t) => [
+  // PostgreSQL 分区表的唯一/主键必须包含分区键 created_at。
+  primaryKey({ columns: [t.id, t.createdAt], name: 'access_logs_pkey' }),
   index('idx_access_logs_user').on(t.userId),
   index('idx_access_logs_created').on(t.createdAt),
   index('idx_access_logs_resource').on(t.resourceType, t.resourceId),
 ]);
-
 

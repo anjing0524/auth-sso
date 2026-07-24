@@ -1062,6 +1062,7 @@ dependencies = [
  "base64 0.22.1",
  "bb8",
  "bb8-redis",
+ "bytes",
  "clap",
  "config",
  "criterion",

@@ -22,6 +22,8 @@ export interface PortalJwtClaims extends JWTPayload {
   aud: string | string[];
   /** Token 唯一标识（用于 jti 黑名单撤销） */
   jti: string;
+  /** OAuth 已授予 scope（空格分隔；不会携带 client 身份） */
+  scope?: string;
 }
 
 /** Token 轮换结果 */

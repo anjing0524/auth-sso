@@ -5,7 +5,7 @@
  */
 import { type NextRequest } from 'next/server';
 import { withPermission, canAccessDept, getUserRoleDeptIds, logServerDataRead } from '@/lib/auth';
-import { DEPARTMENT_ERRORS, COMMON_ERRORS } from '@auth-sso/contracts';
+import { DEPARTMENT_ERRORS, COMMON_ERRORS, DEPARTMENT_PERMISSIONS } from '@auth-sso/contracts';
 import { getDepartmentById } from '@/app/(dashboard)/departments/data';
 import { restSuccess, restError } from '@/lib/response';
 
@@ -13,7 +13,7 @@ interface RouteParams { params: Promise<{ id: string }>; }
 
 /** GET /api/departments/[id] — 委托 data.ts */
 export async function GET(request: NextRequest, { params }: RouteParams) {
-  return withPermission({ permissions: ['department:read'] }, async (_userId) => {
+  return withPermission({ permissions: [DEPARTMENT_PERMISSIONS.READ] }, async (_userId) => {
     const { id } = await params;
     const dept = await getDepartmentById(id);
     if (!dept) return restError(DEPARTMENT_ERRORS.DEPARTMENT_NOT_FOUND, '部门不存在', 404);

@@ -51,10 +51,6 @@ export function usePermissions(userId: string = 'default') {
 
   useEffect(() => {
     mountedRef.current = true;
-    if (cached && !cached.loading) {
-      setCtx(cached);
-      return;
-    }
     fetchPermissions(userId).then(() => {
       const fresh = _cacheByUser.get(userId);
       if (fresh && mountedRef.current) setCtx({ ...fresh });

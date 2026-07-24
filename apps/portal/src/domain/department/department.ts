@@ -2,6 +2,7 @@ import type { CreateDepartmentInput, Department, DepartmentTreeNode } from './ty
 import { ENTITY_ACTIVE } from '@auth-sso/contracts';
 import { BusinessRuleViolationError } from '../shared/errors';
 import { buildTree } from '@/domain/shared/tree-utils';
+import { dateFromInstant, instantFromDate } from '@/domain/shared/time';
 
 export type { Department, DepartmentTreeNode };
 
@@ -23,7 +24,7 @@ export function createDepartment(
     code: input.code ?? null,
     sort: input.sort,
     status: ENTITY_ACTIVE,
-    createdAt: new Date(),
+    createdAt: Temporal.Now.instant(),
   };
 }
 
@@ -108,8 +109,12 @@ export function departmentToInsertRow(d: Department) {
     ancestors: d.ancestors,
     sort: d.sort,
     status: d.status,
-    createdAt: d.createdAt,
+    createdAt: dateFromInstant(d.createdAt),
   };
+}
+
+export function departmentFromPersistence(department: Omit<Department, 'createdAt'> & { createdAt: Date }): Department {
+  return { ...department, createdAt: instantFromDate(department.createdAt) };
 }
 
 export function departmentToUpdateRow(d: Department) {

@@ -52,11 +52,24 @@ pub enum VerifyError {
 #[derive(Debug)]
 pub struct JwtVerifier {
     jwks_cache: Arc<JwksCache>,
+    check_revocation: bool,
 }
 
 impl JwtVerifier {
     pub fn new(jwks_cache: Arc<JwksCache>) -> Self {
-        Self { jwks_cache }
+        Self {
+            jwks_cache,
+            check_revocation: true,
+        }
+    }
+
+    /// 仅供密码学单测使用：隔离 Redis 的 fail-close 行为，验证签名、issuer 与过期判定。
+    #[cfg(test)]
+    pub(crate) fn new_without_revocation_for_test(jwks_cache: Arc<JwksCache>) -> Self {
+        Self {
+            jwks_cache,
+            check_revocation: false,
+        }
     }
 
     /// 对 JWT Token 进行离线密码学验签 + jti 黑名单检查。
@@ -106,7 +119,7 @@ impl JwtVerifier {
         debug!("JWT 验签通过: sub={}, kid={}", token_data.claims.sub, kid);
 
         // 4. jti 黑名单检查（fail-close：Redis 不可用时假定已撤销，拒绝请求）
-        if self.check_jti(&token_data.claims.jti).await {
+        if self.check_revocation && self.check_jti(&token_data.claims.jti).await {
             warn!(
                 "⚠️ 拒绝访问：JWT 的 jti 已被吊销: jti={}",
                 token_data.claims.jti

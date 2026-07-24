@@ -190,7 +190,7 @@ WHERE id = :deptId OR ancestors LIKE :deptId || '/%'
 | `access_token_ttl` | integer | 默认 3600 | Access Token 有效期（秒） |
 | `refresh_token_ttl` | integer | 默认 604800 | Refresh Token 有效期（秒） |
 | `status` | entity_status | 非空，默认 'ACTIVE' | |
-| `is_internal` | boolean | 默认 false | 区分 Portal 内部客户端与第三方，决定 AT audience |
+| `is_internal` | boolean | 默认 false | 区分 Portal 内部客户端与第三方，用于客户端管理展示；不影响 AT audience（ADR-006 固定为 `auth-sso`） |
 | `created_at` | timestamptz | 非空，默认 now() | |
 | `updated_at` | timestamptz | 非空，默认 now()，自动更新 | |
 

@@ -33,15 +33,16 @@ export async function setup() {
       console.log(`[globalSetup] 运行 ${files.length} 个 migration 文件...`);
       for (const file of files) {
         const content = readFileSync(join(drizzleDir, file), 'utf-8');
-        // 跳过 CREATE TYPE 语句（如果枚举已存在）和创建数据库语句
+        // Drizzle 的断点是 migration 的执行单元。不能按分号拆分：分区维护
+        // 等 PostgreSQL 块会使用 DO $$ ...; ... $$，在块内拆分会破坏语法。
         const statements = content
-          .split(';')
+          .split(/^--> statement-breakpoint\s*$/m)
           .map(s => s.trim())
-          .filter(s => s.length > 0 && !s.startsWith('--'));
+          .filter(Boolean);
 
         for (const stmt of statements) {
           try {
-            await sql.unsafe(stmt + ';');
+            await sql.unsafe(stmt);
           } catch (err: any) {
             // 忽略 "already exists" 错误（幂等）
             if (!err.message?.includes('already exists') && !err.message?.includes('duplicate')) {

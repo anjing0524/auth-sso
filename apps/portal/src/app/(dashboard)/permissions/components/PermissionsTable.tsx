@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import {
-  Table, TableCell, TableRow,
+  TableCell, TableRow,
 } from '@/components/ui/table';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
@@ -254,7 +254,7 @@ export default function PermissionsTable({ permissions, activeTab, initialKeywor
       <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
         <DialogContent className="rounded-2xl">
           <DialogHeader><DialogTitle>确认删除</DialogTitle></DialogHeader>
-          <p className="text-sm text-muted-foreground">确认删除权限 "{selected?.name}"？关联角色的绑定将同步清除。</p>
+          <p className="text-sm text-muted-foreground">确认删除权限 &quot;{selected?.name}&quot;？关联角色的绑定将同步清除。</p>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setIsDeleteOpen(false)}>取消</Button>
             <Button variant="destructive" onClick={handleDelete}>确认删除</Button>

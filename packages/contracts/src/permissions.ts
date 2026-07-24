@@ -81,6 +81,11 @@ export const SYSTEM_PERMISSIONS = {
   VIEW_DASHBOARD: 'portal:system:view_dashboard',
 } as const;
 
+/** Portal 首页菜单权限；菜单本身也是权限树中的受控节点。 */
+export const PORTAL_MENU_PERMISSIONS = {
+  DASHBOARD: 'portal:menu:dashboard',
+} as const;
+
 // 所有权限码列表（用于 seed 脚本遍历）
 // 注：MENU_PERMISSIONS / CUSTOMER_GRAPH_PERMISSIONS 已删除（无对应功能实现）
 export const ALL_PERMISSIONS = [
@@ -92,6 +97,7 @@ export const ALL_PERMISSIONS = [
   ...Object.values(AUDIT_PERMISSIONS),
   ...Object.values(LOGIN_LOG_PERMISSIONS),
   ...Object.values(SYSTEM_PERMISSIONS),
+  ...Object.values(PORTAL_MENU_PERMISSIONS),
 ] as const;
 
 // 权限分组（用于 UI 展示）
@@ -104,6 +110,7 @@ export const PERMISSION_GROUPS = {
   AUDIT: { name: '审计日志', permissions: Object.values(AUDIT_PERMISSIONS) },
   LOGIN_LOG: { name: '登录日志', permissions: Object.values(LOGIN_LOG_PERMISSIONS) },
   SYSTEM: { name: '系统管理', permissions: Object.values(SYSTEM_PERMISSIONS) },
+  PORTAL_MENU: { name: '门户菜单', permissions: Object.values(PORTAL_MENU_PERMISSIONS) },
 } as const;
 
 // 权限中文名映射（seed 脚本使用）
@@ -148,4 +155,5 @@ export const PERMISSION_LABELS: Record<string, string> = {
   'portal:login_log:export': '导出登录日志',
   'portal:system:manage': '系统管理',
   'portal:system:view_dashboard': '查看仪表盘',
+  'portal:menu:dashboard': '查看首页',
 };

@@ -28,6 +28,9 @@ pub enum JwksError {
     /// OIDC Discovery 端点返回的 jwks_uri 缺失
     #[error("OIDC Discovery 响应中未包含有效的 jwks_uri")]
     MissingJwksUri,
+    /// OIDC Discovery 端点返回的 issuer 缺失；不得降级为无 issuer 验证
+    #[error("OIDC Discovery 响应中未包含有效的 issuer")]
+    MissingIssuer,
     /// jwks_uri 路径解析失败
     #[error("无法从 jwks_uri 中解析出 JWKS 路径: {0}")]
     InvalidJwksUri(String),
@@ -216,10 +219,11 @@ impl JwksCache {
             .and_then(|v| v.as_str())
             .ok_or(JwksError::MissingJwksUri)?;
 
-        let issuer = metadata_val.get("issuer").and_then(|v| v.as_str());
-        if issuer.is_none() {
-            warn!("⚠️  OIDC Discovery 响应中未包含 issuer 字段");
-        }
+        let issuer = metadata_val
+            .get("issuer")
+            .and_then(|v| v.as_str())
+            .filter(|issuer| !issuer.is_empty())
+            .ok_or(JwksError::MissingIssuer)?;
 
         let signing_algs_val = metadata_val.get("id_token_signing_alg_values_supported");
         info!(
@@ -229,9 +233,7 @@ impl JwksCache {
 
         // 预解析 validation（不写缓存，仅返回）：基线配置 + issuer + ES256 硬锁
         let mut validation = base_validation();
-        if let Some(iss) = issuer {
-            validation.set_issuer(&[iss]);
-        }
+        validation.set_issuer(&[issuer]);
         // 硬锁 ES256 非对称签名，不从 OIDC Discovery 动态填充算法列表
         // （防 alg 混淆攻击：若 discovery 被篡改声明 HS256 可降级为对称签名）
         validation.algorithms = vec![jsonwebtoken::Algorithm::ES256];

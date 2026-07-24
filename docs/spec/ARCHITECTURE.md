@@ -487,7 +487,7 @@ verify_jwt(token, ctx)
   → missing kid → 拒绝
   → Validation::new(Algorithm::ES256)
       · 验证 exp（过期时间）
-      · 验证 iss 和 aud（均需为 "auth-sso"）
+      · 验证 iss（固定为 "auth-sso"）；aud 是体系级固定值，Gateway 按 ADR-006 有意不校验
       · 算法硬锁 ES256（防止 alg 混淆攻击）
       · OIDC Discovery 的 jwks_uri 仅用于公钥获取，不信任其对签名算法的声明
   → decode::<Claims>(token, &decoding_key, &validation)

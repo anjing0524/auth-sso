@@ -42,7 +42,7 @@ export interface Permission {
   /** 排序权重 */
   sort: number;
   /** 创建时间 */
-  createdAt: Date;
+  createdAt: Temporal.Instant;
 }
 
 /**

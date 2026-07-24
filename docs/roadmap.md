@@ -8,7 +8,7 @@
 |------|------|------|------|
 | 用户管理（CRUD/状态/改密） | ✅ 已交付 | v1.1 | 含密码历史 NFR-SEC-15 |
 | 角色管理（RBAC v3.2） | ✅ 已交付 | v1.1 | 角色归属部门模型 |
-| 权限管理（统一权限树） | ✅ 已交付 | v1.1 | DIRECTORY/PAGE/API/DATA 四类型 |
+| 权限管理（统一权限树） | ✅ 已交付 | v1.1 | DIRECTORY/PAGE/API 三类型 |
 | 部门管理（物化路径树） | ✅ 已交付 | v1.1 | ancestors 子树查询 |
 | OAuth 2.1 Provider | ✅ 已交付 | v1.1 | PKCE + 授权码 + Token 轮换 |
 | OIDC Discovery | ✅ 已交付 | v1.1 | 含 end_session_endpoint |
@@ -21,6 +21,7 @@
 
 ## 变更记录
 
+- 2026-07-24: 完成全维度审计整治：OAuth scope allow-list/授权码原子领取/UserInfo 最小披露，Gateway issuer 与生产共享密钥约束，唯一数据库基线与分区调度，Controller 权限常量收敛、受控 Prometheus metrics、Temporal 领域时间边界、OAuth 浏览器授权码 E2E，以及 337 项 Vitest 全绿的共享数据库隔离修复。
 - 2026-07-23: ADR-009 Gateway 重构全量完成（G1-G7），全量文档同步审计（14 份文档）；修复角色绑定事务边界、REST 错误契约、权限 SQL 分页与 OIDC 死类型
 - 2026-07-16: Gateway 安全修复与性能优化完成（B1-B9/D1-D5/C1-C3/A1-A6，见下方区块）
 - 2026-07-16: ADR-006/007/008 全量实现完成，合并 main（75 文件，307 测试全绿）
@@ -148,7 +149,7 @@
 | # | 状态 | 任务 | 文件 |
 |---|:--:|------|------|
 | D7-1 | ✅ | Claims 结构体移除 roles/permissions/dept_ids | `gateway/src/auth/mod.rs` |
-| D7-2 | ✅ | 验签 aud/iss 改为 `"auth-sso"` | `gateway/src/auth/verify.rs` |
+| D7-2 | ✅ | 验签 issuer 固定为 `"auth-sso"`；aud 按 ADR-006 不在 Gateway 校验 | `gateway/src/auth/verify.rs` |
 | D7-3 | ✅ | 移除 X-User-Roles/Permissions/DeptIds 注入 | `gateway/src/gateway.rs` |
 
 ### Phase 8: Seed 数据

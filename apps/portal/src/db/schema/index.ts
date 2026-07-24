@@ -28,7 +28,7 @@ export * from './relations';
 // 编译期类型同步守卫 (Domain ↔ Drizzle 不漂移)
 // ============================================
 import type { User } from '@/domain/user/types';
-import type { EntityStatus, PermissionType } from '@auth-sso/contracts';
+import type { EntityStatus, PermissionType, UserStatus } from '@auth-sso/contracts';
 import type { Department } from '@/domain/department/types';
 import type { Role } from '@/domain/role/types';
 import type { Permission } from '@/domain/permission/types';
@@ -49,8 +49,8 @@ type _PermRowCompatible = PermRow extends Omit<Permission, 'createdAt'> ? true :
 type _ClientRowCompatible = ClientRow extends Omit<Client, 'createdAt'> ? true : never;
 
 // 守卫：枚举取值双向穷举
-type _UserStatusInRow = UserRow['status'] extends import('@auth-sso/contracts').UserStatus ? true : never;
-type _UserStatusInDomain = import('@auth-sso/contracts').UserStatus extends UserRow['status'] ? true : never;
+type _UserStatusInRow = UserRow['status'] extends UserStatus ? true : never;
+type _UserStatusInDomain = UserStatus extends UserRow['status'] ? true : never;
 type _DeptStatusInRow = DeptRow['status'] extends EntityStatus ? true : never;
 type _DeptStatusInDomain = EntityStatus extends DeptRow['status'] ? true : never;
 type _RoleStatusInRow = RoleRow['status'] extends EntityStatus ? true : never;

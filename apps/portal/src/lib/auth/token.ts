@@ -71,11 +71,11 @@ export const ACCESS_TOKEN_TTL = TOKEN_TTL.ACCESS_TOKEN; // 1h
  * @param userId - 用户 ID (UUID)
  * @returns token 字符串 + jti（用于后续撤销）
  */
-export async function signAccessToken(userId: string): Promise<{ token: string; jti: string }> {
+export async function signAccessToken(userId: string, scope?: string): Promise<{ token: string; jti: string }> {
   const { keyId, privateKey } = await getActiveSigningKey();
   const jti = `jti_${generateId(16)}`;
 
-  const token = await new SignJWT({ sub: userId })
+  const token = await new SignJWT({ sub: userId, ...(scope ? { scope } : {}) })
     .setProtectedHeader({ alg: 'ES256', kid: keyId })
     .setIssuedAt()
     .setIssuer(AUTH_SSO)
@@ -299,7 +299,7 @@ export async function rotateRefreshToken(
   if (!permCtx) return null;
   await cacheUserPermissionContext(rt.userId, permCtx);
 
-  const { token: accessToken } = await signAccessToken(rt.userId);
+  const { token: accessToken } = await signAccessToken(rt.userId, rt.scopes);
 
   return { accessToken, refreshToken: newRefreshToken, expiresIn: ACCESS_TOKEN_TTL };
 }

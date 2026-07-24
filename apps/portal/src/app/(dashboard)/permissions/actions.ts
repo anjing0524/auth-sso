@@ -7,7 +7,7 @@ import { revalidatePath, updateTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
 import { eq } from 'drizzle-orm';
 import { withAuth, type AuthContext } from '@/lib/auth';
-import { createPermission, applyPermissionUpdate, permissionToInsertRow, permissionToUpdateRow } from '@/domain/permission/permission';
+import { createPermission, applyPermissionUpdate, permissionFromPersistence, permissionToInsertRow, permissionToUpdateRow } from '@/domain/permission/permission';
 import {
   CreatePermissionInputSchema,
   UpdatePermissionInputSchema,
@@ -17,7 +17,7 @@ import { generateUUID } from '@/lib/crypto';
 import { validate } from '@/lib/validation';
 import { refreshUsersPermissionCache } from '@/lib/permissions';
 import { revokeUsersAccessByUserId } from '@/lib/session/revoke';
-import { type ApiResponse } from '@auth-sso/contracts';
+import { PERMISSION_PERMISSIONS, type ApiResponse } from '@auth-sso/contracts';
 
 async function getAffectedUserIds(permId: string): Promise<string[]> {
   const rows = await db
@@ -38,7 +38,7 @@ async function invalidateAffectedUsersCache(permId: string): Promise<void> {
 
 /** 创建权限 */
 export const createPermissionAction = withAuth(
-  { permissions: ['permission:create'], audit: 'PERMISSION_CREATE' },
+  { permissions: [PERMISSION_PERMISSIONS.CREATE], audit: 'PERMISSION_CREATE' },
   async (_ctx: AuthContext, input: Record<string, unknown>): Promise<ApiResponse<{ id: string }>> => {
     const v = validate(CreatePermissionInputSchema, input);
     if (!v.ok) return v.response;
@@ -64,18 +64,18 @@ export const createPermissionAction = withAuth(
 
 /** 更新权限 */
 export const updatePermissionAction = withAuth(
-  { permissions: ['permission:update'], audit: 'PERMISSION_UPDATE' },
+  { permissions: [PERMISSION_PERMISSIONS.UPDATE], audit: 'PERMISSION_UPDATE' },
   async (_ctx: AuthContext, permId: string, input: Record<string, unknown>): Promise<ApiResponse<{ id: string }>> => {
     const v = validate(UpdatePermissionInputSchema, input);
     if (!v.ok) return v.response;
 
-    const updated = await db.transaction(async (tx) => {
+    await db.transaction(async (tx) => {
       const row = await tx.query.permissions.findFirst({
         where: eq(schema.permissions.id, permId),
       });
       if (!row) throw new EntityNotFoundError('Permission', permId);
 
-      const updated = applyPermissionUpdate(row as Parameters<typeof applyPermissionUpdate>[0], v.data);
+      const updated = applyPermissionUpdate(permissionFromPersistence(row), v.data);
 
       await tx.update(schema.permissions).set(permissionToUpdateRow(updated))
         .where(eq(schema.permissions.id, row.id));
@@ -93,7 +93,7 @@ export const updatePermissionAction = withAuth(
 
 /** 删除权限 */
 export const deletePermissionAction = withAuth(
-  { permissions: ['permission:delete'], audit: 'PERMISSION_DELETE' },
+  { permissions: [PERMISSION_PERMISSIONS.DELETE], audit: 'PERMISSION_DELETE' },
   async (_ctx: AuthContext, permId: string): Promise<ApiResponse<{ id: string }>> => {
     const row = await db.query.permissions.findFirst({
       where: eq(schema.permissions.id, permId),

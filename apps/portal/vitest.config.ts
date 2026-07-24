@@ -24,6 +24,10 @@ export default mergeConfig(
       globals: true,
       // 事务回滚模式需要串行执行（max: 1 连接共享同一个 session）
       fileParallelism: false,
+      // 多个集成测试共享 TRUNCATE 隔离的数据库，必须限制为单一 worker，
+      // 否则不同文件会并发写入固定 fixture ID，产生非确定性唯一约束冲突。
+      minWorkers: 1,
+      maxWorkers: 1,
       include: [
         'src/**/*.test.{ts,tsx}',
         '__tests__/**/*.test.{ts,tsx}',

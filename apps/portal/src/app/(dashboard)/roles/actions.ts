@@ -12,6 +12,7 @@ import {
   applyRoleUpdate,
   guardNotSystemRole,
   hasRolePermissionImpact,
+  roleFromPersistence,
   roleToInsertRow,
   roleToUpdateRow,
 } from '@/domain/role/role';
@@ -26,7 +27,7 @@ import { validate } from '@/lib/validation';
 import { refreshUsersPermissionCache } from '@/lib/permissions';
 import { revokeUsersAccessByUserId } from '@/lib/session/revoke';
 import { canAccessDept, getUserRoleDeptIds } from '@/lib/auth';
-import { ENTITY_ACTIVE } from '@auth-sso/contracts';
+import { ENTITY_ACTIVE, ROLE_PERMISSIONS } from '@auth-sso/contracts';
 import type { ApiResponse } from '@auth-sso/contracts';
 
 /** 查询绑定某角色的所有用户 ID */
@@ -47,7 +48,7 @@ async function invalidateRoleBoundUsersCache(roleId: string): Promise<string[]> 
 
 /** 创建角色 */
 export const createRoleAction = withAuth(
-  { permissions: ['role:create'], audit: 'ROLE_CREATE' },
+  { permissions: [ROLE_PERMISSIONS.CREATE], audit: 'ROLE_CREATE' },
   async (ctx: AuthContext, input: CreateRoleInput): Promise<ApiResponse<{ id: string }>> => {
     const v = validate(CreateRoleInputSchema, input);
     if (!v.ok) return v.response;
@@ -89,7 +90,7 @@ export const createRoleAction = withAuth(
 
 /** 更新角色 */
 export const updateRoleAction = withAuth(
-  { permissions: ['role:update'], audit: 'ROLE_UPDATE' },
+  { permissions: [ROLE_PERMISSIONS.UPDATE], audit: 'ROLE_UPDATE' },
   async (ctx: AuthContext, roleId: string, input: Record<string, unknown>): Promise<ApiResponse<{ id: string }>> => {
     const v = validate(UpdateRoleInputSchema, input);
     if (!v.ok) return v.response;
@@ -104,9 +105,10 @@ export const updateRoleAction = withAuth(
       if (v.data.deptId && !canAccessDept(deptIds, v.data.deptId)) {
         throw new ForbiddenError('无权将角色迁移至该部门');
       }
-      guardNotSystemRole(row);
-      const updated = applyRoleUpdate(row, v.data);
-      permissionChanged = hasRolePermissionImpact(row, updated);
+      const role = roleFromPersistence(row);
+      guardNotSystemRole(role);
+      const updated = applyRoleUpdate(role, v.data);
+      permissionChanged = hasRolePermissionImpact(role, updated);
       await tx.update(schema.roles).set(roleToUpdateRow(updated))
         .where(eq(schema.roles.id, roleId));
     });
@@ -123,7 +125,7 @@ export const updateRoleAction = withAuth(
 
 /** 删除角色 */
 export const deleteRoleAction = withAuth(
-  { permissions: ['role:delete'], audit: 'ROLE_DELETE' },
+  { permissions: [ROLE_PERMISSIONS.DELETE], audit: 'ROLE_DELETE' },
   async (ctx: AuthContext, roleId: string): Promise<ApiResponse<{ id: string }>> => {
     const row = await db.query.roles.findFirst({ where: eq(schema.roles.id, roleId) });
     if (!row) throw new EntityNotFoundError('Role', roleId);
@@ -131,7 +133,7 @@ export const deleteRoleAction = withAuth(
     const deptIds = await getUserRoleDeptIds(ctx.userId);
     if (!canAccessDept(deptIds, row.deptId)) throw new ForbiddenError('无权操作该部门的角色');
 
-    guardNotSystemRole(row);
+    guardNotSystemRole(roleFromPersistence(row));
 
     // 事务前预先获取绑定用户，事务后清除缓存
     const boundUsers = await db.select({ userId: schema.userRoles.userId })

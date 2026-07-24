@@ -4,8 +4,8 @@
  * 封装 bcrypt 哈希与验证逻辑，纯函数无副作用。
  * 从 Better Auth 的 emailAndPassword.password 配置迁移而来。
  *
- * 所有接受密码配置的函数均支持显式注入 PasswordConfig，
- * 未注入时使用模块级默认值（向后兼容）。
+ * 所有接受密码配置的函数均支持显式注入 PasswordConfig；未注入时使用
+ * 固定默认值。领域层不读取环境变量，运行环境配置须在应用边界注入。
  *
  * @module domain/auth/password
  */
@@ -23,16 +23,7 @@ export const DEFAULT_PASSWORD_CONFIG: PasswordConfig = {
   passwordHistoryMax: 5,
 };
 
-// ── 模块级默认值（向后兼容：从 process.env 读取，生产代码无需修改调用签名）─
-
-const BCRYPT_ROUNDS = process.env['NODE_ENV'] === 'test' ? 4 : DEFAULT_PASSWORD_CONFIG.bcryptRounds;
-
-export const PASSWORD_HISTORY_MAX = (() => {
-  const raw = process.env['PASSWORD_HISTORY_MAX'];
-  const parsed = raw ? parseInt(raw, 10) : DEFAULT_PASSWORD_CONFIG.passwordHistoryMax;
-  if (isNaN(parsed) || parsed < 1) return DEFAULT_PASSWORD_CONFIG.passwordHistoryMax;
-  return parsed;
-})();
+export const PASSWORD_HISTORY_MAX = DEFAULT_PASSWORD_CONFIG.passwordHistoryMax;
 
 // ── 密码哈希与验证 ─────────────────────────────────────────────────────
 
@@ -40,11 +31,11 @@ export const PASSWORD_HISTORY_MAX = (() => {
  * 对原始密码进行 bcrypt 哈希
  *
  * @param raw    原始明文密码
- * @param config 可选配置，未传时使用模块级 BCRYPT_ROUNDS（process.env 驱动）
+ * @param config 可选配置，未传时使用固定默认值
  * @returns 哈希后的密码字符串
  */
 export async function hashPassword(raw: string, config?: PasswordConfig): Promise<string> {
-  const rounds = config?.bcryptRounds ?? BCRYPT_ROUNDS;
+  const rounds = config?.bcryptRounds ?? DEFAULT_PASSWORD_CONFIG.bcryptRounds;
   return bcrypt.hash(raw, rounds);
 }
 

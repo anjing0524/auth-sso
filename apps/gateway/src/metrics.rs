@@ -111,3 +111,47 @@ pub fn log_snapshot() {
         jwks_cache_staleness_secs(),
     );
 }
+
+/// Prometheus 文本格式快照，供受控的网关 metrics 端点抓取。
+pub fn render_prometheus() -> String {
+    format!(
+        concat!(
+            "# TYPE auth_sso_gateway_requests_total counter\n",
+            "auth_sso_gateway_requests_total {}\n",
+            "# TYPE auth_sso_gateway_auth_failures_total counter\n",
+            "auth_sso_gateway_auth_failures_total {}\n",
+            "# TYPE auth_sso_gateway_rate_limited_total counter\n",
+            "auth_sso_gateway_rate_limited_total {}\n",
+            "# TYPE auth_sso_gateway_jti_revoked_total counter\n",
+            "auth_sso_gateway_jti_revoked_total {}\n",
+            "# TYPE auth_sso_gateway_refresh_success_total counter\n",
+            "auth_sso_gateway_refresh_success_total {}\n",
+            "# TYPE auth_sso_gateway_refresh_failure_total counter\n",
+            "auth_sso_gateway_refresh_failure_total {}\n",
+            "# TYPE auth_sso_gateway_redis_acquire_failures_total counter\n",
+            "auth_sso_gateway_redis_acquire_failures_total {}\n",
+            "# TYPE auth_sso_gateway_jwks_cache_staleness_seconds gauge\n",
+            "auth_sso_gateway_jwks_cache_staleness_seconds {}\n"
+        ),
+        REQUESTS_TOTAL.load(Ordering::Relaxed),
+        AUTH_FAILURES_TOTAL.load(Ordering::Relaxed),
+        RATE_LIMITED_TOTAL.load(Ordering::Relaxed),
+        JTI_REVOKED_TOTAL.load(Ordering::Relaxed),
+        REFRESH_SUCCESS_TOTAL.load(Ordering::Relaxed),
+        REFRESH_FAILURE_TOTAL.load(Ordering::Relaxed),
+        REDIS_ACQUIRE_FAILURES.load(Ordering::Relaxed),
+        jwks_cache_staleness_secs(),
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn prometheus_snapshot_exposes_core_counters() {
+        let output = render_prometheus();
+        assert!(output.contains("auth_sso_gateway_requests_total"));
+        assert!(output.contains("auth_sso_gateway_jwks_cache_staleness_seconds"));
+    }
+}

@@ -109,7 +109,7 @@ export async function checkBruteForce(
           ),
         );
       failCount = result[0]?.count ?? 0;
-    } catch (_err) {
+    } catch {
       throw new Error('暴力破解防范服务不可用');
     }
   }

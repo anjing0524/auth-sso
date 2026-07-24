@@ -8,11 +8,12 @@ import { withPermission, getUserRoleDeptIds } from '@/lib/auth';
 import { getUsers } from '@/app/(dashboard)/users/data';
 import { parsePagination } from '@/lib/pagination';
 import { restListSuccess } from '@/lib/response';
+import { USER_PERMISSIONS } from '@auth-sso/contracts';
 
 
 /** GET /api/users — 委托 data.ts 获取过滤与分页的用户列表 */
 export async function GET(request: NextRequest) {
-  return withPermission({ permissions: ['user:list'] }, async (userId) => {
+  return withPermission({ permissions: [USER_PERMISSIONS.LIST] }, async (userId) => {
     const sp = request.nextUrl.searchParams;
     const { page, pageSize } = parsePagination(sp);
     const keyword = sp.get('keyword') || '';

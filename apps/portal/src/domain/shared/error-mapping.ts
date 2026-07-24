@@ -33,6 +33,7 @@ const ERROR_STATUS: Record<string, number> = {
   InvalidGrantError: 400,
   PKCEVerificationError: 400,
   InvalidRedirectUriError: 400,
+  InvalidScopeError: 400,
   BusinessRuleViolationError: 422,
 };
 
@@ -82,6 +83,7 @@ const OAUTH_ERROR_MAP: Record<string, string> = {
   [AUTH_ERRORS.INVALID_CODE]: 'invalid_grant',
   [AUTH_ERRORS.PKCE_VERIFICATION_FAILED]: 'invalid_grant',
   [AUTH_ERRORS.OAUTH_INVALID_REDIRECT_URI]: 'invalid_grant',
+  INVALID_SCOPE: 'invalid_scope',
   [AUTH_ERRORS.UNSUPPORTED_GRANT_TYPE]: 'unsupported_grant_type',
 };
 

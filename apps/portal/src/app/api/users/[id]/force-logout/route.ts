@@ -16,7 +16,7 @@ import { withPermission, canAccessDept, getUserRoleDeptIds } from '@/lib/auth';
 import { revokeAllRefreshTokens } from '@/lib/auth/token';
 import { revokeUserAccessByUserId } from '@/lib/session/revoke';
 import { clearUserPermissionCache } from '@/lib/permissions';
-import { COMMON_ERRORS } from '@auth-sso/contracts';
+import { COMMON_ERRORS, USER_PERMISSIONS } from '@auth-sso/contracts';
 import { restSuccess, restError } from '@/lib/response';
 
 interface RouteParams {
@@ -31,7 +31,7 @@ export async function POST(
   request: NextRequest,
   { params }: RouteParams,
 ) {
-  return withPermission({ permissions: ['user:manage'] }, async (_adminUserId) => {
+  return withPermission({ permissions: [USER_PERMISSIONS.MANAGE] }, async (_adminUserId) => {
     const { id } = await params;
 
     // 按内部 id 查找用户

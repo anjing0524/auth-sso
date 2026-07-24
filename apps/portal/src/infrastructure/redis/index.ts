@@ -17,6 +17,8 @@ const log = createLogger('Redis');
  * 定义 Portal 需要的方法
  */
 export interface RedisClient {
+  /** 确保 lazy client 已完成连接；关键会话写入不得依赖 offline queue。 */
+  connect(): Promise<void>;
   get(key: string): Promise<string | null>;
   /** 原子读取并删除（GETDEL，Redis 6.2+），用于一次性消费场景 */
   getdel(key: string): Promise<string | null>;
@@ -59,6 +61,9 @@ function createIoredisClient(): RedisClient {
 
   const client = new Redis(redisUrl, {
     maxRetriesPerRequest: 3,
+    connectTimeout: 3_000,
+    enableOfflineQueue: false,
+    retryStrategy: (attempt) => (attempt <= 3 ? attempt * 200 : null),
     lazyConnect: true,
     // 如果是 rediss:// 协议，启用 TLS
     tls: redisUrl.startsWith('rediss://') ? {} : undefined,
@@ -72,8 +77,39 @@ function createIoredisClient(): RedisClient {
     log.info('Connected');
   });
 
+  let connectPromise: Promise<void> | null = null;
+  const connect = async (): Promise<void> => {
+    if (client.status === 'ready') return;
+    if (client.status === 'connecting' || client.status === 'connect' || client.status === 'reconnecting') {
+      await new Promise<void>((resolve, reject) => {
+        const onReady = () => {
+          cleanup();
+          resolve();
+        };
+        const onError = (error: Error) => {
+          cleanup();
+          reject(error);
+        };
+        const cleanup = () => {
+          client.off('ready', onReady);
+          client.off('error', onError);
+        };
+        client.once('ready', onReady);
+        client.once('error', onError);
+      });
+      return;
+    }
+    if (!connectPromise) {
+      connectPromise = client.connect().finally(() => {
+        connectPromise = null;
+      });
+    }
+    await connectPromise;
+  };
+
   // ioredis API 直接匹配 RedisClient 接口
   return {
+    connect,
     get: (key) => client.get(key),
     getdel: (key) => client.getdel(key),
     setex: (key, seconds, value) => client.setex(key, seconds, value),
@@ -103,4 +139,3 @@ export function getRedis(): RedisClient {
   }
   return redisClient;
 }
-

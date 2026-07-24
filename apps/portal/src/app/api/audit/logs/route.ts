@@ -6,14 +6,14 @@
 import { type NextRequest } from 'next/server';
 import { withPermission } from '@/lib/auth';
 import { getAuditLogs } from '@/app/audit/data';
-import { AUDIT_OPERATION_VALUES, type AuditOperation } from '@auth-sso/contracts';
+import { AUDIT_OPERATION_VALUES, AUDIT_PERMISSIONS, type AuditOperation } from '@auth-sso/contracts';
 import { parsePagination } from '@/lib/pagination';
 import { restListSuccess } from '@/lib/response';
 
 
 /** GET /api/audit/logs — 委托 data.ts */
 export async function GET(request: NextRequest) {
-  return withPermission({ permissions: ['audit:read'] }, async () => {
+  return withPermission({ permissions: [AUDIT_PERMISSIONS.READ] }, async () => {
     const sp = request.nextUrl.searchParams;
     const { page, pageSize } = parsePagination(sp);
     const rawOp = sp.get('operation');

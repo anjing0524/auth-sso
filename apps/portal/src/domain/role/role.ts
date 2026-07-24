@@ -1,6 +1,7 @@
 import type { CreateRoleInput, Role } from './types';
 import { ENTITY_ACTIVE } from '@auth-sso/contracts';
 import { BusinessRuleViolationError } from '../shared/errors';
+import { dateFromInstant, instantFromDate } from '@/domain/shared/time';
 
 export type { Role };
 
@@ -17,7 +18,7 @@ export function createRole(
     isSystem: false,
     status: ENTITY_ACTIVE,
     sort: input.sort,
-    createdAt: new Date(),
+    createdAt: Temporal.Now.instant(),
   };
 }
 
@@ -61,8 +62,12 @@ export function roleToInsertRow(r: Role) {
     isSystem: r.isSystem,
     sort: r.sort,
     status: r.status,
-    createdAt: r.createdAt,
+    createdAt: dateFromInstant(r.createdAt),
   };
+}
+
+export function roleFromPersistence(role: Omit<Role, 'createdAt'> & { createdAt: Date }): Role {
+  return { ...role, createdAt: instantFromDate(role.createdAt) };
 }
 
 export function roleToUpdateRow(r: Role) {

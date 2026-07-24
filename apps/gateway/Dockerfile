@@ -1,5 +1,5 @@
 # Build stage
-FROM rust:1.88-alpine AS builder
+FROM rust:1.93-alpine@sha256:4fec02de605563c297c78a31064c8335bc004fa2b0bf406b1b99441da64e2d2d AS builder
 
 # 安装构建依赖（添加 alpine-sdk 以及构建 vendored openssl 所需的基础工具）
 RUN apk add --no-cache musl-dev pkgconfig perl make cmake clang-dev clang alpine-sdk
@@ -24,7 +24,7 @@ COPY apps/gateway/src ./src
 RUN touch src/main.rs && cargo build --release
 
 # Runner stage
-FROM alpine:latest
+FROM alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d
 
 # 创建非 root 用户（安全加固：禁止容器以 root 运行）
 RUN addgroup -S gateway && adduser -S gateway -G gateway

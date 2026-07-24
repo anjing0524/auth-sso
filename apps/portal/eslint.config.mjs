@@ -16,6 +16,16 @@ const eslintConfig = [
       "next-env.d.ts",
     ],
   },
+  {
+    files: ["__tests__/**/*.{ts,tsx}", "tests/**/*.{ts,tsx}"],
+    rules: {
+      "@typescript-eslint/consistent-type-imports": "warn",
+      "@typescript-eslint/no-this-alias": "warn",
+      "@typescript-eslint/no-unsafe-function-type": "warn",
+      "@typescript-eslint/no-unused-vars": "warn",
+      "no-var": "warn",
+    },
+  },
 ];
 
 export default eslintConfig;

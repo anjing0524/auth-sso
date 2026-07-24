@@ -13,7 +13,7 @@ import { withPermission, canAccessDept, getUserRoleDeptIds, logServerDataRead } 
 import { appendSecurityAudit, extractClientIP, extractUserAgent } from '@/lib/audit';
 import { refreshUserPermissionCache } from '@/lib/permissions';
 import { revokeUserAccessByUserId } from '@/lib/session/revoke';
-import { COMMON_ERRORS, USER_ERRORS, ENTITY_ACTIVE } from '@auth-sso/contracts';
+import { COMMON_ERRORS, USER_ERRORS, ENTITY_ACTIVE, USER_PERMISSIONS } from '@auth-sso/contracts';
 import { getUserRoles } from '@/app/(dashboard)/users/data';
 import { restSuccess, restError } from '@/lib/response';
 
@@ -49,7 +49,7 @@ async function validateRoleAssignment(
 
 /** GET /api/users/[id]/roles — 委托 data.ts */
 export async function GET(request: NextRequest, { params }: RouteParams) {
-  return withPermission({ permissions: ['user:read'] }, async (_adminUserId) => {
+  return withPermission({ permissions: [USER_PERMISSIONS.READ] }, async (_adminUserId) => {
     const { id } = await params;
     const target = await db.query.users.findFirst({
       where: eq(schema.users.id, id),
@@ -72,7 +72,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
  * POST /api/users/[id]/roles — 为用户分配角色（v3.2: R-USER-ROLE 部门约束）
  */
 export async function POST(request: NextRequest, { params }: RouteParams) {
-  return withPermission({ permissions: ['user:assign_role'] }, async (adminUserId) => {
+  return withPermission({ permissions: [USER_PERMISSIONS.ASSIGN_ROLE] }, async (adminUserId) => {
     const { id } = await params;
     const parsed = RoleAssignmentBodySchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) return restError(COMMON_ERRORS.VALIDATION_ERROR, '角色ID列表格式不合法', 400);
@@ -144,7 +144,7 @@ export async function DELETE(
   request: NextRequest,
   { params }: RouteParams
 ) {
-  return withPermission({ permissions: ['user:assign_role'] }, async (adminUserId) => {
+  return withPermission({ permissions: [USER_PERMISSIONS.ASSIGN_ROLE] }, async (adminUserId) => {
     const { id } = await params;
     const parsed = RoleRemovalBodySchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) return restError(COMMON_ERRORS.VALIDATION_ERROR, '角色ID格式不合法', 400);
@@ -156,9 +156,9 @@ export async function DELETE(
         where: eq(schema.users.id, id),
         columns: { id: true, deptId: true },
       });
-      if (!userRow) return { error: COMMON_ERRORS.NOT_FOUND, message: '用户不存在', status: 404 } as const;
+      if (!userRow) return { success: false as const, error: COMMON_ERRORS.NOT_FOUND, message: '用户不存在', status: 404 };
       if (!canAccessDept(deptIds, userRow.deptId)) {
-        return { error: COMMON_ERRORS.FORBIDDEN, message: '无权操作该用户', status: 403 } as const;
+        return { success: false as const, error: COMMON_ERRORS.FORBIDDEN, message: '无权操作该用户', status: 403 };
       }
       await tx.delete(schema.userRoles).where(and(
         eq(schema.userRoles.userId, userRow.id),
@@ -174,10 +174,11 @@ export async function DELETE(
         userAgent: extractUserAgent(request.headers),
         status: 200,
       });
-      return { userId: userRow.id } as const;
+      return { success: true as const, userId: userRow.id };
     });
-    if ('error' in result) return restError(result.error, result.message, result.status);
+    if (!result.success) return restError(result.error, result.message, result.status);
     const userId = result.userId;
+    if (!userId) return restError(COMMON_ERRORS.INTERNAL_ERROR, '角色移除结果缺少用户', 500);
 
     // 移除角色后主动清除该用户的权限缓存，保障缓存强一致性
     await refreshUserPermissionCache(userId);

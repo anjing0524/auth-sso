@@ -7,7 +7,7 @@ import { type NextRequest } from 'next/server';
 import { db, schema } from '@/infrastructure/db';
 import { eq, inArray, and } from 'drizzle-orm';
 import { withPermission, logServerDataRead } from '@/lib/auth';
-import { COMMON_ERRORS } from '@auth-sso/contracts';
+import { CLIENT_PERMISSIONS, COMMON_ERRORS } from '@auth-sso/contracts';
 import { getClientById, getClientTokens } from '@/app/(dashboard)/clients/data';
 import { appendSecurityAudit, extractClientIP, extractUserAgent } from '@/lib/audit';
 import { parsePagination } from '@/lib/pagination';
@@ -18,7 +18,7 @@ interface RouteParams { params: Promise<{ id: string }>; }
 
 /** GET /api/clients/[id]/tokens — 委托 data.ts */
 export async function GET(request: NextRequest, { params }: RouteParams) {
-  return withPermission({ permissions: ['client:read'] }, async () => {
+  return withPermission({ permissions: [CLIENT_PERMISSIONS.READ] }, async () => {
     const { id } = await params;
 
     const client = await getClientById(id);
@@ -38,7 +38,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
 /** DELETE /api/clients/[id]/tokens — 撤销授权 Token */
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
-  return withPermission({ permissions: ['client:update'] }, async (adminUserId) => {
+  return withPermission({ permissions: [CLIENT_PERMISSIONS.UPDATE] }, async (adminUserId) => {
     const { id } = await params;
     const body = await request.json();
     const { tokenIds, revokeAll } = body;

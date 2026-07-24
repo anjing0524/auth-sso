@@ -1,5 +1,6 @@
 import { ENTITY_ACTIVE } from '@auth-sso/contracts';
 import type { CreatePermissionInput, Permission } from './types';
+import { dateFromInstant, instantFromDate } from '@/domain/shared/time';
 
 export type { Permission };
 
@@ -20,7 +21,7 @@ export function createPermission(
     parentId: ('parentId' in input ? input.parentId : undefined) ?? null,
     status: ENTITY_ACTIVE,
     sort: ('sort' in input ? input.sort : undefined) ?? 0,
-    createdAt: new Date(),
+    createdAt: Temporal.Now.instant(),
   };
 }
 
@@ -58,8 +59,12 @@ export function permissionToInsertRow(p: Permission) {
     parentId: p.parentId,
     sort: p.sort,
     status: p.status,
-    createdAt: p.createdAt,
+    createdAt: dateFromInstant(p.createdAt),
   };
+}
+
+export function permissionFromPersistence(permission: Omit<Permission, 'createdAt'> & { createdAt: Date }): Permission {
+  return { ...permission, createdAt: instantFromDate(permission.createdAt) };
 }
 
 export function permissionToUpdateRow(p: Permission) {

@@ -10,11 +10,11 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { getLoginLogs, getAuditLogs } from '@/app/audit/data';
 import { withPermission } from '@/lib/auth';
-import { MAX_PAGE_SIZE } from '@auth-sso/contracts';
+import { AUDIT_PERMISSIONS, MAX_PAGE_SIZE } from '@auth-sso/contracts';
 
 export async function GET(request: NextRequest) {
   return withPermission(
-    { permissions: ['audit:export'] },
+    { permissions: [AUDIT_PERMISSIONS.EXPORT] },
     async () => {
       const { searchParams } = new URL(request.url);
       const type = searchParams.get('type') || 'login';
