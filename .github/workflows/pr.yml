@@ -189,6 +189,16 @@ jobs:
           REDIS_URL: redis://localhost:6379
           NODE_ENV: test
 
+      - name: Start Portal
+        run: |
+          pnpm --filter @auth-sso/portal dev &
+          npx wait-on http://localhost:4100 --timeout 30000
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/auth_sso_test
+          REDIS_URL: redis://localhost:6379
+          NODE_ENV: test
+          PORT: 4100
+
       - name: Run E2E tests
         run: pnpm test:e2e
         env:

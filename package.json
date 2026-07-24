@@ -39,6 +39,7 @@
   "devDependencies": {
     "@playwright/test": "^1.60.0",
     "tsx": "^4.22.4",
+    "wait-on": "^8.0.0",
     "vitest": "^4.1.9"
   }
 }
