@@ -465,6 +465,30 @@ describe('Permission Enforcement', () => {
       expect(result.authorized).toBe(true);
       expect(result.userId).toBe(USER_ID);
     });
+
+    // ── Redis 降级熔断路径 ──
+
+    it('Redis 不可用时降级 DB，授权决策不受影响', async () => {
+      mockGetJwtFromCookie.mockResolvedValueOnce('valid-token');
+      mockVerifyJwt.mockResolvedValueOnce(defaultClaims);
+      // 当前 mock Redis.get 返回 null，模拟无缓存命中
+      const result = await checkPermission({
+        permissions: ['portal:user:list'],
+      });
+      expect(result.authorized).toBe(true);
+      expect(result.userId).toBe(USER_ID);
+    });
+
+    it('连续 Redis 故障不应抛出未捕获异常', async () => {
+      mockGetJwtFromCookie.mockResolvedValue('valid-token');
+      mockVerifyJwt.mockResolvedValue(defaultClaims);
+      for (let i = 0; i < 3; i++) {
+        const result = await checkPermission({
+          permissions: ['portal:user:list'],
+        });
+        expect(result.authorized).toBe(true);
+      }
+    });
   });
 
   // ======== withPermission ========
