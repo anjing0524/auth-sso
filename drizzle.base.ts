@@ -23,6 +23,5 @@ export function createDrizzleConfig(opts: { schema: string; out: string }) {
     },
     verbose: true,
     strict: true,
-    push: { confirm: false },
   };
 }
