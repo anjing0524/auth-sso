@@ -124,7 +124,6 @@ describe('POST /api/auth/login', () => {
 
   it('无效 email 格式时返回 400', async () => {
     const res = await POST(buildLoginRequest({ email: 'not-an-email', password: 'test123' }));
-    const json = await res.json();
     expect(res.status).toBe(400);
   });
 
@@ -139,7 +138,6 @@ describe('POST /api/auth/login', () => {
     holder.mockVerifyPassword.mockResolvedValueOnce(false);
 
     const res = await POST(buildLoginRequest({ email: 'user@example.com', password: 'wrong' }));
-    const json = await res.json();
 
     expect(res.status).toBe(401);
     expect(holder.mockIncrementBruteForce).toHaveBeenCalledWith(U1);
@@ -147,7 +145,6 @@ describe('POST /api/auth/login', () => {
 
   it('登录成功时返回 200、设置 Cookie、清除暴力破解计数', async () => {
     const res = await POST(buildLoginRequest({ email: 'user@example.com', password: 'correct' }));
-    const json = await res.json();
 
     expect(res.status).toBe(200);
     expect(holder.mockSignLoginSession).toHaveBeenCalledWith(U1);
@@ -162,7 +159,6 @@ describe('POST /api/auth/login', () => {
     });
 
     const res = await POST(buildLoginRequest({ email: 'user@example.com', password: 'test123' }));
-    const json = await res.json();
 
     expect(res.status).toBe(423);
     expect(holder.mockVerifyPassword).not.toHaveBeenCalled();
@@ -172,7 +168,6 @@ describe('POST /api/auth/login', () => {
     const res = await POST(
       buildLoginRequest({ email: 'locked-user@example.com', password: 'test123' }),
     );
-    const json = await res.json();
 
     expect(res.status).toBe(403);
     expect(holder.mockVerifyPassword).not.toHaveBeenCalled();
