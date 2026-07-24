@@ -12,7 +12,7 @@
     "seed": "tsx scripts/seed-rbac.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:push": "drizzle-kit push",
+    "db:push": "NODE_OPTIONS='--require scripts/tty-shim.cjs' drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "db:seed": "node --import ./scripts/esm-mock-server-only.mjs --import tsx scripts/seed.ts",
     "db:clean": "npx tsx scripts/clean-clients.ts",

@@ -14,7 +14,7 @@
     "db:generate": "pnpm --filter @auth-sso/portal db:generate",
     "db:migrate": "pnpm --filter @auth-sso/portal db:migrate",
     "db:push": "pnpm --filter @auth-sso/portal db:push",
-    "db:push:ci": "pnpm db:generate && pnpm db:migrate",
+    "db:push:ci": "pnpm --filter @auth-sso/portal db:push",
     "db:studio": "pnpm --filter @auth-sso/portal db:studio",
     "db:seed": "pnpm --filter @auth-sso/portal db:seed",
     "infra:up": "docker compose up -d",
