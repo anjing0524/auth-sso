@@ -109,6 +109,7 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/auth_sso_test
           REDIS_URL: redis://localhost:6379
           E2E_BASE_URL: http://localhost:4100
+          E2E_SKIP_WEB_SERVER: 'true'
           CI: true
 
       - name: Upload Playwright report
