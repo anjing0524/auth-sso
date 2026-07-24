@@ -14,6 +14,7 @@
     "db:generate": "pnpm --filter @auth-sso/portal db:generate",
     "db:migrate": "pnpm --filter @auth-sso/portal db:migrate",
     "db:push": "pnpm --filter @auth-sso/portal db:push",
+    "db:push:ci": "pnpm --filter @auth-sso/portal db:push --force",
     "db:studio": "pnpm --filter @auth-sso/portal db:studio",
     "db:seed": "pnpm --filter @auth-sso/portal db:seed",
     "infra:up": "docker compose up -d",
@@ -38,6 +39,7 @@
   "devDependencies": {
     "@playwright/test": "^1.60.0",
     "tsx": "^4.22.4",
+    "wait-on": "^8.0.0",
     "vitest": "^4.1.9"
   }
 }

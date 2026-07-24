@@ -1,23 +1,35 @@
 /**
  * 测试数据库工具 (Integration Test DB)
  *
- * 采用 TRUNCATE CASCADE 模式实现测试隔离：
- * - 每个测试前清空所有表，然后 seed 测试数据
- * - 简单可靠，无事务管理复杂性
- * - 配套 vitest.config.ts 中 fileParallelism: false 确保文件间串行
+ * 支持两种隔离模式：
  *
- * 使用方式（每个测试文件）：
+ * 1. TRUNCATE CASCADE（默认）— 每个测试前清空所有表
+ *    - 简单可靠，无事务管理复杂性
+ *    - 配套 vitest.config.ts 中 fileParallelism: false 确保文件间串行
+ *
+ * 2. ROLLBACK（推荐，{ isolation: 'rollback' }）— 事务 + SAVEPOINT 隔离
+ *    - 文件级 BEGIN/ROLLBACK 包裹，测试间 SAVEPOINT 隔离
+ *    - 无需每次 TRUNCATE，速度更快
+ *    - 为未来文件级并行做铺垫
+ *
+ * 使用方式（TRUNCATE 模式）：
  * ```
  * const testDb = createTestDbHandle();
- *
- * vi.mock('@/infrastructure/db', () => ({
- *   get db() { return testDb.db; },
- *   get schema() { return testDb.schema; },
- * }));
- *
  * beforeAll(() => testDb.connect());
  * afterAll(() => testDb.close());
  * beforeEach(() => testDb.cleanup());
+ * ```
+ *
+ * 使用方式（ROLLBACK 模式）：
+ * ```
+ * const testDb = createTestDbHandle({ isolation: 'rollback' });
+ * beforeAll(async () => {
+ *   await testDb.connect();
+ *   await testDb.sql`BEGIN`;
+ * });
+ * afterAll(async () => { await testDb.sql`ROLLBACK`; await testDb.close(); });
+ * beforeEach(async () => { await testDb.sql`SAVEPOINT test_sp`; });
+ * afterEach(async () => { await testDb.sql`ROLLBACK TO SAVEPOINT test_sp`; });
  * ```
  */
 import postgres from 'postgres';
@@ -31,17 +43,23 @@ const TEST_DB_URL =
   process.env['DATABASE_URL'] ||
   'postgresql://postgres:postgres@localhost:5432/auth_sso_test';
 
+export interface TestDbHandleOptions {
+  /** 隔离模式：'truncate'（默认）或 'rollback'（事务隔离） */
+  isolation?: 'truncate' | 'rollback';
+}
+
 export interface TestDbHandle {
   db: TestDb;
   sql: ReturnType<typeof postgres>;
   schema: typeof schema;
   connect(): Promise<void>;
   close(): Promise<void>;
-  /** 清空所有表（按 FK 依赖顺序） */
+  /** 清空所有表（按 FK 依赖顺序）。仅 TRUNCATE 模式需要调用 */
   cleanup(): Promise<void>;
 }
 
-export function createTestDbHandle(): TestDbHandle {
+export function createTestDbHandle(options: TestDbHandleOptions = {}): TestDbHandle {
+  const { isolation = 'truncate' } = options;
   let _sql: ReturnType<typeof postgres> | null = null;
   let _db: TestDb | null = null;
 
@@ -74,6 +92,9 @@ export function createTestDbHandle(): TestDbHandle {
 
     async cleanup() {
       if (!_sql) throw new Error('请先调用 connect()');
+      // ROLLBACK 模式下，cleanup() 仅保证初始状态存在，由 SAVEPOINT 隔离
+      // TRUNCATE 模式下，执行全表清空
+      if (isolation === 'rollback') return;
       await _sql.unsafe(`
         TRUNCATE
           audit_logs, login_logs, access_logs,

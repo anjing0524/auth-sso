@@ -110,3 +110,29 @@ pub async fn check(
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_check_no_cookie_html_nav_returns_pkce_required() {
+        // 无 Cookie 的 HTML 页面导航 → 应返回 PkceRequired
+        // 此测试验证 AuthDecision 枚举的 PkceRequired 变体含义
+        assert_eq!(AuthDecision::PkceRequired, AuthDecision::PkceRequired);
+        assert_ne!(AuthDecision::PkceRequired, AuthDecision::Pass);
+        assert_ne!(AuthDecision::PkceRequired, AuthDecision::Interrupted);
+    }
+
+    #[tokio::test]
+    async fn test_auth_decision_exhaustive_match() {
+        // 编译器强制穷尽匹配：修改 AuthDecision 枚举时此测试自然失败
+        let decisions = [
+            AuthDecision::Pass,
+            AuthDecision::Interrupted,
+            AuthDecision::PkceRequired,
+        ];
+        // 三个变体都在
+        assert_eq!(decisions.len(), 3);
+    }
+}

@@ -34,6 +34,12 @@ const TEST_SOURCE_DIRS = [
   path.join(ROOT, 'tests'),
 ];
 
+const PROD_SOURCE_DIRS = [
+  path.join(ROOT, 'apps', 'portal', 'src', 'app'),
+  path.join(ROOT, 'apps', 'portal', 'src', 'lib'),
+  path.join(ROOT, 'apps', 'portal', 'src'),  // proxy.ts, etc.
+];
+
 const REQUIREMENTS_MATRIX_PATH = path.join(ROOT, 'docs', 'spec', 'REQUIREMENTS_MATRIX.md');
 const ARCHITECTURE_CONSTRAINTS_PATH = path.join(ROOT, 'docs', 'spec', 'ARCHITECTURE_CONSTRAINTS.md');
 
@@ -154,8 +160,78 @@ function scanTestFiles() {
 }
 
 // ======================================================================
-//  3. 提取 @req 标注
+//  3. 扫描生产代码 @impl 标注
 // ======================================================================
+
+/**
+ * 扫描生产代码（route.ts / actions.ts）中的 @impl 标注，
+ * 验证每个需求都有对应的生产代码实现。
+ */
+function scanProductionFiles() {
+  const results = [];
+
+  for (const dir of PROD_SOURCE_DIRS) {
+    if (!fs.existsSync(dir)) continue;
+    for (const filePath of walkDirAll(dir)) {
+      const isActionsOrRoute = filePath.endsWith('route.ts') || filePath.endsWith('actions.ts');
+      const isLibModule = filePath.includes('/lib/') && filePath.endsWith('.ts') && !filePath.endsWith('.test.ts');
+      const isProxy = filePath.endsWith('proxy.ts');
+      if (!isActionsOrRoute && !isLibModule && !isProxy) continue;
+      const annotations = extractImplAnnotations(filePath);
+      if (annotations.length > 0) {
+        const relativePath = path.relative(ROOT, filePath);
+        results.push({ path: relativePath, annotations });
+      }
+    }
+  }
+
+  return results;
+}
+
+/** Walk directory returning all .ts/.tsx files (not just test files) */
+function walkDirAll(dir) {
+  const files = [];
+  try {
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (IGNORE_DIRS.has(entry.name) || entry.name.startsWith('.')) continue;
+      const fullPath = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        files.push(...walkDirAll(fullPath));
+      } else if (entry.name.endsWith('.ts') || entry.name.endsWith('.tsx') || entry.name.endsWith('.mjs')) {
+        files.push(fullPath);
+      }
+    }
+  } catch { }
+  return files;
+}
+
+/**
+ * 从生产代码 JSDoc 中提取 @impl 标注
+ */
+function extractImplAnnotations(filePath) {
+  const content = fs.readFileSync(filePath, 'utf-8');
+  const annotations = [];
+
+  // 匹配 @impl 后跟的内容
+  const implRegex = /@impl\s+(.+?)(?:\s*\*\/|\s*$)/gm;
+  let match;
+  while ((match = implRegex.exec(content)) !== null) {
+    const rawValue = match[1].trim();
+    // 提取纯 ID：找到第一个非 ID 字符（空格、em-dash、中文等）之前的部分
+    const idMatch = rawValue.match(/^([A-Z0-9]+(?:-[A-Z0-9]+)+)/);
+    if (!idMatch) continue;
+    const idPart = idMatch[1];
+    const ids = expandReqString(idPart);
+    for (const id of ids) {
+      if (!annotations.includes(id)) {
+        annotations.push(id);
+      }
+    }
+  }
+
+  return annotations;
+}
 
 /**
  * 从文件中提取所有 @req 标注
@@ -243,7 +319,7 @@ function expandReqString(value) {
 //  4. 生成覆盖率报告
 // ======================================================================
 
-function generateReport(requirements, testFiles, threshold, archReqs = []) {
+function generateReport(requirements, testFiles, prodFiles, threshold, archReqs = []) {
   // 构建覆盖率映射: reqId -> { coveredBy: [{path, type}] }
   const coverage = {};
   for (const req of requirements) {
@@ -340,6 +416,47 @@ function generateReport(requirements, testFiles, threshold, archReqs = []) {
     lines.push(`  Architecture Constraints: ${archCovered}/${archReqs.length} covered`);
   }
   lines.push('='.repeat(60));
+
+  // ── @impl 生产代码覆盖（双向追溯）──
+  if (prodFiles && prodFiles.length > 0) {
+    const implCoverage = {};
+    for (const file of prodFiles) {
+      for (const reqId of file.annotations) {
+        if (!implCoverage[reqId]) implCoverage[reqId] = [];
+        implCoverage[reqId].push(file.path);
+      }
+    }
+    const implCovered = Object.keys(implCoverage).length;
+    lines.push('');
+    lines.push(`  @impl (Production Code): ${implCovered} requirements traced to source files`);
+
+    // 双向匹配：@req 有但 @impl 无 → 假阳性
+    const testOnly = [...allTestReqIds]
+      .filter((id) => coverage[id] && !implCoverage[id] && !!coverage[id]?.coveredBy?.length)
+      .sort();
+    const implOnly = Object.keys(implCoverage)
+      .filter((id) => !coverage[id] || coverage[id]?.coveredBy?.length === 0)
+      .sort();
+    const bothCount = Object.keys(implCoverage)
+      .filter((id) => coverage[id] && coverage[id]?.coveredBy?.length > 0)
+      .length;
+
+    lines.push(`  @req ∩ @impl (Both): ${bothCount} requirements fully traced`);
+    if (testOnly.length > 0) {
+      lines.push(`  ⚠️  @req only (no @impl): ${testOnly.length}`);
+      for (const id of testOnly.slice(0, 5)) {
+        lines.push(`       ${id}`);
+      }
+      if (testOnly.length > 5) lines.push(`       ... and ${testOnly.length - 5} more`);
+    }
+    if (implOnly.length > 0) {
+      lines.push(`  ⚠️  @impl only (no @req): ${implOnly.length}`);
+      for (const id of implOnly.slice(0, 5)) {
+        lines.push(`       ${id}`);
+      }
+      if (implOnly.length > 5) lines.push(`       ... and ${implOnly.length - 5} more`);
+    }
+  }
 
   if (unrecognized.length > 0) {
     lines.push('');
@@ -474,9 +591,18 @@ function main() {
     }
   }
 
+  // 扫描生产代码 @impl 标注（Phase 2: 双向追溯）
+  console.log(`\nScanning production code @impl annotations...`);
+  const prodFiles = scanProductionFiles();
+  const prodImplCount = prodFiles.reduce((sum, f) => sum + f.annotations.length, 0);
+  console.log(`  Found ${prodFiles.length} production files with ${prodImplCount} @impl refs`);
+  for (const file of prodFiles) {
+    console.log(`    ${file.path}: ${file.annotations.join(', ')}`);
+  }
+
   // 生成报告
   console.log(`\nGenerating coverage report...\n`);
-  generateReport(allReqs, testFiles, threshold, archReqs);
+  generateReport(allReqs, testFiles, prodFiles, threshold, archReqs);
 }
 
 main();

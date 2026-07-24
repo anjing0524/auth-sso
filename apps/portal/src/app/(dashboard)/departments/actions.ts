@@ -5,6 +5,10 @@
  *
  * 仅执行编排：Zod 门禁 → 领域纯函数 → Drizzle 直调。
  * 鉴权与领域错误映射统一由 withAuth 高阶函数施加。
+ *
+ * @impl F-DEP-C — 创建部门
+ * @impl F-DEP-U — 编辑部门信息
+ * @impl F-DEP-D — 删除部门
  */
 import { revalidatePath, updateTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';

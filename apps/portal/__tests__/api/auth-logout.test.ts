@@ -89,7 +89,7 @@ vi.mock('@/domain/shared/error-mapping', () => ({
 }));
 
 vi.mock('@auth-sso/contracts', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@auth-sso/contracts')>();
+  const actual = await importOriginal();
   return {
     ...actual,
   };
@@ -136,7 +136,6 @@ beforeEach(async () => {
 describe('POST /api/auth/logout', () => {
   it('无 Cookie 时仍返回 200', async () => {
     const res = await POST(buildPostRequest());
-    const json = await res.json();
 
     expect(res.status).toBe(200);
   });
@@ -151,7 +150,6 @@ describe('POST /api/auth/logout', () => {
     mockRevokeJti.mockResolvedValueOnce(undefined);
 
     const res = await POST(buildPostRequest());
-    const json = await res.json();
 
     expect(res.status).toBe(200);
     expect(mockVerifyAccessToken).toHaveBeenCalledWith('valid-jwt');
@@ -183,7 +181,6 @@ describe('POST /api/auth/logout', () => {
     mockVerifyAccessToken.mockRejectedValueOnce(new Error('Token invalid'));
 
     const res = await POST(buildPostRequest());
-    const json = await res.json();
 
     expect(res.status).toBe(200);
     expect(res.cookies.get('portal_jwt_token')?.maxAge).toBe(0);

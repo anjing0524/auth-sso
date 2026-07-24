@@ -2,6 +2,11 @@
 
 /**
  * 角色管理 Server Actions (BFF 薄 Controller)
+ *
+ * @impl C-ROL-C — 新建角色
+ * @impl C-ROL-U — 编辑角色属性
+ * @impl C-ROL-D — 删除角色
+ * @impl C-ROL-PA — 为角色分配权限
  */
 import { revalidatePath, updateTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';

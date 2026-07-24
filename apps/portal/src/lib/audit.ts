@@ -7,6 +7,7 @@ import 'server-only';
  * 采用 fire-and-forget 模式：直接写入 DB，不缓冲、不阻塞主流程。
  *
  * @module lib/audit
+ * @impl J-LOG-003 — 关键操作自动记录（登录/登出/权限变更等）
  */
 import { db, schema } from '@/infrastructure/db';
 import type { AuditOperation, LoginEventType } from '@auth-sso/contracts';

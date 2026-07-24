@@ -34,6 +34,8 @@ function isSkipPath(pathname: string): boolean {
  *
  * PKCE 生成 + OAuth 2.1 授权链路由 Gateway（Rust/Pingora）统一完成。
  * proxy.ts 仅检查 JWT Cookie 存在性——有 JWT 放行，无 JWT 透传。
+ *
+ * @impl H-AUTH-001 — 未登录拦截与重定向
  */
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
