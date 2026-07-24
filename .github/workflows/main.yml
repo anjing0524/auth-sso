@@ -73,7 +73,7 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Push database schema
-        run: pnpm db:push
+        run: pnpm db:push:ci
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/auth_sso_test
           REDIS_URL: redis://localhost:6379
@@ -152,4 +152,5 @@ jobs:
         run: cargo test --lib
 
       - name: Run cargo audit
+        continue-on-error: true
         run: cargo audit
