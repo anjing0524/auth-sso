@@ -21,7 +21,8 @@ export default defineConfig({
   // Release validation must exercise the already-built Docker image, never start a
   // second development server on the host.
   webServer: useExternalServer ? undefined : {
-    command: `pnpm --filter @auth-sso/portal exec next dev -p ${port}`,
+    command: `./node_modules/.bin/next dev -p ${port}`,
+    cwd: 'apps/portal',
     url: `http://127.0.0.1:${port}/login`,
     reuseExistingServer: process.env.PLAYWRIGHT_REUSE_SERVER === 'true',
     timeout: 120_000,

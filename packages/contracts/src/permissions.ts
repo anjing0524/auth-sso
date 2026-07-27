@@ -69,12 +69,6 @@ export const AUDIT_PERMISSIONS = {
   EXPORT: 'portal:audit:export',
 } as const;
 
-// ========== 登录日志权限 ==========
-export const LOGIN_LOG_PERMISSIONS = {
-  READ: 'portal:login_log:read',
-  EXPORT: 'portal:login_log:export',
-} as const;
-
 // ========== 系统管理权限 ==========
 export const SYSTEM_PERMISSIONS = {
   MANAGE: 'portal:system:manage',
@@ -95,7 +89,6 @@ export const ALL_PERMISSIONS = [
   ...Object.values(PERMISSION_PERMISSIONS),
   ...Object.values(CLIENT_PERMISSIONS),
   ...Object.values(AUDIT_PERMISSIONS),
-  ...Object.values(LOGIN_LOG_PERMISSIONS),
   ...Object.values(SYSTEM_PERMISSIONS),
   ...Object.values(PORTAL_MENU_PERMISSIONS),
 ] as const;
@@ -108,7 +101,6 @@ export const PERMISSION_GROUPS = {
   PERMISSION: { name: '权限管理', permissions: Object.values(PERMISSION_PERMISSIONS) },
   CLIENT: { name: 'Client 管理', permissions: Object.values(CLIENT_PERMISSIONS) },
   AUDIT: { name: '审计日志', permissions: Object.values(AUDIT_PERMISSIONS) },
-  LOGIN_LOG: { name: '登录日志', permissions: Object.values(LOGIN_LOG_PERMISSIONS) },
   SYSTEM: { name: '系统管理', permissions: Object.values(SYSTEM_PERMISSIONS) },
   PORTAL_MENU: { name: '门户菜单', permissions: Object.values(PORTAL_MENU_PERMISSIONS) },
 } as const;
@@ -151,8 +143,6 @@ export const PERMISSION_LABELS: Record<string, string> = {
   'portal:client:rotate_secret': '轮换密钥',
   'portal:audit:read': '查看审计日志',
   'portal:audit:export': '导出审计日志',
-  'portal:login_log:read': '查看登录日志',
-  'portal:login_log:export': '导出登录日志',
   'portal:system:manage': '系统管理',
   'portal:system:view_dashboard': '查看仪表盘',
   'portal:menu:dashboard': '查看首页',

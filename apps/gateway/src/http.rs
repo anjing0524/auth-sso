@@ -47,29 +47,20 @@ pub fn host_only(host: &str) -> &str {
     }
 }
 
-/// 统一的「本地/回环」判定：IP 解析 + is_loopback（覆盖 127.0.0.0/8、::1），
-/// 非 IP 时精确匹配 localhost。同时供 Cookie Secure 标记与 redirect_uri scheme 决策使用。
-pub fn is_secure_host(host: &str) -> bool {
-    let h = host_only(host);
-    let bare = h
-        .strip_prefix('[')
-        .and_then(|s| s.strip_suffix(']'))
-        .unwrap_or(h);
-    if let Ok(ip) = bare.parse::<std::net::IpAddr>() {
-        return !ip.is_loopback();
-    }
-    h != "localhost"
-}
-
 /// 判断请求是否为 HTML 页面导航（GET + Accept: text/html + 无 RSC header）
 pub fn is_html_page_navigation(req: &RequestHeader) -> bool {
     let is_get = req.method.as_str().eq_ignore_ascii_case("GET");
     let is_html = req
         .headers
-        .get("Accept")
+        .get("accept")
+        .or_else(|| req.headers.get("Accept"))
         .and_then(|h| h.to_str().ok())
         .is_some_and(|a| a.contains("text/html"));
-    let is_rsc = req.headers.get("RSC").is_some();
+    let is_rsc = req
+        .headers
+        .get("rsc")
+        .or_else(|| req.headers.get("RSC"))
+        .is_some();
     is_get && is_html && !is_rsc
 }
 
@@ -206,34 +197,18 @@ mod tests {
     }
 
     #[test]
-    fn is_secure_host_local_dev_returns_false() {
-        // 本地开发环境：不应设置 Secure（否则浏览器在 http 上丢弃 Cookie）
-        assert!(!is_secure_host("localhost"));
-        assert!(!is_secure_host("localhost:3000"));
-        assert!(!is_secure_host("127.0.0.1"));
-        assert!(!is_secure_host("127.0.0.1:4100"));
-        assert!(!is_secure_host("[::1]"));
-        assert!(!is_secure_host("[::1]:18443"));
-        assert!(!is_secure_host("[::1]:443"));
-        assert!(!is_secure_host("::1"));
-        // 127.0.0.0/8 整段回环（原精确匹配漏判）
-        assert!(!is_secure_host("127.0.0.2"));
-        assert!(!is_secure_host("127.1.2.3:8080"));
+    fn html_navigation_accept_lookup_supports_lowercase_http2_headers() {
+        let mut req = RequestHeader::build("GET", b"/dashboard", Some(16)).unwrap();
+        req.insert_header("accept", "text/html,application/xhtml+xml")
+            .unwrap();
+        assert!(is_html_page_navigation(&req));
     }
 
     #[test]
-    fn is_secure_host_production_returns_true() {
-        assert!(is_secure_host("sso.company.com"));
-        assert!(is_secure_host("sso.company.com:443"));
-    }
-
-    #[test]
-    fn is_secure_host_not_fooled_by_substring() {
-        // 子串匹配的回归测试：原先 contains("localhost") 会误判这些为本地
-        assert!(is_secure_host("notlocalhost.evil.com"));
-        assert!(is_secure_host("localhost.evil.com"));
-        // 原先 contains("127.0.0.1") 会误判
-        assert!(is_secure_host("2127.0.0.1"));
-        assert!(is_secure_host("127.0.0.1.evil.com"));
+    fn html_navigation_rsc_header_blocks_navigation_detection_regardless_of_case() {
+        let mut req = RequestHeader::build("GET", b"/dashboard", Some(16)).unwrap();
+        req.insert_header("accept", "text/html").unwrap();
+        req.insert_header("rsc", "1").unwrap();
+        assert!(!is_html_page_navigation(&req));
     }
 }

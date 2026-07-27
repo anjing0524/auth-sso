@@ -378,6 +378,14 @@ mod tests {
     }
 
     #[test]
+    fn build_redirect_uri_keeps_https_for_loopback_tls_entrypoint() {
+        assert_eq!(
+            build_redirect_uri("127.0.0.1:19443", "/api/auth/callback", true),
+            "https://127.0.0.1:19443/api/auth/callback"
+        );
+    }
+
+    #[test]
     fn extract_pkce_verifier_works() {
         let header = "pkce_verifier=abc123; oauth_state=xyz; return_to=/dash";
         assert_eq!(extract_pkce_verifier(header), Some("abc123"));

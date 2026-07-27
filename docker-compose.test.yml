@@ -1,5 +1,5 @@
-# Immutable release acceptance stack. The browser reaches only the Gateway;
-# PostgreSQL, Redis, and Portal remain on the private Compose network.
+name: auth-sso-test
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -7,6 +7,8 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: auth_sso
+    volumes:
+      - ./docker/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d auth_sso"]
       interval: 5s
@@ -20,6 +22,27 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+
+  node-test:
+    build:
+      context: .
+      dockerfile: apps/portal/Dockerfile
+      target: workspace
+      args:
+        NEXT_PUBLIC_APP_URL: http://portal:4100
+    working_dir: /app
+    environment:
+      TEST_DATABASE_URL: postgresql://postgres:postgres@postgres:5432/auth_sso_test
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/auth_sso_test
+      REDIS_URL: redis://redis:6379
+      NODE_ENV: test
+      NEXT_PUBLIC_APP_URL: http://portal:4100
+      PORTAL_REDIRECT_URL: http://portal:4100/api/auth/callback
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
   cert-init:
     image: alpine:3.21
@@ -35,7 +58,7 @@ services:
       target: builder
       args:
         NEXT_PUBLIC_APP_URL: https://127.0.0.1:19443
-    command: sh -c 'pnpm db:push --force && pnpm db:seed'
+    command: sh -c 'pnpm db:migrate && pnpm db:seed'
     environment:
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/auth_sso
       REDIS_URL: redis://redis:6379

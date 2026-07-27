@@ -3,13 +3,14 @@
  * Loaded via NODE_OPTIONS='--require scripts/preload-mock.cjs' before tsx.
  * Patches Module._resolveFilename to intercept 'server-only' imports.
  */
+/* eslint-disable @typescript-eslint/no-require-imports */
 const Module = require('module');
 const path = require('path');
 
 const origResolve = Module._resolveFilename;
 const mockPath = path.resolve(__dirname, 'server-only-mock-shim.cjs');
 
-Module._resolveFilename = function (request, parent, isMain) {
+Module._resolveFilename = function (request, _parent, _isMain) {
   if (request === 'server-only') {
     return mockPath;
   }

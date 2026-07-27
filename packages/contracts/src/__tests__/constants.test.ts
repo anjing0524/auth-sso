@@ -21,7 +21,6 @@ import {
   PERMISSION_PERMISSIONS,
   CLIENT_PERMISSIONS,
   AUDIT_PERMISSIONS,
-  LOGIN_LOG_PERMISSIONS,
   PORTAL_MENU_PERMISSIONS,
   SYSTEM_PERMISSIONS,
 } from '../permissions';
@@ -90,7 +89,6 @@ describe('权限码常量', () => {
     PERMISSION_PERMISSIONS,
     CLIENT_PERMISSIONS,
     AUDIT_PERMISSIONS,
-    LOGIN_LOG_PERMISSIONS,
     SYSTEM_PERMISSIONS,
     PORTAL_MENU_PERMISSIONS,
   ];
@@ -118,7 +116,6 @@ describe('权限码常量', () => {
     expect(groupKeys).toContain('PERMISSION');
     expect(groupKeys).toContain('CLIENT');
     expect(groupKeys).toContain('AUDIT');
-    expect(groupKeys).toContain('LOGIN_LOG');
     expect(groupKeys).toContain('SYSTEM');
     expect(groupKeys).toContain('PORTAL_MENU');
   });

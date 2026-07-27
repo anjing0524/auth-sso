@@ -476,7 +476,7 @@ Phase 0: Mock 基础设施统一化（3 天）
 
 Phase 1: E2E Playwright 搭建（5 天）
   ├── playwright.config.ts
-  ├── docker-compose.e2e.yml 统一启动 Portal + Gateway 依赖
+  ├── docker-compose.test.yml 统一启动 Portal + Gateway 依赖
   ├── Cycle 1-2 (10 tests): 未认证 → 认证全流程
   ├── CI main.yml 集成 Playwright
   └── 验收: 全绿通过

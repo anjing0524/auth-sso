@@ -616,7 +616,7 @@ export function proxy(request: NextRequest) {
 | §3.1 用户管理 | 所有响应移除 `dataScopeType`；`POST /api/users/:id/reset-password` 权限码从 `user:reset_password` 改为 `user:update` |
 | §3.2 部门管理 | 响应字段 `sortOrder` → `sort`（对齐 schema 列名）；`parentId` → `parent_id` |
 | §3.3 角色管理 | 所有请求/响应移除 `dataScopeType` 字段、增加 `deptId` 字段；移除 §3.3 末尾废弃的 `GET/PUT /api/roles/:id/data-scopes` |
-| §3.4 权限管理 | 权限码 `group` 字段改为 `type`（DIRECTORY/PAGE/API/DATA）；权限码表移除 `group` 列 |
+| §3.4 权限管理 | 权限码 `group` 字段改为 `type`（DIRECTORY/PAGE/API）；权限码表移除 `group` 列 |
 | §3.7 审计日志 | `POST /api/audit/login-logs` 权限码从 `login_log:read` 改为 `audit:read` |
 | §4 OIDC Provider | introspect/revoke 端点标注需 client 认证 |
 

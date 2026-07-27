@@ -114,10 +114,10 @@ packages/config/    共享 env 配置 (Zod + URL 推导)
 
 ## 测试体系 (Vitest 4 Projects 模式)
 
-- Vitest 4.x 使用 `test.projects` 聚合（根 vitest.config.ts → apps/portal/vitest.config.ts），非 `vitest.workspace.ts`
+- Vitest 4.x 使用 `test.projects` 聚合（根 `vitest.config.ts` → `apps/portal/vitest.api.config.ts` + `apps/portal/vitest.ui.config.ts`），非 `vitest.workspace.ts`
 - jsdom 默认环境；API 测试文件用 `// @vitest-environment node` 行级覆盖
 - Vite 8 原生支持 tsconfig paths 解析（无需 `vite-tsconfig-paths` 插件）
-- API 测试 mock DB（`vi.mock()`）和 Redis；领域层纯函数 TDD 零 mock
+- API project 以 Docker Compose 暴露的 PostgreSQL/Redis 作为真实基础设施基线；UI/domain project 不依赖数据库
 - E2E Playwright 仅 Chromium，baseURL `http://localhost:4100`
 - 需求追溯: 测试文件用 `@req` 注解标记覆盖的需求 ID
 - 共享配置: `vitest.base.ts` (coverage/timeout) + `drizzle.base.ts`
@@ -151,4 +151,4 @@ packages/config/    共享 env 配置 (Zod + URL 推导)
 - ESLint flat config (`eslint.base.mjs`)，`consistent-type-imports` 使用 `inline-type-imports` 风格
 - Next.js 16: Middleware 改名为 Proxy，Server Function 公开可达（三层防御原因）
 - Docker Compose 本地开发: `docker compose up -d`（PostgreSQL 16 + Redis 7）
-- 数据库初始化顺序: `pnpm db:push` → `pnpm db:seed`
+- 数据库初始化顺序: `pnpm db:migrate` → `pnpm db:seed`；`db:push` 只允许本地临时试验，不进入 CI/发布路径

@@ -17,6 +17,11 @@ import { validateAuthCodeRow, verifyPKCE } from '@/domain/auth/oauth-code';
 import { validateClientActive, validateClientSecret, validateRedirectUri } from '@/domain/auth/oauth-client';
 import { validateAuthorization } from '@/domain/auth/oauth-authorize';
 
+const TEST_PASSWORD_CONFIG = {
+  bcryptRounds: 4,
+  passwordHistoryMax: 5,
+} as const;
+
 // ======== login.ts ========
 
 describe('validateLoginCredentials', () => {
@@ -55,19 +60,19 @@ describe('validateLoginCredentials', () => {
 
 describe('password', () => {
   it('hashPassword → 返回 bcrypt 哈希字符串', async () => {
-    const hash = await hashPassword('test123');
+    const hash = await hashPassword('test123', TEST_PASSWORD_CONFIG);
     expect(hash).toMatch(/^\$2[aby]\$\d+\$/);
-  });
+  }, 30_000);
 
   it('verifyPassword → 正确密码返回 true', async () => {
-    const hash = await hashPassword('securepass');
+    const hash = await hashPassword('securepass', TEST_PASSWORD_CONFIG);
     expect(await verifyPassword('securepass', hash)).toBe(true);
-  });
+  }, 30_000);
 
   it('verifyPassword → 错误密码返回 false', async () => {
-    const hash = await hashPassword('securepass');
+    const hash = await hashPassword('securepass', TEST_PASSWORD_CONFIG);
     expect(await verifyPassword('wrongpass', hash)).toBe(false);
-  });
+  }, 30_000);
 });
 
 // ======== oauth-code.ts ========

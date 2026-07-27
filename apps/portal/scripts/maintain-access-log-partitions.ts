@@ -1,14 +1,16 @@
 /**
  * access_logs 分区维护脚本
  *
- * 用法：
- *   cd apps/portal && DATABASE_URL=<url> tsx scripts/maintain-access-log-partitions.ts
- *
- * 建议 cron：每月 1 号执行。
+ * 默认入口：`pnpm --filter @auth-sso/portal db:maintain-partitions`
+ * 直接运行：cd apps/portal && DATABASE_URL=<url> tsx scripts/maintain-access-log-partitions.ts
  *
  * 职责：
  * 1. 预创建未来 2 个月的分区（确保写入不报错）
  * 2. 删除超过 180 天的过期分区（合规保留期）
+ *
+ * 调度归属：
+ * 该脚本只提供运行时分区维护能力，具体由实际部署/运维平台按月调度；
+ * GitHub Actions 仅承担 CI 验证，不负责生产数据库运维。
  *
  * 幂等：CREATE TABLE IF NOT EXISTS + 检查 pg_inherits 避免重复。
  */

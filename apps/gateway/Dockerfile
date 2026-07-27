@@ -41,8 +41,8 @@ COPY --from=builder /app/apps/gateway/target/release/gateway /usr/local/bin/gate
 # 复制 Docker 环境专用配置文件（upstream/issuer/redis 使用 Docker 内部地址）
 COPY apps/gateway/gateway.docker.toml ./gateway.toml
 
-# 创建 SSL 目录挂载点并授予 gateway 用户权限
-RUN mkdir -p /etc/gateway/ssl && chown -R gateway:gateway /etc/gateway/ssl
+# 创建运行时必需的可写目录并授予 gateway 用户权限
+RUN mkdir -p /etc/gateway/ssl /app/logs && chown -R gateway:gateway /etc/gateway/ssl /app/logs
 
 EXPOSE 80 443
 
