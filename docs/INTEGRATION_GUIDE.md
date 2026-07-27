@@ -23,6 +23,8 @@ docker compose up -d
 docker compose ps    # 确认 postgres + redis healthy
 ```
 
+> Portal 的 Vitest/API 测试默认连接宿主机 `localhost:5432` 的 PostgreSQL。用于发布验收的 `docker-compose.e2e.yml` 私有网络栈不会暴露这个端口，不能替代开发环境里的 `docker compose up -d postgres redis`。
+
 ## 第二步：初始化 Portal
 
 ```bash

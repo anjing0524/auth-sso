@@ -70,6 +70,14 @@ export class MockRedisStore {
     return this.store.get(key) ?? null;
   }
 
+  async connect(): Promise<void> {
+    // 内存实现无需建立网络连接。
+  }
+
+  async ping(): Promise<'PONG'> {
+    return 'PONG';
+  }
+
   async setex(key: string, seconds: number, value: string): Promise<'OK' | null> {
     this.store.set(key, value);
     this.expiries.set(key, Date.now() + seconds * 1000);

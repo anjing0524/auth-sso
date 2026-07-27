@@ -9,19 +9,86 @@ import postgres from 'postgres';
 import { readdirSync, readFileSync } from 'fs';
 import { join } from 'path';
 
+function redactDatabaseUrl(url: string): string {
+  return url.replace(/\/\/.*@/, '//***@');
+}
+
+function buildSetupHint(testUrl: string): string {
+  return [
+    `[globalSetup] 无法连接测试数据库: ${redactDatabaseUrl(testUrl)}`,
+    '[globalSetup] Portal API 测试依赖宿主机可达的 PostgreSQL。',
+    '[globalSetup] 先执行 `docker compose up -d postgres redis`，确认 `auth-sso-postgres` 暴露 `5432:5432`，再重试 Vitest。',
+    '[globalSetup] 若本机使用了其他 Compose 栈，请检查它是否占用了同名容器或没有把 PostgreSQL 暴露到 localhost:5432。',
+  ].join('\n');
+}
+
+function quoteIdentifier(identifier: string): string {
+  return `"${identifier.replaceAll('"', '""')}"`;
+}
+
+async function ensureDatabaseExists(testUrl: string): Promise<void> {
+  const parsed = new URL(testUrl);
+  const databaseName = parsed.pathname.replace(/^\//, '');
+  if (!databaseName) {
+    throw new Error(`[globalSetup] 测试数据库 URL 缺少 database 名称: ${redactDatabaseUrl(testUrl)}`);
+  }
+
+  const adminUrl = new URL(testUrl);
+  adminUrl.pathname = '/postgres';
+
+  const adminSql = postgres(adminUrl.toString(), {
+    max: 1,
+    idle_timeout: 10,
+    connect_timeout: 5,
+  });
+
+  try {
+    const rows = await adminSql<{ exists: boolean }[]>`
+      SELECT EXISTS(
+        SELECT 1
+        FROM pg_database
+        WHERE datname = ${databaseName}
+      ) AS "exists"
+    `;
+
+    if (!rows[0]?.exists) {
+      console.log(`[globalSetup] 创建缺失的测试数据库: ${databaseName}`);
+      await adminSql.unsafe(`CREATE DATABASE ${quoteIdentifier(databaseName)}`);
+    }
+  } finally {
+    await adminSql.end();
+  }
+}
+
 export async function setup() {
   const testUrl =
     process.env['TEST_DATABASE_URL'] ||
     process.env['DATABASE_URL'] ||
     'postgresql://postgres:postgres@localhost:5432/auth_sso_test';
 
-  console.log(`\n[globalSetup] 连接测试数据库: ${testUrl.replace(/\/\/.*@/, '//***@')}`);
+  console.log(`\n[globalSetup] 连接测试数据库: ${redactDatabaseUrl(testUrl)}`);
 
-  const sql = postgres(testUrl, { max: 1, idle_timeout: 10 });
+  try {
+    await ensureDatabaseExists(testUrl);
+  } catch (error) {
+    const details = error instanceof Error ? error.message : String(error);
+    throw new Error(`${buildSetupHint(testUrl)}\n[globalSetup] 创建/检查测试数据库失败: ${details}`);
+  }
+
+  const sql = postgres(testUrl, {
+    max: 1,
+    idle_timeout: 10,
+    connect_timeout: 5,
+  });
 
   try {
     // 检查连接
-    await sql`SELECT 1`;
+    try {
+      await sql`SELECT 1`;
+    } catch (error) {
+      const details = error instanceof Error ? error.message : String(error);
+      throw new Error(`${buildSetupHint(testUrl)}\n[globalSetup] 原始错误: ${details}`);
+    }
 
     // 运行 migration SQL 文件
     const drizzleDir = join(__dirname, 'drizzle');

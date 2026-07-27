@@ -21,6 +21,8 @@
 
 ## 变更记录
 
+- 2026-07-27: 修复本地测试数据库自举缺口：Portal `vitest.globalSetup.ts` 在连接前自动补建缺失的 `auth_sso_test`，开发环境 `docker/init-db.sql` 首次启动同步创建测试库；避免 Vitest 因本地仅有 `auth_sso` 而卡死或误用业务库跑测试。沉淀到 `docs/solution/2026-07-27-local-test-db-bootstrap.md`。
+- 2026-07-27: 完成 Portal 健康检查依赖探测收尾：`/api/health` 现主动探测 PostgreSQL `SELECT 1` 与 Redis `PING`，按 `healthy/degraded/unhealthy` 返回聚合状态；补齐数据库失败与双依赖失败测试，并沉淀依赖探针最佳实践到 `docs/solution/2026-07-27-health-check-active-dependency-probes.md`。
 - 2026-07-24: 整理文件归属：用户创建权限守卫下沉至 users 模块、403 视图进入 shared；需求追溯报告改为忽略的本地生成物，消除每次生成带来的工作树噪声。
 - 2026-07-24: 清除四份失效 E2E（过时 REST 写路径、错误 OAuth 回调/PKCE、无 baseline 的视觉快照、以无效授权码伪装安全验证）及其动态 `skip` 伪通过；追溯脚本改为信息清单，不再作为 CI 通过率门禁，真实缺口以 55/76 明示并纳入后续测试补齐。
 - 2026-07-24: 首轮无效入口清理：删除与当前 schema 漂移、无调用方的调试/种子/生产改写脚本及其 `db:clean` 命令；移除被 Docker 发布验收替代的本地 QA 编排与未配置告警脚本。保留 CI 调度的分区维护与性能基准。
@@ -74,7 +76,7 @@
 | A3-1 | 🔲 | 拆分 token.ts（584 行 → sign/keys/rotate/revoke 四模块） | `lib/auth/token.ts` | 3.1 |
 | A3-2 | 🔲 | 分离 gateway.rs 的 OAuth client 逻辑（853 行） | `gateway/src/gateway.rs` | 3.2 |
 | A3-3 | ✅ | 删除无逻辑的 facade re-export，公开入口直接导出实际模块 | `lib/auth/index.ts` | 3.5 |
-| A3-4 | 🔲 | 健康检查加 DB/Redis 连通性探测 | `api/health/route.ts` | 10.3 |
+| A3-4 | ✅ | 健康检查加 DB/Redis 连通性探测与失败边界测试 | `api/health/route.ts` + `__tests__/api/health.test.ts` | 10.3 |
 
 ### P4 质量防护
 

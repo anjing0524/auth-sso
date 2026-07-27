@@ -10,7 +10,6 @@ import { NextResponse } from 'next/server';
 import { db } from '@/infrastructure/db';
 import { getRedis } from '@/infrastructure/redis';
 import { sql } from 'drizzle-orm';
-import type Redis from 'ioredis';
 
 interface HealthCheck {
   status: 'ok' | 'fail';
@@ -39,7 +38,7 @@ async function checkDatabase(): Promise<HealthCheck> {
 async function checkRedis(): Promise<HealthCheck> {
   const start = Date.now();
   try {
-    const redis = getRedis() as unknown as Redis;
+    const redis = getRedis();
     const result = await redis.ping();
     if (result === 'PONG') {
       return { status: 'ok', latencyMs: Date.now() - start };

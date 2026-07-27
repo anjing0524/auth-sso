@@ -19,6 +19,7 @@ const log = createLogger('Redis');
 export interface RedisClient {
   /** 确保 lazy client 已完成连接；关键会话写入不得依赖 offline queue。 */
   connect(): Promise<void>;
+  ping(): Promise<'PONG'>;
   get(key: string): Promise<string | null>;
   /** 原子读取并删除（GETDEL，Redis 6.2+），用于一次性消费场景 */
   getdel(key: string): Promise<string | null>;
@@ -110,6 +111,7 @@ function createIoredisClient(): RedisClient {
   // ioredis API 直接匹配 RedisClient 接口
   return {
     connect,
+    ping: () => client.ping(),
     get: (key) => client.get(key),
     getdel: (key) => client.getdel(key),
     setex: (key, seconds, value) => client.setex(key, seconds, value),
