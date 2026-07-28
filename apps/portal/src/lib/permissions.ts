@@ -2,7 +2,6 @@
  * 权限上下文工具函数
  * 获取用户的角色和权限，具备高性能的 Redis 旁路缓存支持
  */
-import { db, schema } from '@/infrastructure/db';
 import { eq } from 'drizzle-orm';
 import { getRedis, type RedisClient } from '@/infrastructure/redis';
 import { ENTITY_ACTIVE, REDIS_KEY_PREFIX } from '@auth-sso/contracts';
@@ -21,6 +20,10 @@ const NULL_CACHE_TTL = 60;
 /** null 标记的 Redis Key 后缀 */
 const NULL_CACHE_SUFFIX = ':null';
 const USER_BATCH_SIZE = 50;
+
+async function getPermissionDb() {
+  return import('@/infrastructure/db');
+}
 
 async function settleUserBatches(
   userIds: string[],
@@ -93,6 +96,7 @@ export async function getUserPermissionContext(userId: string): Promise<UserPerm
   }
 
   try {
+    const { db, schema } = await getPermissionDb();
     // 2. 从数据库级联查询用户、绑定的角色以及各角色的权限列表，降低 DB 往返开销。
     // 使用 columns 仅选必要字段，减少 4 层嵌套关联的数据传输量。
     const user = await db.query.users.findFirst({
