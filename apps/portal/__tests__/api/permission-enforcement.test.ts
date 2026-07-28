@@ -65,15 +65,18 @@ const {
   mockGetJwtFromCookie,
   mockVerifyJwt,
   mockHeadersGet,
+  mockConnection,
 } = vi.hoisted(() => {
   const mockGetJwtFromCookie = vi.fn();
   const mockVerifyJwt = vi.fn();
   const mockHeadersGet = vi.fn().mockReturnValue(null);
+  const mockConnection = vi.fn().mockResolvedValue(undefined);
 
   return {
     mockGetJwtFromCookie,
     mockVerifyJwt,
     mockHeadersGet,
+    mockConnection,
   };
 });
 
@@ -87,6 +90,14 @@ const { mockGetUserPermissionContext } = vi.hoisted(() => ({
 vi.mock('@/lib/permissions', () => ({
   getUserPermissionContext: mockGetUserPermissionContext,
 }));
+
+vi.mock('next/server', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('next/server')>();
+  return {
+    ...actual,
+    connection: mockConnection,
+  };
+});
 
 vi.mock('next/headers', () => ({
   headers: async () => ({
