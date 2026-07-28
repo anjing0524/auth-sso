@@ -10,7 +10,7 @@
 ## 2. 目录结构
 ```text
 /opt/auth-sso/
-├── docker-compose.yml
+├── docker-compose.prod.yml
 ├── .env.prod
 └── data/
     ├── postgres/
@@ -34,10 +34,9 @@
      -d portal.yourdomain.com
    ```
 4. 证书目录映射：确保证书文件位于 `data/certbot/conf/live/yourdomain.com/` 下。
-5. 启动服务：`docker-compose -f docker-compose.prod.yml up -d --build`。
+5. 启动服务：`docker compose -f docker-compose.prod.yml up -d --build`。
 6. 数据库初始化：`docker exec -i auth-sso-postgres psql -U postgres < init-db.sql`。
 
 ## 5. 注意事项 (IMPORTANT)
 - **HTTPS 协议**: 在 `.env.prod` 中，`BETTER_AUTH_URL` 和 `NEXT_PUBLIC_APP_URL` 必须以 `https://` 开头。
 - **代理透传**: Nginx 必须转发 `X-Forwarded-Proto: https`，否则 Better Auth 会因协议不匹配拒绝签发 Cookie。
-

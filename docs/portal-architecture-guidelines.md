@@ -1,6 +1,6 @@
 # Portal 架构设计与开发规范指南 (Zod门禁 + 领域纯函数 + Drizzle直调)
 
-本指南旨在规范 `@auth-sso/portal` 项目在 Next.js 16 App Router + React 19 + Node.js 26 架构下的设计与重构标准，并完全对齐 [@portal-ddd-architecture-requirements.md](file:///Users/liushuo/code/干了科技/auth-sso/docs/brainstorms/portal-ddd-architecture-requirements.md) 需求文档。
+本指南旨在规范 `@auth-sso/portal` 项目在 Next.js 16 App Router + React 19 + Node.js 26 架构下的设计与重构标准，并完全对齐 [portal-ddd-architecture-requirements.md](./brainstorms/portal-ddd-architecture-requirements.md) 需求文档。
 
 > **版本演进说明**：本指南已针对 Next.js 16 的关键变化完成修订——包括 Cache Components（`use cache` 指令替代 `React.cache()`）、Middleware 更名为 Proxy、Server Functions 安全模型等。
 
@@ -284,19 +284,20 @@ type _UserStatusInDomain = UserStatus extends UserRow['status'] ? true : never;
 /** 将领域实体转为 Drizzle insert 行（仅用于创建路径） */
 export function clientToInsertRow(c: Client) {
   return {
-    id: c.id, publicId: c.publicId, name: c.name,
     clientId: c.clientId, clientSecret: c.clientSecret,
-    redirectUrls: JSON.stringify(c.redirectUris),  // 领域数组 → DB JSON 字符串
-    grantTypes: c.grantTypes, scopes: c.scopes,
-    homepageUrl: c.homepageUrl, icon: c.logoUrl,   // 领域名 → DB 列名映射
-    accessTokenTtl: c.accessTokenTtl, refreshTokenTtl: c.refreshTokenTtl,
-    status: c.status, disabled: c.disabled, skipConsent: c.skipConsent,
-    createdAt: new Date(), updatedAt: new Date(),   // Temporal → Date（仅此一处转换点）
+    redirectUris: c.redirectUris,                   // 领域数组 → PG text[] 原生数组
+    scopes: c.scopes,
+    homepageUrl: c.homepageUrl,
+    logoUrl: c.logoUrl,                             // 领域名 → DB 列名映射
+    accessTokenTtl: c.accessTokenTtl,
+    refreshTokenTtl: c.refreshTokenTtl,
+    status: c.status,
+    createdAt: new Date(),                          // Temporal → Date（仅此一处转换点）
   };
 }
 
 /** 将领域实体转为 Drizzle update 行（仅用于更新路径） */
-export function clientToUpdateRow(c: Client) { /* 子集：不含 id/publicId/createdAt */ }
+export function clientToUpdateRow(c: Client) { /* 子集：不含 clientId/createdAt */ }
 ```
 
 **强制规则**：
@@ -351,7 +352,6 @@ import { USER_STATUS_VALUES, type UserStatus } from '@auth-sso/contracts';
 // ── 领域实体（纯 TS interface，替代旧的 UserPropsSchema） ──
 export interface User {
   id: string;
-  publicId: string;
   username: string;
   email: string | null;
   name: string;
@@ -490,7 +490,6 @@ export function createUser(
 ): User {
   return {
     id: idGenerator(20),
-    publicId: `user_${idGenerator(8)}`,
     username: input.username,
     email: input.email,
     name: input.name,
@@ -636,25 +635,25 @@ Next.js 16 启用 `cacheComponents: true` 后，使用 `"use cache"` 指令替�
 ```typescript
 // app/users/data.ts
 import { cacheLife, cacheTag } from 'next/cache';
-import { db } from '@/infrastructure/db';
-import { checkPermission, getDataScopeFilter, applyDataScopeFilter } from '@/lib/auth';
-import { headers } from 'next/headers';
+import { eq } from 'drizzle-orm';
+import { db, schema } from '@/infrastructure/db';
+import { USER_LIST_COLUMNS, buildUserListConditions, isScopeDenied } from '@/db/user-queries';
 
 export async function getUsers(params: {
-  page: number; pageSize: number; keyword: string; status: string;
+  deptIds: string[];
+  userId: string;
+  page: number; pageSize: number; keyword: string; status: string; deptId?: string;
 }) {
   'use cache';
   cacheLife('minutes');          // 缓存生命周期：分钟级
   cacheTag('users-list');        // 标签化，后续可通过 updateTag('users-list') 精确失效
 
-  const check = await checkPermission(await headers(), { permissions: ['user:list'] });
-  if (!check.authorized || !check.userId) throw new Error('权限不足');
-
-  const scopeFilter = await getDataScopeFilter(check.userId);
-  // applyDataScopeFilter 是抽取的公共工具函数，消除各读路径中的重复分支
-  const conditions = applyDataScopeFilter(scopeFilter, check.userId);
+  if (isScopeDenied(params.deptIds)) return [];
+  const conditions = buildUserListConditions(params);
+  if (params.deptId) conditions.push(eq(schema.users.deptId, params.deptId));
 
   // ... Drizzle 直接进行查询
+  return db.select(USER_LIST_COLUMNS).from(schema.users).where(/* and(...conditions) */);
 }
 ```
 
@@ -681,7 +680,7 @@ describe('User 领域核心规则 TDD 测试', () => {
 
   it('当激活态用户切换状态时，应变为禁用状态', () => {
     const user = {
-      id: 'u_1', publicId: 'user_1', username: 'test', email: 'a@a.com', name: '测试',
+      id: 'u_1', username: 'test', email: 'a@a.com', name: '测试',
       status: 'ACTIVE' as const, deptId: null, deptName: null, createdAt: new Date()
     };
     expect(toggleUserStatus(user).status).toBe('DISABLED');
@@ -689,7 +688,7 @@ describe('User 领域核心规则 TDD 测试', () => {
 
   it('当删除态用户切换状态时，应抛出 BusinessRuleViolationError', () => {
     const user = {
-      id: 'u_1', publicId: 'user_1', username: 'test', email: 'a@a.com', name: '测试',
+      id: 'u_1', username: 'test', email: 'a@a.com', name: '测试',
       status: 'DELETED' as const, deptId: null, deptName: null, createdAt: new Date()
     };
     expect(() => toggleUserStatus(user)).toThrow(BusinessRuleViolationError);
@@ -782,7 +781,7 @@ export default [
 5. **领域层抛出 `throw new Error(...)` 而非领域错误类型** —— 丢失结构化错误语义。
 6. **Controller 层手写 `if (err instanceof XxxError)` 而非使用 `mapDomainError`** —— 错误映射逻辑分散，破坏统一的错误处理横切层。
 7. **涉及多表写入的 Controller 未使用 `db.transaction()` 包裹** —— 数据一致性风险。
-8. **读路径中重复编写数据范围过滤分支（`if (scopeFilter.type === 'LIST')...`）** —— 必须使用统一的 `applyDataScopeFilter` 工具函数。
+8. **读路径中重复编写部门范围过滤分支（手写 `inArray(users.deptId, deptIds)` / 空范围 `sql\`FALSE\`` 判定）** —— 必须复用统一的 `buildUserListConditions()` / `isScopeDenied()` 查询辅助函数。
 9. **`domain/` 或 `db/` 中手写枚举字面量（`z.enum(['ACTIVE',...])` / `pgEnum('...', ['ACTIVE',...])`）** —— 枚举值必须从 `@auth-sso/contracts` 常值数组派生，单一真相源。
 10. **`domain/` 中保留 `XxxPropsSchema`（如 `UserPropsSchema`）** —— 已废除。Domain 实体用纯 `interface`，不再用 Zod Schema 描述实体全貌。
 11. **API Route GET 处理器中出现直接 `db.select()` / `db.query` DB 调用** —— 读操作必须委托给 `data.ts` 统一读模型，Route 只做鉴权 + 委托。
@@ -816,7 +815,7 @@ export default [
                            ▼
 ┌──────────────────────────────────────────────────────────────────┐
 │ 第三层：withAuth Guard (Portal 应用精细鉴权)                        │
-│ • 细粒度权限编码校验（user:create 等）——实时查询 DB + Redis 缓存    │
+│ • 细粒度权限编码校验（portal:user:create 等）——实时查询 DB + Redis 缓存 │
 │ • 数据范围/资源所有权校验（含递归 CTE 部门树）                       │
 │ • 领域错误统一映射（mapDomainError）                                │
 │ ✅ 运行在 Node.js Runtime，完整访问 Drizzle/DB/Redis               │
@@ -830,7 +829,7 @@ Gateway 已经解码了 JWT，JWT claims 中也确实包含 `permissions` 和 `r
 | 方式 | 权限生效延迟 | 数据范围 | jti 撤销 |
 |------|-------------|---------|---------|
 | Gateway 读 JWT claims 做权限检查 | **最长 1h**（Token 过期才刷新） | ❌ 无法做（需递归 CTE） | ❌ 无 Redis |
-| Portal Action 查 DB 做权限检查 | **最长 5min**（Redis 缓存 TTL） | ✅ `checkDataScope()` | ✅ `isJtiRevoked()` |
+| Portal Action 查 DB 做权限检查 | **最长 5min**（Redis 缓存 TTL） | ✅ `getUserRoleDeptIds()` + `canAccessDept()` | ✅ `isJtiRevoked()` |
 
 管理后台的权限变更（如管理员撤销某用户的删除权限）需要尽快生效。依赖 JWT claims 意味着攻击窗口 = Token 剩余有效期。因此，**权限检查必须在 Portal Action 层实时查 DB**，Gateway 仅负责"这个请求带了一个有效 JWT 吗"的身份校验。
 
@@ -927,7 +926,7 @@ export function withAuth<T extends (...args: any[]) => Promise<any>>(
 
 3. **Session Cookie 安全策略**：Session Cookie 必须设置 `SameSite=Lax`（默认值），防止 CSRF 跨站提交。严禁降级为 `SameSite=None`（除非有明确的跨域 SSO 场景并配合 `Secure` 标志）。
 
-4. **资源所有权校验（数据范围过滤）**：写操作除功能权限（如 `user:create`）外，**必须校验资源所有权**。例如：部门管理员只能操作本部门下的用户，不得仅凭功能权限即放行跨部门操作。所有数据库查询与写入必须通过统一的 `applyDataScopeFilter` / `checkDataScope` 附加数据范围过滤。
+4. **资源所有权校验（数据范围过滤）**：写操作除功能权限（如 `portal:user:create`）外，**必须校验资源所有权**。例如：部门管理员只能操作本部门下的用户，不得仅凭功能权限即放行跨部门操作。读路径统一通过 `getUserRoleDeptIds()` + `buildUserListConditions()` 收敛部门范围，写路径统一通过 `getUserRoleDeptIds()` + `canAccessDept()` 做目标资源部门校验。
 
 5. **环境变量安全**：不得在 `NEXT_PUBLIC_` 前缀的环境变量中暴露敏感信息（API 密钥、数据库连接串、JWT 密钥等）。`NEXT_PUBLIC_` 变量会被打包到客户端 bundle，对用户完全可见。
 
@@ -959,9 +958,9 @@ Controller 只捕获错误，不判断错误类型。所有 `DomainError` → HT
 *   **严禁行为**：Controller 中写 `if (err instanceof DuplicateEntityError) { return NextResponse.json(..., { status: 409 }) }`。
 *   **正确做法**：Controller 的 catch 块只调用 `const mapped = mapDomainError(err); return NextResponse.json(mapped, { status: mapped.status })`。
 
-### 9.5 防线五：数据范围过滤统一抽取 (applyDataScopeFilter)
-`data.ts`、各 GET Route、各 BC 的读路径中**严禁**重复编写数据范围过滤的分支逻辑（`if (scopeFilter.type === 'LIST') { ... } else if (scopeFilter.type === 'SELF') { ... }`）。
-*   **正确做法**：抽取 `applyDataScopeFilter(query, scopeFilter, userId)` 工具函数，所有读路径统一调用，消除代码重复并确保安全策略一致。
+### 9.5 防线五：数据范围过滤统一抽取 (`getUserRoleDeptIds` + 查询辅助函数)
+`data.ts`、各 GET Route、各 BC 的读路径中**严禁**重复编写部门范围过滤分支（如手写“空范围直接拒绝”“`inArray(users.deptId, deptIds)`”“二次 deptId 叠加筛选”）。
+*   **正确做法**：调用 `getUserRoleDeptIds(userId)` 获取已展开子树的部门 ID 列表；读路径统一复用 `buildUserListConditions()` / `isScopeDenied()` 组合查询条件；写路径统一用 `canAccessDept(deptIds, targetDeptId)` 做越权拦截。
 
 ### 9.6 防线六：Auth Guard 包装器统一鉴权 (withAuth)
 
@@ -1087,7 +1086,7 @@ const handleToggle = (item) => {
 ```
 app/users/page.tsx        Server Component — async 获取数据，注入 Client
   ↓ props
-app/users/data.ts         getUsers() — Drizzle 直调查询 + applyDataScopeFilter
+app/users/data.ts         getUsers() — Drizzle 直调查询 + buildUserListConditions
 app/users/components/UserTable.tsx  Client Component — useOptimistic 即时状态翻转
 ```
 
@@ -1141,7 +1140,7 @@ export function withAuth(options, fn) {
 }
 
 // 使用
-export const createUserAction = withAuth({ permissions: ['user:create'] }, async (input) => {
+export const createUserAction = withAuth({ permissions: ['portal:user:create'] }, async (input) => {
   // 只写业务，无鉴权/错误处理样板
 });
 ```

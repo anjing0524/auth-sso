@@ -4,13 +4,14 @@ ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 RUN npm install -g pnpm@10.12.4
 
-FROM base AS builder
+FROM base AS workspace
 WORKDIR /app
 
 # 先复制依赖描述文件 → install → 利用 Docker layer caching（源码变更不重新下载依赖）
 COPY pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY package.json tsconfig.base.json next.base.ts vitest.base.ts ./
 COPY apps/portal/package.json apps/portal/tsconfig.json apps/portal/next.config.ts ./apps/portal/
+COPY apps/demo-app/package.json ./apps/demo-app/
 COPY packages/contracts/package.json ./packages/contracts/
 COPY packages/config/package.json ./packages/config/
 
@@ -23,8 +24,12 @@ ENV NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL
 
 RUN pnpm install --frozen-lockfile
 
-# 再复制全部源码 → 构建
+# 再复制全部源码
 COPY . .
+
+FROM workspace AS builder
+
+# 构建生产 Portal
 RUN pnpm --filter @auth-sso/portal build
 
 FROM base AS runner

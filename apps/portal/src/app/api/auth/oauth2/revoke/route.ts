@@ -11,7 +11,7 @@ import { revokeJti } from '@/lib/session/revoke';
 import { db, schema } from '@/infrastructure/db';
 import { eq } from 'drizzle-orm';
 import { hashToken } from '@/lib/crypto';
-import { mapDomainError } from '@/domain/shared/error-mapping';
+import { mapServerError } from '@/lib/server-error';
 import { parseOAuthBody } from '@/lib/auth/oauth-body';
 import { authenticateOAuthClient } from '@/lib/auth/oauth-helpers';
 import { createLogger } from '@/lib/logger';
@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
 
   } catch (err) {
     // RFC 7009: 异常时仍返回 200，结构化日志记录不含堆栈（防信息泄露）
-    const mapped = mapDomainError(err);
+    const mapped = mapServerError(err);
     log.error('Exception', { error: mapped.error, message: mapped.message });
     return NextResponse.json({});
   }

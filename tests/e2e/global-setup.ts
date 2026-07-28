@@ -1,14 +1,20 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import path from 'node:path';
 
 const execFileAsync = promisify(execFile);
+const rootDir = process.cwd();
+const portalDir = path.join(rootDir, 'apps/portal');
+const preloadMock = path.join(portalDir, 'scripts/preload-mock.cjs');
+const seedScript = path.join(portalDir, 'scripts/seed.ts');
 
 export default async function globalSetup() {
   if (process.env.E2E_SKIP_SEED === 'true') {
     return;
   }
 
-  await execFileAsync('pnpm', ['db:seed'], {
+  await execFileAsync(process.execPath, ['--require', preloadMock, '--import', 'tsx', seedScript], {
+    cwd: rootDir,
     env: {
       ...process.env,
       DATABASE_URL: process.env.DATABASE_URL ?? 'postgresql://postgres:postgres@localhost:5432/auth_sso',

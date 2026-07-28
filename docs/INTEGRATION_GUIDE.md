@@ -23,31 +23,32 @@ docker compose up -d
 docker compose ps    # 确认 postgres + redis healthy
 ```
 
-> Portal 的 Vitest/API 测试默认连接宿主机 `localhost:5432` 的 PostgreSQL。用于发布验收的 `docker-compose.e2e.yml` 私有网络栈不会暴露这个端口，不能替代开发环境里的 `docker compose up -d postgres redis`。
+> 开发机直接执行 `pnpm test:api` 时，Portal API 测试会连接当前开发环境 `docker compose up -d postgres redis` 暴露出的 PostgreSQL/Redis；而 GitHub CI 与 release 验收统一改为在 `docker-compose.test.yml` 中完成：同一份 Compose 文件既提供 `node-test` 容器跑 lint/typecheck/migrate/seed/test，也提供 Gateway 闭环所需的 `db-init`/`portal`/`gateway` 私有栈。
 
 ## 第二步：初始化 Portal
 
 ```bash
-# 推送 DB schema + 种子数据
-pnpm --filter @auth-sso/portal db:push
+# 执行迁移 + 种子数据
+pnpm --filter @auth-sso/portal db:migrate
 pnpm --filter @auth-sso/portal db:seed
 ```
 
 ## 第三步：启动所有服务
 
 ```bash
-# 终端 1: Portal (http://localhost:4100)
-pnpm dev:portal
-
-# 终端 2: Gateway (预编译二进制)
-./apps/gateway/target/release/gateway -c apps/gateway/gateway.toml
-# Gateway: HTTP :19080 (→ 302 HTTPS), HTTPS :19443
-
-# 终端 3: Demo App (http://localhost:3100)
-pnpm dev:demo
+# 默认开发入口：自动拉起 postgres + redis + portal + demo + gateway
+pnpm dev
 ```
 
-> 浏览器访问 `https://localhost:19443` 时需接受自签名证书（CN=localhost, 有效期至 2036）。
+如需分别调试某一层，可改用：
+
+```bash
+pnpm dev:portal
+pnpm dev:demo
+pnpm dev:gateway
+```
+
+> 浏览器默认入口必须是 `https://localhost:19443`。`http://localhost:4100` 仅作为 Portal 上游调试地址；若直接访问它，得到的是“绕过 Gateway 的 Portal 调试路径”，不能代表真实交付拓扑。
 
 ## 第四步：端到端验证
 
@@ -55,6 +56,18 @@ pnpm dev:demo
 2. 用 admin 账户登录 → 获得 `portal_jwt_token` Cookie
 3. 访问 `https://localhost:19443` → Portal Dashboard（Gateway 验签通过）
 4. 新标签页访问 `http://localhost:3100` → **注意：直接访问 Demo App 不会经过 Gateway**
+
+## 第五步：本地 Gateway 闭环测试
+
+```bash
+pnpm test:e2e
+```
+
+该命令会自动拉起 `docker-compose.test.yml` 中的 Gateway 发布拓扑（`postgres`/`redis`/`cert-init`/`db-init`/`portal`/`gateway`），并只执行经 Gateway 的发布闭环用例。若只想调试直连 Portal 的浏览器冒烟，再显式执行：
+
+```bash
+pnpm test:e2e:portal
+```
 
 ### Gateway 代理模式完整验证
 

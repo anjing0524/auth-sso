@@ -19,7 +19,8 @@ import { validateClientActive, validateClientSecret } from '@/domain/auth/oauth-
 import { verifyPKCE } from '@/domain/auth/oauth-code';
 import { parseScopes } from '@/domain/auth/oauth-authorize';
 import { getUserPermissionContext, cacheUserPermissionContext } from '@/lib/permissions';
-import { mapDomainError, mapToOAuthError } from '@/domain/shared/error-mapping';
+import { mapToOAuthError } from '@/domain/shared/error-mapping';
+import { mapServerError } from '@/lib/server-error';
 import { InvalidGrantError } from '@/domain/shared/errors';
 
 import { z } from 'zod';
@@ -149,7 +150,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ error: 'unsupported_grant_type' }, { status: 400 });
   } catch (err) {
-    const mapped = mapDomainError(err);
+    const mapped = mapServerError(err);
     const oauthError = mapToOAuthError(mapped.error);
 
     return NextResponse.json(

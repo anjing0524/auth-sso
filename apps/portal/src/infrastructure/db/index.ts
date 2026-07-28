@@ -10,16 +10,40 @@
 import postgres from 'postgres';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import * as schema from '../../db/schema';
-import { getEnvConfig } from '@auth-sso/config';
+import { getDatabaseUrl } from '@auth-sso/config';
 
-/** 数据库连接配置 — 通过 Zod 校验的环境变量，确保启动期 fail-fast */
-const connectionString = getEnvConfig().DATABASE_URL;
+function createDatabase() {
+  const client = postgres(getDatabaseUrl());
+  return drizzle(client, { schema });
+}
 
-/** Postgres 客户端 */
-const client = postgres(connectionString);
+export type PortalDatabase = ReturnType<typeof createDatabase>;
 
-/** Drizzle ORM 实例 */
-export const db = drizzle(client, { schema });
+let database: PortalDatabase | null = null;
+
+/**
+ * 首次真实数据库操作时初始化连接。
+ *
+ * Next.js 构建会求值 Route Handler / RSC 的模块图；导入数据库模块本身必须保持纯净，
+ * 运行时缺少 DATABASE_URL 仍会在首次访问时通过 Zod fail-fast。
+ */
+export function getDb(): PortalDatabase {
+  if (!database) {
+    database = createDatabase();
+  }
+  return database;
+}
+
+/**
+ * 保持现有 `db.select()` / `db.query.*` API，同时将初始化推迟到首次属性访问。
+ */
+export const db = new Proxy({} as PortalDatabase, {
+  get(_target, property) {
+    const instance = getDb();
+    const value = Reflect.get(instance, property, instance);
+    return typeof value === 'function' ? value.bind(instance) : value;
+  },
+});
 
 /** 导出 schema 以便其他模块使用 */
 export { schema };

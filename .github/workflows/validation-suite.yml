@@ -1,0 +1,152 @@
+name: Shared Validation Suite
+
+on:
+  workflow_call:
+    inputs:
+      artifact_name:
+        required: true
+        type: string
+      artifact_retention_days:
+        required: false
+        type: number
+        default: 14
+      run_fault_injection:
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  full-check:
+    name: Full CI (Lint + Test + Coverage)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build test node-test image
+        run: docker compose -f docker-compose.test.yml build node-test
+
+      - name: Start Docker test infrastructure
+        run: docker compose -f docker-compose.test.yml up -d postgres redis
+
+      - name: Verify Docker test infrastructure
+        run: docker compose -f docker-compose.test.yml ps
+
+      - name: Run lint
+        run: docker compose -f docker-compose.test.yml run --rm node-test pnpm lint
+
+      - name: Run typecheck
+        run: docker compose -f docker-compose.test.yml run --rm node-test pnpm typecheck
+
+      - name: Run dependency audit
+        continue-on-error: true
+        run: docker compose -f docker-compose.test.yml run --rm node-test pnpm audit --prod --audit-level=high
+
+      - name: Migrate empty database
+        run: docker compose -f docker-compose.test.yml run --rm node-test pnpm db:migrate
+
+      - name: Seed database
+        run: docker compose -f docker-compose.test.yml run --rm node-test pnpm --filter @auth-sso/portal db:seed
+
+      - name: Run unit, API, and component tests
+        run: docker compose -f docker-compose.test.yml run --rm node-test pnpm test
+
+      - name: Generate traceability inventory
+        run: docker compose -f docker-compose.test.yml run --rm node-test node tests/traceability/generate-report.mjs
+
+      - name: Run fault injection smoke test
+        if: ${{ inputs.run_fault_injection && always() }}
+        continue-on-error: true
+        run: docker compose -f docker-compose.test.yml run --rm node-test node tests/performance/api-benchmark.mjs --quick
+
+      - name: Collect Docker test infrastructure logs
+        if: always()
+        run: docker compose -f docker-compose.test.yml logs --no-color postgres redis
+
+      - name: Tear down Docker test infrastructure
+        if: always()
+        run: docker compose -f docker-compose.test.yml down --volumes --remove-orphans
+
+  gateway-full:
+    name: Gateway (fmt + clippy + test + audit)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/gateway
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            apps/gateway/target
+          key: cargo-${{ runner.os }}-${{ hashFiles('apps/gateway/Cargo.lock') }}
+
+      - name: Run cargo fmt --check
+        run: cargo fmt --all -- --check
+
+      - name: Run cargo clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: Run cargo test
+        run: cargo test --lib
+
+      - name: Run cargo audit
+        continue-on-error: true
+        run: cargo audit
+
+  gateway-e2e:
+    name: Gateway Release Journey
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build and start immutable Gateway stack
+        run: docker compose -f docker-compose.test.yml up --detach --build --wait --wait-timeout 600 postgres redis cert-init db-init portal gateway
+
+      - name: Run Gateway release journey
+        run: >
+          docker run --rm
+          --network host
+          -v "$PWD:/work"
+          -w /work
+          -e E2E_TARGET=docker
+          -e E2E_BASE_URL=https://127.0.0.1:19443
+          -e E2E_SKIP_SEED=true
+          mcr.microsoft.com/playwright:v1.60.0-noble
+          bash -lc "npm install -g pnpm@10.12.4 &&
+          printf 'manage-package-manager-versions=false\nregistry=https://registry.npmmirror.com\n' > .npmrc &&
+          pnpm install --frozen-lockfile &&
+          pnpm test:e2e:release"
+
+      - name: Collect Gateway stack logs
+        if: always()
+        run: docker compose -f docker-compose.test.yml logs --no-color > gateway-e2e.log
+
+      - name: Upload Gateway stack logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.artifact_name }}
+          path: |
+            gateway-e2e.log
+            playwright-report/
+            test-results/
+          retention-days: ${{ inputs.artifact_retention_days }}
+
+      - name: Tear down immutable Gateway stack
+        if: always()
+        run: docker compose -f docker-compose.test.yml down --volumes --remove-orphans

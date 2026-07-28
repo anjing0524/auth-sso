@@ -18,7 +18,7 @@ import { verifyPassword } from '@/domain/auth/password';
 import { checkBruteForce, clearBruteForceCounter, incrementBruteForce } from '@/lib/auth/brute-force';
 import { signLoginSession, LOGIN_SESSION_TTL } from '@/lib/auth/token';
 import { InvalidCredentialsError } from '@/domain/shared/errors';
-import { mapDomainError } from '@/domain/shared/error-mapping';
+import { mapServerError } from '@/lib/server-error';
 import { AUTH_ERRORS, COMMON_ERRORS, COOKIE_NAMES } from '@auth-sso/contracts';
 import { writeLoginLog, extractClientIP, extractUserAgent } from '@/lib/audit';
 import { isCookieSecure } from '@/lib/env';
@@ -107,7 +107,7 @@ export async function POST(request: NextRequest) {
     });
     return response;
   } catch (err) {
-    const mapped = mapDomainError(err);
+    const mapped = mapServerError(err);
     return NextResponse.json(
       { error: mapped.error, message: mapped.message },
       { status: mapped.status },

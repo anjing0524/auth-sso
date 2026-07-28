@@ -39,6 +39,39 @@ const portalEnvSchema = baseEnvSchema.extend({
 
 export type PortalEnv = z.infer<typeof portalEnvSchema>;
 
+const databaseEnvSchema = portalEnvSchema.pick({ DATABASE_URL: true });
+const redisEnvSchema = portalEnvSchema.pick({ REDIS_URL: true });
+const appUrlEnvSchema = portalEnvSchema.pick({ NEXT_PUBLIC_APP_URL: true });
+const issuerEnvSchema = portalEnvSchema.pick({
+  NEXT_PUBLIC_APP_URL: true,
+  PORTAL_ISSUER: true,
+});
+const jwksEnvSchema = portalEnvSchema.pick({
+  NEXT_PUBLIC_APP_URL: true,
+  PORTAL_JWKS_URI: true,
+});
+const trustedOriginsEnvSchema = portalEnvSchema.pick({
+  NODE_ENV: true,
+  NEXT_PUBLIC_APP_URL: true,
+  TRUSTED_ORIGINS: true,
+});
+const cookieEnvSchema = portalEnvSchema.pick({
+  NODE_ENV: true,
+  COOKIE_SECURE: true,
+});
+const gatewaySecretEnvSchema = portalEnvSchema.pick({
+  GATEWAY_SHARED_SECRET: true,
+});
+const logLevelSchema = z.enum([
+  'trace',
+  'debug',
+  'info',
+  'warn',
+  'error',
+  'fatal',
+  'silent',
+]).default('info');
+
 /** 已验证的配置单例 — 模块加载时惰性初始化 */
 let _cached: PortalEnv | null = null;
 
@@ -62,8 +95,16 @@ export function getEnvConfig(): PortalEnv {
   return getConfig();
 }
 
+export function getDatabaseUrl(): string {
+  return databaseEnvSchema.parse(process.env).DATABASE_URL;
+}
+
+export function getLogLevel(): z.infer<typeof logLevelSchema> {
+  return logLevelSchema.parse(process.env['LOG_LEVEL']);
+}
+
 export function isCookieSecure(env?: Partial<PortalEnv>): boolean {
-  const cfg = env ?? getConfig();
+  const cfg = env ?? cookieEnvSchema.parse(process.env);
   if (cfg.COOKIE_SECURE === undefined) {
     return cfg.NODE_ENV === 'production';
   }
@@ -71,19 +112,24 @@ export function isCookieSecure(env?: Partial<PortalEnv>): boolean {
 }
 
 export function getAppBaseURL(): string {
-  return (getConfig().NEXT_PUBLIC_APP_URL || DEV_DEFAULT_BASE_URL).trim().replace(/\/+$/, '');
+  const { NEXT_PUBLIC_APP_URL } = appUrlEnvSchema.parse(process.env);
+  return NEXT_PUBLIC_APP_URL.trim().replace(/\/+$/, '');
 }
 
 export function getIssuer(): string {
-  return (getConfig().PORTAL_ISSUER || getAppBaseURL()).trim();
+  const config = issuerEnvSchema.parse(process.env);
+  const appBaseURL = config.NEXT_PUBLIC_APP_URL.trim().replace(/\/+$/, '');
+  return (config.PORTAL_ISSUER || appBaseURL).trim();
 }
 
 export function getJwksUri(): string {
-  return (getConfig().PORTAL_JWKS_URI || `${getAppBaseURL()}/api/auth/jwks`).trim();
+  const config = jwksEnvSchema.parse(process.env);
+  const appBaseURL = config.NEXT_PUBLIC_APP_URL.trim().replace(/\/+$/, '');
+  return (config.PORTAL_JWKS_URI || `${appBaseURL}/api/auth/jwks`).trim();
 }
 
 export function getTrustedOrigins(): string[] {
-  const cfg = getConfig();
+  const cfg = trustedOriginsEnvSchema.parse(process.env);
   if (cfg.TRUSTED_ORIGINS) {
     return cfg.TRUSTED_ORIGINS.split(',')
       .map((s) => s.trim())
@@ -103,9 +149,9 @@ export function getTrustedOrigins(): string[] {
 }
 
 export function getRedisUrl(): string {
-  return getConfig().REDIS_URL.trim();
+  return redisEnvSchema.parse(process.env).REDIS_URL.trim();
 }
 
 export function getGatewaySharedSecret(): string | null {
-  return getConfig().GATEWAY_SHARED_SECRET || null;
+  return gatewaySecretEnvSchema.parse(process.env).GATEWAY_SHARED_SECRET || null;
 }

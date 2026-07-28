@@ -1,5 +1,5 @@
-# Immutable release acceptance stack. The browser reaches only the Gateway;
-# PostgreSQL, Redis, and Portal remain on the private Compose network.
+name: auth-sso-test
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -7,6 +7,8 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: auth_sso
+    volumes:
+      - ./docker/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d auth_sso"]
       interval: 5s
@@ -21,11 +23,43 @@ services:
       timeout: 3s
       retries: 20
 
+  node-test:
+    build:
+      context: .
+      dockerfile: apps/portal/Dockerfile
+      target: workspace
+      args:
+        NEXT_PUBLIC_APP_URL: http://portal:4100
+    working_dir: /app
+    environment:
+      TEST_DATABASE_URL: postgresql://postgres:postgres@postgres:5432/auth_sso_test
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/auth_sso_test
+      REDIS_URL: redis://redis:6379
+      NODE_ENV: test
+      NEXT_PUBLIC_APP_URL: http://portal:4100
+      PORTAL_REDIRECT_URL: http://portal:4100/api/auth/callback
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
   cert-init:
-    image: alpine:3.21
-    command: sh -c 'cp /source/fullchain.pem /source/privkey.pem /certs/ && chmod 644 /certs/fullchain.pem /certs/privkey.pem'
+    build:
+      context: .
+      dockerfile: apps/gateway/Dockerfile
+      target: cert-init
+    command:
+      - sh
+      - -ec
+      - |
+        openssl req -x509 -newkey rsa:2048 -sha256 -nodes -days 2 \
+          -subj '/CN=127.0.0.1' \
+          -addext 'subjectAltName=IP:127.0.0.1,DNS:localhost' \
+          -keyout /certs/privkey.pem \
+          -out /certs/fullchain.pem
+        chmod 644 /certs/fullchain.pem /certs/privkey.pem
     volumes:
-      - ./apps/gateway/ssl:/source:ro
       - gateway_certs:/certs
 
   db-init:
@@ -35,7 +69,7 @@ services:
       target: builder
       args:
         NEXT_PUBLIC_APP_URL: https://127.0.0.1:19443
-    command: sh -c 'pnpm db:push --force && pnpm db:seed'
+    command: sh -c 'pnpm db:migrate && pnpm db:seed'
     environment:
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/auth_sso
       REDIS_URL: redis://redis:6379

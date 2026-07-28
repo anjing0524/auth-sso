@@ -8,9 +8,9 @@
  * @permission audit:export
  */
 import { type NextRequest, NextResponse } from 'next/server';
-import { getLoginLogs, getAuditLogs } from '@/app/audit/data';
 import { withPermission } from '@/lib/auth';
 import { AUDIT_PERMISSIONS, MAX_PAGE_SIZE } from '@auth-sso/contracts';
+import { getAuditLogs, getLoginLogs } from '@/app/audit/data';
 
 export async function GET(request: NextRequest) {
   return withPermission(

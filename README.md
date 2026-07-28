@@ -59,42 +59,44 @@ cp apps/portal/.env.example apps/portal/.env.local
 ### 3. 启动服务
 
 ```bash
-# 一键启动 Portal
+# Gateway-first 本地开发入口（自动拉起 postgres/redis + portal + demo + gateway）
 pnpm dev
 ```
 
 访问地址:
-- **Portal (管理门户 + 认证中心)**: http://localhost:4100
+- **Gateway 统一入口**: https://localhost:19443
+- **Portal 上游（仅供调试，不作为浏览器默认入口）**: http://localhost:4100
 
 ```bash
-# 启动 Gateway 信创网关 (可选)
-cd apps/gateway
-cargo run
+# 需要单独调试某一层时，可分别启动
+pnpm dev:portal
+pnpm dev:demo
+pnpm dev:gateway
 ```
-
-网关访问地址 (代理至 Portal):
-- **HTTP**: http://localhost:19080
-- **HTTPS**: https://localhost:19443
 
 ### 4. 数据库初始化
 
 ```bash
-# 推送数据库模型
-pnpm db:push
+# 以迁移方式初始化数据库
+pnpm db:migrate
 
 # 插入基础测试数据
 pnpm db:seed
 ```
+
+`pnpm db:push` 仅用于本地一次性临时试验，不作为默认初始化、CI 或发布验收路径。
 
 ## 自动化测试
 
 项目内置了完整的分层测试体系与需求追溯：
 
 ```bash
+docker compose up -d postgres redis  # API 测试前先启动本地数据库基础设施
 pnpm test                 # 全量 Vitest 测试
-pnpm test:api             # API 层测试
-pnpm test:components      # 组件层测试
-pnpm test:e2e             # Playwright E2E 端到端测试
+pnpm test:api             # API project（真实 PostgreSQL/Redis）
+pnpm test:components      # UI/domain project（不依赖 DB）
+pnpm test:e2e             # 自动拉起 Gateway 发布拓扑并验证真实浏览器闭环
+pnpm test:e2e:portal      # 仅 Portal 浏览器冒烟（直连 Portal，用于局部调试）
 pnpm test:report          # 需求追溯性覆盖率报告
 ```
 

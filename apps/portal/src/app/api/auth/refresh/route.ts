@@ -10,7 +10,7 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { getRefreshTokenFromCookie, getJwtFromCookie, decodeJwtPayload } from '@/lib/session';
 import { rotateRefreshToken } from '@/lib/auth/token';
-import { mapDomainError } from '@/domain/shared/error-mapping';
+import { mapServerError } from '@/lib/server-error';
 import { AUTH_ERRORS, COOKIE_NAMES, TOKEN_TTL } from '@auth-sso/contracts';
 import { writeLoginLog, extractClientIP, extractUserAgent } from '@/lib/audit';
 import { isCookieSecure, getGatewaySharedSecret } from '@/lib/env';
@@ -114,7 +114,7 @@ export async function POST(request: NextRequest) {
 
     return response;
   } catch (err) {
-    const mapped = mapDomainError(err);
+    const mapped = mapServerError(err);
     return NextResponse.json(
       { error: mapped.error, message: mapped.message },
       { status: mapped.status },

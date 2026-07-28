@@ -16,9 +16,9 @@ function redactDatabaseUrl(url: string): string {
 function buildSetupHint(testUrl: string): string {
   return [
     `[globalSetup] 无法连接测试数据库: ${redactDatabaseUrl(testUrl)}`,
-    '[globalSetup] Portal API 测试依赖宿主机可达的 PostgreSQL。',
-    '[globalSetup] 先执行 `docker compose up -d postgres redis`，确认 `auth-sso-postgres` 暴露 `5432:5432`，再重试 Vitest。',
-    '[globalSetup] 若本机使用了其他 Compose 栈，请检查它是否占用了同名容器或没有把 PostgreSQL 暴露到 localhost:5432。',
+    '[globalSetup] Portal API 测试以 Docker Compose 中的 postgres/redis 为唯一基础设施基线。',
+    '[globalSetup] 先执行 `docker compose up -d postgres redis`，确认 `auth-sso-postgres` 与 `auth-sso-redis` healthy，再重试 Vitest。',
+    '[globalSetup] 若本机运行了其他 Compose 栈，请检查它是否占用了 5432/6379，或没有把 PostgreSQL 暴露到 127.0.0.1:5432。',
   ].join('\n');
 }
 
@@ -64,7 +64,7 @@ export async function setup() {
   const testUrl =
     process.env['TEST_DATABASE_URL'] ||
     process.env['DATABASE_URL'] ||
-    'postgresql://postgres:postgres@localhost:5432/auth_sso_test';
+    'postgresql://postgres:postgres@127.0.0.1:5432/auth_sso_test';
 
   console.log(`\n[globalSetup] 连接测试数据库: ${redactDatabaseUrl(testUrl)}`);
 

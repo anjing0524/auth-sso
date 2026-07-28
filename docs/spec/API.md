@@ -428,25 +428,25 @@ GET /api/users/:id
 
 ### 5.4 更新用户（🔧 Server Action）
 
-`updateUserAction` — 由 Portal 用户详情编辑表单调用，权限 `user:update`。
+`updateUserAction` — 由 Portal 用户详情编辑表单调用，权限 `portal:user:update`。
 
 **可编辑字段：** `name`、`email`、`deptId`、`status`
 
 ### 5.5 切换用户状态（🔧 Server Action）
 
-`toggleUserStatusAction` — 由 Portal 用户列表操作菜单调用，权限 `user:update`。
+`toggleUserStatusAction` — 由 Portal 用户列表操作菜单调用，权限 `portal:user:update`。
 
 **行为：** ACTIVE ⇄ DISABLED 切换。
 
 ### 5.6 解锁用户（🔧 Server Action）
 
-`unlockUserAction` — 由 Portal 调用，权限 `user:update`。
+`unlockUserAction` — 由 Portal 调用，权限 `portal:user:update`。
 
 **行为：** 将 LOCKED 状态的用户恢复为 ACTIVE。
 
 ### 5.7 删除用户（🔧 Server Action）
 
-`deleteUserAction` — 由 Portal 用户详情页调用，权限 `user:delete`。
+`deleteUserAction` — 由 Portal 用户详情页调用，权限 `portal:user:delete`。
 
 **行为：** 软删除（设置 status=DELETED），撤销所有活跃 Token。
 
@@ -456,7 +456,7 @@ GET /api/users/:id
 POST /api/users/:id/reset-password    （REST）
 ```
 
-`resetPasswordAction` — Server Action（Portal 表单调用），权限 `user:reset_password`
+`resetPasswordAction` — Server Action（Portal 表单调用），权限 `portal:user:reset_password`
 
 **请求体：**
 ```json
@@ -651,7 +651,7 @@ GET /api/clients/:id
 
 ### 9.6 轮换密钥（🔧 Server Action）
 
-`rotateClientSecretAction` — 由 Portal 调用，权限 `portal:client:update`。
+`rotateClientSecretAction` — 由 Portal 调用，权限 `portal:client:rotate_secret`。
 
 ### 9.7 应用 Token 管理（REST）
 
@@ -660,7 +660,9 @@ GET    /api/clients/:id/tokens   — 查看已签发 Token
 DELETE /api/clients/:id/tokens   — 撤销所有 Token
 ```
 
-**权限：** `portal:client:read` / `portal:client:update`
+**权限：**
+- `GET /api/clients/:id/tokens` → `portal:client:read`
+- `DELETE /api/clients/:id/tokens` → `portal:client:update`
 
 ### 9.8 撤销 Token（🔧 Server Action）
 

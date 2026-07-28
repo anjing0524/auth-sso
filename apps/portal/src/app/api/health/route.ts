@@ -6,7 +6,7 @@
  *
  * @route GET /api/health
  */
-import { NextResponse } from 'next/server';
+import { connection, NextResponse } from 'next/server';
 import { db } from '@/infrastructure/db';
 import { getRedis } from '@/infrastructure/redis';
 import { sql } from 'drizzle-orm';
@@ -50,6 +50,7 @@ async function checkRedis(): Promise<HealthCheck> {
 }
 
 export async function GET() {
+  await connection();
   const [dbCheck, redisCheck] = await Promise.all([checkDatabase(), checkRedis()]);
 
   const allOk = dbCheck.status === 'ok' && redisCheck.status === 'ok';

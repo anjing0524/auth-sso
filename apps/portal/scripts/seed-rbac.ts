@@ -1,14 +1,15 @@
 /**
- * RBAC 数据初始化脚本 (v2 重构)
- * 运行: cd apps/portal && DATABASE_URL=<your_db_url> tsx scripts/seed-rbac.ts
+ * RBAC 数据初始化脚本
+ * 供 `seed.ts` 委托调用；如需单独执行：
+ *   cd apps/portal && DATABASE_URL=<your_db_url> tsx scripts/seed-rbac.ts
  *
- * 幂等性：可重复执行，已存在的记录跳过，不会重复创建。
+ * 职责：
+ * - 从 `@auth-sso/contracts` 写入 API 权限常量
+ * - 写入 Portal 侧边栏所需的 PAGE 菜单节点
+ * - 幂等创建 SUPER_ADMIN / ADMIN 系统角色
+ * - 用 role_permissions 复合主键表为系统角色重建 API 权限绑定
  *
- * v2 变更：
- * - 权限插入补 resource/action（API 类型 CHECK 约束要求）
- * - 角色插入去除重复 id 键
- * - 绑定权限去除 id 列（复合主键无独立 id）
- * - 新增 Portal 菜单种子（PAGE 类型，支持数据驱动侧边栏）
+ * 幂等性：可重复执行；已存在记录跳过，角色权限绑定采用先删后建。
  */
 import postgres from 'postgres';
 import { drizzle } from 'drizzle-orm/postgres-js';

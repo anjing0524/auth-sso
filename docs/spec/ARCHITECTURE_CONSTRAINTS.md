@@ -168,19 +168,19 @@ conditions.push(inArray(schema.users.deptId, deptIds));
 ```typescript
 // Layout —— requirePermission
 export default async function UsersLayout({ children }) {
-  await requirePermission({ permissions: ['user:list'] });
+  await requirePermission({ permissions: ['portal:user:list'] });
   return <>{children}</>;
 }
 
 // Server Action —— withAuth
 export const createUserAction = withAuth(
-  { permissions: ['user:create'] },
+  { permissions: ['portal:user:create'] },
   async (_ctx, input) => { /* ... */ },
 );
 
 // API Route —— withPermission
 export async function GET(request: NextRequest) {
-  return withPermission({ permissions: ['role:list'] }, async () => {
+  return withPermission({ permissions: ['portal:role:list'] }, async () => {
     const result = await getRoles(params);
     return NextResponse.json(result);
   });
@@ -233,7 +233,7 @@ export async function getUsers(scopeFilter, userId, params) {
 
 // route.ts —— ✅ 委托给 data.ts
 export async function GET(request: NextRequest) {
-  return withPermission({ permissions: ['user:list'] }, async (userId) => {
+  return withPermission({ permissions: ['portal:user:list'] }, async (userId) => {
     const result = await getUsers(scopeFilter, userId, params);
     return NextResponse.json(result);
   });
@@ -447,7 +447,7 @@ export async function proxy(request: NextRequest) {
 
 | ID | 约束描述 | 验证方法 | 关联产品需求 |
 | :--- | :--- | :--- | :--- |
-| **DC-MENU-C** | 创建菜单时，领域层须校验路径格式合法性、类型与字段约束一致性（DIRECTORY/PAGE 类型须填写 path 和 icon；API/DATA 类型须填写 resource 和 action 字段，client_id 可选） | 自动化测试 / 代码审查 | E-MNU-C |
+| **DC-MENU-C** | 创建权限树节点时，领域层须校验路径格式合法性、类型与字段约束一致性：DIRECTORY/PAGE 类型仅允许使用 `path`/`icon`/`visible` 这组导航字段，且 PAGE 必须具备可跳转路径；API 类型不得混入导航字段，需要通过 `code` 与可选 `client_id` 表达鉴权语义 | 自动化测试 / 代码审查 | E-MNU-C |
 | **DC-MENU-U** | 编辑菜单时，领域层须校验修改后的路由、父级菜单、权限绑定符合类型约束 | 自动化测试 / 代码审查 | E-MNU-U |
 | **DC-MENU-D** | 删除菜单时，领域层须递归清理所有下级子菜单，级联解除所有权限绑定关系 | 自动化测试 / 代码审查 | E-MNU-D |
 

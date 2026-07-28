@@ -6,9 +6,17 @@
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { mockExecute, mockPing } = vi.hoisted(() => ({
+const { mockConnection, mockExecute, mockPing } = vi.hoisted(() => ({
+  mockConnection: vi.fn(),
   mockExecute: vi.fn(),
   mockPing: vi.fn(),
+}));
+
+vi.mock('next/server', () => ({
+  connection: mockConnection,
+  NextResponse: {
+    json: (body: unknown, init?: ResponseInit) => Response.json(body, init),
+  },
 }));
 
 vi.mock('@/infrastructure/db', () => ({
@@ -23,6 +31,7 @@ import { GET } from '@/app/api/health/route';
 
 describe('GET /api/health', () => {
   beforeEach(() => {
+    mockConnection.mockResolvedValue(undefined);
     mockExecute.mockResolvedValue(undefined);
     mockPing.mockResolvedValue('PONG');
   });
@@ -30,6 +39,10 @@ describe('GET /api/health', () => {
   it('数据库与 Redis 均可用时返回 200', async () => {
     const response = await GET();
 
+    expect(mockConnection).toHaveBeenCalledOnce();
+    expect(mockConnection.mock.invocationCallOrder[0]).toBeLessThan(
+      mockExecute.mock.invocationCallOrder[0]!,
+    );
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({
       status: 'healthy',

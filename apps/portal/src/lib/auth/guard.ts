@@ -10,9 +10,9 @@ import 'server-only';
  *
  * @module lib/auth/guard
  */
-import { type NextResponse } from 'next/server';
+import type { NextResponse } from 'next/server';
 import { checkPermission, type PermissionCheckOptions } from './check-permission';
-import { mapDomainError } from '@/domain/shared/error-mapping';
+import { mapServerError } from '@/lib/server-error';
 import { recordActionAudit, recordApiAudit } from '@/lib/audit';
 import { createLogger } from '@/lib/logger';
 import { COMMON_ERRORS, type ApiResponse } from '@auth-sso/contracts';
@@ -40,11 +40,11 @@ export function withAuth<TArgs extends unknown[], TData>(
         if (res.success && options.audit) await recordActionAudit(check.userId, options.audit);
         return res;
       } catch (err: unknown) {
-        const mapped = mapDomainError(err);
+        const mapped = mapServerError(err);
         return { success: false, error: mapped.error, message: mapped.message };
       }
     } catch (err: unknown) {
-      const mapped = mapDomainError(err);
+      const mapped = mapServerError(err);
       return { success: false, error: mapped.error, message: mapped.message };
     }
   };
@@ -69,7 +69,7 @@ export async function withPermission(
     if (options.audit) await recordApiAudit(check.userId, options.audit);
     return response;
   } catch (error: unknown) {
-    const mapped = mapDomainError(error);
+    const mapped = mapServerError(error);
     if (mapped.status >= 500) {
       log.error('服务执行异常', { error: mapped.error, message: mapped.message });
     }

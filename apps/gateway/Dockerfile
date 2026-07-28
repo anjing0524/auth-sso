@@ -1,3 +1,7 @@
+FROM alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d AS cert-init
+
+RUN apk add --no-cache openssl
+
 # Build stage
 FROM rust:1.93-alpine@sha256:4fec02de605563c297c78a31064c8335bc004fa2b0bf406b1b99441da64e2d2d AS builder
 
@@ -41,8 +45,8 @@ COPY --from=builder /app/apps/gateway/target/release/gateway /usr/local/bin/gate
 # 复制 Docker 环境专用配置文件（upstream/issuer/redis 使用 Docker 内部地址）
 COPY apps/gateway/gateway.docker.toml ./gateway.toml
 
-# 创建 SSL 目录挂载点并授予 gateway 用户权限
-RUN mkdir -p /etc/gateway/ssl && chown -R gateway:gateway /etc/gateway/ssl
+# 创建运行时必需的可写目录并授予 gateway 用户权限
+RUN mkdir -p /etc/gateway/ssl /app/logs && chown -R gateway:gateway /etc/gateway/ssl /app/logs
 
 EXPOSE 80 443
 

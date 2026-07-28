@@ -41,52 +41,50 @@ Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, ARCHITECTURE.md, DATABASE.md
 
 | 权限组 | 权限代码 |
 | :--- | :--- |
-| 用户管理 | `user:list`, `user:create`, `user:read`, `user:update`, `user:delete`, `user:manage`, `user:reset_password`, `user:assign_role` |
-| 部门管理 | `department:list`, `department:create`, `department:read`, `department:update`, `department:delete`, `department:manage` |
-| 角色管理 | `role:list`, `role:create`, `role:read`, `role:update`, `role:delete`, `role:manage`, `role:assign_permission` |
-| 权限管理 | `permission:list`, `permission:create`, `permission:read`, `permission:update`, `permission:delete`, `permission:manage` |
-| 菜单管理 | `menu:list`, `menu:create`, `menu:read`, `menu:update`, `menu:delete`, `menu:manage` |
-| 客户端管理 | `client:list`, `client:create`, `client:read`, `client:update`, `client:delete`, `client:manage`, `client:rotate_secret` |
-| 审计日志 | `audit:read`, `audit:export` |
-| 登录日志 | `login_log:read`, `login_log:export` |
-| 系统管理 | `system:manage`, `system:view_dashboard` |
+| 用户管理 | `portal:user:list`, `portal:user:create`, `portal:user:read`, `portal:user:update`, `portal:user:delete`, `portal:user:manage`, `portal:user:reset_password`, `portal:user:assign_role` |
+| 部门管理 | `portal:department:list`, `portal:department:create`, `portal:department:read`, `portal:department:update`, `portal:department:delete`, `portal:department:manage` |
+| 角色管理 | `portal:role:list`, `portal:role:create`, `portal:role:read`, `portal:role:update`, `portal:role:delete`, `portal:role:manage`, `portal:role:assign_permission` |
+| 权限管理 | `portal:permission:list`, `portal:permission:create`, `portal:permission:read`, `portal:permission:update`, `portal:permission:delete`, `portal:permission:manage` |
+| 菜单管理 | `portal:menu:list`, `portal:menu:create`, `portal:menu:read`, `portal:menu:update`, `portal:menu:delete`, `portal:menu:manage` |
+| 客户端管理 | `portal:client:list`, `portal:client:create`, `portal:client:read`, `portal:client:update`, `portal:client:delete`, `portal:client:manage`, `portal:client:rotate_secret` |
+| 审计日志 | `portal:audit:read`, `portal:audit:export` |
+| 系统管理 | `portal:system:manage`, `portal:system:view_dashboard` |
 
 #### org_admin（组织管理员 — 李四）
 
 | 权限组 | 权限代码 |
 | :--- | :--- |
-| 用户管理 | `user:list`, `user:create`, `user:read`, `user:update`, `user:reset_password`, `user:assign_role` |
-| 部门管理 | `department:list`, `department:read` |
-| 角色管理 | `role:list`, `role:read` |
-| 系统管理 | `system:view_dashboard` |
+| 用户管理 | `portal:user:list`, `portal:user:create`, `portal:user:read`, `portal:user:update`, `portal:user:reset_password`, `portal:user:assign_role` |
+| 部门管理 | `portal:department:list`, `portal:department:read` |
+| 角色管理 | `portal:role:list`, `portal:role:read` |
+| 系统管理 | `portal:system:view_dashboard` |
 
 #### dept_manager（部门经理 — 王五）
 
 | 权限组 | 权限代码 |
 | :--- | :--- |
-| 用户管理 | `user:list`, `user:read`, `user:update` |
-| 部门管理 | `department:list`, `department:read` |
-| 角色管理 | `role:list`, `role:read` |
-| 系统管理 | `system:view_dashboard` |
+| 用户管理 | `portal:user:list`, `portal:user:read`, `portal:user:update` |
+| 部门管理 | `portal:department:list`, `portal:department:read` |
+| 角色管理 | `portal:role:list`, `portal:role:read` |
+| 系统管理 | `portal:system:view_dashboard` |
 
 #### employee（普通员工 — 赵六）
 
 | 权限组 | 权限代码 |
 | :--- | :--- |
-| _(无管理权限)_ | `system:view_dashboard` |
+| _(无管理权限)_ | `portal:system:view_dashboard` |
 
 #### app_admin（应用管理员 — 孙七）
 
 | 权限组 | 权限代码 |
 | :--- | :--- |
-| 客户端管理 | `client:list`, `client:create`, `client:read`, `client:update`, `client:delete`, `client:manage`, `client:rotate_secret` |
+| 客户端管理 | `portal:client:list`, `portal:client:create`, `portal:client:read`, `portal:client:update`, `portal:client:delete`, `portal:client:manage`, `portal:client:rotate_secret` |
 
 #### audit_viewer（审计员 — 周八）
 
 | 权限组 | 权限代码 |
 | :--- | :--- |
-| 审计日志 | `audit:read`, `audit:export` |
-| 登录日志 | `login_log:read`, `login_log:export` |
+| 审计日志 | `portal:audit:read`, `portal:audit:export` |
 
 ### 1.4 OAuth 客户端
 
@@ -111,7 +109,7 @@ Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, ARCHITECTURE.md, DATABASE.md
 
 **验收标准：**
 1. 张三登录后，侧边栏展示全部一级菜单项
-2. 菜单项与 `system:view_dashboard`、`user:list`、`department:list`、`role:list`、`permission:list`、`menu:list`、`client:list`、`audit:read` 等权限代码一一对应
+2. 菜单项与 `portal:system:view_dashboard`、`portal:user:list`、`portal:department:list`、`portal:role:list`、`portal:permission:list`、`portal:menu:list`、`portal:client:list`、`portal:audit:read` 等权限代码一一对应
 3. 菜单顺序与 `E-MNU-*` 管理的排序一致
 
 ---
@@ -120,7 +118,7 @@ Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, ARCHITECTURE.md, DATABASE.md
 
 > **@req A-NAV-01**
 
-**作为** 拥有 `employee` 角色的赵六（仅有 `system:view_dashboard`），
+**作为** 拥有 `employee` 角色的赵六（仅有 `portal:system:view_dashboard`），
 **我** 登录后侧边栏只显示「首页/仪表盘」菜单项，
 **以便** 我不会看到无法操作的灰化入口。
 
@@ -165,14 +163,14 @@ Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, ARCHITECTURE.md, DATABASE.md
 
 > **@req A-NAV-03**
 
-**作为** 拥有 `system:view_dashboard` 权限的张三、李四、王五，
+**作为** 拥有 `portal:system:view_dashboard` 权限的张三、李四、王五，
 **我** 在首页仪表盘看到用户总数、在线用户数、今日登录数等指标卡片，
 **以便** 我快速了解系统运行状态。
 
 **验收标准：**
 1. 指标卡片数据正确加载，无空白或 loading 卡死
 2. 数据范围由角色所属部门决定：张三（super_admin）看到全公司，李四（归属技术部）看到技术部及子部门，王五（归属产品部）只看到产品部
-3. 无 `system:view_dashboard` 权限的用户（如吴九）看不到仪表盘
+3. 无 `portal:system:view_dashboard` 权限的用户（如吴九）看不到仪表盘
 
 ---
 
@@ -180,7 +178,7 @@ Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, ARCHITECTURE.md, DATABASE.md
 
 ### US-B-01：超级管理员查看全部用户列表
 
-> **@req B-USR-L** | **权限:** `user:list`
+> **@req B-USR-L** | **权限:** `portal:user:list`
 
 **作为** 拥有 `super_admin` 角色的张三（超级管理员绕过数据范围限制），
 **我** 访问用户管理页面时看到公司所有用户（包括总部、技术部、前端组、后端组、产品部、运营部的全部成员），
@@ -195,7 +193,7 @@ Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, ARCHITECTURE.md, DATABASE.md
 
 ### US-B-02：组织管理员查看本部门及子部门用户
 
-> **@req B-USR-L** | **权限:** `user:list`
+> **@req B-USR-L** | **权限:** `portal:user:list`
 
 **作为** 拥有 `org_admin` 角色（归属技术部）的李四，
 **我** 访问用户管理页面时仅看到技术部及其子部门（前端组、后端组）的用户，
@@ -212,7 +210,7 @@ Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, ARCHITECTURE.md, DATABASE.md
 
 ### US-B-03：部门经理仅查看本部门用户
 
-> **@req B-USR-L** | **权限:** `user:list`
+> **@req B-USR-L** | **权限:** `portal:user:list`
 
 **作为** 拥有 `dept_manager` 角色（归属产品部）的王五，
 **我** 访问用户管理页面时仅看到产品部的直属用户，
@@ -228,7 +226,7 @@ Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, ARCHITECTURE.md, DATABASE.md
 
 ### US-B-04：普通员工的数据范围
 
-> **@req B-USR-L** | **权限:** `user:list`
+> **@req B-USR-L** | **权限:** `portal:user:list`
 
 **作为** 拥有 `employee` 角色（归属后端组）的赵六，
 **我** 访问用户管理页面时仅看到后端组的用户，
@@ -244,7 +242,7 @@ Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, ARCHITECTURE.md, DATABASE.md
 
 ### US-B-05：无权限用户无法查看用户列表
 
-> **@req B-USR-L** | **权限:** _(无 `user:list`)_
+> **@req B-USR-L** | **权限:** _(无 `portal:user:list`)_
 
 **作为** 没有任何管理权限的吴九，
 **我** 尝试访问 `/api/users` 时收到 403 FORBIDDEN，
@@ -259,7 +257,7 @@ Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, ARCHITECTURE.md, DATABASE.md
 
 ### US-B-06：实时搜索用户
 
-> **@req B-USR-S** | **权限:** `user:list`
+> **@req B-USR-S** | **权限:** `portal:user:list`
 
 **作为** 拥有 `super_admin` 角色的张三，
 **我** 在用户列表页输入搜索关键词「赵」时，列表实时过滤出姓名/邮箱/用户名包含「赵」的用户，
@@ -274,7 +272,7 @@ Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, ARCHITECTURE.md, DATABASE.md
 
 ### US-B-07：通过对话框创建用户
 
-> **@req B-USR-C** | **权限:** `user:create`
+> **@req B-USR-C** | **权限:** `portal:user:create`
 
 **作为** 拥有 `super_admin` 角色的张三，
 **我** 点击「新建用户」按钮，在弹出的对话框中填写用户名、姓名、邮箱、部门、初始密码后提交，
@@ -291,9 +289,9 @@ Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, ARCHITECTURE.md, DATABASE.md
 
 ### US-B-08：无创建权限时新建按钮不可见
 
-> **@req B-USR-C** | **权限:** _(无 `user:create`)_
+> **@req B-USR-C** | **权限:** _(无 `portal:user:create`)_
 
-**作为** 拥有 `dept_manager` 角色但没有 `user:create` 权限的王五，
+**作为** 拥有 `dept_manager` 角色但没有 `portal:user:create` 权限的王五，
 **我** 在用户列表页面看不到「新建用户」按钮，
 **以便** 我不会尝试无法完成的操作。
 
@@ -305,7 +303,7 @@ Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, ARCHITECTURE.md, DATABASE.md
 
 ### US-B-09：查看用户详情
 
-> **@req B-USR-R** | **权限:** `user:read`
+> **@req B-USR-R** | **权限:** `portal:user:read`
 
 **作为** 拥有 `super_admin` 角色的张三，
 **我** 点击用户列表中「赵六」行进入 `/users/u_zhaoliu` 详情页，
@@ -320,7 +318,7 @@ Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, ARCHITECTURE.md, DATABASE.md
 
 ### US-B-10：更新用户资料
 
-> **@req B-USR-U** | **权限:** `user:update`
+> **@req B-USR-U** | **权限:** `portal:user:update`
 
 **作为** 拥有 `super_admin` 角色的张三，
 **我** 在赵六的详情页点击「编辑」，修改其邮箱和部门（从后端组调到前端组）后保存，
@@ -336,7 +334,7 @@ Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, ARCHITECTURE.md, DATABASE.md
 
 ### US-B-11：逻辑删除用户（二次确认）
 
-> **@req B-USR-D** | **权限:** `user:delete`
+> **@req B-USR-D** | **权限:** `portal:user:delete`
 
 **作为** 拥有 `super_admin` 角色的张三，
 **我** 在用户列表中点击某个离职员工的「删除」按钮，弹出二次确认对话框，确认后该用户被逻辑删除，
@@ -347,13 +345,13 @@ Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, ARCHITECTURE.md, DATABASE.md
 2. 确认后调用 `DELETE /api/users/:id`，数据库设置 `deleted_at` 时间戳
 3. 被删除用户不再出现在用户列表中
 4. 被删除用户的 JWT jti 被写入 Redis 黑名单（紧急撤销）
-5. 无 `user:delete` 权限的用户（李四、王五、赵六）看不到删除按钮
+5. 无 `portal:user:delete` 权限的用户（李四、王五、赵六）看不到删除按钮
 
 ---
 
 ### US-B-12：账户状态控制（锁定/激活/禁用）
 
-> **@req B-USR-ST** | **权限:** `user:update`
+> **@req B-USR-ST** | **权限:** `portal:user:update`
 
 **作为** 拥有 `super_admin` 角色的张三，
 **我** 在陈十（已禁用）的用户详情页点击「激活」，将其状态从 DISABLED 改为 ACTIVE，
@@ -370,7 +368,7 @@ Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, ARCHITECTURE.md, DATABASE.md
 
 ### US-B-13：为用户分配角色
 
-> **@req B-USR-ST** | **权限:** `user:assign_role`
+> **@req B-USR-ST** | **权限:** `portal:user:assign_role`
 
 **作为** 拥有 `super_admin` 角色的张三，
 **我** 在赵六的用户详情页点击「分配角色」，勾选 `dept_manager` 角色后保存，
@@ -386,7 +384,7 @@ Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, ARCHITECTURE.md, DATABASE.md
 
 ### US-B-14：重置用户密码
 
-> **@req B-USR-ST** | **权限:** `user:reset_password`
+> **@req B-USR-ST** | **权限:** `portal:user:reset_password`
 
 **作为** 拥有 `super_admin` 角色的张三，
 **我** 在赵六的用户详情页点击「重置密码」，输入新密码后确认，
@@ -396,7 +394,7 @@ Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, ARCHITECTURE.md, DATABASE.md
 1. 重置密码需要管理员输入并确认新密码
 2. 重置成功后赵六的当前 JWT jti 被写入 Redis 黑名单（强制重新登录）
 3. 赵六使用新密码可正常登录
-4. 无 `user:reset_password` 权限的用户（王五）看不到重置密码按钮
+4. 无 `portal:user:reset_password` 权限的用户（王五）看不到重置密码按钮
 
 ---
 
@@ -404,7 +402,7 @@ Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, ARCHITECTURE.md, DATABASE.md
 
 ### US-C-01：查看角色列表
 
-> **@req C-ROL-L** | **权限:** `role:list`
+> **@req C-ROL-L** | **权限:** `portal:role:list`
 
 **作为** 拥有 `super_admin` 角色的张三，
 **我** 访问角色管理页面，看到所有系统角色（super_admin、org_admin、dept_manager、employee、app_admin、audit_viewer），
@@ -412,14 +410,14 @@ Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, ARCHITECTURE.md, DATABASE.md
 
 **验收标准：**
 1. 角色列表展示：角色名称、Code、描述、所属部门、关联用户数
-2. 李四（org_admin）和赵六（employee）也能看到角色列表（有 `role:list`）
+2. 李四（org_admin）和赵六（employee）也能看到角色列表（有 `portal:role:list`）
 3. 吴九（无角色）无法访问角色列表页面
 
 ---
 
 ### US-C-02：新建角色（含部门归属）
 
-> **@req C-ROL-C** | **权限:** `role:create`
+> **@req C-ROL-C** | **权限:** `portal:role:create`
 
 **作为** 拥有 `super_admin` 角色的张三，
 **我** 点击「新建角色」，在对话框中填写角色名称「项目经理」、Code `project_manager`、描述、所属部门选择「技术部」，
@@ -431,13 +429,13 @@ Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, ARCHITECTURE.md, DATABASE.md
 1. 对话框包含：角色名称（必填）、Code（必填，唯一）、描述（选填）、所属部门选择（必填）
 2. Code 重复时提示错误
 3. 创建成功后角色出现在列表中
-4. 李四（无 `role:create`）看不到「新建角色」按钮
+4. 李四（无 `portal:role:create`）看不到「新建角色」按钮
 
 ---
 
 ### US-C-03：编辑角色
 
-> **@req C-ROL-U** | **权限:** `role:update`
+> **@req C-ROL-U** | **权限:** `portal:role:update`
 
 **作为** 拥有 `super_admin` 角色的张三，
 **我** 编辑 `org_admin` 角色的描述为「组织管理员，管理指定部门及子部门的用户和配置」，
@@ -452,7 +450,7 @@ Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, ARCHITECTURE.md, DATABASE.md
 
 ### US-C-04：删除角色（二次确认）
 
-> **@req C-ROL-D** | **权限:** `role:delete`
+> **@req C-ROL-D** | **权限:** `portal:role:delete`
 
 **作为** 拥有 `super_admin` 角色的张三，
 **我** 删除 `project_manager` 角色前，系统弹出确认对话框，确认后角色被移除，
@@ -468,23 +466,23 @@ Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, ARCHITECTURE.md, DATABASE.md
 
 ### US-C-05：为角色授予功能权限
 
-> **@req C-ROL-PA** | **权限:** `role:assign_permission`
+> **@req C-ROL-PA** | **权限:** `portal:role:assign_permission`
 
 **作为** 拥有 `super_admin` 角色的张三，
-**我** 编辑 `dept_manager` 角色，在权限树中勾选 `user:reset_password` 权限后保存，
+**我** 编辑 `dept_manager` 角色，在权限树中勾选 `portal:user:reset_password` 权限后保存，
 **以便** 部门经理也能帮下属重置密码。
 
 **验收标准：**
 1. 权限树按模块分组展示（用户管理、角色管理、部门管理...）
 2. 勾选/取消勾选后保存到 `role_permissions` 关联表
 3. 保存后拥有该角色的用户在下一次请求时获取更新后的权限
-4. 李四（有 `role:list` 但无 `role:assign_permission`）只能查看权限树但不能编辑
+4. 李四（有 `portal:role:list` 但无 `portal:role:assign_permission`）只能查看权限树但不能编辑
 
 ---
 
 ### US-C-06：控制角色的应用授权（v3.2：通过客户端 API 权限控制）
 
-> **@req C-ROL-PA** | **权限:** `role:assign_permission`
+> **@req C-ROL-PA** | **权限:** `portal:role:assign_permission`
 
 **作为** 拥有 `super_admin` 角色的张三，
 **我** 编辑 `dept_manager` 角色，为其授予 `erp-app` 客户端注册的 API 权限（如 `erp:access`），
@@ -502,7 +500,7 @@ Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, ARCHITECTURE.md, DATABASE.md
 
 ### US-C-07：修改角色的所属部门
 
-> **@req C-ROL-U** | **权限:** `role:update`
+> **@req C-ROL-U** | **权限:** `portal:role:update`
 
 **作为** 拥有 `super_admin` 角色的张三，
 **我** 将 `dept_manager` 角色的所属部门从「产品部」修改为「技术部」，
@@ -521,30 +519,30 @@ Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, ARCHITECTURE.md, DATABASE.md
 
 ### US-D-01：查看权限分类列表
 
-> **@req D-PRM-L** | **权限:** `permission:list`
+> **@req D-PRM-L** | **权限:** `portal:permission:list`
 
 **作为** 拥有 `super_admin` 角色的张三，
-**我** 访问权限管理页面，看到按类型（DIRECTORY/PAGE/API/DATA）分组的所有权限 Code，
+**我** 访问权限管理页面，看到按类型（DIRECTORY/PAGE/API）分组的所有权限 Code，
 **以便** 我了解系统的权限全貌。
 
 **验收标准：**
 1. 权限按类型分组展示（树形或标签页）
 2. 每条权限展示：Code、名称、类型、描述、关联角色数
 3. 搜索功能支持按 Code 过滤
-4. 周八（audit_viewer）无 `permission:list` 权限，无法访问此页面
+4. 周八（audit_viewer）无 `portal:permission:list` 权限，无法访问此页面
 
 ---
 
 ### US-D-02：新增权限标识
 
-> **@req D-PRM-C** | **权限:** `permission:create`
+> **@req D-PRM-C** | **权限:** `portal:permission:create`
 
 **作为** 拥有 `super_admin` 角色的张三，
 **我** 点击「新增权限」，在对话框中填写 Code `order:approve`、名称「订单审批」、类型 `API`、描述，
 **以便** 新业务功能的权限标识被注册到系统。
 
 **验收标准：**
-1. 对话框包含：Code（必填，唯一）、名称（必填）、类型（DIRECTORY/PAGE/API/DATA）、描述
+1. 对话框包含：Code（必填，唯一）、名称（必填）、类型（DIRECTORY/PAGE/API）、描述
 2. Code 重复时提示错误
 3. 创建后权限出现在列表中，可被分配给角色
 
@@ -552,7 +550,7 @@ Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, ARCHITECTURE.md, DATABASE.md
 
 ### US-D-03：编辑权限标识
 
-> **@req D-PRM-U** | **权限:** `permission:update`
+> **@req D-PRM-U** | **权限:** `portal:permission:update`
 
 **作为** 拥有 `super_admin` 角色的张三，
 **我** 编辑 `order:approve` 权限的名称和描述，
@@ -567,7 +565,7 @@ Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, ARCHITECTURE.md, DATABASE.md
 
 ### US-D-04：删除权限标识（确认对话框）
 
-> **@req D-PRM-D** | **权限:** `permission:delete`
+> **@req D-PRM-D** | **权限:** `portal:permission:delete`
 
 **作为** 拥有 `super_admin` 角色的张三，
 **我** 删除 `order:approve` 权限时，系统弹出确认对话框，
@@ -585,7 +583,7 @@ Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, ARCHITECTURE.md, DATABASE.md
 
 ### US-E-01：树形菜单列表展示
 
-> **@req E-MNU-L** | **权限:** `menu:list`
+> **@req E-MNU-L** | **权限:** `portal:menu:list`
 
 **作为** 拥有 `super_admin` 角色的张三，
 **我** 访问菜单管理页面，看到树形结构的菜单层级（首页、用户管理、角色管理、部门管理...），
@@ -594,13 +592,13 @@ Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, ARCHITECTURE.md, DATABASE.md
 **验收标准：**
 1. 菜单以树形结构展示，支持展开/收起
 2. 每个节点显示：菜单名称、路径、图标、排序号、状态（显示/隐藏）
-3. 孙七（app_admin）无 `menu:list` 权限，无法访问此页面
+3. 孙七（app_admin）无 `portal:menu:list` 权限，无法访问此页面
 
 ---
 
 ### US-E-02：创建菜单项
 
-> **@req E-MNU-C** | **权限:** `menu:create`
+> **@req E-MNU-C** | **权限:** `portal:menu:create`
 
 **作为** 拥有 `super_admin` 角色的张三，
 **我** 在「系统设置」节点下新建子菜单「邮件配置」，指定路径 `/admin/email-config`、图标、排序号，
@@ -615,7 +613,7 @@ Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, ARCHITECTURE.md, DATABASE.md
 
 ### US-E-03：编辑菜单属性
 
-> **@req E-MNU-U** | **权限:** `menu:update`
+> **@req E-MNU-U** | **权限:** `portal:menu:update`
 
 **作为** 拥有 `super_admin` 角色的张三，
 **我** 将「用户管理」菜单的排序号从 2 改为 1（提升到第一位置），并修改路径为 `/admin/users`，
@@ -630,7 +628,7 @@ Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, ARCHITECTURE.md, DATABASE.md
 
 ### US-E-04：删除菜单项（递归清理）
 
-> **@req E-MNU-D** | **权限:** `menu:delete`
+> **@req E-MNU-D** | **权限:** `portal:menu:delete`
 
 **作为** 拥有 `super_admin` 角色的张三，
 **我** 删除「邮件配置」菜单项，
@@ -645,11 +643,11 @@ Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, ARCHITECTURE.md, DATABASE.md
 
 ### US-E-05：菜单绑定权限标识
 
-> **@req E-MNU-PB** | **权限:** `menu:update`
+> **@req E-MNU-PB** | **权限:** `portal:menu:update`
 
 **作为** 拥有 `super_admin` 角色的张三，
-**我** 将「用户管理」菜单项绑定权限 Code `user:list`，
-**以便** 只有拥有 `user:list` 权限的用户才能在侧边栏看到该菜单。
+**我** 将「用户管理」菜单项绑定权限 Code `portal:user:list`，
+**以便** 只有拥有 `portal:user:list` 权限的用户才能在侧边栏看到该菜单。
 
 **验收标准：**
 1. 每个菜单项可绑定一个权限 Code
@@ -662,7 +660,7 @@ Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, ARCHITECTURE.md, DATABASE.md
 
 ### US-F-01：查看部门组织树
 
-> **@req F-DEP-L** | **权限:** `department:list`
+> **@req F-DEP-L** | **权限:** `portal:department:list`
 
 **作为** 拥有 `super_admin` 角色的张三，
 **我** 访问部门管理页面，看到完整的组织架构树（总部 → 技术部/前端组/后端组/产品部/运营部），
@@ -671,13 +669,13 @@ Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, ARCHITECTURE.md, DATABASE.md
 **验收标准：**
 1. 树形结构展示，支持展开/收起
 2. 每个节点显示：部门名称、编码、负责人、人数
-3. 李四（org_admin）也能查看部门树（有 `department:list` 和 `department:read`）
+3. 李四（org_admin）也能查看部门树（有 `portal:department:list` 和 `portal:department:read`）
 
 ---
 
 ### US-F-02：创建子部门
 
-> **@req F-DEP-C** | **权限:** `department:create`
+> **@req F-DEP-C** | **权限:** `portal:department:create`
 
 **作为** 拥有 `super_admin` 角色的张三，
 **我** 在「技术部」节点下新增子部门「测试组」，
@@ -687,13 +685,13 @@ Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, ARCHITECTURE.md, DATABASE.md
 1. 选择父部门后创建子节点
 2. 新部门的 `ancestors` 字段自动计算（materialized path）
 3. 创建后组织树即时刷新
-4. 李四（无 `department:create`）无法创建部门
+4. 李四（无 `portal:department:create`）无法创建部门
 
 ---
 
 ### US-F-03：修改部门信息
 
-> **@req F-DEP-U** | **权限:** `department:update`
+> **@req F-DEP-U** | **权限:** `portal:department:update`
 
 **作为** 拥有 `super_admin` 角色的张三，
 **我** 将「前端组」的名称修改为「大前端组」，
@@ -702,13 +700,13 @@ Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, ARCHITECTURE.md, DATABASE.md
 **验收标准：**
 1. 可修改：部门名称、编码、负责人
 2. 修改编码时校验唯一性
-3. 李四（无 `department:update`）无法修改
+3. 李四（无 `portal:department:update`）无法修改
 
 ---
 
 ### US-F-04：删除部门节点
 
-> **@req F-DEP-D** | **权限:** `department:delete`
+> **@req F-DEP-D** | **权限:** `portal:department:delete`
 
 **作为** 拥有 `super_admin` 角色的张三，
 **我** 删除「测试组」部门节点，
@@ -726,7 +724,7 @@ Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, ARCHITECTURE.md, DATABASE.md
 
 ### US-G-01：查看客户端列表
 
-> **@req G-CLT-L** | **权限:** `client:list`
+> **@req G-CLT-L** | **权限:** `portal:client:list`
 
 **作为** 拥有 `super_admin` 角色的张三或拥有 `app_admin` 角色的孙七，
 **我** 访问客户端管理页面，看到所有 OAuth 客户端（portal、erp-app、crm-app、disabled-app），
@@ -735,13 +733,13 @@ Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, ARCHITECTURE.md, DATABASE.md
 **验收标准：**
 1. 列表展示：客户端名称、Client ID、Redirect URI、授权角色、状态、创建时间
 2. 孙七能看到完整的客户端列表（归属总部，数据范围覆盖全公司）
-3. 李四（无 `client:list`）无法访问此页面，侧边栏不显示入口
+3. 李四（无 `portal:client:list`）无法访问此页面，侧边栏不显示入口
 
 ---
 
 ### US-G-02：注册新客户端
 
-> **@req G-CLT-C** | **权限:** `client:create`
+> **@req G-CLT-C** | **权限:** `portal:client:create`
 
 **作为** 拥有 `super_admin` 角色的张三，
 **我** 点击「注册客户端」，填写应用名称「HR 系统」、Redirect URI `https://hr.example.com/callback` 后提交，
@@ -751,13 +749,13 @@ Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, ARCHITECTURE.md, DATABASE.md
 1. 系统自动生成 Client ID 和 Client Secret
 2. Client Secret 仅在创建时展示一次，后续不可查看
 3. 新客户端默认状态为 ACTIVE
-4. 孙七（app_admin，有 `client:create`）也能注册新客户端
+4. 孙七（app_admin，有 `portal:client:create`）也能注册新客户端
 
 ---
 
 ### US-G-03：更新客户端配置
 
-> **@req G-CLT-U** | **权限:** `client:update`
+> **@req G-CLT-U** | **权限:** `portal:client:update`
 
 **作为** 拥有 `super_admin` 角色的张三，
 **我** 修改 `portal` 的 Redirect URI 从 `http://localhost:4000/callback` 改为 `http://localhost:4100/api/auth/callback`，
@@ -772,7 +770,7 @@ Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, ARCHITECTURE.md, DATABASE.md
 
 ### US-G-04：注销客户端
 
-> **@req G-CLT-D** | **权限:** `client:delete`
+> **@req G-CLT-D** | **权限:** `portal:client:delete`
 
 **作为** 拥有 `super_admin` 角色的张三，
 **我** 注销 `disabled-app` 客户端（彻底移除），
@@ -817,7 +815,7 @@ Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, ARCHITECTURE.md, DATABASE.md
 
 ### US-G-07：轮换客户端密钥
 
-> **@req G-CLT-U** | **权限:** `client:rotate_secret`
+> **@req G-CLT-SEC** | **权限:** `portal:client:rotate_secret`
 
 **作为** 拥有 `super_admin` 角色的张三，
 **我** 在 `erp-app` 详情页点击「轮换密钥」，系统生成新的 Client Secret，
@@ -827,7 +825,7 @@ Related Specs: REQUIREMENTS_MATRIX.md, PRD.md, ARCHITECTURE.md, DATABASE.md
 1. 新 Secret 立即生效，旧 Secret 立即失效
 2. 新 Secret 仅展示一次
 3. 使用旧 Secret 的请求返回 `invalid_client` 错误
-4. 孙七（app_admin，有 `client:rotate_secret`）也能轮换密钥
+4. 孙七（app_admin，有 `portal:client:rotate_secret`）也能轮换密钥
 
 ---
 
@@ -1030,7 +1028,7 @@ JWT payload 包含以下 claims：
 - `iat`: 签发时间
 - `jti`: 唯一标识（用于紧急撤销）
 - `roles`: 角色代码数组（如 `["super_admin"]`）
-- `permissions`: 权限代码数组（如 `["user:list", "user:create", ...]`）
+- `permissions`: 权限代码数组（如 `["portal:user:list", "portal:user:create", ...]`）
 
 ---
 
@@ -1419,7 +1417,7 @@ JWT payload 包含以下 claims：
 
 **验收标准：**
 1. 返回 `authenticated: true`
-2. `user.permissions` 包含赵六拥有的权限代码数组（如 `["system:view_dashboard"]`）
+2. `user.permissions` 包含赵六拥有的权限代码数组（如 `["portal:system:view_dashboard"]`）
 3. `menus` 仅包含赵六可见的菜单项
 4. 周八（audit_viewer）的 `menus` 包含审计日志相关菜单
 5. 吴九（无角色）的 `permissions` 为空数组，`menus` 为空数组
@@ -1436,7 +1434,7 @@ JWT payload 包含以下 claims：
 1. 可修改：邮箱、手机号、头像
 2. 不可修改：用户名、部门、角色（需管理员操作）
 3. 邮箱唯一性校验
-4. 不需要 `user:update` 管理权限（自助服务）
+4. 不需要 `portal:user:update` 管理权限（自助服务）
 
 ---
 
@@ -1444,7 +1442,7 @@ JWT payload 包含以下 claims：
 
 ### US-AUDIT-01：查看审计日志
 
-> **权限:** `audit:read`
+> **权限:** `portal:audit:read`
 
 **作为** 拥有 `audit_viewer` 角色的周八，
 **我** 访问审计日志页面，按时间范围和操作类型筛选日志，
@@ -1460,7 +1458,7 @@ JWT payload 包含以下 claims：
 
 ### US-AUDIT-02：导出审计日志
 
-> **权限:** `audit:export`
+> **权限:** `portal:audit:export`
 
 **作为** 拥有 `audit_viewer` 角色的周八，
 **我** 点击「导出」按钮将筛选后的审计日志导出为 CSV 文件，
@@ -1470,13 +1468,13 @@ JWT payload 包含以下 claims：
 1. 导出内容与当前筛选条件一致
 2. CSV 格式包含所有日志字段
 3. 大量日志时异步导出，避免浏览器超时
-4. 赵六（employee）无 `audit:export` 权限，看不到导出按钮
+4. 赵六（employee）无 `portal:audit:export` 权限，看不到导出按钮
 
 ---
 
 ### US-AUDIT-03：查看登录日志
 
-> **权限:** `login_log:read`
+> **权限:** `portal:audit:read`
 
 **作为** 拥有 `audit_viewer` 角色的周八，
 **我** 访问登录日志页面，查看所有用户的登录历史，
@@ -1492,7 +1490,7 @@ JWT payload 包含以下 claims：
 
 ### US-AUDIT-04：导出登录日志
 
-> **权限:** `login_log:export`
+> **权限:** `portal:audit:export`
 
 **作为** 拥有 `audit_viewer` 角色的周八，
 **我** 点击「导出」将登录日志导出为 CSV，
@@ -1500,7 +1498,7 @@ JWT payload 包含以下 claims：
 
 **验收标准：**
 1. 导出功能与审计日志导出行为一致
-2. 赵六（employee）无 `login_log:export` 权限
+2. 赵六（employee）无 `portal:audit:export` 权限
 
 ---
 
@@ -1573,7 +1571,7 @@ JWT payload 包含以下 claims：
 ### US-CROSS-01：权限缓存与实时生效
 
 **作为** 拥有 `super_admin` 角色的张三，
-**我** 将 `dept_manager` 角色新增 `user:reset_password` 权限后，
+**我** 将 `dept_manager` 角色新增 `portal:user:reset_password` 权限后，
 **王五**（拥有 `dept_manager` 角色）在 5 分钟内（Redis 缓存 TTL）获取到新权限。
 
 **验收标准：**
@@ -1591,7 +1589,7 @@ JWT payload 包含以下 claims：
 **以便** 我能同时管理组织架构和查看审计日志。
 
 **验收标准：**
-1. JWT `permissions` 数组包含 `user:list`, `user:create`, ..., `audit:read`, `audit:export`（两个角色的并集）
+1. JWT `permissions` 数组包含 `portal:user:list`, `portal:user:create`, ..., `portal:audit:read`, `portal:audit:export`（两个角色的并集）
 2. 数据范围取多角色部门（含子树展开）的并集
 3. 侧边栏展示两个角色对应的所有菜单
 
@@ -1652,8 +1650,8 @@ JWT payload 包含以下 claims：
 
 **验收标准：**
 1. 审计日志包含：操作人、操作时间、操作类型、目标对象、变更详情
-2. 周八（audit_viewer）可查看审计日志（有 `audit:read`）
-3. 赵六（employee）无法查看审计日志（无 `audit:read`）
+2. 周八（audit_viewer）可查看审计日志（有 `portal:audit:read`）
+3. 赵六（employee）无法查看审计日志（无 `portal:audit:read`）
 
 ---
 
@@ -1706,12 +1704,12 @@ JWT payload 包含以下 claims：
 ### US-RBAC-03：删除仍被角色引用的权限
 
 **作为** 拥有 `super_admin` 角色的张三，
-**我** 尝试删除被 `dept_manager` 角色引用的 `user:read` 权限时，
+**我** 尝试删除被 `dept_manager` 角色引用的 `portal:user:read` 权限时，
 **系统** 提示需先从角色中移除该权限。
 
 **验收标准：**
 1. 删除前检查权限关联角色数
-2. 若被引用，警告：「权限 `user:read` 被 2 个角色引用：dept_manager、org_admin。删除将从这些角色中移除该权限。」
+2. 若被引用，警告：「权限 `portal:user:read` 被 2 个角色引用：dept_manager、org_admin。删除将从这些角色中移除该权限。」
 3. 确认后权限删除，角色权限关联同步清除
 4. 受影响用户的权限缓存被清除（Redis TTL 或主动失效）
 
@@ -1751,12 +1749,12 @@ JWT payload 包含以下 claims：
 ### US-MNU-BTN-02：菜单类型 — 页面
 
 **作为** 拥有 `super_admin` 角色的张三，
-**我** 创建一个「页面」类型的菜单项「用户管理」，绑定路由 `/admin/users` 和权限 `user:list`，
+**我** 创建一个「页面」类型的菜单项「用户管理」，绑定路由 `/admin/users` 和权限 `portal:user:list`，
 **以便** 点击后导航到用户管理页面。
 
 **验收标准：**
 1. 页面类型菜单点击后跳转到绑定的路由
-2. 只有拥有 `user:list` 权限的用户能看到此菜单
+2. 只有拥有 `portal:user:list` 权限的用户能看到此菜单
 3. 直接访问 `/admin/users` 时，无权限用户被 403 拦截
 
 ---
@@ -1764,13 +1762,13 @@ JWT payload 包含以下 claims：
 ### US-MNU-BTN-03：按钮级权限控制
 
 **作为** 拥有 `super_admin` 角色的张三，
-**我** 在用户管理页面配置按钮级权限：`user:create`（新建按钮）、`user:delete`（删除按钮）、`user:reset_password`（重置密码按钮），
+**我** 在用户管理页面配置按钮级权限：`portal:user:create`（新建按钮）、`portal:user:delete`（删除按钮）、`portal:user:reset_password`（重置密码按钮），
 **以便** 不同角色看到不同的操作按钮。
 
 **验收标准：**
 1. 按钮级权限是 `API` 类型权限，与菜单权限分离
-2. 王五（有 `user:list`、`user:read`、`user:update`）能看到用户列表和编辑按钮，但看不到「新建」和「删除」按钮
-3. 赵六（仅有 `system:view_dashboard`）看不到任何操作按钮
+2. 王五（有 `portal:user:list`、`portal:user:read`、`portal:user:update`）能看到用户列表和编辑按钮，但看不到「新建」和「删除」按钮
+3. 赵六（仅有 `portal:system:view_dashboard`）看不到任何操作按钮
 4. 前端根据 `GET /api/me` 返回的 `permissions` 数组动态渲染/隐藏按钮
 5. 后端 API 同样校验权限（前端隐藏仅是 UX 优化，非安全边界）
 
@@ -1873,52 +1871,50 @@ JWT payload 包含以下 claims：
 
 | 权限代码 | 覆盖的用户故事 |
 | :--- | :--- |
-| `user:list` | US-B-01, US-B-02, US-B-03, US-B-04, US-B-05, US-B-06, US-RBAC-01 |
-| `user:create` | US-B-07, US-B-08, US-MNU-BTN-03 |
-| `user:read` | US-B-09, US-MNU-BTN-03 |
-| `user:update` | US-B-10, US-B-12, US-MNU-BTN-03 |
-| `user:delete` | US-B-11, US-MNU-BTN-03 |
-| `user:manage` | US-B-01 (隐含) |
-| `user:reset_password` | US-B-14, US-MNU-BTN-03 |
-| `user:assign_role` | US-B-13 |
-| `department:list` | US-F-01 |
-| `department:create` | US-F-02 |
-| `department:read` | US-F-01 |
-| `department:update` | US-F-03, US-RBAC-01 |
-| `department:delete` | US-F-04 |
-| `department:manage` | US-F-01 (隐含) |
-| `role:list` | US-C-01 |
-| `role:create` | US-C-02 |
-| `role:read` | US-C-01 |
-| `role:update` | US-C-03, US-C-06, US-C-07, US-RBAC-02 |
-| `role:delete` | US-C-04, US-RBAC-02 |
-| `role:manage` | US-C-01 (隐含) |
-| `role:assign_permission` | US-C-05, US-RBAC-03 |
-| `permission:list` | US-D-01 |
-| `permission:create` | US-D-02 |
-| `permission:read` | US-D-01 |
-| `permission:update` | US-D-03 |
-| `permission:delete` | US-D-04, US-RBAC-03 |
-| `permission:manage` | US-D-01 (隐含) |
-| `menu:list` | US-E-01 |
-| `menu:create` | US-E-02, US-MNU-BTN-01, US-MNU-BTN-02 |
-| `menu:read` | US-E-01 |
-| `menu:update` | US-E-03, US-E-05, US-MNU-BTN-04 |
-| `menu:delete` | US-E-04 |
-| `menu:manage` | US-E-01 (隐含) |
-| `client:list` | US-G-01 |
-| `client:create` | US-G-02 |
-| `client:read` | US-G-01 |
-| `client:update` | US-G-03 |
-| `client:delete` | US-G-04 |
-| `client:manage` | US-G-01 (隐含) |
-| `client:rotate_secret` | US-G-07, US-OIDC-08 |
-| `audit:read` | US-CROSS-06, US-AUDIT-01 |
-| `audit:export` | US-CROSS-06, US-AUDIT-02 |
-| `login_log:read` | US-AUDIT-03 |
-| `login_log:export` | US-AUDIT-04 |
-| `system:manage` | US-A-01 (隐含) |
-| `system:view_dashboard` | US-A-05, US-SELF-02 |
+| `portal:user:list` | US-B-01, US-B-02, US-B-03, US-B-04, US-B-05, US-B-06, US-RBAC-01 |
+| `portal:user:create` | US-B-07, US-B-08, US-MNU-BTN-03 |
+| `portal:user:read` | US-B-09, US-MNU-BTN-03 |
+| `portal:user:update` | US-B-10, US-B-12, US-MNU-BTN-03 |
+| `portal:user:delete` | US-B-11, US-MNU-BTN-03 |
+| `portal:user:manage` | US-B-01 (隐含) |
+| `portal:user:reset_password` | US-B-14, US-MNU-BTN-03 |
+| `portal:user:assign_role` | US-B-13 |
+| `portal:department:list` | US-F-01 |
+| `portal:department:create` | US-F-02 |
+| `portal:department:read` | US-F-01 |
+| `portal:department:update` | US-F-03, US-RBAC-01 |
+| `portal:department:delete` | US-F-04 |
+| `portal:department:manage` | US-F-01 (隐含) |
+| `portal:role:list` | US-C-01 |
+| `portal:role:create` | US-C-02 |
+| `portal:role:read` | US-C-01 |
+| `portal:role:update` | US-C-03, US-C-06, US-C-07, US-RBAC-02 |
+| `portal:role:delete` | US-C-04, US-RBAC-02 |
+| `portal:role:manage` | US-C-01 (隐含) |
+| `portal:role:assign_permission` | US-C-05, US-RBAC-03 |
+| `portal:permission:list` | US-D-01 |
+| `portal:permission:create` | US-D-02 |
+| `portal:permission:read` | US-D-01 |
+| `portal:permission:update` | US-D-03 |
+| `portal:permission:delete` | US-D-04, US-RBAC-03 |
+| `portal:permission:manage` | US-D-01 (隐含) |
+| `portal:menu:list` | US-E-01 |
+| `portal:menu:create` | US-E-02, US-MNU-BTN-01, US-MNU-BTN-02 |
+| `portal:menu:read` | US-E-01 |
+| `portal:menu:update` | US-E-03, US-E-05, US-MNU-BTN-04 |
+| `portal:menu:delete` | US-E-04 |
+| `portal:menu:manage` | US-E-01 (隐含) |
+| `portal:client:list` | US-G-01 |
+| `portal:client:create` | US-G-02 |
+| `portal:client:read` | US-G-01 |
+| `portal:client:update` | US-G-03 |
+| `portal:client:delete` | US-G-04 |
+| `portal:client:manage` | US-G-01 (隐含) |
+| `portal:client:rotate_secret` | US-G-07, US-OIDC-08 |
+| `portal:audit:read` | US-CROSS-06, US-AUDIT-01 |
+| `portal:audit:export` | US-CROSS-06, US-AUDIT-02 |
+| `portal:system:manage` | US-A-01 (隐含) |
+| `portal:system:view_dashboard` | US-A-05, US-SELF-02 |
 
 ---
 
@@ -1951,8 +1947,8 @@ JWT payload 包含以下 claims：
 | `GET /api/departments/:id/members` | US-F-01 |
 | `GET /api/clients` | US-G-01 |
 | `GET /api/clients/:id` | US-G-01 |
-| `GET /api/clients/:id/tokens` | US-G-01 |
-| `DELETE /api/clients/:id/tokens` | US-G-05 |
+| `GET /api/clients/:id/tokens` | US-G-03 |
+| `DELETE /api/clients/:id/tokens` | US-G-03 |
 | `GET /api/audit/logs` | US-AUDIT-01, US-CROSS-06 |
 | `GET /api/audit/login-logs` | US-AUDIT-03 |
 | `GET /.well-known/openid-configuration` | US-OIDC-01 |

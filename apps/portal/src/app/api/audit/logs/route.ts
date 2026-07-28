@@ -3,13 +3,12 @@
  *
  * GET 读操作委托给 audit/data.ts 统一读模型。
  */
-import { type NextRequest } from 'next/server';
+import type { NextRequest } from 'next/server';
 import { withPermission } from '@/lib/auth';
-import { getAuditLogs } from '@/app/audit/data';
 import { AUDIT_OPERATION_VALUES, AUDIT_PERMISSIONS, type AuditOperation } from '@auth-sso/contracts';
 import { parsePagination } from '@/lib/pagination';
 import { restListSuccess } from '@/lib/response';
-
+import { getAuditLogs } from '@/app/audit/data';
 
 /** GET /api/audit/logs — 委托 data.ts */
 export async function GET(request: NextRequest) {

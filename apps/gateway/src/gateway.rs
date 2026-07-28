@@ -9,7 +9,7 @@ use tracing::{debug, info, warn};
 use crate::auth::{AuthDecision, JwtVerifier, RefreshedTokens, TokenRefresher};
 use crate::config::{OAuthConfig, Upstreams};
 use crate::cookie;
-use crate::http::{SessionExt, hmac_sha256_hex, is_html_page_navigation, is_secure_host};
+use crate::http::{SessionExt, hmac_sha256_hex, is_html_page_navigation};
 use crate::jwks::JwksCache;
 use crate::oauth;
 use crate::path_matcher::{PathClass, PathMatcher};
@@ -276,7 +276,10 @@ impl Gateway {
         return_to: &str,
     ) -> Result<bool> {
         let host = get_host(session);
-        let secure = is_secure_host(host);
+        // Gateway 主代理服务本身就是浏览器的 TLS 第一跳。走到这里的浏览器请求
+        // 已经在 HTTPS 监听端口内，OAuth redirect_uri 与临时 Cookie 必须按 HTTPS 生成，
+        // 不能再因为 loopback/localhost 主机名而退化为 http://...:443/19443。
+        let secure = true;
 
         let callback_path = self.jwks_cache.callback_path_or_default();
 
@@ -392,7 +395,8 @@ impl Gateway {
         state_param: &str,
     ) -> Result<bool> {
         let host = get_host(session);
-        let secure = is_secure_host(host);
+        // 与 /authorize 阶段保持同一条边界事实：Gateway callback 始终经 HTTPS 到达。
+        let secure = true;
         let ck = match cookie_header.as_deref() {
             Some(c) => c,
             None => {
@@ -757,7 +761,7 @@ impl ProxyHttp for Gateway {
     /// 下行响应过滤：若在 request_filter 中完成了续签，则将新 Token 以 Set-Cookie 下发给浏览器
     async fn response_filter(
         &self,
-        session: &mut Session,
+        _session: &mut Session,
         upstream_response: &mut ResponseHeader,
         ctx: &mut Self::CTX,
     ) -> Result<()> {
@@ -765,8 +769,8 @@ impl ProxyHttp for Gateway {
             return Ok(());
         };
 
-        let host = get_host(session);
-        let secure = is_secure_host(host);
+        // 续签后的浏览器会话 Cookie 同样由 HTTPS Gateway 下发，必须保持 Secure。
+        let secure = true;
 
         for cookie in oauth::build_session_cookies(&new_tokens.access, &new_tokens.refresh, secure)
         {

@@ -343,12 +343,12 @@ export const requirePermission = cache(
 
 - 基于 `React.cache()` 实现同请求去重。Layout 和 Page 各自调用时命中缓存，零额外开销。
 - 返回 `null` 时，Layout 渲染 `<Forbidden />` 组件。
-- 适用于页面级权限控制，如用户管理页面的 `user:list` 权限。
+- 适用于页面级权限控制，如用户管理页面的 `portal:user:list` 权限。
 
 典型用法（`layout.tsx`）:
 ```typescript
 export default async function UsersLayout({ children }) {
-  const userId = await requirePermission({ permissions: ['user:list'] });
+  const userId = await requirePermission({ permissions: ['portal:user:list'] });
   if (!userId) return <Forbidden />;
   return <>{children}</>;
 }

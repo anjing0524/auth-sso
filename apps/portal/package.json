@@ -9,13 +9,11 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "seed": "tsx scripts/seed-rbac.ts",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate",
+    "db:migrate": "node --import tsx scripts/migrate.ts",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "db:seed": "NODE_OPTIONS='--require ./scripts/preload-mock.cjs' node --import tsx scripts/seed.ts",
-    "db:cleanup": "npx tsx scripts/cleanup-expired-tokens.ts",
     "db:maintain-partitions": "npx tsx scripts/maintain-access-log-partitions.ts"
   },
   "dependencies": {

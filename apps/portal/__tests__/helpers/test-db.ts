@@ -5,7 +5,7 @@
  *
  * 1. TRUNCATE CASCADE（默认）— 每个测试前清空所有表
  *    - 简单可靠，无事务管理复杂性
- *    - 配套 vitest.config.ts 中 fileParallelism: false 确保文件间串行
+ *    - 配套 vitest.api.config.ts 中 fileParallelism: false 确保文件间串行
  *
  * 2. ROLLBACK（推荐，{ isolation: 'rollback' }）— 事务 + SAVEPOINT 隔离
  *    - 文件级 BEGIN/ROLLBACK 包裹，测试间 SAVEPOINT 隔离
@@ -41,7 +41,7 @@ type TestDb = PostgresJsDatabase<typeof schema>;
 const TEST_DB_URL =
   process.env['TEST_DATABASE_URL'] ||
   process.env['DATABASE_URL'] ||
-  'postgresql://postgres:postgres@localhost:5432/auth_sso_test';
+  'postgresql://postgres:postgres@127.0.0.1:5432/auth_sso_test';
 
 export interface TestDbHandleOptions {
   /** 隔离模式：'truncate'（默认）或 'rollback'（事务隔离） */

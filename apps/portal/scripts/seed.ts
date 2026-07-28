@@ -4,7 +4,8 @@
  * 职责：清空数据库 → 创建管理员用户 + OAuth 客户端 + 部门
  * RBAC 初始化委托给 seed-rbac.ts（幂等，从 @auth-sso/contracts 读取权限定义）
  *
- * 运行: cd apps/portal && DATABASE_URL=<url> tsx scripts/seed.ts
+ * 默认入口：`pnpm --filter @auth-sso/portal db:seed`
+ * 直接运行：cd apps/portal && DATABASE_URL=<url> tsx scripts/seed.ts
  */
 import './load-env';
 

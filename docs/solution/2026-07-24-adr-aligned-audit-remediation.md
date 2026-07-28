@@ -11,7 +11,7 @@
 - Refresh Token 继续不绑定 Client；这不是遗漏，而是 ADR-006 的用户级会话模型。revoke 的跨 Client 影响同样是该模型的预期语义。
 - 全部 Portal Controller/Action 改为直接导入 `@auth-sso/contracts` 权限常量，删除运行时旧前缀归一化。
 - Discovery 缺少 issuer 时拒绝刷新，保持最近完整 JWKS 快照；生产环境缺少 `GATEWAY_SHARED_SECRET` 启动失败。Gateway 仍显式保留 `validate_aud = false`。
-- 迁移历史收敛为 `0000_initial.sql`：真实复合主键、完整索引、`access_logs` 月分区；初始化动态创建当月和下月分区。GitHub Actions 每月执行维护脚本，CI 使用 `db:migrate`。
+- 迁移历史收敛为 `0000_initial.sql`：真实复合主键、完整索引、`access_logs` 月分区；初始化动态创建当月和下月分区。`db:maintain-partitions` 作为运行时维护脚本保留，由实际部署/运维平台按月调度；GitHub 仅承担 CI，CI 使用 `db:migrate`。
 - Redis 离线队列关闭并设置有限重试；批量权限缓存/会话撤销按 50 个用户分批。Gateway 提供由共享密钥保护的 `/__gateway/metrics` Prometheus 文本端点。
 - 用户、角色、部门、权限和 Client 领域对象以 `Temporal.Instant` 表达时间；Drizzle `Date` 仅在持久化适配函数中转换。Redis 懒连接以单一等待路径协调，避免鉴权与暴力破解检查并发触发时误判 Redis 不可用。
 
@@ -19,7 +19,7 @@
 
 - 空库验证必须同时清除 `public` 与 `drizzle` schema；只删 `public` 会保留 Drizzle 迁移记录，产生“表不存在但 migration 已完成”的假象。
 - 已在本地空库执行 `db:migrate`、`db:seed`，确认表、复合主键和两个 access-log 分区存在。
-- 分区任务使用部署环境的 `DATABASE_URL` GitHub Secret；任务失败会使 workflow 失败，作为可观测告警入口。
+- 分区任务应由实际部署环境注入 `DATABASE_URL` 并纳入其告警体系；GitHub Actions 不再承担该运行时任务。
 - 后续改动的最小回归集：OAuth scope/domain 测试、API 测试、Portal lint/typecheck、Gateway fmt/clippy/test，以及 `git diff --check`。
 - Playwright 覆盖登录至授权码签发的浏览器旅程；回调 Token 兑换由 Gateway 生成的 PKCE/CSRF Cookie 负责，作为独立边界验证，避免测试绕过该安全前置条件。
 - Gateway Docker build 与 runner 均固定 Docker Official Image 的 multi-platform manifest digest；升级基础镜像必须显式更新 digest，并重新执行 Rust 与容器构建验证。

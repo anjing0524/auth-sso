@@ -9,7 +9,7 @@
 import { type NextRequest } from 'next/server';
 import { resolveIdentity } from '@/lib/auth';
 import { getUserPermissionContext } from '@/lib/permissions';
-import { mapDomainError } from '@/domain/shared/error-mapping';
+import { mapServerError } from '@/lib/server-error';
 import { COMMON_ERRORS } from '@auth-sso/contracts';
 import { restSuccess, restError } from '@/lib/response';
 
@@ -33,7 +33,7 @@ export async function GET(_request: NextRequest) {
       deptIds: permissionContext.deptIds,
     });
   } catch (err) {
-    const mapped = mapDomainError(err);
+    const mapped = mapServerError(err);
     return restError(mapped.error, mapped.message, mapped.status);
   }
 }

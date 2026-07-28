@@ -3,7 +3,7 @@ import { db, schema } from '@/infrastructure/db';
 import { eq, sql, inArray, ne, isNull, or, and } from 'drizzle-orm';
 import { generateUUID } from '@/lib/crypto';
 import { COMMON_ERRORS } from '@auth-sso/contracts';
-import { mapDomainError } from '@/domain/shared/error-mapping';
+import { mapServerError } from '@/lib/server-error';
 import { validateClientActive, validateClientSecret } from '@/domain/auth/oauth-client';
 import { flattenPermissions, getHashCode, findDuplicateCode } from '@/domain/permission/permission-sync';
 import type { IncomingPermission } from '@/domain/permission/permission-sync';
@@ -97,7 +97,7 @@ export async function POST(request: NextRequest) {
     });
     return restSuccess(result);
   } catch (error) {
-    const mapped = mapDomainError(error);
+    const mapped = mapServerError(error);
     log.error('同步失败', { error: mapped.error, message: mapped.message });
     return restError(mapped.error, mapped.message, mapped.status);
   }

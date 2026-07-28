@@ -8,7 +8,7 @@
 
 - 删除未被 package 命令、CI、部署配置或文档操作手册引用，且与当前 schema 不兼容的脚本；同时删除唯一指向它的 `db:clean` 命令。
 - 删除已由 Docker 发布验收覆盖的本地 QA 编排脚本，以及没有配置入口、没有部署调度的容器退出监听脚本。
-- 保留有明确生产职责和 CI 调度的 `db:maintain-partitions`，以及 CI 调用的性能基准脚本。
+- 保留有明确运行时职责的 `db:maintain-partitions`，但不再把它挂到 GitHub Actions；GitHub 仅承担 CI，真实分区维护改由部署/运维平台调度。性能基准脚本继续按 CI 消费关系保留。
 - 清除已经迁移到 Base UI 后仍留在 manifest 的无引用 Radix 包，以及 Vite 8 已原生支持后无引用的 `vite-tsconfig-paths`；删除与 `test:api` 完全相同且无调用方的 `test:portal` 别名。
 - 删除根命令中无消费者的 `setup:env` 提示、未被 CI 使用的危险 `db:push:ci` 包装，以及会无差别删除本地依赖和 pnpm 缓存的 `clean:all`。
 - 删除没有页面、组件或测试消费者的图表、滚动区域和 Sonner 包装组件，并移除仅被该图表模板使用的 `recharts`。
