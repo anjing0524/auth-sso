@@ -9,14 +9,11 @@ import 'server-only';
  * @module lib/audit
  * @impl J-LOG-003 — 关键操作自动记录（登录/登出/权限变更等）
  */
+import { db, schema } from '@/infrastructure/db';
 import type { AuditOperation, LoginEventType } from '@auth-sso/contracts';
 import { createLogger } from '@/lib/logger';
 
 const log = createLogger('Audit');
-
-async function getAuditDb() {
-  return import('@/infrastructure/db');
-}
 
 async function fireAndForgetWithRetry(factory: () => Promise<unknown>, maxRetries: number = 3): Promise<void> {
   for (let attempt = 0; attempt < maxRetries; attempt++) {
@@ -56,17 +53,15 @@ export interface WriteLoginLogParams {
 
 export function writeLoginLog(params: WriteLoginLogParams): void {
   fireAndForget(() =>
-    getAuditDb().then(({ db, schema }) =>
-      db.insert(schema.loginLogs).values({
-        userId: params.userId || null,
-        username: params.username,
-        eventType: params.eventType,
-        ip: params.ip || null,
-        userAgent: params.userAgent || null,
-        location: params.location || null,
-        failReason: params.failReason || null,
-      })
-    )
+    db.insert(schema.loginLogs).values({
+      userId: params.userId || null,
+      username: params.username,
+      eventType: params.eventType,
+      ip: params.ip || null,
+      userAgent: params.userAgent || null,
+      location: params.location || null,
+      failReason: params.failReason || null,
+    })
   );
 }
 
@@ -88,9 +83,7 @@ export interface WriteAuditLogParams {
   errorMsg?: string | null;
 }
 
-type AuditDbModule = typeof import('@/infrastructure/db');
-type DbInstance = AuditDbModule['db'];
-type DrizzleTransaction = Parameters<Parameters<DbInstance['transaction']>[0]>[0];
+type DrizzleTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 function toAuditLogRow(params: WriteAuditLogParams) {
   return {
@@ -117,12 +110,10 @@ export async function appendSecurityAudit(
   tx: DrizzleTransaction,
   params: WriteAuditLogParams,
 ): Promise<void> {
-  const { schema } = await getAuditDb();
   await tx.insert(schema.auditLogs).values(toAuditLogRow(params));
 }
 
 export async function writeAuditLog(params: WriteAuditLogParams): Promise<void> {
-  const { db, schema } = await getAuditDb();
   await db.insert(schema.auditLogs).values(toAuditLogRow(params));
 }
 
@@ -173,20 +164,18 @@ export interface WriteAccessLogParams {
 
 export function writeAccessLog(params: WriteAccessLogParams): void {
   fireAndForget(() =>
-    getAuditDb().then(({ db, schema }) =>
-      db.insert(schema.accessLogs).values({
-        userId: params.userId,
-        username: params.username || null,
-        method: params.method,
-        path: params.path,
-        resourceType: params.resourceType || null,
-        resourceId: params.resourceId || null,
-        ip: params.ip || null,
-        userAgent: params.userAgent || null,
-        status: params.status ?? null,
-        duration: params.duration ?? null,
-      })
-    )
+    db.insert(schema.accessLogs).values({
+      userId: params.userId,
+      username: params.username || null,
+      method: params.method,
+      path: params.path,
+      resourceType: params.resourceType || null,
+      resourceId: params.resourceId || null,
+      ip: params.ip || null,
+      userAgent: params.userAgent || null,
+      status: params.status ?? null,
+      duration: params.duration ?? null,
+    })
   );
 }
 

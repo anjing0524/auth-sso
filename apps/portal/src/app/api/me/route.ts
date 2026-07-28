@@ -13,7 +13,7 @@ import { type NextRequest } from 'next/server';
 import { resolveIdentity } from '@/lib/auth';
 import { getDynamicMenuTree } from '@/lib/menu-tree';
 import { getUserPermissionContext } from '@/lib/permissions';
-import { mapDomainError } from '@/domain/shared/error-mapping';
+import { mapServerError } from '@/lib/server-error';
 import { COMMON_ERRORS, ADMIN_ROLE_CODES } from '@auth-sso/contracts';
 import { restSuccess, restError } from '@/lib/response';
 import { getUser } from '@/app/(dashboard)/users/data';
@@ -60,7 +60,7 @@ export async function GET(_request: NextRequest) {
       menus: menuItems,
     });
   } catch (err) {
-    const mapped = mapDomainError(err);
+    const mapped = mapServerError(err);
     return restError(mapped.error, mapped.message, mapped.status);
   }
 }

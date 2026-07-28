@@ -8,11 +8,11 @@ import { withPermission } from '@/lib/auth';
 import { AUDIT_PERMISSIONS, LOGIN_EVENT_VALUES, type LoginEventType } from '@auth-sso/contracts';
 import { parsePagination } from '@/lib/pagination';
 import { restListSuccess } from '@/lib/response';
+import { getLoginLogs } from '@/app/audit/data';
 
 /** GET /api/audit/login-logs — 委托 data.ts */
 export async function GET(request: NextRequest) {
   return withPermission({ permissions: [AUDIT_PERMISSIONS.READ] }, async () => {
-    const { getLoginLogs } = await import('@/app/audit/data');
     const sp = request.nextUrl.searchParams;
     const { page, pageSize } = parsePagination(sp);
     const rawEvent = sp.get('eventType');

@@ -16,6 +16,8 @@ export {
   getTrustedOrigins,
   getGatewaySharedSecret,
   getRedisUrl,
+  getDatabaseUrl,
+  getLogLevel,
   getEnvConfig,
   parsePortalEnv,
   isCookieSecure,

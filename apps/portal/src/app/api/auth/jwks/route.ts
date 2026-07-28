@@ -6,13 +6,14 @@
  *
  * @route GET /api/auth/jwks
  */
-import { NextResponse } from 'next/server';
+import { connection, NextResponse } from 'next/server';
 import { db, schema } from '@/infrastructure/db';
 import { or, gt, isNull } from 'drizzle-orm';
-import { mapDomainError } from '@/domain/shared/error-mapping';
+import { mapServerError } from '@/lib/server-error';
 import { getActiveSigningKey } from '@/lib/auth/token';
 
 export async function GET() {
+  await connection();
   try {
     // 自动确保数据库中至少有一个活跃的密钥对，防止冷启动时 Gateway 连接 JWKS 死锁
     await getActiveSigningKey();
@@ -39,7 +40,7 @@ export async function GET() {
 
     return NextResponse.json({ keys });
   } catch (err) {
-    const mapped = mapDomainError(err);
+    const mapped = mapServerError(err);
     return NextResponse.json({ error: mapped.error, message: mapped.message }, { status: mapped.status });
   }
 }

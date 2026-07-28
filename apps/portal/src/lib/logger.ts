@@ -1,6 +1,6 @@
 import 'server-only';
 import pino from 'pino';
-import { getEnvConfig } from '@auth-sso/config';
+import { getLogLevel } from '@auth-sso/config';
 
 /**
  * 结构化日志工具 (Structured Logger)
@@ -24,22 +24,10 @@ export interface Logger {
 /** 从 Zod 校验路径读取 LOG_LEVEL，fallback 到 'info' */
 function getConfiguredLevel(): pino.LevelWithSilent {
   try {
-    const config = getEnvConfig();
-    // pino 支持的标准级别：trace/debug/info/warn/error/fatal/silent
-    if (config.LOG_LEVEL) {
-      const level = config.LOG_LEVEL as string;
-      if (['trace', 'debug', 'info', 'warn', 'error', 'fatal', 'silent'].includes(level)) {
-        return level as pino.LevelWithSilent;
-      }
-    }
+    return getLogLevel();
   } catch {
-    // config 包异常时 fallback
-    const raw = process.env['LOG_LEVEL'];
-    if (raw && ['trace', 'debug', 'info', 'warn', 'error', 'fatal', 'silent'].includes(raw)) {
-      return raw as pino.LevelWithSilent;
-    }
+    return 'info';
   }
-  return 'info';
 }
 
 /**

@@ -38,37 +38,12 @@ const ERROR_STATUS: Record<string, number> = {
 };
 
 /**
- * 判断错误是否为 Next.js 构建期（静态预渲染 / Partial Prerendering）的正常中断信号。
- * React 通过 Suspense 边界正确处理这类异常——它们不是真正的运行时错误。
- *
- * Next.js 16 通过 `digest` 属性标记动态函数 bailout，
- * 同时保留 message 中的描述文本作为回退信号。
- */
-function isPrerenderingError(err: unknown): boolean {
-  if (!(err instanceof Error)) return false;
-  if ('digest' in err) {
-    const digest = String((err as Record<string, unknown>)['digest']);
-    if (digest.startsWith('DYNAMIC_SERVER_USAGE') || digest.startsWith('BAILOUT_TO_CLIENT_SIDE_RENDERING')) {
-      return true;
-    }
-  }
-  return (
-    err.message.includes('prerender') ||
-    err.message.includes('Prerendering')
-  );
-}
-
-/**
  * 将领域错误统一映射为 HTTP 语义
  *
  * @param err 捕获的异常对象
  * @returns 标准化的错误映射结果，可直接返回给客户端
  */
 export function mapDomainError(err: unknown): ErrorMapping {
-  if (isPrerenderingError(err)) {
-    return { status: 500, error: COMMON_ERRORS.INTERNAL_ERROR, message: '服务器内部错误' };
-  }
-
   if (err instanceof DomainError) {
     const status = ERROR_STATUS[err.constructor.name] ?? 400;
     return { status, error: err.code, message: err.message };

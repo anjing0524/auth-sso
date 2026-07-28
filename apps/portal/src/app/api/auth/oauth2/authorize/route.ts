@@ -2,7 +2,7 @@
  * OAuth 2.1 授权端点 (GET /api/auth/oauth2/authorize)
  *
  * 薄 Controller：仅做编排（校验 → 委托 data 层查询 → 委托 domain 准入检查 → 重定向）。
- * 业务规则判断全部下沉到 domain 纯函数，数据查询委托 data 层，错误映射统一走 mapDomainError()。
+ * 业务规则判断全部下沉到 domain 纯函数，数据查询委托 data 层，错误映射统一走 mapServerError()。
  *
  * 两条分支共用同一签发路径：
  * - 分支 A（带 session_id）：登录后回跳，从 Redis 恢复授权参数 + 验 login_session
@@ -17,7 +17,7 @@ import { parseScopes, validateAuthorization, validateRequestedScopes } from '@/d
 import { validateClientActive, validateRedirectUri } from '@/domain/auth/oauth-client';
 import { generateId, generateUUID } from '@/lib/crypto';
 import { getAppBaseURL } from '@/lib/env';
-import { mapDomainError } from '@/domain/shared/error-mapping';
+import { mapServerError } from '@/lib/server-error';
 import {
   buildOAuthErrorRedirect,
   buildLoginPageRedirect,
@@ -231,7 +231,7 @@ export async function GET(request: NextRequest) {
 
     return handleFullParamsBranch(request);
   } catch (err) {
-    const mapped = mapDomainError(err);
+    const mapped = mapServerError(err);
     return buildOAuthErrorRedirect(request, mapped.error, mapped.message);
   }
 }

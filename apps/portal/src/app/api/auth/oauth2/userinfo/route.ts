@@ -9,7 +9,7 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { verifyAccessToken } from '@/lib/auth/token';
 import { getJwtFromCookie } from '@/lib/session';
-import { mapDomainError } from '@/domain/shared/error-mapping';
+import { mapServerError } from '@/lib/server-error';
 import { getUserProfile } from '@/app/(dashboard)/users/data';
 import { parseScopes } from '@/domain/auth/oauth-authorize';
 
@@ -50,7 +50,7 @@ export async function GET(request: NextRequest) {
     }
     return NextResponse.json(response);
   } catch (err) {
-    const mapped = mapDomainError(err);
+    const mapped = mapServerError(err);
     return NextResponse.json({ error: mapped.error }, { status: mapped.status });
   }
 }
