@@ -15,7 +15,6 @@ import 'server-only';
  * @module lib/auth/token/signing-keys
  */
 import { importJWK, generateKeyPair, exportJWK } from 'jose';
-import { db, schema } from '@/infrastructure/db';
 import { eq, desc } from 'drizzle-orm';
 import { generateId, generateUUID, encryptPrivateKey, decryptPrivateKey } from '@/lib/crypto';
 
@@ -24,6 +23,10 @@ import { generateId, generateUUID, encryptPrivateKey, decryptPrivateKey } from '
 // ============================================================================
 
 const KEY_CACHE_TTL_MS = 300_000;
+
+async function getSigningKeyDb() {
+  return import('@/infrastructure/db');
+}
 
 /** 进程级互斥锁：防止冷启动时多个并发请求各自生成重复密钥对 */
 let keyGenLock: Promise<void> = Promise.resolve();
@@ -73,6 +76,7 @@ export async function getSigningKeyByKid(kid: string): Promise<{
   publicKey: CryptoKey;
   publicJwk: JsonWebKey;
 } | null> {
+  const { db, schema } = await getSigningKeyDb();
   const cached = getCachedKey(kid);
   if (cached) return cached;
 
@@ -103,6 +107,7 @@ export async function getActiveSigningKey(): Promise<{
   publicKey: CryptoKey;
   publicJwk: JsonWebKey;
 }> {
+  const { db, schema } = await getSigningKeyDb();
   // DESC 排序取最新密钥（修复：ASC 导致永远选中旧密钥，密钥轮换形同虚设）
   const rows = await db
     .select()
@@ -169,6 +174,7 @@ async function generateAndPersistKeyPair(): Promise<{
   publicKey: CryptoKey;
   publicJwk: JsonWebKey;
 }> {
+  const { db, schema } = await getSigningKeyDb();
   const { publicKey, privateKey } = await generateKeyPair('ES256', { extractable: true });
   const publicJwk = await exportJWK(publicKey);
   const privateJwk = await exportJWK(privateKey);

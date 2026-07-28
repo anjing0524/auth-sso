@@ -9,7 +9,6 @@ import 'server-only';
  * @module lib/auth/token
  */
 import { SignJWT, jwtVerify, decodeProtectedHeader } from 'jose';
-import { db, schema } from '@/infrastructure/db';
 import { eq } from 'drizzle-orm';
 import { generateId, generateUUID, hashToken } from '@/lib/crypto';
 import { isJtiRevoked, trackUserJti, revokeUserAccessByUserId } from '@/lib/session/revoke';
@@ -23,6 +22,10 @@ export { getActiveSigningKey, getSigningKeyByKid } from './token/signing-keys';
 
 const log = createLogger('Token');
 const AUTH_SSO = 'auth-sso';
+
+async function getAuthDb() {
+  return import('@/infrastructure/db');
+}
 
 // ============================================================================
 // Login Session Token — 登录成功后写入 HttpOnly Cookie 的临时凭证
@@ -218,6 +221,7 @@ export async function issueRefreshToken(
   userId: string,
   scopes: string = 'openid profile email offline_access',
 ): Promise<string> {
+  const { db, schema } = await getAuthDb();
   const id = generateUUID();
   const token = `rt_${generateId(32)}`;
   const now = new Date();
@@ -249,6 +253,7 @@ export async function issueRefreshToken(
 export async function rotateRefreshToken(
   oldRefreshToken: string,
 ): Promise<RefreshTokenResult | null> {
+  const { db, schema } = await getAuthDb();
   const lockedRt = await db.transaction(async (tx) => {
     const rows = await tx
       .select({ rt: schema.refreshTokens })
@@ -310,6 +315,7 @@ export async function rotateRefreshToken(
  * @param userId - 用户内部 ID
  */
 export async function revokeAllRefreshTokens(userId: string): Promise<void> {
+  const { db, schema } = await getAuthDb();
   await db.update(schema.refreshTokens)
     .set({ revoked: new Date() })
     .where(eq(schema.refreshTokens.userId, userId));
