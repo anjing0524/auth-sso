@@ -10,7 +10,7 @@ import 'server-only';
  *
  * @module lib/auth/guard
  */
-import { type NextResponse } from 'next/server';
+import { connection, type NextResponse } from 'next/server';
 import { checkPermission, type PermissionCheckOptions } from './check-permission';
 import { mapDomainError } from '@/domain/shared/error-mapping';
 import { recordActionAudit, recordApiAudit } from '@/lib/audit';
@@ -55,6 +55,7 @@ export async function withPermission(
   handler: (userId: string) => Promise<NextResponse>
 ): Promise<NextResponse> {
   try {
+    await connection();
     const check = await checkPermission(options);
 
     if (!check.authorized) {
