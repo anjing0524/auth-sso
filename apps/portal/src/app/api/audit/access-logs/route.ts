@@ -6,7 +6,6 @@
  */
 import { connection, type NextRequest } from 'next/server';
 import { withPermission } from '@/lib/auth';
-import { getAccessLogs } from '@/app/audit/data';
 import { parsePagination } from '@/lib/pagination';
 import { restListSuccess } from '@/lib/response';
 import { AUDIT_PERMISSIONS } from '@auth-sso/contracts';
@@ -16,6 +15,7 @@ import { AUDIT_PERMISSIONS } from '@auth-sso/contracts';
 export async function GET(request: NextRequest) {
   await connection();
   return withPermission({ permissions: [AUDIT_PERMISSIONS.READ] }, async () => {
+    const { getAccessLogs } = await import('@/app/audit/data');
     const sp = request.nextUrl.searchParams;
     const { page, pageSize } = parsePagination(sp);
     const result = await getAccessLogs({

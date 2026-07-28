@@ -5,7 +5,6 @@
  */
 import { connection, type NextRequest } from 'next/server';
 import { withPermission } from '@/lib/auth';
-import { getLoginLogs } from '@/app/audit/data';
 import { AUDIT_PERMISSIONS, LOGIN_EVENT_VALUES, type LoginEventType } from '@auth-sso/contracts';
 import { parsePagination } from '@/lib/pagination';
 import { restListSuccess } from '@/lib/response';
@@ -15,6 +14,7 @@ import { restListSuccess } from '@/lib/response';
 export async function GET(request: NextRequest) {
   await connection();
   return withPermission({ permissions: [AUDIT_PERMISSIONS.READ] }, async () => {
+    const { getLoginLogs } = await import('@/app/audit/data');
     const sp = request.nextUrl.searchParams;
     const { page, pageSize } = parsePagination(sp);
     const rawEvent = sp.get('eventType');

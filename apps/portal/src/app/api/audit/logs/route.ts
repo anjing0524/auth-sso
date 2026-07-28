@@ -5,7 +5,6 @@
  */
 import { connection, type NextRequest } from 'next/server';
 import { withPermission } from '@/lib/auth';
-import { getAuditLogs } from '@/app/audit/data';
 import { AUDIT_OPERATION_VALUES, AUDIT_PERMISSIONS, type AuditOperation } from '@auth-sso/contracts';
 import { parsePagination } from '@/lib/pagination';
 import { restListSuccess } from '@/lib/response';
@@ -15,6 +14,7 @@ import { restListSuccess } from '@/lib/response';
 export async function GET(request: NextRequest) {
   await connection();
   return withPermission({ permissions: [AUDIT_PERMISSIONS.READ] }, async () => {
+    const { getAuditLogs } = await import('@/app/audit/data');
     const sp = request.nextUrl.searchParams;
     const { page, pageSize } = parsePagination(sp);
     const rawOp = sp.get('operation');
