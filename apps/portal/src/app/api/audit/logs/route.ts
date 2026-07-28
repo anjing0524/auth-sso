@@ -3,16 +3,14 @@
  *
  * GET 读操作委托给 audit/data.ts 统一读模型。
  */
-import { connection, type NextRequest } from 'next/server';
+import type { NextRequest } from 'next/server';
 import { withPermission } from '@/lib/auth';
 import { AUDIT_OPERATION_VALUES, AUDIT_PERMISSIONS, type AuditOperation } from '@auth-sso/contracts';
 import { parsePagination } from '@/lib/pagination';
 import { restListSuccess } from '@/lib/response';
 
-
 /** GET /api/audit/logs — 委托 data.ts */
 export async function GET(request: NextRequest) {
-  await connection();
   return withPermission({ permissions: [AUDIT_PERMISSIONS.READ] }, async () => {
     const { getAuditLogs } = await import('@/app/audit/data');
     const sp = request.nextUrl.searchParams;

@@ -6,9 +6,12 @@
  */
 import 'server-only';
 
-import { db, schema } from '@/infrastructure/db';
 import { eq, desc, and, gte, lte, count } from 'drizzle-orm';
 import type { AuditOperation, LoginEventType } from '@auth-sso/contracts';
+
+async function getAuditDb() {
+  return import('@/infrastructure/db');
+}
 
 /** 日期格式正则：防止 SQL 注入和异常参数穿透 */
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
@@ -58,6 +61,7 @@ async function paginatedSelect<T>(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   mapRow: (row: any) => T,
 ): Promise<PaginatedResult<T>> {
+  const { db } = await getAuditDb();
   const page = clamp(params.page, 1, Infinity);
   const pageSize = clamp(params.pageSize, 1, 100);
   const offset = (page - 1) * pageSize;
@@ -90,6 +94,7 @@ export async function getAuditLogs(params: PaginationParams & {
   startDate?: string;
   endDate?: string;
 }) {
+  const { schema } = await getAuditDb();
   const conditions: ReturnType<typeof eq>[] = [];
   if (params.userId) conditions.push(eq(schema.auditLogs.userId, params.userId));
   if (params.operation) conditions.push(eq(schema.auditLogs.operation, params.operation));
@@ -121,6 +126,7 @@ export async function getLoginLogs(params: PaginationParams & {
   startDate?: string;
   endDate?: string;
 }) {
+  const { schema } = await getAuditDb();
   const conditions: ReturnType<typeof eq>[] = [];
   if (params.userId) conditions.push(eq(schema.loginLogs.userId, params.userId));
   if (params.eventType) conditions.push(eq(schema.loginLogs.eventType, params.eventType));
@@ -151,6 +157,7 @@ export async function getAccessLogs(params: PaginationParams & {
   startDate?: string;
   endDate?: string;
 }) {
+  const { schema } = await getAuditDb();
   const conditions: ReturnType<typeof eq>[] = [];
   if (params.userId) conditions.push(eq(schema.accessLogs.userId, params.userId));
   if (params.resourceType) conditions.push(eq(schema.accessLogs.resourceType, params.resourceType));

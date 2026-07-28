@@ -7,12 +7,11 @@
  * @route GET /api/audit/export?type=login|operation
  * @permission audit:export
  */
-import { connection, type NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 import { withPermission } from '@/lib/auth';
 import { AUDIT_PERMISSIONS, MAX_PAGE_SIZE } from '@auth-sso/contracts';
 
 export async function GET(request: NextRequest) {
-  await connection();
   return withPermission(
     { permissions: [AUDIT_PERMISSIONS.EXPORT] },
     async () => {
