@@ -45,10 +45,21 @@ services:
         condition: service_healthy
 
   cert-init:
-    image: alpine:3.21
-    command: sh -c 'cp /source/fullchain.pem /source/privkey.pem /certs/ && chmod 644 /certs/fullchain.pem /certs/privkey.pem'
+    build:
+      context: .
+      dockerfile: apps/gateway/Dockerfile
+      target: cert-init
+    command:
+      - sh
+      - -ec
+      - |
+        openssl req -x509 -newkey rsa:2048 -sha256 -nodes -days 2 \
+          -subj '/CN=127.0.0.1' \
+          -addext 'subjectAltName=IP:127.0.0.1,DNS:localhost' \
+          -keyout /certs/privkey.pem \
+          -out /certs/fullchain.pem
+        chmod 644 /certs/fullchain.pem /certs/privkey.pem
     volumes:
-      - ./apps/gateway/ssl:/source:ro
       - gateway_certs:/certs
 
   db-init:

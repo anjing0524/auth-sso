@@ -42,5 +42,6 @@
 - Gateway 闭环与 CI 已进一步收敛到统一的 `docker-compose.test.yml`；该文件保留独立 `name:`，不再复用本地开发中的 `postgres`/`redis` 容器。
 - Gateway 对 HTML 导航的识别原先直接读取 `Accept`/`RSC` 大写头名，真实 HTTP/2 浏览器请求使用小写头时会误判为 API，导致 `/dashboard` 首跳返回 `401`。修复后同时兼容大小写，并新增回归测试。
 - Gateway 在 OAuth 跳转与 callback `redirect_uri` 上曾用 loopback 主机名推断 `http`，结果把浏览器导向 `http://127.0.0.1:19443/...` 这种“明文协议 + TLS 端口”的非法地址，Playwright 表现为 `ERR_EMPTY_RESPONSE`。现已在 Gateway 主代理链路中把浏览器协议事实固定为 HTTPS，并补齐回归测试。
+- Gateway 发布栈的 `cert-init` 曾从被 `.gitignore` 排除的 `apps/gateway/ssl` 复制 PEM；本地因恰好存在证书而通过，干净 CI 则以 `cp: can't stat` 失败。测试拓扑现改为通过 `apps/gateway/Dockerfile` 的专用 `cert-init` target 固化 OpenSSL，并在一次性 `gateway_certs` named volume 中生成含 `127.0.0.1`/`localhost` SAN 的短期自签证书。启动期不再安装软件或读取宿主机私钥，volume 在旅程结束后随 compose 栈销毁。
 
-最终以本地实测 `bash -x scripts/run-gateway-e2e.sh` 通过为证据：浏览器从 `https://127.0.0.1:19443/dashboard` 首跳进入 Gateway，触发 PKCE → 登录 → OAuth callback → Secure Cookie 下发 → 登出闭环全部成功。
+最终以本地实测 `scripts/run-gateway-e2e.sh` 通过为证据：浏览器从 `https://127.0.0.1:19443/dashboard` 首跳进入 Gateway，触发 PKCE → 登录 → OAuth callback → Secure Cookie 下发 → 登出闭环全部成功；专用 `cert-init` 镜像在 `--no-build` 启动路径下也完成同一场景，证明验收运行期不依赖宿主机证书或包仓库。
