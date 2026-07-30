@@ -108,6 +108,8 @@ public_paths = ["/demo/landing"]
 
 ## 验证检查清单
 
+> `https://localhost:19443` 的本地/发布 E2E 证书是仅含 loopback SAN 的临时自签证书。生产环境不复用该证书，统一由 `docker-compose.prod.yml` 中 Gateway 的 Rust 内建 ACME 客户端签发和续期 Let's Encrypt 证书，详见根目录 `DOCKER.md`。
+
 | # | 检查项 | 预期结果 |
 |---|--------|---------|
 | 1 | Gateway 启动 + JWKS 下载 | 日志: "JWKS 缓存已刷新" |

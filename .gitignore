@@ -37,6 +37,9 @@ coverage
 
 # Certs
 *.pem
+!tests/acme/pebble.minica.pem
+!tests/acme/pebble-server.pem
+!tests/acme/pebble-server-key.pem
 
 # Debug logs (npm/yarn/pnpm)
 npm-debug.log*
@@ -63,3 +66,5 @@ test-mcp
 
 # Agent run cache & plans
 .zcode/
+.context/
+.env*

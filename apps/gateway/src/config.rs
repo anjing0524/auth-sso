@@ -3,12 +3,17 @@ use serde::Deserialize;
 use std::collections::HashSet;
 use tracing::info;
 
+const LETS_ENCRYPT_PRODUCTION_DIRECTORY: &str = "https://acme-v02.api.letsencrypt.org/directory";
+
 /// 网关服务层配置
 #[derive(Debug, Deserialize, Clone)]
 #[serde(default)]
 pub struct GatewayConfig {
     pub port: u16,
     pub ssl_port: u16,
+    /// TLS 由上游平台（如 Vercel）终结。启用后 Gateway 仅在 `port`
+    /// 上提供明文 HTTP，且不启动 ACME、TLS 监听器或 HTTP 重定向服务。
+    pub external_tls_termination: bool,
     pub ssl_cert_path: String,
     pub ssl_key_path: String,
     pub log_dir: String,
@@ -22,6 +27,10 @@ pub struct GatewayConfig {
     /// 内网 mTLS 场景下可设为 "https"。
     #[serde(default = "default_upstream_scheme")]
     pub upstream_scheme: String,
+    /// HTTPS 上游的 SNI 主机名。未配置时沿用浏览器请求 Host。
+    pub upstream_server_name: Option<String>,
+    /// 转发给上游的 Host。未配置时沿用浏览器请求 Host。
+    pub upstream_host_header: Option<String>,
     /// JWKS 刷新成功后的标准间隔（秒，默认 300）。
     /// 可通过 JWKS_REFRESH_INTERVAL_SECS 环境变量覆盖。
     pub jwks_refresh_interval_secs: u64,
@@ -36,13 +45,47 @@ impl Default for GatewayConfig {
         Self {
             port: 18080,
             ssl_port: 18443,
+            external_tls_termination: false,
             ssl_cert_path: "ssl/fullchain.pem".to_string(),
             ssl_key_path: "ssl/privkey.pem".to_string(),
             log_dir: "logs".to_string(),
             log_level: "info".to_string(),
             gateway_shared_secret: None,
             upstream_scheme: "http".to_string(),
+            upstream_server_name: None,
+            upstream_host_header: None,
             jwks_refresh_interval_secs: 300,
+        }
+    }
+}
+
+/// Gateway 内建 ACME 客户端配置。
+#[derive(Debug, Deserialize, Clone)]
+#[serde(default)]
+pub struct AcmeConfig {
+    /// HTTP-01 验证及证书签发使用的单个 DNS 域名。
+    pub domain: String,
+    /// ACME 账户联系邮箱。
+    pub email: String,
+    /// ACME directory URL；默认使用 Let's Encrypt 生产环境。
+    pub directory_url: String,
+    /// ACME 账户凭据、证书和私钥的持久化目录。
+    pub state_dir: String,
+    /// 仅供测试或内部 CA 使用的额外根证书路径；生产环境禁止配置。
+    pub ca_cert_path: Option<String>,
+    /// ARI/证书有效期复核间隔（秒）。
+    pub check_interval_secs: u64,
+}
+
+impl Default for AcmeConfig {
+    fn default() -> Self {
+        Self {
+            domain: String::new(),
+            email: String::new(),
+            directory_url: LETS_ENCRYPT_PRODUCTION_DIRECTORY.to_string(),
+            state_dir: "acme".to_string(),
+            ca_cert_path: None,
+            check_interval_secs: 21_600,
         }
     }
 }
@@ -169,6 +212,7 @@ impl Default for RedisConfig {
 #[serde(default)]
 pub struct Config {
     pub gateway: GatewayConfig,
+    pub acme: Option<AcmeConfig>,
     pub redis: RedisConfig,
     #[serde(default)]
     pub upstreams: Vec<UpstreamConfig>,
@@ -182,7 +226,8 @@ impl Config {
 
         if !path.exists() {
             info!("ℹ️ 配置文件 {} 未找到，使用默认配置", path.display());
-            let cfg = Config::default();
+            let mut cfg = Config::default();
+            cfg.apply_env_overrides()?;
             validate_production_security(&cfg, std::env::var("NODE_ENV").ok().as_deref())?;
             return Ok(cfg);
         }
@@ -195,31 +240,7 @@ impl Config {
             .try_deserialize()
             .with_context(|| format!("反序列化配置文件 {} 失败，请检查语法格式", path.display()))?;
 
-        cfg.redis.url = resolve_redis_url(&cfg.redis.url, std::env::var("REDIS_URL").ok());
-        cfg.gateway.gateway_shared_secret =
-            resolve_optional_env(&cfg.gateway.gateway_shared_secret, "GATEWAY_SHARED_SECRET");
-        cfg.gateway.upstream_scheme =
-            resolve_env_str(&cfg.gateway.upstream_scheme, "UPSTREAM_SCHEME");
-        // Redis 连接池参数 — 环境变量覆盖
-        cfg.redis.pool_max_size = resolve_env(cfg.redis.pool_max_size, "REDIS_POOL_MAX_SIZE");
-        cfg.redis.pool_min_idle = resolve_env(cfg.redis.pool_min_idle, "REDIS_POOL_MIN_IDLE");
-        cfg.redis.pool_max_lifetime_sec = resolve_env(
-            cfg.redis.pool_max_lifetime_sec,
-            "REDIS_POOL_MAX_LIFETIME_SEC",
-        );
-        cfg.redis.pool_idle_timeout_sec = resolve_env(
-            cfg.redis.pool_idle_timeout_sec,
-            "REDIS_POOL_IDLE_TIMEOUT_SEC",
-        );
-        cfg.redis.pool_connection_timeout_sec = resolve_env(
-            cfg.redis.pool_connection_timeout_sec,
-            "REDIS_POOL_CONNECTION_TIMEOUT_SEC",
-        );
-        // JWKS 刷新间隔 — 环境变量覆盖
-        cfg.gateway.jwks_refresh_interval_secs = resolve_env(
-            cfg.gateway.jwks_refresh_interval_secs,
-            "JWKS_REFRESH_INTERVAL_SECS",
-        );
+        cfg.apply_env_overrides()?;
 
         if cfg.upstreams.is_empty() {
             anyhow::bail!(
@@ -236,12 +257,119 @@ impl Config {
         info!("✅ 成功从配置文件 {} 加载网关配置", path.display());
         Ok(cfg)
     }
+
+    fn apply_env_overrides(&mut self) -> anyhow::Result<()> {
+        self.gateway.external_tls_termination = resolve_env(
+            self.gateway.external_tls_termination,
+            "EXTERNAL_TLS_TERMINATION",
+        )?;
+        self.gateway.port = resolve_listener_port(
+            self.gateway.port,
+            self.gateway.external_tls_termination,
+            std::env::var("GATEWAY_PORT").ok(),
+            std::env::var("PORT").ok(),
+        )?;
+        self.gateway.ssl_port = resolve_env(self.gateway.ssl_port, "GATEWAY_SSL_PORT")?;
+        self.gateway.ssl_cert_path = resolve_env_str(&self.gateway.ssl_cert_path, "SSL_CERT_PATH");
+        self.gateway.ssl_key_path = resolve_env_str(&self.gateway.ssl_key_path, "SSL_KEY_PATH");
+        self.apply_acme_env_overrides()?;
+        self.redis.url = resolve_redis_url(&self.redis.url, std::env::var("REDIS_URL").ok());
+        self.gateway.gateway_shared_secret =
+            resolve_optional_env(&self.gateway.gateway_shared_secret, "GATEWAY_SHARED_SECRET");
+        self.gateway.upstream_scheme =
+            resolve_env_str(&self.gateway.upstream_scheme, "UPSTREAM_SCHEME");
+        self.redis.pool_max_size = resolve_env(self.redis.pool_max_size, "REDIS_POOL_MAX_SIZE")?;
+        self.redis.pool_min_idle = resolve_env(self.redis.pool_min_idle, "REDIS_POOL_MIN_IDLE")?;
+        self.redis.pool_max_lifetime_sec = resolve_env(
+            self.redis.pool_max_lifetime_sec,
+            "REDIS_POOL_MAX_LIFETIME_SEC",
+        )?;
+        self.redis.pool_idle_timeout_sec = resolve_env(
+            self.redis.pool_idle_timeout_sec,
+            "REDIS_POOL_IDLE_TIMEOUT_SEC",
+        )?;
+        self.redis.pool_connection_timeout_sec = resolve_env(
+            self.redis.pool_connection_timeout_sec,
+            "REDIS_POOL_CONNECTION_TIMEOUT_SEC",
+        )?;
+        self.gateway.jwks_refresh_interval_secs = resolve_env(
+            self.gateway.jwks_refresh_interval_secs,
+            "JWKS_REFRESH_INTERVAL_SECS",
+        )?;
+        self.apply_portal_env_overrides()?;
+        Ok(())
+    }
+
+    fn apply_portal_env_overrides(&mut self) -> anyhow::Result<()> {
+        let Some(portal) = self.upstreams.iter_mut().find(|route| route.oidc_provider) else {
+            return Ok(());
+        };
+
+        if let Ok(client_secret) = std::env::var("PORTAL_CLIENT_SECRET") {
+            portal.oauth.client_secret = client_secret;
+        }
+
+        if let Ok(raw_url) = std::env::var("PORTAL_UPSTREAM_URL") {
+            let endpoint = parse_upstream_url(&raw_url)?;
+            portal.addresses = endpoint.address;
+            self.gateway.upstream_scheme = endpoint.scheme;
+            self.gateway.upstream_server_name = Some(endpoint.server_name);
+            self.gateway.upstream_host_header = Some(endpoint.host_header);
+        } else if let Ok(addresses) = std::env::var("PORTAL_UPSTREAM") {
+            portal.addresses = addresses;
+        }
+
+        Ok(())
+    }
+
+    fn apply_acme_env_overrides(&mut self) -> anyhow::Result<()> {
+        let domain = std::env::var("LETSENCRYPT_DOMAIN").ok();
+        let email = std::env::var("LETSENCRYPT_EMAIL").ok();
+        let directory_url = std::env::var("ACME_DIRECTORY_URL").ok();
+        let state_dir = std::env::var("ACME_STATE_DIR").ok();
+        let ca_cert_path = std::env::var("ACME_CA_CERT_PATH").ok();
+        let check_interval = std::env::var("ACME_CHECK_INTERVAL_SECS").ok();
+
+        if domain.is_none()
+            && email.is_none()
+            && directory_url.is_none()
+            && state_dir.is_none()
+            && ca_cert_path.is_none()
+            && check_interval.is_none()
+        {
+            return Ok(());
+        }
+
+        let acme = self.acme.get_or_insert_with(AcmeConfig::default);
+        if let Some(domain) = domain {
+            acme.domain = domain;
+        }
+        if let Some(email) = email {
+            acme.email = email;
+        }
+        if let Some(directory_url) = directory_url {
+            acme.directory_url = directory_url;
+        }
+        if let Some(state_dir) = state_dir {
+            acme.state_dir = state_dir;
+        }
+        if let Some(ca_cert_path) = ca_cert_path {
+            acme.ca_cert_path = Some(ca_cert_path);
+        }
+        acme.check_interval_secs = resolve_env_value(
+            acme.check_interval_secs,
+            "ACME_CHECK_INTERVAL_SECS",
+            check_interval,
+        )?;
+        Ok(())
+    }
 }
 
 impl Default for Config {
     fn default() -> Self {
         Self {
             gateway: GatewayConfig::default(),
+            acme: None,
             redis: RedisConfig::default(),
             upstreams: vec![UpstreamConfig {
                 name: "/".to_string(),
@@ -268,6 +396,67 @@ fn resolve_redis_url(config_value: &str, env_value: Option<String>) -> String {
     env_value.unwrap_or_else(|| config_value.to_string())
 }
 
+#[derive(Debug, PartialEq, Eq)]
+struct ParsedUpstream {
+    scheme: String,
+    address: String,
+    server_name: String,
+    host_header: String,
+}
+
+fn parse_upstream_url(raw: &str) -> anyhow::Result<ParsedUpstream> {
+    let parsed = reqwest::Url::parse(raw)
+        .map_err(|error| anyhow::anyhow!("PORTAL_UPSTREAM_URL 不是有效 URL: {error}"))?;
+    let scheme = parsed.scheme();
+    if !matches!(scheme, "http" | "https") {
+        bail!("PORTAL_UPSTREAM_URL 仅支持 http:// 或 https://");
+    }
+    if !parsed.username().is_empty() || parsed.password().is_some() {
+        bail!("PORTAL_UPSTREAM_URL 禁止携带用户凭据");
+    }
+    if parsed.path() != "/" || parsed.query().is_some() || parsed.fragment().is_some() {
+        bail!("PORTAL_UPSTREAM_URL 不得包含路径、查询参数或片段");
+    }
+
+    let host = parsed
+        .host_str()
+        .ok_or_else(|| anyhow::anyhow!("PORTAL_UPSTREAM_URL 缺少主机名"))?;
+    let port = parsed
+        .port_or_known_default()
+        .ok_or_else(|| anyhow::anyhow!("PORTAL_UPSTREAM_URL 缺少端口"))?;
+    let address_host = if host.contains(':') {
+        format!("[{host}]")
+    } else {
+        host.to_string()
+    };
+    let host_header = match parsed.port() {
+        Some(explicit_port) => format!("{address_host}:{explicit_port}"),
+        None => address_host.clone(),
+    };
+
+    Ok(ParsedUpstream {
+        scheme: scheme.to_string(),
+        address: format!("{address_host}:{port}"),
+        server_name: host.to_string(),
+        host_header,
+    })
+}
+
+fn resolve_listener_port(
+    default_value: u16,
+    external_tls_termination: bool,
+    gateway_port: Option<String>,
+    platform_port: Option<String>,
+) -> anyhow::Result<u16> {
+    if gateway_port.is_some() {
+        return resolve_env_value(default_value, "GATEWAY_PORT", gateway_port);
+    }
+    if external_tls_termination {
+        return resolve_env_value(default_value, "PORT", platform_port);
+    }
+    Ok(default_value)
+}
+
 /// 优先从环境变量读取可选配置，回退到 TOML 文件值。
 fn resolve_optional_env(config_value: &Option<String>, env_name: &str) -> Option<String> {
     std::env::var(env_name)
@@ -275,11 +464,33 @@ fn resolve_optional_env(config_value: &Option<String>, env_name: &str) -> Option
         .or_else(|| config_value.clone())
 }
 
-fn resolve_env<T: std::str::FromStr>(default_val: T, env_name: &str) -> T {
-    std::env::var(env_name)
-        .ok()
-        .and_then(|v| v.parse().ok())
-        .unwrap_or(default_val)
+fn resolve_env<T>(default_value: T, env_name: &str) -> anyhow::Result<T>
+where
+    T: std::str::FromStr,
+    T::Err: std::fmt::Display,
+{
+    match std::env::var(env_name) {
+        Ok(value) => resolve_env_value(default_value, env_name, Some(value)),
+        Err(std::env::VarError::NotPresent) => Ok(default_value),
+        Err(error) => Err(anyhow::anyhow!("环境变量 {env_name} 无法读取: {error}")),
+    }
+}
+
+fn resolve_env_value<T>(
+    default_value: T,
+    env_name: &str,
+    env_value: Option<String>,
+) -> anyhow::Result<T>
+where
+    T: std::str::FromStr,
+    T::Err: std::fmt::Display,
+{
+    match env_value {
+        Some(value) => value
+            .parse()
+            .map_err(|error| anyhow::anyhow!("环境变量 {env_name} 的值 {value:?} 无效: {error}")),
+        None => Ok(default_value),
+    }
 }
 
 fn resolve_env_str(config_value: &str, env_name: &str) -> String {
@@ -287,6 +498,38 @@ fn resolve_env_str(config_value: &str, env_name: &str) -> String {
 }
 
 fn validate_production_security(config: &Config, node_env: Option<&str>) -> anyhow::Result<()> {
+    if node_env == Some("production")
+        && !config.gateway.external_tls_termination
+        && config.acme.is_none()
+    {
+        bail!("生产环境必须配置 LETSENCRYPT_DOMAIN 与 LETSENCRYPT_EMAIL");
+    }
+    if config.gateway.external_tls_termination && config.acme.is_some() {
+        bail!("外部 TLS 终结模式禁止同时启用 ACME");
+    }
+    if let Some(acme) = &config.acme {
+        if !is_valid_dns_name(&acme.domain) {
+            bail!("LETSENCRYPT_DOMAIN 不是有效的 DNS 名称");
+        }
+        if !is_valid_email(&acme.email) {
+            bail!("LETSENCRYPT_EMAIL 不是有效的联系邮箱");
+        }
+        if !acme.directory_url.starts_with("https://") {
+            bail!("ACME_DIRECTORY_URL 必须使用 https://");
+        }
+        if acme.state_dir.is_empty() {
+            bail!("ACME_STATE_DIR 不能为空");
+        }
+        if acme.ca_cert_path.as_deref().is_some_and(str::is_empty) {
+            bail!("ACME_CA_CERT_PATH 不能为空");
+        }
+        if node_env == Some("production") && acme.ca_cert_path.is_some() {
+            bail!("生产环境禁止配置 ACME_CA_CERT_PATH");
+        }
+        if acme.check_interval_secs == 0 {
+            bail!("ACME_CHECK_INTERVAL_SECS 必须大于 0");
+        }
+    }
     if node_env == Some("production")
         && config
             .gateway
@@ -297,6 +540,35 @@ fn validate_production_security(config: &Config, node_env: Option<&str>) -> anyh
         bail!("生产环境必须配置 GATEWAY_SHARED_SECRET");
     }
     Ok(())
+}
+
+fn is_valid_dns_name(domain: &str) -> bool {
+    !domain.is_empty()
+        && domain.len() <= 253
+        && domain.contains('.')
+        && domain.parse::<std::net::IpAddr>().is_err()
+        && domain.split('.').all(|label| {
+            !label.is_empty()
+                && label.len() <= 63
+                && label
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-')
+                && label
+                    .as_bytes()
+                    .first()
+                    .is_some_and(u8::is_ascii_alphanumeric)
+                && label
+                    .as_bytes()
+                    .last()
+                    .is_some_and(u8::is_ascii_alphanumeric)
+        })
+}
+
+fn is_valid_email(email: &str) -> bool {
+    email
+        .split_once('@')
+        .is_some_and(|(local, domain)| !local.is_empty() && is_valid_dns_name(domain))
+        && !email.bytes().any(|byte| byte.is_ascii_whitespace())
 }
 
 #[cfg(test)]
@@ -342,6 +614,7 @@ mod tests {
     fn test_load_default_config() {
         let config = Config::default();
         assert_eq!(config.gateway.port, 18080);
+        assert!(!config.gateway.external_tls_termination);
         assert_eq!(config.upstreams.len(), 1);
         assert_eq!(config.upstreams[0].name, "/");
         assert!(config.upstreams[0].oidc_provider);
@@ -365,6 +638,12 @@ mod tests {
                 log_dir = "/var/log/gw"
                 log_level = "debug"
 
+                [acme]
+                domain = "sso.example.com"
+                email = "ops@example.com"
+                state_dir = "/var/lib/gateway/acme"
+                check_interval_secs = 3600
+
                 [[upstreams]]
                 name = "/"
                 addresses = "portal:4000"
@@ -378,6 +657,10 @@ mod tests {
             fs::write(file_path, toml).unwrap();
             let config = Config::load(file_path).unwrap();
             assert_eq!(config.gateway.port, 80);
+            assert_eq!(
+                config.acme.as_ref().map(|acme| acme.domain.as_str()),
+                Some("sso.example.com")
+            );
             assert_eq!(config.upstreams.len(), 1);
             assert_eq!(config.upstreams[0].name, "/");
             assert!(config.upstreams[0].oidc_provider);
@@ -429,14 +712,141 @@ mod tests {
     }
 
     #[test]
+    fn parses_https_upstream_url_for_load_balancer_and_http_host() {
+        assert_eq!(
+            parse_upstream_url("https://portal.internal.example").unwrap(),
+            ParsedUpstream {
+                scheme: "https".to_string(),
+                address: "portal.internal.example:443".to_string(),
+                server_name: "portal.internal.example".to_string(),
+                host_header: "portal.internal.example".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn preserves_explicit_upstream_port() {
+        assert_eq!(
+            parse_upstream_url("http://portal.internal.example:4100").unwrap(),
+            ParsedUpstream {
+                scheme: "http".to_string(),
+                address: "portal.internal.example:4100".to_string(),
+                server_name: "portal.internal.example".to_string(),
+                host_header: "portal.internal.example:4100".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn rejects_upstream_url_with_path_or_credentials() {
+        assert!(parse_upstream_url("https://portal.internal.example/base").is_err());
+        assert!(parse_upstream_url("https://user:secret@portal.internal.example").is_err());
+        assert!(parse_upstream_url("ftp://portal.internal.example").is_err());
+    }
+
+    #[test]
+    fn external_tls_mode_uses_platform_port_as_fallback() {
+        assert_eq!(
+            resolve_listener_port(18080, true, None, Some("8080".to_string())).unwrap(),
+            8080
+        );
+        assert_eq!(
+            resolve_listener_port(
+                18080,
+                true,
+                Some("9090".to_string()),
+                Some("8080".to_string())
+            )
+            .unwrap(),
+            9090
+        );
+        assert_eq!(
+            resolve_listener_port(18080, false, None, Some("8080".to_string())).unwrap(),
+            18080
+        );
+    }
+
+    #[test]
+    fn numeric_env_override_rejects_invalid_values() {
+        assert_eq!(
+            resolve_env_value(300_u64, "ACME_CHECK_INTERVAL_SECS", None).unwrap(),
+            300
+        );
+        assert_eq!(
+            resolve_env_value(300_u64, "ACME_CHECK_INTERVAL_SECS", Some("60".to_string())).unwrap(),
+            60
+        );
+
+        let error = resolve_env_value(
+            300_u64,
+            "ACME_CHECK_INTERVAL_SECS",
+            Some("not-a-number".to_string()),
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("ACME_CHECK_INTERVAL_SECS"));
+        assert!(error.to_string().contains("not-a-number"));
+    }
+
+    #[test]
     fn production_requires_gateway_shared_secret() {
         let config = Config::default();
         assert!(validate_production_security(&config, Some("production")).is_err());
 
         let mut configured = config;
         configured.gateway.gateway_shared_secret = Some("test-secret".to_string());
+        configured.acme = Some(AcmeConfig {
+            domain: "sso.example.com".to_string(),
+            email: "ops@example.com".to_string(),
+            ..AcmeConfig::default()
+        });
         assert!(validate_production_security(&configured, Some("production")).is_ok());
         assert!(validate_production_security(&Config::default(), Some("development")).is_ok());
+    }
+
+    #[test]
+    fn production_external_tls_mode_does_not_require_acme() {
+        let mut config = Config::default();
+        config.gateway.external_tls_termination = true;
+        config.gateway.gateway_shared_secret = Some("test-secret".to_string());
+
+        assert!(validate_production_security(&config, Some("production")).is_ok());
+
+        config.acme = Some(AcmeConfig {
+            domain: "sso.example.com".to_string(),
+            email: "ops@example.com".to_string(),
+            ..AcmeConfig::default()
+        });
+        assert!(validate_production_security(&config, Some("production")).is_err());
+    }
+
+    #[test]
+    fn config_rejects_invalid_acme_settings() {
+        let mut config = Config {
+            acme: Some(AcmeConfig {
+                domain: "../example.com".to_string(),
+                email: "invalid".to_string(),
+                directory_url: "http://acme.example.com/directory".to_string(),
+                state_dir: String::new(),
+                ca_cert_path: None,
+                check_interval_secs: 0,
+            }),
+            ..Config::default()
+        };
+        assert!(validate_production_security(&config, Some("development")).is_err());
+        assert!(!is_valid_dns_name("localhost"));
+        assert!(!is_valid_dns_name("127.0.0.1"));
+
+        let acme = AcmeConfig {
+            domain: "sso.example.com".to_string(),
+            email: "ops@example.com".to_string(),
+            ..AcmeConfig::default()
+        };
+        config.acme = Some(acme);
+        assert!(validate_production_security(&config, Some("development")).is_ok());
+
+        config.acme.as_mut().unwrap().ca_cert_path = Some("/test/pebble.minica.pem".to_string());
+        assert!(validate_production_security(&config, Some("test")).is_ok());
+        assert!(validate_production_security(&config, Some("production")).is_err());
     }
 
     #[test]

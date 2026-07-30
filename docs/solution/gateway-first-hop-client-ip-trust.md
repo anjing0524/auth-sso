@@ -39,11 +39,19 @@ if let Some(ip) = real_ip.as_deref() {
 2. **限流键取 socket 地址**，且仅对限流路径（`/api/auth/**`）才提取 IP，非限流路径零开销。
 3. **`"unknown"` 仅剩 unix-socket 等边缘场景**，不再是全站共享桶。
 
-## 边界与演进
+## 平台 TLS 终结模式
 
-若未来在 Gateway 前部署 LB/CDN，socket 地址将变成 LB 地址。届时需引入 **trusted-proxy 配置**：仅当对端 socket 地址 ∈ 可信代理网段时，才信任其 XFF 的最后 N 跳。本次明确不做（当前拓扑无前置代理）。
+Vercel 部署已经引入受控前置代理，此时 socket 地址是平台代理而不是公网客户端。信任模型按显式部署模式拆分：
+
+- 自管 TLS：只信 socket 地址，忽略所有转发 IP 头。
+- Vercel 外部 TLS：只信平台权威覆写的单值 `X-Vercel-Forwarded-For`；必须严格解析为 `IpAddr`，非法或缺失时退回 socket。
+
+普通 `X-Forwarded-For` 在两种模式下都不是信任来源。平台值在 `request_filter` 中只解析一次，存入请求上下文，并同时用于限流与下游审计头，避免同一请求出现两个客户端身份。
+
+实现与生产拓扑复盘见 `docs/solution/2026-07-30-vercel-gateway-only-production-topology.md`。
 
 ## 验证
 
 - E2E：本地 `curl -H "X-Forwarded-For: 1.2.3.4"` 不影响限流桶，下游收到的 `X-Client-IP` 为 socket 地址。
+- 单测：平台模式只接受单个合法 IPv4/IPv6 字面量，拒绝逗号链和任意文本。
 - 单测：`is_secure_host` 回环判定覆盖 `127.0.0.0/8`、`[::1]:port`；防子串绕过（`2127.0.0.1`、`localhost.evil.com`）。

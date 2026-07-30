@@ -23,6 +23,8 @@
     "test:api": "vitest run --project @auth-sso/portal-api",
     "test:components": "vitest run --project @auth-sso/portal-ui 'apps/portal/__tests__/components/app-sidebar.test.tsx' 'apps/portal/__tests__/components/permission-guard.test.tsx'",
     "test:e2e": "./scripts/run-gateway-e2e.sh",
+    "test:e2e:acme": "./scripts/run-gateway-acme-e2e.sh",
+    "test:e2e:acme:staging": "./scripts/run-gateway-acme-staging.sh",
     "test:e2e:portal": "playwright test",
     "test:e2e:release": "playwright test tests/e2e/docker-release.spec.ts",
     "test:e2e:ui": "playwright test --ui",

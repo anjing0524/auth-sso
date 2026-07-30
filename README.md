@@ -11,7 +11,7 @@
   - **智能重定向**: 登录后自动跳转至 `/dashboard`；已登录用户访问首页时自动感知并跳转。
 - **RBAC 权限体系**: 基于角色所属部门的精细化数据范围控制，支持多角色部门并集与子树自动展开。
 - **审计日志**: 提供完整的登录日志与操作审计追踪。
-- **信创网关**: 自研 Pingora (Rust) 网关，ES256 JWKS 离线验签，Cookie-to-Bearer 令牌转换。
+- **信创网关**: 自研 Pingora (Rust) 网关，Let's Encrypt 自动签发/续期与证书热加载，ES256 JWKS 离线验签，Cookie-to-Bearer 令牌转换。
 
 ## 项目结构
 
@@ -111,12 +111,14 @@ pnpm test:report          # 需求追溯性覆盖率报告
 - [需求追踪矩阵 (docs/spec/REQUIREMENTS_MATRIX.md)](docs/spec/REQUIREMENTS_MATRIX.md) — 需求→验收标准全覆盖
 - [用户故事 (docs/spec/USER_STORIES.md)](docs/spec/USER_STORIES.md) — 角色驱动的功能验收场景
 - [Portal 架构规范 (docs/portal-architecture-guidelines.md)](docs/portal-architecture-guidelines.md) — 开发规范、组件模式与 Next.js 16 适配
+- [生产 Docker 部署 (DOCKER.md)](DOCKER.md) — Let's Encrypt 自动签发、续期、热加载与部署验证
 - [设计规范 (DESIGN.md)](DESIGN.md) — UI/UX 规范与品牌定义
 
 ## 安全提醒
 
 - 生产环境务必生成强密钥：`openssl rand -base64 32`。
 - 敏感配置请通过部署平台的环境变量管理功能设置。
+- 生产 TLS 证书必须由 `docker-compose.prod.yml` 中 Gateway 的 Rust 内建 ACME 客户端获取和续期；不要引入 Certbot 脚本，也不要挂载仓库内或开发机生成的自签证书。
 
 ## License
 

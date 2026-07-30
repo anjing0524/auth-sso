@@ -1,8 +1,8 @@
 # Auth-SSO 生产就绪验收标准 (Production Readiness Acceptance Criteria)
 
-版本：v2.2
+版本：v2.4
 状态：正式发布
-最后更新：2026-07-23
+最后更新：2026-07-29
 审查来源：全栈纵深审查（Spec↔实现↔测试五层对齐 + 第二轮深度链路追踪 + 第三轮全面审计 + 第四轮文档同步审计）
 
 ---
@@ -206,7 +206,10 @@ Browser → POST /api/auth/logout → performRevocation():
 
 | 机制 | 状态 | 说明 |
 |------|------|------|
-| HTTPS 强制 | ✅ | Gateway + Cookie secure 标记 |
+| HTTPS 强制 | ✅ | Gateway 强制跳转 + Cookie secure 标记；HTTP-01 challenge 为唯一协议例外 |
+| 公网 TLS 证书生命周期实现 | ✅ | Gateway Rust 内建 ACME 自动签发/续期；ARI 调度、原子持久化和热加载，失败保留上一有效证书 |
+| ACME 本地真实协议闭环 | ✅ | Pebble v2.8.0 + 真实 Gateway 已验证首次 HTTP-01 签发、同进程热加载、重启恢复及 CA 故障保留旧证书 |
+| 公共 Let's Encrypt staging | ⏳ 待部署环境验证 | 验收脚本已就绪；本地域名或未放通公网入口会生成 `blocked_invalid_prerequisites` 证据；仍需真实 DNS 指向与公网 80/443，在首次生产部署前执行 |
 | ES256 非对称签名 | ✅ | jose 库，私钥存 DB |
 | PKCE S256 强制 | ✅ | 所有授权码流程 |
 | State 参数 (CSRF) | ✅ | 10 分钟 TTL |
@@ -277,7 +280,9 @@ Browser → POST /api/auth/logout → performRevocation():
 | G6 | 暴力破解防护实现 | ✅ | Redis INCR 原子计数 + 5 次失败/15min 锁定（v2.1 TOCTOU 修复） |
 | G7 | API 文档与实现一致 | ⚠️ 2026-07-09 修复中 | `docs/spec/API.md` v2.0 存在多处偏差（响应格式、权限码、端点路由），本轮审计修复中 |
 | G8 | Cookie 安全属性正确 | ✅ | RT path 统一为 `/`，secure 基于 `NEXT_PUBLIC_APP_URL` 判断 |
-| G9 | HTTPS 强制 | ✅ | Gateway + Cookie secure |
+| G9 | HTTPS 强制 | ✅ | Gateway + Cookie secure；Rust 内建 ACME 获取 Let's Encrypt 可信证书并自动续期/热加载 |
+| G9a | ACME 自动化生命周期闭环 | ✅ | `pnpm test:e2e:acme` 已通过：无证书启动、HTTP-01、同进程热加载、TLS 链/域名、重启恢复、CA 故障保留 |
+| G9b | 公共 Let's Encrypt staging 演练 | ⏳ | `pnpm test:e2e:acme:staging` 已提供；当前 `local` 域名与无公网入口使预检状态为 `blocked_invalid_prerequisites`；首次生产部署前必须在真实域名/DNS/公网 80/443 环境的 `latest/summary.txt` 取得 `status=passed` |
 | G10 | JWT ES256 签名验证 | ✅ | Portal + Gateway 双重验证 |
 | G11 | jti 黑名单校验 | ✅ | Gateway + Portal 双重 |
 | G12 | PKCE S256 强制 | ✅ | 所有授权码流程 |

@@ -1,0 +1,21 @@
+# Public Let's Encrypt staging acceptance only. Do not use this config for application traffic.
+
+[gateway]
+port = 80
+ssl_port = 443
+log_dir = "logs"
+log_level = "info"
+gateway_shared_secret = "overridden-by-compose"
+
+[redis]
+url = "redis://redis:6379"
+
+[[upstreams]]
+name = "/"
+addresses = "127.0.0.1:65535"
+oidc_provider = true
+public_paths = ["/"]
+
+[upstreams.oauth]
+client_id = "acme-staging"
+client_secret = "acme-staging-client-secret"

@@ -72,9 +72,14 @@ async function main() {
       process.env.PORTAL_REDIRECT_URL,
       ['http://localhost:4100/auth/callback', 'http://localhost:4100/api/auth/callback'],
     );
-    const portalSecret = process.env.PORTAL_CLIENT_SECRET || crypto.randomBytes(32).toString('hex');
+    const configuredPortalSecret = process.env.PORTAL_CLIENT_SECRET;
+    const portalSecret = configuredPortalSecret || crypto.randomBytes(32).toString('hex');
     const portalSecretHash = await hashClientSecret(portalSecret);
-    console.log(`\n🔑 Portal client_secret (明文，仅此一次输出，请复制到 gateway.toml): ${portalSecret}\n`);
+    if (configuredPortalSecret) {
+      console.log('\n🔑 Portal client_secret 已从环境变量加载，明文不写入日志。\n');
+    } else {
+      console.log(`\n🔑 Portal client_secret (明文，仅此一次输出，请复制到 gateway.toml): ${portalSecret}\n`);
+    }
     await db.insert(schema.clients).values({
       clientId: 'portal',
       name: 'Auth-SSO Portal',

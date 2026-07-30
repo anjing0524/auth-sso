@@ -128,5 +128,91 @@ services:
       timeout: 3s
       retries: 24
 
+  pebble:
+    image: auth-sso-test-pebble:v2.8.0
+    build:
+      context: .
+      dockerfile: tests/acme/Dockerfile.pebble
+      target: pebble
+    profiles: ["acme"]
+    command:
+      - -config
+      - test/config/gateway-pebble-config.json
+      - -strict=false
+      - -dnsserver
+      - 10.31.50.3:8053
+    environment:
+      PEBBLE_AUTHZREUSE: "0"
+      PEBBLE_VA_NOSLEEP: "1"
+      PEBBLE_WFE_NONCEREJECT: "0"
+    ports:
+      - "14000:14000"
+      - "15000:15000"
+    volumes:
+      - ./tests/acme/pebble-config.json:/test/config/gateway-pebble-config.json:ro
+      - ./tests/acme/pebble-server.pem:/test/certs/pebble-server.pem:ro
+      - ./tests/acme/pebble-server-key.pem:/test/certs/pebble-server-key.pem:ro
+    networks:
+      acmenet:
+        ipv4_address: 10.31.50.2
+
+  challtestsrv:
+    image: auth-sso-test-pebble-challtestsrv:v2.8.0
+    build:
+      context: .
+      dockerfile: tests/acme/Dockerfile.pebble
+      target: challtestsrv
+    profiles: ["acme"]
+    command:
+      - -defaultIPv6
+      - ""
+      - -defaultIPv4
+      - 10.31.50.4
+    ports:
+      - "8055:8055"
+    networks:
+      acmenet:
+        ipv4_address: 10.31.50.3
+
+  gateway-acme:
+    build:
+      context: .
+      dockerfile: apps/gateway/Dockerfile
+    profiles: ["acme"]
+    ports:
+      - "19080:80"
+      - "19444:443"
+    environment:
+      NODE_ENV: test
+      LETSENCRYPT_DOMAIN: gateway.test
+      LETSENCRYPT_EMAIL: acme-e2e@example.test
+      ACME_DIRECTORY_URL: https://pebble:14000/dir
+      ACME_STATE_DIR: /var/lib/gateway/acme
+      ACME_CA_CERT_PATH: /test/pebble.minica.pem
+      ACME_CHECK_INTERVAL_SECS: "1"
+      GATEWAY_SHARED_SECRET: acme-e2e-gateway-shared-secret
+    volumes:
+      - ./apps/gateway/gateway.acme-e2e.toml:/app/gateway.toml:ro
+      - ./tests/acme/pebble.minica.pem:/test/pebble.minica.pem:ro
+      - gateway_acme_test:/var/lib/gateway/acme
+    depends_on:
+      redis:
+        condition: service_healthy
+      pebble:
+        condition: service_started
+      challtestsrv:
+        condition: service_started
+    networks:
+      default:
+      acmenet:
+        ipv4_address: 10.31.50.4
+
 volumes:
   gateway_certs:
+  gateway_acme_test:
+
+networks:
+  acmenet:
+    ipam:
+      config:
+        - subnet: 10.31.50.0/24

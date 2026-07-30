@@ -1,6 +1,6 @@
 # 详细设计 (Detailed Design) - Auth-SSO
 
-**版本**: v1.0 · **状态**: 正式发布 · **最后更新**: 2026-06-24
+**版本**: v1.1 · **状态**: 正式发布 · **最后更新**: 2026-07-28
 **依赖**: [PRD.md](PRD.md), [ARCHITECTURE.md](ARCHITECTURE.md), [DATABASE.md](DATABASE.md)
 
 ---
@@ -633,12 +633,14 @@ type ApiResponse<T> =
 
 ### 6.1 请求处理流水线
 
-Gateway 基于 Pingora (0.8.0)，是一个反向代理 + 安全网关，提供 HTTPS 入口和离线 JWT 验证。
+Gateway 基于 Pingora 0.8.x，是一个反向代理 + 安全网关，提供 HTTPS 入口、Rust 内建 Let's Encrypt ACME 证书生命周期和离线 JWT 验证。
 
 ```
 请求到达
   │
-  ├─ HTTP(80) → RedirectService → 301重定向到HTTPS
+  ├─ HTTP(80) → RedirectService
+  │      ├─ /.well-known/acme-challenge/{token} → ACME 内存快照
+  │      └─ 其他路径 → 301重定向到HTTPS
   │
   └─ HTTPS(443) → Gateway Proxy
        │
@@ -786,6 +788,36 @@ SKIP_PREFIXES: /_next, /favicon, /images, /fonts
 ```
 
 **白名单差异说明**: Gateway 侧对 `/*` 和 `/api/*` 有更细分的处理（微服务路由 vs Portal 路由）。Portal 的 proxy.ts 放行所有 `/api/` 路径（包括管理 API），因为 API 层自身有鉴权逻辑。
+
+### 6.5 TLS 证书生命周期
+
+生产环境由 Gateway Rust 进程内建 ACME 客户端签发 Let's Encrypt ECDSA P-256 证书。生命周期后台服务与请求热路径在同一进程内按不可变快照解耦，不依赖 Certbot 或 shell：
+
+```
+AcmeService（instant-acme）
+  ├─ 恢复/创建 ACME 账户
+  ├─ newOrder + HTTP-01 + CSR + certificate
+  ├─ ARI 建议窗口 / 实际有效期 2/3 回退
+  └─ account.json + certificate.json 原子持久化
+                     │
+                     ├─ AcmeChallengeStore（ArcSwapOption）
+Let's Encrypt ─GET :80/.well-known/acme-challenge/{token}
+                     │
+                     └─ TlsCertificateStore（ArcSwapOption）
+                                  │
+                                  v
+                TlsCertificateCallback（握手路径零磁盘 I/O）
+```
+
+约束与故障语义：
+
+1. 生产环境必须配置 `[acme]` 或等价环境变量。首次没有持久化证书时 Gateway 允许进入引导态，以便 80 端口先完成 HTTP-01；此时 HTTPS 握手暂不可用。
+2. challenge token 只能是单个 base64url 风格路径段，禁止目录穿越；只有当前 order 的精确 token 才返回 key-authorization，其他 challenge 路径返回 404，普通 HTTP 请求仍强制跳转 HTTPS。
+3. 续期优先读取 RFC 9773 ARI 建议窗口，并用证书摘要在窗口内选择稳定时刻；CA 不支持 ARI 或查询失败时回退到证书实际生命周期的三分之二处，不假设固定证书期限。
+4. 新证书先完整解析证书链并校验 leaf 公钥与私钥匹配，再把 fullchain 与 private key 作为单个 bundle 通过同目录临时文件、`fsync` 和 `rename` 原子持久化，最后原子发布不可变内存快照。
+5. 账户状态、证书状态和目录分别使用 `0600`、`0600`、`0700`；生产容器以固定 UID/GID 10001 访问专用 `gateway_acme` named volume。
+6. directory URL 或域名变化时旧证书不进入内存，Gateway 自动创建匹配的新账户/order。签发、续期、网络或持久化失败时指数退避并保留上一有效 TLS 快照；续期不需要重启。
+7. 当前状态模型是单域名、单进程写者；水平扩展前必须增加 ACME leader election 或改用集中式证书控制器。开发/E2E 的 loopback 自签证书不得进入生产 Compose。
 
 ---
 
@@ -1119,11 +1151,23 @@ export function hashToken(token: string): string
 |--------|--------|------|
 | `gateway.port` | `18080` | HTTP 监听端口（重定向到 HTTPS） |
 | `gateway.ssl_port` | `18443` | HTTPS 监听端口 |
-| `gateway.ssl_cert_path` | - | TLS 证书路径 |
-| `gateway.ssl_key_path` | - | TLS 密钥路径 |
+| `gateway.ssl_cert_path` | - | 非 ACME 开发/E2E 模式的 TLS 证书路径 |
+| `gateway.ssl_key_path` | - | 非 ACME 开发/E2E 模式的 TLS 密钥路径 |
 | `gateway.log_dir` | - | 日志目录 |
 | `gateway.log_level` | `'info'` | 日志级别 |
 | `redis.url` | - | Redis 连接 URL（用于 jti 黑名单） |
+
+**Gateway ACME 配置**（`[acme]`；生产必填）：
+
+| 配置项 | 默认值 | 环境变量 | 描述 |
+|--------|--------|----------|------|
+| `acme.domain` | 无 | `LETSENCRYPT_DOMAIN` | HTTP-01 和证书 SAN 使用的单个 DNS 域名 |
+| `acme.email` | 无 | `LETSENCRYPT_EMAIL` | ACME 账户联系邮箱 |
+| `acme.directory_url` | Let's Encrypt production | `ACME_DIRECTORY_URL` | ACME directory，必须为 HTTPS |
+| `acme.state_dir` | `acme` | `ACME_STATE_DIR` | 原子持久化账户和证书 bundle 的目录 |
+| `acme.check_interval_secs` | `21600` | `ACME_CHECK_INTERVAL_SECS` | ARI/证书有效期复核间隔，必须大于 0 |
+
+环境变量与 TOML 使用同一验证路径。生产 Compose 只启用内建 ACME 配置，不提供 `SSL_CERT_PATH`、`SSL_KEY_PATH`；文件证书来源仅保留给本地开发和 E2E。
 
 > JWT `issuer` 与签名算法**非配置项**，由 Gateway 启动时通过 OIDC Discovery（`/.well-known/openid-configuration`）从 `oidc_provider = true` 的 upstream 动态获取，写入 JWT 校验 `validation`。
 
