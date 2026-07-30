@@ -1,0 +1,21 @@
+# Pebble ACME lifecycle acceptance only. Public traffic must never use this file.
+
+[gateway]
+port = 80
+ssl_port = 443
+log_dir = "logs"
+log_level = "debug"
+gateway_shared_secret = "acme-e2e-gateway-shared-secret"
+
+[redis]
+url = "redis://redis:6379"
+
+[[upstreams]]
+name = "/"
+addresses = "127.0.0.1:65535"
+oidc_provider = true
+public_paths = ["/"]
+
+[upstreams.oauth]
+client_id = "acme-e2e"
+client_secret = "acme-e2e-client-secret"

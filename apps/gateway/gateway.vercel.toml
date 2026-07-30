@@ -1,0 +1,32 @@
+[gateway]
+port = 80
+external_tls_termination = true
+log_dir = "logs"
+log_level = "info"
+
+[redis]
+url = "redis://127.0.0.1:6379"
+pool_max_size = 4
+pool_min_idle = 1
+
+[[upstreams]]
+name = "/"
+addresses = "127.0.0.1:4100"
+oidc_provider = true
+public_paths = [
+    "/",
+    "/login",
+    "/register",
+    "/error",
+    "/oauth/error",
+    "/api/auth/",
+    "/api/health",
+    "/oauth2/",
+    "/.well-known/",
+    "/_next/",
+    "/favicon.ico",
+]
+
+[upstreams.oauth]
+client_id = "portal"
+client_secret = "runtime-environment-required"

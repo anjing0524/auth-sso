@@ -12,7 +12,7 @@
 | 部门管理（物化路径树） | ✅ 已交付 | v1.1 | ancestors 子树查询 |
 | OAuth 2.1 Provider | ✅ 已交付 | v1.1 | PKCE + 授权码 + Token 轮换 |
 | OIDC Discovery | ✅ 已交付 | v1.1 | 含 end_session_endpoint |
-| Gateway 边缘验签 | ✅ 已交付 | v1.1 | Pingora + ES256 + HMAC 签名 |
+| Gateway 边缘入口 | ✅ 已交付 | v1.3 | Pingora + ES256 + HMAC；默认自托管 ACME/ARI，平台 TLS 构建编译期裁剪 ACME |
 | 审计日志（180天分区） | ✅ 已交付 | v1.1 | append-only |
 | 暴力破解防护 | ✅ 已交付 | v1.1 | Redis INCR 锁定 |
 | SAML 2.0 | 🔲 待评估 | P2 | 未在本期范围，企业对接需求驱动 |
@@ -21,6 +21,12 @@
 
 ## 变更记录
 
+- 2026-07-30: 完成 Gateway TLS 能力的编译期隔离：新增默认 `self-managed-tls` Cargo Feature，自托管 Docker/Compose 继续包含 ACME、HTTP 重定向和 TLS 热加载；Vercel 改用 `--no-default-features` 构建，仅保留平台 TLS 终结所需的 HTTP 代理能力，并从编译单元及正常依赖图排除 `acme`/`redirect`/`tls` 模块与 `instant-acme` 等专属直接依赖。配置层对“裁剪版 + 未启用外部 TLS”执行 fail-closed，CI 同时验证两套 clippy/test、平台 release build 和 ACME 依赖缺席，最佳实践同步沉淀到两份 TLS/部署 solution。
+- 2026-07-30: 完成 Vercel 生产部署拓扑收敛：Vercel 只暴露一个 Docker Service，Next.js Portal standalone 在同一容器内仅监听 `127.0.0.1:4100`，Rust Gateway 作为唯一 `$PORT` 公网入口并使用平台 TLS 模式；Neon PostgreSQL 与 Upstash Redis 由 Marketplace 注入。生产验证否决了会因容器 IPv6 `[100::1]` 无路由而间歇 502 的跨 Service binding，改为确定性的 loopback 上游；同步补齐平台客户端 IP 信任边界、OAuth 正式回调白名单、Docker 构建期公开 URL 和 GitHub/Vercel 自动部署配置，最佳实践沉淀到 `docs/solution/2026-07-30-vercel-gateway-only-production-topology.md`。
+- 2026-07-29: 补齐公共 Let's Encrypt staging 的可审计预检：`scripts/run-gateway-acme-staging.sh` 在访问 Docker/公共 CA 前检查公网 DNS 名称、联系邮箱和公网 80/443 操作员声明；缺失或无效时以状态码 2 退出并在独立 `preflight/` 目录写入阻塞证据，不覆盖既有公网通过证据。用户当前提供的 `local` 是无效公共域名，`8.8.8.8` 只是递归解析器且明确没有公网入口，因此当前证据为 `blocked_invalid_prerequisites`；进入真实演练后才在 `latest/` 使用 `failed_or_incomplete`，仅全部外部断言通过才写入 `passed`。
+- 2026-07-28: 完成 Gateway ACME 可复现验收闭环：新增固定 Pebble v2.8.0 官方 Release SHA-256 的本地 CA/HTTP-01 测试栈和独立 CI 门禁，真实 Gateway 从无证书状态启动后在同一容器、零进程重启条件下签发并启用 HTTPS；TLS 链/域名验证、`0700/0600` 状态权限、同指纹重启恢复及 CA 停止后保留旧证书均已通过，证据保存在 `.context/compound-engineering/acme-e2e/latest/`。同步修复生产 80/443 映射与端口环境覆盖漂移、数值环境变量静默回退、测试 profile 残留清理及动态 Redis 地址抢占验证 IP；公网 Let's Encrypt staging 脚本已就绪，因当前环境缺少真实域名/DNS/公网端口，保留为首次生产部署前强制外部验收项。
+- 2026-07-28: 完成 Gateway ACME/TLS 简化复审：删除不服务生产 ACME、也非本地/E2E 需求的文件证书轮询后台服务及其配置状态，文件证书恢复为启动期单次加载；续期结果改用 `Issue/Wait` 枚举消除无效组合，内联单用途账户路径与 directory 参数，并为直接使用的 `tokio::net::TcpStream` 显式声明 `net` feature，避免依赖传递 feature union 偶然编译。保持 ACME 原子持久化、HTTP-01、ARI 与证书热加载语义不变，规则同步沉淀到 `docs/solution/2026-07-28-gateway-letsencrypt-zero-downtime.md`。
+- 2026-07-28: 完成生产 Gateway TLS 生命周期收敛并修订早期 Certbot 方案：移除 `docker-compose.prod.yml` 对 `apps/gateway/ssl`、Certbot 服务和 shell 入口的依赖，由 Gateway Rust 进程使用 `instant-acme` 内建 ACME 账户恢复、HTTP-01、ECDSA P-256 签发、ARI 续期调度、指数退避与自动热加载。ACME 账户和证书/私钥单 bundle 以 `0700/0600` 权限原子持久化到专用 volume；握手与 challenge 热路径均使用 `ArcSwapOption` 内存快照，失败继续使用上一有效证书且无需重启。同步补齐生产配置校验、非 root volume 权限、部署/架构/验收文档和 Rust 单元测试；本地/E2E loopback 自签证书继续作为隔离测试设施。最佳实践沉淀到 `docs/solution/2026-07-28-gateway-letsencrypt-zero-downtime.md`。
 - 2026-07-28: 修复 Gateway Release Journey 对开发机证书的隐式依赖：`docker-compose.test.yml` 不再从被 Git 忽略的 `apps/gateway/ssl` 复制 PEM，改由 `apps/gateway/Dockerfile` 的专用 `cert-init` target 在构建期固化 OpenSSL、启动期向一次性 named volume 生成带 loopback SAN 的短期自签证书。CI 与本地现在都从干净输入构造 TLS 验收环境，运行期不安装软件、不读取宿主机私钥，发布浏览器闭环本地复验 `1/1` 通过；最佳实践补充到 `docs/solution/2026-07-27-gateway-first-delivery-entrypoints.md`。
 - 2026-07-28: 从根因收敛 Next.js 16 构建期数据库边界：将 `@/infrastructure/db` 改为首次真实访问才解析 `DATABASE_URL` 并创建连接的统一惰性单例，删除审计、鉴权、权限模块中逐调用方堆叠的动态 import 补丁；将公开 URL、数据库、Redis、Cookie 等环境配置改为按关注点独立校验，避免静态 OIDC Discovery 因无关数据库配置失败；共享鉴权及相关 Controller catch 通过官方 `unstable_rethrow()` 保留 headers/cookies/PPR 控制流，不再把动态路由错误预渲染为静态 500；只在无 Request 参数且必须实时探测外部依赖的 health/JWKS GET 入口使用官方 `connection()` 请求边界；同时修复 `.dockerignore` 未排除真实 `.env*` 导致本地 Docker 构建被开发机配置污染的问题。Route Handler 与页面继续遵循 Cache Components 默认动态/部分预渲染语义，不再用 `dynamic` 或 blanket `connection()` 掩盖共享边界问题，最佳实践沉淀到 `docs/solution/2026-07-28-nextjs-rsc-build-time-db-boundary.md`。
 - 2026-07-27: 收敛 Docker Compose 入口：删除无消费者、与当前脚本/工作流职责重复的 `docker-compose.local.yml`，并将原 `docker-compose.ci.yml` 与 `docker-compose.e2e.yml` 合并为统一的 `docker-compose.test.yml`。收敛后的职责为三类：`docker-compose.yml` 仅服务本地开发数据库/Redis，`docker-compose.test.yml` 统一承担 CI 的 `node-test` 容器与 Gateway 发布闭环私有栈，`docker-compose.prod.yml` 保留部署用途；相关 `workflow`、`scripts/run-gateway-e2e.sh`、接入文档与最佳实践同步切换，避免再维护“同一件事三份 compose 入口”的漂移。

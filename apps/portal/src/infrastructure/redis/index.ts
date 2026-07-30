@@ -108,27 +108,32 @@ function createIoredisClient(): RedisClient {
     await connectPromise;
   };
 
-  // ioredis API 直接匹配 RedisClient 接口
+  const runConnected = async <T>(operation: () => Promise<T>): Promise<T> => {
+    await connect();
+    return operation();
+  };
+
+  // 关闭 offline queue 后，每条命令必须等待 lazy client ready，避免冷启动首条命令被拒绝。
   return {
     connect,
-    ping: () => client.ping(),
-    get: (key) => client.get(key),
-    getdel: (key) => client.getdel(key),
-    setex: (key, seconds, value) => client.setex(key, seconds, value),
-    del: (...keys) => client.del(...keys),
-    keys: (pattern) => client.keys(pattern),
+    ping: () => runConnected(() => client.ping()),
+    get: (key) => runConnected(() => client.get(key)),
+    getdel: (key) => runConnected(() => client.getdel(key)),
+    setex: (key, seconds, value) => runConnected(() => client.setex(key, seconds, value)),
+    del: (...keys) => runConnected(() => client.del(...keys)),
+    keys: (pattern) => runConnected(() => client.keys(pattern)),
     quit: async () => {
       await client.quit();
     },
-    sadd: (key, member) => client.sadd(key, member),
-    srem: (key, member) => client.srem(key, member),
-    smembers: (key) => client.smembers(key),
-    expire: (key, seconds) => client.expire(key, seconds),
-    hset: (key, field, value) => client.hset(key, field, value),
-    hgetall: (key) => client.hgetall(key),
+    sadd: (key, member) => runConnected(() => client.sadd(key, member)),
+    srem: (key, member) => runConnected(() => client.srem(key, member)),
+    smembers: (key) => runConnected(() => client.smembers(key)),
+    expire: (key, seconds) => runConnected(() => client.expire(key, seconds)),
+    hset: (key, field, value) => runConnected(() => client.hset(key, field, value)),
+    hgetall: (key) => runConnected(() => client.hgetall(key)),
     pipeline: () => client.pipeline(),
-    exists: (key) => client.exists(key),
-    incr: (key) => client.incr(key),
+    exists: (key) => runConnected(() => client.exists(key)),
+    incr: (key) => runConnected(() => client.incr(key)),
   };
 }
 

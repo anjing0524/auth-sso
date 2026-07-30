@@ -1,9 +1,9 @@
 # 系统架构 -- Auth-SSO
 
-**版本：** v5.3
+**版本：** v5.5
 **状态：** 已发布（Released）
-**最后更新：** 2026-07-23
-**变更：** v5.3 — JWT Claims 最小化（ADR-006）、Gateway callback 统一（ADR-009）、文件引用对齐
+**最后更新：** 2026-07-30
+**变更：** v5.5 — Gateway TLS 能力按部署拓扑编译：自托管默认构建保留 ACME，平台 TLS 构建在编译期排除 ACME 模块与专属依赖
 
 ---
 
@@ -14,7 +14,7 @@ Auth-SSO 是一个基于 Next.js 16 构建的统一身份与访问管理（IAM�
 | 组件 | 角色 | 技术栈 |
 |---|---|---|
 | **Portal**（`apps/portal`） | 企业管理后台、BFF 和 OIDC 提供商——三者合为一体 | Next.js 16 + TypeScript |
-| **Gateway**（`apps/gateway`） | 统一 HTTPS 入口、离线 JWT 验证、Cookie 到 Bearer 令牌转换 | Rust + Pingora |
+| **Gateway**（`apps/gateway`） | 统一公网入口、离线 JWT 验证、Cookie 到 Bearer 令牌转换；自托管构建额外承担 Let's Encrypt 内建签发/续期 | Rust + Pingora；`self-managed-tls` 构建额外使用 instant-acme |
 | **`packages/contracts`** | 共享 TypeScript 类型、错误码、权限码、OIDC 常量 | TypeScript |
 | **`packages/config`** | 共享环境配置（Zod 模式 + URL 推导）；TypeScript/ESLint 预设位于仓库根目录（`tsconfig.base.json` / `eslint.base.mjs`）| TypeScript |
 
@@ -45,6 +45,8 @@ Portal **本身就是**身份提供者（Identity Provider）。不存在独立�
   |
   v
 Gateway（Rust/Pingora）
+  |-- 自托管构建：Rust 内建 ACME HTTP-01 + ARI 自动续期 + TLS 热加载
+  |-- 平台 TLS 构建：平台终结公网 TLS，Gateway 仅监听平台注入的 HTTP 端口
   |-- ES256 离线 JWT 验证（内存级 JWKS 缓存）
   |-- Cookie 提取 + Bearer 头注入
   |-- 按路径前缀路由到多个上游应用（Portal + 子应用，经 [[upstreams]] 路由表）
@@ -64,7 +66,7 @@ Portal（BFF + OIDC 提供商 + 管理后台 UI）
 | 组件 | 核心职责 | 禁止行为 |
 |---|---|---|
 | **Portal** | （1）用户凭据验证（bcrypt、数据库存储的密码哈希）。（2）通过数据库存储的密钥对签发 ES256 签名的 JWT。（3）暴露 `/.well-known/jwks` 和 `/api/auth/jwks` 端点。（4）OAuth 2.1 + OIDC 提供商端点（authorize、token、userinfo、introspect、revoke）。（5）将 JWT 写入 HttpOnly Cookie（`portal_jwt_token`、`portal_refresh_token`）。（6）管理用户、部门、角色、权限、OAuth 客户端。（7）基于角色所属部门的 RBAC 数据范围过滤（权限 × 角色部门交集）。（8）用于紧急令牌吊销的 jti 黑名单。（9）审计日志 | 绝不在 Redis 中存储 Portal API 认证的会话状态（无状态 JWT）。绝不向客户端 JavaScript 暴露敏感令牌 |
-| **Gateway** | （1）统一 HTTPS 流量入口。（2）OAuth 2.1 Client 层：为所有下游应用统一生成 PKCE/state/nonce → Cookie → 302 /authorize；配置了 `oauth.client_secret` 的所有 upstream（含 Portal 自身），由 Gateway 统一拦截 callback 并完成 code→token 交换 + Cookie 下发。（3）提取 `portal_jwt_token` Cookie，通过缓存的 JWKS 验证（ES256、离线）。（4）移除 Cookie，为下游注入 `Authorization: Bearer <JWT>` 头。（5）jti 黑名单检查：验签通过后查询 Redis（`portal:jti_blocklist:{jti}`），Redis 不可用时故障开放（fail-open）。（6）按路径前缀将请求路由到多个上游应用（经 `[[upstreams]]` 路由表，支持 Portal + 子应用） | 绝不执行业务层面的权限检查。绝不连接业务数据库（仅查 Redis jti 黑名单）。 |
+| **Gateway** | （1）作为统一公网流量入口；默认 `self-managed-tls` 构建在 Rust 进程内完成 ACME 账户/order/HTTP-01/CSR/ARI 生命周期，平台 TLS 构建则在编译期排除该能力并只监听平台端口。（2）OAuth 2.1 Client 层：为所有下游应用统一生成 PKCE/state/nonce → Cookie → 302 /authorize；配置了 `oauth.client_secret` 的所有 upstream（含 Portal 自身），由 Gateway 统一拦截 callback 并完成 code→token 交换 + Cookie 下发。（3）提取 `portal_jwt_token` Cookie，通过缓存的 JWKS 验证（ES256、离线）。（4）移除 Cookie，为下游注入 `Authorization: Bearer <JWT>` 头。（5）jti 黑名单检查：验签通过后查询 Redis（`portal:jti_blocklist:{jti}`），Redis 不可用时故障开放（fail-open）。（6）按路径前缀将请求路由到多个上游应用（经 `[[upstreams]]` 路由表，支持 Portal + 子应用） | 绝不执行业务层面的权限检查。绝不连接业务数据库（仅查 Redis jti 黑名单）。绝不依赖 Certbot、证书 shell 脚本或仓库内开发证书。平台 TLS 构建绝不携带 ACME 客户端模块。 |
 
 ### 3.2 Portal 内部架构（分层领域驱动设计 DDD）
 
@@ -611,6 +613,7 @@ revokeUserAccessByUserId(userId)
 | 8 | **紧急吊销** | 基于 Redis 的 jti 黑名单，用于安全事件中的即时令牌失效。 |
 | 9 | **ES256 非对称签名** | 私钥以 JWK 格式存储在 PostgreSQL 中（安全依赖 DB 访问控制）。公钥通过 JWKS 暴露。服务之间不共享密钥。 |
 | 10 | **审计追踪** | 所有认证敏感操作（登录、登出、令牌刷新、权限变更）都记录在 `audit_logs` 表中。 |
+| 11 | **可信传输证书** | 自托管部署由 Gateway `self-managed-tls` 构建通过 Rust 内建 ACME 自动签发和续期；平台部署由平台终结公网 TLS，Gateway 使用 `--no-default-features` 构建并在编译期排除 ACME。两种模式互斥且配置不匹配时拒绝启动。 |
 
 ---
 
@@ -657,3 +660,7 @@ auth-sso/
 | `apps/portal/src/lib/crypto.ts` | ID/Secret 随机生成 |
 | `apps/portal/src/infrastructure/db/index.ts` | Drizzle + postgres-js 连接池 |
 | `apps/portal/src/infrastructure/redis/index.ts` | ioredis 客户端单例 |
+| `apps/gateway/src/tls.rs` | TLS 证书完整性校验、内存快照和握手期热加载 |
+| `apps/gateway/src/redirect.rs` | HTTP-01 challenge 直出与其余 HTTP 请求强制跳转 |
+| `apps/gateway/src/acme.rs` | Rust 内建 ACME 账户、HTTP-01、ARI、签发续期与原子状态持久化 |
+| `apps/gateway/Cargo.toml` | `self-managed-tls` 默认 Feature 与平台 TLS 编译边界 |

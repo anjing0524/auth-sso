@@ -108,22 +108,18 @@ pub fn observe(ip: &str, path: &str) -> RateDecision {
 ///
 /// ```ignore
 /// // 在 request_filter 热路径上调用：
-/// if rate_limiter::check(session).await? {
+/// if rate_limiter::check(session, "203.0.113.10").await? {
 ///     return Ok(true); // 已触发限流，短路
 /// }
 /// ```
-pub async fn check(session: &mut Session) -> Result<bool> {
+pub async fn check(session: &mut Session, client_ip: &str) -> Result<bool> {
     let path = session.req_header().uri.path();
-    // 非限流路径零开销：仅认证端点才提取客户端 IP
     if !is_tracked_path(path) {
         return Ok(false);
     }
-    // socket 真实地址（不可伪造）；unwrap_or 仅剩 unix-socket 等边缘场景
-    let ip = session.client_ip();
-    let ip = ip.as_deref().unwrap_or("unknown");
 
-    if matches!(observe(ip, path), RateDecision::Blocked) {
-        warn!("速率限制触发: ip={}, path={}", ip, path);
+    if matches!(observe(client_ip, path), RateDecision::Blocked) {
+        warn!("速率限制触发: ip={}, path={}", client_ip, path);
         crate::metrics::inc_rate_limited();
         session.respond_429(60).await?;
         return Ok(true);

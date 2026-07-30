@@ -31,8 +31,8 @@ RUN touch src/main.rs && cargo build --release
 # Runner stage
 FROM alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d
 
-# 创建非 root 用户（安全加固：禁止容器以 root 运行）
-RUN addgroup -S gateway && adduser -S gateway -G gateway
+# 创建固定 UID/GID 的非 root 用户，确保 ACME 持久化卷权限稳定。
+RUN addgroup -S -g 10001 gateway && adduser -S -u 10001 gateway -G gateway
 
 WORKDIR /app
 
@@ -46,7 +46,8 @@ COPY --from=builder /app/apps/gateway/target/release/gateway /usr/local/bin/gate
 COPY apps/gateway/gateway.docker.toml ./gateway.toml
 
 # 创建运行时必需的可写目录并授予 gateway 用户权限
-RUN mkdir -p /etc/gateway/ssl /app/logs && chown -R gateway:gateway /etc/gateway/ssl /app/logs
+RUN mkdir -p /etc/gateway/ssl /var/lib/gateway/acme /app/logs \
+    && chown -R gateway:gateway /etc/gateway/ssl /var/lib/gateway/acme /app/logs
 
 EXPOSE 80 443
 

@@ -3,6 +3,7 @@ use bytes::Bytes;
 use pingora_core::prelude::*;
 use pingora_http::{RequestHeader, ResponseHeader};
 use pingora_proxy::{ProxyHttp, Session};
+use std::net::IpAddr;
 use std::sync::Arc;
 use tracing::{debug, info, warn};
 
@@ -40,6 +41,15 @@ fn get_host(session: &Session) -> &str {
         return host;
     }
     "localhost"
+}
+
+/// 解析 Vercel 权威写入的单值客户端 IP 头。
+///
+/// 仅接受一个合法 IP 字面量，拒绝逗号链和任意文本，避免错误配置时把
+/// 未经验证的转发链直接变成限流与审计身份。
+fn parse_platform_client_ip(value: Option<&str>) -> Option<String> {
+    let value = value?.trim();
+    value.parse::<IpAddr>().ok().map(|ip| ip.to_string())
 }
 
 /// 当 `value` 为 `Some` 时向请求头注入；`None` 视为 no-op
@@ -151,6 +161,8 @@ pub struct GatewayCtx {
     pub identity: Option<Identity>,
     /// 续签得到的新 Token（若在本次请求中触发了静默续签）
     pub refreshed_tokens: Option<RefreshedTokens>,
+    /// 当前请求的权威客户端 IP（第一跳 socket，或平台签名边界内的覆写头）
+    pub client_ip: Option<String>,
 }
 
 impl GatewayCtx {
@@ -208,6 +220,12 @@ pub struct Gateway {
     gateway_shared_secret: Option<String>,
     /// 内部上游请求协议（http/https）
     upstream_scheme: String,
+    /// HTTPS 上游的 SNI 主机名。平台内部服务通常与公网 Host 不同。
+    upstream_server_name: Option<String>,
+    /// 发往上游的 Host；`X-Forwarded-Host` 仍保留浏览器访问的公网 Host。
+    upstream_host_header: Option<String>,
+    /// 是否信任 Vercel 在容器边界覆写的 `X-Vercel-Forwarded-For`。
+    trust_platform_client_ip: bool,
     /// JWKS 公钥缓存 — 用于获取 OIDC Discovery 元数据（callback_path 等）
     jwks_cache: Arc<JwksCache>,
 }
@@ -242,6 +260,9 @@ impl Gateway {
     ///     ups,
     ///     None,
     ///     "http".to_string(),
+    ///     None,
+    ///     None,
+    ///     false,
     ///     jwks,
     /// );
     /// ```
@@ -254,6 +275,9 @@ impl Gateway {
         oidc_provider_upstream: Arc<Upstreams>,
         gateway_shared_secret: Option<String>,
         upstream_scheme: String,
+        upstream_server_name: Option<String>,
+        upstream_host_header: Option<String>,
+        trust_platform_client_ip: bool,
         jwks_cache: Arc<JwksCache>,
     ) -> Self {
         Self {
@@ -264,8 +288,25 @@ impl Gateway {
             oidc_provider_upstream,
             gateway_shared_secret,
             upstream_scheme,
+            upstream_server_name,
+            upstream_host_header,
+            trust_platform_client_ip,
             jwks_cache,
         }
+    }
+
+    /// 解析当前请求的权威客户端 IP。
+    ///
+    /// 自管 TLS 模式只信任 socket 对端；平台 TLS 模式只信任 Vercel
+    /// 专用且由平台覆写的单值头，非法或缺失时退回 socket。
+    fn client_ip(&self, session: &Session) -> Option<String> {
+        if self.trust_platform_client_ip
+            && let Some(ip) =
+                parse_platform_client_ip(header_str(session, "X-Vercel-Forwarded-For"))
+        {
+            return Some(ip);
+        }
+        session.client_ip()
     }
 
     /// 无 JWT 页面导航 → 生成 PKCE + Cookie → 302 /authorize
@@ -566,7 +607,12 @@ impl ProxyHttp for Gateway {
             })?;
         debug!("路由至 upstream \"{}\": {:?}", entry.prefix, peer);
         // upstream_scheme = "https" 时主代理路径真正走 TLS（与文档承诺一致）
-        let http_peer = HttpPeer::new(peer, self.upstream_scheme == "https", host.to_string());
+        let server_name = self
+            .upstream_server_name
+            .as_deref()
+            .unwrap_or(host)
+            .to_string();
+        let http_peer = HttpPeer::new(peer, self.upstream_scheme == "https", server_name);
         Ok(Box::new(http_peer))
     }
 
@@ -574,6 +620,7 @@ impl ProxyHttp for Gateway {
         crate::metrics::inc_requests();
 
         let path = session.req_header().uri.path().to_owned();
+        ctx.client_ip = self.client_ip(session);
 
         if path == METRICS_PATH {
             let authorized = self.gateway_shared_secret.as_deref().is_some_and(|secret| {
@@ -611,7 +658,9 @@ impl ProxyHttp for Gateway {
         }
 
         // 3. 限流校验
-        if crate::rate_limiter::check(session).await? {
+        if crate::rate_limiter::check(session, ctx.client_ip.as_deref().unwrap_or("unknown"))
+            .await?
+        {
             return Ok(true);
         }
 
@@ -697,24 +746,23 @@ impl ProxyHttp for Gateway {
     ) -> Result<()> {
         let _ = upstream_request.remove_header("X-Forwarded-Proto");
         upstream_request.insert_header("X-Forwarded-Proto", "https")?;
-        if let Some(host) = session.get_header("Host") {
-            let _ = upstream_request.remove_header("Host");
-            upstream_request.insert_header("Host", host)?;
-            let _ = upstream_request.remove_header("X-Forwarded-Host");
-            upstream_request.insert_header("X-Forwarded-Host", host)?;
-        }
+        let public_host = get_host(session).to_owned();
+        let upstream_host = self.upstream_host_header.as_deref().unwrap_or(&public_host);
+        let _ = upstream_request.remove_header("Host");
+        upstream_request.insert_header("Host", upstream_host)?;
+        let _ = upstream_request.remove_header("X-Forwarded-Host");
+        upstream_request.insert_header("X-Forwarded-Host", public_host)?;
 
         // 零信任前置清洗：无条件剥离客户端可能伪造的所有身份相关头
         // （Authorization / X-User-* / X-Roles / X-Permissions / X-Client-*），
         // 再由下方按验签结果权威注入。下游收到的身份信息 100% 来自 gateway。
         strip_identity_headers(upstream_request);
 
-        // 权威覆写代理头：Gateway 是 TLS 终结第一跳，socket 地址即真实客户端 IP。
-        // 入站 X-Forwarded-For / X-Real-IP 一律覆写而非透传（B2）。
-        let real_ip = session.client_ip();
+        // 权威覆写代理头：自管 TLS 取 socket；平台 TLS 仅信任 Vercel 覆写的专用头。
+        // 其他入站 X-Forwarded-For / X-Real-IP 一律覆写而非透传（B2）。
         let _ = upstream_request.remove_header("X-Forwarded-For");
         let _ = upstream_request.remove_header("X-Real-IP");
-        if let Some(ip) = real_ip.as_deref() {
+        if let Some(ip) = ctx.client_ip.as_deref() {
             upstream_request.insert_header("X-Forwarded-For", ip)?;
             upstream_request.insert_header("X-Real-IP", ip)?;
             upstream_request.insert_header("X-Client-IP", ip)?;
@@ -905,5 +953,23 @@ mod tests {
             query_param("error=access_denied", "error"),
             Some("access_denied")
         );
+    }
+
+    #[test]
+    fn platform_client_ip_accepts_only_one_valid_ip_literal() {
+        assert_eq!(
+            parse_platform_client_ip(Some(" 203.0.113.10 ")).as_deref(),
+            Some("203.0.113.10")
+        );
+        assert_eq!(
+            parse_platform_client_ip(Some("2001:db8::1")).as_deref(),
+            Some("2001:db8::1")
+        );
+        assert_eq!(
+            parse_platform_client_ip(Some("203.0.113.10, 10.0.0.1")),
+            None
+        );
+        assert_eq!(parse_platform_client_ip(Some("unknown")), None);
+        assert_eq!(parse_platform_client_ip(None), None);
     }
 }

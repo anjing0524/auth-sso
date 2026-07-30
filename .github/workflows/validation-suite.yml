@@ -96,15 +96,100 @@ jobs:
       - name: Run cargo fmt --check
         run: cargo fmt --all -- --check
 
-      - name: Run cargo clippy
+      - name: Run cargo clippy (self-managed TLS)
         run: cargo clippy --all-targets --all-features -- -D warnings
 
-      - name: Run cargo test
-        run: cargo test --lib
+      - name: Run cargo clippy (platform TLS)
+        run: cargo clippy --all-targets --no-default-features -- -D warnings
+
+      - name: Run cargo test (self-managed TLS)
+        run: cargo test --lib --bins --all-features
+
+      - name: Run cargo test (platform TLS)
+        run: cargo test --lib --bins --no-default-features
+
+      - name: Build Vercel Gateway profile
+        run: cargo build --release --bin gateway --no-default-features
+
+      - name: Verify platform build excludes ACME client
+        run: |
+          if cargo tree --no-default-features --edges normal --prefix none | rg -q '^instant-acme '; then
+            echo "instant-acme must not be present in the platform TLS dependency graph"
+            exit 1
+          fi
 
       - name: Run cargo audit
         continue-on-error: true
         run: cargo audit
+
+  gateway-acme-e2e:
+    name: Gateway ACME Lifecycle
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify public staging preflight evidence
+        run: |
+          set +e
+          env -u LETSENCRYPT_STAGING_DOMAIN -u LETSENCRYPT_STAGING_EMAIL \
+            -u ACME_STAGING_PUBLIC_REACHABLE \
+            ./scripts/run-gateway-acme-staging.sh
+          status=$?
+          set -e
+          test "$status" -eq 2
+          grep -qx "status=blocked_missing_prerequisites" \
+            .context/compound-engineering/acme-staging/preflight/summary.txt
+          grep -qx "public_letsencrypt_staging=not_run" \
+            .context/compound-engineering/acme-staging/preflight/summary.txt
+          set +e
+          LETSENCRYPT_STAGING_DOMAIN=local \
+            LETSENCRYPT_STAGING_EMAIL=ops@example.org \
+            ACME_STAGING_PUBLIC_REACHABLE=false \
+            ACME_STAGING_EVIDENCE_DIR=.context/compound-engineering/acme-staging/preflight/invalid \
+            ./scripts/run-gateway-acme-staging.sh
+          status=$?
+          set -e
+          test "$status" -eq 2
+          grep -qx "status=blocked_invalid_prerequisites" \
+            .context/compound-engineering/acme-staging/preflight/invalid/summary.txt
+          grep -qx "letsencrypt_staging_domain=invalid" \
+            .context/compound-engineering/acme-staging/preflight/invalid/summary.txt
+          grep -qx "public_ingress=unavailable" \
+            .context/compound-engineering/acme-staging/preflight/invalid/summary.txt
+          set +e
+          LETSENCRYPT_STAGING_DOMAIN=127.0.0.1 \
+            LETSENCRYPT_STAGING_EMAIL=ops@example.org \
+            ACME_STAGING_PUBLIC_REACHABLE=true \
+            ACME_STAGING_EVIDENCE_DIR=.context/compound-engineering/acme-staging/preflight/ip-literal \
+            ./scripts/run-gateway-acme-staging.sh
+          status=$?
+          set -e
+          test "$status" -eq 2
+          grep -qx "letsencrypt_staging_domain=invalid" \
+            .context/compound-engineering/acme-staging/preflight/ip-literal/summary.txt
+
+      - name: Run Pebble ACME lifecycle
+        run: ./scripts/run-gateway-acme-e2e.sh
+
+      - name: Upload public staging preflight evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.artifact_name }}-acme-staging-preflight
+          path: .context/compound-engineering/acme-staging/preflight/
+          retention-days: ${{ inputs.artifact_retention_days }}
+          if-no-files-found: error
+
+      - name: Upload ACME lifecycle evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.artifact_name }}-acme
+          path: .context/compound-engineering/acme-e2e/latest/
+          retention-days: ${{ inputs.artifact_retention_days }}
+          if-no-files-found: error
 
   gateway-e2e:
     name: Gateway Release Journey

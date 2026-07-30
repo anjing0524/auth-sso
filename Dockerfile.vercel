@@ -1,0 +1,63 @@
+FROM rust:1.93-alpine AS gateway-builder
+
+RUN apk add --no-cache alpine-sdk clang clang-dev cmake make musl-dev perl pkgconfig
+
+WORKDIR /app/apps/gateway
+COPY apps/gateway/Cargo.toml apps/gateway/Cargo.lock ./
+COPY apps/gateway/benches ./benches
+COPY apps/gateway/src ./src
+
+RUN --mount=type=cache,id=auth-sso-cargo-registry,target=/usr/local/cargo/registry \
+    --mount=type=cache,id=auth-sso-gateway-target,target=/app/apps/gateway/target \
+    cargo build --release --bin gateway --no-default-features \
+    && cp /app/apps/gateway/target/release/gateway /gateway
+
+FROM node:26-alpine AS portal-builder
+
+ENV PNPM_HOME="/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
+RUN npm install -g pnpm@10.12.4
+
+WORKDIR /app
+COPY pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY package.json tsconfig.base.json next.base.ts vitest.base.ts ./
+COPY apps/portal/package.json apps/portal/tsconfig.json apps/portal/next.config.ts ./apps/portal/
+COPY apps/demo-app/package.json ./apps/demo-app/
+COPY packages/contracts/package.json ./packages/contracts/
+COPY packages/config/package.json ./packages/config/
+
+RUN printf 'manage-package-manager-versions=false\nregistry=https://registry.npmmirror.com\n' > .npmrc
+
+ARG NEXT_PUBLIC_APP_URL=https://auth-sso-stack.vercel.app
+ENV NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL
+
+RUN pnpm install --frozen-lockfile
+
+COPY . .
+
+RUN pnpm --filter @auth-sso/portal build
+
+FROM node:26-alpine AS runner
+
+RUN apk add --no-cache ca-certificates \
+    && addgroup -S -g 10001 auth-sso \
+    && adduser -S -u 10001 auth-sso -G auth-sso \
+    && mkdir -p /app/logs \
+    && chown -R auth-sso:auth-sso /app
+
+WORKDIR /app
+COPY --from=gateway-builder /gateway /usr/local/bin/gateway
+COPY apps/gateway/gateway.vercel.toml ./gateway.toml
+COPY --from=portal-builder --chown=auth-sso:auth-sso /app/apps/portal/public ./apps/portal/public
+COPY --from=portal-builder --chown=auth-sso:auth-sso /app/apps/portal/.next/standalone ./
+COPY --from=portal-builder --chown=auth-sso:auth-sso /app/apps/portal/.next/static ./apps/portal/.next/static
+
+ENV NODE_ENV=production \
+    EXTERNAL_TLS_TERMINATION=true \
+    RUST_LOG=info \
+    PORT=80
+
+USER auth-sso
+
+# Portal 仅监听容器回环端口；其 HTTP 服务就绪后才启动唯一公网入口 Gateway。
+CMD ["sh", "-c", "PORT=4100 HOSTNAME=127.0.0.1 node --harmony-temporal apps/portal/server.js & portal_pid=$!; until wget -q -O /dev/null http://127.0.0.1:4100/.well-known/openid-configuration; do kill -0 \"$portal_pid\" || exit 1; sleep 1; done; exec gateway"]
