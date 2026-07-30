@@ -1,4 +1,6 @@
+#[cfg(feature = "self-managed-tls")]
 use std::net::Ipv6Addr;
+#[cfg(feature = "self-managed-tls")]
 use std::str::FromStr;
 use std::sync::LazyLock;
 use std::time::Duration;
@@ -34,6 +36,7 @@ pub(crate) fn hmac_sha256_hex(secret: &str, payload: &str) -> Option<String> {
 ///
 /// 注意：裸 IPv6 分支用 `Ipv6Addr::from_str` 严格校验，避免把含多个冒号的畸形
 /// 输入（如 `a:b:c`、`:::`）误当作 IPv6 而跳过端口剥离。
+#[cfg(feature = "self-managed-tls")]
 pub fn host_only(host: &str) -> &str {
     if host.starts_with('[') {
         // 规范 IPv6 字面量：截到闭合方括号（含），其后为端口
@@ -158,18 +161,21 @@ impl SessionExt for Session {
 mod tests {
     use super::*;
 
+    #[cfg(feature = "self-managed-tls")]
     #[test]
     fn host_only_strips_port() {
         assert_eq!(host_only("localhost:18080"), "localhost");
         assert_eq!(host_only("example.com:443"), "example.com");
     }
 
+    #[cfg(feature = "self-managed-tls")]
     #[test]
     fn host_only_keeps_bare_host() {
         assert_eq!(host_only("example.com"), "example.com");
         assert_eq!(host_only("localhost"), "localhost");
     }
 
+    #[cfg(feature = "self-managed-tls")]
     #[test]
     fn host_only_handles_ipv6_literal() {
         // 含端口：截到 ] （含方括号）
@@ -179,6 +185,7 @@ mod tests {
         assert_eq!(host_only("[2001:db8::1]"), "[2001:db8::1]");
     }
 
+    #[cfg(feature = "self-managed-tls")]
     #[test]
     fn host_only_accepts_valid_bare_ipv6() {
         // 合法裸 IPv6：整体视为主机，不剥离
@@ -187,6 +194,7 @@ mod tests {
         assert_eq!(host_only("fe80::1"), "fe80::1");
     }
 
+    #[cfg(feature = "self-managed-tls")]
     #[test]
     fn host_only_rejects_malformed_multi_colon_as_ipv6() {
         // 含多个冒号但非合法 IPv6 的输入：走普通主机分支，按首个冒号剥离

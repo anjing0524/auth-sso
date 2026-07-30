@@ -222,7 +222,7 @@
 
 | NFR ID | 需求描述 | 量化阈值 | 验证方法 | 架构约束 | 关联 Matrix ID |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| NFR-SEC-01 | 通信加密 | 所有业务通信强制 HTTPS；生产证书须由 Gateway Rust 内建 ACME 客户端获取、自动续期且无需重启加载 | 安全审计 + Pebble 全生命周期 E2E（`pnpm test:e2e:acme`）+ 首次部署前公共 staging 演练（`pnpm test:e2e:acme:staging`） | R1~R14 架构规则 | H-AUTH-001 |
+| NFR-SEC-01 | 通信加密 | 所有业务通信强制 HTTPS；自托管生产证书由 Gateway Rust 内建 ACME 自动续期并热加载，平台部署由平台终结 TLS 且 Gateway 在编译期排除 ACME | 安全审计 + 自托管 Pebble E2E/公共 staging + 平台 `--no-default-features` 双构建门禁和依赖图断言 | R1~R14 架构规则 | H-AUTH-001 |
 | NFR-SEC-02 | Cookie 安全属性 | HttpOnly + Secure + SameSite=Lax | 代码审查 + 渗透测试 | — | H-SESS-001 |
 | NFR-SEC-03 | Token 安全 | 无敏感令牌存前端存储 | 代码审查 | — | H-SESS-001 |
 | NFR-SEC-04 | JWT 签名算法 | ES256 非对称，密钥 90 天轮换 | 安全审计 | — | H-AUTH-005~006 |

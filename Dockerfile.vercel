@@ -9,7 +9,7 @@ COPY apps/gateway/src ./src
 
 RUN --mount=type=cache,id=auth-sso-cargo-registry,target=/usr/local/cargo/registry \
     --mount=type=cache,id=auth-sso-gateway-target,target=/app/apps/gateway/target \
-    cargo build --release --bin gateway \
+    cargo build --release --bin gateway --no-default-features \
     && cp /app/apps/gateway/target/release/gateway /gateway
 
 FROM node:26-alpine AS portal-builder

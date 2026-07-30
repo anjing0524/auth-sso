@@ -498,6 +498,9 @@ fn resolve_env_str(config_value: &str, env_name: &str) -> String {
 }
 
 fn validate_production_security(config: &Config, node_env: Option<&str>) -> anyhow::Result<()> {
+    if !cfg!(feature = "self-managed-tls") && !config.gateway.external_tls_termination {
+        bail!("当前 Gateway 未编译 self-managed-tls，必须启用 EXTERNAL_TLS_TERMINATION");
+    }
     if node_env == Some("production")
         && !config.gateway.external_tls_termination
         && config.acme.is_none()
@@ -625,6 +628,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "self-managed-tls")]
     #[test]
     fn test_config_all() {
         let file_path = "./test_gateway.toml";
@@ -787,6 +791,7 @@ mod tests {
         assert!(error.to_string().contains("not-a-number"));
     }
 
+    #[cfg(feature = "self-managed-tls")]
     #[test]
     fn production_requires_gateway_shared_secret() {
         let config = Config::default();
@@ -819,6 +824,20 @@ mod tests {
         assert!(validate_production_security(&config, Some("production")).is_err());
     }
 
+    #[cfg(not(feature = "self-managed-tls"))]
+    #[test]
+    fn platform_tls_build_rejects_self_managed_listener_mode() {
+        let mut config = Config::default();
+        config.gateway.gateway_shared_secret = Some("test-secret".to_string());
+
+        let error = validate_production_security(&config, Some("development")).unwrap_err();
+        assert!(error.to_string().contains("self-managed-tls"));
+
+        config.gateway.external_tls_termination = true;
+        assert!(validate_production_security(&config, Some("production")).is_ok());
+    }
+
+    #[cfg(feature = "self-managed-tls")]
     #[test]
     fn config_rejects_invalid_acme_settings() {
         let mut config = Config {
@@ -880,6 +899,9 @@ mod tests {
     fn upstream_route_config_parses_public_paths() {
         let fp = "./test_upstream_public.toml";
         let toml = r#"
+            [gateway]
+            external_tls_termination = true
+
             [[upstreams]]
             name = "/"
             addresses = "127.0.0.1:4100"

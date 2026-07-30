@@ -1,6 +1,7 @@
 //! Auth-SSO 去中心化安全网关库 (Gateway Library)
 //!
-//! 基于 Pingora 0.8.1 + Rust 内建 ACME + ES256 JWKS 离线验签。
+//! 基于 Pingora 0.8.1 + ES256 JWKS 离线验签。默认构建额外启用 Rust 内建 ACME；
+//! 平台 TLS 构建通过 `--no-default-features` 在编译期排除自托管 TLS 能力。
 //!
 //! 本库提供网关的核心可复用组件，包括：
 //! - JWT 密码学验签与静默续签 ([`auth`])
@@ -10,9 +11,8 @@
 //! - 进程内速率限制（[`rate_limiter`]，限流键为网关信任边界内的权威客户端 IP）
 //! - 配置管理与上游管理 ([`config`])
 //! - 无锁全局指标计数（内部模块 `metrics`，非公共 API）
-//! - HTTP → HTTPS 重定向服务 ([`redirect`])
-//! - 内建 ACME 证书签发与自动续期（[`acme`]）
-//! - TLS 证书原子热重载（[`tls`]）
+//! - `self-managed-tls` Feature：HTTP → HTTPS 重定向、内建 ACME 证书生命周期和
+//!   TLS 证书原子热重载
 //!
 //! # Examples
 //!
@@ -25,6 +25,7 @@
 //! }
 //! ```
 
+#[cfg(feature = "self-managed-tls")]
 pub mod acme;
 pub mod auth;
 pub(crate) mod authenticate;
@@ -38,9 +39,11 @@ pub(crate) mod metrics;
 pub mod oauth;
 pub mod path_matcher;
 pub mod rate_limiter;
+#[cfg(feature = "self-managed-tls")]
 pub mod redirect;
 pub mod redis;
 pub mod router;
+#[cfg(feature = "self-managed-tls")]
 pub mod tls;
 
 // 重导出常用类型

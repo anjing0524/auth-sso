@@ -16,6 +16,8 @@
 
 ## 架构决策
 
+ACME 是自托管部署能力，不是所有 Gateway 产物的固有能力。`self-managed-tls` 作为默认 Cargo Feature，保持现有 Docker/Compose 和本地发布路径无需额外参数；Vercel 等平台 TLS 构建显式使用 `--no-default-features`，从编译单元排除 `acme`、`redirect`、`tls` 模块，并把 `instant-acme`、`x509-parser`、`time`、`rustls-pki-types` 与 Gateway 的直接 `openssl` 依赖设为可选。Pingora 自身仍可能传递依赖 OpenSSL，这不属于 ACME 专属依赖。
+
 `apps/gateway/src/acme.rs` 使用 `instant-acme 0.8.5` 实现 RFC 8555 生命周期：
 
 1. 从专用状态目录恢复 ACME 账户；无状态时创建账户并立即持久化 opaque credentials。
@@ -72,6 +74,7 @@ bundle 同时绑定 `domain` 和 `directory_url`。域名或 CA directory 变化
 1. 生产 ACME 热更新与测试文件证书是两种明确模式。只有前者需要后台生命周期；为后者增加轮询服务、配置项和错误状态属于 YAGNI。
 2. crate 直接使用 feature-gated API 时必须显式声明对应 feature，不能依赖其他依赖的 Cargo feature union 偶然启用。本实现直接使用 `tokio::net::TcpStream`，因此在自身 Tokio 依赖中声明 `net`。
 3. 互斥运行状态使用枚举表达。续期判断从可组合出无效状态的 `due + replacement + next_check` 字段组收敛为 `Issue(replacement) | Wait(delay)`，让编译器保证分支完整性。
+4. 部署平台已终结 TLS 时，ACME 必须通过 Cargo Feature 在编译期排除，而不只是在运行时跳过。默认 Feature 保障自托管兼容性，平台构建必须显式 `--no-default-features`；两种配置都要独立执行 clippy/test，且平台依赖图应断言不含 ACME 客户端。
 
 真实协议验收又暴露了四类测试基础设施问题，并形成同类预防规则：
 
@@ -87,6 +90,10 @@ bundle 同时绑定 `domain` 和 `directory_url`。域名或 CA directory 变化
 
 - Rust 单元/目标测试：`cargo test --all-targets --all-features`
 - Rust 质量门禁：`cargo clippy --all-targets --all-features -- -D warnings`
+- 平台 TLS 测试：`cargo test --lib --bins --no-default-features`
+- 平台 TLS 质量门禁：`cargo clippy --all-targets --no-default-features -- -D warnings`
+- 平台 release 构建：`cargo build --release --bin gateway --no-default-features`
+- 平台依赖裁剪：`cargo tree --no-default-features --edges normal --prefix none` 不得包含 `instant-acme`
 - 格式：`cargo fmt --all -- --check`
 - 生产 Compose 渲染：`docker compose --env-file <test-env> -f docker-compose.prod.yml config`
 - 生产镜像：`docker build -f apps/gateway/Dockerfile .`

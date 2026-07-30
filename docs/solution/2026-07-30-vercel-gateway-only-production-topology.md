@@ -39,6 +39,15 @@ Portal 不得拥有独立公网路由；Gateway 是唯一监听 Vercel `$PORT` �
 
 公网 TLS 由 Vercel 终结。Gateway 不启动 ACME、TLS listener 或 HTTP→HTTPS redirect，但仍把浏览器侧协议权威转发为 `X-Forwarded-Proto: https`。自管 Docker/Compose 部署继续使用 Gateway 内建 ACME，两种模式互斥。
 
+这条边界必须落实到编译期，而不只是运行时 `if`：
+
+- `self-managed-tls` 是 Gateway 默认 Cargo Feature，包含 `acme`、`redirect`、`tls` 模块及其专属直接依赖；
+- `Dockerfile.vercel` 使用 `cargo build --release --bin gateway --no-default-features`；
+- 平台构建的正常依赖图不得出现 `instant-acme`，也不编译上述三个模块；
+- 裁剪版若未配置 `external_tls_termination = true`，启动校验直接失败。
+
+Pingora 自身的代理/TLS 抽象仍传递依赖 OpenSSL，因此验收目标是排除 ACME 客户端与自托管 TLS 代码，而不是错误宣称二进制完全不含任何 TLS/加密依赖。
+
 ### 客户端 IP
 
 自管 TLS 模式继续只信任 socket 对端。Vercel 模式下 socket 对端是平台代理，因此只读取 Vercel 权威覆写的 `X-Vercel-Forwarded-For`：
@@ -63,10 +72,11 @@ Portal 不得拥有独立公网路由；Gateway 是唯一监听 Vercel `$PORT` �
 
 1. `docker build --check -f Dockerfile.vercel .` 无告警。
 2. 完整镜像构建成功，Next.js 生产构建生成全部路由。
-3. `cargo fmt --all -- --check`、严格 Clippy、全量 Rust tests/benches 通过。
-4. 公网 `/api/health`、OIDC Discovery、JWKS 连续请求稳定返回 200。
-5. 未携带密钥访问 `/__gateway/metrics` 返回 401，用于证明流量确实经过 Gateway。
-6. 生产日志中 upstream 固定为 `127.0.0.1:4100`，不得再出现 `services.vercel-infra.com` 或 `[100::1]`。
+3. `cargo fmt --all -- --check`，以及 `--all-features`、`--no-default-features` 两套严格 Clippy 和 tests 通过。
+4. `cargo build --release --bin gateway --no-default-features` 成功，`cargo tree --no-default-features` 不含 `instant-acme`。
+5. 公网 `/api/health`、OIDC Discovery、JWKS 连续请求稳定返回 200。
+6. 未携带密钥访问 `/__gateway/metrics` 返回 401，用于证明流量确实经过 Gateway。
+7. 生产日志中 upstream 固定为 `127.0.0.1:4100`，不得再出现 `services.vercel-infra.com` 或 `[100::1]`。
 
 ## 可复用结论
 
@@ -74,3 +84,4 @@ Portal 不得拥有独立公网路由；Gateway 是唯一监听 Vercel `$PORT` �
 - 入口隔离应由部署拓扑保证，不能依赖一个隐藏 URL 或应用层约定。
 - Next.js standalone 的 `public` 与 `.next/static` 必须显式复制到运行镜像。
 - OAuth 回调白名单属于部署数据，域名切换时必须与环境变量、数据库记录一起变更。
+- 平台已经托管某项能力时，应通过 Cargo Feature 形成编译边界；运行时开关只负责选择已编译能力，不能替代依赖裁剪。

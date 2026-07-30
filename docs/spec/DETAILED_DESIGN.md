@@ -1,6 +1,6 @@
 # 详细设计 (Detailed Design) - Auth-SSO
 
-**版本**: v1.1 · **状态**: 正式发布 · **最后更新**: 2026-07-28
+**版本**: v1.2 · **状态**: 正式发布 · **最后更新**: 2026-07-30
 **依赖**: [PRD.md](PRD.md), [ARCHITECTURE.md](ARCHITECTURE.md), [DATABASE.md](DATABASE.md)
 
 ---
@@ -633,16 +633,23 @@ type ApiResponse<T> =
 
 ### 6.1 请求处理流水线
 
-Gateway 基于 Pingora 0.8.x，是一个反向代理 + 安全网关，提供 HTTPS 入口、Rust 内建 Let's Encrypt ACME 证书生命周期和离线 JWT 验证。
+Gateway 基于 Pingora 0.8.x，是一个反向代理 + 安全网关。认证、路由与代理能力始终编译；TLS 能力按部署拓扑选择：
+
+- 默认 `self-managed-tls`：编译 HTTP→HTTPS、TLS listener、证书热加载和 Rust 内建 ACME 生命周期。
+- `--no-default-features`：供 Vercel 等平台 TLS 部署使用，在编译期排除 `acme`、`redirect`、`tls` 模块及 `instant-acme` 等专属直接依赖，只监听平台注入的 HTTP 端口。
+
+平台裁剪版必须配置 `external_tls_termination = true`，否则配置加载直接失败；外部 TLS 模式与 `[acme]` 配置仍互斥。
 
 ```
 请求到达
   │
-  ├─ HTTP(80) → RedirectService
+  ├─ [self-managed-tls] HTTP(80) → RedirectService
   │      ├─ /.well-known/acme-challenge/{token} → ACME 内存快照
   │      └─ 其他路径 → 301重定向到HTTPS
   │
-  └─ HTTPS(443) → Gateway Proxy
+  ├─ [self-managed-tls] HTTPS(443) ─┐
+  │                                ├→ Gateway Proxy
+  └─ [平台 TLS] HTTP($PORT) ────────┘
        │
        ├─ 1. request_filter()
        │      ├─ 路径白名单匹配 → 放行
@@ -791,7 +798,9 @@ SKIP_PREFIXES: /_next, /favicon, /images, /fonts
 
 ### 6.5 TLS 证书生命周期
 
-生产环境由 Gateway Rust 进程内建 ACME 客户端签发 Let's Encrypt ECDSA P-256 证书。生命周期后台服务与请求热路径在同一进程内按不可变快照解耦，不依赖 Certbot 或 shell：
+本节生命周期仅属于默认 `self-managed-tls` 构建。Vercel 等平台 TLS 部署使用 `cargo build --release --bin gateway --no-default-features`，公网证书由平台负责，Gateway 二进制中不存在 ACME、重定向和自托管 TLS 模块。
+
+自托管生产环境由 Gateway Rust 进程内建 ACME 客户端签发 Let's Encrypt ECDSA P-256 证书。生命周期后台服务与请求热路径在同一进程内按不可变快照解耦，不依赖 Certbot 或 shell：
 
 ```
 AcmeService（instant-acme）
@@ -1157,7 +1166,7 @@ export function hashToken(token: string): string
 | `gateway.log_level` | `'info'` | 日志级别 |
 | `redis.url` | - | Redis 连接 URL（用于 jti 黑名单） |
 
-**Gateway ACME 配置**（`[acme]`；生产必填）：
+**Gateway ACME 配置**（`[acme]`；仅 `self-managed-tls` 自托管生产必填）：
 
 | 配置项 | 默认值 | 环境变量 | 描述 |
 |--------|--------|----------|------|
@@ -1167,7 +1176,7 @@ export function hashToken(token: string): string
 | `acme.state_dir` | `acme` | `ACME_STATE_DIR` | 原子持久化账户和证书 bundle 的目录 |
 | `acme.check_interval_secs` | `21600` | `ACME_CHECK_INTERVAL_SECS` | ARI/证书有效期复核间隔，必须大于 0 |
 
-环境变量与 TOML 使用同一验证路径。生产 Compose 只启用内建 ACME 配置，不提供 `SSL_CERT_PATH`、`SSL_KEY_PATH`；文件证书来源仅保留给本地开发和 E2E。
+环境变量与 TOML 使用同一验证路径。生产 Compose 只启用内建 ACME 配置，不提供 `SSL_CERT_PATH`、`SSL_KEY_PATH`；文件证书来源仅保留给本地开发和 E2E。Vercel 构建使用 `--no-default-features` 与 `EXTERNAL_TLS_TERMINATION=true`，禁止提供 ACME 配置。
 
 > JWT `issuer` 与签名算法**非配置项**，由 Gateway 启动时通过 OIDC Discovery（`/.well-known/openid-configuration`）从 `oidc_provider = true` 的 upstream 动态获取，写入 JWT 校验 `validation`。
 

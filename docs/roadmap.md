@@ -12,7 +12,7 @@
 | 部门管理（物化路径树） | ✅ 已交付 | v1.1 | ancestors 子树查询 |
 | OAuth 2.1 Provider | ✅ 已交付 | v1.1 | PKCE + 授权码 + Token 轮换 |
 | OIDC Discovery | ✅ 已交付 | v1.1 | 含 end_session_endpoint |
-| Gateway 边缘入口 | ✅ 已交付 | v1.2 | Pingora + Rust 内建 ACME/ARI + ES256 + HMAC 签名 |
+| Gateway 边缘入口 | ✅ 已交付 | v1.3 | Pingora + ES256 + HMAC；默认自托管 ACME/ARI，平台 TLS 构建编译期裁剪 ACME |
 | 审计日志（180天分区） | ✅ 已交付 | v1.1 | append-only |
 | 暴力破解防护 | ✅ 已交付 | v1.1 | Redis INCR 锁定 |
 | SAML 2.0 | 🔲 待评估 | P2 | 未在本期范围，企业对接需求驱动 |
@@ -21,6 +21,7 @@
 
 ## 变更记录
 
+- 2026-07-30: 完成 Gateway TLS 能力的编译期隔离：新增默认 `self-managed-tls` Cargo Feature，自托管 Docker/Compose 继续包含 ACME、HTTP 重定向和 TLS 热加载；Vercel 改用 `--no-default-features` 构建，仅保留平台 TLS 终结所需的 HTTP 代理能力，并从编译单元及正常依赖图排除 `acme`/`redirect`/`tls` 模块与 `instant-acme` 等专属直接依赖。配置层对“裁剪版 + 未启用外部 TLS”执行 fail-closed，CI 同时验证两套 clippy/test、平台 release build 和 ACME 依赖缺席，最佳实践同步沉淀到两份 TLS/部署 solution。
 - 2026-07-30: 完成 Vercel 生产部署拓扑收敛：Vercel 只暴露一个 Docker Service，Next.js Portal standalone 在同一容器内仅监听 `127.0.0.1:4100`，Rust Gateway 作为唯一 `$PORT` 公网入口并使用平台 TLS 模式；Neon PostgreSQL 与 Upstash Redis 由 Marketplace 注入。生产验证否决了会因容器 IPv6 `[100::1]` 无路由而间歇 502 的跨 Service binding，改为确定性的 loopback 上游；同步补齐平台客户端 IP 信任边界、OAuth 正式回调白名单、Docker 构建期公开 URL 和 GitHub/Vercel 自动部署配置，最佳实践沉淀到 `docs/solution/2026-07-30-vercel-gateway-only-production-topology.md`。
 - 2026-07-29: 补齐公共 Let's Encrypt staging 的可审计预检：`scripts/run-gateway-acme-staging.sh` 在访问 Docker/公共 CA 前检查公网 DNS 名称、联系邮箱和公网 80/443 操作员声明；缺失或无效时以状态码 2 退出并在独立 `preflight/` 目录写入阻塞证据，不覆盖既有公网通过证据。用户当前提供的 `local` 是无效公共域名，`8.8.8.8` 只是递归解析器且明确没有公网入口，因此当前证据为 `blocked_invalid_prerequisites`；进入真实演练后才在 `latest/` 使用 `failed_or_incomplete`，仅全部外部断言通过才写入 `passed`。
 - 2026-07-28: 完成 Gateway ACME 可复现验收闭环：新增固定 Pebble v2.8.0 官方 Release SHA-256 的本地 CA/HTTP-01 测试栈和独立 CI 门禁，真实 Gateway 从无证书状态启动后在同一容器、零进程重启条件下签发并启用 HTTPS；TLS 链/域名验证、`0700/0600` 状态权限、同指纹重启恢复及 CA 停止后保留旧证书均已通过，证据保存在 `.context/compound-engineering/acme-e2e/latest/`。同步修复生产 80/443 映射与端口环境覆盖漂移、数值环境变量静默回退、测试 profile 残留清理及动态 Redis 地址抢占验证 IP；公网 Let's Encrypt staging 脚本已就绪，因当前环境缺少真实域名/DNS/公网端口，保留为首次生产部署前强制外部验收项。

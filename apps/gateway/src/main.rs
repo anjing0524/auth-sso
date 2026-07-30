@@ -1,5 +1,6 @@
 use anyhow::Context;
 use clap::Parser;
+#[cfg(feature = "self-managed-tls")]
 use pingora_core::listeners::tls::TlsSettings;
 use pingora_core::prelude::*;
 use pingora_core::services::background::background_service;
@@ -8,14 +9,17 @@ use pingora_proxy::http_proxy_service;
 use std::sync::Arc;
 use tracing::info;
 
+#[cfg(feature = "self-managed-tls")]
 use gateway::acme::{AcmeChallengeStore, AcmeService, AcmeState};
 use gateway::auth::{JwtVerifier, TokenRefresher};
 use gateway::config::{Config, Upstreams};
 use gateway::gateway::Gateway;
 use gateway::jwks::JwksCache;
 use gateway::path_matcher::PathMatcher;
+#[cfg(feature = "self-managed-tls")]
 use gateway::redirect::RedirectService;
 use gateway::router::{RouteEntry, Router};
+#[cfg(feature = "self-managed-tls")]
 use gateway::tls::{TlsCertificateCallback, TlsCertificateStore};
 
 #[derive(Parser, Debug)]
@@ -30,7 +34,11 @@ fn main() -> anyhow::Result<()> {
     let config = Config::load(&cli.config).context("❌ 无法加载网关配置文件")?;
 
     let _guard = gateway::logging::init_tracing(&config.gateway.log_dir, &config.gateway.log_level);
-    info!("🚀 SSO 去中心化安全网关启动中 (Pingora 0.8.1 + ACME + ES256 JWKS 验签)...");
+    info!("🚀 SSO 去中心化安全网关启动中 (Pingora 0.8.1 + ES256 JWKS 验签)...");
+    #[cfg(feature = "self-managed-tls")]
+    info!("  编译能力: 自托管 TLS + ACME");
+    #[cfg(not(feature = "self-managed-tls"))]
+    info!("  编译能力: 平台 TLS 终结");
 
     let upstream_routes = &config.upstreams;
     gateway::config::validate_routing_consistency(upstream_routes)
@@ -159,83 +167,92 @@ fn main() -> anyhow::Result<()> {
         my_server.run_forever();
     }
 
-    let mut acme_runtime = None;
-    let tls_store = if let Some(acme_config) = config.acme.clone() {
-        let state = AcmeState::prepare(&acme_config).context("❌ 初始化 ACME 状态目录失败")?;
-        let store = match state
-            .load_certificate()
-            .context("❌ 加载持久化 ACME 证书失败")?
-        {
-            Some((certificate, private_key)) => {
-                TlsCertificateStore::from_pem(&certificate, &private_key)
-                    .context("❌ 持久化 ACME 证书校验失败")?
-            }
-            None => TlsCertificateStore::empty(),
-        };
-        let challenges = Arc::new(AcmeChallengeStore::new());
-        acme_runtime = Some((acme_config, state, challenges));
-        Arc::new(store)
-    } else {
-        Arc::new(
-            TlsCertificateStore::load(&config.gateway.ssl_cert_path, &config.gateway.ssl_key_path)
+    #[cfg(not(feature = "self-managed-tls"))]
+    anyhow::bail!("当前 Gateway 未编译 self-managed-tls，必须启用 external_tls_termination");
+
+    #[cfg(feature = "self-managed-tls")]
+    {
+        let mut acme_runtime = None;
+        let tls_store = if let Some(acme_config) = config.acme.clone() {
+            let state = AcmeState::prepare(&acme_config).context("❌ 初始化 ACME 状态目录失败")?;
+            let store = match state
+                .load_certificate()
+                .context("❌ 加载持久化 ACME 证书失败")?
+            {
+                Some((certificate, private_key)) => {
+                    TlsCertificateStore::from_pem(&certificate, &private_key)
+                        .context("❌ 持久化 ACME 证书校验失败")?
+                }
+                None => TlsCertificateStore::empty(),
+            };
+            let challenges = Arc::new(AcmeChallengeStore::new());
+            acme_runtime = Some((acme_config, state, challenges));
+            Arc::new(store)
+        } else {
+            Arc::new(
+                TlsCertificateStore::load(
+                    &config.gateway.ssl_cert_path,
+                    &config.gateway.ssl_key_path,
+                )
                 .context("❌ 初始化 TLS 证书存储失败")?,
-        )
-    };
-    let tls_ready_at_boot = tls_store.has_certificate();
-    if tls_ready_at_boot {
-        info!("✅ TLS 证书已加载");
-    } else {
-        info!("⏳ TLS 监听器以 ACME 引导模式启动，等待首张证书签发");
-    }
+            )
+        };
+        let tls_ready_at_boot = tls_store.has_certificate();
+        if tls_ready_at_boot {
+            info!("✅ TLS 证书已加载");
+        } else {
+            info!("⏳ TLS 监听器以 ACME 引导模式启动，等待首张证书签发");
+        }
 
-    let mut tls_settings = TlsSettings::with_callbacks(Box::new(TlsCertificateCallback::new(
-        Arc::clone(&tls_store),
-    )))
-    .context("❌ 创建动态 TLS 配置失败")?;
-    tls_settings.enable_h2();
+        let mut tls_settings = TlsSettings::with_callbacks(Box::new(TlsCertificateCallback::new(
+            Arc::clone(&tls_store),
+        )))
+        .context("❌ 创建动态 TLS 配置失败")?;
+        tls_settings.enable_h2();
 
-    gateway_proxy.add_tls_with_settings(
-        &format!("0.0.0.0:{}", config.gateway.ssl_port),
-        None,
-        tls_settings,
-    );
-    let gateway_handle = my_server.add_service(gateway_proxy);
-    gateway_handle.add_dependency(&redis_handle);
-    info!(
-        "✅ HTTPS 代理服务监听于: 0.0.0.0:{}",
-        config.gateway.ssl_port
-    );
-
-    let acme_challenges = acme_runtime
-        .as_ref()
-        .map(|(_, _, challenges)| Arc::clone(challenges));
-    let mut redirect_proxy = http_proxy_service(
-        &my_server.configuration,
-        RedirectService::new(config.gateway.ssl_port, acme_challenges),
-    );
-    redirect_proxy.add_tcp(&format!("0.0.0.0:{}", config.gateway.port));
-    let _ = my_server.add_service(redirect_proxy);
-    info!("✅ HTTP 重定向服务监听于: 0.0.0.0:{}", config.gateway.port);
-
-    if let Some((acme_config, acme_state, challenges)) = acme_runtime {
-        let acme_service = background_service(
-            "ACME Certificate Lifecycle",
-            AcmeService::new(
-                acme_config,
-                acme_state,
-                config.gateway.port,
-                tls_store,
-                challenges,
-            ),
+        gateway_proxy.add_tls_with_settings(
+            &format!("0.0.0.0:{}", config.gateway.ssl_port),
+            None,
+            tls_settings,
         );
-        let _ = my_server.add_service(acme_service);
-        info!("✅ Gateway 内建 ACME 证书生命周期服务已启用");
-    }
+        let gateway_handle = my_server.add_service(gateway_proxy);
+        gateway_handle.add_dependency(&redis_handle);
+        info!(
+            "✅ HTTPS 代理服务监听于: 0.0.0.0:{}",
+            config.gateway.ssl_port
+        );
 
-    if tls_ready_at_boot {
-        info!("🚀 SSO 去中心化网关监听服务与 HTTPS 已就绪");
-    } else {
-        info!("⏳ Gateway HTTP/ACME 引导服务已就绪，HTTPS 将在证书签发后自动上线");
+        let acme_challenges = acme_runtime
+            .as_ref()
+            .map(|(_, _, challenges)| Arc::clone(challenges));
+        let mut redirect_proxy = http_proxy_service(
+            &my_server.configuration,
+            RedirectService::new(config.gateway.ssl_port, acme_challenges),
+        );
+        redirect_proxy.add_tcp(&format!("0.0.0.0:{}", config.gateway.port));
+        let _ = my_server.add_service(redirect_proxy);
+        info!("✅ HTTP 重定向服务监听于: 0.0.0.0:{}", config.gateway.port);
+
+        if let Some((acme_config, acme_state, challenges)) = acme_runtime {
+            let acme_service = background_service(
+                "ACME Certificate Lifecycle",
+                AcmeService::new(
+                    acme_config,
+                    acme_state,
+                    config.gateway.port,
+                    tls_store,
+                    challenges,
+                ),
+            );
+            let _ = my_server.add_service(acme_service);
+            info!("✅ Gateway 内建 ACME 证书生命周期服务已启用");
+        }
+
+        if tls_ready_at_boot {
+            info!("🚀 SSO 去中心化网关监听服务与 HTTPS 已就绪");
+        } else {
+            info!("⏳ Gateway HTTP/ACME 引导服务已就绪，HTTPS 将在证书签发后自动上线");
+        }
+        my_server.run_forever();
     }
-    my_server.run_forever();
 }
