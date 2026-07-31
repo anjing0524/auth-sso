@@ -7,6 +7,7 @@ import {
   applyDepartmentUpdate,
   validateNoCircularReference,
   buildDepartmentTree,
+  flattenVisibleDepartmentTree,
 } from '@/domain/department/department';
 import { BusinessRuleViolationError } from '@/domain/shared/errors';
 
@@ -68,5 +69,16 @@ describe('Department 领域核心规则', () => {
     expect(tree[0]!.name).toBe('根部门');
     expect(tree[0]!.children).toHaveLength(1);
     expect(tree[0]!.children![0]!.name).toBe('子部门');
+  });
+
+  it('flattenVisibleDepartmentTree 仅展开 expanded 中的节点', () => {
+    const tree = buildDepartmentTree([
+      createDepartment({ name: '根部门', sort: 0 }, () => 'root_id_123'),
+      createDepartment({ name: '子部门', parentId: 'root_id_123', sort: 0 }, () => 'child_id_45'),
+    ]);
+
+    expect(flattenVisibleDepartmentTree(tree, new Set()).map((item) => item.id)).toEqual(['root_id_123']);
+    expect(flattenVisibleDepartmentTree(tree, new Set(['root_id_123'])).map((item) => item.id))
+      .toEqual(['root_id_123', 'child_id_45']);
   });
 });

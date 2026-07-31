@@ -19,6 +19,7 @@ import { validate } from '@/lib/validation';
 import { PasswordSchema } from '@/domain/shared/zod-schemas';
 import { COMMON_ERRORS, type ApiResponse } from '@auth-sso/contracts';
 import { createLogger } from '@/lib/logger';
+import { appendSecurityAudit, getActionAuditContext } from '@/lib/audit';
 
 const log = createLogger('ProfileAction');
 
@@ -72,7 +73,23 @@ export const updateOwnProfileAction = withAuth(
       return { success: true, data: { id: ctx.userId }, message: '无内容变更' };
     }
 
-    await db.update(schema.users).set(updates).where(eq(schema.users.id, ctx.userId));
+    const auditContext = await getActionAuditContext();
+    await db.transaction(async (tx) => {
+      await tx.update(schema.users).set(updates).where(eq(schema.users.id, ctx.userId));
+      await appendSecurityAudit(tx, {
+        userId: ctx.userId,
+        operation: 'USER_UPDATE',
+        targetType: 'user',
+        targetId: ctx.userId,
+        targetName: v.data.name ?? row.name,
+        changes: {
+          name: { before: row.name, after: v.data.name ?? row.name },
+          email: { before: row.email, after: v.data.email ?? row.email },
+          avatarUrl: { before: row.avatarUrl, after: v.data.avatarUrl ?? row.avatarUrl },
+        },
+        ...auditContext,
+      });
+    });
 
     revalidatePath('/profile');
     return { success: true, data: { id: ctx.userId }, message: '资料已更新' };
@@ -86,7 +103,7 @@ export const updateOwnProfileAction = withAuth(
  * 审计：TOKEN_REVOKE（withAuth 自动记录）
  */
 export const changeOwnPasswordAction = withAuth(
-  { audit: 'TOKEN_REVOKE' },
+  {},
   async (
     ctx: AuthContext,
     input: Record<string, unknown>,
@@ -115,10 +132,21 @@ export const changeOwnPasswordAction = withAuth(
     // 哈希新密码并更新（同时记录 passwordChangedAt + 推入密码历史）
     const newHash = await hashPassword(v.data.newPassword);
     const newHistory = pushPasswordHistory(row.passwordHistory ?? null, row.passwordHash ?? '');
-    await db
-      .update(schema.users)
-      .set({ passwordHash: newHash, passwordHistory: newHistory, passwordChangedAt: new Date() })
-      .where(eq(schema.users.id, ctx.userId));
+    const auditContext = await getActionAuditContext();
+    await db.transaction(async (tx) => {
+      await tx
+        .update(schema.users)
+        .set({ passwordHash: newHash, passwordHistory: newHistory, passwordChangedAt: new Date() })
+        .where(eq(schema.users.id, ctx.userId));
+      await appendSecurityAudit(tx, {
+        userId: ctx.userId,
+        operation: 'TOKEN_REVOKE',
+        targetType: 'user',
+        targetId: ctx.userId,
+        params: { reason: 'self_password_change' },
+        ...auditContext,
+      });
+    });
 
     // 失效所有会话（含当前），强制重新登录（NFR-SEC-13）
     // 关键安全操作必须 await（Redis 不可达时撤销失败会留下有效旧 Token）

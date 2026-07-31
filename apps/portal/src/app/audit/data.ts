@@ -7,8 +7,9 @@
 import 'server-only';
 
 import { db, schema } from '@/infrastructure/db';
-import { eq, desc, and, gte, lte, count } from 'drizzle-orm';
+import { eq, desc, and, gte, lte, count, ilike, or } from 'drizzle-orm';
 import type { AuditOperation, LoginEventType } from '@auth-sso/contracts';
+import { getShanghaiDayRange } from '@/lib/format-time';
 
 /** 日期格式正则：防止 SQL 注入和异常参数穿透 */
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
@@ -24,10 +25,10 @@ function addDateRangeConditions(
   endDate?: string,
 ): void {
   if (startDate && DATE_REGEX.test(startDate)) {
-    conditions.push(gte(column, new Date(`${startDate}T00:00:00`)));
+    conditions.push(gte(column, getShanghaiDayRange(startDate).start));
   }
   if (endDate && DATE_REGEX.test(endDate)) {
-    conditions.push(lte(column, new Date(`${endDate}T23:59:59.999`)));
+    conditions.push(lte(column, getShanghaiDayRange(endDate).end));
   }
 }
 
@@ -87,12 +88,21 @@ async function paginatedSelect<T>(
 export async function getAuditLogs(params: PaginationParams & {
   userId?: string;
   operation?: AuditOperation;
+  username?: string;
+  target?: string;
   startDate?: string;
   endDate?: string;
 }) {
   const conditions: ReturnType<typeof eq>[] = [];
   if (params.userId) conditions.push(eq(schema.auditLogs.userId, params.userId));
   if (params.operation) conditions.push(eq(schema.auditLogs.operation, params.operation));
+  if (params.username) conditions.push(ilike(schema.auditLogs.username, `%${params.username}%`));
+  if (params.target) {
+    conditions.push(or(
+      ilike(schema.auditLogs.targetId, `%${params.target}%`),
+      ilike(schema.auditLogs.targetName, `%${params.target}%`),
+    )!);
+  }
   addDateRangeConditions(conditions, schema.auditLogs.createdAt, params.startDate, params.endDate);
 
   return paginatedSelect(schema.auditLogs, schema.auditLogs.createdAt, conditions, params, (log) => ({
@@ -103,6 +113,11 @@ export async function getAuditLogs(params: PaginationParams & {
     method: log.method,
     url: log.url,
     params: log.params,
+    targetType: log.targetType,
+    targetId: log.targetId,
+    targetName: log.targetName,
+    changes: log.changes,
+    traceId: log.traceId,
     ip: log.ip,
     userAgent: log.userAgent,
     status: log.status,
@@ -118,12 +133,14 @@ export async function getAuditLogs(params: PaginationParams & {
 export async function getLoginLogs(params: PaginationParams & {
   userId?: string;
   eventType?: LoginEventType;
+  username?: string;
   startDate?: string;
   endDate?: string;
 }) {
   const conditions: ReturnType<typeof eq>[] = [];
   if (params.userId) conditions.push(eq(schema.loginLogs.userId, params.userId));
   if (params.eventType) conditions.push(eq(schema.loginLogs.eventType, params.eventType));
+  if (params.username) conditions.push(ilike(schema.loginLogs.username, `%${params.username}%`));
   addDateRangeConditions(conditions, schema.loginLogs.createdAt, params.startDate, params.endDate);
 
   return paginatedSelect(schema.loginLogs, schema.loginLogs.createdAt, conditions, params, (log) => ({

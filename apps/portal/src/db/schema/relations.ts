@@ -44,6 +44,12 @@ export const rolePermissionsRelations = relations(rolePermissions, ({ one }) => 
 export const permissionsRelations = relations(permissions, ({ one, many }) => ({
   parent: one(permissions, { fields: [permissions.parentId], references: [permissions.id], relationName: 'permission_parent' }),
   children: many(permissions, { relationName: 'permission_parent' }),
+  requiredPermission: one(permissions, {
+    fields: [permissions.requiredPermissionId],
+    references: [permissions.id],
+    relationName: 'menu_required_permission',
+  }),
+  requiredByMenus: many(permissions, { relationName: 'menu_required_permission' }),
   rolePermissions: many(rolePermissions),
   client: one(clients, { fields: [permissions.clientId], references: [clients.clientId] }),
 }));

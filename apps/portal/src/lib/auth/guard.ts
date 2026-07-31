@@ -37,7 +37,12 @@ export function withAuth<TArgs extends unknown[], TData>(
 
       try {
         const res = await fn({ userId: check.userId }, ...args);
-        if (res.success && options.audit) await recordActionAudit(check.userId, options.audit);
+        if (res.success && options.audit) {
+          const targetId = typeof args[0] === 'string' && args[0].length <= 150
+            ? args[0]
+            : undefined;
+          await recordActionAudit(check.userId, options.audit, targetId);
+        }
         return res;
       } catch (err: unknown) {
         const mapped = mapServerError(err);

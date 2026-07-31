@@ -44,6 +44,7 @@ import {
 import { DataTable } from '@/components/shared/data-table';
 import { EmptyState } from '@/components/shared/empty-state';
 import { toggleUserStatusAction } from '../actions';
+import { formatShanghaiDateTime } from '@/lib/format-time';
 
 /**
  * 用户类型定义 (对齐领域 UserProps)
@@ -207,12 +208,13 @@ export default function UserTable({ users, pagination, filters }: UserTableProps
         </Badge>
       </TableCell>
       <TableCell className="text-[10px] text-muted-foreground font-mono font-black">
-        {new Date(user.createdAt).toLocaleDateString()}
+        {formatShanghaiDateTime(user.createdAt)}
       </TableCell>
       <TableCell className="text-right pr-6">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-muted transition-colors">
+              <span className="sr-only">打开 {user.name} 的用户操作</span>
               <MoreHorizontal className="h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>
@@ -266,7 +268,7 @@ export default function UserTable({ users, pagination, filters }: UserTableProps
     {/* 统一分页器 UI */}
     <div className="flex items-center justify-between px-6 py-4 bg-muted/50 border-t mt-4 rounded-b-xl">
       <p className="text-[10px] font-black text-muted-foreground uppercase tracking-tighter">
-        TOTAL RECORDS: <span className="text-foreground">{pagination.total}</span>
+        共 <span className="text-foreground">{pagination.total}</span> 条记录
       </p>
       <div className="flex gap-1.5">
         <Button
@@ -275,6 +277,7 @@ export default function UserTable({ users, pagination, filters }: UserTableProps
           className="h-8 w-8 rounded-lg shadow-sm hover:bg-card bg-card border-border"
           disabled={pagination.page === 1}
           onClick={() => handlePageChange(pagination.page - 1)}
+          aria-label="上一页"
         >
           <ChevronRight className="h-3.5 w-3.5 rotate-180" />
         </Button>
@@ -287,6 +290,7 @@ export default function UserTable({ users, pagination, filters }: UserTableProps
           className="h-8 w-8 rounded-lg shadow-sm hover:bg-card bg-card border-border"
           disabled={pagination.page >= pagination.totalPages}
           onClick={() => handlePageChange(pagination.page + 1)}
+          aria-label="下一页"
         >
           <ChevronRight className="h-3.5 w-3.5" />
         </Button>

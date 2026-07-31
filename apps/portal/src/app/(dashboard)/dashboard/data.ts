@@ -1,13 +1,25 @@
 import 'server-only';
 
 import { db, schema } from '@/infrastructure/db';
-import { eq, ne, desc, count, inArray, and } from 'drizzle-orm';
+import {
+  eq,
+  ne,
+  desc,
+  count,
+  inArray,
+  and,
+  gt,
+  isNull,
+  countDistinct,
+  gte,
+} from 'drizzle-orm';
 import { USER_DELETED } from '@auth-sso/contracts';
+import { getShanghaiDayRange } from '@/lib/format-time';
 
 export interface DashboardStats {
   users: number;
-  roles: number;
-  clients: number;
+  onlineUsers: number;
+  todayLogins: number;
 }
 
 export interface RecentAuditLog {
@@ -28,20 +40,39 @@ export async function getDashboardStats(deptIds: string[]): Promise<DashboardSta
     ? [ne(schema.users.status, USER_DELETED), inArray(schema.users.deptId, deptIds)]
     : [ne(schema.users.status, USER_DELETED)];
 
-  const roleWhere = deptIds.length > 0
-    ? [inArray(schema.roles.deptId, deptIds)]
-    : [];
+  const now = new Date();
+  const shanghaiToday = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(now);
+  const todayStart = getShanghaiDayRange(shanghaiToday).start;
 
-  const [[usersCount], [rolesCount], [clientsCount]] = await Promise.all([
+  const [[usersCount], [onlineCount], [loginCount]] = await Promise.all([
     db.select({ count: count() }).from(schema.users).where(and(...userWhere)),
-    db.select({ count: count() }).from(schema.roles).where(roleWhere.length > 0 ? and(...roleWhere) : undefined),
-    db.select({ count: count() }).from(schema.clients),
+    db.select({ count: countDistinct(schema.refreshTokens.userId) })
+      .from(schema.refreshTokens)
+      .innerJoin(schema.users, eq(schema.refreshTokens.userId, schema.users.id))
+      .where(and(
+        gt(schema.refreshTokens.expiresAt, now),
+        isNull(schema.refreshTokens.revoked),
+        ...userWhere,
+      )),
+    db.select({ count: countDistinct(schema.loginLogs.userId) })
+      .from(schema.loginLogs)
+      .innerJoin(schema.users, eq(schema.loginLogs.userId, schema.users.id))
+      .where(and(
+        eq(schema.loginLogs.eventType, 'LOGIN_SUCCESS'),
+        gte(schema.loginLogs.createdAt, todayStart),
+        ...userWhere,
+      )),
   ]);
 
   return {
     users: Number(usersCount?.count || 0),
-    roles: Number(rolesCount?.count || 0),
-    clients: Number(clientsCount?.count || 0),
+    onlineUsers: Number(onlineCount?.count || 0),
+    todayLogins: Number(loginCount?.count || 0),
   };
 }
 
@@ -51,13 +82,12 @@ export async function getDashboardStats(deptIds: string[]): Promise<DashboardSta
 export async function getRecentAuditLogs(limit = 8): Promise<RecentAuditLog[]> {
   return db.select({
     id: schema.auditLogs.id,
-    username: schema.users.username,
+    username: schema.auditLogs.username,
     operation: schema.auditLogs.operation,
     status: schema.auditLogs.status,
     createdAt: schema.auditLogs.createdAt,
   })
     .from(schema.auditLogs)
-    .leftJoin(schema.users, eq(schema.auditLogs.userId, schema.users.id))
     .orderBy(desc(schema.auditLogs.createdAt))
     .limit(limit);
 }

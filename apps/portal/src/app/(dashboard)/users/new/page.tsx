@@ -19,7 +19,6 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 import { createUserAction } from '../actions';
 
@@ -32,7 +31,6 @@ export default function NewUserPage() {
     username: '',
     email: '',
     password: '',
-    status: 'ACTIVE' as 'ACTIVE' | 'DISABLED' | 'LOCKED',
     deptId: null as string | null,
   });
 
@@ -42,14 +40,19 @@ export default function NewUserPage() {
       return;
     }
     setSaving(true);
-    const res = await createUserAction(formData);
-    if (res.success) {
-      toast.success('用户创建成功');
-      router.push('/users');
-    } else {
-      toast.error(res.message || '创建失败');
+    try {
+      const res = await createUserAction(formData);
+      if (res.success) {
+        toast.success('用户创建成功');
+        router.push('/users');
+      } else {
+        toast.error(res.message || '创建失败');
+      }
+    } catch {
+      toast.error('创建失败，请重试');
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
   };
 
   return (
@@ -57,7 +60,7 @@ export default function NewUserPage() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="icon" className="rounded-full" asChild>
-            <Link href="/users"><ArrowLeft className="h-5 w-5" /></Link>
+            <Link href="/users" aria-label="返回用户列表"><ArrowLeft className="h-5 w-5" /></Link>
           </Button>
           <div>
             <h1 className="text-3xl font-black tracking-tight text-foreground">新增用户</h1>
@@ -75,48 +78,38 @@ export default function NewUserPage() {
             <CardDescription>设置用户的基本身份信息和初始凭证。</CardDescription>
           </CardHeader>
           <CardContent className="p-8 space-y-6">
-            <div className="grid grid-cols-2 gap-8">
+            <div className="grid gap-6 sm:grid-cols-2 sm:gap-8">
               <div className="space-y-2">
-                <Label className="font-bold text-foreground/80">显示名称 <span className="text-destructive">*</span></Label>
-                <Input placeholder="例如：张三" value={formData.name}
+                <Label htmlFor="new-user-name" className="font-bold text-foreground/80">显示名称 <span className="text-destructive">*</span></Label>
+                <Input id="new-user-name" placeholder="例如：张三" value={formData.name}
                   onChange={e => setFormData({...formData, name: e.target.value})}
                   className="h-11 rounded-lg focus:ring-2 focus:ring-primary/10" />
               </div>
               <div className="space-y-2">
-                <Label className="font-bold text-foreground/80">登录账号 (Username) <span className="text-destructive">*</span></Label>
-                <Input placeholder="zhangsan" value={formData.username}
+                <Label htmlFor="new-user-username" className="font-bold text-foreground/80">登录账号 <span className="text-destructive">*</span></Label>
+                <Input id="new-user-username" placeholder="zhangsan" value={formData.username}
                   onChange={e => setFormData({...formData, username: e.target.value})}
                   className="h-11 rounded-lg focus:ring-2 focus:ring-primary/10" />
               </div>
               <div className="space-y-2">
-                <Label className="font-bold text-foreground/80">电子邮箱 <span className="text-destructive">*</span></Label>
-                <Input type="email" placeholder="zhangsan@example.com" value={formData.email}
+                <Label htmlFor="new-user-email" className="font-bold text-foreground/80">电子邮箱 <span className="text-destructive">*</span></Label>
+                <Input id="new-user-email" type="email" placeholder="zhangsan@example.com" value={formData.email}
                   onChange={e => setFormData({...formData, email: e.target.value})}
                   className="h-11 rounded-lg focus:ring-2 focus:ring-primary/10" />
               </div>
               <div className="space-y-2">
-                <Label className="font-bold text-foreground/80">初始密码 <span className="text-destructive">*</span></Label>
+                <Label htmlFor="new-user-password" className="font-bold text-foreground/80">初始密码 <span className="text-destructive">*</span></Label>
                 <div className="relative">
-                  <Input type={showPassword ? 'text' : 'password'} placeholder="••••••••"
+                  <Input id="new-user-password" type={showPassword ? 'text' : 'password'} placeholder="••••••••"
                     value={formData.password}
                     onChange={e => setFormData({...formData, password: e.target.value})}
                     className="h-11 rounded-lg focus:ring-2 focus:ring-primary/10 pr-10" />
                   <button type="button" onClick={() => setShowPassword(!showPassword)}
+                    aria-label={showPassword ? '隐藏密码' : '显示密码'}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground/70">
                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
-              </div>
-              <div className="space-y-2">
-                <Label className="font-bold text-foreground/80">账户状态</Label>
-                <Select value={formData.status} onValueChange={(v: any) => setFormData({...formData, status: v})}>
-                  <SelectTrigger className="h-11 rounded-lg"><SelectValue /></SelectTrigger>
-                  <SelectContent className="rounded-lg">
-                    <SelectItem value="ACTIVE">正常 (Active)</SelectItem>
-                    <SelectItem value="DISABLED">禁用 (Disabled)</SelectItem>
-                    <SelectItem value="LOCKED">锁定 (Locked)</SelectItem>
-                  </SelectContent>
-                </Select>
               </div>
             </div>
           </CardContent>

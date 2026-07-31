@@ -13,6 +13,7 @@ export function createUser(
     id: idGenerator(),
     username: input.username,
     email: input.email,
+    mobile: null,
     name: input.name,
     status: USER_ACTIVE,
     deptId: input.deptId || null,
@@ -51,9 +52,23 @@ export function deleteUser(user: User): User {
   return { ...user, status: USER_DELETED, deletedAt: Temporal.Now.instant() };
 }
 
+export function assertUserDeletionAllowed(input: {
+  actorId: string;
+  targetId: string;
+  targetIsActiveSuperAdmin: boolean;
+  activeSuperAdminCount: number;
+}): void {
+  if (input.actorId === input.targetId) {
+    throw new BusinessRuleViolationError('不能删除当前登录用户');
+  }
+  if (input.targetIsActiveSuperAdmin && input.activeSuperAdminCount <= 1) {
+    throw new BusinessRuleViolationError('不能删除最后一个有效的超级管理员');
+  }
+}
+
 export function applyUserUpdate(
   user: User,
-  patch: Partial<Pick<User, 'name' | 'email' | 'status' | 'deptId' | 'avatarUrl'>>
+  patch: Partial<Pick<User, 'name' | 'email' | 'mobile' | 'status' | 'deptId' | 'avatarUrl'>>
 ): User {
   if (user.status === USER_DELETED) {
     throw new BusinessRuleViolationError('无法更新已逻辑删除的用户');
@@ -62,6 +77,7 @@ export function applyUserUpdate(
     ...user,
     name: patch.name ?? user.name,
     email: patch.email ?? user.email,
+    mobile: patch.mobile !== undefined ? patch.mobile : user.mobile,
     status: patch.status ?? user.status,
     deptId: patch.deptId !== undefined ? patch.deptId : user.deptId,
     avatarUrl: patch.avatarUrl ?? user.avatarUrl,
@@ -77,6 +93,7 @@ export function userToInsertRow(u: User) {
     id: u.id,
     username: u.username,
     email: u.email,
+    mobile: u.mobile,
     name: u.name,
     avatarUrl: u.avatarUrl,
     status: u.status,
@@ -91,6 +108,7 @@ export function userToUpdateRow(u: User) {
   return {
     name: u.name,
     email: u.email,
+    mobile: u.mobile,
     avatarUrl: u.avatarUrl,
     status: u.status,
     deptId: u.deptId,

@@ -12,6 +12,7 @@
  */
 import { type NextRequest, NextResponse } from 'next/server';
 import { db, schema } from '@/infrastructure/db';
+import { eq } from 'drizzle-orm';
 import { verifyAccessToken } from '@/lib/auth/token';
 import { parseScopes, validateAuthorization, validateRequestedScopes } from '@/domain/auth/oauth-authorize';
 import { validateClientActive, validateRedirectUri } from '@/domain/auth/oauth-client';
@@ -33,6 +34,10 @@ import {
 } from '@/lib/session/auth-request-store';
 import type { StoredAuthRequest } from '@/domain/auth/types';
 import { z } from 'zod';
+import { extractClientIP, extractUserAgent, writeLoginLog } from '@/lib/audit';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('Authorize');
 
 const AuthorizeQuerySchema = z.object({
   client_id: z.string().min(1),
@@ -64,6 +69,7 @@ async function issueCodeAndRedirect(
     codeChallengeMethod: 'S256';
   },
   userId: string,
+  recordCredentialLogin = false,
 ): Promise<NextResponse> {
   const client = await getClientByClientId(params.clientId);
   validateClientActive(client ?? undefined);
@@ -110,6 +116,27 @@ async function issueCodeAndRedirect(
     used: false,
     createdAt: now,
   });
+
+  if (recordCredentialLogin) {
+    try {
+      await db
+        .update(schema.users)
+        .set({ lastLoginAt: now })
+        .where(eq(schema.users.id, userId));
+    } catch (error) {
+      log.error('更新 lastLoginAt 失败', {
+        userId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+    writeLoginLog({
+      userId,
+      username: userWithRoles.username,
+      eventType: 'LOGIN_SUCCESS',
+      ip: extractClientIP(request.headers),
+      userAgent: extractUserAgent(request.headers),
+    });
+  }
 
   const redirectUrl = new URL(params.redirectUri);
   redirectUrl.searchParams.set('code', code);
@@ -164,6 +191,7 @@ async function handleSessionIdBranch(
       codeChallengeMethod: stored.code_challenge_method as 'S256',
     },
     sessionClaims.sub,
+    true,
   );
 }
 

@@ -28,7 +28,7 @@ const portalEnvSchema = baseEnvSchema.extend({
   NEXT_PUBLIC_APP_URL: z.string().url().default(DEV_DEFAULT_BASE_URL),
   PORTAL_CLIENT_SECRET: z.string().optional(),
   GATEWAY_SHARED_SECRET: z.string().optional(),
-  PORTAL_ISSUER: z.string().optional(),
+  PORTAL_ISSUER: z.string().url().optional(),
   PORTAL_JWKS_URI: z.string().optional(),
   TRUSTED_ORIGINS: z.string().optional(),
   COOKIE_SECURE: z
@@ -43,6 +43,7 @@ const databaseEnvSchema = portalEnvSchema.pick({ DATABASE_URL: true });
 const redisEnvSchema = portalEnvSchema.pick({ REDIS_URL: true });
 const appUrlEnvSchema = portalEnvSchema.pick({ NEXT_PUBLIC_APP_URL: true });
 const issuerEnvSchema = portalEnvSchema.pick({
+  NODE_ENV: true,
   NEXT_PUBLIC_APP_URL: true,
   PORTAL_ISSUER: true,
 });
@@ -119,7 +120,17 @@ export function getAppBaseURL(): string {
 export function getIssuer(): string {
   const config = issuerEnvSchema.parse(process.env);
   const appBaseURL = config.NEXT_PUBLIC_APP_URL.trim().replace(/\/+$/, '');
-  return (config.PORTAL_ISSUER || appBaseURL).trim();
+  const issuer = (config.PORTAL_ISSUER || appBaseURL).trim().replace(/\/+$/, '');
+  const parsed = new URL(issuer);
+
+  if (parsed.username || parsed.password || parsed.search || parsed.hash) {
+    throw new Error('PORTAL_ISSUER 不得包含凭据、查询参数或片段');
+  }
+  if (config.NODE_ENV === 'production' && parsed.protocol !== 'https:') {
+    throw new Error('生产环境 PORTAL_ISSUER 必须使用 HTTPS');
+  }
+
+  return issuer;
 }
 
 export function getJwksUri(): string {

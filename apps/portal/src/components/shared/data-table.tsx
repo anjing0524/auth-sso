@@ -46,9 +46,9 @@ export function DataTable<T>({
   cardHeader,
 }: DataTableProps<T>) {
   return (
-    <Card className="border-none shadow-sm ring-1 ring-border/50 overflow-hidden rounded-xl">
+    <Card className="min-w-0 max-w-full border-none shadow-sm ring-1 ring-border/50 overflow-hidden rounded-xl">
       {cardHeader}
-      <CardContent className="p-0">
+      <CardContent className="min-w-0 overflow-hidden p-0">
         <Table>
           <TableHeader className="bg-muted/50">
             <TableRow>

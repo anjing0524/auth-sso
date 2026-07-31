@@ -26,6 +26,10 @@ import { createdAtColumn } from './helpers';
 
 /** 审计请求参数载荷（结构化 JSON） */
 export type AuditParams = Record<string, unknown>;
+export type AuditChanges = Record<string, {
+  before?: unknown;
+  after?: unknown;
+}>;
 
 /**
  * 操作审计日志表（append-only，无 FK）
@@ -38,6 +42,11 @@ export const auditLogs = pgTable('audit_logs', {
   method: varchar('method', { length: 10 }),
   url: varchar('url', { length: 500 }),
   params: jsonb('params').$type<AuditParams>(),
+  targetType: varchar('target_type', { length: 50 }),
+  targetId: varchar('target_id', { length: 150 }),
+  targetName: varchar('target_name', { length: 200 }),
+  changes: jsonb('changes').$type<AuditChanges>(),
+  traceId: varchar('trace_id', { length: 100 }),
   ip: inet('ip'),
   userAgent: varchar('user_agent', { length: 500 }),
   status: smallint('status'),
@@ -48,6 +57,8 @@ export const auditLogs = pgTable('audit_logs', {
   index('idx_audit_logs_user').on(t.userId),
   index('idx_audit_logs_created').on(t.createdAt),
   index('idx_audit_logs_operation').on(t.operation),
+  index('idx_audit_logs_target').on(t.targetType, t.targetId),
+  index('idx_audit_logs_trace').on(t.traceId),
 ]);
 
 /**
@@ -98,4 +109,3 @@ export const accessLogs = pgTable('access_logs', {
   index('idx_access_logs_created').on(t.createdAt),
   index('idx_access_logs_resource').on(t.resourceType, t.resourceId),
 ]);
-

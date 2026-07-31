@@ -34,10 +34,11 @@ import { generateUUID } from '@/lib/crypto';
 import { validate } from '@/lib/validation';
 import { canAccessDept, getUserRoleDeptIds } from '@/lib/auth';
 import { DEPARTMENT_PERMISSIONS, type ApiResponse } from '@auth-sso/contracts';
+import { appendSecurityAudit, getActionAuditContext } from '@/lib/audit';
 
 /** 创建部门 */
 export const createDepartmentAction = withAuth(
-  { permissions: [DEPARTMENT_PERMISSIONS.CREATE], audit: 'DEPARTMENT_CREATE' },
+  { permissions: [DEPARTMENT_PERMISSIONS.CREATE] },
   async (ctx: AuthContext, input: CreateDepartmentInput): Promise<ApiResponse<{ id: string }>> => {
     const v = validate(CreateDepartmentInputSchema, input);
     if (!v.ok) return v.response;
@@ -47,6 +48,7 @@ export const createDepartmentAction = withAuth(
     if (v.data.parentId && !canAccessDept(deptIds, v.data.parentId)) {
       throw new ForbiddenError('无权在指定父部门下创建子部门');
     }
+    const auditContext = await getActionAuditContext();
 
     const dept = await db.transaction(async (tx) => {
       // 查询父级 ancestors 在事务内完成，消除读-写竞争窗口
@@ -56,12 +58,26 @@ export const createDepartmentAction = withAuth(
               where: eq(schema.departments.id, v.data.parentId!),
               columns: { id: true, ancestors: true },
             });
-            return parent?.ancestors ?? null;
+            if (!parent) throw new EntityNotFoundError('Department', v.data.parentId!);
+            return parent.ancestors;
           })()
         : null;
 
       const d = createDepartment(v.data, generateUUID, parentAncestors);
       await tx.insert(schema.departments).values(departmentToInsertRow(d));
+      await appendSecurityAudit(tx, {
+        userId: ctx.userId,
+        operation: 'DEPARTMENT_CREATE',
+        targetType: 'department',
+        targetId: d.id,
+        targetName: d.name,
+        changes: {
+          code: { after: d.code },
+          parentId: { after: d.parentId },
+          status: { after: d.status },
+        },
+        ...auditContext,
+      });
       return d;
     });
 
@@ -100,10 +116,11 @@ async function performDepartmentUpdate(tx: DrizzleTransaction, deptId: string, p
 
 /** 更新部门 */
 export const updateDepartmentAction = withAuth(
-  { permissions: [DEPARTMENT_PERMISSIONS.UPDATE], audit: 'DEPARTMENT_UPDATE' },
+  { permissions: [DEPARTMENT_PERMISSIONS.UPDATE] },
   async (ctx: AuthContext, deptId: string, input: Record<string, unknown>): Promise<ApiResponse<{ id: string }>> => {
     const v = validate(UpdateDepartmentInputSchema, input);
     if (!v.ok) return v.response;
+    const auditContext = await getActionAuditContext();
     await db.transaction(async (tx) => {
       // 数据范围校验：目标部门 + 拟变更父部门均在操作者可访问范围内
       const deptIds = await getUserRoleDeptIds(ctx.userId);
@@ -114,6 +131,19 @@ export const updateDepartmentAction = withAuth(
         throw new ForbiddenError('无权将部门迁移至该父部门');
       }
       await performDepartmentUpdate(tx, deptId, v.data);
+      await appendSecurityAudit(tx, {
+        userId: ctx.userId,
+        operation: 'DEPARTMENT_UPDATE',
+        targetType: 'department',
+        targetId: deptId,
+        targetName: v.data.name ?? row.name,
+        changes: {
+          name: { before: row.name, after: v.data.name ?? row.name },
+          parentId: { before: row.parentId, after: v.data.parentId ?? row.parentId },
+          status: { before: row.status, after: v.data.status ?? row.status },
+        },
+        ...auditContext,
+      });
     });
     revalidatePath('/departments');
     updateTag('departments-list');
@@ -123,8 +153,9 @@ export const updateDepartmentAction = withAuth(
 
 /** 删除部门 */
 export const deleteDepartmentAction = withAuth(
-  { permissions: [DEPARTMENT_PERMISSIONS.DELETE], audit: 'DEPARTMENT_DELETE' },
+  { permissions: [DEPARTMENT_PERMISSIONS.DELETE] },
   async (ctx: AuthContext, deptId: string): Promise<ApiResponse<{ id: string }>> => {
+    const auditContext = await getActionAuditContext();
     await db.transaction(async (tx) => {
       const row = await tx.query.departments.findFirst({
         where: eq(schema.departments.id, deptId),
@@ -156,6 +187,14 @@ export const deleteDepartmentAction = withAuth(
       });
 
       await tx.delete(schema.departments).where(eq(schema.departments.id, row.id));
+      await appendSecurityAudit(tx, {
+        userId: ctx.userId,
+        operation: 'DEPARTMENT_DELETE',
+        targetType: 'department',
+        targetId: row.id,
+        targetName: row.name,
+        ...auditContext,
+      });
     });
 
     revalidatePath('/departments');

@@ -9,7 +9,7 @@
  * @module lib/menu-tree
  */
 import { db, schema } from '@/infrastructure/db';
-import { eq, inArray, and } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 
 export interface SidebarMenuItem {
   id: string;
@@ -17,6 +17,57 @@ export interface SidebarMenuItem {
   url: string;
   icon: string | null;
   children?: SidebarMenuItem[];
+}
+
+export interface MenuPermissionRow {
+  id: string;
+  name: string;
+  code: string;
+  type: string;
+  path: string | null;
+  icon: string | null;
+  visible: boolean | null;
+  parentId: string | null;
+  requiredPermissionId: string | null;
+}
+
+export function buildVisibleMenuTree(
+  activePermissions: readonly MenuPermissionRow[],
+  userPermissions: readonly string[],
+  isAdmin: boolean,
+): SidebarMenuItem[] {
+  const allMenuItems = activePermissions.filter(
+    (permission) => permission.type === 'DIRECTORY' || permission.type === 'PAGE',
+  );
+  const permissionCodeById = new Map(
+    activePermissions
+      .filter((permission) => permission.type === 'API')
+      .map((permission) => [permission.id, permission.code]),
+  );
+
+  const buildTree = (parentId: string | null = null): SidebarMenuItem[] =>
+    allMenuItems
+      .filter((menu) => menu.parentId === parentId && menu.visible !== false)
+      .map((menu): SidebarMenuItem | null => {
+        const requiredCode = menu.requiredPermissionId
+          ? permissionCodeById.get(menu.requiredPermissionId)
+          : null;
+        const hasPermission = isAdmin
+          || menu.requiredPermissionId === null
+          || (typeof requiredCode === 'string' && userPermissions.includes(requiredCode));
+        const children = buildTree(menu.id);
+        if (!hasPermission && children.length === 0) return null;
+        return {
+          id: menu.id,
+          title: menu.name,
+          url: menu.path || '#',
+          icon: menu.icon || 'LayoutGrid',
+          children: children.length > 0 ? children : undefined,
+        };
+      })
+      .filter((menu): menu is SidebarMenuItem => menu !== null);
+
+  return buildTree();
 }
 
 /**
@@ -33,34 +84,11 @@ export async function getDynamicMenuTree(
   userPermissions: string[],
   isAdmin: boolean,
 ): Promise<SidebarMenuItem[]> {
-  // 查询所有 ACTIVE 状态的 DIRECTORY 和 PAGE 类型权限（即菜单项）
-  const allMenuItems = await db
+  // 一次查询同时取得菜单节点及其显式绑定的 ACTIVE API 权限。
+  const activePermissions = await db
     .select()
     .from(schema.permissions)
-    .where(
-      and(
-        inArray(schema.permissions.type, ['DIRECTORY', 'PAGE']),
-        eq(schema.permissions.status, 'ACTIVE'),
-      ),
-    )
+    .where(eq(schema.permissions.status, 'ACTIVE'))
     .orderBy(schema.permissions.sort);
-
-  const buildTree = (parentId: string | null = null): SidebarMenuItem[] => {
-    return allMenuItems
-      .filter((m) => m.parentId === parentId && m.visible !== false)
-      .map((m): SidebarMenuItem | null => {
-        const hasPermission = !m.code || isAdmin || userPermissions.includes(m.code);
-        const children = buildTree(m.id);
-        if (!hasPermission && children.length === 0) return null;
-        return {
-          id: m.id,
-          title: m.name,
-          url: m.path || '#',
-          icon: m.icon || 'LayoutGrid',
-          children: children.length > 0 ? children : undefined,
-        };
-      })
-      .filter((m): m is SidebarMenuItem => m !== null);
-  };
-  return buildTree();
+  return buildVisibleMenuTree(activePermissions, userPermissions, isAdmin);
 }

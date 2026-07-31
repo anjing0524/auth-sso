@@ -6,6 +6,7 @@ export interface User {
   id: string;
   username: string;
   email: string | null;
+  mobile: string | null;
   name: string;
   status: UserStatus;
   deptId: string | null;
@@ -28,6 +29,10 @@ export const UpdateUserInputSchema = z.object({
   id: z.string().min(1, '用户ID不能为空'),
   name: z.string().min(1, '姓名不能为空').optional(),
   email: z.string().email('邮箱格式不合法').optional(),
+  mobile: z.preprocess(
+    (value) => value === '' ? null : value,
+    z.string().max(20, '手机号不能超过20位').nullable().optional(),
+  ),
   status: userStatusEnum.optional(),
   deptId: z.string().nullable().optional(),
   avatarUrl: z.string().optional(),

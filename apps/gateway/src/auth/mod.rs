@@ -84,6 +84,14 @@ pub struct RefreshedTokens {
     pub refresh: String,
 }
 
+/// 静默续签结果。显式区分同一会话的并发续签与真实失败，避免把锁竞争误报为 401。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RefreshOutcome {
+    Refreshed(RefreshedTokens),
+    InProgress,
+    Failed,
+}
+
 // ── 工具函数 ──
 
 /// 从 JWT token 中提取 payload 段并 base64url 解码，返回原始字节。

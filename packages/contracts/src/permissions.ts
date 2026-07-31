@@ -75,9 +75,14 @@ export const SYSTEM_PERMISSIONS = {
   VIEW_DASHBOARD: 'portal:system:view_dashboard',
 } as const;
 
-/** Portal 首页菜单权限；菜单本身也是权限树中的受控节点。 */
+/** Portal 菜单配置管理权限；菜单节点本身使用独立稳定 code。 */
 export const PORTAL_MENU_PERMISSIONS = {
-  DASHBOARD: 'portal:menu:dashboard',
+  LIST: 'portal:menu:list',
+  CREATE: 'portal:menu:create',
+  READ: 'portal:menu:read',
+  UPDATE: 'portal:menu:update',
+  DELETE: 'portal:menu:delete',
+  MANAGE: 'portal:menu:manage',
 } as const;
 
 // 所有权限码列表（用于 seed 脚本遍历）
@@ -145,5 +150,10 @@ export const PERMISSION_LABELS: Record<string, string> = {
   'portal:audit:export': '导出审计日志',
   'portal:system:manage': '系统管理',
   'portal:system:view_dashboard': '查看仪表盘',
-  'portal:menu:dashboard': '查看首页',
+  'portal:menu:list': '查看菜单列表',
+  'portal:menu:create': '创建菜单',
+  'portal:menu:read': '查看菜单详情',
+  'portal:menu:update': '修改菜单',
+  'portal:menu:delete': '删除菜单',
+  'portal:menu:manage': '菜单管理',
 };

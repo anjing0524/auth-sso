@@ -41,8 +41,10 @@ export const ENTITY_DISABLED: EntityStatus = 'DISABLED';
 export const PERMISSION_API: PermissionType = 'API';
 export const PERMISSION_PAGE: PermissionType = 'PAGE';
 export const PERMISSION_DIRECTORY: PermissionType = 'DIRECTORY';
-/** 系统管理员角色编码集合（硬编码业务常量） */
-export const ADMIN_ROLE_CODES = ['SUPER_ADMIN', 'ADMIN'] as const;
+export const SUPER_ADMIN_ROLE_CODE = 'SUPER_ADMIN' as const;
+export const ADMIN_ROLE_CODE = 'ADMIN' as const;
+/** 系统管理员角色编码集合 */
+export const ADMIN_ROLE_CODES = [SUPER_ADMIN_ROLE_CODE, ADMIN_ROLE_CODE] as const;
 
 // Cookie 名称 — Portal 与 Gateway 共享的 HttpOnly Cookie Key
 export const COOKIE_NAMES = {
@@ -70,6 +72,27 @@ export const PORTAL_AUD = 'auth-sso' as const;
 
 /** 列表分页最大 pageSize，Controller 层统一引用（防资源耗尽） */
 export const MAX_PAGE_SIZE = 100;
+
+/** 侧边栏可用图标名称白名单 */
+export const MENU_ICON_VALUES = [
+  'LayoutGrid',
+  'LayoutDashboard',
+  'Users',
+  'Building2',
+  'ShieldCheck',
+  'AppWindow',
+  'Menu',
+  'ShieldAlert',
+  'FileText',
+  'Key',
+  'Lock',
+  'Globe',
+  'Bell',
+  'HelpCircle',
+  'Settings',
+  'User',
+] as const;
+export type MenuIconName = typeof MENU_ICON_VALUES[number];
 
 // Gateway 注入的请求头名称
 export const GATEWAY_HEADERS = {
@@ -121,6 +144,22 @@ export interface UserPermissionContext {
   permissions: string[];
   /** 用户所有角色所属部门（含子树展开）的 ID 列表 */
   deptIds: string[];
+}
+
+/** 用户角色绑定 REST DTO（GET /api/users/:id/roles） */
+export interface UserRoleDto {
+  id: string;
+  code: string;
+  name: string;
+  description: string | null;
+  deptId: string;
+  status: EntityStatus;
+  assignedAt: Date | string | null;
+}
+
+/** 用户角色替换 REST DTO（POST /api/users/:id/roles） */
+export interface UserRolesUpdateResult {
+  roleIds: string[];
 }
 
 // API 响应类型契约

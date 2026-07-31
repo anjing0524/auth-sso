@@ -6,11 +6,11 @@ import Link from 'next/link';
 import {
   Users,
   ShieldCheck,
-  AppWindow,
   Plus,
   ArrowRight,
   ArrowUpRight,
-  Activity,
+  UserCheck,
+  LogIn,
   TrendingUp,
   History
 } from 'lucide-react';
@@ -37,6 +37,7 @@ import { EmptyState } from '@/components/shared/empty-state';
 import { getDashboardStats, getRecentAuditLogs } from './data';
 import { resolveIdentity } from '@/lib/auth/verify-jwt';
 import { getUserRoleDeptIds } from '@/lib/auth';
+import { formatShanghaiTime } from '@/lib/format-time';
 
 
 export default async function DashboardPage() {
@@ -86,7 +87,7 @@ export default async function DashboardPage() {
       </div>
 
       {/* 2. Key Metrics - Shadcn Block-01 Grid */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-3">
         <Card className="rounded-xl border-none shadow-sm ring-1 ring-border/50 hover:bg-primary-subtle transition-all duration-200 ease-out">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground">用户总数</CardTitle>
@@ -99,34 +100,22 @@ export default async function DashboardPage() {
         </Card>
         <Card className="rounded-xl border-none shadow-sm ring-1 ring-border/50 hover:bg-primary-subtle transition-all duration-200 ease-out">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground">活跃角色</CardTitle>
-            <ShieldCheck className="h-4 w-4 text-primary opacity-70" />
+            <CardTitle className="text-xs font-bold tracking-wider text-muted-foreground">在线用户</CardTitle>
+            <UserCheck className="h-4 w-4 text-primary opacity-70" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-black">{stats.roles}</div>
-            <p className="text-[10px] text-muted-foreground font-medium mt-1">已配置角色</p>
+            <div className="text-2xl font-black">{stats.onlineUsers}</div>
+            <p className="text-[10px] text-muted-foreground font-medium mt-1">持有有效会话</p>
           </CardContent>
         </Card>
         <Card className="rounded-xl border-none shadow-sm ring-1 ring-border/50 hover:bg-primary-subtle transition-all duration-200 ease-out">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground">受控应用</CardTitle>
-            <AppWindow className="h-4 w-4 text-primary opacity-70" />
+            <CardTitle className="text-xs font-bold tracking-wider text-muted-foreground">今日登录</CardTitle>
+            <LogIn className="h-4 w-4 text-primary opacity-70" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-black">{stats.clients}</div>
-            <p className="text-[10px] text-muted-foreground font-medium mt-1">已注册应用</p>
-          </CardContent>
-        </Card>
-        <Card className="rounded-xl border-none shadow-sm ring-1 ring-border/50 hover:bg-primary-subtle transition-all duration-200 ease-out">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground">认证状态</CardTitle>
-            <Activity className="h-4 w-4 text-primary opacity-70" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-black text-success">Stable</div>
-            <p className="text-[10px] text-muted-foreground font-medium mt-1 flex items-center gap-1">
-              <span className="h-2 w-2 rounded-full bg-success animate-pulse" /> 服务节点正常
-            </p>
+            <div className="text-2xl font-black">{stats.todayLogins}</div>
+            <p className="text-[10px] text-muted-foreground font-medium mt-1">Asia/Shanghai 自然日</p>
           </CardContent>
         </Card>
       </div>
@@ -175,16 +164,15 @@ export default async function DashboardPage() {
                   </TableRow>
                 ) : (
                   recentLogs.map((log) => {
-                    const date = new Date(log.createdAt);
-                    const timeStr = `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+                    const timeStr = formatShanghaiTime(log.createdAt);
 
                     return (
                       <TableRow key={log.id} className="group hover:bg-muted/50 transition-colors border-none">
-                        <TableCell className="pl-8 font-bold text-sm">{log.username || 'Unknown'}</TableCell>
+                        <TableCell className="pl-8 font-bold text-sm">{log.username || '未知用户'}</TableCell>
                         <TableCell className="text-xs font-medium text-muted-foreground">{log.operation}</TableCell>
                         <TableCell className="text-center">
                            <Badge variant={log.status === 200 ? 'default' : 'destructive'} className={`rounded-md px-2 py-0 h-5 text-[10px] ${log.status === 200 ? 'bg-success/10 text-success dark:bg-success/20 dark:text-success hover:bg-success/20 dark:hover:bg-success/25' : ''}`}>
-                             {log.status === 200 ? 'Success' : 'Fail'}
+                             {log.status === 200 ? '成功' : '失败'}
                            </Badge>
                         </TableCell>
                         <TableCell className="text-right pr-8 text-[10px] font-mono text-muted-foreground">

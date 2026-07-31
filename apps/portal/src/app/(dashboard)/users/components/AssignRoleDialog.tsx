@@ -21,6 +21,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog';
+import type { UserRoleDto, UserRolesUpdateResult } from '@auth-sso/contracts';
 
 interface UserInfo {
   id: string;
@@ -57,8 +58,11 @@ export default function AssignRoleDialog({ open, onOpenChange, user }: AssignRol
         fetch('/api/roles?pageSize=500'),
         fetch(`/api/users/${user.id}/roles`),
       ]);
+      if (!rolesRes.ok || !userRolesRes.ok) {
+        throw new Error('角色数据请求失败');
+      }
       const rolesData = await rolesRes.json();
-      const userRolesData = await userRolesRes.json();
+      const userRolesData = await userRolesRes.json() as UserRoleDto[];
 
       // 仅展示用户所属部门（或同部门）的角色（R-USER-ROLE 部门约束）
       const allRoles: Role[] = rolesData.data ?? [];
@@ -68,8 +72,7 @@ export default function AssignRoleDialog({ open, onOpenChange, user }: AssignRol
 
       setRoles(filtered);
 
-      const assigned: Array<{ id: string; roleId?: string }> = userRolesData.data ?? [];
-      setAssignedRoleIds(new Set(assigned.map((r) => r.roleId ?? r.id)));
+      setAssignedRoleIds(new Set(userRolesData.map((role) => role.id)));
     } catch {
       toast.error('加载角色数据失败');
     } finally {
@@ -102,12 +105,12 @@ export default function AssignRoleDialog({ open, onOpenChange, user }: AssignRol
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ roleIds }),
       });
-      const body = await res.json();
-      if (res.ok && (body.success || body.data)) {
+      const body = await res.json() as UserRolesUpdateResult | { message?: string };
+      if (res.ok) {
         toast.success(`已为用户「${user.name}」更新角色（${roleIds.length} 个）`);
         onOpenChange(false);
       } else {
-        toast.error(body.message || '角色分配失败');
+        toast.error('message' in body && body.message ? body.message : '角色分配失败');
       }
     } catch {
       toast.error('网络错误，请重试');

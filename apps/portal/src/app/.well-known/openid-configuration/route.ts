@@ -6,7 +6,7 @@
  * @route GET /.well-known/openid-configuration
  */
 import { NextResponse } from 'next/server';
-import { getAppBaseURL } from '@/lib/env';
+import { getAppBaseURL, getIssuer } from '@/lib/env';
 import {
   SCOPES_SUPPORTED,
   RESPONSE_TYPES_SUPPORTED,
@@ -23,8 +23,8 @@ export async function GET() {
   const baseURL = getAppBaseURL();
 
   const metadata = {
-    // ADR-006：issuer 是体系级固定标识，与所有 JWT 签发/验签保持一致。
-    issuer: 'auth-sso',
+    // OIDC Core：issuer 必须是 HTTPS URL，并与所有 JWT 的 iss 完全一致。
+    issuer: getIssuer(),
     authorization_endpoint: `${baseURL}/api/auth/oauth2/authorize`,
     token_endpoint: `${baseURL}/api/auth/oauth2/token`,
     userinfo_endpoint: `${baseURL}/api/auth/oauth2/userinfo`,

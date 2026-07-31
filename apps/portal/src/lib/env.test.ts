@@ -52,7 +52,7 @@ describe('runtime configuration boundaries', () => {
     Reflect.set(process.env, 'GATEWAY_SHARED_SECRET', 'gateway-secret');
 
     expect(getAppBaseURL()).toBe('https://sso.example.com');
-    expect(getIssuer()).toBe('https://issuer.example.com/');
+    expect(getIssuer()).toBe('https://issuer.example.com');
     expect(getJwksUri()).toBe('https://sso.example.com/api/auth/jwks');
     expect(getTrustedOrigins()).toEqual(['https://sso.example.com']);
     expect(getRedisUrl()).toBe('redis://localhost:6379');
@@ -62,5 +62,20 @@ describe('runtime configuration boundaries', () => {
 
   it('keeps DATABASE_URL validation scoped to database access', () => {
     expect(() => getDatabaseUrl()).toThrow();
+  });
+
+  it('生产 issuer 必须使用 HTTPS', () => {
+    Reflect.set(process.env, 'NODE_ENV', 'production');
+    Reflect.set(process.env, 'NEXT_PUBLIC_APP_URL', 'http://sso.example.com');
+
+    expect(() => getIssuer()).toThrow('必须使用 HTTPS');
+  });
+
+  it('issuer 不允许查询参数或片段', () => {
+    Reflect.set(process.env, 'NODE_ENV', 'development');
+    Reflect.set(process.env, 'NEXT_PUBLIC_APP_URL', 'https://sso.example.com');
+    Reflect.set(process.env, 'PORTAL_ISSUER', 'https://sso.example.com/oidc?tenant=a');
+
+    expect(() => getIssuer()).toThrow('不得包含凭据、查询参数或片段');
   });
 });

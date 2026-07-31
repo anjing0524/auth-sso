@@ -90,6 +90,27 @@ export function buildDepartmentTree(flatList: Department[]): DepartmentTreeNode[
   return buildTree(flatList, 'id', 'parentId', 'sort');
 }
 
+/** 将部门树投影为当前展开状态下的可见行；搜索时可强制展开完整树。 */
+export function flattenVisibleDepartmentTree<
+  T extends { id: string; children?: T[] },
+>(
+  nodes: T[],
+  expanded: ReadonlySet<string>,
+  depth = 0,
+  forceExpand = false,
+): Array<T & { depth: number }> {
+  let result: Array<T & { depth: number }> = [];
+  for (const node of nodes) {
+    result.push({ ...node, depth });
+    if (node.children?.length && (forceExpand || expanded.has(node.id))) {
+      result = result.concat(
+        flattenVisibleDepartmentTree(node.children, expanded, depth + 1, forceExpand),
+      );
+    }
+  }
+  return result;
+}
+
 export function computeAncestorPrefix(deptId: string, ancestors: string | null): string {
   return ancestors ? `${ancestors}/${deptId}` : deptId;
 }

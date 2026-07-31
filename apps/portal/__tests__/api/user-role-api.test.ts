@@ -40,7 +40,11 @@ vi.mock('@/lib/audit', () => ({
   extractUserAgent: vi.fn(() => 'Vitest'),
 }));
 
-import { POST as assignRoles, DELETE as removeRole } from '@/app/api/users/[id]/roles/route';
+import {
+  GET as getRoles,
+  POST as assignRoles,
+  DELETE as removeRole,
+} from '@/app/api/users/[id]/roles/route';
 
 const ADMIN_ID = '00000000-0000-4000-8000-000000000101';
 const USER_ID = '00000000-0000-4000-8000-000000000201';
@@ -93,7 +97,6 @@ describe('用户角色绑定 API', () => {
 
   it.each([
     { roleIds: ['not-a-uuid'] },
-    { roleIds: [] },
     { roleIds: Array.from({ length: 101 }, () => ROLE_ID) },
   ])('非法 roleIds 返回 400', async (body) => {
     const response = await assignRoles(request(body), params());
@@ -107,6 +110,27 @@ describe('用户角色绑定 API', () => {
 
     expect(response.status).toBe(200);
     expect(await roleIds()).toEqual([ROLE_ID]);
+  });
+
+  it('GET 直接返回角色数组契约', async () => {
+    const response = await getRoles(
+      createTestRequest(`/api/users/${USER_ID}/roles`),
+      params(),
+    );
+
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body).toEqual([
+      expect.objectContaining({ id: OLD_ROLE_ID, code: 'OLD_ROLE' }),
+    ]);
+  });
+
+  it('空 roleIds 清除全部角色并返回统一 DTO', async () => {
+    const response = await assignRoles(request({ roleIds: [] }), params());
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ roleIds: [] });
+    expect(await roleIds()).toEqual([]);
   });
 
   it('审计写入失败时回滚角色替换', async () => {

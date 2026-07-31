@@ -37,6 +37,8 @@ export interface Permission {
   clientId: string | null;
   /** 父节点 ID（权限树） */
   parentId: string | null;
+  /** DIRECTORY/PAGE 显式绑定的 API 权限 */
+  requiredPermissionId: string | null;
   /** 状态 */
   status: EntityStatus;
   /** 排序权重 */
@@ -64,6 +66,7 @@ export const CreatePermissionInputSchema = z.discriminatedUnion('type', [
     icon: z.string().optional(),
     visible: z.boolean().default(true),
     parentId: z.string().nullable().optional(),
+    requiredPermissionId: z.string().uuid().nullable().optional(),
     sort: z.number().int().default(0),
   }),
   // PAGE：菜单页面
@@ -76,6 +79,7 @@ export const CreatePermissionInputSchema = z.discriminatedUnion('type', [
     icon: z.string().optional(),
     visible: z.boolean().default(true),
     parentId: z.string().nullable().optional(),
+    requiredPermissionId: z.string().uuid().nullable().optional(),
     sort: z.number().int().default(0),
   }),
   // API：接口权限（code 格式 {clientId}:{resource}:{action}）
@@ -101,6 +105,7 @@ export const UpdatePermissionInputSchema = z.object({
   visible: z.boolean().optional(),
   clientId: z.string().nullable().optional(),
   parentId: z.string().nullable().optional(),
+  requiredPermissionId: z.string().uuid().nullable().optional(),
   sort: z.number().int().optional(),
   status: entityStatusEnum.optional(),
 });

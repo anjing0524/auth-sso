@@ -36,8 +36,8 @@ export default async function UsersPage({ searchParams }: PageProps) {
   ]);
 
   return (
-    <div className="h-full flex flex-col gap-6 pb-10">
-      <div className="flex items-center justify-between">
+    <div className="h-full min-w-0 flex flex-col gap-6 pb-10">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground">用户管理</h1>
           <p className="text-muted-foreground text-sm font-medium mt-1">

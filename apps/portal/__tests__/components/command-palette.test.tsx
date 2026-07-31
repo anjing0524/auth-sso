@@ -69,7 +69,7 @@ describe('CommandPalette', () => {
 
     // 菜单项以 button 渲染（mock 的 CommandItem），通过文本查找
     const userBtn = screen.getByRole('button', { name: '用户管理' });
-    userBtn.click();
+    fireEvent.click(userBtn);
 
     expect(mockPush).toHaveBeenCalledWith('/users');
   });

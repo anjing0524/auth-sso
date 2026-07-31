@@ -22,8 +22,9 @@ import {
   User,
   type LucideIcon,
 } from 'lucide-react';
+import { MENU_ICON_VALUES, type MenuIconName } from '@auth-sso/contracts';
 
-export const ICON_MAP: Record<string, LucideIcon> = {
+export const ICON_MAP: Record<MenuIconName, LucideIcon> = {
   LayoutGrid,
   LayoutDashboard,
   Users,
@@ -43,6 +44,7 @@ export const ICON_MAP: Record<string, LucideIcon> = {
 };
 
 export function DynamicIcon({ name, className }: { name: string; className?: string }) {
-  const IconComponent = ICON_MAP[name] || LayoutGrid;
+  const iconName = MENU_ICON_VALUES.find((value) => value === name);
+  const IconComponent = iconName ? ICON_MAP[iconName] : LayoutGrid;
   return <IconComponent className={className} />;
 }

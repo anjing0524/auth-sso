@@ -4,13 +4,13 @@
  * @req A-NAV-01
  *
  * AppSidebar 通过 props 接收 user 和 dynamicMenus，不直接调用 hooks 获取数据。
- * dynamicMenus 为空时使用内置 fallbackMenus 兜底。
+ * dynamicMenus 显式为空时不展示管理菜单；仅未传入时使用内置 fallbackMenus 兜底。
  *
  * 覆盖场景：
  * - 正常：渲染 dynamicMenus 传入的菜单项
  * - 正常：渲染 user 信息（名称、邮箱、头像 fallback）
  * - 正常：渲染子菜单（children 嵌套菜单）
- * - 边界：dynamicMenus 为空时展示内置 fallbackMenus
+ * - 边界：dynamicMenus 显式为空时不展示管理菜单
  * - 边界：user.user 为空时显示默认头像 'U'
  * - 正常：登录用户下拉菜单渲染个人中心/系统设置/登出
  */
@@ -37,6 +37,10 @@ function makeSidebarMock() {
   const mc = (name: string, tag = 'div') =>
     (p: any) => h(tag, { 'data-mock': name, className: p?.className }, p?.children);
   return {
+    useSidebar: () => ({
+      isMobile: false,
+      setOpenMobile: vi.fn(),
+    }),
     Sidebar: mc('Sidebar'),
     SidebarHeader: mc('SidebarHeader'),
     SidebarContent: mc('SidebarContent'),
@@ -126,11 +130,11 @@ describe('AppSidebar', () => {
   });
 
   // ── Fallback menus ────────────────────────────────────────
-  it('shows fallback menus when dynamicMenus is empty', () => {
+  it('does not expose fallback management menus when dynamicMenus is empty', () => {
     render(<AppSidebar user={{ name: 'Admin' }} dynamicMenus={[]} />);
-    expect(screen.getByText('工作台')).toBeInTheDocument();
-    expect(screen.getByText('权限中心')).toBeInTheDocument();
-    expect(screen.getByText('安全审计')).toBeInTheDocument();
+    expect(screen.queryByText('工作台')).not.toBeInTheDocument();
+    expect(screen.queryByText('权限中心')).not.toBeInTheDocument();
+    expect(screen.queryByText('安全审计')).not.toBeInTheDocument();
   });
 
   it('shows fallback menus when dynamicMenus is undefined', () => {
@@ -182,8 +186,8 @@ describe('AppSidebar', () => {
       />,
     );
     expect(screen.getByText('个人中心')).toBeInTheDocument();
-    expect(screen.getByText('系统设置')).toBeInTheDocument();
-    expect(screen.getByText('Sign Out')).toBeInTheDocument();
+    expect(screen.getByText('账户设置')).toBeInTheDocument();
+    expect(screen.getByText('退出登录')).toBeInTheDocument();
   });
 
   // ── Brand logo ────────────────────────────────────────────

@@ -16,6 +16,8 @@ oidc_provider = true
 public_paths = [
     "/",
     "/login",
+    "/help",
+    "/privacy",
     "/register",
     "/error",
     "/oauth/error",

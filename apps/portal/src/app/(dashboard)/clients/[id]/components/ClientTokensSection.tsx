@@ -14,6 +14,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import type { ClientTokenDTO as Token } from '../../data';
+import { formatShanghaiDateTime } from '@/lib/format-time';
 
 export interface ClientTokensSectionProps {
   tokens: Token[];
@@ -22,7 +23,7 @@ export interface ClientTokensSectionProps {
 
 function formatDate(date: Date | string | null): string {
   if (!date) return '-';
-  return new Date(date).toLocaleString('zh-CN');
+  return formatShanghaiDateTime(date);
 }
 
 export function ClientTokensSection({ tokens, onRevokeAll }: ClientTokensSectionProps) {

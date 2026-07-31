@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import type { ClientDTO as Client } from '../../data';
+import { formatShanghaiDateTime } from '@/lib/format-time';
 
 export interface ClientInfoSectionProps {
   client: Client;
@@ -40,7 +41,7 @@ function formatTTL(seconds: number): string {
 
 function formatDate(date: Date | string | null): string {
   if (!date) return '-';
-  return new Date(date).toLocaleString('zh-CN');
+  return formatShanghaiDateTime(date);
 }
 
 export function ClientInfoSection({
@@ -151,7 +152,7 @@ export function ClientInfoSection({
                 variant="ghost"
                 size="icon"
                 onClick={() => onCopy(client.clientId)}
-                title="复制"
+                aria-label="复制 Client ID"
                 className="shrink-0"
               >
                 <Copy className="h-4 w-4" />
@@ -179,7 +180,7 @@ export function ClientInfoSection({
                     variant="ghost"
                     size="icon"
                     onClick={() => onCopy(newSecret)}
-                    title="复制"
+                    aria-label="复制新 Client Secret"
                     className="shrink-0"
                   >
                     <Copy className="h-4 w-4" />

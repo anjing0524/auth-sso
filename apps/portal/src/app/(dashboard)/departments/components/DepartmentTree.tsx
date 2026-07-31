@@ -19,15 +19,16 @@ import {
   DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { EmptyState } from '@/components/shared/empty-state';
 import { createDepartmentAction, updateDepartmentAction, deleteDepartmentAction } from '../actions';
+import { flattenVisibleDepartmentTree } from '@/domain/department/department';
 
 interface DeptTreeNode {
   id: string;
-  
+
   parentId: string | null;
   name: string;
   code: string | null;
@@ -40,16 +41,6 @@ interface Props {
   departments: DeptTreeNode[];
 }
 
-/** 扁平化树节点（含深度） */
-function flattenTree(nodes: DeptTreeNode[], depth = 0): Array<DeptTreeNode & { depth: number }> {
-  let result: Array<DeptTreeNode & { depth: number }> = [];
-  for (const node of nodes) {
-    result.push({ ...node, depth });
-    if (node.children?.length) result = result.concat(flattenTree(node.children, depth + 1));
-  }
-  return result;
-}
-
 export default function DepartmentTree({ departments }: Props) {
   const router = useRouter();
   const [keyword, setKeyword] = useState('');
@@ -60,10 +51,20 @@ export default function DepartmentTree({ departments }: Props) {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [selected, setSelected] = useState<DeptTreeNode | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<DeptTreeNode | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const [form, setForm] = useState({ name: '', code: '', sort: 0, parentId: '' as string | null });
 
   const toggleExpand = (id: string) => {
-    setExpanded(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
+    setExpanded((previous) => {
+      const next = new Set(previous);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
   };
 
   const openAdd = (parent?: string) => { setForm({ name: '', code: '', sort: 0, parentId: parent || null }); setIsAddOpen(true); };
@@ -72,26 +73,63 @@ export default function DepartmentTree({ departments }: Props) {
   const handleCreate = async () => {
     if (!form.name) { toast.error('请填写部门名称'); return; }
     setSaving(true);
-    const r = await createDepartmentAction({ name: form.name, code: form.code || undefined, sort: form.sort, parentId: form.parentId });
-    setSaving(false);
-    if (r.success) { toast.success(r.message); setIsAddOpen(false); router.refresh(); } else { toast.error(r.message); }
+    try {
+      const r = await createDepartmentAction({ name: form.name, code: form.code || undefined, sort: form.sort, parentId: form.parentId });
+      if (r.success) {
+        toast.success(r.message);
+        setIsAddOpen(false);
+        if (form.parentId) {
+          setExpanded((previous) => new Set(previous).add(form.parentId!));
+        }
+        router.refresh();
+      } else {
+        toast.error(r.message);
+      }
+    } catch {
+      toast.error('创建部门失败，请重试');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleUpdate = async () => {
     if (!selected) return;
     setSaving(true);
-    const r = await updateDepartmentAction(selected.id, form);
-    setSaving(false);
-    if (r.success) { toast.success(r.message); setIsEditOpen(false); router.refresh(); } else { toast.error(r.message); }
+    try {
+      const r = await updateDepartmentAction(selected.id, form);
+      if (r.success) {
+        toast.success(r.message);
+        setIsEditOpen(false);
+        router.refresh();
+      } else {
+        toast.error(r.message);
+      }
+    } catch {
+      toast.error('保存部门失败，请重试');
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const handleDelete = async () => {
-    if (!selected) return;
-    const r = await deleteDepartmentAction(selected.id);
-    if (r.success) { toast.success(r.message); setIsEditOpen(false); router.refresh(); } else { toast.error(r.message); }
+  const handleDelete = async (target: DeptTreeNode) => {
+    setDeleting(true);
+    try {
+      const r = await deleteDepartmentAction(target.id);
+      if (r.success) {
+        toast.success(r.message);
+        setDeleteTarget(null);
+        router.refresh();
+      } else {
+        toast.error(r.message);
+      }
+    } catch {
+      toast.error('删除部门失败，请确认部门下没有子部门、用户或角色');
+    } finally {
+      setDeleting(false);
+    }
   };
 
-  const flatList = flattenTree(departments);
+  const flatList = flattenVisibleDepartmentTree(departments, expanded, 0, keyword.length > 0);
   const filtered = keyword ? flatList.filter(d => d.name.includes(keyword) || d.code?.includes(keyword)) : flatList;
 
   return (
@@ -112,7 +150,7 @@ export default function DepartmentTree({ departments }: Props) {
           {filtered.map(dept => (
             <div key={dept.id} className="flex items-center gap-3 px-6 py-3 hover:bg-muted/50/50 transition-colors" style={{ paddingLeft: `${24 + dept.depth * 24}px` }}>
               {(dept.children?.length ?? 0) > 0 ? (
-                <Button variant="ghost" size="icon" className="h-6 w-6 rounded" onClick={() => toggleExpand(dept.id)}>
+                <Button variant="ghost" size="icon" className="h-6 w-6 rounded" onClick={() => toggleExpand(dept.id)} aria-label={`${expanded.has(dept.id) ? '收起' : '展开'} ${dept.name}`}>
                   {expanded.has(dept.id) ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
                 </Button>
               ) : <div className="w-6" />}
@@ -123,18 +161,18 @@ export default function DepartmentTree({ departments }: Props) {
                   {dept.code && <code className="text-[10px] text-muted-foreground">{dept.code}</code>}
                 </div>
               </div>
-              <Badge variant={dept.status === 'ACTIVE' ? 'success' : 'secondary'} className="text-[10px] shrink-0">{dept.status}</Badge>
+              <Badge variant={dept.status === 'ACTIVE' ? 'success' : 'secondary'} className="text-[10px] shrink-0">{dept.status === 'ACTIVE' ? '启用' : '停用'}</Badge>
               <div className="flex items-center gap-1 shrink-0">
-                <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg" onClick={() => openAdd(dept.id)} title="添加子部门"><Plus className="h-3 w-3" /></Button>
+                <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg" onClick={() => openAdd(dept.id)} aria-label={`在 ${dept.name} 下添加子部门`}><Plus className="h-3 w-3" /></Button>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg"><MoreVertical className="h-3 w-3" /></Button>
+                    <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg" aria-label={`打开 ${dept.name} 部门操作`}><MoreVertical className="h-3 w-3" /></Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-40 rounded-xl p-2">
                     <DropdownMenuLabel className="text-[10px]">部门操作</DropdownMenuLabel>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem className="rounded-lg cursor-pointer" onClick={() => openEdit(dept)}><Edit className="h-3.5 w-3.5 mr-2 text-blue-500" /> 编辑</DropdownMenuItem>
-                    <DropdownMenuItem className="rounded-lg cursor-pointer text-destructive" onClick={() => { setSelected(dept); handleDelete(); }}>
+                    <DropdownMenuItem className="rounded-lg cursor-pointer text-destructive" onClick={() => setDeleteTarget(dept)}>
                       <Trash2 className="h-3.5 w-3.5 mr-2" /> 删除
                     </DropdownMenuItem>
                   </DropdownMenuContent>
@@ -151,10 +189,17 @@ export default function DepartmentTree({ departments }: Props) {
       {/* 新增对话框 */}
       <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
         <DialogContent className="rounded-2xl">
-          <DialogHeader><DialogTitle className="flex items-center gap-2"><Building2 className="h-5 w-5 text-primary" /> 新建部门</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Building2 className="h-5 w-5 text-primary" /> 新建部门</DialogTitle>
+            <DialogDescription>
+              {form.parentId
+                ? `将在“${flatList.find((item) => item.id === form.parentId)?.name ?? '所选部门'}”下创建子部门。`
+                : '将创建新的根部门。'}
+            </DialogDescription>
+          </DialogHeader>
           <div className="space-y-4 py-4">
-            <div className="space-y-2"><Label>部门名称</Label><Input value={form.name} onChange={e => setForm({...form, name: e.target.value})} placeholder="技术部" /></div>
-            <div className="space-y-2"><Label>部门编码</Label><Input value={form.code} onChange={e => setForm({...form, code: e.target.value})} placeholder="tech" /></div>
+            <div className="space-y-2"><Label htmlFor="department-name">部门名称</Label><Input id="department-name" value={form.name} onChange={e => setForm({...form, name: e.target.value})} placeholder="技术部" /></div>
+            <div className="space-y-2"><Label htmlFor="department-code">部门编码</Label><Input id="department-code" value={form.code} onChange={e => setForm({...form, code: e.target.value})} placeholder="tech" /></div>
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setIsAddOpen(false)}>取消</Button>
@@ -168,12 +213,44 @@ export default function DepartmentTree({ departments }: Props) {
         <DialogContent className="rounded-2xl">
           <DialogHeader><DialogTitle>编辑部门</DialogTitle></DialogHeader>
           <div className="space-y-4 py-4">
-            <div className="space-y-2"><Label>部门名称</Label><Input value={form.name} onChange={e => setForm({...form, name: e.target.value})} /></div>
-            <div className="space-y-2"><Label>部门编码</Label><Input value={form.code} onChange={e => setForm({...form, code: e.target.value})} /></div>
+            <div className="space-y-2"><Label htmlFor="edit-department-name">部门名称</Label><Input id="edit-department-name" value={form.name} onChange={e => setForm({...form, name: e.target.value})} /></div>
+            <div className="space-y-2"><Label htmlFor="edit-department-code">部门编码</Label><Input id="edit-department-code" value={form.code} onChange={e => setForm({...form, code: e.target.value})} /></div>
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setIsEditOpen(false)}>取消</Button>
             <Button onClick={handleUpdate} disabled={saving}>{saving ? '保存中...' : '保存'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={deleteTarget !== null}
+        onOpenChange={(open) => {
+          if (!open && !deleting) setDeleteTarget(null);
+        }}
+      >
+        <DialogContent className="rounded-2xl">
+          <DialogHeader>
+            <DialogTitle>确认删除部门</DialogTitle>
+            <DialogDescription>
+              {deleteTarget
+                ? `即将删除部门“${deleteTarget.name}”。仅无子部门、无用户且无角色关联的部门可以删除。`
+                : ''}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setDeleteTarget(null)} disabled={deleting}>
+              取消
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={deleting}
+              onClick={() => {
+                if (deleteTarget) void handleDelete(deleteTarget);
+              }}
+            >
+              {deleting ? '删除中...' : '确认删除'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

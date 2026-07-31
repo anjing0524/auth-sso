@@ -6,6 +6,8 @@ import { COOKIE_NAMES } from '@auth-sso/contracts';
  */
 const PUBLIC_PATHS = [
   '/login',
+  '/help',
+  '/privacy',
   '/oauth2',
   '/.well-known',
 ];

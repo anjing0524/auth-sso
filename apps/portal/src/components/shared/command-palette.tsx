@@ -7,6 +7,7 @@ import {
   CommandItem, CommandList,
 } from '@/components/ui/command';
 import { ICON_MAP } from '@/lib/icon-map';
+import { MENU_ICON_VALUES } from '@auth-sso/contracts';
 
 interface MenuItem {
   id: string; title: string; url: string; icon?: string | null;
@@ -74,7 +75,10 @@ export function CommandPalette({ menus }: { menus: MenuItem[] }) {
         </CommandEmpty>
         <CommandGroup heading="导航菜单">
           {flatMenus.map(item => {
-            const IconComponent = item.icon ? ICON_MAP[item.icon] : null;
+            const iconName = item.icon
+              ? MENU_ICON_VALUES.find((value) => value === item.icon)
+              : undefined;
+            const IconComponent = iconName ? ICON_MAP[iconName] : null;
             return (
               <CommandItem key={item.id} onSelect={() => handleSelect(item.url)}>
                 {IconComponent && <IconComponent className="mr-2 h-4 w-4 opacity-50" />}

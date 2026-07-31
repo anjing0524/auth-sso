@@ -17,13 +17,14 @@
  */
 import { revalidatePath, updateTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
-import { eq, or } from 'drizzle-orm';
+import { and, asc, eq, or } from 'drizzle-orm';
 import { withAuth, type AuthContext } from '@/lib/auth';
 import {
   createUser,
   toggleUserStatus,
   unlockUser,
   deleteUser,
+  assertUserDeletionAllowed,
   applyUserUpdate,
   hasDeptChanged,
   userFromPersistence,
@@ -48,8 +49,67 @@ import { canAccessDept, getUserRoleDeptIds } from '@/lib/auth';
 import { createLogger } from '@/lib/logger';
 
 const log = createLogger('UsersAction');
-import { COMMON_ERRORS, USER_ACTIVE, USER_PERMISSIONS } from '@auth-sso/contracts';
+import {
+  COMMON_ERRORS,
+  ENTITY_ACTIVE,
+  SUPER_ADMIN_ROLE_CODE,
+  USER_ACTIVE,
+  USER_PERMISSIONS,
+} from '@auth-sso/contracts';
 import type { ApiResponse } from '@auth-sso/contracts';
+import { appendSecurityAudit, getActionAuditContext } from '@/lib/audit';
+
+async function deleteUserInTransaction(
+  actorId: string,
+  targetId: string,
+  deptIds: string[],
+  auditContext: Awaited<ReturnType<typeof getActionAuditContext>>,
+): Promise<void> {
+  await db.transaction(async (tx) => {
+    const [superAdminRole] = await tx.select({ id: schema.roles.id, status: schema.roles.status })
+      .from(schema.roles)
+      .where(eq(schema.roles.code, SUPER_ADMIN_ROLE_CODE))
+      .for('update')
+      .limit(1);
+    const [row] = await tx.select().from(schema.users)
+      .where(eq(schema.users.id, targetId))
+      .for('update')
+      .limit(1);
+    if (!row) throw new EntityNotFoundError('User', targetId);
+    if (!canAccessDept(deptIds, row.deptId)) throw new ForbiddenError('无权操作该部门的用户');
+
+    const activeSuperAdmins = superAdminRole?.status === ENTITY_ACTIVE
+      ? await tx.select({ id: schema.users.id })
+          .from(schema.users)
+          .innerJoin(schema.userRoles, eq(schema.userRoles.userId, schema.users.id))
+          .where(and(
+            eq(schema.userRoles.roleId, superAdminRole.id),
+            eq(schema.users.status, USER_ACTIVE),
+          ))
+          .orderBy(asc(schema.users.id))
+      : [];
+    assertUserDeletionAllowed({
+      actorId,
+      targetId,
+      targetIsActiveSuperAdmin: activeSuperAdmins.some((user) => user.id === targetId),
+      activeSuperAdminCount: activeSuperAdmins.length,
+    });
+
+    const deleted = deleteUser(userFromPersistence(row));
+    await tx.update(schema.users)
+      .set(userToUpdateRow(deleted))
+      .where(eq(schema.users.id, targetId));
+    await appendSecurityAudit(tx, {
+      userId: actorId,
+      operation: 'USER_DELETE',
+      targetType: 'user',
+      targetId,
+      targetName: row.name,
+      changes: { status: { before: row.status, after: deleted.status } },
+      ...auditContext,
+    });
+  });
+}
 
 /**
  * 创建新用户 Action Controller
@@ -59,7 +119,7 @@ import type { ApiResponse } from '@auth-sso/contracts';
  * - React 19 Form Action：createUserAction(null, formData)
  */
 export const createUserAction = withAuth(
-  { permissions: [USER_PERMISSIONS.CREATE], audit: 'USER_CREATE' },
+  { permissions: [USER_PERMISSIONS.CREATE] },
   async (
     ctx: AuthContext,
     firstArg: CreateUserInput | null | undefined,
@@ -78,6 +138,7 @@ export const createUserAction = withAuth(
 
     // 密码哈希在事务外完成，避免长时间占用 DB 连接（bcrypt 通常 50-200ms）
     const passwordHash = await hashPassword(v.data.password);
+    const auditContext = await getActionAuditContext();
 
     // 查重 + 插入在事务中原子完成（R22）
     // deptId 已在 Zod .preprocess() 中归一化 ('ALL' → null)，Controller 层不重复判定
@@ -92,6 +153,20 @@ export const createUserAction = withAuth(
         ...userToInsertRow(user),
         passwordHash,
       });
+      await appendSecurityAudit(tx, {
+        userId: ctx.userId,
+        operation: 'USER_CREATE',
+        targetType: 'user',
+        targetId: user.id,
+        targetName: user.name,
+        changes: {
+          username: { after: user.username },
+          email: { after: user.email },
+          deptId: { after: user.deptId },
+          status: { after: user.status },
+        },
+        ...auditContext,
+      });
       return user;
     });
 
@@ -105,13 +180,14 @@ export const createUserAction = withAuth(
  * 切换用户启用/禁用状态 Action Controller
  */
 export const toggleUserStatusAction = withAuth(
-  { permissions: [USER_PERMISSIONS.UPDATE], audit: 'USER_UPDATE' },
+  { permissions: [USER_PERMISSIONS.UPDATE] },
   async (ctx: AuthContext, userIdStr: string): Promise<ApiResponse<{ status: string }>> => {
     const v = validate(UserIdentityInputSchema, { id: userIdStr });
     if (!v.ok) return v.response;
 
     // 读取 + 更新在事务中原子完成（R22）
     const deptIds = await getUserRoleDeptIds(ctx.userId);
+    const auditContext = await getActionAuditContext();
     const updated = await db.transaction(async (tx) => {
       const row = await tx.query.users.findFirst({ where: eq(schema.users.id, v.data.id) });
       if (!row) throw new EntityNotFoundError('User', v.data.id);
@@ -122,6 +198,15 @@ export const toggleUserStatusAction = withAuth(
       await tx.update(schema.users)
         .set({ status: target.status })
         .where(eq(schema.users.id, v.data.id));
+      await appendSecurityAudit(tx, {
+        userId: ctx.userId,
+        operation: 'USER_UPDATE',
+        targetType: 'user',
+        targetId: row.id,
+        targetName: row.name,
+        changes: { status: { before: row.status, after: target.status } },
+        ...auditContext,
+      });
       return target;
     });
 
@@ -147,12 +232,13 @@ export const toggleUserStatusAction = withAuth(
  * 解锁被锁定用户 Action Controller (B-USR-ST)
  */
 export const unlockUserAction = withAuth(
-  { permissions: [USER_PERMISSIONS.UPDATE], audit: 'USER_UPDATE' },
+  { permissions: [USER_PERMISSIONS.UPDATE] },
   async (ctx: AuthContext, userIdStr: string): Promise<ApiResponse<{ status: string }>> => {
     const v = validate(UserIdentityInputSchema, { id: userIdStr });
     if (!v.ok) return v.response;
 
     const deptIds = await getUserRoleDeptIds(ctx.userId);
+    const auditContext = await getActionAuditContext();
     const updated = await db.transaction(async (tx) => {
       const row = await tx.query.users.findFirst({ where: eq(schema.users.id, v.data.id) });
       if (!row) throw new EntityNotFoundError('User', v.data.id);
@@ -162,6 +248,15 @@ export const unlockUserAction = withAuth(
       await tx.update(schema.users)
         .set({ status: target.status })
         .where(eq(schema.users.id, v.data.id));
+      await appendSecurityAudit(tx, {
+        userId: ctx.userId,
+        operation: 'USER_UPDATE',
+        targetType: 'user',
+        targetId: row.id,
+        targetName: row.name,
+        changes: { status: { before: row.status, after: target.status } },
+        ...auditContext,
+      });
       return target;
     });
 
@@ -187,7 +282,7 @@ export const unlockUserAction = withAuth(
  * 更新用户信息 Action Controller
  */
 export const updateUserAction = withAuth(
-  { permissions: [USER_PERMISSIONS.UPDATE], audit: 'USER_UPDATE' },
+  { permissions: [USER_PERMISSIONS.UPDATE] },
   async (
     ctx: AuthContext,
     userIdStr: string,
@@ -198,6 +293,7 @@ export const updateUserAction = withAuth(
 
     let deptIdChanged = false;
     const deptIds = await getUserRoleDeptIds(ctx.userId);
+    const auditContext = await getActionAuditContext();
     await db.transaction(async (tx) => {
       const row = await tx.query.users.findFirst({ where: eq(schema.users.id, v.data.id) });
       if (!row) throw new EntityNotFoundError('User', v.data.id);
@@ -208,13 +304,28 @@ export const updateUserAction = withAuth(
       }
 
       const updated = applyUserUpdate(userFromPersistence(row), {
-        name: v.data.name, email: v.data.email,
+        name: v.data.name, email: v.data.email, mobile: v.data.mobile,
         status: v.data.status, deptId: v.data.deptId,
         avatarUrl: v.data.avatarUrl,
       });
       deptIdChanged = hasDeptChanged(row.deptId, v.data.deptId);
       await tx.update(schema.users).set(userToUpdateRow(updated))
         .where(eq(schema.users.id, v.data.id));
+      await appendSecurityAudit(tx, {
+        userId: ctx.userId,
+        operation: 'USER_UPDATE',
+        targetType: 'user',
+        targetId: row.id,
+        targetName: updated.name,
+        changes: {
+          name: { before: row.name, after: updated.name },
+          email: { before: row.email, after: updated.email },
+          mobile: { before: row.mobile, after: updated.mobile },
+          status: { before: row.status, after: updated.status },
+          deptId: { before: row.deptId, after: updated.deptId },
+        },
+        ...auditContext,
+      });
     });
     await refreshUserPermissionCache(v.data.id);
     if (deptIdChanged) await revokeUserAccessByUserId(v.data.id);
@@ -228,23 +339,14 @@ export const updateUserAction = withAuth(
  * 逻辑删除用户 Action Controller
  */
 export const deleteUserAction = withAuth(
-  { permissions: [USER_PERMISSIONS.DELETE], audit: 'USER_DELETE' },
+  { permissions: [USER_PERMISSIONS.DELETE] },
   async (ctx: AuthContext, userIdStr: string): Promise<ApiResponse<{ id: string }>> => {
     const v = validate(UserIdentityInputSchema, { id: userIdStr });
     if (!v.ok) return v.response;
 
-    // 读取 + 更新在事务中原子完成（R22）；领域纯函数执行删除规则校验
     const deptIds = await getUserRoleDeptIds(ctx.userId);
-    await db.transaction(async (tx) => {
-      const row = await tx.query.users.findFirst({ where: eq(schema.users.id, v.data.id) });
-      if (!row) throw new EntityNotFoundError('User', v.data.id);
-      if (!canAccessDept(deptIds, row.deptId)) throw new ForbiddenError('无权操作该部门的用户');
-
-      const deleted = deleteUser(userFromPersistence(row));
-      await tx.update(schema.users)
-        .set({ status: deleted.status })
-        .where(eq(schema.users.id, v.data.id));
-    });
+    const auditContext = await getActionAuditContext();
+    await deleteUserInTransaction(ctx.userId, v.data.id, deptIds, auditContext);
 
     // 删除用户后撤销其所有活跃 JWT（jti 黑名单），确保即时下线
     // 关键安全操作必须 await（Redis 不可达时撤销失败会留下有效旧 Token）
@@ -267,7 +369,7 @@ export const deleteUserAction = withAuth(
  * 管理员为指定用户重置密码，重置后该用户所有活跃会话立即失效。
  */
 export const resetPasswordAction = withAuth(
-  { permissions: [USER_PERMISSIONS.RESET_PASSWORD], audit: 'TOKEN_REVOKE' },
+  { permissions: [USER_PERMISSIONS.RESET_PASSWORD] },
   async (ctx: AuthContext, userIdStr: string, newPassword: string): Promise<ApiResponse<{ id: string }>> => {
     const v = validate(UserIdentityInputSchema, { id: userIdStr });
     if (!v.ok) return v.response;
@@ -279,6 +381,7 @@ export const resetPasswordAction = withAuth(
     const passwordHash = await hashPassword(newPassword);
 
     const deptIds = await getUserRoleDeptIds(ctx.userId);
+    const auditContext = await getActionAuditContext();
     await db.transaction(async (tx) => {
       const row = await tx.query.users.findFirst({ where: eq(schema.users.id, v.data.id) });
       if (!row) throw new EntityNotFoundError('User', v.data.id);
@@ -294,6 +397,15 @@ export const resetPasswordAction = withAuth(
       await tx.update(schema.users)
         .set({ passwordHash, passwordHistory: newHistory })
         .where(eq(schema.users.id, v.data.id));
+      await appendSecurityAudit(tx, {
+        userId: ctx.userId,
+        operation: 'TOKEN_REVOKE',
+        targetType: 'user',
+        targetId: row.id,
+        targetName: row.name,
+        params: { reason: 'password_reset' },
+        ...auditContext,
+      });
     });
 
     // 重置后所有会话失效，用户须用新密码重新登录（B-USR-PW）

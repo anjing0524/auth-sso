@@ -26,6 +26,9 @@ function parseRedirectUrls(envValue: string | undefined, defaults: string[]): st
 }
 
 async function main() {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('拒绝在 production 环境运行破坏性 seed.ts；请改用幂等 seed-rbac.ts');
+  }
   console.log('🌱 Seeding clean database...');
 
   try {

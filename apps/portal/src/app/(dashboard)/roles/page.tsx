@@ -7,6 +7,9 @@ import { getRoles } from './data';
 import { getDepartments } from '@/app/(dashboard)/users/data';
 import { resolveIdentity, getUserRoleDeptIds } from '@/lib/auth';
 import RolesTable from './components/RolesTable';
+import { getPermissions } from '@/app/(dashboard)/permissions/data';
+import { checkPermission } from '@/lib/auth/check-permission';
+import { ROLE_PERMISSIONS } from '@auth-sso/contracts';
 
 interface PageProps {
   searchParams: Promise<{
@@ -24,9 +27,11 @@ export default async function RolesPage({ searchParams }: PageProps) {
   const identity = await resolveIdentity();
   const deptIds = identity ? await getUserRoleDeptIds(identity.userId) : [];
 
-  const [{ data: roles, pagination }, departments] = await Promise.all([
+  const [{ data: roles, pagination }, departments, permissions, assignCheck] = await Promise.all([
     getRoles({ page, pageSize: 10, keyword, status: '', deptIds }),
     getDepartments(),
+    getPermissions('API'),
+    checkPermission({ permissions: [ROLE_PERMISSIONS.ASSIGN_PERMISSION] }),
   ]);
 
   return (
@@ -40,7 +45,18 @@ export default async function RolesPage({ searchParams }: PageProps) {
         </div>
       </div>
 
-      <RolesTable roles={roles} pagination={pagination} initialKeyword={keyword} departments={departments} />
+      <RolesTable
+        roles={roles}
+        pagination={pagination}
+        initialKeyword={keyword}
+        departments={departments}
+        permissions={permissions.map((permission) => ({
+          id: permission.id,
+          code: permission.code,
+          name: permission.name,
+        }))}
+        canAssignPermissions={assignCheck.authorized}
+      />
     </div>
   );
 }

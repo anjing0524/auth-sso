@@ -13,7 +13,14 @@ import { withPermission, canAccessDept, getUserRoleDeptIds, logServerDataRead } 
 import { appendSecurityAudit, extractClientIP, extractUserAgent } from '@/lib/audit';
 import { refreshUserPermissionCache } from '@/lib/permissions';
 import { revokeUserAccessByUserId } from '@/lib/session/revoke';
-import { COMMON_ERRORS, USER_ERRORS, ENTITY_ACTIVE, USER_PERMISSIONS } from '@auth-sso/contracts';
+import {
+  COMMON_ERRORS,
+  USER_ERRORS,
+  ENTITY_ACTIVE,
+  USER_PERMISSIONS,
+  type UserRoleDto,
+  type UserRolesUpdateResult,
+} from '@auth-sso/contracts';
 import { getUserRoles } from '@/app/(dashboard)/users/data';
 import { restSuccess, restError } from '@/lib/response';
 
@@ -22,7 +29,7 @@ interface RouteParams { params: Promise<{ id: string }>; }
 const MAX_ASSIGNED_ROLES = 100;
 
 const RoleAssignmentBodySchema = z.object({
-  roleIds: z.array(z.string().uuid()).min(1).max(MAX_ASSIGNED_ROLES),
+  roleIds: z.array(z.string().uuid()).max(MAX_ASSIGNED_ROLES),
 }).superRefine(({ roleIds }, ctx) => {
   if (new Set(roleIds).size !== roleIds.length) {
     ctx.addIssue({ code: 'custom', message: '角色 ID 不可重复', path: ['roleIds'] });
@@ -64,7 +71,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     }
     const roles = await getUserRoles(id);
     await logServerDataRead('user_roles', id);
-    return restSuccess(roles);
+    return restSuccess<UserRoleDto[]>(roles);
   });
 }
 
@@ -104,18 +111,27 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       if (errMsg) return { error: COMMON_ERRORS.VALIDATION_ERROR, message: errMsg, status: 400 } as const;
 
       await tx.delete(schema.userRoles).where(eq(schema.userRoles.userId, userRow.id));
-      await tx.insert(schema.userRoles).values(roleIds.map(roleId => ({ userId: userRow.id, roleId, createdAt: new Date() })));
+      if (roleIds.length > 0) {
+        await tx.insert(schema.userRoles).values(roleIds.map(roleId => ({
+          userId: userRow.id,
+          roleId,
+          createdAt: new Date(),
+        })));
+      }
       await appendSecurityAudit(tx, {
         userId: adminUserId,
         operation: 'USER_ROLE_ASSIGN',
         method: 'POST',
         url: request.url,
+        targetType: 'user',
+        targetId: userRow.id,
         params: { targetUserId: userRow.id, roleIds },
+        changes: { roleIds: { after: roleIds } },
         ip: extractClientIP(request.headers),
         userAgent: extractUserAgent(request.headers),
         status: 200,
       });
-      return { assignedCount: roleIds }; // no as const — avoids type narrowing issues
+      return { roleIds: [...roleIds] } satisfies UserRolesUpdateResult;
     });
 
     if ('error' in result) {
@@ -127,7 +143,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     await revokeUserAccessByUserId(userId);
     revalidatePath('/users');
     updateTag('users-list');
-    return restSuccess(result);
+    return restSuccess<UserRolesUpdateResult>(result);
   });
 }
 
@@ -169,7 +185,10 @@ export async function DELETE(
         operation: 'USER_ROLE_ASSIGN',
         method: 'DELETE',
         url: request.url,
+        targetType: 'user',
+        targetId: userRow.id,
         params: { targetUserId: userRow.id, roleId },
+        changes: { roleId: { before: roleId, after: null } },
         ip: extractClientIP(request.headers),
         userAgent: extractUserAgent(request.headers),
         status: 200,

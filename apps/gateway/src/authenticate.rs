@@ -8,17 +8,18 @@
 //! | `NearlyExpired`（< 5min） | 尝试续签，**不阻断请求** | 旧 AT 仍有效，**下次请求重试** |
 //! | `Expired` | 尝试续签，**续签失败则阻断** | 401 或 PKCE 302 |
 //!
-//! **Expired 并发竞争**：同用户并发续签由 Redis SET NX EX 原子抢占去重（30s 窗口），
-//! 仅一个请求发起续签；竞争失败方在 `Expired` 状态下收到 401/PKCE。
-//! 这是有意的安全权衡——Redis 中不缓存新 AT 供失败方取用（零 token 明文泄露面），
-//! 失败方浏览器凭续签成功方下发的新 Cookie 在下次请求自愈。
+//! **Expired 并发竞争**：同一 Refresh Token 的并发续签由 Redis SET NX EX 原子去重。
+//! 仅一个请求发起续签；其余持有同一已验证会话 Cookie 的请求继续使用原身份完成当前
+//! 请求，避免 Next.js RSC 导航出现瞬时 401。不同设备的 Refresh Token 互不竞争。
 //!
 //! **NearlyExpired 重试风暴风险**：如果 Portal 连续不可达，每次请求都会触发续签尝试
 //! （因为 AT 在接下来 5 分钟内始终处于 NearlyExpired）。这是有意的可用性权衡——
 //! 旧 AT 在业务上仍可接受。Redis 去重（30s 窗口）限制了入站续签请求频率；
 //! 若 Redis 降级，每次请求都会尝试续签，入站 POST 量将增加，但不会阻断业务。
 
-use crate::auth::{AuthDecision, JwtVerifier, TokenExpiry, TokenRefresher, TokenStatus};
+use crate::auth::{
+    AuthDecision, JwtVerifier, RefreshOutcome, TokenExpiry, TokenRefresher, TokenStatus,
+};
 use crate::cookie;
 use crate::gateway::{GatewayCtx, Identity};
 use crate::http::SessionExt;
@@ -36,22 +37,38 @@ async fn auth_failure_decision(session: &mut Session, is_html_nav: bool) -> Resu
     }
 }
 
-async fn try_refresh_session(ctx: &mut GatewayCtx, refresher: &TokenRefresher) -> bool {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SessionRefreshOutcome {
+    Refreshed,
+    InProgress,
+    Failed,
+}
+
+fn refresh_allows_request(expiry: &TokenExpiry, outcome: SessionRefreshOutcome) -> bool {
+    !matches!(expiry, TokenExpiry::Expired) || outcome != SessionRefreshOutcome::Failed
+}
+
+async fn try_refresh_session(
+    ctx: &mut GatewayCtx,
+    refresher: &TokenRefresher,
+) -> SessionRefreshOutcome {
     let rt = ctx
         .cookie_header
         .as_deref()
         .and_then(|h| cookie::extract_from_header(h, cookie::REFRESH_COOKIE));
     let Some(rt) = rt else {
-        return false;
+        return SessionRefreshOutcome::Failed;
     };
     let Some(identity) = ctx.identity.as_ref() else {
-        return false;
+        return SessionRefreshOutcome::Failed;
     };
-    let Some(new_tokens) = refresher.try_refresh(rt, &identity.user_id).await else {
-        return false;
+    let new_tokens = match refresher.try_refresh(rt, &identity.user_id).await {
+        RefreshOutcome::Refreshed(tokens) => tokens,
+        RefreshOutcome::InProgress => return SessionRefreshOutcome::InProgress,
+        RefreshOutcome::Failed => return SessionRefreshOutcome::Failed,
     };
     let Some(new_claims) = crate::auth::decode_jwt_payload(&new_tokens.access) else {
-        return false;
+        return SessionRefreshOutcome::Failed;
     };
 
     ctx.identity = Some(Identity {
@@ -60,7 +77,7 @@ async fn try_refresh_session(ctx: &mut GatewayCtx, refresher: &TokenRefresher) -
         user_jti: new_claims.jti,
     });
     ctx.refreshed_tokens = Some(new_tokens);
-    true
+    SessionRefreshOutcome::Refreshed
 }
 
 pub async fn check(
@@ -100,12 +117,11 @@ pub async fn check(
     match expiry {
         TokenExpiry::Valid => Ok(AuthDecision::Pass),
         TokenExpiry::NearlyExpired | TokenExpiry::Expired => {
-            let refreshed = try_refresh_session(ctx, refresher).await;
-            match expiry {
-                TokenExpiry::Expired if !refreshed => {
-                    auth_failure_decision(session, is_html_nav).await
-                }
-                _ => Ok(AuthDecision::Pass),
+            let refresh_outcome = try_refresh_session(ctx, refresher).await;
+            if refresh_allows_request(&expiry, refresh_outcome) {
+                Ok(AuthDecision::Pass)
+            } else {
+                auth_failure_decision(session, is_html_nav).await
             }
         }
     }
@@ -134,5 +150,21 @@ mod tests {
         ];
         // 三个变体都在
         assert_eq!(decisions.len(), 3);
+    }
+
+    #[test]
+    fn expired_parallel_refresh_is_allowed_but_real_failure_is_blocked() {
+        assert!(refresh_allows_request(
+            &TokenExpiry::Expired,
+            SessionRefreshOutcome::InProgress,
+        ));
+        assert!(!refresh_allows_request(
+            &TokenExpiry::Expired,
+            SessionRefreshOutcome::Failed,
+        ));
+        assert!(refresh_allows_request(
+            &TokenExpiry::NearlyExpired,
+            SessionRefreshOutcome::Failed,
+        ));
     }
 }

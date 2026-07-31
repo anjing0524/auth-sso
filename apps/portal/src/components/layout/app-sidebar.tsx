@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect } from 'react';
 import {
   ChevronRight,
   LogOut,
@@ -25,6 +26,7 @@ import {
   SidebarMenuSub,
   SidebarMenuSubItem,
   SidebarMenuSubButton,
+  useSidebar,
 } from '@/components/ui/sidebar';
 import {
   DropdownMenu,
@@ -49,12 +51,17 @@ interface MenuItem {
   children?: MenuItem[];
 }
 
-export function AppSidebar({ user, dynamicMenus = [] }: {
+export function AppSidebar({ user, dynamicMenus }: {
   user: { id?: string; name?: string; email?: string | null; picture?: string | null } | null;
   dynamicMenus?: MenuItem[];
 }) {
   const pathname = usePathname();
+  const { isMobile, setOpenMobile } = useSidebar();
   const userData = user || {};
+
+  useEffect(() => {
+    if (isMobile) setOpenMobile(false);
+  }, [isMobile, pathname, setOpenMobile]);
 
   // 内置菜单作为兜底，当数据库为空时使用
   const fallbackMenus: MenuItem[] = [
@@ -69,8 +76,9 @@ export function AppSidebar({ user, dynamicMenus = [] }: {
     { id: 'audit', title: '安全审计', url: '/audit-logs', icon: 'ShieldAlert' },
   ];
 
-  // dynamicMenus 来自服务端，已按权限过滤；为空则用内置菜单兜底
-  const displayMenus: MenuItem[] = dynamicMenus.length > 0 ? dynamicMenus : fallbackMenus;
+  // 服务端显式传入 [] 代表当前用户无可见菜单，不能回退到管理员菜单。
+  // 仅保留未传 prop 时的 Storybook/组件独立预览兜底。
+  const displayMenus: MenuItem[] = dynamicMenus ?? fallbackMenus;
 
   return (
     <Sidebar collapsible="icon" className="border-r border-border/40 bg-muted/30">
@@ -89,7 +97,7 @@ export function AppSidebar({ user, dynamicMenus = [] }: {
       <SidebarContent className="px-3 pt-4">
         <SidebarGroup>
           <SidebarGroupLabel className="px-4 text-[10px] font-black uppercase tracking-[0.15em] text-muted-foreground mb-2 group-data-[collapsible=icon]:hidden">
-            System Control
+            系统功能
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu className="gap-1">
@@ -178,7 +186,7 @@ export function AppSidebar({ user, dynamicMenus = [] }: {
                 sideOffset={16}
               >
                 <div className="px-3 py-3 mb-2 bg-muted rounded-2xl">
-                   <p className="text-[10px] font-black text-primary uppercase tracking-widest mb-1">Authenticated Account</p>
+                   <p className="text-[10px] font-black text-primary tracking-widest mb-1">当前登录账户</p>
                    <p className="text-xs font-bold text-muted-foreground truncate">{userData.email}</p>
                 </div>
                 <DropdownMenuItem asChild className="rounded-xl cursor-pointer">
@@ -188,16 +196,16 @@ export function AppSidebar({ user, dynamicMenus = [] }: {
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild className="rounded-xl cursor-pointer">
-                  <Link href="/profile" className="flex items-center gap-3 py-3 px-3 hover:bg-muted">
+                  <Link href="/settings" className="flex items-center gap-3 py-3 px-3 hover:bg-muted">
                     <div className="p-2 bg-muted text-muted-foreground rounded-lg"><Settings className="h-4 w-4" /></div>
-                    <span className="font-bold text-sm text-foreground">系统设置</span>
+                    <span className="font-bold text-sm text-foreground">账户设置</span>
                   </Link>
                 </DropdownMenuItem>
                 <div className="h-px bg-border my-2 mx-2" />
                 <DropdownMenuItem asChild className="rounded-xl cursor-pointer text-destructive focus:bg-destructive/5 focus:text-destructive">
                   <a href="/api/auth/logout?callbackUrl=/login" className="flex items-center gap-3 py-3 px-3">
                     <div className="p-2 bg-destructive/10 text-destructive rounded-lg"><LogOut className="h-4 w-4" /></div>
-                    <span className="font-black text-sm uppercase tracking-tight">Sign Out</span>
+                    <span className="font-black text-sm tracking-tight">退出登录</span>
                   </a>
                 </DropdownMenuItem>
               </DropdownMenuContent>

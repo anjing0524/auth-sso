@@ -70,6 +70,11 @@ export const permissions = pgTable('permissions', {
   clientId: varchar('client_id', { length: 50 }).references(() => clients.clientId, { onDelete: 'cascade' }),
   // 树形结构（FK 自引用）
   parentId: uuid('parent_id').references((): AnyPgColumn => permissions.id, { onDelete: 'cascade' }),
+  // DIRECTORY/PAGE 显式绑定的 API 权限；菜单 code 不再兼任业务鉴权码
+  requiredPermissionId: uuid('required_permission_id').references(
+    (): AnyPgColumn => permissions.id,
+    { onDelete: 'set null' },
+  ),
   status: entityStatusEnum('status').notNull().default('ACTIVE'),
   sort: smallint('sort').notNull().default(0),
   createdAt: createdAtColumn(),
@@ -77,6 +82,7 @@ export const permissions = pgTable('permissions', {
 }, (t) => [
   index('idx_permissions_client').on(t.clientId),
   index('idx_permissions_parent').on(t.parentId),
+  index('idx_permissions_required_permission').on(t.requiredPermissionId),
   index('idx_permissions_type').on(t.type),
   // CHECK：DIRECTORY/PAGE 不可有 client_id
   // 应用层 Zod discriminatedUnion 为第一道防线，此为 DB 第二道防线

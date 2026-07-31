@@ -57,7 +57,7 @@ export default function DashboardLayout({
     if (segments[0] !== 'dashboard') {
       const titleMap: Record<string, string> = {
         users: '用户管理',
-        roles: '角色权限',
+        roles: '角色管理',
         departments: '组织架构',
         clients: '应用管理',
         'audit-logs': '审计日志',
@@ -66,6 +66,17 @@ export default function DashboardLayout({
       };
       const title = titleMap[segments[0]!] || segments[0] || '';
       crumbs.push({ title, url: `/${segments[0]}` });
+      if (segments.length > 1) {
+        const detailTitleMap: Record<string, string> = {
+          users: '用户详情',
+          roles: '角色详情',
+          clients: '应用详情',
+        };
+        crumbs.push({
+          title: detailTitleMap[segments[0]!] ?? '详情',
+          url: pathname,
+        });
+      }
     }
 
     return crumbs;
@@ -107,8 +118,8 @@ export default function DashboardLayout({
             </kbd>
           </div>
         </header>
-        <main id="main-content" className="flex-1 overflow-auto bg-muted/30 p-4 lg:p-6">
-          <div className="space-y-6 animate-in fade-in duration-500">
+        <main id="main-content" className="min-w-0 flex-1 overflow-auto bg-muted/30 p-4 lg:p-6">
+          <div className="min-w-0 space-y-6 animate-in fade-in duration-500">
             {children}
           </div>
         </main>

@@ -60,11 +60,43 @@ export async function getRoles(params: {
     .limit(pageSize)
     .offset(offset);
 
+  const roleIds = rows.map((row) => row.id);
+  const [boundCounts, permissionBindings] = roleIds.length > 0
+    ? await Promise.all([
+      db
+      .select({
+        roleId: schema.userRoles.roleId,
+        count: count(),
+      })
+      .from(schema.userRoles)
+      .where(inArray(schema.userRoles.roleId, roleIds))
+      .groupBy(schema.userRoles.roleId),
+      db
+        .select({
+          roleId: schema.rolePermissions.roleId,
+          permissionId: schema.rolePermissions.permissionId,
+        })
+        .from(schema.rolePermissions)
+        .where(inArray(schema.rolePermissions.roleId, roleIds)),
+    ])
+    : [[], []];
+  const boundCountByRole = new Map(
+    boundCounts.map((item) => [item.roleId, Number(item.count)]),
+  );
+  const permissionIdsByRole = new Map<string, string[]>();
+  for (const binding of permissionBindings) {
+    const ids = permissionIdsByRole.get(binding.roleId) ?? [];
+    ids.push(binding.permissionId);
+    permissionIdsByRole.set(binding.roleId, ids);
+  }
+
   return {
     data: rows.map(r => ({
       id: r.id, name: r.name, code: r.code,
       description: r.description, deptId: r.deptId,
       isSystem: r.isSystem ?? false, status: r.status, sort: r.sort ?? 0,
+      boundUserCount: boundCountByRole.get(r.id) ?? 0,
+      permissionIds: permissionIdsByRole.get(r.id) ?? [],
       createdAt: r.createdAt.toISOString(),
     })),
     pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) },
@@ -128,4 +160,3 @@ export async function getRolePermissions(roleId: string) {
       assignedAt: rp.createdAt,
     }));
 }
-

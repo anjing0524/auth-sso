@@ -23,6 +23,7 @@ export async function GET(request: NextRequest) {
       page,
       pageSize,
       userId: sp.get('userId') || undefined,
+      username: sp.get('username') || undefined,
       eventType,
       startDate: sp.get('startDate') || undefined,
       endDate: sp.get('endDate') || undefined,

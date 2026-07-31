@@ -73,6 +73,20 @@ export function safeRedirectPath(target: string | null | undefined): string | nu
 }
 
 /**
+ * 解析 Portal 登录后的落地路径。
+ *
+ * 无任何管理权限的已认证用户必须进入专用说明页，不能回跳到受保护页面后
+ * 再被登录代理重复送回 OAuth 流程。
+ */
+export function resolvePortalLandingPath(
+  target: string | null | undefined,
+  hasPermissions: boolean,
+): string {
+  if (!hasPermissions) return '/no-access';
+  return safeRedirectPath(target) || '/dashboard';
+}
+
+/**
  * 构建「重定向到登录页」响应 — 未登录时只传不透明的 session_id
  *
  * OAuth 授权参数（client_id/redirect_uri/code_challenge/state/nonce）已暂存到 Redis

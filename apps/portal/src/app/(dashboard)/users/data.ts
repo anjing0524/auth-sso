@@ -82,7 +82,7 @@ export async function getUsers(
     data: users.map((u) => ({
       ...u,
       status: u.status,
-      name: u.name || u.username || 'Unknown',
+      name: u.name || u.username || '未知用户',
       deptName: u.deptName || '未分配',
       createdAt: u.createdAt.toISOString(),
       lastLoginAt: u.lastLoginAt ? u.lastLoginAt.toISOString() : null,
@@ -140,6 +140,7 @@ export async function getUser(lookupId: string) {
     id: user.id,
     username: user.username,
     email: user.email,
+    mobile: user.mobile,
     name: user.name,
     avatarUrl: user.avatarUrl,
     status: user.status,

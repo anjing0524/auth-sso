@@ -14,15 +14,15 @@ import { eq } from 'drizzle-orm';
 import { generateId, generateUUID, hashToken } from '@/lib/crypto';
 import { isJtiRevoked, trackUserJti, revokeUserAccessByUserId } from '@/lib/session/revoke';
 import { getUserPermissionContext, cacheUserPermissionContext } from '@/lib/permissions';
-import { TOKEN_TTL } from '@auth-sso/contracts';
+import { PORTAL_AUD, TOKEN_TTL } from '@auth-sso/contracts';
 import type { PortalJwtClaims, RefreshTokenResult } from '@/domain/auth/types';
 import { getActiveSigningKey, getSigningKeyByKid } from './token/signing-keys';
 import { createLogger } from '@/lib/logger';
+import { getIssuer } from '@/lib/env';
 // 保持向后兼容：密钥管理函数仍从 @/lib/auth/token 可导入
 export { getActiveSigningKey, getSigningKeyByKid } from './token/signing-keys';
 
 const log = createLogger('Token');
-const AUTH_SSO = 'auth-sso';
 
 // ============================================================================
 // Login Session Token — 登录成功后写入 HttpOnly Cookie 的临时凭证
@@ -48,8 +48,8 @@ export async function signLoginSession(userId: string): Promise<string> {
   return new SignJWT({ sub: userId })
     .setProtectedHeader({ alg: 'ES256', kid: keyId })
     .setIssuedAt()
-    .setIssuer(AUTH_SSO)
-    .setAudience(AUTH_SSO)
+    .setIssuer(getIssuer())
+    .setAudience(PORTAL_AUD)
     .setJti(`jti_${generateId(16)}`)
     .setExpirationTime(Math.floor(Date.now() / 1000) + LOGIN_SESSION_TTL)
     .sign(privateKey);
@@ -78,8 +78,8 @@ export async function signAccessToken(userId: string, scope?: string): Promise<{
   const token = await new SignJWT({ sub: userId, ...(scope ? { scope } : {}) })
     .setProtectedHeader({ alg: 'ES256', kid: keyId })
     .setIssuedAt()
-    .setIssuer(AUTH_SSO)
-    .setAudience(AUTH_SSO)
+    .setIssuer(getIssuer())
+    .setAudience(PORTAL_AUD)
     .setJti(jti)
     .setExpirationTime(Math.floor(Date.now() / 1000) + ACCESS_TOKEN_TTL)
     .sign(privateKey);
@@ -106,7 +106,7 @@ export async function signAccessToken(userId: string, scope?: string): Promise<{
  */
 export async function verifyAccessToken(
   token: string,
-  audience: string | null = AUTH_SSO,
+  audience: string | null = PORTAL_AUD,
 ): Promise<PortalJwtClaims | null> {
   try {
     const header = decodeProtectedHeader(token);
@@ -123,7 +123,7 @@ export async function verifyAccessToken(
     }
 
     const verifyOpts: { issuer: string; algorithms: string[]; audience?: string } = {
-      issuer: AUTH_SSO,
+      issuer: getIssuer(),
       algorithms: ['ES256'],
     };
     if (audience !== null) {
@@ -192,7 +192,7 @@ export async function signIdToken(params: {
   return new SignJWT(payload)
     .setProtectedHeader({ alg: 'ES256', kid: keyId })
     .setIssuedAt()
-    .setIssuer(AUTH_SSO)
+    .setIssuer(getIssuer())
     .setAudience(params.clientId)
     .setJti(`jti_${generateId(16)}`)
     .setExpirationTime(now + ID_TOKEN_TTL)

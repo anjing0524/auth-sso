@@ -136,7 +136,7 @@ export default function ClientsTable({ clients, initialKeyword }: Props) {
                 {client.homepageUrl} <ExternalLink className="h-2 w-2" />
               </a>
             ) : (
-              <span className="text-[10px] text-muted-foreground">Internal Application</span>
+              <span className="text-[10px] text-muted-foreground">内部应用</span>
             )}
           </div>
         </div>
@@ -151,6 +151,7 @@ export default function ClientsTable({ clients, initialKeyword }: Props) {
             size="icon"
             className="h-7 w-7 rounded-md hover:bg-card hover:shadow-sm transition-all"
             onClick={() => handleCopy(client.clientId, client.clientId)}
+            aria-label={`复制 ${client.name} 的 Client ID`}
           >
             {copiedId === client.clientId ? <Check className="h-3 w-3 text-success" /> : <Copy className="h-3 w-3 text-muted-foreground" />}
           </Button>
@@ -173,13 +174,13 @@ export default function ClientsTable({ clients, initialKeyword }: Props) {
           variant={client.status === 'ACTIVE' ? 'success' : 'secondary'}
           className="px-2.5 py-0.5 font-bold tracking-wider text-[10px]"
         >
-          {client.status === 'ACTIVE' ? 'ACTIVE' : 'DISABLED'}
+          {client.status === 'ACTIVE' ? '启用' : '停用'}
         </Badge>
       </TableCell>
       <TableCell className="text-right pr-8">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-card hover:shadow-md transition-all">
+            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-card hover:shadow-md transition-all" aria-label={`打开 ${client.name} 的应用操作`}>
               <MoreHorizontal className="h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>

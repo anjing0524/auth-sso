@@ -43,16 +43,16 @@ export default function ClientDetailPage({ params }: PageProps) {
     try {
       const response = await fetch(`/api/clients/${id}`);
       if (response.ok) {
-        const data = await response.json();
-        setClient(data.data);
+        const data = await response.json() as Client;
+        setClient(data);
         setFormData({
-          name: data.data.name,
-          redirectUris: data.data.redirectUris.join('\n'),
-          scopes: data.data.scopes,
-          homepageUrl: data.data.homepageUrl || '',
-          logoUrl: data.data.logoUrl || '',
-          accessTokenTtl: data.data.accessTokenTtl,
-          refreshTokenTtl: data.data.refreshTokenTtl,
+          name: data.name,
+          redirectUris: data.redirectUris.join('\n'),
+          scopes: data.scopes,
+          homepageUrl: data.homepageUrl || '',
+          logoUrl: data.logoUrl || '',
+          accessTokenTtl: data.accessTokenTtl ?? 3600,
+          refreshTokenTtl: data.refreshTokenTtl ?? 604800,
         });
       }
     } catch (error) {

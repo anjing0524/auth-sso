@@ -16,6 +16,7 @@ import { hashPassword, verifyPassword } from '@/domain/auth/password';
 import { validateAuthCodeRow, verifyPKCE } from '@/domain/auth/oauth-code';
 import { validateClientActive, validateClientSecret, validateRedirectUri } from '@/domain/auth/oauth-client';
 import { validateAuthorization } from '@/domain/auth/oauth-authorize';
+import { PORTAL_CLIENT_ID } from '@auth-sso/contracts';
 
 const TEST_PASSWORD_CONFIG = {
   bcryptRounds: 4,
@@ -193,12 +194,21 @@ describe('validateAuthorization', () => {
     expect(result.allowed).toBe(true);
   });
 
-  it('无角色 → 拒绝', () => {
+  it('无角色访问外部 Client → 拒绝', () => {
     const result = validateAuthorization({
       userId: 'user-1', clientId: 'client-1',
       status: 'ACTIVE', roles: [],
     });
     expect(result.allowed).toBe(false);
+    expect(result.errorCode).toBe('no_roles');
+  });
+
+  it('无角色访问 Portal 自身 → 允许完成认证', () => {
+    const result = validateAuthorization({
+      userId: 'user-1', clientId: PORTAL_CLIENT_ID,
+      status: 'ACTIVE', roles: [],
+    });
+    expect(result.allowed).toBe(true);
   });
 
   it('DISABLED 用户 → 拒绝', () => {

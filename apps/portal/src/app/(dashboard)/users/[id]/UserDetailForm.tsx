@@ -1,52 +1,87 @@
-/**
- * 用户详情编辑表单 (Client Component)
- *
- * 职责分工：
- * - Server Component 父组件负责初始数据获取
- * - 本组件只管理可编辑字段的表单状态（useState）
- * - 只读展示数据（deptName、createdAt 等）直接从 prop 读取
- * - 保存后 router.refresh() 让 Server Component 重新获取，prop 更新驱动展示区刷新
- */
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { toast } from 'sonner';
-import {
-  User as UserIcon, ArrowLeft, Save, Trash2, Shield, Building, Calendar, AlertTriangle,
-} from 'lucide-react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import {
+  AlertTriangle,
+  ArrowLeft,
+  Building,
+  Calendar,
+  Clock,
+  KeyRound,
+  Phone,
+  Save,
+  Shield,
+  Trash2,
+  User as UserIcon,
+} from 'lucide-react';
+import { toast } from 'sonner';
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { formatShanghaiDateTime } from '@/lib/format-time';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription, DialogTrigger,
-} from '@/components/ui/dialog';
 import AssignRoleDialog from '../components/AssignRoleDialog';
-import { updateUserAction, deleteUserAction } from '../actions';
+import { deleteUserAction, resetPasswordAction, updateUserAction } from '../actions';
+
+interface UserDetail {
+  id: string;
+  username: string;
+  email: string | null;
+  mobile: string | null;
+  name: string;
+  status: string;
+  deptId: string | null;
+  deptName: string | null;
+  createdAt: string;
+  lastLoginAt: string | null;
+  roles: Array<{ id: string; code: string; name: string; description: string | null }>;
+}
 
 interface Props {
   id: string;
-  initialUser: Record<string, unknown> | null;
+  initialUser: UserDetail | null;
+  canDelete: boolean;
+  canUpdate: boolean;
+  canAssignRole: boolean;
+  canResetPassword: boolean;
 }
 
-export default function UserDetailForm({ id, initialUser: serverUser }: Props) {
+export default function UserDetailForm({
+  id,
+  initialUser: serverUser,
+  canDelete,
+  canUpdate,
+  canAssignRole,
+  canResetPassword,
+}: Props) {
   const router = useRouter();
-  const user = serverUser ?? {};
   const [form, setForm] = useState({
-    name: user.name as string,
-    email: (user.email as string) || '',
-    status: (user.status as string) || 'ACTIVE',
+    name: serverUser?.name ?? '',
+    email: serverUser?.email ?? '',
+    mobile: serverUser?.mobile ?? '',
+    status: serverUser?.status ?? 'ACTIVE',
   });
   const [saving, setSaving] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [isResetOpen, setIsResetOpen] = useState(false);
   const [isRoleOpen, setIsRoleOpen] = useState(false);
 
-  // 用户不存在时：在 useEffect 中执行副作用（toast + 导航），避免在 render 中直接调用
-  // React StrictMode 下 render 可能双触发，副作用统一收敛至 Effect 中是安全的
   useEffect(() => {
     if (!serverUser) {
       toast.error('用户不存在');
@@ -56,110 +91,160 @@ export default function UserDetailForm({ id, initialUser: serverUser }: Props) {
 
   if (!serverUser) return null;
 
-  // 只读展示从 prop 读取 —— router.refresh() 后自动更新
-  const username = serverUser.username as string;
-  const deptName = (serverUser.deptName as string) || null;
-  const createdAt = serverUser.createdAt as string;
-
   const handleUpdate = async () => {
     setSaving(true);
-    const res = await updateUserAction(id, form);
-    if (res.success) {
+    try {
+      const res = await updateUserAction(id, form);
+      if (!res.success) {
+        toast.error(res.message || '更新失败');
+        return;
+      }
       toast.success('用户信息更新成功');
-      router.refresh(); // 刷新 Server Component 数据，prop 更新只读展示区
-    } else {
-      toast.error(res.message || '更新失败');
+      router.refresh();
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
   };
 
   const handleDelete = async () => {
     const res = await deleteUserAction(id);
-    if (res.success) {
-      toast.success('用户已成功删除');
-      setIsDeleteOpen(false);
-      router.push('/users');
-    } else {
+    if (!res.success) {
       toast.error(res.message || '删除失败');
+      return;
+    }
+    toast.success('用户已成功删除');
+    setIsDeleteOpen(false);
+    router.push('/users');
+  };
+
+  const handleResetPassword = async () => {
+    setResetting(true);
+    try {
+      const res = await resetPasswordAction(id, newPassword);
+      if (!res.success) {
+        toast.error(res.message || '重置失败');
+        return;
+      }
+      toast.success(res.message);
+      setNewPassword('');
+      setIsResetOpen(false);
+    } finally {
+      setResetting(false);
     }
   };
 
   return (
-    <div className="space-y-8 pb-10">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" className="rounded-full" asChild>
-            <Link href="/users"><ArrowLeft className="h-5 w-5" /></Link>
+    <div className="min-w-0 space-y-6 pb-10">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex min-w-0 items-center gap-3">
+          <Button variant="ghost" size="icon" className="shrink-0 rounded-full" asChild>
+            <Link href="/users" aria-label="返回用户列表">
+              <ArrowLeft className="h-5 w-5" />
+            </Link>
           </Button>
-          <div>
-            <h1 className="text-3xl font-black tracking-tight text-foreground">{form.name}</h1>
-            <p className="text-muted-foreground text-sm font-medium">
-              账号 ID: <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">{username}</code>
+          <div className="min-w-0">
+            <h1 className="truncate text-2xl font-black tracking-tight text-foreground sm:text-3xl">
+              {form.name}
+            </h1>
+            <p className="truncate text-sm font-medium text-muted-foreground">
+              登录账号：<code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">{serverUser.username}</code>
             </p>
           </div>
         </div>
-        <div className="flex gap-3">
-          <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
-            <DialogTrigger render={<Button variant="destructive" className="rounded-lg px-6 bg-destructive/10 text-destructive hover:bg-destructive/20 border-none shadow-none" />}>
-              <Trash2 className="mr-2 h-4 w-4" /> 删除用户
+        <div className="flex flex-wrap gap-2">
+          {canDelete && (
+            <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
+              <DialogTrigger
+                render={<Button variant="destructive" className="rounded-lg bg-destructive/10 text-destructive shadow-none hover:bg-destructive/20" />}
+              >
+                <Trash2 className="mr-2 h-4 w-4" />删除用户
+              </DialogTrigger>
+              <DialogContent className="rounded-2xl">
+                <DialogHeader>
+                  <DialogTitle className="text-xl font-black text-destructive">确认删除用户？</DialogTitle>
+                  <DialogDescription>
+                    用户 <strong>{form.name}</strong> 将被逻辑删除，所有活跃会话也会失效。此操作不可撤销。
+                  </DialogDescription>
+                </DialogHeader>
+                <DialogFooter>
+                  <Button variant="ghost" onClick={() => setIsDeleteOpen(false)}>取消</Button>
+                  <Button variant="destructive" onClick={handleDelete}>确认删除</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          )}
+          {canResetPassword && <Dialog open={isResetOpen} onOpenChange={setIsResetOpen}>
+            <DialogTrigger render={<Button variant="outline" className="rounded-lg" />}>
+              <KeyRound className="mr-2 h-4 w-4" />重置密码
             </DialogTrigger>
             <DialogContent className="rounded-2xl">
               <DialogHeader>
-                <DialogTitle className="text-xl font-black text-red-600">确认永久删除？</DialogTitle>
+                <DialogTitle>重置用户密码</DialogTitle>
                 <DialogDescription>
-                  此操作将立即注销用户 <strong>{form.name}</strong> 的所有访问权限。该操作不可撤销。
+                  重置后会立即撤销该用户的全部会话。新密码不能与最近使用过的密码相同。
                 </DialogDescription>
               </DialogHeader>
+              <div className="space-y-2 py-2">
+                <Label htmlFor="reset-password">新密码</Label>
+                <Input
+                  id="reset-password"
+                  type="password"
+                  autoComplete="new-password"
+                  value={newPassword}
+                  onChange={(event) => setNewPassword(event.target.value)}
+                  placeholder="至少8位，含大小写字母和数字"
+                />
+              </div>
               <DialogFooter>
-                <Button variant="ghost" onClick={() => setIsDeleteOpen(false)}>取消</Button>
-                <Button onClick={handleDelete} className="bg-destructive hover:bg-destructive/80 rounded-lg px-8">确认删除</Button>
+                <Button variant="ghost" onClick={() => setIsResetOpen(false)}>取消</Button>
+                <Button onClick={handleResetPassword} disabled={resetting || !newPassword}>
+                  {resetting ? '重置中…' : '确认重置'}
+                </Button>
               </DialogFooter>
             </DialogContent>
-          </Dialog>
-          <Button
-            variant="outline"
-            className="rounded-lg px-6"
-            onClick={() => setIsRoleOpen(true)}
-          >
-            <Shield className="mr-2 h-4 w-4" /> 分配角色
-          </Button>
-          <Button onClick={handleUpdate} disabled={saving} className="rounded-lg px-8 shadow-lg shadow-primary/20">
-            {saving ? '保存中...' : <><Save className="mr-2 h-4 w-4" /> 保存更改</>}
-          </Button>
+          </Dialog>}
+          {canAssignRole && <Button variant="outline" className="rounded-lg" onClick={() => setIsRoleOpen(true)}>
+            <Shield className="mr-2 h-4 w-4" />分配角色
+          </Button>}
+          {canUpdate && <Button onClick={handleUpdate} disabled={saving} className="rounded-lg shadow-lg shadow-primary/20">
+            <Save className="mr-2 h-4 w-4" />{saving ? '保存中…' : '保存更改'}
+          </Button>}
         </div>
       </div>
 
-      <div className="grid grid-cols-12 gap-8">
-        <Card className="col-span-8 border-none shadow-sm ring-1 ring-border/50 rounded-2xl overflow-hidden bg-card">
+      <div className="grid min-w-0 gap-6 xl:grid-cols-12">
+        <Card className="overflow-hidden rounded-2xl border-none bg-card shadow-sm ring-1 ring-border/50 xl:col-span-8">
           <CardHeader className="border-b bg-muted/50">
-            <CardTitle className="text-lg font-black flex items-center gap-2">
-              <UserIcon className="h-5 w-5 text-primary" /> 基本资料
+            <CardTitle className="flex items-center gap-2 text-lg font-black">
+              <UserIcon className="h-5 w-5 text-primary" />基本资料
             </CardTitle>
           </CardHeader>
-          <CardContent className="p-8 space-y-6">
-            <div className="grid grid-cols-2 gap-8">
+          <CardContent className="space-y-6 p-5 sm:p-8">
+            <div className="grid gap-6 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label className="font-bold text-foreground/80">显示名称</Label>
-                <Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })}
-                  className="h-11 rounded-lg focus:ring-2 focus:ring-primary/10" />
+                <Label htmlFor="user-name">显示名称</Label>
+                <Input id="user-name" value={form.name} disabled={!canUpdate} onChange={(event) => setForm({ ...form, name: event.target.value })} />
               </div>
               <div className="space-y-2">
-                <Label className="font-bold text-foreground/80">电子邮箱</Label>
-                <Input value={form.email} onChange={e => setForm({ ...form, email: e.target.value })}
-                  className="h-11 rounded-lg focus:ring-2 focus:ring-primary/10" />
+                <Label htmlFor="user-email">电子邮箱</Label>
+                <Input id="user-email" type="email" value={form.email} disabled={!canUpdate} onChange={(event) => setForm({ ...form, email: event.target.value })} />
               </div>
               <div className="space-y-2">
-                <Label className="font-bold text-foreground/80">登录账号 (Username)</Label>
-                <Input value={username} disabled className="h-11 rounded-lg bg-muted opacity-60" />
+                <Label htmlFor="user-mobile">手机号</Label>
+                <Input id="user-mobile" type="tel" value={form.mobile} disabled={!canUpdate} onChange={(event) => setForm({ ...form, mobile: event.target.value })} placeholder="未填写" />
               </div>
               <div className="space-y-2">
-                <Label className="font-bold text-foreground/80">账户状态</Label>
-                <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v })}>
-                  <SelectTrigger className="h-11 rounded-lg"><SelectValue /></SelectTrigger>
-                  <SelectContent className="rounded-lg">
-                    <SelectItem value="ACTIVE">正常 (Active)</SelectItem>
-                    <SelectItem value="DISABLED">禁用 (Disabled)</SelectItem>
-                    <SelectItem value="LOCKED">锁定 (Locked)</SelectItem>
+                <Label htmlFor="user-username">登录账号</Label>
+                <Input id="user-username" value={serverUser.username} disabled />
+              </div>
+              <div className="space-y-2 sm:col-span-2">
+                <Label htmlFor="user-status">账户状态</Label>
+                <Select value={form.status} disabled={!canUpdate} onValueChange={(status) => setForm({ ...form, status })}>
+                  <SelectTrigger id="user-status"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ACTIVE">正常</SelectItem>
+                    <SelectItem value="DISABLED">禁用</SelectItem>
+                    <SelectItem value="LOCKED">锁定</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -167,66 +252,71 @@ export default function UserDetailForm({ id, initialUser: serverUser }: Props) {
           </CardContent>
         </Card>
 
-        <div className="col-span-4 space-y-6">
-          <Card className="border-none shadow-sm ring-1 ring-border/50 rounded-2xl overflow-hidden bg-card">
+        <div className="space-y-6 xl:col-span-4">
+          <Card className="overflow-hidden rounded-2xl border-none bg-card shadow-sm ring-1 ring-border/50">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-black uppercase tracking-widest text-muted-foreground">系统信息</CardTitle>
+              <CardTitle className="text-sm font-black tracking-wider text-muted-foreground">账户信息</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-muted rounded-lg text-muted-foreground"><Building className="h-4 w-4" /></div>
-                <div>
-                  <p className="text-[10px] font-bold text-muted-foreground uppercase">所属部门</p>
-                  <p className="text-sm font-bold text-foreground/80">{deptName || '未分配'}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-muted rounded-lg text-muted-foreground"><Calendar className="h-4 w-4" /></div>
-                <div>
-                  <p className="text-[10px] font-bold text-muted-foreground uppercase">创建于</p>
-                  <p className="text-sm font-bold text-foreground/80">{new Date(createdAt).toLocaleString()}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-muted rounded-lg text-muted-foreground"><Shield className="h-4 w-4" /></div>
-                <div>
-                  <p className="text-[10px] font-bold text-muted-foreground uppercase">安全角色</p>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="rounded-lg text-xs mt-1"
-                    onClick={() => setIsRoleOpen(true)}
-                  >
-                    <Shield className="mr-1 h-3 w-3" /> 管理角色
-                  </Button>
+            <CardContent className="space-y-5">
+              <InfoRow icon={Building} label="所属部门" value={serverUser.deptName || '未分配'} />
+              <InfoRow icon={Phone} label="联系电话" value={form.mobile || '未填写'} />
+              <InfoRow icon={Calendar} label="创建时间" value={formatShanghaiDateTime(serverUser.createdAt)} />
+              <InfoRow icon={Clock} label="最近登录" value={serverUser.lastLoginAt ? formatShanghaiDateTime(serverUser.lastLoginAt) : '暂无登录记录'} />
+              <div className="space-y-2">
+                <p className="text-xs font-bold text-muted-foreground">已分配角色</p>
+                <div className="flex flex-wrap gap-2">
+                  {serverUser.roles.length > 0
+                    ? serverUser.roles.map((role) => <Badge key={role.id} variant="secondary">{role.name}</Badge>)
+                    : <span className="text-sm text-muted-foreground">尚未分配角色</span>}
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          <div className="bg-warning/10 border border-warning/20 rounded-3xl p-6 flex gap-4 items-start">
-            <div className="p-2 bg-card rounded-xl shadow-sm text-warning"><AlertTriangle className="h-5 w-5" /></div>
+          <div className="flex items-start gap-4 rounded-2xl border border-warning/20 bg-warning/10 p-5">
+            <div className="rounded-xl bg-card p-2 text-warning shadow-sm"><AlertTriangle className="h-5 w-5" /></div>
             <div className="space-y-1">
-              <h5 className="text-sm font-bold text-warning">高风险操作</h5>
-              <p className="text-xs text-warning/80 leading-relaxed">
-                禁用或删除用户会立即撤销其在所有接入子系统中的活跃 Session，请谨慎操作。
+              <h2 className="text-sm font-bold text-warning">高风险操作</h2>
+              <p className="text-xs leading-relaxed text-warning/80">
+                禁用、删除或重置密码会影响该用户在所有接入系统中的活跃会话。
               </p>
             </div>
           </div>
         </div>
       </div>
 
-      {/* 角色分配对话框 */}
-      <AssignRoleDialog
-        open={isRoleOpen}
-        onOpenChange={setIsRoleOpen}
-        user={{
-          id,
-          name: form.name,
-          deptId: (serverUser.deptId as string) || null,
-          deptName: (serverUser.deptName as string) || null,
-        }}
-      />
+      {canAssignRole && (
+        <AssignRoleDialog
+          open={isRoleOpen}
+          onOpenChange={setIsRoleOpen}
+          user={{
+            id,
+            name: form.name,
+            deptId: serverUser.deptId,
+            deptName: serverUser.deptName,
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function InfoRow({
+  icon: Icon,
+  label,
+  value,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="flex items-start gap-3">
+      <div className="rounded-lg bg-muted p-2 text-muted-foreground"><Icon className="h-4 w-4" /></div>
+      <div className="min-w-0">
+        <p className="text-xs font-bold text-muted-foreground">{label}</p>
+        <p className="break-words text-sm font-bold text-foreground/80">{value}</p>
+      </div>
     </div>
   );
 }

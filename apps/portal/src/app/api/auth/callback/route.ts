@@ -16,9 +16,11 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { getAppBaseURL, getEnvConfig, isCookieSecure } from '@/lib/env';
 import { COOKIE_NAMES, TOKEN_TTL, PORTAL_CLIENT_ID } from '@auth-sso/contracts';
-import { safeRedirectPath } from '@/lib/oauth-utils';
+import { resolvePortalLandingPath } from '@/lib/oauth-utils';
 import { decodeJwtPayload } from '@/lib/session/jwt';
 import { createLogger } from '@/lib/logger';
+import { verifyAccessToken } from '@/lib/auth/token';
+import { getUserPermissionContext } from '@/lib/permissions';
 
 const log = createLogger('Callback');
 
@@ -106,9 +108,21 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    const accessClaims = await verifyAccessToken(tokens.access_token);
+    if (!accessClaims) {
+      return errorRedirect(publicBase, 'token_exchange_failed');
+    }
+    const permissionContext = await getUserPermissionContext(accessClaims.sub);
+    if (!permissionContext) {
+      return errorRedirect(publicBase, 'token_exchange_failed');
+    }
+
     const secure = isCookieSecure();
-    // 回跳路径从 return_to Cookie 取（不再复用 state），经同源消毒防开放重定向
-    const targetUrl = safeRedirectPath(returnTo) || '/dashboard';
+    // 无管理权限用户进入专用落地页；其余用户的 return_to 仍经同源消毒。
+    const targetUrl = resolvePortalLandingPath(
+      returnTo,
+      permissionContext.permissions.length > 0,
+    );
 
     const response = NextResponse.redirect(new URL(targetUrl, publicBase));
 

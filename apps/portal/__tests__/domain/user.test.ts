@@ -5,7 +5,15 @@
  * @vitest-environment node
  */
 import { describe, it, expect } from 'vitest';
-import { toggleUserStatus, unlockUser, createUser, deleteUser, applyUserUpdate, type User } from '../../src/domain/user/user';
+import {
+  toggleUserStatus,
+  unlockUser,
+  createUser,
+  deleteUser,
+  assertUserDeletionAllowed,
+  applyUserUpdate,
+  type User,
+} from '../../src/domain/user/user';
 import { BusinessRuleViolationError } from '../../src/domain/shared/errors';
 
 describe('User 领域核心规则与工厂单元测试', () => {
@@ -17,6 +25,7 @@ describe('User 领域核心规则与工厂单元测试', () => {
       id: 'usr_test_1',
       username: 'test_user',
       email: 'test@example.com',
+      mobile: null,
       name: '测试用户',
       status,
       deptId: 'dept_test_1',
@@ -102,6 +111,33 @@ describe('User 领域核心规则与工厂单元测试', () => {
   it('逻辑删除已被删除的用户，应当抛出 BusinessRuleViolationError 拦截', () => {
     const user = createTestUser('DELETED');
     expect(() => deleteUser(user)).toThrow(BusinessRuleViolationError);
+  });
+
+  it('禁止用户删除自己', () => {
+    expect(() => assertUserDeletionAllowed({
+      actorId: 'user-1',
+      targetId: 'user-1',
+      targetIsActiveSuperAdmin: false,
+      activeSuperAdminCount: 0,
+    })).toThrow('不能删除当前登录用户');
+  });
+
+  it('禁止删除最后一个有效超级管理员', () => {
+    expect(() => assertUserDeletionAllowed({
+      actorId: 'admin-2',
+      targetId: 'admin-1',
+      targetIsActiveSuperAdmin: true,
+      activeSuperAdminCount: 1,
+    })).toThrow('不能删除最后一个有效的超级管理员');
+  });
+
+  it('存在另一个有效超级管理员时允许删除目标管理员', () => {
+    expect(() => assertUserDeletionAllowed({
+      actorId: 'admin-2',
+      targetId: 'admin-1',
+      targetIsActiveSuperAdmin: true,
+      activeSuperAdminCount: 2,
+    })).not.toThrow();
   });
 
   // 5. 属性更新合并函数测试

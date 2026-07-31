@@ -9,8 +9,16 @@
  */
 import { type NextRequest, NextResponse } from 'next/server';
 import { withPermission } from '@/lib/auth';
-import { AUDIT_PERMISSIONS, MAX_PAGE_SIZE } from '@auth-sso/contracts';
+import {
+  AUDIT_OPERATION_VALUES,
+  AUDIT_PERMISSIONS,
+  LOGIN_EVENT_VALUES,
+  MAX_PAGE_SIZE,
+  type AuditOperation,
+  type LoginEventType,
+} from '@auth-sso/contracts';
 import { getAuditLogs, getLoginLogs } from '@/app/audit/data';
+import { formatShanghaiDateTime } from '@/lib/format-time';
 
 export async function GET(request: NextRequest) {
   return withPermission(
@@ -35,19 +43,48 @@ export async function GET(request: NextRequest) {
       };
 
       if (type === 'login') {
-        const logs = await getLoginLogs(pagination);
+        const rawEvent = searchParams.get('eventType');
+        const logs = await getLoginLogs({
+          ...pagination,
+          username: searchParams.get('username') || undefined,
+          eventType: rawEvent && (LOGIN_EVENT_VALUES as readonly string[]).includes(rawEvent)
+            ? rawEvent as LoginEventType
+            : undefined,
+          startDate: searchParams.get('startDate') || undefined,
+          endDate: searchParams.get('endDate') || undefined,
+        });
         csv = '\uFEFF' + [
           '时间,用户,事件类型,IP地址,User-Agent,失败原因',
           ...logs.data.map((l: Record<string, unknown>) =>
-            [l.createdAt, l.username, l.eventType, l.ip, l.userAgent, l.failReason].map(csvEscape).join(',')
+            [formatShanghaiDateTime(l.createdAt as Date | string), l.username, l.eventType, l.ip, l.userAgent, l.failReason].map(csvEscape).join(',')
           ),
         ].join('\n');
       } else {
-        const logs = await getAuditLogs(pagination);
+        const rawOperation = searchParams.get('operation');
+        const logs = await getAuditLogs({
+          ...pagination,
+          username: searchParams.get('username') || undefined,
+          target: searchParams.get('target') || undefined,
+          operation: rawOperation && (AUDIT_OPERATION_VALUES as readonly string[]).includes(rawOperation)
+            ? rawOperation as AuditOperation
+            : undefined,
+          startDate: searchParams.get('startDate') || undefined,
+          endDate: searchParams.get('endDate') || undefined,
+        });
         csv = '\uFEFF' + [
-          '时间,操作人,操作类型,目标资源,详情,IP地址',
+          '时间,操作人,操作类型,目标类型,目标资源,详情,状态,IP地址,Trace ID',
           ...logs.data.map((l: Record<string, unknown>) =>
-            [l.createdAt, l.operator || l.username, l.operation, l.resource, l.detail, l.ip].map(csvEscape).join(',')
+            [
+              formatShanghaiDateTime(l.createdAt as Date | string),
+              l.username,
+              l.operation,
+              l.targetType,
+              l.targetName || l.targetId || l.url,
+              JSON.stringify(l.changes || l.params || {}),
+              l.status,
+              l.ip,
+              l.traceId,
+            ].map(csvEscape).join(',')
           ),
         ].join('\n');
       }

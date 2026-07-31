@@ -4,6 +4,7 @@
 //! 和上游地址列表（用于回退），Redis 操作通过 [`crate::redis`] 模块函数完成。
 
 use serde::Deserialize;
+use sha2::{Digest, Sha256};
 use std::sync::Arc;
 use tracing::{debug, info, warn};
 
@@ -12,7 +13,7 @@ use crate::cookie;
 use crate::http::{HTTP_CLIENT, hmac_sha256_hex};
 use crate::jwks::JwksCache;
 
-use super::RefreshedTokens;
+use super::{RefreshOutcome, RefreshedTokens};
 
 /// Portal `/api/auth/refresh` 端点返回的 JSON 响应结构。
 ///
@@ -57,7 +58,7 @@ const REFRESH_DEDUP_PREFIX: &str = "portal:refresh_dedup:";
 /// Token 静默续签器。
 ///
 /// 先尝试 OIDC Discovery 缓存的主端点，失败后遍历全部 upstream 逐一回退。
-/// 通过 Redis SET NX EX 原子抢占实现 30s 跨实例去重。
+/// 通过 Redis SET NX EX 原子抢占实现 30s 跨实例、同一会话去重。
 #[derive(Debug)]
 pub struct TokenRefresher {
     jwks_cache: Arc<JwksCache>,
@@ -86,7 +87,7 @@ impl TokenRefresher {
 
     /// 向 Portal 发起 Access Token 静默续签。
     ///
-    /// 返回 `Some(RefreshedTokens)` 或 `None`（续签失败不阻断请求，旧 AT 仍有效）。
+    /// 返回强类型结果，调用方可区分续签成功、同一会话正在续签和真实失败。
     ///
     /// # 去重语义
     ///
@@ -95,7 +96,7 @@ impl TokenRefresher {
     /// - 抢到但全部端点失败 → DEL 释放锁，允许下次请求立即重试
     /// - 抢到且成功 → 保留锁至 TTL 自然过期（即 30s 去重窗口）
     ///
-    /// 锁仅存固定标记 "1"，不含任何 token 明文，消除 Redis 中的 token 泄露面。
+    /// Key 仅包含 Refresh Token 的 SHA-256 摘要，值为固定标记 "1"，不保存 token 明文。
     ///
     /// # Examples
     ///
@@ -107,22 +108,22 @@ impl TokenRefresher {
     /// let cache = Arc::new(JwksCache::new());
     /// let ups = Arc::new(Upstreams::from_config("127.0.0.1:4100"));
     /// let refresher = TokenRefresher::new(cache, ups, "http".to_string(), None);
-    /// // 服务未启动时续签返回 None
-    /// // let tokens = refresher.try_refresh("rt_value", "user-1").await;
+    /// // 服务未启动时续签返回 RefreshOutcome::Failed
+    /// // let outcome = refresher.try_refresh("rt_value", "user-1").await;
     /// ```
-    pub async fn try_refresh(&self, refresh_token: &str, sub: &str) -> Option<RefreshedTokens> {
-        let dedup_key = format!("{REFRESH_DEDUP_PREFIX}{sub}");
+    pub async fn try_refresh(&self, refresh_token: &str, sub: &str) -> RefreshOutcome {
+        let dedup_key = refresh_dedup_key(refresh_token);
         // 原子抢占（SET NX EX）：未抢到说明 30s 窗口内已有续签在进行/刚完成
         if !crate::redis::acquire_nx_ex(&dedup_key, "1", REFRESH_DEDUP_SEC).await {
             debug!("续签去重命中 (Redis): sub={}", sub);
-            return None;
+            return RefreshOutcome::InProgress;
         }
 
         // 1. 尝试主端点（来自 OIDC Discovery 缓存）
         if let Some(primary) = self.primary_endpoint()
             && let Some(tokens) = self.try_endpoint(&primary, refresh_token, sub).await
         {
-            return Some(tokens);
+            return RefreshOutcome::Refreshed(tokens);
         }
 
         // 2. 回退：遍历全部 upstream 的默认续签路径
@@ -133,20 +134,20 @@ impl TokenRefresher {
             );
             crate::redis::del(&dedup_key).await;
             crate::metrics::inc_refresh_failure();
-            return None;
+            return RefreshOutcome::Failed;
         }
 
         for upstream in self.upstreams.iter() {
             let fallback_url = format!("{}://{}/api/auth/refresh", self.upstream_scheme, upstream);
             if let Some(tokens) = self.try_endpoint(&fallback_url, refresh_token, sub).await {
-                return Some(tokens);
+                return RefreshOutcome::Refreshed(tokens);
             }
         }
 
         // 全部失败：释放锁，下次请求可立即重试
         crate::redis::del(&dedup_key).await;
         crate::metrics::inc_refresh_failure();
-        None
+        RefreshOutcome::Failed
     }
 
     /// OIDC Discovery 缓存中的主续签端点 URL
@@ -248,5 +249,26 @@ impl TokenRefresher {
             sub
         );
         None
+    }
+}
+
+fn refresh_dedup_key(refresh_token: &str) -> String {
+    let digest = Sha256::digest(refresh_token.as_bytes());
+    format!("{REFRESH_DEDUP_PREFIX}{}", hex::encode(digest))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::refresh_dedup_key;
+
+    #[test]
+    fn dedup_key_is_scoped_to_refresh_token_without_exposing_it() {
+        let first = refresh_dedup_key("refresh-token-a");
+        let same = refresh_dedup_key("refresh-token-a");
+        let second = refresh_dedup_key("refresh-token-b");
+
+        assert_eq!(first, same);
+        assert_ne!(first, second);
+        assert!(!first.contains("refresh-token-a"));
     }
 }

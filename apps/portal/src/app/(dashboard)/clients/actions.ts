@@ -28,19 +28,37 @@ import { EntityNotFoundError } from '@/domain/shared/errors';
 import { generateClientId, generateClientSecret, hashClientSecret } from '@/lib/crypto';
 import { validate } from '@/lib/validation';
 import { CLIENT_PERMISSIONS, type ApiResponse } from '@auth-sso/contracts';
+import { appendSecurityAudit, getActionAuditContext } from '@/lib/audit';
 
 /** 创建 Client */
 export const createClientAction = withAuth(
-  { permissions: [CLIENT_PERMISSIONS.CREATE], audit: 'CLIENT_CREATE' },
-  async (_ctx: AuthContext, input: CreateClientInput): Promise<ApiResponse<{ id: string; clientId: string; clientSecret: string | null }>> => {
+  { permissions: [CLIENT_PERMISSIONS.CREATE] },
+  async (ctx: AuthContext, input: CreateClientInput): Promise<ApiResponse<{ id: string; clientId: string; clientSecret: string | null }>> => {
     const v = validate(CreateClientInputSchema, input);
     if (!v.ok) return v.response;
 
     const rawSecret = generateClientSecret();
     const client = createClient(v.data, generateClientId, () => rawSecret);
-    await db.insert(schema.clients).values({
-      ...clientToInsertRow(client),
-      clientSecret: await hashClientSecret(rawSecret),
+    const secretHash = await hashClientSecret(rawSecret);
+    const auditContext = await getActionAuditContext();
+    await db.transaction(async (tx) => {
+      await tx.insert(schema.clients).values({
+        ...clientToInsertRow(client),
+        clientSecret: secretHash,
+      });
+      await appendSecurityAudit(tx, {
+        userId: ctx.userId,
+        operation: 'CLIENT_CREATE',
+        targetType: 'client',
+        targetId: client.clientId,
+        targetName: client.name,
+        changes: {
+          redirectUris: { after: client.redirectUris },
+          scopes: { after: client.scopes },
+          status: { after: client.status },
+        },
+        ...auditContext,
+      });
     });
 
     revalidatePath('/clients');
@@ -55,11 +73,12 @@ export const createClientAction = withAuth(
 
 /** 更新 Client */
 export const updateClientAction = withAuth(
-  { permissions: [CLIENT_PERMISSIONS.UPDATE], audit: 'CLIENT_UPDATE' },
-  async (_ctx: AuthContext, clientIdStr: string, input: Record<string, unknown>): Promise<ApiResponse<{ id: string }>> => {
+  { permissions: [CLIENT_PERMISSIONS.UPDATE] },
+  async (ctx: AuthContext, clientIdStr: string, input: Record<string, unknown>): Promise<ApiResponse<{ id: string }>> => {
     const v = validate(UpdateClientInputSchema, input);
     if (!v.ok) return v.response;
 
+    const auditContext = await getActionAuditContext();
     await db.transaction(async (tx) => {
       const row = await tx.query.clients.findFirst({
         where: eq(schema.clients.clientId, clientIdStr),
@@ -70,6 +89,20 @@ export const updateClientAction = withAuth(
 
       await tx.update(schema.clients).set(clientToUpdateRow(updated))
         .where(eq(schema.clients.clientId, row.clientId));
+      await appendSecurityAudit(tx, {
+        userId: ctx.userId,
+        operation: 'CLIENT_UPDATE',
+        targetType: 'client',
+        targetId: row.clientId,
+        targetName: updated.name,
+        changes: {
+          name: { before: row.name, after: updated.name },
+          redirectUris: { before: row.redirectUris, after: updated.redirectUris },
+          scopes: { before: row.scopes, after: updated.scopes },
+          status: { before: row.status, after: updated.status },
+        },
+        ...auditContext,
+      });
       return updated;
     });
 
@@ -81,8 +114,9 @@ export const updateClientAction = withAuth(
 
 /** 删除 Client */
 export const deleteClientAction = withAuth(
-  { permissions: [CLIENT_PERMISSIONS.DELETE], audit: 'CLIENT_DELETE' },
-  async (_ctx: AuthContext, clientIdStr: string): Promise<ApiResponse<{ id: string }>> => {
+  { permissions: [CLIENT_PERMISSIONS.DELETE] },
+  async (ctx: AuthContext, clientIdStr: string): Promise<ApiResponse<{ id: string }>> => {
+    const auditContext = await getActionAuditContext();
     await db.transaction(async (tx) => {
       const row = await tx.query.clients.findFirst({
         where: eq(schema.clients.clientId, clientIdStr),
@@ -90,6 +124,14 @@ export const deleteClientAction = withAuth(
       if (!row) throw new EntityNotFoundError('Client', clientIdStr);
 
       await tx.delete(schema.clients).where(eq(schema.clients.clientId, row.clientId));
+      await appendSecurityAudit(tx, {
+        userId: ctx.userId,
+        operation: 'CLIENT_DELETE',
+        targetType: 'client',
+        targetId: row.clientId,
+        targetName: row.name,
+        ...auditContext,
+      });
     });
 
     revalidatePath('/clients');
@@ -100,17 +142,30 @@ export const deleteClientAction = withAuth(
 
 /** 重新生成 Client Secret */
 export const rotateClientSecretAction = withAuth(
-  { permissions: [CLIENT_PERMISSIONS.ROTATE_SECRET], audit: 'CLIENT_SECRET_REGENERATE' },
-  async (_ctx: AuthContext, clientIdStr: string): Promise<ApiResponse<{ clientSecret: string }>> => {
-    const row = await db.query.clients.findFirst({
-      where: eq(schema.clients.clientId, clientIdStr),
-    });
-    if (!row) throw new EntityNotFoundError('Client', clientIdStr);
-
+  { permissions: [CLIENT_PERMISSIONS.ROTATE_SECRET] },
+  async (ctx: AuthContext, clientIdStr: string): Promise<ApiResponse<{ clientSecret: string }>> => {
     const newSecret = generateClientSecret();
-    await db.update(schema.clients)
-      .set({ clientSecret: await hashClientSecret(newSecret) })
-      .where(eq(schema.clients.clientId, row.clientId));
+    const secretHash = await hashClientSecret(newSecret);
+    const auditContext = await getActionAuditContext();
+    const row = await db.transaction(async (tx) => {
+      const target = await tx.query.clients.findFirst({
+        where: eq(schema.clients.clientId, clientIdStr),
+      });
+      if (!target) throw new EntityNotFoundError('Client', clientIdStr);
+      await tx.update(schema.clients)
+        .set({ clientSecret: secretHash })
+        .where(eq(schema.clients.clientId, target.clientId));
+      await appendSecurityAudit(tx, {
+        userId: ctx.userId,
+        operation: 'CLIENT_SECRET_REGENERATE',
+        targetType: 'client',
+        targetId: target.clientId,
+        targetName: target.name,
+        params: { secretExposedOnce: true },
+        ...auditContext,
+      });
+      return target;
+    });
 
     revalidatePath(`/clients/${row.clientId}`);
     revalidatePath('/clients');
@@ -121,30 +176,39 @@ export const rotateClientSecretAction = withAuth(
 
 /** 撤销 Client Token */
 export const revokeClientTokensAction = withAuth(
-  { permissions: [CLIENT_PERMISSIONS.UPDATE], audit: 'TOKEN_REVOKE' },
-  async (_ctx: AuthContext, clientIdStr: string, tokenIds: string[], revokeAll: boolean): Promise<ApiResponse<{ revokedCount: number }>> => {
-    const row = await db.query.clients.findFirst({
-      where: eq(schema.clients.clientId, clientIdStr),
+  { permissions: [CLIENT_PERMISSIONS.UPDATE] },
+  async (ctx: AuthContext, clientIdStr: string, tokenIds: string[], revokeAll: boolean): Promise<ApiResponse<{ revokedCount: number }>> => {
+    const auditContext = await getActionAuditContext();
+    const deletedCount = await db.transaction(async (tx) => {
+      const row = await tx.query.clients.findFirst({
+        where: eq(schema.clients.clientId, clientIdStr),
+      });
+      if (!row) throw new EntityNotFoundError('Client', clientIdStr);
+      const result = revokeAll
+        ? await tx.delete(schema.accessTokens)
+            .where(eq(schema.accessTokens.clientId, row.clientId))
+            .returning({ id: schema.accessTokens.id })
+        : tokenIds.length > 0
+          ? await tx.delete(schema.accessTokens)
+              .where(and(
+                eq(schema.accessTokens.clientId, row.clientId),
+                inArray(schema.accessTokens.id, tokenIds),
+              ))
+              .returning({ id: schema.accessTokens.id })
+          : [];
+      await appendSecurityAudit(tx, {
+        userId: ctx.userId,
+        operation: 'TOKEN_REVOKE',
+        targetType: 'client',
+        targetId: row.clientId,
+        targetName: row.name,
+        params: { revokeAll, revokedCount: result.length },
+        ...auditContext,
+      });
+      return result.length;
     });
-    if (!row) throw new EntityNotFoundError('Client', clientIdStr);
 
-    let deletedCount = 0;
-    if (revokeAll) {
-      const result = await db.delete(schema.accessTokens)
-        .where(eq(schema.accessTokens.clientId, row.clientId))
-        .returning({ id: schema.accessTokens.id });
-      deletedCount = result.length;
-    } else if (tokenIds && tokenIds.length > 0) {
-      const result = await db.delete(schema.accessTokens)
-        .where(and(
-          eq(schema.accessTokens.clientId, row.clientId),
-          inArray(schema.accessTokens.id, tokenIds)
-        ))
-        .returning({ id: schema.accessTokens.id });
-      deletedCount = result.length;
-    }
-
-    revalidatePath(`/clients/${row.clientId}`);
+    revalidatePath(`/clients/${clientIdStr}`);
     return { success: true, data: { revokedCount: deletedCount }, message: `已成功撤销 ${deletedCount} 个 Token` };
   },
 );

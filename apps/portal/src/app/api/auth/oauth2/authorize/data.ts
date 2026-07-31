@@ -14,6 +14,7 @@ import { ENTITY_ACTIVE } from '@auth-sso/contracts';
 
 export interface UserWithRoleClients {
   id: string;
+  username: string;
   status: string;
   roles: Array<{
     id: string;
@@ -59,6 +60,7 @@ export async function getUserWithRoleClients(userId: string): Promise<UserWithRo
 
   return {
     id: user.id,
+    username: user.username,
     status: user.status,
     roles: user.userRoles
       .map((ur) => ur.role)

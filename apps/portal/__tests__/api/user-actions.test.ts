@@ -9,7 +9,13 @@
 import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest';
 import { EntityNotFoundError } from '@/domain/shared/errors';
 import { createTestDbHandle, seedTestData } from '../helpers/test-db';
-import { seedRootDept, seedTestUser } from '../helpers/seed-fixtures';
+import {
+  seedAdminUser,
+  seedRootDept,
+  seedSuperAdminRole,
+  seedTestUser,
+  seedUserRoleBinding,
+} from '../helpers/seed-fixtures';
 import * as schema from '@/db/schema';
 
 // ── 测试数据库 ──────────────────────────────────────
@@ -138,6 +144,43 @@ describe('User Server Actions', () => {
       expect(r.success).toBe(true);
       expect(r.message).toBe('用户已逻辑删除');
       expect(r.data.id).toBe('00000000-0000-4000-8000-000000000201');
+      const [deleted] = await db.select().from(schema.users);
+      expect(deleted?.deletedAt).toBeInstanceOf(Date);
+    });
+
+    it('禁止删除当前登录用户', async () => {
+      await seedTestData(td.db, { users: seedAdminUser() });
+
+      await expect(deleteUserAction(ADMIN_ID)).rejects.toThrow('不能删除当前登录用户');
+    });
+
+    it('禁止删除最后一个有效超级管理员', async () => {
+      const roleId = seedSuperAdminRole()![0]!.id!;
+      const targetId = seedTestUser()![0]!.id!;
+      await seedTestData(td.db, {
+        users: [...(seedAdminUser() ?? []), ...(seedTestUser() ?? [])],
+        roles: seedSuperAdminRole(),
+        userRoles: seedUserRoleBinding(targetId, roleId),
+      });
+
+      await expect(deleteUserAction(targetId)).rejects.toThrow('不能删除最后一个有效的超级管理员');
+    });
+
+    it('存在另一个有效超级管理员时允许删除目标管理员', async () => {
+      const roleId = seedSuperAdminRole()![0]!.id!;
+      const targetId = seedTestUser()![0]!.id!;
+      await seedTestData(td.db, {
+        users: [...(seedAdminUser() ?? []), ...(seedTestUser() ?? [])],
+        roles: seedSuperAdminRole(),
+        userRoles: [
+          ...(seedUserRoleBinding(ADMIN_ID, roleId) ?? []),
+          ...(seedUserRoleBinding(targetId, roleId) ?? []),
+        ],
+      });
+
+      const result = await deleteUserAction(targetId);
+
+      expect(result.success).toBe(true);
     });
 
     it('不存在用户 → 抛出错误', async () => {

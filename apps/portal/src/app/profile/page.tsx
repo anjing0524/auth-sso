@@ -9,6 +9,7 @@ import { resolveIdentity } from '@/lib/auth';
 import { getUser } from '@/app/(dashboard)/users/data';
 import { getUserPermissionContext } from '@/lib/permissions';
 import ProfileClient from './ProfileClient';
+import { getOwnSecurityActivity } from './data';
 
 /**
  * 实际进行个人身份解析与相关权限数据异步拉取的内容组件。
@@ -23,9 +24,10 @@ async function ProfileContent() {
     );
   }
 
-  const [user, permCtx] = await Promise.all([
+  const [user, permCtx, securityActivity] = await Promise.all([
     getUser(identity.userId),
     getUserPermissionContext(identity.userId),
+    getOwnSecurityActivity(identity.userId),
   ]);
 
   return (
@@ -40,6 +42,7 @@ async function ProfileContent() {
       } : null}
       permissions={permCtx?.permissions ?? []}
       roles={permCtx?.roles.map(r => ({ code: r.code, name: r.name })) ?? []}
+      securityActivity={securityActivity}
     />
   );
 }

@@ -6,14 +6,14 @@
 
 | 模块 | 状态 | 版本 | 备注 |
 |------|------|------|------|
-| 用户管理（CRUD/状态/改密） | ✅ 已交付 | v1.1 | 含密码历史 NFR-SEC-15 |
-| 角色管理（RBAC v3.2） | ✅ 已交付 | v1.1 | 角色归属部门模型 |
-| 权限管理（统一权限树） | ✅ 已交付 | v1.1 | DIRECTORY/PAGE/API 三类型 |
-| 部门管理（物化路径树） | ✅ 已交付 | v1.1 | ancestors 子树查询 |
-| OAuth 2.1 Provider | ✅ 已交付 | v1.1 | PKCE + 授权码 + Token 轮换 |
-| OIDC Discovery | ✅ 已交付 | v1.1 | 含 end_session_endpoint |
-| Gateway 边缘入口 | ✅ 已交付 | v1.3 | Pingora + ES256 + HMAC；默认自托管 ACME/ARI，平台 TLS 构建编译期裁剪 ACME |
-| 审计日志（180天分区） | ✅ 已交付 | v1.1 | append-only |
+| 用户管理（CRUD/状态/改密） | ⚠️ 生产复验待完成 | v1.1 | 代码已补齐自删除/最后管理员保护、角色契约、详情与重置密码；待 API/E2E 和 Vercel 角色矩阵复验 |
+| 角色管理（RBAC v3.2） | ⚠️ 生产复验待完成 | v1.1 | 代码已补齐删除影响确认、描述与权限分配；待数据库集成和生产复验 |
+| 权限管理（统一权限树） | ⚠️ 生产复验待完成 | v1.1 | 代码已补齐 PAGE、描述、引用计数及独立菜单管理；待迁移和生产复验 |
+| 部门管理（物化路径树） | ⚠️ 生产复验待完成 | v1.1 | 代码已修复 pending、删除竞态、展开语义与父级上下文；待 Actor Matrix 数据复验 |
+| OAuth 2.1 Provider | ⚠️ 生产复验待完成 | v1.1 | 无角色 Portal 登录改为 `/no-access`，登录成功审计移至授权完成边界；待真实登录链路复验 |
+| OIDC Discovery | ⚠️ 生产迁移待完成 | v1.1 | 代码已统一 HTTPS issuer；部署会使旧 Token 失效，待生产强制重登与互操作复验 |
+| Gateway 边缘入口 | ✅ 已交付 | v1.3 | Pingora + ES256 + HMAC；续签按 Refresh Token 去重并区分并发/失败，公开帮助与隐私路径已同步 |
+| 审计日志（180天分区） | ⚠️ 生产复验待完成 | v1.1 | 代码已补齐 actor/target/change/result/trace、筛选及 CSV；待迁移、API 与生产数据复验 |
 | 暴力破解防护 | ✅ 已交付 | v1.1 | Redis INCR 锁定 |
 | SAML 2.0 | 🔲 待评估 | P2 | 未在本期范围，企业对接需求驱动 |
 | OIDC RP-Initiated Logout | 🔲 待评估 | P2 | 当前用自定义 revoke 实现 |
@@ -21,6 +21,8 @@
 
 ## 变更记录
 
+- 2026-07-31: 完成 `2026-07-30-vercel-ux-business-audit.md` 的代码整治与横向复审：修复 2 个 P0 和 11 个 P1，补齐菜单管理、角色授权、结构化事务审计、Actor Matrix 可选种子、Dashboard/Profile/用户详情、Asia/Shanghai 时间、移动端和可访问性；Gateway 续签去重按 Refresh Token 隔离并区分并发与真实失败。三套 TypeScript 检查、165 项 Portal UI/domain 测试、Portal 生产构建、Gateway 94 项单元测试与 8 项文档测试、严格 Clippy/fmt 均通过；公开页完成 390/768/1440 浏览器复验。因本机 Docker daemon 未启动，API project、迁移实跑、登录态管理页面和 Vercel 新版本角色矩阵仍是发布阻断，不把“代码完成”误记为“生产验收完成”。计划见 `docs/plans/2026-07-31-001-fix-vercel-ux-business-audit-plan.md`，复盘见 `docs/solution/2026-07-31-vercel-ux-business-audit-remediation.md`。
+- 2026-07-30: 完成 Vercel 生产环境真实 Chrome 用户故事审计，覆盖桌面端、390px 移动端、键盘、错误路径、网络/控制台、CSV、OIDC/JWKS 与源码归因；确认 Gateway OAuth/PKCE 管理员主链路可用，同时发现 2 个 P0、11 个 P1 及一组体验/可访问性问题。临时用户、角色、客户端均已清理，本轮未修改业务代码。完整证据、复现步骤与退出标准见 `docs/audit/2026-07-30-vercel-ux-business-audit.md`。
 - 2026-07-30: 完成 Gateway TLS 能力的编译期隔离：新增默认 `self-managed-tls` Cargo Feature，自托管 Docker/Compose 继续包含 ACME、HTTP 重定向和 TLS 热加载；Vercel 改用 `--no-default-features` 构建，仅保留平台 TLS 终结所需的 HTTP 代理能力，并从编译单元及正常依赖图排除 `acme`/`redirect`/`tls` 模块与 `instant-acme` 等专属直接依赖。配置层对“裁剪版 + 未启用外部 TLS”执行 fail-closed，CI 同时验证两套 clippy/test、平台 release build 和 ACME 依赖缺席，最佳实践同步沉淀到两份 TLS/部署 solution。
 - 2026-07-30: 完成 Vercel 生产部署拓扑收敛：Vercel 只暴露一个 Docker Service，Next.js Portal standalone 在同一容器内仅监听 `127.0.0.1:4100`，Rust Gateway 作为唯一 `$PORT` 公网入口并使用平台 TLS 模式；Neon PostgreSQL 与 Upstash Redis 由 Marketplace 注入。生产验证否决了会因容器 IPv6 `[100::1]` 无路由而间歇 502 的跨 Service binding，改为确定性的 loopback 上游；同步补齐平台客户端 IP 信任边界、OAuth 正式回调白名单、Docker 构建期公开 URL 和 GitHub/Vercel 自动部署配置，最佳实践沉淀到 `docs/solution/2026-07-30-vercel-gateway-only-production-topology.md`。
 - 2026-07-29: 补齐公共 Let's Encrypt staging 的可审计预检：`scripts/run-gateway-acme-staging.sh` 在访问 Docker/公共 CA 前检查公网 DNS 名称、联系邮箱和公网 80/443 操作员声明；缺失或无效时以状态码 2 退出并在独立 `preflight/` 目录写入阻塞证据，不覆盖既有公网通过证据。用户当前提供的 `local` 是无效公共域名，`8.8.8.8` 只是递归解析器且明确没有公网入口，因此当前证据为 `blocked_invalid_prerequisites`；进入真实演练后才在 `latest/` 使用 `failed_or_incomplete`，仅全部外部断言通过才写入 `passed`。
@@ -49,6 +51,41 @@
 - 2026-07-13: 新增"审计驱动待办（基于 2026-07-13-code-audit.md，经代码实证勘误）"区块
 - 2026-07-10: 初始化路线图，对齐 v1.1 交付状态
 
+## 2026-07-30 Vercel 审计整治状态
+
+### P0 / P1
+
+| 审计项 | 代码状态 | 发布退出条件 |
+|---|:--:|---|
+| P0-01 自删除/最后管理员 | ✅ | API 并发删除测试和生产只读保护确认 |
+| P0-02 OIDC issuer | ✅ | 生产设置 HTTPS issuer、强制重登并验证 Discovery/JWT/Gateway 一致 |
+| P1-01 命令面板 | ✅ | 登录态键盘打开、搜索、选择、Esc 浏览器回归 |
+| P1-02 无角色登录 | ✅ | 无角色 Actor 落入 `/no-access` 且不产生登录循环 |
+| P1-03 用户角色契约 | ✅ | 真实数据库验证读取、增加、减少到零及失败回滚 |
+| P1-04 角色删除 | ✅ | 验证关联用户影响数量、系统角色保护与审计 |
+| P1-05 Client Secret/详情 | ✅ | 验证一次性 Secret、显式确认和详情错误恢复 |
+| P1-06 部门交互 | ✅ | 验证 401/403/网络异常后 pending 恢复及树结构一致 |
+| P1-07 菜单管理 | ✅ | 应用 `0001` migration，按角色验证菜单、直接 URL 和按钮权限 |
+| P1-08 角色授权 | ✅ | 验证只读/授权能力分离、缓存失效和会话撤销 |
+| P1-09 审计/CSV | ✅ | 应用 `0002` migration，页面与 CSV 对照真实写操作 |
+| P1-10 角色/组织种子 | ✅ | 验收环境显式启用 Actor Matrix，禁止生产默认创建演示账号 |
+| P1-11 移动端 | ✅ | 登录态 390/768/桌面验证用户表、抽屉关闭和危险操作 |
+
+### P2 / P3
+
+代码已补齐 Dashboard 三项真实指标、用户详情、上海时区、审计筛选、Profile 真实会话与安全活动、`/settings`、`/help`、`/privacy`、自定义 404、移动端内部滚动、抽屉关闭、中文化、表单 label 和图标按钮 accessible name。公开页面已完成三档视口复验；登录态页面、首屏性能和六角色权限矩阵仍需在新版本部署后采集证据。
+
+### 本轮验证与阻断
+
+- ✅ contracts、config、Portal TypeScript 检查。
+- ✅ Portal UI/domain：23 个文件、165 项测试。
+- ✅ Portal ESLint 0 error；287 条既有 warning 仍为非阻断基线。
+- ✅ Next.js 16.2.9 生产构建，47 个路由生成完成。
+- ✅ Gateway tests、严格 Clippy 和 fmt。
+- ✅ 登录、帮助、隐私公开页面 390/768/1440 无整页横向溢出。
+- ⚠️ Docker daemon 未启动，Portal API project、migration/seed 实跑和 Gateway 发布旅程未执行。
+- ⚠️ 工作树尚未部署，Vercel 登录态和 Actor Matrix 生产复验未执行。
+
 ## 审计驱动待办（基于 2026-07-13-code-audit.md）
 
 > 下表条目均经过对 HEAD 代码的实证复核；审计报告本身的 3 处事实错误（13.1 CI、2.1 audit success、6.1 遗漏项）已在报告中勘误，此处不再重复。
@@ -57,7 +94,7 @@
 
 | # | 状态 | 任务 | 文件:行 | 来源发现 |
 |---|:--:|------|---------|:--:|
-| A0-1 | 🔲 | fire-and-forget → await（复核遗漏的 4 处安全关键调用） | `app/(dashboard)/users/actions.ts:120,232,282` + `app/profile/actions.ts:124` | 6.1 勘误 |
+| A0-1 | ✅ | 安全关键撤销/缓存更新改为 await，业务写入与审计同事务 | `app/(dashboard)/users/actions.ts` + `app/profile/actions.ts` | 6.1 勘误 |
 | A0-2 | ✅ | `revokeAllRefreshTokens` JTI 撤销 fire-and-forget（工作树已修复） | `lib/auth/token.ts:568-577` | 7.4（升级为严重） |
 | A0-3 | 🔲 | CI 增补 `pnpm audit` / `cargo audit` 依赖安全扫描 | `.github/workflows/*` | 13.2 |
 | A0-4 | ✅ | permissions 列表接口补 SQL 分页（page/pageSize/pagination） | `api/permissions/route.ts` + `permissions/data.ts` | 5.2 |
@@ -70,15 +107,15 @@
 | A1-1 | 🔲 | facade.ts 错误响应补 `success: false`（统一 ApiResponse 契约） | `lib/auth/facade.ts:56-59,64-67,78-81` | 2.1 |
 | A1-2 | 🔲 | register 路由成功响应用 `data` 替代 `stats` | `api/permissions/register/route.ts:178` | 2.1 |
 | A1-3 | 🔲 | `LOG_LEVEL` 生效 + 全量日志结构化 | `packages/config/src/env.ts:39` + Portal 全局 | 10.1, 10.2 |
-| A1-4 | 🔲 | 管理员角色硬编码改为引用 `ADMIN_ROLE_CODES` | `app/profile/ProfileClient.tsx:270` | 11.1 |
+| A1-4 | ✅ | 管理员角色硬编码改为引用 `ADMIN_ROLE_CODES` | `app/profile/ProfileClient.tsx` | 11.1 |
 
 ### P2 公共抽取
 
 | # | 状态 | 任务 | 文件 | 来源发现 |
 |---|:--:|------|------|:--:|
-| A2-1 | 🔲 | 审计日志写入抽取公共工厂（消除 3 次重复） | `lib/audit.ts` | 7.2 |
+| A2-1 | ✅ | 审计日志写入抽取公共工厂，并提供事务内安全审计入口 | `lib/audit.ts` | 7.2 |
 | A2-2 | 🔲 | 分页参数解析工具 `parsePagination()` | 新建 `lib/pagination.ts` | 14.5 |
-| A2-3 | 🔲 | 日期范围过滤条件构建工具 | `app/audit/data.ts` | 14.2 |
+| A2-3 | ✅ | 日期范围过滤统一按 Asia/Shanghai 自然日构建 | `app/audit/data.ts` + `lib/format-time.ts` | 14.2 |
 | A2-4 | 🔲 | 密钥导入模式去重（`importJwk`） | `lib/auth/token.ts` | 3.4 |
 
 ### P3 架构优化
@@ -130,14 +167,14 @@
 |---|:--:|------|------|
 | D2-1 | ✅ | 所有权限常量加 `portal:` 前缀 | `packages/contracts/src/permissions.ts` |
 | D2-2 | ✅ | `PortalJwtClaims` 最小化（移除 roles/permissions/deptIds） | `domain/auth/types.ts` |
-| D2-3 | ✅ | OIDC 常量 `iss`/`aud` 改为 `"auth-sso"` | `packages/contracts/src/oidc.ts` |
+| D2-3 | ✅ | `aud` 使用 `"auth-sso"`；原固定 issuer 已于 2026-07-31 迁移为 HTTPS URL 真相源 | `packages/contracts/src/oidc.ts` + `packages/config/src/env.ts` |
 
 ### Phase 3: JWT Token 签发/验证
 
 | # | 状态 | 任务 | 文件 |
 |---|:--:|------|------|
 | D3-1 | ✅ | `signAccessToken` 最小化 claims | `lib/auth/token.ts` |
-| D3-2 | ✅ | `verifyAccessToken` aud/iss 改为 `"auth-sso"` | `lib/auth/token.ts` |
+| D3-2 | ✅ | `verifyAccessToken` 校验独立 `aud` 与 HTTPS issuer | `lib/auth/token.ts` |
 | D3-3 | ✅ | `resolveTokenClaims` 不再返回鉴权数据供 JWT 嵌入 | `lib/auth/permissions.ts` |
 
 ### Phase 4: 权限上下文 Redis 化
@@ -169,7 +206,7 @@
 | # | 状态 | 任务 | 文件 |
 |---|:--:|------|------|
 | D7-1 | ✅ | Claims 结构体移除 roles/permissions/dept_ids | `gateway/src/auth/mod.rs` |
-| D7-2 | ✅ | 验签 issuer 固定为 `"auth-sso"`；aud 按 ADR-006 不在 Gateway 校验 | `gateway/src/auth/verify.rs` |
+| D7-2 | ✅ | Gateway 从 OIDC Discovery 缓存 issuer 并严格校验；aud 按 ADR-006 不在 Gateway 校验 | `gateway/src/auth/verify.rs` + `gateway/src/jwks.rs` |
 | D7-3 | ✅ | 移除 X-User-Roles/Permissions/DeptIds 注入 | `gateway/src/gateway.rs` |
 
 ### Phase 8: Seed 数据

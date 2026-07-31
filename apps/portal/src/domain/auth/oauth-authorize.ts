@@ -8,7 +8,7 @@
  *
  * @module domain/auth/oauth-authorize
  */
-import { ENTITY_ACTIVE, ADMIN_ROLE_CODES } from '@auth-sso/contracts';
+import { ENTITY_ACTIVE, ADMIN_ROLE_CODES, PORTAL_CLIENT_ID } from '@auth-sso/contracts';
 import { InvalidScopeError } from '@/domain/shared/errors';
 
 export { InvalidScopeError } from '@/domain/shared/errors';
@@ -108,8 +108,9 @@ export interface AuthorizeUserInput {
  *
  * v3.2 逻辑链路：
  *   1. 用户状态检查 — 仅 ACTIVE 用户可通过
- *   2. 有效角色检查 — 至少一个 ACTIVE 角色
- *   3. Client 访问绑定 — 管理员放行，否则需角色通过 permissions 关联到目标 client
+ *   2. Portal 自身允许无角色用户完成认证，随后进入无权限落地页
+ *   3. 外部 Client 要求至少一个 ACTIVE 角色
+ *   4. Client 访问绑定 — 管理员放行，否则需角色通过 permissions 关联到目标 client
  */
 export function validateAuthorization(input: AuthorizeUserInput): AuthorizationResult {
   // 1. 用户状态检查
@@ -121,7 +122,12 @@ export function validateAuthorization(input: AuthorizeUserInput): AuthorizationR
     };
   }
 
-  // 2. 筛选有效角色
+  // 2. Portal 自身仅负责完成身份认证；管理权限由页面守卫实时核准。
+  if (input.clientId === PORTAL_CLIENT_ID) {
+    return { allowed: true };
+  }
+
+  // 3. 外部 Client 必须具备有效角色
   const activeRoles = input.roles.filter((r) => r.status === ENTITY_ACTIVE);
   if (activeRoles.length === 0) {
     return {
@@ -131,7 +137,7 @@ export function validateAuthorization(input: AuthorizeUserInput): AuthorizationR
     };
   }
 
-  // 3. 委托 Client 准入检查
+  // 4. 委托 Client 准入检查
   return checkUserClientAccess({
     userId: input.userId,
     clientId: input.clientId,

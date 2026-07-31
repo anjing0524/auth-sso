@@ -22,9 +22,6 @@ import { mapServerError } from '@/lib/server-error';
 import { AUTH_ERRORS, COMMON_ERRORS, COOKIE_NAMES } from '@auth-sso/contracts';
 import { writeLoginLog, extractClientIP, extractUserAgent } from '@/lib/audit';
 import { isCookieSecure } from '@/lib/env';
-import { createLogger } from '@/lib/logger';
-
-const log = createLogger('Login');
 
 const LoginSchema = z.object({
   email: z.string().email(),
@@ -82,15 +79,9 @@ export async function POST(request: NextRequest) {
     // 5. 密码通过 → 清除暴力破解计数器
     await clearBruteForceCounter(user.id);
 
-    // 6. 更新 lastLoginAt + 记录成功日志（await 确保审计时间准确）
-    try {
-      await db.update(schema.users).set({ lastLoginAt: new Date() }).where(eq(schema.users.id, user.id));
-    } catch (err) {
-      log.error('更新 lastLoginAt 失败，暴力破解 DB 回退路径可能受影响', { userId: user.id, error: (err as Error).message });
-    }
-    writeLoginLog({ userId: user.id, username: user.username, eventType: 'LOGIN_SUCCESS', ip, userAgent: ua });
-
-    // 7. 签发 Login Session JWT → Cookie
+    // 6. 签发 Login Session JWT → Cookie
+    // LOGIN_SUCCESS 与 lastLoginAt 延迟到 authorize 完成用户/Client 准入后记录，
+    // 避免凭证正确但授权失败时产生“登录成功”的假阳性审计。
     const session = await signLoginSession(user.id);
     const secure = isCookieSecure();
     const redirectPath = session_id ? `/api/auth/oauth2/authorize?session_id=${session_id}` : null;
