@@ -100,8 +100,8 @@ export async function POST(request: NextRequest) {
       // 签发 Access Token
       const { token: accessToken } = await signAccessToken(authCode.userId, authCode.scope);
 
-      // 签发 Refresh Token
-      const newRefreshToken = await issueRefreshToken(authCode.userId, authCode.scope);
+      // 签发 Refresh Token（绑定发放 client，RFC 9700 token family）
+      const newRefreshToken = await issueRefreshToken(authCode.userId, authCode.scope, client.clientId);
 
       // ID Token（scope 包含 openid 时签发 OIDC 标准 ID Token）
       let idToken: string | undefined;
@@ -130,7 +130,9 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'invalid_request', error_description: '缺少 refresh_token' }, { status: 400 });
       }
 
-      const result = await rotateRefreshToken(refresh_token);
+      // sender 绑定强制：RT 必须归属于当前认证的 client（RFC 9700 §4.14），
+      // 不匹配视同泄露，家族撤销在 rotateRefreshToken 内原子完成
+      const result = await rotateRefreshToken(refresh_token, client.clientId);
       if (!result) {
         writeLoginLog({ username: client_id, eventType: 'TOKEN_REFRESH_FAILED', ip: extractClientIP(request.headers), userAgent: extractUserAgent(request.headers), failReason: 'Refresh Token 无效或已过期' });
         // 注：username 填入 client_id 是因为 TOKEN 端点由 OAuth Client 调用，无真实用户上下文

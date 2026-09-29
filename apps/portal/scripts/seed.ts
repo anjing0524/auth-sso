@@ -36,7 +36,6 @@ async function main() {
     await db.delete(schema.permissions);
     await db.delete(schema.roles);
     await db.delete(schema.refreshTokens);
-    await db.delete(schema.accessTokens);
     await db.delete(schema.authorizationCodes);
     await db.delete(schema.clients);
     await db.delete(schema.users);

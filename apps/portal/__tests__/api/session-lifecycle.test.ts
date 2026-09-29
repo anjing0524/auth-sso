@@ -2,7 +2,7 @@
  * JWT Cookie 会话生命周期测试 — 真实 DB (jwks 表)
  *
  * verifyAccessToken 路径需要 jwks 表提供签名公钥，
- * revokeUserToken 需要 access_tokens 表执行 DELETE。
+ * revokeUserToken 走 Redis jti 黑名单（无持久化行）。
  *
  * @req H-SESS-001~006, H-SSO-004
  * @vitest-environment node

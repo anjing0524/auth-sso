@@ -98,7 +98,7 @@ export function createTestDbHandle(options: TestDbHandleOptions = {}): TestDbHan
       await _sql.unsafe(`
         TRUNCATE
           audit_logs, login_logs, access_logs,
-          authorization_codes, refresh_tokens, access_tokens,
+          authorization_codes, refresh_tokens,
           user_roles, role_permissions,
           users, roles, permissions, departments, clients, jwks
         CASCADE

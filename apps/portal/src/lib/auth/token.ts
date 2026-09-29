@@ -10,11 +10,12 @@ import 'server-only';
  */
 import { SignJWT, jwtVerify, decodeProtectedHeader } from 'jose';
 import { db, schema } from '@/infrastructure/db';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { generateId, generateUUID, hashToken } from '@/lib/crypto';
 import { isJtiRevoked, trackUserJti, revokeUserAccessByUserId } from '@/lib/session/revoke';
 import { getUserPermissionContext, cacheUserPermissionContext } from '@/lib/permissions';
-import { TOKEN_TTL } from '@auth-sso/contracts';
+import { PORTAL_AUD, TOKEN_TTL } from '@auth-sso/contracts';
+import { getIssuer } from '@/lib/env';
 import type { PortalJwtClaims, RefreshTokenResult } from '@/domain/auth/types';
 import { getActiveSigningKey, getSigningKeyByKid } from './token/signing-keys';
 import { createLogger } from '@/lib/logger';
@@ -22,7 +23,6 @@ import { createLogger } from '@/lib/logger';
 export { getActiveSigningKey, getSigningKeyByKid } from './token/signing-keys';
 
 const log = createLogger('Token');
-const AUTH_SSO = 'auth-sso';
 
 // ============================================================================
 // Login Session Token — 登录成功后写入 HttpOnly Cookie 的临时凭证
@@ -48,8 +48,8 @@ export async function signLoginSession(userId: string): Promise<string> {
   return new SignJWT({ sub: userId })
     .setProtectedHeader({ alg: 'ES256', kid: keyId })
     .setIssuedAt()
-    .setIssuer(AUTH_SSO)
-    .setAudience(AUTH_SSO)
+    .setIssuer(getIssuer())
+    .setAudience(PORTAL_AUD)
     .setJti(`jti_${generateId(16)}`)
     .setExpirationTime(Math.floor(Date.now() / 1000) + LOGIN_SESSION_TTL)
     .sign(privateKey);
@@ -78,8 +78,8 @@ export async function signAccessToken(userId: string, scope?: string): Promise<{
   const token = await new SignJWT({ sub: userId, ...(scope ? { scope } : {}) })
     .setProtectedHeader({ alg: 'ES256', kid: keyId })
     .setIssuedAt()
-    .setIssuer(AUTH_SSO)
-    .setAudience(AUTH_SSO)
+    .setIssuer(getIssuer())
+    .setAudience(PORTAL_AUD)
     .setJti(jti)
     .setExpirationTime(Math.floor(Date.now() / 1000) + ACCESS_TOKEN_TTL)
     .sign(privateKey);
@@ -106,7 +106,7 @@ export async function signAccessToken(userId: string, scope?: string): Promise<{
  */
 export async function verifyAccessToken(
   token: string,
-  audience: string | null = AUTH_SSO,
+  audience: string | null = PORTAL_AUD,
 ): Promise<PortalJwtClaims | null> {
   try {
     const header = decodeProtectedHeader(token);
@@ -122,8 +122,9 @@ export async function verifyAccessToken(
       return null;
     }
 
+    // issuer 校验：env 驱动 URL（OIDC Discovery §4.3，与 discovery 同源，见 ADR-012）
     const verifyOpts: { issuer: string; algorithms: string[]; audience?: string } = {
-      issuer: AUTH_SSO,
+      issuer: getIssuer(),
       algorithms: ['ES256'],
     };
     if (audience !== null) {
@@ -192,7 +193,7 @@ export async function signIdToken(params: {
   return new SignJWT(payload)
     .setProtectedHeader({ alg: 'ES256', kid: keyId })
     .setIssuedAt()
-    .setIssuer(AUTH_SSO)
+    .setIssuer(getIssuer())
     .setAudience(params.clientId)
     .setJti(`jti_${generateId(16)}`)
     .setExpirationTime(now + ID_TOKEN_TTL)
@@ -210,13 +211,18 @@ export const REFRESH_TOKEN_TTL = TOKEN_TTL.REFRESH_TOKEN; // 7d
  *
  * 调用方：`app/api/auth/oauth2/token/route.ts`（authorization_code grant）
  *
+ * RT 绑定发放时的 OAuth Client（RFC 9700 token family 最小语义）：
+ * Gateway SSO 会话传 'portal'，直连 RP 传各自 client_id。
+ *
  * @param userId - 用户内部 ID
  * @param scopes - 授权范围，默认 "openid profile email offline_access"
+ * @param clientId - 发放该 RT 的 OAuth Client
  * @returns Refresh Token 字符串
  */
 export async function issueRefreshToken(
   userId: string,
   scopes: string = 'openid profile email offline_access',
+  clientId: string,
 ): Promise<string> {
   const id = generateUUID();
   const token = `rt_${generateId(32)}`;
@@ -227,6 +233,7 @@ export async function issueRefreshToken(
     id,
     tokenHash: hashToken(token),
     userId,
+    clientId,
     scopes,
     createdAt: now,
     expiresAt,
@@ -240,14 +247,20 @@ export async function issueRefreshToken(
  *
  * 调用方：`oauth2/token/route.ts`(refresh_token) + `auth/refresh/route.ts`
  *
- * 安全：旧 token 已撤销 → 级联撤销同用户全部 Refresh Token（防盗用）
- * Refresh Token 为用户级（不绑定 client_id），级联吊销范围覆盖用户维度。
+ * 安全（RFC 9700 §4.14 token family）：RT 绑定发放 client，重放检测命中后
+ * 级联撤销范围 = (userId, clientId) —— 同一授权家族，而非该用户全部会话；
+ * 其他 client 的会话不受牵连（消除跨 client DoS 放大）。
+ * token 端点必须传入 expectedClientId 校验归属（sender 绑定强制）；
+ * 不匹配视同泄露信号，撤销整个家族。Gateway 静默续签（/api/auth/refresh）
+ * 无 client 上下文，不传该参数。
  *
  * @param oldRefreshToken - 旧的 Refresh Token
+ * @param expectedClientId - 发起轮换的 OAuth client（token 端点必传）
  * @returns 新的 accessToken + refreshToken + expiresIn，失败返回 null
  */
 export async function rotateRefreshToken(
   oldRefreshToken: string,
+  expectedClientId?: string,
 ): Promise<RefreshTokenResult | null> {
   const lockedRt = await db.transaction(async (tx) => {
     const rows = await tx
@@ -263,14 +276,32 @@ export async function rotateRefreshToken(
     const rt = rows[0]!.rt;
 
     if (rt.revoked) {
+      // RFC 9700 §4.14：轮换后的 RT 被重放 = 疑似泄露，撤销同一家族
+      // （同用户 + 同 client）的全部 Refresh Token
       await tx
         .update(schema.refreshTokens)
         .set({ revoked: new Date() })
-        .where(eq(schema.refreshTokens.userId, rt.userId));
+        .where(and(
+          eq(schema.refreshTokens.userId, rt.userId),
+          eq(schema.refreshTokens.clientId, rt.clientId),
+        ));
       return null;
     }
 
     if (rt.expiresAt && new Date(rt.expiresAt) < new Date()) return null;
+
+    // sender 绑定强制（RFC 9700）：提交的 RT 不属于认证中的 client =
+    // 疑似泄露/伪造，视同重放 —— 撤销该授权家族并拒绝
+    if (expectedClientId && rt.clientId !== expectedClientId) {
+      await tx
+        .update(schema.refreshTokens)
+        .set({ revoked: new Date() })
+        .where(and(
+          eq(schema.refreshTokens.userId, rt.userId),
+          eq(schema.refreshTokens.clientId, rt.clientId),
+        ));
+      return null;
+    }
 
     await tx
       .update(schema.refreshTokens)
@@ -284,6 +315,7 @@ export async function rotateRefreshToken(
       id: newRtId,
       tokenHash: hashToken(newRtToken),
       userId: rt.userId,
+      clientId: rt.clientId,
       scopes: rt.scopes,
       createdAt: now,
       expiresAt: new Date(now.getTime() + REFRESH_TOKEN_TTL * 1000),

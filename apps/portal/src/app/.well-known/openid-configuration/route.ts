@@ -6,7 +6,7 @@
  * @route GET /.well-known/openid-configuration
  */
 import { NextResponse } from 'next/server';
-import { getAppBaseURL } from '@/lib/env';
+import { getAppBaseURL, getIssuer } from '@/lib/env';
 import {
   SCOPES_SUPPORTED,
   RESPONSE_TYPES_SUPPORTED,
@@ -23,8 +23,10 @@ export async function GET() {
   const baseURL = getAppBaseURL();
 
   const metadata = {
-    // ADR-006：issuer 是体系级固定标识，与所有 JWT 签发/验签保持一致。
-    issuer: 'auth-sso',
+    // OIDC Discovery §4.3：issuer 必须与 discovery URL 同源（env 驱动，
+    // PORTAL_ISSUER 覆写，默认 NEXT_PUBLIC_APP_URL）。历史值 'auth-sso' 非 URL，
+    // 违反规范导致标准 RP 无法接入（audit 2026-09-28），过渡期验签双接受。
+    issuer: getIssuer(),
     authorization_endpoint: `${baseURL}/api/auth/oauth2/authorize`,
     token_endpoint: `${baseURL}/api/auth/oauth2/token`,
     userinfo_endpoint: `${baseURL}/api/auth/oauth2/userinfo`,

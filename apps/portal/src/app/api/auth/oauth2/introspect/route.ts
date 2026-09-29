@@ -45,20 +45,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ active: false });
     }
 
-    // 尝试作为 Access Token 验签
+    // 尝试作为 Access Token 验签（无状态：签名 + exp + issuer + jti 黑名单。
+    // verifyAccessToken 内部已完成黑名单复核，active:true 即未被撤销）
     const claims = await verifyAccessToken(token);
     if (claims) {
-      // client_id / scope 取自 access_tokens DB 行（签发时持久化），而非 JWT claims（aud 语义 ≠ client_id）
-      const atRows = await db
-        .select({ clientId: schema.accessTokens.clientId, scopes: schema.accessTokens.scopes })
-        .from(schema.accessTokens)
-        .where(eq(schema.accessTokens.tokenHash, hashToken(token)))
-        .limit(1);
-      const atRow = atRows[0];
+      // RFC 7662 §2.2：除 active 外全部字段可选。AT 经 ADR-006 最小化后不含
+      // scope/client_id 语义，诚实省略而非返回空串误导 RS；scope 语义由 RT 分支提供。
       return NextResponse.json({
         active: true,
-        scope: atRow?.scopes || '',
-        client_id: atRow?.clientId || '',
         sub: claims.sub,
         token_type: 'Bearer',
         exp: claims.exp,
@@ -83,7 +77,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         active: !isRevoked && !isExpired,
         scope: rt.scopes,
-        client_id: clientId || '',
+        client_id: rt.clientId,
         sub: rt.userId,
         token_type: 'refresh_token',
       });

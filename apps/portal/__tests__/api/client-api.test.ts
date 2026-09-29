@@ -83,7 +83,6 @@ function seedTokens() {
       scopes: 'openid profile',
       expiresAt: new Date('2027-01-01'),
       createdAt: now,
-      updatedAt: now,
     },
     {
       tokenHash: 'hash-token-2',
@@ -92,7 +91,6 @@ function seedTokens() {
       scopes: 'openid',
       expiresAt: new Date('2027-01-01'),
       createdAt: now,
-      updatedAt: now,
     },
   ];
 }
@@ -191,7 +189,7 @@ describe('Client API', () => {
         users: seedAdminUser(),
         clients: seedClients(),
       });
-      await db.insert(schema.accessTokens).values(seedTokens());
+      await db.insert(schema.refreshTokens).values(seedTokens());
 
       const body = await parseResponseJson(await ListTokens(
         createTestRequest('/api/clients/test-client-1/tokens'),

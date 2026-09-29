@@ -5,7 +5,7 @@ import 'server-only';
 
 import { cacheLife, cacheTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
-import { ilike, eq, or, desc, and, count, gt } from 'drizzle-orm';
+import { ilike, eq, or, desc, and, count, gt, isNull } from 'drizzle-orm';
 import { ENTITY_STATUS_VALUES, type EntityStatus } from '@auth-sso/contracts';
 import { asEntityStatus } from '@/lib/type-guards';
 
@@ -136,7 +136,10 @@ export interface ClientTokenDTO {
 }
 
 /**
- * 获取 Client 的授权 Token 列表（分页 + 按用户过滤）
+ * 获取 Client 的活跃会话凭证列表（分页 + 按用户过滤）
+ *
+ * 数据源为 refresh_tokens（RT 绑定发放 client）：AT 无 client 语义且无持久化行，
+ * "Client 的 Token" 的真实含义是该 client 的授权家族 —— 即其名下的 RT。
  */
 export async function getClientTokens(
   clientId: string,
@@ -146,30 +149,31 @@ export async function getClientTokens(
   const offset = (page - 1) * pageSize;
 
   const conditions = [
-    eq(schema.accessTokens.clientId, clientId),
-    // 仅返回未过期（活跃）token；过期行留存于表以备审计，但不进入列表与计数
-    gt(schema.accessTokens.expiresAt, new Date()),
+    eq(schema.refreshTokens.clientId, clientId),
+    // 仅返回活跃会话：未撤销且未过期
+    isNull(schema.refreshTokens.revoked),
+    gt(schema.refreshTokens.expiresAt, new Date()),
   ];
-  if (userId) conditions.push(eq(schema.accessTokens.userId, userId));
+  if (userId) conditions.push(eq(schema.refreshTokens.userId, userId));
 
   const countResult = await db.select({ count: count() })
-    .from(schema.accessTokens)
+    .from(schema.refreshTokens)
     .where(and(...conditions));
   const total = Number(countResult[0]?.count ?? 0);
 
   const tokens = await db.select({
-    id: schema.accessTokens.id,
-    userId: schema.accessTokens.userId,
-    scopes: schema.accessTokens.scopes,
-    createdAt: schema.accessTokens.createdAt,
-    expiresAt: schema.accessTokens.expiresAt,
+    id: schema.refreshTokens.id,
+    userId: schema.refreshTokens.userId,
+    scopes: schema.refreshTokens.scopes,
+    createdAt: schema.refreshTokens.createdAt,
+    expiresAt: schema.refreshTokens.expiresAt,
     userEmail: schema.users.email,
     userName: schema.users.name,
   })
-    .from(schema.accessTokens)
-    .leftJoin(schema.users, eq(schema.accessTokens.userId, schema.users.id))
+    .from(schema.refreshTokens)
+    .leftJoin(schema.users, eq(schema.refreshTokens.userId, schema.users.id))
     .where(and(...conditions))
-    .orderBy(desc(schema.accessTokens.createdAt))
+    .orderBy(desc(schema.refreshTokens.createdAt))
     .limit(pageSize)
     .offset(offset);
 

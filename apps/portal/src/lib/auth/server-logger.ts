@@ -33,6 +33,10 @@ export async function logServerDataRead(resourceType: string, resourceId: string
       }
     } catch {}
 
+    // A5-4 trace-id 传播：Gateway 为每条请求生成/透传 X-Request-Id，
+    // 数据读取日志与网关侧日志可凭此 ID 全链路关联
+    const requestId = reqHeaders.get('x-request-id') ?? null;
+
     writeAccessLog({
       userId: identity.userId,
       username: identity.claims.sub ?? null,
@@ -44,6 +48,12 @@ export async function logServerDataRead(resourceType: string, resourceId: string
       userAgent: extractUserAgent(reqHeaders),
       status: 200,
       duration: null, // 底层无法精确计算 API 的 HTTP 总耗时
+    });
+
+    log.info('data_read', {
+      request_id: requestId,
+      resource_type: resourceType,
+      resource_id: resourceId,
     });
   } catch (err) {
     log.error('底层数据访问日志记录失败', { error: err instanceof Error ? err.message : String(err) });

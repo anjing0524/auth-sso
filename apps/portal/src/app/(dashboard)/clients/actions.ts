@@ -10,7 +10,7 @@
  */
 import { revalidatePath, updateTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
-import { eq, and, inArray } from 'drizzle-orm';
+import { eq, and, inArray, isNull } from 'drizzle-orm';
 import { withAuth, type AuthContext } from '@/lib/auth';
 import {
   createClient,
@@ -119,7 +119,7 @@ export const rotateClientSecretAction = withAuth(
   },
 );
 
-/** 撤销 Client Token */
+/** 撤销 Client 的 Refresh Token（RFC 9700：按 client 撤销授权家族） */
 export const revokeClientTokensAction = withAuth(
   { permissions: [CLIENT_PERMISSIONS.UPDATE], audit: 'TOKEN_REVOKE' },
   async (_ctx: AuthContext, clientIdStr: string, tokenIds: string[], revokeAll: boolean): Promise<ApiResponse<{ revokedCount: number }>> => {
@@ -128,23 +128,34 @@ export const revokeClientTokensAction = withAuth(
     });
     if (!row) throw new EntityNotFoundError('Client', clientIdStr);
 
-    let deletedCount = 0;
+    // AT 无 client 语义（ADR-006 最小化），不可按 client 定点撤销；
+    // 撤 RT 即终止该 client 的续期能力，已发 AT 在 ≤1h TTL 内自然失效，
+    // 急迫场景走 jti 黑名单强制下线。历史上本动作 DELETE 幽灵表 access_tokens
+    // 恒为 0 行却返回成功（audit 2026-09-28 H-2），此处修复为真实撤销。
+    let revokedCount = 0;
     if (revokeAll) {
-      const result = await db.delete(schema.accessTokens)
-        .where(eq(schema.accessTokens.clientId, row.clientId))
-        .returning({ id: schema.accessTokens.id });
-      deletedCount = result.length;
-    } else if (tokenIds && tokenIds.length > 0) {
-      const result = await db.delete(schema.accessTokens)
+      const result = await db.update(schema.refreshTokens)
+        .set({ revoked: new Date() })
         .where(and(
-          eq(schema.accessTokens.clientId, row.clientId),
-          inArray(schema.accessTokens.id, tokenIds)
+          eq(schema.refreshTokens.clientId, row.clientId),
+          isNull(schema.refreshTokens.revoked),
         ))
-        .returning({ id: schema.accessTokens.id });
-      deletedCount = result.length;
+        .returning({ id: schema.refreshTokens.id });
+      revokedCount = result.length;
+    } else if (tokenIds && tokenIds.length > 0) {
+      const result = await db.update(schema.refreshTokens)
+        .set({ revoked: new Date() })
+        .where(and(
+          eq(schema.refreshTokens.clientId, row.clientId),
+          inArray(schema.refreshTokens.id, tokenIds),
+          isNull(schema.refreshTokens.revoked),
+        ))
+        .returning({ id: schema.refreshTokens.id });
+      revokedCount = result.length;
     }
 
     revalidatePath(`/clients/${row.clientId}`);
-    return { success: true, data: { revokedCount: deletedCount }, message: `已成功撤销 ${deletedCount} 个 Token` };
+    updateTag('clients-list');
+    return { success: true, data: { revokedCount }, message: `已成功撤销 ${revokedCount} 个 Token` };
   },
 );

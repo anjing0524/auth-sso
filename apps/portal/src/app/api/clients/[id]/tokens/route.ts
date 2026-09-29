@@ -5,7 +5,7 @@
  */
 import { type NextRequest } from 'next/server';
 import { db, schema } from '@/infrastructure/db';
-import { eq, inArray, and } from 'drizzle-orm';
+import { eq, inArray, and, isNull } from 'drizzle-orm';
 import { withPermission, logServerDataRead } from '@/lib/auth';
 import { CLIENT_PERMISSIONS, COMMON_ERRORS } from '@auth-sso/contracts';
 import { getClientById, getClientTokens } from '@/app/(dashboard)/clients/data';
@@ -52,10 +52,20 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       return restError(COMMON_ERRORS.VALIDATION_ERROR, '请提供 tokenIds 或 revokeAll', 400);
     }
 
-    const deletedCount = await db.transaction(async (tx) => {
+    // AT 无 client 语义（ADR-006 最小化），按 client 撤销的对象是 RT（授权家族）：
+    // 撤 RT 终止续期能力，已发 AT 在 ≤1h TTL 内自然失效（audit 2026-09-28 H-2 修复）
+    const revokedCount = await db.transaction(async (tx) => {
       const result = revokeAll
-        ? await tx.delete(schema.accessTokens).where(eq(schema.accessTokens.clientId, client.clientId)).returning({ id: schema.accessTokens.id })
-        : await tx.delete(schema.accessTokens).where(and(eq(schema.accessTokens.clientId, client.clientId), inArray(schema.accessTokens.id, tokenIds))).returning({ id: schema.accessTokens.id });
+        ? await tx.update(schema.refreshTokens).set({ revoked: new Date() })
+            .where(and(eq(schema.refreshTokens.clientId, client.clientId), isNull(schema.refreshTokens.revoked)))
+            .returning({ id: schema.refreshTokens.id })
+        : await tx.update(schema.refreshTokens).set({ revoked: new Date() })
+            .where(and(
+              eq(schema.refreshTokens.clientId, client.clientId),
+              inArray(schema.refreshTokens.id, tokenIds),
+              isNull(schema.refreshTokens.revoked),
+            ))
+            .returning({ id: schema.refreshTokens.id });
       await appendSecurityAudit(tx, {
         userId: adminUserId,
         operation: 'TOKEN_REVOKE',
@@ -69,6 +79,6 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       return result.length;
     });
 
-    return restSuccess({ message: `已撤销 ${deletedCount} 个 Token`, data: { revokedCount: deletedCount } });
+    return restSuccess({ message: `已撤销 ${revokedCount} 个 Token`, data: { revokedCount } });
   });
 }

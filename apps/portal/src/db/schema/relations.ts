@@ -13,7 +13,7 @@
  */
 import { relations } from 'drizzle-orm';
 import { users, userRoles } from './users';
-import { clients, accessTokens, refreshTokens, authorizationCodes } from './auth';
+import { clients, refreshTokens, authorizationCodes } from './auth';
 import { roles, permissions, rolePermissions } from './rbac';
 import { departments } from './org';
 
@@ -50,19 +50,14 @@ export const permissionsRelations = relations(permissions, ({ one, many }) => ({
 
 /** Client ↔ Token / 授权码 / 权限（统一引用 client_id） */
 export const clientsRelations = relations(clients, ({ many }) => ({
-  accessTokens: many(accessTokens),
   refreshTokens: many(refreshTokens),
   authorizationCodes: many(authorizationCodes),
   permissions: many(permissions),
 }));
 
-export const accessTokensRelations = relations(accessTokens, ({ one }) => ({
-  client: one(clients, { fields: [accessTokens.clientId], references: [clients.clientId] }),
-  user: one(users, { fields: [accessTokens.userId], references: [users.id] }),
-}));
-
 export const refreshTokensRelations = relations(refreshTokens, ({ one }) => ({
   user: one(users, { fields: [refreshTokens.userId], references: [users.id] }),
+  client: one(clients, { fields: [refreshTokens.clientId], references: [clients.clientId] }),
 }));
 
 export const authorizationCodesRelations = relations(authorizationCodes, ({ one }) => ({

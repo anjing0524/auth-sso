@@ -67,6 +67,7 @@ export const createDepartmentAction = withAuth(
 
     revalidatePath('/departments');
     updateTag('departments-list');
+    updateTag('departments');
     return { success: true, data: { id: dept.id }, message: '部门创建成功' };
   },
 );
@@ -117,6 +118,7 @@ export const updateDepartmentAction = withAuth(
     });
     revalidatePath('/departments');
     updateTag('departments-list');
+    updateTag('departments');
     return { success: true, data: { id: deptId }, message: '部门更新成功' };
   },
 );
@@ -160,6 +162,7 @@ export const deleteDepartmentAction = withAuth(
 
     revalidatePath('/departments');
     updateTag('departments-list');
+    updateTag('departments');
     return { success: true, data: { id: deptId }, message: '部门已删除' };
   },
 );

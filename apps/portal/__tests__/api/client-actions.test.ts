@@ -167,9 +167,9 @@ describe('Client Server Actions', () => {
         users: seedTestUser(),
         clients: seedTestClient(),
       } as any);
-      await db.insert(schema.accessTokens).values([
-        { tokenHash: 'hash-a1', clientId: TEST_CLIENT_ID, userId: USER_ID, scopes: 'openid', expiresAt: new Date(Date.now() + 3600000), createdAt: now, updatedAt: now },
-        { tokenHash: 'hash-a2', clientId: TEST_CLIENT_ID, userId: USER_ID, scopes: 'openid', expiresAt: new Date(Date.now() + 3600000), createdAt: now, updatedAt: now },
+      await db.insert(schema.refreshTokens).values([
+        { tokenHash: 'hash-a1', clientId: TEST_CLIENT_ID, userId: USER_ID, scopes: 'openid', expiresAt: new Date(Date.now() + 3600000), createdAt: now },
+        { tokenHash: 'hash-a2', clientId: TEST_CLIENT_ID, userId: USER_ID, scopes: 'openid', expiresAt: new Date(Date.now() + 3600000), createdAt: now },
       ]);
 
       const r: any = await revokeClientTokensAction(TEST_CLIENT_ID, [], true);
@@ -177,8 +177,8 @@ describe('Client Server Actions', () => {
       expect(r.success).toBe(true);
       expect(r.data.revokedCount).toBe(2);
 
-      const remaining = await db.select().from(schema.accessTokens);
-      expect(remaining.length).toBe(0);
+      const remaining = await db.select().from(schema.refreshTokens);
+      expect(remaining.every(t => t.revoked !== null)).toBe(true);
     });
 
     it('不存在 → throw EntityNotFoundError', async () => {

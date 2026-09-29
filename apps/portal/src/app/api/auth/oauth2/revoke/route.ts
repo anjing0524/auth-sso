@@ -48,19 +48,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({});
     }
 
-    // 尝试撤销 Access Token（jti 黑名单 + 删 access_tokens 行）
+    // 尝试撤销 Access Token（jti 黑名单 — AT 无持久化行，黑名单是唯一撤销通道）
     if (!tokenTypeHint || tokenTypeHint === 'access_token') {
       const claims = await verifyAccessToken(token);
       if (claims?.jti && claims.exp) {
         await revokeJti(claims.jti, claims.exp);
-      }
-      // claims 存在即为有效 access token，同步删除其入库行（UI 列表一致性）
-      if (claims) {
-        try {
-          await db.delete(schema.accessTokens).where(eq(schema.accessTokens.tokenHash, hashToken(token)));
-        } catch (e) {
-          log.error('删除 access_tokens 失败', { error: (e as Error).message });
-        }
       }
     }
 

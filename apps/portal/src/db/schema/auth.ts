@@ -3,7 +3,7 @@
  *
  * - clients：OAuth 2.1 客户端应用（client_id 为 PK，统一 FK 引用目标）
  * - authorizationCodes：授权码
- * - accessTokens / refreshTokens：令牌存储（token_hash 替代明文 token）
+ * - refreshTokens：令牌存储（token_hash 替代明文 token，绑定发放 client）
  *
  * 注意：scopes 列保持 varchar 类型 —— OAuth scope 在 RFC 6749 / JWT scope claim 中
  * 本就是空格分隔字符串，是正确的语义而非反模式。
@@ -65,38 +65,17 @@ export const authorizationCodes = pgTable('authorization_codes', {
 });
 
 /**
- * Access Token (用于 introspection + revocation)
- *
- * **预留表**：当前无状态 JWT 架构下不使用此表。
- * JWT 的紧急撤销通过 Redis jti 黑名单实现（`portal:jti_blocklist:{jti}`），
- * 不需写此表。保留供未来有状态 Token 场景（如 Token Introspection 缓存、审计统计）。
- *
- * token_hash 存储 SHA256(token)，不可为空。
- */
-export const accessTokens = pgTable('access_tokens', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  tokenHash: varchar('token_hash', { length: 64 }).notNull().unique(),
-  clientId: varchar('client_id', { length: 50 }).notNull().references(() => clients.clientId, { onDelete: 'cascade' }),
-  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-  scopes: varchar('scopes', { length: 200 }).notNull(),
-  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
-  createdAt: createdAtColumn(),
-  updatedAt: updatedAtColumn(),
-}, (t) => [
-  index('idx_access_tokens_client').on(t.clientId),
-  index('idx_access_tokens_user').on(t.userId),
-]);
-
-/**
  * Refresh Token (用于 rotation + revocation)
  *
- * 仅绑定用户，不绑定 Client（user-level refresh token）。
- * 多客户端共享同一 refresh token，降低存储开销，简化续签逻辑。
+ * 绑定发放时的 OAuth Client（RFC 9700 token family 语义的最小落地）：
+ * Gateway SSO 会话的 RT 记 `client_id = 'portal'`，直连 RP 的 RT 记各自 client。
+ * 重放检测的级联撤销范围 = (userId, clientId)，不再横扫该用户全部会话。
  */
 export const refreshTokens = pgTable('refresh_tokens', {
   id: uuid('id').primaryKey().defaultRandom(),
   tokenHash: varchar('token_hash', { length: 64 }).notNull().unique(),
   userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  clientId: varchar('client_id', { length: 50 }).notNull().references(() => clients.clientId, { onDelete: 'cascade' }),
   scopes: varchar('scopes', { length: 200 }).notNull(),
   revoked: timestamp('revoked', { withTimezone: true }),
   authTime: timestamp('auth_time', { withTimezone: true }),
@@ -105,6 +84,7 @@ export const refreshTokens = pgTable('refresh_tokens', {
   updatedAt: updatedAtColumn(),
 }, (t) => [
   index('idx_refresh_tokens_user').on(t.userId),
+  index('idx_refresh_tokens_client').on(t.clientId),
   index('idx_refresh_tokens_expires').on(t.expiresAt),
 ]);
 
