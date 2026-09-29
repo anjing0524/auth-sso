@@ -3,14 +3,12 @@ use std::sync::Arc;
 use pingora_load_balancing::LoadBalancer;
 use pingora_load_balancing::selection::RoundRobin;
 
-use crate::config::OAuthConfig;
-
-/// 单条路由条目 — prefix 即 upstream name，一次装配负载均衡器与 OAuth Client 配置。
+/// 单条路由条目 — prefix 即 upstream name，一次装配负载均衡器。
+/// OAuth Client 配置已收敛到网关级 `[gateway.oauth]`（ADR-010 二期），不再随路由携带。
 pub struct RouteEntry {
     /// 路径前缀（即 upstream name，如 `/`、`/demo/`）
     pub prefix: String,
     pub lb: Arc<LoadBalancer<RoundRobin>>,
-    pub oauth: OAuthConfig,
 }
 
 /// 前缀路由表 — 按 prefix 长度降序排列的单一真相源。
@@ -73,10 +71,6 @@ mod tests {
             .map(|n| RouteEntry {
                 prefix: n.to_string(),
                 lb: make_lb(),
-                oauth: OAuthConfig {
-                    client_id: format!("client{n}"),
-                    client_secret: "secret".to_string(),
-                },
             })
             .collect::<Vec<_>>();
         Router::new(entries)
@@ -106,15 +100,5 @@ mod tests {
         let router = make_router(&["/", "/demo/"]);
         let e = router.entry(router.resolve_idx("non-slash-path")).unwrap();
         assert_eq!(e.prefix, "/");
-    }
-
-    #[test]
-    fn entry_carries_oauth_config() {
-        // 路由条目与 OAuth 配置同源：一次匹配同时得到 LB 与 OAuth Client
-        let router = make_router(&["/", "/demo/"]);
-        let e = router.entry(router.resolve_idx("/demo/x")).unwrap();
-        assert_eq!(e.oauth.client_id, "client/demo/");
-        let e = router.entry(router.resolve_idx("/dashboard")).unwrap();
-        assert_eq!(e.oauth.client_id, "client/");
     }
 }

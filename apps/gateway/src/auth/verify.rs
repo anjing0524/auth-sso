@@ -106,10 +106,24 @@ impl JwtVerifier {
 
         // 2. 单次 wait-free 快照：一次原子 load 同时获得 keys + validation，零拷贝
         let meta = self.jwks_cache.snapshot();
+        let now = crate::http::unix_secs().ok_or(VerifyError::ClockError)?;
         let key = meta
             .keys
             .get(&kid)
-            .ok_or_else(|| VerifyError::UnknownKid(kid.clone()))?;
+            // 宽限期外的条目视为不存在（上游轮换维护窗口的残缺响应防护）
+            .filter(|entry| now.saturating_sub(entry.cached_at) < crate::jwks::JWKS_KEY_GRACE_SECS)
+            .map(|entry| &entry.key)
+            .ok_or_else(|| {
+                // Portal 可能刚完成密钥轮换：触发一次有节流的按需刷新
+                // （单飞 + 最小间隔），本次请求仍按 UnknownKid 拒绝，下一请求受益。
+                if self
+                    .jwks_cache
+                    .request_refresh_if_due(crate::jwks::JWKS_ON_DEMAND_MIN_INTERVAL_SECS)
+                {
+                    warn!("UnknownKid({kid}) 已触发按需 JWKS 刷新");
+                }
+                VerifyError::UnknownKid(kid.clone())
+            })?;
 
         // 3. 验签 + issuer/algorithm 校验
         let token_data = decode::<Claims>(token, key, &meta.validation).map_err(|e| {

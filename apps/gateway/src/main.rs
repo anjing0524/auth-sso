@@ -41,7 +41,7 @@ fn main() -> anyhow::Result<()> {
     info!("  编译能力: 平台 TLS 终结");
 
     let upstream_routes = &config.upstreams;
-    gateway::config::validate_routing_consistency(upstream_routes)
+    gateway::config::validate_routing_consistency(upstream_routes, &config.gateway.oauth)
         .context("❌ 路由配置一致性校验失败")?;
 
     let oidc_entry = upstream_routes
@@ -66,7 +66,8 @@ fn main() -> anyhow::Result<()> {
         config.gateway.gateway_shared_secret.clone(),
     );
 
-    // 单一路由表：name/lb/oauth 一次装配（Router 内部按 prefix 长度降序排序）
+    // 单一路由表：name/lb 一次装配（Router 内部按 prefix 长度降序排序）。
+    // OAuth Client 凭据已收敛到 [gateway.oauth]（ADR-010 二期），不随路由携带。
     let mut entries: Vec<RouteEntry> = Vec::new();
     for uc in upstream_routes {
         let ups = Upstreams::from_config(&uc.addresses);
@@ -79,7 +80,6 @@ fn main() -> anyhow::Result<()> {
         entries.push(RouteEntry {
             prefix: uc.name.clone(),
             lb,
-            oauth: uc.oauth.clone(),
         });
     }
     let router = Router::new(entries);
@@ -136,7 +136,7 @@ fn main() -> anyhow::Result<()> {
             config.gateway.jwks_refresh_interval_secs,
         ),
     );
-    let _ = my_server.add_service(jwks_refresh_svc);
+    let jwks_handle = my_server.add_service(jwks_refresh_svc);
 
     let mut gateway_proxy = http_proxy_service(
         &my_server.configuration,
@@ -151,6 +151,8 @@ fn main() -> anyhow::Result<()> {
             config.gateway.upstream_server_name.clone(),
             config.gateway.upstream_host_header.clone(),
             config.gateway.external_tls_termination,
+            config.gateway.rate_limit.clone(),
+            config.gateway.oauth.clone(),
             Arc::clone(&jwks_cache),
         ),
     );
@@ -159,6 +161,7 @@ fn main() -> anyhow::Result<()> {
         gateway_proxy.add_tcp(&format!("0.0.0.0:{}", config.gateway.port));
         let gateway_handle = my_server.add_service(gateway_proxy);
         gateway_handle.add_dependency(&redis_handle);
+        gateway_handle.add_dependency(&jwks_handle);
         info!(
             "✅ 平台 TLS 终结代理服务监听于: 0.0.0.0:{}",
             config.gateway.port
@@ -217,6 +220,7 @@ fn main() -> anyhow::Result<()> {
         );
         let gateway_handle = my_server.add_service(gateway_proxy);
         gateway_handle.add_dependency(&redis_handle);
+        gateway_handle.add_dependency(&jwks_handle);
         info!(
             "✅ HTTPS 代理服务监听于: 0.0.0.0:{}",
             config.gateway.ssl_port

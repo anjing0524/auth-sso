@@ -7,11 +7,22 @@ use pingora_core::server::ShutdownWatch;
 use pingora_core::services::background::BackgroundService;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicI64, Ordering};
 use std::time::Duration;
+use tokio::sync::Notify;
 use tracing::{info, warn};
 
 use crate::config::Upstreams;
 use crate::http::HTTP_CLIENT;
+
+/// 公钥宽限期（秒）：刷新结果与新集合合并时，不在新集合中的旧 key 在此窗口内保留。
+/// 防止上游瞬时返回残缺 JWKS（如轮换维护窗口）把仍在使用的旧 kid 顶掉，
+/// 一次上游抖动放大为全站验签失败。
+pub(crate) const JWKS_KEY_GRACE_SECS: u64 = 24 * 3600;
+
+/// UnknownKid 触发按需刷新的最小间隔（秒）：单飞节流，
+/// 防止伪造 token 风暴借"每个坏 token 触发一次拉取"打爆 JWKS 端点。
+pub(crate) const JWKS_ON_DEMAND_MIN_INTERVAL_SECS: u64 = 30;
 
 /// JWKS 获取与解析过程中的强类型错误定义
 #[derive(thiserror::Error, Debug)]
@@ -34,6 +45,9 @@ pub enum JwksError {
     /// jwks_uri 路径解析失败
     #[error("无法从 jwks_uri 中解析出 JWKS 路径: {0}")]
     InvalidJwksUri(String),
+    /// 系统时钟不可用，无法执行宽限期判定
+    #[error("系统时钟不可用")]
+    ClockError,
 }
 
 /// OIDC Discovery 拉取结果 — 不含公钥，待 JWKS 公钥也拉取成功后一并原子写入缓存
@@ -65,14 +79,22 @@ fn base_validation() -> Validation {
 /// 热路径一次 wait-free load 同时获得全部字段，零锁零拷贝。
 #[derive(Clone)]
 pub(crate) struct OidcMetadata {
-    /// kid -> 公钥映射表
-    pub(crate) keys: HashMap<String, DecodingKey>,
+    /// kid -> 公钥条目映射（条目携带 cached_at，供轮换宽限期淘汰）
+    pub(crate) keys: HashMap<String, JwksKeyEntry>,
     /// 预构建的 JWT 校验配置（Arc 共享引用，热路径仅原子引用计数递增，零拷贝）
     pub(crate) validation: Arc<Validation>,
     /// Token 刷新接口端点 URL (已解析为完整内网 URL)
     pub(crate) refresh_endpoint: Option<Arc<str>>,
     /// Gateway 拦截 OAuth callback 的路径（来自 OIDC Discovery `oauth_callback_path` 字段）
     pub(crate) callback_path: Option<Arc<str>>,
+}
+
+/// 单个公钥缓存条目
+#[derive(Clone)]
+pub(crate) struct JwksKeyEntry {
+    pub(crate) key: DecodingKey,
+    /// 首次写入时的 Unix 秒 — 宽限期淘汰依据
+    pub(crate) cached_at: u64,
 }
 
 impl Default for OidcMetadata {
@@ -92,6 +114,10 @@ impl Default for OidcMetadata {
 /// 热路径 `snapshot()` 为一次 wait-free 原子 load，无锁、无中毒可能、零拷贝。
 pub struct JwksCache {
     inner: ArcSwap<OidcMetadata>,
+    /// UnknownKid 触发的按需刷新信号（后台服务循环监听）
+    refresh_notify: Notify,
+    /// 上一次按需刷新触发时间（Unix 秒）— 单飞节流依据
+    last_refresh_request: AtomicI64,
 }
 
 impl std::fmt::Debug for JwksCache {
@@ -106,6 +132,37 @@ impl Default for JwksCache {
     }
 }
 
+/// 合并新旧公钥：新 keys 全量收录（fresh cached_at）；不在新集合中的旧 key
+/// 保留至宽限期结束。上游瞬时返回残缺 JWKS 时，仍在使用的旧 kid 不会被顶掉。
+fn merge_keys(
+    old: &HashMap<String, JwksKeyEntry>,
+    new: HashMap<String, DecodingKey>,
+    now: u64,
+    grace_secs: u64,
+) -> HashMap<String, JwksKeyEntry> {
+    let mut merged: HashMap<String, JwksKeyEntry> = new
+        .into_iter()
+        .map(|(kid, key)| {
+            (
+                kid,
+                JwksKeyEntry {
+                    key,
+                    cached_at: now,
+                },
+            )
+        })
+        .collect();
+    for (kid, entry) in old {
+        if merged.contains_key(kid) {
+            continue;
+        }
+        if now.saturating_sub(entry.cached_at) < grace_secs {
+            merged.insert(kid.clone(), entry.clone());
+        }
+    }
+    merged
+}
+
 impl JwksCache {
     /// 创建空的 JWKS 缓存实例
     ///
@@ -118,6 +175,8 @@ impl JwksCache {
     pub fn new() -> Self {
         Self {
             inner: ArcSwap::from_pointee(OidcMetadata::default()),
+            refresh_notify: Notify::new(),
+            last_refresh_request: AtomicI64::new(0),
         }
     }
 
@@ -126,7 +185,7 @@ impl JwksCache {
         self.inner.load_full()
     }
 
-    /// 获取特定 kid 对应的公钥（同步读取）
+    /// 获取特定 kid 对应的公钥（同步读取；宽限期外的条目视为不存在）
     ///
     /// # Examples
     ///
@@ -136,7 +195,32 @@ impl JwksCache {
     /// assert!(cache.key("nonexistent").is_none());
     /// ```
     pub fn key(&self, kid: &str) -> Option<DecodingKey> {
-        self.inner.load().keys.get(kid).cloned()
+        self.inner.load().keys.get(kid).and_then(|entry| {
+            let now = crate::http::unix_secs().unwrap_or(entry.cached_at);
+            (now.saturating_sub(entry.cached_at) < JWKS_KEY_GRACE_SECS).then(|| entry.key.clone())
+        })
+    }
+
+    /// UnknownKid 触发的按需刷新请求（单飞 + 最小间隔节流）。
+    ///
+    /// 返回 true 表示本次调用赢得触发权并已唤醒后台刷新循环；
+    /// 间隔内的重复调用直接返回 false，防止伪造 token 风暴借
+    /// "每个坏 token 触发一次拉取" 打爆 JWKS 端点。
+    pub fn request_refresh_if_due(&self, min_interval_secs: u64) -> bool {
+        let now = crate::http::unix_secs().unwrap_or(0) as i64;
+        let last = self.last_refresh_request.load(Ordering::Relaxed);
+        if now.saturating_sub(last) < min_interval_secs as i64 {
+            return false;
+        }
+        if self
+            .last_refresh_request
+            .compare_exchange(last, now, Ordering::Relaxed, Ordering::Relaxed)
+            .is_err()
+        {
+            return false;
+        }
+        self.refresh_notify.notify_one();
+        true
     }
 
     /// 获取预构建的 OIDC 校验配置（Arc 共享引用，热路径原子引用计数递增，零拷贝）
@@ -265,6 +349,9 @@ impl JwksCache {
     }
 
     /// 原子写入 OIDC 元数据 + JWKS 公钥，一次 store 完成所有变更
+    ///
+    /// 新公钥全量收录；不在新集合中的旧 key 保留一个宽限期
+    /// （[`merge_keys`]），消除上游残缺响应的放大效应。
     fn apply_discovery(
         &self,
         discovery: OidcDiscovery,
@@ -273,9 +360,12 @@ impl JwksCache {
         if new_keys.is_empty() {
             return Err(JwksError::EmptyKeys);
         }
+        let now = crate::http::unix_secs().ok_or(JwksError::ClockError)?;
         let count = new_keys.len();
+        let old = self.inner.load();
+        let merged = merge_keys(&old.keys, new_keys, now, JWKS_KEY_GRACE_SECS);
         self.inner.store(Arc::new(OidcMetadata {
-            keys: new_keys,
+            keys: merged,
             validation: discovery.validation,
             refresh_endpoint: discovery.refresh_endpoint,
             callback_path: discovery.callback_path,
@@ -349,7 +439,8 @@ impl JwksCache {
     #[doc(hidden)]
     pub fn insert_key_for_test(&self, kid: String, key: DecodingKey) {
         let mut meta = (*self.inner.load_full()).clone();
-        meta.keys.insert(kid, key);
+        let cached_at = crate::http::unix_secs().unwrap_or(0);
+        meta.keys.insert(kid, JwksKeyEntry { key, cached_at });
         self.inner.store(Arc::new(meta));
     }
 
@@ -376,6 +467,9 @@ impl JwksCache {
 
 /// 缓存为空时的重试间隔（快速初始化）
 const JWKS_INIT_RETRY_SECS: u64 = 10;
+
+/// 首刷失败重试上限：达到后放行就绪（降级运行），避免 Portal 不可达时网关永不启动
+const JWKS_INIT_MAX_ATTEMPTS: u32 = 5;
 
 /// 渐进式退避延迟表（秒）：索引为连续失败次数 - 1
 const JWKS_BACKOFF_SECS: &[u64] = &[30, 60, 120, 300];
@@ -462,11 +556,18 @@ impl JwksRefreshService {
 
 #[async_trait::async_trait]
 impl BackgroundService for JwksRefreshService {
-    async fn start(&self, mut shutdown: ShutdownWatch) {
-        // 阻塞首次刷新：确保 JWKS 缓存就绪后才启动主事件循环。
-        // 避免 Gateway 在首次 Discovery 完成前就开始接受流量，
-        // 导致所有 JWT 验证因 UnknownKid 而失败。
+    /// 覆盖默认就绪通知：**先完成首次 JWKS 刷新、再通知就绪**，配合 main.rs
+    /// 对代理服务声明的 `add_dependency`，使网关在公钥缓存就绪前不接收流量
+    /// （此前 start() 内的阻塞只约束本服务自身的事件循环，约束不到代理）。
+    /// 首刷连续 JWKS_INIT_MAX_ATTEMPTS 次失败则放行就绪，降级为请求期
+    /// 401/PKCE 循环 —— Portal 不可达时网关其他能力（ACME/跳转）仍可用。
+    async fn start_with_ready_notifier(
+        &self,
+        mut shutdown: ShutdownWatch,
+        ready_notifier: pingora_core::services::ServiceReadyNotifier,
+    ) {
         info!("🔍 执行首次 JWKS 刷新，等待缓存就绪...");
+        let mut attempts: u32 = 0;
         loop {
             match self.try_refresh_from_any().await {
                 Ok(()) => {
@@ -474,9 +575,16 @@ impl BackgroundService for JwksRefreshService {
                     break;
                 }
                 Err(e) => {
+                    attempts += 1;
+                    if attempts >= JWKS_INIT_MAX_ATTEMPTS {
+                        warn!(
+                            "⚠️ 首次 JWKS 刷新连续 {attempts} 次失败: {e}，放行就绪（请求将以 401/PKCE 降级直至恢复）"
+                        );
+                        break;
+                    }
                     warn!(
-                        "⏳ 首次 JWKS 刷新失败: {}，{} 秒后重试...",
-                        e, JWKS_INIT_RETRY_SECS
+                        "⏳ 首次 JWKS 刷新失败: {}，{} 秒后重试（{}/{}）...",
+                        e, JWKS_INIT_RETRY_SECS, attempts, JWKS_INIT_MAX_ATTEMPTS
                     );
                     tokio::select! {
                         _ = shutdown.changed() => {
@@ -488,8 +596,18 @@ impl BackgroundService for JwksRefreshService {
                 }
             }
         }
+        ready_notifier.notify_ready();
+        self.run_refresh_loop(shutdown).await;
+    }
 
-        // 主事件循环：定时后台刷新
+    async fn start(&self, shutdown: ShutdownWatch) {
+        self.run_refresh_loop(shutdown).await;
+    }
+}
+
+impl JwksRefreshService {
+    /// 主刷新循环：定时刷新 + UnknownKid 按需刷新信号 + 退出信号三路 select
+    async fn run_refresh_loop(&self, mut shutdown: ShutdownWatch) {
         loop {
             let result = self.try_refresh_from_any().await;
             let delay_secs = match &result {
@@ -518,6 +636,9 @@ impl BackgroundService for JwksRefreshService {
                     break;
                 }
                 _ = tokio::time::sleep(Duration::from_secs(delay_secs)) => {}
+                _ = self.jwks_cache.refresh_notify.notified() => {
+                    info!("⚡ UnknownKid 触发按需 JWKS 刷新");
+                }
             }
         }
     }

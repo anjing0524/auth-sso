@@ -7,12 +7,17 @@
 use std::hint::black_box;
 
 use criterion::{Criterion, criterion_group, criterion_main};
+use gateway::config::RateLimitConfig;
 use gateway::rate_limiter::observe;
 
 fn bench_auth_endpoint_rate_check(c: &mut Criterion) {
     c.bench_function("rate_limit/auth_endpoint", |b| {
         b.iter(|| {
-            let result = observe(black_box("192.168.1.100"), black_box("/api/auth/session"));
+            let result = observe(
+                black_box("192.168.1.100"),
+                black_box("/api/auth/session"),
+                black_box(&RateLimitConfig::default()),
+            );
             black_box(result)
         })
     });
@@ -21,7 +26,11 @@ fn bench_auth_endpoint_rate_check(c: &mut Criterion) {
 fn bench_token_endpoint_rate_check(c: &mut Criterion) {
     c.bench_function("rate_limit/token_endpoint", |b| {
         b.iter(|| {
-            let result = observe(black_box("10.0.0.55"), black_box("/api/auth/oauth2/token"));
+            let result = observe(
+                black_box("10.0.0.55"),
+                black_box("/api/auth/oauth2/token"),
+                black_box(&RateLimitConfig::default()),
+            );
             black_box(result)
         })
     });
@@ -30,7 +39,11 @@ fn bench_token_endpoint_rate_check(c: &mut Criterion) {
 fn bench_no_limit_path(c: &mut Criterion) {
     c.bench_function("rate_limit/no_limit_path", |b| {
         b.iter(|| {
-            let result = observe(black_box("10.0.0.1"), black_box("/dashboard/users"));
+            let result = observe(
+                black_box("10.0.0.1"),
+                black_box("/dashboard/users"),
+                black_box(&RateLimitConfig::default()),
+            );
             black_box(result)
         })
     });
@@ -45,7 +58,11 @@ fn bench_different_ips_token_endpoint(c: &mut Criterion) {
         b.iter(|| {
             let ip = black_box(&ips[idx % ips.len()]);
             idx = idx.wrapping_add(1);
-            let result = observe(ip, black_box("/api/auth/oauth2/token"));
+            let result = observe(
+                ip,
+                black_box("/api/auth/oauth2/token"),
+                black_box(&RateLimitConfig::default()),
+            );
             black_box(result)
         })
     });

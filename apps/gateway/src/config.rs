@@ -5,6 +5,27 @@ use tracing::info;
 
 const LETS_ENCRYPT_PRODUCTION_DIRECTORY: &str = "https://acme-v02.api.letsencrypt.org/directory";
 
+/// 认证端点进程内限流阈值（60s 滑动窗口）。
+///
+/// 默认值为生产建议基线（爆破防护）；E2E 通过 RATE_LIMIT_AUTH_MAX /
+/// RATE_LIMIT_TOKEN_MAX 环境变量抬高档位，不再依赖源码内硬编码。
+#[derive(Debug, Deserialize, Clone, PartialEq, Eq)]
+pub struct RateLimitConfig {
+    /// `/api/auth/*` 端点每分钟请求上限
+    pub auth_max: isize,
+    /// `/api/auth/oauth2/token` 端点每分钟请求上限
+    pub token_max: isize,
+}
+
+impl Default for RateLimitConfig {
+    fn default() -> Self {
+        Self {
+            auth_max: 20,
+            token_max: 30,
+        }
+    }
+}
+
 /// 网关服务层配置
 #[derive(Debug, Deserialize, Clone)]
 #[serde(default)]
@@ -34,6 +55,15 @@ pub struct GatewayConfig {
     /// JWKS 刷新成功后的标准间隔（秒，默认 300）。
     /// 可通过 JWKS_REFRESH_INTERVAL_SECS 环境变量覆盖。
     pub jwks_refresh_interval_secs: u64,
+    /// 部署环境标识（development/test/production）。生产安全校验以此为依据，
+    /// 不再依赖 NODE_ENV（Node.js 惯例不应泄入 Rust 配置）。
+    /// 可通过 GATEWAY_ENVIRONMENT 环境变量覆盖；未配置时回退读取 NODE_ENV。
+    pub environment: String,
+    /// 认证端点限流阈值。
+    pub rate_limit: RateLimitConfig,
+    /// 网关级统一 OAuth Client（ADR-010 二期）：所有被代理 upstream 共用，
+    /// callback 拦截与 code→token 交换都使用这一组凭据。
+    pub oauth: OAuthConfig,
 }
 
 fn default_upstream_scheme() -> String {
@@ -55,6 +85,12 @@ impl Default for GatewayConfig {
             upstream_server_name: None,
             upstream_host_header: None,
             jwks_refresh_interval_secs: 300,
+            environment: String::new(),
+            rate_limit: RateLimitConfig::default(),
+            oauth: OAuthConfig {
+                client_id: "portal".to_string(),
+                client_secret: String::new(),
+            },
         }
     }
 }
@@ -99,13 +135,18 @@ pub struct UpstreamConfig {
     pub public_paths: Vec<String>,
     #[serde(default)]
     pub oidc_provider: bool,
-    /// OAuth 2.1 Client 配置（必填）。
-    /// Gateway 为该上游代为执行 PKCE 生成 + callback 拦截 + Token 交换（无感 SSO）。
-    pub oauth: OAuthConfig,
+    /// 该 upstream 是否走 Gateway 统一 OAuth Client 流程（未认证 HTML 导航
+    /// 生成 PKCE + callback 拦截）。默认 true；纯内网/静态 upstream 可显式关闭。
+    #[serde(default = "default_true")]
+    pub oauth_enabled: bool,
 }
 
-/// 单个上游的 OAuth 2.1 客户端配置
-#[derive(Debug, Deserialize, Clone)]
+fn default_true() -> bool {
+    true
+}
+
+/// 网关级统一 OAuth 2.1 客户端配置（ADR-010：Gateway 是唯一 OAuth Client）。
+#[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
 pub struct OAuthConfig {
     /// OAuth 2.1 client_id（在 Portal 中注册的客户端标识符）
     pub client_id: String,
@@ -114,7 +155,18 @@ pub struct OAuthConfig {
 }
 
 /// 启动期路由一致性校验。
-pub fn validate_routing_consistency(routes: &[UpstreamConfig]) -> anyhow::Result<()> {
+pub fn validate_routing_consistency(
+    routes: &[UpstreamConfig],
+    oauth: &OAuthConfig,
+) -> anyhow::Result<()> {
+    // ADR-010 二期：凭据已收敛到 [gateway.oauth]，缺失即拒绝启动
+    // （callback 换 token 无凭据可用）
+    if oauth.client_id.is_empty() {
+        bail!("gateway.oauth.client_id 不能为空（统一 OAuth Client 凭据）");
+    }
+    if oauth.client_secret.is_empty() {
+        bail!("gateway.oauth.client_secret 不能为空（统一 OAuth Client 凭据）");
+    }
     let mut seen: HashSet<&str> = HashSet::new();
     for r in routes {
         if !seen.insert(r.name.as_str()) {
@@ -122,12 +174,6 @@ pub fn validate_routing_consistency(routes: &[UpstreamConfig]) -> anyhow::Result
         }
         if r.name.is_empty() {
             bail!("upstream name 不能为空字符串");
-        }
-        if r.oauth.client_id.is_empty() {
-            bail!("upstream \"{}\" 的 oauth.client_id 不能为空", r.name);
-        }
-        if r.oauth.client_secret.is_empty() {
-            bail!("upstream \"{}\" 的 oauth.client_secret 不能为空", r.name);
         }
         // 白名单归属校验：public_path 必须落在自身路由前缀内，
         // 防止某个 upstream 的配置为其他 upstream 的路径开放免鉴权后门
@@ -225,7 +271,24 @@ impl Config {
         let path = std::path::Path::new(path);
 
         if !path.exists() {
-            info!("ℹ️ 配置文件 {} 未找到，使用默认配置", path.display());
+            // 安全网关禁止静默回退默认配置（默认上游指向 127.0.0.1）：
+            // `-c gateway.toml` 拼写错误的网关会"正常启动"并路由到 localhost。
+            // 本地试验确需默认配置时，必须显式设置 GATEWAY_ALLOW_DEFAULT_CONFIG=1。
+            if std::env::var("GATEWAY_ALLOW_DEFAULT_CONFIG")
+                .ok()
+                .as_deref()
+                != Some("1")
+            {
+                bail!(
+                    "配置文件 {} 不存在。安全网关禁止静默回退到默认配置；\
+                     如确需本地试验，请显式设置 GATEWAY_ALLOW_DEFAULT_CONFIG=1",
+                    path.display()
+                );
+            }
+            info!(
+                "ℹ️ 配置文件 {} 未找到（GATEWAY_ALLOW_DEFAULT_CONFIG=1），使用默认配置",
+                path.display()
+            );
             let mut cfg = Config::default();
             cfg.apply_env_overrides()?;
             validate_production_security(&cfg, std::env::var("NODE_ENV").ok().as_deref())?;
@@ -296,6 +359,12 @@ impl Config {
             self.gateway.jwks_refresh_interval_secs,
             "JWKS_REFRESH_INTERVAL_SECS",
         )?;
+        self.gateway.environment =
+            resolve_env_str(&self.gateway.environment, "GATEWAY_ENVIRONMENT");
+        self.gateway.rate_limit.auth_max =
+            resolve_env(self.gateway.rate_limit.auth_max, "RATE_LIMIT_AUTH_MAX")?;
+        self.gateway.rate_limit.token_max =
+            resolve_env(self.gateway.rate_limit.token_max, "RATE_LIMIT_TOKEN_MAX")?;
         self.apply_portal_env_overrides()?;
         Ok(())
     }
@@ -306,7 +375,7 @@ impl Config {
         };
 
         if let Ok(client_secret) = std::env::var("PORTAL_CLIENT_SECRET") {
-            portal.oauth.client_secret = client_secret;
+            self.gateway.oauth.client_secret = client_secret;
         }
 
         if let Ok(raw_url) = std::env::var("PORTAL_UPSTREAM_URL") {
@@ -383,10 +452,7 @@ impl Default for Config {
                     "/.well-known/".into(),
                 ],
                 oidc_provider: true,
-                oauth: OAuthConfig {
-                    client_id: "portal".to_string(),
-                    client_secret: String::new(),
-                },
+                oauth_enabled: true,
             }],
         }
     }
@@ -498,13 +564,13 @@ fn resolve_env_str(config_value: &str, env_name: &str) -> String {
 }
 
 fn validate_production_security(config: &Config, node_env: Option<&str>) -> anyhow::Result<()> {
+    // 生产判定：优先 gateway.environment，未配置时回退 NODE_ENV（兼容既有部署）
+    let is_production =
+        config.gateway.environment == "production" || node_env == Some("production");
     if !cfg!(feature = "self-managed-tls") && !config.gateway.external_tls_termination {
         bail!("当前 Gateway 未编译 self-managed-tls，必须启用 EXTERNAL_TLS_TERMINATION");
     }
-    if node_env == Some("production")
-        && !config.gateway.external_tls_termination
-        && config.acme.is_none()
-    {
+    if is_production && !config.gateway.external_tls_termination && config.acme.is_none() {
         bail!("生产环境必须配置 LETSENCRYPT_DOMAIN 与 LETSENCRYPT_EMAIL");
     }
     if config.gateway.external_tls_termination && config.acme.is_some() {
@@ -526,14 +592,14 @@ fn validate_production_security(config: &Config, node_env: Option<&str>) -> anyh
         if acme.ca_cert_path.as_deref().is_some_and(str::is_empty) {
             bail!("ACME_CA_CERT_PATH 不能为空");
         }
-        if node_env == Some("production") && acme.ca_cert_path.is_some() {
+        if is_production && acme.ca_cert_path.is_some() {
             bail!("生产环境禁止配置 ACME_CA_CERT_PATH");
         }
         if acme.check_interval_secs == 0 {
             bail!("ACME_CHECK_INTERVAL_SECS 必须大于 0");
         }
     }
-    if node_env == Some("production")
+    if is_production
         && config
             .gateway
             .gateway_shared_secret
@@ -628,6 +694,46 @@ mod tests {
         );
     }
 
+    fn oauth_upstream(name: &str) -> UpstreamConfig {
+        UpstreamConfig {
+            name: name.to_string(),
+            addresses: "127.0.0.1:4100".to_string(),
+            public_paths: vec![],
+            oidc_provider: name == "/",
+            oauth_enabled: true,
+        }
+    }
+
+    #[test]
+    fn test_validate_rejects_missing_gateway_oauth_credentials() {
+        // ADR-010 二期：凭据收敛到 [gateway.oauth]，缺失直接拒绝启动
+        let routes = vec![oauth_upstream("/")];
+        let err = validate_routing_consistency(&routes, &OAuthConfig::default()).unwrap_err();
+        assert!(err.to_string().contains("gateway.oauth.client_id 不能为空"));
+    }
+
+    #[test]
+    fn test_validate_accepts_with_gateway_oauth() {
+        let routes = vec![oauth_upstream("/"), oauth_upstream("/demo/")];
+        let oauth = OAuthConfig {
+            client_id: "portal".to_string(),
+            client_secret: "shared-secret".to_string(),
+        };
+        assert!(validate_routing_consistency(&routes, &oauth).is_ok());
+    }
+
+    #[test]
+    fn test_load_missing_config_fails_fast() {
+        // 默认配置静默回退已被禁止（audit 2026-09-28）；仅当显式设置
+        // GATEWAY_ALLOW_DEFAULT_CONFIG=1 时才允许本地试验场景
+        if std::env::var("GATEWAY_ALLOW_DEFAULT_CONFIG").is_ok() {
+            assert!(Config::load("./definitely-missing-gateway.toml").is_ok());
+        } else {
+            let err = Config::load("./definitely-missing-gateway.toml").unwrap_err();
+            assert!(err.to_string().contains("GATEWAY_ALLOW_DEFAULT_CONFIG"));
+        }
+    }
+
     #[cfg(feature = "self-managed-tls")]
     #[test]
     fn test_config_all() {
@@ -654,7 +760,7 @@ mod tests {
                 oidc_provider = true
                 public_paths = ["/login", "/register", "/custom"]
 
-                [upstreams.oauth]
+                [gateway.oauth]
                 client_id = "portal"
                 client_secret = "portal-secret-123"
             "#;
@@ -684,7 +790,7 @@ mod tests {
                 addresses = "partial-portal:3000"
                 oidc_provider = true
 
-                [upstreams.oauth]
+                [gateway.oauth]
                 client_id = "portal"
                 client_secret = "portal-secret-override"
             "#;
@@ -943,10 +1049,14 @@ mod tests {
             addresses: "127.0.0.1:4100".to_string(),
             public_paths: Vec::new(),
             oidc_provider,
-            oauth: OAuthConfig {
-                client_id: "test".to_string(),
-                client_secret: "test-secret".to_string(),
-            },
+            oauth_enabled: true,
+        }
+    }
+
+    fn gw_oauth() -> OAuthConfig {
+        OAuthConfig {
+            client_id: "portal".to_string(),
+            client_secret: "test-secret".to_string(),
         }
     }
 
@@ -957,26 +1067,26 @@ mod tests {
             upstream("/demo/", false),
             upstream("/admin/", false),
         ];
-        assert!(validate_routing_consistency(&routes).is_ok());
+        assert!(validate_routing_consistency(&routes, &gw_oauth()).is_ok());
     }
 
     #[test]
     fn routing_check_rejects_duplicate_name() {
         let routes = vec![upstream("/a/", true), upstream("/a/", false)];
-        let err = validate_routing_consistency(&routes).unwrap_err();
+        let err = validate_routing_consistency(&routes, &gw_oauth()).unwrap_err();
         assert!(err.to_string().contains("重复出现"));
     }
 
     #[test]
     fn routing_check_rejects_empty_name() {
         let routes = vec![upstream("/", true), upstream("", false)];
-        let err = validate_routing_consistency(&routes).unwrap_err();
+        let err = validate_routing_consistency(&routes, &gw_oauth()).unwrap_err();
         assert!(err.to_string().contains("空字符串"));
     }
 
     #[test]
     fn routing_check_rejects_missing_oidc_provider() {
-        let err = validate_routing_consistency(&[upstream("/", false)]).unwrap_err();
+        let err = validate_routing_consistency(&[upstream("/", false)], &gw_oauth()).unwrap_err();
         assert!(err.to_string().contains("oidc_provider"));
     }
 
@@ -987,7 +1097,7 @@ mod tests {
         portal.public_paths = vec!["/login".into(), "/api/auth/".into()];
         let mut demo = upstream("/demo/", false);
         demo.public_paths = vec!["/demo/landing".into(), "/demo/about".into()];
-        assert!(validate_routing_consistency(&[portal, demo]).is_ok());
+        assert!(validate_routing_consistency(&[portal, demo], &gw_oauth()).is_ok());
     }
 
     #[test]
@@ -996,7 +1106,7 @@ mod tests {
         let portal = upstream("/", true);
         let mut demo = upstream("/demo/", false);
         demo.public_paths = vec!["/login".into()];
-        let err = validate_routing_consistency(&[portal, demo]).unwrap_err();
+        let err = validate_routing_consistency(&[portal, demo], &gw_oauth()).unwrap_err();
         assert!(err.to_string().contains("越界白名单"));
     }
 }

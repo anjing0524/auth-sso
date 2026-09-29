@@ -5,10 +5,10 @@ use pingora_http::{RequestHeader, ResponseHeader};
 use pingora_proxy::{ProxyHttp, Session};
 use std::net::IpAddr;
 use std::sync::Arc;
-use tracing::{debug, info, warn};
+use tracing::{debug, warn};
 
 use crate::auth::{AuthDecision, JwtVerifier, RefreshedTokens, TokenRefresher};
-use crate::config::{OAuthConfig, Upstreams};
+use crate::config::{OAuthConfig, RateLimitConfig, Upstreams};
 use crate::cookie;
 use crate::http::{SessionExt, hmac_sha256_hex, is_html_page_navigation};
 use crate::jwks::JwksCache;
@@ -33,7 +33,7 @@ fn header_str<'s>(session: &'s Session, name: &str) -> Option<&'s str> {
 ///
 /// H2 的 `:authority` 伪头由 pingora 归一化进 `uri.authority()`，
 /// 无需（也无法）通过 `get_header(":authority")` 读取。
-fn get_host(session: &Session) -> &str {
+pub(crate) fn get_host(session: &Session) -> &str {
     if let Some(auth) = session.req_header().uri.authority() {
         return auth.as_str();
     }
@@ -180,14 +180,6 @@ impl GatewayCtx {
     }
 }
 
-/// Token 交换结果（code → access_token + refresh_token + id_token）
-#[derive(Debug, Clone)]
-struct TokenExchangeResult {
-    access: String,
-    refresh: String,
-    id_token: Option<String>,
-}
-
 /// 从 query string 提取指定参数值（大小写敏感，符合 RFC 6570 / OAuth 参数语义；零分配）
 fn query_param<'a>(query: &'a str, key: &str) -> Option<&'a str> {
     query
@@ -195,7 +187,7 @@ fn query_param<'a>(query: &'a str, key: &str) -> Option<&'a str> {
         .find_map(|kv| kv.strip_prefix(key)?.strip_prefix('='))
 }
 
-/// Auth-SSO 去中心化安全网关 — 基于 Pingora (0.8.0 + OpenSSL)
+/// Auth-SSO 去中心化安全网关 — 基于 Pingora (0.9.0 + OpenSSL)
 ///
 /// 负责代理编排：路由分类 → 限流检查 → OAuth 2.1 Client 层（PKCE + callback 拦截）
 /// → JWT 鉴权与静默续签 → 请求转发。
@@ -215,19 +207,23 @@ pub struct Gateway {
     jwt_verifier: JwtVerifier,
     token_refresher: TokenRefresher,
     /// OIDC Provider 的上游地址列表（用于 POST /token 等内部调用）
-    oidc_provider_upstream: Arc<Upstreams>,
+    pub(crate) oidc_provider_upstream: Arc<Upstreams>,
     /// 与 Portal 共享的 HMAC 密钥（Option 表示未启用 HMAC 签名）
     gateway_shared_secret: Option<String>,
     /// 内部上游请求协议（http/https）
-    upstream_scheme: String,
+    pub(crate) upstream_scheme: String,
     /// HTTPS 上游的 SNI 主机名。平台内部服务通常与公网 Host 不同。
     upstream_server_name: Option<String>,
     /// 发往上游的 Host；`X-Forwarded-Host` 仍保留浏览器访问的公网 Host。
     upstream_host_header: Option<String>,
     /// 是否信任 Vercel 在容器边界覆写的 `X-Vercel-Forwarded-For`。
     trust_platform_client_ip: bool,
+    /// 认证端点限流阈值（来自配置，env 可覆盖）
+    rate_limit: RateLimitConfig,
+    /// 网关级统一 OAuth Client 凭据（ADR-010 二期：所有 upstream 共用）
+    pub(crate) oauth: OAuthConfig,
     /// JWKS 公钥缓存 — 用于获取 OIDC Discovery 元数据（callback_path 等）
-    jwks_cache: Arc<JwksCache>,
+    pub(crate) jwks_cache: Arc<JwksCache>,
 }
 
 impl Gateway {
@@ -278,6 +274,8 @@ impl Gateway {
         upstream_server_name: Option<String>,
         upstream_host_header: Option<String>,
         trust_platform_client_ip: bool,
+        rate_limit: RateLimitConfig,
+        oauth: OAuthConfig,
         jwks_cache: Arc<JwksCache>,
     ) -> Self {
         Self {
@@ -291,6 +289,8 @@ impl Gateway {
             upstream_server_name,
             upstream_host_header,
             trust_platform_client_ip,
+            rate_limit,
+            oauth,
             jwks_cache,
         }
     }
@@ -310,208 +310,6 @@ impl Gateway {
     }
 
     /// 无 JWT 页面导航 → 生成 PKCE + Cookie → 302 /authorize
-    async fn oauth_authorize_redirect(
-        &self,
-        session: &mut Session,
-        oauth: &OAuthConfig,
-        return_to: &str,
-    ) -> Result<bool> {
-        let host = get_host(session);
-        // Gateway 主代理服务本身就是浏览器的 TLS 第一跳。走到这里的浏览器请求
-        // 已经在 HTTPS 监听端口内，OAuth redirect_uri 与临时 Cookie 必须按 HTTPS 生成，
-        // 不能再因为 loopback/localhost 主机名而退化为 http://...:443/19443。
-        let secure = true;
-
-        let callback_path = self.jwks_cache.callback_path_or_default();
-
-        let state = oauth::build_oauth_state(oauth, host, return_to, &callback_path, secure)
-            .map_err(|e| {
-                Error::explain(
-                    ErrorType::HTTPStatus(500),
-                    format!("构建 OAuth state 失败: {e}"),
-                )
-            })?;
-        let scheme = if secure { "https" } else { "http" };
-        let auth_url = format!(
-            "{scheme}://{host}/api/auth/oauth2/authorize?\
-            response_type=code&client_id={}&redirect_uri={}&\
-            scope=openid+profile+email+offline_access&code_challenge={}&\
-            code_challenge_method=S256&state={}&nonce={}",
-            state.client_id,
-            urlencoding::encode(&state.redirect_uri),
-            state.code_challenge,
-            state.state,
-            state.nonce,
-        );
-
-        let cookies = oauth::build_oauth_cookies(&state, secure);
-
-        info!(
-            "OAuth PKCE redirect: {} → /authorize (client={}, return_to={})",
-            host, oauth.client_id, return_to
-        );
-
-        session
-            .respond_302_with_cookies(&auth_url, &cookies)
-            .await?;
-        Ok(true)
-    }
-
-    /// 内部调用 OIDC Provider 的 POST /api/auth/oauth2/token 进行 code→token 交换。
-    ///
-    /// 故障转移语义：**网络错误**（不可达/超时）→ 尝试下一节点；
-    /// **HTTP 非 2xx**（如 invalid_grant）→ 确定性拒绝，立即返回该错误不重试。
-    /// 所有节点网络失败 → 502。
-    async fn do_token_exchange(
-        &self,
-        code: &str,
-        code_verifier: &str,
-        client_id: &str,
-        client_secret: &str,
-        redirect_uri: &str,
-    ) -> Result<TokenExchangeResult> {
-        let body = oauth::build_token_exchange_body(
-            code,
-            code_verifier,
-            client_id,
-            client_secret,
-            redirect_uri,
-        );
-
-        for node in self.oidc_provider_upstream.iter() {
-            let token_url = format!("{}://{node}/api/auth/oauth2/token", self.upstream_scheme);
-            let resp = match crate::http::HTTP_CLIENT
-                .post(&token_url)
-                .header("Content-Type", "application/json")
-                .json(&body)
-                .send()
-                .await
-            {
-                Ok(r) => r,
-                Err(e) => {
-                    warn!("Token 端点不可达: {}: {e}，尝试下一节点", token_url);
-                    continue;
-                }
-            };
-
-            if !resp.status().is_success() {
-                // 确定性拒绝（如 invalid_grant）：换节点重试不会改变结果
-                let status = resp.status().as_u16();
-                let text = resp.text().await.unwrap_or_default();
-                return Err(Error::explain(
-                    ErrorType::HTTPStatus(status),
-                    format!("Token 交换失败 ({}): {text}", status),
-                ));
-            }
-
-            let json: serde_json::Value = resp.json().await.map_err(|e| {
-                Error::explain(
-                    ErrorType::HTTPStatus(502),
-                    format!("Token 响应解析失败: {e}"),
-                )
-            })?;
-            return parse_token_exchange_response(json);
-        }
-
-        Err(Error::explain(
-            ErrorType::HTTPStatus(502),
-            "OIDC Provider 所有节点均不可达，无法执行 Token 交换".to_string(),
-        ))
-    }
-
-    /// OAuth callback 错误 → 302 重定向到登录页并终止请求处理。
-    async fn oauth_error_redirect(session: &mut Session, reason: &str) -> Result<bool> {
-        let url = format!("/login?error={reason}");
-        session.respond_302_with_cookies(&url, &[]).await?;
-        Ok(true)
-    }
-
-    /// OAuth callback 拦截：CSRF state + nonce 校验 + Token 交换 + Cookie 清除
-    async fn handle_oauth_callback(
-        &self,
-        session: &mut Session,
-        oauth: &OAuthConfig,
-        cookie_header: &Option<String>,
-        code: &str,
-        state_param: &str,
-    ) -> Result<bool> {
-        let host = get_host(session);
-        // 与 /authorize 阶段保持同一条边界事实：Gateway callback 始终经 HTTPS 到达。
-        let secure = true;
-        let ck = match cookie_header.as_deref() {
-            Some(c) => c,
-            None => {
-                warn!("OAuth callback 缺少 Cookie");
-                return Self::oauth_error_redirect(session, "invalid_state").await;
-            }
-        };
-
-        let cookie_state = oauth::extract_oauth_state(ck);
-        if cookie_state != Some(state_param) {
-            warn!(
-                "OAuth callback CSRF state 不匹配: cookie={:?} query={}",
-                cookie_state, state_param
-            );
-            return Self::oauth_error_redirect(session, "csrf_mismatch").await;
-        }
-
-        let Some(verifier) = oauth::extract_pkce_verifier(ck) else {
-            warn!("OAuth callback 缺少 pkce_verifier");
-            return Self::oauth_error_redirect(session, "invalid_state").await;
-        };
-
-        let cookie_nonce = oauth::extract_oauth_nonce(ck);
-
-        let return_to = oauth::extract_return_to(ck)
-            .and_then(oauth::safe_redirect_path)
-            .unwrap_or_else(|| "/".to_string());
-
-        let callback_path = self.jwks_cache.callback_path_or_default();
-
-        // 与 /authorize 阶段同一函数（oauth::build_redirect_uri）构造，
-        // 保证 OAuth 2.1 两阶段 redirect_uri 逐字节一致
-        let redirect_uri = oauth::build_redirect_uri(host, &callback_path, secure);
-
-        let tokens = match self
-            .do_token_exchange(
-                code,
-                verifier,
-                &oauth.client_id,
-                &oauth.client_secret,
-                &redirect_uri,
-            )
-            .await
-        {
-            Ok(t) => t,
-            Err(e) => {
-                warn!("Token 交换失败: {:?}", e);
-                return Self::oauth_error_redirect(session, "token_exchange_failed").await;
-            }
-        };
-
-        if let Some(nonce) = cookie_nonce
-            && let Some(ref id_token) = tokens.id_token
-        {
-            let id_nonce = oauth::decode_id_token_nonce(id_token);
-            if id_nonce.as_deref() != Some(nonce) {
-                warn!("OAuth callback nonce 不匹配");
-                return Self::oauth_error_redirect(session, "nonce_mismatch").await;
-            }
-        }
-
-        let session_cookies = oauth::build_session_cookies(&tokens.access, &tokens.refresh, secure);
-        let clear_cookies = oauth::build_clear_oauth_cookies(secure, &callback_path);
-
-        info!(
-            "OAuth callback 完成: client={}, return_to={}",
-            oauth.client_id, return_to
-        );
-        session
-            .respond_302_with_cookies(&return_to, &[session_cookies, clear_cookies].concat())
-            .await?;
-        Ok(true)
-    }
-
     /// 根据 ctx 重写发往上游的 Cookie：微服务剥离全部，受保护路径剥离 RT 并替换 AT。
     ///
     /// 输入取 `ctx.cookie_header`（request_filter 起始处一次 collapse 的共享副本），
@@ -540,34 +338,6 @@ impl Gateway {
             PathClass::Static | PathClass::Public => {}
         }
     }
-}
-
-/// 从 /token 端点 JSON 响应中解析 access_token / refresh_token / id_token。
-fn parse_token_exchange_response(json: serde_json::Value) -> Result<TokenExchangeResult> {
-    let access = json["access_token"]
-        .as_str()
-        .filter(|s| !s.is_empty())
-        .ok_or_else(|| {
-            Error::explain(
-                ErrorType::HTTPStatus(502),
-                "Token 响应中缺少 access_token 字段".to_string(),
-            )
-        })?;
-    let refresh = json["refresh_token"]
-        .as_str()
-        .filter(|s| !s.is_empty())
-        .ok_or_else(|| {
-            Error::explain(
-                ErrorType::HTTPStatus(502),
-                "Token 响应中缺少 refresh_token 字段".to_string(),
-            )
-        })?;
-
-    Ok(TokenExchangeResult {
-        access: access.to_string(),
-        refresh: refresh.to_string(),
-        id_token: json["id_token"].as_str().map(String::from),
-    })
 }
 
 #[async_trait]
@@ -658,20 +428,18 @@ impl ProxyHttp for Gateway {
         }
 
         // 3. 限流校验
-        if crate::rate_limiter::check(session, ctx.client_ip.as_deref().unwrap_or("unknown"))
-            .await?
+        if crate::rate_limiter::check(
+            session,
+            ctx.client_ip.as_deref().unwrap_or("unknown"),
+            &self.rate_limit,
+        )
+        .await?
         {
             return Ok(true);
         }
 
-        // 4. 当前路由的 OAuth 配置（与 LB 同一路由表条目，单一真相源）
-        let entry = self.router.entry(ctx.route_idx).ok_or_else(|| {
-            Error::explain(
-                ErrorType::HTTPStatus(502),
-                format!("gateway: 路由索引 {} 越界", ctx.route_idx),
-            )
-        })?;
-        let oauth_config = &entry.oauth;
+        // 4. 网关级统一 OAuth Client 凭据（ADR-010 二期：不再随路由携带）
+        let oauth_config = &self.oauth;
 
         // 5. OAuth callback 拦截
         {
@@ -757,6 +525,15 @@ impl ProxyHttp for Gateway {
         // （Authorization / X-User-* / X-Roles / X-Permissions / X-Client-*），
         // 再由下方按验签结果权威注入。下游收到的身份信息 100% 来自 gateway。
         strip_identity_headers(upstream_request);
+
+        // A5-4 trace-id 传播：X-Request-Id 在白名单内原样透传；缺失时以
+        // CSPRNG 生成，保证每条请求在 Portal 结构化日志中可全链路关联
+        if upstream_request.headers.get("X-Request-Id").is_none() {
+            let mut bytes = [0u8; 16];
+            let _ = getrandom::fill(&mut bytes);
+            let request_id: String = bytes.iter().map(|b| format!("{b:02x}")).collect();
+            upstream_request.insert_header("X-Request-Id", request_id)?;
+        }
 
         // 权威覆写代理头：自管 TLS 取 socket；平台 TLS 仅信任 Vercel 覆写的专用头。
         // 其他入站 X-Forwarded-For / X-Real-IP 一律覆写而非透传（B2）。

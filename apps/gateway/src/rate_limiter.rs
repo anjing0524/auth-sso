@@ -15,6 +15,7 @@ use pingora_limits::rate::Rate;
 use pingora_proxy::Session;
 use tracing::warn;
 
+use crate::config::RateLimitConfig;
 use crate::http::SessionExt;
 
 // ── 限流计数器（进程内静态单例）──
@@ -24,14 +25,6 @@ static AUTH_RATE: LazyLock<Rate> = LazyLock::new(|| Rate::new(Duration::from_sec
 
 /// Token 端点进程内滑动窗口限流器（60s 窗口）
 static OIDC_TOKEN_RATE: LazyLock<Rate> = LazyLock::new(|| Rate::new(Duration::from_secs(60)));
-
-/// 认证端点限流阈值：20 req/min（测试环境 E2E 需 200）
-/// 生产部署前请改回 20。Gateway 重启后窗口重置。
-const AUTH_MAX: isize = 200;
-
-/// Token 端点限流阈值：30 req/min（测试环境 E2E 需 300）
-/// 生产部署前请改回 30。
-const OIDC_TOKEN_MAX: isize = 300;
 
 // ── 内部纯函数：判定限流结果 ──
 
@@ -59,6 +52,9 @@ pub enum RateDecision {
 
 /// 观察指定 IP 对该路径的一次请求，返回限流判定（同步，无 IO）。
 ///
+/// 阈值来自配置（[`RateLimitConfig`]），默认 20/30 req/min，
+/// E2E 通过 RATE_LIMIT_* 环境变量覆盖。
+///
 /// 仅对认证相关端点（`/api/auth/oauth2/token` 与 `/api/auth/*`）生效；
 /// 其余路径返回 [`RateDecision::Untracked`]，不触碰任何计数器。
 ///
@@ -66,23 +62,25 @@ pub enum RateDecision {
 ///
 /// ```
 /// # use gateway::rate_limiter::{observe, RateDecision};
+/// # use gateway::config::RateLimitConfig;
+/// let limits = RateLimitConfig::default();
 /// // 非限流路径
-/// assert_eq!(observe("10.0.0.1", "/"), RateDecision::Untracked);
+/// assert_eq!(observe("10.0.0.1", "/", &limits), RateDecision::Untracked);
 /// // 首次请求未超限
-/// assert_eq!(observe("10.0.0.2", "/api/auth/oauth2/token"), RateDecision::Allowed);
+/// assert_eq!(observe("10.0.0.2", "/api/auth/oauth2/token", &limits), RateDecision::Allowed);
 /// ```
-pub fn observe(ip: &str, path: &str) -> RateDecision {
+pub fn observe(ip: &str, path: &str, limits: &RateLimitConfig) -> RateDecision {
     // Rate::observe 要求 T: Hash + Sized，传入 &&str 使 T = &str（Sized）
     if path == "/api/auth/oauth2/token" {
         let count = OIDC_TOKEN_RATE.observe(&ip, 1);
-        if count <= OIDC_TOKEN_MAX {
+        if count <= limits.token_max {
             RateDecision::Allowed
         } else {
             RateDecision::Blocked
         }
     } else if is_tracked_path(path) {
         let count = AUTH_RATE.observe(&ip, 1);
-        if count <= AUTH_MAX {
+        if count <= limits.auth_max {
             RateDecision::Allowed
         } else {
             RateDecision::Blocked
@@ -112,13 +110,17 @@ pub fn observe(ip: &str, path: &str) -> RateDecision {
 ///     return Ok(true); // 已触发限流，短路
 /// }
 /// ```
-pub async fn check(session: &mut Session, client_ip: &str) -> Result<bool> {
+pub async fn check(
+    session: &mut Session,
+    client_ip: &str,
+    limits: &RateLimitConfig,
+) -> Result<bool> {
     let path = session.req_header().uri.path();
     if !is_tracked_path(path) {
         return Ok(false);
     }
 
-    if matches!(observe(client_ip, path), RateDecision::Blocked) {
+    if matches!(observe(client_ip, path, limits), RateDecision::Blocked) {
         warn!("速率限制触发: ip={}, path={}", client_ip, path);
         crate::metrics::inc_rate_limited();
         session.respond_429(60).await?;

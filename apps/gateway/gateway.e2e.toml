@@ -10,6 +10,10 @@ log_dir = "logs"
 log_level = "info"
 gateway_shared_secret = "e2e-gateway-shared-secret"
 
+[gateway.oauth]
+client_id = "portal"
+client_secret = "portal-secret"
+
 [redis]
 url = "redis://redis:6379"
 
@@ -27,6 +31,3 @@ public_paths = [
     "/favicon.ico",
 ]
 
-[upstreams.oauth]
-client_id = "portal"
-client_secret = "portal-secret"

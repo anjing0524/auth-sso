@@ -113,3 +113,66 @@ async fn test_jwks_parsing() {
     assert!(new_keys.contains_key("key-2"));
     assert!(!new_keys.contains_key("key-3"));
 }
+
+fn entry(secret: &[u8], cached_at: u64) -> JwksKeyEntry {
+    JwksKeyEntry {
+        key: DecodingKey::from_secret(secret),
+        cached_at,
+    }
+}
+
+#[test]
+fn test_merge_keys_keeps_old_key_within_grace() {
+    let now: u64 = 1_000_000;
+    let mut old = HashMap::new();
+    old.insert("old-kid".to_string(), entry(b"old", now - 3600));
+
+    let mut new = HashMap::new();
+    new.insert("new-kid".to_string(), DecodingKey::from_secret(b"new"));
+
+    let merged = merge_keys(&old, new, now, JWKS_KEY_GRACE_SECS);
+
+    // 新 key 收录 + 宽限期内的旧 key 保留（上游残缺响应防护）
+    assert!(merged.contains_key("new-kid"));
+    assert!(merged.contains_key("old-kid"));
+    assert_eq!(merged["new-kid"].cached_at, now);
+}
+
+#[test]
+fn test_merge_keys_drops_old_key_past_grace() {
+    let now: u64 = 1_000_000;
+    let mut old = HashMap::new();
+    old.insert(
+        "stale-kid".to_string(),
+        entry(b"stale", now - JWKS_KEY_GRACE_SECS - 1),
+    );
+    old.insert("fresh-kid".to_string(), entry(b"fresh", now - 60));
+
+    let mut new = HashMap::new();
+    new.insert("rotated".to_string(), DecodingKey::from_secret(b"rotated"));
+
+    let merged = merge_keys(&old, new, now, JWKS_KEY_GRACE_SECS);
+
+    assert!(merged.contains_key("rotated"));
+    assert!(merged.contains_key("fresh-kid"));
+    assert!(!merged.contains_key("stale-kid"));
+}
+
+#[test]
+fn test_merge_keys_prefers_new_entry_for_same_kid() {
+    let now: u64 = 1_000_000;
+    let mut old = HashMap::new();
+    old.insert(
+        "kid".to_string(),
+        entry(b"old", now - JWKS_KEY_GRACE_SECS + 1),
+    );
+
+    let mut new = HashMap::new();
+    new.insert("kid".to_string(), DecodingKey::from_secret(b"new"));
+
+    let merged = merge_keys(&old, new, now, JWKS_KEY_GRACE_SECS);
+
+    // 同 kid 以新 key + 新 cached_at 为准
+    assert_eq!(merged.len(), 1);
+    assert_eq!(merged["kid"].cached_at, now);
+}

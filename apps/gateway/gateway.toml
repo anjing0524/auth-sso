@@ -10,6 +10,10 @@ ssl_key_path = "ssl/privkey.pem"
 log_dir = "logs"
 log_level = "info"
 
+[gateway.oauth]
+client_id = "portal"
+client_secret = "portal-secret"
+
 [redis]
 url = "redis://localhost:6379"
 
@@ -33,15 +37,8 @@ public_paths = [
     "/_next/",
     "/favicon.ico",
 ]
-# PKCE 生成 client_id + client_secret（必填，Portal seed 脚本输出明文 secret 后填入此处）
-[upstreams.oauth]
-client_id = "portal"
-client_secret = "portal-secret"
 
 [[upstreams]]
 name = "/demo/"
 addresses = "127.0.0.1:3100"
 public_paths = ["/demo/landing"]
-[upstreams.oauth]
-client_id = "demo"
-client_secret = "请替换为 Demo 应用注册生成的 client_secret 明文"

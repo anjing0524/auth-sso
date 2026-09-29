@@ -265,3 +265,28 @@ async fn test_verify_rejects_tampered_signature() {
     let result = verifier.verify(&tampered).await;
     assert!(matches!(result, Err(VerifyError::InvalidToken(_))));
 }
+
+#[test]
+fn jwt_claims_match_cross_language_contract() {
+    // A5-3：claims 字段契约以 packages/contracts/src/jwt-claims-fixture.json
+    // 为唯一真相源 —— TS 侧（Portal 签发语义）与 Rust 侧（Gateway 验签结构）
+    // 双端测试消费同一 fixture，杜绝跨语言漂移。
+    let raw = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../packages/contracts/src/jwt-claims-fixture.json"
+    ));
+    let claims: Claims =
+        serde_json::from_str(raw).expect("fixture 必须能反序列化为 Gateway Claims");
+    assert_eq!(claims.aud, "auth-sso", "体系级 aud 契约（ADR-006）");
+    assert!(
+        claims.iss.starts_with("https://"),
+        "issuer 为 URL（ADR-012）"
+    );
+    assert!(
+        claims.jti.starts_with("jti_"),
+        "jti 前缀契约（Redis 黑名单键空间）"
+    );
+    assert!(!claims.sub.is_empty());
+    // Gateway Claims 消费 Portal claims 的子集：iat 不在 Claims 中，
+    // 由 Portal 侧 jwt-contract.test.ts 保障 exp - iat = 3600 契约。
+}
