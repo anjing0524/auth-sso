@@ -3,6 +3,9 @@
  * @module @auth-sso/contracts/oidc
  */
 
+/** Portal Access Token 的 aud claim 值（与 Gateway 验签期望的 aud 一致） */
+export const PORTAL_AUD = 'auth-sso' as const;
+
 // OAuth 2.1 参数
 export const OAUTH_PARAMS = {
   GRANT_TYPE_AUTHORIZATION_CODE: 'authorization_code',

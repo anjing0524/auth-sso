@@ -65,9 +65,6 @@ export const COOKIE_NAMES = {
 /** Portal 自身作为 OAuth Client 的内部 client_id（BFF 模式） */
 export const PORTAL_CLIENT_ID = 'portal' as const;
 
-/** Portal Access Token 的 aud claim 值（与 Gateway 验签期望的 aud 一致） */
-export const PORTAL_AUD = 'auth-sso' as const;
-
 /** 列表分页最大 pageSize，Controller 层统一引用（防资源耗尽） */
 export const MAX_PAGE_SIZE = 100;
 
@@ -148,3 +145,4 @@ export type ApiResponse<T> = ApiSuccess<T> | ApiError;
 export * from './errors';
 export * from './permissions';
 export * from './oidc';
+export * from './jwt-contract';
