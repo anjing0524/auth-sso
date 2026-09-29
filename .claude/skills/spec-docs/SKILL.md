@@ -142,7 +142,7 @@ REQUIREMENTS_MATRIX.md（需求追溯矩阵）
 | 5 | 过程性能基线（UCL/LCL 统计控制） | PRD.md §8.4 |
 | 6 | CAR 缺陷因果分析程序（5-Why + 鱼骨图 + 闭环） | PRD.md §8.5 |
 | 7 | 过程改进选择与部署流程（Pilot → 度量 → 推广/回滚） | PRD.md §8.6 |
-| 8 | 经验教训管理（`docs/solutions/`） | PRD.md §8.7 |
+| 8 | 经验教训管理（`docs/solution/`） | PRD.md §8.7 |
 | 9 | 组织级过程资产（架构约束、编码规范、Red Flags） | ARCHITECTURE_CONSTRAINTS.md |
 
 ---
@@ -200,6 +200,6 @@ REQUIREMENTS_MATRIX.md（需求追溯矩阵）
 
 - **架构编码指南**: `.claude/skills/architecting-portal/SKILL.md`（Portal 分层架构、Controller 规范）
 - **项目总览**: `CLAUDE.md`（技术栈、测试体系、开发命令）
-- **经验教训库**: `docs/solutions/`（代码审查、Bug 修复记录）
+- **经验教训库**: `docs/solution/`（代码审查、Bug 修复记录）
 - **测试体系**: `apps/portal/__tests__/` + `tests/e2e/` + `tests/traceability/`
 - **追溯性工具**: `tests/traceability/generate-report.mjs`

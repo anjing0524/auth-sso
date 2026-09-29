@@ -36,16 +36,19 @@ Redis 键空间：
 | `portal:user_jti:{userId}`       | Source of Truth | 永久       | 用户→当前有效 jti 映射，用于批量撤销 |
 | `portal:user_perms:{userId}`     | Cache           | 3600s      | 权限缓存，可从 DB 重建       |
 
-`access_tokens` 表**继续预留**，不删除。当前不参与 JWT 生命周期，但为未来可能的 opaque token 模式保留扩展点。
+`access_tokens` 表~~继续预留，不删除~~ **已于 2026-09-28 删除**：无编译期隔离的"预留表"被三条消费链路当真表使用（introspect 恒空数据、管理端撤销为静默 no-op 却返回成功），详见 ADR-012。Opaque token 扩展点若未来需要，以显式 schema 变更 reintroduce。
 
 ## 容错策略
 
-Redis 不可用时 **fail-open**：
-- `jti_blocklist` 不存在 → 跳过黑名单检查（JWT 视为有效）
-- `refresh_dedup` 失败 → 跳过去重锁（允许并发续签，非致命）
+（2026-09-28 修订：jti 检查的故障语义由 fail-open 改为 **fail-close**，与代码实现对齐，依据见 ADR-011。）
+
+Redis 不可用时的分级策略：
+
+- `jti_blocklist`（否决性安全数据）→ **fail-close**：Redis 不可用/2s 超时/命令异常一律拒绝请求（`redis.rs` `exists()`）。业界先例（OCSP）中 soft-fail 被视为伪撤销；降低撤销依赖的正确杠杆是短 AT TTL（1h）。
+- `refresh_dedup` 锁（辅助数据）→ fail-open：跳过去重锁（允许并发续签，非致命）
 - 连接池初始化失败 → Gateway 退出启动（fail-fast 兜底）
 
-Redis 是核心依赖，生产环境使用集群部署。无需额外 PostgreSQL 灾备。
+Redis 因此是**可用性关键依赖**（fail-close 的显式代价），生产环境使用集群部署。无需额外 PostgreSQL 灾备。
 
 ## 后果
 

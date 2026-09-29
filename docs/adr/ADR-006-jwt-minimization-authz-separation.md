@@ -76,7 +76,11 @@ Value: {
 
 ### Redis 可用性策略
 
-Redis 是鉴权数据唯一来源，**不可用时系统不可用（fail-closed）**。不设降级路径（如 LRU 缓存或 JWT 内嵌权限），以降低架构复杂度。
+（2026-09-28 修订：原文"Redis 不可用时系统不可用（fail-closed），不设降级路径"与实现不符，依据 ADR-011 修正。）
+
+- **Portal 自身**：权限上下文是**缓存性数据**（DB 永久真源），Redis 异常时降级为 DB 回退重建（`permissions.ts`），性能降级但不拒绝服务。
+- **外部子应用**（ADR-007）：没有 DB 访问能力，权限读取**拓扑性 fail-closed** —— 本 ADR 原始精神在子应用侧自动成立，无需代码分叉。
+- 分层备忘：本 ADR 剥离的 claims 应限于 **RBAC 鉴权数据**（roles/permissions/deptIds）；OAuth 协议数据（scope/client/aud）业界 AT 普遍携带，第三方 RS 上量后按 ADR-012 决策 4 演进。
 
 ## 后果
 

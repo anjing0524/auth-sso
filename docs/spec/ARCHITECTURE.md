@@ -66,7 +66,7 @@ Portal（BFF + OIDC 提供商 + 管理后台 UI）
 | 组件 | 核心职责 | 禁止行为 |
 |---|---|---|
 | **Portal** | （1）用户凭据验证（bcrypt、数据库存储的密码哈希）。（2）通过数据库存储的密钥对签发 ES256 签名的 JWT。（3）暴露 `/.well-known/jwks` 和 `/api/auth/jwks` 端点。（4）OAuth 2.1 + OIDC 提供商端点（authorize、token、userinfo、introspect、revoke）。（5）将 JWT 写入 HttpOnly Cookie（`portal_jwt_token`、`portal_refresh_token`）。（6）管理用户、部门、角色、权限、OAuth 客户端。（7）基于角色所属部门的 RBAC 数据范围过滤（权限 × 角色部门交集）。（8）用于紧急令牌吊销的 jti 黑名单。（9）审计日志 | 绝不在 Redis 中存储 Portal API 认证的会话状态（无状态 JWT）。绝不向客户端 JavaScript 暴露敏感令牌 |
-| **Gateway** | （1）作为统一公网流量入口；默认 `self-managed-tls` 构建在 Rust 进程内完成 ACME 账户/order/HTTP-01/CSR/ARI 生命周期，平台 TLS 构建则在编译期排除该能力并只监听平台端口。（2）OAuth 2.1 Client 层：为所有下游应用统一生成 PKCE/state/nonce → Cookie → 302 /authorize；配置了 `oauth.client_secret` 的所有 upstream（含 Portal 自身），由 Gateway 统一拦截 callback 并完成 code→token 交换 + Cookie 下发。（3）提取 `portal_jwt_token` Cookie，通过缓存的 JWKS 验证（ES256、离线）。（4）移除 Cookie，为下游注入 `Authorization: Bearer <JWT>` 头。（5）jti 黑名单检查：验签通过后查询 Redis（`portal:jti_blocklist:{jti}`），Redis 不可用时故障开放（fail-open）。（6）按路径前缀将请求路由到多个上游应用（经 `[[upstreams]]` 路由表，支持 Portal + 子应用） | 绝不执行业务层面的权限检查。绝不连接业务数据库（仅查 Redis jti 黑名单）。绝不依赖 Certbot、证书 shell 脚本或仓库内开发证书。平台 TLS 构建绝不携带 ACME 客户端模块。 |
+| **Gateway** | （1）作为统一公网流量入口；默认 `self-managed-tls` 构建在 Rust 进程内完成 ACME 账户/order/HTTP-01/CSR/ARI 生命周期，平台 TLS 构建则在编译期排除该能力并只监听平台端口。（2）OAuth 2.1 Client 层：为所有下游应用统一生成 PKCE/state/nonce → Cookie → 302 /authorize；配置了 `oauth.client_secret` 的所有 upstream（含 Portal 自身），由 Gateway 统一拦截 callback 并完成 code→token 交换 + Cookie 下发。（3）提取 `portal_jwt_token` Cookie，通过缓存的 JWKS 验证（ES256、离线）。（4）移除 Cookie，为下游注入 `Authorization: Bearer <JWT>` 头。（5）jti 黑名单检查：验签通过后查询 Redis（`portal:jti_blocklist:{jti}`），Redis 不可用时故障关闭（fail-close，拒绝请求；见 ADR-011）。（6）按路径前缀将请求路由到多个上游应用（经 `[[upstreams]]` 路由表，支持 Portal + 子应用） | 绝不执行业务层面的权限检查。绝不连接业务数据库（仅查 Redis jti 黑名单）。绝不依赖 Certbot、证书 shell 脚本或仓库内开发证书。平台 TLS 构建绝不携带 ACME 客户端模块。 |
 
 ### 3.2 Portal 内部架构（分层领域驱动设计 DDD）
 
@@ -308,7 +308,7 @@ Portal Admin UI 自身的 OAuth Client 职责由 Gateway（Rust/Pingora）统一
 
 1. 浏览器发送携带 `portal_jwt_token` Cookie 的 API 请求或页面导航请求。
 2. Gateway 从 Cookie 头中提取 JWT。
-3. Gateway 使用内存中的 JWKS 缓存验证 JWT 签名（ES256、离线），随后查询 Redis jti 黑名单（fail-open）。
+3. Gateway 使用内存中的 JWKS 缓存验证 JWT 签名（ES256、离线），随后查询 Redis jti 黑名单（fail-close，见 ADR-011）。
 4. 验证成功：移除 Cookie 头，注入 `Authorization: Bearer <JWT>`，转发到下游服务。
 5. 验证失败：
    - **HTML 页面导航**（`GET` + `Accept: text/html` + 无 `RSC` header）→ **Gateway 作为 OAuth Client 生成 PKCE** + Set-Cookie + 302 /authorize。不再透传给 Portal 的 proxy.ts 处理。
@@ -373,7 +373,7 @@ Auth-SSO 的请求处理全链路由 **11 层** 组成，按职责划分为三�
 │ · Cookie 提取 portal_jwt_token                    │
 │ · kid → DecodingKey（内存缓存）                    │
 │ · ES256 离线验签（100% 无 I/O）                    │
-│ · Redis jti 黑名单检查（可选，Redis 不可用时放行）    │
+│ · Redis jti 黑名单检查（fail-close，不可用时拒绝）   │
 │ · 注入 X-User-Id、X-User-Jti、Authorization 头    │
 │ · 微服务路由（/api/v1/*）：剥离 Cookie + Bearer 注入 │
 └──────────────┬──────────────────────────────────┘
@@ -494,7 +494,7 @@ verify_jwt(token, ctx)
       · OIDC Discovery 的 jwks_uri 仅用于公钥获取，不信任其对签名算法的声明
   → decode::<Claims>(token, &decoding_key, &validation)
   → jti 黑名单检查：Redis EXISTS portal:jti_blocklist:{jti}
-      · Redis 不可用 → 容错放行（fail-open）
+      · Redis 不可用 → fail-close 拒绝请求（ADR-011）
   → 成功 → 设置 ctx.auth_header、ctx.user_id、ctx.user_jti
 
 authenticate::check(session, ctx, verifier, refresher, is_html_nav)
@@ -530,12 +530,12 @@ revokeUserAccessByUserId(userId)
   → Redis HGETALL portal:user_jti:{userId}
   → Pipeline: 每个 jti → SETEX portal:jti_blocklist:{jti} ttl "1"
   → DEL portal:user_jti:{userId}
-  → 非阻塞：DELETE FROM access_tokens WHERE userId = userId
+  → 非阻塞：无持久化 AT 行可清理（access_tokens 幽灵表已删除，ADR-012）
 ```
 
 **关键安全属性：**
 - Gateway 和 Portal 双重校验 jti 黑名单，防止单点绕过
-- Redis 不可用时全部容错放行（可用性优先）
+- jti 检查 fail-close（否决性安全数据，ADR-011）；Portal 权限缓存 fail-open 降级 DB（缓存性数据，ADR-011）
 - TTL 自动过期，防止黑名单无限增长
 - 非关键操作（DB 清理）采用 fire-and-forget，不阻塞主流程
 
@@ -567,7 +567,7 @@ revokeUserAccessByUserId(userId)
 | **访问令牌（Access Token）** | ES256 JWT | 1 小时 | `portal_jwt_token` HttpOnly Cookie | 认证 + 授权（角色、权限、数据范围） |
 | **刷新令牌（Refresh Token）** | 不透明（数据库中 SHA-256 哈希存储） | 7 天 | `portal_refresh_token` HttpOnly Cookie | 静默令牌续期 |
 
-**JWT 载荷**（访问令牌 Access Token，ADR-006 最小化后）仅包含身份断言：`sub`（用户 ID）、`iss`（签发者 `"auth-sso"`）、`aud`（受众 `"auth-sso"`）、`jti`（唯一标识）、`iat`（签发时间）、`exp`（过期时间）。已删除 `roles`、`permissions`、`deptIds`——鉴权数据全部存于 Redis（`portal:user_perms:{userId}`）。
+**JWT 载荷**（访问令牌 Access Token，ADR-006 最小化后）仅包含身份断言：`sub`（用户 ID）、`iss`（签发者，env 驱动 URL —— `PORTAL_ISSUER` 优先、默认 `NEXT_PUBLIC_APP_URL`，OIDC Discovery §4.3 要求与 discovery URL 同源，见 ADR-012）、`aud`（体系级受众 `"auth-sso"`）、`jti`（唯一标识）、`iat`（签发时间）、`exp`（过期时间）。已删除 `roles`、`permissions`、`deptIds`——鉴权数据全部存于 Redis（`portal:user_perms:{userId}`）。
 
 ### 7.3 紧急吊销（jti 黑名单）
 

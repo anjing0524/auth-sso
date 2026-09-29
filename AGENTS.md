@@ -9,11 +9,11 @@ This version has breaking changes — APIs, conventions, and file structure may 
 ## 永远保持中文对话 所有对话提问都需要中文
 
 `@docs/spec/*` 文档提供理论支持
-当前 Rust 版本环境约定（Rust 1.93.0+）：对于需要多线程并发调度（Send 约束）的 Trait 异步方法，必须采用“零开销异步 Trait”最佳实践：在 Trait 定义中使用 `-> impl std::future::Future<Output = T> + Send` 进行严格的线程安全约束，并在 `impl` 实现块中直接使用 `async fn` 语法以保持代码简洁。坚决避免引入 `#[async_trait]` 带来的 Box 堆分配开销。
+当前 Rust 版本环境约定（Rust 1.93.0+）：对于自定义的需要多线程并发调度（Send 约束）的 Trait 异步方法，必须采用“零开销异步 Trait”最佳实践：在 Trait 定义中使用 `-> impl std::future::Future<Output = T> + Send` 进行严格的线程安全约束，并在 `impl` 实现块中直接使用 `async fn` 语法以保持代码简洁，避免 `#[async_trait]` 带来的 Box 堆分配开销。Pingora 框架的 trait 回调（如 `ProxyHttp`）签名由框架固定，必须使用 `#[async_trait]` 实现，属唯一例外。
 
 ## 基础环境
 
-nodejs@26
+nodejs@26（nvm default；Temporal 需要 `--harmony-temporal`——已在 vitest.base.ts / portal dev/start / Vercel CMD 内置，勿删）
 nextjs@16
 Rust 1.93.0+
 
@@ -112,19 +112,19 @@ packages/config/    共享 env 配置 (Zod + URL 推导)
 
 ## 测试体系 (Vitest 4 Projects 模式)
 
-- Vitest 4.x 使用 `test.projects` 聚合（根 `vitest.config.ts` → `apps/portal/vitest.api.config.ts` + `apps/portal/vitest.ui.config.ts`），非 `vitest.workspace.ts`
-- jsdom 默认环境；API 测试文件用 `// @vitest-environment node` 行级覆盖
+- Vitest 4.x 使用 `test.projects` 聚合（根 `vitest.config.ts` → `apps/portal/vitest.api.config.ts` + `apps/portal/vitest.ui.config.ts` + `packages/contracts/vitest.config.ts`），非 `vitest.workspace.ts`
+- 测试环境按 project 划分：API project 全局 `node`（`vitest.api.config.ts`），UI/domain project 全局 `jsdom`（`vitest.ui.config.ts`）；UI project 下个别需 node 的文件用 `// @vitest-environment node` 行级覆盖
 - Vite 8 原生支持 tsconfig paths 解析（无需 `vite-tsconfig-paths` 插件）
 - API project 以 Docker Compose 暴露的 PostgreSQL/Redis 作为真实基础设施基线；UI/domain project 不依赖数据库
-- E2E Playwright 仅 Chromium，baseURL `http://localhost:4100`
+- E2E Playwright 仅 Chromium，默认 baseURL `http://127.0.0.1:4102`（可用 `E2E_BASE_URL` 覆盖）
 - 需求追溯: 测试文件用 `@req` 注解标记覆盖的需求 ID
-- 共享配置: `vitest.base.ts` (coverage/timeout) + `drizzle.base.ts`
+- 共享配置: `vitest.base.ts`（仅 testTimeout，coverage 在根 `vitest.config.ts`）+ `drizzle.base.ts`
 
 ## Portal 架构要点
 
 详见 `docs/portal-architecture-guidelines.md`，以下为关键约束：
 
-- **分层**: `src/app/[bc]/`（page.tsx + data.ts + actions.ts） → `src/domain/`（纯函数） → Drizzle 直调。无 Repository/Mapper 层
+- **分层**: `src/app/(dashboard)/` 等页面目录（page.tsx + data.ts + actions.ts） → `src/domain/`（纯函数） → Drizzle 直调。无 Repository/Mapper 层
 - **单控制器原则**: 内部页面写操作只用 Server Actions（actions.ts），不用 REST API 路由。外部系统/跨域/OIDC 回调才写 route.ts
 - **读模型**: `data.ts` 中用 `"use cache"` + `cacheLife()` + `cacheTag()`（Next.js 16 Cache Components）
 - **Controller 函数 ≤20 行**，不包含业务逻辑判断；`@/` 路径别名 = `src/`
@@ -138,8 +138,8 @@ packages/config/    共享 env 配置 (Zod + URL 推导)
 ## Gateway (Rust) 要点
 
 - edition = "2024"（注意 `use` 路径变更）
-- Pingora 0.8.1 + OpenSSL（vendored）
-- 需要 `Send` 约束的 Trait 异步方法: `-> impl Future<Output = T> + Send`，禁止 `#[async_trait]`
+- Pingora 0.9.0 + OpenSSL（vendored）
+- 自定义 Trait 的 `Send` 约束异步方法: `-> impl Future<Output = T> + Send`；`#[async_trait]` 仅用于 Pingora 框架 trait 回调（签名由框架固定，无法避免）
 - 修改后必须 `cargo clippy --all-targets --all-features -- -D warnings` + `cargo fmt --all -- --check`
 - 遵循 [Rust API 指南](https://rust-lang.github.io/api-guidelines/checklist.html)
 

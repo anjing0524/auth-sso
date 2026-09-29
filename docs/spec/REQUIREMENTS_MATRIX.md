@@ -255,5 +255,5 @@
 - **缺陷追溯**：测试失败时通过 `@req` 注解 → 需求 ID → CAR 程序（5-Why 根因分析 → 纠正/预防措施 → 经验教训沉淀）
 - **过程度量**：测试通过率（基线 100%，LCL 95%）、追溯性覆盖率（目标 85%）受统计过程控制（SPC）监控
 - **持续改进**：P0/P1 缺陷触发 CAR → 预防措施更新架构约束/Red Flags → Pilot → 度量 → 推广/回滚
-- **经验教训**：每次 CAR 输出写入 `docs/solutions/`，作为组织级过程资产积累
+- **经验教训**：每次 CAR 输出写入 `docs/solution/`，作为组织级过程资产积累
 - **tests/traceability/.generated/coverage-report.md**：需求映射报告（本地自动生成）

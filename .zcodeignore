@@ -1,0 +1,98 @@
+node_modules
+.pnpm-store
+dist
+build
+.next
+out
+# Logs and temp files
+*.log
+*_logs.txt
+*.tar
+.DS_Store
+.vercel
+
+# Environment variables - 永远不要提交
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Local env files
+*.local
+.env*.local
+
+# Vercel
+.vercel
+.turbo
+.gstack/
+.worktrees
+
+# gateway
+apps/gateway/target
+apps/gateway/ssl
+apps/gateway/logs
+
+# Coverage
+coverage
+
+# Certs
+*.pem
+!tests/acme/pebble.minica.pem
+!tests/acme/pebble-server.pem
+!tests/acme/pebble-server-key.pem
+
+# Debug logs (npm/yarn/pnpm)
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# TypeScript incremental build cache
+*.tsbuildinfo
+
+# Next.js auto-generated type declarations
+next-env.d.ts
+
+test-results
+playwright-report
+feat
+tests/e2e-report
+tests/traceability/.generated/
+.claude/worktrees/
+apps/portal/tsc_output.txt
+
+data
+test-mcp
+
+# Agent run cache & plans
+.zcode/
+.context/
+.env*
+
+# ===== ↑ 以上同步自 .gitignore（「从 .gitignore 同步」只重写以上部分）=====
+.git/
+.hg/
+.svn/
+bower_components/
+jspm_packages/
+__pycache__/
+site-packages/
+venv/
+htmlcov/
+lcov-report/
+cmakefiles/
+cmake-build-*/
+bazel-*/
+pods/
+deriveddata/
+storybook-static/
+allure-results/
+allure-report/
+cdk.out/
+*.egg-info/
+*.dist-info/
+eggs/
+pip-wheel-metadata/
+wheels/
+# ----- ↑ 以上为 ZCode 默认排除规则（自定义规则请写在本行下方，不会被同步/恢复改动）-----
+# 自定义规则写在下方（本行提示可删除）

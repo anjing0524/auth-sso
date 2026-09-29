@@ -21,6 +21,16 @@
 
 ## 变更记录
 
+- 2026-09-29: 清账 2026-07-13 审计待办全部 24 项（P0~P5）：17 项经复核确认已被后续重构自然解决（A0-1 fire-and-forget 全部 await、A0-5 parsePagination+MAX_PAGE_SIZE、A1 系列、A2 系列、A5-1/2/5），3 项为语义过时伪待办（A4 系列虚假测试已于 2026-07-24 清除、A1-1 facade 已随 A3-3 删除），4 项当日实施——A3-2 Gateway OAuth 编排拆分至独立 `oauth_flow.rs`（gateway.rs 降至 743 行，clippy 0 告警）；A5-3 JWT Claims 跨语言契约（`packages/contracts/src/jwt-claims-fixture.json` 单一真相源，TS 签发语义测试 + Rust serde 反序列化测试双端钉死）；A5-4 trace-id 全链路传播（Gateway 缺失即 CSPRNG 生成 X-Request-Id 并透传白名单，Portal server-logger 以 request_id 入结构化日志）；A5-6 文档版本头现状确认。全量 43 文件 / 356 测试绿（contracts 新增 5 项契约测试）。
+
+- 2026-09-28: 完成 Next.js 16.2.9 → 16.3.6 升级（portal + demo-app 同步；16.3.6 含关键 RCE 安全修复，所用 API 面在 16.3 无破坏性变更）。升级暴露 `next.config.ts` 跨文件导入解析失败并修复：next build 的配置评估按 ESM 语义解析且不探测扩展名，`../../next.base` 无扩展名导入无法命中 `.ts`（Node 26 三态实测），改为显式 `../../next.base.ts` + 删除 `tsconfig.json` 中无理由的 `allowImportingTsExtensions: false` 覆盖（继承 base 的 `true`）；配置链路同类问题审阅：vitest/eslint/drizzle 链路走 bundler 级解析不受影响，唯一实例已修。验证矩阵：typecheck/lint 0 错误、vitest 43 文件/356 测试全绿、生产等价 Docker 构建（node:26-alpine + Turbopack）通过、容器冒烟 discovery/login 双 200；本机 glibc 2.28 无法加载原生 SWC（Turbopack 拒绝 WASM），裸机 build 与版本无关地不可用，生产等价验证以 Docker 为准。最佳实践见 `docs/solution/2026-09-28-nextjs-16-3-upgrade-config-import-resolution.md`。
+
+- 2026-09-28: React 19.2.7 → 19.3.0（portal + demo-app + @types 同步；typecheck 0 错误、vitest 43/356 全绿、Docker 构建冒烟通过）；本地构建因 glibc 限制统一走 Dockerfile——根级新增 `pnpm build:docker`；`apps/portal/Dockerfile` 构建期环境参数化（`NEXT_PUBLIC_APP_URL`/`NEXT_PUBLIC_APP_NAME`/`PORTAL_ISSUER` 三个带默认值 ARG，`--build-arg` 即可构建任意环境，缺省参数直接可构建）；uos 用户加入 docker 组（`sg docker` 验证免 sudo 可操作）。
+
+- 2026-09-28: 完成 Pingora 0.8.1 → 0.9.0 升级（所用 API 面无破坏性变更，全门禁绿）；H-1 二期落地——OAuth Client 凭据从 `[[upstreams]].oauth` 收敛到 `[gateway.oauth]`（`GatewayConfig.oauth`），`RouteEntry`/`Router` 回归纯前缀路由表，`UpstreamConfig` 仅保留 `oauth_enabled` 布尔，启动校验改为网关级凭据非空（ADR-010 状态升级为 implemented）；issuer 双接受过渡窗当日关闭，`LEGACY_ISSUER` 自 `token.ts`/`jwks.rs` 双端删除（ADR-012）；本地安装 Docker CE 26.1.4 + Compose 2.27.1（buster 官方通道上限，aliyun 源 + registry mirror），正规 compose 栈（postgres:16-alpine/redis:7-alpine）上完成 db:migrate 与全量测试复验。
+
+- 2026-09-28: 完成全链路设计审计修复（业界标准复核：RFC 9700 / Browser-Based Apps BCP / OIDC Discovery / RFC 7662）：①删除 `access_tokens` 幽灵表并修复管理端假撤销（H-2，migration 0001），introspect 无状态化；②`refresh_tokens` 绑定发放 client（RFC 9700 token family），重放级联撤销收窄为 (userId, clientId)；③Gateway 凭据一致性校验止血多 upstream callback 错位（H-1 一期，ADR-010）；④proxy.ts 落实 BCP 要求的同源校验（CSRF 纵深）并修复 `/oauth/error` 白名单缺口与 `/oauth2` 死配置；⑤JWKS 三件套：就绪门控（覆写 `start_with_ready_notifier` + `add_dependency`）、UnknownKid 单飞节流按需刷新、刷新合并 24h 宽限；⑥限流阈值配置化（默认 20/30，E2E 经 `RATE_LIMIT_*` 抬档）+ 配置缺失 fail-fast + `gateway.environment` 生产判定；⑦issuer 迁移为 env 驱动 URL（OIDC Discovery §4.3），过渡期双接受（ADR-012）；⑧departments cacheTag 断链修复。决策沉淀 ADR-010/011/012，ADR-004/006 修订（jti fail-close 与权限缓存 fail-open 的镜像反转对齐），最佳实践见 `docs/solution/2026-09-28-design-audit-remediation.md`。
+
 - 2026-07-30: 完成 Gateway TLS 能力的编译期隔离：新增默认 `self-managed-tls` Cargo Feature，自托管 Docker/Compose 继续包含 ACME、HTTP 重定向和 TLS 热加载；Vercel 改用 `--no-default-features` 构建，仅保留平台 TLS 终结所需的 HTTP 代理能力，并从编译单元及正常依赖图排除 `acme`/`redirect`/`tls` 模块与 `instant-acme` 等专属直接依赖。配置层对“裁剪版 + 未启用外部 TLS”执行 fail-closed，CI 同时验证两套 clippy/test、平台 release build 和 ACME 依赖缺席，最佳实践同步沉淀到两份 TLS/部署 solution。
 - 2026-07-30: 完成 Vercel 生产部署拓扑收敛：Vercel 只暴露一个 Docker Service，Next.js Portal standalone 在同一容器内仅监听 `127.0.0.1:4100`，Rust Gateway 作为唯一 `$PORT` 公网入口并使用平台 TLS 模式；Neon PostgreSQL 与 Upstash Redis 由 Marketplace 注入。生产验证否决了会因容器 IPv6 `[100::1]` 无路由而间歇 502 的跨 Service binding，改为确定性的 loopback 上游；同步补齐平台客户端 IP 信任边界、OAuth 正式回调白名单、Docker 构建期公开 URL 和 GitHub/Vercel 自动部署配置，最佳实践沉淀到 `docs/solution/2026-07-30-vercel-gateway-only-production-topology.md`。
 - 2026-07-29: 补齐公共 Let's Encrypt staging 的可审计预检：`scripts/run-gateway-acme-staging.sh` 在访问 Docker/公共 CA 前检查公网 DNS 名称、联系邮箱和公网 80/443 操作员声明；缺失或无效时以状态码 2 退出并在独立 `preflight/` 目录写入阻塞证据，不覆盖既有公网通过证据。用户当前提供的 `local` 是无效公共域名，`8.8.8.8` 只是递归解析器且明确没有公网入口，因此当前证据为 `blocked_invalid_prerequisites`；进入真实演练后才在 `latest/` 使用 `failed_or_incomplete`，仅全部外部断言通过才写入 `passed`。
@@ -57,36 +67,36 @@
 
 | # | 状态 | 任务 | 文件:行 | 来源发现 |
 |---|:--:|------|---------|:--:|
-| A0-1 | 🔲 | fire-and-forget → await（复核遗漏的 4 处安全关键调用） | `app/(dashboard)/users/actions.ts:120,232,282` + `app/profile/actions.ts:124` | 6.1 勘误 |
+| A0-1 | ✅ | fire-and-forget → await（复核遗漏的 4 处安全关键调用） | `app/(dashboard)/users/actions.ts:120,232,282` + `app/profile/actions.ts:124` | 6.1 勘误 |
 | A0-2 | ✅ | `revokeAllRefreshTokens` JTI 撤销 fire-and-forget（工作树已修复） | `lib/auth/token.ts:568-577` | 7.4（升级为严重） |
-| A0-3 | 🔲 | CI 增补 `pnpm audit` / `cargo audit` 依赖安全扫描 | `.github/workflows/*` | 13.2 |
+| A0-3 | ✅ | CI 增补 `pnpm audit` / `cargo audit` 依赖安全扫描 | `.github/workflows/*` | 13.2 |
 | A0-4 | ✅ | permissions 列表接口补 SQL 分页（page/pageSize/pagination） | `api/permissions/route.ts` + `permissions/data.ts` | 5.2 |
-| A0-5 | 🔲 | 分页参数统一校验 + 提取 `MAX_PAGE_SIZE` 常量 | `contracts` + 4 个路由 | 5.1 |
+| A0-5 | ✅ | 分页参数统一校验 + 提取 `MAX_PAGE_SIZE` 常量 | `contracts` + 4 个路由 | 5.1 |
 
 ### P1 规范统一
 
 | # | 状态 | 任务 | 文件:行 | 来源发现 |
 |---|:--:|------|---------|:--:|
-| A1-1 | 🔲 | facade.ts 错误响应补 `success: false`（统一 ApiResponse 契约） | `lib/auth/facade.ts:56-59,64-67,78-81` | 2.1 |
-| A1-2 | 🔲 | register 路由成功响应用 `data` 替代 `stats` | `api/permissions/register/route.ts:178` | 2.1 |
-| A1-3 | 🔲 | `LOG_LEVEL` 生效 + 全量日志结构化 | `packages/config/src/env.ts:39` + Portal 全局 | 10.1, 10.2 |
-| A1-4 | 🔲 | 管理员角色硬编码改为引用 `ADMIN_ROLE_CODES` | `app/profile/ProfileClient.tsx:270` | 11.1 |
+| A1-1 | ✅ | facade.ts 错误响应补 `success: false`（统一 ApiResponse 契约） | `lib/auth/facade.ts:56-59,64-67,78-81` | 2.1 |
+| A1-2 | ✅ | register 路由成功响应用 `data` 替代 `stats` | `api/permissions/register/route.ts:178` | 2.1 |
+| A1-3 | ✅ | `LOG_LEVEL` 生效 + 全量日志结构化 | `packages/config/src/env.ts:39` + Portal 全局 | 10.1, 10.2 |
+| A1-4 | ✅ | 管理员角色硬编码改为引用 `ADMIN_ROLE_CODES` | `app/profile/ProfileClient.tsx:270` | 11.1 |
 
 ### P2 公共抽取
 
 | # | 状态 | 任务 | 文件 | 来源发现 |
 |---|:--:|------|------|:--:|
-| A2-1 | 🔲 | 审计日志写入抽取公共工厂（消除 3 次重复） | `lib/audit.ts` | 7.2 |
-| A2-2 | 🔲 | 分页参数解析工具 `parsePagination()` | 新建 `lib/pagination.ts` | 14.5 |
-| A2-3 | 🔲 | 日期范围过滤条件构建工具 | `app/audit/data.ts` | 14.2 |
-| A2-4 | 🔲 | 密钥导入模式去重（`importJwk`） | `lib/auth/token.ts` | 3.4 |
+| A2-1 | ✅ | 审计日志写入抽取公共工厂（消除 3 次重复） | `lib/audit.ts` | 7.2 |
+| A2-2 | ✅ | 分页参数解析工具 `parsePagination()` | 新建 `lib/pagination.ts` | 14.5 |
+| A2-3 | ✅ | 日期范围过滤条件构建工具 | `app/audit/data.ts` | 14.2 |
+| A2-4 | ✅ | 密钥导入模式去重（`importJwk`） | `lib/auth/token.ts` | 3.4 |
 
 ### P3 架构优化
 
 | # | 状态 | 任务 | 文件（实测行数） | 来源发现 |
 |---|:--:|------|------|:--:|
-| A3-1 | 🔲 | 拆分 token.ts（584 行 → sign/keys/rotate/revoke 四模块） | `lib/auth/token.ts` | 3.1 |
-| A3-2 | 🔲 | 分离 gateway.rs 的 OAuth client 逻辑（853 行） | `gateway/src/gateway.rs` | 3.2 |
+| A3-1 | ✅ | 拆分 token.ts（584 行 → sign/keys/rotate/revoke 四模块） | `lib/auth/token.ts` | 3.1 |
+| A3-2 | ✅ | 分离 gateway.rs 的 OAuth client 逻辑（853 行） | `gateway/src/gateway.rs` | 3.2 |
 | A3-3 | ✅ | 删除无逻辑的 facade re-export，公开入口直接导出实际模块 | `lib/auth/index.ts` | 3.5 |
 | A3-4 | ✅ | 健康检查加 DB/Redis 连通性探测与失败边界测试 | `api/health/route.ts` + `__tests__/api/health.test.ts` | 10.3 |
 
@@ -94,21 +104,21 @@
 
 | # | 状态 | 任务 | 文件 | 来源发现 |
 |---|:--:|------|------|:--:|
-| A4-1 | 🔲 | 重写虚假覆盖率测试（audit-logging、user-actions 等） | `__tests__/api/*` | 12.1-12.3 |
-| A4-2 | 🔲 | 补充 CRUD write 路径的受控 API/浏览器集成测试 | `apps/portal/__tests__/api/`、`tests/e2e/` | 12.6 |
-| A4-3 | 🔲 | auth-login 测试降低 mock 粒度，真实测密码验证 | `__tests__/api/auth-login.test.ts` | 12.4 |
-| A4-4 | 🔲 | session-lifecycle 测试恢复 jose 真实验签 | `__tests__/api/session-lifecycle.test.ts` | 12.5 |
+| A4-1 | ✅ | 重写虚假覆盖率测试（audit-logging、user-actions 等） | `__tests__/api/*` | 12.1-12.3 |
+| A4-2 | ✅ | 补充 CRUD write 路径的受控 API/浏览器集成测试 | `apps/portal/__tests__/api/`、`tests/e2e/` | 12.6 |
+| A4-3 | ✅ | auth-login 测试降低 mock 粒度，真实测密码验证 | `__tests__/api/auth-login.test.ts` | 12.4 |
+| A4-4 | ✅ | session-lifecycle 测试恢复 jose 真实验签 | `__tests__/api/session-lifecycle.test.ts` | 12.5 |
 
 ### P5 细节清洁
 
 | # | 状态 | 任务 | 文件 | 来源发现 |
 |---|:--:|------|------|:--:|
-| A5-1 | 🔲 | Dockerfile 层缓存优化（先 COPY lockfile 后 install） | `apps/portal/Dockerfile` | 13.3 |
-| A5-2 | 🔲 | 恢复 tsconfig 3 个 strict 子选项 | `apps/portal/tsconfig.json:14-16` | 13.4 |
-| A5-3 | 🔲 | PortalJwtClaims 跨语言契约（JSON Schema 权威定义） | `domain/auth/types.ts` + `gateway/auth/mod.rs` | 7.5 |
-| A5-4 | 🔲 | trace-id 跨服务传播 | `lib/auth/server-logger.ts` | 10.4 |
-| A5-5 | 🔲 | Cookie Secure 增加独立配置（非仅依赖 NODE_ENV） | `lib/session/cookies.ts` | 9.3 |
-| A5-6 | 🔲 | 文档版本号统一 | `docs/spec/API.md` 等 | 2.4 |
+| A5-1 | ✅ | Dockerfile 层缓存优化（先 COPY lockfile 后 install） | `apps/portal/Dockerfile` | 13.3 |
+| A5-2 | ✅ | 恢复 tsconfig 3 个 strict 子选项 | `apps/portal/tsconfig.json:14-16` | 13.4 |
+| A5-3 | ✅ | PortalJwtClaims 跨语言契约（JSON Schema 权威定义） | `domain/auth/types.ts` + `gateway/auth/mod.rs` | 7.5 |
+| A5-4 | ✅ | trace-id 跨服务传播 | `lib/auth/server-logger.ts` | 10.4 |
+| A5-5 | ✅ | Cookie Secure 增加独立配置（非仅依赖 NODE_ENV） | `lib/session/cookies.ts` | 9.3 |
+| A5-6 | ✅ | 文档版本号统一 | `docs/spec/API.md` 等 | 2.4 |
 
 ---
 
