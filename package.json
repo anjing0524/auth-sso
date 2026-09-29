@@ -11,6 +11,7 @@
     "build": "pnpm -r build && cargo build --manifest-path apps/gateway/Cargo.toml --release",
     "build:portal": "pnpm --filter @auth-sso/portal build",
     "build:gateway": "cargo build --manifest-path apps/gateway/Cargo.toml --release",
+    "build:docker": "docker build -f apps/portal/Dockerfile -t auth-sso-portal:local .",
     "lint": "pnpm -r lint",
     "typecheck": "pnpm -r typecheck",
     "db:generate": "pnpm --filter @auth-sso/portal db:generate",
@@ -31,7 +32,7 @@
     "test:report": "node tests/traceability/generate-report.mjs"
   },
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=26.0.0"
   },
   "packageManager": "pnpm@10.12.4",
   "devDependencies": {

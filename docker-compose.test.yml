@@ -114,6 +114,9 @@ services:
     environment:
       NODE_ENV: test
       GATEWAY_SHARED_SECRET: e2e-gateway-shared-secret
+      # E2E 网关限流抬档（生产默认 20/30，见 config.rs RateLimitConfig）
+      RATE_LIMIT_AUTH_MAX: "200"
+      RATE_LIMIT_TOKEN_MAX: "300"
     volumes:
       - ./apps/gateway/gateway.e2e.toml:/app/gateway.toml:ro
       - gateway_certs:/etc/gateway/ssl:ro
