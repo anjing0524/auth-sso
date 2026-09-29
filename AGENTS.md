@@ -16,6 +16,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 nodejs@26（nvm default；Temporal 需要 `--harmony-temporal`——已在 vitest.base.ts / portal dev/start / Vercel CMD 内置，勿删）
 nextjs@16
 Rust 1.93.0+
+git 身份/远程：GitHub 推送一律用 `gh` CLI（HTTPS + 凭据助手已配置，账号 anjing0524）；本机 `id_ed25519` 是 `anjing0524/vue-refresh` 仓库的 deploy key，对 auth-sso 无推送权限，勿走 SSH；Docker 命令当前用户已入 docker 组（旧会话内用 `sg docker -c` 或 sudo 兜底）
 
 ## 优先
 
