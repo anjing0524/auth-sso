@@ -15,7 +15,6 @@
     "declaration": false,
     "declarationMap": false,
     "sourceMap": false,
-    "allowImportingTsExtensions": false,
     "plugins": [
       {
         "name": "next"

@@ -1,5 +1,6 @@
 import type { NextConfig } from 'next';
-import { baseNextConfig } from '../../next.base';
+// 显式 .ts 扩展名：next build 的配置加载按 ESM 语义解析，无扩展名相对导入无法命中 .ts 文件
+import { baseNextConfig } from '../../next.base.ts';
 
 const nextConfig: NextConfig = {
   // 继承 workspace 基础配置（output standalone、安全 headers、optimizePackageImports）
