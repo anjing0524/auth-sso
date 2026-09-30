@@ -4,7 +4,7 @@
  * 鉴权由 layout.tsx 统一处理，本组件零鉴权样板，专注数据获取与渲染。
  */
 import { resolveIdentity, getUserRoleDeptIds } from '@/lib/auth';
-import { getUsers, getDepartments } from './data';
+import { getUsers, getDepartmentOptions } from './data';
 import UserFilters from './components/UserFilters';
 import CreateUserDialog from './components/CreateUserDialog';
 import UserTable from './components/UserTable';
@@ -32,7 +32,7 @@ export default async function UsersPage({ searchParams }: PageProps) {
   const userId = identity?.userId ?? '';
   const [{ data: users, pagination }, departments] = await Promise.all([
     getUsers(deptIds, userId, { page, pageSize, keyword, status }),
-    getDepartments(),
+    getDepartmentOptions(),
   ]);
 
   return (

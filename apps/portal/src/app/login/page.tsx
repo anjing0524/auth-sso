@@ -10,7 +10,7 @@ import { Suspense } from 'react';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { verifyAccessToken } from '@/lib/auth/token';
-import { COOKIE_NAMES } from '@auth-sso/contracts';
+import { COOKIE_NAMES, PORTAL_CLIENT_ID } from '@auth-sso/contracts';
 import LoginForm from './login-form';
 
 
@@ -34,7 +34,7 @@ async function LoginContent({ searchParams }: SearchParams) {
   const jwtCookie = cookieStore.get(COOKIE_NAMES.JWT);
 
   if (jwtCookie?.value) {
-    const claims = await verifyAccessToken(jwtCookie.value);
+    const claims = await verifyAccessToken(jwtCookie.value, PORTAL_CLIENT_ID);
     if (claims) {
       if (sessionId) {
         // 已登录 + 授权请求 → 接续 authorize（SSO 免登，authorize 凭 session_id 恢复参数并签发 code）

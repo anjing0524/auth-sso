@@ -51,4 +51,3 @@ export const UpdateDepartmentInputSchema = z.object({
 });
 
 export type CreateDepartmentInput = z.infer<typeof CreateDepartmentInputSchema>;
-export type UpdateDepartmentInput = z.infer<typeof UpdateDepartmentInputSchema>;

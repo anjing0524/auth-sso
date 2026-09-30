@@ -47,12 +47,16 @@ fn make_test_token(
     let claims = Claims {
         sub: sub.to_string(),
         iss: issuer.to_string(),
-        aud: "portal-client".to_string(),
+        // 与生产签发语义对齐（ADR-013）：AT aud = 签发对象 client_id
+        aud: "portal".to_string(),
+        client_id: "portal".to_string(),
         exp: (now as i64 + exp_offset_sec) as u64,
         jti: jti.to_string(),
     };
     let mut header = Header::new(Algorithm::ES256);
     header.kid = Some(kid.to_string());
+    // 与 Portal 签发端对齐（contracts JWT_TYP.ACCESS_TOKEN，RFC 8725 §3.11）
+    header.typ = Some("at+jwt".to_string());
     encode(
         &header,
         &claims,
@@ -165,6 +169,7 @@ fn test_decode_jwt_payload() {
         sub: "user-1".to_string(),
         iss: "test".to_string(),
         aud: "test".to_string(),
+        client_id: "test".to_string(),
         exp: 9999999999u64,
         jti: "jti-1".to_string(),
     };
@@ -206,12 +211,14 @@ async fn test_verify_rejects_hs256_algorithm_confusion() {
     let claims = Claims {
         sub: "user-123".to_string(),
         iss: issuer.to_string(),
-        aud: "portal-client".to_string(),
+        aud: "portal".to_string(),
+        client_id: "portal".to_string(),
         exp: 9999999999u64,
         jti: "jti-456".to_string(),
     };
     let mut header = Header::new(Algorithm::HS256);
     header.kid = Some("test-es256-key".to_string());
+    header.typ = Some("at+jwt".to_string());
     let token = encode(
         &header,
         &claims,
@@ -222,6 +229,77 @@ async fn test_verify_rejects_hs256_algorithm_confusion() {
     let result = verifier.verify(&token).await;
     // HS256 签名应被拒绝（JWKS 白名单仅含 ES256）
     assert!(result.is_err());
+}
+
+/// RFC 8725 §3.11 显式类型：typ 与预期用途不符的 JWT 被拒绝（如 login 凭证冒充 AT）
+#[tokio::test]
+async fn test_verify_rejects_mismatched_typ() {
+    let jwks_cache = Arc::new(JwksCache::new());
+    let issuer = "https://sso.example.com";
+    let (kid, private_pem, public_pem) = generate_es256_key();
+
+    jwks_cache.set_metadata_for_test(issuer, &["ES256"]);
+    jwks_cache.insert_key_for_test(kid.clone(), DecodingKey::from_ec_pem(&public_pem).unwrap());
+
+    let claims = Claims {
+        sub: "user-123".to_string(),
+        iss: issuer.to_string(),
+        aud: "auth-sso".to_string(),
+        client_id: "portal".to_string(),
+        exp: 9999999999u64,
+        jti: "jti-typ-1".to_string(),
+    };
+    let mut header = Header::new(Algorithm::ES256);
+    header.kid = Some(kid.clone());
+    header.typ = Some("login+jwt".to_string());
+    let token = encode(
+        &header,
+        &claims,
+        &EncodingKey::from_ec_pem(&private_pem).unwrap(),
+    )
+    .unwrap();
+
+    let verifier = make_test_verifier(&jwks_cache);
+    let result = verifier.verify(&token).await;
+    assert!(matches!(result, Err(VerifyError::InvalidTokenType(t)) if t == "login+jwt"));
+}
+
+/// RFC 8725 §3.11 + ADR-013 决策 2：typ 强制存在——缺失 typ 的 token 拒绝
+/// （系统无生产存量，F11 的"缺失放行"兼容窗已收紧关闭）
+#[tokio::test]
+async fn test_verify_rejects_missing_typ() {
+    let jwks_cache = Arc::new(JwksCache::new());
+    let issuer = "https://sso.example.com";
+    let (kid, private_pem, public_pem) = generate_es256_key();
+
+    jwks_cache.set_metadata_for_test(issuer, &["ES256"]);
+    jwks_cache.insert_key_for_test(kid.clone(), DecodingKey::from_ec_pem(&public_pem).unwrap());
+
+    let claims = Claims {
+        sub: "user-123".to_string(),
+        iss: issuer.to_string(),
+        aud: "portal".to_string(),
+        client_id: "portal".to_string(),
+        exp: 9999999999u64,
+        jti: "jti-typ-2".to_string(),
+    };
+    let mut header = Header::new(Algorithm::ES256);
+    header.kid = Some(kid.clone());
+    header.typ = None; // Header::new 默认 Some("JWT")，须显式清除以模拟无 typ token
+    let token = encode(
+        &header,
+        &claims,
+        &EncodingKey::from_ec_pem(&private_pem).unwrap(),
+    )
+    .unwrap();
+
+    let verifier = make_test_verifier(&jwks_cache);
+    let result = verifier.verify(&token).await;
+    assert!(
+        matches!(result, Err(VerifyError::MissingTyp)),
+        "typ 缺失的 token 应被拒绝: {:?}",
+        result.err()
+    );
 }
 
 /// T6-01: NearlyExpired Token 验签通过但标记为即将过期
@@ -277,7 +355,14 @@ fn jwt_claims_match_cross_language_contract() {
     ));
     let claims: Claims =
         serde_json::from_str(raw).expect("fixture 必须能反序列化为 Gateway Claims");
-    assert_eq!(claims.aud, "auth-sso", "体系级 aud 契约（ADR-006）");
+    assert_eq!(
+        claims.aud, "portal",
+        "AT aud = 签发对象 client_id（ADR-013）"
+    );
+    assert_eq!(
+        claims.client_id, "portal",
+        "client_id claim 与 aud 同源同值（ADR-013）"
+    );
     assert!(
         claims.iss.starts_with("https://"),
         "issuer 为 URL（ADR-012）"

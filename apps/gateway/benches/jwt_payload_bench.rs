@@ -15,7 +15,8 @@ fn make_test_jwt(sub: &str, jti: &str) -> String {
     let claims = Claims {
         sub: sub.to_string(),
         iss: "https://sso.example.com".to_string(),
-        aud: "portal-client".to_string(),
+        aud: "portal".to_string(),
+        client_id: "portal".to_string(),
         exp: 9999999999u64,
         jti: jti.to_string(),
     };

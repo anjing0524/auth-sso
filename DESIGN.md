@@ -1,7 +1,7 @@
 # Auth-SSO 设计系统
 
-版本: v2.2
-最后更新: 2026-06-26
+版本: v2.3
+最后更新: 2026-09-30
 
 ---
 
@@ -15,6 +15,8 @@
 3. **数据优先**: 管理后台突出数据密度和操作效率
 4. **中文优化**: 字体选择优先中文显示效果
 5. **极简登录**: 登录页减少视觉元素，专注核心操作
+
+> **⚠️ 架构章节时效声明（2026-09-30）**：本文档"OIDC 授权时序""数据沙箱""CTE 递归防死循环"等架构章节为 v2.1 时代（Better Auth / `role_clients` / `DataScopeType`）的历史快照，所述机制已被 ADR-001/002/006/007/008/010/012 取代——Portal 为自建 OIDC Provider、Client 准入经 `permissions.client_id` 链路、数据范围为角色部门子树（`ancestors` 物化路径，非 CTE 递归）。现行架构唯一真相源：`docs/spec/ARCHITECTURE.md` 与 `docs/adr/`。视觉设计规范章节（色彩/字体/组件规范）仍然有效。
 
 ---
 
@@ -527,6 +529,7 @@ WITH RECURSIVE sub_depts AS (
 
 | 日期 | 版本 | 变更 |
 |------|------|------|
+| 2026-09-30 | v2.3 | 架构章节标注为 v2.x 历史快照（Better Auth/role_clients/DataScopeType/CTE 递归已被 ADR-001/002/006/007/010/012 取代），现行架构真相源指向 docs/spec/ARCHITECTURE.md 与 docs/adr/ |
 | 2026-06-26 | v2.2 | 颜色体系全量迁移至 oklch（globals.css 同步）；圆角系统扩增 `rounded-2xl` (16px)；组件规范引用 design token 替代 hex |
 | 2026-05-20 | v2.1 | 增补 OIDC 强拦截与数据沙箱核心架构设计图；修复并补充前端页面级 401 拦截与带 callbackUrl 的重定向体验方案 |
 | 2026-03-24 | v2.0 | 更新主色为 #0066FF；引入 Geist 字体；新增动效系统；新增暗黑模式 |

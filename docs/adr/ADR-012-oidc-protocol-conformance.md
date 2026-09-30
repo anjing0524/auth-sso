@@ -42,6 +42,8 @@
 
 ADR-006 剥离 JWT claims 时把两类数据混在了一起：**RBAC 鉴权数据**（roles/permissions/deptIds，剥离正确）与 **OAuth 协议数据**（scope/client/aud，业界 AT 普遍携带）。当前 BFF 单一体系内无碍；第三方 RS 上量后，正确演进是把 OAuth 协议字段加回 AT（aud=各 RS、scope、client_id），RBAC 数据继续留在 Redis。
 
+（2026-09-30 已定案：由 **ADR-013** 落地为完整决策——AT `aud = client_id` + 显式 `client_id` claim、Gateway aud 校验自动推导常开、RFC 7009 AT 级联有意接受。）
+
 ## 后果
 
 - 标准 OIDC RP（含第三方库的 iss 校验）可直接接入；`getIssuer()`/`getTrustedOrigins()` 等 config 包推导函数复活。

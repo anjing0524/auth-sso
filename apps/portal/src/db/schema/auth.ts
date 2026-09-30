@@ -20,6 +20,7 @@
  * @module db/schema/auth
  */
 import { pgTable, uuid, varchar, text, timestamp, boolean, integer, index } from 'drizzle-orm/pg-core';
+import { DEFAULT_SCOPES } from '@auth-sso/contracts';
 import { entityStatusEnum, codeChallengeMethodEnum } from './enums';
 import { users } from './users';
 import { createdAtColumn, updatedAtColumn } from './helpers';
@@ -35,7 +36,7 @@ export const clients = pgTable('clients', {
   name: varchar('name', { length: 100 }).notNull(),
   clientSecret: varchar('client_secret', { length: 128 }),
   redirectUris: varchar('redirect_uris', { length: 255 }).array().notNull(),
-  scopes: varchar('scopes', { length: 200 }).notNull().default('openid profile email offline_access'),
+  scopes: varchar('scopes', { length: 200 }).notNull().default(DEFAULT_SCOPES),
   homepageUrl: varchar('homepage_url', { length: 500 }),
   logoUrl: varchar('logo_url', { length: 500 }),
   accessTokenTtl: integer('access_token_ttl').notNull().default(3600),

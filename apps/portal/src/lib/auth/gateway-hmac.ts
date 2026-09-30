@@ -20,7 +20,7 @@ export const SIGNATURE_TIMESTAMP_WINDOW_SEC = (() => {
 /**
  * 使用 Web Crypto API 计算 HMAC-SHA256 并以 hex 字符串返回。
  */
-export async function computeHmacHex(secret: string, payload: string): Promise<string> {
+async function computeHmacHex(secret: string, payload: string): Promise<string> {
   const encoder = new TextEncoder();
   const key = await crypto.subtle.importKey(
     'raw',

@@ -43,6 +43,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { DataTable } from '@/components/shared/data-table';
 import { EmptyState } from '@/components/shared/empty-state';
+import type { UserStatus } from '@auth-sso/contracts';
 import { toggleUserStatusAction } from '../actions';
 
 /**
@@ -50,12 +51,12 @@ import { toggleUserStatusAction } from '../actions';
  */
 interface User {
   id: string;
-  
+
   username: string;
   email: string | null;
   name: string;
   avatarUrl: string | null;
-  status: 'ACTIVE' | 'DISABLED' | 'LOCKED' | 'DELETED';
+  status: UserStatus;
   deptId: string | null;
   deptName: string | null;
   createdAt: string;

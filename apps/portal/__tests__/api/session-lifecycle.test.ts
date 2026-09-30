@@ -70,7 +70,7 @@ vi.mock('next/headers', () => ({
 
 vi.mock('jose', () => ({
   jwtVerify: vi.fn(async (token: string) => {
-    if (token === 'valid-jwt') {
+    if (token === 'valid-jwt' || token === 'valid-jwt-typ-at' || token === 'valid-jwt-typ-login') {
       return { payload: { sub: 'usr_1', jti: 'jti-123', iss: '', aud: 'auth-sso', exp: Math.floor(Date.now() / 1000) + 3600 } };
     }
     throw new Error('Invalid signature');
@@ -83,7 +83,14 @@ vi.mock('jose', () => ({
   }),
   decodeProtectedHeader: vi.fn((token: string) => {
     if (token === 'valid-jwt') {
+      // 存量 token：无 typ（兼容期放行）
       return { kid: 'test-kid-1', alg: 'ES256' };
+    }
+    if (token === 'valid-jwt-typ-at') {
+      return { kid: 'test-kid-1', alg: 'ES256', typ: 'at+jwt' };
+    }
+    if (token === 'valid-jwt-typ-login') {
+      return { kid: 'test-kid-1', alg: 'ES256', typ: 'login+jwt' };
     }
     throw new Error('Invalid JWT header');
   }),
@@ -101,7 +108,7 @@ import {
   isJtiRevoked,
   revokeUserToken,
 } from '@/lib/session';
-import { COOKIE_NAMES } from '@auth-sso/contracts';
+import { COOKIE_NAMES, PORTAL_CLIENT_ID } from '@auth-sso/contracts';
 import { verifyAccessToken } from '@/lib/auth/token';
 
 beforeAll(async () => { await td.connect(); });
@@ -206,25 +213,42 @@ describe('JWT Cookie Session Lifecycle', () => {
 
   describe('verifyAccessToken', () => {
     it('对有效 JWT 成功验签并返回载荷', async () => {
-      const payload = await verifyAccessToken('valid-jwt');
+      const payload = await verifyAccessToken('valid-jwt', PORTAL_CLIENT_ID);
       expect(payload).toBeTruthy();
       expect(payload!.sub).toBe('usr_1');
     });
 
     it('如果 jti 在黑名单中则返回 null', async () => {
       await revokeJti('jti-123', Math.floor(Date.now() / 1000) + 3600);
-      const payload = await verifyAccessToken('valid-jwt');
+      const payload = await verifyAccessToken('valid-jwt', PORTAL_CLIENT_ID);
       expect(payload).toBeNull();
     });
 
     it('无效 JWT 返回 null', async () => {
-      const payload = await verifyAccessToken('invalid-jwt');
+      const payload = await verifyAccessToken('invalid-jwt', PORTAL_CLIENT_ID);
       expect(payload).toBeNull();
     });
 
     it('恶意/畸形 token 返回 null 不抛异常', async () => {
-      const payload = await verifyAccessToken('');
+      const payload = await verifyAccessToken('', PORTAL_CLIENT_ID);
       expect(payload).toBeNull();
+    });
+  });
+
+  describe('verifyAccessToken typ 显式类型（RFC 8725 §3.11）', () => {
+    it('typ 与预期一致时验签通过', async () => {
+      const payload = await verifyAccessToken('valid-jwt-typ-at', PORTAL_CLIENT_ID, 'at+jwt');
+      expect(payload).toBeTruthy();
+    });
+
+    it('typ 与预期不符（login 凭证冒充 AT）返回 null', async () => {
+      const payload = await verifyAccessToken('valid-jwt-typ-login', PORTAL_CLIENT_ID, 'at+jwt');
+      expect(payload).toBeNull();
+    });
+
+    it('typ 缺失的存量 token 放行（兼容期）', async () => {
+      const payload = await verifyAccessToken('valid-jwt', PORTAL_CLIENT_ID, 'at+jwt');
+      expect(payload).toBeTruthy();
     });
   });
 

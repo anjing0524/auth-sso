@@ -179,8 +179,7 @@ Browser → POST /api/auth/logout → performRevocation():
 | role_permissions | 3 | 2 (复合主键) | 1 | ✅ |
 | clients | 11 | — | — (自身PK) | ✅ |
 | authorization_codes | 11 | — | 2 | ✅ |
-| access_tokens | 8 | 2 | 2 | ✅ |
-| refresh_tokens | 10 | 2 | 2 | ✅ |
+| refresh_tokens | 10 | 3 | 2 (user_id, client_id) | ✅ |
 | jwks | 6 | — | — | ✅ |
 | audit_logs | 11 | 3 | — (无FK) | ✅ |
 | login_logs | 8 | 3 | — (无FK) | ✅ |

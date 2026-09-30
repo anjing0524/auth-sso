@@ -9,6 +9,7 @@
  */
 import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest';
 import type * as Contracts from '@auth-sso/contracts';
+import { PORTAL_CLIENT_ID } from '@auth-sso/contracts';
 import { createTestDbHandle, seedTestData } from '../helpers/test-db';
 
 const {
@@ -153,7 +154,8 @@ describe('POST /api/auth/logout', () => {
     const res = await POST(buildPostRequest());
 
     expect(res.status).toBe(200);
-    expect(mockVerifyAccessToken).toHaveBeenCalledWith('valid-jwt');
+    // logout 路由按 aud（PORTAL_CLIENT_ID，ADR-013）+ typ 契约显式传参（RFC 8725 §3.11）
+    expect(mockVerifyAccessToken).toHaveBeenCalledWith('valid-jwt', PORTAL_CLIENT_ID, 'at+jwt');
     expect(mockRevokeJti).toHaveBeenCalledWith('jti-1', expect.any(Number));
 
     expect(res.cookies.get('portal_jwt_token')?.value).toBe('');

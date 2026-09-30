@@ -11,6 +11,7 @@ import {
   getRedisUrl,
   getTrustedOrigins,
   isCookieSecure,
+  resetConfig,
 } from '@auth-sso/config';
 
 const ENV_KEYS = [
@@ -32,6 +33,8 @@ const originalEnv = Object.fromEntries(
 describe('runtime configuration boundaries', () => {
   beforeEach(() => {
     for (const key of ENV_KEYS) Reflect.deleteProperty(process.env, key);
+    // getter 已走模块级缓存单例：env 变更后必须重置，防止跨用例串味
+    resetConfig();
   });
 
   afterEach(() => {
@@ -43,6 +46,7 @@ describe('runtime configuration boundaries', () => {
         Reflect.set(process.env, key, value);
       }
     }
+    resetConfig();
   });
 
   it('resolves non-database settings without DATABASE_URL', () => {

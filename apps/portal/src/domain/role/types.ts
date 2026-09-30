@@ -49,4 +49,3 @@ export const UpdateRoleInputSchema = z.object({
 });
 
 export type CreateRoleInput = z.infer<typeof CreateRoleInputSchema>;
-export type UpdateRoleInput = z.infer<typeof UpdateRoleInputSchema>;

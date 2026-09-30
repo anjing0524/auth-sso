@@ -48,6 +48,16 @@ impl TokenRefreshJsonResponse {
     }
 }
 
+/// 单端点续签尝试结果 — skipped（Portal 判定 AT 仍新）必须与失败区分：
+/// skipped 应终止全部重试，失败才回退下一端点。
+#[derive(Debug)]
+enum EndpointOutcome {
+    Tokens(RefreshedTokens),
+    /// Portal 判定无需续签（AT 剩余时间充足）
+    Skipped,
+    Failed,
+}
+
 /// 同用户续签去重窗口（秒），防止并发请求反复轮换 Refresh Token
 const REFRESH_DEDUP_SEC: u64 = 30;
 
@@ -119,10 +129,14 @@ impl TokenRefresher {
         }
 
         // 1. 尝试主端点（来自 OIDC Discovery 缓存）
-        if let Some(primary) = self.primary_endpoint()
-            && let Some(tokens) = self.try_endpoint(&primary, refresh_token, sub).await
-        {
-            return Some(tokens);
+        if let Some(primary) = self.primary_endpoint() {
+            match self.attempt_endpoint(&primary, refresh_token, sub).await {
+                EndpointOutcome::Tokens(tokens) => return Some(tokens),
+                // skipped = 无需续签：若继续回退会对同一 Portal 端点再发一次注定
+                // skipped 的请求（多 upstream 时 N 次），且把"不需要"误当"失败"
+                EndpointOutcome::Skipped => return None,
+                EndpointOutcome::Failed => {}
+            }
         }
 
         // 2. 回退：遍历全部 upstream 的默认续签路径
@@ -138,7 +152,10 @@ impl TokenRefresher {
 
         for upstream in self.upstreams.iter() {
             let fallback_url = format!("{}://{}/api/auth/refresh", self.upstream_scheme, upstream);
-            if let Some(tokens) = self.try_endpoint(&fallback_url, refresh_token, sub).await {
+            if let EndpointOutcome::Tokens(tokens) = self
+                .attempt_endpoint(&fallback_url, refresh_token, sub)
+                .await
+            {
                 return Some(tokens);
             }
         }
@@ -168,12 +185,12 @@ impl TokenRefresher {
     /// 1. JSON body（新版 Portal + 签名通过时的标准协议）
     /// 2. Set-Cookie 头回退（旧版 Portal 或未配置共享密钥的部署，
     ///    保证滚动发布期间新 Gateway + 旧 Portal 的续签不中断）
-    async fn try_endpoint(
+    async fn attempt_endpoint(
         &self,
         endpoint: &str,
         refresh_token: &str,
         sub: &str,
-    ) -> Option<RefreshedTokens> {
+    ) -> EndpointOutcome {
         debug!("发起静默续签: url={}, sub={}", endpoint, sub);
         let mut request = HTTP_CLIENT.post(endpoint).header(
             "Cookie",
@@ -196,11 +213,11 @@ impl TokenRefresher {
             Ok(r) if r.status().is_success() => r,
             Ok(r) => {
                 warn!("续签请求被 Portal 拒绝: status={}, sub={}", r.status(), sub);
-                return None;
+                return EndpointOutcome::Failed;
             }
             Err(e) => {
                 warn!("续签请求网络错误: {}, sub={}", e, sub);
-                return None;
+                return EndpointOutcome::Failed;
             }
         };
 
@@ -219,16 +236,22 @@ impl TokenRefresher {
         }
 
         // 方案一：JSON body 解析（新版 Portal，签名通过时回传 token）
-        let body_bytes = response.text().await.ok()?;
+        let body_bytes = match response.text().await {
+            Ok(bytes) => bytes,
+            Err(e) => {
+                warn!("续签响应读取失败: {}, sub={}", e, sub);
+                return EndpointOutcome::Failed;
+            }
+        };
         if let Ok(json) = serde_json::from_str::<TokenRefreshJsonResponse>(&body_bytes) {
             if json.is_skipped() {
                 debug!("续签跳过（AT 剩余时间充足）: sub={}", sub);
-                return None;
+                return EndpointOutcome::Skipped;
             }
             if let (Some(access), Some(refresh)) = (json.access_token(), json.refresh_token()) {
                 info!("静默续签成功 (JSON): sub={}", sub);
                 crate::metrics::inc_refresh_success();
-                return Some(RefreshedTokens {
+                return EndpointOutcome::Tokens(RefreshedTokens {
                     access: access.to_string(),
                     refresh: refresh.to_string(),
                 });
@@ -239,7 +262,7 @@ impl TokenRefresher {
         if let (Some(access), Some(refresh)) = (cookie_at, cookie_rt) {
             info!("静默续签成功 (Set-Cookie 回退): sub={}", sub);
             crate::metrics::inc_refresh_success();
-            return Some(RefreshedTokens { access, refresh });
+            return EndpointOutcome::Tokens(RefreshedTokens { access, refresh });
         }
 
         warn!(
@@ -247,6 +270,6 @@ impl TokenRefresher {
             body_bytes.len(),
             sub
         );
-        None
+        EndpointOutcome::Failed
     }
 }

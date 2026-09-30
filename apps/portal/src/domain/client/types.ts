@@ -60,4 +60,3 @@ export const UpdateClientInputSchema = z.object({
 });
 
 export type CreateClientInput = z.infer<typeof CreateClientInputSchema>;
-export type UpdateClientInput = z.infer<typeof UpdateClientInputSchema>;

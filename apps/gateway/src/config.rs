@@ -26,6 +26,33 @@ impl Default for RateLimitConfig {
     }
 }
 
+/// 部署环境（development/test/production）。生产安全校验以此为依据，
+/// 不再依赖 NODE_ENV（Node.js 惯例不应泄入 Rust 配置）。
+/// 可通过 GATEWAY_ENVIRONMENT 环境变量覆盖；未配置时回退读取 NODE_ENV。
+#[derive(Debug, Deserialize, Clone, Copy, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum Environment {
+    #[default]
+    Development,
+    Test,
+    Production,
+}
+
+impl std::str::FromStr for Environment {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "development" | "dev" => Ok(Self::Development),
+            "test" => Ok(Self::Test),
+            "production" | "prod" => Ok(Self::Production),
+            other => Err(format!(
+                "未知环境标识 {other:?}（支持 development/test/production）"
+            )),
+        }
+    }
+}
+
 /// 网关服务层配置
 #[derive(Debug, Deserialize, Clone)]
 #[serde(default)]
@@ -55,10 +82,10 @@ pub struct GatewayConfig {
     /// JWKS 刷新成功后的标准间隔（秒，默认 300）。
     /// 可通过 JWKS_REFRESH_INTERVAL_SECS 环境变量覆盖。
     pub jwks_refresh_interval_secs: u64,
-    /// 部署环境标识（development/test/production）。生产安全校验以此为依据，
+    /// 部署环境标识。生产安全校验以此为依据，
     /// 不再依赖 NODE_ENV（Node.js 惯例不应泄入 Rust 配置）。
     /// 可通过 GATEWAY_ENVIRONMENT 环境变量覆盖；未配置时回退读取 NODE_ENV。
-    pub environment: String,
+    pub environment: Environment,
     /// 认证端点限流阈值。
     pub rate_limit: RateLimitConfig,
     /// 网关级统一 OAuth Client（ADR-010 二期）：所有被代理 upstream 共用，
@@ -85,7 +112,7 @@ impl Default for GatewayConfig {
             upstream_server_name: None,
             upstream_host_header: None,
             jwks_refresh_interval_secs: 300,
-            environment: String::new(),
+            environment: Environment::default(),
             rate_limit: RateLimitConfig::default(),
             oauth: OAuthConfig {
                 client_id: "portal".to_string(),
@@ -135,14 +162,6 @@ pub struct UpstreamConfig {
     pub public_paths: Vec<String>,
     #[serde(default)]
     pub oidc_provider: bool,
-    /// 该 upstream 是否走 Gateway 统一 OAuth Client 流程（未认证 HTML 导航
-    /// 生成 PKCE + callback 拦截）。默认 true；纯内网/静态 upstream 可显式关闭。
-    #[serde(default = "default_true")]
-    pub oauth_enabled: bool,
-}
-
-fn default_true() -> bool {
-    true
 }
 
 /// 网关级统一 OAuth 2.1 客户端配置（ADR-010：Gateway 是唯一 OAuth Client）。
@@ -359,8 +378,7 @@ impl Config {
             self.gateway.jwks_refresh_interval_secs,
             "JWKS_REFRESH_INTERVAL_SECS",
         )?;
-        self.gateway.environment =
-            resolve_env_str(&self.gateway.environment, "GATEWAY_ENVIRONMENT");
+        self.gateway.environment = resolve_env(self.gateway.environment, "GATEWAY_ENVIRONMENT")?;
         self.gateway.rate_limit.auth_max =
             resolve_env(self.gateway.rate_limit.auth_max, "RATE_LIMIT_AUTH_MAX")?;
         self.gateway.rate_limit.token_max =
@@ -452,7 +470,6 @@ impl Default for Config {
                     "/.well-known/".into(),
                 ],
                 oidc_provider: true,
-                oauth_enabled: true,
             }],
         }
     }
@@ -565,8 +582,8 @@ fn resolve_env_str(config_value: &str, env_name: &str) -> String {
 
 fn validate_production_security(config: &Config, node_env: Option<&str>) -> anyhow::Result<()> {
     // 生产判定：优先 gateway.environment，未配置时回退 NODE_ENV（兼容既有部署）
-    let is_production =
-        config.gateway.environment == "production" || node_env == Some("production");
+    let is_production = matches!(config.gateway.environment, Environment::Production)
+        || node_env == Some("production");
     if !cfg!(feature = "self-managed-tls") && !config.gateway.external_tls_termination {
         bail!("当前 Gateway 未编译 self-managed-tls，必须启用 EXTERNAL_TLS_TERMINATION");
     }
@@ -694,27 +711,17 @@ mod tests {
         );
     }
 
-    fn oauth_upstream(name: &str) -> UpstreamConfig {
-        UpstreamConfig {
-            name: name.to_string(),
-            addresses: "127.0.0.1:4100".to_string(),
-            public_paths: vec![],
-            oidc_provider: name == "/",
-            oauth_enabled: true,
-        }
-    }
-
     #[test]
     fn test_validate_rejects_missing_gateway_oauth_credentials() {
         // ADR-010 二期：凭据收敛到 [gateway.oauth]，缺失直接拒绝启动
-        let routes = vec![oauth_upstream("/")];
+        let routes = vec![upstream("/", true)];
         let err = validate_routing_consistency(&routes, &OAuthConfig::default()).unwrap_err();
         assert!(err.to_string().contains("gateway.oauth.client_id 不能为空"));
     }
 
     #[test]
     fn test_validate_accepts_with_gateway_oauth() {
-        let routes = vec![oauth_upstream("/"), oauth_upstream("/demo/")];
+        let routes = vec![upstream("/", true), upstream("/demo/", false)];
         let oauth = OAuthConfig {
             client_id: "portal".to_string(),
             client_secret: "shared-secret".to_string(),
@@ -737,7 +744,7 @@ mod tests {
     #[cfg(feature = "self-managed-tls")]
     #[test]
     fn test_config_all() {
-        let file_path = "./test_gateway.toml";
+        let file_path = std::env::temp_dir().join("auth-sso-gw-test_gateway.toml");
         {
             let toml = r#"
                 [gateway]
@@ -764,8 +771,8 @@ mod tests {
                 client_id = "portal"
                 client_secret = "portal-secret-123"
             "#;
-            fs::write(file_path, toml).unwrap();
-            let config = Config::load(file_path).unwrap();
+            fs::write(&file_path, toml).unwrap();
+            let config = Config::load(file_path.to_str().unwrap()).unwrap();
             assert_eq!(config.gateway.port, 80);
             assert_eq!(
                 config.acme.as_ref().map(|acme| acme.domain.as_str()),
@@ -794,15 +801,15 @@ mod tests {
                 client_id = "portal"
                 client_secret = "portal-secret-override"
             "#;
-            fs::write(file_path, toml).unwrap();
-            let config = Config::load(file_path).unwrap();
+            fs::write(&file_path, toml).unwrap();
+            let config = Config::load(file_path.to_str().unwrap()).unwrap();
             assert_eq!(config.gateway.port, 9999);
             assert_eq!(config.upstreams[0].addresses, "partial-portal:3000");
             assert_eq!(config.gateway.ssl_port, 18443); // default
             assert!(config.upstreams[0].oidc_provider);
         }
 
-        let _ = fs::remove_file(file_path);
+        let _ = fs::remove_file(&file_path);
     }
 
     #[test]
@@ -976,15 +983,16 @@ mod tests {
 
     #[test]
     fn load_rejects_invalid_toml() {
-        let fp = "./test_invalid_gateway.toml";
-        fs::write(fp, r#"[gateway]\nport = "not-a-number""#).unwrap();
-        assert!(Config::load(fp).is_err());
-        let _ = fs::remove_file(fp);
+        // 真实换行（此前 raw string 使 \n 成为字面量，测的是畸形 key 而非类型错误）
+        let fp = std::env::temp_dir().join("auth-sso-gw-test-invalid-gateway.toml");
+        fs::write(&fp, "[gateway]\nport = \"not-a-number\"").unwrap();
+        assert!(Config::load(fp.to_str().unwrap()).is_err());
+        let _ = fs::remove_file(&fp);
     }
 
     #[test]
     fn load_rejects_old_portal_section() {
-        let fp = "./test_old_portal.toml";
+        let fp = std::env::temp_dir().join("auth-sso-gw-test_old_portal.toml");
         let old = r#"
             [gateway]
             port = 8080
@@ -992,9 +1000,9 @@ mod tests {
             upstream = "127.0.0.1:4100"
             public_paths = ["/login", "/register"]
         "#;
-        fs::write(fp, old).unwrap();
-        let err = Config::load(fp).unwrap_err().to_string();
-        let _ = fs::remove_file(fp);
+        fs::write(&fp, old).unwrap();
+        let err = Config::load(fp.to_str().unwrap()).unwrap_err().to_string();
+        let _ = fs::remove_file(&fp);
         assert!(
             err.contains("[[upstreams]]"),
             "错误应提示迁移到 [[upstreams]]，得到: {err}"
@@ -1002,8 +1010,8 @@ mod tests {
     }
 
     #[test]
-    fn upstream_route_config_parses_public_paths() {
-        let fp = "./test_upstream_public.toml";
+    fn upstream_route_config_parses_public_paths_and_ignores_unknown_tables() {
+        let fp = std::env::temp_dir().join("auth-sso-gw-test_upstream_public.toml");
         let toml = r#"
             [gateway]
             external_tls_termination = true
@@ -1013,22 +1021,14 @@ mod tests {
             addresses = "127.0.0.1:4100"
             oidc_provider = true
 
-            [upstreams.oauth]
-            client_id = "portal"
-            client_secret = "portal-secret"
-
             [[upstreams]]
             name = "/demo/"
             addresses = "127.0.0.1:3100"
             public_paths = ["/demo/landing", "/demo/about"]
-
-            [upstreams.oauth]
-            client_id = "demo"
-            client_secret = "demo-secret"
         "#;
-        fs::write(fp, toml).unwrap();
-        let config = Config::load(fp).unwrap();
-        let _ = fs::remove_file(fp);
+        fs::write(&fp, toml).unwrap();
+        let config = Config::load(fp.to_str().unwrap()).unwrap();
+        let _ = fs::remove_file(&fp);
 
         let portal = config.upstreams.iter().find(|u| u.name == "/").unwrap();
         assert!(portal.oidc_provider);
@@ -1049,7 +1049,6 @@ mod tests {
             addresses: "127.0.0.1:4100".to_string(),
             public_paths: Vec::new(),
             oidc_provider,
-            oauth_enabled: true,
         }
     }
 

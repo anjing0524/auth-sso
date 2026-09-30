@@ -6,7 +6,7 @@ import { dateFromInstant, instantFromDate } from '@/domain/shared/time';
 
 export type { Department, DepartmentTreeNode };
 
-export function computeAncestors(parentId: string, parentAncestors: string | null): string {
+function computeAncestors(parentId: string, parentAncestors: string | null): string {
   return parentAncestors ? `${parentAncestors}/${parentId}` : parentId;
 }
 

@@ -18,7 +18,7 @@ export interface PasswordConfig {
   passwordHistoryMax: number;
 }
 
-export const DEFAULT_PASSWORD_CONFIG: PasswordConfig = {
+const DEFAULT_PASSWORD_CONFIG: PasswordConfig = {
   bcryptRounds: 12,
   passwordHistoryMax: 5,
 };

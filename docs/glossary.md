@@ -1,7 +1,7 @@
 # Auth-SSO 领域术语表 (Glossary)
 
 > 本文件记录 Auth-SSO 系统的核心领域概念、有界上下文划分及术语定义。
-> 最后更新: 2026-07-23 (ADR-006/007/008/009 全量实现)
+> 最后更新: 2026-09-30 (RT 回绑 client 家族作用域、issuer URL 化——对齐 2026-09-28 设计审计后的已提交代码)
 
 ---
 
@@ -161,21 +161,19 @@ M:N 关联表，复合主键 `(role_id, permission_id)`。
 OAuth 2.1 authorization_code grant 的一次性授权码。支持 PKCE S256。5min TTL，一次性使用（`used` 标记）。
 
 ### RefreshToken（刷新令牌）
-用户级别的长期有效 refresh_token（ADR-006 决定去 clientId 作用域）。
+绑定发放 client 的授权家族级 refresh_token（RFC 9700 token family；2026-09-28 设计审计恢复 clientId 绑定，撤销不再横扫用户全部会话）。
 
 | 属性 | 说明 |
 |------|------|
 | `token_hash` | SHA-256 哈希存储（明文不落库） |
 | `user_id` | 所属用户 |
+| `client_id` | 发放该 RT 的 OAuth Client（Gateway SSO 会话记 `portal`，直连 RP 记各自 client） |
 | `scopes` | 授权范围 |
 | `revoked` | 非空 = 已撤销（时间戳） |
 | `expires_at` | 过期时间（7 天） |
 
 **Rotation**：刷旧 RT → 撤销旧 RT + 签发新 RT + 新 AT（同一 DB 事务）。
-**复用检测**：检测到已撤销 RT 被重复使用 → 级联撤销该用户**所有** RT → 拒绝。
-
-**废弃属性**：
-- ~~`client_id`~~ — 已删除（ADR-006），RT 统一为用户级
+**复用检测**：检测到已撤销 RT 被重复使用 → 级联撤销同授权家族 `(userId, clientId)` 的全部 RT → 拒绝。
 
 ### JWKS（JSON Web Key Set）
 ES256 密钥对存储。
@@ -193,7 +191,7 @@ ES256 密钥对存储。
 | 概念 | 存储 | 说明 |
 |------|------|------|
 | Access Token (AT) | Cookie `portal_jwt_token` | ES256 JWT，仅含 `sub` + `jti` + 标准 claims，1h 有效期 |
-| Refresh Token (RT) | Cookie `portal_refresh_token` | Opaque token，用户级别，7d 有效期 |
+| Refresh Token (RT) | Cookie `portal_refresh_token` | Opaque token，绑定发放 client 的授权家族级，7d 有效期 |
 | jti 黑名单 | Redis `portal:jti_blocklist:{jti}` | 紧急撤销 |
 | 用户权限上下文 | Redis `user:{sub}:perms` | `{roles[], permissions[], deptIds[]}`，子应用自取鉴权 |
 
@@ -201,13 +199,15 @@ ES256 密钥对存储。
 ```typescript
 {
   sub: string;        // 用户 ID
-  iss: "auth-sso";    // 体系级签发者
-  aud: "auth-sso";    // 体系级受众
+  iss: <issuer URL>;  // env PORTAL_ISSUER（缺省 appBaseURL），OIDC Discovery §4.3
+  aud: "auth-sso";    // 体系级受众（AT/LoginSession；ID Token 的 aud = client_id）
   jti: string;
   iat: number;
   exp: number;
 }
 ```
+
+**aud 语义演进（ADR-013，2026-09-30 定案、待实施）**：OAuth Access Token 的 aud 将改为签发对象 `client_id`，并显式携带 `client_id` claim；LoginSession 维持体系级 `auth-sso`；ID Token 的 aud = client_id（OIDC Core §2）。
 
 ### PKCE (Proof Key for Code Exchange)
 OAuth 2.1 强制安全机制。Gateway 端使用 CSPRNG 生成 32 字节 `code_verifier`，SHA-256 计算 `code_challenge`。
@@ -288,7 +288,6 @@ Append-only 写操作记录，**无 FK 约束**（确保用户/实体删除后�
 | 概念 | 状态 | 替代方案 |
 |------|------|----------|
 | ~~JWT 中 `roles[]`/`permissions[]`/`deptIds[]`~~ | 废弃（ADR-006） | Redis `user:{sub}:perms` |
-| ~~`refresh_tokens.client_id`~~ | 废弃（ADR-006） | RT 统一用户级 |
 | ~~`permissions.resource` / `permissions.action`~~ | 废弃（ADR-008） | code `{clientId}:{resource}:{action}` 自包含 |
 | ~~`DATA` 权限类型~~ | 废弃，待清理 | ADR-002：数据范围通过角色-部门绑定 |
 | ~~`access_tokens` 表~~ | 预留，不使用 | ADR-004：JWT 无状态 + Redis jti 黑名单 |

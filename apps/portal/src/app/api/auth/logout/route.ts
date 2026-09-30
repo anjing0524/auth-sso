@@ -28,7 +28,7 @@ import { verifyAccessToken } from '@/lib/auth/token';
 import { decodeJwtPayload } from '@/lib/session/jwt';
 import { getRefreshTokenFromCookie } from '@/lib/session/cookies';
 import { mapDomainError } from '@/domain/shared/error-mapping';
-import { COOKIE_NAMES } from '@auth-sso/contracts';
+import { COOKIE_NAMES, JWT_TYP, PORTAL_CLIENT_ID } from '@auth-sso/contracts';
 import { writeLoginLog, extractClientIP, extractUserAgent } from '@/lib/audit';
 import { hashToken } from '@/lib/crypto';
 
@@ -40,7 +40,7 @@ async function performRevocation(cookieStore: Awaited<ReturnType<typeof cookies>
   try {
     const jwtToken = cookieStore.get(COOKIE_NAMES.JWT)?.value;
     if (jwtToken) {
-      const claims = await verifyAccessToken(jwtToken);
+      const claims = await verifyAccessToken(jwtToken, PORTAL_CLIENT_ID, JWT_TYP.ACCESS_TOKEN);
       if (claims?.sub) {
         userId = claims.sub;
         const jti = claims.jti;

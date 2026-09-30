@@ -56,6 +56,10 @@ Redis 因此是**可用性关键依赖**（fail-close 的显式代价），生�
 - **撤销窗口**：JWT 签发后到下一次 Gateway 验签之间的请求无法撤销（但续签检测 300s 窗口限制了这个风险）
 - **Redis 依赖**：Redis 不可用时撤销失效，这是明确接受的权衡
 
+### 有意接受：RFC 7009 §2.1 撤销级联（2026-09-29 记录，2026-09-30 定案）
+
+RFC 7009 §2.1 规定撤销 Refresh Token 时 SHOULD 级联撤销同授权 grant 的全部 Access Token。本项目**有意不实现**该级联（2026-09-30 /grill-with-docs 定案，详见 ADR-013 决策 4）：ADR-013 落地 per-client aud + client_id claim 后技术上已可定位 (userId, clientId) 家族，但 AT TTL 1h 是 ADR-011 §4 认可的正确撤销杠杆（泄露 AT 残余风险 ≤1h），RT 家族撤销（RFC 9700 §4.14）已闭合续期能力；per-family 活跃 jti 集合需新 Redis 键空间 + 成员级过期 + 签发写放大，与 SHOULD（非 MUST）收益不成比例。若降级为撤销用户全部 jti 仍会跨 client DoS 放大，继续排除。重评触发：AT TTL 延长、对标 FAPI 2.0、合规审计强制级联。分析详见 docs/research/2026-09-29-oidc-oauth2-provider-practices.md §3/§5 与 docs/plans/2026-09-29-research-fixes-implementation-plan.md（D2）。
+
 ## 相关 ADR
 
 - ADR-003: Gateway 作为统一 OAuth Client

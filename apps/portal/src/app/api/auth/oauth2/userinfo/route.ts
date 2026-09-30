@@ -12,29 +12,43 @@ import { getJwtFromCookie } from '@/lib/session';
 import { mapServerError } from '@/lib/server-error';
 import { getUserProfile } from '@/app/(dashboard)/users/data';
 import { parseScopes } from '@/domain/auth/oauth-authorize';
+import { JWT_TYP } from '@auth-sso/contracts';
 
+/** RFC 6750 §3：401 响应 MUST 携带 WWW-Authenticate；无效凭证 SHOULD 带 error 属性 */
+const WWW_AUTHENTICATE_BEARER = 'Bearer';
+const WWW_AUTHENTICATE_INVALID_TOKEN = 'Bearer error="invalid_token"';
 
 export async function GET(request: NextRequest) {
   try {
-    // 从 Authorization Header 或 Cookie 获取 token
+    // 从 Authorization Header 或 Cookie 获取 token（Cookie 回退为门户自用的
+    // 非标准扩展：浏览器页面直连 userinfo 免重复传头，文档化于研究笔记 §5）
     const authHeader = request.headers.get('authorization');
     const token: string | null = authHeader?.startsWith('Bearer ')
       ? authHeader.slice(7)
       : await getJwtFromCookie();
 
     if (!token) {
-      return NextResponse.json({ error: 'invalid_token' }, { status: 401 });
+      return NextResponse.json(
+        { error: 'invalid_token' },
+        { status: 401, headers: { 'WWW-Authenticate': WWW_AUTHENTICATE_BEARER } },
+      );
     }
 
-    const claims = await verifyAccessToken(token, null); // UserInfo 不校验 audience（多 client 通用端点）
+    const claims = await verifyAccessToken(token, null, JWT_TYP.ACCESS_TOKEN); // UserInfo 不校验 audience（多 client 通用端点）
     if (!claims) {
-      return NextResponse.json({ error: 'invalid_token' }, { status: 401 });
+      return NextResponse.json(
+        { error: 'invalid_token' },
+        { status: 401, headers: { 'WWW-Authenticate': WWW_AUTHENTICATE_INVALID_TOKEN } },
+      );
     }
 
     // 查询用户档案（委托 data 层，仅取 OIDC 标准字段，不做角色/部门 JOIN）
     const user = await getUserProfile(claims.sub);
     if (!user) {
-      return NextResponse.json({ error: 'invalid_token' }, { status: 401 });
+      return NextResponse.json(
+        { error: 'invalid_token' },
+        { status: 401, headers: { 'WWW-Authenticate': WWW_AUTHENTICATE_INVALID_TOKEN } },
+      );
     }
 
     const scopes = new Set(parseScopes(claims.scope ?? ''));

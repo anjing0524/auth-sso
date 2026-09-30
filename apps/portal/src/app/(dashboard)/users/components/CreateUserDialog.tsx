@@ -28,6 +28,7 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select';
+import type { ApiResponse } from '@auth-sso/contracts';
 import { createUserAction } from '../actions';
 
 /**
@@ -55,11 +56,17 @@ export default function CreateUserDialog({ departments }: CreateUserDialogProps)
   const [isOpen, setIsOpen] = useState(false);
   const [deptId, setDeptId] = useState('');
 
-  // 绑定 React 19 Action
-  const [state, formAction, isPending] = useActionState(
-    async (prevState: any, formData: FormData) => {
+  // 绑定 React 19 Action：state 类型 = Action 返回值（ApiResponse）。
+  // 提交走 createUserAction 的 FormData 双签名路径（firstArg 显式 null）——
+  // 此前把 useActionState 的 state（首轮 null，其后为 ApiResponse）直接透传给
+  // firstArg，类型上是"ApiResponse 冒充 CreateUserInput"的失配。
+  const [state, formAction, isPending] = useActionState<
+    ApiResponse<{ id: string }> | null,
+    FormData
+  >(
+    async (_prevState, formData) => {
       formData.set('deptId', deptId);
-      return await createUserAction(prevState, formData);
+      return await createUserAction(null, formData);
     },
     null
   );

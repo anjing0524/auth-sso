@@ -62,7 +62,8 @@ struct OidcDiscovery {
 /// 构造网关统一的 JWT 校验基线配置：ES256 算法、不校验 aud/exp。
 ///
 /// exp 由网关自行判定（`Valid`/`NearlyExpired`/`Expired` 三态），故关闭
-/// jsonwebtoken 的内置 exp 校验；aud 的校验职责在 Portal 侧。issuer 与算法
+/// jsonwebtoken 的内置 exp 校验；aud 由 [`JwksCache::fetch_oidc_metadata`]
+/// 注入网关自身 client_id 后开启（RFC 8725 §3.9 / ADR-013）。issuer 与算法
 /// 列表由调用方在 OIDC Discovery 后追加设置。
 ///
 /// 提取此函数以消除原先散落在 4 处的相同三行构造，规避配置漂移风险。
@@ -118,6 +119,9 @@ pub struct JwksCache {
     refresh_notify: Notify,
     /// 上一次按需刷新触发时间（Unix 秒）— 单飞节流依据
     last_refresh_request: AtomicI64,
+    /// JWT 验签预期 aud（RFC 8725 §3.9 / ADR-013）：恒为网关自身 OAuth client_id，
+    /// 由 main.rs 从 `gateway.oauth.client_id` 注入，校验常开无配置开关
+    jwt_audience: Arc<str>,
 }
 
 impl std::fmt::Debug for JwksCache {
@@ -173,10 +177,22 @@ impl JwksCache {
     /// let cache = JwksCache::new();
     /// ```
     pub fn new() -> Self {
+        // 默认受众与 GatewayConfig::default().oauth.client_id 一致；
+        // 生产路径由 main.rs 以配置值经 [`Self::with_audience`] 注入
+        Self::with_audience("portal".to_string())
+    }
+
+    /// 创建带预期 aud 的缓存实例（RFC 8725 §3.9 / ADR-013 决策 2）。
+    ///
+    /// audience 必填（网关自身 OAuth client_id）：aud 语义定案为"签发对象
+    /// client_id"后，预期受众与自身 client 身份是同一事实，无需独立配置面，
+    /// 验签恒校验 JWT `aud` claim 与之相等。
+    pub fn with_audience(jwt_audience: String) -> Self {
         Self {
             inner: ArcSwap::from_pointee(OidcMetadata::default()),
             refresh_notify: Notify::new(),
             last_refresh_request: AtomicI64::new(0),
+            jwt_audience: Arc::from(jwt_audience),
         }
     }
 
@@ -321,6 +337,10 @@ impl JwksCache {
         // 硬锁 ES256 非对称签名，不从 OIDC Discovery 动态填充算法列表
         // （防 alg 混淆攻击：若 discovery 被篡改声明 HS256 可降级为对称签名）
         validation.algorithms = vec![jsonwebtoken::Algorithm::ES256];
+        // aud 校验恒开（RFC 8725 §3.9 / ADR-013）：预期受众 = 网关自身 OAuth client_id，
+        // 拒绝为其他 client 签发的 AT 重放到本网关（跨 client token 替代防线）
+        validation.set_audience(&[self.jwt_audience.as_ref()]);
+        validation.validate_aud = true;
 
         // 预解析 refresh_endpoint 路径（不写缓存，仅返回原始路径）
         let refresh_endpoint = metadata_val
@@ -606,11 +626,25 @@ impl BackgroundService for JwksRefreshService {
 }
 
 impl JwksRefreshService {
-    /// 主刷新循环：定时刷新 + UnknownKid 按需刷新信号 + 退出信号三路 select
+    /// 主刷新循环：定时刷新 + UnknownKid 按需刷新信号 + 退出信号三路 select。
+    /// 先等待后刷新——首刷已在 start_with_ready_notifier 完成，进入循环立即再刷
+    /// 会造成一秒内的重复拉取；sleep 前置后周期首刷落在 refresh_interval 之后。
     async fn run_refresh_loop(&self, mut shutdown: ShutdownWatch) {
+        let mut delay_secs = self.refresh_interval_secs;
         loop {
+            tokio::select! {
+                _ = shutdown.changed() => {
+                    info!("JWKS 刷新服务收到退出信号...");
+                    break;
+                }
+                _ = tokio::time::sleep(Duration::from_secs(delay_secs)) => {}
+                _ = self.jwks_cache.refresh_notify.notified() => {
+                    info!("⚡ UnknownKid 触发按需 JWKS 刷新");
+                }
+            }
+
             let result = self.try_refresh_from_any().await;
-            let delay_secs = match &result {
+            delay_secs = match &result {
                 Ok(()) => {
                     info!("✅ JWKS 公钥缓存定时刷新成功");
                     crate::metrics::log_snapshot();
@@ -629,17 +663,6 @@ impl JwksRefreshService {
                     delay
                 }
             };
-
-            tokio::select! {
-                _ = shutdown.changed() => {
-                    info!("JWKS 刷新服务收到退出信号...");
-                    break;
-                }
-                _ = tokio::time::sleep(Duration::from_secs(delay_secs)) => {}
-                _ = self.jwks_cache.refresh_notify.notified() => {
-                    info!("⚡ UnknownKid 触发按需 JWKS 刷新");
-                }
-            }
         }
     }
 }

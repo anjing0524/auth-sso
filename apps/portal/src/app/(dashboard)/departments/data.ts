@@ -17,6 +17,16 @@ import { isScopeDenied } from '@/db/user-queries';
 import { asEntityStatus } from '@/lib/type-guards';
 
 
+/** departments 行 → 领域实体（sort 兜底 + 状态守护） */
+function toDomainDepartment(r: typeof schema.departments.$inferSelect) {
+  return departmentFromPersistence({
+    id: r.id, parentId: r.parentId, ancestors: r.ancestors,
+    name: r.name, code: r.code, sort: r.sort ?? 0,
+    status: asEntityStatus(r.status),
+    createdAt: r.createdAt,
+  });
+}
+
 /**
  * 获取当前授权范围内的部门树形结构
  *
@@ -40,14 +50,7 @@ export async function getDepartments(
     .where(inArray(schema.departments.id, deptIds))
     .orderBy(asc(schema.departments.sort), asc(schema.departments.createdAt));
 
-  const depts = rows.map(r => departmentFromPersistence({
-    id: r.id, parentId: r.parentId, ancestors: r.ancestors,
-    name: r.name, code: r.code, sort: r.sort ?? 0,
-    status: asEntityStatus(r.status),
-    createdAt: r.createdAt,
-  }));
-
-  return buildDepartmentTree(depts);
+  return buildDepartmentTree(rows.map(toDomainDepartment));
 }
 
 /**

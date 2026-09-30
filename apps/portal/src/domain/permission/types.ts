@@ -106,4 +106,3 @@ export const UpdatePermissionInputSchema = z.object({
 });
 
 export type CreatePermissionInput = z.infer<typeof CreatePermissionInputSchema>;
-export type UpdatePermissionInput = z.infer<typeof UpdatePermissionInputSchema>;

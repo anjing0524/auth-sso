@@ -13,8 +13,7 @@ import 'server-only';
 import { cache } from 'react';
 
 import { resolveIdentity } from './verify-jwt';
-import { getRedis } from '@/infrastructure/redis';
-import { REDIS_KEY_PREFIX, ADMIN_ROLE_CODES } from '@auth-sso/contracts';
+import { ADMIN_ROLE_CODES } from '@auth-sso/contracts';
 import type { AuditOperation } from '@auth-sso/contracts';
 import { getUserPermissionContext } from '@/lib/permissions';
 
@@ -63,36 +62,13 @@ export async function checkPermission(
   }
   const { userId } = identity;
 
-  let roles: string[] = [];
-  let permissions: string[] = [];
-
-  // Redis 缓存读取（独立 try/catch：失败视为缓存 miss，恢复时继续走 DB 回退）
-  let cached: string | null = null;
-  try {
-    const redis = getRedis();
-    const cacheKey = `${REDIS_KEY_PREFIX.USER_PERMS}${userId}`;
-    cached = await redis.get(cacheKey);
-  } catch {
-    // Redis 不可用，跳过缓存，进入 DB 回退路径
-  }
-
-  if (cached) {
-    try {
-      const ctx = JSON.parse(cached);
-      roles = ctx.roles?.map((r: any) => r.code) ?? [];
-      permissions = ctx.permissions ?? [];
-    } catch {
-      // 缓存数据损坏，视为 miss，进入 DB 回退路径
-    }
-  }
-
-  if (roles.length === 0 && permissions.length === 0) {
-    const ctx = await getUserPermissionContext(userId);
-    if (ctx) {
-      roles = ctx.roles.map(r => r.code);
-      permissions = ctx.permissions;
-    }
-  }
+  // 统一走 getUserPermissionContext（缓存 → null 标记 → DB 降级三态自管理）。
+  // 此前这里手写过第二条 Redis 读取路径，缺陷有二：键拼装/解析与 permissions.ts
+  // 双处漂移；用"空数组"误判缓存 miss，导致合法空权限用户每次请求穿透 DB。
+  // ctx 为 null（用户不存在/DB 异常）时按无权限处理 = fail-close（ADR-011）。
+  const ctx = await getUserPermissionContext(userId);
+  const roles = ctx?.roles.map((r) => r.code) ?? [];
+  const permissions = ctx?.permissions ?? [];
 
   if (roles.some((rc) => (ADMIN_ROLE_CODES as readonly string[]).includes(rc))) {
     return { authorized: true, userId };

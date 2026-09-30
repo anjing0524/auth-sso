@@ -5,9 +5,10 @@ import 'server-only';
 
 import { cacheLife, cacheTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
-import { ilike, eq, or, desc, and, count, gt, isNull } from 'drizzle-orm';
+import { ilike, eq, or, desc, and, gt, isNull } from 'drizzle-orm';
 import { ENTITY_STATUS_VALUES, type EntityStatus } from '@auth-sso/contracts';
 import { asEntityStatus } from '@/lib/type-guards';
+import { withPagination, countRows } from '@/lib/pagination';
 
 
 /**
@@ -30,22 +31,24 @@ export interface ClientDTO {
   updatedAt: string | null;
 }
 
-/**
- * 分页获取 Client 列表
- */
-export async function getClients(params: {
-  page: number;
-  pageSize: number;
-  keyword: string;
-  status: string;
-}) {
-  'use cache';
-  cacheLife('minutes');
-  cacheTag('clients-list');
+/** Client 行 → DTO（日期序列化）；列表与详情共用 */
+function toClientDTO(c: {
+  clientId: string; name: string; redirectUris: string[]; scopes: string;
+  homepageUrl: string | null; logoUrl: string | null;
+  accessTokenTtl: number | null; refreshTokenTtl: number | null;
+  status: EntityStatus; createdAt: Date; updatedAt: Date | null;
+}): ClientDTO {
+  return {
+    clientId: c.clientId, name: c.name,
+    redirectUris: c.redirectUris,
+    scopes: c.scopes, homepageUrl: c.homepageUrl, logoUrl: c.logoUrl,
+    accessTokenTtl: c.accessTokenTtl, refreshTokenTtl: c.refreshTokenTtl,
+    status: c.status, createdAt: c.createdAt.toISOString(), updatedAt: c.updatedAt?.toISOString() ?? null,
+  };
+}
 
-  const { page, pageSize, keyword, status } = params;
-  const offset = (page - 1) * pageSize;
-
+/** Client 列表过滤条件：关键字（名称/clientId）+ 状态 */
+function buildClientConditions(keyword: string, status: string) {
   const conditions = [];
   if (keyword) {
     conditions.push(or(
@@ -56,29 +59,36 @@ export async function getClients(params: {
   if (status && ENTITY_STATUS_VALUES.includes(asEntityStatus(status))) {
     conditions.push(eq(schema.clients.status, asEntityStatus(status)));
   }
+  return conditions.length > 0 ? and(...conditions) : undefined;
+}
 
-  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+/**
+ * 分页获取 Client 列表
+ */
+export interface ClientListParams {
+  page: number;
+  pageSize: number;
+  keyword: string;
+  status: string;
+}
 
-  const countResult = await db.select({ count: count() })
-    .from(schema.clients).where(whereClause);
-  const total = Number(countResult[0]?.count ?? 0);
+export async function getClients(params: ClientListParams) {
+  'use cache';
+  cacheLife('minutes');
+  cacheTag('clients-list');
 
-  const rows = await db.select()
-    .from(schema.clients)
-    .where(whereClause)
-    .orderBy(desc(schema.clients.createdAt))
-    .limit(pageSize)
-    .offset(offset);
+  const { page, pageSize, keyword, status } = params;
+  const whereClause = buildClientConditions(keyword, status);
 
-  return {
-    data: rows.map(c => ({
-      clientId: c.clientId, name: c.name,
-      redirectUris: c.redirectUris,
-      scopes: c.scopes, homepageUrl: c.homepageUrl, logoUrl: c.logoUrl,
-      status: c.status, createdAt: c.createdAt.toISOString(), updatedAt: c.updatedAt?.toISOString(),
-    })),
-    pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) },
-  };
+  return withPagination(
+    page,
+    pageSize,
+    db.select().from(schema.clients).where(whereClause)
+      .orderBy(desc(schema.clients.createdAt))
+      .limit(pageSize).offset((page - 1) * pageSize),
+    countRows(schema.clients, whereClause),
+    toClientDTO,
+  );
 }
 
 /**
@@ -91,21 +101,7 @@ export async function getClientById(lookupId: string): Promise<ClientDTO | null>
     .where(eq(schema.clients.clientId, lookupId))
     .limit(1);
   const row = rows[0];
-  if (!row) return null;
-
-  return {
-    clientId: row.clientId,
-    name: row.name,
-    redirectUris: row.redirectUris,
-    scopes: row.scopes,
-    homepageUrl: row.homepageUrl,
-    logoUrl: row.logoUrl,
-    accessTokenTtl: row.accessTokenTtl,
-    refreshTokenTtl: row.refreshTokenTtl,
-    status: row.status,
-    createdAt: row.createdAt.toISOString(),
-    updatedAt: row.updatedAt?.toISOString() ?? null,
-  };
+  return row ? toClientDTO(row) : null;
 }
 
 /**
@@ -129,10 +125,26 @@ export async function getClientByClientId(clientId: string) {
 export interface ClientTokenDTO {
   id: string;
   userId: string;
-  username: string | undefined;
+  /** 关联用户的展示名（email 优先）；left join 可能双空 → null */
+  username: string | null;
   scopes: string[];
   createdAt: Date;
   expiresAt: Date | null;
+}
+
+/** RT + 用户联查行 → ClientTokenDTO（scopes 空格串按 RFC 6749 拆分） */
+function toClientTokenDTO(t: {
+  id: string; userId: string; userEmail: string | null; userName: string | null;
+  scopes: string | null; createdAt: Date; expiresAt: Date | null;
+}): ClientTokenDTO {
+  return {
+    id: t.id,
+    userId: t.userId,
+    username: t.userEmail || t.userName,
+    scopes: t.scopes ? t.scopes.split(/\s+/).filter(Boolean) : [],
+    createdAt: t.createdAt,
+    expiresAt: t.expiresAt,
+  };
 }
 
 /**
@@ -146,7 +158,6 @@ export async function getClientTokens(
   params: { page: number; pageSize: number; userId?: string },
 ) {
   const { page, pageSize, userId } = params;
-  const offset = (page - 1) * pageSize;
 
   const conditions = [
     eq(schema.refreshTokens.clientId, clientId),
@@ -155,13 +166,9 @@ export async function getClientTokens(
     gt(schema.refreshTokens.expiresAt, new Date()),
   ];
   if (userId) conditions.push(eq(schema.refreshTokens.userId, userId));
+  const whereClause = and(...conditions);
 
-  const countResult = await db.select({ count: count() })
-    .from(schema.refreshTokens)
-    .where(and(...conditions));
-  const total = Number(countResult[0]?.count ?? 0);
-
-  const tokens = await db.select({
+  const tokenRows = db.select({
     id: schema.refreshTokens.id,
     userId: schema.refreshTokens.userId,
     scopes: schema.refreshTokens.scopes,
@@ -172,21 +179,15 @@ export async function getClientTokens(
   })
     .from(schema.refreshTokens)
     .leftJoin(schema.users, eq(schema.refreshTokens.userId, schema.users.id))
-    .where(and(...conditions))
+    .where(whereClause)
     .orderBy(desc(schema.refreshTokens.createdAt))
-    .limit(pageSize)
-    .offset(offset);
+    .limit(pageSize).offset((page - 1) * pageSize);
 
-  return {
-    data: tokens.map(t => ({
-      id: t.id,
-      userId: t.userId,
-      username: t.userEmail || t.userName,
-      // OAuth scope 按 RFC 6749 为空格分隔字符串（与 token 签发、introspection 语义一致）
-      scopes: t.scopes ? t.scopes.split(/\s+/).filter(Boolean) : [],
-      createdAt: t.createdAt,
-      expiresAt: t.expiresAt,
-    })),
-    pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) },
-  };
+  return withPagination(
+    page,
+    pageSize,
+    tokenRows,
+    countRows(schema.refreshTokens, whereClause),
+    toClientTokenDTO,
+  );
 }

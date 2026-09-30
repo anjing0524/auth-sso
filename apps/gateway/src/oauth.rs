@@ -119,8 +119,8 @@ pub fn build_redirect_uri(host: &str, callback_path: &str, secure: bool) -> Stri
 
 /// 构建一次授权请求所需的完整 OAuth state（PKCE + state + nonce + redirect_uri）。
 ///
-/// `secure` 由调用方用 [`crate::http::is_secure_host`] 计算一次传入——
-/// `/authorize` 与 `/token` 两阶段的 redirect_uri scheme 由同一函数决定，
+/// `secure` 由调用方按部署拓扑决定——Gateway 是浏览器 TLS 第一跳，恒传 true；
+/// `/authorize` 与 `/token` 两阶段必须经同一函数计算 redirect_uri，
 /// 杜绝 OAuth 2.1 redirect_uri 不匹配导致的交换 400。
 pub fn build_oauth_state(
     oauth_config: &OAuthConfig,
@@ -199,19 +199,19 @@ pub fn build_oauth_cookies(state: &OAuthState, secure: bool) -> Vec<String> {
 /// 构造登录后 Set-Cookie: portal_jwt_token + portal_refresh_token
 pub fn build_session_cookies(access_token: &str, refresh_token: &str, secure: bool) -> Vec<String> {
     vec![
-        format!(
-            "{}={}; Path=/; HttpOnly; SameSite=Lax; Max-Age={}{}",
+        build_set_cookie(
             cookie::ACCESS_COOKIE,
             access_token,
             ACCESS_TOKEN_MAX_AGE_SEC,
-            if secure { "; Secure" } else { "" },
+            "/",
+            secure,
         ),
-        format!(
-            "{}={}; Path=/; HttpOnly; SameSite=Lax; Max-Age={}{}",
+        build_set_cookie(
             cookie::REFRESH_COOKIE,
             refresh_token,
             REFRESH_TOKEN_MAX_AGE_SEC,
-            if secure { "; Secure" } else { "" },
+            "/",
+            secure,
         ),
     ]
 }

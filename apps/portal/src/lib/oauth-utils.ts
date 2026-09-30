@@ -9,7 +9,7 @@ import 'server-only';
  */
 import { type NextRequest, NextResponse } from 'next/server';
 import { COOKIE_NAMES } from '@auth-sso/contracts';
-import { getAppBaseURL } from '@/lib/env';
+import { getAppBaseURL, getIssuer } from '@/lib/env';
 import { isCookieSecure } from '@auth-sso/config';
 
 /**
@@ -29,8 +29,28 @@ export function buildOAuthErrorRedirect(
   const errorUrl = new URL('/oauth/error', getAppBaseURL());
   errorUrl.searchParams.set('error', errorCode);
   errorUrl.searchParams.set('message', message);
+  errorUrl.searchParams.set('iss', getIssuer());
   if (clientId) errorUrl.searchParams.set('client_id', clientId);
   return NextResponse.redirect(errorUrl);
+}
+
+/**
+ * 构建 RFC 6749 §4.1.2.1 错误重定向 —— 将授权拒绝回传给 RP 的 redirect_uri。
+ *
+ * 仅限 redirect_uri 已通过白名单校验的场景调用（决策 D1）；redirect_uri 未经
+ * 校验时必须走 buildOAuthErrorRedirect（本地错误页），不得向未验证地址重定向。
+ * 携带 error / error_description / state（原请求携带时必回传）/ iss（RFC 9207）。
+ */
+export function buildRfc6749ErrorRedirect(
+  redirectUri: string,
+  params: { error: string; errorDescription?: string; state?: string; iss: string },
+): NextResponse {
+  const url = new URL(redirectUri);
+  url.searchParams.set('error', params.error);
+  if (params.errorDescription) url.searchParams.set('error_description', params.errorDescription);
+  if (params.state) url.searchParams.set('state', params.state);
+  url.searchParams.set('iss', params.iss);
+  return NextResponse.redirect(url);
 }
 
 /**

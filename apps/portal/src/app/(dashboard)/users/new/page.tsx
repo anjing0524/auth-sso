@@ -20,6 +20,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { USER_ACTIVE, type UserStatus } from '@auth-sso/contracts';
 
 import { createUserAction } from '../actions';
 
@@ -32,7 +33,7 @@ export default function NewUserPage() {
     username: '',
     email: '',
     password: '',
-    status: 'ACTIVE' as 'ACTIVE' | 'DISABLED' | 'LOCKED',
+    status: USER_ACTIVE,
     deptId: null as string | null,
   });
 
@@ -109,7 +110,7 @@ export default function NewUserPage() {
               </div>
               <div className="space-y-2">
                 <Label className="font-bold text-foreground/80">账户状态</Label>
-                <Select value={formData.status} onValueChange={(v: any) => setFormData({...formData, status: v})}>
+                <Select value={formData.status} onValueChange={(v: string) => setFormData({...formData, status: v as UserStatus})}>
                   <SelectTrigger className="h-11 rounded-lg"><SelectValue /></SelectTrigger>
                   <SelectContent className="rounded-lg">
                     <SelectItem value="ACTIVE">正常 (Active)</SelectItem>

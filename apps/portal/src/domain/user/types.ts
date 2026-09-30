@@ -36,5 +36,3 @@ export const UpdateUserInputSchema = z.object({
 export const UserIdentityInputSchema = z.object({
   id: z.string().min(1, '用户ID不能为空'),
 });
-
-export type UpdateUserInput = z.infer<typeof UpdateUserInputSchema>;

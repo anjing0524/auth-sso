@@ -19,7 +19,7 @@ use crate::router::Router;
 /// Pingora `LoadBalancer::select` 的第二参数为选择输入的哈希键；
 /// 传 `b""` 表示纯轮询（不做一致性哈希），256 为保留的总权重占位。
 ///
-/// 见 pingora-load-balancing 0.8 `select(&self, key: &[u8], total_weight: usize)`。
+/// 见 pingora-load-balancing 0.9 `select(&self, key: &[u8], total_weight: usize)`。
 const UPSTREAM_SELECT_WEIGHT: usize = 256;
 const METRICS_PATH: &str = "/__gateway/metrics";
 const METRICS_KEY_HEADER: &str = "X-Gateway-Metrics-Key";
@@ -200,6 +200,33 @@ fn query_param<'a>(query: &'a str, key: &str) -> Option<&'a str> {
 /// - `oidc_provider_upstream` — OIDC Provider 的 upstream nodes（用于 /token 调用）
 ///
 /// 限流器为模块级函数 [`crate::rate_limiter::check`]，无需注入。
+/// [`Gateway::new`] 的依赖装配参数 — 13 个具名字段替代裸位置参数。
+#[derive(Debug)]
+pub struct GatewayDeps {
+    pub path_matcher: PathMatcher,
+    pub router: Router,
+    pub jwt_verifier: JwtVerifier,
+    pub token_refresher: TokenRefresher,
+    /// OIDC Provider 的上游地址列表（用于 POST /token 等内部调用）
+    pub oidc_provider_upstream: Arc<Upstreams>,
+    /// 与 Portal 共享的 HMAC 密钥（None 表示未启用 HMAC 签名）
+    pub gateway_shared_secret: Option<String>,
+    /// 内部上游请求协议（http/https）
+    pub upstream_scheme: String,
+    /// HTTPS 上游的 SNI 主机名。平台内部服务通常与公网 Host 不同。
+    pub upstream_server_name: Option<String>,
+    /// 发往上游的 Host；`X-Forwarded-Host` 仍保留浏览器访问的公网 Host。
+    pub upstream_host_header: Option<String>,
+    /// 是否信任 Vercel 在容器边界覆写的 `X-Vercel-Forwarded-For`。
+    pub trust_platform_client_ip: bool,
+    /// 认证端点限流阈值（来自配置，env 可覆盖）
+    pub rate_limit: RateLimitConfig,
+    /// 网关级统一 OAuth Client 凭据（ADR-010 二期：所有 upstream 共用）
+    pub oauth: OAuthConfig,
+    /// JWKS 公钥缓存 — 用于获取 OIDC Discovery 元数据（callback_path 等）
+    pub jwks_cache: Arc<JwksCache>,
+}
+
 #[derive(Debug)]
 pub struct Gateway {
     path_matcher: PathMatcher,
@@ -229,11 +256,14 @@ pub struct Gateway {
 impl Gateway {
     /// 创建网关实例。
     ///
+    /// 依赖装配见 [`GatewayDeps`]：具名字段结构让调用点逐项自解释，
+    /// 新增依赖时由编译器点名缺失字段，替代裸位置参数 + too_many_arguments 豁免。
+    ///
     /// # Examples
     ///
     /// ```ignore
     /// # use std::sync::Arc;
-    /// # use gateway::gateway::Gateway;
+    /// # use gateway::gateway::{Gateway, GatewayDeps};
     /// # use gateway::router::{RouteEntry, Router};
     /// # use gateway::path_matcher::PathMatcher;
     /// # use gateway::auth::{JwtVerifier, TokenRefresher};
@@ -246,52 +276,38 @@ impl Gateway {
     /// let router = Router::new(vec![RouteEntry {
     ///     prefix: "/".to_string(),
     ///     lb,
-    ///     oauth: oauth_config,
     /// }]);
-    /// let gw = Gateway::new(
-    ///     PathMatcher::default(),
+    /// let gw = Gateway::new(GatewayDeps {
+    ///     path_matcher: PathMatcher::default(),
     ///     router,
-    ///     JwtVerifier::new(Arc::clone(&jwks)),
-    ///     TokenRefresher::new(Arc::clone(&jwks), Arc::clone(&ups), "http".to_string(), None),
-    ///     ups,
-    ///     None,
-    ///     "http".to_string(),
-    ///     None,
-    ///     None,
-    ///     false,
-    ///     jwks,
-    /// );
+    ///     jwt_verifier: JwtVerifier::new(Arc::clone(&jwks)),
+    ///     token_refresher: TokenRefresher::new(Arc::clone(&jwks), Arc::clone(&ups), "http".to_string(), None),
+    ///     oidc_provider_upstream: Arc::clone(&ups),
+    ///     gateway_shared_secret: None,
+    ///     upstream_scheme: "http".to_string(),
+    ///     upstream_server_name: None,
+    ///     upstream_host_header: None,
+    ///     trust_platform_client_ip: false,
+    ///     rate_limit: Default::default(),
+    ///     oauth: Default::default(),
+    ///     jwks_cache: jwks,
+    /// });
     /// ```
-    #[allow(clippy::too_many_arguments)]
-    pub fn new(
-        path_matcher: PathMatcher,
-        router: Router,
-        jwt_verifier: JwtVerifier,
-        token_refresher: TokenRefresher,
-        oidc_provider_upstream: Arc<Upstreams>,
-        gateway_shared_secret: Option<String>,
-        upstream_scheme: String,
-        upstream_server_name: Option<String>,
-        upstream_host_header: Option<String>,
-        trust_platform_client_ip: bool,
-        rate_limit: RateLimitConfig,
-        oauth: OAuthConfig,
-        jwks_cache: Arc<JwksCache>,
-    ) -> Self {
+    pub fn new(deps: GatewayDeps) -> Self {
         Self {
-            path_matcher,
-            router,
-            jwt_verifier,
-            token_refresher,
-            oidc_provider_upstream,
-            gateway_shared_secret,
-            upstream_scheme,
-            upstream_server_name,
-            upstream_host_header,
-            trust_platform_client_ip,
-            rate_limit,
-            oauth,
-            jwks_cache,
+            path_matcher: deps.path_matcher,
+            router: deps.router,
+            jwt_verifier: deps.jwt_verifier,
+            token_refresher: deps.token_refresher,
+            oidc_provider_upstream: deps.oidc_provider_upstream,
+            gateway_shared_secret: deps.gateway_shared_secret,
+            upstream_scheme: deps.upstream_scheme,
+            upstream_server_name: deps.upstream_server_name,
+            upstream_host_header: deps.upstream_host_header,
+            trust_platform_client_ip: deps.trust_platform_client_ip,
+            rate_limit: deps.rate_limit,
+            oauth: deps.oauth,
+            jwks_cache: deps.jwks_cache,
         }
     }
 
@@ -463,7 +479,7 @@ impl ProxyHttp for Gateway {
                         .handle_oauth_callback(
                             session,
                             oauth_config,
-                            &ctx.cookie_header,
+                            ctx.cookie_header.as_deref(),
                             code,
                             state,
                         )

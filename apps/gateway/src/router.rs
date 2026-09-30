@@ -55,6 +55,11 @@ impl Router {
     pub fn entry(&self, idx: usize) -> Option<&RouteEntry> {
         self.entries.get(idx)
     }
+
+    /// 兜底路由前缀（最长前缀排序后的末条目，通常为 `/`）——供启动日志/诊断使用
+    pub fn fallback_prefix(&self) -> &str {
+        &self.entries[self.entries.len() - 1].prefix
+    }
 }
 
 #[cfg(test)]

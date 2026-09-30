@@ -13,7 +13,9 @@ import { hashToken } from '@/lib/crypto';
 import { mapServerError } from '@/lib/server-error';
 import { parseOAuthBody } from '@/lib/auth/oauth-body';
 import { authenticateOAuthClient } from '@/lib/auth/oauth-helpers';
+import { resolveClientCredentials, type ClientCredentials } from '@/lib/auth/client-credentials';
 import { createLogger } from '@/lib/logger';
+import { JWT_TYP } from '@auth-sso/contracts';
 
 const log = createLogger('Introspect');
 
@@ -22,18 +24,13 @@ export async function POST(request: NextRequest) {
   try {
     const body = await parseOAuthBody(request);
     const token = body.token;
-    const clientId = body.client_id;
-    const clientSecret = body.client_secret;
 
-    // RFC 7662 §2.1：introspection 端点必须校验调用方身份（client credentials）
-    if (!clientId) {
-      return NextResponse.json(
-        { error: 'invalid_client', error_description: '缺少 client_id' },
-        { status: 401 },
-      );
-    }
+    // RFC 7662 §2.1：introspection 端点必须校验调用方身份（client credentials，
+    // Basic / post 双通道，RFC 6749 §2.3.1）
+    let creds: ClientCredentials;
     try {
-      await authenticateOAuthClient(clientId, clientSecret);
+      creds = resolveClientCredentials(request, body);
+      await authenticateOAuthClient(creds.clientId, creds.clientSecret);
     } catch {
       return NextResponse.json(
         { error: 'invalid_client', error_description: '客户端凭证无效' },
@@ -46,14 +43,18 @@ export async function POST(request: NextRequest) {
     }
 
     // 尝试作为 Access Token 验签（无状态：签名 + exp + issuer + jti 黑名单。
-    // verifyAccessToken 内部已完成黑名单复核，active:true 即未被撤销）
-    const claims = await verifyAccessToken(token);
+    // verifyAccessToken 内部已完成黑名单复核，active:true 即未被撤销。
+    // audience 传 null：多 client 通用端点，aud 由 RS 按 RFC 7662 响应自行判定）
+    const claims = await verifyAccessToken(token, null, JWT_TYP.ACCESS_TOKEN);
     if (claims) {
-      // RFC 7662 §2.2：除 active 外全部字段可选。AT 经 ADR-006 最小化后不含
-      // scope/client_id 语义，诚实省略而非返回空串误导 RS；scope 语义由 RT 分支提供。
+      // RFC 7662 §2.2：除 active 外全部字段可选。AT 显式携带 OAuth 协议数据
+      // （aud = client_id + client_id claim + scope，ADR-013），透传给 RS 供
+      // 授权判定与审计；其余仅返回真实存在的字段。
       return NextResponse.json({
         active: true,
         sub: claims.sub,
+        ...(claims.scope ? { scope: claims.scope } : {}),
+        ...(claims.client_id ? { client_id: claims.client_id, aud: claims.aud } : {}),
         token_type: 'Bearer',
         exp: claims.exp,
         iat: claims.iat,

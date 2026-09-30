@@ -4,7 +4,7 @@
  */
 import { ShieldCheck } from 'lucide-react';
 import { getRoles } from './data';
-import { getDepartments } from '@/app/(dashboard)/users/data';
+import { getDepartmentOptions } from '@/app/(dashboard)/users/data';
 import { resolveIdentity, getUserRoleDeptIds } from '@/lib/auth';
 import RolesTable from './components/RolesTable';
 
@@ -26,7 +26,7 @@ export default async function RolesPage({ searchParams }: PageProps) {
 
   const [{ data: roles, pagination }, departments] = await Promise.all([
     getRoles({ page, pageSize: 10, keyword, status: '', deptIds }),
-    getDepartments(),
+    getDepartmentOptions(),
   ]);
 
   return (

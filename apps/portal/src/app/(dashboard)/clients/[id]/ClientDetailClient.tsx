@@ -1,0 +1,188 @@
+/**
+ * Client 详情交互组件 — 表单编辑 / 标签页 / 写操作反馈。
+ *
+ * 初始数据由 Server Component 经 props 注入；写操作成功后 router.refresh()
+ * 重取 server 数据（actions 内已 updateTag 失效对应缓存），组件自身不再发起
+ * REST 读取。
+ */
+'use client';
+
+import { useState } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { updateClientAction, rotateClientSecretAction, revokeClientTokensAction } from '../actions';
+import type { ClientDTO as Client, ClientTokenDTO as Token } from '../data';
+import { ClientInfoSection } from './components/ClientInfoSection';
+import { ClientTokensSection } from './components/ClientTokensSection';
+import { createClientLogger } from '@/lib/logger-client';
+
+const log = createClientLogger('ClientDetail');
+
+interface ClientDetailClientProps {
+  client: Client;
+  initialTokens: Token[];
+}
+
+export function ClientDetailClient({ client, initialTokens }: ClientDetailClientProps) {
+  const router = useRouter();
+  const [saving, setSaving] = useState(false);
+  const [newSecret, setNewSecret] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'info' | 'tokens'>('info');
+
+  const [formData, setFormData] = useState({
+    name: client.name,
+    redirectUris: client.redirectUris.join('\n'),
+    scopes: client.scopes,
+    homepageUrl: client.homepageUrl || '',
+    logoUrl: client.logoUrl || '',
+    accessTokenTtl: client.accessTokenTtl ?? 3600,
+    refreshTokenTtl: client.refreshTokenTtl ?? 604800,
+  });
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const res = await updateClientAction(client.clientId, {
+        name: formData.name,
+        redirectUris: formData.redirectUris.split('\n').filter(Boolean),
+        scopes: formData.scopes,
+        homepageUrl: formData.homepageUrl || null,
+        logoUrl: formData.logoUrl || null,
+        accessTokenTtl: formData.accessTokenTtl,
+        refreshTokenTtl: formData.refreshTokenTtl,
+      });
+      if (res.success) {
+        router.refresh();
+        alert('保存成功');
+      } else {
+        alert(res.message || '保存失败');
+      }
+    } catch (error) {
+      log.error('保存客户端失败', { error: (error as Error).message });
+      alert('保存失败');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleRegenerateSecret = async () => {
+    if (!confirm('确定要重新生成 Secret 吗？旧的 Secret 将立即失效。')) return;
+    try {
+      const res = await rotateClientSecretAction(client.clientId);
+      if (res.success && res.data) {
+        setNewSecret(res.data.clientSecret);
+      } else {
+        alert(res.message || '重新生成 Secret 失败');
+      }
+    } catch (error) {
+      log.error('重新生成 Secret 失败', { error: (error as Error).message });
+      alert('重新生成 Secret 失败');
+    }
+  };
+
+  const handleRevokeAllTokens = async () => {
+    if (!confirm('确定要撤销所有授权 Token 吗？')) return;
+    try {
+      const res = await revokeClientTokensAction(client.clientId, [], true);
+      if (res.success) {
+        router.refresh();
+        alert('已撤销所有 Token');
+      } else {
+        alert(res.message || '撤销 Token 失败');
+      }
+    } catch (error) {
+      log.error('撤销 Token 失败', { error: (error as Error).message });
+    }
+  };
+
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      alert('已复制到剪贴板');
+    } catch {
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textarea);
+      alert('已复制到剪贴板');
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* 页面标题 */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center space-x-4">
+          <Link href="/clients" className="text-muted-foreground hover:text-foreground">
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+          </Link>
+          <div>
+            <h2 className="text-2xl font-bold text-foreground">{client.name}</h2>
+            <p className="text-sm text-muted-foreground">{client.clientId}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* 标签页 */}
+      <div className="border-b border-border">
+        <nav className="-mb-px flex space-x-8">
+          <button
+            onClick={() => setActiveTab('info')}
+            className={`py-4 px-1 border-b-2 font-medium text-sm ${
+              activeTab === 'info'
+                ? 'border-primary text-primary'
+                : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
+            }`}
+          >
+            基本信息
+          </button>
+          <button
+            onClick={() => setActiveTab('tokens')}
+            className={`py-4 px-1 border-b-2 font-medium text-sm ${
+              activeTab === 'tokens'
+                ? 'border-primary text-primary'
+                : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
+            }`}
+          >
+            授权记录
+          </button>
+        </nav>
+      </div>
+
+      {/* Section 内容 */}
+      {activeTab === 'info' && (
+        <ClientInfoSection
+          client={client}
+          formData={formData}
+          saving={saving}
+          newSecret={newSecret}
+          onFormChange={(partial) => setFormData({ ...formData, ...partial })}
+          onSave={handleSave}
+          onRegenerateSecret={handleRegenerateSecret}
+          onToggleStatus={async () => {
+            const newStatus = client.status === 'ACTIVE' ? 'DISABLED' : 'ACTIVE';
+            try {
+              const res = await updateClientAction(client.clientId, { status: newStatus });
+              if (res.success) router.refresh();
+              else alert(res.message || '更新状态失败');
+            } catch (error) {
+              log.error('切换客户端状态失败', { error: (error as Error).message });
+            }
+          }}
+          onCopy={copyToClipboard}
+        />
+      )}
+
+      {activeTab === 'tokens' && (
+        <ClientTokensSection
+          tokens={initialTokens}
+          onRevokeAll={handleRevokeAllTokens}
+        />
+      )}
+    </div>
+  );
+}

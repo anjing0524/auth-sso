@@ -16,12 +16,32 @@ import 'server-only';
 
 import { cacheLife, cacheTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
-import { eq, desc, and, count } from 'drizzle-orm';
+import { eq, desc, and } from 'drizzle-orm';
 import {
   USER_LIST_COLUMNS,
   buildUserListConditions,
   isScopeDenied,
 } from '@/db/user-queries';
+import { paginationMeta, withPagination, countRows } from '@/lib/pagination';
+
+/** 列表行 → 列表项 DTO（日期序列化 + 展示名/部门名兜底）；泛型透传保留其余列 */
+function toUserListItem<
+  T extends {
+    name: string | null;
+    username: string;
+    deptName: string | null;
+    createdAt: Date;
+    lastLoginAt: Date | null;
+  },
+>(u: T) {
+  return {
+    ...u,
+    name: u.name || u.username || 'Unknown',
+    deptName: u.deptName || '未分配',
+    createdAt: u.createdAt.toISOString(),
+    lastLoginAt: u.lastLoginAt ? u.lastLoginAt.toISOString() : null,
+  };
+}
 
 /**
  * 分页与过滤获取用户列表
@@ -47,48 +67,25 @@ export async function getUsers(
   cacheTag('users-list');
 
   const { page, pageSize, keyword, status, deptId } = params;
-  const offset = (page - 1) * pageSize;
-
   if (isScopeDenied(deptIds)) {
-    return { data: [], pagination: { page, pageSize, total: 0, totalPages: 0 } };
+    return { data: [], pagination: paginationMeta(page, pageSize, 0) };
   }
 
   const conditions = buildUserListConditions({ keyword, status, deptIds, userId });
-
   // 部门 ID 二次筛选（在已授权范围内叠加）
-  if (deptId) {
-    conditions.push(eq(schema.users.deptId, deptId));
-  }
+  if (deptId) conditions.push(eq(schema.users.deptId, deptId));
+  const where = and(...conditions);
 
-  const query = db
-    .select(USER_LIST_COLUMNS)
-    .from(schema.users)
-    .leftJoin(schema.departments, eq(schema.users.deptId, schema.departments.id));
-
-  const users = await query
-    .where(and(...conditions))
-    .orderBy(desc(schema.users.createdAt))
-    .limit(pageSize)
-    .offset(offset);
-
-  const countResult = await db
-    .select({ count: count() })
-    .from(schema.users)
-    .where(and(...conditions));
-
-  const total = Number(countResult[0]?.count ?? 0);
-
-  return {
-    data: users.map((u) => ({
-      ...u,
-      status: u.status,
-      name: u.name || u.username || 'Unknown',
-      deptName: u.deptName || '未分配',
-      createdAt: u.createdAt.toISOString(),
-      lastLoginAt: u.lastLoginAt ? u.lastLoginAt.toISOString() : null,
-    })),
-    pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) },
-  };
+  return withPagination(
+    page,
+    pageSize,
+    db.select(USER_LIST_COLUMNS).from(schema.users)
+      .leftJoin(schema.departments, eq(schema.users.deptId, schema.departments.id))
+      .where(where).orderBy(desc(schema.users.createdAt))
+      .limit(pageSize).offset((page - 1) * pageSize),
+    countRows(schema.users, where),
+    toUserListItem,
+  );
 }
 
 /**
@@ -116,26 +113,31 @@ export async function getUserProfile(userId: string) {
   return rows[0] ?? null;
 }
 
-/**
- * 获取单个用户详情（含角色列表与部门信息）
- *
- * 不使用缓存，确保详情数据实时性。
- * 已内置底层越权校验（IDOR 防护）与访问日志（Access Log）自动记录。
- *
- * @param lookupId 用户 ID 或 publicId
- * @returns 用户详情对象，不存在时返回 null
- */
-export async function getUser(lookupId: string) {
-  // 使用 Relational Queries 一次性取出用户、角色、部门（FK 已建立，一次 DB 往返）
-  const user = await db.query.users.findFirst({
+/** Relational Queries 一次往返取出用户 + 角色 + 部门（getUser / getUserRoles 共用） */
+function findUserWithRoles(lookupId: string) {
+  return db.query.users.findFirst({
     where: eq(schema.users.id, lookupId),
     with: {
       userRoles: { with: { role: true } },
       department: true,
     },
   });
-  if (!user) return null;
+}
 
+type UserWithRolesRow = NonNullable<Awaited<ReturnType<typeof findUserWithRoles>>>;
+
+/** 角色绑定行 → 对外契约一致的扁平角色 DTO */
+function toRoleDTO(ur: NonNullable<UserWithRolesRow['userRoles'][number]>) {
+  return {
+    id: ur.role.id,
+    code: ur.role.code,
+    name: ur.role.name,
+    description: ur.role.description,
+  };
+}
+
+/** 用户详情行 → 详情 DTO（日期序列化 + 部门名投影 + 角色扁平化） */
+function toUserDetail(user: UserWithRolesRow) {
   return {
     id: user.id,
     username: user.username,
@@ -149,20 +151,28 @@ export async function getUser(lookupId: string) {
     createdAt: user.createdAt.toISOString(),
     updatedAt: user.updatedAt?.toISOString() ?? null,
     lastLoginAt: user.lastLoginAt?.toISOString() ?? null,
-    // 投影为对外契约一致的扁平角色结构（DTO）
-    roles: user.userRoles.map(ur => ({
-      id: ur.role.id,
-      code: ur.role.code,
-      name: ur.role.name,
-      description: ur.role.description,
-    })),
+    roles: user.userRoles.map(toRoleDTO),
   };
+}
+
+/**
+ * 获取单个用户详情（含角色列表与部门信息）
+ *
+ * 不使用缓存，确保详情数据实时性。
+ * 已内置底层越权校验（IDOR 防护）与访问日志（Access Log）自动记录。
+ *
+ * @param lookupId 用户 ID 或 publicId
+ * @returns 用户详情对象，不存在时返回 null
+ */
+export async function getUser(lookupId: string) {
+  const user = await findUserWithRoles(lookupId);
+  return user ? toUserDetail(user) : null;
 }
 
 /**
  * 获取所有部门列表（用于下拉选择）
  */
-export async function getDepartments() {
+export async function getDepartmentOptions() {
   'use cache';
   cacheLife('hours');
   cacheTag('departments');
@@ -171,6 +181,33 @@ export async function getDepartments() {
     .select({ id: schema.departments.id, name: schema.departments.name })
     .from(schema.departments)
     .orderBy(schema.departments.name);
+}
+
+/** 角色 + 所属部门 + 分配时间 DTO */
+interface AssignedRole {
+  id: string;
+  code: string;
+  name: string;
+  description: string | null;
+  deptId: string | null;
+  status: string;
+  assignedAt: Date;
+}
+
+/** 用户-角色绑定行 → AssignedRole */
+function toAssignedRole(ur: {
+  role: { id: string; code: string; name: string; description: string | null; deptId: string | null; status: string };
+  createdAt: Date;
+}): AssignedRole {
+  return {
+    id: ur.role.id,
+    code: ur.role.code,
+    name: ur.role.name,
+    description: ur.role.description,
+    deptId: ur.role.deptId,
+    status: ur.role.status,
+    assignedAt: ur.createdAt,
+  };
 }
 
 /**
@@ -185,24 +222,12 @@ export async function getUserRoles(lookupId: string) {
     with: {
       userRoles: {
         orderBy: (userRoles, { desc }) => [desc(userRoles.createdAt)],
-        with: {
-          role: true,
-        },
+        with: { role: true },
       },
     },
   });
 
   if (!user) return [];
 
-  return user.userRoles
-    .filter(ur => ur.role !== null)
-    .map(ur => ({
-      id: ur.role.id,
-      code: ur.role.code,
-      name: ur.role.name,
-      description: ur.role.description,
-      deptId: ur.role.deptId,
-      status: ur.role.status,
-      assignedAt: ur.createdAt,
-    }));
+  return user.userRoles.filter(ur => ur.role !== null).map(toAssignedRole);
 }

@@ -113,7 +113,7 @@ export async function appendSecurityAudit(
   await tx.insert(schema.auditLogs).values(toAuditLogRow(params));
 }
 
-export async function writeAuditLog(params: WriteAuditLogParams): Promise<void> {
+async function writeAuditLog(params: WriteAuditLogParams): Promise<void> {
   await db.insert(schema.auditLogs).values(toAuditLogRow(params));
 }
 

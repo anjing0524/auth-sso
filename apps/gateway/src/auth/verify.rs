@@ -16,6 +16,14 @@ use super::{TokenExpiry, TokenStatus, VerifiedToken};
 /// Access Token 剩余有效期低于此阈值（秒）时触发静默续签
 const REFRESH_THRESHOLD_SEC: u64 = 300;
 
+/// Access Token 的 typ protected header 期望值（RFC 8725 §3.11 显式类型，
+/// 与 Portal contracts `JWT_TYP.ACCESS_TOKEN` 对齐）
+const JWT_TYP_ACCESS: &str = "at+jwt";
+
+/// exp 判定的时钟偏差容忍（秒）——对齐 jsonwebtoken 内置校验的默认 leeway，
+/// Portal 与 Gateway 时钟偏差在此范围内不影响到期判定
+const JWT_EXP_LEEWAY_SECS: u64 = 60;
+
 /// JWT 验签失败的强类型错误。
 ///
 /// [`JwtVerifier::verify`] 将每一种失败路径建模为独立的枚举变体，
@@ -41,6 +49,12 @@ pub enum VerifyError {
     /// JWT 的 `jti` 已被吊销（命中 Redis 黑名单）。
     #[error("jti 已被吊销: {0}")]
     RevokedJti(String),
+    /// JWT 的 `typ` 与预期用途不符（RFC 8725 §3.11 显式类型，防跨用途类型混淆）。
+    #[error("JWT typ 与预期用途不符: {0}")]
+    InvalidTokenType(String),
+    /// JWT 头部缺少 `typ`（RFC 8725 §3.11 显式类型为强制项，ADR-013 决策 2 收紧）。
+    #[error("JWT 缺少 typ header")]
+    MissingTyp,
     /// 系统时钟异常（当前时间早于 Unix epoch）。
     #[error("系统时钟异常")]
     ClockError,
@@ -87,6 +101,7 @@ impl JwtVerifier {
     /// - [`UnknownKid`](VerifyError::UnknownKid) — JWKS 中无此 kid
     /// - [`InvalidToken`](VerifyError::InvalidToken) — 验签/校验未通过
     /// - [`RevokedJti`](VerifyError::RevokedJti) — jti 已吊销
+    /// - [`InvalidTokenType`](VerifyError::InvalidTokenType) / [`MissingTyp`](VerifyError::MissingTyp) — typ 校验未通过
     ///
     /// # Examples
     ///
@@ -103,6 +118,15 @@ impl JwtVerifier {
         // 1. 解析头部，定位 kid
         let header = decode_header(token)?;
         let kid = header.kid.ok_or(VerifyError::MissingKid)?;
+
+        // 1b. typ 显式类型校验（RFC 8725 §3.11）：必须存在且为 at+jwt。
+        // ADR-013 决策 2 收紧为强制存在——系统无生产存量 token，F11 的
+        // "缺失放行"兼容窗不再开启（Portal 签发端已同步携带 typ）。
+        match header.typ.as_deref() {
+            Some(JWT_TYP_ACCESS) => {}
+            Some(typ) => return Err(VerifyError::InvalidTokenType(typ.to_string())),
+            None => return Err(VerifyError::MissingTyp),
+        }
 
         // 2. 单次 wait-free 快照：一次原子 load 同时获得 keys + validation，零拷贝
         let meta = self.jwks_cache.snapshot();
@@ -142,10 +166,11 @@ impl JwtVerifier {
             return Err(VerifyError::RevokedJti(token_data.claims.jti.clone()));
         }
 
-        // 5. 判定过期状态
+        // 5. 判定过期状态（leeway 容忍 Portal/Gateway 时钟偏差；
+        //    saturating_add 防 exp 极大值溢出）
         let now = crate::http::unix_secs().ok_or(VerifyError::ClockError)?;
 
-        let expiry = if token_data.claims.exp < now {
+        let expiry = if token_data.claims.exp.saturating_add(JWT_EXP_LEEWAY_SECS) < now {
             TokenExpiry::Expired
         } else if token_data.claims.exp.saturating_sub(now) < REFRESH_THRESHOLD_SEC {
             TokenExpiry::NearlyExpired

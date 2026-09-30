@@ -18,11 +18,13 @@ export interface PortalJwtClaims extends JWTPayload {
   sub: string;
   /** Token 签发者 */
   iss: string;
-  /** Token 目标受众 */
+  /** Token 目标受众（AT/ID Token = 签发对象 client_id；LoginSession = 体系级 auth-sso，ADR-013） */
   aud: string | string[];
+  /** 签发该 AT 的 OAuth client（与 aud 同源同值；供 revoke 归属判定与 introspect 透传，ADR-013） */
+  client_id?: string;
   /** Token 唯一标识（用于 jti 黑名单撤销） */
   jti: string;
-  /** OAuth 已授予 scope（空格分隔；不会携带 client 身份） */
+  /** OAuth 已授予 scope（空格分隔） */
   scope?: string;
 }
 

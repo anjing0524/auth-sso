@@ -49,7 +49,7 @@ const ADMIN_ROLES = new Set<string>(ADMIN_ROLE_CODES);
  *   3. 非管理员需通过 role.clientIds 检查（client → permission → role 链路）
  *   4. 无任何有效角色则拒绝
  */
-export function checkUserClientAccess(input: AuthorizationInput): AuthorizationResult {
+function checkUserClientAccess(input: AuthorizationInput): AuthorizationResult {
   const { clientId, roles } = input;
 
   const activeRoles = roles.filter((r) => r.status === ENTITY_ACTIVE);

@@ -14,7 +14,7 @@
  * @route GET /api/auth/callback
  */
 import { type NextRequest, NextResponse } from 'next/server';
-import { getAppBaseURL, getEnvConfig, isCookieSecure } from '@/lib/env';
+import { getAppBaseURL, getEnvConfig, getIssuer, isCookieSecure } from '@/lib/env';
 import { COOKIE_NAMES, TOKEN_TTL, PORTAL_CLIENT_ID } from '@auth-sso/contracts';
 import { safeRedirectPath } from '@/lib/oauth-utils';
 import { decodeJwtPayload } from '@/lib/session/jwt';
@@ -44,6 +44,13 @@ export async function GET(request: NextRequest) {
   const cookieState = request.cookies.get(COOKIE_NAMES.OAUTH_STATE)?.value;
   if (!cookieState || cookieState !== stateParam) {
     return errorRedirect(publicBase, 'csrf_mismatch');
+  }
+
+  // ①b RFC 9207 iss 校验（mix-up 防御）：authorize 响应携带的 iss 必须与本 Provider 一致
+  const issParam = url.searchParams.get('iss');
+  if (issParam && issParam !== getIssuer()) {
+    log.warn('OAuth callback iss 不匹配', { iss: issParam });
+    return errorRedirect(publicBase, 'issuer_mismatch');
   }
 
   // ② PKCE code_verifier（HttpOnly Cookie，proxy.ts 写入）

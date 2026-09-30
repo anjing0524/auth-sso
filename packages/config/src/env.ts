@@ -40,28 +40,6 @@ const portalEnvSchema = baseEnvSchema.extend({
 export type PortalEnv = z.infer<typeof portalEnvSchema>;
 
 const databaseEnvSchema = portalEnvSchema.pick({ DATABASE_URL: true });
-const redisEnvSchema = portalEnvSchema.pick({ REDIS_URL: true });
-const appUrlEnvSchema = portalEnvSchema.pick({ NEXT_PUBLIC_APP_URL: true });
-const issuerEnvSchema = portalEnvSchema.pick({
-  NEXT_PUBLIC_APP_URL: true,
-  PORTAL_ISSUER: true,
-});
-const jwksEnvSchema = portalEnvSchema.pick({
-  NEXT_PUBLIC_APP_URL: true,
-  PORTAL_JWKS_URI: true,
-});
-const trustedOriginsEnvSchema = portalEnvSchema.pick({
-  NODE_ENV: true,
-  NEXT_PUBLIC_APP_URL: true,
-  TRUSTED_ORIGINS: true,
-});
-const cookieEnvSchema = portalEnvSchema.pick({
-  NODE_ENV: true,
-  COOKIE_SECURE: true,
-});
-const gatewaySecretEnvSchema = portalEnvSchema.pick({
-  GATEWAY_SHARED_SECRET: true,
-});
 const logLevelSchema = z.enum([
   'trace',
   'debug',
@@ -72,12 +50,24 @@ const logLevelSchema = z.enum([
   'silent',
 ]).default('info');
 
-/** 已验证的配置单例 — 模块加载时惰性初始化 */
-let _cached: PortalEnv | null = null;
+/**
+ * Web 运行时缓存视图 — 单例 `getEnvConfig()` 的解析基础。
+ *
+ * 与 `portalEnvSchema` 的唯一差异：DATABASE_URL 放宽为可选。URL 推导 getter
+ * （getIssuer/getAppBaseURL/getTrustedOrigins 等）走此缓存视图，保证在最小
+ * env（脚本/单测只设少量变量）下仍可用；DATABASE_URL 的 fail-fast 校验由
+ * `getDatabaseUrl()` 的专属 strict 解析独立承担，两者职责分离互不拖累。
+ */
+const runtimeConfigSchema = portalEnvSchema.extend({
+  DATABASE_URL: z.string().url().optional(),
+});
 
-function getConfig(): PortalEnv {
+/** 已验证的配置单例 — 模块加载时惰性初始化 */
+let _cached: z.infer<typeof runtimeConfigSchema> | null = null;
+
+function getConfig(): z.infer<typeof runtimeConfigSchema> {
   if (!_cached) {
-    _cached = portalEnvSchema.parse(process.env as Record<string, string | undefined>);
+    _cached = runtimeConfigSchema.parse(process.env as Record<string, string | undefined>);
   }
   return _cached;
 }
@@ -91,11 +81,15 @@ export function parsePortalEnv(env: Record<string, string | undefined>): PortalE
   return portalEnvSchema.parse(env);
 }
 
-export function getEnvConfig(): PortalEnv {
+/** Web 运行时配置视图类型（DATABASE_URL 不经此视图消费，见 getDatabaseUrl） */
+export type RuntimeEnv = z.infer<typeof runtimeConfigSchema>;
+
+export function getEnvConfig(): RuntimeEnv {
   return getConfig();
 }
 
 export function getDatabaseUrl(): string {
+  // DATABASE_URL 唯一的 strict 校验点：缺失即 fail-fast（运行时缓存视图已放宽为可选）
   return databaseEnvSchema.parse(process.env).DATABASE_URL;
 }
 
@@ -104,7 +98,7 @@ export function getLogLevel(): z.infer<typeof logLevelSchema> {
 }
 
 export function isCookieSecure(env?: Partial<PortalEnv>): boolean {
-  const cfg = env ?? cookieEnvSchema.parse(process.env);
+  const cfg = env ?? getConfig();
   if (cfg.COOKIE_SECURE === undefined) {
     return cfg.NODE_ENV === 'production';
   }
@@ -112,24 +106,23 @@ export function isCookieSecure(env?: Partial<PortalEnv>): boolean {
 }
 
 export function getAppBaseURL(): string {
-  const { NEXT_PUBLIC_APP_URL } = appUrlEnvSchema.parse(process.env);
-  return NEXT_PUBLIC_APP_URL.trim().replace(/\/+$/, '');
+  return getConfig().NEXT_PUBLIC_APP_URL.trim().replace(/\/+$/, '');
 }
 
 export function getIssuer(): string {
-  const config = issuerEnvSchema.parse(process.env);
+  const config = getConfig();
   const appBaseURL = config.NEXT_PUBLIC_APP_URL.trim().replace(/\/+$/, '');
   return (config.PORTAL_ISSUER || appBaseURL).trim();
 }
 
 export function getJwksUri(): string {
-  const config = jwksEnvSchema.parse(process.env);
+  const config = getConfig();
   const appBaseURL = config.NEXT_PUBLIC_APP_URL.trim().replace(/\/+$/, '');
   return (config.PORTAL_JWKS_URI || `${appBaseURL}/api/auth/jwks`).trim();
 }
 
 export function getTrustedOrigins(): string[] {
-  const cfg = trustedOriginsEnvSchema.parse(process.env);
+  const cfg = getConfig();
   if (cfg.TRUSTED_ORIGINS) {
     return cfg.TRUSTED_ORIGINS.split(',')
       .map((s) => s.trim())
@@ -149,9 +142,9 @@ export function getTrustedOrigins(): string[] {
 }
 
 export function getRedisUrl(): string {
-  return redisEnvSchema.parse(process.env).REDIS_URL.trim();
+  return getConfig().REDIS_URL.trim();
 }
 
 export function getGatewaySharedSecret(): string | null {
-  return gatewaySecretEnvSchema.parse(process.env).GATEWAY_SHARED_SECRET || null;
+  return getConfig().GATEWAY_SHARED_SECRET || null;
 }

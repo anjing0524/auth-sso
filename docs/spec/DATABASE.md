@@ -1,12 +1,14 @@
 # 数据库设计 - Auth-SSO
 
-版本：v3.2
+版本：v3.4
 状态：已发布
-最后更新：2026-06-25
+最后更新：2026-09-30
 
 > **v3.2 重大变更 — RBAC 权限模型重构**：删除 `data_scope_type` 枚举和 `role_data_scopes`、`role_clients` 两张关联表；角色新增 `dept_id` 字段（FK → `departments.id`），以「角色所属部门」替代独立的数据范围配置。数据访问控制从「dataScopeType 五种分支」简化为「角色部门 ID 列表 + 子树展开」的单一模型。详见 [RBAC_MODEL_REDESIGN.md](./RBAC_MODEL_REDESIGN.md)。
 >
 > **v3.3 变更 — ADR-006/007/008 清理**：`permissions` 表移除 `resource` 和 `action` 列、移除 `DATA` 类型；`refresh_tokens` 表移除 `client_id` 列（RT 统一为用户级）；权限码格式改为 `{clientId}:{resource}:{action}` 命名空间格式。
+>
+> **v3.4 变更 — ADR-012/013（2026-09-28/30）**：`access_tokens` 预留表删除（幽灵表清理，introspect 无状态化）；`refresh_tokens` 恢复 `client_id` 绑定（RFC 9700 token family，重放级联撤销收窄为 `(userId, clientId)`）；AT 显式携带 `aud = client_id` + `client_id` claim。
 >
 > **v2 基础架构变更**：全表 `text`→`uuid`/`varchar`、`timestamp`→`timestamptz`、移除 `public_id`、`clients.client_id` 为业务主键、`user_roles`/`role_permissions` 改为复合主键。本文件已完全同步至 `apps/portal/src/db/schema/*.ts`。
 >
@@ -36,7 +38,7 @@ Auth-SSO 采用 PostgreSQL 与 Redis 的混合存储方案。为简化部署、�
 - **表名**：复数蛇形命名法（snake_case），例如 `users`、`roles`。
 - **列名**：蛇形命名法（snake_case），例如 `dept_id`、`created_at`。
 - **主键**：统一 `uuid().defaultRandom()`，对外以 `id`（uuid）暴露，不再使用 `public_id`。
-- **外键**：默认引用目标表主键。唯一例外：`permissions.client_id`、`authorization_codes.client_id`、`access_tokens.client_id` 引用 `clients.client_id`（业务键），因为 Gateway 和 OAuth 端点直接消费业务 `client_id`。`clients.client_id` 具有 UNIQUE 约束，参照完整性与引用内部 `id` 等效。`refresh_tokens` 为用户级令牌，不绑定 Client（ADR-006）。
+- **外键**：默认引用目标表主键。唯一例外：`permissions.client_id`、`authorization_codes.client_id`、`refresh_tokens.client_id` 引用 `clients.client_id`（业务键），因为 Gateway 和 OAuth 端点直接消费业务 `client_id`。`clients.client_id` 具有 UNIQUE 约束，参照完整性与引用内部 `id` 等效（RT 绑定发放 client 见 ADR-012，RFC 9700 token family）。
 - **状态**：用户使用 `user_status` 枚举（`ACTIVE`、`DISABLED`、`LOCKED`、`DELETED`）。其他所有实体使用 `entity_status` 枚举（`ACTIVE`、`DISABLED`）。用户的软删除通过 `status = 'DELETED'` 实现。
 - **时间列**：统一 `timestamptz`（`timestamp with timezone`），通过 `createdAtColumn()` / `updatedAtColumn()` helper 构造。
 
@@ -214,34 +216,20 @@ WHERE id = :deptId OR ancestors LIKE :deptId || '/%'
 | `used` | boolean | 默认 false | 单次使用强制 |
 | `created_at` | timestamptz | 非空，默认 now() | |
 
-### 4.3 访问令牌表（`access_tokens`）
+### 4.3 访问令牌表（`access_tokens`）— 🗑️ 已移除
 
-> **当前用途**：预留表（Reserved）。当前无状态 JWT 架构下，Access Token 的紧急撤销通过 Redis jti 黑名单实现，不写此表。保留供未来有状态 Token 场景（如 Token Introspection 缓存、审计统计）。
-
-| 列名 | 类型 | 约束 | 说明 |
-|--------|------|------------|--------|
-| `id` | uuid | 主键，defaultRandom() | |
-| `token_hash` | varchar(64) | 唯一，非空 | 访问令牌 SHA-256 哈希（不存明文） |
-| `client_id` | varchar(50) | 非空，外键 → clients.client_id，ON DELETE CASCADE | |
-| `user_id` | uuid | 非空，外键 → users.id，ON DELETE CASCADE | |
-| `scopes` | varchar(200) | 非空 | 已授予的权限范围 |
-| `expires_at` | timestamptz | 非空 | |
-| `created_at` | timestamptz | 非空，默认 now() | |
-| `updated_at` | timestamptz | 非空，默认 now()，自动更新 | |
-
-**索引**：
-- `idx_access_tokens_client`：`client_id`
-- `idx_access_tokens_user`：`user_id`
+> **v3.4 变更（ADR-012，2026-09-28）**：预留表删除——无编译期隔离的"预留表"被三条消费链路当真表使用（introspect 恒空数据、管理端撤销为静默 no-op）。Access Token 为无状态 JWT，紧急撤销走 Redis jti 黑名单（ADR-004），introspect 无状态化（RFC 7662）。
 
 ### 4.4 刷新令牌表（`refresh_tokens`）
 
-> **v3.3 变更（ADR-006）**：移除 `client_id` 列。Refresh Token 统一为用户级，不再绑定具体 OAuth Client。同一用户的 Refresh Token 可在任意 Client 间通用。
+> **v3.4 变更（ADR-012，2026-09-28）**：恢复 `client_id` 列（v3.3 曾按 ADR-006 移除）。RT 绑定发放 client（RFC 9700 token family）：Gateway SSO 会话记 `portal`，直连 RP 记各自 client；重放检测级联撤销范围 = `(userId, clientId)`，不再横扫用户全部会话。
 
 | 列名 | 类型 | 约束 | 说明 |
 |--------|------|------------|--------|
 | `id` | uuid | 主键，defaultRandom() | |
-| `token_hash` | varchar(64) | 唯一，非空 | 刷新令牌（明文存储，列名保留历史名称） |
+| `token_hash` | varchar(64) | 唯一，非空 | 刷新令牌 SHA-256 哈希（不存明文；列名保留历史名称） |
 | `user_id` | uuid | 非空，外键 → users.id，ON DELETE CASCADE | |
+| `client_id` | varchar(50) | 非空，外键 → clients.client_id，ON DELETE CASCADE | 发放该 RT 的 OAuth Client |
 | `scopes` | varchar(200) | 非空 | |
 | `revoked` | timestamptz | | 非空表示已撤销（撤销时间戳） |
 | `auth_time` | timestamptz | | 原始认证时间 |
@@ -251,6 +239,8 @@ WHERE id = :deptId OR ancestors LIKE :deptId || '/%'
 
 **索引**：
 - `idx_refresh_tokens_user`：`user_id`
+- `idx_refresh_tokens_client`：`client_id`（按 client 撤销/列表查询）
+- `idx_refresh_tokens_expires`：`expires_at`
 
 ### 4.5 用户授权记录表（`consents`）— 🗑️ 已移除
 
@@ -384,9 +374,8 @@ WHERE id = :deptId OR ancestors LIKE :deptId || '/%'
 | `permissions` | `parent_id` | `permissions` | `id` | （自引用，migration 手动添加） |
 | `authorization_codes` | `client_id` | `clients` | `client_id` * | CASCADE |
 | `authorization_codes` | `user_id` | `users` | `id` | CASCADE |
-| `access_tokens` | `client_id` | `clients` | `client_id` * | CASCADE |
-| `access_tokens` | `user_id` | `users` | `id` | CASCADE |
 | `refresh_tokens` | `user_id` | `users` | `id` | CASCADE |
+| `refresh_tokens` | `client_id` | `clients` | `client_id` * | CASCADE |
 
 > \* 此三表的 `client_id` 引用 `clients.client_id`（业务键）。`clients.client_id` 具有 UNIQUE 约束，参照完整性与引用内部 `id` 等效。Gateway 和 OAuth 端点直接消费业务 `client_id`。
 >

@@ -26,20 +26,20 @@ export interface BruteForceConfig {
   windowMinutes: number;
 }
 
-export const DEFAULT_BRUTE_FORCE_CONFIG: BruteForceConfig = {
+const DEFAULT_BRUTE_FORCE_CONFIG: BruteForceConfig = {
   maxAttempts: 5,
   windowMinutes: 15,
 };
 
 // ── 模块级默认值（向后兼容：从 process.env 读取）───────────────
 
-export const BRUTE_FORCE_MAX_ATTEMPTS = (() => {
+const BRUTE_FORCE_MAX_ATTEMPTS = (() => {
   const raw = process.env['BRUTE_FORCE_MAX_ATTEMPTS'];
   const parsed = raw ? parseInt(raw, 10) : NaN;
   return parsed > 0 ? parsed : DEFAULT_BRUTE_FORCE_CONFIG.maxAttempts;
 })();
 
-export const BRUTE_FORCE_WINDOW_MINUTES = (() => {
+const BRUTE_FORCE_WINDOW_MINUTES = (() => {
   const raw = process.env['BRUTE_FORCE_WINDOW_MINUTES'];
   const parsed = raw ? parseInt(raw, 10) : NaN;
   return parsed > 0 ? parsed : DEFAULT_BRUTE_FORCE_CONFIG.windowMinutes;

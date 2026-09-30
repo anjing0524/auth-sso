@@ -5,9 +5,10 @@ import 'server-only';
 
 import { cacheLife, cacheTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
-import { eq, asc, count } from 'drizzle-orm';
+import { eq, asc } from 'drizzle-orm';
 import { asPermissionType } from '@/lib/type-guards';
 import { logServerDataRead } from '@/lib/auth';
+import { withPagination, countRows, type PaginationMeta } from '@/lib/pagination';
 
 /**
  * 获取权限列表（可按类型过滤）
@@ -54,27 +55,24 @@ export async function getPermissions(type?: string): Promise<PermissionListItem[
   return rows.map(toPermissionListItem);
 }
 
-export async function getPermissionPage({ type, page, pageSize }: {
-  type?: string;
-  page: number;
-  pageSize: number;
-}): Promise<{ data: PermissionListItem[]; pagination: { page: number; pageSize: number; total: number; totalPages: number } }> {
+export async function getPermissionPage({ type, page, pageSize }:
+  { type?: string; page: number; pageSize: number }
+): Promise<{ data: PermissionListItem[]; pagination: PaginationMeta }> {
   'use cache';
   cacheLife('hours');
   cacheTag('permissions-list');
 
   const conditions = buildPermissionConditions(type);
-  const [totalRow] = await db.select({ total: count() }).from(schema.permissions).where(conditions);
-  const total = totalRow?.total ?? 0;
-  const rows = await db.select().from(schema.permissions)
-    .where(conditions)
-    .orderBy(asc(schema.permissions.sort), asc(schema.permissions.createdAt))
-    .limit(pageSize)
-    .offset((page - 1) * pageSize);
-  return {
-    data: rows.map(toPermissionListItem),
-    pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) },
-  };
+
+  return withPagination(
+    page,
+    pageSize,
+    db.select().from(schema.permissions).where(conditions)
+      .orderBy(asc(schema.permissions.sort), asc(schema.permissions.createdAt))
+      .limit(pageSize).offset((page - 1) * pageSize),
+    countRows(schema.permissions, conditions),
+    toPermissionListItem,
+  );
 }
 
 /**

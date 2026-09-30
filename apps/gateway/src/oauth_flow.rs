@@ -33,23 +33,24 @@ impl Gateway {
         // Gateway 主代理服务本身就是浏览器的 TLS 第一跳。走到这里的浏览器请求
         // 已经在 HTTPS 监听端口内，OAuth redirect_uri 与临时 Cookie 必须按 HTTPS 生成，
         // 不能再因为 loopback/localhost 主机名而退化为 http://...:443/19443。
-        let secure = true;
+        const SECURE: bool = true;
 
         let callback_path = self.jwks_cache.callback_path_or_default();
 
-        let state = oauth::build_oauth_state(oauth, host, return_to, &callback_path, secure)
+        let state = oauth::build_oauth_state(oauth, host, return_to, &callback_path, SECURE)
             .map_err(|e| {
                 Error::explain(
                     ErrorType::HTTPStatus(500),
                     format!("构建 OAuth state 失败: {e}"),
                 )
             })?;
-        let scheme = if secure { "https" } else { "http" };
+        // /authorize URL 的 scheme:host 段与 redirect_uri 同一函数构造，消除两处 scheme 翻译
+        let authorize_base = oauth::build_redirect_uri(host, "/api/auth/oauth2/authorize", SECURE);
         let auth_url = format!(
-            "{scheme}://{host}/api/auth/oauth2/authorize?\
-            response_type=code&client_id={}&redirect_uri={}&\
+            "{}?response_type=code&client_id={}&redirect_uri={}&\
             scope=openid+profile+email+offline_access&code_challenge={}&\
             code_challenge_method=S256&state={}&nonce={}",
+            authorize_base,
             state.client_id,
             urlencoding::encode(&state.redirect_uri),
             state.code_challenge,
@@ -57,7 +58,7 @@ impl Gateway {
             state.nonce,
         );
 
-        let cookies = oauth::build_oauth_cookies(&state, secure);
+        let cookies = oauth::build_oauth_cookies(&state, SECURE);
 
         info!(
             "OAuth PKCE redirect: {} → /authorize (client={}, return_to={})",
@@ -144,19 +145,16 @@ impl Gateway {
         &self,
         session: &mut Session,
         oauth: &OAuthConfig,
-        cookie_header: &Option<String>,
+        cookie_header: Option<&str>,
         code: &str,
         state_param: &str,
     ) -> Result<bool> {
         let host = get_host(session);
         // 与 /authorize 阶段保持同一条边界事实：Gateway callback 始终经 HTTPS 到达。
-        let secure = true;
-        let ck = match cookie_header.as_deref() {
-            Some(c) => c,
-            None => {
-                warn!("OAuth callback 缺少 Cookie");
-                return Self::oauth_error_redirect(session, "invalid_state").await;
-            }
+        const SECURE: bool = true;
+        let Some(ck) = cookie_header else {
+            warn!("OAuth callback 缺少 Cookie");
+            return Self::oauth_error_redirect(session, "invalid_state").await;
         };
 
         let cookie_state = oauth::extract_oauth_state(ck);
@@ -183,7 +181,7 @@ impl Gateway {
 
         // 与 /authorize 阶段同一函数（oauth::build_redirect_uri）构造，
         // 保证 OAuth 2.1 两阶段 redirect_uri 逐字节一致
-        let redirect_uri = oauth::build_redirect_uri(host, &callback_path, secure);
+        let redirect_uri = oauth::build_redirect_uri(host, &callback_path, SECURE);
 
         let tokens = match self
             .do_token_exchange(
@@ -202,18 +200,25 @@ impl Gateway {
             }
         };
 
-        if let Some(nonce) = cookie_nonce
-            && let Some(ref id_token) = tokens.id_token
-        {
-            let id_nonce = oauth::decode_id_token_nonce(id_token);
-            if id_nonce.as_deref() != Some(nonce) {
-                warn!("OAuth callback nonce 不匹配");
-                return Self::oauth_error_redirect(session, "nonce_mismatch").await;
-            }
+        // nonce 一致性 fail-close 双向闭合（OIDC Core §3.1.2.2）：
+        // 仅当两侧都无 nonce（授权请求本就未带）才放行；
+        // 单侧存在即 Cookie 被剥离/篡改或 token 重放，拒绝。
+        let id_nonce = tokens
+            .id_token
+            .as_deref()
+            .and_then(oauth::decode_id_token_nonce);
+        let nonce_ok = match (cookie_nonce, id_nonce) {
+            (Some(cookie), Some(id)) => cookie == id,
+            (None, None) => true,
+            _ => false,
+        };
+        if !nonce_ok {
+            warn!("OAuth callback nonce 不匹配");
+            return Self::oauth_error_redirect(session, "nonce_mismatch").await;
         }
 
-        let session_cookies = oauth::build_session_cookies(&tokens.access, &tokens.refresh, secure);
-        let clear_cookies = oauth::build_clear_oauth_cookies(secure, &callback_path);
+        let session_cookies = oauth::build_session_cookies(&tokens.access, &tokens.refresh, SECURE);
+        let clear_cookies = oauth::build_clear_oauth_cookies(SECURE, &callback_path);
 
         info!(
             "OAuth callback 完成: client={}, return_to={}",

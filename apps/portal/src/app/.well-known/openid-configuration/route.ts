@@ -47,6 +47,8 @@ export async function GET() {
     token_endpoint_auth_methods_supported: TOKEN_ENDPOINT_AUTH_METHODS_SUPPORTED,
     code_challenge_methods_supported: CODE_CHALLENGE_METHODS_SUPPORTED,
     claims_supported: CLAIMS_SUPPORTED,
+    // RFC 9207：authorize 响应携带 iss 参数（mix-up 防御），元数据声明支持
+    authorization_response_iss_parameter_supported: true,
   };
 
   return NextResponse.json(metadata);

@@ -12,7 +12,7 @@
  * 任何一侧增删/改名 claims 字段，必须同步本 fixture 与两端测试 —— 这是由
  * 跨语言漂移引发的硬约束（历史上 Portal 端曾单方面增删 claims 而无门禁）。
  *
- * 注意：Gateway 的 `Claims` 只消费子集（sub/iss/aud/jti/exp；iat 仅 Portal 侧
+ * 注意：Gateway 的 `Claims` 只消费子集（sub/iss/aud/jti/exp/client_id；iat 仅 Portal 侧
  * 语义使用），serde 默认忽略未知字段，fixture 携带 iat 以锚定 AT TTL 契约。
  *
  * @module @auth-sso/contracts/jwt-contract
@@ -23,9 +23,8 @@ export const PORTAL_JWT_CLAIM_KEYS = [
   'sub',
   'iss',
   'aud',
+  'client_id',
   'jti',
   'iat',
   'exp',
 ] as const;
-
-export type PortalJwtClaimKey = (typeof PORTAL_JWT_CLAIM_KEYS)[number];

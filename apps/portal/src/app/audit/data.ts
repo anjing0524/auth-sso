@@ -8,6 +8,8 @@ import 'server-only';
 
 import { db, schema } from '@/infrastructure/db';
 import { eq, desc, and, gte, lte, count } from 'drizzle-orm';
+import type { AnyColumn, SQL } from 'drizzle-orm';
+import type { PgTable } from 'drizzle-orm/pg-core';
 import type { AuditOperation, LoginEventType } from '@auth-sso/contracts';
 
 /** 日期格式正则：防止 SQL 注入和异常参数穿透 */
@@ -17,9 +19,8 @@ const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
  * 为分页查询构建日期范围过滤条件 — 消除 getAuditLogs / getLoginLogs / getAccessLogs 三处重复
  */
 function addDateRangeConditions(
-  conditions: ReturnType<typeof eq>[],
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  column: any,
+  conditions: SQL[],
+  column: AnyColumn,
   startDate?: string,
   endDate?: string,
 ): void {
@@ -46,14 +47,15 @@ interface PaginatedResult<T> {
 }
 
 /**
- * 通用分页查询 — 消除 getAuditLogs / getLoginLogs 之间 ~50 行重复模板
- * 使用 any 透传以兼容 Drizzle 各表的强类型（内部辅助函数）
+ * 通用分页查询 — 消除 getAuditLogs / getLoginLogs 之间 ~50 行重复模板。
+ *
+ * `mapRow` 是本文件唯一的 any 透传边界：Drizzle 泛型 PgTable 的行类型无法
+ * 静态表达，三张日志表的行形状由调用方的 mapRow 闭包按各自 schema 收敛。
  */
- 
 async function paginatedSelect<T>(
-  table: any,
-  orderByColumn: any,
-  conditions: ReturnType<typeof eq>[],
+  table: PgTable,
+  orderByColumn: AnyColumn,
+  conditions: SQL[],
   params: PaginationParams,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   mapRow: (row: any) => T,

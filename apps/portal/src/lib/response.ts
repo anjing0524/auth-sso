@@ -37,7 +37,7 @@ export interface PaginationMeta {
  * @param status - HTTP 状态码（默认 200）
  */
 export function restSuccess<T>(data: T, status: number = 200): NextResponse<T> {
-  return NextResponse.json(data as any, { status });
+  return NextResponse.json(data, { status }) as NextResponse<T>;
 }
 
 /**

@@ -8,7 +8,7 @@ import 'server-only';
  *   kid        — 16 位密钥标识，写入 JWT header.kid
  *   publicKey  — JWK 格式公钥 JSON 字符串
  *   privateKey — JWK 格式私钥 JSON 字符串
- *   expiresAt  — 90 天后过期，过期自动生成新对
+ *   expiresAt  — 90 天有效期；进入续期窗口（到期前 JWKS_RENEW_AHEAD_SECS）自动生成新对
  *
  * 进程内存缓存 5 分钟，避免每次签发/验签都查 DB。
  *
@@ -18,6 +18,7 @@ import { importJWK, generateKeyPair, exportJWK } from 'jose';
 import { db, schema } from '@/infrastructure/db';
 import { eq, desc } from 'drizzle-orm';
 import { generateId, generateUUID, encryptPrivateKey, decryptPrivateKey } from '@/lib/crypto';
+import { JWKS_RENEW_AHEAD_SECS } from '@auth-sso/contracts';
 
 // ============================================================================
 // 常量与缓存
@@ -39,7 +40,7 @@ export interface CachedSigningKey {
 /** 缓存按 kid 索引，支持多 key 共存（密钥轮换后旧 token 仍可验签） */
 const keyCache = new Map<string, CachedSigningKey>();
 
-export function getCachedKey(kid: string): CachedSigningKey | undefined {
+function getCachedKey(kid: string): CachedSigningKey | undefined {
   const entry = keyCache.get(kid);
   if (entry && Date.now() - entry.fetchedAt < KEY_CACHE_TTL_MS) {
     return entry;
@@ -49,7 +50,7 @@ export function getCachedKey(kid: string): CachedSigningKey | undefined {
 }
 
 /** 从数据库 JSON 字符串反序列化并导入为 CryptoKey（消除 3 处 JSON.parse + importJWK 重复） */
-export async function importKeyFromJwk(jwkStr: string, alg: string = 'ES256'): Promise<CryptoKey> {
+async function importKeyFromJwk(jwkStr: string, alg: string = 'ES256'): Promise<CryptoKey> {
   const decrypted = decryptPrivateKey(jwkStr);
   return await importJWK(JSON.parse(decrypted) as JsonWebKey, alg) as CryptoKey;
 }
@@ -110,7 +111,13 @@ export async function getActiveSigningKey(): Promise<{
     .orderBy(desc(schema.jwks.createdAt))
     .limit(1);
 
-  const needsGen = rows.length === 0 || (rows[0]!.expiresAt && new Date(rows[0]!.expiresAt) < new Date());
+  // 提前轮换：新密钥在旧密钥进入续期窗口（到期前 JWKS_RENEW_AHEAD_SECS）时生成，
+  // 而非过期后才生成——配合 JWKS 端点的发布宽限（JWKS_PUBLISH_GRACE_SECS），
+  // 保证新旧公钥在 JWKS 中存在重叠窗口，轮换瞬间存量 token 对冷启动验签方仍可验证
+  const renewBefore = Date.now() + JWKS_RENEW_AHEAD_SECS * 1000;
+  const needsGen =
+    rows.length === 0 ||
+    (rows[0]!.expiresAt && new Date(rows[0]!.expiresAt).getTime() < renewBefore);
 
   if (needsGen) {
     // 串行化密钥生成，防止冷启动时多个并发请求各自生成重复密钥对
@@ -127,8 +134,8 @@ export async function getActiveSigningKey(): Promise<{
         .limit(1);
       if (recheck.length > 0) {
         const rjwk = recheck[0]!;
-        if (!rjwk.expiresAt || new Date(rjwk.expiresAt) >= new Date()) {
-          // 已有有效密钥（由并发请求生成），直接使用
+        if (!rjwk.expiresAt || new Date(rjwk.expiresAt).getTime() >= renewBefore) {
+          // 已有未进入续期窗口的密钥（由并发请求生成），直接使用
           const rkid = rjwk.kid ?? rjwk.id;
           const rcached = getCachedKey(rkid);
           if (rcached) return rcached;

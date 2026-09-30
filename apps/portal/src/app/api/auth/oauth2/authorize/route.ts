@@ -16,14 +16,16 @@ import { verifyAccessToken } from '@/lib/auth/token';
 import { parseScopes, validateAuthorization, validateRequestedScopes } from '@/domain/auth/oauth-authorize';
 import { validateClientActive, validateRedirectUri } from '@/domain/auth/oauth-client';
 import { generateId, generateUUID } from '@/lib/crypto';
-import { getAppBaseURL } from '@/lib/env';
+import { getAppBaseURL, getIssuer } from '@/lib/env';
 import { mapServerError } from '@/lib/server-error';
+import { mapToOAuthError } from '@/domain/shared/error-mapping';
 import {
   buildOAuthErrorRedirect,
+  buildRfc6749ErrorRedirect,
   buildLoginPageRedirect,
   clearLoginSessionCookie,
 } from '@/lib/oauth-utils';
-import { COOKIE_NAMES } from '@auth-sso/contracts';
+import { COOKIE_NAMES, JWT_TYP, PORTAL_AUD, PORTAL_CLIENT_ID } from '@auth-sso/contracts';
 import { getClientByClientId } from '@/app/(dashboard)/clients/data';
 import { getUserWithRoleClients } from './data';
 import {
@@ -52,7 +54,6 @@ const AuthorizeQuerySchema = z.object({
  * 成功时清除 login_session 一次性凭证。
  */
 async function issueCodeAndRedirect(
-  request: NextRequest,
   params: {
     clientId: string;
     redirectUri: string;
@@ -68,11 +69,28 @@ async function issueCodeAndRedirect(
   const client = await getClientByClientId(params.clientId);
   validateClientActive(client ?? undefined);
   validateRedirectUri(client!.redirectUris, params.redirectUri);
-  validateRequestedScopes(parseScopes(params.scope), parseScopes(client!.scopes));
+  // redirect_uri 已通过白名单校验：此后的授权拒绝按 RFC 6749 §4.1.2.1 重定向回 RP
+  //（error/state/iss）；此前的失败（client 未知/停用、参数畸形）仍走本地错误页——
+  // 不得向未验证的 redirect_uri 重定向（决策 D1）
+  try {
+    validateRequestedScopes(parseScopes(params.scope), parseScopes(client!.scopes));
+  } catch (err) {
+    const mapped = mapServerError(err);
+    return buildRfc6749ErrorRedirect(params.redirectUri, {
+      error: mapToOAuthError(mapped.error),
+      errorDescription: mapped.message,
+      state: params.state,
+      iss: getIssuer(),
+    });
+  }
 
   const userWithRoles = await getUserWithRoleClients(userId);
   if (!userWithRoles) {
-    return buildOAuthErrorRedirect(request, 'user_inactive', '用户不存在。');
+    return buildRfc6749ErrorRedirect(params.redirectUri, {
+      error: 'user_inactive',
+      state: params.state,
+      iss: getIssuer(),
+    });
   }
 
   const accessCheck = validateAuthorization({
@@ -82,12 +100,12 @@ async function issueCodeAndRedirect(
     roles: userWithRoles.roles,
   });
   if (!accessCheck.allowed) {
-    return buildOAuthErrorRedirect(
-      request,
-      accessCheck.errorCode || 'unauthorized_client',
-      accessCheck.message || '',
-      params.clientId,
-    );
+    return buildRfc6749ErrorRedirect(params.redirectUri, {
+      error: accessCheck.errorCode || 'unauthorized_client',
+      errorDescription: accessCheck.message || undefined,
+      state: params.state,
+      iss: getIssuer(),
+    });
   }
 
   const code = `auth_code_${generateId(32)}`;
@@ -114,6 +132,8 @@ async function issueCodeAndRedirect(
   const redirectUrl = new URL(params.redirectUri);
   redirectUrl.searchParams.set('code', code);
   redirectUrl.searchParams.set('state', params.state);
+  // RFC 9207：授权响应携带 iss（mix-up 攻击防御，RFC 9700 §4.4.2.1 首选对策）
+  redirectUrl.searchParams.set('iss', getIssuer());
 
   const response = NextResponse.redirect(redirectUrl);
   clearLoginSessionCookie(response);
@@ -141,7 +161,7 @@ async function handleSessionIdBranch(
   }
 
   // 2. 验证 login_session JWT 有效性（过期/篡改回登录页，不消费 Redis key）
-  const sessionClaims = await verifyAccessToken(loginSession);
+  const sessionClaims = await verifyAccessToken(loginSession, PORTAL_AUD, JWT_TYP.LOGIN_SESSION);
   if (!sessionClaims) {
     return buildLoginPageRedirect(appBaseURL, sessionId);
   }
@@ -153,7 +173,6 @@ async function handleSessionIdBranch(
   }
 
   return issueCodeAndRedirect(
-    request,
     {
       clientId: stored.client_id,
       redirectUri: stored.redirect_uri,
@@ -188,13 +207,19 @@ async function handleFullParamsBranch(
   const { client_id, redirect_uri, scope, state, nonce, code_challenge, code_challenge_method } = parsed.data;
 
   // SSO 免登：已有 login_session 或 portal_jwt_token → 直签授权码
-  const existingSession =
-    request.cookies.get(COOKIE_NAMES.LOGIN_SESSION)?.value || request.cookies.get(COOKIE_NAMES.JWT)?.value;
-  const sessionClaims = existingSession ? await verifyAccessToken(existingSession) : null;
+  // typ 按 Cookie 来源区分校验（RFC 8725 §3.11）：login_session → login+jwt，AT → at+jwt
+  const loginSessionValue = request.cookies.get(COOKIE_NAMES.LOGIN_SESSION)?.value;
+  const jwtSessionValue = loginSessionValue ? undefined : request.cookies.get(COOKIE_NAMES.JWT)?.value;
+  const existingSession = loginSessionValue || jwtSessionValue;
+  const expectedTyp = loginSessionValue ? JWT_TYP.LOGIN_SESSION : JWT_TYP.ACCESS_TOKEN;
+  // aud 按凭证类型区分（ADR-013）：LoginSession = 体系级 auth-sso，AT = 签发对象 client_id
+  const expectedAud = loginSessionValue ? PORTAL_AUD : PORTAL_CLIENT_ID;
+  const sessionClaims = existingSession
+    ? await verifyAccessToken(existingSession, expectedAud, expectedTyp)
+    : null;
 
   if (sessionClaims) {
     return issueCodeAndRedirect(
-      request,
       { clientId: client_id, redirectUri: redirect_uri, scope, state, nonce, codeChallenge: code_challenge, codeChallengeMethod: code_challenge_method },
       sessionClaims.sub,
     );
@@ -204,7 +229,18 @@ async function handleFullParamsBranch(
   const client = await getClientByClientId(client_id);
   validateClientActive(client ?? undefined);
   validateRedirectUri(client!.redirectUris, redirect_uri);
-  validateRequestedScopes(parseScopes(scope), parseScopes(client!.scopes));
+  // redirect_uri 已过白名单：scope 越界同样按 RFC 6749 §4.1.2.1 重定向回 RP（决策 D1）
+  try {
+    validateRequestedScopes(parseScopes(scope), parseScopes(client!.scopes));
+  } catch (err) {
+    const mapped = mapServerError(err);
+    return buildRfc6749ErrorRedirect(redirect_uri, {
+      error: mapToOAuthError(mapped.error),
+      errorDescription: mapped.message,
+      state,
+      iss: getIssuer(),
+    });
+  }
 
   const newSessionId = generateSessionId();
   const stored: StoredAuthRequest = {
@@ -226,10 +262,11 @@ export async function GET(request: NextRequest) {
     const sessionId = url.searchParams.get('session_id');
 
     if (sessionId) {
-      return handleSessionIdBranch(request, sessionId);
+      // 必须 await：`return promise` 不会触发本层 catch（异步拒绝穿透 try 语义）
+      return await handleSessionIdBranch(request, sessionId);
     }
 
-    return handleFullParamsBranch(request);
+    return await handleFullParamsBranch(request);
   } catch (err) {
     const mapped = mapServerError(err);
     return buildOAuthErrorRedirect(request, mapped.error, mapped.message);

@@ -37,8 +37,8 @@ export const permissionTypeEnum = z.enum(PERMISSION_TYPE_VALUES);
  *   - 至少 10 位（注：API 文档初次编写时定为 8 位，经安全评审后提升至 10 位）
  *   - 大写字母 / 小写字母 / 数字 / 特殊字符 中至少包含 3 类
  */
-export const PASSWORD_MIN_LENGTH = 10;
-export const PASSWORD_REQUIRED_CATEGORIES = 3;
+const PASSWORD_MIN_LENGTH = 10;
+const PASSWORD_REQUIRED_CATEGORIES = 3;
 
 const PASSWORD_CATEGORY_REGEXES: readonly RegExp[] = [
   /[a-z]/,        // 小写字母

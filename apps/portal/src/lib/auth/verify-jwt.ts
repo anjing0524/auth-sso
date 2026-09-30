@@ -5,7 +5,7 @@ import { getJwtFromCookie } from '../session';
 import { verifyAccessToken } from '@/lib/auth/token';
 import { decodeJwtPayload } from '@/lib/session/jwt';
 import { getGatewaySharedSecret } from '@/lib/env';
-import { GATEWAY_HEADERS, PORTAL_AUD } from '@auth-sso/contracts';
+import { GATEWAY_HEADERS, PORTAL_CLIENT_ID, JWT_TYP } from '@auth-sso/contracts';
 import { createLogger } from '@/lib/logger';
 import type { ResolvedIdentity, PortalJwtClaims } from '@/domain/auth/types';
 import { verifySignature, SIGNATURE_TIMESTAMP_WINDOW_SEC } from './gateway-hmac';
@@ -114,13 +114,14 @@ export const resolveIdentity = cache(
     if (gatewayUserId) {
       const jti = await getGatewayJti();
       if (await isRequestFromTrustedGateway(gatewayUserId, jti)) {
-        // Gateway 已验证 JWT 签名 + issuer + jti，Portal 补充 aud 校验（纵深防御）
+        // Gateway 已验证 JWT 签名 + issuer + jti，Portal 补充 aud 校验（纵深防御，
+        // ADR-013：AT aud = 签发对象 client_id，Gateway 信任路径的 AT 恒为 portal）
         if (token) {
           const claims = decodeJwtPayload(token);
-          if (claims && claims.aud === PORTAL_AUD) {
+          if (claims && claims.aud === PORTAL_CLIENT_ID) {
             return { userId: gatewayUserId, claims };
           }
-          if (claims && claims.aud !== PORTAL_AUD) {
+          if (claims && claims.aud !== PORTAL_CLIENT_ID) {
             log.warn('Gateway 信任路径 aud 不匹配', { aud: claims.aud });
           }
         }
@@ -134,7 +135,7 @@ export const resolveIdentity = cache(
     // Fallback：无 Gateway 或 HMAC 校验未通过 → 自验签
     if (!token) return null;
 
-    const claims = await verifyAccessToken(token);
+    const claims = await verifyAccessToken(token, PORTAL_CLIENT_ID, JWT_TYP.ACCESS_TOKEN);
     if (!claims) return null;
 
     return { userId: claims.sub, claims };

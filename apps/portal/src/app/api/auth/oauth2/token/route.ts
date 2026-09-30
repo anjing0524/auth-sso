@@ -14,7 +14,7 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { db, schema } from '@/infrastructure/db';
 import { eq, and, gt } from 'drizzle-orm';
-import { signAccessToken, signIdToken, issueRefreshToken, rotateRefreshToken, ACCESS_TOKEN_TTL } from '@/lib/auth/token';
+import { signAccessToken, signIdToken, issueRefreshToken, rotateRefreshToken, revokeRefreshTokenFamily, ACCESS_TOKEN_TTL } from '@/lib/auth/token';
 import { validateClientActive, validateClientSecret } from '@/domain/auth/oauth-client';
 import { verifyPKCE } from '@/domain/auth/oauth-code';
 import { parseScopes } from '@/domain/auth/oauth-authorize';
@@ -27,6 +27,7 @@ import { z } from 'zod';
 import { OAUTH_PARAMS } from '@auth-sso/contracts';
 import { writeLoginLog, extractClientIP, extractUserAgent } from '@/lib/audit';
 import { parseOAuthBody } from '@/lib/auth/oauth-body';
+import { resolveClientCredentials } from '@/lib/auth/client-credentials';
 
 
 const TokenSchema = z.object({
@@ -35,8 +36,15 @@ const TokenSchema = z.object({
   redirect_uri: z.string().optional(),
   code_verifier: z.string().optional(),
   refresh_token: z.string().optional(),
-  client_id: z.string().min(1),
+  // client_id/client_secret 可经 Basic 头传入（client_secret_basic），body 字段放宽为可选，
+  // 由 resolveClientCredentials 统一裁决双通道（RFC 6749 §2.3.1）
+  client_id: z.string().min(1).optional(),
   client_secret: z.string().optional(),
+}).superRefine((data, ctx) => {
+  // RFC 6749 §4.1.3：authorize 端点强制携带 redirect_uri，token 端点此时必须 REQUIRED
+  if (data.grant_type === OAUTH_PARAMS.GRANT_TYPE_AUTHORIZATION_CODE && !data.redirect_uri) {
+    ctx.addIssue({ code: 'custom', path: ['redirect_uri'], message: 'authorization_code 授权必须携带 redirect_uri' });
+  }
 });
 
 export async function POST(request: NextRequest) {
@@ -51,13 +59,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { grant_type, client_id, client_secret, code, redirect_uri, code_verifier, refresh_token } = parsed.data;
+    const { grant_type, code, redirect_uri, code_verifier, refresh_token } = parsed.data;
 
-    // 2. 校验 Client
-    const clientRows = await db.select().from(schema.clients).where(eq(schema.clients.clientId, client_id)).limit(1);
+    // 2. 校验 Client（凭证双通道：client_secret_basic / client_secret_post，RFC 6749 §2.3.1）
+    const creds = resolveClientCredentials(request, body);
+    const clientRows = await db.select().from(schema.clients).where(eq(schema.clients.clientId, creds.clientId)).limit(1);
     validateClientActive(clientRows[0]);
     const client = clientRows[0]!;
-    await validateClientSecret(client, client_secret);
+    await validateClientSecret(client, creds.clientSecret);
 
     // ── grant_type: authorization_code ──
     if (grant_type === OAUTH_PARAMS.GRANT_TYPE_AUTHORIZATION_CODE) {
@@ -77,7 +86,25 @@ export async function POST(request: NextRequest) {
           gt(schema.authorizationCodes.expiresAt, new Date()),
         ))
         .returning();
-      if (!authCode || (redirect_uri && authCode.redirectUri !== redirect_uri)) {
+      if (!authCode || authCode.redirectUri !== redirect_uri) {
+        // RFC 9700 §4.2.4：已消费授权码被再次兑换 = 疑似泄露，撤销该授权家族的 RT。
+        // 仅锚定真实存在且已消费的 code 行（client 维度隔离）——普通坏 code / 过期 code
+        // 不触发撤销，防止借随机 code 撤销他人家族（DoS 放大）。
+        if (!authCode) {
+          const [replayed] = await db
+            .select()
+            .from(schema.authorizationCodes)
+            .where(and(
+              eq(schema.authorizationCodes.code, code!),
+              eq(schema.authorizationCodes.clientId, client.clientId),
+              eq(schema.authorizationCodes.used, true),
+            ))
+            .limit(1);
+          if (replayed) {
+            await revokeRefreshTokenFamily(replayed.userId, replayed.clientId);
+            writeLoginLog({ username: client.clientId, eventType: 'TOKEN_REFRESH_FAILED', ip: extractClientIP(request.headers), userAgent: extractUserAgent(request.headers), failReason: '授权码重放（已消费 code 二次兑换），已撤销同家族 Refresh Token' });
+          }
+        }
         throw new InvalidGrantError('授权码无效、已使用、已过期或 redirect_uri 不匹配');
       }
 
@@ -87,8 +114,7 @@ export async function POST(request: NextRequest) {
       }
       await verifyPKCE(code_verifier!, authCode.codeChallenge);
 
-      // 标记授权码已使用
-      await db.update(schema.authorizationCodes).set({ used: true }).where(eq(schema.authorizationCodes.id, authCode.id));
+      // 授权码已在上方原子领取时置 used=true，无需二次更新
 
       // 获取用户权限上下文并缓存到 Redis（通过中间层消除循环依赖）
       const permCtx = await getUserPermissionContext(authCode.userId);
@@ -97,18 +123,22 @@ export async function POST(request: NextRequest) {
       }
       await cacheUserPermissionContext(authCode.userId, permCtx);
 
-      // 签发 Access Token
-      const { token: accessToken } = await signAccessToken(authCode.userId, authCode.scope);
+      // 签发 Access Token（aud/client_id = 授权对象 client，ADR-013）
+      const { token: accessToken } = await signAccessToken(authCode.userId, client.clientId, authCode.scope);
 
-      // 签发 Refresh Token（绑定发放 client，RFC 9700 token family）
-      const newRefreshToken = await issueRefreshToken(authCode.userId, authCode.scope, client.clientId);
+      // 签发 Refresh Token（绑定发放 client，RFC 9700 token family）。
+      // RT 按 offline_access 门控发放（OIDC Core §11：长期凭证仅在明确请求时发放，
+      // 决策 D3）；Gateway 统一 OAuth Client 流程恒请求 offline_access，不受影响。
+      const newRefreshToken = parseScopes(authCode.scope).includes('offline_access')
+        ? await issueRefreshToken(authCode.userId, client.clientId, authCode.scope)
+        : undefined;
 
       // ID Token（scope 包含 openid 时签发 OIDC 标准 ID Token）
       let idToken: string | undefined;
       if (parseScopes(authCode.scope).includes('openid')) {
         idToken = await signIdToken({
           userId: authCode.userId,
-          clientId: client_id,
+          clientId: client.clientId,
           nonce: authCode.nonce,
           authTime: authCode.createdAt,
         });
@@ -118,7 +148,7 @@ export async function POST(request: NextRequest) {
         access_token: accessToken,
         token_type: 'Bearer',
         expires_in: ACCESS_TOKEN_TTL,
-        refresh_token: newRefreshToken,
+        ...(newRefreshToken ? { refresh_token: newRefreshToken } : {}),
         id_token: idToken,
         scope: authCode.scope,
       });
@@ -134,13 +164,13 @@ export async function POST(request: NextRequest) {
       // 不匹配视同泄露，家族撤销在 rotateRefreshToken 内原子完成
       const result = await rotateRefreshToken(refresh_token, client.clientId);
       if (!result) {
-        writeLoginLog({ username: client_id, eventType: 'TOKEN_REFRESH_FAILED', ip: extractClientIP(request.headers), userAgent: extractUserAgent(request.headers), failReason: 'Refresh Token 无效或已过期' });
+        writeLoginLog({ username: client.clientId, eventType: 'TOKEN_REFRESH_FAILED', ip: extractClientIP(request.headers), userAgent: extractUserAgent(request.headers), failReason: 'Refresh Token 无效或已过期' });
         // 注：username 填入 client_id 是因为 TOKEN 端点由 OAuth Client 调用，无真实用户上下文
         throw new InvalidGrantError('Refresh Token 无效或已过期');
       }
 
       // 续签成功 → 记录 TOKEN_REFRESH 日志（I-LOG-003）
-      writeLoginLog({ username: client_id, eventType: 'TOKEN_REFRESH', ip: extractClientIP(request.headers), userAgent: extractUserAgent(request.headers) });
+      writeLoginLog({ username: client.clientId, eventType: 'TOKEN_REFRESH', ip: extractClientIP(request.headers), userAgent: extractUserAgent(request.headers) });
 
       return NextResponse.json({
         access_token: result.accessToken,

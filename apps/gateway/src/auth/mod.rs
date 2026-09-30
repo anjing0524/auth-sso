@@ -34,6 +34,11 @@ pub struct Claims {
     pub sub: String,
     pub iss: String,
     pub aud: String,
+    /// 签发该 AT 的 OAuth client（ADR-013：与 aud 同源同值）。
+    /// struct 级 `rename_all = "camelCase"` 会把字段误配为 "clientId"，
+    /// JWT claims 惯例为 snake_case，故显式 rename。
+    #[serde(rename = "client_id")]
+    pub client_id: String,
     pub exp: u64,
     pub jti: String,
 }
@@ -45,7 +50,7 @@ pub struct Claims {
 /// 用于网关 `response_filter` 下发续签后的新 AT。修改时务必同步 Portal 侧。
 pub const ACCESS_TOKEN_MAX_AGE_SEC: u64 = 3600;
 
-/// Refresh Token 的 Cookie Max-Age（秒）— 与 Portal `signRefreshToken` 过期时间同步。
+/// Refresh Token 的 Cookie Max-Age（秒）— 与 Portal `issueRefreshToken` 过期时间同步。
 ///
 /// 用于网关 `response_filter` 下发续签后的新 RT。修改时务必同步 Portal 侧。
 pub const REFRESH_TOKEN_MAX_AGE_SEC: u64 = 604800;

@@ -53,17 +53,13 @@ pub fn host_only(host: &str) -> &str {
 /// 判断请求是否为 HTML 页面导航（GET + Accept: text/html + 无 RSC header）
 pub fn is_html_page_navigation(req: &RequestHeader) -> bool {
     let is_get = req.method.as_str().eq_ignore_ascii_case("GET");
+    // HeaderMap 查找本身大小写不敏感（存储名已归一化小写），无需双写回退
     let is_html = req
         .headers
         .get("accept")
-        .or_else(|| req.headers.get("Accept"))
         .and_then(|h| h.to_str().ok())
         .is_some_and(|a| a.contains("text/html"));
-    let is_rsc = req
-        .headers
-        .get("rsc")
-        .or_else(|| req.headers.get("RSC"))
-        .is_some();
+    let is_rsc = req.headers.get("rsc").is_some();
     is_get && is_html && !is_rsc
 }
 

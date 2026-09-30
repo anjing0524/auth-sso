@@ -1,19 +1,27 @@
 use anyhow::Context;
 use clap::Parser;
+use futures::FutureExt;
 #[cfg(feature = "self-managed-tls")]
 use pingora_core::listeners::tls::TlsSettings;
 use pingora_core::prelude::*;
 use pingora_core::services::background::background_service;
-use pingora_load_balancing::LoadBalancer;
+use pingora_load_balancing::discovery::{ServiceDiscovery, Static};
+use pingora_load_balancing::health_check::TcpHealthCheck;
+use pingora_load_balancing::selection::RoundRobin;
+use pingora_load_balancing::{Backends, HealthCheckService, HealthRegistry, LoadBalancer};
 use pingora_proxy::http_proxy_service;
 use std::sync::Arc;
+use std::time::Duration;
 use tracing::info;
+
+/// 主动健康检查探测周期（秒）——TCP 连通性探测，不可达节点摘出轮询
+const HEALTH_CHECK_INTERVAL_SECS: u64 = 10;
 
 #[cfg(feature = "self-managed-tls")]
 use gateway::acme::{AcmeChallengeStore, AcmeService, AcmeState};
 use gateway::auth::{JwtVerifier, TokenRefresher};
 use gateway::config::{Config, Upstreams};
-use gateway::gateway::Gateway;
+use gateway::gateway::{Gateway, GatewayDeps};
 use gateway::jwks::JwksCache;
 use gateway::path_matcher::PathMatcher;
 #[cfg(feature = "self-managed-tls")]
@@ -34,7 +42,7 @@ fn main() -> anyhow::Result<()> {
     let config = Config::load(&cli.config).context("❌ 无法加载网关配置文件")?;
 
     let _guard = gateway::logging::init_tracing(&config.gateway.log_dir, &config.gateway.log_level);
-    info!("🚀 SSO 去中心化安全网关启动中 (Pingora 0.8.1 + ES256 JWKS 验签)...");
+    info!("🚀 SSO 去中心化安全网关启动中 (Pingora 0.9.0 + ES256 JWKS 验签)...");
     #[cfg(feature = "self-managed-tls")]
     info!("  编译能力: 自托管 TLS + ACME");
     #[cfg(not(feature = "self-managed-tls"))]
@@ -57,7 +65,9 @@ fn main() -> anyhow::Result<()> {
         );
     }
 
-    let jwks_cache = Arc::new(JwksCache::new());
+    let jwks_cache = Arc::new(JwksCache::with_audience(
+        config.gateway.oauth.client_id.clone(),
+    ));
     let jwt_verifier = JwtVerifier::new(Arc::clone(&jwks_cache));
     let token_refresher = TokenRefresher::new(
         Arc::clone(&jwks_cache),
@@ -68,15 +78,27 @@ fn main() -> anyhow::Result<()> {
 
     // 单一路由表：name/lb 一次装配（Router 内部按 prefix 长度降序排序）。
     // OAuth Client 凭据已收敛到 [gateway.oauth]（ADR-010 二期），不随路由携带。
+    // 共享健康注册表：全部路由的 upstream 经单一 HealthCheckService 周期探活
+    // （TCP 连通性，协议无关），不可达节点被摘出轮询；就绪状态经共享句柄
+    // 实时传导到各 LoadBalancer 的选择器（BackendReadiness 持 Arc 活句柄），无需重建。
+    let health_registry = Arc::new(HealthRegistry::new());
+    health_registry.set_health_check(TcpHealthCheck::new());
+
     let mut entries: Vec<RouteEntry> = Vec::new();
     for uc in upstream_routes {
         let ups = Upstreams::from_config(&uc.addresses);
         if ups.is_empty() {
             anyhow::bail!("❌ upstream \"{}\" 未配置有效地址", uc.name);
         }
-        let lb = Arc::new(LoadBalancer::try_from_iter(ups.iter()).map_err(|e| {
-            anyhow::anyhow!("配置 upstream \"{}\" 负载均衡器失败: {:?}", uc.name, e)
-        })?);
+        let discovery: Box<dyn ServiceDiscovery + Send + Sync> = Static::try_from_iter(ups.iter())
+            .map_err(|e| anyhow::anyhow!("配置 upstream \"{}\" 静态发现失败: {}", uc.name, e))?;
+        let backends = Backends::new_with_health_registry(discovery, Arc::clone(&health_registry));
+        let lb = Arc::new(LoadBalancer::<RoundRobin>::from_backends(backends));
+        // 静态成员：立即构建选择器（与 try_from_iter 同语义，不会阻塞）
+        lb.update()
+            .now_or_never()
+            .expect("static discovery should not block")
+            .expect("static discovery should not error");
         entries.push(RouteEntry {
             prefix: uc.name.clone(),
             lb,
@@ -89,11 +111,6 @@ fn main() -> anyhow::Result<()> {
         .flat_map(|u| u.public_paths.iter().cloned())
         .collect();
     let path_matcher = PathMatcher::new(all_public_paths);
-
-    let default_upstream_name = upstream_routes
-        .first()
-        .map(|u| u.name.clone())
-        .unwrap_or_else(|| "/".to_string());
 
     info!("配置加载完成:");
     if config.gateway.external_tls_termination {
@@ -116,7 +133,7 @@ fn main() -> anyhow::Result<()> {
     for uc in upstream_routes {
         info!("    {} → {}", uc.name, uc.addresses);
     }
-    info!("  默认 upstream: {}", default_upstream_name);
+    info!("  默认 upstream: {}", router.fallback_prefix());
 
     let mut my_server = Server::new(None).context("❌ 创建 Pingora 服务器失败")?;
     my_server.bootstrap();
@@ -138,23 +155,30 @@ fn main() -> anyhow::Result<()> {
     );
     let jwks_handle = my_server.add_service(jwks_refresh_svc);
 
+    // 主动健康检查服务：周期探测全部 upstream 节点，就绪/摘除经共享注册表传导
+    let mut health_check_service = HealthCheckService::new(health_registry);
+    health_check_service.health_check_frequency =
+        Some(Duration::from_secs(HEALTH_CHECK_INTERVAL_SECS));
+    health_check_service.parallel_health_check = true;
+    let _ = my_server.add_service(background_service("LB Health Check", health_check_service));
+
     let mut gateway_proxy = http_proxy_service(
         &my_server.configuration,
-        Gateway::new(
+        Gateway::new(GatewayDeps {
             path_matcher,
             router,
             jwt_verifier,
             token_refresher,
-            portal_upstreams,
-            config.gateway.gateway_shared_secret.clone(),
-            config.gateway.upstream_scheme.clone(),
-            config.gateway.upstream_server_name.clone(),
-            config.gateway.upstream_host_header.clone(),
-            config.gateway.external_tls_termination,
-            config.gateway.rate_limit.clone(),
-            config.gateway.oauth.clone(),
-            Arc::clone(&jwks_cache),
-        ),
+            oidc_provider_upstream: portal_upstreams,
+            gateway_shared_secret: config.gateway.gateway_shared_secret.clone(),
+            upstream_scheme: config.gateway.upstream_scheme.clone(),
+            upstream_server_name: config.gateway.upstream_server_name.clone(),
+            upstream_host_header: config.gateway.upstream_host_header.clone(),
+            trust_platform_client_ip: config.gateway.external_tls_termination,
+            rate_limit: config.gateway.rate_limit.clone(),
+            oauth: config.gateway.oauth.clone(),
+            jwks_cache: Arc::clone(&jwks_cache),
+        }),
     );
 
     if config.gateway.external_tls_termination {

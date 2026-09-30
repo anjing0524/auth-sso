@@ -4,7 +4,8 @@ import 'server-only';
  * JWT 快速解码（不验签，仅用于提取载荷信息）
  *
  * 验签统一由 lib/auth/token.ts verifyAccessToken + resolveIdentity 负责。
- * unsafeDecodeJwtPayload 仅用于 revoke.ts 提取 jti/exp 等不需要验签的场景。
+ * 本模块仅经下方 decodeJwtPayload 别名对外暴露；unsafe 前缀实现保持私有，
+ * 防止调用方绕过命名语义直接引用。
  *
  * @module lib/session/jwt
  */

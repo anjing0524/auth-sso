@@ -211,10 +211,10 @@ export async function refreshUserPermissionCache(userId: string): Promise<void> 
     // 2. 查 DB → 自动回写 Redis（TTL 带随机抖动）
     const ctx = await getUserPermissionContext(userId);
     if (ctx) {
-      log.info(`Refreshed cache for user`, { userId });
+      log.info('Refreshed cache for user', { userId });
     }
   } catch (error: unknown) {
-    log.error(`Failed to refresh cache for user`, { userId, error: (error as Error).message });
+    log.error('Failed to refresh cache for user', { userId, error: (error as Error).message });
   }
 }
 
@@ -239,32 +239,9 @@ export async function clearUserPermissionCache(userId: string): Promise<void> {
     const cacheKey = `${REDIS_KEY_PREFIX.USER_PERMS}${userId}`;
     // 同时删除 null 标记，确保下次查询重新走 DB
     await redis.del(cacheKey, `${cacheKey}${NULL_CACHE_SUFFIX}`);
-    log.info(`Cleared permissions cache for user`, { userId });
+    log.info('Cleared permissions cache for user', { userId });
   } catch (error: unknown) {
-    log.error(`Failed to clear permission cache for user`, { userId, error: (error as Error).message });
-  }
-}
-
-/**
- * 批量清除指定用户的权限上下文缓存
- * 常用于角色权限变更、角色数据范围更新等会影响大批用户的场景
- * @param userIds 用户 ID 数组
- */
-export async function clearUsersPermissionCache(userIds: string[]): Promise<void> {
-  if (!userIds || userIds.length === 0) return;
-  try {
-    const redis = getRedis();
-    const failed = await settleUserBatches(userIds, async (userId) => {
-      const cacheKey = `${REDIS_KEY_PREFIX.USER_PERMS}${userId}`;
-      await redis.del(cacheKey, `${cacheKey}${NULL_CACHE_SUFFIX}`);
-    });
-    if (failed > 0) {
-      log.warn(`Batch cleared for ${userIds.length} users, ${failed} failed`);
-    } else {
-      log.info(`Batch cleared permissions cache for ${userIds.length} users`);
-    }
-  } catch (error: unknown) {
-    log.error('Failed to batch clear permissions cache', { error: (error as Error).message });
+    log.error('Failed to clear permission cache for user', { userId, error: (error as Error).message });
   }
 }
 
@@ -281,7 +258,13 @@ export async function cacheUserPermissionContext(
   ctx: UserPermissionContext,
   ttl?: number,
 ): Promise<void> {
-  const redis = getRedis();
-  const cacheKey = `${REDIS_KEY_PREFIX.USER_PERMS}${userId}`;
-  await safeSetCache(redis, cacheKey, ttl ?? jitteredCacheTtl(), JSON.stringify(ctx), userId);
+  // 预填充缓存是尽力而为：getRedis() 抛错（Redis 不可用）与 setex 失败同属
+  // 缓存性故障，不应让 Token 签发/轮换整体失败（ADR-011 缓存性数据 fail-open）
+  try {
+    const redis = getRedis();
+    const cacheKey = `${REDIS_KEY_PREFIX.USER_PERMS}${userId}`;
+    await safeSetCache(redis, cacheKey, ttl ?? jitteredCacheTtl(), JSON.stringify(ctx), userId);
+  } catch (error: unknown) {
+    log.warn(`Skipped permission cache prefill for user ${userId}`, { error: (error as Error).message });
+  }
 }

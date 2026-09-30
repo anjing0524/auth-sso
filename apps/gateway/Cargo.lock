@@ -1061,6 +1061,7 @@ dependencies = [
  "clap",
  "config",
  "criterion",
+ "futures",
  "getrandom 0.4.3",
  "hex",
  "hmac",

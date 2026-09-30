@@ -36,6 +36,13 @@ async fn auth_failure_decision(session: &mut Session, is_html_nav: bool) -> Resu
     }
 }
 
+/// 续签后的三态判定（纯函数）：仅"已过期且续签失败"阻断；
+/// NearlyExpired 续签失败不阻断（旧 AT 仍有效，模块文档承诺的可用性权衡）。
+/// 抽出纯函数使决策表可脱离 Pingora Session 直接单测。
+fn refresh_failure_blocks(expiry: &TokenExpiry, refreshed: bool) -> bool {
+    matches!(expiry, TokenExpiry::Expired) && !refreshed
+}
+
 async fn try_refresh_session(ctx: &mut GatewayCtx, refresher: &TokenRefresher) -> bool {
     let rt = ctx
         .cookie_header
@@ -101,11 +108,10 @@ pub async fn check(
         TokenExpiry::Valid => Ok(AuthDecision::Pass),
         TokenExpiry::NearlyExpired | TokenExpiry::Expired => {
             let refreshed = try_refresh_session(ctx, refresher).await;
-            match expiry {
-                TokenExpiry::Expired if !refreshed => {
-                    auth_failure_decision(session, is_html_nav).await
-                }
-                _ => Ok(AuthDecision::Pass),
+            if refresh_failure_blocks(&expiry, refreshed) {
+                auth_failure_decision(session, is_html_nav).await
+            } else {
+                Ok(AuthDecision::Pass)
             }
         }
     }
@@ -115,24 +121,21 @@ pub async fn check(
 mod tests {
     use super::*;
 
-    #[tokio::test]
-    async fn test_check_no_cookie_html_nav_returns_pkce_required() {
-        // 无 Cookie 的 HTML 页面导航 → 应返回 PkceRequired
-        // 此测试验证 AuthDecision 枚举的 PkceRequired 变体含义
-        assert_eq!(AuthDecision::PkceRequired, AuthDecision::PkceRequired);
-        assert_ne!(AuthDecision::PkceRequired, AuthDecision::Pass);
-        assert_ne!(AuthDecision::PkceRequired, AuthDecision::Interrupted);
-    }
+    /// check() 的续签后决策表全真值覆盖：
+    /// 仅 (Expired, 续签失败) 阻断；Valid/NearlyExpired 恒放行。
+    /// （此前此处是 assert_eq!(X, X) 同义反复的伪测试，check() 决策零覆盖。）
+    #[test]
+    fn decision_table_blocks_only_expired_unrefreshed() {
+        use crate::auth::TokenExpiry;
 
-    #[tokio::test]
-    async fn test_auth_decision_exhaustive_match() {
-        // 编译器强制穷尽匹配：修改 AuthDecision 枚举时此测试自然失败
-        let decisions = [
-            AuthDecision::Pass,
-            AuthDecision::Interrupted,
-            AuthDecision::PkceRequired,
-        ];
-        // 三个变体都在
-        assert_eq!(decisions.len(), 3);
+        // Valid：不触发续签路径，无论 refreshed 取值都放行
+        assert!(!refresh_failure_blocks(&TokenExpiry::Valid, false));
+        assert!(!refresh_failure_blocks(&TokenExpiry::Valid, true));
+        // NearlyExpired：续签失败不阻断（旧 AT 仍有效，下次请求重试）
+        assert!(!refresh_failure_blocks(&TokenExpiry::NearlyExpired, false));
+        assert!(!refresh_failure_blocks(&TokenExpiry::NearlyExpired, true));
+        // Expired：续签失败必须阻断（401/PKCE）；成功放行
+        assert!(refresh_failure_blocks(&TokenExpiry::Expired, false));
+        assert!(!refresh_failure_blocks(&TokenExpiry::Expired, true));
     }
 }

@@ -11,6 +11,7 @@ import { db, schema } from '@/infrastructure/db';
 import { or, gt, isNull } from 'drizzle-orm';
 import { mapServerError } from '@/lib/server-error';
 import { getActiveSigningKey } from '@/lib/auth/token';
+import { JWKS_PUBLISH_GRACE_SECS } from '@auth-sso/contracts';
 
 export async function GET() {
   await connection();
@@ -18,12 +19,15 @@ export async function GET() {
     // 自动确保数据库中至少有一个活跃的密钥对，防止冷启动时 Gateway 连接 JWKS 死锁
     await getActiveSigningKey();
 
-    // 仅返回未过期的密钥（expiresAt > now 或 expiresAt 为 NULL 的兜底），避免暴露历史密钥
+    // 发布宽限（JWKS 轮换重叠窗口）：过期公钥在 JWKS 中保留 JWKS_PUBLISH_GRACE_SECS
+    // （≥ max(AT_TTL, ID_TOKEN_TTL)），保证轮换瞬间存量 token 仍可被冷启动的
+    // 验签方（Gateway）取到旧公钥；宽限外的历史密钥不再暴露
+    const publishCutoff = new Date(Date.now() - JWKS_PUBLISH_GRACE_SECS * 1000);
     const rows = await db
       .select()
       .from(schema.jwks)
       .where(or(
-        gt(schema.jwks.expiresAt, new Date()),
+        gt(schema.jwks.expiresAt, publishCutoff),
         isNull(schema.jwks.expiresAt),
       ))
       .orderBy(schema.jwks.createdAt);

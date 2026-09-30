@@ -14,7 +14,7 @@ import { and, eq } from 'drizzle-orm';
 import { generateId, generateUUID, hashToken } from '@/lib/crypto';
 import { isJtiRevoked, trackUserJti, revokeUserAccessByUserId } from '@/lib/session/revoke';
 import { getUserPermissionContext, cacheUserPermissionContext } from '@/lib/permissions';
-import { PORTAL_AUD, TOKEN_TTL } from '@auth-sso/contracts';
+import { DEFAULT_SCOPES, PORTAL_AUD, TOKEN_TTL, JWT_TYP } from '@auth-sso/contracts';
 import { getIssuer } from '@/lib/env';
 import type { PortalJwtClaims, RefreshTokenResult } from '@/domain/auth/types';
 import { getActiveSigningKey, getSigningKeyByKid } from './token/signing-keys';
@@ -23,6 +23,11 @@ import { createLogger } from '@/lib/logger';
 export { getActiveSigningKey, getSigningKeyByKid } from './token/signing-keys';
 
 const log = createLogger('Token');
+
+/** jti 统一格式：`jti_` + 16 位随机 ID — 三个签发函数共用，防格式漂移 */
+function newJti(): string {
+  return `jti_${generateId(16)}`;
+}
 
 // ============================================================================
 // Login Session Token — 登录成功后写入 HttpOnly Cookie 的临时凭证
@@ -46,11 +51,11 @@ export async function signLoginSession(userId: string): Promise<string> {
   const { keyId, privateKey } = await getActiveSigningKey();
 
   return new SignJWT({ sub: userId })
-    .setProtectedHeader({ alg: 'ES256', kid: keyId })
+    .setProtectedHeader({ alg: 'ES256', kid: keyId, typ: JWT_TYP.LOGIN_SESSION })
     .setIssuedAt()
     .setIssuer(getIssuer())
     .setAudience(PORTAL_AUD)
-    .setJti(`jti_${generateId(16)}`)
+    .setJti(newJti())
     .setExpirationTime(Math.floor(Date.now() / 1000) + LOGIN_SESSION_TTL)
     .sign(privateKey);
 }
@@ -66,20 +71,28 @@ export const ACCESS_TOKEN_TTL = TOKEN_TTL.ACCESS_TOKEN; // 1h
  *
  * 调用方：`app/api/auth/oauth2/token/route.ts`（authorization_code + refresh_token grant）
  *
- * JWT 仅含 sub，权限信息通过 Redis 缓存传递，不在 JWT 中内嵌。
+ * OAuth 协议数据携带（ADR-013）：aud = 签发对象 client_id，payload 显式含
+ * client_id claim（与 aud 同源同值，RFC 9068 形态）；scope 随授权授予写入。
+ * 权限信息通过 Redis 缓存传递，不在 JWT 中内嵌（ADR-006）。
  *
  * @param userId - 用户 ID (UUID)
+ * @param clientId - 授权对象 OAuth client_id（aud 与 client_id claim 的唯一来源）
+ * @param scope - 已授予 scope（空格分隔），未授予时省略
  * @returns token 字符串 + jti（用于后续撤销）
  */
-export async function signAccessToken(userId: string, scope?: string): Promise<{ token: string; jti: string }> {
+export async function signAccessToken(
+  userId: string,
+  clientId: string,
+  scope?: string,
+): Promise<{ token: string; jti: string }> {
   const { keyId, privateKey } = await getActiveSigningKey();
-  const jti = `jti_${generateId(16)}`;
+  const jti = newJti();
 
-  const token = await new SignJWT({ sub: userId, ...(scope ? { scope } : {}) })
-    .setProtectedHeader({ alg: 'ES256', kid: keyId })
+  const token = await new SignJWT({ sub: userId, client_id: clientId, ...(scope ? { scope } : {}) })
+    .setProtectedHeader({ alg: 'ES256', kid: keyId, typ: JWT_TYP.ACCESS_TOKEN })
     .setIssuedAt()
     .setIssuer(getIssuer())
-    .setAudience(PORTAL_AUD)
+    .setAudience(clientId)
     .setJti(jti)
     .setExpirationTime(Math.floor(Date.now() / 1000) + ACCESS_TOKEN_TTL)
     .sign(privateKey);
@@ -101,18 +114,31 @@ export async function signAccessToken(userId: string, scope?: string): Promise<{
  * 步骤：decodeProtectedHeader 提取 header.kid → 按 kid 查公钥 → ES256 验签 → issuer 校验 → jti 黑名单检查
  * 与 Gateway 的离线验签逻辑对齐：通过 kid 精准匹配密钥，支持轮换后旧 token 仍可验签。
  *
+ * typ 显式类型校验（RFC 8725 §3.11）：`expectedTyp` 传入时，header.typ 存在且
+ * 不匹配预期即拒；typ 缺失放行（存量 token 兼容期，最长 = AT TTL）。
+ *
  * @param token - JWT 字符串
+ * @param audience - 预期 aud，必传显式语义：AT 用 `PORTAL_CLIENT_ID`、LoginSession 用
+ *   `PORTAL_AUD`（体系级 auth-sso）；多 client 通用端点（userinfo/introspect）传 null 跳过校验
+ * @param expectedTyp - 预期 typ（JWT_TYP），调用方按 token 用途传入；省略则不做 typ 校验
  * @returns 解析后的 PortalJwtClaims，验签失败或已撤销返回 null
  */
 export async function verifyAccessToken(
   token: string,
-  audience: string | null = PORTAL_AUD,
+  audience: string | null,
+  expectedTyp?: string,
 ): Promise<PortalJwtClaims | null> {
   try {
     const header = decodeProtectedHeader(token);
     const kid = header.kid;
     if (!kid) {
       log.warn('JWT 缺少 kid header');
+      return null;
+    }
+
+    // typ 存在且不匹配预期即拒（缺失放行，兼容存量 token 自然过期）
+    if (expectedTyp && header.typ && header.typ !== expectedTyp) {
+      log.warn('JWT typ 与预期用途不匹配', { typ: header.typ, expected: expectedTyp });
       return null;
     }
 
@@ -149,7 +175,7 @@ export async function verifyAccessToken(
 // ============================================================================
 
 /** ID Token TTL（1h），与 Access Token 对齐，OIDC 规范建议短于 Access Token */
-export const ID_TOKEN_TTL = TOKEN_TTL.ACCESS_TOKEN;
+const ID_TOKEN_TTL = TOKEN_TTL.ACCESS_TOKEN;
 
 /**
  * 【server-only async】签发 OIDC ID Token (ES256 JWT)
@@ -191,11 +217,11 @@ export async function signIdToken(params: {
   }
 
   return new SignJWT(payload)
-    .setProtectedHeader({ alg: 'ES256', kid: keyId })
+    .setProtectedHeader({ alg: 'ES256', kid: keyId, typ: JWT_TYP.ID_TOKEN })
     .setIssuedAt()
     .setIssuer(getIssuer())
     .setAudience(params.clientId)
-    .setJti(`jti_${generateId(16)}`)
+    .setJti(newJti())
     .setExpirationTime(now + ID_TOKEN_TTL)
     .sign(privateKey);
 }
@@ -204,7 +230,7 @@ export async function signIdToken(params: {
 // Refresh Token — OAuth 2.1 流程专用，长期凭证，支持轮换
 // ============================================================================
 
-export const REFRESH_TOKEN_TTL = TOKEN_TTL.REFRESH_TOKEN; // 7d
+const REFRESH_TOKEN_TTL = TOKEN_TTL.REFRESH_TOKEN; // 7d
 
 /**
  * 【server-only async】签发 Refresh Token 并写入 DB
@@ -215,14 +241,14 @@ export const REFRESH_TOKEN_TTL = TOKEN_TTL.REFRESH_TOKEN; // 7d
  * Gateway SSO 会话传 'portal'，直连 RP 传各自 client_id。
  *
  * @param userId - 用户内部 ID
- * @param scopes - 授权范围，默认 "openid profile email offline_access"
  * @param clientId - 发放该 RT 的 OAuth Client
+ * @param scopes - 授权范围，默认 DEFAULT_SCOPES（contracts 单一真相源）
  * @returns Refresh Token 字符串
  */
 export async function issueRefreshToken(
   userId: string,
-  scopes: string = 'openid profile email offline_access',
   clientId: string,
+  scopes: string = DEFAULT_SCOPES,
 ): Promise<string> {
   const id = generateUUID();
   const token = `rt_${generateId(32)}`;
@@ -258,11 +284,45 @@ export async function issueRefreshToken(
  * @param expectedClientId - 发起轮换的 OAuth client（token 端点必传）
  * @returns 新的 accessToken + refreshToken + expiresIn，失败返回 null
  */
+/** Drizzle 事务句柄类型（与 lib/audit 的提取方式一致） */
+type RefreshTokenTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+/** 撤销同属一个授权家族 (userId, clientId) 的全部 Refresh Token（RFC 9700 §4.14）。
+ *  重放检测与 sender 绑定失配共用此原语，消除两处相同 SQL 的漂移面。 */
+async function revokeTokenFamily(tx: RefreshTokenTx, userId: string, clientId: string): Promise<void> {
+  await tx
+    .update(schema.refreshTokens)
+    .set({ revoked: new Date() })
+    .where(and(
+      eq(schema.refreshTokens.userId, userId),
+      eq(schema.refreshTokens.clientId, clientId),
+    ));
+}
+
+/**
+ * 【server-only async】在事务外撤销同授权家族 (userId, clientId) 的全部 Refresh Token。
+ *
+ * 供 token 端点的授权码重放检测（RFC 9700 §4.2.4）使用——该路径不在
+ * rotateRefreshToken 事务内，用 db 直连版本；重放撤销幂等，无原子性要求。
+ *
+ * @param userId - 被重放授权码归属的用户
+ * @param clientId - 被重放授权码归属的 OAuth Client
+ */
+export async function revokeRefreshTokenFamily(userId: string, clientId: string): Promise<void> {
+  await db
+    .update(schema.refreshTokens)
+    .set({ revoked: new Date() })
+    .where(and(
+      eq(schema.refreshTokens.userId, userId),
+      eq(schema.refreshTokens.clientId, clientId),
+    ));
+}
+
 export async function rotateRefreshToken(
   oldRefreshToken: string,
   expectedClientId?: string,
 ): Promise<RefreshTokenResult | null> {
-  const lockedRt = await db.transaction(async (tx) => {
+  const outcome = await db.transaction(async (tx) => {
     const rows = await tx
       .select({ rt: schema.refreshTokens })
       .from(schema.refreshTokens)
@@ -278,13 +338,7 @@ export async function rotateRefreshToken(
     if (rt.revoked) {
       // RFC 9700 §4.14：轮换后的 RT 被重放 = 疑似泄露，撤销同一家族
       // （同用户 + 同 client）的全部 Refresh Token
-      await tx
-        .update(schema.refreshTokens)
-        .set({ revoked: new Date() })
-        .where(and(
-          eq(schema.refreshTokens.userId, rt.userId),
-          eq(schema.refreshTokens.clientId, rt.clientId),
-        ));
+      await revokeTokenFamily(tx, rt.userId, rt.clientId);
       return null;
     }
 
@@ -293,13 +347,7 @@ export async function rotateRefreshToken(
     // sender 绑定强制（RFC 9700）：提交的 RT 不属于认证中的 client =
     // 疑似泄露/伪造，视同重放 —— 撤销该授权家族并拒绝
     if (expectedClientId && rt.clientId !== expectedClientId) {
-      await tx
-        .update(schema.refreshTokens)
-        .set({ revoked: new Date() })
-        .where(and(
-          eq(schema.refreshTokens.userId, rt.userId),
-          eq(schema.refreshTokens.clientId, rt.clientId),
-        ));
+      await revokeTokenFamily(tx, rt.userId, rt.clientId);
       return null;
     }
 
@@ -309,11 +357,11 @@ export async function rotateRefreshToken(
       .where(eq(schema.refreshTokens.id, rt.id));
 
     const newRtId = generateUUID();
-    const newRtToken = `rt_${generateId(32)}`;
+    const newRefreshToken = `rt_${generateId(32)}`;
     const now = new Date();
     await tx.insert(schema.refreshTokens).values({
       id: newRtId,
-      tokenHash: hashToken(newRtToken),
+      tokenHash: hashToken(newRefreshToken),
       userId: rt.userId,
       clientId: rt.clientId,
       scopes: rt.scopes,
@@ -321,19 +369,34 @@ export async function rotateRefreshToken(
       expiresAt: new Date(now.getTime() + REFRESH_TOKEN_TTL * 1000),
     });
 
-    return { rt, newRefreshToken: newRtToken };
+    return { rt, newRtId, newRefreshToken };
   });
 
-  if (!lockedRt) return null;
-  const { rt, newRefreshToken } = lockedRt;
+  if (!outcome) return null;
+  const { rt, newRtId, newRefreshToken } = outcome;
 
-  const permCtx = await getUserPermissionContext(rt.userId);
-  if (!permCtx) return null;
-  await cacheUserPermissionContext(rt.userId, permCtx);
+  // 事务已提交：以下任一失败必须补偿回收刚入库的新 RT —— 否则产生
+  // "已入库但永不发放"的孤儿行（明文已丢弃，无人可用，但属垃圾数据）
+  try {
+    const permCtx = await getUserPermissionContext(rt.userId);
+    if (!permCtx) throw new Error('用户权限上下文不可用（fail-close）');
+    await cacheUserPermissionContext(rt.userId, permCtx);
 
-  const { token: accessToken } = await signAccessToken(rt.userId, rt.scopes);
+    const { token: accessToken } = await signAccessToken(rt.userId, rt.clientId, rt.scopes);
 
-  return { accessToken, refreshToken: newRefreshToken, expiresIn: ACCESS_TOKEN_TTL };
+    return { accessToken, refreshToken: newRefreshToken, expiresIn: ACCESS_TOKEN_TTL };
+  } catch (e) {
+    log.error('RT 轮换后置步骤失败，补偿回收新 RT', { error: (e as Error).message });
+    try {
+      // 仅回收新 RT 本身（不触发家族级联——infra 故障不应牵连其他会话）
+      await db.update(schema.refreshTokens)
+        .set({ revoked: new Date() })
+        .where(eq(schema.refreshTokens.id, newRtId));
+    } catch (revokeErr) {
+      log.error('补偿回收新 RT 失败', { error: (revokeErr as Error).message });
+    }
+    return null;
+  }
 }
 
 /**
