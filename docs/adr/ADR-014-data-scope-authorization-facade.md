@@ -69,7 +69,7 @@ apps/portal/src/lib/authz/
 ├── scope.ts       纯函数：Scope 类型 + canAccess()（零 I/O）
 ├── resolve.ts     I/O：resolveScope(executor, operatorId) -> Scope
 ├── query.ts       读路径：scopeFilter(scope, column)（空 scope ⇒ sql`FALSE`）
-├── write.ts       写路径：assertScope（现 requireDeptAccess 改为 scope-first，模块内私有）
+├── write.ts       写路径：withScopedWrite / withScopedRow（scope-first，守卫配置由调用方声明）
 ├── with-scoped-write.ts  写入口包装器：事务 + 事务内快照 + 守卫 + 错误映射 + 审计
 └── index.ts       只导出 withScopedWrite / resolveScope / scopeFilter / canAccess / Scope
 ```
@@ -149,7 +149,7 @@ like(schema.departments.ancestors, `${deptId}/%`),   // 只匹配二级及更深
 
 修复：谓词补 `eq(schema.departments.ancestors, deptId)`（直接子部门），保留 `LIKE`（更深层）。测试期望同步翻转为 `{ROOT, TECH, MKT, FE, BE}` 长度 5。
 4. ✅ **关门面**：`lib/auth/index.ts` 不再导出 `getUserRoleDeptIds` / `canAccessDept`。
-   - 仅保留 `requireDeptAccess`：它是 executor-first 的，Server Action 侧 16 处调用全部正确；迁移到 `withScopedWrite` 是后续步骤。
+   - **后续步骤已闭合（2026-10-08）**：`requireDeptAccess` 当时被保留（executor-first，Server Action 侧 16 处调用正确），迁移到 `withScopedWrite` 属后续工作。该迁移已完成——引入 `withScopedWrite` / `withScopedRow` 后，`requireDeptAccess` **实测 0 处调用**，已连同其 barrel 导出与 11 个测试文件的 mock 一并撤下（`authz-surface.test.ts` 的断言反转为"不再导出"）。
    - 撤下后全库对这两个原语的引用降为 **0**（只剩 `lib/auth/data-scope.ts` 自身定义与 `lib/authz` 的内部使用）。
 5. ✅ **单一入口检查测试（替代原定的 lint 规则）**：
    - ⚠️ **偏离原计划并说明理由**：原定"禁止在 `app/api/**` 直接 `db.select`"的 lint 规则**被否决**——全库有 **39 个文件**合法导入 `@/infrastructure/db`（其中 13 个做写操作），宽泛禁令需要大范围白名单，噪声大于价值；且 ADR 已明确"Drizzle 无运行时拦截层、这层封不死"。**次优强制不应伪装成强强制。**

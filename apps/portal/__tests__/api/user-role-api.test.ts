@@ -44,7 +44,6 @@ vi.mock('@/lib/auth', () => ({
     }
   }),
   canAccessDept: vi.fn(() => true),
-  requireDeptAccess: vi.fn(async () => {}),
   getUserRoleDeptIds: vi.fn(async () => ['00000000-0000-4000-8000-000000000001']),
   logServerDataRead: vi.fn(async () => {}),
 }));

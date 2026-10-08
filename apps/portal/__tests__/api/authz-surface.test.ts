@@ -29,10 +29,15 @@ describe('@/lib/auth 公开面', () => {
     expect(auth).not.toHaveProperty('canAccessDept');
   });
 
-  it('保留 requireDeptAccess（executor-first，Server Action 侧唯一正确的用法）', async () => {
+  it('requireDeptAccess 亦已撤下（调用点全部迁移到 withScoped*，实测 0 处调用）', async () => {
     const auth = await import('@/lib/auth');
 
-    expect(typeof auth.requireDeptAccess).toBe('function');
+    expect(auth).not.toHaveProperty('requireDeptAccess');
+  });
+
+  it('保留 withPermission / withAuth / resolveIdentity', async () => {
+    const auth = await import('@/lib/auth');
+
     expect(typeof auth.withPermission).toBe('function');
     expect(typeof auth.withAuth).toBe('function');
     expect(typeof auth.resolveIdentity).toBe('function');

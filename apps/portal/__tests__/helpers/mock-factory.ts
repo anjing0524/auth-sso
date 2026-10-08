@@ -63,7 +63,6 @@ export interface HoistedHolders {
     logServerDataRead: ReturnType<typeof vi.fn>;
     getUserRoleDeptIds: ReturnType<typeof vi.fn>;
     canAccessDept: ReturnType<typeof vi.fn>;
-    requireDeptAccess: ReturnType<typeof vi.fn>;
   };
 
   /** @/lib/crypto mock */
@@ -127,7 +126,6 @@ export function createHoistedHolders(): HoistedHolders {
       logServerDataRead: vi.fn(async () => {}),
       getUserRoleDeptIds: vi.fn(() => Promise.resolve([] as string[])),
       canAccessDept: vi.fn(() => true),
-      requireDeptAccess: vi.fn(async () => {}),
     },
 
     mockCrypto: {

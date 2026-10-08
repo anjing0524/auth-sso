@@ -12,7 +12,6 @@ import { eq, or, like } from 'drizzle-orm';
 import { schema } from '@/infrastructure/db';
 import type { DbExecutor } from '@/infrastructure/db';
 import { ENTITY_ACTIVE } from '@auth-sso/contracts';
-import { ForbiddenError } from '@/domain/shared/errors';
 
 /**
  * 获取用户可访问的部门 ID 列表（含子树展开）
@@ -109,28 +108,3 @@ export function canAccessDept(
   return deptIds.includes(targetDeptId);
 }
 
-/**
- * 作用域守卫：在传入的 executor 上计算操作者范围快照，并校验全部目标部门可访问，
- * 任一目标越界即抛 ForbiddenError（经 mapDomainError 统一映射为 403）。
- *
- * 写操作的调用规范：在事务内加载目标行（404 归调用方）后调用本函数并传 `tx`，
- * 使权限快照与业务写入同事务——快照读到的是本事务内的操作者角色状态。
- * 每个目标携带各自的越界消息（如"无权操作该部门的用户"与"无权将用户迁移至该部门"），
- * 可选目标（仅存在时校验，如"拟迁移至的目标部门"）由调用方按存在性展开传入。
- *
- * @param executor 事务句柄（写守卫）或 db（无事务场景）
- * @param operatorId 操作者用户 ID
- * @param targets 逐项 `[目标部门 ID, 越界消息]`；deptId 为 null/undefined 视为越界
- */
-export async function requireDeptAccess(
-  executor: DbExecutor,
-  operatorId: string,
-  ...targets: Array<readonly [deptId: string | null | undefined, message: string]>
-): Promise<void> {
-  const deptIds = await getUserRoleDeptIds(executor, operatorId);
-  for (const [deptId, message] of targets) {
-    if (!canAccessDept(deptIds, deptId)) {
-      throw new ForbiddenError(message);
-    }
-  }
-}

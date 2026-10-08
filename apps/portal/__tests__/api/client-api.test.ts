@@ -23,7 +23,6 @@ vi.mock('@/lib/auth', () => ({
   logServerDataRead: vi.fn(async () => {}),
   getUserRoleDeptIds: vi.fn().mockResolvedValue([]),
   canAccessDept: vi.fn(() => true),
-  requireDeptAccess: vi.fn(async () => {}),
   withPermission: (_options: any, handler: Function) => handler('00000000-0000-4000-8000-000000000101'),
 }));
 vi.mock('next/cache', () => ({
