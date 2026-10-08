@@ -13,7 +13,7 @@ import 'server-only';
 import { cache } from 'react';
 
 import { resolveIdentity } from './verify-jwt';
-import { ADMIN_ROLE_CODES } from '@auth-sso/contracts';
+import { canAll, canAny, hasRole as hasRoleShared, isAdminRole } from '@auth-sso/contracts';
 import type { AuditOperation } from '@auth-sso/contracts';
 import { getUserPermissionContext } from '@/lib/permissions';
 
@@ -21,9 +21,9 @@ import { getUserPermissionContext } from '@/lib/permissions';
  * 权限检查选项接口定义
  */
 export interface PermissionCheckOptions {
-  /** 需要的权限编码列表（requireAll=false 时满足任一即可） */
+  /** 需要的权限编码列表（requireAll=false 时满足任一即可；管理员绕过） */
   permissions?: string[];
-  /** 需要的角色编码列表（requireAll=false 时满足任一即可） */
+  /** 需要的角色编码列表（requireAll=false 时满足任一即可；**不因管理员而绕过**） */
   roles?: string[];
   /** 为 true 时要求满足所有权限/角色，默认 false（满足任一即可） */
   requireAll?: boolean;
@@ -67,25 +67,32 @@ export async function checkPermission(
   // 双处漂移；用"空数组"误判缓存 miss，导致合法空权限用户每次请求穿透 DB。
   // ctx 为 null（用户不存在/DB 异常）时按无权限处理 = fail-close（ADR-011）。
   const ctx = await getUserPermissionContext(userId);
-  const roles = ctx?.roles.map((r) => r.code) ?? [];
-  const permissions = ctx?.permissions ?? [];
+  // 判定统一委托 @auth-sso/contracts 的纯函数（与客户端共用同一实现，ADR-015）。
+  const subject = {
+    roleCodes: ctx?.roles.map((r) => r.code) ?? [],
+    permissionCodes: ctx?.permissions ?? [],
+  };
 
-  if (roles.some((rc) => (ADMIN_ROLE_CODES as readonly string[]).includes(rc))) {
+  // 管理员绕过权限码检查（ADR-001 既有语义）。角色归属**不**因此绕过。
+  if (isAdminRole(subject.roleCodes)) {
     return { authorized: true, userId };
   }
 
-  const checkList = (required: string[], owned: string[], mode: boolean | undefined) => {
-    return mode ? required.every((x) => owned.includes(x)) : required.some((x) => owned.includes(x));
-  };
-
   if (options.permissions?.length) {
-    if (!checkList(options.permissions, permissions, options.requireAll)) {
+    const ok = options.requireAll
+      ? canAll(subject, options.permissions)
+      : canAny(subject, options.permissions);
+    if (!ok) {
       return { authorized: false, userId, error: '权限不足', statusCode: 403 };
     }
   }
 
   if (options.roles?.length) {
-    if (!checkList(options.roles, roles, options.requireAll)) {
+    const matched = options.roles.some((code) => hasRoleShared(subject, code));
+    const ok = options.requireAll
+      ? options.roles.every((code) => hasRoleShared(subject, code))
+      : matched;
+    if (!ok) {
       return { authorized: false, userId, error: '角色权限不足', statusCode: 403 };
     }
   }

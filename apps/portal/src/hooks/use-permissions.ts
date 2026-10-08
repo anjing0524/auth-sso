@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { ADMIN_ROLE_CODES } from '@auth-sso/contracts';
+import { can, hasRole as hasRoleShared, isAdminRole } from '@auth-sso/contracts';
 
 export interface PermissionContext {
   roles: Array<{ id: string; code: string; name: string }>;
@@ -60,19 +60,26 @@ export function usePermissions(userId: string = 'default') {
     };
   }, [userId]);
 
+  // 判定统一委托 @auth-sso/contracts 的纯函数（与服务端共用同一实现，ADR-015）。
   const isAdmin = useCallback(
-    () => ctx.roles.some((r) => (ADMIN_ROLE_CODES as readonly string[]).includes(r.code)),
+    () => isAdminRole(ctx.roles.map((r) => r.code)),
     [ctx.roles],
   );
 
   const hasPermission = useCallback(
-    (code: string) => isAdmin() || ctx.permissions.includes(code),
-    [isAdmin, ctx.permissions],
+    (code: string) => can(
+      { roleCodes: ctx.roles.map((r) => r.code), permissionCodes: ctx.permissions },
+      code,
+    ),
+    [ctx.roles, ctx.permissions],
   );
 
   const hasRole = useCallback(
-    (code: string) => ctx.roles.some((r) => r.code === code),
-    [ctx.roles],
+    (code: string) => hasRoleShared(
+      { roleCodes: ctx.roles.map((r) => r.code), permissionCodes: ctx.permissions },
+      code,
+    ),
+    [ctx.roles, ctx.permissions],
   );
 
   return { ...ctx, hasPermission, hasRole, isAdmin };

@@ -12,7 +12,6 @@ import { resolveIdentity } from '@/lib/auth';
 import { getUser } from '@/app/(dashboard)/users/data';
 import { getDynamicMenuTree } from '@/lib/menu-tree';
 import { getUserPermissionContext } from '@/lib/permissions';
-import { ADMIN_ROLE_CODES } from '@auth-sso/contracts';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 
 /**
@@ -28,8 +27,8 @@ async function DashboardContent({ children }: { children: React.ReactNode }) {
   const permCtx = await getUserPermissionContext(identity.userId);
   const roles = permCtx?.roles.map(r => r.code) ?? [];
   const permissions = permCtx?.permissions ?? [];
-  const isAdmin = roles.some((r) => (ADMIN_ROLE_CODES as readonly string[]).includes(r));
-  const menus = await getDynamicMenuTree(permissions, isAdmin);
+  const subject = { roleCodes: roles, permissionCodes: permissions };
+  const menus = await getDynamicMenuTree(subject);
 
   // 并行获取用户数据（仅用于 UI 展示）
   const user = await getUser(identity.userId);

@@ -8,7 +8,7 @@
  *
  * @module domain/auth/oauth-authorize
  */
-import { ENTITY_ACTIVE, ADMIN_ROLE_CODES } from '@auth-sso/contracts';
+import { ENTITY_ACTIVE, isAdminRole } from '@auth-sso/contracts';
 import { InvalidScopeError } from '@/domain/shared/errors';
 
 export { InvalidScopeError } from '@/domain/shared/errors';
@@ -38,8 +38,6 @@ export interface AuthorizationResult {
   message?: string;
 }
 
-const ADMIN_ROLES = new Set<string>(ADMIN_ROLE_CODES);
-
 /**
  * 检查用户是否有权访问指定的 OAuth Client
  *
@@ -62,7 +60,7 @@ function checkUserClientAccess(input: AuthorizationInput): AuthorizationResult {
     };
   }
 
-  const isAdmin = activeRoles.some((r) => ADMIN_ROLES.has(r.code));
+  const isAdmin = isAdminRole(activeRoles.map((r) => r.code));
   if (isAdmin) {
     return { allowed: true };
   }

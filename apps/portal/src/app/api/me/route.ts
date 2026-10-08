@@ -14,7 +14,7 @@ import { resolveIdentity } from '@/lib/auth';
 import { getDynamicMenuTree } from '@/lib/menu-tree';
 import { getUserPermissionContext } from '@/lib/permissions';
 import { mapServerError } from '@/lib/server-error';
-import { COMMON_ERRORS, ADMIN_ROLE_CODES } from '@auth-sso/contracts';
+import { COMMON_ERRORS } from '@auth-sso/contracts';
 import { restSuccess, restError } from '@/lib/response';
 import { getUser } from '@/app/(dashboard)/users/data';
 
@@ -34,8 +34,8 @@ export async function GET(_request: NextRequest) {
     const roles = permCtx?.roles.map(r => r.code) ?? [];
     const permissions = permCtx?.permissions ?? [];
     const deptIds = permCtx?.deptIds ?? [];
-    const isAdmin = roles.some((r) => (ADMIN_ROLE_CODES as readonly string[]).includes(r));
-    const menuItems = await getDynamicMenuTree(permissions, isAdmin);
+    const subject = { roleCodes: roles, permissionCodes: permissions };
+    const menuItems = await getDynamicMenuTree(subject);
 
     const user = await getUser(userId);
     if (!user) {

@@ -10,6 +10,7 @@
  */
 import { db, schema } from '@/infrastructure/db';
 import { eq, inArray, and } from 'drizzle-orm';
+import { can, type AuthorizationSubject } from '@auth-sso/contracts';
 
 export interface SidebarMenuItem {
   id: string;
@@ -23,15 +24,17 @@ export interface SidebarMenuItem {
  * 获取当前用户可见的动态菜单树
  *
  * 查询 permissions 表中 type = 'DIRECTORY' 或 'PAGE' 且 status = 'ACTIVE' 的记录，
- * 按用户权限过滤：有 permission_code → 用户必须拥有该 code（或为 admin）才能看到。
+ * 按权限过滤。**没有权限码的菜单项对所有已登录用户可见**（`!m.code` 分支）。
  *
- * @param userPermissions  用户拥有的权限编码列表
- * @param isAdmin          是否为管理员（绕过权限检查）
+ * 判定委托 `@auth-sso/contracts` 的 `can`（与 checkPermission / usePermissions
+ * 共用同一实现，ADR-015）——此前这里内联了 `isAdmin || userPermissions.includes(code)`，
+ * 是同一规则的第七份拷贝。
+ *
+ * @param subject 判定主体（角色编码 + 权限编码）
  * @returns 过滤并构建好的菜单树
  */
 export async function getDynamicMenuTree(
-  userPermissions: string[],
-  isAdmin: boolean,
+  subject: AuthorizationSubject,
 ): Promise<SidebarMenuItem[]> {
   // 查询所有 ACTIVE 状态的 DIRECTORY 和 PAGE 类型权限（即菜单项）
   const allMenuItems = await db
@@ -49,7 +52,7 @@ export async function getDynamicMenuTree(
     return allMenuItems
       .filter((m) => m.parentId === parentId && m.visible !== false)
       .map((m): SidebarMenuItem | null => {
-        const hasPermission = !m.code || isAdmin || userPermissions.includes(m.code);
+        const hasPermission = !m.code || can(subject, m.code);
         const children = buildTree(m.id);
         if (!hasPermission && children.length === 0) return null;
         return {
