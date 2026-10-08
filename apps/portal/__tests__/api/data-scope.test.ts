@@ -2,12 +2,12 @@
  * 数据范围（Data Scope）集成测试 — 真实 DB
  *
  * 覆盖：
- * - getUserRoleDeptIds() 从真实 DB 中计算角色部门 + 子树展开
+ * - getUserRoleDeptIds(executor, userId) 从真实 DB 中计算角色部门 + 子树展开
  * - canAccessDept() 纯函数边界条件验证
  *
  * 种子数据链路：
  *   departments → users → roles → userRoles
- *   getUserRoleDeptIds(userId) 查询 users → userRoles → roles.dept_id → 子树展开
+ *   getUserRoleDeptIds(td.db, userId) 查询 users → userRoles → roles.dept_id → 子树展开
  *
  * @req H-DSCOPE-001~003
  * @vitest-environment node
@@ -263,27 +263,27 @@ describe('getUserRoleDeptIds', () => {
   it('用户不存在时返回空数组', async () => {
     await seedDataScopeFixture();
     // 使用合法 UUID 格式的不存在用户 ID
-    const result = await getUserRoleDeptIds('00000000-0000-4000-8000-000000000999');
+    const result = await getUserRoleDeptIds(td.db, '00000000-0000-4000-8000-000000000999');
     expect(result).toEqual([]);
   });
 
   it('用户无角色时返回空数组', async () => {
     await seedDataScopeFixture();
-    const result = await getUserRoleDeptIds(NO_ROLE_USER_ID);
+    const result = await getUserRoleDeptIds(td.db, NO_ROLE_USER_ID);
     expect(result).toEqual([]);
   });
 
   it('单角色单部门 — 返回角色对应部门自身', async () => {
     await seedDataScopeFixture();
     // TECH_USER_ID → FE_LEAD_ROLE → deptId = FE_DEPT_ID（无子部门）
-    const result = await getUserRoleDeptIds(TECH_USER_ID);
+    const result = await getUserRoleDeptIds(td.db, TECH_USER_ID);
     expect(new Set(result)).toEqual(new Set([FE_DEPT_ID]));
   });
 
   it('角色 deptId 为 TECH — 返回 TECH 部门自身', async () => {
     await seedDataScopeFixture();
     // ADMIN_USER_ID → TECH_ADMIN_ROLE → deptId = TECH_DEPT_ID
-    const result = await getUserRoleDeptIds(ADMIN_USER_ID);
+    const result = await getUserRoleDeptIds(td.db, ADMIN_USER_ID);
     expect(new Set(result)).toEqual(new Set([TECH_DEPT_ID]));
     expect(result.length).toBe(1);
   });
@@ -291,7 +291,7 @@ describe('getUserRoleDeptIds', () => {
   it('多角色多部门 — 合并去重', async () => {
     await seedDataScopeFixture();
     // MULTI_ROLE_USER_ID → TECH_ADMIN_ROLE (deptId = TECH_DEPT_ID) + MKT_ROLE (deptId = MKT_DEPT_ID)
-    const result = await getUserRoleDeptIds(MULTI_ROLE_USER_ID);
+    const result = await getUserRoleDeptIds(td.db, MULTI_ROLE_USER_ID);
     expect(new Set(result)).toEqual(new Set([TECH_DEPT_ID, MKT_DEPT_ID]));
     expect(result.length).toBe(2);
   });
@@ -301,7 +301,7 @@ describe('getUserRoleDeptIds', () => {
     await td.db.insert(schema.userRoles).values([
       { userId: NO_ROLE_USER_ID, roleId: INACTIVE_ROLE_ID, createdAt: now },
     ]);
-    const result = await getUserRoleDeptIds(NO_ROLE_USER_ID);
+    const result = await getUserRoleDeptIds(td.db, NO_ROLE_USER_ID);
     expect(result).toEqual([]);
   });
 
@@ -312,7 +312,7 @@ describe('getUserRoleDeptIds', () => {
       { userId: MULTI_ROLE_USER_ID, roleId: INACTIVE_ROLE_ID, createdAt: now },
     ]);
     // 结果应与"多角色多部门"相同
-    const result = await getUserRoleDeptIds(MULTI_ROLE_USER_ID);
+    const result = await getUserRoleDeptIds(td.db, MULTI_ROLE_USER_ID);
     expect(new Set(result)).toEqual(new Set([TECH_DEPT_ID, MKT_DEPT_ID]));
   });
 
@@ -337,7 +337,7 @@ describe('getUserRoleDeptIds', () => {
       { userId: ADMIN_USER_ID, roleId: '00000000-0000-4000-8000-000000000505', createdAt: now },
     ]);
 
-    const result = await getUserRoleDeptIds(ADMIN_USER_ID);
+    const result = await getUserRoleDeptIds(td.db, ADMIN_USER_ID);
     // 两个角色：TECH_ADMIN(deptId=TECH) + ROOT_ADMIN(deptId=ROOT)
     // TECH: id=TECH_ID → TECH
     // ROOT: id=ROOT_ID → ROOT; LIKE 'ROOT_ID/%' → FE(ROOT_ID/TECH_ID), BE(ROOT_ID/TECH_ID)
@@ -372,7 +372,7 @@ describe('canAccessDept', () => {
 
   it('与 DB 查询结果一致性验证', async () => {
     await seedDataScopeFixture();
-    const deptIds = await getUserRoleDeptIds(ADMIN_USER_ID);
+    const deptIds = await getUserRoleDeptIds(td.db, ADMIN_USER_ID);
     // ADMIN → TECH_ADMIN_ROLE → deptId = TECH_DEPT_ID
     expect(canAccessDept(deptIds, TECH_DEPT_ID)).toBe(true);
     // FE / BE / MKT 不在其管辖范围

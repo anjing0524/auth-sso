@@ -26,12 +26,12 @@ import {
   UpdateRoleInputSchema,
   type CreateRoleInput,
 } from '@/domain/role/types';
-import { EntityNotFoundError, DuplicateEntityError, ForbiddenError, BusinessRuleViolationError } from '@/domain/shared/errors';
+import { EntityNotFoundError, DuplicateEntityError, BusinessRuleViolationError } from '@/domain/shared/errors';
 import { generateUUID } from '@/lib/crypto';
 import { validate } from '@/lib/validation';
 import { refreshUsersPermissionCache } from '@/lib/permissions';
 import { revokeUsersAccessByUserId } from '@/lib/session/revoke';
-import { canAccessDept, getUserRoleDeptIds } from '@/lib/auth';
+import { requireDeptAccess } from '@/lib/auth';
 import { ENTITY_ACTIVE, ROLE_PERMISSIONS } from '@auth-sso/contracts';
 import type { ApiResponse } from '@auth-sso/contracts';
 
@@ -58,14 +58,11 @@ export const createRoleAction = withAuth(
     const v = validate(CreateRoleInputSchema, input);
     if (!v.ok) return v.response;
 
-    // 数据范围校验：角色归属部门必须在操作者可访问范围内（R-ROLE-DEPT / R7）
-    const deptIds = await getUserRoleDeptIds(ctx.userId);
-    if (!canAccessDept(deptIds, v.data.deptId)) {
-      throw new ForbiddenError('无权在指定部门下创建角色');
-    }
-
-    // 查重 + 部门存在性/ACTIVE 校验 + 插入在事务中原子完成
+    // 查重 + 部门存在性/ACTIVE 校验 + 插入在事务中原子完成；范围守卫快照在事务内
     const role = await db.transaction(async (tx) => {
+      // 数据范围校验：角色归属部门必须在操作者可访问范围内（R-ROLE-DEPT / R7）
+      await requireDeptAccess(tx, ctx.userId, [v.data.deptId, '无权在指定部门下创建角色']);
+
       // 部门存在性 + ACTIVE 状态校验（DC-ROLE-C：不依赖 DB FK 兜底）
       const dept = await tx.query.departments.findFirst({
         where: eq(schema.departments.id, v.data.deptId),
@@ -104,12 +101,9 @@ export const updateRoleAction = withAuth(
     await db.transaction(async (tx) => {
       const row = await tx.query.roles.findFirst({ where: eq(schema.roles.id, roleId) });
       if (!row) throw new EntityNotFoundError('Role', roleId);
-      // 数据范围校验：目标角色归属部门 + 拟变更部门均在操作者可访问范围内
-      const deptIds = await getUserRoleDeptIds(ctx.userId);
-      if (!canAccessDept(deptIds, row.deptId)) throw new ForbiddenError('无权操作该部门的角色');
-      if (v.data.deptId && !canAccessDept(deptIds, v.data.deptId)) {
-        throw new ForbiddenError('无权将角色迁移至该部门');
-      }
+      // 数据范围校验：目标角色归属部门 + 拟变更部门均在操作者可访问范围内（快照在事务内消除 TOCTOU）
+      await requireDeptAccess(tx, ctx.userId, [row.deptId, '无权操作该部门的角色'],
+        ...(v.data.deptId ? [[v.data.deptId, '无权将角色迁移至该部门']] as const : []));
       const role = roleFromPersistence(row);
       guardNotSystemRole(role);
       const updated = applyRoleUpdate(role, v.data);
@@ -132,19 +126,19 @@ export const updateRoleAction = withAuth(
 export const deleteRoleAction = withAuth(
   { permissions: [ROLE_PERMISSIONS.DELETE], audit: 'ROLE_DELETE' },
   async (ctx: AuthContext, roleId: string): Promise<ApiResponse<{ id: string }>> => {
-    const row = await db.query.roles.findFirst({ where: eq(schema.roles.id, roleId) });
-    if (!row) throw new EntityNotFoundError('Role', roleId);
-    // 数据范围校验：目标角色归属部门必须在操作者可访问范围内
-    const deptIds = await getUserRoleDeptIds(ctx.userId);
-    if (!canAccessDept(deptIds, row.deptId)) throw new ForbiddenError('无权操作该部门的角色');
-
-    guardNotSystemRole(roleFromPersistence(row));
-
-    // 事务前预先获取绑定用户，事务后清除缓存
-    const boundUsers = await db.select({ userId: schema.userRoles.userId })
-      .from(schema.userRoles).where(eq(schema.userRoles.roleId, roleId));
-
+    let boundUsers: Array<{ userId: string }> = [];
     await db.transaction(async (tx) => {
+      const row = await tx.query.roles.findFirst({ where: eq(schema.roles.id, roleId) });
+      if (!row) throw new EntityNotFoundError('Role', roleId);
+      // 数据范围校验：目标角色归属部门必须在操作者可访问范围内（快照在事务内）
+      await requireDeptAccess(tx, ctx.userId, [row.deptId, '无权操作该部门的角色']);
+
+      guardNotSystemRole(roleFromPersistence(row));
+
+      // 事务内删除前预取绑定用户，事务后清除缓存
+      boundUsers = await tx.select({ userId: schema.userRoles.userId })
+        .from(schema.userRoles).where(eq(schema.userRoles.roleId, roleId));
+
       await tx.delete(schema.userRoles).where(eq(schema.userRoles.roleId, roleId));
       await tx.delete(schema.rolePermissions).where(eq(schema.rolePermissions.roleId, roleId));
       await tx.delete(schema.roles).where(eq(schema.roles.id, roleId));

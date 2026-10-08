@@ -249,7 +249,8 @@ describe('POST /api/auth/oauth2/token — 授权码重放检测（F7, RFC 9700 �
     const json = await res.json();
 
     expect(json.error).toBe('invalid_grant');
-    expect(mocks.mockRevokeRefreshTokenFamily).toHaveBeenCalledWith(USER_ID, 'portal');
+    // executor 首参（db 直连，重放检测在事务外）+ (userId, clientId) 家族锚点
+    expect(mocks.mockRevokeRefreshTokenFamily).toHaveBeenCalledWith(expect.anything(), USER_ID, 'portal');
     expect(mocks.mockWriteLoginLog).toHaveBeenCalledWith(
       expect.objectContaining({ eventType: 'TOKEN_REFRESH_FAILED' }),
     );

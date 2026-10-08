@@ -6,12 +6,13 @@
 import { Building2 } from 'lucide-react';
 import { resolveIdentity, getUserRoleDeptIds } from '@/lib/auth';
 import { getDepartments } from './data';
+import { db } from '@/infrastructure/db';
 import DepartmentTree from './components/DepartmentTree';
 
 export default async function DepartmentsPage() {
   // 鉴权由 departments/layout.tsx 负责（requirePermission(['department:list'])），此处只取身份信息。
   const identity = await resolveIdentity();
-  const deptIds = identity ? await getUserRoleDeptIds(identity.userId) : [];
+  const deptIds = identity ? await getUserRoleDeptIds(db, identity.userId) : [];
   const userId = identity?.userId ?? '';
   const departments = await getDepartments(deptIds, userId);
 

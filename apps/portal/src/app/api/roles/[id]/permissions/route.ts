@@ -25,7 +25,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     if (!role) {
       return restError(ROLE_ERRORS.ROLE_NOT_FOUND, '角色不存在', 404);
     }
-    const deptIds = await getUserRoleDeptIds(_userId);
+    const deptIds = await getUserRoleDeptIds(db, _userId);
     if (!canAccessDept(deptIds, role.deptId)) {
       return restError(COMMON_ERRORS.FORBIDDEN, '无权查看该角色的权限', 403);
     }

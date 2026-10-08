@@ -7,6 +7,7 @@ import { type NextRequest } from 'next/server';
 import { withPermission, canAccessDept, getUserRoleDeptIds, logServerDataRead } from '@/lib/auth';
 import { DEPARTMENT_ERRORS, COMMON_ERRORS, DEPARTMENT_PERMISSIONS } from '@auth-sso/contracts';
 import { getDepartmentById } from '@/app/(dashboard)/departments/data';
+import { db } from '@/infrastructure/db';
 import { restSuccess, restError } from '@/lib/response';
 
 interface RouteParams { params: Promise<{ id: string }>; }
@@ -18,7 +19,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const dept = await getDepartmentById(id);
     if (!dept) return restError(DEPARTMENT_ERRORS.DEPARTMENT_NOT_FOUND, '部门不存在', 404);
 
-    const deptIds = await getUserRoleDeptIds(_userId);
+    const deptIds = await getUserRoleDeptIds(db, _userId);
     if (!canAccessDept(deptIds, dept.id)) return restError(COMMON_ERRORS.FORBIDDEN, '无权访问该部门', 403);
 
     // 记录访问日志

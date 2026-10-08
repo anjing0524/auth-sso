@@ -126,17 +126,38 @@ The skill has specialized workflows that produce better results than ad-hoc answ
 
 Key routing rules:
 
-- Product ideas, "is this worth building", brainstorming → invoke office-hours
-- Bugs, errors, "why is this broken", 500 errors → invoke investigate
-- Ship, deploy, push, create PR → invoke ship
-- QA, test the site, find bugs → invoke qa
-- Code review, check my diff → invoke review
-- Update docs after shipping → invoke document-release
-- Weekly retro → invoke retro
-- Spec docs maintenance, PRD update, requirements matrix → invoke spec-docs
-- Portal architecture, Server Actions, domain logic → invoke architecting-portal
-- Design system, brand → invoke design-consultation
-- Visual audit, design polish → invoke design-review
-- Architecture review → invoke plan-eng-review
-- Save progress, checkpoint, resume → invoke checkpoint
-- Code quality, health check → invoke health
+- Product ideas, "is this worth building", stress-test a plan → invoke grilling (grill-with-docs when ADRs/glossary should be written along the way)
+- Bugs, errors, "why is this broken", slow regressions → invoke diagnosing-bugs
+- Code review of a branch, PR, or diff since X → invoke code-review
+- Spec/PRD synthesis from the current conversation → invoke to-spec
+- Break a plan/spec into tickets → invoke to-tickets
+- Triage/categorize GitHub issues → invoke triage
+- Implement work per spec or tickets → invoke implement
+- Build/fix test-first, red-green-refactor → invoke tdd
+- Research a topic against primary sources → invoke research
+- Design or improve a module's interface → invoke codebase-design
+- Architecture review, find deepening opportunities → invoke improve-codebase-architecture
+- Terminology, CONTEXT.md, ADR authoring → invoke domain-modeling
+- Throwaway prototype to answer a design question → invoke prototype
+- In-progress merge/rebase conflicts → invoke resolving-merge-conflicts
+- Work too large for one session, plan as a ticket map → invoke wayfinder
+- Save progress / compact conversation for another agent → invoke handoff
+- Provisioning, credentials, CI secrets walkthroughs → invoke wizard
+- Git commit, PR, or release on GitHub → invoke github:commit / github:pr / github:release
+- QA the site in a browser, find UI/visual bugs → invoke browser-use:web-gui-tester
+- Writing skills or editing AGENTS.md/CLAUDE.md → invoke writing-for-agents
+- Unsure which skill fits → invoke ask-matt
+
+## Agent skills
+
+### Issue tracker
+
+Issues live in GitHub Issues (`anjing0524/auth-sso`) via the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Five canonical triage labels kept at their defaults. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: root `CONTEXT.md` + the existing `docs/adr/` (ADR-001~013). See `docs/agents/domain.md`.

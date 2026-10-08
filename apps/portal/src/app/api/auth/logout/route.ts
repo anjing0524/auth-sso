@@ -21,6 +21,7 @@ import { safeRedirectPath } from '@/lib/oauth-utils';
 import { db, schema } from '@/infrastructure/db';
 import { eq } from 'drizzle-orm';
 import { revokeJti, revokeUserAccessByUserId } from '@/lib/session/revoke';
+import { revokeRefreshTokenByTokenHash, revokeUserRefreshTokens } from '@/lib/auth/token/revocation';
 import { createLogger } from '@/lib/logger';
 
 const log = createLogger('Logout');
@@ -77,10 +78,8 @@ async function performRevocation(cookieStore: Awaited<ReturnType<typeof cookies>
   try {
     const refreshToken = await getRefreshTokenFromCookie();
     if (refreshToken) {
-      await db
-        .update(schema.refreshTokens)
-        .set({ revoked: new Date() })
-        .where(eq(schema.refreshTokens.tokenHash, hashToken(refreshToken)));
+      // tokenHash 存储的是 SHA256(token)，查询时需同样 hash 匹配
+      await revokeRefreshTokenByTokenHash(db, hashToken(refreshToken));
     }
   } catch (e) {
     log.error('Refresh Token 撤销失败', { error: (e as Error).message });
@@ -89,10 +88,7 @@ async function performRevocation(cookieStore: Awaited<ReturnType<typeof cookies>
   // 4. DB: 按用户 ID 撤销全部 Refresh Token + 批量撤销 Access Token（防御纵深）
   if (userId) {
     try {
-      await db
-        .update(schema.refreshTokens)
-        .set({ revoked: new Date() })
-        .where(eq(schema.refreshTokens.userId, userId));
+      await revokeUserRefreshTokens(db, userId);
     } catch (e) {
       log.error('批量撤销 Refresh Token 失败', { error: (e as Error).message });
     }

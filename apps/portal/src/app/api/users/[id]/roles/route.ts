@@ -10,6 +10,7 @@ import { z } from 'zod';
 import { db, schema } from '@/infrastructure/db';
 import { eq, inArray, and } from 'drizzle-orm';
 import { withPermission, canAccessDept, getUserRoleDeptIds, logServerDataRead } from '@/lib/auth';
+import { withScopedWrite } from '@/lib/authz';
 import { appendSecurityAudit, extractClientIP, extractUserAgent } from '@/lib/audit';
 import { refreshUserPermissionCache } from '@/lib/permissions';
 import { revokeUserAccessByUserId } from '@/lib/session/revoke';
@@ -58,7 +59,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     if (!target) {
       return restError(USER_ERRORS.USER_NOT_FOUND, '用户不存在', 404);
     }
-    const deptIds = await getUserRoleDeptIds(_adminUserId);
+    const deptIds = await getUserRoleDeptIds(db, _adminUserId);
     if (!canAccessDept(deptIds, target.deptId)) {
       return restError(COMMON_ERRORS.FORBIDDEN, '无权查看该用户', 403);
     }
@@ -83,51 +84,55 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     const userId = users[0]!.id;
 
-    const deptIds = await getUserRoleDeptIds(adminUserId);
-    if (!canAccessDept(deptIds, users[0]!.deptId)) {
-      return restError(COMMON_ERRORS.FORBIDDEN, '无权操作该用户', 403);
-    }
+    // 数据范围守卫 + 角色部门约束 + 写入，全部在同一事务内（ADR-014 / H-ACL-002）。
+    // 原实现把操作者范围快照取在事务外、再在事务内复用，操作者被降权后仍会放行。
+    const result = await withScopedWrite(
+      {
+        operatorId: adminUserId,
+        targets: async (tx) => {
+          const target = await tx.query.users.findFirst({
+            where: eq(schema.users.id, id),
+            columns: { deptId: true },
+          });
+          if (!target) return [];   // 不存在交由下方 404 分支处理
+          return [{ deptId: target.deptId, message: '无权操作该用户' }];
+        },
+      },
+      async (tx) => {
+        const userRow = await tx.query.users.findFirst({
+          where: eq(schema.users.id, id),
+          columns: { id: true, deptId: true },
+        });
+        if (!userRow) return { success: false as const, error: COMMON_ERRORS.NOT_FOUND, message: '用户不存在', status: 404 };
 
-    // 事务内重读用户 deptId + 重验角色部门约束，防止 TOCTOU（H-ACL-002）
-    const result = await db.transaction(async (tx) => {
-      const userRow = await tx.query.users.findFirst({
-        where: eq(schema.users.id, id),
-        columns: { id: true, deptId: true },
-      });
-      if (!userRow) return { error: USER_ERRORS.USER_NOT_FOUND, message: '用户不存在', status: 404 } as const;
+        const errMsg = await validateRoleAssignment(tx, userRow.deptId, roleIds);
+        if (errMsg) return { success: false as const, error: COMMON_ERRORS.VALIDATION_ERROR, message: errMsg, status: 400 };
 
-      if (!canAccessDept(deptIds, userRow.deptId)) {
-        return { error: COMMON_ERRORS.FORBIDDEN, message: '无权操作该用户', status: 403 } as const;
-      }
+        await tx.delete(schema.userRoles).where(eq(schema.userRoles.userId, userRow.id));
+        await tx.insert(schema.userRoles).values(roleIds.map(roleId => ({ userId: userRow.id, roleId, createdAt: new Date() })));
+        await appendSecurityAudit(tx, {
+          userId: adminUserId,
+          operation: 'USER_ROLE_ASSIGN',
+          method: 'POST',
+          url: request.url,
+          params: { targetUserId: userRow.id, roleIds },
+          ip: extractClientIP(request.headers),
+          userAgent: extractUserAgent(request.headers),
+          status: 200,
+        });
+        return { success: true as const, assignedCount: roleIds };
+      },
+    );
 
-      const errMsg = await validateRoleAssignment(tx, userRow.deptId, roleIds);
-      if (errMsg) return { error: COMMON_ERRORS.VALIDATION_ERROR, message: errMsg, status: 400 } as const;
-
-      await tx.delete(schema.userRoles).where(eq(schema.userRoles.userId, userRow.id));
-      await tx.insert(schema.userRoles).values(roleIds.map(roleId => ({ userId: userRow.id, roleId, createdAt: new Date() })));
-      await appendSecurityAudit(tx, {
-        userId: adminUserId,
-        operation: 'USER_ROLE_ASSIGN',
-        method: 'POST',
-        url: request.url,
-        params: { targetUserId: userRow.id, roleIds },
-        ip: extractClientIP(request.headers),
-        userAgent: extractUserAgent(request.headers),
-        status: 200,
-      });
-      return { assignedCount: roleIds }; // no as const — avoids type narrowing issues
-    });
-
-    if ('error' in result) {
-      const { error, message, status } = result as { error: string; message: string; status: number };
-      return restError(error, message, status);
+    if (!result.success) {
+      return restError(result.error, result.message, result.status);
     }
 
     await refreshUserPermissionCache(userId);
     await revokeUserAccessByUserId(userId);
     revalidatePath('/users');
     updateTag('users-list');
-    return restSuccess(result);
+    return restSuccess({ assignedCount: result.assignedCount });
   });
 }
 
@@ -150,35 +155,45 @@ export async function DELETE(
     if (!parsed.success) return restError(COMMON_ERRORS.VALIDATION_ERROR, '角色ID格式不合法', 400);
     const { roleId } = parsed.data;
 
-    const deptIds = await getUserRoleDeptIds(adminUserId);
-    const result = await db.transaction(async (tx) => {
-      const userRow = await tx.query.users.findFirst({
-        where: eq(schema.users.id, id),
-        columns: { id: true, deptId: true },
-      });
-      if (!userRow) return { success: false as const, error: COMMON_ERRORS.NOT_FOUND, message: '用户不存在', status: 404 };
-      if (!canAccessDept(deptIds, userRow.deptId)) {
-        return { success: false as const, error: COMMON_ERRORS.FORBIDDEN, message: '无权操作该用户', status: 403 };
-      }
-      await tx.delete(schema.userRoles).where(and(
-        eq(schema.userRoles.userId, userRow.id),
-        eq(schema.userRoles.roleId, roleId),
-      ));
-      await appendSecurityAudit(tx, {
-        userId: adminUserId,
-        operation: 'USER_ROLE_ASSIGN',
-        method: 'DELETE',
-        url: request.url,
-        params: { targetUserId: userRow.id, roleId },
-        ip: extractClientIP(request.headers),
-        userAgent: extractUserAgent(request.headers),
-        status: 200,
-      });
-      return { success: true as const, userId: userRow.id };
-    });
+    // 数据范围守卫与写入同事务（ADR-014 / H-ACL-002）——原先快照取自事务外。
+    const result = await withScopedWrite(
+      {
+        operatorId: adminUserId,
+        targets: async (tx) => {
+          const target = await tx.query.users.findFirst({
+            where: eq(schema.users.id, id),
+            columns: { deptId: true },
+          });
+          if (!target) return [];   // 不存在交由下方 404 分支处理
+          return [{ deptId: target.deptId, message: '无权操作该用户' }];
+        },
+      },
+      async (tx) => {
+        const userRow = await tx.query.users.findFirst({
+          where: eq(schema.users.id, id),
+          columns: { id: true },
+        });
+        if (!userRow) return { success: false as const, error: COMMON_ERRORS.NOT_FOUND, message: '用户不存在', status: 404 };
+
+        await tx.delete(schema.userRoles).where(and(
+          eq(schema.userRoles.userId, userRow.id),
+          eq(schema.userRoles.roleId, roleId),
+        ));
+        await appendSecurityAudit(tx, {
+          userId: adminUserId,
+          operation: 'USER_ROLE_ASSIGN',
+          method: 'DELETE',
+          url: request.url,
+          params: { targetUserId: userRow.id, roleId },
+          ip: extractClientIP(request.headers),
+          userAgent: extractUserAgent(request.headers),
+          status: 200,
+        });
+        return { success: true as const, userId: userRow.id };
+      },
+    );
     if (!result.success) return restError(result.error, result.message, result.status);
     const userId = result.userId;
-    if (!userId) return restError(COMMON_ERRORS.INTERNAL_ERROR, '角色移除结果缺少用户', 500);
 
     // 移除角色后主动清除该用户的权限缓存，保障缓存强一致性
     await refreshUserPermissionCache(userId);

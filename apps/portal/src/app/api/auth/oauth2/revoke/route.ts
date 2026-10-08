@@ -8,8 +8,8 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { verifyAccessToken } from '@/lib/auth/token';
 import { revokeJti } from '@/lib/session/revoke';
-import { db, schema } from '@/infrastructure/db';
-import { eq, and } from 'drizzle-orm';
+import { revokeRefreshTokenByTokenHash } from '@/lib/auth/token/revocation';
+import { db } from '@/infrastructure/db';
 import { hashToken } from '@/lib/crypto';
 import { mapServerError } from '@/lib/server-error';
 import { parseOAuthBody } from '@/lib/auth/oauth-body';
@@ -58,14 +58,8 @@ export async function POST(request: NextRequest) {
 
     // 尝试撤销 Refresh Token（DB revoked 标记，限定当前认证 client 名下的行）
     if (!tokenTypeHint || tokenTypeHint === 'refresh_token') {
-      await db
-        .update(schema.refreshTokens)
-        .set({ revoked: new Date() })
-        // tokenHash 存储的是 SHA256(token)，查询时需同样 hash 匹配
-        .where(and(
-          eq(schema.refreshTokens.tokenHash, hashToken(token)),
-          eq(schema.refreshTokens.clientId, creds.clientId),
-        ));
+      // tokenHash 存储的是 SHA256(token)，查询时需同样 hash 匹配
+      await revokeRefreshTokenByTokenHash(db, hashToken(token), { clientId: creds.clientId });
     }
 
     // RFC 7009 §2.2: 撤销成功（或 token 不存在）时均返回 HTTP 200

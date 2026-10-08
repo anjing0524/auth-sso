@@ -6,6 +6,7 @@ import { withPermission, canAccessDept, getUserRoleDeptIds, logServerDataRead } 
 import { COMMON_ERRORS, ROLE_ERRORS, ROLE_PERMISSIONS } from '@auth-sso/contracts';
 import { getRoleById } from '@/app/(dashboard)/roles/data';
 import { restSuccess, restError } from '@/lib/response';
+import { db } from '@/infrastructure/db';
 
 interface RouteParams { params: Promise<{ id: string }>; }
 
@@ -15,7 +16,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const { id } = await params;
     const role = await getRoleById(id);
     if (!role) return restError(ROLE_ERRORS.ROLE_NOT_FOUND, '角色不存在', 404);
-    const deptIds = await getUserRoleDeptIds(_adminUserId);
+    const deptIds = await getUserRoleDeptIds(db, _adminUserId);
     if (!canAccessDept(deptIds, role.deptId)) {
       return restError(COMMON_ERRORS.FORBIDDEN, '无权查看该角色', 403);
     }

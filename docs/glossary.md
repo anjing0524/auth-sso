@@ -1,7 +1,7 @@
 # Auth-SSO 领域术语表 (Glossary)
 
 > 本文件记录 Auth-SSO 系统的核心领域概念、有界上下文划分及术语定义。
-> 最后更新: 2026-09-30 (RT 回绑 client 家族作用域、issuer URL 化——对齐 2026-09-28 设计审计后的已提交代码)
+> 最后更新: 2026-09-30 (RT 回绑 client 家族作用域、issuer URL 化——对齐 2026-09-28 设计审计后的已提交代码；RT 撤销原语收口至 `lib/auth/token/revocation.ts` 按维度命名)
 
 ---
 
@@ -174,6 +174,7 @@ OAuth 2.1 authorization_code grant 的一次性授权码。支持 PKCE S256。5m
 
 **Rotation**：刷旧 RT → 撤销旧 RT + 签发新 RT + 新 AT（同一 DB 事务）。
 **复用检测**：检测到已撤销 RT 被重复使用 → 级联撤销同授权家族 `(userId, clientId)` 的全部 RT → 拒绝。
+**Revocation（撤销原语）**：RT 撤销 SQL 收口于 `lib/auth/token/revocation.ts`（2026-09-30，此前散落 12 处），按领域维度命名：`revokeRefreshTokenById`（轮换/补偿回收）、`revokeRefreshTokenByTokenHash`（登出 / RFC 7009，可选 client 归属限定）、`revokeRefreshTokenFamily`（家族级联，事务内外通用）、`revokeUserRefreshTokens`（强制下线）、`revokeClientRefreshTokens`（管理端，返回真实翻转计数）。禁止在调用方绕行手写 `set({ revoked })` SQL。AT/jti 撤销属 Session 侧（`lib/session/revoke.ts`），双层撤销闭环由编排方（`revokeAllRefreshTokens`、登出）组合。
 
 ### JWKS（JSON Web Key Set）
 ES256 密钥对存储。
@@ -186,7 +187,7 @@ ES256 密钥对存储。
 | `algorithm` | 固定 `ES256` |
 
 ### Session（会话）
-用户登录态。基于**最小化无状态 JWT**（ADR-006）+ Redis jti 黑名单实现撤销。
+用户登录态。基于**最小化无状态 JWT**（ADR-006）+ Redis jti 黑名单实现撤销。会话 Cookie（AT/RT）由 **Gateway OAuth 回调统一下发**（ADR-010：Gateway 是唯一 OAuth Client；Portal 侧历史 callback handler 已于 2026-09-30 移除）。
 
 | 概念 | 存储 | 说明 |
 |------|------|------|

@@ -29,10 +29,10 @@ import {
   UpdateDepartmentInputSchema,
   type CreateDepartmentInput,
 } from '@/domain/department/types';
-import { EntityNotFoundError, ForbiddenError } from '@/domain/shared/errors';
+import { EntityNotFoundError } from '@/domain/shared/errors';
 import { generateUUID } from '@/lib/crypto';
 import { validate } from '@/lib/validation';
-import { canAccessDept, getUserRoleDeptIds } from '@/lib/auth';
+import { requireDeptAccess } from '@/lib/auth';
 import { DEPARTMENT_PERMISSIONS, type ApiResponse } from '@auth-sso/contracts';
 
 /** 创建部门 */
@@ -42,13 +42,12 @@ export const createDepartmentAction = withAuth(
     const v = validate(CreateDepartmentInputSchema, input);
     if (!v.ok) return v.response;
 
-    // 数据范围校验：父部门必须在操作者可访问范围内（顶级部门 parentId 为 null 时放行）
-    const deptIds = await getUserRoleDeptIds(ctx.userId);
-    if (v.data.parentId && !canAccessDept(deptIds, v.data.parentId)) {
-      throw new ForbiddenError('无权在指定父部门下创建子部门');
-    }
-
     const dept = await db.transaction(async (tx) => {
+      // 数据范围校验：父部门必须在操作者可访问范围内（顶级部门 parentId 为 null 时放行；快照在事务内）
+      if (v.data.parentId) {
+        await requireDeptAccess(tx, ctx.userId, [v.data.parentId, '无权在指定父部门下创建子部门']);
+      }
+
       // 查询父级 ancestors 在事务内完成，消除读-写竞争窗口
       const parentAncestors = v.data.parentId
         ? await (async () => {
@@ -106,14 +105,11 @@ export const updateDepartmentAction = withAuth(
     const v = validate(UpdateDepartmentInputSchema, input);
     if (!v.ok) return v.response;
     await db.transaction(async (tx) => {
-      // 数据范围校验：目标部门 + 拟变更父部门均在操作者可访问范围内
-      const deptIds = await getUserRoleDeptIds(ctx.userId);
       const row = await tx.query.departments.findFirst({ where: eq(schema.departments.id, deptId) });
       if (!row) throw new EntityNotFoundError('Department', deptId);
-      if (!canAccessDept(deptIds, row.id)) throw new ForbiddenError('无权操作该部门');
-      if (v.data.parentId && !canAccessDept(deptIds, v.data.parentId)) {
-        throw new ForbiddenError('无权将部门迁移至该父部门');
-      }
+      // 数据范围校验：目标部门 + 拟变更父部门均在操作者可访问范围内（快照在事务内消除 TOCTOU）
+      await requireDeptAccess(tx, ctx.userId, [row.id, '无权操作该部门'],
+        ...(v.data.parentId ? [[v.data.parentId, '无权将部门迁移至该父部门']] as const : []));
       await performDepartmentUpdate(tx, deptId, v.data);
     });
     revalidatePath('/departments');
@@ -132,9 +128,8 @@ export const deleteDepartmentAction = withAuth(
         where: eq(schema.departments.id, deptId),
       });
       if (!row) throw new EntityNotFoundError('Department', deptId);
-      // 数据范围校验：目标部门必须在操作者可访问范围内
-      const deptIds = await getUserRoleDeptIds(ctx.userId);
-      if (!canAccessDept(deptIds, row.id)) throw new ForbiddenError('无权操作该部门');
+      // 数据范围校验：目标部门必须在操作者可访问范围内（快照在事务内）
+      await requireDeptAccess(tx, ctx.userId, [row.id, '无权操作该部门']);
 
       // 检查是否有子部门
       const children = await tx.query.departments.findFirst({

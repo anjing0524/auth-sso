@@ -10,6 +10,9 @@
  */
 import { beforeAll, afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
+import { NextResponse } from 'next/server';
+import { DomainError } from '@/domain/shared/errors';
+import { COMMON_ERRORS } from '@auth-sso/contracts';
 import { createTestDbHandle, seedTestData } from '../helpers/test-db';
 import { seedAdminUser, seedRootDept, seedTestUser, seedUserRoleBinding } from '../helpers/seed-fixtures';
 import { createTestRequest } from '../helpers/test-utils';
@@ -25,9 +28,23 @@ vi.mock('@/infrastructure/db', () => ({
 }));
 
 vi.mock('@/lib/auth', () => ({
-  withPermission: vi.fn(async (_options: unknown, handler: (userId: string) => Promise<Response>) =>
-    handler('00000000-0000-4000-8000-000000000101')),
+  // 与真实包装器一致：领域错误映射为 HTTP 响应（DomainError.code → 状态码），
+  // 其余异常照常抛出（审计失败回滚用例依赖这一点）。
+  withPermission: vi.fn(async (_options: unknown, handler: (userId: string) => Promise<Response>) => {
+    try {
+      return await handler('00000000-0000-4000-8000-000000000101');
+    } catch (err) {
+      if (err instanceof DomainError) {
+        const status = err.code === COMMON_ERRORS.FORBIDDEN ? 403
+          : err.code === COMMON_ERRORS.NOT_FOUND ? 404
+          : err.code === COMMON_ERRORS.VALIDATION_ERROR ? 422 : 400;
+        return NextResponse.json({ error: err.code, message: err.message }, { status });
+      }
+      throw err;
+    }
+  }),
   canAccessDept: vi.fn(() => true),
+  requireDeptAccess: vi.fn(async () => {}),
   getUserRoleDeptIds: vi.fn(async () => ['00000000-0000-4000-8000-000000000001']),
   logServerDataRead: vi.fn(async () => {}),
 }));
@@ -43,7 +60,11 @@ vi.mock('@/lib/audit', () => ({
 import { POST as assignRoles, DELETE as removeRole } from '@/app/api/users/[id]/roles/route';
 
 const ADMIN_ID = '00000000-0000-4000-8000-000000000101';
+const ADMIN_ROLE_ID = '00000000-0000-4000-8000-000000000304';
+const ROOT_DEPT_ID = '00000000-0000-4000-8000-000000000001';
+const OTHER_DEPT_ID = '00000000-0000-4000-8000-000000000009';
 const USER_ID = '00000000-0000-4000-8000-000000000201';
+const OUT_OF_SCOPE_USER_ID = '00000000-0000-4000-8000-000000000209';
 const OLD_ROLE_ID = '00000000-0000-4000-8000-000000000301';
 const ROLE_ID = '00000000-0000-4000-8000-000000000302';
 const SECOND_ROLE_ID = '00000000-0000-4000-8000-000000000303';
@@ -56,15 +77,38 @@ afterAll(async () => { await td.close(); });
 beforeEach(async () => {
   vi.clearAllMocks();
   await td.cleanup();
+  const now = new Date();
   await seedTestData(td.db, {
-    departments: seedRootDept(),
-    users: [...(seedTestUser() ?? []), ...(seedAdminUser() ?? [])],
-    roles: [
-      { id: OLD_ROLE_ID, name: '旧角色', code: 'OLD_ROLE', deptId: '00000000-0000-4000-8000-000000000001', isSystem: false, status: 'ACTIVE', sort: 0 },
-      { id: ROLE_ID, name: '新角色', code: 'NEW_ROLE', deptId: '00000000-0000-4000-8000-000000000001', isSystem: false, status: 'ACTIVE', sort: 1 },
-      { id: SECOND_ROLE_ID, name: '第二角色', code: 'SECOND_ROLE', deptId: '00000000-0000-4000-8000-000000000001', isSystem: false, status: 'ACTIVE', sort: 2 },
+    departments: [
+      ...seedRootDept(),
+      // 不属于任何管理角色的部门 —— 用于证明越界被拦截
+      {
+        id: OTHER_DEPT_ID, parentId: null, name: '外部部门', code: 'OTHER',
+        ancestors: null, sort: 9, status: 'ACTIVE', createdAt: now, updatedAt: now,
+      },
     ],
-    userRoles: seedUserRoleBinding(USER_ID, OLD_ROLE_ID),
+    users: [
+      ...(seedTestUser() ?? []),
+      ...(seedAdminUser() ?? []),
+      // 处于操作者数据范围之外的用户
+      {
+        ...(seedTestUser() ?? [])[0]!,
+        id: OUT_OF_SCOPE_USER_ID, username: 'outsider', email: 'outsider@example.com',
+        deptId: OTHER_DEPT_ID,
+      },
+    ],
+    roles: [
+      { id: OLD_ROLE_ID, name: '旧角色', code: 'OLD_ROLE', deptId: ROOT_DEPT_ID, isSystem: false, status: 'ACTIVE', sort: 0 },
+      { id: ROLE_ID, name: '新角色', code: 'NEW_ROLE', deptId: ROOT_DEPT_ID, isSystem: false, status: 'ACTIVE', sort: 1 },
+      { id: SECOND_ROLE_ID, name: '第二角色', code: 'SECOND_ROLE', deptId: ROOT_DEPT_ID, isSystem: false, status: 'ACTIVE', sort: 2 },
+      { id: ADMIN_ROLE_ID, name: '管理员角色', code: 'ADMIN_ROLE', deptId: ROOT_DEPT_ID, isSystem: false, status: 'ACTIVE', sort: 3 },
+    ],
+    // 写路径的数据范围快照现在由真实 getUserRoleDeptIds 解析（经 lib/authz 门面），
+    // 因此操作者必须在库中真实拥有一个根部门角色，否则其可见范围为空、守卫正确拒绝。
+    userRoles: [
+      ...seedUserRoleBinding(USER_ID, OLD_ROLE_ID),
+      ...seedUserRoleBinding(ADMIN_ID, ADMIN_ROLE_ID),
+    ],
   });
 });
 
@@ -127,5 +171,31 @@ describe('用户角色绑定 API', () => {
 
     expect(response.status).toBe(200);
     expect(await roleIds()).toEqual([SECOND_ROLE_ID]);
+  });
+
+  it('数据范围外用户 → POST 返回 403 且不改变绑定', async () => {
+    const response = await assignRoles(
+      createTestRequest(`/api/users/${OUT_OF_SCOPE_USER_ID}/roles`, { method: 'POST', body: { roleIds: [ROLE_ID] } }),
+      { params: Promise.resolve({ id: OUT_OF_SCOPE_USER_ID }) },
+    );
+
+    expect(response.status).toBe(403);
+    const rows = await td.db.select({ roleId: schema.userRoles.roleId })
+      .from(schema.userRoles).where(eq(schema.userRoles.userId, OUT_OF_SCOPE_USER_ID));
+    expect(rows).toEqual([]);
+  });
+
+  it('数据范围外用户 → DELETE 返回 403 且不删除绑定', async () => {
+    await td.db.insert(schema.userRoles).values({ userId: OUT_OF_SCOPE_USER_ID, roleId: OLD_ROLE_ID, createdAt: new Date() });
+
+    const response = await removeRole(
+      createTestRequest(`/api/users/${OUT_OF_SCOPE_USER_ID}/roles`, { method: 'DELETE', body: { roleId: OLD_ROLE_ID } }),
+      { params: Promise.resolve({ id: OUT_OF_SCOPE_USER_ID }) },
+    );
+
+    expect(response.status).toBe(403);
+    const rows = await td.db.select({ roleId: schema.userRoles.roleId })
+      .from(schema.userRoles).where(eq(schema.userRoles.userId, OUT_OF_SCOPE_USER_ID));
+    expect(rows.map((r) => r.roleId)).toEqual([OLD_ROLE_ID]);
   });
 });

@@ -10,7 +10,7 @@ import 'server-only';
  */
 import { SignJWT, jwtVerify, decodeProtectedHeader } from 'jose';
 import { db, schema } from '@/infrastructure/db';
-import { and, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { generateId, generateUUID, hashToken } from '@/lib/crypto';
 import { isJtiRevoked, trackUserJti, revokeUserAccessByUserId } from '@/lib/session/revoke';
 import { getUserPermissionContext, cacheUserPermissionContext } from '@/lib/permissions';
@@ -18,6 +18,7 @@ import { DEFAULT_SCOPES, PORTAL_AUD, TOKEN_TTL, JWT_TYP } from '@auth-sso/contra
 import { getIssuer } from '@/lib/env';
 import type { PortalJwtClaims, RefreshTokenResult } from '@/domain/auth/types';
 import { getActiveSigningKey, getSigningKeyByKid } from './token/signing-keys';
+import { revokeRefreshTokenById, revokeRefreshTokenFamily, revokeUserRefreshTokens } from './token/revocation';
 import { createLogger } from '@/lib/logger';
 // 保持向后兼容：密钥管理函数仍从 @/lib/auth/token 可导入
 export { getActiveSigningKey, getSigningKeyByKid } from './token/signing-keys';
@@ -284,39 +285,9 @@ export async function issueRefreshToken(
  * @param expectedClientId - 发起轮换的 OAuth client（token 端点必传）
  * @returns 新的 accessToken + refreshToken + expiresIn，失败返回 null
  */
-/** Drizzle 事务句柄类型（与 lib/audit 的提取方式一致） */
-type RefreshTokenTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
-
-/** 撤销同属一个授权家族 (userId, clientId) 的全部 Refresh Token（RFC 9700 §4.14）。
- *  重放检测与 sender 绑定失配共用此原语，消除两处相同 SQL 的漂移面。 */
-async function revokeTokenFamily(tx: RefreshTokenTx, userId: string, clientId: string): Promise<void> {
-  await tx
-    .update(schema.refreshTokens)
-    .set({ revoked: new Date() })
-    .where(and(
-      eq(schema.refreshTokens.userId, userId),
-      eq(schema.refreshTokens.clientId, clientId),
-    ));
-}
-
-/**
- * 【server-only async】在事务外撤销同授权家族 (userId, clientId) 的全部 Refresh Token。
- *
- * 供 token 端点的授权码重放检测（RFC 9700 §4.2.4）使用——该路径不在
- * rotateRefreshToken 事务内，用 db 直连版本；重放撤销幂等，无原子性要求。
- *
- * @param userId - 被重放授权码归属的用户
- * @param clientId - 被重放授权码归属的 OAuth Client
- */
-export async function revokeRefreshTokenFamily(userId: string, clientId: string): Promise<void> {
-  await db
-    .update(schema.refreshTokens)
-    .set({ revoked: new Date() })
-    .where(and(
-      eq(schema.refreshTokens.userId, userId),
-      eq(schema.refreshTokens.clientId, clientId),
-    ));
-}
+// RT 撤销原语已收口到 ./token/revocation.ts（此前 12 处散落 SQL）；
+// 家族撤销对既有调用方（token 端点重放取证）保持从本模块导出，签名新增 executor 首参。
+export { revokeRefreshTokenFamily };
 
 export async function rotateRefreshToken(
   oldRefreshToken: string,
@@ -338,7 +309,7 @@ export async function rotateRefreshToken(
     if (rt.revoked) {
       // RFC 9700 §4.14：轮换后的 RT 被重放 = 疑似泄露，撤销同一家族
       // （同用户 + 同 client）的全部 Refresh Token
-      await revokeTokenFamily(tx, rt.userId, rt.clientId);
+      await revokeRefreshTokenFamily(tx, rt.userId, rt.clientId);
       return null;
     }
 
@@ -347,14 +318,11 @@ export async function rotateRefreshToken(
     // sender 绑定强制（RFC 9700）：提交的 RT 不属于认证中的 client =
     // 疑似泄露/伪造，视同重放 —— 撤销该授权家族并拒绝
     if (expectedClientId && rt.clientId !== expectedClientId) {
-      await revokeTokenFamily(tx, rt.userId, rt.clientId);
+      await revokeRefreshTokenFamily(tx, rt.userId, rt.clientId);
       return null;
     }
 
-    await tx
-      .update(schema.refreshTokens)
-      .set({ revoked: new Date() })
-      .where(eq(schema.refreshTokens.id, rt.id));
+    await revokeRefreshTokenById(tx, rt.id);
 
     const newRtId = generateUUID();
     const newRefreshToken = `rt_${generateId(32)}`;
@@ -389,9 +357,7 @@ export async function rotateRefreshToken(
     log.error('RT 轮换后置步骤失败，补偿回收新 RT', { error: (e as Error).message });
     try {
       // 仅回收新 RT 本身（不触发家族级联——infra 故障不应牵连其他会话）
-      await db.update(schema.refreshTokens)
-        .set({ revoked: new Date() })
-        .where(eq(schema.refreshTokens.id, newRtId));
+      await revokeRefreshTokenById(db, newRtId);
     } catch (revokeErr) {
       log.error('补偿回收新 RT 失败', { error: (revokeErr as Error).message });
     }
@@ -405,9 +371,7 @@ export async function rotateRefreshToken(
  * @param userId - 用户内部 ID
  */
 export async function revokeAllRefreshTokens(userId: string): Promise<void> {
-  await db.update(schema.refreshTokens)
-    .set({ revoked: new Date() })
-    .where(eq(schema.refreshTokens.userId, userId));
+  await revokeUserRefreshTokens(db, userId);
 
   // 同步撤销所有 Access Token 的 JTI（双层撤销闭环）
   try {

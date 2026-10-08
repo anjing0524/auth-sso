@@ -4,9 +4,9 @@
  * DELETE /api/clients/[id]/tokens — 撤销授权 Token
  */
 import { type NextRequest } from 'next/server';
-import { db, schema } from '@/infrastructure/db';
-import { eq, inArray, and, isNull } from 'drizzle-orm';
+import { db } from '@/infrastructure/db';
 import { withPermission, logServerDataRead } from '@/lib/auth';
+import { revokeClientRefreshTokens } from '@/lib/auth/token/revocation';
 import { CLIENT_PERMISSIONS, COMMON_ERRORS } from '@auth-sso/contracts';
 import { getClientById, getClientTokens } from '@/app/(dashboard)/clients/data';
 import { appendSecurityAudit, extractClientIP, extractUserAgent } from '@/lib/audit';
@@ -55,28 +55,18 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     // AT 无 client 语义（ADR-006 最小化），按 client 撤销的对象是 RT（授权家族）：
     // 撤 RT 终止续期能力，已发 AT 在 ≤1h TTL 内自然失效（audit 2026-09-28 H-2 修复）
     const revokedCount = await db.transaction(async (tx) => {
-      const result = revokeAll
-        ? await tx.update(schema.refreshTokens).set({ revoked: new Date() })
-            .where(and(eq(schema.refreshTokens.clientId, client.clientId), isNull(schema.refreshTokens.revoked)))
-            .returning({ id: schema.refreshTokens.id })
-        : await tx.update(schema.refreshTokens).set({ revoked: new Date() })
-            .where(and(
-              eq(schema.refreshTokens.clientId, client.clientId),
-              inArray(schema.refreshTokens.id, tokenIds),
-              isNull(schema.refreshTokens.revoked),
-            ))
-            .returning({ id: schema.refreshTokens.id });
+      const count = await revokeClientRefreshTokens(tx, client.clientId, revokeAll ? undefined : { tokenIds });
       await appendSecurityAudit(tx, {
         userId: adminUserId,
         operation: 'TOKEN_REVOKE',
         method: 'DELETE',
         url: request.url,
-        params: { targetId: client.clientId, targetName: client.name, revokeAll, tokenIds, revokedCount: result.length },
+        params: { targetId: client.clientId, targetName: client.name, revokeAll, tokenIds, revokedCount: count },
         ip: extractClientIP(request.headers),
         userAgent: extractUserAgent(request.headers),
         status: 200,
       });
-      return result.length;
+      return count;
     });
 
     return restSuccess({ message: `已撤销 ${revokedCount} 个 Token`, data: { revokedCount } });

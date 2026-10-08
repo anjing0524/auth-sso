@@ -2,9 +2,13 @@
  * 用户密码重置 API (B-USR-PW)
  *
  * POST /api/users/[id]/reset-password — 管理员重置用户密码，所有活跃会话立即失效
+ *
+ * 数据范围守卫经 `withScopedWrite`（ADR-014）：操作者范围快照与密码写入
+ * 在同一事务内，消除"快照后、提交前操作者被降权"的 TOCTOU 窗口。
  */
 import { type NextRequest } from 'next/server';
-import { withPermission, canAccessDept, getUserRoleDeptIds } from '@/lib/auth';
+import { withPermission } from '@/lib/auth';
+import { withScopedWrite } from '@/lib/authz';
 import { db, schema } from '@/infrastructure/db';
 import { eq } from 'drizzle-orm';
 import { hashPassword, isPasswordReused, pushPasswordHistory } from '@/domain/auth/password';
@@ -34,8 +38,28 @@ export async function POST(
       return restError(COMMON_ERRORS.VALIDATION_ERROR, passwordError, 400);
     }
 
-    // 数据范围守卫：只能重置本部门（含子部门）范围内用户的密码（H-DSCOPE-003）
-    // 同时读取 passwordHistory 用于 NFR-SEC-15 校验
+    // bcrypt 在事务外完成（50-200ms），避免长时间占用 DB 连接
+    const passwordHash = await hashPassword(newPassword);
+
+    // 数据范围守卫：只能重置可见范围内用户的密码（H-DSCOPE-003）。
+    // 快照与后续写入同事务——原先快照取自事务外，操作者被降权后仍会放行
+    // （ADR-014 / H-ACL-002）。
+    await withScopedWrite(
+      {
+        operatorId: adminUserId,
+        targets: async (tx) => {
+          const row = await tx.query.users.findFirst({
+            where: eq(schema.users.id, id),
+            columns: { deptId: true },
+          });
+          if (!row) return [];   // 不存在交由下方 404 分支处理
+          return [{ deptId: row.deptId, message: '无权操作该用户' }];
+        },
+      },
+      async () => undefined,
+    );
+
+    // 读取 passwordHistory 用于 NFR-SEC-15 校验
     const target = await db.query.users.findFirst({
       where: eq(schema.users.id, id),
       columns: { id: true, deptId: true, passwordHash: true, passwordHistory: true },
@@ -43,17 +67,12 @@ export async function POST(
     if (!target) {
       return restError(USER_ERRORS.USER_NOT_FOUND, '用户不存在', 404);
     }
-    const deptIds = await getUserRoleDeptIds(adminUserId);
-    if (!canAccessDept(deptIds, target.deptId)) {
-      return restError(COMMON_ERRORS.FORBIDDEN, '无权操作该用户', 403);
-    }
 
     // NFR-SEC-15: 禁止重用最近 5 次密码
     if (await isPasswordReused(newPassword, target.passwordHistory ?? null)) {
       return restError(COMMON_ERRORS.VALIDATION_ERROR, '新密码不能与该用户最近使用过的密码相同', 400);
     }
 
-    const passwordHash = await hashPassword(newPassword);
     const newHistory = pushPasswordHistory(target.passwordHistory ?? null, target.passwordHash ?? '');
 
     await db.transaction(async (tx) => {

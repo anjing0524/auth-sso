@@ -6,6 +6,7 @@
 import { type NextRequest } from 'next/server';
 import { withPermission, getUserRoleDeptIds } from '@/lib/auth';
 import { getRoles } from '@/app/(dashboard)/roles/data';
+import { db } from '@/infrastructure/db';
 import { parsePagination } from '@/lib/pagination';
 import { restListSuccess } from '@/lib/response';
 import { ROLE_PERMISSIONS } from '@auth-sso/contracts';
@@ -19,7 +20,7 @@ export async function GET(request: NextRequest) {
     const status = sp.get('status') || '';
     const { page, pageSize } = parsePagination(sp);
 
-    const deptIds = await getUserRoleDeptIds(_adminUserId);
+    const deptIds = await getUserRoleDeptIds(db, _adminUserId);
     const result = await getRoles({ page, pageSize, keyword, status, deptIds });
     return restListSuccess(result.data, result.pagination);
   });

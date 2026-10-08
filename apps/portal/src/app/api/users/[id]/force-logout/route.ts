@@ -12,7 +12,8 @@ import { type NextRequest } from 'next/server';
 import { revalidatePath, updateTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
 import { eq } from 'drizzle-orm';
-import { withPermission, canAccessDept, getUserRoleDeptIds } from '@/lib/auth';
+import { withPermission } from '@/lib/auth';
+import { withScopedWrite } from '@/lib/authz';
 import { revokeAllRefreshTokens } from '@/lib/auth/token';
 import { revokeUserAccessByUserId } from '@/lib/session/revoke';
 import { clearUserPermissionCache } from '@/lib/permissions';
@@ -31,25 +32,35 @@ export async function POST(
   request: NextRequest,
   { params }: RouteParams,
 ) {
-  return withPermission({ permissions: [USER_PERMISSIONS.MANAGE] }, async (_adminUserId) => {
+  return withPermission({ permissions: [USER_PERMISSIONS.MANAGE] }, async (adminUserId) => {
     const { id } = await params;
 
-    // 按内部 id 查找用户
-    const users = await db
-      .select()
-      .from(schema.users)
-      .where(eq(schema.users.id, id));
+    // 数据范围守卫：快照与断言同事务（ADR-014 / H-ACL-002）。
+    // 原先快照取自事务外，操作者被降权后仍会放行越界下线。
+    await withScopedWrite(
+      {
+        operatorId: adminUserId,
+        targets: async (tx) => {
+          const row = await tx.query.users.findFirst({
+            where: eq(schema.users.id, id),
+            columns: { deptId: true },
+          });
+          if (!row) return [];   // 不存在交由下方 404 分支处理
+          return [{ deptId: row.deptId, message: '无权操作该用户' }];
+        },
+      },
+      async () => undefined,
+    );
 
-    if (users.length === 0) {
+    const target = await db.query.users.findFirst({
+      where: eq(schema.users.id, id),
+      columns: { id: true },
+    });
+    if (!target) {
       return restError(COMMON_ERRORS.NOT_FOUND, '用户不存在', 404);
     }
 
-    const userId = users[0]!.id;
-
-    const deptIds = await getUserRoleDeptIds(_adminUserId);
-    if (!canAccessDept(deptIds, users[0]!.deptId)) {
-      return restError(COMMON_ERRORS.FORBIDDEN, '无权操作该用户', 403);
-    }
+    const userId = target.id;
 
     // 1. 撤销全部 Refresh Token（DB 层，同时触发 JTI 黑名单撤销）
     await revokeAllRefreshTokens(userId);

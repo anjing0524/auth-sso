@@ -5,7 +5,7 @@ import 'server-only';
 
 import { cacheLife, cacheTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
-import { eq, ilike, or, asc, desc, and, inArray } from 'drizzle-orm';
+import { eq, ilike, or, asc, desc, and, inArray, sql } from 'drizzle-orm';
 
 import { asEntityStatus } from '@/lib/type-guards';
 import type { EntityStatus } from '@auth-sso/contracts';
@@ -25,11 +25,21 @@ function toRoleDTO(r: {
   };
 }
 
-/** 角色列表过滤条件：部门范围（H-ACL-002）+ 关键字 + 状态 */
-function buildRoleConditions(keyword: string, status: string, deptIds?: string[]) {
+/**
+ * 角色列表过滤条件：部门范围（H-ACL-002）+ 关键字 + 状态
+ *
+ * `deptIds` 为必填且必须非空（空范围是"无权限"，由调用方先行短路）。
+ * 此处仍对空数组兜底 `sql\`FALSE\``：安全约束必须在 SQL 层始终存在，
+ * 不能依赖调用方——`and()` 在无有效条件时返回 undefined，会静默退化成全表查询。
+ */
+function buildRoleConditions(keyword: string, status: string, deptIds: string[]) {
   const conditions = [];
-  if (deptIds && deptIds.length > 0) {
+  // 数据范围过滤（v3.2: 直接按部门 ID 列表过滤）
+  // 空 deptIds → fail-closed：添加 SQL 恒假条件防止无意中返回全表数据
+  if (deptIds.length > 0) {
     conditions.push(inArray(schema.roles.deptId, deptIds));
+  } else {
+    conditions.push(sql`FALSE`);
   }
   if (keyword) {
     conditions.push(or(
@@ -47,15 +57,20 @@ function buildRoleConditions(keyword: string, status: string, deptIds?: string[]
 /**
  * 分页获取角色列表
  *
- * @param params.deptIds 可选的部门范围过滤（数据范围控制）；为空数组时返回空集
+ * @param params.deptIds 操作者可访问的部门 ID 列表（必填，数据范围控制）
  */
 export interface RolesListParams {
   page: number;
   pageSize: number;
   keyword: string;
   status: string;
-  /** 可选的部门范围过滤（数据范围控制） */
-  deptIds?: string[];
+  /**
+   * 操作者可访问的部门 ID 列表（必填）。
+   *
+   * 刻意不设为可选：可选参数会让"忘记传范围"编译通过并静默返回全部角色，
+   * 而省略与传空数组在语义上完全不同（后者是"无权限"，前者是"不过滤"）。
+   */
+  deptIds: string[];
 }
 
 export async function getRoles(params: RolesListParams) {
@@ -64,8 +79,8 @@ export async function getRoles(params: RolesListParams) {
   cacheTag('roles-list');
 
   const { page, pageSize, keyword, status, deptIds } = params;
-  // 数据范围：空范围即空集
-  if (deptIds?.length === 0) return { data: [], pagination: paginationMeta(page, pageSize, 0) };
+  // 数据范围：空范围即空集（无可见部门 → 不得返回任何角色）
+  if (deptIds.length === 0) return { data: [], pagination: paginationMeta(page, pageSize, 0) };
   const whereClause = buildRoleConditions(keyword, status, deptIds);
 
   return withPagination(

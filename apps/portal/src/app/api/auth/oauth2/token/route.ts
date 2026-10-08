@@ -101,7 +101,7 @@ export async function POST(request: NextRequest) {
             ))
             .limit(1);
           if (replayed) {
-            await revokeRefreshTokenFamily(replayed.userId, replayed.clientId);
+            await revokeRefreshTokenFamily(db, replayed.userId, replayed.clientId);
             writeLoginLog({ username: client.clientId, eventType: 'TOKEN_REFRESH_FAILED', ip: extractClientIP(request.headers), userAgent: extractUserAgent(request.headers), failReason: '授权码重放（已消费 code 二次兑换），已撤销同家族 Refresh Token' });
           }
         }

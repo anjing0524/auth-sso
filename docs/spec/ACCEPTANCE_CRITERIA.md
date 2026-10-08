@@ -692,6 +692,8 @@ async function checkBruteForce(userId: string): Promise<boolean> {
 
 **位置：** `apps/portal/src/app/api/auth/callback/route.ts`
 
+> **⚠️ 现状注记（2026-09-30）：** 该 route handler 已删除。PKCE verifier 的写入方自 a69c462 重构起由 proxy.ts 变更为 Gateway（Rust，`oauth.rs`），callback 的处理方也随之收敛为 Gateway 边缘拦截（`gateway.rs` 按 `oauth_callback_path` 匹配），Portal 侧第二实现成为无发起端、必然 `invalid_state` 失败的死代码，已按 ADR-010（Gateway 是唯一 OAuth Client）移除。以下为历史审计记录，描述的 proxy.ts 行为已不存在。
+
 **状态：** 已修复（2026-07-08）。当前 `callback/route.ts` 已将 `code_verifier` 作为 token 请求的**独立 body 字段**传递，`redirect_uri` 不再附加任何动态 query 参数。PKCE verifier 由 proxy.ts 写入 HttpOnly Cookie（Path=/api/auth/callback），callback 从 Cookie 读取后作为独立 body 字段传给 /token：
 
 ```typescript

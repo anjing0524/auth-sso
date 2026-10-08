@@ -282,19 +282,20 @@ Portal Admin UI 自身的 OAuth Client 职责由 Gateway（Rust/Pingora）统一
                     |- 302 → /api/auth/callback?code=...&state=...
 ```
 
-**阶段三：Client 回调换 Token（callback → token）**
+**阶段三：Client 回调换 Token（callback → token，Gateway 边缘拦截）**
 
 ```
-7. [Portal]      GET /api/auth/callback?code=...&state=...
+7. [Gateway]     边缘拦截 GET /api/auth/callback?code=...&state=...
+                  （path 匹配 discovery 自定义字段 oauth_callback_path，Portal 侧无该 handler）
                     |- 校验 state Cookie ↔ URL 一致性（CSRF）
-                    |- POST /api/auth/oauth2/token（code_verifier 独立 body 字段）
-                    |- 校验 id_token.nonce ↔ Cookie（OIDC）
+                    |- 读取 pkce_verifier Cookie → POST /api/auth/oauth2/token（内网，code_verifier 独立 body 字段）
+                    |- 校验 id_token.nonce ↔ Cookie（fail-close 双向闭合，OIDC Core §3.1.2.2）
                     |- 清除 4 个临时 Cookie
                     |- Set-Cookie: portal_jwt_token（1h）+ portal_refresh_token（7d）
                     |- 302 → return_to || /dashboard
 ```
 
-**第三方下游应用**（如 ERP）：Gateway 统一生成 PKCE。若配置了 `oauth.client_secret`，Gateway 在阶段三代为拦截 callback + POST /token + Set-Cookie，下游应用零 OAuth 代码。Portal 自身作为 OIDC Provider，callback 由 Portal 自行处理。
+**第三方下游应用**（如 ERP）：Gateway 统一生成 PKCE。若配置了 `oauth.client_secret`，Gateway 在阶段三代为拦截 callback + POST /token + Set-Cookie，下游应用零 OAuth 代码。Portal 自身的会话 Cookie 同样由 Gateway 在阶段三写入（ADR-010：Gateway 是唯一 OAuth Client，Portal 侧历史 callback handler 已于 2026-09-30 移除）。
 
 ### 5.2 单点登录流程
 

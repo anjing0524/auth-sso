@@ -9,6 +9,7 @@ import { withPermission, canAccessDept, getUserRoleDeptIds, logServerDataRead } 
 import { COMMON_ERRORS, USER_ERRORS, USER_PERMISSIONS } from '@auth-sso/contracts';
 import { getUser } from '@/app/(dashboard)/users/data';
 import { restSuccess, restError } from '@/lib/response';
+import { db } from '@/infrastructure/db';
 
 
 interface RouteParams {
@@ -24,7 +25,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       return restError(USER_ERRORS.USER_NOT_FOUND, '用户不存在', 404);
     }
 
-    const deptIds = await getUserRoleDeptIds(adminUserId);
+    const deptIds = await getUserRoleDeptIds(db, adminUserId);
     if (!canAccessDept(deptIds, user.deptId)) {
       return restError(COMMON_ERRORS.FORBIDDEN, '无权查看该用户', 403);
     }

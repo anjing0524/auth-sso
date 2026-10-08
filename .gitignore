@@ -68,3 +68,6 @@ test-mcp
 .zcode/
 .context/
 .env*
+
+# 架构评审报告（由 improve-codebase-architecture 生成，不入库）
+.arch-review/

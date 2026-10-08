@@ -5,6 +5,7 @@
  */
 import { resolveIdentity, getUserRoleDeptIds } from '@/lib/auth';
 import { getUsers, getDepartmentOptions } from './data';
+import { db } from '@/infrastructure/db';
 import UserFilters from './components/UserFilters';
 import CreateUserDialog from './components/CreateUserDialog';
 import UserTable from './components/UserTable';
@@ -28,7 +29,7 @@ export default async function UsersPage({ searchParams }: PageProps) {
 
   // 鉴权由 users/layout.tsx 负责（requirePermission(['user:list'])），此处只取身份信息。
   const identity = await resolveIdentity();
-  const deptIds = identity ? await getUserRoleDeptIds(identity.userId) : [];
+  const deptIds = identity ? await getUserRoleDeptIds(db, identity.userId) : [];
   const userId = identity?.userId ?? '';
   const [{ data: users, pagination }, departments] = await Promise.all([
     getUsers(deptIds, userId, { page, pageSize, keyword, status }),

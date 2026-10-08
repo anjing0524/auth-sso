@@ -10,7 +10,8 @@
  */
 import { revalidatePath, updateTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
-import { eq, and, inArray, isNull } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
+import { revokeClientRefreshTokens } from '@/lib/auth/token/revocation';
 import { withAuth, type AuthContext } from '@/lib/auth';
 import {
   createClient,
@@ -134,24 +135,9 @@ export const revokeClientTokensAction = withAuth(
     // 恒为 0 行却返回成功（audit 2026-09-28 H-2），此处修复为真实撤销。
     let revokedCount = 0;
     if (revokeAll) {
-      const result = await db.update(schema.refreshTokens)
-        .set({ revoked: new Date() })
-        .where(and(
-          eq(schema.refreshTokens.clientId, row.clientId),
-          isNull(schema.refreshTokens.revoked),
-        ))
-        .returning({ id: schema.refreshTokens.id });
-      revokedCount = result.length;
+      revokedCount = await revokeClientRefreshTokens(db, row.clientId);
     } else if (tokenIds && tokenIds.length > 0) {
-      const result = await db.update(schema.refreshTokens)
-        .set({ revoked: new Date() })
-        .where(and(
-          eq(schema.refreshTokens.clientId, row.clientId),
-          inArray(schema.refreshTokens.id, tokenIds),
-          isNull(schema.refreshTokens.revoked),
-        ))
-        .returning({ id: schema.refreshTokens.id });
-      revokedCount = result.length;
+      revokedCount = await revokeClientRefreshTokens(db, row.clientId, { tokenIds });
     }
 
     revalidatePath(`/clients/${row.clientId}`);

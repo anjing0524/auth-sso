@@ -37,14 +37,14 @@ import {
   type CreateUserInput,
 } from '@/domain/user/types';
 import { validatePassword } from '@/domain/shared/zod-schemas';
-import { EntityNotFoundError, DuplicateEntityError, ForbiddenError, BusinessRuleViolationError } from '@/domain/shared/errors';
+import { EntityNotFoundError, DuplicateEntityError, BusinessRuleViolationError } from '@/domain/shared/errors';
 import { generateUUID } from '@/lib/crypto';
 import { validate } from '@/lib/validation';
 import { hashPassword, isPasswordReused, pushPasswordHistory } from '@/domain/auth/password';
 import { refreshUserPermissionCache } from '@/lib/permissions';
 import { revokeUserAccessByUserId } from '@/lib/session/revoke';
 import { clearBruteForceCounter } from '@/lib/auth/brute-force';
-import { canAccessDept, getUserRoleDeptIds } from '@/lib/auth';
+import { requireDeptAccess } from '@/lib/auth';
 import { createLogger } from '@/lib/logger';
 
 const log = createLogger('UsersAction');
@@ -70,18 +70,17 @@ export const createUserAction = withAuth(
     const v = validate(CreateUserInputSchema, rawInput);
     if (!v.ok) return v.response;
 
-    // 数据范围校验：目标部门必须在操作者可访问范围内（R7 / H-ACL-002）
-    const deptIds = await getUserRoleDeptIds(ctx.userId);
-    if (v.data.deptId && !canAccessDept(deptIds, v.data.deptId)) {
-      throw new ForbiddenError('无权在指定部门下创建用户');
-    }
-
     // 密码哈希在事务外完成，避免长时间占用 DB 连接（bcrypt 通常 50-200ms）
     const passwordHash = await hashPassword(v.data.password);
 
-    // 查重 + 插入在事务中原子完成（R22）
+    // 查重 + 插入在事务中原子完成（R22）；范围守卫传 tx，快照与写入同事务（消除 TOCTOU）
     // deptId 已在 Zod .preprocess() 中归一化 ('ALL' → null)，Controller 层不重复判定
     const result = await db.transaction(async (tx) => {
+      // 数据范围校验：目标部门必须在操作者可访问范围内（R7 / H-ACL-002）
+      if (v.data.deptId) {
+        await requireDeptAccess(tx, ctx.userId, [v.data.deptId, '无权在指定部门下创建用户']);
+      }
+
       const existing = await tx.query.users.findFirst({
         where: or(eq(schema.users.username, v.data.username), eq(schema.users.email, v.data.email)),
       });
@@ -110,13 +109,12 @@ export const toggleUserStatusAction = withAuth(
     const v = validate(UserIdentityInputSchema, { id: userIdStr });
     if (!v.ok) return v.response;
 
-    // 读取 + 更新在事务中原子完成（R22）
-    const deptIds = await getUserRoleDeptIds(ctx.userId);
+    // 读取 + 更新在事务中原子完成（R22）；范围守卫传 tx，快照与写入同事务（消除 TOCTOU）
     const updated = await db.transaction(async (tx) => {
       const row = await tx.query.users.findFirst({ where: eq(schema.users.id, v.data.id) });
       if (!row) throw new EntityNotFoundError('User', v.data.id);
       // 数据范围校验：目标用户部门必须在操作者可访问范围内（R7 / H-ACL-002）
-      if (!canAccessDept(deptIds, row.deptId)) throw new ForbiddenError('无权操作该部门的用户');
+      await requireDeptAccess(tx, ctx.userId, [row.deptId, '无权操作该部门的用户']);
 
       const target = toggleUserStatus(userFromPersistence(row));
       await tx.update(schema.users)
@@ -152,11 +150,10 @@ export const unlockUserAction = withAuth(
     const v = validate(UserIdentityInputSchema, { id: userIdStr });
     if (!v.ok) return v.response;
 
-    const deptIds = await getUserRoleDeptIds(ctx.userId);
     const updated = await db.transaction(async (tx) => {
       const row = await tx.query.users.findFirst({ where: eq(schema.users.id, v.data.id) });
       if (!row) throw new EntityNotFoundError('User', v.data.id);
-      if (!canAccessDept(deptIds, row.deptId)) throw new ForbiddenError('无权操作该部门的用户');
+      await requireDeptAccess(tx, ctx.userId, [row.deptId, '无权操作该部门的用户']);
 
       const target = unlockUser(userFromPersistence(row));
       await tx.update(schema.users)
@@ -197,15 +194,12 @@ export const updateUserAction = withAuth(
     if (!v.ok) return v.response;
 
     let deptIdChanged = false;
-    const deptIds = await getUserRoleDeptIds(ctx.userId);
     await db.transaction(async (tx) => {
       const row = await tx.query.users.findFirst({ where: eq(schema.users.id, v.data.id) });
       if (!row) throw new EntityNotFoundError('User', v.data.id);
-      // 校验目标用户当前部门 + 拟变更目标部门均在操作者可访问范围内
-      if (!canAccessDept(deptIds, row.deptId)) throw new ForbiddenError('无权操作该部门的用户');
-      if (v.data.deptId && !canAccessDept(deptIds, v.data.deptId)) {
-        throw new ForbiddenError('无权将用户迁移至该部门');
-      }
+      // 校验目标用户当前部门 + 拟变更目标部门均在操作者可访问范围内（快照在事务内）
+      await requireDeptAccess(tx, ctx.userId, [row.deptId, '无权操作该部门的用户'],
+        ...(v.data.deptId ? [[v.data.deptId, '无权将用户迁移至该部门']] as const : []));
 
       const updated = applyUserUpdate(userFromPersistence(row), {
         name: v.data.name, email: v.data.email,
@@ -233,12 +227,11 @@ export const deleteUserAction = withAuth(
     const v = validate(UserIdentityInputSchema, { id: userIdStr });
     if (!v.ok) return v.response;
 
-    // 读取 + 更新在事务中原子完成（R22）；领域纯函数执行删除规则校验
-    const deptIds = await getUserRoleDeptIds(ctx.userId);
+    // 读取 + 更新在事务中原子完成（R22）；领域纯函数执行删除规则校验；守卫快照在事务内
     await db.transaction(async (tx) => {
       const row = await tx.query.users.findFirst({ where: eq(schema.users.id, v.data.id) });
       if (!row) throw new EntityNotFoundError('User', v.data.id);
-      if (!canAccessDept(deptIds, row.deptId)) throw new ForbiddenError('无权操作该部门的用户');
+      await requireDeptAccess(tx, ctx.userId, [row.deptId, '无权操作该部门的用户']);
 
       const deleted = deleteUser(userFromPersistence(row));
       await tx.update(schema.users)
@@ -278,11 +271,10 @@ export const resetPasswordAction = withAuth(
 
     const passwordHash = await hashPassword(newPassword);
 
-    const deptIds = await getUserRoleDeptIds(ctx.userId);
     await db.transaction(async (tx) => {
       const row = await tx.query.users.findFirst({ where: eq(schema.users.id, v.data.id) });
       if (!row) throw new EntityNotFoundError('User', v.data.id);
-      if (!canAccessDept(deptIds, row.deptId)) throw new ForbiddenError('无权操作该部门的用户');
+      await requireDeptAccess(tx, ctx.userId, [row.deptId, '无权操作该部门的用户']);
 
       // NFR-SEC-15: 禁止重用最近 5 次密码
       if (await isPasswordReused(newPassword, row.passwordHistory ?? null)) {

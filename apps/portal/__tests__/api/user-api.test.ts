@@ -54,6 +54,7 @@ vi.mock('@/lib/auth', () => ({
   logServerDataRead: vi.fn(async () => {}),
   getUserRoleDeptIds: mockGetUserRoleDeptIds,
   canAccessDept: vi.fn(() => true),
+  requireDeptAccess: vi.fn(async () => {}),
   withAuth: (_o: any, h: Function) => async (...a: any[]) => {
     const check = await mockAuthCheck();
     if (!check.authorized) {

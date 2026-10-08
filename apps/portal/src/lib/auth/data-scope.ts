@@ -3,14 +3,16 @@ import 'server-only';
 /**
  * 数据范围过滤子模块 (Data Scope)
  *
- * 职责：根据用户角色所属部门计算其数据访问范围。
+ * 职责：根据用户角色所属部门计算其数据访问范围，并为写操作提供作用域守卫。
  * 数据范围由角色所属部门（roles.dept_id）隐式决定，不再有 data_scope_type 枚举。
  *
  * @module lib/auth/data-scope
  */
 import { eq, or, like } from 'drizzle-orm';
-import { db, schema } from '@/infrastructure/db';
+import { schema } from '@/infrastructure/db';
+import type { DbExecutor } from '@/infrastructure/db';
 import { ENTITY_ACTIVE } from '@auth-sso/contracts';
+import { ForbiddenError } from '@/domain/shared/errors';
 
 /**
  * 获取用户可访问的部门 ID 列表（含子树展开）
@@ -22,11 +24,16 @@ import { ENTITY_ACTIVE } from '@auth-sso/contracts';
  *
  * 无角色时返回空数组（表示无数据访问权限）。
  *
+ * 首参 executor 决定快照的连接归属：读路径/列表过滤传 `db`；
+ * 事务内的写守卫传 `tx`——快照与写入在同一事务上执行，消除
+ * "校验后、提交前操作者被降权"的 TOCTOU 窗口（H-ACL-002）。
+ *
+ * @param executor db 直连或事务句柄
  * @param userId 用户唯一标识 ID
  * @returns 部门 ID 列表（已去重、已展开子树）
  */
-export async function getUserRoleDeptIds(userId: string): Promise<string[]> {
-  const user = await db.query.users.findFirst({
+export async function getUserRoleDeptIds(executor: DbExecutor, userId: string): Promise<string[]> {
+  const user = await executor.query.users.findFirst({
     where: eq(schema.users.id, userId),
     with: {
       userRoles: {
@@ -58,7 +65,7 @@ export async function getUserRoleDeptIds(userId: string): Promise<string[]> {
     eq(schema.departments.id, deptId),
     like(schema.departments.ancestors, `${deptId}/%`),
   ]);
-  const result = await db
+  const result = await executor
     .select({ id: schema.departments.id })
     .from(schema.departments)
     .where(or(...conditions));
@@ -90,4 +97,30 @@ export function canAccessDept(
   if (!targetDeptId) return false;
   if (deptIds.length === 0) return false;
   return deptIds.includes(targetDeptId);
+}
+
+/**
+ * 作用域守卫：在传入的 executor 上计算操作者范围快照，并校验全部目标部门可访问，
+ * 任一目标越界即抛 ForbiddenError（经 mapDomainError 统一映射为 403）。
+ *
+ * 写操作的调用规范：在事务内加载目标行（404 归调用方）后调用本函数并传 `tx`，
+ * 使权限快照与业务写入同事务——快照读到的是本事务内的操作者角色状态。
+ * 每个目标携带各自的越界消息（如"无权操作该部门的用户"与"无权将用户迁移至该部门"），
+ * 可选目标（仅存在时校验，如"拟迁移至的目标部门"）由调用方按存在性展开传入。
+ *
+ * @param executor 事务句柄（写守卫）或 db（无事务场景）
+ * @param operatorId 操作者用户 ID
+ * @param targets 逐项 `[目标部门 ID, 越界消息]`；deptId 为 null/undefined 视为越界
+ */
+export async function requireDeptAccess(
+  executor: DbExecutor,
+  operatorId: string,
+  ...targets: Array<readonly [deptId: string | null | undefined, message: string]>
+): Promise<void> {
+  const deptIds = await getUserRoleDeptIds(executor, operatorId);
+  for (const [deptId, message] of targets) {
+    if (!canAccessDept(deptIds, deptId)) {
+      throw new ForbiddenError(message);
+    }
+  }
 }

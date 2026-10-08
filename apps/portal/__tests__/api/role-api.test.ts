@@ -39,6 +39,7 @@ vi.mock('@/lib/auth', () => ({
   logServerDataRead: vi.fn(async () => {}),
   getUserRoleDeptIds: mockGetUserRoleDeptIds,
   canAccessDept: vi.fn(() => true),
+  requireDeptAccess: vi.fn(async () => {}),
   withPermission: mockWithPermission,
 }));
 

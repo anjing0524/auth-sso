@@ -9,6 +9,7 @@
  */
 import postgres from 'postgres';
 import { drizzle } from 'drizzle-orm/postgres-js';
+import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import * as schema from '../../db/schema';
 import { getDatabaseUrl } from '@auth-sso/config';
 
@@ -47,3 +48,12 @@ export const db = new Proxy({} as PortalDatabase, {
 
 /** 导出 schema 以便其他模块使用 */
 export { schema };
+
+/** Drizzle 事务句柄（db.transaction 回调参数类型） */
+export type DbTxHandle = Parameters<Parameters<PortalDatabase['transaction']>[0]>[0];
+
+/**
+ * 通用数据库执行器：db 直连、事务句柄或等价的 drizzle postgres-js 实例（测试 TestDb）。
+ * 需要"事务内外通用"的原语（RT 撤销、数据范围快照等）以此为首参，调用方传 tx 即获得真实事务语义。
+ */
+export type DbExecutor = PortalDatabase | DbTxHandle | PostgresJsDatabase<typeof schema>;

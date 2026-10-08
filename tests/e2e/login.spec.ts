@@ -11,7 +11,10 @@ test('登录页提供凭据表单与授权入口', async ({ page }) => {
   await expect(page.getByRole('button', { name: /登录/i })).toBeVisible();
 });
 
-/** @req OAuth 授权码 + PKCE 浏览器完整旅程可用。 */
+/** @req OAuth 授权码 + PKCE 浏览器完整旅程可用。
+ *  本测试验证 authorize 端点签发授权码并重定向到 redirect_uri（直连 Portal，无 Gateway）。
+ *  注意：redirect_uri 落点的 Portal callback handler 已按 ADR-010 移除（Gateway 唯一 OAuth Client），
+ *  故此处断言到"带 code/state 的请求发出"为止，不断言 Portal 侧会话建立。 */
 test('管理员登录后签发 OAuth 授权码', async ({ page }) => {
   await page.goto(authorizeUrl);
   await expect(page).toHaveURL(/\/login\?session_id=/);

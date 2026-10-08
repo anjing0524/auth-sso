@@ -4,6 +4,7 @@
  */
 import { ShieldCheck } from 'lucide-react';
 import { getRoles } from './data';
+import { db } from '@/infrastructure/db';
 import { getDepartmentOptions } from '@/app/(dashboard)/users/data';
 import { resolveIdentity, getUserRoleDeptIds } from '@/lib/auth';
 import RolesTable from './components/RolesTable';
@@ -22,7 +23,7 @@ export default async function RolesPage({ searchParams }: PageProps) {
 
   // 鉴权由 roles/layout.tsx 负责（requirePermission(['role:list'])），此处只取身份信息。
   const identity = await resolveIdentity();
-  const deptIds = identity ? await getUserRoleDeptIds(identity.userId) : [];
+  const deptIds = identity ? await getUserRoleDeptIds(db, identity.userId) : [];
 
   const [{ data: roles, pagination }, departments] = await Promise.all([
     getRoles({ page, pageSize: 10, keyword, status: '', deptIds }),

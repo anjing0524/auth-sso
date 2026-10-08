@@ -6,6 +6,7 @@
 import { type NextRequest } from 'next/server';
 import { withPermission, getUserRoleDeptIds } from '@/lib/auth';
 import { getDepartments } from '@/app/(dashboard)/departments/data';
+import { db } from '@/infrastructure/db';
 import { restSuccess } from '@/lib/response';
 import { DEPARTMENT_PERMISSIONS } from '@auth-sso/contracts';
 
@@ -13,7 +14,7 @@ import { DEPARTMENT_PERMISSIONS } from '@auth-sso/contracts';
 /** GET /api/departments — 委托 data.ts 获取授权范围内的部门树 */
 export async function GET(_request: NextRequest) {
   return withPermission({ permissions: [DEPARTMENT_PERMISSIONS.LIST] }, async (userId) => {
-    const deptIds = await getUserRoleDeptIds(userId);
+    const deptIds = await getUserRoleDeptIds(db, userId);
     const data = await getDepartments(deptIds, userId);
     return restSuccess(data);
   });

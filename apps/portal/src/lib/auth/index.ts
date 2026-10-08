@@ -13,7 +13,7 @@
  */
 export { withAuth, withPermission, type AuthContext } from './guard';
 export { checkPermission } from './check-permission';
-export { getUserRoleDeptIds, canAccessDept } from './data-scope';
+export { getUserRoleDeptIds, canAccessDept, requireDeptAccess } from './data-scope';
 export { logServerDataRead } from './server-logger';
 export type { PermissionCheckOptions, PermissionCheckResult } from './check-permission';
 export { requirePermission } from './check-permission';
