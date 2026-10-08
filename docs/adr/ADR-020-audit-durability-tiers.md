@@ -82,8 +82,10 @@ try {
 **代价**
 - `recordActionAudit` / `recordApiAudit` 不再抛出，调用方无法感知审计失败——这是刻意的：它们**没有资格**推翻业务结果。可观测性由 `log.error` 承担。
 
-**已知未修（挂账）**
-- **`x-action-method` / `x-action-path` 是永不被满足的契约**：这两个头在整个仓库中**没有任何注入点**（Portal 与 Gateway 均无）。因此档②写入的 `method` 恒为兜底值 `'ACTION'` / `'API'`，`url` 恒为 `null`。API 层已改用 `request.url` 记录真实 URL，但 `audit_logs.url` 仍为 null。修复方向是让审计记录从真实请求取 method/url（而非依赖不存在的头），属独立改动。
+**已修（原挂账）**
+- **`x-action-method` / `x-action-path` 是永不被满足的契约**（原记录）：这两个头在整个仓库中**没有任何注入点**，是"只被读取、从未被写入"的幽灵契约，导致档②写入的 `method` 恒为兜底值、`url` 恒为 `null`。
+  **已改为采集真实存在的数据**：`method` 取 Next.js 的 `next-action` 头（Server Action 标识，已在其 `action-handler.js` 中确认 `ACTION_HEADER = 'next-action'`），无该头时回退 `'ACTION'` / `'API'`；`url` 取 `referer` 的 pathname（Server Action 请求由当前页面发出，referer 即该页面），解析失败一律返回 `null` —— **审计字段缺失优于写入假数据**。幽灵头的读取已全部删除。
+  依赖 `next-action` 是 Next.js 内部头的风险：它若改名，行为退化为回退值（与修复前一致），不会报错。
 
 ## 相关 ADR
 

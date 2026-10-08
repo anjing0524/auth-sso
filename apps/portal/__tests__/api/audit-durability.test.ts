@@ -17,7 +17,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const { mocks } = vi.hoisted(() => ({
-  mocks: { insert: vi.fn() },
+  mocks: {
+    insert: vi.fn(),
+    lastRow: {} as Record<string, unknown>,
+  },
 }));
 
 vi.mock('@/infrastructure/db', () => ({
@@ -25,8 +28,12 @@ vi.mock('@/infrastructure/db', () => ({
   schema: { auditLogs: {}, loginLogs: {}, accessLogs: {} },
 }));
 
+const { headerStore } = vi.hoisted(() => ({
+  headerStore: {} as Record<string, string>,
+}));
+
 vi.mock('next/headers', () => ({
-  headers: async () => new Headers({ 'x-action-method': 'ACTION', 'x-action-path': '/x' }),
+  headers: async () => new Headers(headerStore),
 }));
 
 import { appendSecurityAudit, recordActionAudit, recordApiAudit } from '@/lib/audit';
@@ -40,13 +47,22 @@ function makeInsertFail(message = 'audit storage down') {
 
 function makeInsertSucceed() {
   mocks.insert.mockImplementation(() => ({
-    values: () => Promise.resolve(undefined),
+    values: (row: Record<string, unknown>) => {
+      mocks.lastRow = row;
+      return Promise.resolve(undefined);
+    },
   }));
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
+  for (const k of Object.keys(headerStore)) delete headerStore[k];
 });
+
+/** 取出最近一次写入 audit_logs 的行 */
+function lastAuditRow(): Record<string, unknown> {
+  return mocks.lastRow;
+}
 
 describe('档② 控制面审计 —— 永不抛出', () => {
   it('recordActionAudit 在 DB 写入失败时不抛出', async () => {
@@ -91,5 +107,66 @@ describe('档① 安全审计 —— 必须抛出（与业务同事务）', () =
     await expect(
       appendSecurityAudit(tx as never, { userId: 'u1', operation: 'USER_UPDATE' }),
     ).rejects.toThrow();
+  });
+});
+
+// ── 真实请求数据的采集（替代幽灵头）──────────────────────
+//
+// 原先 `method`/`url` 取自 `x-action-method` / `x-action-path` 两个头，
+// 而这两个头在整个仓库中**没有任何注入点**——是"只被读取、从未被写入"的幽灵
+// 契约，导致 `audit_logs.url` 恒为 null、`method` 恒为兜底值。
+// 改用真实存在的数据：Next.js 的 `next-action` 头（Server Action 标识）
+// 与 `referer`（发起页面）。
+
+describe('档② 采集真实请求数据', () => {
+  it('method 取自 Next.js 的 next-action 头（Server Action 标识）', async () => {
+    makeInsertSucceed();
+    headerStore['next-action'] = 'a1b2c3d4e5';
+
+    await recordActionAudit('u1', 'USER_UPDATE');
+
+    expect(lastAuditRow().method).toBe('a1b2c3d4e5');
+  });
+
+  it('无 next-action 头时回退到兜底方法名', async () => {
+    makeInsertSucceed();
+
+    await recordActionAudit('u1', 'USER_UPDATE');
+
+    expect(lastAuditRow().method).toBe('ACTION');
+  });
+
+  it('url 取自 referer 的 pathname（不再恒为 null）', async () => {
+    makeInsertSucceed();
+    headerStore['referer'] = 'http://localhost:4100/users?page=2';
+
+    await recordActionAudit('u1', 'USER_UPDATE');
+
+    expect(lastAuditRow().url).toBe('/users');
+  });
+
+  it('referer 缺失 → url 为 null（不写入假数据）', async () => {
+    makeInsertSucceed();
+
+    await recordActionAudit('u1', 'USER_UPDATE');
+
+    expect(lastAuditRow().url).toBeNull();
+  });
+
+  it('referer 非法（非绝对 URL）→ url 为 null 而非抛出', async () => {
+    makeInsertSucceed();
+    headerStore['referer'] = 'not-a-url';
+
+    await recordActionAudit('u1', 'USER_UPDATE');
+
+    expect(lastAuditRow().url).toBeNull();
+  });
+
+  it('recordApiAudit 回退方法名为 API', async () => {
+    makeInsertSucceed();
+
+    await recordApiAudit('u1', 'USER_UPDATE');
+
+    expect(lastAuditRow().method).toBe('API');
   });
 });

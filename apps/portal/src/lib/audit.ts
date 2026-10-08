@@ -148,8 +148,8 @@ async function recordControlPlaneAudit(
     await writeAuditLog({
       userId,
       operation,
-      method: h.get('x-action-method') || fallbackMethod,
-      url: h.get('x-action-path') || null,
+      method: h.get('next-action') ?? fallbackMethod,
+      url: refererPath(h),
       ip: extractClientIP(h),
       userAgent: extractUserAgent(h),
       status: 200,
@@ -160,6 +160,27 @@ async function recordControlPlaneAudit(
       operation,
       error: err instanceof Error ? err.message : String(err),
     });
+  }
+}
+
+/**
+ * 从 `referer` 提取来源路径（去掉 origin 与 query）。
+ *
+ * **替代原先的 `x-action-path` 头**：那个头在整个仓库中没有任何注入点，
+ * 是一个"只被读取、从未被写入"的幽灵契约，导致 `audit_logs.url` 恒为 null。
+ * `referer` 是浏览器/客户端实际会发送的真实数据（Server Action 请求由当前页面
+ * 发出，referer 即该页面），虽不如自定义头精确，但**确实存在**。
+ *
+ * 解析失败（缺失、非绝对 URL、跨域）一律返回 null —— 审计字段缺失优于写入假数据。
+ */
+function refererPath(h: Headers): string | null {
+  const referer = h.get('referer');
+  if (!referer) return null;
+  try {
+    const url = new URL(referer);
+    return url.pathname;
+  } catch {
+    return null;
   }
 }
 
