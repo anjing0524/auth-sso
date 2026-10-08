@@ -15,7 +15,6 @@
  * @impl B-USR-ST — 账户状态管理
  * @impl B-USR-PW — 重置用户密码
  */
-import { revalidatePath, updateTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
 import { eq, or } from 'drizzle-orm';
 import { withAuth, type AuthContext } from '@/lib/auth';
@@ -46,6 +45,7 @@ import { revokeUserAccessByUserId } from '@/lib/session/revoke';
 import { clearBruteForceCounter } from '@/lib/auth/brute-force';
 import { requireDeptAccess } from '@/lib/auth';
 import { createLogger } from '@/lib/logger';
+import { invalidateResource } from '@/lib/cache-invalidation';
 
 const log = createLogger('UsersAction');
 import { COMMON_ERRORS, USER_ACTIVE, USER_PERMISSIONS } from '@auth-sso/contracts';
@@ -94,8 +94,7 @@ export const createUserAction = withAuth(
       return user;
     });
 
-    revalidatePath('/users');
-    updateTag('users-list');
+    invalidateResource('users');
     return { success: true, data: { id: result.id }, message: '用户创建成功' };
   },
 );
@@ -131,8 +130,7 @@ export const toggleUserStatusAction = withAuth(
       log.error('撤销用户 JWT 失败', { error: (e as Error).message });
     }
 
-    revalidatePath('/users');
-    updateTag('users-list');
+    invalidateResource('users');
     return {
       success: true,
       data: { status: updated.status },
@@ -162,8 +160,7 @@ export const unlockUserAction = withAuth(
       return target;
     });
 
-    revalidatePath('/users');
-    updateTag('users-list');
+    invalidateResource('users');
 
     // 清除暴力破解 Redis 计数器（管理员解锁需同步清除，否则窗口期内仍被锁定）
     try {
@@ -212,8 +209,7 @@ export const updateUserAction = withAuth(
     });
     await refreshUserPermissionCache(v.data.id);
     if (deptIdChanged) await revokeUserAccessByUserId(v.data.id);
-    revalidatePath('/users');
-    updateTag('users-list');
+    invalidateResource('users');
     return { success: true, data: { id: v.data.id }, message: '更新成功' };
   },
 );
@@ -248,8 +244,7 @@ export const deleteUserAction = withAuth(
     }
 
     await refreshUserPermissionCache(v.data.id);
-    revalidatePath('/users');
-    updateTag('users-list');
+    invalidateResource('users');
     return { success: true, data: { id: v.data.id }, message: '用户已逻辑删除' };
   },
 );
@@ -296,8 +291,7 @@ export const resetPasswordAction = withAuth(
       log.error('重置密码后撤销 JWT 失败', { error: (e as Error).message });
     }
 
-    revalidatePath('/users');
-    updateTag('users-list');
+    invalidateResource('users');
     return { success: true, data: { id: v.data.id }, message: '密码已重置，该用户所有会话已失效' };
   },
 );

@@ -8,7 +8,6 @@
  * 满足 FR-USR-10（自助改密）/ FR-USR-12（自助改资料）。
  */
 import { z } from 'zod';
-import { revalidatePath } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
 import { eq } from 'drizzle-orm';
 import { withAuth, type AuthContext } from '@/lib/auth';
@@ -19,6 +18,7 @@ import { validate } from '@/lib/validation';
 import { PasswordSchema } from '@/domain/shared/zod-schemas';
 import { COMMON_ERRORS, type ApiResponse } from '@auth-sso/contracts';
 import { createLogger } from '@/lib/logger';
+import { invalidateResource } from '@/lib/cache-invalidation';
 
 const log = createLogger('ProfileAction');
 
@@ -74,7 +74,7 @@ export const updateOwnProfileAction = withAuth(
 
     await db.update(schema.users).set(updates).where(eq(schema.users.id, ctx.userId));
 
-    revalidatePath('/profile');
+    invalidateResource('profile');
     return { success: true, data: { id: ctx.userId }, message: '资料已更新' };
   },
 );

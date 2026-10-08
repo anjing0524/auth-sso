@@ -10,7 +10,6 @@
  * @impl F-DEP-U — 编辑部门信息
  * @impl F-DEP-D — 删除部门
  */
-import { revalidatePath, updateTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
 import { eq, sql, count } from 'drizzle-orm';
 import { withAuth, type AuthContext } from '@/lib/auth';
@@ -33,6 +32,7 @@ import { EntityNotFoundError } from '@/domain/shared/errors';
 import { generateUUID } from '@/lib/crypto';
 import { validate } from '@/lib/validation';
 import { requireDeptAccess } from '@/lib/auth';
+import { invalidateResource } from '@/lib/cache-invalidation';
 import { DEPARTMENT_PERMISSIONS, type ApiResponse } from '@auth-sso/contracts';
 
 /** 创建部门 */
@@ -64,9 +64,7 @@ export const createDepartmentAction = withAuth(
       return d;
     });
 
-    revalidatePath('/departments');
-    updateTag('departments-list');
-    updateTag('departments');
+    invalidateResource('departments');
     return { success: true, data: { id: dept.id }, message: '部门创建成功' };
   },
 );
@@ -112,9 +110,7 @@ export const updateDepartmentAction = withAuth(
         ...(v.data.parentId ? [[v.data.parentId, '无权将部门迁移至该父部门']] as const : []));
       await performDepartmentUpdate(tx, deptId, v.data);
     });
-    revalidatePath('/departments');
-    updateTag('departments-list');
-    updateTag('departments');
+    invalidateResource('departments');
     return { success: true, data: { id: deptId }, message: '部门更新成功' };
   },
 );
@@ -155,9 +151,7 @@ export const deleteDepartmentAction = withAuth(
       await tx.delete(schema.departments).where(eq(schema.departments.id, row.id));
     });
 
-    revalidatePath('/departments');
-    updateTag('departments-list');
-    updateTag('departments');
+    invalidateResource('departments');
     return { success: true, data: { id: deptId }, message: '部门已删除' };
   },
 );

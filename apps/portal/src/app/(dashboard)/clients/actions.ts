@@ -8,7 +8,6 @@
  * @impl G-CLT-D — 注销客户端
  * @impl G-CLT-SEC — 轮换客户端密钥
  */
-import { revalidatePath, updateTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
 import { eq } from 'drizzle-orm';
 import { revokeClientRefreshTokens } from '@/lib/auth/token/revocation';
@@ -28,6 +27,7 @@ import {
 import { EntityNotFoundError } from '@/domain/shared/errors';
 import { generateClientId, generateClientSecret, hashClientSecret } from '@/lib/crypto';
 import { validate } from '@/lib/validation';
+import { invalidateResource } from '@/lib/cache-invalidation';
 import { CLIENT_PERMISSIONS, type ApiResponse } from '@auth-sso/contracts';
 
 /** 创建 Client */
@@ -44,8 +44,7 @@ export const createClientAction = withAuth(
       clientSecret: await hashClientSecret(rawSecret),
     });
 
-    revalidatePath('/clients');
-    updateTag('clients-list');
+    invalidateResource('clients');
     return {
       success: true,
       data: { id: client.clientId, clientId: client.clientId, clientSecret: rawSecret },
@@ -74,8 +73,7 @@ export const updateClientAction = withAuth(
       return updated;
     });
 
-    revalidatePath('/clients');
-    updateTag('clients-list');
+    invalidateResource('clients');
     return { success: true, data: { id: clientIdStr }, message: '应用更新成功' };
   },
 );
@@ -93,8 +91,7 @@ export const deleteClientAction = withAuth(
       await tx.delete(schema.clients).where(eq(schema.clients.clientId, row.clientId));
     });
 
-    revalidatePath('/clients');
-    updateTag('clients-list');
+    invalidateResource('clients');
     return { success: true, data: { id: clientIdStr }, message: '应用已注销' };
   },
 );
@@ -113,9 +110,7 @@ export const rotateClientSecretAction = withAuth(
       .set({ clientSecret: await hashClientSecret(newSecret) })
       .where(eq(schema.clients.clientId, row.clientId));
 
-    revalidatePath(`/clients/${row.clientId}`);
-    revalidatePath('/clients');
-    updateTag('clients-list');
+    invalidateResource('clients', [`/clients/${row.clientId}`]);
     return { success: true, data: { clientSecret: newSecret }, message: '密钥重新生成成功' };
   },
 );
@@ -140,8 +135,7 @@ export const revokeClientTokensAction = withAuth(
       revokedCount = await revokeClientRefreshTokens(db, row.clientId, { tokenIds });
     }
 
-    revalidatePath(`/clients/${row.clientId}`);
-    updateTag('clients-list');
+    invalidateResource('clients', [`/clients/${row.clientId}`]);
     return { success: true, data: { revokedCount }, message: `已成功撤销 ${revokedCount} 个 Token` };
   },
 );

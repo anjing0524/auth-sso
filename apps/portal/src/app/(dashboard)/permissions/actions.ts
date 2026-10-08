@@ -7,7 +7,6 @@
  * @impl D-PRM-U — 编辑权限信息
  * @impl D-PRM-D — 删除权限
  */
-import { revalidatePath, updateTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
 import { eq } from 'drizzle-orm';
 import { withAuth, type AuthContext } from '@/lib/auth';
@@ -21,6 +20,7 @@ import { generateUUID } from '@/lib/crypto';
 import { validate } from '@/lib/validation';
 import { refreshUsersPermissionCache } from '@/lib/permissions';
 import { revokeUsersAccessByUserId } from '@/lib/session/revoke';
+import { invalidateResource } from '@/lib/cache-invalidation';
 import { PERMISSION_PERMISSIONS, type ApiResponse } from '@auth-sso/contracts';
 
 async function getAffectedUserIds(permId: string): Promise<string[]> {
@@ -60,8 +60,7 @@ export const createPermissionAction = withAuth(
       return p;
     });
 
-    revalidatePath('/permissions');
-    updateTag('permissions-list');
+    invalidateResource('permissions');
     return { success: true, data: { id: perm.id }, message: '权限创建成功' };
   },
 );
@@ -89,8 +88,7 @@ export const updatePermissionAction = withAuth(
     // 权限变更影响所有绑定了该权限的角色 → 这些角色的用户权限缓存需刷新
     await invalidateAffectedUsersCache(permId);
 
-    revalidatePath('/permissions');
-    updateTag('permissions-list');
+    invalidateResource('permissions');
     return { success: true, data: { id: permId }, message: '权限更新成功' };
   },
 );
@@ -117,8 +115,7 @@ export const deletePermissionAction = withAuth(
       await revokeUsersAccessByUserId(affectedUserIds);
     }
 
-    revalidatePath('/permissions');
-    updateTag('permissions-list');
+    invalidateResource('permissions');
     return { success: true, data: { id: permId }, message: '权限已删除' };
   },
 );

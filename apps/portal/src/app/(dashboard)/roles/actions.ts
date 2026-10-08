@@ -8,7 +8,6 @@
  * @impl C-ROL-D — 删除角色
  * @impl C-ROL-PA — 为角色分配权限
  */
-import { revalidatePath, updateTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
 import { eq } from 'drizzle-orm';
 import { withAuth, type AuthContext } from '@/lib/auth';
@@ -32,6 +31,7 @@ import { validate } from '@/lib/validation';
 import { refreshUsersPermissionCache } from '@/lib/permissions';
 import { revokeUsersAccessByUserId } from '@/lib/session/revoke';
 import { requireDeptAccess } from '@/lib/auth';
+import { invalidateResource } from '@/lib/cache-invalidation';
 import { ENTITY_ACTIVE, ROLE_PERMISSIONS } from '@auth-sso/contracts';
 import type { ApiResponse } from '@auth-sso/contracts';
 
@@ -84,8 +84,7 @@ export const createRoleAction = withAuth(
       return r;
     });
 
-    revalidatePath('/roles');
-    updateTag('roles-list');
+    invalidateResource('roles');
     return { success: true, data: { id: role.id }, message: '角色创建成功' };
   },
 );
@@ -116,8 +115,7 @@ export const updateRoleAction = withAuth(
       await revokeUsersAccessByUserId(userIds);
     }
 
-    revalidatePath('/roles');
-    updateTag('roles-list');
+    invalidateResource('roles');
     return { success: true, data: { id: roleId }, message: '角色更新成功' };
   },
 );
@@ -150,8 +148,7 @@ export const deleteRoleAction = withAuth(
       await revokeUsersAccessByUserId(boundUsers.map(u => u.userId));
     }
 
-    revalidatePath('/roles');
-    updateTag('roles-list');
+    invalidateResource('roles');
     return { success: true, data: { id: roleId }, message: '角色已删除' };
   },
 );

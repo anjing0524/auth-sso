@@ -9,7 +9,6 @@
  * @route POST /api/users/[id]/force-logout
  */
 import { type NextRequest } from 'next/server';
-import { revalidatePath, updateTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
 import { eq } from 'drizzle-orm';
 import { withPermission } from '@/lib/auth';
@@ -19,6 +18,7 @@ import { revokeUserAccessByUserId } from '@/lib/session/revoke';
 import { clearUserPermissionCache } from '@/lib/permissions';
 import { COMMON_ERRORS, USER_PERMISSIONS } from '@auth-sso/contracts';
 import { restSuccess, restError } from '@/lib/response';
+import { invalidateResource } from '@/lib/cache-invalidation';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -72,8 +72,7 @@ export async function POST(
     await clearUserPermissionCache(userId);
 
     // 4. 失效页面缓存与数据缓存（确保用户列表即时反映下线状态）
-    revalidatePath('/users');
-    updateTag('users-list');
+    invalidateResource('users');
 
     return restSuccess({
       userId: id,
