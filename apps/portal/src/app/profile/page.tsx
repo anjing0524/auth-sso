@@ -7,7 +7,7 @@
 import { Suspense } from 'react';
 import { resolveIdentity } from '@/lib/auth';
 import { getUser } from '@/app/(dashboard)/users/data';
-import { getUserPermissionContext } from '@/lib/permissions';
+import { getUserPermissionContext, toPermissionContextOrNull } from '@/lib/permissions';
 import ProfileClient from './ProfileClient';
 
 /**
@@ -25,7 +25,7 @@ async function ProfileContent() {
 
   const [user, permCtx] = await Promise.all([
     getUser(identity.userId),
-    getUserPermissionContext(identity.userId),
+    getUserPermissionContext(identity.userId).then(toPermissionContextOrNull),
   ]);
 
   return (

@@ -346,9 +346,19 @@ export async function rotateRefreshToken(
   // 事务已提交：以下任一失败必须补偿回收刚入库的新 RT —— 否则产生
   // "已入库但永不发放"的孤儿行（明文已丢弃，无人可用，但属垃圾数据）
   try {
-    const permCtx = await getUserPermissionContext(rt.userId);
-    if (!permCtx) throw new Error('用户权限上下文不可用（fail-close）');
-    await cacheUserPermissionContext(rt.userId, permCtx);
+    // 权限上下文预填充分两种失败（ADR-011 / ADR-018）：
+    // - denied（用户不存在 / 非 ACTIVE）→ 否决性数据，必须拒绝：用户已被禁用/删除，
+    //   不该拿到新令牌。
+    // - unavailable（DB 故障）→ **不阻断轮换**，仅跳过预填充。轮换与签发不依赖权限
+    //   上下文；跳过预填充意味着该用户首次鉴权时解析一次（fail-open 路径）。
+    //   原实现把两者都当"上下文不可用"而 fail-close，使一次 DB 抖动登出用户。
+    const permResult = await getUserPermissionContext(rt.userId);
+    if (permResult.kind === 'denied') {
+      throw new Error(`用户不可用（${permResult.reason}），拒绝轮换`);
+    }
+    if (permResult.kind === 'ok') {
+      await cacheUserPermissionContext(rt.userId, permResult.context);
+    }
 
     const { token: accessToken } = await signAccessToken(rt.userId, rt.clientId, rt.scopes);
 

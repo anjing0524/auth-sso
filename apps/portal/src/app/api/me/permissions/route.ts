@@ -8,7 +8,7 @@
  */
 import { type NextRequest } from 'next/server';
 import { resolveIdentity } from '@/lib/auth';
-import { getUserPermissionContext } from '@/lib/permissions';
+import { getUserPermissionContext, toPermissionContextOrNull } from '@/lib/permissions';
 import { mapServerError } from '@/lib/server-error';
 import { COMMON_ERRORS } from '@auth-sso/contracts';
 import { restSuccess, restError } from '@/lib/response';
@@ -21,7 +21,7 @@ export async function GET(_request: NextRequest) {
       return restError(COMMON_ERRORS.UNAUTHORIZED, '未登录', 401);
     }
 
-    const permissionContext = await getUserPermissionContext(identity.userId);
+    const permissionContext = toPermissionContextOrNull(await getUserPermissionContext(identity.userId));
     if (!permissionContext) {
       return restError(COMMON_ERRORS.INTERNAL_ERROR, '无法获取用户权限上下文', 500);
     }

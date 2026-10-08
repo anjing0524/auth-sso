@@ -89,6 +89,10 @@ const { mockGetUserPermissionContext } = vi.hoisted(() => ({
 
 vi.mock('@/lib/permissions', () => ({
   getUserPermissionContext: mockGetUserPermissionContext,
+  // 用真实实现而非 mock：它是纯收窄函数（result → context | null），
+  // mock 掉它等于把待测语义替换成测试自己的假设。
+  toPermissionContextOrNull: (r: { kind: string; context?: unknown }) =>
+    r.kind === 'ok' ? r.context : null,
 }));
 
 vi.mock('next/server', async (importOriginal) => {
@@ -261,11 +265,11 @@ beforeEach(async () => {
   await seedTestData(td.db, buildFullSeed());
 
   // 默认权限上下文：USER 角色 + 全部 4 个权限
-  mockGetUserPermissionContext.mockResolvedValue({
+  mockGetUserPermissionContext.mockResolvedValue( { kind: 'ok', context:{
     roles: [{ id: USER_ROLE_ID, code: 'USER', name: '普通用户' }],
     permissions: ['portal:user:list', 'portal:user:read', 'portal:audit:read', 'portal:role:assign'],
     deptIds: [ROOT_DEPT_ID],
-  });
+  } });
 });
 
 describe('Permission Enforcement', () => {
@@ -309,11 +313,11 @@ describe('Permission Enforcement', () => {
     it('权限上下文中无所需权限时返回 403', async () => {
       mockGetJwtFromCookie.mockResolvedValueOnce('valid-token');
       mockVerifyJwt.mockResolvedValueOnce(defaultClaims);
-      mockGetUserPermissionContext.mockResolvedValueOnce({
+      mockGetUserPermissionContext.mockResolvedValueOnce( { kind: 'ok', context:{
         roles: [{ id: USER_ROLE_ID, code: 'USER', name: '普通用户' }],
         permissions: ['portal:user:list'],
         deptIds: [ROOT_DEPT_ID],
-      });
+      } });
 
       const result = await checkPermission({
         permissions: ['portal:audit:read'],
@@ -350,11 +354,11 @@ describe('Permission Enforcement', () => {
     it('requireAll 模式：缺少任一权限时返回 403', async () => {
       mockGetJwtFromCookie.mockResolvedValueOnce('valid-token');
       mockVerifyJwt.mockResolvedValueOnce(defaultClaims);
-      mockGetUserPermissionContext.mockResolvedValueOnce({
+      mockGetUserPermissionContext.mockResolvedValueOnce( { kind: 'ok', context:{
         roles: [{ id: USER_ROLE_ID, code: 'USER', name: '普通用户' }],
         permissions: ['portal:user:list'],
         deptIds: [ROOT_DEPT_ID],
-      });
+      } });
 
       const result = await checkPermission({
         permissions: ['portal:user:list', 'portal:audit:read'],
@@ -381,11 +385,11 @@ describe('Permission Enforcement', () => {
     it('基于角色的检查：匹配角色时通过', async () => {
       mockGetJwtFromCookie.mockResolvedValueOnce('valid-token');
       mockVerifyJwt.mockResolvedValueOnce(defaultClaims);
-      mockGetUserPermissionContext.mockResolvedValueOnce({
+      mockGetUserPermissionContext.mockResolvedValueOnce( { kind: 'ok', context:{
         roles: [{ id: ADMIN_ROLE_ID, code: 'ADMIN', name: '管理员' }],
         permissions: [],
         deptIds: [ROOT_DEPT_ID],
-      });
+      } });
 
       const result = await checkPermission({
         roles: ['ADMIN'],
@@ -410,11 +414,11 @@ describe('Permission Enforcement', () => {
     it('超级管理员角色（ADMIN）绕过所有权限检查', async () => {
       mockGetJwtFromCookie.mockResolvedValueOnce('valid-token');
       mockVerifyJwt.mockResolvedValueOnce(defaultClaims);
-      mockGetUserPermissionContext.mockResolvedValueOnce({
+      mockGetUserPermissionContext.mockResolvedValueOnce( { kind: 'ok', context:{
         roles: [{ id: ADMIN_ROLE_ID, code: 'ADMIN', name: '管理员' }],
         permissions: [],
         deptIds: [ROOT_DEPT_ID],
-      });
+      } });
 
       const result = await checkPermission({
         permissions: ['portal:nonexistent:permission'],
@@ -427,11 +431,11 @@ describe('Permission Enforcement', () => {
     it('超级管理员角色（SUPER_ADMIN）绕过所有权限检查', async () => {
       mockGetJwtFromCookie.mockResolvedValueOnce('valid-token');
       mockVerifyJwt.mockResolvedValueOnce(defaultClaims);
-      mockGetUserPermissionContext.mockResolvedValueOnce({
+      mockGetUserPermissionContext.mockResolvedValueOnce( { kind: 'ok', context:{
         roles: [{ id: SUPER_ADMIN_ROLE_ID, code: 'SUPER_ADMIN', name: '超级管理员' }],
         permissions: [],
         deptIds: [ROOT_DEPT_ID],
-      });
+      } });
 
       const result = await checkPermission({
         permissions: ['portal:nonexistent:permission'],
@@ -529,11 +533,11 @@ describe('Permission Enforcement', () => {
     it('权限不通过时返回 403 且不执行 handler', async () => {
       mockGetJwtFromCookie.mockResolvedValueOnce('valid-token');
       mockVerifyJwt.mockResolvedValueOnce(defaultClaims);
-      mockGetUserPermissionContext.mockResolvedValueOnce({
+      mockGetUserPermissionContext.mockResolvedValueOnce( { kind: 'ok', context:{
         roles: [{ id: USER_ROLE_ID, code: 'USER', name: '普通用户' }],
         permissions: ['portal:user:list'],
         deptIds: [ROOT_DEPT_ID],
-      });
+      } });
 
       const handler = vi.fn(async () =>
         NextResponse.json({ success: true })
@@ -554,11 +558,11 @@ describe('Permission Enforcement', () => {
     it('角色匹配时执行 handler', async () => {
       mockGetJwtFromCookie.mockResolvedValueOnce('valid-token');
       mockVerifyJwt.mockResolvedValueOnce(defaultClaims);
-      mockGetUserPermissionContext.mockResolvedValueOnce({
+      mockGetUserPermissionContext.mockResolvedValueOnce( { kind: 'ok', context:{
         roles: [{ id: ADMIN_ROLE_ID, code: 'ADMIN', name: '管理员' }],
         permissions: [],
         deptIds: [ROOT_DEPT_ID],
-      });
+      } });
 
       const handler = vi.fn(async (userId: string) =>
         NextResponse.json({ success: true, userId })
@@ -613,11 +617,11 @@ describe('Permission Enforcement', () => {
     it('超级管理员角色即使无指定权限也能通过', async () => {
       mockGetJwtFromCookie.mockResolvedValueOnce('valid-token');
       mockVerifyJwt.mockResolvedValueOnce(defaultClaims);
-      mockGetUserPermissionContext.mockResolvedValueOnce({
+      mockGetUserPermissionContext.mockResolvedValueOnce( { kind: 'ok', context:{
         roles: [{ id: ADMIN_ROLE_ID, code: 'ADMIN', name: '管理员' }],
         permissions: [],
         deptIds: [ROOT_DEPT_ID],
-      });
+      } });
 
       const handler = vi.fn(async (userId: string) =>
         NextResponse.json({ success: true, userId })

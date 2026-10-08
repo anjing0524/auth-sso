@@ -15,7 +15,7 @@ import { cache } from 'react';
 import { resolveIdentity } from './verify-jwt';
 import { canAll, canAny, hasRole as hasRoleShared, isAdminRole } from '@auth-sso/contracts';
 import type { AuditOperation } from '@auth-sso/contracts';
-import { getUserPermissionContext } from '@/lib/permissions';
+import { getUserPermissionContext, toPermissionContextOrNull } from '@/lib/permissions';
 
 /**
  * 权限检查选项接口定义
@@ -66,7 +66,7 @@ export async function checkPermission(
   // 此前这里手写过第二条 Redis 读取路径，缺陷有二：键拼装/解析与 permissions.ts
   // 双处漂移；用"空数组"误判缓存 miss，导致合法空权限用户每次请求穿透 DB。
   // ctx 为 null（用户不存在/DB 异常）时按无权限处理 = fail-close（ADR-011）。
-  const ctx = await getUserPermissionContext(userId);
+  const ctx = toPermissionContextOrNull(await getUserPermissionContext(userId));
   // 判定统一委托 @auth-sso/contracts 的纯函数（与客户端共用同一实现，ADR-015）。
   const subject = {
     roleCodes: ctx?.roles.map((r) => r.code) ?? [],

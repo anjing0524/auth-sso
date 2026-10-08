@@ -12,7 +12,7 @@
 import { type NextRequest } from 'next/server';
 import { resolveIdentity } from '@/lib/auth';
 import { getDynamicMenuTree } from '@/lib/menu-tree';
-import { getUserPermissionContext } from '@/lib/permissions';
+import { getUserPermissionContext, toPermissionContextOrNull } from '@/lib/permissions';
 import { mapServerError } from '@/lib/server-error';
 import { COMMON_ERRORS } from '@auth-sso/contracts';
 import { restSuccess, restError } from '@/lib/response';
@@ -30,7 +30,7 @@ export async function GET(_request: NextRequest) {
 
     const { userId, expiresAt, issuedAt } = identity;
 
-    const permCtx = await getUserPermissionContext(userId);
+    const permCtx = toPermissionContextOrNull(await getUserPermissionContext(userId));
     const roles = permCtx?.roles.map(r => r.code) ?? [];
     const permissions = permCtx?.permissions ?? [];
     const deptIds = permCtx?.deptIds ?? [];

@@ -151,11 +151,19 @@ export async function exchangeAuthorizationCode(
   await verifyPKCE(codeVerifier, authCode.codeChallenge);
 
   // ── 3. 权限上下文预填充（使后续请求总是 Redis 命中）──
-  const permCtx = await getUserPermissionContext(authCode.userId);
-  if (!permCtx) {
-    return { ok: false, reason: 'invalid_grant', detail: '无法获取用户权限上下文' };
+  //
+  // 这里必须区分两种失败（ADR-011 / ADR-018）：
+  // - 用户已不存在 / 非 ACTIVE → 不签发（否决性数据；码签发后被禁用/删除）
+  // - 数据库不可用 → **不阻断签发**，只跳过预填充。签发令牌不依赖权限上下文，
+  //   而预填充是纯粹的优化：跳过它意味着该用户首次鉴权时解析一次（fail-open 路径）。
+  //   原实现把两者都 fail-close，使一次 DB 抖动变成用户被登出。
+  const permResult = await getUserPermissionContext(authCode.userId);
+  if (permResult.kind === 'denied') {
+    return { ok: false, reason: 'invalid_grant', detail: '用户不可用' };
   }
-  await cacheUserPermissionContext(authCode.userId, permCtx);
+  if (permResult.kind === 'ok') {
+    await cacheUserPermissionContext(authCode.userId, permResult.context);
+  }
 
   // ── 4. 签发 ──
   // AT：aud / client_id = 授权对象 client（ADR-013）

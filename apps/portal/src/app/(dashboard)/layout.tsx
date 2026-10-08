@@ -11,7 +11,7 @@ import { redirect } from 'next/navigation';
 import { resolveIdentity } from '@/lib/auth';
 import { getUser } from '@/app/(dashboard)/users/data';
 import { getDynamicMenuTree } from '@/lib/menu-tree';
-import { getUserPermissionContext } from '@/lib/permissions';
+import { getUserPermissionContext, toPermissionContextOrNull } from '@/lib/permissions';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 
 /**
@@ -24,7 +24,7 @@ async function DashboardContent({ children }: { children: React.ReactNode }) {
   }
 
   // 从 Redis 获取用户角色和权限上下文
-  const permCtx = await getUserPermissionContext(identity.userId);
+  const permCtx = toPermissionContextOrNull(await getUserPermissionContext(identity.userId));
   const roles = permCtx?.roles.map(r => r.code) ?? [];
   const permissions = permCtx?.permissions ?? [];
   const subject = { roleCodes: roles, permissionCodes: permissions };

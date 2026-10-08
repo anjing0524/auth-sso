@@ -20,6 +20,15 @@ const PERM_CACHE_TTL_JITTER = 300;
 const NULL_CACHE_TTL = 60;
 /** null 标记的 Redis Key 后缀 */
 const NULL_CACHE_SUFFIX = ':null';
+/**
+ * 瞬时故障标记的 Redis Key 后缀与 TTL。
+ *
+ * 与 `:null`（用户不存在，60s）刻意分开：把"DB 抖动"缓存成"用户不存在"会让
+ * 一个瞬时故障固化成 60 秒的拒绝。但完全不缓存又会在 DB 抖动时让同用户的
+ * 重试全部穿透到 DB（雪崩）。5 秒是"吸收重试风暴、又不把故障当真"的折中。
+ */
+const UNAVAILABLE_CACHE_SUFFIX = ':unavailable';
+const UNAVAILABLE_CACHE_TTL = 5;
 const USER_BATCH_SIZE = 50;
 
 async function settleUserBatches(
@@ -71,7 +80,25 @@ async function safeSetCache(
  * Token 签发时已通过 cacheUserPermissionContext 主动预填充缓存，
  * 正常情况下总是 Redis 命中，零 DB 查询。
  */
-export async function getUserPermissionContext(userId: string): Promise<UserPermissionContext | null> {
+/**
+ * 权限上下文解析结果。
+ *
+ * 原先返回 `UserPermissionContext | null`，把**三种语义完全不同**的失败压成同一个
+ * `null`（见 ADR-018）：
+ * - `not_found` / `inactive` —— 必须拒绝（否决性数据）
+ * - `unavailable` —— 基础设施故障，按 ADR-011 属缓存性数据，**调用方应降级而非拒绝**
+ *
+ * 压成 `null` 的直接后果：`rotateRefreshToken` 只能把 DB 抖动当成"上下文不可用"
+ * 而 fail-close 登出用户。调用方无从分级，是因为 interface 没给它们分级的信息。
+ */
+export type UserPermissionContextResult =
+  | { readonly kind: 'ok'; readonly context: UserPermissionContext }
+  /** 用户不存在或非 ACTIVE —— 否决性数据，调用方必须拒绝 */
+  | { readonly kind: 'denied'; readonly reason: 'not_found' | 'inactive' }
+  /** 数据库不可用 —— **不构成判据**，调用方应按 ADR-011 降级 */
+  | { readonly kind: 'unavailable' };
+
+export async function getUserPermissionContext(userId: string): Promise<UserPermissionContextResult> {
   const cacheKey = `${REDIS_KEY_PREFIX.USER_PERMS}${userId}`;
   let redis: RedisClient | null = null;
 
@@ -79,13 +106,17 @@ export async function getUserPermissionContext(userId: string): Promise<UserPerm
   try {
     redis = getRedis();
     // 防穿透：先检查 null 标记（用户不存在时缓存的短 TTL 占位）
-    const nullMarker = await redis.get(`${cacheKey}${NULL_CACHE_SUFFIX}`);
-    if (nullMarker !== null) {
-      return null;
+    // 先查瞬时故障标记：命中说明刚刚 DB 不可用，短暂短路避免重试风暴
+    if (await redis.get(`${cacheKey}${UNAVAILABLE_CACHE_SUFFIX}`) !== null) {
+      return { kind: 'unavailable' };
+    }
+    // 防穿透：null 标记表示用户不存在
+    if (await redis.get(`${cacheKey}${NULL_CACHE_SUFFIX}`) !== null) {
+      return { kind: 'denied', reason: 'not_found' };
     }
     const cachedData = await redis.get(cacheKey);
     if (cachedData) {
-      return JSON.parse(cachedData) as UserPermissionContext;
+      return { kind: 'ok', context: JSON.parse(cachedData) as UserPermissionContext };
     }
   } catch (cacheError: unknown) {
     // 降级容错：Redis 异常时不阻断核心鉴权业务，仅记录日志并继续查库
@@ -125,13 +156,13 @@ export async function getUserPermissionContext(userId: string): Promise<UserPerm
       if (redis) {
         await safeSetCache(redis, `${cacheKey}${NULL_CACHE_SUFFIX}`, NULL_CACHE_TTL, '1', userId);
       }
-      return null;
+      return { kind: 'denied', reason: 'not_found' };
     }
 
-    // 强核准状态约束：如果用户状态不是激活状态 (ACTIVE)，立刻返回 null 拒绝加载权限与角色，防范封禁账号鉴权逃逸漏洞
+    // 强核准状态约束：非 ACTIVE 立刻拒绝，防范封禁账号鉴权逃逸漏洞
     if (user.status !== ENTITY_ACTIVE) {
       log.warn(`Access denied: User ${userId} is not ACTIVE`, { status: user.status });
-      return null;
+      return { kind: 'denied', reason: 'inactive' };
     }
 
     // 从嵌套结构中过滤出处于激活状态 (ACTIVE) 的角色
@@ -150,7 +181,7 @@ export async function getUserPermissionContext(userId: string): Promise<UserPerm
       if (redis) {
         await safeSetCache(redis, cacheKey, jitteredCacheTtl(), JSON.stringify(context), userId);
       }
-      return context;
+      return { kind: 'ok', context };
     }
 
     // 从激活角色拥有的权限中过滤出激活状态的权限 code（进行去重处理）
@@ -188,11 +219,32 @@ export async function getUserPermissionContext(userId: string): Promise<UserPerm
       await safeSetCache(redis, cacheKey, jitteredCacheTtl(), JSON.stringify(context), userId);
     }
 
-    return context;
+    return { kind: 'ok', context };
   } catch (error: unknown) {
     log.error('Database query error', { error: (error as Error).message });
-    return null;
+    // 瞬时故障标记：短 TTL 吸收重试风暴，但**不**写成 `:null`——那会把瞬时故障
+    // 固化成 60 秒的"用户不存在"（ADR-011 / ADR-018）。
+    if (redis) {
+      await safeSetCache(redis, `${cacheKey}${UNAVAILABLE_CACHE_SUFFIX}`, UNAVAILABLE_CACHE_TTL, '1', userId);
+    }
+    return { kind: 'unavailable' };
   }
+}
+
+/**
+ * 把解析结果收窄为**判定语义**：有上下文返回它，否则 null。
+ *
+ * 判定场景（鉴权、权限码检查、页面渲染）不区分 `denied` 与 `unavailable`——
+ * 两者都不构成授权依据，都拒绝。**降级决策集中在此一处**，而不是散落到
+ * 每个调用点各自判断（那正是 ADR-018 要消除的形状）。
+ *
+ * 仅当调用方确实要为基础设施故障保留"非否决"语义时（如 token 签发后的
+ * 缓存预填充），才应直接消费 {@link UserPermissionContextResult}。
+ */
+export function toPermissionContextOrNull(
+  result: UserPermissionContextResult,
+): UserPermissionContext | null {
+  return result.kind === 'ok' ? result.context : null;
 }
 
 /**
