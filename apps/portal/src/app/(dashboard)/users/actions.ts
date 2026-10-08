@@ -37,16 +37,22 @@ import {
   type CreateUserInput,
 } from '@/domain/user/types';
 import { validatePassword } from '@/domain/shared/zod-schemas';
-import { EntityNotFoundError, DuplicateEntityError, BusinessRuleViolationError } from '@/domain/shared/errors';
+import { EntityNotFoundError, DuplicateEntityError } from '@/domain/shared/errors';
 import { generateUUID } from '@/lib/crypto';
 import { validate } from '@/lib/validation';
-import { hashPassword, isPasswordReused, pushPasswordHistory } from '@/domain/auth/password';
+import { hashPassword } from '@/domain/auth/password';
 import { refreshUserPermissionCache } from '@/lib/permissions';
 import { revokeUserAccessByUserId } from '@/lib/session/revoke';
 import { clearBruteForceCounter } from '@/lib/auth/brute-force';
 import { createLogger } from '@/lib/logger';
 import { invalidateResource } from '@/lib/cache-invalidation';
 import { withScopedRow, withScopedWrite } from '@/lib/authz';
+import {
+  assertResetAllowed,
+  buildPasswordHistory,
+  hashNewPassword,
+  revokeAfterPasswordReset,
+} from '@/lib/account/reset-password';
 
 const log = createLogger('UsersAction');
 import { COMMON_ERRORS, USER_ACTIVE, USER_PERMISSIONS } from '@auth-sso/contracts';
@@ -291,7 +297,8 @@ export const resetPasswordAction = withAuth(
       return { success: false, error: COMMON_ERRORS.VALIDATION_ERROR, message: passwordError };
     }
 
-    const passwordHash = await hashPassword(newPassword);
+    // bcrypt 在作用域外完成：约 50–200ms，放进事务会长时间占用 DB 连接
+    const passwordHash = await hashNewPassword(newPassword);
 
     await withScopedRow(
       {
@@ -305,26 +312,20 @@ export const resetPasswordAction = withAuth(
         notFound: () => new EntityNotFoundError('User', v.data.id),
       },
       async (tx, row) => {
-        // NFR-SEC-15: 禁止重用最近 5 次密码
-        if (await isPasswordReused(newPassword, row.passwordHistory ?? null)) {
-          // 使用 BusinessRuleViolationError 而非原生 Error，确保 mapDomainError 能正确映射错误码
-          throw new BusinessRuleViolationError('新密码不能与该用户最近使用过的密码相同');
-        }
-
-        const newHistory = pushPasswordHistory(row.passwordHistory ?? null, row.passwordHash ?? '');
+        const state = {
+          currentHash: row.passwordHash ?? null,
+          history: row.passwordHistory ?? null,
+        };
+        // NFR-SEC-15: 禁止重用最近 5 次密码（领域判定与自助改密共用）
+        await assertResetAllowed(newPassword, state);
         await tx.update(schema.users)
-          .set({ passwordHash, passwordHistory: newHistory })
+          .set({ passwordHash, passwordHistory: buildPasswordHistory(state) })
           .where(eq(schema.users.id, v.data.id));
       },
     );
 
     // 重置后所有会话失效，用户须用新密码重新登录（B-USR-PW）
-    // 关键安全操作必须 await（Redis 不可达时撤销失败会留下有效旧 Token）
-    try {
-      await revokeUserAccessByUserId(v.data.id);
-    } catch (e) {
-      log.error('重置密码后撤销 JWT 失败', { error: (e as Error).message });
-    }
+    await revokeAfterPasswordReset(v.data.id);
 
     invalidateResource('users');
     return { success: true, data: { id: v.data.id }, message: '密码已重置，该用户所有会话已失效' };

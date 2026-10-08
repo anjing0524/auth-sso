@@ -11,6 +11,7 @@ import { EntityNotFoundError } from '@/domain/shared/errors';
 import { createTestDbHandle, seedTestData } from '../helpers/test-db';
 import { seedAdminUser, seedRootDept, seedSuperAdminRole, seedTestUser, seedUserRoleBinding } from '../helpers/seed-fixtures';
 import * as schema from '@/db/schema';
+import { eq } from 'drizzle-orm';
 
 // ── 测试数据库 ──────────────────────────────────────
 const td = createTestDbHandle();
@@ -38,7 +39,7 @@ vi.mock('@/lib/session/revoke', () => ({ revokeUserAccessByUserId: vi.fn(async (
 vi.mock('@/infrastructure/redis', () => ({}));
 
 import { db } from '@/infrastructure/db';
-import { createUserAction, updateUserAction, toggleUserStatusAction, deleteUserAction } from '@/app/(dashboard)/users/actions';
+import { createUserAction, updateUserAction, toggleUserStatusAction, deleteUserAction, resetPasswordAction } from '@/app/(dashboard)/users/actions';
 
 const ADMIN_ID = '00000000-0000-4000-8000-000000000101';
 const DEPT_ID = '00000000-0000-4000-8000-000000000001';
@@ -154,5 +155,82 @@ describe('User Server Actions', () => {
         deleteUserAction('00000000-0000-4000-8000-000000000999')
       ).rejects.toThrow(EntityNotFoundError);
     });
+  });
+});
+
+// ── resetPasswordAction：安全关键操作，此前零覆盖 ──────────────
+//
+// 该 action 承担两条安全不变量，且此前**没有任何测试**：
+// 1. NFR-SEC-15 禁止重用最近 5 次密码（命中历史必须拒绝，且不落库）
+// 2. 重置后撤销目标用户全部会话（B-USR-PW）
+// 数据范围守卫与 404 由 withScopedRow 承担（其自身已有独立覆盖）。
+
+describe('resetPasswordAction', () => {
+  const NEW_PASSWORD = 'BrandNew@654321';
+
+  async function rowOf(id: string) {
+    const [row] = await td.db.select({
+      passwordHash: schema.users.passwordHash,
+      passwordHistory: schema.users.passwordHistory,
+    }).from(schema.users).where(eq(schema.users.id, id));
+    return row;
+  }
+
+  it('有效输入 → 更新密码哈希并把旧哈希推入历史', async () => {
+    const { hashPassword } = await import('@/domain/auth/password');
+    await td.db.insert(schema.users).values(seedTestUser({ passwordHash: await hashPassword('Old@123456') })[0]!);
+    const before = await rowOf('00000000-0000-4000-8000-000000000201');
+
+    const res = await resetPasswordAction('00000000-0000-4000-8000-000000000201', NEW_PASSWORD);
+
+    expect(res.success).toBe(true);
+    const after = await rowOf('00000000-0000-4000-8000-000000000201');
+    expect(after!.passwordHash).not.toBe(before!.passwordHash);
+    expect(after!.passwordHistory).toContain(before!.passwordHash);
+  });
+
+  it('弱密码 → 拒绝且不落库', async () => {
+    const { hashPassword } = await import('@/domain/auth/password');
+    await td.db.insert(schema.users).values(seedTestUser({ passwordHash: await hashPassword('Old@123456') })[0]!);
+    const before = await rowOf('00000000-0000-4000-8000-000000000201');
+
+    const res = await resetPasswordAction('00000000-0000-4000-8000-000000000201', 'short');
+
+    expect(res.success).toBe(false);
+    const after = await rowOf('00000000-0000-4000-8000-000000000201');
+    expect(after!.passwordHash).toBe(before!.passwordHash);
+  });
+
+  it('**新密码命中历史 → 拒绝且不落库**（NFR-SEC-15）', async () => {
+    const { hashPassword } = await import('@/domain/auth/password');
+    const reusedHash = await hashPassword(NEW_PASSWORD);
+    await td.db.insert(schema.users).values(seedTestUser({
+      passwordHash: await hashPassword('Current@123456'),
+      passwordHistory: [reusedHash],
+    })[0]!);
+    const before = await rowOf('00000000-0000-4000-8000-000000000201');
+
+    await expect(
+      resetPasswordAction('00000000-0000-4000-8000-000000000201', NEW_PASSWORD),
+    ).rejects.toThrow('新密码不能与最近使用过的密码相同');
+
+    const after = await rowOf('00000000-0000-4000-8000-000000000201');
+    expect(after!.passwordHash).toBe(before!.passwordHash);
+  });
+
+  it('目标用户不存在 → EntityNotFoundError（不与其他失败混淆）', async () => {
+    await expect(
+      resetPasswordAction('00000000-0000-4000-8000-000000000999', NEW_PASSWORD),
+    ).rejects.toThrow(EntityNotFoundError);
+  });
+
+  it('重置成功后撤销该用户全部会话（B-USR-PW）', async () => {
+    const { hashPassword } = await import('@/domain/auth/password');
+    const { revokeUserAccessByUserId } = await import('@/lib/session/revoke');
+    await td.db.insert(schema.users).values(seedTestUser({ passwordHash: await hashPassword('Old@123456') })[0]!);
+
+    await resetPasswordAction('00000000-0000-4000-8000-000000000201', NEW_PASSWORD);
+
+    expect(revokeUserAccessByUserId).toHaveBeenCalledWith('00000000-0000-4000-8000-000000000201');
   });
 });
