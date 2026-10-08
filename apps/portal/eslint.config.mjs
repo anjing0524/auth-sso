@@ -16,6 +16,19 @@ const eslintConfig = [
       "next-env.d.ts",
     ],
   },
+  // Controller 行数上限（ADR-019）：只对「控制器」目录施加，不牵连组件与页面。
+  // 区分两类：委托型 ≤20 行（人工评审判断），编排型 ≤30 逻辑行（本规则强制）。
+  // 阈值 30 来自本仓库实测的违规断层（无 21~26 行用例，违规集中在 27~38），
+  // 而非外部数字；skipBlankLines/skipComments 与基础规则一致（只数逻辑行）。
+  {
+    files: [
+      "src/app/**/actions.ts",
+      "src/app/api/**/route.ts",
+    ],
+    rules: {
+      "max-lines-per-function": ["warn", { max: 30, skipBlankLines: true, skipComments: true }],
+    },
+  },
   {
     files: ["__tests__/**/*.{ts,tsx}", "tests/**/*.{ts,tsx}"],
     rules: {
