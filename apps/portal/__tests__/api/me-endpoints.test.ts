@@ -76,18 +76,14 @@ const PERM_ID_USER_CREATE = '00000000-0000-4000-8000-000000000402';
 const PERM_ID_USER_UPDATE = '00000000-0000-4000-8000-000000000403';
 const PERM_ID_USER_DELETE = '00000000-0000-4000-8000-000000000404';
 
+/**
+ * `ResolvedIdentity` 已不再携带 claims（见 ADR-016）：它曾是空字符串哨兵值的载体，
+ * 唯一被真正读取的是 `sub`（恒等于 userId）与 `exp`/`iat`。现改为显式时间字段。
+ */
 const defaultIdentity = {
   userId: USER_ID,
-  claims: {
-    sub: USER_ID,
-    email: 'admin@example.com',
-    name: '超级管理员',
-    jti: 'jti-123',
-    iss: 'http://localhost:4101',
-    aud: 'auth-sso',
-    exp: 9999999999,
-    iat: 1000000000,
-  },
+  expiresAt: 9999999999,
+  issuedAt: 1000000000,
 };
 
 beforeEach(async () => {
@@ -146,7 +142,7 @@ describe('Me Endpoints', () => {
     it('返回 tokenInfo.expiresAt 用于前端静默刷新调度', async () => {
       mockResolveIdentity.mockResolvedValue({
         ...defaultIdentity,
-        claims: { ...defaultIdentity.claims, exp: 2000000000 },
+        expiresAt: 2000000000,
       });
 
       const response = await GetMe(createTestRequest('/api/me'));
@@ -182,8 +178,8 @@ describe('Me Endpoints', () => {
 
     it('用户不存在时返回 500', async () => {
       mockResolveIdentity.mockResolvedValue({
+        ...defaultIdentity,
         userId: '00000000-0000-4000-8000-000000000999',
-        claims: { ...defaultIdentity.claims, sub: '00000000-0000-4000-8000-000000000999' },
       });
 
       const response = await GetMePermissions(createTestRequest('/api/me/permissions'));

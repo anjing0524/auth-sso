@@ -7,27 +7,29 @@ import { decodeJwtPayload } from '@/lib/session/jwt';
 import { getGatewaySharedSecret } from '@/lib/env';
 import { GATEWAY_HEADERS, PORTAL_CLIENT_ID, JWT_TYP } from '@auth-sso/contracts';
 import { createLogger } from '@/lib/logger';
-import type { ResolvedIdentity, PortalJwtClaims } from '@/domain/auth/types';
+import type { ResolvedIdentity } from '@/domain/auth/types';
 import { verifySignature, SIGNATURE_TIMESTAMP_WINDOW_SEC } from './gateway-hmac';
 
 const log = createLogger('Auth');
 
-export type { ResolvedIdentity };
-
 /**
- * Gateway 信任路径下 claims 缺失时的最小 fallback。
+ * 把 JWT 载荷折叠为身份 + 时间字段。
  *
- * 空字符串（sub/iss/aud/jti）是 Gateway 信任路径的占位哨兵值——
- * 表示这些字段未由 JWT 解析获取，而是由 Gateway 的 X-User-Id 等头注入。
- * 下游消费者（如数据范围守卫）需自行检查并处理空值，
- * 不应将空字符串与真实 JWT claims 混淆。
+ * 只把调用方真正需要的两个时间字段带出 seam，而不是整个 claims 对象——
+ * 后者曾是空字符串哨兵值的载体（ADR-016）。
  */
-const EMPTY_CLAIMS: PortalJwtClaims = {
-  sub: '',
-  iss: '',
-  aud: '',
-  jti: '',
-};
+function toIdentity(
+  userId: string,
+  claims: { exp?: number; iat?: number },
+): ResolvedIdentity {
+  return {
+    userId,
+    expiresAt: typeof claims.exp === 'number' ? claims.exp : null,
+    issuedAt: typeof claims.iat === 'number' ? claims.iat : null,
+  };
+}
+
+export type { ResolvedIdentity };
 
 /** HMAC-SHA256 签名头名称 */
 const HEADER_SIGNATURE = 'x-gateway-signature';
@@ -117,18 +119,18 @@ export const resolveIdentity = cache(
         // Gateway 已验证 JWT 签名 + issuer + jti，Portal 补充 aud 校验（纵深防御，
         // ADR-013：AT aud = 签发对象 client_id，Gateway 信任路径的 AT 恒为 portal）
         if (token) {
+          // aud 复核（纵深防御）在本模块内完成，不把解码结果带出 seam —— 见 ADR-016。
           const claims = decodeJwtPayload(token);
           if (claims && claims.aud === PORTAL_CLIENT_ID) {
-            return { userId: gatewayUserId, claims };
+            return toIdentity(gatewayUserId, claims);
           }
           if (claims && claims.aud !== PORTAL_CLIENT_ID) {
             log.warn('Gateway 信任路径 aud 不匹配', { aud: claims.aud });
           }
         }
-        // 极端情况：有 X-User-Id 但无有效 JWT → 降级最小 claims。
-        // EMPTY_CLAIMS 的 sub/iss/aud/jti 为空字符串哨兵值，仅 sub 由 Gateway userId 填充。
-        // 下游消费方（如 canAccessDept）需自行处理空 aud/jti，不可假设必填字段非空。
-        return { userId: gatewayUserId, claims: { ...EMPTY_CLAIMS, sub: gatewayUserId } };
+        // 极端情况：有 X-User-Id 但无有效 JWT → 仍信任 Gateway 注入的身份。
+        // 此时无 token 可解码；身份唯一来源是 HMAC 已验的 X-User-Id。
+        return { userId: gatewayUserId, expiresAt: null, issuedAt: null };
       }
     }
 
@@ -138,6 +140,6 @@ export const resolveIdentity = cache(
     const claims = await verifyAccessToken(token, PORTAL_CLIENT_ID, JWT_TYP.ACCESS_TOKEN);
     if (!claims) return null;
 
-    return { userId: claims.sub, claims };
+    return toIdentity(claims.sub, claims);
   },
 );

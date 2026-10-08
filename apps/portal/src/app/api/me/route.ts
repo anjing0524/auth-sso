@@ -28,7 +28,7 @@ export async function GET(_request: NextRequest) {
       return restError(COMMON_ERRORS.UNAUTHORIZED, '未登录', 401);
     }
 
-    const { userId, claims } = identity;
+    const { userId, expiresAt, issuedAt } = identity;
 
     const permCtx = await getUserPermissionContext(userId);
     const roles = permCtx?.roles.map(r => r.code) ?? [];
@@ -51,8 +51,8 @@ export async function GET(_request: NextRequest) {
         emailVerified: user.emailVerified,
       },
       tokenInfo: {
-        expiresAt: claims.exp ? claims.exp * 1000 : null,
-        issuedAt: claims.iat ? claims.iat * 1000 : null,
+        expiresAt: expiresAt !== null ? expiresAt * 1000 : null,
+        issuedAt: issuedAt !== null ? issuedAt * 1000 : null,
       },
       permissions,
       roles,

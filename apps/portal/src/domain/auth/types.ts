@@ -39,12 +39,32 @@ export interface RefreshTokenResult {
 // 身份解析
 // ────────────────────────────────────────────
 
-/** 从 Gateway header 或 JWT Cookie 解析出的用户身份 */
+/**
+ * 从 Gateway header 或 JWT Cookie 解析出的用户身份
+ *
+ * 只暴露 `userId`，**不带 claims**——见 ADR-016：这条路径上 claims 曾经
+ * 是一个用空字符串哨兵值伪造的 `PortalJwtClaims`（`iss`/`aud`/`jti` 均为 `''`，
+ * 而类型声称非空），把"字段可能不存在"的负担推给了调用方。
+ *
+ * 实测该字段在全部生产代码中只有两个消费者：一个读 `claims.sub`（恒等于
+ * `userId`），一个读 `exp`/`iat`（现由本类型的两个显式字段承担）。
+ * 即 claims 对象本身从未被真正需要。
+ * 需要 claims 的场景（aud 复核等）在 `lib/auth/verify-jwt.ts` 内部完成，
+ * 不越过这个 seam。
+ */
 export interface ResolvedIdentity {
   /** 用户内部唯一标识 ID */
   userId: string;
-  /** JWT 完整声明（Gateway 路径下从 Cookie 快速解码，自验签路径下完整验证） */
-  claims: PortalJwtClaims;
+  /**
+   * Access Token 过期时间（epoch 秒），无法确定时为 null。
+   *
+   * 显式给出而非让调用方从 claims 里挖 `exp`——见 ADR-016。
+   * 注意来源差异：Gateway 信任路径下 token 已由 Gateway 完成 ES256 验签与
+   * jti 复核，此处仅解码取其时间字段；自验签路径下由 `jose` 完整校验后取值。
+   */
+  expiresAt: number | null;
+  /** Access Token 签发时间（epoch 秒），无法确定时为 null */
+  issuedAt: number | null;
 }
 
 // ────────────────────────────────────────────

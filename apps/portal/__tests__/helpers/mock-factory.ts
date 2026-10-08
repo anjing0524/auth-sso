@@ -121,7 +121,6 @@ export function createHoistedHolders(): HoistedHolders {
       }),
       resolveIdentity: vi.fn(async () => ({
         userId: DEFAULT_ADMIN_ID,
-        claims: { sub: '', iss: '', aud: 'auth-sso', jti: '' },
       })),
       logServerDataRead: vi.fn(async () => {}),
       getUserRoleDeptIds: vi.fn(() => Promise.resolve([] as string[])),

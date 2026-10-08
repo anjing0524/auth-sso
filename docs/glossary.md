@@ -210,6 +210,22 @@ ES256 密钥对存储。
 
 **aud 语义演进（ADR-013，2026-09-30 定案、待实施）**：OAuth Access Token 的 aud 将改为签发对象 `client_id`，并显式携带 `client_id` claim；LoginSession 维持体系级 `auth-sso`；ID Token 的 aud = client_id（OIDC Core §2）。
 
+### ResolvedIdentity（已解析身份）
+Portal 的**身份边界**：把「Gateway HMAC 信任路径」与「自验签 JWT Cookie 兜底」两条来源
+折叠为同一个值（`resolveIdentity()`，`lib/auth/verify-jwt.ts`）。
+
+| 字段 | 说明 |
+|------|------|
+| `userId` | 用户内部唯一标识。**唯一**的身份字段 |
+| `expiresAt` | Access Token 过期时间（epoch 秒），无法确定时为 `null` |
+| `issuedAt` | 签发时间（epoch 秒），无法确定时为 `null` |
+
+**不含 claims**（ADR-016）：曾有一版携带 `claims: PortalJwtClaims`，而 Gateway 信任路径
+用空字符串哨兵值 `{ sub:'', iss:'', aud:'', jti:'' }` 伪造它——类型声称非空、实现给出 `''`，
+把"字段可能不存在"的负担推给调用方。实测该对象在全部生产代码中只有两个消费者，其中一个
+读的 `sub` 恒等于 `userId`，故整体移除。**aud 复核等 claims 用途在 `verify-jwt.ts` 内部完成**，
+需新增字段时应扩展显式字段，而不是把整个 claims 对象重新打开。
+
 ### PKCE (Proof Key for Code Exchange)
 OAuth 2.1 强制安全机制。Gateway 端使用 CSPRNG 生成 32 字节 `code_verifier`，SHA-256 计算 `code_challenge`。
 

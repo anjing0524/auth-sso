@@ -39,7 +39,8 @@ export async function logServerDataRead(resourceType: string, resourceId: string
 
     writeAccessLog({
       userId: identity.userId,
-      username: identity.claims.sub ?? null,
+      // 该路径下没有独立用户名可用；此前填的是 claims.sub，而它恒等于 userId
+      username: identity.userId,
       method: 'GET',
       path,
       resourceType,

@@ -12,10 +12,11 @@ Session（AT/RT/jti 黑名单/权限上下文）等全部领域概念在此定�
 
 ## 架构决策（ADR）
 
-**`docs/adr/`** —— ADR-001 ~ ADR-015。涉及 Token 设计、Gateway 职责、RBAC/OBAC 模型、故障语义分级的
+**`docs/adr/`** —— ADR-001 ~ ADR-016。涉及 Token 设计、Gateway 职责、RBAC/OBAC 模型、故障语义分级的
 改动先查对应 ADR（如：AT 验签 → ADR-004/011/013；RT 撤销 → ADR-012；Gateway OAuth Client → ADR-003/009/010；
 数据范围（OBAC）授权 → **ADR-014**，其中含"不上 PostgreSQL RLS"与"放弃 Drizzle 运行时拦截层"的显式 tradeoff；
-授权判定（权限码/角色/管理员绕过）→ **ADR-015**，实现在 `packages/contracts/src/authorization.ts`，服务端与客户端共用）。
+授权判定（权限码/角色/管理员绕过）→ **ADR-015**，实现在 `packages/contracts/src/authorization.ts`，服务端与客户端共用；
+身份边界形状（`ResolvedIdentity` 只暴露 userId + 时间字段）→ **ADR-016**）。
 
 ## 词汇使用约束
 
