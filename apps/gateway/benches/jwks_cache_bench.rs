@@ -1,11 +1,17 @@
 //! JWKS 缓存读取基准测试 (JWKS Cache Read Benchmarks)
 //!
 //! 测试 `JwksCache` 在热路径上的读取性能：
-//! - 根据 kid 查找公钥（每条验签请求执行一次）
-//! - 获取 validation 配置引用（每条验签请求执行一次，Arc 共享）
+//!
+//! - `key(kid)` —— **生产验签路径的必经之处**（`auth/verify.rs` 调用它取公钥）。
+//!   它内部做一次 wait-free 原子 load + 宽限期判定，返回 `Arc<DecodingKey>`
+//!   （命中只做引用计数递增，不克隆 `DecodingKey` 内部的 `Vec<u8>`）。
+//! - `validation()` —— 预构建的 JWT 校验配置（Arc 共享，热路径零拷贝）。
 //!
 //! 缓存内部为 `ArcSwap<OidcMetadata>` 快照：读取为 wait-free 原子 load，
 //! 无锁、无中毒可能，高并发下无同步点。
+//!
+//! 注：`verify_path_combined` 与 `concurrent_read_stress` 组合了上述两项，
+//! 逼近真实的每请求读取序列。
 
 use std::hint::black_box;
 use std::sync::Arc;

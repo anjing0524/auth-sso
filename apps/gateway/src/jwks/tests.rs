@@ -116,7 +116,7 @@ async fn test_jwks_parsing() {
 
 fn entry(secret: &[u8], cached_at: u64) -> JwksKeyEntry {
     JwksKeyEntry {
-        key: DecodingKey::from_secret(secret),
+        key: Arc::new(DecodingKey::from_secret(secret)),
         cached_at,
     }
 }
@@ -175,4 +175,71 @@ fn test_merge_keys_prefers_new_entry_for_same_kid() {
     // 同 kid 以新 key + 新 cached_at 为准
     assert_eq!(merged.len(), 1);
     assert_eq!(merged["kid"].cached_at, now);
+}
+
+// ── key() 的查询期宽限期判定（生产验签路径的必经之处）──
+//
+// 此前只有 merge_keys 的合并期裁剪被测，而 `key()` 自身的时间判定零覆盖。
+// verify.rs 现经由 `key()` 取公钥，故该判定直接决定"轮换期间旧 key 还能不能用"。
+
+#[test]
+fn test_key_returns_fresh_entry() {
+    let cache = JwksCache::new();
+    let now = crate::http::unix_secs().unwrap_or(0);
+    cache.insert_key_with_cached_at_for_test(
+        "fresh".to_string(),
+        DecodingKey::from_secret(b"k"),
+        now,
+    );
+
+    assert!(cache.key("fresh").is_some());
+}
+
+#[test]
+fn test_key_returns_entry_within_grace() {
+    let cache = JwksCache::new();
+    let now = crate::http::unix_secs().unwrap_or(0);
+    cache.insert_key_with_cached_at_for_test(
+        "within".to_string(),
+        DecodingKey::from_secret(b"k"),
+        now - JWKS_KEY_GRACE_SECS + 60,
+    );
+
+    assert!(cache.key("within").is_some(), "宽限期内应仍可用");
+}
+
+#[test]
+fn test_key_hides_entry_past_grace() {
+    let cache = JwksCache::new();
+    let now = crate::http::unix_secs().unwrap_or(0);
+    cache.insert_key_with_cached_at_for_test(
+        "stale".to_string(),
+        DecodingKey::from_secret(b"k"),
+        now - JWKS_KEY_GRACE_SECS - 60,
+    );
+
+    assert!(cache.key("stale").is_none(), "宽限期外的条目应视为不存在");
+}
+
+#[test]
+fn test_key_unknown_kid_is_none() {
+    let cache = JwksCache::new();
+    assert!(cache.key("never-inserted").is_none());
+}
+
+/// 边界：恰好等于宽限期即视为过期（判定为严格小于）
+#[test]
+fn test_key_boundary_at_exactly_grace_is_expired() {
+    let cache = JwksCache::new();
+    let now = crate::http::unix_secs().unwrap_or(0);
+    cache.insert_key_with_cached_at_for_test(
+        "boundary".to_string(),
+        DecodingKey::from_secret(b"k"),
+        now - JWKS_KEY_GRACE_SECS,
+    );
+
+    assert!(
+        cache.key("boundary").is_none(),
+        "now - cached_at == GRACE 不在宽限期内"
+    );
 }

@@ -93,7 +93,10 @@ pub(crate) struct OidcMetadata {
 /// 单个公钥缓存条目
 #[derive(Clone)]
 pub(crate) struct JwksKeyEntry {
-    pub(crate) key: DecodingKey,
+    /// 公钥，以 `Arc` 持有：`key()` 每次命中只做一次引用计数递增而非拷贝
+    /// `DecodingKey`（其内部为 `Vec<u8>`，克隆是堆分配）。这是让 `key()` 能成为
+    /// 宽限期判定**唯一真相源**的前提——否则生产热路径会为避免拷贝而绕过它。
+    pub(crate) key: Arc<DecodingKey>,
     /// 首次写入时的 Unix 秒 — 宽限期淘汰依据
     pub(crate) cached_at: u64,
 }
@@ -150,7 +153,7 @@ fn merge_keys(
             (
                 kid,
                 JwksKeyEntry {
-                    key,
+                    key: Arc::new(key),
                     cached_at: now,
                 },
             )
@@ -210,10 +213,14 @@ impl JwksCache {
     /// let cache = JwksCache::new();
     /// assert!(cache.key("nonexistent").is_none());
     /// ```
-    pub fn key(&self, kid: &str) -> Option<DecodingKey> {
+    pub fn key(&self, kid: &str) -> Option<Arc<DecodingKey>> {
         self.inner.load().keys.get(kid).and_then(|entry| {
             let now = crate::http::unix_secs().unwrap_or(entry.cached_at);
-            (now.saturating_sub(entry.cached_at) < JWKS_KEY_GRACE_SECS).then(|| entry.key.clone())
+            // 宽限期外的条目视为不存在（上游轮换维护窗口的残缺响应防护）。
+            // 这是该判定的**唯一出处**——verify.rs 与基准均经由本函数，
+            // 避免同一规则在两个地方各自维护（曾各写一份，见 ADR-021）。
+            (now.saturating_sub(entry.cached_at) < JWKS_KEY_GRACE_SECS)
+                .then(|| Arc::clone(&entry.key))
         })
     }
 
@@ -458,9 +465,30 @@ impl JwksCache {
     /// 写路径为 load_full → clone → mutate → store（冷路径，拷贝无碍）。
     #[doc(hidden)]
     pub fn insert_key_for_test(&self, kid: String, key: DecodingKey) {
-        let mut meta = (*self.inner.load_full()).clone();
         let cached_at = crate::http::unix_secs().unwrap_or(0);
-        meta.keys.insert(kid, JwksKeyEntry { key, cached_at });
+        self.insert_key_with_cached_at_for_test(kid, key, cached_at);
+    }
+
+    /// 同 [`Self::insert_key_for_test`]，但可指定 `cached_at`。
+    ///
+    /// 存在的唯一理由：`key()` 的**查询期宽限期判定**（`now - cached_at < GRACE`）
+    /// 只有在能注入"陈旧条目"时才可测。默认钩子用真实当前时间，构造不出过期条目，
+    /// 于是该判定长期没有被任何测试覆盖——而这正是生产验签路径取公钥的必经之处。
+    #[doc(hidden)]
+    pub fn insert_key_with_cached_at_for_test(
+        &self,
+        kid: String,
+        key: DecodingKey,
+        cached_at: u64,
+    ) {
+        let mut meta = (*self.inner.load_full()).clone();
+        meta.keys.insert(
+            kid,
+            JwksKeyEntry {
+                key: Arc::new(key),
+                cached_at,
+            },
+        );
         self.inner.store(Arc::new(meta));
     }
 
