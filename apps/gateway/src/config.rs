@@ -662,6 +662,73 @@ mod tests {
     use super::*;
     use std::fs;
 
+    /// 所有随包发布的 gateway 配置都必须能被解析出 **非空** OAuth 凭据。
+    ///
+    /// ## 为什么需要它
+    ///
+    /// `OAuthConfig` 是 `GatewayConfig` 的字段（`[gateway.oauth]`），而
+    /// `UpstreamConfig` **没有** `oauth` 字段。历史上把凭据写在
+    /// `[upstreams.oauth]` 时，`config` crate 会**静默忽略**该未知字段，
+    /// 于是 `gateway.oauth` 保持 `Default`（空串），直到启动期
+    /// `validate_routing_consistency` 才 bail：
+    ///
+    /// ```text
+    /// gateway.oauth.client_secret 不能为空（统一 OAuth Client 凭据）
+    /// ```
+    ///
+    /// 后果是网关**启动即失败**，HTTP 引导监听器根本不存在——CI 的
+    /// `Gateway ACME Lifecycle` 因此报"未返回 301"，而真实原因藏在容器日志里，
+    /// 诊断成本远高于在此处直接断言。
+    ///
+    /// 本测试遍历**已发布的全部配置**，使这类"静默忽略"在单测阶段暴露，
+    /// 而不是留给运行时。
+    #[test]
+    fn test_all_shipped_configs_have_non_empty_oauth_credentials() {
+        // 相对 crate 根（apps/gateway）——不依赖 cwd 之外的路径。
+        const CONFIGS: &[&str] = &[
+            "gateway.toml",
+            "gateway.e2e.toml",
+            "gateway.docker.toml",
+            "gateway.vercel.toml",
+            "gateway.acme-e2e.toml",
+            "gateway.acme-staging.toml",
+        ];
+
+        for name in CONFIGS {
+            let path = std::path::Path::new(name);
+            assert!(path.exists(), "{name} 不存在（测试清单与实际文件已脱节）");
+
+            let raw = fs::read_to_string(path).unwrap_or_else(|e| panic!("读取 {name} 失败: {e}"));
+            let parsed: Config = config::Config::builder()
+                .add_source(config::File::from(path).required(true))
+                .build()
+                .unwrap_or_else(|e| panic!("构建 {name} 配置失败: {e}"))
+                .try_deserialize()
+                .unwrap_or_else(|e| panic!("反序列化 {name} 失败: {e}"));
+
+            assert!(
+                !parsed.gateway.oauth.client_id.is_empty(),
+                "{name} 未解析出 gateway.oauth.client_id——凭据可能被写在了 \
+                 [upstreams.oauth]（UpstreamConfig 无该字段，会被静默忽略）"
+            );
+            assert!(
+                !parsed.gateway.oauth.client_secret.is_empty(),
+                "{name} 未解析出 gateway.oauth.client_secret——凭据可能被写在了 \
+                 [upstreams.oauth]（UpstreamConfig 无该字段，会被静默忽略）"
+            );
+
+            // 同时确认该配置能通过启动期校验（本测试的存在理由就是它曾在此 bail）
+            validate_routing_consistency(&parsed.upstreams, &parsed.gateway.oauth)
+                .unwrap_or_else(|e| panic!("{name} 未通过路由一致性校验: {e}"));
+
+            // 旧段名不应再出现在任何已发布配置中（防止回退）
+            assert!(
+                !raw.contains("[upstreams.oauth]"),
+                "{name} 仍含已废弃的 [upstreams.oauth] 段——该段会被静默忽略"
+            );
+        }
+    }
+
     fn upstreams_iter(up: &Upstreams) -> Vec<String> {
         up.iter().map(String::from).collect()
     }

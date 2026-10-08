@@ -16,6 +16,6 @@ addresses = "127.0.0.1:65535"
 oidc_provider = true
 public_paths = ["/"]
 
-[upstreams.oauth]
+[gateway.oauth]
 client_id = "acme-staging"
 client_secret = "acme-staging-client-secret"

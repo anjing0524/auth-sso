@@ -27,6 +27,6 @@ public_paths = [
     "/favicon.ico",
 ]
 
-[upstreams.oauth]
+[gateway.oauth]
 client_id = "portal"
 client_secret = "runtime-environment-required"
