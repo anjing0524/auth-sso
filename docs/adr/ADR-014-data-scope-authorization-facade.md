@@ -2,7 +2,7 @@
 
 | 属性       | 值                                                                    |
 |------------|-----------------------------------------------------------------------|
-| **状态**   | accepted (2026-10-08) —— 分阶段实施，进度见本文"实施顺序"            |
+| **状态**   | implemented (2026-10-08) —— 6 个步骤全部落地；唯一遗留见"实施顺序"第 4 步注 |
 | **日期**   | 2026-10-08                                                            |
 | **决策者** | Auth-SSO 团队（improve-codebase-architecture 架构评审候选 ② + 一手来源调研定案） |
 | **影响范围** | `lib/auth/data-scope.ts`、4 个 `(dashboard)/**/data.ts`、9 条写路径 route、16 处 Server Action、`lib/auth/index.ts` 公开面 |
@@ -119,16 +119,18 @@ RLS 在技术上可表达子树并集（policy + `SECURITY DEFINER` helper），
 ## 实施顺序（每步独立可验证）
 
 1. ✅ **修 fail-open**：`roles/data.ts` 的 `deptIds` 改必填 + `sql\`FALSE\`` 兜底；补"空范围即空集 / 范围外不可见"回归测试。**已完成 2026-10-08**，测试经变异验证（移除守卫后确会失败）。
-2. 🔶 **修 TOCTOU 写路径（3 条）**：
+2. ✅ **修 TOCTOU 写路径（3 条）**：
    - ✅ **门面落地**：`lib/authz/{data-scope,write,index}.ts`，含 `resolveScope` / `isWithinScope` / `assertWithinScope` / `withScopedWrite`；9 个门面测试经**真实并发时序**证明"旧形状降权后仍写入成功、门面形状拒绝且不写入"。
    - ✅ **3/3 条 TOCTOU 写路径已迁移**：`users/[id]/reset-password`、`users/[id]/force-logout`、`users/[id]/roles` 的 **POST 与 DELETE**（同一文件两个分支）。
    - ✅ **补了 2 条路由级越界断言**（`user-role-api.test.ts`）：范围外用户 POST/DELETE → 403 且绑定不变。此前该文件只 mock `canAccessDept`，无法区分新旧快照路径。
-3. 🔶 **收读路径**：
+3. ✅ **收读路径**：
    - ✅ **新增读路径原语** `lib/authz/query.ts`：`scopeFilter(scope, column)` 保证**永远返回一个条件**（范围内 → `IN`，空范围 → `FALSE`），消除 `and()` 无有效条件时返回 `undefined` 导致静默不过滤的 fail-open 形状；`isScopeDenied(scope)` 供查询前短路。
    - ✅ **departments 读模型已迁移**：`getDepartments(scope, …)`、`getDepartmentById(lookupId, scope)`、`getDepartmentMembers(deptId, scope)`；后两者原先**根本没有作用域参数**（JSDoc 却声称"可选：API Route 传入"，属 interface 撒谎），现在范围约束进入 SQL。
    - ✅ **顺带修掉一个真实缺陷**：子树展开谓词漏掉一级子部门（详见下节），它使 `/api/departments` 对真实管理员返回断裂的树。
    - ✅ 5 处只读路由不再手写守卫：范围外与不存在同形返回 404（避免用状态码探测部门是否存在）。
-   - ⬜ 待迁移：`users/data.ts`、`roles/data.ts`、`departments/data.ts` 的 `deptIds: string[]` 收口为 `Scope`；`roles/[id]`、`users/[id]` 等只读守卫统一。
+   - ✅ **全部读模型收口为 `Scope`**：`users/data.ts`（`getUsers`）、`roles/data.ts`（`getRoles` / `getRoleById` / `getRolePermissions`）、`dashboard/data.ts`（`getDashboardStats`）、`db/user-queries.ts`（`buildUserListConditions`）。
+   - ✅ **顺带修掉第二处 fail-open**：`getDashboardStats` 原先只在 `deptIds` 非空时追加范围条件，空范围会退化为**统计全系统**的用户数与角色数。现改为空范围直接返回全 0（`isScopeDenied` 短路）。
+   - ✅ **全部只读守卫统一**：`users/[id]`、`users/[id]/roles` GET、`roles/[id]`、`roles/[id]/permissions`、`departments/[id]`、`departments/[id]/members` 不再手写三连，改由读模型内部 `scopeFilter` 施加；角色详情与权限列表改为"范围外与不存在同形返回 404"。
 
 ### 附带修复：子树展开漏掉一级子部门（真实缺陷，非重构副产品）
 
@@ -146,9 +148,14 @@ like(schema.departments.ancestors, `${deptId}/%`),   // 只匹配二级及更深
 产物侧的可见症状：`/api/departments` 的 `buildDepartmentTree` 按 `parentId` 嵌套，当中间层（TECH）不在结果集里时，其子部门（FE）因父缺失被当作顶层返回——管理员的部门树出现"前端组"与"总公司"并列。
 
 修复：谓词补 `eq(schema.departments.ancestors, deptId)`（直接子部门），保留 `LIKE`（更深层）。测试期望同步翻转为 `{ROOT, TECH, MKT, FE, BE}` 长度 5。
-4. ⬜ **关门面**：删除 `lib/auth/index.ts:16` 的再导出，13 处 REST 形状 B 编译失败并改造。
-5. ⬜ **lint 兜底 + 单一入口检查测试**：禁止在 `app/api/**`、`(dashboard)/**/{data,actions}.ts` 直接 `db.select`（白名单 `lib/authz/**`、`infrastructure/db/**`、`db/user-queries.ts`）。
-6. ⬜ **删除 `departments/data.ts:60,84` 的 JSDoc 谎话**（改名 `Unscoped` 或加 `Scope` 参数）。
+4. ✅ **关门面**：`lib/auth/index.ts` 不再导出 `getUserRoleDeptIds` / `canAccessDept`。
+   - 仅保留 `requireDeptAccess`：它是 executor-first 的，Server Action 侧 16 处调用全部正确；迁移到 `withScopedWrite` 是后续步骤。
+   - 撤下后全库对这两个原语的引用降为 **0**（只剩 `lib/auth/data-scope.ts` 自身定义与 `lib/authz` 的内部使用）。
+5. ✅ **单一入口检查测试（替代原定的 lint 规则）**：
+   - ⚠️ **偏离原计划并说明理由**：原定"禁止在 `app/api/**` 直接 `db.select`"的 lint 规则**被否决**——全库有 **39 个文件**合法导入 `@/infrastructure/db`（其中 13 个做写操作），宽泛禁令需要大范围白名单，噪声大于价值；且 ADR 已明确"Drizzle 无运行时拦截层、这层封不死"。**次优强制不应伪装成强强制。**
+   - ✅ 改为**公开面契约测试** `__tests__/api/authz-surface.test.ts`：断言 `@/lib/auth` 不再导出 `getUserRoleDeptIds` / `canAccessDept`，而 `@/lib/authz` 提供 `withScopedWrite` / `resolveScope` / `scopeFilter` 等全部门面原语。**经变异验证**：把 `canAccessDept` 加回 barrel 后测试立即变红。
+   - 选择契约测试而非 lint 的理由：**lint 规则可被 `eslint-disable` 绕过，静态契约测试不能**；且它钉住的正是"已撤下"这一事实本身。
+6. ✅ **删除 JSDoc 谎话**：`departments/data.ts` 与 `roles/data.ts` 的 4 处"`deptIds` 可选：API Route 传入"（参数并不存在）已随读模型 `Scope` 化一并删除。
 
 ### 测试方法说明（可复用）
 

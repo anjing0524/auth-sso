@@ -4,7 +4,8 @@
  * GET 读操作委托给 roles/data.ts 统一读模型，消除重复 Drizzle 查询。
  */
 import { type NextRequest } from 'next/server';
-import { withPermission, getUserRoleDeptIds } from '@/lib/auth';
+import { withPermission } from '@/lib/auth';
+import { resolveScope } from '@/lib/authz';
 import { getRoles } from '@/app/(dashboard)/roles/data';
 import { db } from '@/infrastructure/db';
 import { parsePagination } from '@/lib/pagination';
@@ -20,8 +21,8 @@ export async function GET(request: NextRequest) {
     const status = sp.get('status') || '';
     const { page, pageSize } = parsePagination(sp);
 
-    const deptIds = await getUserRoleDeptIds(db, _adminUserId);
-    const result = await getRoles({ page, pageSize, keyword, status, deptIds });
+    const scope = await resolveScope(db, _adminUserId);
+    const result = await getRoles({ page, pageSize, keyword, status, scope });
     return restListSuccess(result.data, result.pagination);
   });
 }

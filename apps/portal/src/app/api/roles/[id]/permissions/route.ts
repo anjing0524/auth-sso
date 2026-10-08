@@ -5,32 +5,32 @@
  * PUT /api/roles/[id]/permissions — 更新角色权限
  */
 import { type NextRequest } from 'next/server';
-import { withPermission, canAccessDept, getUserRoleDeptIds, logServerDataRead } from '@/lib/auth';
-import { getRolePermissions } from '@/app/(dashboard)/roles/data';
-import { COMMON_ERRORS, ROLE_ERRORS, ROLE_PERMISSIONS } from '@auth-sso/contracts';
-import { db, schema } from '@/infrastructure/db';
-import { eq } from 'drizzle-orm';
+import { withPermission, logServerDataRead } from '@/lib/auth';
+import { resolveScope } from '@/lib/authz';
+import { getRoleById, getRolePermissions } from '@/app/(dashboard)/roles/data';
+import { ROLE_ERRORS, ROLE_PERMISSIONS } from '@auth-sso/contracts';
+import { db } from '@/infrastructure/db';
 import { restSuccess, restError } from '@/lib/response';
 
 interface RouteParams { params: Promise<{ id: string }>; }
 
-/** GET /api/roles/[id]/permissions — 委托 data.ts，deptIds 由 claims 传入做数据范围校验 */
-export async function GET(request: NextRequest, { params }: RouteParams) {
-  return withPermission({ permissions: [ROLE_PERMISSIONS.READ] }, async (_userId) => {
+/**
+ * GET /api/roles/[id]/permissions — 委托 data.ts
+ *
+ * 数据范围由读模型内部施加（scopeFilter）；范围外角色与不存在角色同形返回 404
+ * （此前本路由自行查角色再判 403，属重复守卫，见 ADR-014）。
+ */
+export async function GET(_request: NextRequest, { params }: RouteParams) {
+  return withPermission({ permissions: [ROLE_PERMISSIONS.READ] }, async (userId) => {
     const { id } = await params;
-    const role = await db.query.roles.findFirst({
-      where: eq(schema.roles.id, id),
-      columns: { id: true, deptId: true },
-    });
+    const scope = await resolveScope(db, userId);
+
+    const role = await getRoleById(id, scope);
     if (!role) {
       return restError(ROLE_ERRORS.ROLE_NOT_FOUND, '角色不存在', 404);
     }
-    const deptIds = await getUserRoleDeptIds(db, _userId);
-    if (!canAccessDept(deptIds, role.deptId)) {
-      return restError(COMMON_ERRORS.FORBIDDEN, '无权查看该角色的权限', 403);
-    }
 
-    const permissions = await getRolePermissions(id);
+    const permissions = await getRolePermissions(id, scope);
     await logServerDataRead('role_permissions', id);
     return restSuccess(permissions);
   });

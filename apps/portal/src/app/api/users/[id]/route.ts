@@ -1,11 +1,12 @@
 /**
  * 单个用户操作 API (REST 薄 Controller)
  *
- * GET 读操作委托给 users/data.ts 统一读模型，
- * 数据范围检查保留在本层（属于鉴权逻辑，非数据获取逻辑）。
+ * GET 读操作委托给 users/data.ts 统一读模型。
+ * 数据范围判定使用 lib/authz 的纯判定原语（与写路径同一套语义）。
  */
 import { type NextRequest } from 'next/server';
-import { withPermission, canAccessDept, getUserRoleDeptIds, logServerDataRead } from '@/lib/auth';
+import { withPermission, logServerDataRead } from '@/lib/auth';
+import { resolveScope, isWithinScope } from '@/lib/authz';
 import { COMMON_ERRORS, USER_ERRORS, USER_PERMISSIONS } from '@auth-sso/contracts';
 import { getUser } from '@/app/(dashboard)/users/data';
 import { restSuccess, restError } from '@/lib/response';
@@ -25,8 +26,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       return restError(USER_ERRORS.USER_NOT_FOUND, '用户不存在', 404);
     }
 
-    const deptIds = await getUserRoleDeptIds(db, adminUserId);
-    if (!canAccessDept(deptIds, user.deptId)) {
+    const scope = await resolveScope(db, adminUserId);
+    if (!isWithinScope(scope, user.deptId)) {
       return restError(COMMON_ERRORS.FORBIDDEN, '无权查看该用户', 403);
     }
 

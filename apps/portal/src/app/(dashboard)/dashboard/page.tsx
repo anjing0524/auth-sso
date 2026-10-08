@@ -37,15 +37,15 @@ import { EmptyState } from '@/components/shared/empty-state';
 import { getDashboardStats, getRecentAuditLogs } from './data';
 import { db } from '@/infrastructure/db';
 import { resolveIdentity } from '@/lib/auth/verify-jwt';
-import { getUserRoleDeptIds } from '@/lib/auth';
+import { resolveScope } from '@/lib/authz';
 
 
 export default async function DashboardPage() {
   // 鉴权由 layout.tsx 统一处理（requirePermission(['dashboard:view'])），本组件零鉴权样板
   const identity = await resolveIdentity();
-  const deptIds = identity ? await getUserRoleDeptIds(db, identity.userId) : [];
+  const scope = identity ? await resolveScope(db, identity.userId) : { deptIds: [] };
   const [stats, recentLogs] = await Promise.all([
-    getDashboardStats(deptIds),
+    getDashboardStats(scope),
     getRecentAuditLogs(),
   ]);
 

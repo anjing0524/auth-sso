@@ -9,8 +9,8 @@ import { revalidatePath, updateTag } from 'next/cache';
 import { z } from 'zod';
 import { db, schema } from '@/infrastructure/db';
 import { eq, inArray, and } from 'drizzle-orm';
-import { withPermission, canAccessDept, getUserRoleDeptIds, logServerDataRead } from '@/lib/auth';
-import { withScopedWrite } from '@/lib/authz';
+import { withPermission, logServerDataRead } from '@/lib/auth';
+import { withScopedWrite, resolveScope, isWithinScope } from '@/lib/authz';
 import { appendSecurityAudit, extractClientIP, extractUserAgent } from '@/lib/audit';
 import { refreshUserPermissionCache } from '@/lib/permissions';
 import { revokeUserAccessByUserId } from '@/lib/session/revoke';
@@ -59,8 +59,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     if (!target) {
       return restError(USER_ERRORS.USER_NOT_FOUND, '用户不存在', 404);
     }
-    const deptIds = await getUserRoleDeptIds(db, _adminUserId);
-    if (!canAccessDept(deptIds, target.deptId)) {
+    const scope = await resolveScope(db, _adminUserId);
+    if (!isWithinScope(scope, target.deptId)) {
       return restError(COMMON_ERRORS.FORBIDDEN, '无权查看该用户', 403);
     }
     const roles = await getUserRoles(id);

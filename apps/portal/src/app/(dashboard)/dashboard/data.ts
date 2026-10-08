@@ -1,8 +1,10 @@
 import 'server-only';
 
 import { db, schema } from '@/infrastructure/db';
-import { eq, ne, desc, count, inArray, and } from 'drizzle-orm';
+import { eq, ne, desc, count, and } from 'drizzle-orm';
 import { USER_DELETED } from '@auth-sso/contracts';
+import { scopeFilter, isScopeDenied } from '@/lib/authz';
+import type { UserScope } from '@/lib/authz';
 
 export interface DashboardStats {
   users: number;
@@ -21,19 +23,22 @@ export interface RecentAuditLog {
 /**
  * 获取 Dashboard 核心指标（v3.2: 用户数和角色数按数据范围过滤）
  *
- * @param deptIds 用户可访问的部门 ID 列表（含子树展开）
+ * @param scope 操作者数据范围（在缓存作用域外经 `resolveScope` 获取）
  */
-export async function getDashboardStats(deptIds: string[]): Promise<DashboardStats> {
-  const userWhere = [ne(schema.users.status, USER_DELETED)];
-  const roleWhere = [];
-  if (deptIds.length > 0) {
-    userWhere.push(inArray(schema.users.deptId, deptIds));
-    roleWhere.push(inArray(schema.roles.deptId, deptIds));
+export async function getDashboardStats(scope: UserScope): Promise<DashboardStats> {
+  // 无可见部门 → 全部计数为 0，而不是"不过滤"。
+  // 原实现只在 deptIds 非空时追加范围条件，空范围会退化为统计全系统
+  // （与 roles/data.ts 同源的 fail-open，见 ADR-014）。
+  if (isScopeDenied(scope)) {
+    return { users: 0, roles: 0, clients: 0 };
   }
+
+  const userWhere = [ne(schema.users.status, USER_DELETED), scopeFilter(scope, schema.users.deptId)];
+  const roleWhere = [scopeFilter(scope, schema.roles.deptId)];
 
   const [[usersCount], [rolesCount], [clientsCount]] = await Promise.all([
     db.select({ count: count() }).from(schema.users).where(and(...userWhere)),
-    db.select({ count: count() }).from(schema.roles).where(roleWhere.length > 0 ? and(...roleWhere) : undefined),
+    db.select({ count: count() }).from(schema.roles).where(and(...roleWhere)),
     db.select({ count: count() }).from(schema.clients),
   ]);
 

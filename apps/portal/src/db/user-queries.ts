@@ -4,8 +4,10 @@
  * 消除 data.ts 与 api/users/route.ts 之间 ~80 行重复的查询构建逻辑。
  * 两类读路径统一通过本模块组合查询条件与响应格式化。
  */
-import { eq, ne, or, ilike, type and, inArray, sql } from 'drizzle-orm';
+import { eq, ne, or, ilike, type and } from 'drizzle-orm';
 import { schema } from '@/infrastructure/db';
+import { scopeFilter } from '@/lib/authz';
+import type { UserScope } from '@/lib/authz';
 import { asUserStatus } from '@/lib/type-guards';
 
 /**
@@ -34,10 +36,10 @@ export const USER_LIST_COLUMNS = {
 export function buildUserListConditions(params: {
   keyword: string;
   status: string;
-  deptIds: string[];
+  scope: UserScope;
   userId: string;
 }) {
-  const { keyword, status, deptIds } = params;
+  const { keyword, status, scope } = params;
 
   // 默认排除逻辑删除的用户
   const conditions: ReturnType<typeof and>[] = [ne(schema.users.status, 'DELETED')];
@@ -56,20 +58,9 @@ export function buildUserListConditions(params: {
     conditions.push(eq(schema.users.status, asUserStatus(status)));
   }
 
-  // 数据范围过滤（v3.2: 直接按部门 ID 列表过滤）
-  // 空 deptIds → fail-closed：添加 SQL 恒假条件防止无意中返回全表数据
-  if (deptIds.length > 0) {
-    conditions.push(inArray(schema.users.deptId, deptIds));
-  } else {
-    conditions.push(sql`FALSE`);
-  }
+  // 数据范围过滤（v3.2: 按操作者可见部门过滤）。
+  // 由 scopeFilter 统一施加，空范围恒 FALSE —— 安全约束不再依赖调用方是否记得加条件。
+  conditions.push(scopeFilter(scope, schema.users.deptId));
 
   return conditions;
-}
-
-/**
- * 判断数据范围过滤是否导致无权限访问
- */
-export function isScopeDenied(deptIds: string[]): boolean {
-  return deptIds.length === 0;
 }

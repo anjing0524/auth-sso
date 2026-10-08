@@ -17,11 +17,9 @@ import 'server-only';
 import { cacheLife, cacheTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
 import { eq, desc, and } from 'drizzle-orm';
-import {
-  USER_LIST_COLUMNS,
-  buildUserListConditions,
-  isScopeDenied,
-} from '@/db/user-queries';
+import { USER_LIST_COLUMNS, buildUserListConditions } from '@/db/user-queries';
+import { isScopeDenied } from '@/lib/authz';
+import type { UserScope } from '@/lib/authz';
 import { paginationMeta, withPagination, countRows } from '@/lib/pagination';
 
 /** 列表行 → 列表项 DTO（日期序列化 + 展示名/部门名兜底）；泛型透传保留其余列 */
@@ -51,7 +49,7 @@ function toUserListItem<
  * @returns 用户列表数据及分页信息（纯 JSON 可序列化）
  */
 export async function getUsers(
-  deptIds: string[],
+  scope: UserScope,
   userId: string,
   params: {
     page: number;
@@ -67,11 +65,11 @@ export async function getUsers(
   cacheTag('users-list');
 
   const { page, pageSize, keyword, status, deptId } = params;
-  if (isScopeDenied(deptIds)) {
+  if (isScopeDenied(scope)) {
     return { data: [], pagination: paginationMeta(page, pageSize, 0) };
   }
 
-  const conditions = buildUserListConditions({ keyword, status, deptIds, userId });
+  const conditions = buildUserListConditions({ keyword, status, scope, userId });
   // 部门 ID 二次筛选（在已授权范围内叠加）
   if (deptId) conditions.push(eq(schema.users.deptId, deptId));
   const where = and(...conditions);

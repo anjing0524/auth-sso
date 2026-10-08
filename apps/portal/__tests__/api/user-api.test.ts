@@ -16,7 +16,7 @@ import { COMMON_ERRORS } from '@auth-sso/contracts';
 import { EntityNotFoundError } from '@/domain/shared/errors';
 import { createTestRequest } from '../helpers/test-utils';
 import { createTestDbHandle, seedTestData } from '../helpers/test-db';
-import { seedRootDept, seedTestUser } from '../helpers/seed-fixtures';
+import { seedAdminUser, seedRootDept, seedSuperAdminRole, seedTestUser, seedUserRoleBinding } from '../helpers/seed-fixtures';
 import * as schema from '@/db/schema';
 
 // ════════════════════════════════════════════════════════
@@ -112,12 +112,24 @@ import {
 // 测试生命周期
 // ════════════════════════════════════════════════════════
 const DEPT_ID = '00000000-0000-4000-8000-000000000001';
+const ADMIN_ID = '00000000-0000-4000-8000-000000000101';
+/** 操作者自己的角色，须与被测用户区分 */
+const ADMIN_ROLE_ID = '00000000-0000-4000-8000-000000000398';
 
 beforeAll(async () => { await td.connect(); });
 afterAll(async () => { await td.close(); });
 beforeEach(async () => {
   await td.cleanup();
-  await seedTestData(td.db, { departments: seedRootDept() });
+  // 读路径的数据范围由真实 resolveScope（lib/authz）解析，走原生 SQL 读
+  // user_roles → roles.dept_id，不再经过被 mock 的 @/lib/auth。
+  // 因此操作者必须在库中真实拥有一个 DEPT_ID 部门角色，否则可见范围为空、
+  // 读模型 fail-closed 返回空集。
+  await seedTestData(td.db, {
+    departments: seedRootDept(),
+    users: seedAdminUser(),
+    roles: seedSuperAdminRole({ id: ADMIN_ROLE_ID, deptId: DEPT_ID }),
+    userRoles: seedUserRoleBinding(ADMIN_ID, ADMIN_ROLE_ID),
+  });
   vi.clearAllMocks();
 });
 
@@ -125,7 +137,6 @@ describe('User Management API & Actions', () => {
   describe('GET /api/users (list)', () => {
     it('分页返回用户列表，含 total 和 page', async () => {
       await seedTestData(td.db, { users: seedTestUser() });
-      mockGetUserRoleDeptIds.mockResolvedValueOnce([DEPT_ID]);
 
       const response = await ListUsers(
         createTestRequest('/api/users', { searchParams: { page: '1', pageSize: '10' } }),
@@ -133,13 +144,15 @@ describe('User Management API & Actions', () => {
       const body = await response.json();
 
       expect(response.status).toBe(200);
-      expect(body.data).toHaveLength(1);
-      expect(body.data[0]).toMatchObject({
+      // 操作者自己（同部门）也在范围内，故列表包含两条；断言"包含被测用户"
+      // 而非精确条数，避免用例与夹具细节耦合。
+      const testUser = body.data.find((u: { username: string }) => u.username === 'testuser');
+      expect(testUser).toMatchObject({
         username: 'testuser',
         name: '测试用户',
       });
       expect(body.pagination).toBeDefined();
-      expect(body.pagination.total).toBe(1);
+      expect(body.pagination.total).toBe(body.data.length);
     });
 
     it('无 user:list 权限时返回 403', async () => {

@@ -78,25 +78,25 @@ beforeEach(async () => {
 
 describe('getRoles — 数据范围 fail-closed', () => {
   it('空范围（无可见部门）→ 返回空集，而非全表', async () => {
-    const result = await getRoles({ ...BASE, deptIds: [] });
+    const result = await getRoles({ ...BASE, scope: { deptIds: [] } });
     expect(result.data).toEqual([]);
     expect(result.pagination.total).toBe(0);
   });
 
   it('范围只含一个部门 → 只返回该部门的角色（不泄漏其他部门）', async () => {
-    const result = await getRoles({ ...BASE, deptIds: [FE_DEPT_ID] });
+    const result = await getRoles({ ...BASE, scope: { deptIds: [FE_DEPT_ID] } });
     expect(result.data.map((r) => r.id)).toEqual([FE_ROLE_ID]);
   });
 
   it('范围含两个部门 → 返回两个部门角色并集，且不含范围外角色', async () => {
-    const result = await getRoles({ ...BASE, deptIds: [ROOT_DEPT_ID, MKT_DEPT_ID] });
+    const result = await getRoles({ ...BASE, scope: { deptIds: [ROOT_DEPT_ID, MKT_DEPT_ID] } });
     const ids = result.data.map((r) => r.id).sort();
     expect(ids).toEqual([ROOT_ROLE_ID, MKT_ROLE_ID].sort());
     expect(ids).not.toContain(FE_ROLE_ID);
   });
 
   it('范围外的关键字仍不得越界（关键字不能放大范围）', async () => {
-    const result = await getRoles({ ...BASE, keyword: '前端', deptIds: [MKT_DEPT_ID] });
+    const result = await getRoles({ ...BASE, keyword: '前端', scope: { deptIds: [MKT_DEPT_ID] } });
     expect(result.data).toEqual([]);
   });
 });

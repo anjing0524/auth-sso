@@ -5,8 +5,10 @@ import 'server-only';
 
 import { cacheLife, cacheTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
-import { eq, ilike, or, asc, desc, and, inArray, sql } from 'drizzle-orm';
+import { eq, ilike, or, asc, desc, and } from 'drizzle-orm';
 
+import { scopeFilter, isScopeDenied } from '@/lib/authz';
+import type { UserScope } from '@/lib/authz';
 import { asEntityStatus } from '@/lib/type-guards';
 import type { EntityStatus } from '@auth-sso/contracts';
 import { paginationMeta, withPagination, countRows } from '@/lib/pagination';
@@ -32,15 +34,10 @@ function toRoleDTO(r: {
  * 此处仍对空数组兜底 `sql\`FALSE\``：安全约束必须在 SQL 层始终存在，
  * 不能依赖调用方——`and()` 在无有效条件时返回 undefined，会静默退化成全表查询。
  */
-function buildRoleConditions(keyword: string, status: string, deptIds: string[]) {
+function buildRoleConditions(keyword: string, status: string, scope: UserScope) {
   const conditions = [];
-  // 数据范围过滤（v3.2: 直接按部门 ID 列表过滤）
-  // 空 deptIds → fail-closed：添加 SQL 恒假条件防止无意中返回全表数据
-  if (deptIds.length > 0) {
-    conditions.push(inArray(schema.roles.deptId, deptIds));
-  } else {
-    conditions.push(sql`FALSE`);
-  }
+  // 数据范围过滤：由 scopeFilter 统一施加（空范围恒 FALSE）
+  conditions.push(scopeFilter(scope, schema.roles.deptId));
   if (keyword) {
     conditions.push(or(
       ilike(schema.roles.name, `%${keyword}%`),
@@ -57,7 +54,7 @@ function buildRoleConditions(keyword: string, status: string, deptIds: string[])
 /**
  * 分页获取角色列表
  *
- * @param params.deptIds 操作者可访问的部门 ID 列表（必填，数据范围控制）
+ * @param params.scope 操作者数据范围（必填，数据范围控制）
  */
 export interface RolesListParams {
   page: number;
@@ -65,12 +62,12 @@ export interface RolesListParams {
   keyword: string;
   status: string;
   /**
-   * 操作者可访问的部门 ID 列表（必填）。
+   * 操作者数据范围（必填）。
    *
    * 刻意不设为可选：可选参数会让"忘记传范围"编译通过并静默返回全部角色，
    * 而省略与传空数组在语义上完全不同（后者是"无权限"，前者是"不过滤"）。
    */
-  deptIds: string[];
+  scope: UserScope;
 }
 
 export async function getRoles(params: RolesListParams) {
@@ -78,10 +75,10 @@ export async function getRoles(params: RolesListParams) {
   cacheLife('minutes');
   cacheTag('roles-list');
 
-  const { page, pageSize, keyword, status, deptIds } = params;
+  const { page, pageSize, keyword, status, scope } = params;
   // 数据范围：空范围即空集（无可见部门 → 不得返回任何角色）
-  if (deptIds.length === 0) return { data: [], pagination: paginationMeta(page, pageSize, 0) };
-  const whereClause = buildRoleConditions(keyword, status, deptIds);
+  if (isScopeDenied(scope)) return { data: [], pagination: paginationMeta(page, pageSize, 0) };
+  const whereClause = buildRoleConditions(keyword, status, scope);
 
   return withPagination(
     page,
@@ -98,11 +95,14 @@ export async function getRoles(params: RolesListParams) {
  * 按 ID 获取单个角色详情（支持内部 ID 和 publicId）
  *
  * @param lookupId 角色 ID
- * @param deptIds  操作者数据范围（可选：API Route 传入；Server Component 自查询不传）
+ * @param scope    操作者数据范围。**必填**：不可省略——省略即无范围约束，
+ *                 会静默返回任意部门的角色详情（此前 JSDoc 声称有该参数但签名
+ *                 里并不存在，属 interface 撒谎，见 ADR-014）。
+ * @returns 角色不存在或不在范围内 → null（调用方据此返回 404）
  */
-export async function getRoleById(lookupId: string) {
+export async function getRoleById(lookupId: string, scope: UserScope) {
   const rows = await db.select().from(schema.roles)
-    .where(eq(schema.roles.id, lookupId))
+    .where(and(eq(schema.roles.id, lookupId), scopeFilter(scope, schema.roles.deptId)))
     .limit(1);
   const row = rows[0];
   return row ? toRoleDTO(row) : null;
@@ -125,13 +125,17 @@ function toAssignedPermission(rp: {
 /**
  * 获取角色绑定的权限列表
  *
- * @param roleId  角色 ID
- * @param deptIds 操作者数据范围（可选：API Route 传入；Server Component 自查询不传）
+ * 角色必须在操作者数据范围内——范围约束是查询条件之一，不能只靠调用方
+ * 先校验角色部门后即信任（见 ADR-014）。
+ *
+ * @param roleId 角色 ID
+ * @param scope  操作者数据范围（必填，理由同 {@link getRoleById}）
+ * @returns 角色不存在或不在范围内 → 空数组
  */
-export async function getRolePermissions(roleId: string) {
+export async function getRolePermissions(roleId: string, scope: UserScope) {
   // 使用 Relational Queries 一次性带出角色及其绑定的权限
   const role = await db.query.roles.findFirst({
-    where: eq(schema.roles.id, roleId),
+    where: and(eq(schema.roles.id, roleId), scopeFilter(scope, schema.roles.deptId)),
     with: { rolePermissions: { with: { permission: true } } },
   });
 
