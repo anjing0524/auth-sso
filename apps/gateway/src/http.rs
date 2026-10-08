@@ -157,6 +157,75 @@ impl SessionExt for Session {
 mod tests {
     use super::*;
 
+    // ── HMAC 信任路径：跨语言契约（Gateway 签发 ↔ Portal 校验）──
+    //
+    // 这些向量是 Gateway（Rust/hmac+hex）与 Portal（TS/WebCrypto）之间的**协议**。
+    // 两端若在 payload 构造或 hex 大小写上分叉，Portal 会一律拒绝签名，而症状
+    // 只在生产出现（跨语言无编译期交集）。固定向量是唯一能锁住它的手段。
+
+    /// RFC 4231 Test Case 2：校验 HMAC-SHA256 实现本身符合标准
+    #[test]
+    fn hmac_sha256_matches_rfc4231_vector() {
+        let sig = hmac_sha256_hex("Jefe", "what do ya want for nothing?").unwrap();
+        assert_eq!(
+            sig,
+            "5bdcc146bf60754e6a042426089575c75a003f089d2739839dec58b964ec3843"
+        );
+    }
+
+    /// 十六进制必须**小写**：Portal 侧按 hex 解析后逐字节比对，
+    /// 大写 hex 会被解析成同样字节从而侥幸通过；但一旦未来改为字符串比对即失效，
+    /// 故在此锁定大小写。
+    #[test]
+    fn hmac_sha256_output_is_lowercase_hex() {
+        let sig = hmac_sha256_hex("k", "p").unwrap();
+        assert_eq!(sig, sig.to_lowercase());
+        assert!(sig.chars().all(|c| c.is_ascii_hexdigit()));
+    }
+
+    /// **身份签名 payload 契约**：`{ts}:{user_id}:{user_jti}`
+    ///
+    /// 对应 `gateway.rs` 的 `format!("{}:{}:{}", ts, id.user_id, id.user_jti)`
+    /// 与 Portal `verify-jwt.ts` 的 `` `${timestamp}:${userId}:${jti}` ``。
+    #[test]
+    fn identity_signature_payload_matches_portal_contract() {
+        let secret = "test-gateway-shared-secret-32chars!!";
+        let payload = "1700000000:user-abc:jti-xyz";
+        assert_eq!(
+            hmac_sha256_hex(secret, payload).unwrap(),
+            "94f2fd6f848a36f670c19c86e9c9c4893d2e8718b8764f81d368dfc15035cdac"
+        );
+    }
+
+    /// **续签签名 payload 契约**：`refresh:{ts}`（与身份签名域分离）
+    ///
+    /// 对应 `auth/refresh.rs` 与 Portal `api/auth/refresh/route.ts`。
+    /// 域分离的意义：身份签名的 ts 可信不代表续签的 ts 可信。
+    #[test]
+    fn refresh_signature_payload_matches_portal_contract() {
+        let secret = "test-gateway-shared-secret-32chars!!";
+        assert_eq!(
+            hmac_sha256_hex(secret, "refresh:1700000000").unwrap(),
+            "ccdf7e8a2c1ba718599e5613f22c30fb381a0f88fc37d5c5b3e7d210a998e639"
+        );
+    }
+
+    /// 两个域的签名必须不同——若相同说明域分离失效
+    #[test]
+    fn identity_and_refresh_domains_are_separated() {
+        let secret = "s";
+        let identity = hmac_sha256_hex(secret, "1700000000:u:j").unwrap();
+        let refresh = hmac_sha256_hex(secret, "refresh:1700000000").unwrap();
+        assert_ne!(identity, refresh);
+    }
+
+    /// 密钥为空串时仍能计算（HMAC 接受任意长度密钥）。空密钥意味着共享密钥
+    /// 未配置，Portal 侧会直接拒绝，不依赖此处返回 None。
+    #[test]
+    fn hmac_sha256_accepts_empty_secret() {
+        assert!(hmac_sha256_hex("", "payload").is_some());
+    }
+
     #[cfg(feature = "self-managed-tls")]
     #[test]
     fn host_only_strips_port() {
