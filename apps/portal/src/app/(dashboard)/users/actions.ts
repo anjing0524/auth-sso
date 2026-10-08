@@ -47,6 +47,7 @@ import { clearBruteForceCounter } from '@/lib/auth/brute-force';
 import { createLogger } from '@/lib/logger';
 import { invalidateResource } from '@/lib/cache-invalidation';
 import { withScopedRow, withScopedWrite } from '@/lib/authz';
+import type { DbTxHandle } from '@/infrastructure/db';
 import {
   assertResetAllowed,
   buildPasswordHistory,
@@ -55,6 +56,32 @@ import {
 } from '@/lib/account/reset-password';
 
 const log = createLogger('UsersAction');
+
+/**
+ * 事务内加载目标用户行并施加数据范围守卫。
+ *
+ * 抽取理由是**正确性而非行数**：这份守卫配置（授权到 `deptId`、越界消息、
+ * 404 语义）原先在本文件里逐字重复 3 处。安全配置散落时，改一处而漏改另一处
+ * 就是越权——收成一处才能保证「改则全改」。`selectColumns` 供只需要密码字段的
+ * 场景收窄列（其余场景默认全列）。
+ */
+function loadUserScoped(
+  operatorId: string,
+  userId: string,
+  selectColumns?: { id?: true; deptId?: true; passwordHash?: true; passwordHistory?: true },
+) {
+  return {
+    operatorId,
+    load: (tx: DbTxHandle) =>
+      tx.query.users.findFirst({
+        where: eq(schema.users.id, userId),
+        ...(selectColumns ? { columns: selectColumns } : {}),
+      }),
+    deptOf: (row: { deptId: string | null }) => row.deptId,
+    message: '无权操作该部门的用户',
+    notFound: () => new EntityNotFoundError('User', userId),
+  };
+}
 import { COMMON_ERRORS, USER_ACTIVE, USER_PERMISSIONS } from '@auth-sso/contracts';
 import type { ApiResponse } from '@auth-sso/contracts';
 
@@ -121,13 +148,7 @@ export const toggleUserStatusAction = withAuth(
 
     // 加载行 → 404 → 数据范围守卫，三步同一事务（消除 TOCTOU，ADR-014）
     const updated = await withScopedRow(
-      {
-        operatorId: ctx.userId,
-        load: (tx) => tx.query.users.findFirst({ where: eq(schema.users.id, v.data.id) }),
-        deptOf: (row) => row.deptId,
-        message: '无权操作该部门的用户',
-        notFound: () => new EntityNotFoundError('User', v.data.id),
-      },
+      loadUserScoped(ctx.userId, v.data.id),
       async (tx, row) => {
         const target = toggleUserStatus(userFromPersistence(row));
         await tx.update(schema.users)
@@ -164,13 +185,7 @@ export const unlockUserAction = withAuth(
     if (!v.ok) return v.response;
 
     const updated = await withScopedRow(
-      {
-        operatorId: ctx.userId,
-        load: (tx) => tx.query.users.findFirst({ where: eq(schema.users.id, v.data.id) }),
-        deptOf: (row) => row.deptId,
-        message: '无权操作该部门的用户',
-        notFound: () => new EntityNotFoundError('User', v.data.id),
-      },
+      loadUserScoped(ctx.userId, v.data.id),
       async (tx, row) => {
         const target = unlockUser(userFromPersistence(row));
         await tx.update(schema.users)
@@ -215,15 +230,11 @@ export const updateUserAction = withAuth(
     let deptIdChanged = false;
     await withScopedRow(
       {
-        operatorId: ctx.userId,
-        load: (tx) => tx.query.users.findFirst({ where: eq(schema.users.id, v.data.id) }),
-        deptOf: (row) => row.deptId,
-        message: '无权操作该部门的用户',
+        ...loadUserScoped(ctx.userId, v.data.id),
         // 第二个目标：拟迁入部门（同一份快照，不重复读取）
         extraTargets: () => v.data.deptId
           ? [{ deptId: v.data.deptId, message: '无权将用户迁移至该部门' }]
           : [],
-        notFound: () => new EntityNotFoundError('User', v.data.id),
       },
       async (tx, row) => {
         const updated = applyUserUpdate(userFromPersistence(row), {
@@ -253,13 +264,7 @@ export const deleteUserAction = withAuth(
     if (!v.ok) return v.response;
 
     await withScopedRow(
-      {
-        operatorId: ctx.userId,
-        load: (tx) => tx.query.users.findFirst({ where: eq(schema.users.id, v.data.id) }),
-        deptOf: (row) => row.deptId,
-        message: '无权操作该部门的用户',
-        notFound: () => new EntityNotFoundError('User', v.data.id),
-      },
+      loadUserScoped(ctx.userId, v.data.id),
       async (tx, row) => {
         const deleted = deleteUser(userFromPersistence(row));
         await tx.update(schema.users)

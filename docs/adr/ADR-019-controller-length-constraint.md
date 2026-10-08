@@ -2,7 +2,7 @@
 
 | 属性       | 值                                                                    |
 |------------|-----------------------------------------------------------------------|
-| **状态**   | **superseded in part (2026-10-08)** —— 「编排型 ≤30 逻辑行」这一阈值已被一手来源调研推翻，改为复杂度约束；见下方「修订」节 |
+| **状态**   | **superseded in part (2026-10-08)** —— 「编排型 ≤30 逻辑行」这一阈值已被一手来源调研推翻，改为复杂度约束；见「修订」节与「候选 ⑦ 的收口」节 |
 | **日期**   | 2026-10-08                                                            |
 | **决策者** | Auth-SSO 团队（improve-codebase-architecture 架构评审候选 ⑦）          |
 | **影响范围** | `AGENTS.md`、`docs/portal-architecture-guidelines.md`、`eslint.base.mjs`、22 个 Controller |
@@ -263,6 +263,34 @@ Airbnb 直接设为 `off`。**不存在"业界通行阈值"这回事。**
 | 安全写编排收口 | `withScopedRow` / `withScopedWrite` + `preflight`；`requireDeptAccess` 调用点 12 → 0（commit `3deca95`） |
 | 约束本身的修正 | 行数上限移除，改复杂度门槛；文档与配置对齐（commit `6103c9b`） |
 | 领域操作层方向验证 | `changeOwnPasswordAction` 32 → 20 逻辑行，**不产生无名中间函数**（commit `6da98f3`）。该 action 现为 `lib/account/change-password.ts` 的 `changeOwnPassword`；`resetPasswordAction` 的同法抽取见 commit `629dc38` |
+
+### 第三轮：实测剩余重复，据此收口（2026-10-08）
+
+code review 的 Spec 轴指出⑦"以撤掉标尺代替达标"。据此做了直接实测，而不是继续论证：
+
+**① 领域操作已经存在。** 11 个超标 Controller 各自**只调用一个**领域函数
+（`createUser` / `toggleUserStatus` / `applyRoleUpdate` / `validateDepartmentDeletable` …），
+再落库。再抽一层只会产出"纯粹转发的中间人"——正是评审基线里的 **Middle Man**。
+
+**② 重复确实存在，但只在 `users/actions.ts`。** 逐字比对 `withScopedRow` 的
+options 块：users 有 **3 处逐字相同**（另 2 处为合理变体：一处加迁移目标、
+一处选列收窄）；而 **roles / departments 各 3 块、重复 0 组**。
+
+**③ 据此抽取（已实施）。** 新增 `loadUserScoped(operatorId, userId, selectColumns?)`，
+把这份**安全配置**（授权到 `deptId`、越界消息、404 语义）收为一处。抽取理由是
+正确性而非行数：守卫配置散落时，改一处而漏改另一处即越权；收成一处才能保证
+"改则全改"。效果：
+
+| Controller | 逻辑行 |
+|---|---|
+| `toggleUserStatusAction` | 34 → 26 |
+| `unlockUserAction` | 33 → 25 |
+| `deleteUserAction` | 30 → 22 |
+| `updateUserAction` | 38 → 32 |
+
+**④ 剩余 7 个不再抽取。** 它们的长度来自 `withScopedRow` 的**声明式变体**
+（每个 Controller 的守卫目标与列选择各不相同）与 Zod 校验、响应映射。实测重复为 0，
+故抽取收益为负（换来的是 Middle Man）。
 
 ### 未做且**不应**作为"违规修复"继续做的部分
 
