@@ -129,3 +129,172 @@ pub async fn check(
 
     Ok(false)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::{AtomicU32, Ordering};
+
+    /// 唯一 IP 生成器：`observe` 的计数由**模块级 static** 持有，Rust 测试默认并行，
+    /// 同一 IP 会被多个用例共享而互相污染。每个用例取一个专属 IP 即可隔离，
+    /// 无需给生产代码加"重置计数器"的测试后门。
+    static IP_SEQ: AtomicU32 = AtomicU32::new(1);
+
+    fn unique_ip() -> String {
+        // 只做一次原子递增：先 fetch_add 再 load 会让两个线程读到同一序号，
+        // 从而生成相同 IP、破坏隔离（本函数的存在意义就是保证唯一）。
+        let n = IP_SEQ.fetch_add(1, Ordering::Relaxed);
+        format!("10.9.{}.{}", n / 250, n % 250)
+    }
+
+    fn limits(auth_max: isize, token_max: isize) -> RateLimitConfig {
+        RateLimitConfig {
+            auth_max,
+            token_max,
+        }
+    }
+
+    #[test]
+    fn untracked_path_never_counts() {
+        let l = limits(1, 1);
+        // 非 /api/auth/ 路径一律 Untracked，且反复调用也不应产生阻断
+        for _ in 0..10 {
+            assert_eq!(observe("10.1.0.1", "/", &l), RateDecision::Untracked);
+            assert_eq!(observe("10.1.0.1", "/api/me", &l), RateDecision::Untracked);
+            assert_eq!(observe("10.1.0.1", "/health", &l), RateDecision::Untracked);
+        }
+    }
+
+    #[test]
+    fn tracked_prefix_does_not_include_lookalike_path() {
+        let l = limits(1, 1);
+        // `/api/authz/...` 不以 `/api/auth/` 开头，不得被当作认证端点限流
+        assert_eq!(
+            observe("10.1.0.2", "/api/authz/x", &l),
+            RateDecision::Untracked
+        );
+        // 前缀本身不以 `/` 结尾的近似路径
+        assert_eq!(
+            observe("10.1.0.2", "/api/auth", &l),
+            RateDecision::Untracked
+        );
+        // 真正的认证子路径被追踪
+        assert_eq!(
+            observe("10.1.0.2", "/api/auth/login", &l),
+            RateDecision::Allowed
+        );
+    }
+
+    #[test]
+    fn token_endpoint_uses_its_own_counter() {
+        // token_max=2：token 端点第 3 次阻断
+        let l = limits(100, 2);
+        let ip = unique_ip();
+        assert_eq!(
+            observe(&ip, "/api/auth/oauth2/token", &l),
+            RateDecision::Allowed
+        );
+        assert_eq!(
+            observe(&ip, "/api/auth/oauth2/token", &l),
+            RateDecision::Allowed
+        );
+        assert_eq!(
+            observe(&ip, "/api/auth/oauth2/token", &l),
+            RateDecision::Blocked
+        );
+    }
+
+    #[test]
+    fn other_auth_paths_use_the_auth_counter() {
+        // auth_max=2：其他 /api/auth/* 第 3 次阻断
+        let l = limits(2, 100);
+        let ip = unique_ip();
+        assert_eq!(observe(&ip, "/api/auth/login", &l), RateDecision::Allowed);
+        assert_eq!(observe(&ip, "/api/auth/login", &l), RateDecision::Allowed);
+        assert_eq!(observe(&ip, "/api/auth/login", &l), RateDecision::Blocked);
+    }
+
+    /// 两个计数器相互独立：打满 token 计数器不影响 auth 计数器
+    #[test]
+    fn token_and_auth_counters_are_independent() {
+        let l = limits(2, 1);
+        let ip = unique_ip();
+        // 打满 token 计数器
+        assert_eq!(
+            observe(&ip, "/api/auth/oauth2/token", &l),
+            RateDecision::Allowed
+        );
+        assert_eq!(
+            observe(&ip, "/api/auth/oauth2/token", &l),
+            RateDecision::Blocked
+        );
+        // auth 计数器对这个 IP 仍是新的
+        assert_eq!(observe(&ip, "/api/auth/login", &l), RateDecision::Allowed);
+    }
+
+    /// 不同 IP 的计数互不影响（限流按 IP 维度）
+    #[test]
+    fn different_ips_have_separate_budgets() {
+        let l = limits(1, 1);
+        let (ip_a, ip_b) = (unique_ip(), unique_ip());
+        assert_eq!(observe(&ip_a, "/api/auth/login", &l), RateDecision::Allowed);
+        assert_eq!(observe(&ip_a, "/api/auth/login", &l), RateDecision::Blocked);
+        // 另一个 IP 未被牵连
+        assert_eq!(observe(&ip_b, "/api/auth/login", &l), RateDecision::Allowed);
+    }
+
+    /// 边界：阈值 N 表示**允许前 N 次**（`count <= max`），第 N+1 次才阻断
+    #[test]
+    fn threshold_allows_exactly_n_requests() {
+        let l = limits(3, 100);
+        let ip = unique_ip();
+        for i in 1..=3 {
+            assert_eq!(
+                observe(&ip, "/api/auth/anything", &l),
+                RateDecision::Allowed,
+                "第 {i} 次应在阈值内"
+            );
+        }
+        assert_eq!(
+            observe(&ip, "/api/auth/anything", &l),
+            RateDecision::Blocked,
+            "第 4 次应阻断"
+        );
+    }
+
+    /// 阈值 0 时首次请求即阻断（fail-closed 配置不应被静默忽略）
+    #[test]
+    fn zero_threshold_blocks_immediately() {
+        let l = limits(0, 0);
+        assert_eq!(
+            observe(&unique_ip(), "/api/auth/login", &l),
+            RateDecision::Blocked
+        );
+        assert_eq!(
+            observe(&unique_ip(), "/api/auth/oauth2/token", &l),
+            RateDecision::Blocked
+        );
+    }
+
+    /// 默认配置下的阈值与文档一致（20/30 req/min），防止默认值被误改
+    #[test]
+    fn default_limits_match_documented_values() {
+        let l = RateLimitConfig::default();
+        assert_eq!(l.auth_max, 20);
+        assert_eq!(l.token_max, 30);
+    }
+
+    /// 默认配置下阈值内的请求放行（用唯一 IP 避免与其它用例互相干扰）
+    #[test]
+    fn default_limits_allow_first_request() {
+        let l = RateLimitConfig::default();
+        assert_eq!(
+            observe(&unique_ip(), "/api/auth/login", &l),
+            RateDecision::Allowed
+        );
+        assert_eq!(
+            observe(&unique_ip(), "/api/auth/oauth2/token", &l),
+            RateDecision::Allowed
+        );
+    }
+}
