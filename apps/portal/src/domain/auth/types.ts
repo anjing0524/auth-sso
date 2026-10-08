@@ -28,6 +28,21 @@ export interface PortalJwtClaims extends JWTPayload {
   scope?: string;
 }
 
+/**
+ * OAuth 2.1 token 端点成功响应体（RFC 6749 §5.1）。
+ *
+ * 可选字段用可选属性而非 `| undefined`——`exactOptionalPropertyTypes` 下
+ * 条件展开（`...(x ? { k: x } : {})`）需要可选而非 undefined 联合。
+ */
+export interface OAuthTokenResponse {
+  access_token: string;
+  token_type: 'Bearer';
+  expires_in: number;
+  refresh_token?: string;
+  id_token?: string;
+  scope?: string;
+}
+
 /** Token 轮换结果 */
 export interface RefreshTokenResult {
   accessToken: string;
