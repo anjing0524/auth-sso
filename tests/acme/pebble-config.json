@@ -15,8 +15,8 @@
     },
     "profiles": {
       "default": {
-        "description": "Short-lived certificate for Gateway lifecycle verification",
-        "validityPeriod": 90
+        "description": "Gateway lifecycle verification. Validity must satisfy BOTH bounds: long enough that the renewal point (2/3 of lifetime) is not crossed before the restart-recovery assertion, yet short enough that the renewal point falls inside the CA-failure observation window (otherwise the gateway never contacts the CA, emits no lifecycle failure, and the retention assertion can never be exercised). 300s => renewal at ~200s.",
+        "validityPeriod": 300
       }
     }
   }
