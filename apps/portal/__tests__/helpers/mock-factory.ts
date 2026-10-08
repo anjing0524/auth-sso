@@ -114,11 +114,13 @@ export function createHoistedHolders(): HoistedHolders {
           return handler({ userId: DEFAULT_ADMIN_ID }, ...args);
         };
       }),
-      withPermission: vi.fn((_opts: any, _req: any, handler: Function) => {
-        return async (...args: any[]) => {
-          return handler(DEFAULT_ADMIN_ID, ...args);
-        };
-      }),
+      // 忠实镜像真实签名 `withPermission(options, handler)`——此前 mock 是
+      // 三参 `(_opts, _req, handler)`，比真实签名多一个不存在的参数，
+      // 于是测试固化的接口形状与生产不符（候选 ⑪ 的 seam 分叉之一）。
+      withPermission: vi.fn(
+        async (_options: unknown, handler: (userId: string) => Promise<Response>) =>
+          handler(DEFAULT_ADMIN_ID),
+      ),
       resolveIdentity: vi.fn(async () => ({
         userId: DEFAULT_ADMIN_ID,
       })),

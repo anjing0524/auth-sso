@@ -28,7 +28,7 @@ vi.mock('@/lib/auth', () => ({
   requireDeptAccess: vi.fn(async () => {}),
   withAuth: (_o: any, h: Function) => async (...a: any[]) =>
     h({ userId: '00000000-0000-4000-8000-000000000101' }, ...a),
-  withPermission: (_o: any, _r: any, h: Function) => async (...a: any[]) => h('00000000-0000-4000-8000-000000000101', ...a),
+  withPermission: (_o: any, h: Function) => async () => h('00000000-0000-4000-8000-000000000101'),
 }));
 vi.mock('@/lib/crypto', () => ({
   generateUUID: () => 'aabbccdd-eeff-4000-8000-000000000001',
