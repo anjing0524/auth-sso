@@ -91,10 +91,33 @@ decode::<Claims>(token, &key, &meta.validation)
 - 公开 API `key()` 的返回类型由 `Option<DecodingKey>` 变为 `Option<Arc<DecodingKey>>`
   （breaking change）。当前唯一外部使用方是本站基准测试，已随之适配。
 
-**未验证**
-- **性能数字未实测**：`cargo bench` 在本环境因缺 `cmake`（`libz-ng-sys` 构建脚本）
-  无法运行 release 构建。`cargo check --benches` 通过，即基准**可编译且引用正确**，
-  但"`Arc` 克隆与借用引用同样廉价"这一论断只有推理支撑，没有测量数据。
+**性能实测（原标"未验证"，已补测）**
+
+本环境默认 `cargo bench` 因缺 `cmake` 失败（`libz-ng-sys` 构建脚本，由默认启用的
+ACME 特性引入）。**`--no-default-features` 可绕过该依赖并成功构建 release**，
+故性能数字可测：
+
+| 基准 | 耗时（median） |
+|---|---|
+| `jwks/key_lookup_hit`（生产路径，含 Arc 克隆） | ≈ 84–93 ns |
+| `jwks/key_lookup_miss`（load + HashMap 未命中，**不克隆**） | ≈ 38–50 ns |
+| `jwks/validation_access`（Arc 克隆 validation） | ≈ 30 ns |
+| `jwks/verify_path_combined` | ≈ 121 ns |
+| `jwks/concurrent_read_stress`（8 次模拟并发读） | ≈ 1.4 µs |
+
+**`Arc<DecodingKey>` 克隆的代价 ≈ 44–46 ns**（由 `hit − miss` 得出：两者做同样的
+load + HashMap 查找，唯一差别是命中后多一次 `Arc::clone`）。两次独立运行的绝对值
+有 ±10% 噪声，但**差值稳定**。
+
+这是一个**绝对量级的界，而非与旧实现的对比**：旧的
+`verify.rs` 内联借引用版本已随本 ADR 删除，无法回溯测量，故不能声称"Arc 克隆比
+`DecodingKey` 克隆快多少"。可确定的是：44 ns 量级与一次原子引用计数递增相符
+（一次堆分配通常 20–50 ns 起），且相对一次 JWT 验签（ES256 约 50–200 µs）小
+三个数量级，**对热路径无实质影响**。
+
+**仍未验证**：
+- `next-action` 头（ADR-020）是 Next.js 内部实现细节，其稳定性未经跨版本验证。
+- 上表来自开发机，非生产硬件基线。
 
 ## 教训：变异验证必须确认变异真的注入了
 
