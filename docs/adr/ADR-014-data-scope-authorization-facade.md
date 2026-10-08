@@ -123,7 +123,29 @@ RLS 在技术上可表达子树并集（policy + `SECURITY DEFINER` helper），
    - ✅ **门面落地**：`lib/authz/{data-scope,write,index}.ts`，含 `resolveScope` / `isWithinScope` / `assertWithinScope` / `withScopedWrite`；9 个门面测试经**真实并发时序**证明"旧形状降权后仍写入成功、门面形状拒绝且不写入"。
    - ✅ **3/3 条 TOCTOU 写路径已迁移**：`users/[id]/reset-password`、`users/[id]/force-logout`、`users/[id]/roles` 的 **POST 与 DELETE**（同一文件两个分支）。
    - ✅ **补了 2 条路由级越界断言**（`user-role-api.test.ts`）：范围外用户 POST/DELETE → 403 且绑定不变。此前该文件只 mock `canAccessDept`，无法区分新旧快照路径。
-3. ⬜ **收读路径（5 处形状 B + 4 个 `data.ts`）**：`Scope` + `scopeFilter` 替换 `deptIds: string[]`；迁移只读守卫（`users/[id]`、`users/[id]/roles` GET、`roles/[id]`、`roles/[id]/permissions`、`departments/[id]`、`departments/[id]/members`、4 个 page.tsx）。
+3. 🔶 **收读路径**：
+   - ✅ **新增读路径原语** `lib/authz/query.ts`：`scopeFilter(scope, column)` 保证**永远返回一个条件**（范围内 → `IN`，空范围 → `FALSE`），消除 `and()` 无有效条件时返回 `undefined` 导致静默不过滤的 fail-open 形状；`isScopeDenied(scope)` 供查询前短路。
+   - ✅ **departments 读模型已迁移**：`getDepartments(scope, …)`、`getDepartmentById(lookupId, scope)`、`getDepartmentMembers(deptId, scope)`；后两者原先**根本没有作用域参数**（JSDoc 却声称"可选：API Route 传入"，属 interface 撒谎），现在范围约束进入 SQL。
+   - ✅ **顺带修掉一个真实缺陷**：子树展开谓词漏掉一级子部门（详见下节），它使 `/api/departments` 对真实管理员返回断裂的树。
+   - ✅ 5 处只读路由不再手写守卫：范围外与不存在同形返回 404（避免用状态码探测部门是否存在）。
+   - ⬜ 待迁移：`users/data.ts`、`roles/data.ts`、`departments/data.ts` 的 `deptIds: string[]` 收口为 `Scope`；`roles/[id]`、`users/[id]` 等只读守卫统一。
+
+### 附带修复：子树展开漏掉一级子部门（真实缺陷，非重构副产品）
+
+`ancestors` 的权威语义是**父链、不含自身**（`domain/department.ts` 的 `computeAncestorPrefix`：根 `null`、一级子部门 = 根 ID、二级 = `根/一级`）。但 `getUserRoleDeptIds` 的子树谓词只有：
+
+```ts
+eq(schema.departments.id, deptId),
+like(schema.departments.ancestors, `${deptId}/%`),   // 只匹配二级及更深
+```
+
+**一级子部门的 `ancestors` 恰等于 `deptId`（无末尾 `/`），不匹配 `LIKE 'deptId/%'`**，因此被整体漏掉。后果按角色所在层级不同而不同：角色在一级部门时正常，角色在**根部门**时可见范围漏掉全部一级子部门。
+
+**该缺陷能长期存活的关键原因：它被写进了测试期望。** `data-scope.test.ts` 的"角色 deptId 为根部门 — 子树正确展开"用例注释明写 *"直接子部门(ancestors=ROOT_ID，无末尾'/')不匹配 LIKE 'ROOT_ID/%'"*，并断言结果集**刻意排除** MKT、长度为 4。**把缺陷固化成规范后，任何符合直觉的实现都会让测试变红**，于是 bug 被"保护"了下来。
+
+产物侧的可见症状：`/api/departments` 的 `buildDepartmentTree` 按 `parentId` 嵌套，当中间层（TECH）不在结果集里时，其子部门（FE）因父缺失被当作顶层返回——管理员的部门树出现"前端组"与"总公司"并列。
+
+修复：谓词补 `eq(schema.departments.ancestors, deptId)`（直接子部门），保留 `LIKE`（更深层）。测试期望同步翻转为 `{ROOT, TECH, MKT, FE, BE}` 长度 5。
 4. ⬜ **关门面**：删除 `lib/auth/index.ts:16` 的再导出，13 处 REST 形状 B 编译失败并改造。
 5. ⬜ **lint 兜底 + 单一入口检查测试**：禁止在 `app/api/**`、`(dashboard)/**/{data,actions}.ts` 直接 `db.select`（白名单 `lib/authz/**`、`infrastructure/db/**`、`db/user-queries.ts`）。
 6. ⬜ **删除 `departments/data.ts:60,84` 的 JSDoc 谎话**（改名 `Unscoped` 或加 `Scope` 参数）。

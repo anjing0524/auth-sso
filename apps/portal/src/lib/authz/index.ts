@@ -35,3 +35,5 @@ export {
   type ScopedWriteOptions,
   type ScopeTargets,
 } from './write';
+
+export { scopeFilter, isScopeDenied } from './query';

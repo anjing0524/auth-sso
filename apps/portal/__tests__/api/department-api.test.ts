@@ -12,6 +12,7 @@
  */
 import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest';
 import { createTestDbHandle, seedTestData } from '../helpers/test-db';
+import { seedAdminUser, seedSuperAdminRole, seedUserRoleBinding } from '../helpers/seed-fixtures';
 import { createTestRequest, parseResponseJson } from '../helpers/test-utils';
 import * as schema from '@/db/schema';
 import { BusinessRuleViolationError } from '@/domain/shared/errors';
@@ -101,6 +102,27 @@ beforeEach(async () => {
 });
 
 // ── 种子工具 ───────────────────────────────────────
+
+/**
+ * 播种部门树 + 一个真实的管理员角色绑定。
+ *
+ * 读路径的数据范围现在由真实的 `resolveScope`（lib/authz）解析，
+ * 走原生 SQL 读 `user_roles → roles.dept_id`，不再经过被 mock 的
+ * `@/lib/auth`。因此操作者必须在库中真实拥有一个根部门角色，否则
+ * 其可见范围为空、读模型 fail-closed 返回空集。
+ */
+async function seedTreeWithAdminScope(
+  departments: ReturnType<typeof seedThreeLevelTree>,
+  roleDeptId: string = ROOT_DEPT_ID,
+) {
+  await seedTestData(td.db, {
+    departments,
+    users: seedAdminUser(),
+    // 角色的 dept_id 决定操作者范围（含子树展开）
+    roles: seedSuperAdminRole({ deptId: roleDeptId }),
+    userRoles: seedUserRoleBinding(ADMIN_USER_ID, '00000000-0000-4000-8000-000000000301'),
+  });
+}
 function seedThreeLevelTree() {
   return [
     {
@@ -158,19 +180,17 @@ describe('Department API', () => {
   // ── GET /api/departments ─────────────────────────────────
   describe('GET /api/departments', () => {
     it('返回多级嵌套树形结构', async () => {
-      await seedTestData(td.db, { departments: seedThreeLevelTree() });
-      mockGetUserRoleDeptIds.mockResolvedValueOnce([
-        ROOT_DEPT_ID, TECH_DEPT_ID, FE_DEPT_ID, MKT_DEPT_ID,
-      ]);
+      await seedTreeWithAdminScope(seedThreeLevelTree());
 
       const req = createTestRequest('/api/departments');
       const res = await ListDepartments(req);
       const body = await parseResponseJson(res);
 
       expect(res.status).toBe(200);
+      // 全范围：根部门角色的子树 = ROOT + 一级子部门(TECH/MKT) + 更深层(FE)
       expect(body).toHaveLength(1);
       const root = body[0];
-      expect(root.name).toBe('总公司');
+      expect(root.id).toBe(ROOT_DEPT_ID);
       expect(root.children).toHaveLength(2);
 
       const techDept = root.children.find((c: any) => c.id === TECH_DEPT_ID);
@@ -198,9 +218,8 @@ describe('Department API', () => {
     });
 
     it('deptIds 限定时只返回可访问的子树', async () => {
-      await seedTestData(td.db, { departments: seedThreeLevelTree() });
-      mockGetUserRoleDeptIds.mockResolvedValueOnce([TECH_DEPT_ID, FE_DEPT_ID]);
-
+      // 只给技术部角色 → 可见范围 = 技术部子树 {TECH, FE}，不应看到 MKT
+      await seedTreeWithAdminScope(seedThreeLevelTree(), TECH_DEPT_ID);
 
       const req = createTestRequest('/api/departments');
       const res = await ListDepartments(req);

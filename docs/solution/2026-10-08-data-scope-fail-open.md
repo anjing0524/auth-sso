@@ -100,10 +100,40 @@ if (deptIds.length > 0) {
 
 **收口方向见 ADR-014**：把范围快照的获取与使用绑定到同一执行器，并把 `requireDeptAccess` 从公开面撤下。
 
-## 五、同类问题审阅（尚未修复，已挂号）
+### 6. 测试期望可能把缺陷固化成规范（本次最值得记住的一条）
+
+子树展开谓词只用 `LIKE 'deptId/%'`，漏掉**一级子部门**——它们的 `ancestors` 恰等于 `deptId`（无末尾 `/`），不匹配该 LIKE。而"直接子部门被排除"这件事**被写进了测试断言**：
+
+```ts
+// data-scope.test.ts（修复前）
+it('角色 deptId 为根部门 — 子树正确展开', async () => {
+  // 注意：直接子部门(ancestors=ROOT_ID，无末尾'/')不匹配 LIKE 'ROOT_ID/%'
+  ...
+  expect(new Set(result)).toEqual(
+    new Set([ROOT_DEPT_ID, TECH_DEPT_ID, FE_DEPT_ID, BE_DEPT_ID]),   // ← 刻意排除 MKT
+  );
+  expect(result.length).toBe(4);
+});
+```
+
+**后果**：任何"符合直觉"的修复都会让这个测试变红，于是缺陷被测试保护了下来。产物侧的可见症状是 `/api/departments` 对管理员返回断裂的树（中间层 TECH 缺失 → 其子部门 FE 被 `buildDepartmentTree` 当作顶层，与"总公司"并列）。
+
+**判别信号**：测试注释里出现"注意：……不匹配……"、"由于……所以……被排除"这类**为异常行为辩护的解释**时，要停下来问："这是规范，还是我们正在固化一个 bug？"**规范的异常应当来自需求决策，不是实现的副作用。**
+
+**处置**：这种用例不能只改断言，必须把注释改成记录缺陷历史（本次已改），否则下一个读者仍会以为"排除"是有意设计。
+
+### 7. 并发跑同一个物理测试库会让测试互相破坏
+
+`vitest.api.config.ts` 设了 `fileParallelism: false` + `maxWorkers: 1`，**单进程内**文件是串行的。但 `cleanup()` 是 `TRUNCATE … CASCADE` 打在同一物理库上——**两个 vitest 进程同时跑就会互相截断**，表现为 `departments_pkey` 唯一冲突、`users_dept_id_fkey` 外键失败等看似"夹具错误"的告警。
+
+**教训**：这类失败与代码无关，却极易误判为回归。诊断顺序应是——先确认**只有一个** vitest 进程在跑（`pgrep -af vitest`），再看失败内容。本次即因此浪费了一轮排查。
+
+## 五、同类问题审阅
 
 | 位置 | 问题 | 状态 |
 |---|---|---|
-| `departments/data.ts:60,84` | JSDoc 声称"`deptIds` 可选：API Route 传入"，但**参数根本不存在**，查询无范围过滤 | 待修（ADR-014 步骤 6） |
-| `departments/data.ts:89` | `getDepartmentMembers` 仅按 `departmentId` 过滤，作用域强制 100% 在调用方 | 待修 |
-| 8 条写路径 | operator 范围快照在事务外获取（TOCTOU） | 待修（ADR-014 步骤 2） |
+| `departments/data.ts` | JSDoc 声称"`deptIds` 可选：API Route 传入"，但参数根本不存在，查询无范围过滤 | ✅ 已修（ADR-014 步骤 3） |
+| `departments/data.ts` | `getDepartmentMembers` 仅按 `departmentId` 过滤，作用域强制 100% 在调用方 | ✅ 已修 |
+| `lib/auth/data-scope.ts` | 子树谓词漏掉一级子部门（`ancestors = deptId` 未匹配） | ✅ 已修（见最佳实践 6） |
+| 3 条 TOCTOU 写路径 | operator 范围快照在事务外获取 | ✅ 已修（ADR-014 步骤 2） |
+| 5 处只读守卫 + 3 个 `data.ts` 的 `deptIds: string[]` | 形状 B 与 `Scope` 未统一 | ⬜ 待修（ADR-014 步骤 3 剩余） |

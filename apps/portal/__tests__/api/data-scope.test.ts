@@ -316,9 +316,13 @@ describe('getUserRoleDeptIds', () => {
     expect(new Set(result)).toEqual(new Set([TECH_DEPT_ID, MKT_DEPT_ID]));
   });
 
-  it('角色 deptId 为根部门 — 子树正确展开', async () => {
-    // 当 deptId 是根部门(ancestors=null)时，LIKE 'ROOT_ID/%' 匹配孙子级及更深部门
-    // 注意：直接子部门(ancestors=ROOT_ID，无末尾'/')不匹配 LIKE 'ROOT_ID/%'
+  it('角色 deptId 为根部门 — 子树展开覆盖直接子部门与更深层后代', async () => {
+    // `ancestors` 是**父链、不含自身**：根 null、直接子部门 = 根 ID、更深层 = `根/一级`。
+    // 因此子树谓词需要两条：`ancestors = deptId`（直接子部门）+ `ancestors LIKE deptId/%`（更深层）。
+    //
+    // 回归记录：此用例原先断言"直接子部门不匹配 LIKE，故被排除"，并把 MKT 排除在期望集
+    // 之外——等于把缺陷固化成了规范。真实后果是：角色在根部门时可见范围漏掉全部一级子部门，
+    // /api/departments 对真实管理员返回断裂的树（父不在结果里的孙部门变成顶层）。
     await seedDataScopeFixture();
     // 给 ADMIN_USER 再加一个根部门角色
     await td.db.insert(schema.roles).values({
@@ -339,13 +343,14 @@ describe('getUserRoleDeptIds', () => {
 
     const result = await getUserRoleDeptIds(td.db, ADMIN_USER_ID);
     // 两个角色：TECH_ADMIN(deptId=TECH) + ROOT_ADMIN(deptId=ROOT)
-    // TECH: id=TECH_ID → TECH
-    // ROOT: id=ROOT_ID → ROOT; LIKE 'ROOT_ID/%' → FE(ROOT_ID/TECH_ID), BE(ROOT_ID/TECH_ID)
-    // 直接子部门 TECH/MKT 的 ancestors=ROOT_ID 不包含'/'，不匹配 LIKE 'ROOT_ID/%'
+    //   TECH: id=TECH → TECH，以及其后代 FE/BE（ancestors 以 `TECH/` 开头）
+    //   ROOT: id=ROOT → ROOT，直接子部门 TECH/MKT（ancestors = ROOT），深层 FE/BE（ancestors 以 `ROOT/` 开头）
     expect(new Set(result)).toEqual(
-      new Set([ROOT_DEPT_ID, TECH_DEPT_ID, FE_DEPT_ID, BE_DEPT_ID]),
+      new Set([ROOT_DEPT_ID, TECH_DEPT_ID, MKT_DEPT_ID, FE_DEPT_ID, BE_DEPT_ID]),
     );
-    expect(result.length).toBe(4);
+    expect(result.length).toBe(5);
+    // 直接子部门必须在范围内（这是本用例的回归点）
+    expect(result).toContain(MKT_DEPT_ID);
   });
 });
 

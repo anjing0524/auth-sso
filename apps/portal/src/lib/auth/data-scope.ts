@@ -60,9 +60,19 @@ export async function getUserRoleDeptIds(executor: DbExecutor, userId: string): 
 
   if (roleDeptIds.length === 0) return [];
 
-  // 单次批量 SQL 查询替代 N+1：对每个角色 deptId，匹配部门 id 或 ancestors 包含该 deptId
+  // 单次批量 SQL 查询替代 N+1：对每个角色 deptId 展开其子树。
+  //
+  // `ancestors` 是**父链、不含自身**（见 domain/department.ts 的 computeAncestorPrefix）：
+  // 根部门 null、一级子部门 = 根 ID、二级子部门 = `根/一级`。因此子树谓词必须是两条：
+  //   1. `ancestors = deptId`      → 该部门的**直接**子部门（祖先恰等于 deptId）
+  //   2. `ancestors LIKE deptId/%` → 更深层的后代
+  // 只保留第 2 条会漏掉全部直接子部门，导致一级子部门在数据范围中"消失"。
   const conditions = roleDeptIds.flatMap((deptId): ReturnType<typeof or>[] => [
+    // 部门自身
     eq(schema.departments.id, deptId),
+    // 直接子部门：ancestors 恰为 deptId
+    eq(schema.departments.ancestors, deptId),
+    // 更深层后代：ancestors 以 `deptId/` 开头
     like(schema.departments.ancestors, `${deptId}/%`),
   ]);
   const result = await executor

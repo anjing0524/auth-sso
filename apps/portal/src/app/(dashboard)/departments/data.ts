@@ -10,10 +10,11 @@ import 'server-only';
 
 import { cacheLife, cacheTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
-import { asc, eq, inArray } from 'drizzle-orm';
+import { asc, eq, and } from 'drizzle-orm';
 import { buildDepartmentTree, departmentFromPersistence } from '@/domain/department/department';
 import type { DepartmentTreeNode } from '@/domain/department/department';
-import { isScopeDenied } from '@/db/user-queries';
+import { scopeFilter, isScopeDenied } from '@/lib/authz';
+import type { UserScope } from '@/lib/authz';
 import { asEntityStatus } from '@/lib/type-guards';
 
 
@@ -30,24 +31,24 @@ function toDomainDepartment(r: typeof schema.departments.$inferSelect) {
 /**
  * 获取当前授权范围内的部门树形结构
  *
- * @param deptIds — 由调用方在缓存作用域外通过 getUserRoleDeptIds(userId) 预先计算的部门 ID 列表
- * @param userId  — 当前操作者用户 ID（v3.2: 暂保留参数以维持接口兼容）
+ * @param scope  操作者数据范围（在缓存作用域**外**经 `resolveScope` 获取）
+ * @param userId 当前操作者用户 ID（v3.2: 暂保留参数以维持接口兼容）
  */
 export async function getDepartments(
-  deptIds: string[],
+  scope: UserScope,
   _userId: string,
 ): Promise<DepartmentTreeNode[]> {
   'use cache';
   cacheLife('minutes');
   cacheTag('departments-list');
 
-  if (isScopeDenied(deptIds)) {
+  if (isScopeDenied(scope)) {
     return [];
   }
 
   const rows = await db.select()
     .from(schema.departments)
-    .where(inArray(schema.departments.id, deptIds))
+    .where(scopeFilter(scope, schema.departments.id))
     .orderBy(asc(schema.departments.sort), asc(schema.departments.createdAt));
 
   return buildDepartmentTree(rows.map(toDomainDepartment));
@@ -57,11 +58,14 @@ export async function getDepartments(
  * 按 ID 获取单个部门详情
  *
  * @param lookupId 部门 ID
- * @param deptIds  操作者数据范围（可选：API Route 传入；Server Component 自查询不传）
+ * @param scope    操作者数据范围。**必填**：不可省略——省略即无范围约束，
+ *                 会静默返回任意部门的详情（此前的 JSDoc 声称有该参数但签名
+ *                 里并不存在，属 fail-open 隐患，见 ADR-014）。
+ * @returns 部门不存在或不在范围内 → null（调用方据此返回 404）
  */
-export async function getDepartmentById(lookupId: string) {
+export async function getDepartmentById(lookupId: string, scope: UserScope) {
   const rows = await db.select().from(schema.departments)
-    .where(eq(schema.departments.id, lookupId))
+    .where(and(eq(schema.departments.id, lookupId), scopeFilter(scope, schema.departments.id)))
     .limit(1);
   const row = rows[0];
   if (!row) return null;
@@ -80,10 +84,13 @@ export async function getDepartmentById(lookupId: string) {
 /**
  * 获取部门下的成员列表
  *
+ * 成员必须在操作者数据范围内——范围约束与部门约束同为查询条件，
+ * 不能只在调用方校验部门后即信任（见 ADR-014）。
+ *
  * @param departmentId 部门 ID
- * @param deptIds      操作者数据范围（可选：API Route 传入；Server Component 自查询不传）
+ * @param scope        操作者数据范围（必填，理由同 {@link getDepartmentById}）
  */
-export async function getDepartmentMembers(departmentId: string) {
+export async function getDepartmentMembers(departmentId: string, scope: UserScope) {
   return db.select({
     id: schema.users.id,
     name: schema.users.name,
@@ -94,5 +101,8 @@ export async function getDepartmentMembers(departmentId: string) {
     createdAt: schema.users.createdAt,
   })
     .from(schema.users)
-    .where(eq(schema.users.deptId, departmentId));
+    .where(and(
+      eq(schema.users.deptId, departmentId),
+      scopeFilter(scope, schema.users.deptId),
+    ));
 }
