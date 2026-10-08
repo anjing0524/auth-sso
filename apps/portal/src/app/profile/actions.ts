@@ -11,16 +11,12 @@ import { z } from 'zod';
 import { db, schema } from '@/infrastructure/db';
 import { eq } from 'drizzle-orm';
 import { withAuth, type AuthContext } from '@/lib/auth';
-import { verifyPassword, hashPassword, isPasswordReused, pushPasswordHistory } from '@/domain/auth/password';
-import { revokeUserAccessByUserId } from '@/lib/session/revoke';
 import { EntityNotFoundError } from '@/domain/shared/errors';
 import { validate } from '@/lib/validation';
 import { PasswordSchema } from '@/domain/shared/zod-schemas';
 import { COMMON_ERRORS, type ApiResponse } from '@auth-sso/contracts';
-import { createLogger } from '@/lib/logger';
 import { invalidateResource } from '@/lib/cache-invalidation';
-
-const log = createLogger('ProfileAction');
+import { changeOwnPassword, INVALID_CURRENT_PASSWORD_MESSAGE } from '@/lib/account/change-password';
 
 /**
  * 自助改资料入参校验 Schema
@@ -94,38 +90,19 @@ export const changeOwnPasswordAction = withAuth(
     const v = validate(ChangeOwnPasswordSchema, input);
     if (!v.ok) return v.response;
 
-    // 用 ctx.userId 锁定目标，防止 IDOR
-    const row = await db.query.users.findFirst({
-      where: eq(schema.users.id, ctx.userId),
-      columns: { id: true, passwordHash: true, passwordHistory: true },
-    });
-    if (!row) throw new EntityNotFoundError('User', ctx.userId);
+    // 领域操作（纯判定 + bcrypt + 持久化 + 会话撤销）已命名，见 lib/account/change-password。
+    // 目标由 ctx.userId 锁定，防止 IDOR。
+    const result = await changeOwnPassword(ctx.userId, v.data.currentPassword, v.data.newPassword);
 
-    // 验证旧密码
-    const isValid = await verifyPassword(v.data.currentPassword, row.passwordHash ?? '');
-    if (!isValid) {
-      return { success: false, error: COMMON_ERRORS.VALIDATION_ERROR, message: '当前密码错误' };
-    }
-
-    // NFR-SEC-15: 禁止重用最近 5 次密码
-    if (await isPasswordReused(v.data.newPassword, row.passwordHistory ?? null)) {
-      return { success: false, error: COMMON_ERRORS.VALIDATION_ERROR, message: '新密码不能与最近使用过的密码相同' };
-    }
-
-    // 哈希新密码并更新（同时记录 passwordChangedAt + 推入密码历史）
-    const newHash = await hashPassword(v.data.newPassword);
-    const newHistory = pushPasswordHistory(row.passwordHistory ?? null, row.passwordHash ?? '');
-    await db
-      .update(schema.users)
-      .set({ passwordHash: newHash, passwordHistory: newHistory, passwordChangedAt: new Date() })
-      .where(eq(schema.users.id, ctx.userId));
-
-    // 失效所有会话（含当前），强制重新登录（NFR-SEC-13）
-    // 关键安全操作必须 await（Redis 不可达时撤销失败会留下有效旧 Token）
-    try {
-      await revokeUserAccessByUserId(ctx.userId);
-    } catch (e) {
-      log.error('改密后撤销会话失败', { error: (e as Error).message });
+    if (!result.ok) {
+      if (result.reason === 'user_not_found') {
+        throw new EntityNotFoundError('User', ctx.userId);
+      }
+      return {
+        success: false,
+        error: COMMON_ERRORS.VALIDATION_ERROR,
+        message: INVALID_CURRENT_PASSWORD_MESSAGE,
+      };
     }
 
     return { success: true, data: { id: ctx.userId }, message: '密码已更新，请重新登录' };

@@ -84,6 +84,33 @@
 
 这一步**分阶段进行**，不在本 ADR 内一次完成 12 个；先做试点验证方向。
 
+## 试点验证（2026-10-08）
+
+用 `changeOwnPasswordAction` 验证"补领域操作层"这一方向，而非直接削行数。
+
+**结果：逻辑行 32 → 20**，恰好达到"委托型 ≤20"的上限，且不再触发 30 行规则。
+Controller 现在读作：
+
+```ts
+const result = await changeOwnPassword(ctx.userId, v.data.currentPassword, v.data.newPassword);
+if (!result.ok) { /* 映射 user_not_found → 404 / 其余 → 验证错误 */ }
+return { success: true, data: { id: ctx.userId }, message: '密码已更新，请重新登录' };
+```
+
+**这验证了根因诊断**：变薄是"给操作起名字"的自然结果，不是削出来的——Controller 里
+没有留下一层无名中间函数。若抽完仍接近 30 行，则说明诊断错误；实测未发生。
+
+分层落点（沿 `domain/auth/login.ts` 的既有先例）：
+
+| 关注点 | 位置 |
+|---|---|
+| 纯判定（同步、无 I/O、抛 DomainError） | `domain/auth/password-change.ts` |
+| bcrypt 比对/哈希 + DB + 会话撤销编排 | `lib/account/change-password.ts` |
+
+**为什么判定在 domain 而非 `lib`**：`domain/auth/login.ts` 已有同构先例——
+纯判定抛 `DomainError`，由 `mapDomainError` 统一映射；异步 bcrypt 与 DB 留在外层。
+把 bcrypt 移入 domain 会违反"domain 层纯 TS"的既有约束。
+
 ## 后果
 
 **收益**

@@ -754,6 +754,7 @@ export default [
 | **Client Component 表单** | `components/*/Form.tsx` | `react-dom`, Server Actions | 必须使用 `useFormStatus` 或 `useActionState` 防止重复提交 | — |
 | **Server Action** | `actions.ts` | `next/cache`, `domain/`, `lib/auth` (`withAuth`), `lib/authz`, `infrastructure/db` | **委托型 ≤20 行 / 编排型 ≤30 逻辑行**（不含空行与注释；见 ADR-019）。Zod `.safeParse()` 校验入参，`xxxToInsertRow()` 统一 DB 映射，Drizzle 直调 + 事务 | `max-lines-per-function`（max: 30） |
 | **API 路由** | `route.ts` | `next/server`, `domain/`, `lib/auth` (`withPermission`), `lib/authz`, `infrastructure/db` | REST 写网关，约束同上（委托型 ≤20 / 编排型 ≤30 逻辑行）。使用 `withPermission()` 包装 | `max-lines-per-function`（max: 30） |
+| **领域操作（编排）** | `lib/<area>/<operation>.ts` | `domain/`, `infrastructure/db`, 其他 `lib/*` | 一个具名业务操作的步骤编排（bcrypt/DB/会话撤销/外部副作用）。**Controller 变薄的正确途径是给操作起名字**，而不是削行数（ADR-019） | — |
 | **领域层核心** | `domain/*/*.ts` | **仅限 `@auth-sso/contracts` + Zod + 纯 TypeScript** | 纯函数计算 + `xxxToInsertRow`/`xxxToUpdateRow` DB 行转换。枚举值必须从 contracts 导入 | `boundaries/element-types` |
 | **领域实体接口** | `domain/*/types.ts` | 纯 TS `interface`，`zod` | 替代旧 `UserPropsSchema`。Interface 不绑 Zod，仅描述实体结构。与 Drizzle `$inferSelect` 的兼容性由编译期守卫保证 | — |
 | **领域错误** | `domain/shared/errors.ts` | 仅限纯 TypeScript | DomainError 基类及子类 | `boundaries/element-types` |
