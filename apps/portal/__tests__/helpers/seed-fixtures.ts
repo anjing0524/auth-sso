@@ -124,25 +124,49 @@ export function seedPortalClient(overrides: Partial<NonNullable<SeedData['client
   }];
 }
 
-/** ES256 JWK 密钥对（用于 JWT 签发/验签测试） */
+/**
+ * 一个**真实可用**的 ES256 密钥对（模块级生成一次，同一测试进程内复用）。
+ *
+ * ## 为什么必须真实生成，而不能硬编码
+ *
+ * 此前这里硬编码了一组 JWK，其中私钥 **无法被 jose 导入**
+ * （`Invalid keyData`），因此 `seedJwks()` 实际上从来没有支持过真正的签名——
+ * 它只是把两个字符串塞进数据库。缺陷长期未被发现，是因为所有需要签发的测试
+ * 都 `vi.mock('@/lib/auth/token')` 把签发整个替换掉了：**夹具失效与 mock
+ * 恰好互相掩盖**。
+ *
+ * 用 `generateKeyPairSync` 同步生成，保证：
+ * - 私钥可被 `jose` 导入并签发（`seedJwks` 的调用方可以真正走验签路径）；
+ * - 公钥与私钥是**同一密钥对**——硬编码时这一点只靠人工保证，现已由密码学保证；
+ * - 返回值与 `SeedData` 的同步契约一致，6 个既有调用点无需改签名。
+ *
+ * 生成一次即缓存：每次调用现生成会让"同一测试里签发再验签"失败。
+ */
+const fixtureKeyPair = (() => {
+  const { privateKey, publicKey } = crypto.generateKeyPairSync('ec', {
+    namedCurve: 'prime256v1',
+  });
+  const priv = privateKey.export({ format: 'jwk' }) as JsonWebKey;
+  return {
+    privateKey: JSON.stringify(priv),
+    // 公钥只取 kty/crv/x/y：jwk 导出的私钥对象含 d，不应写入公钥列
+    publicKey: JSON.stringify({ kty: priv.kty, crv: priv.crv, x: priv.x, y: priv.y }),
+  };
+})();
+
+/**
+ * ES256 JWK 密钥对（用于 JWT 签发/验签测试）。
+ *
+ * 产出的是可用的密钥对——调用方可以真正完成"签发 → 验签"闭环，
+ * 无需 mock `@/lib/auth/token`。
+ */
 export function seedJwks(overrides: Partial<NonNullable<SeedData['jwks']>[0]> = {}): NonNullable<SeedData['jwks']> {
   return [{
     id: crypto.randomUUID(),
     kid: 'test-kid-001',
     algorithm: 'ES256',
-    publicKey: JSON.stringify({
-      kty: 'EC',
-      crv: 'P-256',
-      x: 'f83OJ3D2xF1Bg8vub9tM1gGPT34Ogv50GI1g9SamyC8',
-      y: 'x_9LH9FHme7alQA9g1y5OB84XJWADnVEhypT5sR-vCs',
-    }),
-    privateKey: JSON.stringify({
-      kty: 'EC',
-      crv: 'P-256',
-      x: 'f83OJ3D2xF1Bg8vub9tM1gGPT34Ogv50GI1g9SamyC8',
-      y: 'x_9LH9FHme7alQA9g1y5OB84XJWADnVEhypT5sR-vCs',
-      d: 'jpsQnnGQmLv7UfFpQ9k8-kH6-4SJyvK2Wj2N2aQeE24',
-    }),
+    publicKey: fixtureKeyPair.publicKey,
+    privateKey: fixtureKeyPair.privateKey,
     createdAt: now,
     expiresAt: new Date(now.getTime() + 90 * 24 * 3600 * 1000),
     ...overrides,
