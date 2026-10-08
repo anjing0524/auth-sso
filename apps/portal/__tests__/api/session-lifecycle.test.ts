@@ -8,7 +8,6 @@
  * @vitest-environment node
  */
 import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest';
-import { NextResponse } from 'next/server';
 import { createTestDbHandle, seedTestData } from '../helpers/test-db';
 import { seedJwks } from '../helpers/seed-fixtures';
 
@@ -99,8 +98,6 @@ vi.mock('jose', () => ({
 }));
 
 import {
-  setJwtCookies,
-  clearJwtCookies,
   getJwtFromCookie,
   getRefreshTokenFromCookie,
   decodeJwtPayload,
@@ -124,57 +121,6 @@ beforeEach(async () => {
 });
 
 describe('JWT Cookie Session Lifecycle', () => {
-  describe('setJwtCookies', () => {
-    it('正确将 JWT 写入 Response Cookie', () => {
-      const response = NextResponse.next();
-      const setSpy = vi.spyOn(response.cookies, 'set');
-
-      setJwtCookies(response, 'access-token', 'refresh-token', 3600);
-
-      expect(setSpy).toHaveBeenCalledWith(COOKIE_NAMES.JWT, 'access-token', expect.objectContaining({
-        path: '/',
-        httpOnly: true,
-        maxAge: 3600,
-      }));
-      expect(setSpy).toHaveBeenCalledWith(COOKIE_NAMES.REFRESH, 'refresh-token', expect.objectContaining({
-        path: '/',
-        httpOnly: true,
-        maxAge: 604800,
-      }));
-    });
-
-    it('Cookie 包含 sameSite=lax 防 CSRF', () => {
-      const response = NextResponse.next();
-      const setSpy = vi.spyOn(response.cookies, 'set');
-
-      setJwtCookies(response, 'access-token', undefined, 3600);
-
-      expect(setSpy).toHaveBeenCalledWith(COOKIE_NAMES.JWT, 'access-token', expect.objectContaining({
-        sameSite: 'lax',
-      }));
-    });
-
-    it('无 refresh token 时不设置 REFRESH Cookie', () => {
-      const response = NextResponse.next();
-      const setSpy = vi.spyOn(response.cookies, 'set');
-
-      setJwtCookies(response, 'access-token', undefined, 3600);
-
-      const refreshCalls = setSpy.mock.calls.filter((c: any) => c[0] === COOKIE_NAMES.REFRESH);
-      expect(refreshCalls).toHaveLength(0);
-    });
-  });
-
-  describe('clearJwtCookies', () => {
-    it('正确在响应头中追加 Max-Age=0 清理 Cookie', () => {
-      const response = new Response();
-      clearJwtCookies(response);
-      const setCookies = response.headers.getSetCookie();
-      expect(setCookies.some(c => c.includes(`${COOKIE_NAMES.JWT}=;`) && c.includes('Max-Age=0'))).toBe(true);
-      expect(setCookies.some(c => c.includes(`${COOKIE_NAMES.REFRESH}=;`) && c.includes('Max-Age=0'))).toBe(true);
-    });
-  });
-
   describe('getJwtFromCookie & getRefreshTokenFromCookie', () => {
     it('从 cookies 接口成功读取 Token', async () => {
       mockCookiesGet.mockImplementation((name: string) => {

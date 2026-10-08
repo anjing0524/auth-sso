@@ -3,7 +3,7 @@
 //! 测试网关热路径上的 Cookie 操作性能：
 //! - Cookie 请求头中提取 Token（零拷贝）
 //! - Set-Cookie 响应头解析
-//! - Cookie 头移除和替换（内存分配路径）
+//! - Cookie 头重写（`rewrite_protected_cookies`，Protected 路径的生产实现）
 //!
 //! 这些操作在每次请求中至少执行一次（验签路径），
 //! 高并发场景下对延迟有显著影响。
@@ -77,54 +77,25 @@ fn bench_extract_missing_from_set_cookie(c: &mut Criterion) {
     });
 }
 
-// ── remove_from_header ──
+// ── rewrite_protected_cookies（Protected 路径的生产实现）──
 
-fn bench_remove_rt_from_header(c: &mut Criterion) {
-    c.bench_function("cookie/remove_rt_from_header", |b| {
+fn bench_rewrite_protected_cookies(c: &mut Criterion) {
+    c.bench_function("cookie/rewrite_protected_cookies", |b| {
         b.iter(|| {
-            let result = cookie::remove_from_header(
+            let result = cookie::rewrite_protected_cookies(
                 black_box(TYPICAL_COOKIE_HEADER),
-                "portal_refresh_token",
+                Some(black_box("new_access_token_value_12345")),
             );
             black_box(result)
         })
     });
 }
 
-fn bench_remove_at_from_header(c: &mut Criterion) {
-    c.bench_function("cookie/remove_at_from_header", |b| {
+fn bench_rewrite_protected_cookies_drop_refresh(c: &mut Criterion) {
+    c.bench_function("cookie/rewrite_protected_cookies_strip_rt", |b| {
         b.iter(|| {
-            let result =
-                cookie::remove_from_header(black_box(TYPICAL_COOKIE_HEADER), "portal_jwt_token");
-            black_box(result)
-        })
-    });
-}
-
-// ── replace_in_header ──
-
-fn bench_replace_existing_at_in_header(c: &mut Criterion) {
-    c.bench_function("cookie/replace_existing_at_in_header", |b| {
-        b.iter(|| {
-            let result = cookie::replace_in_header(
-                black_box(TYPICAL_COOKIE_HEADER),
-                "portal_jwt_token",
-                black_box("new_token_value_here_12345"),
-            );
-            black_box(result)
-        })
-    });
-}
-
-fn bench_replace_append_missing_in_header(c: &mut Criterion) {
-    let header = "portal_refresh_token=rt_abc; other=val";
-    c.bench_function("cookie/replace_append_missing_in_header", |b| {
-        b.iter(|| {
-            let result = cookie::replace_in_header(
-                black_box(header),
-                "portal_jwt_token",
-                black_box("new_token_value"),
-            );
+            // new_access = None → 仅剥离 RT（Microservice 路径语义）
+            let result = cookie::rewrite_protected_cookies(black_box(TYPICAL_COOKIE_HEADER), None);
             black_box(result)
         })
     });
@@ -137,9 +108,7 @@ criterion_group!(
     bench_extract_missing_from_header,
     bench_extract_at_from_set_cookie,
     bench_extract_missing_from_set_cookie,
-    bench_remove_rt_from_header,
-    bench_remove_at_from_header,
-    bench_replace_existing_at_in_header,
-    bench_replace_append_missing_in_header,
+    bench_rewrite_protected_cookies,
+    bench_rewrite_protected_cookies_drop_refresh,
 );
 criterion_main!(benches);

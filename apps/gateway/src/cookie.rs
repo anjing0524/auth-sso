@@ -29,8 +29,8 @@ pub fn collapse_cookie_header(req: &RequestHeader) -> Option<String> {
 
 /// 判定并截取一个 cookie 片段的值：匹配 `name=` 前缀后返回其后的值切片，否则 None
 ///
-/// 统一 `extract_from_header` / `extract_from_set_cookie` / `remove_from_header` /
-/// `replace_in_header` 对 "name=" 前缀的匹配逻辑，零分配、无裸索引切片。
+/// `extract_from_header` / `extract_from_set_cookie` / `rewrite_protected_cookies`
+/// 共用同一套 "name=" 前缀匹配逻辑，零分配、无裸索引切片。
 fn cookie_value<'a>(seg: &'a str, name: &str) -> Option<&'a str> {
     seg.strip_prefix(name)?.strip_prefix('=')
 }
@@ -83,78 +83,10 @@ fn strip_quotes(val: &str) -> &str {
         .and_then(|v| v.strip_suffix('"'))
         .unwrap_or(val)
 }
-
-/// 从 Cookie 头部中移除指定名称的 cookie
-///
-/// 采用单次内存分配方式重构，规避中间 Vec 集合分配，提升高并发下的执行效率。
-///
-/// # 参数
-/// * `cookie_header` - 原始 Cookie 头
-/// * `cookie_name` - 要移除的 cookie 名称
-pub fn remove_from_header(cookie_header: &str, cookie_name: &str) -> String {
-    let mut result = String::with_capacity(cookie_header.len());
-    let mut first = true;
-
-    for s in cookie_header.split(';') {
-        let trimmed = s.trim_start();
-        if cookie_value(trimmed, cookie_name).is_some() {
-            continue;
-        }
-        if !first {
-            result.push_str("; ");
-        }
-        result.push_str(trimmed);
-        first = false;
-    }
-    result
-}
-
-/// 替换 Cookie 头部中指定 cookie 的值；若不存在则追加
-///
-/// 采用预估容量的单次内存分配设计，省去 Vec 及各个分段 String 的分配开销。
-///
-/// # 参数
-/// * `cookie_header` - 原始 Cookie 头
-/// * `cookie_name` - 要替换的 cookie 名称
-/// * `new_value` - 新的 cookie 值
-pub fn replace_in_header(cookie_header: &str, cookie_name: &str, new_value: &str) -> String {
-    let mut found = false;
-    // 预估新 Cookie 串的长度，防止 String 在追加时多次 resize
-    let estimated_cap = cookie_header.len() + cookie_name.len() + new_value.len() + 2;
-    let mut result = String::with_capacity(estimated_cap);
-    let mut first = true;
-
-    for s in cookie_header.split(';') {
-        let trimmed = s.trim_start();
-        if !first {
-            result.push_str("; ");
-        }
-        if cookie_value(trimmed, cookie_name).is_some() {
-            found = true;
-            result.push_str(cookie_name);
-            result.push('=');
-            result.push_str(new_value);
-        } else {
-            result.push_str(trimmed);
-        }
-        first = false;
-    }
-
-    if !found {
-        if !first {
-            result.push_str("; ");
-        }
-        result.push_str(cookie_name);
-        result.push('=');
-        result.push_str(new_value);
-    }
-    result
-}
-
 /// 单遍完成：剥离 RT + 可选替换/追加 AT。输入为已 collapse 的 Cookie 头。
 ///
 /// 供 `rewrite_upstream_cookies` 的 Protected 分支使用——替代原先
-/// `remove_from_header` + `replace_in_header` 两遍扫描 + 两次分配，
+/// 取代原先的「两遍扫描 + 两次分配」写法，
 /// 单次预估容量分配即完成全部重写（O(n)）。
 ///
 /// # 参数
@@ -239,32 +171,6 @@ mod tests {
             extract_from_set_cookie(set_cookie, "portal_refresh_token"),
             None
         );
-    }
-
-    #[test]
-    fn test_remove_from_header() {
-        let header = "portal_jwt_token=abc; portal_refresh_token=rrr; other=val";
-        let result = remove_from_header(header, "portal_refresh_token");
-        assert!(result.contains("portal_jwt_token=abc"));
-        assert!(result.contains("other=val"));
-        assert!(!result.contains("portal_refresh_token"));
-    }
-
-    #[test]
-    fn test_replace_in_header_existing() {
-        let header = "portal_jwt_token=old; portal_refresh_token=rrr";
-        let result = replace_in_header(header, "portal_jwt_token", "new");
-        assert!(result.contains("portal_jwt_token=new"));
-        assert!(!result.contains("portal_jwt_token=old"));
-        assert!(result.contains("portal_refresh_token=rrr"));
-    }
-
-    #[test]
-    fn test_replace_in_header_append() {
-        let header = "portal_refresh_token=rrr";
-        let result = replace_in_header(header, "portal_jwt_token", "new");
-        assert!(result.contains("portal_jwt_token=new"));
-        assert!(result.contains("portal_refresh_token=rrr"));
     }
 
     #[test]

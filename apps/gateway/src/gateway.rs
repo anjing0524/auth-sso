@@ -165,20 +165,7 @@ pub struct GatewayCtx {
     pub client_ip: Option<String>,
 }
 
-impl GatewayCtx {
-    /// 是否已通过验签（即上行应注入身份 Header）
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # use gateway::gateway::GatewayCtx;
-    /// let ctx = GatewayCtx::default();
-    /// assert!(!ctx.is_authenticated());
-    /// ```
-    pub fn is_authenticated(&self) -> bool {
-        self.identity.is_some()
-    }
-}
+impl GatewayCtx {}
 
 /// 从 query string 提取指定参数值（大小写敏感，符合 RFC 6570 / OAuth 参数语义；零分配）
 fn query_param<'a>(query: &'a str, key: &str) -> Option<&'a str> {

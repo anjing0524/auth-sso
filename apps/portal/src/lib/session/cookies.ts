@@ -1,58 +1,17 @@
 import 'server-only';
 
 /**
- * JWT Cookie 读写工具（服务端调用）
+ * JWT Cookie 读取工具（服务端调用）
+ *
+ * **只读**：Cookie 的写入与清除分散在各自的 handler 中（`login` 写 LoginSession、
+ * `refresh` 写 AT/RT、`logout` 清除），因为这些 write 各自有不同的 Path 与属性
+ * 要求。原先这里还有 `setJwtCookies` / `clearJwtCookies` 两个写入口，但**生产
+ * 代码从未调用**（只有测试在用），且其属性集与生产实际写入不一致（详见 ADR-021）。
  *
  * @module lib/session/cookies
  */
-import { type NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { COOKIE_NAMES, TOKEN_TTL } from '@auth-sso/contracts';
-import { isCookieSecure } from '@auth-sso/config';
-
-/**
- * 将 Access Token 和 Refresh Token 分别写入 HttpOnly Cookie
- * 在 OIDC 回调成功后由 Portal BFF 调用
- */
-export function setJwtCookies(
-  response: NextResponse,
-  accessToken: string,
-  refreshToken: string | undefined,
-  accessTokenExpiresIn: number = TOKEN_TTL.ACCESS_TOKEN
-): void {
-  const secure = isCookieSecure();
-
-  response.cookies.set(COOKIE_NAMES.JWT, accessToken, {
-    path: '/',
-    httpOnly: true,
-      secure,
-      sameSite: 'lax',
-      maxAge: accessTokenExpiresIn,
-    });
-
-    if (refreshToken) {
-      response.cookies.set(COOKIE_NAMES.REFRESH, refreshToken, {
-        path: '/',
-        httpOnly: true,
-        secure,
-      sameSite: 'lax',
-      maxAge: TOKEN_TTL.REFRESH_TOKEN,
-    });
-  }
-}
-
-/**
- * 清除 Access Token 和 Refresh Token Cookie（登出时调用）
- */
-export function clearJwtCookies(response: Response): void {
-  const secure = isCookieSecure() ? '; Secure' : '';
-  const expiredCookieBase = `Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure}`;
-  response.headers.append('Set-Cookie', `${COOKIE_NAMES.JWT}=; ${expiredCookieBase}`);
-  response.headers.append(
-    'Set-Cookie',
-    `${COOKIE_NAMES.REFRESH}=; ${expiredCookieBase}`,
-  );
-}
+import { COOKIE_NAMES } from '@auth-sso/contracts';
 
 /**
  * 从当前请求的 Cookie 中读取 Access Token 字符串。

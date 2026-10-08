@@ -2,7 +2,7 @@
 
 | 属性       | 值                                                                    |
 |------------|-----------------------------------------------------------------------|
-| **状态**   | accepted (2026-10-08) —— 决策已定；完整实施（12 个 Controller 的领域层抽取）分阶段进行 |
+| **状态**   | **superseded in part (2026-10-08)** —— 「编排型 ≤30 逻辑行」这一阈值已被一手来源调研推翻，改为复杂度约束；见下方「修订」节 |
 | **日期**   | 2026-10-08                                                            |
 | **决策者** | Auth-SSO 团队（improve-codebase-architecture 架构评审候选 ⑦）          |
 | **影响范围** | `AGENTS.md`、`docs/portal-architecture-guidelines.md`、`eslint.base.mjs`、22 个 Controller |
@@ -110,6 +110,66 @@ return { success: true, data: { id: ctx.userId }, message: '密码已更新，�
 **为什么判定在 domain 而非 `lib`**：`domain/auth/login.ts` 已有同构先例——
 纯判定抛 `DomainError`，由 `mapDomainError` 统一映射；异步 bcrypt 与 DB 留在外层。
 把 bcrypt 移入 domain 会违反"domain 层纯 TS"的既有约束。
+
+## 修订（同日，基于一手来源调研）
+
+上文的「编排型 ≤30 逻辑行 / 委托型 ≤20 行」双阈值被后续调研**推翻**。调研用 TypeScript
+编译器 API 只读解析了 22 个 Server Action，得到两个决定性事实：
+
+### 事实一：这条约束测错了对象
+
+| 指标 | 实测 |
+|---|---|
+| 整段 action 的**圈复杂度** | **最大 8**，仅 2 个 > 5，**0 个 > 10** |
+| 最大嵌套深度 | 3 |
+| 超 20 逻辑行的 14 个中 | **12 个圈复杂度 ≤ 5** |
+| `withScopedWrite/withScopedRow` 的声明式守卫 spec 占比 | **18% 逻辑行** |
+
+**长度来自声明式配置与多行参数，不是逻辑。** 这直接解释了本 ADR 上文那个困惑
+——"抽出两轮重复模式后 18→19"：每引入一个编排原语都在函数体里加行，**重复度降了
+而行数不降，因为度量与目标正交**。
+
+### 事实二：权威来源反对硬性行数上限
+
+| 来源 | 表述 |
+|---|---|
+| Google C++ Style Guide | "**no hard limit** is placed on functions length. If a function exceeds about 40 lines, think about whether it can be broken up" |
+| Ousterhout（APoSD） | "Setting **arbitrary numerical limits** such as 2-4 lines in a method … **exacerbates this problem**" |
+| Fowler《FunctionLength》 | "This is a **proxy** for the more important question…" / "**size isn't important**" |
+| Clean Code 作者本人 | "It is certainly possible to **over-decompose** code" / "I claimed **no final authority**" |
+| Hatton 1997（DOI 10.1109/52.582978） | 缺陷密度呈 **U 形**，**中等组件比小或大组件更可靠**——直接反证"越短越好" |
+| Linux 内核风格 | 长度上限与"复杂度与缩进层级"成反比；概念简单则可长 |
+| Next.js / NestJS / Rails 官方 | 对 handler 只定义**职责**（未信任入口、鉴权、校验入参），**从不设行数** |
+
+工具默认值跨度达 5 倍（ESLint 50 / CodeScene 70 / Checkstyle 150 / SonarJS 200），
+Airbnb 直接设为 `off`。**不存在"业界通行阈值"这回事。**
+
+### 修订后的决策
+
+1. **唯一硬性约束是职责**，不是长度：Controller 不得出现业务规则判定；必须经
+   `withAuth` + `validate()` + `withScopedWrite/withScopedRow`；多表写入同一事务。
+2. **复杂度由工具强制**：`complexity: 10`（对齐 PMD 默认）、
+   `sonarjs/cognitive-complexity: 15`、`max-depth: 4`、`max-params: 4`。
+3. **物理行仅作软兜底**：`max-lines-per-function: 150`（逻辑行，跳空行与注释）。
+   依据：Checkstyle 默认 150、SonarJS 200、本项目实测最大 40 逻辑行 → 只拦真正
+   失控的过程式长函数。
+4. **豁免**：无分支的纯顺序编排函数（cyclo ≤ 3 且嵌套 ≤ 1）不受行数限制。
+
+**迁移成本 0 行代码**（实测新规则下 22 个 action 全部通过），只需改配置与文档。
+
+### 放弃的东西（如实记录）
+
+- 放弃"零工具依赖、一眼可读"的自律信号，改用需学习成本、可被技巧规避的复杂度指标。
+- 放弃对长篇过程式逻辑的强兜底（150 行比 20 行宽松 7.5 倍）。
+- 放弃可移植性（阈值绑定工具，换工具需重新标定）。
+- **接受一个学术验证不完整的度量**：认知复杂度由 SonarSource 自研，其白皮书**全文
+  没有推荐阈值**（15 全部来自工具默认），独立实证（Costagliola et al. 2022）未能取得。
+  应标注为"业界共识较强、学术验证不完全"。
+
+### 保留有效的部分
+
+上文「根因是缺失的领域操作层」这一诊断**未被推翻**，且被试点验证（见下节）。
+抽取领域操作仍然有价值——理由是**可命名性、可单测性与职责**，而**不是**为了压行数。
 
 ## 后果
 

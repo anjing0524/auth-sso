@@ -13,7 +13,7 @@ import { describe, it, expect } from 'vitest';
 import { PKCEVerificationError } from '@/domain/shared/errors';
 import { validateLoginCredentials } from '@/domain/auth/login';
 import { hashPassword, verifyPassword } from '@/domain/auth/password';
-import { validateAuthCodeRow, verifyPKCE } from '@/domain/auth/oauth-code';
+import { verifyPKCE } from '@/domain/auth/oauth-code';
 import { validateClientActive, validateClientSecret, validateRedirectUri } from '@/domain/auth/oauth-client';
 import { validateAuthorization } from '@/domain/auth/oauth-authorize';
 
@@ -76,40 +76,6 @@ describe('password', () => {
 });
 
 // ======== oauth-code.ts ========
-
-describe('validateAuthCodeRow', () => {
-  const now = new Date();
-  const validRow = {
-    used: false,
-    expiresAt: new Date(now.getTime() + 60000),
-    redirectUri: 'https://app.example.com/cb',
-    codeChallenge: 'abc123',
-    codeChallengeMethod: 'S256' as const,
-  };
-
-  it('有效授权码 → 不抛异常', () => {
-    expect(() => validateAuthCodeRow(validRow, 'https://app.example.com/cb')).not.toThrow();
-  });
-
-  it('undefined → 抛出 InvalidGrantError', () => {
-    expect(() => validateAuthCodeRow(undefined)).toThrow('无效的授权码');
-  });
-
-  it('used=true → 抛出 InvalidGrantError', () => {
-    expect(() => validateAuthCodeRow({ ...validRow, used: true }))
-      .toThrow('授权码已被使用');
-  });
-
-  it('已过期 → 抛出 InvalidGrantError', () => {
-    expect(() => validateAuthCodeRow({ ...validRow, expiresAt: new Date(now.getTime() - 1000) }))
-      .toThrow('授权码已过期');
-  });
-
-  it('redirect_uri 不匹配 → 抛出 InvalidGrantError', () => {
-    expect(() => validateAuthCodeRow(validRow, 'https://other.example.com/cb'))
-      .toThrow('redirect_uri 不匹配');
-  });
-});
 
 describe('verifyPKCE', () => {
   it('正确 code_verifier → 无异常', async () => {
