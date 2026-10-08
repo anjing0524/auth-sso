@@ -58,7 +58,7 @@ export const createRoleAction = withAuth(
     const v = validate(CreateRoleInputSchema, input);
     if (!v.ok) return v.response;
 
-    // 范围守卫 + 部门存在性/ACTIVE 校验 + 插入同一事务（ADR-019）
+    // 范围守卫 + 部门存在性/ACTIVE 校验 + 插入同一事务（ADR-014）
     const role = await withScopedWrite(
       {
         operatorId: ctx.userId,

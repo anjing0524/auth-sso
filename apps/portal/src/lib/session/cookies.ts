@@ -6,7 +6,8 @@ import 'server-only';
  * **只读**：Cookie 的写入与清除分散在各自的 handler 中（`login` 写 LoginSession、
  * `refresh` 写 AT/RT、`logout` 清除），因为这些 write 各自有不同的 Path 与属性
  * 要求。原先这里还有 `setJwtCookies` / `clearJwtCookies` 两个写入口，但**生产
- * 代码从未调用**（只有测试在用），且其属性集与生产实际写入不一致（详见 ADR-021）。
+ * 代码从未调用**（只有测试在用），且其属性集与生产实际写入不一致
+ * （见 docs/roadmap.md 变更记录，架构评审候选 ⑨）。
  *
  * @module lib/session/cookies
  */

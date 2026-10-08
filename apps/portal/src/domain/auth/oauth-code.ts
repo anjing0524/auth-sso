@@ -1,7 +1,7 @@
 /**
  * PKCE S256 验证（纯函数，零框架依赖）
  *
- * 授权码本身的**有效性**判定不在此处（详见 ADR-021）：`used` / `expiresAt` /
+ * 授权码本身的**有效性**判定不在此处（详见 ADR-017）：`used` / `expiresAt` /
  * `redirect_uri` 由 token 端点的**原子领取** SQL 一并施加（条件 UPDATE +
  * RETURNING），使"一次性使用"在并发下成立。此处只负责密码学验证。
  *

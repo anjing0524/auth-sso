@@ -8,7 +8,7 @@
  * 鉴权与领域错误映射统一由 withAuth 高阶函数施加（R21 / R20），
  * 函数体控制在 ≤ 20 行，不含任何内联业务规则判定（R9 / 红线 #2）。
  * 涉及"读取 + 更新"的多步骤写操作均经 lib/authz 的 withScopedRow / withScopedWrite
- * 在同一事务内完成（R22 / ADR-019）。
+ * 在同一事务内完成（R22 / ADR-014）。
  *
  * @impl B-USR-C — 新建用户
  * @impl B-USR-U — 编辑用户资料
@@ -80,7 +80,7 @@ export const createUserAction = withAuth(
     // 密码哈希在事务外完成，避免长时间占用 DB 连接（bcrypt 通常 50-200ms）
     const passwordHash = await hashPassword(v.data.password);
 
-    // 范围守卫 + 查重 + 插入同一事务（消除 TOCTOU，ADR-019）。
+    // 范围守卫 + 查重 + 插入同一事务（消除 TOCTOU，ADR-014）。
     // deptId 已在 Zod .preprocess() 中归一化 ('ALL' → null)，Controller 层不重复判定；
     // deptId 为 null 时 targets 为空数组，守卫不构成限制（与既有语义一致）。
     const result = await withScopedWrite(
@@ -119,7 +119,7 @@ export const toggleUserStatusAction = withAuth(
     const v = validate(UserIdentityInputSchema, { id: userIdStr });
     if (!v.ok) return v.response;
 
-    // 加载行 → 404 → 数据范围守卫，三步同一事务（消除 TOCTOU，ADR-019）
+    // 加载行 → 404 → 数据范围守卫，三步同一事务（消除 TOCTOU，ADR-014）
     const updated = await withScopedRow(
       {
         operatorId: ctx.userId,
@@ -211,7 +211,7 @@ export const updateUserAction = withAuth(
     if (!v.ok) return v.response;
 
     // 双目标守卫：目标用户**当前**部门 + 拟**迁入**部门都必须在操作者范围内。
-    // 快照取自授权码行同事务（ADR-019）；deptId 未变更时不追加迁移目标。
+    // 范围快照取自本事务（ADR-014）；deptId 未变更时不追加迁移目标。
     let deptIdChanged = false;
     await withScopedRow(
       {

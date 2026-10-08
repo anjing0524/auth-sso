@@ -8,9 +8,11 @@
 
 ## 一、核心约束 (Core Rules)
 
-### R1. Controller ≤ 20 行，零业务逻辑
+### R1. Controller 零业务逻辑（不设行数上限）
 
 Server Action 与 Route Handler 只做编排：Zod 校验 → 调领域函数 → DB 写入 → 响应。Controller 内**严禁出现** if/else 业务分支、状态判定、字段合并、或默认值赋值。
+
+**不设行数上限**——行数不是复杂度的好代理（实测 22 个 action 最大圈复杂度仅 8，长度来自声明式配置与多行参数）。复杂度由 lint 强制：`complexity ≤ 15`、`max-depth ≤ 4`。见 ADR-019。
 
 ```typescript
 // ❌ 错误：Controller 内嵌业务逻辑
@@ -278,7 +280,7 @@ Code Review 中发现以下任意模式，**立即停止合并，必须重构**�
 |---|---|---|
 | 1 | Controller 中出现 `if` 业务条件判定 | R1 |
 | 2 | Controller 中手写 `instanceof` 错误分支 | R2 |
-| 3 | Controller 超过 20 行有效代码 | R1 |
+| 3 | Controller 出现业务规则判定（状态机／权限判定／配额计算） | R1 |
 | 4 | `data.ts` 中遗漏数据范围过滤或手写 dept_id 判断 | R7 |
 | 5 | 循环内执行 `db.update()` / `db.insert()` | R3 |
 | 6 | domain 实体使用 `z.object()` 定义 | R5 |
@@ -319,7 +321,7 @@ import { revalidatePath, updateTag } from 'next/cache';
 
 export const createEntityAction = withAuth(
   { permissions: ['entity:create'] },                // 权限码
-  async (_ctx: AuthContext, raw: unknown) => {       // ← 不超 20 行
+  async (_ctx: AuthContext, raw: unknown) => {       // ← 只编排，无业务判定
     const parsed = InputSchema.safeParse(raw);
     if (!parsed.success) return { success: false, error: 'VALIDATION_ERROR', message: ... };
 

@@ -172,7 +172,7 @@ Airbnb 直接设为 `off`。**不存在"业界通行阈值"这回事。**
 
 | 指标 | 改动前 | 改动后 |
 |---|---|---|
-| lint 告警总数 | 104 | **73** |
+| lint 告警总数 | 104 | **81** |
 | lint 错误 | 0 | **0** |
 | 新增复杂度类告警 | — | **10**（其中 5 条落在测试夹具与脚本；5 条落在生产代码） |
 
@@ -262,7 +262,7 @@ Airbnb 直接设为 `off`。**不存在"业界通行阈值"这回事。**
 | 写后缓存失效收口 | 51 处手写 → 1 个原语 + 21 处调用（commit `968ae60`） |
 | 安全写编排收口 | `withScopedRow` / `withScopedWrite` + `preflight`；`requireDeptAccess` 调用点 12 → 0（commit `3deca95`） |
 | 约束本身的修正 | 行数上限移除，改复杂度门槛；文档与配置对齐（commit `6103c9b`） |
-| 领域操作层方向验证 | `changeOwnPasswordAction` 32 → 20 逻辑行，**不产生无名中间函数**（commit `6da98f3`） |
+| 领域操作层方向验证 | `changeOwnPasswordAction` 32 → 20 逻辑行，**不产生无名中间函数**（commit `6da98f3`）。该 action 现为 `lib/account/change-password.ts` 的 `changeOwnPassword`；`resetPasswordAction` 的同法抽取见 commit `629dc38` |
 
 ### 未做且**不应**作为"违规修复"继续做的部分
 

@@ -5,7 +5,7 @@
  * 与 `domain/auth/login.ts` 同构——bcrypt 比对/哈希、持久化与会话撤销
  * 由 `lib/account/change-password.ts` 编排。
  *
- * 存在的理由（ADR-019）：`changeOwnPassword` 原先作为步骤序列内联在
+ * 存在的理由（ADR-014 的写路径门面之上）：`changeOwnPassword` 原先作为步骤序列内联在
  * Server Action 里（物理 45 行），使 Controller 承担了领域判定。
  * 命名这个操作后，"改密"有了唯一可命名、可单测的规则所在。
  *
