@@ -35,10 +35,12 @@ export async function GET() {
     jwks_uri: `${baseURL}/api/auth/jwks`,
     // OIDC RP-Initiated Logout 1.0：客户端发起登出的端点
     end_session_endpoint: `${baseURL}/api/auth/logout`,
-    // 自定义字段：Cookie-based Token 静默续签端点（非标准 OIDC，供 Gateway 服务端续签使用）
-    refresh_endpoint: `${baseURL}/api/auth/refresh`,
-    // 自定义字段：Gateway 拦截 OAuth callback 的路径（非标准 OIDC，供 Gateway 动态发现）
-    oauth_callback_path: '/api/auth/callback',
+    // 自定义扩展字段（RFC 8414 §2）：非标准 OIDC 元数据必须用带命名空间的名字，
+    // 否则会与注册字段名冲突，且外部 RP 会误以为可获得标准的 refresh_token grant
+    // 支持——本端点只认 HttpOnly Cookie，第三方客户端照此调用必然失败。
+    // 消费方仅 Gateway（jwks.rs 探测，容忍 com_authsso_* 与旧名）。
+    com_authsso_refresh_endpoint: `${baseURL}/api/auth/refresh`,
+    com_authsso_callback_path: '/api/auth/callback',
     scopes_supported: SCOPES_SUPPORTED,
     response_types_supported: RESPONSE_TYPES_SUPPORTED,
     grant_types_supported: GRANT_TYPES_SUPPORTED,

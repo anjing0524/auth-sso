@@ -18,6 +18,24 @@ use crate::http::HTTP_CLIENT;
 /// 公钥宽限期（秒）：刷新结果与新集合合并时，不在新集合中的旧 key 在此窗口内保留。
 /// 防止上游瞬时返回残缺 JWKS（如轮换维护窗口）把仍在使用的旧 kid 顶掉，
 /// 一次上游抖动放大为全站验签失败。
+/// 自定义 Discovery 扩展字段名（RFC 8414 §2 命名空间前缀）。
+/// 每个数组含新名与旧名，`custom_field` 按顺序探测——仅为部署错序容忍。
+pub(crate) const CUSTOM_FIELD_REFRESH_ENDPOINT: &[&str] =
+    &["com_authsso_refresh_endpoint", "refresh_endpoint"];
+pub(crate) const CUSTOM_FIELD_CALLBACK_PATH: &[&str] =
+    &["com_authsso_callback_path", "oauth_callback_path"];
+
+/// 读取自定义扩展字段：优先带命名空间的新名，回退旧名。
+///
+/// 存在两个名字的唯一理由是**部署错序容忍**（RFC 8414 §2 要求扩展字段带
+/// 命名空间，而旧名没有）。新名落地并确认线上无旧值后，旧名分支应删除。
+fn custom_field<'a>(
+    metadata: &'a serde_json::Value,
+    names: &[&str],
+) -> Option<&'a serde_json::Value> {
+    names.iter().find_map(|n| metadata.get(*n))
+}
+
 pub(crate) const JWKS_KEY_GRACE_SECS: u64 = 24 * 3600;
 
 /// UnknownKid 触发按需刷新的最小间隔（秒）：单飞节流，
@@ -86,7 +104,7 @@ pub(crate) struct OidcMetadata {
     pub(crate) validation: Arc<Validation>,
     /// Token 刷新接口端点 URL (已解析为完整内网 URL)
     pub(crate) refresh_endpoint: Option<Arc<str>>,
-    /// Gateway 拦截 OAuth callback 的路径（来自 OIDC Discovery `oauth_callback_path` 字段）
+    /// Gateway 拦截 OAuth callback 的路径（来自 OIDC Discovery `com_authsso_callback_path` 字段）
     pub(crate) callback_path: Option<Arc<str>>,
 }
 
@@ -260,14 +278,14 @@ impl JwksCache {
     ///
     /// 这是 Gateway 自身的 OAuth callback 拦截路径，通过 OIDC Discovery 从 Portal 动态获取，
     /// 属于 Gateway 本地配置而非 OIDC 标准字段。Portal 在 `.well-known/openid-configuration`
-    /// 中以自定义字段 `oauth_callback_path` 声明此值。
+    /// 中以自定义字段 `com_authsso_callback_path` 声明此值。
     pub fn callback_path_or_default(&self) -> Arc<str> {
         self.inner
             .load()
             .callback_path
             .clone()
             .unwrap_or_else(|| Arc::from("/api/auth/callback"))
-        // ↑ 兜底值与 Portal Discovery `oauth_callback_path` 声明值
+        // ↑ 兜底值与 Portal Discovery `com_authsso_callback_path` 声明值
         // 及 Portal callback 路由路径保持一致；变更时需三方同步
     }
 
@@ -349,9 +367,10 @@ impl JwksCache {
         validation.set_audience(&[self.jwt_audience.as_ref()]);
         validation.validate_aud = true;
 
-        // 预解析 refresh_endpoint 路径（不写缓存，仅返回原始路径）
-        let refresh_endpoint = metadata_val
-            .get("refresh_endpoint")
+        // 预解析 refresh_endpoint 路径（不写缓存，仅返回原始路径）。
+        // RFC 8414 §2：自定义扩展字段带命名空间；容忍旧字段名以支持 Portal/Gateway
+        // 部署错序（两个方向都不得因此断掉续签）。
+        let refresh_endpoint = custom_field(&metadata_val, CUSTOM_FIELD_REFRESH_ENDPOINT)
             .and_then(|v| v.as_str())
             .and_then(|ep| {
                 Self::resolve_jwks_url(scheme, upstream, ep)
@@ -360,9 +379,8 @@ impl JwksCache {
             })
             .map(Arc::from);
 
-        // 解析 Gateway OAuth callback 拦截路径（来自 OIDC Discovery 自定义字段 oauth_callback_path）
-        let callback_path = metadata_val
-            .get("oauth_callback_path")
+        // 解析 Gateway OAuth callback 拦截路径（同上，出自自定义扩展字段）
+        let callback_path = custom_field(&metadata_val, CUSTOM_FIELD_CALLBACK_PATH)
             .and_then(|v| v.as_str())
             .filter(|p| p.starts_with('/'))
             .map(Arc::<str>::from);

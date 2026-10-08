@@ -243,3 +243,73 @@ fn test_key_boundary_at_exactly_grace_is_expired() {
         "now - cached_at == GRACE 不在宽限期内"
     );
 }
+
+// ── 自定义 Discovery 扩展字段（RFC 8414 §2 命名空间 + 部署错序容忍）──
+//
+// 旧名 `refresh_endpoint` / `oauth_callback_path` 无命名空间，会与注册字段名
+// 冲突，并让外部 RP 误以为存在标准 refresh_token grant 支持。改名后需容忍
+// 旧名，否则 Portal/Gateway 部署错序会断掉续签。
+
+#[test]
+fn custom_field_prefers_namespaced_name() {
+    let meta = serde_json::json!({
+        "com_authsso_refresh_endpoint": "/new",
+        "refresh_endpoint": "/legacy",
+    });
+
+    let v = custom_field(&meta, CUSTOM_FIELD_REFRESH_ENDPOINT).unwrap();
+    assert_eq!(v.as_str().unwrap(), "/new", "新名存在时必须优先");
+}
+
+#[test]
+fn custom_field_falls_back_to_legacy_name() {
+    let meta = serde_json::json!({ "refresh_endpoint": "/legacy" });
+
+    let v = custom_field(&meta, CUSTOM_FIELD_REFRESH_ENDPOINT).unwrap();
+    assert_eq!(
+        v.as_str().unwrap(),
+        "/legacy",
+        "仅旧名存在时应回退，不得断掉续签"
+    );
+}
+
+#[test]
+fn custom_field_returns_none_when_neither_present() {
+    let meta = serde_json::json!({ "issuer": "https://sso.example.com" });
+
+    assert!(custom_field(&meta, CUSTOM_FIELD_REFRESH_ENDPOINT).is_none());
+    assert!(custom_field(&meta, CUSTOM_FIELD_CALLBACK_PATH).is_none());
+}
+
+#[test]
+fn custom_field_callback_path_tolerance() {
+    let legacy = serde_json::json!({ "oauth_callback_path": "/api/auth/callback" });
+    let current = serde_json::json!({ "com_authsso_callback_path": "/api/auth/cb" });
+
+    assert_eq!(
+        custom_field(&legacy, CUSTOM_FIELD_CALLBACK_PATH)
+            .unwrap()
+            .as_str()
+            .unwrap(),
+        "/api/auth/callback"
+    );
+    assert_eq!(
+        custom_field(&current, CUSTOM_FIELD_CALLBACK_PATH)
+            .unwrap()
+            .as_str()
+            .unwrap(),
+        "/api/auth/cb"
+    );
+}
+
+/// 常量顺序即优先级：新（带命名空间）在前，旧在后。顺序被改会静默改变优先级。
+#[test]
+fn custom_field_constants_are_namespaced_first() {
+    assert_eq!(
+        CUSTOM_FIELD_REFRESH_ENDPOINT[0],
+        "com_authsso_refresh_endpoint"
+    );
+    assert_eq!(CUSTOM_FIELD_REFRESH_ENDPOINT[1], "refresh_endpoint");
+    assert_eq!(CUSTOM_FIELD_CALLBACK_PATH[0], "com_authsso_callback_path");
+    assert_eq!(CUSTOM_FIELD_CALLBACK_PATH[1], "oauth_callback_path");
+}

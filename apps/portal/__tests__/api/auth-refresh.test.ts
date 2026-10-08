@@ -99,12 +99,12 @@ function makeRequest(headers: Record<string, string> = {}): NextRequest {
   return new NextRequest('http://localhost:4100/api/auth/refresh', { method: 'POST', headers });
 }
 
-async function seedRefreshToken(token = RT) {
+async function seedRefreshToken(token = RT, clientId = CLIENT_ID) {
   await td.db.insert(schema.refreshTokens).values({
     id: crypto.randomUUID(),
     tokenHash: hashToken(token),
     userId: USER_ID,
-    clientId: CLIENT_ID,
+    clientId,
     scopes: 'openid offline_access',
     expiresAt: new Date(Date.now() + 7 * 24 * 3600 * 1000),
     createdAt: new Date(),
@@ -300,5 +300,38 @@ describe('POST /api/auth/refresh — Gateway 信任边界（核心安全不变�
     }))).json();
 
     expect(body.accessToken).toBeUndefined();
+  });
+});
+
+describe('POST /api/auth/refresh — sender 绑定（RFC 9700）', () => {
+  it('**属于其他 client 的 RT 不得被轮换**（且视同重放、撤销该家族）', async () => {
+    // 该 RT 绑定到 'other-client'，却出现在 Portal 的 Cookie 里。
+    // 需先播种该 client：refresh_tokens.client_id 有外键约束。
+    await seedTestData(td.db, { clients: seedPortalClient({ clientId: 'other-client' }) });
+    await seedRefreshToken(RT, 'other-client');
+    mocks.setCookies({
+      [COOKIE_NAMES.JWT]: makeAtWithExp(60),
+      [COOKIE_NAMES.REFRESH]: RT,
+    });
+
+    const res = await refreshPost(makeRequest());
+
+    expect(res.status).toBe(401);
+    // 归属不符 → 视同重放：该家族的 RT 应被撤销
+    const [row] = await td.db.select({ revoked: schema.refreshTokens.revoked })
+      .from(schema.refreshTokens).where(eq(schema.refreshTokens.tokenHash, hashToken(RT)));
+    expect(row?.revoked).not.toBeNull();
+  });
+
+  it('属于 Portal 自身的 RT 正常轮换（对照，证明上一条不是拒绝一切）', async () => {
+    await seedRefreshToken(RT, CLIENT_ID);
+    mocks.setCookies({
+      [COOKIE_NAMES.JWT]: makeAtWithExp(60),
+      [COOKIE_NAMES.REFRESH]: RT,
+    });
+
+    const res = await refreshPost(makeRequest());
+
+    expect(res.status).toBe(200);
   });
 });

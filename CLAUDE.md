@@ -160,4 +160,4 @@ Five canonical triage labels kept at their defaults. See `docs/agents/triage-lab
 
 ### Domain docs
 
-Single-context: root `CONTEXT.md` + the existing `docs/adr/` (ADR-001~013). See `docs/agents/domain.md`.
+Single-context: root `CONTEXT.md` + the existing `docs/adr/` (ADR-001~021). See `docs/agents/domain.md`.

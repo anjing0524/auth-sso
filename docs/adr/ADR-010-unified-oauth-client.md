@@ -9,7 +9,7 @@
 
 ## 背景
 
-`[[upstreams]]` 允许每个 upstream 配置独立的 `oauth.client_id/client_secret`，而 callback 拦截路径是全局单一的（来自 OIDC Discovery `oauth_callback_path`）。`/authorize` 阶段用**被访问路由**的凭据发起 PKCE（`gateway.rs` `oauth_authorize_redirect`），callback 阶段却用 **callback 路由解析出的凭据**换 token（`handle_oauth_callback`），四个临时 Cookie 均不携带 client_id —— 任何非 callback 路由的 upstream 配置了不同凭据时，其授权码在 callback 处必然 `invalid_grant`。这是结构性缺陷，不是配置错误。
+`[[upstreams]]` 允许每个 upstream 配置独立的 `oauth.client_id/client_secret`，而 callback 拦截路径是全局单一的（来自 OIDC Discovery `com_authsso_callback_path`）。`/authorize` 阶段用**被访问路由**的凭据发起 PKCE（`gateway.rs` `oauth_authorize_redirect`），callback 阶段却用 **callback 路由解析出的凭据**换 token（`handle_oauth_callback`），四个临时 Cookie 均不携带 client_id —— 任何非 callback 路由的 upstream 配置了不同凭据时，其授权码在 callback 处必然 `invalid_grant`。这是结构性缺陷，不是配置错误。
 
 更深层地：**per-upstream client 身份在本架构中没有消费者**。
 

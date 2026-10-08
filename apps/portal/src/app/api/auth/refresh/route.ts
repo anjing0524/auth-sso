@@ -11,7 +11,7 @@ import { type NextRequest, NextResponse } from 'next/server';
 import { getRefreshTokenFromCookie, getJwtFromCookie, decodeJwtPayload } from '@/lib/session';
 import { rotateRefreshToken } from '@/lib/auth/token';
 import { mapServerError } from '@/lib/server-error';
-import { AUTH_ERRORS, COOKIE_NAMES, TOKEN_TTL } from '@auth-sso/contracts';
+import { AUTH_ERRORS, COOKIE_NAMES, PORTAL_CLIENT_ID, TOKEN_TTL } from '@auth-sso/contracts';
 import { writeLoginLog, extractClientIP, extractUserAgent } from '@/lib/audit';
 import { isCookieSecure, getGatewaySharedSecret } from '@/lib/env';
 import { verifySignature, SIGNATURE_TIMESTAMP_WINDOW_SEC } from '@/lib/auth/gateway-hmac';
@@ -68,7 +68,10 @@ export async function POST(request: NextRequest) {
     const ip = extractClientIP(request.headers);
     const ua = extractUserAgent(request.headers);
 
-    const result = await rotateRefreshToken(refreshToken);
+    // RFC 9700 sender 绑定强制：本端点的 RT 恒绑定 Portal 自身（登录时以
+    // PORTAL_CLIENT_ID 签发，见 oauth-grant.ts），故显式断言归属。此前传
+    // undefined 等于跳过该强制——任何 client 的 RT 落到本 Cookie 都会被轮换。
+    const result = await rotateRefreshToken(refreshToken, PORTAL_CLIENT_ID);
     if (!result) {
       writeLoginLog({ userId: atPayload?.sub, username, eventType: 'TOKEN_REFRESH_FAILED', ip, userAgent: ua, failReason: 'Refresh Token 无效或已过期' });
       const response = NextResponse.json(

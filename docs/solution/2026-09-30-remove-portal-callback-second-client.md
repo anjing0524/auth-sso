@@ -17,7 +17,7 @@
 
 ## 二、死代码判定（事实链，非偏好）
 
-1. **活跃闭环不经 Portal handler**：Gateway 在边缘按 `oauth_callback_path` 拦截 `/api/auth/callback`（`gateway.rs:460-490`），经 Gateway 的 callback 请求永远不到达 Portal；docker-release E2E 断言 portal JWT 由 Gateway 写入。
+1. **活跃闭环不经 Portal handler**：Gateway 在边缘按 `com_authsso_callback_path` 拦截 `/api/auth/callback`（`gateway.rs:460-490`），经 Gateway 的 callback 请求永远不到达 Portal；docker-release E2E 断言 portal JWT 由 Gateway 写入。
 2. **直连场景已断链**：PKCE 发起端（写 `pkce_verifier/oauth_state/oauth_nonce/return_to` 4 个 Cookie）在 a69c462 重构中已从 proxy.ts 移除；全仓 grep 证实无任何代码写这些 Cookie → 直连 callback 必然 `invalid_state` 失败。
 3. **ADR-010 已定案**：config.rs 注释明言 Gateway 是唯一 OAuth Client。
 

@@ -163,7 +163,7 @@ GET /api/auth/callback?code=<authorization_code>&state=<state>
 
 **认证：** 无需（OAuth 2.1 Authorization Code + PKCE 流程的第二步）
 
-**处理方：** **Gateway（Rust/Pingora）在边缘按 path 拦截处理**（path 取自 discovery 自定义字段 `oauth_callback_path`）。Portal 侧不存在该 route handler——ADR-010 确立 Gateway 是唯一 OAuth Client，Portal 侧历史实现已于 2026-09-30 移除。Portal client 的 redirect_uri 白名单仍需注册该路径（authorize 端点校验的是 Gateway 发来的 redirect_uri）。
+**处理方：** **Gateway（Rust/Pingora）在边缘按 path 拦截处理**（path 取自 discovery 自定义字段 `com_authsso_callback_path`）。Portal 侧不存在该 route handler——ADR-010 确立 Gateway 是唯一 OAuth Client，Portal 侧历史实现已于 2026-09-30 移除。Portal client 的 redirect_uri 白名单仍需注册该路径（authorize 端点校验的是 Gateway 发来的 redirect_uri）。
 
 **行为（Gateway 内，`oauth_flow.rs`）：** 校验 state Cookie ↔ URL 一致性（CSRF）→ 读取 `pkce_verifier` Cookie → 内网 POST `/api/auth/oauth2/token`（code_verifier 独立 body 字段）→ 校验 `id_token.nonce` ↔ Cookie（fail-close 双向闭合，OIDC Core §3.1.2.2）→ Set-Cookie `portal_jwt_token` + `portal_refresh_token` → 302 `return_to`。
 
