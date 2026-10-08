@@ -62,7 +62,7 @@ flowchart TD
     *   **适用场景**：
         *   **Server Actions**：用于我们自己内部页面的表单提交、按钮点击、删除等操作，直接处理入参 Zod 解析，调用领域纯函数，直调 Drizzle 落库，并通过 `updateTag()` / `revalidatePath()` 刷新缓存，返回 JS plain object 即可。
         *   **REST Route Handlers**：只有在发生**”外部系统集成（Webhook/OIDC 回调）”**、**”跨域/子系统用户同步等开放 API 服务”**以及**”运维脚本与 cron 程序化调用”**这 3 种情况时，才允许为相应的写操作编写 API 路由。
-    *   **统一规范**：所有控制层函数体**不超过 20 行，不包含一行业务逻辑判断**。
+    *   **统一规范**：控制层**不得包含任何业务逻辑判断**（唯一硬性约束），只做「编排 + 映射」；**不设行数上限**，复杂度由 lint 强制（`complexity ≤ 15`、`max-depth ≤ 4`，见 ADR-019）。
 3.  **领域层 (Domain Layer)**：纯原生 TS 代码，零依赖 Next.js 模块。将所有核心业务规则（状态机转换、权限判定、数据计算与变换）抽象为**纯函数**（Plain Object 输入输出）。错误用**领域级错误类型**表达，由统一的**错误映射横切层**（`mapDomainError`）转换为 HTTP 响应。
 4.  **数据持久化层 (Database Layer)**：不设置 Repository 接口与实现分离，不设 Mapper 转换层与工厂 DI。控制器层在通过 Zod 校验与领域函数处理后，直接调用 Drizzle 语句对数据库进行操作，直接引用由 Drizzle schema 推导出的物理类型，消除不必要的间接抽象层。涉及多表写入时必须在 Controller 层显式使用 `db.transaction()`。
 5.  **基础设施层 (Infrastructure Layer)**：存放数据库连接、Redis 客户端、密码哈希等**有外部副作用的适配器**。`infrastructure/db/` 和 `infrastructure/redis/` 提供全局单例连接。区别于 `lib/`（纯业务工具与鉴权逻辑）。
@@ -543,7 +543,7 @@ export function applyUserUpdate(user: User, patch: Partial<Pick<User, 'name' | '
 
 ### 3.4 表现层：薄 Controller 规范 (actions.ts / route.ts)
 
-表现层直接执行 **Zod 校验门禁 -> 调用领域纯函数判断 -> Drizzle 数据库直调**。函数体 **≤ 20 行**。统一使用 `mapDomainError` 转换领域错误。
+表现层直接执行 **Zod 校验门禁 -> 调用领域纯函数判断 -> Drizzle 数据库直调**。函数体内**不得出现业务逻辑判断**（唯一硬性约束）；**不设行数上限**，复杂度由 lint 强制（见 ADR-019）。统一使用 `mapDomainError` 转换领域错误。
 
 ```typescript
 // app/users/actions.ts (Server Actions Controller)
@@ -752,8 +752,8 @@ export default [
 | **首屏拉取** | `page.tsx` | 展示子组件, `data.ts` | 读模型入口，严禁写操作 | — |
 | **数据直调** | `data.ts` | `drizzle-orm`, `next/headers`, `next/cache` (`cacheLife`/`cacheTag`) | Drizzle 数据直接查询，使用 `"use cache"` 持久化缓存，绕过领域层直取只读数据 | — |
 | **Client Component 表单** | `components/*/Form.tsx` | `react-dom`, Server Actions | 必须使用 `useFormStatus` 或 `useActionState` 防止重复提交 | — |
-| **Server Action** | `actions.ts` | `next/cache`, `domain/`, `lib/auth` (`withAuth`), `lib/authz`, `infrastructure/db` | **委托型 ≤20 行 / 编排型 ≤30 逻辑行**（不含空行与注释；见 ADR-019）。Zod `.safeParse()` 校验入参，`xxxToInsertRow()` 统一 DB 映射，Drizzle 直调 + 事务 | `max-lines-per-function`（max: 30） |
-| **API 路由** | `route.ts` | `next/server`, `domain/`, `lib/auth` (`withPermission`), `lib/authz`, `infrastructure/db` | REST 写网关，约束同上（委托型 ≤20 / 编排型 ≤30 逻辑行）。使用 `withPermission()` 包装 | `max-lines-per-function`（max: 30） |
+| **Server Action** | `actions.ts` | `next/cache`, `domain/`, `lib/auth` (`withAuth`), `lib/authz`, `infrastructure/db` | **不得含业务逻辑判断**，只做「编排 + 映射」（见 ADR-019）。Zod `.safeParse()` 校验入参，`xxxToInsertRow()` 统一 DB 映射，Drizzle 直调 + 事务 | `complexity`(15) / `max-depth`(4) |
+| **API 路由** | `route.ts` | `next/server`, `domain/`, `lib/auth` (`withPermission`), `lib/authz`, `infrastructure/db` | REST 写网关，约束同上（不得含业务逻辑判断）。使用 `withPermission()` 包装 | `complexity`(15) / `max-depth`(4) |
 | **领域操作（编排）** | `lib/<area>/<operation>.ts` | `domain/`, `infrastructure/db`, 其他 `lib/*` | 一个具名业务操作的步骤编排（bcrypt/DB/会话撤销/外部副作用）。**Controller 变薄的正确途径是给操作起名字**，而不是削行数（ADR-019） | — |
 | **领域层核心** | `domain/*/*.ts` | **仅限 `@auth-sso/contracts` + Zod + 纯 TypeScript** | 纯函数计算 + `xxxToInsertRow`/`xxxToUpdateRow` DB 行转换。枚举值必须从 contracts 导入 | `boundaries/element-types` |
 | **领域实体接口** | `domain/*/types.ts` | 纯 TS `interface`，`zod` | 替代旧 `UserPropsSchema`。Interface 不绑 Zod，仅描述实体结构。与 Drizzle `$inferSelect` 的兼容性由编译期守卫保证 | — |

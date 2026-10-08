@@ -155,7 +155,40 @@ Airbnb 直接设为 `off`。**不存在"业界通行阈值"这回事。**
    失控的过程式长函数。
 4. **豁免**：无分支的纯顺序编排函数（cyclo ≤ 3 且嵌套 ≤ 1）不受行数限制。
 
-**迁移成本 0 行代码**（实测新规则下 22 个 action 全部通过），只需改配置与文档。
+**迁移成本 0 行代码**（实测 22 个 action 全部通过），只需改配置与文档。
+
+### 落地实测（2026-10-08）
+
+配置已改：`eslint.base.mjs` 加 `complexity: ["warn", 15]`、`max-depth: ["warn", 4]`，
+`max-lines-per-function` 由 `80` 放宽为 `150`；上文的目录作用域 30 行规则已撤回。
+
+| 指标 | 改动前 | 改动后 |
+|---|---|---|
+| lint 告警总数 | 104 | **73** |
+| lint 错误 | 0 | **0** |
+| 新增复杂度类告警 | — | **10**（其中 5 条落在测试夹具与脚本；5 条落在生产代码） |
+
+**刻意不引入 `max-params`**：实测其违规全部是"恰好 5 参数"的既有工具函数
+（`withPagination`、`verifySignature`、`paginatedSelect` 等），改造属纯负担、收益不明。
+
+**刻意不引入认知复杂度**：需新增 `eslint-plugin-sonarjs`，而其 `recommended` 预设会把
+几乎所有规则设为 `error`（存量爆噪音），必须逐个手动开启；且该度量的独立学术验证
+不完整。记为**待评估项**。
+
+被新门槛标出的 5 处生产热点（**保留为待修，不静默豁免**）：
+
+| 位置 | 问题 |
+|---|---|
+| `api/auth/logout/route.ts:36` `performRevocation` | complexity 23 |
+| `api/permissions/register/route.ts:56` | complexity 29 |
+| `app/(dashboard)/layout.tsx:20` `DashboardContent` | complexity 16 |
+| `api/auth/logout/route.ts:51` | 嵌套 5 层 |
+| `lib/auth/token/signing-keys.ts:141` | 嵌套 5 层 |
+
+**一处需要说明的判断**：`performRevocation` 的 23 来自 **5 段各自独立的 try/catch**
+（每步失败不影响其余，是刻意的优雅降级设计）。拆开它会破坏该设计——这是"复杂度指标
+把刻意为之的结构算作复杂"的实例，也是本 ADR 承认认知复杂度"学术验证不完全"的具体注脚。
+故**保持现状并在此登记**，而非为降低指标而改动正确代码。
 
 ### 放弃的东西（如实记录）
 

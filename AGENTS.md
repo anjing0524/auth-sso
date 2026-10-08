@@ -128,7 +128,7 @@ packages/config/    共享 env 配置 (Zod + URL 推导)
 - **分层**: `src/app/(dashboard)/` 等页面目录（page.tsx + data.ts + actions.ts） → `src/domain/`（纯函数） → Drizzle 直调。无 Repository/Mapper 层
 - **单控制器原则**: 内部页面写操作只用 Server Actions（actions.ts），不用 REST API 路由。外部系统/跨域/OIDC 回调才写 route.ts
 - **读模型**: `data.ts` 中用 `"use cache"` + `cacheLife()` + `cacheTag()`（Next.js 16 Cache Components）
-- **Controller 函数 ≤20 行**，不包含业务逻辑判断；`@/` 路径别名 = `src/`
+- **Controller 职责约束**（唯一硬性）：不得出现业务规则判定（`instanceof` 错误分支 / 权限判定 / 状态机 / 配额计算），只允许「编排 + 映射」两类语句；必须经 `withAuth` + `validate()` + `withScopedWrite/withScopedRow`，多表写入同一事务。**不设行数上限**——行数不是复杂度的好代理（见 ADR-019）。复杂度由 lint 强制：`complexity ≤ 15`、`max-depth ≤ 4`；`@/` 路径别名 = `src/`
 - **domain 层纯 TS**: 禁止 import `next/*` 或 Drizzle；多表写入必须 `db.transaction()`
 - **枚举值**: 从 `@auth-sso/contracts` 常值数组派生 `z.enum(ARR)` / `pgEnum(...)`，禁止手写字面量
 - **错误处理**: `DomainError` 类体系 + `mapDomainError()` 统一映射，Controller 不手写 `instanceof` 分支
