@@ -110,6 +110,21 @@ beforeEach(async () => {
  * `@/lib/auth`。因此操作者必须在库中真实拥有一个根部门角色，否则
  * 其可见范围为空、读模型 fail-closed 返回空集。
  */
+/**
+ * 为"自行内联播种部门"的用例补上操作者角色。
+ *
+ * 写路径的数据范围守卫现由真实 `resolveScope`（lib/authz）解析，走原生 SQL 读
+ * `user_roles → roles.dept_id`，不再经过被 mock 的 `@/lib/auth`。操作者若在库中
+ * 没有真实角色，可见范围为空、守卫会正确拒绝。
+ */
+async function seedOperatorScope() {
+  await seedTestData(td.db, {
+    users: seedAdminUser(),
+    roles: seedSuperAdminRole({ deptId: ROOT_DEPT_ID }),
+    userRoles: seedUserRoleBinding(ADMIN_USER_ID, '00000000-0000-4000-8000-000000000301'),
+  });
+}
+
 async function seedTreeWithAdminScope(
   departments: ReturnType<typeof seedThreeLevelTree>,
   roleDeptId: string = ROOT_DEPT_ID,
@@ -179,7 +194,7 @@ describe('Department API', () => {
   // ── GET /api/departments ─────────────────────────────────
   describe('GET /api/departments', () => {
     it('返回多级嵌套树形结构', async () => {
-      await seedTreeWithAdminScope(seedThreeLevelTree());
+      await seedTreeWithAdminScope(seedThreeLevelTree(), ROOT_DEPT_ID);
 
       const req = createTestRequest('/api/departments');
       const res = await ListDepartments(req);
@@ -284,6 +299,7 @@ describe('Department API', () => {
           },
         ],
       });
+      await seedOperatorScope();
 
       const r: any = await createDepartmentAction({
         name: '财务部',
@@ -328,6 +344,7 @@ describe('Department API', () => {
           },
         ],
       });
+      await seedOperatorScope();
 
       const r: any = await createDepartmentAction({
         name: '后端组',
@@ -388,6 +405,7 @@ describe('Department API', () => {
           },
         ],
       });
+      await seedOperatorScope();
 
       await expect(
         updateDepartmentAction(TECH_DEPT_ID, { parentId: TECH_DEPT_ID } as any),
@@ -396,6 +414,7 @@ describe('Department API', () => {
 
     it('更新 parentId 为自身子部门 → BusinessRuleViolationError', async () => {
       await seedTestData(td.db, { departments: seedThreeLevelTree() });
+      await seedOperatorScope();
 
       await expect(
         updateDepartmentAction(TECH_DEPT_ID, { parentId: FE_DEPT_ID } as any),
@@ -451,6 +470,7 @@ describe('Department API', () => {
           },
         ],
       });
+      await seedOperatorScope();
 
       await expect(
         updateDepartmentAction(TECH_DEPT_ID, {

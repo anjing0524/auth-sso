@@ -9,7 +9,7 @@
 import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest';
 import { EntityNotFoundError } from '@/domain/shared/errors';
 import { createTestDbHandle, seedTestData } from '../helpers/test-db';
-import { seedRootDept, seedTestUser } from '../helpers/seed-fixtures';
+import { seedAdminUser, seedRootDept, seedSuperAdminRole, seedTestUser, seedUserRoleBinding } from '../helpers/seed-fixtures';
 import * as schema from '@/db/schema';
 
 // ── 测试数据库 ──────────────────────────────────────
@@ -47,7 +47,15 @@ beforeAll(async () => { await td.connect(); });
 afterAll(async () => { await td.close(); });
 beforeEach(async () => {
   await td.cleanup();
-  await seedTestData(td.db, { departments: seedRootDept() });
+  // 数据范围守卫现由真实 resolveScope（lib/authz）解析，走原生 SQL 读
+  // user_roles → roles.dept_id，不再经过被 mock 的 @/lib/auth。
+  // 因此操作者必须在库中真实拥有一个根部门角色，否则可见范围为空、守卫正确拒绝。
+  await seedTestData(td.db, {
+    departments: seedRootDept(),
+    users: seedAdminUser(),
+    roles: seedSuperAdminRole({ deptId: '00000000-0000-4000-8000-000000000001' }),
+    userRoles: seedUserRoleBinding(ADMIN_ID, '00000000-0000-4000-8000-000000000301'),
+  });
 });
 
 describe('User Server Actions', () => {

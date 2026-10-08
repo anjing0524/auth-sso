@@ -32,8 +32,10 @@ export {
 
 export {
   withScopedWrite,
+  withScopedRow,
   type ScopedWriteOptions,
   type ScopeTargets,
+  type LoadedScopeGuardOptions,
 } from './write';
 
 export { scopeFilter, isScopeDenied } from './query';

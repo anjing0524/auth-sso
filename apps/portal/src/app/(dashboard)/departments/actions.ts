@@ -10,7 +10,8 @@
  * @impl F-DEP-U — 编辑部门信息
  * @impl F-DEP-D — 删除部门
  */
-import { db, schema } from '@/infrastructure/db';
+import { schema } from '@/infrastructure/db';
+import type { DbTxHandle } from '@/infrastructure/db';
 import { eq, sql, count } from 'drizzle-orm';
 import { withAuth, type AuthContext } from '@/lib/auth';
 import {
@@ -31,8 +32,8 @@ import {
 import { EntityNotFoundError } from '@/domain/shared/errors';
 import { generateUUID } from '@/lib/crypto';
 import { validate } from '@/lib/validation';
-import { requireDeptAccess } from '@/lib/auth';
 import { invalidateResource } from '@/lib/cache-invalidation';
+import { withScopedRow, withScopedWrite } from '@/lib/authz';
 import { DEPARTMENT_PERMISSIONS, type ApiResponse } from '@auth-sso/contracts';
 
 /** 创建部门 */
@@ -42,12 +43,15 @@ export const createDepartmentAction = withAuth(
     const v = validate(CreateDepartmentInputSchema, input);
     if (!v.ok) return v.response;
 
-    const dept = await db.transaction(async (tx) => {
-      // 数据范围校验：父部门必须在操作者可访问范围内（顶级部门 parentId 为 null 时放行；快照在事务内）
-      if (v.data.parentId) {
-        await requireDeptAccess(tx, ctx.userId, [v.data.parentId, '无权在指定父部门下创建子部门']);
-      }
-
+    const dept = await withScopedWrite(
+      {
+        operatorId: ctx.userId,
+        // 顶级部门（parentId 为 null）无父级可校验 → targets 为空，守卫不构成限制
+        targets: v.data.parentId
+          ? [{ deptId: v.data.parentId, message: '无权在指定父部门下创建子部门' }]
+          : [],
+      },
+      async (tx) => {
       // 查询父级 ancestors 在事务内完成，消除读-写竞争窗口
       const parentAncestors = v.data.parentId
         ? await (async () => {
@@ -73,9 +77,7 @@ export const createDepartmentAction = withAuth(
  * 内部辅助：执行部门更新 + 级联 ancestors 路径
  * 提取出 Controller 以减少主函数行数（R1 合规）
  */
-type DrizzleTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
-
-async function performDepartmentUpdate(tx: DrizzleTransaction, deptId: string, patch: Record<string, unknown>): Promise<void> {
+async function performDepartmentUpdate(tx: DbTxHandle, deptId: string, patch: Record<string, unknown>): Promise<void> {
   const row = await tx.query.departments.findFirst({ where: eq(schema.departments.id, deptId) });
   if (!row) throw new EntityNotFoundError('Department', deptId);
 
@@ -102,14 +104,20 @@ export const updateDepartmentAction = withAuth(
   async (ctx: AuthContext, deptId: string, input: Record<string, unknown>): Promise<ApiResponse<{ id: string }>> => {
     const v = validate(UpdateDepartmentInputSchema, input);
     if (!v.ok) return v.response;
-    await db.transaction(async (tx) => {
-      const row = await tx.query.departments.findFirst({ where: eq(schema.departments.id, deptId) });
-      if (!row) throw new EntityNotFoundError('Department', deptId);
-      // 数据范围校验：目标部门 + 拟变更父部门均在操作者可访问范围内（快照在事务内消除 TOCTOU）
-      await requireDeptAccess(tx, ctx.userId, [row.id, '无权操作该部门'],
-        ...(v.data.parentId ? [[v.data.parentId, '无权将部门迁移至该父部门']] as const : []));
-      await performDepartmentUpdate(tx, deptId, v.data);
-    });
+    await withScopedRow(
+      {
+        operatorId: ctx.userId,
+        load: (tx) => tx.query.departments.findFirst({ where: eq(schema.departments.id, deptId) }),
+        deptOf: (row) => row.id,
+        message: '无权操作该部门',
+        // 第二个目标：拟迁入的父部门（同一份快照，不重复读取）
+        extraTargets: () => v.data.parentId
+          ? [{ deptId: v.data.parentId, message: '无权将部门迁移至该父部门' }]
+          : [],
+        notFound: () => new EntityNotFoundError('Department', deptId),
+      },
+      async (tx) => performDepartmentUpdate(tx, deptId, v.data),
+    );
     invalidateResource('departments');
     return { success: true, data: { id: deptId }, message: '部门更新成功' };
   },
@@ -119,37 +127,41 @@ export const updateDepartmentAction = withAuth(
 export const deleteDepartmentAction = withAuth(
   { permissions: [DEPARTMENT_PERMISSIONS.DELETE], audit: 'DEPARTMENT_DELETE' },
   async (ctx: AuthContext, deptId: string): Promise<ApiResponse<{ id: string }>> => {
-    await db.transaction(async (tx) => {
-      const row = await tx.query.departments.findFirst({
-        where: eq(schema.departments.id, deptId),
-      });
-      if (!row) throw new EntityNotFoundError('Department', deptId);
-      // 数据范围校验：目标部门必须在操作者可访问范围内（快照在事务内）
-      await requireDeptAccess(tx, ctx.userId, [row.id, '无权操作该部门']);
+    await withScopedRow(
+      {
+        operatorId: ctx.userId,
+        load: (tx) => tx.query.departments.findFirst({
+          where: eq(schema.departments.id, deptId),
+        }),
+        deptOf: (row) => row.id,
+        message: '无权操作该部门',
+        notFound: () => new EntityNotFoundError('Department', deptId),
+      },
+      async (tx, row) => {
+        // 检查是否有子部门
+        const children = await tx.query.departments.findFirst({
+          where: eq(schema.departments.parentId, row.id),
+        });
+        // v3.2: 检查是否有关联用户（DC-DEPT-D）
+        const [userResult] = await tx
+          .select({ count: count() })
+          .from(schema.users)
+          .where(eq(schema.users.deptId, row.id));
+        // 检查是否有角色关联（v3.2: roles.dept_id FK）
+        const [roleResult] = await tx
+          .select({ count: count() })
+          .from(schema.roles)
+          .where(eq(schema.roles.deptId, row.id));
 
-      // 检查是否有子部门
-      const children = await tx.query.departments.findFirst({
-        where: eq(schema.departments.parentId, row.id),
-      });
-      // v3.2: 检查是否有关联用户（DC-DEPT-D）
-      const [userResult] = await tx
-        .select({ count: count() })
-        .from(schema.users)
-        .where(eq(schema.users.deptId, row.id));
-      // 检查是否有角色关联（v3.2: roles.dept_id FK）
-      const [roleResult] = await tx
-        .select({ count: count() })
-        .from(schema.roles)
-        .where(eq(schema.roles.deptId, row.id));
+        validateDepartmentDeletable({
+          hasChildren: !!children,
+          userCount: Number(userResult?.count || 0),
+          roleCount: Number(roleResult?.count || 0),
+        });
 
-      validateDepartmentDeletable({
-        hasChildren: !!children,
-        userCount: Number(userResult?.count || 0),
-        roleCount: Number(roleResult?.count || 0),
-      });
-
-      await tx.delete(schema.departments).where(eq(schema.departments.id, row.id));
-    });
+        await tx.delete(schema.departments).where(eq(schema.departments.id, row.id));
+      },
+    );
 
     invalidateResource('departments');
     return { success: true, data: { id: deptId }, message: '部门已删除' };

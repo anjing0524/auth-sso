@@ -10,7 +10,7 @@ import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vites
 import { COMMON_ERRORS } from '@auth-sso/contracts';
 import { EntityNotFoundError, BusinessRuleViolationError } from '@/domain/shared/errors';
 import { createTestDbHandle, seedTestData } from '../helpers/test-db';
-import { seedRootDept } from '../helpers/seed-fixtures';
+import { seedAdminUser, seedRootDept, seedSuperAdminRole, seedUserRoleBinding } from '../helpers/seed-fixtures';
 import * as schema from '@/db/schema';
 
 // ── 测试数据库 ──────────────────────────────────────
@@ -81,7 +81,14 @@ beforeAll(async () => { await td.connect(); });
 afterAll(async () => { await td.close(); });
 beforeEach(async () => {
   await td.cleanup();
-  await seedTestData(td.db, { departments: seedRootDept() });
+  // 数据范围守卫现由真实 resolveScope（lib/authz）解析，不再经过被 mock 的
+  // @/lib/auth。操作者须在库中真实拥有一个根部门角色，否则可见范围为空。
+  await seedTestData(td.db, {
+    departments: seedRootDept(),
+    users: seedAdminUser(),
+    roles: seedSuperAdminRole({ deptId: '00000000-0000-4000-8000-000000000001' }),
+    userRoles: seedUserRoleBinding('00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000000301'),
+  });
 });
 
 describe('Role Server Actions', () => {
