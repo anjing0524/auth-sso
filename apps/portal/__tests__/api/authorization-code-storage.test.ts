@@ -21,6 +21,7 @@
 import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest';
 import { createTestDbHandle, seedTestData } from '../helpers/test-db';
 import { seedAdminUser, seedPortalClient, seedRootDept } from '../helpers/seed-fixtures';
+import { createHash } from 'node:crypto';
 import { hashToken } from '@/lib/crypto';
 
 const { mocks, tdHolder } = vi.hoisted(() => ({
@@ -59,6 +60,16 @@ vi.mock('@/lib/session/auth-request-store', () => ({
 
 vi.mock('@/lib/auth/token', () => ({
   verifyAccessToken: mocks.mockVerifyAccessToken,
+  signAccessToken: vi.fn(async () => ({ token: 'at-mock', jti: 'jti-mock' })),
+  signIdToken: vi.fn(async () => 'id-mock'),
+  issueRefreshToken: vi.fn(async () => 'rt-mock'),
+  revokeRefreshTokenFamily: vi.fn(async () => {}),
+  ACCESS_TOKEN_TTL: 3600,
+}));
+
+vi.mock('@/lib/permissions', () => ({
+  getUserPermissionContext: vi.fn(async () => ({ kind: 'ok', context: { roles: [], permissions: [], deptIds: [] } })),
+  cacheUserPermissionContext: vi.fn(async () => {}),
 }));
 
 vi.mock('@/lib/env', async (importOriginal) => {
@@ -68,13 +79,17 @@ vi.mock('@/lib/env', async (importOriginal) => {
 
 import { GET } from '@/app/api/auth/oauth2/authorize/route';
 import { NextRequest } from 'next/server';
+import { exchangeAuthorizationCode } from '@/lib/auth/oauth-grant';
 
 const td = createTestDbHandle();
 tdHolder.current = td;
 
 const REDIRECT_URI = 'https://rp.example.com/cb';
 const CLIENT_ID = 'portal';
-const CHALLENGE = 'dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk';
+// verifier 与其 challenge 必须成对：challenge 由 verifier 派生出，
+// 不手抄字面量（此前从别处借用导致二者不匹配，测试当场抓出）
+const CODE_VERIFIER = 'test-verifier-43-chars-abcdefghijklmnopqrstuvwxyz';
+const CHALLENGE = createHash('sha256').update(CODE_VERIFIER).digest('base64url');
 
 function authorizeRequest(): NextRequest {
   const params = new URLSearchParams({
@@ -103,6 +118,30 @@ beforeEach(async () => {
     departments: seedRootDept(),
     users: seedAdminUser(),
     clients: seedPortalClient({ clientId: CLIENT_ID, redirectUris: [REDIRECT_URI] }),
+  });
+});
+
+describe('端到端：真实 authorize 签发的 code 能被真实 exchange 兑换', () => {
+  it('**同一份明文走完整链**（写入侧存哈希、读取侧按哈希查，两侧不得分叉）', async () => {
+    const res = await GET(authorizeRequest());
+    const plainCode = new URL(res.headers.get('location')!).searchParams.get('code')!;
+    expect(plainCode).toBeTruthy();
+
+    const result = await exchangeAuthorizationCode({
+      code: plainCode,
+      client: { clientId: CLIENT_ID },
+      redirectUri: REDIRECT_URI,
+      codeVerifier: CODE_VERIFIER,
+    });
+
+    // 修复前必然在此失败：写入侧存明文、读取侧按明文查虽自洽，
+    // 但一旦只有一侧改为哈希，整链即断——本用例正是锁住"两侧同源"。
+    expect(result.ok).toBe(true);
+
+    // 且可兑换的码在库中只以哈希存在
+    const rows = await td.db.select().from((await import('@/db/schema')).authorizationCodes);
+    expect(JSON.stringify(rows)).not.toContain(plainCode);
+    expect(rows[0]!.code).toBe(hashToken(plainCode));
   });
 });
 
