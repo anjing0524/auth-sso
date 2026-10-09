@@ -15,11 +15,8 @@
  * @impl H-AUTH-011 — PKCE code_verifier 验证
  */
 import { type NextRequest, NextResponse } from 'next/server';
-import { db, schema } from '@/infrastructure/db';
-import { eq } from 'drizzle-orm';
 import { rotateRefreshToken } from '@/lib/auth/token';
 import { exchangeAuthorizationCode } from '@/lib/auth/oauth-grant';
-import { validateClientActive, validateClientSecret } from '@/domain/auth/oauth-client';
 import { mapToOAuthError } from '@/domain/shared/error-mapping';
 import { mapServerError } from '@/lib/server-error';
 import { InvalidGrantError } from '@/domain/shared/errors';
@@ -28,6 +25,7 @@ import { z } from 'zod';
 import { OAUTH_PARAMS } from '@auth-sso/contracts';
 import { writeLoginLog, extractClientIP, extractUserAgent } from '@/lib/audit';
 import { parseOAuthBody } from '@/lib/auth/oauth-body';
+import { authenticateOAuthClient } from '@/lib/auth/oauth-helpers';
 import { resolveClientCredentials } from '@/lib/auth/client-credentials';
 
 
@@ -62,12 +60,11 @@ export async function POST(request: NextRequest) {
 
     const { grant_type, code, redirect_uri, code_verifier, refresh_token } = parsed.data;
 
-    // 2. 校验 Client（凭证双通道：client_secret_basic / client_secret_post，RFC 6749 §2.3.1）
+    // 2. 校验 Client（凭证双通道：client_secret_basic / client_secret_post，RFC 6749 §2.3.1）。
+    // 经共享 seam，与 revoke / introspect 使用**同一实现**——此前此处内联复刻了
+    // 完全相同的「查 DB → 校验状态 → 校验密钥」，三处各自维护同一条安全规则。
     const creds = resolveClientCredentials(request, body);
-    const clientRows = await db.select().from(schema.clients).where(eq(schema.clients.clientId, creds.clientId)).limit(1);
-    validateClientActive(clientRows[0]);
-    const client = clientRows[0]!;
-    await validateClientSecret(client, creds.clientSecret);
+    const client = await authenticateOAuthClient(creds.clientId, creds.clientSecret);
 
     // ── grant_type: authorization_code ──
     if (grant_type === OAUTH_PARAMS.GRANT_TYPE_AUTHORIZATION_CODE) {

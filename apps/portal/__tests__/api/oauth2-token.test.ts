@@ -213,6 +213,56 @@ describe('POST /api/auth/oauth2/token — client_secret_basic（F2, RFC 6749 §2
   });
 });
 
+describe('POST /api/auth/oauth2/token — 凭证校验契约（RFC 6749 §5.2）', () => {
+  it('client_secret 缺失 → 401 invalid_client（confidential client 必须凭密钥）', async () => {
+    await seedAuthCode('code-no-secret', false);
+    const body = codeGrantBody('code-no-secret');
+    delete body['client_secret'];
+
+    const res = await POST(buildRequest(body));
+    const json = await res.json();
+
+    expect(res.status).toBe(401);
+    expect(json.error).toBe('invalid_client');
+  });
+
+  it('**client 已停用 → 401 invalid_client，不得凭正确密钥放行**', async () => {
+    // 覆盖 validateClientActive 的停用分支。该分支此前对 token 端点**零覆盖**：
+    // 变异「跳过 validateClientActive」后 14 个测试全绿——即停用一个应用后，
+    // 它仍能凭正确密钥换取令牌（停用形同虚设）。
+    await seedTestData(td.db, {
+      clients: [seedPortalClient({ clientId: 'disabled-app', status: 'DISABLED' })[0]!],
+    });
+    await seedAuthCode('code-disabled', false);
+    const body = codeGrantBody('code-disabled');
+    body['client_id'] = 'disabled-app';
+    body['client_secret'] = 'portal-secret';
+
+    const res = await POST(buildRequest(body));
+    const json = await res.json();
+
+    expect(res.status).toBe(401);
+    expect(json.error).toBe('invalid_client');
+  });
+
+  it('**client 未配置密钥（DB client_secret 为 NULL）→ 401，不得放行**', async () => {
+    // 覆盖 validateClientSecret 的「客户端密钥未配置」分支——此前零测试。
+    // 安全含义：密钥未配置的 client 若无条件放行，等于一个无凭据即可认证的后门。
+    await seedTestData(td.db, {
+      clients: [seedPortalClient({ clientId: 'no-secret-app', clientSecret: null })[0]!],
+    });
+    await seedAuthCode('code-null-secret', false);
+    const body = codeGrantBody('code-null-secret');
+    body['client_id'] = 'no-secret-app';
+
+    const res = await POST(buildRequest(body));
+    const json = await res.json();
+
+    expect(res.status).toBe(401);
+    expect(json.error).toBe('invalid_client');
+  });
+});
+
 describe('POST /api/auth/oauth2/token — RT 按 offline_access 门控（D3, OIDC Core §11）', () => {
   it('scope 含 offline_access 时发放 refresh_token', async () => {
     await seedAuthCode('code-rt-with', false);
