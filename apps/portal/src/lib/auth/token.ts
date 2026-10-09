@@ -88,14 +88,19 @@ export async function signAccessToken(
 ): Promise<{ token: string; jti: string }> {
   const { keyId, privateKey } = await getActiveSigningKey();
   const jti = newJti();
+  // 单一时刻同时作为 iat 与 exp 的基准：若让 `.setIssuedAt()` 自行读实时时钟，
+  // 而 exp 另用 Date.now() 计算，两次读时钟跨越秒边界时
+  // `exp - iat` 会比 ACCESS_TOKEN_TTL 少 1 秒，与响应的 `expires_in` 承诺不符，
+  // 处在续期边界上的客户端会拿到 401。
+  const now = Math.floor(Date.now() / 1000);
 
   const token = await new SignJWT({ sub: userId, client_id: clientId, ...(scope ? { scope } : {}) })
     .setProtectedHeader({ alg: 'ES256', kid: keyId, typ: JWT_TYP.ACCESS_TOKEN })
-    .setIssuedAt()
+    .setIssuedAt(now)
     .setIssuer(getIssuer())
     .setAudience(clientId)
     .setJti(jti)
-    .setExpirationTime(Math.floor(Date.now() / 1000) + ACCESS_TOKEN_TTL)
+    .setExpirationTime(now + ACCESS_TOKEN_TTL)
     .sign(privateKey);
 
   try {
@@ -219,7 +224,8 @@ export async function signIdToken(params: {
 
   return new SignJWT(payload)
     .setProtectedHeader({ alg: 'ES256', kid: keyId, typ: JWT_TYP.ID_TOKEN })
-    .setIssuedAt()
+    // 同 signAccessToken：iat 与 exp 必须同源，避免寿命比声明少 1 秒
+    .setIssuedAt(now)
     .setIssuer(getIssuer())
     .setAudience(params.clientId)
     .setJti(newJti())

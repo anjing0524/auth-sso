@@ -21,10 +21,10 @@
  * @vitest-environment node
  */
 import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest';
-import { generateKeyPair, exportJWK, importJWK, jwtVerify } from 'jose';
+import { generateKeyPair, exportJWK, importJWK, jwtVerify, decodeJwt } from 'jose';
 import { createTestDbHandle, seedTestData } from '../helpers/test-db';
 import { seedRootDept, seedAdminUser, seedPortalClient } from '../helpers/seed-fixtures';
-import { JWT_TYP } from '@auth-sso/contracts';
+import { JWT_TYP, TOKEN_TTL } from '@auth-sso/contracts';
 
 /** 固定 issuer：sign 与 verify 两侧都经 getIssuer()，便于构造 issuer 负例 */
 const ISSUER = 'https://sso.example.com';
@@ -102,6 +102,26 @@ beforeEach(async () => {
   });
 });
 
+/**
+ * 按 issuer/audience 验签并返回 claims。
+ *
+ * `currentDate` 传入被冻结的时刻：jose 的时间校验（nbf/exp/iat）以它为"现在"，
+ * 否则在冻结时钟下会把令牌判为"尚未生效"。
+ */
+async function verifyIdTokenAgainstJwksWithAud(
+  token: string,
+  clientId: string,
+  currentDate?: Date,
+) {
+  const publicKey = await importJWK(JSON.parse(jwksRow.publicKey), 'ES256');
+  const { payload } = await jwtVerify(token, publicKey, {
+    issuer: ISSUER,
+    audience: clientId,
+    ...(currentDate ? { currentDate } : {}),
+  });
+  return { payload };
+}
+
 describe('ID Token 的 claims 契约（对外 OIDC 契约，OIDC Core §2）', () => {
   /**
    * ID Token 由**外部 RP** 直接消费，其 claim 形状是与第三方系统的契约。
@@ -178,6 +198,61 @@ describe('ID Token 的 claims 契约（对外 OIDC 契约，OIDC Core §2）', (
     // 为 B 签发的 ID Token 不得被当作 A 的
     await expect(verifyIdTokenAgainstJwks(token, CLIENT_A)).rejects.toThrow();
     await expect(verifyIdTokenAgainstJwks(token, CLIENT_B)).resolves.toBeTruthy();
+  });
+});
+
+describe('令牌寿命与 iat/exp 的一致性（OAuth 2.1 §5.1 expires_in）', () => {
+  /**
+   * `expires_in` 是对客户端的**承诺**：客户端据此安排续期。若 `exp` 与 `iat`
+   * 由两次独立的时钟读取得出，`exp - iat` 就可能比承诺少 1 秒（两次读取跨越
+   * 秒边界时），而 `expires_in` 仍恒报 ACCESS_TOKEN_TTL——
+   * 处在续期边界上的客户端会拿到 401。
+   *
+   * 用假时钟把这个概率事件变成**确定事件**：把 `Date.now()` 固定在 T0，
+   * 而 jose 内部读的是实时时钟（非 Date.now），二者必然相差若干秒。
+   * 因此只有当实现**显式传入同一时刻**给 iat 与 exp 时，本断言才成立。
+   */
+  const T0 = 1_800_000_000; // 远早于真实时钟的时刻（jose 的 setIssuedAt 读实时时钟）
+
+  /**
+   * 用 spy 把 `Date.now()` 固定为 T0*1000——jose 的 `.setIssuedAt()` 读的是
+   * **实时时钟**（非 Date.now），故若实现不把同一时刻显式传给 iat/exp，
+   * 二者必然相差若干秒。spy 只影响 Date.now，不冻结定时器，故 DB/网络不受影响。
+   */
+  function withFrozenDateNow<T>(fn: () => Promise<T>): Promise<T> {
+    const spy = vi.spyOn(Date, 'now').mockReturnValue(T0 * 1000);
+    return fn().finally(() => spy.mockRestore());
+  }
+
+  it('**AT 的 exp - iat 必须精确等于 ACCESS_TOKEN_TTL**（不含时钟抖动）', async () => {
+    const { token } = await withFrozenDateNow(() =>
+      signAccessToken(USER_ID, CLIENT_A, 'openid'),
+    );
+    // 本组只断言 claims 的一致性；密码学验签由同文件其他用例覆盖，
+    // 故此处用 decodeJwt（冻结时钟下 jwtVerify 的时间校验会干扰断言）
+    const payload = decodeJwt(token);
+
+    expect(payload.exp! - payload.iat!).toBe(TOKEN_TTL.ACCESS_TOKEN);
+  });
+
+  it('**ID Token 的 exp - iat 必须精确等于其 TTL**', async () => {
+    const token = await withFrozenDateNow(() =>
+      signIdToken({ userId: USER_ID, clientId: CLIENT_A, authTime: new Date(T0 * 1000) }),
+    );
+    const payload = decodeJwt(token);
+
+    // ID Token 的 TTL 即 ACCESS_TOKEN_TTL（token.ts 的本地常量 ID_TOKEN_TTL）
+    expect(payload.exp! - payload.iat!).toBe(TOKEN_TTL.ACCESS_TOKEN);
+  });
+
+  it('**iat 与 exp 同源**：iat 恰为冻结时刻、exp 恰为其加 TTL', async () => {
+    const { token } = await withFrozenDateNow(() =>
+      signAccessToken(USER_ID, CLIENT_A, 'openid'),
+    );
+    const payload = decodeJwt(token);
+
+    expect(payload.iat).toBe(T0);
+    expect(payload.exp).toBe(T0 + TOKEN_TTL.ACCESS_TOKEN);
   });
 });
 
