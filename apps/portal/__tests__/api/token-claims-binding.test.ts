@@ -21,7 +21,7 @@
  * @vitest-environment node
  */
 import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest';
-import { generateKeyPair, exportJWK } from 'jose';
+import { generateKeyPair, exportJWK, importJWK, jwtVerify } from 'jose';
 import { createTestDbHandle, seedTestData } from '../helpers/test-db';
 import { seedRootDept, seedAdminUser, seedPortalClient } from '../helpers/seed-fixtures';
 import { JWT_TYP } from '@auth-sso/contracts';
@@ -57,7 +57,7 @@ vi.mock('@/lib/permissions', () => ({
   cacheUserPermissionContext: vi.fn(async () => {}),
 }));
 
-import { signAccessToken, signLoginSession, verifyAccessToken } from '@/lib/auth/token';
+import { signAccessToken, signLoginSession, signIdToken, verifyAccessToken } from '@/lib/auth/token';
 
 const td = createTestDbHandle();
 tdHolder.current = td;
@@ -99,6 +99,85 @@ beforeEach(async () => {
       seedPortalClient({ clientId: CLIENT_A })[0]!,
       seedPortalClient({ clientId: CLIENT_B })[0]!,
     ],
+  });
+});
+
+describe('ID Token 的 claims 契约（对外 OIDC 契约，OIDC Core §2）', () => {
+  /**
+   * ID Token 由**外部 RP** 直接消费，其 claim 形状是与第三方系统的契约。
+   * 此前 Vitest 层零覆盖（仅 Docker E2E，默认 `E2E_TARGET` 下不运行）。
+   *
+   * 断言以 RP 视角进行：用 JWKS 公钥真体验签后读 claims，而不是内部解码，
+   * 因为 RP 正是这样消费的。
+   */
+  async function verifyIdTokenAgainstJwks(token: string, clientId: string) {
+    const publicKey = await importJWK(JSON.parse(jwksRow.publicKey), 'ES256');
+    return jwtVerify(token, publicKey, { issuer: ISSUER, audience: clientId });
+  }
+
+  it('必需 claim 齐全且类型正确（sub/aud/iss/exp/iat/auth_time/jti）', async () => {
+    const authTime = new Date('2026-01-02T03:04:05Z');
+    const token = await signIdToken({ userId: USER_ID, clientId: CLIENT_A, authTime });
+
+    const { payload } = await verifyIdTokenAgainstJwks(token, CLIENT_A);
+
+    expect(payload.sub).toBe(USER_ID);
+    expect(payload.aud).toBe(CLIENT_A);
+    expect(payload.iss).toBe(ISSUER);
+    expect(payload.jti).toBeTruthy();
+    expect(typeof payload.exp).toBe('number');
+    expect(typeof payload.iat).toBe('number');
+  });
+
+  it('**auth_time 是秒级时间戳，不是毫秒**（常见 millisecond 错位）', async () => {
+    const authTime = new Date('2026-01-02T03:04:05Z');
+    const token = await signIdToken({ userId: USER_ID, clientId: CLIENT_A, authTime });
+
+    const { payload } = await verifyIdTokenAgainstJwks(token, CLIENT_A);
+
+    // 若误用 getTime()（毫秒），该值会比正确值大约 1000 倍
+    expect(payload.auth_time).toBe(Math.floor(authTime.getTime() / 1000));
+  });
+
+  it('typ 为 id+jwt（RFC 8725 §3.11 显式类型，防跨用途混用）', async () => {
+    const token = await signIdToken({
+      userId: USER_ID, clientId: CLIENT_A, authTime: new Date(),
+    });
+
+    const { protectedHeader } = await verifyIdTokenAgainstJwks(token, CLIENT_A);
+    expect(protectedHeader.typ).toBe(JWT_TYP.ID_TOKEN);
+    expect(protectedHeader.alg).toBe('ES256');
+    expect(protectedHeader.kid).toBe(KID);
+  });
+
+  it('**传入 nonce 时必须写入 payload**（OIDC Core §3.1.2.1 重放防护）', async () => {
+    const nonce = 'n-0S6_WzA2Mj';
+    const token = await signIdToken({
+      userId: USER_ID, clientId: CLIENT_A, nonce, authTime: new Date(),
+    });
+
+    const { payload } = await verifyIdTokenAgainstJwks(token, CLIENT_A);
+    expect(payload.nonce).toBe(nonce);
+  });
+
+  it('**未传 / 传 null / 传空串时不得写入 nonce**（RP 会因此拒绝含意外 nonce 的 ID Token）', async () => {
+    for (const nonce of [undefined, null, ''] as const) {
+      const token = await signIdToken({
+        userId: USER_ID, clientId: CLIENT_A, nonce, authTime: new Date(),
+      });
+      const { payload } = await verifyIdTokenAgainstJwks(token, CLIENT_A);
+      expect(payload.nonce, `nonce=${JSON.stringify(nonce)} 不应出现`).toBeUndefined();
+    }
+  });
+
+  it('aud 锁定为发起授权的 client：以其他 client 验签被拒', async () => {
+    const token = await signIdToken({
+      userId: USER_ID, clientId: CLIENT_B, authTime: new Date(),
+    });
+
+    // 为 B 签发的 ID Token 不得被当作 A 的
+    await expect(verifyIdTokenAgainstJwks(token, CLIENT_A)).rejects.toThrow();
+    await expect(verifyIdTokenAgainstJwks(token, CLIENT_B)).resolves.toBeTruthy();
   });
 });
 
