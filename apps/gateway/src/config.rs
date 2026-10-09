@@ -662,6 +662,97 @@ mod tests {
     use super::*;
     use std::fs;
 
+    /// 每份随包发布的配置都必须通过**完整的启动校验链**，而不只是反序列化。
+    ///
+    /// ## 为什么需要它
+    ///
+    /// `Config::load` 的链路是「反序列化 → apply_env_overrides →
+    /// validate_production_security」；调用方随后还会跑
+    /// `validate_routing_consistency`。既有测试只覆盖了第一环与最后一环的**单元**，
+    /// 没有任何测试把**真实配置**跑完整条链——`gateway.vercel.toml` 的
+    /// `[upstreams.oauth]` 段名错误正是因此逃逸到运行时（网关启动即退出）。
+    ///
+    /// ## 为什么不能一律按 production 校验
+    ///
+    /// 各配置的运行档位不同（见下表），一律按 production 会**误报**：
+    /// 例如 `gateway.vercel.toml` 需要 `GATEWAY_SHARED_SECRET`（它由平台注入，
+    /// 不在 TOML 里），而 `gateway.acme-*.toml` 的 ACME 参数全部来自环境变量
+    /// （TOML 里没有 `[acme]` 段），故必须在对应档位下校验才有意义。
+    ///
+    /// | 配置 | consumer | 运行档 |
+    /// |---|---|---|
+    /// | `gateway.toml` / `gateway.docker.toml` | `apps/gateway/Dockerfile` | 自托管 TLS + ACME（env） |
+    /// | `gateway.vercel.toml` | `Dockerfile.vercel` | `NODE_ENV=production` + 平台 TLS |
+    /// | `gateway.e2e.toml` | `docker-compose.test.yml` | `NODE_ENV=test` |
+    /// | `gateway.acme-e2e.toml` | `docker-compose.test.yml` | `NODE_ENV=test` |
+    /// | `gateway.acme-staging.toml` | `docker-compose.acme-staging.yml` | `NODE_ENV=production` + ACME |
+    #[test]
+    fn test_all_shipped_configs_pass_startup_validation() {
+        /// 各配置在其 consumer 下的运行档位。
+        struct Profile {
+            node_env: Option<&'static str>,
+            /// 该 consumer 是否通过环境变量提供 ACME 参数
+            acme_from_env: bool,
+            /// 该 consumer 是否通过环境注入 GATEWAY_SHARED_SECRET
+            shared_secret_injected: bool,
+        }
+
+        /// 全部已发布 consumer 都会注入共享密钥；仅 ACME 参数与档位有差异。
+        fn profile(node_env: &'static str, acme_from_env: bool) -> Profile {
+            Profile {
+                node_env: Some(node_env),
+                acme_from_env,
+                shared_secret_injected: true,
+            }
+        }
+
+        let configs: &[(&str, Profile)] = &[
+            ("gateway.toml", profile("production", true)),
+            ("gateway.docker.toml", profile("production", true)),
+            ("gateway.vercel.toml", profile("production", false)),
+            ("gateway.e2e.toml", profile("test", false)),
+            ("gateway.acme-e2e.toml", profile("test", true)),
+            ("gateway.acme-staging.toml", profile("production", true)),
+        ];
+
+        for (name, profile) in configs {
+            let parsed: Config = config::Config::builder()
+                .add_source(config::File::from(std::path::Path::new(name)).required(true))
+                .build()
+                .unwrap_or_else(|e| panic!("构建 {name} 配置失败: {e}"))
+                .try_deserialize()
+                .unwrap_or_else(|e| panic!("反序列化 {name} 失败: {e}"));
+
+            let mut cfg = parsed;
+
+            // 模拟 consumer 注入的环境变量（不经 std::env，避免测试间竞态）
+            if profile.acme_from_env {
+                cfg.acme = Some(AcmeConfig {
+                    domain: "gateway.test".to_string(),
+                    email: "ops@example.test".to_string(),
+                    directory_url: "https://acme-v02.api.letsencrypt.org/directory".to_string(),
+                    ..AcmeConfig::default()
+                });
+            }
+            if profile.shared_secret_injected {
+                cfg.gateway.gateway_shared_secret =
+                    Some("injected-by-platform-shared-secret".to_string());
+            }
+
+            // 调用方（main.rs）施加的第一道校验
+            validate_routing_consistency(&cfg.upstreams, &cfg.gateway.oauth)
+                .unwrap_or_else(|e| panic!("{name} 未通过路由一致性校验: {e}"));
+
+            // Config::load 施加的第二道校验
+            validate_production_security(&cfg, profile.node_env).unwrap_or_else(|e| {
+                panic!(
+                    "{name} 在 node_env={:?} 下未通过安全校验: {e}",
+                    profile.node_env
+                )
+            });
+        }
+    }
+
     /// 所有随包发布的 gateway 配置都必须能被解析出 **非空** OAuth 凭据。
     ///
     /// ## 为什么需要它
