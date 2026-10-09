@@ -380,14 +380,22 @@ export async function rotateRefreshToken(
  *
  * @param userId - 用户内部 ID
  */
-export async function revokeAllRefreshTokens(userId: string): Promise<void> {
+/**
+ * 撤销用户的全部 Refresh Token，并同步撤销其 Access Token 的 JTI（双层撤销闭环）。
+ *
+ * @returns 本次撤销的 Access Token JTI 数量；Redis 不可用时返回 0
+ *   （jti 撤销属缓存性故障，不得阻断否决性的 RT 撤销，见 ADR-018）
+ */
+export async function revokeAllRefreshTokens(userId: string): Promise<number> {
   await revokeUserRefreshTokens(db, userId);
 
   // 同步撤销所有 Access Token 的 JTI（双层撤销闭环）
   try {
     const count = await revokeUserAccessByUserId(userId);
     if (count > 0) log.info('已撤销用户 Access Token JTI', { userId, count });
+    return count;
   } catch (e) {
     log.error('撤销用户 Access Token JTI 失败', { error: (e as Error).message });
+    return 0;
   }
 }

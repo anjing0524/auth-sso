@@ -14,7 +14,6 @@ import { eq } from 'drizzle-orm';
 import { withPermission } from '@/lib/auth';
 import { withScopedWrite } from '@/lib/authz';
 import { revokeAllRefreshTokens } from '@/lib/auth/token';
-import { revokeUserAccessByUserId } from '@/lib/session/revoke';
 import { clearUserPermissionCache } from '@/lib/permissions';
 import { COMMON_ERRORS, USER_PERMISSIONS } from '@auth-sso/contracts';
 import { restSuccess, restError } from '@/lib/response';
@@ -62,11 +61,13 @@ export async function POST(
 
     const userId = target.id;
 
-    // 1. 撤销全部 Refresh Token（DB 层，同时触发 JTI 黑名单撤销）
-    await revokeAllRefreshTokens(userId);
-
-    // 2. 二次确保 Access Token JTI 全部撤销（同步等待结果，不 fire-and-forget）
-    const revokedJtiCount = await revokeUserAccessByUserId(userId);
+    // 1. 撤销全部 Refresh Token（DB 层）并同步撤销全部 Access Token JTI，
+    //    返回本次真实撤销的 JTI 数量。
+    //
+    //    此前这里在编排层调用之后再单独调一次 `revokeUserAccessByUserId` 作为
+    //    计数来源——但该函数是**幂等**的（读完 user_jti 映射即 `del` 消费掉），
+    //    第二次必然拿到空映射并返回 0，导致响应里的 revokedJtiCount 恒为 0。
+    const revokedJtiCount = await revokeAllRefreshTokens(userId);
 
     // 3. 清除权限缓存，确保下次请求拉取最新权限
     await clearUserPermissionCache(userId);

@@ -127,8 +127,9 @@ describe('revokeAllRefreshTokens — 双层撤销闭环', () => {
     await seedRt('rt_redis_down', USER_A, CLIENT_PORTAL);
     mocks.mockRevokeUserAccess.mockRejectedValue(new Error('redis unavailable'));
 
-    // 不得抛出：Redis 抖动不应使"任何人都无法被强制下线"
-    await expect(revokeAllRefreshTokens(USER_A)).resolves.toBeUndefined();
+    // 不得抛出：Redis 抖动不应使"任何人都无法被强制下线"；
+    // 返回 0 表示本次没有可计数的 JTI 撤销（而非失败）
+    await expect(revokeAllRefreshTokens(USER_A)).resolves.toBe(0);
 
     // 否决性的 DB 撤销必须已经生效
     const tokens = await revokedTokens(USER_A);
@@ -137,8 +138,15 @@ describe('revokeAllRefreshTokens — 双层撤销闭环', () => {
 
   it('无 RT 的用户：不抛异常，且仍尝试撤销 jti（AT 可能仍活着）', async () => {
     // 无任何 RT 行，但该用户可能持有未过期的 AT
-    await expect(revokeAllRefreshTokens(USER_B)).resolves.toBeUndefined();
+    await expect(revokeAllRefreshTokens(USER_B)).resolves.toBe(0);
     expect(mocks.mockRevokeUserAccess).toHaveBeenCalledWith(USER_B);
+  });
+
+  it('**返回实际撤销的 JTI 数量**（供调用方如实报告，不被幂等空转掩盖）', async () => {
+    await seedRt('rt_count', USER_A, CLIENT_PORTAL);
+    mocks.mockRevokeUserAccess.mockResolvedValue(5);
+
+    await expect(revokeAllRefreshTokens(USER_A)).resolves.toBe(5);
   });
 
   it('已撤销的 RT 再次撤销是幂等的（沿用原撤销时间）', async () => {
