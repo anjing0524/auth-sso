@@ -139,6 +139,70 @@ describe('GET /api/auth/oauth2/authorize — 错误重定向语义（D1, RFC 674
     expect(location).not.toContain(REDIRECT_URI);
   });
 
+  describe('redirect_uri 必须精确匹配（禁止前缀匹配 → 开放重定向）', () => {
+    // `validateRedirectUri` 的注释记录过这一漏洞类别：前缀匹配会让已注册的
+    // `https://app/cb` 错误接受 `https://app/cb.evil.com/...`。该分支此前只有
+    // 「完全不同主机」一个用例，前缀形态零覆盖——而这正是开放重定向的入口。
+
+    it('**注册串为裸 origin + 攻击串是其子域 → 本地错误页，绝不重定向**', async () => {
+      // 这是 `includes`（精确）与 `startsWith`（前缀）**行为分叉且跳到外域**的形态。
+      // 真前缀必然同主机（多出的部分只能是 path/query/fragment），故"前缀匹配导致
+      // 跳外域"需要注册串本身缺 path——即下面这种裸 origin 注册。
+      const registered = 'https://app.example.com';
+      const attack = 'https://app.example.com.evil.com/cb';
+
+      expect(attack.startsWith(registered)).toBe(true); // 攻击串确以注册串为前缀
+      expect(new URL(attack).host).toBe('app.example.com.evil.com'); // 但主机是外域
+
+      mocks.mockGetClientByClientId.mockResolvedValue(
+        makeClient({ redirectUris: [registered] }),
+      );
+
+      const res = await GET(buildAuthorizeRequest({ redirect_uri: attack }));
+      const location = res.headers.get('location')!;
+
+      expect(res.status).toBe(307);
+      expect(location).toContain('/oauth/error');
+      expect(location).not.toContain('evil.com');
+    });
+
+    it('注册串 + 额外路径段 → 本地错误页（不得前缀放行）', async () => {
+      mocks.mockGetClientByClientId.mockResolvedValue(makeClient());
+
+      const res = await GET(
+        buildAuthorizeRequest({ redirect_uri: `${REDIRECT_URI}/extra` }),
+      );
+      const location = res.headers.get('location')!;
+
+      expect(location).toContain('/oauth/error');
+      expect(location).not.toContain(`${REDIRECT_URI}/extra`);
+    });
+
+    it('注册串 + 路径穿越（/cb/../evil）→ 本地错误页', async () => {
+      mocks.mockGetClientByClientId.mockResolvedValue(makeClient());
+
+      const res = await GET(
+        buildAuthorizeRequest({ redirect_uri: `${REDIRECT_URI}/../evil` }),
+      );
+      const location = res.headers.get('location')!;
+
+      expect(location).toContain('/oauth/error');
+      expect(location).not.toContain('/../evil');
+    });
+
+    it('注册串 + 查询串 → 本地错误页（查询参数不构成匹配）', async () => {
+      mocks.mockGetClientByClientId.mockResolvedValue(makeClient());
+
+      const res = await GET(
+        buildAuthorizeRequest({ redirect_uri: `${REDIRECT_URI}?x=1` }),
+      );
+      const location = res.headers.get('location')!;
+
+      expect(location).toContain('/oauth/error');
+      expect(location).not.toContain('x=1');
+    });
+  });
+
   it('client_id 未知 → 本地错误页', async () => {
     mocks.mockGetClientByClientId.mockResolvedValue(null);
 
