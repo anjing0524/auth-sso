@@ -407,6 +407,15 @@ impl AcmeService {
         certificate_der: &[u8],
     ) -> anyhow::Result<RenewalDecision> {
         let certificate = CertificateDer::from(certificate_der.to_vec());
+        // 显式禁用 ARI 时直接走寿命判定：ARI 的续期时机由 CA 决定，对同一证书
+        // 也可能变化，故需要确定性续期点的场景（如 ACME 生命周期 E2E）必须能绕开它。
+        if self.config.disable_ari {
+            debug!("已按配置禁用 ARI，改用证书寿命 2/3 判定");
+            return fallback_renewal_evaluation(
+                certificate_der,
+                Duration::from_secs(self.config.check_interval_secs),
+            );
+        }
         if let Ok(identifier) = CertificateIdentifier::try_from(&certificate) {
             let identifier = identifier.into_owned();
             match account.renewal_info(&identifier).await {

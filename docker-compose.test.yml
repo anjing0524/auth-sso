@@ -193,6 +193,10 @@ services:
       ACME_STATE_DIR: /var/lib/gateway/acme
       ACME_CA_CERT_PATH: /test/pebble.minica.pem
       ACME_CHECK_INTERVAL_SECS: "1"
+      # 关闭 ARI：其续期时机由 Pebble 的 suggested_window 决定，对同一证书也会变化，
+      # 使"重启恢复同一张证书"断言的时序不可控（曾本地 3/3 通过而 CI 失败）。
+      # 关闭后续期点严格等于证书寿命的 2/3（300s ⇒ 200s），脚本据此排布各阶段。
+      ACME_DISABLE_ARI: "true"
       GATEWAY_SHARED_SECRET: acme-e2e-gateway-shared-secret
     volumes:
       - ./apps/gateway/gateway.acme-e2e.toml:/app/gateway.toml:ro

@@ -82,10 +82,13 @@ certificate_fingerprint() {
 wait_for_lifecycle_failure() {
   local since="$1"
   local attempt
-  # 窗口须覆盖"从停止 CA 到续期点"的间隔：续期未到期时网关不会联系 CA，
-  # 因而不会报错（evaluate_renewal 走 fallback → Wait）。Pebble 证书 300s
-  # ⇒ 续期点 ~200s，故窗口设为 300s 而非原先的 90s。
-  for attempt in $(seq 1 300); do
+  # 时序契约（依赖 compose 的 ACME_DISABLE_ARI=true 与 Pebble validityPeriod=600）：
+  #   续期点 = not_before + 寿命*2/3 = 签发后 ~400s（ARI 关闭后此式严格成立）
+  #   本脚本在 ~150s 前完成重启恢复断言，随后停 CA
+  #   ⇒ 续期点落在停止 CA **之后**，网关届时才联系 CA 并失败报错
+  # 窗口 440s 覆盖"停 CA → 到续期点（~250s）+ 重试"。
+  # 若 CI 明显变慢致重启逼近续期点，应提高 Pebble validityPeriod 并同步此窗口。
+  for attempt in $(seq 1 440); do
     if compose logs --no-color --since "${since}" gateway-acme 2>/dev/null \
       | grep -q "ACME 证书生命周期任务失败"; then
       return 0

@@ -138,6 +138,16 @@ pub struct AcmeConfig {
     pub ca_cert_path: Option<String>,
     /// ARI/证书有效期复核间隔（秒）。
     pub check_interval_secs: u64,
+    /// 禁用 ARI（ACME Renewal Information）续期窗口，改用证书寿命的 2/3 判定。
+    ///
+    /// 存在的理由：ARI 的续期时机由 **CA 决定**（`suggested_window`），对同一张
+    /// 证书也可能随时间/服务端状态变化，故 `Gateway ACME Lifecycle` 的
+    /// "重启恢复同一张证书"断言在 ARI 路径下**时序不可控**（同一提交本地 3/3 通过、
+    /// CI 失败即为此）。置 true 后走 `fallback_renewal_evaluation`，续期点严格等于
+    /// `not_before + 寿命*2/3`，测试可据此设定证书寿命使续期落在期望的阶段。
+    ///
+    /// 生产默认 false（保持 ARI 的服务端建议）。
+    pub disable_ari: bool,
 }
 
 impl Default for AcmeConfig {
@@ -148,6 +158,7 @@ impl Default for AcmeConfig {
             directory_url: LETS_ENCRYPT_PRODUCTION_DIRECTORY.to_string(),
             state_dir: "acme".to_string(),
             ca_cert_path: None,
+            disable_ari: false,
             check_interval_secs: 21_600,
         }
     }
@@ -417,17 +428,22 @@ impl Config {
         let ca_cert_path = std::env::var("ACME_CA_CERT_PATH").ok();
         let check_interval = std::env::var("ACME_CHECK_INTERVAL_SECS").ok();
 
+        let disable_ari = std::env::var("ACME_DISABLE_ARI").ok();
         if domain.is_none()
             && email.is_none()
             && directory_url.is_none()
             && state_dir.is_none()
             && ca_cert_path.is_none()
             && check_interval.is_none()
+            && disable_ari.is_none()
         {
             return Ok(());
         }
 
         let acme = self.acme.get_or_insert_with(AcmeConfig::default);
+        if let Some(v) = disable_ari {
+            acme.disable_ari = matches!(v.as_str(), "1" | "true" | "TRUE" | "True");
+        }
         if let Some(domain) = domain {
             acme.domain = domain;
         }
@@ -1183,6 +1199,7 @@ mod tests {
                 state_dir: String::new(),
                 ca_cert_path: None,
                 check_interval_secs: 0,
+                disable_ari: false,
             }),
             ..Config::default()
         };

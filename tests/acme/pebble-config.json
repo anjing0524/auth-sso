@@ -15,8 +15,8 @@
     },
     "profiles": {
       "default": {
-        "description": "Gateway lifecycle verification. Validity must satisfy BOTH bounds: long enough that the renewal point (2/3 of lifetime) is not crossed before the restart-recovery assertion, yet short enough that the renewal point falls inside the CA-failure observation window (otherwise the gateway never contacts the CA, emits no lifecycle failure, and the retention assertion can never be exercised). 300s => renewal at ~200s.",
-        "validityPeriod": 300
+        "description": "Gateway lifecycle verification. With ACME_DISABLE_ARI=true the renewal point is exactly not_before + 2/3*lifetime. Validity must satisfy BOTH bounds: long enough that the renewal point is not crossed before the restart-recovery assertion (which must observe the persisted certificate), yet short enough that it falls inside the CA-failure observation window (otherwise the gateway never contacts the CA, emits no lifecycle failure, and the retention assertion can never be exercised). 600s => renewal at ~400s; the script allows ~150s before restart and observes the failure for 440s. Raise this value if CI slows down, and keep scripts/run-gateway-acme-e2e.sh in sync.",
+        "validityPeriod": 600
       }
     }
   }
