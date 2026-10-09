@@ -701,18 +701,21 @@ mod tests {
 
         struct Profile {
             node_env: Option<&'static str>,
-            /// 该 consumer 是否通过环境变量提供 ACME 参数
-            acme_from_env: bool,
+            /// 该 consumer 是否经**环境变量**注入 ACME 参数（配置自身无 [acme] 段）。
+            /// 这类配置在缺 env 时**必然**被拒，故本测试不对其断言"校验通过"——
+            /// 那需要凭空构造参数，会让测试验证编写者的假设而非部署契约。
+            /// 该契约由 `deployment-wiring.test.ts` 读真实 compose/Dockerfile 校验。
+            needs_acme_env: bool,
             /// 该 consumer 是否通过环境注入 GATEWAY_SHARED_SECRET
             shared_secret_injected: bool,
             tls_mode: TlsMode,
         }
 
         /// 全部已发布 consumer 都会注入共享密钥；其余维度显式声明。
-        fn profile(node_env: &'static str, acme_from_env: bool, tls_mode: TlsMode) -> Profile {
+        fn profile(node_env: &'static str, needs_acme_env: bool, tls_mode: TlsMode) -> Profile {
             Profile {
                 node_env: Some(node_env),
-                acme_from_env,
+                needs_acme_env,
                 shared_secret_injected: true,
                 tls_mode,
             }
@@ -738,7 +741,7 @@ mod tests {
             ),
             (
                 "gateway.acme-e2e.toml",
-                profile("test", true, TlsMode::SelfManaged),
+                profile("test", false, TlsMode::SelfManaged),
             ),
             (
                 "gateway.acme-staging.toml",
@@ -756,15 +759,6 @@ mod tests {
 
             let mut cfg = parsed;
 
-            // 模拟 consumer 注入的环境变量（不经 std::env，避免测试间竞态）
-            if profile.acme_from_env {
-                cfg.acme = Some(AcmeConfig {
-                    domain: "gateway.test".to_string(),
-                    email: "ops@example.test".to_string(),
-                    directory_url: "https://acme-v02.api.letsencrypt.org/directory".to_string(),
-                    ..AcmeConfig::default()
-                });
-            }
             if profile.shared_secret_injected {
                 cfg.gateway.gateway_shared_secret =
                     Some("injected-by-platform-shared-secret".to_string());
@@ -778,27 +772,48 @@ mod tests {
             // - 平台 TLS 构建下，自托管配置本就应当被拒绝（错误地说"必须启用
             //   EXTERNAL_TLS_TERMINATION"），这正是防止把自托管配置部署到
             //   平台构建上的保护。
-            match (cfg!(feature = "self-managed-tls"), profile.tls_mode) {
-                (true, _) | (false, TlsMode::Platform) => {
-                    validate_production_security(&cfg, profile.node_env).unwrap_or_else(|e| {
-                        panic!(
-                            "{name} 在 node_env={:?} 下未通过安全校验: {e}",
-                            profile.node_env
-                        )
-                    });
-                }
-                (false, TlsMode::SelfManaged) => {
-                    let err =
-                        validate_production_security(&cfg, profile.node_env).expect_err(concat!(
-                            "{name} 依赖 self-managed-tls，在平台 TLS 构建下",
-                            " 本应被拒绝却能通过——构建裁剪的保护失效了"
-                        ));
-                    assert!(
-                        err.to_string().contains("self-managed-tls"),
-                        "{name} 在平台 TLS 构建下被拒绝，但原因不是构建特性: {err}"
-                    );
-                }
+            // 配置自身若**不带** [acme] 段，则其 ACME 参数由 consumer 经环境变量注入
+            // （见 docker-compose*.yml）。**不在此凭空构造那些参数**——否则本测试验证
+            // 的是编写者的假设而非部署契约（曾因此出现"测试绿、部署起不来"）。
+            // 该部分契约由 `__tests__/api/deployment-wiring.test.ts` 读真实
+            // compose/Dockerfile 校验。
+            // 构建特性是**前置条件**，先判：平台 TLS 构建下，依赖 self-managed-tls
+            // 的配置必然因此被拒（与其是否注入 ACME env 无关）——这正是防止把
+            // 自托管配置部署到平台构建上的保护。
+            if !cfg!(feature = "self-managed-tls") && profile.tls_mode == TlsMode::SelfManaged {
+                let err = validate_production_security(&cfg, profile.node_env).expect_err(concat!(
+                    "{name} 依赖 self-managed-tls，在平台 TLS 构建下本应被拒却能通过——",
+                    "构建裁剪的保护失效了"
+                ));
+                assert!(
+                    err.to_string().contains("self-managed-tls"),
+                    "{name} 在平台 TLS 构建下被拒绝，但原因不是构建特性: {err}"
+                );
+                continue;
             }
+
+            if profile.needs_acme_env {
+                // 配置自身不带 [acme] 段 ⇒ 缺 env 时**必然**被拒。这是确定性事实，
+                // 断言它可证明"该 consumer 确实必须注入 ACME 环境变量"；反之若这里
+                // 竟然通过，说明校验出现漏洞（缺参数也能启动）。
+                let err = validate_production_security(&cfg, profile.node_env).expect_err(concat!(
+                    "{name} 未注入 ACME 环境变量却通过了安全校验——",
+                    "缺参数的网关本不应启动"
+                ));
+                assert!(
+                    err.to_string().contains("ACME") || err.to_string().contains("LETSENCRYPT"),
+                    "{name} 被拒的原因不是缺少 ACME 参数: {err}"
+                );
+                continue;
+            }
+
+            // 至此：构建特性兼容、且参数自足 ⇒ 必须通过。
+            validate_production_security(&cfg, profile.node_env).unwrap_or_else(|e| {
+                panic!(
+                    "{name} 在 node_env={:?} 下未通过安全校验: {e}",
+                    profile.node_env
+                )
+            });
         }
     }
 
