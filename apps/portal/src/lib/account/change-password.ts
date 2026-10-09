@@ -20,6 +20,7 @@ import {
   type PasswordChangeState,
 } from '@/domain/auth/password-change';
 import { revokeUserAccessByUserId } from '@/lib/session/revoke';
+import { revokeUserRefreshTokens } from '@/lib/auth/token/revocation';
 import { createLogger } from '@/lib/logger';
 
 const log = createLogger('ChangePassword');
@@ -84,6 +85,15 @@ export async function changeOwnPassword(
     .set({ passwordHash: newHash, passwordHistory: newHistory, passwordChangedAt: new Date() })
     .where(eq(schema.users.id, userId));
 
+  // 会话终止必须覆盖**两层**，与 logout / revokeAllRefreshTokens 一致：
+  // - Refresh Token（否决性）：它是"续期能力"的载体。只撤 AT 时，窃取的 RT 仍能
+  //   换取新 AT —— 旧会话实际上从未终止，改密"踢出会话"的承诺不成立。
+  // - Access Token jti（尽力而为）：AT 会在 ≤1h 内自然过期，且撤销依赖 Redis。
+  try {
+    await revokeUserRefreshTokens(db, userId);
+  } catch (e) {
+    log.error('改密后撤销 Refresh Token 失败', { error: (e as Error).message });
+  }
   try {
     await revokeUserAccessByUserId(userId);
   } catch (e) {

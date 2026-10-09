@@ -19,6 +19,8 @@ import {
   type PasswordChangeState,
 } from '@/domain/auth/password-change';
 import { revokeUserAccessByUserId } from '@/lib/session/revoke';
+import { db } from '@/infrastructure/db';
+import { revokeUserRefreshTokens } from '@/lib/auth/token/revocation';
 import { createLogger } from '@/lib/logger';
 
 const log = createLogger('ResetPassword');
@@ -70,11 +72,24 @@ export function buildPasswordHistory(state: PasswordChangeState): string[] {
 /**
  * 重置完成后的副作用：撤销目标用户全部会话（B-USR-PW）。
  *
+ * **必须覆盖两层**，与 `logout` / `revokeAllRefreshTokens` 一致：
+ * - **Refresh Token（否决性）**：它是续期能力的载体。只撤 AT 时，窃取的 RT 仍能
+ *   换取新 AT——而"重置密码踢出会话"恰恰是账号疑似失陷时的处置手段。
+ * - **Access Token jti（尽力而为）**：AT 会在 ≤1h 内自然过期，且撤销依赖 Redis。
+ *
  * **失败不阻断**（与自助改密一致，见 ADR-020 的分档思路）：密码已持久化，撤销
  * 是尽力而为；让一次 Redis 抖动把已成功的重置报成失败，会诱使管理员重试——
  * 而密码其实已经变了。失败仅记日志。
+ *
+ * 注：`revokeUserAccessByUserId` 内部已整体 try/catch、不会抛出，其外层
+ * try/catch 属历史遗留；此处保留仅为防御未来改动。
  */
 export async function revokeAfterPasswordReset(userId: string): Promise<void> {
+  try {
+    await revokeUserRefreshTokens(db, userId);
+  } catch (e) {
+    log.error('重置密码后撤销 Refresh Token 失败', { error: (e as Error).message });
+  }
   try {
     await revokeUserAccessByUserId(userId);
   } catch (e) {

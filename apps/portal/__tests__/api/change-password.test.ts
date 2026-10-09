@@ -18,6 +18,8 @@ import { createTestDbHandle, seedTestData } from '../helpers/test-db';
 import { seedAdminUser, seedRootDept } from '../helpers/seed-fixtures';
 import * as schema from '@/db/schema';
 import { hashPassword, verifyPassword } from '@/domain/auth/password';
+import { hashToken } from '@/lib/crypto';
+import { seedPortalClient } from '../helpers/seed-fixtures';
 
 const { mocks, tdHolder } = vi.hoisted(() => ({
   mocks: { mockRevoke: vi.fn(async () => 0) },
@@ -50,6 +52,28 @@ async function currentRow() {
   return row;
 }
 
+/** 种一个未撤销的 Refresh Token（与该用户绑定） */
+async function seedRefreshToken(token: string) {
+  await td.db.insert(schema.refreshTokens).values({
+    id: crypto.randomUUID(),
+    tokenHash: hashToken(token),
+    userId: USER_ID,
+    clientId: 'portal',
+    scopes: 'openid offline_access',
+    revoked: null,
+    expiresAt: new Date(Date.now() + 7 * 24 * 3600 * 1000),
+    createdAt: new Date(),
+  });
+}
+
+async function isRtRevoked(token: string): Promise<boolean | null> {
+  const [row] = await td.db
+    .select({ revoked: schema.refreshTokens.revoked })
+    .from(schema.refreshTokens)
+    .where(eq(schema.refreshTokens.tokenHash, hashToken(token)));
+  return row ? row.revoked !== null : null;
+}
+
 beforeAll(async () => { await td.connect(); });
 afterAll(async () => { await td.close(); });
 
@@ -60,6 +84,38 @@ beforeEach(async () => {
   await seedTestData(td.db, {
     departments: seedRootDept(),
     users: seedAdminUser({ passwordHash: await hashPassword(CURRENT) }),
+    clients: seedPortalClient({ clientId: 'portal' }),
+  });
+});
+
+describe('changeOwnPassword — 会话终止必须覆盖 Refresh Token', () => {
+  /**
+   * 密码变更的业务语义是"终止既有会话"。只撤销 Access Token 的 jti 是**不够**的：
+   * Refresh Token 仍可换取新的 Access Token，攻击者用窃取的 RT 就能在改密后
+   * 继续续期——旧会话实际上从未被终止。
+   *
+   * 对照：`logout` 与 `revokeAllRefreshTokens` 都是**双层撤销**
+   * （`revokeUserRefreshTokens` + `revokeUserAccessByUserId`）。
+   */
+  it('**改密后该用户的 Refresh Token 必须被撤销**（否则旧 RT 仍可续期）', async () => {
+    const oldRt = 'rt_should_be_revoked_on_password_change';
+    await seedRefreshToken(oldRt);
+    expect(await isRtRevoked(oldRt)).toBe(false);
+
+    const result = await changeOwnPassword(USER_ID, CURRENT, NEW);
+    expect(result.ok).toBe(true);
+
+    expect(await isRtRevoked(oldRt)).toBe(true);
+  });
+
+  it('改密失败（旧密码错）→ 不得撤销 RT（未发生变更就不终止会话）', async () => {
+    const rt = 'rt_must_survive_failed_change';
+    await seedRefreshToken(rt);
+
+    const result = await changeOwnPassword(USER_ID, 'WrongPassword@1', NEW);
+    expect(result.ok).toBe(false);
+
+    expect(await isRtRevoked(rt)).toBe(false);
   });
 });
 

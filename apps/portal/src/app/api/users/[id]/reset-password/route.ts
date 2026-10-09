@@ -14,6 +14,7 @@ import { eq } from 'drizzle-orm';
 import { hashPassword, isPasswordReused, pushPasswordHistory } from '@/domain/auth/password';
 import { COMMON_ERRORS, USER_ERRORS, USER_PERMISSIONS } from '@auth-sso/contracts';
 import { revokeUserAccessByUserId } from '@/lib/session/revoke';
+import { revokeUserRefreshTokens } from '@/lib/auth/token/revocation';
 import { refreshUserPermissionCache } from '@/lib/permissions';
 import { validatePassword } from '@/domain/shared/zod-schemas';
 import { createLogger } from '@/lib/logger';
@@ -81,7 +82,15 @@ export async function POST(
         .where(eq(schema.users.id, id));
     });
 
-    // 重置后所有会话立即失效（关键安全操作，必须 await 确保执行）
+    // 重置后所有会话立即失效（关键安全操作，必须 await 确保执行）。
+    // 必须覆盖**两层**，与 logout / revokeAllRefreshTokens 一致：
+    // 只撤 AT jti 时，窃取的 Refresh Token 仍能换取新 AT——而"重置密码踢出会话"
+    // 恰恰是账号疑似失陷时的处置手段，此时旧 RT 必须一并失效。
+    try {
+      await revokeUserRefreshTokens(db, id);
+    } catch (e) {
+      log.error('撤销 Refresh Token 失败', { error: (e as Error).message });
+    }
     try {
       await revokeUserAccessByUserId(id);
     } catch (e) {
