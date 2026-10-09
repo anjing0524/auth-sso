@@ -52,9 +52,10 @@ COPY --from=portal-builder --chown=auth-sso:auth-sso /app/apps/portal/public ./a
 COPY --from=portal-builder --chown=auth-sso:auth-sso /app/apps/portal/.next/standalone ./
 COPY --from=portal-builder --chown=auth-sso:auth-sso /app/apps/portal/.next/static ./apps/portal/.next/static
 
+# 不设 RUST_LOG：日志级别由 gateway.vercel.toml 的 log_level 决定（配置为单一真相源）。
+# RUST_LOG 仍可作运维应急覆盖（tracing 的 EnvFilter 优先级高于配置）。
 ENV NODE_ENV=production \
     EXTERNAL_TLS_TERMINATION=true \
-    RUST_LOG=info \
     PORT=80
 
 USER auth-sso

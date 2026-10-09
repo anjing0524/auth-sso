@@ -52,7 +52,8 @@ RUN mkdir -p /etc/gateway/ssl /var/lib/gateway/acme /app/logs \
 EXPOSE 80 443
 
 # 设置日志级别
-ENV RUST_LOG=info
+# 不设 RUST_LOG：日志级别由配置的 log_level 决定（配置为单一真相源）。
+# RUST_LOG 仍可作运维应急覆盖（tracing 的 EnvFilter 优先级高于配置）。
 
 # 切换到非 root 用户运行
 USER gateway

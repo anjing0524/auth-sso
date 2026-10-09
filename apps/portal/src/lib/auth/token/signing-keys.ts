@@ -40,6 +40,19 @@ export interface CachedSigningKey {
 /** 缓存按 kid 索引，支持多 key 共存（密钥轮换后旧 token 仍可验签） */
 const keyCache = new Map<string, CachedSigningKey>();
 
+/**
+ * 清空签名密钥缓存。
+ *
+ * 用途：
+ * 1. **测试隔离**——`keyCache` 是模块级状态（TTL 5 分钟），跨测试文件共享，
+ *    不重置会让断言取决于执行顺序（同一 worker 内先前用例写入的条目仍在）。
+ * 2. **密钥轮换**——轮换会删除旧行，但已缓存的条目仍是"活"的，按 kid 查询会
+ *    继续返回已从 DB 删除的密钥材料长达 TTL。
+ */
+export function resetSigningKeyCache(): void {
+  keyCache.clear();
+}
+
 function getCachedKey(kid: string): CachedSigningKey | undefined {
   const entry = keyCache.get(kid);
   if (entry && Date.now() - entry.fetchedAt < KEY_CACHE_TTL_MS) {
@@ -146,6 +159,9 @@ export async function getActiveSigningKey(): Promise<{
           return rentry;
         }
       }
+      // 轮换会淘汰旧密钥行：此刻起按 kid 的缓存不再可信（否则仍会返回已删除的
+      // 密钥材料），故整表失效后由本次生成重新填充。
+      resetSigningKeyCache();
       return generateAndPersistKeyPair();
     } finally {
       release!();
