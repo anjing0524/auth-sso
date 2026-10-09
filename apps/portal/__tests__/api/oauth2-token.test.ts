@@ -14,6 +14,7 @@
 import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest';
 import crypto from 'crypto';
 import { createTestDbHandle, seedTestData } from '../helpers/test-db';
+import { hashToken } from '@/lib/crypto';
 import { seedPortalClient, seedRootDept, seedTestUser } from '../helpers/seed-fixtures';
 
 const { mocks, tdHolder } = vi.hoisted(() => ({
@@ -79,7 +80,8 @@ async function seedAuthCode(
 ): Promise<void> {
   await td.db.insert(td.schema.authorizationCodes).values({
     id: crypto.randomUUID(),
-    code,
+    // 与生产一致：库中存哈希
+    code: hashToken(code),
     clientId: 'portal',
     userId: USER_ID,
     redirectUri: REDIRECT_URI,

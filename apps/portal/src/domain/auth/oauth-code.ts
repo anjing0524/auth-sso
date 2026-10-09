@@ -17,11 +17,39 @@ import { PKCEVerificationError } from '@/domain/shared/errors';
  */
 export async function verifyPKCE(codeVerifier: string, codeChallenge: string): Promise<void> {
   const encoder = new TextEncoder();
-  const digest = await crypto.subtle.digest('SHA-256', encoder.encode(codeVerifier));
-  const bytes = new Uint8Array(digest);
-  const binary = String.fromCharCode(...bytes);
-  const challenge = btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-  if (challenge !== codeChallenge) {
+  const digest = new Uint8Array(
+    await crypto.subtle.digest('SHA-256', encoder.encode(codeVerifier)),
+  );
+  const expected = base64UrlToBytes(codeChallenge);
+
+  if (!constantTimeEqual(digest, expected)) {
     throw new PKCEVerificationError();
   }
+}
+
+/** base64url → Uint8Array（无padding） */
+function base64UrlToBytes(value: string): Uint8Array {
+  const base64 = value.replace(/-/g, '+').replace(/_/g, '/');
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+/**
+ * 恒定时间字节比较。
+ *
+ * 与 `validateClientSecret` 的定时安全比较对齐；用累积 XOR 而非短路比较，
+ * 使耗时与"第几个字节不同"无关。长度不等时立即返回 false——PKCE 的
+ * code_challenge 长度由规范固定（S256 恒为 43 字符），长度本身不是秘密。
+ *
+ * 说明：PKCE 两侧都是 SHA-256 输出（均匀分布），且 code_challenge 随授权请求
+ * 公开注册，故计时侧信道在此**不构成实际可利用风险**；这是纵深防御，
+ * 不是修补某个已成立的漏洞。
+ */
+function constantTimeEqual(a: Uint8Array, b: Uint8Array): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i += 1) diff |= a[i]! ^ b[i]!;
+  return diff === 0;
 }

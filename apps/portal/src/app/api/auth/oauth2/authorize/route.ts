@@ -15,7 +15,7 @@ import { db, schema } from '@/infrastructure/db';
 import { verifyAccessToken } from '@/lib/auth/token';
 import { parseScopes, validateAuthorization, validateRequestedScopes } from '@/domain/auth/oauth-authorize';
 import { validateClientActive, validateRedirectUri } from '@/domain/auth/oauth-client';
-import { generateId, generateUUID } from '@/lib/crypto';
+import { generateId, generateUUID, hashToken } from '@/lib/crypto';
 import { getAppBaseURL, getIssuer } from '@/lib/env';
 import { mapServerError } from '@/lib/server-error';
 import { mapToOAuthError } from '@/domain/shared/error-mapping';
@@ -108,6 +108,8 @@ async function issueCodeAndRedirect(
     });
   }
 
+  // 明文 code 只经重定向交给 RP；**库中存其哈希**（与 Refresh Token 同一策略）。
+  // 授权码是可以换取令牌的凭证，DB 泄露 / 备份被读取时不应可直接使用。
   const code = `auth_code_${generateId(32)}`;
   const codeId = generateUUID();
   const now = new Date();
@@ -115,7 +117,7 @@ async function issueCodeAndRedirect(
 
   await db.insert(schema.authorizationCodes).values({
     id: codeId,
-    code,
+    code: hashToken(code),
     clientId: client!.clientId,
     userId,
     redirectUri: params.redirectUri,

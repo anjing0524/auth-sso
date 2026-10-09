@@ -16,6 +16,7 @@ import crypto from 'crypto';
 import { createTestDbHandle, seedTestData } from '../helpers/test-db';
 import { seedAdminUser, seedPortalClient, seedRootDept } from '../helpers/seed-fixtures';
 import * as schema from '@/db/schema';
+import { hashToken } from '@/lib/crypto';
 
 const { mocks, tdHolder } = vi.hoisted(() => ({
   mocks: {
@@ -47,6 +48,7 @@ vi.mock('@/lib/permissions', () => ({
   cacheUserPermissionContext: mocks.mockCacheUserPermissionContext,
 }));
 
+
 import { exchangeAuthorizationCode } from '@/lib/auth/oauth-grant';
 
 const td = createTestDbHandle();
@@ -63,7 +65,8 @@ const client = { clientId: CLIENT_ID };
 async function seedAuthCode(overrides: Partial<typeof schema.authorizationCodes.$inferInsert> = {}) {
   await td.db.insert(schema.authorizationCodes).values({
     id: crypto.randomUUID(),
-    code: 'code-1',
+    // 与生产一致：库中存哈希（明文仅在兑换时传入）
+    code: hashToken('code-1'),
     clientId: CLIENT_ID,
     userId: USER_ID,
     redirectUri: REDIRECT_URI,
@@ -103,6 +106,37 @@ beforeEach(async () => {
     departments: seedRootDept(),
     users: seedAdminUser(),
     clients: seedPortalClient({ clientId: CLIENT_ID }),
+  });
+});
+
+describe('授权码的存储形态（不得明文入库）', () => {
+  /**
+   * RT 以 `hashToken` 存储（DB 泄露不可直接使用）；授权码此前却是**明文**。
+   * 授权码同样是可换取令牌的凭证，且 PKCE 的 code_challenge 与 code_verifier
+   * 都不保护"码本身被读到即可使用"这一面——拿到明文码即可发起兑换，
+   * 只差用户自己的 verifier。故其存储形态应与 RT 一致。
+   */
+  it('**库中不存明文授权码，只存其哈希**', async () => {
+    const plainCode = 'auth_code_plaintext_must_not_be_stored';
+    await seedAuthCode({ code: hashToken(plainCode) });
+
+    const rows = await td.db
+      .select({ code: schema.authorizationCodes.code })
+      .from(schema.authorizationCodes);
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.code).not.toBe(plainCode);
+    expect(rows[0]!.code).toBe(hashToken(plainCode));
+  });
+
+  it('**以明文 code 兑换一个按哈希存储的码可以成功**（读写两侧同源）', async () => {
+    const plainCode = 'auth_code_roundtrip';
+    await seedAuthCode({ code: hashToken(plainCode) });
+
+    const result = await exchange({ code: plainCode });
+
+    // 修复前：查询按明文比对 ⇒ 找不到行 ⇒ invalid_grant
+    expect(result.ok).toBe(true);
   });
 });
 

@@ -22,11 +22,17 @@ export function hexToBytes(hex: string): Uint8Array {
 /**
  * 生成指定长度的随机 ID (基于十六进制字符)
  * 保留用于日志表等不需要 UUID 的辅助表
+ *
+ * 每个 hex 字符只承载 4 bit，故产出 `length` 个字符只需 `ceil(length/2)` 字节。
+ * 此前取 `randomBytes(length)` 再 `slice(0, length)`，等于**生成 2 倍字节后丢弃
+ * 一半**（`generateId(32)` 实际只有 128 bit 熵而非 256）。现已按需取字节，
+ * 输出长度与字符集不变，但随机字节的利用率与产出熵名实相符。
+ *
  * @param length 生成的 ID 长度，默认为 20
  * @returns 随机生成的 ID 字符串
  */
 export function generateId(length: number = 20): string {
-  return randomBytes(length).toString('hex').slice(0, length);
+  return randomBytes(Math.ceil(length / 2)).toString('hex').slice(0, length);
 }
 
 /**

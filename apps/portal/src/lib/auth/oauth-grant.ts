@@ -13,6 +13,7 @@ import { eq, and, gt } from 'drizzle-orm';
 import type { OAuthTokenResponse } from '@/domain/auth/types';
 import { verifyPKCE } from '@/domain/auth/oauth-code';
 import { parseScopes } from '@/domain/auth/oauth-authorize';
+import { hashToken } from '@/lib/crypto';
 import { getUserPermissionContext, cacheUserPermissionContext } from '@/lib/permissions';
 // 从 ./token 导入而非直接 ./token/revocation：token.ts 是 token 族的模块边界
 // （re-export 撤销原语），经它导入也让测试对 @/lib/auth/token 的 mock 生效。
@@ -78,7 +79,7 @@ async function claimAuthorizationCode(
     .update(schema.authorizationCodes)
     .set({ used: true })
     .where(and(
-      eq(schema.authorizationCodes.code, code),
+      eq(schema.authorizationCodes.code, hashToken(code)),
       eq(schema.authorizationCodes.clientId, clientId),
       eq(schema.authorizationCodes.used, false),
       gt(schema.authorizationCodes.expiresAt, new Date()),
@@ -104,7 +105,7 @@ async function findConsumedCode(
     })
     .from(schema.authorizationCodes)
     .where(and(
-      eq(schema.authorizationCodes.code, code),
+      eq(schema.authorizationCodes.code, hashToken(code)),
       eq(schema.authorizationCodes.clientId, clientId),
       eq(schema.authorizationCodes.used, true),
     ))
