@@ -37,19 +37,22 @@ export function validateClientActive(
  * 1. 若为 bcrypt，使用 async compare；
  * 2. 若为 SHA-256（64位 hex），使用 timingSafeEqual。
  *
+ * 密钥未配置的 client 一律拒绝：曾有一个 `if (client.isPublic) return;` 的
+ * 免密钥放行分支，但 `clients` 表**没有 `is_public` 列**、也无任何调用方传入该
+ * 字段，故它是永久不可达的 fail-open 出口——已删除，而非保留为"未启用的能力"。
+ *
  * @param client - 包含 clientSecret 的 Client 对象
  * @param providedSecret - 请求中携带的 client_secret 原文
- * @throws InvalidClientError 当 secret 缺失或不匹配
+ * @throws InvalidClientError 当 secret 未配置、缺失或不匹配
  */
 /** bcrypt 哈希前缀（识别已迁移至 bcrypt 的 Client Secret） */
 const BCRYPT_PREFIXES = ['$2a$', '$2b$', '$2y$'] as const;
 
 export async function validateClientSecret(
-  client: { clientSecret: string | null; isPublic?: boolean | null },
+  client: { clientSecret: string | null },
   providedSecret?: string,
 ): Promise<void> {
   if (!client.clientSecret) {
-    if (client.isPublic) return;
     throw new InvalidClientError('客户端密钥未配置');
   }
   if (!providedSecret) {
