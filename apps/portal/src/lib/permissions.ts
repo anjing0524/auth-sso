@@ -31,16 +31,38 @@ const UNAVAILABLE_CACHE_SUFFIX = ':unavailable';
 const UNAVAILABLE_CACHE_TTL = 5;
 const USER_BATCH_SIZE = 50;
 
+/** 单个用户的缓存刷新结果——`void` 无法区分"成功"与"内部已吞掉的失败" */
+interface RefreshOutcome {
+  readonly ok: boolean;
+}
+
+export interface BatchRefreshResult {
+  /** 成功刷新缓存的用户数 */
+  readonly succeeded: number;
+  /** 刷新失败的用户数（Redis 或 DB 故障） */
+  readonly failed: number;
+}
+
 async function settleUserBatches(
   userIds: string[],
-  operation: (userId: string) => Promise<void>,
-): Promise<number> {
+  operation: (userId: string) => Promise<RefreshOutcome>,
+): Promise<BatchRefreshResult> {
+  let succeeded = 0;
   let failed = 0;
   for (let index = 0; index < userIds.length; index += USER_BATCH_SIZE) {
-    const results = await Promise.allSettled(userIds.slice(index, index + USER_BATCH_SIZE).map(operation));
-    failed += results.filter((result) => result.status === 'rejected').length;
+    // 按操作的**返回结果**判别，而非 `allSettled` 的 rejected。
+    // 原先按 rejected 计数是失效的：`refreshUserPermissionCache` 整体 try/catch、
+    // **永不 reject**（出错只记日志），故 failed 恒为 0——"成功 N 个"的日志
+    // 在全部失败时照样打印。这与 `revokeUsersAccessByUserId` 曾是同一形态。
+    const results = await Promise.all(
+      userIds.slice(index, index + USER_BATCH_SIZE).map(operation),
+    );
+    for (const result of results) {
+      if (result.ok) succeeded += 1;
+      else failed += 1;
+    }
   }
-  return failed;
+  return { succeeded, failed };
 }
 
 /**
@@ -254,7 +276,7 @@ export function toPermissionContextOrNull(
  *
  * @param userId 用户 ID
  */
-export async function refreshUserPermissionCache(userId: string): Promise<void> {
+export async function refreshUserPermissionCache(userId: string): Promise<RefreshOutcome> {
   try {
     const redis = getRedis();
     const cacheKey = `${REDIS_KEY_PREFIX.USER_PERMS}${userId}`;
@@ -265,8 +287,10 @@ export async function refreshUserPermissionCache(userId: string): Promise<void> 
     if (ctx) {
       log.info('Refreshed cache for user', { userId });
     }
+    return { ok: true };
   } catch (error: unknown) {
     log.error('Failed to refresh cache for user', { userId, error: (error as Error).message });
+    return { ok: false };
   }
 }
 
@@ -274,10 +298,18 @@ export async function refreshUserPermissionCache(userId: string): Promise<void> 
  * 批量主动刷新指定用户的权限上下文缓存
  * @param userIds 用户 ID 数组
  */
-export async function refreshUsersPermissionCache(userIds: string[]): Promise<void> {
-  if (!userIds || userIds.length === 0) return;
-  const failed = await settleUserBatches(userIds, refreshUserPermissionCache);
-  log.info(`Refreshed cache for ${userIds.length} users`, { failed });
+export async function refreshUsersPermissionCache(
+  userIds: string[],
+): Promise<BatchRefreshResult> {
+  if (!userIds || userIds.length === 0) return { succeeded: 0, failed: 0 };
+
+  const result = await settleUserBatches(userIds, refreshUserPermissionCache);
+  if (result.failed > 0) {
+    log.warn(`刷新权限缓存 ${userIds.length} 个用户：成功 ${result.succeeded}、失败 ${result.failed}`);
+  } else {
+    log.info(`Refreshed cache for ${userIds.length} users`);
+  }
+  return result;
 }
 
 /**
