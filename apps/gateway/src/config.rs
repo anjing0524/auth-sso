@@ -689,30 +689,61 @@ mod tests {
     #[test]
     fn test_all_shipped_configs_pass_startup_validation() {
         /// 各配置在其 consumer 下的运行档位。
+        /// 该配置依赖哪种 TLS 终结方式。`self-managed-tls` 是**编译期特性**，
+        /// 故这个维度决定了配置在哪种构建下才有资格通过启动校验。
+        #[derive(Clone, Copy, PartialEq)]
+        enum TlsMode {
+            /// 需要 self-managed-tls 特性（自托管 TLS / ACME）
+            SelfManaged,
+            /// 平台 TLS 终结（`external_tls_termination = true`），两种构建皆可
+            Platform,
+        }
+
         struct Profile {
             node_env: Option<&'static str>,
             /// 该 consumer 是否通过环境变量提供 ACME 参数
             acme_from_env: bool,
             /// 该 consumer 是否通过环境注入 GATEWAY_SHARED_SECRET
             shared_secret_injected: bool,
+            tls_mode: TlsMode,
         }
 
-        /// 全部已发布 consumer 都会注入共享密钥；仅 ACME 参数与档位有差异。
-        fn profile(node_env: &'static str, acme_from_env: bool) -> Profile {
+        /// 全部已发布 consumer 都会注入共享密钥；其余维度显式声明。
+        fn profile(node_env: &'static str, acme_from_env: bool, tls_mode: TlsMode) -> Profile {
             Profile {
                 node_env: Some(node_env),
                 acme_from_env,
                 shared_secret_injected: true,
+                tls_mode,
             }
         }
 
         let configs: &[(&str, Profile)] = &[
-            ("gateway.toml", profile("production", true)),
-            ("gateway.docker.toml", profile("production", true)),
-            ("gateway.vercel.toml", profile("production", false)),
-            ("gateway.e2e.toml", profile("test", false)),
-            ("gateway.acme-e2e.toml", profile("test", true)),
-            ("gateway.acme-staging.toml", profile("production", true)),
+            (
+                "gateway.toml",
+                profile("production", true, TlsMode::SelfManaged),
+            ),
+            (
+                "gateway.docker.toml",
+                profile("production", true, TlsMode::SelfManaged),
+            ),
+            // 平台 TLS：`Dockerfile.vercel` 用 `--no-default-features` 构建
+            (
+                "gateway.vercel.toml",
+                profile("production", false, TlsMode::Platform),
+            ),
+            (
+                "gateway.e2e.toml",
+                profile("test", false, TlsMode::SelfManaged),
+            ),
+            (
+                "gateway.acme-e2e.toml",
+                profile("test", true, TlsMode::SelfManaged),
+            ),
+            (
+                "gateway.acme-staging.toml",
+                profile("production", true, TlsMode::SelfManaged),
+            ),
         ];
 
         for (name, profile) in configs {
@@ -739,17 +770,35 @@ mod tests {
                     Some("injected-by-platform-shared-secret".to_string());
             }
 
-            // 调用方（main.rs）施加的第一道校验
+            // 调用方（main.rs）施加的第一道校验。与 TLS 编译特性无关，故两种构建都必过。
             validate_routing_consistency(&cfg.upstreams, &cfg.gateway.oauth)
                 .unwrap_or_else(|e| panic!("{name} 未通过路由一致性校验: {e}"));
 
-            // Config::load 施加的第二道校验
-            validate_production_security(&cfg, profile.node_env).unwrap_or_else(|e| {
-                panic!(
-                    "{name} 在 node_env={:?} 下未通过安全校验: {e}",
-                    profile.node_env
-                )
-            });
+            // Config::load 施加的第二道校验，其结果**取决于编译特性**：
+            // - 平台 TLS 构建下，自托管配置本就应当被拒绝（错误地说"必须启用
+            //   EXTERNAL_TLS_TERMINATION"），这正是防止把自托管配置部署到
+            //   平台构建上的保护。
+            match (cfg!(feature = "self-managed-tls"), profile.tls_mode) {
+                (true, _) | (false, TlsMode::Platform) => {
+                    validate_production_security(&cfg, profile.node_env).unwrap_or_else(|e| {
+                        panic!(
+                            "{name} 在 node_env={:?} 下未通过安全校验: {e}",
+                            profile.node_env
+                        )
+                    });
+                }
+                (false, TlsMode::SelfManaged) => {
+                    let err =
+                        validate_production_security(&cfg, profile.node_env).expect_err(concat!(
+                            "{name} 依赖 self-managed-tls，在平台 TLS 构建下",
+                            " 本应被拒绝却能通过——构建裁剪的保护失效了"
+                        ));
+                    assert!(
+                        err.to_string().contains("self-managed-tls"),
+                        "{name} 在平台 TLS 构建下被拒绝，但原因不是构建特性: {err}"
+                    );
+                }
+            }
         }
     }
 
