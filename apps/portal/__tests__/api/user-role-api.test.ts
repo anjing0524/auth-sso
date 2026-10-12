@@ -27,10 +27,10 @@ vi.mock('@/infrastructure/db', () => ({
   get schema() { return schema; },
 }));
 
-vi.mock('@/lib/auth', () => ({
+vi.mock(import('@/lib/auth'), (): Partial<typeof authModule> => ({
   // 与真实包装器一致：领域错误映射为 HTTP 响应（DomainError.code → 状态码），
   // 其余异常照常抛出（审计失败回滚用例依赖这一点）。
-  withPermission: vi.fn(async (_options: unknown, handler: (userId: string) => Promise<Response>) => {
+  withPermission: vi.fn(async (_options, handler) => {
     try {
       return await handler('00000000-0000-4000-8000-000000000101');
     } catch (err) {
@@ -43,20 +43,23 @@ vi.mock('@/lib/auth', () => ({
       throw err;
     }
   }),
-  canAccessDept: vi.fn(() => true),
-  getUserRoleDeptIds: vi.fn(async () => ['00000000-0000-4000-8000-000000000001']),
   logServerDataRead: vi.fn(async () => {}),
 }));
 
-vi.mock('@/lib/permissions', () => ({ refreshUserPermissionCache: vi.fn(async () => {}) }));
-vi.mock('@/lib/session/revoke', () => ({ revokeUserAccessByUserId: vi.fn(async () => 0) }));
-vi.mock('@/lib/audit', () => ({
+vi.mock(import('@/lib/permissions'), (): Partial<typeof permissionsModule> => ({ refreshUserPermissionCache: vi.fn(async () => ({ ok: true })) }));
+vi.mock(import('@/lib/session/revoke'), (): Partial<typeof sessionRevokeModule> => ({ revokeUserAccessByUserId: vi.fn(async () => 0) }));
+vi.mock(import('@/lib/audit'), (): Partial<typeof auditModule> => ({
   appendSecurityAudit: vi.fn(async () => {}),
   extractClientIP: vi.fn(() => '127.0.0.1'),
   extractUserAgent: vi.fn(() => 'Vitest'),
 }));
 
 import { POST as assignRoles, DELETE as removeRole } from '@/app/api/users/[id]/roles/route';
+import type * as authModule from '@/lib/auth';
+import type * as permissionsModule from '@/lib/permissions';
+import type * as sessionRevokeModule from '@/lib/session/revoke';
+import type * as auditModule from '@/lib/audit';
+
 
 const ADMIN_ID = '00000000-0000-4000-8000-000000000101';
 const ADMIN_ROLE_ID = '00000000-0000-4000-8000-000000000304';

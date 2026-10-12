@@ -16,6 +16,9 @@ import { seedAdminUser, seedSuperAdminRole, seedUserRoleBinding } from '../helpe
 import { createTestRequest, parseResponseJson } from '../helpers/test-utils';
 import * as schema from '@/db/schema';
 import { BusinessRuleViolationError } from '@/domain/shared/errors';
+import type * as authModule from '@/lib/auth';
+import type * as cryptoModule from '@/lib/crypto';
+
 
 // ── 测试数据库 ──────────────────────────────────────
 const td = createTestDbHandle();
@@ -36,22 +39,21 @@ const CREATED_DEPT_ID = 'aabbccdd-eeff-4000-8000-000000000001';
 const now = new Date();
 
 // ── Auth mock（同时覆盖 withPermission 和 withAuth）─
-const { mockWithPermission, mockGetUserRoleDeptIds } = vi.hoisted(() => {
+const { mockWithPermission } = vi.hoisted(() => {
   const mockWithPermission = vi.fn(
     async (_options: any, handler: Function) =>
       handler('00000000-0000-4000-8000-000000000101'),
   );
-  const mockGetUserRoleDeptIds = vi.fn().mockResolvedValue([]);
-  return { mockWithPermission, mockGetUserRoleDeptIds };
+  return { mockWithPermission, };
 });
 
-vi.mock('@/lib/auth', () => ({
+vi.mock(import('@/lib/auth'), (): Partial<typeof authModule> => ({
   resolveIdentity: vi.fn(async () => ({
     userId: '00000000-0000-4000-8000-000000000101',
+    expiresAt: null,
+    issuedAt: null,
   })),
   logServerDataRead: vi.fn(async () => {}),
-  getUserRoleDeptIds: mockGetUserRoleDeptIds,
-  canAccessDept: vi.fn(() => true),
   withPermission: mockWithPermission,
   withAuth:
     (_o: any, h: Function) =>
@@ -64,7 +66,7 @@ vi.mock('@/lib/auth', () => ({
       ),
 }));
 
-vi.mock('@/lib/crypto', () => ({
+vi.mock(import('@/lib/crypto'), (): Partial<typeof cryptoModule> => ({
   generateUUID: () => CREATED_DEPT_ID,
   generateId: (_len?: number) => 'aaaaaaaa',
   hashToken: (t: string) => t,

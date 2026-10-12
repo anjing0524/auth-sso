@@ -40,12 +40,14 @@ vi.mock('@/infrastructure/db', () => ({
   get schema() { return tdHolder.current!.schema; },
 }));
 
-vi.mock('@/lib/permissions', () => ({
+vi.mock(import('@/lib/permissions'), (): Partial<typeof permissionsModule> => ({
   getUserPermissionContext: mocks.mockGetPerm,
   cacheUserPermissionContext: mocks.mockCachePerm,
 }));
 
 import { rotateRefreshToken } from '@/lib/auth/token';
+import type * as permissionsModule from '@/lib/permissions';
+
 
 const td = createTestDbHandle();
 tdHolder.current = td;

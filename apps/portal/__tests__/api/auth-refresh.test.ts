@@ -66,12 +66,14 @@ vi.mock('@/lib/env', async (importOriginal) => {
   return { ...actual, getGatewaySharedSecret: () => SHARED_SECRET };
 });
 
-vi.mock('@/lib/audit', async (importOriginal) => {
+vi.mock(import('@/lib/audit'), async (importOriginal): Promise<Partial<typeof auditModule>> => {
   const actual = await importOriginal<typeof import('@/lib/audit')>();
   return { ...actual, writeLoginLog: mocks.mockWriteLoginLog };
 });
 
 import { POST as refreshPost } from '@/app/api/auth/refresh/route';
+import type * as auditModule from '@/lib/audit';
+
 
 const td = createTestDbHandle();
 tdHolder.current = td;

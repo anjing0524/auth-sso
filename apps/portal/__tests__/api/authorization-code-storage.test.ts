@@ -36,7 +36,7 @@ vi.mock('@/infrastructure/db', () => ({
 }));
 
 // @allow-module-mock @/app/(dashboard)/clients/data input-fixture: 只提供"该 client 存在及其 redirect_uris"这一输入，断言落在授权码写入形态上
-vi.mock('@/app/(dashboard)/clients/data', () => ({
+vi.mock(import('@/app/(dashboard)/clients/data'), (): Partial<typeof clientsDataModule> => ({
   getClientByClientId: async (clientId: string) => {
     const { db, schema } = tdHolder.current!;
     const { eq } = await import('drizzle-orm');
@@ -45,7 +45,7 @@ vi.mock('@/app/(dashboard)/clients/data', () => ({
 }));
 
 // @allow-module-mock @/app/api/auth/oauth2/authorize/data input-fixture: 只提供"当前登录用户及其角色"这一输入；本文件不测该查询实现
-vi.mock('@/app/api/auth/oauth2/authorize/data', () => ({
+vi.mock(import('@/app/api/auth/oauth2/authorize/data'), (): Partial<typeof authorizeDataModule> => ({
   getUserWithRoleClients: async () => ({
     id: '00000000-0000-4000-8000-000000000101',
     status: 'ACTIVE',
@@ -56,7 +56,7 @@ vi.mock('@/app/api/auth/oauth2/authorize/data', () => ({
 }));
 
 // @allow-module-mock @/lib/session/auth-request-store input-fixture: 只提供"回跳时能取回授权参数"这一输入；本文件不测暂存实现
-vi.mock('@/lib/session/auth-request-store', () => ({
+vi.mock(import('@/lib/session/auth-request-store'), (): Partial<typeof authRequestStoreModule> => ({
   storeAuthRequest: vi.fn(async () => {}),
   getStoredAuthRequest: vi.fn(async () => null),
   generateSessionId: vi.fn(() => 'sess-test'),
@@ -75,8 +75,8 @@ vi.mock(import('@/lib/auth/token'), async (importOriginal): Promise<Partial<type
 });
 
 // @allow-module-mock @/lib/permissions input-fixture: 只提供"该用户的权限上下文"这一输入；真实 PG 驱动的分级由 rt-permission-failure / permission-enforcement 覆盖
-vi.mock('@/lib/permissions', () => ({
-  getUserPermissionContext: vi.fn(async () => ({ kind: 'ok', context: { roles: [], permissions: [], deptIds: [] } })),
+vi.mock(import('@/lib/permissions'), (): Partial<typeof permissionsModule> => ({
+  getUserPermissionContext: vi.fn(async () => ({ kind: 'ok' as const, context: { roles: [], permissions: [], deptIds: [] } })),
   cacheUserPermissionContext: vi.fn(async () => {}),
 }));
 
@@ -89,6 +89,11 @@ import { GET } from '@/app/api/auth/oauth2/authorize/route';
 import { NextRequest } from 'next/server';
 import { exchangeAuthorizationCode } from '@/lib/auth/oauth-grant';
 import { signLoginSession } from '@/lib/auth/token';
+import type * as clientsDataModule from '@/app/(dashboard)/clients/data';
+import type * as authorizeDataModule from '@/app/api/auth/oauth2/authorize/data';
+import type * as authRequestStoreModule from '@/lib/session/auth-request-store';
+import type * as permissionsModule from '@/lib/permissions';
+
 
 /** 当前用例的真实登录态令牌（authorize 端点会用真身 verifyAccessToken 验它） */
 let loginSessionToken = '';

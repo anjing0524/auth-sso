@@ -20,16 +20,15 @@ vi.mock('@/infrastructure/db', () => ({
   get db() { return td.db; },
   get schema() { return td.schema; },
 }));
-vi.mock('@/lib/auth', () => ({
-  resolveIdentity: vi.fn(async () => ({ userId: '00000000-0000-4000-8000-000000000101' })),
+vi.mock(import('@/lib/auth'), (): Partial<typeof authModule> => ({
+  resolveIdentity: vi.fn(async () => ({ userId: '00000000-0000-4000-8000-000000000101', expiresAt: null, issuedAt: null })),
   logServerDataRead: vi.fn(async () => {}),
-  getUserRoleDeptIds: vi.fn().mockResolvedValue([]),
-  canAccessDept: vi.fn(() => true),
-  withAuth: (_o: any, h: Function) => async (...a: any[]) =>
-    h({ userId: '00000000-0000-4000-8000-000000000101' }, ...a),
-  withPermission: (_o: any, h: Function) => async () => h('00000000-0000-4000-8000-000000000101'),
+  // 参数不标注、由对象字面量的上下文类型推断，与真身签名（返回**包装后的 handler**、
+  // handler 首参为 AuthContext）保持一致——此前写 `any`/`Function` 恰好掩盖了这一漂移
+  withAuth: (_o, h) => async (...a) => h({ userId: '00000000-0000-4000-8000-000000000101' }, ...a),
+  withPermission: async (_o, h) => h('00000000-0000-4000-8000-000000000101'),
 }));
-vi.mock('@/lib/crypto', () => ({
+vi.mock(import('@/lib/crypto'), (): Partial<typeof cryptoModule> => ({
   generateUUID: () => 'aabbccdd-eeff-4000-8000-000000000001',
   generateId: (_len?: number) => 'aaaaaaaa',
   hashToken: (t: string) => t,
@@ -40,6 +39,9 @@ vi.mock('@/lib/crypto', () => ({
 
 import { db } from '@/infrastructure/db';
 import { createUserAction, updateUserAction, toggleUserStatusAction, deleteUserAction, resetPasswordAction } from '@/app/(dashboard)/users/actions';
+import type * as authModule from '@/lib/auth';
+import type * as cryptoModule from '@/lib/crypto';
+
 
 const ADMIN_ID = '00000000-0000-4000-8000-000000000101';
 const DEPT_ID = '00000000-0000-4000-8000-000000000001';

@@ -23,15 +23,13 @@ vi.mock('@/infrastructure/db', () => ({
   get db() { return td.db; },
   get schema() { return td.schema; },
 }));
-vi.mock('@/lib/auth', () => ({
-  resolveIdentity: vi.fn(async () => ({ userId: '00000000-0000-4000-8000-000000000101' })),
+vi.mock(import('@/lib/auth'), (): Partial<typeof authModule> => ({
+  resolveIdentity: vi.fn(async () => ({ userId: '00000000-0000-4000-8000-000000000101', expiresAt: null, issuedAt: null })),
   logServerDataRead: vi.fn(async () => {}),
-  getUserRoleDeptIds: vi.fn().mockResolvedValue([]),
-  canAccessDept: vi.fn(() => true),
   withAuth: (_o: any, h: Function) => async (...a: any[]) =>
     h({ userId: '00000000-0000-4000-8000-000000000101' }, ...a),
 }));
-vi.mock('@/lib/crypto', () => ({
+vi.mock(import('@/lib/crypto'), (): Partial<typeof cryptoModule> => ({
   generateUUID: () => CREATED_DEPT_ID,
   generateId: (_len?: number) => 'aaaaaaaa',
 }));
@@ -39,6 +37,9 @@ vi.mock('next/cache', () => ({ revalidatePath: vi.fn(), updateTag: vi.fn() }));
 
 import { db } from '@/infrastructure/db';
 import { createDepartmentAction, updateDepartmentAction, deleteDepartmentAction } from '@/app/(dashboard)/departments/actions';
+import type * as authModule from '@/lib/auth';
+import type * as cryptoModule from '@/lib/crypto';
+
 
 beforeAll(async () => { await td.connect(); });
 afterAll(async () => { await td.close(); });

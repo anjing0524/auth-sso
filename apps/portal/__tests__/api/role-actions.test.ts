@@ -20,25 +20,28 @@ vi.mock('@/infrastructure/db', () => ({
   get db() { return td.db; },
   get schema() { return td.schema; },
 }));
-vi.mock('@/lib/auth', () => ({
-  resolveIdentity: vi.fn(async () => ({ userId: '00000000-0000-4000-8000-000000000101' })),
+vi.mock(import('@/lib/auth'), (): Partial<typeof authModule> => ({
+  resolveIdentity: vi.fn(async () => ({ userId: '00000000-0000-4000-8000-000000000101', expiresAt: null, issuedAt: null })),
   logServerDataRead: vi.fn(async () => {}),
-  getUserRoleDeptIds: vi.fn().mockResolvedValue([]),
-  canAccessDept: vi.fn(() => true),
   withAuth: (_o: any, h: Function) => async (...a: any[]) =>
     h({ userId: '00000000-0000-4000-8000-000000000101' }, ...a),
 }));
-vi.mock('@/lib/crypto', () => ({
+vi.mock(import('@/lib/crypto'), (): Partial<typeof cryptoModule> => ({
   generateUUID: () => 'aabbccdd-eeff-4000-8000-000000000001',
   generateId: (_len?: number) => 'aaaaaaaa',
 }));
-vi.mock('@/lib/permissions', () => ({ refreshUsersPermissionCache: vi.fn(async () => {}) }));
-vi.mock('@/lib/session/revoke', () => ({ revokeUsersAccessByUserId: vi.fn(async () => {}) }));
+vi.mock(import('@/lib/permissions'), (): Partial<typeof permissionsModule> => ({ refreshUsersPermissionCache: vi.fn(async () => ({ succeeded: 0, failed: 0 })) }));
+vi.mock(import('@/lib/session/revoke'), (): Partial<typeof sessionRevokeModule> => ({ revokeUsersAccessByUserId: vi.fn(async () => ({ succeeded: 0, failed: 0 })) }));
 vi.mock('@/infrastructure/redis', () => ({}));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn(), updateTag: vi.fn() }));
 
 import { db } from '@/infrastructure/db';
 import { createRoleAction, updateRoleAction, deleteRoleAction } from '@/app/(dashboard)/roles/actions';
+import type * as authModule from '@/lib/auth';
+import type * as cryptoModule from '@/lib/crypto';
+import type * as permissionsModule from '@/lib/permissions';
+import type * as sessionRevokeModule from '@/lib/session/revoke';
+
 
 const DEPT_ID = '00000000-0000-4000-8000-000000000001';
 const ROLE_ID_UPDATE = '00000000-0000-4000-8000-000000000401';

@@ -18,11 +18,9 @@ vi.mock('@/infrastructure/db', () => ({
   get db() { return td.db; },
   get schema() { return td.schema; },
 }));
-vi.mock('@/lib/auth', () => ({
-  resolveIdentity: vi.fn(async () => ({ userId: '00000000-0000-4000-8000-000000000101' })),
+vi.mock(import('@/lib/auth'), (): Partial<typeof authModule> => ({
+  resolveIdentity: vi.fn(async () => ({ userId: '00000000-0000-4000-8000-000000000101', expiresAt: null, issuedAt: null })),
   logServerDataRead: vi.fn(async () => {}),
-  getUserRoleDeptIds: vi.fn().mockResolvedValue([]),
-  canAccessDept: vi.fn(() => true),
   withPermission: (_options: any, handler: Function) => handler('00000000-0000-4000-8000-000000000101'),
 }));
 vi.mock('next/cache', () => ({
@@ -35,6 +33,8 @@ import { GET as GetClient } from '@/app/api/clients/[id]/route';
 import { GET as ListTokens } from '@/app/api/clients/[id]/tokens/route';
 import { createTestRequest, parseResponseJson } from '../helpers/test-utils';
 import { db } from '@/infrastructure/db';
+import type * as authModule from '@/lib/auth';
+
 
 const CLIENT_ID_1 = 'test-client-1';
 const CLIENT_ID_2 = 'test-client-2';

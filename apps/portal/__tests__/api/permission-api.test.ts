@@ -27,11 +27,9 @@ const { mockWithPermission } = vi.hoisted(() => {
   return { mockWithPermission };
 });
 
-vi.mock('@/lib/auth', () => ({
-  resolveIdentity: vi.fn(async () => ({ userId: '00000000-0000-4000-8000-000000000101' })),
+vi.mock(import('@/lib/auth'), (): Partial<typeof authModule> => ({
+  resolveIdentity: vi.fn(async () => ({ userId: '00000000-0000-4000-8000-000000000101', expiresAt: null, issuedAt: null })),
   logServerDataRead: vi.fn(async () => {}),
-  getUserRoleDeptIds: vi.fn().mockResolvedValue([]),
-  canAccessDept: vi.fn(() => true),
   withPermission: mockWithPermission,
 }));
 
@@ -46,14 +44,12 @@ const cryptoMocks = vi.hoisted(() => {
   };
 });
 
-vi.mock('@/lib/crypto', () => ({
+vi.mock(import('@/lib/crypto'), (): Partial<typeof cryptoModule> => ({
   generateUUID: cryptoMocks.generateUUID,
   generateId: () => 'aaaaaaaa',
 }));
 
-vi.mock('@/lib/audit', () => ({
-  logAuditEvent: vi.fn(async () => {}),
-  getClientIP: vi.fn(() => '127.0.0.1'),
+vi.mock(import('@/lib/audit'), (): Partial<typeof auditModule> => ({
 }));
 
 vi.mock('@/infrastructure/redis', () => ({}));
@@ -61,6 +57,10 @@ vi.mock('@/infrastructure/redis', () => ({}));
 import { GET as ListPermissions } from '@/app/api/permissions/route';
 import { GET as GetPermission } from '@/app/api/permissions/[id]/route';
 import { POST as RegisterPermissions } from '@/app/api/permissions/register/route';
+import type * as authModule from '@/lib/auth';
+import type * as cryptoModule from '@/lib/crypto';
+import type * as auditModule from '@/lib/audit';
+
 
 const REGISTRY_CLIENT_ID = 'registry-client';
 const REGISTRY_CLIENT_SECRET = 'registry-secret';

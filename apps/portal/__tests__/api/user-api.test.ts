@@ -22,7 +22,7 @@ import * as schema from '@/db/schema';
 // ════════════════════════════════════════════════════════
 // Hoisted mocks
 // ════════════════════════════════════════════════════════
-const { tdHolder, mockAuthCheck, mockWithPermission, mockGetUserRoleDeptIds } = vi.hoisted(() => {
+const { tdHolder, mockAuthCheck, mockWithPermission } = vi.hoisted(() => {
   const tdHolder: { current: any } = { current: null };
   const mockAuthCheck = vi.fn(async () => ({
     authorized: true,
@@ -36,8 +36,7 @@ const { tdHolder, mockAuthCheck, mockWithPermission, mockGetUserRoleDeptIds } = 
       return h('00000000-0000-4000-8000-000000000101');
     },
   );
-  const mockGetUserRoleDeptIds = vi.fn().mockResolvedValue([]);
-  return { tdHolder, mockAuthCheck, mockWithPermission, mockGetUserRoleDeptIds };
+  return { tdHolder, mockAuthCheck, mockWithPermission };
 });
 
 // ════════════════════════════════════════════════════════
@@ -49,11 +48,9 @@ vi.mock('@/infrastructure/db', () => ({
   schema,
 }));
 
-vi.mock('@/lib/auth', () => ({
-  resolveIdentity: vi.fn(async () => ({ userId: '00000000-0000-4000-8000-000000000101' })),
+vi.mock(import('@/lib/auth'), (): Partial<typeof authModule> => ({
+  resolveIdentity: vi.fn(async () => ({ userId: '00000000-0000-4000-8000-000000000101', expiresAt: null, issuedAt: null })),
   logServerDataRead: vi.fn(async () => {}),
-  getUserRoleDeptIds: mockGetUserRoleDeptIds,
-  canAccessDept: vi.fn(() => true),
   withAuth: (_o: any, h: Function) => async (...a: any[]) => {
     const check = await mockAuthCheck();
     if (!check.authorized) {
@@ -72,15 +69,15 @@ vi.mock('@/lib/auth', () => ({
   withPermission: mockWithPermission,
 }));
 
-vi.mock('@/lib/crypto', () => ({
+vi.mock(import('@/lib/crypto'), (): Partial<typeof cryptoModule> => ({
   generateUUID: () => 'aabbccdd-eeff-4000-8000-000000000001',
   generateId: (_len?: number) => 'aaaaaaaa',
   hashToken: (t: string) => t,
 }));
 
-vi.mock('@/lib/session/revoke', () => ({ revokeUserAccessByUserId: vi.fn(async () => 0) }));
+vi.mock(import('@/lib/session/revoke'), (): Partial<typeof sessionRevokeModule> => ({ revokeUserAccessByUserId: vi.fn(async () => 0) }));
 vi.mock('@/infrastructure/redis', () => ({ getRedis: vi.fn(() => null) }));
-vi.mock('@/domain/auth/password', () => ({
+vi.mock(import('@/domain/auth/password'), (): Partial<typeof authPasswordModule> => ({
   hashPassword: vi.fn(async (pw: string) => `$2b$10$${pw}_hashed`),
   isPasswordReused: vi.fn(async () => false),
   pushPasswordHistory: vi.fn(() => [] as string[]),
@@ -106,6 +103,11 @@ import {
   unlockUserAction,
   resetPasswordAction,
 } from '@/app/(dashboard)/users/actions';
+import type * as authModule from '@/lib/auth';
+import type * as cryptoModule from '@/lib/crypto';
+import type * as sessionRevokeModule from '@/lib/session/revoke';
+import type * as authPasswordModule from '@/domain/auth/password';
+
 
 // ════════════════════════════════════════════════════════
 // 测试生命周期

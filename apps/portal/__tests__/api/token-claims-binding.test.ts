@@ -44,7 +44,7 @@ vi.mock('@/lib/env', async (importOriginal) => {
   return { ...actual, getIssuer: () => ISSUER, getAppBaseURL: () => ISSUER };
 });
 
-vi.mock('@/lib/session/revoke', () => ({
+vi.mock(import('@/lib/session/revoke'), (): Partial<typeof sessionRevokeModule> => ({
   revokeUserAccessByUserId: mocks.mockRevokeUserAccess,
   isJtiRevoked: vi.fn(async () => false),
   trackUserJti: vi.fn(async () => {}),
@@ -52,12 +52,15 @@ vi.mock('@/lib/session/revoke', () => ({
   revokeUserToken: vi.fn(async () => {}),
 }));
 
-vi.mock('@/lib/permissions', () => ({
-  getUserPermissionContext: vi.fn(async () => ({ roles: [], permissions: [], deptIds: [] })),
+vi.mock(import('@/lib/permissions'), (): Partial<typeof permissionsModule> => ({
+  getUserPermissionContext: vi.fn(async () => ({ kind: 'ok' as const, context: { roles: [], permissions: [], deptIds: [] } })),
   cacheUserPermissionContext: vi.fn(async () => {}),
 }));
 
 import { signAccessToken, signLoginSession, signIdToken, verifyAccessToken } from '@/lib/auth/token';
+import type * as sessionRevokeModule from '@/lib/session/revoke';
+import type * as permissionsModule from '@/lib/permissions';
+
 
 const td = createTestDbHandle();
 tdHolder.current = td;

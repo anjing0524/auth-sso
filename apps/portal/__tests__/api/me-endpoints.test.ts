@@ -22,6 +22,9 @@ import {
   seedTestPermission,
   seedUserRoleBinding,
 } from '../helpers/seed-fixtures';
+import type * as authModule from '@/lib/auth';
+import type * as menuTreeModule from '@/lib/menu-tree';
+
 
 const now = new Date();
 
@@ -30,13 +33,12 @@ const { mockResolveIdentity } = vi.hoisted(() => ({
   mockResolveIdentity: vi.fn(),
 }));
 
-vi.mock('@/lib/auth', () => ({
+vi.mock(import('@/lib/auth'), (): Partial<typeof authModule> => ({
   resolveIdentity: mockResolveIdentity,
   logServerDataRead: vi.fn(async () => {}),
-  getUserRoleDeptIds: vi.fn().mockResolvedValue([]),
 }));
 
-vi.mock('@/lib/menu-tree', () => ({
+vi.mock(import('@/lib/menu-tree'), (): Partial<typeof menuTreeModule> => ({
   getDynamicMenuTree: vi.fn().mockResolvedValue([]),
 }));
 

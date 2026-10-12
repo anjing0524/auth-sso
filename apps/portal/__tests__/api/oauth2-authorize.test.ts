@@ -30,29 +30,34 @@ vi.mock('@/infrastructure/db', () => ({
 }));
 
 // @allow-module-mock @/app/(dashboard)/clients/data input-fixture: 只提供"这个 client 存在/不存在"这一输入；本文件依赖它的断言：全部 GET 用例（client 查询结果决定 302 回 RP 还是本地错误页）。client 查询本身由 client-api.test.ts 覆盖
-vi.mock('@/app/(dashboard)/clients/data', () => ({
+vi.mock(import('@/app/(dashboard)/clients/data'), (): Partial<typeof clientsDataModule> => ({
   getClientByClientId: mocks.mockGetClientByClientId,
 }));
 
 // @allow-module-mock @/app/api/auth/oauth2/authorize/data input-fixture: 只提供"当前登录用户及其角色"这一输入；本文件依赖它的断言：登录态通过后的重定向/错误参数用例（准入判定读它）。真实查询形态见该模块自身的测试
-vi.mock('@/app/api/auth/oauth2/authorize/data', () => ({
+vi.mock(import('@/app/api/auth/oauth2/authorize/data'), (): Partial<typeof authorizeDataModule> => ({
   getUserWithRoleClients: mocks.mockGetUserWithRoleClients,
 }));
 
 // @allow-module-mock @/lib/session/auth-request-store input-fixture: 授权请求暂存只提供"回跳时能取回参数"这一输入；本文件依赖它的断言：带 session_id 的回跳用例。其真实读写形态见 authorization-code-storage.test.ts 的真实 Redis 路径
-vi.mock('@/lib/session/auth-request-store', () => ({
+vi.mock(import('@/lib/session/auth-request-store'), (): Partial<typeof authRequestStoreModule> => ({
   storeAuthRequest: vi.fn(async () => {}),
   getStoredAuthRequest: vi.fn(async () => null),
   generateSessionId: vi.fn(() => 'sess-test'),
 }));
 
 // @allow-module-mock @/lib/auth/token input-fixture: 登录态只提供"谁已登录"这一输入；本文件依赖它的断言：全部需要已登录用户的用例（identity.userId 的来源）。验签本身不是本文件被测语义，其真实覆盖见 token-claims-binding / oauth-introspect / fixture-keypair
-vi.mock('@/lib/auth/token', () => ({
+vi.mock(import('@/lib/auth/token'), (): Partial<typeof authTokenModule> => ({
   verifyAccessToken: mocks.mockVerifyAccessToken,
 }));
 
 import { GET } from '@/app/api/auth/oauth2/authorize/route';
 import { NextRequest } from 'next/server';
+import type * as clientsDataModule from '@/app/(dashboard)/clients/data';
+import type * as authorizeDataModule from '@/app/api/auth/oauth2/authorize/data';
+import type * as authRequestStoreModule from '@/lib/session/auth-request-store';
+import type * as authTokenModule from '@/lib/auth/token';
+
 
 const REDIRECT_URI = 'https://rp.example.com/cb';
 const ISSUER = 'https://sso.example.com';

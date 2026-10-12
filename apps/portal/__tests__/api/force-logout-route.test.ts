@@ -41,7 +41,7 @@ vi.mock('@/infrastructure/db', () => ({
   get schema() { return tdHolder.current!.schema; },
 }));
 
-vi.mock('@/lib/session/revoke', () => ({
+vi.mock(import('@/lib/session/revoke'), (): Partial<typeof sessionRevokeModule> => ({
   revokeUserAccessByUserId: mocks.mockRevokeUserAccess,
   isJtiRevoked: vi.fn(async () => false),
   trackUserJti: vi.fn(async () => {}),
@@ -49,26 +49,32 @@ vi.mock('@/lib/session/revoke', () => ({
   revokeUserToken: vi.fn(async () => {}),
 }));
 
-vi.mock('@/lib/permissions', () => ({
-  getUserPermissionContext: vi.fn(async () => ({ roles: [], permissions: [], deptIds: [] })),
+vi.mock(import('@/lib/permissions'), (): Partial<typeof permissionsModule> => ({
+  getUserPermissionContext: vi.fn(async () => ({ kind: 'ok' as const, context: { roles: [], permissions: [], deptIds: [] } })),
   cacheUserPermissionContext: vi.fn(async () => {}),
   clearUserPermissionCache: mocks.mockClearPermCache,
 }));
 
 // 权限门面与数据范围守卫：本文件测的是响应契约，非鉴权（后者另有覆盖）
-vi.mock('@/lib/auth', () => ({
-  withPermission: (_opts: unknown, handler: (adminUserId: string) => unknown) =>
-    handler('00000000-0000-4000-8000-000000000101'),
+vi.mock(import('@/lib/auth'), (): Partial<typeof authModule> => ({
+  withPermission: (_opts, handler) => handler('00000000-0000-4000-8000-000000000101'),
 }));
 
-vi.mock('@/lib/authz', () => ({
-  withScopedWrite: async (_opts: unknown, write: () => Promise<unknown>) => write(),
+vi.mock(import('@/lib/authz'), (): Partial<typeof authzModule> => ({
+  // mock 只负责"直接执行回调"；事务对象由生产签名决定，测试内没有真实事务可用
+  withScopedWrite: async (_opts, write) => write(undefined as never),
 }));
 
-vi.mock('@/lib/cache-invalidation', () => ({ invalidateResource: vi.fn() }));
+vi.mock(import('@/lib/cache-invalidation'), (): Partial<typeof cacheInvalidationModule> => ({ invalidateResource: vi.fn() }));
 
 import { POST } from '@/app/api/users/[id]/force-logout/route';
 import { NextRequest } from 'next/server';
+import type * as sessionRevokeModule from '@/lib/session/revoke';
+import type * as permissionsModule from '@/lib/permissions';
+import type * as authModule from '@/lib/auth';
+import type * as authzModule from '@/lib/authz';
+import type * as cacheInvalidationModule from '@/lib/cache-invalidation';
+
 
 const td = createTestDbHandle();
 tdHolder.current = td;
