@@ -5,7 +5,7 @@
 | **状态**   | **accepted**（2026-10-12）                                            |
 | **日期**   | 2026-10-12                                                            |
 | **决策者** | Auth-SSO 团队（wayfinder 地图「测试真实性：治理整体 mock 生产模块与假绿断言」） |
-| **影响范围** | `apps/portal/vitest.api.config.ts`、`apps/portal/vitest.globalSetup.ts`、`apps/portal/vitest.api.setup.ts`（新增）、`apps/portal/__tests__/**`、`docs/portal-architecture-guidelines.md`、CI（**沿用现有门禁，零新增步骤**） |
+| **影响范围** | `apps/portal/vitest.api.config.ts`、`apps/portal/vitest.globalSetup.ts`、`apps/portal/vitest.redis.ts`（新增，地址解析与测试客户端工厂）、`apps/portal/vitest.api.setup.ts`（新增）、`apps/portal/__tests__/**`、`docs/portal-architecture-guidelines.md`、CI（**沿用现有门禁，零新增步骤**） |
 | **取代**   | 部分取代 `docs/archive/solutions/2026-07-09-test-mock-strategy.md` 的「统一 Mock 工厂」路线（实测 0/17 采用者） |
 
 ## 背景：一份看着在、实际不拦的安全网
