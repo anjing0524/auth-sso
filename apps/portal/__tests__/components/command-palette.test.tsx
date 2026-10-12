@@ -28,6 +28,8 @@ vi.mock('next/navigation', () => ({
 }));
 
 import { CommandPalette } from '@/components/shared/command-palette';
+import type * as commandModule from '@/components/ui/command';
+
 
 const mockMenus = [
   { id: '1', title: '工作台', url: '/dashboard', icon: 'LayoutDashboard', children: [] },
@@ -35,8 +37,21 @@ const mockMenus = [
   { id: '3', title: '角色管理', url: '/roles', icon: 'ShieldCheck', children: [] },
 ];
 
+/**
+ * 把"最小 stub 组件"约束为目标模块的键集后一次性断言其值类型。
+ *
+ * 键集受 `keyof T` 约束——拼错或多余的组件名会当场报错；值类型必须断言，因为真实
+ * 组件是 `forwardRef` 组件类型（带 `$$typeof` 等内部字段），jsdom 下的普通函数 stub
+ * 在结构上不可能满足它。
+ */
+function asComponentStubs<T>(stubs: { [K in keyof T]?: (props: any) => unknown }): Partial<T> {
+  return stubs as Partial<T>;
+}
+// 注：必须用**函数声明**——`vi.mock` 工厂会被提升到文件顶部，`const` 箭头函数在工厂执行时仍在 TDZ
+
 // Mock CommandDialog open state
-vi.mock('@/components/ui/command', () => ({
+vi.mock(import('@/components/ui/command'), (): Partial<typeof commandModule> =>
+  asComponentStubs<typeof commandModule>({
   CommandDialog: ({ children, open }: any) =>
     open ? <div data-testid="command-dialog">{children}</div> : null,
   CommandInput: (props: any) => <input placeholder="搜索功能..." {...props} />,

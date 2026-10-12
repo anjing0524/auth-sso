@@ -18,6 +18,9 @@ import { render, screen } from '@testing-library/react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import React from 'react';
 import { AppSidebar } from '@/components/layout/app-sidebar';
+import type * as sidebarModule from '@/components/ui/sidebar';
+import type * as dropdownMenuModule from '@/components/ui/dropdown-menu';
+
 
 // ============================================================
 // Mocks
@@ -86,11 +89,25 @@ function makeLinkMock() {
   };
 }
 
+/**
+ * 把"最小 stub 组件"约束为目标模块的键集后一次性断言其值类型。
+ *
+ * 键集受 `keyof T` 约束——拼错或多余的组件名会当场报错；值类型必须断言，因为真实
+ * 组件是 `forwardRef` 组件类型（带 `$$typeof` 等内部字段），jsdom 下的普通函数 stub
+ * 在结构上不可能满足它。
+ */
+function asComponentStubs<T>(stubs: { [K in keyof T]?: (props: any) => unknown }): Partial<T> {
+  return stubs as Partial<T>;
+}
+// 注：必须用**函数声明**——`vi.mock` 工厂会被提升到文件顶部，`const` 箭头函数在工厂执行时仍在 TDZ
+
 // 将工厂函数包装为匿名函数传递给 vi.mock
 // `require('react')` 在这些函数首次调用时才执行，此时模块系统已就绪
 vi.mock('next/link', () => makeLinkMock());
-vi.mock('@/components/ui/sidebar', () => makeSidebarMock());
-vi.mock('@/components/ui/dropdown-menu', () => makeDropdownMock());
+vi.mock(import('@/components/ui/sidebar'), (): Partial<typeof sidebarModule> =>
+  asComponentStubs<typeof sidebarModule>(makeSidebarMock()));
+vi.mock(import('@/components/ui/dropdown-menu'), (): Partial<typeof dropdownMenuModule> =>
+  asComponentStubs<typeof dropdownMenuModule>(makeDropdownMock()));
 
 // ============================================================
 // Tests

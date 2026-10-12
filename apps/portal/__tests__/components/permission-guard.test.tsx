@@ -14,10 +14,12 @@
 import { render, screen } from '@testing-library/react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { PermissionGuard } from '@/app/(dashboard)/users/components/permission-guard';
+import type * as usePermissionsModule from '@/hooks/use-permissions';
+
 
 // ── Mock usePermissions ──────────────────────────────────────
 const mockUsePermissions = vi.fn();
-vi.mock('@/hooks/use-permissions', () => ({
+vi.mock(import('@/hooks/use-permissions'), (): Partial<typeof usePermissionsModule> => ({
   usePermissions: () => mockUsePermissions(),
 }));
 

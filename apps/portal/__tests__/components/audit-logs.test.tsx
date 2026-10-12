@@ -11,7 +11,7 @@ import { render, screen } from '@testing-library/react';
 
 // Mock 共享数据获取函数 — 返回 { data, pagination } 结构
 // vi.mock 是 hoisted 的，不能引用外部变量，必须内联对象
-vi.mock('@/app/audit/data', () => ({
+vi.mock(import('@/app/audit/data'), (): Partial<typeof auditDataModule> => ({
   getLoginLogs: vi.fn().mockResolvedValue({ data: [], pagination: { page: 1, pageSize: 20, total: 0 } }),
   getAuditLogs: vi.fn().mockResolvedValue({ data: [], pagination: { page: 1, pageSize: 20, total: 0 } }),
 }));
@@ -22,13 +22,16 @@ vi.mock('next/navigation', () => ({
 }));
 
 // Mock auth (audit-logs page 在 layout 层鉴权，但 resolveIdentity 可能间接调用)
-vi.mock('@/lib/auth/verify-jwt', () => ({
+vi.mock(import('@/lib/auth/verify-jwt'), (): Partial<typeof authVerifyJwtModule> => ({
   resolveIdentity: vi.fn().mockResolvedValue({
     claims: { sub: 'user-1', iss: '', aud: 'auth-sso', jti: '' },
   }),
 }));
 
 import AuditLogsPage from '@/app/(dashboard)/audit-logs/page';
+import type * as auditDataModule from '@/app/audit/data';
+import type * as authVerifyJwtModule from '@/lib/auth/verify-jwt';
+
 
 describe('AuditLogsPage', () => {
   it('空数据时渲染页面结构', async () => {
