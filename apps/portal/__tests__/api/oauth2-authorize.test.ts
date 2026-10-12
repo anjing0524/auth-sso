@@ -1,9 +1,17 @@
 /**
- * OAuth 2.1 Authorize 端点测试（GET /api/auth/oauth2/authorize）— mock 编排依赖
+ * OAuth 2.1 Authorize 端点测试（GET /api/auth/oauth2/authorize）
  *
  * 覆盖决策 D1（RFC 6749 §4.1.2.1）：redirect_uri 已通过白名单校验后的授权拒绝
  * 重定向回 RP（error/state/iss）；未通过校验的失败走本地错误页，不向未验证
  * 地址重定向。
+ *
+ * ## 为什么这里的模块级 mock 是「保留」而不是「换真实」（#49 / #33 的判定）
+ *
+ * 本文件的主题是**重定向语义**（失败往哪儿跳、带什么参数），不是令牌签发/验签，
+ * 也不是权限解析。因此把编排依赖（client 查询、用户查询、授权请求暂存、登录态
+ * 验签）作为**输入夹具**替换是恰当的——每个 mock 都带 `input-fixture` 理由注解，
+ * 说明它只提供输入、不替被测语义说话。这些依赖的真实形态另有专测覆盖
+ * （client 查询见 client-api，验签见 token-claims-binding / oauth-introspect）。
  *
  * @req H-AUTH-003
  * @vitest-environment node
@@ -21,20 +29,24 @@ vi.mock('@/infrastructure/db', () => ({
   schema: {},
 }));
 
+// @allow-module-mock @/app/(dashboard)/clients/data input-fixture: 只提供"这个 client 存在/不存在"这一输入，断言落在重定向语义上；client 查询本身由 client-api.test.ts 覆盖
 vi.mock('@/app/(dashboard)/clients/data', () => ({
   getClientByClientId: mocks.mockGetClientByClientId,
 }));
 
+// @allow-module-mock @/app/api/auth/oauth2/authorize/data input-fixture: 只提供"当前登录用户及其角色"这一输入（授权准入判定的输入侧）；真实查询形态见该模块自身的测试
 vi.mock('@/app/api/auth/oauth2/authorize/data', () => ({
   getUserWithRoleClients: mocks.mockGetUserWithRoleClients,
 }));
 
+// @allow-module-mock @/lib/session/auth-request-store input-fixture: 授权请求暂存只提供"回跳时能取回参数"这一输入；本文件不测暂存实现（其读写形态见 authorization-code-storage.test.ts 的真实 Redis 路径）
 vi.mock('@/lib/session/auth-request-store', () => ({
   storeAuthRequest: vi.fn(async () => {}),
   getStoredAuthRequest: vi.fn(async () => null),
   generateSessionId: vi.fn(() => 'sess-test'),
 }));
 
+// @allow-module-mock @/lib/auth/token input-fixture: 登录态只提供"谁已登录"这一输入；验签本身不是本文件被测语义，其真实覆盖见 token-claims-binding / oauth-introspect / fixture-keypair
 vi.mock('@/lib/auth/token', () => ({
   verifyAccessToken: mocks.mockVerifyAccessToken,
 }));

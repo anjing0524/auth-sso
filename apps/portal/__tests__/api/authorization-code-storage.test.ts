@@ -23,9 +23,10 @@ import { createTestDbHandle, seedTestData } from '../helpers/test-db';
 import { seedAdminUser, seedPortalClient, seedRootDept } from '../helpers/seed-fixtures';
 import { createHash } from 'node:crypto';
 import { hashToken } from '@/lib/crypto';
+import { seedSigningKeys } from '../helpers/seed-signing-keys';
+import type * as tokenModule from '@/lib/auth/token';
 
-const { mocks, tdHolder } = vi.hoisted(() => ({
-  mocks: { mockVerifyAccessToken: vi.fn(async () => ({ sub: '00000000-0000-4000-8000-000000000101' })) },
+const { tdHolder } = vi.hoisted(() => ({
   tdHolder: { current: null as ReturnType<typeof createTestDbHandle> | null },
 }));
 
@@ -34,6 +35,7 @@ vi.mock('@/infrastructure/db', () => ({
   get schema() { return tdHolder.current!.schema; },
 }));
 
+// @allow-module-mock @/app/(dashboard)/clients/data input-fixture: 只提供"该 client 存在及其 redirect_uris"这一输入，断言落在授权码写入形态上
 vi.mock('@/app/(dashboard)/clients/data', () => ({
   getClientByClientId: async (clientId: string) => {
     const { db, schema } = tdHolder.current!;
@@ -42,6 +44,7 @@ vi.mock('@/app/(dashboard)/clients/data', () => ({
   },
 }));
 
+// @allow-module-mock @/app/api/auth/oauth2/authorize/data input-fixture: 只提供"当前登录用户及其角色"这一输入；本文件不测该查询实现
 vi.mock('@/app/api/auth/oauth2/authorize/data', () => ({
   getUserWithRoleClients: async () => ({
     id: '00000000-0000-4000-8000-000000000101',
@@ -52,21 +55,26 @@ vi.mock('@/app/api/auth/oauth2/authorize/data', () => ({
   }),
 }));
 
+// @allow-module-mock @/lib/session/auth-request-store input-fixture: 只提供"回跳时能取回授权参数"这一输入；本文件不测暂存实现
 vi.mock('@/lib/session/auth-request-store', () => ({
   storeAuthRequest: vi.fn(async () => {}),
   getStoredAuthRequest: vi.fn(async () => null),
   generateSessionId: vi.fn(() => 'sess-test'),
 }));
 
-vi.mock('@/lib/auth/token', () => ({
-  verifyAccessToken: mocks.mockVerifyAccessToken,
-  signAccessToken: vi.fn(async () => ({ token: 'at-mock', jti: 'jti-mock' })),
-  signIdToken: vi.fn(async () => 'id-mock'),
-  issueRefreshToken: vi.fn(async () => 'rt-mock'),
-  revokeRefreshTokenFamily: vi.fn(async () => {}),
-  ACCESS_TOKEN_TTL: 3600,
-}));
+// @allow-module-mock @/lib/auth/token input-fixture: 签发/撤销类导出只提供输入（本文件主题是**授权码写入形态**，不是签发）；`verifyAccessToken` 走 `importOriginal()` 真身——登录态必须真实验签，否则 authorize 端点会接受伪造会话
+vi.mock(import('@/lib/auth/token'), async (importOriginal): Promise<Partial<typeof tokenModule>> => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    signAccessToken: vi.fn(async () => ({ token: 'at-mock', jti: 'jti-mock' })),
+    signIdToken: vi.fn(async () => 'id-mock'),
+    issueRefreshToken: vi.fn(async () => 'rt-mock'),
+    revokeRefreshTokenFamily: vi.fn(async () => {}),
+  };
+});
 
+// @allow-module-mock @/lib/permissions input-fixture: 只提供"该用户的权限上下文"这一输入；真实 PG 驱动的分级由 rt-permission-failure / permission-enforcement 覆盖
 vi.mock('@/lib/permissions', () => ({
   getUserPermissionContext: vi.fn(async () => ({ kind: 'ok', context: { roles: [], permissions: [], deptIds: [] } })),
   cacheUserPermissionContext: vi.fn(async () => {}),
@@ -80,6 +88,10 @@ vi.mock('@/lib/env', async (importOriginal) => {
 import { GET } from '@/app/api/auth/oauth2/authorize/route';
 import { NextRequest } from 'next/server';
 import { exchangeAuthorizationCode } from '@/lib/auth/oauth-grant';
+import { signLoginSession } from '@/lib/auth/token';
+
+/** 当前用例的真实登录态令牌（authorize 端点会用真身 verifyAccessToken 验它） */
+let loginSessionToken = '';
 
 const td = createTestDbHandle();
 tdHolder.current = td;
@@ -103,7 +115,7 @@ function authorizeRequest(): NextRequest {
   });
   return new NextRequest(
     `http://localhost:4100/api/auth/oauth2/authorize?${params.toString()}`,
-    { headers: { cookie: 'login_session=stub-session-jwt' } },
+    { headers: { cookie: `login_session=${loginSessionToken}` } },
   );
 }
 
@@ -112,12 +124,32 @@ afterAll(async () => { await td.close(); });
 
 beforeEach(async () => {
   vi.clearAllMocks();
-  mocks.mockVerifyAccessToken.mockResolvedValue({ sub: '00000000-0000-4000-8000-000000000101' });
   await td.cleanup();
   await seedTestData(td.db, {
     departments: seedRootDept(),
     users: seedAdminUser(),
     clients: seedPortalClient({ clientId: CLIENT_ID, redirectUris: [REDIRECT_URI] }),
+  });
+  // 真实 ES256：种入密钥对，并签一枚**真实**登录态令牌放进 Cookie——
+  // 伪造的 stub 会被真身 verifyAccessToken 拒绝（这正是我们要的边界）。
+  await seedSigningKeys(td);
+  loginSessionToken = await signLoginSession('00000000-0000-4000-8000-000000000101');
+});
+
+describe('authorize 端点的登录态边界（真实验签）', () => {
+  it('**伪造的 login_session 被真实验签拒绝**：不签发授权码，跳回登录页', async () => {
+    // 结构合法但**签名被篡改**：这样才能区分"真验签"与"只解码"——
+    // 用一个结构上就不是 JWT 的串会被解码阶段先拒掉，从而掩盖"跳过验签"的变异（实测）。
+    loginSessionToken = `${loginSessionToken.slice(0, -3)}xxx`;
+
+    const res = await GET(authorizeRequest());
+
+    expect(new URL(res.headers.get('location')!).pathname).toContain('login');
+    // 真实状态：库里不得出现任何授权码
+    const rows = await td.db
+      .select({ id: td.schema.authorizationCodes.id })
+      .from(td.schema.authorizationCodes);
+    expect(rows).toHaveLength(0);
   });
 });
 
