@@ -45,8 +45,6 @@ vi.mock(import('@/lib/crypto'), (): Partial<typeof cryptoModule> => ({
   hashToken: (t: string) => t,
 }));
 
-vi.mock(import('@/lib/audit'), (): Partial<typeof auditModule> => ({
-}));
 
 vi.mock('@/infrastructure/redis', () => ({}));
 
@@ -56,7 +54,6 @@ import { GET as GetRole } from '@/app/api/roles/[id]/route';
 import { GET as GetRolePermissions } from '@/app/api/roles/[id]/permissions/route';
 import type * as authModule from '@/lib/auth';
 import type * as cryptoModule from '@/lib/crypto';
-import type * as auditModule from '@/lib/audit';
 
 
 const ROLE_ID = '00000000-0000-4000-8000-000000000301';

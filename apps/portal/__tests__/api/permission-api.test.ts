@@ -49,8 +49,6 @@ vi.mock(import('@/lib/crypto'), (): Partial<typeof cryptoModule> => ({
   generateId: () => 'aaaaaaaa',
 }));
 
-vi.mock(import('@/lib/audit'), (): Partial<typeof auditModule> => ({
-}));
 
 vi.mock('@/infrastructure/redis', () => ({}));
 
@@ -59,7 +57,6 @@ import { GET as GetPermission } from '@/app/api/permissions/[id]/route';
 import { POST as RegisterPermissions } from '@/app/api/permissions/register/route';
 import type * as authModule from '@/lib/auth';
 import type * as cryptoModule from '@/lib/crypto';
-import type * as auditModule from '@/lib/audit';
 
 
 const REGISTRY_CLIENT_ID = 'registry-client';
