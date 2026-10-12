@@ -29,7 +29,7 @@
 import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest';
 import crypto from 'crypto';
 import { eq } from 'drizzle-orm';
-import { JWT_TYP } from '@auth-sso/contracts';
+import { JWT_TYP, type LoginEventType } from '@auth-sso/contracts';
 import { createTestDbHandle, seedTestData } from '../helpers/test-db';
 import { hashToken } from '@/lib/crypto';
 import { seedPortalClient, seedRootDept, seedTestUser } from '../helpers/seed-fixtures';
@@ -125,10 +125,6 @@ async function seedRefreshTokenRow(clientId: string, token: string): Promise<voi
  * `writeLoginLog` 是 **fire-and-forget**（内部最多 3 次重试、首次失败退避 1s），
  * 因此调用返回时行可能还没落库——直接断言行会有竞态，故轮询等待。
  */
-/** `login_logs.event_type` 的取值（与 schema 的 pgEnum 一致） */
-type LoginEventType =
-  | 'LOGIN_SUCCESS' | 'LOGIN_FAILED' | 'LOGOUT' | 'TOKEN_REFRESH' | 'TOKEN_REFRESH_FAILED';
-
 async function waitForLoginLog(eventType: LoginEventType, timeoutMs = 3000) {
   const deadline = Date.now() + timeoutMs;
   for (;;) {

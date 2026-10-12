@@ -62,7 +62,7 @@ vi.mock('@/lib/session/auth-request-store', () => ({
   generateSessionId: vi.fn(() => 'sess-test'),
 }));
 
-// @allow-module-mock @/lib/auth/token input-fixture: 签发/撤销类导出只提供输入（本文件主题是**授权码写入形态**，不是签发）；`verifyAccessToken` 走 `importOriginal()` 真身——登录态必须真实验签，否则 authorize 端点会接受伪造会话
+// @allow-module-mock @/lib/auth/token input-fixture: 签发/撤销类导出只提供输入；本文件依赖它们的断言：无（本文件不触达签发路径，主题是**授权码写入形态**）。`verifyAccessToken` 走 `importOriginal()` 真身——登录态必须真实验签，否则 authorize 端点会接受伪造会话
 vi.mock(import('@/lib/auth/token'), async (importOriginal): Promise<Partial<typeof tokenModule>> => {
   const actual = await importOriginal();
   return {

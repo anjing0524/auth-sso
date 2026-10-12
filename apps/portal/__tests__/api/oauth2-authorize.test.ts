@@ -29,24 +29,24 @@ vi.mock('@/infrastructure/db', () => ({
   schema: {},
 }));
 
-// @allow-module-mock @/app/(dashboard)/clients/data input-fixture: 只提供"这个 client 存在/不存在"这一输入，断言落在重定向语义上；client 查询本身由 client-api.test.ts 覆盖
+// @allow-module-mock @/app/(dashboard)/clients/data input-fixture: 只提供"这个 client 存在/不存在"这一输入；本文件依赖它的断言：全部 GET 用例（client 查询结果决定 302 回 RP 还是本地错误页）。client 查询本身由 client-api.test.ts 覆盖
 vi.mock('@/app/(dashboard)/clients/data', () => ({
   getClientByClientId: mocks.mockGetClientByClientId,
 }));
 
-// @allow-module-mock @/app/api/auth/oauth2/authorize/data input-fixture: 只提供"当前登录用户及其角色"这一输入（授权准入判定的输入侧）；真实查询形态见该模块自身的测试
+// @allow-module-mock @/app/api/auth/oauth2/authorize/data input-fixture: 只提供"当前登录用户及其角色"这一输入；本文件依赖它的断言：登录态通过后的重定向/错误参数用例（准入判定读它）。真实查询形态见该模块自身的测试
 vi.mock('@/app/api/auth/oauth2/authorize/data', () => ({
   getUserWithRoleClients: mocks.mockGetUserWithRoleClients,
 }));
 
-// @allow-module-mock @/lib/session/auth-request-store input-fixture: 授权请求暂存只提供"回跳时能取回参数"这一输入；本文件不测暂存实现（其读写形态见 authorization-code-storage.test.ts 的真实 Redis 路径）
+// @allow-module-mock @/lib/session/auth-request-store input-fixture: 授权请求暂存只提供"回跳时能取回参数"这一输入；本文件依赖它的断言：带 session_id 的回跳用例。其真实读写形态见 authorization-code-storage.test.ts 的真实 Redis 路径
 vi.mock('@/lib/session/auth-request-store', () => ({
   storeAuthRequest: vi.fn(async () => {}),
   getStoredAuthRequest: vi.fn(async () => null),
   generateSessionId: vi.fn(() => 'sess-test'),
 }));
 
-// @allow-module-mock @/lib/auth/token input-fixture: 登录态只提供"谁已登录"这一输入；验签本身不是本文件被测语义，其真实覆盖见 token-claims-binding / oauth-introspect / fixture-keypair
+// @allow-module-mock @/lib/auth/token input-fixture: 登录态只提供"谁已登录"这一输入；本文件依赖它的断言：全部需要已登录用户的用例（identity.userId 的来源）。验签本身不是本文件被测语义，其真实覆盖见 token-claims-binding / oauth-introspect / fixture-keypair
 vi.mock('@/lib/auth/token', () => ({
   verifyAccessToken: mocks.mockVerifyAccessToken,
 }));
@@ -74,7 +74,7 @@ function buildAuthorizeRequest(overrides: Record<string, string> = {}): NextRequ
     code_challenge_method: 'S256',
     ...overrides,
   });
-  // 携带 login_session Cookie 以命中分支 B 的 SSO 免登路径（verifyAccessToken 已 mock）
+  // 携带 login_session Cookie 以命中分支 B 的 SSO 免登路径（该 Cookie 的验签在本文件被 input-fixture 替身接管，见上方注解）
   return new NextRequest(`http://localhost:4100/api/auth/oauth2/authorize?${params.toString()}`, {
     headers: { cookie: 'login_session=stub-session-jwt' },
   });
