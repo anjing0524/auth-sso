@@ -22,9 +22,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createTestDbHandle, seedTestData } from '../helpers/test-db';
 import {
   seedRootDept, seedAdminUser, seedTestUser,
-  seedSuperAdminRole, seedJwks, seedUserRoleBinding,
+  seedSuperAdminRole, seedUserRoleBinding,
 } from '../helpers/seed-fixtures';
+import { seedSigningKeys } from '../helpers/seed-signing-keys';
 import type { SeedData } from '../helpers/test-db';
+import type * as permissionsModule from '@/lib/permissions';
+import type * as redisModule from '@/infrastructure/redis';
 
 // =========================================
 // 真实测试 DB 句柄
@@ -36,49 +39,44 @@ vi.mock('@/infrastructure/db', () => ({
   get schema() { return td.schema; },
 }));
 
-// Mock Redis — 返回 null 强制 DB 回退（jti 黑名单 + 权限缓存均不命中）
-vi.mock('@/infrastructure/redis', () => ({
-  getRedis: () => ({
-    get: async () => null,
-    setex: async () => 'OK',
-    del: async () => 1,
-    exists: async () => 0,
-    keys: async () => [],
-    sadd: async () => 1,
-    srem: async () => 0,
-    smembers: async () => [],
-    expire: async () => 1,
-    incr: async () => 1,
-    hset: async () => 1,
-    hgetall: async () => ({}),
-    pipeline: () => ({
-      del: () => ({ get: () => ({}), setex: () => ({}), sadd: () => ({}), srem: () => ({}), exec: async () => [] }),
-    }),
-    quit: async () => {},
-  }),
-}));
+// 真实 Redis：正常路径走真身（jti 黑名单与权限缓存都是真库，每用例前被全局钩子清空）。
+// 「Redis 不可用」类用例打开 faultHolder.failRedis 注入**可抛错**的故障——改造前这里
+// 是一个永不抛错的 fake（所有方法返回常量），于是那两条用例实际测的是"缓存未命中"，
+// 而不是"基础设施故障"（普查 N3；ADR-022 §3 要求故障注入必须可抛错）。
+vi.mock(import('@/infrastructure/redis'), async (importOriginal): Promise<Partial<typeof redisModule>> => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    getRedis: () => {
+      if (!faultHolder.failRedis) return actual.getRedis();
+      const thrower = async () => { throw new Error('Redis down (injected)'); };
+      return {
+        connect: thrower, ping: thrower, get: thrower, getdel: thrower, setex: thrower,
+        del: thrower, keys: thrower, quit: thrower, sadd: thrower, srem: thrower,
+        smembers: thrower, expire: thrower, hset: thrower, hgetall: thrower,
+        exists: thrower, incr: thrower,
+        pipeline: () => { throw new Error('Redis down (injected)'); },
+      };
+    },
+  };
+});
 
 // =========================================
 // Mock — JWT 层（crypto 操作，无法用真实 DB 替代）
 // =========================================
 const {
-  mockGetJwtFromCookie,
-  mockVerifyJwt,
+  cookieHolder,
+  faultHolder,
   mockHeadersGet,
   mockConnection,
-} = vi.hoisted(() => {
-  const mockGetJwtFromCookie = vi.fn();
-  const mockVerifyJwt = vi.fn();
-  const mockHeadersGet = vi.fn().mockReturnValue(null);
-  const mockConnection = vi.fn().mockResolvedValue(undefined);
-
-  return {
-    mockGetJwtFromCookie,
-    mockVerifyJwt,
-    mockHeadersGet,
-    mockConnection,
-  };
-});
+} = vi.hoisted(() => ({
+  /** 当前请求携带的 Cookie JWT（真实 `getJwtFromCookie` 会读它） */
+  cookieHolder: { value: null as string | null },
+  /** 故障注入开关：打开后所有 Redis 命令抛错 */
+  faultHolder: { failRedis: false },
+  mockHeadersGet: vi.fn().mockReturnValue(null),
+  mockConnection: vi.fn().mockResolvedValue(undefined),
+}));
 
 // =========================================
 // Mock — permission context（控制 checkPermission 返回的权限/角色）
@@ -87,13 +85,14 @@ const { mockGetUserPermissionContext } = vi.hoisted(() => ({
   mockGetUserPermissionContext: vi.fn(),
 }));
 
-vi.mock('@/lib/permissions', () => ({
-  getUserPermissionContext: mockGetUserPermissionContext,
-  // 用真实实现而非 mock：它是纯收窄函数（result → context | null），
-  // mock 掉它等于把待测语义替换成测试自己的假设。
-  toPermissionContextOrNull: (r: { kind: string; context?: unknown }) =>
-    r.kind === 'ok' ? r.context : null,
-}));
+// 只替换"输入"那一半：`toPermissionContextOrNull` 用 `importOriginal()` 取**真身**。
+// 改造前这里手写重实现了它、注释却自称"用真实实现"——正是普查 N4：手写副本与真身
+// 各自演化，而测试在副本身上断言（ADR-022 §4(a) 的注解 kind 只对被替换的导出成立）。
+// @allow-module-mock @/lib/permissions input-fixture: 权限上下文是本文件被测判定（权限/角色/管理员绕过）的输入；真实 PG 驱动的上下文解析由 rt-permission-failure 覆盖
+vi.mock(import('@/lib/permissions'), async (importOriginal): Promise<Partial<typeof permissionsModule>> => {
+  const actual = await importOriginal();
+  return { ...actual, getUserPermissionContext: mockGetUserPermissionContext };
+});
 
 vi.mock('next/server', async (importOriginal) => {
   const actual = await importOriginal<typeof import('next/server')>();
@@ -108,19 +107,18 @@ vi.mock('next/headers', () => ({
     get: mockHeadersGet,
   }),
   cookies: async () => ({
-    get: (name: string) => ({ value: 'test-token' }),
+    get: (name: string) =>
+      cookieHolder.value === null ? undefined : { name, value: cookieHolder.value },
   }),
 }));
 
-vi.mock('@/lib/session', () => ({
-  getJwtFromCookie: mockGetJwtFromCookie,
-}));
-
-vi.mock('@/lib/auth/token', () => ({
-  verifyAccessToken: mockVerifyJwt,
-}));
+// `@/lib/session` 与 `@/lib/auth/token` 不再 mock：`getJwtFromCookie` 走真实实现
+// （读下面 mock 的 `next/headers` cookies），`verifyAccessToken` 走真实 ES256
+// （密钥对由 `seedSigningKeys` 种入真库）。
 
 import { checkPermission, withPermission } from '@/lib/auth';
+import { signAccessToken } from '@/lib/auth/token';
+import { PORTAL_CLIENT_ID } from '@auth-sso/contracts';
 
 // =========================================
 // 固定 seed ID 常量（与 JWT claims 对齐）
@@ -250,7 +248,6 @@ function buildFullSeed(): SeedData {
       ...(seedUserRoleBinding(ADMIN_USER_ID, ADMIN_ROLE_ID) ?? []),
       ...(seedUserRoleBinding(USER_ID, USER_ROLE_ID) ?? []),
     ],
-    jwks: seedJwks(),
   };
 }
 
@@ -261,8 +258,12 @@ beforeAll(async () => { await td.connect(); });
 afterAll(async () => { await td.close(); });
 beforeEach(async () => {
   vi.clearAllMocks();
+  cookieHolder.value = null;
+  faultHolder.failRedis = false;
   await td.cleanup();
   await seedTestData(td.db, buildFullSeed());
+  // 真实 ES256：种入密钥对（内含签名密钥缓存重置）
+  await seedSigningKeys(td);
 
   // 默认权限上下文：USER 角色 + 全部 4 个权限
   mockGetUserPermissionContext.mockResolvedValue( { kind: 'ok', context:{
@@ -272,23 +273,26 @@ beforeEach(async () => {
   } });
 });
 
+/**
+ * 让当前请求带上一枚**真实签名**的 Access Token（aud = PORTAL_CLIENT_ID）。
+ * 取代改造前的 `mockGetJwtFromCookie('valid-token') + mockVerifyJwt(claims)` 组合——
+ * 那套组合里"验签"从未真正发生。
+ */
+async function givenValidToken(userId: string = USER_ID): Promise<void> {
+  const { token } = await signAccessToken(userId, PORTAL_CLIENT_ID, 'openid');
+  cookieHolder.value = token;
+}
+
 describe('Permission Enforcement', () => {
   function createRequest(): NextRequest {
     return new NextRequest('http://localhost:4100/api/test');
   }
 
-  const defaultClaims = {
-    sub: USER_ID,
-    jti: 'jti-123',
-    iss: 'http://localhost:4101',
-    aud: 'auth-sso',
-  };
-
   // ======== checkPermission ========
 
   describe('checkPermission', () => {
     it('JWT Cookie 不存在时返回 401', async () => {
-      mockGetJwtFromCookie.mockResolvedValueOnce(null);
+      cookieHolder.value = null;
 
       const result = await checkPermission({
         permissions: ['portal:user:list'],
@@ -299,8 +303,7 @@ describe('Permission Enforcement', () => {
     });
 
     it('JWT 验签失败时返回 401', async () => {
-      mockGetJwtFromCookie.mockResolvedValueOnce('invalid-token');
-      mockVerifyJwt.mockResolvedValueOnce(null);
+      cookieHolder.value = 'invalid-token';
 
       const result = await checkPermission({
         permissions: ['portal:user:list'],
@@ -311,8 +314,7 @@ describe('Permission Enforcement', () => {
     });
 
     it('权限上下文中无所需权限时返回 403', async () => {
-      mockGetJwtFromCookie.mockResolvedValueOnce('valid-token');
-      mockVerifyJwt.mockResolvedValueOnce(defaultClaims);
+      await givenValidToken();
       mockGetUserPermissionContext.mockResolvedValueOnce( { kind: 'ok', context:{
         roles: [{ id: USER_ROLE_ID, code: 'USER', name: '普通用户' }],
         permissions: ['portal:user:list'],
@@ -328,8 +330,7 @@ describe('Permission Enforcement', () => {
     });
 
     it('用户拥有任一所需权限时通过', async () => {
-      mockGetJwtFromCookie.mockResolvedValueOnce('valid-token');
-      mockVerifyJwt.mockResolvedValueOnce(defaultClaims);
+      await givenValidToken();
 
       const result = await checkPermission({
         permissions: ['portal:audit:read'],
@@ -340,8 +341,7 @@ describe('Permission Enforcement', () => {
     });
 
     it('拥有多个权限中的任一即通过（或逻辑）', async () => {
-      mockGetJwtFromCookie.mockResolvedValueOnce('valid-token');
-      mockVerifyJwt.mockResolvedValueOnce(defaultClaims);
+      await givenValidToken();
 
       const result = await checkPermission({
         permissions: ['portal:audit:read', 'portal:user:list'],
@@ -352,8 +352,7 @@ describe('Permission Enforcement', () => {
 
     // @req H-ACL-003
     it('requireAll 模式：缺少任一权限时返回 403', async () => {
-      mockGetJwtFromCookie.mockResolvedValueOnce('valid-token');
-      mockVerifyJwt.mockResolvedValueOnce(defaultClaims);
+      await givenValidToken();
       mockGetUserPermissionContext.mockResolvedValueOnce( { kind: 'ok', context:{
         roles: [{ id: USER_ROLE_ID, code: 'USER', name: '普通用户' }],
         permissions: ['portal:user:list'],
@@ -370,8 +369,7 @@ describe('Permission Enforcement', () => {
     });
 
     it('requireAll 模式：拥有全部权限时通过', async () => {
-      mockGetJwtFromCookie.mockResolvedValueOnce('valid-token');
-      mockVerifyJwt.mockResolvedValueOnce(defaultClaims);
+      await givenValidToken();
 
       const result = await checkPermission({
         permissions: ['portal:user:list', 'portal:audit:read'],
@@ -383,8 +381,7 @@ describe('Permission Enforcement', () => {
     });
 
     it('基于角色的检查：匹配角色时通过', async () => {
-      mockGetJwtFromCookie.mockResolvedValueOnce('valid-token');
-      mockVerifyJwt.mockResolvedValueOnce(defaultClaims);
+      await givenValidToken();
       mockGetUserPermissionContext.mockResolvedValueOnce( { kind: 'ok', context:{
         roles: [{ id: ADMIN_ROLE_ID, code: 'ADMIN', name: '管理员' }],
         permissions: [],
@@ -400,8 +397,7 @@ describe('Permission Enforcement', () => {
     });
 
     it('基于角色的检查：角色不匹配时返回 403', async () => {
-      mockGetJwtFromCookie.mockResolvedValueOnce('valid-token');
-      mockVerifyJwt.mockResolvedValueOnce(defaultClaims);
+      await givenValidToken();
 
       const result = await checkPermission({
         roles: ['ADMIN'],
@@ -412,8 +408,7 @@ describe('Permission Enforcement', () => {
     });
 
     it('超级管理员角色（ADMIN）绕过所有权限检查', async () => {
-      mockGetJwtFromCookie.mockResolvedValueOnce('valid-token');
-      mockVerifyJwt.mockResolvedValueOnce(defaultClaims);
+      await givenValidToken();
       mockGetUserPermissionContext.mockResolvedValueOnce( { kind: 'ok', context:{
         roles: [{ id: ADMIN_ROLE_ID, code: 'ADMIN', name: '管理员' }],
         permissions: [],
@@ -429,8 +424,7 @@ describe('Permission Enforcement', () => {
     });
 
     it('超级管理员角色（SUPER_ADMIN）绕过所有权限检查', async () => {
-      mockGetJwtFromCookie.mockResolvedValueOnce('valid-token');
-      mockVerifyJwt.mockResolvedValueOnce(defaultClaims);
+      await givenValidToken();
       mockGetUserPermissionContext.mockResolvedValueOnce( { kind: 'ok', context:{
         roles: [{ id: SUPER_ADMIN_ROLE_ID, code: 'SUPER_ADMIN', name: '超级管理员' }],
         permissions: [],
@@ -445,8 +439,7 @@ describe('Permission Enforcement', () => {
     });
 
     it('无权限列表且无角色列表时仅要求登录', async () => {
-      mockGetJwtFromCookie.mockResolvedValueOnce('valid-token');
-      mockVerifyJwt.mockResolvedValueOnce(defaultClaims);
+      await givenValidToken();
 
       const result = await checkPermission({});
 
@@ -454,26 +447,23 @@ describe('Permission Enforcement', () => {
       expect(result.userId).toBe(USER_ID);
     });
 
-    it('权限上下文为 null 时返回 500', async () => {
-      mockGetJwtFromCookie.mockResolvedValueOnce('valid-token');
-      mockVerifyJwt.mockResolvedValueOnce(null);
-      // verifyAccessToken 返回 null → resolveIdentity 返回 null → 401
+    it('权限上下文不可用（kind=unavailable）⇒ 按无权限处理：403，不得放行', async () => {
+      // 改造前这条用例名写"返回 500"，实际却靠 `mockVerifyJwt → null` 测的是
+      // "验签失败 ⇒ 401"（名与实不符）。真实语义是：上下文取不到（unavailable）
+      // 时 `toPermissionContextOrNull` 返回 null ⇒ 主体无任何权限 ⇒ 403（fail-closed）。
+      await givenValidToken();
+      mockGetUserPermissionContext.mockResolvedValueOnce({ kind: 'unavailable' });
+
       const result = await checkPermission({
         permissions: ['portal:user:list'],
       });
 
       expect(result.authorized).toBe(false);
-      expect(result.statusCode).toBe(401);
+      expect(result.statusCode).toBe(403);
     });
 
     it('验签通过返回授权结果', async () => {
-      const claims = {
-        sub: USER_ID,
-        jti: 'jti-123',
-        iss: 'http://localhost:4101',
-      };
-      mockGetJwtFromCookie.mockResolvedValueOnce('valid-token');
-      mockVerifyJwt.mockResolvedValueOnce(claims);
+      await givenValidToken();
 
       const result = await checkPermission({});
 
@@ -483,25 +473,30 @@ describe('Permission Enforcement', () => {
 
     // ── Redis 降级熔断路径 ──
 
-    it('Redis 不可用时降级 DB，授权决策不受影响', async () => {
-      mockGetJwtFromCookie.mockResolvedValueOnce('valid-token');
-      mockVerifyJwt.mockResolvedValueOnce(defaultClaims);
-      // 当前 mock Redis.get 返回 null，模拟无缓存命中
+    it('Redis 不可用 ⇒ jti 黑名单查不了 ⇒ **fail-close 拒绝**（401），不得改判为放行', async () => {
+      await givenValidToken();
+      faultHolder.failRedis = true;
+
       const result = await checkPermission({
         permissions: ['portal:user:list'],
       });
-      expect(result.authorized).toBe(true);
-      expect(result.userId).toBe(USER_ID);
+
+      // 撤销状态无法确认时按"已撤销"处理（isJtiRevoked 的 fail-close）。
+      // 改造前这里断言 authorized=true——那是"永不抛错的 fake"造出来的假象。
+      expect(result.authorized).toBe(false);
+      expect(result.statusCode).toBe(401);
     });
 
-    it('连续 Redis 故障不应抛出未捕获异常', async () => {
-      mockGetJwtFromCookie.mockResolvedValue('valid-token');
-      mockVerifyJwt.mockResolvedValue(defaultClaims);
-      for (let i = 0; i < 3; i++) {
+    it('连续 Redis 故障：每次都稳定 fail-close，不抛未捕获异常、不放行', async () => {
+      await givenValidToken();
+      faultHolder.failRedis = true;
+
+      for (let i = 0; i < 3; i += 1) {
         const result = await checkPermission({
           permissions: ['portal:user:list'],
         });
-        expect(result.authorized).toBe(true);
+        expect(result.authorized).toBe(false);
+        expect(result.statusCode).toBe(401);
       }
     });
   });
@@ -511,8 +506,7 @@ describe('Permission Enforcement', () => {
   describe('withPermission', () => {
     // @req H-ACL-001
     it('权限通过时执行 handler 并返回结果', async () => {
-      mockGetJwtFromCookie.mockResolvedValueOnce('valid-token');
-      mockVerifyJwt.mockResolvedValueOnce(defaultClaims);
+      await givenValidToken();
 
       const handler = vi.fn(async (userId: string) =>
         NextResponse.json({ data: { userId } })
@@ -531,8 +525,7 @@ describe('Permission Enforcement', () => {
     });
 
     it('权限不通过时返回 403 且不执行 handler', async () => {
-      mockGetJwtFromCookie.mockResolvedValueOnce('valid-token');
-      mockVerifyJwt.mockResolvedValueOnce(defaultClaims);
+      await givenValidToken();
       mockGetUserPermissionContext.mockResolvedValueOnce( { kind: 'ok', context:{
         roles: [{ id: USER_ROLE_ID, code: 'USER', name: '普通用户' }],
         permissions: ['portal:user:list'],
@@ -556,8 +549,7 @@ describe('Permission Enforcement', () => {
     });
 
     it('角色匹配时执行 handler', async () => {
-      mockGetJwtFromCookie.mockResolvedValueOnce('valid-token');
-      mockVerifyJwt.mockResolvedValueOnce(defaultClaims);
+      await givenValidToken();
       mockGetUserPermissionContext.mockResolvedValueOnce( { kind: 'ok', context:{
         roles: [{ id: ADMIN_ROLE_ID, code: 'ADMIN', name: '管理员' }],
         permissions: [],
@@ -579,7 +571,7 @@ describe('Permission Enforcement', () => {
     });
 
     it('无 Session 时返回 401（forbidden error code）', async () => {
-      mockGetJwtFromCookie.mockResolvedValueOnce(null);
+      cookieHolder.value = null;
 
       const handler = vi.fn(async () => NextResponse.json({ success: true }));
 
@@ -596,8 +588,7 @@ describe('Permission Enforcement', () => {
     });
 
     it('handler 异常时返回 500', async () => {
-      mockGetJwtFromCookie.mockResolvedValueOnce('valid-token');
-      mockVerifyJwt.mockResolvedValueOnce(defaultClaims);
+      await givenValidToken();
 
       const handler = vi.fn(async () => {
         throw new Error('Handler crashed');
@@ -615,8 +606,7 @@ describe('Permission Enforcement', () => {
     });
 
     it('超级管理员角色即使无指定权限也能通过', async () => {
-      mockGetJwtFromCookie.mockResolvedValueOnce('valid-token');
-      mockVerifyJwt.mockResolvedValueOnce(defaultClaims);
+      await givenValidToken();
       mockGetUserPermissionContext.mockResolvedValueOnce( { kind: 'ok', context:{
         roles: [{ id: ADMIN_ROLE_ID, code: 'ADMIN', name: '管理员' }],
         permissions: [],
