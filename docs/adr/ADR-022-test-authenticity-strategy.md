@@ -105,7 +105,7 @@ vi.mock('<target>', () => ({ … }));
 - 每条带 `class`（`debt` = A 类假绿待治理 / `annotate-later` = B 类只需补注解）与 `owner`（治理票号或 `legit`），**无主即红**；
 - **只减不增**：条目不得新增；点位已消失或已补合法注解后仍留账单，也变红；
 - **结局（#56）**：机械生成的 48 条存量逐条结清（44 条补合法注解、4 处 `hashToken` 恒等替身改走真身），随后**快照文件、`compareSnapshot` 比对函数与 `UPDATE_MODULE_MOCK_BASELINE` 生成入口全部删除**，守卫不再有"被账单容忍"分支——规则退化为**纯注解驱动**，**没有永久白名单**。
-- **如实留档的一条边界**：`force-logout-route.test.ts` 的 `revokedJtiCount` 由 mock 提供计数，该断言锁的是**响应投影**（路由必须把撤销层的报告如实带出），真实撤销计数语义由 `force-logout-revocation` / `oauth-revoke` 的真实 Redis 路径覆盖；注解里点名了这一边界，不假装它有判别力。
+- **曾如实留档、现已闭环的一条边界**：`force-logout-route.test.ts` 的 `revokedJtiCount` 一度由 mock 提供计数（只锁响应投影）。#57 已把它改成**真实驱动**——删除 `@/lib/session/revoke` 的整体 mock，用真实 `trackUserJti` 播种 `user_jti`、断言真实计数与真实黑名单效果，并把"只执行一次"改为幂等空转的行为证据（变异：破坏计数来源 ⇒ 2 例红）。至此**规则里不再有任何 A 类边界留档**。
 
 **（d）守卫测试**：`apps/portal/__tests__/api/module-mock-guard.test.ts`（API project 内、纯 `fs` 文本扫描、零 IO），扫描 `apps/portal/__tests__/**`、`apps/portal/src/**/*.test.{ts,tsx}`、`packages/contracts/src/**`、`tests/e2e/*.spec.ts`。守卫的判定逻辑抽成纯函数，并由 **9 个违例夹具 + 1 条全量扫描断言**（缺注解 / target 不一致 / kind 非法 / 孤儿注解 / auth-bypass 未点名 / 豁免清单生效 / 注解贴错位置 / 注释引用不算点位 / **不得把下一条 mock 的目标算到上一条** / 目标无法识别）在 CI 里真跑 —— 这是对 ADR-019「约束文档化 4 处、声称由工具强制、实际从未触发」的机械回应。
 

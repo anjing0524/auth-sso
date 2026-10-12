@@ -1,10 +1,11 @@
 /**
- * 强制下线端点的响应契约（mock 编排依赖）
+ * 强制下线端点的响应契约（撤销走真实 Redis 状态）
  *
  * ## 为什么需要它
  *
  * `POST /api/users/[id]/force-logout` 的响应承诺告知管理员「本次撤销了多少个
- * Access Token JTI」。但实现里存在一次**重复撤销**：
+ * Access Token JTI」。历史上实现里存在一次**重复撤销**（**已修复**：路由现在直接取
+ * `revokeAllRefreshTokens` 的真实返回值）：
  *
  * 1. `revokeAllRefreshTokens(userId)` 内部已调用 `revokeUserAccessByUserId`
  *    （双层撤销闭环）
@@ -16,7 +17,9 @@
  * 结果：`revokedJtiCount` 恒为 0，响应里的「已撤销 N 个 Access Token JTI」
  * 永远显示 0，与实际撤销数量无关（N 个 AT 确实被撤销了，只是数字报错）。
  *
- * 本文件以**响应契约**为接缝锁住这个数字的真实性。
+ * 本文件以**响应契约**为接缝锁住这个数字的真实性：用**真实 Redis 的 `user_jti` 播种**给出
+ * "该用户当时持有 N 个 AT"这一前提，再断言真实撤销数量与真实黑名单效果（#57 之前这里用
+ * mock 喂计数，锁的只是响应投影，对"撤销真的撤了几个"没有判别力）。
  *
  * @req H-SESS-004, H-SESS-006
  * @vitest-environment node
@@ -29,8 +32,6 @@ import * as schema from '@/db/schema';
 
 const { mocks, tdHolder } = vi.hoisted(() => ({
   mocks: {
-    /** 撤销该用户全部 AT 的 jti，返回实际撤销数量 */
-    mockRevokeUserAccess: vi.fn(async () => 0),
     mockClearPermCache: vi.fn(async () => {}),
   },
   tdHolder: { current: null as ReturnType<typeof createTestDbHandle> | null },
@@ -39,15 +40,6 @@ const { mocks, tdHolder } = vi.hoisted(() => ({
 vi.mock('@/infrastructure/db', () => ({
   get db() { return tdHolder.current!.db; },
   get schema() { return tdHolder.current!.schema; },
-}));
-
-// @allow-module-mock @/lib/session/revoke input-fixture: 提供的**计数**是路由响应投影所需的输入——本文件锁的是"撤销层报告 N ⇒ body/message 如实带出 N"这一投影契约，以及"jti 撤销只执行一次"的调用语义；真实撤销计数（真实 Redis `user_jti`）由 force-logout-revocation / oauth-revoke 覆盖。**边界如实记录**：这里的 N 由 mock 给出，不具备"撤销真的撤了几个"的判别力
-vi.mock(import('@/lib/session/revoke'), (): Partial<typeof sessionRevokeModule> => ({
-  revokeUserAccessByUserId: mocks.mockRevokeUserAccess,
-  isJtiRevoked: vi.fn(async () => false),
-  trackUserJti: vi.fn(async () => {}),
-  revokeJti: vi.fn(async () => {}),
-  revokeUserToken: vi.fn(async () => {}),
 }));
 
 // @allow-module-mock @/lib/permissions input-fixture: 只提供权限上下文输入；真实 PG 驱动的分级由 permission-enforcement / rt-permission-failure 覆盖
@@ -73,13 +65,12 @@ vi.mock(import('@/lib/authz'), (): Partial<typeof authzModule> => ({
 vi.mock(import('@/lib/cache-invalidation'), (): Partial<typeof cacheInvalidationModule> => ({ invalidateResource: vi.fn() }));
 
 import { POST } from '@/app/api/users/[id]/force-logout/route';
+import { isJtiRevoked, revokeUserAccessByUserId, trackUserJti } from '@/lib/session/revoke';
 import { NextRequest } from 'next/server';
-import type * as sessionRevokeModule from '@/lib/session/revoke';
 import type * as permissionsModule from '@/lib/permissions';
 import type * as authModule from '@/lib/auth';
 import type * as authzModule from '@/lib/authz';
 import type * as cacheInvalidationModule from '@/lib/cache-invalidation';
-
 
 const td = createTestDbHandle();
 tdHolder.current = td;
@@ -111,41 +102,53 @@ async function callRoute(): Promise<{ status: number; body: Record<string, unkno
 
 describe('POST /api/users/[id]/force-logout — 响应契约', () => {
   it('**响应中的 revokedJtiCount 必须等于实际撤销的 JTI 数量**', async () => {
-    // 该用户当时持有 3 个未过期 AT
-    mocks.mockRevokeUserAccess.mockResolvedValue(3);
+    // 前提（真实状态）：该用户当时持有 3 个未过期 AT
+    const jtis = ['jti-a', 'jti-b', 'jti-c'];
+    for (const jti of jtis) await trackUserJti(ADMIN_ID, jti, 3600);
 
     const { body } = await callRoute();
 
-    // 本用例锁**响应形状**（数量如实出现在 body 与 message 中）；
-    // "不得重复调用导致计数归零"由下一条用例负责——用固定返回值的 mock
-    // 无法区分调用次数，故两者分工明确。
+    // 结论 1：数量如实出现在 body 与 message 中（响应投影）
     expect(body['revokedJtiCount']).toBe(3);
     expect(String(body['message'])).toContain('3');
+    // 结论 2：这 3 个 jti **真的**进了黑名单（真实效果，不只是数字）
+    for (const jti of jtis) await expect(isJtiRevoked(jti)).resolves.toBe(true);
   });
 
-  it('**jti 撤销只执行一次**（重复调用是幂等空转，第二次必然返回 0 使计数失真）', async () => {
-    mocks.mockRevokeUserAccess.mockResolvedValue(2);
+  it('**计数取自唯一一次消费**（该原语幂等：再消费一次只会得到 0）', async () => {
+    for (const jti of ['jti-x', 'jti-y', 'jti-z']) await trackUserJti(ADMIN_ID, jti, 3600);
 
-    await callRoute();
+    const { body } = await callRoute();
+    expect(body['revokedJtiCount']).toBe(3);
 
-    // 编排层调用一次即可；路由额外再调一次会拿到 0
-    expect(mocks.mockRevokeUserAccess).toHaveBeenCalledTimes(1);
+    // 显式证成前提：该原语是幂等的——消费掉映射后再调一次只会拿到 0。
+    // 因此"计数仍为 3"本身就是"路由只撤销了一次"的行为证据（此前靠调用次数断言）。
+    await expect(revokeUserAccessByUserId(ADMIN_ID)).resolves.toBe(0);
   });
 
   it('撤销 0 个 JTI 时如实报告 0（不得伪造数字）', async () => {
-    mocks.mockRevokeUserAccess.mockResolvedValue(0);
-
+    // 不播种：该用户没有在册的 AT
     const { body } = await callRoute();
 
     expect(body['revokedJtiCount']).toBe(0);
   });
 
   it('用户不存在 → 404，且不执行任何撤销', async () => {
+    const ghostId = '00000000-0000-4000-8000-00000000dead';
+
+    // **调用前**播种：判别力来自"有东西可丢却没丢"——撤销会 `del` 掉整张映射。
+    // （此前只断言 `isJtiRevoked('jti-untouched')===false`，而那个 jti 从未播种，
+    //   任何实现都写不进黑名单；若把播种放到调用之后，映射是调用后才存在的，
+    //   "未被消费"同样恒真——两个版本都没有判别力。）
+    await trackUserJti(ghostId, 'jti-of-ghost', 3600);
+
     const res = await POST(forceLogoutRequest(), {
-      params: Promise.resolve({ id: '00000000-0000-4000-8000-00000000dead' }),
+      params: Promise.resolve({ id: ghostId }),
     });
 
     expect(res.status).toBe(404);
-    expect(mocks.mockRevokeUserAccess).not.toHaveBeenCalled();
+    await expect(isJtiRevoked('jti-of-ghost')).resolves.toBe(false);
+    // 映射仍在册 ⇒ 确实没有执行任何撤销（消费掉就会返回 0）
+    await expect(revokeUserAccessByUserId(ghostId)).resolves.toBe(1);
   });
 });
