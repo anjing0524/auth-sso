@@ -33,7 +33,7 @@ vi.mock('next/navigation', () => ({
 // 为了绕过 vite hoist 上下文限制，在 vi.mock 外部定义工厂函数
 // 通过 `require('react')` 获取 React.createElement
 
-function makeSidebarMock() {
+function makeSidebarMock(): { [K in keyof typeof sidebarModule]?: (props: any) => unknown } {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const R = require('react');
   const h = R.createElement;
@@ -60,7 +60,7 @@ function makeSidebarMock() {
   };
 }
 
-function makeDropdownMock() {
+function makeDropdownMock(): { [K in keyof typeof dropdownMenuModule]?: (props: any) => unknown } {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const R = require('react');
   const h = R.createElement;
@@ -92,7 +92,8 @@ function makeLinkMock() {
 /**
  * 把"最小 stub 组件"约束为目标模块的键集后一次性断言其值类型。
  *
- * 键集受 `keyof T` 约束——拼错或多余的组件名会当场报错；值类型必须断言，因为真实
+ * 键集受 `keyof T` 约束——但**只对对象字面量实参成立**（多余属性检查不适用于函数调用结果），
+ * 故两个工厂的返回类型各自显式写成映射类型，键集在那里被当场抓住；值类型必须断言，因为真实
  * 组件是 `forwardRef` 组件类型（带 `$$typeof` 等内部字段），jsdom 下的普通函数 stub
  * 在结构上不可能满足它。
  */

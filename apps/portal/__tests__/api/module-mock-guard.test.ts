@@ -15,8 +15,9 @@
  *
  * - 键集与判别式形状**交给编译器**（类型化工厂 + `pnpm typecheck`），本守卫只管
  *   类型系统表达不了的那一半："为什么允许 mock 这个模块"（ADR-022 §4(a)/(d)）；
- * - 守卫自身也**被守**：违例夹具（缺注解 / target 不一致 / kind 非法 / 孤儿注解 /
- *   auth-bypass 未点名 / 注释引用不算点位 / 豁免生效）在 CI 里真跑。
+ * - 守卫自身也**被守**：**9 个违例夹具**（缺注解 / kind 非法 / auth-bypass 未点名 / 孤儿注解 /
+ *   豁免清单生效 / 注解贴错位置 / 注释引用不算点位 / 不得跨条串味 / 目标无法识别）
+ *   外加 1 条全量扫描断言，一起在 CI 里真跑。
  *
  * ## 债务快照机制**已撤除**（#56）
  *
@@ -26,7 +27,6 @@
  * 与快照相关夹具**全部删除**——规则里**不留永久白名单**：今天之后，任何新增的生产
  * 模块 mock 都必须**当场**给出理由，没有"先记账、以后再还"的通道。
  *
- * @req H-ACL-001
  * @vitest-environment node
  */
 import { describe, it, expect } from 'vitest';
@@ -140,7 +140,12 @@ export function scanModuleMocks(source: string): ModuleMockFinding[] {
   return findings;
 }
 
-/** 纯函数：注解层面的违例（形态、target 一致、kind 枚举、auth-bypass 点名） */
+/**
+ * 纯函数：注解层面的违例（形态、kind 枚举、auth-bypass 点名）。
+ *
+ * target 一致性**不在这里判**——由 `findAnnotationBindingViolations` 独占（那条还覆盖豁免
+ * mock），否则同一处错位会产出两条措辞不同的违例，且两条判定日后各自演化。
+ */
 export function findAnnotationViolations(findings: readonly ModuleMockFinding[]): string[] {
   const violations: string[] = [];
 
@@ -154,12 +159,6 @@ export function findAnnotationViolations(findings: readonly ModuleMockFinding[])
     if (!f.annotation) {
       violations.push(`第 ${f.line} 行：生产模块 ${f.target} 缺少 // @allow-module-mock 理由注解`);
       continue;
-    }
-
-    if (f.annotation.target !== f.target) {
-      violations.push(
-        `第 ${f.line} 行：注解 target「${f.annotation.target}」与 mock 目标「${f.target}」不一致`,
-      );
     }
 
     if (!REASON_KINDS.includes(f.annotation.kind as ReasonKind)) {
@@ -200,7 +199,11 @@ export function findAnnotationBindingViolations(source: string): string[] {
     }
 
     const found = extractMockTarget(lines, i + 1);
-    if (found && found.target !== annMatch[1]) {
+    if (!found) {
+      violations.push(`第 ${i + 1} 行：无法识别 vi.mock 的目标说明符（首参不在 3 行窗口内，或用了非单引号形式）`);
+      continue;
+    }
+    if (found.target !== annMatch[1]) {
       violations.push(
         `第 ${i + 1} 行：注解 target「${annMatch[1]}」与下一行 vi.mock 目标「${found.target}」不一致（注解贴错位置）`,
       );
@@ -255,10 +258,9 @@ describe('module-mock-guard —— 违例夹具（守卫自身被守）', () => 
     expect(v.join()).toContain('缺少');
   });
 
-  it('夹具 2：target 不一致 → 报"不一致"', () => {
+  it('夹具 2：注解 target 与 mock 目标不一致 → 报"贴错位置"（判定收敛在绑定性检查一处）', () => {
     const src = "// @allow-module-mock @/lib/bar input-fixture: x\nvi.mock(import('@/lib/foo'), () => ({}));";
-    const v = findAnnotationViolations(scanModuleMocks(src));
-    expect(v.join()).toContain('不一致');
+    expect(findAnnotationBindingViolations(src).join()).toContain('贴错位置');
   });
 
   it('夹具 3：kind 非法 → 报"不在枚举内"', () => {
@@ -270,6 +272,11 @@ describe('module-mock-guard —— 违例夹具（守卫自身被守）', () => 
   it('夹具 4：孤儿注解 → 报"孤儿注解"', () => {
     const src = "// @allow-module-mock @/lib/foo input-fixture: x\nconst x = 1;";
     expect(findAnnotationBindingViolations(src).join()).toContain('孤儿注解');
+  });
+
+  it('夹具 10：目标说明符无法识别（非单引号）→ 显式报错而非静默放过', () => {
+    const src = '// @allow-module-mock @/lib/foo input-fixture: x\nvi.mock(`@/lib/foo`, () => ({}));';
+    expect(findAnnotationBindingViolations(src).join()).toContain('无法识别');
   });
 
   it('夹具 9：不得把下一条 mock 的目标算到上一条（跨条串味）', () => {

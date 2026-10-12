@@ -30,11 +30,17 @@ vi.mock(import('@/lib/auth'), (): Partial<typeof authModule> => ({
   withAuth: (_o: any, h: Function) => async (...a: any[]) =>
     h({ userId: '00000000-0000-4000-8000-000000000101' }, ...a),
 }));
-// @allow-module-mock @/lib/crypto input-fixture: 只提供确定性的 ID 输入（哈希走真实实现）
-vi.mock(import('@/lib/crypto'), (): Partial<typeof cryptoModule> => ({
-  generateUUID: () => CREATED_DEPT_ID,
-  generateId: (_len?: number) => 'aaaaaaaa',
-}));
+// @allow-module-mock @/lib/crypto input-fixture: 只覆盖「确定性 ID」这类输入，其余导出（含 hashToken）走真身
+vi.mock(import('@/lib/crypto'), async (importOriginal): Promise<Partial<typeof cryptoModule>> => {
+  const actual = await importOriginal();
+  // 只覆盖「确定性 ID」，其余导出（含 hashToken 的真实 sha256）走真身：
+  // 整体替换会让未列出的导出变成 undefined，而注解却声称它们走真实实现
+  return {
+    ...actual,
+    generateUUID: () => CREATED_DEPT_ID,
+    generateId: (_len?: number) => 'aaaaaaaa',
+  };
+});
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn(), updateTag: vi.fn() }));
 
 import { db } from '@/infrastructure/db';

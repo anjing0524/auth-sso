@@ -24,10 +24,16 @@ vi.mock(import('@/lib/auth'), (): Partial<typeof authModule> => ({
   withAuth: (_o: any, h: Function) => async (...a: any[]) =>
     h({ userId: '00000000-0000-4000-8000-000000000101' }, ...a),
 }));
-// @allow-module-mock @/lib/crypto input-fixture: 只提供确定性的 ID 输入（哈希走真实实现）
-vi.mock(import('@/lib/crypto'), (): Partial<typeof cryptoModule> => ({
-  generateUUID: () => 'aabbccdd-eeff-4000-8000-000000000001',
-}));
+// @allow-module-mock @/lib/crypto input-fixture: 只覆盖「确定性 ID」这类输入，其余导出（含 hashToken）走真身
+vi.mock(import('@/lib/crypto'), async (importOriginal): Promise<Partial<typeof cryptoModule>> => {
+  const actual = await importOriginal();
+  // 只覆盖「确定性 ID」，其余导出（含 hashToken 的真实 sha256）走真身：
+  // 整体替换会让未列出的导出变成 undefined，而注解却声称它们走真实实现
+  return {
+    ...actual,
+    generateUUID: () => 'aabbccdd-eeff-4000-8000-000000000001',
+  };
+});
 // @allow-module-mock @/lib/permissions input-fixture: 只提供权限上下文输入；真实 PG 驱动的分级由 permission-enforcement / rt-permission-failure 覆盖
 vi.mock(import('@/lib/permissions'), (): Partial<typeof permissionsModule> => ({ refreshUsersPermissionCache: vi.fn(async () => ({ succeeded: 0, failed: 0 })) }));
 // @allow-module-mock @/lib/session/revoke input-fixture: 只提供"撤销已完成/计数为 N"这类输入；真实 Redis 撤销由 force-logout-revocation / oauth-revoke 覆盖

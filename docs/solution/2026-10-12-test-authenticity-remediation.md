@@ -45,7 +45,7 @@
 3. **真实 Redis 进 API project**：`globalSetup` 硬探针（PING + 写读删 + `FLUSHDB` 校验，固定日志行作证据锚点）+ 专用逻辑库 + `vitest.api.setup.ts` 全局 `beforeEach` `FLUSHDB`（禁 `FLUSHALL`）+ 金丝雀测试；UI/domain project 不受影响。
 4. **契约交给编译器**：类型化 mock 工厂 `vi.mock(import('@/lib/x'), (): Partial<typeof import('@/lib/x')> => ({…}))`，`pnpm typecheck` 阻断。
 5. **理由注解 + 枚举**：`// @allow-module-mock <target> <reason-kind>: <理由>`，`target` 逐字校验。
-6. **债务快照只减不增**：存量 78 处进快照，owner 必填、点位消失或已补注解即须销账。
+6. **存量先记账、后清账**：规则上线当天的存量（机械生成 48 条）先入快照并标 owner，**只减不增**；#56 逐条结清后**快照机制（文件 / 比对函数 / 生成入口）整体撤除**——最终形态是**纯注解驱动，没有白名单**。
 7. **不可变异两类转换变异通道**：A4 → 编译器可变异（改生产导出名 → tsc 必须报错）；A2 → 真实状态可变异（改坏生产逻辑 → 必须红）。
 8. **零采用的基础设施即删**：`mock-redis.ts` / `mock-auth.ts` / `mock-factory.ts` / `mock-contract.test.ts`（净约 676 行）。
 
@@ -83,11 +83,11 @@
 
 类型化工厂把契约判定交给 `tsc`：它直接读真实模块类型，不需要维护副本，也不可能"忘了更新"。**结论：能用类型系统表达的契约，不要写运行时守卫。** 反过来，类型系统表达不了的（"为什么允许 mock 这个模块"），才用注解 + 守卫测试。
 
-### 4. 规则三件套：编译器管契约、守卫管理由、快照管存量
+### 4. 规则两件套（快照退场后）：编译器管契约、守卫管理由
 
 - 契约（键集/形状）→ 编译器；
-- 理由（为什么允许）→ 注解 + 枚举 + 守卫（含 7 个违例夹具，让守卫自己也被守）；
-- 存量 → **只减不增**的债务快照：owner 必填、点位消失即销账、补了注解即销账。**没有永久白名单。**
+- 理由（为什么允许）→ 注解 + 枚举 + 守卫（含 9 个违例夹具 + 1 条全量扫描断言，让守卫自己也被守）；
+- 存量 → 曾有**只减不增**的债务快照（owner 必填、点位消失或补上注解即销账）；**#56 清账后连同快照机制一并删除**，今天任何新增点位都必须**当场**给出理由。
 
 ### 5. 环境基线必须被强制，否则结论是环境的函数
 
@@ -104,19 +104,6 @@
 ### 8. 规范不得声称由工具强制，除非工具确实以该阈值运行
 
 ADR-019 已经吃过一次（约束文档化 4 处、声称由 lint 强制、实际阈值是文档值的 4 倍且从未触发）。本策略的每条规则都写明**强制手段 + 阻断点 + 自检方式**（见 ADR-022 的「强制点」表），并且**零新增 CI 步骤**——复用既有的 `typecheck` 与 `test`，少一处会腐化的接线。
-
-### 11. 用"正向变异"证明 mock 与真身有类型联系
-
-类型化工厂的价值在于**编译器知道真身长什么样**。要证明这一点存在（而不是"写了 `Partial<typeof x>` 就算数"），做法与证明测试有判别力同构——**换一条变异通道**：
-
-1. **正向变异**：临时把生产模块里某个导出**改名**（如 `getUserPermissionContext` → `…RENAMED`），跑 `pnpm --filter @auth-sso/portal typecheck`。
-   引用它的类型化工厂必须报错，且错误**点名到键**：
-   `TS2561 Object literal may only specify known properties, but 'getUserPermissionContext' does not exist in type 'Partial<typeof import(…)>'. Did you mean to write 'cacheUserPermissionContext'?`
-   （无可推荐名字时是同族的 `TS2353`；直接 import 真身的文件同时报 `TS2724`。）
-2. **对照**：把工厂改成**裸写**（不标返回类型）后重复同一改名——实测**零诊断**。也就是说，裸写不是"错误变模糊"，而是**契约根本不生效**。
-3. 还原生产代码，`typecheck` 回到 0 错。三次输出都要贴进票据（含 Redis 就绪锚点行，若该次运行涉及 API project）。
-
-结论固化在 ADR-022 §4(a)：**显式返回类型是这条契约唯一的信号产生点**。
 
 ### 9. 夹具的加载期依赖会泄漏给它所有的导入者
 
@@ -138,6 +125,19 @@ Caused by: ReferenceError: Cannot access '__vi_import_5__' before initialization
 ### 10. 夹具自检要覆盖"生产配置"，而不只是默认配置
 
 `JWKS_ENCRYPTION_KEY` 未设置时 `encryptPrivateKey`/`decryptPrivateKey` 都是**直通**——于是私钥加密落库这条路径在所有测试里零覆盖，`decryptPrivateKey` 的 AES 分支从未执行过。夹具自检因此要成对：默认配置一条 + `vi.stubEnv('JWKS_ENCRYPTION_KEY', …)` 一条（并断言落库的是密文而非明文 JWK）。同理，闭环要用**生产函数**（`signAccessToken` → `verifyAccessToken`）而非只用 `jose` 手工签——只到 `jose` 那一层时，"改坏生产签发逻辑必红"并不成立。
+
+### 11. 用"正向变异"证明 mock 与真身有类型联系
+
+类型化工厂的价值在于**编译器知道真身长什么样**。要证明这一点存在（而不是"写了 `Partial<typeof x>` 就算数"），做法与证明测试有判别力同构——**换一条变异通道**：
+
+1. **正向变异**：临时把生产模块里某个导出**改名**（如 `getUserPermissionContext` → `…RENAMED`），跑 `pnpm --filter @auth-sso/portal typecheck`。
+   引用它的类型化工厂必须报错，且错误**点名到键**：
+   `TS2561 Object literal may only specify known properties, but 'getUserPermissionContext' does not exist in type 'Partial<typeof import(…)>'. Did you mean to write 'cacheUserPermissionContext'?`
+   （无可推荐名字时是同族的 `TS2353`；直接 import 真身的文件同时报 `TS2724`。）
+2. **对照**：把工厂改成**裸写**（不标返回类型）后重复同一改名——分两种子形态：**不展开真身**时 `TS2769` 恒定报错（与键对错无关，属"构建失败"）；**展开真身**时**零诊断**（契约根本不生效，连弱报错都没有）。
+3. 还原生产代码，`typecheck` 回到 0 错。三次输出都要贴进票据（含 Redis 就绪锚点行，若该次运行涉及 API project）。
+
+结论固化在 ADR-022 §4(a)：**显式返回类型是这条契约唯一的信号产生点**。
 
 ## 五、同类问题审阅
 
