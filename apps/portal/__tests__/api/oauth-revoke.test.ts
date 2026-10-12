@@ -17,9 +17,10 @@ import { and, eq } from 'drizzle-orm';
 import { NextRequest } from 'next/server';
 import { createTestDbHandle, seedTestData } from '../helpers/test-db';
 import { seedAdminUser, seedPortalClient, seedRootDept } from '../helpers/seed-fixtures';
+import { seedSigningKeys } from '../helpers/seed-signing-keys';
 import * as schema from '@/db/schema';
 import { hashToken } from '@/lib/crypto';
-import { exportJWK, generateKeyPair } from 'jose';
+import { JWT_TYP } from '@auth-sso/contracts';
 
 const { tdHolder } = vi.hoisted(() => ({
   tdHolder: { current: null as ReturnType<typeof createTestDbHandle> | null },
@@ -31,12 +32,11 @@ vi.mock('@/infrastructure/db', () => ({
 }));
 
 import { POST as revokePost } from '@/app/api/auth/oauth2/revoke/route';
-import { signAccessToken } from '@/lib/auth/token';
+import { POST as introspectPost } from '@/app/api/auth/oauth2/introspect/route';
+import { signAccessToken, verifyAccessToken } from '@/lib/auth/token';
 
 const td = createTestDbHandle();
 tdHolder.current = td;
-
-let jwksRow: { kid: string; privateKey: string; publicKey: string };
 
 const USER_ID = '00000000-0000-4000-8000-000000000101';
 const CLIENT_A = 'client-a';
@@ -80,21 +80,17 @@ async function isJtiRevoked(jti: string): Promise<boolean> {
   return check(jti);
 }
 
-/**
- * 真实 ES256 密钥对。
- *
- * 刻意不用 `seedJwks()`：那组硬编码 JWK 无法被 jose 用于验签，且既有签发类测试都
- * 整体 mock 了 `@/lib/auth/token`，导致**真实验签路径从未被覆盖**。此处生成可用密钥，
- * 使本测试真正穿过 `verifyAccessToken` 的 JWK 解析与 ES256 验签。
- */
+/** 以 client A 的凭证问 introspect 端点"这个令牌还有效吗" */
+function introspect(token: string) {
+  return introspectPost(new NextRequest('http://localhost:4100/api/auth/oauth2/introspect', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ token, client_id: CLIENT_A, client_secret: SECRET_A }),
+  }));
+}
+
 beforeAll(async () => {
   await td.connect();
-  const { privateKey, publicKey } = await generateKeyPair('ES256', { extractable: true });
-  jwksRow = {
-    kid: 'revoke-test-kid',
-    privateKey: JSON.stringify(await exportJWK(privateKey)),
-    publicKey: JSON.stringify(await exportJWK(publicKey)),
-  };
 });
 afterAll(async () => { await td.close(); });
 
@@ -103,15 +99,6 @@ beforeEach(async () => {
   await seedTestData(td.db, {
     departments: seedRootDept(),
     users: seedAdminUser(),
-    jwks: [{
-      id: crypto.randomUUID(),
-      kid: jwksRow.kid,
-      algorithm: 'ES256',
-      publicKey: jwksRow.publicKey,
-      privateKey: jwksRow.privateKey,
-      createdAt: new Date(),
-      expiresAt: new Date(Date.now() + 90 * 24 * 3600 * 1000),
-    }],
     clients: [
       ...seedPortalClient({
         clientId: CLIENT_A,
@@ -123,6 +110,10 @@ beforeEach(async () => {
       }),
     ],
   });
+  // 真实 ES256：由 `seedSigningKeys` 夹具种入真密钥对（它同时重置签名密钥缓存，
+  // 且私钥按生产同路加密落库）。本文件不 mock `@/lib/auth/token`，
+  // 因此这里真的会穿过 verifyAccessToken 的 JWK 解析与 ES256 验签。
+  await seedSigningKeys(td);
 });
 
 describe('POST /api/auth/oauth2/revoke — 客户端认证', () => {
@@ -158,8 +149,11 @@ describe('POST /api/auth/oauth2/revoke — 客户端认证', () => {
 });
 
 describe('POST /api/auth/oauth2/revoke — Access Token 撤销', () => {
-  it('本 client 的 AT → jti 进入黑名单', async () => {
+  it('本 client 的 AT → jti 进入黑名单，且**该令牌随即被拒**（端点级闭环）', async () => {
     const { token, jti } = await signAccessToken(USER_ID, CLIENT_A);
+
+    // 前提：撤销前同一令牌是有效的（否则"被拒"可能是因为别的原因）
+    await expect(verifyAccessToken(token, CLIENT_A, JWT_TYP.ACCESS_TOKEN)).resolves.not.toBeNull();
 
     const res = await revokePost(makeRequest({
       token, client_id: CLIENT_A, client_secret: SECRET_A,
@@ -167,6 +161,12 @@ describe('POST /api/auth/oauth2/revoke — Access Token 撤销', () => {
 
     expect(res.status).toBe(200);
     expect(await isJtiRevoked(jti)).toBe(true);
+
+    // 结论：撤销生效必须能被观察到，而不只是"黑名单里有这个键"。
+    // 改造前本文件只断言上面那行——去掉 verifyAccessToken 的 jti 校验后 11 例全绿。
+    await expect(verifyAccessToken(token, CLIENT_A, JWT_TYP.ACCESS_TOKEN)).resolves.toBeNull();
+    const body = await (await introspect(token)).json();
+    expect(body.active).toBe(false);
   });
 
   it('**他人 client 的 AT → 静默忽略，不得撤销**（跨 client DoS 阻断）', async () => {

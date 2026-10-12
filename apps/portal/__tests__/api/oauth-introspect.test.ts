@@ -16,10 +16,10 @@ import { eq } from 'drizzle-orm';
 import { NextRequest } from 'next/server';
 import { createTestDbHandle, seedTestData } from '../helpers/test-db';
 import { seedAdminUser, seedPortalClient, seedRootDept } from '../helpers/seed-fixtures';
+import { seedSigningKeys } from '../helpers/seed-signing-keys';
 import * as schema from '@/db/schema';
 import { hashToken } from '@/lib/crypto';
 import { TOKEN_TTL } from '@auth-sso/contracts';
-import { exportJWK, generateKeyPair } from 'jose';
 
 const { tdHolder } = vi.hoisted(() => ({
   tdHolder: { current: null as ReturnType<typeof createTestDbHandle> | null },
@@ -32,7 +32,7 @@ vi.mock('@/infrastructure/db', () => ({
 
 import { POST as introspectPost } from '@/app/api/auth/oauth2/introspect/route';
 import { signAccessToken } from '@/lib/auth/token';
-import { revokeJti } from '@/lib/session/revoke';
+import { isJtiRevoked, revokeJti } from '@/lib/session/revoke';
 
 const td = createTestDbHandle();
 tdHolder.current = td;
@@ -41,8 +41,6 @@ const USER_ID = '00000000-0000-4000-8000-000000000101';
 const CLIENT_ID = 'portal';
 const SECRET = 'portal-secret';
 const RT = 'rt_introspect_test_token_value';
-
-let jwksRow: { publicKey: string; privateKey: string };
 
 function makeRequest(body: Record<string, string>): NextRequest {
   return new NextRequest('http://localhost:4100/api/auth/oauth2/introspect', {
@@ -71,13 +69,6 @@ async function seedRefreshToken(overrides: { revoked?: Date; expiresAt?: Date } 
 
 beforeAll(async () => {
   await td.connect();
-  // 真实 ES256 密钥对：既有签发类测试都整体 mock 了 @/lib/auth/token，
-  // 真实验签路径从未被覆盖；此处让本测试真正穿过 jose 的 JWK 解析与验签。
-  const { privateKey, publicKey } = await generateKeyPair('ES256', { extractable: true });
-  jwksRow = {
-    privateKey: JSON.stringify(await exportJWK(privateKey)),
-    publicKey: JSON.stringify(await exportJWK(publicKey)),
-  };
 });
 afterAll(async () => { await td.close(); });
 
@@ -86,17 +77,12 @@ beforeEach(async () => {
   await seedTestData(td.db, {
     departments: seedRootDept(),
     users: seedAdminUser(),
-    jwks: [{
-      id: crypto.randomUUID(),
-      kid: 'introspect-test-kid',
-      algorithm: 'ES256',
-      publicKey: jwksRow.publicKey,
-      privateKey: jwksRow.privateKey,
-      createdAt: new Date(),
-      expiresAt: new Date(Date.now() + 90 * 24 * 3600 * 1000),
-    }],
     clients: seedPortalClient({ clientSecret: hashToken(SECRET) }),
   });
+  // 真实 ES256：由 `seedSigningKeys` 夹具种入真密钥对（它同时重置签名密钥缓存，
+  // 且私钥按生产同路加密落库）。本文件不 mock `@/lib/auth/token`，
+  // 因此这里真的会穿过 jose 的 JWK 解析与 ES256 验签。
+  await seedSigningKeys(td);
 });
 
 describe('POST /api/auth/oauth2/introspect — 客户端认证', () => {
@@ -129,6 +115,11 @@ describe('POST /api/auth/oauth2/introspect — Access Token', () => {
   it('有效 AT → active:true 且透传 sub / client_id / jti 等（RFC 7662 §2.2）', async () => {
     const { token, jti } = await signAccessToken(USER_ID, CLIENT_ID, 'openid profile');
 
+    // 与下面"已撤销"例成对的前提：该 jti 必须在黑名单之外。缺 Redis 时
+    // `isJtiRevoked` 走 fail-close 恒为 true，本断言会先红——否则 active:true
+    // 与 active:false 谁是有效信号就无从判断。
+    expect(await isJtiRevoked(jti)).toBe(false);
+
     const body = await (await introspect(token)).json();
 
     expect(body.active).toBe(true);
@@ -140,11 +131,21 @@ describe('POST /api/auth/oauth2/introspect — Access Token', () => {
     expect(typeof body.exp).toBe('number');
   });
 
-  it('**已被撤销（jti 进黑名单）的 AT → active:false**（撤销机制的有效性）', async () => {
+  it('**已被撤销（jti 进黑名单）的 AT → active:false**（先证前提，再证结论）', async () => {
     const { token, jti } = await signAccessToken(USER_ID, CLIENT_ID, 'openid');
+
+    // 前提 1：撤销**之前**该 jti 不在黑名单。这一条是判别力的来源——缺 Redis 时
+    // `isJtiRevoked` 走 fail-close 恒返回 true，本断言会先红，而不是让下面的
+    // `active:false` 变成天然为真的空断言（改造前正是如此）。
+    expect(await isJtiRevoked(jti)).toBe(false);
+
     // signAccessToken 以 ACCESS_TOKEN_TTL 设 exp，直接据此撤销（无需再验签一次）
     await revokeJti(jti, Math.floor(Date.now() / 1000) + TOKEN_TTL.ACCESS_TOKEN);
 
+    // 前提 2：jti 确实进了黑名单（真实 Redis 键）
+    expect(await isJtiRevoked(jti)).toBe(true);
+
+    // 结论
     const body = await (await introspect(token)).json();
 
     expect(body.active).toBe(false);
