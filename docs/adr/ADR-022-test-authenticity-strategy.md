@@ -82,8 +82,8 @@ vi.mock(import('@/lib/permissions'), (): Partial<typeof permissionsModule> => ({
 }));
 ```
 
-- 幽灵键 → `TS2353`（**点名到键**）；陈旧判别式形状 → `TS2769`；
-- **必须显式标注返回类型**：裸写 `vi.mock(import(…), () => ({…}))` 时同一错误退化为不点名的 `TS2769`（实测对比）；
+- 幽灵键 → **`TS2561`**（`Object literal may only specify known properties, but 'x' does not exist in type 'Partial<typeof import(…)>'. Did you mean to write 'y'?`）——**点名到键**并给出候选；同类但无可推荐名字时为 `TS2353`。直接 `import` 真身函数的文件同时以 `TS2724`（has no exported member named 'x'）报警。陈旧判别式形状 → `TS2769`。
+- **必须显式标注返回类型**（#51 实测复核，结论比原文更强）：标注后幽灵键必报错；**裸写**（`vi.mock(import(…), async (importOriginal) => ({…}))`）时同一幽灵键**零诊断**——不是"退化为不点名的错误"，而是**完全不报错**。因此显式返回类型不是风格偏好，而是这条契约唯一产生信号的地方；
 - **返回类型必须写成顶层 type-only 命名空间别名**（`import type * as x from '…'` + `Partial<typeof x>`），**不能**内联 `Partial<typeof import('…')>`：仓库的 `consistent-type-imports`（`inline-type-imports` 风格）把 inline `import()` 类型标注判为违规（实现 #41 时实测报 `` `import()` type annotations are forbidden ``）。首参仍用 `import('…')` 值形态——不在该规则管辖内。
 - 需要保留模块其余部分真实时用 `importOriginal()` 展开真身再覆盖单个导出（"只替换替语义说话的那一半"）；此时注解的 kind 只对**被替换的那些导出**成立。
 - 强制点 = 既有的 `pnpm --filter @auth-sso/portal typecheck`（`apps/portal/tsconfig.json` 的 `**/*.ts` 覆盖 `__tests__/**`）。

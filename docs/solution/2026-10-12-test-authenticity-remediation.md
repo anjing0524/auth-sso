@@ -105,6 +105,19 @@
 
 ADR-019 已经吃过一次（约束文档化 4 处、声称由 lint 强制、实际阈值是文档值的 4 倍且从未触发）。本策略的每条规则都写明**强制手段 + 阻断点 + 自检方式**（见 ADR-022 的「强制点」表），并且**零新增 CI 步骤**——复用既有的 `typecheck` 与 `test`，少一处会腐化的接线。
 
+### 11. 用"正向变异"证明 mock 与真身有类型联系
+
+类型化工厂的价值在于**编译器知道真身长什么样**。要证明这一点存在（而不是"写了 `Partial<typeof x>` 就算数"），做法与证明测试有判别力同构——**换一条变异通道**：
+
+1. **正向变异**：临时把生产模块里某个导出**改名**（如 `getUserPermissionContext` → `…RENAMED`），跑 `pnpm --filter @auth-sso/portal typecheck`。
+   引用它的类型化工厂必须报错，且错误**点名到键**：
+   `TS2561 Object literal may only specify known properties, but 'getUserPermissionContext' does not exist in type 'Partial<typeof import(…)>'. Did you mean to write 'cacheUserPermissionContext'?`
+   （无可推荐名字时是同族的 `TS2353`；直接 import 真身的文件同时报 `TS2724`。）
+2. **对照**：把工厂改成**裸写**（不标返回类型）后重复同一改名——实测**零诊断**。也就是说，裸写不是"错误变模糊"，而是**契约根本不生效**。
+3. 还原生产代码，`typecheck` 回到 0 错。三次输出都要贴进票据（含 Redis 就绪锚点行，若该次运行涉及 API project）。
+
+结论固化在 ADR-022 §4(a)：**显式返回类型是这条契约唯一的信号产生点**。
+
 ### 9. 夹具的加载期依赖会泄漏给它所有的导入者
 
 把"要写 DB 并清生产模块缓存"的夹具（`seedSigningKeys`）并进"纯数据模板"模块（`seed-fixtures`）时，`user-api.test.ts` **整个文件 0 个用例**地跑不起来：
