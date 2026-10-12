@@ -105,6 +105,27 @@
 
 ADR-019 已经吃过一次（约束文档化 4 处、声称由 lint 强制、实际阈值是文档值的 4 倍且从未触发）。本策略的每条规则都写明**强制手段 + 阻断点 + 自检方式**（见 ADR-022 的「强制点」表），并且**零新增 CI 步骤**——复用既有的 `typecheck` 与 `test`，少一处会腐化的接线。
 
+### 9. 夹具的加载期依赖会泄漏给它所有的导入者
+
+把"要写 DB 并清生产模块缓存"的夹具（`seedSigningKeys`）并进"纯数据模板"模块（`seed-fixtures`）时，`user-api.test.ts` **整个文件 0 个用例**地跑不起来：
+
+```
+Error: [vitest] There was an error when mocking a module...
+Caused by: ReferenceError: Cannot access '__vi_import_5__' before initialization
+ ❯ __tests__/api/user-api.test.ts:49:3
+```
+
+根因不是"加载期碰了 DB"——绊线在 **`vi.mock` 工厂**：该文件的工厂 `() => ({ get db() {...}, schema })` 引用了**顶层 import**（`import * as schema from '@/db/schema'`）。任何在它之前请求 `@/infrastructure/db` 的模块，都会让这个工厂在 `schema` 绑定初始化之前执行，撞上 ESM 的 TDZ。夹具只需多出一条加载期依赖，就能远程引爆别的文件。
+
+两条可复用结论：
+
+- **夹具按"加载期依赖"分层**：纯数据模板一个模块；需要真实基础设施（DB、生产模块进程级状态）的种子独立成模块，**并且不进 helpers barrel**——barrel 会把这条边广播给每一个导入者。判据不是"是不是测试工具"，而是"导入它在加载期会拉进什么"。
+- **`vi.mock` 工厂里引用顶层 import 是顺序敏感的脆弱写法**。安全形态是 holder + getter（`const { tdHolder } = vi.hoisted(...)` + `get db() { return tdHolder.current!.db; }`），本仓库 24 处先例即此。注意 getter 在 `td.connect()` 之前被访问会抛错，故 holder 必须在 `beforeAll` 之后才被触碰。
+
+### 10. 夹具自检要覆盖"生产配置"，而不只是默认配置
+
+`JWKS_ENCRYPTION_KEY` 未设置时 `encryptPrivateKey`/`decryptPrivateKey` 都是**直通**——于是私钥加密落库这条路径在所有测试里零覆盖，`decryptPrivateKey` 的 AES 分支从未执行过。夹具自检因此要成对：默认配置一条 + `vi.stubEnv('JWKS_ENCRYPTION_KEY', …)` 一条（并断言落库的是密文而非明文 JWK）。同理，闭环要用**生产函数**（`signAccessToken` → `verifyAccessToken`）而非只用 `jose` 手工签——只到 `jose` 那一层时，"改坏生产签发逻辑必红"并不成立。
+
 ## 五、同类问题审阅
 
 - **Rust 侧**：`apps/gateway` 15 个含测试的文件未做同类普查；整体替换式 test double 的形态未评估。跨语言契约目前只靠 `gateway-identity-trust.test.ts` 与 `apps/gateway/src/http.rs` 的同向量测试锚定。
@@ -121,3 +142,5 @@ ADR-019 已经吃过一次（约束文档化 4 处、声称由 lint 强制、实
 5. 注入故障吗？→ fake 必须**可抛错**；常量返回 `null` 的 fake 不算故障注入。
 6. 别用 `@/infrastructure/redis` 的空模块 `{}`（那等于"Redis 永久宕机"，会激活生产不可达分支并让断言天然为真）。
 7. 夹具改动后跑一次夹具自检；新写的回归测试做一次变异验证并记录输出（含 Redis 可用性行）。
+8. 要新加测试夹具吗？→ 先问"导入它在加载期会拉进什么"：带 IO / 生产模块状态的夹具独立成模块且**不进 barrel**，否则会远程引爆那些把顶层 import 捕进 `vi.mock` 工厂的文件。
+9. 夹具涉及**配置相关的分支**（加密、开关、TTL）吗？→ 默认配置与生产配置各写一条自检（如 `JWKS_ENCRYPTION_KEY` 开/关），别让默认配置的直通路径掩盖整条分支。

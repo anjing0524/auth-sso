@@ -3,6 +3,14 @@
  *
  * 提供常用测试数据模板（部门/用户/角色/权限/Client/JWKS），
  * 各测试文件按需组合使用。
+ *
+ * 本模块**只做纯数据模板**（无 IO、不依赖生产模块），因此可以被任意测试文件
+ * 安全导入。需要真实基础设施的种子（如 `seedSigningKeys`）放在
+ * `./seed-signing-keys`：它要写 DB 并清生产模块的缓存，一旦并进来，每个导入本
+ * 模块的测试文件都会在**模块加载期**请求 `@/infrastructure/db`——这会提前触发
+ * 那些把顶层 import 捕进 `vi.mock` 工厂的文件的工厂，撞上 ESM 绑定的 TDZ
+ * （`Cannot access ... before initialization`；`@/infrastructure/db` 自身是懒
+ * 初始化的，无辜，绊线在 mock 工厂）。
  */
 import crypto from 'crypto';
 import type { SeedData } from './test-db';
@@ -159,16 +167,23 @@ const fixtureKeyPair = (() => {
  *
  * 产出的是可用的密钥对——调用方可以真正完成"签发 → 验签"闭环，
  * 无需 mock `@/lib/auth/token`。
+ *
+ * 两个时间戳都按**调用时刻**推导（不是模块加载时刻）：`getActiveSigningKey()`
+ * 按 `createdAt DESC` 取最新一行，"刚种入的这对应当成为活跃密钥"必须在任何
+ * 调用顺序下都成立。两个基准若不一致，就会出现"先自己生成了一对、再种入夹具，
+ * 活跃密钥却是自动生成那对"的顺序依赖。`createdAt` 与 `expiresAt` 同基准，
+ * 也让有效期不随模块加载时长漂移。
  */
 export function seedJwks(overrides: Partial<NonNullable<SeedData['jwks']>[0]> = {}): NonNullable<SeedData['jwks']> {
+  const seededAt = new Date();
   return [{
     id: crypto.randomUUID(),
     kid: 'test-kid-001',
     algorithm: 'ES256',
     publicKey: fixtureKeyPair.publicKey,
     privateKey: fixtureKeyPair.privateKey,
-    createdAt: now,
-    expiresAt: new Date(now.getTime() + 90 * 24 * 3600 * 1000),
+    createdAt: seededAt,
+    expiresAt: new Date(seededAt.getTime() + 90 * 24 * 3600 * 1000),
     ...overrides,
   }];
 }
