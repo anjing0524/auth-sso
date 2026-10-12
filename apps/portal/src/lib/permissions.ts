@@ -31,7 +31,14 @@ const UNAVAILABLE_CACHE_SUFFIX = ':unavailable';
 const UNAVAILABLE_CACHE_TTL = 5;
 const USER_BATCH_SIZE = 50;
 
-/** 单个用户的缓存刷新结果——`void` 无法区分"成功"与"内部已吞掉的失败" */
+/**
+ * 单个用户的缓存刷新结果——`void` 无法区分"成功"与"内部已吞掉的失败"。
+ *
+ * `ok: true` 的定义（**唯一**）：Redis 旧缓存删除成功，且
+ * `getUserPermissionContext` 返回 `kind: 'ok'`（缓存确实被回填）。
+ * `denied` / `unavailable` / Redis 抛错 一律 `ok: false`——分级联合是对象，
+ * 不能用真值判断（issue #36 的根因）。
+ */
 interface RefreshOutcome {
   readonly ok: boolean;
 }
@@ -274,6 +281,12 @@ export function toPermissionContextOrNull(
  * 先删旧缓存 → 查 DB 获取最新数据 → 写入 Redis。
  * 用于管理员修改用户角色/权限/部门后立即同步缓存，确保受影响用户下次请求零 DB 命中。
  *
+ * **成败判据（ADR-018 之后）**：`getUserPermissionContext` 返回的是分级联合
+ * `ok | denied | unavailable`，**永远是对象（真值）**。只有 `kind === 'ok'` 才代表
+ * 缓存真的被回填；`denied`（用户不存在/非 ACTIVE）与 `unavailable`（DB 故障）
+ * 都意味着"这次刷新没有发生"，必须如实计入失败——否则 DB 抖动会被上报成
+ * "全部刷新成功"（issue #36），而 `catch` 分支根本不可达。
+ *
  * @param userId 用户 ID
  */
 export async function refreshUserPermissionCache(userId: string): Promise<RefreshOutcome> {
@@ -283,10 +296,16 @@ export async function refreshUserPermissionCache(userId: string): Promise<Refres
     // 1. 删除旧缓存 + null 标记，强制走 DB 获取最新数据
     await redis.del(cacheKey, `${cacheKey}${NULL_CACHE_SUFFIX}`);
     // 2. 查 DB → 自动回写 Redis（TTL 带随机抖动）
-    const ctx = await getUserPermissionContext(userId);
-    if (ctx) {
-      log.info('Refreshed cache for user', { userId });
+    const result = await getUserPermissionContext(userId);
+    if (result.kind !== 'ok') {
+      log.warn('刷新权限缓存未生效', {
+        userId,
+        kind: result.kind,
+        ...(result.kind === 'denied' ? { reason: result.reason } : {}),
+      });
+      return { ok: false };
     }
+    log.info('Refreshed cache for user', { userId });
     return { ok: true };
   } catch (error: unknown) {
     log.error('Failed to refresh cache for user', { userId, error: (error as Error).message });
