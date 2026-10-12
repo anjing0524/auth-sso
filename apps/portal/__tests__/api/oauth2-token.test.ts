@@ -1,32 +1,45 @@
 /**
- * OAuth 2.1 Token 端点集成测试 (POST /api/auth/oauth2/token) — 真实 DB
+ * OAuth 2.1 Token 端点集成测试 (POST /api/auth/oauth2/token) — 真实 DB + 真实签发
  *
  * 覆盖修复规划 F1/F2/F7 的端点语义：
  * - F1（RFC 6749 §4.1.3）：authorization_code grant 的 redirect_uri 必填且强制比对
  * - F2（RFC 6749 §2.3.1）：client_secret_basic / client_secret_post 双通道凭证
  * - F7（RFC 9700 §4.2.4）：已消费授权码重放 → 撤销同授权家族 Refresh Token
  *
- * token 签发/轮换（@/lib/auth/token）mock；PKCE 验证与凭证解析走真实领域函数。
+ * ## 真实驱动（本文件不再 mock `@/lib/auth/token`）
+ *
+ * 改造前把 `signAccessToken` / `signIdToken` / `issueRefreshToken` /
+ * `rotateRefreshToken` / `revokeRefreshTokenFamily` 整体替换成替身，于是：
+ * 签发是否真的落库、轮换是否真的撤销旧行，本文件一概看不见——断言的全是
+ * 「某个 mock 被以什么参数调用」。现在：
+ *
+ * - AT / ID Token 用真实 ES256（`seedSigningKeys` 种入真密钥对）签发，并用**生产**
+ *   `verifyAccessToken` 验回，逐项断言 ADR-013 的 aud / client_id / scope；
+ * - RT 落**真实 `refresh_tokens` 行**（按哈希存储），门控断言"库中有没有行"；
+ * - refresh_token grant 走真实轮换：旧行 `revoked` 被置位 + 新行落库；
+ * - 重放检测的家族撤销断言**真实行被标记 `revoked`**。
+ *
+ * 仍保留的替身只有两处（各有注解）：`getUserPermissionContext`（输入）与
+ * `@/lib/audit`（旁路副作用 + ip/ua 输入；把审计断言改为真实 `login_logs` 行的债
+ * 记在 #50——`writeLoginLog` 是 fire-and-forget，直接断言行会有竞态）。
  *
  * @req H-AUTH-003, H-AUTH-004, H-AUTH-011
  * @vitest-environment node
  */
 import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest';
 import crypto from 'crypto';
+import { JWT_TYP } from '@auth-sso/contracts';
 import { createTestDbHandle, seedTestData } from '../helpers/test-db';
 import { hashToken } from '@/lib/crypto';
 import { seedPortalClient, seedRootDept, seedTestUser } from '../helpers/seed-fixtures';
+import { seedSigningKeys } from '../helpers/seed-signing-keys';
+import type * as permissionsModule from '@/lib/permissions';
+import type * as auditModule from '@/lib/audit';
 
 const { mocks, tdHolder } = vi.hoisted(() => ({
   mocks: {
-    mockSignAccessToken: vi.fn(),
-    mockSignIdToken: vi.fn(),
-    mockIssueRefreshToken: vi.fn(),
-    mockRotateRefreshToken: vi.fn(),
-    mockRevokeRefreshTokenFamily: vi.fn(),
-    mockGetUserPermissionContext: vi.fn(),
-    mockCacheUserPermissionContext: vi.fn(),
-    mockWriteLoginLog: vi.fn(),
+    getUserPermissionContext: vi.fn(),
+    writeLoginLog: vi.fn(),
   },
   tdHolder: { current: null as ReturnType<typeof createTestDbHandle> | null },
 }));
@@ -36,28 +49,27 @@ vi.mock('@/infrastructure/db', () => ({
   get schema() { return tdHolder.current!.schema; },
 }));
 
-vi.mock('@/lib/auth/token', () => ({
-  signAccessToken: mocks.mockSignAccessToken,
-  signIdToken: mocks.mockSignIdToken,
-  issueRefreshToken: mocks.mockIssueRefreshToken,
-  rotateRefreshToken: mocks.mockRotateRefreshToken,
-  revokeRefreshTokenFamily: mocks.mockRevokeRefreshTokenFamily,
-  ACCESS_TOKEN_TTL: 3600,
-}));
+// @allow-module-mock @/lib/permissions input-fixture: 权限上下文在本文件里是端点协议语义的输入；真实 PG 驱动的权限分级由 permission-enforcement、rt-permission-failure 覆盖
+vi.mock(import('@/lib/permissions'), async (importOriginal): Promise<Partial<typeof permissionsModule>> => {
+  const actual = await importOriginal();
+  // 只替换"输入"那一半：`cacheUserPermissionContext` 保持真实（真实 Redis 键）
+  return { ...actual, getUserPermissionContext: mocks.getUserPermissionContext };
+});
 
-vi.mock('@/lib/permissions', () => ({
-  getUserPermissionContext: mocks.mockGetUserPermissionContext,
-  cacheUserPermissionContext: mocks.mockCacheUserPermissionContext,
-}));
-
-vi.mock('@/lib/audit', () => ({
-  writeLoginLog: mocks.mockWriteLoginLog,
-  extractClientIP: () => null,
-  extractUserAgent: () => null,
-}));
+// @allow-module-mock @/lib/audit infra-boundary: 被替换的是审计写入这一**旁路副作用**（本文件测端点协议语义，不测审计）；同时提供 ip/ua 输入。注意本文件里对 writeLoginLog 的断言仍是"只断言调用"（A2），改为真实 login_logs 行的债由 #50 偿还——该函数是 fire-and-forget，直接断言行有竞态
+vi.mock(import('@/lib/audit'), async (importOriginal): Promise<Partial<typeof auditModule>> => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    writeLoginLog: mocks.writeLoginLog,
+    extractClientIP: () => null,
+    extractUserAgent: () => null,
+  };
+});
 
 import { POST } from '@/app/api/auth/oauth2/token/route';
 import { NextRequest } from 'next/server';
+import { verifyAccessToken } from '@/lib/auth/token';
 
 const td = createTestDbHandle();
 tdHolder.current = td;
@@ -72,28 +84,53 @@ const CLIENT = seedPortalClient({
   redirectUris: [REDIRECT_URI],
 })[0]!;
 
-/** 种一个授权码行，可指定 used 状态与 scope */
+/** 种一个授权码行（与生产一致：库中存哈希），可指定 used / scope / 归属 client / 过期时刻 */
 async function seedAuthCode(
   code: string,
   used: boolean,
-  scope = 'openid profile email offline_access',
+  options: { scope?: string; clientId?: string; expiresAt?: Date } = {},
 ): Promise<void> {
   await td.db.insert(td.schema.authorizationCodes).values({
     id: crypto.randomUUID(),
-    // 与生产一致：库中存哈希
     code: hashToken(code),
-    clientId: 'portal',
+    clientId: options.clientId ?? 'portal',
     userId: USER_ID,
     redirectUri: REDIRECT_URI,
-    scope,
+    scope: options.scope ?? 'openid profile email offline_access',
     state: 'st-' + code.slice(-6),
     nonce: null,
     codeChallenge: CHALLENGE,
     codeChallengeMethod: 'S256',
-    expiresAt: new Date(now.getTime() + 5 * 60 * 1000),
+    expiresAt: options.expiresAt ?? new Date(now.getTime() + 5 * 60 * 1000),
     used,
     createdAt: now,
   });
+}
+
+/** 种一个真实的 Refresh Token 行（按哈希），用于轮换 / 家族撤销的真实状态断言 */
+async function seedRefreshTokenRow(clientId: string, token: string): Promise<void> {
+  await td.db.insert(td.schema.refreshTokens).values({
+    id: crypto.randomUUID(),
+    tokenHash: hashToken(token),
+    userId: USER_ID,
+    clientId,
+    scopes: 'openid profile email offline_access',
+    createdAt: now,
+    expiresAt: new Date(now.getTime() + 7 * 24 * 3600 * 1000),
+  });
+}
+
+/** 真实 `refresh_tokens` 行（不经过任何替身） */
+function selectRefreshTokens() {
+  return td.db
+    .select({
+      tokenHash: td.schema.refreshTokens.tokenHash,
+      userId: td.schema.refreshTokens.userId,
+      clientId: td.schema.refreshTokens.clientId,
+      scopes: td.schema.refreshTokens.scopes,
+      revoked: td.schema.refreshTokens.revoked,
+    })
+    .from(td.schema.refreshTokens);
 }
 
 function buildRequest(body: Record<string, unknown>, headers: Record<string, string> = {}): NextRequest {
@@ -128,10 +165,13 @@ beforeEach(async () => {
     clients: [CLIENT, seedPortalClient({ clientId: 'other-app' })[0]!],
   });
   vi.clearAllMocks();
-  mocks.mockSignAccessToken.mockResolvedValue({ token: 'mock-at', jti: 'jti_x' });
-  mocks.mockSignIdToken.mockResolvedValue('mock-id-token');
-  mocks.mockIssueRefreshToken.mockResolvedValue('mock-rt');
-  mocks.mockGetUserPermissionContext.mockResolvedValue({ roles: [], permissions: [], deptIds: [] });
+  // ADR-018 的分级联合：`kind` 是判别式（旧形状缺它会让真实分支零执行）
+  mocks.getUserPermissionContext.mockResolvedValue({
+    kind: 'ok',
+    context: { roles: [], permissions: [], deptIds: [] },
+  });
+  // 真实 ES256：种入密钥对（TRUNCATE 之后，故必须在 cleanup 之后）
+  await seedSigningKeys(td);
 });
 
 describe('POST /api/auth/oauth2/token — redirect_uri 强制比对（F1, RFC 6749 §4.1.3）', () => {
@@ -157,34 +197,65 @@ describe('POST /api/auth/oauth2/token — redirect_uri 强制比对（F1, RFC 67
     expect(json.error).toBe('invalid_grant');
   });
 
-  it('redirect_uri 一致且 PKCE 通过时成功签发', async () => {
+  it('redirect_uri 一致且 PKCE 通过时签发**真实** AT / RT / ID Token', async () => {
     await seedAuthCode('code-ok', false);
 
     const res = await POST(buildRequest(codeGrantBody('code-ok')));
     const json = await res.json();
 
     expect(res.status).toBe(200);
-    expect(json.access_token).toBe('mock-at');
-    expect(json.refresh_token).toBe('mock-rt');
-    expect(json.id_token).toBe('mock-id-token');
-    // ADR-013：AT aud = 签发对象 client_id，payload 显式携带 client_id claim
-    expect(mocks.mockSignAccessToken).toHaveBeenCalledWith(
-      USER_ID,
-      'portal',
-      'openid profile email offline_access',
-    );
+
+    // AT：真实 JWT，用生产验签函数验回；ADR-013 的 aud / client_id claim 逐项断言
+    const atClaims = await verifyAccessToken(json.access_token, 'portal', JWT_TYP.ACCESS_TOKEN);
+    expect(atClaims).not.toBeNull();
+    expect(atClaims!.sub).toBe(USER_ID);
+    expect(atClaims!.aud).toBe('portal');
+    expect(atClaims!.client_id).toBe('portal');
+    expect(atClaims!.scope).toBe('openid profile email offline_access');
+
+    // RT：真实落库行（按哈希，库中无明文）
+    expect(json.refresh_token).toMatch(/^rt_/);
+    const rows = await selectRefreshTokens();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.tokenHash).toBe(hashToken(json.refresh_token));
+    expect(rows[0]!.tokenHash).not.toBe(json.refresh_token);
+    expect(rows[0]!.userId).toBe(USER_ID);
+    expect(rows[0]!.clientId).toBe('portal');
+    expect(rows[0]!.revoked).toBeNull();
+
+    // ID Token：真实 JWT
+    const idClaims = await verifyAccessToken(json.id_token, 'portal', JWT_TYP.ID_TOKEN);
+    expect(idClaims).not.toBeNull();
+    expect(idClaims!.sub).toBe(USER_ID);
   });
 
-  it('refresh_token grant 不要求 redirect_uri', async () => {
-    mocks.mockRotateRefreshToken.mockResolvedValue({
-      accessToken: 'mock-at-2', refreshToken: 'mock-rt-2', expiresIn: 3600,
-    });
+  it('refresh_token grant 不要求 redirect_uri，且**轮换真实落库**（旧行撤销 + 新行签发）', async () => {
+    const oldRefreshToken = 'rt_old_for_rotation_test_value';
+    await seedRefreshTokenRow('portal', oldRefreshToken);
 
     const res = await POST(buildRequest({
-      grant_type: 'refresh_token', refresh_token: 'rt_x', client_id: 'portal', client_secret: 'portal-secret',
+      grant_type: 'refresh_token', refresh_token: oldRefreshToken,
+      client_id: 'portal', client_secret: 'portal-secret',
     }));
+    const json = await res.json();
 
     expect(res.status).toBe(200);
+
+    // 新 AT 真实可验
+    const atClaims = await verifyAccessToken(json.access_token, 'portal', JWT_TYP.ACCESS_TOKEN);
+    expect(atClaims).not.toBeNull();
+    expect(atClaims!.sub).toBe(USER_ID);
+
+    // 真实轮换：旧行被标记撤销、新行落库且与新返回的 RT 哈希一致
+    const rows = await selectRefreshTokens();
+    expect(rows).toHaveLength(2);
+    const oldRow = rows.find(r => r.tokenHash === hashToken(oldRefreshToken));
+    const newRow = rows.find(r => r.tokenHash === hashToken(json.refresh_token));
+    expect(oldRow).toBeDefined();
+    expect(newRow).toBeDefined();
+    expect(oldRow!.revoked).not.toBeNull();
+    expect(newRow!.revoked).toBeNull();
+    expect(newRow!.tokenHash).not.toBe(oldRow!.tokenHash);
   });
 });
 
@@ -266,97 +337,89 @@ describe('POST /api/auth/oauth2/token — 凭证校验契约（RFC 6749 §5.2）
 });
 
 describe('POST /api/auth/oauth2/token — RT 按 offline_access 门控（D3, OIDC Core §11）', () => {
-  it('scope 含 offline_access 时发放 refresh_token', async () => {
+  it('scope 含 offline_access 时发放 refresh_token（真实落库，scopes 与授权一致）', async () => {
     await seedAuthCode('code-rt-with', false);
 
     const res = await POST(buildRequest(codeGrantBody('code-rt-with')));
     const json = await res.json();
 
     expect(res.status).toBe(200);
-    expect(json.refresh_token).toBe('mock-rt');
-    expect(mocks.mockIssueRefreshToken).toHaveBeenCalledWith(
-      USER_ID,
-      'portal',
-      'openid profile email offline_access',
-    );
+    expect(json.refresh_token).toMatch(/^rt_/);
+    const rows = await selectRefreshTokens();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.tokenHash).toBe(hashToken(json.refresh_token));
+    expect(rows[0]!.scopes).toBe('openid profile email offline_access');
   });
 
-  it('scope 不含 offline_access 时不发放 refresh_token', async () => {
-    await seedAuthCode('code-rt-without', false, 'openid profile');
+  it('scope 不含 offline_access 时不发放 refresh_token，且**库中没有任何 RT 行**', async () => {
+    await seedAuthCode('code-rt-without', false, { scope: 'openid profile' });
 
     const res = await POST(buildRequest(codeGrantBody('code-rt-without')));
     const json = await res.json();
 
     expect(res.status).toBe(200);
     expect(json.refresh_token).toBeUndefined();
-    expect(mocks.mockIssueRefreshToken).not.toHaveBeenCalled();
+    // 真实状态断言：不是"某个函数没被调用"，而是库中确实没有行
+    await expect(selectRefreshTokens()).resolves.toHaveLength(0);
   });
 });
 
 describe('POST /api/auth/oauth2/token — 授权码重放检测（F7, RFC 9700 §4.2.4）', () => {
-  it('已消费授权码被再次兑换时撤销同家族 Refresh Token', async () => {
+  it('已消费授权码被再次兑换时撤销同家族 Refresh Token（**真实行被标记 revoked**）', async () => {
+    const familyRefreshToken = 'rt_portal_family_to_be_revoked';
+    await seedRefreshTokenRow('portal', familyRefreshToken);
     await seedAuthCode('code-replayed', true);
 
     const res = await POST(buildRequest(codeGrantBody('code-replayed')));
     const json = await res.json();
 
     expect(json.error).toBe('invalid_grant');
-    // executor 首参（db 直连，重放检测在事务外）+ (userId, clientId) 家族锚点
-    expect(mocks.mockRevokeRefreshTokenFamily).toHaveBeenCalledWith(expect.anything(), USER_ID, 'portal');
-    expect(mocks.mockWriteLoginLog).toHaveBeenCalledWith(
+
+    const rows = await selectRefreshTokens();
+    const familyRow = rows.find(r => r.tokenHash === hashToken(familyRefreshToken));
+    expect(familyRow).toBeDefined();
+    expect(familyRow!.revoked).not.toBeNull();
+
+    // 审计痕迹：本条仍是"断言 mock 被调用"（#50 负责改为真实 login_logs 行）
+    expect(mocks.writeLoginLog).toHaveBeenCalledWith(
       expect.objectContaining({ eventType: 'TOKEN_REFRESH_FAILED' }),
     );
   });
 
   it('不存在的授权码不触发家族撤销（防随机 code DoS 放大）', async () => {
-    const res = await POST(buildRequest(codeGrantBody('code-never-existed')));
-    const json = await res.json();
+    await seedRefreshTokenRow('portal', 'rt_portal_untouched_by_unknown_code');
 
-    expect(json.error).toBe('invalid_grant');
-    expect(mocks.mockRevokeRefreshTokenFamily).not.toHaveBeenCalled();
+    const res = await POST(buildRequest(codeGrantBody('code-never-existed')));
+
+    expect((await res.json()).error).toBe('invalid_grant');
+    const rows = await selectRefreshTokens();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.revoked).toBeNull();
   });
 
   it('过期未消费的授权码不触发家族撤销', async () => {
-    await td.db.insert(td.schema.authorizationCodes).values({
-      id: crypto.randomUUID(),
-      code: 'code-expired',
-      clientId: 'portal',
-      userId: USER_ID,
-      redirectUri: REDIRECT_URI,
-      scope: 'openid',
-      state: 'st',
-      nonce: null,
-      codeChallenge: CHALLENGE,
-      codeChallengeMethod: 'S256',
-      expiresAt: new Date(now.getTime() - 60 * 1000),
-      used: false,
-      createdAt: now,
-    });
+    await seedRefreshTokenRow('portal', 'rt_portal_untouched_by_expired_code');
+    // 注意：必须走 helper（库中存哈希）。此前这里直接插入**明文** code，
+    // 于是"过期"用例其实是在测"码不存在"——过了，但过得不对。
+    await seedAuthCode('code-expired', false, { expiresAt: new Date(now.getTime() - 60 * 1000) });
 
     await POST(buildRequest(codeGrantBody('code-expired')));
 
-    expect(mocks.mockRevokeRefreshTokenFamily).not.toHaveBeenCalled();
+    const rows = await selectRefreshTokens();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.revoked).toBeNull();
   });
 
   it('其他 client 的已消费授权码不触发本 client 视角的家族撤销', async () => {
-    await td.db.insert(td.schema.authorizationCodes).values({
-      id: crypto.randomUUID(),
-      code: 'code-other-client',
-      clientId: 'other-app',
-      userId: USER_ID,
-      redirectUri: REDIRECT_URI,
-      scope: 'openid',
-      state: 'st',
-      nonce: null,
-      codeChallenge: CHALLENGE,
-      codeChallengeMethod: 'S256',
-      expiresAt: new Date(now.getTime() + 5 * 60 * 1000),
-      used: true,
-      createdAt: now,
-    });
+    await seedRefreshTokenRow('portal', 'rt_portal_untouched_by_other_client');
+    await seedRefreshTokenRow('other-app', 'rt_other_app_family');
+    // 同上：走 helper 以哈希入库，否则测的是"码不存在"
+    await seedAuthCode('code-other-client', true, { clientId: 'other-app', scope: 'openid' });
 
     await POST(buildRequest(codeGrantBody('code-other-client')));
 
-    expect(mocks.mockRevokeRefreshTokenFamily).not.toHaveBeenCalled();
+    const rows = await selectRefreshTokens();
+    expect(rows).toHaveLength(2);
+    expect(rows.every(r => r.revoked === null)).toBe(true);
   });
 });
