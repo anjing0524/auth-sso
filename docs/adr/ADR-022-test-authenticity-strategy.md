@@ -74,14 +74,18 @@ Rust 侧（`apps/gateway`）不在本策略射程；跨语言契约继续由 `ga
 **（a）类型化 mock 工厂** —— 契约（mock 键集 ⊆ 真实导出集 + 判别式形状）**交给编译器**：
 
 ```ts
+import type * as permissionsModule from '@/lib/permissions';
+
 // @allow-module-mock @/lib/permissions fault-injection: 真实 PostgreSQL 无法按需变为不可用
-vi.mock(import('@/lib/permissions'), (): Partial<typeof import('@/lib/permissions')> => ({
+vi.mock(import('@/lib/permissions'), (): Partial<typeof permissionsModule> => ({
   getUserPermissionContext: vi.fn(async () => ({ kind: 'unavailable' })),
 }));
 ```
 
 - 幽灵键 → `TS2353`（**点名到键**）；陈旧判别式形状 → `TS2769`；
 - **必须显式标注返回类型**：裸写 `vi.mock(import(…), () => ({…}))` 时同一错误退化为不点名的 `TS2769`（实测对比）；
+- **返回类型必须写成顶层 type-only 命名空间别名**（`import type * as x from '…'` + `Partial<typeof x>`），**不能**内联 `Partial<typeof import('…')>`：仓库的 `consistent-type-imports`（`inline-type-imports` 风格）把 inline `import()` 类型标注判为违规（实现 #41 时实测报 `` `import()` type annotations are forbidden ``）。首参仍用 `import('…')` 值形态——不在该规则管辖内。
+- 需要保留模块其余部分真实时用 `importOriginal()` 展开真身再覆盖单个导出（"只替换替语义说话的那一半"）；此时注解的 kind 只对**被替换的那些导出**成立。
 - 强制点 = 既有的 `pnpm --filter @auth-sso/portal typecheck`（`apps/portal/tsconfig.json` 的 `**/*.ts` 覆盖 `__tests__/**`）。
 - **不使用**手写"扫 mock 键集"的运行时守卫，也**不自写 TS 编译器 API 扫描**：编译器直接读真实模块类型，不存在"守卫与真身各自演化"的空间——那正是 `Function.length` 守卫失败的根因。
 
