@@ -1,26 +1,39 @@
 /**
  * Gateway 身份信任路径测试 (`resolveIdentity`) — 身份签名的 Portal 侧
  *
- * `lib/auth/verify-jwt.ts` 此前**零测试覆盖**（架构评审候选 ⑩），而它承担
- * "Gateway → Portal 的信任边界"：
+ * `lib/auth/verify-jwt.ts` 承担"Gateway → Portal 的信任边界"：
  *
  * **`X-User-Id` 只有在 HMAC 签名通过时才被信任。** 若该判定失效，攻击者只需
  * 伪造一个请求头即可成为任意用户——这是整套三层安全里最直接的一个伪面。
+ *
+ * 两条路径各自的前提不同，测试手法也必须不同：
+ * - **Gateway 信任路径**：令牌已由 Gateway 离线验签，Portal 只做 `aud` 复核
+ *   （`decodeJwtPayload`）。故此处用**任意形状的 JWT** 作输入是对的——签名不必可验。
+ * - **无 Gateway 时的回退自验签**：Portal 自己必须完成真实验签。
+ *
+ * ## 改造前（`#46`）的假绿
+ *
+ * 回退分支被 `vi.mock('@/lib/auth/token')` 整体替换，`mockResolvedValue({sub:'cookie-user', exp:123})`
+ * 让"自验签成功"变成一句替身台词；`@/lib/session` 的 `getJwtFromCookie` 也是替身。
+ * 现在回退分支走**真实 ES256 + 真实 PostgreSQL + 真实 Redis**，并补上"无效令牌必须
+ * 被拒"的负例（改造前只有"无 token → null"这一条）。
  *
  * ## 与 Rust 侧的跨语言契约
  *
  * payload 为 `{ts}:{userId}:{jti}`，与 `apps/gateway/src/http.rs` 的
  * `identity_signature_payload_matches_portal_contract` 使用**同一组固定向量**
  * （secret `test-gateway-shared-secret-32chars!!`、ts `1700000000`、
- * user `user-abc`、jti `jti-xyz`）。
- *
- * 两端是不同语言、无编译期交集；这两个测试共同构成跨端契约的锚点。
+ * user `user-abc`、jti `jti-xyz`）。两端是不同语言、无编译期交集；这两个测试
+ * 共同构成跨端契约的锚点。
  *
  * @req H-AUTH-001, ADR-016
  * @vitest-environment node
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest';
 import { createHmac } from 'node:crypto';
+import { COOKIE_NAMES, GATEWAY_HEADERS, PORTAL_CLIENT_ID } from '@auth-sso/contracts';
+import { createTestDbHandle } from '../helpers/test-db';
+import { seedSigningKeys } from '../helpers/seed-signing-keys';
 
 const SHARED_SECRET = 'test-gateway-shared-secret-32chars!!';
 /** 与 Rust 侧相同的固定向量 */
@@ -29,15 +42,25 @@ const VECTOR_USER = 'user-abc';
 const VECTOR_JTI = 'jti-xyz';
 const VECTOR_SIG = '94f2fd6f848a36f670c19c86e9c9c4893d2e8718b8764f81d368dfc15035cdac';
 
-const { mocks } = vi.hoisted(() => ({
+const { mocks, tdHolder } = vi.hoisted(() => ({
   mocks: {
     headerStore: {} as Record<string, string>,
-    mockVerifyAccessToken: vi.fn(),
+    cookieStore: {} as Record<string, string>,
   },
+  tdHolder: { current: null as ReturnType<typeof createTestDbHandle> | null },
 }));
+
+const td = createTestDbHandle();
+tdHolder.current = td;
 
 vi.mock('next/headers', () => ({
   headers: async () => new Headers(mocks.headerStore),
+  cookies: async () => ({
+    get: (name: string) => {
+      const value = mocks.cookieStore[name];
+      return value ? { name, value } : undefined;
+    },
+  }),
 }));
 
 vi.mock('react', async (importOriginal) => {
@@ -51,20 +74,21 @@ vi.mock('@/lib/env', async (importOriginal) => {
   return { ...actual, getGatewaySharedSecret: () => SHARED_SECRET };
 });
 
-vi.mock('@/lib/auth/token', () => ({
-  verifyAccessToken: mocks.mockVerifyAccessToken,
-}));
-
-vi.mock('@/lib/session', () => ({
-  getJwtFromCookie: async () => mocks.headerStore['cookie-jwt'] ?? null,
+vi.mock('@/infrastructure/db', () => ({
+  get db() { return tdHolder.current!.db; },
+  get schema() { return tdHolder.current!.schema; },
 }));
 
 import { resolveIdentity } from '@/lib/auth/verify-jwt';
-import { GATEWAY_HEADERS } from '@auth-sso/contracts';
+import { signAccessToken, verifyAccessToken } from '@/lib/auth/token';
+import { decodeJwtPayload } from '@/lib/session/jwt';
+import { revokeJti } from '@/lib/session/revoke';
+import { ACCESS_TOKEN_TTL } from '@/lib/auth/token';
 
 const b64 = (o: unknown) => Buffer.from(JSON.stringify(o)).toString('base64url');
 
-function makeToken(claims: Record<string, unknown>): string {
+/** Gateway 信任路径的输入：形状合法但**无需可验签**的 JWT（Gateway 已离线验签） */
+function makeGatewayPathToken(claims: Record<string, unknown>): string {
   return `${b64({ alg: 'ES256' })}.${b64(claims)}.sig`;
 }
 
@@ -95,10 +119,20 @@ function setGatewayHeaders(opts: {
   }
 }
 
-beforeEach(() => {
+/** 设置 Cookie 里的 JWT（真实 `getJwtFromCookie` 会读它） */
+function setJwtCookie(token: string) {
+  mocks.cookieStore = { [COOKIE_NAMES.JWT]: token };
+}
+
+beforeAll(async () => { await td.connect(); });
+afterAll(async () => { await td.close(); });
+
+beforeEach(async () => {
   vi.clearAllMocks();
   mocks.headerStore = {};
-  mocks.mockVerifyAccessToken.mockResolvedValue(null);
+  mocks.cookieStore = {};
+  await td.cleanup();
+  await seedSigningKeys(td);
 });
 
 describe('身份签名 payload 契约（与 Rust 侧同一组固定向量）', () => {
@@ -117,7 +151,6 @@ describe('身份签名 payload 契约（与 Rust 侧同一组固定向量）', (
     };
     // VECTOR_TS 是历史时间戳；用当前时间重算以通过窗口校验
     setGatewayHeaders({});
-    mocks.mockVerifyAccessToken.mockResolvedValue(null);
 
     const identity = await resolveIdentity();
 
@@ -126,9 +159,9 @@ describe('身份签名 payload 契约（与 Rust 侧同一组固定向量）', (
 });
 
 describe('resolveIdentity — Gateway 信任路径被正当时', () => {
-  it('签名有效 + aud=portal → 采用 Gateway 身份', async () => {
+  it('签名有效 + aud=portal → 采用 Gateway 身份，并带上 token 的时间字段', async () => {
     setGatewayHeaders({});
-    mocks.headerStore['cookie-jwt'] = makeToken({ sub: VECTOR_USER, aud: 'portal', exp: 9999999999 });
+    setJwtCookie(makeGatewayPathToken({ sub: VECTOR_USER, aud: PORTAL_CLIENT_ID, exp: 9999999999 }));
 
     const identity = await resolveIdentity();
 
@@ -147,9 +180,9 @@ describe('resolveIdentity — Gateway 信任路径被正当时', () => {
 
   it('签名有效但 aud 不匹配 portal → 丢弃 token claims，仍采用已验签的头身份', async () => {
     setGatewayHeaders({});
-    mocks.headerStore['cookie-jwt'] = makeToken({
+    setJwtCookie(makeGatewayPathToken({
       sub: 'other-user', aud: 'other-client', exp: 9999999999, iat: 1,
-    });
+    }));
 
     const identity = await resolveIdentity();
 
@@ -232,18 +265,45 @@ describe('resolveIdentity — 伪造身份头必须被拒绝（核心安全不�
   });
 });
 
-describe('resolveIdentity — 无 Gateway 时回退自验签', () => {
-  it('无 Gateway 头 + 有效 Cookie token → 自验签成功', async () => {
-    mocks.headerStore = { 'cookie-jwt': 'valid-token' };
-    mocks.mockVerifyAccessToken.mockResolvedValue({
-      sub: 'cookie-user', exp: 123, iat: 100,
-    });
+describe('resolveIdentity — 无 Gateway 时回退自验签（真实 ES256）', () => {
+  it('无 Gateway 头 + 真实有效 Cookie token → 自验签成功', async () => {
+    const { token } = await signAccessToken('cookie-user', PORTAL_CLIENT_ID, 'openid');
+    setJwtCookie(token);
 
     const identity = await resolveIdentity();
 
+    // 断言来自**真实令牌自身**的声明（不是替身返回值）
+    const claims = decodeJwtPayload(token)!;
     expect(identity?.userId).toBe('cookie-user');
-    expect(identity?.expiresAt).toBe(123);
-    expect(identity?.issuedAt).toBe(100);
+    expect(identity?.expiresAt).toBe(claims.exp);
+    expect(identity?.issuedAt).toBe(claims.iat);
+  });
+
+  it('无 Gateway 头 + **签名被篡改**的 token → null（真实 ES256 拒签）', async () => {
+    const { token } = await signAccessToken('cookie-user', PORTAL_CLIENT_ID, 'openid');
+    const tampered = `${token.slice(0, -3)}xxx`;
+    setJwtCookie(tampered);
+
+    // 前提：篡改后的令牌确实无法通过生产验签（否则下面的 null 可能来自别处）
+    await expect(verifyAccessToken(tampered, PORTAL_CLIENT_ID)).resolves.toBeNull();
+
+    const identity = await resolveIdentity();
+
+    expect(identity).toBeNull();
+  });
+
+  it('无 Gateway 头 + **jti 已进黑名单**的 token → null（真实 Redis 撤销生效）', async () => {
+    const { token, jti } = await signAccessToken('cookie-user', PORTAL_CLIENT_ID, 'openid');
+    setJwtCookie(token);
+
+    // 前提：撤销前该令牌是可验的
+    await expect(verifyAccessToken(token, PORTAL_CLIENT_ID)).resolves.not.toBeNull();
+
+    await revokeJti(jti, Math.floor(Date.now() / 1000) + ACCESS_TOKEN_TTL);
+
+    const identity = await resolveIdentity();
+
+    expect(identity).toBeNull();
   });
 
   it('无 Gateway 头 + 无 token → null', async () => {
