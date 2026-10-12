@@ -1,0 +1,342 @@
+{
+  "generatedBy": "module-mock-guard.scanModuleMocks",
+  "note": "由守卫自己的扫描器机械生成；class 一律 annotate-later，A/B 的语义分类由 #56 逐点核定",
+  "entries": [
+    {
+      "file": "apps/portal/__tests__/api/auth-refresh.test.ts",
+      "target": "@/lib/audit",
+      "line": 69,
+      "class": "annotate-later",
+      "owner": "#56"
+    },
+    {
+      "file": "apps/portal/__tests__/api/client-actions.test.ts",
+      "target": "@/lib/auth",
+      "line": 22,
+      "class": "annotate-later",
+      "owner": "#56"
+    },
+    {
+      "file": "apps/portal/__tests__/api/client-actions.test.ts",
+      "target": "@/lib/crypto",
+      "line": 28,
+      "class": "annotate-later",
+      "owner": "#56"
+    },
+    {
+      "file": "apps/portal/__tests__/api/client-api.test.ts",
+      "target": "@/lib/auth",
+      "line": 21,
+      "class": "annotate-later",
+      "owner": "#56"
+    },
+    {
+      "file": "apps/portal/__tests__/api/department-actions.test.ts",
+      "target": "@/lib/auth",
+      "line": 26,
+      "class": "annotate-later",
+      "owner": "#56"
+    },
+    {
+      "file": "apps/portal/__tests__/api/department-actions.test.ts",
+      "target": "@/lib/crypto",
+      "line": 32,
+      "class": "annotate-later",
+      "owner": "#56"
+    },
+    {
+      "file": "apps/portal/__tests__/api/department-api.test.ts",
+      "target": "@/lib/auth",
+      "line": 50,
+      "class": "annotate-later",
+      "owner": "#56"
+    },
+    {
+      "file": "apps/portal/__tests__/api/department-api.test.ts",
+      "target": "@/lib/crypto",
+      "line": 69,
+      "class": "annotate-later",
+      "owner": "#56"
+    },
+    {
+      "file": "apps/portal/__tests__/api/force-logout-route.test.ts",
+      "target": "@/lib/session/revoke",
+      "line": 44,
+      "class": "annotate-later",
+      "owner": "#56"
+    },
+    {
+      "file": "apps/portal/__tests__/api/force-logout-route.test.ts",
+      "target": "@/lib/permissions",
+      "line": 52,
+      "class": "annotate-later",
+      "owner": "#56"
+    },
+    {
+      "file": "apps/portal/__tests__/api/force-logout-route.test.ts",
+      "target": "@/lib/auth",
+      "line": 59,
+      "class": "annotate-later",
+      "owner": "#56"
+    },
+    {
+      "file": "apps/portal/__tests__/api/force-logout-route.test.ts",
+      "target": "@/lib/authz",
+      "line": 63,
+      "class": "annotate-later",
+      "owner": "#56"
+    },
+    {
+      "file": "apps/portal/__tests__/api/force-logout-route.test.ts",
+      "target": "@/lib/cache-invalidation",
+      "line": 68,
+      "class": "annotate-later",
+      "owner": "#56"
+    },
+    {
+      "file": "apps/portal/__tests__/api/me-endpoints.test.ts",
+      "target": "@/lib/auth",
+      "line": 36,
+      "class": "annotate-later",
+      "owner": "#56"
+    },
+    {
+      "file": "apps/portal/__tests__/api/me-endpoints.test.ts",
+      "target": "@/lib/menu-tree",
+      "line": 41,
+      "class": "annotate-later",
+      "owner": "#56"
+    },
+    {
+      "file": "apps/portal/__tests__/api/permission-actions.test.ts",
+      "target": "@/lib/auth",
+      "line": 20,
+      "class": "annotate-later",
+      "owner": "#56"
+    },
+    {
+      "file": "apps/portal/__tests__/api/permission-actions.test.ts",
+      "target": "@/lib/crypto",
+      "line": 26,
+      "class": "annotate-later",
+      "owner": "#56"
+    },
+    {
+      "file": "apps/portal/__tests__/api/permission-actions.test.ts",
+      "target": "@/lib/permissions",
+      "line": 29,
+      "class": "annotate-later",
+      "owner": "#56"
+    },
+    {
+      "file": "apps/portal/__tests__/api/permission-actions.test.ts",
+      "target": "@/lib/session/revoke",
+      "line": 30,
+      "class": "annotate-later",
+      "owner": "#56"
+    },
+    {
+      "file": "apps/portal/__tests__/api/permission-api.test.ts",
+      "target": "@/lib/auth",
+      "line": 30,
+      "class": "annotate-later",
+      "owner": "#56"
+    },
+    {
+      "file": "apps/portal/__tests__/api/permission-api.test.ts",
+      "target": "@/lib/crypto",
+      "line": 47,
+      "class": "annotate-later",
+      "owner": "#56"
+    },
+    {
+      "file": "apps/portal/__tests__/api/role-actions.test.ts",
+      "target": "@/lib/auth",
+      "line": 23,
+      "class": "annotate-later",
+      "owner": "#56"
+    },
+    {
+      "file": "apps/portal/__tests__/api/role-actions.test.ts",
+      "target": "@/lib/crypto",
+      "line": 29,
+      "class": "annotate-later",
+      "owner": "#56"
+    },
+    {
+      "file": "apps/portal/__tests__/api/role-actions.test.ts",
+      "target": "@/lib/permissions",
+      "line": 33,
+      "class": "annotate-later",
+      "owner": "#56"
+    },
+    {
+      "file": "apps/portal/__tests__/api/role-actions.test.ts",
+      "target": "@/lib/session/revoke",
+      "line": 34,
+      "class": "annotate-later",
+      "owner": "#56"
+    },
+    {
+      "file": "apps/portal/__tests__/api/role-api.test.ts",
+      "target": "@/lib/auth",
+      "line": 36,
+      "class": "annotate-later",
+      "owner": "#56"
+    },
+    {
+      "file": "apps/portal/__tests__/api/role-api.test.ts",
+      "target": "@/lib/crypto",
+      "line": 42,
+      "class": "annotate-later",
+      "owner": "#56"
+    },
+    {
+      "file": "apps/portal/__tests__/api/rt-reuse-detection.test.ts",
+      "target": "@/lib/permissions",
+      "line": 48,
+      "class": "annotate-later",
+      "owner": "#56"
+    },
+    {
+      "file": "apps/portal/__tests__/api/token-claims-binding.test.ts",
+      "target": "@/lib/session/revoke",
+      "line": 47,
+      "class": "annotate-later",
+      "owner": "#56"
+    },
+    {
+      "file": "apps/portal/__tests__/api/token-claims-binding.test.ts",
+      "target": "@/lib/permissions",
+      "line": 55,
+      "class": "annotate-later",
+      "owner": "#56"
+    },
+    {
+      "file": "apps/portal/__tests__/api/user-actions.test.ts",
+      "target": "@/lib/auth",
+      "line": 23,
+      "class": "annotate-later",
+      "owner": "#56"
+    },
+    {
+      "file": "apps/portal/__tests__/api/user-actions.test.ts",
+      "target": "@/lib/crypto",
+      "line": 31,
+      "class": "annotate-later",
+      "owner": "#56"
+    },
+    {
+      "file": "apps/portal/__tests__/api/user-api.test.ts",
+      "target": "@/lib/auth",
+      "line": 51,
+      "class": "annotate-later",
+      "owner": "#56"
+    },
+    {
+      "file": "apps/portal/__tests__/api/user-api.test.ts",
+      "target": "@/lib/crypto",
+      "line": 72,
+      "class": "annotate-later",
+      "owner": "#56"
+    },
+    {
+      "file": "apps/portal/__tests__/api/user-api.test.ts",
+      "target": "@/lib/session/revoke",
+      "line": 78,
+      "class": "annotate-later",
+      "owner": "#56"
+    },
+    {
+      "file": "apps/portal/__tests__/api/user-api.test.ts",
+      "target": "@/domain/auth/password",
+      "line": 79,
+      "class": "annotate-later",
+      "owner": "#56"
+    },
+    {
+      "file": "apps/portal/__tests__/api/user-api.test.ts",
+      "target": "@/domain/auth/password",
+      "line": 80,
+      "class": "annotate-later",
+      "owner": "#56"
+    },
+    {
+      "file": "apps/portal/__tests__/api/user-role-api.test.ts",
+      "target": "@/lib/auth",
+      "line": 30,
+      "class": "annotate-later",
+      "owner": "#56"
+    },
+    {
+      "file": "apps/portal/__tests__/api/user-role-api.test.ts",
+      "target": "@/lib/permissions",
+      "line": 49,
+      "class": "annotate-later",
+      "owner": "#56"
+    },
+    {
+      "file": "apps/portal/__tests__/api/user-role-api.test.ts",
+      "target": "@/lib/session/revoke",
+      "line": 50,
+      "class": "annotate-later",
+      "owner": "#56"
+    },
+    {
+      "file": "apps/portal/__tests__/api/user-role-api.test.ts",
+      "target": "@/lib/audit",
+      "line": 51,
+      "class": "annotate-later",
+      "owner": "#56"
+    },
+    {
+      "file": "apps/portal/__tests__/components/app-sidebar.test.tsx",
+      "target": "@/components/ui/sidebar",
+      "line": 106,
+      "class": "annotate-later",
+      "owner": "#56"
+    },
+    {
+      "file": "apps/portal/__tests__/components/app-sidebar.test.tsx",
+      "target": "@/components/ui/sidebar",
+      "line": 107,
+      "class": "annotate-later",
+      "owner": "#56"
+    },
+    {
+      "file": "apps/portal/__tests__/components/app-sidebar.test.tsx",
+      "target": "@/components/ui/dropdown-menu",
+      "line": 109,
+      "class": "annotate-later",
+      "owner": "#56"
+    },
+    {
+      "file": "apps/portal/__tests__/components/audit-logs.test.tsx",
+      "target": "@/app/audit/data",
+      "line": 14,
+      "class": "annotate-later",
+      "owner": "#56"
+    },
+    {
+      "file": "apps/portal/__tests__/components/audit-logs.test.tsx",
+      "target": "@/lib/auth/verify-jwt",
+      "line": 25,
+      "class": "annotate-later",
+      "owner": "#56"
+    },
+    {
+      "file": "apps/portal/__tests__/components/command-palette.test.tsx",
+      "target": "@/components/ui/command",
+      "line": 53,
+      "class": "annotate-later",
+      "owner": "#56"
+    },
+    {
+      "file": "apps/portal/__tests__/components/permission-guard.test.tsx",
+      "target": "@/hooks/use-permissions",
+      "line": 22,
+      "class": "annotate-later",
+      "owner": "#56"
+    }
+  ]
+}
