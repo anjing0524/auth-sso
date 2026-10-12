@@ -20,9 +20,12 @@ import * as schema from '@/db/schema';
 import { hashPassword, verifyPassword } from '@/domain/auth/password';
 import { hashToken } from '@/lib/crypto';
 import { seedPortalClient } from '../helpers/seed-fixtures';
+import { isJtiRevoked, trackUserJti } from '@/lib/session/revoke';
+import type * as redisModule from '@/infrastructure/redis';
 
-const { mocks, tdHolder } = vi.hoisted(() => ({
-  mocks: { mockRevoke: vi.fn(async () => 0) },
+const { faultHolder, tdHolder } = vi.hoisted(() => ({
+  /** 故障注入开关：让所有 Redis 命令抛错（ADR-022 §3 要求可抛错） */
+  faultHolder: { failRedis: false },
   tdHolder: { current: null as ReturnType<typeof createTestDbHandle> | null },
 }));
 
@@ -31,9 +34,25 @@ vi.mock('@/infrastructure/db', () => ({
   get schema() { return tdHolder.current!.schema; },
 }));
 
-vi.mock('@/lib/session/revoke', () => ({
-  revokeUserAccessByUserId: mocks.mockRevoke,
-}));
+// 故障注入落在**基础设施边界**（豁免清单内）而不是业务模块：这样
+// `revokeUserAccessByUserId` 与 `isJtiRevoked` 都保持真实（真实 Redis 黑名单）。
+vi.mock(import('@/infrastructure/redis'), async (importOriginal): Promise<Partial<typeof redisModule>> => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    getRedis: () => {
+      if (!faultHolder.failRedis) return actual.getRedis();
+      const thrower = async () => { throw new Error('Redis down (injected)'); };
+      return {
+        connect: thrower, ping: thrower, get: thrower, getdel: thrower, setex: thrower,
+        del: thrower, keys: thrower, quit: thrower, sadd: thrower, srem: thrower,
+        smembers: thrower, expire: thrower, hset: thrower, hgetall: thrower,
+        exists: thrower, incr: thrower,
+        pipeline: () => { throw new Error('Redis down (injected)'); },
+      };
+    },
+  };
+});
 
 import { changeOwnPassword } from '@/lib/account/change-password';
 
@@ -79,7 +98,7 @@ afterAll(async () => { await td.close(); });
 
 beforeEach(async () => {
   vi.clearAllMocks();
-  mocks.mockRevoke.mockResolvedValue(0);
+  faultHolder.failRedis = false;
   await td.cleanup();
   await seedTestData(td.db, {
     departments: seedRootDept(),
@@ -165,14 +184,19 @@ describe('changeOwnPassword', () => {
     expect(result).toEqual({ ok: false, reason: 'user_not_found' });
   });
 
-  it('成功时撤销该用户全部会话', async () => {
+  it('成功时撤销该用户全部会话（真实 user_jti 哈希 → Redis 黑名单）', async () => {
+    const jti = 'jti-change-password-session';
+    await trackUserJti(USER_ID, jti, 3600);
+    expect(await isJtiRevoked(jti)).toBe(false);
+
     await changeOwnPassword(USER_ID, CURRENT, NEW);
 
-    expect(mocks.mockRevoke).toHaveBeenCalledWith(USER_ID);
+    // 真实状态：不是"某个函数被调用过"，而是该 jti 确实进了黑名单
+    expect(await isJtiRevoked(jti)).toBe(true);
   });
 
-  it('会话撤销失败 → 不阻断改密（新密码仍然生效）', async () => {
-    mocks.mockRevoke.mockRejectedValueOnce(new Error('Redis down'));
+  it('会话撤销失败（真实 Redis 抛错）→ 不阻断改密（新密码仍然生效）', async () => {
+    faultHolder.failRedis = true;
 
     const result = await changeOwnPassword(USER_ID, CURRENT, NEW);
 

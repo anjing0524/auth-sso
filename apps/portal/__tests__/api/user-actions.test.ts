@@ -34,8 +34,9 @@ vi.mock('@/lib/crypto', () => ({
   generateId: (_len?: number) => 'aaaaaaaa',
   hashToken: (t: string) => t,
 }));
-vi.mock('@/lib/session/revoke', () => ({ revokeUserAccessByUserId: vi.fn(async () => 0) }));
-vi.mock('@/infrastructure/redis', () => ({}));
+// 这里**不再** mock `@/lib/session/revoke`，也**不再**用空模块 `{}` 替换 Redis：
+// 空模块等价于"Redis 永久宕机"，会激活生产不可达分支并让断言天然为真（普查的
+// "只断言调用 + 空模块"组合）。现在撤销走真实 Redis，断言落在真实黑名单上。
 
 import { db } from '@/infrastructure/db';
 import { createUserAction, updateUserAction, toggleUserStatusAction, deleteUserAction, resetPasswordAction } from '@/app/(dashboard)/users/actions';
@@ -223,13 +224,19 @@ describe('resetPasswordAction', () => {
     ).rejects.toThrow(EntityNotFoundError);
   });
 
-  it('重置成功后撤销该用户全部会话（B-USR-PW）', async () => {
+  it('重置成功后撤销该用户全部会话（B-USR-PW，断言真实黑名单）', async () => {
     const { hashPassword } = await import('@/domain/auth/password');
-    const { revokeUserAccessByUserId } = await import('@/lib/session/revoke');
+    const { trackUserJti, isJtiRevoked } = await import('@/lib/session/revoke');
     await td.db.insert(schema.users).values(seedTestUser({ passwordHash: await hashPassword('Old@123456') })[0]!);
 
-    await resetPasswordAction('00000000-0000-4000-8000-000000000201', NEW_PASSWORD);
+    const targetUser = '00000000-0000-4000-8000-000000000201';
+    const jti = 'jti-user-actions-reset';
+    await trackUserJti(targetUser, jti, 3600);
+    expect(await isJtiRevoked(jti)).toBe(false);
 
-    expect(revokeUserAccessByUserId).toHaveBeenCalledWith('00000000-0000-4000-8000-000000000201');
+    await resetPasswordAction(targetUser, NEW_PASSWORD);
+
+    // 真实状态：该用户的 jti 确实进了 Redis 黑名单（不是"某函数被调用过"）
+    expect(await isJtiRevoked(jti)).toBe(true);
   });
 });

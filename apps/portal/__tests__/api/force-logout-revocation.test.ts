@@ -28,11 +28,12 @@ import { createTestDbHandle, seedTestData } from '../helpers/test-db';
 import { seedRootDept, seedTestUser, seedPortalClient, seedAdminUser } from '../helpers/seed-fixtures';
 import * as schema from '@/db/schema';
 import { hashToken } from '@/lib/crypto';
+import { isJtiRevoked, trackUserJti } from '@/lib/session/revoke';
+import type * as redisModule from '@/infrastructure/redis';
 
-const { mocks, tdHolder } = vi.hoisted(() => ({
-  mocks: {
-    mockRevokeUserAccess: vi.fn(async () => 0),
-  },
+const { faultHolder, tdHolder } = vi.hoisted(() => ({
+  /** 故障注入开关：让所有 Redis 命令抛错（ADR-022 §3 要求可抛错） */
+  faultHolder: { failRedis: false },
   tdHolder: { current: null as ReturnType<typeof createTestDbHandle> | null },
 }));
 
@@ -41,13 +42,25 @@ vi.mock('@/infrastructure/db', () => ({
   get schema() { return tdHolder.current!.schema; },
 }));
 
-vi.mock('@/lib/session/revoke', () => ({
-  revokeUserAccessByUserId: mocks.mockRevokeUserAccess,
-  isJtiRevoked: vi.fn(async () => false),
-  trackUserJti: vi.fn(async () => {}),
-  revokeJti: vi.fn(async () => {}),
-  revokeUserToken: vi.fn(async () => {}),
-}));
+// 故障注入落在**基础设施边界**（豁免清单内）而不是业务模块：这样
+// `revokeUserAccessByUserId` / `isJtiRevoked` / `trackUserJti` 都保持真实（真实 Redis 黑名单）。
+vi.mock(import('@/infrastructure/redis'), async (importOriginal): Promise<Partial<typeof redisModule>> => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    getRedis: () => {
+      if (!faultHolder.failRedis) return actual.getRedis();
+      const thrower = async () => { throw new Error('Redis down (injected)'); };
+      return {
+        connect: thrower, ping: thrower, get: thrower, getdel: thrower, setex: thrower,
+        del: thrower, keys: thrower, quit: thrower, sadd: thrower, srem: thrower,
+        smembers: thrower, expire: thrower, hset: thrower, hgetall: thrower,
+        exists: thrower, incr: thrower,
+        pipeline: () => { throw new Error('Redis down (injected)'); },
+      };
+    },
+  };
+});
 
 import { revokeAllRefreshTokens } from '@/lib/auth/token';
 
@@ -85,7 +98,7 @@ afterAll(async () => { await td.close(); });
 
 beforeEach(async () => {
   vi.clearAllMocks();
-  mocks.mockRevokeUserAccess.mockResolvedValue(0);
+  faultHolder.failRedis = false;
   await td.cleanup();
   await seedTestData(td.db, {
     departments: seedRootDept(),
@@ -114,18 +127,22 @@ describe('revokeAllRefreshTokens — 双层撤销闭环', () => {
     expect(bTokens.every((r) => r.revoked === null)).toBe(true);
   });
 
-  it('**同时触发 AT jti 批量撤销**（双层都必须执行）', async () => {
+  it('**同时触发 AT jti 批量撤销**（双层都必须执行，断言真实黑名单）', async () => {
     await seedRt('rt_jti', USER_A, CLIENT_PORTAL);
+    const jti = 'jti-force-logout-batch';
+    await trackUserJti(USER_A, jti, 3600);
+    expect(await isJtiRevoked(jti)).toBe(false);
 
     await revokeAllRefreshTokens(USER_A);
 
-    // 仅撤 RT 而不撤 jti，会让 AT 在 TTL 内继续可用——闭环缺一层
-    expect(mocks.mockRevokeUserAccess).toHaveBeenCalledWith(USER_A);
+    // 仅撤 RT 而不撤 jti，会让 AT 在 TTL 内继续可用——闭环缺一层。
+    // 真实状态：该 jti 确实进了黑名单（不是"某函数被调用过"）。
+    expect(await isJtiRevoked(jti)).toBe(true);
   });
 
   it('**Redis 故障不得阻断 RT 撤销**（缓存性故障分级，ADR-018）', async () => {
     await seedRt('rt_redis_down', USER_A, CLIENT_PORTAL);
-    mocks.mockRevokeUserAccess.mockRejectedValue(new Error('redis unavailable'));
+    faultHolder.failRedis = true;
 
     // 不得抛出：Redis 抖动不应使"任何人都无法被强制下线"；
     // 返回 0 表示本次没有可计数的 JTI 撤销（而非失败）
@@ -136,15 +153,21 @@ describe('revokeAllRefreshTokens — 双层撤销闭环', () => {
     expect(tokens.every((r) => r.revoked !== null)).toBe(true);
   });
 
-  it('无 RT 的用户：不抛异常，且仍尝试撤销 jti（AT 可能仍活着）', async () => {
+  it('无 RT 的用户：不抛异常，且 jti 仍被真实撤销（AT 可能仍活着）', async () => {
     // 无任何 RT 行，但该用户可能持有未过期的 AT
-    await expect(revokeAllRefreshTokens(USER_B)).resolves.toBe(0);
-    expect(mocks.mockRevokeUserAccess).toHaveBeenCalledWith(USER_B);
+    const jti = 'jti-force-logout-no-rt';
+    await trackUserJti(USER_B, jti, 3600);
+
+    await expect(revokeAllRefreshTokens(USER_B)).resolves.toBe(1);
+    expect(await isJtiRevoked(jti)).toBe(true);
   });
 
   it('**返回实际撤销的 JTI 数量**（供调用方如实报告，不被幂等空转掩盖）', async () => {
     await seedRt('rt_count', USER_A, CLIENT_PORTAL);
-    mocks.mockRevokeUserAccess.mockResolvedValue(5);
+    // 真实种 5 个 jti：返回值必须等于真实撤销的个数
+    for (let i = 0; i < 5; i += 1) {
+      await trackUserJti(USER_A, `jti-count-${i}`, 3600);
+    }
 
     await expect(revokeAllRefreshTokens(USER_A)).resolves.toBe(5);
   });

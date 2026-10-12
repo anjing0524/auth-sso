@@ -28,9 +28,12 @@ import { createTestDbHandle, seedTestData } from '../helpers/test-db';
 import { seedRootDept, seedAdminUser, seedTestUser, seedPortalClient } from '../helpers/seed-fixtures';
 import * as schema from '@/db/schema';
 import { hashToken } from '@/lib/crypto';
+import { isJtiRevoked, trackUserJti } from '@/lib/session/revoke';
+import type * as redisModule from '@/infrastructure/redis';
 
-const { mocks, tdHolder } = vi.hoisted(() => ({
-  mocks: { mockRevokeAccess: vi.fn(async () => 0) },
+const { faultHolder, tdHolder } = vi.hoisted(() => ({
+  /** 故障注入开关：让所有 Redis 命令抛错（ADR-022 §3 要求可抛错） */
+  faultHolder: { failRedis: false },
   tdHolder: { current: null as ReturnType<typeof createTestDbHandle> | null },
 }));
 
@@ -39,13 +42,25 @@ vi.mock('@/infrastructure/db', () => ({
   get schema() { return tdHolder.current!.schema; },
 }));
 
-vi.mock('@/lib/session/revoke', () => ({
-  revokeUserAccessByUserId: mocks.mockRevokeAccess,
-  isJtiRevoked: vi.fn(async () => false),
-  trackUserJti: vi.fn(async () => {}),
-  revokeJti: vi.fn(async () => {}),
-  revokeUserToken: vi.fn(async () => {}),
-}));
+// 故障注入落在**基础设施边界**（豁免清单内）而不是业务模块：这样
+// `revokeUserAccessByUserId` / `isJtiRevoked` / `trackUserJti` 都保持真实（真实 Redis 黑名单）。
+vi.mock(import('@/infrastructure/redis'), async (importOriginal): Promise<Partial<typeof redisModule>> => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    getRedis: () => {
+      if (!faultHolder.failRedis) return actual.getRedis();
+      const thrower = async () => { throw new Error('Redis down (injected)'); };
+      return {
+        connect: thrower, ping: thrower, get: thrower, getdel: thrower, setex: thrower,
+        del: thrower, keys: thrower, quit: thrower, sadd: thrower, srem: thrower,
+        smembers: thrower, expire: thrower, hset: thrower, hgetall: thrower,
+        exists: thrower, incr: thrower,
+        pipeline: () => { throw new Error('Redis down (injected)'); },
+      };
+    },
+  };
+});
 
 import { revokeAfterPasswordReset } from '@/lib/account/reset-password';
 
@@ -81,7 +96,7 @@ afterAll(async () => { await td.close(); });
 
 beforeEach(async () => {
   vi.clearAllMocks();
-  mocks.mockRevokeAccess.mockResolvedValue(0);
+  faultHolder.failRedis = false;
   await td.cleanup();
   await seedTestData(td.db, {
     departments: seedRootDept(),
@@ -100,12 +115,15 @@ describe('revokeAfterPasswordReset — 必须同时撤销 RT 与 AT', () => {
     expect(await isRevoked('rt_target')).toBe(true);
   });
 
-  it('**同时撤销 Access Token jti**（双层都要执行，缺一层即闭环不完整）', async () => {
+  it('**同时撤销 Access Token jti**（双层都要执行，断言真实黑名单）', async () => {
     await seedRt('rt_both_layers', USER_A);
+    const jti = 'jti-password-reset-both';
+    await trackUserJti(USER_A, jti, 3600);
+    expect(await isJtiRevoked(jti)).toBe(false);
 
     await revokeAfterPasswordReset(USER_A);
 
-    expect(mocks.mockRevokeAccess).toHaveBeenCalledWith(USER_A);
+    expect(await isJtiRevoked(jti)).toBe(true);
   });
 
   it('**不波及其他用户的 RT**（重置一个账号不应影响他人会话）', async () => {
@@ -120,7 +138,7 @@ describe('revokeAfterPasswordReset — 必须同时撤销 RT 与 AT', () => {
 
   it('**Redis 故障不得阻断 RT 撤销**（否决性操作不依赖缓存层）', async () => {
     await seedRt('rt_redis_down', USER_A);
-    mocks.mockRevokeAccess.mockRejectedValue(new Error('redis unavailable'));
+    faultHolder.failRedis = true;
 
     // 不得抛出：密码已持久化，撤销是尽力而为
     await expect(revokeAfterPasswordReset(USER_A)).resolves.toBeUndefined();

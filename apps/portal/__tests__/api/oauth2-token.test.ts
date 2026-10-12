@@ -28,6 +28,7 @@
  */
 import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest';
 import crypto from 'crypto';
+import { eq } from 'drizzle-orm';
 import { JWT_TYP } from '@auth-sso/contracts';
 import { createTestDbHandle, seedTestData } from '../helpers/test-db';
 import { hashToken } from '@/lib/crypto';
@@ -39,7 +40,6 @@ import type * as auditModule from '@/lib/audit';
 const { mocks, tdHolder } = vi.hoisted(() => ({
   mocks: {
     getUserPermissionContext: vi.fn(),
-    writeLoginLog: vi.fn(),
   },
   tdHolder: { current: null as ReturnType<typeof createTestDbHandle> | null },
 }));
@@ -56,12 +56,11 @@ vi.mock(import('@/lib/permissions'), async (importOriginal): Promise<Partial<typ
   return { ...actual, getUserPermissionContext: mocks.getUserPermissionContext };
 });
 
-// @allow-module-mock @/lib/audit infra-boundary: 被替换的是审计写入这一**旁路副作用**（本文件测端点协议语义，不测审计）；同时提供 ip/ua 输入。注意本文件里对 writeLoginLog 的断言仍是"只断言调用"（A2），改为真实 login_logs 行的债由 #50 偿还——该函数是 fire-and-forget，直接断言行有竞态
+// @allow-module-mock @/lib/audit input-fixture: 只替换 ip/ua 两个**输入**helper（测试请求没有真实来源信息）；`writeLoginLog` 走真身，审计断言落在真实 `login_logs` 行上（#50）
 vi.mock(import('@/lib/audit'), async (importOriginal): Promise<Partial<typeof auditModule>> => {
   const actual = await importOriginal();
   return {
     ...actual,
-    writeLoginLog: mocks.writeLoginLog,
     extractClientIP: () => null,
     extractUserAgent: () => null,
   };
@@ -118,6 +117,28 @@ async function seedRefreshTokenRow(clientId: string, token: string): Promise<voi
     createdAt: now,
     expiresAt: new Date(now.getTime() + 7 * 24 * 3600 * 1000),
   });
+}
+
+/**
+ * 等待 `login_logs` 里出现指定事件类型的真实行。
+ *
+ * `writeLoginLog` 是 **fire-and-forget**（内部最多 3 次重试、首次失败退避 1s），
+ * 因此调用返回时行可能还没落库——直接断言行会有竞态，故轮询等待。
+ */
+/** `login_logs.event_type` 的取值（与 schema 的 pgEnum 一致） */
+type LoginEventType =
+  | 'LOGIN_SUCCESS' | 'LOGIN_FAILED' | 'LOGOUT' | 'TOKEN_REFRESH' | 'TOKEN_REFRESH_FAILED';
+
+async function waitForLoginLog(eventType: LoginEventType, timeoutMs = 3000) {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const rows = await td.db
+      .select({ id: td.schema.loginLogs.id, username: td.schema.loginLogs.username })
+      .from(td.schema.loginLogs)
+      .where(eq(td.schema.loginLogs.eventType, eventType));
+    if (rows.length > 0 || Date.now() > deadline) return rows;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
 }
 
 /** 真实 `refresh_tokens` 行（不经过任何替身） */
@@ -380,10 +401,10 @@ describe('POST /api/auth/oauth2/token — 授权码重放检测（F7, RFC 9700 �
     expect(familyRow).toBeDefined();
     expect(familyRow!.revoked).not.toBeNull();
 
-    // 审计痕迹：本条仍是"断言 mock 被调用"（#50 负责改为真实 login_logs 行）
-    expect(mocks.writeLoginLog).toHaveBeenCalledWith(
-      expect.objectContaining({ eventType: 'TOKEN_REFRESH_FAILED' }),
-    );
+    // 审计痕迹：断言**真实 `login_logs` 行**（不再是"某个函数被调用"）
+    const auditRows = await waitForLoginLog('TOKEN_REFRESH_FAILED');
+    expect(auditRows.length).toBeGreaterThan(0);
+    expect(auditRows[0]!.username).toBe('portal');
   });
 
   it('不存在的授权码不触发家族撤销（防随机 code DoS 放大）', async () => {
