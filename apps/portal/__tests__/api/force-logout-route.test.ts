@@ -41,6 +41,7 @@ vi.mock('@/infrastructure/db', () => ({
   get schema() { return tdHolder.current!.schema; },
 }));
 
+// @allow-module-mock @/lib/session/revoke input-fixture: 只提供"撤销已完成/计数为 N"这类输入；真实 Redis 撤销由 force-logout-revocation / oauth-revoke 覆盖
 vi.mock(import('@/lib/session/revoke'), (): Partial<typeof sessionRevokeModule> => ({
   revokeUserAccessByUserId: mocks.mockRevokeUserAccess,
   isJtiRevoked: vi.fn(async () => false),
@@ -49,6 +50,7 @@ vi.mock(import('@/lib/session/revoke'), (): Partial<typeof sessionRevokeModule> 
   revokeUserToken: vi.fn(async () => {}),
 }));
 
+// @allow-module-mock @/lib/permissions input-fixture: 只提供权限上下文输入；真实 PG 驱动的分级由 permission-enforcement / rt-permission-failure 覆盖
 vi.mock(import('@/lib/permissions'), (): Partial<typeof permissionsModule> => ({
   getUserPermissionContext: vi.fn(async () => ({ kind: 'ok' as const, context: { roles: [], permissions: [], deptIds: [] } })),
   cacheUserPermissionContext: vi.fn(async () => {}),
@@ -56,15 +58,18 @@ vi.mock(import('@/lib/permissions'), (): Partial<typeof permissionsModule> => ({
 }));
 
 // 权限门面与数据范围守卫：本文件测的是响应契约，非鉴权（后者另有覆盖）
+// @allow-module-mock @/lib/auth auth-bypass: 本文件被测语义不依赖登录/授权链路，mock 仅用于构造"已登录/已授权"的请求上下文（依赖它的断言：force-logout-route.test.ts 全部用例）
 vi.mock(import('@/lib/auth'), (): Partial<typeof authModule> => ({
   withPermission: (_opts, handler) => handler('00000000-0000-4000-8000-000000000101'),
 }));
 
+// @allow-module-mock @/lib/authz input-fixture: 数据范围写路径只提供"直接执行回调"这一输入；真实范围快照由 lib/authz 自身测试覆盖
 vi.mock(import('@/lib/authz'), (): Partial<typeof authzModule> => ({
   // mock 只负责"直接执行回调"；事务对象由生产签名决定，测试内没有真实事务可用
   withScopedWrite: async (_opts, write) => write(undefined as never),
 }));
 
+// @allow-module-mock @/lib/cache-invalidation infra-boundary: 缓存失效是旁路副作用，不影响本文件断言的响应契约
 vi.mock(import('@/lib/cache-invalidation'), (): Partial<typeof cacheInvalidationModule> => ({ invalidateResource: vi.fn() }));
 
 import { POST } from '@/app/api/users/[id]/force-logout/route';

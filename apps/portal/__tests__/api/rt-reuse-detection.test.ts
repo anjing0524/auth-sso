@@ -45,6 +45,7 @@ vi.mock('@/infrastructure/db', () => ({
   get schema() { return tdHolder.current!.schema; },
 }));
 
+// @allow-module-mock @/lib/permissions input-fixture: 只提供权限上下文输入；真实 PG 驱动的分级由 permission-enforcement / rt-permission-failure 覆盖
 vi.mock(import('@/lib/permissions'), (): Partial<typeof permissionsModule> => ({
   getUserPermissionContext: mocks.mockGetPerm,
   cacheUserPermissionContext: mocks.mockCachePerm,

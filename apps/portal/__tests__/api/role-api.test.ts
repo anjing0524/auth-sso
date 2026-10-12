@@ -33,16 +33,17 @@ const { mockWithPermission } = vi.hoisted(() => {
   return { mockWithPermission };
 });
 
+// @allow-module-mock @/lib/auth auth-bypass: 本文件被测语义不依赖登录/授权链路，mock 仅用于构造"已登录/已授权"的请求上下文（依赖它的断言：role-api.test.ts 全部用例）
 vi.mock(import('@/lib/auth'), (): Partial<typeof authModule> => ({
   resolveIdentity: vi.fn(async () => ({ userId: '00000000-0000-4000-8000-000000000101', expiresAt: null, issuedAt: null })),
   logServerDataRead: vi.fn(async () => {}),
   withPermission: mockWithPermission,
 }));
 
+// @allow-module-mock @/lib/crypto input-fixture: 只提供确定性的 ID 输入（哈希走真实实现）
 vi.mock(import('@/lib/crypto'), (): Partial<typeof cryptoModule> => ({
   generateUUID: () => 'aabbccdd-eeff-4000-8000-000000000001',
   generateId: (_len?: number) => 'aaaaaaaa',
-  hashToken: (t: string) => t,
 }));
 
 

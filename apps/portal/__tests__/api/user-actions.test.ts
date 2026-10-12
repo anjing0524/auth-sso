@@ -20,6 +20,7 @@ vi.mock('@/infrastructure/db', () => ({
   get db() { return td.db; },
   get schema() { return td.schema; },
 }));
+// @allow-module-mock @/lib/auth auth-bypass: 本文件被测语义不依赖登录/授权链路，mock 仅用于构造"已登录/已授权"的请求上下文（依赖它的断言：user-actions.test.ts 全部用例）
 vi.mock(import('@/lib/auth'), (): Partial<typeof authModule> => ({
   resolveIdentity: vi.fn(async () => ({ userId: '00000000-0000-4000-8000-000000000101', expiresAt: null, issuedAt: null })),
   logServerDataRead: vi.fn(async () => {}),
@@ -28,10 +29,10 @@ vi.mock(import('@/lib/auth'), (): Partial<typeof authModule> => ({
   withAuth: (_o, h) => async (...a) => h({ userId: '00000000-0000-4000-8000-000000000101' }, ...a),
   withPermission: async (_o, h) => h('00000000-0000-4000-8000-000000000101'),
 }));
+// @allow-module-mock @/lib/crypto input-fixture: 只提供确定性的 ID 输入（哈希走真实实现）
 vi.mock(import('@/lib/crypto'), (): Partial<typeof cryptoModule> => ({
   generateUUID: () => 'aabbccdd-eeff-4000-8000-000000000001',
   generateId: (_len?: number) => 'aaaaaaaa',
-  hashToken: (t: string) => t,
 }));
 // 这里**不再** mock `@/lib/session/revoke`，也**不再**用空模块 `{}` 替换 Redis：
 // 空模块等价于"Redis 永久宕机"，会激活生产不可达分支并让断言天然为真（普查的

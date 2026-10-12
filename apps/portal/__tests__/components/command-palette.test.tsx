@@ -50,6 +50,7 @@ function asComponentStubs<T>(stubs: { [K in keyof T]?: (props: any) => unknown }
 // 注：必须用**函数声明**——`vi.mock` 工厂会被提升到文件顶部，`const` 箭头函数在工厂执行时仍在 TDZ
 
 // Mock CommandDialog open state
+// @allow-module-mock @/components/ui/command infra-boundary: UI 原语 stub，本文件测的是命令面板交互
 vi.mock(import('@/components/ui/command'), (): Partial<typeof commandModule> =>
   asComponentStubs<typeof commandModule>({
   CommandDialog: ({ children, open }: any) =>

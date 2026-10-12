@@ -66,6 +66,7 @@ vi.mock('@/lib/env', async (importOriginal) => {
   return { ...actual, getGatewaySharedSecret: () => SHARED_SECRET };
 });
 
+// @allow-module-mock @/lib/audit infra-boundary: 审计写入是旁路副作用（fire-and-forget 写库），本文件测的是端点/动作语义
 vi.mock(import('@/lib/audit'), async (importOriginal): Promise<Partial<typeof auditModule>> => {
   const actual = await importOriginal<typeof import('@/lib/audit')>();
   return { ...actual, writeLoginLog: mocks.mockWriteLoginLog };

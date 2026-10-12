@@ -33,11 +33,13 @@ const { mockResolveIdentity } = vi.hoisted(() => ({
   mockResolveIdentity: vi.fn(),
 }));
 
+// @allow-module-mock @/lib/auth auth-bypass: 本文件被测语义不依赖登录/授权链路，mock 仅用于构造"已登录/已授权"的请求上下文（依赖它的断言：me-endpoints.test.ts 全部用例）
 vi.mock(import('@/lib/auth'), (): Partial<typeof authModule> => ({
   resolveIdentity: mockResolveIdentity,
   logServerDataRead: vi.fn(async () => {}),
 }));
 
+// @allow-module-mock @/lib/menu-tree input-fixture: 菜单树只提供渲染输入，不参与本文件断言
 vi.mock(import('@/lib/menu-tree'), (): Partial<typeof menuTreeModule> => ({
   getDynamicMenuTree: vi.fn().mockResolvedValue([]),
 }));

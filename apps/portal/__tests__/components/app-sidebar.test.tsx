@@ -103,9 +103,12 @@ function asComponentStubs<T>(stubs: { [K in keyof T]?: (props: any) => unknown }
 
 // 将工厂函数包装为匿名函数传递给 vi.mock
 // `require('react')` 在这些函数首次调用时才执行，此时模块系统已就绪
+// @allow-module-mock @/components/ui/sidebar infra-boundary: UI 原语 stub：真实组件是 forwardRef 组件，本文件测的是导航逻辑
 vi.mock('next/link', () => makeLinkMock());
+// @allow-module-mock @/components/ui/sidebar infra-boundary: UI 原语 stub：真实组件是 forwardRef 组件，本文件测的是导航逻辑
 vi.mock(import('@/components/ui/sidebar'), (): Partial<typeof sidebarModule> =>
   asComponentStubs<typeof sidebarModule>(makeSidebarMock()));
+// @allow-module-mock @/components/ui/dropdown-menu infra-boundary: UI 原语 stub，同上
 vi.mock(import('@/components/ui/dropdown-menu'), (): Partial<typeof dropdownMenuModule> =>
   asComponentStubs<typeof dropdownMenuModule>(makeDropdownMock()));
 

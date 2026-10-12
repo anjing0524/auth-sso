@@ -44,6 +44,7 @@ vi.mock('@/lib/env', async (importOriginal) => {
   return { ...actual, getIssuer: () => ISSUER, getAppBaseURL: () => ISSUER };
 });
 
+// @allow-module-mock @/lib/session/revoke input-fixture: 只提供"撤销已完成/计数为 N"这类输入；真实 Redis 撤销由 force-logout-revocation / oauth-revoke 覆盖
 vi.mock(import('@/lib/session/revoke'), (): Partial<typeof sessionRevokeModule> => ({
   revokeUserAccessByUserId: mocks.mockRevokeUserAccess,
   isJtiRevoked: vi.fn(async () => false),
@@ -52,6 +53,7 @@ vi.mock(import('@/lib/session/revoke'), (): Partial<typeof sessionRevokeModule> 
   revokeUserToken: vi.fn(async () => {}),
 }));
 
+// @allow-module-mock @/lib/permissions input-fixture: 只提供权限上下文输入；真实 PG 驱动的分级由 permission-enforcement / rt-permission-failure 覆盖
 vi.mock(import('@/lib/permissions'), (): Partial<typeof permissionsModule> => ({
   getUserPermissionContext: vi.fn(async () => ({ kind: 'ok' as const, context: { roles: [], permissions: [], deptIds: [] } })),
   cacheUserPermissionContext: vi.fn(async () => {}),

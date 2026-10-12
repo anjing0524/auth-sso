@@ -19,6 +19,7 @@ import type * as usePermissionsModule from '@/hooks/use-permissions';
 
 // ── Mock usePermissions ──────────────────────────────────────
 const mockUsePermissions = vi.fn();
+// @allow-module-mock @/hooks/use-permissions infra-boundary: 权限 hook 只提供"已授权"输入；真实判定由 permission-enforcement 覆盖
 vi.mock(import('@/hooks/use-permissions'), (): Partial<typeof usePermissionsModule> => ({
   usePermissions: () => mockUsePermissions(),
 }));

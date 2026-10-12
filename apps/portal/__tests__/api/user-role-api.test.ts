@@ -27,6 +27,7 @@ vi.mock('@/infrastructure/db', () => ({
   get schema() { return schema; },
 }));
 
+// @allow-module-mock @/lib/auth auth-bypass: 本文件被测语义不依赖登录/授权链路，mock 仅用于构造"已登录/已授权"的请求上下文（依赖它的断言：user-role-api.test.ts 全部用例）
 vi.mock(import('@/lib/auth'), (): Partial<typeof authModule> => ({
   // 与真实包装器一致：领域错误映射为 HTTP 响应（DomainError.code → 状态码），
   // 其余异常照常抛出（审计失败回滚用例依赖这一点）。
@@ -46,8 +47,11 @@ vi.mock(import('@/lib/auth'), (): Partial<typeof authModule> => ({
   logServerDataRead: vi.fn(async () => {}),
 }));
 
+// @allow-module-mock @/lib/permissions input-fixture: 只提供权限上下文输入；真实 PG 驱动的分级由 permission-enforcement / rt-permission-failure 覆盖
 vi.mock(import('@/lib/permissions'), (): Partial<typeof permissionsModule> => ({ refreshUserPermissionCache: vi.fn(async () => ({ ok: true })) }));
+// @allow-module-mock @/lib/session/revoke input-fixture: 只提供"撤销已完成/计数为 N"这类输入；真实 Redis 撤销由 force-logout-revocation / oauth-revoke 覆盖
 vi.mock(import('@/lib/session/revoke'), (): Partial<typeof sessionRevokeModule> => ({ revokeUserAccessByUserId: vi.fn(async () => 0) }));
+// @allow-module-mock @/lib/audit infra-boundary: 审计写入是旁路副作用（fire-and-forget 写库），本文件测的是端点/动作语义
 vi.mock(import('@/lib/audit'), (): Partial<typeof auditModule> => ({
   appendSecurityAudit: vi.fn(async () => {}),
   extractClientIP: vi.fn(() => '127.0.0.1'),
