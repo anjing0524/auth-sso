@@ -44,7 +44,7 @@ vi.mock('@/lib/env', async (importOriginal) => {
   return { ...actual, getIssuer: () => ISSUER, getAppBaseURL: () => ISSUER };
 });
 
-// @allow-module-mock @/lib/session/revoke input-fixture: 只提供"撤销已完成/计数为 N"这类输入；真实 Redis 撤销由 force-logout-revocation / oauth-revoke 覆盖
+// @allow-module-mock @/lib/session/revoke input-fixture: 本文件测 claims 与签发的绑定，不测撤销；`isJtiRevoked=false` 是「该 token 未被撤销」这一**前置条件**。真实黑名单「命中即拒绝」的闭环由 oauth-introspect / oauth-revoke 覆盖（#43）
 vi.mock(import('@/lib/session/revoke'), (): Partial<typeof sessionRevokeModule> => ({
   revokeUserAccessByUserId: mocks.mockRevokeUserAccess,
   isJtiRevoked: vi.fn(async () => false),

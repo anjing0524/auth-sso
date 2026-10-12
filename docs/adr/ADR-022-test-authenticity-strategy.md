@@ -98,15 +98,16 @@ vi.mock('<target>', () => ({ … }));
 
 - 注解必须紧邻 `vi.mock(` 的**上一行**；`<target>` 与首参**逐字一致**（守卫校验，防复制粘贴错位）；
 - `<reason-kind>` ∈ 枚举：`infra-boundary`（被替代者其实是基础设施伪装）｜ `input-fixture`（只提供输入，断言落真实实现）｜ `fault-injection`（注入真实实现无法产生的故障，必须可抛错）｜ `auth-bypass`（旁路鉴权，自由文本**必须点名覆盖它的文件**）；
-- **禁止**"历史原因 / 暂时 / 先这样"一类自由文本作为合法理由——那类只能落进（c）的债务清单。
+- **禁止**"历史原因 / 暂时 / 先这样"一类自由文本作为合法理由——理由只能落进上面的枚举（守卫按枚举机械拒绝）。
 
-**（c）债务快照** —— 规则落地当天的存量（78 处）进 `apps/portal/__tests__/fixtures/module-mock-baseline.json`：
+**（c）债务快照（历史机制，已于 #56 撤除）** —— 规则上线当天的存量曾记入 `apps/portal/__tests__/fixtures/module-mock-baseline.json`：
 
 - 每条带 `class`（`debt` = A 类假绿待治理 / `annotate-later` = B 类只需补注解）与 `owner`（治理票号或 `legit`），**无主即红**；
-- **只减不增**：条目数不得超过 checked-in 基线；条目指向的 `vi.mock` 点位若已不存在，该条目必须同步删除；点位已补上合法注解后仍留在账单里，也变红；
-- 快照清空后删除该文件与守卫里的快照分支，规则退化为纯注解驱动。**没有永久白名单。**
+- **只减不增**：条目不得新增；点位已消失或已补合法注解后仍留账单，也变红；
+- **结局（#56）**：机械生成的 48 条存量逐条结清（44 条补合法注解、4 处 `hashToken` 恒等替身改走真身），随后**快照文件、`compareSnapshot` 比对函数与 `UPDATE_MODULE_MOCK_BASELINE` 生成入口全部删除**，守卫不再有"被账单容忍"分支——规则退化为**纯注解驱动**，**没有永久白名单**。
+- **如实留档的一条边界**：`force-logout-route.test.ts` 的 `revokedJtiCount` 由 mock 提供计数，该断言锁的是**响应投影**（路由必须把撤销层的报告如实带出），真实撤销计数语义由 `force-logout-revocation` / `oauth-revoke` 的真实 Redis 路径覆盖；注解里点名了这一边界，不假装它有判别力。
 
-**（d）守卫测试**：`apps/portal/__tests__/api/module-mock-guard.test.ts`（API project 内、纯 `fs` 文本扫描、零 IO），扫描 `apps/portal/__tests__/**`、`apps/portal/src/**/*.test.{ts,tsx}`、`packages/contracts/src/**`、`tests/e2e/*.spec.ts`。守卫的判定逻辑抽成纯函数，并由 **7 个违例夹具**（缺注解 / target 不一致 / kind 非法 / 孤儿注解 / 陈旧快照条目 / 快照增长 / 记账后未销账）在 CI 里真跑 —— 这是对 ADR-019「约束文档化 4 处、声称由工具强制、实际从未触发」的机械回应。
+**（d）守卫测试**：`apps/portal/__tests__/api/module-mock-guard.test.ts`（API project 内、纯 `fs` 文本扫描、零 IO），扫描 `apps/portal/__tests__/**`、`apps/portal/src/**/*.test.{ts,tsx}`、`packages/contracts/src/**`、`tests/e2e/*.spec.ts`。守卫的判定逻辑抽成纯函数，并由 **10 个违例夹具**（缺注解 / target 不一致 / kind 非法 / 孤儿注解 / auth-bypass 未点名 / 豁免清单生效 / 注解贴错位置 / 注释引用不算点位 / **不得把下一条 mock 的目标算到上一条**）在 CI 里真跑 —— 这是对 ADR-019「约束文档化 4 处、声称由工具强制、实际从未触发」的机械回应。
 
 ### 5. 环境基线：真实 Redis 进 API project
 
@@ -152,7 +153,7 @@ vi.mock('<target>', () => ({ … }));
 **代价**
 
 - API project 的测试需要真实 PostgreSQL + 真实 Redis；本地开发必须先 `docker compose up -d postgres redis`（探针会给出明确提示）。
-- 迁移期存在债务快照，规则上线当天 78 处生产模块 mock 全部"待销账"；快照消失前，规则对新代码有效、对存量是显式账单。
+- 迁移期曾有债务快照（规则上线当天 78 处点位待销账）；**#56 结清后快照机制已撤除**，今天任何新增的生产模块 mock 都必须**当场**给出理由。
 - 类型化工厂让每个 mock 多写一行 `(): Partial<typeof import('x')>`。
 
 **未做 / 明确排除**
@@ -167,8 +168,8 @@ vi.mock('<target>', () => ({ … }));
 | 规则 | 强制手段 | 阻断点 | 自检 |
 |---|---|---|---|
 | mock 键集 ⊆ 真实导出集、判别式形状 | 类型化 mock 工厂 | `pnpm typecheck`（`tsc --noEmit`） | 正向变异（第 6 条） |
-| 生产模块 mock 必须带合法理由注解 | `module-mock-guard.test.ts` | `pnpm test`（现有 "Run unit, API, and component tests" 步骤） | 7 个违例夹具 |
-| 存量只减不增、owner 必填、销账 | 债务快照 + 守卫 | 同上 | 快照增长/陈旧条目夹具 |
+| 生产模块 mock 必须带合法理由注解 | `module-mock-guard.test.ts` | `pnpm test`（现有 "Run unit, API, and component tests" 步骤） | 10 个违例夹具 |
+| 注解必须绑定到下一行 `vi.mock` 且 target 逐字一致（含豁免 mock） | `module-mock-guard.test.ts` | 同上 | 贴错位置 / 孤儿注解夹具 |
 | 真实 Redis 在场 | `vitest.globalSetup.ts` 硬探针 | 任一 API 测试运行前 | 金丝雀测试 |
 | 安全语义真实驱动 | 代码审查 + 本 ADR 第 2 条 | review | 逐点变异验证（记入票据） |
 

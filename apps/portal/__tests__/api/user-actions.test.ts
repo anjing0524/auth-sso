@@ -29,11 +29,17 @@ vi.mock(import('@/lib/auth'), (): Partial<typeof authModule> => ({
   withAuth: (_o, h) => async (...a) => h({ userId: '00000000-0000-4000-8000-000000000101' }, ...a),
   withPermission: async (_o, h) => h('00000000-0000-4000-8000-000000000101'),
 }));
-// @allow-module-mock @/lib/crypto input-fixture: 只提供确定性的 ID 输入（哈希走真实实现）
-vi.mock(import('@/lib/crypto'), (): Partial<typeof cryptoModule> => ({
-  generateUUID: () => 'aabbccdd-eeff-4000-8000-000000000001',
-  generateId: (_len?: number) => 'aaaaaaaa',
-}));
+// @allow-module-mock @/lib/crypto input-fixture: 只覆盖「确定性 ID」这类输入，其余导出（含 hashToken）走真身
+vi.mock(import('@/lib/crypto'), async (importOriginal): Promise<Partial<typeof cryptoModule>> => {
+  const actual = await importOriginal();
+  // 只覆盖「确定性 ID」，其余导出（含 hashToken 的真实 sha256）走真身：
+  // 早先整体替换会把 hashToken 变成 undefined，而注解却写着「哈希走真实实现」
+  return {
+    ...actual,
+    generateUUID: () => 'aabbccdd-eeff-4000-8000-000000000001',
+    generateId: (_len?: number) => 'aaaaaaaa',
+  };
+});
 // 这里**不再** mock `@/lib/session/revoke`，也**不再**用空模块 `{}` 替换 Redis：
 // 空模块等价于"Redis 永久宕机"，会激活生产不可达分支并让断言天然为真（普查的
 // "只断言调用 + 空模块"组合）。现在撤销走真实 Redis，断言落在真实黑名单上。

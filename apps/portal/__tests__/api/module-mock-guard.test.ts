@@ -92,6 +92,25 @@ function isCommentLine(line: string): boolean {
   return at > 0 && line.slice(0, at).includes('//');
 }
 
+/**
+ * 提取某个 `vi.mock(` 的目标说明符；首参允许换行，但**不得跨入下一条 mock 或注解**。
+ *
+ * 实测教训：早先用「本行 + 后两行」的窗口，会把**下一条** mock 的目标算到上一条头上
+ * （表现为给豁免的 redis mock 安上 `@/domain/auth/password` 的目标），并进而产生
+ * "同一条 mock 记两笔"的幽灵账单条目。
+ */
+function extractMockTarget(lines: readonly string[], i: number): { target: string; usesImportForm: boolean } | null {
+  for (let j = i; j < Math.min(i + 3, lines.length); j += 1) {
+    const text = lines[j]!;
+    if (j > i && (MOCK_CALL.test(text) || ANNOTATION.test(text))) break;
+    const importMatch = IMPORT_FORM.exec(text);
+    if (importMatch) return { target: importMatch[1]!, usesImportForm: true };
+    const stringMatch = STRING_FORM.exec(text);
+    if (stringMatch) return { target: stringMatch[1]!, usesImportForm: false };
+  }
+  return null;
+}
+
 /** 纯函数：扫一段源码里的模块级 mock + 其上一行的理由注解（跳过注释里的引用文字） */
 export function scanModuleMocks(source: string): ModuleMockFinding[] {
   const lines = source.split('\n');
@@ -102,20 +121,16 @@ export function scanModuleMocks(source: string): ModuleMockFinding[] {
     if (!MOCK_CALL.test(line)) continue;
     if (isCommentLine(line)) continue;
 
-    // 允许首参跨到下一行：在 `vi.mock(` 之后的两行内找说明符
-    const window = [line, lines[i + 1] ?? '', lines[i + 2] ?? ''].join('\n');
-    const importMatch = IMPORT_FORM.exec(window);
-    const stringMatch = importMatch ? null : STRING_FORM.exec(window);
-    const target = importMatch?.[1] ?? stringMatch?.[1];
-    if (!target) continue;
+    const found = extractMockTarget(lines, i);
+    if (!found) continue;
 
     const prev = lines[i - 1] ?? '';
     const annMatch = ANNOTATION.exec(prev);
 
     findings.push({
-      target,
+      target: found.target,
       line: i + 1,
-      usesImportForm: Boolean(importMatch),
+      usesImportForm: found.usesImportForm,
       annotation: annMatch
         ? { target: annMatch[1]!, kind: annMatch[2]!, reason: (annMatch[3] ?? '').trim() }
         : null,
@@ -162,19 +177,37 @@ export function findAnnotationViolations(findings: readonly ModuleMockFinding[])
   return violations;
 }
 
-/** 纯函数：孤儿注解（注解下一行不是 `vi.mock(`） */
-export function findOrphanAnnotations(source: string): string[] {
+/**
+ * 纯函数：注解**绑定性**检查——注解必须紧贴一个 `vi.mock(`，且 target 逐字一致。
+ *
+ * 为什么连**豁免** mock 也要查：实测过一条漏网注解——`@/domain/auth/password` 的注解
+ * 被插到了下一行的 `vi.mock('@/infrastructure/redis')`（豁免模块）之上。豁免模块的目标
+ * 不参与"是否必须给理由"的判定，但**注解与目标的绑定关系**必须成立，否则注解会
+ * 静默指错对象（读的人以为它管的是别的模块）。
+ */
+export function findAnnotationBindingViolations(source: string): string[] {
   const lines = source.split('\n');
-  const orphans: string[] = [];
+  const violations: string[] = [];
 
   for (let i = 0; i < lines.length; i += 1) {
-    if (!ANNOTATION.test(lines[i]!)) continue;
-    if (!MOCK_CALL.test(lines[i + 1] ?? '')) {
-      orphans.push(`第 ${i + 1} 行：理由注解的下一行不是 vi.mock(（孤儿注解）`);
+    const annMatch = ANNOTATION.exec(lines[i]!);
+    if (!annMatch) continue;
+
+    const next = lines[i + 1] ?? '';
+    if (!MOCK_CALL.test(next)) {
+      violations.push(`第 ${i + 1} 行：理由注解的下一行不是 vi.mock(（孤儿注解）`);
+      continue;
+    }
+
+    const found = extractMockTarget(lines, i + 1);
+    if (found && found.target !== annMatch[1]) {
+      violations.push(
+        `第 ${i + 1} 行：注解 target「${annMatch[1]}」与下一行 vi.mock 目标「${found.target}」不一致（注解贴错位置）`,
+      );
     }
   }
 
-  return orphans;
+  return violations;
 }
 
 // ════════════════════════════════════════════════════════════
@@ -236,7 +269,24 @@ describe('module-mock-guard —— 违例夹具（守卫自身被守）', () => 
 
   it('夹具 4：孤儿注解 → 报"孤儿注解"', () => {
     const src = "// @allow-module-mock @/lib/foo input-fixture: x\nconst x = 1;";
-    expect(findOrphanAnnotations(src).join()).toContain('孤儿注解');
+    expect(findAnnotationBindingViolations(src).join()).toContain('孤儿注解');
+  });
+
+  it('夹具 9：不得把下一条 mock 的目标算到上一条（跨条串味）', () => {
+    const src = [
+      "vi.mock('@/infrastructure/redis', () => ({}));",
+      "// @allow-module-mock @/domain/auth/password input-fixture: x",
+      "vi.mock(import('@/domain/auth/password'), () => ({}));",
+    ].join('\n');
+    const found = scanModuleMocks(src);
+    expect(found.map((f) => f.target)).toEqual(['@/infrastructure/redis', '@/domain/auth/password']);
+    expect(findAnnotationBindingViolations(src)).toEqual([]);
+  });
+
+  it('夹具 8：注解贴到**豁免** mock 上（target 不匹配）→ 报"贴错位置"', () => {
+    const src =
+      "// @allow-module-mock @/domain/auth/password input-fixture: x\nvi.mock('@/infrastructure/redis', () => ({}));";
+    expect(findAnnotationBindingViolations(src).join()).toContain('贴错位置');
   });
 
   it('夹具 5：auth-bypass 未点名测试文件 → 报"必须点名"', () => {
@@ -266,7 +316,7 @@ describe('module-mock-guard —— 全量扫描', () => {
     for (const abs of scanScopeFiles()) {
       const rel = relative(REPO_ROOT, abs);
       const source = readFileSync(abs, 'utf-8');
-      violations.push(...findOrphanAnnotations(source).map((v) => `${rel} ${v}`));
+      violations.push(...findAnnotationBindingViolations(source).map((v) => `${rel} ${v}`));
       violations.push(...findAnnotationViolations(scanModuleMocks(source)).map((v) => `${rel} ${v}`));
     }
     expect(violations).toEqual([]);

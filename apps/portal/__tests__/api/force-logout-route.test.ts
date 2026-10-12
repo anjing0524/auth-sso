@@ -41,7 +41,7 @@ vi.mock('@/infrastructure/db', () => ({
   get schema() { return tdHolder.current!.schema; },
 }));
 
-// @allow-module-mock @/lib/session/revoke input-fixture: 只提供"撤销已完成/计数为 N"这类输入；真实 Redis 撤销由 force-logout-revocation / oauth-revoke 覆盖
+// @allow-module-mock @/lib/session/revoke input-fixture: 提供的**计数**是路由响应投影所需的输入——本文件锁的是"撤销层报告 N ⇒ body/message 如实带出 N"这一投影契约，以及"jti 撤销只执行一次"的调用语义；真实撤销计数（真实 Redis `user_jti`）由 force-logout-revocation / oauth-revoke 覆盖。**边界如实记录**：这里的 N 由 mock 给出，不具备"撤销真的撤了几个"的判别力
 vi.mock(import('@/lib/session/revoke'), (): Partial<typeof sessionRevokeModule> => ({
   revokeUserAccessByUserId: mocks.mockRevokeUserAccess,
   isJtiRevoked: vi.fn(async () => false),

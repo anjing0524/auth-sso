@@ -39,9 +39,9 @@ vi.mock(import('@/lib/auth'), (): Partial<typeof authModule> => ({
   logServerDataRead: vi.fn(async () => {}),
 }));
 
-// @allow-module-mock @/lib/menu-tree input-fixture: 菜单树只提供渲染输入，不参与本文件断言
+// @allow-module-mock @/lib/menu-tree input-fixture: 菜单树只提供可辨识的渲染输入；断言检查的是**路由原样透传**该输入（不重排/不裁剪），树的构建逻辑由其自身测试覆盖
 vi.mock(import('@/lib/menu-tree'), (): Partial<typeof menuTreeModule> => ({
-  getDynamicMenuTree: vi.fn().mockResolvedValue([]),
+  getDynamicMenuTree: vi.fn().mockResolvedValue([{ id: 'menu-marker', name: '透传标记', path: '/marker', children: [] }]),
 }));
 
 vi.mock('@/infrastructure/redis', () => ({
@@ -130,7 +130,8 @@ describe('Me Endpoints', () => {
       expect(body.permissions).toContain('portal:user:list');
       expect(body.roles).toBeDefined();
       expect(body.roles).toContain('SUPER_ADMIN');
-      expect(body.menus).toBeDefined();
+      // 透传契约：路由必须原样带出菜单树（此前只断言 toBeDefined，且 mock 返回空数组 ⇒ 恒真）
+      expect(body.menus).toEqual([{ id: 'menu-marker', name: '透传标记', path: '/marker', children: [] }]);
     });
 
     it('无身份时返回 401', async () => {
