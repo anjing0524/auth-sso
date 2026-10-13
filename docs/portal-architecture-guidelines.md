@@ -582,9 +582,27 @@ export const createUserAction = withAuth(
 
     revalidatePath('/users');
     return { success: true, data: { id: result.id }, message: '用户创建成功' };
-  }
-);
+  });
 ```
+
+> **唯一性冲突的机制在哪儿？（2026-10-13 补，架构评审 R2 候选 R10）**
+>
+> 上面的"**先查后写**"只是**更早给出消息**的优化，**不是正确性依赖**——它对并发不安全：
+> 两个并发请求都能通过 `existing.length === 0`，落库时后者仍会撞约束。
+>
+> 真正的保证在**服务端边界**：`lib/server-error.ts` 的 `mapServerError()` 沿 `cause` 链
+> 识别 PostgreSQL 唯一约束违例（SQLSTATE `23505`，Drizzle 会把它包在
+> `DrizzleQueryError.cause` 里）并翻译成 `DuplicateEntityError` → **409**。
+> 因此：
+>
+> - 实体是否需要 `DuplicateEntityError` 预检查**不影响状态码正确性**（边界兜底）；
+> - **任何**未被预检查覆盖的唯一约束（含 update 路径改字段）都自动得到 409，
+>   而不是 500「服务器内部错误」；
+> - 消息由 `table_name` + `detail` 的**列名**翻译而来，**绝不回显冲突值**
+>   （`detail` 里带的是库里已存在那位的邮箱/手机号/用户名）。
+>
+> 新加唯一约束时**无需**额外做预检查；`lib/db-errors.test.ts` 与
+> `__tests__/api/db-unique-violation.test.ts` 已覆盖六条用户可触发的约束。
 
 ### 3.5 表现层：REST Route Handler 薄 Controller 示例 (route.ts)
 
