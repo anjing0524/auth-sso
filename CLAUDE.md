@@ -23,12 +23,11 @@ pnpm dev
 pnpm --filter @auth-sso/portal dev   # Portal on port 4100
 
 # 测试体系 (Vitest + Playwright + Traceability)
-pnpm test                  # 全量 Vitest 测试
-pnpm test:api              # API 层测试（Mock DB/Redis）
-pnpm test:components       # 组件层测试（jsdom）
+pnpm test                  # 全量 Vitest 测试（api / ui / contracts 三个 project）
+pnpm test:api              # API 层测试：**真实 PostgreSQL + 真实 Redis**（见 ADR-022）
+pnpm test:components       # UI 层测试：components / domain / helpers / src 内联（jsdom，零基础设施）
 pnpm test:e2e              # Playwright E2E 端到端测试
-pnpm test:report           # 需求追溯性覆盖率报告
-pnpm test:report           # 静态需求追溯清单（不等同于实际测试覆盖率）
+pnpm test:report           # 需求追溯清单（是清单，不是覆盖率门禁）
 ```
 
 ## Test Architecture
@@ -40,7 +39,7 @@ Tests follow a layered strategy — fast, isolated unit tests at the bottom, int
 - **Location**: `apps/*/__tests__/components/`, `apps/*/__tests__/smoke.test.ts`
 - **Framework**: Vitest with `jsdom` environment
 - **Scope**: Component rendering, user interactions, helper functions
-- **Mocks**: All external dependencies (auth, API calls, DB)
+- **Mocks**: 外部 UI 原语与数据源；生产业务模块的 mock 必须带理由注解（见 `CODING_STANDARDS.md`）
 - **Run**: `pnpm test:components`
 
 ### Layer 2: API Tests
@@ -48,7 +47,9 @@ Tests follow a layered strategy — fast, isolated unit tests at the bottom, int
 - **Location**: `apps/*/__tests__/api/*.test.ts`
 - **Framework**: Vitest with `@vitest-environment node`
 - **Scope**: API route handlers — request validation, auth enforcement, CRUD logic, data scope filtering
-- **Mocks**: DB via `vi.mock()`, Redis via `@/lib/redis`, auth middleware via `vi.mock('@/lib/auth-middleware')`
+- **基础设施**: **真实 PostgreSQL + 真实 Redis** —— `vitest.globalSetup.ts` 硬探针 + 专用逻辑库 + 每用例 `FLUSHDB`；真实库经 `vi.mock('@/infrastructure/db')` 的测试句柄注入
+- **Mocks**: 生产业务模块的模块级 mock 必须是**类型化工厂**（`vi.mock(import('…'), (): Partial<typeof xModule> => …)`）并带 `// @allow-module-mock <target> <kind>: <理由>`；签发/验签/撤销/登录/权限/审计等**安全语义一律真实驱动**
+- **规则出处**: `docs/adr/ADR-022-test-authenticity-strategy.md`（豁免清单与理由枚举）；由 `__tests__/api/module-mock-guard.test.ts` 在 `pnpm test` 内强制
 - **Run**: `pnpm test:api`
 
 ### Layer 3: E2E Tests

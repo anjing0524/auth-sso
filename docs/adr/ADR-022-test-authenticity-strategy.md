@@ -10,7 +10,7 @@
 
 ## 背景：一份看着在、实际不拦的安全网
 
-全仓 79 个测试文件普查（基线 `ad530d6`）的实测结果：
+全仓 79 个测试文件普查（基线 `ad530d6`；一手来源 `docs/research/2026-10-12-fake-green-census.md`）的实测结果：
 
 | 项 | 实测值 |
 |---|---|
@@ -107,7 +107,7 @@ vi.mock('<target>', () => ({ … }));
 - **结局（#56）**：机械生成的 48 条存量逐条结清（44 条补合法注解、4 处 `hashToken` 恒等替身改走真身），随后**快照文件、`compareSnapshot` 比对函数与 `UPDATE_MODULE_MOCK_BASELINE` 生成入口全部删除**，守卫不再有"被账单容忍"分支——规则退化为**纯注解驱动**，**没有永久白名单**。
 - **曾如实留档、现已闭环的一条边界**：`force-logout-route.test.ts` 的 `revokedJtiCount` 一度由 mock 提供计数（只锁响应投影）。#57 已把它改成**真实驱动**——删除 `@/lib/session/revoke` 的整体 mock，用真实 `trackUserJti` 播种 `user_jti`、断言真实计数与真实黑名单效果，并把"只执行一次"改为幂等空转的行为证据（变异：破坏计数来源 ⇒ 2 例红）。至此**规则里不再有任何 A 类边界留档**。
 
-**（d）守卫测试**：`apps/portal/__tests__/api/module-mock-guard.test.ts`（API project 内、纯 `fs` 文本扫描、零 IO），扫描 `apps/portal/__tests__/**`、`apps/portal/src/**/*.test.{ts,tsx}`、`packages/contracts/src/**`、`tests/e2e/*.spec.ts`。守卫的判定逻辑抽成纯函数，并由 **9 个违例夹具 + 1 条全量扫描断言**（缺注解 / target 不一致 / kind 非法 / 孤儿注解 / auth-bypass 未点名 / 豁免清单生效 / 注解贴错位置 / 注释引用不算点位 / **不得把下一条 mock 的目标算到上一条** / 目标无法识别）在 CI 里真跑 —— 这是对 ADR-019「约束文档化 4 处、声称由工具强制、实际从未触发」的机械回应。
+**（d）守卫测试**：`apps/portal/__tests__/api/module-mock-guard.test.ts`（API project 内、纯 `fs` 文本扫描、零 IO），扫描 `apps/portal/__tests__/**`、`apps/portal/src/**/*.test.{ts,tsx}`、`packages/contracts/src/**`、`tests/e2e/*.spec.ts`。守卫的判定逻辑抽成纯函数，并由 **10 个违例夹具 + 1 条全量扫描断言**（缺注解 / target 不一致 / kind 非法 / 孤儿注解 / auth-bypass 未点名 / 豁免清单生效 / 注解贴错位置 / 注释引用不算点位 / **不得把下一条 mock 的目标算到上一条** / 目标无法识别）在 CI 里真跑 —— 这是对 ADR-019「约束文档化 4 处、声称由工具强制、实际从未触发」的机械回应。
 
 ### 5. 环境基线：真实 Redis 进 API project
 
@@ -168,7 +168,7 @@ vi.mock('<target>', () => ({ … }));
 | 规则 | 强制手段 | 阻断点 | 自检 |
 |---|---|---|---|
 | mock 键集 ⊆ 真实导出集、判别式形状 | 类型化 mock 工厂 | `pnpm typecheck`（`tsc --noEmit`） | 正向变异（第 6 条） |
-| 生产模块 mock 必须带合法理由注解 | `module-mock-guard.test.ts` | `pnpm test`（现有 "Run unit, API, and component tests" 步骤） | 9 个违例夹具 + 1 条全量扫描 |
+| 生产模块 mock 必须带合法理由注解 | `module-mock-guard.test.ts` | `pnpm test`（现有 "Run unit, API, and component tests" 步骤） | 10 个违例夹具 + 1 条全量扫描 |
 | 注解必须绑定到下一行 `vi.mock` 且 target 逐字一致（含豁免 mock） | `module-mock-guard.test.ts` | 同上 | 贴错位置 / 孤儿注解夹具 |
 | 真实 Redis 在场 | `vitest.globalSetup.ts` 硬探针 | 任一 API 测试运行前 | 金丝雀测试 |
 | 安全语义真实驱动 | 代码审查 + 本 ADR 第 2 条 | review | 逐点变异验证（记入票据） |
@@ -189,7 +189,7 @@ vi.mock('<target>', () => ({ … }));
 
 **决策链条（wayfinder 地图的子票据）**
 
-- 全仓假绿普查（三级分类 A/B/C、五子码 A1–A5、M1–M5 变异实验、N1–N13 新增假绿）
+- 全仓假绿普查（三级分类 A/B/C、五子码 A1–A5、M1–M5 变异实验、N1–N13 新增假绿）—— `docs/research/2026-10-12-fake-green-census.md`
 - 真实 Redis 如何接进 API project（本 ADR 第 5 条）
 - token 安全语义的真实覆盖（四个点位的真实驱动形态）
 - 8 个 mock token 的文件逐个判定（逐文件"换真实/保留/删"）

@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+#
+# 提交前的机械门禁（#58 / retro 第 6 条）
+#
+# 挡在提交之前的，是**机械性**失误：语法/类型错误、测试文件加载失败（TDZ 这类）、
+# 以及本次改动会立刻打破的守卫。它们在 CI 也能被发现，但那时已经晚了一轮。
+#
+# 选型：**不引入任何依赖**（本机网络不稳，装钩子框架＝装包＝额外风险），只用仓库
+# 已有的命令。钩子通过 `core.hooksPath` 接线，由 package.json 的 `prepare` 在
+# `pnpm install` 后自动设置（见该脚本）。
+#
+# 出口：`git commit --no-verify`（有意为之时用，不用于赶时间）。
+set -uo pipefail
+
+fail() { echo ""; echo "[pre-commit] ✗ $1"; echo "[pre-commit] 修正后重试；确实有意跳过请用 git commit --no-verify"; exit 1; }
+
+echo "[pre-commit] 1/3 typecheck（所有包，含 __tests__）…"
+pnpm -s typecheck || fail "typecheck 未通过"
+
+echo "[pre-commit] 2/3 UI project 测试（jsdom，零基础设施）…"
+pnpm -s exec vitest run --project @auth-sso/portal-ui || fail "UI project 测试未通过"
+
+# API project 需要真实 Redis（ADR-022 §5 的硬探针）。Redis 不在时不假装跑过：
+# 明确跳过并说明交给 CI，避免"没跑却说绿"。
+if timeout 1 bash -c "</dev/tcp/127.0.0.1/6379" 2>/dev/null; then
+  echo "[pre-commit] 3/3 Redis 在场：跑模块级 mock 守卫 + 文档声明检查…"
+  pnpm -s exec vitest run --project @auth-sso/portal-api \
+    apps/portal/__tests__/api/module-mock-guard.test.ts \
+    apps/portal/__tests__/api/docs-claims.test.ts \
+    apps/portal/__tests__/api/docs-references.test.ts || fail "守卫/文档检查未通过"
+else
+  echo "[pre-commit] 3/3 跳过 API project 检查（127.0.0.1:6379 不可达）——由 CI 的 Full CI 步骤兜底"
+fi
+
+echo "[pre-commit] ✓ 通过"

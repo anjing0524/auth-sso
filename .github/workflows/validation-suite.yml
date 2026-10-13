@@ -17,7 +17,10 @@ on:
 
 jobs:
   full-check:
-    name: Full CI (Lint + Test + Coverage)
+    # 名称只列**真正阻断**的步骤。覆盖率不在其中：本仓 CI 从未跑 `--coverage`
+    # （`vitest.config.ts` 的 coverage 配置供本地 `pnpm exec vitest run --coverage`，
+    #  且未设 thresholds，本来就不构成门禁）。见 CODING_STANDARDS.md 第 7 条。
+    name: Full CI (Lint + Typecheck + Test + 追溯清单)
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -40,6 +43,8 @@ jobs:
       - name: Run typecheck
         run: docker compose -f docker-compose.test.yml run --rm node-test pnpm typecheck
 
+      # 有意**不阻断**：审计库的传递依赖常出现无法修复的告警，且审计服务本身可能不可达
+      # ——阻断会让每次构建随机变红。结论按报告看待。
       - name: Run dependency audit
         continue-on-error: true
         run: docker compose -f docker-compose.test.yml run --rm node-test pnpm audit --prod --audit-level=high
@@ -118,6 +123,7 @@ jobs:
             exit 1
           fi
 
+      # 同上：cargo audit 作为报告，不阻断构建（unmaintained/advisory 常无可修版本）
       - name: Run cargo audit
         continue-on-error: true
         run: cargo audit

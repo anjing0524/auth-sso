@@ -4,6 +4,7 @@
   "private": true,
   "description": "小企业统一门户 + SSO + 权限中心",
   "scripts": {
+    "prepare": "git config core.hooksPath .githooks || true",
     "dev": "./scripts/dev-gateway-stack.sh",
     "dev:portal": "pnpm --filter @auth-sso/portal dev",
     "dev:demo": "pnpm --filter @auth-sso/demo-app dev",
@@ -22,7 +23,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:api": "vitest run --project @auth-sso/portal-api",
-    "test:components": "vitest run --project @auth-sso/portal-ui 'apps/portal/__tests__/components/app-sidebar.test.tsx' 'apps/portal/__tests__/components/permission-guard.test.tsx'",
+    "test:components": "vitest run --project @auth-sso/portal-ui",
     "test:e2e": "./scripts/run-gateway-e2e.sh",
     "test:e2e:acme": "./scripts/run-gateway-acme-e2e.sh",
     "test:e2e:acme:staging": "./scripts/run-gateway-acme-staging.sh",
