@@ -8,6 +8,7 @@ import { getRedis, type RedisClient } from '@/infrastructure/redis';
 import { ENTITY_ACTIVE, REDIS_KEY_PREFIX } from '@auth-sso/contracts';
 import type { UserPermissionContext } from '@auth-sso/contracts';
 import { createLogger } from '@/lib/logger';
+import { settleInBatches, type BatchOutcome } from '@/lib/batch';
 import { randomInt } from 'crypto';
 
 const log = createLogger('PermissionContext');
@@ -29,7 +30,6 @@ const NULL_CACHE_SUFFIX = ':null';
  */
 const UNAVAILABLE_CACHE_SUFFIX = ':unavailable';
 const UNAVAILABLE_CACHE_TTL = 5;
-const USER_BATCH_SIZE = 50;
 
 /**
  * 单个用户的缓存刷新结果——`void` 无法区分"成功"与"内部已吞掉的失败"。
@@ -41,35 +41,6 @@ const USER_BATCH_SIZE = 50;
  */
 interface RefreshOutcome {
   readonly ok: boolean;
-}
-
-export interface BatchRefreshResult {
-  /** 成功刷新缓存的用户数 */
-  readonly succeeded: number;
-  /** 刷新失败的用户数（Redis 或 DB 故障） */
-  readonly failed: number;
-}
-
-async function settleUserBatches(
-  userIds: string[],
-  operation: (userId: string) => Promise<RefreshOutcome>,
-): Promise<BatchRefreshResult> {
-  let succeeded = 0;
-  let failed = 0;
-  for (let index = 0; index < userIds.length; index += USER_BATCH_SIZE) {
-    // 按操作的**返回结果**判别，而非 `allSettled` 的 rejected。
-    // 原先按 rejected 计数是失效的：`refreshUserPermissionCache` 整体 try/catch、
-    // **永不 reject**（出错只记日志），故 failed 恒为 0——"成功 N 个"的日志
-    // 在全部失败时照样打印。这与 `revokeUsersAccessByUserId` 曾是同一形态。
-    const results = await Promise.all(
-      userIds.slice(index, index + USER_BATCH_SIZE).map(operation),
-    );
-    for (const result of results) {
-      if (result.ok) succeeded += 1;
-      else failed += 1;
-    }
-  }
-  return { succeeded, failed };
 }
 
 /**
@@ -315,14 +286,24 @@ export async function refreshUserPermissionCache(userId: string): Promise<Refres
 
 /**
  * 批量主动刷新指定用户的权限上下文缓存
+ *
+ * 成败判据只有一条：`refreshUserPermissionCache` 报 `ok: false` 即视为失败（抛出）。
+ * 该判别式结果本身是可靠的（`denied` / `unavailable` / Redis 抛错 三态都收敛到
+ * `ok: false`），而"聚合侧重新解释它"正是 issue #36 那类错误的产生处——
+ * 故此处只做**一次**翻译，统计交给 {@link settleInBatches}。
+ *
  * @param userIds 用户 ID 数组
  */
 export async function refreshUsersPermissionCache(
   userIds: string[],
-): Promise<BatchRefreshResult> {
+): Promise<BatchOutcome> {
   if (!userIds || userIds.length === 0) return { succeeded: 0, failed: 0 };
 
-  const result = await settleUserBatches(userIds, refreshUserPermissionCache);
+  const result = await settleInBatches(userIds, async (userId) => {
+    const outcome = await refreshUserPermissionCache(userId);
+    if (!outcome.ok) throw new Error('权限缓存刷新未生效');
+  });
+
   if (result.failed > 0) {
     log.warn(`刷新权限缓存 ${userIds.length} 个用户：成功 ${result.succeeded}、失败 ${result.failed}`);
   } else {

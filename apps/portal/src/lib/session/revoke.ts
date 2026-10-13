@@ -14,12 +14,12 @@ import { getRedis } from '@/infrastructure/redis';
 import { decodeJwtPayload } from './jwt';
 import { REDIS_KEY_PREFIX } from '@auth-sso/contracts';
 import { createLogger } from '@/lib/logger';
+import { settleInBatches, type BatchOutcome } from '@/lib/batch';
 
 const log = createLogger('Session');
 
 const JTI_BLOCKLIST_PREFIX = REDIS_KEY_PREFIX.JTI_BLOCKLIST;
 const USER_JTI_PREFIX = REDIS_KEY_PREFIX.USER_JTI;
-const USER_BATCH_SIZE = 50;
 
 /**
  * 将指定 jti 加入 Redis 黑名单
@@ -138,48 +138,29 @@ export async function revokeUserAccessByUserId(userId: string): Promise<UserRevo
  * 用于角色权限/数据范围变更等会影响一批用户的场景，确保受影响用户下次请求被强制重登，
  * 从而重走 rotateRefreshToken 拿到最新权限（消除 JWT claims 与缓存的双源不一致）。
  *
- * 每批最多并发 50 个撤销，单个用户失败不影响其他用户。
+ * 成败判据只有一条：`revokeUserAccessByUserId` 报 `failed: true` 即视为失败（抛出）。
+ * "按 `allSettled` 的 rejected 计数"曾经失效——被调方整体 try/catch、**永不 reject**，
+ * 于是 `failed` 恒为 0。改成"判别式结果 + 单点翻译"后该形态在结构上不可能出现；
+ * 分批与统计由 {@link settleInBatches} 提供（与权限缓存刷新共用同一原语）。
  *
  * @param userIds 用户 ID 数组
  */
-export interface BatchRevokeResult {
-  /** 真正完成撤销的用户数 */
-  readonly succeeded: number;
-  /** 未能撤销的用户数（Redis 不可用或操作抛错） */
-  readonly failed: number;
-}
-
 export async function revokeUsersAccessByUserId(
   userIds: string[],
-): Promise<BatchRevokeResult> {
+): Promise<BatchOutcome> {
   if (!userIds || userIds.length === 0) return { succeeded: 0, failed: 0 };
 
-  let succeeded = 0;
-  let failed = 0;
-  for (let index = 0; index < userIds.length; index += USER_BATCH_SIZE) {
-    // 用**可判别的结果**统计成败，而非 `rejected`。
-    //
-    // 按 `allSettled` 的 rejected 计数是失效的：被调用的
-    // `revokeUserAccessByUserId` 整体 try/catch、**永不 reject**，故 failed 恒为 0
-    // ——"批量撤销成功"恒打印、失败告警永不触发。这与 `revokeAllRefreshTokens`
-    // 曾把"永不失败的调用"当作计数依据属同一形态。
-    const results = await Promise.all(
-      userIds
-        .slice(index, index + USER_BATCH_SIZE)
-        .map((id) => revokeUserAccessByUserId(id)),
-    );
-    for (const result of results) {
-      if (result.failed) failed += 1;
-      else succeeded += 1;
-    }
-  }
+  const result = await settleInBatches(userIds, async (userId) => {
+    const outcome = await revokeUserAccessByUserId(userId);
+    if (outcome.failed) throw new Error('Access Token JTI 撤销未执行');
+  });
 
-  if (failed > 0) {
-    log.warn(`批量撤销 ${userIds.length} 个用户：成功 ${succeeded}、失败 ${failed}`);
+  if (result.failed > 0) {
+    log.warn(`批量撤销 ${userIds.length} 个用户：成功 ${result.succeeded}、失败 ${result.failed}`);
   } else {
     log.info(`批量撤销 ${userIds.length} 个用户成功`);
   }
-  return { succeeded, failed };
+  return result;
 }
 
 /**

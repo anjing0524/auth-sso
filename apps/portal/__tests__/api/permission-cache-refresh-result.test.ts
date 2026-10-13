@@ -4,7 +4,8 @@
  * ## 为什么需要它
  *
  * `refreshUsersPermissionCache` 用于"角色/权限/部门变更后立即同步一批用户的缓存"，
- * 由 `settleUserBatches` 按**操作的返回结果**统计成败。
+ * 由 `lib/batch.ts` 的 `settleInBatches` 统计成败——**抛出即失败**（判别式结果由一层
+ * 薄 adapter 翻译为抛出，见该模块的说明）。本文件是那条判据在权限缓存侧的回归网。
  *
  * ADR-018 把 `getUserPermissionContext` 由 `| null` 改为分级联合
  * `ok | denied(not_found|inactive) | unavailable` 之后，`refreshUserPermissionCache`
