@@ -1,12 +1,19 @@
-import { AUTH_ERRORS, COMMON_ERRORS } from '@auth-sso/contracts';
+import { AUTH_ERRORS, COMMON_ERRORS, type ErrorCode } from '@auth-sso/contracts';
 
 /**
  * 领域错误类型体系
  * 所有领域异常的根类型，Controller 层据此映射 HTTP 状态码
  */
 export class DomainError extends Error {
+  /**
+   * 错误码 —— **闭合词汇表**里的值（`@auth-sso/contracts` 的 `ErrorCode`）。
+   *
+   * 2026-10-13 由裸 `string` 收窄（架构评审 R2 次级候选「错误码词汇表」）：
+   * 此前 `InvalidScopeError` 直接 `super('INVALID_SCOPE')`，而该码**不在词汇表里**，
+   * 却被映射表当键用、并原样流进了 API 响应。收窄后这类码在编译期即被拒。
+   */
   constructor(
-    public readonly code: string,
+    public readonly code: ErrorCode,
     message: string
   ) {
     super(message);
@@ -53,7 +60,11 @@ export class InvalidCredentialsError extends DomainError {
 
 /** 账号状态异常（禁用/锁定/已删除），按具体 code 区分 */
 export class AccountStatusError extends DomainError {
-  constructor(code: string, message: string) {
+  /**
+   * @param code 必须是词汇表内的错误码（`AUTH_ERRORS.ACCOUNT_DISABLED` / `ACCOUNT_LOCKED` …）
+   *   —— 此前是裸 `string`，测试里甚至传过**状态值** `'DISABLED'` 当错误码。
+   */
+  constructor(code: ErrorCode, message: string) {
     super(code, message);
   }
 }
@@ -91,6 +102,6 @@ export class InvalidRedirectUriError extends DomainError {
 /** OAuth scope 不在 Client 注册允许范围内 */
 export class InvalidScopeError extends DomainError {
   constructor(message: string = '请求的 scope 未获 Client 授权') {
-    super('INVALID_SCOPE', message);
+    super(AUTH_ERRORS.INVALID_SCOPE, message);
   }
 }

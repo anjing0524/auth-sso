@@ -49,6 +49,8 @@ export const AUTH_ERRORS = {
   PKCE_VERIFICATION_FAILED: `${ERROR_PREFIX}_2034`,
   INVALID_CLIENT: `${ERROR_PREFIX}_2035`,
   UNSUPPORTED_GRANT_TYPE: `${ERROR_PREFIX}_2036`,
+  /** OAuth 授权请求的 scope 超出 Client 注册范围（RFC 6749 §4.1.2.1 `invalid_scope`） */
+  INVALID_SCOPE: `${ERROR_PREFIX}_2037`,
 } as const;
 
 // 用户管理错误码 (3xxx)
@@ -97,3 +99,35 @@ export const CLIENT_ERRORS = {
   INVALID_REDIRECT_URI: `${ERROR_PREFIX}_7004`,
   SECRET_ROTATION_FAILED: `${ERROR_PREFIX}_7005`,
 } as const;
+
+/**
+ * 全部错误码值的**闭合词汇表** —— 按分组派生，不手写第二份。
+ *
+ * ## 为什么需要它（2026-10-13，架构评审 R2 次级候选「错误码词汇表」）
+ *
+ * 本文件此前是"40 余个字符串常量的袋子"：**零行为**，且没有一个类型把这些值闭起来。
+ * 消费端 `DomainError.code` 因而是裸 `string`，两张映射表也以 `string` 为键并在缺项时
+ * 静默兜底（`?? 400` / `?? 'invalid_request'`）。后果是**词汇表外的码真的上网了**：
+ * `apps/portal/src/domain/shared/errors.ts` 的 `InvalidScopeError` 直接
+ * `super('INVALID_SCOPE')`，而 `INVALID_SCOPE` 在词汇表里根本不存在。
+ *
+ * 现在 `DomainError.code` 键入本联合 ⇒ 词汇表外的码在**编译期**就无法出现。
+ *
+ * @example
+ * ```ts
+ * const code: ErrorCode = AUTH_ERRORS.INVALID_CLIENT; // ✓
+ * // const bad: ErrorCode = 'INVALID_SCOPE';          // ✗ 编译错误
+ * ```
+ */
+export const ERROR_CODE_VALUES = [
+  ...Object.values(COMMON_ERRORS),
+  ...Object.values(AUTH_ERRORS),
+  ...Object.values(USER_ERRORS),
+  ...Object.values(DEPARTMENT_ERRORS),
+  ...Object.values(ROLE_ERRORS),
+  ...Object.values(PERMISSION_ERRORS),
+  ...Object.values(CLIENT_ERRORS),
+] as const;
+
+/** 词汇表内的错误码（闭合联合）。词汇表外的字符串无法赋给它。 */
+export type ErrorCode = (typeof ERROR_CODE_VALUES)[number];
