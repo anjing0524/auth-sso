@@ -47,10 +47,24 @@ vi.mock(import('@/lib/auth'), (): Partial<typeof authModule> => ({
   logServerDataRead: vi.fn(async () => {}),
 }));
 
-// @allow-module-mock @/lib/permissions input-fixture: 只提供权限上下文输入；真实 PG 驱动的分级由 permission-enforcement / rt-permission-failure 覆盖
-vi.mock(import('@/lib/permissions'), (): Partial<typeof permissionsModule> => ({ refreshUserPermissionCache: vi.fn(async () => ({ ok: true })) }));
-// @allow-module-mock @/lib/session/revoke input-fixture: 只提供"撤销已完成（revoked=N、failed=false）"这类输入；真实 Redis 撤销由 force-logout-revocation / oauth-revoke 覆盖
-vi.mock(import('@/lib/session/revoke'), (): Partial<typeof sessionRevokeModule> => ({ revokeUserAccessByUserId: vi.fn(async () => ({ revoked: 0, failed: false })) }));
+// @allow-module-mock @/lib/permissions input-fixture: 只提供"刷新已完成"这类输入（单用户与批量两版）；真实 PG 驱动的分级由 permission-enforcement / rt-permission-failure 覆盖
+vi.mock(import('@/lib/permissions'), async (importOriginal): Promise<Partial<typeof permissionsModule>> => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    refreshUserPermissionCache: vi.fn(async () => ({ ok: true })),
+    refreshUsersPermissionCache: vi.fn(async () => ({ succeeded: 0, failed: 0 })),
+  };
+});
+// @allow-module-mock @/lib/session/revoke input-fixture: 只提供"撤销已完成（revoked=N、failed=false / succeeded、failed）"这类输入（单用户与批量两版）；importOriginal + spread 让未列出的导出走真身——路由经 lib/auth/authorization-effects 走**批量**原语，整体替换会让它变 undefined（本文件曾因此 2 例变红）；真实 Redis 撤销由 force-logout-revocation / oauth-revoke 覆盖
+vi.mock(import('@/lib/session/revoke'), async (importOriginal): Promise<Partial<typeof sessionRevokeModule>> => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    revokeUserAccessByUserId: vi.fn(async () => ({ revoked: 0, failed: false })),
+    revokeUsersAccessByUserId: vi.fn(async () => ({ succeeded: 0, failed: 0 })),
+  };
+});
 // @allow-module-mock @/lib/audit infra-boundary: 审计写入是旁路副作用（fire-and-forget 写库），本文件测的是端点/动作语义
 vi.mock(import('@/lib/audit'), (): Partial<typeof auditModule> => ({
   appendSecurityAudit: vi.fn(async () => {}),

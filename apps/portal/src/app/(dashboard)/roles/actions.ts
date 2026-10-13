@@ -28,27 +28,20 @@ import {
 import { EntityNotFoundError, DuplicateEntityError, BusinessRuleViolationError } from '@/domain/shared/errors';
 import { generateUUID } from '@/lib/crypto';
 import { validate } from '@/lib/validation';
-import { refreshUsersPermissionCache } from '@/lib/permissions';
-import { revokeUsersAccessByUserId } from '@/lib/session/revoke';
+import {
+  refreshAuthorizationCache,
+  revokeAndRefreshAuthorization,
+} from '@/lib/auth/authorization-effects';
 import { invalidateResource } from '@/lib/cache-invalidation';
 import { withScopedRow, withScopedWrite } from '@/lib/authz';
 import { ENTITY_ACTIVE, ROLE_PERMISSIONS } from '@auth-sso/contracts';
 import type { ApiResponse } from '@auth-sso/contracts';
 
-/** 查询绑定某角色的所有用户 ID */
+/** 查询绑定某角色的所有用户 ID（受影响用户集之一：按**角色**求） */
 async function getRoleBoundUserIds(roleId: string): Promise<string[]> {
   const boundUsers = await db.select({ userId: schema.userRoles.userId })
     .from(schema.userRoles).where(eq(schema.userRoles.roleId, roleId));
   return boundUsers.map((u) => u.userId);
-}
-
-/** 获取绑定某角色的所有用户 ID，并主动刷新其权限缓存（删旧 → 查 DB → 写新） */
-async function invalidateRoleBoundUsersCache(roleId: string): Promise<string[]> {
-  const userIds = await getRoleBoundUserIds(roleId);
-  if (userIds.length > 0) {
-    await refreshUsersPermissionCache(userIds);
-  }
-  return userIds;
 }
 
 /** 创建角色 */
@@ -122,9 +115,13 @@ export const updateRoleAction = withAuth(
           .where(eq(schema.roles.id, roleId));
       },
     );
-    const userIds = await invalidateRoleBoundUsersCache(roleId);
-    if (permissionChanged && userIds.length > 0) {
-      await revokeUsersAccessByUserId(userIds);
+    // 受影响用户集按角色求；是否收敛到"撤销 + 刷新"取决于这次更新有没有改变权限决策
+    const userIds = await getRoleBoundUserIds(roleId);
+    if (permissionChanged) {
+      await revokeAndRefreshAuthorization(userIds);
+    } else {
+      // 仅改名/描述等不影响权限决策的变更：只刷缓存，不强制重登
+      await refreshAuthorizationCache(userIds);
     }
 
     invalidateResource('roles');
@@ -158,11 +155,8 @@ export const deleteRoleAction = withAuth(
       },
     );
 
-    if (boundUsers.length > 0) {
-      await refreshUsersPermissionCache(boundUsers.map(u => u.userId));
-      // 删除角色属于权限决策变更 → 批量撤销绑定用户 Access Token，强制重登解绑
-      await revokeUsersAccessByUserId(boundUsers.map(u => u.userId));
-    }
+    // 删除角色属于权限决策变更 → 绑定用户收敛（撤销 AT 强制重登 + 刷新缓存）
+    await revokeAndRefreshAuthorization(boundUsers.map(u => u.userId));
 
     invalidateResource('roles');
     return { success: true, data: { id: roleId }, message: '角色已删除' };

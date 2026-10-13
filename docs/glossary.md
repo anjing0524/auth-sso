@@ -299,6 +299,7 @@ Append-only 写操作记录，**无 FK 约束**（确保用户/实体删除后�
 | **`@auth-sso/contracts`** | 共享包：枚举值、错误码、权限码、OIDC 常量的唯一真相源 |
 | **范围读口** | `data.ts` 中把数据范围当**必填参数**、经 `scopeFilter` 进入 SQL 的读口（`getUser(id, scope)`）。范围外与不存在**同形**返回 `null`（→ 404），不用状态码区分存在性（ADR-014 第 3 步） |
 | **身份读口** | 只按身份读**本人**的读口（`getOwnUser(userId)`；来源是 `resolveIdentity`，不是 URL 参数）。**不受数据范围约束**——操作者的范围来自其**角色**的部门子树，而本人的 `dept_id` 可能落在该子树之外，走范围读口会读不到自己 |
+| **收敛动作 (Authorization Effects)** | 权限**决策**变更后对受影响用户的成对动作：**撤销 Access Token**（强制重登）+ **刷新权限上下文缓存**（下次请求即见新权限）。唯一实现 `lib/auth/authorization-effects.ts`，按"是否改变权限决策"分两个具名动词：`revokeAndRefreshAuthorization` / `refreshAuthorizationCache`；顺序固定为**先撤销、后刷新**（安全相关优先，且部分失败下自愈——重登时签发路径会预填充缓存）。受影响用户集有两种**不可合并**的求法：按角色（`userRoles`）与按权限（`userRoles ⋈ rolePermissions`） |
 
 ---
 

@@ -11,8 +11,7 @@ import { eq, inArray, and } from 'drizzle-orm';
 import { withPermission, logServerDataRead } from '@/lib/auth';
 import { withScopedWrite, resolveScope } from '@/lib/authz';
 import { appendSecurityAudit, extractClientIP, extractUserAgent } from '@/lib/audit';
-import { refreshUserPermissionCache } from '@/lib/permissions';
-import { revokeUserAccessByUserId } from '@/lib/session/revoke';
+import { revokeAndRefreshAuthorization } from '@/lib/auth/authorization-effects';
 import { COMMON_ERRORS, USER_ERRORS, ENTITY_ACTIVE, USER_PERMISSIONS } from '@auth-sso/contracts';
 import { getUserRoles } from '@/app/(dashboard)/users/data';
 import { restSuccess, restError } from '@/lib/response';
@@ -121,8 +120,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       return restError(result.error, result.message, result.status);
     }
 
-    await refreshUserPermissionCache(userId);
-    await revokeUserAccessByUserId(userId);
+    // 角色分配属于权限决策变更 → 收敛（撤销 AT 强制重登 + 刷缓存），顺序由 module 固定
+    await revokeAndRefreshAuthorization([userId]);
     invalidateResourceFromRoute('users');
     return restSuccess({ assignedCount: result.assignedCount });
   });
@@ -187,11 +186,8 @@ export async function DELETE(
     if (!result.success) return restError(result.error, result.message, result.status);
     const userId = result.userId;
 
-    // 移除角色后主动清除该用户的权限缓存，保障缓存强一致性
-    await refreshUserPermissionCache(userId);
-
-    // 角色移除属于权限决策变更：强制该用户重登以更新 JWT claims（见 POST 同名注释）
-    await revokeUserAccessByUserId(userId);
+    // 角色移除属于权限决策变更 → 收敛（同上）
+    await revokeAndRefreshAuthorization([userId]);
 
     // 失效页面与数据缓存
     invalidateResourceFromRoute('users');

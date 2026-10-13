@@ -41,7 +41,10 @@ import { EntityNotFoundError, DuplicateEntityError } from '@/domain/shared/error
 import { generateUUID } from '@/lib/crypto';
 import { validate } from '@/lib/validation';
 import { hashPassword } from '@/domain/auth/password';
-import { refreshUserPermissionCache } from '@/lib/permissions';
+import {
+  refreshAuthorizationCache,
+  revokeAndRefreshAuthorization,
+} from '@/lib/auth/authorization-effects';
 import { revokeUserAccessByUserId } from '@/lib/session/revoke';
 import { clearBruteForceCounter } from '@/lib/auth/brute-force';
 import { invalidateResource } from '@/lib/cache-invalidation';
@@ -242,8 +245,13 @@ export const updateUserAction = withAuth(
           .where(eq(schema.users.id, v.data.id));
       },
     );
-    await refreshUserPermissionCache(v.data.id);
-    if (deptIdChanged) await revokeUserAccessByUserId(v.data.id);
+    // 部门归属变了 ⇒ 权限决策变了（数据范围随之变化）→ 撤销 AT + 刷缓存；
+    // 否则只是改名/邮箱一类不改变决策的变更 → 只刷缓存
+    if (deptIdChanged) {
+      await revokeAndRefreshAuthorization([v.data.id]);
+    } else {
+      await refreshAuthorizationCache([v.data.id]);
+    }
     invalidateResource('users');
     return { success: true, data: { id: v.data.id }, message: '更新成功' };
   },
@@ -268,11 +276,8 @@ export const deleteUserAction = withAuth(
       },
     );
 
-    // 删除用户后撤销其所有活跃 JWT（jti 黑名单），确保即时下线。
-    // 同上：失败不阻断（AT 自然过期兜底），由 lib/session/revoke 记日志。
-    await revokeUserAccessByUserId(v.data.id);
-
-    await refreshUserPermissionCache(v.data.id);
+    // 逻辑删除使该用户失去全部角色 ⇒ 权限决策变更 → 收敛（撤销 AT + 刷缓存）
+    await revokeAndRefreshAuthorization([v.data.id]);
     invalidateResource('users');
     return { success: true, data: { id: v.data.id }, message: '用户已逻辑删除' };
   },

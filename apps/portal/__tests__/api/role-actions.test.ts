@@ -38,10 +38,17 @@ vi.mock(import('@/lib/crypto'), async (importOriginal): Promise<Partial<typeof c
     generateId: (_len?: number) => 'aaaaaaaa',
   };
 });
-// @allow-module-mock @/lib/permissions input-fixture: 只提供权限上下文输入；真实 PG 驱动的分级由 permission-enforcement / rt-permission-failure 覆盖
-vi.mock(import('@/lib/permissions'), (): Partial<typeof permissionsModule> => ({ refreshUsersPermissionCache: vi.fn(async () => ({ succeeded: 0, failed: 0 })) }));
-// @allow-module-mock @/lib/session/revoke input-fixture: 只提供"撤销已完成/计数为 N"这类输入；真实 Redis 撤销由 force-logout-revocation / oauth-revoke 覆盖
-vi.mock(import('@/lib/session/revoke'), (): Partial<typeof sessionRevokeModule> => ({ revokeUsersAccessByUserId: vi.fn(async () => ({ succeeded: 0, failed: 0 })) }));
+const { effectsMocks } = vi.hoisted(() => ({
+  effectsMocks: {
+    refreshUsers: vi.fn(async () => ({ succeeded: 0, failed: 0 })),
+    revokeUsers: vi.fn(async () => ({ succeeded: 0, failed: 0 })),
+  },
+}));
+
+// @allow-module-mock @/lib/permissions input-fixture: 只提供批量刷新结果这一输入；真实 PG 驱动的分级由 permission-enforcement / rt-permission-failure 覆盖
+vi.mock(import('@/lib/permissions'), (): Partial<typeof permissionsModule> => ({ refreshUsersPermissionCache: effectsMocks.refreshUsers }));
+// @allow-module-mock @/lib/session/revoke input-fixture: 只提供批量撤销结果这一输入；真实 Redis 撤销由 force-logout-revocation / oauth-revoke 覆盖
+vi.mock(import('@/lib/session/revoke'), (): Partial<typeof sessionRevokeModule> => ({ revokeUsersAccessByUserId: effectsMocks.revokeUsers }));
 vi.mock('@/infrastructure/redis', () => ({}));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn(), updateTag: vi.fn() }));
 
@@ -187,6 +194,26 @@ describe('Role Server Actions', () => {
       await expect(
         deleteRoleAction('00000000-0000-4000-8000-000000000999'),
       ).rejects.toThrow(EntityNotFoundError);
+    });
+
+    it('**绑定用户必须同时被撤销与刷新**（配对由 module 保证，不靠调用点记得）', async () => {
+      effectsMocks.revokeUsers.mockClear();
+      effectsMocks.refreshUsers.mockClear();
+
+      await seedTestData(td.db, { roles: seedDeleteRole() });
+      const boundUser = '00000000-0000-4000-8000-000000000101';
+      // 给被删角色绑一个真实用户，使"受影响用户集"（按角色真实求）非空
+      await td.db.insert(schema.userRoles).values({ userId: boundUser, roleId: ROLE_ID_DELETE, createdAt: now });
+
+      const r: any = await deleteRoleAction(ROLE_ID_DELETE);
+      expect(r.success).toBe(true);
+
+      // 漏掉任何一半此前都没有信号（历史上"只刷不撤"与"只撤不刷"都出现过）
+      expect(effectsMocks.revokeUsers).toHaveBeenCalledWith([boundUser]);
+      expect(effectsMocks.refreshUsers).toHaveBeenCalledWith([boundUser]);
+      // 顺序固定：先撤销（安全相关），后刷新（缓存性）
+      expect(effectsMocks.revokeUsers.mock.invocationCallOrder[0]!)
+        .toBeLessThan(effectsMocks.refreshUsers.mock.invocationCallOrder[0]!);
     });
   });
 });

@@ -518,11 +518,13 @@ portal:user_jti:{userId}   → Hash {jti: exp, ...} (按用户批量撤销)
 - 管理员封禁/锁定用户 → `revokeUserAccessByUserId(userId)`
 - 密码修改 → 所有活跃 JWT 的 jti 批量写入黑名单
 - **权限决策变更** → 强制相关用户重登以获取新 JWT claims（消除 claims 与权限缓存的双源不一致）：
-  - 用户角色分配/移除（`/api/users/[id]/roles`）→ 撤销该用户
-  - 用户部门变更（`updateUserAction` 中 `deptId` 实际变化）→ 撤销该用户
-  - 角色数据范围/状态变更（`updateRoleAction`）→ 批量撤销该角色所有绑定用户（`revokeUsersAccessByUserId`）
-  - 角色删除（`deleteRoleAction`）→ 批量撤销绑定用户
-  - 仅改名/描述等不影响权限决策的变更不触发撤销，只刷新权限缓存
+  - 以下五类**全部经 `lib/auth/authorization-effects.ts` 收敛**，顺序与配对由该 module 固定为「先撤销 AT、后刷新缓存」：
+    - 用户角色分配/移除（`/api/users/[id]/roles` POST 与 DELETE）→ 撤销该用户
+    - 用户部门变更（`updateUserAction` 中 `deptId` 实际变化）→ 撤销该用户
+    - 角色数据范围/状态变更（`updateRoleAction`，仅当 `hasRolePermissionImpact` 为真）→ 该角色全部绑定用户
+    - 角色删除（`deleteRoleAction`）→ 该角色全部绑定用户
+    - 权限更新/删除（`permissions/actions.ts`）→ 该权限经角色关联到的全部用户
+  - 仅改名/描述等不影响权限决策的变更 → **只刷缓存**（`refreshAuthorizationCache`），不强制重登
 
 撤销流程：
 ```
