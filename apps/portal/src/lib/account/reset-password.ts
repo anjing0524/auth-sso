@@ -80,9 +80,6 @@ export function buildPasswordHistory(state: PasswordChangeState): string[] {
  * **失败不阻断**（与自助改密一致，见 ADR-020 的分档思路）：密码已持久化，撤销
  * 是尽力而为；让一次 Redis 抖动把已成功的重置报成失败，会诱使管理员重试——
  * 而密码其实已经变了。失败仅记日志。
- *
- * 注：`revokeUserAccessByUserId` 内部已整体 try/catch、不会抛出，其外层
- * try/catch 属历史遗留；此处保留仅为防御未来改动。
  */
 export async function revokeAfterPasswordReset(userId: string): Promise<void> {
   try {
@@ -90,9 +87,7 @@ export async function revokeAfterPasswordReset(userId: string): Promise<void> {
   } catch (e) {
     log.error('重置密码后撤销 Refresh Token 失败', { error: (e as Error).message });
   }
-  try {
-    await revokeUserAccessByUserId(userId);
-  } catch (e) {
-    log.error('重置密码后撤销 JWT 失败', { error: (e as Error).message });
-  }
+  // jti 层（尽力而为）：同上，失败由 lib/session/revoke 记日志；此处不写 catch
+  // ——此前保留的那个「防御未来改动」的 catch 不可达，已删除。
+  await revokeUserAccessByUserId(userId);
 }

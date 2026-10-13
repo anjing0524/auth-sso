@@ -487,6 +487,21 @@ POST /api/users/:id/force-logout
 
 **行为：** 撤销目标用户所有活跃 Token（jti 入黑名单）。
 
+**响应：**
+```json
+{
+  "userId": "<uuid>",
+  "revokedJtiCount": 3,
+  "jtiRevocationFailed": false,
+  "message": "已强制下线用户 …，撤销 3 个 Access Token JTI"
+}
+```
+
+`jtiRevocationFailed` **必须**与 `revokedJtiCount` 一起消费：jti 撤销是 ADR-011 分级下的
+尽力而为（Redis 故障既不抛错也不阻断整个下线），因此 `revokedJtiCount: 0` 同时可能是
+「该用户没有活着的 AT」与「Redis 不可用、一个都没撤成」。仅凭数字无法区分，调用方
+（含管理端 UI）须用该布尔量判断后者。
+
 ---
 
 ## 6. 角色管理

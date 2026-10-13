@@ -94,11 +94,10 @@ export async function changeOwnPassword(
   } catch (e) {
     log.error('改密后撤销 Refresh Token 失败', { error: (e as Error).message });
   }
-  try {
-    await revokeUserAccessByUserId(userId);
-  } catch (e) {
-    log.error('改密后撤销会话失败', { error: (e as Error).message });
-  }
+  // jti 层（尽力而为）：ADR-011 分级下 Redis 故障既不抛错也不阻断，失败由
+  // lib/session/revoke 在发生处记日志（含 userId），故此处刻意不写 catch
+  // ——此前那个 catch 不可达（该函数没有 throw 出口）。
+  await revokeUserAccessByUserId(userId);
 
   return { ok: true };
 }

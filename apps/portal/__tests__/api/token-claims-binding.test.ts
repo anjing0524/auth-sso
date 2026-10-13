@@ -30,7 +30,7 @@ import { JWT_TYP, TOKEN_TTL } from '@auth-sso/contracts';
 const ISSUER = 'https://sso.example.com';
 
 const { mocks, tdHolder } = vi.hoisted(() => ({
-  mocks: { mockRevokeUserAccess: vi.fn(async () => 0) },
+  mocks: { mockRevokeUserAccess: vi.fn(async () => ({ revoked: 0, failed: false })) },
   tdHolder: { current: null as ReturnType<typeof createTestDbHandle> | null },
 }));
 

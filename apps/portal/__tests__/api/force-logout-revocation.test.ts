@@ -140,13 +140,14 @@ describe('revokeAllRefreshTokens — 双层撤销闭环', () => {
     expect(await isJtiRevoked(jti)).toBe(true);
   });
 
-  it('**Redis 故障不得阻断 RT 撤销**（缓存性故障分级，ADR-018）', async () => {
+  it('**Redis 故障不得阻断 RT 撤销，且必须如实回报失败**（ADR-011/018 分级）', async () => {
     await seedRt('rt_redis_down', USER_A, CLIENT_PORTAL);
     faultHolder.failRedis = true;
 
-    // 不得抛出：Redis 抖动不应使"任何人都无法被强制下线"；
-    // 返回 0 表示本次没有可计数的 JTI 撤销（而非失败）
-    await expect(revokeAllRefreshTokens(USER_A)).resolves.toBe(0);
+    // 不得抛出：Redis 抖动不应使"任何人都无法被强制下线"。
+    // 但"没撤成"必须可判别——此前只回数字 0，与"该用户没有活着的 AT"同形，
+    // 调用方既无法上报也无法记录（8 处 catch 全部不可达）。
+    await expect(revokeAllRefreshTokens(USER_A)).resolves.toEqual({ revoked: 0, failed: true });
 
     // 否决性的 DB 撤销必须已经生效
     const tokens = await revokedTokens(USER_A);
@@ -158,7 +159,7 @@ describe('revokeAllRefreshTokens — 双层撤销闭环', () => {
     const jti = 'jti-force-logout-no-rt';
     await trackUserJti(USER_B, jti, 3600);
 
-    await expect(revokeAllRefreshTokens(USER_B)).resolves.toBe(1);
+    await expect(revokeAllRefreshTokens(USER_B)).resolves.toEqual({ revoked: 1, failed: false });
     expect(await isJtiRevoked(jti)).toBe(true);
   });
 
@@ -169,7 +170,7 @@ describe('revokeAllRefreshTokens — 双层撤销闭环', () => {
       await trackUserJti(USER_A, `jti-count-${i}`, 3600);
     }
 
-    await expect(revokeAllRefreshTokens(USER_A)).resolves.toBe(5);
+    await expect(revokeAllRefreshTokens(USER_A)).resolves.toEqual({ revoked: 5, failed: false });
   });
 
   it('已撤销的 RT 再次撤销是幂等的（沿用原撤销时间）', async () => {

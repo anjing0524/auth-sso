@@ -44,7 +44,6 @@ import { hashPassword } from '@/domain/auth/password';
 import { refreshUserPermissionCache } from '@/lib/permissions';
 import { revokeUserAccessByUserId } from '@/lib/session/revoke';
 import { clearBruteForceCounter } from '@/lib/auth/brute-force';
-import { createLogger } from '@/lib/logger';
 import { invalidateResource } from '@/lib/cache-invalidation';
 import { withScopedRow, withScopedWrite } from '@/lib/authz';
 import type { DbTxHandle } from '@/infrastructure/db';
@@ -54,8 +53,6 @@ import {
   hashNewPassword,
   revokeAfterPasswordReset,
 } from '@/lib/account/reset-password';
-
-const log = createLogger('UsersAction');
 
 /**
  * 事务内加载目标用户行并施加数据范围守卫。
@@ -158,13 +155,11 @@ export const toggleUserStatusAction = withAuth(
       },
     );
 
-    // 状态变更后撤销该用户所有活跃 JWT（jti 黑名单），确保变更即时生效
-    // 关键安全操作必须 await（Redis 不可达时撤销失败会留下有效旧 Token）
-    try {
-      await revokeUserAccessByUserId(v.data.id);
-    } catch (e) {
-      log.error('撤销用户 JWT 失败', { error: (e as Error).message });
-    }
+    // 状态变更后撤销该用户所有活跃 JWT（jti 黑名单），确保变更即时生效。
+    // 关键安全操作必须 await；但 ADR-011 分级下 Redis 故障不阻断本次状态变更
+    // （AT 会在 ≤1h 内自然过期），失败由 lib/session/revoke 记日志（含 userId），
+    // 故此处刻意不写 catch——此前那个 catch 不可达。
+    await revokeUserAccessByUserId(v.data.id);
 
     invalidateResource('users');
     return {
@@ -273,13 +268,9 @@ export const deleteUserAction = withAuth(
       },
     );
 
-    // 删除用户后撤销其所有活跃 JWT（jti 黑名单），确保即时下线
-    // 关键安全操作必须 await（Redis 不可达时撤销失败会留下有效旧 Token）
-    try {
-      await revokeUserAccessByUserId(v.data.id);
-    } catch (e) {
-      log.error('撤销已删除用户 JWT 失败', { error: (e as Error).message });
-    }
+    // 删除用户后撤销其所有活跃 JWT（jti 黑名单），确保即时下线。
+    // 同上：失败不阻断（AT 自然过期兜底），由 lib/session/revoke 记日志。
+    await revokeUserAccessByUserId(v.data.id);
 
     await refreshUserPermissionCache(v.data.id);
     invalidateResource('users');

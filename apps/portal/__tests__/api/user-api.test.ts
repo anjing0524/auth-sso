@@ -83,7 +83,7 @@ vi.mock(import('@/lib/crypto'), async (importOriginal): Promise<Partial<typeof c
 });
 
 // @allow-module-mock @/lib/session/revoke input-fixture: 只提供"撤销已完成/计数为 N"这类输入；真实 Redis 撤销由 force-logout-revocation / oauth-revoke 覆盖
-vi.mock(import('@/lib/session/revoke'), (): Partial<typeof sessionRevokeModule> => ({ revokeUserAccessByUserId: vi.fn(async () => 0) }));
+vi.mock(import('@/lib/session/revoke'), (): Partial<typeof sessionRevokeModule> => ({ revokeUserAccessByUserId: vi.fn(async () => ({ revoked: 0, failed: false })) }));
 vi.mock('@/infrastructure/redis', () => ({ getRedis: vi.fn(() => null) }));
 // @allow-module-mock @/domain/auth/password input-fixture: 只提供密码相关输入（真实规则由 change-password 覆盖）
 vi.mock(import('@/domain/auth/password'), (): Partial<typeof authPasswordModule> => ({

@@ -79,11 +79,11 @@ export async function trackUserJti(userId: string, jti: string, ttl: number): Pr
 /**
  * 单个用户的撤销结果——**成败可判别**。
  *
- * `revoked` 的 0 有两种含义（"该用户没有活着的 AT" 与 "Redis 出错"），
- * 仅凭数字无法区分。需要据此统计成败的调用方（批量撤销）必须用本类型，
- * 否则会把"全部失败"误报成"全部成功"。
+ * `revoked` 的 0 有两种含义（"该用户没有活着的 AT" 与 "Redis 出错"），仅凭数字无法
+ * 区分。因此本类型是**公开 seam 的一部分**：需要据此统计或上报成败的调用方
+ * （批量撤销、强制下线响应、登出日志）必须消费它，而不是消费一个会说谎的数字。
  */
-interface UserRevokeOutcome {
+export interface UserRevokeOutcome {
   /** 本次写入黑名单的 jti 数量（Redis 不可用时为 0） */
   readonly revoked: number;
   /** 是否未真正执行（Redis 不可用或操作抛错） */
@@ -91,13 +91,19 @@ interface UserRevokeOutcome {
 }
 
 /**
- * `revokeUserAccessByUserId` 的实现体，额外回报是否失败。
+ * 按用户 ID 撤销其所有 Access Token（jti 黑名单 + 清除映射）
+ * 用于管理员封禁账户 / 强制下线场景，与 revokeAllRefreshTokens 互补
  *
- * 抽出来的唯一原因：公共函数历史上返回 `number`，而 0 是**多义**的
- * （无 jti / Redis 故障）。批量撤销需要单义信号，故在此暴露 `failed`，
- * 公共签名保持不变（避免为内部需要扩散到 7+ 个既有调用方）。
+ * jti 撤销是 ADR-011/018 分级下的**尽力而为**：Redis 不可用时既不抛错、也不阻断
+ * 否决性的 RT 撤销。但"尽力而为"不等于"不必回报"——本函数**永不抛出**，因此成败
+ * 只能经返回值传达。此前它只回 `revoked` 数字，于是 8 处调用点按"失败会 throw"
+ * 写的 catch 全部不可达，Redis 全挂时连一行日志都没有（而 `users/actions.ts` 的
+ * 注释还承诺了相反的保证）。
+ *
+ * @param userId - 用户内部 ID
+ * @returns `{ revoked, failed }`；`failed` 为真表示本次未真正执行
  */
-async function revokeUserAccessByUserIdOutcome(userId: string): Promise<UserRevokeOutcome> {
+export async function revokeUserAccessByUserId(userId: string): Promise<UserRevokeOutcome> {
   try {
     const redis = getRedis();
     if (!redis) return { revoked: 0, failed: true };
@@ -122,20 +128,9 @@ async function revokeUserAccessByUserIdOutcome(userId: string): Promise<UserRevo
 
     return { revoked: entries.length, failed: false };
   } catch (error) {
-    log.error('按用户 ID 撤销 JTI 失败', { error: (error as Error).message });
+    log.error('按用户 ID 撤销 JTI 失败', { userId, error: (error as Error).message });
     return { revoked: 0, failed: true };
   }
-}
-
-/**
- * 按用户 ID 撤销其所有 Access Token（jti 黑名单 + 清除映射）
- * 用于管理员封禁账户 / 强制下线场景，与 revokeAllRefreshTokens 互补
- *
- * @param userId - 用户内部 ID
- * @returns 撤销的 jti 数量，Redis 不可用时返回 0
- */
-export async function revokeUserAccessByUserId(userId: string): Promise<number> {
-  return (await revokeUserAccessByUserIdOutcome(userId)).revoked;
 }
 
 /**
@@ -164,14 +159,14 @@ export async function revokeUsersAccessByUserId(
   for (let index = 0; index < userIds.length; index += USER_BATCH_SIZE) {
     // 用**可判别的结果**统计成败，而非 `rejected`。
     //
-    // 原先按 `allSettled` 的 rejected 计数是失效的：被调用的
-    // `revokeUserAccessByUserId` 整体 try/catch、**永不 reject**（内部出错只记日志
-    // 并返回 0），故 failed 恒为 0——"批量撤销成功"恒打印、失败告警永不触发。
-    // 这与 `revokeAllRefreshTokens` 曾把"永不失败的调用"当作计数依据属同一形态。
+    // 按 `allSettled` 的 rejected 计数是失效的：被调用的
+    // `revokeUserAccessByUserId` 整体 try/catch、**永不 reject**，故 failed 恒为 0
+    // ——"批量撤销成功"恒打印、失败告警永不触发。这与 `revokeAllRefreshTokens`
+    // 曾把"永不失败的调用"当作计数依据属同一形态。
     const results = await Promise.all(
       userIds
         .slice(index, index + USER_BATCH_SIZE)
-        .map((id) => revokeUserAccessByUserIdOutcome(id)),
+        .map((id) => revokeUserAccessByUserId(id)),
     );
     for (const result of results) {
       if (result.failed) failed += 1;

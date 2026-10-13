@@ -46,13 +46,12 @@ async function performRevocation(cookieStore: Awaited<ReturnType<typeof cookies>
         userId = claims.sub;
         const jti = claims.jti;
         const jtiExp = claims.exp;
-        // jti 黑名单写入（Gateway 离线验签即时拦截）— 每个步骤独立 try/catch
+        // jti 黑名单写入（Gateway 离线验签即时拦截）。
+        // `revokeJti` 与 `revokeUserAccessByUserId` 同属"内部整体 try/catch、永不抛出"
+        // 的尽力而为原语（ADR-011），失败由 lib/session/revoke 自行记日志，
+        // 故此处不写 catch——此前那个 catch 不可达。
         if (jti && jtiExp) {
-          try {
-            await revokeJti(jti, jtiExp);
-          } catch (e) {
-            log.error('Access Token jti 撤销失败', { error: (e as Error).message });
-          }
+          await revokeJti(jti, jtiExp);
         }
       }
     }
@@ -93,11 +92,9 @@ async function performRevocation(cookieStore: Awaited<ReturnType<typeof cookies>
       log.error('批量撤销 Refresh Token 失败', { error: (e as Error).message });
     }
 
-    try {
-      await revokeUserAccessByUserId(userId);
-    } catch (e) {
-      log.error('批量撤销 Access Token 失败', { error: (e as Error).message });
-    }
+    // jti 层（尽力而为）：ADR-011 分级下 Redis 故障不阻断登出；失败由
+    // lib/session/revoke 在发生处记日志（含 userId），故此处不写 catch。
+    await revokeUserAccessByUserId(userId);
 
     // 5. 查询用户名用于日志（撤销完成后查询，失败不阻断）
     try {

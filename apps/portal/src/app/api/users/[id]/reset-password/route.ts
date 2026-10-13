@@ -91,11 +91,9 @@ export async function POST(
     } catch (e) {
       log.error('撤销 Refresh Token 失败', { error: (e as Error).message });
     }
-    try {
-      await revokeUserAccessByUserId(id);
-    } catch (e) {
-      log.error('撤销 JWT 失败', { error: (e as Error).message });
-    }
+    // jti 层（尽力而为）：失败不阻断（AT 自然过期兜底），由 lib/session/revoke
+    // 记日志（含 userId），故此处不写 catch——此前那个 catch 不可达。
+    await revokeUserAccessByUserId(id);
     try {
       await refreshUserPermissionCache(id);
     } catch (e) {

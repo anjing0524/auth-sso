@@ -12,7 +12,7 @@ import { SignJWT, jwtVerify, decodeProtectedHeader } from 'jose';
 import { db, schema } from '@/infrastructure/db';
 import { eq } from 'drizzle-orm';
 import { generateId, generateUUID, hashToken } from '@/lib/crypto';
-import { isJtiRevoked, trackUserJti, revokeUserAccessByUserId } from '@/lib/session/revoke';
+import { isJtiRevoked, trackUserJti, revokeUserAccessByUserId, type UserRevokeOutcome } from '@/lib/session/revoke';
 import { getUserPermissionContext, cacheUserPermissionContext } from '@/lib/permissions';
 import { DEFAULT_SCOPES, PORTAL_AUD, TOKEN_TTL, JWT_TYP } from '@auth-sso/contracts';
 import { getIssuer } from '@/lib/env';
@@ -389,19 +389,21 @@ export async function rotateRefreshToken(
 /**
  * 撤销用户的全部 Refresh Token，并同步撤销其 Access Token 的 JTI（双层撤销闭环）。
  *
- * @returns 本次撤销的 Access Token JTI 数量；Redis 不可用时返回 0
- *   （jti 撤销属缓存性故障，不得阻断否决性的 RT 撤销，见 ADR-018）
+ * RT 撤销走 DB 且**失败即抛**（否决性数据 fail-close，ADR-011）——因此本函数正常
+ * 返回就说明 RT 层已完成。返回值只描述**会部分失败的那一层**：jti 撤销是尽力而为
+ * （Redis 故障既不抛错也不阻断），其成败必须由调用方消费，否则"没撤成"不可观测。
+ * 失败的具体原因由 `lib/session/revoke` 在发生处记日志（含 userId）。
+ *
+ * @returns jti 层的 `{ revoked, failed }`
  */
-export async function revokeAllRefreshTokens(userId: string): Promise<number> {
+export async function revokeAllRefreshTokens(userId: string): Promise<UserRevokeOutcome> {
   await revokeUserRefreshTokens(db, userId);
 
-  // 同步撤销所有 Access Token 的 JTI（双层撤销闭环）
-  try {
-    const count = await revokeUserAccessByUserId(userId);
-    if (count > 0) log.info('已撤销用户 Access Token JTI', { userId, count });
-    return count;
-  } catch (e) {
-    log.error('撤销用户 Access Token JTI 失败', { error: (e as Error).message });
-    return 0;
+  // 同步撤销所有 Access Token 的 JTI（双层撤销闭环）。
+  // 刻意不需要 try/catch：该函数永不抛出，失败经返回值回报（此前那个 catch 不可达）。
+  const outcome = await revokeUserAccessByUserId(userId);
+  if (outcome.revoked > 0) {
+    log.info('已撤销用户 Access Token JTI', { userId, count: outcome.revoked });
   }
+  return outcome;
 }

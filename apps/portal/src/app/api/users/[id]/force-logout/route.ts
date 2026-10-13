@@ -61,13 +61,14 @@ export async function POST(
 
     const userId = target.id;
 
-    // 1. 撤销全部 Refresh Token（DB 层）并同步撤销全部 Access Token JTI，
-    //    返回本次真实撤销的 JTI 数量。
+    // 1. 撤销全部 Refresh Token（DB 层，失败即抛）并同步撤销全部 Access Token JTI。
+    //    返回值只描述 **jti 层**——它永不抛出，"没撤成"必须经它回报，否则响应里的
+    //    数字既可能是"无 AT 可撤"也可能是"一个都没撤成"。
     //
     //    此前这里在编排层调用之后再单独调一次 `revokeUserAccessByUserId` 作为
     //    计数来源——但该函数是**幂等**的（读完 user_jti 映射即 `del` 消费掉），
     //    第二次必然拿到空映射并返回 0，导致响应里的 revokedJtiCount 恒为 0。
-    const revokedJtiCount = await revokeAllRefreshTokens(userId);
+    const jti = await revokeAllRefreshTokens(userId);
 
     // 3. 清除权限缓存，确保下次请求拉取最新权限
     await clearUserPermissionCache(userId);
@@ -80,8 +81,13 @@ export async function POST(
 
     return restSuccess({
       userId: id,
-      revokedJtiCount,
-      message: `已强制下线用户 ${id}，撤销 ${revokedJtiCount} 个 Access Token JTI`,
+      revokedJtiCount: jti.revoked,
+      // jti 层永不抛出，"没撤成"只能经返回值回报：不报的话，revokedJtiCount 的 0
+      // 既可能是"该用户没有活着的 AT"，也可能是"Redis 不可用、一个都没撤成"。
+      jtiRevocationFailed: jti.failed,
+      message: jti.failed
+        ? `已强制下线用户 ${id}；Access Token 撤销未能执行（Redis 不可用），旧 AT 在自然过期前仍然有效`
+        : `已强制下线用户 ${id}，撤销 ${jti.revoked} 个 Access Token JTI`,
     });
   });
 }

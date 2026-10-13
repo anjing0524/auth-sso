@@ -1058,7 +1058,10 @@ export function decodeJwtPayload(token: string): PortalJwtClaims | null
 export async function revokeJti(jti: string, tokenExp: number): Promise<void>
 export async function isJtiRevoked(jti: string): Promise<boolean>
 export async function trackUserJti(userId: string, jti: string, ttl: number): Promise<void>
-export async function revokeUserAccessByUserId(userId: string): Promise<number>
+export async function revokeUserAccessByUserId(userId: string): Promise<UserRevokeOutcome>
+// UserRevokeOutcome = { revoked: number; failed: boolean }
+// jti 撤销属尽力而为、永不抛出，成败只能经返回值回报：0 同时意味着
+// "该用户没有活着的 AT" 与 "Redis 故障、一个都没撤成"，故必须可判别。
 export async function revokeUserToken(accessToken: string): Promise<void>
 ```
 
