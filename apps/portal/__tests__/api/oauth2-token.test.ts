@@ -19,9 +19,11 @@
  * - refresh_token grant 走真实轮换：旧行 `revoked` 被置位 + 新行落库；
  * - 重放检测的家族撤销断言**真实行被标记 `revoked`**。
  *
- * 仍保留的替身只有两处（各有注解）：`getUserPermissionContext`（输入）与
- * `@/lib/audit`（旁路副作用 + ip/ua 输入；把审计断言改为真实 `login_logs` 行的债
- * 记在 #50——`writeLoginLog` 是 fire-and-forget，直接断言行会有竞态）。
+ * 仍保留的替身只有一处（有注解）：`@/lib/audit`（旁路副作用 + ip/ua 输入；把审计断言
+ * 改为真实 `login_logs` 行的债记在 #50——`writeLoginLog` 是 fire-and-forget，直接断言
+ * 行会有竞态）。`@/lib/permissions` 的替身已移除：分级判定搬进 `resolveIssuancePermission`
+ * 后，那个"输入替身"不再影响任何断言（真身读真实 DB 得到同样的空上下文），
+ * 留着会谎称自己还在驱动被测语义。
  *
  * @req H-AUTH-003, H-AUTH-004, H-AUTH-011
  * @vitest-environment node
@@ -34,13 +36,9 @@ import { createTestDbHandle, seedTestData } from '../helpers/test-db';
 import { hashToken } from '@/lib/crypto';
 import { seedPortalClient, seedRootDept, seedTestUser } from '../helpers/seed-fixtures';
 import { seedSigningKeys } from '../helpers/seed-signing-keys';
-import type * as permissionsModule from '@/lib/permissions';
 import type * as auditModule from '@/lib/audit';
 
-const { mocks, tdHolder } = vi.hoisted(() => ({
-  mocks: {
-    getUserPermissionContext: vi.fn(),
-  },
+const { tdHolder } = vi.hoisted(() => ({
   tdHolder: { current: null as ReturnType<typeof createTestDbHandle> | null },
 }));
 
@@ -48,13 +46,6 @@ vi.mock('@/infrastructure/db', () => ({
   get db() { return tdHolder.current!.db; },
   get schema() { return tdHolder.current!.schema; },
 }));
-
-// @allow-module-mock @/lib/permissions input-fixture: 权限上下文在本文件里是端点协议语义的输入；真实 PG 驱动的权限分级由 permission-enforcement、rt-permission-failure 覆盖
-vi.mock(import('@/lib/permissions'), async (importOriginal): Promise<Partial<typeof permissionsModule>> => {
-  const actual = await importOriginal();
-  // 只替换"输入"那一半：`cacheUserPermissionContext` 保持真实（真实 Redis 键）
-  return { ...actual, getUserPermissionContext: mocks.getUserPermissionContext };
-});
 
 // @allow-module-mock @/lib/audit input-fixture: 只替换 ip/ua 两个**输入**helper（测试请求没有真实来源信息）；`writeLoginLog` 走真身，审计断言落在真实 `login_logs` 行上（#50）
 vi.mock(import('@/lib/audit'), async (importOriginal): Promise<Partial<typeof auditModule>> => {
@@ -182,11 +173,6 @@ beforeEach(async () => {
     clients: [CLIENT, seedPortalClient({ clientId: 'other-app' })[0]!],
   });
   vi.clearAllMocks();
-  // ADR-018 的分级联合：`kind` 是判别式（旧形状缺它会让真实分支零执行）
-  mocks.getUserPermissionContext.mockResolvedValue({
-    kind: 'ok',
-    context: { roles: [], permissions: [], deptIds: [] },
-  });
   // 真实 ES256：种入密钥对（TRUNCATE 之后，故必须在 cleanup 之后）
   await seedSigningKeys(td);
 });

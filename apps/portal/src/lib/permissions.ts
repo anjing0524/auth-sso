@@ -248,6 +248,45 @@ export function toPermissionContextOrNull(
 }
 
 /**
+ * 签发路径的权限上下文消费结果。
+ *
+ * `prefilled: false` 表示**因基础设施故障跳过了预填充**（仍然签发）——把它与
+ * `ok: true, prefilled: true` 区分开，正是为了让"跳过预填充"这条 ADR-018 分支
+ * 在本 seam 上可断言，而不必靠签发路径各自的替身开关。
+ */
+export type IssuancePermission =
+  | { readonly ok: true; readonly prefilled: boolean }
+  | { readonly ok: false; readonly reason: 'not_found' | 'inactive' };
+
+/**
+ * 签发路径的权限上下文消费 —— 缓存预填充的**唯一**分级出处。
+ *
+ * {@link toPermissionContextOrNull} 服务于"判定"场景：`denied` 与 `unavailable` 都不构成
+ * 授权依据，**都拒绝**。签发场景的语义**相反**，故另设本函数（ADR-011 / ADR-018）：
+ *
+ * - `denied`（用户不存在 / 非 ACTIVE）→ **否决性数据**：拒绝签发。授权码签发后被禁用/
+ *   删除的用户不该拿到新令牌。
+ * - `unavailable`（DB 故障）→ **不阻断签发**，只跳过预填充。签发令牌不依赖权限上下文，
+ *   预填充是纯优化；跳过它意味着该用户首次鉴权时解析一次（fail-open 路径）。
+ * - `ok` → 预填充。
+ *
+ * **存在理由**：这段分级此前在 `oauth-grant.ts`（授权码兑换）与 `token.ts`（RT 轮换）
+ * **各写一遍**，且只能靠三个测试文件各自的替身开关才被测到。两条路径真正的差异是
+ * **失败如何投递**（前者返回判别式结果、后者抛错以触发孤儿 RT 补偿回收）——那属调用方；
+ * 判定本身只应有一处。
+ *
+ * @param userId 用户 ID
+ */
+export async function resolveIssuancePermission(userId: string): Promise<IssuancePermission> {
+  const result = await getUserPermissionContext(userId);
+  if (result.kind === 'denied') return { ok: false, reason: result.reason };
+  if (result.kind === 'unavailable') return { ok: true, prefilled: false };
+
+  await cacheUserPermissionContext(userId, result.context);
+  return { ok: true, prefilled: true };
+}
+
+/**
  * 主动刷新指定用户的权限上下文缓存。
  * 先删旧缓存 → 查 DB 获取最新数据 → 写入 Redis。
  * 用于管理员修改用户角色/权限/部门后立即同步缓存，确保受影响用户下次请求零 DB 命中。

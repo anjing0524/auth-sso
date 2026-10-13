@@ -21,8 +21,10 @@
  * - 权限上下文预填充落**真实 Redis 键**；
  * - 家族撤销断言的是**真实行被标记 `revoked`**，而不是"某个 mock 被调用"。
  *
- * 唯一的替身是 `getUserPermissionContext`（见该处理由注解）：它在本文件里是
- * **输入**，不是被测语义——但要断言的三支（ok / denied / unavailable）都真被执行。
+ * 本文件**没有任何业务模块替身**：ADR-018 的三支分级（ok / denied / unavailable）分别由
+ * **真实用户行**（ACTIVE / DISABLED）与**真实 Redis `:unavailable` 标记**驱动，而不是由
+ * mock 声明。分级判定本身住在 `resolveIssuancePermission`（由 `issuance-permission.test.ts`
+ * 直测）；本文件断言的是**兑换编排对三种结局的反应**。
  *
  * @req H-AUTH-003, H-AUTH-004, H-AUTH-011
  * @vitest-environment node
@@ -34,15 +36,10 @@ import { createTestDbHandle, seedTestData } from '../helpers/test-db';
 import { seedAdminUser, seedPortalClient, seedRootDept } from '../helpers/seed-fixtures';
 import { seedSigningKeys } from '../helpers/seed-signing-keys';
 import * as schema from '@/db/schema';
+import { eq } from 'drizzle-orm';
 import { hashToken } from '@/lib/crypto';
-// 显式返回类型需要模块类型；仓库的 consistent-type-imports 禁止 inline `import()`
-// 类型标注，故用顶层 type-only 命名空间别名（ADR-022 §4(a) 的合规形态）
-import type * as permissionsModule from '@/lib/permissions';
 
-const { mocks, tdHolder } = vi.hoisted(() => ({
-  mocks: {
-    getUserPermissionContext: vi.fn(),
-  },
+const { tdHolder } = vi.hoisted(() => ({
   tdHolder: { current: null as ReturnType<typeof createTestDbHandle> | null },
 }));
 
@@ -50,16 +47,6 @@ vi.mock('@/infrastructure/db', () => ({
   get db() { return tdHolder.current!.db; },
   get schema() { return tdHolder.current!.schema; },
 }));
-
-// @allow-module-mock @/lib/permissions input-fixture: 权限上下文在本文件里是授权码兑换的**输入**（被测语义是兑换/重放/PKCE/条件签发）；真实 PG 驱动的权限分级由 permission-enforcement、rt-permission-failure 覆盖
-vi.mock(import('@/lib/permissions'), async (importOriginal): Promise<Partial<typeof permissionsModule>> => {
-  const actual = await importOriginal();
-  return {
-    ...actual,
-    // 只替换"输入"那一半：`cacheUserPermissionContext` 保持真实，它写的是真实 Redis 键
-    getUserPermissionContext: mocks.getUserPermissionContext,
-  };
-});
 
 import { exchangeAuthorizationCode } from '@/lib/auth/oauth-grant';
 import { verifyAccessToken } from '@/lib/auth/token';
@@ -135,12 +122,6 @@ afterAll(async () => { await td.close(); });
 
 beforeEach(async () => {
   vi.clearAllMocks();
-  // ADR-018 的分级联合：`kind` 是判别式，缺了它 `oauth-grant.ts:165` 的真实
-  // 成功分支永远不会被执行（改造前正是这种旧形状）。
-  mocks.getUserPermissionContext.mockResolvedValue({
-    kind: 'ok',
-    context: { roles: [], permissions: [], deptIds: [] },
-  });
   await td.cleanup();
   await seedTestData(td.db, {
     departments: seedRootDept(),
@@ -283,9 +264,11 @@ describe('exchangeAuthorizationCode — 成功路径（真实签发）', () => {
   });
 });
 
-describe('exchangeAuthorizationCode — ADR-018 权限上下文分级', () => {
-  it('kind=denied（用户不存在/停用）→ 不签发任何令牌，且不写权限缓存', async () => {
-    mocks.getUserPermissionContext.mockResolvedValue({ kind: 'denied', reason: 'inactive' });
+describe('exchangeAuthorizationCode — ADR-018 权限上下文分级（真实状态驱动）', () => {
+  it('denied:inactive（用户被真实禁用）→ 不签发任何令牌，且不写权限缓存', async () => {
+    await td.db.update(schema.users)
+      .set({ status: 'DISABLED' })
+      .where(eq(schema.users.id, USER_ID));
     await seedAuthCode();
 
     const result = await exchange();
@@ -298,8 +281,9 @@ describe('exchangeAuthorizationCode — ADR-018 权限上下文分级', () => {
     await expect(getRedis().get(PERMISSION_CACHE_KEY)).resolves.toBeNull();
   });
 
-  it('kind=unavailable（数据库不可用）→ **不阻断签发**，只跳过缓存预填充（ADR-011 fail-open）', async () => {
-    mocks.getUserPermissionContext.mockResolvedValue({ kind: 'unavailable' });
+  it('unavailable（真实 `:unavailable` 标记）→ **不阻断签发**，只跳过缓存预填充（ADR-011 fail-open）', async () => {
+    // 用真身会读的那个键注入，而不是 mock 掉读上下文的那一半
+    await getRedis().setex(`${PERMISSION_CACHE_KEY}:unavailable`, 5, '1');
     await seedAuthCode();
 
     const result = await exchange();

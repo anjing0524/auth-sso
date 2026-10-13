@@ -74,12 +74,6 @@ vi.mock(import('@/lib/auth/token'), async (importOriginal): Promise<Partial<type
   };
 });
 
-// @allow-module-mock @/lib/permissions input-fixture: 只提供"该用户的权限上下文"这一输入；真实 PG 驱动的分级由 rt-permission-failure / permission-enforcement 覆盖
-vi.mock(import('@/lib/permissions'), (): Partial<typeof permissionsModule> => ({
-  getUserPermissionContext: vi.fn(async () => ({ kind: 'ok' as const, context: { roles: [], permissions: [], deptIds: [] } })),
-  cacheUserPermissionContext: vi.fn(async () => {}),
-}));
-
 vi.mock('@/lib/env', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/env')>();
   return { ...actual, getIssuer: () => 'https://sso.example.com', getAppBaseURL: () => 'http://localhost:4100' };
@@ -92,7 +86,6 @@ import { signLoginSession } from '@/lib/auth/token';
 import type * as clientsDataModule from '@/app/(dashboard)/clients/data';
 import type * as authorizeDataModule from '@/app/api/auth/oauth2/authorize/data';
 import type * as authRequestStoreModule from '@/lib/session/auth-request-store';
-import type * as permissionsModule from '@/lib/permissions';
 
 
 /** 当前用例的真实登录态令牌（authorize 端点会用真身 verifyAccessToken 验它） */

@@ -75,10 +75,18 @@ export function toPermissionContextOrNull(
 
 | 调用方 | 语义 | `denied` | `unavailable` |
 |---|---|---|---|
-| `rotateRefreshToken`、`exchangeAuthorizationCode` | **预填充** | 拒绝（否决性） | **跳过预填充，照常签发** |
+| `resolveIssuancePermission`（`rotateRefreshToken` 与 `exchangeAuthorizationCode` **共用**） | **预填充** | 拒绝（否决性） | **跳过预填充，照常签发** |
 | 判定/渲染场景（5 处） | 判定 | 拒绝 | 拒绝（经收窄函数） |
 
 预填充之所以可以降级：**签发令牌不依赖权限上下文**。跳过预填充的唯一后果是该用户下次鉴权时解析一次（即 ADR-011 的 fail-open 路径）。而 `denied` 仍拒绝——用户已被删除或禁用，不该拿到新令牌。
+
+> **2026-10-13 修订（架构评审 R2 候选 R6）**：上表第一行原为两条路径**各写一遍**该分级
+> （`oauth-grant.ts` 与 `token.ts`），且只能靠三个测试文件各自的替身开关才被测到。
+> 现收口为 `lib/permissions.ts` 的 `resolveIssuancePermission(userId)`——它紧邻
+> `toPermissionContextOrNull`（判定场景的收窄函数），两个 adapter 并列，语义差别读得出来。
+> 两条路径**只保留各自的失败投递方式**（授权码兑换返回判别式结果、RT 轮换抛错以触发孤儿 RT
+> 补偿回收），判定本身只此一处；返回类型里的 `prefilled: boolean` 让"跳过预填充"这条分支
+> 可在该 seam 上直接断言。详见 `docs/solution/2026-10-13-issuance-permission-seam.md`。
 
 ## 后果
 

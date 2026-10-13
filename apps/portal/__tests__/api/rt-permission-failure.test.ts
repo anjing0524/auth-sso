@@ -18,8 +18,9 @@
  * 改成非 ACTIVE 即 `denied:inactive`；预填充断言落在**真实 Redis 键**上，并用
  * "删掉 users 行后仍返回 ok" 来证明缓存命中（行为化）。
  *
- * 唯一保留的替身是 `unavailable`：真实 PostgreSQL 无法按需变为不可用，故用
- * **开关式故障注入**（注解见该 mock），其余情况一律走真身。
+ * `unavailable` 也**不再依赖替身**：真身 `getUserPermissionContext` 的第一步就是查
+ * `:unavailable` 标记（TTL 5s），因此往真实 Redis 写那个键即可注入——注入的是**状态**，
+ * 而不是实现。本文件现已**零业务模块替身**。
  *
  * @req H-SESS-003, H-ACL-002
  * @vitest-environment node
@@ -32,11 +33,8 @@ import { seedAdminUser, seedPortalClient, seedRootDept } from '../helpers/seed-f
 import { seedSigningKeys } from '../helpers/seed-signing-keys';
 import * as schema from '@/db/schema';
 import { hashToken } from '@/lib/crypto';
-import type * as permissionsModule from '@/lib/permissions';
 
-const { faultHolder, tdHolder } = vi.hoisted(() => ({
-  /** 故障注入开关：真实 PostgreSQL 无法按需变为不可用 */
-  faultHolder: { forceUnavailable: false },
+const { tdHolder } = vi.hoisted(() => ({
   tdHolder: { current: null as ReturnType<typeof createTestDbHandle> | null },
 }));
 
@@ -44,18 +42,6 @@ vi.mock('@/infrastructure/db', () => ({
   get db() { return tdHolder.current!.db; },
   get schema() { return tdHolder.current!.schema; },
 }));
-
-// @allow-module-mock @/lib/permissions fault-injection: 真实 PostgreSQL 无法按需变为不可用（unavailable 是基础设施故障，不是数据状态）；开关关闭时该导出仍走真身，`cacheUserPermissionContext` 全程真实
-vi.mock(import('@/lib/permissions'), async (importOriginal): Promise<Partial<typeof permissionsModule>> => {
-  const actual = await importOriginal();
-  return {
-    ...actual,
-    getUserPermissionContext: (userId: string) =>
-      faultHolder.forceUnavailable
-        ? Promise.resolve({ kind: 'unavailable' } as const)
-        : actual.getUserPermissionContext(userId),
-  };
-});
 
 import { rotateRefreshToken } from '@/lib/auth/token';
 import { getUserPermissionContext } from '@/lib/permissions';
@@ -68,6 +54,17 @@ const USER_ID = '00000000-0000-4000-8000-000000000101';
 const CLIENT_ID = 'portal';
 const OLD_RT = 'rt_old_token_value_for_rotation_test';
 const PERMISSION_CACHE_KEY = `${REDIS_KEY_PREFIX.USER_PERMS}${USER_ID}`;
+
+/**
+ * 注入 `unavailable`：往**真身会读的那个键**写标记。
+ *
+ * `getUserPermissionContext` 的第一步就是查 `:unavailable`（TTL 5s，为吸收重试风暴而设），
+ * 因此写这个键 = 让真身按它自己的语义返回 `unavailable`。注入的是**状态**，不是实现——
+ * 这比 mock 掉读上下文的那一半更接近生产，也让"跳过预填充"的断言仍然落在真实行为上。
+ */
+async function markUnavailable(): Promise<void> {
+  await getRedis().setex(`${PERMISSION_CACHE_KEY}:unavailable`, 5, '1');
+}
 
 async function seedRefreshToken(token: string) {
   await td.db.insert(schema.refreshTokens).values({
@@ -97,7 +94,6 @@ afterAll(async () => { await td.close(); });
 
 beforeEach(async () => {
   vi.clearAllMocks();
-  faultHolder.forceUnavailable = false;
   await td.cleanup();
   await seedTestData(td.db, {
     departments: seedRootDept(),
@@ -110,7 +106,7 @@ beforeEach(async () => {
 
 describe('rotateRefreshToken — 权限上下文缓存性故障不得阻断轮换', () => {
   it('unavailable（DB 故障）→ 仍然签发新令牌，且**没有**任何权限缓存被写入', async () => {
-    faultHolder.forceUnavailable = true;
+    await markUnavailable();
 
     const result = await rotateRefreshToken(OLD_RT, CLIENT_ID);
 
@@ -122,7 +118,7 @@ describe('rotateRefreshToken — 权限上下文缓存性故障不得阻断轮�
   });
 
   it('unavailable → 旧 RT 仍被撤销、新 RT 仍入库（轮换语义完整）', async () => {
-    faultHolder.forceUnavailable = true;
+    await markUnavailable();
 
     const result = await rotateRefreshToken(OLD_RT, CLIENT_ID);
     expect(result).not.toBeNull();

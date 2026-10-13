@@ -30,13 +30,7 @@ import { seedAdminUser, seedPortalClient, seedRootDept, seedTestUser } from '../
 import * as schema from '@/db/schema';
 import { hashToken } from '@/lib/crypto';
 
-const { mocks, tdHolder } = vi.hoisted(() => ({
-  mocks: {
-    // 显式给出函数类型：否则 `vi.fn()` 返回 any，mockResolvedValue 的形状
-    // 不受编译器约束（ADR-018 的 kind 判别式曾因此被静默写成陈旧形状）
-    mockGetPerm: vi.fn<(userId: string) => Promise<UserPermissionContextResult>>(),
-    mockCachePerm: vi.fn(async () => {}),
-  },
+const { tdHolder } = vi.hoisted(() => ({
   tdHolder: { current: null as ReturnType<typeof createTestDbHandle> | null },
 }));
 
@@ -45,15 +39,7 @@ vi.mock('@/infrastructure/db', () => ({
   get schema() { return tdHolder.current!.schema; },
 }));
 
-// @allow-module-mock @/lib/permissions input-fixture: 只提供权限上下文输入；真实 PG 驱动的分级由 permission-enforcement / rt-permission-failure 覆盖
-vi.mock(import('@/lib/permissions'), (): Partial<typeof permissionsModule> => ({
-  getUserPermissionContext: mocks.mockGetPerm,
-  cacheUserPermissionContext: mocks.mockCachePerm,
-}));
-
 import { rotateRefreshToken } from '@/lib/auth/token';
-import type * as permissionsModule from '@/lib/permissions';
-import type { UserPermissionContextResult } from '@/lib/permissions';
 
 
 const td = createTestDbHandle();
@@ -99,8 +85,6 @@ afterAll(async () => { await td.close(); });
 
 beforeEach(async () => {
   vi.clearAllMocks();
-  mocks.mockGetPerm.mockResolvedValue({ kind: 'ok', context: { roles: [], permissions: [], deptIds: [] } });
-  mocks.mockCachePerm.mockResolvedValue(undefined);
   await td.cleanup();
   await seedTestData(td.db, {
     departments: seedRootDept(),
