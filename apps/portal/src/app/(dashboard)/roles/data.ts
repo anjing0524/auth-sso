@@ -11,7 +11,7 @@ import { scopeFilter, isScopeDenied } from '@/lib/authz';
 import type { UserScope } from '@/lib/authz';
 import { asEntityStatus } from '@/lib/type-guards';
 import type { EntityStatus } from '@auth-sso/contracts';
-import { paginationMeta, withPagination, countRows } from '@/lib/pagination';
+import { paginationMeta, withPagination, countRows, offsetFor, normalizePagination } from '@/lib/pagination';
 
 /** 角色行 → 列表/详情 DTO（isSystem/sort 兜底 + 日期序列化），列表与详情共用 */
 function toRoleDTO(r: {
@@ -75,7 +75,9 @@ export async function getRoles(params: RolesListParams) {
   cacheLife('minutes');
   cacheTag('roles-list');
 
-  const { page, pageSize, keyword, status, scope } = params;
+  const { keyword, status, scope } = params;
+  // 非法页码在入口归一：LIMIT / OFFSET / 返回元信息三处共用同一值
+  const { page, pageSize } = normalizePagination(params.page, params.pageSize);
   // 数据范围：空范围即空集（无可见部门 → 不得返回任何角色）
   if (isScopeDenied(scope)) return { data: [], pagination: paginationMeta(page, pageSize, 0) };
   const whereClause = buildRoleConditions(keyword, status, scope);
@@ -85,7 +87,7 @@ export async function getRoles(params: RolesListParams) {
     pageSize,
     db.select().from(schema.roles).where(whereClause)
       .orderBy(asc(schema.roles.sort), desc(schema.roles.createdAt))
-      .limit(pageSize).offset((page - 1) * pageSize),
+      .limit(pageSize).offset(offsetFor(page, pageSize)),
     countRows(schema.roles, whereClause),
     toRoleDTO,
   );

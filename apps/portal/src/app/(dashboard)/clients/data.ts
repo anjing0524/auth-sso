@@ -8,7 +8,7 @@ import { db, schema } from '@/infrastructure/db';
 import { ilike, eq, or, desc, and, gt, isNull } from 'drizzle-orm';
 import { ENTITY_STATUS_VALUES, type EntityStatus } from '@auth-sso/contracts';
 import { asEntityStatus } from '@/lib/type-guards';
-import { withPagination, countRows } from '@/lib/pagination';
+import { withPagination, countRows, offsetFor, normalizePagination } from '@/lib/pagination';
 
 
 /**
@@ -77,7 +77,8 @@ export async function getClients(params: ClientListParams) {
   cacheLife('minutes');
   cacheTag('clients-list');
 
-  const { page, pageSize, keyword, status } = params;
+  const { keyword, status } = params;
+  const { page, pageSize } = normalizePagination(params.page, params.pageSize);
   const whereClause = buildClientConditions(keyword, status);
 
   return withPagination(
@@ -85,7 +86,7 @@ export async function getClients(params: ClientListParams) {
     pageSize,
     db.select().from(schema.clients).where(whereClause)
       .orderBy(desc(schema.clients.createdAt))
-      .limit(pageSize).offset((page - 1) * pageSize),
+      .limit(pageSize).offset(offsetFor(page, pageSize)),
     countRows(schema.clients, whereClause),
     toClientDTO,
   );
@@ -157,7 +158,8 @@ export async function getClientTokens(
   clientId: string,
   params: { page: number; pageSize: number; userId?: string },
 ) {
-  const { page, pageSize, userId } = params;
+  const { userId } = params;
+  const { page, pageSize } = normalizePagination(params.page, params.pageSize);
 
   const conditions = [
     eq(schema.refreshTokens.clientId, clientId),
@@ -181,7 +183,7 @@ export async function getClientTokens(
     .leftJoin(schema.users, eq(schema.refreshTokens.userId, schema.users.id))
     .where(whereClause)
     .orderBy(desc(schema.refreshTokens.createdAt))
-    .limit(pageSize).offset((page - 1) * pageSize);
+    .limit(pageSize).offset(offsetFor(page, pageSize));
 
   return withPagination(
     page,

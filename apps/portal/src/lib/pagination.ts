@@ -21,6 +21,76 @@ export interface ParsedPagination {
   pageSize: number;
 }
 
+/** 默认每页条数（`parsePagination` 与页面层的共同默认） */
+const DEFAULT_PAGE_SIZE = 20;
+
+/**
+ * 把单个输入归一为「>= 1 的整数」；无法解析（NaN/Infinity/0/负/小数截断后 <1）时取 fallback。
+ *
+ * 单点判据：`clampPage` / `clampPageSize` / `offsetFor` 都用它，保证三处语义一致
+ * （此前页面层裸 `parseInt`、`audit/data.ts` 另写一份 `clamp`，三套判据互不相同）。
+ */
+function normalizePositiveInt(value: number, fallback: number): number {
+  if (!Number.isFinite(value)) return fallback;
+  const truncated = Math.trunc(value);
+  return truncated >= 1 ? truncated : fallback;
+}
+
+/**
+ * 钳制**页码**（页面 Server Component 与 API 路由共用同一判据）。
+ *
+ * 非法输入（`?page=0`、`?page=abc`、`?page=-5`、缺省）一律回到 `fallback`（默认第 1 页）。
+ *
+ * 存在的理由：页面层此前用裸 `parseInt(params.page || '1')`，而数据层把它直接换算成
+ * `.offset((page - 1) * pageSize)` ⇒ `?page=0` 得到 `OFFSET -20`、`?page=abc` 得到
+ * `OFFSET NaN`，两者都是 PostgreSQL 错误 ⇒ 用户手改 URL 就得到 **500**。
+ *
+ * @param raw 查询参数原值（字符串）或已解析的数字
+ * @param fallback 无法解析时的页码（默认 1）
+ */
+export function clampPage(raw: string | number | undefined | null, fallback = 1): number {
+  return normalizePositiveInt(typeof raw === 'string' ? parseInt(raw, 10) : (raw ?? Number.NaN), fallback);
+}
+
+/**
+ * 钳制**每页条数**：解析失败或非正数回到 `fallback`，否则夹到 `[1, MAX_PAGE_SIZE]`。
+ *
+ * @param raw 查询参数原值（字符串）或已解析的数字
+ * @param fallback 无法解析时的每页条数（默认 20）
+ */
+export function clampPageSize(
+  raw: string | number | undefined | null,
+  fallback = DEFAULT_PAGE_SIZE,
+): number {
+  const parsed = normalizePositiveInt(
+    typeof raw === 'string' ? parseInt(raw, 10) : (raw ?? Number.NaN),
+    fallback,
+  );
+  return Math.min(MAX_PAGE_SIZE, parsed);
+}
+
+/**
+ * `LIMIT/OFFSET` 的 OFFSET 计算 —— **恒为非负整数**。
+ *
+ * 这是「非法页码不得到达 SQL」的最后一道结构保证：即便某个调用方忘了先 `clampPage`，
+ * `.offset(offsetFor(page, pageSize))` 也不会产生负值或 NaN。
+ * （`pageSize` 同样被归一：`< 1` 视为 1。）
+ */
+export function offsetFor(page: number, pageSize: number): number {
+  return (normalizePositiveInt(page, 1) - 1) * normalizePositiveInt(pageSize, 1);
+}
+
+/**
+ * 读模型入口的分页归一 —— **一次钳制，三处共用**（`LIMIT`、`OFFSET`、返回的元信息）。
+ *
+ * 存在的理由：`withPagination` 会用传入的 `page` 拼装返回的 `pagination.page`，
+ * 若读模型只把 `offsetFor` 用在 SQL 上而元信息仍用原始入参，`?page=0` 会返回
+ * 「第 0 页」（虽然不再 500）。归一放在入口，三者就必然一致。
+ */
+export function normalizePagination(page: number, pageSize: number): ParsedPagination {
+  return { page: clampPage(page), pageSize: clampPageSize(pageSize) };
+}
+
 /**
  * 从 URLSearchParams 中安全解析分页参数
  *
@@ -30,12 +100,12 @@ export interface ParsedPagination {
  */
 export function parsePagination(
   sp: URLSearchParams,
-  defaultPageSize: number = 20,
+  defaultPageSize: number = DEFAULT_PAGE_SIZE,
 ): ParsedPagination {
-  const page = Math.max(1, parseInt(sp.get('page') || '1', 10) || 1);
-  const rawPageSize = parseInt(sp.get('pageSize') || String(defaultPageSize), 10);
-  const pageSize = Math.min(MAX_PAGE_SIZE, Math.max(1, rawPageSize || defaultPageSize));
-  return { page, pageSize };
+  return {
+    page: clampPage(sp.get('page')),
+    pageSize: clampPageSize(sp.get('pageSize'), defaultPageSize),
+  };
 }
 
 // ── 读模型分页原语 ──

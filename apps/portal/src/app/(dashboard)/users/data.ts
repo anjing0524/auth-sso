@@ -20,7 +20,7 @@ import { eq, desc, and, type SQL } from 'drizzle-orm';
 import { USER_LIST_COLUMNS, buildUserListConditions } from '@/db/user-queries';
 import { isScopeDenied, scopeFilter } from '@/lib/authz';
 import type { UserScope } from '@/lib/authz';
-import { paginationMeta, withPagination, countRows } from '@/lib/pagination';
+import { paginationMeta, withPagination, countRows, offsetFor, normalizePagination } from '@/lib/pagination';
 
 /** 列表行 → 列表项 DTO（日期序列化 + 展示名/部门名兜底）；泛型透传保留其余列 */
 function toUserListItem<
@@ -64,7 +64,9 @@ export async function getUsers(
   cacheLife('minutes');
   cacheTag('users-list');
 
-  const { page, pageSize, keyword, status, deptId } = params;
+  const { keyword, status, deptId } = params;
+  // 非法页码在入口归一：LIMIT / OFFSET / 返回元信息三处共用同一值
+  const { page, pageSize } = normalizePagination(params.page, params.pageSize);
   if (isScopeDenied(scope)) {
     return { data: [], pagination: paginationMeta(page, pageSize, 0) };
   }
@@ -80,7 +82,7 @@ export async function getUsers(
     db.select(USER_LIST_COLUMNS).from(schema.users)
       .leftJoin(schema.departments, eq(schema.users.deptId, schema.departments.id))
       .where(where).orderBy(desc(schema.users.createdAt))
-      .limit(pageSize).offset((page - 1) * pageSize),
+      .limit(pageSize).offset(offsetFor(page, pageSize)),
     countRows(schema.users, where),
     toUserListItem,
   );

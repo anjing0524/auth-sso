@@ -11,6 +11,7 @@ import { eq, desc, and, gte, lte, count } from 'drizzle-orm';
 import type { AnyColumn, SQL } from 'drizzle-orm';
 import type { PgTable } from 'drizzle-orm/pg-core';
 import type { AuditOperation, LoginEventType } from '@auth-sso/contracts';
+import { clampPage, clampPageSize, offsetFor, paginationMeta, type PaginationMeta } from '@/lib/pagination';
 
 /** 日期格式正则：防止 SQL 注入和异常参数穿透 */
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
@@ -32,10 +33,6 @@ function addDateRangeConditions(
   }
 }
 
-function clamp(val: number, min: number, max: number) {
-  return isNaN(val) || val < min ? min : val > max ? max : val;
-}
-
 interface PaginationParams {
   page: number;
   pageSize: number;
@@ -43,7 +40,7 @@ interface PaginationParams {
 
 interface PaginatedResult<T> {
   data: T[];
-  pagination: { page: number; pageSize: number; total: number; totalPages: number };
+  pagination: PaginationMeta;
 }
 
 /**
@@ -60,26 +57,30 @@ async function paginatedSelect<T>(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   mapRow: (row: any) => T,
 ): Promise<PaginatedResult<T>> {
-  const page = clamp(params.page, 1, Infinity);
-  const pageSize = clamp(params.pageSize, 1, 100);
-  const offset = (page - 1) * pageSize;
+  // 钳制与 OFFSET 全部走 lib/pagination 的单点判据（原先本文件是**第三套**实现：
+  // 自带 clamp、pageSize 上限硬编码 100 而与 contracts 的 MAX_PAGE_SIZE 脱钩）。
+  const page = clampPage(params.page);
+  const pageSize = clampPageSize(params.pageSize);
+  const offset = offsetFor(page, pageSize);
 
   const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
-  const countResult = await db.select({ count: count() })
-    .from(table).where(whereClause);
+  // 两次查询无依赖 ⇒ 并发（与 lib/pagination 的 withPagination 同语义；
+  // 此前是串行两次 await，白白多一个往返）
+  const [rows, countResult] = await Promise.all([
+    db.select()
+      .from(table)
+      .where(whereClause)
+      .orderBy(desc(orderByColumn))
+      .limit(pageSize)
+      .offset(offset),
+    db.select({ count: count() }).from(table).where(whereClause),
+  ]);
   const total = Number(countResult[0]?.count ?? 0);
-
-  const rows = await db.select()
-    .from(table)
-    .where(whereClause)
-    .orderBy(desc(orderByColumn))
-    .limit(pageSize)
-    .offset(offset);
 
   return {
     data: rows.map(r => mapRow(r as unknown as Record<string, unknown>)),
-    pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) },
+    pagination: paginationMeta(page, pageSize, total),
   };
 }
 

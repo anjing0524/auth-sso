@@ -8,7 +8,7 @@ import { db, schema } from '@/infrastructure/db';
 import { eq, asc } from 'drizzle-orm';
 import { asPermissionType } from '@/lib/type-guards';
 import { logServerDataRead } from '@/lib/auth';
-import { withPagination, countRows, type PaginationMeta } from '@/lib/pagination';
+import { withPagination, countRows, offsetFor, normalizePagination, type PaginationMeta } from '@/lib/pagination';
 
 /**
  * 获取权限列表（可按类型过滤）
@@ -55,12 +55,14 @@ export async function getPermissions(type?: string): Promise<PermissionListItem[
   return rows.map(toPermissionListItem);
 }
 
-export async function getPermissionPage({ type, page, pageSize }:
+export async function getPermissionPage({ type, page: rawPage, pageSize: rawPageSize }:
   { type?: string; page: number; pageSize: number }
 ): Promise<{ data: PermissionListItem[]; pagination: PaginationMeta }> {
   'use cache';
   cacheLife('hours');
   cacheTag('permissions-list');
+
+  const { page, pageSize } = normalizePagination(rawPage, rawPageSize);
 
   const conditions = buildPermissionConditions(type);
 
@@ -69,7 +71,7 @@ export async function getPermissionPage({ type, page, pageSize }:
     pageSize,
     db.select().from(schema.permissions).where(conditions)
       .orderBy(asc(schema.permissions.sort), asc(schema.permissions.createdAt))
-      .limit(pageSize).offset((page - 1) * pageSize),
+      .limit(pageSize).offset(offsetFor(page, pageSize)),
     countRows(schema.permissions, conditions),
     toPermissionListItem,
   );

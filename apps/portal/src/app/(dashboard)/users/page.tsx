@@ -5,6 +5,7 @@
  */
 import { resolveIdentity } from '@/lib/auth';
 import { resolveScope } from '@/lib/authz';
+import { clampPage } from '@/lib/pagination';
 import { getUsers, getDepartmentOptions } from './data';
 import { db } from '@/infrastructure/db';
 import UserFilters from './components/UserFilters';
@@ -25,7 +26,7 @@ export default async function UsersPage({ searchParams }: PageProps) {
   const params = await searchParams;
   const keyword = params.keyword || '';
   const status = params.status || 'ALL';
-  const page = parseInt(params.page || '1', 10);
+  const page = clampPage(params.page);
   const pageSize = 15;
 
   // 鉴权由 users/layout.tsx 负责（requirePermission(['user:list'])），此处只取身份信息。

@@ -38,7 +38,9 @@ export async function GET(request: NextRequest) {
         const logs = await getLoginLogs(pagination);
         csv = '\uFEFF' + [
           '时间,用户,事件类型,IP地址,User-Agent,失败原因',
-          ...logs.data.map((l: Record<string, unknown>) =>
+          // 不强制转换为 Record<string, unknown>：让 TS 用真实行类型检查字段名
+          // （那层转换曾让下面 3 个不存在的字段通过编译，见 operation 分支）
+          ...logs.data.map((l) =>
             [l.createdAt, l.username, l.eventType, l.ip, l.userAgent, l.failReason].map(csvEscape).join(',')
           ),
         ].join('\n');
@@ -46,8 +48,12 @@ export async function GET(request: NextRequest) {
         const logs = await getAuditLogs(pagination);
         csv = '\uFEFF' + [
           '时间,操作人,操作类型,目标资源,详情,IP地址',
-          ...logs.data.map((l: Record<string, unknown>) =>
-            [l.createdAt, l.operator || l.username, l.operation, l.resource, l.detail, l.ip].map(csvEscape).join(',')
+          // 字段名必须取自行形状（getAuditLogs 的 mapRow）：
+          // 原为 `l.operator || l.username`、`l.resource`、`l.detail` —— 三者都不存在，
+          // 而 `l: Record<string, unknown>` 的强制转换让编译器无法发现 ⇒ 导出的 CSV
+          // 有 3 列恒为 `undefined`（2026-10-13 修复，架构评审 R2 次级候选）。
+          ...logs.data.map((l) =>
+            [l.createdAt, l.username, l.operation, l.url, l.params, l.ip].map(csvEscape).join(',')
           ),
         ].join('\n');
       }

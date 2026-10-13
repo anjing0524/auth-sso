@@ -8,6 +8,7 @@ import { db } from '@/infrastructure/db';
 import { getDepartmentOptions } from '@/app/(dashboard)/users/data';
 import { resolveIdentity } from '@/lib/auth';
 import { resolveScope } from '@/lib/authz';
+import { clampPage } from '@/lib/pagination';
 import RolesTable from './components/RolesTable';
 
 interface PageProps {
@@ -19,7 +20,7 @@ interface PageProps {
 
 export default async function RolesPage({ searchParams }: PageProps) {
   const params = await searchParams;
-  const page = parseInt(params.page || '1', 10);
+  const page = clampPage(params.page);
   const keyword = params.keyword || '';
 
   // 鉴权由 roles/layout.tsx 负责（requirePermission(['role:list'])），此处只取身份信息。

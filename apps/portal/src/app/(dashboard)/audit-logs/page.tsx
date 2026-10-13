@@ -11,6 +11,7 @@ import { ShieldAlert, FileText, Download } from 'lucide-react';
 import Link from 'next/link';
 import { LOGIN_EVENT_LABELS, AUDIT_OPERATION_LABELS } from '@auth-sso/contracts';
 import { getLoginLogs, getAuditLogs } from '@/app/audit/data';
+import { clampPage } from '@/lib/pagination';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
@@ -48,7 +49,7 @@ function pageHref(tab: string, page: number): string {
 export default async function AuditLogsPage({ searchParams }: PageProps) {
   const params = await searchParams;
   const tab: 'login' | 'operation' = params.tab === 'operation' ? 'operation' : 'login';
-  const page = Math.max(1, parseInt(params.page || '1', 10) || 1);
+  const page = clampPage(params.page);
 
   // 按当前 tab 仅查询所需数据源，互斥取数
   const { data, pagination } =
