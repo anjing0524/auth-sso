@@ -14,11 +14,18 @@ import 'server-only';
  * - 写路径只能经 {@link withScopedWrite}（快照与写入同事务，不可分开）
  * - 读路径只能用 {@link scopeFilter} 构造过滤条件（空范围恒 `FALSE`）
  *
+ * 子树展开（原 `lib/auth/data-scope.ts` 的 `getUserRoleDeptIds`）已**收进本模块作私有
+ * implementation**：它只被 {@link resolveScope} 调用，暴露出去就又是"两种形状"的入口。
+ * 零调用方的 `canAccessDept` 随之删除——它的判据与 {@link isWithinScope} 逐字相同，
+ * 而后者带 `UserScope` 形状（能区分"未取快照"与"范围为空"）。
+ *
  * @module lib/authz/data-scope
  */
+import { eq, like, or } from 'drizzle-orm';
 import type { DbExecutor } from '@/infrastructure/db';
+import { schema } from '@/infrastructure/db';
+import { ENTITY_ACTIVE } from '@auth-sso/contracts';
 import { ForbiddenError } from '@/domain/shared/errors';
-import { getUserRoleDeptIds } from '@/lib/auth/data-scope';
 
 /**
  * 操作者的数据范围快照。
@@ -30,6 +37,97 @@ import { getUserRoleDeptIds } from '@/lib/auth/data-scope';
 export interface UserScope {
   /** 操作者可访问的部门 ID 列表（已含子树展开） */
   readonly deptIds: readonly string[];
+}
+
+/**
+ * 计算操作者可见部门集合（含子树展开）—— **私有 implementation**。
+ *
+ * 两步逻辑：
+ * 1. 取用户全部 **ACTIVE** 角色的 `dept_id`（与 `getUserPermissionContext` 同一口径）
+ * 2. 对每个 `dept_id` 用物化路径 `ancestors` 展开子树，去重返回
+ *
+ * 首参 executor 决定连接归属：读路径传 `db`；事务内写守卫传 `tx`（消除
+ * "校验后、提交前操作者被降权"的 TOCTOU 窗口，H-ACL-002）。
+ *
+ * ## 子树谓词必须逐段判定（两次踩坑的教训）
+ *
+ * `ancestors` 是**完整祖先链**（root 在前、`/` 分隔、不含自身）——见
+ * `domain/department.ts` 的 `computeAncestorPrefix`：根 `null`、一级子部门 `= 根ID`、
+ * 二级 `= 根ID/一级ID`。因此"deptId 是否在祖先链上"要**逐段**判定，共五条分支：
+ *
+ * | 分支 | 命中 |
+ * |---|---|
+ * | `id = deptId` | 部门自身 |
+ * | `ancestors = deptId` | deptId 在链首（其直接子部门，如 ROOT → `ROOT`） |
+ * | `ancestors LIKE deptId/%` | deptId 在链首的更深后代（ROOT → `ROOT/TECH`） |
+ * | `ancestors LIKE %/deptId` | deptId 在链尾（其直接子部门，如 TECH → `ROOT/TECH`） |
+ * | `ancestors LIKE %/deptId/%` | deptId 在链中（孙子及更深，TECH → `ROOT/TECH/FE`） |
+ *
+ * 历史上两次都是"少一条分支，而测试把缺失写成期望"：
+ * 1. 只有第 3 条时，根部门的**一级**子部门（`ancestors = ROOT`，无 `/`）被整体漏掉
+ *    （ADR-014 记录的那次）；
+ * 2. 补上第 2 条后修好了**根角色**，但**非根角色仍漏掉全部深度 ≥ 2 的后代**——
+ *    `FE` 的 `ancestors` 是 `ROOT/TECH`，既不等于 `TECH` 也不以 `TECH/` 开头，
+ *    于是"技术部管理员看不见前端组/后端组的用户"；而当时三条断言
+ *    （`ADMIN → {TECH}`、`MULTI_ROLE → {TECH, MKT}`、"FE/BE 不在 TECH 角色管辖范围"）
+ *    把这个缺陷钉成了期望值。
+ *
+ * **方向性说明**：漏判是 fail-closed（少看见数据），不构成越权；但它是真实的功能缺陷。
+ * 新增分支只会**扩大**范围、不会缩小，故对既有范围内的对象无影响。
+ *
+ * @param executor db 直连或事务句柄
+ * @param operatorId 操作者用户 ID
+ * @returns 部门 ID 列表（已去重、已展开子树）；无角色时为空数组
+ */
+async function expandRoleDeptSubtrees(
+  executor: DbExecutor,
+  operatorId: string,
+): Promise<string[]> {
+  const user = await executor.query.users.findFirst({
+    where: eq(schema.users.id, operatorId),
+    with: {
+      userRoles: {
+        with: {
+          role: {
+            columns: { deptId: true, status: true },
+          },
+        },
+      },
+    },
+  });
+
+  if (!user) return [];
+
+  // 只取 ACTIVE 角色的 dept_id，与 getUserPermissionContext 保持一致
+  const roleDeptIds = Array.from(
+    new Set(
+      user.userRoles
+        .filter(ur => ur.role !== null && ur.role.status === ENTITY_ACTIVE)
+        .map(ur => ur.role!.deptId)
+        .filter((id): id is string => !!id),
+    ),
+  );
+
+  if (roleDeptIds.length === 0) return [];
+
+  // 单次批量 SQL 替代 N+1：对每个角色 deptId 展开其子树（五条分支见函数文档）
+  const conditions = roleDeptIds.flatMap((deptId): ReturnType<typeof or>[] => [
+    // 部门自身
+    eq(schema.departments.id, deptId),
+    // deptId 在祖先链链首：其直接子部门（ancestors 恰等于 deptId）
+    eq(schema.departments.ancestors, deptId),
+    // deptId 在祖先链链首：更深后代（ancestors 以 `deptId/` 开头）
+    like(schema.departments.ancestors, `${deptId}/%`),
+    // deptId 在祖先链链尾：其直接子部门（ancestors 以 `/deptId` 结尾）
+    like(schema.departments.ancestors, `%/${deptId}`),
+    // deptId 在祖先链链中：孙子及更深后代（`…/deptId/…`）
+    like(schema.departments.ancestors, `%/${deptId}/%`),
+  ]);
+  const result = await executor
+    .select({ id: schema.departments.id })
+    .from(schema.departments)
+    .where(or(...conditions));
+  return Array.from(new Set(result.map((r) => r.id)));
 }
 
 /**
@@ -51,7 +149,7 @@ export async function resolveScope(
   executor: DbExecutor,
   operatorId: string,
 ): Promise<UserScope> {
-  return { deptIds: await getUserRoleDeptIds(executor, operatorId) };
+  return { deptIds: await expandRoleDeptSubtrees(executor, operatorId) };
 }
 
 /**

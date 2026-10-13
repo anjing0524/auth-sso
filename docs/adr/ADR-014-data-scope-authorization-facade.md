@@ -167,6 +167,33 @@ like(schema.departments.ancestors, `${deptId}/%`),   // 只匹配二级及更深
 产物侧的可见症状：`/api/departments` 的 `buildDepartmentTree` 按 `parentId` 嵌套，当中间层（TECH）不在结果集里时，其子部门（FE）因父缺失被当作顶层返回——管理员的部门树出现"前端组"与"总公司"并列。
 
 修复：谓词补 `eq(schema.departments.ancestors, deptId)`（直接子部门），保留 `LIKE`（更深层）。测试期望同步翻转为 `{ROOT, TECH, MKT, FE, BE}` 长度 5。
+
+> **同一缺陷的第二级（2026-10-13，架构评审 R2 候选 R9 复核）**：上面的修复只补了"根部门的
+> **一级**子部门"，**非根角色的深度 ≥ 2 后代仍然全部漏掉**——`FE` 的 `ancestors` 是
+> `ROOT/TECH`，既不等于 `TECH` 也不以 `TECH/` 开头。后果：**"技术部管理员看不见前端组/
+> 后端组的用户"**（fail-closed，不构成越权，但 `/api/departments` 仍返回断裂的树、
+> 用户/角色列表少人）。
+>
+> **而它同样被写进了测试期望**——`data-scope.test.ts` 有三条断言把缺失固化成规范：
+> `ADMIN(TECH 角色) → {TECH}`（用例名甚至叫"返回 TECH 部门自身"）、
+> `MULTI_ROLE(TECH+MKT) → {TECH, MKT}`、以及 `canAccessDept` 一致性用例里
+> *"FE / BE / MKT 不在其管辖范围"*。
+>
+> 修复：谓词改为**逐段判定**共五条分支（`id` / `ancestors = deptId` / `LIKE deptId/%` /
+> `LIKE %/deptId` / `LIKE %/deptId/%`）——`ancestors` 是完整祖先链，"deptId 是否在链上"
+> 必须按 `/` 边界逐段匹配。三条断言同步更正；新增一条独立回归用例
+> （"**非根角色覆盖全部后代**：TECH 角色 → TECH + FE + BE"）。
+>
+> **教训（两次同一疾病）**：**把缺陷写进测试期望，比没有测试更危险**——它让正确实现变红。
+> 因此修复此类问题时必须同时审阅"测试里那些看起来像规范的断言"。
+> 详见 `docs/solution/2026-10-13-scope-expansion-seam.md`。
+>
+> **同时闭合门面（本 ADR 步骤 4/5 的补完）**：第 4 步只关了 **barrel**，模块 `lib/auth/data-scope.ts`
+> 仍在导出 `getUserRoleDeptIds` / `canAccessDept`（**barrel 为真、模块为假**），
+> 任何调用方 `import '@/lib/auth/data-scope'` 即可绕开门面。现子树展开收进
+> `lib/authz` 作**私有 implementation**（`expandRoleDeptSubtrees`），原模块删除，
+> `canAccessDept` 删除（0 生产调用方，判据与 `isWithinScope` 逐字相同且后者带 `UserScope` 形状）；
+> `authz-surface.test.ts` 增补**模块级**断言（含 fs 断言原模块已不存在）。
 4. ✅ **关门面**：`lib/auth/index.ts` 不再导出 `getUserRoleDeptIds` / `canAccessDept`。
    - **后续步骤已闭合（2026-10-08）**：`requireDeptAccess` 当时被保留（executor-first，Server Action 侧 16 处调用正确），迁移到 `withScopedWrite` 属后续工作。该迁移已完成——引入 `withScopedWrite` / `withScopedRow` 后，`requireDeptAccess` **实测 0 处调用**，已连同其 barrel 导出与 11 个测试文件的 mock 一并撤下（`authz-surface.test.ts` 的断言反转为"不再导出"）。
    - 撤下后全库对这两个原语的引用降为 **0**（只剩 `lib/auth/data-scope.ts` 自身定义与 `lib/authz` 的内部使用）。

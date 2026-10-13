@@ -15,6 +15,9 @@
  * @vitest-environment node
  */
 import { describe, it, expect, vi } from 'vitest';
+import { existsSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 // next/headers 等平台 API 在受测模块的传递依赖里被引用，做最小 mock 以避免副作用
 vi.mock('next/headers', () => ({ headers: async () => new Headers(), cookies: async () => ({ get: () => undefined }) }));
@@ -64,5 +67,38 @@ describe('@/lib/authz 门面公开面', () => {
 
     expect(authz).not.toHaveProperty('getUserRoleDeptIds');
     expect(authz).not.toHaveProperty('canAccessDept');
+  });
+});
+
+/**
+ * 模块级封闭 —— 门面曾经"只关了一半"。
+ *
+ * 上面两个用例断言的是 **barrel**（`@/lib/auth*`）。但 2026-10-13 复核发现：
+ * barrel 侧为真、**模块侧为假** —— `lib/auth/data-scope.ts` 仍然导出
+ * `getUserRoleDeptIds` / `canAccessDept`，任何调用方 `import '@/lib/auth/data-scope'`
+ * 即可绕开门面（正是 ADR-014 要消灭的"两种形状"）。原测试没抓到，因为它只查 barrel。
+ *
+ * 现在：子树展开是 `@/lib/authz` 的**私有 implementation**，原模块已删除。
+ */
+describe('范围原语的模块级封闭', () => {
+  it('@/lib/authz 的内部模块也不导出裸原语', async () => {
+    const dataScope = await import('@/lib/authz/data-scope');
+    expect(dataScope).not.toHaveProperty('getUserRoleDeptIds');
+    expect(dataScope).not.toHaveProperty('canAccessDept');
+    // 子树展开是私有 implementation：连名字都不该出现在导出面上
+    expect(dataScope).not.toHaveProperty('expandRoleDeptSubtrees');
+
+    const query = await import('@/lib/authz/query');
+    expect(query).not.toHaveProperty('getUserRoleDeptIds');
+    expect(query).not.toHaveProperty('canAccessDept');
+  });
+
+  it('原模块 src/lib/auth/data-scope.ts 已删除（门面不可被绕开）', () => {
+    const legacy = resolve(
+      dirname(fileURLToPath(import.meta.url)),
+      '../../src/lib/auth/data-scope.ts',
+    );
+    // 用文件系统断言而非 `import()`：后者是构建期解析，失败形态不可控
+    expect(existsSync(legacy), `${legacy} 不应存在——范围原语必须只经 @/lib/authz`).toBe(false);
   });
 });
