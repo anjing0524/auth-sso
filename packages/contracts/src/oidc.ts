@@ -86,3 +86,18 @@ export const REDIS_KEY_PREFIX = {
   /** 登录失败计数 Key 前缀 — 暴力破解防护 */
   LOGIN_FAIL: 'portal:login_fail:',
 } as const;
+
+/**
+ * Discovery 文档里的**自定义扩展字段名**（Portal 发布 ↔ Gateway 消费）。
+ *
+ * RFC 8414 §2 要求扩展字段带命名空间前缀（`com_authsso_`）以避免与注册字段冲突。
+ * Gateway 侧对应 `jwks.rs` 的 `CUSTOM_FIELD_REFRESH_ENDPOINT` / `CUSTOM_FIELD_CALLBACK_PATH`
+ * ——那两个数组**仅为首名与旧名并存**（部署错序容忍），首名即本处的值。
+ *
+ * 跨语言契约工件：`packages/contracts/src/cross-language-fixture.json`。
+ * 改这里的值必须同步 Rust 侧，否则静默续签会退化为回退旧字段名而**看不出坏了**。
+ */
+export const DISCOVERY_CUSTOM_FIELDS = {
+  REFRESH_ENDPOINT: 'com_authsso_refresh_endpoint',
+  CALLBACK_PATH: 'com_authsso_callback_path',
+} as const;

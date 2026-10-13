@@ -12,6 +12,11 @@
  * 任何一侧增删/改名 claims 字段，必须同步本 fixture 与两端测试 —— 这是由
  * 跨语言漂移引发的硬约束（历史上 Portal 端曾单方面增删 claims 而无门禁）。
  *
+ * **姊妹工件**：`cross-language-fixture.json` 用同一机制承载**非 claims** 的跨语言
+ * 字面量（Cookie 名、注入头、jti 键前缀、scope 集合、Discovery 字段名），
+ * 由 `__tests__/cross-language-fixture.test.ts` 与 Gateway 的
+ * `src/contract_tests.rs` 双端断言。新增跨语言值应放进那个工件，而不是这里。
+ *
  * 注意：Gateway 的 `Claims` 只消费子集（sub/iss/aud/jti/exp/client_id；iat 仅 Portal 侧
  * 语义使用），serde 默认忽略未知字段，fixture 携带 iat 以锚定 AT TTL 契约。
  *

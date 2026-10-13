@@ -16,6 +16,7 @@ import {
   TOKEN_ENDPOINT_AUTH_METHODS_SUPPORTED,
   CODE_CHALLENGE_METHODS_SUPPORTED,
   CLAIMS_SUPPORTED,
+  DISCOVERY_CUSTOM_FIELDS,
 } from '@auth-sso/contracts';
 
 
@@ -39,8 +40,9 @@ export async function GET() {
     // 否则会与注册字段名冲突，且外部 RP 会误以为可获得标准的 refresh_token grant
     // 支持——本端点只认 HttpOnly Cookie，第三方客户端照此调用必然失败。
     // 消费方仅 Gateway（jwks.rs 探测，容忍 com_authsso_* 与旧名）。
-    com_authsso_refresh_endpoint: `${baseURL}/api/auth/refresh`,
-    com_authsso_callback_path: '/api/auth/callback',
+    // 字段名取自 contracts（跨语言契约工件断言两端一致，防止"改名后靠旧名回退而静默降级"）。
+    [DISCOVERY_CUSTOM_FIELDS.REFRESH_ENDPOINT]: `${baseURL}/api/auth/refresh`,
+    [DISCOVERY_CUSTOM_FIELDS.CALLBACK_PATH]: '/api/auth/callback',
     scopes_supported: SCOPES_SUPPORTED,
     response_types_supported: RESPONSE_TYPES_SUPPORTED,
     grant_types_supported: GRANT_TYPES_SUPPORTED,

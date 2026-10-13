@@ -41,12 +41,13 @@ pub struct OAuthState {
     pub callback_path: String,
 }
 
-// ── OAuth 2.1 Client Cookie 名称（必须与 Portal /callback/route.ts 完全一致）──
+// ── OAuth 2.1 Client Cookie 名称（跨语言契约：与 Portal `COOKIE_NAMES` 一致，
+//    由 src/contract_tests.rs 对 cross-language-fixture.json 断言）──
 
-const PKCE_VERIFIER_COOKIE: &str = "pkce_verifier";
-const OAUTH_STATE_COOKIE: &str = "oauth_state";
-const OAUTH_NONCE_COOKIE: &str = "oauth_nonce";
-const RETURN_TO_COOKIE: &str = "return_to";
+pub(crate) const PKCE_VERIFIER_COOKIE: &str = "pkce_verifier";
+pub(crate) const OAUTH_STATE_COOKIE: &str = "oauth_state";
+pub(crate) const OAUTH_NONCE_COOKIE: &str = "oauth_nonce";
+pub(crate) const RETURN_TO_COOKIE: &str = "return_to";
 
 /// 临时 OAuth Cookie 的 TTL（秒）— 与 authorization_code 5min 对齐
 const OAUTH_COOKIE_MAX_AGE: u64 = 300;

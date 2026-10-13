@@ -50,3 +50,10 @@ pub mod tls;
 // 重导出常用类型
 pub use gateway::Gateway;
 pub use router::Router;
+
+/// 跨语言字面量契约断言（Portal TS ↔ Gateway Rust）。
+///
+/// 独立成模块而非塞进各文件的原因：契约的价值在于**一处集中断言两端全部共享值**，
+/// 分散到各文件就会随文件增删而漏（这正是它此前缺失的原因）。
+#[cfg(test)]
+mod contract_tests;

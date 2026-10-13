@@ -17,8 +17,12 @@ use super::{TokenExpiry, TokenStatus, VerifiedToken};
 const REFRESH_THRESHOLD_SEC: u64 = 300;
 
 /// Access Token 的 typ protected header 期望值（RFC 8725 §3.11 显式类型，
-/// 与 Portal contracts `JWT_TYP.ACCESS_TOKEN` 对齐）
-const JWT_TYP_ACCESS: &str = "at+jwt";
+/// 与 Portal contracts `JWT_TYP.ACCESS_TOKEN` 对齐；由 `contract_tests` 断言）
+pub(crate) const JWT_TYP_ACCESS: &str = "at+jwt";
+
+/// jti 黑名单 Key 前缀（跨语言契约：Portal 写入、Gateway 读取。
+/// 与 contracts `REDIS_KEY_PREFIX.JTI_BLOCKLIST` 一致——漂移会让撤销静默失效）
+pub(crate) const JTI_BLOCKLIST_PREFIX: &str = "portal:jti_blocklist:";
 
 /// exp 判定的时钟偏差容忍（秒）——对齐 jsonwebtoken 内置校验的默认 leeway，
 /// Portal 与 Gateway 时钟偏差在此范围内不影响到期判定
@@ -183,7 +187,7 @@ impl JwtVerifier {
 
     /// 检查 jti 是否在黑名单中（fail-close：Redis 不可用时返回 true 拒绝请求）
     async fn check_jti(&self, jti: &str) -> bool {
-        let jti_key = format!("portal:jti_blocklist:{}", jti);
+        let jti_key = format!("{JTI_BLOCKLIST_PREFIX}{}", jti);
         crate::redis::exists(&jti_key).await
     }
 }

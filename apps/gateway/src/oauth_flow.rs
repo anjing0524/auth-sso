@@ -13,6 +13,12 @@ use crate::config::OAuthConfig;
 use crate::http::SessionExt;
 use crate::oauth;
 
+/// `/authorize` 请求里的 scope 查询参数段（URL 编码形态，`+` 为分隔符）。
+///
+/// **跨语言契约**：集合必须与 contracts `SCOPES_SUPPORTED` 一致（由 `contract_tests` 断言）。
+/// 收窄 Portal 侧 client 的注册 scopes 而不改这里，网关的登录跳转就会拿到 `invalid_scope`。
+pub(crate) const AUTHORIZE_SCOPE_QUERY: &str = "openid+profile+email+offline_access";
+
 /// Token 交换结果（code → access_token + refresh_token + id_token）
 #[derive(Debug, Clone)]
 pub(crate) struct TokenExchangeResult {
@@ -53,7 +59,7 @@ impl Gateway {
         let authorize_base = oauth::build_redirect_uri(host, "/api/auth/oauth2/authorize", SECURE);
         let auth_url = format!(
             "{}?response_type=code&client_id={}&redirect_uri={}&\
-            scope=openid+profile+email+offline_access&code_challenge={}&\
+            scope={AUTHORIZE_SCOPE_QUERY}&code_challenge={}&\
             code_challenge_method=S256&state={}&nonce={}",
             authorize_base,
             state.client_id,

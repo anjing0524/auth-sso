@@ -24,6 +24,13 @@ const UPSTREAM_SELECT_WEIGHT: usize = 256;
 const METRICS_PATH: &str = "/__gateway/metrics";
 const METRICS_KEY_HEADER: &str = "X-Gateway-Metrics-Key";
 
+/// 验签后注入的用户 ID / jti 头名。
+///
+/// **跨语言契约**：Portal 侧以 `GATEWAY_HEADERS.USER_ID` / `USER_JTI` 读取（由
+/// `contract_tests` 断言两端一致）。HTTP 头名大小写不敏感，这里是规范书写形态。
+pub(crate) const HEADER_USER_ID: &str = "X-User-Id";
+pub(crate) const HEADER_USER_JTI: &str = "X-User-Jti";
+
 /// 从 Session 提取指定请求头的字符串值
 fn header_str<'s>(session: &'s Session, name: &str) -> Option<&'s str> {
     session.get_header(name).and_then(|h| h.to_str().ok())
@@ -561,8 +568,8 @@ impl ProxyHttp for Gateway {
 
         if let Some(id) = &ctx.identity {
             upstream_request.insert_header("Authorization", id.auth_header.as_str())?;
-            upstream_request.insert_header("X-User-Id", id.user_id.as_str())?;
-            upstream_request.insert_header("X-User-Jti", id.user_jti.as_str())?;
+            upstream_request.insert_header(HEADER_USER_ID, id.user_id.as_str())?;
+            upstream_request.insert_header(HEADER_USER_JTI, id.user_jti.as_str())?;
 
             // HMAC 签名：Gateway 用共享密钥对 (timestamp + userId + jti) 签名，
             // Portal 端验证此签名以确认请求确实来自受信任的 Gateway（替代 IP 白名单）。
