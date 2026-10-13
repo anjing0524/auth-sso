@@ -362,7 +362,9 @@ export async function rotateRefreshToken(
 
     const { token: accessToken } = await signAccessToken(rt.userId, rt.clientId, rt.scopes);
 
-    return { accessToken, refreshToken: newRefreshToken, expiresIn: ACCESS_TOKEN_TTL };
+    // scope 一并返回：协议响应必须回报授予范围（RFC 6749 §5.1），
+    // 而此前 RefreshTokenResult 不带它 ⇒ 路由手拼响应时漏掉
+    return { accessToken, refreshToken: newRefreshToken, expiresIn: ACCESS_TOKEN_TTL, scope: rt.scopes };
   } catch (e) {
     log.error('RT 轮换后置步骤失败，补偿回收新 RT', { error: (e as Error).message });
     try {

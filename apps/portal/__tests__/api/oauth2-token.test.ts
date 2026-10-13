@@ -250,6 +250,16 @@ describe('POST /api/auth/oauth2/token — redirect_uri 强制比对（F1, RFC 67
     expect(atClaims!.sub).toBe(USER_ID);
 
     // 真实轮换：旧行被标记撤销、新行落库且与新返回的 RT 哈希一致
+    // RFC 6749 §5.1：**授予的 scope 必须回报**。
+    // 授权码分支一直带 `scope`，而本分支此前手拼响应体时漏了它
+    //（轮换当时手里就有 rt.scopes，只是 RefreshTokenResult 没返回）——
+    // 2026-10-13 修复，架构评审 R2 次级候选「token 签发族统一返回形状」。
+    expect(json.token_type).toBe('Bearer');
+    expect(typeof json.expires_in).toBe('number');
+    expect(json.scope).toBe('openid profile email offline_access');
+    // 新 AT 的 scope claim 与响应体一致（同一来源 rt.scopes）
+    expect(atClaims!.scope).toBe(json.scope);
+
     const rows = await selectRefreshTokens();
     expect(rows).toHaveLength(2);
     const oldRow = rows.find(r => r.tokenHash === hashToken(oldRefreshToken));

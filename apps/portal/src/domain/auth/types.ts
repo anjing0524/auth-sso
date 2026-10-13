@@ -43,11 +43,20 @@ export interface OAuthTokenResponse {
   scope?: string;
 }
 
-/** Token 轮换结果 */
+/**
+ * Token 轮换结果（领域形状，camelCase）。
+ *
+ * `scope` 是**必填**：轮换手里本就有 `refresh_tokens.scopes`，而协议的
+ * `OAuthTokenResponse` 按 RFC 6749 §5.1 必须回报授予的 scope。
+ * 此前本类型没有它，于是 refresh 分支手拼响应时**漏掉了 scope**
+ * （2026-10-13 修复，架构评审 R2 次级候选「token 签发族统一返回形状」）。
+ */
 export interface RefreshTokenResult {
   accessToken: string;
   refreshToken: string;
   expiresIn: number;
+  /** 本次轮换授予的 scope（空格分隔）—— 与 AT 的 `scope` claim 同源 */
+  scope: string;
 }
 
 // ────────────────────────────────────────────

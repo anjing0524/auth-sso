@@ -78,9 +78,13 @@ export async function POST(request: NextRequest) {
         { error: AUTH_ERRORS.REFRESH_TOKEN_INVALID, message: 'Refresh Token 无效或已过期' },
         { status: 401 },
       );
-      // 清除无效 Cookie
-      response.cookies.set(COOKIE_NAMES.JWT, '', { path: '/', httpOnly: true, sameSite: 'lax', maxAge: 0 });
-      response.cookies.set(COOKIE_NAMES.REFRESH, '', { path: '/', httpOnly: true, sameSite: 'lax', maxAge: 0 });
+      // 清除无效 Cookie。属性必须与**写入侧**同策略（含 secure）：
+      // 只对齐 path 是不够的——RFC 6265bis 的 cookie protection 下，
+      // 非 Secure 的清除 Cookie 无法覆盖 Secure 的那个（此前两处清除漏了 secure，
+      // 而 oauth-utils 的清除带了它）。
+      const secureClear = isCookieSecure();
+      response.cookies.set(COOKIE_NAMES.JWT, '', { path: '/', httpOnly: true, secure: secureClear, sameSite: 'lax', maxAge: 0 });
+      response.cookies.set(COOKIE_NAMES.REFRESH, '', { path: '/', httpOnly: true, secure: secureClear, sameSite: 'lax', maxAge: 0 });
       return response;
     }
 

@@ -16,7 +16,7 @@
  */
 import { type NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { getAppBaseURL } from '@/lib/env';
+import { getAppBaseURL, isCookieSecure } from '@/lib/env';
 import { safeRedirectPath } from '@/lib/oauth-utils';
 import { db, schema } from '@/infrastructure/db';
 import { eq } from 'drizzle-orm';
@@ -116,9 +116,15 @@ function clearAuthCookies(response: NextResponse) {
   // Path 必须与写入时完全一致，浏览器才会删除 Cookie：
   // - JWT / REFRESH 写在 path='/'，清除也用 '/'
   // - LOGIN_SESSION 写在 path='/api/auth/oauth2/authorize'（见 login/route.ts），清除须用同 Path
-  response.cookies.set(COOKIE_NAMES.JWT, '', { path: '/', httpOnly: true, sameSite: 'lax', maxAge: 0 });
-  response.cookies.set(COOKIE_NAMES.LOGIN_SESSION, '', { path: '/api/auth/oauth2/authorize', httpOnly: true, sameSite: 'lax', maxAge: 0 });
-  response.cookies.set(COOKIE_NAMES.REFRESH, '', { path: '/', httpOnly: true, sameSite: 'lax', maxAge: 0 });
+  //
+  // 2026-10-13：清除侧补上 `secure`——**属性策略必须与写入侧一致**。
+  // RFC 6265bis 的 cookie protection 下，非 Secure 的清除 Cookie 无法覆盖 Secure 的同名 Cookie，
+  // 于是 COOKIE_SECURE=true 而请求未被视为安全（如 TLS 在别处终结）时，登出**清不掉**会话 Cookie。
+  // 此前三处清除里只有 oauth-utils 带了 secure。
+  const secure = isCookieSecure();
+  response.cookies.set(COOKIE_NAMES.JWT, '', { path: '/', httpOnly: true, secure, sameSite: 'lax', maxAge: 0 });
+  response.cookies.set(COOKIE_NAMES.LOGIN_SESSION, '', { path: '/api/auth/oauth2/authorize', httpOnly: true, secure, sameSite: 'lax', maxAge: 0 });
+  response.cookies.set(COOKIE_NAMES.REFRESH, '', { path: '/', httpOnly: true, secure, sameSite: 'lax', maxAge: 0 });
 }
 
 export async function POST(request: NextRequest) {

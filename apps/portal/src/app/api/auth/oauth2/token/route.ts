@@ -18,6 +18,7 @@ import { type NextRequest, NextResponse } from 'next/server';
 import { rotateRefreshToken } from '@/lib/auth/token';
 import { exchangeAuthorizationCode } from '@/lib/auth/oauth-grant';
 import { mapToOAuthError } from '@/domain/shared/error-mapping';
+import { toOAuthTokenResponse } from '@/domain/auth/token-response';
 import { mapServerError } from '@/lib/server-error';
 import { InvalidGrantError } from '@/domain/shared/errors';
 
@@ -116,12 +117,8 @@ export async function POST(request: NextRequest) {
       // 续签成功 → 记录 TOKEN_REFRESH 日志（I-LOG-003）
       writeLoginLog({ username: client.clientId, eventType: 'TOKEN_REFRESH', ip: extractClientIP(request.headers), userAgent: extractUserAgent(request.headers) });
 
-      return NextResponse.json({
-        access_token: result.accessToken,
-        token_type: 'Bearer',
-        expires_in: result.expiresIn,
-        refresh_token: result.refreshToken,
-      });
+      // 协议响应由**唯一组装点**产出（此前手拼并漏掉 scope，RFC 6749 §5.1）
+      return NextResponse.json(toOAuthTokenResponse(result));
     }
 
     return NextResponse.json({ error: 'unsupported_grant_type' }, { status: 400 });
