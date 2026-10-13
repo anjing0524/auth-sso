@@ -23,11 +23,16 @@ pub(crate) struct TokenExchangeResult {
 
 impl Gateway {
     /// 无 JWT 页面导航 → 生成 PKCE + Cookie → 302 /authorize
+    /// 生成 PKCE 跳转并用 302 回给浏览器。
+    ///
+    /// `extra_cookies` 用于"续签已轮换、但本次请求仍需重登"的场景：新 Token Cookie
+    /// 必须随这个 302 一并送达，否则浏览器会继续用已被 Portal 撤销的旧 RT。
     pub(crate) async fn oauth_authorize_redirect(
         &self,
         session: &mut Session,
         oauth: &OAuthConfig,
         return_to: &str,
+        extra_cookies: &[String],
     ) -> Result<bool> {
         let host = get_host(session);
         // Gateway 主代理服务本身就是浏览器的 TLS 第一跳。走到这里的浏览器请求
@@ -58,7 +63,9 @@ impl Gateway {
             state.nonce,
         );
 
-        let cookies = oauth::build_oauth_cookies(&state, SECURE);
+        let mut cookies = oauth::build_oauth_cookies(&state, SECURE);
+        // 续签已轮换时的会话 Cookie 附在同一响应上（见函数文档）
+        cookies.extend(extra_cookies.iter().cloned());
 
         info!(
             "OAuth PKCE redirect: {} → /authorize (client={}, return_to={})",

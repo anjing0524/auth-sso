@@ -500,8 +500,11 @@ impl ProxyHttp for Gateway {
                 } else {
                     format!("{path}?{query}")
                 };
+                // 若本次请求已续签（Portal 已轮换），新 Cookie 必须随这个 302 送达：
+                // 丢掉它们会让浏览器继续用已被撤销的旧 RT（见 authenticate 模块头部）。
+                let extra_cookies = crate::authenticate::refreshed_cookies(ctx);
                 return self
-                    .oauth_authorize_redirect(session, oauth_config, &return_to)
+                    .oauth_authorize_redirect(session, oauth_config, &return_to, &extra_cookies)
                     .await;
             }
         }

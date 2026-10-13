@@ -87,6 +87,21 @@ match expiry {
 }
 ```
 
+> **2026-10-13 修订（架构评审 R2 候选 R7）**：上面这段是当时的形态，其 `try_refresh` 返回
+> `bool`。该布尔把两种完全相反的事实压在一起——"Portal 已轮换（旧 RT 已被撤销，新 Cookie
+> 必须送达）"与"什么都没发生"。后果：新 AT 的 payload 解不出时新 Cookie 被整体丢弃，浏览器
+> 继续用已被撤销的旧 RT，下次续签命中 Portal 复用检测 → **家族级联撤销（连该用户其他会话）**。
+>
+> 现已改为：`TokenRefresher::try_refresh → RefreshOutcome`（`Rotated` / `Skipped` / `Deduped` /
+> `Failed`），并由纯转移函数 `refresh_effect(expiry, outcome) -> RefreshEffect` 决定
+> （`Rotated ⇒ tokens 必为 Some`，与 payload 是否可解码、本次是否被阻断均无关）；新 Cookie 在
+> 放行时由 `response_filter` 下发，阻断时随 401 / 登录跳转一并下发。
+>
+> 本 ADR 的实质决策（`check` 返回 `AuthDecision`、`match expiry` 穷尽、认证决策点唯一）**全部不变**
+> ——本次只替换驱动该 `match` 的续签结果表示。详见
+> `docs/solution/2026-10-13-refresh-outcome-named.md`。
+```
+
 编译器强制穷尽，新增 `TokenExpiry` 变体时编译报错。
 
 ## 后果

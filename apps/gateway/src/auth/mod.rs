@@ -7,7 +7,7 @@
 pub mod refresh;
 pub mod verify;
 
-pub use refresh::TokenRefresher;
+pub use refresh::{RefreshOutcome, TokenRefresher};
 pub use verify::{JwtVerifier, VerifyError};
 
 use base64::Engine;

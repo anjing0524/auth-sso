@@ -104,6 +104,15 @@ pub trait SessionExt {
     /// 发送 401 Unauthorized 响应并注入 Bearer WWW-Authenticate 头部
     fn respond_401(&mut self) -> impl std::future::Future<Output = Result<()>> + Send;
 
+    /// 发送 401 并附带 Set-Cookie。
+    ///
+    /// 用于"Portal 已轮换、但本次请求仍被阻断"的场景：新 Cookie 必须送达浏览器，
+    /// 否则它会继续使用已被 Portal 撤销的旧 RT（下次续签命中复用检测 → 家族级联撤销）。
+    fn respond_401_with_cookies(
+        &mut self,
+        cookies: &[String],
+    ) -> impl std::future::Future<Output = Result<()>> + Send;
+
     /// 发送 302 重定向响应（含 Set-Cookie 头列表）
     fn respond_302_with_cookies(
         &mut self,
@@ -129,8 +138,15 @@ impl SessionExt for Session {
     }
 
     async fn respond_401(&mut self) -> Result<()> {
+        self.respond_401_with_cookies(&[]).await
+    }
+
+    async fn respond_401_with_cookies(&mut self, cookies: &[String]) -> Result<()> {
         let mut header = ResponseHeader::build(401, None)?;
         header.insert_header("WWW-Authenticate", "Bearer")?;
+        for cookie in cookies {
+            header.append_header("Set-Cookie", cookie.as_str())?;
+        }
         self.write_response_header(Box::new(header), true).await
     }
 

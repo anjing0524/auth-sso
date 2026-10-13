@@ -25,15 +25,21 @@ pub async fn acquire_nx_ex(key: &str, value: &str, ttl_secs: u64) -> bool {
     // SET ... NX 在 key 已存在时返回 nil，抢占成功返回 OK —— 服务端原子判定
 }
 
-pub async fn try_refresh(&self, ...) -> Option<RefreshedTokens> {
+pub async fn try_refresh(&self, ...) -> RefreshOutcome {
     if !redis::acquire_nx_ex(&dedup_key, "1", REFRESH_DEDUP_SEC).await {
-        return None;                      // 未抢到：窗口内已有续签在进行
+        return RefreshOutcome::Deduped;   // 未抢到：窗口内已有续签在进行
     }
     // ... 尝试各端点 ...
-    // 成功：保留锁至 TTL 自然过期（即去重窗口）
-    // 全部失败：DEL 释放锁，下次请求可立即重试
+    // 成功：返回 RefreshOutcome::Rotated(tokens)，保留锁至 TTL 自然过期（即去重窗口）
+    // 全部失败：DEL 释放锁，下次请求可立即重试，返回 RefreshOutcome::Failed
 }
 ```
+
+> **2026-10-13 修订（架构评审 R2 候选 R7）**：返回类型由 `Option<RefreshedTokens>` 改为具名的
+> `RefreshOutcome`（`Rotated` / `Skipped` / `Deduped` / `Failed`）。原来的 `None` 把"去重命中 /
+> Portal 判定无需续签 / 无 upstream / 全部失败"四种语义压成同一个值，于是**「Portal 已轮换但
+> 新 token 拿不到」与「什么都没发生」长得一样**——那正是用户被家族级联撤销的路径。
+> 本文件上面的 `acquire_nx_ex` 语义未变。
 
 三条纪律：
 

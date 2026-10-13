@@ -58,6 +58,34 @@ enum EndpointOutcome {
     Failed,
 }
 
+/// 一次续签尝试的**具名**结果。
+///
+/// 此前 [`TokenRefresher::try_refresh`] 返回 `Option<RefreshedTokens>`，把四种语义
+/// 完全不同的情况压成同一个 `None`：
+///
+/// | 情况 | 旧返回 | 真实语义 |
+/// |---|---|---|
+/// | Portal 已轮换 | `Some` | 旧 RT **已在 Portal 侧被撤销**；新 token 必须送达浏览器 |
+/// | Portal 判定无需续签 | `None` | AT 仍新，什么都没发生 |
+/// | 30s 去重命中 | `None` | 另一个请求正在续签 |
+/// | 全部端点失败 | `None` | 续签没成功 |
+///
+/// 压成同一个值之后，「Portal 已经轮换了但新 token 拿不到」与「什么都没发生」长得一样——
+/// 而那正是用户被登出的路径：浏览器继续用已被撤销的旧 RT，下次续签命中 Portal 的
+/// 复用检测 → 家族级联撤销（连其他会话一起）。**「已轮换」是不可逆事实，必须有名字。**
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RefreshOutcome {
+    /// Portal 已轮换：新 token 对可用。调用方**必须**把新 Cookie 送达浏览器，
+    /// 无论本次请求最终是放行还是被阻断。
+    Rotated(RefreshedTokens),
+    /// Portal 判定无需续签（AT 剩余时间充足）
+    Skipped,
+    /// 30s 去重窗口内已有续签在进行/刚完成，本次放弃
+    Deduped,
+    /// 已尝试且全部端点失败（或没有任何可用端点）
+    Failed,
+}
+
 /// 同用户续签去重窗口（秒），防止并发请求反复轮换 Refresh Token
 const REFRESH_DEDUP_SEC: u64 = 30;
 
@@ -96,12 +124,13 @@ impl TokenRefresher {
 
     /// 向 Portal 发起 Access Token 静默续签。
     ///
-    /// 返回 `Some(RefreshedTokens)` 或 `None`（续签失败不阻断请求，旧 AT 仍有效）。
+    /// 返回具名的 [`RefreshOutcome`] —— 续签失败**不阻断请求**（旧 AT 仍有效），
+    /// 但「Portal 已轮换」这一不可逆事实必须被调用方看见（见该枚举的说明）。
     ///
     /// # 去重语义
     ///
     /// 先以 SET NX EX **原子抢占** 30s 去重锁（服务端单命令，无 TOCTOU 窗口）：
-    /// - 未抢到 → 30s 窗口内已有续签在进行/刚完成，放弃本次续签
+    /// - 未抢到 → 30s 窗口内已有续签在进行/刚完成，放弃本次续签（[`RefreshOutcome::Deduped`]）
     /// - 抢到但全部端点失败 → DEL 释放锁，允许下次请求立即重试
     /// - 抢到且成功 → 保留锁至 TTL 自然过期（即 30s 去重窗口）
     ///
@@ -117,24 +146,24 @@ impl TokenRefresher {
     /// let cache = Arc::new(JwksCache::new());
     /// let ups = Arc::new(Upstreams::from_config("127.0.0.1:4100"));
     /// let refresher = TokenRefresher::new(cache, ups, "http".to_string(), None);
-    /// // 服务未启动时续签返回 None
-    /// // let tokens = refresher.try_refresh("rt_value", "user-1").await;
+    /// // 服务未启动时续签返回 RefreshOutcome::Failed
+    /// // let outcome = refresher.try_refresh("rt_value", "user-1").await;
     /// ```
-    pub async fn try_refresh(&self, refresh_token: &str, sub: &str) -> Option<RefreshedTokens> {
+    pub async fn try_refresh(&self, refresh_token: &str, sub: &str) -> RefreshOutcome {
         let dedup_key = format!("{REFRESH_DEDUP_PREFIX}{sub}");
         // 原子抢占（SET NX EX）：未抢到说明 30s 窗口内已有续签在进行/刚完成
         if !crate::redis::acquire_nx_ex(&dedup_key, "1", REFRESH_DEDUP_SEC).await {
             debug!("续签去重命中 (Redis): sub={}", sub);
-            return None;
+            return RefreshOutcome::Deduped;
         }
 
         // 1. 尝试主端点（来自 OIDC Discovery 缓存）
         if let Some(primary) = self.primary_endpoint() {
             match self.attempt_endpoint(&primary, refresh_token, sub).await {
-                EndpointOutcome::Tokens(tokens) => return Some(tokens),
+                EndpointOutcome::Tokens(tokens) => return RefreshOutcome::Rotated(tokens),
                 // skipped = 无需续签：若继续回退会对同一 Portal 端点再发一次注定
                 // skipped 的请求（多 upstream 时 N 次），且把"不需要"误当"失败"
-                EndpointOutcome::Skipped => return None,
+                EndpointOutcome::Skipped => return RefreshOutcome::Skipped,
                 EndpointOutcome::Failed => {}
             }
         }
@@ -147,7 +176,7 @@ impl TokenRefresher {
             );
             crate::redis::del(&dedup_key).await;
             crate::metrics::inc_refresh_failure();
-            return None;
+            return RefreshOutcome::Failed;
         }
 
         for upstream in self.upstreams.iter() {
@@ -156,14 +185,14 @@ impl TokenRefresher {
                 .attempt_endpoint(&fallback_url, refresh_token, sub)
                 .await
             {
-                return Some(tokens);
+                return RefreshOutcome::Rotated(tokens);
             }
         }
 
         // 全部失败：释放锁，下次请求可立即重试
         crate::redis::del(&dedup_key).await;
         crate::metrics::inc_refresh_failure();
-        None
+        RefreshOutcome::Failed
     }
 
     /// OIDC Discovery 缓存中的主续签端点 URL
