@@ -122,3 +122,14 @@ fn discovery_field_names_match_fixture() {
         at(&f, "discoveryFields.callback_path")
     );
 }
+
+/// callback 路径**值**：原先散在三处、靠注释要求"变更时需三方同步"。
+///
+/// 现在两端都对同一工件断言 —— 改 Portal 声明而不改 Gateway 兜底（或反之）必然变红。
+#[test]
+fn oauth_callback_path_matches_fixture() {
+    assert_eq!(
+        crate::jwks::DEFAULT_CALLBACK_PATH,
+        at(&fixture(), "discoveryFields.callbackPath")
+    );
+}

@@ -17,6 +17,7 @@ import {
   CODE_CHALLENGE_METHODS_SUPPORTED,
   CLAIMS_SUPPORTED,
   DISCOVERY_CUSTOM_FIELDS,
+  OAUTH_CALLBACK_PATH,
 } from '@auth-sso/contracts';
 
 
@@ -42,7 +43,7 @@ export async function GET() {
     // 消费方仅 Gateway（jwks.rs 探测，容忍 com_authsso_* 与旧名）。
     // 字段名取自 contracts（跨语言契约工件断言两端一致，防止"改名后靠旧名回退而静默降级"）。
     [DISCOVERY_CUSTOM_FIELDS.REFRESH_ENDPOINT]: `${baseURL}/api/auth/refresh`,
-    [DISCOVERY_CUSTOM_FIELDS.CALLBACK_PATH]: '/api/auth/callback',
+    [DISCOVERY_CUSTOM_FIELDS.CALLBACK_PATH]: OAUTH_CALLBACK_PATH,
     scopes_supported: SCOPES_SUPPORTED,
     response_types_supported: RESPONSE_TYPES_SUPPORTED,
     grant_types_supported: GRANT_TYPES_SUPPORTED,

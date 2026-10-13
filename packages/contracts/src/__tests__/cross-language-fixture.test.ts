@@ -4,6 +4,7 @@ import { COOKIE_NAMES, GATEWAY_HEADERS } from '../index';
 import {
   DEFAULT_SCOPES,
   DISCOVERY_CUSTOM_FIELDS,
+  OAUTH_CALLBACK_PATH,
   JWT_TYP,
   REDIS_KEY_PREFIX,
   SCOPES_SUPPORTED,
@@ -28,8 +29,19 @@ import {
  *
  * ## 纳入与不纳入（不纳入的必须写明理由）
  *
- * 纳入 = 该值**确实跨语言**（一侧写、另一侧读）。不纳入的见文件末尾的
- * "明确不纳入"用例——把理由写下来，下一位读者才不会把它当成漏修。
+ * 纳入 = 该值**确实需要两端一致**。两种情形：
+ *
+ * 1. **一侧写、另一侧读**（如 `jwt` / `refresh` Cookie 名、注入头、jti 前缀、scope）；
+ * 2. **contracts 声明 + 单一实现方消费**（如 4 个 OAuth 临时 Cookie 名：由 Gateway 的
+ *    `/authorize` 下发、Gateway 的 callback 阶段读回，读写都在 Gateway 侧；contracts
+ *    仍声明它们，故两端一致仍可被断言）。
+ *
+ * 不纳入的见文件末尾的"明确不纳入"用例——把理由写下来，下一位读者才不会把它当成漏修。
+ *
+ * > 2026-10-13 更正（架构评审 R2 候选 R12）：第 2 类原先被写成"一侧写、另一侧读"，
+ * > 而 Portal 的 `/callback/route.ts` 已于 2026-09-30 移除，全仓 grep 这 4 个名字在
+ * > Portal / demo-app 侧**零引用**。约束本身仍有价值（防 contracts↔Gateway 漂移），
+ * > 但**理由**必须说准。
  *
  * @req A5-3, H-CFG-001
  */
@@ -47,7 +59,7 @@ describe('跨语言字面量契约 — TS 侧', () => {
       expect(COOKIE_NAMES.RETURN_TO).toBe(fixture.cookies.return_to);
     });
 
-    it('工件恰好覆盖这 6 个跨语言 Cookie 名（新增须同步改本测试）', () => {
+    it('工件恰好覆盖这 6 个 Cookie 名（jwt/refresh 跨语言；其余 4 个为 contracts 声明 + Gateway 独占）', () => {
       expect(Object.keys(fixture.cookies).sort()).toEqual([
         'jwt',
         'oauth_nonce',
@@ -94,6 +106,10 @@ describe('跨语言字面量契约 — TS 侧', () => {
         fixture.discoveryFields.refresh_endpoint,
       );
       expect(DISCOVERY_CUSTOM_FIELDS.CALLBACK_PATH).toBe(fixture.discoveryFields.callback_path);
+    });
+
+    it('callback 路径**值**一致（原先靠"变更时需三方同步"的注释）', () => {
+      expect(OAUTH_CALLBACK_PATH).toBe(fixture.discoveryFields.callbackPath);
     });
   });
 

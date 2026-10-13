@@ -20,6 +20,7 @@
   "scopesSupported": ["openid", "profile", "email", "offline_access"],
   "discoveryFields": {
     "refresh_endpoint": "com_authsso_refresh_endpoint",
-    "callback_path": "com_authsso_callback_path"
+    "callback_path": "com_authsso_callback_path",
+    "callbackPath": "/api/auth/callback"
   }
 }

@@ -41,8 +41,17 @@ pub struct OAuthState {
     pub callback_path: String,
 }
 
-// ── OAuth 2.1 Client Cookie 名称（跨语言契约：与 Portal `COOKIE_NAMES` 一致，
-//    由 src/contract_tests.rs 对 cross-language-fixture.json 断言）──
+// ── OAuth 2.1 Client Cookie 名称 ──
+//
+// 这四个临时 Cookie 由 Gateway 的 `/authorize` 阶段下发、由本文件的 extract_* 在
+// callback 阶段读回，**读写都在 Gateway 侧**（callback 拦截已从 Portal 迁到 Gateway）。
+// 名称仍与 contracts `COOKIE_NAMES` 对齐，并由 src/contract_tests.rs 对
+// cross-language-fixture.json 断言——那是**防 contracts↔Gateway 漂移**，
+// 不代表 Portal 还有消费方。
+//
+// 2026-10-13 更正（架构评审 R2 候选 R12）：原注释写"必须与 Portal /callback/route.ts
+// 完全一致"，而该路由已于 2026-09-30 移除（glossary 有记录），且全仓 grep 这 4 个名字
+// 在 Portal/demo-app 侧**零引用**。
 
 pub(crate) const PKCE_VERIFIER_COOKIE: &str = "pkce_verifier";
 pub(crate) const OAUTH_STATE_COOKIE: &str = "oauth_state";
@@ -303,6 +312,34 @@ pub fn decode_id_token_nonce(id_token: &str) -> Option<String> {
     value.get("nonce")?.as_str().map(String::from)
 }
 
+// ── 安全判定（纯函数：原先内联在需要 Pingora Session 的编排里，零测试）──
+
+/// CSRF `state` 一致性判定 —— **fail-close**。
+///
+/// - Cookie 侧缺失（`None`）一律拒绝：不接受"查询串有、Cookie 无"。
+/// - **两侧都为空串也拒绝**：CSRF token 不存在合法空值，`/authorize` 阶段下发的
+///   state 恒为 CSPRNG 非空值。此前内联的三元比对会放行 `Some("") == ""`，
+///   属 fail-open 边缘（不可利用——攻击者无法在 Gateway 域上设置 Cookie——
+///   但没必要留一个"空令牌算通过"的口子）。
+///
+/// 提取自 `oauth_flow::handle_oauth_callback`，使其可穷举测试（原先该判定只在
+/// 260 行编排里存在，测试数为 0）。
+pub fn state_matches(cookie_state: Option<&str>, query_state: &str) -> bool {
+    !query_state.is_empty() && cookie_state == Some(query_state)
+}
+
+/// OIDC `nonce` 一致性判定 —— **双向 fail-close**（OIDC Core §3.1.2.2）。
+///
+/// 仅当**两侧都无** nonce（授权请求本就未带）才放行；单侧存在即视为 Cookie 被剥离/
+/// 篡改或 ID Token 重放，拒绝。
+pub fn nonce_matches(cookie_nonce: Option<&str>, id_token_nonce: Option<&str>) -> bool {
+    match (cookie_nonce, id_token_nonce) {
+        (Some(cookie), Some(id)) => cookie == id,
+        (None, None) => true,
+        _ => false,
+    }
+}
+
 // ── Token 交换请求体 ──
 
 /// 构造 /token 端点的 code→token 交换请求体（JSON）
@@ -414,5 +451,35 @@ mod tests {
         assert_eq!(safe_redirect_path("https://evil.com/path"), None);
         assert_eq!(safe_redirect_path(""), None);
         assert_eq!(safe_redirect_path("javascript:alert(1)"), None);
+    }
+
+    /// CSRF state 判定：**fail-close** —— 缺失、不匹配、空值一律拒绝（穷举真值）
+    #[test]
+    fn state_matches_is_fail_close() {
+        // 命中
+        assert!(state_matches(Some("s1"), "s1"));
+        // 不匹配
+        assert!(!state_matches(Some("s1"), "s2"));
+        // Cookie 缺失（查询串有）→ 拒绝
+        assert!(!state_matches(None, "s1"));
+        // 查询串为空 → 拒绝
+        assert!(!state_matches(Some("s1"), ""));
+        assert!(!state_matches(None, ""));
+        // 两侧都为空串 → 仍拒绝（空 CSRF token 不算通过；收紧记录见函数文档）
+        assert!(!state_matches(Some(""), ""));
+    }
+
+    /// nonce 判定：**双向 fail-close**（OIDC Core §3.1.2.2）—— 2×2 全真值覆盖
+    #[test]
+    fn nonce_matches_is_bidirectional_fail_close() {
+        // 两侧都有且相等 → 放行
+        assert!(nonce_matches(Some("n1"), Some("n1")));
+        // 两侧都有但不相等 → 拒绝
+        assert!(!nonce_matches(Some("n1"), Some("n2")));
+        // 两侧都无（授权请求未带 nonce）→ 放行
+        assert!(nonce_matches(None, None));
+        // 单侧存在 → 拒绝（Cookie 被剥离/篡改，或 ID Token 重放）
+        assert!(!nonce_matches(Some("n1"), None));
+        assert!(!nonce_matches(None, Some("n1")));
     }
 }

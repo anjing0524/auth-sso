@@ -15,6 +15,14 @@ use tracing::{info, warn};
 use crate::config::Upstreams;
 use crate::http::HTTP_CLIENT;
 
+/// Discovery 未就绪时的兜底 callback 路径。
+///
+/// 权威值由 Portal 在 Discovery 的 `com_authsso_callback_path` 中声明（contracts
+/// `OAUTH_CALLBACK_PATH`）；这里只是**取不到时的兜底**。
+/// 两端对 `cross-language-fixture.json` 的 `discoveryFields.callbackPath` 各有断言
+/// ⇒ 不再是"变更时需三方同步"的注释约定（2026-10-13，架构评审 R2 候选 R12）。
+pub(crate) const DEFAULT_CALLBACK_PATH: &str = "/api/auth/callback";
+
 /// 公钥宽限期（秒）：刷新结果与新集合合并时，不在新集合中的旧 key 在此窗口内保留。
 /// 防止上游瞬时返回残缺 JWKS（如轮换维护窗口）把仍在使用的旧 kid 顶掉，
 /// 一次上游抖动放大为全站验签失败。
@@ -284,9 +292,7 @@ impl JwksCache {
             .load()
             .callback_path
             .clone()
-            .unwrap_or_else(|| Arc::from("/api/auth/callback"))
-        // ↑ 兜底值与 Portal Discovery `com_authsso_callback_path` 声明值
-        // 及 Portal callback 路由路径保持一致；变更时需三方同步
+            .unwrap_or_else(|| Arc::from(DEFAULT_CALLBACK_PATH))
     }
 
     /// 判断当前公钥缓存是否为空

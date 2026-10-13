@@ -101,3 +101,14 @@ export const DISCOVERY_CUSTOM_FIELDS = {
   REFRESH_ENDPOINT: 'com_authsso_refresh_endpoint',
   CALLBACK_PATH: 'com_authsso_callback_path',
 } as const;
+
+/**
+ * Gateway 拦截 OAuth callback 的路径（Portal 在 Discovery 中声明的**值**）。
+ *
+ * 原本这个值散在三处、靠注释要求「变更时需三方同步」：
+ * Portal Discovery 路由的字面量、Gateway `jwks.rs` 的兜底默认值、以及 Gateway 的拦截判定。
+ * 现由 contracts 单点持有，两端各有测试对
+ * `cross-language-fixture.json` 的 `discoveryFields.callbackPath` 断言
+ * ⇒ 改一侧必然变红，不再依赖"记得同步"。
+ */
+export const OAUTH_CALLBACK_PATH = '/api/auth/callback';

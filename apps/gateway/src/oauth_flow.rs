@@ -170,8 +170,9 @@ impl Gateway {
             return Self::oauth_error_redirect(session, "invalid_state").await;
         };
 
+        // 判定提取为纯函数（`oauth::state_matches`）：可穷举测试、fail-close
         let cookie_state = oauth::extract_oauth_state(ck);
-        if cookie_state != Some(state_param) {
+        if !oauth::state_matches(cookie_state, state_param) {
             warn!(
                 "OAuth callback CSRF state 不匹配: cookie={:?} query={}",
                 cookie_state, state_param
@@ -213,19 +214,13 @@ impl Gateway {
             }
         };
 
-        // nonce 一致性 fail-close 双向闭合（OIDC Core §3.1.2.2）：
-        // 仅当两侧都无 nonce（授权请求本就未带）才放行；
-        // 单侧存在即 Cookie 被剥离/篡改或 token 重放，拒绝。
+        // nonce 一致性 fail-close 双向闭合（OIDC Core §3.1.2.2）：判定提取为纯函数
+        // `oauth::nonce_matches` —— 原先内联的 match 在本文件里零测试。
         let id_nonce = tokens
             .id_token
             .as_deref()
             .and_then(oauth::decode_id_token_nonce);
-        let nonce_ok = match (cookie_nonce, id_nonce) {
-            (Some(cookie), Some(id)) => cookie == id,
-            (None, None) => true,
-            _ => false,
-        };
-        if !nonce_ok {
+        if !oauth::nonce_matches(cookie_nonce, id_nonce.as_deref()) {
             warn!("OAuth callback nonce 不匹配");
             return Self::oauth_error_redirect(session, "nonce_mismatch").await;
         }
