@@ -12,10 +12,9 @@ import 'server-only';
  *
  * @module lib/account/reset-password
  */
-import { hashPassword, isPasswordReused } from '@/domain/auth/password';
+import { isPasswordReused } from '@/domain/auth/password';
 import {
-  assertPasswordChangeAllowed,
-  nextPasswordHistory,
+  assertPasswordNotReused,
   type PasswordChangeState,
 } from '@/domain/auth/password-change';
 import { revokeUserAccessByUserId } from '@/lib/session/revoke';
@@ -41,32 +40,14 @@ export async function assertResetAllowed(
   newPassword: string,
   state: PasswordChangeState,
 ): Promise<void> {
-  // NFR-SEC-15: 禁止重用最近 5 次密码。与自助改密共用同一领域判定。
-  assertPasswordChangeAllowed(state, {
-    newPassword,
-    reusesRecentPassword: await isPasswordReused(
-      newPassword,
-      state.history ? [...state.history] : null,
-    ),
-  });
-}
-
-/**
- * 事务外预计算新密码哈希。
- *
- * 与 [`assertResetAllowed`] 分开的理由见其文档：bcrypt 不应在事务内执行。
- * 调用顺序应为：`hashPassword`（事务外）→ `withScopedRow`（事务内加载 + 判定 + 落库）。
- */
-export async function hashNewPassword(newPassword: string): Promise<string> {
-  return hashPassword(newPassword);
-}
-
-/**
- * 计算应写入的新密码历史（旧哈希入列，按上限截断）。
- * 必须在事务内、`assertResetAllowed` 通过后调用。
- */
-export function buildPasswordHistory(state: PasswordChangeState): string[] {
-  return nextPasswordHistory(state);
+  // NFR-SEC-15: 禁止重用最近 5 次密码。与自助改密**共用同一条规则**。
+  //
+  // 刻意**不**调用 `assertHasPassword`：管理员重置的用途之一正是"为从未设置密码的账号
+  // 设初始密码"。此前复用自助路径的合成判定，会把「无密码不能**自助**改密」这条
+  // 否决判据套到管理员头上，直接挡住该场景（错误信息还写成"无法自助改密"）。
+  assertPasswordNotReused(
+    await isPasswordReused(newPassword, state.history ? [...state.history] : null),
+  );
 }
 
 /**

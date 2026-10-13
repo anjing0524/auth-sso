@@ -176,6 +176,19 @@ describe('changeOwnPassword', () => {
     expect(after!.passwordHash).toBe(mid!.passwordHash);
   });
 
+  it('**账号从未设置密码 → 抛领域规则，不得报成"当前密码错误"**', async () => {
+    await td.db.update(schema.users)
+      .set({ passwordHash: null, passwordHistory: null })
+      .where(eq(schema.users.id, USER_ID));
+
+    // 此前先用空串哨兵 `verifyPassword(pw, '')` 验旧密码 → 必然 false，
+    // 于是返回 invalid_current_password，而领域里那条"未设置密码"的判据**永不可达**。
+    await expect(changeOwnPassword(USER_ID, CURRENT, NEW)).rejects.toThrow('账号未设置密码，无法自助改密');
+
+    const after = await currentRow();
+    expect(after!.passwordHash).toBeNull();
+  });
+
   it('用户不存在 → 返回 user_not_found（调用方据此 404，不与"密码错误"混淆）', async () => {
     const result = await changeOwnPassword(
       '00000000-0000-4000-8000-000000000999', CURRENT, NEW,

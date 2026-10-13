@@ -99,6 +99,21 @@ Gateway 信任路径原先解码 token 既做 aud 复核、又把整个 claims �
 
 **未覆盖**：`PortalJwtClaims` 类型本身保留（`verifyAccessToken` / 签发函数仍需它）；本次只改 Portal 身份边界的**对外形状**。
 
+> **同类第二例（2026-10-13，架构评审 R2 次级候选「改密收成一个 module」）**：
+> 本 ADR 的"不用哨兵值掩盖字段可能不存在"这条纪律，在改密路径上还有一处——
+> `verifyPassword(currentPassword, state.currentHash ?? '')` 把 `null`（账号未设置密码）
+> 折叠成空串，于是：
+> ① `bcrypt.compare(pw, '')` 恒返回 false ⇒ 领域里那条"未设置密码"的判据**永不可达**，
+> "没密码"被报成"当前密码错误"；
+> ② 管理员重置路径复用了同一条自助判据 ⇒ **挡住"为从未设密码的账号设初始密码"**；
+> ③ REST 路由另用 `pushPasswordHistory(history, passwordHash ?? '')` 把 **`''` 当成旧哈希
+> 写进了 `password_history`**。
+>
+> 修复方式与本 ADR 同构：把"必须已有密码"提成**断言函数** `assertHasPassword(state)`，
+> 通过后 `currentHash` 在类型上收窄为非空 ⇒ **哨兵无处可写**；并把自助/管理员两条路径
+> 各自组合需要的规则（判定一处、组合各自）。详见
+> `docs/solution/2026-10-13-password-change-rule-split.md`。
+
 ## 验证
 
 - `tsc` 0 错误——**typecheck 是本次的关键门禁**：它把 `me/route.ts` 那个被 grep 漏掉的 `claims` 消费点暴露出来。

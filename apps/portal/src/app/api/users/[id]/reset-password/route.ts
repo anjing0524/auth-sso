@@ -12,8 +12,9 @@ import { withPermission } from '@/lib/auth';
 import { withScopedRow } from '@/lib/authz';
 import { db, schema } from '@/infrastructure/db';
 import { eq } from 'drizzle-orm';
-import { hashPassword, isPasswordReused, pushPasswordHistory } from '@/domain/auth/password';
+import { hashPassword, isPasswordReused } from '@/domain/auth/password';
 import { EntityNotFoundError } from '@/domain/shared/errors';
+import { nextPasswordHistory } from '@/domain/auth/password-change';
 import { COMMON_ERRORS, USER_PERMISSIONS } from '@auth-sso/contracts';
 import { revokeUserAccessByUserId } from '@/lib/session/revoke';
 import { revokeUserRefreshTokens } from '@/lib/auth/token/revocation';
@@ -71,7 +72,11 @@ export async function POST(
           return restError(COMMON_ERRORS.VALIDATION_ERROR, '新密码不能与该用户最近使用过的密码相同', 400);
         }
 
-        const newHistory = pushPasswordHistory(target.passwordHistory ?? null, target.passwordHash ?? '');
+        // 无旧哈希（账号首次设密码）时历史原样保留；**不得**用 `?? ''` 把空串当旧哈希写进历史
+        const newHistory = nextPasswordHistory({
+          currentHash: target.passwordHash,
+          history: target.passwordHistory,
+        });
 
         await tx.update(schema.users)
           .set({ passwordHash, passwordHistory: newHistory })

@@ -9,7 +9,8 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
-  assertPasswordChangeAllowed,
+  assertHasPassword,
+  assertPasswordNotReused,
   nextPasswordHistory,
   type PasswordChangeState,
 } from '@/domain/auth/password-change';
@@ -22,33 +23,34 @@ const HASH_B = 'hash-b';
 const withPassword: PasswordChangeState = { currentHash: HASH_A, history: [HASH_B] };
 const noPassword: PasswordChangeState = { currentHash: null, history: null };
 
-describe('assertPasswordChangeAllowed', () => {
-  it('有密码且不复用 → 通过', () => {
-    expect(() => assertPasswordChangeAllowed(withPassword, {
-      newPassword: 'NewPassw0rd!',
-      reusesRecentPassword: false,
-    })).not.toThrow();
+describe('assertHasPassword（自助路径的否决判据）', () => {
+  it('有密码 → 通过', () => {
+    const state: PasswordChangeState = { ...withPassword };
+    expect(() => assertHasPassword(state)).not.toThrow();
   });
 
   it('未设置密码 → 拒绝（应走管理员重置流程）', () => {
-    expect(() => assertPasswordChangeAllowed(noPassword, {
-      newPassword: 'NewPassw0rd!',
-      reusesRecentPassword: false,
-    })).toThrow(BusinessRuleViolationError);
+    const state: PasswordChangeState = { ...noPassword };
+    expect(() => assertHasPassword(state)).toThrow(BusinessRuleViolationError);
+    expect(() => assertHasPassword({ ...noPassword } as PasswordChangeState)).toThrow('账号未设置密码');
+  });
+
+  it('是**断言函数**：通过后 currentHash 被收窄为非空（调用方无需空串哨兵）', () => {
+    const state: PasswordChangeState = { ...withPassword };
+    assertHasPassword(state);
+    // 此行若 currentHash 仍是 `string | null` 就编不过——这正是删除 `?? ''` 哨兵的机制
+    const hash: string = state.currentHash;
+    expect(hash).toBe(HASH_A);
+  });
+});
+
+describe('assertPasswordNotReused（两条路径共用）', () => {
+  it('不复用 → 通过', () => {
+    expect(() => assertPasswordNotReused(false)).not.toThrow();
   });
 
   it('新密码命中近期历史 → 拒绝（NFR-SEC-15）', () => {
-    expect(() => assertPasswordChangeAllowed(withPassword, {
-      newPassword: 'Reused0ld!',
-      reusesRecentPassword: true,
-    })).toThrow('新密码不能与最近使用过的密码相同');
-  });
-
-  it('未设置密码优先于复用判定（两者同时成立时抛前者）', () => {
-    expect(() => assertPasswordChangeAllowed(noPassword, {
-      newPassword: 'x',
-      reusesRecentPassword: true,
-    })).toThrow('账号未设置密码');
+    expect(() => assertPasswordNotReused(true)).toThrow('新密码不能与最近使用过的密码相同');
   });
 });
 
@@ -68,7 +70,9 @@ describe('nextPasswordHistory', () => {
     expect(next[0]).toBe(HASH_A);
   });
 
-  it('未设置密码 → 拒绝（与 assert 同判据）', () => {
-    expect(() => nextPasswordHistory(noPassword)).toThrow(BusinessRuleViolationError);
+  it('**无旧哈希（账号首次设密码）→ 历史原样保留**：不抛错、不写入空串哨兵', () => {
+    // 管理员重置正是"为从未设密码的账号设初始密码"的流程，故这里必须可计算
+    expect(nextPasswordHistory(noPassword)).toEqual([]);
+    expect(nextPasswordHistory({ currentHash: null, history: [HASH_B] })).toEqual([HASH_B]);
   });
 });

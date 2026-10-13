@@ -179,6 +179,25 @@ describe('POST /api/users/[id]/reset-password — 范围与写入', () => {
     expect(after.passwordHistory).toEqual([reusedHash]);
   });
 
+  it('**目标账号从未设置密码 → 管理员仍能设置初始密码**', async () => {
+    await seedScopeFixture();
+    // 该账号没有密码（passwordHash NULL）——这正是"管理员重置"该覆盖的场景之一
+    await td.db.update(schema.users)
+      .set({ passwordHash: null, passwordHistory: null })
+      .where(eq(schema.users.id, TARGET_IN_SCOPE_ID));
+
+    const res = await callRoute(TARGET_IN_SCOPE_ID, NEW_PASSWORD);
+
+    // 领域规则「无密码不能**自助**改密」不得套到管理员路径上
+    expect(res.status).toBe(200);
+    const after = await readPasswordState(TARGET_IN_SCOPE_ID);
+    expect(after.passwordHash).not.toBeNull();
+    // 且历史里**不得出现空串哨兵**：此前用 `pushPasswordHistory(history, passwordHash ?? '')`
+    // 把 `''` 当成"旧哈希"写进了 `password_history`（ADR-016 明令禁止的空哨兵形态）。
+    expect(after.passwordHistory ?? []).not.toContain('');
+    expect(after.passwordHistory ?? []).toEqual([]);
+  });
+
   it('密码不合规 → 400（策略校验先于任何事务）', async () => {
     const oldHash = await seedScopeFixture();
 

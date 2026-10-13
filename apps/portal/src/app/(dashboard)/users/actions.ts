@@ -50,12 +50,8 @@ import { clearBruteForceCounter } from '@/lib/auth/brute-force';
 import { invalidateResource } from '@/lib/cache-invalidation';
 import { withScopedRow, withScopedWrite } from '@/lib/authz';
 import type { DbTxHandle } from '@/infrastructure/db';
-import {
-  assertResetAllowed,
-  buildPasswordHistory,
-  hashNewPassword,
-  revokeAfterPasswordReset,
-} from '@/lib/account/reset-password';
+import { assertResetAllowed, revokeAfterPasswordReset } from '@/lib/account/reset-password';
+import { nextPasswordHistory } from '@/domain/auth/password-change';
 
 /**
  * 事务内加载目标用户行并施加数据范围守卫。
@@ -299,7 +295,7 @@ export const resetPasswordAction = withAuth(
     }
 
     // bcrypt 在作用域外完成：约 50–200ms，放进事务会长时间占用 DB 连接
-    const passwordHash = await hashNewPassword(newPassword);
+    const passwordHash = await hashPassword(newPassword);
 
     await withScopedRow(
       {
@@ -320,7 +316,7 @@ export const resetPasswordAction = withAuth(
         // NFR-SEC-15: 禁止重用最近 5 次密码（领域判定与自助改密共用）
         await assertResetAllowed(newPassword, state);
         await tx.update(schema.users)
-          .set({ passwordHash, passwordHistory: buildPasswordHistory(state) })
+          .set({ passwordHash, passwordHistory: nextPasswordHistory(state) })
           .where(eq(schema.users.id, v.data.id));
       },
     );

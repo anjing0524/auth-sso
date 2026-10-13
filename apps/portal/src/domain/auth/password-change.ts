@@ -22,32 +22,55 @@ export interface PasswordChangeState {
   readonly history: readonly string[] | null;
 }
 
-/** 改密的两个输入 */
+/**
+ * 密码复用判定的输入。
+ *
+ * 只有这一个字段：新密码的**复用判定**由 `isPasswordReused` 在 bcrypt 层完成
+ * （本模块是同步纯函数，不碰 I/O），此处只接收结论。
+ */
 export interface PasswordChangeInput {
-  readonly newPassword: string;
-  /**
-   * 新密码是否命中近期历史（由 `isPasswordReused` 在 **bcrypt 层**判定后传入）。
-   *
-   * 之所以把它作为入参而非在此处调用：`isPasswordReused` 是异步 bcrypt 比对，
-   * 而本模块是同步纯函数。判定与 I/O 的分工见文件头。
-   */
   readonly reusesRecentPassword: boolean;
 }
 
 /**
- * 纯判定：当前状态下是否允许自助改密。
+ * 规则 ①：**自助改密**的前置——账号必须已有密码。
  *
- * @throws BusinessRuleViolationError 未设置密码 / 新密码与近期历史重复
+ * 无密码的账号不能自助改密（应走管理员重置流程），故这条规则只属于自助路径；
+ * 管理员重置**必须允许**目标没有密码（那正是"为从未设密码的账号设初始密码"的场景）。
+ *
+ * ## 为什么把它与复用判定拆开（2026-10-13，架构评审 R2 次级候选「改密收成一个 module」）
+ *
+ * 原先两者合成 `assertPasswordChangeAllowed`，被两条路径**都**调用，于是：
+ * - 自助路径：先 `verifyPassword(currentPassword, currentHash ?? '')`（空串哨兵）必返回 false，
+ *   本条规则**永不可达**，且"没密码"被报成"当前密码错误"；
+ * - 管理员路径：被套上自助路径的否决判据，**挡住了给无密码账号设初始密码**，
+ *   错误信息还是"无法自助改密"。
+ *
+ * 现在两条路径各自组合需要的规则（判定一处、投递/组合各自）。
+ *
+ * ## 为什么是 `asserts` 断言函数
+ *
+ * 它把 `currentHash` 收窄为非空，使调用方**不再需要 `?? ''` 空串哨兵**
+ * （ADR-016 明令禁止"用哨兵值掩盖字段可能不存在"这一形态）。
+ *
+ * @throws BusinessRuleViolationError 账号未设置密码
  */
-export function assertPasswordChangeAllowed(
+export function assertHasPassword(
   state: PasswordChangeState,
-  input: PasswordChangeInput,
-): void {
+): asserts state is PasswordChangeState & { currentHash: string } {
   if (!state.currentHash) {
-    // 无密码的账号不能自助改密（应走管理员重置流程）
     throw new BusinessRuleViolationError('账号未设置密码，无法自助改密');
   }
-  if (input.reusesRecentPassword) {
+}
+
+/**
+ * 规则 ②：新密码不得命中近期历史（NFR-SEC-15）—— **自助改密与管理员重置共用**。
+ *
+ * @param reusesRecentPassword 由 `isPasswordReused`（bcrypt）判定后的结论
+ * @throws BusinessRuleViolationError 新密码与最近使用过的密码相同
+ */
+export function assertPasswordNotReused(reusesRecentPassword: boolean): void {
+  if (reusesRecentPassword) {
     throw new BusinessRuleViolationError('新密码不能与最近使用过的密码相同');
   }
 }
@@ -55,14 +78,16 @@ export function assertPasswordChangeAllowed(
 /**
  * 计算改密后应写入的密码历史（旧哈希入列，按上限截断）。
  *
- * @throws BusinessRuleViolationError 未设置密码（与 {@link assertPasswordChangeAllowed} 同判据）
+ * **无旧哈希时（账号首次设密码）历史原样保留**——那里没有"旧密码"可入列，
+ * 故既不抛错也不写入空串哨兵（此前 REST 路由用 `pushPasswordHistory(history, hash ?? '')`
+ * 把 `''` 当成旧哈希写进了 `password_history`）。
  */
 export function nextPasswordHistory(
   state: PasswordChangeState,
   config?: PasswordConfig,
 ): string[] {
   if (!state.currentHash) {
-    throw new BusinessRuleViolationError('账号未设置密码，无法自助改密');
+    return state.history ? [...state.history] : [];
   }
   return pushPasswordHistory(state.history ? [...state.history] : null, state.currentHash, config);
 }

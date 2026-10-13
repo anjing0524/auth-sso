@@ -15,7 +15,8 @@ import { db, schema } from '@/infrastructure/db';
 import { eq } from 'drizzle-orm';
 import { hashPassword, isPasswordReused, verifyPassword } from '@/domain/auth/password';
 import {
-  assertPasswordChangeAllowed,
+  assertHasPassword,
+  assertPasswordNotReused,
   nextPasswordHistory,
   type PasswordChangeState,
 } from '@/domain/auth/password-change';
@@ -67,15 +68,21 @@ export async function changeOwnPassword(
     history: row.passwordHistory ?? null,
   };
 
-  const isValid = await verifyPassword(currentPassword, state.currentHash ?? '');
+  // ① 先判"能不能自助改密"（含"未设置密码"这一否决判据）：便宜且必须最前——
+  //    此前先用 `verifyPassword(currentPassword, currentHash ?? '')`（空串哨兵）验旧密码，
+  //    必然 false ⇒ 该判据**永不可达**，且"没密码"被报成"当前密码错误"。
+  //    断言函数同时把 currentHash 收窄为非空，**不再需要 ??? '' 哨兵**（ADR-016）。
+  assertHasPassword(state);
+
+  const isValid = await verifyPassword(currentPassword, state.currentHash);
   if (!isValid) {
     return { ok: false, reason: 'invalid_current_password' };
   }
 
-  assertPasswordChangeAllowed(state, {
-    newPassword,
-    reusesRecentPassword: await isPasswordReused(newPassword, state.history ? [...state.history] : null),
-  });
+  // ② 旧密码正确后才做复用判定：否则会向"不知道旧密码"的人泄露"新密码命中历史"这一信息
+  assertPasswordNotReused(
+    await isPasswordReused(newPassword, state.history ? [...state.history] : null),
+  );
 
   const newHash = await hashPassword(newPassword);
   const newHistory = nextPasswordHistory(state);

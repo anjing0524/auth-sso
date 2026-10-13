@@ -198,6 +198,20 @@ describe('resetPasswordAction', () => {
     expect(after!.passwordHistory).toContain(before!.passwordHash);
   });
 
+  it('**目标账号从未设置密码 → 管理员仍能设置初始密码**', async () => {
+    // 「无密码不能**自助**改密」是自助路径的否决判据；管理员重置恰恰是它指向的替代流程，
+    // 因此这里必须成功（此前复用同一判定，抛「账号未设置密码，无法自助改密」而挡住）。
+    await td.db.insert(schema.users).values(seedTestUser({ passwordHash: null })[0]!);
+
+    const res = await resetPasswordAction('00000000-0000-4000-8000-000000000201', NEW_PASSWORD);
+
+    expect(res.success).toBe(true);
+    const after = await rowOf('00000000-0000-4000-8000-000000000201');
+    expect(after!.passwordHash).not.toBeNull();
+    // 历史里不得留下空串哨兵
+    expect(after!.passwordHistory ?? []).not.toContain('');
+  });
+
   it('弱密码 → 拒绝且不落库', async () => {
     const { hashPassword } = await import('@/domain/auth/password');
     await td.db.insert(schema.users).values(seedTestUser({ passwordHash: await hashPassword('Old@123456') })[0]!);
