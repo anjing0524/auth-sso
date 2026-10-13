@@ -16,9 +16,9 @@ import 'server-only';
 
 import { cacheLife, cacheTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
-import { eq, desc, and } from 'drizzle-orm';
+import { eq, desc, and, type SQL } from 'drizzle-orm';
 import { USER_LIST_COLUMNS, buildUserListConditions } from '@/db/user-queries';
-import { isScopeDenied } from '@/lib/authz';
+import { isScopeDenied, scopeFilter } from '@/lib/authz';
 import type { UserScope } from '@/lib/authz';
 import { paginationMeta, withPagination, countRows } from '@/lib/pagination';
 
@@ -111,10 +111,16 @@ export async function getUserProfile(userId: string) {
   return rows[0] ?? null;
 }
 
-/** Relational Queries 一次往返取出用户 + 角色 + 部门（getUser / getUserRoles 共用） */
-function findUserWithRoles(lookupId: string) {
+/**
+ * 一次往返取出用户 + 角色 + 部门（`getUser` / `getOwnUser` / `getUserRoles` 共用）。
+ *
+ * `where` 由调用方给出：**范围读口**必须传入含 `scopeFilter` 的条件，**身份读口**
+ * 只传主键。把条件做成入参而非"可选的范围参数"，是为了让"有范围"在调用处显式可见
+ * ——可选范围参数正是 ADR-014 记录过的 fail-open 形状（省略即不过滤）。
+ */
+function findUserWithRoles(where: SQL | undefined) {
   return db.query.users.findFirst({
-    where: eq(schema.users.id, lookupId),
+    where,
     with: {
       userRoles: { with: { role: true } },
       department: true,
@@ -154,30 +160,61 @@ function toUserDetail(user: UserWithRolesRow) {
 }
 
 /**
- * 获取单个用户详情（含角色列表与部门信息）
+ * 获取单个用户详情（含角色列表与部门信息）——**范围读口**。
+ *
+ * 范围约束在 SQL 内施加：范围外与不存在同形返回 `null`，读路径不用状态码区分
+ * 存在性（ADR-014 实施顺序第 3 步）。访问日志由调用方记录，本 module 不知道
+ * HTTP 存在——此前 JSDoc 声称"已内置 IDOR 防护与访问日志"，两件事都不在函数体里，
+ * 而页面详情路径正因这句谎话把范围判定漏掉了。
  *
  * 不使用缓存，确保详情数据实时性。
- * 已内置底层越权校验（IDOR 防护）与访问日志（Access Log）自动记录。
  *
- * @param lookupId 用户 ID 或 publicId
- * @returns 用户详情对象，不存在时返回 null
+ * @param lookupId 用户 ID
+ * @param scope 操作者数据范围（经 `resolveScope` 获取）
+ * @returns 用户详情；不存在或超出范围时为 null
  */
-export async function getUser(lookupId: string) {
-  const user = await findUserWithRoles(lookupId);
+export async function getUser(lookupId: string, scope: UserScope) {
+  if (isScopeDenied(scope)) return null;
+  const user = await findUserWithRoles(
+    and(eq(schema.users.id, lookupId), scopeFilter(scope, schema.users.deptId)),
+  );
   return user ? toUserDetail(user) : null;
 }
 
 /**
- * 获取所有部门列表（用于下拉选择）
+ * 获取**自己**的用户详情——身份读口，不受数据范围约束。
+ *
+ * 存在两个读口的理由不是对称性而是必要性：操作者的可见范围来自其角色的部门子树，
+ * 而本人的 `dept_id` 完全可能落在该子树之外（角色部门与本人所属部门不同）。
+ * 若让 `/api/me`、`/profile`、dashboard 侧边栏走范围读口，这些用户会读不到自己。
+ *
+ * @param userId 身份来源的用户 ID（来自 `resolveIdentity`，不是 URL 参数）
+ * @returns 用户详情；不存在时为 null
  */
-export async function getDepartmentOptions() {
+export async function getOwnUser(userId: string) {
+  const user = await findUserWithRoles(eq(schema.users.id, userId));
+  return user ? toUserDetail(user) : null;
+}
+
+/**
+ * 获取可选部门列表（用于 users / roles 页面的部门下拉）——**范围读口**。
+ *
+ * 同样收 scope：此前它没有任何范围参数，于是范围受限的管理员在下拉里能看到
+ * 全部部门（含范围外部门的名称与 ID），与 H-ACL-002 属同一形态。
+ *
+ * @param scope 操作者数据范围（经 `resolveScope` 获取）
+ */
+export async function getDepartmentOptions(scope: UserScope) {
   'use cache';
   cacheLife('hours');
   cacheTag('departments');
 
+  if (isScopeDenied(scope)) return [];
+
   return await db
     .select({ id: schema.departments.id, name: schema.departments.name })
     .from(schema.departments)
+    .where(scopeFilter(scope, schema.departments.id))
     .orderBy(schema.departments.name);
 }
 
@@ -209,14 +246,24 @@ function toAssignedRole(ur: {
 }
 
 /**
- * 获取用户绑定的角色列表（含分配时间）
+ * 获取用户绑定的角色列表（含分配时间）——**范围读口**。
+ *
+ * 返回值区分"不可见"与"可见但无角色"：前者 null（调用方映射为 404），
+ * 后者 `[]`（合法的空列表）。此前不存在时返回 `[]`，使这两种情况无法区分。
  *
  * @param lookupId 用户 ID
+ * @param scope 操作者数据范围（经 `resolveScope` 获取）
+ * @returns 角色列表；不存在或超出范围时为 null
  */
-export async function getUserRoles(lookupId: string) {
+export async function getUserRoles(
+  lookupId: string,
+  scope: UserScope,
+): Promise<AssignedRole[] | null> {
+  if (isScopeDenied(scope)) return null;
+
   // 使用 Relational Queries 一次性取出用户绑定的角色及分配时间
   const user = await db.query.users.findFirst({
-    where: eq(schema.users.id, lookupId),
+    where: and(eq(schema.users.id, lookupId), scopeFilter(scope, schema.users.deptId)),
     with: {
       userRoles: {
         orderBy: (userRoles, { desc }) => [desc(userRoles.createdAt)],
@@ -225,7 +272,7 @@ export async function getUserRoles(lookupId: string) {
     },
   });
 
-  if (!user) return [];
+  if (!user) return null;
 
   return user.userRoles.filter(ur => ur.role !== null).map(toAssignedRole);
 }

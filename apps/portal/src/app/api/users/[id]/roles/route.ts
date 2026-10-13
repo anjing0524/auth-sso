@@ -9,7 +9,7 @@ import { z } from 'zod';
 import { db, schema } from '@/infrastructure/db';
 import { eq, inArray, and } from 'drizzle-orm';
 import { withPermission, logServerDataRead } from '@/lib/auth';
-import { withScopedWrite, resolveScope, isWithinScope } from '@/lib/authz';
+import { withScopedWrite, resolveScope } from '@/lib/authz';
 import { appendSecurityAudit, extractClientIP, extractUserAgent } from '@/lib/audit';
 import { refreshUserPermissionCache } from '@/lib/permissions';
 import { revokeUserAccessByUserId } from '@/lib/session/revoke';
@@ -48,22 +48,15 @@ async function validateRoleAssignment(
   return invalid.length > 0 ? '部分角色不属于该用户所属部门或已禁用，无法分配' : null;
 }
 
-/** GET /api/users/[id]/roles — 委托 data.ts */
+/** GET /api/users/[id]/roles — 委托 data.ts（范围由读口施加，不可见与不存在同形 404） */
 export async function GET(request: NextRequest, { params }: RouteParams) {
-  return withPermission({ permissions: [USER_PERMISSIONS.READ] }, async (_adminUserId) => {
+  return withPermission({ permissions: [USER_PERMISSIONS.READ] }, async (adminUserId) => {
     const { id } = await params;
-    const target = await db.query.users.findFirst({
-      where: eq(schema.users.id, id),
-      columns: { id: true, deptId: true },
-    });
-    if (!target) {
+    const scope = await resolveScope(db, adminUserId);
+    const roles = await getUserRoles(id, scope);
+    if (roles === null) {
       return restError(USER_ERRORS.USER_NOT_FOUND, '用户不存在', 404);
     }
-    const scope = await resolveScope(db, _adminUserId);
-    if (!isWithinScope(scope, target.deptId)) {
-      return restError(COMMON_ERRORS.FORBIDDEN, '无权查看该用户', 403);
-    }
-    const roles = await getUserRoles(id);
     await logServerDataRead('user_roles', id);
     return restSuccess(roles);
   });

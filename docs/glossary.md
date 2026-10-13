@@ -297,6 +297,8 @@ Append-only 写操作记录，**无 FK 约束**（确保用户/实体删除后�
 | **Domain 层** | 纯 TypeScript，零框架依赖，禁止 `import "next/*"` |
 | **DomainError** | 领域错误基类，`mapDomainError()` 统一映射 HTTP |
 | **`@auth-sso/contracts`** | 共享包：枚举值、错误码、权限码、OIDC 常量的唯一真相源 |
+| **范围读口** | `data.ts` 中把数据范围当**必填参数**、经 `scopeFilter` 进入 SQL 的读口（`getUser(id, scope)`）。范围外与不存在**同形**返回 `null`（→ 404），不用状态码区分存在性（ADR-014 第 3 步） |
+| **身份读口** | 只按身份读**本人**的读口（`getOwnUser(userId)`；来源是 `resolveIdentity`，不是 URL 参数）。**不受数据范围约束**——操作者的范围来自其**角色**的部门子树，而本人的 `dept_id` 可能落在该子树之外，走范围读口会读不到自己 |
 
 ---
 

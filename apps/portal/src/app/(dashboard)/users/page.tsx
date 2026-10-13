@@ -34,7 +34,7 @@ export default async function UsersPage({ searchParams }: PageProps) {
   const userId = identity?.userId ?? '';
   const [{ data: users, pagination }, departments] = await Promise.all([
     getUsers(scope, userId, { page, pageSize, keyword, status }),
-    getDepartmentOptions(),
+    getDepartmentOptions(scope),
   ]);
 
   return (

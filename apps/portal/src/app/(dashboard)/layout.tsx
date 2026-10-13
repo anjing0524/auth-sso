@@ -9,7 +9,7 @@
 import { Suspense } from 'react';
 import { redirect } from 'next/navigation';
 import { resolveIdentity } from '@/lib/auth';
-import { getUser } from '@/app/(dashboard)/users/data';
+import { getOwnUser } from '@/app/(dashboard)/users/data';
 import { getDynamicMenuTree } from '@/lib/menu-tree';
 import { getUserPermissionContext, toPermissionContextOrNull } from '@/lib/permissions';
 import DashboardLayout from '@/components/layout/DashboardLayout';
@@ -30,8 +30,8 @@ async function DashboardContent({ children }: { children: React.ReactNode }) {
   const subject = { roleCodes: roles, permissionCodes: permissions };
   const menus = await getDynamicMenuTree(subject);
 
-  // 并行获取用户数据（仅用于 UI 展示）
-  const user = await getUser(identity.userId);
+  // 并行获取用户数据（仅用于 UI 展示）——读的是自己，用身份读口，不受数据范围约束
+  const user = await getOwnUser(identity.userId);
 
   return (
     <DashboardLayout

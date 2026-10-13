@@ -28,7 +28,7 @@ export default async function RolesPage({ searchParams }: PageProps) {
 
   const [{ data: roles, pagination }, departments] = await Promise.all([
     getRoles({ page, pageSize: 10, keyword, status: '', scope }),
-    getDepartmentOptions(),
+    getDepartmentOptions(scope),
   ]);
 
   return (

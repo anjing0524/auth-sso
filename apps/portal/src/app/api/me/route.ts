@@ -16,7 +16,7 @@ import { getUserPermissionContext, toPermissionContextOrNull } from '@/lib/permi
 import { mapServerError } from '@/lib/server-error';
 import { COMMON_ERRORS } from '@auth-sso/contracts';
 import { restSuccess, restError } from '@/lib/response';
-import { getUser } from '@/app/(dashboard)/users/data';
+import { getOwnUser } from '@/app/(dashboard)/users/data';
 
 
 export async function GET(_request: NextRequest) {
@@ -37,7 +37,7 @@ export async function GET(_request: NextRequest) {
     const subject = { roleCodes: roles, permissionCodes: permissions };
     const menuItems = await getDynamicMenuTree(subject);
 
-    const user = await getUser(userId);
+    const user = await getOwnUser(userId);
     if (!user) {
       return restError(COMMON_ERRORS.UNAUTHORIZED, '用户不存在', 401);
     }

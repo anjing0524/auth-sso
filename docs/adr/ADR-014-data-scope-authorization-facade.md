@@ -2,7 +2,7 @@
 
 | 属性       | 值                                                                    |
 |------------|-----------------------------------------------------------------------|
-| **状态**   | implemented (2026-10-08) —— 6 个步骤全部落地；唯一遗留见"实施顺序"第 4 步注 |
+| **状态**   | implemented (2026-10-08) —— 6 个步骤全部落地；唯一遗留见"实施顺序"第 4 步注。<br>**2026-10-13 修订**：发现第 3 步"全部只读守卫统一"对 `users/[id]` 与 `users/[id]/roles` GET 为**不实记载**（两处从未迁移，构成一处真实越权），已补齐并新增"范围读口 / 身份读口"决策，见下 |
 | **日期**   | 2026-10-08                                                            |
 | **决策者** | Auth-SSO 团队（improve-codebase-architecture 架构评审候选 ② + 一手来源调研定案） |
 | **影响范围** | `lib/auth/data-scope.ts`、4 个 `(dashboard)/**/data.ts`、9 条写路径 route、16 处 Server Action、`lib/auth/index.ts` 公开面 |
@@ -130,7 +130,26 @@ RLS 在技术上可表达子树并集（policy + `SECURITY DEFINER` helper），
    - ✅ 5 处只读路由不再手写守卫：范围外与不存在同形返回 404（避免用状态码探测部门是否存在）。
    - ✅ **全部读模型收口为 `Scope`**：`users/data.ts`（`getUsers`）、`roles/data.ts`（`getRoles` / `getRoleById` / `getRolePermissions`）、`dashboard/data.ts`（`getDashboardStats`）、`db/user-queries.ts`（`buildUserListConditions`）。
    - ✅ **顺带修掉第二处 fail-open**：`getDashboardStats` 原先只在 `deptIds` 非空时追加范围条件，空范围会退化为**统计全系统**的用户数与角色数。现改为空范围直接返回全 0（`isScopeDenied` 短路）。
-   - ✅ **全部只读守卫统一**：`users/[id]`、`users/[id]/roles` GET、`roles/[id]`、`roles/[id]/permissions`、`departments/[id]`、`departments/[id]/members` 不再手写三连，改由读模型内部 `scopeFilter` 施加；角色详情与权限列表改为"范围外与不存在同形返回 404"。
+   - ⚠️ **只读守卫统一——原记载不实，2026-10-13 修正**：`roles/[id]`、`roles/[id]/permissions`、`departments/[id]`、`departments/[id]/members` 确已改由读模型内部 `scopeFilter` 施加；但 **`users/[id]` 与 `users/[id]/roles` GET 从未迁移**——它们继续在路由里手写 `resolveScope + isWithinScope → 403`，而 `getUser` / `getUserRoles` **连 scope 参数都没有**，JSDoc 却声称"已内置底层越权校验（IDOR 防护）"。两处已于 2026-10-13 补齐，见下一节。
+
+### 第 3 步的漏迁移：用户详情读口没有范围参数（真实越权，2026-10-13 修复）
+
+**缺陷**：`users/data.ts` 的 `getUser(lookupId)` / `getUserRoles(lookupId)` 的 SQL 里没有任何范围条件。REST 路径之所以没暴露，只是因为调用点自己补了 `resolveScope + isWithinScope`；而 `(dashboard)/users/[id]/page.tsx` 直接 `getUser(id)` 渲染详情——**改 URL 里的 id 即可跨部门读取任意用户详情（含其角色列表）**，违反 H-ACL-002（🔴关键 P0，`docs/spec/REQUIREMENTS_MATRIX.md:150`：「用户无法通过直接输入 URL 或修改 API 参数的方式访问其角色所属部门（含子部门）范围之外的信息」）。
+
+**这是"读路径 fail-open"的第三种形态**。前两种已在本 ADR 记录（`roles/data.ts` 的可选 `deptIds`；`getDashboardStats` 的空范围退化为统计全系统）。前两种是**条件缺失**，这一种是**根本没有条件参数**——同样是 interface 允许了错误用法，与本文"背景"的诊断同源。
+
+**决策：读口按"谁在问"分成两个，而不是给同一个读口加可选范围参数**
+
+| 读口 | interface | 用途 |
+|---|---|---|
+| 范围读口 | `getUser(lookupId, scope)` / `getUserRoles(lookupId, scope)` | admin 读他人：范围经 `scopeFilter` 进入 SQL |
+| 身份读口 | `getOwnUser(userId)` | `/api/me`、`/profile`、`(dashboard)/layout` 读**自己** |
+
+**为什么必须两个而不是一个**（不是对称性，是必要性）：操作者的可见范围来自其**角色**的部门子树，而本人的 `dept_id` 完全可能落在该子树之外（角色所在部门 ≠ 本人所属部门）。若让自我读口走范围读口，这类用户会读不到自己。`user-detail-scope.test.ts` 直接构造了该情形（用户在 MKT、角色在 FE）并断言两个读口给出不同答案。
+
+**失败语义**：范围外与不存在同形返回 `null`（读路径不用状态码区分存在性，与第 3 步既有决定一致），路由映射为 404。`getUserRoles` 据此把"不可见"（`null`）与"可见但无角色"（`[]`）分开——此前两者都是 `[]`，调用方无法区分。
+
+**验证**（`apps/portal/__tests__/api/user-detail-scope.test.ts`，11 例，真实 PostgreSQL）：变异验证——移除 `getUser` 的 `scopeFilter` 后**恰好 5 例变红**（范围外 / 无部门 / 同形 / 身份读口前置断言 / REST 404），其余 6 例保持绿，其中含正向对照「范围内 → 返回详情」与证明 `isScopeDenied` 短路独立生效的「空范围 → null」；`getUserRoles` 三例不受影响，证明该文件能分辨两个读口。
 
 ### 附带修复：子树展开漏掉一级子部门（真实缺陷，非重构副产品）
 
