@@ -88,6 +88,61 @@ export function getEnvConfig(): RuntimeEnv {
   return getConfig();
 }
 
+// ── 公开 URL 推导：唯一实现（纯函数，接受 env 注入）──
+
+/** `resolvePublicUrls` 需要的最小 env 切片 */
+export type PublicUrlEnv = Pick<
+  z.infer<typeof runtimeConfigSchema>,
+  'NEXT_PUBLIC_APP_URL' | 'PORTAL_ISSUER' | 'PORTAL_JWKS_URI'
+>;
+
+export interface PublicUrls {
+  /** 应用对外基址（无尾斜杠） */
+  readonly appBaseURL: string;
+  /** OIDC issuer（无尾斜杠）—— 必须与取 Discovery 的 URL 同源（ADR-012 / OIDC Discovery §4.3） */
+  readonly issuer: string;
+  /** jwks_uri（无尾斜杠） */
+  readonly jwksUri: string;
+}
+
+/** 去掉尾斜杠：所有公开 URL 共用的唯一归一判据 */
+function stripTrailingSlashes(url: string): string {
+  return url.trim().replace(/\/+$/, '');
+}
+
+/**
+ * 公开 URL 推导 —— **纯函数，唯一实现**。
+ *
+ * ## 为什么要有它（2026-10-13，架构评审 R2 次级候选「公开 URL 推导」）
+ *
+ * 同一段推导原先在三个 getter 里各写一遍，且**判据不一致**：
+ * `NEXT_PUBLIC_APP_URL` 走 `.trim().replace(/\/+$/, '')`，而 `PORTAL_ISSUER` /
+ * `PORTAL_JWKS_URI` 只 `.trim()` —— 于是显式配置 `PORTAL_ISSUER=https://sso.example.com/`
+ * 会得到**带尾斜杠的 issuer**，而 Discovery 的 `issuer` 按 ADR-012 必须与取 metadata 的
+ * URL 同源 ⇒ 严格的 OIDC RP 会以 issuer 不匹配拒绝登录。
+ * 该不对称当时被 `apps/portal/src/lib/env.test.ts` **写成了规范**（同一种疾病本仓第三次出现）。
+ *
+ * ## 为什么接受 env 注入
+ *
+ * 原先唯一接受注入的入口 `parsePortalEnv` **零消费者**，实际被消费的是读模块级缓存单例的
+ * getter ⇒ 推导只能靠「改 `process.env` + `resetConfig()`」来测。纯函数可以直接喂 env，
+ * 这就是本候选要的测试面。
+ *
+ * 三个公开 URL 的判据统一为：**先 trim、再去尾斜杠**；未显式配置时按 ADR-012 的默认推导。
+ *
+ * @param env env 切片（`getConfig()` 的视图或任何同形对象）
+ */
+export function resolvePublicUrls(env: PublicUrlEnv): PublicUrls {
+  const appBaseURL = stripTrailingSlashes(env.NEXT_PUBLIC_APP_URL);
+  const issuer = env.PORTAL_ISSUER
+    ? stripTrailingSlashes(env.PORTAL_ISSUER)
+    : appBaseURL;
+  const jwksUri = env.PORTAL_JWKS_URI
+    ? stripTrailingSlashes(env.PORTAL_JWKS_URI)
+    : `${appBaseURL}/api/auth/jwks`;
+  return { appBaseURL, issuer, jwksUri };
+}
+
 export function getDatabaseUrl(): string {
   // DATABASE_URL 唯一的 strict 校验点：缺失即 fail-fast（运行时缓存视图已放宽为可选）
   return databaseEnvSchema.parse(process.env).DATABASE_URL;
@@ -106,19 +161,15 @@ export function isCookieSecure(env?: Partial<PortalEnv>): boolean {
 }
 
 export function getAppBaseURL(): string {
-  return getConfig().NEXT_PUBLIC_APP_URL.trim().replace(/\/+$/, '');
+  return resolvePublicUrls(getConfig()).appBaseURL;
 }
 
 export function getIssuer(): string {
-  const config = getConfig();
-  const appBaseURL = config.NEXT_PUBLIC_APP_URL.trim().replace(/\/+$/, '');
-  return (config.PORTAL_ISSUER || appBaseURL).trim();
+  return resolvePublicUrls(getConfig()).issuer;
 }
 
 export function getJwksUri(): string {
-  const config = getConfig();
-  const appBaseURL = config.NEXT_PUBLIC_APP_URL.trim().replace(/\/+$/, '');
-  return (config.PORTAL_JWKS_URI || `${appBaseURL}/api/auth/jwks`).trim();
+  return resolvePublicUrls(getConfig()).jwksUri;
 }
 
 export function getTrustedOrigins(): string[] {

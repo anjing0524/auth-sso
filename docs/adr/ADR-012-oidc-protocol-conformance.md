@@ -20,6 +20,15 @@
 ### 1. issuer 迁移（双接受过渡窗已于 2026-09-28 当日关闭）
 
 - 签发（login_session/AT/id_token）与 Discovery 一律改用 `getIssuer()`：`PORTAL_ISSUER` 优先，默认 `NEXT_PUBLIC_APP_URL`（OIDC 规范要求 issuer 与 discovery URL 同源）。
+  - **2026-10-13 修订（架构评审 R2 次级候选「公开 URL 推导」）**：本条的"同源"要求此前**只实现了一半**——
+    `getAppBaseURL()` 去尾斜杠，而 `getIssuer()` / `getJwksUri()` 对**显式配置**的值只 `.trim()`，
+    于是 `PORTAL_ISSUER=https://sso.example.com/`（一个尾斜杠）会让 Discovery 声明
+    `issuer: "https://sso.example.com/"`，而 RP 用 `https://sso.example.com` 取 metadata ⇒
+    **严格的 OIDC RP 以 issuer 不匹配拒绝登录**（OIDC Discovery §4.3：issuer MUST be identical to
+    用于取 metadata 的 URL）。该不对称当时被 `apps/portal/src/lib/env.test.ts` 写成了期望。
+    现收成一个纯函数 `resolvePublicUrls(env)`（`packages/config/src/env.ts`），三个公开 URL 的判据
+    统一为「先 trim、再去尾斜杠」，getter 成为它的缓存视图包装。详见
+    `docs/solution/2026-10-13-public-url-derivation.md`。
 - 过渡窗设计为"Portal 与 Gateway 双接受 `[新 URL issuer, 'auth-sso']` 一个发布周期"；因系统尚无生产存量 token（仅开发环境），**窗口当日即关闭**——`token.ts` 与 `jwks.rs` 的 `LEGACY_ISSUER` 常量已删除，验签只接受新 URL issuer。
 - Gateway 的 issuer 取自 discovery，无需配置变更。`aud` 保持体系级 `PORTAL_AUD = 'auth-sso'` 不变（ADR-006 既定）。
 - `aud` 保持体系级 `PORTAL_AUD = 'auth-sso'` 不变（ADR-006 既定）。

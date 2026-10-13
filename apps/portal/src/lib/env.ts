@@ -21,6 +21,8 @@ export {
   getEnvConfig,
   parsePortalEnv,
   isCookieSecure,
+  // 公开 URL 推导的唯一实现（纯函数，接受 env 注入）——getter 只是它的缓存视图包装
+  resolvePublicUrls,
 } from '@auth-sso/config';
 
-export type { PortalEnv } from '@auth-sso/config';
+export type { PortalEnv, PublicUrlEnv, PublicUrls } from '@auth-sso/config';
