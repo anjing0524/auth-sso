@@ -41,6 +41,26 @@ REST 侧 13 处手写守卫中，**8 处**的 operator 范围快照取自事务�
 | `api/users/[id]/route.ts`、`api/users/[id]/roles/route.ts` GET、`api/roles/[id]/route.ts`、`api/roles/[id]/permissions/route.ts`、`api/departments/[id]/route.ts`、`api/departments/[id]/members/route.ts` | 只读 | 快照在事务外（读路径无写入，无 TOCTOU，但形状不统一） |
 
 > 计数更正记录：本 ADR 初稿写"9 条写路径中 8 条中招"，是把"手写守卫点位数"与"写路径数"混为一谈的口径错误。真实写路径数是 **4 个**（`roles` POST/DELETE 同属一个文件），其中 **3 个**曾取事务外快照。原调研报告的表格本身是准确的（只读项标注"—"），是本文摘要时的转述错误。
+>
+> **第二级修订（2026-10-13，架构评审 R2 候选 R11）**：上表最后两行当时被记为"已随
+> `withScopedWrite` 修复"，**实际只修好了形状、没有恢复不变量**——两个路由把 handler
+> 写成空函数：
+>
+> ```ts
+> await withScopedWrite({ operatorId, targets: async (tx) => [...] }, async () => undefined);
+> //                                    ↑ 事务只做断言就提交，真正的写入在另一个事务里
+> ```
+>
+> `reset-password` 随后用事务外的 `db` 读 `passwordHistory`、写入又是**另一个**事务；
+> `force-logout` 的 RT 撤销在事务外的 `db` 上执行。⇒「快照与写入同事务」仍被打破，
+> 且两处**零测试覆盖**（`password-reset-session-revocation.test.ts` 覆盖的是
+> `revokeAfterPasswordReset` 助手，不是这个端点），故长期无人发现。
+>
+> 修复：改用 `withScopedRow`（load → 404 → 范围断言 → handler 同一事务），
+> 并把 `revokeAllRefreshTokens` 的 executor 改为**显式必填首参**（调用方决定连接归属，
+> 与 `revokeUserRefreshTokens` 同形）；补该端点的真实测试（含"越界 ⇒ 密码一个字节都没被写"）；
+> 新增静态守卫 `__tests__/api/scoped-write-guard.test.ts` 钉住"守卫事务不得空转"这一形状。
+> 详见 `docs/solution/2026-10-13-write-path-guard-transaction.md`。
 
 `POST /api/users/[id]/roles` 在事务内**重读 target.deptId** 并再次 `canAccessDept(deptIds, ...)`，制造了原子性的假象——重读的是**被操作对象**，不是**操作者的范围快照**。因此"操作者被降权"这一半完全敞开。
 

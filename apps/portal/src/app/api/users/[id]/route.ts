@@ -7,7 +7,7 @@
 import { type NextRequest } from 'next/server';
 import { withPermission, logServerDataRead } from '@/lib/auth';
 import { resolveScope } from '@/lib/authz';
-import { USER_ERRORS, USER_PERMISSIONS } from '@auth-sso/contracts';
+import { COMMON_ERRORS, USER_PERMISSIONS } from '@auth-sso/contracts';
 import { getUser } from '@/app/(dashboard)/users/data';
 import { restSuccess, restError } from '@/lib/response';
 import { db } from '@/infrastructure/db';
@@ -24,7 +24,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const scope = await resolveScope(db, adminUserId);
     const user = await getUser(id, scope);
     if (!user) {
-      return restError(USER_ERRORS.USER_NOT_FOUND, '用户不存在', 404);
+      return restError(COMMON_ERRORS.NOT_FOUND, '用户不存在', 404);
     }
 
     // 在 API 契约层记录读取日志，切断 data 层的反向依赖

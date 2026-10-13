@@ -116,7 +116,7 @@ describe('revokeAllRefreshTokens — 双层撤销闭环', () => {
     await seedRt('rt_a_demo', USER_A, CLIENT_DEMO);
     await seedRt('rt_b_portal', USER_B, CLIENT_PORTAL);
 
-    await revokeAllRefreshTokens(USER_A);
+    await revokeAllRefreshTokens(td.db, USER_A);
 
     const aTokens = await revokedTokens(USER_A);
     expect(aTokens.length).toBe(2);
@@ -133,7 +133,7 @@ describe('revokeAllRefreshTokens — 双层撤销闭环', () => {
     await trackUserJti(USER_A, jti, 3600);
     expect(await isJtiRevoked(jti)).toBe(false);
 
-    await revokeAllRefreshTokens(USER_A);
+    await revokeAllRefreshTokens(td.db, USER_A);
 
     // 仅撤 RT 而不撤 jti，会让 AT 在 TTL 内继续可用——闭环缺一层。
     // 真实状态：该 jti 确实进了黑名单（不是"某函数被调用过"）。
@@ -147,7 +147,7 @@ describe('revokeAllRefreshTokens — 双层撤销闭环', () => {
     // 不得抛出：Redis 抖动不应使"任何人都无法被强制下线"。
     // 但"没撤成"必须可判别——此前只回数字 0，与"该用户没有活着的 AT"同形，
     // 调用方既无法上报也无法记录（8 处 catch 全部不可达）。
-    await expect(revokeAllRefreshTokens(USER_A)).resolves.toEqual({ revoked: 0, failed: true });
+    await expect(revokeAllRefreshTokens(td.db, USER_A)).resolves.toEqual({ revoked: 0, failed: true });
 
     // 否决性的 DB 撤销必须已经生效
     const tokens = await revokedTokens(USER_A);
@@ -159,7 +159,7 @@ describe('revokeAllRefreshTokens — 双层撤销闭环', () => {
     const jti = 'jti-force-logout-no-rt';
     await trackUserJti(USER_B, jti, 3600);
 
-    await expect(revokeAllRefreshTokens(USER_B)).resolves.toEqual({ revoked: 1, failed: false });
+    await expect(revokeAllRefreshTokens(td.db, USER_B)).resolves.toEqual({ revoked: 1, failed: false });
     expect(await isJtiRevoked(jti)).toBe(true);
   });
 
@@ -170,14 +170,14 @@ describe('revokeAllRefreshTokens — 双层撤销闭环', () => {
       await trackUserJti(USER_A, `jti-count-${i}`, 3600);
     }
 
-    await expect(revokeAllRefreshTokens(USER_A)).resolves.toEqual({ revoked: 5, failed: false });
+    await expect(revokeAllRefreshTokens(td.db, USER_A)).resolves.toEqual({ revoked: 5, failed: false });
   });
 
   it('已撤销的 RT 再次撤销是幂等的（沿用原撤销时间）', async () => {
     const firstRevoke = new Date(Date.now() - 3600_000);
     await seedRt('rt_already', USER_A, CLIENT_PORTAL, firstRevoke);
 
-    await revokeAllRefreshTokens(USER_A);
+    await revokeAllRefreshTokens(td.db, USER_A);
 
     const tokens = await revokedTokens(USER_A);
     expect(tokens.length).toBe(1);

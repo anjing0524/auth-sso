@@ -27,7 +27,7 @@
 import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { createTestDbHandle, seedTestData } from '../helpers/test-db';
-import { seedRootDept, seedAdminUser } from '../helpers/seed-fixtures';
+import { seedRootDept, seedAdminUser, seedSuperAdminRole, seedUserRoleBinding } from '../helpers/seed-fixtures';
 import * as schema from '@/db/schema';
 
 const { mocks, tdHolder, faultHolder } = vi.hoisted(() => ({
@@ -71,16 +71,18 @@ vi.mock(import('@/lib/permissions'), (): Partial<typeof permissionsModule> => ({
   clearUserPermissionCache: mocks.mockClearPermCache,
 }));
 
-// 权限门面与数据范围守卫：本文件测的是响应契约，非鉴权（后者另有覆盖）
-// @allow-module-mock @/lib/auth auth-bypass: 本文件被测语义不依赖登录/授权链路，mock 仅用于构造"已登录/已授权"的请求上下文（依赖它的断言：force-logout-route.test.ts 全部用例）
-vi.mock(import('@/lib/auth'), (): Partial<typeof authModule> => ({
-  withPermission: (_opts, handler) => handler('00000000-0000-4000-8000-000000000101'),
-}));
-
-// @allow-module-mock @/lib/authz input-fixture: 数据范围写路径只提供"直接执行回调"这一输入；真实范围快照由 lib/authz 自身测试覆盖
-vi.mock(import('@/lib/authz'), (): Partial<typeof authzModule> => ({
-  // mock 只负责"直接执行回调"；事务对象由生产签名决定，测试内没有真实事务可用
-  withScopedWrite: async (_opts, write) => write(undefined as never),
+// 鉴权只伪造"已授权"这一个输入；**真实** `withPermission`（含错误映射）与**真实**数据范围
+// 守卫全程参与 —— 领域错误因此以「映射后的 404/403 响应」出现，与生产契约一致。
+//
+// 2026-10-13 修订（架构评审 R2 候选 R11）：此前把 `@/lib/auth` 整体替换为
+// `withPermission: (_o, h) => h(ADMIN_ID)`，**权限判定与错误映射双双消失**，并固化了
+// 「领域错误以 reject 出现」这一与生产相反的契约；`@/lib/authz` 又被替换成一个假
+// `withScopedWrite`，守卫同样消失（`withScopedRow` 出现后还直接变成 undefined）。
+// 现已改为只 mock 鉴权结果 —— 少两个替身，且测到真实的守卫与映射。
+// @allow-module-mock @/lib/auth/check-permission auth-bypass: 只为进入 handler 伪造"已授权"上下文；真实 withPermission 与真实 lib/authz 守卫全程参与（依赖它的断言：force-logout-route.test.ts 全部用例）
+vi.mock(import('@/lib/auth/check-permission'), (): Partial<typeof permModule> => ({
+  checkPermission: async () => ({ authorized: true, userId: '00000000-0000-4000-8000-000000000101' }),
+  requirePermission: async () => ({ userId: '00000000-0000-4000-8000-000000000101' }),
 }));
 
 // @allow-module-mock @/lib/cache-invalidation infra-boundary: 缓存失效是旁路副作用，不影响本文件断言的响应契约；importOriginal + spread 让未列出的导出走真身 —— 此前整体替换使新增的 invalidateResourceFromRoute 变成 undefined，本文件 3 例变红
@@ -93,8 +95,7 @@ import { POST } from '@/app/api/users/[id]/force-logout/route';
 import { isJtiRevoked, revokeUserAccessByUserId, trackUserJti } from '@/lib/session/revoke';
 import { NextRequest } from 'next/server';
 import type * as permissionsModule from '@/lib/permissions';
-import type * as authModule from '@/lib/auth';
-import type * as authzModule from '@/lib/authz';
+import type * as permModule from '@/lib/auth/check-permission';
 import type * as cacheInvalidationModule from '@/lib/cache-invalidation';
 import type * as redisModule from '@/infrastructure/redis';
 
@@ -113,6 +114,9 @@ beforeEach(async () => {
   await seedTestData(td.db, {
     departments: seedRootDept(),
     users: seedAdminUser(),
+    // 真实守卫现在全程参与：操作者必须**真的有**覆盖目标的角色范围
+    roles: seedSuperAdminRole(),
+    userRoles: seedUserRoleBinding(ADMIN_ID, '00000000-0000-4000-8000-000000000301'),
   });
 });
 

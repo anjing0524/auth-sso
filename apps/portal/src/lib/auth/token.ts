@@ -18,7 +18,7 @@ import { DEFAULT_SCOPES, PORTAL_AUD, TOKEN_TTL, JWT_TYP } from '@auth-sso/contra
 import { getIssuer } from '@/lib/env';
 import type { PortalJwtClaims, RefreshTokenResult } from '@/domain/auth/types';
 import { getActiveSigningKey, getSigningKeyByKid } from './token/signing-keys';
-import { revokeRefreshTokenById, revokeRefreshTokenFamily, revokeUserRefreshTokens } from './token/revocation';
+import { revokeRefreshTokenById, revokeRefreshTokenFamily, revokeUserRefreshTokens, type RevocationExecutor } from './token/revocation';
 import { createLogger } from '@/lib/logger';
 // 保持向后兼容：密钥管理函数仍从 @/lib/auth/token 可导入
 export { getActiveSigningKey, getSigningKeyByKid } from './token/signing-keys';
@@ -388,10 +388,26 @@ export async function rotateRefreshToken(
  * （Redis 故障既不抛错也不阻断），其成败必须由调用方消费，否则"没撤成"不可观测。
  * 失败的具体原因由 `lib/session/revoke` 在发生处记日志（含 userId）。
  *
+ * ## executor 为什么是**必填首参**（2026-10-13 修订，架构评审 R2 候选 R11）
+ *
+ * 原签名只收 `userId`，内部固定用事务外的 `db`。调用方
+ * （`/api/users/[id]/force-logout`）却在 `withScopedWrite` 的事务内做数据范围断言
+ * ——于是"快照与写入同事务"这个不变量被打破：RT 撤销落在一个**没有范围断言**的
+ * 事务里（ADR-014 / H-ACL-002 的 TOCTOU 窗口）。
+ *
+ * 与 {@link revokeUserRefreshTokens} 同形显式收 `executor`：**连接归属由调用方决定**，
+ * 事务内的调用方传 `tx` 即把撤销绑进同一个事务。不用可选参数——那会退化成
+ * "传不传都行"的条件参数化，而这里的正确性恰恰取决于调用方选对了执行器。
+ *
+ * @param executor db 直连（事务外）或事务句柄 `tx`
+ * @param userId 用户内部 ID
  * @returns jti 层的 `{ revoked, failed }`
  */
-export async function revokeAllRefreshTokens(userId: string): Promise<UserRevokeOutcome> {
-  await revokeUserRefreshTokens(db, userId);
+export async function revokeAllRefreshTokens(
+  executor: RevocationExecutor,
+  userId: string,
+): Promise<UserRevokeOutcome> {
+  await revokeUserRefreshTokens(executor, userId);
 
   // 同步撤销所有 Access Token 的 JTI（双层撤销闭环）。
   // 刻意不需要 try/catch：该函数永不抛出，失败经返回值回报（此前那个 catch 不可达）。

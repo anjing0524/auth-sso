@@ -9,14 +9,15 @@
  * @route POST /api/users/[id]/force-logout
  */
 import { type NextRequest } from 'next/server';
-import { db, schema } from '@/infrastructure/db';
+import { schema } from '@/infrastructure/db';
 import { eq } from 'drizzle-orm';
 import { withPermission } from '@/lib/auth';
-import { withScopedWrite } from '@/lib/authz';
+import { withScopedRow } from '@/lib/authz';
 import { revokeAllRefreshTokens } from '@/lib/auth/token';
 import { clearUserPermissionCache } from '@/lib/permissions';
-import { COMMON_ERRORS, USER_PERMISSIONS } from '@auth-sso/contracts';
-import { restSuccess, restError } from '@/lib/response';
+import { EntityNotFoundError } from '@/domain/shared/errors';
+import { USER_PERMISSIONS } from '@auth-sso/contracts';
+import { restSuccess } from '@/lib/response';
 import { invalidateResourceFromRoute } from '@/lib/cache-invalidation';
 
 interface RouteParams {
@@ -34,46 +35,38 @@ export async function POST(
   return withPermission({ permissions: [USER_PERMISSIONS.MANAGE] }, async (adminUserId) => {
     const { id } = await params;
 
-    // 数据范围守卫：快照与断言同事务（ADR-014 / H-ACL-002）。
-    // 原先快照取自事务外，操作者被降权后仍会放行越界下线。
-    await withScopedWrite(
+    // 数据范围守卫 + 目标读取 + 撤销，**全部在同一事务内**（ADR-014 / H-ACL-002）。
+    //
+    // 2026-10-13 修订（架构评审 R2 候选 R11）：此前守卫写成
+    // `withScopedWrite({...}, async () => undefined)` —— 事务里什么都没做，
+    // 随后的目标读取走事务外 `db`、RT 撤销又用事务外的 `db` 执行，
+    // 于是"快照与写入同事务"被打破；且目标不存在时 `targets` 返回空数组使守卫静默放行。
+    // 改用 `withScopedRow`，并把 `tx` 显式传给 `revokeAllRefreshTokens`。
+    const jti = await withScopedRow(
       {
         operatorId: adminUserId,
-        targets: async (tx) => {
-          const row = await tx.query.users.findFirst({
+        load: (tx) =>
+          tx.query.users.findFirst({
             where: eq(schema.users.id, id),
-            columns: { deptId: true },
-          });
-          if (!row) return [];   // 不存在交由下方 404 分支处理
-          return [{ deptId: row.deptId, message: '无权操作该用户' }];
-        },
+            columns: { id: true, deptId: true },
+          }),
+        deptOf: (row) => row.deptId,
+        message: '无权操作该用户',
+        notFound: () => new EntityNotFoundError('用户', id),
       },
-      async () => undefined,
+      async (tx, target) => {
+        // 1. 撤销全部 Refresh Token（在同一事务内，失败即抛 → 整体回滚）
+        //    并同步撤销全部 Access Token JTI。
+        //    返回值只描述 **jti 层**——它永不抛出，"没撤成"必须经它回报，否则响应里的
+        //    数字既可能是"无 AT 可撤"也可能是"一个都没撤成"。
+        return revokeAllRefreshTokens(tx, target.id);
+      },
     );
 
-    const target = await db.query.users.findFirst({
-      where: eq(schema.users.id, id),
-      columns: { id: true },
-    });
-    if (!target) {
-      return restError(COMMON_ERRORS.NOT_FOUND, '用户不存在', 404);
-    }
+    // 2. 清除权限缓存，确保下次请求拉取最新权限
+    await clearUserPermissionCache(id);
 
-    const userId = target.id;
-
-    // 1. 撤销全部 Refresh Token（DB 层，失败即抛）并同步撤销全部 Access Token JTI。
-    //    返回值只描述 **jti 层**——它永不抛出，"没撤成"必须经它回报，否则响应里的
-    //    数字既可能是"无 AT 可撤"也可能是"一个都没撤成"。
-    //
-    //    此前这里在编排层调用之后再单独调一次 `revokeUserAccessByUserId` 作为
-    //    计数来源——但该函数是**幂等**的（读完 user_jti 映射即 `del` 消费掉），
-    //    第二次必然拿到空映射并返回 0，导致响应里的 revokedJtiCount 恒为 0。
-    const jti = await revokeAllRefreshTokens(userId);
-
-    // 3. 清除权限缓存，确保下次请求拉取最新权限
-    await clearUserPermissionCache(userId);
-
-    // 4. 失效页面缓存与数据缓存（确保用户列表即时反映下线状态）
+    // 3. 失效页面缓存与数据缓存（确保用户列表即时反映下线状态）
     //    Route Handler 必须用 route 版入口：`invalidateResource` 走 `updateTag`，
     //    而该原语在 route 上下文必抛（Next.js E872）——抛出点在撤销已提交之后，
     //    会造成"写成功、失效未发生、响应 5xx"并诱使调用方重试。

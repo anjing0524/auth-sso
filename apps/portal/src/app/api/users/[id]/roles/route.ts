@@ -12,7 +12,7 @@ import { withPermission, logServerDataRead } from '@/lib/auth';
 import { withScopedWrite, resolveScope } from '@/lib/authz';
 import { appendSecurityAudit, extractClientIP, extractUserAgent } from '@/lib/audit';
 import { revokeAndRefreshAuthorization } from '@/lib/auth/authorization-effects';
-import { COMMON_ERRORS, USER_ERRORS, ENTITY_ACTIVE, USER_PERMISSIONS } from '@auth-sso/contracts';
+import { COMMON_ERRORS, ENTITY_ACTIVE, USER_PERMISSIONS } from '@auth-sso/contracts';
 import { getUserRoles } from '@/app/(dashboard)/users/data';
 import { restSuccess, restError } from '@/lib/response';
 import { invalidateResourceFromRoute } from '@/lib/cache-invalidation';
@@ -54,7 +54,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const scope = await resolveScope(db, adminUserId);
     const roles = await getUserRoles(id, scope);
     if (roles === null) {
-      return restError(USER_ERRORS.USER_NOT_FOUND, '用户不存在', 404);
+      return restError(COMMON_ERRORS.NOT_FOUND, '用户不存在', 404);
     }
     await logServerDataRead('user_roles', id);
     return restSuccess(roles);

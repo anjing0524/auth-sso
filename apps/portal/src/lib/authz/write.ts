@@ -58,6 +58,17 @@ export interface ScopedWriteOptions {
  * 越界时抛出 `ForbiddenError`，由调用链上的 `withPermission` /
  * `mapDomainError` 统一映射为 403；事务随之回滚，不会留下部分写入。
  *
+ * ## 不要把 handler 写成空函数（2026-10-13 实测踩到，架构评审 R2 候选 R11）
+ *
+ * `withScopedWrite({...}, async () => undefined)` 看起来"加了守卫"，实际是**零守卫**：
+ * 库事务只完成断言就提交，**真正的写入落在另一个事务里**，"快照与写入同事务"
+ * 这一不变量被打破（H-ACL-002 的 TOCTOU 窗口重新敞开）。
+ * `/api/users/[id]/reset-password` 与 `.../force-logout` 两处曾如此，且都零测试覆盖。
+ *
+ * **需要"先加载目标行再动手"时用 {@link withScopedRow}**：
+ * 它把 load → 404 → 范围断言 → handler 收在同一个事务里。
+ * `__tests__/api/scoped-write-guard.test.ts` 以静态检查钉住这个形状。
+ *
  * @param options.operatorId 操作者用户 ID
  * @param options.targets    目标部门（数组）或事务内加载目标的函数
  * @param handler            业务写入，只接收事务句柄

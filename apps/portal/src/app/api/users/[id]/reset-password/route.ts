@@ -3,16 +3,18 @@
  *
  * POST /api/users/[id]/reset-password — 管理员重置用户密码，所有活跃会话立即失效
  *
- * 数据范围守卫经 `withScopedWrite`（ADR-014）：操作者范围快照与密码写入
- * 在同一事务内，消除"快照后、提交前操作者被降权"的 TOCTOU 窗口。
+ * 数据范围守卫经 `withScopedRow`（ADR-014）：目标行加载、范围断言、
+ * 密码复用校验与密码写入**在同一事务内**，消除"快照后、提交前操作者被降权"
+ * 的 TOCTOU 窗口（H-ACL-002）；目标不存在时由 DomainError 统一映射为 404。
  */
 import { type NextRequest } from 'next/server';
 import { withPermission } from '@/lib/auth';
-import { withScopedWrite } from '@/lib/authz';
+import { withScopedRow } from '@/lib/authz';
 import { db, schema } from '@/infrastructure/db';
 import { eq } from 'drizzle-orm';
 import { hashPassword, isPasswordReused, pushPasswordHistory } from '@/domain/auth/password';
-import { COMMON_ERRORS, USER_ERRORS, USER_PERMISSIONS } from '@auth-sso/contracts';
+import { EntityNotFoundError } from '@/domain/shared/errors';
+import { COMMON_ERRORS, USER_PERMISSIONS } from '@auth-sso/contracts';
 import { revokeUserAccessByUserId } from '@/lib/session/revoke';
 import { revokeUserRefreshTokens } from '@/lib/auth/token/revocation';
 import { refreshUserPermissionCache } from '@/lib/permissions';
@@ -42,45 +44,42 @@ export async function POST(
     // bcrypt 在事务外完成（50-200ms），避免长时间占用 DB 连接
     const passwordHash = await hashPassword(newPassword);
 
-    // 数据范围守卫：只能重置可见范围内用户的密码（H-DSCOPE-003）。
-    // 快照与后续写入同事务——原先快照取自事务外，操作者被降权后仍会放行
-    // （ADR-014 / H-ACL-002）。
-    await withScopedWrite(
+    // 数据范围守卫 + 目标读取 + 复用校验 + 写入，**全部在同一事务内**（ADR-014 / H-ACL-002）。
+    //
+    // 2026-10-13 修订（架构评审 R2 候选 R11）：此前守卫写成
+    // `withScopedWrite({...}, async () => undefined)` —— 事务里什么都没做，
+    // 随后的 passwordHistory 读取走事务外的 `db`、写入又是**另一个**事务，
+    // 于是"快照与写入同事务"这个不变量被打破（操作者在这中间被降权仍会写入）；
+    // 且目标不存在时 `targets` 返回空数组使守卫静默放行。文件头注释当时却在宣称
+    // 不变量成立。改用 `withScopedRow`：load → 404 → 范围断言 → handler 共用同一事务。
+    const response = await withScopedRow(
       {
         operatorId: adminUserId,
-        targets: async (tx) => {
-          const row = await tx.query.users.findFirst({
+        load: (tx) =>
+          tx.query.users.findFirst({
             where: eq(schema.users.id, id),
-            columns: { deptId: true },
-          });
-          if (!row) return [];   // 不存在交由下方 404 分支处理
-          return [{ deptId: row.deptId, message: '无权操作该用户' }];
-        },
+            columns: { id: true, deptId: true, passwordHash: true, passwordHistory: true },
+          }),
+        deptOf: (row) => row.deptId,
+        message: '无权操作该用户',
+        notFound: () => new EntityNotFoundError('用户', id),
       },
-      async () => undefined,
+      async (tx, target) => {
+        // NFR-SEC-15: 禁止重用最近 5 次密码。
+        // bcrypt 比对（最多 5 次）也在事务内——这正是原先最长的敞口窗口。
+        if (await isPasswordReused(newPassword, target.passwordHistory ?? null)) {
+          return restError(COMMON_ERRORS.VALIDATION_ERROR, '新密码不能与该用户最近使用过的密码相同', 400);
+        }
+
+        const newHistory = pushPasswordHistory(target.passwordHistory ?? null, target.passwordHash ?? '');
+
+        await tx.update(schema.users)
+          .set({ passwordHash, passwordHistory: newHistory })
+          .where(eq(schema.users.id, target.id));
+
+        return restSuccess({ message: '密码已重置，该用户所有会话已失效' });
+      },
     );
-
-    // 读取 passwordHistory 用于 NFR-SEC-15 校验
-    const target = await db.query.users.findFirst({
-      where: eq(schema.users.id, id),
-      columns: { id: true, deptId: true, passwordHash: true, passwordHistory: true },
-    });
-    if (!target) {
-      return restError(USER_ERRORS.USER_NOT_FOUND, '用户不存在', 404);
-    }
-
-    // NFR-SEC-15: 禁止重用最近 5 次密码
-    if (await isPasswordReused(newPassword, target.passwordHistory ?? null)) {
-      return restError(COMMON_ERRORS.VALIDATION_ERROR, '新密码不能与该用户最近使用过的密码相同', 400);
-    }
-
-    const newHistory = pushPasswordHistory(target.passwordHistory ?? null, target.passwordHash ?? '');
-
-    await db.transaction(async (tx) => {
-      await tx.update(schema.users)
-        .set({ passwordHash, passwordHistory: newHistory })
-        .where(eq(schema.users.id, id));
-    });
 
     // 重置后所有会话立即失效（关键安全操作，必须 await 确保执行）。
     // 必须覆盖**两层**，与 logout / revokeAllRefreshTokens 一致：
@@ -100,6 +99,7 @@ export async function POST(
       log.error('刷新缓存失败', { error: (e as Error).message });
     }
 
-    return restSuccess({ message: '密码已重置，该用户所有会话已失效' });
+    // 响应体由事务内的 handler 产出（复用校验分支会返回 400）
+    return response;
   });
 }
