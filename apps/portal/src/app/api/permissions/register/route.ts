@@ -4,7 +4,8 @@ import { eq, sql, inArray, ne, isNull, or, and } from 'drizzle-orm';
 import { generateUUID } from '@/lib/crypto';
 import { COMMON_ERRORS } from '@auth-sso/contracts';
 import { mapServerError } from '@/lib/server-error';
-import { validateClientActive, validateClientSecret } from '@/domain/auth/oauth-client';
+import { validateClientSecret } from '@/domain/auth/oauth-client';
+import { resolveActiveClient } from '@/lib/auth/oauth-helpers';
 import { flattenPermissions, getHashCode, findDuplicateCode } from '@/domain/permission/permission-sync';
 import type { IncomingPermission } from '@/domain/permission/permission-sync';
 import { restSuccess, restError } from '@/lib/response';
@@ -38,9 +39,10 @@ export async function POST(request: NextRequest) {
     const auth = extractBasicAuth(request);
     if (!auth) return restError(COMMON_ERRORS.UNAUTHORIZED, '缺少或格式错误的 Basic Auth 凭证', 401);
 
-    const clientRecord = await db.select().from(schema.clients).where(eq(schema.clients.clientId, auth.clientId)).limit(1);
-    try { validateClientActive(clientRecord[0]); } catch { return restError(COMMON_ERRORS.FORBIDDEN, '该应用系统已停用或不存在', 403); }
-    try { await validateClientSecret(clientRecord[0]!, auth.clientSecret); } catch { return restError(COMMON_ERRORS.FORBIDDEN, 'Client ID 或 Secret 错误', 403); }
+    // 查询 + 激活校验一次完成；**投递语义各自保留**（本端点用 403 而非领域错误映射）
+    const client = await resolveActiveClient(auth.clientId).catch(() => null);
+    if (!client) return restError(COMMON_ERRORS.FORBIDDEN, '该应用系统已停用或不存在', 403);
+    try { await validateClientSecret(client, auth.clientSecret); } catch { return restError(COMMON_ERRORS.FORBIDDEN, 'Client ID 或 Secret 错误', 403); }
 
     const body = await request.json();
     const tree: IncomingPermission[] = body.permissions;

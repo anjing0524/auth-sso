@@ -14,7 +14,7 @@ import { type NextRequest, NextResponse } from 'next/server';
 import { db, schema } from '@/infrastructure/db';
 import { verifyAccessToken } from '@/lib/auth/token';
 import { parseScopes, validateAuthorization, validateRequestedScopes } from '@/domain/auth/oauth-authorize';
-import { validateClientActive, validateRedirectUri } from '@/domain/auth/oauth-client';
+import { validateRedirectUri } from '@/domain/auth/oauth-client';
 import { generateId, generateUUID, hashToken } from '@/lib/crypto';
 import { getAppBaseURL, getIssuer } from '@/lib/env';
 import { mapServerError } from '@/lib/server-error';
@@ -26,7 +26,7 @@ import {
   clearLoginSessionCookie,
 } from '@/lib/oauth-utils';
 import { COOKIE_NAMES, JWT_TYP, PORTAL_AUD, PORTAL_CLIENT_ID } from '@auth-sso/contracts';
-import { getClientByClientId } from '@/app/(dashboard)/clients/data';
+import { resolveActiveClient } from '@/lib/auth/oauth-helpers';
 import { getUserWithRoleClients } from './data';
 import {
   storeAuthRequest,
@@ -66,8 +66,8 @@ async function issueCodeAndRedirect(
   },
   userId: string,
 ): Promise<NextResponse> {
-  const client = await getClientByClientId(params.clientId);
-  validateClientActive(client ?? undefined);
+  // 查询 + 激活校验一次完成（漏校验在结构上不可能：getClientByClientId 已删除）
+  const client = await resolveActiveClient(params.clientId);
   validateRedirectUri(client!.redirectUris, params.redirectUri);
   // redirect_uri 已通过白名单校验：此后的授权拒绝按 RFC 6749 §4.1.2.1 重定向回 RP
   //（error/state/iss）；此前的失败（client 未知/停用、参数畸形）仍走本地错误页——
@@ -228,8 +228,7 @@ async function handleFullParamsBranch(
   }
 
   // 未登录 → 校验 Client → 暂存参数到 Redis → 302 /login
-  const client = await getClientByClientId(client_id);
-  validateClientActive(client ?? undefined);
+  const client = await resolveActiveClient(client_id);
   validateRedirectUri(client!.redirectUris, redirect_uri);
   // redirect_uri 已过白名单：scope 越界同样按 RFC 6749 §4.1.2.1 重定向回 RP（决策 D1）
   try {

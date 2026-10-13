@@ -106,21 +106,6 @@ export async function getClientById(lookupId: string): Promise<ClientDTO | null>
 }
 
 /**
- * 按 OAuth client_id 查找 Client（供 OAuth 授权/令牌端点使用）
- *
- * 与 getClientById 不同：本函数按 client_id 字段查找，
- * 返回 Drizzle 原始行以便 domain 层做进一步校验（validateClientActive）。
- * 不使用缓存以保证授权流程的实时性。
- */
-export async function getClientByClientId(clientId: string) {
-  const rows = await db.select()
-    .from(schema.clients)
-    .where(eq(schema.clients.clientId, clientId))
-    .limit(1);
-  return rows[0] ?? null;
-}
-
-/**
  * Client Token 的 DTO 类型
  */
 export interface ClientTokenDTO {

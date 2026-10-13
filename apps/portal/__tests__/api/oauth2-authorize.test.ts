@@ -19,7 +19,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  mockGetClientByClientId: vi.fn(),
+  mockResolveActiveClient: vi.fn(),
   mockGetUserWithRoleClients: vi.fn(),
   mockVerifyAccessToken: vi.fn(),
 }));
@@ -29,10 +29,14 @@ vi.mock('@/infrastructure/db', () => ({
   schema: {},
 }));
 
-// @allow-module-mock @/app/(dashboard)/clients/data input-fixture: 只提供"这个 client 存在/不存在"这一输入；本文件依赖它的断言：全部 GET 用例（client 查询结果决定 302 回 RP 还是本地错误页）。client 查询本身由 client-api.test.ts 覆盖
-vi.mock(import('@/app/(dashboard)/clients/data'), (): Partial<typeof clientsDataModule> => ({
-  getClientByClientId: mocks.mockGetClientByClientId,
-}));
+// 2026-10-13（架构评审 R2 次级候选「取得活跃 OAuth Client 收敛为一个 module」）：
+// client 的**查询 + 激活校验**已收进 `lib/auth/oauth-helpers`（`getClientByClientId` 随删除），
+// 本文件的输入夹具目标随之从数据层改到该 module。
+// @allow-module-mock @/lib/auth/oauth-helpers input-fixture: 只提供"这个 client 可用/不可用"这一输入；本文件依赖它的断言：全部 GET 用例（结果决定 302 回 RP 还是本地错误页）。查询+校验的真实形态由 oauth-helpers 自身的测试覆盖
+vi.mock(import('@/lib/auth/oauth-helpers'), async (importOriginal): Promise<Partial<typeof oauthHelpersModule>> => {
+  const actual = await importOriginal();
+  return { ...actual, resolveActiveClient: mocks.mockResolveActiveClient };
+});
 
 // @allow-module-mock @/app/api/auth/oauth2/authorize/data input-fixture: 只提供"当前登录用户及其角色"这一输入；本文件依赖它的断言：登录态通过后的重定向/错误参数用例（准入判定读它）。真实查询形态见该模块自身的测试
 vi.mock(import('@/app/api/auth/oauth2/authorize/data'), (): Partial<typeof authorizeDataModule> => ({
@@ -51,9 +55,10 @@ vi.mock(import('@/lib/auth/token'), (): Partial<typeof authTokenModule> => ({
   verifyAccessToken: mocks.mockVerifyAccessToken,
 }));
 
+import { InvalidClientError } from '@/domain/shared/errors';
 import { GET } from '@/app/api/auth/oauth2/authorize/route';
 import { NextRequest } from 'next/server';
-import type * as clientsDataModule from '@/app/(dashboard)/clients/data';
+import type * as oauthHelpersModule from '@/lib/auth/oauth-helpers';
 import type * as authorizeDataModule from '@/app/api/auth/oauth2/authorize/data';
 import type * as authRequestStoreModule from '@/lib/session/auth-request-store';
 import type * as authTokenModule from '@/lib/auth/token';
@@ -103,7 +108,7 @@ beforeEach(() => {
 
 describe('GET /api/auth/oauth2/authorize — 错误重定向语义（D1, RFC 6749 §4.1.2.1）', () => {
   it('redirect_uri 已过白名单后用户不存在 → 重定向回 RP（error/state/iss）', async () => {
-    mocks.mockGetClientByClientId.mockResolvedValue(makeClient());
+    mocks.mockResolveActiveClient.mockResolvedValue(makeClient());
     mocks.mockGetUserWithRoleClients.mockResolvedValue(null);
 
     const res = await GET(buildAuthorizeRequest());
@@ -117,7 +122,7 @@ describe('GET /api/auth/oauth2/authorize — 错误重定向语义（D1, RFC 674
   });
 
   it('scope 越界 → 重定向回 RP invalid_scope', async () => {
-    mocks.mockGetClientByClientId.mockResolvedValue(makeClient({ scopes: 'openid' }));
+    mocks.mockResolveActiveClient.mockResolvedValue(makeClient({ scopes: 'openid' }));
 
     const res = await GET(buildAuthorizeRequest({ scope: 'openid profile email' }));
     const location = new URL(res.headers.get('location')!);
@@ -129,7 +134,7 @@ describe('GET /api/auth/oauth2/authorize — 错误重定向语义（D1, RFC 674
   });
 
   it('准入拒绝（用户停用）→ 重定向回 RP 携带 error', async () => {
-    mocks.mockGetClientByClientId.mockResolvedValue(makeClient());
+    mocks.mockResolveActiveClient.mockResolvedValue(makeClient());
     mocks.mockGetUserWithRoleClients.mockResolvedValue({
       id: USER_ID,
       status: 'DISABLED',
@@ -146,7 +151,7 @@ describe('GET /api/auth/oauth2/authorize — 错误重定向语义（D1, RFC 674
   });
 
   it('redirect_uri 不在白名单 → 本地错误页，绝不向未验证地址重定向', async () => {
-    mocks.mockGetClientByClientId.mockResolvedValue(makeClient({ redirectUris: ['https://rp.example.com/other'] }));
+    mocks.mockResolveActiveClient.mockResolvedValue(makeClient({ redirectUris: ['https://rp.example.com/other'] }));
 
     const res = await GET(buildAuthorizeRequest());
     const location = res.headers.get('location')!;
@@ -171,7 +176,7 @@ describe('GET /api/auth/oauth2/authorize — 错误重定向语义（D1, RFC 674
       expect(attack.startsWith(registered)).toBe(true); // 攻击串确以注册串为前缀
       expect(new URL(attack).host).toBe('app.example.com.evil.com'); // 但主机是外域
 
-      mocks.mockGetClientByClientId.mockResolvedValue(
+      mocks.mockResolveActiveClient.mockResolvedValue(
         makeClient({ redirectUris: [registered] }),
       );
 
@@ -184,7 +189,7 @@ describe('GET /api/auth/oauth2/authorize — 错误重定向语义（D1, RFC 674
     });
 
     it('注册串 + 额外路径段 → 本地错误页（不得前缀放行）', async () => {
-      mocks.mockGetClientByClientId.mockResolvedValue(makeClient());
+      mocks.mockResolveActiveClient.mockResolvedValue(makeClient());
 
       const res = await GET(
         buildAuthorizeRequest({ redirect_uri: `${REDIRECT_URI}/extra` }),
@@ -196,7 +201,7 @@ describe('GET /api/auth/oauth2/authorize — 错误重定向语义（D1, RFC 674
     });
 
     it('注册串 + 路径穿越（/cb/../evil）→ 本地错误页', async () => {
-      mocks.mockGetClientByClientId.mockResolvedValue(makeClient());
+      mocks.mockResolveActiveClient.mockResolvedValue(makeClient());
 
       const res = await GET(
         buildAuthorizeRequest({ redirect_uri: `${REDIRECT_URI}/../evil` }),
@@ -208,7 +213,7 @@ describe('GET /api/auth/oauth2/authorize — 错误重定向语义（D1, RFC 674
     });
 
     it('注册串 + 查询串 → 本地错误页（查询参数不构成匹配）', async () => {
-      mocks.mockGetClientByClientId.mockResolvedValue(makeClient());
+      mocks.mockResolveActiveClient.mockResolvedValue(makeClient());
 
       const res = await GET(
         buildAuthorizeRequest({ redirect_uri: `${REDIRECT_URI}?x=1` }),
@@ -220,8 +225,13 @@ describe('GET /api/auth/oauth2/authorize — 错误重定向语义（D1, RFC 674
     });
   });
 
-  it('client_id 未知 → 本地错误页', async () => {
-    mocks.mockGetClientByClientId.mockResolvedValue(null);
+  it('client 不可用（未知/停用）→ 本地错误页', async () => {
+    // 夹具形状必须与真实契约一致：`resolveActiveClient` **抛出** InvalidClientError，
+    // 不返回 null（此前这里 mockResolvedValue(null) 是个不可能的取值，
+    // 靠路由的宽 catch 才碰巧产生同样的页面 —— 那让断言失去判别力）。
+    // 「未知」与「停用」由 `resolveActiveClient` 在同一处判定，其真实覆盖见
+    // resolve-active-client.test.ts。
+    mocks.mockResolveActiveClient.mockRejectedValue(new InvalidClientError('该应用系统已停用或不存在，请联系管理员。'));
 
     const res = await GET(buildAuthorizeRequest());
     const location = res.headers.get('location')!;

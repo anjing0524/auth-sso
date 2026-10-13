@@ -35,15 +35,6 @@ vi.mock('@/infrastructure/db', () => ({
   get schema() { return tdHolder.current!.schema; },
 }));
 
-// @allow-module-mock @/app/(dashboard)/clients/data input-fixture: 只提供"该 client 存在及其 redirect_uris"这一输入，断言落在授权码写入形态上
-vi.mock(import('@/app/(dashboard)/clients/data'), (): Partial<typeof clientsDataModule> => ({
-  getClientByClientId: async (clientId: string) => {
-    const { db, schema } = tdHolder.current!;
-    const { eq } = await import('drizzle-orm');
-    return (await db.query.clients.findFirst({ where: eq(schema.clients.clientId, clientId) })) ?? null;
-  },
-}));
-
 // @allow-module-mock @/app/api/auth/oauth2/authorize/data input-fixture: 只提供"当前登录用户及其角色"这一输入；本文件不测该查询实现
 vi.mock(import('@/app/api/auth/oauth2/authorize/data'), (): Partial<typeof authorizeDataModule> => ({
   getUserWithRoleClients: async () => ({
@@ -83,7 +74,6 @@ import { GET } from '@/app/api/auth/oauth2/authorize/route';
 import { NextRequest } from 'next/server';
 import { exchangeAuthorizationCode } from '@/lib/auth/oauth-grant';
 import { signLoginSession } from '@/lib/auth/token';
-import type * as clientsDataModule from '@/app/(dashboard)/clients/data';
 import type * as authorizeDataModule from '@/app/api/auth/oauth2/authorize/data';
 import type * as authRequestStoreModule from '@/lib/session/auth-request-store';
 
