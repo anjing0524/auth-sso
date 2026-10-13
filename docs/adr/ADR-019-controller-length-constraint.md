@@ -260,6 +260,7 @@ Airbnb 直接设为 `off`。**不存在"业界通行阈值"这回事。**
 | 项 | 结果 |
 |---|---|
 | 写后缓存失效收口 | 51 处手写 → 1 个原语 + 21 处调用（commit `968ae60`） |
+| 写后失效的**写入位置**维度 | **2026-10-13 补**：该 module 的 interface 当时只有 Server Action 版（内部 `updateTag`），3 处 Route Handler 调用点在 route 上下文**必抛** `E872` → 写已提交却返回 5xx、标签未失效。新增 `invalidateResourceFromRoute`（`revalidateTag(tag, { expire: 0 })`）+ 机械守卫（`cache-invalidation-site-guard.test.ts` 扫描全部 `route.ts`）。详见 `docs/solution/2026-10-13-cache-invalidation-write-site.md` |
 | 安全写编排收口 | `withScopedRow` / `withScopedWrite` + `preflight`；`requireDeptAccess` 调用点 12 → 0（commit `3deca95`） |
 | 约束本身的修正 | 行数上限移除，改复杂度门槛；文档与配置对齐（commit `6103c9b`） |
 | 领域操作层方向验证 | `changeOwnPasswordAction` 32 → 20 逻辑行，**不产生无名中间函数**（commit `6da98f3`）。该 action 现为 `lib/account/change-password.ts` 的 `changeOwnPassword`；`resetPasswordAction` 的同法抽取见 commit `629dc38` |

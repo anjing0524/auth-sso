@@ -17,7 +17,7 @@ import { revokeAllRefreshTokens } from '@/lib/auth/token';
 import { clearUserPermissionCache } from '@/lib/permissions';
 import { COMMON_ERRORS, USER_PERMISSIONS } from '@auth-sso/contracts';
 import { restSuccess, restError } from '@/lib/response';
-import { invalidateResource } from '@/lib/cache-invalidation';
+import { invalidateResourceFromRoute } from '@/lib/cache-invalidation';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -73,7 +73,10 @@ export async function POST(
     await clearUserPermissionCache(userId);
 
     // 4. 失效页面缓存与数据缓存（确保用户列表即时反映下线状态）
-    invalidateResource('users');
+    //    Route Handler 必须用 route 版入口：`invalidateResource` 走 `updateTag`，
+    //    而该原语在 route 上下文必抛（Next.js E872）——抛出点在撤销已提交之后，
+    //    会造成"写成功、失效未发生、响应 5xx"并诱使调用方重试。
+    invalidateResourceFromRoute('users');
 
     return restSuccess({
       userId: id,

@@ -16,7 +16,7 @@ import { revokeUserAccessByUserId } from '@/lib/session/revoke';
 import { COMMON_ERRORS, USER_ERRORS, ENTITY_ACTIVE, USER_PERMISSIONS } from '@auth-sso/contracts';
 import { getUserRoles } from '@/app/(dashboard)/users/data';
 import { restSuccess, restError } from '@/lib/response';
-import { invalidateResource } from '@/lib/cache-invalidation';
+import { invalidateResourceFromRoute } from '@/lib/cache-invalidation';
 
 interface RouteParams { params: Promise<{ id: string }>; }
 
@@ -123,7 +123,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     await refreshUserPermissionCache(userId);
     await revokeUserAccessByUserId(userId);
-    invalidateResource('users');
+    invalidateResourceFromRoute('users');
     return restSuccess({ assignedCount: result.assignedCount });
   });
 }
@@ -194,7 +194,7 @@ export async function DELETE(
     await revokeUserAccessByUserId(userId);
 
     // 失效页面与数据缓存
-    invalidateResource('users');
+    invalidateResourceFromRoute('users');
 
     return restSuccess({});
   });

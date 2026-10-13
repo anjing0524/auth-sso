@@ -60,11 +60,20 @@ vi.mock(import('@/lib/crypto'), async (importOriginal): Promise<Partial<typeof c
 
 vi.mock('@/infrastructure/redis', () => ({}));
 
+const { mockInvalidateFromRoute } = vi.hoisted(() => ({ mockInvalidateFromRoute: vi.fn() }));
+
+// @allow-module-mock @/lib/cache-invalidation infra-boundary: 只观测「是否触发写后失效」这一旁路副作用，其余导出走真身；原语选择与资源表由 cache-invalidation.test.ts 覆盖
+vi.mock(import('@/lib/cache-invalidation'), async (importOriginal): Promise<Partial<typeof cacheInvalidationModule>> => {
+  const actual = await importOriginal();
+  return { ...actual, invalidateResourceFromRoute: mockInvalidateFromRoute };
+});
+
 import { GET as ListPermissions } from '@/app/api/permissions/route';
 import { GET as GetPermission } from '@/app/api/permissions/[id]/route';
 import { POST as RegisterPermissions } from '@/app/api/permissions/register/route';
 import type * as authModule from '@/lib/auth';
 import type * as cryptoModule from '@/lib/crypto';
+import type * as cacheInvalidationModule from '@/lib/cache-invalidation';
 
 
 const REGISTRY_CLIENT_ID = 'registry-client';
@@ -349,6 +358,37 @@ describe('Permission API', () => {
       expect(parent).toBeDefined();
       expect(child).toBeDefined();
       expect(child!.parentId).toBe(parent!.id);
+    });
+
+    it('同步确有变更 → 触发 route 版写后失效', async () => {
+      await seedRegistryClient();
+
+      const res = await RegisterPermissions(
+        createRegisterReq([{ code: 'portal:user:list', name: '用户列表', type: 'API', sort: 1 }]),
+      );
+      const body = await parseResponseJson(res);
+
+      expect(body.inserted).toBe(1);
+      expect(mockInvalidateFromRoute).toHaveBeenCalledWith('permissions');
+    });
+
+    it('幂等重复上报（零变更）→ 不触发失效，避免白白打掉 hours 档缓存', async () => {
+      await seedRegistryClient();
+
+      // 第一次：真实插入
+      await RegisterPermissions(
+        createRegisterReq([{ code: 'portal:user:list', name: '用户列表', type: 'API', sort: 1 }]),
+      );
+      mockInvalidateFromRoute.mockClear();
+
+      // 第二次：与库中完全一致 → inserted / updated / deprecated 全为 0
+      const res = await RegisterPermissions(
+        createRegisterReq([{ code: 'portal:user:list', name: '用户列表', type: 'API', sort: 1 }]),
+      );
+      const body = await parseResponseJson(res);
+
+      expect(body).toMatchObject({ inserted: 0, updated: 0, deprecated: 0 });
+      expect(mockInvalidateFromRoute).not.toHaveBeenCalled();
     });
   });
 });

@@ -8,6 +8,7 @@ import { validateClientActive, validateClientSecret } from '@/domain/auth/oauth-
 import { flattenPermissions, getHashCode, findDuplicateCode } from '@/domain/permission/permission-sync';
 import type { IncomingPermission } from '@/domain/permission/permission-sync';
 import { restSuccess, restError } from '@/lib/response';
+import { invalidateResourceFromRoute } from '@/lib/cache-invalidation';
 import { createLogger } from '@/lib/logger';
 
 const log = createLogger('PermissionsRegister');
@@ -95,6 +96,14 @@ export async function POST(request: NextRequest) {
       }
       return syncedCounts;
     });
+
+    // 写后失效：权限树变更会改变 /permissions 的读模型（cacheLife('hours')）。
+    // 此前该端点完全不失效，于是权限上报后列表最长陈旧数小时。
+    // 仅在确有变更时失效——本端点常在每次部署被调用，无变更时失效会白白打掉缓存。
+    if (result.inserted + result.updated + result.deprecated > 0) {
+      invalidateResourceFromRoute('permissions');
+    }
+
     return restSuccess(result);
   } catch (error) {
     const mapped = mapServerError(error);

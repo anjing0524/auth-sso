@@ -61,8 +61,11 @@ vi.mock(import('@/lib/authz'), (): Partial<typeof authzModule> => ({
   withScopedWrite: async (_opts, write) => write(undefined as never),
 }));
 
-// @allow-module-mock @/lib/cache-invalidation infra-boundary: 缓存失效是旁路副作用，不影响本文件断言的响应契约
-vi.mock(import('@/lib/cache-invalidation'), (): Partial<typeof cacheInvalidationModule> => ({ invalidateResource: vi.fn() }));
+// @allow-module-mock @/lib/cache-invalidation infra-boundary: 缓存失效是旁路副作用，不影响本文件断言的响应契约；importOriginal + spread 让未列出的导出走真身 —— 此前整体替换使新增的 invalidateResourceFromRoute 变成 undefined，本文件 3 例变红
+vi.mock(import('@/lib/cache-invalidation'), async (importOriginal): Promise<Partial<typeof cacheInvalidationModule>> => {
+  const actual = await importOriginal();
+  return { ...actual, invalidateResourceFromRoute: vi.fn() };
+});
 
 import { POST } from '@/app/api/users/[id]/force-logout/route';
 import { isJtiRevoked, revokeUserAccessByUserId, trackUserJti } from '@/lib/session/revoke';

@@ -245,7 +245,11 @@ export async function GET(request: NextRequest) {
 ### R12. 缓存策略 (Next.js 16)
 
 - 列表查询：`'use cache'` + `cacheTag()` + `cacheLife()` 在 data.ts 中使用
-- 写操作：`revalidatePath()` + `updateTag()` 在 actions.ts 中使用
+- 写后失效：**只**经 `lib/cache-invalidation.ts`（资源表与标签的唯一真相源），并按**写入位置**选入口：
+  - Server Action → `invalidateResource(resource)`（内部 `updateTag`，立即过期）
+  - Route Handler → `invalidateResourceFromRoute(resource)`（内部 `revalidateTag(tag, { expire: 0 })`）
+  - ⚠️ `updateTag` **只能**在 Server Action 里调用；在 Route Handler 里**必抛**（Next.js `E872`），而抛出点在写事务提交之后 —— 形态是「写成功 + 失效未发生 + 响应 5xx」并诱使调用方重试
+  - 机械守卫：`__tests__/api/cache-invalidation-site-guard.test.ts` 扫描全部 `route.ts`，命中即红
 - **严禁**在 `'use cache'` 作用域内访问 `cookies()` / `headers()` / `searchParams`
 - 动态 API 必须包裹在 `<Suspense>` 边界内
 
@@ -304,7 +308,9 @@ Code Review 中发现以下任意模式，**立即停止合并，必须重构**�
 | 类型耦合 | domain 实体 `extends z.infer<typeof XSchema>` | 纯 interface + 独立的 Zod Schema |
 | 事务懒惰 | `await tx.query` 查完立刻 `await db.update`（外层事务失效） | 同一 `db.transaction` 回调内完成 |
 | 读写在 actions 混用 | 在 actions.ts 中先 `getUsers()` 再 `createUser()` | 只读去 data.ts，只写留 actions.ts |
-| 写 Action 只调 `revalidatePath` 不调 `updateTag` | v16 缓存失效不完整 | 追加 `updateTag('xxx-list')`（v16 新 API，即时失效） |
+| 写 Action 只调 `revalidatePath` 不调标签失效 | v16 缓存失效不完整 | 改用 `invalidateResource('xxx')`（内部同时做路径与标签） |
+| 写后失效绕过 `lib/cache-invalidation.ts` 手写原语 | 资源表与跨资源标签必漏（如部门变更需失效用户下拉的 `departments`） | 改用 `invalidateResource()` |
+| Route Handler 里调 `invalidateResource()`（内部 `updateTag`） | `updateTag` 在 route 上下文必抛 `E872`，抛出点在事务提交之后 → 写成功 + 响应 5xx | 改用 `invalidateResourceFromRoute()` |
 | 多层 layout 重复包裹 `<DashboardLayout>` | 多个 layout.tsx 各自包裹 | 统一放入 Route Group `(dashboard)/layout.tsx` |
 
 ---
@@ -317,7 +323,7 @@ Code Review 中发现以下任意模式，**立即停止合并，必须重构**�
 'use server';
 import { withAuth, type AuthContext } from '@/lib/auth';
 import { db, schema } from '@/infrastructure/db';
-import { revalidatePath, updateTag } from 'next/cache';
+import { invalidateResource } from '@/lib/cache-invalidation';
 
 export const createEntityAction = withAuth(
   { permissions: ['entity:create'] },                // 权限码
@@ -331,8 +337,8 @@ export const createEntityAction = withAuth(
       return entity;
     });
 
-    revalidatePath('/entities');
-    updateTag('entities-list');
+    // 路径与标签都在资源表里；Server Action 位置用 invalidateResource
+    invalidateResource('entities');
     return { success: true, data: { id: result.id } };
   },
 );

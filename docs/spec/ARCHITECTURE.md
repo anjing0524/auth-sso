@@ -186,9 +186,8 @@ Browser → Gateway（验签 + 注入头）
           return entity
         })
 
-        // 3. 缓存失效（必须同时调用 revalidatePath + updateTag）
-        revalidatePath('/xxx')
-        updateTag('xxx-list')
+        // 3. 缓存失效（只经 lib/cache-invalidation.ts；资源表决定路径与标签）
+        invalidateResource('xxx')
 
         return { success: true, data: { id: result.id } }
       })
@@ -197,7 +196,7 @@ Browser → Gateway（验签 + 注入头）
 **关键设计原则：**
 - `withAuth` 统一处理鉴权 + 错误映射，Action 体内**零鉴权样板、零 try/catch**
 - 多表/多行写入**必须**使用 `db.transaction()` 包裹
-- 每个写操作必须同时调用 `revalidatePath()`（失效 RSC Payload）和 `updateTag()`（即时失效 `'use cache'` 数据缓存）
+- 写后失效**只经** `lib/cache-invalidation.ts`，并按写入位置选入口：Server Action 用 `invalidateResource()`（内部 `updateTag`），Route Handler 用 `invalidateResourceFromRoute()`（内部 `revalidateTag(tag, { expire: 0 })`）。`updateTag` 在 Route Handler 里必抛（Next.js `E872`），而抛出点在事务提交之后 → 「写成功 + 失效未发生 + 5xx」
 - 角色变更后需主动刷新受影响用户的权限缓存：`refreshUserPermissionCache(userId)`
 - 非关键副作用（JWT 撤销、审计日志）使用 fire-and-forget 模式，不阻塞主流程
 
@@ -436,7 +435,7 @@ Auth-SSO 的请求处理全链路由 **11 层** 组成，按职责划分为三�
 │ 第 7 层：data.ts / actions.ts / route.ts        │
 │ · 读取：Drizzle 查询链 + 'use cache' 缓存          │
 │ · 写入：db.transaction() 事务 + 领域纯函数          │
-│ · 缓存失效：revalidatePath + updateTag             │
+│ · 缓存失效：lib/cache-invalidation（按写入位置选原语） │
 └──────────────┬──────────────────────────────────┘
                │
                ▼

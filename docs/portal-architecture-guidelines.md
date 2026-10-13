@@ -60,8 +60,8 @@ flowchart TD
 2.  **写模型 (Write Model - 单控制器原则)**：
     *   **判定标准**：如果一个写业务仅在我们自己内部的页面上调用，**一律只编写 Server Actions (actions.ts)**。严禁为其编写任何重复的 `/api/` 路由接口。
     *   **适用场景**：
-        *   **Server Actions**：用于我们自己内部页面的表单提交、按钮点击、删除等操作，直接处理入参 Zod 解析，调用领域纯函数，直调 Drizzle 落库，并通过 `updateTag()` / `revalidatePath()` 刷新缓存，返回 JS plain object 即可。
-        *   **REST Route Handlers**：只有在发生**”外部系统集成（Webhook/OIDC 回调）”**、**”跨域/子系统用户同步等开放 API 服务”**以及**”运维脚本与 cron 程序化调用”**这 3 种情况时，才允许为相应的写操作编写 API 路由。
+        *   **Server Actions**：用于我们自己内部页面的表单提交、按钮点击、删除等操作，直接处理入参 Zod 解析，调用领域纯函数，直调 Drizzle 落库，并通过 `invalidateResource()`（`lib/cache-invalidation.ts`，内部同时失效页面路径与读模型标签）刷新缓存，返回 JS plain object 即可。
+        *   **REST Route Handlers**：只有在发生**”外部系统集成（Webhook/OIDC 回调）”**、**”跨域/子系统用户开放 API 服务”**以及**”运维脚本与 cron 程序化调用”**这 3 种情况时，才允许为相应的写操作编写 API 路由。写后失效必须用 **route 版入口** `invalidateResourceFromRoute()` —— `invalidateResource()` 内部的 `updateTag` 在 Route Handler 里必抛（Next.js `E872`），抛出点在事务提交之后，会造成「写成功 + 失效未发生 + 5xx」。
     *   **统一规范**：控制层**不得包含任何业务逻辑判断**（唯一硬性约束），只做「编排 + 映射」；**不设行数上限**，复杂度由 lint 强制（`complexity ≤ 15`、`max-depth ≤ 4`，见 ADR-019）。
 3.  **领域层 (Domain Layer)**：纯原生 TS 代码，零依赖 Next.js 模块。将所有核心业务规则（状态机转换、权限判定、数据计算与变换）抽象为**纯函数**（Plain Object 输入输出）。错误用**领域级错误类型**表达，由统一的**错误映射横切层**（`mapDomainError`）转换为 HTTP 响应。
 4.  **数据持久化层 (Database Layer)**：不设置 Repository 接口与实现分离，不设 Mapper 转换层与工厂 DI。控制器层在通过 Zod 校验与领域函数处理后，直接调用 Drizzle 语句对数据库进行操作，直接引用由 Drizzle schema 推导出的物理类型，消除不必要的间接抽象层。涉及多表写入时必须在 Controller 层显式使用 `db.transaction()`。
