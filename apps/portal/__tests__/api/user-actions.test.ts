@@ -7,11 +7,14 @@
  * @vitest-environment node
  */
 import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest';
-import { EntityNotFoundError } from '@/domain/shared/errors';
 import { createTestDbHandle, seedTestData } from '../helpers/test-db';
 import { seedAdminUser, seedRootDept, seedSuperAdminRole, seedTestUser, seedUserRoleBinding } from '../helpers/seed-fixtures';
 import * as schema from '@/db/schema';
 import { eq } from 'drizzle-orm';
+import { COMMON_ERRORS } from '@auth-sso/contracts';
+
+// 断言说明：`ApiResponse` 是判别联合（`ApiSuccess | ApiError`），因此断言失败契约时先
+// `if (r.success) expect.unreachable(...)` 收窄，再取 `r.error`（直接取会 TS2339）。
 
 // ── 测试数据库 ──────────────────────────────────────
 const td = createTestDbHandle();
@@ -20,15 +23,30 @@ vi.mock('@/infrastructure/db', () => ({
   get db() { return td.db; },
   get schema() { return td.schema; },
 }));
-// @allow-module-mock @/lib/auth auth-bypass: 本文件被测语义不依赖登录/授权链路，mock 仅用于构造"已登录/已授权"的请求上下文（依赖它的断言：user-actions.test.ts 全部用例）
-vi.mock(import('@/lib/auth'), (): Partial<typeof authModule> => ({
-  resolveIdentity: vi.fn(async () => ({ userId: '00000000-0000-4000-8000-000000000101', expiresAt: null, issuedAt: null })),
-  logServerDataRead: vi.fn(async () => {}),
-  // 参数不标注、由对象字面量的上下文类型推断，与真身签名（返回**包装后的 handler**、
-  // handler 首参为 AuthContext）保持一致——此前写 `any`/`Function` 恰好掩盖了这一漂移
-  withAuth: (_o, h) => async (...a) => h({ userId: '00000000-0000-4000-8000-000000000101' }, ...a),
-  withPermission: async (_o, h) => h('00000000-0000-4000-8000-000000000101'),
-}));
+// 2026-10-14（#71）：**只 mock 身份解析，让 `withAuth` 跑真身**。
+//
+// 此前本文件把 `@/lib/auth` 整体替换为 `withAuth: (_o, h) => async (...a) => h(...)`，
+// 于是**权限判定与错误映射双双消失**，领域错误以 reject 逃逸——
+// 而生产契约恰恰相反：`withAuth`（`lib/auth/guard.ts:38-49`）在内部 catch 领域错误，
+// 映射为 `{ success:false, error, message }`，**从不抛出**。
+// 实测该文件因此同时钉住两种相反的契约：5 处 `rejects.toThrow(...)`（mock 产物）
+// 与 2 处 `success === false`（生产契约）并存。
+//
+// 现在只替换身份（`checkPermission` 直接从 `./verify-jwt` 导入它），
+// 权限门（SUPER_ADMIN 绕过，ADR-001）、范围守卫、错误映射、审计全部真实执行。
+// @allow-module-mock @/lib/auth/verify-jwt auth-bypass: 只提供"谁已登录"这一输入；本文件依赖它的断言：全部用例的操作者身份。鉴权链路其余部分走真身（见上）；合法理由见 ADR-022（reason 点名本文件 user-actions.test.ts）
+vi.mock(import('@/lib/auth/verify-jwt'), async (importOriginal): Promise<Partial<typeof verifyJwtModule>> => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    // 字面量而非 ADMIN_ID：vi.mock 工厂被提升，引用下方 const 会落进 TDZ
+    resolveIdentity: async () => ({
+      userId: '00000000-0000-4000-8000-000000000101',
+      expiresAt: null,
+      issuedAt: null,
+    }),
+  };
+});
 // @allow-module-mock @/lib/crypto input-fixture: 只覆盖「确定性 ID」这类输入，其余导出（含 hashToken）走真身
 vi.mock(import('@/lib/crypto'), async (importOriginal): Promise<Partial<typeof cryptoModule>> => {
   const actual = await importOriginal();
@@ -46,7 +64,7 @@ vi.mock(import('@/lib/crypto'), async (importOriginal): Promise<Partial<typeof c
 
 import { db } from '@/infrastructure/db';
 import { createUserAction, updateUserAction, toggleUserStatusAction, deleteUserAction, resetPasswordAction } from '@/app/(dashboard)/users/actions';
-import type * as authModule from '@/lib/auth';
+import type * as verifyJwtModule from '@/lib/auth/verify-jwt';
 import type * as cryptoModule from '@/lib/crypto';
 
 
@@ -93,7 +111,7 @@ describe('User Server Actions', () => {
         username: '', name: '', password: '', email: '',
       } as any);
 
-      expect(r.success).toBe(false);
+      if (r.success) expect.unreachable('应当被拒绝（生产契约：失败信封）');
       expect(r.error).toBeDefined();
     });
   });
@@ -113,10 +131,12 @@ describe('User Server Actions', () => {
       expect(updated!.name).toBe('Updated Name');
     });
 
-    it('不存在用户 → 抛出 EntityNotFoundError', async () => {
-      await expect(
-        updateUserAction('00000000-0000-4000-8000-000000000999', { name: 'X' } as any)
-      ).rejects.toThrow(EntityNotFoundError);
+    it('不存在用户 → 失败信封 NOT_FOUND（生产契约，非抛出）', async () => {
+      const r = await updateUserAction('00000000-0000-4000-8000-000000000999', { name: 'X' } as any);
+
+      // 生产契约：withAuth 映射领域错误为失败信封，**不抛出**
+      if (r.success) expect.unreachable('应当被拒绝（生产契约：失败信封）');
+      expect(r.error).toBe(COMMON_ERRORS.NOT_FOUND);
     });
   });
 
@@ -142,10 +162,11 @@ describe('User Server Actions', () => {
       expect(r.data.status).toBe('ACTIVE');
     });
 
-    it('不存在用户 → 抛出错误', async () => {
-      await expect(
-        toggleUserStatusAction('00000000-0000-4000-8000-000000000999')
-      ).rejects.toThrow(EntityNotFoundError);
+    it('不存在用户 → 失败信封 NOT_FOUND（生产契约，非抛出）', async () => {
+      const r = await toggleUserStatusAction('00000000-0000-4000-8000-000000000999');
+
+      if (r.success) expect.unreachable('应当被拒绝（生产契约：失败信封）');
+      expect(r.error).toBe(COMMON_ERRORS.NOT_FOUND);
     });
   });
 
@@ -159,10 +180,11 @@ describe('User Server Actions', () => {
       expect(r.data.id).toBe('00000000-0000-4000-8000-000000000201');
     });
 
-    it('不存在用户 → 抛出错误', async () => {
-      await expect(
-        deleteUserAction('00000000-0000-4000-8000-000000000999')
-      ).rejects.toThrow(EntityNotFoundError);
+    it('不存在用户 → 失败信封 NOT_FOUND（生产契约，非抛出）', async () => {
+      const r = await deleteUserAction('00000000-0000-4000-8000-000000000999');
+
+      if (r.success) expect.unreachable('应当被拒绝（生产契约：失败信封）');
+      expect(r.error).toBe(COMMON_ERRORS.NOT_FOUND);
     });
   });
 });
@@ -233,18 +255,22 @@ describe('resetPasswordAction', () => {
     })[0]!);
     const before = await rowOf('00000000-0000-4000-8000-000000000201');
 
-    await expect(
-      resetPasswordAction('00000000-0000-4000-8000-000000000201', NEW_PASSWORD),
-    ).rejects.toThrow('新密码不能与最近使用过的密码相同');
+    const r = await resetPasswordAction('00000000-0000-4000-8000-000000000201', NEW_PASSWORD);
+
+    // 生产契约：领域规则违反 → 失败信封（422 语义）+ 可读文案，**不抛出**
+    if (r.success) expect.unreachable('应当被拒绝（生产契约：失败信封）');
+    expect(r.error).toBe(COMMON_ERRORS.VALIDATION_ERROR);
+    expect(r.message).toContain('新密码不能与最近使用过的密码相同');
 
     const after = await rowOf('00000000-0000-4000-8000-000000000201');
     expect(after!.passwordHash).toBe(before!.passwordHash);
   });
 
-  it('目标用户不存在 → EntityNotFoundError（不与其他失败混淆）', async () => {
-    await expect(
-      resetPasswordAction('00000000-0000-4000-8000-000000000999', NEW_PASSWORD),
-    ).rejects.toThrow(EntityNotFoundError);
+  it('目标用户不存在 → NOT_FOUND（不与其他失败混淆）', async () => {
+    const r = await resetPasswordAction('00000000-0000-4000-8000-000000000999', NEW_PASSWORD);
+
+    if (r.success) expect.unreachable('应当被拒绝（生产契约：失败信封）');
+    expect(r.error).toBe(COMMON_ERRORS.NOT_FOUND);
   });
 
   it('重置成功后撤销该用户全部会话（B-USR-PW，断言真实黑名单）', async () => {

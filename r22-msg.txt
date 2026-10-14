@@ -1,0 +1,38 @@
+test(auth): 写路径测试契约改为生产契约，withAuth 跑真身（refs #71）
+
+问题：user-actions.test.ts 把 @/lib/auth 整体替换为
+withAuth: (_o, h) => async (...a) => h(...)，于是权限判定与错误映射双双消失，
+领域错误以 reject 逃逸 —— 而生产契约恰恰相反：withAuth（lib/auth/guard.ts:38-49）
+在内部 catch 领域错误并映射为 { success:false, error, message }，从不抛出。
+同一文件因此并存两种相反的契约：5 处 rejects.toThrow(...)（mock 产物）
+与 2 处 success === false（生产契约）；department-actions.test.ts 同形（4 处），
+且 #81 期间我新加的那条测试也照着 mock 契约写了（我自己的残留）。
+
+修法（关键事实来自读码）：check-permission.ts 从 ./verify-jwt 直接导入
+resolveIdentity（不走 @/lib/auth 桶），且 checkPermission 有 SUPER_ADMIN 绕过
+（ADR-001）而测试台已播种该角色 ⇒ 只需把 mock 目标换成身份解析，withAuth 即可跑真身
+（importOriginal + spread，避免部分替换陷阱）。于是权限门、范围守卫、错误映射、
+审计全部真实执行；断言改为生产契约（NOT_FOUND / VALIDATION_ERROR + message；
+#81 的根部门则断言 DEPARTMENT_ERRORS.CANNOT_DELETE_ROOT ⇒ 专属码真正到达客户端）。
+注：ApiResponse 是判别联合，断言失败契约时用 if (r.success) expect.unreachable(...)
+收窄后再取 r.error（直接存取会 TS2339 —— 由 pre-commit 的 typecheck 钩子抓出）。
+
+验证：换成真身、未改断言先跑 → 5 条立刻红，失败信息即证据
+（promise resolved "{ success: false, …(2) }" instead of rejecting）。
+确定性：两文件各连跑 3 次（15/15、10/10）全绿。
+
+过程中的两次自我纠错（已写入 solution）：
+1. 第一版红是"错的红" —— 我清理临时探针时正则把该用例的 seedTestData(...) 一行一并删掉，
+   测试跑在"库里只有根部门"的状态（R10/R19 同源教训：红的成因必须先确认）
+2. 调试中读到 Redis 的 portal:user_perms:…:null 防穿透标记，一度怀疑每用例没清 Redis；
+   决定性实验（手工写入标记 TTL=600 后只跑该用例 → 通过）推翻该假设 ⇒ 基础设施无问题
+
+同类普查：grep -rln "vi.mock(import('@/lib/auth')" __tests__/ 得 13 个文件，
+逐文件数 rejects.toThrow 命中 6 个 —— 已修 2，其余 role-actions(4)/department-api(3)/
+permission-actions(2)/client-actions(2) 同形另记 #84（附已验证可行的修法）；
+user-role-api(1) 机制不同（审计模块抛错穿透路由）。
+
+门禁：pnpm test 96 文件 786 用例全绿；tsc 0；eslint 0 error
+（1 条 warning 既有，已对 HEAD 证明）。
+
+文档：docs/solution/2026-10-14-write-path-test-contract.md

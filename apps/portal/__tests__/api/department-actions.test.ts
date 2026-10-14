@@ -5,10 +5,13 @@
  * @vitest-environment node
  */
 import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest';
-import { EntityNotFoundError, BusinessRuleViolationError } from '@/domain/shared/errors';
 import { createTestDbHandle, seedTestData } from '../helpers/test-db';
 import { seedAdminUser, seedRootDept, seedSubDept, seedSuperAdminRole, seedTestUser, seedUserRoleBinding } from '../helpers/seed-fixtures';
 import * as schema from '@/db/schema';
+import { COMMON_ERRORS } from '@auth-sso/contracts';
+
+// 断言说明：`ApiResponse` 是判别联合（`ApiSuccess | ApiError`），因此断言失败契约时先
+// `if (r.success) expect.unreachable(...)` 收窄，再取 `r.error`（直接取会 TS2339）。
 import { DEPARTMENT_ERRORS } from '@auth-sso/contracts';
 
 // ── 测试数据库 ──────────────────────────────────────
@@ -24,13 +27,22 @@ vi.mock('@/infrastructure/db', () => ({
   get db() { return td.db; },
   get schema() { return td.schema; },
 }));
-// @allow-module-mock @/lib/auth auth-bypass: 本文件被测语义不依赖登录/授权链路，mock 仅用于构造"已登录/已授权"的请求上下文（依赖它的断言：department-actions.test.ts 全部用例）
-vi.mock(import('@/lib/auth'), (): Partial<typeof authModule> => ({
-  resolveIdentity: vi.fn(async () => ({ userId: '00000000-0000-4000-8000-000000000101', expiresAt: null, issuedAt: null })),
-  logServerDataRead: vi.fn(async () => {}),
-  withAuth: (_o: any, h: Function) => async (...a: any[]) =>
-    h({ userId: '00000000-0000-4000-8000-000000000101' }, ...a),
-}));
+// 2026-10-14（#71 同类修订）：**只 mock 身份解析，让 `withAuth` 跑真身**。
+// 此前整体替换 `@/lib/auth`（含 `withAuth`），于是**权限判定与错误映射双双消失**，
+// 领域错误以 reject 逃逸——而生产契约是 `{ success:false, error, message }`（`lib/auth/guard.ts:38-49`）。
+// 现在权限门（SUPER_ADMIN 绕过，ADR-001）、范围守卫、错误映射、审计全部真实执行。
+// @allow-module-mock @/lib/auth/verify-jwt auth-bypass: 只提供"谁已登录"这一输入；本文件依赖它的断言：全部用例的操作者身份。鉴权链路其余部分走真身（见上）；合法理由见 ADR-022（reason 点名本文件 department-actions.test.ts）
+vi.mock(import('@/lib/auth/verify-jwt'), async (importOriginal): Promise<Partial<typeof verifyJwtModule>> => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    resolveIdentity: async () => ({
+      userId: '00000000-0000-4000-8000-000000000101',
+      expiresAt: null,
+      issuedAt: null,
+    }),
+  };
+});
 // @allow-module-mock @/lib/crypto input-fixture: 只覆盖「确定性 ID」这类输入，其余导出（含 hashToken）走真身
 vi.mock(import('@/lib/crypto'), async (importOriginal): Promise<Partial<typeof cryptoModule>> => {
   const actual = await importOriginal();
@@ -46,7 +58,7 @@ vi.mock('next/cache', () => ({ revalidatePath: vi.fn(), updateTag: vi.fn() }));
 
 import { db } from '@/infrastructure/db';
 import { createDepartmentAction, updateDepartmentAction, deleteDepartmentAction } from '@/app/(dashboard)/departments/actions';
-import type * as authModule from '@/lib/auth';
+import type * as verifyJwtModule from '@/lib/auth/verify-jwt';
 import type * as cryptoModule from '@/lib/crypto';
 
 
@@ -97,7 +109,7 @@ describe('Department Server Actions', () => {
     it('缺 name → 返回 success: false 并包含错误码', async () => {
       const r: any = await createDepartmentAction({ name: '', code: '', sort: 1, parentId: null } as any);
 
-      expect(r.success).toBe(false);
+      if (r.success) expect.unreachable('应当被拒绝（生产契约：失败信封）');
       expect(r.error).toBeDefined();
       expect(r.message).toBeDefined();
     });
@@ -119,10 +131,15 @@ describe('Department Server Actions', () => {
       expect(updated!.name).toBe('Updated Tech');
     });
 
-    it('不存在部门 → 抛出 EntityNotFoundError', async () => {
-      await expect(
-        updateDepartmentAction('00000000-0000-4000-8000-000000000999', { name: 'X' } as any)
-      ).rejects.toThrow(EntityNotFoundError);
+    it('不存在部门 → 失败信封 NOT_FOUND（生产契约）', async () => {
+      const r = await updateDepartmentAction(
+        '00000000-0000-4000-8000-000000000999',
+        { name: 'X' } as any,
+      );
+
+      // 生产契约：领域错误被 withAuth 映射为失败信封（**不抛出**）
+      if (r.success) expect.unreachable('应当被拒绝（生产契约：失败信封）');
+      expect(r.error).toBe(COMMON_ERRORS.NOT_FOUND);
     });
   });
 
@@ -147,22 +164,24 @@ describe('Department Server Actions', () => {
       // **因此这条用例的判别点是"用哪个码拒绝"，而不是"是否拒绝"**：
       // ADR-002 承诺的是 `CANNOT_DELETE_ROOT`（该码此前只在 contracts 定义、全仓零引用），
       // 而非通用的 `VALIDATION_ERROR` + "存在关联角色"的文案。
-      await expect(deleteDepartmentAction(ROOT_DEPT_ID)).rejects.toMatchObject({
-        code: DEPARTMENT_ERRORS.CANNOT_DELETE_ROOT,
-      });
+      const r = await deleteDepartmentAction(ROOT_DEPT_ID);
+      if (r.success) expect.unreachable('应当被拒绝（生产契约：失败信封）');
+      expect(r.error).toBe(DEPARTMENT_ERRORS.CANNOT_DELETE_ROOT);
 
       // 行必须仍在（否决性数据：拒绝就不能有副作用）
       const rows = await db.select().from(schema.departments);
       expect(rows.find(d => d.id === ROOT_DEPT_ID)).toBeDefined();
     });
 
-    it('不存在部门 → 抛出 EntityNotFoundError', async () => {
-      await expect(
+    it('不存在部门 → 失败信封 NOT_FOUND（生产契约）', async () => {
+      const r = await (
         deleteDepartmentAction('00000000-0000-4000-8000-000000000999')
-      ).rejects.toThrow(EntityNotFoundError);
+      );
+      if (r.success) expect.unreachable('应当被拒绝（生产契约：失败信封）');
+      expect(r.error).toBe(COMMON_ERRORS.NOT_FOUND);
     });
 
-    it('有子部门 → 抛出 BusinessRuleViolationError', async () => {
+    it('有子部门 → 失败信封 VALIDATION_ERROR（生产契约）', async () => {
       await seedTestData(td.db, {
         departments: [
           ...(seedSubDept()!),
@@ -180,12 +199,15 @@ describe('Department Server Actions', () => {
         ],
       });
 
-      await expect(
+      const r = await (
         deleteDepartmentAction(TECH_DEPT_ID)
-      ).rejects.toThrow(BusinessRuleViolationError);
+      );
+      if (r.success) expect.unreachable('应当被拒绝（生产契约：失败信封）');
+      expect(r.error).toBe(COMMON_ERRORS.VALIDATION_ERROR);
+      expect(r.message).toContain('子部门');
     });
 
-    it('有用户关联 → 抛出 BusinessRuleViolationError', async () => {
+    it('有用户关联 → 失败信封 VALIDATION_ERROR（生产契约）', async () => {
       await seedTestData(td.db, {
         departments: [{
           id: WITH_USERS_DEPT_ID,
@@ -201,9 +223,12 @@ describe('Department Server Actions', () => {
         users: seedTestUser({ deptId: WITH_USERS_DEPT_ID, id: '00000000-0000-4000-8000-000000000201' }),
       });
 
-      await expect(
+      const r = await (
         deleteDepartmentAction(WITH_USERS_DEPT_ID)
-      ).rejects.toThrow(BusinessRuleViolationError);
+      );
+      if (r.success) expect.unreachable('应当被拒绝（生产契约：失败信封）');
+      expect(r.error).toBe(COMMON_ERRORS.VALIDATION_ERROR);
+      expect(r.message).toContain('关联用户');
     });
   });
 });
