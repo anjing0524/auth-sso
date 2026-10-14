@@ -57,3 +57,7 @@ pub use router::Router;
 /// 分散到各文件就会随文件增删而漏（这正是它此前缺失的原因）。
 #[cfg(test)]
 mod contract_tests;
+
+/// 仓库卫生守卫（生产代码里的测试缝必须登记）；见 `test_hygiene_tests.rs` 的普查说明。
+#[cfg(test)]
+mod test_hygiene_tests;

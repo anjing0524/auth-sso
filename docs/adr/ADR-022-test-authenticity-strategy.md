@@ -160,7 +160,28 @@ vi.mock('<target>', () => ({ … }));
 
 - 不给 UI/domain project 引入真实 Redis 或 DB（AGENTS.md 的硬约束保持）。
 - 不为测试引入 DI 容器/抽象层；不引入 testcontainers。
-- Rust 侧同类形态（整体替换式 test double）不在本策略射程，另立 effort。
+- ~~Rust 侧同类形态（整体替换式 test double）不在本策略射程，另立 effort。~~
+  **2026-10-14 结案（#88）**：**普查后确认该 effort 没有主体**——Rust 侧不存在
+  "整体替换式 test double"。普查方法（可复跑，见 `apps/gateway/src/test_hygiene_tests.rs` 的模块文档）：
+
+  ```text
+  grep -rniE "struct (Fake|Mock|Stub|Dummy|Test)[A-Za-z]*|enum (Fake|Mock|Stub)" src/
+  grep -rn  "impl .* for .*" src/*/tests.rs
+  grep -rniE "call_count|times_called|assert.*called" src/
+  grep -rn  "cfg(test)|cfg!(test)" src/ | grep -v "mod tests"
+  ```
+
+  结论（2026-10-14 实测）：**零命中**——无命名替身、无为生产 trait 写的测试类型、
+  无调用计数断言、无本地服务器/HTTP 客户端替换；依赖经 `Arc`/显式参数注入
+  （`JwtVerifier::new(jwks_cache)`、`JwksCache::new(...)`），测试直接构造真实值
+  （真实 HMAC 向量、真实 JWKS 解析）。Rust 的模块系统本身也不提供模块级 mock。
+
+  **但普查发现了真正需要看管的东西**：`#[cfg(test)]` 出现在**生产模块内**的"测试缝"——
+  目前仅一处，`JwtVerifier::new_without_revocation_for_test`（关掉 Redis 撤销检查，
+  供密码学单测隔离）。这类缝可以悄悄削弱测试，正是本策略要防的形态。
+  故新增守卫 `test_hygiene_tests.rs`：**生产模块内每个测试缝都必须在 `DECLARED_SEAMS`
+  里登记并写明理由**（对齐 TS 侧 `@allow-module-mock` 的纪律），
+  且守卫含解析器自测 + 反向检查（登记项失效也要报）。
 - 生产缺陷本身的修复（如"把永不失败的调用当失败信号"第 4 处，见 issue #36）走 bug 流程，不属本策略。
 
 ## 强制点（机械可验，逐条可追溯）
