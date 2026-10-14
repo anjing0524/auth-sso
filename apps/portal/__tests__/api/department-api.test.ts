@@ -15,8 +15,9 @@ import { createTestDbHandle, seedTestData } from '../helpers/test-db';
 import { seedAdminUser, seedSuperAdminRole, seedUserRoleBinding } from '../helpers/seed-fixtures';
 import { createTestRequest, parseResponseJson } from '../helpers/test-utils';
 import * as schema from '@/db/schema';
-import { BusinessRuleViolationError } from '@/domain/shared/errors';
+import { COMMON_ERRORS } from '@auth-sso/contracts';
 import type * as authModule from '@/lib/auth';
+import type * as verifyJwtModule from '@/lib/auth/verify-jwt';
 import type * as cryptoModule from '@/lib/crypto';
 
 
@@ -47,25 +48,30 @@ const { mockWithPermission } = vi.hoisted(() => {
   return { mockWithPermission, };
 });
 
-// @allow-module-mock @/lib/auth auth-bypass: 本文件被测语义不依赖登录/授权链路，mock 仅用于构造"已登录/已授权"的请求上下文（依赖它的断言：department-api.test.ts 全部用例）
-vi.mock(import('@/lib/auth'), (): Partial<typeof authModule> => ({
-  resolveIdentity: vi.fn(async () => ({
-    userId: '00000000-0000-4000-8000-000000000101',
-    expiresAt: null,
-    issuedAt: null,
-  })),
-  logServerDataRead: vi.fn(async () => {}),
-  withPermission: mockWithPermission,
-  withAuth:
-    (_o: any, h: Function) =>
-    async (...a: any[]) =>
-      h(
-        {
-          userId: '00000000-0000-4000-8000-000000000101',
-        },
-        ...a,
-      ),
-}));
+// 2026-10-14（#84，沿用 #71 已验证的修法）：`withAuth` **不再被替换**，跑真身——
+// 整体替换会连带删掉错误映射（生产 `withAuth` 返回 `{ success:false, error, message }`，从不抛出），
+// 使断言钉住与生产相反的契约。`withPermission` 仍作为**输入夹具**保留（有测试用它模拟拒绝）。
+// @allow-module-mock @/lib/auth auth-bypass: 只覆盖 `withPermission`（构造"已授权/被拒"这两种路由输入）与数据读取日志；本文件依赖它的断言：路由用例与 `mockWithPermission.mockImplementationOnce` 的拒绝用例。`withAuth` 走真身；合法理由见 ADR-022（reason 点名本文件 department-api.test.ts）
+vi.mock(import('@/lib/auth'), async (importOriginal): Promise<Partial<typeof authModule>> => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    logServerDataRead: vi.fn(async () => {}),
+    withPermission: mockWithPermission,
+  };
+});
+// @allow-module-mock @/lib/auth/verify-jwt auth-bypass: 只提供"谁已登录"这一输入（`checkPermission` 直接从本模块导入它）；本文件依赖它的断言：全部用例的操作者身份。合法理由见 ADR-022（reason 点名本文件 department-api.test.ts）
+vi.mock(import('@/lib/auth/verify-jwt'), async (importOriginal): Promise<Partial<typeof verifyJwtModule>> => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    resolveIdentity: async () => ({
+      userId: '00000000-0000-4000-8000-000000000101',
+      expiresAt: null,
+      issuedAt: null,
+    }),
+  };
+});
 
 // @allow-module-mock @/lib/crypto input-fixture: 只覆盖「确定性 ID」这类输入，其余导出（含 hashToken）走真身
 vi.mock(import('@/lib/crypto'), async (importOriginal): Promise<Partial<typeof cryptoModule>> => {
@@ -272,6 +278,9 @@ describe('Department API', () => {
         ],
       });
 
+      // 真身鉴权链路要求库中真实存在操作者范围（本用例此前未播）
+      await seedOperatorScope();
+
       const r: any = await createDepartmentAction({
         name: '新事业部',
         code: 'BU',
@@ -386,7 +395,7 @@ describe('Department API', () => {
 
   // ── 循环引用防护 ──────────────────────────────────────
   describe('circular reference prevention', () => {
-    it('更新为自身 parentId → BusinessRuleViolationError', async () => {
+    it('更新为自身 parentId → 失败信封 VALIDATION_ERROR（生产契约）', async () => {
       await seedTestData(td.db, {
         departments: [
           {
@@ -415,21 +424,24 @@ describe('Department API', () => {
       });
       await seedOperatorScope();
 
-      await expect(
-        updateDepartmentAction(TECH_DEPT_ID, { parentId: TECH_DEPT_ID } as any),
-      ).rejects.toThrow(BusinessRuleViolationError);
+      const r = await updateDepartmentAction(TECH_DEPT_ID, { parentId: TECH_DEPT_ID } as any);
+
+      // 生产契约：领域规则违反 → 失败信封（422 语义），**不抛出**
+      if (r.success) expect.unreachable('循环引用必须被拒');
+      expect(r.error).toBe(COMMON_ERRORS.VALIDATION_ERROR);
     });
 
-    it('更新 parentId 为自身子部门 → BusinessRuleViolationError', async () => {
+    it('更新 parentId 为自身子部门 → 失败信封 VALIDATION_ERROR（生产契约）', async () => {
       await seedTestData(td.db, { departments: seedThreeLevelTree() });
       await seedOperatorScope();
 
-      await expect(
-        updateDepartmentAction(TECH_DEPT_ID, { parentId: FE_DEPT_ID } as any),
-      ).rejects.toThrow(BusinessRuleViolationError);
+      const r = await updateDepartmentAction(TECH_DEPT_ID, { parentId: FE_DEPT_ID } as any);
+
+      if (r.success) expect.unreachable('循环引用必须被拒');
+      expect(r.error).toBe(COMMON_ERRORS.VALIDATION_ERROR);
     });
 
-    it('更新 parentId 为自身孙子部门 → BusinessRuleViolationError', async () => {
+    it('更新 parentId 为自身孙子部门 → 失败信封 VALIDATION_ERROR（生产契约）', async () => {
       await seedTestData(td.db, {
         departments: [
           {
@@ -480,11 +492,12 @@ describe('Department API', () => {
       });
       await seedOperatorScope();
 
-      await expect(
-        updateDepartmentAction(TECH_DEPT_ID, {
-          parentId: '00000000-0000-4000-8000-000000000005',
-        } as any),
-      ).rejects.toThrow(BusinessRuleViolationError);
+      const r = await updateDepartmentAction(TECH_DEPT_ID, {
+        parentId: '00000000-0000-4000-8000-000000000005',
+      } as any);
+
+      if (r.success) expect.unreachable('循环引用必须被拒');
+      expect(r.error).toBe(COMMON_ERRORS.VALIDATION_ERROR);
     });
   });
 });

@@ -8,7 +8,6 @@
  */
 import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest';
 import { COMMON_ERRORS } from '@auth-sso/contracts';
-import { EntityNotFoundError, BusinessRuleViolationError } from '@/domain/shared/errors';
 import { createTestDbHandle, seedTestData } from '../helpers/test-db';
 import { seedAdminUser, seedRootDept, seedSuperAdminRole, seedUserRoleBinding } from '../helpers/seed-fixtures';
 import * as schema from '@/db/schema';
@@ -20,13 +19,23 @@ vi.mock('@/infrastructure/db', () => ({
   get db() { return td.db; },
   get schema() { return td.schema; },
 }));
-// @allow-module-mock @/lib/auth auth-bypass: 本文件被测语义不依赖登录/授权链路，mock 仅用于构造"已登录/已授权"的请求上下文（依赖它的断言：role-actions.test.ts 全部用例）
-vi.mock(import('@/lib/auth'), (): Partial<typeof authModule> => ({
-  resolveIdentity: vi.fn(async () => ({ userId: '00000000-0000-4000-8000-000000000101', expiresAt: null, issuedAt: null })),
-  logServerDataRead: vi.fn(async () => {}),
-  withAuth: (_o: any, h: Function) => async (...a: any[]) =>
-    h({ userId: '00000000-0000-4000-8000-000000000101' }, ...a),
-}));
+// 2026-10-14（#84，沿用 #71 已验证的修法）：**只 mock 身份解析，让 `withAuth` 跑真身**。
+// 整体替换 `@/lib/auth` 会连带删掉**错误映射**（生产 `withAuth` 从不放领域错误逃逸，
+// 而是返回 `{ success:false, error, message }`），使断言钉住与生产相反的契约。
+// 依据：`check-permission.ts` 从 `./verify-jwt` 直接导入 `resolveIdentity`，
+// 且 `checkPermission` 有 SUPER_ADMIN 绕过（ADR-001）——本文件 beforeEach 已播种该角色。
+// @allow-module-mock @/lib/auth/verify-jwt auth-bypass: 只提供"谁已登录"这一输入；本文件依赖它的断言：全部用例的操作者身份。鉴权链路其余部分走真身；合法理由见 ADR-022（reason 点名本文件 role-actions.test.ts）
+vi.mock(import('@/lib/auth/verify-jwt'), async (importOriginal): Promise<Partial<typeof verifyJwtModule>> => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    resolveIdentity: async () => ({
+      userId: '00000000-0000-4000-8000-000000000101',
+      expiresAt: null,
+      issuedAt: null,
+    }),
+  };
+});
 // @allow-module-mock @/lib/crypto input-fixture: 只覆盖「确定性 ID」这类输入，其余导出（含 hashToken）走真身
 vi.mock(import('@/lib/crypto'), async (importOriginal): Promise<Partial<typeof cryptoModule>> => {
   const actual = await importOriginal();
@@ -45,8 +54,13 @@ const { effectsMocks } = vi.hoisted(() => ({
   },
 }));
 
-// @allow-module-mock @/lib/permissions input-fixture: 只提供批量刷新结果这一输入；真实 PG 驱动的分级由 permission-enforcement / rt-permission-failure 覆盖
-vi.mock(import('@/lib/permissions'), (): Partial<typeof permissionsModule> => ({ refreshUsersPermissionCache: effectsMocks.refreshUsers }));
+// （#84：`withAuth` 跑真身后，`checkPermission` 需要本模块的 `getUserPermissionContext`——
+//  先前整体替换只给出 `refreshUsersPermissionCache`，会让它变成 undefined ⇒ tsc 不报、运行时 500）
+// @allow-module-mock @/lib/permissions input-fixture: 只覆盖批量刷新结果这一输入；其余导出**必须保留真身**
+vi.mock(import('@/lib/permissions'), async (importOriginal): Promise<Partial<typeof permissionsModule>> => {
+  const actual = await importOriginal();
+  return { ...actual, refreshUsersPermissionCache: effectsMocks.refreshUsers };
+});
 // @allow-module-mock @/lib/session/revoke input-fixture: 只提供批量撤销结果这一输入；真实 Redis 撤销由 force-logout-revocation / oauth-revoke 覆盖
 vi.mock(import('@/lib/session/revoke'), (): Partial<typeof sessionRevokeModule> => ({ revokeUsersAccessByUserId: effectsMocks.revokeUsers }));
 vi.mock('@/infrastructure/redis', () => ({}));
@@ -54,7 +68,7 @@ vi.mock('next/cache', () => ({ revalidatePath: vi.fn(), updateTag: vi.fn() }));
 
 import { db } from '@/infrastructure/db';
 import { createRoleAction, updateRoleAction, deleteRoleAction } from '@/app/(dashboard)/roles/actions';
-import type * as authModule from '@/lib/auth';
+import type * as verifyJwtModule from '@/lib/auth/verify-jwt';
 import type * as cryptoModule from '@/lib/crypto';
 import type * as permissionsModule from '@/lib/permissions';
 import type * as sessionRevokeModule from '@/lib/session/revoke';
@@ -132,13 +146,14 @@ describe('Role Server Actions', () => {
       expect(r.error).toBe(COMMON_ERRORS.VALIDATION_ERROR);
     });
 
-    it('部门不存在 → 抛出 EntityNotFoundError', async () => {
-      await expect(
-        createRoleAction({ name: 'X', code: 'XX', sort: 1, deptId: '00000000-0000-4000-8000-000000000999' }),
-      ).rejects.toThrow(EntityNotFoundError);
+    it('部门不存在 → 失败信封 NOT_FOUND（生产契约）', async () => {
+      const r = await createRoleAction({ name: 'X', code: 'XX', sort: 1, deptId: '00000000-0000-4000-8000-000000000999' });
+
+      if (r.success) expect.unreachable('应当被拒绝（生产契约：失败信封）');
+      expect(r.error).toBe(COMMON_ERRORS.NOT_FOUND);
     });
 
-    it('部门已禁用 → 抛出 BusinessRuleViolationError', async () => {
+    it('部门已禁用 → 失败信封 VALIDATION_ERROR（生产契约）', async () => {
       await seedTestData(td.db, {
         departments: [{
           id: '00000000-0000-4000-8000-000000000002',
@@ -152,9 +167,10 @@ describe('Role Server Actions', () => {
           updatedAt: now,
         }],
       });
-      await expect(
-        createRoleAction({ name: 'X', code: 'XX', sort: 1, deptId: '00000000-0000-4000-8000-000000000002' }),
-      ).rejects.toThrow(BusinessRuleViolationError);
+      const r = await createRoleAction({ name: 'X', code: 'XX', sort: 1, deptId: '00000000-0000-4000-8000-000000000002' });
+
+      if (r.success) expect.unreachable('停用部门下不得建角色');
+      expect(r.error).toBe(COMMON_ERRORS.VALIDATION_ERROR);
     });
   });
 
@@ -170,10 +186,11 @@ describe('Role Server Actions', () => {
       expect(updated!.name).toBe('Updated');
     });
 
-    it('角色不存在 → 抛出 EntityNotFoundError', async () => {
-      await expect(
-        updateRoleAction('00000000-0000-4000-8000-000000000999', { name: 'X' } as any),
-      ).rejects.toThrow(EntityNotFoundError);
+    it('角色不存在 → 失败信封 NOT_FOUND（生产契约）', async () => {
+      const r = await updateRoleAction('00000000-0000-4000-8000-000000000999', { name: 'X' } as any);
+
+      if (r.success) expect.unreachable('应当被拒绝（生产契约：失败信封）');
+      expect(r.error).toBe(COMMON_ERRORS.NOT_FOUND);
     });
   });
 
@@ -190,10 +207,11 @@ describe('Role Server Actions', () => {
       expect(deleted).toBeUndefined();
     });
 
-    it('角色不存在 → 抛出 EntityNotFoundError', async () => {
-      await expect(
-        deleteRoleAction('00000000-0000-4000-8000-000000000999'),
-      ).rejects.toThrow(EntityNotFoundError);
+    it('角色不存在 → 失败信封 NOT_FOUND（生产契约）', async () => {
+      const r = await deleteRoleAction('00000000-0000-4000-8000-000000000999');
+
+      if (r.success) expect.unreachable('应当被拒绝（生产契约：失败信封）');
+      expect(r.error).toBe(COMMON_ERRORS.NOT_FOUND);
     });
 
     it('**绑定用户必须同时被撤销与刷新**（配对由 module 保证，不靠调用点记得）', async () => {

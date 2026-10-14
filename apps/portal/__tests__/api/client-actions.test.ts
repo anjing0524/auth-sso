@@ -7,9 +7,9 @@
  * @vitest-environment node
  */
 import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest';
-import { EntityNotFoundError } from '@/domain/shared/errors';
 import { createTestDbHandle, seedTestData } from '../helpers/test-db';
-import { seedRootDept, seedTestUser } from '../helpers/seed-fixtures';
+import { seedAdminUser, seedRootDept, seedSuperAdminRole, seedTestUser, seedUserRoleBinding } from '../helpers/seed-fixtures';
+import { COMMON_ERRORS } from '@auth-sso/contracts';
 import * as schema from '@/db/schema';
 
 // ── 测试数据库 ──────────────────────────────────────
@@ -19,13 +19,20 @@ vi.mock('@/infrastructure/db', () => ({
   get db() { return td.db; },
   get schema() { return td.schema; },
 }));
-// @allow-module-mock @/lib/auth auth-bypass: 本文件被测语义不依赖登录/授权链路，mock 仅用于构造"已登录/已授权"的请求上下文（依赖它的断言：client-actions.test.ts 全部用例）
-vi.mock(import('@/lib/auth'), (): Partial<typeof authModule> => ({
-  resolveIdentity: vi.fn(async () => ({ userId: '00000000-0000-4000-8000-000000000101', expiresAt: null, issuedAt: null })),
-  logServerDataRead: vi.fn(async () => {}),
-  withAuth: (_o: any, h: Function) => async (...a: any[]) =>
-    h({ userId: '00000000-0000-4000-8000-000000000101' }, ...a),
-}));
+// 2026-10-14（#84，沿用 #71 已验证的修法）：**只 mock 身份解析，让 `withAuth` 跑真身**
+// （整体替换会连带删掉错误映射，使断言钉住与生产相反的契约）。
+// @allow-module-mock @/lib/auth/verify-jwt auth-bypass: 只提供"谁已登录"这一输入；本文件依赖它的断言：全部用例的操作者身份。鉴权链路其余部分走真身；合法理由见 ADR-022（reason 点名本文件 client-actions.test.ts）
+vi.mock(import('@/lib/auth/verify-jwt'), async (importOriginal): Promise<Partial<typeof verifyJwtModule>> => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    resolveIdentity: async () => ({
+      userId: '00000000-0000-4000-8000-000000000101',
+      expiresAt: null,
+      issuedAt: null,
+    }),
+  };
+});
 // @allow-module-mock @/lib/crypto input-fixture: 只覆盖「确定性 ID」这类输入，其余导出（含 hashToken）走真身
 vi.mock(import('@/lib/crypto'), async (importOriginal): Promise<Partial<typeof cryptoModule>> => {
   const actual = await importOriginal();
@@ -43,7 +50,7 @@ vi.mock('next/cache', () => ({ revalidatePath: vi.fn(), updateTag: vi.fn() }));
 
 import { db } from '@/infrastructure/db';
 import { createClientAction, updateClientAction, deleteClientAction, rotateClientSecretAction, revokeClientTokensAction } from '@/app/(dashboard)/clients/actions';
-import type * as authModule from '@/lib/auth';
+import type * as verifyJwtModule from '@/lib/auth/verify-jwt';
 import type * as cryptoModule from '@/lib/crypto';
 
 
@@ -74,7 +81,13 @@ beforeAll(async () => { await td.connect(); });
 afterAll(async () => { await td.close(); });
 beforeEach(async () => {
   await td.cleanup();
-  await seedTestData(td.db, { departments: seedRootDept() });
+  // 真身鉴权链路要求操作者在库中真实拥有一个根部门角色（SUPER_ADMIN 绕过权限码，ADR-001）
+  await seedTestData(td.db, {
+    departments: seedRootDept(),
+    users: seedAdminUser(),
+    roles: seedSuperAdminRole({ deptId: '00000000-0000-4000-8000-000000000001' }),
+    userRoles: seedUserRoleBinding('00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000000301'),
+  });
 });
 
 describe('Client Server Actions', () => {
@@ -133,10 +146,11 @@ describe('Client Server Actions', () => {
       expect(updated!.name).toBe('Updated');
     });
 
-    it('不存在 → throw EntityNotFoundError', async () => {
-      await expect(
-        updateClientAction('nonexistent', { name: 'X' } as any)
-      ).rejects.toThrow(EntityNotFoundError);
+    it('不存在 → 失败信封 NOT_FOUND（生产契约）', async () => {
+      const r = await updateClientAction('nonexistent', { name: 'X' } as any);
+
+      if (r.success) expect.unreachable('应当被拒绝（生产契约：失败信封）');
+      expect(r.error).toBe(COMMON_ERRORS.NOT_FOUND);
     });
   });
 
@@ -190,10 +204,11 @@ describe('Client Server Actions', () => {
       expect(remaining.every(t => t.revoked !== null)).toBe(true);
     });
 
-    it('不存在 → throw EntityNotFoundError', async () => {
-      await expect(
-        revokeClientTokensAction('bad', [], false)
-      ).rejects.toThrow(EntityNotFoundError);
+    it('不存在 → 失败信封 NOT_FOUND（生产契约）', async () => {
+      const r = await revokeClientTokensAction('bad', [], false);
+
+      if (r.success) expect.unreachable('应当被拒绝（生产契约：失败信封）');
+      expect(r.error).toBe(COMMON_ERRORS.NOT_FOUND);
     });
   });
 });
