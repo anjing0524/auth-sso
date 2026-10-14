@@ -9,6 +9,7 @@ import { EntityNotFoundError, BusinessRuleViolationError } from '@/domain/shared
 import { createTestDbHandle, seedTestData } from '../helpers/test-db';
 import { seedAdminUser, seedRootDept, seedSubDept, seedSuperAdminRole, seedTestUser, seedUserRoleBinding } from '../helpers/seed-fixtures';
 import * as schema from '@/db/schema';
+import { DEPARTMENT_ERRORS } from '@auth-sso/contracts';
 
 // ── 测试数据库 ──────────────────────────────────────
 const td = createTestDbHandle();
@@ -137,6 +138,22 @@ describe('Department Server Actions', () => {
 
       const rows = await db.select().from(schema.departments);
       expect(rows.find(d => d.id === TECH_DEPT_ID)).toBeUndefined();
+    });
+
+    it('**根部门以专属码被拒**（ADR-002 承诺的守卫 + 优先级）', async () => {
+      // 夹具说明（beforeEach 已播根部门 + 绑在根上的操作者角色）：
+      // 要删除根部门，操作者的**生效角色必须绑在根上**（否则范围不覆盖根），
+      // 于是根上必然 ≥1 个角色 ⇒ roleCount 检查本来也会挡住。
+      // **因此这条用例的判别点是"用哪个码拒绝"，而不是"是否拒绝"**：
+      // ADR-002 承诺的是 `CANNOT_DELETE_ROOT`（该码此前只在 contracts 定义、全仓零引用），
+      // 而非通用的 `VALIDATION_ERROR` + "存在关联角色"的文案。
+      await expect(deleteDepartmentAction(ROOT_DEPT_ID)).rejects.toMatchObject({
+        code: DEPARTMENT_ERRORS.CANNOT_DELETE_ROOT,
+      });
+
+      // 行必须仍在（否决性数据：拒绝就不能有副作用）
+      const rows = await db.select().from(schema.departments);
+      expect(rows.find(d => d.id === ROOT_DEPT_ID)).toBeDefined();
     });
 
     it('不存在部门 → 抛出 EntityNotFoundError', async () => {

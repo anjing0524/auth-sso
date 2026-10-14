@@ -154,6 +154,8 @@ export const deleteDepartmentAction = withAuth(
           .where(eq(schema.roles.deptId, row.id));
 
         validateDepartmentDeletable({
+          // 根部门（parentId IS NULL）恒不可删——ADR-002 的承诺，此前从未实现
+          isRoot: row.parentId === null,
           hasChildren: !!children,
           userCount: Number(userResult?.count || 0),
           roleCount: Number(roleResult?.count || 0),

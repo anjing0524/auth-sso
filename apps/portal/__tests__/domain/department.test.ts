@@ -2,7 +2,8 @@
  * @req DC-DEPT-C, DC-DEPT-U, DC-DEPT-D
  */
 import { describe, it, expect } from 'vitest';
-import {
+import { DEPARTMENT_ERRORS } from '@auth-sso/contracts';
+import { validateDepartmentDeletable,
   createDepartment,
   applyDepartmentUpdate,
   validateNoCircularReference,
@@ -11,6 +12,33 @@ import {
 import { BusinessRuleViolationError } from '@/domain/shared/errors';
 
 const mockIdGen = () => 'test_id_12345';
+
+describe('validateDepartmentDeletable（删除前置校验）', () => {
+  const clean = { isRoot: false, hasChildren: false, userCount: 0, roleCount: 0 };
+
+  it('无依赖的非根部门 → 通过', () => {
+    expect(() => validateDepartmentDeletable(clean)).not.toThrow();
+  });
+
+  it('**根部门 → 恒拒绝，且携带专属码**（ADR-002 的承诺；与是否有依赖无关）', () => {
+    // 优先级：即便同时有子部门/用户/角色，也必须报"根部门不可删除"
+    for (const extra of [{}, { hasChildren: true }, { userCount: 3 }, { roleCount: 2 }]) {
+      try {
+        validateDepartmentDeletable({ ...clean, ...extra, isRoot: true });
+        expect.unreachable('根部门必须被拒绝');
+      } catch (err) {
+        // 具体业务码而非通用 VALIDATION_ERROR —— 客户端据此可判别
+        expect((err as { code?: string }).code).toBe(DEPARTMENT_ERRORS.CANNOT_DELETE_ROOT);
+      }
+    }
+  });
+
+  it('有子部门 / 有关联用户 / 有关联角色 → 各自拒绝', () => {
+    expect(() => validateDepartmentDeletable({ ...clean, hasChildren: true })).toThrow('该部门下有子部门');
+    expect(() => validateDepartmentDeletable({ ...clean, userCount: 1 })).toThrow('该部门下存在关联用户');
+    expect(() => validateDepartmentDeletable({ ...clean, roleCount: 1 })).toThrow('该部门下存在关联角色');
+  });
+});
 
 describe('Department 领域核心规则', () => {
   it('应通过工厂函数创建状态为 ACTIVE 的部门', () => {

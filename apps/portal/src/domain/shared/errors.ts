@@ -28,10 +28,21 @@ export class EntityNotFoundError extends DomainError {
   }
 }
 
-/** 业务规则违反错误 */
+/**
+ * 业务规则违反错误。
+ *
+ * @param rule 人类可读的规则说明
+ * @param code **具体业务码**，默认 `VALIDATION_ERROR`。
+ *
+ * 需要它的理由（2026-10-13，架构评审 R2 次级候选「根部门守卫」）：
+ * contracts 里为每条实体规则都留了专属码（`DEPARTMENT_ERRORS.CANNOT_DELETE_ROOT`、
+ * `CANNOT_DELETE_SELF` …），但实现一律抛通用码 ⇒ 客户端只能靠**解析消息**区分
+ * "有子部门"/"有关联用户"/"是根部门"。默认参数让既有调用点零改动，
+ * 同时新规则可以携带自己的码。
+ */
 export class BusinessRuleViolationError extends DomainError {
-  constructor(rule: string) {
-    super(COMMON_ERRORS.VALIDATION_ERROR, rule);
+  constructor(rule: string, code: ErrorCode = COMMON_ERRORS.VALIDATION_ERROR) {
+    super(code, rule);
   }
 }
 

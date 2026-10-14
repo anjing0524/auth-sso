@@ -29,6 +29,22 @@ v3.2 重构了 RBAC 模型，移除 `role_data_scopes`、`role_clients`、`data_
 3. **数据范围 = 角色部门 ∪ 子树**。通过 `departments.ancestors` 物化路径做 `LIKE 'dept_X/%'` 查询展开。
 4. **删除部门级联删除角色**（`ON DELETE CASCADE`）。系统预置角色绑在根部门，根部门不可删除（`CANNOT_DELETE_ROOT` 错误码保护）。
 
+> **2026-10-14 兑现说明（架构评审 R2 次级候选「根部门守卫」）**：本条后半句
+> ——"根部门不可删除（`CANNOT_DELETE_ROOT` 保护）"——**此前从未实现**：该码只在
+> contracts 定义、全仓零引用，`validateDepartmentDeletable` 也没有根部门判定。
+> 现已补齐：根部门（`parentId IS NULL`）检查排在**最前**，携带专属码
+> `DEPARTMENT_ERRORS.CANNOT_DELETE_ROOT`（→ 422）。
+>
+> **可达性说明（重要）**：补齐之前，根部门**在当前唯一删除路径上本就不可达删除**——
+> 要删除根部门，操作者的生效角色必须绑在根上，于是 `roleCount ≥ 1` 会先被
+> "存在关联角色"（实测为"关联用户"）挡住。因此本次是**兑现承诺 + 消除对"偶然保护"的依赖**，
+> 而非修补一个可被利用的漏洞：原先的保护来自与根部门无关的事实，一旦 `roleCount`
+> 加上 `status` 过滤、或新增第二条删除路径，根部门就会变得可删。
+>
+> 顺带发现：contracts 里其它实体业务码（`DEPARTMENT_HAS_CHILDREN` / `CANNOT_DELETE_SELF` / …）
+> **同样从未被发射**（一律抛通用 `VALIDATION_ERROR`）——已记为独立 issue。
+> 详见 `docs/solution/2026-10-14-root-department-guard.md`。
+
 ## 数据范围公式
 
 ```text
