@@ -732,11 +732,9 @@ Gateway（Rust/Pingora）完成 JWT 离线验签后，向下游 Portal / 微服�
 | `AUTH_SSO_2002` (INVALID_CREDENTIALS) | 401 | 用户名或密码错误 |
 | `AUTH_SSO_2004` (ACCOUNT_LOCKED) | 423 | 账户已锁定（连续失败 N 次） |
 | `AUTH_SSO_2003` (ACCOUNT_DISABLED) | 403 | 账户已被管理员禁用 |
-| `AUTH_SSO_2020` (TOKEN_EXPIRED) | 401 | Access Token 已过期 |
 | `AUTH_SSO_2025` (REFRESH_TOKEN_MISSING) | 401 | 缺少 Refresh Token Cookie |
 | `AUTH_SSO_2024` (REFRESH_TOKEN_INVALID) | 401 | Refresh Token 无效或已过期 |
-| `AUTH_SSO_2022` (TOKEN_REVOKED) | 401 | Token 已被撤销 |
-| `AUTH_SSO_1002` (UNAUTHORIZED) | 401 | 未认证 |
+| `AUTH_SSO_1002` (UNAUTHORIZED) | 401 | 未认证（含 Access Token 过期或已撤销——#82 后不再有独立的过期/撤销码） |
 | `AUTH_SSO_1003` (FORBIDDEN) | 403 | 无权限 |
 | `AUTH_SSO_1004` (NOT_FOUND) | 404 | 资源不存在 |
 | `AUTH_SSO_3003` (USERNAME_ALREADY_EXISTS) | 409 | 用户名已存在 |

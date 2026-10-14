@@ -30,6 +30,7 @@ import {
 } from '@/components/ui/select';
 import type { ApiResponse } from '@auth-sso/contracts';
 import { createUserAction } from '../actions';
+import { fieldForErrorCode } from '@/domain/shared/error-fields';
 
 /**
  * 局部组件：基于 React 19 useFormStatus 感知表单提交态
@@ -71,6 +72,11 @@ export default function CreateUserDialog({ departments }: CreateUserDialogProps)
     null
   );
 
+  // 服务端给的是**具体**码（#82 接通、#92 消费）：能落到某个输入框的就落到那里，
+  // 落不到的（如 403/500）才走 toast——两者不重复提示。
+  const failedField = state && !state.success ? fieldForErrorCode(state.error) : null;
+  const failedMessage = state && !state.success ? state.message : null;
+
   // 感知 Action 结果并响应（依赖原始值避免不必要的 effect 重跑）
   useEffect(() => {
     if (!state) return;
@@ -79,11 +85,11 @@ export default function CreateUserDialog({ departments }: CreateUserDialogProps)
         toast.success(state.message || '用户创建成功');
         setIsOpen(false);
         setDeptId('');
-      } else {
+      } else if (!fieldForErrorCode(state.error)) {
         toast.error(state.message || '创建用户失败');
       }
     });
-  }, [state?.success, state?.message]);
+  }, [state]);
 
   return (
     <>
@@ -120,16 +126,23 @@ export default function CreateUserDialog({ departments }: CreateUserDialogProps)
               <div className="space-y-2">
                 <Label htmlFor="username" className="font-bold text-foreground">登录账号 (Username)</Label>
                 <Input
+                  aria-invalid={failedField === 'username'}
                   id="username"
                   name="username"
                   required
                   className="h-11 rounded-lg font-mono"
                   placeholder="例如：zhangsan"
                 />
+                {failedField === 'username' && (
+                  <p role="alert" className="text-sm font-medium text-destructive">
+                    {failedMessage}
+                  </p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="email" className="font-bold text-foreground">电子邮箱</Label>
                 <Input
+                  aria-invalid={failedField === 'email'}
                   id="email"
                   name="email"
                   type="email"
@@ -137,10 +150,16 @@ export default function CreateUserDialog({ departments }: CreateUserDialogProps)
                   className="h-11 rounded-lg"
                   placeholder="zhangsan@example.com"
                 />
+                {failedField === 'email' && (
+                  <p role="alert" className="text-sm font-medium text-destructive">
+                    {failedMessage}
+                  </p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="password" className="font-bold text-foreground">初始密码</Label>
                 <Input
+                  aria-invalid={failedField === 'password'}
                   id="password"
                   name="password"
                   type="password"
@@ -148,6 +167,11 @@ export default function CreateUserDialog({ departments }: CreateUserDialogProps)
                   defaultValue=""
                   className="h-11 rounded-lg"
                 />
+                {failedField === 'password' && (
+                  <p role="alert" className="text-sm font-medium text-destructive">
+                    {failedMessage}
+                  </p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="deptId" className="font-bold text-foreground">所属部门</Label>
