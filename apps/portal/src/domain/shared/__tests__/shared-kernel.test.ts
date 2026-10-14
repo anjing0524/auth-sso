@@ -8,7 +8,7 @@
 import { describe, it, expect } from 'vitest';
 import { mapDomainError } from '@/domain/shared/error-mapping';
 import { validatePassword } from '@/domain/shared/zod-schemas';
-import { AUTH_ERRORS, type ErrorCode } from '@auth-sso/contracts';
+import { AUTH_ERRORS } from '@auth-sso/contracts';
 import {
   EntityNotFoundError,
   ForbiddenError,
@@ -71,24 +71,10 @@ describe('mapDomainError', () => {
   });
 });
 
-// ── 类型层断言：错误码词汇表是**闭合**的 ──
-//
-// 放在 portal 而非 contracts：本包的 tsconfig 包含测试文件，会真正跑这条断言；
-// contracts 的 tsconfig 排除 `src/__tests__`，放那里的 `@ts-expect-error` 不被检查
-// （实测：把 `ErrorCode` 退化成 `string` 后 tsc 仍通过 ⇒ 守卫成了装饰）。
-//
-// 语义：`ErrorCode` 闭合时下一行**必须**报错（指令被消费）；若它退化成 `string`/`any`，
-// 该行合法 ⇒ `@ts-expect-error` 变成"未使用" ⇒ **tsc 报错** ⇒ 保护失效立刻可见。
-// `INVALID_SCOPE` 正是修复前 `InvalidScopeError` 直接送上网的那个码。
-// @ts-expect-error 'INVALID_SCOPE' 不在词汇表内
-const NOT_A_CODE: ErrorCode = 'INVALID_SCOPE';
-
-describe('错误码词汇表', () => {
-  it('**词汇表外的码不是 ErrorCode**（类型层断言见上方）', () => {
-    // 运行时它当然仍是字符串——这条断言的作用是让类型层指令必须有意义
-    expect(NOT_A_CODE).toBe('INVALID_SCOPE');
-  });
-});
+// 注：错误码词汇表的**类型层守卫**已移回它的自然归属
+// `packages/contracts/src/__tests__/errors.test.ts`——#77 修复后该包的 typecheck
+// 已覆盖 `src/__tests__`，`@ts-expect-error` 在那儿会被真正检查。
+// 本文件只保留"消费方能把词汇表用作类型"的正向证据（见下方 AccountStatusError 用例）。
 
 describe('validatePassword', () => {
   it('≥10 位 + 3 类字符 → 通过', () => {
