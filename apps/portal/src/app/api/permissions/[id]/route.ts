@@ -5,7 +5,7 @@
  */
 import { type NextRequest } from 'next/server';
 import { withPermission } from '@/lib/auth';
-import { PERMISSION_ERRORS, PERMISSION_PERMISSIONS } from '@auth-sso/contracts';
+import { COMMON_ERRORS, PERMISSION_PERMISSIONS  } from '@auth-sso/contracts';
 import { getPermissionById } from '@/app/(dashboard)/permissions/data';
 import { restSuccess, restError } from '@/lib/response';
 
@@ -16,7 +16,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   return withPermission({ permissions: [PERMISSION_PERMISSIONS.READ] }, async () => {
     const { id } = await params;
     const perm = await getPermissionById(id);
-    if (!perm) return restError(PERMISSION_ERRORS.PERMISSION_NOT_FOUND, '权限不存在', 404);
+    if (!perm) return restError(COMMON_ERRORS.NOT_FOUND, '权限不存在', 404);
     return restSuccess(perm);
   });
 }

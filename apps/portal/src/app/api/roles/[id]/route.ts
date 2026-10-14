@@ -4,7 +4,7 @@
 import { type NextRequest } from 'next/server';
 import { withPermission, logServerDataRead } from '@/lib/auth';
 import { resolveScope } from '@/lib/authz';
-import { ROLE_ERRORS, ROLE_PERMISSIONS } from '@auth-sso/contracts';
+import { COMMON_ERRORS, ROLE_PERMISSIONS  } from '@auth-sso/contracts';
 import { getRoleById } from '@/app/(dashboard)/roles/data';
 import { restSuccess, restError } from '@/lib/response';
 import { db } from '@/infrastructure/db';
@@ -23,7 +23,7 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
     const scope = await resolveScope(db, userId);
 
     const role = await getRoleById(id, scope);
-    if (!role) return restError(ROLE_ERRORS.ROLE_NOT_FOUND, '角色不存在', 404);
+    if (!role) return restError(COMMON_ERRORS.NOT_FOUND, '角色不存在', 404);
 
     // 在 API 契约层记录读取日志，切断 data 层的反向依赖
     await logServerDataRead('role', id);

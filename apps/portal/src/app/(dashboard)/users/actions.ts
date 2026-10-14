@@ -78,7 +78,7 @@ function loadUserScoped(
     notFound: () => new EntityNotFoundError('User', userId),
   };
 }
-import { COMMON_ERRORS, USER_ACTIVE, USER_ERRORS, USER_PERMISSIONS } from '@auth-sso/contracts';
+import { USER_ACTIVE, USER_ERRORS, USER_PERMISSIONS } from '@auth-sso/contracts';
 import type { ApiResponse } from '@auth-sso/contracts';
 
 /**
@@ -116,8 +116,19 @@ export const createUserAction = withAuth(
       async (tx) => {
         const existing = await tx.query.users.findFirst({
           where: or(eq(schema.users.username, v.data.username), eq(schema.users.email, v.data.email)),
+          columns: { username: true, email: true },
         });
-        if (existing) throw new DuplicateEntityError('User', 'username/email');
+        if (existing) {
+          // 一次查询即可，但要**分别报码**：客户端表单需要定位到具体输入框（#82）
+          const usernameTaken = existing.username === v.data.username;
+          throw new DuplicateEntityError(
+            'User',
+            usernameTaken ? 'username' : 'email',
+            usernameTaken
+              ? USER_ERRORS.USERNAME_ALREADY_EXISTS
+              : USER_ERRORS.EMAIL_ALREADY_EXISTS,
+          );
+        }
 
         const user = createUser(v.data, generateUUID);
         await tx.insert(schema.users).values({
@@ -302,7 +313,8 @@ export const resetPasswordAction = withAuth(
     if (!v.ok) return v.response;
     const passwordError = validatePassword(newPassword);
     if (passwordError) {
-      return { success: false, error: COMMON_ERRORS.VALIDATION_ERROR, message: passwordError };
+      // 专属码：客户端据此把错误定位到"新密码"输入框并展示强度要求（#82）
+      return { success: false, error: USER_ERRORS.PASSWORD_TOO_WEAK, message: passwordError };
     }
 
     // bcrypt 在作用域外完成：约 50–200ms，放进事务会长时间占用 DB 连接

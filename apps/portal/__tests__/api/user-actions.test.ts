@@ -184,6 +184,38 @@ describe('User Server Actions', () => {
     });
   });
 
+  describe('createUserAction 唯一性冲突', () => {
+    it('用户名重复 → 409 且携带 **USERNAME_ALREADY_EXISTS**（表单需定位到具体输入框）', async () => {
+      await seedTestData(td.db, { users: seedTestUser({ username: 'dup-user' }) });
+
+      const r = await createUserAction({
+        name: '另一个人',
+        username: 'dup-user',
+        email: 'other@example.com',
+        password: 'StrongP@ss123',
+        deptId: null,
+      } as any);
+
+      if (r.success) expect.unreachable('重复用户名必须被拒');
+      expect(r.error).toBe(USER_ERRORS.USERNAME_ALREADY_EXISTS);
+    });
+
+    it('邮箱重复 → 409 且携带 **EMAIL_ALREADY_EXISTS**', async () => {
+      await seedTestData(td.db, { users: seedTestUser({ email: 'dup@example.com' }) });
+
+      const r = await createUserAction({
+        name: '另一个人',
+        username: 'brand-new-user',
+        email: 'dup@example.com',
+        password: 'StrongP@ss123',
+        deptId: null,
+      } as any);
+
+      if (r.success) expect.unreachable('重复邮箱必须被拒');
+      expect(r.error).toBe(USER_ERRORS.EMAIL_ALREADY_EXISTS);
+    });
+  });
+
   describe('deleteUserAction', () => {
     it('**不能删除自己**（契约码 CANNOT_DELETE_SELF 的规则此前从未实现）', async () => {
       const r = await deleteUserAction(ADMIN_ID);

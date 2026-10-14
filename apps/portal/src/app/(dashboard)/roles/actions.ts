@@ -35,7 +35,7 @@ import {
 } from '@/lib/auth/authorization-effects';
 import { invalidateResource } from '@/lib/cache-invalidation';
 import { withScopedRow, withScopedWrite } from '@/lib/authz';
-import { ENTITY_ACTIVE, ROLE_PERMISSIONS } from '@auth-sso/contracts';
+import { ENTITY_ACTIVE, ROLE_PERMISSIONS , ROLE_ERRORS } from '@auth-sso/contracts';
 import type { ApiResponse } from '@auth-sso/contracts';
 
 /** 查询绑定某角色的所有用户 ID（受影响用户集之一：按**角色**求） */
@@ -74,7 +74,7 @@ export const createRoleAction = withAuth(
           .from(schema.roles)
           .where(eq(schema.roles.code, v.data.code))
           .limit(1);
-        if (existing[0]) throw new DuplicateEntityError('Role', 'code');
+        if (existing[0]) throw new DuplicateEntityError('Role', 'code', ROLE_ERRORS.ROLE_ALREADY_EXISTS);
 
         const r = createRole(v.data, generateUUID);
         await tx.insert(schema.roles).values(roleToInsertRow(r));

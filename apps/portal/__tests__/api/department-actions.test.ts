@@ -115,6 +115,23 @@ describe('Department Server Actions', () => {
     });
   });
 
+  describe('createDepartmentAction 唯一性冲突（走真实 DB 唯一约束）', () => {
+    it('部门编码重复 → 409 且携带 **DEPARTMENT_ALREADY_EXISTS**', async () => {
+      await seedTestData(td.db, { departments: seedSubDept() }); // code = 'TECH'
+
+      const r = await createDepartmentAction({
+        name: '另一个部门',
+        code: 'TECH',
+        sort: 9,
+        parentId: null,
+      } as any);
+
+      if (r.success) expect.unreachable('重复编码必须被拒');
+      // 本路径**没有**内联查重：唯一性由 PG 约束保证，错误从唯一约束违例映射而来
+      expect(r.error).toBe(DEPARTMENT_ERRORS.DEPARTMENT_ALREADY_EXISTS);
+    });
+  });
+
   describe('updateDepartmentAction', () => {
     it('存在部门 → 返回 success: true 且 DB 更新', async () => {
       await seedTestData(td.db, { departments: seedSubDept() });

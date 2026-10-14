@@ -8,7 +8,7 @@ import { type NextRequest } from 'next/server';
 import { withPermission, logServerDataRead } from '@/lib/auth';
 import { resolveScope } from '@/lib/authz';
 import { getRoleById, getRolePermissions } from '@/app/(dashboard)/roles/data';
-import { ROLE_ERRORS, ROLE_PERMISSIONS } from '@auth-sso/contracts';
+import { COMMON_ERRORS, ROLE_PERMISSIONS  } from '@auth-sso/contracts';
 import { db } from '@/infrastructure/db';
 import { restSuccess, restError } from '@/lib/response';
 
@@ -27,7 +27,7 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
 
     const role = await getRoleById(id, scope);
     if (!role) {
-      return restError(ROLE_ERRORS.ROLE_NOT_FOUND, '角色不存在', 404);
+      return restError(COMMON_ERRORS.NOT_FOUND, '角色不存在', 404);
     }
 
     const permissions = await getRolePermissions(id, scope);

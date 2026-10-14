@@ -5,7 +5,7 @@
  * @req E-MNU-U, E-MNU-D, E-MNU-PB
  * @vitest-environment node
  */
-import { PERMISSION_ERRORS } from '@auth-sso/contracts';
+import { COMMON_ERRORS } from '@auth-sso/contracts';
 import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest';
 import { createHash } from 'crypto';
 import { eq } from 'drizzle-orm';
@@ -210,14 +210,14 @@ describe('Permission API', () => {
       expect(body.code).toBe('portal:user:list');
     });
 
-    it('不存在返回 404，且携带**专属码** PERMISSION_NOT_FOUND（与 dept/role/client 路由一致）', async () => {
+    it('不存在返回 404，且携带**统一码** AUTH_SSO_1004（docs/spec/API.md:44）', async () => {
       const res = await GetPermission(createTestRequest('/api/permissions/00000000-0000-4000-8000-000000000999'), {
         params: Promise.resolve({ id: '00000000-0000-4000-8000-000000000999' }),
       } as any);
 
       expect(res.status).toBe(404);
-      // 专属码：此前与 dept/role/client 三个路由不一致（那三个早已用专属码）
-      expect((await res.json()).error).toBe(PERMISSION_ERRORS.PERMISSION_NOT_FOUND);
+      // 统一码：资源类型由 URL 表达，实体级 not-found 码不增加信息（#82 统一了 5 个路由）
+      expect((await res.json()).error).toBe(COMMON_ERRORS.NOT_FOUND);
     });
   });
 

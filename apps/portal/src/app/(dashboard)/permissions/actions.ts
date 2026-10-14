@@ -20,7 +20,7 @@ import { generateUUID } from '@/lib/crypto';
 import { validate } from '@/lib/validation';
 import { revokeAndRefreshAuthorization } from '@/lib/auth/authorization-effects';
 import { invalidateResource } from '@/lib/cache-invalidation';
-import { PERMISSION_PERMISSIONS, type ApiResponse } from '@auth-sso/contracts';
+import { PERMISSION_PERMISSIONS, type ApiResponse , PERMISSION_ERRORS } from '@auth-sso/contracts';
 
 async function getAffectedUserIds(permId: string): Promise<string[]> {
   const rows = await db
@@ -44,7 +44,7 @@ export const createPermissionAction = withAuth(
         .from(schema.permissions)
         .where(eq(schema.permissions.code, v.data.code))
         .limit(1);
-      if (existing[0]) throw new DuplicateEntityError('Permission', 'code');
+      if (existing[0]) throw new DuplicateEntityError('Permission', 'code', PERMISSION_ERRORS.PERMISSION_ALREADY_EXISTS);
 
       const p = createPermission(v.data, generateUUID);
       await tx.insert(schema.permissions).values(permissionToInsertRow(p));

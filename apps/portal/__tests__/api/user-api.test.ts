@@ -12,8 +12,7 @@
  */
 import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest';
 import { NextResponse } from 'next/server';
-import { COMMON_ERRORS } from '@auth-sso/contracts';
-import { EntityNotFoundError } from '@/domain/shared/errors';
+import { USER_ERRORS } from '@auth-sso/contracts';
 import { createTestRequest } from '../helpers/test-utils';
 import { createTestDbHandle, seedTestData } from '../helpers/test-db';
 import { seedAdminUser, seedRootDept, seedSuperAdminRole, seedTestUser, seedUserRoleBinding } from '../helpers/seed-fixtures';
@@ -372,7 +371,8 @@ describe('User Management API & Actions', () => {
     it('密码过短 → 拒绝', async () => {
       const res = await resetPasswordAction('00000000-0000-4000-8000-000000000201', 'short');
       expect(res.success).toBe(false);
-      expect((res as any).error).toBe(COMMON_ERRORS.VALIDATION_ERROR);
+      // 专属码：客户端据此把错误定位到"新密码"输入框（#82）
+      expect((res as any).error).toBe(USER_ERRORS.PASSWORD_TOO_WEAK);
     });
 
     it('密码无大写 → 拒绝', async () => {

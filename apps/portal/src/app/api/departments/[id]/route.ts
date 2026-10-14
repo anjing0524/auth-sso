@@ -8,7 +8,7 @@
 import { type NextRequest } from 'next/server';
 import { withPermission, logServerDataRead } from '@/lib/auth';
 import { resolveScope } from '@/lib/authz';
-import { DEPARTMENT_ERRORS, DEPARTMENT_PERMISSIONS } from '@auth-sso/contracts';
+import { COMMON_ERRORS, DEPARTMENT_PERMISSIONS  } from '@auth-sso/contracts';
 import { getDepartmentById } from '@/app/(dashboard)/departments/data';
 import { db } from '@/infrastructure/db';
 import { restSuccess, restError } from '@/lib/response';
@@ -22,7 +22,7 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
     const scope = await resolveScope(db, userId);
 
     const dept = await getDepartmentById(id, scope);
-    if (!dept) return restError(DEPARTMENT_ERRORS.DEPARTMENT_NOT_FOUND, '部门不存在', 404);
+    if (!dept) return restError(COMMON_ERRORS.NOT_FOUND, '部门不存在', 404);
 
     // 记录访问日志
     await logServerDataRead('department', id);

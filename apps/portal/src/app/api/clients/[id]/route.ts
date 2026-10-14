@@ -5,7 +5,7 @@
  */
 import { type NextRequest } from 'next/server';
 import { withPermission, logServerDataRead } from '@/lib/auth';
-import { CLIENT_ERRORS, CLIENT_PERMISSIONS } from '@auth-sso/contracts';
+import { COMMON_ERRORS, CLIENT_PERMISSIONS  } from '@auth-sso/contracts';
 import { getClientById } from '@/app/(dashboard)/clients/data';
 import { restSuccess, restError } from '@/lib/response';
 
@@ -18,7 +18,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const { id } = await params;
     const client = await getClientById(id);
     if (!client) {
-      return restError(CLIENT_ERRORS.CLIENT_NOT_FOUND, 'Client 不存在', 404);
+      return restError(COMMON_ERRORS.NOT_FOUND, 'Client 不存在', 404);
     }
 
     // 记录访问日志

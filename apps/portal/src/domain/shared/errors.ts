@@ -48,8 +48,17 @@ export class BusinessRuleViolationError extends DomainError {
 
 /** 唯一性冲突错误 */
 export class DuplicateEntityError extends DomainError {
-  constructor(entity: string, field: string) {
-    super(COMMON_ERRORS.VALIDATION_ERROR, `${entity} 的 ${field} 已存在`);
+  /**
+   * @param entity 实体名（中文，用于消息）
+   * @param field  冲突字段（中文，用于消息）
+   * @param code   **专属冲突码**（`*_ALREADY_EXISTS`），默认 `VALIDATION_ERROR`。
+   *
+   * 需要它的理由（#82）：客户端表单需要把"哪个字段冲突"定位到**具体输入框**
+   * （用户名 / 邮箱 / 手机号 / 编码 / Client ID 各有自己的码），
+   * 而不是解析 "${entity} 的 ${field} 已存在" 这段中文。
+   */
+  constructor(entity: string, field: string, code: ErrorCode = COMMON_ERRORS.VALIDATION_ERROR) {
+    super(code, `${entity} 的 ${field} 已存在`);
   }
 }
 

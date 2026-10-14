@@ -743,8 +743,6 @@ Gateway（Rust/Pingora）完成 JWT 离线验签后，向下游 Portal / 微服�
 | `AUTH_SSO_3004` (EMAIL_ALREADY_EXISTS) | 409 | 邮箱已存在 |
 | `AUTH_SSO_1005` (VALIDATION_ERROR) | 400 | 参数校验失败 |
 | `AUTH_SSO_1006` (INTERNAL_ERROR) | 500 | 服务器内部错误 |
-| `AUTH_SSO_1007` (PAYLOAD_TOO_LARGE) | 413 | 请求体过大 |
-| `AUTH_SSO_1001` (INVALID_REQUEST) | 400 | 无效请求 |
 
 ---
 

@@ -4,6 +4,14 @@ import { unstable_rethrow } from 'next/navigation';
 import { mapDomainError } from '@/domain/shared/error-mapping';
 import { DuplicateEntityError } from '@/domain/shared/errors';
 import { uniqueViolation } from '@/lib/db-errors';
+import {
+  CLIENT_ERRORS,
+  DEPARTMENT_ERRORS,
+  PERMISSION_ERRORS,
+  ROLE_ERRORS,
+  USER_ERRORS,
+  type ErrorCode,
+} from '@auth-sso/contracts';
 
 /**
  * Server Action / API Route 的**唯一**服务端错误映射入口。
@@ -44,7 +52,29 @@ const FIELD_LABELS: Record<string, string> = {
   client_id: 'Client ID',
 };
 
-/** 唯一约束违例 → 409 的领域错误（消息不含冲突值） */
+/**
+ * 唯一约束（表:列）→ **专属冲突码**（`*_ALREADY_EXISTS`）。
+ *
+ * 键与 PG 的 `table_name` / `detail` 里解析出的列名一致（见 `uniqueViolation`）。
+ * 未列出的组合回落到实体级码（`*_ALREADY_EXISTS`）或通用 `VALIDATION_ERROR`——
+ * 新增唯一约束时应在此登记，否则客户端只能解析中文文案定位字段。
+ */
+const CONFLICT_CODES: Record<string, ErrorCode> = {
+  'users:username': USER_ERRORS.USERNAME_ALREADY_EXISTS,
+  'users:email': USER_ERRORS.EMAIL_ALREADY_EXISTS,
+  'users:mobile': USER_ERRORS.MOBILE_ALREADY_EXISTS,
+  'roles:code': ROLE_ERRORS.ROLE_ALREADY_EXISTS,
+  'departments:code': DEPARTMENT_ERRORS.DEPARTMENT_ALREADY_EXISTS,
+  'permissions:code': PERMISSION_ERRORS.PERMISSION_ALREADY_EXISTS,
+  'clients:client_id': CLIENT_ERRORS.CLIENT_ALREADY_EXISTS,
+};
+
+/** 表 → 实体级冲突码（列无法唯一定位时使用，如复合唯一约束） */
+const CONFLICT_ENTITY_CODES: Record<string, ErrorCode> = {
+  users: USER_ERRORS.USER_ALREADY_EXISTS,
+};
+
+/** 唯一约束违例 → 409 的领域错误（消息不含冲突值）+ 专属码 */
 function conflictFromUniqueViolation(violation: {
   table: string | null;
   columns: readonly string[];
@@ -54,7 +84,16 @@ function conflictFromUniqueViolation(violation: {
     violation.columns.length > 0
       ? violation.columns.map((column) => FIELD_LABELS[column] ?? column).join('/')
       : '唯一字段';
-  return new DuplicateEntityError(entity, field);
+
+  const code =
+    (violation.table && violation.columns.length === 1
+      ? CONFLICT_CODES[`${violation.table}:${violation.columns[0]}`]
+      : undefined) ??
+    (violation.table ? CONFLICT_ENTITY_CODES[violation.table] : undefined);
+
+  return code
+    ? new DuplicateEntityError(entity, field, code)
+    : new DuplicateEntityError(entity, field);
 }
 
 export function mapServerError(error: unknown) {
