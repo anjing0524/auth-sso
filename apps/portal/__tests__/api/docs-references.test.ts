@@ -93,3 +93,29 @@ describe('引导文件里的 @/ 路径指引', () => {
     expect(violations).toEqual([]);
   });
 });
+
+/**
+ * `docs/solution/README.md` 是**决策索引**（导航指针）：任何一篇 solution 文档都必须
+ * 能从它到达——否则"这件事以前有人做过吗"只能靠 grep（retro C1：本会话问了 6 次）。
+ *
+ * 索引**会腐坏**（新文档写完就忘），所以这条断言是它唯一的维护机制。
+ */
+describe('docs/solution 决策索引的完整性', () => {
+  it('索引存在，且链接到 docs/solution 下的每一篇文档', () => {
+    const index = join(REPO_ROOT, 'docs/solution/README.md');
+    expect(existsSync(index), 'docs/solution/README.md 不存在（决策索引缺失）').toBe(true);
+    const text = readFileSync(index, 'utf-8');
+
+    const docs = readdirSync(join(REPO_ROOT, 'docs/solution')).filter(
+      (n) => n.endsWith('.md') && n !== 'README.md',
+    );
+    // 扫描范围非空（否则这条检查是假绿）
+    expect(docs.length).toBeGreaterThanOrEqual(50);
+
+    const unlinked = docs.filter((n) => !text.includes(`(${n})`));
+    expect(
+      unlinked,
+      '这些 solution 文档没有被索引链接——新增文档时请把它挂到 README 的某个主题下',
+    ).toEqual([]);
+  });
+});

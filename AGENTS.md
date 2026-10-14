@@ -9,6 +9,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 ## 永远保持中文对话 所有对话提问都需要中文
 
 `@docs/spec/*` 文档提供理论支持
+决策索引：动手改某块之前若想知道「这件事以前有人做过吗 / 为什么长这样」，先读 `docs/solution/README.md`（按主题索引历次决策与教训）
 当前 Rust 版本环境约定（Rust 1.93.0+）：对于自定义的需要多线程并发调度（Send 约束）的 Trait 异步方法，必须采用“零开销异步 Trait”最佳实践：在 Trait 定义中使用 `-> impl std::future::Future<Output = T> + Send` 进行严格的线程安全约束，并在 `impl` 实现块中直接使用 `async fn` 语法以保持代码简洁，避免 `#[async_trait]` 带来的 Box 堆分配开销。Pingora 框架的 trait 回调（如 `ProxyHttp`）签名由框架固定，必须使用 `#[async_trait]` 实现，属唯一例外。
 
 ## 基础环境
