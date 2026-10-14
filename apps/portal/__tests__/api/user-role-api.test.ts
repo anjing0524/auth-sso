@@ -11,7 +11,6 @@
 import { beforeAll, afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
-import { DomainError } from '@/domain/shared/errors';
 import { COMMON_ERRORS } from '@auth-sso/contracts';
 import { createTestDbHandle, seedTestData } from '../helpers/test-db';
 import { seedAdminUser, seedRootDept, seedTestUser, seedUserRoleBinding } from '../helpers/seed-fixtures';
@@ -27,25 +26,33 @@ vi.mock('@/infrastructure/db', () => ({
   get schema() { return schema; },
 }));
 
-// @allow-module-mock @/lib/auth auth-bypass: 本文件被测语义不依赖登录/授权链路，mock 仅用于构造"已登录/已授权"的请求上下文（依赖它的断言：user-role-api.test.ts 全部用例）
-vi.mock(import('@/lib/auth'), (): Partial<typeof authModule> => ({
-  // 与真实包装器一致：领域错误映射为 HTTP 响应（DomainError.code → 状态码），
-  // 其余异常照常抛出（审计失败回滚用例依赖这一点）。
-  withPermission: vi.fn(async (_options, handler) => {
-    try {
-      return await handler('00000000-0000-4000-8000-000000000101');
-    } catch (err) {
-      if (err instanceof DomainError) {
-        const status = err.code === COMMON_ERRORS.FORBIDDEN ? 403
-          : err.code === COMMON_ERRORS.NOT_FOUND ? 404
-          : err.code === COMMON_ERRORS.VALIDATION_ERROR ? 422 : 400;
-        return NextResponse.json({ error: err.code, message: err.message }, { status });
+// 2026-10-14（#87）：**只保留 auth-bypass，错误映射复用生产实现**。
+//
+// 此前这里的 `withPermission` 是**手写复刻**：领域错误映射为响应、**其余异常照常抛出**，
+// 且注释明说"审计失败回滚用例依赖这一点"。但生产契约恰恰是 `withPermission`
+// （`lib/auth/guard.ts:71-77`）**catch 一切**并 `mapServerError` ⇒ 审计失败应得到
+// **500 响应**（事务已回滚），而不是把异常抛给调用方。手写的状态码表还会与
+// `ERROR_STATUS` 漂移（它把 VALIDATION_ERROR 映射成 422，与生产不同）。
+//
+// 现在：保留"已授权"这一输入（auth-bypass 的正当用途），但错误映射**调用生产的
+// `mapServerError`**——换掉替身而不重写契约。
+// @allow-module-mock @/lib/auth auth-bypass: 只构造"已授权"上下文；错误映射复用生产 mapServerError。本文件依赖它的断言：user-role-api.test.ts 全部用例
+vi.mock(import('@/lib/auth'), async (importOriginal): Promise<Partial<typeof authModule>> => {
+  const actual = await importOriginal();
+  const { mapServerError } = await import('@/lib/server-error');
+  return {
+    ...actual,
+    withPermission: async (_options, handler) => {
+      try {
+        return await handler('00000000-0000-4000-8000-000000000101');
+      } catch (err) {
+        const mapped = mapServerError(err);
+        return NextResponse.json({ error: mapped.error, message: mapped.message }, { status: mapped.status });
       }
-      throw err;
-    }
-  }),
-  logServerDataRead: vi.fn(async () => {}),
-}));
+    },
+    logServerDataRead: vi.fn(async () => {}),
+  };
+});
 
 // @allow-module-mock @/lib/permissions input-fixture: 只提供"刷新已完成"这类输入（单用户与批量两版）；真实 PG 驱动的分级由 permission-enforcement / rt-permission-failure 覆盖
 vi.mock(import('@/lib/permissions'), async (importOriginal): Promise<Partial<typeof permissionsModule>> => {
@@ -173,13 +180,17 @@ describe('用户角色绑定 API', () => {
     expect(await roleIds()).toEqual([ROLE_ID]);
   });
 
-  it('审计写入失败时回滚角色替换', async () => {
+  it('审计写入失败 → **整体回滚**且返回 500（生产契约：错误边界映射，不抛出）', async () => {
     const { appendSecurityAudit } = await import('@/lib/audit');
     vi.mocked(appendSecurityAudit).mockRejectedValueOnce(new Error('审计存储不可用'));
 
-    await expect(assignRoles(request({ roleIds: [ROLE_ID] }), params())).rejects.toThrow('审计存储不可用');
+    const response = await assignRoles(request({ roleIds: [ROLE_ID] }), params());
 
+    // 审计在事务内：失败必须让角色替换一并回滚（本用例的核心价值）
     expect(await roleIds()).toEqual([OLD_ROLE_ID]);
+    // 而非 DomainError 由错误边界映射为 500——**不是**抛给调用方
+    expect(response.status).toBe(500);
+    expect((await response.json()).error).toBe(COMMON_ERRORS.INTERNAL_ERROR);
   });
 
   it('DELETE 仅移除指定角色', async () => {
