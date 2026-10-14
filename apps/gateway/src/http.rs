@@ -130,6 +130,45 @@ pub trait SessionExt {
     ) -> impl std::future::Future<Output = Result<()>> + Send;
 }
 
+// ── 响应头构造（纯函数）──
+//
+// 存在理由（#85）：这些头原先直接构造在 `SessionExt` 的 async 方法里，
+// 而 `Session` 需要真实连接才能实例化 ⇒ **四个响应构造器零测试**。
+// 把它们抽成纯函数后，"状态码 / Location / Set-Cookie 及其顺序 / Retry-After"
+// 可以逐条断言，`SessionExt` 只负责把结果写进 Session。
+//
+// ⚠️ **顺序有意义**：同名 Set-Cookie 出现多次时**后者生效**（RFC 6265 §5.2），
+// 因此"会话 Cookie 与清除 Cookie 的先后"是语义的一部分，不能重排。
+
+/// 401 响应头：`WWW-Authenticate: Bearer` + 逐条 `Set-Cookie`。
+pub(crate) fn build_401_headers(cookies: &[String]) -> Result<ResponseHeader> {
+    let mut header = ResponseHeader::build(401, None)?;
+    header.insert_header("WWW-Authenticate", "Bearer")?;
+    for cookie in cookies {
+        header.append_header("Set-Cookie", cookie.as_str())?;
+    }
+    Ok(header)
+}
+
+/// 302 响应头：`Location` + 逐条 `Set-Cookie`（**保序**）。
+pub(crate) fn build_302_headers(location: &str, cookies: &[String]) -> Result<ResponseHeader> {
+    let mut header = ResponseHeader::build(302, None)?;
+    header.insert_header("Location", location)?;
+    for cookie in cookies {
+        header.append_header("Set-Cookie", cookie.as_str())?;
+    }
+    Ok(header)
+}
+
+/// 429 响应头：`Retry-After`。
+pub(crate) fn build_429_headers(retry_after_secs: u64) -> Result<ResponseHeader> {
+    let mut header = ResponseHeader::build(429, None)?;
+    // 用 itoa 栈上格式化替代 to_string() 的堆分配（冷路径，但属范式正确）
+    let mut buf = itoa::Buffer::new();
+    header.insert_header("Retry-After", buf.format(retry_after_secs))?;
+    Ok(header)
+}
+
 impl SessionExt for Session {
     fn client_ip(&self) -> Option<String> {
         self.client_addr()
@@ -142,29 +181,19 @@ impl SessionExt for Session {
     }
 
     async fn respond_401_with_cookies(&mut self, cookies: &[String]) -> Result<()> {
-        let mut header = ResponseHeader::build(401, None)?;
-        header.insert_header("WWW-Authenticate", "Bearer")?;
-        for cookie in cookies {
-            header.append_header("Set-Cookie", cookie.as_str())?;
-        }
+        let header = build_401_headers(cookies)?;
         self.write_response_header(Box::new(header), true).await
     }
 
     async fn respond_302_with_cookies(&mut self, location: &str, cookies: &[String]) -> Result<()> {
-        let mut header = ResponseHeader::build(302, None)?;
-        header.insert_header("Location", location)?;
-        for cookie in cookies {
-            header.append_header("Set-Cookie", cookie.as_str())?;
-        }
+        let header = build_302_headers(location, cookies)?;
+        // keepalive 是 Session 级副作用，留在 impl（不入纯构造函数）
         self.set_keepalive(None);
         self.write_response_header(Box::new(header), true).await
     }
 
     async fn respond_429(&mut self, retry_after_secs: u64) -> Result<()> {
-        let mut header = ResponseHeader::build(429, None)?;
-        // 用 itoa 栈上格式化替代 to_string() 的堆分配（冷路径，但属范式正确）
-        let mut buf = itoa::Buffer::new();
-        header.insert_header("Retry-After", buf.format(retry_after_secs))?;
+        let header = build_429_headers(retry_after_secs)?;
         self.write_response_header(Box::new(header), true).await
     }
 }
@@ -299,5 +328,105 @@ mod tests {
         req.insert_header("accept", "text/html").unwrap();
         req.insert_header("rsc", "1").unwrap();
         assert!(!is_html_page_navigation(&req));
+    }
+
+    // ── Session 响应头构造（#85：原先零测试）──────────────────────────
+    //
+    // 这些头是**安全相关**的下发面：401 的清除 Cookie（漏一条 = 登出后仍持有效会话）、
+    // 302 的 `extra_cookies`（漏掉 = 浏览器继续用已被 Portal 撤销的旧 RT，见 #64）。
+    // 症状在正常路径下看不出来 —— 响应码与 Location 都对，只有 Cookie 头的内容错了。
+
+    /// 读取响应头里的全部 Set-Cookie（按出现顺序）
+    fn set_cookies(header: &ResponseHeader) -> Vec<String> {
+        header
+            .headers
+            .get_all("set-cookie")
+            .iter()
+            .filter_map(|v| v.to_str().ok().map(str::to_string))
+            .collect()
+    }
+
+    #[test]
+    fn test_build_401_headers_sets_bearer_and_each_cookie_in_order() {
+        let header = build_401_headers(&["a=1; Path=/".to_string(), "b=2; Path=/".to_string()])
+            .expect("构造应成功");
+
+        assert_eq!(header.status.as_u16(), 401);
+        assert_eq!(
+            header
+                .headers
+                .get("www-authenticate")
+                .and_then(|v| v.to_str().ok()),
+            Some("Bearer")
+        );
+        // 顺序即语义：同名 Set-Cookie 后者生效，故不得重排
+        assert_eq!(set_cookies(&header), vec!["a=1; Path=/", "b=2; Path=/"]);
+    }
+
+    #[test]
+    fn test_build_401_headers_without_cookies_has_no_set_cookie() {
+        let header = build_401_headers(&[]).expect("构造应成功");
+
+        assert_eq!(header.status.as_u16(), 401);
+        assert!(set_cookies(&header).is_empty());
+    }
+
+    #[test]
+    fn test_build_302_headers_sets_location_and_each_cookie_in_order() {
+        let header = build_302_headers(
+            "/dashboard?tab=1",
+            &["jwt=at; Path=/".to_string(), "jwt=; Max-Age=0".to_string()],
+        )
+        .expect("构造应成功");
+
+        assert_eq!(header.status.as_u16(), 302);
+        assert_eq!(
+            header.headers.get("location").and_then(|v| v.to_str().ok()),
+            Some("/dashboard?tab=1")
+        );
+        // 会话 Cookie 先、清除 Cookie 后（**后者生效**）——顺序是语义的一部分
+        assert_eq!(
+            set_cookies(&header),
+            vec!["jwt=at; Path=/", "jwt=; Max-Age=0"]
+        );
+    }
+
+    #[test]
+    fn test_build_302_headers_without_cookies_has_no_set_cookie() {
+        let header = build_302_headers("/login?error=csrf_mismatch", &[]).expect("构造应成功");
+
+        assert_eq!(header.status.as_u16(), 302);
+        assert!(set_cookies(&header).is_empty());
+    }
+
+    #[test]
+    fn test_build_429_headers_sets_retry_after() {
+        for secs in [0_u64, 1, 30, 3600] {
+            let header = build_429_headers(secs).expect("构造应成功");
+
+            assert_eq!(header.status.as_u16(), 429);
+            assert_eq!(
+                header
+                    .headers
+                    .get("retry-after")
+                    .and_then(|v| v.to_str().ok()),
+                Some(secs.to_string().as_str()),
+                "Retry-After 应为十进制秒数"
+            );
+        }
+    }
+
+    #[test]
+    fn test_build_302_headers_keeps_duplicate_cookie_names_by_append_not_replace() {
+        // `append_header` 而非 `insert_header`：同名 Cookie 必须**共存且保序**，
+        // 否则「清除旧的 + 下发新的」会丢掉其中一条
+        let header = build_302_headers(
+            "/",
+            &["k=old; Path=/".to_string(), "k=new; Path=/".to_string()],
+        )
+        .expect("构造应成功");
+
+        assert_eq!(set_cookies(&header).len(), 2);
+        assert_eq!(set_cookies(&header)[1], "k=new; Path=/");
     }
 }
