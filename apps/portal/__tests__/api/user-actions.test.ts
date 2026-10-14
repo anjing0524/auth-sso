@@ -184,6 +184,64 @@ describe('User Server Actions', () => {
     });
   });
 
+  describe('软删除语义（#86）', () => {
+    const TARGET_ID = '00000000-0000-4000-8000-000000000201';
+
+    async function rowOf(id: string) {
+      const [row] = await td.db
+        .select({ status: schema.users.status, deletedAt: schema.users.deletedAt })
+        .from(schema.users)
+        .where(eq(schema.users.id, id));
+      return row;
+    }
+
+    it('删除动作**写入 deletedAt**（部分唯一索引生效的前提）', async () => {
+      await seedTestData(td.db, { users: seedTestUser() });
+
+      await deleteUserAction(TARGET_ID);
+
+      const row = await rowOf(TARGET_ID);
+      expect(row!.status).toBe('DELETED');
+      // 此前只写 status、丢弃领域层算出的 deletedAt ⇒ deleted_at 恒为 NULL
+      expect(row!.deletedAt).not.toBeNull();
+    });
+
+    it('软删除后**邮箱可被新用户复用**（与部分唯一索引同口径）', async () => {
+      await seedTestData(td.db, {
+        users: seedTestUser({ username: 'gone-user', email: 'freed@example.com' }),
+      });
+      await deleteUserAction(TARGET_ID);
+
+      const r = await createUserAction({
+        name: '新同事',
+        username: 'newbie',
+        email: 'freed@example.com',
+        password: 'StrongP@ss123',
+        deptId: null,
+      } as any);
+
+      if (!r.success) expect.unreachable(`邮箱应可复用，实际失败：${JSON.stringify(r)}`);
+      expect(r.success).toBe(true);
+    });
+
+    it('软删除后**用户名仍不可复用**（完整唯一约束 → USERNAME_ALREADY_EXISTS）', async () => {
+      await seedTestData(td.db, { users: seedTestUser() }); // username = 'testuser'
+      await deleteUserAction(TARGET_ID);
+
+      const r = await createUserAction({
+        name: '新同事',
+        username: 'testuser',
+        email: 'another@example.com',
+        password: 'StrongP@ss123',
+        deptId: null,
+      } as any);
+
+      // 内联查重只看未删除行 ⇒ 落到数据库的**完整**唯一约束 ⇒ 由唯一违例映射报专属码
+      if (r.success) expect.unreachable('用户名由完整唯一约束保护，必须被拒');
+      expect(r.error).toBe(USER_ERRORS.USERNAME_ALREADY_EXISTS);
+    });
+  });
+
   describe('createUserAction 唯一性冲突', () => {
     it('用户名重复 → 409 且携带 **USERNAME_ALREADY_EXISTS**（表单需定位到具体输入框）', async () => {
       await seedTestData(td.db, { users: seedTestUser({ username: 'dup-user' }) });

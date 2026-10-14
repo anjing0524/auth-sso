@@ -17,7 +17,7 @@
  * @impl B-USR-PW — 重置用户密码
  */
 import { schema } from '@/infrastructure/db';
-import { eq, or } from 'drizzle-orm';
+import { and, eq, isNull, or } from 'drizzle-orm';
 import { withAuth, type AuthContext } from '@/lib/auth';
 import {
   createUser,
@@ -114,8 +114,14 @@ export const createUserAction = withAuth(
           : [],
       },
       async (tx) => {
+        // 只看**未删除**行：与 `ux_users_email` / `ux_users_mobile` 的部分唯一索引同口径
+        // （`WHERE deleted_at IS NULL`）。用户名没有部分索引（完整唯一约束），
+        // 因此软删除用户的用户名仍会被数据库挡住并映射为 `USERNAME_ALREADY_EXISTS`。
         const existing = await tx.query.users.findFirst({
-          where: or(eq(schema.users.username, v.data.username), eq(schema.users.email, v.data.email)),
+          where: and(
+            or(eq(schema.users.username, v.data.username), eq(schema.users.email, v.data.email)),
+            isNull(schema.users.deletedAt),
+          ),
           columns: { username: true, email: true },
         });
         if (existing) {
@@ -288,8 +294,12 @@ export const deleteUserAction = withAuth(
       loadUserScoped(ctx.userId, v.data.id),
       async (tx, row) => {
         const deleted = deleteUser(userFromPersistence(row));
+        // **用领域映射写回全部可变列**（而非只手写 status）：`deleteUser` 会算出的
+        // `deletedAt` 此前被丢弃 ⇒ `deleted_at` 永远为 NULL ⇒ schema 的
+        // **部分唯一索引**（`WHERE deleted_at IS NULL`）永不释放被删用户的
+        // 邮箱/手机号，「软删除后可复用」的设计意图完全失效（#86）。
         await tx.update(schema.users)
-          .set({ status: deleted.status })
+          .set(userToUpdateRow(deleted))
           .where(eq(schema.users.id, v.data.id));
       },
     );
