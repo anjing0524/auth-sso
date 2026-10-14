@@ -228,11 +228,16 @@ pub struct Gateway {
     jwt_verifier: JwtVerifier,
     token_refresher: TokenRefresher,
     /// OIDC Provider 的上游地址列表（用于 POST /token 等内部调用）
-    pub(crate) oidc_provider_upstream: Arc<Upstreams>,
+    ///
+    /// **私有**：消费方是 `oauth_flow::TokenExchange`，它由本文件内的
+    /// [`Gateway::token_exchange`] 装配——自持依赖后无需放宽可见性。
+    oidc_provider_upstream: Arc<Upstreams>,
     /// 与 Portal 共享的 HMAC 密钥（Option 表示未启用 HMAC 签名）
     gateway_shared_secret: Option<String>,
     /// 内部上游请求协议（http/https）
-    pub(crate) upstream_scheme: String,
+    ///
+    /// **私有**：同 `oidc_provider_upstream`，经 [`Gateway::token_exchange`] 注入执行体。
+    upstream_scheme: String,
     /// HTTPS 上游的 SNI 主机名。平台内部服务通常与公网 Host 不同。
     upstream_server_name: Option<String>,
     /// 发往上游的 Host；`X-Forwarded-Host` 仍保留浏览器访问的公网 Host。
@@ -248,6 +253,22 @@ pub struct Gateway {
 }
 
 impl Gateway {
+    /// 构造 token 交换执行体（`oauth_flow::TokenExchange`）——**唯一装配点**。
+    ///
+    /// 放在本文件而非 `oauth_flow.rs`：只有在这里才能合法读私有字段，
+    /// 于是 `oidc_provider_upstream` / `upstream_scheme` **不必**为了跨模块访问而放宽可见性。
+    pub(crate) fn token_exchange(&self) -> crate::oauth_flow::TokenExchange<'_> {
+        crate::oauth_flow::TokenExchange::new(&self.oidc_provider_upstream, &self.upstream_scheme)
+    }
+
+    /// OAuth callback 路径的**唯一取值口**。
+    ///
+    /// `/authorize` 阶段、callback 阶段与 `request_filter` 的路径判定必须用**同一个值**——
+    /// OAuth 2.1 要求两阶段 `redirect_uri` 逐字节一致；取值散落时"改一处漏一处"就会不一致。
+    pub(crate) fn oauth_callback_path(&self) -> Arc<str> {
+        self.jwks_cache.callback_path_or_default()
+    }
+
     /// 创建网关实例。
     ///
     /// 依赖装配见 [`GatewayDeps`]：具名字段结构让调用点逐项自解释，
@@ -453,7 +474,7 @@ impl ProxyHttp for Gateway {
 
         // 5. OAuth callback 拦截
         {
-            let callback_path = self.jwks_cache.callback_path_or_default();
+            let callback_path = self.oauth_callback_path();
             let is_callback = path
                 .strip_prefix(callback_path.as_ref())
                 .is_some_and(|rest| rest.is_empty() || rest.starts_with('/'));

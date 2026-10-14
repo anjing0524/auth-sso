@@ -9,7 +9,7 @@ use pingora_proxy::Session;
 use tracing::{info, warn};
 
 use super::gateway::{Gateway, get_host};
-use crate::config::OAuthConfig;
+use crate::config::{OAuthConfig, Upstreams};
 use crate::http::SessionExt;
 use crate::oauth;
 
@@ -25,6 +25,119 @@ pub(crate) struct TokenExchangeResult {
     pub(crate) access: String,
     pub(crate) refresh: String,
     pub(crate) id_token: Option<String>,
+}
+
+/// 单次 token 交换尝试的**结果**——刻意与 HTTP 库解耦，使决策表可穷举测试。
+#[derive(Debug, Clone)]
+pub(crate) enum ExchangeAttempt {
+    /// 传输层失败（不可达 / 超时）
+    Transport,
+    /// 收到响应但状态非 2xx（附响应体文本）
+    Status(u16, String),
+    /// 2xx 且响应体已解析为 JSON
+    Body(serde_json::Value),
+}
+
+/// 决策表的输出。
+#[derive(Debug)]
+pub(crate) enum ExchangeStep {
+    /// 换下一节点重试（仅传输层失败）
+    RetryNextNode,
+    /// **确定性拒绝**：换节点不会改变结果（HTTP 非 2xx，或 2xx 但响应体不可用）
+    Reject { status: u16, message: String },
+    /// 成功
+    Parsed(TokenExchangeResult),
+}
+
+/// **Token 交换的决策表**（纯函数、零 I/O）。
+///
+/// 语义（原先内联在 `do_token_exchange` 的分支里，本文件零测试）：
+/// - **网络错误**（不可达/超时）→ 试下一节点（`RetryNextNode`）；
+/// - **HTTP 非 2xx**（如 `invalid_grant`）→ **确定性拒绝**，立即返回该错误、不重试；
+/// - **2xx** → 解析响应体；缺字段/空值 → 按 502 拒绝。
+///
+/// 抽成纯函数的理由：这三条是**业务语义**，却只能靠起一个 HTTP 服务器才能验证；
+/// 决策与 I/O 分开后，决策表可以逐条穷举（见 `oauth_flow/tests.rs`）。
+pub(crate) fn decide_exchange(attempt: ExchangeAttempt) -> ExchangeStep {
+    match attempt {
+        ExchangeAttempt::Transport => ExchangeStep::RetryNextNode,
+        ExchangeAttempt::Status(status, text) => ExchangeStep::Reject {
+            status,
+            message: format!("Token 交换失败 ({status}): {text}"),
+        },
+        ExchangeAttempt::Body(json) => match parse_token_exchange_response(json) {
+            Ok(tokens) => ExchangeStep::Parsed(tokens),
+            Err(message) => ExchangeStep::Reject {
+                status: 502,
+                message,
+            },
+        },
+    }
+}
+
+/// Token 交换执行体——**自持依赖**（上游节点列表 + 协议 scheme）。
+///
+/// 它只持有自己需要的东西，因此 `Gateway` 的 `oidc_provider_upstream` 与
+/// `upstream_scheme` **不必**为了跨模块访问而放宽可见性（装配点在 `gateway.rs` 内的
+/// `Gateway::token_exchange`，那里能合法读私有字段）。
+pub(crate) struct TokenExchange<'a> {
+    upstreams: &'a Upstreams,
+    scheme: &'a str,
+}
+
+impl<'a> TokenExchange<'a> {
+    pub(crate) fn new(upstreams: &'a Upstreams, scheme: &'a str) -> Self {
+        Self { upstreams, scheme }
+    }
+
+    /// 依次尝试各上游节点执行 `code → token` 交换，按 [`decide_exchange`] 的决策表处理。
+    ///
+    /// 所有节点网络失败 → 502。
+    pub(crate) async fn exchange(&self, body: &serde_json::Value) -> Result<TokenExchangeResult> {
+        for node in self.upstreams.iter() {
+            let token_url = format!("{}://{node}/api/auth/oauth2/token", self.scheme);
+            let attempt = match crate::http::HTTP_CLIENT
+                .post(&token_url)
+                .header("Content-Type", "application/json")
+                .json(body)
+                .send()
+                .await
+            {
+                Ok(resp) => {
+                    let status = resp.status();
+                    if status.is_success() {
+                        match resp.json::<serde_json::Value>().await {
+                            Ok(json) => ExchangeAttempt::Body(json),
+                            Err(e) => {
+                                // 2xx 但响应体不可解析：确定性拒绝（换节点不会改变结果）
+                                ExchangeAttempt::Status(502, format!("Token 响应解析失败: {e}"))
+                            }
+                        }
+                    } else {
+                        let text = resp.text().await.unwrap_or_default();
+                        ExchangeAttempt::Status(status.as_u16(), text)
+                    }
+                }
+                Err(e) => {
+                    warn!("Token 端点不可达: {}: {e}，尝试下一节点", token_url);
+                    ExchangeAttempt::Transport
+                }
+            };
+
+            match decide_exchange(attempt) {
+                ExchangeStep::RetryNextNode => continue,
+                ExchangeStep::Reject { status, message } => {
+                    return Err(Error::explain(ErrorType::HTTPStatus(status), message));
+                }
+                ExchangeStep::Parsed(tokens) => return Ok(tokens),
+            }
+        }
+
+        Err(Error::explain(
+            ErrorType::HTTPStatus(502),
+            "OIDC Provider 所有节点均不可达，无法执行 Token 交换".to_string(),
+        ))
+    }
 }
 
 impl Gateway {
@@ -46,7 +159,7 @@ impl Gateway {
         // 不能再因为 loopback/localhost 主机名而退化为 http://...:443/19443。
         const SECURE: bool = true;
 
-        let callback_path = self.jwks_cache.callback_path_or_default();
+        let callback_path = self.oauth_callback_path();
 
         let state = oauth::build_oauth_state(oauth, host, return_to, &callback_path, SECURE)
             .map_err(|e| {
@@ -105,45 +218,8 @@ impl Gateway {
             redirect_uri,
         );
 
-        for node in self.oidc_provider_upstream.iter() {
-            let token_url = format!("{}://{node}/api/auth/oauth2/token", self.upstream_scheme);
-            let resp = match crate::http::HTTP_CLIENT
-                .post(&token_url)
-                .header("Content-Type", "application/json")
-                .json(&body)
-                .send()
-                .await
-            {
-                Ok(r) => r,
-                Err(e) => {
-                    warn!("Token 端点不可达: {}: {e}，尝试下一节点", token_url);
-                    continue;
-                }
-            };
-
-            if !resp.status().is_success() {
-                // 确定性拒绝（如 invalid_grant）：换节点重试不会改变结果
-                let status = resp.status().as_u16();
-                let text = resp.text().await.unwrap_or_default();
-                return Err(Error::explain(
-                    ErrorType::HTTPStatus(status),
-                    format!("Token 交换失败 ({}): {text}", status),
-                ));
-            }
-
-            let json: serde_json::Value = resp.json().await.map_err(|e| {
-                Error::explain(
-                    ErrorType::HTTPStatus(502),
-                    format!("Token 响应解析失败: {e}"),
-                )
-            })?;
-            return parse_token_exchange_response(json);
-        }
-
-        Err(Error::explain(
-            ErrorType::HTTPStatus(502),
-            "OIDC Provider 所有节点均不可达，无法执行 Token 交换".to_string(),
-        ))
+        // 决策表与 I/O 分开：本函数只负责"拼请求体 + 交给执行体"
+        self.token_exchange().exchange(&body).await
     }
 
     /// OAuth callback 错误 → 302 重定向到登录页并终止请求处理。
@@ -191,7 +267,7 @@ impl Gateway {
             .and_then(oauth::safe_redirect_path)
             .unwrap_or_else(|| "/".to_string());
 
-        let callback_path = self.jwks_cache.callback_path_or_default();
+        let callback_path = self.oauth_callback_path();
 
         // 与 /authorize 阶段同一函数（oauth::build_redirect_uri）构造，
         // 保证 OAuth 2.1 两阶段 redirect_uri 逐字节一致
@@ -240,25 +316,18 @@ impl Gateway {
 }
 
 /// 从 /token 端点 JSON 响应中解析 access_token / refresh_token / id_token。
-fn parse_token_exchange_response(json: serde_json::Value) -> Result<TokenExchangeResult> {
+///
+/// 返回 `Err(消息)` 而非 `Error`：本函数是**纯解析**，消息即拒绝原因，
+/// 由调用方（决策表 / `TokenExchange::exchange`）统一包装成 502。
+fn parse_token_exchange_response(json: serde_json::Value) -> Result<TokenExchangeResult, String> {
     let access = json["access_token"]
         .as_str()
         .filter(|s| !s.is_empty())
-        .ok_or_else(|| {
-            Error::explain(
-                ErrorType::HTTPStatus(502),
-                "Token 响应中缺少 access_token 字段".to_string(),
-            )
-        })?;
+        .ok_or_else(|| "Token 响应中缺少 access_token 字段".to_string())?;
     let refresh = json["refresh_token"]
         .as_str()
         .filter(|s| !s.is_empty())
-        .ok_or_else(|| {
-            Error::explain(
-                ErrorType::HTTPStatus(502),
-                "Token 响应中缺少 refresh_token 字段".to_string(),
-            )
-        })?;
+        .ok_or_else(|| "Token 响应中缺少 refresh_token 字段".to_string())?;
 
     Ok(TokenExchangeResult {
         access: access.to_string(),
@@ -266,3 +335,7 @@ fn parse_token_exchange_response(json: serde_json::Value) -> Result<TokenExchang
         id_token: json["id_token"].as_str().map(String::from),
     })
 }
+
+/// 单元测试模块，外置于 `oauth_flow/tests.rs`
+#[cfg(test)]
+mod tests;
