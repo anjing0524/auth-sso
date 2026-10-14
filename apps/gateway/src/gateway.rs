@@ -175,7 +175,10 @@ pub struct GatewayCtx {
 impl GatewayCtx {}
 
 /// 从 query string 提取指定参数值（大小写敏感，符合 RFC 6570 / OAuth 参数语义；零分配）
-fn query_param<'a>(query: &'a str, key: &str) -> Option<&'a str> {
+///
+/// `pub(crate)`：OAuth callback 的**拦截判定**已移入 `oauth_flow::intercept`（纯函数，
+/// 可直测），那里需要复用同一套参数提取（避免两处实现漂移）。
+pub(crate) fn query_param<'a>(query: &'a str, key: &str) -> Option<&'a str> {
     query
         .split('&')
         .find_map(|kv| kv.strip_prefix(key)?.strip_prefix('='))
@@ -473,34 +476,29 @@ impl ProxyHttp for Gateway {
         let oauth_config = &self.oauth;
 
         // 5. OAuth callback 拦截
-        {
-            let callback_path = self.oauth_callback_path();
-            let is_callback = path
-                .strip_prefix(callback_path.as_ref())
-                .is_some_and(|rest| rest.is_empty() || rest.starts_with('/'));
-            if is_callback {
-                // IdP 显式拒绝（error=access_denied 等）：立即回登录页，不做 code/state 校验
-                if query_param(&query, "error").is_some() {
-                    warn!("OAuth callback 携带 error 参数，重定向登录页");
-                    session
-                        .respond_302_with_cookies("/login?error=oauth_denied", &[])
-                        .await?;
-                    return Ok(true);
-                }
-                let code = query_param(&query, "code");
-                let state = query_param(&query, "state");
-                if let (Some(code), Some(state)) = (code, state) {
-                    return self
-                        .handle_oauth_callback(
-                            session,
-                            oauth_config,
-                            ctx.cookie_header.as_deref(),
-                            code,
-                            state,
-                        )
-                        .await;
-                }
-                warn!("OAuth callback 缺少 code/state，透传上游处理");
+        //
+        // 判定本身是纯函数（`oauth_flow::intercept`，可穷举测试）；
+        // 本处只负责把判定结果写成响应 —— 单一职责，且"路径前缀 / error 优先级 /
+        // code+state 缺一不可"这三条规则不再靠读这段内联代码才能知道。
+        match crate::oauth_flow::intercept(&path, &query, self.oauth_callback_path().as_ref()) {
+            crate::oauth_flow::CallbackOutcome::NotIntercepted => {}
+            crate::oauth_flow::CallbackOutcome::Denied => {
+                warn!("OAuth callback 携带 error 参数，重定向登录页");
+                session
+                    .respond_302_with_cookies(crate::oauth_flow::CALLBACK_DENIED_LOCATION, &[])
+                    .await?;
+                return Ok(true);
+            }
+            crate::oauth_flow::CallbackOutcome::Handle { code, state } => {
+                return self
+                    .handle_oauth_callback(
+                        session,
+                        oauth_config,
+                        ctx.cookie_header.as_deref(),
+                        &code,
+                        &state,
+                    )
+                    .await;
             }
         }
 

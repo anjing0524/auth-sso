@@ -153,3 +153,187 @@ fn test_parse_function_does_not_panic_on_non_object_json() {
     let (status, _) = expect_reject(decide_exchange(ExchangeAttempt::Body(json!("oops"))));
     assert_eq!(status, 502);
 }
+
+// ── 拦截判定（`intercept`）：原先内联在 `request_filter`，零测试 ──────────
+
+const CB: &str = "/api/auth/callback";
+
+#[test]
+fn test_intercept_ignores_non_callback_path() {
+    assert_eq!(
+        intercept("/dashboard", "code=c&state=s", CB),
+        CallbackOutcome::NotIntercepted
+    );
+}
+
+#[test]
+fn test_intercept_requires_exact_path_or_separator() {
+    // 精确命中 → 是 callback（但缺参数 ⇒ 不进流程）
+    assert_eq!(intercept(CB, "", CB), CallbackOutcome::NotIntercepted);
+    // 紧随 `/` → 是 callback
+    assert_eq!(
+        intercept(&format!("{CB}/extra"), "code=c&state=s", CB),
+        CallbackOutcome::Handle {
+            code: "c".into(),
+            state: "s".into()
+        }
+    );
+    // ⚠️ 前缀但**无分隔符** ⇒ 不是 callback（否则 `/cb.evil` 这类路径会被放行）
+    assert_eq!(
+        intercept(&format!("{CB}XYZ"), "code=c&state=s", CB),
+        CallbackOutcome::NotIntercepted
+    );
+}
+
+#[test]
+fn test_intercept_handles_callback_with_code_and_state() {
+    assert_eq!(
+        intercept(CB, "code=abc&state=xyz", CB),
+        CallbackOutcome::Handle {
+            code: "abc".into(),
+            state: "xyz".into()
+        }
+    );
+}
+
+#[test]
+fn test_intercept_requires_both_code_and_state() {
+    // 半套参数不得进入流程（换 token 必然失败，且会消耗一次 state 校验）
+    assert_eq!(
+        intercept(CB, "code=abc", CB),
+        CallbackOutcome::NotIntercepted
+    );
+    assert_eq!(
+        intercept(CB, "state=xyz", CB),
+        CallbackOutcome::NotIntercepted
+    );
+}
+
+#[test]
+fn test_intercept_error_param_takes_priority_over_code() {
+    // IdP 显式拒绝时**不做** code/state 校验（RFC 6749 §4.1.2.1 的错误响应不带 code）
+    assert_eq!(
+        intercept(CB, "error=access_denied&code=abc&state=xyz", CB),
+        CallbackOutcome::Denied
+    );
+    assert_eq!(
+        intercept(CB, "error=access_denied", CB),
+        CallbackOutcome::Denied
+    );
+}
+
+#[test]
+fn test_callback_denied_location_is_stable() {
+    // 位置是契约字符串：改动它等于改动用户可见的跳转目标
+    assert_eq!(CALLBACK_DENIED_LOCATION, "/login?error=oauth_denied");
+}
+
+// ── callback 校验序列（`check_callback`）：原先内联在 &mut Session 方法里 ──
+
+fn cookie_header(
+    state: &str,
+    verifier: Option<&str>,
+    nonce: Option<&str>,
+    return_to: Option<&str>,
+) -> String {
+    let mut parts = vec![format!("oauth_state={state}")];
+    if let Some(v) = verifier {
+        parts.push(format!("pkce_verifier={v}"));
+    }
+    if let Some(n) = nonce {
+        parts.push(format!("oauth_nonce={n}"));
+    }
+    if let Some(r) = return_to {
+        parts.push(format!("return_to={r}"));
+    }
+    parts.join("; ")
+}
+
+#[test]
+fn test_check_callback_without_cookie_header_redirects() {
+    assert_eq!(
+        check_callback(None, "state-1"),
+        CallbackCheck::RedirectToLogin {
+            reason: "invalid_state"
+        }
+    );
+}
+
+#[test]
+fn test_check_callback_state_mismatch_precedes_missing_verifier() {
+    // **顺序即语义**：state 不匹配时必须报 csrf_mismatch，
+    // 不能因"同时缺 verifier"而降级成 invalid_state（那会掩盖 CSRF 失败）
+    let header = cookie_header("other", None, None, None);
+
+    assert_eq!(
+        check_callback(Some(&header), "state-1"),
+        CallbackCheck::RedirectToLogin {
+            reason: "csrf_mismatch"
+        }
+    );
+}
+
+#[test]
+fn test_check_callback_matching_state_but_missing_verifier_redirects() {
+    let header = cookie_header("state-1", None, None, None);
+
+    assert_eq!(
+        check_callback(Some(&header), "state-1"),
+        CallbackCheck::RedirectToLogin {
+            reason: "invalid_state"
+        }
+    );
+}
+
+#[test]
+fn test_check_callback_proceeds_with_verifier_nonce_and_return_to() {
+    let header = cookie_header(
+        "state-1",
+        Some("ver-1"),
+        Some("nonce-1"),
+        Some("/dashboard"),
+    );
+
+    assert_eq!(
+        check_callback(Some(&header), "state-1"),
+        CallbackCheck::Proceed {
+            verifier: "ver-1".into(),
+            nonce: Some("nonce-1".into()),
+            return_to: "/dashboard".into(),
+        }
+    );
+}
+
+#[test]
+fn test_check_callback_defaults_return_to_to_root() {
+    let header = cookie_header("state-1", Some("ver-1"), None, None);
+
+    match check_callback(Some(&header), "state-1") {
+        CallbackCheck::Proceed {
+            return_to, nonce, ..
+        } => {
+            assert_eq!(return_to, "/");
+            assert_eq!(nonce, None);
+        }
+        other => panic!("期望通过校验，实际是 {other:?}"),
+    }
+}
+
+#[test]
+fn test_check_callback_rejects_open_redirect_return_to() {
+    // 开放重定向防护：绝对 URL 不得成为回跳目标，必须回落到 `/`
+    for evil in [
+        "https://evil.example.com/",
+        "//evil.example.com",
+        "javascript:alert(1)",
+    ] {
+        let header = cookie_header("state-1", Some("ver-1"), None, Some(evil));
+
+        match check_callback(Some(&header), "state-1") {
+            CallbackCheck::Proceed { return_to, .. } => {
+                assert_eq!(return_to, "/", "不应接受 {evil}");
+            }
+            other => panic!("期望通过校验，实际是 {other:?}"),
+        }
+    }
+}

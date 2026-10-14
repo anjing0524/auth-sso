@@ -27,6 +27,97 @@ pub(crate) struct TokenExchangeResult {
     pub(crate) id_token: Option<String>,
 }
 
+/// IdP 显式拒绝（`error=` 参数）时的登录页位置（**契约字符串**，由测试钉住）。
+pub(crate) const CALLBACK_DENIED_LOCATION: &str = "/login?error=oauth_denied";
+
+/// callback 拦截的**判定结果**（纯数据，可直测）。
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum CallbackOutcome {
+    /// 不是 callback，或缺少 `code`/`state`（按上游处理，不进 OAuth 流程）
+    NotIntercepted,
+    /// IdP 显式拒绝（`error=access_denied` 等）：**不做** code/state 校验，直接回登录页
+    Denied,
+    /// 需要执行完整 callback 流程（state/nonce 校验 + token 交换 + 下发会话）
+    Handle { code: String, state: String },
+}
+
+/// **callback 拦截判定**（纯函数、零 I/O）：从 `gateway.rs::request_filter` 内联段抽出。
+///
+/// 判定规则（本轮从原代码逐条固化，原先**零测试**）：
+/// 1. 路径命中 callback 需**精确匹配 `callback_path`**，或其后紧跟 `/`——
+///    `/cbXYZ` **不得**被当成 callback（前缀匹配会放行 `https://host/cb.evil` 这类路径）；
+/// 2. `error=` 参数**优先于** `code`/`state`：IdP 显式拒绝时不复用 code 校验路径
+///    （RFC 6749 §4.1.2.1 的错误响应不带 code）；
+/// 3. `code` 与 `state` **都**存在才进入流程；缺任一则按上游处理（不透传半套参数）。
+pub(crate) fn intercept(path: &str, query: &str, callback_path: &str) -> CallbackOutcome {
+    let is_callback = path
+        .strip_prefix(callback_path)
+        .is_some_and(|rest| rest.is_empty() || rest.starts_with('/'));
+    if !is_callback {
+        return CallbackOutcome::NotIntercepted;
+    }
+    if crate::gateway::query_param(query, "error").is_some() {
+        return CallbackOutcome::Denied;
+    }
+    match (
+        crate::gateway::query_param(query, "code"),
+        crate::gateway::query_param(query, "state"),
+    ) {
+        (Some(code), Some(state)) => CallbackOutcome::Handle {
+            code: code.to_string(),
+            state: state.to_string(),
+        },
+        _ => CallbackOutcome::NotIntercepted,
+    }
+}
+
+/// callback 内部校验序列的判定结果（纯数据，可直测）。
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum CallbackCheck {
+    /// 回登录页（reason 即 `/login?error={reason}` 的片段）
+    RedirectToLogin { reason: &'static str },
+    /// 校验通过，可执行 token 交换
+    Proceed {
+        verifier: String,
+        nonce: Option<String>,
+        return_to: String,
+    },
+}
+
+/// **callback 校验序列**（纯函数）：Cookie 缺失 → state 不匹配 → PKCE 缺失 → 通过。
+///
+/// 三处"fail-close"原先内联在 `handle_oauth_callback` 里（`&mut Session` 使得它们
+/// 只能靠集成测试），抽出后可逐条穷举。**顺序即语义**：state 必须先于 PKCE 判定，
+/// 否则 CSRF 检测会被"先报缺 verifier"掩盖。
+pub(crate) fn check_callback(cookie_header: Option<&str>, state_param: &str) -> CallbackCheck {
+    let Some(ck) = cookie_header else {
+        return CallbackCheck::RedirectToLogin {
+            reason: "invalid_state",
+        };
+    };
+
+    if !oauth::state_matches(oauth::extract_oauth_state(ck), state_param) {
+        return CallbackCheck::RedirectToLogin {
+            reason: "csrf_mismatch",
+        };
+    }
+
+    let Some(verifier) = oauth::extract_pkce_verifier(ck) else {
+        return CallbackCheck::RedirectToLogin {
+            reason: "invalid_state",
+        };
+    };
+
+    CallbackCheck::Proceed {
+        verifier: verifier.to_string(),
+        nonce: oauth::extract_oauth_nonce(ck).map(str::to_string),
+        // 回跳目标必须过 `safe_redirect_path`（防开放重定向），默认 `/`
+        return_to: oauth::extract_return_to(ck)
+            .and_then(oauth::safe_redirect_path)
+            .unwrap_or_else(|| "/".to_string()),
+    }
+}
+
 /// 单次 token 交换尝试的**结果**——刻意与 HTTP 库解耦，使决策表可穷举测试。
 #[derive(Debug, Clone)]
 pub(crate) enum ExchangeAttempt {
@@ -241,31 +332,20 @@ impl Gateway {
         let host = get_host(session);
         // 与 /authorize 阶段保持同一条边界事实：Gateway callback 始终经 HTTPS 到达。
         const SECURE: bool = true;
-        let Some(ck) = cookie_header else {
-            warn!("OAuth callback 缺少 Cookie");
-            return Self::oauth_error_redirect(session, "invalid_state").await;
+
+        // Cookie 缺失 / state 不匹配 / PKCE 缺失这条**校验序列**是纯函数（`check_callback`）：
+        // 顺序与 fail-close 语义可穷举（原先内联在 `&mut Session` 方法里 ⇒ 零测试）。
+        let (verifier, cookie_nonce, return_to) = match check_callback(cookie_header, state_param) {
+            CallbackCheck::RedirectToLogin { reason } => {
+                warn!("OAuth callback 校验失败: {reason}");
+                return Self::oauth_error_redirect(session, reason).await;
+            }
+            CallbackCheck::Proceed {
+                verifier,
+                nonce,
+                return_to,
+            } => (verifier, nonce, return_to),
         };
-
-        // 判定提取为纯函数（`oauth::state_matches`）：可穷举测试、fail-close
-        let cookie_state = oauth::extract_oauth_state(ck);
-        if !oauth::state_matches(cookie_state, state_param) {
-            warn!(
-                "OAuth callback CSRF state 不匹配: cookie={:?} query={}",
-                cookie_state, state_param
-            );
-            return Self::oauth_error_redirect(session, "csrf_mismatch").await;
-        }
-
-        let Some(verifier) = oauth::extract_pkce_verifier(ck) else {
-            warn!("OAuth callback 缺少 pkce_verifier");
-            return Self::oauth_error_redirect(session, "invalid_state").await;
-        };
-
-        let cookie_nonce = oauth::extract_oauth_nonce(ck);
-
-        let return_to = oauth::extract_return_to(ck)
-            .and_then(oauth::safe_redirect_path)
-            .unwrap_or_else(|| "/".to_string());
 
         let callback_path = self.oauth_callback_path();
 
@@ -276,7 +356,7 @@ impl Gateway {
         let tokens = match self
             .do_token_exchange(
                 code,
-                verifier,
+                &verifier,
                 &oauth.client_id,
                 &oauth.client_secret,
                 &redirect_uri,
@@ -296,7 +376,7 @@ impl Gateway {
             .id_token
             .as_deref()
             .and_then(oauth::decode_id_token_nonce);
-        if !oauth::nonce_matches(cookie_nonce, id_nonce.as_deref()) {
+        if !oauth::nonce_matches(cookie_nonce.as_deref(), id_nonce.as_deref()) {
             warn!("OAuth callback nonce 不匹配");
             return Self::oauth_error_redirect(session, "nonce_mismatch").await;
         }
