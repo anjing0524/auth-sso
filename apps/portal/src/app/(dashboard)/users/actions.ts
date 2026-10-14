@@ -37,7 +37,7 @@ import {
   type CreateUserInput,
 } from '@/domain/user/types';
 import { validatePassword } from '@/domain/shared/zod-schemas';
-import { EntityNotFoundError, DuplicateEntityError } from '@/domain/shared/errors';
+import { EntityNotFoundError, DuplicateEntityError , BusinessRuleViolationError } from '@/domain/shared/errors';
 import { generateUUID } from '@/lib/crypto';
 import { validate } from '@/lib/validation';
 import { hashPassword } from '@/domain/auth/password';
@@ -78,7 +78,7 @@ function loadUserScoped(
     notFound: () => new EntityNotFoundError('User', userId),
   };
 }
-import { COMMON_ERRORS, USER_ACTIVE, USER_PERMISSIONS } from '@auth-sso/contracts';
+import { COMMON_ERRORS, USER_ACTIVE, USER_ERRORS, USER_PERMISSIONS } from '@auth-sso/contracts';
 import type { ApiResponse } from '@auth-sso/contracts';
 
 /**
@@ -147,6 +147,11 @@ export const toggleUserStatusAction = withAuth(
       loadUserScoped(ctx.userId, v.data.id),
       async (tx, row) => {
         const target = toggleUserStatus(userFromPersistence(row));
+        // `USER_ERRORS.CANNOT_DISABLE_SELF` 对应的规则（此前从未实现）：
+        // 只拦"把自己禁用"；自己处于禁用态时再启用是自救，必须允许。
+        if (v.data.id === ctx.userId && target.status !== USER_ACTIVE) {
+          throw new BusinessRuleViolationError('不能禁用自己的账号', USER_ERRORS.CANNOT_DISABLE_SELF);
+        }
         await tx.update(schema.users)
           .set({ status: target.status })
           .where(eq(schema.users.id, v.data.id));
@@ -261,6 +266,12 @@ export const deleteUserAction = withAuth(
   async (ctx: AuthContext, userIdStr: string): Promise<ApiResponse<{ id: string }>> => {
     const v = validate(UserIdentityInputSchema, { id: userIdStr });
     if (!v.ok) return v.response;
+
+    // `USER_ERRORS.CANNOT_DELETE_SELF` 对应的规则（契约里定义了但此前**从未实现**）：
+    // 允许管理员删除自己会造成自锁死（尤其当他是最后一个管理员）。
+    if (v.data.id === ctx.userId) {
+      throw new BusinessRuleViolationError('不能删除自己的账号', USER_ERRORS.CANNOT_DELETE_SELF);
+    }
 
     await withScopedRow(
       loadUserScoped(ctx.userId, v.data.id),

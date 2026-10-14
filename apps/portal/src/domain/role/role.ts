@@ -1,5 +1,5 @@
 import type { CreateRoleInput, Role } from './types';
-import { ENTITY_ACTIVE } from '@auth-sso/contracts';
+import { ENTITY_ACTIVE, ROLE_ERRORS } from '@auth-sso/contracts';
 import { BusinessRuleViolationError } from '../shared/errors';
 import { dateFromInstant, instantFromDate } from '@/domain/shared/time';
 
@@ -36,9 +36,23 @@ export function applyRoleUpdate(
   };
 }
 
-export function guardNotSystemRole(role: Role): void {
+/** 系统角色的两种受禁操作 —— 决定发射哪个契约码 */
+export type SystemRoleAction = 'modify' | 'delete';
+
+/**
+ * 系统内置角色禁止修改或删除。
+ *
+ * 携带**专属契约码**：客户端/UI 需要据此隐藏或禁用对应操作（此前只发通用
+ * `VALIDATION_ERROR`，只能靠解析中文文案区分"禁止修改"与"禁止删除"）。
+ */
+export function guardNotSystemRole(role: Role, action: SystemRoleAction): void {
   if (role.isSystem) {
-    throw new BusinessRuleViolationError('系统内置角色禁止修改或删除');
+    throw new BusinessRuleViolationError(
+      '系统内置角色禁止修改或删除',
+      action === 'delete'
+        ? ROLE_ERRORS.CANNOT_DELETE_SYSTEM_ROLE
+        : ROLE_ERRORS.CANNOT_MODIFY_SYSTEM_ROLE,
+    );
   }
 }
 

@@ -129,7 +129,7 @@ export const updateRoleAction = withAuth(
         : []),
       async (tx, row) => {
         const role = roleFromPersistence(row);
-        guardNotSystemRole(role);
+        guardNotSystemRole(role, 'modify');
         const updated = applyRoleUpdate(role, v.data);
         permissionChanged = hasRolePermissionImpact(role, updated);
         await tx.update(schema.roles).set(roleToUpdateRow(updated))
@@ -157,7 +157,7 @@ export const deleteRoleAction = withAuth(
     let boundUsers: Array<{ userId: string }> = [];
     await withScopedRow(loadRoleScoped(ctx.userId, roleId),
       async (tx, row) => {
-        guardNotSystemRole(roleFromPersistence(row));
+        guardNotSystemRole(roleFromPersistence(row), 'delete');
 
         // 事务内删除前预取绑定用户，事务后清除缓存
         boundUsers = await tx.select({ userId: schema.userRoles.userId })

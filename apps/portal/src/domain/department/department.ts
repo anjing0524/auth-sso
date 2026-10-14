@@ -49,13 +49,19 @@ export function validateNoCircularReference(
   allDepts: Array<{ id: string; parentId: string | null }>,
 ): void {
   if (deptId === newParentId) {
-    throw new BusinessRuleViolationError('不能将父部门设为自身，这会导致环形死锁');
+    throw new BusinessRuleViolationError(
+      '不能将父部门设为自身，这会导致环形死锁',
+      DEPARTMENT_ERRORS.CANNOT_MOVE_TO_CHILD,
+    );
   }
   let currentId: string | null = newParentId;
   const visited = new Set<string>();
   while (currentId) {
     if (currentId === deptId) {
-      throw new BusinessRuleViolationError('不能将父部门设为其子部门，这会导致环形死锁');
+      throw new BusinessRuleViolationError(
+        '不能将父部门设为其子部门，这会导致环形死锁',
+        DEPARTMENT_ERRORS.CANNOT_MOVE_TO_CHILD,
+      );
     }
     if (visited.has(currentId)) break;
     visited.add(currentId);
@@ -115,8 +121,18 @@ export function validateDepartmentDeletable(checks: {
   if (checks.isRoot) {
     throw new BusinessRuleViolationError('根部门不可删除', DEPARTMENT_ERRORS.CANNOT_DELETE_ROOT);
   }
-  if (checks.hasChildren) throw new BusinessRuleViolationError('该部门下有子部门，无法删除');
-  if (checks.userCount > 0) throw new BusinessRuleViolationError('该部门下存在关联用户，无法删除');
+  if (checks.hasChildren) {
+    throw new BusinessRuleViolationError(
+      '该部门下有子部门，无法删除',
+      DEPARTMENT_ERRORS.DEPARTMENT_HAS_CHILDREN,
+    );
+  }
+  if (checks.userCount > 0) {
+    throw new BusinessRuleViolationError(
+      '该部门下存在关联用户，无法删除',
+      DEPARTMENT_ERRORS.DEPARTMENT_HAS_USERS,
+    );
+  }
   if (checks.roleCount > 0) throw new BusinessRuleViolationError('该部门下存在关联角色，无法删除');
 }
 

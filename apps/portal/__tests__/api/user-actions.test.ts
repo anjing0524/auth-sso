@@ -11,7 +11,7 @@ import { createTestDbHandle, seedTestData } from '../helpers/test-db';
 import { seedAdminUser, seedRootDept, seedSuperAdminRole, seedTestUser, seedUserRoleBinding } from '../helpers/seed-fixtures';
 import * as schema from '@/db/schema';
 import { eq } from 'drizzle-orm';
-import { COMMON_ERRORS } from '@auth-sso/contracts';
+import { COMMON_ERRORS, USER_ERRORS } from '@auth-sso/contracts';
 
 // 断言说明：`ApiResponse` 是判别联合（`ApiSuccess | ApiError`），因此断言失败契约时先
 // `if (r.success) expect.unreachable(...)` 收窄，再取 `r.error`（直接取会 TS2339）。
@@ -162,6 +162,20 @@ describe('User Server Actions', () => {
       expect(r.data.status).toBe('ACTIVE');
     });
 
+    it('**不能禁用自己的账号**（契约码 CANNOT_DISABLE_SELF 的规则此前从未实现）', async () => {
+      const before = await td.db.select({ status: schema.users.status })
+        .from(schema.users).where(eq(schema.users.id, ADMIN_ID));
+
+      const r = await toggleUserStatusAction(ADMIN_ID);
+
+      if (r.success) expect.unreachable('自禁必须被拒（否则把自己踢出后无法自救）');
+      expect(r.error).toBe(USER_ERRORS.CANNOT_DISABLE_SELF);
+
+      const after = await td.db.select({ status: schema.users.status })
+        .from(schema.users).where(eq(schema.users.id, ADMIN_ID));
+      expect(after[0]!.status).toBe(before[0]!.status);
+    });
+
     it('不存在用户 → 失败信封 NOT_FOUND（生产契约，非抛出）', async () => {
       const r = await toggleUserStatusAction('00000000-0000-4000-8000-000000000999');
 
@@ -171,6 +185,17 @@ describe('User Server Actions', () => {
   });
 
   describe('deleteUserAction', () => {
+    it('**不能删除自己**（契约码 CANNOT_DELETE_SELF 的规则此前从未实现）', async () => {
+      const r = await deleteUserAction(ADMIN_ID);
+
+      if (r.success) expect.unreachable('自删必须被拒（否则最后一个管理员可把自己删掉 = 自锁死）');
+      expect(r.error).toBe(USER_ERRORS.CANNOT_DELETE_SELF);
+
+      const [row] = await td.db.select({ status: schema.users.status })
+        .from(schema.users).where(eq(schema.users.id, ADMIN_ID));
+      expect(row!.status).not.toBe('DELETED');
+    });
+
     it('可删除用户 → 返回 success: true', async () => {
       await seedTestData(td.db, { users: seedTestUser() });
       const r: any = await deleteUserAction('00000000-0000-4000-8000-000000000201');

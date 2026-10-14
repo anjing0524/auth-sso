@@ -3,6 +3,7 @@
  * v3.2: dataScopeType 已替换为 deptId
  */
 import { describe, it, expect } from 'vitest';
+import { ROLE_ERRORS } from '@auth-sso/contracts';
 import {
   createRole,
   applyRoleUpdate,
@@ -39,17 +40,31 @@ describe('Role 领域核心规则', () => {
     expect(updated.deptId).toBe('a1b2c3d4-e5f6-4789-abcd-ef0123456789'); // 未修改保持原值
   });
 
-  it('guardNotSystemRole 应阻止操作系统角色', () => {
+  it('guardNotSystemRole 阻止操作系统角色，并**按操作区分契约码**', () => {
     const input = CreateRoleInputSchema.parse({ name: '系统角色', code: 'SYS', deptId: 'a1b2c3d4-e5f6-4789-abcd-ef0123456789' });
     const role = createRole(input, mockIdGen);
     const sysRole = { ...role, isSystem: true };
-    expect(() => guardNotSystemRole(sysRole)).toThrow(BusinessRuleViolationError);
+
+    // 修改与删除各用专属码：客户端据此隐藏/禁用**对应**操作
+    expect(() => guardNotSystemRole(sysRole, 'modify')).toThrow(BusinessRuleViolationError);
+    expect(() => guardNotSystemRole(sysRole, 'delete')).toThrow(BusinessRuleViolationError);
+
+    const codes: string[] = [];
+    for (const action of ['modify', 'delete'] as const) {
+      try {
+        guardNotSystemRole(sysRole, action);
+      } catch (err) {
+        codes.push((err as { code: string }).code);
+      }
+    }
+    expect(codes).toEqual([ROLE_ERRORS.CANNOT_MODIFY_SYSTEM_ROLE, ROLE_ERRORS.CANNOT_DELETE_SYSTEM_ROLE]);
   });
 
   it('guardNotSystemRole 应允许操作非系统角色', () => {
     const input = CreateRoleInputSchema.parse({ name: '普通角色', code: 'NORMAL', deptId: 'a1b2c3d4-e5f6-4789-abcd-ef0123456789' });
     const role = createRole(input, mockIdGen);
-    expect(() => guardNotSystemRole(role)).not.toThrow();
+    expect(() => guardNotSystemRole(role, 'modify')).not.toThrow();
+    expect(() => guardNotSystemRole(role, 'delete')).not.toThrow();
   });
 });
 

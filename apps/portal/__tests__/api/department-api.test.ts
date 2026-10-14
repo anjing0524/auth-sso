@@ -15,7 +15,7 @@ import { createTestDbHandle, seedTestData } from '../helpers/test-db';
 import { seedAdminUser, seedSuperAdminRole, seedUserRoleBinding } from '../helpers/seed-fixtures';
 import { createTestRequest, parseResponseJson } from '../helpers/test-utils';
 import * as schema from '@/db/schema';
-import { COMMON_ERRORS } from '@auth-sso/contracts';
+import { DEPARTMENT_ERRORS } from '@auth-sso/contracts';
 import type * as authModule from '@/lib/auth';
 import type * as verifyJwtModule from '@/lib/auth/verify-jwt';
 import type * as cryptoModule from '@/lib/crypto';
@@ -395,7 +395,7 @@ describe('Department API', () => {
 
   // ── 循环引用防护 ──────────────────────────────────────
   describe('circular reference prevention', () => {
-    it('更新为自身 parentId → 失败信封 VALIDATION_ERROR（生产契约）', async () => {
+    it('更新为自身 parentId → 失败信封 CANNOT_MOVE_TO_CHILD（生产契约）', async () => {
       await seedTestData(td.db, {
         departments: [
           {
@@ -428,20 +428,20 @@ describe('Department API', () => {
 
       // 生产契约：领域规则违反 → 失败信封（422 语义），**不抛出**
       if (r.success) expect.unreachable('循环引用必须被拒');
-      expect(r.error).toBe(COMMON_ERRORS.VALIDATION_ERROR);
+      expect(r.error).toBe(DEPARTMENT_ERRORS.CANNOT_MOVE_TO_CHILD);
     });
 
-    it('更新 parentId 为自身子部门 → 失败信封 VALIDATION_ERROR（生产契约）', async () => {
+    it('更新 parentId 为自身子部门 → 失败信封 CANNOT_MOVE_TO_CHILD（生产契约）', async () => {
       await seedTestData(td.db, { departments: seedThreeLevelTree() });
       await seedOperatorScope();
 
       const r = await updateDepartmentAction(TECH_DEPT_ID, { parentId: FE_DEPT_ID } as any);
 
       if (r.success) expect.unreachable('循环引用必须被拒');
-      expect(r.error).toBe(COMMON_ERRORS.VALIDATION_ERROR);
+      expect(r.error).toBe(DEPARTMENT_ERRORS.CANNOT_MOVE_TO_CHILD);
     });
 
-    it('更新 parentId 为自身孙子部门 → 失败信封 VALIDATION_ERROR（生产契约）', async () => {
+    it('更新 parentId 为自身孙子部门 → 失败信封 CANNOT_MOVE_TO_CHILD（生产契约）', async () => {
       await seedTestData(td.db, {
         departments: [
           {
@@ -497,7 +497,7 @@ describe('Department API', () => {
       } as any);
 
       if (r.success) expect.unreachable('循环引用必须被拒');
-      expect(r.error).toBe(COMMON_ERRORS.VALIDATION_ERROR);
+      expect(r.error).toBe(DEPARTMENT_ERRORS.CANNOT_MOVE_TO_CHILD);
     });
   });
 });

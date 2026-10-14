@@ -203,7 +203,7 @@ describe('Department Server Actions', () => {
         deleteDepartmentAction(TECH_DEPT_ID)
       );
       if (r.success) expect.unreachable('应当被拒绝（生产契约：失败信封）');
-      expect(r.error).toBe(COMMON_ERRORS.VALIDATION_ERROR);
+      expect(r.error).toBe(DEPARTMENT_ERRORS.DEPARTMENT_HAS_CHILDREN);
       expect(r.message).toContain('子部门');
     });
 
@@ -227,7 +227,7 @@ describe('Department Server Actions', () => {
         deleteDepartmentAction(WITH_USERS_DEPT_ID)
       );
       if (r.success) expect.unreachable('应当被拒绝（生产契约：失败信封）');
-      expect(r.error).toBe(COMMON_ERRORS.VALIDATION_ERROR);
+      expect(r.error).toBe(DEPARTMENT_ERRORS.DEPARTMENT_HAS_USERS);
       expect(r.message).toContain('关联用户');
     });
   });
