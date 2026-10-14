@@ -9,6 +9,7 @@
  * @impl C-ROL-PA — 为角色分配权限
  */
 import { db, schema } from '@/infrastructure/db';
+import type { DbTxHandle } from '@/infrastructure/db';
 import { eq } from 'drizzle-orm';
 import { withAuth, type AuthContext } from '@/lib/auth';
 import {
@@ -86,6 +87,33 @@ export const createRoleAction = withAuth(
   },
 );
 
+/**
+ * 角色操作的数据范围守卫配置（**安全配置集中一处：改则全改**）
+ *
+ * 存在理由（#71 结构那一半）：这段 `load/deptOf/notFound/message` 组合原先在
+ * 「更新角色」与「删除角色」两处逐字重复。安全配置散落时，**改一处而漏改另一处
+ * 就是越权**——收成一处才能保证「改则全改」。
+ *
+ * 形状与 `users/actions.ts` 的 `loadUserScoped` 一致（同一纪律，不另立新词）。
+ *
+ * @param extraTargets 本次操作额外涉及的部门（如"拟迁入的部门"）。它依赖已校验的输入，
+ *                     故以 thunk 传入——守卫在**同一份范围快照**上判定，不重复读取。
+ */
+function loadRoleScoped(
+  operatorId: string,
+  roleId: string,
+  extraTargets?: () => Array<{ deptId: string; message: string }>,
+) {
+  return {
+    operatorId,
+    load: (tx: DbTxHandle) => tx.query.roles.findFirst({ where: eq(schema.roles.id, roleId) }),
+    deptOf: (row: { deptId: string | null }) => row.deptId,
+    message: '无权操作该部门的角色',
+    ...(extraTargets ? { extraTargets } : {}),
+    notFound: () => new EntityNotFoundError('Role', roleId),
+  };
+}
+
 /** 更新角色 */
 export const updateRoleAction = withAuth(
   { permissions: [ROLE_PERMISSIONS.UPDATE], audit: 'ROLE_UPDATE' },
@@ -95,17 +123,10 @@ export const updateRoleAction = withAuth(
 
     let permissionChanged = false;
     await withScopedRow(
-      {
-        operatorId: ctx.userId,
-        load: (tx) => tx.query.roles.findFirst({ where: eq(schema.roles.id, roleId) }),
-        deptOf: (row) => row.deptId,
-        message: '无权操作该部门的角色',
-        // 第二个目标：拟迁入部门（同一份快照，不重复读取）
-        extraTargets: () => v.data.deptId
-          ? [{ deptId: v.data.deptId, message: '无权将角色迁移至该部门' }]
-          : [],
-        notFound: () => new EntityNotFoundError('Role', roleId),
-      },
+      // 第二个目标：拟迁入部门（同一份快照，不重复读取）
+      loadRoleScoped(ctx.userId, roleId, () => v.data.deptId
+        ? [{ deptId: v.data.deptId, message: '无权将角色迁移至该部门' }]
+        : []),
       async (tx, row) => {
         const role = roleFromPersistence(row);
         guardNotSystemRole(role);
@@ -134,14 +155,7 @@ export const deleteRoleAction = withAuth(
   { permissions: [ROLE_PERMISSIONS.DELETE], audit: 'ROLE_DELETE' },
   async (ctx: AuthContext, roleId: string): Promise<ApiResponse<{ id: string }>> => {
     let boundUsers: Array<{ userId: string }> = [];
-    await withScopedRow(
-      {
-        operatorId: ctx.userId,
-        load: (tx) => tx.query.roles.findFirst({ where: eq(schema.roles.id, roleId) }),
-        deptOf: (row) => row.deptId,
-        message: '无权操作该部门的角色',
-        notFound: () => new EntityNotFoundError('Role', roleId),
-      },
+    await withScopedRow(loadRoleScoped(ctx.userId, roleId),
       async (tx, row) => {
         guardNotSystemRole(roleFromPersistence(row));
 

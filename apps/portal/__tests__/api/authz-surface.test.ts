@@ -15,7 +15,7 @@
  * @vitest-environment node
  */
 import { describe, it, expect, vi } from 'vitest';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -100,5 +100,25 @@ describe('范围原语的模块级封闭', () => {
     );
     // 用文件系统断言而非 `import()`：后者是构建期解析，失败形态不可控
     expect(existsSync(legacy), `${legacy} 不应存在——范围原语必须只经 @/lib/authz`).toBe(false);
+  });
+});
+
+/**
+ * #71 结构那一半：实体范围守卫配置集中一处
+ *
+ * 每个实体的 `load/deptOf/notFound/message` 组合**只应出现一次**（作为该文件的守卫工厂）。
+ * 散落时改一处而漏改另一处就是越权——这类"安全配置散落"缺陷与
+ * `withScopedWrite` 空转同类：**正常路径看不出差别**，故用静态检查钉住。
+ */
+describe('实体范围守卫配置集中一处', () => {
+  it.each([
+    ['app/(dashboard)/users/actions.ts', '无权操作该部门的用户'],
+    ['app/(dashboard)/roles/actions.ts', '无权操作该部门的角色'],
+    ['app/(dashboard)/departments/actions.ts', '无权操作该部门'],
+  ])('%s：守卫文案在代码中只出现一次（改则全改）', (relPath, message) => {
+    const raw = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), '../../src', relPath), 'utf-8');
+    // 去注释后再数：**注释里提到这个文案不算缺陷**（否则修复记录本身会让守卫变红，R11 的教训）
+    const code = raw.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+    expect(code.split(message).length - 1).toBe(1);
   });
 });

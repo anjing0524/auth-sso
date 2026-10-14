@@ -297,17 +297,14 @@ export const resetPasswordAction = withAuth(
     // bcrypt 在作用域外完成：约 50–200ms，放进事务会长时间占用 DB 连接
     const passwordHash = await hashPassword(newPassword);
 
+    // 复用本文件唯一的守卫工厂（`selectColumns` 正是为"只取密码字段"这一场景提供的）
     await withScopedRow(
-      {
-        operatorId: ctx.userId,
-        load: (tx) => tx.query.users.findFirst({
-          where: eq(schema.users.id, v.data.id),
-          columns: { id: true, deptId: true, passwordHash: true, passwordHistory: true },
-        }),
-        deptOf: (row) => row.deptId,
-        message: '无权操作该部门的用户',
-        notFound: () => new EntityNotFoundError('User', v.data.id),
-      },
+      loadUserScoped(ctx.userId, v.data.id, {
+        id: true,
+        deptId: true,
+        passwordHash: true,
+        passwordHistory: true,
+      }),
       async (tx, row) => {
         const state = {
           currentHash: row.passwordHash ?? null,

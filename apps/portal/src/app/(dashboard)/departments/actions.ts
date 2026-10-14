@@ -98,6 +98,31 @@ async function performDepartmentUpdate(tx: DbTxHandle, deptId: string, patch: Re
   }
 }
 
+/**
+ * 部门操作的数据范围守卫配置（**安全配置集中一处：改则全改**）
+ *
+ * 存在理由（#71 结构那一半）：这段 `load/deptOf/notFound/message` 组合原先在
+ * 「更新部门」与「删除部门」两处逐字重复；安全配置散落时改一处漏一处就是越权。
+ * 形状与 `users/actions.ts` 的 `loadUserScoped` 一致（同一纪律，不另立新词）。
+ *
+ * @param extraTargets 本次操作额外涉及的部门（如"拟迁入的父部门"），依赖已校验输入故以 thunk 传入
+ */
+function loadDepartmentScoped(
+  operatorId: string,
+  deptId: string,
+  extraTargets?: () => Array<{ deptId: string; message: string }>,
+) {
+  return {
+    operatorId,
+    load: (tx: DbTxHandle) =>
+      tx.query.departments.findFirst({ where: eq(schema.departments.id, deptId) }),
+    deptOf: (row: { id: string }) => row.id,
+    message: '无权操作该部门',
+    ...(extraTargets ? { extraTargets } : {}),
+    notFound: () => new EntityNotFoundError('Department', deptId),
+  };
+}
+
 /** 更新部门 */
 export const updateDepartmentAction = withAuth(
   { permissions: [DEPARTMENT_PERMISSIONS.UPDATE], audit: 'DEPARTMENT_UPDATE' },
@@ -105,17 +130,10 @@ export const updateDepartmentAction = withAuth(
     const v = validate(UpdateDepartmentInputSchema, input);
     if (!v.ok) return v.response;
     await withScopedRow(
-      {
-        operatorId: ctx.userId,
-        load: (tx) => tx.query.departments.findFirst({ where: eq(schema.departments.id, deptId) }),
-        deptOf: (row) => row.id,
-        message: '无权操作该部门',
-        // 第二个目标：拟迁入的父部门（同一份快照，不重复读取）
-        extraTargets: () => v.data.parentId
-          ? [{ deptId: v.data.parentId, message: '无权将部门迁移至该父部门' }]
-          : [],
-        notFound: () => new EntityNotFoundError('Department', deptId),
-      },
+      // 第二个目标：拟迁入的父部门（同一份快照，不重复读取）
+      loadDepartmentScoped(ctx.userId, deptId, () => v.data.parentId
+        ? [{ deptId: v.data.parentId, message: '无权将部门迁移至该父部门' }]
+        : []),
       async (tx) => performDepartmentUpdate(tx, deptId, v.data),
     );
     invalidateResource('departments');
@@ -127,16 +145,7 @@ export const updateDepartmentAction = withAuth(
 export const deleteDepartmentAction = withAuth(
   { permissions: [DEPARTMENT_PERMISSIONS.DELETE], audit: 'DEPARTMENT_DELETE' },
   async (ctx: AuthContext, deptId: string): Promise<ApiResponse<{ id: string }>> => {
-    await withScopedRow(
-      {
-        operatorId: ctx.userId,
-        load: (tx) => tx.query.departments.findFirst({
-          where: eq(schema.departments.id, deptId),
-        }),
-        deptOf: (row) => row.id,
-        message: '无权操作该部门',
-        notFound: () => new EntityNotFoundError('Department', deptId),
-      },
+    await withScopedRow(loadDepartmentScoped(ctx.userId, deptId),
       async (tx, row) => {
         // 检查是否有子部门
         const children = await tx.query.departments.findFirst({
