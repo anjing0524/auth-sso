@@ -11,6 +11,7 @@ import { type NextRequest, NextResponse } from 'next/server';
 import { getRefreshTokenFromCookie, getJwtFromCookie, decodeJwtPayload } from '@/lib/session';
 import { rotateRefreshToken } from '@/lib/auth/token';
 import { mapServerError } from '@/lib/server-error';
+import { restError } from '@/lib/response';
 import { AUTH_ERRORS, COOKIE_NAMES, PORTAL_CLIENT_ID, TOKEN_TTL } from '@auth-sso/contracts';
 import { writeLoginLog, extractClientIP, extractUserAgent } from '@/lib/audit';
 import { isCookieSecure, getGatewaySharedSecret } from '@/lib/env';
@@ -122,9 +123,7 @@ export async function POST(request: NextRequest) {
     return response;
   } catch (err) {
     const mapped = mapServerError(err);
-    return NextResponse.json(
-      { error: mapped.error, message: mapped.message },
-      { status: mapped.status },
-    );
+    // 同上：信封形状只能有一处
+    return restError(mapped.error, mapped.message, mapped.status);
   }
 }

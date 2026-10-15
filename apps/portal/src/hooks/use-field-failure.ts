@@ -43,13 +43,20 @@ export function useFieldFailure(renderedFields: readonly ErrorField[] = []) {
   // 依赖必须是简单表达式：把字段清单折成一个稳定字符串再进依赖数组
   const fieldsKey = renderedFields.join(',');
 
-  /** 映射存在**且本表单有该字段** ⇒ 就地显示；否则回落到 toast（**不重复提示**） */
+  /**
+   * 映射存在**且本表单有该字段** ⇒ 就地显示；否则回落到 toast（**不重复提示**）。
+   *
+   * @param fallbackMessage 服务端没给 message 时的兜底文案。各调用点原本写的是
+   *   `toast.error(res.message || '更新失败')`；收口到此处后必须把这个兜底一并带过来，
+   *   否则空 message 会 toast 出空串（代码评审查出：5 处曾因此丢掉文案）。
+   */
   const reportFailure = useCallback(
-    (res: ActionFailure): void => {
+    (res: ActionFailure, fallbackMessage = '操作失败'): void => {
+      const message = res.message || fallbackMessage;
       const mapped = fieldForErrorCode(res.error);
       const handled = mapped !== null && fieldsKey.split(',').includes(mapped);
-      setFieldError(handled ? { field: mapped, message: res.message } : null);
-      if (!handled) toast.error(res.message);
+      setFieldError(handled ? { field: mapped, message } : null);
+      if (!handled) toast.error(message);
     },
     [fieldsKey],
   );

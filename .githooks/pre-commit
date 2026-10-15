@@ -30,12 +30,14 @@ pnpm -s exec vitest run --project @auth-sso/portal-ui || fail "UI project 测试
 # 明确跳过并说明交给 CI，避免"没跑却说绿"。
 if timeout 1 bash -c "</dev/tcp/127.0.0.1/6379" 2>/dev/null; then
   echo "[pre-commit] 4/5 Redis 在场：跑模块级 mock 守卫 + 文档声明检查…"
-  # 守卫名单**由扫描派生**，不手抄：手抄的名单曾经漏掉 3 个守卫
-  # （cache-invalidation-site-guard / error-status-guard / scoped-write-guard）
-  # ⇒ 本地 pre-commit 有"5 个守卫绿了"的假绿窗口（CI 跑全量所以不漏）。
-  pnpm -s exec vitest run --project @auth-sso/portal-api \
-    $(ls apps/portal/__tests__/api/*guard.test.ts apps/portal/__tests__/api/docs-*.test.ts) \
-    || fail "守卫/文档检查未通过"
+  # 守卫名单**由 glob 派生**，不手抄：手抄的名单曾漏掉 3 个守卫
+  # （cache-invalidation-site-guard / error-status-guard / scoped-write-guard）。
+  # 注意这是一条 glob，不是"全部守卫"的枚举：`repo-scan.test.ts`（共享脚手架的自测）
+  # 与 `deployment-wiring.test.ts` 不在 `*guard.test.ts`/`docs-*.test.ts` 里，
+  # 其中前者显式补在此处；`packages/contracts` 的守卫不在本 project 的 include 内（跨包 rootDir 限制）。
+  GUARD_FILES="$(ls apps/portal/__tests__/api/*guard.test.ts apps/portal/__tests__/api/docs-*.test.ts apps/portal/__tests__/api/repo-scan.test.ts 2>/dev/null)"
+  [ -n "$GUARD_FILES" ] || fail "守卫名单为空（glob 没匹配到文件）——检查路径是否变了"
+  pnpm -s exec vitest run --project @auth-sso/portal-api $GUARD_FILES || fail "守卫/文档检查未通过"
 else
   echo "[pre-commit] 4/5 跳过 API project 检查（127.0.0.1:6379 不可达）——由 CI 的 Full CI 步骤兜底"
 fi

@@ -153,7 +153,7 @@ export default function UserTable({ users, pagination, filters }: UserTableProps
       setOptimisticUser(user.id); // 即时翻转 UI
       const res = await toggleUserStatusAction(user.id);
       if (!res.success) {
-        reportFailure(res);
+        reportFailure(res, '操作失败');
       } else {
         toast.success('用户状态已更新');
       }

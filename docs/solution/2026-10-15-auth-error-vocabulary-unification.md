@@ -39,13 +39,13 @@ interface PermissionCheckResult {
    "未登录/会话失效"此前**没有**对应的领域错误——这正是状态码分歧的根源。
 3. **guard 失败一律抛出**：`if (!check.authorized) throw check.reason;`
    ⇒ 一个 `try` / 一个 `catch` / 一个 `mapServerError`（"唯一服务端错误映射入口"），
-   鉴权失败与业务错误走**同一条路**。`withAuth` 由 24 行收到 16 行；
+   鉴权失败与业务错误走**同一条路**。`withAuth` 整函数由 **25 行收到 20 行**（内部闭包 20→15）；
    `withPermission` 的"鉴权上下文缺失 ⇒ 500"分支被**删除**（它已不可表达）。
 4. **`ApiError.error` 由裸 `string` 收窄为 `ErrorCode`**（`packages/contracts`）。
 
 ## 三、收窄的余波比想象小得多（值得记下）
 
-收窄契约类型后 `pnpm -r typecheck` 报 **16 处**错误。逐条看：**全部来自同一处**——
+收窄契约类型后 `pnpm -r typecheck` 报 **16 处**错误（报错点在 5 个 actions.ts：departments 2 / permissions 2 / roles 2 / users 6 / profile 2）。逐条看：**改一处即可全消**——
 `apps/portal/src/lib/validation.ts` 自己手抄了一份失败信封类型：
 
 ```ts
@@ -61,7 +61,7 @@ type Invalid = { ok: false; response: { success: false; error: string; message: 
 |---|---|
 | `pnpm -r typecheck` | **4/4，0 error**（收窄后从 16 处降到 0，只改了 1 个文件） |
 | `pnpm test` | **105 文件 / 884 用例全绿**（+1：新的"三面一致"不变量测试） |
-| **变异** | 把"未登录"退回 `ForbiddenError`（旧行为的等价物）⇒ **5 条红**（含新不变量）⇒ 还原后 `git diff` 为空 |
+| **变异** | 把"未登录"退回 `ForbiddenError`（旧行为的等价物）⇒ **6 条红**（`permission-enforcement.test.ts` 6 failed / 23；并发清库时条数会漂移，故只记这一次独占观察）⇒ 还原后 `git diff` 为空 |
 | 新增不变量测试 | 一条测试同时断言 **`checkPermission` 的原因 / `withAuth` 的 `ApiError` / `withPermission` 的响应**都指向 `401 + UNAUTHORIZED` |
 | 断言强度 | 8 条状态码断言从"裸数字"升级为"**原因的类型** + 映射后的状态"（`instanceof UnauthenticatedError` + `status === 401`） |
 

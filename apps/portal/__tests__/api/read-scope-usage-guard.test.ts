@@ -15,8 +15,9 @@
  *
  * 1. **取了不用**：`const scope = await resolveScope(...)` 之后 `scope` 再没被引用
  *    ⇒ 报（这是"忘了用它"的直接形态）。
- * 2. **收了不用**：函数签名里收了名为 `scope` 的参数，函数体内却从未引用
+ * 2. **收了不用**：函数签名里收了**注解为 `UserScope`** 的参数，函数体内却从未引用
  *    ⇒ 报（这是"范围参数被吞掉"的形态，等价于可选范围参数那种 fail-open）。
+ *    注意只认 `UserScope` 注解：按参数**名** `scope` 判会误报 OAuth scope（`string`，实测踩到）。
  *
  * 与 `module-mock-guard` / `gate-inventory-guard` 同构：规则本体在**本文件的注释**里，
  * 守卫是可执行副本，并自带夹具自测（解析器失灵会让守卫"永远通过"）。
@@ -67,7 +68,9 @@ export interface ScopeViolation {
 function findResolveScopeUnused(source: string): ScopeViolation[] {
   const code = stripComments(source);
   const found: ScopeViolation[] = [];
-  const re = /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*await\s+resolveScope\s*\(/g;
+  // 允许 `= 条件 ? await resolveScope(…) : { deptIds: [] }` 这类三元取法
+  // （5 个 page.tsx 全是这个形状——评审实测：只认 `= await resolveScope(` 时它们全被漏掉）
+  const re = /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*[^;\n]*?(?:await\s+)?resolveScope\s*\(/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(code)) !== null) {
     const name = m[1]!;
@@ -89,16 +92,29 @@ function findResolveScopeUnused(source: string): ScopeViolation[] {
 function findScopeParamUnused(source: string): ScopeViolation[] {
   const found: ScopeViolation[] = [];
   const code = stripComments(source);
-  const re = /(?:export\s+)?(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\(([^)]*)\)/g;
+  // 形参表按**括号配对**截取：`(scope: UserScope, a: (x) => void, b: {c: string})`
+  // 这类签名里含 `)` 的参数会让 `[^)]*` 提前截断，把签名内容当函数体（评审实测假阳性）
+  const re = /(?:export\s+)?(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\(/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(code)) !== null) {
-    const params = m[2]!;
+    const openParen = m.index + m[0].length - 1;
+    let depth = 0;
+    let closeParen = -1;
+    for (let i = openParen; i < code.length; i += 1) {
+      if (code[i] === '(') depth += 1;
+      else if (code[i] === ')') {
+        depth -= 1;
+        if (depth === 0) { closeParen = i; break; }
+      }
+    }
+    if (closeParen < 0) continue;
+    const params = code.slice(openParen + 1, closeParen);
     // 只认**数据范围**：必须注解为 UserScope。
     // 反例（实测踩到）：`signAccessToken(…, scope: string)` 里的 scope 是 OAuth scope（JWT claim），
     // 与 OBAC 数据范围无关 ⇒ 按名字判定会误报。
     const hasScope = /(^|,)\s*scope\s*\??\s*:\s*(?:readonly\s+)?UserScope\b/.test(params);
     if (!hasScope) continue;
-    const body = bodyAfterSignature(code, m.index + m[0].length);
+    const body = bodyAfterSignature(code, closeParen + 1);
     if (body === null) continue;
     if (!/\bscope\b/.test(body)) {
       found.push({
@@ -141,17 +157,27 @@ describe('read-scope-usage-guard —— 夹具（守卫自身被守）', () => {
     expect(findScopeUsageViolations(src)).toEqual([]);
   });
 
-  it('夹具 5：OAuth scope（字符串）不是数据范围 ⇒ 不报（实测踩到的假阳性）', () => {
+  it('夹具 5：三元取法 `= cond ? await resolveScope(…) : { deptIds: [] }` 也受规则 1 管', () => {
+    const src = `const scope = identity ? await resolveScope(db, userId) : { deptIds: [] };\nreturn restSuccess([]);`;
+    expect(findScopeUsageViolations(src).map((x) => x.kind)).toEqual(['resolve-scope-unused']);
+  });
+
+  it('夹具 6：签名里含括号的参数不得让规则 2 误判（按括号配对取签名）', () => {
+    const src = `export function f(scope: UserScope, cb: (x: number) => void, o: { c: string }) {\n  return scope.deptIds.length + cb(1) + o.c.length;\n}`;
+    expect(findScopeUsageViolations(src)).toEqual([]);
+  });
+
+  it('夹具 7：OAuth scope（字符串）不是数据范围 ⇒ 不报（实测踩到的假阳性）', () => {
     const src = `export async function signAccessToken(userId: string, scope: string) {\n  return jwt.sign({ sub: userId, scope });\n}`;
     expect(findScopeUsageViolations(src)).toEqual([]);
   });
 
-  it('夹具 6：注释里提过 scope 不算"用了"（去注释后再判）', () => {
+  it('夹具 8：注释里提过 scope 不算"用了"（去注释后再判）', () => {
     const src = `export async function getThings(x: string, scope: UserScope) {\n  // 这里本该用 scope 过滤\n  return [];\n}`;
     expect(findScopeUsageViolations(src)[0]!.kind).toBe('scope-param-unused');
   });
 
-  it('夹具 7：注释掉的 resolveScope 调用不会被误报', () => {
+  it('夹具 9：注释掉的 resolveScope 调用不会被误报', () => {
     const src = `// const scope = await resolveScope(db, userId);\nreturn [];`;
     expect(findScopeUsageViolations(src)).toEqual([]);
   });

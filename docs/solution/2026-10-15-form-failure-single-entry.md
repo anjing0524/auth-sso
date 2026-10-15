@@ -8,7 +8,7 @@
 ## 一、审计：绕过比巡检说的更多
 
 巡检说"5 个 mutation 里只有 3 个接了 #82/#92 的分类，同一文件内 delete 绕过 `reportFailure`"。
-写了一条守卫去**枚举**这一类之后，实测**全类 10 处**：
+写了一条守卫去**枚举**这一类之后，实测**全类 12 个收口点（分布在 10 个文件）**：
 
 | 文件 | 绕过形态 |
 |---|---|
@@ -41,7 +41,7 @@
 1. **`useFieldFailure(renderedFields)` 的参数改为可选（默认 `[]`）**：不渲染 `<FieldError>` 的表单
    也能用同一个分类点，行为与原来一致（一律 toast）。语义仍然是"**真的渲染了**才算"——
    传未渲染的字段会静默吞掉错误，所以不渲染表单必须传空（注释已写明）。
-2. **10 处绕过统一改为 `reportFailure(res)`**（其中 8 处补上 hook 接线）。
+2. **12 个收口点统一改为 `reportFailure(res)`**（其中 8 处补上 hook 接线）。
 3. **新守卫** `__tests__/api/form-failure-handling-guard.test.ts`：禁止把 Server Action 结果的
    `message` 直接交给 `toast.error`（那正是绕过分类点的形状）。纯前端校验的字面量提示不算；
    确有需要的写 `// @allow-direct-toast: <理由>`。
@@ -61,13 +61,13 @@
 | `pnpm test` | **退出码 0**（**108 文件 / 901 用例**，+1 文件 +6 用例） |
 | `pnpm -r lint` | **退出码 0**（`0 errors, 82 warnings`，未因本次改动新增） |
 | **变异** | 把 `UserTable` 退回 `toast.error(res.message)` ⇒ 守卫**当红**并点名 `UserTable.tsx:156` ⇒ 还原后 `git diff` 为空（逐字节） |
-| 行为 | **保持**：不渲染 `<FieldError>` 的表单仍然一律 toast ⇒ **无对外可见变更**，不进 CHANGELOG |
+| 行为 | 基本保持：不渲染 `<FieldError>` 的表单仍然一律 toast。**但首版收口时 5 处的兜底文案被丢掉**（空 message 会 toast 空串）——代码评审查出后已作为 `reportFailure(res, fallback)` 参数补回，并加护栏 |
 
 ## 六、顺带发现（不动手，记录）
 
 `users/components/AssignRoleDialog.tsx` 用 **fetch** 调 REST 路由完成内部页面的角色分配 ——
 与"内部页面写操作只用 Server Actions"的约定相悖（`AGGREGATE` 边界的例外是外部系统/跨域/OIDC 回调）。
-本次只把它的失败接进分类点，**不顺手重构**（Surgical Changes）；若要统一，另开一条。
+本次只把它的失败接进分类点，**不顺手重构**（Surgical Changes）。**触发条件**：当该对话框需要新增第二种写操作、或"内部页面写操作只用 Server Actions"再次被违反时，一并改为 Server Action 并补组件测试。
 
 ## 七、最佳实践（可复用）
 

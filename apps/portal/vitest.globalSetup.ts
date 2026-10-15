@@ -7,8 +7,7 @@
  * 3. 确认测试 Redis 可用（硬失败，见 probeRedis）
  */
 import postgres from 'postgres';
-import { existsSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from 'fs';
-import { tmpdir } from 'os';
+import { readdirSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { createTestRedisClient, resolveTestRedisUrl } from './vitest.redis';
 import { isIdempotentMigrationError } from './scripts/idempotent-migration-error';
@@ -193,49 +192,49 @@ async function applyDrizzleMigrations(sql: postgres.Sql, drizzleDir: string): Pr
  * `users_dept_id_fkey` 找不到父行等）。本会话里，并行跑的评审子代理与我的运行就这样撞过两次，
  * 排查成本远高于加一个锁。
  *
- * ⇒ 用 PID 锁文件：**明确报错**并给出处置命令，而不是让人去猜。
+ * ⇒ 用 **PostgreSQL 咨询锁**：明确报错并给出处置命令，而不是让人去猜。
+ *
+ * ## 为什么不用 `os.tmpdir()` 的 PID 锁文件（曾经的实现）
+ *
+ * 代码评审实测：本 harness 下**每次 bash 调用是独立的 `--tmpfs /tmp`**，跨调用并发的两个
+ * 套件互相看不见锁文件 —— 而这个机制恰恰是为"跨调用/跨代理并发"写的。评审当场跑出
+ * 101 例 DB 互毁红，锁一次都没响。PG 咨询锁跨调用、跨检出、跨 /tmp 隔离都有效，
+ * 且连接断开时由数据库自动释放（不会留陈旧锁）。
  */
-const RUN_LOCK = join(tmpdir(), 'auth-sso-api-tests.lock');
+let lockSql: ReturnType<typeof postgres> | null = null;
 
-function lockHolderIsAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch {
-    return false;
+async function acquireRunLock(testUrl: string): Promise<void> {
+  const client = postgres(testUrl, { max: 1, onnotice: () => {} });
+  const [row] = await client<{ ok: boolean }[]>`
+    select pg_try_advisory_lock(hashtext('auth-sso-api-tests')) as ok
+  `;
+  if (!row?.ok) {
+    await client.end();
+    throw new Error(
+      '[globalSetup] 另一个测试进程正持有测试库独占锁 —— 两个 vitest 会互相破坏共享测试库'
+        + '（表现为"无关文件红了、单跑又过"）。先结束它再跑：pgrep -af vitest',
+    );
   }
+  lockSql = client;
 }
 
-function acquireRunLock(): void {
-  if (existsSync(RUN_LOCK)) {
-    const holder = Number(readFileSync(RUN_LOCK, 'utf-8').trim());
-    if (Number.isFinite(holder) && holder !== process.pid && lockHolderIsAlive(holder)) {
-      throw new Error(
-        `[globalSetup] 另一个测试进程（pid ${holder}）正在运行 —— 两个 vitest 会互相破坏共享测试库`
-          + '（表现为"无关文件红了、单跑又过"）。先结束它再跑：pgrep -af vitest',
-      );
-    }
-    console.warn(`[globalSetup] 发现陈旧锁文件（pid ${holder} 已不在）——接管`);
-  }
-  writeFileSync(RUN_LOCK, String(process.pid));
-}
-
-function releaseRunLock(): void {
+async function releaseRunLock(): Promise<void> {
+  if (!lockSql) return;
   try {
-    if (existsSync(RUN_LOCK) && Number(readFileSync(RUN_LOCK, 'utf-8').trim()) === process.pid) {
-      unlinkSync(RUN_LOCK);
-    }
+    await lockSql.end();
   } catch {
     // 清理失败不影响测试结果
   }
+  lockSql = null;
 }
 
 export async function setup() {
-  acquireRunLock();
   const testUrl =
     process.env['TEST_DATABASE_URL'] ||
     process.env['DATABASE_URL'] ||
     'postgresql://postgres:postgres@127.0.0.1:5432/auth_sso_test';
+
+  await acquireRunLock(testUrl);
 
   console.log(`\n[globalSetup] 连接测试数据库: ${redactUrl(testUrl)}`);
 
@@ -272,6 +271,6 @@ export async function setup() {
   await assertTestRedisReady();
 }
 
-export function teardown() {
-  releaseRunLock();
+export async function teardown() {
+  await releaseRunLock();
 }

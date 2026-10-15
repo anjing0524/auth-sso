@@ -69,11 +69,41 @@ export function isCommentLine(line: string, codeToken?: string): boolean {
  * 守卫会把"解释这个形状的文档"当成缺陷本身（本仓实测踩到过）。
  */
 export function stripComments(source: string): string {
-  return source
-    // 块注释替换为**等量空白但保留换行**：调用方（守卫）按行报点时行号才准。
-    // 直接删掉块注释会让其后的所有行号前移（实测：read-scope / form-failure 两个守卫都受影响）。
-    .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' '))
-    .replace(/(^|[^:])\/\/.*$/gm, '$1');
+  // 字符级状态机，**不用正则**：正则会把**字符串里的** `//` 与 `/*` 当注释
+  // （实测：`const s = 'a//b'; const x = await resolveScope(…)` 会被切成半行，
+  // 其后代码整段消失 ⇒ 基于它的守卫静默漏报）。
+  // 输出**逐字符等长**（注释字符变空格、换行原样保留）⇒ 调用方按行报点时行列都准。
+  const out: string[] = [];
+  let state: 'code' | 'line' | 'block' | 'single' | 'double' | 'template' = 'code';
+  for (let i = 0; i < source.length; i += 1) {
+    const ch = source[i]!;
+    const next = source[i + 1];
+    if (state === 'code') {
+      if (ch === '/' && next === '/') { state = 'line'; out.push('  '); i += 1; continue; }
+      if (ch === '/' && next === '*') { state = 'block'; out.push('  '); i += 1; continue; }
+      if (ch === "'") state = 'single';
+      else if (ch === '"') state = 'double';
+      else if (ch === '`') state = 'template';
+      out.push(ch);
+      continue;
+    }
+    if (state === 'line') {
+      if (ch === '\n') { state = 'code'; out.push('\n'); } else out.push(' ');
+      continue;
+    }
+    if (state === 'block') {
+      if (ch === '*' && next === '/') { state = 'code'; out.push('  '); i += 1; continue; }
+      out.push(ch === '\n' ? '\n' : ' ');
+      continue;
+    }
+    // 字符串内部：原样保留；处理转义引号
+    if (ch === '\\' && state !== 'template') { out.push(ch, next ?? ''); i += 1; continue; }
+    if ((state === 'single' && ch === "'") || (state === 'double' && ch === '"') || (state === 'template' && ch === '`')) {
+      state = 'code';
+    }
+    out.push(ch);
+  }
+  return out.join('');
 }
 
 /**

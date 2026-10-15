@@ -1,8 +1,8 @@
 /**
- * `test-support/repo-scan.ts` 的直接测试
+ * `helpers/repo-scan.ts` 的直接测试
  *
- * 为什么需要：这个 module 是**所有静态守卫的底座**（8 个守卫共用它的 root / walk /
- * 非空断言）。它自己没有测试面的话，一次"walk 少走一层目录"的改动会让所有守卫一起变绿
+ * 为什么需要：这个 module 是**所有静态守卫的底座**（守卫与其自测共用它的 root / walk /
+ * 非空断言 / 注释剥离）。它自己没有测试面的话，一次"walk 少走一层目录"的改动会让所有守卫一起变绿
  * ——那正是本仓反复治理的"检查在假绿"。接口就是测试面：下面直接打它的接口。
  */
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
@@ -104,8 +104,31 @@ describe('repo-scan —— 注释判定', () => {
     expect(stripped).not.toContain('块');
     expect(stripped).not.toContain('行');
     expect(stripped.split('\n')[2]).toBe('const b = 2;');
+    // 字符串里的 URL 双斜杠同样不是注释
     expect(stripComments("const url = 'https://example.com/x';")).toBe(
       "const url = 'https://example.com/x';",
     );
+  });
+
+  it('字符串里的 // 不是注释：其后的代码必须保留（代码评审查出的漏报通道）', () => {
+    const src = "const s = 'a//b'; const x = await resolveScope(db, u);";
+    const out = stripComments(src);
+    expect(out).toContain('await resolveScope(db, u)');
+    expect(out).toHaveLength(src.length);
+  });
+
+  it('字符串里的 /* 不是注释：且不吞掉后续行', () => {
+    const src = "const p = '/* not a comment';\nconst y = 2;";
+    const out = stripComments(src);
+    expect(out.split('\n')[1]).toBe('const y = 2;');
+    expect(out).toHaveLength(src.length);
+  });
+
+  it('行注释确实被去掉，且长度不变（守卫的行列定位依赖它）', () => {
+    const src = 'const a = 1; // 注释\nconst b = 2;';
+    const out = stripComments(src);
+    expect(out).not.toContain('注释');
+    expect(out.split('\n')[1]).toBe('const b = 2;');
+    expect(out).toHaveLength(src.length);
   });
 });

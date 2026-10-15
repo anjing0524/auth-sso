@@ -50,7 +50,7 @@ export default function NewUserPage() {
       toast.success('用户创建成功');
       router.push('/users');
     } else {
-      reportFailure(res);
+      reportFailure(res, '创建失败');
     }
     setSaving(false);
   };

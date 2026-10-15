@@ -71,7 +71,7 @@ export default function UserDetailForm({ id, initialUser: serverUser }: Props) {
       toast.success('用户信息更新成功');
       router.refresh(); // 刷新 Server Component 数据，prop 更新只读展示区
     } else {
-      reportFailure(res);
+      reportFailure(res, '更新失败');
     }
     setSaving(false);
   };
@@ -83,7 +83,7 @@ export default function UserDetailForm({ id, initialUser: serverUser }: Props) {
       setIsDeleteOpen(false);
       router.push('/users');
     } else {
-      reportFailure(res);
+      reportFailure(res, '删除失败');
     }
   };
 

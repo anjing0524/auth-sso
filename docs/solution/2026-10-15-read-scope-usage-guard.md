@@ -10,7 +10,7 @@
 巡检的论据是："写路径把 `resolveScope` 藏进 module，读路径却导出它，要求 9 个 route +
 5 个 data 模块手写同一道工序"。我按 **删除测试** 与**实际审计**核了一遍：
 
-**审计结果（逐个调用点看完）**：9 个 `resolveScope` 调用点**全部**把结果传进了带范围的读函数
+**审计结果（逐个调用点看完）**：`apps/portal/src` 内 `await resolveScope(` 共 **16 处**（9 个 route + 5 个 page + 2 处 `authz/write.ts`）；route 那 9 处**全部**把结果传进了带范围的读函数
 （`getUsers` / `getRoles` / `getDepartments` / `getDepartmentById` / `getRoleById` /
 `getRolePermissions` / `getUser` / `getUserRoles` …），**没有一处取了不用**；
 `data.ts` 一族也都用了 `isScopeDenied` 短路 + `scopeFilter` 造条件 —— 这是 ADR-014 之后
@@ -43,7 +43,7 @@ Next.js 16 Cache Components 要求 scope 在 `"use cache"` 作用域**外**解�
 
 ## 三、实测踩到的假阳性（已写成夹具）
 
-规则最初按参数**名** `scope` 判定 ⇒ 全量扫描立刻误报 `lib/auth/token.ts:54` 的
+规则最初按参数**名** `scope` 判定 ⇒ 全量扫描立刻误报 `lib/auth/token.ts` 的（`signAccessToken` 声明于 :84，参数 `scope?: string`）
 `signAccessToken(…, scope: string)` —— 那是 **OAuth scope**（JWT claim），与 OBAC 数据范围无关。
 ⇒ 收紧为**必须注解 `UserScope`**，并把这条边界写成夹具 5（"OAuth scope 不是数据范围"）。
 **这正是先跑全量、再收紧规则的价值**：规则写宽了会在真实代码上立刻暴露。
@@ -54,7 +54,7 @@ Next.js 16 Cache Components 要求 scope 在 `"use cache"` 作用域**外**解�
 |---|---|
 | 守卫自测 | **8 用例全绿**（7 夹具 + 1 条全量扫描），全量扫描在真实代码上**零违例** |
 | `tsc` | 0 错 |
-| **变异** | 抽掉 `roles/data.ts` 的 `conditions.push(scopeFilter(scope, schema.roles.deptId))` ⇒ 守卫**当红**并点名 `roles/data.ts:29 [scope-param-unused]` ⇒ 还原后 `git diff` 为空（逐字节） |
+| **变异** | 抽掉 `roles/data.ts` 的 `conditions.push(scopeFilter(scope, schema.roles.deptId))` ⇒ 守卫**当红**并点名 `roles/data.ts:37 [scope-param-unused]` ⇒ 还原后 `git diff` 为空（逐字节） |
 | 顺带修正 | `lib/authz/index.ts` 的 JSDoc 原写 `scopeFilter`"待读路径迁移时加入本模块"——**它早已在第 41 行导出**（过期文案，与本次会话反复出现的"声明 ≠ 实现"同形）⇒ 改为实况，并写明缓存边界约束与新守卫的兜底位置 |
 | 阻断点 | `pre-commit` 的守卫名单**由扫描派生**（上一轮做的）⇒ 新守卫**自动**被收录，无需手抄 |
 

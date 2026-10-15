@@ -19,6 +19,7 @@ import { checkBruteForce, clearBruteForceCounter, incrementBruteForce } from '@/
 import { signLoginSession, LOGIN_SESSION_TTL } from '@/lib/auth/token';
 import { InvalidCredentialsError } from '@/domain/shared/errors';
 import { mapServerError } from '@/lib/server-error';
+import { restError } from '@/lib/response';
 import { AUTH_ERRORS, COMMON_ERRORS, COOKIE_NAMES } from '@auth-sso/contracts';
 import { writeLoginLog, extractClientIP, extractUserAgent } from '@/lib/audit';
 import { isCookieSecure } from '@/lib/env';
@@ -108,9 +109,7 @@ export async function POST(request: NextRequest) {
     return response;
   } catch (err) {
     const mapped = mapServerError(err);
-    return NextResponse.json(
-      { error: mapped.error, message: mapped.message },
-      { status: mapped.status },
-    );
+    // 信封形状只能有一处（restError）——此前这里手抄了逐字相同的三行
+    return restError(mapped.error, mapped.message, mapped.status);
   }
 }

@@ -54,7 +54,7 @@ export default function NewClientPage() {
       toast.success(result.message || '应用注册成功');
       router.push('/clients');
     } else {
-      reportFailure(result);
+      reportFailure(result, '注册失败');
     }
   };
 

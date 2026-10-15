@@ -21,10 +21,8 @@
  */
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
-
-const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..');
+import { join } from 'node:path';
+import { REPO_ROOT } from '../helpers/repo-scan';
 const GUARD = join(REPO_ROOT, 'apps/portal/__tests__/api/module-mock-guard.test.ts');
 const ADR = join(REPO_ROOT, 'docs/adr/ADR-022-test-authenticity-strategy.md');
 const SOLUTION = join(REPO_ROOT, 'docs/solution/2026-10-12-test-authenticity-remediation.md');

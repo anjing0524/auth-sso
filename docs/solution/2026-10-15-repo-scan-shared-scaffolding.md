@@ -12,7 +12,7 @@
 
 | 重复物 | 出现处 |
 |---|---|
-| `__tests__/api/` → 上溯 4 层到仓库根 | **6 份**（`REPO_ROOT` / `ROOT` 两个名字） |
+| `__tests__/api/` → 上溯 4 层到仓库根 | **7 份（8 个守卫内）／9 份（含 contracts 与 deployment-wiring）**；两个名字 `REPO_ROOT` / `ROOT` + 一处匿名 `path.resolve` |
 | `walk`（递归收集文件） | **5 份**（其中一份在 `packages/contracts`） |
 | `isCommentLine`（跳不跳注释） | **2 份**（第二份的注释写着"教训来自 module-mock-guard"） |
 | "扫描范围非空"断言 | 阈值各写各的（`≥50` / `≥4` / 无），靠作者记得加 |
