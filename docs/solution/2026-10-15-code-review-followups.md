@@ -10,7 +10,7 @@
 
 | 轴 | 它抓到的（我自己没发现的） |
 |---|---|
-| Standards | ①ADR-022 §4(b′) 声称"必须调 `importOriginal()` **并** `...actual` spread"，**守卫只查了 `importOriginal`** ⇒ 文档承诺了守卫不查的一半（`CODING_STANDARDS` §7 的硬违规）；②`error-fields.ts` 头注释仍把 `clientId` 列为已映射，而同一提交刚把它归入"无字段"；`ErrorField` 里 `mobile`/`clientId` 是**死成员**；③`<p role="alert">` 复制 5 份（判定抽了、渲染没抽）；④两个脚本各写一份"幂等 migration 错误"判据；⑤`});;` 双分号与缩进噪声 18 处 |
+| Standards | ①ADR-022 §4(b′) 声称"必须调 `importOriginal()` **并** `...actual` spread"，**守卫只查了 `importOriginal`** ⇒ 文档承诺了守卫不查的一半（`CODING_STANDARDS` §7 的硬违规）；②`error-fields.ts` 头注释仍把 `clientId` 列为已映射，而同一提交刚把它归入"无字段"；`ErrorField` 里 `mobile`/`clientId` 是**死成员**；③`<p role="alert">` 复制 5 份（判定抽了、渲染没抽）；④两个脚本各写一份"幂等 migration 错误"判据；⑤`});;` 双分号与缩进噪声（**26 次 `});;`、分布在 18 个文件**；两个数字口径不同） |
 | Spec | ⑥**"27 处业务替身"是错的，实测 26**（26+3=29 才与 #91 清单一致），而它已写进 4 份文档；⑦"修好 4 处/5 个告警"与同文档 5 行表格冲突（真实是 **5 处 / 7 个告警**）；⑧"表内误记为 56"是**误读**——56 是位置列的**行号**不是复杂度（且 `POST` 现在第 44 行）；⑨`docs/solution/README.md` 的"64 篇"过期且无人管；⑩ADR-022 数字改成 15 但**枚举仍列 10 项**；⑪`RolesTable` **编辑**对话框不渲染字段错误（静默路径的第二处）；`CreateUserDialog` 不调用 `clearFailure`；⑫`sonner` 被加进豁免清单是"为了让自测过关" |
 
 ## 二、处置（逐项）
@@ -67,7 +67,7 @@
 | 项 | 结果 |
 |---|---|
 | `pnpm test` | 全量绿（文件/用例数见提交时的输出） |
-| `module-mock-guard` | **19 用例全绿**（含 spread 夹具 15 与两份豁免清单相等） |
+| `module-mock-guard` | **全绿**（夹具数与全量扫描数由 `docs-claims` 钉住；**两份豁免清单相等**的断言在 `docs-claims`，不在此文件） |
 | `error-fields` / `use-field-failure` | 6 / 4 全绿（含"无死成员"与"映射存在但表单无该字段 ⇒ 回落 toast"） |
 | `helpers` | 8 全绿（含新的助手审计断言） |
 | `pnpm db:migrate` | 在 `apps/portal` 下带测试库 URL 运行 **exit 0**（判据已改为共享模块） |
@@ -116,7 +116,7 @@
   （先核实再改，才不会把对的改成错的）。
 - **`USER_ALREADY_EXISTS → 'username'` 是把错输入框标红的猜测**（复合唯一约束下无从判断是哪一列）
   ⇒ 改判为 `CONFLICT_CODES_WITHOUT_FIELD`（附理由），测试同步。
-- **`docs-references` 的范围下限是魔法数**：`docs.length >= 50` 只防"空集假绿"⇒ 已由"声明篇数必须等于实测"接替。
+- **`docs-references` 的范围下限是魔法数**：`docs.length >= 50` 只防"空集假绿"⇒ **与之并存**的是"声明篇数必须等于实测"（前者防空集、后者防漂移；原文写"接替"不准确）。
 
 ### 工具与入口（已修）
 

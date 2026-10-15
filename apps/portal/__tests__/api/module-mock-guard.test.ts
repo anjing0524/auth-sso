@@ -20,10 +20,13 @@
  *
  * - 键集与判别式形状**交给编译器**（类型化工厂 + `pnpm typecheck`），本守卫只管
  *   类型系统表达不了的那一半："为什么允许 mock 这个模块"（ADR-022 §4(a)/(d)）；
- * - 守卫自身也**被守**：**15 个违例夹具**（缺注解 / 注解 target 与生产 mock 不一致 /
+ * - 守卫自身也**被守**：**17 个违例夹具**（其中 12/13/17 是"应当通过"的正例；缺注解 / 注解 target 与生产 mock 不一致 /
  *   kind 非法 / 孤儿注解 / auth-bypass 未点名 / 注释引用不算点位 / 豁免清单生效 /
  *   注解贴到**豁免** mock 上 / 不得跨条串味 / 目标无法识别）
- *   外加 1 条全量扫描断言，一起在 CI 里真跑（#91 又补了工厂形态的 4 个夹具）。
+ *   外加 1 条全量扫描断言（#91 补的工厂形态夹具：11 缺 `importOriginal` / 12 正解通过 /
+ *   13 `full-replacement` 通过 / 14 不得跨条串味 / 15 调了但无 spread；代码评审再补
+ *   16 有 `...` 但不是真身 / 17 绑定真身的正例）。**数字与枚举由 §11 约束：
+ *   数字归 `docs-claims.test.ts` 钉，枚举与本段同进同退。**
  *
  * ## 债务快照机制**已撤除**（#56）
  *
@@ -63,7 +66,7 @@ const EXEMPT_PREFIXES = [
 ] as const;
 
 /** 理由类型封闭枚举（ADR-022 §4(b)） */
-export const REASON_KINDS = [
+const REASON_KINDS = [
   'infra-boundary',
   'input-fixture',
   'fault-injection',
@@ -75,9 +78,9 @@ export const REASON_KINDS = [
    */
   'full-replacement',
 ] as const;
-export type ReasonKind = typeof REASON_KINDS[number];
+type ReasonKind = typeof REASON_KINDS[number];
 
-export interface ModuleMockFinding {
+interface ModuleMockFinding {
   /** 被 mock 的模块说明符（`import('x')` 归一化为 `x`） */
   readonly target: string;
   /** `vi.mock(` 所在行（1-based） */
@@ -88,7 +91,7 @@ export interface ModuleMockFinding {
   readonly annotation: { readonly target: string; readonly kind: string; readonly reason: string } | null;
 }
 
-export function isExempt(target: string): boolean {
+function isExempt(target: string): boolean {
   return EXEMPT_PREFIXES.some((p) => target === p || target.startsWith(p));
 }
 
@@ -131,7 +134,7 @@ function extractMockTarget(lines: readonly string[], i: number): { target: strin
 }
 
 /** 纯函数：扫一段源码里的模块级 mock + 其上一行的理由注解（跳过注释里的引用文字） */
-export function scanModuleMocks(source: string): ModuleMockFinding[] {
+function scanModuleMocks(source: string): ModuleMockFinding[] {
   const lines = source.split('\n');
   const findings: ModuleMockFinding[] = [];
 
@@ -165,7 +168,7 @@ export function scanModuleMocks(source: string): ModuleMockFinding[] {
  * target 一致性**不在这里判**——由 `findAnnotationBindingViolations` 独占（那条还覆盖豁免
  * mock），否则同一处错位会产出两条措辞不同的违例，且两条判定日后各自演化。
  */
-export function findAnnotationViolations(findings: readonly ModuleMockFinding[]): string[] {
+function findAnnotationViolations(findings: readonly ModuleMockFinding[]): string[] {
   const violations: string[] = [];
 
   for (const f of findings) {
@@ -203,7 +206,7 @@ export function findAnnotationViolations(findings: readonly ModuleMockFinding[])
  * 不参与"是否必须给理由"的判定，但**注解与目标的绑定关系**必须成立，否则注解会
  * 静默指错对象（读的人以为它管的是别的模块）。
  */
-export function findAnnotationBindingViolations(source: string): string[] {
+function findAnnotationBindingViolations(source: string): string[] {
   const lines = source.split('\n');
   const violations: string[] = [];
 
@@ -241,7 +244,7 @@ export function findAnnotationBindingViolations(source: string): string[] {
  * 规则：`Partial<typeof` + 无 `importOriginal` + kind ≠ `full-replacement` ⇒ 违例。
  * （整体替换是**合法**的，但必须声明；见 `REASON_KINDS` 里那条的说明。）
  */
-export function findFactoryShapeViolations(source: string): string[] {
+function findFactoryShapeViolations(source: string): string[] {
   const lines = source.split('\n');
   const violations: string[] = [];
 
@@ -260,12 +263,20 @@ export function findFactoryShapeViolations(source: string): string[] {
 
     // 两半都要查：**只查 importOriginal 会漏掉"解构但不 spread"**——
     // 那仍然让未列出的导出变成 undefined，恰是 §4(b′) 声称要防的形态。
+    // 两半都要查，且第二半必须**绑定到 importOriginal 的结果变量**：
+    // 只查 `/importOriginal/` 会漏掉「解构但不 spread」；只查 `/\.\.\./` 又会被
+    // `...defaults`、注释里的 `...actual`、数组 spread 一律骗过（代码评审实测）。
     const hasImportOriginal = /importOriginal/.test(block);
-    const hasSpread = /\.\.\./.test(block);
-    if (!hasImportOriginal || !hasSpread) {
+    // 允许 `importOriginal<typeof import('x')>()` 这种带类型实参的写法（真实存在于
+    // auth-refresh.test.ts；收紧规则时它先把这个正确写法误报了一次）
+    const importedVar = /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:await\s+)?importOriginal\s*(?:<[^>]*>)?\s*\(/.exec(block);
+    const spreadsRealModule = importedVar !== null && block.includes(`...${importedVar[1]}`);
+    if (!hasImportOriginal || !spreadsRealModule) {
       violations.push(
         `第 ${f.line} 行：${f.target} 的工厂注解为 Partial<typeof …>，但`
-          + `${hasImportOriginal ? '缺 `...actual` spread' : '未调 importOriginal'}`
+          + `${hasImportOriginal
+            ? '调了 importOriginal 却**没有把它的结果 spread 进返回对象**（`...actual`）'
+            : '未调 importOriginal'}`
           + '（未列出的导出会是 undefined，运行时炸、tsc 不报）。'
           + '修法二选一：① async (importOriginal) + { ...(await importOriginal()), … }；'
           + '② 若本意就是整体替换，把 kind 改成 full-replacement 并写明理由',
@@ -282,7 +293,7 @@ export function findFactoryShapeViolations(source: string): string[] {
  * 为什么不用"扫到 `}));` 行"的启发式：相邻 mock 会被串进同一窗口，
  * 上一个 mock 的 `Partial<typeof` 就栽到下一个头上（#91 实测的假阳性来源）。
  */
-export function balancedBlock(source: string, startIndex: number): string {
+function balancedBlock(source: string, startIndex: number): string {
   let depth = 0;
   let quote: string | null = null;
   let i = startIndex;
@@ -428,6 +439,30 @@ describe('module-mock-guard —— 违例夹具（守卫自身被守）', () => 
     ].join('\n');
     const v = findFactoryShapeViolations(src).join();
     expect(v).toContain('spread');
+  });
+
+  it('夹具 16：有 `...` 但 spread 的不是真身（`...defaults` / 注释里的 `...actual`）→ 仍报', () => {
+    const src = [
+      '// @allow-module-mock @/lib/auth input-fixture: 只提供"谁已登录"这一输入（先前调过 importOriginal）',
+      String.raw`vi.mock(import('@/lib/auth'), (): Partial<typeof authModule> => {`,
+      '  const defaults = { withAuth: vi.fn() };',
+      '  // 过去确实调过 importOriginal，但结果没被 spread 进返回对象',
+      '  return { ...defaults, resolveIdentity: vi.fn() };',
+      '});',
+    ].join('\n');
+    const v = findFactoryShapeViolations(src).join();
+    expect(v).toContain('没有把它的结果 spread');
+  });
+
+  it('夹具 17：`const actual = await importOriginal()` + `...actual` → 通过（绑定到真身）', () => {
+    const src = [
+      '// @allow-module-mock @/lib/auth input-fixture: 只提供"谁已登录"这一输入',
+      String.raw`vi.mock(import('@/lib/auth'), async (importOriginal): Promise<Partial<typeof authModule>> => {`,
+      '  const actual = await importOriginal();',
+      '  return { ...actual, resolveIdentity: vi.fn() };',
+      '});',
+    ].join('\n');
+    expect(findFactoryShapeViolations(src)).toEqual([]);
   });
 
   it('夹具 12：Partial + importOriginal → 通过（部分替换的正解）', () => {

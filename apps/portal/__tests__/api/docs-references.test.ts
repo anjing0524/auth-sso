@@ -42,7 +42,7 @@ function steeringFiles(): string[] {
 }
 
 /** 从一段文本里抽出 `@/…` 路径令牌（去掉通配与尾部标点） */
-export function extractAliasPaths(source: string): string[] {
+function extractAliasPaths(source: string): string[] {
   const tokens = source.match(/@\/[A-Za-z0-9._/-]+/g) ?? [];
   return [...new Set(tokens.map((t) => t.replace(/[.,;:)\]]+$/, '')))];
 }

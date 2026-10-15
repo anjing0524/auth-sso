@@ -43,7 +43,7 @@ function isCommentLine(line: string): boolean {
 }
 
 /** 纯函数：产出 route 源码中「Server Action 专用入口」的点位（行号 1-based） */
-export function findActionOnlyInvalidations(source: string): number[] {
+function findActionOnlyInvalidations(source: string): number[] {
   const found: number[] = [];
   source.split('\n').forEach((line, index) => {
     if (isCommentLine(line)) return;
@@ -53,7 +53,7 @@ export function findActionOnlyInvalidations(source: string): number[] {
 }
 
 /** 纯函数：产出 route 源码中直接触碰 `updateTag` 的点位（行号 1-based） */
-export function findDirectUpdateTag(source: string): number[] {
+function findDirectUpdateTag(source: string): number[] {
   const found: number[] = [];
   source.split('\n').forEach((line, index) => {
     if (isCommentLine(line)) return;

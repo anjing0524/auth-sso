@@ -21,12 +21,11 @@ for i in $(seq 1 "$MAX"); do
     echo "$out" | tail -2
     exit 0
   fi
-  case "$out" in
-    *non-fast-forward*|*"Updates were rejected"*|*"protected branch"*|*"pre-receive hook declined"*)
-      echo "✗ 永久性拒绝（重试无用）：$(echo "$out" | tail -1)"
-      exit 1
-      ;;
-  esac
+  # 永久性拒绝：匹配 GitHub 的真实文案（大小写不敏感；GH006 = 保护分支）
+  if printf '%s' "$out" | grep -qiE 'non-fast-forward|Updates were rejected|Protected branch|GH006|pre-receive hook declined'; then
+    echo "✗ 永久性拒绝（重试无用）：$(echo "$out" | tail -1)"
+    exit 1
+  fi
   echo "… 第 $i/$MAX 次失败（网络类，重试）：$(echo "$out" | tail -1)"
   sleep 5
 done

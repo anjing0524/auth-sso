@@ -101,8 +101,13 @@ docs/spec/API.md:738 文档写了 AUTH_SSO_2022 (TOKEN_REVOKED)，但契约里�
 
 ```bash
 # 1) 在 docs/spec/API.md 任意表里插入 | `AUTH_SSO_9999` (GHOST_CODE) | 418 | … |
-npx vitest run --project @auth-sso/portal-api apps/portal/__tests__/api/docs-api-error-codes.test.ts
-# 2) 恢复后 git diff docs/spec/API.md 应只剩预期的两行删除 + 一行改写
+$ npx vitest run --project @auth-sso/portal-api apps/portal/__tests__/api/docs-api-error-codes.test.ts
+Tests  2 failed | 1 passed (3)
++ "docs/spec/API.md:739 文档写了 AUTH_SSO_9999 (GHOST_CODE)，但契约里没有键 GHOST_CODE",
++ "docs/spec/API.md:739 引用了契约里不存在的码 AUTH_SSO_9999",
+# 2) 恢复后：
+$ npx vitest run --project @auth-sso/portal-api apps/portal/__tests__/api/docs-api-error-codes.test.ts
+Tests  4 passed (4)
 ```
 
 > **途中一次操作失误（记下来）**：我用改动**之前**算的哈希去校验还原，当然不匹配。

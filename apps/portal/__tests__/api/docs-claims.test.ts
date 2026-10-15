@@ -32,12 +32,12 @@ const SOLUTION = join(REPO_ROOT, 'docs/solution/2026-10-12-test-authenticity-rem
 const read = (p: string) => readFileSync(p, 'utf-8');
 
 /** 数某个 describe 区块里的 `it(` 个数（按文本切片，避免依赖 vitest 的运行时 API） */
-export function countCases(section: string): number {
+function countCases(section: string): number {
   return [...section.matchAll(/^\s*it\(/gm)].length;
 }
 
 /** 守卫的两块：违例夹具 / 全量扫描 */
-export function guardCaseCounts(source: string): { fixtures: number; fullScan: number } {
+function guardCaseCounts(source: string): { fixtures: number; fullScan: number } {
   const fixturesAt = source.indexOf("describe('module-mock-guard —— 违例夹具");
   const fullScanAt = source.indexOf("describe('module-mock-guard —— 全量扫描");
   expect(fixturesAt).toBeGreaterThan(-1);
@@ -49,7 +49,7 @@ export function guardCaseCounts(source: string): { fixtures: number; fullScan: n
 }
 
 /** 文档里 `N 个违例夹具 + M 条全量扫描` 的每一处声明 */
-export function claimsIn(doc: string): Array<{ fixtures: number; fullScan: number }> {
+function claimsIn(doc: string): Array<{ fixtures: number; fullScan: number }> {
   return [...doc.matchAll(/(\d+)\s*个违例夹具\s*\+\s*(\d+)\s*条全量扫描/g)].map((m) => ({
     fixtures: Number(m[1]),
     fullScan: Number(m[2]),
@@ -57,16 +57,16 @@ export function claimsIn(doc: string): Array<{ fixtures: number; fullScan: numbe
 }
 
 /** 归一化豁免项：`@/infrastructure/**` 与 `@/infrastructure/` 视为同一项 */
-export const normalizeExempt = (raw: string): string => raw.replace(/[*]+$/, '').replace(/\/+$/, '');
+const normalizeExempt = (raw: string): string => raw.replace(/[*]+$/, '').replace(/\/+$/, '');
 
 /** 守卫里的豁免清单 */
-export function guardExemptions(source: string): Set<string> {
+function guardExemptions(source: string): Set<string> {
   const block = source.slice(source.indexOf('const EXEMPT_PREFIXES = ['), source.indexOf('] as const;'));
   return new Set([...block.matchAll(/'([^']+)'/g)].map((m) => normalizeExempt(m[1]!)));
 }
 
 /** ADR-022 §1 里那张"明确豁免"清单 */
-export function adrExemptions(doc: string): Set<string> {
+function adrExemptions(doc: string): Set<string> {
   const line = doc.split('\n').find((l) => l.includes('**明确豁免**'));
   expect(line, 'ADR-022 §1 的"明确豁免"清单不见了').toBeTruthy();
   return new Set([...line!.matchAll(/`([^`]+)`/g)].map((m) => normalizeExempt(m[1]!)));

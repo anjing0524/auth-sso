@@ -18,10 +18,11 @@
  * 1. **接线**：`apps/*` 与 `packages/*` 的每个包都必须有 `lint` 与 `typecheck` 脚本，
  *    且根脚本必须是递归形式（`pnpm -r …`），否则列表会退化成"我手动敲哪些包"。
  * 2. **不得吞掉失败**：`lint` / `typecheck` 脚本里不得出现会吞掉退出码或错误的写法
- *    （`|| echo …` / `|| true` / `2>/dev/null` / `--no-eslintrc` / `; true` /
- *    `|| exit 0` / `|| :` / `| tee` …）——这些写法让门禁**恒绿**。
- *    **完整且规范性的清单是下方 `FAILURE_SWALLOWING_PATTERNS` 表**，本段只是举例：
- *    §7 要求"声明的范围与实现一致"，所以两处**同进同退**（评审实测过 `; true` 曾被漏掉）。
+ *    （`|| echo …` / `|| true` / `2>/dev/null` / `--no-eslintrc` / `; true` / `; echo …` /
+ *    `; exit 0` / `|| exit 0` / `|| :` / 管道 `| cat`、`| tee` / 结尾 `&` …）——它们让门禁**恒绿**。
+ *    **下方 `FAILURE_SWALLOWING_PATTERNS` 表是规范性清单**（本段只是举例）；
+ *    但它**不是穷尽的**：shell 吞掉退出码的写法无穷多，真正的保证是"CI 用 `pnpm test`
+ *    的退出码"这件事本身（本文件只挡已知形状）。§7：声明范围不得大于实现范围。
  *
  * 与 `module-mock-guard.test.ts` 同构：规则本体在文档（本文件 JSDoc + 下方禁令表），
  * 守卫是它的可执行副本，并自带**解析器自测**（扫描失灵会让守卫"永远通过"）。
@@ -57,13 +58,19 @@ const FAILURE_SWALLOWING_PATTERNS: ReadonlyArray<{ pattern: RegExp; why: string 
   { pattern: /\|\|\s*true\b/, why: '`|| true` 吞掉退出码' },
   { pattern: /2>\s*\/dev\/null/, why: '重定向掉 stderr ⇒ 配置坏了也看不见（#83 掩盖了缺 eslint-plugin-import）' },
   { pattern: /--no-eslintrc/, why: 'ESLint 9 flat config 下不是合法参数，必然失败（#83）' },
-  // 以下四条是代码评审查出的缺口：文件头声明了禁止"吞掉失败"，但实现只有上面四条 ⇒
-  // `eslint . ; true` / `|| exit 0` / `|| :` / `| tee` 都会被判过（"检查看起来在拦、实际拦不住"）。
+  // 以下各条是代码评审查出的缺口：文件头曾声明禁止"吞掉失败"，而实现只有前四条 ⇒
+  // `eslint . ; true` / `|| exit 0` / `|| :` / 管道 都会被判过（"检查看起来在拦、实际拦不住"）。
+  // 计数不写死：清单增删时由夹具与文件头枚举同步（§11 同一事实只写一处）。
   { pattern: /;\s*true\b/, why: '`; true` 让脚本以 0 退出（前一条命令的失败被丢弃）' },
   { pattern: /\|\|\s*exit\s+0\b/, why: '`|| exit 0` 把失败改写成成功退出' },
   { pattern: /;\s*exit\s+0\b/, why: '`; exit 0` 把失败改写成成功退出' },
   { pattern: /\|\|\s*:/, why: '`|| :`（shell no-op）丢弃退出码' },
   { pattern: /\|\s*tee\b/, why: '`| tee` 让管道退出码取自 tee，原命令的失败被丢掉' },
+  // 代码评审指出：只挡 `| tee` 仍会放过别的管道（`| cat` / `| tail` …）——
+  // 管道的退出码都取自最后一个命令。用"单个 `|`（非 `||`）"统一覆盖。
+  { pattern: /(?<!\|)\|(?!\|)/, why: '管道：脚本退出码取自最后一个命令，前面的失败被丢掉' },
+  { pattern: /;\s*echo\b/, why: '`; echo` 让脚本以 echo 的 0 退出' },
+  { pattern: /&\s*$/, why: '结尾 `&` 把命令放后台，脚本立刻以 0 退出' },
 ];
 
 /** 判定一个脚本是否吞掉失败；返回命中的原因（无命中返回 null） */
@@ -156,6 +163,10 @@ describe('门禁清单自检（retro A1）', () => {
       'eslint .; exit 0',
       'eslint . || :',
       'eslint . | tee lint.log',
+      'eslint . | cat',
+      'eslint . | tail -5',
+      'eslint . ; echo done',
+      'eslint . &',
     ];
     for (const script of shouldBeRejected) {
       it(`拒绝：${script}`, () => {

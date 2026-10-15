@@ -31,6 +31,7 @@ import {
 import type { ApiResponse } from '@auth-sso/contracts';
 import { createUserAction } from '../actions';
 import { useFieldFailure } from '@/hooks/use-field-failure';
+import { FieldError } from '@/components/shared/field-error';
 
 /**
  * 局部组件：基于 React 19 useFormStatus 感知表单提交态
@@ -76,8 +77,6 @@ export default function CreateUserDialog({ departments }: CreateUserDialogProps)
   // 落不到的（403/500，或本表单没有该字段）才走 toast——两者不重复提示。
   // 字段清单是**参数**：本表单只有 username/email/password（不采集 mobile）。
   const { fieldError, reportFailure, clearFailure } = useFieldFailure(['username', 'email', 'password']);
-  const failedField = fieldError?.field ?? null;
-  const failedMessage = fieldError?.message ?? null;
 
   // 感知 Action 结果并响应：`state` 每次提交完成都会有新身份 ⇒ 用它作依赖；
   // `reportFailure` 已由 hook 用 useCallback 稳定（依赖它不会造成多余重跑）
@@ -130,23 +129,19 @@ export default function CreateUserDialog({ departments }: CreateUserDialogProps)
               <div className="space-y-2">
                 <Label htmlFor="username" className="font-bold text-foreground">登录账号 (Username)</Label>
                 <Input
-                  aria-invalid={failedField === 'username'}
+                  aria-invalid={fieldError?.field === 'username'}
                   id="username"
                   name="username"
                   required
                   className="h-11 rounded-lg font-mono"
                   placeholder="例如：zhangsan"
                 />
-                {failedField === 'username' && (
-                  <p role="alert" className="text-sm font-medium text-destructive">
-                    {failedMessage}
-                  </p>
-                )}
+                <FieldError failure={fieldError} field="username" />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="email" className="font-bold text-foreground">电子邮箱</Label>
                 <Input
-                  aria-invalid={failedField === 'email'}
+                  aria-invalid={fieldError?.field === 'email'}
                   id="email"
                   name="email"
                   type="email"
@@ -154,16 +149,12 @@ export default function CreateUserDialog({ departments }: CreateUserDialogProps)
                   className="h-11 rounded-lg"
                   placeholder="zhangsan@example.com"
                 />
-                {failedField === 'email' && (
-                  <p role="alert" className="text-sm font-medium text-destructive">
-                    {failedMessage}
-                  </p>
-                )}
+                <FieldError failure={fieldError} field="email" />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="password" className="font-bold text-foreground">初始密码</Label>
                 <Input
-                  aria-invalid={failedField === 'password'}
+                  aria-invalid={fieldError?.field === 'password'}
                   id="password"
                   name="password"
                   type="password"
@@ -171,11 +162,7 @@ export default function CreateUserDialog({ departments }: CreateUserDialogProps)
                   defaultValue=""
                   className="h-11 rounded-lg"
                 />
-                {failedField === 'password' && (
-                  <p role="alert" className="text-sm font-medium text-destructive">
-                    {failedMessage}
-                  </p>
-                )}
+                <FieldError failure={fieldError} field="password" />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="deptId" className="font-bold text-foreground">所属部门</Label>

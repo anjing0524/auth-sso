@@ -36,7 +36,7 @@ export interface ActionFailure {
  * 那种情况下若照旧"就地显示"，就会出现**无处渲染、也不弹提示**的静默失败——
  * 这与"服务端给了可判别的原因、客户端却没显示"完全一样糟。
  */
-export function useFieldFailure(renderedFields: readonly string[]) {
+export function useFieldFailure(renderedFields: readonly ErrorField[]) {
   const [fieldError, setFieldError] = useState<FieldFailure | null>(null);
 
   // 依赖必须是简单表达式：把字段清单折成一个稳定字符串再进依赖数组

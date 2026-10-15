@@ -24,12 +24,12 @@ import { fileURLToPath } from 'node:url';
 const DOMAIN_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '../../src/domain/shared');
 
 /** `errors.ts` 里所有 `export class X extends DomainError` 的类名 */
-export function parseDomainErrorNames(source: string): string[] {
+function parseDomainErrorNames(source: string): string[] {
   return [...source.matchAll(/export class (\w+) extends DomainError/g)].map((m) => m[1]!);
 }
 
 /** `error-mapping.ts` 里 `ERROR_STATUS` 字面量的键 */
-export function parseErrorStatusKeys(source: string): string[] {
+function parseErrorStatusKeys(source: string): string[] {
   const block = /const ERROR_STATUS[^=]*=\s*\{([\s\S]*?)\n\};/.exec(source);
   if (!block) return [];
   return [...block[1]!.matchAll(/^\s*(\w+):/gm)].map((m) => m[1]!);

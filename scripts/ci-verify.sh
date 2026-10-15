@@ -46,7 +46,27 @@ gh run view "$RID" --json jobs --jq '.jobs[] | "\(.conclusion // .status)\t\(.na
 
 NON_SUCCESS_STEPS="$(gh api "repos/$REPO/actions/runs/$RID/jobs" \
   --jq '[.jobs[].steps[] | select(.conclusion != "success" and .conclusion != "skipped")] | length')"
+RUN_CONCLUSION="$(gh run view "$RID" --json conclusion --jq '.conclusion // "-"')"
 CANCELLED_JOBS="$(gh run view "$RID" --json jobs --jq '[.jobs[] | select(.conclusion == "cancelled")] | length')"
+
+# 空/不可解析的计数必须**明确报错**：否则会被下面的 `!= "0"` 当成"有 job 被取消"而误报
+# （代码评审的 stub 实测暴露：`gh --json jobs` 返回空时曾报出「有  个 job 被取消」）
+case "$CANCELLED_JOBS" in
+  ''|*[!0-9]*)
+    echo "✗ 无法解析 job 列表（gh 返回「$CANCELLED_JOBS」）——CI 状态未知，按非绿处理"
+    exit 1
+    ;;
+esac
+
+# 运行级结论是第一道判据（评审实测：0 个 job 的 startup_failure / failure / cancelled
+# 会让"无 cancelled job、无失败步骤"的三条判据全部为 0 ⇒ 误报全绿）
+if [ "$RUN_CONCLUSION" != "success" ]; then
+  echo "✗ 运行级结论为 $RUN_CONCLUSION（不是 success）"
+  if [ "$RUN_CONCLUSION" = "cancelled" ]; then
+    echo "  可能被同一分支上更新的提交取代——请对最新提交重跑本脚本"
+  fi
+  exit 1
+fi
 
 if [ "$CANCELLED_JOBS" != "0" ]; then
   echo "✗ 有 $CANCELLED_JOBS 个 job 被取消：若同一分支已有更新的提交，说明这次运行**已被取代**——请对最新提交重跑本脚本"

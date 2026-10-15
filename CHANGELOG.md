@@ -9,8 +9,22 @@ All notable changes to this project will be documented in this file.
 - 启动期 `validate_routing_consistency()` 路由一致性校验，检测路径前缀交叉覆盖、上下游不一致等配置错误
 
 ### Changed
+- **404 统一为 `AUTH_SSO_1004`**：实体路由（`/api/users/:id`、`/api/departments/:id`、`/api/roles/:id`、
+  `/api/roles/:id/permissions`、`/api/clients/:id`、`/api/permissions/:id`）不再返回实体专属的
+  not-found 码（那些码已从契约删除）。**按专属码分支的集成方需改为按 404 + `AUTH_SSO_1004` 处理。**
+- **冲突原因具体化**：唯一约束冲突改报专属码——`USERNAME_ALREADY_EXISTS` / `EMAIL_ALREADY_EXISTS` /
+  `MOBILE_ALREADY_EXISTS` / `ROLE_ALREADY_EXISTS` / `DEPARTMENT_ALREADY_EXISTS` /
+  `PERMISSION_ALREADY_EXISTS` / `CLIENT_ALREADY_EXISTS`；弱密码报 `PASSWORD_TOO_WEAK`（此前是通用 `VALIDATION_ERROR`）。
+  管理界面据此把错误**显示在对应输入框下方**。
+- **管理员不得删除/禁用自己**：`CANNOT_DELETE_SELF` / `CANNOT_DISABLE_SELF`（422）。
+  契约里早已定义这两个码，但规则此前从未实现；允许自删会让"最后一个管理员"自锁死。
+- **软删除语义修正**：删除用户现在真正写入 `deleted_at`（此前只写 `status`，导致 schema 的
+  部分唯一索引永不释放）；因此**被删用户的邮箱/手机号可被新用户复用**，用户名仍不可复用（完整唯一约束保护）。
 - `[portal].public_paths` 语义收窄为全局白名单——仅保留登录/注册/认证等全局必须公开端点；各应用独立的公开路径移至 `[[upstreams]].public_paths`
 - Docker 配置文件 `gateway.docker.toml` 对齐生产配置结构，Portal upstream 条目新增 `public_paths`
+
+### Removed
+- **24 个零引用错误码**从契约删除（57 → 33，均有"删除理由"记录；线值**不重编号**，空洞永久保留）。
 
 ### Security
 - 零信任身份头剥离策略从精确匹配 4 个头强化为黑名单兜底——无条件剥离所有 `X-*` 头（仅显式放行 `X-Forwarded-*` / `X-Request-Id` / `X-Correlation-Id` / `X-Real-IP`）。下游收到的身份信息 100% 来自 Gateway 权威注入，杜绝客户端伪造透传

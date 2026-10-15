@@ -7,7 +7,8 @@
  * 3. 确认测试 Redis 可用（硬失败，见 probeRedis）
  */
 import postgres from 'postgres';
-import { readdirSync, readFileSync } from 'fs';
+import { existsSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from 'fs';
+import { tmpdir } from 'os';
 import { join } from 'path';
 import { createTestRedisClient, resolveTestRedisUrl } from './vitest.redis';
 import { isIdempotentMigrationError } from './scripts/idempotent-migration-error';
@@ -184,7 +185,53 @@ async function applyDrizzleMigrations(sql: postgres.Sql, drizzleDir: string): Pr
   }
 }
 
+/**
+ * 并发运行检测（本会话实测的坑）
+ *
+ * 两个 vitest 进程同时打**同一个物理测试库**会互相 `TRUNCATE … CASCADE`：
+ * 表现为"某个看似无关的文件红了、单独跑又通过"（`duplicate key … departments_pkey`、
+ * `users_dept_id_fkey` 找不到父行等）。本会话里，并行跑的评审子代理与我的运行就这样撞过两次，
+ * 排查成本远高于加一个锁。
+ *
+ * ⇒ 用 PID 锁文件：**明确报错**并给出处置命令，而不是让人去猜。
+ */
+const RUN_LOCK = join(tmpdir(), 'auth-sso-api-tests.lock');
+
+function lockHolderIsAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function acquireRunLock(): void {
+  if (existsSync(RUN_LOCK)) {
+    const holder = Number(readFileSync(RUN_LOCK, 'utf-8').trim());
+    if (Number.isFinite(holder) && holder !== process.pid && lockHolderIsAlive(holder)) {
+      throw new Error(
+        `[globalSetup] 另一个测试进程（pid ${holder}）正在运行 —— 两个 vitest 会互相破坏共享测试库`
+          + '（表现为"无关文件红了、单跑又过"）。先结束它再跑：pgrep -af vitest',
+      );
+    }
+    console.warn(`[globalSetup] 发现陈旧锁文件（pid ${holder} 已不在）——接管`);
+  }
+  writeFileSync(RUN_LOCK, String(process.pid));
+}
+
+function releaseRunLock(): void {
+  try {
+    if (existsSync(RUN_LOCK) && Number(readFileSync(RUN_LOCK, 'utf-8').trim()) === process.pid) {
+      unlinkSync(RUN_LOCK);
+    }
+  } catch {
+    // 清理失败不影响测试结果
+  }
+}
+
 export async function setup() {
+  acquireRunLock();
   const testUrl =
     process.env['TEST_DATABASE_URL'] ||
     process.env['DATABASE_URL'] ||
@@ -226,5 +273,5 @@ export async function setup() {
 }
 
 export function teardown() {
-  // 无清理操作
+  releaseRunLock();
 }

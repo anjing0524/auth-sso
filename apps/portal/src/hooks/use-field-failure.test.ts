@@ -9,7 +9,7 @@ import { renderHook, act } from '@testing-library/react';
 import { USER_ERRORS, COMMON_ERRORS } from '@auth-sso/contracts';
 import { useFieldFailure } from '@/hooks/use-field-failure';
 
-// @allow-module-mock sonner infra-boundary: 外部 UI 原语（toast 有 9 个签名各异的方法，类型化替身是与测试目的无关的类型工程），由组件测试整体替换
+// @allow-module-mock sonner full-replacement: 外部 UI 原语（toast 有 9 个签名各异的方法，类型化替身是与测试目的无关的类型工程），由组件测试整体替换
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 
 describe('useFieldFailure', () => {
