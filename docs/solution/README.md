@@ -97,6 +97,7 @@
 
 *何时读*：讨论复杂度 / 覆盖率 / 指标前必读（含「弱预测器不做门禁」的结论）
 
+- [复杂度热点逐处处置：能修的小步修好，修不了的写明理由（ADR-019 收口）](2026-10-15-complexity-hotspot-disposition.md)
 - [度量与忽略范围 —— 两个把自己骗过去的陷阱](2026-10-08-metric-vs-ignore-scope-traps.md)
 - [认知复杂度：一手阈值、独立实证与「弱预测器不能做硬门禁」（#89 结案）](2026-10-14-cognitive-complexity-decision.md)
 

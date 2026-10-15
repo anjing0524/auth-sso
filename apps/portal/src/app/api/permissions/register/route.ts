@@ -6,7 +6,14 @@ import { COMMON_ERRORS } from '@auth-sso/contracts';
 import { mapServerError } from '@/lib/server-error';
 import { validateClientSecret } from '@/domain/auth/oauth-client';
 import { resolveActiveClient } from '@/lib/auth/oauth-helpers';
-import { flattenPermissions, getHashCode, findDuplicateCode } from '@/domain/permission/permission-sync';
+import {
+  flattenPermissions,
+  getHashCode,
+  findDuplicateCode,
+  permissionRowChanged,
+  toPermissionInsertRow,
+  toPermissionUpdateRow,
+} from '@/domain/permission/permission-sync';
 import type { IncomingPermission } from '@/domain/permission/permission-sync';
 import { restSuccess, restError } from '@/lib/response';
 import { invalidateResourceFromRoute } from '@/lib/cache-invalidation';
@@ -69,24 +76,24 @@ export async function POST(request: NextRequest) {
         const parentId = p.parentId ? (codeToIdMap.get(p.parentId) ?? null) : null;
         const existing = dbMap.get(p.code);
         if (!existing) {
-          await tx.insert(schema.permissions).values({
-            id: codeToIdMap.get(p.code)!, name: p.name, code: p.code, type: p.type,
-            path: p.path ?? null, icon: p.icon ?? null, visible: p.visible ?? null,
-            clientId: auth.clientId, parentId, sort: p.sort, status: 'ACTIVE', createdAt: new Date(),
-          });
+          // 行整形与"是否变更"的判定都在 domain（纯函数、可直测）——
+          // 此前它们内联在这里，使本回调的复杂度达到 29（ADR-019 的待修热点）。
+          await tx.insert(schema.permissions).values(
+            toPermissionInsertRow(p, {
+              id: codeToIdMap.get(p.code)!,
+              clientId: auth.clientId,
+              parentId,
+              now: new Date(),
+            }),
+          );
           syncedCounts.inserted++;
-        } else {
-          const changed = existing.parentId !== parentId || existing.name !== p.name || existing.type !== p.type ||
-            existing.path !== (p.path ?? null) || existing.icon !== (p.icon ?? null) ||
-            existing.visible !== (p.visible ?? null) || existing.sort !== p.sort || existing.status !== 'ACTIVE';
-          if (changed) {
-            await tx.update(schema.permissions).set({
-              name: p.name, type: p.type,
-              path: p.path ?? null, icon: p.icon ?? null, visible: p.visible ?? null,
-              sort: p.sort, status: 'ACTIVE', ...(existing.parentId !== parentId ? { parentId } : {}),
-            }).where(eq(schema.permissions.id, existing.id));
-            syncedCounts.updated++;
-          }
+          continue;
+        }
+        if (permissionRowChanged(existing, p, parentId)) {
+          await tx.update(schema.permissions)
+            .set(toPermissionUpdateRow(p, { parentId, parentChanged: existing.parentId !== parentId }))
+            .where(eq(schema.permissions.id, existing.id));
+          syncedCounts.updated++;
         }
       }
       const incomingSet = new Set(codes);

@@ -44,22 +44,36 @@ async function main(): Promise<void> {
       console.log(`[db:migrate] applying ${file} (${statements.length} statements)`);
 
       for (const statement of statements) {
-        try {
-          await sql.unsafe(statement);
-        } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
-          if (isIdempotentMigrationError(message)) {
-            console.warn(`[db:migrate] skip idempotent error in ${file}: ${message.slice(0, 160)}`);
-            continue;
-          }
-          throw new Error(`[db:migrate] ${file} 执行失败: ${message}`);
-        }
+        await applyStatementWithIdempotentSkip(sql, file, statement);
       }
     }
 
     console.log('[db:migrate] 完成');
   } finally {
     await sql.end();
+  }
+}
+
+/**
+ * 执行单条 migration 语句：幂等错误（already exists / duplicate）跳过，其余抛出并**带上文件名**。
+ *
+ * 抽出来的理由（ADR-019 待修热点）：原来这段嵌在「main → for(files) → for(statements) → try → catch → if」
+ * 里，嵌套 5 层；抽成具名函数后主流程回到线性，且失败信息有了一处来源。
+ */
+async function applyStatementWithIdempotentSkip(
+  sql: postgres.Sql,
+  file: string,
+  statement: string,
+): Promise<void> {
+  try {
+    await sql.unsafe(statement);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (isIdempotentMigrationError(message)) {
+      console.warn(`[db:migrate] skip idempotent error in ${file}: ${message.slice(0, 160)}`);
+      return;
+    }
+    throw new Error(`[db:migrate] ${file} 执行失败: ${message}`);
   }
 }
 

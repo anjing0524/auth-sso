@@ -136,6 +136,53 @@ async function assertTestRedisReady(): Promise<void> {
   console.log(`[globalSetup] Redis 就绪 ${redactUrl(testRedisUrl)}`);
 }
 
+/**
+ * 执行单条 migration 语句：幂等错误（already exists / duplicate）只告警，其余也只告警不中断。
+ *
+ * 抽出来的理由（ADR-019 待修热点）：原来这段在
+ * 「setup → try → for(files) → for(statements) → try → catch → if」里嵌套 6 层；
+ * 抽成具名函数后两处主流程都回到线性。
+ */
+async function applyStatementIgnoringIdempotentErrors(
+  sql: postgres.Sql,
+  stmt: string,
+): Promise<void> {
+  try {
+    await sql.unsafe(stmt);
+  } catch (err: any) {
+    // 忽略 "already exists" 错误（幂等）
+    if (!err.message?.includes('already exists') && !err.message?.includes('duplicate')) {
+      console.warn(`[globalSetup] SQL 警告: ${err.message?.slice(0, 100)}`);
+    }
+  }
+}
+
+/**
+ * 运行 drizzle 目录下的全部 migration SQL。
+ *
+ * Drizzle 的断点是 migration 的执行单元。**不能按分号拆分**：分区维护等
+ * PostgreSQL 块会使用 `DO $$ …; … $$`，在块内拆分会破坏语法。
+ */
+async function applyDrizzleMigrations(sql: postgres.Sql, drizzleDir: string): Promise<void> {
+  const files = readdirSync(drizzleDir)
+    .filter(f => f.endsWith('.sql'))
+    .sort();
+  if (files.length === 0) return;
+
+  console.log(`[globalSetup] 运行 ${files.length} 个 migration 文件...`);
+  for (const file of files) {
+    const content = readFileSync(join(drizzleDir, file), 'utf-8');
+    const statements = content
+      .split(/^--> statement-breakpoint\s*$/m)
+      .map(s => s.trim())
+      .filter(Boolean);
+
+    for (const stmt of statements) {
+      await applyStatementIgnoringIdempotentErrors(sql, stmt);
+    }
+  }
+}
+
 export async function setup() {
   const testUrl =
     process.env['TEST_DATABASE_URL'] ||
@@ -166,35 +213,8 @@ export async function setup() {
       throw new Error(`${buildSetupHint(testUrl)}\n[globalSetup] 原始错误: ${details}`);
     }
 
-    // 运行 migration SQL 文件
-    const drizzleDir = join(__dirname, 'drizzle');
-    const files = readdirSync(drizzleDir)
-      .filter(f => f.endsWith('.sql'))
-      .sort();
-
-    if (files.length > 0) {
-      console.log(`[globalSetup] 运行 ${files.length} 个 migration 文件...`);
-      for (const file of files) {
-        const content = readFileSync(join(drizzleDir, file), 'utf-8');
-        // Drizzle 的断点是 migration 的执行单元。不能按分号拆分：分区维护
-        // 等 PostgreSQL 块会使用 DO $$ ...; ... $$，在块内拆分会破坏语法。
-        const statements = content
-          .split(/^--> statement-breakpoint\s*$/m)
-          .map(s => s.trim())
-          .filter(Boolean);
-
-        for (const stmt of statements) {
-          try {
-            await sql.unsafe(stmt);
-          } catch (err: any) {
-            // 忽略 "already exists" 错误（幂等）
-            if (!err.message?.includes('already exists') && !err.message?.includes('duplicate')) {
-              console.warn(`[globalSetup] SQL 警告: ${err.message?.slice(0, 100)}`);
-            }
-          }
-        }
-      }
-    }
+    // 运行 migration SQL 文件（抽取成具名函数：见 applyDrizzleMigrations 的说明）
+    await applyDrizzleMigrations(sql, join(__dirname, 'drizzle'));
 
     console.log('[globalSetup] 测试数据库就绪');
   } finally {

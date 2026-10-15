@@ -13,6 +13,7 @@ import { getOwnUser } from '@/app/(dashboard)/users/data';
 import { getDynamicMenuTree } from '@/lib/menu-tree';
 import { getUserPermissionContext, toPermissionContextOrNull } from '@/lib/permissions';
 import DashboardLayout from '@/components/layout/DashboardLayout';
+import { toDashboardUser } from '@/lib/dashboard-user';
 
 /**
  * 实际进行身份鉴权与菜单数据拉取的异步内容组件。
@@ -35,13 +36,7 @@ async function DashboardContent({ children }: { children: React.ReactNode }) {
 
   return (
     <DashboardLayout
-      user={{
-        id: user?.id ?? identity.userId,
-        email: user?.email ?? null,
-        name: user?.name ?? '未知',
-        picture: user?.avatarUrl ?? null,
-        emailVerified: user?.emailVerified ?? null,
-      }}
+      user={toDashboardUser(user, identity.userId)}
       menus={menus}
     >
       {children}

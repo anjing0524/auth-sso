@@ -204,15 +204,20 @@ Airbnb 直接设为 `off`。**不存在"业界通行阈值"这回事。**
 **重新评估的触发条件**（不留"永久待评估"）：出现 ≥3 层嵌套且混杂多分支的函数，
 或出现归因于"难读"的线上事故时重新评估；届时验收判据是**先证明该规则在本仓真会红**。
 
-被新门槛标出的 5 处生产热点（**保留为待修，不静默豁免**）：
+被新门槛标出的生产热点 —— **2026-10-15 逐处处置完毕**（数字为当前实测；详见
+`docs/solution/2026-10-15-complexity-hotspot-disposition.md`）：
 
-| 位置 | 问题 |
-|---|---|
-| `api/auth/logout/route.ts:36` `performRevocation` | complexity 23 |
-| `api/permissions/register/route.ts:56` | complexity 29 |
-| `app/(dashboard)/layout.tsx:20` `DashboardContent` | complexity 16 |
-| `api/auth/logout/route.ts:51` | 嵌套 5 层 |
-| `lib/auth/token/signing-keys.ts:141` | 嵌套 5 层 |
+| 位置 | 当时 | 现状 | 处置 |
+|---|---|---|---|
+| `api/permissions/register/route.ts` | complexity 29（表内误记为 56） | **已清** | 抽 3 个纯函数进 `domain/permission/permission-sync.ts` + 补 10 条直测；**抽取时 tsc 抓到漏 `code` 列** |
+| `app/(dashboard)/layout.tsx` `DashboardContent` | complexity 16 | **已清** | 抽纯映射 `toDashboardUser`（`src/lib/dashboard-user.ts`）+ 直测 |
+| `lib/auth/token/signing-keys.ts` | 嵌套 5 | **已清** | 抽 `reuseConcurrentlyCreatedKey` |
+| `scripts/migrate.ts` | 嵌套 5 | **已清** | 抽 `applyStatementWithIdempotentSkip` |
+| `vitest.globalSetup.ts` `setup` | complexity 16 / 嵌套 5–6 | **已清** | 抽 `applyDrizzleMigrations` + `applyStatementIgnoringIdempotentErrors` |
+| `api/auth/logout/route.ts` `performRevocation` | complexity 23 | 21 → **接受** | 5 段**独立** try/catch 是刻意的优雅降级，拆开只增间接层。触发条件：新增第 6 段、或出现"某步失败影响其余"的事故 |
+| `__tests__/helpers/test-db.ts` `seedTestData` | complexity 21 | 24 → **接受** | 11 行是**声明式**插入顺序；表驱动需 `as never` 强转、牺牲类型安全。触发条件：插入表数超过约 15、或出现顺序错误的事故 |
+
+**接受的也必须有依据与触发条件**——"不静默豁免"的含义是**写明**，而不是让告警沉默地躺着。
 
 **一处需要说明的判断**：`performRevocation` 的 23 来自 **5 段各自独立的 try/catch**
 （每步失败不影响其余，是刻意的优雅降级设计）。拆开它会破坏该设计——这是"复杂度指标

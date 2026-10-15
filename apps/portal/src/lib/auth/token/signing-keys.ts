@@ -107,6 +107,38 @@ export async function getSigningKeyByKid(kid: string): Promise<{
 }
 
 /**
+ * 双重检查：等待生成锁期间，若**并发请求**已写入一行、且它尚未进入续期窗口，则复用它。
+ *
+ * 抽出来的理由（ADR-019 待修热点）：这段曾嵌在 `getActiveSigningKey` 的
+ * 「if(needsGen) → try → if(recheck) → if(未进续期窗口) → if(缓存命中)」里（嵌套 5 层）；
+ * 而它的语义——"复用并发写入的密钥"——本来就该有个名字。
+ *
+ * @returns 可复用的密钥条目；没有（或已进续期窗口）时 `null`
+ */
+async function reuseConcurrentlyCreatedKey(
+  recheck: Array<typeof schema.jwks.$inferSelect>,
+  renewBefore: number,
+): Promise<{
+  keyId: string;
+  privateKey: CryptoKey;
+  publicKey: CryptoKey;
+  publicJwk: JsonWebKey;
+} | null> {
+  const rjwk = recheck[0];
+  if (!rjwk) return null;
+  if (rjwk.expiresAt && new Date(rjwk.expiresAt).getTime() < renewBefore) return null;
+
+  const rkid = rjwk.kid ?? rjwk.id;
+  const rcached = getCachedKey(rkid);
+  if (rcached) return rcached;
+
+  const rprivateKey = await importKeyFromJwk(rjwk.privateKey);
+  const rpublicKey = await importKeyFromJwk(rjwk.publicKey);
+  const rpublicJwk = JSON.parse(rjwk.publicKey) as JsonWebKey;
+  return createAndCacheEntry(rkid, rprivateKey, rpublicKey, rpublicJwk);
+}
+
+/**
  * 获取当前活跃的签名密钥对（用于签发新 token）
  *
  * 优先级：取 jwks 表最新未过期的一行 → 缓存 miss 查 DB → 无可用密钥自动生成
@@ -145,20 +177,8 @@ export async function getActiveSigningKey(): Promise<{
         .from(schema.jwks)
         .orderBy(desc(schema.jwks.createdAt))
         .limit(1);
-      if (recheck.length > 0) {
-        const rjwk = recheck[0]!;
-        if (!rjwk.expiresAt || new Date(rjwk.expiresAt).getTime() >= renewBefore) {
-          // 已有未进入续期窗口的密钥（由并发请求生成），直接使用
-          const rkid = rjwk.kid ?? rjwk.id;
-          const rcached = getCachedKey(rkid);
-          if (rcached) return rcached;
-          const rprivateKey = await importKeyFromJwk(rjwk.privateKey);
-          const rpublicKey = await importKeyFromJwk(rjwk.publicKey);
-          const rpublicJwk = JSON.parse(rjwk.publicKey) as JsonWebKey;
-          const rentry = createAndCacheEntry(rkid, rprivateKey, rpublicKey, rpublicJwk);
-          return rentry;
-        }
-      }
+      const reused = await reuseConcurrentlyCreatedKey(recheck, renewBefore);
+      if (reused) return reused;
       // 轮换会淘汰旧密钥行：此刻起按 kid 的缓存不再可信（否则仍会返回已删除的
       // 密钥材料），故整表失效后由本次生成重新填充。
       resetSigningKeyCache();
