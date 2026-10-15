@@ -31,6 +31,7 @@ import { DataTable } from '@/components/shared/data-table';
 import { EmptyState } from '@/components/shared/empty-state';
 import { createRoleAction, updateRoleAction, deleteRoleAction } from '../actions';
 import { useFieldFailure } from '@/hooks/use-field-failure';
+import { FieldError } from '@/components/shared/field-error';
 
 interface RoleRow {
   id: string;  name: string; code: string;
@@ -204,8 +205,8 @@ export default function RolesTable({ roles, pagination, initialKeyword, departme
           <DialogHeader><DialogTitle className="flex items-center gap-2"><ShieldCheck className="h-5 w-5 text-primary" /> 新建角色</DialogTitle></DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2"><Label>角色名称</Label><Input value={form.name} onChange={e => setForm({...form, name: e.target.value})} placeholder="管理员" /></div>
-            <div className="space-y-2"><Label>角色编码</Label><Input value={form.code} onChange={e => setForm({...form, code: e.target.value})} placeholder="admin" /></div>
-            {fieldError?.field === 'code' && <p role="alert" className="text-xs font-medium text-destructive">{fieldError.message}</p>}
+            <div className="space-y-2"><Label>角色编码</Label><Input value={form.code} aria-invalid={fieldError?.field === 'code'} onChange={e => setForm({...form, code: e.target.value})} placeholder="admin" /></div>
+            <FieldError failure={fieldError} field="code" />
             <div className="space-y-2"><Label>所属部门</Label>{renderDeptSelect(form.deptId, v => setForm({...form, deptId: v}))}</div>
           </div>
           <DialogFooter><Button variant="ghost" onClick={() => setIsAddOpen(false)}>取消</Button><Button onClick={handleCreate} disabled={saving}>创建</Button></DialogFooter>
@@ -218,6 +219,9 @@ export default function RolesTable({ roles, pagination, initialKeyword, departme
           <div className="space-y-4 py-4">
             <div className="space-y-2"><Label>角色名称</Label><Input value={form.name} onChange={e => setForm({...form, name: e.target.value})} /></div>
             <div className="space-y-2"><Label>角色编码</Label><Input value={form.code} disabled /></div>
+            {/* 编辑态的 code 是 disabled（不可改、也不会产生冲突码），但仍渲染错误——
+                否则 update 失败时既不弹 toast 也不内联，正是要消灭的静默路径 */}
+            <FieldError failure={fieldError} field="code" />
             <div className="space-y-2"><Label>所属部门</Label>{renderDeptSelect(form.deptId, v => setForm({...form, deptId: v}))}</div>
           </div>
           <DialogFooter><Button variant="ghost" onClick={() => setIsEditOpen(false)}>取消</Button><Button onClick={handleUpdate} disabled={saving}>保存</Button></DialogFooter>

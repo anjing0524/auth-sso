@@ -80,7 +80,7 @@ vi.mock(import('@/lib/audit'), async (importOriginal): Promise<Partial<typeof au
   extractClientIP: vi.fn(() => '127.0.0.1'),
   extractUserAgent: vi.fn(() => 'Vitest'),
 };
-});;
+});
 
 import { POST as assignRoles, DELETE as removeRole } from '@/app/api/users/[id]/roles/route';
 import type * as authModule from '@/lib/auth';

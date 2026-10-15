@@ -72,7 +72,7 @@ vi.mock(import('@/lib/permissions'), async (importOriginal): Promise<Partial<typ
   cacheUserPermissionContext: vi.fn(async () => {}),
   clearUserPermissionCache: mocks.mockClearPermCache,
 };
-});;
+});
 
 // 鉴权只伪造"已授权"这一个输入；**真实** `withPermission`（含错误映射）与**真实**数据范围
 // 守卫全程参与 —— 领域错误因此以「映射后的 404/403 响应」出现，与生产契约一致。
@@ -89,7 +89,7 @@ vi.mock(import('@/lib/auth/check-permission'), async (importOriginal): Promise<P
   checkPermission: async () => ({ authorized: true, userId: '00000000-0000-4000-8000-000000000101' }),
   requirePermission: async () => ({ userId: '00000000-0000-4000-8000-000000000101' }),
 };
-});;
+});
 
 // @allow-module-mock @/lib/cache-invalidation infra-boundary: 缓存失效是旁路副作用，不影响本文件断言的响应契约；importOriginal + spread 让未列出的导出走真身 —— 此前整体替换使新增的 invalidateResourceFromRoute 变成 undefined，本文件 3 例变红
 vi.mock(import('@/lib/cache-invalidation'), async (importOriginal): Promise<Partial<typeof cacheInvalidationModule>> => {

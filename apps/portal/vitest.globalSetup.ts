@@ -10,6 +10,7 @@ import postgres from 'postgres';
 import { readdirSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { createTestRedisClient, resolveTestRedisUrl } from './vitest.redis';
+import { isIdempotentMigrationError } from './scripts/idempotent-migration-error';
 
 /** 连接串脱敏：只隐去凭据，保留主机与逻辑库（日志与证据锚点需要可辨识） */
 function redactUrl(url: string): string {
@@ -150,8 +151,8 @@ async function applyStatementIgnoringIdempotentErrors(
   try {
     await sql.unsafe(stmt);
   } catch (err: any) {
-    // 忽略 "already exists" 错误（幂等）
-    if (!err.message?.includes('already exists') && !err.message?.includes('duplicate')) {
+    // 幂等错误（already exists / duplicate）不告警；判据与 migrate.ts 共用一处
+    if (!isIdempotentMigrationError(String(err.message ?? ''))) {
       console.warn(`[globalSetup] SQL 警告: ${err.message?.slice(0, 100)}`);
     }
   }

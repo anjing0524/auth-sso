@@ -51,9 +51,9 @@ vi.mock('@/infrastructure/db', () => ({
 vi.mock(import('@/lib/auth'), async (importOriginal): Promise<Partial<typeof authModule>> => {
   const actual = await importOriginal();
   return { ...actual,
-  resolveIdentity: vi.fn(async () => ({ userId: '00000000-0000-4000-8000-000000000101', expiresAt: null, issuedAt: null })),
-  logServerDataRead: vi.fn(async () => {}),
-  withAuth: (_o: any, h: Function) => async (...a: any[]) => {
+    resolveIdentity: vi.fn(async () => ({ userId: '00000000-0000-4000-8000-000000000101', expiresAt: null, issuedAt: null })),
+    logServerDataRead: vi.fn(async () => {}),
+    withAuth: (_o: any, h: Function) => async (...a: any[]) => {
     const check = await mockAuthCheck();
     if (!check.authorized) {
       return { success: false, error: 'FORBIDDEN', message: check.error || '权限不足' };
@@ -67,17 +67,17 @@ vi.mock(import('@/lib/auth'), async (importOriginal): Promise<Partial<typeof aut
       const e = err as Error & { code?: string };
       return { success: false, error: e.code || 'INTERNAL_ERROR', message: e.message || '服务器错误' };
     }
-  },
-  withPermission: mockWithPermission,
+    },
+    withPermission: mockWithPermission,
 };
-});;
+});
 
 // @allow-module-mock @/lib/crypto input-fixture: 只覆盖「确定性 ID」这类输入，其余导出（含 hashToken）走真身
 vi.mock(import('@/lib/crypto'), async (importOriginal): Promise<Partial<typeof cryptoModule>> => {
-  const actual = await importOriginal();
-  // 只覆盖「确定性 ID」，其余导出（含 hashToken 的真实 sha256）走真身：
-  // 早先整体替换会把 hashToken 变成 undefined，而注解却写着「哈希走真实实现」
-  return {
+    const actual = await importOriginal();
+    // 只覆盖「确定性 ID」，其余导出（含 hashToken 的真实 sha256）走真身：
+    // 早先整体替换会把 hashToken 变成 undefined，而注解却写着「哈希走真实实现」
+    return {
     ...actual,
     generateUUID: () => 'aabbccdd-eeff-4000-8000-000000000001',
     generateId: (_len?: number) => 'aaaaaaaa',
@@ -102,7 +102,7 @@ vi.mock(import('@/domain/auth/password'), async (importOriginal): Promise<Partia
   isPasswordReused: vi.fn(async () => false),
   pushPasswordHistory: vi.fn(() => [] as string[]),
 };
-});;
+});
 
 // ════════════════════════════════════════════════════════
 // 初始化 td

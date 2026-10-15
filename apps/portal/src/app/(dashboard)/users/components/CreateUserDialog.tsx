@@ -75,7 +75,7 @@ export default function CreateUserDialog({ departments }: CreateUserDialogProps)
   // 服务端给的是**具体**码（#82 接通、#92 消费）：能落到本表单某个输入框的就落到那里，
   // 落不到的（403/500，或本表单没有该字段）才走 toast——两者不重复提示。
   // 字段清单是**参数**：本表单只有 username/email/password（不采集 mobile）。
-  const { fieldError, reportFailure } = useFieldFailure(['username', 'email', 'password']);
+  const { fieldError, reportFailure, clearFailure } = useFieldFailure(['username', 'email', 'password']);
   const failedField = fieldError?.field ?? null;
   const failedMessage = fieldError?.message ?? null;
 
@@ -99,7 +99,7 @@ export default function CreateUserDialog({ departments }: CreateUserDialogProps)
       <PermissionGuard permission="user:create">
         <Button
           className="rounded-lg h-11 px-6 shadow-lg shadow-primary/20"
-          onClick={() => setIsOpen(true)}
+          onClick={() => { clearFailure(); setIsOpen(true); }}
         >
           <UserPlus className="mr-2 h-4 w-4" /> 新增用户
         </Button>

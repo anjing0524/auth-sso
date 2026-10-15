@@ -40,7 +40,7 @@ vi.mock(import('@/lib/auth'), async (importOriginal): Promise<Partial<typeof aut
   resolveIdentity: mockResolveIdentity,
   logServerDataRead: vi.fn(async () => {}),
 };
-});;
+});
 
 // @allow-module-mock @/lib/menu-tree input-fixture: 菜单树只提供可辨识的渲染输入；断言检查的是**路由原样透传**该输入（不重排/不裁剪），树的构建逻辑由其自身测试覆盖
 vi.mock(import('@/lib/menu-tree'), async (importOriginal): Promise<Partial<typeof menuTreeModule>> => {
@@ -48,7 +48,7 @@ vi.mock(import('@/lib/menu-tree'), async (importOriginal): Promise<Partial<typeo
   return { ...actual,
   getDynamicMenuTree: vi.fn().mockResolvedValue([{ id: 'menu-marker', name: '透传标记', path: '/marker', children: [] }]),
 };
-});;
+});
 
 vi.mock('@/infrastructure/redis', () => ({
   getRedis: vi.fn(() => null),

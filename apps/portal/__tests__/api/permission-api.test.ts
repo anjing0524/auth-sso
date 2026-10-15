@@ -32,15 +32,15 @@ const { mockWithPermission } = vi.hoisted(() => {
 vi.mock(import('@/lib/auth'), async (importOriginal): Promise<Partial<typeof authModule>> => {
   const actual = await importOriginal();
   return { ...actual,
-  resolveIdentity: vi.fn(async () => ({ userId: '00000000-0000-4000-8000-000000000101', expiresAt: null, issuedAt: null })),
-  logServerDataRead: vi.fn(async () => {}),
-  withPermission: mockWithPermission,
+    resolveIdentity: vi.fn(async () => ({ userId: '00000000-0000-4000-8000-000000000101', expiresAt: null, issuedAt: null })),
+    logServerDataRead: vi.fn(async () => {}),
+    withPermission: mockWithPermission,
 };
-});;
+});
 
 const cryptoMocks = vi.hoisted(() => {
-  let _uuidCount = 0;
-  return {
+    let _uuidCount = 0;
+    return {
     generateUUID: vi.fn(() => {
       _uuidCount += 1;
       return `aabbccdd-eeff-4000-8000-${String(_uuidCount).padStart(12, '0')}`;

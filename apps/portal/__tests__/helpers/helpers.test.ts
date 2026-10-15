@@ -9,6 +9,9 @@
  * 只自检"句柄形状、未连接时不建连接"，种子夹具只自检形状。
  */
 import { describe, it, expect } from 'vitest';
+import { readdirSync, readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { createTestRequest, parseResponseJson } from './test-utils';
 import { createTestDbHandle, seedTestData } from './test-db';
 import {
@@ -57,6 +60,20 @@ describe('在用 helper 自检', () => {
       expect(typeof td.connect).toBe('function');
       expect(typeof td.cleanup).toBe('function');
       expect(() => td.db).toThrow(/未初始化/);
+    });
+  });
+
+  describe('助手审计（#91-A5：把"逐一看形状"做成可复现的断言）', () => {
+    it('助手模块里不得有静默吞异常的 catch（会把失败吞掉）', () => {
+      const dir = dirname(fileURLToPath(import.meta.url));
+      const modules = readdirSync(dir).filter((f) => f.endsWith('.ts') && !f.endsWith('.test.ts'));
+      // 扫描范围非空（否则这条检查是假绿）
+      expect(modules.length).toBeGreaterThanOrEqual(4);
+
+      const offenders = modules.filter((f) =>
+        /catch\s*(\([^)]*\))?\s*\{\s*\}/.test(readFileSync(join(dir, f), 'utf-8')),
+      );
+      expect(offenders, '助手里的空 catch 会把失败吞掉——要吞也要写明为什么').toEqual([]);
     });
   });
 

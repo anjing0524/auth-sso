@@ -51,7 +51,7 @@ vi.mock(import('@/lib/auth/check-permission'), async (importOriginal): Promise<P
   checkPermission: async () => ({ authorized: true, userId: '00000000-0000-4000-8000-000000000101' }),
   requirePermission: async () => ({ userId: '00000000-0000-4000-8000-000000000101' }),
 };
-});;
+});
 
 import { GET } from '@/app/api/audit/export/route';
 

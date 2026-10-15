@@ -6,19 +6,19 @@
  * ## 为什么是 hook 而不是每处写一遍
  *
  * #82 让服务端能报**具体**冲突码（`ROLE_ALREADY_EXISTS` / `PERMISSION_ALREADY_EXISTS` /
- * `DEPARTMENT_ALREADY_EXISTS` / `CLIENT_ALREADY_EXISTS` …），前端要把它落到**对应输入框**。
- * 四处表单（角色 / 权限 / 部门 / 客户端）的处理完全同形：
+ * `DEPARTMENT_ALREADY_EXISTS` …），前端要把它落到**对应输入框**。
+ * 三处实体表单（角色 / 权限 / 部门）与创建用户表单的处理完全同形：
  * "有映射 ⇒ 就地显示；无映射 ⇒ toast"。写四遍等于把同一个判定复制四份。
  *
  * @module hooks/use-field-failure
  */
 import { useCallback, useState } from 'react';
 import { toast } from 'sonner';
-import { fieldForErrorCode } from '@/domain/shared/error-fields';
+import { fieldForErrorCode, type ErrorField } from '@/domain/shared/error-fields';
 
 /** 落在某个输入框上的失败 */
 export interface FieldFailure {
-  field: string;
+  field: ErrorField;
   message: string;
 }
 

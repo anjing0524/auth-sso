@@ -25,6 +25,7 @@ import { Label } from '@/components/ui/label';
 import { EmptyState } from '@/components/shared/empty-state';
 import { createDepartmentAction, updateDepartmentAction, deleteDepartmentAction } from '../actions';
 import { useFieldFailure } from '@/hooks/use-field-failure';
+import { FieldError } from '@/components/shared/field-error';
 
 interface DeptTreeNode {
   id: string;
@@ -160,7 +161,7 @@ export default function DepartmentTree({ departments }: Props) {
           <div className="space-y-4 py-4">
             <div className="space-y-2"><Label>部门名称</Label><Input value={form.name} onChange={e => setForm({...form, name: e.target.value})} placeholder="技术部" /></div>
             <div className="space-y-2"><Label>部门编码</Label><Input value={form.code} aria-invalid={fieldError?.field === 'code'} onChange={e => setForm({...form, code: e.target.value})} placeholder="tech" /></div>
-            {fieldError?.field === 'code' && <p role="alert" className="text-xs font-medium text-destructive">{fieldError.message}</p>}
+            <FieldError failure={fieldError} field="code" />
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setIsAddOpen(false)}>取消</Button>
@@ -176,7 +177,7 @@ export default function DepartmentTree({ departments }: Props) {
           <div className="space-y-4 py-4">
             <div className="space-y-2"><Label>部门名称</Label><Input value={form.name} onChange={e => setForm({...form, name: e.target.value})} /></div>
             <div className="space-y-2"><Label>部门编码</Label><Input value={form.code} aria-invalid={fieldError?.field === 'code'} onChange={e => setForm({...form, code: e.target.value})} /></div>
-            {fieldError?.field === 'code' && <p role="alert" className="text-xs font-medium text-destructive">{fieldError.message}</p>}
+            <FieldError failure={fieldError} field="code" />
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setIsEditOpen(false)}>取消</Button>

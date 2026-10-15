@@ -30,6 +30,7 @@ import { DataTable } from '@/components/shared/data-table';
 import { EmptyState } from '@/components/shared/empty-state';
 import { createPermissionAction, updatePermissionAction, deletePermissionAction } from '../actions';
 import { useFieldFailure } from '@/hooks/use-field-failure';
+import { FieldError } from '@/components/shared/field-error';
 
 interface PermissionRow {
   id: string;
@@ -212,7 +213,7 @@ export default function PermissionsTable({ permissions, activeTab, initialKeywor
           <div className="space-y-4 py-4">
             <div className="space-y-2"><Label>权限名称</Label><Input value={form.name} onChange={e => setForm({...form, name: e.target.value})} placeholder="用户列表" /></div>
             <div className="space-y-2"><Label>权限编码</Label><Input value={form.code} aria-invalid={fieldError?.field === 'code'} onChange={e => setForm({...form, code: e.target.value})} placeholder="user:list" /></div>
-            {fieldError?.field === 'code' && <p role="alert" className="text-xs font-medium text-destructive">{fieldError.message}</p>}
+            <FieldError failure={fieldError} field="code" />
             <div className="space-y-2">
               <Label>类型</Label>
               <Select value={form.type} onValueChange={v => setForm({...form, type: v})}>
@@ -238,7 +239,7 @@ export default function PermissionsTable({ permissions, activeTab, initialKeywor
           <div className="space-y-4 py-4">
             <div className="space-y-2"><Label>权限名称</Label><Input value={form.name} onChange={e => setForm({...form, name: e.target.value})} /></div>
             <div className="space-y-2"><Label>权限编码</Label><Input value={form.code} aria-invalid={fieldError?.field === 'code'} onChange={e => setForm({...form, code: e.target.value})} /></div>
-            {fieldError?.field === 'code' && <p role="alert" className="text-xs font-medium text-destructive">{fieldError.message}</p>}
+            <FieldError failure={fieldError} field="code" />
             <div className="space-y-2">
               <Label>类型</Label>
               <Select value={form.type} onValueChange={v => setForm({...form, type: v})}>

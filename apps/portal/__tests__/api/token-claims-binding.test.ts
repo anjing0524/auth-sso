@@ -48,22 +48,22 @@ vi.mock('@/lib/env', async (importOriginal) => {
 vi.mock(import('@/lib/session/revoke'), async (importOriginal): Promise<Partial<typeof sessionRevokeModule>> => {
   const actual = await importOriginal();
   return { ...actual,
-  revokeUserAccessByUserId: mocks.mockRevokeUserAccess,
-  isJtiRevoked: vi.fn(async () => false),
-  trackUserJti: vi.fn(async () => {}),
-  revokeJti: vi.fn(async () => {}),
-  revokeUserToken: vi.fn(async () => {}),
+    revokeUserAccessByUserId: mocks.mockRevokeUserAccess,
+    isJtiRevoked: vi.fn(async () => false),
+    trackUserJti: vi.fn(async () => {}),
+    revokeJti: vi.fn(async () => {}),
+    revokeUserToken: vi.fn(async () => {}),
 };
-});;
+});
 
 // @allow-module-mock @/lib/permissions input-fixture: 只提供权限上下文输入；真实 PG 驱动的分级由 permission-enforcement / rt-permission-failure 覆盖
 vi.mock(import('@/lib/permissions'), async (importOriginal): Promise<Partial<typeof permissionsModule>> => {
-  const actual = await importOriginal();
-  return { ...actual,
-  getUserPermissionContext: vi.fn(async () => ({ kind: 'ok' as const, context: { roles: [], permissions: [], deptIds: [] } })),
-  cacheUserPermissionContext: vi.fn(async () => {}),
+    const actual = await importOriginal();
+    return { ...actual,
+    getUserPermissionContext: vi.fn(async () => ({ kind: 'ok' as const, context: { roles: [], permissions: [], deptIds: [] } })),
+    cacheUserPermissionContext: vi.fn(async () => {}),
 };
-});;
+});
 
 import { signAccessToken, signLoginSession, signIdToken, verifyAccessToken } from '@/lib/auth/token';
 import type * as sessionRevokeModule from '@/lib/session/revoke';
@@ -81,10 +81,10 @@ const KID = 'claims-binding-test-kid';
 let jwksRow: { publicKey: string; privateKey: string };
 
 beforeAll(async () => {
-  await td.connect();
-  // 真实 ES256 密钥对：本文件必须穿过 jose 的真实 JWK 解析与验签
-  const { privateKey, publicKey } = await generateKeyPair('ES256', { extractable: true });
-  jwksRow = {
+    await td.connect();
+    // 真实 ES256 密钥对：本文件必须穿过 jose 的真实 JWK 解析与验签
+    const { privateKey, publicKey } = await generateKeyPair('ES256', { extractable: true });
+    jwksRow = {
     privateKey: JSON.stringify(await exportJWK(privateKey)),
     publicKey: JSON.stringify(await exportJWK(publicKey)),
   };

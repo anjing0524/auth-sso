@@ -26,7 +26,7 @@ vi.mock(import('@/lib/auth'), async (importOriginal): Promise<Partial<typeof aut
   logServerDataRead: vi.fn(async () => {}),
   withPermission: (_options: any, handler: Function) => handler('00000000-0000-4000-8000-000000000101'),
 };
-});;
+});
 vi.mock('next/cache', () => ({
   cacheLife: vi.fn(),
   cacheTag: vi.fn(),

@@ -37,18 +37,18 @@ const { mockWithPermission } = vi.hoisted(() => {
 vi.mock(import('@/lib/auth'), async (importOriginal): Promise<Partial<typeof authModule>> => {
   const actual = await importOriginal();
   return { ...actual,
-  resolveIdentity: vi.fn(async () => ({ userId: '00000000-0000-4000-8000-000000000101', expiresAt: null, issuedAt: null })),
-  logServerDataRead: vi.fn(async () => {}),
-  withPermission: mockWithPermission,
+    resolveIdentity: vi.fn(async () => ({ userId: '00000000-0000-4000-8000-000000000101', expiresAt: null, issuedAt: null })),
+    logServerDataRead: vi.fn(async () => {}),
+    withPermission: mockWithPermission,
 };
-});;
+});
 
 // @allow-module-mock @/lib/crypto input-fixture: 只覆盖「确定性 ID」这类输入，其余导出（含 hashToken）走真身
 vi.mock(import('@/lib/crypto'), async (importOriginal): Promise<Partial<typeof cryptoModule>> => {
-  const actual = await importOriginal();
-  // 只覆盖「确定性 ID」，其余导出（含 hashToken 的真实 sha256）走真身：
-  // 早先整体替换会把 hashToken 变成 undefined，而注解却写着「哈希走真实实现」
-  return {
+    const actual = await importOriginal();
+    // 只覆盖「确定性 ID」，其余导出（含 hashToken 的真实 sha256）走真身：
+    // 早先整体替换会把 hashToken 变成 undefined，而注解却写着「哈希走真实实现」
+    return {
     ...actual,
     generateUUID: () => 'aabbccdd-eeff-4000-8000-000000000001',
     generateId: (_len?: number) => 'aaaaaaaa',

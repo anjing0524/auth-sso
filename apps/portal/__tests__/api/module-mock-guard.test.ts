@@ -20,7 +20,7 @@
  *
  * - 键集与判别式形状**交给编译器**（类型化工厂 + `pnpm typecheck`），本守卫只管
  *   类型系统表达不了的那一半："为什么允许 mock 这个模块"（ADR-022 §4(a)/(d)）；
- * - 守卫自身也**被守**：**14 个违例夹具**（缺注解 / 注解 target 与生产 mock 不一致 /
+ * - 守卫自身也**被守**：**15 个违例夹具**（缺注解 / 注解 target 与生产 mock 不一致 /
  *   kind 非法 / 孤儿注解 / auth-bypass 未点名 / 注释引用不算点位 / 豁免清单生效 /
  *   注解贴到**豁免** mock 上 / 不得跨条串味 / 目标无法识别）
  *   外加 1 条全量扫描断言，一起在 CI 里真跑（#91 又补了工厂形态的 4 个夹具）。
@@ -55,7 +55,7 @@ const EXEMPT_PREFIXES = [
   'react',
   'server-only',
   'cmdk',
-  // 外部 UI 原语（与 cmdk 同类）：toast 库由组件测试整体替换
+  // 外部 UI 原语（同 cmdk）：toast 库由组件测试整体替换；理由见 ADR-022 §1
   'sonner',
   '@auth-sso/',
   '@/lib/env',
@@ -256,9 +256,16 @@ export function findFactoryShapeViolations(source: string): string[] {
     if (start < 0) continue;
     const block = balancedBlock(source, start);
 
-    if (/Partial<typeof/.test(block) && !/importOriginal/.test(block)) {
+    if (!/Partial<typeof/.test(block)) continue;
+
+    // 两半都要查：**只查 importOriginal 会漏掉"解构但不 spread"**——
+    // 那仍然让未列出的导出变成 undefined，恰是 §4(b′) 声称要防的形态。
+    const hasImportOriginal = /importOriginal/.test(block);
+    const hasSpread = /\.\.\./.test(block);
+    if (!hasImportOriginal || !hasSpread) {
       violations.push(
-        `第 ${f.line} 行：${f.target} 的工厂注解为 Partial<typeof …> 却未调 importOriginal`
+        `第 ${f.line} 行：${f.target} 的工厂注解为 Partial<typeof …>，但`
+          + `${hasImportOriginal ? '缺 `...actual` spread' : '未调 importOriginal'}`
           + '（未列出的导出会是 undefined，运行时炸、tsc 不报）。'
           + '修法二选一：① async (importOriginal) + { ...(await importOriginal()), … }；'
           + '② 若本意就是整体替换，把 kind 改成 full-replacement 并写明理由',
@@ -409,6 +416,18 @@ describe('module-mock-guard —— 违例夹具（守卫自身被守）', () => 
     const v = findFactoryShapeViolations(src).join();
     expect(v).toContain('未调 importOriginal');
     expect(v).toContain('full-replacement');
+  });
+
+  it('夹具 15：调了 importOriginal 但**没有 spread** → 仍报（只查 importOriginal 会漏掉它）', () => {
+    const src = [
+      '// @allow-module-mock @/lib/auth input-fixture: 只提供"谁已登录"这一输入',
+      String.raw`vi.mock(import('@/lib/auth'), async (importOriginal): Promise<Partial<typeof authModule>> => {`,
+      '  const { resolveIdentity } = await importOriginal();',
+      '  return { resolveIdentity, withAuth: vi.fn() };',
+      '});',
+    ].join('\n');
+    const v = findFactoryShapeViolations(src).join();
+    expect(v).toContain('spread');
   });
 
   it('夹具 12：Partial + importOriginal → 通过（部分替换的正解）', () => {

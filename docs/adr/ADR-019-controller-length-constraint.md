@@ -209,7 +209,7 @@ Airbnb 直接设为 `off`。**不存在"业界通行阈值"这回事。**
 
 | 位置 | 当时 | 现状 | 处置 |
 |---|---|---|---|
-| `api/permissions/register/route.ts` | complexity 29（表内误记为 56） | **已清** | 抽 3 个纯函数进 `domain/permission/permission-sync.ts` + 补 10 条直测；**抽取时 tsc 抓到漏 `code` 列** |
+| `api/permissions/register/route.ts` | complexity 29 | **已清** | 抽 3 个纯函数进 `domain/permission/permission-sync.ts` + 补 10 条直测；**抽取时 tsc 抓到漏 `code` 列** |
 | `app/(dashboard)/layout.tsx` `DashboardContent` | complexity 16 | **已清** | 抽纯映射 `toDashboardUser`（`src/lib/dashboard-user.ts`）+ 直测 |
 | `lib/auth/token/signing-keys.ts` | 嵌套 5 | **已清** | 抽 `reuseConcurrentlyCreatedKey` |
 | `scripts/migrate.ts` | 嵌套 5 | **已清** | 抽 `applyStatementWithIdempotentSkip` |

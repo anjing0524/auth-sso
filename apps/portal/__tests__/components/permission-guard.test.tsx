@@ -25,7 +25,7 @@ vi.mock(import('@/hooks/use-permissions'), async (importOriginal): Promise<Parti
   return { ...actual,
   usePermissions: () => mockUsePermissions(),
 };
-});;
+});
 
 // ── Default permission context (all-access) ──────────────────
 const allAccessCtx = {

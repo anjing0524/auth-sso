@@ -2,13 +2,10 @@ import { readdirSync, readFileSync } from 'fs';
 import { join } from 'path';
 import postgres from 'postgres';
 import './load-env';
+import { isIdempotentMigrationError } from './idempotent-migration-error';
 
 function redactDatabaseUrl(url: string): string {
   return url.replace(/\/\/.*@/, '//***@');
-}
-
-function isIdempotentMigrationError(message: string): boolean {
-  return message.includes('already exists') || message.includes('duplicate');
 }
 
 async function main(): Promise<void> {

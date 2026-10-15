@@ -11,7 +11,8 @@
  * ## 约定
  *
  * - 值是**表单字段标识**：与实体表单里承载该值的字段同名
- *   （用户域 = `username`/`email`/`mobile`/`password`；角色/部门/权限 = `code`；客户端 = `clientId`）。
+ *   （用户域 = `username`/`email`/`password`；角色/部门/权限 = `code`）。
+ *   没有用户可编辑输入框的冲突码归入 `CONFLICT_CODES_WITHOUT_FIELD`（见下），**不在本表**。
  * - **纯函数、无副作用**：只做码 → 字段的查表；不认识就返回 `null`，
  *   由调用方回落到原有的消息提示（不重复提示）。
  * - **自维护**：`error-fields.test.ts` 断言"契约里每个 `*_ALREADY_EXISTS` 码都必须**要么有字段映射、
@@ -31,8 +32,18 @@ import {
   type ErrorCode,
 } from '@auth-sso/contracts';
 
+/**
+ * 允许的字段标识（**值化清单**）。
+ *
+ * 为什么是值而不是纯类型：纯类型无法被测试枚举 ⇒ 会留下无人映射的 dead member
+ * （本会话实测：`mobile` / `clientId` 曾出现在手工类型里，而两条映射已被归入
+ * 「无对应字段」⇒ 类型比现实宽）。值化之后 `error-fields.test.ts` 可以做**双向**断言：
+ * 映射的值 ⊆ 本清单，且**本清单每一项都至少被一个码用到**。
+ */
+export const ERROR_FIELDS = ['username', 'email', 'password', 'code'] as const;
+
 /** 表单字段标识（各实体表单里承载该值的字段名） */
-export type ErrorField = 'username' | 'email' | 'mobile' | 'password' | 'code' | 'clientId';
+export type ErrorField = (typeof ERROR_FIELDS)[number];
 
 /**
  * 错误码 → 表单字段。

@@ -55,8 +55,8 @@
 - **依据**：原规则「`Partial<typeof X>` 一律必须 `importOriginal`」会**误伤 3 处 UI 原语 stub**
   （`app-sidebar` ×2 / `command-palette` ×1：真实组件是 forwardRef，无法在 jsdom 里当替身）
   ⇒ 改为**必须二选一**：`importOriginal` + spread，或声明 `full-replacement`。
-- **结果**：27 处业务替身改用 `importOriginal`；3 处 UI stub 声明整体替换；守卫全量扫描 0 违规。
-- **回滚**：把 `full-replacement` 从枚举移除并还原 27 处工厂（守卫会立刻变红 ⇒ 不会静默）。
+- **结果**：26 处业务替身改用 `importOriginal`；3 处 UI stub 声明整体替换；守卫全量扫描 0 违规。
+- **回滚**：把 `full-replacement` 从枚举移除并还原 26 处工厂（守卫会立刻变红 ⇒ 不会静默）。
 
 ## 附：本轮自查发现的**文档与实况不符**（并已修正）
 

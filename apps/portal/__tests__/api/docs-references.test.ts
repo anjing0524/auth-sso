@@ -117,5 +117,10 @@ describe('docs/solution 决策索引的完整性', () => {
       unlinked,
       '这些 solution 文档没有被索引链接——新增文档时请把它挂到 README 的某个主题下',
     ).toEqual([]);
+
+    // 声明里的篇数必须等于实测（此前写死"64 篇"，新增几篇后就悄悄过期）
+    const declared = /全部 \*\*(\d+) 篇\*\*文档/.exec(text);
+    expect(declared, 'README 里缺少「全部 **N 篇**文档」的声明').not.toBeNull();
+    expect(Number(declared![1]), 'README 声明的篇数与实际不符').toBe(docs.length);
   });
 });

@@ -29,7 +29,7 @@
 3. **4 个新夹具**（守卫自身被守）：夹具 11 缺 `importOriginal` ⇒ 报错并附**两种修法**；
    夹具 12 `importOriginal` ⇒ 通过；夹具 13 `full-replacement` ⇒ 通过；
    夹具 14 **不得把相邻 mock 串成同一窗口**。
-4. **清扫 27 处**业务替身：`async (importOriginal)` + `const actual = await importOriginal()` + `{ ...actual, … }`；
+4. **清扫 26 处**业务替身：`async (importOriginal)` + `const actual = await importOriginal()` + `{ ...actual, … }`；
    **3 处** UI 原语 stub 改声明 `full-replacement`。
 5. **声明数字同步**：三处"X 个违例夹具 + 1 条全量扫描"（守卫 JSDoc / ADR-022 两处 / solution 文档）
    由 10 改为 14 —— 是 `docs-claims.test.ts` **变红**逼出来的（它断言文档声明的数字必须等于实测）。
@@ -38,7 +38,7 @@
 
 | 项 | 结果 |
 |---|---|
-| 守卫全量扫描 | **0 违规**（27 处改写 + 3 处声明之后） |
+| 守卫全量扫描 | **0 违规**（26 处改写 + 3 处声明之后；**2026-10-15 复核更正**：曾写 27，实测 26，26+3=29 与 #91 清单逐行一致） |
 | 守卫自身 | **15 用例全绿**（含 4 个新夹具） |
 | `docs-claims` | **3 用例全绿**（数字声明与实测一致） |
 | `pnpm test` | **101 文件 / 838 用例全绿** |

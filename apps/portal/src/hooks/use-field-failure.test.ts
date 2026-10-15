@@ -9,6 +9,7 @@ import { renderHook, act } from '@testing-library/react';
 import { USER_ERRORS, COMMON_ERRORS } from '@auth-sso/contracts';
 import { useFieldFailure } from '@/hooks/use-field-failure';
 
+// @allow-module-mock sonner infra-boundary: 外部 UI 原语（toast 有 9 个签名各异的方法，类型化替身是与测试目的无关的类型工程），由组件测试整体替换
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 
 describe('useFieldFailure', () => {
@@ -31,7 +32,7 @@ describe('useFieldFailure', () => {
     expect(toast.error).not.toHaveBeenCalled();
   });
 
-  it('无字段映射的码（如 403/500）：清掉 fieldError，回落到 toast', async () => {
+  it('先命中 email 字段；随后遇到无映射的码（403）⇒ 清掉 fieldError 并回落到 toast', async () => {
     const { toast } = await import('sonner');
     const { result } = renderHook(() => useFieldFailure(['username', 'email']));
 

@@ -65,7 +65,7 @@ vi.mock(import('@/lib/permissions'), async (importOriginal): Promise<Partial<typ
 vi.mock(import('@/lib/session/revoke'), async (importOriginal): Promise<Partial<typeof sessionRevokeModule>> => {
   const actual = await importOriginal();
   return { ...actual, revokeUsersAccessByUserId: effectsMocks.revokeUsers };
-});;
+});
 vi.mock('@/infrastructure/redis', () => ({}));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn(), updateTag: vi.fn() }));
 

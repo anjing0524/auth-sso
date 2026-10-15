@@ -96,9 +96,8 @@ export function findDuplicateCode(codes: string[]): string | null {
 // 抽出来的理由不是"数字好看"，而是：把这些 `??` 归一化与逐字段比较**集中一处**之后，
 // 它们成为可直测的纯函数（此前只被"整条路由能跑"间接覆盖），而路由回到线性的编排。
 
-/** 「是否变更」判定所依赖的已有行字段（结构化类型：领域层不依赖 Drizzle 的 schema） */
-export interface ExistingPermissionRow {
-  id: string;
+/** 权限行里参与同步的字段（结构化类型：领域层不依赖 Drizzle 的 schema） */
+interface PermissionRowFields {
   parentId: string | null;
   name: string;
   type: 'DIRECTORY' | 'PAGE' | 'API';
@@ -108,6 +107,19 @@ export interface ExistingPermissionRow {
   sort: number;
   /** 与 DB 枚举同宽（写成 `string` 会让插入行不可赋值——tsc 会拦） */
   status: 'ACTIVE' | 'DISABLED';
+}
+
+/** **读**到的已有行（含 id）——「是否变更」判定用 */
+export interface ExistingPermissionRow extends PermissionRowFields {
+  id: string;
+}
+
+/** **写**入的行：插入（id + code + clientId + createdAt） */
+export interface PermissionInsertRow extends PermissionRowFields {
+  id: string;
+  code: string;
+  clientId: string;
+  createdAt: Date;
 }
 
 /** 已有行与上报项**是否等价**（把所有"缺省即 null"的归一化收在这里） */
@@ -132,7 +144,7 @@ export function permissionRowChanged(
 export function toPermissionInsertRow(
   incoming: FlatPermission,
   ctx: { id: string; clientId: string; parentId: string | null; now: Date },
-): ExistingPermissionRow & { code: string; clientId: string; createdAt: Date } {
+): PermissionInsertRow {
   return {
     id: ctx.id,
     name: incoming.name,
@@ -149,8 +161,8 @@ export function toPermissionInsertRow(
   };
 }
 
-/** 更新行的形状：除 id 外都可写，但 `parentId` 是**可选的**（未变时不写） */
-export type PermissionUpdateRow = Omit<ExistingPermissionRow, 'id' | 'parentId'> & {
+/** **更新**行的形状：除 id 外都可写，但 `parentId` 是**可选的**（未变时不写） */
+export type PermissionUpdateRow = Omit<PermissionRowFields, 'parentId'> & {
   parentId?: string | null;
 };
 

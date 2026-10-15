@@ -18,7 +18,7 @@ vi.mock(import('@/app/audit/data'), async (importOriginal): Promise<Partial<type
   getLoginLogs: vi.fn().mockResolvedValue({ data: [], pagination: { page: 1, pageSize: 20, total: 0 } }),
   getAuditLogs: vi.fn().mockResolvedValue({ data: [], pagination: { page: 1, pageSize: 20, total: 0 } }),
 };
-});;
+});
 
 // Mock next/navigation
 vi.mock('next/navigation', () => ({
@@ -34,7 +34,7 @@ vi.mock(import('@/lib/auth/verify-jwt'), async (importOriginal): Promise<Partial
     claims: { sub: 'user-1', iss: '', aud: 'auth-sso', jti: '' },
   }),
 };
-});;
+});
 
 import AuditLogsPage from '@/app/(dashboard)/audit-logs/page';
 import type * as auditDataModule from '@/app/audit/data';

@@ -1,8 +1,10 @@
 /**
  * `error-fields` 直测：错误码 → 表单字段的映射必须**完整且自维护**（#92）
  *
- * 关键那条不是"几个码映射对了"，而是**最后一条**：契约里每个 `*_ALREADY_EXISTS` 码
- * 都必须有映射。否则 #82 新接通一个冲突码，前端又悄悄退回"解析中文文案"。
+ * 关键那条不是"几个码映射对了"，而是**完整性**：契约里每个 `*_ALREADY_EXISTS` 码都必须
+ * **要么有字段映射、要么在 `CONFLICT_CODES_WITHOUT_FIELD` 里写明理由**（#92 原先写"一律要有映射"，
+ * 实测 `MOBILE_ALREADY_EXISTS`/`CLIENT_ALREADY_EXISTS` 在当前 UI 没有可编辑输入框 ⇒ 改为**二分类**，
+ * 但分类必须完整：漏一个就变红）。
  */
 import { describe, expect, it } from 'vitest';
 import {
@@ -15,6 +17,7 @@ import {
 import {
   CONFLICT_CODES_WITHOUT_FIELD,
   ERROR_CODE_FIELDS,
+  ERROR_FIELDS,
   fieldForErrorCode,
 } from '@/domain/shared/error-fields';
 
@@ -37,11 +40,17 @@ describe('fieldForErrorCode', () => {
     }
   });
 
-  it('映射的值都是已知字段标识（防止拼错字段名）', () => {
-    const known = new Set(['username', 'email', 'mobile', 'password', 'code', 'clientId']);
+  it('映射的值 ⊆ 已知字段清单（防止拼错字段名）', () => {
+    const known = new Set<string>(ERROR_FIELDS);
     for (const [code, field] of Object.entries(ERROR_CODE_FIELDS)) {
       expect(known.has(field), `${code} 映射到了未知字段 ${field}`).toBe(true);
     }
+  });
+
+  it('反向：字段清单里**每一项**都至少被一个码用到（无死成员）', () => {
+    const used = new Set<string>(Object.values(ERROR_CODE_FIELDS));
+    const dead = ERROR_FIELDS.filter((f) => !used.has(f));
+    expect(dead, 'ERROR_FIELDS 里有没人映射的字段标识 ⇒ 类型比现实宽').toEqual([]);
   });
 
   // ── 自维护断言（本文件的核心价值）──────────────────────────────────

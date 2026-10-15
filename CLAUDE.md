@@ -25,9 +25,6 @@ Auth-SSO is an enterprise unified identity authentication platform implementing 
 
 各命令的**语义**（分层策略、真实基础设施、清单与门禁的区别）见 `AGENTS.md` 的「测试体系」与本文的 Test Architecture。
 
-**装新依赖（retro G）**：若 `pnpm add` 报 `ERR_PNPM_EROFS`（某些环境把 pnpm store 挂为只读），
-**报告并请用户代跑**——不要改换包管理器、不要绕过锁文件、不要在 CI 里去掉 `--frozen-lockfile`。
-
 ## Test Architecture
 
 Tests follow a layered strategy — fast, isolated unit tests at the bottom, integration-style API tests in the middle, and full-browser E2E at the top.

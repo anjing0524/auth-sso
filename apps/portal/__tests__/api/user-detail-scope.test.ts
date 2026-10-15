@@ -39,11 +39,11 @@ vi.mock('next/cache', () => ({
 vi.mock(import('@/lib/auth'), async (importOriginal): Promise<Partial<typeof authModule>> => {
   const actual = await importOriginal();
   return { ...actual,
-  resolveIdentity: vi.fn(async () => ({ userId: OPERATOR_ID, expiresAt: null, issuedAt: null })),
-  logServerDataRead: vi.fn(async () => {}),
-  withPermission: vi.fn(async (_o: unknown, handler: Function) => handler(OPERATOR_ID)),
+    resolveIdentity: vi.fn(async () => ({ userId: OPERATOR_ID, expiresAt: null, issuedAt: null })),
+    logServerDataRead: vi.fn(async () => {}),
+    withPermission: vi.fn(async (_o: unknown, handler: Function) => handler(OPERATOR_ID)),
 };
-});;
+});
 
 // ── 被测模块 ────────────────────────────────────────
 import { db } from '@/infrastructure/db';
@@ -73,15 +73,15 @@ const SELF_OUT_OF_SCOPE_USER_ID = '00000000-0000-4000-8000-000000000204';
 const now = new Date();
 
 function departments() {
-  return [
+    return [
     { id: ROOT_DEPT_ID, parentId: null, name: '总公司', code: 'ROOT', ancestors: null, sort: 0, status: 'ACTIVE' as const, createdAt: now, updatedAt: now },
     { id: FE_DEPT_ID, parentId: ROOT_DEPT_ID, name: '前端组', code: 'FE', ancestors: ROOT_DEPT_ID, sort: 0, status: 'ACTIVE' as const, createdAt: now, updatedAt: now },
     { id: MKT_DEPT_ID, parentId: ROOT_DEPT_ID, name: '市场部', code: 'MKT', ancestors: ROOT_DEPT_ID, sort: 1, status: 'ACTIVE' as const, createdAt: now, updatedAt: now },
-  ];
+    ];
 }
 
 function user(id: string, username: string, name: string, deptId: string | null) {
-  return {
+    return {
     id, username, email: `${username}@example.com`, emailVerified: true,
     mobile: null, mobileVerified: false, name,
     passwordHash: '$2b$10$3NW6cGa0tGI9DCtuGr0leOcsRRUVKd.4hsrs7kWdhuK6.kaEXitVe',

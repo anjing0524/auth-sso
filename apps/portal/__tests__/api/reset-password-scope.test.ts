@@ -34,10 +34,10 @@ vi.mock('@/infrastructure/db', () => ({
 vi.mock(import('@/lib/auth/check-permission'), async (importOriginal): Promise<Partial<typeof permModule>> => {
   const actual = await importOriginal();
   return { ...actual,
-  checkPermission: async () => ({ authorized: true, userId: OPERATOR_ID }),
-  requirePermission: async () => ({ userId: OPERATOR_ID }),
+    checkPermission: async () => ({ authorized: true, userId: OPERATOR_ID }),
+    requirePermission: async () => ({ userId: OPERATOR_ID }),
 };
-});;
+});
 
 import { POST } from '@/app/api/users/[id]/reset-password/route';
 import { hashPassword } from '@/domain/auth/password';
@@ -57,7 +57,7 @@ const NEW_PASSWORD = 'NewPassw0rd!23';
 const now = new Date();
 
 function user(id: string, username: string, deptId: string, passwordHash: string, passwordHistory: string[] | null = null) {
-  return {
+    return {
     id,
     username,
     email: `${username}@test.com`,
