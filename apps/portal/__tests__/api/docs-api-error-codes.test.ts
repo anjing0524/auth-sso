@@ -46,7 +46,7 @@ const ERROR_GROUPS = [
 ] as const;
 
 /** 契约全表：键 → 线值 */
-export function contractCodeTable(): Map<string, string> {
+function contractCodeTable(): Map<string, string> {
   const table = new Map<string, string>();
   for (const group of ERROR_GROUPS) {
     const entries = (contracts as unknown as Record<string, Record<string, string>>)[group];
@@ -57,7 +57,7 @@ export function contractCodeTable(): Map<string, string> {
 }
 
 /** 解析 `` `AUTH_SSO_<n>` (`NAME`) `` 对（返回码、名字、行号） */
-export function parseCodeNamePairs(source: string): { code: string; name: string; line: number }[] {
+function parseCodeNamePairs(source: string): { code: string; name: string; line: number }[] {
   const pairs: { code: string; name: string; line: number }[] = [];
   source.split('\n').forEach((line, index) => {
     const re = /`AUTH_SSO_(\d+)`\s*\(([A-Z][A-Z0-9_]*)\)/g;
@@ -69,7 +69,7 @@ export function parseCodeNamePairs(source: string): { code: string; name: string
 }
 
 /** 解析文档里出现的**每个** `AUTH_SSO_<n>` token（含不带名字的引用） */
-export function parseCodeTokens(source: string): { code: string; line: number }[] {
+function parseCodeTokens(source: string): { code: string; line: number }[] {
   const tokens: { code: string; line: number }[] = [];
   source.split('\n').forEach((line, index) => {
     for (const m of line.matchAll(/AUTH_SSO_(\d+)/g)) {
@@ -106,6 +106,11 @@ describe('docs/spec 的 AUTH_SSO 码与 contracts 对齐（#93）', () => {
     const allTokens = files.flatMap((f) => parseCodeTokens(readFileSync(f, 'utf-8')));
     expect(allPairs.length, '未解析到任何 (码, 名字) 对，解析器或文档形态已变').toBeGreaterThanOrEqual(10);
     expect(allTokens.length).toBeGreaterThanOrEqual(15);
+  });
+
+  it('错误组清单与 contracts 的导出一致（契约新增第 8 组不会被静默漏检）', () => {
+    const exported = Object.keys(contracts).filter((k) => k.endsWith('_ERRORS')).sort();
+    expect(exported, '契约新增/改名了错误组 ⇒ 请同步本文件的 ERROR_GROUPS').toEqual([...ERROR_GROUPS].sort());
   });
 
   it('每个 (`AUTH_SSO_<n>`, NAME) 对的键与线值双向对齐', () => {

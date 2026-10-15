@@ -55,7 +55,9 @@ export const ERROR_CODE_FIELDS = {
 > 教训：自维护断言的**取材**要写清是键还是线值——否则它会以"取到了空集"的方式假绿/假红。
 
 **本轮范围（如实说明）**：只接线了用户创建路径（#82 的码就是为它引入的）；
-其余四个表单（角色/部门/权限/客户端）用同一张映射即可，属后续增量。
+其余四个表单（角色/部门/权限/客户端）用同一张映射即可。**2026-10-15 结案**：
+角色/权限/部门三处已在 commit `4920381` 接线（共享 `useFieldFailure` + `<FieldError>`），
+客户端不接线并写明理由（`client_id` 由服务端生成）。
 **未加组件级测试**：jsdom 下 Radix Dialog + React 19 form action 的组合成本高于收益，
 而**判定逻辑**（码 → 字段）已被 5 条直测覆盖。
 
@@ -95,7 +97,13 @@ docs/spec/API.md:738 文档写了 AUTH_SSO_2022 (TOKEN_REVOKED)，但契约里�
 ```
 
 **变异验证**：插入 `AUTH_SSO_9999 (GHOST_CODE)` ⇒ 两条规则各自精确变红并点名行号 ✓；还原后
-`git diff` 只剩预期那 3 处改动 ✓。
+`git diff` 只剩预期那 3 处改动 ✓。**可复跑命令**：
+
+```bash
+# 1) 在 docs/spec/API.md 任意表里插入 | `AUTH_SSO_9999` (GHOST_CODE) | 418 | … |
+npx vitest run --project @auth-sso/portal-api apps/portal/__tests__/api/docs-api-error-codes.test.ts
+# 2) 恢复后 git diff docs/spec/API.md 应只剩预期的两行删除 + 一行改写
+```
 
 > **途中一次操作失误（记下来）**：我用改动**之前**算的哈希去校验还原，当然不匹配。
 > 教训：**还原校验用 `git diff`**（或改完之后重新取哈希）——哈希必须对应"当前应有内容"。

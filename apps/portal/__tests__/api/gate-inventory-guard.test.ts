@@ -55,6 +55,13 @@ const FAILURE_SWALLOWING_PATTERNS: ReadonlyArray<{ pattern: RegExp; why: string 
   { pattern: /\|\|\s*true\b/, why: '`|| true` 吞掉退出码' },
   { pattern: /2>\s*\/dev\/null/, why: '重定向掉 stderr ⇒ 配置坏了也看不见（#83 掩盖了缺 eslint-plugin-import）' },
   { pattern: /--no-eslintrc/, why: 'ESLint 9 flat config 下不是合法参数，必然失败（#83）' },
+  // 以下四条是代码评审查出的缺口：文件头声明了禁止"吞掉失败"，但实现只有上面四条 ⇒
+  // `eslint . ; true` / `|| exit 0` / `|| :` / `| tee` 都会被判过（"检查看起来在拦、实际拦不住"）。
+  { pattern: /;\s*true\b/, why: '`; true` 让脚本以 0 退出（前一条命令的失败被丢弃）' },
+  { pattern: /\|\|\s*exit\s+0\b/, why: '`|| exit 0` 把失败改写成成功退出' },
+  { pattern: /;\s*exit\s+0\b/, why: '`; exit 0` 把失败改写成成功退出' },
+  { pattern: /\|\|\s*:/, why: '`|| :`（shell no-op）丢弃退出码' },
+  { pattern: /\|\s*tee\b/, why: '`| tee` 让管道退出码取自 tee，原命令的失败被丢掉' },
 ];
 
 /** 判定一个脚本是否吞掉失败；返回命中的原因（无命中返回 null） */
@@ -142,6 +149,11 @@ describe('门禁清单自检（retro A1）', () => {
       'eslint . || true',
       'eslint . 2>/dev/null',
       'eslint --no-eslintrc .',
+      'eslint . ; true',
+      'eslint . || exit 0',
+      'eslint .; exit 0',
+      'eslint . || :',
+      'eslint . | tee lint.log',
     ];
     for (const script of shouldBeRejected) {
       it(`拒绝：${script}`, () => {

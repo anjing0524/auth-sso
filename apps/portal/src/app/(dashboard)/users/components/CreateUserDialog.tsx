@@ -79,7 +79,8 @@ export default function CreateUserDialog({ departments }: CreateUserDialogProps)
   const failedField = fieldError?.field ?? null;
   const failedMessage = fieldError?.message ?? null;
 
-  // 感知 Action 结果并响应（依赖原始值避免不必要的 effect 重跑）
+  // 感知 Action 结果并响应：`state` 每次提交完成都会有新身份 ⇒ 用它作依赖；
+  // `reportFailure` 已由 hook 用 useCallback 稳定（依赖它不会造成多余重跑）
   useEffect(() => {
     if (!state) return;
     queueMicrotask(() => {

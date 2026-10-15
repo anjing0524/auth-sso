@@ -5,7 +5,9 @@
 # 为什么需要（本会话两次误读）：
 #  1. 轮询"最新一次运行"却不核对 headSha ⇒ 读到的可能是**上一个提交**的结果；
 #  2. GitHub 在**新推送**到来时会**取消**同一分支上仍在跑的旧运行 ⇒
-#     "cancelled" 看起来像失败，其实是被取代（反之亦然：不能把 cancelled 当绿）。
+#     "cancelled" 看起来像失败，其实可能是被取代。
+#     **本脚本对 cancelled 与失败一律非零退出（fail-closed）**，只在输出里**说明**它可能是被取代、
+#     并提示"对最新提交重跑"——不假装成功，也不假装失败。
 #
 # 用法：scripts/ci-verify.sh [sha]（默认 HEAD）；等待上限用 MAX_WAIT_SECONDS 覆盖。
 set -uo pipefail

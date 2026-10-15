@@ -42,7 +42,7 @@ Portal 存在两种不同的调用协议：
 | 未认证 | 401 | `{ "error": "AUTH_SSO_1002", "message": "..." }` |
 | 无权限 | 403 | `{ "error": "AUTH_SSO_1003", "message": "..." }` |
 | 资源不存在 | 404 | `{ "error": "AUTH_SSO_1004", "message": "..." }` |
-| 冲突/重复 | 409 | `{ "error": "AUTH_SSO_1005", "message": "..." }` |
+| 冲突/重复 | 409 | `{ "error": "AUTH_SSO_3003", "message": "..." }`（**实体专属** `*_ALREADY_EXISTS` 码，如 3003=用户名已存在；`AUTH_SSO_1005` 是参数校验失败的 400，见下表——2026-10-15 按代码评审更正） |
 | 服务器错误 | 500 | `{ "error": "AUTH_SSO_1006", "message": "..." }` |
 
 **Server Actions（RPC 调用）**：无 HTTP 协议层，通过 `success` 字段承载语义。

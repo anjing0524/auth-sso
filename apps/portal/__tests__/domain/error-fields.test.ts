@@ -30,8 +30,9 @@ describe('fieldForErrorCode', () => {
     expect(fieldForErrorCode(USER_ERRORS.PASSWORD_TOO_WEAK)).toBe('password');
   });
 
-  it('复合唯一约束的实体级回落归到登录名（无从判断是哪一列）', () => {
-    expect(fieldForErrorCode(USER_ERRORS.USER_ALREADY_EXISTS)).toBe('username');
+  it('复合唯一约束的实体级回落：**不**归到某个字段（无从判断是哪一列，标红任一框都是猜测）', () => {
+    expect(fieldForErrorCode(USER_ERRORS.USER_ALREADY_EXISTS)).toBeNull();
+    expect(CONFLICT_CODES_WITHOUT_FIELD).toHaveProperty(USER_ERRORS.USER_ALREADY_EXISTS);
   });
 
   it('非字段级原因返回 null（由调用方回落到消息提示）', () => {

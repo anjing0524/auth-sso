@@ -55,8 +55,6 @@ export const ERROR_CODE_FIELDS = {
   // 用户域：具体到字段的冲突码（#82 接通的 8 个码里最需要定位的一组）
   [USER_ERRORS.USERNAME_ALREADY_EXISTS]: 'username',
   [USER_ERRORS.EMAIL_ALREADY_EXISTS]: 'email',
-  // 复合唯一约束时的实体级回落：无从判断是哪一列 ⇒ 归到最常用的登录名
-  [USER_ERRORS.USER_ALREADY_EXISTS]: 'username',
   [USER_ERRORS.PASSWORD_TOO_WEAK]: 'password',
   // 其余实体的冲突码：各自表单里承载唯一值的字段
   [ROLE_ERRORS.ROLE_ALREADY_EXISTS]: 'code',
@@ -71,6 +69,8 @@ export const ERROR_CODE_FIELDS = {
  * `*_ALREADY_EXISTS` 码（**分类必须完整**，不留"忘了映射"的空档）。
  */
 export const CONFLICT_CODES_WITHOUT_FIELD = {
+  [USER_ERRORS.USER_ALREADY_EXISTS]:
+    '复合唯一约束的实体级回落：无法判断是哪一列——把任一输入框标红都是猜测（代码评审查出）',
   [USER_ERRORS.MOBILE_ALREADY_EXISTS]:
     'UI 没有任何表单采集 mobile（用户创建/编辑表单都没有该输入框）⇒ 无处就地提示，走 toast',
   [CLIENT_ERRORS.CLIENT_ALREADY_EXISTS]:

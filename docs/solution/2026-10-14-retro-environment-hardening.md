@@ -19,7 +19,7 @@
 
 | 项 | 内容 | 验证 |
 |---|---|---|
-| **A1 门禁清单自检** | 新增 `gate-inventory-guard.test.ts`：①每个 `apps/*`、`packages/*` 包必须有 `lint`+`typecheck`；②根命令必须是递归（`pnpm -r …`）；③脚本**不得吞掉失败**（`\|\| echo` / `\|\| true` / `2>/dev/null` / `--no-eslintrc`） | **两次变异**：把 config 的 lint 改成吞错形状 ⇒ 精确变红；删掉它的 `typecheck` ⇒ 报 `缺少：typecheck`。含 7 条判定夹具 |
+| **A1 门禁清单自检** | 新增 `gate-inventory-guard.test.ts`：①每个 `apps/*`、`packages/*` 包必须有 `lint`+`typecheck`；②根命令必须是递归（`pnpm -r …`）；③脚本**不得吞掉失败**（`\|\| echo` / `\|\| true` / `2>/dev/null` / `--no-eslintrc`） | **两次变异**：把 config 的 lint 改成吞错形状 ⇒ 精确变红；删掉它的 `typecheck` ⇒ 报 `缺少：typecheck`。含判定夹具。**可复跑命令**：`npx vitest run --project @auth-sso/portal-api apps/portal/__tests__/api/gate-inventory-guard.test.ts` |
 | **A3 pre-commit 加 Rust** | 钩子新增 4/4 步：仅当本次暂存了 `.rs` 时跑 `cargo fmt -- --check` + `cargo clippy -D warnings`（实测增量 1.5–5s）；未装 cargo 时明确跳过而非假装 | **变异**：注入格式违规 ⇒ 钩子打印 fmt diff 并以 1 退出 |
 | **A4 两个脚本** | `scripts/push-main.sh`（保留**真实退出码**，此前命令行 `for` 循环的 `$?` 被后续命令覆盖）；`scripts/ci-verify.sh`（**pin headSha** + 断言所有 job success + 0 非成功步骤，并区分"被取代而 cancelled"） | 本轮**当场使用**它们完成推送与 CI 校验 |
 | **B 三条判断题** | `CODING_STANDARDS.md` 新增 §8 替身不得手写被替换者的行为 / §9 红必须红在正确原因上 / §10 未来时承诺必须带触发条件 | 该文件的定位是"只收判断题、机械的一律造检查" |
@@ -54,7 +54,12 @@
 > **教训**：一个"显然是机械类"的规则，落到 29 处存量上才暴露它**混了两种意图**。
 > **先测量存量，再决定规则**——否则会得到一条"绿不了也讲不清"的门禁。
 
-## 四、未落地项（已立案，不在本次提交内）
+## 四、未落地项 —— **2026-10-15 全部结案**（保留原文可见演进）
+
+> 本节原列 A2 修订版 / A5 / D / G 四项"未落地"。它们此后**都已落地**：
+> **A2 修订版**（`full-replacement` 声明 + 26 处二选一清扫 + 守卫）见 commit `83112e2`（closes #91）；
+> **A5**（`seedTestData` 形状守卫真正落地 + 助手审计断言）、**D**（`CLAUDE.md` 命令表改指针）、
+> **G**（`AGENTS.md` 写明装包限制）同批。本节文字保留，是因为"曾经未落地"本身是这条复盘的证据。
 
 - **A2 修订版**（`full-replacement` 声明 + 29 处二选一清扫）：这是**项目**而不是 retro 的边角，
   需单独一票，附 29 处清单与两种修法。
