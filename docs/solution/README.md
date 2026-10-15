@@ -99,6 +99,7 @@
 
 *何时读*：讨论复杂度 / 覆盖率 / 指标前必读（含「弱预测器不做门禁」的结论）
 
+- [读路径数据范围：不建 seam，改为机械守卫「取了范围就必须用它」（架构巡检候选 3）](2026-10-15-read-scope-usage-guard.md)
 - [鉴权失败的「一个答案」：判别式联合 + 错误码词汇表收窄（架构巡检候选 1）](2026-10-15-auth-error-vocabulary-unification.md)
 - [守卫的 repo 扫描脚手架：收成一个 module（架构巡检候选 2）](2026-10-15-repo-scan-shared-scaffolding.md)
 - [/retro（第二次）：把「声明 ≠ 实现」「竞态」「引号陷阱」变成规程与标准](2026-10-15-retro-standards-and-procedures.md)
@@ -131,7 +132,7 @@
 
 ## 维护
 
-本索引覆盖 `docs/solution/` 全部 **74 篇**文档（**由测试断言**：每篇都能到达、每篇恰好一次、篇数等于实测）。
+本索引覆盖 `docs/solution/` 全部 **75 篇**文档（**由测试断言**：每篇都能到达、每篇恰好一次、篇数等于实测）。
 **新增文档必须同时挂到某个主题下**——否则索引会断言失败。
 
 **阻断点**：`apps/portal/__tests__/api/docs-references.test.ts`（在 `pnpm test` 的 API project 里跑）断言三件事：

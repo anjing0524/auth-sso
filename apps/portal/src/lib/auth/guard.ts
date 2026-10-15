@@ -15,7 +15,7 @@ import { checkPermission, type PermissionCheckOptions } from './check-permission
 import { mapServerError } from '@/lib/server-error';
 import { recordActionAudit, recordApiAudit } from '@/lib/audit';
 import { createLogger } from '@/lib/logger';
-import { COMMON_ERRORS, type ApiResponse } from '@auth-sso/contracts';
+import type { ApiResponse } from '@auth-sso/contracts';
 import { restError } from '@/lib/response';
 
 const log = createLogger('AuthGuard');

@@ -14,16 +14,22 @@ set -uo pipefail
 
 fail() { echo ""; echo "[pre-commit] ✗ $1"; echo "[pre-commit] 修正后重试；确实有意跳过请用 git commit --no-verify"; exit 1; }
 
-echo "[pre-commit] 1/4 typecheck（所有包，含 __tests__）…"
+echo "[pre-commit] 1/5 typecheck（所有包，含 __tests__）…"
 pnpm -s typecheck || fail "typecheck 未通过"
 
-echo "[pre-commit] 2/4 UI project 测试（jsdom，零基础设施）…"
+# lint 也进钩子（2026-10-15 实测教训）：一次重构留下未使用导入，当时的钩子（无 lint）放行、
+# CI 才拦下；而我在本地用 `grep '^\s*[0-9]+:[0-9]+\s+error'` 过滤输出 ⇒ 因真实输出带
+# `apps/portal lint:` 前缀而零匹配 ⇒ 把 1 个 error 误判成「0 error」。结论一律看退出码。
+echo "[pre-commit] 2/5 lint（所有包；结论只看退出码）…"
+pnpm -s lint || fail "lint 未通过"
+
+echo "[pre-commit] 3/5 UI project 测试（jsdom，零基础设施）…"
 pnpm -s exec vitest run --project @auth-sso/portal-ui || fail "UI project 测试未通过"
 
 # API project 需要真实 Redis（ADR-022 §5 的硬探针）。Redis 不在时不假装跑过：
 # 明确跳过并说明交给 CI，避免"没跑却说绿"。
 if timeout 1 bash -c "</dev/tcp/127.0.0.1/6379" 2>/dev/null; then
-  echo "[pre-commit] 3/4 Redis 在场：跑模块级 mock 守卫 + 文档声明检查…"
+  echo "[pre-commit] 4/5 Redis 在场：跑模块级 mock 守卫 + 文档声明检查…"
   # 守卫名单**由扫描派生**，不手抄：手抄的名单曾经漏掉 3 个守卫
   # （cache-invalidation-site-guard / error-status-guard / scoped-write-guard）
   # ⇒ 本地 pre-commit 有"5 个守卫绿了"的假绿窗口（CI 跑全量所以不漏）。
@@ -31,13 +37,13 @@ if timeout 1 bash -c "</dev/tcp/127.0.0.1/6379" 2>/dev/null; then
     $(ls apps/portal/__tests__/api/*guard.test.ts apps/portal/__tests__/api/docs-*.test.ts) \
     || fail "守卫/文档检查未通过"
 else
-  echo "[pre-commit] 3/4 跳过 API project 检查（127.0.0.1:6379 不可达）——由 CI 的 Full CI 步骤兜底"
+  echo "[pre-commit] 4/5 跳过 API project 检查（127.0.0.1:6379 不可达）——由 CI 的 Full CI 步骤兜底"
 fi
 
 # Rust 侧（retro A3）：此前钩子**完全不跑 cargo** ⇒ Rust 改动的机械错误（格式化、lint）
 # 只能等 CI。本会话 5 轮 Rust 改动全靠人工手敲这两条命令。仅在改动了 .rs 时跑，
 # 避免每次提交都付 clippy 的成本（实测增量 1.5–5s）。
-echo "[pre-commit] 4/4 Rust 侧（fmt + clippy；仅当本次改动了 .rs）…"
+echo "[pre-commit] 5/5 Rust 侧（fmt + clippy；仅当本次改动了 .rs）…"
 if git diff --cached --name-only | grep -q '\.rs$'; then
   if command -v cargo >/dev/null 2>&1; then
     cargo fmt --all --manifest-path apps/gateway/Cargo.toml -- --check || fail "cargo fmt 未通过"

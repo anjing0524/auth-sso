@@ -15,8 +15,11 @@
  *
  * - **写路径**：只能经 {@link withScopedWrite}。它把事务、快照、守卫绑在一起，
  *   handler 只拿得到 `tx`。
- * - **读路径**：用 {@link resolveScope} 取范围，用 `scopeFilter`（待读路径迁移时
- *   加入本模块）构造过滤条件；空范围必须产生恒假条件，不得退化为"不过滤"。
+ * - **读路径**：用 {@link resolveScope} 取范围（必须在 `"use cache"` 作用域**外**，
+ *   Cache Components 要求），用 {@link scopeFilter} 构造过滤条件——它**已经在本门面里**
+ *   （此文案原写"待读路径迁移时加入"，早已过期；2026-10-15 巡检候选 3 更正）。
+ *   空范围必须产生恒假条件，不得退化为"不过滤"；"取了范围却不用 / 收了范围却不用"
+ *   由 `__tests__/api/read-scope-usage-guard.test.ts` 机械兜住。
  * - **纯判定**：{@link isWithinScope} / {@link assertWithinScope} 零 I/O，
  *   仅在已有 scope 的前提下使用；不要用它们绕过门面自行取快照。
  *
