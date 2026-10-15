@@ -16,6 +16,7 @@ import {
 import Link from 'next/link';
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { useFieldFailure } from '@/hooks/use-field-failure';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -27,6 +28,7 @@ import { createUserAction } from '../actions';
 export default function NewUserPage() {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
+  const { reportFailure } = useFieldFailure();
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
@@ -48,7 +50,7 @@ export default function NewUserPage() {
       toast.success('用户创建成功');
       router.push('/users');
     } else {
-      toast.error(res.message || '创建失败');
+      reportFailure(res);
     }
     setSaving(false);
   };

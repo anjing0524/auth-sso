@@ -29,14 +29,15 @@ export interface ActionFailure {
 }
 
 /**
- * @param renderedFields 本表单**实际渲染**的字段标识。
+ * @param renderedFields 本表单**实际渲染**的字段标识；不渲染 `<FieldError>` 的表单传空
+ *   （默认值）——那样一律回落到 toast，**不要**传未渲染的字段（会静默吞掉错误）。
  *
  * 为什么必须传：错误码可能有字段映射，而**这个表单并没有那个输入框**
  * （例如 `MOBILE_ALREADY_EXISTS` 映射到 `mobile`，但创建用户表单不采集 mobile）。
  * 那种情况下若照旧"就地显示"，就会出现**无处渲染、也不弹提示**的静默失败——
  * 这与"服务端给了可判别的原因、客户端却没显示"完全一样糟。
  */
-export function useFieldFailure(renderedFields: readonly ErrorField[]) {
+export function useFieldFailure(renderedFields: readonly ErrorField[] = []) {
   const [fieldError, setFieldError] = useState<FieldFailure | null>(null);
 
   // 依赖必须是简单表达式：把字段清单折成一个稳定字符串再进依赖数组

@@ -7,6 +7,7 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
+import { useFieldFailure } from '@/hooks/use-field-failure';
 import { ArrowLeft, AppWindow, Plus } from 'lucide-react';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -19,6 +20,7 @@ import { createClientAction } from '../actions';
 export default function NewClientPage() {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
+  const { reportFailure } = useFieldFailure();
   const [formData, setFormData] = useState({
     name: '',
     redirectUris: '',
@@ -52,7 +54,7 @@ export default function NewClientPage() {
       toast.success(result.message || '应用注册成功');
       router.push('/clients');
     } else {
-      toast.error(result.message || '注册失败');
+      reportFailure(result);
     }
   };
 

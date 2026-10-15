@@ -9,6 +9,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
+import { useFieldFailure } from '@/hooks/use-field-failure';
 import { Shield, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -47,6 +48,7 @@ export default function AssignRoleDialog({ open, onOpenChange, user }: AssignRol
   const [assignedRoleIds, setAssignedRoleIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const { reportFailure } = useFieldFailure();
 
   // 加载可选角色 + 用户已有角色
   const loadData = useCallback(async () => {
@@ -107,7 +109,8 @@ export default function AssignRoleDialog({ open, onOpenChange, user }: AssignRol
         toast.success(`已为用户「${user.name}」更新角色（${roleIds.length} 个）`);
         onOpenChange(false);
       } else {
-        toast.error(body.message || '角色分配失败');
+        // body 来自 fetch 的响应（REST 形状）⇒ 构造分类点需要的 { error, message }
+        reportFailure({ error: body.error ?? '', message: body.message || '角色分配失败' });
       }
     } catch {
       toast.error('网络错误，请重试');

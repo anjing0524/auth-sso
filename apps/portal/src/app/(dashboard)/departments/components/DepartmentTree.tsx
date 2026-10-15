@@ -94,7 +94,7 @@ export default function DepartmentTree({ departments }: Props) {
   const handleDelete = async () => {
     if (!selected) return;
     const r = await deleteDepartmentAction(selected.id);
-    if (r.success) { toast.success(r.message); setIsEditOpen(false); router.refresh(); } else { toast.error(r.message); }
+    if (r.success) { toast.success(r.message); setIsEditOpen(false); router.refresh(); } else { reportFailure(r); }
   };
 
   const flatList = flattenTree(departments);

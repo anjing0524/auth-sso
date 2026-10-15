@@ -18,6 +18,7 @@ import {
 import Link from 'next/link';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useFieldFailure } from '@/hooks/use-field-failure';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -42,6 +43,8 @@ export default function UserDetailForm({ id, initialUser: serverUser }: Props) {
     status: (user.status as string) || 'ACTIVE',
   });
   const [saving, setSaving] = useState(false);
+  // 失败处置只有一个入口（本表单不渲染 <FieldError> ⇒ 传空字段 ⇒ 一律 toast）
+  const { reportFailure } = useFieldFailure();
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [isRoleOpen, setIsRoleOpen] = useState(false);
 
@@ -68,7 +71,7 @@ export default function UserDetailForm({ id, initialUser: serverUser }: Props) {
       toast.success('用户信息更新成功');
       router.refresh(); // 刷新 Server Component 数据，prop 更新只读展示区
     } else {
-      toast.error(res.message || '更新失败');
+      reportFailure(res);
     }
     setSaving(false);
   };
@@ -80,7 +83,7 @@ export default function UserDetailForm({ id, initialUser: serverUser }: Props) {
       setIsDeleteOpen(false);
       router.push('/users');
     } else {
-      toast.error(res.message || '删除失败');
+      reportFailure(res);
     }
   };
 

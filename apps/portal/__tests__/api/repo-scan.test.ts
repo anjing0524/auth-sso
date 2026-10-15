@@ -98,9 +98,12 @@ describe('repo-scan —— 注释判定', () => {
   });
 
   it('stripComments 去掉块注释与行注释，但不动 `https://` 这类非注释斜杠', () => {
-    expect(stripComments('const a = 1; /* 块 */ // 行\nconst b = 2;')).toBe(
-      'const a = 1;  \nconst b = 2;',
-    );
+    // 关键契约：**行号与行结构不变**（守卫按行报点），块的宽度变成空白
+    const stripped = stripComments('const a = 1; /* 块\n跨行 */ // 行\nconst b = 2;');
+    expect(stripped.split('\n')).toHaveLength(3);
+    expect(stripped).not.toContain('块');
+    expect(stripped).not.toContain('行');
+    expect(stripped.split('\n')[2]).toBe('const b = 2;');
     expect(stripComments("const url = 'https://example.com/x';")).toBe(
       "const url = 'https://example.com/x';",
     );

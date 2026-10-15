@@ -10,6 +10,7 @@
  * v2：新增修改密码 / 编辑资料 Dialog（FR-USR-10 / FR-USR-12）
  */
 import React, { useTransition } from 'react';
+import { useFieldFailure } from '@/hooks/use-field-failure';
 import {
   Mail,
   ShieldCheck,
@@ -61,6 +62,7 @@ interface ProfileClientProps {
  * 修改密码 Dialog 组件
  */
 function ChangePasswordDialog() {
+  const { reportFailure } = useFieldFailure();
   const [open, setOpen] = React.useState(false);
   const [isPending, startTransition] = useTransition();
   const [form, setForm] = React.useState({
@@ -92,7 +94,7 @@ function ChangePasswordDialog() {
         // 服务端已失效会话，短暂延迟后刷新页面引导用户重登
         setTimeout(() => window.location.assign('/login'), 1500);
       } else {
-        toast.error(res.message ?? '修改失败');
+        reportFailure(res);
       }
     });
   };
@@ -173,6 +175,7 @@ function ChangePasswordDialog() {
  * 编辑资料 Dialog 组件
  */
 function EditProfileDialog({ user }: { user: NonNullable<ProfileClientProps['user']> }) {
+  const { reportFailure } = useFieldFailure();
   const [open, setOpen] = React.useState(false);
   const [isPending, startTransition] = useTransition();
   const [form, setForm] = React.useState({ name: user.name, email: user.email });
@@ -191,7 +194,7 @@ function EditProfileDialog({ user }: { user: NonNullable<ProfileClientProps['use
         toast.success(res.message ?? '资料已更新');
         setOpen(false);
       } else {
-        toast.error(res.message ?? '更新失败');
+        reportFailure(res);
       }
     });
   };

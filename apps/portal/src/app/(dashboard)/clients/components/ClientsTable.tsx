@@ -8,6 +8,7 @@ import React, { useState, useCallback, useTransition, useEffect, useRef } from '
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { toast } from 'sonner';
+import { useFieldFailure } from '@/hooks/use-field-failure';
 import {
   Search, Copy, ExternalLink, MoreHorizontal, Edit, Trash2, Globe, Check, Lock, AppWindow,
 } from 'lucide-react';
@@ -70,10 +71,12 @@ export default function ClientsTable({ clients, initialKeyword }: Props) {
     timerRef.current = setTimeout(() => setCopiedId(null), 2000);
   };
 
+  const { reportFailure } = useFieldFailure();
+
   const handleDelete = async (clientId: string) => {
     if (!confirm('确认注销该应用？此操作不可撤销。')) return;
     const res = await deleteClientAction(clientId);
-    if (res.success) { toast.success(res.message); } else { toast.error(res.message); }
+    if (res.success) { toast.success(res.message); } else { reportFailure(res); }
     router.refresh();
   };
 

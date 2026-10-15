@@ -69,7 +69,11 @@ export function isCommentLine(line: string, codeToken?: string): boolean {
  * 守卫会把"解释这个形状的文档"当成缺陷本身（本仓实测踩到过）。
  */
 export function stripComments(source: string): string {
-  return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
+  return source
+    // 块注释替换为**等量空白但保留换行**：调用方（守卫）按行报点时行号才准。
+    // 直接删掉块注释会让其后的所有行号前移（实测：read-scope / form-failure 两个守卫都受影响）。
+    .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' '))
+    .replace(/(^|[^:])\/\/.*$/gm, '$1');
 }
 
 /**

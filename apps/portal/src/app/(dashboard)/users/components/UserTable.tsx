@@ -9,6 +9,7 @@ import { useState, useOptimistic, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
+import { useFieldFailure } from '@/hooks/use-field-failure';
 import {
   UserPlus,
   MoreHorizontal,
@@ -131,6 +132,7 @@ export default function UserTable({ users, pagination, filters }: UserTableProps
 
   // 角色分配对话框状态
   const [roleDialogOpen, setRoleDialogOpen] = useState(false);
+  const { reportFailure } = useFieldFailure();
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
 
   // useOptimistic: 状态切换立即反映在 UI，失败自动回退
@@ -151,7 +153,7 @@ export default function UserTable({ users, pagination, filters }: UserTableProps
       setOptimisticUser(user.id); // 即时翻转 UI
       const res = await toggleUserStatusAction(user.id);
       if (!res.success) {
-        toast.error(res.message || '操作失败');
+        reportFailure(res);
       } else {
         toast.success('用户状态已更新');
       }

@@ -117,7 +117,7 @@ export default function PermissionsTable({ permissions, activeTab, initialKeywor
     if (!selected) return;
     const r = await deletePermissionAction(selected.id);
     if (r.success) { toast.success(r.message); setIsDeleteOpen(false); router.refresh(); }
-    else { toast.error(r.message); }
+    else { reportFailure(r); }
   };
 
   const filtered = keyword

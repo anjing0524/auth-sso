@@ -98,7 +98,8 @@ export default function RolesTable({ roles, pagination, initialKeyword, departme
   const handleDelete = async () => {
     if (!selected) return;
     const res = await deleteRoleAction(selected.id);
-    if (res.success) { toast.success(res.message); setIsEditOpen(false); router.refresh(); } else { toast.error(res.message); }
+    // 走同一个分类点：有映射且本表单渲染了该字段 ⇒ 就地显示，否则回落 toast
+    if (res.success) { toast.success(res.message); setIsEditOpen(false); router.refresh(); } else { reportFailure(res); }
   };
 
   const getDeptName = (deptId: string) => departments.find(d => d.id === deptId)?.name ?? deptId;
