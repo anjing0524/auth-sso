@@ -4,6 +4,7 @@
  */
 
 // 用户状态唯一真相源值数组
+import type { ErrorCode } from './errors';
 export const USER_STATUS_VALUES = ['ACTIVE', 'DISABLED', 'LOCKED', 'DELETED'] as const;
 export type UserStatus = typeof USER_STATUS_VALUES[number];
 
@@ -134,7 +135,13 @@ export type ApiSuccess<T> = {
 
 export type ApiError = {
   success: false;
-  error: string;
+  /**
+   * 错误码 —— **闭合词汇表**里的值（本包的 `ErrorCode`）。
+   *
+   * 2026-10-15 由裸 `string` 收窄（架构巡检候选 1）：此前任何字符串都能流进响应体，
+   * 测试替身因此写出了一个生产代码从不发出的码（`'FORBIDDEN'`）而编译器毫无异议。
+   */
+  error: ErrorCode;
   message: string;
 };
 

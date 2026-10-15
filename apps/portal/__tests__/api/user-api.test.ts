@@ -23,10 +23,11 @@ import * as schema from '@/db/schema';
 // ════════════════════════════════════════════════════════
 const { tdHolder, mockAuthCheck, mockWithPermission } = vi.hoisted(() => {
   const tdHolder: { current: any } = { current: null };
-  const mockAuthCheck = vi.fn(async () => ({
+  // 与生产 checkPermission 同形（判别式联合）：失败必带 DomainError。
+  // 此前是 { authorized, userId, error: string } —— 于是替身里出现了生产从不发出的码 'FORBIDDEN'。
+  const mockAuthCheck = vi.fn<() => Promise<PermissionCheckResult>>(async () => ({
     authorized: true,
     userId: '00000000-0000-4000-8000-000000000101',
-    error: undefined as string | undefined,
   }));
   // withPermission: 直接调用 handler 并返回其结果（NextResponse）
   const mockWithPermission = vi.fn(
@@ -56,7 +57,9 @@ vi.mock(import('@/lib/auth'), async (importOriginal): Promise<Partial<typeof aut
     withAuth: (_o: any, h: Function) => async (...a: any[]) => {
     const check = await mockAuthCheck();
     if (!check.authorized) {
-      return { success: false, error: 'FORBIDDEN', message: check.error || '权限不足' };
+      // 与生产 withAuth 同形：失败带 DomainError，映射走同一个入口
+      const mapped = mapDomainError(check.reason);
+      return { success: false, error: mapped.error, message: mapped.message };
     }
     try {
       return await h(
@@ -125,6 +128,9 @@ import {
   resetPasswordAction,
 } from '@/app/(dashboard)/users/actions';
 import type * as authModule from '@/lib/auth';
+import type { PermissionCheckResult } from '@/lib/auth';
+import { mapDomainError } from '@/domain/shared/error-mapping';
+import { ForbiddenError } from '@/domain/shared/errors';
 import type * as cryptoModule from '@/lib/crypto';
 import type * as sessionRevokeModule from '@/lib/session/revoke';
 import type * as authPasswordModule from '@/domain/auth/password';
@@ -265,7 +271,7 @@ describe('User Management API & Actions', () => {
     });
 
     it('鉴权失败 → 返回 false', async () => {
-      mockAuthCheck.mockResolvedValueOnce({ authorized: false, userId: '', error: '权限不足' });
+      mockAuthCheck.mockResolvedValueOnce({ authorized: false, reason: new ForbiddenError('权限不足') });
       const res = await createUserAction({} as any);
       expect(res.success).toBe(false);
       expect(res.message).toContain('权限不足');

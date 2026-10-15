@@ -25,6 +25,7 @@ interface ErrorMapping {
  */
 const ERROR_STATUS: Record<string, number> = {
   EntityNotFoundError: 404,
+  UnauthenticatedError: 401,
   ForbiddenError: 403,
   InvalidCredentialsError: 401,
   AccountStatusError: 403,

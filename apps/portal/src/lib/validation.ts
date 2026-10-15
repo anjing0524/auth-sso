@@ -1,10 +1,11 @@
 import 'server-only';
 
 import type { z } from 'zod';
-import { COMMON_ERRORS } from '@auth-sso/contracts';
+import { COMMON_ERRORS, type ApiError } from '@auth-sso/contracts';
 
 type Valid<T> = { ok: true; data: T };
-type Invalid = { ok: false; response: { success: false; error: string; message: string } };
+/** 失败信封直接复用契约的 `ApiError`（此前这里手抄了一份，且把码写成裸 `string`） */
+type Invalid = { ok: false; response: ApiError };
 
 export function validate<T>(schema: z.ZodSchema<T>, input: unknown): Valid<T> | Invalid {
   const parsed = schema.safeParse(input);

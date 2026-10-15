@@ -116,9 +116,12 @@ vi.mock('next/headers', () => ({
 // （读下面 mock 的 `next/headers` cookies），`verifyAccessToken` 走真实 ES256
 // （密钥对由 `seedSigningKeys` 种入真库）。
 
-import { checkPermission, withPermission } from '@/lib/auth';
+import { checkPermission, withAuth, withPermission } from '@/lib/auth';
+import type { PermissionCheckResult } from '@/lib/auth';
+import { mapDomainError } from '@/domain/shared/error-mapping';
+import { ForbiddenError, UnauthenticatedError } from '@/domain/shared/errors';
 import { signAccessToken } from '@/lib/auth/token';
-import { PORTAL_CLIENT_ID } from '@auth-sso/contracts';
+import { COMMON_ERRORS, PORTAL_CLIENT_ID } from '@auth-sso/contracts';
 
 // =========================================
 // 固定 seed ID 常量（与 JWT claims 对齐）
@@ -283,6 +286,22 @@ async function givenValidToken(userId: string = USER_ID): Promise<void> {
   cookieHolder.value = token;
 }
 
+/**
+ * 判别式联合的两把小钥匙 —— 让「通过必有 userId、失败必带原因」成为**类型层面**的事实。
+ *
+ * 先取再断言，取不到就抛出并说明实际是什么：比 `expect(result.userId)` 更能定位问题，
+ * 也不依赖断言顺序（`expect(result.authorized).toBe(true)` 不会让 TS 收窄）。
+ */
+function passUserId(result: PermissionCheckResult): string {
+  if (!result.authorized) throw new Error(`期望鉴权通过，实际失败：${result.reason.message}`);
+  return result.userId;
+}
+
+function failureReason(result: PermissionCheckResult) {
+  if (result.authorized) throw new Error('期望鉴权失败，实际通过');
+  return result.reason;
+}
+
 describe('Permission Enforcement', () => {
   function createRequest(): NextRequest {
     return new NextRequest('http://localhost:4100/api/test');
@@ -299,7 +318,8 @@ describe('Permission Enforcement', () => {
       });
 
       expect(result.authorized).toBe(false);
-      expect(result.statusCode).toBe(401);
+      expect(failureReason(result)).toBeInstanceOf(UnauthenticatedError);
+      expect(mapDomainError(failureReason(result)).status).toBe(401);
     });
 
     it('JWT 验签失败时返回 401', async () => {
@@ -310,7 +330,8 @@ describe('Permission Enforcement', () => {
       });
 
       expect(result.authorized).toBe(false);
-      expect(result.statusCode).toBe(401);
+      expect(failureReason(result)).toBeInstanceOf(UnauthenticatedError);
+      expect(mapDomainError(failureReason(result)).status).toBe(401);
     });
 
     it('权限上下文中无所需权限时返回 403', async () => {
@@ -326,7 +347,8 @@ describe('Permission Enforcement', () => {
       });
 
       expect(result.authorized).toBe(false);
-      expect(result.statusCode).toBe(403);
+      expect(failureReason(result)).toBeInstanceOf(ForbiddenError);
+      expect(mapDomainError(failureReason(result)).status).toBe(403);
     });
 
     it('用户拥有任一所需权限时通过', async () => {
@@ -337,7 +359,7 @@ describe('Permission Enforcement', () => {
       });
 
       expect(result.authorized).toBe(true);
-      expect(result.userId).toBe(USER_ID);
+      expect(passUserId(result)).toBe(USER_ID);
     });
 
     it('拥有多个权限中的任一即通过（或逻辑）', async () => {
@@ -365,7 +387,8 @@ describe('Permission Enforcement', () => {
       });
 
       expect(result.authorized).toBe(false);
-      expect(result.statusCode).toBe(403);
+      expect(failureReason(result)).toBeInstanceOf(ForbiddenError);
+      expect(mapDomainError(failureReason(result)).status).toBe(403);
     });
 
     it('requireAll 模式：拥有全部权限时通过', async () => {
@@ -377,7 +400,7 @@ describe('Permission Enforcement', () => {
       });
 
       expect(result.authorized).toBe(true);
-      expect(result.userId).toBe(USER_ID);
+      expect(passUserId(result)).toBe(USER_ID);
     });
 
     it('基于角色的检查：匹配角色时通过', async () => {
@@ -393,7 +416,7 @@ describe('Permission Enforcement', () => {
       });
 
       expect(result.authorized).toBe(true);
-      expect(result.userId).toBe(USER_ID);
+      expect(passUserId(result)).toBe(USER_ID);
     });
 
     it('基于角色的检查：角色不匹配时返回 403', async () => {
@@ -404,7 +427,8 @@ describe('Permission Enforcement', () => {
       });
 
       expect(result.authorized).toBe(false);
-      expect(result.statusCode).toBe(403);
+      expect(failureReason(result)).toBeInstanceOf(ForbiddenError);
+      expect(mapDomainError(failureReason(result)).status).toBe(403);
     });
 
     it('超级管理员角色（ADMIN）绕过所有权限检查', async () => {
@@ -420,7 +444,7 @@ describe('Permission Enforcement', () => {
       });
 
       expect(result.authorized).toBe(true);
-      expect(result.userId).toBe(USER_ID);
+      expect(passUserId(result)).toBe(USER_ID);
     });
 
     it('超级管理员角色（SUPER_ADMIN）绕过所有权限检查', async () => {
@@ -444,7 +468,7 @@ describe('Permission Enforcement', () => {
       const result = await checkPermission({});
 
       expect(result.authorized).toBe(true);
-      expect(result.userId).toBe(USER_ID);
+      expect(passUserId(result)).toBe(USER_ID);
     });
 
     it('权限上下文不可用（kind=unavailable）⇒ 按无权限处理：403，不得放行', async () => {
@@ -459,7 +483,8 @@ describe('Permission Enforcement', () => {
       });
 
       expect(result.authorized).toBe(false);
-      expect(result.statusCode).toBe(403);
+      expect(failureReason(result)).toBeInstanceOf(ForbiddenError);
+      expect(mapDomainError(failureReason(result)).status).toBe(403);
     });
 
     it('验签通过返回授权结果', async () => {
@@ -468,7 +493,7 @@ describe('Permission Enforcement', () => {
       const result = await checkPermission({});
 
       expect(result.authorized).toBe(true);
-      expect(result.userId).toBe(USER_ID);
+      expect(passUserId(result)).toBe(USER_ID);
     });
 
     // ── Redis 降级熔断路径 ──
@@ -484,7 +509,8 @@ describe('Permission Enforcement', () => {
       // 撤销状态无法确认时按"已撤销"处理（isJtiRevoked 的 fail-close）。
       // 改造前这里断言 authorized=true——那是"永不抛错的 fake"造出来的假象。
       expect(result.authorized).toBe(false);
-      expect(result.statusCode).toBe(401);
+      expect(failureReason(result)).toBeInstanceOf(UnauthenticatedError);
+      expect(mapDomainError(failureReason(result)).status).toBe(401);
     });
 
     it('连续 Redis 故障：每次都稳定 fail-close，不抛未捕获异常、不放行', async () => {
@@ -496,7 +522,8 @@ describe('Permission Enforcement', () => {
           permissions: ['portal:user:list'],
         });
         expect(result.authorized).toBe(false);
-        expect(result.statusCode).toBe(401);
+        expect(failureReason(result)).toBeInstanceOf(UnauthenticatedError);
+        expect(mapDomainError(failureReason(result)).status).toBe(401);
       }
     });
   });
@@ -570,7 +597,7 @@ describe('Permission Enforcement', () => {
       expect(handler).toHaveBeenCalledWith(USER_ID);
     });
 
-    it('无 Session 时返回 401（forbidden error code）', async () => {
+    it('无 Session 时返回 401 + UNAUTHORIZED（此前 401 却配 FORBIDDEN 码，自相矛盾）', async () => {
       cookieHolder.value = null;
 
       const handler = vi.fn(async () => NextResponse.json({ success: true }));
@@ -583,8 +610,40 @@ describe('Permission Enforcement', () => {
 
       expect(response.status).toBe(401);
       const body = await response.json();
-      expect(body.error).toBe('AUTH_SSO_1003');
+      // 401 必须配 UNAUTHORIZED：此前是 401 + FORBIDDEN（码与状态自相矛盾）。
+      // 根因是 withPermission 拿中文文案当码、withAuth 恒用 FORBIDDEN；
+      // 现在两者都由 DomainError 决定（UnauthenticatedError=401 / ForbiddenError=403）
+      expect(body.error).toBe('AUTH_SSO_1002');
       expect(handler).not.toHaveBeenCalled();
+    });
+
+    // 架构巡检候选 1 的核心不变量："一次失败 → 哪个码 + 哪个状态"只有**一个**答案。
+    // 此前 withAuth 恒 403/FORBIDDEN、withPermission 用 check.statusCode，
+    // checkPermission 自己又把中文文案放进名为 error 的字段 ⇒ 三个面各说各话。
+    it('三面一致：未登录时 checkPermission 的原因 / withAuth 的 ApiError / withPermission 的响应都指向 401 + UNAUTHORIZED', async () => {
+      cookieHolder.value = null;
+
+      const check = await checkPermission({ permissions: ['portal:user:list'] });
+      expect(failureReason(check)).toBeInstanceOf(UnauthenticatedError);
+      expect(mapDomainError(failureReason(check))).toMatchObject({
+        status: 401,
+        error: COMMON_ERRORS.UNAUTHORIZED,
+      });
+
+      const action = withAuth(
+        { permissions: ['portal:user:list'] },
+        async () => ({ success: true as const, data: null })
+      );
+      const actionResult = await action();
+      expect(actionResult.success).toBe(false);
+      expect(actionResult.success === false && actionResult.error).toBe(COMMON_ERRORS.UNAUTHORIZED);
+
+      const response = await withPermission(
+        { permissions: ['portal:user:list'] },
+        async () => NextResponse.json({ ok: true })
+      );
+      expect(response.status).toBe(401);
+      expect((await response.json()).error).toBe(COMMON_ERRORS.UNAUTHORIZED);
     });
 
     it('handler 异常时返回 500', async () => {

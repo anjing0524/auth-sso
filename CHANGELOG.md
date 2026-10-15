@@ -9,6 +9,9 @@ All notable changes to this project will be documented in this file.
 - 启动期 `validate_routing_consistency()` 路由一致性校验，检测路径前缀交叉覆盖、上下游不一致等配置错误
 
 ### Changed
+- **未登录的错误码统一为 `AUTH_SSO_1002`（`UNAUTHORIZED`）**：此前 REST 面返回 401 却配
+  `AUTH_SSO_1003`（`FORBIDDEN`）、Server Action 面恒为 `FORBIDDEN` —— 同一个失败在不同面给出
+  不同答案，且"401 + FORBIDDEN"本身自相矛盾。现由领域错误类型唯一决定（未认证=401、无权限=403）。
 - **404 统一为 `AUTH_SSO_1004`**：实体路由（`/api/users/:id`、`/api/departments/:id`、`/api/roles/:id`、
   `/api/roles/:id/permissions`、`/api/clients/:id`、`/api/permissions/:id`）不再返回实体专属的
   not-found 码（那些码已从契约删除）。**按专属码分支的集成方需改为按 404 + `AUTH_SSO_1004` 处理。**

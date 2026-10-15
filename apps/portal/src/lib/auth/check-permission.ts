@@ -16,6 +16,7 @@ import { resolveIdentity } from './verify-jwt';
 import { canAll, canAny, hasRole as hasRoleShared, isAdminRole } from '@auth-sso/contracts';
 import type { AuditOperation } from '@auth-sso/contracts';
 import { getUserPermissionContext, toPermissionContextOrNull } from '@/lib/permissions';
+import { ForbiddenError, UnauthenticatedError, type DomainError } from '@/domain/shared/errors';
 
 /**
  * 权限检查选项接口定义
@@ -36,14 +37,21 @@ export interface PermissionCheckOptions {
 }
 
 /**
- * 权限检查结果返回结构定义
+ * 权限检查结果 —— **判别式联合**（架构巡检候选 1）
+ *
+ * 此前是 `{ authorized: boolean; userId?: string; error?: string; statusCode?: number }`：
+ * 三个字段都可选 ⇒ "通过但没有 userId"是可表达的状态（调用点得自己补一个
+ * "鉴权上下文缺失 ⇒ 500"分支），而 `error` 装的是**中文文案**却被调用点当**码**用
+ * （`withAuth` 把 `check.error` 直接写进 `ApiError.error`，而契约里那是码）。
+ * 测试替身因此写出了一个生产代码从不发出的码 `'FORBIDDEN'`——接口无法表达的不变量，
+ * 只能靠人眼维持。
+ *
+ * 现在：通过则**必有** userId；失败则必带 `DomainError`（它自带码与状态），
+ * 由调用点抛出、统一走 `mapServerError` 这一个映射入口。
  */
-export interface PermissionCheckResult {
-  authorized: boolean;
-  userId?: string;
-  error?: string;
-  statusCode?: number;
-}
+export type PermissionCheckResult =
+  | { authorized: true; userId: string }
+  | { authorized: false; reason: DomainError };
 
 /**
  * 检查当前请求用户的身份有效性及 Portal 细粒度权限
@@ -58,7 +66,7 @@ export async function checkPermission(
 ): Promise<PermissionCheckResult> {
   const identity = await resolveIdentity();
   if (!identity) {
-    return { authorized: false, error: '未登录', statusCode: 401 };
+    return { authorized: false, reason: new UnauthenticatedError() };
   }
   const { userId } = identity;
 
@@ -83,7 +91,7 @@ export async function checkPermission(
       ? canAll(subject, options.permissions)
       : canAny(subject, options.permissions);
     if (!ok) {
-      return { authorized: false, userId, error: '权限不足', statusCode: 403 };
+      return { authorized: false, reason: new ForbiddenError('权限不足') };
     }
   }
 
@@ -93,7 +101,7 @@ export async function checkPermission(
       ? options.roles.every((code) => hasRoleShared(subject, code))
       : matched;
     if (!ok) {
-      return { authorized: false, userId, error: '角色权限不足', statusCode: 403 };
+      return { authorized: false, reason: new ForbiddenError('角色权限不足') };
     }
   }
 
@@ -112,6 +120,6 @@ export async function checkPermission(
 export const requirePermission = cache(
   async (options: PermissionCheckOptions): Promise<{ userId: string } | null> => {
     const auth = await checkPermission(options);
-    return auth.authorized && auth.userId ? { userId: auth.userId } : null;
+    return auth.authorized ? { userId: auth.userId } : null;
   },
 );

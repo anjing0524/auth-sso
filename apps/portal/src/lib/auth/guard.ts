@@ -31,18 +31,13 @@ export function withAuth<TArgs extends unknown[], TData>(
   return async (...args: TArgs): Promise<ApiResponse<TData>> => {
     try {
       const check = await checkPermission(options);
-      if (!check.authorized || !check.userId) {
-        return { success: false, error: check.error || COMMON_ERRORS.FORBIDDEN, message: check.error || '权限不足' };
-      }
+      // 失败一律**抛出**领域错误 ⇒ 与业务错误走同一个 catch 与同一个映射入口
+      // （此前是两个逐字相同的 catch：鉴权失败一处、业务失败一处）
+      if (!check.authorized) throw check.reason;
 
-      try {
-        const res = await fn({ userId: check.userId }, ...args);
-        if (res.success && options.audit) await recordActionAudit(check.userId, options.audit);
-        return res;
-      } catch (err: unknown) {
-        const mapped = mapServerError(err);
-        return { success: false, error: mapped.error, message: mapped.message };
-      }
+      const res = await fn({ userId: check.userId }, ...args);
+      if (res.success && options.audit) await recordActionAudit(check.userId, options.audit);
+      return res;
     } catch (err: unknown) {
       const mapped = mapServerError(err);
       return { success: false, error: mapped.error, message: mapped.message };
@@ -56,14 +51,7 @@ export async function withPermission(
 ): Promise<NextResponse> {
   try {
     const check = await checkPermission(options);
-
-    if (!check.authorized) {
-      return restError(COMMON_ERRORS.FORBIDDEN, check.error || '权限不足', check.statusCode ?? 403);
-    }
-
-    if (!check.userId) {
-      return restError(COMMON_ERRORS.INTERNAL_ERROR, '鉴权上下文缺失', 500);
-    }
+    if (!check.authorized) throw check.reason;
 
     const response = await handler(check.userId);
     if (options.audit) await recordApiAudit(check.userId, options.audit);

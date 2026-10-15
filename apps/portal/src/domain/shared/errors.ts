@@ -62,6 +62,20 @@ export class DuplicateEntityError extends DomainError {
   }
 }
 
+/**
+ * 未认证错误（无有效会话 / 会话已失效）。
+ *
+ * 需要它的理由（架构巡检候选 1）：`checkPermission` 早就知道"未登录（401）"与
+ * "权限不足（403）"是两件事，但 `PermissionCheckResult` 只暴露裸 `error: string` +
+ * `statusCode`，于是 `withAuth` 一律返回 403 `FORBIDDEN`、`withPermission` 用 401
+ * ——**同一个失败在两个面上给出不同答案**。给出类型后，"哪个码 + 哪个状态"只剩一处。
+ */
+export class UnauthenticatedError extends DomainError {
+  constructor(message: string = '未登录或会话已失效') {
+    super(COMMON_ERRORS.UNAUTHORIZED, message);
+  }
+}
+
 /** 无权限错误 */
 export class ForbiddenError extends DomainError {
   constructor(message: string = '超出数据权限范围') {
