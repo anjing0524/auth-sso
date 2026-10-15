@@ -88,16 +88,30 @@ function findResolveScopeUnused(source: string): ScopeViolation[] {
   return found;
 }
 
-/** 规则 2：名为 `scope` 的形参必须在函数体内被引用 */
+/** 函数式位置：`function f(` / `(…) =>` / 对象方法简写 `m(…)`（后者排除关键字） */
+const FUNCTION_HEAD_PATTERNS: RegExp[] = [
+  /(?:export\s+)?(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\(/g,
+  /\(([^)]*?)\)\s*(?::[^=>{]*)?=>\s*\{/g,
+  /^\s*(?:async\s+)?(?!if|for|while|switch|catch|return|function)([A-Za-z_$][\w$]*)\s*\(/gm,
+];
+
+/**
+ * 规则 2：**注解为 `UserScope`** 的形参必须在函数体内被引用。
+ *
+ * 覆盖三种函数式位置（`function` / 箭头 / 对象方法简写）——代码评审实测：
+ * 只认 `function` 声明时，箭头与方法简写形态**全部漏报**（构造形状实测返回空清单）。
+ */
 function findScopeParamUnused(source: string): ScopeViolation[] {
   const found: ScopeViolation[] = [];
   const code = stripComments(source);
   // 形参表按**括号配对**截取：`(scope: UserScope, a: (x) => void, b: {c: string})`
   // 这类签名里含 `)` 的参数会让 `[^)]*` 提前截断，把签名内容当函数体（评审实测假阳性）
-  const re = /(?:export\s+)?(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\(/g;
+  for (const re of FUNCTION_HEAD_PATTERNS) {
+  re.lastIndex = 0;
   let m: RegExpExecArray | null;
   while ((m = re.exec(code)) !== null) {
-    const openParen = m.index + m[0].length - 1;
+    const name = m[1] ?? '(匿名)';
+    const openParen = code.indexOf('(', m.index);
     let depth = 0;
     let closeParen = -1;
     for (let i = openParen; i < code.length; i += 1) {
@@ -121,9 +135,10 @@ function findScopeParamUnused(source: string): ScopeViolation[] {
         file: '',
         line: code.slice(0, m.index).split('\n').length,
         kind: 'scope-param-unused',
-        detail: `function ${m[1]}(… scope …) 的函数体从未引用 scope ⇒ 范围参数被吞掉（等价于不过滤）`,
+        detail: `${name}(… scope …) 的函数体从未引用 scope ⇒ 范围参数被吞掉（等价于不过滤）`,
       });
     }
+  }
   }
   return found;
 }
@@ -167,17 +182,27 @@ describe('read-scope-usage-guard —— 夹具（守卫自身被守）', () => {
     expect(findScopeUsageViolations(src)).toEqual([]);
   });
 
-  it('夹具 7：OAuth scope（字符串）不是数据范围 ⇒ 不报（实测踩到的假阳性）', () => {
+  it('夹具 7：箭头函数形态的 UserScope 形参被吞掉 ⇒ 报（评审实测：只认 function 时漏报）', () => {
+    const src = `export const listThings = async (scope: UserScope) => {\n  return db.select().from(schema.things);\n};`;
+    expect(findScopeUsageViolations(src).map((x) => x.kind)).toEqual(['scope-param-unused']);
+  });
+
+  it('夹具 8：对象方法简写形态的 UserScope 形参被吞掉 ⇒ 报（同上）', () => {
+    const src = `export const repo = {\n  list(scope: UserScope) {\n    return [];\n  },\n};`;
+    expect(findScopeUsageViolations(src).map((x) => x.kind)).toEqual(['scope-param-unused']);
+  });
+
+  it('夹具 9：OAuth scope（字符串）不是数据范围 ⇒ 不报（实测踩到的假阳性）', () => {
     const src = `export async function signAccessToken(userId: string, scope: string) {\n  return jwt.sign({ sub: userId, scope });\n}`;
     expect(findScopeUsageViolations(src)).toEqual([]);
   });
 
-  it('夹具 8：注释里提过 scope 不算"用了"（去注释后再判）', () => {
+  it('夹具 10：注释里提过 scope 不算"用了"（去注释后再判）', () => {
     const src = `export async function getThings(x: string, scope: UserScope) {\n  // 这里本该用 scope 过滤\n  return [];\n}`;
     expect(findScopeUsageViolations(src)[0]!.kind).toBe('scope-param-unused');
   });
 
-  it('夹具 9：注释掉的 resolveScope 调用不会被误报', () => {
+  it('夹具 11：注释掉的 resolveScope 调用不会被误报', () => {
     const src = `// const scope = await resolveScope(db, userId);\nreturn [];`;
     expect(findScopeUsageViolations(src)).toEqual([]);
   });
