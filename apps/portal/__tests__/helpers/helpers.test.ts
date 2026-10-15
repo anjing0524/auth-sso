@@ -10,7 +10,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { createTestRequest, parseResponseJson } from './test-utils';
-import { createTestDbHandle } from './test-db';
+import { createTestDbHandle, seedTestData } from './test-db';
 import {
   seedAdminUser,
   seedRootDept,
@@ -71,6 +71,18 @@ describe('在用 helper 自检', () => {
       expect(admin!.status).toBe('ACTIVE');
       expect(user!.status).toBe('ACTIVE');
       expect(admin!.id).not.toBe(user!.id);
+    });
+
+    it('seedTestData 的形状守卫：字段不是数组 ⇒ 立刻抛（不让种子被静默跳过）', async () => {
+      // 不连库：守卫在任何 DB 访问**之前**就抛（UI project 不得连库）
+      const fakeDb = {} as unknown as Parameters<typeof seedTestData>[0];
+
+      await expect(
+        seedTestData(fakeDb, { users: { id: 'x' } } as never),
+      ).rejects.toThrow(/必须是数组/);
+
+      // 空数组是**合法**的 no-op（不触发守卫、也不碰库）——守卫只拦"形状错"
+      await expect(seedTestData(fakeDb, { users: [] })).resolves.toBeUndefined();
     });
 
     it('权限：code 与 type 齐备', () => {

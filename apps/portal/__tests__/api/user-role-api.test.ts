@@ -73,11 +73,14 @@ vi.mock(import('@/lib/session/revoke'), async (importOriginal): Promise<Partial<
   };
 });
 // @allow-module-mock @/lib/audit infra-boundary: 审计写入是旁路副作用（fire-and-forget 写库），本文件测的是端点/动作语义
-vi.mock(import('@/lib/audit'), (): Partial<typeof auditModule> => ({
+vi.mock(import('@/lib/audit'), async (importOriginal): Promise<Partial<typeof auditModule>> => {
+  const actual = await importOriginal();
+  return { ...actual,
   appendSecurityAudit: vi.fn(async () => {}),
   extractClientIP: vi.fn(() => '127.0.0.1'),
   extractUserAgent: vi.fn(() => 'Vitest'),
-}));
+};
+});;
 
 import { POST as assignRoles, DELETE as removeRole } from '@/app/api/users/[id]/roles/route';
 import type * as authModule from '@/lib/auth';

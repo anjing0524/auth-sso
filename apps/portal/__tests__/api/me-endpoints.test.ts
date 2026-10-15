@@ -34,15 +34,21 @@ const { mockResolveIdentity } = vi.hoisted(() => ({
 }));
 
 // @allow-module-mock @/lib/auth auth-bypass: 本文件被测语义不依赖登录/授权链路，mock 仅用于构造"已登录/已授权"的请求上下文（依赖它的断言：me-endpoints.test.ts 全部用例）
-vi.mock(import('@/lib/auth'), (): Partial<typeof authModule> => ({
+vi.mock(import('@/lib/auth'), async (importOriginal): Promise<Partial<typeof authModule>> => {
+  const actual = await importOriginal();
+  return { ...actual,
   resolveIdentity: mockResolveIdentity,
   logServerDataRead: vi.fn(async () => {}),
-}));
+};
+});;
 
 // @allow-module-mock @/lib/menu-tree input-fixture: 菜单树只提供可辨识的渲染输入；断言检查的是**路由原样透传**该输入（不重排/不裁剪），树的构建逻辑由其自身测试覆盖
-vi.mock(import('@/lib/menu-tree'), (): Partial<typeof menuTreeModule> => ({
+vi.mock(import('@/lib/menu-tree'), async (importOriginal): Promise<Partial<typeof menuTreeModule>> => {
+  const actual = await importOriginal();
+  return { ...actual,
   getDynamicMenuTree: vi.fn().mockResolvedValue([{ id: 'menu-marker', name: '透传标记', path: '/marker', children: [] }]),
-}));
+};
+});;
 
 vi.mock('@/infrastructure/redis', () => ({
   getRedis: vi.fn(() => null),

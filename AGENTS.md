@@ -152,3 +152,5 @@ packages/config/    共享 env 配置 (Zod + URL 推导)
 - Next.js 16: Middleware 改名为 Proxy，Server Function 公开可达（三层防御原因）
 - Docker Compose 本地开发: `docker compose up -d`（PostgreSQL 16 + Redis 7）
 - 数据库初始化顺序: `pnpm db:migrate` → `pnpm db:seed`；`db:push` 只允许本地临时试验，不进入 CI/发布路径
+- **装新依赖**：若 `pnpm add` 报 `ERR_PNPM_EROFS`（环境把 pnpm store 挂为只读）⇒ **报告并请用户代跑**；不要改换包管理器、不要绕过锁文件、不要在 CI 去掉 `--frozen-lockfile`（本会话实测：`eslint-plugin-sonarjs` 因此装不上，#89 只能给结论不能落地）
+- **文档维护**：`docs/solution/README.md` 是决策索引——**新增 solution 文档必须同时挂到某个主题下**（`docs-references.test.ts` 会断言无遗漏）；引用既有决定前先查它（"这件事以前有人做过吗"）

@@ -62,7 +62,10 @@ vi.mock(import('@/lib/permissions'), async (importOriginal): Promise<Partial<typ
   return { ...actual, refreshUsersPermissionCache: effectsMocks.refreshUsers };
 });
 // @allow-module-mock @/lib/session/revoke input-fixture: 只提供批量撤销结果这一输入；真实 Redis 撤销由 force-logout-revocation / oauth-revoke 覆盖
-vi.mock(import('@/lib/session/revoke'), (): Partial<typeof sessionRevokeModule> => ({ revokeUsersAccessByUserId: effectsMocks.revokeUsers }));
+vi.mock(import('@/lib/session/revoke'), async (importOriginal): Promise<Partial<typeof sessionRevokeModule>> => {
+  const actual = await importOriginal();
+  return { ...actual, revokeUsersAccessByUserId: effectsMocks.revokeUsers };
+});;
 vi.mock('@/infrastructure/redis', () => ({}));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn(), updateTag: vi.fn() }));
 

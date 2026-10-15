@@ -9,6 +9,7 @@
 
 *何时读*：假绿、替身、守卫是否真被检查——本仓反复出问题的区域
 
+- [A2 修订版落地：不禁止整体替换，只禁止「不声明的整体替换」（#91）](2026-10-14-full-replacement-declaration.md)
 - [测试真实性治理 —— 假绿的识别、变异验证与机械规则](2026-10-12-test-authenticity-remediation.md)
 - [写路径测试契约 · 同类清扫（#84）—— 以及「门禁真的在拦我」的两次实证](2026-10-14-same-class-test-contract-sweep.md)
 - [写路径的测试契约：让 `withAuth` 跑真身（#71 的测试那一半）](2026-10-14-write-path-test-contract.md)
@@ -115,6 +116,12 @@
 - [2026-09-29 代码坏味道深度修复：架构收敛残骸、双真相源、决策表与伪测试](2026-09-29-code-smell-remediation.md)
 - [移除 Portal callback 第二套 OAuth Client 实现（架构评审候选 ④）](2026-09-30-remove-portal-callback-second-client.md)
 - [RT 撤销原语收口 —— 领域维度模块化（架构评审候选 ①）](2026-09-30-rt-revocation-module-consolidation.md)
+
+## 自主决策记录
+
+*何时读*：想推翻此前某个「已定但可回滚」的判断时——每项都写了依据、代价与回滚施工图
+
+- [自主决策记录：6 项待拍板事项的结论与依据](2026-10-14-autonomous-decisions.md)
 
 ## 维护
 

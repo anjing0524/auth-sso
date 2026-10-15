@@ -65,11 +65,14 @@ vi.mock(import('@/infrastructure/redis'), async (importOriginal): Promise<Partia
 });
 
 // @allow-module-mock @/lib/permissions input-fixture: 只提供权限上下文输入；真实 PG 驱动的分级由 permission-enforcement / rt-permission-failure 覆盖
-vi.mock(import('@/lib/permissions'), (): Partial<typeof permissionsModule> => ({
+vi.mock(import('@/lib/permissions'), async (importOriginal): Promise<Partial<typeof permissionsModule>> => {
+  const actual = await importOriginal();
+  return { ...actual,
   getUserPermissionContext: vi.fn(async () => ({ kind: 'ok' as const, context: { roles: [], permissions: [], deptIds: [] } })),
   cacheUserPermissionContext: vi.fn(async () => {}),
   clearUserPermissionCache: mocks.mockClearPermCache,
-}));
+};
+});;
 
 // 鉴权只伪造"已授权"这一个输入；**真实** `withPermission`（含错误映射）与**真实**数据范围
 // 守卫全程参与 —— 领域错误因此以「映射后的 404/403 响应」出现，与生产契约一致。
@@ -80,10 +83,13 @@ vi.mock(import('@/lib/permissions'), (): Partial<typeof permissionsModule> => ({
 // `withScopedWrite`，守卫同样消失（`withScopedRow` 出现后还直接变成 undefined）。
 // 现已改为只 mock 鉴权结果 —— 少两个替身，且测到真实的守卫与映射。
 // @allow-module-mock @/lib/auth/check-permission auth-bypass: 只为进入 handler 伪造"已授权"上下文；真实 withPermission 与真实 lib/authz 守卫全程参与（依赖它的断言：force-logout-route.test.ts 全部用例）
-vi.mock(import('@/lib/auth/check-permission'), (): Partial<typeof permModule> => ({
+vi.mock(import('@/lib/auth/check-permission'), async (importOriginal): Promise<Partial<typeof permModule>> => {
+  const actual = await importOriginal();
+  return { ...actual,
   checkPermission: async () => ({ authorized: true, userId: '00000000-0000-4000-8000-000000000101' }),
   requirePermission: async () => ({ userId: '00000000-0000-4000-8000-000000000101' }),
-}));
+};
+});;
 
 // @allow-module-mock @/lib/cache-invalidation infra-boundary: 缓存失效是旁路副作用，不影响本文件断言的响应契约；importOriginal + spread 让未列出的导出走真身 —— 此前整体替换使新增的 invalidateResourceFromRoute 变成 undefined，本文件 3 例变红
 vi.mock(import('@/lib/cache-invalidation'), async (importOriginal): Promise<Partial<typeof cacheInvalidationModule>> => {

@@ -39,21 +39,30 @@ vi.mock(import('@/lib/auth/oauth-helpers'), async (importOriginal): Promise<Part
 });
 
 // @allow-module-mock @/app/api/auth/oauth2/authorize/data input-fixture: 只提供"当前登录用户及其角色"这一输入；本文件依赖它的断言：登录态通过后的重定向/错误参数用例（准入判定读它）。真实查询形态见该模块自身的测试
-vi.mock(import('@/app/api/auth/oauth2/authorize/data'), (): Partial<typeof authorizeDataModule> => ({
+vi.mock(import('@/app/api/auth/oauth2/authorize/data'), async (importOriginal): Promise<Partial<typeof authorizeDataModule>> => {
+  const actual = await importOriginal();
+  return { ...actual,
   getUserWithRoleClients: mocks.mockGetUserWithRoleClients,
-}));
+};
+});;
 
 // @allow-module-mock @/lib/session/auth-request-store input-fixture: 授权请求暂存只提供"回跳时能取回参数"这一输入；本文件依赖它的断言：带 session_id 的回跳用例。其真实读写形态见 authorization-code-storage.test.ts 的真实 Redis 路径
-vi.mock(import('@/lib/session/auth-request-store'), (): Partial<typeof authRequestStoreModule> => ({
+vi.mock(import('@/lib/session/auth-request-store'), async (importOriginal): Promise<Partial<typeof authRequestStoreModule>> => {
+  const actual = await importOriginal();
+  return { ...actual,
   storeAuthRequest: vi.fn(async () => {}),
   getStoredAuthRequest: vi.fn(async () => null),
   generateSessionId: vi.fn(() => 'sess-test'),
-}));
+};
+});;
 
 // @allow-module-mock @/lib/auth/token input-fixture: 登录态只提供"谁已登录"这一输入；本文件依赖它的断言：全部需要已登录用户的用例（identity.userId 的来源）。验签本身不是本文件被测语义，其真实覆盖见 token-claims-binding / oauth-introspect / fixture-keypair
-vi.mock(import('@/lib/auth/token'), (): Partial<typeof authTokenModule> => ({
+vi.mock(import('@/lib/auth/token'), async (importOriginal): Promise<Partial<typeof authTokenModule>> => {
+  const actual = await importOriginal();
+  return { ...actual,
   verifyAccessToken: mocks.mockVerifyAccessToken,
-}));
+};
+});;
 
 import { InvalidClientError } from '@/domain/shared/errors';
 import { GET } from '@/app/api/auth/oauth2/authorize/route';

@@ -12,10 +12,13 @@ import { render, screen } from '@testing-library/react';
 // Mock 共享数据获取函数 — 返回 { data, pagination } 结构
 // vi.mock 是 hoisted 的，不能引用外部变量，必须内联对象
 // @allow-module-mock @/app/audit/data input-fixture: 读模型只提供日志行输入，不参与本文件断言
-vi.mock(import('@/app/audit/data'), (): Partial<typeof auditDataModule> => ({
+vi.mock(import('@/app/audit/data'), async (importOriginal): Promise<Partial<typeof auditDataModule>> => {
+  const actual = await importOriginal();
+  return { ...actual,
   getLoginLogs: vi.fn().mockResolvedValue({ data: [], pagination: { page: 1, pageSize: 20, total: 0 } }),
   getAuditLogs: vi.fn().mockResolvedValue({ data: [], pagination: { page: 1, pageSize: 20, total: 0 } }),
-}));
+};
+});;
 
 // Mock next/navigation
 vi.mock('next/navigation', () => ({
@@ -24,11 +27,14 @@ vi.mock('next/navigation', () => ({
 
 // Mock auth (audit-logs page 在 layout 层鉴权，但 resolveIdentity 可能间接调用)
 // @allow-module-mock @/lib/auth/verify-jwt auth-bypass: 本文件测 UI 行为，登录态解析由 mock 提供"已登录用户"这一输入（依赖它的断言：audit-logs.test.tsx 全部用例）
-vi.mock(import('@/lib/auth/verify-jwt'), (): Partial<typeof authVerifyJwtModule> => ({
+vi.mock(import('@/lib/auth/verify-jwt'), async (importOriginal): Promise<Partial<typeof authVerifyJwtModule>> => {
+  const actual = await importOriginal();
+  return { ...actual,
   resolveIdentity: vi.fn().mockResolvedValue({
     claims: { sub: 'user-1', iss: '', aud: 'auth-sso', jti: '' },
   }),
-}));
+};
+});;
 
 import AuditLogsPage from '@/app/(dashboard)/audit-logs/page';
 import type * as auditDataModule from '@/app/audit/data';

@@ -45,19 +45,25 @@ vi.mock('@/lib/env', async (importOriginal) => {
 });
 
 // @allow-module-mock @/lib/session/revoke input-fixture: 本文件测 claims 与签发的绑定，不测撤销；`isJtiRevoked=false` 是「该 token 未被撤销」这一**前置条件**。真实黑名单「命中即拒绝」的闭环由 oauth-introspect / oauth-revoke 覆盖（#43）
-vi.mock(import('@/lib/session/revoke'), (): Partial<typeof sessionRevokeModule> => ({
+vi.mock(import('@/lib/session/revoke'), async (importOriginal): Promise<Partial<typeof sessionRevokeModule>> => {
+  const actual = await importOriginal();
+  return { ...actual,
   revokeUserAccessByUserId: mocks.mockRevokeUserAccess,
   isJtiRevoked: vi.fn(async () => false),
   trackUserJti: vi.fn(async () => {}),
   revokeJti: vi.fn(async () => {}),
   revokeUserToken: vi.fn(async () => {}),
-}));
+};
+});;
 
 // @allow-module-mock @/lib/permissions input-fixture: 只提供权限上下文输入；真实 PG 驱动的分级由 permission-enforcement / rt-permission-failure 覆盖
-vi.mock(import('@/lib/permissions'), (): Partial<typeof permissionsModule> => ({
+vi.mock(import('@/lib/permissions'), async (importOriginal): Promise<Partial<typeof permissionsModule>> => {
+  const actual = await importOriginal();
+  return { ...actual,
   getUserPermissionContext: vi.fn(async () => ({ kind: 'ok' as const, context: { roles: [], permissions: [], deptIds: [] } })),
   cacheUserPermissionContext: vi.fn(async () => {}),
-}));
+};
+});;
 
 import { signAccessToken, signLoginSession, signIdToken, verifyAccessToken } from '@/lib/auth/token';
 import type * as sessionRevokeModule from '@/lib/session/revoke';

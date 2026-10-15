@@ -128,6 +128,20 @@ export interface SeedData {
  * 种子数据插入（按 FK 依赖顺序）
  */
 export async function seedTestData(db: TestDb, data: SeedData): Promise<void> {
+  // 形状守卫（#91 / A5）：字段不是数组时**立刻抛**，而不是被 `if (data.x?.length)` 静默跳过。
+  //
+  // 来历：曾把 `{ users: seedTestUser()[0]! }`（**对象而非数组**）传进来 ——
+  // `if (data.users?.length)` 为假 ⇒ **整段种子被静默跳过** ⇒ 用例跑在空库上却"通过"了
+  // （假绿）。这条守卫把"传错形状"变成一声巨响。
+  for (const [key, value] of Object.entries(data)) {
+    if (value !== undefined && !Array.isArray(value)) {
+      throw new TypeError(
+        `seedTestData: 字段 ${key} 必须是数组（收到 ${typeof value}）——`
+          + '静默跳过会让用例假绿（#91/A5）',
+      );
+    }
+  }
+
   if (data.departments?.length) await db.insert(schema.departments).values(data.departments);
   if (data.users?.length) await db.insert(schema.users).values(data.users);
   if (data.roles?.length) await db.insert(schema.roles).values(data.roles);

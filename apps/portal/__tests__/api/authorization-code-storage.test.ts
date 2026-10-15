@@ -36,7 +36,9 @@ vi.mock('@/infrastructure/db', () => ({
 }));
 
 // @allow-module-mock @/app/api/auth/oauth2/authorize/data input-fixture: 只提供"当前登录用户及其角色"这一输入；本文件不测该查询实现
-vi.mock(import('@/app/api/auth/oauth2/authorize/data'), (): Partial<typeof authorizeDataModule> => ({
+vi.mock(import('@/app/api/auth/oauth2/authorize/data'), async (importOriginal): Promise<Partial<typeof authorizeDataModule>> => {
+  const actual = await importOriginal();
+  return { ...actual,
   getUserWithRoleClients: async () => ({
     id: '00000000-0000-4000-8000-000000000101',
     status: 'ACTIVE',
@@ -44,14 +46,18 @@ vi.mock(import('@/app/api/auth/oauth2/authorize/data'), (): Partial<typeof autho
     name: '超管',
     roles: [{ id: 'r1', code: 'ADMIN', status: 'ACTIVE', clientIds: ['portal'] }],
   }),
-}));
+};
+});;
 
 // @allow-module-mock @/lib/session/auth-request-store input-fixture: 只提供"回跳时能取回授权参数"这一输入；本文件不测暂存实现
-vi.mock(import('@/lib/session/auth-request-store'), (): Partial<typeof authRequestStoreModule> => ({
+vi.mock(import('@/lib/session/auth-request-store'), async (importOriginal): Promise<Partial<typeof authRequestStoreModule>> => {
+  const actual = await importOriginal();
+  return { ...actual,
   storeAuthRequest: vi.fn(async () => {}),
   getStoredAuthRequest: vi.fn(async () => null),
   generateSessionId: vi.fn(() => 'sess-test'),
-}));
+};
+});;
 
 // @allow-module-mock @/lib/auth/token input-fixture: 签发/撤销类导出只提供输入；本文件依赖它们的断言：无（本文件不触达签发路径，主题是**授权码写入形态**）。`verifyAccessToken` 走 `importOriginal()` 真身——登录态必须真实验签，否则 authorize 端点会接受伪造会话
 vi.mock(import('@/lib/auth/token'), async (importOriginal): Promise<Partial<typeof tokenModule>> => {

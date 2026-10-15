@@ -10,15 +10,20 @@
  *    `// @allow-module-mock <target> <reason-kind>: <理由>`，注解在 `vi.mock(` 的
  *    **上一行**、target 逐字一致、kind ∈ 封闭枚举；`auth-bypass` 必须在理由里
  *    **点名**依赖它的测试文件。
+ * 3. **工厂形态（#91 / A2 修订版）**：注解类型为 `Partial<typeof X>` 的工厂**必须**
+ *    调 `importOriginal()`（配 `...actual` spread）——否则未列出的导出在替身里是
+ *    `undefined`，生产代码一用到就**运行时炸、`tsc` 不报**（本会话踩了 5 次：
+ *    R6/R13/R16/R18/R33）。本意就是**整体替换**的替身（UI 原语 stub 等）
+ *    必须把 kind 写成 **`full-replacement`**，把意图写明。
  *
  * ## 为什么这样写（而不是 ESLint 规则 / 手写键集扫描）
  *
  * - 键集与判别式形状**交给编译器**（类型化工厂 + `pnpm typecheck`），本守卫只管
  *   类型系统表达不了的那一半："为什么允许 mock 这个模块"（ADR-022 §4(a)/(d)）；
- * - 守卫自身也**被守**：**10 个违例夹具**（缺注解 / 注解 target 与生产 mock 不一致 /
+ * - 守卫自身也**被守**：**14 个违例夹具**（缺注解 / 注解 target 与生产 mock 不一致 /
  *   kind 非法 / 孤儿注解 / auth-bypass 未点名 / 注释引用不算点位 / 豁免清单生效 /
  *   注解贴到**豁免** mock 上 / 不得跨条串味 / 目标无法识别）
- *   外加 1 条全量扫描断言，一起在 CI 里真跑。
+ *   外加 1 条全量扫描断言，一起在 CI 里真跑（#91 又补了工厂形态的 4 个夹具）。
  *
  * ## 债务快照机制**已撤除**（#56）
  *
@@ -56,7 +61,18 @@ const EXEMPT_PREFIXES = [
 ] as const;
 
 /** 理由类型封闭枚举（ADR-022 §4(b)） */
-export const REASON_KINDS = ['infra-boundary', 'input-fixture', 'fault-injection', 'auth-bypass'] as const;
+export const REASON_KINDS = [
+  'infra-boundary',
+  'input-fixture',
+  'fault-injection',
+  'auth-bypass',
+  /**
+   * 本意就是**整体替换**整个模块（例如 UI 原语 stub：真实组件是 forwardRef，
+   * 无法在 jsdom 里当替身用）。声明它之后，工厂**不必** `importOriginal`——
+   * 但必须写明理由，让"整体替换"是**声明**而不是猜测。
+   */
+  'full-replacement',
+] as const;
 export type ReasonKind = typeof REASON_KINDS[number];
 
 export interface ModuleMockFinding {
@@ -214,6 +230,73 @@ export function findAnnotationBindingViolations(source: string): string[] {
   return violations;
 }
 
+/**
+ * 纯函数：工厂**形态**违例（#91 / A2 修订版）。
+ *
+ * `Partial<typeof X>` 只约束"键集 ⊆"，**不要求完整**：工厂少列一个导出，
+ * 它在替身里就是 `undefined`——生产代码用到时才炸，且 `tsc` 不报。
+ *
+ * 规则：`Partial<typeof` + 无 `importOriginal` + kind ≠ `full-replacement` ⇒ 违例。
+ * （整体替换是**合法**的，但必须声明；见 `REASON_KINDS` 里那条的说明。）
+ */
+export function findFactoryShapeViolations(source: string): string[] {
+  const lines = source.split('\n');
+  const violations: string[] = [];
+
+  for (const f of scanModuleMocks(source)) {
+    if (isExempt(f.target)) continue;
+    // 缺注解 / kind 非法由 findAnnotationViolations 独占报错，这里不重复报
+    if (!f.annotation || !REASON_KINDS.includes(f.annotation.kind as ReasonKind)) continue;
+    if (f.annotation.kind === 'full-replacement') continue;
+
+    const lineOffset = lines.slice(0, f.line - 1).reduce((n, l) => n + l.length + 1, 0);
+    const start = source.indexOf('vi.mock(', lineOffset);
+    if (start < 0) continue;
+    const block = balancedBlock(source, start);
+
+    if (/Partial<typeof/.test(block) && !/importOriginal/.test(block)) {
+      violations.push(
+        `第 ${f.line} 行：${f.target} 的工厂注解为 Partial<typeof …> 却未调 importOriginal`
+          + '（未列出的导出会是 undefined，运行时炸、tsc 不报）。'
+          + '修法二选一：① async (importOriginal) + { ...(await importOriginal()), … }；'
+          + '② 若本意就是整体替换，把 kind 改成 full-replacement 并写明理由',
+      );
+    }
+  }
+
+  return violations;
+}
+
+/**
+ * 取从 `vi.mock(` 起点开始的**完整实参块**（括号配平）。
+ *
+ * 为什么不用"扫到 `}));` 行"的启发式：相邻 mock 会被串进同一窗口，
+ * 上一个 mock 的 `Partial<typeof` 就栽到下一个头上（#91 实测的假阳性来源）。
+ */
+export function balancedBlock(source: string, startIndex: number): string {
+  let depth = 0;
+  let quote: string | null = null;
+  let i = startIndex;
+  for (; i < source.length; i += 1) {
+    const ch = source[i]!;
+    if (quote) {
+      if (ch === '\\') i += 1;
+      else if (ch === quote) quote = null;
+      continue;
+    }
+    if (ch === '"' || ch === "'" || ch === '`') quote = ch;
+    else if (ch === '(') depth += 1;
+    else if (ch === ')') {
+      depth -= 1;
+      if (depth === 0) {
+        i += 1;
+        break;
+      }
+    }
+  }
+  return source.slice(startIndex, i);
+}
+
 // ════════════════════════════════════════════════════════════
 // 扫描范围与文件遍历
 // ════════════════════════════════════════════════════════════
@@ -312,6 +395,54 @@ describe('module-mock-guard —— 违例夹具（守卫自身被守）', () => 
     const src = "vi.mock('@/infrastructure/redis', () => ({}));";
     expect(findAnnotationViolations(scanModuleMocks(src))).toEqual([]);
   });
+
+  // ── #91 新增：工厂形态（Partial 必须 importOriginal，或声明 full-replacement）──
+  it('夹具 11：Partial 工厂缺 importOriginal → 报"未调 importOriginal"（附两种修法）', () => {
+    const src = [
+      '// @allow-module-mock @/lib/audit input-fixture: 只提供审计写入输入',
+      String.raw`vi.mock(import('@/lib/audit'), (): Partial<typeof auditModule> => ({`,
+      '  appendSecurityAudit: vi.fn(),',
+      '}));',
+    ].join('\n');
+    const v = findFactoryShapeViolations(src).join();
+    expect(v).toContain('未调 importOriginal');
+    expect(v).toContain('full-replacement');
+  });
+
+  it('夹具 12：Partial + importOriginal → 通过（部分替换的正解）', () => {
+    const src = [
+      '// @allow-module-mock @/lib/auth input-fixture: 只提供"谁已登录"这一输入',
+      String.raw`vi.mock(import('@/lib/auth'), async (importOriginal): Promise<Partial<typeof authModule>> => {`,
+      '  const actual = await importOriginal();',
+      '  return { ...actual, withAuth: vi.fn() };',
+      '});',
+    ].join('\n');
+    expect(findFactoryShapeViolations(src)).toEqual([]);
+  });
+
+  it('夹具 13：full-replacement 声明 → 通过（整体替换必须声明，不是被禁止）', () => {
+    const src = [
+      '// @allow-module-mock @/components/ui/command full-replacement: UI 原语 stub，真实组件是 forwardRef',
+      String.raw`vi.mock(import('@/components/ui/command'), (): Partial<typeof commandModule> =>`,
+      '  asComponentStubs<typeof commandModule>({}));',
+    ].join('\n');
+    expect(findFactoryShapeViolations(src)).toEqual([]);
+  });
+
+  it('夹具 14：不得把相邻 mock 串成同一窗口（括号配平）', () => {
+    const src = [
+      '// @allow-module-mock @/lib/permissions input-fixture: 只提供刷新结果',
+      String.raw`vi.mock(import('@/lib/permissions'), async (importOriginal): Promise<Partial<typeof permissionsModule>> => {`,
+      '  const actual = await importOriginal();',
+      '  return { ...actual, refreshUsersPermissionCache: vi.fn() };',
+      '});',
+      '// @allow-module-mock @/lib/session/revoke input-fixture: 只提供批量撤销结果',
+      String.raw`vi.mock(import('@/lib/session/revoke'), (): Partial<typeof sessionRevokeModule> => ({ revokeUsersAccessByUserId: vi.fn() }));`,
+    ].join('\n');
+    const v = findFactoryShapeViolations(src);
+    expect(v.length).toBe(1);
+    expect(v[0]).toContain('@/lib/session/revoke');
+  });
 });
 
 // ════════════════════════════════════════════════════════════
@@ -326,6 +457,7 @@ describe('module-mock-guard —— 全量扫描', () => {
       const source = readFileSync(abs, 'utf-8');
       violations.push(...findAnnotationBindingViolations(source).map((v) => `${rel} ${v}`));
       violations.push(...findAnnotationViolations(scanModuleMocks(source)).map((v) => `${rel} ${v}`));
+      violations.push(...findFactoryShapeViolations(source).map((v) => `${rel} ${v}`));
     }
     expect(violations).toEqual([]);
   });

@@ -31,10 +31,13 @@ vi.mock('@/infrastructure/db', () => ({
 }));
 
 // @allow-module-mock @/lib/auth/check-permission auth-bypass: 只为进入 handler 伪造"已授权"上下文；真实 withPermission（含错误映射）与真实 lib/authz 守卫全程参与（依赖它的断言：reset-password-scope.test.ts 全部用例）
-vi.mock(import('@/lib/auth/check-permission'), (): Partial<typeof permModule> => ({
+vi.mock(import('@/lib/auth/check-permission'), async (importOriginal): Promise<Partial<typeof permModule>> => {
+  const actual = await importOriginal();
+  return { ...actual,
   checkPermission: async () => ({ authorized: true, userId: OPERATOR_ID }),
   requirePermission: async () => ({ userId: OPERATOR_ID }),
-}));
+};
+});;
 
 import { POST } from '@/app/api/users/[id]/reset-password/route';
 import { hashPassword } from '@/domain/auth/password';

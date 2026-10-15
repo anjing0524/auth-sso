@@ -48,7 +48,9 @@ vi.mock('@/infrastructure/db', () => ({
 }));
 
 // @allow-module-mock @/lib/auth auth-bypass: 本文件被测语义不依赖登录/授权链路，mock 仅用于构造"已登录/已授权"的请求上下文（依赖它的断言：user-api.test.ts 全部用例）
-vi.mock(import('@/lib/auth'), (): Partial<typeof authModule> => ({
+vi.mock(import('@/lib/auth'), async (importOriginal): Promise<Partial<typeof authModule>> => {
+  const actual = await importOriginal();
+  return { ...actual,
   resolveIdentity: vi.fn(async () => ({ userId: '00000000-0000-4000-8000-000000000101', expiresAt: null, issuedAt: null })),
   logServerDataRead: vi.fn(async () => {}),
   withAuth: (_o: any, h: Function) => async (...a: any[]) => {
@@ -67,7 +69,8 @@ vi.mock(import('@/lib/auth'), (): Partial<typeof authModule> => ({
     }
   },
   withPermission: mockWithPermission,
-}));
+};
+});;
 
 // @allow-module-mock @/lib/crypto input-fixture: 只覆盖「确定性 ID」这类输入，其余导出（含 hashToken）走真身
 vi.mock(import('@/lib/crypto'), async (importOriginal): Promise<Partial<typeof cryptoModule>> => {
@@ -92,11 +95,14 @@ vi.mock(import('@/lib/session/revoke'), async (importOriginal): Promise<Partial<
 });
 vi.mock('@/infrastructure/redis', () => ({ getRedis: vi.fn(() => null) }));
 // @allow-module-mock @/domain/auth/password input-fixture: 只提供密码相关输入（真实规则由 change-password 覆盖）
-vi.mock(import('@/domain/auth/password'), (): Partial<typeof authPasswordModule> => ({
+vi.mock(import('@/domain/auth/password'), async (importOriginal): Promise<Partial<typeof authPasswordModule>> => {
+  const actual = await importOriginal();
+  return { ...actual,
   hashPassword: vi.fn(async (pw: string) => `$2b$10$${pw}_hashed`),
   isPasswordReused: vi.fn(async () => false),
   pushPasswordHistory: vi.fn(() => [] as string[]),
-}));
+};
+});;
 
 // ════════════════════════════════════════════════════════
 // 初始化 td

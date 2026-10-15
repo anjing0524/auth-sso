@@ -45,10 +45,13 @@ vi.mock('next/cache', () => ({
 }));
 
 // @allow-module-mock @/lib/auth/check-permission auth-bypass: 只为进入 handler 伪造"已授权"上下文；真实 withPermission 与真实读模型全程参与（依赖它的断言：audit-export.test.ts 全部用例）
-vi.mock(import('@/lib/auth/check-permission'), (): Partial<typeof permModule> => ({
+vi.mock(import('@/lib/auth/check-permission'), async (importOriginal): Promise<Partial<typeof permModule>> => {
+  const actual = await importOriginal();
+  return { ...actual,
   checkPermission: async () => ({ authorized: true, userId: '00000000-0000-4000-8000-000000000101' }),
   requirePermission: async () => ({ userId: '00000000-0000-4000-8000-000000000101' }),
-}));
+};
+});;
 
 import { GET } from '@/app/api/audit/export/route';
 

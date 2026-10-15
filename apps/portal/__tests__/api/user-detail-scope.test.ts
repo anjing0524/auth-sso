@@ -36,11 +36,14 @@ vi.mock('next/cache', () => ({
 }));
 
 // @allow-module-mock @/lib/auth auth-bypass: 本文件断言读口的数据范围，mock 仅用于构造「已登录/已授权」的请求上下文（依赖它的断言：user-detail-scope.test.ts 的 REST 契约用例）
-vi.mock(import('@/lib/auth'), (): Partial<typeof authModule> => ({
+vi.mock(import('@/lib/auth'), async (importOriginal): Promise<Partial<typeof authModule>> => {
+  const actual = await importOriginal();
+  return { ...actual,
   resolveIdentity: vi.fn(async () => ({ userId: OPERATOR_ID, expiresAt: null, issuedAt: null })),
   logServerDataRead: vi.fn(async () => {}),
   withPermission: vi.fn(async (_o: unknown, handler: Function) => handler(OPERATOR_ID)),
-}));
+};
+});;
 
 // ── 被测模块 ────────────────────────────────────────
 import { db } from '@/infrastructure/db';

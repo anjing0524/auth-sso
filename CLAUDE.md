@@ -15,20 +15,18 @@ Auth-SSO is an enterprise unified identity authentication platform implementing 
 
 ## Development Commands
 
-```bash
-# Start all apps in development
-pnpm dev
+**命令清单以根 `package.json` 的 `scripts` 为准**——本文件不再复制一份（复制出来的清单会漂移，
+而"文档写的命令不存在"正是本仓反复治理过的一类问题）：
 
-# Start specific app
-pnpm --filter @auth-sso/portal dev   # Portal on port 4100
+- 开发/构建：`pnpm dev` · `pnpm build` · `pnpm --filter @auth-sso/portal dev`
+- 质量门：`pnpm lint`（递归，全部包）· `pnpm typecheck`（递归）· `pnpm test`
+- 测试分层：`test:api`（真实 PostgreSQL + Redis，见 ADR-022）· `test:components`（jsdom）· `test:e2e` · `test:report`（追溯清单，不是覆盖率门禁）
+- 数据库：`pnpm db:migrate` → `pnpm db:seed`（`db:push` 只允许本地临时试验）
 
-# 测试体系 (Vitest + Playwright + Traceability)
-pnpm test                  # 全量 Vitest 测试（api / ui / contracts 三个 project）
-pnpm test:api              # API 层测试：**真实 PostgreSQL + 真实 Redis**（见 ADR-022）
-pnpm test:components       # UI 层测试：components / domain / helpers / src 内联（jsdom，零基础设施）
-pnpm test:e2e              # Playwright E2E 端到端测试
-pnpm test:report           # 需求追溯清单（是清单，不是覆盖率门禁）
-```
+各命令的**语义**（分层策略、真实基础设施、清单与门禁的区别）见 `AGENTS.md` 的「测试体系」与本文的 Test Architecture。
+
+**装新依赖（retro G）**：若 `pnpm add` 报 `ERR_PNPM_EROFS`（某些环境把 pnpm store 挂为只读），
+**报告并请用户代跑**——不要改换包管理器、不要绕过锁文件、不要在 CI 里去掉 `--frozen-lockfile`。
 
 ## Test Architecture
 
