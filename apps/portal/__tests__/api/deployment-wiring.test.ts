@@ -29,15 +29,9 @@
  * @vitest-environment node
  */
 import { describe, it, expect } from 'vitest';
+import { REPO_ROOT } from '../helpers/repo-scan';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-
-/** 仓库根：相对本测试文件解析（vitest 的 cwd 与 project root 不一致，勿用 cwd） */
-const REPO_ROOT = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
-  '../../../..',
-);
 
 function readRepoFile(relPath: string): string {
   return readFileSync(path.join(REPO_ROOT, relPath), 'utf-8');

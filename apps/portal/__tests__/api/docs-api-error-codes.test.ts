@@ -27,11 +27,10 @@
  */
 import { describe, expect, it } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { REPO_ROOT } from '../helpers/repo-scan';
+import { join } from 'node:path';
 import * as contracts from '@auth-sso/contracts';
 
-const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '../../../..');
 const SPEC_DIR = join(REPO_ROOT, 'docs/spec');
 
 /** 契约的错误组（与 `packages/contracts/src/errors.ts` 的导出名一致） */

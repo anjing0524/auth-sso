@@ -24,12 +24,12 @@ pnpm -s exec vitest run --project @auth-sso/portal-ui || fail "UI project 测试
 # 明确跳过并说明交给 CI，避免"没跑却说绿"。
 if timeout 1 bash -c "</dev/tcp/127.0.0.1/6379" 2>/dev/null; then
   echo "[pre-commit] 3/4 Redis 在场：跑模块级 mock 守卫 + 文档声明检查…"
+  # 守卫名单**由扫描派生**，不手抄：手抄的名单曾经漏掉 3 个守卫
+  # （cache-invalidation-site-guard / error-status-guard / scoped-write-guard）
+  # ⇒ 本地 pre-commit 有"5 个守卫绿了"的假绿窗口（CI 跑全量所以不漏）。
   pnpm -s exec vitest run --project @auth-sso/portal-api \
-    apps/portal/__tests__/api/module-mock-guard.test.ts \
-    apps/portal/__tests__/api/docs-claims.test.ts \
-    apps/portal/__tests__/api/docs-references.test.ts \
-    apps/portal/__tests__/api/gate-inventory-guard.test.ts \
-    apps/portal/__tests__/api/docs-api-error-codes.test.ts || fail "守卫/文档检查未通过"
+    $(ls apps/portal/__tests__/api/*guard.test.ts apps/portal/__tests__/api/docs-*.test.ts) \
+    || fail "守卫/文档检查未通过"
 else
   echo "[pre-commit] 3/4 跳过 API project 检查（127.0.0.1:6379 不可达）——由 CI 的 Full CI 步骤兜底"
 fi

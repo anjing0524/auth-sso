@@ -39,9 +39,9 @@
  * @vitest-environment node
  */
 import { describe, it, expect } from 'vitest';
-import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
-import { dirname, extname, join, relative, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { readFileSync } from 'node:fs';
+import { extname, join, relative } from 'node:path';
+import { REPO_ROOT, assertScannedNonEmpty, isCommentLine, walk } from '../helpers/repo-scan';
 
 // ════════════════════════════════════════════════════════════
 // 规则的可执行副本：豁免清单 / 理由枚举（ADR-022 §1、§4(b)）
@@ -100,19 +100,6 @@ const IMPORT_FORM = /vi\.mock\(\s*import\(\s*'([^']+)'\s*\)/;
 const STRING_FORM = /vi\.mock\(\s*'([^']+)'/;
 const ANNOTATION = /^\s*\/\/\s*@allow-module-mock\s+(\S+)\s+(\S+):\s*(.*)$/;
 
-/**
- * 该行是否处在注释里（文档注释与行注释都算）。
- *
- * 实测必要性：`audit-retry`/`fixture-keypair`/`gateway-identity-trust`/`seed-fixtures`
- * 会在 **JSDoc 里引用** `vi.mock('@/lib/auth/token')` 来说明"过去为什么这么做"，
- * 若不跳过注释，扫描器会把历史叙述当成真实点位误报（8 处）。
- */
-function isCommentLine(line: string): boolean {
-  const trimmed = line.trim();
-  if (trimmed.startsWith('//') || trimmed.startsWith('*') || trimmed.startsWith('/*')) return true;
-  const at = line.indexOf('vi.mock(');
-  return at > 0 && line.slice(0, at).includes('//');
-}
 
 /**
  * 提取某个 `vi.mock(` 的目标说明符；首参允许换行，但**不得跨入下一条 mock 或注解**。
@@ -141,7 +128,7 @@ function scanModuleMocks(source: string): ModuleMockFinding[] {
   for (let i = 0; i < lines.length; i += 1) {
     const line = lines[i]!;
     if (!MOCK_CALL.test(line)) continue;
-    if (isCommentLine(line)) continue;
+    if (isCommentLine(line, 'vi.mock(')) continue;
 
     const found = extractMockTarget(lines, i);
     if (!found) continue;
@@ -321,23 +308,8 @@ function balancedBlock(source: string, startIndex: number): string {
 // 扫描范围与文件遍历
 // ════════════════════════════════════════════════════════════
 
-const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..');
 /** 守卫自身要排除：它的夹具文本里含 `vi.mock(` 字样，否则会扫到自己 */
 const SELF = 'module-mock-guard.test.ts';
-
-function walk(dir: string, predicate: (name: string) => boolean): string[] {
-  if (!existsSync(dir)) return [];
-  const out: string[] = [];
-  for (const name of readdirSync(dir)) {
-    const full = join(dir, name);
-    if (statSync(full).isDirectory()) {
-      out.push(...walk(full, predicate));
-    } else if (predicate(name)) {
-      out.push(full);
-    }
-  }
-  return out;
-}
 
 const isTs = (n: string) => ['.ts', '.tsx'].includes(extname(n));
 
@@ -348,7 +320,9 @@ function scanScopeFiles(): string[] {
     ...walk(join(REPO_ROOT, 'packages/contracts/src'), isTs),
     ...walk(join(REPO_ROOT, 'tests/e2e'), (n) => n.endsWith('.spec.ts')),
   ];
-  return files.filter((f) => !f.endsWith(SELF)).sort();
+  const scoped = files.filter((f) => !f.endsWith(SELF)).sort();
+  assertScannedNonEmpty(scoped, '模块级 mock 扫描范围（apps/portal + packages/contracts + tests/e2e）', 50);
+  return scoped;
 }
 
 // ════════════════════════════════════════════════════════════

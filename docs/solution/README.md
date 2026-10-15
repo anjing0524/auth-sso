@@ -99,6 +99,7 @@
 
 *何时读*：讨论复杂度 / 覆盖率 / 指标前必读（含「弱预测器不做门禁」的结论）
 
+- [守卫的 repo 扫描脚手架：收成一个 module（架构巡检候选 2）](2026-10-15-repo-scan-shared-scaffolding.md)
 - [/retro（第二次）：把「声明 ≠ 实现」「竞态」「引号陷阱」变成规程与标准](2026-10-15-retro-standards-and-procedures.md)
 - [复杂度热点逐处处置：能修的小步修好，修不了的写明理由（ADR-019 收口）](2026-10-15-complexity-hotspot-disposition.md)
 - [度量与忽略范围 —— 两个把自己骗过去的陷阱](2026-10-08-metric-vs-ignore-scope-traps.md)
@@ -129,7 +130,7 @@
 
 ## 维护
 
-本索引覆盖 `docs/solution/` 全部 **72 篇**文档（**由测试断言**：每篇都能到达、每篇恰好一次、篇数等于实测）。
+本索引覆盖 `docs/solution/` 全部 **73 篇**文档（**由测试断言**：每篇都能到达、每篇恰好一次、篇数等于实测）。
 **新增文档必须同时挂到某个主题下**——否则索引会断言失败。
 
 **阻断点**：`apps/portal/__tests__/api/docs-references.test.ts`（在 `pnpm test` 的 API project 里跑）断言三件事：

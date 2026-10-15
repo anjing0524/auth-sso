@@ -17,11 +17,11 @@
  * @vitest-environment node
  */
 import { describe, it, expect } from 'vitest';
+import { REPO_ROOT } from '../helpers/repo-scan';
 import { readFileSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 
-const DOMAIN_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '../../src/domain/shared');
+const DOMAIN_DIR = join(REPO_ROOT, 'apps/portal/src/domain/shared');
 
 /** `errors.ts` 里所有 `export class X extends DomainError` 的类名 */
 function parseDomainErrorNames(source: string): string[] {

@@ -21,10 +21,9 @@
  */
 import { describe, it, expect } from 'vitest';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
-import { dirname, join, relative, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { REPO_ROOT } from '../helpers/repo-scan';
+import { join, relative } from 'node:path';
 
-const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..');
 
 /** `@/` 别名根（apps/portal/tsconfig.json 的 paths） */
 const ALIAS_ROOT = join(REPO_ROOT, 'apps/portal/src');

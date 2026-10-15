@@ -31,17 +31,16 @@
  */
 import { describe, expect, it } from 'vitest';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { REPO_ROOT } from '../helpers/repo-scan';
+import { join } from 'node:path';
 
 // apps/portal/__tests__/api/xxx.test.ts → 上溯 4 层到仓库根
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), '../../../..');
 
 /** 必须上清单的包目录（`apps/*` 与 `packages/*`） */
 function workspacePackageDirs(): string[] {
   const dirs: string[] = [];
   for (const group of ['apps', 'packages']) {
-    const base = join(ROOT, group);
+    const base = join(REPO_ROOT, group);
     if (!existsSync(base)) continue;
     for (const entry of readdirSync(base, { withFileTypes: true })) {
       if (!entry.isDirectory()) continue;
@@ -104,7 +103,7 @@ function inspectPackages(): PackageReport[] {
       if (why) swallowing.push(`${s}: ${why}（实际：${script}）`);
     }
     return {
-      path: pkgJsonPath.replace(`${ROOT}/`, ''),
+      path: pkgJsonPath.replace(`${REPO_ROOT}/`, ''),
       name: pkg.name ?? '(未命名)',
       missing,
       swallowing,
@@ -127,7 +126,7 @@ describe('门禁清单自检（retro A1）', () => {
   });
 
   it('根 lint/typecheck 必须是递归形式（否则清单不生效）', () => {
-    const rootPkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')) as {
+    const rootPkg = JSON.parse(readFileSync(join(REPO_ROOT, 'package.json'), 'utf8')) as {
       scripts?: Record<string, string>;
     };
     const scripts = rootPkg.scripts ?? {};

@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="zh">
+  <head>
+    <meta charset="utf-8" />
+    <title>Architecture review — auth-sso</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="module">
+      import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+      mermaid.initialize({ startOnLoad: true, theme: "neutral", securityLevel: "loose" });
+    </script>
+    <style>
+      .seam { stroke-dasharray: 5 4; }
+      .deep { background: linear-gradient(135deg, #0f172a, #1e293b); }
+      .lbl { font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
+      .diagram { min-height: 300px; }
+    </style>
+  </head>
+  <body class="bg-stone-50 text-slate-900 font-sans">
+    <main class="max-w-5xl mx-auto px-6 py-12 space-y-12">
+      <header class="border-b border-slate-200 pb-6">
+        <h1 class="font-serif text-4xl">Architecture review — <span class="font-mono text-3xl">auth-sso</span></h1>
+        <p class="mt-2 text-sm text-slate-500">2026-10-15 · 范围：近期改动过的生产模块（`users/actions.ts`、`lib/authz/*`、`domain/permission/*`、`lib/server-error.ts`、`domain/shared/*`、UI 表单、守卫一族）</p>
+        <div class="mt-4 flex flex-wrap gap-4 text-xs text-slate-600">
+          <span class="inline-flex items-center gap-2"><span class="inline-block w-5 h-3 border-2 border-slate-400 bg-white"></span> module</span>
+          <span class="inline-flex items-center gap-2"><svg width="26" height="10"><line x1="0" y1="5" x2="26" y2="5" stroke="#64748b" stroke-width="2" class="seam"/></svg> seam</span>
+          <span class="inline-flex items-center gap-2"><svg width="26" height="10"><line x1="0" y1="5" x2="26" y2="5" stroke="#dc2626" stroke-width="2"/></svg> leakage</span>
+          <span class="inline-flex items-center gap-2"><span class="inline-block w-5 h-3 deep"></span> deep module</span>
+        </div>
+      </header>
+
+      <section id="candidates" class="space-y-12">
+
+        <!-- ────────────── 候选 1 ────────────── -->
+        <article id="c1" class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div class="flex items-start justify-between gap-4">
+            <h2 class="font-serif text-2xl">1 · 收敛 <span class="font-mono text-xl">withAuth</span> 的双错误路径，并让 <span class="font-mono text-xl">checkPermission</span> 的结果可判别</h2>
+            <span class="shrink-0 rounded-full bg-emerald-100 text-emerald-800 px-3 py-1 text-xs font-semibold">Strong</span>
+          </div>
+          <p class="mt-1 font-mono text-xs text-slate-500">apps/portal/src/lib/auth/guard.ts:32-77 · lib/auth/check-permission.ts:63-95 · packages/contracts/src/index.ts:135-138 · __tests__/api/user-api.test.ts:59</p>
+
+          <div class="grid md:grid-cols-2 gap-4 mt-5 diagram">
+            <div class="rounded-lg border border-slate-200 p-4">
+              <p class="lbl text-slate-500 mb-3">before — 两类失败 × 两种面</p>
+              <div class="space-y-2">
+                <div class="border-2 border-slate-400 bg-white p-2"><span class="lbl">withAuth</span>
+                  <div class="mt-1 text-xs font-mono">try { checkPermission() } <span class="text-red-600">catch → mapServerError()</span></div>
+                  <div class="mt-1 text-xs font-mono">try { fn() } <span class="text-red-600">catch → mapServerError()</span></div>
+                </div>
+                <div class="border border-slate-300 bg-stone-50 p-2"><span class="lbl">checkPermission</span>
+                  <div class="text-xs font-mono">→ { error: <span class="text-amber-700">'权限不足'</span> | statusCode }</div>
+                </div>
+                <p class="text-xs text-red-600">同一失败：withAuth 恒 403 · withPermission 401 ⇒ 两个答案</p>
+                <p class="text-xs text-red-600">替身写成 <span class="font-mono">error:'FORBIDDEN'</span> —— 生产从不发出的码</p>
+              </div>
+            </div>
+            <div class="rounded-lg border border-slate-200 p-4">
+              <p class="lbl text-slate-500 mb-3">after — 一条路径</p>
+              <div class="border-2 border-slate-400 bg-white p-2">
+                <span class="lbl">withAuth</span>
+                <div class="mt-1 text-xs font-mono">try { 鉴权 + 业务 }</div>
+                <div class="text-xs font-mono">catch (e) → <span class="text-emerald-700">toFailure(e)</span></div>
+              </div>
+              <div class="mt-3 deep text-white p-3 rounded">
+                <span class="lbl">checkPermission 的 interface</span>
+                <div class="text-xs font-mono mt-1">DomainError（自带码与状态）</div>
+              </div>
+              <p class="text-xs text-emerald-700 mt-3">失败 → 码/状态：一处回答；<span class="font-mono">ApiError.error</span> 收窄为 <span class="font-mono">ErrorCode</span></p>
+            </div>
+          </div>
+          <div class="grid md:grid-cols-2 gap-4 mt-4 text-sm">
+            <p><span class="font-semibold">Problem</span>：两个 catch 逐字相同（guard.ts:43/47）；而 <span class="font-mono">checkPermission</span> 把中文文案塞进名为 <span class="font-mono">error</span> 的字段，调用点当码用。</p>
+            <p><span class="font-semibold">Solution</span>：让 <span class="font-mono">checkPermission</span> 抛/返回 <span class="font-mono">DomainError</span>；guard 一个 catch，<span class="font-mono">mapServerError</span> 只跑一次。</p>
+          </div>
+          <ul class="mt-3 text-sm space-y-1">
+            <li>· locality：<span class="font-mono">失败→码/状态</span> 只有一个答案</li>
+            <li>· leverage：22 个 <span class="font-mono">withAuth</span> + 24 个 <span class="font-mono">withPermission</span> 调用点</li>
+            <li>· 测试面：三处手写替身里的 <span class="font-mono">'FORBIDDEN'</span> 会编译不过</li>
+            <li>· interface 收窄 ⇒ 漂移不再靠人眼</li>
+          </ul>
+        </article>
+
+        <!-- ────────────── 候选 2 ────────────── -->
+        <article id="c2" class="rounded-2xl border-2 border-emerald-300 bg-white p-6 shadow-sm">
+          <div class="flex items-start justify-between gap-4">
+            <h2 class="font-serif text-2xl">2 · 把守卫的 repo 扫描脚手架收成一个 module</h2>
+            <span class="shrink-0 rounded-full bg-emerald-100 text-emerald-800 px-3 py-1 text-xs font-semibold">Strong · Top</span>
+          </div>
+          <p class="mt-1 font-mono text-xs text-slate-500">8 个守卫文件 · 1406 行 · __tests__/helpers/index.ts（现成 barrel，5 个守卫一个都没用）</p>
+
+          <div class="grid md:grid-cols-2 gap-4 mt-5 diagram">
+            <div class="rounded-lg border border-slate-200 p-4">
+              <p class="lbl text-slate-500 mb-3">before — 每处自建 fs 管线</p>
+              <div class="space-y-2">
+                <div class="flex gap-2 items-end">
+                  <div class="w-24 h-24 border-2 border-slate-400 bg-white flex items-center justify-center text-center"><span class="lbl">守卫 A<br>interface</span></div>
+                  <div class="w-24 h-20 border border-slate-300 bg-stone-100 flex items-center justify-center text-center"><span class="lbl">walk + root<br>+ 空扫描断言</span></div>
+                </div>
+                <div class="flex gap-2 items-end">
+                  <div class="w-24 h-24 border-2 border-slate-400 bg-white flex items-center justify-center text-center"><span class="lbl">守卫 B<br>interface</span></div>
+                  <div class="w-24 h-20 border border-slate-300 bg-stone-100 flex items-center justify-center text-center"><span class="lbl">walk + root<br>（另一份签名）</span></div>
+                </div>
+                <div class="text-xs text-red-600">6 份根路径推导 · 5 份 walk · 2 份 isCommentLine · 阈值各写各的（≥50 / ≥4 / ≥3）</div>
+              </div>
+            </div>
+            <div class="rounded-lg border border-slate-200 p-4">
+              <p class="lbl text-slate-500 mb-3">after — 一个 module，8 个调用点</p>
+              <div class="flex gap-3 items-center">
+                <div class="deep text-white p-3 rounded w-40">
+                  <span class="lbl">repoScan</span>
+                  <div class="text-xs font-mono mt-1">repoRoot<br>walk<br>tsFiles<br>rejectIfEmpty</div>
+                </div>
+                <div class="text-xs font-mono">← 8 个守卫各留一个纯函数<br><span class="text-slate-500">（源码 → 违例清单）</span></div>
+              </div>
+              <p class="text-xs text-emerald-700 mt-3">注释跳过语义、仓库形状、别名根：各只改一处</p>
+              <p class="text-xs text-emerald-700">「空扫描即红」由 module 统一强制 ⇒ 假绿在结构上不可能</p>
+            </div>
+          </div>
+          <div class="grid md:grid-cols-2 gap-4 mt-4 text-sm">
+            <p><span class="font-semibold">Problem</span>：<span class="font-mono">cache-invalidation-site-guard</span> 的注释写着"教训来自 module-mock-guard"——同一安全语义抄两遍，第二遍靠注释提醒第一遍。</p>
+            <p><span class="font-semibold">Solution</span>：建 <span class="font-mono">repoScan</span>（root/walk/tsFiles/rejectIfEmpty），每个守卫只声明扫描范围与纯规则。</p>
+          </div>
+          <ul class="mt-3 text-sm space-y-1">
+            <li>· locality：仓库形状与注释语义各一处</li>
+            <li>· leverage：8 个守卫各少 30–40 行 fs 管线</li>
+            <li>· 删除测试：删掉它复杂度会分摊到未来 N 个守卫</li>
+            <li>· 底座：候选 3/4 都要新增静态守卫，正好吃这个红利</li>
+          </ul>
+        </article>
+
+        <!-- ────────────── 候选 3 ────────────── -->
+        <article id="c3" class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div class="flex items-start justify-between gap-4">
+            <h2 class="font-serif text-2xl">3 · Authorization 读路径的 <span class="font-mono text-xl">Scope</span> 穿线</h2>
+            <span class="shrink-0 rounded-full bg-amber-100 text-amber-800 px-3 py-1 text-xs font-semibold">Worth exploring</span>
+          </div>
+          <p class="mt-1 font-mono text-xs text-slate-500">lib/authz/{index,data-scope,query}.ts · 9 个 route · 5 个 data 模块（isScopeDenied ×8、scopeFilter ×6）</p>
+
+          <div class="grid md:grid-cols-2 gap-4 mt-5 diagram">
+            <div class="rounded-lg border border-slate-200 p-4">
+              <p class="lbl text-slate-500 mb-2">before — 每个调用点手写同一道工序</p>
+              <pre class="mermaid">
+flowchart TB
+  R[API route] --> S[resolveScope]
+  S --> D[data.ts]
+  D --> F{记得调 scopeFilter?}
+  F -.忘.-> L[fail-open：全表]
+  classDef leak stroke:#dc2626,stroke-width:2px;
+  class L leak
+              </pre>
+            </div>
+            <div class="rounded-lg border border-slate-200 p-4">
+              <p class="lbl text-slate-500 mb-2">after — 门面里一个读 seam</p>
+              <pre class="mermaid">
+flowchart TB
+  R[API route] --> RS[readScoped]
+  RS --> D[data.ts]
+  D --> OK[scopeFilter 已在 seam 内]
+  classDef deep fill:#0f172a,color:#fff,stroke:#0f172a;
+  class RS deep
+              </pre>
+            </div>
+          </div>
+          <div class="grid md:grid-cols-2 gap-4 mt-4 text-sm">
+            <p><span class="font-semibold">Problem</span>：写路径把 <span class="font-mono">resolveScope</span> 藏在 module 内，读路径却导出它并要求每个调用点手写取/传；<span class="font-mono">authz/index.ts:41</span> 的 JSDoc 还写着"待读路径迁移时加入本模块"（已过期）。</p>
+            <p><span class="font-semibold">Solution</span>：在门面加 <span class="font-mono">readScoped(build)</span>，组合取快照 + 短路 + builder；调用点不再出现裸 <span class="font-mono">scope</span>。</p>
+          </div>
+          <ul class="mt-3 text-sm space-y-1">
+            <li>· locality：fail-closed / 空范围≠未取快照，集中一处</li>
+            <li>· leverage：9 route + 5 data 模块少记一份配方</li>
+            <li>· 测试面：一条深测 + 一条静态守卫（data.ts 不再收裸 scope）</li>
+          </ul>
+          <div class="mt-3 rounded-lg bg-amber-50 border border-amber-200 p-3 text-xs text-amber-900">
+            约束（真实）：Next.js 16 Cache Components 要求 scope 在 <span class="font-mono">"use cache"</span> 外解析后注入（<span class="font-mono">users/data.ts:118-121</span>）⇒ 移的是"取快照 + 短路判定"这一段，不是整个 data 模块。
+          </div>
+        </article>
+
+        <!-- ────────────── 候选 4 ────────────── -->
+        <article id="c4" class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div class="flex items-start justify-between gap-4">
+            <h2 class="font-serif text-2xl">4 · 错误 → 响应信封：四种形状收成一个翻译点</h2>
+            <span class="shrink-0 rounded-full bg-amber-100 text-amber-800 px-3 py-1 text-xs font-semibold">Worth exploring</span>
+          </div>
+          <p class="mt-1 font-mono text-xs text-slate-500">12 个 route 的 catch · lib/response.ts · lib/auth/guard.ts:71-77</p>
+
+          <div class="rounded-lg border border-slate-200 p-4 mt-5 diagram">
+            <p class="lbl text-slate-500 mb-2">before — mapServerError 之后各拼各的</p>
+            <pre class="mermaid">
+flowchart LR
+  M[mapServerError] --> A[restError]
+  M --> B[NextResponse.json 手拼]
+  M --> C[mapToOAuthError]
+  M --> D[Server Action 信封（丢 status）]
+  C -.漏调.-> E[静默退回 invalid_request]
+  classDef leak stroke:#dc2626,stroke-width:2px;
+  class E leak
+            </pre>
+          </div>
+          <div class="grid md:grid-cols-2 gap-4 mt-4 text-sm">
+            <p><span class="font-semibold">Problem</span>：信封选择与错误映射是两件事，却被 12 个 route 各拼一次；OAuth 面漏调 <span class="font-mono">mapToOAuthError</span> 会**静默**退回 <span class="font-mono">invalid_request</span>。</p>
+            <p><span class="font-semibold">Solution</span>：在 <span class="font-mono">lib/response.ts</span> 建单点翻译（REST / OAuth 协议 / Server Action 三种目标），route 只声明目标。</p>
+          </div>
+          <ul class="mt-3 text-sm space-y-1">
+            <li>· leverage：12 个 route 学 3 个目标名，而非 4 种信封</li>
+            <li>· locality：码→状态→协议码 收成一处的同一答案（与候选 1 合流）</li>
+            <li>· 测试面：一条单测覆盖三种信封 + 一条静态守卫钉"route 不手拼错误体"</li>
+          </ul>
+        </article>
+
+        <!-- ────────────── 候选 5 ────────────── -->
+        <article id="c5" class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div class="flex items-start justify-between gap-4">
+            <h2 class="font-serif text-2xl">5 · 实体表单的失败处置编排（5 个 mutation 只有 3 个接了分类）</h2>
+            <span class="shrink-0 rounded-full bg-amber-100 text-amber-800 px-3 py-1 text-xs font-semibold">Worth exploring</span>
+          </div>
+          <p class="mt-1 font-mono text-xs text-slate-500">RolesTable:79-102 · PermissionsTable:95-120 · DepartmentTree:75-98 · CreateUserDialog:79-95 · hooks/use-field-failure.ts:39</p>
+
+          <div class="grid md:grid-cols-2 gap-4 mt-5 diagram">
+            <div class="rounded-lg border border-slate-200 p-4">
+              <p class="lbl text-slate-500 mb-3">before — 同文件内两条失败路径</p>
+              <div class="space-y-2 text-xs font-mono">
+                <div class="border border-emerald-300 bg-emerald-50 p-2">create / update → clearFailure · reportFailure ✓</div>
+                <div class="border border-red-300 bg-red-50 p-2">delete / 状态切换 → toast.error(res.message) ✗（RolesTable:101 等 5 处）</div>
+              </div>
+              <p class="text-xs text-red-600 mt-2">不变量「每个失败要么落输入框、要么落提示」无人强制</p>
+            </div>
+            <div class="rounded-lg border border-slate-200 p-4">
+              <p class="lbl text-slate-500 mb-3">after — 一个编排 seam</p>
+              <div class="deep text-white p-3 rounded">
+                <span class="lbl">useEntityForm</span>
+                <div class="text-xs font-mono mt-1">save / remove → 唯一分类点</div>
+              </div>
+              <p class="text-xs text-emerald-700 mt-3">4 张表只声明字段与 action</p>
+              <p class="text-xs text-emerald-700">组件测试对四张表断言**同一行为矩阵**</p>
+            </div>
+          </div>
+          <div class="grid md:grid-cols-2 gap-4 mt-4 text-sm">
+            <p><span class="font-semibold">Problem</span>：create/update 编排四处逐字同形；而 delete 与状态切换绕过 <span class="font-mono">reportFailure</span> 直接 toast ⇒ #82/#92 的分类能力只覆盖 5 个 mutation 的 3 个。</p>
+            <p><span class="font-semibold">Solution</span>：<span class="font-mono">useEntityForm</span>（save/remove + 把失败交给唯一分类点），四张表只声明字段与 action。</p>
+          </div>
+          <ul class="mt-3 text-sm space-y-1">
+            <li>· locality：有且只有一处回答"失败怎么呈现"</li>
+            <li>· leverage：5 个 mutation 共用同一段编排</li>
+            <li>· 字段清单与 JSX 的一致性也可在一处钉住</li>
+          </ul>
+        </article>
+
+        <!-- ────────────── 候选 6 ────────────── -->
+        <article id="c6" class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div class="flex items-start justify-between gap-4">
+            <h2 class="font-serif text-2xl">6 · <span class="font-mono text-xl">ERROR_STATUS</span> 用类名做键</h2>
+            <span class="shrink-0 rounded-full bg-slate-200 text-slate-700 px-3 py-1 text-xs font-semibold">Speculative</span>
+          </div>
+          <p class="mt-1 font-mono text-xs text-slate-500">domain/shared/error-mapping.ts:26-46 · __tests__/api/error-status-guard.test.ts:27-45</p>
+          <div class="grid md:grid-cols-2 gap-4 mt-4 text-sm">
+            <p><span class="font-semibold">Problem</span>：<span class="font-mono">ERROR_STATUS[err.constructor.name] ?? 400</span>——"每个子类都登记"这条不变量**无法由接口表达**，只能靠源码正则扫描（守卫自己的头注承认了）。</p>
+            <p><span class="font-semibold">Solution</span>：状态成为错误类型自己的属性，注册表降为派生；<span class="font-mono">mapDomainError</span> 不再需要兜底。</p>
+          </div>
+          <ul class="mt-3 text-sm space-y-1">
+            <li>· 编译期可查：新增错误类型只碰一处</li>
+            <li>· 守卫从"正则 + 源码扫描"变成"import 派生表并断言"</li>
+            <li>· 现状已被守卫覆盖 ⇒ 属"更干净"而非"修问题"</li>
+          </ul>
+        </article>
+      </section>
+
+      <section id="top-recommendation">
+        <div class="rounded-2xl border-2 border-emerald-400 bg-emerald-50 p-6">
+          <p class="lbl text-emerald-800">Top recommendation</p>
+          <h2 class="font-serif text-2xl mt-1">先做候选 2 —— 把守卫的 repo 扫描脚手架收成一个 <span class="font-mono">repoScan</span> module</h2>
+          <p class="mt-2 text-sm">零业务风险（只动测试）；8 个守卫文件里的 fs 管线一次收敛；而且它是**后续守卫的底座**——本仓的习惯是"把机械性违规做成确定性检查"（<span class="font-mono">docs-references.test.ts:12</span> 的原话），新增门禁的成本从"抄 60 行脚手架"降到"写一个纯函数 + 声明扫描范围"。候选 3 与 4 各需要一条新的静态守卫，正好吃这个红利。<a class="underline" href="#c2">见候选 2 ↑</a></p>
+          <p class="mt-3 text-sm"><span class="font-semibold">紧接着第二件：候选 1</span>（<span class="font-mono">checkPermission</span> 的部分结果）——本仓唯一一处"接口无法表达的不变量，已经在测试替身里长出了一个生产代码从不发出的错误码"（<span class="font-mono">'FORBIDDEN'</span>），且认证/授权面的 401 vs 403 分歧属于安全语义。</p>
+        </div>
+
+        <div class="mt-6 rounded-2xl border border-slate-300 bg-white p-6">
+          <p class="lbl text-slate-500">额外发现（不属候选，但建议知道）</p>
+          <h3 class="font-serif text-xl mt-1">pre-commit 的守卫名单是手抄的，已漏 3 个</h3>
+          <p class="mt-2 text-sm"><span class="font-mono">.githooks/pre-commit:30-40</span> 硬编码 5 个文件名，而 <span class="font-mono">__tests__/api/</span> 下实有 8 个守卫（漏 <span class="font-mono">cache-invalidation-site-guard</span> / <span class="font-mono">error-status-guard</span> / <span class="font-mono">scoped-write-guard</span>）。CI 跑全量不漏，但**本地 pre-commit 有假绿窗口**；<span class="font-mono">gate-inventory-guard</span> 只守 package.json 的 lint/typecheck，不守这份名单。</p>
+          <p class="mt-2 text-sm">这正是候选 2 的 leverage 论证的现成例子：把"哪些文件算守卫"变成**可被扫描的事实**，这类漂移就能机械挡住。</p>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

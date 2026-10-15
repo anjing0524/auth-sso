@@ -22,11 +22,10 @@
  * @vitest-environment node
  */
 import { describe, it, expect } from 'vitest';
-import { readdirSync, readFileSync, statSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { readFileSync } from 'node:fs';
+import { REPO_ROOT, assertScannedNonEmpty, stripComments, tsFiles } from '../helpers/repo-scan';
+import { join } from 'node:path';
 
-const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..');
 const SRC_DIR = join(REPO_ROOT, 'apps/portal/src');
 
 /**
@@ -37,34 +36,13 @@ const SRC_DIR = join(REPO_ROOT, 'apps/portal/src');
  */
 const NOOP_HANDLER = /withScopedWrite\([\s\S]{0,2000}?async\s*\(\s*\)\s*=>\s*(?:undefined|\{\s*\})/;
 
-/**
- * 去掉注释后再匹配 —— 守卫只看**代码**。
- *
- * 修掉这个形状的文件往往会在注释里写下「此前是 `withScopedWrite({...}, async () => undefined)`」
- * 作为修复记录；若把注释也算进去，守卫会把"解释这个形状的文档"当成缺陷本身（实测踩到）。
- */
-function stripComments(source: string): string {
-  return source
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/(^|[^:])\/\/.*$/gm, '$1');
-}
 
-/** 递归收集 `src/` 下的 .ts（排除测试文件本身） */
-function walkTs(dir: string, out: string[] = []): string[] {
-  for (const name of readdirSync(dir)) {
-    const full = join(dir, name);
-    if (statSync(full).isDirectory()) {
-      walkTs(full, out);
-    } else if (name.endsWith('.ts') && !name.endsWith('.test.ts')) {
-      out.push(full);
-    }
-  }
-  return out;
-}
 
 describe('withScopedWrite 不得被当作纯守卫使用', () => {
   it('src/ 下没有任何「空 handler」调用点', () => {
-    const violations = walkTs(SRC_DIR)
+    const scanned = tsFiles(SRC_DIR);
+    assertScannedNonEmpty(scanned, 'apps/portal/src 下的 .ts 扫描范围（空 handler 检查）', 40);
+    const violations = scanned
       .filter((file) => NOOP_HANDLER.test(stripComments(readFileSync(file, 'utf-8'))))
       .map((file) => file.replace(`${REPO_ROOT}/`, ''));
 
