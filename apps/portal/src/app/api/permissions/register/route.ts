@@ -2,7 +2,7 @@ import { type NextRequest } from 'next/server';
 import { db, schema } from '@/infrastructure/db';
 import { eq, sql, inArray, ne, isNull, or, and } from 'drizzle-orm';
 import { generateUUID } from '@/lib/crypto';
-import { COMMON_ERRORS } from '@auth-sso/contracts';
+import { COMMON_ERRORS, PERMISSION_ERRORS } from '@auth-sso/contracts';
 import { mapServerError } from '@/lib/server-error';
 import { validateClientSecret } from '@/domain/auth/oauth-client';
 import { resolveActiveClient } from '@/lib/auth/oauth-helpers';
@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
     if (dup) return restError(COMMON_ERRORS.VALIDATION_ERROR, `上报权限树中存在重复 code: ${dup}`, 400);
 
     const conflictCode = await checkCodeConflicts(codes, auth.clientId);
-    if (conflictCode) return restError('conflict', `权限 code「${conflictCode}」全局已被占用，建议使用「${auth.clientId}:${conflictCode}」前缀`, 409);
+    if (conflictCode) return restError(PERMISSION_ERRORS.PERMISSION_ALREADY_EXISTS, `权限 code「${conflictCode}」全局已被占用，建议使用「${auth.clientId}:${conflictCode}」前缀`, 409);
 
     const result = await db.transaction(async (tx) => {
       await tx.execute(sql`SELECT pg_advisory_xact_lock(${getHashCode(auth.clientId)})`);

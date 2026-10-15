@@ -5,7 +5,7 @@
  * @req E-MNU-U, E-MNU-D, E-MNU-PB
  * @vitest-environment node
  */
-import { COMMON_ERRORS } from '@auth-sso/contracts';
+import { COMMON_ERRORS, PERMISSION_ERRORS } from '@auth-sso/contracts';
 import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest';
 import { createHash } from 'crypto';
 import { eq } from 'drizzle-orm';
@@ -323,7 +323,10 @@ describe('Permission API', () => {
       );
       expect(res.status).toBe(409);
       const body = await parseResponseJson(res);
-      expect(body.error).toBe('conflict');
+      // 这里此前断言 `'conflict'` —— 一个**词表外**的字面量（route 直接拼字符串进响应体）。
+      // 2026-10-15 巡检候选 4 把 restError 的 code 收窄为 ErrorCode 后，它编译不过，
+      // 遂改为契约里的专属冲突码（409）。
+      expect(body.error).toBe(PERMISSION_ERRORS.PERMISSION_ALREADY_EXISTS);
       expect(body.message).toContain('portal:user:list');
     });
 

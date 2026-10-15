@@ -9,6 +9,9 @@ All notable changes to this project will be documented in this file.
 - 启动期 `validate_routing_consistency()` 路由一致性校验，检测路径前缀交叉覆盖、上下游不一致等配置错误
 
 ### Changed
+- **OIDC UserInfo 端点的错误信封改为符合 RFC 6750**：此前兜底错误会把**内部码**
+  （如 `AUTH_SSO_1006`）回给第三方 RP，且 401 漏了 MUST 携带的 `WWW-Authenticate`。
+  现在按状态映射为 `invalid_request` / `invalid_token` / `insufficient_scope` / `server_error`。
 - **未登录的错误码统一为 `AUTH_SSO_1002`（`UNAUTHORIZED`）**：此前 REST 面返回 401 却配
   `AUTH_SSO_1003`（`FORBIDDEN`）、Server Action 面恒为 `FORBIDDEN` —— 同一个失败在不同面给出
   不同答案，且"401 + FORBIDDEN"本身自相矛盾。现由领域错误类型唯一决定（未认证=401、无权限=403）。

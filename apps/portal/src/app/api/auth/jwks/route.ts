@@ -10,6 +10,7 @@ import { connection, NextResponse } from 'next/server';
 import { db, schema } from '@/infrastructure/db';
 import { or, gt, isNull } from 'drizzle-orm';
 import { mapServerError } from '@/lib/server-error';
+import { restError } from '@/lib/response';
 import { getActiveSigningKey } from '@/lib/auth/token';
 import { JWKS_PUBLISH_GRACE_SECS } from '@auth-sso/contracts';
 
@@ -45,6 +46,8 @@ export async function GET() {
     return NextResponse.json({ keys });
   } catch (err) {
     const mapped = mapServerError(err);
-    return NextResponse.json({ error: mapped.error, message: mapped.message }, { status: mapped.status });
+    // 手抄的 { error, message } 信封（与 restError 逐字相同）⇒ 改用工厂：
+    // 信封形状只能有一处，否则"改了一处忘了另一处"迟早发生（架构巡检候选 4）
+    return restError(mapped.error, mapped.message, mapped.status);
   }
 }

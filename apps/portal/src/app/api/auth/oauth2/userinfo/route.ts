@@ -65,6 +65,18 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(response);
   } catch (err) {
     const mapped = mapServerError(err);
-    return NextResponse.json({ error: mapped.error }, { status: mapped.status });
+    // RFC 6750 §3：错误体只认 OAuth 错误名（invalid_request / invalid_token /
+    // insufficient_scope …），且 401 MUST 携带 WWW-Authenticate。
+    // 此前这里回的是**内部码**（AUTH_SSO_xxxx）——OIDC 客户端无从识别（巡检候选 4 实测）。
+    if (mapped.status >= 500) {
+      // 服务器出错不是"令牌无效"：保留状态码，用 OAuth 的 server_error
+      return NextResponse.json({ error: 'server_error' }, { status: mapped.status });
+    }
+    const oauthError =
+      mapped.status === 400 ? 'invalid_request' : mapped.status === 403 ? 'insufficient_scope' : 'invalid_token';
+    return NextResponse.json(
+      { error: oauthError },
+      { status: mapped.status, headers: { 'WWW-Authenticate': `Bearer error="${oauthError}"` } },
+    );
   }
 }

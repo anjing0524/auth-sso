@@ -1,5 +1,6 @@
 import 'server-only';
 import { NextResponse } from 'next/server';
+import type { ErrorCode } from '@auth-sso/contracts';
 
 /**
  * API 响应工厂 — 严格区分 REST HTTP 端点与 Server Action 两种协议。
@@ -53,11 +54,15 @@ export function restListSuccess<T>(
 
 /**
  * REST 错误响应 — { error, message }，无 success 字段。
+ *
+ * `code` 键入**闭合词汇表** `ErrorCode`（2026-10-15，与 `ApiError.error` 同步收窄）：
+ * 此前是裸 `string`，于是 `permissions/register` 直接塞了一个字面量 `'conflict'`
+ * ——一个词表外的码原样流进了响应体，而编译器毫无异议（架构巡检候选 4 实测）。
  */
 export function restError(
-  code: string,
+  code: ErrorCode,
   message: string,
   status: number,
-): NextResponse<{ error: string; message: string }> {
+): NextResponse<{ error: ErrorCode; message: string }> {
   return NextResponse.json({ error: code, message }, { status });
 }
