@@ -3,49 +3,27 @@
  * GET /api/users/[id]/roles — 委托 data.ts 获取用户的角色
  * POST /api/users/[id]/roles — 为用户分配角色
  * DELETE /api/users/[id]/roles — 移除用户的指定角色
+ *
+ * 写路径都只是**适配器**：编排（范围守卫 / 事务 / 校验 / 审计 / 权限收敛）
+ * 在 `lib/user-role-assignment.ts` 里只写一份，REST 与 Server Action 共用（见该模块头注）。
  */
 import { type NextRequest } from 'next/server';
-import { z } from 'zod';
-import { db, schema } from '@/infrastructure/db';
-import { eq, inArray, and } from 'drizzle-orm';
+import { db } from '@/infrastructure/db';
 import { withPermission, logServerDataRead } from '@/lib/auth';
-import { withScopedWrite, resolveScope } from '@/lib/authz';
-import { appendSecurityAudit, extractClientIP, extractUserAgent } from '@/lib/audit';
-import { revokeAndRefreshAuthorization } from '@/lib/auth/authorization-effects';
-import { COMMON_ERRORS, ENTITY_ACTIVE, USER_PERMISSIONS } from '@auth-sso/contracts';
+import { resolveScope } from '@/lib/authz';
+import { extractClientIP, extractUserAgent } from '@/lib/audit';
+import { COMMON_ERRORS, USER_PERMISSIONS } from '@auth-sso/contracts';
+import {
+  RoleAssignmentSchema,
+  RoleRemovalSchema,
+  assignUserRoles,
+  removeUserRole,
+} from '@/lib/user-role-assignment';
 import { getUserRoles } from '@/app/(dashboard)/users/data';
 import { restSuccess, restError } from '@/lib/response';
 import { invalidateResourceFromRoute } from '@/lib/cache-invalidation';
 
 interface RouteParams { params: Promise<{ id: string }>; }
-
-const MAX_ASSIGNED_ROLES = 100;
-
-const RoleAssignmentBodySchema = z.object({
-  roleIds: z.array(z.string().uuid()).min(1).max(MAX_ASSIGNED_ROLES),
-}).superRefine(({ roleIds }, ctx) => {
-  if (new Set(roleIds).size !== roleIds.length) {
-    ctx.addIssue({ code: 'custom', message: '角色 ID 不可重复', path: ['roleIds'] });
-  }
-});
-
-const RoleRemovalBodySchema = z.object({
-  roleId: z.string().uuid(),
-});
-
-/** v3.2: 校验角色全部属于用户部门且为 ACTIVE（R-USER-ROLE），返回 null 表示通过 */
-async function validateRoleAssignment(
-  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
-  userDeptId: string | null,
-  roleIds: readonly string[],
-): Promise<string | null> {
-  if (!userDeptId) return '该用户尚未分配部门，请先为用户分配部门后再分配角色';
-  const roles = await tx.select({ id: schema.roles.id, deptId: schema.roles.deptId, status: schema.roles.status })
-    .from(schema.roles).where(inArray(schema.roles.id, roleIds));
-  if (roles.length !== roleIds.length) return '存在无效角色';
-  const invalid = roles.filter(r => r.deptId !== userDeptId || r.status !== ENTITY_ACTIVE);
-  return invalid.length > 0 ? '部分角色不属于该用户所属部门或已禁用，无法分配' : null;
-}
 
 /** GET /api/users/[id]/roles — 委托 data.ts（范围由读口施加，不可见与不存在同形 404） */
 export async function GET(request: NextRequest, { params }: RouteParams) {
@@ -63,65 +41,24 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
 /**
  * POST /api/users/[id]/roles — 为用户分配角色（v3.2: R-USER-ROLE 部门约束）
+ *
+ * 缓存失效用 **route 版**入口：`cache-invalidation-site-guard` 禁止 route 用 Action 版
+ * （反之亦然），所以它留在适配器里，而写编排在共享模块里。
  */
 export async function POST(request: NextRequest, { params }: RouteParams) {
   return withPermission({ permissions: [USER_PERMISSIONS.ASSIGN_ROLE] }, async (adminUserId) => {
     const { id } = await params;
-    const parsed = RoleAssignmentBodySchema.safeParse(await request.json().catch(() => null));
+    const parsed = RoleAssignmentSchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) return restError(COMMON_ERRORS.VALIDATION_ERROR, '角色ID列表格式不合法', 400);
-    const { roleIds } = parsed.data;
 
-    const users = await db.select().from(schema.users).where(eq(schema.users.id, id));
-    if (users.length === 0) return restError(COMMON_ERRORS.NOT_FOUND, '用户不存在', 404);
+    const result = await assignUserRoles(adminUserId, id, parsed.data.roleIds, {
+      method: 'POST',
+      url: request.url,
+      ip: extractClientIP(request.headers),
+      userAgent: extractUserAgent(request.headers),
+    });
+    if (!result.ok) return restError(result.error, result.message, result.status);
 
-    const userId = users[0]!.id;
-
-    // 数据范围守卫 + 角色部门约束 + 写入，全部在同一事务内（ADR-014 / H-ACL-002）。
-    // 原实现把操作者范围快照取在事务外、再在事务内复用，操作者被降权后仍会放行。
-    const result = await withScopedWrite(
-      {
-        operatorId: adminUserId,
-        targets: async (tx) => {
-          const target = await tx.query.users.findFirst({
-            where: eq(schema.users.id, id),
-            columns: { deptId: true },
-          });
-          if (!target) return [];   // 不存在交由下方 404 分支处理
-          return [{ deptId: target.deptId, message: '无权操作该用户' }];
-        },
-      },
-      async (tx) => {
-        const userRow = await tx.query.users.findFirst({
-          where: eq(schema.users.id, id),
-          columns: { id: true, deptId: true },
-        });
-        if (!userRow) return { success: false as const, error: COMMON_ERRORS.NOT_FOUND, message: '用户不存在', status: 404 };
-
-        const errMsg = await validateRoleAssignment(tx, userRow.deptId, roleIds);
-        if (errMsg) return { success: false as const, error: COMMON_ERRORS.VALIDATION_ERROR, message: errMsg, status: 400 };
-
-        await tx.delete(schema.userRoles).where(eq(schema.userRoles.userId, userRow.id));
-        await tx.insert(schema.userRoles).values(roleIds.map(roleId => ({ userId: userRow.id, roleId, createdAt: new Date() })));
-        await appendSecurityAudit(tx, {
-          userId: adminUserId,
-          operation: 'USER_ROLE_ASSIGN',
-          method: 'POST',
-          url: request.url,
-          params: { targetUserId: userRow.id, roleIds },
-          ip: extractClientIP(request.headers),
-          userAgent: extractUserAgent(request.headers),
-          status: 200,
-        });
-        return { success: true as const, assignedCount: roleIds };
-      },
-    );
-
-    if (!result.success) {
-      return restError(result.error, result.message, result.status);
-    }
-
-    // 角色分配属于权限决策变更 → 收敛（撤销 AT 强制重登 + 刷缓存），顺序由 module 固定
-    await revokeAndRefreshAuthorization([userId]);
     invalidateResourceFromRoute('users');
     return restSuccess({ assignedCount: result.assignedCount });
   });
@@ -130,68 +67,23 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 /**
  * DELETE /api/users/[id]/roles
  * 移除用户的指定角色（🔥已修复：加入 roleId 精准比对，绝不误删该用户的其他所有角色）
- * 权限要求: user:update
- *
- * @param request NextRequest 对象
- * @param params 动态路由参数
- * @returns 成功移除状态响应
+ * 权限要求: user:assign_role
  */
-export async function DELETE(
-  request: NextRequest,
-  { params }: RouteParams
-) {
+export async function DELETE(request: NextRequest, { params }: RouteParams) {
   return withPermission({ permissions: [USER_PERMISSIONS.ASSIGN_ROLE] }, async (adminUserId) => {
     const { id } = await params;
-    const parsed = RoleRemovalBodySchema.safeParse(await request.json().catch(() => null));
+    const parsed = RoleRemovalSchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) return restError(COMMON_ERRORS.VALIDATION_ERROR, '角色ID格式不合法', 400);
-    const { roleId } = parsed.data;
 
-    // 数据范围守卫与写入同事务（ADR-014 / H-ACL-002）——原先快照取自事务外。
-    const result = await withScopedWrite(
-      {
-        operatorId: adminUserId,
-        targets: async (tx) => {
-          const target = await tx.query.users.findFirst({
-            where: eq(schema.users.id, id),
-            columns: { deptId: true },
-          });
-          if (!target) return [];   // 不存在交由下方 404 分支处理
-          return [{ deptId: target.deptId, message: '无权操作该用户' }];
-        },
-      },
-      async (tx) => {
-        const userRow = await tx.query.users.findFirst({
-          where: eq(schema.users.id, id),
-          columns: { id: true },
-        });
-        if (!userRow) return { success: false as const, error: COMMON_ERRORS.NOT_FOUND, message: '用户不存在', status: 404 };
+    const result = await removeUserRole(adminUserId, id, parsed.data.roleId, {
+      method: 'DELETE',
+      url: request.url,
+      ip: extractClientIP(request.headers),
+      userAgent: extractUserAgent(request.headers),
+    });
+    if (!result.ok) return restError(result.error, result.message, result.status);
 
-        await tx.delete(schema.userRoles).where(and(
-          eq(schema.userRoles.userId, userRow.id),
-          eq(schema.userRoles.roleId, roleId),
-        ));
-        await appendSecurityAudit(tx, {
-          userId: adminUserId,
-          operation: 'USER_ROLE_ASSIGN',
-          method: 'DELETE',
-          url: request.url,
-          params: { targetUserId: userRow.id, roleId },
-          ip: extractClientIP(request.headers),
-          userAgent: extractUserAgent(request.headers),
-          status: 200,
-        });
-        return { success: true as const, userId: userRow.id };
-      },
-    );
-    if (!result.success) return restError(result.error, result.message, result.status);
-    const userId = result.userId;
-
-    // 角色移除属于权限决策变更 → 收敛（同上）
-    await revokeAndRefreshAuthorization([userId]);
-
-    // 失效页面与数据缓存
     invalidateResourceFromRoute('users');
-
     return restSuccess({});
   });
 }
