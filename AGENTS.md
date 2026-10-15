@@ -10,7 +10,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 `@docs/spec/*` 文档提供理论支持
 决策索引：动手改某块之前若想知道「这件事以前有人做过吗 / 为什么长这样」，先读 `docs/solution/README.md`（按主题索引历次决策与教训）
-当前 Rust 版本环境约定（Rust 1.93.0+）：对于自定义的需要多线程并发调度（Send 约束）的 Trait 异步方法，必须采用“零开销异步 Trait”最佳实践：在 Trait 定义中使用 `-> impl std::future::Future<Output = T> + Send` 进行严格的线程安全约束，并在 `impl` 实现块中直接使用 `async fn` 语法以保持代码简洁，避免 `#[async_trait]` 带来的 Box 堆分配开销。Pingora 框架的 trait 回调（如 `ProxyHttp`）签名由框架固定，必须使用 `#[async_trait]` 实现，属唯一例外。
+Rust 异步 Trait 的写法见「Gateway (Rust) 要点」（唯一出处，勿在此重复）。
 
 ## 基础环境
 
@@ -152,11 +152,8 @@ packages/config/    共享 env 配置 (Zod + URL 推导)
 - Next.js 16: Middleware 改名为 Proxy，Server Function 公开可达（三层防御原因）
 - Docker Compose 本地开发: `docker compose up -d`（PostgreSQL 16 + Redis 7）
 - 数据库初始化顺序: `pnpm db:migrate` → `pnpm db:seed`；`db:push` 只允许本地临时试验，不进入 CI/发布路径
-- **装新依赖**：若 `pnpm add` 报 `ERR_PNPM_EROFS`（环境把 pnpm store 挂为只读）⇒ **报告并请用户代跑**；不要改换包管理器、不要绕过锁文件、不要在 CI 去掉 `--frozen-lockfile`（本会话实测：`eslint-plugin-sonarjs` 因此装不上，#89 只能给结论不能落地）
-- **长作业不要与写操作并发**：CI 校验这类长任务开始前先**固化 SHA**（`scripts/ci-verify.sh <sha>`）；不要在同一次调用里「提交 + 启动校验」（脚本 `git rev-parse` 会落在旧提交上）；也不要**在脚本运行中改写它**（bash 增量读取 ⇒ 读到半行、报出莫名语法错误）。本会话两种竞态各踩一次。
-- **门禁结论只看退出码，不要用 grep 过滤行**：过滤模式写错会得出**相反**的结论——2026-10-15 实测：
-  `pnpm -r lint` 真值 **1 error**（`guard.ts` 未使用导入），被 `grep '^\s*[0-9]+:[0-9]+\s+error'`
-  判成「0 error」，因为真实输出带 `apps/portal lint:` 前缀 ⇒ 零匹配。要看结论就用退出码 +
-  末尾的 `✖ N problems (X errors…)` 汇总行；`pre-commit` 现已包含 lint 步骤。
-- **批量改写脚本一律用三引号或中文引号**：把英文引号嵌进双引号 Python 字符串会让**整段脚本不执行**（本会话栽过 **6 次**；写下本条规则之后**又栽了一次**，其中一次导致索引与 roadmap 漏写）。写完先看脚本是否真的跑了（打印的确认行）。
-- **文档维护**：`docs/solution/README.md` 是决策索引——**新增 solution 文档必须同时挂到某个主题下**（`docs-references.test.ts` 会断言无遗漏）；引用既有决定前先查它（"这件事以前有人做过吗"）
+- **装新依赖**：`pnpm add` 若报 `ERR_PNPM_EROFS`（pnpm store 只读）⇒ 报告并请用户代跑，保持包管理器、锁文件与 CI 的 `--frozen-lockfile` 原样（实测：`eslint-plugin-sonarjs` 因此装不上，#89 只给结论不落地）
+- **长作业先固化 SHA，再单独启动**：`scripts/ci-verify.sh <sha>` 在提交**之后**单独跑；脚本一旦启动就当它只读（要改就停下重跑）。本会话两种竞态各踩一次：`git rev-parse` 落在旧提交上、bash 增量读到半行。
+- **门禁结论取退出码**（加末尾的 `✖ N problems (X errors…)` 汇总行）；grep 只用来筛行、不当结论：`grep '^\s*[0-9]+:[0-9]+\s+error'` 曾把 1 个 lint error 读成「0 error」（真实输出带 `apps/portal lint:` 前缀）。`pre-commit` 已含 lint 步骤。
+- **批量改写脚本用三引号或中文引号，写完先看确认行**：英文引号嵌进双引号 Python 字符串会让整段脚本**不执行**（本会话连栽 6 次，含规则写下之后的那次；一次导致索引与 roadmap 漏写）。
+- **文档维护**：新增 solution 文档必须挂进 `docs/solution/README.md` 的主题下（`docs-references.test.ts` 断言无遗漏）；引用既有决定前先查它。

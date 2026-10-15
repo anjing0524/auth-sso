@@ -2,158 +2,33 @@
 
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+工程约定、项目结构、技术栈、测试环境的**唯一出处**是 `AGENTS.md`（本文件不复制）。
+技能路由见 `ask-matt` —— 那张地图就是全部入口，本文件不再抄一份。
+命令清单以根 `package.json` 的 `scripts` 为准；各命令的**语义**见 `AGENTS.md` 的「测试体系」。
+下面只留 Claude Code 侧另需的两件事。
 
-## Project Overview
+## 测试分层（分层职责；环境与 project 配置在 `AGENTS.md`）
 
-Auth-SSO is an enterprise unified identity authentication platform implementing SSO (Single Sign-On) with OIDC Provider capabilities. It's a pnpm monorepo containing:
+| 层 | 位置 | 环境 / 框架 | 范围 | 命令 |
+|---|---|---|---|---|
+| 单元 / 组件 | `apps/*/__tests__/{components,domain,helpers}` | jsdom + Vitest | 渲染、交互、纯函数；外部 UI 原语与数据源可 mock | `pnpm test:components` |
+| API | `apps/*/__tests__/api/*.test.ts` | node + **真实 PostgreSQL / Redis** | route 与 action 的校验、鉴权、CRUD、数据范围过滤 | `pnpm test:api` |
+| E2E | `tests/e2e/*.spec.ts` | Playwright（仅 Chromium） | 登录冒烟与 Docker 发布栈闭环 | `pnpm test:e2e` |
 
-- **apps/portal** - Admin Portal & OIDC Provider (port 4100) - User/role/permission management, custom OAuth 2.1/OIDC Provider, and Dashboard. IDP functionality is fully integrated into Portal.
-- **apps/gateway** - API Gateway (Rust/Pingora) - ES256 JWKS offline verification, Cookie-to-Bearer transformation
-- **packages/contracts** - Shared types, error codes, permission codes, OIDC constants
-- **packages/config** - Shared env config (Zod schema + URL derivation), TypeScript/ESLint configuration
+API 层里生产业务模块的模块级 mock 必须是**类型化工厂**（`vi.mock(import('…'), (): Partial<typeof xModule> => …)`）
+并带 `// @allow-module-mock <target> <kind>: <理由>`；签发/验签/撤销/登录/权限/审计等安全语义**真实驱动**。
+规则出处 `docs/adr/ADR-022-test-authenticity-strategy.md`，由 `__tests__/api/module-mock-guard.test.ts` 在 `pnpm test` 内强制。
+**没有**"关键测试文件清单"：目录就是清单（清单会过期，见 `AGENTS.md` 的门禁结论一条）。
 
-## Development Commands
+## 追溯（`@req`）
 
-**命令清单以根 `package.json` 的 `scripts` 为准**——本文件不再复制一份（复制出来的清单会漂移，
-而"文档写的命令不存在"正是本仓反复治理过的一类问题）：
-
-- 开发/构建：`pnpm dev` · `pnpm build` · `pnpm --filter @auth-sso/portal dev`
-- 质量门：`pnpm lint`（递归，全部包）· `pnpm typecheck`（递归）· `pnpm test`
-- 测试分层：`test:api`（真实 PostgreSQL + Redis，见 ADR-022）· `test:components`（jsdom）· `test:e2e` · `test:report`（追溯清单，不是覆盖率门禁）
-- 数据库：`pnpm db:migrate` → `pnpm db:seed`（`db:push` 只允许本地临时试验）
-
-各命令的**语义**（分层策略、真实基础设施、清单与门禁的区别）见 `AGENTS.md` 的「测试体系」与本文的 Test Architecture。
-
-## Test Architecture
-
-Tests follow a layered strategy — fast, isolated unit tests at the bottom, integration-style API tests in the middle, and full-browser E2E at the top.
-
-### Layer 1: Unit / Component Tests
-
-- **Location**: `apps/*/__tests__/components/`, `apps/*/__tests__/smoke.test.ts`
-- **Framework**: Vitest with `jsdom` environment
-- **Scope**: Component rendering, user interactions, helper functions
-- **Mocks**: 外部 UI 原语与数据源；生产业务模块的 mock 必须带理由注解（见 `CODING_STANDARDS.md`）
-- **Run**: `pnpm test:components`
-
-### Layer 2: API Tests
-
-- **Location**: `apps/*/__tests__/api/*.test.ts`
-- **Framework**: Vitest with `@vitest-environment node`
-- **Scope**: API route handlers — request validation, auth enforcement, CRUD logic, data scope filtering
-- **基础设施**: **真实 PostgreSQL + 真实 Redis** —— `vitest.globalSetup.ts` 硬探针 + 专用逻辑库 + 每用例 `FLUSHDB`；真实库经 `vi.mock('@/infrastructure/db')` 的测试句柄注入
-- **Mocks**: 生产业务模块的模块级 mock 必须是**类型化工厂**（`vi.mock(import('…'), (): Partial<typeof xModule> => …)`）并带 `// @allow-module-mock <target> <kind>: <理由>`；签发/验签/撤销/登录/权限/审计等**安全语义一律真实驱动**
-- **规则出处**: `docs/adr/ADR-022-test-authenticity-strategy.md`（豁免清单与理由枚举）；由 `__tests__/api/module-mock-guard.test.ts` 在 `pnpm test` 内强制
-- **Run**: `pnpm test:api`
-
-### Layer 3: E2E Tests
-
-- **Location**: `tests/e2e/*.spec.ts`
-- **Framework**: Playwright on Chromium
-- **Scope**: 浏览器登录冒烟与 Docker 发布栈的 Gateway→Portal 登录/登出闭环
-- **Setup**: 本地 Portal webServer 或 Docker 发布验收栈
-- **Run**: `pnpm test:e2e`
-
-### Session 架构
-
-系统采用**纯自定义无状态 JWT Cookie 架构**。Portal 自身即为 OIDC Provider，通过 `jose` 库实现 ES256 JWT 签发与验签，密钥对存储在 PostgreSQL `jwks` 表中。认证流程基于 OAuth 2.1 Authorization Code + PKCE，登录成功后写入 `portal_jwt_token`（Access Token）和 `portal_refresh_token`（Refresh Token）两个 HttpOnly Cookie。Gateway（Rust/Pingora）通过缓存 JWKS 公钥实现离线 JWT 签名验证，验签后查询 Redis jti 黑名单（H-SESS-006 即时失效依赖此，Redis 宕机时 fail-open 放行，撤销的 token 在 AT 自然过期前可用）。
-
-### Traceability
-
-- **Script**: `tests/traceability/generate-report.mjs`
-- **Reports**: `tests/traceability/.generated/coverage-report.md`（本地生成，不提交）
-- **Mechanism**: Scans test files for `@req` annotations (file-level and line-level), matches against `docs/spec/REQUIREMENTS_MATRIX.md`, generates coverage report
-- **CI**: 报告作为需求映射清单生成；实际 Vitest、lint、typecheck 和 Docker 发布验收才是阻断门禁。
-
-### `@req` Annotation Convention
-
-Every test file SHOULD annotate which requirements it covers:
-
-- File-level (JSDoc block):
-  ```
-   * @req AUTH-001~005
-   * @req D-PRM-L, D-PRM-C, D-PRM-U, D-PRM-D
-  ```
-- Line-level (inline, for specific test cases):
-  ```
-  // @req AUTH-001
-  it('缺少 code 参数时重定向到登录页', async () => { ... });
-  ```
-
-Supported formats:
-
-- Single ID: `@req A-NAV-01`
-- Comma-separated: `@req D-PRM-L, D-PRM-C, D-PRM-U, D-PRM-D`
-- Range: `@req AUTH-001~005` expands to AUTH-001 ... AUTH-005
-- Slash alternation: `@req F-DEP-L/C/U/D` expands to F-DEP-L, F-DEP-C, F-DEP-U, F-DEP-D
-- Mixed: `@req F-DEP-L/C/U/D, SCOPE-001~005`
-
-### Key Test Files
-
-- `apps/portal/__tests__/api/auth-login.test.ts` — 登录验证与暴力破解防护
-- `apps/portal/__tests__/api/auth-logout.test.ts` — 登出与 Cookie 清理
-- `apps/portal/__tests__/api/session-lifecycle.test.ts` — Session TTL 与刷新
-- `apps/portal/__tests__/domain/auth.test.ts` — PKCE/State/Nonce 安全
-- `apps/portal/__tests__/api/data-scope.test.ts` — 数据范围过滤
-- `apps/portal/__tests__/api/permission-api.test.ts` — 权限 CRUD
-- `apps/portal/__tests__/api/role-api.test.ts` — 角色 + 权限绑定
-- `apps/portal/__tests__/api/user-api.test.ts` — 用户 CRUD
-- `apps/portal/__tests__/api/department-api.test.ts` — 部门 CRUD
-- `apps/portal/__tests__/api/client-api.test.ts` — OAuth Client CRUD
-- `apps/portal/__tests__/api/me-endpoints.test.ts` — 当前用户 API
-- `tests/e2e/security.spec.ts` — 未认证令牌拒绝与 OIDC/JWKS 公开端点
-- `tests/e2e/docker-release.spec.ts` — Docker 发布栈完整认证闭环
-
-## Tech Stack
-
-- Next.js 16 (Turbopack)
-- 自研 OAuth 2.1 / OIDC Provider（`jose`）
-- Drizzle ORM + PostgreSQL
-- Redis (ioredis) for session storage
-- Tailwind CSS 4
-- pnpm workspaces
-
-## Skill routing
-
-When the user's request matches an available skill, ALWAYS invoke it using the Skill
-tool as your FIRST action. Do NOT answer directly, do NOT use other tools first.
-The skill has specialized workflows that produce better results than ad-hoc answers.
-
-Key routing rules:
-
-- Product ideas, "is this worth building", stress-test a plan → invoke grilling (grill-with-docs when ADRs/glossary should be written along the way)
-- Bugs, errors, "why is this broken", slow regressions → invoke diagnosing-bugs
-- Code review of a branch, PR, or diff since X → invoke code-review
-- Spec/PRD synthesis from the current conversation → invoke to-spec
-- Break a plan/spec into tickets → invoke to-tickets
-- Triage/categorize GitHub issues → invoke triage
-- Implement work per spec or tickets → invoke implement
-- Build/fix test-first, red-green-refactor → invoke tdd
-- Research a topic against primary sources → invoke research
-- Design or improve a module's interface → invoke codebase-design
-- Architecture review, find deepening opportunities → invoke improve-codebase-architecture
-- Terminology, CONTEXT.md, ADR authoring → invoke domain-modeling
-- Throwaway prototype to answer a design question → invoke prototype
-- In-progress merge/rebase conflicts → invoke resolving-merge-conflicts
-- Work too large for one session, plan as a ticket map → invoke wayfinder
-- Save progress / compact conversation for another agent → invoke handoff
-- Provisioning, credentials, CI secrets walkthroughs → invoke wizard
-- Git commit, PR, or release on GitHub → invoke github:commit / github:pr / github:release
-- QA the site in a browser, find UI/visual bugs → invoke browser-use:web-gui-tester
-- Writing skills or editing AGENTS.md/CLAUDE.md → invoke writing-for-agents
-- Unsure which skill fits → invoke ask-matt
+`tests/traceability/generate-report.mjs` 扫测试文件里的 `@req` 注解（文件级 JSDoc 与行级注释都算），
+与 `docs/spec/REQUIREMENTS_MATRIX.md` 对齐，生成 `tests/traceability/.generated/coverage-report.md`（本地生成，不提交）。
+写法：单 ID · 逗号并列 · 区间 `AUTH-001~005` · 斜杠 `F-DEP-L/C/U/D` · 混写。
+**报告是需求映射清单，不是门禁**；阻断门禁是 Vitest / lint / typecheck / Docker 发布验收。
 
 ## Agent skills
 
-### Issue tracker
-
-Issues live in GitHub Issues (`anjing0524/auth-sso`) via the `gh` CLI. See `docs/agents/issue-tracker.md`.
-
-### Triage labels
-
-Five canonical triage labels kept at their defaults. See `docs/agents/triage-labels.md`.
-
-### Domain docs
-
-Single-context: root `CONTEXT.md` + the existing `docs/adr/` (ADR-001~022). See `docs/agents/domain.md`.
+- 议题在 GitHub Issues（`anjing0524/auth-sso`，走 `gh` CLI）：`docs/agents/issue-tracker.md`
+- 五个 triage 标签保持默认：`docs/agents/triage-labels.md`
+- 单上下文领域文档：根 `CONTEXT.md` + `docs/adr/`（ADR-001~022）：`docs/agents/domain.md`
