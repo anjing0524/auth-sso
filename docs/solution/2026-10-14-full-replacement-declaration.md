@@ -26,9 +26,10 @@
 2. **新纯函数** `findFactoryShapeViolations(source)` + `balancedBlock(source, start)`
    （**括号配平**解析，不用"扫到 `}));` 行"的启发式——后者会把相邻 mock 串成同一窗口，
    正是首版假阳性的来源）。
-3. **4 个新夹具**（守卫自身被守）：夹具 11 缺 `importOriginal` ⇒ 报错并附**两种修法**；
-   夹具 12 `importOriginal` ⇒ 通过；夹具 13 `full-replacement` ⇒ 通过；
-   夹具 14 **不得把相邻 mock 串成同一窗口**。
+3. **5 个新夹具**（守卫自身被守）：夹具 11 缺 `importOriginal` ⇒ 报错并附**两种修法**；
+   夹具 12 `importOriginal` + spread ⇒ 通过；夹具 13 `full-replacement` ⇒ 通过；
+   夹具 14 **不得把相邻 mock 串成同一窗口**；
+   夹具 15 **调了 `importOriginal` 但解构不 spread** ⇒ 仍报（代码评审查出："只查 importOriginal 会漏掉它"）。
 4. **清扫 26 处**业务替身：`async (importOriginal)` + `const actual = await importOriginal()` + `{ ...actual, … }`；
    **3 处** UI 原语 stub 改声明 `full-replacement`。
 5. **声明数字同步**：三处"X 个违例夹具 + 1 条全量扫描"（守卫 JSDoc / ADR-022 两处 / solution 文档）
@@ -39,7 +40,7 @@
 | 项 | 结果 |
 |---|---|
 | 守卫全量扫描 | **0 违规**（26 处改写 + 3 处声明之后；**2026-10-15 复核更正**：曾写 27，实测 26，26+3=29 与 #91 清单逐行一致） |
-| 守卫自身 | **15 用例全绿**（含 4 个新夹具） |
+| 守卫自身 | **16 用例全绿**（含 5 个新夹具，逐字对照见提交时的实测） |
 | `docs-claims` | **3 用例全绿**（数字声明与实测一致） |
 | `pnpm test` | **101 文件 / 838 用例全绿** |
 | 变异（真实文件） | 去掉 `role-actions.test.ts` 里 `@/lib/session/revoke` 的 `importOriginal` ⇒ 精确变红并点名 + 给出两种修法 |
