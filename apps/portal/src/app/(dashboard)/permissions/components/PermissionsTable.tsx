@@ -29,6 +29,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { DataTable } from '@/components/shared/data-table';
 import { EmptyState } from '@/components/shared/empty-state';
 import { createPermissionAction, updatePermissionAction, deletePermissionAction } from '../actions';
+import { useFieldFailure } from '@/hooks/use-field-failure';
 
 interface PermissionRow {
   id: string;
@@ -67,6 +68,8 @@ export default function PermissionsTable({ permissions, activeTab, initialKeywor
   const [selected, setSelected] = useState<PermissionRow | null>(null);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({ name: '', code: '', type: 'API' as string });
+  /** 具体错误码（如 PERMISSION_ALREADY_EXISTS）落到对应输入框（#92） */
+  const { fieldError, reportFailure, clearFailure } = useFieldFailure(['code']);
 
   const handleTabChange = (tab: string) => {
     startTransition(() => {
@@ -91,20 +94,22 @@ export default function PermissionsTable({ permissions, activeTab, initialKeywor
 
   const handleCreate = async () => {
     if (!form.name || !form.code) { toast.error('请填写完整信息'); return; }
+    clearFailure();
     setSaving(true);
     const r = await createPermissionAction({ name: form.name, code: form.code, type: form.type as 'DIRECTORY' | 'PAGE' | 'API', sort: 0 });
     setSaving(false);
     if (r.success) { toast.success(r.message); setIsAddOpen(false); setForm({ name: '', code: '', type: 'API' }); router.refresh(); }
-    else { toast.error(r.message); }
+    else { reportFailure(r); }
   };
 
   const handleUpdate = async () => {
     if (!selected) return;
+    clearFailure();
     setSaving(true);
     const r = await updatePermissionAction(selected.id, form);
     setSaving(false);
     if (r.success) { toast.success(r.message); setIsEditOpen(false); router.refresh(); }
-    else { toast.error(r.message); }
+    else { reportFailure(r); }
   };
 
   const handleDelete = async () => {
@@ -206,7 +211,8 @@ export default function PermissionsTable({ permissions, activeTab, initialKeywor
           <DialogHeader><DialogTitle className="flex items-center gap-2"><ShieldCheck className="h-5 w-5 text-primary" /> 新增权限</DialogTitle></DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2"><Label>权限名称</Label><Input value={form.name} onChange={e => setForm({...form, name: e.target.value})} placeholder="用户列表" /></div>
-            <div className="space-y-2"><Label>权限编码</Label><Input value={form.code} onChange={e => setForm({...form, code: e.target.value})} placeholder="user:list" /></div>
+            <div className="space-y-2"><Label>权限编码</Label><Input value={form.code} aria-invalid={fieldError?.field === 'code'} onChange={e => setForm({...form, code: e.target.value})} placeholder="user:list" /></div>
+            {fieldError?.field === 'code' && <p role="alert" className="text-xs font-medium text-destructive">{fieldError.message}</p>}
             <div className="space-y-2">
               <Label>类型</Label>
               <Select value={form.type} onValueChange={v => setForm({...form, type: v})}>
@@ -231,7 +237,8 @@ export default function PermissionsTable({ permissions, activeTab, initialKeywor
           <DialogHeader><DialogTitle>编辑权限</DialogTitle></DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2"><Label>权限名称</Label><Input value={form.name} onChange={e => setForm({...form, name: e.target.value})} /></div>
-            <div className="space-y-2"><Label>权限编码</Label><Input value={form.code} onChange={e => setForm({...form, code: e.target.value})} /></div>
+            <div className="space-y-2"><Label>权限编码</Label><Input value={form.code} aria-invalid={fieldError?.field === 'code'} onChange={e => setForm({...form, code: e.target.value})} /></div>
+            {fieldError?.field === 'code' && <p role="alert" className="text-xs font-medium text-destructive">{fieldError.message}</p>}
             <div className="space-y-2">
               <Label>类型</Label>
               <Select value={form.type} onValueChange={v => setForm({...form, type: v})}>

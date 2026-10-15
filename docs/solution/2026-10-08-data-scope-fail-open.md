@@ -136,4 +136,4 @@ it('角色 deptId 为根部门 — 子树正确展开', async () => {
 | `departments/data.ts` | `getDepartmentMembers` 仅按 `departmentId` 过滤，作用域强制 100% 在调用方 | ✅ 已修 |
 | `lib/auth/data-scope.ts` | 子树谓词漏掉一级子部门（`ancestors = deptId` 未匹配） | ✅ 已修（见最佳实践 6） |
 | 3 条 TOCTOU 写路径 | operator 范围快照在事务外获取 | ✅ 已修（ADR-014 步骤 2） |
-| 5 处只读守卫 + 3 个 `data.ts` 的 `deptIds: string[]` | 形状 B 与 `Scope` 未统一 | ⬜ 待修（ADR-014 步骤 3 剩余） |
+| 5 处只读守卫 + 3 个 `data.ts` 的 `deptIds: string[]` | 形状 B 与 `Scope` 未统一 | ✅ **已修**（2026-10-15 复核：裸数组形状已消失——`grep -rn "deptIds: string\[\]" src` 为空；`data.ts` 读口统一收 `scope: UserScope` 并经 `@/lib/authz` 的 `scopeFilter`/`isScopeDenied` 过滤；`lib/authz/data-scope.ts` 写明「刻意用对象而非裸 `string[]` 包裹 `deptIds`」）。**此行的「待修」曾是过期声明**——详见 `docs/solution/2026-10-15-complexity-hotspot-disposition.md` 同批收口 |

@@ -30,6 +30,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { DataTable } from '@/components/shared/data-table';
 import { EmptyState } from '@/components/shared/empty-state';
 import { createRoleAction, updateRoleAction, deleteRoleAction } from '../actions';
+import { useFieldFailure } from '@/hooks/use-field-failure';
 
 interface RoleRow {
   id: string;  name: string; code: string;
@@ -56,6 +57,8 @@ export default function RolesTable({ roles, pagination, initialKeyword, departme
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [selected, setSelected] = useState<RoleRow | null>(null);
   const [form, setForm] = useState({ name: '', code: '', description: '', deptId: '', sort: 0 });
+  /** 具体错误码（如 ROLE_ALREADY_EXISTS）落到对应输入框（#92；hook 供四处表单复用） */
+  const { fieldError, reportFailure, clearFailure } = useFieldFailure(['code']);
 
   const handleSearch = (value: string) => {
     setKeyword(value);
@@ -75,18 +78,20 @@ export default function RolesTable({ roles, pagination, initialKeyword, departme
   const handleCreate = async () => {
     if (!form.name || !form.code) { toast.error('请填写完整信息'); return; }
     if (!form.deptId) { toast.error('请选择所属部门'); return; }
+    clearFailure();
     setSaving(true);
     const res = await createRoleAction({ name: form.name, code: form.code, description: form.description || undefined, deptId: form.deptId, sort: form.sort });
     setSaving(false);
-    if (res.success) { toast.success(res.message); setIsAddOpen(false); router.refresh(); } else { toast.error(res.message); }
+    if (res.success) { toast.success(res.message); setIsAddOpen(false); router.refresh(); } else { reportFailure(res); }
   };
 
   const handleUpdate = async () => {
     if (!selected) return;
     setSaving(true);
+    clearFailure();
     const res = await updateRoleAction(selected.id, form);
     setSaving(false);
-    if (res.success) { toast.success(res.message); setIsEditOpen(false); router.refresh(); } else { toast.error(res.message); }
+    if (res.success) { toast.success(res.message); setIsEditOpen(false); router.refresh(); } else { reportFailure(res); }
   };
 
   const handleDelete = async () => {
@@ -200,6 +205,7 @@ export default function RolesTable({ roles, pagination, initialKeyword, departme
           <div className="space-y-4 py-4">
             <div className="space-y-2"><Label>角色名称</Label><Input value={form.name} onChange={e => setForm({...form, name: e.target.value})} placeholder="管理员" /></div>
             <div className="space-y-2"><Label>角色编码</Label><Input value={form.code} onChange={e => setForm({...form, code: e.target.value})} placeholder="admin" /></div>
+            {fieldError?.field === 'code' && <p role="alert" className="text-xs font-medium text-destructive">{fieldError.message}</p>}
             <div className="space-y-2"><Label>所属部门</Label>{renderDeptSelect(form.deptId, v => setForm({...form, deptId: v}))}</div>
           </div>
           <DialogFooter><Button variant="ghost" onClick={() => setIsAddOpen(false)}>取消</Button><Button onClick={handleCreate} disabled={saving}>创建</Button></DialogFooter>

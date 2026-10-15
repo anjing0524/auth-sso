@@ -24,6 +24,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { EmptyState } from '@/components/shared/empty-state';
 import { createDepartmentAction, updateDepartmentAction, deleteDepartmentAction } from '../actions';
+import { useFieldFailure } from '@/hooks/use-field-failure';
 
 interface DeptTreeNode {
   id: string;
@@ -61,6 +62,8 @@ export default function DepartmentTree({ departments }: Props) {
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [selected, setSelected] = useState<DeptTreeNode | null>(null);
   const [form, setForm] = useState({ name: '', code: '', sort: 0, parentId: '' as string | null });
+  /** 具体错误码（如 DEPARTMENT_ALREADY_EXISTS）落到对应输入框（#92） */
+  const { fieldError, reportFailure, clearFailure } = useFieldFailure(['code']);
 
   const toggleExpand = (id: string) => {
     setExpanded(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
@@ -71,18 +74,20 @@ export default function DepartmentTree({ departments }: Props) {
 
   const handleCreate = async () => {
     if (!form.name) { toast.error('请填写部门名称'); return; }
+    clearFailure();
     setSaving(true);
     const r = await createDepartmentAction({ name: form.name, code: form.code || undefined, sort: form.sort, parentId: form.parentId });
     setSaving(false);
-    if (r.success) { toast.success(r.message); setIsAddOpen(false); router.refresh(); } else { toast.error(r.message); }
+    if (r.success) { toast.success(r.message); setIsAddOpen(false); router.refresh(); } else { reportFailure(r); }
   };
 
   const handleUpdate = async () => {
     if (!selected) return;
+    clearFailure();
     setSaving(true);
     const r = await updateDepartmentAction(selected.id, form);
     setSaving(false);
-    if (r.success) { toast.success(r.message); setIsEditOpen(false); router.refresh(); } else { toast.error(r.message); }
+    if (r.success) { toast.success(r.message); setIsEditOpen(false); router.refresh(); } else { reportFailure(r); }
   };
 
   const handleDelete = async () => {
@@ -154,7 +159,8 @@ export default function DepartmentTree({ departments }: Props) {
           <DialogHeader><DialogTitle className="flex items-center gap-2"><Building2 className="h-5 w-5 text-primary" /> 新建部门</DialogTitle></DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2"><Label>部门名称</Label><Input value={form.name} onChange={e => setForm({...form, name: e.target.value})} placeholder="技术部" /></div>
-            <div className="space-y-2"><Label>部门编码</Label><Input value={form.code} onChange={e => setForm({...form, code: e.target.value})} placeholder="tech" /></div>
+            <div className="space-y-2"><Label>部门编码</Label><Input value={form.code} aria-invalid={fieldError?.field === 'code'} onChange={e => setForm({...form, code: e.target.value})} placeholder="tech" /></div>
+            {fieldError?.field === 'code' && <p role="alert" className="text-xs font-medium text-destructive">{fieldError.message}</p>}
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setIsAddOpen(false)}>取消</Button>
@@ -169,7 +175,8 @@ export default function DepartmentTree({ departments }: Props) {
           <DialogHeader><DialogTitle>编辑部门</DialogTitle></DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2"><Label>部门名称</Label><Input value={form.name} onChange={e => setForm({...form, name: e.target.value})} /></div>
-            <div className="space-y-2"><Label>部门编码</Label><Input value={form.code} onChange={e => setForm({...form, code: e.target.value})} /></div>
+            <div className="space-y-2"><Label>部门编码</Label><Input value={form.code} aria-invalid={fieldError?.field === 'code'} onChange={e => setForm({...form, code: e.target.value})} /></div>
+            {fieldError?.field === 'code' && <p role="alert" className="text-xs font-medium text-destructive">{fieldError.message}</p>}
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setIsEditOpen(false)}>取消</Button>

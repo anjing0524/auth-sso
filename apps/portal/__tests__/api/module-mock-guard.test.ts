@@ -55,6 +55,8 @@ const EXEMPT_PREFIXES = [
   'react',
   'server-only',
   'cmdk',
+  // 外部 UI 原语（与 cmdk 同类）：toast 库由组件测试整体替换
+  'sonner',
   '@auth-sso/',
   '@/lib/env',
   '@/lib/logger',

@@ -14,8 +14,11 @@
  *   （用户域 = `username`/`email`/`mobile`/`password`；角色/部门/权限 = `code`；客户端 = `clientId`）。
  * - **纯函数、无副作用**：只做码 → 字段的查表；不认识就返回 `null`，
  *   由调用方回落到原有的消息提示（不重复提示）。
- * - **自维护**：`error-fields.test.ts` 断言"契约里每个 `*_ALREADY_EXISTS` 码都必须有映射"
- *   ——新增冲突码却忘了映射，测试立刻变红。
+ * - **自维护**：`error-fields.test.ts` 断言"契约里每个 `*_ALREADY_EXISTS` 码都必须**要么有字段映射、
+ *   要么在 `CONFLICT_CODES_WITHOUT_FIELD` 里写明理由**"——新增冲突码却忘了分类，测试立刻变红。
+ * - **无对应字段**不是例外，而是**分类**：`MOBILE_ALREADY_EXISTS` / `CLIENT_ALREADY_EXISTS`
+ *   在当前 UI 里没有用户可编辑的输入框（创建用户表单不采集 mobile；client_id 由服务端生成）
+ *   ⇒ 落到提示而非某个输入框。理由必须写下来，将来表单加了字段再翻回来。
  *
  * @module domain/shared/error-fields
  */
@@ -41,7 +44,6 @@ export const ERROR_CODE_FIELDS = {
   // 用户域：具体到字段的冲突码（#82 接通的 8 个码里最需要定位的一组）
   [USER_ERRORS.USERNAME_ALREADY_EXISTS]: 'username',
   [USER_ERRORS.EMAIL_ALREADY_EXISTS]: 'email',
-  [USER_ERRORS.MOBILE_ALREADY_EXISTS]: 'mobile',
   // 复合唯一约束时的实体级回落：无从判断是哪一列 ⇒ 归到最常用的登录名
   [USER_ERRORS.USER_ALREADY_EXISTS]: 'username',
   [USER_ERRORS.PASSWORD_TOO_WEAK]: 'password',
@@ -49,8 +51,20 @@ export const ERROR_CODE_FIELDS = {
   [ROLE_ERRORS.ROLE_ALREADY_EXISTS]: 'code',
   [DEPARTMENT_ERRORS.DEPARTMENT_ALREADY_EXISTS]: 'code',
   [PERMISSION_ERRORS.PERMISSION_ALREADY_EXISTS]: 'code',
-  [CLIENT_ERRORS.CLIENT_ALREADY_EXISTS]: 'clientId',
 } as const satisfies Partial<Record<ErrorCode, ErrorField>>;
+
+/**
+ * 冲突码里**没有用户可编辑字段**的那些：落到消息提示，而不是某个输入框。
+ *
+ * 值与 `ERROR_CODE_FIELDS` 互补；`error-fields.test.ts` 断言两者合起来覆盖全部
+ * `*_ALREADY_EXISTS` 码（**分类必须完整**，不留"忘了映射"的空档）。
+ */
+export const CONFLICT_CODES_WITHOUT_FIELD = {
+  [USER_ERRORS.MOBILE_ALREADY_EXISTS]:
+    'UI 没有任何表单采集 mobile（用户创建/编辑表单都没有该输入框）⇒ 无处就地提示，走 toast',
+  [CLIENT_ERRORS.CLIENT_ALREADY_EXISTS]:
+    'client_id 由服务端生成（创建表单不采集）⇒ 此码只可能来自内部唯一约束碰撞，归属不到输入框',
+} as const satisfies Partial<Record<ErrorCode, string>>;
 
 /**
  * 该错误码要不要落到具体字段上。

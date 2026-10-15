@@ -12,13 +12,18 @@ import {
   ROLE_ERRORS,
   USER_ERRORS,
 } from '@auth-sso/contracts';
-import { ERROR_CODE_FIELDS, fieldForErrorCode } from '@/domain/shared/error-fields';
+import {
+  CONFLICT_CODES_WITHOUT_FIELD,
+  ERROR_CODE_FIELDS,
+  fieldForErrorCode,
+} from '@/domain/shared/error-fields';
 
 describe('fieldForErrorCode', () => {
   it('用户域：冲突与弱密码各自落到对应输入框', () => {
     expect(fieldForErrorCode(USER_ERRORS.USERNAME_ALREADY_EXISTS)).toBe('username');
     expect(fieldForErrorCode(USER_ERRORS.EMAIL_ALREADY_EXISTS)).toBe('email');
-    expect(fieldForErrorCode(USER_ERRORS.MOBILE_ALREADY_EXISTS)).toBe('mobile');
+    // mobile 在 UI 里没有输入框 ⇒ 明确归类为「无对应字段」（见 CONFLICT_CODES_WITHOUT_FIELD）
+    expect(fieldForErrorCode(USER_ERRORS.MOBILE_ALREADY_EXISTS)).toBeNull();
     expect(fieldForErrorCode(USER_ERRORS.PASSWORD_TOO_WEAK)).toBe('password');
   });
 
@@ -40,7 +45,7 @@ describe('fieldForErrorCode', () => {
   });
 
   // ── 自维护断言（本文件的核心价值）──────────────────────────────────
-  it('契约里**每个** `*_ALREADY_EXISTS` 码都有字段映射', () => {
+  it('契约里**每个** `*_ALREADY_EXISTS` 码都被分类：有字段映射，或写明「无对应字段」的理由', () => {
     // 注意：必须按错误组的**键名**筛（`ERROR_CODE_VALUES` 里装的是线值 `AUTH_SSO_xxxx`，
     // 不是键名）——这条测试第一版就是栽在这里，才改成从组里取键。
     const groups = {
@@ -58,11 +63,18 @@ describe('fieldForErrorCode', () => {
     // 扫描范围非空（否则这条断言是假绿）
     expect(conflictCodes.length).toBeGreaterThanOrEqual(8);
 
-    const unmapped = conflictCodes.filter((c) => fieldForErrorCode(c) === null);
+    const unclassified = conflictCodes.filter(
+      (c) => fieldForErrorCode(c) === null && !(c in CONFLICT_CODES_WITHOUT_FIELD),
+    );
     expect(
-      unmapped,
-      '契约新增了冲突码但前端没有映射 ⇒ 该错误会退回"解析中文文案"（#92）。'
-        + '请在 src/domain/shared/error-fields.ts 里补上它落到哪个字段',
+      unclassified,
+      '契约新增了冲突码但既没有字段映射、也没有写明「无对应字段」的理由 ⇒ 该错误会退回"解析中文文案"（#92）。'
+        + '请在 src/domain/shared/error-fields.ts 里二选一',
     ).toEqual([]);
+
+    // 反向：分类表里的理由不能是空话
+    for (const [code, reason] of Object.entries(CONFLICT_CODES_WITHOUT_FIELD)) {
+      expect(reason.length, `${code} 的「无对应字段」理由太短`).toBeGreaterThan(10);
+    }
   });
 });

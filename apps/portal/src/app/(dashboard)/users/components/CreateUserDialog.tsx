@@ -30,7 +30,7 @@ import {
 } from '@/components/ui/select';
 import type { ApiResponse } from '@auth-sso/contracts';
 import { createUserAction } from '../actions';
-import { fieldForErrorCode } from '@/domain/shared/error-fields';
+import { useFieldFailure } from '@/hooks/use-field-failure';
 
 /**
  * 局部组件：基于 React 19 useFormStatus 感知表单提交态
@@ -72,10 +72,12 @@ export default function CreateUserDialog({ departments }: CreateUserDialogProps)
     null
   );
 
-  // 服务端给的是**具体**码（#82 接通、#92 消费）：能落到某个输入框的就落到那里，
-  // 落不到的（如 403/500）才走 toast——两者不重复提示。
-  const failedField = state && !state.success ? fieldForErrorCode(state.error) : null;
-  const failedMessage = state && !state.success ? state.message : null;
+  // 服务端给的是**具体**码（#82 接通、#92 消费）：能落到本表单某个输入框的就落到那里，
+  // 落不到的（403/500，或本表单没有该字段）才走 toast——两者不重复提示。
+  // 字段清单是**参数**：本表单只有 username/email/password（不采集 mobile）。
+  const { fieldError, reportFailure } = useFieldFailure(['username', 'email', 'password']);
+  const failedField = fieldError?.field ?? null;
+  const failedMessage = fieldError?.message ?? null;
 
   // 感知 Action 结果并响应（依赖原始值避免不必要的 effect 重跑）
   useEffect(() => {
@@ -85,11 +87,12 @@ export default function CreateUserDialog({ departments }: CreateUserDialogProps)
         toast.success(state.message || '用户创建成功');
         setIsOpen(false);
         setDeptId('');
-      } else if (!fieldForErrorCode(state.error)) {
-        toast.error(state.message || '创建用户失败');
+      } else {
+        // 就地显示还是 toast，由 hook 按"本表单字段清单"判断（不依赖上一次的状态）
+        reportFailure({ error: state.error, message: state.message || '创建用户失败' });
       }
     });
-  }, [state]);
+  }, [state, reportFailure]);
 
   return (
     <>

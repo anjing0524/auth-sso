@@ -9,6 +9,7 @@
 
 *何时读*：假绿、替身、守卫是否真被检查——本仓反复出问题的区域
 
+- [字段级错误铺到四个实体表单 —— 以及我上一轮接线里的一处静默失败（#92 余下）](2026-10-15-field-level-errors-across-forms.md)
 - [A2 修订版落地：不禁止整体替换，只禁止「不声明的整体替换」（#91）](2026-10-14-full-replacement-declaration.md)
 - [测试真实性治理 —— 假绿的识别、变异验证与机械规则](2026-10-12-test-authenticity-remediation.md)
 - [写路径测试契约 · 同类清扫（#84）—— 以及「门禁真的在拦我」的两次实证](2026-10-14-same-class-test-contract-sweep.md)

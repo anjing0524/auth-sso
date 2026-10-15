@@ -49,7 +49,7 @@
 
 **生产业务模块**（须受规则约束）：`@/lib/**`、`@/domain/**`、`@/app/**`、`@/hooks/**`、`@/components/**`。
 
-**明确豁免**（不进规则射程，写死在守卫的豁免清单里，不是"默认漏网"）：`@/infrastructure/**`、`next/*`、`jose`、`ioredis`、`postgres`、`drizzle-orm/*`、`react`、`server-only`、`cmdk`、`@auth-sso/*`、`@/lib/env`、`@/lib/logger`。
+**明确豁免**（不进规则射程，写死在守卫的豁免清单里，不是"默认漏网"）：`@/infrastructure/**`、`next/*`、`jose`、`ioredis`、`postgres`、`drizzle-orm/*`、`react`、`server-only`、`cmdk`、`sonner`、`@auth-sso/*`、`@/lib/env`、`@/lib/logger`。
 
 Rust 侧（`apps/gateway`）不在本策略射程；跨语言契约继续由 `gateway-identity-trust.test.ts` 与 `apps/gateway/src/http.rs` 的同向量测试锚定。
 
