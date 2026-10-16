@@ -66,3 +66,15 @@ ADR-006 剥离 JWT claims 时把两类数据混在了一起：**RBAC 鉴权数�
 - ADR-006: JWT 最小化（RBAC 数据剥离维持；OAuth 协议数据的分层见决策 4）
 - ADR-011: 故障语义分级（introspect 的 jti 复核 fail-close）
 - ADR-010: Gateway 统一 OAuth Client（SSO 会话 RT 的 client 恒为 `portal`）
+
+## 验证（2026-10-15 补：活体核实，含两处自我修订）
+
+| 断言 | 证据（file:line） | 判定 |
+|---|---|---|
+| 2026-10-13 修订的核心修法：三个公开 URL 的判据收成一个纯函数 | `packages/config/src/env.ts:135` = `export function resolvePublicUrls(env: PublicUrlEnv): PublicUrls` | 真 |
+| **过渡窗当日关闭**：`LEGACY_ISSUER` 已从 Portal 与 Gateway 删除 | `apps/portal/src` + `apps/gateway/src` 全量 grep `LEGACY_ISSUER` ⇒ **0 命中** | 真（强证据：常量确已不存在） |
+| RT 绑定发放 client：`client_id` **NOT NULL + FK → clients**，历史行回填 `'portal'` | `apps/portal/drizzle/0001_drop_ghost_access_tokens_bind_rt_client.sql:13`（`SET NOT NULL`）、`:14-16`（`ADD CONSTRAINT fk_refresh_tokens_client FOREIGN KEY (client_id) REFERENCES clients(client_id) ON DELETE CASCADE`）、`:17`（建索引）、回填语句 `UPDATE refresh_tokens SET client_id = 'portal' WHERE client_id IS NULL` | 真 |
+
+**旁证（顺带核实）**：同一迁移 `:11` 有 `DROP TABLE IF EXISTS access_tokens` —— 即它顺带删掉了
+幽灵表 `access_tokens`，这正对应别处日志里的 `table "access_tokens" does not exist, skipping`
+（表已按 ADR 删除、迁移日志仍提及，属正常现象，不是缺陷）。
