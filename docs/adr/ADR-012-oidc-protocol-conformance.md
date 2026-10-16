@@ -67,7 +67,7 @@ ADR-006 剥离 JWT claims 时把两类数据混在了一起：**RBAC 鉴权数�
 - ADR-011: 故障语义分级（introspect 的 jti 复核 fail-close）
 - ADR-010: Gateway 统一 OAuth Client（SSO 会话 RT 的 client 恒为 `portal`）
 
-## 验证（2026-10-15 补：活体核实，含两处自我修订）
+## 验证（2026-10-16 补：活体核实，含两处自我修订）
 
 | 断言 | 证据（file:line） | 判定 |
 |---|---|---|

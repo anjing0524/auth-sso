@@ -242,7 +242,7 @@ like(schema.departments.ancestors, `${deptId}/%`),   // 只匹配二级及更深
 
 **已取得逐字引用的来源**：PostgreSQL 官方（`transaction-iso.html`、`ddl-rowsecurity.html`、`sql-createfunction.html`、`functions-admin.html`）；Prisma Transactions；ZenStack Under the Hood；PostgREST Transactions / Auth / DB Authz；Supabase RLS 与 RLS 性能指南；Hasura Row-Level Permissions；PgBouncer features；Spring Transaction Propagation；Node.js async_context；本地 `drizzle-orm@0.45.2` 源码。
 
-## 验证（2026-10-15 补：活体核实 2026-10-13 的自我更正）
+## 验证（2026-10-16 补：活体核实 2026-10-13 的自我更正）
 
 本 ADR 的修订段声称：`users/[id]` 与 `users/[id]/roles` 的 GET「**从未迁移**（在路由里手写
 `resolveScope + isWithinScope → 403`，而 `getUser` / `getUserRoles` 连 scope 参数都没有），

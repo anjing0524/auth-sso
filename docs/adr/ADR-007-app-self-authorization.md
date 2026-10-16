@@ -94,7 +94,7 @@ async function authorize(request) {
 - ADR-008: 权限码命名空间化模型
 - ADR-003: Gateway 作为 OAuth Client
 
-## 验证（2026-10-15 补：活体核实）
+## 验证（2026-10-16 补：活体核实）
 
 | 断言 | 证据（file:line） | 判定 |
 |---|---|---|
