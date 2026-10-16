@@ -10,6 +10,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
 import { useFieldFailure } from '@/hooks/use-field-failure';
+import { updateUserRolesAction } from '../actions';
 import { Shield, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -99,21 +100,15 @@ export default function AssignRoleDialog({ open, onOpenChange, user }: AssignRol
     setSaving(true);
     try {
       const roleIds = Array.from(assignedRoleIds);
-      const res = await fetch(`/api/users/${user.id}/roles`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ roleIds }),
-      });
-      const body = await res.json();
-      if (res.ok && (body.success || body.data)) {
+      // 内部页面写操作走 Server Action（不再 fetch REST 路由）：
+      // 编排与 REST 面共用 lib/user-role-assignment 的同一份实现
+      const res = await updateUserRolesAction(user.id, roleIds);
+      if (res.success) {
         toast.success(`已为用户「${user.name}」更新角色（${roleIds.length} 个）`);
         onOpenChange(false);
       } else {
-        // body 来自 fetch 的响应（REST 形状）⇒ 构造分类点需要的 { error, message }
-        reportFailure({ error: body.error ?? '', message: body.message || '角色分配失败' });
+        reportFailure(res);
       }
-    } catch {
-      toast.error('网络错误，请重试');
     } finally {
       setSaving(false);
     }

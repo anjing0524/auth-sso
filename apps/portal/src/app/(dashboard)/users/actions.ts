@@ -17,6 +17,8 @@
  * @impl B-USR-PW — 重置用户密码
  */
 import { schema } from '@/infrastructure/db';
+import { RoleAssignmentSchema, assignUserRoles } from '@/lib/user-role-assignment';
+import { invalidateResource } from '@/lib/cache-invalidation';
 import { and, eq, isNull, or } from 'drizzle-orm';
 import { withAuth, type AuthContext } from '@/lib/auth';
 import {
@@ -47,7 +49,6 @@ import {
 } from '@/lib/auth/authorization-effects';
 import { revokeUserAccessByUserId } from '@/lib/session/revoke';
 import { clearBruteForceCounter } from '@/lib/auth/brute-force';
-import { invalidateResource } from '@/lib/cache-invalidation';
 import { withScopedRow, withScopedWrite } from '@/lib/authz';
 import type { DbTxHandle } from '@/infrastructure/db';
 import { assertResetAllowed, revokeAfterPasswordReset } from '@/lib/account/reset-password';
@@ -356,5 +357,39 @@ export const resetPasswordAction = withAuth(
 
     invalidateResource('users');
     return { success: true, data: { id: v.data.id }, message: '密码已重置，该用户所有会话已失效' };
+  },
+);
+
+/**
+ * 分配用户角色（**内部页面写操作的唯一入口**）
+ *
+ * 与 REST 路由共用 `lib/user-role-assignment` 的**同一份**写编排与**同一份** zod schema：
+ * 范围守卫、事务内校验（R-USER-ROLE）、删旧插新、安全审计、权限收敛都在那里，本函数只做
+ * 三件事——鉴权（{@link withAuth}）、调共享实现、用 **Action 版**入口失效缓存
+ * （route 用 `invalidateResourceFromRoute`，两者不可混用，见 `cache-invalidation-site-guard`）。
+ *
+ * 为什么不是手写一遍编排：那是同一件事两种形状，正是 `lib/authz` 当初要消灭的形态。
+ */
+export const updateUserRolesAction = withAuth(
+  { permissions: [USER_PERMISSIONS.ASSIGN_ROLE] },
+  async (
+    ctx: AuthContext,
+    targetUserId: string,
+    roleIds: string[],
+  ): Promise<ApiResponse<{ assignedCount: number }>> => {
+    const v = validate(RoleAssignmentSchema, { roleIds });
+    if (!v.ok) return v.response;
+
+    // 共享实现已完成权限收敛（撤销 AT + 刷权限缓存）；失败带可直接进信封的码/消息
+    const result = await assignUserRoles(ctx.userId, targetUserId, v.data.roleIds, {
+      method: 'POST',
+      url: `action://users/${targetUserId}/roles`,
+      ip: null,
+      userAgent: null,
+    });
+    if (!result.ok) return { success: false, error: result.error, message: result.message };
+
+    invalidateResource('users');
+    return { success: true, data: { assignedCount: result.assignedCount.length } };
   },
 );
