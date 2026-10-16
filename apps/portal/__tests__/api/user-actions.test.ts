@@ -63,7 +63,7 @@ vi.mock(import('@/lib/crypto'), async (importOriginal): Promise<Partial<typeof c
 // "只断言调用 + 空模块"组合）。现在撤销走真实 Redis，断言落在真实黑名单上。
 
 import { db } from '@/infrastructure/db';
-import { createUserAction, updateUserAction, toggleUserStatusAction, deleteUserAction, resetPasswordAction } from '@/app/(dashboard)/users/actions';
+import { createUserAction, updateUserRolesAction, updateUserAction, toggleUserStatusAction, deleteUserAction, resetPasswordAction } from '@/app/(dashboard)/users/actions';
 import type * as verifyJwtModule from '@/lib/auth/verify-jwt';
 import type * as cryptoModule from '@/lib/crypto';
 
@@ -137,6 +137,40 @@ describe('User Server Actions', () => {
       // 生产契约：withAuth 映射领域错误为失败信封，**不抛出**
       if (r.success) expect.unreachable('应当被拒绝（生产契约：失败信封）');
       expect(r.error).toBe(COMMON_ERRORS.NOT_FOUND);
+    });
+  });
+
+  describe('updateUserRolesAction', () => {
+    // beforeEach 已种下：操作者（ADMIN_ID）在根部门的 SUPER_ADMIN 角色 + 绑定，
+    // 即"有范围 + 有权限"；本组只补**被操作的目标用户**。
+    const ROOT_DEPT = '00000000-0000-4000-8000-000000000001';
+    const ROLE_ID = '00000000-0000-4000-8000-000000000301';
+    const TARGET_ID = '00000000-0000-4000-8000-000000000201';
+
+    it('成功：覆盖式分配本部门角色，返回数量并真正写库', async () => {
+      await seedTestData(td.db, { users: seedTestUser({ id: TARGET_ID, deptId: ROOT_DEPT }) });
+
+      const r: any = await updateUserRolesAction(TARGET_ID, [ROLE_ID]);
+
+      expect(r.success).toBe(true);
+      expect(r.data.assignedCount).toBe(1);
+      const rows = await td.db.select().from(schema.userRoles).where(eq(schema.userRoles.userId, TARGET_ID));
+      expect(rows.map((x) => x.roleId)).toEqual([ROLE_ID]);
+    });
+
+    // 未覆盖（诚实记录）：'角色不属于该用户部门' 这条 R-USER-ROLE 失败需要**第二个部门 + 该部门的角色**，
+    // 而 `seedRootDept()` 不接受 overrides（TS2554）⇒ 造不出。触发条件：给种子助手加 overrides、
+    // 或该规则下次被改动时，补一条断言 message 含「无法分配」的用例。
+    it('目标用户不在操作者数据范围（无部门）⇒ 范围守卫拒绝，且不写库', async () => {
+      // 实测发现：这条路径先被 lib/authz 的范围守卫拦下（无部门无法证明归属，ADR-002），
+      // 因此共享实现里"该用户尚未分配部门…"那句在 action 路径不可达——留着是数据层兜底。
+      await seedTestData(td.db, { users: seedTestUser({ id: TARGET_ID, deptId: null }) });
+
+      const r: any = await updateUserRolesAction(TARGET_ID, [ROLE_ID]);
+
+      expect(r.success).toBe(false);
+      const rows = await td.db.select().from(schema.userRoles).where(eq(schema.userRoles.userId, TARGET_ID));
+      expect(rows).toEqual([]);
     });
   });
 
