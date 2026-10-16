@@ -90,6 +90,23 @@ export const AUDIT_OPERATION_VALUES = [
 ] as const;
 export type AuditOperation = typeof AUDIT_OPERATION_VALUES[number];
 
+/**
+ * 已声明但**尚无发射点**的审计操作（保留值）。
+ *
+ * 为什么必须有这份清单：`ROLE_PERMISSION_ASSIGN` 是"给角色分配权限"预留的操作码，
+ * 而该能力**尚未构建**（2026-10-16 核实：全 src 只有删除绑定的路径，没有 insert）。
+ * 契约里若不标注，后人与守卫都**无法区分"有意的预留"与"漏了发射"** —— 核实当时，
+ * 这个未标注的预留值就一度被误读成一处审计缺口（真实情况：能力还没做）。
+ *
+ * 规则（由 `__tests__/audit-operation-emission.test.ts` 强制）：
+ * `AUDIT_OPERATION_VALUES` 的每个值必须**要么**在 `apps/portal/src` 里被引用，
+ * **要么**出现在本清单里；反之，列在本清单里的值**不得**已被引用（否则标记过期，应移除）。
+ */
+export const RESERVED_AUDIT_OPERATIONS: readonly AuditOperation[] = [
+  // 预留：角色↔权限授予的写路径尚未实现（现只有"删权限/删角色时清绑定"）
+  'ROLE_PERMISSION_ASSIGN',
+];
+
 // 审计操作中英文标签
 export const AUDIT_OPERATION_LABELS: Record<AuditOperation, string> = {
   USER_CREATE: '创建用户',
