@@ -158,16 +158,19 @@ describe('User Server Actions', () => {
       expect(rows.map((x) => x.roleId)).toEqual([ROLE_ID]);
     });
 
-    // 未覆盖（诚实记录，第 7 次尝试后按"该停就停"撤掉）：'角色不属于该用户部门' 的 R-USER-ROLE 失败。
-    // 已解决：`seedRootDept()` 支持 overrides（与兄弟助手对齐）。
-    // **已用探针拿到的事实**（一步步收敛，不是猜）：
-    //   1) 失败**发生在断言之前**——给断言带自报上下文后，两种 reporter 里都没有那条消息 ⇒ 是抛错；
-    //   2) 抛出物是 `Failed query: insert into "departments" … values (…), (…)` ⇒ **第二个部门的插入被 DB 拒绝**；
-    //   3) 在 postgres.js 的错误对象上直接读 `code/constraint/detail` 全是 `undefined` ⇒ 真字段在 **`err.cause`** 里，需要展开一层（`(e as any).cause`）才能看到 constraint 名。
-    // ⇒ 下一步（专门一轮、只做这一件事）：打印 `err.cause`，拿到约束名；若约束来自**种子数据本身不合法**
-    //   （例如第二个根部门触发某条唯一/非空约束），那 `seedRootDept({...})` 造同级部门这条路就是错的，
-    //   应改为"给该部门一个合法的 ancestors/parentId"，或给种子助手加一个真正的 `seedChildDept()`。
-    //   这与"该用例是否值得"无关：它先暴露了**种子层**的一个未知，优先搞清它。
+    // 未覆盖（诚实记录，第 8 次尝试后仍按"该停就停"撤掉）：'角色不属于该用户部门' 的 R-USER-ROLE 失败。
+    //
+    // 已用探针一步步拿到的事实（不是猜）：
+    //   1) 失败**在断言之前**——给断言带自报上下文后两种 reporter 都没有那条消息 ⇒ 是抛错；
+    //   2) postgres.js 的包装错误上，真字段在 **`err.cause`**（`code/constraint/detail` 在包装层是 undefined）；
+    //   3) cause 显示 `duplicate key "departments_pkey"` / `Key (id)=(00000000-…-000000000001) already exists`
+    //      ⇒ 我提供的**第二个部门最终仍带 root id**；
+    //   4) 改用**显式对象展开**（`{ ...seedRootDept()[0]!, id: OTHER_DEPT, … }`）后**仍然失败**、仍拿不到自报信息
+    //      ⇒ "id 覆盖没生效"**不是全部原因**。
+    //
+    // 下一步（专门一轮、只做这一件事）：**只**跑 `seedTestData` 并把抛出的 cause 链打全，
+    // 确认到底是 departments / roles / users 哪一句失败（`/diagnosing-bugs` 的紧反馈环；
+    // 这也可能是 `seedTestData` 的既有缺陷，属共享基础设施，优先于这条用例本身）。
     it('目标用户不在操作者数据范围（无部门）⇒ 范围守卫拒绝，且不写库', async () => {
       // 实测发现：这条路径先被 lib/authz 的范围守卫拦下（无部门无法证明归属，ADR-002），
       // 因此共享实现里"该用户尚未分配部门…"那句在 action 路径不可达——留着是数据层兜底。
