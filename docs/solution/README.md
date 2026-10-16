@@ -5,6 +5,10 @@
 
 > 规范本体在 `docs/adr/`；判断题规则在 `CODING_STANDARDS.md`；可执行副本在 `apps/portal/__tests__/api/*-guard.test.ts`。
 
+## 决策核实
+
+- [核实历史决策：11 条 implemented ADR 的活体取证（含方法、4 次猜路径扑空与一次中断恢复）](2026-10-16-verifying-historical-decisions.md)
+
 ## 测试真实性与守卫
 
 *何时读*：假绿、替身、守卫是否真被检查——本仓反复出问题的区域
@@ -134,7 +138,7 @@
 
 ## 维护
 
-本索引覆盖 `docs/solution/` 全部 **77 篇**文档（**由测试断言**：每篇都能到达、每篇恰好一次、篇数等于实测）。
+本索引覆盖 `docs/solution/` 全部 **78 篇**文档（**由测试断言**：每篇都能到达、每篇恰好一次、篇数等于实测）。
 **新增文档必须同时挂到某个主题下**——否则索引会断言失败。
 
 **阻断点**：`apps/portal/__tests__/api/docs-references.test.ts`（在 `pnpm test` 的 API project 里跑）断言三件事：
