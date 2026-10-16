@@ -21,6 +21,15 @@
 
 ## 变更记录
 
+- 2026-10-16（续六十六）: **本会话第一条「真系统」证据到手（3/3 全对）**。承接续六十五（`dev`/`start` 起不来 ✗），本轮换了一条路并成功：`node <require.resolve 出的 next 入口> dev --webpack -p 4100`（**不带** Temporal 旗标）⇒ Next **376ms Ready** ✓、`.env.local` 被识别 ✓，随后三个**只读真实请求**全部符合预期：
+  | 请求 | 结果 | 活体验证了什么 |
+  |---|---|---|
+  | `/.well-known/openid-configuration` | **200** ✓，`issuer` = `http://localhost:4100` ✓ | **ADR-012 的「issuer 必须与取 metadata 的 URL 同源」**（此前只读过 `resolvePublicUrls` 的代码 ✓，现在是真的同源 ✓） |
+  | `/api/auth/jwks` | **200** ✓ | JWKS 端点可用，密钥来自 PostgreSQL `jwks` 表 ✓ |
+  | `/api/users`（不带认证） | **401** ✓（非 200 ✗、非 500 ✗） | **三层安全里的 `withAuth` 层真的在拒** ✓，且拒绝码正是设计值 ✓ |
+  **环境真相（三个各自独立的结论）**：①Turbopack 在本沙箱**不可用** ✗（缺 SWC 原生绑定：`GLIBC_2.29` 缺失 / musl 包 ELF 头异常）⇒ Next 自己建议的 `--webpack` **实测可行** ✓，属**纯环境**、与仓库代码无关 ✓；②**Temporal 旗标在启动与这三条路由上并非必需** ✓（不带旗标照样 200/401）⇒ 此前「程序需要它」的猜测**被证伪** ✓；③`.env.example` 的库名 `auth_sso_portal` 不存在 ✗，活库是 `auth_sso` ✓。
+  **处置**：把可复用的启动方式写进 `AGENTS.md`（含正确库名 ✓、`--webpack` ✓、不带旗标 ✓，与 e2e 那条并列 ✓）；旗标阻塞 `dev`/`start` 脚本一事**仍旧挂着** ✓（触发条件见续六十五 ✓），但**已确认它不阻塞上述三条路由** ✓ ⇒ 从"未知是否阻塞验证"降级为"已知不阻塞验证" ✓。
+
 - 2026-10-16（续六十五）: **新方向开工第一步即撞到真缺陷：`apps/portal` 在 node@26 下起不来**。动因：本会话的验证全是静态面（ADR/契约/守卫），唯一想验「真系统」的 e2e 被 Docker 构建里的 npm registry 卡死 ⇒ 改走「Next dev 独立启动」绕开构建。前提探明顺利：`dev` = `next dev -p 4100`（不依赖 Docker）✓、`auth-sso-postgres`/`redis` 活着 ✓、库 `auth_sso` 已迁移（15 张表）✓、7 个环境变量齐备 ✓，并**查出 `.env.example` 的库名 `auth_sso_portal` 根本不存在**（活库是 `auth_sso`）✓ ⇒ 按真库名写了被 gitignore 的 `.env.local`（`.gitignore:70` ✓，未污染仓库 ✓）。
   随后两次启动**都失败**：①按脚本方式（`NODE_OPTIONS='--harmony-temporal'`）⇒ `node: --harmony-temporal is not allowed in NODE_OPTIONS` ✗、HTTP 000；②把旗标移到 **node 命令行**（`node --harmony-temporal <require.resolve 出的 next 入口> dev`）⇒ **仍见同一报错** ✗、HTTP 000。仓库里设 `NODE_OPTIONS` 的只有 `package.json` 的 `dev`/`start`（`db:seed` 用 `--require`，不受白名单限制 ✓），而当前 shell 并无该变量 ✓ ⇒ **结论分两半（不写假结论）**：`dev`/`start` 经 `NODE_OPTIONS` 传 V8 旗标在 node@26 下**确实被拒**（这部分**已坐实** ✓，`AGENTS.md` 那句「已内置」因此**不再成立**，本提交已同步修正 ✓）；但绕过脚本后仍报同一错 ⇒ **还有第二个传播机制未查明** ✗。
   **处置**：按「宁可留待查，不写假结论」停下留档 ✓（未改任何生产代码 ✓、无半成品 ✓、`git status` 干净 ✓）。触发条件：**单独一轮只做这件事** —— 起服务 → 打印子进程 `NODE_OPTIONS` → 定位设值处。
