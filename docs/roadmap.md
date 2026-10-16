@@ -21,6 +21,10 @@
 
 ## 变更记录
 
+- 2026-10-16（续六十四）: **补齐 `read-scope-usage-guard` 的另一半（规则 1）—— 并顺带弄清"守卫没红"时该怎么判**。上一轮只验了规则 2（收 scope 不用）⇒ 本轮补规则 1（**绑定了 `resolveScope` 的结果却不再引用**）：放探针 `const scope = await resolveScope(db, userId); return 1;` ⇒ 守卫**退出码 1**（12 tests / 1 failed）✓，删探针后 `git status` 为空 ✓ ⇒ 该守卫**两条规则都已变异验证** ✓。
+  **过程中的一个重要分辨**（值得留档）：我第一次造的探针是**裸调用** `await resolveScope(db, userId);`（不绑定）⇒ 守卫**没红** ✗。此时有两种可能：我的形状不对 ✓ / 守卫有覆盖缺口 ✗ —— 我**没有猜**，而是去读规则实现 ✓：规则 1 的正则**要求 `const|let|var X = … resolveScope(`** ✓ ⇒ 我的形状本就不在该规则的管辖内 ✓（**判断：是我错了，不是守卫漏了** ✓）。改用正确形状后立刻变红 ✓。
+  **副产物（已知窄口，记录不修）**：裸调用 `await resolveScope(...)`（丢弃结果、无绑定）**不在**规则 1 的管辖内 ✗。判断：`resolveScope` 无副作用 ⇒ 这种写法是**死代码** ✓，不是真实的 fail-open 风险 ✓ ⇒ **不为此加宽守卫** ✗（避免投机性加固 ✓）；触发条件：若仓库里真的出现该形状（grep `await resolveScope(` 无赋值前缀），再收进来。
+
 - 2026-10-16（续六十三）: **`read-scope-usage-guard` 变异验证通过（越权面，价值最高的一条）**。做法：在 `apps/portal/src/lib/` 放一个最小探针"声明了 `scope: UserScope` 形参但在函数体里完全不使用"（规则 2 的对象）⇒ 守卫**退出码 1**（`12 tests | 1 failed`）⇒ 证明它**真的在扫生产文件**，不是只跑夹具；随即删除探针，`git status --short` **为空** ✓（零残留）。
   这条守的是**数据范围**（越权面）✓，其既有证据链也最厚：第 4 轮两轴评审实测它曾漏报**箭头函数与对象方法简写**形态 ⇒ 补齐 `FUNCTION_HEAD_PATTERNS` 并加 2 个夹具（续五十）✓；本次又证明它在真实文件上会红 ✓。
   仍未做变异验证：`scoped-write-guard` / `module-mock-guard` / `cache-invalidation-site-guard` / `gate-inventory-guard` / 两个 docs 守卫 ✓，触发条件：下次被改动时补 ✓。
