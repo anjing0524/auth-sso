@@ -53,10 +53,22 @@ export interface ToastViolation {
 export function findDirectActionToasts(source: string): ToastViolation[] {
   const code = stripComments(source);
   const rawLines = source.split('\n');
+
+  // 别名转手：先把"从 action 结果的 .message / .error 取值的变量名"收集起来
+  // （例：`const msg = res.message;` 之后 `toast.error(msg)`）。只认这种来源，
+  // 因此不会把"前端自己算出来的提示变量"误判成绕过。
+  const aliasNames = new Set<string>();
+  const aliasRe = /(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*[A-Za-z_$][\w$]*\s*\.\s*(?:message|error)\b/g;
+  for (const m of code.matchAll(aliasRe)) aliasNames.add(m[1]!);
+
+  const DIRECT = /toast\.error\(\s*[A-Za-z_$][\w$]*\s*\.\s*(?:message|error)\b/;
   const found: ToastViolation[] = [];
   code.split('\n').forEach((line, index) => {
     if (!/toast\.error\(/.test(line)) return;
-    if (!/toast\.error\(\s*[A-Za-z_$][\w$]*\s*\.\s*(?:message|error)\b/.test(line)) return;
+    const aliasHit = [...aliasNames].some((name) =>
+      new RegExp(`toast\\.error\\(\\s*${name}\\s*[,)]`).test(line),
+    );
+    if (!DIRECT.test(line) && !aliasHit) return;
     // 允许出口写在**本行或上一行**（原文，不是去注释版）
     const context = `${rawLines[index - 1] ?? ''}\n${rawLines[index] ?? ''}`;
     if (context.includes('@allow-direct-toast')) return;
@@ -79,6 +91,17 @@ describe('form-failure-handling-guard —— 夹具（守卫自身被守）', ()
     const src = `if (!res.success) { toast.error(res.message); }`;
     const v = findDirectActionToasts(src);
     expect(v.map((x) => x.line)).toEqual([1]);
+  });
+
+  it('夹具 1c：别名转手（const msg = res.message; toast.error(msg)）⇒ 报绕过分类点', () => {
+    const src = `if (!res.success) { const msg = res.message; toast.error(msg); }`;
+    const found = findDirectActionToasts(src);
+    expect(found.length, JSON.stringify(found)).toBe(1);
+  });
+
+  it('夹具 1d：本地校验提示变量（不来自 action 结果）⇒ 不误判', () => {
+    const src = `const hint = '请填写完整信息'; toast.error(hint);`;
+    expect(findDirectActionToasts(src)).toEqual([]);
   });
 
   it('夹具 2：reportFailure(res) ⇒ 通过', () => {
