@@ -25,13 +25,30 @@ function classify(referenced: boolean, reserved: boolean): 'emitted' | 'reserved
   return 'gap';
 }
 
+/**
+ * 生产代码视图：跳过测试文件，并**去掉注释**。
+ *
+ * 为什么必须去注释（2026-10-16 两轴评审发现）：原实现直接 `src.includes(op)` 全量匹配，
+ * 于是**一行注释**提到 `ROLE_PERMISSION_ASSIGN` 就会被判成"已被引用"（假红）；
+ * 反方向则是把"注释里的提及"算成"已发射"（假绿）。
+ * 这与网关头守卫（`gateway-header-emission.test.ts`）的"提及 ≠ 消费"口径必须一致 ——
+ * 两个守卫是**同一条规则**的两个实例。
+ */
+export function productionTsText(raw: string): string {
+  return raw
+    .replace(/\/\*[\s\S]*?\*\//g, '')   // 块注释（含 JSDoc）
+    .split('\n')
+    .map((line) => line.replace(/\/\/.*$/, ''))  // 行注释
+    .join('\n');
+}
+
 function portalSrcText(): string {
   const dir = fileURLToPath(new URL('../../../../apps/portal/src', import.meta.url));
   const out: string[] = [];
   for (const entry of readdirSync(dir, { recursive: true, encoding: 'utf8' })) {
     if (!entry.endsWith('.ts') && !entry.endsWith('.tsx')) continue;
     if (entry.includes('.test.')) continue;
-    out.push(readFileSync(`${dir}/${entry}`, 'utf8'));
+    out.push(productionTsText(readFileSync(`${dir}/${entry}`, 'utf8')));
   }
   return out.join('\n');
 }
@@ -51,6 +68,17 @@ describe('审计操作：声明 ↔ 发射（含显式保留清单）', () => {
       if (kind === 'stale-reservation') problems.push(`${op}: 列为保留但 src 中已被引用 ⇒ 标记过期，请从保留清单移除`);
     }
     expect(problems.join('\n'), '审计操作的声明与发射不一致').toBe('');
+  });
+
+  it('夹具：注释里的提及不算消费（否则假红/假绿）', () => {
+    const withComment = productionTsText('// TODO: ROLE_PERMISSION_ASSIGN 将来要用\nconst x = 1;');
+    expect(withComment, '行注释未被去掉').not.toContain('ROLE_PERMISSION_ASSIGN');
+
+    const withBlock = productionTsText('/** 见 ROLE_PERMISSION_ASSIGN */\nconst y = 2;');
+    expect(withBlock, '块注释未被去掉').not.toContain('ROLE_PERMISSION_ASSIGN');
+
+    // 真实代码里的出现仍必须保留
+    expect(productionTsText("const op = 'ROLE_PERMISSION_ASSIGN';")).toContain('ROLE_PERMISSION_ASSIGN');
   });
 
   it('保留清单本身不含未声明的值', () => {
