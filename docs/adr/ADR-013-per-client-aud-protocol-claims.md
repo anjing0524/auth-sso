@@ -83,3 +83,20 @@ ADR-006 JWT 最小化时把两类数据一并剥离：RBAC 鉴权数据（roles/
 - ADR-004: RFC 7009 级联偏差改写为有意接受
 - ADR-010: Gateway 统一 OAuth Client（aud 校验目标 = 自身 client_id 的前提）
 - ADR-011: 故障语义分级（正确性校验无运行时开关的依据）
+
+## 验证（2026-10-15 补：活体核实）
+
+按"已记录但未活体验证的历史决策"逐条读实现取证，**四条决策全部为真**：
+
+| 决策 | 证据（file:line） | 判定 |
+|---|---|---|
+| ① `signAccessToken` 增 `clientId` 入参；`aud = clientId` 且显式带 `client_id` claim（**同源同值**） | `apps/portal/src/lib/auth/token.ts:86`（形参）、`:97`（payload `client_id: clientId`）、`:101`（`.setAudience(clientId)`）；`:80` 注释"aud 与 client_id claim 的唯一来源" | 真 |
+| ② Gateway audience **自动取 `gateway.oauth.client_id`** | **`apps/gateway/src/main.rs:68-70` = `JwksCache::with_audience(config.gateway.oauth.client_id.clone())`**（一路查到注入点）；`jwks.rs:209-211` 注明默认值与配置默认一致；`GATEWAY_JWT_AUDIENCE` 在 `config.rs` **零命中**（独立配置面确已删除） | 真 |
+| ② `typ` 收紧为**强制存在**（缺失即拒、无兼容窗） | `apps/gateway/src/auth/verify.rs:59-60`（`MissingTyp` 错误）、`:126-128`（"必须存在且为 at+jwt；『缺失放行』兼容窗不再开启"） | 真 |
+| ③ 跨语言契约同步 `aud` / `client_id` | `packages/contracts/src/jwt-claims-fixture.json:4-5` = `"aud": "portal"`、`"client_id": "portal"` | 真 |
+| ④ RFC 7009 §2.1 AT 级联**有意不实现** | 未发现 **per-family**（`(userId, clientId)`）AT 级联；存在的 `revokeUserAccessByUserId`（`apps/portal/src/lib/session/revoke.ts:106-130`）是**用户级** AT 撤销（ADR-011 机制，封禁/强制下线），与决策 ④ 所指的家族级级联**不是一回事** | 真（与代码一致） |
+
+**决策 ④ 的辨析**（值得写下来，避免后人误判为"已实现"）：本仓现有的是**用户级** AT 撤销
+（清该用户全部 jti）与 **RT 家族**撤销（RFC 9700 §4.14）；ADR-013 决策 ④ 拒绝的是
+"**RT 家族撤销时级联撤销同家族 AT**"。三者粒度不同，因此"存在 `revokeUserAccessByUserId`"
+**不构成**对决策 ④ 的推翻。
