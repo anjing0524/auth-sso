@@ -62,6 +62,24 @@ describe('useFieldFailure', () => {
     expect(toast.error).toHaveBeenCalledWith('手机号已存在');
   });
 
+  it('message 为空 ⇒ 用兜底文案（默认「操作失败」，调用点可覆盖）', async () => {
+    // 覆盖来自代码评审查出的 5 处丢文案：各调用点原本写 toast.error(res.message || '更新失败')，
+    // 收口到 reportFailure 后必须把兜底一并带过来，否则空 message 会 toast 出空串。
+    const { toast } = await import('sonner');
+    const { result } = renderHook(() => useFieldFailure());
+
+    act(() => {
+      result.current.reportFailure({ error: COMMON_ERRORS.NOT_FOUND, message: '' });
+    });
+    expect(toast.error).toHaveBeenLastCalledWith('操作失败');
+
+    act(() => {
+      result.current.reportFailure({ error: COMMON_ERRORS.NOT_FOUND, message: '' }, '更新失败');
+    });
+    expect(toast.error).toHaveBeenLastCalledWith('更新失败');
+    expect(result.current.fieldError, JSON.stringify(result.current.fieldError)).toBeNull();
+  });
+
   it('clearFailure 清空（对话框重开时用）', () => {
     const { result } = renderHook(() => useFieldFailure(['password']));
 
