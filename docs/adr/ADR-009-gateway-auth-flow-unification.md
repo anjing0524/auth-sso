@@ -141,3 +141,15 @@ match expiry {
 - ADR-005: 三层安全模型
 - ADR-006: JWT 最小化 — 身份断言与鉴权数据分离
 - ADR-007: 子应用自取权限 — Gateway 不管鉴权
+
+## 验证（2026-10-15 补：活体核实）
+
+| 断言 | 证据（file:line） | 判定 |
+|---|---|---|
+| 认证决策收敛为 `AuthDecision` **三态**枚举 | `apps/gateway/src/auth/mod.rs:20-26` = `enum AuthDecision { Pass, Interrupted, PkceRequired }` —— 与本文正文**逐字一致**（连注释语义也对上） | 真 |
+| 决策的**生产者**集中在 `authenticate::check` | `src/authenticate.rs:108`（`PkceRequired`）、`:112`（`Interrupted`）、`:165`、`:185`（`Pass`）—— 全部同一模块 | 真 |
+| `request_filter` 中**唯一**的认证决策点 | `src/gateway.rs:520-522` 一处 `match`，三分支分别继续 / `return Ok(true)` / PKCE 跳转 ⇒ 三态**在一处消费** | 真 |
+
+**这条决策的形状**（值得点明）：把"是否放行 / 是否已响应 / 是否要 PKCE"从散落的布尔判断
+收敛成一个**可穷举**的枚举，并在唯一一处消费它 —— 与 ADR-017 的"失败可判别"是同一思路
+（前者管**认证决策**，后者管**授权码兑换失败**）。
