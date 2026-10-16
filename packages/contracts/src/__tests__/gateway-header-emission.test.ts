@@ -15,6 +15,28 @@ import { GATEWAY_HEADERS, RESERVED_GATEWAY_HEADERS } from '../index';
  *
  * 比较按小写归一：HTTP 头名大小写不敏感（契约写 x-user-id，Rust 写 X-User-Id）。
  */
+/**
+ * 生产代码视图：去掉 `//` 注释，并**只**截掉文件末尾的 `#[cfg(test)] mod tests { … }`。
+ *
+ * ## 为什么不能用 `raw.split('#[cfg(test)]')[0]`
+ *
+ * 那会在**首个**标记处截断。而 `#[cfg(test)]` 也可能出现在文件**中部**（仅标注一个仅供测试
+ * 使用的构造函数/辅助函数），例如 `apps/gateway/src/auth/verify.rs` 第 85 行的
+ * `new_without_revocation_for_test` —— 其后还有上百行生产代码，`split` 会把它们一并漏扫，
+ * 于是"缝后真的消费了保留值"这种情况**静默放行**（2026-10-16 两轴评审发现）。
+ *
+ * 残留局限（已知、如实记录）：中部被 `#[cfg(test)]` 标注的**辅助函数体**仍会被扫到，
+ * 理论上可能把"测试辅助里的提及"算成消费。当前网关无此形状；若将来出现，应改为按 item 剔除。
+ */
+export function productionRustText(raw: string): string {
+  // 只匹配**文件末尾**的测试模块
+  const withoutTrailingTestModule = raw.replace(/\n#\[cfg\(test\)\]\s*\nmod tests\s*\{[\s\S]*$/, '');
+  return withoutTrailingTestModule
+    .split('\n')
+    .map((line) => line.replace(/\/\/.*$/, ''))
+    .join('\n');
+}
+
 function gatewaySrcText(): string {
   const dir = fileURLToPath(new URL('../../../../apps/gateway/src', import.meta.url));
   const out: string[] = [];
@@ -23,16 +45,7 @@ function gatewaySrcText(): string {
     // 只认**生产代码**：跳过测试模块（它们会"提到"某个头名——如 contract_tests.rs 里
     // 那条"USER_NAME 既不被注入也不被读取"的注释——那种提及不算消费）
     if (entry.includes('tests')) continue;
-    // 去掉 // 注释（"文档里提到"不算消费），并截掉文件末尾的 #[cfg(test)] 模块
-    // （Rust 惯例：单元测试挂在生产文件尾部的 cfg(test) 里；那里的断言提及不算消费——
-    //   实测 gateway.rs 的 is_identity_header(b"x-user-name") 断言就是一处）
-    const raw = readFileSync(`${dir}/${entry}`, 'utf8');
-    const withoutTests = raw.split('#[cfg(test)]')[0]!;
-    const stripped = withoutTests
-      .split('\n')
-      .map((line) => line.replace(/\/\/.*$/, ''))
-      .join('\n');
-    out.push(stripped);
+    out.push(productionRustText(readFileSync(`${dir}/${entry}`, 'utf8')));
   }
   return out.join('\n').toLowerCase();
 }
@@ -68,6 +81,23 @@ describe('网关头：声明 ↔ 消费（含显式保留清单）', () => {
     expect(classify(false, true)).toBe('reserved');
     expect(classify(false, false)).toBe('gap');                  // 声明了却没人消费
     expect(classify(true, true)).toBe('stale-reservation');      // 保留标记过期
+  });
+
+  it('夹具：中部 #[cfg(test)] 之后的代码仍被保留（评审发现的盲点不得回归）', () => {
+    const raw = [
+      'pub fn a() {}',
+      '#[cfg(test)]',
+      'pub fn only_for_test() {}',
+      'pub const HEADER_LATE: &str = "x-late-header";',   // 标记之后的生产代码
+      '#[cfg(test)]',
+      'mod tests {',
+      '  #[test]',
+      '  fn t() { assert!(true); }',
+      '}',
+    ].join('\n');
+    const view = productionRustText(raw);
+    expect(view, '中部标记之后的代码被漏扫了（盲点回归）').toContain('x-late-header');
+    expect(view, '末尾测试模块未被去掉').not.toContain('mod tests');
   });
 
   it('保留清单只允许 GATEWAY_HEADERS 的键', () => {
