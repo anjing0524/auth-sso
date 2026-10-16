@@ -21,6 +21,10 @@
 
 ## 变更记录
 
+- 2026-10-16（续六十二）: **`form-failure-handling-guard` 变异验证通过（覆盖真实业务规则的那一类）**。做法：把 `apps/portal/src/app/profile/ProfileClient.tsx:97` 真实的 `reportFailure(res);` 改成 `toast.error(res.message);`（即"绕过失败分类点"的形状）⇒ 守卫**退出码 1** ✓，且失败信息**精确定位到 `ProfileClient.tsx:97`** 并给出修法提示 ✓；`git checkout --` 逐字还原后 `git status --short` **为空** ✓（基线退出码 0）。
+  **这一条比契约守卫那条更有价值**：契约守卫守的是"格式/清单" ✓，而它守的是**真实业务规则**（服务端失败必须经过分类点 ⇒ 否则字段级提示会丢 ✓），且这次验证证明了它**真的在扫生产文件**（不是只跑夹具）✓ —— 这正是"守卫不能是装饰"的实证 ✓。
+  仍未做变异验证：`read-scope-usage-guard` / `scoped-write-guard` / `module-mock-guard` / `cache-invalidation-site-guard` / `gate-inventory-guard` / 两个 docs 守卫 ✓（各有夹具或曾抓真问题 ✓），触发条件：下次被改动时补 ✓。
+
 - 2026-10-16（续六十一）: **对 3 个契约守卫做变异验证 —— 它们真的会红（可复算）**。此前这三个守卫只有"开发中红过"的过程证据 ✓，而本会话的元准则是"**检查必须可证**：人为造一处它该抓的错 ⇒ 确认真的变红 ⇒ 逐字还原 ⇒ `git diff` 为空"。本次逐个执行：
   | 守卫 | 基线 | 注入的变异 | 结果 |
   |---|---|---|---|
