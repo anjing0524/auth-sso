@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { AUDIT_OPERATION_VALUES, RESERVED_AUDIT_OPERATIONS } from '../index';
+import { classify, productionTsText } from './helpers/declaration-consumption';
 
 /**
  * 审计操作的"声明 ↔ 发射"守卫
@@ -17,13 +18,7 @@ import { AUDIT_OPERATION_VALUES, RESERVED_AUDIT_OPERATIONS } from '../index';
  *   ② 列在保留清单里的值**不得**已被引用（否则标记过期，应移除）。
  */
 
-/** 四个分区由 (是否被引用, 是否声明为保留) 决定；只有两种组合合法 */
-function classify(referenced: boolean, reserved: boolean): 'emitted' | 'reserved' | 'gap' | 'stale-reservation' {
-  if (referenced && reserved) return 'stale-reservation';
-  if (reserved) return 'reserved';
-  if (referenced) return 'emitted';
-  return 'gap';
-}
+
 
 /**
  * 生产代码视图：跳过测试文件，并**去掉注释**。
@@ -34,13 +29,7 @@ function classify(referenced: boolean, reserved: boolean): 'emitted' | 'reserved
  * 这与网关头守卫（`gateway-header-emission.test.ts`）的"提及 ≠ 消费"口径必须一致 ——
  * 两个守卫是**同一条规则**的两个实例。
  */
-export function productionTsText(raw: string): string {
-  return raw
-    .replace(/\/\*[\s\S]*?\*\//g, '')   // 块注释（含 JSDoc）
-    .split('\n')
-    .map((line) => line.replace(/\/\/.*$/, ''))  // 行注释
-    .join('\n');
-}
+export 
 
 function portalSrcText(): string {
   const dir = fileURLToPath(new URL('../../../../apps/portal/src', import.meta.url));
@@ -88,7 +77,7 @@ describe('审计操作：声明 ↔ 发射（含显式保留清单）', () => {
   });
 
   it('夹具：分区判定真的会红（四种组合）', () => {
-    expect(classify(true, false)).toBe('emitted');
+    expect(classify(true, false)).toBe('consumed');
     expect(classify(false, true)).toBe('reserved');
     expect(classify(false, false)).toBe('gap');                     // 漏发射
     expect(classify(true, true)).toBe('stale-reservation');         // 标记过期

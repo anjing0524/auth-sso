@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { GATEWAY_HEADERS, RESERVED_GATEWAY_HEADERS } from '../index';
+import { classify, productionRustText } from './helpers/declaration-consumption';
 
 /**
  * 网关头的"声明 ↔ 消费"守卫（与 `audit-operation-emission` 同形）
@@ -28,14 +29,7 @@ import { GATEWAY_HEADERS, RESERVED_GATEWAY_HEADERS } from '../index';
  * 残留局限（已知、如实记录）：中部被 `#[cfg(test)]` 标注的**辅助函数体**仍会被扫到，
  * 理论上可能把"测试辅助里的提及"算成消费。当前网关无此形状；若将来出现，应改为按 item 剔除。
  */
-export function productionRustText(raw: string): string {
-  // 只匹配**文件末尾**的测试模块
-  const withoutTrailingTestModule = raw.replace(/\n#\[cfg\(test\)\]\s*\nmod tests\s*\{[\s\S]*$/, '');
-  return withoutTrailingTestModule
-    .split('\n')
-    .map((line) => line.replace(/\/\/.*$/, ''))
-    .join('\n');
-}
+export 
 
 function gatewaySrcText(): string {
   const dir = fileURLToPath(new URL('../../../../apps/gateway/src', import.meta.url));
@@ -50,13 +44,7 @@ function gatewaySrcText(): string {
   return out.join('\n').toLowerCase();
 }
 
-/** 四分区由 (是否被生产代码消费, 是否声明为保留) 决定；只有两种组合合法 */
-function classify(consumed: boolean, reserved: boolean): 'consumed' | 'reserved' | 'gap' | 'stale-reservation' {
-  if (consumed && reserved) return 'stale-reservation';
-  if (reserved) return 'reserved';
-  if (consumed) return 'consumed';
-  return 'gap';
-}
+
 
 describe('网关头：声明 ↔ 消费（含显式保留清单）', () => {
   it('每个声明的头都被消费，或被显式标记为保留', () => {
