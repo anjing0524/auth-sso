@@ -158,19 +158,26 @@ describe('User Server Actions', () => {
       expect(rows.map((x) => x.roleId)).toEqual([ROLE_ID]);
     });
 
-    // 未覆盖（诚实记录，第 8 次尝试后仍按"该停就停"撤掉）：'角色不属于该用户部门' 的 R-USER-ROLE 失败。
-    //
-    // 已用探针一步步拿到的事实（不是猜）：
-    //   1) 失败**在断言之前**——给断言带自报上下文后两种 reporter 都没有那条消息 ⇒ 是抛错；
-    //   2) postgres.js 的包装错误上，真字段在 **`err.cause`**（`code/constraint/detail` 在包装层是 undefined）；
-    //   3) cause 显示 `duplicate key "departments_pkey"` / `Key (id)=(00000000-…-000000000001) already exists`
-    //      ⇒ 我提供的**第二个部门最终仍带 root id**；
-    //   4) 改用**显式对象展开**（`{ ...seedRootDept()[0]!, id: OTHER_DEPT, … }`）后**仍然失败**、仍拿不到自报信息
-    //      ⇒ "id 覆盖没生效"**不是全部原因**。
-    //
-    // 下一步（专门一轮、只做这一件事）：**只**跑 `seedTestData` 并把抛出的 cause 链打全，
-    // 确认到底是 departments / roles / users 哪一句失败（`/diagnosing-bugs` 的紧反馈环；
-    // 这也可能是 `seedTestData` 的既有缺陷，属共享基础设施，优先于这条用例本身）。
+    it('角色不属于该用户部门 ⇒ 失败并给出可展示原因（R-USER-ROLE），且不写库', async () => {
+      const OTHER_DEPT = '00000000-0000-4000-8000-000000000002';
+      const OTHER_ROLE = '00000000-0000-4000-8000-000000000302';
+      // 根部门与操作者已由 beforeEach 种下 ⇒ 这里**只**补第二个部门（再次插入根部门会撞
+      // departments_pkey —— 独立探针实证：无 beforeEach 时三步全过，有 beforeEach 时重复插入才炸）。
+      const otherDept = { ...seedRootDept()[0]!, id: OTHER_DEPT, code: 'OTHER', name: '其他部门', parentId: null };
+      await seedTestData(td.db, {
+        departments: [otherDept],
+        roles: seedSuperAdminRole({ id: OTHER_ROLE, deptId: OTHER_DEPT, code: 'OTHER_ROLE', name: '其他部门角色' }),
+        users: seedTestUser({ id: TARGET_ID, deptId: ROOT_DEPT }),
+      });
+
+      const r: any = await updateUserRolesAction(TARGET_ID, [OTHER_ROLE]);
+
+      expect(r.success, `实际响应=${JSON.stringify(r)}`).toBe(false);
+      expect(r.message ?? '', `实际响应=${JSON.stringify(r)}`).toContain('无法分配');
+      const rows = await td.db.select().from(schema.userRoles).where(eq(schema.userRoles.userId, TARGET_ID));
+      expect(rows, `实际行=${JSON.stringify(rows)}`).toEqual([]);
+    });
+
     it('目标用户不在操作者数据范围（无部门）⇒ 范围守卫拒绝，且不写库', async () => {
       // 实测发现：这条路径先被 lib/authz 的范围守卫拦下（无部门无法证明归属，ADR-002），
       // 因此共享实现里"该用户尚未分配部门…"那句在 action 路径不可达——留着是数据层兜底。
