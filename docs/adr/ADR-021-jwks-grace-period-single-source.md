@@ -134,3 +134,17 @@ old in s`），再解释测试结果。否则会把"变异没生效"误读成"�
 
 - ADR-019: Controller 行数约束（同一纪律：度量/规则必须对准真实目标）
 - ADR-020: 审计持久性等级（同一手法：把散落的隐式规则收敛为单一出处）
+
+## 验证（2026-10-15 补：活体核实）
+
+本 ADR 原缺"验证"面。2026-10-15 按"已记录但未活体验证的历史决策"逐条核对两条决策，
+**两条都真实落地**（读实现取证，非读文档自述）：
+
+| 决策 | 证据（file:line） | 判定 |
+|---|---|---|
+| ① `key()` 是宽限期判定的唯一出处，生产路径改用它 | `apps/gateway/src/auth/verify.rs:137-138`：`snapshot()` 取 validation + `jwks_cache.key(&kid)` 取公钥；且全文 grep `GRACE\|grace` **零命中** | 真 |
+| ② `JwksKeyEntry.key` 改存 `Arc<DecodingKey>`（①成立的**前提**，否则每请求多一次堆分配） | `apps/gateway/src/jwks.rs:125`：`pub(crate) key: Arc<DecodingKey>` | 真 |
+
+补充判定：`jwks.rs:192`（`merge_keys` 内）仍有同一谓词，但那是**保留/清理**语义，
+与 `key()` 的**查询期**判定职责不同，且共用唯一定义 `JWKS_KEY_GRACE_SECS`（`jwks.rs:47`）
+⇒ **不构成**本 ADR 所指的"同一条规则两处实现"。
