@@ -21,6 +21,10 @@
 
 ## 变更记录
 
+- 2026-10-16（续六十三）: **`read-scope-usage-guard` 变异验证通过（越权面，价值最高的一条）**。做法：在 `apps/portal/src/lib/` 放一个最小探针"声明了 `scope: UserScope` 形参但在函数体里完全不使用"（规则 2 的对象）⇒ 守卫**退出码 1**（`12 tests | 1 failed`）⇒ 证明它**真的在扫生产文件**，不是只跑夹具；随即删除探针，`git status --short` **为空** ✓（零残留）。
+  这条守的是**数据范围**（越权面）✓，其既有证据链也最厚：第 4 轮两轴评审实测它曾漏报**箭头函数与对象方法简写**形态 ⇒ 补齐 `FUNCTION_HEAD_PATTERNS` 并加 2 个夹具（续五十）✓；本次又证明它在真实文件上会红 ✓。
+  仍未做变异验证：`scoped-write-guard` / `module-mock-guard` / `cache-invalidation-site-guard` / `gate-inventory-guard` / 两个 docs 守卫 ✓，触发条件：下次被改动时补 ✓。
+
 - 2026-10-16（续六十二）: **`form-failure-handling-guard` 变异验证通过（覆盖真实业务规则的那一类）**。做法：把 `apps/portal/src/app/profile/ProfileClient.tsx:97` 真实的 `reportFailure(res);` 改成 `toast.error(res.message);`（即"绕过失败分类点"的形状）⇒ 守卫**退出码 1** ✓，且失败信息**精确定位到 `ProfileClient.tsx:97`** 并给出修法提示 ✓；`git checkout --` 逐字还原后 `git status --short` **为空** ✓（基线退出码 0）。
   **这一条比契约守卫那条更有价值**：契约守卫守的是"格式/清单" ✓，而它守的是**真实业务规则**（服务端失败必须经过分类点 ⇒ 否则字段级提示会丢 ✓），且这次验证证明了它**真的在扫生产文件**（不是只跑夹具）✓ —— 这正是"守卫不能是装饰"的实证 ✓。
   仍未做变异验证：`read-scope-usage-guard` / `scoped-write-guard` / `module-mock-guard` / `cache-invalidation-site-guard` / `gate-inventory-guard` / 两个 docs 守卫 ✓（各有夹具或曾抓真问题 ✓），触发条件：下次被改动时补 ✓。
