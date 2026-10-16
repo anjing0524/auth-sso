@@ -46,7 +46,8 @@ export interface ToastViolation {
 /**
  * 纯函数：源码 → 违例清单。
  *
- * 抓的是 `toast.error(<ident>.message …)` —— 变量来自 action 结果时即为绕过分类点。
+ * 抓的是 `toast.error(<ident>.message …)` 与 `toast.error(<ident>.error …)` ——
+ * 两者都是把 action 结果的一部分直接当文案（前者是消息、后者是错误码），都绕过分类点。
  * 字面量（`toast.error('请填写必填字段')`）不算：那是前端自己的提示。
  */
 export function findDirectActionToasts(source: string): ToastViolation[] {
@@ -55,19 +56,25 @@ export function findDirectActionToasts(source: string): ToastViolation[] {
   const found: ToastViolation[] = [];
   code.split('\n').forEach((line, index) => {
     if (!/toast\.error\(/.test(line)) return;
-    if (!/toast\.error\(\s*[A-Za-z_$][\w$]*\s*\.\s*message\b/.test(line)) return;
+    if (!/toast\.error\(\s*[A-Za-z_$][\w$]*\s*\.\s*(?:message|error)\b/.test(line)) return;
     // 允许出口写在**本行或上一行**（原文，不是去注释版）
     const context = `${rawLines[index - 1] ?? ''}\n${rawLines[index] ?? ''}`;
     if (context.includes('@allow-direct-toast')) return;
     found.push({
       line: index + 1,
-      detail: '把 Server Action 结果的 message 直接交给 toast.error ⇒ 绕过了失败分类点（改用 reportFailure(res)）',
+      detail: '把 Server Action 结果的 message/error 直接交给 toast.error ⇒ 绕过了失败分类点（改用 reportFailure(res)）',
     });
   });
   return found;
 }
 
 describe('form-failure-handling-guard —— 夹具（守卫自身被守）', () => {
+  it('夹具 1b：toast.error(res.error) ⇒ 同样报绕过分类点（错误码不是给用户看的文案）', () => {
+    const src = `if (!res.success) { toast.error(res.error); }`;
+    const found = findDirectActionToasts(src);
+    expect(found.length, JSON.stringify(found)).toBe(1);
+  });
+
   it('夹具 1：toast.error(res.message) ⇒ 报"绕过分类点"', () => {
     const src = `if (!res.success) { toast.error(res.message); }`;
     const v = findDirectActionToasts(src);
