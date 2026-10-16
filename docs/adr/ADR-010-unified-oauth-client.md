@@ -40,3 +40,18 @@
 
 - ADR-003: Gateway 作为统一 OAuth Client（本 ADR 消除其"单数"表述与配置面的矛盾）
 - ADR-006 / 007 / 008: client 身份在授权链路中无消费者的依据
+
+## 验证（2026-10-15 补：活体核实）
+
+| 断言 | 证据（file:line） | 判定 |
+|---|---|---|
+| 二期：oauth 配置从 `[[upstreams]]` 上移到 `[gateway.oauth]`（`GatewayConfig.oauth`） | `apps/gateway/src/config.rs:93` = `pub oauth: OAuthConfig` | 真 |
+| 二期：`RouteEntry` 不再携带 OAuth 配置 | `RouteEntry` 结构体定义内 grep `oauth` **零命中** | 真 |
+| 一期：per-upstream 凭据**一致**校验已被取代 | `config.rs:188-198` 的 `validate_routing_consistency` 改为校验**单一** `[gateway.oauth]` 凭据非空、**缺失即拒绝启动**（`:192` 注释即"ADR-010 二期：凭据已收敛到 `[gateway.oauth]`"），**不再比较 per-upstream 一致性** | 真 |
+| （顺带）路由卫生校验仍在，职责清晰 | 同函数 `:201-209`：upstream 名重复 / 空名 / **防止某个 upstream 为别的 upstream 的路径开免鉴权后门** | 在位 |
+
+**一处"看似矛盾、读实不成立"的记录**（核实方法上的提醒）：本文用删除线标注一期方案被二期取代，
+而全仓 grep `validate_routing_consistency` 仍有 **15 处命中** —— 初看像是"删除线不实"。
+读实后不成立：函数**仍在**，但它做的是"校验单一凭据 + 路由卫生"，**不再是**比较 per-upstream 凭据；
+15 处命中只是函数名出现在定义 / 调用点 / 测试里。⇒ 判断历史决策是否被取代，要看**函数现在做什么**，
+而不是看它**是否还存在**。

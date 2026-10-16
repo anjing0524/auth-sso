@@ -93,3 +93,14 @@ async function authorize(request) {
 - ADR-006: JWT 最小化 — 身份断言与鉴权数据分离
 - ADR-008: 权限码命名空间化模型
 - ADR-003: Gateway 作为 OAuth Client
+
+## 验证（2026-10-15 补：活体核实）
+
+| 断言 | 证据（file:line） | 判定 |
+|---|---|---|
+| Gateway 只注入身份断言头 `X-User-Id` | `apps/gateway/src/gateway.rs:31` = `pub(crate) const HEADER_USER_ID: &str = "X-User-Id"`；`is_identity_header(...)` 判定该头（`:653` / `:670`） | 真 |
+| Gateway **不做任何权限操作**（无 Redis 权限查询 / 无权限注入） | 网关 Redis 模块 `apps/gateway/src/redis.rs` 的公开 API 只有 `pool()` / `exists(key)` / `acquire_nx_ex(key, value, ttl)` / `del(key)`（`:53` / `:86` / `:119` / `:141`）—— 即**键存在性 / NX 抢占 / 删除**，正是本文允许的 **jti 黑名单**那一类，**没有任何权限读取** | 真 |
+| （正文未写，但本决策的精神所在）**入站自带的 `X-User-Id` 不可信** | `gateway.rs:696` 有测试 `req.insert_header("X-User-Id", "forged-admin")` ⇒ 身份头**伪造**用例在位 | 在位 |
+
+**记录一处路径教训**：核实本条时我先猜 `src/gateway/redis.rs` ⇒ 零命中；真实路径是
+`src/redis.rs`。**先 `ls`/`find` 定位、再断言** —— 本会话已因猜路径扑空四次。
