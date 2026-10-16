@@ -241,3 +241,20 @@ like(schema.departments.ancestors, `${deptId}/%`),   // 只匹配二级及更深
 以下条目在本次调研中**未能取得一手来源逐字内容**，故不作为决策依据，仅备查：Keycloak 关于"授权决策与业务写入同事务"的官方立场；Ousterhout《A Philosophy of Software Design》逐字引文（取自公开 PDF 副本）；NIST SP 800-162 正文中 PDP/PEP 的逐字定义（`nvlpubs.nist.gov` 返回 406，仅取到出版物元数据页，DOI `10.6028/NIST.SP.800-162`）；XACML 3.0 §3.1 逐字定义（仅取到搜索片段）；Gary Bernhardt "Boundaries" 一手文字；Uber ABAC 与 Netflix 分布式授权博客正文（JS 渲染页）；`@nestjs-cls/transactional` API 细节；TypeORM `@TransactionManager` 逐字文档；NestJS 核心是否有官方 `@Transactional()`；Node.js "Troubleshooting: Context loss" 逐字内容；PgBouncer 表对 `SET LOCAL` 与 `SET` 的区分（本 ADR 中"transaction pooling 下 `SET LOCAL` 安全"的推论基于 PG 官方 `set_config(is_local=true)` 语义 + PostgREST 实际做法，而非 PgBouncer 逐字陈述）。
 
 **已取得逐字引用的来源**：PostgreSQL 官方（`transaction-iso.html`、`ddl-rowsecurity.html`、`sql-createfunction.html`、`functions-admin.html`）；Prisma Transactions；ZenStack Under the Hood；PostgREST Transactions / Auth / DB Authz；Supabase RLS 与 RLS 性能指南；Hasura Row-Level Permissions；PgBouncer features；Spring Transaction Propagation；Node.js async_context；本地 `drizzle-orm@0.45.2` 源码。
+
+## 验证（2026-10-15 补：活体核实 2026-10-13 的自我更正）
+
+本 ADR 的修订段声称：`users/[id]` 与 `users/[id]/roles` 的 GET「**从未迁移**（在路由里手写
+`resolveScope + isWithinScope → 403`，而 `getUser` / `getUserRoles` 连 scope 参数都没有），
+构成一处真实越权，**已于 2026-10-13 补齐**」。2026-10-15 按"已记录但未活体验证的历史决策"
+读实现取证，**更正属实**：
+
+| 断言 | 证据（file:line） | 判定 |
+|---|---|---|
+| 两处已改经**范围读口** | `apps/portal/src/app/api/users/[id]/route.ts:24-25` = `resolveScope(db, adminUserId)` + `getUser(id, scope)`；`apps/portal/src/app/api/users/[id]/roles/route.ts:32-33` = `resolveScope` + `getUserRoles(id, scope)` | 真 |
+| 读函数**真的收了 scope**（不只是路由在挡） | 同上：scope 作为参数进入读函数 | 真 |
+| 两个读口**不可互相替代**且有测试锁住 | `apps/portal/__tests__/api/user-detail-scope.test.ts` 存在，且**真的构造了本 ADR 点名的情形**：`MKT_DEPT_ID`（:61）、"操作者的角色在 FE 部门 → 可见范围 = FE 子树，**不含** ROOT 与 MKT"、"自己的部门(MKT)不在自己范围(FE)内的用户" | 真 |
+
+该测试的头注释还把当时那处越权的**可触发路径**写明：`(dashboard)/users/[id]/page.tsx` 直接
+`getUser(id, …)` 渲染，**改 URL 里的 id 即可跨部门读任意用户** ⇒ 本 ADR 修订的是一处真实可触发的
+越权，且修复与回归测试**都在位**。
