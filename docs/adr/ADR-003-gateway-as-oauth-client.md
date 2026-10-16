@@ -57,3 +57,17 @@ Gateway 负责：
 
 - ADR-004: 无状态 JWT + Redis jti 黑名单
 - ADR-005: 三层安全模型（Gateway 属于第一层）
+
+## 验证（2026-10-15 补：活体核实）
+
+| 断言 | 证据（file:line） | 判定 |
+|---|---|---|
+| 四个 OAuth cookie 名为 `pkce_verifier` / `oauth_state` / `oauth_nonce` / `return_to` | `apps/gateway/src/contract_tests.rs:48` / `:52` / `:56` / `:58` —— **对着跨语言契约文件**逐个断言（`at(&f, "cookies.pkce_verifier")` 等）⇒ 名字由**契约测试**锁住 | 真 |
+| Callback 路径 `/api/auth/callback` | `apps/gateway/src/jwks.rs:24` = `DEFAULT_CALLBACK_PATH: &str = "/api/auth/callback"`（并由 discovery 的自定义字段驱动） | 真 |
+| Cookie 属性 HttpOnly + Secure + SameSite=Lax + Max-Age | `apps/gateway/src/cookie.rs:165` 生成串含 `Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=3600` | 真 |
+| PKCE：CSPRNG 生成 **32 字节** code_verifier | `apps/gateway/src/oauth.rs:83-86` = "生成 PKCE code_verifier（**43 字符**，RFC 7636 §4.1 的 43–128 区间）…… **32 字节（256 bit）** 经 base64url 得 43 字符…… 与 Portal `generateCodeVerifier()`（32 字节 `crypto.getRandomValues` → base64url）一致" | 真 |
+| 两条流程（无 JWT 导航 → 302 `/authorize`；callback → 取 verifier → POST `/token` → 下发 token） | `apps/gateway/src/oauth.rs:4-5` 模块头逐条写明 | 真 |
+
+**一个正面对照**：本 ADR 的 cookie 名**无需补守卫** —— `contract_tests.rs` 已经在用跨语言契约文件
+逐个断言（与 ADR-008 的权限码"当时只有取值、没有校验器"形成对照）。这说明"**声明是否有阻断点**"
+应当逐条核，而不能按"这份 ADR 看起来有测试"整体推断。
