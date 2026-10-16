@@ -21,6 +21,10 @@
 
 ## 变更记录
 
+- 2026-10-16（续六十五）: **新方向开工第一步即撞到真缺陷：`apps/portal` 在 node@26 下起不来**。动因：本会话的验证全是静态面（ADR/契约/守卫），唯一想验「真系统」的 e2e 被 Docker 构建里的 npm registry 卡死 ⇒ 改走「Next dev 独立启动」绕开构建。前提探明顺利：`dev` = `next dev -p 4100`（不依赖 Docker）✓、`auth-sso-postgres`/`redis` 活着 ✓、库 `auth_sso` 已迁移（15 张表）✓、7 个环境变量齐备 ✓，并**查出 `.env.example` 的库名 `auth_sso_portal` 根本不存在**（活库是 `auth_sso`）✓ ⇒ 按真库名写了被 gitignore 的 `.env.local`（`.gitignore:70` ✓，未污染仓库 ✓）。
+  随后两次启动**都失败**：①按脚本方式（`NODE_OPTIONS='--harmony-temporal'`）⇒ `node: --harmony-temporal is not allowed in NODE_OPTIONS` ✗、HTTP 000；②把旗标移到 **node 命令行**（`node --harmony-temporal <require.resolve 出的 next 入口> dev`）⇒ **仍见同一报错** ✗、HTTP 000。仓库里设 `NODE_OPTIONS` 的只有 `package.json` 的 `dev`/`start`（`db:seed` 用 `--require`，不受白名单限制 ✓），而当前 shell 并无该变量 ✓ ⇒ **结论分两半（不写假结论）**：`dev`/`start` 经 `NODE_OPTIONS` 传 V8 旗标在 node@26 下**确实被拒**（这部分**已坐实** ✓，`AGENTS.md` 那句「已内置」因此**不再成立**，本提交已同步修正 ✓）；但绕过脚本后仍报同一错 ⇒ **还有第二个传播机制未查明** ✗。
+  **处置**：按「宁可留待查，不写假结论」停下留档 ✓（未改任何生产代码 ✓、无半成品 ✓、`git status` 干净 ✓）。触发条件：**单独一轮只做这件事** —— 起服务 → 打印子进程 `NODE_OPTIONS` → 定位设值处。
+
 - 2026-10-16（续六十四）: **补齐 `read-scope-usage-guard` 的另一半（规则 1）—— 并顺带弄清"守卫没红"时该怎么判**。上一轮只验了规则 2（收 scope 不用）⇒ 本轮补规则 1（**绑定了 `resolveScope` 的结果却不再引用**）：放探针 `const scope = await resolveScope(db, userId); return 1;` ⇒ 守卫**退出码 1**（12 tests / 1 failed）✓，删探针后 `git status` 为空 ✓ ⇒ 该守卫**两条规则都已变异验证** ✓。
   **过程中的一个重要分辨**（值得留档）：我第一次造的探针是**裸调用** `await resolveScope(db, userId);`（不绑定）⇒ 守卫**没红** ✗。此时有两种可能：我的形状不对 ✓ / 守卫有覆盖缺口 ✗ —— 我**没有猜**，而是去读规则实现 ✓：规则 1 的正则**要求 `const|let|var X = … resolveScope(`** ✓ ⇒ 我的形状本就不在该规则的管辖内 ✓（**判断：是我错了，不是守卫漏了** ✓）。改用正确形状后立刻变红 ✓。
   **副产物（已知窄口，记录不修）**：裸调用 `await resolveScope(...)`（丢弃结果、无绑定）**不在**规则 1 的管辖内 ✗。判断：`resolveScope` 无副作用 ⇒ 这种写法是**死代码** ✓，不是真实的 fail-open 风险 ✓ ⇒ **不为此加宽守卫** ✗（避免投机性加固 ✓）；触发条件：若仓库里真的出现该形状（grep `await resolveScope(` 无赋值前缀），再收进来。

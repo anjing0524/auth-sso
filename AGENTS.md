@@ -14,7 +14,12 @@ Rust 异步 Trait 的写法见「Gateway (Rust) 要点」（唯一出处，勿�
 
 ## 基础环境
 
-nodejs@26（nvm default；Temporal 需要 `--harmony-temporal`——已在 vitest.base.ts / portal dev/start / Vercel CMD 内置，勿删）
+nodejs@26（nvm default；Temporal 需要 `--harmony-temporal`——已在 vitest.base.ts / portal dev/start / Vercel CMD 内置，**勿删**）
+  ⚠️ **但「内置」≠「能起」（2026-10-16 实测）**：`apps/portal` 的 `dev`/`start` 把该旗标放进 `NODE_OPTIONS`，
+  而 node@26 **拒绝** `NODE_OPTIONS` 里的 V8 旗标（`node: --harmony-temporal is not allowed in NODE_OPTIONS`，
+  进程启动瞬间退出、端口无响应）⇒ `pnpm --filter @auth-sso/portal dev/start` **当前起不来**。
+  已试过把它移到 node 命令行注入，**仍见到同一报错** ⇒ 另有传播机制，**未查明**（不猜）。
+  需要本地起 Portal 时：单开一轮专查此事，或请用户在有相应 Node 环境时验证。
 nextjs@16
 Rust 1.93.0+
 git 身份/远程：GitHub 推送一律用 `gh` CLI（HTTPS + 凭据助手已配置，账号 anjing0524）；本机 `id_ed25519` 是 `anjing0524/vue-refresh` 仓库的 deploy key，对 auth-sso 无推送权限，勿走 SSH；Docker 命令当前用户已入 docker 组（旧会话内用 `sg docker -c` 或 sudo 兜底）
