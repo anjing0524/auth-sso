@@ -86,3 +86,18 @@ OR (type = 'API')  -- API 不再有额外的 NOT NULL 约束
 - ADR-001: 统一权限树
 - ADR-002: 角色-部门绑定
 - ADR-007: 子应用自取权限
+
+## 验证（2026-10-15 补：活体核实 + 补阻断点）
+
+| 断言 | 证据 | 判定 |
+|---|---|---|
+| 契约里的权限码**全部**符合 `{clientId}:{resource}:{action}` | `packages/contracts/src/permissions.ts` 全量枚举：**78 条码，0 条不合规**（抽样式正则在 `portal:user:list` / `portal:user:reset_password` / `portal:user:assign_role` 等全部命中） | 真 |
+
+**核实中发现的缺口（已修）**：该格式**此前没有任何代码校验** —— 契约靠 78 条取值本身维持，
+而不是靠机制（加第 79 条时写错不会有任何东西变红）。核实当日补上阻断点：
+`packages/contracts/src/__tests__/permission-code-format.test.ts`（跑在 `pnpm test` 里）
+断言"每个 `*_PERMISSIONS` 的值都是非空三段式"，带 `≥ 50` 的非空下限与 4 条夹具自证。
+
+**守卫自身的教训（写下来备查）**：第一版正则是 `^[^:]+:[^:]+:[^:]+$`，而 `[^:]+`
+**允许空白** ⇒ `'portal:user:list '`（尾随空格）被判通过；**是夹具先红了**才发现
+（若只写真值断言，这个漏洞会静默存在）。已改为禁空白 `^[^:\s]+:[^:\s]+:[^:\s]+$`。
