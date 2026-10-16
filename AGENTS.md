@@ -152,6 +152,13 @@ packages/config/    共享 env 配置 (Zod + URL 推导)
 - Next.js 16: Middleware 改名为 Proxy，Server Function 公开可达（三层防御原因）
 - Docker Compose 本地开发: `docker compose up -d`（PostgreSQL 16 + Redis 7）
 - 数据库初始化顺序: `pnpm db:migrate` → `pnpm db:seed`；`db:push` 只允许本地临时试验，不进入 CI/发布路径
+- **e2e 在本机跑不起来（环境约束，不要再试）**：`pnpm test:e2e` → `scripts/run-gateway-e2e.sh` 会 `docker compose --build`
+  起全栈，而镜像构建里有 `RUN npm install -g pnpm@10.12.4` ⇒ 本沙箱**访问不了 registry.npmjs.org**
+  （`npm error code ETIMEDOUT`，与 `ERR_PNPM_EROFS` 同族）。实测两次：①先撞 buildx 状态目录只读
+  （`~/.docker/buildx` ⇒ `read-only file system`，可用 `BUILDX_CONFIG=$PWD/.tmp-buildx` 绕开）
+  ②绕开后仍卡在 npm registry ⇒ **到此为止，不要反复尝试**。需要 e2e 时请在有网环境跑，或让用户代跑。
+  附带结论（有用）：该脚本建/清的是**自己的** `auth-sso-test` 栈（compose 文件顶层 `name:`），
+  与开发栈 `auth-sso-*` 完全隔离 —— 本地跑不会动到 `pnpm test` 依赖的测试库。
 - **装新依赖**：`pnpm add` 若报 `ERR_PNPM_EROFS`（pnpm store 只读）⇒ 报告并请用户代跑，保持包管理器、锁文件与 CI 的 `--frozen-lockfile` 原样（实测：`eslint-plugin-sonarjs` 因此装不上，#89 只给结论不落地）
 - **长作业先固化 SHA，再单独启动**：`scripts/ci-verify.sh <sha>` 在提交**之后**单独跑；脚本一旦启动就当它只读（要改就停下重跑）。本会话两种竞态各踩一次：`git rev-parse` 落在旧提交上、bash 增量读到半行。
 - **门禁结论取退出码**（加末尾的 `✖ N problems (X errors…)` 汇总行）；grep 只用来筛行、不当结论：`grep '^\s*[0-9]+:[0-9]+\s+error'` 曾把 1 个 lint error 读成「0 error」（真实输出带 `apps/portal lint:` 前缀）；同理**别把校验脚本塞进管道**——`| tail` 会让退出码变成 `tail` 的（实测：一个被取代成 `cancelled` 的 run 因此被读成 exit 0；`scripts/ci-verify.sh` 有运行级判据，直接跑、看它的退出码）。**一次推送只验一个**：同一分支的新推送会取消旧 run（本会话三个连续提交的 run 都被取代成 `cancelled`，于是"绿"永远拿不到）⇒ 上一轮绿了再推下一轮。
