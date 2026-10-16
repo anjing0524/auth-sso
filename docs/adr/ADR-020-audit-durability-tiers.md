@@ -92,3 +92,20 @@ try {
 - ADR-011: 故障语义分级（同一手法：按数据性质而非组件决定失败策略；本 ADR 把它应用到审计）
 - ADR-018: 权限上下文故障分级（另一处"把语义压平导致误判"的修复）
 - ADR-019: Controller 行数约束（同一纪律：规范不得声称与实现不符的事实）
+
+## 验证（2026-10-15 补：活体核实）
+
+本 ADR 原缺"验证"面。2026-10-15 按"已记录但未活体验证的历史决策"逐条核对四条决策，
+**四条全部为真**，且补核了决策 2 里最易漏的那一处（读实现取证，非读文档自述）：
+
+| 决策 | 证据（file:line） | 判定 |
+|---|---|---|
+| ① 按「是否与业务同事务」分档 | `apps/portal/src/lib/audit.ts:123-128` `appendSecurityAudit(tx, …)` 收 **tx**；`:188-195` `record*Audit(userId, operation)` **无 tx** | 真 |
+| ②「永不抛出」放在**函数内**而非调用点 | `recordActionAudit`/`recordApiAudit` **委托** `recordControlPlaneAudit`（`:189`、`:194`）；该函数 `:145-163` 把**动态 import `next/headers` + `headers()` + DB 写入**全包在一个 `try` 内，`catch` 仅 `log.error` | 真 |
+| ③ 档①与档②语义刻意相反 | `appendSecurityAudit` 内是**裸 `tx.insert`**（`:127`），且注释明写"与档②的『永不抛出』是刻意相反的策略"（`:121`） | 真 |
+| ③「这个对照被测试直接锁住」 | `apps/portal/__tests__/api/audit-durability.test.ts` 存在 | 真 |
+| ④ 撤回文件头那句不成立的总括 | `audit.ts` 模块头以表格列三档，不再有全局 "fire-and-forget" 声明 | 真 |
+
+**补核说明**：决策 2 的关键是最容易被写到 `try` 外面的那一步（动态 import 与 `headers()`）——
+实测它们**在 `try` 内**，因此"业务写入不得被审计失败推翻"这条保证确实是**不可绕过的事实**，
+而不是依赖调用点自觉。
