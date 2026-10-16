@@ -158,13 +158,16 @@ describe('User Server Actions', () => {
       expect(rows.map((x) => x.roleId)).toEqual([ROLE_ID]);
     });
 
-    // 未覆盖（诚实记录，第 5 次尝试后按"该停就停"撤掉）：'角色不属于该用户部门' 的 R-USER-ROLE 失败。
-    // 已解决的：`seedRootDept()` 现支持 overrides（与兄弟助手对齐）。
-    // **本轮收敛出的关键事实**：失败**发生在断言之前**——我按新规矩给断言带上 `实际响应=…` 的自报上下文，
-    // 而 plain 与 verbose 两种 reporter 里**都没有**这条消息 ⇒ 说明是**抛错**（最可能在 `seedTestData`
-    // 造第二个部门/角色时），不是断言不匹配。这正好说明新规矩的价值：它把"断言挂了"与"压根没走到断言"分开。
-    // 下一步（触发条件：专门一轮且只做这一件事）：先 `console.log` / 直接 await seedTestData 单独跑，
-    // 拿到抛出物再谈断言。（`/diagnosing-bugs` 的正规姿势：先有能红的紧反馈环，再改。）
+    // 未覆盖（诚实记录，第 7 次尝试后按"该停就停"撤掉）：'角色不属于该用户部门' 的 R-USER-ROLE 失败。
+    // 已解决：`seedRootDept()` 支持 overrides（与兄弟助手对齐）。
+    // **已用探针拿到的事实**（一步步收敛，不是猜）：
+    //   1) 失败**发生在断言之前**——给断言带自报上下文后，两种 reporter 里都没有那条消息 ⇒ 是抛错；
+    //   2) 抛出物是 `Failed query: insert into "departments" … values (…), (…)` ⇒ **第二个部门的插入被 DB 拒绝**；
+    //   3) 在 postgres.js 的错误对象上直接读 `code/constraint/detail` 全是 `undefined` ⇒ 真字段在 **`err.cause`** 里，需要展开一层（`(e as any).cause`）才能看到 constraint 名。
+    // ⇒ 下一步（专门一轮、只做这一件事）：打印 `err.cause`，拿到约束名；若约束来自**种子数据本身不合法**
+    //   （例如第二个根部门触发某条唯一/非空约束），那 `seedRootDept({...})` 造同级部门这条路就是错的，
+    //   应改为"给该部门一个合法的 ancestors/parentId"，或给种子助手加一个真正的 `seedChildDept()`。
+    //   这与"该用例是否值得"无关：它先暴露了**种子层**的一个未知，优先搞清它。
     it('目标用户不在操作者数据范围（无部门）⇒ 范围守卫拒绝，且不写库', async () => {
       // 实测发现：这条路径先被 lib/authz 的范围守卫拦下（无部门无法证明归属，ADR-002），
       // 因此共享实现里"该用户尚未分配部门…"那句在 action 路径不可达——留着是数据层兜底。
