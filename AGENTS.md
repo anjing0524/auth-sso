@@ -156,4 +156,6 @@ packages/config/    共享 env 配置 (Zod + URL 推导)
 - **长作业先固化 SHA，再单独启动**：`scripts/ci-verify.sh <sha>` 在提交**之后**单独跑；脚本一旦启动就当它只读（要改就停下重跑）。本会话两种竞态各踩一次：`git rev-parse` 落在旧提交上、bash 增量读到半行。
 - **门禁结论取退出码**（加末尾的 `✖ N problems (X errors…)` 汇总行）；grep 只用来筛行、不当结论：`grep '^\s*[0-9]+:[0-9]+\s+error'` 曾把 1 个 lint error 读成「0 error」（真实输出带 `apps/portal lint:` 前缀）。`pre-commit` 已含 lint 步骤。
 - **批量改写脚本用三引号或中文引号，写完先看确认行**：英文引号嵌进双引号 Python 字符串会让整段脚本**不执行**（本会话连栽 6 次，含规则写下之后的那次；一次导致索引与 roadmap 漏写）。
+- **断言自带上下文**：写 `expect(actual, JSON.stringify(actual)).toBe(…)`，让失败信息带着值出来；
+  测试报告没有可读细节时，**先把值打出来**再改代码（本会话实测：靠猜改用例白花 4 次尝试）。
 - **文档维护**：新增 solution 文档必须挂进 `docs/solution/README.md` 的主题下（`docs-references.test.ts` 断言无遗漏）；引用既有决定前先查它。

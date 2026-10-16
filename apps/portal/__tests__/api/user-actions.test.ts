@@ -158,9 +158,11 @@ describe('User Server Actions', () => {
       expect(rows.map((x) => x.roleId)).toEqual([ROLE_ID]);
     });
 
-    // 未覆盖（诚实记录）：'角色不属于该用户部门' 这条 R-USER-ROLE 失败需要**第二个部门 + 该部门的角色**，
-    // 而 `seedRootDept()` 不接受 overrides（TS2554）⇒ 造不出。触发条件：给种子助手加 overrides、
-    // 或该规则下次被改动时，补一条断言 message 含「无法分配」的用例。
+    // 未覆盖（诚实记录，第 2 次尝试后仍然放弃）：'角色不属于该用户部门' 这条 R-USER-ROLE 失败。
+    // 已解决的部分：`seedRootDept()` 现在支持 overrides（本轮补的，与 seedTestUser/seedSuperAdminRole 对齐）。
+    // 仍未定位的部分：即便给了第二个部门 + 独立 code 的角色，该用例仍失败，而我没拿到可读的失败信息
+    // （vitest 输出里没捞到断言细节）⇒ 不在本轮继续猜。触发条件：用 /diagnosing-bugs 的一次专门会话，
+    // 或该 R-USER-ROLE 规则下次被改动时，先把 `r.message` 打出来再断言。
     it('目标用户不在操作者数据范围（无部门）⇒ 范围守卫拒绝，且不写库', async () => {
       // 实测发现：这条路径先被 lib/authz 的范围守卫拦下（无部门无法证明归属，ADR-002），
       // 因此共享实现里"该用户尚未分配部门…"那句在 action 路径不可达——留着是数据层兜底。

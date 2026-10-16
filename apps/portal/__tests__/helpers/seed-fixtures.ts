@@ -18,7 +18,9 @@ import type { SeedData } from './test-db';
 const now = new Date();
 
 /** 根部门 — 几乎所有测试都需要的组织锚点 */
-export function seedRootDept(): NonNullable<SeedData['departments']> {
+export function seedRootDept(
+  overrides: Partial<NonNullable<SeedData['departments']>[0]> = {},
+): NonNullable<SeedData['departments']> {
   return [{
     id: '00000000-0000-4000-8000-000000000001',
     parentId: null,
@@ -29,6 +31,7 @@ export function seedRootDept(): NonNullable<SeedData['departments']> {
     status: 'ACTIVE',
     createdAt: now,
     updatedAt: now,
+    ...overrides,
   }];
 }
 
