@@ -112,3 +112,19 @@ Value: {
 - ADR-005: 三层安全模型（Gateway 验签/子应用鉴权分层）
 - ADR-007: 子应用自取权限 — Gateway 不管鉴权
 - ADR-008: 权限码命名空间化模型
+
+## 验证（2026-10-15 补：活体核实）
+
+按"已记录但未活体验证的历史决策"读实现取证，**三条断言全部为真**；另有**一处写法差异**
+值得点明（不是缺陷，但会让后人 grep 扑空）：
+
+| 断言 | 证据（file:line） | 判定 |
+|---|---|---|
+| AT 剥离 `roles[]` / `permissions[]` / `deptIds[]`，仅留身份断言 + 撤销标识 | `apps/portal/src/lib/auth/token.ts:97` 的 payload = `{ sub, client_id, ...(scope) }` —— **三项一个都没有**；配 `typ: at+jwt` 与 `.setJti(jti)` | 真 |
+| 鉴权上下文**仅存 Redis** | `apps/portal/src/lib/permissions.ts:102`（及 `:305` / `:362` / `:388`）一律 `cacheKey = REDIS_KEY_PREFIX.USER_PERMS + userId`，前缀来自 `@auth-sso/contracts`（`:8` 导入） | 真（语义） |
+| 与 ADR-013 的关系（OAuth 协议数据回归） | 本 ADR `:83` 已自述"OAuth 协议数据（aud/client_id/scope）的回归已于 2026-09-30 由 ADR-013 定案" | 真（已对账） |
+
+**写法差异（实测）**：本 ADR 正文写的键是 **`user:{sub}:perms`**（示意）；实际是
+**`REDIS_KEY_PREFIX.USER_PERMS + userId`**（前缀由 contracts 常量提供）。
+语义一致（按 userId 索引、存 Redis），但**字面量不同** —— 直接 grep `:perms` 会**零命中**。
+核实历史决策时建议以**常量名**为线索（本例：`REDIS_KEY_PREFIX.USER_PERMS`），而不是正文里的示意键。
