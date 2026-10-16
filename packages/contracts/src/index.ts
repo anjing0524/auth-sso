@@ -79,6 +79,21 @@ export const GATEWAY_HEADERS = {
   USER_JTI: 'x-user-jti',
 } as const;
 
+/**
+ * 已声明但**无消费者**的网关头（保留值）。
+ *
+ * 与 `RESERVED_AUDIT_OPERATIONS` 同一约定：契约里声明了、而当前没有任何代码读它时，
+ * 必须在这里显式列出并写明原因——否则后人与守卫**无法区分"有意的预留"与"漏了读取"**。
+ *
+ * 规则（由 `__tests__/gateway-header-emission.test.ts` 强制）：
+ * `GATEWAY_HEADERS` 的每个值必须**要么**在 `apps/gateway/src` 出现（按小写归一比较，
+ * HTTP 头名大小写不敏感）、**要么**列在本清单里；反之，本清单里的值不得已被消费。
+ */
+export const RESERVED_GATEWAY_HEADERS: readonly (keyof typeof GATEWAY_HEADERS)[] = [
+  // 预留：Gateway 目前只注入 USER_ID 与 USER_JTI；"用户名用于日志/审计"的设想未落地
+  'USER_NAME',
+];
+
 // 审计操作类型 — 唯一真相源
 export const AUDIT_OPERATION_VALUES = [
   'USER_CREATE', 'USER_UPDATE', 'USER_DELETE', 'USER_ROLE_ASSIGN',
