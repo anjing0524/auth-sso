@@ -158,11 +158,13 @@ describe('User Server Actions', () => {
       expect(rows.map((x) => x.roleId)).toEqual([ROLE_ID]);
     });
 
-    // 未覆盖（诚实记录，第 2 次尝试后仍然放弃）：'角色不属于该用户部门' 这条 R-USER-ROLE 失败。
-    // 已解决的部分：`seedRootDept()` 现在支持 overrides（本轮补的，与 seedTestUser/seedSuperAdminRole 对齐）。
-    // 仍未定位的部分：即便给了第二个部门 + 独立 code 的角色，该用例仍失败，而我没拿到可读的失败信息
-    // （vitest 输出里没捞到断言细节）⇒ 不在本轮继续猜。触发条件：用 /diagnosing-bugs 的一次专门会话，
-    // 或该 R-USER-ROLE 规则下次被改动时，先把 `r.message` 打出来再断言。
+    // 未覆盖（诚实记录，第 5 次尝试后按"该停就停"撤掉）：'角色不属于该用户部门' 的 R-USER-ROLE 失败。
+    // 已解决的：`seedRootDept()` 现支持 overrides（与兄弟助手对齐）。
+    // **本轮收敛出的关键事实**：失败**发生在断言之前**——我按新规矩给断言带上 `实际响应=…` 的自报上下文，
+    // 而 plain 与 verbose 两种 reporter 里**都没有**这条消息 ⇒ 说明是**抛错**（最可能在 `seedTestData`
+    // 造第二个部门/角色时），不是断言不匹配。这正好说明新规矩的价值：它把"断言挂了"与"压根没走到断言"分开。
+    // 下一步（触发条件：专门一轮且只做这一件事）：先 `console.log` / 直接 await seedTestData 单独跑，
+    // 拿到抛出物再谈断言。（`/diagnosing-bugs` 的正规姿势：先有能红的紧反馈环，再改。）
     it('目标用户不在操作者数据范围（无部门）⇒ 范围守卫拒绝，且不写库', async () => {
       // 实测发现：这条路径先被 lib/authz 的范围守卫拦下（无部门无法证明归属，ADR-002），
       // 因此共享实现里"该用户尚未分配部门…"那句在 action 路径不可达——留着是数据层兜底。
