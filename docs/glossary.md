@@ -331,4 +331,3 @@ Append-only 写操作记录，**无 FK 约束**（确保用户/实体删除后�
 - `docs/adr/ADR-009-gateway-auth-flow-unification.md`
 - `docs/spec/ARCHITECTURE.md`
 - `docs/spec/DATABASE.md`
-- `docs/spec/RBAC_MODEL_REDESIGN.md`

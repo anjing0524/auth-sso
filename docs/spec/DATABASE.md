@@ -4,7 +4,7 @@
 状态：已发布
 最后更新：2026-09-30
 
-> **v3.2 重大变更 — RBAC 权限模型重构**：删除 `data_scope_type` 枚举和 `role_data_scopes`、`role_clients` 两张关联表；角色新增 `dept_id` 字段（FK → `departments.id`），以「角色所属部门」替代独立的数据范围配置。数据访问控制从「dataScopeType 五种分支」简化为「角色部门 ID 列表 + 子树展开」的单一模型。详见 [RBAC_MODEL_REDESIGN.md](./RBAC_MODEL_REDESIGN.md)。
+> **v3.2 重大变更 — RBAC 权限模型重构**：删除 `data_scope_type` 枚举和 `role_data_scopes`、`role_clients` 两张关联表；角色新增 `dept_id` 字段（FK → `departments.id`），以「角色所属部门」替代独立的数据范围配置。数据访问控制从「dataScopeType 五种分支」简化为「角色部门 ID 列表 + 子树展开」的单一模型（决策见 ADR-002）。
 >
 > **v3.3 变更 — ADR-006/007/008 清理**：`permissions` 表移除 `resource` 和 `action` 列、移除 `DATA` 类型；`refresh_tokens` 表移除 `client_id` 列（RT 统一为用户级）；权限码格式改为 `{clientId}:{resource}:{action}` 命名空间格式。
 >

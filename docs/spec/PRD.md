@@ -252,8 +252,8 @@
 
 | 实践域 (CMMI V3.0) | 能力等级 | 本文档实现 |
 |--------|----------|-----------|
-| **DMR** (Defining & Managing Requirements) | Level 3 | §3 用户角色 + §4 功能需求 64 条（映射至 REQUIREMENTS_MATRIX.md 70 条矩阵条目）+ §5 用户旅程 + USER_STORIES.md 80+ 故事 + 需求基线 BL-2026-001 + CCB 变更控制 + 7 维属性矩阵（优先级/验证方法/风险/来源/验收标准） |
-| **DRS** (Designing & Realizing the Solution) | Level 3 | ARCHITECTURE.md（管理链路 + 11 层认证授权全链路）+ DETAILED_DESIGN.md（函数签名/时序流程）+ DATABASE.md（13 张表/外键/枚举）+ ARCHITECTURE_CONSTRAINTS.md（14 条规则 + 20 条 DC-* 约束） |
+| **DMR** (Defining & Managing Requirements) | Level 3 | §3 用户角色 + §4 功能需求 64 条（映射至 REQUIREMENTS_MATRIX.md 70 条矩阵条目）+ §5 用户旅程 + 需求基线 BL-2026-001 + CCB 变更控制 + 7 维属性矩阵（优先级/验证方法/风险/来源/验收标准） |
+| **DRS** (Designing & Realizing the Solution) | Level 3 | ARCHITECTURE.md（管理链路 + 11 层认证授权全链路）+ DATABASE.md（13 张表/外键/枚举）+ ARCHITECTURE_CONSTRAINTS.md（14 条规则 + 20 条 DC-* 约束） |
 | **ENQ** (Ensuring Quality) | Level 3 | 分层测试体系（单元/API/E2E）+ 27 文件 255 测试 + `@req` 注解自动追溯性报告 + 源码 Route Handler JSDoc 注释为 API 规范实生 + 代码审查红线清单 |
 
 ### 8.2 成熟度 Level 4（量化管理级）
@@ -269,7 +269,7 @@
 | 实践域 | 能力等级 | 本文档实现 |
 |--------|----------|-----------|
 | **CAR** (Causal Analysis & Resolution) | Level 5 | §8.4 缺陷因果分析程序（5-Why + 鱼骨图 + 纠正/预防措施闭环） |
-| **OPM** — 持续改进 | Level 5 | §8.5 过程改进选择与部署流程（Pilot → 度量 → 推广/回滚）+ 经验教训沉淀机制（`docs/solution/`） |
+| **OPM** — 持续改进 | Level 5 | §8.5 过程改进选择与部署流程（Pilot → 度量 → 推广/回滚）+ 经验教训沉淀机制（`docs/roadmap.md` + `docs/adr/`） |
 | **OPM** — 创新与部署 | Level 5 | ARCHITECTURE_CONSTRAINTS.md Red Flags 清单（主动预防）+ 架构设计指南持续审计机制 |
 
 ### 8.4 过程性能基线 (OPM Level 4)
@@ -325,7 +325,7 @@
 │ · 新增测试用例（覆盖根因场景）                   │
 │ · 更新架构约束或编码规范（如为系统性缺陷）         │
 │ · 更新 Red Flags 清单                          │
-│ · 写入 docs/solution/ 经验教训                │
+│ · 写入 roadmap 变更记录                        │
 └────────────────────────────────────────────┘
        │
        ▼
@@ -377,22 +377,18 @@
 
 ### 8.7 经验教训管理
 
-项目经验教训存储在 `docs/solution/` 目录，按时间倒序排列。每个文件包含：
+项目经验教训记录在根 `docs/roadmap.md` 的「变更记录」（按时间倒序）与 `docs/adr/` 的决策记录中。每条记录包含：
 - **问题描述**（现象、影响、严重等级）
 - **根因分析**（5-Why 输出、鱼骨图维度分析）
 - **解决方案**（纠正措施 + 预防措施）
 - **效果度量**（应用前后对比数据）
 - **相关链接**（关联的 PR/Commit/Issue）
 
-现有经验教训条目：
-- `portal-code-review-2025-06-17.md` — 全面代码审查，28 项修复
-- 更多历史条目见 `docs/solution/` 目录
-
 ### 8.8 CMMI Level 5 成熟度总结
 
 | 成熟度等级 | 特征 | 项目实现 |
 |-----------|------|---------|
 | **Level 2: Managed** | 项目管理、需求管理、质量保证 | 需求基线 + CCB 变更控制 + 分层测试 + CODEOWNERS |
-| **Level 3: Defined** | 标准化过程、组织级资产 | 8 份标准文档 + 架构约束规范 + DDD 模式 + 代码审查清单 |
+| **Level 3: Defined** | 标准化过程、组织级资产 | 7 份标准文档 + 架构约束规范 + DDD 模式 + 代码审查清单 |
 | **Level 4: Quantitatively Managed** | 量化过程管理、统计基线 | 5 项过程性能基线（UCL/LCL）+ 量化 NFR + 追溯性趋势 |
 | **Level 5: Optimizing** | 持续改进、因果分析、创新 | CAR 程序 + 过程改进部署流程 + 经验教训库 + 架构审计机制 |

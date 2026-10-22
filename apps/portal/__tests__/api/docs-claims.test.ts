@@ -11,7 +11,7 @@
  *
  * ## 覆盖的声明
  *
- * 1. 守卫的**夹具数**与**全量扫描断言数**（ADR-022 §4(d)、§强制点表、solution §4 共三处）；
+ * 1. 守卫的**夹具数**与**全量扫描断言数**（ADR-022 §4(d) 与 §强制点表 两处）；
  * 2. ADR-022 §1 的**豁免清单**与守卫 `EXEMPT_PREFIXES` 集合相等（两个副本，必须同进同退）。
  *
  * 检查刻意**要求声明存在**（匹配数下限）：把声明删掉不能让检查变绿——否则删文档就成了
@@ -25,7 +25,6 @@ import { join } from 'node:path';
 import { REPO_ROOT } from '../helpers/repo-scan';
 const GUARD = join(REPO_ROOT, 'apps/portal/__tests__/api/module-mock-guard.test.ts');
 const ADR = join(REPO_ROOT, 'docs/adr/ADR-022-test-authenticity-strategy.md');
-const SOLUTION = join(REPO_ROOT, 'docs/solution/2026-10-12-test-authenticity-remediation.md');
 
 const read = (p: string) => readFileSync(p, 'utf-8');
 
@@ -78,18 +77,14 @@ describe('文档声明的数字与树一致', () => {
     ]);
   });
 
-  it('守卫的夹具数 / 全量扫描数：三处声明都必须等于实测', () => {
+  it('守卫的夹具数 / 全量扫描数：两处声明都必须等于实测', () => {
     const actual = guardCaseCounts(read(GUARD));
     const adr = read(ADR);
-    const solution = read(SOLUTION);
 
-    const claims = [
-      ...claimsIn(adr).map((c) => ({ ...c, where: 'ADR-022' })),
-      ...claimsIn(solution).map((c) => ({ ...c, where: 'solution' })),
-    ];
+    const claims = claimsIn(adr).map((c) => ({ ...c, where: 'ADR-022' }));
 
     // 声明必须存在（删掉声明不能变绿）
-    expect(claims.length).toBeGreaterThanOrEqual(3);
+    expect(claims.length).toBeGreaterThanOrEqual(2);
 
     const wrong = claims
       .filter((c) => c.fixtures !== actual.fixtures || c.fullScan !== actual.fullScan)

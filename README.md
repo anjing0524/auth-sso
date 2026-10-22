@@ -107,7 +107,6 @@ pnpm test:report          # 需求追溯性覆盖率报告
 - [接口契约 (docs/spec/API.md)](docs/spec/API.md) — 核心接口清单与字段级契约
 - [第三方集成说明 (docs/spec/third-party-integration.md)](docs/spec/third-party-integration.md) — 企微、飞书、钉钉等三方登录集成规范
 - [需求追踪矩阵 (docs/spec/REQUIREMENTS_MATRIX.md)](docs/spec/REQUIREMENTS_MATRIX.md) — 需求→验收标准全覆盖
-- [用户故事 (docs/spec/USER_STORIES.md)](docs/spec/USER_STORIES.md) — 角色驱动的功能验收场景
 - [Portal 架构规范 (docs/portal-architecture-guidelines.md)](docs/portal-architecture-guidelines.md) — 开发规范、组件模式与 Next.js 16 适配
 - [生产 Docker 部署 (DOCKER.md)](DOCKER.md) — Let's Encrypt 自动签发、续期、热加载与部署验证
 - [设计规范 (DESIGN.md)](DESIGN.md) — UI/UX 规范与品牌定义

@@ -16,8 +16,7 @@
  * **2026-10-13 修正**：本文件此前把"非根角色的深度 ≥ 2 后代被漏掉"写成了期望
  * （`ADMIN → {TECH}`、`MULTI_ROLE → {TECH, MKT}`），而 FE/BE 明明是 TECH 的子部门。
  * 根因是子树谓词少了两条分支（`ancestors` 是**完整祖先链**，`FE` 的是 `ROOT/TECH`，
- * 既不等于 `TECH` 也不以 `TECH/` 开头）。已修复并更正期望——详见
- * `docs/solution/2026-10-13-scope-expansion-seam.md`。
+ * 既不等于 `TECH` 也不以 `TECH/` 开头）。已修复并更正期望——决策见 ADR-014。
  *
  * @req H-DSCOPE-001~003, H-ACL-002
  * @vitest-environment node

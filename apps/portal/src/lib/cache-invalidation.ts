@@ -24,8 +24,7 @@ import 'server-only';
  * | `revalidateTag` | ✅ | ✅ | 标记过期，按 profile 决定陈旧窗口 |
  *
  * 因此写入位置**不是**可以内部自动探测的实现细节——探测不到就会在 Route Handler 里
- * 抛错（写已提交、失效未发生、响应 5xx）。这里按本仓既有纪律（见
- * `docs/solution/2026-09-30-rt-revocation-module-consolidation.md`：**维度用函数名编码，
+ * 抛错（写已提交、失效未发生、响应 5xx）。这里按本仓既有纪律（**维度用函数名编码，
  * 不用条件参数化**）给出两个具名入口，调用方 grep 函数名即知自己该用哪个：
  *
  * - Server Action → {@link invalidateResource}

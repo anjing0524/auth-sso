@@ -244,8 +244,7 @@ portal 仅在 compose 网络内暴露 4000，不映射宿主端口。
 
 - CI/生产都是容器形态（standalone、非 root、容器网络、gateway TLS 终结）：验收必须与部署形态一致。
 - 有些缺陷**只在容器环境才暴露**：Next 16 Cache Components 的 `instant` 路由声明、
-  `Date.now()` 预渲染校验、服务端/浏览器 locale 差异导致的 hydration 不一致等
-  （全过程见 `docs/solution/2026-10-19-portal-ui-interaction-audit.md` §8.4）。
+  `Date.now()` 预渲染校验、服务端/浏览器 locale 差异导致的 hydration 不一致等。
 - host 的 glibc/Turbopack、端口占用、DB 连接泄漏等噪声会干扰判断。
 
 ### 7.6 故障排查

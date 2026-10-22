@@ -9,7 +9,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 ## 永远保持中文对话 所有对话提问都需要中文
 
 `@docs/spec/*` 文档提供理论支持
-决策索引：动手改某块之前若想知道「这件事以前有人做过吗 / 为什么长这样」，先读 `docs/solution/README.md`（按主题索引历次决策与教训）
+决策记录：想知道「这件事以前有人做过吗 / 为什么长这样」先查 `docs/adr/`；里程碑与取舍见 `docs/roadmap.md`。
 Rust 异步 Trait 的写法见「Gateway (Rust) 要点」（唯一出处，勿在此重复）。
 
 ## 基础环境
@@ -38,7 +38,7 @@ git 身份/远程：GitHub 推送一律用 `gh` CLI（HTTPS + 凭据助手已配
 ## 必须
 
 架构必须足够清晰，架构污染零容忍
-修复问题必须总结-审阅-修订同类问题，沉淀到docs/solution，记录为最佳实践
+修复问题必须总结-审阅-修订同类问题，沉淀到 `docs/adr/` 或 `docs/roadmap.md`，记录为最佳实践
 修改文档前必须重新阅读，文档可能被多人更新
 rust 代码修改后必须修复 `cargo clippy`的所有错误并执行 `cargo fmt` 格式化
 rust 代码必须遵循 `https://rust-lang.github.io/api-guidelines/checklist.html`
@@ -132,6 +132,29 @@ packages/config/    共享 env 配置 (Zod + URL 推导)
 - 需求追溯: 测试文件用 `@req` 注解标记覆盖的需求 ID
 - 共享配置: `vitest.base.ts`（仅 testTimeout，coverage 在根 `vitest.config.ts`）+ `drizzle.base.ts`
 
+| 层 | 位置 | 环境 / 框架 | 范围 | 命令 |
+|---|---|---|---|---|
+| 单元 / 组件 | `apps/*/__tests__/{components,domain,helpers}` | jsdom + Vitest | 渲染、交互、纯函数；外部 UI 原语与数据源可 mock | `pnpm test:components` |
+| API | `apps/*/__tests__/api/*.test.ts` | node + **真实 PostgreSQL / Redis** | route 与 action 的校验、鉴权、CRUD、数据范围过滤 | `pnpm test:api` |
+| E2E | `tests/e2e/*.spec.ts` | Playwright（仅 Chromium） | 登录冒烟与 Docker 发布栈闭环 | `pnpm test:e2e` |
+
+API 层里生产业务模块的模块级 mock 必须是**类型化工厂**（`vi.mock(import('…'), (): Partial<typeof xModule> => …)`）
+并带 `// @allow-module-mock <target> <kind>: <理由>`；签发/验签/撤销/登录/权限/审计等安全语义**真实驱动**。
+规则出处 `docs/adr/ADR-022-test-authenticity-strategy.md`，由 `apps/portal/__tests__/api/module-mock-guard.test.ts` 在 `pnpm test` 内强制。
+**不维护"关键测试文件清单"**：目录就是清单（清单会过期）。
+
+## 追溯（`@req`）
+
+`tests/traceability/generate-report.mjs` 扫测试文件里的 `@req` 注解（文件级 JSDoc 与行级注释都算），
+与 `docs/spec/REQUIREMENTS_MATRIX.md` 对齐，生成 `tests/traceability/.generated/coverage-report.md`（本地生成，不提交）。
+写法：单 ID · 逗号并列 · 区间 `AUTH-001~005` · 斜杠 `F-DEP-L/C/U/D` · 混写。
+**报告是需求映射清单，不是门禁**；阻断门禁是 Vitest / lint / typecheck / Docker 发布验收。
+
+## 文档与流程
+
+- 议题在 GitHub Issues（`anjing0524/auth-sso`，走 `gh` CLI）；五个 triage 标签保持默认。
+- 领域词汇唯一真相源：`docs/glossary.md`；架构决策：`docs/adr/`（ADR-001~022）。
+
 ## Portal 架构要点
 
 详见 `docs/portal-architecture-guidelines.md`，以下为关键约束：
@@ -180,4 +203,4 @@ packages/config/    共享 env 配置 (Zod + URL 推导)
 - **门禁结论取退出码**（加末尾的 `✖ N problems (X errors…)` 汇总行）；grep 只用来筛行、不当结论：`grep '^\s*[0-9]+:[0-9]+\s+error'` 曾把 1 个 lint error 读成「0 error」（真实输出带 `apps/portal lint:` 前缀）；同理**别把校验脚本塞进管道**——`| tail` 会让退出码变成 `tail` 的（实测：一个被取代成 `cancelled` 的 run 因此被读成 exit 0；`scripts/ci-verify.sh` 有运行级判据，直接跑、看它的退出码）。**一次推送只验一个**：同一分支的新推送会取消旧 run（本会话三个连续提交的 run 都被取代成 `cancelled`，于是"绿"永远拿不到）⇒ 上一轮绿了再推下一轮。
 - **批量改写脚本用三引号或中文引号，写完先看确认行**：英文引号嵌进双引号 Python 字符串会让整段脚本**不执行**（本会话反复栽在它上面；最严重的一次导致索引与 roadmap 漏写）。
 - **先把失败的值带出来，再改代码**：断言写 `expect(actual, JSON.stringify(actual)).toBe(…)`；读不到可读原因时先建探针（`JSON.stringify`、被包装的 `err.cause`、单独 `await` 那一步），用完撤掉。本会话一处悬案靠猜白花了好几次尝试，探针一上就定位到 `err.cause` 里的 `departments_pkey` 重复。
-- **文档维护**：新增 solution 文档必须挂进 `docs/solution/README.md` 的主题下（`docs-references.test.ts` 断言无遗漏）；引用既有决定前先查它。
+- **文档维护**：改动文档后跑文档守卫（`apps/portal/__tests__/api/docs-*.test.ts`）；引用既有决定前先查 `docs/adr/`。
