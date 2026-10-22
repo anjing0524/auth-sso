@@ -1,0 +1,187 @@
+/**
+ * Auth-SSO 共享类型定义
+ * @module @auth-sso/contracts
+ */
+
+// 用户状态唯一真相源值数组
+import type { ErrorCode } from './errors';
+export const USER_STATUS_VALUES = ['ACTIVE', 'DISABLED', 'LOCKED', 'DELETED'] as const;
+export type UserStatus = typeof USER_STATUS_VALUES[number];
+
+// 部门/角色/权限/Client 状态唯一真相源值数组
+export const ENTITY_STATUS_VALUES = ['ACTIVE', 'DISABLED'] as const;
+export type EntityStatus = typeof ENTITY_STATUS_VALUES[number];
+
+// 权限类型 — 唯一真相源（合并旧 permission_type + menu_type，menus 表已合并进 permissions）
+export const PERMISSION_TYPE_VALUES = ['DIRECTORY', 'PAGE', 'API'] as const;
+export type PermissionType = typeof PERMISSION_TYPE_VALUES[number];
+
+// 登录事件类型 — 唯一真相源
+export const LOGIN_EVENT_VALUES = ['LOGIN_SUCCESS', 'LOGIN_FAILED', 'LOGOUT', 'TOKEN_REFRESH', 'TOKEN_REFRESH_FAILED'] as const;
+export type LoginEventType = typeof LOGIN_EVENT_VALUES[number];
+
+// 登录事件中英文标签
+export const LOGIN_EVENT_LABELS: Record<LoginEventType, string> = {
+  LOGIN_SUCCESS: '登录成功',
+  LOGIN_FAILED: '登录失败',
+  LOGOUT: '登出',
+  TOKEN_REFRESH: 'Token刷新',
+  TOKEN_REFRESH_FAILED: 'Token刷新失败',
+};
+
+// ────────────────────────────────────────────
+// 枚举默认值常量（domain 工厂函数使用，消除手写字符串字面量）
+// 所有枚举值的单一真相源仍在 *_VALUES 数组中
+// ────────────────────────────────────────────
+export const USER_ACTIVE: UserStatus = 'ACTIVE';
+export const USER_DISABLED: UserStatus = 'DISABLED';
+export const USER_LOCKED: UserStatus = 'LOCKED';
+export const USER_DELETED: UserStatus = 'DELETED';
+export const ENTITY_ACTIVE: EntityStatus = 'ACTIVE';
+export const ENTITY_DISABLED: EntityStatus = 'DISABLED';
+export const PERMISSION_API: PermissionType = 'API';
+export const PERMISSION_PAGE: PermissionType = 'PAGE';
+export const PERMISSION_DIRECTORY: PermissionType = 'DIRECTORY';
+/**
+ * 系统管理员角色编码集合（硬编码业务常量）。
+ * 定义已移至 ./admin-roles，以便 authorization.ts 在不形成循环依赖的前提下引用它。
+ */
+export { ADMIN_ROLE_CODES } from './admin-roles';
+
+// Cookie 名称 — Portal 与 Gateway 共享的 HttpOnly Cookie Key
+export const COOKIE_NAMES = {
+  /** Access Token (ES256 JWT)，Gateway 从此 Cookie 提取并验签 */
+  JWT: 'portal_jwt_token',
+  /** OAuth 2.1 Refresh Token，仅在 Portal BFF 内部读写 */
+  REFRESH: 'portal_refresh_token',
+  /** 登录后临时会话 Token (5min TTL)，仅含 sub，Path=/api/auth/oauth2/authorize */
+  LOGIN_SESSION: 'login_session',
+  /** PKCE code_verifier（Client SSR 生成，HttpOnly），callback 读取后传给 /token */
+  PKCE_VERIFIER: 'pkce_verifier',
+  /** OAuth 2.1 state（Client SSR 生成，随机值），callback 校验 Cookie↔Query 一致性 */
+  OAUTH_STATE: 'oauth_state',
+  /** OIDC nonce（Client SSR 生成），callback 校验 id_token.nonce↔Cookie 一致性 */
+  OAUTH_NONCE: 'oauth_nonce',
+  /** 登录后回跳路径（Client SSR 记录），callback 经 safeRedirectPath 消毒后跳转 */
+  RETURN_TO: 'return_to',
+} as const;
+
+/** 列表分页最大 pageSize，Controller 层统一引用（防资源耗尽） */
+export const MAX_PAGE_SIZE = 100;
+
+// Gateway 注入的请求头名称
+export const GATEWAY_HEADERS = {
+  /** Gateway 验签后注入的用户 ID header（Portal 信任路径免验签） */
+  USER_ID: 'x-user-id',
+  /** Gateway 验签后注入的用户名 header（可选，用于日志/审计） */
+  USER_NAME: 'x-user-name',
+  /** Gateway 验签后注入的 JWT 唯一标识 jti header */
+  USER_JTI: 'x-user-jti',
+} as const;
+
+/**
+ * 已声明但**无消费者**的网关头（保留值）。
+ *
+ * 与 `RESERVED_AUDIT_OPERATIONS` 同一约定：契约里声明了、而当前没有任何代码读它时，
+ * 必须在这里显式列出并写明原因——否则后人与守卫**无法区分"有意的预留"与"漏了读取"**。
+ *
+ * 规则（由 `__tests__/gateway-header-emission.test.ts` 强制）：
+ * `GATEWAY_HEADERS` 的每个值必须**要么**在 `apps/gateway/src` 出现（按小写归一比较，
+ * HTTP 头名大小写不敏感）、**要么**列在本清单里；反之，本清单里的值不得已被消费。
+ */
+export const RESERVED_GATEWAY_HEADERS: readonly (keyof typeof GATEWAY_HEADERS)[] = [
+  // 预留：Gateway 目前只注入 USER_ID 与 USER_JTI；"用户名用于日志/审计"的设想未落地
+  'USER_NAME',
+];
+
+// 审计操作类型 — 唯一真相源
+export const AUDIT_OPERATION_VALUES = [
+  'USER_CREATE', 'USER_UPDATE', 'USER_DELETE', 'USER_ROLE_ASSIGN',
+  'ROLE_CREATE', 'ROLE_UPDATE', 'ROLE_DELETE', 'ROLE_PERMISSION_ASSIGN',
+  'PERMISSION_CREATE', 'PERMISSION_UPDATE', 'PERMISSION_DELETE',
+  'DEPARTMENT_CREATE', 'DEPARTMENT_UPDATE', 'DEPARTMENT_DELETE',
+  'CLIENT_CREATE', 'CLIENT_UPDATE', 'CLIENT_DELETE', 'CLIENT_SECRET_REGENERATE',
+  'TOKEN_REVOKE',
+] as const;
+export type AuditOperation = typeof AUDIT_OPERATION_VALUES[number];
+
+/**
+ * 已声明但**尚无发射点**的审计操作（保留值）。
+ *
+ * 为什么必须有这份清单：历史上 `ROLE_PERMISSION_ASSIGN` 是"给角色分配权限"预留的操作码，
+ * 而该能力一度**尚未构建**（2026-10-16 核实：全 src 只有删除绑定的路径，没有 insert）。
+ * 契约里若不标注，后人与守卫都**无法区分"有意的预留"与"漏了发射"**。
+ *
+ * 2026-10-20：角色↔权限授予的写路径已落地（`lib/role-permission-assignment.ts` +
+ * Server Action + REST POST/PUT + 角色页「配置权限」对话框），该预留已转为真实发射点，
+ * 故从本清单移除；当前**没有**预留审计操作。
+ *
+ * 规则：`AUDIT_OPERATION_VALUES` 的每个值必须**要么**在 `apps/portal/src` 里被引用，
+ * **要么**出现在本清单里；反之，列在本清单里的值**不得**已被引用（否则标记过期，应移除）。
+ */
+export const RESERVED_AUDIT_OPERATIONS: readonly AuditOperation[] = [];
+
+// 审计操作中英文标签
+export const AUDIT_OPERATION_LABELS: Record<AuditOperation, string> = {
+  USER_CREATE: '创建用户',
+  USER_UPDATE: '更新用户',
+  USER_DELETE: '删除用户',
+  USER_ROLE_ASSIGN: '分配角色',
+  ROLE_CREATE: '创建角色',
+  ROLE_UPDATE: '更新角色',
+  ROLE_DELETE: '删除角色',
+  ROLE_PERMISSION_ASSIGN: '分配权限',
+  PERMISSION_CREATE: '创建权限',
+  PERMISSION_UPDATE: '更新权限',
+  PERMISSION_DELETE: '删除权限',
+  DEPARTMENT_CREATE: '创建部门',
+  DEPARTMENT_UPDATE: '更新部门',
+  DEPARTMENT_DELETE: '删除部门',
+  CLIENT_CREATE: '创建Client',
+  CLIENT_UPDATE: '更新Client',
+  CLIENT_DELETE: '删除Client',
+  CLIENT_SECRET_REGENERATE: '重置Secret',
+  TOKEN_REVOKE: '撤销Token',
+};
+
+// 用户权限上下文（由 Portal lib/permissions.ts 查询 DB/Redis 后填充）
+export interface UserPermissionContext {
+  roles: Array<{ id: string; code: string; name: string }>;
+  permissions: string[];
+  /** 用户所有角色所属部门（含子树展开）的 ID 列表 */
+  deptIds: string[];
+}
+
+// API 响应类型契约
+//
+// 适用范围：Server Actions（RPC 风格，无 HTTP 状态码可携带错误语义）。
+// REST HTTP 端点不适用 — 直接使用 HTTP 状态码（200=成功 / 4xx/5xx=失败）+ 业务数据作为响应体，
+// `{ success: true, data: T }` 在 REST 场景中是协议层冗余反模式。
+export type ApiSuccess<T> = {
+  success: true;
+  data: T;
+  pagination?: { page: number; pageSize: number; total: number; totalPages: number };
+  message?: string;
+};
+
+export type ApiError = {
+  success: false;
+  /**
+   * 错误码 —— **闭合词汇表**里的值（本包的 `ErrorCode`）。
+   *
+   * 2026-10-15 由裸 `string` 收窄（架构巡检候选 1）：此前任何字符串都能流进响应体，
+   * 测试替身因此写出了一个生产代码从不发出的码（`'FORBIDDEN'`）而编译器毫无异议。
+   */
+  error: ErrorCode;
+  message: string;
+};
+
+/** 统一 API 响应类型 — Controller 层唯一返回值契约 */
+export type ApiResponse<T> = ApiSuccess<T> | ApiError;
+
+// 导出所有类型
+export * from './errors';
+export * from './permissions';
+export * from './oidc';
+export * from './jwt-contract';
+export * from './authorization';

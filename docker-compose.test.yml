@@ -1,0 +1,225 @@
+name: auth-sso-test
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: auth_sso
+    volumes:
+      - ./docker/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d auth_sso"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  node-test:
+    build:
+      context: .
+      dockerfile: apps/portal/Dockerfile
+      target: workspace
+      args:
+        NEXT_PUBLIC_APP_URL: http://portal:4100
+    working_dir: /app
+    environment:
+      TEST_DATABASE_URL: postgresql://postgres:postgres@postgres:5432/auth_sso_test
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/auth_sso_test
+      REDIS_URL: redis://redis:6379
+      NODE_ENV: test
+      NEXT_PUBLIC_APP_URL: http://portal:4100
+      PORTAL_REDIRECT_URL: http://portal:4100/api/auth/callback
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  cert-init:
+    build:
+      context: .
+      dockerfile: apps/gateway/Dockerfile
+      target: cert-init
+    command:
+      - sh
+      - -ec
+      - |
+        openssl req -x509 -newkey rsa:2048 -sha256 -nodes -days 2 \
+          -subj '/CN=127.0.0.1' \
+          -addext 'subjectAltName=IP:127.0.0.1,DNS:localhost' \
+          -keyout /certs/privkey.pem \
+          -out /certs/fullchain.pem
+        chmod 644 /certs/fullchain.pem /certs/privkey.pem
+    volumes:
+      - gateway_certs:/certs
+
+  db-init:
+    build:
+      context: .
+      dockerfile: apps/portal/Dockerfile
+      target: builder
+      args:
+        NEXT_PUBLIC_APP_URL: https://127.0.0.1:19443
+    command: sh -c 'pnpm db:migrate && pnpm db:seed'
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/auth_sso
+      REDIS_URL: redis://redis:6379
+      PORTAL_CLIENT_SECRET: portal-secret
+      PORTAL_REDIRECT_URL: https://127.0.0.1:19443/api/auth/callback
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  portal:
+    build:
+      context: .
+      dockerfile: apps/portal/Dockerfile
+      args:
+        NEXT_PUBLIC_APP_URL: https://127.0.0.1:19443
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/auth_sso
+      REDIS_URL: redis://redis:6379
+      NEXT_PUBLIC_APP_URL: https://127.0.0.1:19443
+      PORTAL_REDIRECT_URL: https://127.0.0.1:19443/api/auth/callback
+      PORTAL_CLIENT_SECRET: portal-secret
+      GATEWAY_SHARED_SECRET: e2e-gateway-shared-secret
+      COOKIE_SECURE: "true"
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "node -e 'fetch(\"http://127.0.0.1:4000/api/health\").then(r => process.exit(r.status === 200 ? 0 : 1)).catch(() => process.exit(1))'"]
+      interval: 5s
+      timeout: 3s
+      retries: 24
+
+  gateway:
+    build:
+      context: .
+      dockerfile: apps/gateway/Dockerfile
+    ports:
+      - "19443:443"
+    environment:
+      NODE_ENV: test
+      GATEWAY_SHARED_SECRET: e2e-gateway-shared-secret
+      # E2E 网关限流抬档（生产默认 20/30，见 config.rs RateLimitConfig）
+      RATE_LIMIT_AUTH_MAX: "200"
+      RATE_LIMIT_TOKEN_MAX: "300"
+    volumes:
+      - ./apps/gateway/gateway.e2e.toml:/app/gateway.toml:ro
+      - gateway_certs:/etc/gateway/ssl:ro
+    depends_on:
+      portal:
+        condition: service_healthy
+      cert-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-check-certificate -q -O /dev/null https://127.0.0.1:443/login"]
+      interval: 5s
+      timeout: 3s
+      retries: 24
+
+  pebble:
+    image: auth-sso-test-pebble:v2.8.0
+    build:
+      context: .
+      dockerfile: tests/acme/Dockerfile.pebble
+      target: pebble
+    profiles: ["acme"]
+    command:
+      - -config
+      - test/config/gateway-pebble-config.json
+      - -strict=false
+      - -dnsserver
+      - 10.31.50.3:8053
+    environment:
+      PEBBLE_AUTHZREUSE: "0"
+      PEBBLE_VA_NOSLEEP: "1"
+      PEBBLE_WFE_NONCEREJECT: "0"
+    ports:
+      - "14000:14000"
+      - "15000:15000"
+    volumes:
+      - ./tests/acme/pebble-config.json:/test/config/gateway-pebble-config.json:ro
+      - ./tests/acme/pebble-server.pem:/test/certs/pebble-server.pem:ro
+      - ./tests/acme/pebble-server-key.pem:/test/certs/pebble-server-key.pem:ro
+    networks:
+      acmenet:
+        ipv4_address: 10.31.50.2
+
+  challtestsrv:
+    image: auth-sso-test-pebble-challtestsrv:v2.8.0
+    build:
+      context: .
+      dockerfile: tests/acme/Dockerfile.pebble
+      target: challtestsrv
+    profiles: ["acme"]
+    command:
+      - -defaultIPv6
+      - ""
+      - -defaultIPv4
+      - 10.31.50.4
+    ports:
+      - "8055:8055"
+    networks:
+      acmenet:
+        ipv4_address: 10.31.50.3
+
+  gateway-acme:
+    build:
+      context: .
+      dockerfile: apps/gateway/Dockerfile
+    profiles: ["acme"]
+    ports:
+      - "19080:80"
+      - "19444:443"
+    environment:
+      NODE_ENV: test
+      LETSENCRYPT_DOMAIN: gateway.test
+      LETSENCRYPT_EMAIL: acme-e2e@example.test
+      ACME_DIRECTORY_URL: https://pebble:14000/dir
+      ACME_STATE_DIR: /var/lib/gateway/acme
+      ACME_CA_CERT_PATH: /test/pebble.minica.pem
+      ACME_CHECK_INTERVAL_SECS: "1"
+      # 关闭 ARI：其续期时机由 Pebble 的 suggested_window 决定，对同一证书也会变化，
+      # 使"重启恢复同一张证书"断言的时序不可控（曾本地 3/3 通过而 CI 失败）。
+      # 关闭后续期点严格等于证书寿命的 2/3（300s ⇒ 200s），脚本据此排布各阶段。
+      ACME_DISABLE_ARI: "true"
+      GATEWAY_SHARED_SECRET: acme-e2e-gateway-shared-secret
+    volumes:
+      - ./apps/gateway/gateway.acme-e2e.toml:/app/gateway.toml:ro
+      - ./tests/acme/pebble.minica.pem:/test/pebble.minica.pem:ro
+      - gateway_acme_test:/var/lib/gateway/acme
+    depends_on:
+      redis:
+        condition: service_healthy
+      pebble:
+        condition: service_started
+      challtestsrv:
+        condition: service_started
+    networks:
+      default:
+      acmenet:
+        ipv4_address: 10.31.50.4
+
+volumes:
+  gateway_certs:
+  gateway_acme_test:
+
+networks:
+  acmenet:
+    ipam:
+      config:
+        - subnet: 10.31.50.0/24

@@ -1,0 +1,92 @@
+/**
+ * 审计日志 CSV 导出 API (GET /api/audit/export)
+ *
+ * SIEM 集成：支持 Splunk/Datadog/Sentinel 等系统通过 webhook 或定时拉取导入日志。
+ * 返回 RFC 4180 CSV 格式，BOM 头兼容 Excel 中文打开。
+ *
+ * @route GET /api/audit/export?type=login|operation
+ * @permission audit:export
+ */
+import { type NextRequest, NextResponse } from 'next/server';
+import { withPermission } from '@/lib/auth';
+import { AUDIT_PERMISSIONS, MAX_PAGE_SIZE, LOGIN_EVENT_VALUES, AUDIT_OPERATION_VALUES, type LoginEventType, type AuditOperation } from '@auth-sso/contracts';
+import { getAuditLogs, getLoginLogs } from '@/app/audit/data';
+
+export async function GET(request: NextRequest) {
+  return withPermission(
+    { permissions: [AUDIT_PERMISSIONS.EXPORT] },
+    async () => {
+      const { searchParams } = new URL(request.url);
+      const type = searchParams.get('type') || 'login';
+      const eventTypeParam = searchParams.get('eventType');
+      const operationParam = searchParams.get('operation');
+      const eventType = LOGIN_EVENT_VALUES.includes(eventTypeParam as LoginEventType)
+        ? (eventTypeParam as LoginEventType) : undefined;
+      const operation = AUDIT_OPERATION_VALUES.includes(operationParam as AuditOperation)
+        ? (operationParam as AuditOperation) : undefined;
+
+      let csv: string;
+      /** 导出上限：防止一次拉爆内存（10 万行 ≈ 权限表 2000 页也远超实际）。 */
+      const EXPORT_MAX_ROWS = 100_000;
+
+      // 将单元格值转为 RFC 4180 安全的 CSV 字段（含公式注入防护）
+      const csvEscape = (v: unknown): string => {
+        const s = String(v ?? '');
+        // CSV 公式注入防护：以 = + - @ 开头的字段加 tab 前缀，阻止 Excel 执行
+        const escaped = /^[=+\-@\t\r]/.test(s) ? '\t' + s : s;
+        // 含逗号、双引号、换行符的字段用双引号包裹
+        if (/[",\n\r]/.test(escaped)) {
+          return '"' + escaped.replace(/"/g, '""') + '"';
+        }
+        return escaped;
+      };
+
+      if (type === 'login') {
+        // 此前只导出第 1 页（MAX_PAGE_SIZE=100 行）：5000 条登录日志实际只导出 100 条。
+        // 现在按页循环取全量（上限 10 万行）。
+        const all: Awaited<ReturnType<typeof getLoginLogs>>['data'] = [];
+        let pageNo = 1;
+        for (;;) {
+          const res = await getLoginLogs({ page: pageNo, pageSize: MAX_PAGE_SIZE, ...(eventType ? { eventType } : {}) });
+          all.push(...res.data);
+          if (res.data.length === 0 || pageNo >= res.pagination.totalPages || all.length >= EXPORT_MAX_ROWS) break;
+          pageNo += 1;
+        }
+        csv = '\uFEFF' + [
+          '时间,用户,事件类型,IP地址,User-Agent,失败原因',
+          // 不强制转换为 Record<string, unknown>：让 TS 用真实行类型检查字段名
+          // （那层转换曾让下面 3 个不存在的字段通过编译，见 operation 分支）
+          ...all.map((l) =>
+            [l.createdAt, l.username, l.eventType, l.ip, l.userAgent, l.failReason].map(csvEscape).join(',')
+          ),
+        ].join('\n');
+      } else {
+        const all: Awaited<ReturnType<typeof getAuditLogs>>['data'] = [];
+        let pageNo = 1;
+        for (;;) {
+          const res = await getAuditLogs({ page: pageNo, pageSize: MAX_PAGE_SIZE, ...(operation ? { operation } : {}) });
+          all.push(...res.data);
+          if (res.data.length === 0 || pageNo >= res.pagination.totalPages || all.length >= EXPORT_MAX_ROWS) break;
+          pageNo += 1;
+        }
+        csv = '\uFEFF' + [
+          '时间,操作人,操作类型,目标资源,详情,IP地址',
+          // 字段名必须取自行形状（getAuditLogs 的 mapRow）：
+          // 原为 `l.operator || l.username`、`l.resource`、`l.detail` —— 三者都不存在，
+          // 而 `l: Record<string, unknown>` 的强制转换让编译器无法发现 ⇒ 导出的 CSV
+          // 有 3 列恒为 `undefined`（2026-10-13 修复，架构评审 R2 次级候选）。
+          ...all.map((l) =>
+            [l.createdAt, l.username, l.operation, l.url, l.params, l.ip].map(csvEscape).join(',')
+          ),
+        ].join('\n');
+      }
+
+      return new NextResponse(csv, {
+        headers: {
+          'Content-Type': 'text/csv; charset=utf-8',
+          'Content-Disposition': `attachment; filename="audit-${type}-${new Date().toISOString().slice(0, 10)}.csv"`,
+        },
+      });
+    },
+  );
+}

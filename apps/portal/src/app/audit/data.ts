@@ -1,0 +1,197 @@
+/**
+ * 审计日志读模型 (Read Model)
+ *
+ * 提供操作审计日志和登录日志的分页查询。
+ * 不使用缓存（审计数据变化频繁且安全性要求高）。
+ */
+import 'server-only';
+
+import { db, schema } from '@/infrastructure/db';
+import { eq, desc, and, gte, lte, count } from 'drizzle-orm';
+import type { AnyColumn, SQL } from 'drizzle-orm';
+import type { PgTable } from 'drizzle-orm/pg-core';
+import type { AuditOperation, LoginEventType } from '@auth-sso/contracts';
+import { clampPage, clampPageSize, offsetFor, paginationMeta, type PaginationMeta } from '@/lib/pagination';
+
+/** 日期格式正则：防止 SQL 注入和异常参数穿透 */
+const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * 为分页查询构建日期范围过滤条件 — 消除 getAuditLogs / getLoginLogs / getAccessLogs 三处重复
+ */
+function addDateRangeConditions(
+  conditions: SQL[],
+  column: AnyColumn,
+  startDate?: string,
+  endDate?: string,
+): void {
+  if (startDate && DATE_REGEX.test(startDate)) {
+    conditions.push(gte(column, new Date(`${startDate}T00:00:00`)));
+  }
+  if (endDate && DATE_REGEX.test(endDate)) {
+    conditions.push(lte(column, new Date(`${endDate}T23:59:59.999`)));
+  }
+}
+
+interface PaginationParams {
+  page: number;
+  pageSize: number;
+}
+
+interface PaginatedResult<T> {
+  data: T[];
+  pagination: PaginationMeta;
+}
+
+/**
+ * 通用分页查询 — 消除 getAuditLogs / getLoginLogs 之间 ~50 行重复模板。
+ *
+ * `mapRow` 是本文件唯一的 any 透传边界：Drizzle 泛型 PgTable 的行类型无法
+ * 静态表达，三张日志表的行形状由调用方的 mapRow 闭包按各自 schema 收敛。
+ */
+async function paginatedSelect<T>(
+  table: PgTable,
+  orderByColumn: AnyColumn,
+  conditions: SQL[],
+  params: PaginationParams,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  mapRow: (row: any) => T,
+): Promise<PaginatedResult<T>> {
+  // 钳制与 OFFSET 全部走 lib/pagination 的单点判据（原先本文件是**第三套**实现：
+  // 自带 clamp、pageSize 上限硬编码 100 而与 contracts 的 MAX_PAGE_SIZE 脱钩）。
+  const page = clampPage(params.page);
+  const pageSize = clampPageSize(params.pageSize);
+  const offset = offsetFor(page, pageSize);
+
+  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+  // 两次查询无依赖 ⇒ 并发（与 lib/pagination 的 withPagination 同语义；
+  // 此前是串行两次 await，白白多一个往返）
+  const [rows, countResult] = await Promise.all([
+    db.select()
+      .from(table)
+      .where(whereClause)
+      .orderBy(desc(orderByColumn))
+      .limit(pageSize)
+      .offset(offset),
+    db.select({ count: count() }).from(table).where(whereClause),
+  ]);
+  const total = Number(countResult[0]?.count ?? 0);
+
+  return {
+    data: rows.map(r => mapRow(r as unknown as Record<string, unknown>)),
+    pagination: paginationMeta(page, pageSize, total),
+  };
+}
+
+/**
+ * 分页获取操作审计日志
+ */
+export async function getAuditLogs(params: PaginationParams & {
+  userId?: string;
+  operation?: AuditOperation;
+  startDate?: string;
+  endDate?: string;
+}) {
+  const conditions: ReturnType<typeof eq>[] = [];
+  if (params.userId) conditions.push(eq(schema.auditLogs.userId, params.userId));
+  if (params.operation) conditions.push(eq(schema.auditLogs.operation, params.operation));
+  addDateRangeConditions(conditions, schema.auditLogs.createdAt, params.startDate, params.endDate);
+
+  // 操作人：优先取写入时的 username 快照；历史数据 username 为空时左连 users 补登录账号
+  const page = clampPage(params.page);
+  const pageSize = clampPageSize(params.pageSize);
+  const offset = offsetFor(page, pageSize);
+  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+  const [rows, countResult] = await Promise.all([
+    db.select({ log: schema.auditLogs, joinedUsername: schema.users.username })
+      .from(schema.auditLogs)
+      .leftJoin(schema.users, eq(schema.users.id, schema.auditLogs.userId))
+      .where(whereClause)
+      .orderBy(desc(schema.auditLogs.createdAt))
+      .limit(pageSize)
+      .offset(offset),
+    db.select({ count: count() }).from(schema.auditLogs).where(whereClause),
+  ]);
+  const total = Number(countResult[0]?.count ?? 0);
+
+  return {
+    data: rows.map(({ log, joinedUsername }) => ({
+      id: log.id,
+      userId: log.userId,
+      username: log.username ?? joinedUsername,
+      operation: log.operation,
+      method: log.method,
+      url: log.url,
+      params: log.params,
+      ip: log.ip,
+      userAgent: log.userAgent,
+      status: log.status,
+      duration: log.duration,
+      errorMsg: log.errorMsg,
+      createdAt: log.createdAt,
+    })),
+    pagination: paginationMeta(page, pageSize, total),
+  };
+}
+
+/**
+ * 分页获取登录日志
+ */
+export async function getLoginLogs(params: PaginationParams & {
+  userId?: string;
+  eventType?: LoginEventType;
+  startDate?: string;
+  endDate?: string;
+}) {
+  const conditions: ReturnType<typeof eq>[] = [];
+  if (params.userId) conditions.push(eq(schema.loginLogs.userId, params.userId));
+  if (params.eventType) conditions.push(eq(schema.loginLogs.eventType, params.eventType));
+  addDateRangeConditions(conditions, schema.loginLogs.createdAt, params.startDate, params.endDate);
+
+  return paginatedSelect(schema.loginLogs, schema.loginLogs.createdAt, conditions, params, (log) => ({
+    id: log.id,
+    userId: log.userId,
+    username: log.username,
+    eventType: log.eventType,
+    ip: log.ip,
+    userAgent: log.userAgent,
+    location: log.location,
+    failReason: log.failReason,
+    createdAt: log.createdAt,
+  }));
+}
+
+/**
+ * 分页获取访问日志（读操作合规追溯）
+ *
+ * 用于回答"谁查看了哪条敏感数据"。复用 audit:read 权限（不新建权限码）。
+ */
+export async function getAccessLogs(params: PaginationParams & {
+  userId?: string;
+  resourceType?: string;
+  resourceId?: string;
+  startDate?: string;
+  endDate?: string;
+}) {
+  const conditions: ReturnType<typeof eq>[] = [];
+  if (params.userId) conditions.push(eq(schema.accessLogs.userId, params.userId));
+  if (params.resourceType) conditions.push(eq(schema.accessLogs.resourceType, params.resourceType));
+  if (params.resourceId) conditions.push(eq(schema.accessLogs.resourceId, params.resourceId));
+  addDateRangeConditions(conditions, schema.accessLogs.createdAt, params.startDate, params.endDate);
+
+  return paginatedSelect(schema.accessLogs, schema.accessLogs.createdAt, conditions, params, (log) => ({
+    id: log.id,
+    userId: log.userId,
+    username: log.username,
+    method: log.method,
+    path: log.path,
+    resourceType: log.resourceType,
+    resourceId: log.resourceId,
+    ip: log.ip,
+    userAgent: log.userAgent,
+    status: log.status,
+    duration: log.duration,
+    createdAt: log.createdAt,
+  }));
+}

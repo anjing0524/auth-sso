@@ -1,0 +1,110 @@
+'use server';
+
+/**
+ * 用户个人中心 Server Actions (自助服务)
+ *
+ * 只有登录用户本人可调用（withAuth 空权限），
+ * 通过 ctx.userId 锁定操作目标（防止 IDOR）。
+ * 满足 FR-USR-10（自助改密）/ FR-USR-12（自助改资料）。
+ */
+import { z } from 'zod';
+import { db, schema } from '@/infrastructure/db';
+import { eq } from 'drizzle-orm';
+import { withAuth, type AuthContext } from '@/lib/auth';
+import { EntityNotFoundError } from '@/domain/shared/errors';
+import { validate } from '@/lib/validation';
+import { PasswordSchema } from '@/domain/shared/zod-schemas';
+import { COMMON_ERRORS, type ApiResponse } from '@auth-sso/contracts';
+import { invalidateResource } from '@/lib/cache-invalidation';
+import { changeOwnPassword, INVALID_CURRENT_PASSWORD_MESSAGE } from '@/lib/account/change-password';
+
+/**
+ * 自助改资料入参校验 Schema
+ * 仅允许修改安全字段，不允许改 status / deptId（防越权）
+ */
+const UpdateOwnProfileSchema = z.object({
+  /** 显示姓名 */
+  name: z.string().min(1, '姓名不能为空').optional(),
+  /** 邮箱 */
+  email: z.string().email('邮箱格式不合法').optional(),
+  /** 头像 URL */
+  avatarUrl: z.string().url('头像 URL 格式不合法').optional().nullable(),
+});
+
+/**
+ * 自助修改密码入参校验 Schema
+ */
+const ChangeOwnPasswordSchema = z.object({
+  currentPassword: z.string().min(1, '当前密码不能为空'),
+  newPassword: PasswordSchema,
+});
+
+/**
+ * 用户自助修改个人资料 Action Controller
+ *
+ * 限制可修改字段为 { name, email, avatarUrl }，防止越权修改 status/deptId。
+ * 审计操作：无（资料修改非敏感审计事件，由业务决定是否加 audit）
+ */
+export const updateOwnProfileAction = withAuth(
+  {},
+  async (
+    ctx: AuthContext,
+    input: Record<string, unknown>,
+  ): Promise<ApiResponse<{ id: string }>> => {
+    const v = validate(UpdateOwnProfileSchema, input);
+    if (!v.ok) return v.response;
+
+    // 用 ctx.userId 锁定目标，防止 IDOR
+    const row = await db.query.users.findFirst({ where: eq(schema.users.id, ctx.userId) });
+    if (!row) throw new EntityNotFoundError('User', ctx.userId);
+
+    // 仅更新有值的字段（partial update）
+    const updates: Record<string, unknown> = {};
+    if (v.data.name !== undefined) updates['name'] = v.data.name;
+    if (v.data.email !== undefined) updates['email'] = v.data.email;
+    if ('avatarUrl' in v.data) updates['avatarUrl'] = v.data.avatarUrl ?? null;
+
+    if (Object.keys(updates).length === 0) {
+      return { success: true, data: { id: ctx.userId }, message: '无内容变更' };
+    }
+
+    await db.update(schema.users).set(updates).where(eq(schema.users.id, ctx.userId));
+
+    invalidateResource('profile');
+    return { success: true, data: { id: ctx.userId }, message: '资料已更新' };
+  },
+);
+
+/**
+ * 用户自助修改密码 Action Controller（FR-USR-10）
+ *
+ * 验证旧密码 → 哈希新密码 → 更新 passwordChangedAt → 失效所有会话（NFR-SEC-13）。
+ * 审计：TOKEN_REVOKE（withAuth 自动记录）
+ */
+export const changeOwnPasswordAction = withAuth(
+  { audit: 'TOKEN_REVOKE' },
+  async (
+    ctx: AuthContext,
+    input: Record<string, unknown>,
+  ): Promise<ApiResponse<{ id: string }>> => {
+    const v = validate(ChangeOwnPasswordSchema, input);
+    if (!v.ok) return v.response;
+
+    // 领域操作（纯判定 + bcrypt + 持久化 + 会话撤销）已命名，见 lib/account/change-password。
+    // 目标由 ctx.userId 锁定，防止 IDOR。
+    const result = await changeOwnPassword(ctx.userId, v.data.currentPassword, v.data.newPassword);
+
+    if (!result.ok) {
+      if (result.reason === 'user_not_found') {
+        throw new EntityNotFoundError('User', ctx.userId);
+      }
+      return {
+        success: false,
+        error: COMMON_ERRORS.VALIDATION_ERROR,
+        message: INVALID_CURRENT_PASSWORD_MESSAGE,
+      };
+    }
+
+    return { success: true, data: { id: ctx.userId }, message: '密码已更新，请重新登录' };
+  },
+);

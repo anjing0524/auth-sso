@@ -1,0 +1,62 @@
+import { z } from 'zod';
+import { type EntityStatus } from '@auth-sso/contracts';
+import { entityStatusEnum } from '@/domain/shared/zod-schemas';
+
+/**
+ * OAuth Client 领域实体接口 (纯 TS interface)
+ *
+ * clientId 既是 OAuth 业务标识，也是 PK。
+ *
+ * v2 变更：
+ * - 移除 publicId、userId（clients PK 改为 client_id，消除冗余标识符）
+ * - 移除 grantTypes、skipConsent 等旧 Better Auth 兼容字段
+ */
+export interface Client {
+  /** OAuth Client ID（PK，业务标识） */
+  clientId: string;
+  /** 应用名称 */
+  name: string;
+  /** OAuth Client Secret（仅创建时可见） */
+  clientSecret: string | null;
+  /** 回调地址列表 */
+  redirectUris: string[];
+  /** 授权范围 */
+  scopes: string;
+  /** 主页 URL */
+  homepageUrl: string | null;
+  /** Logo URL */
+  logoUrl: string | null;
+  /** Access Token TTL (秒) */
+  accessTokenTtl: number;
+  /** Refresh Token TTL (秒) */
+  refreshTokenTtl: number;
+  /** 状态 */
+  status: EntityStatus;
+  /** 创建时间 */
+  createdAt: Temporal.Instant;
+}
+
+/** 创建 Client 入参校验 Schema */
+export const CreateClientInputSchema = z.object({
+  name: z.string().min(1, '应用名称不能为空').max(100, '应用名称最多 100 个字符'),
+  redirectUris: z.array(z.string().url('回调地址格式不合法').max(500, '回调地址最多 500 个字符')).min(1, '至少需要一个回调地址'),
+  scopes: z.string().max(200, 'scope 最多 200 个字符').default('openid profile email'),
+  homepageUrl: z.string().url().max(500, '主页地址最多 500 个字符').nullable().optional(),
+  logoUrl: z.string().url().max(500, 'Logo 地址最多 500 个字符').nullable().optional(),
+  accessTokenTtl: z.number().int().positive().default(3600),
+  refreshTokenTtl: z.number().int().positive().default(604800),
+});
+
+/** 更新 Client 入参校验 Schema */
+export const UpdateClientInputSchema = z.object({
+  name: z.string().min(1).max(100, '应用名称最多 100 个字符').optional(),
+  redirectUris: z.array(z.string().url().max(500, '回调地址最多 500 个字符')).min(1).optional(),
+  scopes: z.string().max(200, 'scope 最多 200 个字符').optional(),
+  homepageUrl: z.string().url().max(500, '主页地址最多 500 个字符').nullable().optional(),
+  logoUrl: z.string().url().max(500, 'Logo 地址最多 500 个字符').nullable().optional(),
+  accessTokenTtl: z.number().int().positive().optional(),
+  refreshTokenTtl: z.number().int().positive().optional(),
+  status: entityStatusEnum.optional(),
+});
+
+export type CreateClientInput = z.infer<typeof CreateClientInputSchema>;

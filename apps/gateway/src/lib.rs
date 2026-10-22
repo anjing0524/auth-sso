@@ -1,0 +1,63 @@
+//! Auth-SSO 去中心化安全网关库 (Gateway Library)
+//!
+//! 基于 Pingora 0.8.1 + ES256 JWKS 离线验签。默认构建额外启用 Rust 内建 ACME；
+//! 平台 TLS 构建通过 `--no-default-features` 在编译期排除自托管 TLS 能力。
+//!
+//! 本库提供网关的核心可复用组件，包括：
+//! - JWT 密码学验签与静默续签 ([`auth`])
+//! - JWKS 公钥缓存与 OIDC Discovery（[`jwks`]，ArcSwap 快照，热路径 wait-free 读取）
+//! - 单一前缀路由表（[`router`]，prefix → LB + OAuth 配置，一次匹配全生命周期复用）
+//! - 路径分类与 Cookie 处理 ([`path_matcher`], [`cookie`])
+//! - 进程内速率限制（[`rate_limiter`]，限流键为网关信任边界内的权威客户端 IP）
+//! - 配置管理与上游管理 ([`config`])
+//! - 无锁全局指标计数（内部模块 `metrics`，非公共 API）
+//! - `self-managed-tls` Feature：HTTP → HTTPS 重定向、内建 ACME 证书生命周期和
+//!   TLS 证书原子热重载
+//!
+//! # Examples
+//!
+//! ```ignore
+//! # use gateway::config::Config;
+//! fn main() -> anyhow::Result<()> {
+//!     let config = Config::load("gateway.toml")?;
+//!     println!("HTTPS port: {}", config.gateway.ssl_port);
+//!     Ok(())
+//! }
+//! ```
+
+#[cfg(feature = "self-managed-tls")]
+pub mod acme;
+pub mod auth;
+pub(crate) mod authenticate;
+pub mod config;
+pub mod cookie;
+pub mod gateway;
+pub(crate) mod http;
+pub mod jwks;
+pub mod logging;
+pub(crate) mod metrics;
+pub mod oauth;
+pub(crate) mod oauth_flow;
+pub mod path_matcher;
+pub mod rate_limiter;
+#[cfg(feature = "self-managed-tls")]
+pub mod redirect;
+pub mod redis;
+pub mod router;
+#[cfg(feature = "self-managed-tls")]
+pub mod tls;
+
+// 重导出常用类型
+pub use gateway::Gateway;
+pub use router::Router;
+
+/// 跨语言字面量契约断言（Portal TS ↔ Gateway Rust）。
+///
+/// 独立成模块而非塞进各文件的原因：契约的价值在于**一处集中断言两端全部共享值**，
+/// 分散到各文件就会随文件增删而漏（这正是它此前缺失的原因）。
+#[cfg(test)]
+mod contract_tests;
+
+/// 仓库卫生守卫（生产代码里的测试缝必须登记）；见 `test_hygiene_tests.rs` 的普查说明。
+#[cfg(test)]
+mod test_hygiene_tests;

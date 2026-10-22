@@ -1,0 +1,26 @@
+{
+  "cookies": {
+    "jwt": "portal_jwt_token",
+    "refresh": "portal_refresh_token",
+    "pkce_verifier": "pkce_verifier",
+    "oauth_state": "oauth_state",
+    "oauth_nonce": "oauth_nonce",
+    "return_to": "return_to"
+  },
+  "gatewayHeaders": {
+    "user_id": "x-user-id",
+    "user_jti": "x-user-jti"
+  },
+  "jwtTyp": {
+    "access_token": "at+jwt"
+  },
+  "redisKeyPrefixes": {
+    "jti_blocklist": "portal:jti_blocklist:"
+  },
+  "scopesSupported": ["openid", "profile", "email", "offline_access"],
+  "discoveryFields": {
+    "refresh_endpoint": "com_authsso_refresh_endpoint",
+    "callback_path": "com_authsso_callback_path",
+    "callbackPath": "/api/auth/callback"
+  }
+}

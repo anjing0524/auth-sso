@@ -1,0 +1,116 @@
+import 'server-only';
+
+import { unstable_rethrow } from 'next/navigation';
+import { mapDomainError } from '@/domain/shared/error-mapping';
+import { BusinessRuleViolationError, DuplicateEntityError } from '@/domain/shared/errors';
+import { dataViolation, uniqueViolation } from '@/lib/db-errors';
+import {
+  CLIENT_ERRORS,
+  DEPARTMENT_ERRORS,
+  PERMISSION_ERRORS,
+  ROLE_ERRORS,
+  USER_ERRORS,
+  type ErrorCode,
+} from '@auth-sso/contracts';
+
+/**
+ * Server Action / API Route 的**唯一**服务端错误映射入口。
+ *
+ * 保留 Next.js redirect、Request-time API 与 PPR 的框架控制流，仅映射应用错误。
+ *
+ * ## 为什么先认数据库唯一约束违例
+ *
+ * 唯一性冲突的三处既有实现是"事务内先查后写"（`users` / `roles` / `permissions`），
+ * 而 `departments` 直接 insert ⇒ PG 违例经 `mapDomainError` 落到 500「服务器内部错误」。
+ *
+ * 先查后写本身**不是并发安全的**（两个并发请求都能通过检查，落库时后者仍违例），
+ * 所以真正的保证点在**这里**：由数据库当唯一权威，把 `23505` 一次性翻译成
+ * 领域语义的 409。既有的事务内查重因此退化为"更早给出消息"的优化，
+ * 而非正确性依赖。
+ *
+ * ## 消息不含冲突值
+ *
+ * 实体名/字段名由 `table_name` + `detail` 的**列名**翻译而来；
+ * `detail` 里的**值**（他人邮箱/手机号/用户名）一律不进入消息。
+ */
+
+/** 表名 → 用户可读实体名（未映射的回退为表名本身） */
+const ENTITY_LABELS: Record<string, string> = {
+  users: '用户',
+  roles: '角色',
+  permissions: '权限',
+  departments: '部门',
+  clients: '应用',
+};
+
+/** 列名 → 用户可读字段名（未映射的回退为列名本身） */
+const FIELD_LABELS: Record<string, string> = {
+  username: '用户名',
+  email: '邮箱',
+  mobile: '手机号',
+  code: '编码',
+  client_id: 'Client ID',
+};
+
+/**
+ * 唯一约束（表:列）→ **专属冲突码**（`*_ALREADY_EXISTS`）。
+ *
+ * 键与 PG 的 `table_name` / `detail` 里解析出的列名一致（见 `uniqueViolation`）。
+ * 未列出的组合回落到实体级码（`*_ALREADY_EXISTS`）或通用 `VALIDATION_ERROR`——
+ * 新增唯一约束时应在此登记，否则客户端只能解析中文文案定位字段。
+ */
+const CONFLICT_CODES: Record<string, ErrorCode> = {
+  'users:username': USER_ERRORS.USERNAME_ALREADY_EXISTS,
+  'users:email': USER_ERRORS.EMAIL_ALREADY_EXISTS,
+  'users:mobile': USER_ERRORS.MOBILE_ALREADY_EXISTS,
+  'roles:code': ROLE_ERRORS.ROLE_ALREADY_EXISTS,
+  'departments:code': DEPARTMENT_ERRORS.DEPARTMENT_ALREADY_EXISTS,
+  'permissions:code': PERMISSION_ERRORS.PERMISSION_ALREADY_EXISTS,
+  'clients:client_id': CLIENT_ERRORS.CLIENT_ALREADY_EXISTS,
+};
+
+/** 表 → 实体级冲突码（列无法唯一定位时使用，如复合唯一约束） */
+const CONFLICT_ENTITY_CODES: Record<string, ErrorCode> = {
+  users: USER_ERRORS.USER_ALREADY_EXISTS,
+};
+
+/** 唯一约束违例 → 409 的领域错误（消息不含冲突值）+ 专属码 */
+function conflictFromUniqueViolation(violation: {
+  table: string | null;
+  columns: readonly string[];
+}): DuplicateEntityError {
+  const entity = violation.table ? (ENTITY_LABELS[violation.table] ?? violation.table) : '记录';
+  const field =
+    violation.columns.length > 0
+      ? violation.columns.map((column) => FIELD_LABELS[column] ?? column).join('/')
+      : '唯一字段';
+
+  const code =
+    (violation.table && violation.columns.length === 1
+      ? CONFLICT_CODES[`${violation.table}:${violation.columns[0]}`]
+      : undefined) ??
+    (violation.table ? CONFLICT_ENTITY_CODES[violation.table] : undefined);
+
+  return code
+    ? new DuplicateEntityError(entity, field, code)
+    : new DuplicateEntityError(entity, field);
+}
+
+export function mapServerError(error: unknown) {
+  unstable_rethrow(error);
+
+  const violation = uniqueViolation(error);
+  if (violation) return mapDomainError(conflictFromUniqueViolation(violation));
+
+  // 数据形态错误（非法 UUID/枚举文本、超长、CHECK）→ 400/422 语义，而不是 500
+  const data = dataViolation(error);
+  if (data) {
+    return mapDomainError(
+      new BusinessRuleViolationError(
+        data === 'value-too-long' ? '输入内容超出允许长度' : '输入内容格式不合法',
+      ),
+    );
+  }
+
+  return mapDomainError(error);
+}

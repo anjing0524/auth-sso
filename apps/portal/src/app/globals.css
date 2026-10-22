@@ -1,0 +1,282 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  /* 基础颜色 - 基于 DESIGN.md v2.0（hex 值已转为 oklch） */
+  --color-primary: oklch(0.52 0.23 257);
+  --color-primary-hover: oklch(0.43 0.21 257);
+  --color-primary-subtle: oklch(0.95 0.03 250);
+
+  /* 背景 */
+  --color-background: oklch(0.99 0.001 253);
+  --color-surface: oklch(1 0 0);
+  --color-surface-elevated: oklch(1 0 0);
+
+  /* 文字 */
+  --color-text-primary: oklch(0.18 0.02 260);
+  --color-text-secondary: oklch(0.42 0.03 260);
+  --color-text-muted: oklch(0.68 0.03 250);
+
+  /* 边框 */
+  --color-border: oklch(0.93 0.01 260);
+
+  /* 语义 */
+  --color-success: oklch(0.67 0.17 165);
+  --color-warning: oklch(0.72 0.17 80);
+  --color-error: oklch(0.59 0.22 28);
+  --color-info: oklch(0.55 0.22 257);
+
+  /* shadcn 语义色（bg-success / text-success 等） */
+  --success: oklch(0.67 0.17 165);
+  --success-foreground: oklch(1 0 0);
+  --warning: oklch(0.72 0.17 80);
+  --warning-foreground: oklch(0.2 0.03 80);
+  --error: var(--destructive);
+  --error-foreground: var(--destructive-foreground);
+  --info: oklch(0.55 0.22 257);
+  --info-foreground: oklch(1 0 0);
+
+  /* 品牌渐变 */
+  --color-gradient-start: oklch(0.52 0.23 257);
+  --color-gradient-end: oklch(0.35 0.17 257);
+
+  /* 租户品牌自定义（可通过管理后台覆盖，默认继承品牌色） */
+  --tenant-logo-url: none;
+  --tenant-primary: var(--color-primary);
+  --tenant-login-bg-start: var(--color-gradient-start);
+  --tenant-login-bg-end: var(--color-gradient-end);
+  --tenant-login-title: 'Auth-SSO';
+
+  /* Tailwind 4 变量映射 */
+
+  --background: oklch(1 0 0);
+
+  --foreground: oklch(0.145 0 0);
+
+  --card: oklch(1 0 0);
+
+  --card-foreground: oklch(0.145 0 0);
+
+  --popover: oklch(1 0 0);
+
+  --popover-foreground: oklch(0.145 0 0);
+
+  /* 
+    重要：--primary 是 shadcn 前景色（near-black），用于文字/图标。
+    品牌蓝色是 --color-primary，用于背景等。使用 bg-primary 渲染的是黑色，不是品牌蓝。
+    正确的品牌蓝用法：bg-color-primary、text-color-primary
+   */
+  --primary: oklch(0.205 0 0);
+
+  --primary-foreground: oklch(0.985 0 0);
+
+  --secondary: oklch(0.97 0 0);
+
+  --secondary-foreground: oklch(0.205 0 0);
+
+  --muted: oklch(0.97 0 0);
+
+  --muted-foreground: oklch(0.556 0 0);
+
+  --accent: oklch(0.97 0 0);
+
+  --accent-foreground: oklch(0.205 0 0);
+
+  --destructive: oklch(0.577 0.245 27.325);
+
+  --border: oklch(0.922 0 0);
+
+  --input: oklch(0.922 0 0);
+
+  --ring: oklch(0.708 0 0);
+
+  --chart-1: oklch(0.87 0 0);
+
+  --chart-2: oklch(0.556 0 0);
+
+  --chart-3: oklch(0.439 0 0);
+
+  --chart-4: oklch(0.371 0 0);
+
+  --chart-5: oklch(0.269 0 0);
+
+  --radius: 0.625rem;
+
+  --sidebar: oklch(0.985 0 0);
+
+  --sidebar-foreground: oklch(0.145 0 0);
+
+  --sidebar-primary: oklch(0.205 0 0);
+
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+
+  --sidebar-accent: oklch(0.97 0 0);
+
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+
+  --sidebar-border: oklch(0.922 0 0);
+
+  --sidebar-ring: oklch(0.708 0 0);
+}
+
+.dark {
+  --color-background: oklch(0.18 0.02 260);
+  --color-surface: oklch(0.25 0.03 260);
+  --color-surface-elevated: oklch(0.32 0.03 260);
+  --color-text-primary: oklch(0.96 0.01 260);
+  --color-text-secondary: oklch(0.68 0.03 250);
+  --color-text-muted: oklch(0.52 0.03 250);
+  --color-primary: oklch(0.58 0.20 257);
+  --color-border: oklch(0.32 0.03 260);
+
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.556 0 0);
+
+  /* 语义色暗黑覆盖 */
+  --success: oklch(0.58 0.15 165);
+  --success-foreground: oklch(1 0 0);
+  --warning: oklch(0.62 0.14 75);
+  --warning-foreground: oklch(0.95 0.03 80);
+  --info: oklch(0.48 0.19 257);
+  --info-foreground: oklch(1 0 0);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  /*
+   * 字体栈的**唯一装配点**。
+   *
+   * 此前这里写的是 `--font-sans: var(--font-sans)` —— 自引用 ⇒ 该变量在计算值阶段
+   * 变成 guaranteed-invalid ⇒ `font-family: var(--font-sans)` 失效 ⇒ 整站回落到
+   * 浏览器默认 **Times New Roman**（实测 body computed font-family = "Times New Roman"），
+   * 中文再走系统衬线回退，行高/字重观感全部错位。
+   *
+   * 现在：拉丁字形用 next/font 注入的 Geist（`--font-geist-sans`），中文按常见
+   * 系统黑体顺序回退（Geist 不含 CJK 字形，必须显式给中文栈，否则会掉进衬线）。
+   */
+  --font-sans:
+    var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC",
+    "Source Han Sans SC", "WenQuanYi Micro Hei", sans-serif;
+  --font-mono:
+    var(--font-geist-mono), "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo,
+    Consolas, monospace;
+
+  /* 自定义颜色映射 */
+  --color-primary: var(--color-primary);
+  --color-primary-hover: var(--color-primary-hover);
+  --color-primary-subtle: var(--color-primary-subtle);
+  --color-surface: var(--color-surface);
+  --color-surface-elevated: var(--color-surface-elevated);
+  --color-text-primary: var(--color-text-primary);
+  --color-text-secondary: var(--color-text-secondary);
+  --color-text-muted: var(--color-text-muted);
+  --color-border: var(--color-border);
+  --color-success: var(--color-success);
+  --color-warning: var(--color-warning);
+  --color-error: var(--color-error);
+  --color-info: var(--color-info);
+
+  /* shadcn 语义色（bg-success / text-success / bg-warning / text-warning 等） */
+  --success: var(--success);
+  --success-foreground: var(--success-foreground);
+  --warning: var(--warning);
+  --warning-foreground: var(--warning-foreground);
+  --error: var(--error);
+  --error-foreground: var(--error-foreground);
+  --info: var(--info);
+  --info-foreground: var(--info-foreground);
+
+  /* 圆角映射 */
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.5rem;
+
+  /* 缓动曲线 */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in: cubic-bezier(0.7, 0, 0.84, 0);
+  --ease-in-out: cubic-bezier(0.87, 0, 0.13, 1);
+  --font-heading: var(--font-sans);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-xl: 0.75rem;
+  --radius-2xl: 1rem;
+  --radius-3xl: 1.5rem;
+  --radius-4xl: 2rem;
+}
+
+/* 组件基础样式 */
+@layer base {
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-semibold text-text-primary;
+    /* 标题换行更均衡；中文行高由各页字号工具类决定（勿全局压 leading，避免布局漂移） */
+    text-wrap: balance;
+  }
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+}

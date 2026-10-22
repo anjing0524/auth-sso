@@ -1,0 +1,150 @@
+import { AUTH_ERRORS, COMMON_ERRORS, type ErrorCode } from '@auth-sso/contracts';
+
+/**
+ * 领域错误类型体系
+ * 所有领域异常的根类型，Controller 层据此映射 HTTP 状态码
+ */
+export class DomainError extends Error {
+  /**
+   * 错误码 —— **闭合词汇表**里的值（`@auth-sso/contracts` 的 `ErrorCode`）。
+   *
+   * 2026-10-13 由裸 `string` 收窄（架构评审 R2 次级候选「错误码词汇表」）：
+   * 此前 `InvalidScopeError` 直接 `super('INVALID_SCOPE')`，而该码**不在词汇表里**，
+   * 却被映射表当键用、并原样流进了 API 响应。收窄后这类码在编译期即被拒。
+   */
+  /**
+   * @param status HTTP 语义状态码（由子类声明）。
+   *
+   * **不能由 mapDomainError 按 `constructor.name` 反查**：生产构建（Turbopack 压缩）
+   * 会把类名压成单字母，`err.constructor.name` 不再等于 'ForbiddenError' ⇒
+   * 所有领域错误都掉进默认 400（2026-10-21 生产实测：403 权限不足返回 400）。
+   * 状态码作为实例字段随对象走，压缩不影响。
+   */
+  constructor(
+    public readonly code: ErrorCode,
+    message: string,
+    public readonly status: number = 400
+  ) {
+    super(message);
+    this.name = this.constructor.name;
+  }
+}
+
+/** 实体未找到错误 */
+export class EntityNotFoundError extends DomainError {
+  constructor(entity: string, id: string) {
+    super(COMMON_ERRORS.NOT_FOUND, `${entity} [${id}] 不存在`, 404);
+  }
+}
+
+/**
+ * 业务规则违反错误。
+ *
+ * @param rule 人类可读的规则说明
+ * @param code **具体业务码**，默认 `VALIDATION_ERROR`。
+ *
+ * 需要它的理由（2026-10-13，架构评审 R2 次级候选「根部门守卫」）：
+ * contracts 里为每条实体规则都留了专属码（`DEPARTMENT_ERRORS.CANNOT_DELETE_ROOT`、
+ * `CANNOT_DELETE_SELF` …），但实现一律抛通用码 ⇒ 客户端只能靠**解析消息**区分
+ * "有子部门"/"有关联用户"/"是根部门"。默认参数让既有调用点零改动，
+ * 同时新规则可以携带自己的码。
+ */
+export class BusinessRuleViolationError extends DomainError {
+  constructor(rule: string, code: ErrorCode = COMMON_ERRORS.VALIDATION_ERROR) {
+    super(code, rule, 422);
+  }
+}
+
+/** 唯一性冲突错误 */
+export class DuplicateEntityError extends DomainError {
+  /**
+   * @param entity 实体名（中文，用于消息）
+   * @param field  冲突字段（中文，用于消息）
+   * @param code   **专属冲突码**（`*_ALREADY_EXISTS`），默认 `VALIDATION_ERROR`。
+   *
+   * 需要它的理由（#82）：客户端表单需要把"哪个字段冲突"定位到**具体输入框**
+   * （用户名 / 邮箱 / 手机号 / 编码 / Client ID 各有自己的码），
+   * 而不是解析 "${entity} 的 ${field} 已存在" 这段中文。
+   */
+  constructor(entity: string, field: string, code: ErrorCode = COMMON_ERRORS.VALIDATION_ERROR) {
+    super(code, `${entity} 的 ${field} 已存在`, 409);
+  }
+}
+
+/**
+ * 未认证错误（无有效会话 / 会话已失效）。
+ *
+ * 需要它的理由（架构巡检候选 1）：`checkPermission` 早就知道"未登录（401）"与
+ * "权限不足（403）"是两件事，但 `PermissionCheckResult` 只暴露裸 `error: string` +
+ * `statusCode`，于是 `withAuth` 一律返回 403 `FORBIDDEN`、`withPermission` 用 401
+ * ——**同一个失败在两个面上给出不同答案**。给出类型后，"哪个码 + 哪个状态"只剩一处。
+ */
+export class UnauthenticatedError extends DomainError {
+  constructor(message: string = '未登录或会话已失效') {
+    super(COMMON_ERRORS.UNAUTHORIZED, message, 401);
+  }
+}
+
+/** 无权限错误 */
+export class ForbiddenError extends DomainError {
+  constructor(message: string = '超出数据权限范围') {
+    super(COMMON_ERRORS.FORBIDDEN, message, 403);
+  }
+}
+
+// ── 登录认证领域错误 ──
+
+/** 登录凭据无效（用户名/邮箱不存在或密码错误，统一返回以防用户枚举） */
+export class InvalidCredentialsError extends DomainError {
+  constructor(message: string = '邮箱或密码错误') {
+    super(AUTH_ERRORS.INVALID_CREDENTIALS, message, 401);
+  }
+}
+
+/** 账号状态异常（禁用/锁定/已删除），按具体 code 区分 */
+export class AccountStatusError extends DomainError {
+  /**
+   * @param code 必须是词汇表内的错误码（`AUTH_ERRORS.ACCOUNT_DISABLED` / `ACCOUNT_LOCKED` …）
+   *   —— 此前是裸 `string`，测试里甚至传过**状态值** `'DISABLED'` 当错误码。
+   */
+  constructor(code: ErrorCode, message: string) {
+    super(code, message, 403);
+  }
+}
+
+// ── OAuth 2.1 领域错误 ──
+
+/** OAuth Client 无效（不存在 / 已停用 / 密钥不匹配） */
+export class InvalidClientError extends DomainError {
+  constructor(message: string = 'Client 不存在或已停用') {
+    super(AUTH_ERRORS.INVALID_CLIENT, message, 401);
+  }
+}
+
+/** 授权码无效（过期 / 已使用 / redirect_uri 不匹配） */
+export class InvalidGrantError extends DomainError {
+  constructor(message: string) {
+    super(AUTH_ERRORS.INVALID_CODE, message, 400);
+  }
+}
+
+/** PKCE 验证失败（code_verifier 与 code_challenge 不匹配） */
+export class PKCEVerificationError extends DomainError {
+  constructor(message: string = 'PKCE 验证失败') {
+    super(AUTH_ERRORS.PKCE_VERIFICATION_FAILED, message, 400);
+  }
+}
+
+/** OAuth redirect_uri 不在 Client 白名单中 */
+export class InvalidRedirectUriError extends DomainError {
+  constructor(message: string = '回调地址与应用注册的不匹配') {
+    super(AUTH_ERRORS.OAUTH_INVALID_REDIRECT_URI, message, 400);
+  }
+}
+
+/** OAuth scope 不在 Client 注册允许范围内 */
+export class InvalidScopeError extends DomainError {
+  constructor(message: string = '请求的 scope 未获 Client 授权') {
+    super(AUTH_ERRORS.INVALID_SCOPE, message, 400);
+  }
+}

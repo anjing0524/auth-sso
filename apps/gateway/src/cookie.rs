@@ -1,0 +1,219 @@
+//! Cookie 头解析与操作工具（零拷贝 + 零分配，适配网关热路径）
+
+use pingora_http::RequestHeader;
+
+/// Access Token Cookie 名称（与 @auth-sso/contracts `COOKIE_NAMES.JWT` 同步）
+pub const ACCESS_COOKIE: &str = "portal_jwt_token";
+/// Refresh Token Cookie 名称（与 @auth-sso/contracts `COOKIE_NAMES.REFRESH` 同步）
+pub const REFRESH_COOKIE: &str = "portal_refresh_token";
+
+/// 拼合 HTTP/2 多 Cookie 头为单个字符串（兼容 H1/H2）
+///
+/// 处理 HTTP/2 下多个 `Cookie` 头字段的情况，合并为以 `; ` 分隔的单个字符串。
+pub fn collapse_cookie_header(req: &RequestHeader) -> Option<String> {
+    let mut result = String::new();
+    for cookie_val in req.headers.get_all("cookie").iter() {
+        if let Ok(h) = cookie_val.to_str() {
+            if !result.is_empty() {
+                result.push_str("; ");
+            }
+            result.push_str(h);
+        }
+    }
+    if result.is_empty() {
+        None
+    } else {
+        Some(result)
+    }
+}
+
+/// 判定并截取一个 cookie 片段的值：匹配 `name=` 前缀后返回其后的值切片，否则 None
+///
+/// `extract_from_header` / `extract_from_set_cookie` / `rewrite_protected_cookies`
+/// 共用同一套 "name=" 前缀匹配逻辑，零分配、无裸索引切片。
+fn cookie_value<'a>(seg: &'a str, name: &str) -> Option<&'a str> {
+    seg.strip_prefix(name)?.strip_prefix('=')
+}
+
+/// 从请求 Cookie 头部中提取指定名称的 cookie 值（零拷贝）
+///
+/// 容错处理双引号包裹的值（RFC 6265 兼容）。
+/// 统一了原先 `extract_token_from_cookie` 和 `extract_refresh_token_from_cookie`
+/// 的重复实现。
+///
+/// # 参数
+/// * `cookie_header` - 原始的 Cookie 请求头字符串
+/// * `name` - 要提取的 cookie 名称（如 "portal_jwt_token"）
+///
+/// # 示例
+/// ```
+/// use gateway::cookie;
+/// let header = "portal_jwt_token=abc.def; other=val";
+/// assert_eq!(cookie::extract_from_header(header, "portal_jwt_token"), Some("abc.def"));
+/// ```
+pub fn extract_from_header<'a>(cookie_header: &'a str, name: &str) -> Option<&'a str> {
+    cookie_header
+        .split(';')
+        .find_map(|s| cookie_value(s.trim_start(), name).map(strip_quotes))
+}
+
+/// 从 Set-Cookie 响应头中提取指定 cookie 的值（仅匹配首个分号前的 name=value 段）
+///
+/// 与 `extract_from_header` 不同，Set-Cookie 头中 `;` 之后是属性（Path、HttpOnly 等），
+/// 因此只解析第一个分号前的部分。
+///
+/// # 参数
+/// * `set_cookie` - Set-Cookie 响应头值
+/// * `name` - cookie 名称
+///
+/// # 示例
+/// ```
+/// use gateway::cookie;
+/// let sc = "portal_jwt_token=eyJ.xxx; Path=/; HttpOnly; Secure; Max-Age=3600";
+/// assert_eq!(cookie::extract_from_set_cookie(sc, "portal_jwt_token"), Some("eyJ.xxx"));
+/// ```
+pub fn extract_from_set_cookie<'a>(set_cookie: &'a str, name: &str) -> Option<&'a str> {
+    let first_segment = set_cookie.split(';').next()?.trim_start();
+    cookie_value(first_segment, name).map(strip_quotes)
+}
+
+/// 剥离 cookie 值两端的双引号（RFC 6265 兼容），零分配
+fn strip_quotes(val: &str) -> &str {
+    val.strip_prefix('"')
+        .and_then(|v| v.strip_suffix('"'))
+        .unwrap_or(val)
+}
+/// 单遍完成：剥离 RT + 可选替换/追加 AT。输入为已 collapse 的 Cookie 头。
+///
+/// 供 `rewrite_upstream_cookies` 的 Protected 分支使用——替代原先
+/// 取代原先的「两遍扫描 + 两次分配」写法，
+/// 单次预估容量分配即完成全部重写（O(n)）。
+///
+/// # 参数
+/// * `raw` - 已 collapse 的原始 Cookie 头
+/// * `new_access` - `Some(at)` 时将 AT Cookie 替换为新值（不存在则追加）
+pub fn rewrite_protected_cookies(raw: &str, new_access: Option<&str>) -> String {
+    let mut out = String::with_capacity(raw.len() + 64);
+    let mut replaced = false;
+    for seg in raw.split(';') {
+        let seg = seg.trim_start();
+        if seg.is_empty() || cookie_value(seg, REFRESH_COOKIE).is_some() {
+            continue; // 剥离 RT
+        }
+        if !out.is_empty() {
+            out.push_str("; ");
+        }
+        match (new_access, cookie_value(seg, ACCESS_COOKIE)) {
+            (Some(at), Some(_)) => {
+                out.push_str(ACCESS_COOKIE);
+                out.push('=');
+                out.push_str(at);
+                replaced = true;
+            }
+            _ => out.push_str(seg),
+        }
+    }
+    if let (Some(at), false) = (new_access, replaced) {
+        if !out.is_empty() {
+            out.push_str("; ");
+        }
+        out.push_str(ACCESS_COOKIE);
+        out.push('=');
+        out.push_str(at);
+    }
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_extract_from_header_basic() {
+        let header = "portal_jwt_token=abc.def; portal_refresh_token=rrr.ttt; other=val";
+        assert_eq!(
+            extract_from_header(header, "portal_jwt_token"),
+            Some("abc.def")
+        );
+        assert_eq!(
+            extract_from_header(header, "portal_refresh_token"),
+            Some("rrr.ttt")
+        );
+    }
+
+    #[test]
+    fn test_extract_from_header_quoted() {
+        // 带双引号包裹（RFC 6265 兼容）
+        assert_eq!(
+            extract_from_header("portal_refresh_token=\"simple\"", "portal_refresh_token"),
+            Some("simple")
+        );
+    }
+
+    #[test]
+    fn test_extract_from_header_missing() {
+        assert_eq!(
+            extract_from_header("portal_jwt_token=abc; other=val", "portal_refresh_token"),
+            None
+        );
+        assert_eq!(extract_from_header("", "portal_jwt_token"), None);
+    }
+
+    #[test]
+    fn test_extract_from_set_cookie_basic() {
+        let set_cookie =
+            "portal_jwt_token=eyJ.xxx; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=3600";
+        assert_eq!(
+            extract_from_set_cookie(set_cookie, "portal_jwt_token"),
+            Some("eyJ.xxx")
+        );
+        assert_eq!(
+            extract_from_set_cookie(set_cookie, "portal_refresh_token"),
+            None
+        );
+    }
+
+    #[test]
+    fn test_rewrite_protected_cookies_strips_rt_only() {
+        // 仅剥离 RT，无 AT 替换
+        let raw = "portal_jwt_token=abc; portal_refresh_token=rrr; other=val";
+        let result = rewrite_protected_cookies(raw, None);
+        assert_eq!(result, "portal_jwt_token=abc; other=val");
+    }
+
+    #[test]
+    fn test_rewrite_protected_cookies_replaces_at() {
+        // RT 剥离 + AT 替换
+        let raw = "portal_jwt_token=old; portal_refresh_token=rrr; other=val";
+        let result = rewrite_protected_cookies(raw, Some("new-at"));
+        assert_eq!(result, "portal_jwt_token=new-at; other=val");
+    }
+
+    #[test]
+    fn test_rewrite_protected_cookies_appends_missing_at() {
+        // 无 AT 时追加
+        let raw = "portal_refresh_token=rrr; other=val";
+        let result = rewrite_protected_cookies(raw, Some("new-at"));
+        assert_eq!(result, "other=val; portal_jwt_token=new-at");
+    }
+
+    #[test]
+    fn test_rewrite_protected_cookies_empty_input() {
+        assert_eq!(rewrite_protected_cookies("", None), "");
+        assert_eq!(
+            rewrite_protected_cookies("", Some("at")),
+            "portal_jwt_token=at"
+        );
+    }
+
+    #[test]
+    fn test_rewrite_protected_cookies_quoted_values() {
+        // 含引号值：RT 照常剥离，其余段原样保留
+        let raw = "portal_jwt_token=\"abc\"; portal_refresh_token=\"rrr\"; other=\"v\"";
+        let result = rewrite_protected_cookies(raw, None);
+        assert_eq!(result, "portal_jwt_token=\"abc\"; other=\"v\"");
+        // 替换时引号值被新值取代
+        let result = rewrite_protected_cookies(raw, Some("new"));
+        assert_eq!(result, "portal_jwt_token=new; other=\"v\"");
+    }
+}

@@ -1,0 +1,108 @@
+/**
+ * @req DC-ROLE-C, DC-ROLE-U, DC-ROLE-D
+ * v3.2: dataScopeType 已替换为 deptId
+ */
+import { describe, it, expect } from 'vitest';
+import { ROLE_ERRORS } from '@auth-sso/contracts';
+import {
+  createRole,
+  applyRoleUpdate,
+  guardNotSystemRole,
+  hasRolePermissionImpact,
+} from '@/domain/role/role';
+import { CreateRoleInputSchema } from '@/domain/role/types';
+import { BusinessRuleViolationError } from '@/domain/shared/errors';
+
+const mockIdGen = () => 'role_id_12345';
+
+describe('Role 领域核心规则', () => {
+  it('应通过工厂函数创建初始状态为 ACTIVE 的角色', () => {
+    const input = CreateRoleInputSchema.parse({ name: '管理员', code: 'ADMIN', deptId: 'a1b2c3d4-e5f6-4789-abcd-ef0123456789', sort: 0 });
+    const role = createRole(input, mockIdGen);
+    expect(role.status).toBe('ACTIVE');
+    expect(role.isSystem).toBe(false);
+    expect(role.code).toBe('ADMIN');
+    expect(role.deptId).toBe('a1b2c3d4-e5f6-4789-abcd-ef0123456789');
+  });
+
+  it('缺少 deptId 时应被 Zod 校验拒绝', () => {
+    const result = CreateRoleInputSchema.safeParse({ name: '访客', code: 'GUEST' });
+    expect(result.success).toBe(false);
+  });
+
+  it('applyRoleUpdate 应正确 merge 字段', () => {
+    const input = CreateRoleInputSchema.parse({ name: '旧名称', code: 'OLD', deptId: 'a1b2c3d4-e5f6-4789-abcd-ef0123456789' });
+    const role = createRole(input, mockIdGen);
+    const updated = applyRoleUpdate(role, { name: '新名称', description: '新描述' });
+    expect(updated.name).toBe('新名称');
+    expect(updated.description).toBe('新描述');
+    expect(updated.code).toBe('OLD'); // 未修改保持原值
+    expect(updated.deptId).toBe('a1b2c3d4-e5f6-4789-abcd-ef0123456789'); // 未修改保持原值
+  });
+
+  it('guardNotSystemRole 阻止操作系统角色，并**按操作区分契约码**', () => {
+    const input = CreateRoleInputSchema.parse({ name: '系统角色', code: 'SYS', deptId: 'a1b2c3d4-e5f6-4789-abcd-ef0123456789' });
+    const role = createRole(input, mockIdGen);
+    const sysRole = { ...role, isSystem: true };
+
+    // 修改与删除各用专属码：客户端据此隐藏/禁用**对应**操作
+    expect(() => guardNotSystemRole(sysRole, 'modify')).toThrow(BusinessRuleViolationError);
+    expect(() => guardNotSystemRole(sysRole, 'delete')).toThrow(BusinessRuleViolationError);
+
+    const codes: string[] = [];
+    for (const action of ['modify', 'delete'] as const) {
+      try {
+        guardNotSystemRole(sysRole, action);
+      } catch (err) {
+        codes.push((err as { code: string }).code);
+      }
+    }
+    expect(codes).toEqual([ROLE_ERRORS.CANNOT_MODIFY_SYSTEM_ROLE, ROLE_ERRORS.CANNOT_DELETE_SYSTEM_ROLE]);
+  });
+
+  it('guardNotSystemRole 应允许操作非系统角色', () => {
+    const input = CreateRoleInputSchema.parse({ name: '普通角色', code: 'NORMAL', deptId: 'a1b2c3d4-e5f6-4789-abcd-ef0123456789' });
+    const role = createRole(input, mockIdGen);
+    expect(() => guardNotSystemRole(role, 'modify')).not.toThrow();
+    expect(() => guardNotSystemRole(role, 'delete')).not.toThrow();
+  });
+});
+
+describe('CreateRoleInputSchema 长度上限（对齐 DB varchar 列宽）', () => {
+  const base = { deptId: 'a1b2c3d4-e5f6-4789-abcd-ef0123456789', sort: 0 };
+
+  it('角色名称超过 100 字符被拒绝', () => {
+    const r = CreateRoleInputSchema.safeParse({ ...base, name: 'A'.repeat(101), code: 'X' });
+    expect(r.success).toBe(false);
+  });
+
+  it('角色编码超过 50 字符被拒绝', () => {
+    const r = CreateRoleInputSchema.safeParse({ ...base, name: 'X', code: 'A'.repeat(51) });
+    expect(r.success).toBe(false);
+  });
+
+  it('边界值（100/50）通过', () => {
+    const r = CreateRoleInputSchema.safeParse({ ...base, name: 'A'.repeat(100), code: 'A'.repeat(50) });
+    expect(r.success).toBe(true);
+  });
+});
+
+describe('hasRolePermissionImpact', () => {
+  const base = { deptId: 'dept-a', status: 'ACTIVE' as const };
+
+  it('deptId 变更 → 返回 true', () => {
+    expect(hasRolePermissionImpact(base, { ...base, deptId: 'dept-b' })).toBe(true);
+  });
+
+  it('status 变更 → 返回 true', () => {
+    expect(hasRolePermissionImpact(base, { ...base, status: 'DISABLED' as const })).toBe(true);
+  });
+
+  it('permissionChanged=true → 返回 true（即使 deptId/status 不变）', () => {
+    expect(hasRolePermissionImpact(base, base, true)).toBe(true);
+  });
+
+  it('全部不变 → 返回 false', () => {
+    expect(hasRolePermissionImpact(base, base)).toBe(false);
+  });
+});

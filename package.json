@@ -1,0 +1,41 @@
+{
+  "name": "auth-sso",
+  "version": "1.1.1.1",
+  "private": true,
+  "description": "小企业统一门户 + SSO + 权限中心",
+  "scripts": {
+    "prepare": "git config core.hooksPath .githooks || true",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "db:generate": "pnpm --filter @auth-sso/portal db:generate",
+    "db:migrate": "pnpm --filter @auth-sso/portal db:migrate",
+    "db:push": "pnpm --filter @auth-sso/portal db:push",
+    "db:studio": "pnpm --filter @auth-sso/portal db:studio",
+    "db:seed": "pnpm --filter @auth-sso/portal db:seed",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:api": "vitest run --project @auth-sso/portal-api",
+    "test:components": "vitest run --project @auth-sso/portal-ui",
+    "test:e2e": "./scripts/run-gateway-e2e.sh",
+    "test:e2e:acme": "./scripts/run-gateway-acme-e2e.sh",
+    "test:e2e:acme:staging": "./scripts/run-gateway-acme-staging.sh",
+    "test:e2e:release": "playwright test tests/e2e/docker-release.spec.ts",
+    "test:e2e:ui": "playwright test --ui",
+    "test:report": "node tests/traceability/generate-report.mjs",
+    "stack:up": "./scripts/stack.sh up",
+    "stack:build": "./scripts/stack.sh build",
+    "stack:status": "./scripts/stack.sh status",
+    "stack:down": "./scripts/stack.sh down",
+    "stack:logs": "./scripts/stack.sh logs"
+  },
+  "engines": {
+    "node": ">=26.0.0"
+  },
+  "packageManager": "pnpm@10.12.4",
+  "devDependencies": {
+    "@playwright/test": "^1.60.0",
+    "tsx": "^4.22.4",
+    "wait-on": "^8.0.0",
+    "vitest": "^4.1.9"
+  }
+}

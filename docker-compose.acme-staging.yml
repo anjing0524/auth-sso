@@ -1,0 +1,35 @@
+name: auth-sso-acme-staging
+
+services:
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 2s
+      retries: 20
+
+  gateway:
+    build:
+      context: .
+      dockerfile: apps/gateway/Dockerfile
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      NODE_ENV: production
+      LETSENCRYPT_DOMAIN: ${LETSENCRYPT_STAGING_DOMAIN:?必须配置 LETSENCRYPT_STAGING_DOMAIN}
+      LETSENCRYPT_EMAIL: ${LETSENCRYPT_STAGING_EMAIL:?必须配置 LETSENCRYPT_STAGING_EMAIL}
+      ACME_DIRECTORY_URL: https://acme-staging-v02.api.letsencrypt.org/directory
+      ACME_STATE_DIR: /var/lib/gateway/acme
+      ACME_CHECK_INTERVAL_SECS: "60"
+      GATEWAY_SHARED_SECRET: ${ACME_STAGING_GATEWAY_SHARED_SECRET:-acme-staging-validation-shared-secret}
+    volumes:
+      - ./apps/gateway/gateway.acme-staging.toml:/app/gateway.toml:ro
+      - gateway_acme_staging:/var/lib/gateway/acme
+    depends_on:
+      redis:
+        condition: service_healthy
+
+volumes:
+  gateway_acme_staging:

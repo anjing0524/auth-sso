@@ -1,0 +1,53 @@
+import { z } from 'zod';
+import { type EntityStatus } from '@auth-sso/contracts';
+import { entityStatusEnum } from '@/domain/shared/zod-schemas';
+
+/**
+ * 部门领域实体接口 (纯 TS interface)
+ *
+ * v2 变更：移除 publicId
+ */
+export interface Department {
+  /** 内部 ID（UUID） */
+  id: string;
+  /** 父部门 ID */
+  parentId: string | null;
+  /** 物化路径 (ancestors)，用于高效子树查询。顶级为 null */
+  ancestors: string | null;
+  /** 部门名称 */
+  name: string;
+  /** 部门编码 */
+  code: string | null;
+  /** 排序权重 */
+  sort: number;
+  /** 状态 */
+  status: EntityStatus;
+  /** 创建时间 */
+  createdAt: Temporal.Instant;
+}
+
+/**
+ * 树节点（含子节点引用）
+ */
+export interface DepartmentTreeNode extends Department {
+  children: DepartmentTreeNode[];
+}
+
+/** 创建部门入参校验 Schema */
+export const CreateDepartmentInputSchema = z.object({
+  name: z.string().min(1, '部门名称不能为空').max(100, '部门名称最多 100 个字符'),
+  code: z.string().max(50, '部门编码最多 50 个字符').optional(),
+  parentId: z.string().nullable().optional(),
+  sort: z.number().int().default(0),
+});
+
+/** 更新部门入参校验 Schema */
+export const UpdateDepartmentInputSchema = z.object({
+  name: z.string().min(1, '部门名称不能为空').max(100, '部门名称最多 100 个字符').optional(),
+  code: z.string().max(50, '部门编码最多 50 个字符').nullable().optional(),
+  parentId: z.string().nullable().optional(),
+  sort: z.number().int().optional(),
+  status: entityStatusEnum.optional(),
+});
+
+export type CreateDepartmentInput = z.infer<typeof CreateDepartmentInputSchema>;

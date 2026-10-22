@@ -1,0 +1,295 @@
+'use client';
+
+/**
+ * 角色列表交互组件 — 搜索、分页、增删改
+ * 写操作通过 Server Actions 直调
+ *
+ * v3.2: dataScopeType 已替换为 deptId，新建/编辑角色使用部门选择器
+ */
+import React, { useState, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
+import {
+  ShieldCheck, Plus, Edit, Trash2, KeyRound,
+} from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import {
+  TableCell, TableRow,
+} from '@/components/ui/table';
+import {
+  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter,
+} from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { DataTable } from '@/components/shared/data-table';
+import { EmptyState } from '@/components/shared/empty-state';
+import RolePermissionsDialog from './RolePermissionsDialog';
+import { TablePagination } from '@/components/shared/table-pagination';
+import { enableStatus } from '@/lib/status-label';
+import { createRoleAction, updateRoleAction, deleteRoleAction } from '../actions';
+import { useFieldFailure } from '@/hooks/use-field-failure';
+import { FieldError } from '@/components/shared/field-error';
+
+import { SearchInput } from '@/components/shared/search-input';
+import { TableToolbar } from '@/components/shared/table-toolbar';
+import { PermissionGuard } from '@/components/shared/permission-guard';
+import { ROLE_PERMISSIONS } from '@auth-sso/contracts';
+interface RoleRow {
+  id: string;  name: string; code: string;
+  description: string | null; deptId: string;
+  isSystem: boolean; status: string; sort: number; createdAt: string;
+}
+
+interface Pagination { page: number; pageSize: number; total: number; totalPages: number; }
+
+interface Props {
+  roles: RoleRow[];
+  pagination: Pagination;
+  initialKeyword: string;
+  departments: Array<{ id: string; name: string }>;
+}
+
+export default function RolesTable({ roles, pagination, initialKeyword, departments }: Props) {
+  const router = useRouter();
+  const [keyword, setKeyword] = useState(initialKeyword);
+  const [isPending, startTransition] = useTransition();
+  const [saving, setSaving] = useState(false);
+
+  const [isAddOpen, setIsAddOpen] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [selected, setSelected] = useState<RoleRow | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<RoleRow | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [permTarget, setPermTarget] = useState<RoleRow | null>(null);
+  const [form, setForm] = useState({ name: '', code: '', description: '', deptId: '', sort: 0 });
+  /** 具体错误码（如 ROLE_ALREADY_EXISTS）落到对应输入框（#92；hook 供四处表单复用） */
+  const { fieldError, reportFailure, clearFailure } = useFieldFailure(['code']);
+
+  const handleSearch = (value: string) => {
+    setKeyword(value);
+    const params = new URLSearchParams();
+    if (value) params.set('keyword', value);
+    startTransition(() => router.push(`/roles${params.toString() ? `?${params.toString()}` : ''}`));
+  };
+
+  const getDefaultDeptId = () => departments.length > 0 ? departments[0]!.id : '';
+
+  const openEdit = (r: RoleRow) => {
+    setSelected(r);
+    setForm({ name: r.name, code: r.code, description: r.description || '', deptId: r.deptId, sort: r.sort });
+    setIsEditOpen(true);
+  };
+
+  const handleCreate = async () => {
+    if (!form.name || !form.code) { toast.error('请填写完整信息'); return; }
+    if (!form.deptId) { toast.error('请选择所属部门'); return; }
+    clearFailure();
+    setSaving(true);
+    const res = await createRoleAction({ name: form.name, code: form.code, description: form.description || undefined, deptId: form.deptId, sort: form.sort });
+    setSaving(false);
+    if (res.success) { toast.success(res.message); setIsAddOpen(false); router.refresh(); } else { reportFailure(res); }
+  };
+
+  const handleUpdate = async () => {
+    if (!selected) return;
+    setSaving(true);
+    clearFailure();
+    const res = await updateRoleAction(selected.id, form);
+    setSaving(false);
+    if (res.success) { toast.success(res.message); setIsEditOpen(false); router.refresh(); } else { reportFailure(res); }
+  };
+
+  /**
+   * 删除**只用闭包参数**，不读 `selected`。
+   *
+   * 此前是 `onClick={() => { setSelected(r); handleDelete(); }}`：`setSelected` 是异步的，
+   * `handleDelete` 读到的仍是上一次的 state（首击时为 null）⇒ 点击静默无反应
+   * （审计 P1-3 实测：DB 行数不变、无 toast）。现在改为弹窗确认，目标随点击显式传入。
+   */
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    const res = await deleteRoleAction(deleteTarget.id);
+    setDeleting(false);
+    setDeleteTarget(null);
+    if (res.success) { toast.success(res.message); router.refresh(); } else { reportFailure(res); }
+  };
+
+  const getDeptName = (deptId: string) => departments.find(d => d.id === deptId)?.name ?? deptId;
+
+  const renderDeptSelect = (value: string, onChange: (v: string) => void) => (
+    <Select value={value || undefined} onValueChange={onChange}>
+      <SelectTrigger><SelectValue placeholder="选择部门" /></SelectTrigger>
+      <SelectContent>
+        {departments.map(d => (
+          <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+
+  const columns = [
+    { key: 'name', header: '角色名称' },
+    { key: 'code', header: '编码' },
+    { key: 'dept', header: '所属部门' },
+    { key: 'status', header: '状态' },
+    { key: 'actions', header: '操作', className: 'text-right' },
+  ];
+
+  const cardHeader = (
+    <TableToolbar
+      left={<SearchInput placeholder="搜索角色名称或编码..." value={keyword} onChange={handleSearch} />}
+      right={
+        <PermissionGuard permission={ROLE_PERMISSIONS.CREATE}>
+          <Button onClick={() => { setForm({ name: '', code: '', description: '', deptId: getDefaultDeptId(), sort: 0 }); setIsAddOpen(true); }}>
+            <Plus className="h-4 w-4" /> 新建角色
+          </Button>
+        </PermissionGuard>
+      }
+    />
+  );
+
+  const renderRow = (r: RoleRow) => (
+    <TableRow key={r.id} className="hover:bg-muted/50">
+      <TableCell>
+        <div className="flex items-center gap-3">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
+            <ShieldCheck className="h-4 w-4 text-primary" />
+          </div>
+          <div className="flex min-w-0 flex-col leading-tight">
+            <div className="flex items-center gap-2">
+              <span className="max-w-[220px] truncate text-sm font-medium" title={r.name}>{r.name}</span>
+              {r.isSystem && <Badge variant="outline">系统</Badge>}
+            </div>
+            {r.description && (
+              <p className="line-clamp-1 text-xs leading-4 text-muted-foreground">{r.description}</p>
+            )}
+          </div>
+        </div>
+      </TableCell>
+      <TableCell><code className="rounded-md bg-muted px-2 py-0.5 text-xs">{r.code}</code></TableCell>
+      <TableCell><span className="block max-w-[160px] truncate text-xs text-muted-foreground">{getDeptName(r.deptId)}</span></TableCell>
+      <TableCell><Badge variant={enableStatus(r.status).variant}>{enableStatus(r.status).label}</Badge></TableCell>
+      <TableCell className="text-right">
+        {r.isSystem ? (
+          <span className="pr-2 text-xs text-muted-foreground">系统内置</span>
+        ) : (
+          <div className="flex items-center justify-end gap-0.5">
+            <PermissionGuard permission={ROLE_PERMISSIONS.UPDATE}>
+              <Button variant="ghost" size="sm" className="h-8 gap-1.5 px-2" aria-label="编辑角色" title="编辑角色" onClick={() => openEdit(r)}>
+                <Edit className="h-4 w-4" /><span>编辑</span>
+              </Button>
+            </PermissionGuard>
+            <PermissionGuard permission={ROLE_PERMISSIONS.ASSIGN_PERMISSION}>
+              <Button variant="ghost" size="sm" className="h-8 gap-1.5 px-2" aria-label="配置权限" title="配置权限" onClick={() => setPermTarget(r)}>
+                <KeyRound className="h-4 w-4" /><span>配置权限</span>
+              </Button>
+            </PermissionGuard>
+            <PermissionGuard permission={ROLE_PERMISSIONS.DELETE}>
+              <Button
+                variant="ghost"
+                size="sm"
+                aria-label="删除角色"
+                title="删除角色"
+                className="h-8 gap-1.5 px-2 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                onClick={() => setDeleteTarget(r)}
+              >
+                <Trash2 className="h-4 w-4" /><span>删除</span>
+              </Button>
+            </PermissionGuard>
+          </div>
+        )}
+      </TableCell>
+    </TableRow>
+  );
+
+  return (
+    <>
+      <div className="flex min-h-0 flex-1 flex-col">
+      <DataTable
+        fill
+        columns={columns}
+        data={roles}
+        loading={isPending}
+        emptyState={
+          <EmptyState
+            variant="simple"
+            icon="ShieldCheck"
+            title="暂无角色"
+            description="创建角色以开始管理权限"
+            action={{ label: '新建角色', onClick: () => { setForm({ name: '', code: '', description: '', deptId: getDefaultDeptId(), sort: 0 }); setIsAddOpen(true); } }}
+          />
+        }
+        renderRow={renderRow}
+        cardHeader={cardHeader}
+      />
+      <TablePagination
+        page={pagination.page}
+        totalPages={pagination.totalPages}
+        total={pagination.total}
+        onPageChange={(next) => {
+          const p = new URLSearchParams(window.location.search);
+          p.set('page', String(next));
+          router.push(`/roles?${p.toString()}`);
+        }}
+      />
+      </div>
+
+      <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle className="flex items-center gap-2"><ShieldCheck className="h-5 w-5 text-primary" /> 新建角色</DialogTitle></DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2"><Label>角色名称</Label><Input value={form.name} maxLength={100} onChange={e => setForm({...form, name: e.target.value})} placeholder="管理员" /></div>
+            <div className="space-y-2"><Label>角色编码</Label><Input value={form.code} maxLength={50} aria-invalid={fieldError?.field === 'code'} onChange={e => setForm({...form, code: e.target.value})} placeholder="admin" /></div>
+            <FieldError failure={fieldError} field="code" />
+            <div className="space-y-2"><Label>所属部门</Label>{renderDeptSelect(form.deptId, v => setForm({...form, deptId: v}))}</div>
+          </div>
+          <DialogFooter><Button variant="outline" onClick={() => setIsAddOpen(false)}>取消</Button><Button onClick={handleCreate} disabled={saving}>创建</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>编辑角色</DialogTitle></DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2"><Label>角色名称</Label><Input value={form.name} onChange={e => setForm({...form, name: e.target.value})} /></div>
+            <div className="space-y-2"><Label>角色编码</Label><Input value={form.code} disabled /></div>
+            {/* 编辑态的 code 是 disabled（不可改、也不会产生冲突码），但仍渲染错误——
+                否则 update 失败时既不弹 toast 也不内联，正是要消灭的静默路径 */}
+            <FieldError failure={fieldError} field="code" />
+            <div className="space-y-2"><Label>所属部门</Label>{renderDeptSelect(form.deptId, v => setForm({...form, deptId: v}))}</div>
+          </div>
+          <DialogFooter><Button variant="outline" onClick={() => setIsEditOpen(false)}>取消</Button><Button onClick={handleUpdate} disabled={saving}>保存</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 删除确认（危险操作统一走设计系统弹窗，不用原生 confirm） */}
+      <Dialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>删除角色「{deleteTarget?.name}」？</DialogTitle>
+            <DialogDescription>
+              删除后该角色的权限绑定会一并清除；若已分配给用户，这些用户会失去该角色的权限并被强制重新登录。此操作不可撤销。
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteTarget(null)} disabled={deleting}>取消</Button>
+            <Button variant="destructive" onClick={handleDelete} disabled={deleting}>
+              {deleting ? '删除中...' : '确认删除'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {permTarget && (
+        <RolePermissionsDialog
+          open={!!permTarget}
+          onOpenChange={(open) => { if (!open) setPermTarget(null); }}
+          role={{ id: permTarget.id, name: permTarget.name, isSystem: permTarget.isSystem }}
+        />
+      )}
+    </>
+  );
+}

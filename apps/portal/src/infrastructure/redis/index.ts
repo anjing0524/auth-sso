@@ -1,0 +1,154 @@
+/**
+ * Redis 客户端配置 (Infrastructure Layer)
+ * 用于 Portal Session 存储与权限缓存
+ *
+ * 统一使用 ioredis 连接 Redis
+ *
+ * @module infrastructure/redis
+ */
+import Redis, { type ChainableCommander } from 'ioredis';
+import { getRedisUrl } from '@/lib/env';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('Redis');
+
+/**
+ * 统一的 Redis 客户端接口
+ * 定义 Portal 需要的方法
+ */
+export interface RedisClient {
+  /** 确保 lazy client 已完成连接；关键会话写入不得依赖 offline queue。 */
+  connect(): Promise<void>;
+  ping(): Promise<'PONG'>;
+  get(key: string): Promise<string | null>;
+  /** 原子读取并删除（GETDEL，Redis 6.2+），用于一次性消费场景 */
+  getdel(key: string): Promise<string | null>;
+  setex(key: string, seconds: number, value: string): Promise<'OK' | null>;
+  /** 删除一个或多个 key */
+  del(...keys: string[]): Promise<number>;
+  keys(pattern: string): Promise<string[]>;
+  quit(): Promise<void>;
+
+  // 集合与过期命令，用于在线会话反向映射索引
+  sadd(key: string, member: string): Promise<number>;
+  srem(key: string, member: string): Promise<number>;
+  smembers(key: string): Promise<string[]>;
+  expire(key: string, seconds: number): Promise<number>;
+
+  // Hash 命令，用于 jti→exp 精确映射（批量撤销时计算每个 JTI 的剩余 TTL）
+  hset(key: string, field: string, value: string): Promise<number>;
+  hgetall(key: string): Promise<Record<string, string>>;
+
+  // Pipeline 批处理命令，用于多会话批量物理注销
+  pipeline(): ChainableCommander;
+  exists(key: string): Promise<number>;
+
+  // 原子计数器命令（用于暴力破解防护等竞态条件场景）
+  incr(key: string): Promise<number>;
+}
+
+/**
+ * 进程级 Redis 客户端单例槽（理由同 db/index.ts：模块级变量在 Next dev 下会重复初始化，
+ * 实测每个请求都新建 ioredis 连接）。
+ */
+const globalForRedis = globalThis as unknown as { __authSsoPortalRedis?: RedisClient };
+
+/**
+ * 创建 ioredis 客户端
+ */
+function createIoredisClient(): RedisClient {
+  const redisUrl = getRedisUrl();
+  // 日志中仅输出主机信息，避免凭据泄漏
+  log.info('Initializing ioredis', { host: redisUrl.split('@').pop()?.split('/')[0] || 'localhost' });
+
+  const client = new Redis(redisUrl, {
+    maxRetriesPerRequest: 3,
+    connectTimeout: 3_000,
+    enableOfflineQueue: false,
+    retryStrategy: (attempt) => (attempt <= 3 ? attempt * 200 : null),
+    lazyConnect: true,
+    // 如果是 rediss:// 协议，启用 TLS
+    tls: redisUrl.startsWith('rediss://') ? {} : undefined,
+  });
+
+  client.on('error', (err) => {
+    log.error('Connection error', { error: err.message });
+  });
+
+  client.on('connect', () => {
+    log.info('Connected');
+  });
+
+  let connectPromise: Promise<void> | null = null;
+  const connect = async (): Promise<void> => {
+    if (client.status === 'ready') return;
+    if (client.status === 'connecting' || client.status === 'connect' || client.status === 'reconnecting') {
+      await new Promise<void>((resolve, reject) => {
+        const onReady = () => {
+          cleanup();
+          resolve();
+        };
+        const onError = (error: Error) => {
+          cleanup();
+          reject(error);
+        };
+        const cleanup = () => {
+          client.off('ready', onReady);
+          client.off('error', onError);
+        };
+        client.once('ready', onReady);
+        client.once('error', onError);
+      });
+      return;
+    }
+    if (!connectPromise) {
+      connectPromise = client.connect().finally(() => {
+        connectPromise = null;
+      });
+    }
+    await connectPromise;
+  };
+
+  const runConnected = async <T>(operation: () => Promise<T>): Promise<T> => {
+    await connect();
+    return operation();
+  };
+
+  // 关闭 offline queue 后，每条命令必须等待 lazy client ready，避免冷启动首条命令被拒绝。
+  return {
+    connect,
+    ping: () => runConnected(() => client.ping()),
+    get: (key) => runConnected(() => client.get(key)),
+    getdel: (key) => runConnected(() => client.getdel(key)),
+    setex: (key, seconds, value) => runConnected(() => client.setex(key, seconds, value)),
+    del: (...keys) => runConnected(() => client.del(...keys)),
+    keys: (pattern) => runConnected(() => client.keys(pattern)),
+    quit: async () => {
+      await client.quit();
+    },
+    sadd: (key, member) => runConnected(() => client.sadd(key, member)),
+    srem: (key, member) => runConnected(() => client.srem(key, member)),
+    smembers: (key) => runConnected(() => client.smembers(key)),
+    expire: (key, seconds) => runConnected(() => client.expire(key, seconds)),
+    hset: (key, field, value) => runConnected(() => client.hset(key, field, value)),
+    hgetall: (key) => runConnected(() => client.hgetall(key)),
+    pipeline: () => client.pipeline(),
+    exists: (key) => runConnected(() => client.exists(key)),
+    incr: (key) => runConnected(() => client.incr(key)),
+  };
+}
+
+/**
+ * 获取 Redis 客户端实例（单例模式）
+ */
+export function getRedis(): RedisClient {
+  if (!globalForRedis.__authSsoPortalRedis) {
+    globalForRedis.__authSsoPortalRedis = createIoredisClient();
+  }
+  return globalForRedis.__authSsoPortalRedis;
+}
+
+/** 测试用：清空进程级单例（仅测试导入，生产代码不调用） */
+export function resetRedisSingletonForTests(): void {
+  globalForRedis.__authSsoPortalRedis = undefined;
+}

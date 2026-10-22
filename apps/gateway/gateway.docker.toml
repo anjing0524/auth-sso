@@ -1,0 +1,45 @@
+# ==============================================================================
+# Auth-SSO 信创安全网关 Docker 环境配置
+# ==============================================================================
+
+[gateway]
+port = 80
+ssl_port = 443
+# 未启用内建 ACME 时使用的显式证书路径；生产 Compose 启用 ACME 后忽略。
+ssl_cert_path = "/etc/gateway/ssl/fullchain.pem"
+ssl_key_path = "/etc/gateway/ssl/privkey.pem"
+log_dir = "logs"
+log_level = "info"
+
+[gateway.oauth]
+client_id = "portal"
+client_secret = "请替换为 Portal seed 脚本输出的 client_secret 明文"
+
+[redis]
+url = "redis://redis:6379"
+
+# ==============================================================================
+# 多 Upstream 路由表 — name 即 path prefix，按长度降序最长匹配。
+# ==============================================================================
+
+[[upstreams]]
+name = "/"
+addresses = "portal:4000"
+oidc_provider = true
+public_paths = [
+    "/login",
+    "/register",
+    "/error",
+    "/oauth/error",
+    "/api/auth/",
+    "/oauth2/",
+    "/.well-known/",
+    "/",
+    "/_next/",
+    "/favicon.ico",
+]
+
+[[upstreams]]
+name = "/demo/"
+addresses = "demo:3000"
+public_paths = ["/demo/landing"]

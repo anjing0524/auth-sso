@@ -1,0 +1,180 @@
+services:
+  # ============================================
+  # PostgreSQL 生产环境配置
+  # ============================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: auth-sso-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: auth_sso
+    # 生产环境**不向宿主机发布** PostgreSQL 端口：仅 Compose 内网可达。
+    # 需要运维接入时使用 `docker compose exec postgres psql` 或临时端口转发，避免数据库直接暴露公网。
+    expose:
+      - "5432"
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 512M
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - auth-sso-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ============================================
+  # Redis 生产环境配置
+  # ============================================
+  redis:
+    image: redis:7-alpine
+    container_name: auth-sso-redis
+    restart: always
+    command: redis-server --requirepass ${REDIS_PASSWORD} --appendonly yes --maxmemory 256mb --maxmemory-policy volatile-lru
+    volumes:
+      - ./data/redis:/data
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$${REDIS_PASSWORD}\" ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - auth-sso-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ============================================
+  # 一次性数据库初始化：迁移 + seed（幂等）
+  # 首次部署/升级都通过本服务保证 schema 与内置 RBAC 数据就绪，
+  # Portal 在其成功后才启动（depends_on: service_completed_successfully）。
+  # ============================================
+  db-init:
+    build:
+      context: .
+      dockerfile: apps/portal/Dockerfile
+      target: builder
+      args:
+        NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL}
+    command: sh -c 'pnpm db:migrate && pnpm db:seed'
+    restart: "no"
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/auth_sso
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      PORTAL_CLIENT_SECRET: ${PORTAL_CLIENT_SECRET}
+      PORTAL_REDIRECT_URL: ${PORTAL_REDIRECT_URL}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - auth-sso-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ============================================
+  # Portal (Management + IDP)
+  # ============================================
+  portal:
+    build:
+      context: .
+      dockerfile: apps/portal/Dockerfile
+      args:
+        NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL}
+    image: auth-sso-portal:latest
+    container_name: auth-sso-portal
+    restart: always
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/auth_sso
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL}
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL}
+      PORTAL_CLIENT_SECRET: ${PORTAL_CLIENT_SECRET}
+      GATEWAY_SHARED_SECRET: ${GATEWAY_SHARED_SECRET}
+      NODE_ENV: production
+    expose:
+      - "4000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      db-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "node -e 'fetch(\"http://127.0.0.1:4000/api/health\").then(r => process.exit(r.status === 200 ? 0 : 1)).catch(() => process.exit(1))'"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    networks:
+      - auth-sso-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ============================================
+  # Pingora 信创网关 (自研 Rust 网关替代 Nginx)
+  # ============================================
+  gateway:
+    build:
+      context: .
+      dockerfile: apps/gateway/Dockerfile
+    container_name: auth-sso-gateway
+    restart: always
+    environment:
+      NODE_ENV: production
+      LETSENCRYPT_DOMAIN: ${LETSENCRYPT_DOMAIN:?必须配置 LETSENCRYPT_DOMAIN}
+      LETSENCRYPT_EMAIL: ${LETSENCRYPT_EMAIL:?必须配置 LETSENCRYPT_EMAIL}
+      ACME_DIRECTORY_URL: ${ACME_DIRECTORY_URL:-https://acme-v02.api.letsencrypt.org/directory}
+      ACME_STATE_DIR: /var/lib/gateway/acme
+      ACME_CHECK_INTERVAL_SECS: ${ACME_CHECK_INTERVAL_SECS:-21600}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      GATEWAY_SHARED_SECRET: ${GATEWAY_SHARED_SECRET}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - gateway_acme:/var/lib/gateway/acme
+    depends_on:
+      portal:
+        condition: service_healthy
+    networks:
+      - auth-sso-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  auth-sso-network:
+    driver: bridge
+
+volumes:
+  gateway_acme:

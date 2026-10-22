@@ -1,0 +1,200 @@
+/**
+ * 当前用户 API 集成测试（真实 DB）
+ *
+ * 覆盖范围：
+ * - GET /api/me 返回用户信息、权限、角色及动态菜单树
+ * - GET /api/me/permissions 返回权限列表
+ * - GET /api/me 无有效身份返回 401
+ *
+ * @req B-USR-R, H-AUTH-001
+ * @vitest-environment node
+ */
+import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest';
+import { createTestRequest } from '../helpers/test-utils';
+import {
+  createTestDbHandle,
+  seedTestData,
+} from '../helpers/test-db';
+import {
+  seedRootDept,
+  seedAdminUser,
+  seedSuperAdminRole,
+  seedTestPermission,
+  seedUserRoleBinding,
+} from '../helpers/seed-fixtures';
+import type * as authModule from '@/lib/auth';
+import type * as menuTreeModule from '@/lib/menu-tree';
+
+
+const now = new Date();
+
+// ── 可切换的 resolveIdentity 模拟 ─────────────────────
+const { mockResolveIdentity } = vi.hoisted(() => ({
+  mockResolveIdentity: vi.fn(),
+}));
+
+// @allow-module-mock @/lib/auth auth-bypass: 本文件被测语义不依赖登录/授权链路，mock 仅用于构造"已登录/已授权"的请求上下文（依赖它的断言：me-endpoints.test.ts 全部用例）
+vi.mock(import('@/lib/auth'), async (importOriginal): Promise<Partial<typeof authModule>> => {
+  const actual = await importOriginal();
+  return { ...actual,
+  resolveIdentity: mockResolveIdentity,
+  logServerDataRead: vi.fn(async () => {}),
+};
+});
+
+// @allow-module-mock @/lib/menu-tree input-fixture: 菜单树只提供可辨识的渲染输入；断言检查的是**路由原样透传**该输入（不重排/不裁剪），树的构建逻辑由其自身测试覆盖
+vi.mock(import('@/lib/menu-tree'), async (importOriginal): Promise<Partial<typeof menuTreeModule>> => {
+  const actual = await importOriginal();
+  return { ...actual,
+  getDynamicMenuTree: vi.fn().mockResolvedValue([{ id: 'menu-marker', name: '透传标记', path: '/marker', children: [] }]),
+};
+});
+
+vi.mock('@/infrastructure/redis', () => ({
+  getRedis: vi.fn(() => null),
+}));
+
+// ── 真实 DB：TDZ 回避策略 ─────────────────────────────
+// /api/me/route.ts → data.ts → user-queries.ts 在模块顶层访问 schema.users.id，
+// 若使用静态 import 会在 td 初始化前触发 getter。改用动态 import 确保 td 就绪后
+// 再加载路由模块。
+const td = createTestDbHandle();
+
+vi.mock('@/infrastructure/db', () => ({
+  get db() { return td.db; },
+  get schema() { return td.schema; },
+}));
+
+type RouteHandler = (req: any) => Promise<Response>;
+let GetMe: RouteHandler;
+let GetMePermissions: RouteHandler;
+
+beforeAll(async () => {
+  await td.connect();
+  // 此时 td 已就绪，动态导入路由模块即可安全访问 DB 模块
+  ({ GET: GetMe } = await import('@/app/api/me/route'));
+  ({ GET: GetMePermissions } = await import('@/app/api/me/permissions/route'));
+});
+
+afterAll(async () => { await td.close(); });
+
+const USER_ID = '00000000-0000-4000-8000-000000000101';
+const DEPT_ID = '00000000-0000-4000-8000-000000000001';
+const ROLE_ID = '00000000-0000-4000-8000-000000000301';
+const PERM_ID_USER_LIST = '00000000-0000-4000-8000-000000000401';
+const PERM_ID_USER_CREATE = '00000000-0000-4000-8000-000000000402';
+const PERM_ID_USER_UPDATE = '00000000-0000-4000-8000-000000000403';
+const PERM_ID_USER_DELETE = '00000000-0000-4000-8000-000000000404';
+
+/**
+ * `ResolvedIdentity` 已不再携带 claims（见 ADR-016）：它曾是空字符串哨兵值的载体，
+ * 唯一被真正读取的是 `sub`（恒等于 userId）与 `exp`/`iat`。现改为显式时间字段。
+ */
+const defaultIdentity = {
+  userId: USER_ID,
+  expiresAt: 9999999999,
+  issuedAt: 1000000000,
+};
+
+beforeEach(async () => {
+  vi.clearAllMocks();
+  mockResolveIdentity.mockResolvedValue(defaultIdentity);
+  await td.cleanup();
+  await seedTestData(td.db, {
+    departments: seedRootDept(),
+    users: seedAdminUser(),
+    roles: seedSuperAdminRole(),
+    permissions: [
+      ...(seedTestPermission({ id: PERM_ID_USER_LIST, code: 'portal:user:list', name: '用户列表' }) ?? []),
+      ...(seedTestPermission({ id: PERM_ID_USER_CREATE, code: 'portal:user:create', name: '创建用户' }) ?? []),
+      ...(seedTestPermission({ id: PERM_ID_USER_UPDATE, code: 'portal:user:update', name: '更新用户' }) ?? []),
+      ...(seedTestPermission({ id: PERM_ID_USER_DELETE, code: 'portal:user:delete', name: '删除用户' }) ?? []),
+    ],
+    userRoles: seedUserRoleBinding(USER_ID, ROLE_ID),
+    rolePermissions: [
+      { roleId: ROLE_ID, permissionId: PERM_ID_USER_LIST, createdAt: now },
+      { roleId: ROLE_ID, permissionId: PERM_ID_USER_CREATE, createdAt: now },
+      { roleId: ROLE_ID, permissionId: PERM_ID_USER_UPDATE, createdAt: now },
+      { roleId: ROLE_ID, permissionId: PERM_ID_USER_DELETE, createdAt: now },
+    ],
+  });
+});
+
+describe('Me Endpoints', () => {
+  // ======== GET /api/me ========
+
+  describe('GET /api/me', () => {
+    it('返回用户信息（含身份验证通过）', async () => {
+      const response = await GetMe(createTestRequest('/api/me'));
+      const body = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(body.user).toBeDefined();
+      expect(body.user.email).toBe('admin@example.com');
+      expect(body.tokenInfo).toBeDefined();
+      expect(body.permissions).toBeDefined();
+      expect(body.permissions).toContain('portal:user:list');
+      expect(body.roles).toBeDefined();
+      expect(body.roles).toContain('SUPER_ADMIN');
+      // 透传契约：路由必须原样带出菜单树（此前只断言 toBeDefined，且 mock 返回空数组 ⇒ 恒真）
+      expect(body.menus).toEqual([{ id: 'menu-marker', name: '透传标记', path: '/marker', children: [] }]);
+    });
+
+    it('无身份时返回 401', async () => {
+      mockResolveIdentity.mockResolvedValue(null);
+
+      const response = await GetMe(createTestRequest('/api/me'));
+      expect(response.status).toBe(401);
+
+      const body = await response.json();
+      expect(body.error).toBeDefined();
+    });
+
+    it('返回 tokenInfo.expiresAt 用于前端静默刷新调度', async () => {
+      mockResolveIdentity.mockResolvedValue({
+        ...defaultIdentity,
+        expiresAt: 2000000000,
+      });
+
+      const response = await GetMe(createTestRequest('/api/me'));
+      const body = await response.json();
+
+      expect(body.tokenInfo.expiresAt).toBe(2000000000 * 1000);
+    });
+  });
+
+  // ======== GET /api/me/permissions ========
+
+  describe('GET /api/me/permissions', () => {
+    it('返回用户权限上下文', async () => {
+      const response = await GetMePermissions(createTestRequest('/api/me/permissions'));
+      const body = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(body.userId).toBe(USER_ID);
+      expect(body.permissions).toContain('portal:user:list');
+      expect(body.permissions).toContain('portal:user:create');
+      expect(body.roles).toBeDefined();
+      expect(body.roles).toHaveLength(1);
+      expect(body.roles[0].code).toBe('SUPER_ADMIN');
+      expect(body.deptIds).toContain(DEPT_ID);
+    });
+
+    it('无身份时返回 401', async () => {
+      mockResolveIdentity.mockResolvedValue(null);
+
+      const response = await GetMePermissions(createTestRequest('/api/me/permissions'));
+      expect(response.status).toBe(401);
+    });
+
+    it('用户不存在时返回 500', async () => {
+      mockResolveIdentity.mockResolvedValue({
+        ...defaultIdentity,
+        userId: '00000000-0000-4000-8000-000000000999',
+      });
+
+      const response = await GetMePermissions(createTestRequest('/api/me/permissions'));
+      expect(response.status).toBe(500);
+    });
+  });
+});

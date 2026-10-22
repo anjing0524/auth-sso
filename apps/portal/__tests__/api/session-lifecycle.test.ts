@@ -1,0 +1,213 @@
+/**
+ * JWT Cookie 会话生命周期测试 — 真实 DB (jwks 表)
+ *
+ * verifyAccessToken 路径需要 jwks 表提供签名公钥，
+ * revokeUserToken 走 Redis jti 黑名单（无持久化行）。
+ *
+ * @req H-SESS-001~006, H-SSO-004
+ * @vitest-environment node
+ */
+import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest';
+import { createTestDbHandle, seedTestData } from '../helpers/test-db';
+import { seedJwks } from '../helpers/seed-fixtures';
+
+const { mockGetRedis, mockStore, tdHolder } = vi.hoisted(() => {
+  const storeMap = new Map<string, string>();
+
+  return {
+    tdHolder: { current: null as ReturnType<typeof createTestDbHandle> | null },
+    mockStore: {
+      clear: () => storeMap.clear(),
+      get: (key: string) => storeMap.get(key),
+      set: (key: string, value: string) => storeMap.set(key, value),
+    },
+    mockGetRedis: () => ({
+      setex: async (key: string, _ttl: number, value: string) => {
+        storeMap.set(key, value);
+      },
+      exists: async (key: string) => {
+        return storeMap.has(key) ? 1 : 0;
+      },
+      get: async (key: string) => {
+        return storeMap.get(key) || null;
+      },
+      del: async (key: string) => {
+        storeMap.delete(key);
+      },
+      hset: async () => 1,
+      hgetall: async () => ({}),
+      expire: async () => 1,
+      pipeline: () => ({
+        setex: function () { return this; },
+        del: function () { return this; },
+        exec: async () => [],
+      }),
+    }),
+  };
+});
+
+const td = createTestDbHandle();
+tdHolder.current = td;
+
+vi.mock('@/infrastructure/db', () => ({
+  get db() { return tdHolder.current!.db; },
+  get schema() { return tdHolder.current!.schema; },
+}));
+
+vi.mock('@/infrastructure/redis', () => ({
+  getRedis: () => mockGetRedis(),
+}));
+
+const store = mockStore;
+
+const mockCookiesGet = vi.fn();
+vi.mock('next/headers', () => ({
+  cookies: async () => ({
+    get: mockCookiesGet,
+  }),
+}));
+
+vi.mock('jose', () => ({
+  jwtVerify: vi.fn(async (token: string) => {
+    if (token === 'valid-jwt' || token === 'valid-jwt-typ-at' || token === 'valid-jwt-typ-login') {
+      return { payload: { sub: 'usr_1', jti: 'jti-123', iss: '', aud: 'auth-sso', exp: Math.floor(Date.now() / 1000) + 3600 } };
+    }
+    throw new Error('Invalid signature');
+  }),
+  decodeJwt: vi.fn((token: string) => {
+    if (token === 'valid-jwt') {
+      return { kid: 'test-kid-1', sub: 'usr_1', jti: 'jti-123', exp: Math.floor(Date.now() / 1000) + 3600 };
+    }
+    return null;
+  }),
+  decodeProtectedHeader: vi.fn((token: string) => {
+    if (token === 'valid-jwt') {
+      // 存量 token：无 typ（兼容期放行）
+      return { kid: 'test-kid-1', alg: 'ES256' };
+    }
+    if (token === 'valid-jwt-typ-at') {
+      return { kid: 'test-kid-1', alg: 'ES256', typ: 'at+jwt' };
+    }
+    if (token === 'valid-jwt-typ-login') {
+      return { kid: 'test-kid-1', alg: 'ES256', typ: 'login+jwt' };
+    }
+    throw new Error('Invalid JWT header');
+  }),
+  importJWK: vi.fn(async () => ({})),
+  createRemoteJWKSet: vi.fn(() => vi.fn()),
+}));
+
+import {
+  getJwtFromCookie,
+  getRefreshTokenFromCookie,
+  decodeJwtPayload,
+  revokeJti,
+  isJtiRevoked,
+  revokeUserToken,
+} from '@/lib/session';
+import { COOKIE_NAMES, PORTAL_CLIENT_ID } from '@auth-sso/contracts';
+import { verifyAccessToken } from '@/lib/auth/token';
+
+beforeAll(async () => { await td.connect(); });
+afterAll(async () => { await td.close(); });
+
+beforeEach(async () => {
+  await td.cleanup();
+  await seedTestData(td.db, {
+    jwks: seedJwks({ kid: 'test-kid-1' }),
+  });
+  store.clear();
+  vi.clearAllMocks();
+});
+
+describe('JWT Cookie Session Lifecycle', () => {
+  describe('getJwtFromCookie & getRefreshTokenFromCookie', () => {
+    it('从 cookies 接口成功读取 Token', async () => {
+      mockCookiesGet.mockImplementation((name: string) => {
+        if (name === COOKIE_NAMES.JWT) return { value: 'jwt-val' };
+        if (name === COOKIE_NAMES.REFRESH) return { value: 'refresh-val' };
+        return null;
+      });
+
+      const jwt = await getJwtFromCookie();
+      const refresh = await getRefreshTokenFromCookie();
+
+      expect(jwt).toBe('jwt-val');
+      expect(refresh).toBe('refresh-val');
+    });
+
+    it('Cookie 不存在时返回 null', async () => {
+      mockCookiesGet.mockReturnValue(null);
+
+      const jwt = await getJwtFromCookie();
+      expect(jwt).toBeNull();
+    });
+  });
+
+  describe('jti 黑名单机制', () => {
+    it('能够正确加入和判断 jti 黑名单', async () => {
+      await revokeJti('jti-123', Math.floor(Date.now() / 1000) + 3600);
+      expect(await isJtiRevoked('jti-123')).toBe(true);
+      expect(await isJtiRevoked('jti-not-exists')).toBe(false);
+    });
+
+    it('能够自动通过 token 进行注销', async () => {
+      await revokeUserToken('valid-jwt');
+      expect(await isJtiRevoked('jti-123')).toBe(true);
+    });
+  });
+
+  describe('verifyAccessToken', () => {
+    it('对有效 JWT 成功验签并返回载荷', async () => {
+      const payload = await verifyAccessToken('valid-jwt', PORTAL_CLIENT_ID);
+      expect(payload).toBeTruthy();
+      expect(payload!.sub).toBe('usr_1');
+    });
+
+    it('如果 jti 在黑名单中则返回 null', async () => {
+      await revokeJti('jti-123', Math.floor(Date.now() / 1000) + 3600);
+      const payload = await verifyAccessToken('valid-jwt', PORTAL_CLIENT_ID);
+      expect(payload).toBeNull();
+    });
+
+    it('无效 JWT 返回 null', async () => {
+      const payload = await verifyAccessToken('invalid-jwt', PORTAL_CLIENT_ID);
+      expect(payload).toBeNull();
+    });
+
+    it('恶意/畸形 token 返回 null 不抛异常', async () => {
+      const payload = await verifyAccessToken('', PORTAL_CLIENT_ID);
+      expect(payload).toBeNull();
+    });
+  });
+
+  describe('verifyAccessToken typ 显式类型（RFC 8725 §3.11）', () => {
+    it('typ 与预期一致时验签通过', async () => {
+      const payload = await verifyAccessToken('valid-jwt-typ-at', PORTAL_CLIENT_ID, 'at+jwt');
+      expect(payload).toBeTruthy();
+    });
+
+    it('typ 与预期不符（login 凭证冒充 AT）返回 null', async () => {
+      const payload = await verifyAccessToken('valid-jwt-typ-login', PORTAL_CLIENT_ID, 'at+jwt');
+      expect(payload).toBeNull();
+    });
+
+    it('typ 缺失的存量 token 放行（兼容期）', async () => {
+      const payload = await verifyAccessToken('valid-jwt', PORTAL_CLIENT_ID, 'at+jwt');
+      expect(payload).toBeTruthy();
+    });
+  });
+
+  describe('decodeJwtPayload', () => {
+    it('快速解码有效 JWT 载荷', () => {
+      const payload = decodeJwtPayload('valid-jwt');
+      expect(payload).toBeTruthy();
+      expect(payload!.sub).toBe('usr_1');
+    });
+
+    it('无效 token 返回 null', () => {
+      const payload = decodeJwtPayload('invalid-token');
+      expect(payload).toBeNull();
+    });
+  });
+});

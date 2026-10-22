@@ -1,0 +1,31 @@
+# CONTEXT.md — 领域文档入口
+
+> 本文件是领域技能（domain-modeling / grill-with-docs / improve-codebase-architecture 等）的领域文档入口。
+> 术语定义的唯一真相源是 `docs/glossary.md`——本文件不重复定义，只做导航。
+
+## 术语表
+
+**`docs/glossary.md`** —— 有界上下文（Identity / Authorization / AuthN-OAuth / Audit / Gateway）、
+User、Department、Role、Permission（`{clientId}:{resource}:{action}` 命名空间）、Client、
+AuthorizationCode、RefreshToken（授权家族 `(userId, clientId)`、Rotation、复用检测、Revocation 撤销原语）、
+Session（AT/RT/jti 黑名单/权限上下文）等全部领域概念在此定义。
+
+## 架构决策（ADR）
+
+**`docs/adr/`** —— ADR-001 ~ ADR-022。涉及 Token 设计、Gateway 职责、RBAC/OBAC 模型、故障语义分级的
+改动先查对应 ADR（如：AT 验签 → ADR-004/011/013；RT 撤销 → ADR-012；Gateway OAuth Client → ADR-003/009/010；
+数据范围（OBAC）授权 → **ADR-014**，其中含"不上 PostgreSQL RLS"与"放弃 Drizzle 运行时拦截层"的显式 tradeoff；
+授权判定（权限码/角色/管理员绕过）→ **ADR-015**，实现在 `packages/contracts/src/authorization.ts`，服务端与客户端共用；
+身份边界形状（`ResolvedIdentity` 只暴露 userId + 时间字段）→ **ADR-016**；
+OAuth 授权码兑换编排（深 module + 失败可判别）→ **ADR-017**；
+权限上下文故障分级（缓存性故障不得升级为登出）→ **ADR-018**；
+Controller 行数约束（修正未强制且与配置矛盾的规范）→ **ADR-019**；
+审计持久性等级（按是否与业务同事务分档）→ **ADR-020**；
+JWKS 宽限期判定的唯一出处（消除生产路径与查询 API 的重复）→ **ADR-021**；
+测试真实性策略（禁止整体 mock 生产业务模块，安全语义由真实实现驱动，契约交给编译器）→ **ADR-022**）。
+
+## 词汇使用约束
+
+- 输出命名领域概念时，使用 glossary.md 定义的术语，不漂移到它明确避免的同义词。
+- 与现有 ADR 冲突时显式提出并给出重开理由，不静默覆盖。
+- `docs/adr/` 或术语缺失时静默继续，由 domain-modeling 在术语/决策实际沉淀时懒更新。

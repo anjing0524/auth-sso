@@ -1,0 +1,44 @@
+# ==============================================================================
+# Auth-SSO 信创安全网关 生产/本地通用配置文件
+# ==============================================================================
+
+[gateway]
+port = 19080
+ssl_port = 19443
+ssl_cert_path = "ssl/fullchain.pem"
+ssl_key_path = "ssl/privkey.pem"
+log_dir = "logs"
+log_level = "info"
+
+[gateway.oauth]
+client_id = "portal"
+client_secret = "portal-secret"
+
+[redis]
+url = "redis://localhost:6379"
+
+# ==============================================================================
+# 多 Upstream 路由表 — name 即 path prefix，按长度降序最长匹配。
+# ==============================================================================
+
+[[upstreams]]
+name = "/"
+addresses = "127.0.0.1:4100"
+oidc_provider = true
+public_paths = [
+    "/login",
+    "/register",
+    "/error",
+    "/oauth/error",
+    "/api/auth/",
+    "/oauth2/",
+    "/.well-known/",
+    "/",
+    "/_next/",
+    "/favicon.ico",
+]
+
+[[upstreams]]
+name = "/demo/"
+addresses = "127.0.0.1:3100"
+public_paths = ["/demo/landing"]

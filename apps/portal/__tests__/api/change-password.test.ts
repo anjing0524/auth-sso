@@ -1,0 +1,220 @@
+/**
+ * 自助改密编排测试（真实 DB）
+ *
+ * `lib/account/change-password.ts` 是"领域操作"的编排层：bcrypt 比对/哈希、
+ * 持久化、会话撤销（ADR-019 命名该操作的试点）。
+ *
+ * 锁住三条行为：
+ * - 旧密码正确 → 落库新哈希与新历史，且旧哈希不再可用
+ * - 旧密码错误 → 可判别失败，**不落库**
+ * - 会话撤销失败 → **不阻断改密**（改密已持久化；撤销是尽力而为）
+ *
+ * @req FR-USR-10, NFR-SEC-13, NFR-SEC-15
+ * @vitest-environment node
+ */
+import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest';
+import { eq } from 'drizzle-orm';
+import { createTestDbHandle, seedTestData } from '../helpers/test-db';
+import { seedAdminUser, seedRootDept } from '../helpers/seed-fixtures';
+import * as schema from '@/db/schema';
+import { hashPassword, verifyPassword } from '@/domain/auth/password';
+import { hashToken } from '@/lib/crypto';
+import { seedPortalClient } from '../helpers/seed-fixtures';
+import { isJtiRevoked, trackUserJti } from '@/lib/session/revoke';
+import type * as redisModule from '@/infrastructure/redis';
+
+const { faultHolder, tdHolder } = vi.hoisted(() => ({
+  /** 故障注入开关：让所有 Redis 命令抛错（ADR-022 §3 要求可抛错） */
+  faultHolder: { failRedis: false },
+  tdHolder: { current: null as ReturnType<typeof createTestDbHandle> | null },
+}));
+
+vi.mock('@/infrastructure/db', () => ({
+  get db() { return tdHolder.current!.db; },
+  get schema() { return tdHolder.current!.schema; },
+}));
+
+// 故障注入落在**基础设施边界**（豁免清单内）而不是业务模块：这样
+// `revokeUserAccessByUserId` 与 `isJtiRevoked` 都保持真实（真实 Redis 黑名单）。
+vi.mock(import('@/infrastructure/redis'), async (importOriginal): Promise<Partial<typeof redisModule>> => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    getRedis: () => {
+      if (!faultHolder.failRedis) return actual.getRedis();
+      const thrower = async () => { throw new Error('Redis down (injected)'); };
+      return {
+        connect: thrower, ping: thrower, get: thrower, getdel: thrower, setex: thrower,
+        del: thrower, keys: thrower, quit: thrower, sadd: thrower, srem: thrower,
+        smembers: thrower, expire: thrower, hset: thrower, hgetall: thrower,
+        exists: thrower, incr: thrower,
+        pipeline: () => { throw new Error('Redis down (injected)'); },
+      };
+    },
+  };
+});
+
+import { changeOwnPassword } from '@/lib/account/change-password';
+
+const td = createTestDbHandle();
+tdHolder.current = td;
+
+const USER_ID = '00000000-0000-4000-8000-000000000101';
+const CURRENT = 'Current@123456';
+const NEW = 'BrandNew@654321';
+
+async function currentRow() {
+  const [row] = await td.db.select({
+    passwordHash: schema.users.passwordHash,
+    passwordHistory: schema.users.passwordHistory,
+  }).from(schema.users).where(eq(schema.users.id, USER_ID));
+  return row;
+}
+
+/** 种一个未撤销的 Refresh Token（与该用户绑定） */
+async function seedRefreshToken(token: string) {
+  await td.db.insert(schema.refreshTokens).values({
+    id: crypto.randomUUID(),
+    tokenHash: hashToken(token),
+    userId: USER_ID,
+    clientId: 'portal',
+    scopes: 'openid offline_access',
+    revoked: null,
+    expiresAt: new Date(Date.now() + 7 * 24 * 3600 * 1000),
+    createdAt: new Date(),
+  });
+}
+
+async function isRtRevoked(token: string): Promise<boolean | null> {
+  const [row] = await td.db
+    .select({ revoked: schema.refreshTokens.revoked })
+    .from(schema.refreshTokens)
+    .where(eq(schema.refreshTokens.tokenHash, hashToken(token)));
+  return row ? row.revoked !== null : null;
+}
+
+beforeAll(async () => { await td.connect(); });
+afterAll(async () => { await td.close(); });
+
+beforeEach(async () => {
+  vi.clearAllMocks();
+  faultHolder.failRedis = false;
+  await td.cleanup();
+  await seedTestData(td.db, {
+    departments: seedRootDept(),
+    users: seedAdminUser({ passwordHash: await hashPassword(CURRENT) }),
+    clients: seedPortalClient({ clientId: 'portal' }),
+  });
+});
+
+describe('changeOwnPassword — 会话终止必须覆盖 Refresh Token', () => {
+  /**
+   * 密码变更的业务语义是"终止既有会话"。只撤销 Access Token 的 jti 是**不够**的：
+   * Refresh Token 仍可换取新的 Access Token，攻击者用窃取的 RT 就能在改密后
+   * 继续续期——旧会话实际上从未被终止。
+   *
+   * 对照：`logout` 与 `revokeAllRefreshTokens` 都是**双层撤销**
+   * （`revokeUserRefreshTokens` + `revokeUserAccessByUserId`）。
+   */
+  it('**改密后该用户的 Refresh Token 必须被撤销**（否则旧 RT 仍可续期）', async () => {
+    const oldRt = 'rt_should_be_revoked_on_password_change';
+    await seedRefreshToken(oldRt);
+    expect(await isRtRevoked(oldRt)).toBe(false);
+
+    const result = await changeOwnPassword(USER_ID, CURRENT, NEW);
+    expect(result.ok).toBe(true);
+
+    expect(await isRtRevoked(oldRt)).toBe(true);
+  });
+
+  it('改密失败（旧密码错）→ 不得撤销 RT（未发生变更就不终止会话）', async () => {
+    const rt = 'rt_must_survive_failed_change';
+    await seedRefreshToken(rt);
+
+    const result = await changeOwnPassword(USER_ID, 'WrongPassword@1', NEW);
+    expect(result.ok).toBe(false);
+
+    expect(await isRtRevoked(rt)).toBe(false);
+  });
+});
+
+describe('changeOwnPassword', () => {
+  it('旧密码正确 → 落库新哈希与新历史，旧密码失效', async () => {
+    const before = await currentRow();
+
+    const result = await changeOwnPassword(USER_ID, CURRENT, NEW);
+
+    expect(result.ok).toBe(true);
+    const after = await currentRow();
+    expect(await verifyPassword(NEW, after!.passwordHash!)).toBe(true);
+    expect(await verifyPassword(CURRENT, after!.passwordHash!)).toBe(false);
+    // 旧哈希推入历史（NFR-SEC-15 的基础）
+    expect(after!.passwordHistory).toContain(before!.passwordHash);
+  });
+
+  it('旧密码错误 → 可判别失败，且不落库', async () => {
+    const before = await currentRow();
+
+    const result = await changeOwnPassword(USER_ID, 'WrongPassword@1', NEW);
+
+    expect(result).toEqual({ ok: false, reason: 'invalid_current_password' });
+    const after = await currentRow();
+    expect(after!.passwordHash).toBe(before!.passwordHash);
+  });
+
+  it('新密码命中密码历史 → 被领域判定拒绝（NFR-SEC-15），且不落库', async () => {
+    // 先改一次，使 NEW 成为历史项
+    await changeOwnPassword(USER_ID, CURRENT, NEW);
+    const mid = await currentRow();
+
+    // 再改回 CURRENT —— 它现在位于密码历史中 → 必须拒绝（NFR-SEC-15）
+    await expect(changeOwnPassword(USER_ID, NEW, CURRENT)).rejects.toThrow(
+      '新密码不能与最近使用过的密码相同',
+    );
+
+    const after = await currentRow();
+    expect(after!.passwordHash).toBe(mid!.passwordHash);
+  });
+
+  it('**账号从未设置密码 → 抛领域规则，不得报成"当前密码错误"**', async () => {
+    await td.db.update(schema.users)
+      .set({ passwordHash: null, passwordHistory: null })
+      .where(eq(schema.users.id, USER_ID));
+
+    // 此前先用空串哨兵 `verifyPassword(pw, '')` 验旧密码 → 必然 false，
+    // 于是返回 invalid_current_password，而领域里那条"未设置密码"的判据**永不可达**。
+    await expect(changeOwnPassword(USER_ID, CURRENT, NEW)).rejects.toThrow('账号未设置密码，无法自助改密');
+
+    const after = await currentRow();
+    expect(after!.passwordHash).toBeNull();
+  });
+
+  it('用户不存在 → 返回 user_not_found（调用方据此 404，不与"密码错误"混淆）', async () => {
+    const result = await changeOwnPassword(
+      '00000000-0000-4000-8000-000000000999', CURRENT, NEW,
+    );
+
+    expect(result).toEqual({ ok: false, reason: 'user_not_found' });
+  });
+
+  it('成功时撤销该用户全部会话（真实 user_jti 哈希 → Redis 黑名单）', async () => {
+    const jti = 'jti-change-password-session';
+    await trackUserJti(USER_ID, jti, 3600);
+    expect(await isJtiRevoked(jti)).toBe(false);
+
+    await changeOwnPassword(USER_ID, CURRENT, NEW);
+
+    // 真实状态：不是"某个函数被调用过"，而是该 jti 确实进了黑名单
+    expect(await isJtiRevoked(jti)).toBe(true);
+  });
+
+  it('会话撤销失败（真实 Redis 抛错）→ 不阻断改密（新密码仍然生效）', async () => {
+    faultHolder.failRedis = true;
+
+    const result = await changeOwnPassword(USER_ID, CURRENT, NEW);
+
+    expect(result.ok).toBe(true);
+    const after = await currentRow();
+    expect(await verifyPassword(NEW, after!.passwordHash!)).toBe(true);
+  });
+});

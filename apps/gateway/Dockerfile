@@ -1,0 +1,61 @@
+FROM alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d AS cert-init
+
+RUN apk add --no-cache openssl
+
+# Build stage
+FROM rust:1.93-alpine@sha256:4fec02de605563c297c78a31064c8335bc004fa2b0bf406b1b99441da64e2d2d AS builder
+
+# 安装构建依赖（添加 alpine-sdk 以及构建 vendored openssl 所需的基础工具）
+RUN apk add --no-cache musl-dev pkgconfig perl make cmake clang-dev clang alpine-sdk
+
+WORKDIR /app
+
+# 复制 gateway 子项目的 Cargo 配置
+COPY apps/gateway/Cargo.toml apps/gateway/Cargo.lock ./apps/gateway/
+COPY apps/gateway/benches ./apps/gateway/benches
+
+# 复制整个项目根目录的 Cargo.lock，如果存在（这里我们是 monorepo，有 apps/gateway/Cargo.lock）
+# 将工作目录切换到网关
+WORKDIR /app/apps/gateway
+
+# 创建一个假的 main.rs 以构建和缓存依赖项
+RUN mkdir src && echo "fn main() {}" > src/main.rs
+RUN cargo build --release --bin gateway
+RUN rm -rf src
+
+# 复制真正的源码并重新编译
+COPY apps/gateway/src ./src
+# 更新文件修改时间，以防 cargo 认为 src 没有变化而不进行编译
+RUN touch src/main.rs && cargo build --release
+
+# Runner stage
+FROM alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d
+
+# 创建固定 UID/GID 的非 root 用户，确保 ACME 持久化卷权限稳定。
+RUN addgroup -S -g 10001 gateway && adduser -S -u 10001 gateway -G gateway
+
+WORKDIR /app
+
+# 安装 ca-certificates 运行时证书支持
+RUN apk add --no-cache ca-certificates
+
+# 从构建阶段复制二进制文件
+COPY --from=builder /app/apps/gateway/target/release/gateway /usr/local/bin/gateway
+
+# 复制 Docker 环境专用配置文件（upstream/issuer/redis 使用 Docker 内部地址）
+COPY apps/gateway/gateway.docker.toml ./gateway.toml
+
+# 创建运行时必需的可写目录并授予 gateway 用户权限
+RUN mkdir -p /etc/gateway/ssl /var/lib/gateway/acme /app/logs \
+    && chown -R gateway:gateway /etc/gateway/ssl /var/lib/gateway/acme /app/logs
+
+EXPOSE 80 443
+
+# 设置日志级别
+# 不设 RUST_LOG：日志级别由配置的 log_level 决定（配置为单一真相源）。
+# RUST_LOG 仍可作运维应急覆盖（tracing 的 EnvFilter 优先级高于配置）。
+
+# 切换到非 root 用户运行
+USER gateway
+
+CMD ["gateway"]
