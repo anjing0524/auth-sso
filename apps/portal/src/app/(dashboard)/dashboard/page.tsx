@@ -94,7 +94,7 @@ export default async function DashboardPage() {
    */
   if (stats.users <= 1) {
     return (
-      <div className="flex min-h-0 flex-1 flex-col gap-6">
+      <div className="flex min-h-0 flex-1 flex-col gap-4">
         <PageHeader icon="LayoutDashboard" title="工作台" description="首次使用引导" />
         {/* 引导内容在可视区域内垂直居中：此前顶部对齐 + py-10，下方整屏空白，主内容区显得很小 */}
         <div className="flex flex-1 items-center justify-center">

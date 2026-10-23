@@ -44,7 +44,7 @@ export default async function PermissionsPage({ searchParams }: PageProps) {
   const menuOptions = allPermissions.filter((p) => p.type === 'DIRECTORY' || p.type === 'PAGE');
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-6">
+    <div className="flex min-h-0 flex-1 flex-col gap-4">
       <PageHeader
         icon="Key"
         title="权限管理"

@@ -42,7 +42,7 @@ export default async function ClientsPage({ searchParams }: PageProps) {
   const isFiltered = keyword.length > 0;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-6">
+    <div className="flex min-h-0 flex-1 flex-col gap-4">
       <PageHeader
         icon="AppWindow"
         title="应用管理"

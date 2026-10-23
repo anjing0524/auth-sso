@@ -257,7 +257,6 @@ export default function ClientsTable({ clients, pagination, initialKeyword, isFi
     <>
       <div className="flex min-h-0 flex-1 flex-col">
       <DataTable
-        fill
         columns={columns}
         data={clients}
         loading={isPending}

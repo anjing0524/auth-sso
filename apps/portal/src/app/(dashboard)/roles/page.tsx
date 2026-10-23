@@ -43,7 +43,7 @@ export default async function RolesPage({ searchParams }: PageProps) {
   const boundUserCounts = await getRoleBoundUserCounts(roles.map((r) => r.id));
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-6">
+    <div className="flex min-h-0 flex-1 flex-col gap-4">
       <PageHeader
         icon="ShieldCheck"
         title="角色管理"

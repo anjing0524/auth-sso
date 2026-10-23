@@ -33,10 +33,14 @@ export interface DataTableProps<T> {
   renderRow: (item: T) => React.ReactNode;
   /** Card header（搜索栏、统计等），可选 */
   cardHeader?: React.ReactNode;
-  /** 表格滚动区高度上限（默认按无页签列表；带页签页面传更小值） */
+  /**
+   * 表格滚动区高度上限（默认按无页签列表；带页签页面传更小值）。
+   *
+   * 2026-10-23 UI 重做：**卡片不再 flex-1 撑满**——角色等小数据集（1–3 行）
+   * 被撑成整屏空白卡片是"主体和留白比例失衡"的根源；现在卡片贴合内容，
+   * 行数多时由这里的 max-height 让表格内部滚动（表头 sticky 依然生效）。
+   */
   maxHeightClass?: string;
-  /** 撑满父容器剩余高度（列表页主内容区），表格内部滚动、分页固定在卡片下方 */
-  fill?: boolean;
 }
 
 export function DataTable<T>({
@@ -48,13 +52,12 @@ export function DataTable<T>({
   emptyState,
   renderRow,
   cardHeader,
-  maxHeightClass = 'max-h-[calc(100vh-21rem)]',
-  fill = false,
+  maxHeightClass = 'max-h-[calc(100svh-17rem)]',
 }: DataTableProps<T>) {
   return (
-    <Card className={`overflow-hidden rounded-xl border-none shadow-sm ring-1 ring-border/50${fill ? ' flex min-h-0 flex-1 flex-col' : ''}`}>
+    <Card className="overflow-hidden rounded-xl border border-border/70 shadow-sm ring-0">
       {cardHeader}
-      <CardContent className={fill ? 'flex min-h-0 flex-1 flex-col p-0' : 'p-0'}>
+      <CardContent className="p-0">
         {/* 横向滚动提示：宽表在卡片内横向滚动（U-G05）。
             md:hidden 会在 ≥768px 隐藏，但 1024 宽度下宽表仍溢出（实测 clients 720/967），
             因此用 lg:hidden：平板/窄桌面也能看到“可横向滚动”的可发现性提示。 */}
@@ -63,9 +66,10 @@ export function DataTable<T>({
         </p>
         {/* 窄屏下宽表在卡片内横向滚动：根因修复——此前表格没有滚动容器，
             会把 flex 父级撑宽（实测 390px 视口下 document.scrollWidth=557）。 */}
-        <div className={fill ? 'min-h-0 w-full flex-1 overflow-auto' : `${maxHeightClass} w-full overflow-auto`}>
-        <Table>
-          <TableHeader className="sticky top-0 z-10 bg-muted/50">
+        {/* 唯一滚动容器：横向 + 纵向都由这里承担；Table 内层不再自建 overflow（否则 sticky 表头失效）。 */}
+        <div className={`${maxHeightClass} w-full overflow-auto`}>
+        <Table containerClassName="overflow-visible">
+          <TableHeader className="[&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:bg-card">
             <TableRow>
               {columns.map((col) => (
                 <TableHead key={col.key} className={col.className}>

@@ -149,3 +149,38 @@ describe('U-G07 — 用户域错误文案中文化', () => {
     expect(userFacingMessage({ error: 'AUTH_SSO_1005', message: '姓名为空' })).toBe('姓名为空');
   });
 });
+
+/**
+ * 2026-10-23 UI 重做：主表格的滚动 / 吸顶 / 密度契约（用户实测反馈"表格滑动表头不见了"）。
+ *
+ * 根因：Table 内层默认 `overflow-x-auto` 会自成滚动上下文，`TableHeader sticky` 相对它定位，
+ * 外层滚动时表头随内容滚走（实测滚动 205px 后表头从容器顶 219px 变到 14px）。
+ * 现在列表页只保留**一个**滚动容器，Sticky 落在 `th` 上。
+ */
+describe('表格滚动与吸顶契约（2026-10-23 UI 重做）', () => {
+  it('DataTable 只用外层滚动容器，表头 sticky 挂在 th 上', () => {
+    const dataTable = read('src/components/shared/data-table.tsx');
+    expect(dataTable).toContain('containerClassName="overflow-visible"');
+    expect(dataTable).toContain('[&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:bg-card');
+    // 卡片不再 flex-1 撑满（1 行数据不应出现整屏空白卡片）
+    expect(dataTable).not.toContain('flex min-h-0 flex-1 flex-col');
+  });
+
+  it('审计页两张裸表同样使用 overflow-visible + sticky th', () => {
+    const auditPage = read('src/app/(dashboard)/audit-logs/page.tsx');
+    expect(auditPage.match(/containerClassName="overflow-visible"/g)?.length).toBe(2);
+    expect(auditPage.match(/\[&_th\]:sticky \[&_th\]:top-0/g)?.length).toBe(2);
+  });
+
+  it('表头不再用 uppercase + tracking-widest（中文会被拆散）', () => {
+    const table = read('src/components/ui/table.tsx');
+    expect(table).toContain('text-xs font-medium');
+    expect(table).not.toContain('uppercase tracking-widest');
+  });
+
+  it('工具条控件统一 36px、页头标题收敛到 text-xl', () => {
+    expect(read('src/components/shared/table-toolbar.tsx')).toContain('[&_button]:h-9');
+    expect(read('src/components/shared/search-input.tsx')).toContain('md:w-72');
+    expect(read('src/components/shared/page-header.tsx')).toContain('text-xl font-semibold');
+  });
+});

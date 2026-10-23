@@ -65,7 +65,7 @@ export default async function UsersPage({ searchParams }: PageProps) {
   const isFiltered = keyword.length > 0 || status !== 'ALL';
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-6">
+    <div className="flex min-h-0 flex-1 flex-col gap-4">
       <PageHeader
         icon="Users"
         title="用户管理"

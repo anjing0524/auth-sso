@@ -4,11 +4,26 @@ import * as React from "react"
 
 import { cn } from "@/lib/utils"
 
-function Table({ className, ...props }: React.ComponentProps<"table">) {
+function Table({
+  className,
+  containerClassName,
+  ...props
+}: React.ComponentProps<"table"> & {
+  /**
+   * 外层滚动容器的额外类。
+   *
+   * 默认 `overflow-x-auto` 适合"页面本身不滚动、表格自己横向滚动"的孤立用法；
+   * 但**列表页的纵向滚动容器在更外层**（DataTable 的 fill 区 / audit-logs 的滚动区），
+   * 此时内层 `overflow-x-auto` 会自成一个滚动上下文，导致 `position: sticky` 的
+   * 表头相对它定位、随内容一起滚走（实测：滚动 252px 后表头顶部从 256 变为 4）。
+   * 这些调用方必须传 `overflow-visible`，把滚动只留给外层。
+   */
+  containerClassName?: string;
+}) {
   return (
     <div
       data-slot="table-container"
-      className="relative w-full overflow-x-auto"
+      className={cn("relative w-full overflow-x-auto", containerClassName)}
     >
       <table
         data-slot="table"
@@ -57,7 +72,7 @@ function TableRow({ className, ...props }: React.ComponentProps<"tr">) {
     <tr
       data-slot="table-row"
       className={cn(
-        "h-12 border-b transition-colors hover:bg-muted/50 has-aria-expanded:bg-muted/50 data-[state=selected]:bg-muted",
+        "h-11 border-b transition-colors hover:bg-muted/40 has-aria-expanded:bg-muted/50 data-[state=selected]:bg-muted",
         className
       )}
       {...props}
@@ -70,7 +85,8 @@ function TableHead({ className, ...props }: React.ComponentProps<"th">) {
     <th
       data-slot="table-head"
       className={cn(
-        "h-10 px-4 text-left align-middle text-[10px] font-black uppercase tracking-widest whitespace-nowrap text-muted-foreground [&:has([role=checkbox])]:pr-0",
+        // 中文不适合 uppercase/超宽字距（此前 10px + tracking-widest 让"角色名称"变成散字）
+        "h-9 px-4 text-left align-middle text-xs font-medium whitespace-nowrap text-muted-foreground [&:has([role=checkbox])]:pr-0",
         className
       )}
       {...props}
@@ -83,7 +99,7 @@ function TableCell({ className, ...props }: React.ComponentProps<"td">) {
     <td
       data-slot="table-cell"
       className={cn(
-        "px-4 py-1 align-middle whitespace-nowrap [&:has([role=checkbox])]:pr-0",
+        "px-4 py-2 align-middle whitespace-nowrap [&:has([role=checkbox])]:pr-0",
         className
       )}
       {...props}

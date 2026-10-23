@@ -136,12 +136,14 @@ export default function RolesTable({ roles, pagination, initialKeyword, departme
     </Select>
   );
 
+  // 列宽/响应式：角色名是主信息占弹性宽度；编码、部门是辅助信息，窄屏逐级隐藏，
+  // 操作列固定宽度（三个图标按钮），避免 1024px 下操作列被挤到视野外。
   const columns = [
-    { key: 'name', header: '角色名称' },
-    { key: 'code', header: '编码' },
-    { key: 'dept', header: '所属部门' },
-    { key: 'status', header: '状态' },
-    { key: 'actions', header: '操作', className: 'text-right' },
+    { key: 'name', header: '角色名称', className: 'min-w-[240px]' },
+    { key: 'code', header: '编码', className: 'hidden w-[150px] md:table-cell' },
+    { key: 'dept', header: '所属部门', className: 'hidden w-[150px] lg:table-cell' },
+    { key: 'status', header: '状态', className: 'hidden w-[96px] sm:table-cell' },
+    { key: 'actions', header: '操作', className: 'w-[116px] text-right' },
   ];
 
   const cardHeader = (
@@ -158,51 +160,67 @@ export default function RolesTable({ roles, pagination, initialKeyword, departme
   );
 
   const renderRow = (r: RoleRow) => (
-    <TableRow key={r.id} className="hover:bg-muted/50">
+    <TableRow key={r.id}>
+      {/* 主信息：图标仅作视觉锚点（7×7/浅色底），名称 13px 半粗，描述 11px 单行。 */}
       <TableCell>
-        <div className="flex items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
-            <ShieldCheck className="h-4 w-4 text-primary" />
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary/10">
+            <ShieldCheck className="h-3.5 w-3.5 text-primary" />
           </div>
           <div className="flex min-w-0 flex-col leading-tight">
-            <div className="flex items-center gap-2">
-              <span className="max-w-[220px] truncate text-sm font-medium" title={r.name}>{r.name}</span>
-              {r.isSystem && <Badge variant="outline">系统</Badge>}
+            <div className="flex items-center gap-1.5">
+              <span className="max-w-[260px] truncate text-[13px] font-semibold text-foreground" title={r.name}>{r.name}</span>
+              {r.isSystem && (
+                <Badge variant="secondary" className="h-5 shrink-0 px-1.5 text-[10px] font-normal">系统</Badge>
+              )}
             </div>
             {r.description && (
-              <p className="line-clamp-1 text-xs leading-4 text-muted-foreground">{r.description}</p>
+              <p className="line-clamp-1 text-[11px] leading-4 text-muted-foreground" title={r.description}>{r.description}</p>
             )}
+            {/* <sm：状态列隐藏（空间优先给名称与操作），状态改用行内小徽章，信息不丢。 */}
+            <span className="mt-0.5 sm:hidden">
+              <Badge variant={enableStatus(r.status).variant} className="h-4 px-1 text-[10px]">{enableStatus(r.status).label}</Badge>
+            </span>
           </div>
         </div>
       </TableCell>
-      <TableCell><code className="rounded-md bg-muted px-2 py-0.5 text-xs">{r.code}</code></TableCell>
-      <TableCell><span className="block max-w-[160px] truncate text-xs text-muted-foreground">{getDeptName(r.deptId)}</span></TableCell>
-      <TableCell><Badge variant={enableStatus(r.status).variant}>{enableStatus(r.status).label}</Badge></TableCell>
+      <TableCell className="hidden md:table-cell">
+        <code className="inline-flex max-w-full items-center truncate rounded border border-border/70 bg-muted/60 px-1.5 py-0.5 font-mono text-[11px] text-foreground/80">
+          {r.code}
+        </code>
+      </TableCell>
+      <TableCell className="hidden lg:table-cell">
+        <span className="block max-w-[150px] truncate text-[13px] text-muted-foreground">{getDeptName(r.deptId)}</span>
+      </TableCell>
+      <TableCell className="hidden sm:table-cell">
+        <Badge variant={enableStatus(r.status).variant} className="text-[11px]">{enableStatus(r.status).label}</Badge>
+      </TableCell>
+      {/* 操作列：图标按钮 + 原生 title 提示，节省横宽；aria-label 保留完整语义（读屏/自动化不受影响）。 */}
       <TableCell className="text-right">
         {r.isSystem ? (
-          <span className="pr-2 text-xs text-muted-foreground">系统内置</span>
+          <span className="pr-1 text-[11px] text-muted-foreground">系统内置</span>
         ) : (
           <div className="flex items-center justify-end gap-0.5">
             <PermissionGuard permission={ROLE_PERMISSIONS.UPDATE}>
-              <Button variant="ghost" size="sm" className="h-8 gap-1.5 px-2" aria-label={`编辑角色 ${r.name}`} title={`编辑角色 ${r.name}`} onClick={() => openEdit(r)}>
-                <Edit className="h-4 w-4" /><span>编辑</span>
+              <Button variant="ghost" size="icon-sm" aria-label={`编辑角色 ${r.name}`} title={`编辑角色 ${r.name}`} onClick={() => openEdit(r)}>
+                <Edit className="h-4 w-4" />
               </Button>
             </PermissionGuard>
             <PermissionGuard permission={ROLE_PERMISSIONS.ASSIGN_PERMISSION}>
-              <Button variant="ghost" size="sm" className="h-8 gap-1.5 px-2" aria-label={`配置权限 ${r.name}`} title={`配置权限 ${r.name}`} onClick={() => setPermTarget(r)}>
-                <KeyRound className="h-4 w-4" /><span>配置权限</span>
+              <Button variant="ghost" size="icon-sm" aria-label={`配置权限 ${r.name}`} title={`配置权限 ${r.name}`} onClick={() => setPermTarget(r)}>
+                <KeyRound className="h-4 w-4" />
               </Button>
             </PermissionGuard>
             <PermissionGuard permission={ROLE_PERMISSIONS.DELETE}>
               <Button
                 variant="ghost"
-                size="sm"
+                size="icon-sm"
                 aria-label={`删除角色 ${r.name}`}
                 title={`删除角色 ${r.name}`}
-                className="h-8 gap-1.5 px-2 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                className="text-destructive hover:bg-destructive/10 hover:text-destructive"
                 onClick={() => setDeleteTarget(r)}
               >
-                <Trash2 className="h-4 w-4" /><span>删除</span>
+                <Trash2 className="h-4 w-4" />
               </Button>
             </PermissionGuard>
           </div>
@@ -215,7 +233,6 @@ export default function RolesTable({ roles, pagination, initialKeyword, departme
     <>
       <div className="flex min-h-0 flex-1 flex-col">
       <DataTable
-        fill
         columns={columns}
         data={roles}
         loading={isPending}

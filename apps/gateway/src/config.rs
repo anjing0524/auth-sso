@@ -1162,6 +1162,9 @@ mod tests {
     #[test]
     fn metrics_token_must_be_long_enough_when_configured() {
         let mut config = Config::default();
+        // 平台 TLS 构建（`--no-default-features`）会先因 EXTERNAL_TLS_TERMINATION 未开启而
+        // 提前 bail；显式开启外部 TLS 终结，让本测试在两种 feature 组合下都验证 metrics 规则。
+        config.gateway.external_tls_termination = true;
         config.gateway.metrics_token = Some("short".to_string());
         let err = validate_production_security(&config, Some("development"))
             .expect_err("过短的 metrics token 必须被拒绝");

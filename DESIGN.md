@@ -1,6 +1,6 @@
 # Auth-SSO 设计系统
 
-版本: v3.4
+版本: v3.5
 最后更新: 2026-10-23
 
 ---
@@ -147,8 +147,8 @@
 | sm | 13px | 20px | 表格、列表项 — 更紧凑 | `text-sm` = **14px** / 1.25rem |
 | base | 15px | 24px | 正文 — 比 16px 更现代 | 基类 = **16px** / 1.5rem |
 | lg | 17px | 28px | 副标题 | `text-lg` = 18px / 1.75rem |
-| xl | 21px | 28px | 卡片标题 | `text-xl` = 20px / 1.75rem |
-| 2xl | 27px | 36px | 页面标题 | `text-2xl` = 24px / 2rem（`PageHeader` 标题） |
+| xl | 21px | 28px | 卡片标题 / **页面标题（`PageHeader`，2026-10-23 起）** | `text-xl` = 20px / 1.75rem |
+| 2xl | 27px | 36px | 特大标题（当前未使用） | `text-2xl` = 24px / 2rem |
 | 3xl | 35px | 40px | 大标题 | `text-3xl` = 30px / 2.25rem |
 | 4xl | 45px | 52px | 登录页品牌名 | `text-4xl` = 36px / 2.5rem |
 
@@ -160,7 +160,7 @@
 | medium | 500 | 表格标题、按钮 |
 | semibold | 600 | 卡片标题、导航（`globals.css` 对 h1–h6 全局施加 `font-semibold`） |
 | bold | 700 | 页面标题、品牌名 |
-| black | 900 | 表头 / 分组标题（`font-black uppercase tracking-widest`，10px） |
+| black | 900 | 品牌名等强调；**表头自 2026-10-23 起为 `text-xs font-medium`**（中文禁用 `uppercase` + `tracking-widest`，会把汉字拆散） |
 
 ---
 
@@ -186,15 +186,15 @@
 
 | 元素 | 值 |
 |------|-----|
-| 页面内边距 | 16px (移动端 `p-4`) / 24px (桌面 `lg:p-6`)——`DashboardLayout` 的 `<main>` |
+| 页面内边距 | 16px (`p-4`) / 桌面 `lg:px-6 lg:py-4`——`DashboardLayout` 的 `<main>`（2026-10-23 起纵向也收紧到 16px，把高度还给表格） |
 | 卡片内边距 | 24px |
-| 卡片间距 | 24px (`gap-6`) |
+| 卡片间距 | 16px (`gap-4`) 页面级；卡片内 24px (`gap-6`) |
 | 表单字段间距 | 16px |
 | 按钮间距 | 12px (组内) / 24px (组间) |
-| 导航高度 | 64px (顶部 `h-16`) / 240px (侧边栏展开 `--sidebar-width: 16rem`)；折叠态 48px (`--sidebar-width-icon: 3rem`) |
+| 导航高度 | 56px (顶部 `h-14`，2026-10-23 由 64px 收紧) / 240px (侧边栏展开 `--sidebar-width: 16rem`)；折叠态 48px (`--sidebar-width-icon: 3rem`) |
 | 最大内容宽度 | 不设上限（管理后台 `main` 铺满，无 `max-w-[1440px]` 居中容器） / 400px (登录卡片 `max-w-[400px]`) |
 
-> **导航高度口径（现实现）**：`components/ui/sidebar.tsx` 的 `SidebarProvider` 用 `min-h-svh`，而 `LayoutDashboard` 外壳（`components/layout/DashboardLayout.tsx`）在它上面再加 `h-svh overflow-hidden`、`<main>` 用 `height: calc(100svh - 4rem)` 固定视口高度——**应用壳以这条更严格的口径为准**（见「布局与间距体系」）。
+> **导航高度口径（现实现）**：`components/ui/sidebar.tsx` 的 `SidebarProvider` 用 `min-h-svh`，而 `LayoutDashboard` 外壳（`components/layout/DashboardLayout.tsx`）在它上面再加 `h-svh overflow-hidden`、`<main>` 用 `height: calc(100svh - 3.5rem)` 固定视口高度——**应用壳以这条更严格的口径为准**（见「布局与间距体系」）。
 
 ---
 
@@ -342,16 +342,20 @@ DataTable 是共享表格组件，所有列表页统一使用。
 
 | 属性 | 值 |
 |------|-----|
-| 行高 | **48px 起（`TableRow` 基类 `h-12`）/ 多行自然增高**；同一表格内行高必须一致 |
-| 单元格内边距 | **`px-4 py-1`（上下 4px / 左右 16px）**；单行内容由此收敛在 48px 内，多行靠 `leading-tight` 自然增高 |
-| 表头高度 | **40px (`h-10`)** |
-| 表头字号 | 10px `font-black uppercase tracking-widest` |
+| 行高 | **44px 起（`TableRow` 基类 `h-11`）/ 双行文本自然增高约 52px**；同一表格内行高必须一致 |
+| 单元格内边距 | **`px-4 py-2`（上下 8px / 左右 16px）**（2026-10-23 统一；历史 `py-1`/`py-2`/`py-4` 三种口径作废） |
+| 表头高度 | **36px (`h-9`)** |
+| 表头字号 | **12px `text-xs font-medium`**；中文**禁止** `uppercase` / `tracking-widest`（会把每个汉字拆散成孤字） |
 | 表头颜色 | `text-muted-foreground` |
-| 表头背景 | `bg-muted/50`（`DataTable` 在 `TableHeader` 上加 `sticky top-0 z-10 bg-muted/50`） |
-| 数据行字号 | 14px (`text-sm`)；次要信息 12px (`text-xs`) |
-| 圆角 | 12px (`rounded-xl`) — 同 Card |
+| 表头背景 | `bg-card`（不透明，保证吸顶时遮挡下方行）；`sticky` 必须加在 **`th`** 上（`[&_th]:sticky [&_th]:top-0 [&_th]:z-20`），不要加在 `thead` 上 |
+| 数据行字号 | 13–14px（主信息 `text-[13px] font-semibold`；次要信息 11–12px） |
+| 圆角 | 12px (`rounded-xl`) — 同 Card；边框用 `border border-border/70`，**不要** `ring-1 ring-border/*`（该写法在本仓 Tailwind 配置下会落成 `currentColor` 黑描边） |
+| 卡片高度 | **随内容自适应**（不再 `flex-1` 撑满）：1–2 行数据时卡片贴合内容，空白交还页面背景；行多时滚动区由 `maxHeightClass` 限制 |
 
-> ⚠️ **`py` 口径存在三条互斥记录**：`Table` 基类现为 `py-1`（v2.6 变更日志「表格单元格 `py-1`」）、v2.4 变更日志写「py-2」、本节 + 「实现约定 → Table」写「py-4」。已按代码改为 `py-1`，三者对账见「规范 vs 实现：待治理清单」第 2 条。
+> **滚动容器契约（2026-10-23 修复「表格滑动表头消失」）**：列表页只允许**一个**滚动容器。
+> `Table` 的默认内层 `overflow-x-auto` 会自成滚动上下文，使 `sticky` 表头相对它定位、随外层内容滚走；
+> 因此列表页必须给 `Table` 传 `containerClassName="overflow-visible"`，由 `DataTable`/页面的外层
+> `overflow-auto` 同时承担横向与纵向滚动，`sticky` 加在 `th` 上。实测：修复后滚动 205px，表头仍钉在容器顶部。
 
 **行内操作按钮（必须可见）:**
 
@@ -376,22 +380,22 @@ DataTable 是共享表格组件，所有列表页统一使用。
 
 | 属性 | 值 |
 |------|-----|
-| 容器 | `border-b bg-muted/50 px-6 py-3`，与表格卡片同宽 |
+| 容器 | `border-b bg-muted/40 px-4 py-2.5`，与表格卡片同宽 |
 | 布局 | 左槽 = 搜索 + 筛选；右槽 = 统计 + 主操作；md 以上两端对齐，窄屏纵向堆叠（槽内 `gap-3`） |
-| 搜索框 | `SearchInput` 唯一实现：`w-full md:w-80` + 内置清空按钮（`aria-label="清空搜索"`）|
+| 搜索框 | `SearchInput` 唯一实现：`w-full md:w-72 h-9` + 内置清空按钮（`aria-label="清空搜索"`）|
 | 筛选器 | `SelectTrigger` 统一 `w-40`（现实现：`w-full md:w-40`，窄屏占满）；不得使用本页自绘搜索框/自绘清空按钮 |
-| 控件尺寸 | 工具条内 Input/Select/Button **全部 40px 高**（组件审计逐页断言）|
+| 控件尺寸 | 工具条内 Input/Select/Button **全部 36px 高（`h-9`）**；`TableToolbar` 用 `[&_button]:h-9` 强制，窄屏主操作按钮占满一行 |
 | 页签 | Tab/分段控件**不放进工具条**，独立成行（权限管理、审计日志同形态）|
 
 **分页器（"分页出现在滚动之后"是明确返工项）:**
 
 | 属性 | 值 |
 |------|-----|
-| 位置 | 表格卡片底部，`-mt-px` 与卡片贴合，`bg-muted/50` 背景 |
+| 位置 | 表格卡片底部，`-mt-px` 与卡片贴合，`bg-muted/40` 背景 |
 | 首屏可见 | 列表页分页必须**无需滚动页面**即可看到：页面高度 ≤ 视口高度 |
-| 表格滚动 | 列表页用 `DataTable fill` 模式（卡片 `flex min-h-0 flex-1`，表格区 `overflow-auto` 内部滚动）；未传 `fill` 时退回 `max-h-[calc(100vh-21rem)]`（`DataTable` 的 `maxHeightClass` 默认值） |
-| 吸顶表头 | 滚动容器内 `TableHeader` 必须 `sticky top-0 z-10`，滚动时列头不丢 |
-| 页码按钮 | `h-8 min-w-8 rounded-lg px-2`；当前页 `border border-border bg-card font-bold shadow-sm` |
+| 表格滚动 | 卡片高度随内容自适应；表格区 `max-h-[calc(100svh-17rem)] overflow-auto`（`DataTable` 默认 `maxHeightClass`；审计页用 `-19rem` 预留页签/筛选行）——行少不撑空、行多内部滚动 |
+| 吸顶表头 | 滚动容器内 **`th`** 必须 `sticky top-0 z-20 bg-card`，配合 `Table containerClassName="overflow-visible"`；滚动时列头不丢（含横向滚动） |
+| 页码按钮 | `h-8 min-w-8 rounded-lg px-2`；当前页 `border border-border bg-card font-bold shadow-sm`；**仅 1 页时隐藏全部翻页/跳页控件**（保留「共 N 条记录」） |
 | 页码指示器 | `bg-card border border-border rounded-lg` |
 
 ### 按钮圆角（全局统一）
@@ -478,7 +482,7 @@ DataTable 是共享表格组件，所有列表页统一使用。
 |---|---|
 | Card | 12px 圆角；内边距 24px（`py-6` + `CardHeader/CardContent px-6`）；表格卡用 `CardContent p-0` 例外 |
 | Dialog | 宽 448px（`sm:max-w-md`；窄屏 `max-w-[calc(100%-2rem)]`）、16px 圆角、24px 内边距（`p-6`）；`DialogFooter` 由基类提供「上边框 + `bg-muted/50` + 右对齐按钮」；**页面不再覆写宽度/圆角/内边距** |
-| Table | 表头 40px（`h-10`）、10px `font-black uppercase tracking-widest text-muted-foreground`；单元格 `px-4 py-1`（单行收敛在 48px 的 `h-12` 行高内，多行自然增高）；行内操作 32×32；分页统一用 `components/shared/table-pagination.tsx` |
+| Table | 表头 36px（`h-9`）、12px `font-medium text-muted-foreground`（中文不用 uppercase）；单元格 `px-4 py-2`，行高 `h-11` 起；滚动容器契约见「数据表格」；行内操作 32×32；分页统一用 `components/shared/table-pagination.tsx` |
 | PageHeader | `text-2xl`(24px)/700 标题 + `text-sm` 描述 + 右侧操作（操作按钮 40px）；图标底 40×40 `rounded-xl bg-primary/10 text-primary` |
 | Toast | sonner，**全局挂在 `app/layout.tsx`：`position="top-right" richColors`**；不逐页定制位置/宽度 |
 
@@ -555,11 +559,11 @@ DataTable 是共享表格组件，所有列表页统一使用。
 **布局与间距体系（2026-10-21 设计打磨）**
 
 - **应用壳固定视口高度**：`components/layout/DashboardLayout.tsx` 的 `SidebarProvider` 加 `h-svh overflow-hidden`，
-  `<main id="main-content">` 用 `height: calc(100svh - 4rem)`（顶栏 64px）+ `overflow-hidden`，其内层
+  `<main id="main-content">` 用 `height: calc(100svh - 3.5rem)`（顶栏 56px）+ `overflow-hidden`，其内层
   `div.flex-1.overflow-auto` 是唯一滚动容器；`components/ui/sidebar.tsx` 基类自身只有 `min-h-svh`，**不要**只依赖它。
 - **列表页填满主内容区**：wrapper `flex min-h-0 flex-1 flex-col gap-6`；`DataTable fill` 模式（卡片 `flex min-h-0 flex-1`
   + 表格区 `min-h-0 flex-1 overflow-auto`、表头 sticky、分页接在卡片底部）。
-  例外：`DataTable` 未传 `fill` 时用默认 `maxHeightClass = 'max-h-[calc(100vh-21rem)]'`——这是基类默认值，不是页面估算；
+  例外：`DataTable` 统一用默认 `maxHeightClass = 'max-h-[calc(100svh-17rem)]'`（审计页 `-19rem`）——卡片高度自适应，只有表格区限高滚动；
   `max-h-[calc(100vh-30rem)]` / `calc(100vh-25rem)` 这类按页估算高度**禁止**。
 - **详情页主操作放 PageHeader 右侧**（保存=主按钮，禁用/危险切换=outline 危险色）；主操作不得落在首屏之外。
 - **间距只有六档**：4 / 8 / 12 / 16 / 24 / 32 px。区块间距 24、卡片内边距 24、栅格间距 24；
@@ -675,9 +679,9 @@ DataTable 是共享表格组件，所有列表页统一使用。
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│ 顶栏 header (64px, h-16)：折叠按钮 │ 面包屑      ⌘K 提示  │
+│ 顶栏 header (56px, h-14)：折叠按钮 │ 面包屑      ⌘K 提示  │
 ├──────────┬──────────────────────────────────────────────┤
-│          │ ← main: calc(100svh - 4rem)，内层唯一滚动区    │
+│          │ ← main: calc(100svh - 3.5rem)，内层唯一滚动区   │
 │ 侧边栏   │   PageHeader（图标+标题+描述+右侧操作）        │
 │ (240px)  │                                              │
 │ 可折叠    │  ┌──────────┐ ┌──────────┐ ┌──────────┐      │
@@ -691,7 +695,7 @@ DataTable 是共享表格组件，所有列表页统一使用。
 └──────────┴──────────────────────────────────────────────┘
 ```
 
-- 顶栏 (64px, `h-16`) + 侧边栏 (240px = `--sidebar-width: 16rem`，可折叠为 48px 图标条) + 工作区
+- 顶栏 (56px, `h-14`) + 侧边栏 (240px = `--sidebar-width: 16rem`，可折叠为 48px 图标条) + 工作区
 - 工作区**不设最大宽度**（`main` 铺满剩余空间；旧规范写的 1440px 在代码中不存在）
 - 侧边栏菜单由 `ROUTE_ACCESS` + 动态菜单树驱动，固定首项「工作台」；顶栏右侧是 `⌘K` 命令面板提示
 - 数据密度优先
@@ -846,8 +850,8 @@ WITH RECURSIVE sub_depts AS (
 | # | 冲突点 | 规范怎么说 | 代码实际怎样 | 证据 | 建议处置 |
 |---|---|---|---|---|---|
 | 1 | 品牌蓝按钮 token | `globals.css` 注释称品牌蓝要用 `bg-color-primary` / `text-color-primary` | 全仓**没有任何一处**使用 `bg-color-primary`；`Button default` 是 `bg-primary`（shadcn 前景色，近黑）；`app/oauth/error/page.tsx` 用 `bg-primary hover:bg-primary-hover` 才显蓝（靠 `--color-primary` 覆盖 shadcn 映射） | `grep -rn bg-color-primary apps/portal/src` 无结果；`components/ui/button.tsx`；`globals.css` vs `:213` | **需决策**：要么规范改口"品牌蓝按钮 = `bg-primary`（并核对 `@theme inline` 里 `--color-primary` 的映射意图）"，要么给 `Button` 加品牌变体并清掉 `globals.css` 的误导性注释 |
-| 2 | 表格单元格 `py` | 本节原写 `py-4`（已按代码改为 `py-1`）；v2.4 变更日志写「py-4→py-2」 | `Table` 基类实际 `px-4 py-1` | `components/ui/table.tsx` 的 `TableCell`；v2.6 变更日志亦记 `py-1` | 三方对齐：以 `py-1` 为准（历史日志不改）；若视觉上偏紧走设计评审 |
-| 3 | 行内操作按钮文案 | 「行内操作、分页、复制等操作按钮**必须有可见中文文字**」 | 表格行内操作仍是纯图标按钮（`size="icon-sm"` + `aria-label`/`title`）；`SearchInput` 清空、`PageHeader` 返回、分页首/末页也都是纯图标 | `components/shared/table-pagination.tsx`（首页/末页仅图标）、`components/shared/page-header.tsx`（返回箭头） | **需决策**：v2.8 把「行内操作补中文文字」记为完成项，但代码仍是图标；建议明确"行内操作 = 图标 + aria-label 可接受"或以实测截图复核 |
+| 2 | 表格单元格 `py` | 表格规范统一为 `px-4 py-2` | `Table` 基类 `px-4 py-2`，行高 `h-11` 起 | `components/ui/table.tsx` | ✅ 2026-10-23 已决策：三处口径统一为 `py-2`，历史变更日志保留不追改 |
+| 3 | 行内操作按钮文案 | 「行内操作、分页、复制等操作按钮**必须有可见中文文字**」 | 表格行内操作为图标按钮（`size="icon-sm"` + `aria-label`/`title`）；角色页 2026-10-23 收敛为 3 个图标按钮（此前"编辑/配置权限/删除"文字按钮占满横宽、把操作列挤出视野） | `components/shared/table-pagination.tsx`、`components/shared/page-header.tsx`、`(dashboard)/roles/components/RolesTable.tsx` | ✅ 2026-10-23 已决策：**行内操作 = 图标 + `aria-label`/`title` 可接受**；分页在 ≤7 页时隐藏首/末页，单页时隐藏整套翻页控件 |
 | 4 | 间距六档与 `p-8` 孤例 | 「间距只有 4/8/12/16/24/32 六档；禁止 `gap-8`、`px-8`、`p-8`、`pt-8` 孤例（错误页统一 `pt-6`）」 | 7 个 `error.tsx`/`not-found.tsx` 仍用 `p-8`；`dashboard/loading.tsx` 用 `p-8 pt-6`；`profile` 有 `lg:p-8`；`oauth/error` 有 `lg:px-8` | `app/not-found.tsx`、`app/(dashboard)/*/error.tsx`、`app/(dashboard)/dashboard/loading.tsx` | 建议按规范改代码（统一 `p-6` / 错误页 `pt-6`），或把「错误页/全屏页可用 32px」写进规范 |
 | 5 | 圆角 token 用途分工 | 「圆角 token 映射」把 `rounded-md` 标为「按钮 / 输入框」，`rounded-lg` 标为「表单控件（基类统一用它）」 | `Button` 用 `rounded-md`，`Input`/`Select`/`Textarea` 用 `rounded-lg`；两者计算值都是 8px，但同一行里"输入框"与"表单控件统一用 lg"两种说法并存 | `components/ui/button.tsx`、`components/ui/input.tsx` | 建议统一为「按钮 `rounded-md`、表单控件 `rounded-lg`、两者计算值 8px」；用途列已按此改写，分工描述待评审定型 |
 | 6 | `DropdownMenu` 面板圆角 | 「面板 12px 圆角 `p-1`」 | `DropdownMenuContent` 是 `rounded-md`(8px)，只有 `SubContent` 是 `rounded-xl`(12px) | `components/ui/dropdown-menu.tsx` | 二选一：改基类为 `rounded-xl`，或规范改为"面板 8px、子菜单 12px" |
@@ -862,6 +866,7 @@ WITH RECURSIVE sub_depts AS (
 
 | 日期 | 版本 | 变更 |
 |------|------|------|
+| 2026-10-23 | v3.5 | **UI 密度与滚动可用性重做（用户实测反馈：主体表格显小、字号/间距失衡、横向滚动后表头消失）**：①**主次层级**——页头标题 24→20px、图标 40→36px、描述 14→13px；顶栏 64→56px；页面级间距 24→16px、main 纵向 padding 收紧；列表表格成为视觉主体。②**密度**——行高 48→44px 起、单元格 `py-2`、表头 40→36px 且字号 10px `font-black uppercase tracking-widest` → 12px `font-medium`（中文不再被拆散）；工具条控件 40→36px、搜索框 320→288px；角色页操作列三家文字按钮收敛为 3 个图标按钮（`aria-label`+`title`）。③**滚动 bug 修复**——根因是 `Table` 内层 `overflow-x-auto` 自成滚动上下文，`thead sticky` 相对它定位、外层滚动时表头随内容滚走（实测滚动 205px 后表头从容器顶 219px 漂到 14px）；现列表页只保留**一个**滚动容器（`Table containerClassName="overflow-visible"` + `th` 上 `sticky top-0 z-20 bg-card`），横向/纵向滚动表头都钉住（实测 thTop 恒定 219px）。④**卡片高度**——取消 `fill` 强制撑满，改随内容自适应 + 表格区 `max-h-[calc(100svh-17rem)]`，1–2 行数据不再出现整屏空白卡片（实测 1 行卡片 220px）。⑤**分页收敛**——`totalPages<=1` 时隐藏整套翻页/跳页控件只保留总数；≤7 页隐藏首/末页按钮。⑥**描边修正**——`ring-1 ring-border/*` 在本仓 Tailwind 配置下落到 `currentColor` 生成近黑 1px 描边，列表卡片统一改为 `border border-border/70`。⑦**响应式**——390px 下操作列不再被裁切（状态列 <sm 隐藏并在名称下补行内徽章，操作列 116px），主操作按钮占满一行；1024/1440 无横向溢出。 |
 | 2026-10-23 | v3.4 | **按代码校正轮（本文件与实现对齐）**：①路径全部可解析——`globals.css` → `apps/portal/src/app/globals.css`、`scripts/stack.sh` → `scripts/docker/stack.sh`、`scripts/bench-gateway.mjs` → `scripts/bench/gateway.mjs`、`scripts/deploy.sh` → `scripts/docker/deploy.sh`、`DOCKER.md` → `docker/README.md`、`login/login-background.tsx` → `apps/portal/src/app/login/login-background.tsx`、`public/fonts` 补全为 `apps/portal/public/fonts`；`.ui-audit/component-audit.mjs` + `component-score.mjs` 明确标注为本地未入库一次性产物。②token 与 `globals.css` 逐条对账：补 `--color-primary` 暗色值、`--color-error` 别名说明、`--badge-*`、租户变量、圆角四档实际映射、三条 `--ease-*`（无 `--duration-*`）。③字体加载改为实测的 `next/font/local` + `public/fonts/*.woff2`（原 Google Fonts `<link>` 写法违反"构建离线可复现"）。④组件规范按基类改写：按钮 size/variant、输入框状态 token、Card ring、Table `py-1`/表头 40px、EmptyState 三态、Tab/Dialog/PageHeader/Toast、Alert 与 Badge 的 hex 表全部换成 token 表。⑤架构章节 1–4 保留历史图但补现行实现（`/api/auth/oauth2/authorize`、`permissions.client_id`、`ancestors` 物化路径、服务端鉴权、`buildTree` 孤儿升顶）。⑥新增「规范 vs 实现：待治理清单」10 条，不静默改规范。 |
 | 2026-10-22 | v3.3 | **收口轮**：①权限删除影响面（递归 CTE 统计角色/用户/后代 + 弹窗按需展示 + API 测试 3 例）；②`scripts/docker/stack.sh e2e` 跑全部 e2e spec，新增已提交的 SSR 权限快照/网关 healthz 回归（3/3）；③补充影响面与边界回归规范。 |
 | 2026-10-22 | v3.2 | **边界与交付轮**：①权限快照服务端→客户端单次传递，后台 `/api/me/permissions` 请求归零、受保护按钮进入 SSR HTML（首帧不再隐藏）；②权限读取与操作权限匹配（`/api/roles`、`/api/users/:id/roles` 接受 assign_role）；③Gateway 新增 `/healthz` 存活探针 + `scripts/bench/gateway.mjs` 基准（healthz p50≈16.75ms、静态≈13.34ms @300/30）；④生产 Compose 修复：PostgreSQL 不再发布宿主端口、新增 db-init、Redis/Portal healthcheck、Gateway 等 Portal healthy；⑤新增 `scripts/docker/deploy.sh` 一键部署/校验/回滚，`docker/README.md` 同步。 |

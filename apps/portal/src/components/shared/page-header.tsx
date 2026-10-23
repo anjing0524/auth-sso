@@ -35,7 +35,7 @@ export function PageHeader({
   className,
 }: PageHeaderProps) {
   return (
-    <div className={cn('flex flex-col gap-4 md:flex-row md:items-center md:justify-between', className)}>
+    <div className={cn('flex flex-col gap-3 md:flex-row md:items-center md:justify-between', className)}>
       <div className="flex min-w-0 items-center gap-3">
         {backHref ? (
           <a
@@ -48,16 +48,16 @@ export function PageHeader({
             </svg>
           </a>
         ) : icon ? (
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-            <DynamicIcon name={icon} className="h-5 w-5" />
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+            <DynamicIcon name={icon} className="h-4.5 w-4.5" />
           </span>
         ) : null}
-        <div className="min-w-0 space-y-1">
-          <h1 className="truncate text-2xl font-bold tracking-tight text-foreground">{title}</h1>
-          {description ? <p className="text-sm text-muted-foreground">{description}</p> : null}
+        <div className="min-w-0 space-y-0.5">
+          <h1 className="truncate text-xl font-semibold tracking-tight text-foreground">{title}</h1>
+          {description ? <p className="truncate text-[13px] leading-5 text-muted-foreground">{description}</p> : null}
         </div>
       </div>
-      {actions ? <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div> : null}
+      {actions ? <div className="flex shrink-0 flex-wrap items-center gap-2 [&_a]:h-9 [&_button]:h-9 [&_a]:px-3 [&_button]:px-3">{actions}</div> : null}
     </div>
   );
 }

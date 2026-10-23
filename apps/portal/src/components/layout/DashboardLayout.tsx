@@ -81,7 +81,7 @@ export default function DashboardLayout({
       <AppSidebar user={user} dynamicMenus={menus} />
       <CommandPalette menus={menus} />
       <SidebarInset>
-        <header className="flex h-16 shrink-0 items-center gap-2 border-b bg-background px-6 sticky top-0 z-10">
+        <header className="flex h-14 shrink-0 items-center gap-2 border-b bg-background px-5 sticky top-0 z-10">
           <SidebarTrigger className="-ml-1" />
           <Separator orientation="vertical" className="mr-2 h-4" />
           <Breadcrumb>
@@ -108,10 +108,10 @@ export default function DashboardLayout({
             </kbd>
           </div>
         </header>
-        <main id="main-content" className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-muted/30 p-4 lg:p-6" style={{ height: 'calc(100svh - 4rem)' }}>
+        <main id="main-content" className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-muted/30 p-4 lg:px-6 lg:py-4" style={{ height: 'calc(100svh - 3.5rem)' }}>
           {/* 主内容区自身是滚动容器：列表页 flex-1 填满可视高度（表格内部滚动、分页固定在底部），
               详情页/工作台内容超出时在同一个容器内滚动 */}
-          <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-auto">
+          <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto">
             {children}
           </div>
         </main>

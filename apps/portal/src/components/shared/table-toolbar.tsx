@@ -25,9 +25,9 @@ export function TableToolbar({
   className?: string;
 }) {
   return (
-    <div className={cn('flex flex-col gap-3 border-b bg-muted/50 px-6 py-3 md:flex-row md:items-center md:justify-between', className)}>
+    <div className={cn('flex flex-col gap-3 border-b bg-muted/40 px-4 py-2.5 md:flex-row md:items-center md:justify-between', className)}>
       <div className="flex w-full flex-col gap-3 md:w-auto md:flex-row md:items-center">{left}</div>
-      {right ? <div className="flex w-full items-center justify-between gap-3 md:w-auto md:justify-end">{right}</div> : null}
+      {right ? <div className="flex w-full items-center justify-between gap-2 md:w-auto md:justify-end [&_button]:h-9 [&_button]:px-3 [&_button]:max-md:w-full">{right}</div> : null}
     </div>
   );
 }

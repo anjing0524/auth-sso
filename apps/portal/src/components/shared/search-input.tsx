@@ -18,7 +18,7 @@ interface SearchInputProps {
 
 export function SearchInput({ value, onChange, placeholder, className }: SearchInputProps) {
   return (
-    <div className={cn('relative w-full md:w-80', className)}>
+    <div className={cn('relative w-full md:w-72', className)}>
       <Search
         aria-hidden="true"
         className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/60"
@@ -28,7 +28,7 @@ export function SearchInput({ value, onChange, placeholder, className }: SearchI
         placeholder={placeholder}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="pl-9 pr-9"
+        className="h-9 pl-9 pr-9"
       />
       {value ? (
         <button

@@ -90,7 +90,7 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
       : await getAuditLogs({ page, pageSize: PAGE_SIZE, ...(operation ? { operation } : {}) });
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-6">
+    <div className="flex min-h-0 flex-1 flex-col gap-4">
       <PageHeader
         icon="ShieldAlert"
         title="审计日志"
@@ -128,11 +128,11 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
       {/* 日志列表（U-LOG02：页签内容与 role=tablist 关联） */}
       <div id="audit-tabpanel" role="tabpanel" aria-labelledby={`audit-tab-${tab}`} className="flex min-h-0 flex-1 flex-col">
       {tab === 'login' ? (
-        <Card className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border-none shadow-sm ring-1 ring-border/50">
-          <CardContent className="flex min-h-0 flex-1 flex-col p-0">
-            <div className="min-h-0 flex-1 overflow-auto">
-            <Table>
-              <TableHeader className="sticky top-0 z-10 bg-muted/50">
+        <Card className="overflow-hidden rounded-xl border border-border/70 shadow-sm ring-0">
+          <CardContent className="p-0">
+            <div className="max-h-[calc(100svh-19rem)] overflow-auto">
+            <Table containerClassName="overflow-visible">
+              <TableHeader className="[&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:bg-card">
                 <TableRow>
                   <TableHead>时间</TableHead>
                   <TableHead>用户</TableHead>
@@ -203,11 +203,11 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
           </CardContent>
         </Card>
       ) : (
-        <Card className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border-none shadow-sm ring-1 ring-border/50">
-          <CardContent className="flex min-h-0 flex-1 flex-col p-0">
-            <div className="min-h-0 flex-1 overflow-auto">
-            <Table>
-              <TableHeader className="sticky top-0 z-10 bg-muted/50">
+        <Card className="overflow-hidden rounded-xl border border-border/70 shadow-sm ring-0">
+          <CardContent className="p-0">
+            <div className="max-h-[calc(100svh-19rem)] overflow-auto">
+            <Table containerClassName="overflow-visible">
+              <TableHeader className="[&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:bg-card">
                 <TableRow>
                   <TableHead>时间</TableHead>
                   <TableHead>操作人</TableHead>

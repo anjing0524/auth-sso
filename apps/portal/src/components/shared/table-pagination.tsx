@@ -120,15 +120,29 @@ export function TablePagination({
     );
   };
 
+  // 只有一页时隐藏整套翻页控件：2 条记录却摆 6 个按钮 + 跳页输入，是"控件比数据还重"。
+  // 保留总数文案（用户仍需要知道规模），多页时保持全部功能。
+  if (pages <= 1) {
+    return (
+      <div className="-mt-px flex items-center rounded-b-xl border-t bg-muted/40 px-4 py-2.5 sm:px-6">
+        <p className="text-xs text-muted-foreground">
+          共 <span className="font-semibold tabular-nums text-foreground">{total}</span> 条记录
+        </p>
+      </div>
+    );
+  }
+
   return (
-    <div className="-mt-px flex flex-col gap-2 rounded-b-xl border-t bg-muted/50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-      <p className="text-xs font-medium text-muted-foreground">
-        共 <span className="font-semibold text-foreground">{total}</span> 条记录
+    <div className="-mt-px flex flex-col gap-2 rounded-b-xl border-t bg-muted/40 px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+      <p className="text-xs text-muted-foreground">
+        共 <span className="font-semibold tabular-nums text-foreground">{total}</span> 条记录
       </p>
       <div className="flex flex-wrap items-center gap-1.5">
-        <NavButton label="首页" to={hrefFor?.(1)} disabled={page <= 1} onClick={onPageChange ? () => onPageChange(1) : undefined}>
-          <ChevronsLeft className="h-3.5 w-3.5" />
-        </NavButton>
+        {pages > 7 ? (
+          <NavButton label="首页" to={hrefFor?.(1)} disabled={page <= 1} onClick={onPageChange ? () => onPageChange(1) : undefined}>
+            <ChevronsLeft className="h-3.5 w-3.5" />
+          </NavButton>
+        ) : null}
         <NavButton label="上一页" to={prevTo} disabled={page <= 1} onClick={onPageChange ? () => onPageChange(page - 1) : undefined}>
           <ChevronLeft className="h-3.5 w-3.5" />
           <span className="hidden text-xs sm:inline">上一页</span>
@@ -147,9 +161,11 @@ export function TablePagination({
           <span className="hidden text-xs sm:inline">下一页</span>
           <ChevronRight className="h-3.5 w-3.5" />
         </NavButton>
-        <NavButton label="末页" to={hrefFor?.(pages)} disabled={page >= pages} onClick={onPageChange ? () => onPageChange(pages) : undefined}>
-          <ChevronsRight className="h-3.5 w-3.5" />
-        </NavButton>
+        {pages > 7 ? (
+          <NavButton label="末页" to={hrefFor?.(pages)} disabled={page >= pages} onClick={onPageChange ? () => onPageChange(pages) : undefined}>
+            <ChevronsRight className="h-3.5 w-3.5" />
+          </NavButton>
+        ) : null}
 
         {onPageChange ? (
           <PaginationJump totalPages={pages} onPageChange={onPageChange} />

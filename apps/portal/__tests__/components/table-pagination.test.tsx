@@ -110,3 +110,18 @@ describe('TablePagination 服务端模式（GET form 跳页）', () => {
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
 });
+
+/**
+ * 2026-10-23 UI 重做：只有一页时不再摆齐全套翻页控件（用户反馈"2 条记录 6 个按钮"）。
+ * 合集仍是分页条的一部分，因此总数文案必须保留，翻页/跳页入口必须消失。
+ */
+describe('TablePagination 单页收敛', () => {
+  it('totalPages<=1 时只显示总数，不渲染任何翻页/跳页控件', () => {
+    render(<TablePagination page={1} totalPages={1} total={2} onPageChange={vi.fn()} />);
+    expect(screen.getByText(/共/)).toHaveTextContent('共 2 条记录');
+    for (const name of ['首页', '上一页', '下一页', '末页', '跳转']) {
+      expect(screen.queryByRole('button', { name })).not.toBeInTheDocument();
+    }
+    expect(screen.queryByLabelText('跳至页码')).not.toBeInTheDocument();
+  });
+});

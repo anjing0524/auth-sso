@@ -343,7 +343,6 @@ export default function PermissionsTable({ permissions, pagination, activeTab, i
       <div className="shrink-0">{tabsBar}</div>
       <div className="flex min-h-0 flex-1 flex-col">
       <DataTable
-        fill
         columns={columns}
         data={permissions}
         loading={isPending}

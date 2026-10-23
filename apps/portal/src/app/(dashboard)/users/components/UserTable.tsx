@@ -263,7 +263,6 @@ export default function UserTable({ users, pagination, filters, isFiltered = fal
   return (<>
     <div className="flex min-h-0 flex-1 flex-col">
     <DataTable
-      fill
       columns={columns}
       data={optimisticUsers}
       emptyState={
