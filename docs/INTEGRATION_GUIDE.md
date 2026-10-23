@@ -13,8 +13,8 @@ Browser → Gateway (:19443 本地 / :443 Docker) → Portal (:4100)  [OIDC Prov
 
 ## 前提条件
 
-Docker 运行中即可——PG 16 + Redis 7 + Portal + Gateway 都由 `docker-compose.test.yml` 提供，
-与 CI / 生产同形态（host `pnpm dev` 入口已移除，原因见 `DOCKER.md` §7.5）。
+Docker 运行中即可——PG 16 + Redis 7 + Portal + Gateway 都由 `docker/compose.test.yml` 提供，
+与 CI / 生产同形态（host `pnpm dev` 入口已移除，原因见 `docker/README.md` §7.5）。
 
 ## 第一步：构建并启动验收栈
 
@@ -53,7 +53,7 @@ pnpm db:seed      # 种子账号 admin@example.com / Admin@123456
 pnpm test:e2e
 ```
 
-该命令会构建镜像、拉起 `docker-compose.test.yml` 的发布拓扑
+该命令会构建镜像、拉起 `docker/compose.test.yml` 的发布拓扑
 （`postgres`/`redis`/`cert-init`/`db-init`/`portal`/`gateway`），执行经 Gateway 的浏览器闭环
 （登录 → OAuth 回调 → 会话下发 → 登出），跑完自动清理。
 
@@ -104,7 +104,7 @@ public_paths = ["/demo/landing"]
 
 ## 验证检查清单
 
-> `https://localhost:19443` 的本地/发布 E2E 证书是仅含 loopback SAN 的临时自签证书。生产环境不复用该证书，统一由 `docker-compose.prod.yml` 中 Gateway 的 Rust 内建 ACME 客户端签发和续期 Let's Encrypt 证书，详见根目录 `DOCKER.md`。
+> `https://localhost:19443` 的本地/发布 E2E 证书是仅含 loopback SAN 的临时自签证书。生产环境不复用该证书，统一由 `docker/compose.prod.yml` 中 Gateway 的 Rust 内建 ACME 客户端签发和续期 Let's Encrypt 证书，详见根目录 `docker/README.md`。
 
 | # | 检查项 | 预期结果 |
 |---|--------|---------|

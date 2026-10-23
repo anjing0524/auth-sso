@@ -9,8 +9,11 @@
 #     **本脚本对 cancelled 与失败一律非零退出（fail-closed）**，只在输出里**说明**它可能是被取代、
 #     并提示"对最新提交重跑"——不假装成功，也不假装失败。
 #
-# 用法：scripts/ci-verify.sh [sha]（默认 HEAD）；等待上限用 MAX_WAIT_SECONDS 覆盖。
+# 用法：scripts/ci/verify.sh [sha]（默认 HEAD）；等待上限用 MAX_WAIT_SECONDS 覆盖。
 set -uo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+cd "$ROOT"
 
 SHA="${1:-HEAD}"
 FULL="$(git rev-parse "$SHA")"

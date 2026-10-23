@@ -9,7 +9,7 @@
  *   /_next/static/*.js     静态资源（网关 Static 分类直接放行 + immutable 缓存）
  *
  * 用法：
- *   node scripts/bench-gateway.mjs [--url https://127.0.0.1:19443] [--n 200] [--c 20]
+ *   node scripts/bench/gateway.mjs [--url https://127.0.0.1:19443] [--n 200] [--c 20]
  *
  * 说明：Node fetch 走 HTTP/1.1；网关对浏览器协商 HTTP/2 已在 curl 验收中确认。
  * 自签证书环境脚本内部关闭证书校验（仅基准用途）。

@@ -2,10 +2,10 @@
 # Auth-SSO 开发环境 Docker Compose 配置
 # ============================================
 # 使用方法：
-#   启动服务: docker-compose up -d
-#   停止服务: docker-compose down
-#   查看日志: docker-compose logs -f
-#   重置数据: docker-compose down -v
+#   启动服务: docker compose -f docker/compose.yml up -d
+#   停止服务: docker compose -f docker/compose.yml down
+#   查看日志: docker compose -f docker/compose.yml logs -f
+#   重置数据: docker compose -f docker/compose.yml down -v
 # ============================================
 
 services:
@@ -24,7 +24,7 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./docker/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s

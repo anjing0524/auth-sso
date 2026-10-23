@@ -423,7 +423,7 @@ DataTable 是共享表格组件，所有列表页统一使用。
   （如 `/api/roles` 接受 `role:list` 或 `user:assign_role`），不要逼操作员额外持有无关的管理权限。
 - **破坏性操作必须显示影响面**：级联删除（如权限删除）的确认弹窗要按需读取并展示受影响角色/用户/
   子节点数量；影响面加载失败不得阻断操作，但必须在弹窗中说明“影响未知”。
-- **发布验收包含边界回归**：`scripts/stack.sh e2e` 运行 `tests/e2e` 全部 spec；新增的服务端/客户端
+- **发布验收包含边界回归**：`scripts/docker/stack.sh e2e` 运行 `tests/e2e` 全部 spec；新增的服务端/客户端
   边界行为（如权限快照零请求、SSR 按钮）必须有 E2E 或单测钉住。
 
 **生产交付规则（2026-10-22）**
@@ -431,10 +431,10 @@ DataTable 是共享表格组件，所有列表页统一使用。
 - 生产 Compose **不得向宿主机发布** PostgreSQL/Redis 端口；数据库仅 Compose 内网可达。
 - 迁移 + seed 必须由一次性 `db-init` 服务在应用启动前完成（幂等），Portal 通过
   `depends_on: service_completed_successfully` 等待；Portal/Gateway 必须有健康检查与启动依赖。
-- 部署统一走 `scripts/deploy.sh`（`--check` / 默认 / `--no-build` / `--status` / `--down` / `--rollback`）；
+- 部署统一走 `scripts/docker/deploy.sh`（`--check` / 默认 / `--no-build` / `--status` / `--down` / `--rollback`）；
   脚本失败必须退出非 0 并打印日志，不得静默成功；`--rollback` 只回镜像，数据库回退需显式备份恢复。
 - Gateway 提供 `/healthz` 自身存活探针（不查 Redis、不访问 Portal），部署脚本先等它再等 `/login`；
-  可复现基准：`node scripts/bench-gateway.mjs`。
+  可复现基准：`node scripts/bench/gateway.mjs`。
 
 **权限模型规则（2026-10-21 权限设计审计）**
 

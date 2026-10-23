@@ -8,7 +8,7 @@ services:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: auth_sso
     volumes:
-      - ./docker/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d auth_sso"]
       interval: 5s
@@ -25,8 +25,8 @@ services:
 
   node-test:
     build:
-      context: .
-      dockerfile: apps/portal/Dockerfile
+      context: ..
+      dockerfile: docker/portal.Dockerfile
       target: workspace
       args:
         NEXT_PUBLIC_APP_URL: http://portal:4100
@@ -46,8 +46,8 @@ services:
 
   cert-init:
     build:
-      context: .
-      dockerfile: apps/gateway/Dockerfile
+      context: ..
+      dockerfile: docker/gateway.Dockerfile
       target: cert-init
     command:
       - sh
@@ -64,8 +64,8 @@ services:
 
   db-init:
     build:
-      context: .
-      dockerfile: apps/portal/Dockerfile
+      context: ..
+      dockerfile: docker/portal.Dockerfile
       target: builder
       args:
         NEXT_PUBLIC_APP_URL: https://127.0.0.1:19443
@@ -83,8 +83,8 @@ services:
 
   portal:
     build:
-      context: .
-      dockerfile: apps/portal/Dockerfile
+      context: ..
+      dockerfile: docker/portal.Dockerfile
       args:
         NEXT_PUBLIC_APP_URL: https://127.0.0.1:19443
     environment:
@@ -107,8 +107,8 @@ services:
 
   gateway:
     build:
-      context: .
-      dockerfile: apps/gateway/Dockerfile
+      context: ..
+      dockerfile: docker/gateway.Dockerfile
     ports:
       - "19443:443"
     environment:
@@ -118,7 +118,7 @@ services:
       RATE_LIMIT_AUTH_MAX: "200"
       RATE_LIMIT_TOKEN_MAX: "300"
     volumes:
-      - ./apps/gateway/gateway.e2e.toml:/app/gateway.toml:ro
+      - ../apps/gateway/gateway.e2e.toml:/app/gateway.toml:ro
       - gateway_certs:/etc/gateway/ssl:ro
     depends_on:
       portal:
@@ -134,8 +134,8 @@ services:
   pebble:
     image: auth-sso-test-pebble:v2.8.0
     build:
-      context: .
-      dockerfile: tests/acme/Dockerfile.pebble
+      context: ..
+      dockerfile: docker/pebble.Dockerfile
       target: pebble
     profiles: ["acme"]
     command:
@@ -152,9 +152,9 @@ services:
       - "14000:14000"
       - "15000:15000"
     volumes:
-      - ./tests/acme/pebble-config.json:/test/config/gateway-pebble-config.json:ro
-      - ./tests/acme/pebble-server.pem:/test/certs/pebble-server.pem:ro
-      - ./tests/acme/pebble-server-key.pem:/test/certs/pebble-server-key.pem:ro
+      - ./acme/pebble-config.json:/test/config/gateway-pebble-config.json:ro
+      - ./acme/pebble-server.pem:/test/certs/pebble-server.pem:ro
+      - ./acme/pebble-server-key.pem:/test/certs/pebble-server-key.pem:ro
     networks:
       acmenet:
         ipv4_address: 10.31.50.2
@@ -162,8 +162,8 @@ services:
   challtestsrv:
     image: auth-sso-test-pebble-challtestsrv:v2.8.0
     build:
-      context: .
-      dockerfile: tests/acme/Dockerfile.pebble
+      context: ..
+      dockerfile: docker/pebble.Dockerfile
       target: challtestsrv
     profiles: ["acme"]
     command:
@@ -179,8 +179,8 @@ services:
 
   gateway-acme:
     build:
-      context: .
-      dockerfile: apps/gateway/Dockerfile
+      context: ..
+      dockerfile: docker/gateway.Dockerfile
     profiles: ["acme"]
     ports:
       - "19080:80"
@@ -199,8 +199,8 @@ services:
       ACME_DISABLE_ARI: "true"
       GATEWAY_SHARED_SECRET: acme-e2e-gateway-shared-secret
     volumes:
-      - ./apps/gateway/gateway.acme-e2e.toml:/app/gateway.toml:ro
-      - ./tests/acme/pebble.minica.pem:/test/pebble.minica.pem:ro
+      - ../apps/gateway/gateway.acme-e2e.toml:/app/gateway.toml:ro
+      - ./acme/pebble.minica.pem:/test/pebble.minica.pem:ro
       - gateway_acme_test:/var/lib/gateway/acme
     depends_on:
       redis:

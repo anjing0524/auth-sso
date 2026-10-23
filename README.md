@@ -66,7 +66,7 @@ Portal 只在 compose 网络内提供 4000 端口，不对宿主暴露。
 
 ```bash
 pnpm stack:logs portal   # 跟随日志（gateway/postgres/redis 同理）
-pnpm stack:down          # 停机（保留卷）；./scripts/stack.sh clean 连卷与镜像一起删
+pnpm stack:down          # 停机（保留卷）；./scripts/docker/stack.sh clean 连卷与镜像一起删
 ```
 
 ### 4. 验收
@@ -78,19 +78,19 @@ pnpm test:e2e   # 构建 → 起栈 → 浏览器闭环（登录/OAuth 回调/�
 ### 5. 只跑单元 / API 测试
 
 ```bash
-docker compose up -d postgres redis   # 测试用基础设施（PG 16 + Redis 7）
+docker compose -f docker/compose.yml up -d postgres redis   # 测试用基础设施（PG 16 + Redis 7）
 pnpm test
 ```
 
-> Docker 文件矩阵、命令、健康检查与故障排查见 **[DOCKER.md](DOCKER.md)**（唯一出处）；
-> 生产 ACME 部署见 `DOCKER.md` §1–§6。
+> Docker 文件矩阵、命令、健康检查与故障排查见 **[docker/README.md](docker/README.md)**（唯一出处）；
+> 生产 ACME 部署见 `docker/README.md` §1–§6。
 
 ## 自动化测试
 
 项目内置了完整的分层测试体系与需求追溯：
 
 ```bash
-docker compose up -d postgres redis  # API 测试前先启动本地数据库基础设施
+docker compose -f docker/compose.yml up -d postgres redis  # API 测试前先启动本地数据库基础设施
 pnpm test                 # 全量 Vitest 测试
 pnpm test:api             # API project（真实 PostgreSQL/Redis）
 pnpm test:components      # UI/domain project（不依赖 DB）
@@ -108,14 +108,14 @@ pnpm test:report          # 需求追溯性覆盖率报告
 - [第三方集成说明 (docs/spec/third-party-integration.md)](docs/spec/third-party-integration.md) — 企微、飞书、钉钉等三方登录集成规范
 - [需求追踪矩阵 (docs/spec/REQUIREMENTS_MATRIX.md)](docs/spec/REQUIREMENTS_MATRIX.md) — 需求→验收标准全覆盖
 - [Portal 架构规范 (docs/portal-architecture-guidelines.md)](docs/portal-architecture-guidelines.md) — 开发规范、组件模式与 Next.js 16 适配
-- [生产 Docker 部署 (DOCKER.md)](DOCKER.md) — Let's Encrypt 自动签发、续期、热加载与部署验证
+- [生产 Docker 部署 (docker/README.md)](docker/README.md) — Let's Encrypt 自动签发、续期、热加载与部署验证
 - [设计规范 (DESIGN.md)](DESIGN.md) — UI/UX 规范与品牌定义
 
 ## 安全提醒
 
 - 生产环境务必生成强密钥：`openssl rand -base64 32`。
 - 敏感配置请通过部署平台的环境变量管理功能设置。
-- 生产 TLS 证书必须由 `docker-compose.prod.yml` 中 Gateway 的 Rust 内建 ACME 客户端获取和续期；不要引入 Certbot 脚本，也不要挂载仓库内或开发机生成的自签证书。
+- 生产 TLS 证书必须由 `docker/compose.prod.yml` 中 Gateway 的 Rust 内建 ACME 客户端获取和续期；不要引入 Certbot 脚本，也不要挂载仓库内或开发机生成的自签证书。
 
 ## License
 

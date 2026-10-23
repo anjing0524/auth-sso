@@ -3,7 +3,7 @@
   "services": {
     "gateway": {
       "root": ".",
-      "entrypoint": "Dockerfile.vercel"
+      "entrypoint": "docker/vercel.Dockerfile"
     }
   },
   "rewrites": [

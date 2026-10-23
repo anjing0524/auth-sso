@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Auth-SSO 生产部署脚本（唯一入口，配套 docker-compose.prod.yml）
+# Auth-SSO 生产部署脚本（唯一入口，配套 docker/compose.prod.yml）
 #
 # 设计目标：
 # 1. **一条命令完成可复现部署**：环境校验 → Compose 配置校验 → 构建 → 迁移/seed → 启动 → 健康检查；
@@ -8,27 +8,27 @@
 # 3. **可回滚**：部署前给现有镜像打 `:previous` 标签，`--rollback` 直接切回（数据备份需运维负责）。
 #
 # 用法：
-#   ./scripts/deploy.sh                  # 首次/升级部署（构建 + 迁移 + 启动 + 健康检查）
-#   ./scripts/deploy.sh --no-build       # 使用当前镜像部署（不构建）
-#   ./scripts/deploy.sh --check          # 只校验 .env.prod 必填项与 compose 配置，不启动
-#   ./scripts/deploy.sh --status         # 查看容器状态与最近健康
-#   ./scripts/deploy.sh --rollback       # 切回上次部署的镜像（:previous）
-#   ./scripts/deploy.sh --down           # 停止服务（保留数据卷）
+#   ./scripts/docker/deploy.sh                  # 首次/升级部署（构建 + 迁移 + 启动 + 健康检查）
+#   ./scripts/docker/deploy.sh --no-build       # 使用当前镜像部署（不构建）
+#   ./scripts/docker/deploy.sh --check          # 只校验 .env.prod 必填项与 compose 配置，不启动
+#   ./scripts/docker/deploy.sh --status         # 查看容器状态与最近健康
+#   ./scripts/docker/deploy.sh --rollback       # 切回上次部署的镜像（:previous）
+#   ./scripts/docker/deploy.sh --down           # 停止服务（保留数据卷）
 #
 # 环境变量：
 #   ENV_FILE=...       默认 .env.prod
-#   COMPOSE_FILE=...   默认 docker-compose.prod.yml
+#   COMPOSE_FILE=...   默认 docker/compose.prod.yml
 #   WAIT_PORTAL_SECS   默认 120
 #   WAIT_GATEWAY_SECS  默认 300（首次 ACME 签发可能较慢）
 #
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 cd "${ROOT_DIR}"
 
 ENV_FILE="${ENV_FILE:-.env.prod}"
-COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.prod.yml}"
+COMPOSE_FILE="${COMPOSE_FILE:-docker/compose.prod.yml}"
 WAIT_PORTAL_SECS="${WAIT_PORTAL_SECS:-120}"
 WAIT_GATEWAY_SECS="${WAIT_GATEWAY_SECS:-300}"
 PORTAL_IMAGE="auth-sso-portal:latest"

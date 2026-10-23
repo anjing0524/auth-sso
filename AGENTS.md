@@ -183,15 +183,15 @@ API 层里生产业务模块的模块级 mock 必须是**类型化工厂**（`vi
 - pnpm@10.12.4，CI 使用 `--frozen-lockfile`
 - ESLint flat config (`eslint.base.mjs`)，`consistent-type-imports` 使用 `inline-type-imports` 风格
 - Next.js 16: Middleware 改名为 Proxy，Server Function 公开可达（三层防御原因）
-- **Docker 是构建 / 部署 / 验收的主路径**（CI 亦然，见 `validation-suite.yml`）。唯一入口与文件矩阵：**根 `DOCKER.md` §7**（生产部署在 §1–§6）。
-  常用：`pnpm stack:up|build|status|logs|down`（== `./scripts/stack.sh`）、`pnpm test:e2e`
-  （== `scripts/run-gateway-e2e.sh`：构建 → 起 `auth-sso-test` 栈 → Playwright release 闭环 → 清理）。
+- **Docker 是构建 / 部署 / 验收的主路径**（CI 亦然，见 `validation-suite.yml`）。唯一入口与文件矩阵：**`docker/README.md` §7**（生产部署在 §1–§6）。
+  常用：`pnpm stack:up|build|status|logs|down`（== `./scripts/docker/stack.sh`）、`pnpm test:e2e`
+  （== `scripts/e2e/release.sh`：构建 → 起 `auth-sso-test` 栈 → Playwright release 闭环 → 清理）。
   入口 `https://127.0.0.1:19443`（自签证书，`curl -k` / Playwright `ignoreHTTPSErrors`）。
   2026-10-20 实测：`stack.sh build` 成功（portal 的 `next build` 走 Next 16 默认 **Turbopack**，
   `✓ Compiled successfully in 10.5s`；gateway `cargo build --release`）、`stack.sh up` 全健康、
   `pnpm test:e2e` **1/1 通过**。**旧结论"本机 e2e / 镜像构建不可用"已作废**——真实原因只是 buildx
   配置目录只读（`BUILDX_CONFIG=$PWD/.tmp-buildx`，`stack.sh` 已自动处理），不是 registry 不可达。
-- 本地基础设施（仅跑 `pnpm test` 时需要；验收栈自带 PG/Redis）: `docker compose up -d`（PostgreSQL 16 + Redis 7）。
+- 本地基础设施（仅跑 `pnpm test` 时需要；验收栈自带 PG/Redis）: `docker compose -f docker/compose.yml up -d`（PostgreSQL 16 + Redis 7）。
 - 数据库初始化顺序: `pnpm db:migrate` → `pnpm db:seed`；`db:push` 只允许本地临时试验，不进入 CI/发布路径。
 - **host 进程入口已移除**（2026-10-20 清理）：不再有 `pnpm dev` / `dev:*` / `check-portal-boot.sh` /
   `dev-gateway-stack.sh` / `verify-turbopack-container.sh`。原因：验收必须打到构建产物，且宿主 glibc
@@ -199,8 +199,8 @@ API 层里生产业务模块的模块级 mock 必须是**类型化工厂**（`vi
   Turbopack 的可用性证明。**唯一判据**：`pnpm stack:up` 后 `https://127.0.0.1:19443/login` 真实 200 +
   `pnpm test:e2e` 闭环通过。`NODE_OPTIONS` 里的 V8 旗标问题已修（2026-10-19，Temporal 在 node@26 默认开启）。
 - **装新依赖**：`pnpm add` 若报 `ERR_PNPM_EROFS`（pnpm store 只读）⇒ 报告并请用户代跑，保持包管理器、锁文件与 CI 的 `--frozen-lockfile` 原样（实测：`eslint-plugin-sonarjs` 因此装不上，#89 只给结论不落地）
-- **长作业先固化 SHA，再单独启动**：`scripts/ci-verify.sh <sha>` 在提交**之后**单独跑；脚本一旦启动就当它只读（要改就停下重跑）。本会话两种竞态各踩一次：`git rev-parse` 落在旧提交上、bash 增量读到半行。
-- **门禁结论取退出码**（加末尾的 `✖ N problems (X errors…)` 汇总行）；grep 只用来筛行、不当结论：`grep '^\s*[0-9]+:[0-9]+\s+error'` 曾把 1 个 lint error 读成「0 error」（真实输出带 `apps/portal lint:` 前缀）；同理**别把校验脚本塞进管道**——`| tail` 会让退出码变成 `tail` 的（实测：一个被取代成 `cancelled` 的 run 因此被读成 exit 0；`scripts/ci-verify.sh` 有运行级判据，直接跑、看它的退出码）。**一次推送只验一个**：同一分支的新推送会取消旧 run（本会话三个连续提交的 run 都被取代成 `cancelled`，于是"绿"永远拿不到）⇒ 上一轮绿了再推下一轮。
+- **长作业先固化 SHA，再单独启动**：`scripts/ci/verify.sh <sha>` 在提交**之后**单独跑；脚本一旦启动就当它只读（要改就停下重跑）。本会话两种竞态各踩一次：`git rev-parse` 落在旧提交上、bash 增量读到半行。
+- **门禁结论取退出码**（加末尾的 `✖ N problems (X errors…)` 汇总行）；grep 只用来筛行、不当结论：`grep '^\s*[0-9]+:[0-9]+\s+error'` 曾把 1 个 lint error 读成「0 error」（真实输出带 `apps/portal lint:` 前缀）；同理**别把校验脚本塞进管道**——`| tail` 会让退出码变成 `tail` 的（实测：一个被取代成 `cancelled` 的 run 因此被读成 exit 0；`scripts/ci/verify.sh` 有运行级判据，直接跑、看它的退出码）。**一次推送只验一个**：同一分支的新推送会取消旧 run（本会话三个连续提交的 run 都被取代成 `cancelled`，于是"绿"永远拿不到）⇒ 上一轮绿了再推下一轮。
 - **批量改写脚本用三引号或中文引号，写完先看确认行**：英文引号嵌进双引号 Python 字符串会让整段脚本**不执行**（本会话反复栽在它上面；最严重的一次导致索引与 roadmap 漏写）。
 - **先把失败的值带出来，再改代码**：断言写 `expect(actual, JSON.stringify(actual)).toBe(…)`；读不到可读原因时先建探针（`JSON.stringify`、被包装的 `err.cause`、单独 `await` 那一步），用完撤掉。本会话一处悬案靠猜白花了好几次尝试，探针一上就定位到 `err.cause` 里的 `departments_pkey` 重复。
 - **文档维护**：改动文档后跑文档守卫（`apps/portal/__tests__/api/docs-*.test.ts`）；引用既有决定前先查 `docs/adr/`。

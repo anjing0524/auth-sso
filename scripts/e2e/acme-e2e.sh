@@ -2,11 +2,14 @@
 
 set -euo pipefail
 
-readonly compose_file="docker-compose.test.yml"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+cd "$ROOT"
+
+readonly compose_file="docker/compose.test.yml"
 readonly acme_domain="gateway.test"
 readonly http_url="http://127.0.0.1:19080/acme-readiness"
 readonly tls_address="127.0.0.1:19444"
-readonly pebble_ca="tests/acme/pebble.minica.pem"
+readonly pebble_ca="docker/acme/pebble.minica.pem"
 readonly evidence_dir="${ACME_EVIDENCE_DIR:-.context/compound-engineering/acme-e2e/latest}"
 
 mkdir -p "${evidence_dir}"

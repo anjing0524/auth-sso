@@ -17,7 +17,7 @@
 | 你要做的事 | 读这份 |
 |---|---|
 | 本地起服务、跑测试、接入验证 | [`docs/INTEGRATION_GUIDE.md`](INTEGRATION_GUIDE.md) + 根 `README.md` 快速开始 |
-| Docker 构建 / 部署 / 验收（生产 ACME + 本地 test 栈 / `stack.sh` / e2e / 故障排查） | 根 `DOCKER.md`（**唯一出处**） |
+| Docker 构建 / 部署 / 验收（生产 ACME + 本地 test 栈 / `stack.sh` / e2e / 故障排查） | `docker/README.md`（**唯一出处**） |
 | 改 Portal 的代码结构（分层、目录、错误体系、三层安全） | [`docs/portal-architecture-guidelines.md`](portal-architecture-guidelines.md) |
 | 改 UI（颜色/字体/间距/组件规范） | 根 `DESIGN.md`（设计系统） |
 | 查历史取舍与里程碑 | 根 `docs/roadmap.md`（变更记录按时间倒序） |
@@ -38,9 +38,11 @@
 ## 四、目录速览
 
 ```
-AGENTS.md  CODING_STANDARDS.md  DESIGN.md  DOCKER.md  README.md
+AGENTS.md  CODING_STANDARDS.md  DESIGN.md  README.md
 docs/
 ├── adr/ (22)           决策记录
 ├── research/ (3)       调研笔记
 └── spec/ (7)           需求规格
+docker/                 Docker 配置入口（compose / Dockerfile / README）
+scripts/                工具脚本（docker / e2e / ci / bench，见 scripts/README.md）
 ```
