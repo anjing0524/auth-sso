@@ -118,6 +118,16 @@ pub(crate) fn check_callback(cookie_header: Option<&str>, state_param: &str) -> 
     }
 }
 
+/// 失败回跳必须随 302 下发的 Set-Cookie：清除 4 个临时 OAuth Cookie（H-35）。
+///
+/// 成功路径在 `handle_oauth_callback` 末尾已清除；失败路径（IdP 拒绝 / state
+/// 不匹配 / token 交换失败 / nonce 不匹配）此前漏清，临时凭证会残留到
+/// Max-Age(300s) 或下次登录覆盖。清除头的 `Path` 必须与下发时逐字节一致
+/// （都来自 `oauth_callback_path`），否则浏览器不会覆盖旧 Cookie。
+pub(crate) fn failure_clear_cookies(callback_path: &str) -> Vec<String> {
+    oauth::build_clear_oauth_cookies(true, callback_path)
+}
+
 /// 单次 token 交换尝试的**结果**——刻意与 HTTP 库解耦，使决策表可穷举测试。
 #[derive(Debug, Clone)]
 pub(crate) enum ExchangeAttempt {
@@ -314,9 +324,19 @@ impl Gateway {
     }
 
     /// OAuth callback 错误 → 302 重定向到登录页并终止请求处理。
-    async fn oauth_error_redirect(session: &mut Session, reason: &str) -> Result<bool> {
+    ///
+    /// **H-35**：失败路径同样必须清除 4 个临时 OAuth Cookie——残留的
+    /// oauth_state/pkce_verifier/oauth_nonce/return_to 会存活到 Max-Age(300s)
+    /// 或下次登录覆盖；清除是「一次性凭证不跨流程存活」的卫生要求。
+    async fn oauth_error_redirect(
+        session: &mut Session,
+        reason: &str,
+        callback_path: &str,
+    ) -> Result<bool> {
         let url = format!("/login?error={reason}");
-        session.respond_302_with_cookies(&url, &[]).await?;
+        session
+            .respond_302_with_cookies(&url, &failure_clear_cookies(callback_path))
+            .await?;
         Ok(true)
     }
 
@@ -333,12 +353,16 @@ impl Gateway {
         // 与 /authorize 阶段保持同一条边界事实：Gateway callback 始终经 HTTPS 到达。
         const SECURE: bool = true;
 
+        // 失败回跳的清除路径与成功路径共用同一个 callback_path（清除头的 Path
+        // 必须与下发时逐字节一致，否则浏览器不会覆盖旧 Cookie）。
+        let callback_path = self.oauth_callback_path();
+
         // Cookie 缺失 / state 不匹配 / PKCE 缺失这条**校验序列**是纯函数（`check_callback`）：
         // 顺序与 fail-close 语义可穷举（原先内联在 `&mut Session` 方法里 ⇒ 零测试）。
         let (verifier, cookie_nonce, return_to) = match check_callback(cookie_header, state_param) {
             CallbackCheck::RedirectToLogin { reason } => {
                 warn!("OAuth callback 校验失败: {reason}");
-                return Self::oauth_error_redirect(session, reason).await;
+                return Self::oauth_error_redirect(session, reason, &callback_path).await;
             }
             CallbackCheck::Proceed {
                 verifier,
@@ -346,8 +370,6 @@ impl Gateway {
                 return_to,
             } => (verifier, nonce, return_to),
         };
-
-        let callback_path = self.oauth_callback_path();
 
         // 与 /authorize 阶段同一函数（oauth::build_redirect_uri）构造，
         // 保证 OAuth 2.1 两阶段 redirect_uri 逐字节一致
@@ -366,7 +388,12 @@ impl Gateway {
             Ok(t) => t,
             Err(e) => {
                 warn!("Token 交换失败: {:?}", e);
-                return Self::oauth_error_redirect(session, "token_exchange_failed").await;
+                return Self::oauth_error_redirect(
+                    session,
+                    "token_exchange_failed",
+                    &callback_path,
+                )
+                .await;
             }
         };
 
@@ -378,7 +405,7 @@ impl Gateway {
             .and_then(oauth::decode_id_token_nonce);
         if !oauth::nonce_matches(cookie_nonce.as_deref(), id_nonce.as_deref()) {
             warn!("OAuth callback nonce 不匹配");
-            return Self::oauth_error_redirect(session, "nonce_mismatch").await;
+            return Self::oauth_error_redirect(session, "nonce_mismatch", &callback_path).await;
         }
 
         let session_cookies = oauth::build_session_cookies(&tokens.access, &tokens.refresh, SECURE);

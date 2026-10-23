@@ -27,7 +27,16 @@ dist
 # Test artifacts
 test-results
 tests/e2e-report
+tests/traceability/.generated
 coverage
+playwright-report
+
+# 本地审计/工具产物（gitignore 同名单；含 Playwright 浏览器 ~370MB，
+# 不进 Docker 构建上下文，否则每次 build 传输数百 MB 且 COPY . . 命中变化层）
+.ui-audit
+.zcode
+.arch-review
+.tmp-buildx
 
 # TypeScript
 *.tsbuildinfo

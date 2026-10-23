@@ -90,10 +90,19 @@ export const CreatePermissionInputSchema = z.discriminatedUnion('type', [
   }),
 ]);
 
-/** 更新权限入参校验 Schema */
+/**
+ * 更新权限入参校验 Schema
+ *
+ * **编码（code）刻意不在可更新字段内**：`docs/spec/REQUIREMENTS_MATRIX.md` 的 D-PRM-U
+ * 明确"权限编码不可变更"，且 `ALL_PERMISSIONS` 里的码被服务端代码硬编码引用
+ * （`checkPermission` / `route-access`）——改名会让所有非管理员在对应功能上 403，
+ * 甚至通过 `portal:` 前缀改写 OAuth client 准入（H-19）。传入 code 会被 actions 拒绝。
+ *
+ * `type` 可改，但转换后的类型专属字段由 actions 归一（见 `normalizePermissionTypeFields`）：
+ * API→菜单类型清空 `clientId`（否则撞 DB CHECK），菜单→API 清空 path/icon/visible。
+ */
 export const UpdatePermissionInputSchema = z.object({
   name: z.string().min(1).max(100, '权限名称最多 100 个字符').optional(),
-  code: z.string().min(1).max(150, '权限编码最多 150 个字符').optional(),
   type: permissionTypeEnum.optional(),
   description: z.string().nullable().optional(),
   path: z.string().max(200, '路由路径最多 200 个字符').nullable().optional(),

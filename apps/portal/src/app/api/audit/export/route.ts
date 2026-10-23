@@ -8,9 +8,98 @@
  * @permission audit:export
  */
 import { type NextRequest, NextResponse } from 'next/server';
+import {
+  AUDIT_PERMISSIONS,
+  COMMON_ERRORS,
+  MAX_PAGE_SIZE,
+  LOGIN_EVENT_VALUES,
+  AUDIT_OPERATION_VALUES,
+  type LoginEventType,
+  type AuditOperation,
+} from '@auth-sso/contracts';
 import { withPermission } from '@/lib/auth';
-import { AUDIT_PERMISSIONS, MAX_PAGE_SIZE, LOGIN_EVENT_VALUES, AUDIT_OPERATION_VALUES, type LoginEventType, type AuditOperation } from '@auth-sso/contracts';
+import { restError } from '@/lib/response';
 import { getAuditLogs, getLoginLogs } from '@/app/audit/data';
+import { isUuid } from '@/lib/uuid';
+
+/** 导出上限：防止一次拉爆内存（10 万行 ≈ 权限表 2000 页也远超实际）。 */
+const EXPORT_MAX_ROWS = 100_000;
+
+/**
+ * 将单元格值转为 RFC 4180 安全的 CSV 字段（含公式注入防护）。
+ *
+ * H-28：`String()` 会把 Date 变成 `Fri Oct 23 2026 ...`（非 ISO）、把 jsonb 对象变成
+ * `[object Object]`（2026-10-23 实测 5205/5238 行「详情」列损坏）。按类型显式序列化。
+ */
+function csvEscape(v: unknown): string {
+  const serialized = v instanceof Date
+    ? v.toISOString()
+    : (v !== null && typeof v === 'object' ? JSON.stringify(v) : String(v ?? ''));
+  // CSV 公式注入防护：以 = + - @ 开头的字段加 tab 前缀，阻止 Excel 执行
+  const escaped = /^[=+\-@\t\r]/.test(serialized) ? '\t' + serialized : serialized;
+  // 含逗号、双引号、换行符的字段用双引号包裹
+  if (/[",\n\r]/.test(escaped)) {
+    return '"' + escaped.replace(/"/g, '""') + '"';
+  }
+  return escaped;
+}
+
+/** 单页读取结果（数据行 + 是否还有下一页） */
+interface CsvPage {
+  readonly rows: ReadonlyArray<ReadonlyArray<unknown>>;
+  readonly hasMore: boolean;
+}
+
+/**
+ * 把「分页读模型」包装成 CSV 流（H-30）。
+ *
+ * 此前实现把全部行收进数组再 join：5238 行尚可（138ms），但导出上限 10 万行时
+ * 会同时驻留全量对象 + 全量字符串（两份），且 TTFB 等待全部读完。
+ * 现在首字节在读完第一页后立即发出，客户端边下边收；内存占用与单页大小同阶。
+ *
+ * 注意：这里刻意**不**做成纯 `ReadableStream.pull` 拉模式——读模型本身是异步分页，
+ * 用 async generator + `ReadableStream` 的默认背压（pull 时消费一项）即可。
+ */
+function createCsvStream(
+  header: string,
+  loadPage: (page: number) => Promise<CsvPage>,
+): ReadableStream<Uint8Array> {
+  const encoder = new TextEncoder();
+  const generator = async function* (): AsyncGenerator<string> {
+    yield '\uFEFF' + header + '\n';
+    let pageNo = 1;
+    let emitted = 0;
+    for (;;) {
+      const page = await loadPage(pageNo);
+      for (const row of page.rows) {
+        if (emitted >= EXPORT_MAX_ROWS) break;
+        yield row.map(csvEscape).join(',') + '\n';
+        emitted += 1;
+      }
+      if (!page.hasMore || page.rows.length === 0 || emitted >= EXPORT_MAX_ROWS) break;
+      pageNo += 1;
+    }
+  };
+
+  const iterator = generator();
+  return new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      try {
+        const next = await iterator.next();
+        if (next.done) {
+          controller.close();
+          return;
+        }
+        controller.enqueue(encoder.encode(next.value));
+      } catch (error) {
+        controller.error(error);
+      }
+    },
+    async cancel() {
+      await iterator.return(undefined);
+    },
+  });
+}
 
 export async function GET(request: NextRequest) {
   return withPermission(
@@ -25,66 +114,59 @@ export async function GET(request: NextRequest) {
       const operation = AUDIT_OPERATION_VALUES.includes(operationParam as AuditOperation)
         ? (operationParam as AuditOperation) : undefined;
 
-      let csv: string;
-      /** 导出上限：防止一次拉爆内存（10 万行 ≈ 权限表 2000 页也远超实际）。 */
-      const EXPORT_MAX_ROWS = 100_000;
-
-      // 将单元格值转为 RFC 4180 安全的 CSV 字段（含公式注入防护）
-      const csvEscape = (v: unknown): string => {
-        const s = String(v ?? '');
-        // CSV 公式注入防护：以 = + - @ 开头的字段加 tab 前缀，阻止 Excel 执行
-        const escaped = /^[=+\-@\t\r]/.test(s) ? '\t' + s : s;
-        // 含逗号、双引号、换行符的字段用双引号包裹
-        if (/[",\n\r]/.test(escaped)) {
-          return '"' + escaped.replace(/"/g, '""') + '"';
-        }
-        return escaped;
-      };
-
-      if (type === 'login') {
-        // 此前只导出第 1 页（MAX_PAGE_SIZE=100 行）：5000 条登录日志实际只导出 100 条。
-        // 现在按页循环取全量（上限 10 万行）。
-        const all: Awaited<ReturnType<typeof getLoginLogs>>['data'] = [];
-        let pageNo = 1;
-        for (;;) {
-          const res = await getLoginLogs({ page: pageNo, pageSize: MAX_PAGE_SIZE, ...(eventType ? { eventType } : {}) });
-          all.push(...res.data);
-          if (res.data.length === 0 || pageNo >= res.pagination.totalPages || all.length >= EXPORT_MAX_ROWS) break;
-          pageNo += 1;
-        }
-        csv = '\uFEFF' + [
-          '时间,用户,事件类型,IP地址,User-Agent,失败原因',
-          // 不强制转换为 Record<string, unknown>：让 TS 用真实行类型检查字段名
-          // （那层转换曾让下面 3 个不存在的字段通过编译，见 operation 分支）
-          ...all.map((l) =>
-            [l.createdAt, l.username, l.eventType, l.ip, l.userAgent, l.failReason].map(csvEscape).join(',')
-          ),
-        ].join('\n');
-      } else {
-        const all: Awaited<ReturnType<typeof getAuditLogs>>['data'] = [];
-        let pageNo = 1;
-        for (;;) {
-          const res = await getAuditLogs({ page: pageNo, pageSize: MAX_PAGE_SIZE, ...(operation ? { operation } : {}) });
-          all.push(...res.data);
-          if (res.data.length === 0 || pageNo >= res.pagination.totalPages || all.length >= EXPORT_MAX_ROWS) break;
-          pageNo += 1;
-        }
-        csv = '\uFEFF' + [
-          '时间,操作人,操作类型,目标资源,详情,IP地址',
-          // 字段名必须取自行形状（getAuditLogs 的 mapRow）：
-          // 原为 `l.operator || l.username`、`l.resource`、`l.detail` —— 三者都不存在，
-          // 而 `l: Record<string, unknown>` 的强制转换让编译器无法发现 ⇒ 导出的 CSV
-          // 有 3 列恒为 `undefined`（2026-10-13 修复，架构评审 R2 次级候选）。
-          ...all.map((l) =>
-            [l.createdAt, l.username, l.operation, l.url, l.params, l.ip].map(csvEscape).join(',')
-          ),
-        ].join('\n');
+      // H-28：日期 / 用户筛选此前完全没有解析（列表支持、导出丢弃，导出结果与列表不一致）。
+      // 与 audit/data.ts 的 DATE_REGEX 同口径；非法值显式 400 而不是静默忽略。
+      const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+      const startDate = searchParams.get('startDate') || undefined;
+      const endDate = searchParams.get('endDate') || undefined;
+      const userId = searchParams.get('userId') || undefined;
+      if ((startDate && !DATE_REGEX.test(startDate)) || (endDate && !DATE_REGEX.test(endDate))) {
+        return restError(COMMON_ERRORS.VALIDATION_ERROR, 'startDate/endDate 必须是 YYYY-MM-DD', 400);
+      }
+      if (userId && !isUuid(userId)) {
+        return restError(COMMON_ERRORS.VALIDATION_ERROR, 'userId 必须是 UUID', 400);
       }
 
-      return new NextResponse(csv, {
+      const stream = type === 'login'
+        ? createCsvStream('时间,用户,事件类型,IP地址,User-Agent,失败原因', async (pageNo) => {
+            const res = await getLoginLogs({
+              page: pageNo,
+              pageSize: MAX_PAGE_SIZE,
+              ...(eventType ? { eventType } : {}),
+              ...(startDate ? { startDate } : {}),
+              ...(endDate ? { endDate } : {}),
+              ...(userId ? { userId } : {}),
+            });
+            return {
+              rows: res.data.map((l) => [l.createdAt, l.username, l.eventType, l.ip, l.userAgent, l.failReason]),
+              hasMore: pageNo < res.pagination.totalPages,
+            };
+          })
+        : createCsvStream('时间,操作人,操作类型,目标资源,详情,IP地址', async (pageNo) => {
+            const res = await getAuditLogs({
+              page: pageNo,
+              pageSize: MAX_PAGE_SIZE,
+              ...(operation ? { operation } : {}),
+              ...(startDate ? { startDate } : {}),
+              ...(endDate ? { endDate } : {}),
+              ...(userId ? { userId } : {}),
+            });
+            // 字段名必须取自行形状（getAuditLogs 的 mapRow）：原为
+            // `l.operator || l.username`、`l.resource`、`l.detail` —— 三者都不存在，
+            // 而 `l: Record<string, unknown>` 的强制转换让编译器无法发现 ⇒ 导出的 CSV
+            // 有 3 列恒为 `undefined`（2026-10-13 修复，架构评审 R2 次级候选）。
+            return {
+              rows: res.data.map((l) => [l.createdAt, l.username, l.operation, l.url, l.params, l.ip]),
+              hasMore: pageNo < res.pagination.totalPages,
+            };
+          });
+
+      return new NextResponse(stream, {
         headers: {
           'Content-Type': 'text/csv; charset=utf-8',
           'Content-Disposition': `attachment; filename="audit-${type}-${new Date().toISOString().slice(0, 10)}.csv"`,
+          // 流式响应无 Content-Length；显式 no-store 防止中间层缓存半截 CSV
+          'Cache-Control': 'no-store',
         },
       });
     },

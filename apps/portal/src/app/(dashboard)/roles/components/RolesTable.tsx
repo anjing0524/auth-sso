@@ -49,9 +49,11 @@ interface Props {
   pagination: Pagination;
   initialKeyword: string;
   departments: Array<{ id: string; name: string }>;
+  /** 删除确认的影响面：roleId → 绑定用户数（U-ROLES03） */
+  boundUserCounts?: Record<string, number>;
 }
 
-export default function RolesTable({ roles, pagination, initialKeyword, departments }: Props) {
+export default function RolesTable({ roles, pagination, initialKeyword, departments, boundUserCounts = {} }: Props) {
   const router = useRouter();
   const [keyword, setKeyword] = useState(initialKeyword);
   const [isPending, startTransition] = useTransition();
@@ -75,6 +77,10 @@ export default function RolesTable({ roles, pagination, initialKeyword, departme
   };
 
   const getDefaultDeptId = () => departments.length > 0 ? departments[0]!.id : '';
+
+  /** 对话框统一改为 `<form>` 提交（U-G06/U-ROLES02）：Enter 与点击主按钮行为一致 */
+  const submitCreate = (e: React.FormEvent) => { e.preventDefault(); void handleCreate(); };
+  const submitUpdate = (e: React.FormEvent) => { e.preventDefault(); void handleUpdate(); };
 
   const openEdit = (r: RoleRow) => {
     setSelected(r);
@@ -119,9 +125,9 @@ export default function RolesTable({ roles, pagination, initialKeyword, departme
 
   const getDeptName = (deptId: string) => departments.find(d => d.id === deptId)?.name ?? deptId;
 
-  const renderDeptSelect = (value: string, onChange: (v: string) => void) => (
+  const renderDeptSelect = (value: string, onChange: (v: string) => void, id?: string) => (
     <Select value={value || undefined} onValueChange={onChange}>
-      <SelectTrigger><SelectValue placeholder="选择部门" /></SelectTrigger>
+      <SelectTrigger id={id}><SelectValue placeholder="选择部门" /></SelectTrigger>
       <SelectContent>
         {departments.map(d => (
           <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
@@ -178,12 +184,12 @@ export default function RolesTable({ roles, pagination, initialKeyword, departme
         ) : (
           <div className="flex items-center justify-end gap-0.5">
             <PermissionGuard permission={ROLE_PERMISSIONS.UPDATE}>
-              <Button variant="ghost" size="sm" className="h-8 gap-1.5 px-2" aria-label="编辑角色" title="编辑角色" onClick={() => openEdit(r)}>
+              <Button variant="ghost" size="sm" className="h-8 gap-1.5 px-2" aria-label={`编辑角色 ${r.name}`} title={`编辑角色 ${r.name}`} onClick={() => openEdit(r)}>
                 <Edit className="h-4 w-4" /><span>编辑</span>
               </Button>
             </PermissionGuard>
             <PermissionGuard permission={ROLE_PERMISSIONS.ASSIGN_PERMISSION}>
-              <Button variant="ghost" size="sm" className="h-8 gap-1.5 px-2" aria-label="配置权限" title="配置权限" onClick={() => setPermTarget(r)}>
+              <Button variant="ghost" size="sm" className="h-8 gap-1.5 px-2" aria-label={`配置权限 ${r.name}`} title={`配置权限 ${r.name}`} onClick={() => setPermTarget(r)}>
                 <KeyRound className="h-4 w-4" /><span>配置权限</span>
               </Button>
             </PermissionGuard>
@@ -191,8 +197,8 @@ export default function RolesTable({ roles, pagination, initialKeyword, departme
               <Button
                 variant="ghost"
                 size="sm"
-                aria-label="删除角色"
-                title="删除角色"
+                aria-label={`删除角色 ${r.name}`}
+                title={`删除角色 ${r.name}`}
                 className="h-8 gap-1.5 px-2 text-destructive hover:bg-destructive/10 hover:text-destructive"
                 onClick={() => setDeleteTarget(r)}
               >
@@ -214,13 +220,22 @@ export default function RolesTable({ roles, pagination, initialKeyword, departme
         data={roles}
         loading={isPending}
         emptyState={
-          <EmptyState
-            variant="simple"
-            icon="ShieldCheck"
-            title="暂无角色"
-            description="创建角色以开始管理权限"
-            action={{ label: '新建角色', onClick: () => { setForm({ name: '', code: '', description: '', deptId: getDefaultDeptId(), sort: 0 }); setIsAddOpen(true); } }}
-          />
+          keyword.trim() ? (
+            <EmptyState
+              variant="simple"
+              kind="filtered"
+              icon="ShieldCheck"
+              clearAction={{ label: '清除搜索', href: '/roles' }}
+            />
+          ) : (
+            <EmptyState
+              variant="simple"
+              icon="ShieldCheck"
+              title="暂无角色"
+              description="创建角色以开始管理权限"
+              action={{ label: '新建角色', onClick: () => { setForm({ name: '', code: '', description: '', deptId: getDefaultDeptId(), sort: 0 }); setIsAddOpen(true); } }}
+            />
+          )
         }
         renderRow={renderRow}
         cardHeader={cardHeader}
@@ -240,28 +255,32 @@ export default function RolesTable({ roles, pagination, initialKeyword, departme
       <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
         <DialogContent>
           <DialogHeader><DialogTitle className="flex items-center gap-2"><ShieldCheck className="h-5 w-5 text-primary" /> 新建角色</DialogTitle></DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2"><Label>角色名称</Label><Input value={form.name} maxLength={100} onChange={e => setForm({...form, name: e.target.value})} placeholder="管理员" /></div>
-            <div className="space-y-2"><Label>角色编码</Label><Input value={form.code} maxLength={50} aria-invalid={fieldError?.field === 'code'} onChange={e => setForm({...form, code: e.target.value})} placeholder="admin" /></div>
-            <FieldError failure={fieldError} field="code" />
-            <div className="space-y-2"><Label>所属部门</Label>{renderDeptSelect(form.deptId, v => setForm({...form, deptId: v}))}</div>
-          </div>
-          <DialogFooter><Button variant="outline" onClick={() => setIsAddOpen(false)}>取消</Button><Button onClick={handleCreate} disabled={saving}>创建</Button></DialogFooter>
+          <form onSubmit={submitCreate}>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2"><Label htmlFor="role-name">角色名称</Label><Input id="role-name" value={form.name} maxLength={100} onChange={e => setForm({...form, name: e.target.value})} placeholder="管理员" /></div>
+              <div className="space-y-2"><Label htmlFor="role-code">角色编码</Label><Input id="role-code" value={form.code} maxLength={50} aria-invalid={fieldError?.field === 'code'} onChange={e => setForm({...form, code: e.target.value})} placeholder="admin" /></div>
+              <FieldError failure={fieldError} field="code" />
+              <div className="space-y-2"><Label htmlFor="role-dept">所属部门</Label>{renderDeptSelect(form.deptId, v => setForm({...form, deptId: v}), 'role-dept')}</div>
+            </div>
+            <DialogFooter><Button type="button" variant="outline" onClick={() => setIsAddOpen(false)}>取消</Button><Button type="submit" disabled={saving}>创建</Button></DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
 
       <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
         <DialogContent>
           <DialogHeader><DialogTitle>编辑角色</DialogTitle></DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2"><Label>角色名称</Label><Input value={form.name} onChange={e => setForm({...form, name: e.target.value})} /></div>
-            <div className="space-y-2"><Label>角色编码</Label><Input value={form.code} disabled /></div>
-            {/* 编辑态的 code 是 disabled（不可改、也不会产生冲突码），但仍渲染错误——
-                否则 update 失败时既不弹 toast 也不内联，正是要消灭的静默路径 */}
-            <FieldError failure={fieldError} field="code" />
-            <div className="space-y-2"><Label>所属部门</Label>{renderDeptSelect(form.deptId, v => setForm({...form, deptId: v}))}</div>
-          </div>
-          <DialogFooter><Button variant="outline" onClick={() => setIsEditOpen(false)}>取消</Button><Button onClick={handleUpdate} disabled={saving}>保存</Button></DialogFooter>
+          <form onSubmit={submitUpdate}>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2"><Label htmlFor="role-edit-name">角色名称</Label><Input id="role-edit-name" value={form.name} onChange={e => setForm({...form, name: e.target.value})} /></div>
+              <div className="space-y-2"><Label htmlFor="role-edit-code">角色编码</Label><Input id="role-edit-code" value={form.code} disabled /></div>
+              {/* 编辑态的 code 是 disabled（不可改、也不会产生冲突码），但仍渲染错误——
+                  否则 update 失败时既不弹 toast 也不内联，正是要消灭的静默路径 */}
+              <FieldError failure={fieldError} field="code" />
+              <div className="space-y-2"><Label htmlFor="role-edit-dept">所属部门</Label>{renderDeptSelect(form.deptId, v => setForm({...form, deptId: v}), 'role-edit-dept')}</div>
+            </div>
+            <DialogFooter><Button type="button" variant="outline" onClick={() => setIsEditOpen(false)}>取消</Button><Button type="submit" disabled={saving}>保存</Button></DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
 
@@ -274,6 +293,11 @@ export default function RolesTable({ roles, pagination, initialKeyword, departme
               删除后该角色的权限绑定会一并清除；若已分配给用户，这些用户会失去该角色的权限并被强制重新登录。此操作不可撤销。
             </DialogDescription>
           </DialogHeader>
+          {deleteTarget && (
+            <div className="rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2 text-xs text-destructive" data-delete-impact>
+              影响面：{boundUserCounts[deleteTarget.id] ?? 0} 个用户；该角色的权限绑定将同步清除。
+            </div>
+          )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteTarget(null)} disabled={deleting}>取消</Button>
             <Button variant="destructive" onClick={handleDelete} disabled={deleting}>

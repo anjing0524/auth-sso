@@ -81,7 +81,7 @@ export function ResetPasswordDialog({
               id="reset-password"
               type="password"
               autoComplete="new-password"
-              placeholder="至少 8 位，含大小写字母与数字"
+              placeholder="至少 10 位，含大写/小写字母、数字、特殊字符中的至少三类"
               value={password}
               aria-invalid={fieldError?.field === 'password'}
               onChange={(e) => setPassword(e.target.value)}

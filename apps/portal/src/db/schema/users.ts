@@ -50,7 +50,9 @@ export const users = pgTable('users', {
   index('idx_users_status').on(t.status).where(sql`${t.status} <> 'DELETED'`),
   index('idx_users_dept').on(t.deptId),
   index('idx_users_deleted_at').on(t.deletedAt),
-  uniqueIndex('ux_users_email').on(t.email).where(sql`${t.deletedAt} IS NULL`),
+  // H-18：邮箱大小写不敏感唯一（应用层 Zod 已 trim+lower；此索引是第二道防线，
+  // 覆盖历史数据/脚本直写等绕过应用层的路径）。改名 `_ci` 提示语义是 lower(email)。
+  uniqueIndex('ux_users_email_ci').on(sql`lower(${t.email})`).where(sql`${t.deletedAt} IS NULL`),
   uniqueIndex('ux_users_mobile').on(t.mobile).where(sql`${t.deletedAt} IS NULL`),
   // CHECK：密码历史数组长度上限（DB 第二道防线，上限为应用层 PASSWORD_HISTORY_MAX 的 2 倍兜底）
   check(

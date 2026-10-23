@@ -6,9 +6,8 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { toast } from 'sonner';
 import { useFieldFailure } from '@/hooks/use-field-failure';
-import { AppWindow, Plus } from 'lucide-react';
+import { AppWindow, Plus, Copy, Check } from 'lucide-react';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -17,10 +16,32 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { createClientAction } from '../actions';
 
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { PageHeader } from '@/components/shared/page-header';
+/** 回调地址必须是绝对 http(s) URL（与服务端 Zod `.url()` 同口径的前端近似） */
+function isHttpUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' || url.protocol === 'http:';
+  } catch {
+    return false;
+  }
+}
+
 export default function NewClientPage() {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
+  /** 创建成功后的**一次性**凭证（H-C-03）：Secret 仅此刻可见 */
+  const [created, setCreated] = useState<{ clientId: string; clientSecret: string | null } | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [errors, setErrors] = useState<{ name?: string; redirectUris?: string }>({});
   const { reportFailure } = useFieldFailure();
   const [formData, setFormData] = useState({
     name: '',
@@ -32,11 +53,30 @@ export default function NewClientPage() {
     refreshTokenTtl: 604800,
   });
 
-  const handleCreate = async () => {
-    if (!formData.name || !formData.redirectUris) {
-      toast.error('请填写必填字段');
-      return;
+  /**
+   * U-CLIENT02：前端格式校验（此前只有"必填 toast"，非法回调地址要等服务端往返后才报错，
+   * 且错误落不到字段上）。与服务端 Zod 同口径做一层快速反馈。
+   */
+  const validate = (): boolean => {
+    const next: { name?: string; redirectUris?: string } = {};
+    const name = formData.name.trim();
+    if (!name) next.name = '应用名称不能为空';
+    else if (name.length > 100) next.name = '应用名称最多 100 个字符';
+
+    const uris = formData.redirectUris.split('\n').map((u) => u.trim()).filter(Boolean);
+    if (uris.length === 0) {
+      next.redirectUris = '至少需要一个回调地址';
+    } else {
+      const invalid = uris.find((u) => !isHttpUrl(u) || u.length > 500);
+      if (invalid) next.redirectUris = `回调地址格式不合法：${invalid.slice(0, 80)}`;
     }
+
+    setErrors(next);
+    return Object.keys(next).length === 0;
+  };
+
+  const handleCreate = async () => {
+    if (!validate()) return;
 
     setSaving(true);
     const result = await createClientAction({
@@ -52,11 +92,36 @@ export default function NewClientPage() {
     setSaving(false);
 
     if (result.success) {
-      toast.success(result.message || '应用注册成功');
-      router.push('/clients');
+      // H-C-03：Secret 只在此刻可见（DB 只存 bcrypt），必须展示一次；
+      // 此前只 toast + router.push，返回值里的 clientSecret 被丢弃 ⇒ 新应用无法使用。
+      setCreated({ clientId: result.data.clientId, clientSecret: result.data.clientSecret });
     } else {
       reportFailure(result, '注册失败');
     }
+  };
+
+  const copySecret = async () => {
+    if (!created?.clientSecret) return;
+    try {
+      await navigator.clipboard.writeText(created.clientSecret);
+    } catch {
+      // 回退：非安全上下文 / 权限被拒时用 execCommand
+      const textarea = document.createElement('textarea');
+      textarea.value = created.clientSecret;
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textarea);
+    }
+    setCopied(true);
+  };
+
+  const closeCreated = () => {
+    setCreated(null);
+    setCopied(false);
+    router.push('/clients');
   };
 
   return (
@@ -90,20 +155,37 @@ export default function NewClientPage() {
               <Input
                 id="client-name"
                 placeholder="我的业务系统"
+                maxLength={100}
+                aria-invalid={!!errors.name}
                 value={formData.name}
-                onChange={e => setFormData({ ...formData, name: e.target.value })}
+                onChange={e => {
+                  setFormData({ ...formData, name: e.target.value });
+                  if (errors.name) setErrors((prev) => ({ ...prev, name: undefined }));
+                }}
               />
+              {errors.name ? (
+                <p role="alert" className="text-xs font-medium text-destructive">{errors.name}</p>
+              ) : null}
             </div>
             <div className="space-y-2">
               <Label htmlFor="client-redirect-uris">回调地址（每行一个） <span className="text-destructive">*</span></Label>
               <Textarea
                 id="client-redirect-uris"
                 placeholder={'https://your-app.example.com/api/auth/callback\nhttp://localhost:3000/api/auth/callback'}
+                maxLength={2000}
+                aria-invalid={!!errors.redirectUris}
                 value={formData.redirectUris}
-                onChange={e => setFormData({ ...formData, redirectUris: e.target.value })}
+                onChange={e => {
+                  setFormData({ ...formData, redirectUris: e.target.value });
+                  if (errors.redirectUris) setErrors((prev) => ({ ...prev, redirectUris: undefined }));
+                }}
                 className="min-h-24"
               />
-              <p className="text-xs text-muted-foreground">每行一个地址。Client ID 与 Secret 由系统自动生成，创建成功后展示。</p>
+              {errors.redirectUris ? (
+                <p role="alert" className="text-xs font-medium text-destructive">{errors.redirectUris}</p>
+              ) : (
+                <p className="text-xs text-muted-foreground">每行一个 http(s) URL。Client ID 与 Secret 由系统自动生成，创建成功后展示。</p>
+              )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="client-homepage">主页 URL（可选）</Label>
@@ -156,6 +238,39 @@ export default function NewClientPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* H-C-03：注册成功的一次性凭证弹窗（Secret 仅显示一次，DB 只存 bcrypt） */}
+      <Dialog open={!!created} onOpenChange={(open) => { if (!open) closeCreated(); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AppWindow className="h-5 w-5 text-primary" /> 应用注册成功
+            </DialogTitle>
+            <DialogDescription>
+              Client Secret <strong>只显示这一次</strong>，关闭后无法再次查看。请立即复制并妥善保存到接入方配置中。
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <p className="text-sm font-medium">Client ID</p>
+              <code className="block break-all rounded-lg bg-muted px-3 py-2 font-mono text-sm">{created?.clientId}</code>
+            </div>
+            <div className="space-y-1.5">
+              <p className="text-sm font-medium">Client Secret</p>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 break-all rounded-lg bg-muted px-3 py-2 font-mono text-sm">{created?.clientSecret ?? '-'}</code>
+                <Button variant="outline" size="sm" onClick={copySecret} aria-label="复制 Client Secret">
+                  {copied ? <Check className="h-4 w-4 text-success" /> : <Copy className="h-4 w-4" />}
+                  <span>{copied ? '已复制' : '复制'}</span>
+                </Button>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button onClick={closeCreated}>我已保存，前往应用列表</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 

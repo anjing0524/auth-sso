@@ -8,7 +8,6 @@
  * v2 — shadcn Table + 设计 Token + 暗黑模式支持
  */
 import { Download } from 'lucide-react';
-import Link from 'next/link';
 import { LOGIN_EVENT_LABELS, AUDIT_OPERATION_LABELS, LOGIN_EVENT_VALUES, AUDIT_OPERATION_VALUES, AUDIT_PERMISSIONS, can, type AuditOperation, type LoginEventType } from '@auth-sso/contracts';
 import { AuditFilters } from './components/audit-filters';
 import { getLoginLogs, getAuditLogs } from '@/app/audit/data';
@@ -23,6 +22,7 @@ import { EmptyState } from '@/components/shared/empty-state';
 import { TablePagination } from '@/components/shared/table-pagination';
 import { Badge } from '@/components/ui/badge';
 import { AuditLogDetailDialog } from './components/audit-log-detail-dialog';
+import { AuditTabs } from './components/audit-tabs';
 
 import { PageHeader } from '@/components/shared/page-header';
 import { Button } from '@/components/ui/button';
@@ -34,6 +34,7 @@ import { formatDateTime as formatDate } from '@/lib/format-date';
  * 否则 Turbopack 运行时会报 "encountered uncached data during prerendering or a navigation"。
  */
 export const instant = false;
+export const metadata = { title: '审计日志 | Auth-SSO' };
 const PAGE_SIZE = 15;
 
 /** 登录事件 -> 徽章配色（使用 design token，支持暗黑模式） */
@@ -114,31 +115,21 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
 
       {/* Tab 切换 + 类型筛选 — searchParams 驱动；筛选在规模数据下必需 */}
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-3">
-      <div className="inline-flex h-10 items-center rounded-lg bg-muted p-1">
-        {(['login', 'operation'] as const).map((t) => (
-          <Link
-            key={t}
-            href={pageHref(t, 1)}
-            className={`inline-flex h-8 items-center rounded-md px-3 text-sm font-medium transition-colors ${
-              tab === t
-                ? 'bg-background text-foreground shadow-sm'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            {t === 'login' ? '登录日志' : '操作日志'}
-          </Link>
-        ))}
-      </div>
+      <AuditTabs tab={tab} hrefs={{ login: pageHref('login', 1), operation: pageHref('operation', 1) }} />
       <AuditFilters tab={tab} eventType={eventType} operation={operation} />
       </div>
 
-      {/* 日志列表 */}
+      {/* U-G05（F3 遗留）：本页用裸 Table，无法复用 DataTable 内部提示；此处保留**唯一一份**
+          与共享组件同口径的 lg:hidden 提示（此前两个分支各内联一份窄屏断点提示，窄桌面不可见）。 */}
+      <p data-scroll-hint className="border-b bg-muted/30 px-4 py-1.5 text-[11px] text-muted-foreground lg:hidden">
+        左右滑动查看完整表格
+      </p>
+
+      {/* 日志列表（U-LOG02：页签内容与 role=tablist 关联） */}
+      <div id="audit-tabpanel" role="tabpanel" aria-labelledby={`audit-tab-${tab}`} className="flex min-h-0 flex-1 flex-col">
       {tab === 'login' ? (
         <Card className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border-none shadow-sm ring-1 ring-border/50">
           <CardContent className="flex min-h-0 flex-1 flex-col p-0">
-            <p className="border-b bg-muted/30 px-4 py-1.5 text-[11px] text-muted-foreground md:hidden">
-              左右滑动查看完整表格
-            </p>
             <div className="min-h-0 flex-1 overflow-auto">
             <Table>
               <TableHeader className="sticky top-0 z-10 bg-muted/50">
@@ -155,7 +146,16 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
                 {data.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={7} className="p-0">
-                      <EmptyState variant="simple" icon="FileText" title="暂无日志记录" description="当前没有登录日志" />
+                      {eventType ? (
+                        <EmptyState
+                          variant="simple"
+                          kind="filtered"
+                          icon="FileText"
+                          clearAction={{ label: '清除筛选', href: '/audit-logs?tab=login' }}
+                        />
+                      ) : (
+                        <EmptyState variant="simple" icon="FileText" title="暂无日志记录" description="当前没有登录日志" />
+                      )}
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -205,9 +205,6 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
       ) : (
         <Card className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border-none shadow-sm ring-1 ring-border/50">
           <CardContent className="flex min-h-0 flex-1 flex-col p-0">
-            <p className="border-b bg-muted/30 px-4 py-1.5 text-[11px] text-muted-foreground md:hidden">
-              左右滑动查看完整表格
-            </p>
             <div className="min-h-0 flex-1 overflow-auto">
             <Table>
               <TableHeader className="sticky top-0 z-10 bg-muted/50">
@@ -225,7 +222,16 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
                 {data.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={7} className="p-0">
-                      <EmptyState variant="simple" icon="FileText" title="暂无日志记录" description="当前没有操作日志" />
+                      {operation ? (
+                        <EmptyState
+                          variant="simple"
+                          kind="filtered"
+                          icon="FileText"
+                          clearAction={{ label: '清除筛选', href: '/audit-logs?tab=operation' }}
+                        />
+                      ) : (
+                        <EmptyState variant="simple" icon="FileText" title="暂无日志记录" description="当前没有操作日志" />
+                      )}
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -294,6 +300,7 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
           </CardContent>
         </Card>
       )}
+      </div>
 
       {/* 分页 — searchParams 驱动 */}
       {pagination.totalPages > 1 && (

@@ -1,8 +1,10 @@
 # Auth-SSO 架构约束指南 (Architecture Constraints Guide)
 
-**版本**: v1.1 · **状态**: 正式生效 · **最后更新**: 2026-06-24
+**版本**: v1.2 · **状态**: 正式生效 · **最后更新**: 2026-10-23
 
 > 本文档定义了 Auth-SSO 项目所有代码贡献者**必须遵守**的架构约束。每条约束具有**一票否决权 (One-Vote Veto)**——违反任意一条的 PR 不得合并。本文档是 Code Review 与质量门禁的核心依据。
+>
+> **v1.2 变更（2026-10-23 文档校正，以代码为准）**：R7 改用 `lib/authz` 门面（`getUserRoleDeptIds`/`canAccessDept` 已撤下，ADR-014）；R8 的 Layout 层改为 `<PermissionGate>` 装载、补 `requirePermission` 真实返回；R9 时间转换收口到 `domain/shared/time.ts`；R13 补 domain 层白名单实测；R11/R14/骨架模板改用 `validate()` 与 `withAuth`/`withPermission` 真实签名（`mapServerError` 统一映射，Controller 不写 try/catch）；§五 重写为 `proxy.ts` 实际职责（同源校验 403 + 白名单 `/oauth/error`）；§三「多层 layout」条目改写为 `PermissionGate` 与外壳单点包裹；红线表补 #14/#15。
 
 ---
 
@@ -144,67 +146,76 @@ await tx.insert(schema.users).values({ ...userToInsertRow(user), passwordHash })
 数据访问公式：**权限 × 角色部门交集**。用户能看到哪些数据 = 其所有角色的权限并集 ∩ 其所有角色所属部门（含子部门）的数据。
 
 ```typescript
-// ✅ 正确的数据范围过滤
-const deptIds = await getUserRoleDeptIds(userId);
-//   永远返回 string[]。部门 ID 通过 user → user_roles → roles.dept_id 获取
+// ✅ 正确的数据范围过滤（读路径，lib/authz 门面，ADR-014）
+import { resolveScope, isScopeDenied, scopeFilter } from '@/lib/authz';
 
-if (deptIds.length === 0) return { data: [], pagination: { total: 0 } };  // 无角色 → 无数据
-conditions.push(inArray(schema.users.deptId, deptIds));
+const scope = await resolveScope(db, userId);          // UserScope { deptIds }，已展开子树
+if (isScopeDenied(scope)) return { data: [], pagination: { total: 0 } };  // 无角色 → 无数据
+conditions.push(scopeFilter(scope, schema.users.deptId));  // 空范围恒 FALSE，绝不退化为不过滤
 ```
 
-**两步计算逻辑**（封装在 `getUserRoleDeptIds` 中）：
-1. 收集用户所有角色的 `dept_id`（通过 `user_roles` → `roles.dept_id`）
-2. 对每个 `dept_id`，通过 `ancestors LIKE 'deptId/%'` 展开子树
+**两步计算逻辑**（封装在 `lib/authz/data-scope.ts` 的**私有** `expandRoleDeptSubtrees` 中，经 `resolveScope` 对外）：
+1. 收集用户所有 **ACTIVE** 角色的 `dept_id`（通过 `user_roles` → `roles.dept_id`）
+2. 对每个 `dept_id`，展开子树（`ancestors` 物化路径，**五条分支缺一不可**：自身 / `ancestors = deptId` / `LIKE 'deptId/%'` / `LIKE '%/deptId'` / `LIKE '%/deptId/%'`）
 3. 去重后返回部门 ID 数组
 
-**用户分配角色约束**：用户只能被分配其所属部门（`users.dept_id`）下的角色。前端候选列表过滤 + 后端 `withAuth` 中校验。
+> ⚠️ `getUserRoleDeptIds` / `canAccessDept` / `requireDeptAccess` **已从公开面撤下**（`lib/auth/index.ts`、`lib/authz/data-scope.ts`）：范围快照必须与使用绑定同一执行器，否则出现"事务外取快照、事务内复用"的 TOCTOU。写路径只能用 `withScopedWrite` / `withScopedRow`（`lib/authz/write.ts`）。
+
+**用户分配角色约束**：角色必须属于该用户部门且为 `ACTIVE`；范围快照与写入同一事务（`withScopedWrite` / `withScopedRow`）。唯一写路径是 `lib/user-role-assignment.ts`（REST 路由与 Server Action 两个适配器共用，见该文件模块文档）。
 
 ### R8. 三层鉴权体系
 
 | 层 | 位置 | 机制 |
 |---|---|---|
-| Layout | 页面路由 | `requirePermission` 组件守卫 |
-| Server Action | actions.ts | `withAuth` HOF 包裹 |
-| API Route | route.ts | `withPermission` 包装器 |
+| Layout | `(dashboard)/<route>/layout.tsx` | 只声明权限码（`ROUTE_ACCESS`），守卫由 `<PermissionGate>` 装载（内部 `connection()` + `requirePermission` + `<Forbidden/>`） |
+| Server Action | actions.ts | `withAuth` HOF 包裹 → `checkPermission` + `mapServerError` |
+| API Route | route.ts | `withPermission` 包装器 → 同样走 `checkPermission` + `mapServerError` |
 
 ```typescript
-// Layout —— requirePermission
-export default async function UsersLayout({ children }) {
-  await requirePermission({ permissions: ['portal:user:list'] });
-  return <>{children}</>;
+// Layout —— 声明式：layout 不自己 await requirePermission，交给 PermissionGate
+// app/(dashboard)/users/layout.tsx
+export default function UsersLayout({ children }: { children: React.ReactNode }) {
+  return <PermissionGate options={ROUTE_ACCESS['/users']}>{children}</PermissionGate>;
 }
 
-// Server Action —— withAuth
+// Server Action —— withAuth（第一个形参 ctx: AuthContext = { userId }）
 export const createUserAction = withAuth(
-  { permissions: ['portal:user:create'] },
-  async (_ctx, input) => { /* ... */ },
+  { permissions: [USER_PERMISSIONS.CREATE], audit: 'USER_CREATE' },
+  async (ctx: AuthContext, input: CreateUserInput) => { /* ... */ },
 );
 
-// API Route —— withPermission
+// API Route —— withPermission（handler 形参是 userId: string，返回 NextResponse）
 export async function GET(request: NextRequest) {
-  return withPermission({ permissions: ['portal:role:list'] }, async () => {
-    const result = await getRoles(params);
-    return NextResponse.json(result);
+  return withPermission({ permissions: [ROLE_PERMISSIONS.LIST] }, async (userId) => {
+    const result = await getRoles(scope, params);
+    return restListSuccess(result.data, result.pagination);
   });
 }
 ```
 
+> **`requirePermission` 的真实返回**：`Promise<{ userId: string } | null>`（`React.cache()` 包裹），不是 `await requirePermission(...)` 后无事发生——必须判定返回值。`PermissionGate` 是它的唯一装载点（`components/layout/permission-gate.tsx`）。
+
 ### R9. Temporal API
 
-领域实体时间字段使用 `Temporal.Instant`。`new Date()` **仅限** Drizzle 写入列 (`createdAt`, `updatedAt`)。
+领域实体时间字段使用 `Temporal.Instant`。取"现在"用 `Temporal.Now.instant()`；`new Date()` **仅限** DB 边界（`domain/shared/time.ts` 的 `dateFromInstant` 内部，即 `xxxToInsertRow` / `xxxToUpdateRow` / `xxxFromPersistence` 调用处）。
 
 ```typescript
-// domain/user/user.ts —— ✅ Temporal.Instant
+// domain/user/types.ts —— ✅ Temporal.Instant
 export interface User {
   createdAt: Temporal.Instant;
   deletedAt: Temporal.Instant | null;
 }
 
-// domain/user/user.ts —— 转换到 DB 行时 new Date()
-export function userToInsertRow(u: User) {
-  return { createdAt: new Date(u.createdAt.epochMilliseconds) };
-}
+// domain/shared/time.ts —— 时间与 Date 的转换只有这一处
+export function instantFromDate(value: Date): Temporal.Instant { /* … */ }
+export function dateFromInstant(value: Temporal.Instant): Date { /* … */ }
+
+// domain/user/user.ts —— 工厂函数取现在用 Temporal.Now.instant()，转换走 dateFromInstant
+export function createUser(...) { return { /* … */ createdAt: Temporal.Now.instant() }; }
+export function userToInsertRow(u: User) { return { /* … */ createdAt: dateFromInstant(u.createdAt) }; }
 ```
+
+> **前端展示**：读模型输出 ISO 字符串，前端统一用 `lib/format-date.ts`（固定 `zh-CN` / `Asia/Shanghai`），不要直接用 `toLocaleDateString()`（会导致 hydration 文本不一致）。
 
 ### R10. Controller 选择规则
 
@@ -222,22 +233,24 @@ export function userToInsertRow(u: User) {
 - data.ts **禁止**做鉴权检查
 
 ```typescript
-// data.ts —— ✅ 只读模型
+// data.ts —— ✅ 只读模型（真实签名：scope 是入参，鉴权在缓存作用域外完成）
 import 'server-only';
 import { cacheLife, cacheTag } from 'next/cache';
 
-export async function getUsers(scopeFilter, userId, params) {
+export async function getUsers(scope: UserScope, userId: string, params: {...}) {
   'use cache';
   cacheLife('minutes');
   cacheTag('users-list');
+  if (isScopeDenied(scope)) return { data: [], pagination: paginationMeta(page, pageSize, 0) };
   // ... Drizzle 查询
 }
 
 // route.ts —— ✅ 委托给 data.ts
 export async function GET(request: NextRequest) {
-  return withPermission({ permissions: ['portal:user:list'] }, async (userId) => {
-    const result = await getUsers(scopeFilter, userId, params);
-    return NextResponse.json(result);
+  return withPermission({ permissions: [USER_PERMISSIONS.LIST] }, async (userId) => {
+    const scope = await resolveScope(db, userId);
+    const result = await getUsers(scope, userId, params);
+    return restListSuccess(result.data, result.pagination);
   });
 }
 ```
@@ -262,7 +275,7 @@ infrastructure/ → lib/, domain/                ✅
 domain/      → ANY OTHER                        ❌ (零外部依赖)
 ```
 
-`domain/` 层**不得**引入 `next/`、`react/`、Drizzle 或任何非 `@auth-sso/contracts`、`jose`、`bcryptjs` 的 npm 包。
+`domain/` 层**不得**引入 `next/`、`react/`、Drizzle，也不得引入白名单外的 npm 包。白名单（实测 `apps/portal/src/domain/**` 的全部外部导入）：`@auth-sso/contracts`、`zod`、`bcryptjs`（`domain/auth/password.ts`）、`jose`（仅 `domain/auth/types.ts` 的 `JWTPayload` 类型）、`node:crypto`（`domain/auth/oauth-client.ts`）。
 
 ### R14. data.ts DB 查询风格选择
 
@@ -292,9 +305,11 @@ Code Review 中发现以下任意模式，**立即停止合并，必须重构**�
 | 8 | domain 层 `import` 了 `next/`、`react/`、`drizzle-orm` | R13 |
 | 9 | `'use cache'` 函数内出现 `cookies()` / `headers()` | R12 |
 | 10 | 枚举值在 contracts 外另起炉灶定义 | R4 |
-| 11 | `new Date()` 出现在 domain 实体函数中 | R9 |
+| 11 | `new Date()` 出现在 domain 实体函数中（时间转换只经 `domain/shared/time.ts`） | R9 |
 | 12 | API Route 中直接查询 DB 而非委托 data.ts | R11 |
 | 13 | `'use cache'` 函数内调用 `cookies()` / `headers()` / `searchParams` | R12 |
+| 14 | 写路径自行取范围快照再判定（手写 `resolveScope` + `isWithinScope`，绕过 `withScopedWrite` / `withScopedRow`） | R7 |
+| 15 | Route Handler 里调用 `invalidateResource()`（内部 `updateTag`，route 上下文必抛 `E872`） | R12 |
 
 ---
 
@@ -311,11 +326,14 @@ Code Review 中发现以下任意模式，**立即停止合并，必须重构**�
 | 写 Action 只调 `revalidatePath` 不调标签失效 | v16 缓存失效不完整 | 改用 `invalidateResource('xxx')`（内部同时做路径与标签） |
 | 写后失效绕过 `lib/cache-invalidation.ts` 手写原语 | 资源表与跨资源标签必漏（如部门变更需失效用户下拉的 `departments`） | 改用 `invalidateResource()` |
 | Route Handler 里调 `invalidateResource()`（内部 `updateTag`） | `updateTag` 在 route 上下文必抛 `E872`，抛出点在事务提交之后 → 写成功 + 响应 5xx | 改用 `invalidateResourceFromRoute()` |
-| 多层 layout 重复包裹 `<DashboardLayout>` | 多个 layout.tsx 各自包裹 | 统一放入 Route Group `(dashboard)/layout.tsx` |
+| layout 重复手写鉴权样板 | 每个 `(dashboard)/<route>/layout.tsx` 自己 `await requirePermission(...)` + `<Forbidden/>`，且漏判返回值 | 各 layout 只声明 `ROUTE_ACCESS['/xxx']`，守卫统一交给 `<PermissionGate>`（内部 `connection()` + `requirePermission` + `<Forbidden/>` + `<Suspense>`） |
+| 外层 `<DashboardLayout>` 重复包裹 | 多个 layout.tsx 各自包裹外壳 | 外壳只在 `(dashboard)/layout.tsx` 裹一次；`(dashboard)/<route>/layout.tsx` 只放 `<PermissionGate>` |
 
 ---
 
 ## 四、Controller 骨架 (Skeleton Templates)
+
+> 签名唯一出处：`apps/portal/src/lib/auth/guard.ts`（`withAuth`）、`:48`（`withPermission`）、`apps/portal/src/lib/validation.ts`（`validate`）。
 
 ### Server Action
 
@@ -324,18 +342,26 @@ Code Review 中发现以下任意模式，**立即停止合并，必须重构**�
 import { withAuth, type AuthContext } from '@/lib/auth';
 import { db, schema } from '@/infrastructure/db';
 import { invalidateResource } from '@/lib/cache-invalidation';
+import { validate } from '@/lib/validation';
+import { withScopedWrite } from '@/lib/authz';
+import type { ApiResponse } from '@auth-sso/contracts';
 
 export const createEntityAction = withAuth(
-  { permissions: ['entity:create'] },                // 权限码
-  async (_ctx: AuthContext, raw: unknown) => {       // ← 只编排，无业务判定
-    const parsed = InputSchema.safeParse(raw);
-    if (!parsed.success) return { success: false, error: 'VALIDATION_ERROR', message: ... };
+  { permissions: [ENTITY_PERMISSIONS.CREATE], audit: 'ENTITY_CREATE' },   // 权限码 + 审计
+  async (ctx: AuthContext, raw: unknown): Promise<ApiResponse<{ id: string }>> => {
+    // ← 只编排，无业务判定。ctx 是第一个形参（{ userId }）
+    const v = validate(InputSchema, raw);                 // 返回 { ok: true, data } | { ok: false, response: ApiError }
+    if (!v.ok) return v.response;
 
-    const result = await db.transaction(async (tx) => {
-      const entity = createEntity(parsed.data, generateUUID);
-      await tx.insert(schema.entities).values(toInsertRow(entity));
-      return entity;
-    });
+    // 有数据范围时用 withScopedWrite（事务 + 快照 + 守卫一体）；无范围时用 db.transaction
+    const result = await withScopedWrite(
+      { operatorId: ctx.userId, targets: [...] },
+      async (tx) => {
+        const entity = createEntity(v.data, generateUUID);
+        await tx.insert(schema.entities).values(toInsertRow(entity));
+        return entity;
+      },
+    );
 
     // 路径与标签都在资源表里；Server Action 位置用 invalidateResource
     invalidateResource('entities');
@@ -347,19 +373,24 @@ export const createEntityAction = withAuth(
 ### Route Handler GET
 
 ```typescript
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest } from 'next/server';
 import { withPermission } from '@/lib/auth';
+import { resolveScope } from '@/lib/authz';
+import { restListSuccess } from '@/lib/response';
+import { db } from '@/infrastructure/db';
 import { getEntities } from '@/app/(dashboard)/entities/data';
 
 export async function GET(request: NextRequest) {
-  return withPermission({ permissions: ['entity:list'] }, async (userId) => {
+  // handler 形参是 userId: string，返回 NextResponse
+  return withPermission({ permissions: [ENTITY_PERMISSIONS.LIST] }, async (userId) => {
     const sp = request.nextUrl.searchParams;
-    const result = await getEntities({                                     // 委托 data.ts
+    const scope = await resolveScope(db, userId);          // 鉴权/取范围在 data.ts 之外
+    const result = await getEntities(scope, userId, {      // 委托 data.ts
       page: parseInt(sp.get('page') || '1', 10),
       pageSize: parseInt(sp.get('pageSize') || '10', 10),
       keyword: sp.get('keyword') || '',
     });
-    return NextResponse.json(result);
+    return restListSuccess(result.data, result.pagination);
   });
 }
 ```
@@ -367,58 +398,68 @@ export async function GET(request: NextRequest) {
 ### Route Handler POST
 
 ```typescript
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest } from 'next/server';
 import { withPermission } from '@/lib/auth';
-import { db, schema } from '@/infrastructure/db';
-import { mapDomainError } from '@/domain/shared/error-mapping';
+import { validate } from '@/lib/validation';
+import { restSuccess, restError } from '@/lib/response';
+import { withScopedWrite } from '@/lib/authz';
+import { invalidateResourceFromRoute } from '@/lib/cache-invalidation';
 
 export async function POST(request: NextRequest) {
-  return withPermission({ permissions: ['entity:create'] }, async (userId) => {
-    try {
-      const body = await request.json();
-      const parsed = InputSchema.safeParse(body);
-      if (!parsed.success) return NextResponse.json({ error: 'VALIDATION', message: ... }, { status: 400 });
+  return withPermission({ permissions: [ENTITY_PERMISSIONS.CREATE] }, async (userId) => {
+    const v = validate(InputSchema, await request.json());
+    if (!v.ok) return restError(v.response.error, v.response.message, 400);
 
-      const result = await db.transaction(async (tx) => {
-        const entity = createEntity(parsed.data, generateUUID);
-        await tx.insert(schema.entities).values(toInsertRow(entity));
-        return entity;
-      });
+    const entity = await withScopedWrite(
+      { operatorId: userId, targets: [...] },
+      async (tx) => { /* insert */ },
+    );
 
-      return NextResponse.json({ success: true, data: { id: result.id } }, { status: 201 });
-    } catch (err) {
-      const mapped = mapDomainError(err);                  // 统一错误映射
-      return NextResponse.json({ error: mapped.error, message: mapped.message }, { status: mapped.status });
-    }
+    invalidateResourceFromRoute('entities');               // route 位置必须用 route 版入口
+    return restSuccess({ id: entity.id }, 201);
   });
 }
 ```
+
+> **不要写 `try/catch`，也不要写 `instanceof` 分支**：`withPermission` 已经把异常交给 `mapServerError` 并返回 `restError(...)`；`withAuth` 同理返回 `ApiError`。手写这两样即违反 R2（红线 #2）。
 
 ---
 
 ## 五、proxy.ts 职责边界
 
-`apps/portal/src/proxy.ts` 是 Next.js Proxy 层，PKCE 生成已上移到 Gateway（Rust/Pingora）统一完成。proxy.ts 职责简化为：
+`apps/portal/src/proxy.ts` 是 Next.js Proxy 层（源码根，不在 `lib/` 下），PKCE 生成已上移到 Gateway（Rust/Pingora）统一完成。proxy.ts 职责：
 
-- **做**: Cookie 存在性检查（检查 `portal_jwt_token` 是否存在）
-- **做**: 路径白名单放行（`/login`、`/oauth2`、`/.well-known`、`/api/`、`/_next`、静态资源）
-- **不做**: JWT 签名验证（由 API 层的 `resolveIdentity()` 处理）
+- **做**: 同源校验（`isCrossSiteWrite()`）——`POST/PUT/PATCH/DELETE` 带 `Origin` 时比对信任来源 / `X-Forwarded-Host` / 自身 `Host`，跨站返回 **403**；无 `Origin` 的服务端调用放行；`GET/HEAD` 不校验（ADR-005 第 2 层承诺）
+- **做**: 路径白名单放行（`PUBLIC_PATHS = ['/login','/oauth/error','/.well-known']`、`SKIP_PREFIXES = ['/_next','/favicon','/images','/fonts']`、根路径 `/`、以及 `pathname.startsWith('/api/')`）
+- **做**: Cookie 存在性检查（`COOKIE_NAMES.JWT` 无值 → 302 `/login`）
+- **不做**: JWT 签名验证（由 `lib/auth/verify-jwt.ts` 的 `resolveIdentity()` 处理，内含 Gateway HMAC 信任路径与自验签兜底）
 - **不做**: PKCE 生成、OAuth 授权链路由（由 Gateway 统一完成）
-- **不做**: 业务鉴权或角色/权限判定（由 `lib/auth/` 三层体系处理）
+- **不做**: 业务鉴权或角色/权限判定（由 `lib/auth/` + `lib/authz/` 处理）
 
 ```typescript
-// proxy.ts — 纯 JWT 存在性检查，无 PKCE 逻辑
+// proxy.ts（签名、顺序、白名单均与 apps/portal/src/proxy.ts 一致）
+const PUBLIC_PATHS = ['/login', '/oauth/error', '/.well-known'];
+const SKIP_PREFIXES = ['/_next', '/favicon', '/images', '/fonts'];
+
 export async function proxy(request: NextRequest) {
+  if (isCrossSiteWrite(request)) {                                   // ① 同源校验先行
+    return new NextResponse('Forbidden', { status: 403 });
+  }
   const { pathname } = request.nextUrl;
   if (isPublicPath(pathname) || isSkipPath(pathname) || pathname.startsWith('/api/')) {
-    return NextResponse.next();
+    return NextResponse.next();                                      // ② 白名单直通
   }
-  const jwt = request.cookies.get(COOKIE_NAMES.JWT);
-  if (!jwt?.value) {
-    return NextResponse.redirect(new URL('/login', request.url));
+  const jwtToken = request.cookies.get(COOKIE_NAMES.JWT);
+  if (!jwtToken?.value) {
+    return NextResponse.redirect(new URL('/login', request.url));    // ③ 无 JWT → 登录页
   }
   return NextResponse.next();
 }
+
+export const config = { matcher: ['/((?!_next|favicon\\.ico|images|fonts).*)'] };
+```
+
+> 历史修正：白名单里的 `/oauth2` 是**死配置**（实际端点在 `/api/auth/oauth2`，已被 `/api/` 跳过覆盖），现由 `/oauth/error` 取代——未登录用户被引导到 OAuth 错误页时必须放行，否则错误上下文会被 302 `/login` 吞掉（`proxy.ts`）。
 
 ---
 
@@ -430,7 +471,7 @@ export async function proxy(request: NextRequest) {
 
 | ID | 约束描述 | 验证方法 | 关联产品需求 |
 | :--- | :--- | :--- | :--- |
-| **DC-USR-C** | 新建用户时，领域层须校验用户名和邮箱在系统内的唯一性，确保指定部门存在，密码须满足安全策略要求（最小 8 位、含大小写字母和数字） | 自动化测试 / 代码审查 | B-USR-C |
+| **DC-USR-C** | 新建用户时，领域层须校验用户名和邮箱在系统内的唯一性，确保指定部门存在，密码须满足安全策略要求（**至少 10 位、大写/小写/数字/特殊字符四类中至少三类**；2026-10-23 以代码为准统一，此前写"最小 8 位、含大小写字母和数字"） | 自动化测试 / 代码审查 | B-USR-C |
 | **DC-USR-U** | 编辑用户时，领域层须校验目标用户未被逻辑删除，对已删除用户拒绝任何修改操作；部门变更时须校验新部门存在性 | 自动化测试 / 代码审查 | B-USR-U |
 | **DC-USR-D** | 删除用户时，领域层须执行逻辑删除（状态标记为 DELETED），防止重复删除，关联的活跃会话须同步失效 | 自动化测试 / 代码审查 | B-USR-D |
 | **DC-USR-ST** | 切换用户状态时，领域层须校验目标用户未被逻辑删除，已锁定的用户须通过专门的解锁流程恢复，禁止直接切换 | 自动化测试 / 代码审查 | B-USR-ST |

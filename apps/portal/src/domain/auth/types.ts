@@ -24,6 +24,11 @@ export interface PortalJwtClaims extends JWTPayload {
   client_id?: string;
   /** Token 唯一标识（用于 jti 黑名单撤销） */
   jti: string;
+  /**
+   * 登录会话绑定的授权请求 session_id（仅 LoginSession 携带；H-02）。
+   * authorize 分支 A 用它拒绝"被第三方注入的 session_id"。
+   */
+  sid?: string;
   /** OAuth 已授予 scope（空格分隔） */
   scope?: string;
 }
@@ -54,7 +59,10 @@ export interface OAuthTokenResponse {
 export interface RefreshTokenResult {
   accessToken: string;
   refreshToken: string;
+  /** 本次签发的 AT 实际 TTL（秒）—— 来自 client 配置并已钳制（H-16） */
   expiresIn: number;
+  /** 本次签发的 RT 实际 TTL（秒）—— 同上（Portal Cookie maxAge 用） */
+  refreshExpiresIn: number;
   /** 本次轮换授予的 scope（空格分隔）—— 与 AT 的 `scope` claim 同源 */
   scope: string;
 }
@@ -111,4 +119,12 @@ export interface StoredAuthRequest {
   scope: string;
   state: string;
   nonce?: string | null;
+  /**
+   * 授权请求 ↔ 浏览器/登录会话的绑定值（H-02）。
+   *
+   * authorize 分支 B（未登录）生成后写入 HttpOnly Cookie `oauth_request_binding`；
+   * login 端点只有在该 Cookie 与 Redis 中的值一致时才把 session_id 写入 login_session
+   * 并回跳 authorize —— 受害者浏览器没有该 Cookie，第三方注入的 session_id 因此失效。
+   */
+  binding: string;
 }

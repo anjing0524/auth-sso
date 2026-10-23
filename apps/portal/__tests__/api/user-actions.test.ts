@@ -8,7 +8,7 @@
  */
 import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest';
 import { createTestDbHandle, seedTestData } from '../helpers/test-db';
-import { seedAdminUser, seedRootDept, seedSuperAdminRole, seedTestUser, seedUserRoleBinding } from '../helpers/seed-fixtures';
+import { seedAdminUser, seedRootDept, seedSubDept, seedSuperAdminRole, seedTestUser, seedUserRoleBinding } from '../helpers/seed-fixtures';
 import * as schema from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { COMMON_ERRORS, USER_ERRORS } from '@auth-sso/contracts';
@@ -453,5 +453,88 @@ describe('resetPasswordAction', () => {
 
     // 真实状态：该用户的 jti 确实进了 Redis 黑名单（不是"某函数被调用过"）
     expect(await isJtiRevoked(jti)).toBe(true);
+  });
+});
+
+describe('H-18 邮箱规范化', () => {
+  it('创建用户时邮箱 trim + 小写后落库', async () => {
+    const r: any = await createUserAction({
+      username: 'mixedcase', name: 'Mixed Case',
+      password: 'StrongP@ss1', email: '  Mixed.Case@Example.COM ',
+    } as any);
+
+    expect(r.success).toBe(true);
+    const row = await db.query.users.findFirst({ where: eq(schema.users.id, r.data.id) });
+    expect(row?.email).toBe('mixed.case@example.com');
+  });
+
+  it('大小写不同的同一邮箱判重（EMAIL_ALREADY_EXISTS，不写入第二行）', async () => {
+    const first: any = await createUserAction({
+      username: 'caseuser1', name: 'Case One',
+      password: 'StrongP@ss1', email: 'dup@example.com',
+    } as any);
+    expect(first.success).toBe(true);
+
+    const second: any = await createUserAction({
+      username: 'caseuser2', name: 'Case Two',
+      password: 'StrongP@ss1', email: 'DUP@Example.COM',
+    } as any);
+
+    expect(second.success).toBe(false);
+    expect(second.error).toBe(USER_ERRORS.EMAIL_ALREADY_EXISTS);
+    const rows = await db.query.users.findMany({ where: eq(schema.users.email, 'dup@example.com') });
+    expect(rows).toHaveLength(1);
+  });
+
+  it('编辑用户邮箱同样归一化', async () => {
+    const created: any = await createUserAction({
+      username: 'editmail', name: 'Edit Mail',
+      password: 'StrongP@ss1', email: 'edit@example.com',
+      deptId: '00000000-0000-4000-8000-000000000001',
+    } as any);
+    expect(created.success).toBe(true);
+
+    const r: any = await updateUserAction(created.data.id, { email: ' EDIT@Example.COM ' } as any);
+    expect(r.success).toBe(true);
+    const row = await db.query.users.findFirst({ where: eq(schema.users.id, created.data.id) });
+    expect(row?.email).toBe('edit@example.com');
+  });
+});
+
+// ── H-23：用户不能创建在/迁入 DISABLED 部门 ──
+describe('H-23 部门 DISABLED 与用户', () => {
+  const DISABLED_DEPT_ID = '00000000-0000-4000-8000-0000000000d2';
+
+  async function seedDisabledDept(): Promise<void> {
+    await seedTestData(td.db, {
+      departments: seedSubDept({ id: DISABLED_DEPT_ID, code: 'DISABLED_DEPT_U', name: '禁用部门（用户）', status: 'DISABLED' }),
+    });
+  }
+
+  it('在已禁用部门下创建用户 → 422，且不落库', async () => {
+    await seedDisabledDept();
+
+    const r: any = await createUserAction({
+      username: 'disableddeptuser', name: 'Disabled Dept User',
+      password: 'StrongP@ss1', email: 'dd@example.com', deptId: DISABLED_DEPT_ID,
+    } as any);
+
+    expect(r.success).toBe(false);
+    expect(String(r.message)).toContain('禁用');
+    const rows = await db.query.users.findMany({ where: eq(schema.users.email, 'dd@example.com') });
+    expect(rows).toHaveLength(0);
+  });
+
+  it('把用户迁入已禁用部门 → 422，部门不变', async () => {
+    await seedDisabledDept();
+    const target = seedTestUser({ id: '00000000-0000-4000-8000-000000000201', email: 'migrate@example.com', username: 'migrateuser' });
+    await seedTestData(td.db, { users: target });
+
+    const r: any = await updateUserAction('00000000-0000-4000-8000-000000000201', { deptId: DISABLED_DEPT_ID } as any);
+
+    expect(r.success).toBe(false);
+    expect(String(r.message)).toContain('禁用');
+    const row = await db.query.users.findFirst({ where: eq(schema.users.id, '00000000-0000-4000-8000-000000000201') });
+    expect(row?.deptId).toBe(DEPT_ID);
   });
 });

@@ -51,6 +51,16 @@ export function deleteUser(user: User): User {
   return { ...user, status: USER_DELETED, deletedAt: Temporal.Now.instant() };
 }
 
+/**
+ * 用户资料更新（含状态转换规则，H-17）。
+ *
+ * 状态机约束（DC-USR-ST）：
+ * - 请求 `DELETED` 必须走 {@link deleteUser}（写入 `deletedAt`，释放部分唯一索引）。
+ *   此前只写 `status`、丢弃 `deletedAt` ⇒ 邮箱/手机号永久不可复用。
+ * - 当前为 `LOCKED` 时**禁止**经本函数切到任何其它状态（含 ACTIVE）：解锁必须走
+ *   `unlockUserAction`。此前详情表单可直写 LOCKED→ACTIVE，绕过解锁流程。
+ * - 其余转换（ACTIVE↔DISABLED、→LOCKED）属管理员正常操作，允许。
+ */
 export function applyUserUpdate(
   user: User,
   patch: Partial<Pick<User, 'name' | 'email' | 'status' | 'deptId' | 'avatarUrl'>>
@@ -58,11 +68,21 @@ export function applyUserUpdate(
   if (user.status === USER_DELETED) {
     throw new BusinessRuleViolationError('无法更新已逻辑删除的用户');
   }
+  const requestedStatus = patch.status;
+  const nextStatus = requestedStatus ?? user.status;
+
+  if (nextStatus === USER_DELETED && nextStatus !== user.status) {
+    return deleteUser(user);
+  }
+  if (nextStatus !== user.status && user.status === USER_LOCKED) {
+    throw new BusinessRuleViolationError('已锁定的用户无法直接切换状态，请使用解锁功能');
+  }
+
   return {
     ...user,
     name: patch.name ?? user.name,
     email: patch.email ?? user.email,
-    status: patch.status ?? user.status,
+    status: nextStatus,
     deptId: patch.deptId !== undefined ? patch.deptId : user.deptId,
     avatarUrl: patch.avatarUrl ?? user.avatarUrl,
   };

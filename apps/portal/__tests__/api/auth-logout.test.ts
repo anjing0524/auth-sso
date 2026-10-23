@@ -105,7 +105,7 @@ vi.mock(import('@/lib/audit'), async (importOriginal): Promise<Partial<typeof au
   };
 });
 
-import { POST } from '@/app/api/auth/logout/route';
+import { GET, POST } from '@/app/api/auth/logout/route';
 import { signAccessToken, signLoginSession, verifyAccessToken, getActiveSigningKey, rotateRefreshToken } from '@/lib/auth/token';
 import { decodeJwtPayload } from '@/lib/session/jwt';
 import { isJtiRevoked } from '@/lib/session/revoke';
@@ -325,5 +325,69 @@ describe('POST /api/auth/logout', () => {
     expect(res.status).toBe(200);
     // 无 jti ⇒ 第 1/2/3 层都不该有写入（本用例既无 AT 也无 RT Cookie）
     await expect(getRedis().keys('*')).resolves.toHaveLength(0);
+  });
+});
+
+
+describe('GET /api/auth/logout — CSRF 面（H-09）', () => {
+  function buildGetRequest(headers: Record<string, string> = {}): any {
+    return new Request('http://localhost:4100/api/auth/logout', { method: 'GET', headers });
+  }
+
+  it('**跨站顶级导航（Sec-Fetch-Site: cross-site）→ 返回确认页，不执行任何撤销/清 Cookie**', async () => {
+    const plainRefreshToken = 'rt_get_csrf_cross_site';
+    await seedRefreshTokenRow(PORTAL_CLIENT_ID, plainRefreshToken);
+    setCookieValues({ [COOKIE_NAMES.REFRESH]: plainRefreshToken });
+
+    const res = await GET(buildGetRequest({ 'sec-fetch-site': 'cross-site' }));
+    const html = await res.text();
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toContain('text/html');
+    expect(html).toContain('method="post"');
+    // 未发生状态变更：RT 未被撤销、也未下发清除 Cookie
+    const rows = await selectRefreshTokens();
+    expect(rows[0]!.revoked).toBeNull();
+    expect(res.cookies.get(COOKIE_NAMES.REFRESH)).toBeUndefined();
+  });
+
+  it('无 Sec-Fetch-Site 且无 Referer（可疑来源）→ 同样只返回确认页', async () => {
+    const plainRefreshToken = 'rt_get_csrf_no_header';
+    await seedRefreshTokenRow(PORTAL_CLIENT_ID, plainRefreshToken);
+    setCookieValues({ [COOKIE_NAMES.REFRESH]: plainRefreshToken });
+
+    const res = await GET(buildGetRequest());
+
+    expect(res.status).toBe(200);
+    expect(await res.text()).toContain('method="post"');
+    const rows = await selectRefreshTokens();
+    expect(rows[0]!.revoked).toBeNull();
+  });
+
+  it('同源顶级导航（side-bar 链接，Sec-Fetch-Site: same-origin）→ 保留 H-SSO-004 四层撤销并 302 /login', async () => {
+    const plainRefreshToken = 'rt_get_same_origin';
+    await seedRefreshTokenRow(PORTAL_CLIENT_ID, plainRefreshToken);
+    setCookieValues({ [COOKIE_NAMES.REFRESH]: plainRefreshToken });
+
+    const res = await GET(buildGetRequest({ 'sec-fetch-site': 'same-origin' }));
+    const location = res.headers.get('location')!;
+
+    expect(res.status).toBe(307);
+    expect(location).toContain('/login');
+    const rows = await selectRefreshTokens();
+    expect(rows[0]!.revoked).not.toBeNull();
+    expect(res.cookies.get(COOKIE_NAMES.REFRESH)?.maxAge).toBe(0);
+  });
+
+  it('地址栏直接访问（Sec-Fetch-Site: none）→ 视为可信导航，执行登出', async () => {
+    const plainRefreshToken = 'rt_get_direct_nav';
+    await seedRefreshTokenRow(PORTAL_CLIENT_ID, plainRefreshToken);
+    setCookieValues({ [COOKIE_NAMES.REFRESH]: plainRefreshToken });
+
+    const res = await GET(buildGetRequest({ 'sec-fetch-site': 'none' }));
+
+    expect(res.status).toBe(307);
+    const rows = await selectRefreshTokens();
+    expect(rows[0]!.revoked).not.toBeNull();
   });
 });

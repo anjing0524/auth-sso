@@ -228,6 +228,32 @@ fn test_callback_denied_location_is_stable() {
     assert_eq!(CALLBACK_DENIED_LOCATION, "/login?error=oauth_denied");
 }
 
+// ── H-35：失败回跳必须清除 4 个临时 OAuth Cookie ─────────────
+
+#[test]
+fn failure_clear_cookies_drops_all_four_transient_cookies() {
+    let cookies = failure_clear_cookies("/api/auth/callback");
+
+    assert_eq!(cookies.len(), 4, "必须清除全部 4 个临时 Cookie");
+    for (cookie, name) in
+        cookies
+            .iter()
+            .zip(["pkce_verifier", "oauth_state", "oauth_nonce", "return_to"])
+    {
+        assert!(
+            cookie.starts_with(&format!("{name}=")),
+            "{name} 的清除头格式错误: {cookie}"
+        );
+        assert!(cookie.contains("Max-Age=0"), "必须立即过期: {cookie}");
+        assert!(
+            cookie.contains("Path=/api/auth/callback"),
+            "Path 必须与下发时一致: {cookie}"
+        );
+        assert!(cookie.contains("Secure"), "必须保持 Secure: {cookie}");
+        assert!(cookie.contains("HttpOnly"), "必须保持 HttpOnly: {cookie}");
+    }
+}
+
 // ── callback 校验序列（`check_callback`）：原先内联在 &mut Session 方法里 ──
 
 fn cookie_header(

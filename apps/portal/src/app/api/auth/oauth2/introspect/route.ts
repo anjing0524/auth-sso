@@ -8,11 +8,11 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { verifyAccessToken } from '@/lib/auth/token';
 import { db, schema } from '@/infrastructure/db';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { hashToken } from '@/lib/crypto';
 import { mapServerError } from '@/lib/server-error';
 import { parseOAuthBody } from '@/lib/auth/oauth-body';
-import { authenticateOAuthClient } from '@/lib/auth/oauth-helpers';
+import { authenticateOAuthClient, withOAuthNoStore } from '@/lib/auth/oauth-helpers';
 import { resolveClientCredentials, type ClientCredentials } from '@/lib/auth/client-credentials';
 import { createLogger } from '@/lib/logger';
 import { JWT_TYP } from '@auth-sso/contracts';
@@ -39,18 +39,20 @@ export async function POST(request: NextRequest) {
     }
 
     if (!token) {
-      return NextResponse.json({ active: false });
+      return withOAuthNoStore(NextResponse.json({ active: false }));
     }
 
     // 尝试作为 Access Token 验签（无状态：签名 + exp + issuer + jti 黑名单。
     // verifyAccessToken 内部已完成黑名单复核，active:true 即未被撤销。
     // audience 传 null：多 client 通用端点，aud 由 RS 按 RFC 7662 响应自行判定）
     const claims = await verifyAccessToken(token, null, JWT_TYP.ACCESS_TOKEN);
-    if (claims) {
+    // H-07：只向**签发该令牌的 client** 披露内省元数据（RFC 7662 §2.1 端点保护策略）。
+    // 其他 client 一律按"不可识别"返回 inactive——与未知 token 同形，防跨租户元数据泄露。
+    if (claims && claims.client_id === creds.clientId) {
       // RFC 7662 §2.2：除 active 外全部字段可选。AT 显式携带 OAuth 协议数据
       // （aud = client_id + client_id claim + scope，ADR-013），透传给 RS 供
       // 授权判定与审计；其余仅返回真实存在的字段。
-      return NextResponse.json({
+      return withOAuthNoStore(NextResponse.json({
         active: true,
         sub: claims.sub,
         ...(claims.scope ? { scope: claims.scope } : {}),
@@ -60,14 +62,18 @@ export async function POST(request: NextRequest) {
         iat: claims.iat,
         iss: claims.iss,
         jti: claims.jti,
-      });
+      }));
     }
 
-    // 尝试作为 Refresh Token 查询（tokenHash 存 SHA256，查询时需同样 hash）
+    // 尝试作为 Refresh Token 查询（tokenHash 存 SHA256，查询时需同样 hash）。
+    // H-07：同时限定 client 归属，杜绝 client B 内省 client A 的 RT 元数据。
     const rtRows = await db
       .select()
       .from(schema.refreshTokens)
-      .where(eq(schema.refreshTokens.tokenHash, hashToken(token)))
+      .where(and(
+        eq(schema.refreshTokens.tokenHash, hashToken(token)),
+        eq(schema.refreshTokens.clientId, creds.clientId),
+      ))
       .limit(1);
 
     if (rtRows.length > 0) {
@@ -75,22 +81,22 @@ export async function POST(request: NextRequest) {
       const isRevoked = !!rt.revoked;
       const isExpired = rt.expiresAt ? new Date(rt.expiresAt) < new Date() : false;
 
-      return NextResponse.json({
+      return withOAuthNoStore(NextResponse.json({
         active: !isRevoked && !isExpired,
         scope: rt.scopes,
         client_id: rt.clientId,
         sub: rt.userId,
         token_type: 'refresh_token',
-      });
+      }));
     }
 
     // RFC 7662 §2.2: token 不可识别时返回 { active: false }，不得返回错误
-    return NextResponse.json({ active: false });
+    return withOAuthNoStore(NextResponse.json({ active: false }));
 
   } catch (err) {
     // RFC 7662: 异常时仍返回 { active: false }，结构化日志记录不含堆栈（防信息泄露）
     const mapped = mapServerError(err);
     log.error('Exception', { error: mapped.error, message: mapped.message });
-    return NextResponse.json({ active: false });
+    return withOAuthNoStore(NextResponse.json({ active: false }));
   }
 }

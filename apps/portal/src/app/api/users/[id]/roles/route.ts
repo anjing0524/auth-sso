@@ -11,7 +11,7 @@ import { type NextRequest } from 'next/server';
 import { db } from '@/infrastructure/db';
 import { withPermission, logServerDataRead } from '@/lib/auth';
 import { resolveScope } from '@/lib/authz';
-import { extractClientIP, extractUserAgent } from '@/lib/audit';
+import { extractClientIP, extractUserAgent, publicUrlFromRequest } from '@/lib/audit';
 import { COMMON_ERRORS, USER_PERMISSIONS } from '@auth-sso/contracts';
 import {
   RoleAssignmentSchema,
@@ -58,7 +58,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     const result = await assignUserRoles(adminUserId, id, parsed.data.roleIds, {
       method: 'POST',
-      url: request.url,
+      url: publicUrlFromRequest(request) ?? request.nextUrl.pathname,
       ip: extractClientIP(request.headers),
       userAgent: extractUserAgent(request.headers),
     });
@@ -82,7 +82,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
 
     const result = await removeUserRole(adminUserId, id, parsed.data.roleId, {
       method: 'DELETE',
-      url: request.url,
+      url: publicUrlFromRequest(request) ?? request.nextUrl.pathname,
       ip: extractClientIP(request.headers),
       userAgent: extractUserAgent(request.headers),
     });

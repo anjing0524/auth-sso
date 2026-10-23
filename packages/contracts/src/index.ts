@@ -56,6 +56,12 @@ export const COOKIE_NAMES = {
   REFRESH: 'portal_refresh_token',
   /** 登录后临时会话 Token (5min TTL)，仅含 sub，Path=/api/auth/oauth2/authorize */
   LOGIN_SESSION: 'login_session',
+  /**
+   * 授权请求 ↔ 登录会话绑定值（H-02，128bit CSPRNG，HttpOnly，Path=/api/auth，5min）。
+   * 仅 Portal 内部消费：login 校验后写入 login_session.sid，authorize 分支 A 复核，
+   * 阻断"攻击者构造 authorize 拿 session_id → 让受害者登录 → code 投递到攻击者 client"。
+   */
+  AUTH_REQUEST_BINDING: 'oauth_request_binding',
   /** PKCE code_verifier（Client SSR 生成，HttpOnly），callback 读取后传给 /token */
   PKCE_VERIFIER: 'pkce_verifier',
   /** OAuth 2.1 state（Client SSR 生成，随机值），callback 校验 Cookie↔Query 一致性 */
@@ -148,7 +154,7 @@ export const AUDIT_OPERATION_LABELS: Record<AuditOperation, string> = {
 export interface UserPermissionContext {
   roles: Array<{ id: string; code: string; name: string }>;
   permissions: string[];
-  /** 用户所有角色所属部门（含子树展开）的 ID 列表 */
+  /** 用户所有 ACTIVE 角色所属部门的原始 ID 列表（**未展开子树**；子树展开唯一实现是 Portal 的 `resolveScope`，见 ADR-002 增补/ADR-014） */
   deptIds: string[];
 }
 

@@ -10,10 +10,6 @@ on:
         required: false
         type: number
         default: 14
-      run_fault_injection:
-        required: false
-        type: boolean
-        default: false
 
 jobs:
   full-check:
@@ -60,11 +56,6 @@ jobs:
 
       - name: Generate traceability inventory
         run: docker compose -f docker/compose/test.yml run --rm node-test node tests/traceability/generate-report.mjs
-
-      - name: Run fault injection smoke test
-        if: ${{ inputs.run_fault_injection && always() }}
-        continue-on-error: true
-        run: docker compose -f docker/compose/test.yml run --rm node-test node tests/performance/api-benchmark.mjs --quick
 
       - name: Collect Docker test infrastructure logs
         if: always()

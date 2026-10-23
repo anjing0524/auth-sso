@@ -18,7 +18,6 @@ import { resolveIssuancePermission } from '@/lib/permissions';
 // 从 ./token 导入而非直接 ./token/revocation：token.ts 是 token 族的模块边界
 // （re-export 撤销原语），经它导入也让测试对 @/lib/auth/token 的 mock 生效。
 import {
-  ACCESS_TOKEN_TTL,
   issueRefreshToken,
   revokeRefreshTokenFamily,
   signAccessToken,
@@ -35,11 +34,16 @@ export interface AuthorizationCodeExchange {
   /**
    * 已认证的 OAuth Client。
    *
-   * 只要求 `clientId`：本模块不需要 client 的其余字段。刻意的窄接口——
+   * 只要求 `clientId` + 两个 TTL 配置：本模块不需要 client 的其余字段。刻意的窄接口——
    * 家族撤销锚点取自**授权码行**（`authCode.userId` + `authCode.clientId`），
    * 而非调用方传入的 client，避免调用方传错就撤错家族。
+   * TTL 由 client 行提供（H-16），本模块内部仍经 clampTokenTtl 钳制。
    */
-  readonly client: { readonly clientId: string };
+  readonly client: {
+    readonly clientId: string;
+    readonly accessTokenTtl?: number | null;
+    readonly refreshTokenTtl?: number | null;
+  };
   /** 已与授权请求比对过的 redirect_uri（RFC 6749 §4.1.3 必填） */
   readonly redirectUri: string;
   /** PKCE code_verifier 明文 */
@@ -74,13 +78,19 @@ export type AuthorizationCodeExchangeResult =
 async function claimAuthorizationCode(
   code: string,
   clientId: string,
+  redirectUri: string,
 ): Promise<typeof schema.authorizationCodes.$inferSelect | null> {
+  // H-06：redirect_uri 与 code / client / used / 未过期一起进 WHERE ——
+  // 错误 redirect 的兑换请求**领不到**授权码（used 保持 false），因此
+  //  ① 合法 RP 用正确参数重试仍可成功；
+  //  ② 不会被误判为"授权码重放"而撤销整个家族的 RT（此前的事故形态）。
   const [claimed] = await db
     .update(schema.authorizationCodes)
     .set({ used: true })
     .where(and(
       eq(schema.authorizationCodes.code, hashToken(code)),
       eq(schema.authorizationCodes.clientId, clientId),
+      eq(schema.authorizationCodes.redirectUri, redirectUri),
       eq(schema.authorizationCodes.used, false),
       gt(schema.authorizationCodes.expiresAt, new Date()),
     ))
@@ -124,10 +134,10 @@ export async function exchangeAuthorizationCode(
   const { code, client, redirectUri, codeVerifier } = input;
   const clientId = client.clientId;
 
-  // ── 1. 原子领取（一次性使用的实现点）──
-  const authCode = await claimAuthorizationCode(code, clientId);
+  // ── 1. 原子领取（一次性使用的实现点；redirect_uri 已并入 WHERE，见 H-06）──
+  const authCode = await claimAuthorizationCode(code, clientId, redirectUri);
 
-  if (!authCode || authCode.redirectUri !== redirectUri) {
+  if (!authCode) {
     // 领取失败才可能与重放有关：确认该 code 是否确实存在且已消费
     if (!authCode) {
       const consumed = await findConsumedCode(code, clientId);
@@ -162,13 +172,18 @@ export async function exchangeAuthorizationCode(
   }
 
   // ── 4. 签发 ──
-  // AT：aud / client_id = 授权对象 client（ADR-013）
-  const { token: accessToken } = await signAccessToken(authCode.userId, clientId, authCode.scope);
+  // AT：aud / client_id = 授权对象 client（ADR-013）；TTL 取 client 配置（H-16）
+  const { token: accessToken, expiresIn } = await signAccessToken(
+    authCode.userId,
+    clientId,
+    authCode.scope,
+    client.accessTokenTtl,
+  );
 
   // RT：按 offline_access 门控（OIDC Core §11：长期凭证仅在明确请求时发放）
   const grantedScopes = parseScopes(authCode.scope);
   const refreshToken = grantedScopes.includes('offline_access')
-    ? await issueRefreshToken(authCode.userId, clientId, authCode.scope)
+    ? await issueRefreshToken(authCode.userId, clientId, authCode.scope, client.refreshTokenTtl)
     : undefined;
 
   // ID Token：scope 含 openid 时签发
@@ -186,7 +201,8 @@ export async function exchangeAuthorizationCode(
     tokens: {
       access_token: accessToken,
       token_type: 'Bearer',
-      expires_in: ACCESS_TOKEN_TTL,
+      // 实际签发值（来自 client 配置并已钳制），不得手抄全局常量（H-16）
+      expires_in: expiresIn,
       ...(refreshToken ? { refresh_token: refreshToken } : {}),
       ...(idToken ? { id_token: idToken } : {}),
       scope: authCode.scope,

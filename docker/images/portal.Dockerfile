@@ -23,10 +23,8 @@ RUN printf 'manage-package-manager-versions=false\nregistry=https://registry.npm
 # NEXT_PUBLIC_* 会内联进客户端包；预渲染路由（OIDC Discovery）在构建期读取
 # NEXT_PUBLIC_APP_URL / PORTAL_ISSUER，必须与目标环境的公开地址一致
 ARG NEXT_PUBLIC_APP_URL=http://localhost:4100
-ARG NEXT_PUBLIC_APP_NAME=Auth-SSO Portal
 ARG PORTAL_ISSUER
 ENV NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL \
-    NEXT_PUBLIC_APP_NAME=$NEXT_PUBLIC_APP_NAME \
     PORTAL_ISSUER=$PORTAL_ISSUER
 
 RUN pnpm install --frozen-lockfile

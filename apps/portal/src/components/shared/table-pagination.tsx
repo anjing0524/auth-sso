@@ -2,8 +2,8 @@ import Link from 'next/link';
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { PaginationJump } from './pagination-jump';
+import { PaginationJumpForm } from './pagination-jump-form';
 
 /**
  * 列表页统一分页条（唯一实现）。
@@ -29,6 +29,8 @@ export interface TablePaginationProps {
   jumpAction?: string;
   /** 服务端模式跳页需要保留的其它查询参数（如 tab） */
   jumpParams?: Record<string, string>;
+  /** 服务端模式跳页的导航注入点（组件测试用）；默认 window.location.assign */
+  navigate?: (url: string) => void;
 }
 
 const navButtonClass = 'h-8 gap-1 rounded-lg px-2';
@@ -90,6 +92,7 @@ export function TablePagination({
   hrefFor,
   jumpAction,
   jumpParams,
+  navigate,
 }: TablePaginationProps) {
   const pages = Math.max(totalPages, 1);
   const prevTo = hrefFor?.(page - 1);
@@ -98,7 +101,7 @@ export function TablePagination({
 
   const pageNode = (n: number) => {
     const isCurrent = n === page;
-    const cls = `inline-flex h-8 min-w-8 items-center justify-center rounded-lg px-2 text-xs ${
+    const cls = `inline-flex h-8 min-w-8 items-center justify-center rounded-lg px-2 text-xs outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${
       isCurrent
         ? 'border border-border bg-card font-bold shadow-sm'
         : 'text-muted-foreground hover:bg-muted hover:text-foreground'
@@ -151,24 +154,13 @@ export function TablePagination({
         {onPageChange ? (
           <PaginationJump totalPages={pages} onPageChange={onPageChange} />
         ) : jumpAction ? (
-          <form action={jumpAction} method="get" className="flex items-center gap-1.5">
-            {Object.entries(jumpParams ?? {}).map(([k, v]) => (
-              <input key={k} type="hidden" name={k} value={v} />
-            ))}
-            <label htmlFor="pagination-jump-form" className="sr-only">跳至页码</label>
-            <Input
-              id="pagination-jump-form"
-              name="page"
-              type="number"
-              min={1}
-              max={pages}
-              defaultValue={page}
-              inputMode="numeric"
-              data-compact="true"
-              className="h-8 w-16 px-2 text-xs"
-            />
-            <Button type="submit" variant="outline" size="sm" className="h-8 px-2 text-xs">跳转</Button>
-          </form>
+          <PaginationJumpForm
+            action={jumpAction}
+            totalPages={pages}
+            page={page}
+            params={jumpParams}
+            navigate={navigate}
+          />
         ) : null}
       </div>
     </div>

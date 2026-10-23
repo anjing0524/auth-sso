@@ -32,6 +32,7 @@ import { USER_PERMISSIONS, type ApiResponse } from '@auth-sso/contracts';
 import { createUserAction } from '../actions';
 import { useFieldFailure } from '@/hooks/use-field-failure';
 import { FieldError } from '@/components/shared/field-error';
+import { userFacingMessage } from './user-error-copy';
 
 /**
  * 局部组件：基于 React 19 useFormStatus 感知表单提交态
@@ -103,7 +104,7 @@ export default function CreateUserDialog({ departments }: CreateUserDialogProps)
         setValues({ name: '', username: '', email: '', password: '' });
       } else {
         // 就地显示还是 toast，由 hook 按"本表单字段清单"判断（不依赖上一次的状态）
-        reportFailure({ error: state.error, message: state.message || '创建用户失败' });
+        reportFailure({ error: state.error, message: userFacingMessage({ error: state.error, message: state.message }, '创建用户失败') });
       }
     });
   }, [state, reportFailure]);

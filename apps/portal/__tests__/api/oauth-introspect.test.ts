@@ -40,26 +40,28 @@ tdHolder.current = td;
 const USER_ID = '00000000-0000-4000-8000-000000000101';
 const CLIENT_ID = 'portal';
 const SECRET = 'portal-secret';
+const OTHER_CLIENT_ID = 'other-client';
+const OTHER_SECRET = 'other-client-secret';
 const RT = 'rt_introspect_test_token_value';
 
-function makeRequest(body: Record<string, string>): NextRequest {
+function makeRequest(body: Record<string, string>, creds: { id: string; secret: string } = { id: CLIENT_ID, secret: SECRET }): NextRequest {
   return new NextRequest('http://localhost:4100/api/auth/oauth2/introspect', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
+    body: JSON.stringify({ ...body, client_id: creds.id, client_secret: creds.secret }),
   });
 }
 
-function introspect(token: string) {
-  return introspectPost(makeRequest({ token, client_id: CLIENT_ID, client_secret: SECRET }));
+function introspect(token: string, creds?: { id: string; secret: string }) {
+  return introspectPost(makeRequest({ token }, creds));
 }
 
-async function seedRefreshToken(overrides: { revoked?: Date; expiresAt?: Date } = {}) {
+async function seedRefreshToken(overrides: { revoked?: Date; expiresAt?: Date; clientId?: string } = {}) {
   await td.db.insert(schema.refreshTokens).values({
     id: crypto.randomUUID(),
     tokenHash: hashToken(RT),
     userId: USER_ID,
-    clientId: CLIENT_ID,
+    clientId: overrides.clientId ?? CLIENT_ID,
     scopes: 'openid offline_access',
     revoked: overrides.revoked ?? null,
     expiresAt: overrides.expiresAt ?? new Date(Date.now() + 7 * 24 * 3600 * 1000),
@@ -77,7 +79,10 @@ beforeEach(async () => {
   await seedTestData(td.db, {
     departments: seedRootDept(),
     users: seedAdminUser(),
-    clients: seedPortalClient({ clientSecret: hashToken(SECRET) }),
+    clients: [
+      ...seedPortalClient({ clientSecret: hashToken(SECRET) }),
+      ...seedPortalClient({ clientId: OTHER_CLIENT_ID, clientSecret: hashToken(OTHER_SECRET) }),
+    ],
   });
   // 真实 ES256：由 `seedSigningKeys` 夹具种入真密钥对（它同时重置签名密钥缓存，
   // 且私钥按生产同路加密落库）。本文件不 mock `@/lib/auth/token`，
@@ -87,16 +92,14 @@ beforeEach(async () => {
 
 describe('POST /api/auth/oauth2/introspect — 客户端认证', () => {
   it('凭证缺失 → 401 invalid_client（RFC 7662 §2.1）', async () => {
-    const res = await introspectPost(makeRequest({ token: 'x' }));
+    const res = await introspectPost(makeRequest({ token: 'x' }, { id: '', secret: '' }));
 
     expect(res.status).toBe(401);
     expect((await res.json()).error).toBe('invalid_client');
   });
 
   it('凭证错误 → 401', async () => {
-    const res = await introspectPost(makeRequest({
-      token: 'x', client_id: CLIENT_ID, client_secret: 'wrong',
-    }));
+    const res = await introspectPost(makeRequest({ token: 'x' }, { id: CLIENT_ID, secret: 'wrong' }));
 
     expect(res.status).toBe(401);
   });
@@ -187,5 +190,34 @@ describe('POST /api/auth/oauth2/introspect — Refresh Token', () => {
     const body = await (await introspect(RT)).json();
 
     expect(body.active).toBe(false);
+  });
+});
+
+
+describe('POST /api/auth/oauth2/introspect — client 归属校验（H-07）', () => {
+  const otherCreds = { id: OTHER_CLIENT_ID, secret: OTHER_SECRET };
+
+  it('**client B 内省 client A 的 AT → active:false**（不得泄露他人令牌元数据）', async () => {
+    const { token } = await signAccessToken(USER_ID, CLIENT_ID, 'openid');
+
+    const body = await (await introspect(token, otherCreds)).json();
+
+    expect(body).toEqual({ active: false });
+  });
+
+  it('**client B 内省 client A 的 RT → active:false**', async () => {
+    await seedRefreshToken();
+
+    const body = await (await introspect(RT, otherCreds)).json();
+
+    expect(body).toEqual({ active: false });
+  });
+
+  it('归属 client 自己内省仍正常（对照，证明上两条不是拒绝一切）', async () => {
+    const { token } = await signAccessToken(USER_ID, CLIENT_ID, 'openid');
+    await seedRefreshToken();
+
+    expect((await (await introspect(token)).json()).active).toBe(true);
+    expect((await (await introspect(RT)).json()).active).toBe(true);
   });
 });

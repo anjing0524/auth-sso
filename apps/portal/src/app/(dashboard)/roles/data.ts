@@ -5,7 +5,7 @@ import 'server-only';
 
 import { cacheLife, cacheTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
-import { eq, ilike, or, asc, desc, and } from 'drizzle-orm';
+import { eq, ilike, inArray, or, asc, desc, and, count } from 'drizzle-orm';
 
 import { scopeFilter, isScopeDenied } from '@/lib/authz';
 import type { UserScope } from '@/lib/authz';
@@ -146,3 +146,23 @@ export async function getRolePermissions(roleId: string, scope: UserScope) {
   return role.rolePermissions.filter(rp => rp.permission !== null).map(toAssignedPermission);
 }
 
+/**
+ * 批量统计角色当前绑定的用户数（删除确认的影响面，U-ROLES03）。
+ *
+ * 读路径无 "use cache"：删除确认需要**当前**数据，且只在列表页渲染时算一次
+ * （单页角色数 ≤ pageSize，`IN (...)` + GROUP BY 一次查询）。
+ *
+ * @param roleIds 当前页角色 ID（空数组直接返回空对象，零查询）
+ * @returns roleId → 绑定用户数
+ */
+export async function getRoleBoundUserCounts(
+  roleIds: readonly string[],
+): Promise<Record<string, number>> {
+  if (roleIds.length === 0) return {};
+  const rows = await db
+    .select({ roleId: schema.userRoles.roleId, boundUsers: count() })
+    .from(schema.userRoles)
+    .where(inArray(schema.userRoles.roleId, [...roleIds]))
+    .groupBy(schema.userRoles.roleId);
+  return Object.fromEntries(rows.map((r) => [r.roleId, Number(r.boundUsers)]));
+}

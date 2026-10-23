@@ -93,6 +93,15 @@ describe('OIDC Discovery 文档结构', () => {
     }
   });
 
+  it('token_endpoint_auth_methods_supported 与实现一致：不含 none（无 public client 支持）', async () => {
+    const doc = await fetchDocument();
+    expect(doc['token_endpoint_auth_methods_supported']).toEqual([
+      'client_secret_basic',
+      'client_secret_post',
+    ]);
+    expect(doc['token_endpoint_auth_methods_supported']).not.toContain('none');
+  });
+
   it('issuer 是一个合法的 https URL（曾因非 URL 值违反规范）', async () => {
     const doc = await fetchDocument();
 

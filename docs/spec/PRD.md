@@ -1,9 +1,16 @@
 # 产品需求文档 (PRD) - Auth-SSO
 
-版本号：v1.1
+版本号：v1.2
 状态：已发布
-最后更新：2026-06-24
+最后更新：2026-10-23
 目标读者：产品、工程、QA、运维团队
+
+> **v1.2 变更（2026-10-23，对照代码校正）**：只修正"文档描述 = 代码实际行为"，需求 ID、优先级与需求总数不变。
+> ①§2.3 Bootstrap 的强制改密**未实现**（代码中无 `password_changed_at` 拦截，见该节注记）；②§2.1 Cookie-to-Bearer
+> 与权限头表述收敛为 Gateway 实际行为（注入 `Authorization: Bearer` + `X-User-Id`/`X-User-Jti`，**不注入权限头**）；
+> ③§6.1/§6.2/§8 的测量方法改为现有事实（无 k6、无 E2E 计时门禁）；④§8.2/§8.3 的文档篇数与 DC 约束数按树重算；
+> ⑤§8.4 的基线数字标注为 2026-07-09 历史值并写明当前实测规模；⑥删除已不存在的 `auth-flow.spec.ts` 引用。
+> 需求矩阵同步更新见 [REQUIREMENTS_MATRIX.md](REQUIREMENTS_MATRIX.md)。
 
 > **需求基线 (Requirements Baseline)**
 >
@@ -11,9 +18,9 @@
 > |------|-----|
 > | 基线编号 | BL-2026-001 |
 > | 基线建立日期 | 2026-06-24 |
-> | 需求总数 | 70 条（仅含产品功能需求，详见 REQUIREMENTS_MATRIX.md） |
+> | 需求总数 | 70 条（仅含产品功能需求，详见 [REQUIREMENTS_MATRIX.md](REQUIREMENTS_MATRIX.md)） |
 > | 优先级分布 | P0 关键 28 条 / P1 重要 31 条 / P2 一般 11 条 |
-> | 统计口径 | 仅统计产品功能需求（WHAT）；架构实现约束（DC-xxx）见 ARCHITECTURE_CONSTRAINTS.md（不包含在本统计中） |
+> | 统计口径 | 仅统计产品功能需求（WHAT）；架构实现约束（DC-xxx）见 [ARCHITECTURE_CONSTRAINTS.md](ARCHITECTURE_CONSTRAINTS.md)（不包含在本统计中） |
 > | 变更控制 | 所有需求变更须经 CCB（变更控制委员会）审批 |
 > | 追溯粒度 | 需求 → 设计 → 实现 → 测试（四层追溯） |
 > | 适用标准 | CMMI V3.0 (2023), OAuth 2.1 (RFC 6749), OIDC (OpenID Connect Core 1.0) |
@@ -42,8 +49,10 @@
 - 标准 OIDC/OAuth 2.1 流程（Authorization Code + PKCE）。
 - 基于角色所属部门的 RBAC 数据范围控制（权限 × 角色部门交集）。
 - 登录及管理操作的审计日志。
-- 包含空闲超时和绝对超时的会话管理。
-- 基于 Rust/Pingora 的 API 网关，用于离线 JWT 验证和 Cookie-to-Bearer 转换。
+- 会话生命周期采用**静默续签 + 令牌到期**模型、而非"空闲/绝对超时"模型：访问令牌 1 小时过期，Gateway 在其剩余不足 5 分钟时用刷新令牌静默续签（`apps/gateway/src/auth/verify.rs` 的 `REFRESH_THRESHOLD_SEC=300`）；刷新令牌 7 天有效并按轮换使用。**代码中不存在"空闲超时/绝对超时"判定**（原文档此条为需求意图，尚未落地）。
+- 基于 Rust/Pingora 的 API 网关，用于离线 ES256 JWT 验签、Cookie→Bearer 转换，并在验签成功后向下游注入身份头
+  （实际注入 `Authorization: Bearer`、`X-User-Id`、`X-User-Jti`，及可选 HMAC 签名头 `X-Gateway-Timestamp`/`X-Gateway-Signature`；
+  **不注入角色/权限/部门头**，权限一律由 Portal 侧查 Redis/DB 实时判定，见 ADR-006 与 `apps/gateway/src/gateway.rs`）。
 
 ### 2.2 范围外
 - 大规模消费者身份管理。
@@ -56,11 +65,12 @@
 
 ### 2.3 系统初始化（Bootstrap）
 
-首次部署时，系统通过数据库初始化入口 `pnpm db:migrate && pnpm db:seed` 创建首个超级管理员账户；其中 `db:seed` 对应 Portal 全量种子脚本：
+首次部署时，系统通过数据库初始化入口 `pnpm db:migrate && pnpm db:seed` 创建首个超级管理员账户（`db:seed` → `apps/portal/scripts/seed.ts`，RBAC 初始化委托 `seed-rbac.ts`）：
 
-- 内置 `super_admin` 角色归属「总部」根部门（绕过数据范围限制，见 §6 H-ACL）。
-- 种子账户使用环境变量配置的初始用户名/密码，首次登录强制修改密码（password_changed_at 为空时拦截）。
-- 后续 super_admin 的授予通过既有的用户角色分配链路（FR-USR-08）完成，由现有 super_admin 执行。
+- 内置 `SUPER_ADMIN`（超级管理员）与 `ADMIN` 角色归属**已存在的根部门**（`parent_id IS NULL`；seed 主脚本先创建根部门「总公司」（code `ROOT`），随后 `seed-rbac` 把该根部门绑为角色所属部门，并给两个角色绑定全部 API 权限）。管理员角色在 **OAuth 客户端准入**上直接放行（`domain/auth/oauth-authorize.ts` 的 `isAdminRole`）；**数据范围仍走 ADR-014 门面 `resolveScope` 的部门子树规则，不存在"超管绕过数据范围"的特殊分支**（`lib/authz/data-scope.ts` 无角色码旁路）——管理员之所以看起来"全量可见"，是因为其角色挂在根部门上。
+- 种子管理员账号的**用户名/邮箱/密码是硬编码的初值**（`username=admin`、`email=admin@example.com`、密码 `Admin@123456`，`apps/portal/scripts/seed.ts`），**不经环境变量配置**；OAuth 客户端的 `PORTAL_CLIENT_SECRET` / `PORTAL_REDIRECT_URL` 才可由环境变量覆盖。**生产部署必须先改掉这些初值**（`db:seed` 只用于初始化与本地/验收环境）。
+- 后续 `SUPER_ADMIN` 的授予通过既有的用户角色分配链路（FR-USR-08）完成，由现有超级管理员执行。
+- ⚠️ **未实现**：原需求"首次登录强制修改密码（`password_changed_at` 为空时拦截）"在代码中**无对应拦截**——`users.password_changed_at` 列存在（`apps/portal/src/db/schema/users.ts`），但只在自助改密成功时写入（`lib/account/change-password.ts`），登录/鉴权路径从不读取它做判定 ⇒ 当前行为是"种子账号可一直用初值密码登录"。列为待实现项（不在本轮文档校正范围内改代码）。
 
 ---
 
@@ -207,11 +217,13 @@
 
 | ID | 需求描述 | 量化标准 | 测量方法 | 优先级 |
 |----|---------|---------|---------|--------|
-| NFR-PERF-01 | Portal API 响应时间 | `/api/me` P95 < 200ms | k6 压力测试 | P0 关键 |
-| NFR-PERF-02 | 登录全流程耗时 | 从登录到到达 Dashboard P95 < 1.5s | Playwright E2E 计时 | P0 关键 |
-| NFR-PERF-03 | Gateway JWT 验签延迟 | < 5ms（不含网络） | Rust benchmark | P0 关键 |
-| NFR-PERF-04 | 列表查询分页响应 | 1000 条数据 P95 < 500ms | k6 压力测试 | P1 重要 |
-| NFR-PERF-05 | 并发用户支持 | 500 并发用户，错误率 < 1% | k6 压力测试 | P1 重要 |
+| NFR-PERF-01 | Portal API 响应时间 | `/api/me` P95 < 200ms | 真实栈实测（无 k6 负载脚本；`tests/performance/api-benchmark.mjs` 已删除） | P0 关键 |
+| NFR-PERF-02 | 登录全流程耗时 | 从登录到到达 Dashboard P95 < 1.5s | Playwright E2E 覆盖链路，**未做计时断言** | P0 关键 |
+| NFR-PERF-03 | Gateway JWT 验签延迟 | < 5ms（不含网络） | Rust criterion 基准（`apps/gateway/benches/`） | P0 关键 |
+| NFR-PERF-04 | 列表查询分页响应 | 1000 条数据 P95 < 500ms | 真实栈实测（规模数据审计；未达阈值） | P1 重要 |
+| NFR-PERF-05 | 并发用户支持 | 500 并发用户，错误率 < 1% | **未验证**（无并发压测工具；`scripts/bench/gateway.mjs` 为单机只读基准） | P1 重要 |
+
+> 量化口径、实测值与门禁状态见 [REQUIREMENTS_MATRIX.md](REQUIREMENTS_MATRIX.md) 附录「NFR 性能类」。
 
 ### 6.2 安全需求 (Security)
 
@@ -221,8 +233,8 @@
 | NFR-SEC-02 | Cookie 安全属性 | HttpOnly + Secure + SameSite=Lax | 代码审查 + 渗透测试 | P0 关键 |
 | NFR-SEC-03 | Token 安全 | 无敏感令牌存储在前端浏览器存储中 | 代码审查 | P0 关键 |
 | NFR-SEC-04 | JWT 签名算法 | ES256 非对称签名，密钥 90 天轮换 | 安全审计 | P0 关键 |
-| NFR-SEC-05 | 密码策略 | 最小 8 位，含大小写字母和数字 | 自动化测试 | P1 重要 |
-| NFR-SEC-06 | 暴力破解防护 | 连续 5 次失败 → 账户锁定（15分钟自动解锁或管理员手工解锁） | 自动化测试 | P0 关键 |
+| NFR-SEC-05 | 密码策略 | **至少 10 位，且大写/小写/数字/特殊字符四类中至少三类**（2026-10-23 以代码为准统一：`domain/shared/zod-schemas.ts` 的 `PasswordSchema`；此前文档写 8 位） | 自动化测试 | P1 重要 |
+| NFR-SEC-06 | 暴力破解防护 | **账户 × IP + IP 总量双维度**（ADR-025）：同一 IP 对同一账户 5 次失败 / 15 分钟 → 423；同一 IP 跨账户 20 次失败 / 15 分钟 → 429 `RATE_LIMITED`。锁定基于 Redis 计数窗口（`users.status` 保持 ACTIVE，不是 DB `LOCKED`）；管理员解锁清除该用户全部 IP 的账户计数。不存在的邮箱同样执行等值 bcrypt 并计入 IP 计数（抹平时延侧信道 + 提高枚举成本）。阈值可经 `BRUTE_FORCE_*` 环境变量覆盖（H-03/H-04，2026-10-23 实测口径） | 自动化测试 | P0 关键 |
 | NFR-SEC-07 | 审计追溯 | 所有关键操作（登录、权限变更）写入审计日志 | 代码审查 | P1 重要 |
 | NFR-SEC-08 | CSRF 防护 | State 参数验证，OAuth 2.1 强制 | 安全审计 | P0 关键 |
 | NFR-SEC-09 | 授权码一次性使用 | 同一授权码二次提交返回 invalid_grant | 自动化测试 | P0 关键 |
@@ -231,16 +243,17 @@
 | NFR-SEC-12 | Client Secret 轮换即时生效 | 旧 Secret 立即失效 | 自动化测试 | P1 重要 |
 | NFR-SEC-13 | 密码修改强制重新登录 | 密码修改后当前 JWT jti 写入黑名单 | 自动化测试 | P1 重要 |
 | NFR-SEC-14 | 角色撤销即时生效 | 角色移除后当前用户 JWT jti 写入黑名单 | 自动化测试 | P1 重要 |
-| NFR-SEC-15 | 密码历史策略 | 禁止重用最近 5 次密码（需在 users 表增加 password_history 列或独立表） | 自动化测试 | P2 一般 |
-| NFR-SEC-16 | 会话并发控制 | 同一用户最多允许 3 个活跃会话，超出时最早会话自动失效（jti 黑名单写入） | 自动化测试 | P2 一般 |
-| NFR-COMP-01 | 审计日志数据保留 | `audit_logs` 保留至少 180 天（按月分区），`login_logs` 保留 90 天后自动归档或清理 | 部署脚本校验 / 定期审计 | P1 重要 |
+| NFR-SEC-15 | 密码历史策略 | 禁止重用最近 5 次密码**及当前密码**（`users.password_history` + `isPasswordReused`；H-C-06 补当前密码） | 自动化测试 | P2 一般 |
+| NFR-SEC-16 | 会话并发控制 | 同一用户最多允许 3 个活跃会话，超出时最早会话自动失效（jti 黑名单写入） | 自动化测试 | P2 一般（**未实现，backlog**；当前无会话数上限/驱逐机制，仅支持管理员强制下线或角色变更撤销） |
+| NFR-COMP-01 | 审计日志数据保留 | `access_logs` 保留 180 天（`PARTITION BY RANGE (created_at)` 月分区，维护脚本删除超期分区）；`audit_logs` / `login_logs` 为普通表、应用层只 INSERT（append-only），**按月分区与 90 天归档未实现** | `apps/portal/scripts/maintain-access-log-partitions.ts`（`pnpm --filter @auth-sso/portal db:maintain-partitions`，由部署/运维平台按月调度；未纳入自动化门禁） | P1 重要 |
 
 ---
 
 ## 7. 版本与路线图
 
-- **v1.0（当前版本）**：核心 SSO（Portal 内建 OIDC Provider）+ RBAC + Gateway 离线 JWT 验证 + 内部应用集成。
-- **未来规划**：MFA（多因素认证）、Passkeys、社交登录、多租户。
+- **v1.x（当前线，仓库 `package.json` 版本 1.1.1.1）**：核心 SSO（Portal 内建 OIDC Provider）+ RBAC + Gateway 离线 JWT 验证 + 内部应用集成。
+- **未来规划**：MFA（多因素认证）、Passkeys、社交登录、多租户、SAML 2.0（见 §2.2）、自助找回密码（见 §2.2）。
+- **已列出但未交付（backlog）**：首次登录强制改密（§2.3）、会话并发上限 NFR-SEC-16、`audit_logs`/`login_logs` 分区与归档（NFR-COMP-01）、E2E 计时埋点（§8.4 P-04）。逐条状态以 [REQUIREMENTS_MATRIX.md](REQUIREMENTS_MATRIX.md) 与 [roadmap](../roadmap.md) 为准。
 
 ---
 
@@ -252,44 +265,49 @@
 
 | 实践域 (CMMI V3.0) | 能力等级 | 本文档实现 |
 |--------|----------|-----------|
-| **DMR** (Defining & Managing Requirements) | Level 3 | §3 用户角色 + §4 功能需求 64 条（映射至 REQUIREMENTS_MATRIX.md 70 条矩阵条目）+ §5 用户旅程 + 需求基线 BL-2026-001 + CCB 变更控制 + 7 维属性矩阵（优先级/验证方法/风险/来源/验收标准） |
-| **DRS** (Designing & Realizing the Solution) | Level 3 | ARCHITECTURE.md（管理链路 + 11 层认证授权全链路）+ DATABASE.md（13 张表/外键/枚举）+ ARCHITECTURE_CONSTRAINTS.md（14 条规则 + 20 条 DC-* 约束） |
-| **ENQ** (Ensuring Quality) | Level 3 | 分层测试体系（单元/API/E2E）+ 27 文件 255 测试 + `@req` 注解自动追溯性报告 + 源码 Route Handler JSDoc 注释为 API 规范实生 + 代码审查红线清单 |
+| **DMR** (Defining & Managing Requirements) | Level 3 | §3 用户角色 + §4 功能需求 64 条（映射至 [REQUIREMENTS_MATRIX.md](REQUIREMENTS_MATRIX.md) 70 条矩阵条目）+ §5 用户旅程 + 需求基线 BL-2026-001 + CCB 变更控制 + 7 维属性矩阵（优先级/验证方法/风险/来源/验收标准） |
+| **DRS** (Designing & Realizing the Solution) | Level 3 | [ARCHITECTURE.md](ARCHITECTURE.md)（管理链路 + 11 层认证授权全链路）+ [DATABASE.md](DATABASE.md)（13 张表/外键/枚举）+ [ARCHITECTURE_CONSTRAINTS.md](ARCHITECTURE_CONSTRAINTS.md)（14 条 R 规则 + 27 条 DC-* 约束；2026-10-23 按树重算，此前写"20 条 DC-*"） |
+| **ENQ** (Ensuring Quality) | Level 3 | 分层测试体系（单元/API/E2E，`AGENTS.md`「测试体系」）+ `@req` 注解生成的需求映射清单（**不是门禁**）+ 源码 Route Handler JSDoc + 代码审查红线清单。测试规模以 CI 实跑为准，本文不抄死数字（历史值"27 文件 255 测试"已远低于当前规模） |
 
 ### 8.2 成熟度 Level 4（量化管理级）
 
 | 实践域 | 能力等级 | 本文档实现 |
 |--------|----------|-----------|
-| **OPM** (Organizational Performance Management) | Level 4 | §8.3 过程性能基线（5 项关键指标 + 上下控制限 UCL/LCL） |
-| **QPM** (Quantitative Project Management) | Level 4 | §6.1 性能需求（5 项 P95 阈值 + 测量方法）+ §6.2 安全需求（14 项量化标准） |
-| **MPM** (Managing Performance & Measurement) | Level 4 | k6 压力测试 + Playwright E2E 计时 + Rust benchmark + 追溯性覆盖率趋势 |
+| **OPM** (Organizational Performance Management) | Level 4 | §8.4 过程性能基线（5 项关键指标 + 上下控制限 UCL/LCL；P-01/P-02/P-03 的均值仍为 2026-07-09 历史值） |
+| **QPM** (Quantitative Project Management) | Level 4 | §6.1 性能需求（5 项 P95 阈值 + 测量方法）+ §6.2 安全需求（**16 项**量化标准，含未实现的 NFR-SEC-16） |
+| **MPM** (Managing Performance & Measurement) | Level 4 | Rust criterion 基准 + 真实栈实测 + 追溯性覆盖率报告（观测指标）。**无 k6**（已删除的 `tests/performance/api-benchmark.mjs` 属历史假绿，见 [roadmap](../roadmap.md) 续九十四）；**无 E2E 计时门禁** |
 
 ### 8.3 成熟度 Level 5（优化级）
 
 | 实践域 | 能力等级 | 本文档实现 |
 |--------|----------|-----------|
 | **CAR** (Causal Analysis & Resolution) | Level 5 | §8.4 缺陷因果分析程序（5-Why + 鱼骨图 + 纠正/预防措施闭环） |
-| **OPM** — 持续改进 | Level 5 | §8.5 过程改进选择与部署流程（Pilot → 度量 → 推广/回滚）+ 经验教训沉淀机制（`docs/roadmap.md` + `docs/adr/`） |
+| **OPM** — 持续改进 | Level 5 | §8.5 过程改进选择与部署流程（Pilot → 度量 → 推广/回滚）+ 经验教训沉淀机制（[roadmap](../roadmap.md) + [`docs/adr/`](../adr/)） |
 | **OPM** — 创新与部署 | Level 5 | ARCHITECTURE_CONSTRAINTS.md Red Flags 清单（主动预防）+ 架构设计指南持续审计机制 |
 
 ### 8.4 过程性能基线 (OPM Level 4)
 
 > 以下基线数据基于项目历史运行数据建立，定期更新。**UCL/LCL = 均值 ± 3σ**（统计过程控制标准）。
 >
-> 数据更新时间：2026-07-09（基于最近 30 天 CI 运行记录）
+> 数据更新时间：2026-07-09（基于最近 30 天 CI 运行记录）。**表中均值是历史值，未随测试规模增长重算**；
+> 2026-10-23 的真实规模已远大于此（最近一次全量门禁记录：Vitest 131 文件 / 1079 用例，见 [roadmap](../roadmap.md) 续九十五）。
+> 重算基线属独立工作项，本文不臆造新数字。
 
 | # | 指标 | 基线均值 | 下限 (LCL) | 目标 (Target) | 上限 (UCL) | 测量频率 |
 |---|------|---------|-----------|--------------|----------|---------|
-| P-01 | 测试通过率 | 100%（255/255 全部通过） | 95% | 100% | — | 每次提交 |
-| P-02 | API 测试执行时间 | ~18s（Vitest API project，真实 PostgreSQL/Redis 基线） | — | < 30s | 60s | 每次提交 |
-| P-03 | 追溯性覆盖率 | 94.3%（66/70 需求覆盖） | 85% | 100% | — | 每周 |
+| P-01 | 测试通过率 | 100%（历史 255/255；当前规模见注记） | 95% | 100% | — | 每次提交 |
+| P-02 | API 测试执行时间 | ~18s（Vitest API project，真实 PostgreSQL/Redis 基线；历史值） | — | < 30s | 60s | 每次提交 |
+| P-03 | 追溯性覆盖率 | 94.3%（66/70 需求覆盖；历史值） | 85% | 100% | — | 每次本地/CI 生成（观测，不阻断） |
 | P-04 | E2E 登录成功流耗时 | 待测量 | — | P95 < 1.5s | 3.0s | 每日构建 |
 | P-05 | Gateway JWT 验签延迟 | 待测量 | — | < 5ms | 10ms | 发布前 |
 
-> **注：P-04 和 P-05 的测量计划**
-> - P-04：通过 Playwright E2E `auth-flow.spec.ts` 添加性能计时埋点，在 CI 每日构建中采集
-> - P-05：通过 Rust `cargo bench`（`apps/gateway/benches/`）在发布前执行
-> - 目标完成时间：2026-Q3
+> **注：P-04 和 P-05 的测量计划**（2026-10-23 核实）
+> - P-04：`tests/e2e/` 现有 3 个 spec（`docker-release.spec.ts` / `oidc-machine-endpoints.spec.ts` /
+>   `ssr-permission-snapshot.spec.ts`），均**未埋性能计时点**；原引用的 `auth-flow.spec.ts` **不存在**
+>   （host 入口移除时已删），CI 也**没有每日构建的 E2E 计时步骤**。待办：在 `docker-release.spec.ts` 上加计时断言。
+> - P-05：可通过 Rust criterion 基准 `apps/gateway/benches/`（`cargo bench`）在发布前执行；当前 CI 跑的是
+>   `cargo fmt` / `clippy` / `test` / `--no-default-features` 构建，**不跑 `cargo bench`**。
+> - 原"目标完成时间：2026-Q3"已过期，改为随 P-04/P-05 待办推进。
 
 **偏离纠正规则：** 任何指标突破 UCL/LCL 时，触发 §8.4 CAR 程序。
 
@@ -377,7 +395,7 @@
 
 ### 8.7 经验教训管理
 
-项目经验教训记录在根 `docs/roadmap.md` 的「变更记录」（按时间倒序）与 `docs/adr/` 的决策记录中。每条记录包含：
+项目经验教训记录在根 [roadmap](../roadmap.md) 的「变更记录」（按时间倒序）与 [`docs/adr/`](../adr/) 的决策记录中。每条记录包含：
 - **问题描述**（现象、影响、严重等级）
 - **根因分析**（5-Why 输出、鱼骨图维度分析）
 - **解决方案**（纠正措施 + 预防措施）

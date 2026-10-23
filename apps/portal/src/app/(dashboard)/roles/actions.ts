@@ -36,7 +36,8 @@ import {
 import { invalidateResource } from '@/lib/cache-invalidation';
 import { assignRolePermissions, RolePermissionAssignmentSchema } from '@/lib/role-permission-assignment';
 import { withScopedRow, withScopedWrite } from '@/lib/authz';
-import { ENTITY_ACTIVE, ROLE_PERMISSIONS , ROLE_ERRORS } from '@auth-sso/contracts';
+import { assertDepartmentUsable } from '@/lib/department-availability';
+import { ROLE_PERMISSIONS, ROLE_ERRORS } from '@auth-sso/contracts';
 import type { ApiResponse } from '@auth-sso/contracts';
 
 /** 查询绑定某角色的所有用户 ID（受影响用户集之一：按**角色**求） */
@@ -45,6 +46,7 @@ async function getRoleBoundUserIds(roleId: string): Promise<string[]> {
     .from(schema.userRoles).where(eq(schema.userRoles.roleId, roleId));
   return boundUsers.map((u) => u.userId);
 }
+
 
 /** 创建角色 */
 export const createRoleAction = withAuth(
@@ -59,16 +61,7 @@ export const createRoleAction = withAuth(
         operatorId: ctx.userId,
         targets: [{ deptId: v.data.deptId, message: '无权在指定部门下创建角色' }],
         // 存在性/状态校验在守卫之前：不存在的部门必须 404，不能退化成 403
-        preflight: async (tx) => {
-          const dept = await tx.query.departments.findFirst({
-            where: eq(schema.departments.id, v.data.deptId),
-            columns: { id: true, status: true },
-          });
-          if (!dept) throw new EntityNotFoundError('Department', v.data.deptId);
-          if (dept.status !== ENTITY_ACTIVE) {
-            throw new BusinessRuleViolationError('无法在已禁用的部门下创建角色');
-          }
-        },
+        preflight: (tx: DbTxHandle) => assertDepartmentUsable(tx, v.data.deptId, '在指定部门下创建角色'),
       },
       async (tx) => {
         const existing = await tx.select({ id: schema.roles.id })
@@ -131,6 +124,24 @@ export const updateRoleAction = withAuth(
       async (tx, row) => {
         const role = roleFromPersistence(row);
         guardNotSystemRole(role, 'modify');
+        // H-B-05：迁入部门必须存在且 ACTIVE（与创建同口径）
+        // H-25（roles 侧）：跨部门绑定不变量——角色迁往新部门时，已绑定用户必须
+        // 全部属于该部门，否则会留下 `user_roles` 跨部门行（数据范围漂移，且此后
+        // 重新分配会被 400 拒绝、状态无法自洽）。有绑定用户则拒绝迁移。
+        if (v.data.deptId && v.data.deptId !== role.deptId) {
+          await assertDepartmentUsable(tx, v.data.deptId, '将角色迁移至该部门');
+          const boundUsers = await tx
+            .select({ deptId: schema.users.deptId })
+            .from(schema.userRoles)
+            .innerJoin(schema.users, eq(schema.users.id, schema.userRoles.userId))
+            .where(eq(schema.userRoles.roleId, roleId));
+          const mismatched = boundUsers.filter((u) => u.deptId !== v.data.deptId);
+          if (mismatched.length > 0) {
+            throw new BusinessRuleViolationError(
+              `该角色仍绑定 ${mismatched.length} 个不属于目标部门的用户，禁止迁移部门；请先解除这些绑定`,
+            );
+          }
+        }
         const updated = applyRoleUpdate(role, v.data);
         permissionChanged = hasRolePermissionImpact(role, updated);
         await tx.update(schema.roles).set(roleToUpdateRow(updated))

@@ -21,6 +21,7 @@ import { getOwnSessions } from './sessions';
  * 否则 Turbopack 运行时会报 "encountered uncached data during prerendering or a navigation"。
  */
 export const instant = false;
+export const metadata = { title: '个人中心 | Auth-SSO' };
 /**
  * 实际进行个人身份解析与相关权限数据异步拉取的内容组件。
  */

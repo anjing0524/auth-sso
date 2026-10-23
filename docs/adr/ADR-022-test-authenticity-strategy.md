@@ -210,8 +210,8 @@ vi.mock('<target>', () => ({ … }));
 
 - `apps/portal/vitest.globalSetup.ts`（探针与提示文案）、`apps/portal/vitest.api.config.ts:19-23`（串行与 include）、`apps/portal/vitest.setup.ts`（共享 setUp）
 - `apps/portal/src/lib/session/revoke.ts:28-53`（`revokeJti` / `isJtiRevoked` 的 fail-close）、`apps/portal/src/lib/permissions.ts:116-137,266-270`（缓存读路径与收窄函数）、`apps/portal/src/lib/auth/token.ts:132-177,255-276`（黑名单校验与 RT 签发）
-- `apps/portal/__tests__/api/mock-contract.test.ts`（反面教材）、`apps/portal/__tests__/api/authz-surface.test.ts`（静态公开面契约的正确形态）、`apps/portal/__tests__/api/brute-force.test.ts:32-38`（可抛错 fake 的先例）
-- `docs/agents/domain.md`、`docs/portal-architecture-guidelines.md`
+- `apps/portal/__tests__/api/mock-contract.test.ts`（反面教材，已随 `mock-factory.ts` 在 #56 删除，此处仅作历史记录）、`apps/portal/__tests__/api/authz-surface.test.ts`（静态公开面契约的正确形态）、`apps/portal/__tests__/api/brute-force.test.ts:32-38`（可抛错 fake 的先例）
+- `docs/portal-architecture-guidelines.md`
 
 **决策链条（wayfinder 地图的子票据）**
 

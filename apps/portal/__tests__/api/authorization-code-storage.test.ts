@@ -64,7 +64,7 @@ vi.mock(import('@/lib/auth/token'), async (importOriginal): Promise<Partial<type
     const actual = await importOriginal();
     return {
     ...actual,
-    signAccessToken: vi.fn(async () => ({ token: 'at-mock', jti: 'jti-mock' })),
+    signAccessToken: vi.fn(async () => ({ token: 'at-mock', jti: 'jti-mock', expiresIn: 3600 })),
     signIdToken: vi.fn(async () => 'id-mock'),
     issueRefreshToken: vi.fn(async () => 'rt-mock'),
     revokeRefreshTokenFamily: vi.fn(async () => {}),

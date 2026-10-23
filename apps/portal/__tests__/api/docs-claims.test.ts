@@ -12,7 +12,9 @@
  * ## 覆盖的声明
  *
  * 1. 守卫的**夹具数**与**全量扫描断言数**（ADR-022 §4(d) 与 §强制点表 两处）；
- * 2. ADR-022 §1 的**豁免清单**与守卫 `EXEMPT_PREFIXES` 集合相等（两个副本，必须同进同退）。
+ * 2. ADR-022 §1 的**豁免清单**与守卫 `EXEMPT_PREFIXES` 集合相等（两个副本，必须同进同退）；
+ * 3. 各导航文档里的**计数**（`docs/README.md`、根 `README.md`、`docker/README.md`）等于目录实测——
+ *    2026-10-23 的文档校正轮实测到 `docs/README.md` 写"ADR 22 篇"、实际 26 篇。
  *
  * 检查刻意**要求声明存在**（匹配数下限）：把声明删掉不能让检查变绿——否则删文档就成了
  * 绕过检查的最短路径。
@@ -20,7 +22,7 @@
  * @vitest-environment node
  */
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { REPO_ROOT } from '../helpers/repo-scan';
 const GUARD = join(REPO_ROOT, 'apps/portal/__tests__/api/module-mock-guard.test.ts');
@@ -101,5 +103,63 @@ describe('文档声明的数字与树一致', () => {
     const extraInDoc = [...doc].filter((x) => !code.has(x));
 
     expect({ missingInDoc, extraInDoc }).toEqual({ missingInDoc: [], extraInDoc: [] });
+  });
+});
+
+/** 从树里重算的计数：`docs/<dir>/*.md` 的篇数 */
+const mdCount = (dir: string): number =>
+  readdirSync(join(REPO_ROOT, dir)).filter((n) => n.endsWith('.md')).length;
+
+/**
+ * 文档里 `docs/adr/`（N 篇）形式的 ADR 篇数声明
+ *
+ * 只认命名的可机械重算形态（`docs/adr/`（N 篇） / `ADR-001～NNN（共 N 篇）`）：
+ * `docs/README.md` 与根 `README.md` 都带它，而 `docs/README.md` 曾写成 22（实际 26）。其它解释性数字（"12 条规则"）不纳入——旧文档的教训是
+ * 数字一旦手抄就会漂移，能重算的才值得到挂一条守卫。
+ */
+function adrPieceClaims(doc: string): Array<{ where: string; declared: number }> {
+  const patterns = [/`docs\/adr\/`（(\d+) 篇/g, /ADR-001～(\d{3})（共 (\d+) 篇）/g];
+  return patterns.flatMap((re) =>
+    [...doc.matchAll(re)].map((m) => ({
+      where: m[0],
+      declared: Number(m[2] ?? m[1]),
+    })),
+  );
+}
+
+describe('文档里的目录计数等于实测', () => {
+  it('抽取器本身可信（已知样本 + 能抓到目录里的真实计数）', () => {
+    expect(adrPieceClaims('… `docs/adr/`（26 篇）… ADR-001～022（共 22 篇）')).toEqual([
+      { where: '`docs/adr/`（26 篇', declared: 26 },
+      { where: 'ADR-001～022（共 22 篇）', declared: 22 },
+    ]);
+    expect(mdCount('docs/adr')).toBeGreaterThanOrEqual(20);
+    expect(mdCount('docs/spec')).toBeGreaterThanOrEqual(5);
+  });
+
+  it('`docs/README.md` 与根 `README.md` 声明的 ADR 篇数 = `docs/adr/*.md` 实测', () => {
+    const actual = mdCount('docs/adr');
+    const docsFacing = ['docs/README.md', 'README.md'];
+    const claims = docsFacing.flatMap((rel) =>
+      adrPieceClaims(readFileSync(join(REPO_ROOT, rel), 'utf-8')).map((c) => ({ rel, ...c })),
+    );
+    // 声明必须存在（删掉声明不能变绿）
+    expect(claims.length, 'docs/README.md / README.md 里的 ADR 篇数声明不见了').toBeGreaterThanOrEqual(2);
+    expect(
+      claims.filter((c) => c.declared !== actual).map((c) => `${c.rel}: ${c.where}），实测 ${actual}`),
+    ).toEqual([]);
+  });
+
+  it('`docs/README.md` 目录速览的 adr/research/spec 计数 = 目录实测', () => {
+    const doc = readFileSync(join(REPO_ROOT, 'docs/README.md'), 'utf-8');
+    const found = [...doc.matchAll(/(adr|research|spec)\/ \((\d+)\)/g)].map((m) => ({
+      dir: m[1]!,
+      declared: Number(m[2]),
+    }));
+    expect(found.length, 'docs/README.md 第四节的目录速览不见了或格式变了').toBe(3);
+    const wrong = found
+      .filter((f) => f.declared !== mdCount(`docs/${f.dir}`))
+      .map((f) => `docs/${f.dir}: 声明 ${f.declared}，实测 ${mdCount(`docs/${f.dir}`)}`);
+    expect(wrong).toEqual([]);
   });
 });

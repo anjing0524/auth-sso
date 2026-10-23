@@ -27,6 +27,13 @@ export interface RedisClient {
   /** 删除一个或多个 key */
   del(...keys: string[]): Promise<number>;
   keys(pattern: string): Promise<string[]>;
+  /**
+   * 增量游标遍历（SCAN）。管理面批量清理（如按用户清除登录失败计数）用它替代 KEYS：
+   * KEYS 在键多时阻塞单线程 Redis，SCAN 每批 O(1) 摊还。
+   *
+   * @returns `[nextCursor, keys]`；`nextCursor === '0'` 表示遍历结束
+   */
+  scan?(cursor: string, ...args: (string | number)[]): Promise<[string, string[]]>;
   quit(): Promise<void>;
 
   // 集合与过期命令，用于在线会话反向映射索引
@@ -123,6 +130,14 @@ function createIoredisClient(): RedisClient {
     setex: (key, seconds, value) => runConnected(() => client.setex(key, seconds, value)),
     del: (...keys) => runConnected(() => client.del(...keys)),
     keys: (pattern) => runConnected(() => client.keys(pattern)),
+    scan: (cursor, ...args) => runConnected(async () => {
+      // ioredis 的 scan 重载在参数展开时会被解析成 callback 形态，这里收敛为 promise 形态
+      const scan = client.scan.bind(client) as unknown as (
+        cursor: string,
+        ...rest: (string | number)[]
+      ) => Promise<[string, string[]]>;
+      return scan(cursor, ...args);
+    }),
     quit: async () => {
       await client.quit();
     },

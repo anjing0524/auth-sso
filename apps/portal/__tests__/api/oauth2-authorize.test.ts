@@ -22,10 +22,12 @@ const mocks = vi.hoisted(() => ({
   mockResolveActiveClient: vi.fn(),
   mockGetUserWithRoleClients: vi.fn(),
   mockVerifyAccessToken: vi.fn(),
+  mockGetStoredAuthRequest: vi.fn(),
 }));
 
 vi.mock('@/infrastructure/db', () => ({
-  db: {},
+  // 分支 A 成功路径会写 authorization_codes：插入链只需可调用
+  db: { insert: () => ({ values: async () => undefined }) },
   schema: {},
 }));
 
@@ -51,7 +53,7 @@ vi.mock(import('@/lib/session/auth-request-store'), async (importOriginal): Prom
     const actual = await importOriginal();
     return { ...actual,
     storeAuthRequest: vi.fn(async () => {}),
-    getStoredAuthRequest: vi.fn(async () => null),
+    getStoredAuthRequest: mocks.mockGetStoredAuthRequest,
     generateSessionId: vi.fn(() => 'sess-test'),
 };
 });
@@ -113,6 +115,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   // 分支 B SSO 免登路径：有效会话直签授权码（进入 issueCodeAndRedirect 的前置条件）
   mocks.mockVerifyAccessToken.mockResolvedValue({ sub: USER_ID });
+  mocks.mockGetStoredAuthRequest.mockResolvedValue(null);
 });
 
 describe('GET /api/auth/oauth2/authorize — 错误重定向语义（D1, RFC 6749 §4.1.2.1）', () => {
@@ -247,5 +250,90 @@ describe('GET /api/auth/oauth2/authorize — 错误重定向语义（D1, RFC 674
 
     expect(res.status).toBe(307); // NextResponse.redirect 默认 307，语义为临时重定向
     expect(location).toContain('/oauth/error');
+  });
+});
+
+
+describe('GET /api/auth/oauth2/authorize — 分支 A：登录会话 ↔ 授权请求绑定（H-02）', () => {
+  const SESSION_ID = 'sess-branch-a-1';
+  const BINDING_COOKIE = 'oauth_request_binding';
+  const STORED = {
+    client_id: 'portal',
+    redirect_uri: REDIRECT_URI,
+    scope: 'openid profile',
+    state: 'st-123',
+    nonce: null,
+    code_challenge: 'dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk',
+    code_challenge_method: 'S256',
+    binding: 'bind-abc',
+  };
+
+  function buildBranchARequest(cookies: Record<string, string>): NextRequest {
+    const params = new URLSearchParams({ session_id: SESSION_ID });
+    return new NextRequest(
+      `http://localhost:4100/api/auth/oauth2/authorize?${params.toString()}`,
+      { headers: { cookie: Object.entries(cookies).map(([k, v]) => `${k}=${v}`).join('; ') } },
+    );
+  }
+
+  function primeBoundFlow() {
+    mocks.mockResolveActiveClient.mockResolvedValue(makeClient());
+    mocks.mockGetUserWithRoleClients.mockResolvedValue({
+      id: USER_ID,
+      status: 'ACTIVE',
+      roles: [{ id: 'r1', code: 'SUPER_ADMIN', status: 'ACTIVE', clientIds: ['portal'] }],
+    });
+    mocks.mockGetStoredAuthRequest.mockResolvedValue(STORED);
+    mocks.mockVerifyAccessToken.mockResolvedValue({ sub: USER_ID, sid: SESSION_ID });
+  }
+
+  it('绑定 Cookie 匹配且 login_session.sid 匹配 → 签发 code 并 302 回 RP', async () => {
+    primeBoundFlow();
+
+    const res = await GET(
+      buildBranchARequest({ login_session: 'stub-session-jwt', [BINDING_COOKIE]: 'bind-abc' }),
+    );
+    const location = new URL(res.headers.get('location')!);
+
+    expect(res.status).toBe(307);
+    expect(`${location.protocol}//${location.host}${location.pathname}`).toBe(REDIRECT_URI);
+    expect(location.searchParams.get('code')).toBeTruthy();
+    expect(location.searchParams.get('state')).toBe('st-123');
+  });
+
+  it('**缺少绑定 Cookie → 拒绝发码，且不消费暂存授权请求**', async () => {
+    primeBoundFlow();
+
+    const res = await GET(buildBranchARequest({ login_session: 'stub-session-jwt' }));
+    const location = res.headers.get('location')!;
+
+    expect(location).toContain('/oauth/error');
+    expect(location).not.toContain(REDIRECT_URI);
+    expect(mocks.mockGetStoredAuthRequest).not.toHaveBeenCalled();
+  });
+
+  it('**绑定 Cookie 不匹配 → 拒绝发码**', async () => {
+    primeBoundFlow();
+
+    const res = await GET(
+      buildBranchARequest({ login_session: 'stub-session-jwt', [BINDING_COOKIE]: 'bind-WRONG' }),
+    );
+    const location = res.headers.get('location')!;
+
+    expect(location).toContain('/oauth/error');
+    expect(location).not.toContain(REDIRECT_URI);
+  });
+
+  it('**login_session 的 sid 与 URL session_id 不匹配 → 拒绝发码且不消费**', async () => {
+    primeBoundFlow();
+    mocks.mockVerifyAccessToken.mockResolvedValue({ sub: USER_ID, sid: 'other-session' });
+
+    const res = await GET(
+      buildBranchARequest({ login_session: 'stub-session-jwt', [BINDING_COOKIE]: 'bind-abc' }),
+    );
+    const location = res.headers.get('location')!;
+
+    expect(location).toContain('/oauth/error');
+    expect(mocks.mockGetStoredAuthRequest).not.toHaveBeenCalled();
   });
 });

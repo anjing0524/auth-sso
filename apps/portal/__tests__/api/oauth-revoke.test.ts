@@ -182,15 +182,19 @@ describe('POST /api/auth/oauth2/revoke — Access Token 撤销', () => {
     expect(await isJtiRevoked(jti)).toBe(false);
   });
 
-  it('token_type_hint=refresh_token 时跳过 AT 分支', async () => {
+  it('**token_type_hint 错误（AT 标成 refresh_token）→ 仍扩展搜索并撤销 AT**（H-A-02/RFC 7009 §2.1）', async () => {
     const { token, jti } = await signAccessToken(USER_ID, CLIENT_A);
+    expect(await isJtiRevoked(jti)).toBe(false);
 
-    await revokePost(makeRequest({
+    const res = await revokePost(makeRequest({
       token, token_type_hint: 'refresh_token',
       client_id: CLIENT_A, client_secret: SECRET_A,
     }));
 
-    expect(await isJtiRevoked(jti)).toBe(false);
+    expect(res.status).toBe(200);
+    // 修复前这里为 false（按 hint 跳过 AT 分支，静默成功但撤销未发生）
+    expect(await isJtiRevoked(jti)).toBe(true);
+    await expect(verifyAccessToken(token, CLIENT_A, JWT_TYP.ACCESS_TOKEN)).resolves.toBeNull();
   });
 });
 
@@ -204,6 +208,17 @@ describe('POST /api/auth/oauth2/revoke — Refresh Token 撤销', () => {
     }));
 
     expect(res.status).toBe(200);
+    expect(await isRefreshTokenRevoked(RT_A)).toBe(true);
+  });
+
+  it('**hint=access_token 但实际是 RT → 仍扩展搜索并撤销 RT**（H-A-02）', async () => {
+    await seedRefreshToken(RT_A, CLIENT_A);
+
+    await revokePost(makeRequest({
+      token: RT_A, token_type_hint: 'access_token',
+      client_id: CLIENT_A, client_secret: SECRET_A,
+    }));
+
     expect(await isRefreshTokenRevoked(RT_A)).toBe(true);
   });
 

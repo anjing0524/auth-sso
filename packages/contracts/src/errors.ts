@@ -9,7 +9,7 @@ const ERROR_PREFIX = 'AUTH_SSO';
 // ⚠️ 两条纪律（#82）：
 // 1. **不重编号**：已删除的码（如 1001/1007/2001/2020/3001/4001/5001/6001/7001…）
 //    的空洞**永久保留**。码是上网的线值，复用会让历史日志/客户端配置产生歧义。
-// 2. **404 统一用 `COMMON_ERRORS.NOT_FOUND`**（`docs/spec/API.md:44`）：
+// 2. **404 统一用 `COMMON_ERRORS.NOT_FOUND`**（`docs/spec/API.md` §1.3 响应格式 + §12.1 通用错误码）：
 //    资源类型由 URL 表达，实体级 not-found 码不增加信息，反而与文档矛盾。
 
 // 通用错误码 (1xxx)
@@ -19,6 +19,12 @@ export const COMMON_ERRORS = {
   NOT_FOUND: `${ERROR_PREFIX}_1004`,
   VALIDATION_ERROR: `${ERROR_PREFIX}_1005`,
   INTERNAL_ERROR: `${ERROR_PREFIX}_1006`,
+  /**
+   * 请求频率超限（429）。首个消费者：登录 IP 维度限流（ADR-025）。
+   * 与 `AUTH_ERRORS.ACCOUNT_LOCKED`(423) 区分：423 是账户×IP 的登录失败锁定，
+   * 429 是来源 IP 在窗口内的失败总量超限（可能是撞库/枚举）。
+   */
+  RATE_LIMITED: `${ERROR_PREFIX}_1008`,
 } as const;
 
 // 认证错误码 (2xxx)

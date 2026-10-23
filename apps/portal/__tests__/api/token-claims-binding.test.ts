@@ -65,7 +65,7 @@ vi.mock(import('@/lib/permissions'), async (importOriginal): Promise<Partial<typ
 };
 });
 
-import { signAccessToken, signLoginSession, signIdToken, verifyAccessToken } from '@/lib/auth/token';
+import { getActiveSigningKey, signAccessToken, signLoginSession, signIdToken, verifyAccessToken } from '@/lib/auth/token';
 import type * as sessionRevokeModule from '@/lib/session/revoke';
 import type * as permissionsModule from '@/lib/permissions';
 
@@ -354,6 +354,27 @@ describe('issuer 与 kid 绑定', () => {
       .setExpirationTime(Math.floor(Date.now() / 1000) + 3600)
       .sign(rogue.privateKey);
 
+    await expect(verifyAccessToken(token, CLIENT_A, JWT_TYP.ACCESS_TOKEN)).resolves.toBeNull();
+  });
+});
+
+
+describe('typ 严格校验（H-05：Portal 与 Gateway/ADR-013 对齐）', () => {
+  it('**typ 缺失的 token 必须被拒**（兼容窗已关闭，不再放行无类型凭证）', async () => {
+    const { SignJWT } = await import('jose');
+    const { privateKey, keyId } = await getActiveSigningKey();
+    const token = await new SignJWT({ sub: USER_ID, client_id: CLIENT_A })
+      .setProtectedHeader({ alg: 'ES256', kid: keyId }) // 无 typ
+      .setIssuedAt()
+      .setIssuer(ISSUER)
+      .setAudience(CLIENT_A)
+      .setJti('jti-no-typ')
+      .setExpirationTime(Math.floor(Date.now() / 1000) + 3600)
+      .sign(privateKey);
+
+    // 同一 token 以"不校验 typ"的调用（audience 传入但 expectedTyp 省略）仍可用作对照，
+    // 证明拒绝来自 typ 判定而不是其他失败路径。
+    expect(await verifyAccessToken(token, CLIENT_A)).not.toBeNull();
     await expect(verifyAccessToken(token, CLIENT_A, JWT_TYP.ACCESS_TOKEN)).resolves.toBeNull();
   });
 });

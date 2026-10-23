@@ -53,9 +53,13 @@ interface Props {
   clients: ClientRow[];
   pagination: { page: number; pageSize: number; total: number; totalPages: number };
   initialKeyword: string;
+  /** 是否处于搜索态（U-G02：空态文案与「清除筛选」出口据此区分） */
+  isFiltered?: boolean;
+  /** 「清除筛选」目标地址（回第 1 页、清空 keyword） */
+  clearHref?: string;
 }
 
-export default function ClientsTable({ clients, pagination, initialKeyword }: Props) {
+export default function ClientsTable({ clients, pagination, initialKeyword, isFiltered = false, clearHref = '/clients' }: Props) {
   const router = useRouter();
   const [keyword, setKeyword] = useState(initialKeyword);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -258,13 +262,22 @@ export default function ClientsTable({ clients, pagination, initialKeyword }: Pr
         data={clients}
         loading={isPending}
         emptyState={
-          <EmptyState
-            variant="simple"
-            icon="AppWindow"
-            title="暂无 OAuth 应用"
-            description="注册 OAuth 客户端以开始集成"
-            action={{ label: '注册应用', href: '/clients/new' }}
-          />
+          isFiltered ? (
+            <EmptyState
+              variant="simple"
+              kind="filtered"
+              icon="Inbox"
+              clearAction={{ label: '清除筛选', href: clearHref }}
+            />
+          ) : (
+            <EmptyState
+              variant="simple"
+              icon="AppWindow"
+              title="暂无 OAuth 应用"
+              description="注册 OAuth 客户端以开始集成"
+              action={{ label: '注册应用', href: '/clients/new' }}
+            />
+          )
         }
         renderRow={renderRow}
         cardHeader={cardHeader}

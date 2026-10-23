@@ -3,6 +3,7 @@
  *
  * 鉴权由 layout.tsx 统一处理，本组件零鉴权样板，专注数据获取与渲染。
  */
+import { redirect } from 'next/navigation';
 import { resolveIdentity } from '@/lib/auth';
 import { resolveScope } from '@/lib/authz';
 import { clampPage } from '@/lib/pagination';
@@ -50,6 +51,19 @@ export default async function UsersPage({ searchParams }: PageProps) {
     getDepartmentOptions(scope),
   ]);
 
+  // U-U02/U-G02：越界直链（?page=999）此前渲染"暂无用户/系统中还没有用户账号"的误导空态。
+  // 在服务端钳制到最后一个有效页（保留筛选），URL 与内容一致；总数为 0 时保持第 1 页空态。
+  if (pagination.totalPages > 0 && page > pagination.totalPages) {
+    const params = new URLSearchParams();
+    if (keyword) params.set('keyword', keyword);
+    if (status !== 'ALL') params.set('status', status);
+    params.set('page', String(pagination.totalPages));
+    redirect(`/users?${params.toString()}`);
+  }
+
+  // U-G02：区分"系统无数据"与"筛选/搜索无结果"，后者给"清除筛选"出口。
+  const isFiltered = keyword.length > 0 || status !== 'ALL';
+
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-6">
       <PageHeader
@@ -61,6 +75,8 @@ export default async function UsersPage({ searchParams }: PageProps) {
       <UserTable
         users={users}
         pagination={pagination}
+        isFiltered={isFiltered}
+        clearHref="/users"
         filters={
           <TableToolbar
             left={<UserFilters key={keyword} initialKeyword={keyword} initialStatus={status} />}

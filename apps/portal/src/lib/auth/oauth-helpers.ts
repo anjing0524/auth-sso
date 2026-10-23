@@ -23,10 +23,23 @@ import 'server-only';
  */
 import { db, schema } from '@/infrastructure/db';
 import { eq } from 'drizzle-orm';
+import type { NextResponse } from 'next/server';
 import { validateClientActive, validateClientSecret } from '@/domain/auth/oauth-client';
 
 /** Client 行类型（Drizzle 原始行） */
 export type ClientRow = typeof schema.clients.$inferSelect;
+
+/**
+ * 给 OAuth 协议响应加缓存禁止头（RFC 6749 §5.1 MUST；RFC 7662 §2.2 SHOULD）。
+ *
+ * token 响应含令牌明文，绝不能被浏览器/代理缓存；introspect/revoke/userinfo
+ * 同样属于不允许缓存的协议响应。多个端点此前各自手工拼响应，缓存头全部缺失。
+ */
+export function withOAuthNoStore<T extends NextResponse>(response: T): T {
+  response.headers.set('Cache-Control', 'no-store');
+  response.headers.set('Pragma', 'no-cache');
+  return response;
+}
 
 /** 按 client_id 查询原始行（私有：**不校验**，故不导出——避免又出现"未校验的行"这个出口） */
 async function findByClientId(clientId: string): Promise<ClientRow | null> {

@@ -9,8 +9,8 @@ import { resolveScope } from '@/lib/authz';
 import { getRoles } from '@/app/(dashboard)/roles/data';
 import { db } from '@/infrastructure/db';
 import { parsePagination } from '@/lib/pagination';
-import { restListSuccess } from '@/lib/response';
-import { ROLE_PERMISSIONS, USER_PERMISSIONS } from '@auth-sso/contracts';
+import { restError, restListSuccess } from '@/lib/response';
+import { COMMON_ERRORS, ENTITY_STATUS_VALUES, ROLE_PERMISSIONS, USER_PERMISSIONS } from '@auth-sso/contracts';
 
 
 /** GET /api/roles — 委托 data.ts */
@@ -24,6 +24,11 @@ export async function GET(request: NextRequest) {
     const sp = request.nextUrl.searchParams;
     const keyword = sp.get('keyword') || '';
     const status = sp.get('status') || '';
+    // H-C-05：枚举过滤参数非法 → 400（此前直接下沉给 data 层的 asEntityStatus，
+    // 抛出未映射错误后经 mapServerError 变成 500）。
+    if (status && !(ENTITY_STATUS_VALUES as readonly string[]).includes(status)) {
+      return restError(COMMON_ERRORS.VALIDATION_ERROR, 'status 过滤参数不合法（应为 ACTIVE 或 DISABLED）', 400);
+    }
     const { page, pageSize } = parsePagination(sp);
 
     const scope = await resolveScope(db, _adminUserId);

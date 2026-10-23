@@ -55,8 +55,10 @@ export function DataTable<T>({
     <Card className={`overflow-hidden rounded-xl border-none shadow-sm ring-1 ring-border/50${fill ? ' flex min-h-0 flex-1 flex-col' : ''}`}>
       {cardHeader}
       <CardContent className={fill ? 'flex min-h-0 flex-1 flex-col p-0' : 'p-0'}>
-        {/* 窄屏提示：宽表在卡片内横向滚动，但此前没有任何可发现性提示 */}
-        <p className="border-b bg-muted/30 px-4 py-1.5 text-[11px] text-muted-foreground md:hidden">
+        {/* 横向滚动提示：宽表在卡片内横向滚动（U-G05）。
+            md:hidden 会在 ≥768px 隐藏，但 1024 宽度下宽表仍溢出（实测 clients 720/967），
+            因此用 lg:hidden：平板/窄桌面也能看到“可横向滚动”的可发现性提示。 */}
+        <p className="border-b bg-muted/30 px-4 py-1.5 text-[11px] text-muted-foreground lg:hidden">
           左右滑动查看完整表格
         </p>
         {/* 窄屏下宽表在卡片内横向滚动：根因修复——此前表格没有滚动容器，

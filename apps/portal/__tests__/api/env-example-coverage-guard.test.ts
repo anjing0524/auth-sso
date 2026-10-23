@@ -33,7 +33,7 @@ describe('env schema ↔ .env.example 覆盖', () => {
     const example = readFileSync(ENV_EXAMPLE, 'utf8');
     // 用**词边界**而非子串：否则 TRUSTED_ORIGIN 会因 ⊂ TRUSTED_ORIGINS 而假绿。
     // 范围刻意只查 portal 的 .env.example：它是这份 schema 的规范模板；
-    // 根 .env.example 与 .env.production.example 面向不同部署面，允许有所取舍。
+    // 根 .env.example 面向 Docker 部署面，允许有所取舍。
     const missing = keys.filter((k) => !new RegExp(`\\b${k}\\b`).test(example));
     expect(missing.join(', '), '以下环境变量在 .env.example 中完全没被提到').toBe('');
   });

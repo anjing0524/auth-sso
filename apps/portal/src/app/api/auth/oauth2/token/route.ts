@@ -26,7 +26,7 @@ import { z } from 'zod';
 import { OAUTH_PARAMS } from '@auth-sso/contracts';
 import { writeLoginLog, extractClientIP, extractUserAgent } from '@/lib/audit';
 import { parseOAuthBody } from '@/lib/auth/oauth-body';
-import { authenticateOAuthClient } from '@/lib/auth/oauth-helpers';
+import { authenticateOAuthClient, withOAuthNoStore } from '@/lib/auth/oauth-helpers';
 import { resolveClientCredentials } from '@/lib/auth/client-credentials';
 
 
@@ -53,10 +53,10 @@ export async function POST(request: NextRequest) {
     const body = await parseOAuthBody(request);
     const parsed = TokenSchema.safeParse(body);
     if (!parsed.success) {
-      return NextResponse.json(
+      return withOAuthNoStore(NextResponse.json(
         { error: 'invalid_request', error_description: parsed.error.issues[0]?.message },
         { status: 400 },
-      );
+      ));
     }
 
     const { grant_type, code, redirect_uri, code_verifier, refresh_token } = parsed.data;
@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
     // ── grant_type: authorization_code ──
     if (grant_type === OAUTH_PARAMS.GRANT_TYPE_AUTHORIZATION_CODE) {
       if (!code || !code_verifier) {
-        return NextResponse.json({ error: 'invalid_request', error_description: '缺少 code 或 code_verifier' }, { status: 400 });
+        return withOAuthNoStore(NextResponse.json({ error: 'invalid_request', error_description: '缺少 code 或 code_verifier' }, { status: 400 }));
       }
 
       const outcome = await exchangeAuthorizationCode({
@@ -96,13 +96,13 @@ export async function POST(request: NextRequest) {
         throw new InvalidGrantError(outcome.detail);
       }
 
-      return NextResponse.json(outcome.tokens);
+      return withOAuthNoStore(NextResponse.json(outcome.tokens));
     }
 
     // ── grant_type: refresh_token ──
     if (grant_type === OAUTH_PARAMS.GRANT_TYPE_REFRESH_TOKEN) {
       if (!refresh_token) {
-        return NextResponse.json({ error: 'invalid_request', error_description: '缺少 refresh_token' }, { status: 400 });
+        return withOAuthNoStore(NextResponse.json({ error: 'invalid_request', error_description: '缺少 refresh_token' }, { status: 400 }));
       }
 
       // sender 绑定强制：RT 必须归属于当前认证的 client（RFC 9700 §4.14），
@@ -118,17 +118,17 @@ export async function POST(request: NextRequest) {
       writeLoginLog({ username: client.clientId, eventType: 'TOKEN_REFRESH', ip: extractClientIP(request.headers), userAgent: extractUserAgent(request.headers) });
 
       // 协议响应由**唯一组装点**产出（此前手拼并漏掉 scope，RFC 6749 §5.1）
-      return NextResponse.json(toOAuthTokenResponse(result));
+      return withOAuthNoStore(NextResponse.json(toOAuthTokenResponse(result)));
     }
 
-    return NextResponse.json({ error: 'unsupported_grant_type' }, { status: 400 });
+    return withOAuthNoStore(NextResponse.json({ error: 'unsupported_grant_type' }, { status: 400 }));
   } catch (err) {
     const mapped = mapServerError(err);
     const oauthError = mapToOAuthError(mapped.error);
 
-    return NextResponse.json(
+    return withOAuthNoStore(NextResponse.json(
       { error: oauthError, error_description: mapped.message },
       { status: mapped.status },
-    );
+    ));
   }
 }

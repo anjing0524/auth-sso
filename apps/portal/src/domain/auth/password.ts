@@ -25,6 +25,22 @@ const DEFAULT_PASSWORD_CONFIG: PasswordConfig = {
 
 export const PASSWORD_HISTORY_MAX = DEFAULT_PASSWORD_CONFIG.passwordHistoryMax;
 
+/**
+ * 用户不存在时用于**等价比对**的固定 bcrypt 目标哈希（成本 12，与生产一致）。
+ *
+ * 背景（H-04 用户枚举时延侧信道）：登录端点对不存在邮箱直接返回（≈4ms），
+ * 对存在用户则执行真实 bcrypt（≈300ms），攻击者可据响应时延批量枚举有效账号。
+ * 对未知用户也执行一次等成本比对即可抹平该差异；该哈希对应一个不可知的随机口令，
+ * 比对必然失败，但耗时与真实路径同量级。
+ */
+export const DUMMY_PASSWORD_HASH =
+  '$2b$12$riU0a2eUajaOnGBVnbYy1O8mBxkJkffIAej.M3ni9KckH4NZQ7l66';
+
+/** 对**不存在的用户**执行与真实密码校验等成本的 bcrypt 比对（恒失败，仅用于消除时延差） */
+export async function verifyPasswordForUnknownUser(plaintext: string): Promise<void> {
+  await bcrypt.compare(plaintext, DUMMY_PASSWORD_HASH);
+}
+
 // ── 密码哈希与验证 ─────────────────────────────────────────────────────
 
 /**

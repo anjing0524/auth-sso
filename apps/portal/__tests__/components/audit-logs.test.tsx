@@ -7,7 +7,7 @@
  * @req R3
  */
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 
 // Mock 共享数据获取函数 — 返回 { data, pagination } 结构
 // vi.mock 是 hoisted 的，不能引用外部变量，必须内联对象
@@ -37,7 +37,8 @@ vi.mock(import('@/lib/auth/verify-jwt'), async (importOriginal): Promise<Partial
 };
 });
 
-import AuditLogsPage from '@/app/(dashboard)/audit-logs/page';
+import AuditLogsPage, { metadata } from '@/app/(dashboard)/audit-logs/page';
+import { AuditTabs } from '@/app/(dashboard)/audit-logs/components/audit-tabs';
 import type * as auditDataModule from '@/app/audit/data';
 import type * as authVerifyJwtModule from '@/lib/auth/verify-jwt';
 
@@ -76,5 +77,83 @@ describe('AuditLogsPage', () => {
 
     // 确认页面成功渲染且第 2 页参数生效
     expect(screen.getByText('登录日志')).toBeInTheDocument();
+  });
+
+  it('U-LOG02：页签具备 role=tab / aria-selected / tabpanel 关联', async () => {
+    const page = await AuditLogsPage({ searchParams: Promise.resolve({ tab: 'operation' }) });
+    const { container } = render(page);
+
+    expect(container.querySelector('[role="tablist"]')).toBeTruthy();
+    const tabs = container.querySelectorAll('[role="tab"]');
+    expect(tabs.length).toBe(2);
+    const loginTab = container.querySelector('#audit-tab-login')!;
+    const opTab = container.querySelector('#audit-tab-operation')!;
+    expect(opTab.getAttribute('aria-selected')).toBe('true');
+    expect(loginTab.getAttribute('aria-selected')).toBe('false');
+    expect(opTab.getAttribute('aria-controls')).toBe('audit-tabpanel');
+    const panel = container.querySelector('[role="tabpanel"]')!;
+    expect(panel.getAttribute('aria-labelledby')).toBe('audit-tab-operation');
+  });
+
+  it('U-G05：页面只保留一份 lg:hidden 滚动提示（不再有重复的 md:hidden）', async () => {
+    const page = await AuditLogsPage({ searchParams: Promise.resolve({}) });
+    const { container } = render(page);
+
+    const hints = container.querySelectorAll('[data-scroll-hint]');
+    expect(hints.length).toBe(1);
+    expect(hints[0]!.className).toContain('lg:hidden');
+    expect(container.innerHTML).not.toContain('md:hidden');
+  });
+
+  it('U-G02：筛选无结果时空态为 filtered + 「清除筛选」出口；无筛选时保持"暂无"', async () => {
+    const mocked = await import('@/app/audit/data');
+    // 空数据已在文件级 mock 中固定
+    const filteredPage = await AuditLogsPage({
+      searchParams: Promise.resolve({ tab: 'login', eventType: 'LOGIN_FAILED' }),
+    });
+    const filtered = render(filteredPage);
+    expect(filtered.getByText('未找到匹配结果')).toBeInTheDocument();
+    const clearLink = filtered.getByRole('link', { name: '清除筛选' });
+    expect(clearLink.getAttribute('href')).toBe('/audit-logs?tab=login');
+    filtered.unmount();
+
+    const emptyPage = await AuditLogsPage({ searchParams: Promise.resolve({ tab: 'login' }) });
+    render(emptyPage);
+    expect(screen.getByText('暂无日志记录')).toBeInTheDocument();
+    expect(mocked.getLoginLogs).toHaveBeenCalled();
+  });
+
+  it('U-PROF02/metadata：页面导出标题', () => {
+    expect(metadata.title).toBe('审计日志 | Auth-SSO');
+  });
+});
+
+describe('AuditTabs（WAI-ARIA tabs 键盘语义补全）', () => {
+  const hrefs = { login: '/audit-logs?tab=login', operation: '/audit-logs?tab=operation' } as const;
+
+  it('roving tabindex：选中项 0、其余 -1', () => {
+    render(<AuditTabs tab="login" hrefs={hrefs} />);
+    expect(screen.getByRole('tab', { name: '登录日志' })).toHaveAttribute('tabindex', '0');
+    expect(screen.getByRole('tab', { name: '操作日志' })).toHaveAttribute('tabindex', '-1');
+  });
+
+  it('ArrowRight / ArrowLeft / Home / End 移动焦点并更新可达项', () => {
+    render(<AuditTabs tab="login" hrefs={hrefs} />);
+    const login = screen.getByRole('tab', { name: '登录日志' });
+    const operation = screen.getByRole('tab', { name: '操作日志' });
+
+    login.focus();
+    fireEvent.keyDown(login, { key: 'ArrowRight' });
+    expect(document.activeElement).toBe(operation);
+    expect(operation).toHaveAttribute('tabindex', '0');
+
+    fireEvent.keyDown(operation, { key: 'ArrowLeft' });
+    expect(document.activeElement).toBe(login);
+
+    fireEvent.keyDown(login, { key: 'End' });
+    expect(document.activeElement).toBe(operation);
+
+    fireEvent.keyDown(operation, { key: 'Home' });
+    expect(document.activeElement).toBe(login);
   });
 });

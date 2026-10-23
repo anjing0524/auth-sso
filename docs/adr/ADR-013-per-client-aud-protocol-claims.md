@@ -100,3 +100,25 @@ ADR-006 JWT 最小化时把两类数据一并剥离：RBAC 鉴权数据（roles/
 （清该用户全部 jti）与 **RT 家族**撤销（RFC 9700 §4.14）；ADR-013 决策 ④ 拒绝的是
 "**RT 家族撤销时级联撤销同家族 AT**"。三者粒度不同，因此"存在 `revokeUserAccessByUserId`"
 **不构成**对决策 ④ 的推翻。
+
+## 增补（2026-10-23）：per-client TTL —— `exp` 来源补齐 per-client 维度（决策 D15）
+
+本文决策 1 把「AT 的 `aud`/`client_id`」定义为 per-client 语义，但**令牌有效期**当时仍是全局常量
+（`TOKEN_TTL.ACCESS_TOKEN` / `TOKEN_TTL.REFRESH_TOKEN`），而 `clients` 表的
+`access_token_ttl` / `refresh_token_ttl` 从 v3 起就存在、管理面可编辑——形成"配置不生效"的
+声明↔实现漂移（审计 H-16）。
+
+**补充决策：per-client TTL 生效，并经受服务端钳制后落进 `exp` / `expires_in` / RT
+`expires_at` / Cookie `maxAge` 四处（四者同源同值）。**
+
+- 钳制边界：AT `[60s, 24h]`、RT `[5min, 30d]`；缺失/非法回退全局默认（3600 / 604800）；
+  越界收敛到边界。实现 `apps/portal/src/lib/auth/token.ts:81-89`（`ACCESS_TOKEN_TTL_BOUNDS` /
+  `REFRESH_TOKEN_TTL_BOUNDS` / `clampTokenTtl`）。
+- 生效点：授权码兑换（`lib/auth/oauth-grant.ts`）、RT 轮换（`lib/auth/token.ts:332` 起）、
+  Portal 静默续签 Cookie（`app/api/auth/refresh/route.ts`）。
+- **不减损本文决策 4 的撤销杠杆假设**：钳制上界（24h）保证单个 client 不能把 AT 拉长到
+  让 jti 黑名单成为唯一防线；超长 TTL 需求必须走全局部署配置评审。
+- 完整理由、边界依据与验证清单见 **ADR-024**（本 ADR 只记录"与 per-client aud 同源"的关联）。
+
+关联验证：`apps/portal/__tests__/api/oauth2-token.test.ts:466`（per-client TTL 生效/钳制/
+refresh grant 同源），审计证据 `.zcode/audit/portal-crud/evidence-02-h16-oauth.json`。

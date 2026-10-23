@@ -51,7 +51,10 @@ v3.2 重构了 RBAC 模型，移除 `role_data_scopes`、`role_clients`、`data_
 用户的可见部门 = ⋃ (user.roles → role.dept_id → dept.ancestors 子树展开)
 ```
 
-实现层在 `lib/auth/data-scope.ts` 的 `getUserRoleDeptIds()` 函数中完成聚合。
+实现层是 **ADR-014 的数据范围门面**：`lib/authz/data-scope.ts` 的私有实现
+`expandRoleDeptSubtrees()`（经 `resolveScope(executor, operatorId)` 暴露）；原
+`lib/auth/data-scope.ts` 与 `getUserRoleDeptIds()` / `canAccessDept()` 已随 ADR-014 收口删除
+（2026-10-23 更正：本文此前引用的函数名在现行代码中已不存在）。
 
 ## 后果
 
@@ -59,7 +62,55 @@ v3.2 重构了 RBAC 模型，移除 `role_data_scopes`、`role_clients`、`data_
 - 跨部门用户需要多角色：这是有意的约束，不是缺陷
 - `DATA` 权限类型（v3.1 遗留）已无用途，待从代码中移除
 
+## 增补（2026-10-23）：根部门单例、部门 DISABLED 语义、`deptIds` 缓存口径
+
+审计批次（H-21/H-22/H-23）发现三条与本文相关、但此前**没有显式决策**的语义，现补齐：
+
+### 1. 根部门是单例（服务端强制，不再只靠 UI）
+
+**决策：根部门（`parent_id IS NULL`）全局唯一；仅由 seed/迁移在空树引导期建立；任何运行期入口
+不得创建第二个根，也不得把已有部门迁出为根。**
+
+- 依据：本文「系统预置角色绑在根部门，根部门不可删除」；seed 语义（`apps/portal/scripts/seed-rbac.ts`
+  按根部门查找/建立）。「单例」此前只写在 `docs/roadmap.md` 2026-10-19 条目里，未进 ADR。
+- 实现：`app/(dashboard)/departments/actions.ts:51`（`assertRootCreationAllowed`：
+  已有根即拒绝；操作者数据范围为空也拒绝——`targets=[]` 不得成为"无守卫"的捷径）、
+  `:179`（迁出为根拒绝）、`:211` 起（根部门删除拒绝，见 2026-10-14 修订）。
+- 刻意保留的形态：种子/迁移**直插 DB** 建立根部门（不经过 Server Action），因此服务端守卫
+  不会阻塞首次部署。
+- 已知不足：根部门专属错误码（如 `ROOT_DEPARTMENT_EXISTS`）尚未进入 contracts，当前用
+  `BusinessRuleViolationError` 通用 422；如需 UI 精准提示，应作为独立 contracts 变更。
+
+### 2. 部门 `status = DISABLED`：生命周期门禁，不追溯（决策 D2）
+
+**决策：部门禁用是"管理动作开关"，不是"数据冻结"：**
+
+- **禁止**在禁用部门下新建子部门 / 用户 / 角色，**禁止**把既有角色/用户迁入；
+- **不追溯**：既有用户的登录、授权、数据范围保持原状（不因部门被禁用而失效）；
+- 当前实现进度（如实记录）：角色创建/迁移已校验部门 ACTIVE
+  （`roles/actions.ts:58` `assertDeptUsable`，create 与 update 一致）；用户创建/迁移与
+  子部门创建的同口径守卫**尚未落地**，属 backlog；`docs/spec/REQUIREMENTS_MATRIX.md` F 模块
+  已写明该验收口径。
+- 为什么不做"子树退出数据范围"：那会让一次管理动作导致大面积用户失权，且与"禁用是暂停而非
+  删除"的直觉冲突；产品确认前不实现破坏性语义（审计复核 R-D2 结论）。
+
+### 3. Redis `UserPermissionContext.deptIds` = **未展开**的角色部门 ID（决策 D1）
+
+**决策：权限上下文缓存里的 `deptIds` 只存用户所有 ACTIVE 角色的 `roles.dept_id`（原始值，不去重
+子树展开）；子树展开的唯一实现是 `resolveScope`（ADR-014 门面），且只在读/写路径按需实时计算。**
+
+- 实现：`lib/permissions.ts`（`getUserPermissionContext` 收集 `role.deptId`）；
+- 为什么不展开（复核结论，亦是 ADR-014 的推论）：
+  1. 在缓存里展开等于制造**第二个展开实现**，违反单一真相来源；
+  2. 部门移动时缓存值会真正陈旧（原始 `dept_id` 不随移动变化，展开集合会变）；
+  3. Portal 内数据范围是**实时**的（每次请求 `resolveScope` 查 DB），不需要缓存展开值。
+- 消费方注意：`packages/contracts` 的 `UserPermissionContext.deptIds` 注释、`docs/spec/DATABASE.md`
+  §8.2、`docs/glossary.md`、`docs/spec/third-party-integration.md` 已同步改为"未展开"口径；
+  外部子应用若要用它做数据范围，必须自行完成子树展开（或改为调用 Portal 的授权接口），
+  **不能直接把它当作"可见部门集合"**。
+
 ## 相关 ADR
 
 - ADR-001: 统一权限树
 - ADR-005: 三层安全模型（数据范围过滤位于 withAuth 层）
+- ADR-014: 数据范围授权门面（`resolveScope` 是唯一快照来源）

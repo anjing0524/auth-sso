@@ -10,6 +10,10 @@ ssl_cert_path = "/etc/gateway/ssl/fullchain.pem"
 ssl_key_path = "/etc/gateway/ssl/privkey.pem"
 log_dir = "logs"
 log_level = "info"
+# H-D-10：/__gateway/metrics 的独立只读令牌（≥16 字符，建议 openssl rand -hex 32）。
+# 不配置时回退 gateway_shared_secret；配置后抓取器凭证与 HMAC 签名密钥分离。
+# 也可用环境变量 GATEWAY_METRICS_TOKEN 覆盖。
+# metrics_token = ""
 
 [gateway.oauth]
 client_id = "portal"
@@ -39,7 +43,10 @@ public_paths = [
     "/favicon.ico",
 ]
 
-[[upstreams]]
-name = "/demo/"
-addresses = "demo:3000"
-public_paths = ["/demo/landing"]
+# 注意：demo-app 是示例应用，生产 compose **不包含** demo 服务。
+# 此处不再声明 `/demo/` upstream（2026-10-23 修复）：旧配置指向不存在的 `demo:3000`，
+# 任何 /demo/* 请求都会静默 502。需要演示/独立部署 demo 时，请自行添加服务并加回：
+#   [[upstreams]]
+#   name = "/demo/"
+#   addresses = "demo:3000"
+#   public_paths = ["/demo/landing"]

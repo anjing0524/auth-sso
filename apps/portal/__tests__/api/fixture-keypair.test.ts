@@ -189,8 +189,10 @@ describe('seedSigningKeys() —— 真实路径自检（DB → 缓存 → 生产
         .select()
         .from(td.schema.jwks)
         .where(eq(td.schema.jwks.kid, 'encrypted-at-rest'));
-      // 落库的是密文，不是明文 JWK
-      expect(stored!.privateKey).not.toContain('kty');
+      // 落库的是密文，不是明文 JWK。
+      // 断言 JSON 字段标记 `"kty"` 而不是裸 `kty`：后者会以 ~1/26000 的概率出现在
+      // base64 随机密文中（2026-10-23 实测偶发假红），属概率性断言缺陷。
+      expect(stored!.privateKey).not.toContain('"kty"');
 
       const { token } = await signAccessToken(USER_ID, CLIENT_ID, 'openid');
       await expect(

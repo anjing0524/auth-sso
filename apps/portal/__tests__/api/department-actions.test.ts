@@ -8,6 +8,7 @@ import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vites
 import { createTestDbHandle, seedTestData } from '../helpers/test-db';
 import { seedAdminUser, seedRootDept, seedSubDept, seedSuperAdminRole, seedTestUser, seedUserRoleBinding } from '../helpers/seed-fixtures';
 import * as schema from '@/db/schema';
+import { eq } from 'drizzle-orm';
 import { COMMON_ERRORS } from '@auth-sso/contracts';
 
 // 断言说明：`ApiResponse` 是判别联合（`ApiSuccess | ApiError`），因此断言失败契约时先
@@ -78,8 +79,10 @@ beforeEach(async () => {
 
 describe('Department Server Actions', () => {
   describe('createDepartmentAction', () => {
-    it('有效输入 → 返回 success: true 并写入部门', async () => {
-      const r: any = await createDepartmentAction({ name: 'New Dept', code: 'ND', sort: 1, parentId: null });
+    it('有效输入（挂在根部门下）→ 返回 success: true 并写入部门', async () => {
+      // 2026-10-23（task-11/H-21）：根部门是 ADR-002 单例，preflight 会拒绝第二个根，
+      // 故"新建部门"一律挂在已有根下（UI 也只在空树引导期显示"新建根部门"）。
+      const r: any = await createDepartmentAction({ name: 'New Dept', code: 'ND', sort: 1, parentId: ROOT_DEPT_ID });
 
       expect(r.success).toBe(true);
       expect(r.data.id).toBeDefined();
@@ -90,8 +93,8 @@ describe('Department Server Actions', () => {
       expect(created).toBeDefined();
       expect(created!.code).toBe('ND');
       expect(created!.sort).toBe(1);
-      expect(created!.parentId).toBeNull();
-      expect(created!.ancestors).toBeNull();
+      expect(created!.parentId).toBe(ROOT_DEPT_ID);
+      expect(created!.ancestors).toBe(ROOT_DEPT_ID);
     });
 
     it('有 parentId → ancestors 正确计算', async () => {
@@ -123,7 +126,7 @@ describe('Department Server Actions', () => {
         name: '另一个部门',
         code: 'TECH',
         sort: 9,
-        parentId: null,
+        parentId: ROOT_DEPT_ID,
       } as any);
 
       if (r.success) expect.unreachable('重复编码必须被拒');
@@ -247,5 +250,39 @@ describe('Department Server Actions', () => {
       expect(r.error).toBe(DEPARTMENT_ERRORS.DEPARTMENT_HAS_USERS);
       expect(r.message).toContain('关联用户');
     });
+  });
+});
+
+// ── H-23：部门 DISABLED 是生命周期门禁（禁止在其下新建/迁入） ──
+const DISABLED_DEPT_ID = '00000000-0000-4000-8000-0000000000d1';
+
+async function seedDisabledDept(): Promise<void> {
+  await seedTestData(td.db, {
+    departments: seedSubDept({ id: DISABLED_DEPT_ID, code: 'DISABLED_DEPT', name: '已禁用部门', status: 'DISABLED' }),
+  });
+}
+
+describe('H-23 部门 DISABLED 守卫', () => {
+  it('在已禁用部门下创建子部门 → 422，且不落库', async () => {
+    await seedDisabledDept();
+
+    const r: any = await createDepartmentAction({ name: 'Disabled Child', code: 'DC', sort: 1, parentId: DISABLED_DEPT_ID });
+
+    expect(r.success).toBe(false);
+    expect(String(r.message)).toContain('禁用');
+    const children = await db.select().from(schema.departments).where(eq(schema.departments.parentId, DISABLED_DEPT_ID));
+    expect(children).toHaveLength(0);
+  });
+
+  it('把部门迁入已禁用部门 → 422，原父级不变', async () => {
+    await seedDisabledDept();
+    await seedTestData(td.db, { departments: seedSubDept() }); // TECH (parent = ROOT)
+
+    const r: any = await updateDepartmentAction(TECH_DEPT_ID, { parentId: DISABLED_DEPT_ID } as any);
+
+    expect(r.success).toBe(false);
+    expect(String(r.message)).toContain('禁用');
+    const tech = await db.query.departments.findFirst({ where: eq(schema.departments.id, TECH_DEPT_ID) });
+    expect(tech?.parentId).toBe(ROOT_DEPT_ID);
   });
 });

@@ -75,7 +75,7 @@ check_env() {
 
   local required=(
     POSTGRES_PASSWORD REDIS_PASSWORD
-    BETTER_AUTH_SECRET BETTER_AUTH_URL NEXT_PUBLIC_APP_URL PORTAL_CLIENT_SECRET
+    NEXT_PUBLIC_APP_URL PORTAL_CLIENT_SECRET
     PORTAL_REDIRECT_URL GATEWAY_SHARED_SECRET
     LETSENCRYPT_DOMAIN LETSENCRYPT_EMAIL
   )
@@ -85,15 +85,15 @@ check_env() {
     if [[ -z "${value//[[:space:]]/}" ]]; then missing+=("${key}"); fi
   done
   if (( ${#missing[@]} > 0 )); then
-    fail "缺少必填环境变量: ${missing[*]}（见 DOCKER.md §3 与 .env.example）"
+    fail "缺少必填环境变量: ${missing[*]}（见 docker/README.md §3 与 .env.example）"
   fi
 
   local domain
   domain="$(grep -E '^LETSENCRYPT_DOMAIN=.+' "${ENV_FILE}" | tail -1 | cut -d= -f2- | tr -d '"' || true)"
   [[ "${domain}" =~ ^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$ ]] || fail "LETSENCRYPT_DOMAIN 不是合法域名: ${domain:-<空>}"
 
-  grep -qE '^(BETTER_AUTH_URL|NEXT_PUBLIC_APP_URL|PORTAL_REDIRECT_URL)=https://' "${ENV_FILE}" \
-    || fail "BETTER_AUTH_URL / NEXT_PUBLIC_APP_URL / PORTAL_REDIRECT_URL 必须为 https://"
+  grep -qE '^(NEXT_PUBLIC_APP_URL|PORTAL_REDIRECT_URL)=https://' "${ENV_FILE}" \
+    || fail "NEXT_PUBLIC_APP_URL / PORTAL_REDIRECT_URL 必须为 https://"
 
   log "环境文件校验通过：${ENV_FILE}（domain=${domain}）"
 }
@@ -182,7 +182,7 @@ case "${MODE}" in
       || fail "没有 auth-sso-portal:${PREV_TAG} 镜像，无法回滚（从未在本脚本中成功部署过）"
     docker image inspect "auth-sso-gateway:${PREV_TAG}" >/dev/null 2>&1 \
       || fail "没有 auth-sso-gateway:${PREV_TAG} 镜像，无法回滚"
-    warn "回滚只切镜像；数据库 schema/数据不会回退。请确认已按 DOCKER.md §6 备份 data/postgres。"
+    warn "回滚只切镜像；数据库 schema/数据不会回退。请确认已按 docker/README.md §4.1 备份 data/postgres。"
     docker tag "auth-sso-portal:${PREV_TAG}" "${PORTAL_IMAGE}"
     docker tag "auth-sso-gateway:${PREV_TAG}" "${GATEWAY_IMAGE}"
     compose up -d --no-build

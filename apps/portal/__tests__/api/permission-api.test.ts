@@ -214,7 +214,7 @@ describe('Permission API', () => {
       expect(body.code).toBe('portal:user:list');
     });
 
-    it('不存在返回 404，且携带**统一码** AUTH_SSO_1004（docs/spec/API.md:44）', async () => {
+    it('不存在返回 404，且携带**统一码** AUTH_SSO_1004（docs/spec/API.md §12.1）', async () => {
       const res = await GetPermission(createTestRequest('/api/permissions/00000000-0000-4000-8000-000000000999'), {
         params: Promise.resolve({ id: '00000000-0000-4000-8000-000000000999' }),
       } as any);

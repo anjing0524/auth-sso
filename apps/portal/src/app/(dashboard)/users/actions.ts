@@ -19,6 +19,7 @@
 import { schema } from '@/infrastructure/db';
 import { RoleAssignmentSchema, assignUserRoles } from '@/lib/user-role-assignment';
 import { invalidateResource } from '@/lib/cache-invalidation';
+import { clearUserBruteForceCounters } from '@/lib/auth/brute-force';
 import { and, eq, isNull, or } from 'drizzle-orm';
 import { withAuth, type AuthContext } from '@/lib/auth';
 import {
@@ -48,10 +49,15 @@ import {
   revokeAndRefreshAuthorization,
 } from '@/lib/auth/authorization-effects';
 import { revokeUserAccessByUserId } from '@/lib/session/revoke';
-import { clearBruteForceCounter } from '@/lib/auth/brute-force';
+
 import { withScopedRow, withScopedWrite } from '@/lib/authz';
+import { assertDepartmentUsable } from '@/lib/department-availability';
 import type { DbTxHandle } from '@/infrastructure/db';
-import { assertResetAllowed, revokeAfterPasswordReset } from '@/lib/account/reset-password';
+import {
+  assertResetAllowed,
+  revokeAccessTokensAfterReset,
+  revokeRefreshTokensForReset,
+} from '@/lib/account/reset-password';
 import { nextPasswordHistory } from '@/domain/auth/password-change';
 
 /**
@@ -113,6 +119,10 @@ export const createUserAction = withAuth(
         targets: v.data.deptId
           ? [{ deptId: v.data.deptId, message: '无权在指定部门下创建用户' }]
           : [],
+        // H-23：部门必须存在且 ACTIVE（禁用部门不接收新用户）；存在性先于范围判定
+        preflight: async (tx: DbTxHandle) => {
+          if (v.data.deptId) await assertDepartmentUsable(tx, v.data.deptId, '在该部门下创建用户');
+        },
       },
       async (tx) => {
         // 只看**未删除**行：与 `ux_users_email` / `ux_users_mobile` 的部分唯一索引同口径
@@ -216,7 +226,7 @@ export const unlockUserAction = withAuth(
 
     // 清除暴力破解 Redis 计数器（管理员解锁需同步清除，否则窗口期内仍被锁定）
     try {
-      await clearBruteForceCounter(v.data.id);
+      await clearUserBruteForceCounters(v.data.id);
     } catch {
       // 清除失败不阻塞解锁操作
     }
@@ -245,28 +255,65 @@ export const updateUserAction = withAuth(
     // 双目标守卫：目标用户**当前**部门 + 拟**迁入**部门都必须在操作者范围内。
     // 范围快照取自本事务（ADR-014）；deptId 未变更时不追加迁移目标。
     let deptIdChanged = false;
+    let statusChanged = false;
     await withScopedRow(
       {
         ...loadUserScoped(ctx.userId, v.data.id),
+        // H-24：deptId=null 是"历史/引导态"的非法数据，`isWithinScope(null)` 恒拒会让
+        // 管理员连"补部门"这条修复路径都无法执行（update/toggle/assign role 全 403）。
+        // 受控例外：仅当目标是**无部门**用户且本次为它指定部门时，用**拟落入部门**参与
+        // 范围断言（仍要求操作者范围包含该部门；其余情况保持 fail-closed）。
+        deptOf: (row: { deptId: string | null }) => row.deptId ?? v.data.deptId ?? null,
         // 第二个目标：拟迁入部门（同一份快照，不重复读取）
         extraTargets: () => v.data.deptId
           ? [{ deptId: v.data.deptId, message: '无权将用户迁移至该部门' }]
           : [],
       },
       async (tx, row) => {
+        // H-24：禁止把已有部门的用户清空——会主动制造上面那种"谁都改不了"的死锁状态。
+        if (row.deptId !== null && v.data.deptId === null) {
+          throw new BusinessRuleViolationError(
+            '不能清空用户所属部门（用户将失去数据范围归属，且管理员无法再编辑该用户）',
+          );
+        }
+        const nextDeptId = v.data.deptId;
+        const deptChanged = hasDeptChanged(row.deptId, v.data.deptId);
+        // H-23：迁入部门必须存在且 ACTIVE（禁用部门是生命周期门禁）
+        if (deptChanged && nextDeptId) {
+          await assertDepartmentUsable(tx, nextDeptId, '将用户迁移至该部门');
+        }
+        // H-25（users 侧不变量，与 roles 侧「有绑定用户不得迁部门」对称）：
+        // 迁部门前必须保证该用户现有角色都属于新部门（R-USER-ROLE），否则 422 提示先解除角色。
+        if (deptChanged && nextDeptId) {
+          const bound = await tx.query.userRoles.findMany({
+            where: eq(schema.userRoles.userId, v.data.id),
+            with: { role: { columns: { id: true, code: true, deptId: true } } },
+          });
+          const incompatible = bound.filter(
+            (b): b is typeof b & { role: NonNullable<typeof b.role> } =>
+              b.role !== null && b.role.deptId !== nextDeptId,
+          );
+          if (incompatible.length > 0) {
+            throw new BusinessRuleViolationError(
+              `该用户已绑定其他部门的角色（${incompatible.map((b) => b.role.code).join('、')}），请先解除角色后再迁移部门`,
+            );
+          }
+        }
         const updated = applyUserUpdate(userFromPersistence(row), {
           name: v.data.name, email: v.data.email,
           status: v.data.status, deptId: v.data.deptId,
           avatarUrl: v.data.avatarUrl,
         });
-        deptIdChanged = hasDeptChanged(row.deptId, v.data.deptId);
+        deptIdChanged = deptChanged;
+        statusChanged = row.status !== updated.status;
         await tx.update(schema.users).set(userToUpdateRow(updated))
           .where(eq(schema.users.id, v.data.id));
       },
     );
-    // 部门归属变了 ⇒ 权限决策变了（数据范围随之变化）→ 撤销 AT + 刷缓存；
+    // 状态或部门变了 ⇒ 权限/会话决策变了 → 撤销 AT + 刷缓存（H-17：此前直写 status
+    // 不撤 AT，被禁用/锁定用户的既有 Access Token 仍可用至自然过期）；
     // 否则只是改名/邮箱一类不改变决策的变更 → 只刷缓存
-    if (deptIdChanged) {
+    if (deptIdChanged || statusChanged) {
       await revokeAndRefreshAuthorization([v.data.id]);
     } else {
       await refreshAuthorizationCache([v.data.id]);
@@ -349,11 +396,14 @@ export const resetPasswordAction = withAuth(
         await tx.update(schema.users)
           .set({ passwordHash, passwordHistory: nextPasswordHistory(state) })
           .where(eq(schema.users.id, v.data.id));
+        // H-13：RT 撤销与密码写入**同一事务**（fail-close）——撤销失败则整体回滚，
+        // 不产生"密码已改但旧 RT 仍可续期"的部分成功。
+        await revokeRefreshTokensForReset(tx, v.data.id);
       },
     );
 
-    // 重置后所有会话失效，用户须用新密码重新登录（B-USR-PW）
-    await revokeAfterPasswordReset(v.data.id);
+    // jti 层（尽力而为，ADR-011）：失败不阻断已提交的重置，由 lib/session/revoke 记日志。
+    await revokeAccessTokensAfterReset(v.data.id);
 
     invalidateResource('users');
     return { success: true, data: { id: v.data.id }, message: '密码已重置，该用户所有会话已失效' };
@@ -383,7 +433,7 @@ export const updateUserRolesAction = withAuth(
     // 共享实现已完成权限收敛（撤销 AT + 刷权限缓存）；失败带可直接进信封的码/消息
     const result = await assignUserRoles(ctx.userId, targetUserId, v.data.roleIds, {
       method: 'POST',
-      url: `action://users/${targetUserId}/roles`,
+      url: `/users/${targetUserId}`,
       ip: null,
       userAgent: null,
     });

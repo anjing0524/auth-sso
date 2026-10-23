@@ -36,6 +36,7 @@ import { Input } from '@/components/ui/input';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -161,7 +162,7 @@ function ChangePasswordDialog() {
               name="newPassword"
               type="password"
               autoComplete="new-password"
-              placeholder="至少8位，含大小写字母和数字"
+              placeholder="至少 10 位，含大写/小写字母、数字、特殊字符中的至少三类"
               value={form.newPassword}
               onChange={handleChange}
               required
@@ -304,6 +305,9 @@ export default function ProfileClient({
     router.replace(`${pathname}${params.toString() ? `?${params.toString()}` : ''}`, { scroll: false });
   };
   const [showAllPermissions, setShowAllPermissions] = React.useState(false);
+  /** U-PF02：退出会话是会话级安全操作，需二次确认（防误点） */
+  const [logoutConfirmOpen, setLogoutConfirmOpen] = React.useState(false);
+  const [loggingOut, setLoggingOut] = React.useState(false);
   const visiblePermissions = showAllPermissions ? permissions : permissions.slice(0, 12);
   if (!user) {
     return (
@@ -523,15 +527,41 @@ export default function ProfileClient({
                     )}
                   </div>
 
-                  <Button
-                    variant="outline"
-                    onClick={async () => {
-                      await fetch('/api/auth/logout', { method: 'POST' });
-                      window.location.href = '/login';
-                    }}
-                  >
+                  <Button variant="outline" onClick={() => setLogoutConfirmOpen(true)}>
                     退出当前会话
                   </Button>
+
+                  {/* U-PF02：二次确认，避免误点即清会话 */}
+                  <Dialog open={logoutConfirmOpen} onOpenChange={setLogoutConfirmOpen}>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>退出当前会话？</DialogTitle>
+                        <DialogDescription>
+                          将清除本设备的登录会话并返回登录页。其他设备上的会话不受影响。
+                        </DialogDescription>
+                      </DialogHeader>
+                      <DialogFooter>
+                        <Button variant="outline" onClick={() => setLogoutConfirmOpen(false)} disabled={loggingOut}>
+                          取消
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          disabled={loggingOut}
+                          onClick={async () => {
+                            setLoggingOut(true);
+                            try {
+                              await fetch('/api/auth/logout', { method: 'POST' });
+                              window.location.href = '/login';
+                            } finally {
+                              setLoggingOut(false);
+                            }
+                          }}
+                        >
+                          {loggingOut ? '退出中...' : '确认退出'}
+                        </Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
                 </CardContent>
               </Card>
             </TabsContent>

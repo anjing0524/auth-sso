@@ -71,10 +71,12 @@ function assertNoUndefinedCells(csv: string): void {
   }
 }
 
-async function exportCsv(type: 'login' | 'operation') {
-  const res = await GET(new NextRequest(`http://localhost:4100/api/audit/export?type=${type}`));
+async function exportCsv(type: 'login' | 'operation', query = '') {
+  const res = await GET(new NextRequest(`http://localhost:4100/api/audit/export?type=${type}${query}`));
   return { status: res.status, csv: await res.text() };
 }
+
+const ISO_8601 = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 
 describe('GET /api/audit/export — CSV 列取自真实行形状', () => {
   it('type=operation：操作人/目标资源/详情三列必须有值（真实字段）', async () => {
@@ -102,8 +104,12 @@ describe('GET /api/audit/export — CSV 列取自真实行形状', () => {
     expect(row[2]).toBe('USER_UPDATE');     // 操作类型 ← operation
     expect(row[3]).toBe('/api/users/abc');  // 目标资源 ← url（原读 l.resource，不存在）
     expect(row[5]).toBe('10.0.0.7');        // IP ← ip
-    // 详情 ← params（原读 l.detail，不存在）：jsonb 对象会被 String() 化，只要求非空
-    expect(row[4]).not.toBe('');
+    // H-28：详情 ← params 必须是 JSON 序列化（此前 String(object) = "[object Object]"）
+    // CSV 按 RFC 4180 转义：含双引号 → 外层引号 + 内部双写
+    expect(row[4]).toBe('"{""page"":1}"');
+    expect(csv).not.toContain('[object Object]');
+    // H-28：时间列必须是 ISO 8601（此前 Date.toString() = "Fri Oct 23 2026 ..."）
+    expect(row[0]).toMatch(ISO_8601);
   });
 
   it('type=login：既有正确路径的回归守卫', async () => {
@@ -126,5 +132,40 @@ describe('GET /api/audit/export — CSV 列取自真实行形状', () => {
     expect(row[1]).toBe('login-user');
     expect(row[2]).toBe('LOGIN_SUCCESS');
     expect(row[4]).toBe('vitest');
+    expect(row[0]).toMatch(ISO_8601);
+  });
+
+  it('H-28：startDate/endDate 透传（与列表同口径，不再被丢弃）', async () => {
+    const USER = '00000000-0000-4000-8000-000000000101';
+    await td.db.insert(schema.loginLogs).values([
+      { username: 'old-user', eventType: 'LOGIN_SUCCESS', userId: USER, createdAt: new Date('2026-01-01T10:00:00Z') },
+      { username: 'new-user', eventType: 'LOGIN_SUCCESS', userId: USER, createdAt: new Date('2026-06-01T10:00:00Z') },
+    ]);
+
+    const filtered = await exportCsv('login', '&startDate=2026-05-01&endDate=2026-06-30');
+
+    expect(filtered.status).toBe(200);
+    expect(filtered.csv).toContain('new-user');
+    expect(filtered.csv).not.toContain('old-user');
+  });
+
+  it('H-28：userId 透传（此前导出端点不认识该参数）', async () => {
+    const USER_A = '00000000-0000-4000-8000-000000000101';
+    const USER_B = '00000000-0000-4000-8000-000000000202';
+    await td.db.insert(schema.auditLogs).values([
+      { userId: USER_A, username: 'user-a', operation: 'USER_UPDATE', method: 'POST', url: '/a', createdAt: now },
+      { userId: USER_B, username: 'user-b', operation: 'USER_UPDATE', method: 'POST', url: '/b', createdAt: now },
+    ]);
+
+    const filtered = await exportCsv('operation', `&userId=${USER_A}`);
+
+    expect(filtered.status).toBe(200);
+    expect(filtered.csv).toContain('user-a');
+    expect(filtered.csv).not.toContain('user-b');
+  });
+
+  it('H-28：非法日期 → 400（显式校验，不静默忽略）', async () => {
+    const res = await exportCsv('login', '&startDate=2026/01/01');
+    expect(res.status).toBe(400);
   });
 });

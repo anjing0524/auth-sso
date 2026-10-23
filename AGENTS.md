@@ -27,7 +27,7 @@ nodejs@26（nvm default；**Temporal 在 v26.10.0 已默认开启，不需要任
   拿到**真实 HTTP 200**（`pnpm stack:up` + `curl -k`），**只看日志 Ready 会假绿**。
 nextjs@16
 Rust 1.93.0+
-git 身份/远程：GitHub 推送一律用 `gh` CLI（HTTPS + 凭据助手已配置，账号 anjing0524）；本机 `id_ed25519` 是 `anjing0524/vue-refresh` 仓库的 deploy key，对 auth-sso 无推送权限，勿走 SSH；Docker 命令当前用户已入 docker 组（旧会话内用 `sg docker -c` 或 sudo 兜底）
+git 身份/远程：GitHub 推送走 **SSH**（`origin = git@github.com:anjing0524/auth-sso.git`；已实测 `ssh -T git@github.com` 鉴权为账号 anjing0524，`git push origin main` 即可）。**不要**改用 HTTPS / `gh` 凭据助手——此前"勿走 SSH、改用 gh HTTPS"的指引是错的（2026-10-23 用户纠正）。Docker 命令当前用户已入 docker 组（旧会话内用 `sg docker -c` 或 sudo 兜底）
 
 ## 优先
 
@@ -40,6 +40,7 @@ git 身份/远程：GitHub 推送一律用 `gh` CLI（HTTPS + 凭据助手已配
 架构必须足够清晰，架构污染零容忍
 修复问题必须总结-审阅-修订同类问题，沉淀到 `docs/adr/` 或 `docs/roadmap.md`，记录为最佳实践
 修改文档前必须重新阅读，文档可能被多人更新
+文档引用代码用**仓库相对路径 + 章节号/符号名**，不写 `:行号`（行号必漂移；只写不存在的文件 = 死引用）
 rust 代码修改后必须修复 `cargo clippy`的所有错误并执行 `cargo fmt` 格式化
 rust 代码必须遵循 `https://rust-lang.github.io/api-guidelines/checklist.html`
 使用`roadmap`记录系统完成情况
@@ -153,7 +154,7 @@ API 层里生产业务模块的模块级 mock 必须是**类型化工厂**（`vi
 ## 文档与流程
 
 - 议题在 GitHub Issues（`anjing0524/auth-sso`，走 `gh` CLI）；五个 triage 标签保持默认。
-- 领域词汇唯一真相源：`docs/glossary.md`；架构决策：`docs/adr/`（ADR-001~022）。
+- 领域词汇唯一真相源：`docs/glossary.md`；架构决策：`docs/adr/`（ADR-001~026）。
 
 ## Portal 架构要点
 
@@ -203,4 +204,4 @@ API 层里生产业务模块的模块级 mock 必须是**类型化工厂**（`vi
 - **门禁结论取退出码**（加末尾的 `✖ N problems (X errors…)` 汇总行）；grep 只用来筛行、不当结论：`grep '^\s*[0-9]+:[0-9]+\s+error'` 曾把 1 个 lint error 读成「0 error」（真实输出带 `apps/portal lint:` 前缀）；同理**别把校验脚本塞进管道**——`| tail` 会让退出码变成 `tail` 的（实测：一个被取代成 `cancelled` 的 run 因此被读成 exit 0；`scripts/ci/verify.sh` 有运行级判据，直接跑、看它的退出码）。**一次推送只验一个**：同一分支的新推送会取消旧 run（本会话三个连续提交的 run 都被取代成 `cancelled`，于是"绿"永远拿不到）⇒ 上一轮绿了再推下一轮。
 - **批量改写脚本用三引号或中文引号，写完先看确认行**：英文引号嵌进双引号 Python 字符串会让整段脚本**不执行**（本会话反复栽在它上面；最严重的一次导致索引与 roadmap 漏写）。
 - **先把失败的值带出来，再改代码**：断言写 `expect(actual, JSON.stringify(actual)).toBe(…)`；读不到可读原因时先建探针（`JSON.stringify`、被包装的 `err.cause`、单独 `await` 那一步），用完撤掉。本会话一处悬案靠猜白花了好几次尝试，探针一上就定位到 `err.cause` 里的 `departments_pkey` 重复。
-- **文档维护**：改动文档后跑文档守卫（`apps/portal/__tests__/api/docs-*.test.ts`）；引用既有决定前先查 `docs/adr/`。
+- **文档维护**：改动文档后跑文档守卫（`apps/portal/__tests__/api/docs-*.test.ts`；`docs-claims.test.ts` 现在还守 `docs/README.md` / 根 `README.md` 里可重算的目录计数）；引用既有决定前先查 `docs/adr/`。

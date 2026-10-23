@@ -83,4 +83,14 @@ describe('DataTable', () => {
 
     expect(screen.getByText('搜索栏测试')).toBeInTheDocument();
   });
+
+  it('宽表滚动提示在 ≥1024 仍可见（U-G05：lg:hidden，而非 md:hidden）', () => {
+    render(
+      <DataTable columns={columns} data={items} renderRow={renderRow} />
+    );
+
+    const hint = screen.getByText('左右滑动查看完整表格');
+    expect(hint.className).toContain('lg:hidden');
+    expect(hint.className).not.toContain('md:hidden');
+  });
 });

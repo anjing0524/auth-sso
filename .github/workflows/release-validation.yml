@@ -15,4 +15,3 @@ jobs:
     with:
       artifact_name: release-e2e-evidence
       artifact_retention_days: 30
-      run_fault_injection: false

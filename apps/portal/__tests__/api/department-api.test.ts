@@ -15,7 +15,7 @@ import { createTestDbHandle, seedTestData } from '../helpers/test-db';
 import { seedAdminUser, seedSuperAdminRole, seedUserRoleBinding } from '../helpers/seed-fixtures';
 import { createTestRequest, parseResponseJson } from '../helpers/test-utils';
 import * as schema from '@/db/schema';
-import { DEPARTMENT_ERRORS } from '@auth-sso/contracts';
+import { COMMON_ERRORS, DEPARTMENT_ERRORS } from '@auth-sso/contracts';
 import type * as authModule from '@/lib/auth';
 import type * as verifyJwtModule from '@/lib/auth/verify-jwt';
 import type * as cryptoModule from '@/lib/crypto';
@@ -261,7 +261,11 @@ describe('Department API', () => {
 
   // ── POST 创建部门 ──────────────────────────────────────
   describe('POST create department', () => {
-    it('创建顶级部门 — ancestors 为 null', async () => {
+    it('创建第二个根部门 → 被拒绝（H-21 根部门单例），原根不变', async () => {
+      // 2026-10-23（task-11/H-21）**测试语义更新**：服务端已强制 ADR-002 的
+      // "根部门单例"——此前该用例断言"第二个根创建成功"，把缺陷写成了规范。
+      // 空树引导期的根由 seed 建立（有角色⇒必有部门⇒树非空，Server Action 不可达），
+      // 因此这里只验证"已有根 ⇒ 拒绝且无副作用"。
       await seedTestData(td.db, {
         departments: [
           {
@@ -288,16 +292,16 @@ describe('Department API', () => {
         parentId: null,
       });
 
-      expect(r.success).toBe(true);
-      expect(r.data.id).toBe(CREATED_DEPT_ID);
-      expect(r.message).toBe('部门创建成功');
+      if (r.success) expect.unreachable('根部门是 ADR-002 的单例，第二个根必须被拒');
+      // BusinessRuleViolationError 默认映射为 VALIDATION_ERROR（422 语义）
+      expect(r.error).toBe(COMMON_ERRORS.VALIDATION_ERROR);
+      expect(r.message).toContain('根部门');
 
       const rows = await td.db.select().from(schema.departments);
-      const created = rows.find((d) => d.name === '新事业部');
-      expect(created).toBeDefined();
-      expect(created!.code).toBe('BU');
-      expect(created!.parentId).toBeNull();
-      expect(created!.ancestors).toBeNull();
+      expect(rows.find((d) => d.name === '新事业部')).toBeUndefined();
+      const roots = rows.filter((d) => d.parentId === null);
+      expect(roots).toHaveLength(1);
+      expect(roots[0]!.id).toBe(ROOT_DEPT_ID);
     });
 
     it('创建子部门 — ancestors 正确级联', async () => {

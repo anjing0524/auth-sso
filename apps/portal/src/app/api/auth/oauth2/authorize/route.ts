@@ -16,7 +16,7 @@ import { verifyAccessToken } from '@/lib/auth/token';
 import { parseScopes, validateAuthorization, validateRequestedScopes } from '@/domain/auth/oauth-authorize';
 import { validateRedirectUri } from '@/domain/auth/oauth-client';
 import { generateId, generateUUID, hashToken } from '@/lib/crypto';
-import { getAppBaseURL, getIssuer } from '@/lib/env';
+import { getAppBaseURL, getIssuer, isCookieSecure } from '@/lib/env';
 import { mapServerError } from '@/lib/server-error';
 import { mapToOAuthError } from '@/domain/shared/error-mapping';
 import {
@@ -29,12 +29,18 @@ import { COOKIE_NAMES, JWT_TYP, PORTAL_AUD, PORTAL_CLIENT_ID } from '@auth-sso/c
 import { resolveActiveClient } from '@/lib/auth/oauth-helpers';
 import { getUserWithRoleClients } from './data';
 import {
+  AUTH_REQUEST_BINDING_COOKIE,
+  AUTH_REQUEST_BINDING_TTL,
   storeAuthRequest,
   getStoredAuthRequest,
+  generateAuthRequestBinding,
   generateSessionId,
 } from '@/lib/session/auth-request-store';
 import type { StoredAuthRequest } from '@/domain/auth/types';
 import { z } from 'zod';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('Authorize');
 
 const AuthorizeQuerySchema = z.object({
   client_id: z.string().min(1),
@@ -139,6 +145,14 @@ async function issueCodeAndRedirect(
 
   const response = NextResponse.redirect(redirectUrl);
   clearLoginSessionCookie(response);
+  // 一次性绑定 Cookie：授权请求完成后即失效（路径与写入侧一致，均含 secure 策略）
+  response.cookies.set(AUTH_REQUEST_BINDING_COOKIE, '', {
+    path: '/api/auth',
+    httpOnly: true,
+    secure: isCookieSecure(),
+    sameSite: 'lax',
+    maxAge: 0,
+  });
   return response;
 }
 
@@ -168,10 +182,43 @@ async function handleSessionIdBranch(
     return buildLoginPageRedirect(appBaseURL, sessionId);
   }
 
+  // 2b. 登录凭证必须绑定到本授权请求（H-02）：sid 不匹配说明 login_session 是
+  //     在别的授权请求下签发的（典型的授权请求注入），直接拒绝且不消费 Redis 参数。
+  if (sessionClaims.sid !== sessionId) {
+    log.warn('授权请求绑定校验失败（H-02）', { sessionId });
+    return buildOAuthErrorRedirect(
+      request,
+      'session_expired',
+      '授权请求与登录会话不匹配，请重新发起授权',
+    );
+  }
+
+  // 2c. 浏览器维度绑定（H-02）：分支 B 写入的 HttpOnly Cookie 必须存在。
+  //     放在 GETDEL 之前——被注入的请求不该消耗真正的授权请求。
+  const bindingCookie = request.cookies.get(AUTH_REQUEST_BINDING_COOKIE)?.value;
+  if (!bindingCookie) {
+    log.warn('授权请求绑定校验失败（H-02）', { sessionId });
+    return buildOAuthErrorRedirect(
+      request,
+      'session_expired',
+      '授权请求与当前浏览器不匹配，请重新发起授权',
+    );
+  }
+
   // 3. login_session 验证通过后，原子消费 Redis 暂存参数（GETDEL 读取+删除一步完成）
   const stored = await getStoredAuthRequest(sessionId);
   if (!stored) {
     return buildOAuthErrorRedirect(request, 'session_expired', '授权会话已过期，请重新发起授权');
+  }
+
+  // 绑定值二次核对（防 Redis 内容被替换/旧格式数据）：不匹配时拒绝发码
+  if (stored.binding !== bindingCookie) {
+    log.warn('授权请求绑定校验失败（H-02）', { sessionId });
+    return buildOAuthErrorRedirect(
+      request,
+      'session_expired',
+      '授权请求与当前浏览器不匹配，请重新发起授权',
+    );
   }
 
   return issueCodeAndRedirect(
@@ -252,9 +299,19 @@ async function handleFullParamsBranch(
     scope,
     state,
     nonce: nonce || null,
+    // H-02：一次性绑定值 → 同时进 Redis（供 login 校验）与 HttpOnly Cookie（本浏览器凭证）
+    binding: generateAuthRequestBinding(),
   };
   await storeAuthRequest(newSessionId, stored);
-  return buildLoginPageRedirect(appBaseURL, newSessionId);
+  const response = buildLoginPageRedirect(appBaseURL, newSessionId);
+  response.cookies.set(AUTH_REQUEST_BINDING_COOKIE, stored.binding, {
+    path: '/api/auth',
+    httpOnly: true,
+    secure: isCookieSecure(),
+    sameSite: 'lax',
+    maxAge: AUTH_REQUEST_BINDING_TTL,
+  });
+  return response;
 }
 
 export async function GET(request: NextRequest) {

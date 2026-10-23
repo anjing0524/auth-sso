@@ -10,7 +10,7 @@ import 'server-only';
 
 import { cacheLife, cacheTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
-import { asc, eq, and } from 'drizzle-orm';
+import { asc, count, eq, and, inArray } from 'drizzle-orm';
 import { departmentFromPersistence } from '@/domain/department/department';
 import { buildTree } from '@/domain/shared/tree-utils';
 import { scopeFilter, isScopeDenied } from '@/lib/authz';
@@ -137,4 +137,48 @@ export async function getDepartmentMembers(departmentId: string, scope: UserScop
       eq(schema.users.deptId, departmentId),
       scopeFilter(scope, schema.users.deptId),
     ));
+}
+
+/** 删除确认的影响面（U-DEP05）：某个部门下的直接依赖数量 */
+export interface DepartmentDeletionStats {
+  /** 直接子部门数 */
+  childCount: number;
+  /** 直属用户数（含软删，与服务端删除守卫 `count(*)` 同口径） */
+  userCount: number;
+  /** 关联角色数 */
+  roleCount: number;
+}
+
+/**
+ * 批量统计部门删除影响面（子部门 / 直属用户 / 角色）。
+ *
+ * 与服务端 `deleteDepartmentAction` 的三个守卫**同口径**：任一非 0 时删除会被拒，
+ * 因此确认弹窗展示的是"为什么删不了"的真实数字（而不是泛泛的"请确认"）。
+ *
+ * @param deptIds 当前可见部门 ID 列表（空数组 → 空对象，零查询）
+ */
+export async function getDepartmentDeletionStats(
+  deptIds: readonly string[],
+): Promise<Record<string, DepartmentDeletionStats>> {
+  if (deptIds.length === 0) return {};
+  const [children, users, roles] = await Promise.all([
+    db.select({ deptId: schema.departments.parentId, amount: count() })
+      .from(schema.departments)
+      .where(inArray(schema.departments.parentId, [...deptIds]))
+      .groupBy(schema.departments.parentId),
+    db.select({ deptId: schema.users.deptId, amount: count() })
+      .from(schema.users)
+      .where(inArray(schema.users.deptId, [...deptIds]))
+      .groupBy(schema.users.deptId),
+    db.select({ deptId: schema.roles.deptId, amount: count() })
+      .from(schema.roles)
+      .where(inArray(schema.roles.deptId, [...deptIds]))
+      .groupBy(schema.roles.deptId),
+  ]);
+  const stats: Record<string, DepartmentDeletionStats> = {};
+  for (const id of deptIds) stats[id] = { childCount: 0, userCount: 0, roleCount: 0 };
+  for (const row of children) if (row.deptId) stats[row.deptId]!.childCount = Number(row.amount);
+  for (const row of users) if (row.deptId) stats[row.deptId]!.userCount = Number(row.amount);
+  for (const row of roles) stats[row.deptId]!.roleCount = Number(row.amount);
+  return stats;
 }

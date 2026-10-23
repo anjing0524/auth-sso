@@ -2,43 +2,56 @@
 
 企业级统一身份认证平台 (SSO)，实现 OIDC/OAuth 2.1 Provider 能力，提供一体化的身份与权限管理方案。
 
+Portal 自身即是 OIDC Provider；Gateway 作为唯一公网入口，完成 HTTPS 终结、ES256 JWKS 离线验签、Cookie 与 Bearer 令牌转换。构建、部署与验收全部走 Docker（与 CI 同形态）。
+
 ## 核心能力
 
-- **统一身份认证 (OIDC Provider)**: Portal 内建纯自定义 OIDC Provider（基于 `jose` 库，ES256 JWT 无状态签发），支持 OAuth 2.1 + PKCE 授权码流程。
-- **管理门户 (Portal)**:
-  - **实时概览**: 动态展示用户、角色、应用及部门的统计指标。
-  - **最近动态**: 集成操作审计日志，实时监控系统活动。
-  - **智能重定向**: 登录后自动跳转至 `/dashboard`；已登录用户访问首页时自动感知并跳转。
-- **RBAC 权限体系**: 基于角色所属部门的精细化数据范围控制，支持多角色部门并集与子树自动展开。
-- **审计日志**: 提供完整的登录日志与操作审计追踪。
-- **信创网关**: 自研 Pingora (Rust) 网关，Let's Encrypt 自动签发/续期与证书热加载，ES256 JWKS 离线验签，Cookie-to-Bearer 令牌转换。
+- **统一身份认证 (OIDC Provider)**：Portal 内建 OIDC Provider（`jose` + ES256 JWT），支持 OAuth 2.1 + PKCE 授权码流程，对外提供 Discovery 与 JWKS。
+- **管理门户 (Portal)**：
+  - **实时概览**：动态展示用户、角色、应用及部门的统计指标。
+  - **最近动态**：集成操作审计日志，实时监控系统活动。
+  - **智能重定向**：登录后自动跳转至 `/dashboard`；已登录用户访问首页时自动感知并跳转。
+- **RBAC 权限体系**：统一权限树 + 角色部门绑定 + 部门子树数据范围（多角色并集）。Gateway 只做认证（验签 + jti 黑名单），**不做权限判定**（ADR-006）；权限判定在 Portal 的 `withAuth` / `lib/authz` 门面。
+- **审计日志**：完整的登录日志与操作审计；破坏性操作（如删除权限）在确认前展示影响面。
+- **信创网关 (Rust/Pingora)**：HTTPS 终结、JWKS 离线验签、Cookie↔Bearer 转换、限流与 `/healthz` 存活探针；Gateway 内建 ACME 客户端，Let's Encrypt 自动签发/续期并原子热加载证书。
+- **子应用零改造接入**：Gateway 注入 `X-User-Id` / `X-User-Jti` 并转发 `Authorization: Bearer`；权限上下文缓存 `portal:user_perms:{userId}` **由 Portal 在签发路径写入**（Gateway 不读写权限缓存，ADR-006），子应用自行读取。`apps/demo-app` 是读取侧的最小示例；该示例当前没有接入任何 compose 栈（见 `docs/INTEGRATION_GUIDE.md`）。
 
 ## 项目结构
 
 ```
 auth-sso/
 ├── apps/
-│   ├── gateway/       # 信创网关 (Pingora/Rust) — HTTPS 终结 + JWT 验签
-│   └── portal/        # 管理门户 + OIDC Provider (含认证中心) — 端口 4100
+│   ├── gateway/       # 信创网关 (Rust/Pingora) — HTTPS 终结 + JWKS 验签 + ACME
+│   ├── portal/        # 管理门户 + OIDC Provider（宿主开发 4100 / 容器内 4000）
+│   └── demo-app/      # Gateway 代理模式演示（哑服务：读 X-User-Id + Redis 权限）
 ├── packages/
-│   ├── contracts/     # 共享类型定义、错误码、权限码契约
-│   └── config/        # 共享 env 配置 (Zod + URL 推导)、TypeScript/ESLint
-├── tests/             # 自动化测试脚本 (API, SSO, Security, RBAC, E2E)
-└── docs/              # 项目文档与 SOP
+│   ├── contracts/     # 共享类型、错误码、权限码、OIDC 常量（枚举唯一真相源）
+│   └── config/        # 共享 env 配置：Zod 校验 + 公开 URL 推导
+├── docker/            # compose / 镜像 / ACME fixture（唯一出处见 docker/README.md）
+├── scripts/           # 可执行脚本：docker / e2e / ci / bench（索引见 scripts/README.md）
+├── tests/             # E2E（Playwright）+ 需求追溯
+└── docs/              # ADR、需求规格、roadmap、术语表（入口见 docs/README.md）
 ```
 
 > **架构说明**: IDP (身份提供者) 已合并进 Portal。Portal 自身即是 OIDC Provider，不再需要独立的 IDP 服务。
 
 ## 技术栈
 
-- **Next.js 16** - React 核心框架
-- **jose (Web Crypto)** - ES256 JWT 签发与验签，密钥对存储于 PostgreSQL
-- **Pingora** - 自研 Rust 网关 (HTTPS 终结 + JWT 验签)
-- **Drizzle ORM** - 类型安全的数据库操作层
-- **PostgreSQL** - 结构化数据存储
-- **Redis** - 高性能 Session 与缓存存储
-- **Tailwind CSS 4** - 现代 UI 样式系统
-- **pnpm** - 高效的包管理工具
+| 类别 | 选型 |
+|---|---|
+| 运行时 | Node.js 26、pnpm 10.12.4、TypeScript 6 |
+| 应用框架 | Next.js 16（App Router / Cache Components / Turbopack 构建）、React 19、Tailwind CSS 4 |
+| 认证与协议 | 自建 OIDC Provider、OAuth 2.1 + PKCE、`jose`（ES256）、bcryptjs |
+| 数据 | PostgreSQL 16 + Drizzle ORM、Redis 7（JWT 撤销黑名单 / 权限缓存 / 授权请求状态） |
+| 网关 | Rust 1.93+（edition 2024）、Pingora 0.9、OpenSSL（vendored） |
+| 测试与工程 | Vitest 4（Projects 模式）、Playwright（仅 Chromium）、ESLint 9 flat config、Docker Compose |
+
+## 环境要求
+
+- **Node.js >= 26**（`package.json` 的 `engines`；Temporal 在该版本默认开启，不需要 V8 旗标）。
+- **pnpm 10.12.4**（CI 使用 `--frozen-lockfile`）。
+- **Docker + Docker Compose v2**：构建、部署、验收的主路径。
+- **Rust 1.93+**（可选）：仅在宿主机直接编译 `apps/gateway` 时需要；走 Docker 构建无需安装。
 
 ## 快速开始（Docker —— 与 CI / 生产同形态）
 
@@ -51,28 +64,30 @@ pnpm install
 ### 2. 构建镜像
 
 ```bash
-pnpm stack:build     # portal（Next 16 / Turbopack build）+ gateway（cargo release）+ 初始化镜像
+pnpm stack:build     # portal（Next 16 / Turbopack build）+ gateway（cargo release）+ cert-init / db-init
 ```
 
 ### 3. 启动完整栈
 
 ```bash
 pnpm stack:up        # postgres + redis + cert-init + db-init + portal + gateway
-pnpm stack:status    # 确认全部 healthy
+pnpm stack:status    # 确认全部 healthy（一次性服务 Exited (0) 属正常）
 ```
 
 浏览器打开 **https://127.0.0.1:19443**（Gateway 统一入口，自签证书，点一次"继续访问"）。
-Portal 只在 compose 网络内提供 4000 端口，不对宿主暴露。
+种子管理员：`admin@example.com` / `Admin@123456`（由 `db-init` 的 migrate + seed 写入）。
+
+Portal 只在 compose 网络内提供 4000 端口，不对宿主暴露；宿主入口只有 Gateway。
 
 ```bash
 pnpm stack:logs portal   # 跟随日志（gateway/postgres/redis 同理）
-pnpm stack:down          # 停机（保留卷）；./scripts/docker/stack.sh clean 连卷与镜像一起删
+pnpm stack:down          # 停机并删卷（compose down --volumes；要保留数据请改跑 stop，见 docker/README.md §7.2）
 ```
 
 ### 4. 验收
 
 ```bash
-pnpm test:e2e   # 构建 → 起栈 → 浏览器闭环（登录/OAuth 回调/会话/登出）→ 清理
+pnpm test:e2e   # 构建 → 起栈 → tests/e2e 全部 spec（登录/OAuth 回调/会话/登出 + 边界回归）→ 清理
 ```
 
 ### 5. 只跑单元 / API 测试
@@ -83,23 +98,48 @@ pnpm test
 ```
 
 > Docker 文件矩阵、命令、健康检查与故障排查见 **[docker/README.md](docker/README.md)**（唯一出处）；
-> 生产 ACME 部署见 `docker/README.md` §1–§6。
+> 生产 ACME 部署见 `docker/README.md` §0–§6，本地验收栈见 §7。
 
 ## 自动化测试
 
-项目内置了完整的分层测试体系与需求追溯：
+Vitest 4 以 Projects 模式聚合 `apps/portal` 与 `packages/contracts` 的测试；E2E 只跑 Docker 验收栈。
+
+| 层 | 位置 | 命令 | 说明 |
+|---|---|---|---|
+| 单元 / 组件 | `apps/portal/__tests__/{components,domain,helpers}`、`apps/portal/src/**/*.test.ts` | `pnpm test:components` | jsdom；不依赖数据库 |
+| 契约 | `packages/contracts/src/*.test.ts` | `pnpm test` | 随根配置聚合 |
+| API | `apps/portal/__tests__/api/*.test.ts` | `pnpm test:api` | 真实 PostgreSQL / Redis（node 环境） |
+| E2E | `tests/e2e/*.spec.ts` | `pnpm test:e2e` | Playwright（仅 Chromium），Docker 验收栈 |
+| 全量 | 以上全部 | `pnpm test` | 阻断门禁 |
+| 需求追溯 | `tests/traceability/generate-report.mjs` | `pnpm test:report` | 生成 `tests/traceability/.generated/coverage-report.md`（本地生成、不提交，非门禁） |
+
+补充命令（基准类需先起验收栈）：
 
 ```bash
-docker compose -f docker/compose/local.yml up -d postgres redis  # API 测试前先启动本地数据库基础设施
-pnpm test                 # 全量 Vitest 测试
-pnpm test:api             # API project（真实 PostgreSQL/Redis）
-pnpm test:components      # UI/domain project（不依赖 DB）
-pnpm test:e2e             # 自动拉起 Gateway 发布拓扑并验证真实浏览器闭环
-pnpm test:report          # 需求追溯性覆盖率报告
+pnpm test:e2e:acme           # 本地 Pebble ACME 闭环（首签 / 重启恢复 / 续期失败保留旧证书）
+pnpm test:e2e:acme:staging   # 公网 Let's Encrypt staging 联调（需真实 DNS 与 80/443 可达）
+node scripts/bench/gateway.mjs --url https://127.0.0.1:19443 --n 200 --c 20   # Gateway 性能基准
 ```
+
+## 部署
+
+生产环境统一入口是 **[docker/README.md](docker/README.md)**；最简流程：
+
+```bash
+cp .env.example .env.prod            # 再按 docker/README.md §3 补齐必填项
+./scripts/docker/deploy.sh --check   # 逐项校验环境文件与 compose 配置，不启动
+./scripts/docker/deploy.sh           # 构建 → db-init（migrate + seed）→ 启动 → 健康检查
+./scripts/docker/deploy.sh --status  # 容器状态
+./scripts/docker/deploy.sh --rollback # 切回上次镜像（数据不回滚，需自行备份）
+```
+
+Gateway 在进程内完成 ACME HTTP-01 验证、证书签发与热加载，无需 Certbot 或宿主证书脚本。
+另有 Vercel 单镜像变体（`vercel.json` + `docker/images/vercel.Dockerfile`），仅用于 Vercel 部署。
 
 ## 文档指引
 
+- [文档地图 (docs/README.md)](docs/README.md) — 先看这里：每份文档的职责与权威性
+- [工程约定 (AGENTS.md)](AGENTS.md) — 项目结构、环境、测试体系与门禁规则（唯一出处）
 - [产品需求 (docs/spec/PRD.md)](docs/spec/PRD.md) — 核心功能、业务范围与用户模型
 - [系统架构 (docs/spec/ARCHITECTURE.md)](docs/spec/ARCHITECTURE.md) — 系统组成、技术选型、认证与 SSO 流程
 - [架构约束指南 (docs/spec/ARCHITECTURE_CONSTRAINTS.md)](docs/spec/ARCHITECTURE_CONSTRAINTS.md) — 代码规范、分层约束与 Code Review 红线
@@ -107,14 +147,20 @@ pnpm test:report          # 需求追溯性覆盖率报告
 - [接口契约 (docs/spec/API.md)](docs/spec/API.md) — 核心接口清单与字段级契约
 - [第三方集成说明 (docs/spec/third-party-integration.md)](docs/spec/third-party-integration.md) — 企微、飞书、钉钉等三方登录集成规范
 - [需求追踪矩阵 (docs/spec/REQUIREMENTS_MATRIX.md)](docs/spec/REQUIREMENTS_MATRIX.md) — 需求→验收标准全覆盖
-- [Portal 架构规范 (docs/portal-architecture-guidelines.md)](docs/portal-architecture-guidelines.md) — 开发规范、组件模式与 Next.js 16 适配
-- [生产 Docker 部署 (docker/README.md)](docker/README.md) — Let's Encrypt 自动签发、续期、热加载与部署验证
+- [架构决策记录 (docs/adr/)](docs/adr/) — ADR-001～026（共 26 篇）：与代码冲突时先信代码，再查这里的理由
+- [里程碑与取舍 (docs/roadmap.md)](docs/roadmap.md) — 变更记录（按时间倒序）
+- [领域词汇表 (docs/glossary.md)](docs/glossary.md) — 领域概念的唯一真相源
+- [接入验证指南 (docs/INTEGRATION_GUIDE.md)](docs/INTEGRATION_GUIDE.md) — Gateway 代理模式与子应用接入
+- [Portal 架构规范 (docs/portal-architecture-guidelines.md)](docs/portal-architecture-guidelines.md) — 分层、组件模式与 Next.js 16 适配
+- [Docker 构建 / 部署 / 验收 (docker/README.md)](docker/README.md) — 唯一出处
+- [脚本索引 (scripts/README.md)](scripts/README.md) — `docker/`、`e2e/`、`ci/`、`bench/` 的职责与归属
 - [设计规范 (DESIGN.md)](DESIGN.md) — UI/UX 规范与品牌定义
 
 ## 安全提醒
 
-- 生产环境务必生成强密钥：`openssl rand -base64 32`。
-- 敏感配置请通过部署平台的环境变量管理功能设置。
+- 生产环境务必生成强密钥：`openssl rand -base64 32`（至少用于 `PORTAL_CLIENT_SECRET`、`GATEWAY_SHARED_SECRET`）。
+- 敏感配置通过部署平台的环境变量管理；`.env` / `.env.*` 不会入库，模板见 [.env.example](.env.example)。
+- 生产 `NODE_ENV=production` 时 Cookie 默认 `Secure`（可用 `COOKIE_SECURE` 显式覆盖）；Gateway 是唯一公网入口，Portal / PostgreSQL / Redis 只在 compose 内网可达。
 - 生产 TLS 证书必须由 `docker/compose/prod.yml` 中 Gateway 的 Rust 内建 ACME 客户端获取和续期；不要引入 Certbot 脚本，也不要挂载仓库内或开发机生成的自签证书。
 
 ## License

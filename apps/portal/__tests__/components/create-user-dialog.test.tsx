@@ -7,8 +7,10 @@
  * "创建"，只会被 HTML5 `required` 静默拦住（没有请求、没有提示），现场表现就是"功能坏了"。
  *
  * 修复：四个字段改为受控；失败保留输入。本用例钉住"失败后值仍在，且能再次提交"。
+ * F7 追加：重复邮箱的服务端文案是英文模板（"User 的 email 已存在"），页面层必须按
+ * 错误码映射为中文（U-G07）。
  *
- * @req F-USR-C
+ * @req F-USR-C, U-G07
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
@@ -36,7 +38,8 @@ const { createUserAction } = vi.hoisted(() => ({
     if (formData.get('email') === 'admin@example.com') {
       return {
         success: false as const,
-        error: { code: 'USER_EMAIL_EXISTS', message: 'User 的 email 已存在' },
+        // 真实错误码 = USER_ERRORS.EMAIL_ALREADY_EXISTS（AUTH_SSO_3004）；mock 里用字面量避免 hoisted TDZ
+        error: 'AUTH_SSO_3004',
         message: 'User 的 email 已存在',
       };
     }
@@ -75,6 +78,10 @@ describe('CreateUserDialog · 校验失败保留输入', () => {
     // 第一次提交走失败分支（表单不应被关闭）
     await waitFor(() => expect(createUserAction).toHaveBeenCalledTimes(1));
     expect(screen.getByRole('dialog')).toBeInTheDocument();
+
+    // U-G07：英文领域模板不得直出；按错误码映射为中文并落到邮箱输入框下方
+    expect(await screen.findByText('该邮箱已被使用，请换一个')).toBeInTheDocument();
+    expect(screen.queryByText(/User 的 email 已存在/)).not.toBeInTheDocument();
 
     // 回归点：失败后输入不得被清空（非受控表单会被 React reset）
     expect((screen.getByLabelText('显示名称') as HTMLInputElement).value).toBe('张三');

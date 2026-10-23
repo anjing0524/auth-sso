@@ -2,7 +2,7 @@
  * 角色管理页面 — Server Component 读模型入口
  * 写操作通过 Server Actions (actions.ts) 执行
  */
-import { getRoles } from './data';
+import { getRoles, getRoleBoundUserCounts } from './data';
 import { db } from '@/infrastructure/db';
 import { getDepartmentOptions } from '@/app/(dashboard)/users/data';
 import { resolveIdentity } from '@/lib/auth';
@@ -18,6 +18,7 @@ import { PageHeader } from '@/components/shared/page-header';
  * 否则 Turbopack 运行时会报 "encountered uncached data during prerendering or a navigation"。
  */
 export const instant = false;
+export const metadata = { title: '角色管理 | Auth-SSO' };
 interface PageProps {
   searchParams: Promise<{
     page?: string;
@@ -38,6 +39,8 @@ export default async function RolesPage({ searchParams }: PageProps) {
     getRoles({ page, pageSize: 10, keyword, status: '', scope }),
     getDepartmentOptions(scope),
   ]);
+  // 删除确认的影响面（U-ROLES03）：只统计当前页角色，避免全表聚合
+  const boundUserCounts = await getRoleBoundUserCounts(roles.map((r) => r.id));
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-6">
@@ -47,7 +50,13 @@ export default async function RolesPage({ searchParams }: PageProps) {
         description="定义系统角色，绑定菜单权限与数据范围策略。"
       />
 
-      <RolesTable roles={roles} pagination={pagination} initialKeyword={keyword} departments={departments} />
+      <RolesTable
+        roles={roles}
+        pagination={pagination}
+        initialKeyword={keyword}
+        departments={departments}
+        boundUserCounts={boundUserCounts}
+      />
     </div>
   );
 }

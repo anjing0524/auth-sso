@@ -44,7 +44,12 @@ const INVALIDATION: Record<string, { path: string; tags: readonly string[] }> = 
   users: { path: '/users', tags: ['users-list'] },
   roles: { path: '/roles', tags: ['roles-list'] },
   permissions: { path: '/permissions', tags: ['permissions-list'] },
-  clients: { path: '/clients', tags: ['clients-list'] },
+  // 注销 Client 会经 FK CASCADE 删除其 permissions / role_permissions（schema/rbac.ts），
+  // 权限页读模型（permissions/data.ts 的 cacheTag('permissions-list')）必须一并失效。
+  // 漏掉时 /api/permissions 与 /permissions 最长陈旧 cacheLife('hours')（审计 H-C-04 实测 5/5 次读到已删权限）。
+  // 角色**列表**不含权限派生字段（roles/data.ts 的 DTO 无 permission count），故无需失效 roles-list；
+  // 角色权限对话框走 /api/roles/[id]/permissions（getRolePermissions 未使用 "use cache"），实时读 DB。
+  clients: { path: '/clients', tags: ['clients-list', 'permissions-list'] },
   departments: {
     path: '/departments',
     // `departments`（无后缀）是跨资源依赖：用户表单的部门下拉框

@@ -13,7 +13,7 @@ import { eq } from 'drizzle-orm';
 import { withAuth, type AuthContext } from '@/lib/auth';
 import { EntityNotFoundError } from '@/domain/shared/errors';
 import { validate } from '@/lib/validation';
-import { PasswordSchema } from '@/domain/shared/zod-schemas';
+import { EmailSchema, PasswordSchema } from '@/domain/shared/zod-schemas';
 import { COMMON_ERRORS, type ApiResponse } from '@auth-sso/contracts';
 import { invalidateResource } from '@/lib/cache-invalidation';
 import { changeOwnPassword, INVALID_CURRENT_PASSWORD_MESSAGE } from '@/lib/account/change-password';
@@ -26,7 +26,7 @@ const UpdateOwnProfileSchema = z.object({
   /** 显示姓名 */
   name: z.string().min(1, '姓名不能为空').optional(),
   /** 邮箱 */
-  email: z.string().email('邮箱格式不合法').optional(),
+  email: EmailSchema.optional(),
   /** 头像 URL */
   avatarUrl: z.string().url('头像 URL 格式不合法').optional().nullable(),
 });

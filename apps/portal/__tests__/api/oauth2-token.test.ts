@@ -30,7 +30,7 @@
  */
 import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest';
 import crypto from 'crypto';
-import { eq } from 'drizzle-orm';
+import { eq, isNull } from 'drizzle-orm';
 import { JWT_TYP, type LoginEventType } from '@auth-sso/contracts';
 import { createTestDbHandle, seedTestData } from '../helpers/test-db';
 import { hashToken } from '@/lib/crypto';
@@ -200,6 +200,27 @@ describe('POST /api/auth/oauth2/token — redirect_uri 强制比对（F1, RFC 67
     expect(json.error).toBe('invalid_grant');
   });
 
+  it('**redirect_uri 不匹配后，合法参数重试同一 code 必须成功**（H-06）', async () => {
+    await seedAuthCode('code-retry-after-mismatch', false);
+
+    const wrong = await POST(buildRequest({
+      ...codeGrantBody('code-retry-after-mismatch'),
+      redirect_uri: 'https://evil.example.com/cb',
+    }));
+    expect((await wrong.json()).error).toBe('invalid_grant');
+
+    // 修复前：错误 redirect 已把 used 置位 → 重试被判重放 → invalid_grant 且家族 RT 被撤
+    const retry = await POST(buildRequest(codeGrantBody('code-retry-after-mismatch')));
+    const retryJson = await retry.json();
+
+    expect(retry.status).toBe(200);
+    expect(retryJson.access_token).toBeTruthy();
+
+    // 且未产生任何"重放"审计/家族撤销副作用
+    const rows = await selectRefreshTokens();
+    expect(rows.every((r) => r.revoked === null)).toBe(true);
+  });
+
   it('redirect_uri 一致且 PKCE 通过时签发**真实** AT / RT / ID Token', async () => {
     await seedAuthCode('code-ok', false);
 
@@ -215,6 +236,10 @@ describe('POST /api/auth/oauth2/token — redirect_uri 强制比对（F1, RFC 67
     expect(atClaims!.aud).toBe('portal');
     expect(atClaims!.client_id).toBe('portal');
     expect(atClaims!.scope).toBe('openid profile email offline_access');
+
+    // H-A-03：RFC 6749 §5.1 要求 token 响应禁止缓存
+    expect(res.headers.get('cache-control')).toContain('no-store');
+    expect(res.headers.get('pragma')).toBe('no-cache');
 
     // RT：真实落库行（按哈希，库中无明文）
     expect(json.refresh_token).toMatch(/^rt_/);
@@ -434,5 +459,68 @@ describe('POST /api/auth/oauth2/token — 授权码重放检测（F7, RFC 9700 �
     const rows = await selectRefreshTokens();
     expect(rows).toHaveLength(2);
     expect(rows.every(r => r.revoked === null)).toBe(true);
+  });
+});
+
+
+describe('POST /api/auth/oauth2/token — per-client TTL 生效（H-16）', () => {
+  it('DB client TTL=60/300 → 响应 expires_in=60、JWT exp-iat=60、RT 到期≈300s', async () => {
+    await td.db
+      .update(td.schema.clients)
+      .set({ accessTokenTtl: 60, refreshTokenTtl: 300 })
+      .where(eq(td.schema.clients.clientId, 'portal'));
+    await seedAuthCode('code-client-ttl', false);
+
+    const res = await POST(buildRequest(codeGrantBody('code-client-ttl')));
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(json.expires_in).toBe(60);
+    const claims = await verifyAccessToken(json.access_token, 'portal', JWT_TYP.ACCESS_TOKEN);
+    expect((claims!.exp as number) - (claims!.iat as number)).toBe(60);
+    const [rtRow] = await td.db.select().from(td.schema.refreshTokens);
+    const actualTtl = Math.round((rtRow!.expiresAt!.getTime() - new Date(rtRow!.createdAt).getTime()) / 1000);
+    expect(actualTtl).toBe(300);
+  });
+
+  it('refresh_token grant 同样按 client TTL 签发（H-16）', async () => {
+    await td.db
+      .update(td.schema.clients)
+      .set({ accessTokenTtl: 120, refreshTokenTtl: 600 })
+      .where(eq(td.schema.clients.clientId, 'portal'));
+    await seedRefreshTokenRow('portal', 'rt_client_ttl_refresh_grant');
+
+    const res = await POST(buildRequest({
+      grant_type: 'refresh_token',
+      refresh_token: 'rt_client_ttl_refresh_grant',
+      client_id: 'portal',
+      client_secret: 'portal-secret',
+    }));
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(json.expires_in).toBe(120);
+    const claims = await verifyAccessToken(json.access_token, 'portal', JWT_TYP.ACCESS_TOKEN);
+    expect((claims!.exp as number) - (claims!.iat as number)).toBe(120);
+    const [newRt] = await td.db
+      .select()
+      .from(td.schema.refreshTokens)
+      .where(isNull(td.schema.refreshTokens.revoked));
+    const actualTtl = Math.round((newRt!.expiresAt!.getTime() - new Date(newRt!.createdAt).getTime()) / 1000);
+    expect(actualTtl).toBe(600);
+  });
+
+  it('非法 TTL（1）被钳制到下限 60/300，不返回 500', async () => {
+    await td.db
+      .update(td.schema.clients)
+      .set({ accessTokenTtl: 1, refreshTokenTtl: 1 })
+      .where(eq(td.schema.clients.clientId, 'portal'));
+    await seedAuthCode('code-client-ttl-invalid', false);
+
+    const res = await POST(buildRequest(codeGrantBody('code-client-ttl-invalid')));
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(json.expires_in).toBe(60);
   });
 });

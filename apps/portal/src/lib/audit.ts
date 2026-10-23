@@ -243,6 +243,32 @@ export function extractClientIP(headers: Headers): string | null {
   );
 }
 
+/**
+ * 从请求重建**公网可见 URL**（H-C-07）。
+ *
+ * 为什么不能直接用 `request.url`：Portal 位于 Gateway 之后，`request.url` 是
+ * 上游容器视角（实测记为 `https://0.0.0.0:4000/api/...`），写进审计日志后
+ * 页面/SIEM 看到的是容器内部地址，无法排障也无法与访问日志对齐。
+ *
+ * Gateway 在 `upstream_request_filter` 中**权威覆写** `X-Forwarded-Host` /
+ * `X-Forwarded-Proto`（不信任客户端值），故这两个头是公网 origin 的可信来源；
+ * 缺失时退化为仅记录 path（宁可少一段 origin，也不写假数据）。
+ */
+export function publicUrlFromRequest(request: { url: string; headers: Headers }): string | null {
+  let pathname: string;
+  try {
+    const parsed = new URL(request.url);
+    pathname = parsed.pathname + parsed.search;
+  } catch {
+    return null;
+  }
+  const forwardedHost = request.headers.get('x-forwarded-host')?.split(',')[0]?.trim();
+  const host = forwardedHost || request.headers.get('host')?.split(',')[0]?.trim() || null;
+  if (!host) return pathname;
+  const proto = request.headers.get('x-forwarded-proto')?.split(',')[0]?.trim() || 'https';
+  return `${proto}://${host}${pathname}`;
+}
+
 export function extractUserAgent(headers: Headers): string | null {
   return (
     headers.get('X-Client-UA') ||

@@ -78,3 +78,50 @@ ADR-006 剥离 JWT claims 时把两类数据混在了一起：**RBAC 鉴权数�
 **旁证（顺带核实）**：同一迁移 `:11` 有 `DROP TABLE IF EXISTS access_tokens` —— 即它顺带删掉了
 幽灵表 `access_tokens`，这正对应别处日志里的 `table "access_tokens" does not exist, skipping`
 （表已按 ADR 删除、迁移日志仍提及，属正常现象，不是缺陷）。
+
+## 增补（2026-10-23）：audience 策略、issuer 自洽与 typ 对齐（审计 D6 / H-05 / H-07 / H-A-04）
+
+### 1. audience 策略：机器端点接受任意 client 的 AT，但归属与端点各自设防
+
+**决策：`userinfo` / `introspect` 不按 `aud` 过滤（`verifyAccessToken(token, null, …)`），
+这是 OIDC 语义下的显式选择；`revoke` 与 `introspect` 另以 `client_id` claim 做归属校验。**
+
+| 端点 | audience 校验 | client 归属校验 | 理由 |
+|---|---|---|---|
+| `GET /api/auth/oauth2/userinfo` | 不校验（`null`） | 不做（凭 AT 本身） | OIDC Core 未要求 aud 限定；AT 是 Bearer 凭证，持有者即被授权方 |
+| `POST /api/auth/oauth2/introspect` | 不校验（`null`） | **要求 `claims.client_id === 调用方 client`**（AT/RT 两分支） | RFC 7662 端点保护策略：不向无关 client 披露他 client 令牌元数据（H-07） |
+| `POST /api/auth/oauth2/revoke` | 不校验（`null`） | **要求 `client_id` 归属**（AT 分支）/ RT 按 `(tokenHash, clientId)` 限定 | RFC 7009 防跨 client 撤销 DoS |
+
+- 明确记录：不做"AT 只能被 aud 对应 client 使用"的限制，因为 userinfo/introspect 是**多 client
+  通用端点**；若未来需要按 RS 隔离，应引入 RFC 8707 resource indicators 或 per-RS aud
+  （ADR-013 演进路径），而不是在 userinfo 加白名单。
+- 实现（现行行号）：`app/api/auth/oauth2/userinfo/route.ts`、`introspect/route.ts`、
+  `revoke/route.ts` 的 `verifyAccessToken(..., null, JWT_TYP.ACCESS_TOKEN)` 调用与后续归属判断。
+
+### 2. issuer 自洽：discovery 的网络位置 = Gateway 入口（与 ADR-010 更正是同一事实）
+
+- `issuer` 必须等于 RP 取 metadata 的 URL；生产唯一入口是 Gateway，因此 discovery 中声明的
+  四个机器端点也都在 Gateway 域名下。**Gateway 必须放行这些端点的客户端 `Authorization`**
+  （Public 路径保留，见 ADR-010 更正）；否则"声明 endpoint 在 A、实际从 A 访问却被 401 剥离"
+  自相矛盾。
+- 该自洽性由 e2e `tests/e2e/oidc-machine-endpoints.spec.ts` 与
+  `.zcode/audit/review/A-L01/repro.mjs` 的真实请求共同钉住。
+
+### 3. typ 双端对齐（H-05）
+
+- Gateway 自 ADR-013 起**强制** `typ=at+jwt`（缺失即拒，`apps/gateway/src/auth/verify.rs:129-133`）。
+- Portal 身份边界（`lib/auth/token.ts` 的 `verifyAccessToken`）同步收紧：`expectedTyp` 传入时
+  `header.typ` **必须存在且相等**，缺失即拒（2026-10-23 修复；此前"typ 缺失放行"的兼容窗与
+  ADR-013 决策 2 矛盾）。
+- 验证：`apps/portal/__tests__/api/session-lifecycle.test.ts:184` 起（typ 一致通过 / 类型冒充拒绝 /
+  缺失拒绝）。
+
+### 4. discovery 的 `token_endpoint_auth_methods_supported` 曾声明 `none`（D7，已闭合）
+
+- 历史：`packages/contracts/src/oidc.ts` 的 `TOKEN_ENDPOINT_AUTH_METHODS_SUPPORTED` 曾含 `'none'`，
+  而实现对所有 client 强制 secret（无 public client 支持）——声明与实现不符，会让 RP 误以为可免密换取令牌。
+- 决策（D7）：删除 `'none'`，以"必须提供 client_secret（Basic 或 POST body）"为唯一对外契约。
+- **闭合（2026-10-23）**：`packages/contracts/src/oidc.ts` 已删除 `'none'`；
+  `apps/portal/__tests__/api/oidc-discovery.test.ts` 新增断言 `token_endpoint_auth_methods_supported`
+  恰为 `['client_secret_basic','client_secret_post']` 且不含 `none`。若未来支持 public client，
+  必须同时实现、加回该声明、更新本节与 ADR-024 的前置条件。

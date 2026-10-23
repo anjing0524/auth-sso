@@ -60,3 +60,21 @@ export function validatePassword(raw: string): string | null {
   const result = PasswordSchema.safeParse(raw);
   return result.success ? null : result.error.issues[0]?.message ?? '密码不合规';
 }
+
+/**
+ * 身份标识规范化（H-18）：邮箱一律 `trim().toLowerCase()` 后再校验/落库。
+ *
+ * 为什么必须单点定义：登录查询、管理员创建/编辑、自助改资料、唯一索引四处若各写一遍，
+ * 任何一处漏写都会制造"大小写不同的两条身份"（`Admin@x` 与 `admin@x` 都能注册，
+ * 但只有其中一种拼写能登录）。DB 侧由 `ux_users_email_ci`（lower(email) 部分唯一索引）
+ * 兜底，本 Schema 保证进入领域层的值已经规范化。
+ */
+export function normalizeEmail(raw: string): string {
+  return raw.trim().toLowerCase();
+}
+
+/** 归一化后的邮箱 Schema（所有用户可写邮箱字段的唯一入口） */
+export const EmailSchema = z.preprocess(
+  (value) => (typeof value === 'string' ? normalizeEmail(value) : value),
+  z.string().email('邮箱格式不合法').max(255, '邮箱最多 255 个字符'),
+);

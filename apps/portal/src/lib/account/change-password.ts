@@ -79,10 +79,11 @@ export async function changeOwnPassword(
     return { ok: false, reason: 'invalid_current_password' };
   }
 
-  // ② 旧密码正确后才做复用判定：否则会向"不知道旧密码"的人泄露"新密码命中历史"这一信息
-  assertPasswordNotReused(
-    await isPasswordReused(newPassword, state.history ? [...state.history] : null),
-  );
+  // ② 旧密码正确后才做复用判定：否则会向"不知道旧密码"的人泄露"新密码命中历史"这一信息。
+  // H-C-06：比较集合必须包含**当前密码**（history 只在改密时把旧 hash 推入，不含正在使用的密码；
+  // 漏掉时 `newPassword === currentPassword` 会被接受，与 NFR-SEC-15 的承诺不符）。
+  const reuseCandidates = [state.currentHash, ...(state.history ?? [])];
+  assertPasswordNotReused(await isPasswordReused(newPassword, reuseCandidates));
 
   const newHash = await hashPassword(newPassword);
   const newHistory = nextPasswordHistory(state);

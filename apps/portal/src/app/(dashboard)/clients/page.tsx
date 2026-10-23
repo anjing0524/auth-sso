@@ -18,6 +18,7 @@ import { PageHeader } from '@/components/shared/page-header';
  * 否则 Turbopack 运行时会报 "encountered uncached data during prerendering or a navigation"。
  */
 export const instant = false;
+export const metadata = { title: '应用管理 | Auth-SSO' };
 interface PageProps {
   searchParams: Promise<{
     keyword?: string;
@@ -37,6 +38,9 @@ export default async function ClientsPage({ searchParams }: PageProps) {
     status: '',
   });
 
+  // U-G02：搜索无结果与"系统还没有应用"是两种语义（空态文案/出口不同）。
+  const isFiltered = keyword.length > 0;
+
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-6">
       <PageHeader
@@ -45,7 +49,7 @@ export default async function ClientsPage({ searchParams }: PageProps) {
         description="注册 OAuth 2.1 客户端，配置重定向策略与安全密钥。"
       />
 
-      <ClientsTable clients={clients} pagination={pagination} initialKeyword={keyword} />
+      <ClientsTable clients={clients} pagination={pagination} initialKeyword={keyword} isFiltered={isFiltered} clearHref="/clients" />
     </div>
   );
 }

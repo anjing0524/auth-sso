@@ -132,6 +132,7 @@ export default function LoginForm({ sessionId, initialError }: LoginFormProps) {
               <Input
                 id="email"
                 type="text"
+                autoComplete="username"
                 placeholder="admin@example.com"
                 required
                 value={formData.email}
@@ -146,6 +147,7 @@ export default function LoginForm({ sessionId, initialError }: LoginFormProps) {
               <Input
                 id="password"
                 type="password"
+                autoComplete="current-password"
                 placeholder="••••••••"
                 required
                 value={formData.password}

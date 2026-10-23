@@ -23,7 +23,7 @@ import { createTestDbHandle, seedTestData } from '../helpers/test-db';
 import { seedAdminUser, seedPortalClient, seedRootDept } from '../helpers/seed-fixtures';
 import * as schema from '@/db/schema';
 import { hashToken } from '@/lib/crypto';
-import { COOKIE_NAMES, TOKEN_TTL } from '@auth-sso/contracts';
+import { COOKIE_NAMES, JWT_TYP, PORTAL_CLIENT_ID, TOKEN_TTL } from '@auth-sso/contracts';
 
 const SHARED_SECRET = 'test-gateway-shared-secret-32chars!!';
 
@@ -73,6 +73,9 @@ vi.mock(import('@/lib/audit'), async (importOriginal): Promise<Partial<typeof au
 });
 
 import { POST as refreshPost } from '@/app/api/auth/refresh/route';
+import { getActiveSigningKey } from '@/lib/auth/token';
+import { getIssuer } from '@/lib/env';
+import { SignJWT } from 'jose';
 import type * as auditModule from '@/lib/audit';
 
 
@@ -83,11 +86,30 @@ const USER_ID = '00000000-0000-4000-8000-000000000101';
 const CLIENT_ID = 'portal';
 const RT = 'rt_for_refresh_endpoint_test_value';
 
-/** 构造一个仅用于读取 exp 的未签名 JWT（decodeJwtPayload 不解签） */
+/** 伪造示例 */
 function makeAtWithExp(expOffsetSec: number): string {
   const b64 = (o: unknown) => Buffer.from(JSON.stringify(o)).toString('base64url');
   const exp = Math.floor(Date.now() / 1000) + expOffsetSec;
   return `${b64({ alg: 'ES256' })}.${b64({ sub: USER_ID, exp })}.sig`;
+}
+
+/**
+ * 真实 ES256 签发的 AT（H-08 修复后 skip 判定基于验签通过的 claims）。
+ *
+ * 用生产签发密钥直接构造任意 exp 的令牌（生产 signAccessToken 固定 1h），
+ * 覆盖"剩余 >5min / <5min / 已过期"三档。
+ */
+async function makeSignedAtWithExp(expOffsetSec: number): Promise<string> {
+  const { privateKey, keyId } = await getActiveSigningKey();
+  const nowSec = Math.floor(Date.now() / 1000);
+  return new SignJWT({ sub: USER_ID, client_id: PORTAL_CLIENT_ID })
+    .setProtectedHeader({ alg: 'ES256', kid: keyId, typ: JWT_TYP.ACCESS_TOKEN })
+    .setIssuedAt(nowSec)
+    .setIssuer(getIssuer())
+    .setAudience(PORTAL_CLIENT_ID)
+    .setJti(`jti_refresh_test_${Math.random().toString(16).slice(2, 10)}`)
+    .setExpirationTime(nowSec + expOffsetSec)
+    .sign(privateKey);
 }
 
 /** 用 node:crypto 独立计算 Gateway 签名（与实现的 WebCrypto 不同库） */
@@ -140,7 +162,7 @@ describe('POST /api/auth/refresh — 入参前置条件', () => {
 describe('POST /api/auth/refresh — 跳过优化（H-SESS-003）', () => {
   it('当前 AT 剩余 > 5 分钟 → 跳过轮换，返回 skipped 与剩余秒数', async () => {
     mocks.setCookies({
-      [COOKIE_NAMES.JWT]: makeAtWithExp(20 * 60),
+      [COOKIE_NAMES.JWT]: await makeSignedAtWithExp(20 * 60),
       [COOKIE_NAMES.REFRESH]: RT,
     });
 
@@ -159,7 +181,7 @@ describe('POST /api/auth/refresh — 跳过优化（H-SESS-003）', () => {
   it('当前 AT 剩余 < 5 分钟 → 不跳过，执行轮换', async () => {
     await seedRefreshToken();
     mocks.setCookies({
-      [COOKIE_NAMES.JWT]: makeAtWithExp(60),
+      [COOKIE_NAMES.JWT]: await makeSignedAtWithExp(60),
       [COOKIE_NAMES.REFRESH]: RT,
     });
 
@@ -173,7 +195,7 @@ describe('POST /api/auth/refresh — 跳过优化（H-SESS-003）', () => {
   it('AT 已过期（remaining < 0）→ 不跳过', async () => {
     await seedRefreshToken();
     mocks.setCookies({
-      [COOKIE_NAMES.JWT]: makeAtWithExp(-3600),
+      [COOKIE_NAMES.JWT]: await makeSignedAtWithExp(-3600),
       [COOKIE_NAMES.REFRESH]: RT,
     });
 
@@ -182,6 +204,27 @@ describe('POST /api/auth/refresh — 跳过优化（H-SESS-003）', () => {
     expect(res.status).toBe(200);
     expect((await res.json()).skipped).toBeUndefined();
   });
+
+  it('**未验签/伪造的 AT payload（exp 在未来）不得驱动"跳过刷新"**（H-08）', async () => {
+    await seedRefreshToken();
+    mocks.setCookies({
+      [COOKIE_NAMES.JWT]: makeAtWithExp(20 * 60), // 伪造：签名无效，仅 payload 声称剩余 20min
+      [COOKIE_NAMES.REFRESH]: RT,
+    });
+
+    const res = await refreshPost(makeRequest());
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    // 修复前：未验签 decode 直接信 exp → skipped:true（RT 永不轮换）
+    expect(body.skipped).toBeUndefined();
+    expect(body.expiresIn).toBeGreaterThan(0);
+
+    // 真实轮换发生：旧 RT 行被撤销
+    const [row] = await td.db.select({ revoked: schema.refreshTokens.revoked })
+      .from(schema.refreshTokens).where(eq(schema.refreshTokens.tokenHash, hashToken(RT)));
+    expect(row!.revoked).not.toBeNull();
+  });
 });
 
 describe('POST /api/auth/refresh — 轮换与 Cookie 写入', () => {
@@ -189,7 +232,7 @@ describe('POST /api/auth/refresh — 轮换与 Cookie 写入', () => {
 
   it('有效 RT → 新 AT/RT 写入 HttpOnly Cookie，body 只含 expiresIn', async () => {
     mocks.setCookies({
-      [COOKIE_NAMES.JWT]: makeAtWithExp(60),
+      [COOKIE_NAMES.JWT]: await makeSignedAtWithExp(60),
       [COOKIE_NAMES.REFRESH]: RT,
     });
 
@@ -210,7 +253,7 @@ describe('POST /api/auth/refresh — 轮换与 Cookie 写入', () => {
 
   it('旧 RT 被撤销、新 RT 入库（rotation 语义完整）', async () => {
     mocks.setCookies({
-      [COOKIE_NAMES.JWT]: makeAtWithExp(60),
+      [COOKIE_NAMES.JWT]: await makeSignedAtWithExp(60),
       [COOKIE_NAMES.REFRESH]: RT,
     });
 
@@ -227,7 +270,7 @@ describe('POST /api/auth/refresh — 轮换与 Cookie 写入', () => {
 
   it('无效 RT → 401 且清除两个 Cookie', async () => {
     mocks.setCookies({
-      [COOKIE_NAMES.JWT]: makeAtWithExp(60),
+      [COOKIE_NAMES.JWT]: await makeSignedAtWithExp(60),
       [COOKIE_NAMES.REFRESH]: 'not-a-valid-refresh-token',
     });
 
@@ -244,7 +287,7 @@ describe('POST /api/auth/refresh — Gateway 信任边界（核心安全不变�
 
   it('**浏览器（无 Gateway 签名）不得从 body 读到 token 明文**', async () => {
     mocks.setCookies({
-      [COOKIE_NAMES.JWT]: makeAtWithExp(60),
+      [COOKIE_NAMES.JWT]: await makeSignedAtWithExp(60),
       [COOKIE_NAMES.REFRESH]: RT,
     });
 
@@ -256,7 +299,7 @@ describe('POST /api/auth/refresh — Gateway 信任边界（核心安全不变�
 
   it('正确签名的 Gateway 调用 → body 回传 token 明文', async () => {
     mocks.setCookies({
-      [COOKIE_NAMES.JWT]: makeAtWithExp(60),
+      [COOKIE_NAMES.JWT]: await makeSignedAtWithExp(60),
       [COOKIE_NAMES.REFRESH]: RT,
     });
 
@@ -268,7 +311,7 @@ describe('POST /api/auth/refresh — Gateway 信任边界（核心安全不变�
 
   it('**签错（密钥不对）不得被当作受信任**', async () => {
     mocks.setCookies({
-      [COOKIE_NAMES.JWT]: makeAtWithExp(60),
+      [COOKIE_NAMES.JWT]: await makeSignedAtWithExp(60),
       [COOKIE_NAMES.REFRESH]: RT,
     });
 
@@ -281,7 +324,7 @@ describe('POST /api/auth/refresh — Gateway 信任边界（核心安全不变�
 
   it('**时间戳超出容忍窗口 → 拒绝（防重放）**', async () => {
     mocks.setCookies({
-      [COOKIE_NAMES.JWT]: makeAtWithExp(60),
+      [COOKIE_NAMES.JWT]: await makeSignedAtWithExp(60),
       [COOKIE_NAMES.REFRESH]: RT,
     });
 
@@ -294,7 +337,7 @@ describe('POST /api/auth/refresh — Gateway 信任边界（核心安全不变�
 
   it('签名头残缺（只有 timestamp）→ 拒绝', async () => {
     mocks.setCookies({
-      [COOKIE_NAMES.JWT]: makeAtWithExp(60),
+      [COOKIE_NAMES.JWT]: await makeSignedAtWithExp(60),
       [COOKIE_NAMES.REFRESH]: RT,
     });
 
@@ -313,7 +356,7 @@ describe('POST /api/auth/refresh — sender 绑定（RFC 9700）', () => {
     await seedTestData(td.db, { clients: seedPortalClient({ clientId: 'other-client' }) });
     await seedRefreshToken(RT, 'other-client');
     mocks.setCookies({
-      [COOKIE_NAMES.JWT]: makeAtWithExp(60),
+      [COOKIE_NAMES.JWT]: await makeSignedAtWithExp(60),
       [COOKIE_NAMES.REFRESH]: RT,
     });
 
@@ -329,7 +372,7 @@ describe('POST /api/auth/refresh — sender 绑定（RFC 9700）', () => {
   it('属于 Portal 自身的 RT 正常轮换（对照，证明上一条不是拒绝一切）', async () => {
     await seedRefreshToken(RT, CLIENT_ID);
     mocks.setCookies({
-      [COOKIE_NAMES.JWT]: makeAtWithExp(60),
+      [COOKIE_NAMES.JWT]: await makeSignedAtWithExp(60),
       [COOKIE_NAMES.REFRESH]: RT,
     });
 

@@ -40,8 +40,36 @@ interface DeptTreeNode {
   children: DeptTreeNode[];
 }
 
+/** 删除确认的影响面（U-DEP05），与服务端删除守卫同口径 */
+export interface DepartmentDeletionStats {
+  childCount: number;
+  userCount: number;
+  roleCount: number;
+}
+
+/** 排序方式（U-DEP04）：默认=后端 sort 字段顺序；名称/编码=按中文/字典序 */
+export type DepartmentSortKey = 'default' | 'name' | 'code';
+
+/**
+ * 递归排序部门树（U-DEP04）。
+ *
+ * 只排**同级兄弟**，不改变父子层级；`default` 保持后端返回顺序（`departments.sort`）。
+ * 名称用 `localeCompare('zh-Hans-CN')` —— 按拼音而非 Unicode 码点，中文用户可预期。
+ */
+export function sortDepartmentTree(nodes: DeptTreeNode[], key: DepartmentSortKey): DeptTreeNode[] {
+  if (key === 'default') return nodes;
+  const compare = key === 'name'
+    ? (a: DeptTreeNode, b: DeptTreeNode) => a.name.localeCompare(b.name, 'zh-Hans-CN')
+    : (a: DeptTreeNode, b: DeptTreeNode) => (a.code ?? '').localeCompare(b.code ?? '');
+  return [...nodes]
+    .sort(compare)
+    .map((node) => ({ ...node, children: sortDepartmentTree(node.children ?? [], key) }));
+}
+
 interface Props {
   departments: DeptTreeNode[];
+  /** deptId → 子部门/直属用户/角色数量（删除确认弹窗展示，U-DEP05） */
+  deletionStats?: Record<string, DepartmentDeletionStats>;
 }
 
 /** 扁平化树节点（含深度） */
@@ -54,9 +82,10 @@ function flattenTree(nodes: DeptTreeNode[], depth = 0): Array<DeptTreeNode & { d
   return result;
 }
 
-export default function DepartmentTree({ departments }: Props) {
+export default function DepartmentTree({ departments, deletionStats = {} }: Props) {
   const router = useRouter();
   const [keyword, setKeyword] = useState('');
+  const [sortKey, setSortKey] = useState<DepartmentSortKey>('default');
   /** 默认展开根节点（否则 40+ 部门只显示 root，用户需逐层点开） */
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set(departments.filter((d) => !d.parentId).map((d) => d.id)));
   const [saving, setSaving] = useState(false);
@@ -77,6 +106,9 @@ export default function DepartmentTree({ departments }: Props) {
   };
 
   const openAdd = (parent?: string) => { setForm({ name: '', code: '', sort: 0, parentId: parent || null }); setIsAddOpen(true); };
+  /** 对话框统一改为 `<form>` 提交（U-G06）：Enter 与点击主按钮行为一致 */
+  const submitCreate = (e: React.FormEvent) => { e.preventDefault(); void handleCreate(); };
+  const submitUpdate = (e: React.FormEvent) => { e.preventDefault(); void handleUpdate(); };
   const openEdit = (dept: DeptTreeNode) => { setSelected(dept); setForm({ name: dept.name, code: dept.code || '', sort: dept.sort, parentId: dept.parentId }); setIsEditOpen(true); };
 
   const handleCreate = async () => {
@@ -107,11 +139,28 @@ export default function DepartmentTree({ departments }: Props) {
     if (r.success) { toast.success(r.message); router.refresh(); } else { reportFailure(r); }
   };
 
-  const flatList = useMemo(() => flattenTree(departments), [departments]);
+  const sortedTree = useMemo(() => sortDepartmentTree(departments, sortKey), [departments, sortKey]);
+
+  const flatList = useMemo(() => flattenTree(sortedTree), [sortedTree]);
   const expandableIds = useMemo(
     () => flatList.filter((d) => (d.children?.length ?? 0) > 0).map((d) => d.id),
     [flatList],
   );
+
+  /** 搜索命中节点集合（null = 非搜索态）；未命中的可见行只是“祖先路径”（U-DEP02） */
+  const searchMatchIds = useMemo<Set<string> | null>(() => {
+    const kw = keyword.trim();
+    if (!kw) return null;
+    const ids = new Set<string>();
+    const walk = (nodes: DeptTreeNode[]) => {
+      for (const node of nodes) {
+        if (node.name.includes(kw) || (node.code?.includes(kw) ?? false)) ids.add(node.id);
+        walk(node.children ?? []);
+      }
+    };
+    walk(sortedTree);
+    return ids;
+  }, [sortedTree, keyword]);
 
   /**
    * 可见行：**真正**按 expanded 折叠（此前 toggle 只换图标，子行始终渲染）。
@@ -126,7 +175,7 @@ export default function DepartmentTree({ departments }: Props) {
           if (expanded.has(node.id) && node.children?.length) walk(node.children, depth + 1);
         }
       };
-      walk(departments, 0);
+      walk(sortedTree, 0);
       return out;
     }
     const kw = keyword.trim();
@@ -142,8 +191,8 @@ export default function DepartmentTree({ departments }: Props) {
       }
       return out;
     };
-    return searchWalk(departments, 0);
-  }, [departments, expanded, keyword]);
+    return searchWalk(sortedTree, 0);
+  }, [sortedTree, expanded, keyword]);
 
   return (
     <Card className="overflow-hidden">
@@ -155,6 +204,24 @@ export default function DepartmentTree({ departments }: Props) {
           <>
             {departments.length > 0 ? (
               <>
+                <PermissionGuard permission={DEPARTMENT_PERMISSIONS.CREATE}>
+                  <Button onClick={() => openAdd(departments.find((d) => !d.parentId)?.id)}>
+                    <Plus className="h-4 w-4" /> 新建部门
+                  </Button>
+                </PermissionGuard>
+                <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  排序
+                  <select
+                    aria-label="部门排序方式"
+                    value={sortKey}
+                    onChange={(e) => setSortKey(e.target.value as DepartmentSortKey)}
+                    className="h-8 rounded-md border border-border bg-background px-2 text-sm text-foreground"
+                  >
+                    <option value="default">默认顺序</option>
+                    <option value="name">按名称</option>
+                    <option value="code">按编码</option>
+                  </select>
+                </label>
                 <Button variant="outline" onClick={() => setExpanded(new Set(expandableIds))}>
                   展开全部
                 </Button>
@@ -175,32 +242,45 @@ export default function DepartmentTree({ departments }: Props) {
       />
       <CardContent className="p-0">
         <div className="divide-y">
-          {filtered.map(dept => (
-            <div key={dept.id} className="flex items-center gap-3 px-6 py-3 transition-colors hover:bg-muted/50" style={{ paddingLeft: `${24 + dept.depth * 24}px` }}>
+          {filtered.map(dept => {
+            // 搜索态下未命中的可见行只是祖先路径：只作路径展示，不渲染编辑/删除（U-DEP02）
+            const pathOnly = searchMatchIds !== null && !searchMatchIds.has(dept.id);
+            return (
+            <div
+              key={dept.id}
+              data-dept-row={dept.id}
+              // 390px：允许换行（操作组整体折到第二行），并以 min-w 守住名称宽度，
+              // 避免操作列把名称挤成逐字竖排 / 操作被 Card overflow-hidden 裁掉（U-DEP01）
+              className="flex flex-wrap items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/50 sm:px-6"
+              style={{ paddingLeft: `${16 + dept.depth * 20}px` }}
+            >
               {(dept.children?.length ?? 0) > 0 ? (
-                <Button variant="ghost" size="icon" aria-label={expanded.has(dept.id) ? '收起子部门' : '展开子部门'} aria-expanded={expanded.has(dept.id)} className="h-8 w-8 rounded-lg" onClick={() => toggleExpand(dept.id)}>
+                <Button variant="ghost" size="icon" aria-label={expanded.has(dept.id) ? '收起子部门' : '展开子部门'} aria-expanded={expanded.has(dept.id)} className="h-8 w-8 shrink-0 rounded-lg" onClick={() => toggleExpand(dept.id)}>
                   {expanded.has(dept.id) ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                 </Button>
-              ) : <div className="w-8" />}
-              <Building2 className="h-4 w-4 shrink-0 text-primary" />
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="font-medium text-sm truncate">{dept.name}</span>
-                  {dept.code && <code className="font-mono text-xs text-muted-foreground">{dept.code}</code>}
+              ) : <div className="w-8 shrink-0" />}
+              <Building2 className="hidden h-4 w-4 shrink-0 text-primary sm:block" />
+              <div data-dept-name className="min-w-[8rem] flex-1">
+                <div className="flex min-w-0 items-center gap-2">
+                  <span className="truncate text-sm font-medium" title={dept.name}>{dept.name}</span>
+                  {dept.code && <code className="hidden truncate font-mono text-xs text-muted-foreground sm:inline">{dept.code}</code>}
                 </div>
               </div>
               <Badge variant={enableStatus(dept.status).variant} className="shrink-0">{enableStatus(dept.status).label}</Badge>
-              <div className="flex items-center gap-1 shrink-0">
+              {pathOnly ? (
+                <Badge variant="outline" className="ml-auto shrink-0" data-path-only>路径</Badge>
+              ) : (
+              <div className="ml-auto flex flex-wrap items-center justify-end gap-1">
                 <PermissionGuard permission={DEPARTMENT_PERMISSIONS.CREATE}>
-                  <Button variant="ghost" size="sm" className="h-8 gap-1.5 px-2" aria-label="添加子部门" onClick={() => openAdd(dept.id)} title="添加子部门"><Plus className="h-4 w-4" /><span>子部门</span></Button>
+                  <Button variant="ghost" size="sm" className="h-8 gap-1.5 px-2" aria-label={`添加子部门 ${dept.name}`} onClick={() => openAdd(dept.id)} title="添加子部门"><Plus className="h-4 w-4" /><span>子部门</span></Button>
                 </PermissionGuard>
                 <PermissionGuard permission={USER_PERMISSIONS.LIST}>
-                  <Button variant="ghost" size="sm" className="h-8 gap-1.5 px-2" aria-label="查看成员" title="查看成员" onClick={() => setMembersTarget(dept)}>
+                  <Button variant="ghost" size="sm" className="h-8 gap-1.5 px-2" aria-label={`查看成员 ${dept.name}`} title="查看成员" onClick={() => setMembersTarget(dept)}>
                     <Users className="h-4 w-4" /><span>成员</span>
                   </Button>
                 </PermissionGuard>
                 <PermissionGuard permission={DEPARTMENT_PERMISSIONS.UPDATE}>
-                  <Button variant="ghost" size="sm" className="h-8 gap-1.5 px-2" aria-label="编辑部门" title="编辑部门" onClick={() => openEdit(dept)}>
+                  <Button variant="ghost" size="sm" className="h-8 gap-1.5 px-2" aria-label={`编辑部门 ${dept.name}`} title="编辑部门" onClick={() => openEdit(dept)}>
                     <Edit className="h-4 w-4" /><span>编辑</span>
                   </Button>
                 </PermissionGuard>
@@ -210,7 +290,7 @@ export default function DepartmentTree({ departments }: Props) {
                     <Button
                       variant="ghost"
                       size="sm"
-                      aria-label="删除部门"
+                      aria-label={`删除部门 ${dept.name}`}
                       title="删除部门"
                       className="h-8 gap-1.5 px-2 text-destructive hover:bg-destructive/10 hover:text-destructive"
                       onClick={() => setDeleteTarget(dept)}
@@ -220,8 +300,10 @@ export default function DepartmentTree({ departments }: Props) {
                   </PermissionGuard>
                 ) : <div className="w-8" />}
               </div>
+              )}
             </div>
-          ))}
+            );
+          })}
           {filtered.length === 0 && (
             keyword ? (
               <EmptyState variant="simple" icon="Building2" title="没有匹配的部门" description={`未找到名称或编码包含「${keyword}」的部门`} />
@@ -236,15 +318,17 @@ export default function DepartmentTree({ departments }: Props) {
       <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
         <DialogContent>
           <DialogHeader><DialogTitle className="flex items-center gap-2"><Building2 className="h-5 w-5 text-primary" /> 新建部门</DialogTitle></DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2"><Label>部门名称</Label><Input value={form.name} maxLength={100} onChange={e => setForm({...form, name: e.target.value})} placeholder="技术部" /></div>
-            <div className="space-y-2"><Label>部门编码</Label><Input value={form.code} maxLength={50} aria-invalid={fieldError?.field === 'code'} onChange={e => setForm({...form, code: e.target.value})} placeholder="tech" /></div>
-            <FieldError failure={fieldError} field="code" />
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsAddOpen(false)}>取消</Button>
-            <Button onClick={handleCreate} disabled={saving}>{saving ? '创建中...' : '创建'}</Button>
-          </DialogFooter>
+          <form onSubmit={submitCreate}>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2"><Label htmlFor="dept-name">部门名称</Label><Input id="dept-name" value={form.name} maxLength={100} onChange={e => setForm({...form, name: e.target.value})} placeholder="技术部" /></div>
+              <div className="space-y-2"><Label htmlFor="dept-code">部门编码</Label><Input id="dept-code" value={form.code} maxLength={50} aria-invalid={fieldError?.field === 'code'} onChange={e => setForm({...form, code: e.target.value})} placeholder="tech" /></div>
+              <FieldError failure={fieldError} field="code" />
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setIsAddOpen(false)}>取消</Button>
+              <Button type="submit" disabled={saving}>{saving ? '创建中...' : '创建'}</Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
 
@@ -252,15 +336,17 @@ export default function DepartmentTree({ departments }: Props) {
       <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
         <DialogContent>
           <DialogHeader><DialogTitle>编辑部门</DialogTitle></DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2"><Label>部门名称</Label><Input value={form.name} onChange={e => setForm({...form, name: e.target.value})} /></div>
-            <div className="space-y-2"><Label>部门编码</Label><Input value={form.code} aria-invalid={fieldError?.field === 'code'} onChange={e => setForm({...form, code: e.target.value})} /></div>
-            <FieldError failure={fieldError} field="code" />
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsEditOpen(false)}>取消</Button>
-            <Button onClick={handleUpdate} disabled={saving}>{saving ? '保存中...' : '保存'}</Button>
-          </DialogFooter>
+          <form onSubmit={submitUpdate}>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2"><Label htmlFor="dept-edit-name">部门名称</Label><Input id="dept-edit-name" value={form.name} onChange={e => setForm({...form, name: e.target.value})} /></div>
+              <div className="space-y-2"><Label htmlFor="dept-edit-code">部门编码</Label><Input id="dept-edit-code" value={form.code} aria-invalid={fieldError?.field === 'code'} onChange={e => setForm({...form, code: e.target.value})} /></div>
+              <FieldError failure={fieldError} field="code" />
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setIsEditOpen(false)}>取消</Button>
+              <Button type="submit" disabled={saving}>{saving ? '保存中...' : '保存'}</Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
 
@@ -271,6 +357,12 @@ export default function DepartmentTree({ departments }: Props) {
             <DialogTitle>删除部门「{deleteTarget?.name}」？</DialogTitle>
             <DialogDescription>删除前请确认该部门下没有子部门、用户与角色，此操作不可撤销。</DialogDescription>
           </DialogHeader>
+          {deleteTarget && (
+            <div className="rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2 text-xs text-destructive" data-delete-impact>
+              影响面：子部门 {deletionStats[deleteTarget.id]?.childCount ?? 0} 个、直属用户 {deletionStats[deleteTarget.id]?.userCount ?? 0} 人、角色 {deletionStats[deleteTarget.id]?.roleCount ?? 0} 个。
+              存在依赖时服务端会拒绝删除。
+            </div>
+          )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteTarget(null)} disabled={deleting}>取消</Button>
             <Button variant="destructive" onClick={handleDelete} disabled={deleting}>

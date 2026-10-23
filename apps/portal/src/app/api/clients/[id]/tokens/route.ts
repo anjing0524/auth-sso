@@ -9,7 +9,7 @@ import { withPermission, logServerDataRead } from '@/lib/auth';
 import { revokeClientRefreshTokens } from '@/lib/auth/token/revocation';
 import { CLIENT_PERMISSIONS, COMMON_ERRORS } from '@auth-sso/contracts';
 import { getClientById, getClientTokens } from '@/app/(dashboard)/clients/data';
-import { appendSecurityAudit, extractClientIP, extractUserAgent } from '@/lib/audit';
+import { appendSecurityAudit, extractClientIP, extractUserAgent, publicUrlFromRequest } from '@/lib/audit';
 import { parsePagination } from '@/lib/pagination';
 import { restSuccess, restListSuccess, restError } from '@/lib/response';
 
@@ -40,28 +40,38 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   return withPermission({ permissions: [CLIENT_PERMISSIONS.UPDATE] }, async (adminUserId) => {
     const { id } = await params;
-    const body = await request.json();
+    // H-31：malformed JSON 是客户端错误 → 400（此前落 500「服务器内部错误」）。
+    let body: { tokenIds?: unknown; revokeAll?: unknown };
+    try {
+      body = (await request.json()) as { tokenIds?: unknown; revokeAll?: unknown };
+    } catch {
+      return restError(COMMON_ERRORS.VALIDATION_ERROR, '请求体必须是合法的 JSON', 400);
+    }
     const { tokenIds, revokeAll } = body;
+    if (tokenIds !== undefined && !Array.isArray(tokenIds)) {
+      return restError(COMMON_ERRORS.VALIDATION_ERROR, 'tokenIds 必须是字符串数组', 400);
+    }
+    const tokenIdList = Array.isArray(tokenIds) ? tokenIds.filter((t): t is string => typeof t === 'string') : undefined;
 
     const client = await getClientById(id);
     if (!client) {
       return restError(COMMON_ERRORS.NOT_FOUND, 'Client 不存在', 404);
     }
 
-    if (!revokeAll && (!tokenIds || !Array.isArray(tokenIds) || tokenIds.length === 0)) {
+    if (!revokeAll && (!tokenIdList || tokenIdList.length === 0)) {
       return restError(COMMON_ERRORS.VALIDATION_ERROR, '请提供 tokenIds 或 revokeAll', 400);
     }
 
     // AT 无 client 语义（ADR-006 最小化），按 client 撤销的对象是 RT（授权家族）：
     // 撤 RT 终止续期能力，已发 AT 在 ≤1h TTL 内自然失效（audit 2026-09-28 H-2 修复）
     const revokedCount = await db.transaction(async (tx) => {
-      const count = await revokeClientRefreshTokens(tx, client.clientId, revokeAll ? undefined : { tokenIds });
+      const count = await revokeClientRefreshTokens(tx, client.clientId, revokeAll ? undefined : { tokenIds: tokenIdList });
       await appendSecurityAudit(tx, {
         userId: adminUserId,
         operation: 'TOKEN_REVOKE',
         method: 'DELETE',
-        url: request.url,
-        params: { targetId: client.clientId, targetName: client.name, revokeAll, tokenIds, revokedCount: count },
+        url: publicUrlFromRequest(request),
+        params: { targetId: client.clientId, targetName: client.name, revokeAll: !!revokeAll, tokenIds: tokenIdList, revokedCount: count },
         ip: extractClientIP(request.headers),
         userAgent: extractUserAgent(request.headers),
         status: 200,

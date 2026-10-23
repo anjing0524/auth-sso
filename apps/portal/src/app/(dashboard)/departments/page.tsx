@@ -5,7 +5,7 @@
  */
 import { resolveIdentity } from '@/lib/auth';
 import { resolveScope } from '@/lib/authz';
-import { getDepartments } from './data';
+import { getDepartments, getDepartmentDeletionStats } from './data';
 
 import { db } from '@/infrastructure/db';
 import DepartmentTree from './components/DepartmentTree';
@@ -18,12 +18,19 @@ import { PageHeader } from '@/components/shared/page-header';
  * 否则 Turbopack 运行时会报 "encountered uncached data during prerendering or a navigation"。
  */
 export const instant = false;
+export const metadata = { title: '部门管理 | Auth-SSO' };
+
 export default async function DepartmentsPage() {
   // 鉴权由 departments/layout.tsx 负责（requirePermission(['department:list'])），此处只取身份信息。
   const identity = await resolveIdentity();
   const scope = identity ? await resolveScope(db, identity.userId) : { deptIds: [] };
   const userId = identity?.userId ?? '';
   const departments = await getDepartments(scope, userId);
+  // 删除确认的影响面（U-DEP05）：统计当前可见部门（与服务端删除守卫同口径）
+  const flattenIds: string[] = [];
+  const collect = (nodes: typeof departments) => { for (const n of nodes) { flattenIds.push(n.id); collect(n.children); } };
+  collect(departments);
+  const deletionStats = await getDepartmentDeletionStats(flattenIds);
 
   return (
     <div className="space-y-6">
@@ -33,7 +40,7 @@ export default async function DepartmentsPage() {
         description="管理组织架构，支持树形层级与无限子部门嵌套。"
       />
 
-      <DepartmentTree departments={departments} />
+      <DepartmentTree departments={departments} deletionStats={deletionStats} />
     </div>
   );
 }

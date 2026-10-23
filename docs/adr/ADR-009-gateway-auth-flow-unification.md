@@ -153,3 +153,38 @@ match expiry {
 **这条决策的形状**（值得点明）：把"是否放行 / 是否已响应 / 是否要 PKCE"从散落的布尔判断
 收敛成一个**可穷举**的枚举，并在唯一一处消费它 —— 与 ADR-017 的"失败可判别"是同一思路
 （前者管**认证决策**，后者管**授权码兑换失败**）。
+
+## 增补（2026-10-23）：`GET /api/auth/logout` 的 CSRF 决策（H-09）
+
+**背景**：`GET /api/auth/logout` 原先直接执行四层撤销。认证 Cookie 为 `SameSite=Lax`，
+而 Lax 在**跨站顶级 GET 导航**时仍会携带 Cookie ⇒ 任意站点放一个
+`<a href="https://sso/.../api/auth/logout">` 即可强制已登录用户登出（并撤销其全部 RT）。
+POST 侧已有 `proxy.ts` 的 Origin 校验，GET 侧没有任何防线。
+
+**决策：GET 登出按导航来源分级，绝不让跨站导航直接触发状态变更：**
+
+1. **可信顶级导航**（浏览器地址栏直达 `Sec-Fetch-Site: none`、同源/同站链接）→ 执行既有
+   四层撤销并 302（保留 H-SSO-004 语义与"用户点登出即生效"的直觉）；
+2. **跨站或来源不明**（`Sec-Fetch-Site: cross-site`、缺失且 Referer 无法证明同源）→
+   返回**确认页**（HTML，`no-store`、`X-Frame-Options: DENY`），不做任何撤销；
+   用户必须显式 POST 表单确认；
+3. **POST 行为不变**：脚本/表单 POST 仍执行四层撤销；浏览器表单导航（`Sec-Fetch-Mode: navigate`
+   或 urlencoded）返回 302（可读页面），fetch/XHR 保持 JSON 契约。
+
+实现：`apps/portal/src/lib/auth/navigation-trust.ts`（`isTrustedTopLevelNavigation`，
+基于浏览器强制头 `Sec-Fetch-Site`，缺失时 Referer 同源回退）、
+`apps/portal/src/app/api/auth/logout/route.ts:199` 起（GET 分级 + `renderLogoutConfirmPage`）、
+`:144`（POST 表单导航分支）。
+
+**权衡（如实记录）**：
+
+- 为什么不是"GET 一律 405"：现有入口（页头/会话过期提示）以链接方式使用 GET；直接 405 需要
+  同步改 UI 且会让"登出链接"在无 JS 场景失效。确认页保留了 GET 的可用性，同时把状态变更
+  锁在用户显式动作之后。
+- 为什么不是"GET 要求 Origin 头"：浏览器顶级 GET 导航**不发送 Origin**，该判据不成立。
+- 残余风险：`Sec-Fetch-Site` 是较新的浏览器头；老浏览器/非浏览器客户端缺失时按"不可信"处理
+  （返回确认页），属 fail-closed，不构成绕过。
+
+**验证**：`apps/portal/__tests__/api/auth-logout.test.ts`（跨站 GET 返回确认页且不撤销 /
+同源 GET 正常撤销 / POST 导航 302），审计证据见 `.zcode/audit/auth.md` §H-09 与
+`.zcode/audit/auth/evidence/phase3.json`。

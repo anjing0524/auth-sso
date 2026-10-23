@@ -5,7 +5,7 @@
  * 写操作走 Server Actions，变更后 router.refresh() 重取本页 server 数据——
  * 消除原先 client 组件 → REST API → data.ts 的双重跳转读路径。
  */
-import Link from 'next/link';
+import { notFound } from 'next/navigation';
 import { CLIENT_PERMISSIONS, can } from '@auth-sso/contracts';
 
 import { PermissionGate } from '@/components/layout/permission-gate';
@@ -22,6 +22,7 @@ import { ClientDetailClient } from './ClientDetailClient';
  * 否则 Turbopack 运行时会报 "encountered uncached data during prerendering or a navigation"。
  */
 export const instant = false;
+export const metadata = { title: '应用详情 | Auth-SSO' };
 interface PageProps {
   params: Promise<{ id: string }>;
 }
@@ -32,16 +33,8 @@ export default async function ClientDetailPage({ params }: PageProps) {
   // 否则会把所有新建应用当成"不存在"（2026-10-20 改动时踩到过）。
   const client = await getClientById(id);
 
-  if (!client) {
-    return (
-      <div className="text-center py-12">
-        <p className="text-muted-foreground">Client 不存在</p>
-        <Link href="/clients" className="mt-4 text-primary hover:underline">
-          返回列表
-        </Link>
-      </div>
-    );
-  }
+  // U-CLIENT01：与全站 404 一致（图标+标题+原因+出口），此前自绘裸文本且 HTTP 200。
+  if (!client) notFound();
 
   const tokens = await getClientTokens(id, { page: 1, pageSize: 10 });
 

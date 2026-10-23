@@ -59,6 +59,7 @@ import { PageHeader } from '@/components/shared/page-header';
  * 否则 Turbopack 运行时会报 "encountered uncached data during prerendering or a navigation"。
  */
 export const instant = false;
+export const metadata = { title: '工作台 | Auth-SSO' };
 export default async function DashboardPage() {
   // 身份由上层布局保证；工作台对已登录用户开放，区块与快捷入口按功能权限裁剪。
   const identity = await resolveIdentity();
@@ -70,6 +71,10 @@ export default async function DashboardPage() {
   };
   const canAudit = can(subject, AUDIT_PERMISSIONS.READ);
   const canUsers = can(subject, USER_PERMISSIONS.LIST);
+  // U-DASH01：快捷入口必须是**动作**权限，不是列表权限——readonly 没有 user:create /
+  // client:create 却仍看到「新建用户/应用接入」可点击卡片（DESIGN §权限模型）。
+  const canUserCreate = can(subject, USER_PERMISSIONS.CREATE);
+  const canClientCreate = can(subject, CLIENT_PERMISSIONS.CREATE);
   const canRoles = can(subject, ROLE_PERMISSIONS.LIST);
   const canClients = can(subject, CLIENT_PERMISSIONS.LIST);
   const canDepartments = can(subject, DEPARTMENT_PERMISSIONS.LIST);
@@ -101,9 +106,9 @@ export default async function DashboardPage() {
               description="完成以下步骤以开始管理您的身份平台"
               steps={[
                 ...(canDepartments ? [{ label: '创建组织架构', href: '/departments' }] : []),
-                ...(canUsers ? [{ label: '创建用户账号', href: '/users' }] : []),
+                ...(canUserCreate ? [{ label: '创建用户账号', href: '/users' }] : []),
                 ...(canRoles ? [{ label: '配置角色权限', href: '/roles' }] : []),
-                ...(canClients ? [{ label: '注册 OAuth 应用', href: '/clients' }] : []),
+                ...(canClientCreate ? [{ label: '注册 OAuth 应用', href: '/clients' }] : []),
               ]}
             />
           </div>
@@ -256,7 +261,7 @@ export default async function DashboardPage() {
                  <CardTitle>快捷功能直达</CardTitle>
               </CardHeader>
               <CardContent className="grid gap-3">
-                 {canUsers && (
+                 {canUserCreate && (
                  <Button variant="outline" className="group h-16 justify-start rounded-xl border-none bg-card px-6 shadow-sm ring-1 ring-border/50 transition-all hover:border-primary/50" asChild>
                     <Link href="/users">
                        <div className="p-2 bg-info/10 text-info rounded-lg mr-4 group-hover:scale-110 transition-transform"><Plus className="h-4 w-4" /></div>
@@ -267,7 +272,7 @@ export default async function DashboardPage() {
                     </Link>
                  </Button>
                  )}
-                 {canClients && (
+                 {canClientCreate && (
                  <Button variant="outline" className="group h-16 justify-start rounded-xl border-none bg-card px-6 shadow-sm ring-1 ring-border/50 transition-all hover:border-success/50" asChild>
                     <Link href="/clients">
                        <div className="p-2 bg-success/10 text-success rounded-lg mr-4 group-hover:scale-110 transition-transform"><ArrowUpRight className="h-4 w-4" /></div>

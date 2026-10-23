@@ -22,13 +22,22 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { REPO_ROOT, walk } from '../helpers/repo-scan';
 
-/** 收集所有 workspace 的 package.json 路径（根 + apps/* + packages/*） */
+/**
+ * 收集所有 workspace 的 package.json 路径（根 + apps/* + packages/*）。
+ *
+ * 必须跳过构建产物：宿主若执行过 `next build`，`apps/portal/.next/standalone/` 下会有
+ * 一份**产物副本**的 package.json（其 scripts 引用的 `./scripts/preload-mock.cjs` 不在
+ * standalone 目录里 ⇒ 真跑 node 必失败）。那是构建产物而非 workspace 声明，扫描它会产生
+ * 假红（2026-10-23 实测：干净检出全绿、宿主 build 后 1 failed）。
+ */
+const SKIP_DIRS = new Set(['node_modules', '.next', '.turbo', 'dist', 'coverage', 'target']);
+
 function packageJsonPaths(): string[] {
   const isPkgJson = (name: string) => name === 'package.json';
   return [
     join(REPO_ROOT, 'package.json'),
-    ...walk(join(REPO_ROOT, 'apps'), isPkgJson),
-    ...walk(join(REPO_ROOT, 'packages'), isPkgJson),
+    ...walk(join(REPO_ROOT, 'apps'), isPkgJson, SKIP_DIRS),
+    ...walk(join(REPO_ROOT, 'packages'), isPkgJson, SKIP_DIRS),
   ];
 }
 

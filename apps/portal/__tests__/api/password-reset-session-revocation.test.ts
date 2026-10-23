@@ -11,7 +11,7 @@
  * |---|---|
  * | `changeOwnPassword` | `lib/account/change-password.ts` |
  * | 管理员重置端点 | `app/api/users/[id]/reset-password/route.ts` |
- * | `revokeAfterPasswordReset` | `lib/account/reset-password.ts`（Server Action 路径）|
+ * | `revokeRefreshTokensForReset` + `revokeAccessTokensAfterReset` | `lib/account/reset-password.ts`（Server Action 路径）|
  *
  * 后果：**攻击者用窃取的旧 RT 仍能换取新 AT**，旧会话从未真正终止——而
  * "重置密码踢出会话"恰恰是账号疑似失陷时的处置手段。
@@ -62,7 +62,8 @@ vi.mock(import('@/infrastructure/redis'), async (importOriginal): Promise<Partia
   };
 });
 
-import { revokeAfterPasswordReset } from '@/lib/account/reset-password';
+import { revokeAccessTokensAfterReset, revokeRefreshTokensForReset } from '@/lib/account/reset-password';
+import type { DbExecutor } from '@/infrastructure/db';
 
 const td = createTestDbHandle();
 tdHolder.current = td;
@@ -105,12 +106,24 @@ beforeEach(async () => {
   });
 });
 
-describe('revokeAfterPasswordReset — 必须同时撤销 RT 与 AT', () => {
+/**
+ * H-13 之后的两层语义：RT 撤销是**否决性**的（在调用方事务内执行，失败即抛），
+ * AT jti 撤销是**尽力而为**的（Redis 故障不阻断已提交的重置）。
+ * 本测试按真实调用序列组合两者（事务提交后撤 jti），与两个生产入口一致。
+ */
+async function revokeBothLayers(userId: string): Promise<void> {
+  await td.db.transaction(async (tx) => {
+    await revokeRefreshTokensForReset(tx, userId);
+  });
+  await revokeAccessTokensAfterReset(userId);
+}
+
+describe('密码重置的会话撤销 — 必须同时撤销 RT 与 AT（H-13 fail-close）', () => {
   it('**撤销目标用户的全部 Refresh Token**（否则旧 RT 仍可续期出 AT）', async () => {
     await seedRt('rt_target', USER_A);
     expect(await isRevoked('rt_target')).toBe(false);
 
-    await revokeAfterPasswordReset(USER_A);
+    await revokeBothLayers(USER_A);
 
     expect(await isRevoked('rt_target')).toBe(true);
   });
@@ -121,7 +134,7 @@ describe('revokeAfterPasswordReset — 必须同时撤销 RT 与 AT', () => {
     await trackUserJti(USER_A, jti, 3600);
     expect(await isJtiRevoked(jti)).toBe(false);
 
-    await revokeAfterPasswordReset(USER_A);
+    await revokeBothLayers(USER_A);
 
     expect(await isJtiRevoked(jti)).toBe(true);
   });
@@ -130,7 +143,7 @@ describe('revokeAfterPasswordReset — 必须同时撤销 RT 与 AT', () => {
     await seedRt('rt_a', USER_A);
     await seedRt('rt_b', USER_B);
 
-    await revokeAfterPasswordReset(USER_A);
+    await revokeBothLayers(USER_A);
 
     expect(await isRevoked('rt_a')).toBe(true);
     expect(await isRevoked('rt_b')).toBe(false);
@@ -141,13 +154,28 @@ describe('revokeAfterPasswordReset — 必须同时撤销 RT 与 AT', () => {
     faultHolder.failRedis = true;
 
     // 不得抛出：密码已持久化，撤销是尽力而为
-    await expect(revokeAfterPasswordReset(USER_A)).resolves.toBeUndefined();
+    await expect(revokeBothLayers(USER_A)).resolves.toBeUndefined();
 
     // 但否决性的 RT 撤销必须已经生效
     expect(await isRevoked('rt_redis_down')).toBe(true);
   });
 
   it('无 RT 的用户：不抛异常（幂等）', async () => {
-    await expect(revokeAfterPasswordReset(USER_B)).resolves.toBeUndefined();
+    await expect(revokeBothLayers(USER_B)).resolves.toBeUndefined();
+  });
+
+  /**
+   * H-13 的核心：RT 撤销失败必须**抛出**（由调用方事务回滚 → 不产生
+   * "密码已改但旧 RT 仍可续期"的部分成功）。
+   *
+   * 注入点在执行器边界（传一个 update 会抛错的 DbExecutor），而不是 mock 生产模块：
+   * 这样 `revokeUserRefreshTokens` 的真实实现仍然被执行，抛错来自它内部的写库调用。
+   */
+  it('**RT 撤销失败必须抛出**（fail-close，不再被 catch 吞掉）', async () => {
+    const failingExecutor = {
+      update: () => { throw new Error('db down (injected)'); },
+    } as unknown as DbExecutor;
+
+    await expect(revokeRefreshTokensForReset(failingExecutor, USER_A)).rejects.toThrow('db down (injected)');
   });
 });

@@ -71,6 +71,13 @@ pub struct GatewayConfig {
     /// X-Gateway-Signature / X-Gateway-Timestamp 请求头。
     /// Portal 端验证此签名以确认请求确实来自受信任的 Gateway。
     pub gateway_shared_secret: Option<String>,
+    /// `/__gateway/metrics` 的独立访问令牌（H-D-10）。
+    ///
+    /// 不配置时回退使用 `gateway_shared_secret`（保持既有部署兼容）；配置后
+    /// metrics 端点只接受该值，从而与「给 Portal 签 HMAC 的密钥」分离——
+    /// 抓取器（Prometheus）拿到的是只读令牌，泄露后不能伪造网关身份头。
+    /// 可通过 `GATEWAY_METRICS_TOKEN` 环境变量覆盖。
+    pub metrics_token: Option<String>,
     /// 内部上游请求协议（http 或 https），默认 "http"。
     /// 内网 mTLS 场景下可设为 "https"。
     #[serde(default = "default_upstream_scheme")]
@@ -108,6 +115,7 @@ impl Default for GatewayConfig {
             log_dir: "logs".to_string(),
             log_level: "info".to_string(),
             gateway_shared_secret: None,
+            metrics_token: None,
             upstream_scheme: "http".to_string(),
             upstream_server_name: None,
             upstream_host_header: None,
@@ -369,6 +377,8 @@ impl Config {
         self.redis.url = resolve_redis_url(&self.redis.url, std::env::var("REDIS_URL").ok());
         self.gateway.gateway_shared_secret =
             resolve_optional_env(&self.gateway.gateway_shared_secret, "GATEWAY_SHARED_SECRET");
+        self.gateway.metrics_token =
+            resolve_optional_env(&self.gateway.metrics_token, "GATEWAY_METRICS_TOKEN");
         self.gateway.upstream_scheme =
             resolve_env_str(&self.gateway.upstream_scheme, "UPSTREAM_SCHEME");
         self.redis.pool_max_size = resolve_env(self.redis.pool_max_size, "REDIS_POOL_MAX_SIZE")?;
@@ -640,6 +650,12 @@ fn validate_production_security(config: &Config, node_env: Option<&str>) -> anyh
             .is_none_or(str::is_empty)
     {
         bail!("生产环境必须配置 GATEWAY_SHARED_SECRET");
+    }
+    // H-D-10：metrics 独立令牌一旦配置就必须足够长（它是可直接调 metrics 的 Bearer 级凭证）
+    if let Some(token) = config.gateway.metrics_token.as_deref()
+        && token.len() < 16
+    {
+        bail!("GATEWAY_METRICS_TOKEN 长度必须 ≥16（否则比共享密钥更弱，失去分离意义）");
     }
     Ok(())
 }
@@ -1140,6 +1156,22 @@ mod tests {
         .unwrap_err();
         assert!(error.to_string().contains("ACME_CHECK_INTERVAL_SECS"));
         assert!(error.to_string().contains("not-a-number"));
+    }
+
+    // ── H-D-10：metrics 独立令牌一旦配置必须足够长 ────────────────
+    #[test]
+    fn metrics_token_must_be_long_enough_when_configured() {
+        let mut config = Config::default();
+        config.gateway.metrics_token = Some("short".to_string());
+        let err = validate_production_security(&config, Some("development"))
+            .expect_err("过短的 metrics token 必须被拒绝");
+        assert!(
+            err.to_string().contains("GATEWAY_METRICS_TOKEN"),
+            "实际错误: {err}"
+        );
+
+        config.gateway.metrics_token = Some("metrics-token-0123456789".to_string());
+        assert!(validate_production_security(&config, Some("development")).is_ok());
     }
 
     #[cfg(feature = "self-managed-tls")]

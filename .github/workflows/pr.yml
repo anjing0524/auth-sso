@@ -14,4 +14,3 @@ jobs:
     with:
       artifact_name: gateway-e2e-pr
       artifact_retention_days: 14
-      run_fault_injection: false

@@ -1,6 +1,7 @@
 import { ENTITY_ACTIVE } from '@auth-sso/contracts';
 import type { CreatePermissionInput, Permission } from './types';
 import { dateFromInstant, instantFromDate } from '@/domain/shared/time';
+import { BusinessRuleViolationError } from '../shared/errors';
 
 export type { Permission };
 
@@ -43,6 +44,41 @@ export function applyPermissionUpdate(
     sort: patch.sort ?? perm.sort,
     status: patch.status ?? perm.status,
   };
+}
+
+/**
+ * 按类型归一只属于该类型的字段（H-B-04）。
+ *
+ * `type` 是权限表的**鉴别列**，DB 有 CHECK 约束保证组合合法
+ * （`permissions_type_fields_chk`：DIRECTORY/PAGE 不得有 client_id）。
+ * 若只改 type 而保留旧字段，API→菜单类型会撞 CHECK（此前表现为通用 422「输入内容格式不合法」），
+ * 菜单→API 则留下 path/icon/visible 这类对 API 无意义的残留。
+ *
+ * 归一规则（两个方向都做，避免下一次类型转换再撞约束）：
+ * - API：清空菜单专属字段 path / icon / visible
+ * - DIRECTORY / PAGE：清空 clientId
+ *
+ * @param perm 合并后的权限实体（纯函数，零 I/O）
+ */
+export function normalizePermissionTypeFields(perm: Permission): Permission {
+  if (perm.type === 'API') {
+    return { ...perm, path: null, icon: null, visible: null };
+  }
+  return { ...perm, clientId: null };
+}
+
+/**
+ * 校验归一后的类型专属字段完整性（领域约束，非 DB 兜底）。
+ *
+ * - PAGE 必须有路由路径（与 `CreatePermissionInputSchema` 的 PAGE 分支同口径；
+ *   UPdate 时 path 可能来自入参或原值，故必须在合并后校验）。
+ *
+ * @throws BusinessRuleViolationError 字段组合不满足类型约束
+ */
+export function assertPermissionTypeFields(perm: Permission): void {
+  if (perm.type === 'PAGE' && !perm.path) {
+    throw new BusinessRuleViolationError('PAGE 类型必须指定路由路径（path）');
+  }
 }
 
 export function permissionToInsertRow(p: Permission) {

@@ -23,7 +23,14 @@ export const OAUTH_PARAMS = {
 // OIDC Discovery 常量（单一真相源，供 .well-known/openid-configuration 和 DB enum 派生）
 export const RESPONSE_TYPES_SUPPORTED = ['code'] as const;
 export const GRANT_TYPES_SUPPORTED = ['authorization_code', 'refresh_token'] as const;
-export const TOKEN_ENDPOINT_AUTH_METHODS_SUPPORTED = ['client_secret_basic', 'client_secret_post', 'none'] as const;
+/**
+ * token 端点客户端认证方式（RFC 8414 §2）。
+ *
+ * **不含 `none`**：当前实现要求每个 client 都有 secret（`clients.client_secret_hash NOT NULL`），
+ * 无 public client / PKCE-only client 支持；声明 `none` 会让 RP 以为可免密换取令牌（H-A-04）。
+ * 若未来支持 public client，需同时实现 + 加回此处 + 更新 ADR-012。
+ */
+export const TOKEN_ENDPOINT_AUTH_METHODS_SUPPORTED = ['client_secret_basic', 'client_secret_post'] as const;
 export const CODE_CHALLENGE_METHODS_SUPPORTED = ['S256'] as const;
 export const SCOPES_SUPPORTED = ['openid', 'profile', 'email', 'offline_access'] as const;
 
@@ -85,6 +92,8 @@ export const REDIS_KEY_PREFIX = {
   AUTH_REQUEST: 'portal:auth_req:',
   /** 登录失败计数 Key 前缀 — 暴力破解防护 */
   LOGIN_FAIL: 'portal:login_fail:',
+  /** IP 维度登录失败计数（ADR-025：与账户×IP 维度并列） */
+  LOGIN_FAIL_IP: 'portal:login_fail_ip:',
 } as const;
 
 /**

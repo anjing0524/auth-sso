@@ -24,6 +24,23 @@ pub(crate) fn hmac_sha256_hex(secret: &str, payload: &str) -> Option<String> {
     Some(hex::encode(mac.finalize().into_bytes()))
 }
 
+/// 定长摘要后的恒定时间字符串比较（H-33 metrics 共享密钥校验专用）。
+///
+/// 直接 `String == String` 是短路逐字节比较，理论上可通过响应时间泄漏
+/// “已匹配前缀长度”。这里先各自 SHA-256 归一化为**固定 32 字节**，再逐字节
+/// 累积 XOR（无提前退出），使比较耗时与输入内容无关；长度差异也因摘要定长
+/// 而不会走分支。无新增依赖（复用已有 `sha2`）。
+pub(crate) fn constant_time_eq(left: &str, right: &str) -> bool {
+    use sha2::Digest;
+    let left_digest = Sha256::digest(left.as_bytes());
+    let right_digest = Sha256::digest(right.as_bytes());
+    let mut diff = 0u8;
+    for (left_byte, right_byte) in left_digest.iter().zip(right_digest.iter()) {
+        diff |= left_byte ^ right_byte;
+    }
+    diff == 0
+}
+
 // ── Host 头解析 ──
 
 /// 从 `Host` 头值中剥离端口号，仅返回主机部分（零拷贝切片）。
@@ -129,6 +146,11 @@ pub trait SessionExt {
         &mut self,
         retry_after_secs: u64,
     ) -> impl std::future::Future<Output = Result<()>> + Send;
+
+    /// 发送 400 Bad Request（纯文本短消息）。
+    ///
+    /// 入口拒绝共用：HTTP/1.1 缺 Host（H-D-05）与 dot-segment 路径（H-D-03）。
+    fn respond_400(&mut self) -> impl std::future::Future<Output = Result<()>> + Send;
 }
 
 // ── 响应头构造（纯函数）──
@@ -150,6 +172,24 @@ pub trait SessionExt {
 pub(crate) const UNAUTHORIZED_BODY: &str =
     r#"{"error":"AUTH_SSO_1002","message":"未认证或会话已过期"}"#;
 
+/// 400 响应体（Host 缺失 / dot-segment 拒绝共用；H-D-05 / H-D-03）。
+pub(crate) const BAD_REQUEST_BODY: &str = "Bad Request\n";
+
+/// HSTS 头（H-D-09）：TLS 终结在 Gateway，安全头的正确注入层在此。
+///
+/// 取值刻意**不含 `includeSubDomains`/`preload`**：本项目可能部署在共享父域下，
+/// includeSubDomains 会把策略扩散到不受本网关控制的子域；preload 不可逆。
+pub(crate) const HSTS_HEADER: &str = "Strict-Transport-Security";
+pub(crate) const HSTS_VALUE: &str = "max-age=31536000";
+
+/// 向响应头注入 HSTS（Gateway 生成的全部响应共用；已存在则不覆盖）。
+pub(crate) fn insert_hsts(header: &mut ResponseHeader) -> Result<()> {
+    if header.headers.get(HSTS_HEADER).is_none() {
+        header.insert_header(HSTS_HEADER, HSTS_VALUE)?;
+    }
+    Ok(())
+}
+
 /// 401 响应头：`WWW-Authenticate: Bearer` + JSON 响应体头 + 逐条 `Set-Cookie`。
 pub(crate) fn build_401_headers(cookies: &[String]) -> Result<ResponseHeader> {
     let mut header = ResponseHeader::build(401, None)?;
@@ -159,6 +199,16 @@ pub(crate) fn build_401_headers(cookies: &[String]) -> Result<ResponseHeader> {
     for cookie in cookies {
         header.append_header("Set-Cookie", cookie.as_str())?;
     }
+    insert_hsts(&mut header)?;
+    Ok(header)
+}
+
+/// 400 响应头：纯文本短消息 + `Content-Length`（H-D-03 / H-D-05 入口拒绝共用）。
+pub(crate) fn build_400_headers() -> Result<ResponseHeader> {
+    let mut header = ResponseHeader::build(400, None)?;
+    header.insert_header("Content-Type", "text/plain; charset=utf-8")?;
+    header.insert_header("Content-Length", BAD_REQUEST_BODY.len().to_string())?;
+    insert_hsts(&mut header)?;
     Ok(header)
 }
 
@@ -169,6 +219,7 @@ pub(crate) fn build_302_headers(location: &str, cookies: &[String]) -> Result<Re
     for cookie in cookies {
         header.append_header("Set-Cookie", cookie.as_str())?;
     }
+    insert_hsts(&mut header)?;
     Ok(header)
 }
 
@@ -178,6 +229,7 @@ pub(crate) fn build_429_headers(retry_after_secs: u64) -> Result<ResponseHeader>
     // 用 itoa 栈上格式化替代 to_string() 的堆分配（冷路径，但属范式正确）
     let mut buf = itoa::Buffer::new();
     header.insert_header("Retry-After", buf.format(retry_after_secs))?;
+    insert_hsts(&mut header)?;
     Ok(header)
 }
 
@@ -209,6 +261,13 @@ impl SessionExt for Session {
     async fn respond_429(&mut self, retry_after_secs: u64) -> Result<()> {
         let header = build_429_headers(retry_after_secs)?;
         self.write_response_header(Box::new(header), true).await
+    }
+
+    async fn respond_400(&mut self) -> Result<()> {
+        let header = build_400_headers()?;
+        self.write_response_header(Box::new(header), false).await?;
+        self.write_response_body(Some(Bytes::from_static(BAD_REQUEST_BODY.as_bytes())), true)
+            .await
     }
 }
 
@@ -458,5 +517,62 @@ mod tests {
 
         assert_eq!(set_cookies(&header).len(), 2);
         assert_eq!(set_cookies(&header)[1], "k=new; Path=/");
+    }
+
+    // ── H-D-09：TLS 终结层 HSTS（Gateway 生成的全部响应必须携带）────────
+
+    fn hsts(header: &ResponseHeader) -> Option<&str> {
+        header
+            .headers
+            .get(HSTS_HEADER)
+            .and_then(|value| value.to_str().ok())
+    }
+
+    #[test]
+    fn gateway_generated_responses_carry_hsts() {
+        assert_eq!(hsts(&build_401_headers(&[]).unwrap()), Some(HSTS_VALUE));
+        assert_eq!(
+            hsts(&build_302_headers("/login", &[]).unwrap()),
+            Some(HSTS_VALUE)
+        );
+        assert_eq!(hsts(&build_400_headers().unwrap()), Some(HSTS_VALUE));
+        assert_eq!(hsts(&build_429_headers(60).unwrap()), Some(HSTS_VALUE));
+    }
+
+    // ── H-D-05：400 响应构造（Host 缺失 / dot-segment 拒绝共用）────────
+
+    #[test]
+    fn test_build_400_headers_sets_plain_text_body_and_length() {
+        let header = build_400_headers().expect("构造应成功");
+
+        assert_eq!(header.status.as_u16(), 400);
+        assert_eq!(
+            header
+                .headers
+                .get("content-type")
+                .and_then(|value| value.to_str().ok()),
+            Some("text/plain; charset=utf-8")
+        );
+        assert_eq!(
+            header
+                .headers
+                .get("content-length")
+                .and_then(|value| value.to_str().ok()),
+            Some(BAD_REQUEST_BODY.len().to_string().as_str())
+        );
+    }
+
+    // ── H-33：metrics 密钥比较必须定长/恒定时间 ─────────────────────
+
+    #[test]
+    fn constant_time_eq_matches_only_identical_inputs() {
+        assert!(constant_time_eq("secret", "secret"));
+        assert!(constant_time_eq("", ""));
+        assert!(!constant_time_eq("secret", "secreT"));
+        assert!(!constant_time_eq("secret", "secret "));
+        // 前缀匹配不得提前放行（短路口径下长度不同会静默不等）
+        assert!(!constant_time_eq("secre", "secret"));
+        assert!(!constant_time_eq("secret", "secre"));
+        assert!(!constant_time_eq("", "secret"));
     }
 }

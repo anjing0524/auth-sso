@@ -76,6 +76,63 @@ fn is_asset_path(path: &str) -> bool {
     }
 }
 
+/// 路径中是否包含 `.` / `..` 段（含 `%2e` 编码与反斜杠分隔变体）。
+///
+/// # 为什么必须在分类前拒绝（H-D-03）
+///
+/// Gateway 的路径分类（[`PathMatcher::classify`]）、路由前缀匹配与限流判定都
+/// 基于**原始未规范化** URI 路径；而上游（实测 Next.js）会把自己的规范化结果
+/// 用于路由。于是 `/_next/../api/auth/login`、`/static/../<受保护路径>` 会
+/// 被 Gateway 归为 `Static`（跳过限流+验签），却被上游规范化成真实端点命中——
+/// 形成“边缘控制层被绕过”的通道（见 `.zcode/audit/gateway.md` H-D-03）。
+///
+/// 修复选择**直接拒绝**而非自行 `remove_dot_segments`：合法 API/页面请求
+/// 不需要 dot-segment，拒绝语义无歧义，且不会引入“规范化后再转发”的新
+/// 路径解释差异面（Gateway 与上游对编码/反斜杠的规范化规则不可能完全一致）。
+///
+/// 判定覆盖：原始 `..`/`.`、百分号编码（`%2e`/`%2E`，含混合形式 `.%2e`）、
+/// 编码斜杠 `%2f` / 反斜杠 `%5c`（先解码再按 `/`、`\` 分段，避免
+/// `..%2f` 这类“编码分隔符夹带”绕过）。非法百分号转义原样保留（不可能
+/// 被解码成 `.`），故不误杀。
+pub(crate) fn has_dot_segments(path: &str) -> bool {
+    // 热路径快路径：不含 '.'/'%'/'\' 的路径不可能构成 dot-segment（零分配）
+    if !path.bytes().any(|byte| matches!(byte, b'.' | b'%' | b'\\')) {
+        return false;
+    }
+    percent_decode(path)
+        .split(|byte| *byte == b'/' || *byte == b'\\')
+        .any(|segment| segment == b"." || segment == b"..")
+}
+
+/// 仅解码 `%XX`（非法转义原样保留）— 供 [`has_dot_segments`] 使用。
+fn percent_decode(path: &str) -> Vec<u8> {
+    fn hex_val(byte: u8) -> Option<u8> {
+        match byte {
+            b'0'..=b'9' => Some(byte - b'0'),
+            b'a'..=b'f' => Some(byte - b'a' + 10),
+            b'A'..=b'F' => Some(byte - b'A' + 10),
+            _ => None,
+        }
+    }
+
+    let bytes = path.as_bytes();
+    let mut decoded = Vec::with_capacity(bytes.len());
+    let mut index = 0;
+    while index < bytes.len() {
+        if bytes[index] == b'%'
+            && index + 2 < bytes.len()
+            && let (Some(high), Some(low)) = (hex_val(bytes[index + 1]), hex_val(bytes[index + 2]))
+        {
+            decoded.push((high << 4) | low);
+            index += 3;
+            continue;
+        }
+        decoded.push(bytes[index]);
+        index += 1;
+    }
+    decoded
+}
+
 impl PathMatcher {
     /// 初始化并对白名单进行分类与高性能前缀排序
     ///
@@ -286,5 +343,52 @@ mod tests {
         assert!(!is_microservice_route("/api/v1/auth/login"));
         assert!(!is_microservice_route("/dashboard"));
         assert!(!is_microservice_route("/_next/data/xxx.json"));
+    }
+
+    /// H-D-03：含 dot-segment 的路径必须在分类/限流/验签前被识别并拒绝。
+    /// 覆盖原始形式、百分号编码（大小写）、编码斜杠/反斜杠、反斜杠分隔等变体。
+    #[test]
+    fn has_dot_segments_rejects_traversal_variants() {
+        for path in [
+            "/api/auth/../api/users",
+            "/_next/../api/users",
+            "/static/../api/users",
+            "/a/./b",
+            "/a/..",
+            "/..",
+            "/a/%2e%2e/b",
+            "/a/%2E%2E/b",
+            "/a/%2e./b",
+            "/a/.%2e/b",
+            "/a/..%2fb",
+            "/a/%2e%2e%2fb",
+            "/a/..\\b",
+            "/a/..%5cb",
+            "/a/%2e%2e\\b",
+        ] {
+            assert!(
+                has_dot_segments(path),
+                "{path} 含 dot-segment，必须判定为 true"
+            );
+        }
+    }
+
+    /// 正常路径不得误杀：点号只作为文件名/版本号的一部分时不算 dot-segment。
+    #[test]
+    fn has_dot_segments_allows_normal_paths() {
+        for path in [
+            "/",
+            "/healthz",
+            "/api/v1/users",
+            "/api/auth/oauth2/userinfo",
+            "/favicon.ico",
+            "/a.b/c..d",
+            "/v1.2/path",
+            "/...",
+            "/a/%2F/b",
+            "/a/b/",
+        ] {
+            assert!(!has_dot_segments(path), "{path} 不含 dot-segment，不得误杀");
+        }
     }
 }

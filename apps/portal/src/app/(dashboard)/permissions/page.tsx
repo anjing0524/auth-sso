@@ -14,6 +14,7 @@ import { PageHeader } from '@/components/shared/page-header';
  * 否则 Turbopack 运行时会报 "encountered uncached data during prerendering or a navigation"。
  */
 export const instant = false;
+export const metadata = { title: '权限管理 | Auth-SSO' };
 interface PageProps {
   searchParams: Promise<{
     type?: string;

@@ -24,7 +24,6 @@ const baseEnvSchema = z.object({
 });
 
 const portalEnvSchema = baseEnvSchema.extend({
-  NEXT_PUBLIC_APP_NAME: z.string().default('Auth-SSO Portal'),
   NEXT_PUBLIC_APP_URL: z.string().url().default(DEV_DEFAULT_BASE_URL),
   PORTAL_CLIENT_SECRET: z.string().optional(),
   GATEWAY_SHARED_SECRET: z.string().optional(),

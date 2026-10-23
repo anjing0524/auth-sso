@@ -345,7 +345,7 @@ describe('exchangeAuthorizationCode — 失败可判别', () => {
     expect(rows[0]!.revoked).toBeNull();
   });
 
-  it('redirect_uri 不匹配 → invalid_grant（RFC 6749 §4.1.3）', async () => {
+  it('**redirect_uri 不匹配 → invalid_grant，且授权码未被消费**（H-06：错误 redirect 不再作废 code）', async () => {
     await seedAuthCode();
 
     const result = await exchange({ redirectUri: 'https://evil.example.com/cb' });
@@ -353,6 +353,15 @@ describe('exchangeAuthorizationCode — 失败可判别', () => {
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.reason).toBe('invalid_grant');
+    // 关键：校验前置到原子领取的 WHERE 之后，错误 redirect 不得把 used 置位
+    const [row] = await td.db
+      .select({ used: schema.authorizationCodes.used })
+      .from(schema.authorizationCodes);
+    expect(row?.used).toBe(false);
+
+    // 合法 RP 用正确参数重试同一 code → 成功（不会被误判重放撤销家族 RT）
+    const retry = await exchange();
+    expect(retry.ok).toBe(true);
   });
 
   it('PKCE code_verifier 错误 → 被拒，且授权码保持已消费（防离线穷举 verifier）', async () => {
@@ -375,5 +384,51 @@ describe('exchangeAuthorizationCode — 失败可判别', () => {
     expect(result.reason).toBe('invalid_grant');
     if (result.reason !== 'invalid_grant') return;   // 类型收窄
     expect(result.detail).toContain('PKCE');
+  });
+});
+
+
+describe('exchangeAuthorizationCode — per-client TTL（H-16）', () => {
+  it('client access_token_ttl/refresh_token_ttl 生效：expires_in 与 JWT exp-iat 一致、RT 到期时间按配置', async () => {
+    await seedAuthCode();
+    const before = Date.now();
+
+    const result = await exchange({
+      client: { clientId: CLIENT_ID, accessTokenTtl: 60, refreshTokenTtl: 300 },
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.tokens.expires_in).toBe(60);
+
+    // JWT 自身寿命必须与响应一致（同一真相源，不得两处手抄）
+    const claims = await verifyAccessToken(result.tokens.access_token, CLIENT_ID, JWT_TYP.ACCESS_TOKEN);
+    expect(claims).not.toBeNull();
+    expect((claims!.exp as number) - (claims!.iat as number)).toBe(60);
+
+    const [rt] = await td.db.select().from(schema.refreshTokens);
+    const rtTtlSec = Math.round((rt!.expiresAt!.getTime() - before) / 1000);
+    expect(rtTtlSec).toBeGreaterThanOrEqual(298);
+    expect(rtTtlSec).toBeLessThanOrEqual(302);
+  });
+
+  it('非法/过小 TTL 被钳制到下限；未配置回退全局默认（不报 500）', async () => {
+    await seedAuthCode({ code: hashToken('code-ttl-clamp') });
+
+    const tooSmall = await exchange({
+      code: 'code-ttl-clamp',
+      client: { clientId: CLIENT_ID, accessTokenTtl: 1, refreshTokenTtl: 1 },
+    });
+    expect(tooSmall.ok).toBe(true);
+    if (!tooSmall.ok) return;
+    // 下限：access 60s / refresh 300s
+    expect(tooSmall.tokens.expires_in).toBe(60);
+
+    await seedAuthCode({ code: hashToken('code-ttl-default') });
+    const fallback = await exchange({ code: 'code-ttl-default', client: { clientId: CLIENT_ID } });
+    expect(fallback.ok).toBe(true);
+    if (!fallback.ok) return;
+    // 未配置 → 全局默认 3600
+    expect(fallback.tokens.expires_in).toBe(3600);
   });
 });

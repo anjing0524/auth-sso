@@ -8,11 +8,11 @@
  * @route POST /api/auth/refresh
  */
 import { type NextRequest, NextResponse } from 'next/server';
-import { getRefreshTokenFromCookie, getJwtFromCookie, decodeJwtPayload } from '@/lib/session';
-import { rotateRefreshToken } from '@/lib/auth/token';
+import { getRefreshTokenFromCookie, getJwtFromCookie } from '@/lib/session';
+import { rotateRefreshToken, verifyAccessToken } from '@/lib/auth/token';
 import { mapServerError } from '@/lib/server-error';
 import { restError } from '@/lib/response';
-import { AUTH_ERRORS, COOKIE_NAMES, PORTAL_CLIENT_ID, TOKEN_TTL } from '@auth-sso/contracts';
+import { AUTH_ERRORS, COOKIE_NAMES, JWT_TYP, PORTAL_CLIENT_ID } from '@auth-sso/contracts';
 import { writeLoginLog, extractClientIP, extractUserAgent } from '@/lib/audit';
 import { isCookieSecure, getGatewaySharedSecret } from '@/lib/env';
 import { verifySignature, SIGNATURE_TIMESTAMP_WINDOW_SEC } from '@/lib/auth/gateway-hmac';
@@ -50,21 +50,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 检查当前 Access Token 的剩余时间，避免不必要的 token 轮换（H-SESS-003）
+    // 检查当前 Access Token 的剩余时间，避免不必要的 token 轮换（H-SESS-003）。
+    // H-08：该判定必须基于**已验签**的 AT —— 未验签 payload 的 exp 可被任意伪造，
+    // 使刷新被跳过（RT 永不轮换）且日志记录伪造的 sub。
     const accessToken = await getJwtFromCookie();
-    if (accessToken) {
-      const claims = decodeJwtPayload(accessToken);
-      if (claims?.exp) {
-        const remaining = claims.exp - Math.floor(Date.now() / 1000);
-        if (remaining > REFRESH_THRESHOLD) {
-          return NextResponse.json({ skipped: true, remaining });
-        }
+    const atPayload = accessToken
+      ? await verifyAccessToken(accessToken, PORTAL_CLIENT_ID, JWT_TYP.ACCESS_TOKEN)
+      : null;
+    if (atPayload?.exp) {
+      const remaining = atPayload.exp - Math.floor(Date.now() / 1000);
+      if (remaining > REFRESH_THRESHOLD) {
+        return NextResponse.json({ skipped: true, remaining });
       }
     }
 
-    // 从当前 AT 中获取用户信息（用于日志）
-    const currentAT = await getJwtFromCookie();
-    const atPayload = currentAT ? decodeJwtPayload(currentAT) : null;
+    // 用户信息（用于日志）只来自已验签的 claims
     const username = atPayload?.sub || 'unknown';
     const ip = extractClientIP(request.headers);
     const ua = extractUserAgent(request.headers);
@@ -117,7 +117,8 @@ export async function POST(request: NextRequest) {
       httpOnly: true,
       secure,
       sameSite: 'lax',
-      maxAge: TOKEN_TTL.REFRESH_TOKEN,
+      // 实际签发的 RT TTL（per-client 配置并已钳制，H-16）
+      maxAge: result.refreshExpiresIn,
     });
 
     return response;

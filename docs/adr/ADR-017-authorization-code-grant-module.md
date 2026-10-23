@@ -71,12 +71,43 @@ readonly client: { readonly clientId: string };
 
 **未覆盖**：`validateAuthCodeRow`（`domain/auth/auth-code.ts`）仍是"位置错了的 module"——它有 5 个单测但**生产零调用**，真实判定住在 SQL 的 WHERE 子句里。本次把该 SQL 收进了 module，但没有删除这个失去意义的纯函数。**删除它是独立决策**（需同步删其测试），挂号待办。
 
+## 增补（2026-10-23）：授权码兑换的校验顺序 —— `redirect_uri` 并入原子领取（H-06 / 决策 D13）
+
+**背景**：原实现先执行原子领取（条件 UPDATE 置 `used=true`），**之后**才比对 `redirect_uri`。
+后果有两层（审计 H-06 实测）：
+
+1. 持有 client 凭证者可用"正确 code + 错误 redirect_uri"使合法授权码作废（合法 RP 随后兑换
+   只能得到 `invalid_grant`）；
+2. 合法 RP 用错误参数重试后，再用正确参数重试会被判为「授权码重放」，进而**撤销整个家族
+   的 Refresh Token**——把一次参数错误放大成一次会话事故。
+
+**决策：`redirect_uri` 与 `code` / `clientId` / `used=false` / `expires_at > now()` 一起进
+原子领取的 `WHERE`；领取失败后仍按原有逻辑区分「重放」与「无效 grant」。**
+
+- 实现：`lib/auth/oauth-grant.ts:78` 起 `claimAuthorizationCode(code, clientId, redirectUri)`，
+  `:93` 的 `eq(authorizationCodes.redirectUri, redirectUri)`；
+- 语义：错误 redirect 的请求**领不到**行（`used` 保持 false），因此
+  - 合法 RP 用正确参数重试仍可成功；
+  - 不会被误判为"授权码重放"而触发家族撤销；
+- 与"PKCE 失败后 code 仍保持已消费"的关系（**刻意保留的差异，如实记录**）：
+  - `redirect_uri` 校验在领取前（不消耗 code）——它可由 `clientId` + 注册白名单在协议层确定，
+    不消耗 code 不产生暴力猜测面；
+  - **PKCE 校验仍在领取之后**：校验失败时 code 保持已消费。这是本文原决策的一部分
+    （"PKCE 失败后授权码同样保持已消费"，防止攻击者拿到有效 code 离线穷举 `code_verifier`）。
+  - 因此决策 D13 原文"redirect_uri/PKCE 校验前置于 used 置位"中，**PKCE 一项未按字面落地**；
+    这是与决策文本的差异，需 Lead 裁决：若确认要"PKCE 失败也不消耗 code"，会重新打开
+    `verifier` 离线穷举面，不建议；当前实现取"redirect 前置 + PKCE 保持消费"。
+- 回归：`oauth-grant.test.ts` 新增用例（错误 redirect 不消耗 code、正确重试成功、重放仍触发
+  家族撤销），见 `.zcode/audit/auth.md` §H-06 与修复批次 F2。
+
 ## 验证
 
 - `tsc` 0 错误。
 - `pnpm test` 53 文件 / 446 用例全绿（新增 `oauth-grant.test.ts` 10 例）。
 - `oauth2-token.test.ts` 12 例全绿——证明抽出后**协议行为逐位保持**。
 - `lint` 0 errors（76 warnings，比基线少 1）。
+- 2026-10-23 增补的 redirect_uri 顺序修复：`oauth-grant.test.ts` 新增用例先红后绿
+  （修复批次 F2 记录），且重放家族撤销的原有用例保持绿。
 
 ## 相关 ADR
 

@@ -43,15 +43,19 @@ export const LOGIN_SESSION_TTL = TOKEN_TTL.LOGIN_SESSION;
  * 调用方：`app/api/auth/login/route.ts`（POST /api/auth/login）
  *
  * 登录成功后由 login route 调用，结果写入 HttpOnly Cookie。
- * 仅含 sub，5min TTL。不设 portal_jwt_token — Access Token 在 OAuth callback 完成后才颁发。
+ * 5min TTL。不设 portal_jwt_token — Access Token 在 OAuth callback 完成后才颁发。
  *
  * @param userId - 用户 ID (UUID)
+ * @param sessionId - 已通过绑定校验的授权请求 session_id（H-02；普通登录省略）
  * @returns ES256 签名的 JWT 字符串
  */
-export async function signLoginSession(userId: string): Promise<string> {
+export async function signLoginSession(userId: string, sessionId?: string): Promise<string> {
   const { keyId, privateKey } = await getActiveSigningKey();
+  const payload: Record<string, unknown> = { sub: userId };
+  // sid 让 authorize 分支 A 能拒绝"登录凭证与 URL 中 session_id 不匹配"的注入请求
+  if (sessionId) payload['sid'] = sessionId;
 
-  return new SignJWT({ sub: userId })
+  return new SignJWT(payload)
     .setProtectedHeader({ alg: 'ES256', kid: keyId, typ: JWT_TYP.LOGIN_SESSION })
     .setIssuedAt()
     .setIssuer(getIssuer())
@@ -68,6 +72,30 @@ export async function signLoginSession(userId: string): Promise<string> {
 export const ACCESS_TOKEN_TTL = TOKEN_TTL.ACCESS_TOKEN; // 1h
 
 /**
+ * per-client TTL 的服务端钳制边界（H-16）。
+ *
+ * clients 表的 access_token_ttl / refresh_token_ttl 已可被管理员配置，但签发此前
+ * 恒用全局常量（死配置）。读取 client 配置时必须钳制：过短会让 RP 在正常请求间
+ * 频繁失败，过长会削弱撤销杠杆（ADR-013 决策 4 的核心假设是 AT ≤1h）。
+ */
+export const ACCESS_TOKEN_TTL_BOUNDS = { min: 60, max: 24 * 60 * 60 } as const;
+export const REFRESH_TOKEN_TTL_BOUNDS = { min: 5 * 60, max: 30 * 24 * 60 * 60 } as const;
+
+/**
+ * 把 client 配置的 TTL 收敛到合法区间；非法/缺失回退到全局默认（禁止抛错）。
+ *
+ * 非数字、非有限数、≤0 一律视为"未配置"（列有 DB 默认值，但服务端仍防御脏数据）。
+ */
+export function clampTokenTtl(
+  rawTtl: number | null | undefined,
+  fallback: number,
+  bounds: { readonly min: number; readonly max: number },
+): number {
+  if (typeof rawTtl !== 'number' || !Number.isFinite(rawTtl) || rawTtl <= 0) return fallback;
+  return Math.min(Math.max(Math.floor(rawTtl), bounds.min), bounds.max);
+}
+
+/**
  * 【server-only async】签发 OAuth 2.1 Access Token (ES256 JWT)
  *
  * 调用方：`app/api/auth/oauth2/token/route.ts`（authorization_code + refresh_token grant）
@@ -79,14 +107,17 @@ export const ACCESS_TOKEN_TTL = TOKEN_TTL.ACCESS_TOKEN; // 1h
  * @param userId - 用户 ID (UUID)
  * @param clientId - 授权对象 OAuth client_id（aud 与 client_id claim 的唯一来源）
  * @param scope - 已授予 scope（空格分隔），未授予时省略
- * @returns token 字符串 + jti（用于后续撤销）
+ * @param clientAccessTokenTtl - client 配置的 AT TTL（秒）；已钳制，非法值回退默认（H-16）
+ * @returns token 字符串 + jti（用于后续撤销）+ 实际生效 TTL
  */
 export async function signAccessToken(
   userId: string,
   clientId: string,
   scope?: string,
-): Promise<{ token: string; jti: string }> {
+  clientAccessTokenTtl?: number | null,
+): Promise<{ token: string; jti: string; expiresIn: number }> {
   const { keyId, privateKey } = await getActiveSigningKey();
+  const ttl = clampTokenTtl(clientAccessTokenTtl, ACCESS_TOKEN_TTL, ACCESS_TOKEN_TTL_BOUNDS);
   const jti = newJti();
   // 单一时刻同时作为 iat 与 exp 的基准：若让 `.setIssuedAt()` 自行读实时时钟，
   // 而 exp 另用 Date.now() 计算，两次读时钟跨越秒边界时
@@ -100,16 +131,16 @@ export async function signAccessToken(
     .setIssuer(getIssuer())
     .setAudience(clientId)
     .setJti(jti)
-    .setExpirationTime(now + ACCESS_TOKEN_TTL)
+    .setExpirationTime(now + ttl)
     .sign(privateKey);
 
   try {
-    await trackUserJti(userId, jti, ACCESS_TOKEN_TTL);
+    await trackUserJti(userId, jti, ttl);
   } catch (e) {
     log.error('写入 user→jti 映射失败', { error: (e as Error).message });
   }
 
-  return { token, jti };
+  return { token, jti, expiresIn: ttl };
 }
 
 /**
@@ -120,8 +151,8 @@ export async function signAccessToken(
  * 步骤：decodeProtectedHeader 提取 header.kid → 按 kid 查公钥 → ES256 验签 → issuer 校验 → jti 黑名单检查
  * 与 Gateway 的离线验签逻辑对齐：通过 kid 精准匹配密钥，支持轮换后旧 token 仍可验签。
  *
- * typ 显式类型校验（RFC 8725 §3.11）：`expectedTyp` 传入时，header.typ 存在且
- * 不匹配预期即拒；typ 缺失放行（存量 token 兼容期，最长 = AT TTL）。
+ * typ 显式类型校验（RFC 8725 §3.11，与 Gateway `verify.rs` 对齐，ADR-013 决策 2）：
+ * `expectedTyp` 传入时，header.typ **必须存在且相等**——缺失即拒（兼容窗不再开启）。
  *
  * @param token - JWT 字符串
  * @param audience - 预期 aud，必传显式语义：AT 用 `PORTAL_CLIENT_ID`、LoginSession 用
@@ -142,8 +173,8 @@ export async function verifyAccessToken(
       return null;
     }
 
-    // typ 存在且不匹配预期即拒（缺失放行，兼容存量 token 自然过期）
-    if (expectedTyp && header.typ && header.typ !== expectedTyp) {
+    // typ 必须存在且与预期用途一致（缺失即拒：ADR-013 决策 2 已关闭兼容窗，与 Gateway 对齐）
+    if (expectedTyp && header.typ !== expectedTyp) {
       log.warn('JWT typ 与预期用途不匹配', { typ: header.typ, expected: expectedTyp });
       return null;
     }
@@ -250,17 +281,20 @@ const REFRESH_TOKEN_TTL = TOKEN_TTL.REFRESH_TOKEN; // 7d
  * @param userId - 用户内部 ID
  * @param clientId - 发放该 RT 的 OAuth Client
  * @param scopes - 授权范围，默认 DEFAULT_SCOPES（contracts 单一真相源）
+ * @param clientRefreshTokenTtl - client 配置的 RT TTL（秒）；已钳制，非法值回退默认（H-16）
  * @returns Refresh Token 字符串
  */
 export async function issueRefreshToken(
   userId: string,
   clientId: string,
   scopes: string = DEFAULT_SCOPES,
+  clientRefreshTokenTtl?: number | null,
 ): Promise<string> {
   const id = generateUUID();
   const token = `rt_${generateId(32)}`;
+  const ttl = clampTokenTtl(clientRefreshTokenTtl, REFRESH_TOKEN_TTL, REFRESH_TOKEN_TTL_BOUNDS);
   const now = new Date();
-  const expiresAt = new Date(now.getTime() + REFRESH_TOKEN_TTL * 1000);
+  const expiresAt = new Date(now.getTime() + ttl * 1000);
 
   await db.insert(schema.refreshTokens).values({
     id,
@@ -330,6 +364,18 @@ export async function rotateRefreshToken(
 
     await revokeRefreshTokenById(tx, rt.id);
 
+    // H-16：per-client TTL —— 读发放 client 的配置（与授权码兑换路径同源）
+    const [clientRow] = await tx
+      .select({
+        accessTokenTtl: schema.clients.accessTokenTtl,
+        refreshTokenTtl: schema.clients.refreshTokenTtl,
+      })
+      .from(schema.clients)
+      .where(eq(schema.clients.clientId, rt.clientId))
+      .limit(1);
+    const accessTtl = clampTokenTtl(clientRow?.accessTokenTtl, ACCESS_TOKEN_TTL, ACCESS_TOKEN_TTL_BOUNDS);
+    const refreshTtl = clampTokenTtl(clientRow?.refreshTokenTtl, REFRESH_TOKEN_TTL, REFRESH_TOKEN_TTL_BOUNDS);
+
     const newRtId = generateUUID();
     const newRefreshToken = `rt_${generateId(32)}`;
     const now = new Date();
@@ -340,14 +386,14 @@ export async function rotateRefreshToken(
       clientId: rt.clientId,
       scopes: rt.scopes,
       createdAt: now,
-      expiresAt: new Date(now.getTime() + REFRESH_TOKEN_TTL * 1000),
+      expiresAt: new Date(now.getTime() + refreshTtl * 1000),
     });
 
-    return { rt, newRtId, newRefreshToken };
+    return { rt, newRtId, newRefreshToken, accessTtl, refreshTtl };
   });
 
   if (!outcome) return null;
-  const { rt, newRtId, newRefreshToken } = outcome;
+  const { rt, newRtId, newRefreshToken, accessTtl, refreshTtl } = outcome;
 
   // 事务已提交：以下任一失败必须补偿回收刚入库的新 RT —— 否则产生
   // "已入库但永不发放"的孤儿行（明文已丢弃，无人可用，但属垃圾数据）
@@ -360,11 +406,22 @@ export async function rotateRefreshToken(
       throw new Error(`用户不可用（${permission.reason}），拒绝轮换`);
     }
 
-    const { token: accessToken } = await signAccessToken(rt.userId, rt.clientId, rt.scopes);
+    const { token: accessToken, expiresIn } = await signAccessToken(
+      rt.userId,
+      rt.clientId,
+      rt.scopes,
+      accessTtl,
+    );
 
     // scope 一并返回：协议响应必须回报授予范围（RFC 6749 §5.1），
     // 而此前 RefreshTokenResult 不带它 ⇒ 路由手拼响应时漏掉
-    return { accessToken, refreshToken: newRefreshToken, expiresIn: ACCESS_TOKEN_TTL, scope: rt.scopes };
+    return {
+      accessToken,
+      refreshToken: newRefreshToken,
+      expiresIn,
+      refreshExpiresIn: refreshTtl,
+      scope: rt.scopes,
+    };
   } catch (e) {
     log.error('RT 轮换后置步骤失败，补偿回收新 RT', { error: (e as Error).message });
     try {

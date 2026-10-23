@@ -192,9 +192,11 @@ describe('JWT Cookie Session Lifecycle', () => {
       expect(payload).toBeNull();
     });
 
-    it('typ 缺失的存量 token 放行（兼容期）', async () => {
+    // ADR-013 决策 2：系统无生产存量 token，「缺失放行」兼容窗不再开启。
+    // H-05 修复把 Portal 侧收紧为「typ 必须存在且相等」，与 Gateway verify.rs 对齐。
+    it('typ 缺失的 token 拒绝（ADR-013 无兼容期）', async () => {
       const payload = await verifyAccessToken('valid-jwt', PORTAL_CLIENT_ID, 'at+jwt');
-      expect(payload).toBeTruthy();
+      expect(payload).toBeNull();
     });
   });
 

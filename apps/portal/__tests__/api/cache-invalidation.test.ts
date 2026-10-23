@@ -73,6 +73,14 @@ describe('资源表', () => {
     expect(tagMock).toHaveBeenCalledWith('departments', { expire: 0 });
   });
 
+  it('clients 必须失效 permissions-list —— 注销经 CASCADE 删除 permissions/role_permissions（H-C-04）', () => {
+    invalidateResourceFromRoute('clients');
+
+    expect(tagMock).toHaveBeenCalledWith('clients-list', { expire: 0 });
+    // 删除后 5/5 次 /api/permissions 仍返回已删权限（cacheLife hours）——审计 H-C-04 实测
+    expect(tagMock).toHaveBeenCalledWith('permissions-list', { expire: 0 });
+  });
+
   it('profile 必须失效 users-list —— 改资料会显示在用户列表里', () => {
     invalidateResource('profile');
 

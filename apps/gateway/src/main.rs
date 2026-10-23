@@ -171,6 +171,7 @@ fn main() -> anyhow::Result<()> {
             token_refresher,
             oidc_provider_upstream: portal_upstreams,
             gateway_shared_secret: config.gateway.gateway_shared_secret.clone(),
+            metrics_token: config.gateway.metrics_token.clone(),
             upstream_scheme: config.gateway.upstream_scheme.clone(),
             upstream_server_name: config.gateway.upstream_server_name.clone(),
             upstream_host_header: config.gateway.upstream_host_header.clone(),
