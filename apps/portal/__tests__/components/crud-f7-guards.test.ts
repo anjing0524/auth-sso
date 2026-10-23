@@ -174,7 +174,7 @@ describe('表格滚动与吸顶契约（2026-10-23 UI 重做）', () => {
 
   it('表头不再用 uppercase + tracking-widest（中文会被拆散）', () => {
     const table = read('src/components/ui/table.tsx');
-    expect(table).toContain('text-[11px] font-medium');
+    expect(table).toContain('type-table-head');
     expect(table).not.toContain('uppercase tracking-widest');
   });
 
@@ -182,7 +182,7 @@ describe('表格滚动与吸顶契约（2026-10-23 UI 重做）', () => {
     expect(read('src/components/shared/table-toolbar.tsx')).toContain('[&_button]:h-8');
     expect(read('src/components/shared/search-input.tsx')).toContain('md:w-64');
     expect(read('src/components/shared/search-input.tsx')).toContain('h-8 pl-8 pr-8');
-    expect(read('src/components/shared/page-header.tsx')).toContain('text-[17px] font-semibold');
+    expect(read('src/components/shared/page-header.tsx')).toContain('type-page-title');
   });
 
   it('重内容不再用弹窗：角色权限 / 用户角色已页面化，旧弹窗文件不得回归', () => {

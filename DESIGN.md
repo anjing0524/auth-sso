@@ -1,6 +1,6 @@
 # Auth-SSO 设计系统
 
-版本: v3.6
+版本: v3.7
 最后更新: 2026-10-23
 
 ---
@@ -110,6 +110,9 @@
 - **禁止硬编码 hex 或 oklch 原始值**在 TSX 中（如 `bg-[#E6F0FF]`）——这绕过暗黑模式切换
 - **设计新组件时**，颜色选择从已有 design token 中选取，不新增任意颜色值
 
+> **滚动条（v3.7）**：内部滚动容器加 `.scrollbar-slim`（6px 细滚动条、透明轨道）；
+> 页面级不允许出现滚动条（36 项"路由 × 视口"审计为 0）。表格内部滚动属于正常数据行为。
+
 ---
 
 ## 字体规范
@@ -151,6 +154,21 @@
 | 2xl | 27px | 36px | 特大标题（当前未使用） | `text-2xl` = 24px / 2rem |
 | 3xl | 35px | 40px | 大标题 | `text-3xl` = 30px / 2.25rem |
 | 4xl | 45px | 52px | 登录页品牌名 | `text-4xl` = 36px / 2.5rem |
+
+### 语义字体层级（v3.7：唯一口径，组件禁止再散写 text-[Npx]）
+
+定义在 `apps/portal/src/app/globals.css`，组件按层级引用类名：
+
+| Token 类 | 字号/行高 | 字重 | 使用位置 |
+|---|---|---|---|
+| `.type-page-title` | 17px / 24px | 600 | 详情页/表单页页头（`PageHeader`） |
+| `.type-section-title` | 15px / 22px | 600 | 列表页标题（并入表格工具条的 `h1`）、区块标题 |
+| `.type-card-title` | 13px / 20px | 600 | 卡片/分组标题 |
+| `.type-body` | 13px / 20px | 400 | 正文、表格默认字号 |
+| `.type-meta` | 11px / 16px | 400 | 辅助信息（描述、计数、页头副文案） |
+| `.type-table-head` | 11px / 16px | 500 | 表头（`TableHead`） |
+
+规则：同一层级只用同一个类；**禁止**在页面里另写 `text-[13px]` 之类的"局部刻度"（图标尺寸除外）。
 
 ### 字重规范
 
@@ -427,12 +445,12 @@ DataTable 是共享表格组件，所有列表页统一使用。
 
 | 内容特征 | 载体 | 判据 |
 |---|---|---|
-| 轻确认（删除/禁用确认）、短表单（≤ 4 个字段）、单选列表 | **Dialog** | 一屏可读完，不需要搜索/分页/分组 |
-| 多分组勾选、需要搜索或分页、单次可编辑项 > 1 屏、有独立 URL 分享/回退需求 | **页面（独立路由）** | 弹窗内再套滚动 = 可用性不合格 |
+| 轻确认（删除/禁用确认）、短表单（≤ 5 个字段，600px 视口高度内放得下） | **Dialog** | **弹窗不允许出现滚动条**；出现滚动就说明它是页面 |
+| 字段多/条件字段（如权限的页面/目录类型）、需要搜索/分页/多分组/滚动、有独立 URL 需求 | **页面（独立路由）** | 例：`/permissions/new`、`/permissions/[id]/edit`、`/roles/[id]/permissions`、`/users/[id]/roles` |
 
-具体案例（2026-10-23 落地）：`角色权限配置`（45+ 权限、按类型分组、搜索/全选）与
-`用户角色分配`（部门下全部角色、多选）由 233/207 行弹窗改为 `/roles/[id]/permissions`
-与 `/users/[id]/roles` 页面：页面有面包屑、返回、固定保存条，内容整屏可滚动。
+具体案例（2026-10-23 落地）：`角色权限配置`（按应用/目录分组 + 组级全选）、`用户角色分配`、
+`权限新建/编辑`（页面/目录类型 8 字段，600px 视口内弹窗放不下）全部改为独立页面：
+页面有面包屑、返回、固定保存条；全局 `DialogContent` 不再提供 `overflow-y`（禁止用滚动兜底）。
 
 ### 状态徽章 (Badge)
 
@@ -686,6 +704,12 @@ DataTable 是共享表格组件，所有列表页统一使用。
   - 文字在深底上用白色/`white/45`，卡片保持白底保证输入对比度。
   - **例外说明**：容器底色写死 `bg-[#04122B]`、渐变起点用 hex——这是"深色品牌底"的既定例外（Canvas 渐变无法走 Tailwind token，且必须与首帧底色一致以防闪烁）；其余界面仍按「禁止硬编码 hex」执行。
 
+### 登录页（v3.7）
+
+- 根容器用 `min-h-[100svh]`（不是 `100vh`/`min-h-screen`）：浏览器工具栏/任务栏占用后仍以**可见视口**为准。
+- 必须保证 **1139×600 视口无页面滚动条**（实测 600px 高时内容 669px → 压缩品牌区/卡片内边距/输入框到 40px 后 scrollHeight=600）。
+- 登录卡片宽度 400px 上限；窄屏 `px-4 py-5`，不出现横向滚动。
+
 ### 管理后台
 
 ```
@@ -877,6 +901,7 @@ WITH RECURSIVE sub_depts AS (
 
 | 日期 | 版本 | 变更 |
 |------|------|------|
+| 2026-10-23 | v3.7 | **真实交互与自适应轮（用户量化要求：步骤/点击/输入次数）**：①**弹窗硬规则**——弹窗不允许滚动；溢出即改页面。移除全局 Dialog 的 `max-h + overflow-y` 兜底；`新建/编辑权限` 改为 `/permissions/new`、`/permissions/[id]/edit`（服务端 `connection()` + `PermissionGate`，面包屑/返回/表单页布局）；600px 高实测弹窗全部放得下（用户新建 574px、角色新建 404px、删除确认 228px 等）。②**登录页自适应**——`100svh` + 品牌区/卡片/输入框压缩：1139×600 内容 669→600（无滚动条），390×844 无滚动。③**权限分配步骤量化**——由"每项一点"改为按应用（clientId）/菜单根目录分组：组头全选（1 击可选 39 项）+ 组折叠 + 搜索 + 全选所有/清空；配齐一个应用由 39 次点击 → **2 步（组全选 + 保存）**。④**字体层级固定**——新增 6 个语义 token（`.type-page-title` 17px、`.type-section-title` 15px、`.type-card-title` 13px、`.type-body` 13px、`.type-meta` 11px、`.type-table-head` 11px），PageHeader/列表标题/表头/表格基准字号改用 token；禁止页面散写字号。⑤**中文化**——权限图标下拉改为中文（工作台/用户/角色…），类型下拉保持「页面（PAGE）」双语可辨。⑥**滚动条**——新增 `.scrollbar-slim` 细滚动条，36 项（登录 + 11 路由 × 3 视口）页面级滚动条审计 = 0。 |
 | 2026-10-23 | v3.6 | **专业后台密度第二轮（用户实测：有效内容太少、标题间距吃掉半屏、搜索与按钮不同高、重内容弹窗不适合）**：①**主区结构**——顶栏 56→48px、`main` padding 16→12px、页面级 gap 24→12px；**列表页取消独立大页头**（图标块 + 24px 标题 + 描述整行），`h1` 15px 并入表格工具条左侧，首行距顶 `280px→146px`（982px 视口 chrome 占比 29%→15%；556px 短屏 50%→26%，可见行 5→8）。②**表格卡片**——清掉 Card 基类 `py-6 + gap-4`（无端 64px 空白）；表头 36→32px / 11px、行高 44→40px、单元格 `px-3 py-1.5`。③**控件**——Button/Input/Select 默认 36px；工具条内统一 32px（搜索与主按钮逐像素同高）；分页按钮 28px。④**数据密度**——列表 `pageSize` 10/15→20，一屏 15–18 行。⑤**搜索**——300ms 防抖（此前每个字符一次 `router.push`）、`busy` 转圈、`Esc` 清空、自动回到第 1 页。⑥**弹窗→页面**——角色权限配置、用户角色分配改为独立页面（新增「交互载体选择」硬规则）；面包屑补两级。⑦审计页标题/页签/筛选/导出合并为一行，卡片与分页贴合。 |
 | 2026-10-23 | v3.5 | **UI 密度与滚动可用性重做（用户实测反馈：主体表格显小、字号/间距失衡、横向滚动后表头消失）**：①**主次层级**——页头标题 24→20px、图标 40→36px、描述 14→13px；顶栏 64→56px；页面级间距 24→16px、main 纵向 padding 收紧；列表表格成为视觉主体。②**密度**——行高 48→44px 起、单元格 `py-2`、表头 40→36px 且字号 10px `font-black uppercase tracking-widest` → 12px `font-medium`（中文不再被拆散）；工具条控件 40→36px、搜索框 320→288px；角色页操作列三家文字按钮收敛为 3 个图标按钮（`aria-label`+`title`）。③**滚动 bug 修复**——根因是 `Table` 内层 `overflow-x-auto` 自成滚动上下文，`thead sticky` 相对它定位、外层滚动时表头随内容滚走（实测滚动 205px 后表头从容器顶 219px 漂到 14px）；现列表页只保留**一个**滚动容器（`Table containerClassName="overflow-visible"` + `th` 上 `sticky top-0 z-20 bg-card`），横向/纵向滚动表头都钉住（实测 thTop 恒定 219px）。④**卡片高度**——取消 `fill` 强制撑满，改随内容自适应 + 表格区 `max-h-[calc(100svh-17rem)]`，1–2 行数据不再出现整屏空白卡片（实测 1 行卡片 220px）。⑤**分页收敛**——`totalPages<=1` 时隐藏整套翻页/跳页控件只保留总数；≤7 页隐藏首/末页按钮。⑥**描边修正**——`ring-1 ring-border/*` 在本仓 Tailwind 配置下落到 `currentColor` 生成近黑 1px 描边，列表卡片统一改为 `border border-border/70`。⑦**响应式**——390px 下操作列不再被裁切（状态列 <sm 隐藏并在名称下补行内徽章，操作列 116px），主操作按钮占满一行；1024/1440 无横向溢出。 |
 | 2026-10-23 | v3.4 | **按代码校正轮（本文件与实现对齐）**：①路径全部可解析——`globals.css` → `apps/portal/src/app/globals.css`、`scripts/stack.sh` → `scripts/docker/stack.sh`、`scripts/bench-gateway.mjs` → `scripts/bench/gateway.mjs`、`scripts/deploy.sh` → `scripts/docker/deploy.sh`、`DOCKER.md` → `docker/README.md`、`login/login-background.tsx` → `apps/portal/src/app/login/login-background.tsx`、`public/fonts` 补全为 `apps/portal/public/fonts`；`.ui-audit/component-audit.mjs` + `component-score.mjs` 明确标注为本地未入库一次性产物。②token 与 `globals.css` 逐条对账：补 `--color-primary` 暗色值、`--color-error` 别名说明、`--badge-*`、租户变量、圆角四档实际映射、三条 `--ease-*`（无 `--duration-*`）。③字体加载改为实测的 `next/font/local` + `public/fonts/*.woff2`（原 Google Fonts `<link>` 写法违反"构建离线可复现"）。④组件规范按基类改写：按钮 size/variant、输入框状态 token、Card ring、Table `py-1`/表头 40px、EmptyState 三态、Tab/Dialog/PageHeader/Toast、Alert 与 Badge 的 hex 表全部换成 token 表。⑤架构章节 1–4 保留历史图但补现行实现（`/api/auth/oauth2/authorize`、`permissions.client_id`、`ancestors` 物化路径、服务端鉴权、`buildTree` 孤儿升顶）。⑥新增「规范 vs 实现：待治理清单」10 条，不静默改规范。 |

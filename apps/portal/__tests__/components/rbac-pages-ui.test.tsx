@@ -100,6 +100,7 @@ vi.mock(import('@/app/(dashboard)/departments/actions'), async (importOriginal):
 
 import RolesTable from '@/app/(dashboard)/roles/components/RolesTable';
 import PermissionsTable from '@/app/(dashboard)/permissions/components/PermissionsTable';
+import PermissionForm from '@/app/(dashboard)/permissions/permission-form';
 import DepartmentTree from '@/app/(dashboard)/departments/components/DepartmentTree';
 import type * as usePermissionsModule from '@/hooks/use-permissions';
 import type * as roleActionsModule from '@/app/(dashboard)/roles/actions';
@@ -276,29 +277,32 @@ describe('U-G03 对话框 Label 关联', () => {
     expect(screen.getByLabelText('所属部门')).toBeInTheDocument();
   });
 
-  it('permissions 新建对话框：getByLabelText 可定位名称/描述/编码/类型', async () => {
-    const user = userEvent.setup();
-    renderPermissions({ permissions: [PERMISSION_API], pagination: PAGINATION(1), menuOptions: [] });
-
-    await user.click(screen.getByRole('button', { name: '新建权限' }));
-    expect(screen.getByLabelText('权限名称')).toBeInTheDocument();
-    expect(screen.getByLabelText('描述（可选）')).toBeInTheDocument();
-    expect(screen.getByLabelText('权限编码')).toBeInTheDocument();
-    expect(screen.getByLabelText('类型')).toBeInTheDocument();
-  });
-
-  it('permissions 编辑菜单：父级/路由路径等菜单专属字段 label 关联', async () => {
-    const user = userEvent.setup();
+  it('permissions 新建/编辑改为页面：列表不再打开弹窗，入口指向独立路由', () => {
     renderPermissions({ permissions: [PERMISSION_PAGE], pagination: PAGINATION(1), menuOptions: [PERMISSION_PAGE] });
 
-    await user.click(screen.getByRole('button', { name: `编辑权限 ${PERMISSION_PAGE.name}` }));
+    // 2026-10-23 规则：弹窗不允许滚动；页面/目录类型 8 字段在 600px 视口放不下 → 独立页面
+    const newLink = screen.getByRole('link', { name: /新建权限/ });
+    expect(newLink).toHaveAttribute('href', '/permissions/new');
+    const editLink = screen.getByRole('link', { name: `编辑权限 ${PERMISSION_PAGE.name}` });
+    expect(editLink.getAttribute('href')).toBe(`/permissions/${PERMISSION_PAGE.id}/edit`);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('permissions 表单页：菜单专属字段 label 关联、编辑态编码只读', () => {
+    render(
+      <PermissionForm
+        mode="edit"
+        menuOptions={[{ id: PERMISSION_PAGE.id, name: PERMISSION_PAGE.name, type: PERMISSION_PAGE.type, parentId: null }]}
+        permission={{ ...PERMISSION_PAGE, code: PERMISSION_PAGE.code }}
+      />,
+    );
     expect(screen.getByLabelText('权限名称')).toBeInTheDocument();
     expect(screen.getByLabelText('父级权限')).toBeInTheDocument();
     expect(screen.getByLabelText(/路由路径/)).toBeInTheDocument();
     expect(screen.getByLabelText('图标')).toBeInTheDocument();
     expect(screen.getByLabelText('排序')).toBeInTheDocument();
-    // 编码只读展示（H-19 已有约束），不再提供可编辑输入
-    expect(screen.queryByLabelText('权限编码')).not.toBeInTheDocument();
+    // H-19：编码创建后不可变更 → 只读 disabled 输入，而不是“不存在”
+    expect(screen.getByLabelText(/权限编码/)).toBeDisabled();
   });
 
   it('departments 新建/编辑对话框：getByLabelText 可定位名称/编码', async () => {
@@ -334,13 +338,12 @@ describe('U-ROLES02/U-G06 对话框 Enter 提交', () => {
     });
   });
 
-  it('permissions 新建对话框：输入框内 Enter 触发 createPermissionAction', async () => {
+  it('permissions 表单页：输入框内 Enter 触发 createPermissionAction', async () => {
     const user = userEvent.setup();
-    renderPermissions({ permissions: [PERMISSION_API], pagination: PAGINATION(1) });
+    render(<PermissionForm mode="create" menuOptions={[]} />);
 
-    await user.click(screen.getByRole('button', { name: '新建权限' }));
     await user.type(screen.getByLabelText('权限名称'), '新接口权限');
-    await user.type(screen.getByLabelText('权限编码'), 'portal:qa:new{Enter}');
+    await user.type(screen.getByLabelText(/权限编码/), 'portal:qa:new{Enter}');
 
     await vi.waitFor(() => expect(permissionActions.createPermissionAction).toHaveBeenCalledTimes(1));
     expect(vi.mocked(permissionActions.createPermissionAction).mock.calls[0]![0]).toMatchObject({
@@ -444,9 +447,12 @@ describe('U-DEP03 非空树新建入口', () => {
 // U-PRM03 / U-G11 术语统一 + aria-label 区分对象
 // ═══════════════════════════════════════════════════
 describe('U-PRM03/U-G11 术语与 aria-label', () => {
-  it('permissions 行内编辑/删除 aria-label 携带对象名', () => {
+  it('permissions 行内编辑是链接（页面）/删除是按钮（确认弹窗），aria-label 携带对象名', () => {
     renderPermissions({ permissions: [PERMISSION_API], pagination: PAGINATION(1) });
-    expect(screen.getByRole('button', { name: `编辑权限 ${PERMISSION_API.name}` })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: `编辑权限 ${PERMISSION_API.name}` })).toHaveAttribute(
+      'href',
+      `/permissions/${PERMISSION_API.id}/edit`,
+    );
     expect(screen.getByRole('button', { name: `删除权限 ${PERMISSION_API.name}` })).toBeInTheDocument();
   });
 
@@ -456,12 +462,10 @@ describe('U-PRM03/U-G11 术语与 aria-label', () => {
     expect(screen.getByRole('button', { name: `删除角色 ${ROLE.name}` })).toBeInTheDocument();
   });
 
-  it('permissions 对话框标题使用统一术语（接口/页面/目录 + 权限）', async () => {
-    const user = userEvent.setup();
-    renderPermissions({ permissions: [PERMISSION_PAGE], pagination: PAGINATION(1), menuOptions: [PERMISSION_PAGE] });
-
-    await user.click(screen.getByRole('button', { name: '新建权限' }));
-    expect(screen.getByRole('dialog')).toHaveTextContent('新建接口权限');
+  it('permissions 表单页标题使用统一术语（接口/页面/目录 + 权限）', () => {
+    render(<PermissionForm mode="create" menuOptions={[]} />);
+    // 默认类型 API → 标题「新建接口权限」；不使用旧术语「菜单项」
+    expect(screen.getByRole('heading', { name: '新建接口权限' })).toBeInTheDocument();
     expect(screen.queryByText('新建菜单项')).not.toBeInTheDocument();
   });
 });

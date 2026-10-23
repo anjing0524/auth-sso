@@ -1,19 +1,19 @@
 'use client';
 
 /**
- * 角色权限配置页（由 233 行对话框迁移而来）
+ * 角色权限配置页（v2：按应用/菜单目录分组 + 组级全选）
  *
- * 为什么不再用弹窗：345 项权限、三种类型分组、搜索 + 全选 + 逐项勾选 —— 弹窗内容远超
- * 「少量确认/短表单」的边界，滚动嵌套在弹窗里既难操作也看不清整体；页面化后可用整屏
- * 双列布局 + 固定保存条，符合"重内容用页面、轻确认用弹窗"的交互边界。
+ * 真实用户步骤量化（2026-10-23 用户反馈）：
+ * 旧交互 = 每个权限一次点击；给一个角色配齐某应用 45 项需 45 次点击 + 反复滚动/搜索。
+ * 新交互 = 组头一次全选（1 击）+ 保存（1 击）；支持「全选所有」「清空」、搜索、折叠。
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { toast } from 'sonner';
-import { Loader2, Save } from 'lucide-react';
+import { ChevronDown, ChevronRight, Loader2, Save } from 'lucide-react';
 
-import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { PageHeader } from '@/components/shared/page-header';
 import { SearchInput } from '@/components/shared/search-input';
@@ -26,6 +26,8 @@ interface PermissionItem {
   name: string;
   code: string;
   type: string;
+  parentId?: string | null;
+  clientId?: string | null;
 }
 
 export interface RolePermissionsPageProps {
@@ -33,16 +35,23 @@ export interface RolePermissionsPageProps {
 }
 
 const TYPE_LABELS: Record<string, string> = {
-  API: '接口权限',
-  PAGE: '页面权限',
-  DIRECTORY: '目录权限',
+  API: '接口',
+  PAGE: '页面',
+  DIRECTORY: '目录',
 };
-const TYPE_ORDER = ['API', 'PAGE', 'DIRECTORY'];
+
+interface Group {
+  key: string;
+  label: string;
+  hint: string;
+  items: Array<PermissionItem & { depth: number }>;
+}
 
 export default function RolePermissionsPage({ role }: RolePermissionsPageProps) {
   const [permissions, setPermissions] = useState<PermissionItem[]>([]);
   const [assignedIds, setAssignedIds] = useState<Set<string>>(new Set());
   const [keyword, setKeyword] = useState('');
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const { reportFailure } = useFieldFailure();
@@ -50,7 +59,6 @@ export default function RolePermissionsPage({ role }: RolePermissionsPageProps) 
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      // 权限总量可能远超单页上限（MAX_PAGE_SIZE=100）：按页拉全量，否则只能看到前 100 项。
       const collectAllPermissions = async (): Promise<PermissionItem[]> => {
         const firstRes = await fetch('/api/permissions?pageSize=100&page=1');
         const firstData = await firstRes.json();
@@ -83,20 +91,78 @@ export default function RolePermissionsPage({ role }: RolePermissionsPageProps) 
     queueMicrotask(() => { void loadData(); });
   }, [loadData]);
 
-  const filtered = useMemo(() => {
-    const kw = keyword.trim().toLowerCase();
-    if (!kw) return permissions;
-    return permissions.filter(
-      (p) => p.name.toLowerCase().includes(kw) || p.code.toLowerCase().includes(kw),
-    );
-  }, [permissions, keyword]);
+  /** 菜单权限按「根目录」分组并计算层级缩进；API 权限按应用（clientId）分组 */
+  const groups = useMemo<Group[]>(() => {
+    const byId = new Map(permissions.map((p) => [p.id, p]));
+    const rootOf = (p: PermissionItem): PermissionItem => {
+      let cur = p;
+      const guard = new Set<string>();
+      while (cur.parentId && byId.has(cur.parentId) && !guard.has(cur.id)) {
+        guard.add(cur.id);
+        cur = byId.get(cur.parentId)!;
+      }
+      return cur;
+    };
+    const depthOf = (p: PermissionItem): number => {
+      let d = 0;
+      let cur = p;
+      const guard = new Set<string>();
+      while (cur.parentId && byId.has(cur.parentId) && !guard.has(cur.id)) {
+        guard.add(cur.id);
+        cur = byId.get(cur.parentId)!;
+        d += 1;
+      }
+      return d;
+    };
 
-  const grouped = useMemo(() => {
-    return TYPE_ORDER.map((type) => ({
-      type,
-      items: filtered.filter((p) => p.type === type),
-    })).filter((g) => g.items.length > 0);
-  }, [filtered]);
+    const menuGroups = new Map<string, Group>();
+    for (const p of permissions.filter((x) => x.type !== 'API')) {
+      const root = rootOf(p);
+      const key = `menu:${root.id}`;
+      const g = menuGroups.get(key) ?? { key, label: `目录：${root.name}`, hint: '菜单/页面', items: [] };
+      g.items.push({ ...p, depth: p.id === root.id ? 0 : depthOf(p) });
+      menuGroups.set(key, g);
+    }
+    for (const g of menuGroups.values()) {
+      g.items.sort((a, b) => a.depth - b.depth || a.name.localeCompare(b.name, 'zh-Hans-CN'));
+    }
+
+    const apiGroups = new Map<string, Group>();
+    for (const p of permissions.filter((x) => x.type === 'API')) {
+      const app = p.clientId ?? 'unknown';
+      const key = `api:${app}`;
+      const g = apiGroups.get(key) ?? {
+        key,
+        label: app === 'portal' ? '应用：门户（portal）' : `应用：${app}`,
+        hint: '接口',
+        items: [],
+      };
+      g.items.push({ ...p, depth: 0 });
+      apiGroups.set(key, g);
+    }
+    for (const g of apiGroups.values()) {
+      g.items.sort((a, b) => a.code.localeCompare(b.code));
+    }
+
+    return [...apiGroups.values(), ...menuGroups.values()];
+  }, [permissions]);
+
+  const kw = keyword.trim().toLowerCase();
+  const visibleGroups = useMemo(
+    () =>
+      groups
+        .map((g) => ({
+          ...g,
+          items: kw
+            ? g.items.filter((p) => p.name.toLowerCase().includes(kw) || p.code.toLowerCase().includes(kw))
+            : g.items,
+        }))
+        .filter((g) => g.items.length > 0),
+    [groups, kw],
+  );
+
+  const allVisibleIds = useMemo(() => visibleGroups.flatMap((g) => g.items.map((p) => p.id)), [visibleGroups]);
+  const allVisibleSelected = allVisibleIds.length > 0 && allVisibleIds.every((id) => assignedIds.has(id));
 
   const toggle = (id: string) => {
     setAssignedIds((prev) => {
@@ -107,13 +173,22 @@ export default function RolePermissionsPage({ role }: RolePermissionsPageProps) 
     });
   };
 
-  const toggleGroup = (items: PermissionItem[], checked: boolean) => {
+  const setGroup = (ids: string[], checked: boolean) => {
     setAssignedIds((prev) => {
       const next = new Set(prev);
-      for (const item of items) {
-        if (checked) next.add(item.id);
-        else next.delete(item.id);
+      for (const id of ids) {
+        if (checked) next.add(id);
+        else next.delete(id);
       }
+      return next;
+    });
+  };
+
+  const toggleCollapse = (key: string) => {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
       return next;
     });
   };
@@ -139,15 +214,32 @@ export default function RolePermissionsPage({ role }: RolePermissionsPageProps) 
         backLabel="返回角色列表"
         icon="Key"
         title="配置功能权限"
-        description={`角色：${role.name}｜菜单可见性由页面/目录权限决定，保存后即时生效`}
+        description={`角色：${role.name}｜按应用/目录分组，组头一键全选`}
       />
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border/70 bg-card shadow-sm ring-0">
-        {/* 工具条：搜索 + 已选统计 + 保存（重内容页的主操作固定在顶部与底部都可触达） */}
-        <div className="flex flex-wrap items-center gap-3 border-b bg-muted/30 px-3 py-2">
+        <div className="flex flex-wrap items-center gap-2 border-b bg-muted/30 px-3 py-2">
           <SearchInput placeholder="搜索权限名称或编码..." value={keyword} onChange={setKeyword} />
           <Badge variant="secondary" className="h-6">{loading ? '加载中' : `共 ${permissions.length} 项`}</Badge>
-          <span className="text-xs text-muted-foreground">已选 <span className="font-semibold tabular-nums text-foreground">{assignedIds.size}</span> 项</span>
+          <span className="text-xs text-muted-foreground">
+            已选 <span className="font-semibold tabular-nums text-foreground">{assignedIds.size}</span> 项
+          </span>
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={role.isSystem || allVisibleIds.length === 0}
+            onClick={() => setGroup(allVisibleIds, !allVisibleSelected)}
+          >
+            {allVisibleSelected ? '取消全选' : '全选所有'}
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={role.isSystem || assignedIds.size === 0}
+            onClick={() => setAssignedIds(new Set())}
+          >
+            清空
+          </Button>
           <div className="ml-auto flex items-center gap-2">
             <Button variant="outline" size="sm" asChild>
               <Link href="/roles">取消</Link>
@@ -159,50 +251,72 @@ export default function RolePermissionsPage({ role }: RolePermissionsPageProps) 
           </div>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto p-3">
+        <div className="scrollbar-slim min-h-0 flex-1 overflow-y-auto p-3">
           {loading ? (
             <div className="flex items-center justify-center py-24">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
-          ) : grouped.length === 0 ? (
+          ) : visibleGroups.length === 0 ? (
             <p className="py-16 text-center text-sm text-muted-foreground">没有匹配的权限</p>
           ) : (
-            <div className="grid gap-3 xl:grid-cols-2">
-              {grouped.map((group) => {
-                const allChecked = group.items.every((p) => assignedIds.has(p.id));
+            <div className="space-y-2">
+              {visibleGroups.map((group) => {
+                const groupIds = group.items.map((p) => p.id);
+                const allChecked = groupIds.every((id) => assignedIds.has(id));
+                const isCollapsed = collapsed.has(group.key) && !kw;
                 return (
-                  <section key={group.type} className="overflow-hidden rounded-lg border border-border/60">
-                    <div className="flex items-center justify-between border-b bg-muted/20 px-3 py-1.5">
-                      <h2 className="text-xs font-semibold text-muted-foreground">
-                        {TYPE_LABELS[group.type] ?? group.type}（{group.items.length}）
-                      </h2>
+                  <section key={group.key} className="overflow-hidden rounded-md border border-border/60">
+                    <div className="flex items-center gap-2 bg-muted/20 px-2.5 py-1.5">
                       <button
                         type="button"
-                        className="text-xs font-medium text-primary hover:underline"
-                        onClick={() => toggleGroup(group.items, !allChecked)}
-                        disabled={role.isSystem}
+                        onClick={() => toggleCollapse(group.key)}
+                        className="inline-flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground"
+                        aria-label={isCollapsed ? '展开分组' : '折叠分组'}
                       >
-                        {allChecked ? '取消全选' : '全选'}
+                        {isCollapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                      </button>
+                      <Checkbox
+                        checked={allChecked}
+                        onCheckedChange={(v) => setGroup(groupIds, v === true)}
+                        disabled={role.isSystem}
+                        aria-label={`全选 ${group.label}`}
+                      />
+                      <span className="text-[13px] font-medium">{group.label}</span>
+                      <span className="text-[11px] text-muted-foreground">{group.hint} · 已选 {groupIds.filter((id) => assignedIds.has(id)).length}/{group.items.length}</span>
+                      <button
+                        type="button"
+                        className="ml-auto text-xs font-medium text-primary hover:underline disabled:opacity-50"
+                        disabled={role.isSystem}
+                        onClick={() => setGroup(groupIds, !allChecked)}
+                      >
+                        {allChecked ? '取消全选' : '全选本组'}
                       </button>
                     </div>
-                    <div>
-                      {group.items.map((p) => (
-                        <label
-                          key={p.id}
-                          className="flex cursor-pointer items-center gap-2.5 border-b border-border/40 px-3 py-1.5 last:border-b-0 hover:bg-muted/40"
-                        >
-                          <Checkbox
-                            checked={assignedIds.has(p.id)}
-                            onCheckedChange={() => toggle(p.id)}
-                            disabled={role.isSystem}
-                          />
-                          <span className="min-w-0 flex-1">
-                            <span className="block truncate text-[13px]">{p.name}</span>
-                            <span className="block truncate font-mono text-[11px] text-muted-foreground">{p.code}</span>
-                          </span>
-                        </label>
-                      ))}
-                    </div>
+                    {!isCollapsed && (
+                      <div className="grid xl:grid-cols-2">
+                        {group.items.map((p) => (
+                          <label
+                            key={p.id}
+                            className="flex cursor-pointer items-center gap-2.5 border-b border-border/30 px-3 py-1.5 last:border-b-0 hover:bg-muted/40"
+                          >
+                            <Checkbox
+                              checked={assignedIds.has(p.id)}
+                              onCheckedChange={() => toggle(p.id)}
+                              disabled={role.isSystem}
+                            />
+                            <span className="min-w-0 flex-1" style={{ paddingLeft: p.depth * 12 }}>
+                              <span className="flex items-center gap-1.5">
+                                <span className="truncate text-[13px]">{p.name}</span>
+                                <span className="shrink-0 rounded bg-muted px-1 text-[10px] text-muted-foreground">
+                                  {TYPE_LABELS[p.type] ?? p.type}
+                                </span>
+                              </span>
+                              <span className="block truncate font-mono text-[11px] text-muted-foreground">{p.code}</span>
+                            </span>
+                          </label>
+                        ))}
+                      </div>
+                    )}
                   </section>
                 );
               })}

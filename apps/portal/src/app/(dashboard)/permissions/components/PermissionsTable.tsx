@@ -4,14 +4,14 @@
  * 权限列表交互组件 — Tab 过滤、搜索、增删改弹窗
  * 写操作通过 Server Actions 直调
  */
-import React, { useEffect, useMemo, useState, useTransition } from 'react';
+import React, { useEffect, useState, useTransition } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import {
-  ShieldCheck, Plus, Edit, Trash2, Globe, Code, Folder,
+  Plus, Edit, Trash2, Globe, Code, Folder,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import {
   TableCell, TableRow,
@@ -20,17 +20,12 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';
-import { Checkbox } from '@/components/ui/checkbox';
-import { ICON_MAP } from '@/lib/icon-map';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DataTable } from '@/components/shared/data-table';
 import { EmptyState } from '@/components/shared/empty-state';
 import { TablePagination } from '@/components/shared/table-pagination';
 import { enableStatus } from '@/lib/status-label';
-import { createPermissionAction, updatePermissionAction, deletePermissionAction } from '../actions';
 import { useFieldFailure } from '@/hooks/use-field-failure';
-import { FieldError } from '@/components/shared/field-error';
+import { deletePermissionAction } from '../actions';
 
 import { SearchInput } from '@/components/shared/search-input';
 import { TableToolbar } from '@/components/shared/table-toolbar';
@@ -109,64 +104,13 @@ export default function PermissionsTable({ permissions, pagination, activeTab, i
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 仅关键词变化时防抖；URL 由 buildHref 现算
   }, [keyword]);
 
-  // 弹窗
-  const [isAddOpen, setIsAddOpen] = useState(false);
-  const [isEditOpen, setIsEditOpen] = useState(false);
+  // 删除确认（新建/编辑已页面化：弹窗不允许滚动）
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [selected, setSelected] = useState<PermissionRow | null>(null);
   /** 删除影响面（打开确认弹窗时按需读取，不缓存） */
   const [deleteImpact, setDeleteImpact] = useState<{ descendants: number; roles: number; users: number } | null>(null);
   const [impactLoading, setImpactLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({
-    name: '',
-    code: '',
-    type: 'API' as string,
-    description: '',
-    path: '',
-    icon: '',
-    visible: true,
-    parentId: '' as string,
-    sort: 0,
-  });
-  const emptyForm = { name: '', code: '', type: 'API' as string, description: '', path: '', icon: '', visible: true, parentId: '', sort: 0 };
-  const isMenu = form.type !== 'API';
-  /**
-   * 编辑菜单时的父级候选排除集：自身 + 自身后代（H-19 环检测的 UI 侧防线）。
-   *
-   * 服务端已拒绝成环，但"能选到必然报错的选项"本身就是缺陷；这里用 parentId
-   * 关系从选中节点向下 BFS（数据来自 `menuOptions` 全量目录/页面）。
-   */
-  const excludedParentIds = useMemo(() => {
-    const excluded = new Set<string>();
-    if (!selected) return excluded;
-    excluded.add(selected.id);
-    const childrenOf = new Map<string, string[]>();
-    for (const m of menuOptions) {
-      if (!m.parentId) continue;
-      const list = childrenOf.get(m.parentId) ?? [];
-      list.push(m.id);
-      childrenOf.set(m.parentId, list);
-    }
-    const queue = [selected.id];
-    while (queue.length > 0) {
-      const current = queue.pop()!;
-      for (const childId of childrenOf.get(current) ?? []) {
-        if (!excluded.has(childId)) {
-          excluded.add(childId);
-          queue.push(childId);
-        }
-      }
-    }
-    return excluded;
-  }, [selected, menuOptions]);
-  /** 具体错误码（如 PERMISSION_ALREADY_EXISTS）落到对应输入框（#92） */
-  const { fieldError, reportFailure, clearFailure } = useFieldFailure(['code']);
-
-  /** 对话框统一改为 `<form>` 提交（U-G06）：Enter 与点击主按钮行为一致 */
-  const submitCreate = (e: React.FormEvent) => { e.preventDefault(); void handleCreate(); };
-  const submitUpdate = (e: React.FormEvent) => { e.preventDefault(); void handleUpdate(); };
-
+  const { reportFailure } = useFieldFailure();
   const handleTabChange = (tab: string) => {
     startTransition(() => router.push(buildHref(1, keyword, tab)));
   };
@@ -175,61 +119,6 @@ export default function PermissionsTable({ permissions, pagination, activeTab, i
     setKeyword(value);
   };
 
-  const openEdit = (p: PermissionRow) => {
-    setSelected(p);
-    setForm({
-      name: p.name,
-      code: p.code,
-      type: p.type,
-      description: p.description ?? '',
-      path: p.path ?? '',
-      icon: p.icon ?? '',
-      visible: p.visible ?? true,
-      parentId: p.parentId ?? '',
-      sort: p.sort ?? 0,
-    });
-    setIsEditOpen(true);
-  };
-
-  /** 菜单类型（DIRECTORY/PAGE）需要树/路由/图标/排序/显隐；API 只需名称+编码 */
-  const menuPayload = () => ({
-    path: form.path || undefined,
-    icon: form.icon || undefined,
-    visible: form.visible,
-    parentId: form.parentId || null,
-    sort: Number(form.sort) || 0,
-  });
-
-  const handleCreate = async () => {
-    if (!form.name || !form.code) { toast.error('请填写完整信息'); return; }
-    if (form.type === 'PAGE' && !form.path.trim()) { toast.error('页面类型必须填写路由路径'); return; }
-    clearFailure();
-    setSaving(true);
-    const r = await createPermissionAction(
-      form.type === 'API'
-        ? { name: form.name, code: form.code, type: 'API', description: form.description || undefined }
-        : { name: form.name, code: form.code, type: form.type as 'DIRECTORY' | 'PAGE', description: form.description || undefined, ...menuPayload() },
-    );
-    setSaving(false);
-    if (r.success) { toast.success(r.message); setIsAddOpen(false); setForm(emptyForm); router.refresh(); }
-    else { reportFailure(r); }
-  };
-
-  const handleUpdate = async () => {
-    if (!selected) return;
-    clearFailure();
-    setSaving(true);
-    // 刻意不提交 code：编码创建后不可变更（D-PRM-U / H-19），提交反而会被服务端拒绝。
-    const r = await updatePermissionAction(
-      selected.id,
-      form.type === 'API'
-        ? { name: form.name, type: 'API', description: form.description || null }
-        : { name: form.name, type: form.type, description: form.description || null, ...menuPayload() },
-    );
-    setSaving(false);
-    if (r.success) { toast.success(r.message); setIsEditOpen(false); router.refresh(); }
-    else { reportFailure(r); }
-  };
 
   const openDeleteDialog = (p: PermissionRow) => {
     setSelected(p);
@@ -265,8 +154,8 @@ export default function PermissionsTable({ permissions, pagination, activeTab, i
       left={<SearchInput placeholder="搜索权限名称或编码..." value={keyword} onChange={handleSearch} />}
       right={
         <PermissionGuard permission={PERMISSION_PERMISSIONS.CREATE}>
-          <Button onClick={() => { setForm(emptyForm); setIsAddOpen(true); }}>
-            <Plus className="h-4 w-4" /> 新建权限
+          <Button asChild>
+            <Link href="/permissions/new"><Plus className="h-4 w-4" /> 新建权限</Link>
           </Button>
         </PermissionGuard>
       }
@@ -317,8 +206,8 @@ export default function PermissionsTable({ permissions, pagination, activeTab, i
       <TableCell className="text-right">
         <div className="flex items-center justify-end gap-0.5">
           <PermissionGuard permission={PERMISSION_PERMISSIONS.UPDATE}>
-            <Button variant="ghost" size="sm" className="h-8 gap-1.5 px-2" aria-label={`编辑权限 ${p.name}`} title="编辑" onClick={() => openEdit(p)}>
-              <Edit className="h-4 w-4" /><span>编辑</span>
+            <Button asChild variant="ghost" size="sm" className="h-8 gap-1.5 px-2" aria-label={`编辑权限 ${p.name}`} title="编辑">
+              <Link href={`/permissions/${p.id}/edit`}><Edit className="h-4 w-4" /><span>编辑</span></Link>
             </Button>
           </PermissionGuard>
           <PermissionGuard permission={PERMISSION_PERMISSIONS.DELETE}>
@@ -341,7 +230,7 @@ export default function PermissionsTable({ permissions, pagination, activeTab, i
   return (
     <>
       <div className="flex shrink-0 flex-wrap items-center gap-3">
-        <h1 className="text-[15px] font-semibold tracking-tight text-foreground">权限管理</h1>
+        <h1 className="type-section-title text-foreground">权限管理</h1>
         {tabsBar}
       </div>
       <div className="flex min-h-0 flex-1 flex-col">
@@ -363,7 +252,7 @@ export default function PermissionsTable({ permissions, pagination, activeTab, i
               icon="ShieldCheck"
               title="暂无权限"
               description="新增权限点以控制功能访问"
-              action={{ label: '新建权限', onClick: () => { setForm(emptyForm); setIsAddOpen(true); } }}
+              action={{ label: '新建权限', href: '/permissions/new' }}
             />
           )
         }
@@ -378,152 +267,6 @@ export default function PermissionsTable({ permissions, pagination, activeTab, i
         onPageChange={(next) => startTransition(() => router.push(buildHref(next)))}
       />
       </div>
-
-      {/* 新增对话框 */}
-      <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <ShieldCheck className="h-5 w-5 text-primary" /> 新建{TYPE_LABELS[form.type] ?? ''}权限
-            </DialogTitle>
-          </DialogHeader>
-          <form onSubmit={submitCreate}>
-            <div className="space-y-4 py-4">
-              <div className="space-y-2"><Label htmlFor="perm-name">权限名称</Label><Input id="perm-name" value={form.name} maxLength={100} onChange={e => setForm({...form, name: e.target.value})} placeholder="用户列表" /></div>
-              <div className="space-y-2"><Label htmlFor="perm-desc">描述（可选）</Label><Input id="perm-desc" value={form.description} maxLength={500} onChange={e => setForm({...form, description: e.target.value})} placeholder="用于说明该权限的用途" /></div>
-              <div className="space-y-2"><Label htmlFor="perm-code">权限编码</Label><Input id="perm-code" value={form.code} maxLength={150} aria-invalid={fieldError?.field === 'code'} onChange={e => setForm({...form, code: e.target.value})} placeholder="user:list" /></div>
-              <FieldError failure={fieldError} field="code" />
-              {isMenu && (
-                <>
-                  <div className="space-y-2">
-                    <Label htmlFor="perm-parent">父级权限</Label>
-                    <Select value={form.parentId || 'ROOT'} onValueChange={(v) => setForm({ ...form, parentId: v === 'ROOT' ? '' : v })}>
-                      <SelectTrigger id="perm-parent"><SelectValue>{menuOptions.find((m) => m.id === form.parentId)?.name ?? '顶层权限'}</SelectValue></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="ROOT">顶层权限</SelectItem>
-                        {menuOptions.filter((m) => m.id !== selected?.id).map((m) => (
-                          <SelectItem key={m.id} value={m.id}>{m.name}{m.type === 'DIRECTORY' ? '（目录）' : ''}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="perm-path">路由路径{form.type === 'PAGE' ? '（必填）' : '（可选）'}</Label>
-                    <Input id="perm-path" value={form.path} maxLength={200} onChange={e => setForm({ ...form, path: e.target.value })} placeholder="/users" />
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-2">
-                      <Label htmlFor="perm-icon">图标</Label>
-                      <Select value={form.icon || 'LayoutGrid'} onValueChange={(v) => setForm({ ...form, icon: v })}>
-                        <SelectTrigger id="perm-icon"><SelectValue>{form.icon || 'LayoutGrid'}</SelectValue></SelectTrigger>
-                        <SelectContent>
-                          {Object.keys(ICON_MAP).map((name) => (<SelectItem key={name} value={name}>{name}</SelectItem>))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="perm-sort">排序</Label>
-                      <Input id="perm-sort" type="number" value={form.sort} onChange={e => setForm({ ...form, sort: Number(e.target.value) })} />
-                    </div>
-                  </div>
-                  <label className="flex items-center gap-2 text-sm">
-                    <Checkbox checked={form.visible} onCheckedChange={(v) => setForm({ ...form, visible: v === true })} />
-                    在侧边栏显示
-                  </label>
-                </>
-              )}
-              <div className="space-y-2">
-                <Label htmlFor="perm-type">类型</Label>
-                <Select value={form.type} onValueChange={v => setForm({...form, type: v})}>
-                  <SelectTrigger id="perm-type"><SelectValue>{TYPE_LABELS[form.type] ?? form.type}</SelectValue></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="API">接口（API）</SelectItem>
-                    <SelectItem value="PAGE">页面（PAGE）</SelectItem>
-                    <SelectItem value="DIRECTORY">目录（DIRECTORY）</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setIsAddOpen(false)}>取消</Button>
-              <Button type="submit" disabled={saving}>{saving ? '创建中...' : '创建'}</Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-
-      {/* 编辑对话框 */}
-      <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>编辑{TYPE_LABELS[form.type] ?? ''}权限</DialogTitle>
-          </DialogHeader>
-          <form onSubmit={submitUpdate}>
-            <div className="space-y-4 py-4">
-              <div className="space-y-2"><Label htmlFor="perm-edit-name">权限名称</Label><Input id="perm-edit-name" value={form.name} onChange={e => setForm({...form, name: e.target.value})} /></div>
-              {/* 编码创建后不可变更（D-PRM-U / H-19）：只读展示，避免"改得动但保存被拒" */}
-              <div className="space-y-2">
-                <span className="text-sm font-medium">权限编码（创建后不可变更）</span>
-                <code className="block rounded-md bg-muted px-2 py-2 text-xs text-muted-foreground">{form.code}</code>
-              </div>
-              {isMenu && (
-                <>
-                  <div className="space-y-2">
-                    <Label htmlFor="perm-edit-parent">父级权限</Label>
-                    <Select value={form.parentId || 'ROOT'} onValueChange={(v) => setForm({ ...form, parentId: v === 'ROOT' ? '' : v })}>
-                      <SelectTrigger id="perm-edit-parent"><SelectValue>{menuOptions.find((m) => m.id === form.parentId)?.name ?? '顶层权限'}</SelectValue></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="ROOT">顶层权限</SelectItem>
-                        {menuOptions.filter((m) => !excludedParentIds.has(m.id)).map((m) => (
-                          <SelectItem key={m.id} value={m.id}>{m.name}{m.type === 'DIRECTORY' ? '（目录）' : ''}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="perm-edit-path">路由路径{form.type === 'PAGE' ? '（必填）' : '（可选）'}</Label>
-                    <Input id="perm-edit-path" value={form.path} maxLength={200} onChange={e => setForm({ ...form, path: e.target.value })} placeholder="/users" />
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-2">
-                      <Label htmlFor="perm-edit-icon">图标</Label>
-                      <Select value={form.icon || 'LayoutGrid'} onValueChange={(v) => setForm({ ...form, icon: v })}>
-                        <SelectTrigger id="perm-edit-icon"><SelectValue>{form.icon || 'LayoutGrid'}</SelectValue></SelectTrigger>
-                        <SelectContent>
-                          {Object.keys(ICON_MAP).map((name) => (<SelectItem key={name} value={name}>{name}</SelectItem>))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="perm-edit-sort">排序</Label>
-                      <Input id="perm-edit-sort" type="number" value={form.sort} onChange={e => setForm({ ...form, sort: Number(e.target.value) })} />
-                    </div>
-                  </div>
-                  <label className="flex items-center gap-2 text-sm">
-                    <Checkbox checked={form.visible} onCheckedChange={(v) => setForm({ ...form, visible: v === true })} />
-                    在侧边栏显示
-                  </label>
-                </>
-              )}
-              <div className="space-y-2">
-                <Label htmlFor="perm-edit-type">类型</Label>
-                <Select value={form.type} onValueChange={v => setForm({...form, type: v})}>
-                  <SelectTrigger id="perm-edit-type"><SelectValue>{TYPE_LABELS[form.type] ?? form.type}</SelectValue></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="API">接口（API）</SelectItem>
-                    <SelectItem value="PAGE">页面（PAGE）</SelectItem>
-                    <SelectItem value="DIRECTORY">目录（DIRECTORY）</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setIsEditOpen(false)}>取消</Button>
-              <Button type="submit" disabled={saving}>{saving ? '保存中...' : '保存'}</Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
 
       {/* 删除确认 */}
       <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>

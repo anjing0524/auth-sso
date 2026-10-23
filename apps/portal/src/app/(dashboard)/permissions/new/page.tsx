@@ -1,0 +1,26 @@
+/**
+ * 新建权限页（由弹窗改为页面：弹窗不允许滚动，8 字段表单在 600px 视口放不下）
+ */
+import { connection } from 'next/server';
+import { PERMISSION_PERMISSIONS } from '@auth-sso/contracts';
+
+import { PermissionGate } from '@/components/layout/permission-gate';
+import { getPermissions } from '../data';
+import PermissionForm from '../permission-form';
+
+export const instant = false;
+export const metadata = { title: '新建权限 | Auth-SSO' };
+
+export default async function NewPermissionPage() {
+  await connection();
+  const all = await getPermissions();
+  const menuOptions = all
+    .filter((p) => p.type === 'DIRECTORY' || p.type === 'PAGE')
+    .map((p) => ({ id: p.id, name: p.name, type: p.type, parentId: p.parentId ?? null }));
+
+  return (
+    <PermissionGate options={{ permissions: [PERMISSION_PERMISSIONS.CREATE] }}>
+      <PermissionForm mode="create" menuOptions={menuOptions} />
+    </PermissionGate>
+  );
+}

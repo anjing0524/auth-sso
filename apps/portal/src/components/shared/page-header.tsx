@@ -52,9 +52,9 @@ export function PageHeader({
             <DynamicIcon name={icon} className="h-4 w-4" />
           </span>
         ) : null}
-        <h1 className="shrink-0 text-[17px] font-semibold leading-6 tracking-tight text-foreground">{title}</h1>
+        <h1 className="type-page-title shrink-0 text-foreground">{title}</h1>
         {description ? (
-          <p className="hidden min-w-0 truncate text-xs text-muted-foreground lg:block">
+          <p className="type-meta hidden min-w-0 truncate lg:block">
             <span className="mr-1.5 text-border">·</span>{description}
           </p>
         ) : null}

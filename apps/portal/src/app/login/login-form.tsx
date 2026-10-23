@@ -99,26 +99,26 @@ export default function LoginForm({ sessionId, initialError }: LoginFormProps) {
   const formattedError = getErrorMessage(error);
 
   return (
-    <div className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-[#04122B] p-4">
+    <div className="relative flex min-h-[100svh] flex-col items-center justify-center overflow-hidden bg-[#04122B] px-4 py-5">
       <LoginBackground />
       <div className="relative z-10 flex w-full flex-col items-center">
-      <div className="mb-8 flex flex-col items-center gap-2 text-white">
-        <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-lg shadow-primary/20">
-          <ShieldCheck className="h-7 w-7" />
+      <div className="mb-3 flex flex-col items-center gap-1 text-white">
+        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-lg shadow-primary/20">
+          <ShieldCheck className="h-5 w-5" />
         </div>
-        <h1 className="text-2xl font-bold tracking-tight text-white">Auth-SSO Portal</h1>
+        <h1 className="text-lg font-semibold tracking-tight text-white">Auth-SSO Portal</h1>
       </div>
 
       <Card className="w-full max-w-[400px] overflow-hidden border-none shadow-2xl shadow-black/40 ring-1 ring-white/20">
-        <CardHeader className="space-y-1 border-b bg-muted/30 py-6 text-center">
-          <CardTitle className="text-2xl">企业统一身份认证</CardTitle>
+        <CardHeader className="space-y-0.5 border-b bg-muted/30 py-4 text-center">
+          <CardTitle className="text-xl">企业统一身份认证</CardTitle>
           <CardDescription>
             {sessionId ? '正在完成 OAuth 授权登录' : '使用您的企业账号登录管理门户'}
           </CardDescription>
         </CardHeader>
 
         <form onSubmit={handleSubmit}>
-          <CardContent className="pt-6 space-y-4">
+          <CardContent className="space-y-3 pt-4">
             {formattedError ? (
               <Alert variant="destructive" className="animate-in head-shake duration-300">
                 <AlertCircle className="h-4 w-4" />
@@ -138,7 +138,7 @@ export default function LoginForm({ sessionId, initialError }: LoginFormProps) {
                 value={formData.email}
                 onChange={(e) => setFormData((prev) => ({ ...prev, email: e.target.value }))}
                 disabled={isLoading}
-                className="h-12"
+                className="h-10"
               />
             </div>
 
@@ -153,7 +153,7 @@ export default function LoginForm({ sessionId, initialError }: LoginFormProps) {
                 value={formData.password}
                 onChange={(e) => setFormData((prev) => ({ ...prev, password: e.target.value }))}
                 disabled={isLoading}
-                className="h-12"
+                className="h-10"
               />
             </div>
           </CardContent>
@@ -161,7 +161,7 @@ export default function LoginForm({ sessionId, initialError }: LoginFormProps) {
           <CardFooter className="mt-6 flex flex-col gap-4 border-t bg-muted/30 py-4">
             <Button
               type="submit"
-              className="h-12 w-full text-base font-medium transition-all"
+              className="h-10 w-full text-sm font-medium transition-all"
               disabled={isLoading}
             >
               {isLoading ? (
@@ -184,7 +184,7 @@ export default function LoginForm({ sessionId, initialError }: LoginFormProps) {
         </form>
       </Card>
 
-      <p className="mt-8 text-xs text-white/45">
+      <p className="mt-4 text-xs text-white/45">
         登录遇到问题请联系企业 IT 管理员
       </p>
       </div>

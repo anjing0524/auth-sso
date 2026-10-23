@@ -300,3 +300,19 @@
     @apply font-sans;
   }
 }
+
+/* ── 语义字体层级（v3.7，2026-10-23）─────────────────────────────
+ * 目的：固定"什么层级用什么字号/字重/行高"，避免每页各写一套 text-*。
+ * 组件优先引用这些类，而不是散落的 text-[13px]/font-semibold。 */
+.type-page-title { font-size: 17px; line-height: 24px; font-weight: 600; letter-spacing: -0.01em; }
+.type-section-title { font-size: 15px; line-height: 22px; font-weight: 600; letter-spacing: -0.01em; }
+.type-card-title { font-size: 13px; line-height: 20px; font-weight: 600; }
+.type-body { font-size: 13px; line-height: 20px; }
+.type-meta { font-size: 11px; line-height: 16px; color: var(--muted-foreground); }
+.type-table-head { font-size: 11px; line-height: 16px; font-weight: 500; color: var(--muted-foreground); }
+
+/* 细滚动条（v3.7）：表格/权限页内部滚动可见但不抢视觉；macOS overlay 滚动条不受影响 */
+.scrollbar-slim { scrollbar-width: thin; scrollbar-color: color-mix(in oklab, var(--color-border) 70%, transparent) transparent; }
+.scrollbar-slim::-webkit-scrollbar { width: 6px; height: 6px; }
+.scrollbar-slim::-webkit-scrollbar-thumb { border-radius: 999px; background: color-mix(in oklab, var(--color-border) 80%, transparent); }
+.scrollbar-slim::-webkit-scrollbar-track { background: transparent; }

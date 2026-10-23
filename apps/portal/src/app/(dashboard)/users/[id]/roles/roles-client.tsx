@@ -152,7 +152,7 @@ export default function UserRolesPage({ user }: UserRolesPageProps) {
           </div>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto p-3">
+        <div className="scrollbar-slim min-h-0 flex-1 overflow-y-auto p-3">
           {loading ? (
             <div className="flex items-center justify-center py-24">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />

@@ -67,7 +67,7 @@ export function DataTable<T>({
         {/* 窄屏下宽表在卡片内横向滚动：根因修复——此前表格没有滚动容器，
             会把 flex 父级撑宽（实测 390px 视口下 document.scrollWidth=557）。 */}
         {/* 唯一滚动容器：横向 + 纵向都由这里承担；Table 内层不再自建 overflow（否则 sticky 表头失效）。 */}
-        <div className={`${maxHeightClass} w-full overflow-auto`}>
+        <div className={`${maxHeightClass} scrollbar-slim w-full overflow-auto`}>
         <Table containerClassName="overflow-visible">
           <TableHeader className="[&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:bg-card">
             <TableRow>

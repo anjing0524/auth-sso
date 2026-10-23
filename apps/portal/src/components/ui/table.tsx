@@ -27,7 +27,7 @@ function Table({
     >
       <table
         data-slot="table"
-        className={cn("w-full caption-bottom text-sm", className)}
+        className={cn("w-full caption-bottom text-[13px]", className)}
         {...props}
       />
     </div>
@@ -86,7 +86,7 @@ function TableHead({ className, ...props }: React.ComponentProps<"th">) {
       data-slot="table-head"
       className={cn(
         // 中文不适合 uppercase/超宽字距（此前 10px + tracking-widest 让"角色名称"变成散字）
-        "h-8 px-3 text-left align-middle text-[11px] font-medium whitespace-nowrap text-muted-foreground [&:has([role=checkbox])]:pr-0",
+        "type-table-head h-8 px-3 text-left align-middle whitespace-nowrap [&:has([role=checkbox])]:pr-0",
         className
       )}
       {...props}

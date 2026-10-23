@@ -74,6 +74,12 @@ export default function DashboardLayout({
       if (segments[0] === 'users' && segments[2] === 'roles') {
         crumbs.push({ title: '分配角色', url: pathname });
       }
+      if (segments[0] === 'permissions' && segments[1] === 'new') {
+        crumbs.push({ title: '新建权限', url: pathname });
+      }
+      if (segments[0] === 'permissions' && segments[2] === 'edit') {
+        crumbs.push({ title: '编辑权限', url: pathname });
+      }
     }
 
     return crumbs;

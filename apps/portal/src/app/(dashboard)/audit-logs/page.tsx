@@ -123,7 +123,7 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
       {tab === 'login' ? (
         <Card className="gap-0 overflow-hidden rounded-lg border border-border/70 py-0 shadow-sm ring-0">
           <CardContent className="p-0">
-            <div className="max-h-[calc(100svh-19rem)] overflow-auto">
+            <div className="scrollbar-slim max-h-[calc(100svh-19rem)] overflow-auto">
             <Table containerClassName="overflow-visible">
               <TableHeader className="[&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:bg-card">
                 <TableRow>
