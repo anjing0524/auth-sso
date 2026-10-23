@@ -13,7 +13,6 @@ import UserFilters from './components/UserFilters';
 import CreateUserDialog from './components/CreateUserDialog';
 import UserTable from './components/UserTable';
 
-import { PageHeader } from '@/components/shared/page-header';
 import { TableToolbar } from '@/components/shared/table-toolbar';
 
 /**
@@ -40,7 +39,7 @@ export default async function UsersPage({ searchParams }: PageProps) {
     ? (params.status as string)
     : 'ALL';
   const page = clampPage(params.page);
-  const pageSize = 15;
+  const pageSize = 20;
 
   // 鉴权由 users/layout.tsx 负责（requirePermission(['user:list'])），此处只取身份信息。
   const identity = await resolveIdentity();
@@ -65,13 +64,7 @@ export default async function UsersPage({ searchParams }: PageProps) {
   const isFiltered = keyword.length > 0 || status !== 'ALL';
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4">
-      <PageHeader
-        icon="Users"
-        title="用户管理"
-        description="查看和管理系统内的所有用户账户及权限。"
-      />
-
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
       <UserTable
         users={users}
         pagination={pagination}
@@ -79,7 +72,12 @@ export default async function UsersPage({ searchParams }: PageProps) {
         clearHref="/users"
         filters={
           <TableToolbar
-            left={<UserFilters key={keyword} initialKeyword={keyword} initialStatus={status} />}
+            left={
+              <div className="flex min-w-0 items-center gap-3">
+                <h1 className="shrink-0 text-[15px] font-semibold tracking-tight text-foreground">用户管理</h1>
+                <UserFilters key={keyword} initialKeyword={keyword} initialStatus={status} />
+              </div>
+            }
             right={<CreateUserDialog departments={departments} />}
           />
         }

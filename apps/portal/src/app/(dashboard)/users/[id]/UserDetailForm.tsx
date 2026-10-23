@@ -10,6 +10,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import {
@@ -25,7 +26,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription, DialogTrigger,
 } from '@/components/ui/dialog';
-import AssignRoleDialog from '../components/AssignRoleDialog';
 import { USER_PERMISSIONS } from '@auth-sso/contracts';
 import { updateUserAction, deleteUserAction, unlockUserAction } from '../actions';
 
@@ -53,7 +53,6 @@ export default function UserDetailForm({ id, initialUser: serverUser, canUpdate 
   // 失败处置只有一个入口（本表单不渲染 <FieldError> ⇒ 传空字段 ⇒ 一律 toast）
   const { reportFailure } = useFieldFailure();
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
-  const [isRoleOpen, setIsRoleOpen] = useState(false);
 
   // 用户不存在时：在 useEffect 中执行副作用（toast + 导航），避免在 render 中直接调用
   // React StrictMode 下 render 可能双触发，副作用统一收敛至 Effect 中是安全的
@@ -144,12 +143,10 @@ export default function UserDetailForm({ id, initialUser: serverUser, canUpdate 
             <ResetPasswordDialog userId={id} userName={form.name} />
           </PermissionGuard>
           <PermissionGuard permission={USER_PERMISSIONS.ASSIGN_ROLE}>
-            <Button
-              variant="outline"
-              className="rounded-lg px-6"
-              onClick={() => setIsRoleOpen(true)}
-            >
-              <Shield className="mr-2 h-4 w-4" /> 分配角色
+            <Button asChild variant="outline" size="sm">
+              <Link href={`/users/${id}/roles`}>
+                <Shield className="mr-2 h-4 w-4" /> 分配角色
+              </Link>
             </Button>
           </PermissionGuard>
           {(serverUser.status as string) === 'LOCKED' && (
@@ -279,18 +276,6 @@ export default function UserDetailForm({ id, initialUser: serverUser, canUpdate 
           </Button>
         </div>
       )}
-
-      {/* 角色分配对话框 */}
-      <AssignRoleDialog
-        open={isRoleOpen}
-        onOpenChange={setIsRoleOpen}
-        user={{
-          id,
-          name: form.name,
-          deptId: (serverUser.deptId as string) || null,
-          deptName: (serverUser.deptName as string) || null,
-        }}
-      />
     </div>
   );
 }

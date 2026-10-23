@@ -5,7 +5,7 @@
  * 采用 React 19 useTransition 绑定 Server Action Controller，安全下沉领域逻辑
  */
 
-import { useState, useOptimistic, useTransition } from 'react';
+import { useOptimistic, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
@@ -17,7 +17,6 @@ import {
   Shield,
   Building
 } from 'lucide-react';
-import AssignRoleDialog from './AssignRoleDialog';
 
 import {
   Table,
@@ -135,9 +134,7 @@ export default function UserTable({ users, pagination, filters, isFiltered = fal
   const searchParams = useSearchParams();
 
   // 角色分配对话框状态
-  const [roleDialogOpen, setRoleDialogOpen] = useState(false);
   const { reportFailure } = useFieldFailure();
-  const [selectedUser, setSelectedUser] = useState<User | null>(null);
 
   // useOptimistic: 状态切换立即反映在 UI，失败自动回退
   const [optimisticUsers, setOptimisticUser] = useOptimistic(
@@ -232,14 +229,14 @@ export default function UserTable({ users, pagination, filters, isFiltered = fal
           </PermissionGuard>
           <PermissionGuard permission={USER_PERMISSIONS.ASSIGN_ROLE}>
             <Button
+              asChild
               variant="ghost"
               size="sm"
               className="h-8 gap-1.5 px-2"
-              aria-label="分配角色"
+              aria-label={`分配角色 ${user.name}`}
               title="分配角色"
-              onClick={() => { setSelectedUser(user); setRoleDialogOpen(true); }}
             >
-              <Shield className="h-4 w-4" /><span>分配角色</span>
+              <Link href={`/users/${user.id}/roles`}><Shield className="h-4 w-4" /><span>分配角色</span></Link>
             </Button>
           </PermissionGuard>
           <PermissionGuard permission={USER_PERMISSIONS.UPDATE}>
@@ -293,19 +290,5 @@ export default function UserTable({ users, pagination, filters, isFiltered = fal
       onPageChange={handlePageChange}
     />
     </div>
-
-    {/* 角色分配对话框 */}
-    {selectedUser && (
-      <AssignRoleDialog
-        open={roleDialogOpen}
-        onOpenChange={(open) => { setRoleDialogOpen(open); if (!open) setSelectedUser(null); }}
-        user={{
-          id: selectedUser.id,
-          name: selectedUser.name,
-          deptId: selectedUser.deptId,
-          deptName: selectedUser.deptName,
-        }}
-      />
-    )}
   </>);
 }

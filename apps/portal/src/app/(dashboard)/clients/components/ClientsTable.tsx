@@ -65,14 +65,20 @@ export default function ClientsTable({ clients, pagination, initialKeyword, isFi
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleSearch = useCallback((value: string) => {
     setKeyword(value);
-    const params = new URLSearchParams();
-    if (value) params.set('keyword', value);
-    startTransition(() => {
-      router.push(`/clients${params.toString() ? `?${params.toString()}` : ''}`);
-    });
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(() => {
+      const params = new URLSearchParams();
+      if (value.trim()) params.set('keyword', value.trim());
+      params.set('page', '1');
+      startTransition(() => {
+        router.push(`/clients?${params.toString()}`);
+      });
+    }, 300);
   }, [router]);
+  useEffect(() => () => { if (searchTimer.current) clearTimeout(searchTimer.current); }, []);
 
   const timerRef = useRef<ReturnType<typeof setTimeout>>(null);
 
@@ -145,7 +151,12 @@ export default function ClientsTable({ clients, pagination, initialKeyword, isFi
 
   const cardHeader = (
     <TableToolbar
-      left={<SearchInput placeholder="搜索应用名称或 Client ID..." value={keyword} onChange={handleSearch} />}
+      left={
+        <div className="flex min-w-0 items-center gap-3">
+          <h1 className="shrink-0 text-[15px] font-semibold tracking-tight text-foreground">应用管理</h1>
+          <SearchInput placeholder="搜索应用名称或 Client ID..." value={keyword} onChange={handleSearch} busy={isPending} />
+        </div>
+      }
       right={
         <>
           <div className="flex items-center gap-3 text-xs text-muted-foreground">

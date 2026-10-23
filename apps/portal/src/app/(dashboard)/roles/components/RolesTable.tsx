@@ -6,7 +6,8 @@
  *
  * v3.2: dataScopeType 已替换为 deptId，新建/编辑角色使用部门选择器
  */
-import React, { useState, useTransition } from 'react';
+import React, { useEffect, useRef, useState, useTransition } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import {
@@ -25,7 +26,6 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DataTable } from '@/components/shared/data-table';
 import { EmptyState } from '@/components/shared/empty-state';
-import RolePermissionsDialog from './RolePermissionsDialog';
 import { TablePagination } from '@/components/shared/table-pagination';
 import { enableStatus } from '@/lib/status-label';
 import { createRoleAction, updateRoleAction, deleteRoleAction } from '../actions';
@@ -64,17 +64,22 @@ export default function RolesTable({ roles, pagination, initialKeyword, departme
   const [selected, setSelected] = useState<RoleRow | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<RoleRow | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [permTarget, setPermTarget] = useState<RoleRow | null>(null);
   const [form, setForm] = useState({ name: '', code: '', description: '', deptId: '', sort: 0 });
   /** 具体错误码（如 ROLE_ALREADY_EXISTS）落到对应输入框（#92；hook 供四处表单复用） */
   const { fieldError, reportFailure, clearFailure } = useFieldFailure(['code']);
 
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleSearch = (value: string) => {
     setKeyword(value);
-    const params = new URLSearchParams();
-    if (value) params.set('keyword', value);
-    startTransition(() => router.push(`/roles${params.toString() ? `?${params.toString()}` : ''}`));
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(() => {
+      const params = new URLSearchParams();
+      if (value.trim()) params.set('keyword', value.trim());
+      params.set('page', '1');
+      startTransition(() => router.push(`/roles?${params.toString()}`));
+    }, 300);
   };
+  useEffect(() => () => { if (searchTimer.current) clearTimeout(searchTimer.current); }, []);
 
   const getDefaultDeptId = () => departments.length > 0 ? departments[0]!.id : '';
 
@@ -148,7 +153,12 @@ export default function RolesTable({ roles, pagination, initialKeyword, departme
 
   const cardHeader = (
     <TableToolbar
-      left={<SearchInput placeholder="搜索角色名称或编码..." value={keyword} onChange={handleSearch} />}
+      left={
+        <div className="flex min-w-0 items-center gap-3">
+          <h1 className="shrink-0 text-[15px] font-semibold tracking-tight text-foreground">角色管理</h1>
+          <SearchInput placeholder="搜索角色名称或编码..." value={keyword} onChange={handleSearch} busy={isPending} />
+        </div>
+      }
       right={
         <PermissionGuard permission={ROLE_PERMISSIONS.CREATE}>
           <Button onClick={() => { setForm({ name: '', code: '', description: '', deptId: getDefaultDeptId(), sort: 0 }); setIsAddOpen(true); }}>
@@ -207,8 +217,10 @@ export default function RolesTable({ roles, pagination, initialKeyword, departme
               </Button>
             </PermissionGuard>
             <PermissionGuard permission={ROLE_PERMISSIONS.ASSIGN_PERMISSION}>
-              <Button variant="ghost" size="icon-sm" aria-label={`配置权限 ${r.name}`} title={`配置权限 ${r.name}`} onClick={() => setPermTarget(r)}>
-                <KeyRound className="h-4 w-4" />
+              <Button asChild variant="ghost" size="icon-sm" aria-label={`配置权限 ${r.name}`} title={`配置权限 ${r.name}`}>
+                <Link href={`/roles/${r.id}/permissions`}>
+                  <KeyRound className="h-4 w-4" />
+                </Link>
               </Button>
             </PermissionGuard>
             <PermissionGuard permission={ROLE_PERMISSIONS.DELETE}>
@@ -324,13 +336,6 @@ export default function RolesTable({ roles, pagination, initialKeyword, departme
         </DialogContent>
       </Dialog>
 
-      {permTarget && (
-        <RolePermissionsDialog
-          open={!!permTarget}
-          onOpenChange={(open) => { if (!open) setPermTarget(null); }}
-          role={{ id: permTarget.id, name: permTarget.name, isSystem: permTarget.isSystem }}
-        />
-      )}
     </>
   );
 }

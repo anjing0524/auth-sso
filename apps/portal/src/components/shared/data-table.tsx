@@ -52,10 +52,10 @@ export function DataTable<T>({
   emptyState,
   renderRow,
   cardHeader,
-  maxHeightClass = 'max-h-[calc(100svh-17rem)]',
+  maxHeightClass = 'max-h-[calc(100svh-13rem)]',
 }: DataTableProps<T>) {
   return (
-    <Card className="overflow-hidden rounded-xl border border-border/70 shadow-sm ring-0">
+    <Card className="gap-0 overflow-hidden rounded-lg border border-border/70 py-0 shadow-sm ring-0">
       {cardHeader}
       <CardContent className="p-0">
         {/* 横向滚动提示：宽表在卡片内横向滚动（U-G05）。

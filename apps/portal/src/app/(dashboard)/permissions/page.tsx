@@ -6,7 +6,6 @@ import { getPermissionPage, getPermissions } from './data';
 import { clampPage } from '@/lib/pagination';
 import PermissionsTable from './components/PermissionsTable';
 
-import { PageHeader } from '@/components/shared/page-header';
 
 /**
  * 该路由读取会话/动态数据，**保留服务端阻塞**（Cache Components 的 instant 导航校验）。
@@ -37,20 +36,14 @@ export default async function PermissionsPage({ searchParams }: PageProps) {
     type: activeTab === 'ALL' ? undefined : activeTab,
     keyword,
     page,
-    pageSize: 15,
+    pageSize: 20,
   });
   // 父级菜单候选需要全量目录/页面（getPermissions 是 "use cache" 读模型）
   const allPermissions = await getPermissions();
   const menuOptions = allPermissions.filter((p) => p.type === 'DIRECTORY' || p.type === 'PAGE');
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4">
-      <PageHeader
-        icon="Key"
-        title="权限管理"
-        description="管理功能权限与侧边栏菜单：支持目录、页面、接口三种类型。"
-      />
-
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
       <PermissionsTable
         permissions={permissions}
         pagination={pagination}

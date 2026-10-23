@@ -340,7 +340,10 @@ export default function PermissionsTable({ permissions, pagination, activeTab, i
 
   return (
     <>
-      <div className="shrink-0">{tabsBar}</div>
+      <div className="flex shrink-0 flex-wrap items-center gap-3">
+        <h1 className="text-[15px] font-semibold tracking-tight text-foreground">权限管理</h1>
+        {tabsBar}
+      </div>
       <div className="flex min-h-0 flex-1 flex-col">
       <DataTable
         columns={columns}

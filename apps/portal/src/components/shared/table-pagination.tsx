@@ -33,7 +33,7 @@ export interface TablePaginationProps {
   navigate?: (url: string) => void;
 }
 
-const navButtonClass = 'h-8 gap-1 rounded-lg px-2';
+const navButtonClass = 'h-7 gap-1 rounded-md px-2 text-xs';
 
 function NavButton({
   label,
@@ -101,7 +101,7 @@ export function TablePagination({
 
   const pageNode = (n: number) => {
     const isCurrent = n === page;
-    const cls = `inline-flex h-8 min-w-8 items-center justify-center rounded-lg px-2 text-xs outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${
+    const cls = `inline-flex h-7 min-w-7 items-center justify-center rounded-md px-2 text-xs outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${
       isCurrent
         ? 'border border-border bg-card font-bold shadow-sm'
         : 'text-muted-foreground hover:bg-muted hover:text-foreground'
@@ -124,7 +124,7 @@ export function TablePagination({
   // 保留总数文案（用户仍需要知道规模），多页时保持全部功能。
   if (pages <= 1) {
     return (
-      <div className="-mt-px flex items-center rounded-b-xl border-t bg-muted/40 px-4 py-2.5 sm:px-6">
+      <div className="-mt-px flex items-center rounded-b-lg border-t bg-muted/30 px-3 py-1.5">
         <p className="text-xs text-muted-foreground">
           共 <span className="font-semibold tabular-nums text-foreground">{total}</span> 条记录
         </p>
@@ -133,7 +133,7 @@ export function TablePagination({
   }
 
   return (
-    <div className="-mt-px flex flex-col gap-2 rounded-b-xl border-t bg-muted/40 px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+    <div className="-mt-px flex flex-col gap-2 rounded-b-lg border-t bg-muted/30 px-3 py-1.5 sm:flex-row sm:items-center sm:justify-between">
       <p className="text-xs text-muted-foreground">
         共 <span className="font-semibold tabular-nums text-foreground">{total}</span> 条记录
       </p>

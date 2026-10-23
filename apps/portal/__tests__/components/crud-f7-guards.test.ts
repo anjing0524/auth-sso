@@ -9,7 +9,7 @@
  * @vitest-environment node
  */
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { USER_ERRORS } from '@auth-sso/contracts';
 import { userFacingMessage } from '@/app/(dashboard)/users/components/user-error-copy';
@@ -174,13 +174,26 @@ describe('表格滚动与吸顶契约（2026-10-23 UI 重做）', () => {
 
   it('表头不再用 uppercase + tracking-widest（中文会被拆散）', () => {
     const table = read('src/components/ui/table.tsx');
-    expect(table).toContain('text-xs font-medium');
+    expect(table).toContain('text-[11px] font-medium');
     expect(table).not.toContain('uppercase tracking-widest');
   });
 
-  it('工具条控件统一 36px、页头标题收敛到 text-xl', () => {
-    expect(read('src/components/shared/table-toolbar.tsx')).toContain('[&_button]:h-9');
-    expect(read('src/components/shared/search-input.tsx')).toContain('md:w-72');
-    expect(read('src/components/shared/page-header.tsx')).toContain('text-xl font-semibold');
+  it('工具条控件统一 32px、页头标题 17px（列表页标题并入工具条）', () => {
+    expect(read('src/components/shared/table-toolbar.tsx')).toContain('[&_button]:h-8');
+    expect(read('src/components/shared/search-input.tsx')).toContain('md:w-64');
+    expect(read('src/components/shared/search-input.tsx')).toContain('h-8 pl-8 pr-8');
+    expect(read('src/components/shared/page-header.tsx')).toContain('text-[17px] font-semibold');
+  });
+
+  it('重内容不再用弹窗：角色权限 / 用户角色已页面化，旧弹窗文件不得回归', () => {
+    // 判据（2026-10-23）：内容 > 1 屏、需要搜索/分页/多分组 → 页面；仅轻确认/短表单用弹窗。
+    expect(existsSync(join(portalRoot, 'src/app/(dashboard)/roles/components/RolePermissionsDialog.tsx'))).toBe(false);
+    expect(existsSync(join(portalRoot, 'src/app/(dashboard)/users/components/AssignRoleDialog.tsx'))).toBe(false);
+    const rolePerm = read('src/app/(dashboard)/roles/[id]/permissions/page.tsx');
+    expect(rolePerm).toContain('ASSIGN_PERMISSION');
+    expect(rolePerm).toContain('RolePermissionsPage');
+    const userRoles = read('src/app/(dashboard)/users/[id]/roles/page.tsx');
+    expect(userRoles).toContain('ASSIGN_ROLE');
+    expect(userRoles).toContain('UserRolesPage');
   });
 });

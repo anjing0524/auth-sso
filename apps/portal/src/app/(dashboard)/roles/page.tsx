@@ -10,7 +10,6 @@ import { resolveScope } from '@/lib/authz';
 import { clampPage } from '@/lib/pagination';
 import RolesTable from './components/RolesTable';
 
-import { PageHeader } from '@/components/shared/page-header';
 
 /**
  * 该路由读取会话/动态数据，**保留服务端阻塞**（Cache Components 的 instant 导航校验）。
@@ -36,20 +35,14 @@ export default async function RolesPage({ searchParams }: PageProps) {
   const scope = identity ? await resolveScope(db, identity.userId) : { deptIds: [] };
 
   const [{ data: roles, pagination }, departments] = await Promise.all([
-    getRoles({ page, pageSize: 10, keyword, status: '', scope }),
+    getRoles({ page, pageSize: 20, keyword, status: '', scope }),
     getDepartmentOptions(scope),
   ]);
   // 删除确认的影响面（U-ROLES03）：只统计当前页角色，避免全表聚合
   const boundUserCounts = await getRoleBoundUserCounts(roles.map((r) => r.id));
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4">
-      <PageHeader
-        icon="ShieldCheck"
-        title="角色管理"
-        description="定义系统角色，绑定菜单权限与数据范围策略。"
-      />
-
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
       <RolesTable
         roles={roles}
         pagination={pagination}

@@ -24,7 +24,6 @@ import { Badge } from '@/components/ui/badge';
 import { AuditLogDetailDialog } from './components/audit-log-detail-dialog';
 import { AuditTabs } from './components/audit-tabs';
 
-import { PageHeader } from '@/components/shared/page-header';
 import { Button } from '@/components/ui/button';
 import { formatDateTime as formatDate } from '@/lib/format-date';
 
@@ -35,7 +34,7 @@ import { formatDateTime as formatDate } from '@/lib/format-date';
  */
 export const instant = false;
 export const metadata = { title: '审计日志 | Auth-SSO' };
-const PAGE_SIZE = 15;
+const PAGE_SIZE = 20;
 
 /** 登录事件 -> 徽章配色（使用 design token，支持暗黑模式） */
 const EVENT_TYPE_COLORS: Record<string, string> = {
@@ -91,32 +90,26 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4">
-      <PageHeader
-        icon="ShieldAlert"
-        title="审计日志"
-        description="追踪系统登录记录与管理员操作行为。"
-        actions={
-          canExport ? (
-            <>
-              <Button variant="outline" asChild>
-                <a href={`/api/audit/export?type=login${eventType ? `&eventType=${eventType}` : ''}`}>
-                  <Download className="h-4 w-4" /> 导出登录 CSV
-                </a>
-              </Button>
-              <Button variant="outline" asChild>
-                <a href={`/api/audit/export?type=operation${operation ? `&operation=${operation}` : ''}`}>
-                  <Download className="h-4 w-4" /> 导出操作 CSV
-                </a>
-              </Button>
-            </>
-          ) : undefined
-        }
-      />
 
-      {/* Tab 切换 + 类型筛选 — searchParams 驱动；筛选在规模数据下必需 */}
-      <div className="flex shrink-0 flex-wrap items-center justify-between gap-3">
-      <AuditTabs tab={tab} hrefs={{ login: pageHref('login', 1), operation: pageHref('operation', 1) }} />
-      <AuditFilters tab={tab} eventType={eventType} operation={operation} />
+      {/* 标题 + 页签 + 类型筛选 + 导出：压缩为同一行（搜索/标题不应各占一整行） */}
+      <div className="flex shrink-0 flex-wrap items-center gap-3">
+        <h1 className="shrink-0 text-[15px] font-semibold tracking-tight text-foreground">审计日志</h1>
+        <AuditTabs tab={tab} hrefs={{ login: pageHref('login', 1), operation: pageHref('operation', 1) }} />
+        <AuditFilters tab={tab} eventType={eventType} operation={operation} />
+        {canExport ? (
+          <div className="ml-auto flex items-center gap-2">
+            <Button variant="outline" size="sm" asChild>
+              <a href={`/api/audit/export?type=login${eventType ? `&eventType=${eventType}` : ''}`}>
+                <Download className="h-3.5 w-3.5" /> 导出登录
+              </a>
+            </Button>
+            <Button variant="outline" size="sm" asChild>
+              <a href={`/api/audit/export?type=operation${operation ? `&operation=${operation}` : ''}`}>
+                <Download className="h-3.5 w-3.5" /> 导出操作
+              </a>
+            </Button>
+          </div>
+        ) : null}
       </div>
 
       {/* U-G05（F3 遗留）：本页用裸 Table，无法复用 DataTable 内部提示；此处保留**唯一一份**
@@ -128,7 +121,7 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
       {/* 日志列表（U-LOG02：页签内容与 role=tablist 关联） */}
       <div id="audit-tabpanel" role="tabpanel" aria-labelledby={`audit-tab-${tab}`} className="flex min-h-0 flex-1 flex-col">
       {tab === 'login' ? (
-        <Card className="overflow-hidden rounded-xl border border-border/70 shadow-sm ring-0">
+        <Card className="gap-0 overflow-hidden rounded-lg border border-border/70 py-0 shadow-sm ring-0">
           <CardContent className="p-0">
             <div className="max-h-[calc(100svh-19rem)] overflow-auto">
             <Table containerClassName="overflow-visible">
@@ -203,7 +196,7 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
           </CardContent>
         </Card>
       ) : (
-        <Card className="overflow-hidden rounded-xl border border-border/70 shadow-sm ring-0">
+        <Card className="gap-0 overflow-hidden rounded-lg border border-border/70 py-0 shadow-sm ring-0">
           <CardContent className="p-0">
             <div className="max-h-[calc(100svh-19rem)] overflow-auto">
             <Table containerClassName="overflow-visible">

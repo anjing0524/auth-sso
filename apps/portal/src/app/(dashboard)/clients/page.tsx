@@ -10,7 +10,6 @@ import { getClients } from './data';
 import { clampPage } from '@/lib/pagination';
 import ClientsTable from './components/ClientsTable';
 
-import { PageHeader } from '@/components/shared/page-header';
 
 /**
  * 该路由读取会话/动态数据，**保留服务端阻塞**（Cache Components 的 instant 导航校验）。
@@ -33,7 +32,7 @@ export default async function ClientsPage({ searchParams }: PageProps) {
 
   const { data: clients, pagination } = await getClients({
     page,
-    pageSize: 15,
+    pageSize: 20,
     keyword,
     status: '',
   });
@@ -42,13 +41,7 @@ export default async function ClientsPage({ searchParams }: PageProps) {
   const isFiltered = keyword.length > 0;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4">
-      <PageHeader
-        icon="AppWindow"
-        title="应用管理"
-        description="注册 OAuth 2.1 客户端，配置重定向策略与安全密钥。"
-      />
-
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
       <ClientsTable clients={clients} pagination={pagination} initialKeyword={keyword} isFiltered={isFiltered} clearHref="/clients" />
     </div>
   );

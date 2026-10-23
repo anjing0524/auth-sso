@@ -35,29 +35,31 @@ export function PageHeader({
   className,
 }: PageHeaderProps) {
   return (
-    <div className={cn('flex flex-col gap-3 md:flex-row md:items-center md:justify-between', className)}>
-      <div className="flex min-w-0 items-center gap-3">
+    <div className={cn('flex flex-col gap-2 md:flex-row md:items-center md:justify-between', className)}>
+      <div className="flex min-w-0 items-center gap-2">
         {backHref ? (
           <a
             href={backHref}
             aria-label={backLabel}
-            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           >
-            <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4" aria-hidden="true">
               <path d="M15 19l-7-7 7-7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </a>
         ) : icon ? (
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-            <DynamicIcon name={icon} className="h-4.5 w-4.5" />
+          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-primary">
+            <DynamicIcon name={icon} className="h-4 w-4" />
           </span>
         ) : null}
-        <div className="min-w-0 space-y-0.5">
-          <h1 className="truncate text-xl font-semibold tracking-tight text-foreground">{title}</h1>
-          {description ? <p className="truncate text-[13px] leading-5 text-muted-foreground">{description}</p> : null}
-        </div>
+        <h1 className="shrink-0 text-[17px] font-semibold leading-6 tracking-tight text-foreground">{title}</h1>
+        {description ? (
+          <p className="hidden min-w-0 truncate text-xs text-muted-foreground lg:block">
+            <span className="mr-1.5 text-border">·</span>{description}
+          </p>
+        ) : null}
       </div>
-      {actions ? <div className="flex shrink-0 flex-wrap items-center gap-2 [&_a]:h-9 [&_button]:h-9 [&_a]:px-3 [&_button]:px-3">{actions}</div> : null}
+      {actions ? <div className="flex shrink-0 flex-wrap items-center gap-2 [&_a]:h-8 [&_button]:h-8 [&_a]:px-3 [&_button]:px-3">{actions}</div> : null}
     </div>
   );
 }
