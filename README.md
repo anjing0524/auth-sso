@@ -78,7 +78,7 @@ pnpm test:e2e   # 构建 → 起栈 → 浏览器闭环（登录/OAuth 回调/�
 ### 5. 只跑单元 / API 测试
 
 ```bash
-docker compose -f docker/compose.yml up -d postgres redis   # 测试用基础设施（PG 16 + Redis 7）
+docker compose -f docker/compose/local.yml up -d postgres redis   # 测试用基础设施（PG 16 + Redis 7）
 pnpm test
 ```
 
@@ -90,7 +90,7 @@ pnpm test
 项目内置了完整的分层测试体系与需求追溯：
 
 ```bash
-docker compose -f docker/compose.yml up -d postgres redis  # API 测试前先启动本地数据库基础设施
+docker compose -f docker/compose/local.yml up -d postgres redis  # API 测试前先启动本地数据库基础设施
 pnpm test                 # 全量 Vitest 测试
 pnpm test:api             # API project（真实 PostgreSQL/Redis）
 pnpm test:components      # UI/domain project（不依赖 DB）
@@ -115,7 +115,7 @@ pnpm test:report          # 需求追溯性覆盖率报告
 
 - 生产环境务必生成强密钥：`openssl rand -base64 32`。
 - 敏感配置请通过部署平台的环境变量管理功能设置。
-- 生产 TLS 证书必须由 `docker/compose.prod.yml` 中 Gateway 的 Rust 内建 ACME 客户端获取和续期；不要引入 Certbot 脚本，也不要挂载仓库内或开发机生成的自签证书。
+- 生产 TLS 证书必须由 `docker/compose/prod.yml` 中 Gateway 的 Rust 内建 ACME 客户端获取和续期；不要引入 Certbot 脚本，也不要挂载仓库内或开发机生成的自签证书。
 
 ## License
 

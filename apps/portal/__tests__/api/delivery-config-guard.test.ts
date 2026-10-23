@@ -1,5 +1,5 @@
 /**
- * 生产交付配置守卫（docker/compose.prod.yml / scripts/docker/deploy.sh / docker/README.md）
+ * 生产交付配置守卫（docker/compose/prod.yml / scripts/docker/deploy.sh / docker/README.md）
  *
  * 2026-10-22 生产链路审计发现并修复的问题，用测试钉住，避免回退：
  * 1. PostgreSQL 端口不得发布到宿主机（应仅 expose）；
@@ -18,7 +18,7 @@ import { REPO_ROOT } from '../helpers/repo-scan';
 const read = (rel: string) => readFileSync(join(REPO_ROOT, rel), 'utf-8');
 
 describe('生产交付配置', () => {
-  const compose = read('docker/compose.prod.yml');
+  const compose = read('docker/compose/prod.yml');
 
   it('PostgreSQL/Redis 不向宿主机发布端口', () => {
     // postgres 服务块：不允许 ports: - "5432:5432"

@@ -11,8 +11,8 @@ services:
 
   gateway:
     build:
-      context: ..
-      dockerfile: docker/gateway.Dockerfile
+      context: ../..
+      dockerfile: docker/images/gateway.Dockerfile
     ports:
       - "80:80"
       - "443:443"
@@ -25,7 +25,7 @@ services:
       ACME_CHECK_INTERVAL_SECS: "60"
       GATEWAY_SHARED_SECRET: ${ACME_STAGING_GATEWAY_SHARED_SECRET:-acme-staging-validation-shared-secret}
     volumes:
-      - ../apps/gateway/gateway.acme-staging.toml:/app/gateway.toml:ro
+      - ../../apps/gateway/gateway.acme-staging.toml:/app/gateway.toml:ro
       - gateway_acme_staging:/var/lib/gateway/acme
     depends_on:
       redis:

@@ -697,11 +697,11 @@ mod tests {
     ///
     /// | 配置 | consumer | 运行档 |
     /// |---|---|---|
-    /// | `gateway.toml` / `gateway.docker.toml` | `docker/gateway.Dockerfile` | 自托管 TLS + ACME（env） |
-    /// | `gateway.vercel.toml` | `docker/vercel.Dockerfile` | `NODE_ENV=production` + 平台 TLS |
-    /// | `gateway.e2e.toml` | `docker/compose.test.yml` | `NODE_ENV=test` |
-    /// | `gateway.acme-e2e.toml` | `docker/compose.test.yml` | `NODE_ENV=test` |
-    /// | `gateway.acme-staging.toml` | `docker/compose.acme-staging.yml` | `NODE_ENV=production` + ACME |
+    /// | `gateway.toml` / `gateway.docker.toml` | `docker/images/gateway.Dockerfile` | 自托管 TLS + ACME（env） |
+    /// | `gateway.vercel.toml` | `docker/images/vercel.Dockerfile` | `NODE_ENV=production` + 平台 TLS |
+    /// | `gateway.e2e.toml` | `docker/compose/test.yml` | `NODE_ENV=test` |
+    /// | `gateway.acme-e2e.toml` | `docker/compose/test.yml` | `NODE_ENV=test` |
+    /// | `gateway.acme-staging.toml` | `docker/compose/acme-staging.yml` | `NODE_ENV=production` + ACME |
     #[test]
     fn test_all_shipped_configs_pass_startup_validation() {
         /// 各配置在其 consumer 下的运行档位。
@@ -746,7 +746,7 @@ mod tests {
                 "gateway.docker.toml",
                 profile("production", true, TlsMode::SelfManaged),
             ),
-            // 平台 TLS：`docker/vercel.Dockerfile` 用 `--no-default-features` 构建
+            // 平台 TLS：`docker/images/vercel.Dockerfile` 用 `--no-default-features` 构建
             (
                 "gateway.vercel.toml",
                 profile("production", false, TlsMode::Platform),
@@ -789,7 +789,7 @@ mod tests {
             //   EXTERNAL_TLS_TERMINATION"），这正是防止把自托管配置部署到
             //   平台构建上的保护。
             // 配置自身若**不带** [acme] 段，则其 ACME 参数由 consumer 经环境变量注入
-            // （见 docker/compose*.yml）。**不在此凭空构造那些参数**——否则本测试验证
+            // （见 docker/compose/*.yml）。**不在此凭空构造那些参数**——否则本测试验证
             // 的是编写者的假设而非部署契约（曾因此出现"测试绿、部署起不来"）。
             // 该部分契约由 `__tests__/api/deployment-wiring.test.ts` 读真实
             // compose/Dockerfile 校验。

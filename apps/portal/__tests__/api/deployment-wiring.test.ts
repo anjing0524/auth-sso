@@ -86,8 +86,8 @@ const REQUIRED_ACME_ENV = [
 
 describe('ACME consumer 的环境注入契约', () => {
   it.each([
-    ['docker/compose.test.yml', 'gateway-acme'],
-    ['docker/compose.acme-staging.yml', 'gateway'],
+    ['docker/compose/test.yml', 'gateway-acme'],
+    ['docker/compose/acme-staging.yml', 'gateway'],
   ])('%s 的 %s 注入了全部必需 ACME 变量', (composeFile, service) => {
     const env = composeServiceEnv(composeFile, service);
 
@@ -98,14 +98,14 @@ describe('ACME consumer 的环境注入契约', () => {
     }
   });
 
-  it('docker/compose.acme-staging.yml 使用 staging directory（不得误用生产 CA）', () => {
-    const env = composeServiceEnv('docker/compose.acme-staging.yml', 'gateway');
+  it('docker/compose/acme-staging.yml 使用 staging directory（不得误用生产 CA）', () => {
+    const env = composeServiceEnv('docker/compose/acme-staging.yml', 'gateway');
 
     expect(env.get('ACME_DIRECTORY_URL')).toContain('acme-staging-v02');
   });
 
-  it('docker/compose.test.yml 指向 Pebble 且带测试 CA 证书', () => {
-    const env = composeServiceEnv('docker/compose.test.yml', 'gateway-acme');
+  it('docker/compose/test.yml 指向 Pebble 且带测试 CA 证书', () => {
+    const env = composeServiceEnv('docker/compose/test.yml', 'gateway-acme');
 
     expect(env.get('ACME_DIRECTORY_URL')).toContain('pebble');
     // Pebble 用私有 CA，必须注入其证书，否则 ACME 客户端不信任
@@ -113,7 +113,7 @@ describe('ACME consumer 的环境注入契约', () => {
   });
 
   it('**staging 档位不得注入 ACME_CA_CERT_PATH**（生产环境禁自签 CA）', () => {
-    const env = composeServiceEnv('docker/compose.acme-staging.yml', 'gateway');
+    const env = composeServiceEnv('docker/compose/acme-staging.yml', 'gateway');
 
     // validate_production_security：生产环境禁止配置 ACME_CA_CERT_PATH
     expect(env.get('NODE_ENV')).toBe('production');
@@ -122,7 +122,7 @@ describe('ACME consumer 的环境注入契约', () => {
 });
 
 describe('平台 TLS consumer（Vercel）的接线契约', () => {
-  const dockerfile = readRepoFile('docker/vercel.Dockerfile');
+  const dockerfile = readRepoFile('docker/images/vercel.Dockerfile');
 
   it('以 --no-default-features 构建（裁剪 self-managed-tls / ACME）', () => {
     expect(dockerfile).toContain('--no-default-features');
@@ -139,7 +139,7 @@ describe('平台 TLS consumer（Vercel）的接线契约', () => {
 
   it('**不得注入 ACME 变量**（该档位禁用 ACME，同时配置会 bail）', () => {
     for (const key of REQUIRED_ACME_ENV) {
-      expect(dockerfile, `docker/vercel.Dockerfile 不应出现 ${key}`).not.toContain(key);
+      expect(dockerfile, `docker/images/vercel.Dockerfile 不应出现 ${key}`).not.toContain(key);
     }
   });
 

@@ -2,10 +2,52 @@
 
 > **本文是 Docker 的唯一出处**（`AGENTS.md` 只留摘要与指针）。分两条路径：
 > - **生产部署**（§1–§6）：Gateway 内建 ACME + 自托管证书；
-> - **本地开发 / 发布验收**（§7）：`docker/compose.test.yml` 自签证书栈，`pnpm test:e2e` 的正式路径；
+> - **本地开发 / 发布验收**（§7）：`docker/compose/test.yml` 自签证书栈，`pnpm test:e2e` 的正式路径；
 >   与 CI 的 `validation-suite.yml` 同一条路径。
 >
 > 日常命令：`pnpm stack:up|build|status|logs|down`；验收：`pnpm test:e2e`。
+
+## 目录结构
+
+```text
+docker/
+├── compose/                # 编排：按生命周期分档
+│   ├── local.yml           # 本地 PG16 + Redis7（pnpm test 前置）
+│   ├── test.yml            # 发布验收 / CI 栈（含 acme profile）
+│   ├── prod.yml            # 生产部署（deploy.sh）
+│   └── acme-staging.yml    # 公网 Let's Encrypt staging 联调
+├── images/                 # 镜像定义（被 compose / vercel.json 引用）
+│   ├── portal.Dockerfile
+│   ├── gateway.Dockerfile
+│   ├── pebble.Dockerfile
+│   └── vercel.Dockerfile
+├── acme/                   # Pebble 配置与测试 CA（仅 test.yml 的 acme profile）
+├── init-db.sql             # PG 首启初始化：创建 auth_sso_test
+└── README.md               # 本文（唯一出处）
+```
+
+`.dockerignore` 必须留在**仓库根**（构建上下文根约束，见 §2）。
+
+四份 compose 都显式声明 `name:`（`auth-sso` / `auth-sso-test` / `auth-sso-acme-staging`）：
+文件所在目录变化不会改变卷、镜像与网络名；`prod.yml` 的 `name: auth-sso` 也是 `deploy.sh`
+按 `auth-sso-portal` / `auth-sso-gateway` 打 `:previous` 标签的前提。
+
+## 文件有效性审计（2026-10-23）
+
+结论：**全部有用，无死文件**。每个文件都有真实消费者；「可选」只表示仅在某条部署路径下启用，不代表无人使用。
+
+| 文件 | 职责 | 消费者（证据） | 结论 |
+|---|---|---|---|
+| `compose/local.yml` | 本地 PG16 + Redis7，`redis-commander` 在 `tools` profile 下可选 | `AGENTS.md` / `README.md` 的 `docker compose -f … up -d`；`pnpm test` 前置 | 必需（开发） |
+| `compose/test.yml` | 发布验收栈：postgres/redis/cert-init/db-init/portal/gateway + acme profile（pebble/challtestsrv/gateway-acme） | `scripts/docker/stack.sh`、`scripts/e2e/acme-e2e.sh`、CI `validation-suite.yml` | 必需（CI / 验收） |
+| `compose/prod.yml` | 生产形态（ACME、健康检查、db-init、数据卷） | `scripts/docker/deploy.sh`、`delivery-config-guard.test.ts` | 必需（生产） |
+| `compose/acme-staging.yml` | 公网 staging ACME 联调 | `scripts/e2e/acme-staging.sh` | 可选（首次上线演练） |
+| `images/portal.Dockerfile` | portal 镜像（`workspace` / `builder` / `runner` 三个 target） | `compose/test.yml`、`compose/prod.yml` | 必需 |
+| `images/gateway.Dockerfile` | gateway 镜像（`cert-init` / builder / runtime） | `compose/test.yml`、`compose/prod.yml`、`compose/acme-staging.yml` | 必需 |
+| `images/pebble.Dockerfile` | Pebble / challtestsrv 测试镜像 | `compose/test.yml` 的 acme profile、`scripts/e2e/acme-e2e.sh` | 必需（ACME 验收） |
+| `images/vercel.Dockerfile` | Vercel 单镜像变体（gateway + portal 同进程组） | `vercel.json` 的 `entrypoint` | 可选（仅 Vercel 部署） |
+| `acme/pebble-config.json` 等 4 个 fixture | Pebble 配置与测试根证书 | `compose/test.yml`、`scripts/e2e/acme-e2e.sh` | 必需（ACME 验收） |
+| `init-db.sql` | 创建 `auth_sso_test`（API 测试库） | `compose/local.yml`、`compose/test.yml`、`vitest.globalSetup.ts` | 必需（本地 / CI 测试） |
 
 ## 0. 生产环境部署（§1–§6）
 
@@ -27,12 +69,15 @@ ACME challenge 只存在于 Gateway 内存中。证书链和私钥被写入同�
 3. 没有 CDN/WAF 规则拦截或改写 `/.well-known/acme-challenge/`。
 4. 已安装 Docker Engine 和 Docker Compose v2。
 
-部署在**仓库根**执行（`compose.prod.yml` 的 `context: ..` 需要读取源码）；除源码外只需生产环境变量与业务数据目录，不需要证书脚本或宿主机证书目录：
+部署在**仓库根**执行（`compose/prod.yml` 的 `context: ../..` 需要读取源码）；除源码外只需生产环境变量与业务数据目录，不需要证书脚本或宿主机证书目录：
 
 ```text
 /opt/auth-sso/            # 仓库根（含源码）
 ├── docker/
-│   └── compose.prod.yml
+│   ├── compose/
+│   │   └── prod.yml
+│   ├── images/
+│   └── init-db.sql
 ├── .env.prod
 └── data/
     ├── postgres/
@@ -40,7 +85,7 @@ ACME challenge 只存在于 Gateway 内存中。证书链和私钥被写入同�
 ```
 
 `.dockerignore` 例外地保留在**仓库根**：Docker 只从构建上下文根读取它，而所有镜像的 context 都是仓库根
-（compose 中写作 `context: ..`，Dockerfile 路径再指向 `docker/*.Dockerfile`）。把它移进 `docker/` 会让
+（compose 中写作 `context: ../..`，Dockerfile 路径再指向 `docker/images/*.Dockerfile`）。把它移进 `docker/` 会让
 `node_modules`、`.next`、`.git` 全被送进构建上下文。
 
 当前实现面向单个域名和单个 Gateway 实例。若未来水平扩展 Gateway，应先增加 ACME leader election 或改用集中式证书控制器，避免多个实例同时写同一账户状态。
@@ -102,8 +147,8 @@ cp .env.example .env.prod   # 按 §3 填写生产参数（LETSENCRYPT_DOMAIN �
 3. `gateway` 在 `portal` healthy 后才启动，监听 80/443 并恢复/创建 ACME 账户。
 
 ```bash
-docker compose --env-file .env.prod -f docker/compose.prod.yml ps
-docker compose --env-file .env.prod -f docker/compose.prod.yml logs -f gateway
+docker compose --env-file .env.prod -f docker/compose/prod.yml ps
+docker compose --env-file .env.prod -f docker/compose/prod.yml logs -f gateway
 ```
 
 升级部署：重复执行 `./scripts/docker/deploy.sh`（会先给当前镜像打 `:previous` 标签）。
@@ -129,7 +174,7 @@ docker compose --env-file .env.prod -f docker/compose.prod.yml logs -f gateway
 ## 5. 验证
 
 ```bash
-docker compose --env-file .env.prod -f docker/compose.prod.yml logs gateway
+docker compose --env-file .env.prod -f docker/compose/prod.yml logs gateway
 curl -I http://portal.example.com
 openssl s_client -connect portal.example.com:443 -servername portal.example.com </dev/null 2>/dev/null \
   | openssl x509 -noout -issuer -subject -dates
@@ -173,7 +218,7 @@ pnpm test:e2e:acme:staging
 
 `8.8.8.8` 是递归 DNS 解析器地址，不能替代域名的 A/AAAA 记录，也不能让外部 CA 访问本机。没有公网入口时继续使用 `pnpm test:e2e:acme` 的 Pebble 本地闭环，不能把它记为公共 staging 通过。
 
-本地开发和发布 E2E 继续使用只包含 loopback SAN 的运行时临时自签证书，因为 Let's Encrypt 不为 `localhost` 签发证书；该路径位于 `docker/compose.test.yml`，与生产 ACME 路径隔离——完整用法见 **§7**。
+本地开发和发布 E2E 继续使用只包含 loopback SAN 的运行时临时自签证书，因为 Let's Encrypt 不为 `localhost` 签发证书；该路径位于 `docker/compose/test.yml`，与生产 ACME 路径隔离——完整用法见 **§7**。
 
 参考：
 
@@ -182,7 +227,7 @@ pnpm test:e2e:acme:staging
 - [ACME Renewal Information（ARI）](https://letsencrypt.org/docs/ari/)
 - [instant-acme 0.8.5](https://docs.rs/instant-acme/0.8.5/instant_acme/)
 
-## 7. 本地开发 / 发布验收（`docker/compose.test.yml`，与 CI 同路径）
+## 7. 本地开发 / 发布验收（`docker/compose/test.yml`，与 CI 同路径）
 
 > 结论：**构建、部署、验收 e2e 全部走 Docker**。host 进程只用于断点调试。
 > 2026-10-20 实测（离线镜像）：`pnpm stack:build` 成功（portal 的 `next build` 走 Next 16 默认
@@ -192,24 +237,16 @@ pnpm test:e2e:acme:staging
 > **host 进程入口已移除**：`pnpm dev` / `dev:*` / `dev-gateway-stack.sh` / `check-portal-boot.sh` /
 > `verify-turbopack-container.sh` 全部删除；`tests/e2e` 只保留 Docker 验收闭环（无 host `next dev` webServer）。
 
-### 7.1 文件矩阵
+### 7.1 运行入口
 
-| 文件 | 用途 | 何时用 |
+| 入口 | 用途 | 何时用 |
 |---|---|---|
-| `docker/compose.yml` | 本地基础设施：postgres:16 + redis:7 | 只跑 `pnpm test` / host dev 时 |
-| **`docker/compose.test.yml`** | **发布验收栈**：postgres + redis + cert-init + db-init + portal + gateway（另有 pebble/challtestsrv/gateway-acme 服务用于 ACME 验收） | `pnpm test:e2e`、镜像构建验证、UI 验收 |
-| `docker/compose.prod.yml` | 生产形态（§1–§6） | 生产部署 |
-| `docker/compose.acme-staging.yml` | ACME staging 联调 | `pnpm test:e2e:acme:staging` |
-| `docker/portal.Dockerfile` | portal standalone 镜像（多阶段；非 root `nextjs`；4000；`/api/health`） | `stack.sh build` |
-| `docker/gateway.Dockerfile` | gateway alpine 镜像（builder → cert-init → runtime；非 root 10001） | `stack.sh build` |
-| `docker/pebble.Dockerfile` | ACME 测试 Pebble | ACME 脚本 |
-| `docker/vercel.Dockerfile` | Vercel 变体 | 平台专用，不参与 compose |
-| `.dockerignore`（**仓库根**，见下） | 构建上下文忽略清单 | 所有镜像构建 |
 | **`scripts/docker/stack.sh`** | **统一入口**：`up / build / status / logs / e2e / down / clean` | 日常 |
 | `scripts/e2e/release.sh` | `pnpm test:e2e` 实现（`stack.sh e2e --build` + 退出清理；`E2E_KEEP_STACK=1` 保留） | 验收闭环 |
 | `scripts/e2e/acme-e2e.sh` / `scripts/e2e/acme-staging.sh` | ACME 验收 | `pnpm test:e2e:acme[:staging]` |
+| `scripts/docker/deploy.sh` | 生产部署（§4） | 上线 / 回滚 |
 
-> 脚本的职责划分与归属规则见 [`scripts/README.md`](../scripts/README.md)。
+> 文件职责与有效性见文首「文件有效性审计」；脚本归属规则见 [`scripts/README.md`](../scripts/README.md)。
 
 ### 7.2 常用命令
 
@@ -272,10 +309,10 @@ portal 仅在 compose 网络内暴露 4000，不映射宿主端口。
 CI 不走 `stack.sh`，而是直接（`.github/workflows/validation-suite.yml`）：
 
 ```bash
-docker compose -f docker/compose.test.yml up --detach --build --wait --wait-timeout 600 \
+docker compose -f docker/compose/test.yml up --detach --build --wait --wait-timeout 600 \
   postgres redis cert-init db-init portal gateway
 E2E_TARGET=docker E2E_BASE_URL=https://127.0.0.1:19443 E2E_SKIP_SEED=true pnpm test:e2e:release
-docker compose -f docker/compose.test.yml logs --no-color > gateway-e2e.log
+docker compose -f docker/compose/test.yml logs --no-color > gateway-e2e.log
 ```
 
 本地 `pnpm test:e2e` 与它是同一条路径（同 compose、同 spec、同 base URL），只多了退出清理与 buildx 兜底。

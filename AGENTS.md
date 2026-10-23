@@ -191,7 +191,7 @@ API 层里生产业务模块的模块级 mock 必须是**类型化工厂**（`vi
   `✓ Compiled successfully in 10.5s`；gateway `cargo build --release`）、`stack.sh up` 全健康、
   `pnpm test:e2e` **1/1 通过**。**旧结论"本机 e2e / 镜像构建不可用"已作废**——真实原因只是 buildx
   配置目录只读（`BUILDX_CONFIG=$PWD/.tmp-buildx`，`stack.sh` 已自动处理），不是 registry 不可达。
-- 本地基础设施（仅跑 `pnpm test` 时需要；验收栈自带 PG/Redis）: `docker compose -f docker/compose.yml up -d`（PostgreSQL 16 + Redis 7）。
+- 本地基础设施（仅跑 `pnpm test` 时需要；验收栈自带 PG/Redis）: `docker compose -f docker/compose/local.yml up -d`（PostgreSQL 16 + Redis 7）。
 - 数据库初始化顺序: `pnpm db:migrate` → `pnpm db:seed`；`db:push` 只允许本地临时试验，不进入 CI/发布路径。
 - **host 进程入口已移除**（2026-10-20 清理）：不再有 `pnpm dev` / `dev:*` / `check-portal-boot.sh` /
   `dev-gateway-stack.sh` / `verify-turbopack-container.sh`。原因：验收必须打到构建产物，且宿主 glibc

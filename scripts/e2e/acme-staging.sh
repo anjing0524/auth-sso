@@ -5,7 +5,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 
-readonly compose_file="docker/compose.acme-staging.yml"
+readonly compose_file="docker/compose/acme-staging.yml"
 readonly tls_address="127.0.0.1:443"
 
 is_valid_public_dns_name() {

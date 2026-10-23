@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Auth-SSO 生产部署脚本（唯一入口，配套 docker/compose.prod.yml）
+# Auth-SSO 生产部署脚本（唯一入口，配套 docker/compose/prod.yml）
 #
 # 设计目标：
 # 1. **一条命令完成可复现部署**：环境校验 → Compose 配置校验 → 构建 → 迁移/seed → 启动 → 健康检查；
@@ -17,7 +17,7 @@
 #
 # 环境变量：
 #   ENV_FILE=...       默认 .env.prod
-#   COMPOSE_FILE=...   默认 docker/compose.prod.yml
+#   COMPOSE_FILE=...   默认 docker/compose/prod.yml
 #   WAIT_PORTAL_SECS   默认 120
 #   WAIT_GATEWAY_SECS  默认 300（首次 ACME 签发可能较慢）
 #
@@ -28,7 +28,7 @@ ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 cd "${ROOT_DIR}"
 
 ENV_FILE="${ENV_FILE:-.env.prod}"
-COMPOSE_FILE="${COMPOSE_FILE:-docker/compose.prod.yml}"
+COMPOSE_FILE="${COMPOSE_FILE:-docker/compose/prod.yml}"
 WAIT_PORTAL_SECS="${WAIT_PORTAL_SECS:-120}"
 WAIT_GATEWAY_SECS="${WAIT_GATEWAY_SECS:-300}"
 PORTAL_IMAGE="auth-sso-portal:latest"

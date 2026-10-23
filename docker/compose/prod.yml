@@ -1,3 +1,7 @@
+# 显式固定 project name：`deploy.sh` 依赖 `auth-sso-{portal,gateway}` 镜像名，
+# 且 `gateway_acme` 卷名不能随 compose 文件所在目录变化。
+name: auth-sso
+
 services:
   # ============================================
   # PostgreSQL 生产环境配置
@@ -15,7 +19,7 @@ services:
     expose:
       - "5432"
     volumes:
-      - ../data/postgres:/var/lib/postgresql/data
+      - ../../data/postgres:/var/lib/postgresql/data
     deploy:
       resources:
         limits:
@@ -43,7 +47,7 @@ services:
     restart: always
     command: redis-server --requirepass ${REDIS_PASSWORD} --appendonly yes --maxmemory 256mb --maxmemory-policy volatile-lru
     volumes:
-      - ../data/redis:/data
+      - ../../data/redis:/data
     deploy:
       resources:
         limits:
@@ -69,8 +73,8 @@ services:
   # ============================================
   db-init:
     build:
-      context: ..
-      dockerfile: docker/portal.Dockerfile
+      context: ../..
+      dockerfile: docker/images/portal.Dockerfile
       target: builder
       args:
         NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL}
@@ -99,8 +103,8 @@ services:
   # ============================================
   portal:
     build:
-      context: ..
-      dockerfile: docker/portal.Dockerfile
+      context: ../..
+      dockerfile: docker/images/portal.Dockerfile
       args:
         NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL}
     image: auth-sso-portal:latest
@@ -143,8 +147,8 @@ services:
   # ============================================
   gateway:
     build:
-      context: ..
-      dockerfile: docker/gateway.Dockerfile
+      context: ../..
+      dockerfile: docker/images/gateway.Dockerfile
     container_name: auth-sso-gateway
     restart: always
     environment:
