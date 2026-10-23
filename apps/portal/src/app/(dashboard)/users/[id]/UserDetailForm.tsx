@@ -14,7 +14,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import {
-  User as UserIcon, Save, Trash2, Shield, Building, Calendar, AlertTriangle, ShieldCheck,
+  User as UserIcon, Save, Trash2, Shield, Building, Calendar, AlertTriangle, ShieldCheck, Copy, KeyRound,
 } from 'lucide-react';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -112,165 +112,211 @@ export default function UserDetailForm({ id, initialUser: serverUser, canUpdate 
     }
   };
 
+  /** 复制用户 ID（排障/对接工单常用，减少手抄） */
+  const copyUserId = async () => {
+    try {
+      await navigator.clipboard.writeText(String(serverUser.id ?? id));
+      toast.success('已复制用户 ID');
+    } catch {
+      toast.error('复制失败，请手动选择');
+    }
+  };
+
   return (
-    <div className="space-y-6">
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
       <PageHeader
         backHref="/users"
         title={form.name}
-        description={`账号：${username}`}
+        description={`账号：${username} · 状态：${STATUS_LABELS[form.status] ?? form.status}`}
         actions={
           <div className="flex flex-wrap items-center justify-start gap-2 lg:justify-end">
-          <PermissionGuard permission={USER_PERMISSIONS.DELETE}>
-          <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
-            <DialogTrigger render={<Button variant="destructive" className="rounded-lg px-6 bg-destructive/10 text-destructive hover:bg-destructive/20 border-none shadow-none" />}>
-              <Trash2 className="mr-2 h-4 w-4" /> 删除用户
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle className="text-destructive">确认永久删除？</DialogTitle>
-                <DialogDescription>
-                  此操作将立即注销用户 <strong>{form.name}</strong> 的所有访问权限。该操作不可撤销。
-                </DialogDescription>
-              </DialogHeader>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setIsDeleteOpen(false)}>取消</Button>
-                <Button variant="destructive" onClick={handleDelete}>确认删除</Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-          </PermissionGuard>
-          <PermissionGuard permission={USER_PERMISSIONS.RESET_PASSWORD}>
-            <ResetPasswordDialog userId={id} userName={form.name} />
-          </PermissionGuard>
-          <PermissionGuard permission={USER_PERMISSIONS.ASSIGN_ROLE}>
-            <Button asChild variant="outline" size="sm">
-              <Link href={`/users/${id}/roles`}>
-                <Shield className="mr-2 h-4 w-4" /> 分配角色
-              </Link>
-            </Button>
-          </PermissionGuard>
-          {(serverUser.status as string) === 'LOCKED' && (
             <PermissionGuard permission={USER_PERMISSIONS.UPDATE}>
-              <Button variant="outline" onClick={handleUnlock} disabled={saving}>
-                <ShieldCheck className="mr-2 h-4 w-4" /> 解锁
+              <Button size="sm" onClick={handleUpdate} disabled={saving}>
+                {saving ? '保存中...' : <><Save className="h-3.5 w-3.5" /> 保存修改</>}
               </Button>
             </PermissionGuard>
-          )}
-          <PermissionGuard permission={USER_PERMISSIONS.UPDATE}>
-            <Button onClick={handleUpdate} disabled={saving}>
-              {saving ? '保存中...' : <><Save className="h-4 w-4" /> 保存修改</>}
-            </Button>
-          </PermissionGuard>
           </div>
         }
       />
 
       {!canUpdate && (
-        <div data-readonly-banner className="flex items-center gap-2 rounded-xl border border-border/60 bg-muted/50 px-4 py-3 text-sm text-muted-foreground">
+        <div data-readonly-banner className="flex items-center gap-2 rounded-lg border border-border/60 bg-muted/50 px-3 py-2 text-[13px] text-muted-foreground">
           <Shield className="h-4 w-4 shrink-0" />
           只读模式：当前账号缺少用户编辑权限（portal:user:update），仅可查看资料。
         </div>
       )}
 
       <fieldset disabled={!canUpdate} className="m-0 min-w-0 border-0 p-0">
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-        <Card className="overflow-hidden lg:col-span-8 rounded-xl border-none bg-card shadow-sm ring-1 ring-border/50">
-          <CardHeader className="border-b bg-muted/50">
-            <CardTitle className="flex items-center gap-2">
-              <UserIcon className="h-5 w-5 text-primary" /> 基本资料
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="user-name">显示名称</Label>
-                <Input id="user-name" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="user-email">电子邮箱</Label>
-                <Input id="user-email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="user-username">登录账号</Label>
-                <Input id="user-username" value={username} disabled aria-label="登录账号" className="bg-muted opacity-60" />
-              </div>
-              <div className="space-y-2">
-                <Label>账户状态</Label>
-                <Select
-                  value={form.status}
-                  onValueChange={(v) => setForm({ ...form, status: v })}
-                  disabled={(serverUser.status as string) === 'LOCKED'}
-                >
-                  <SelectTrigger aria-label="账户状态">
-                    <SelectValue>{STATUS_LABELS[form.status] ?? form.status}</SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ACTIVE">正常</SelectItem>
-                    <SelectItem value="DISABLED">已禁用</SelectItem>
-                    <SelectItem value="LOCKED">已锁定</SelectItem>
-                  </SelectContent>
-                </Select>
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-12">
+          <div className="space-y-3 lg:col-span-8">
+            {/* ① 基本资料：可编辑字段集中，两列栅格 */}
+            <Card className="gap-0 overflow-hidden rounded-lg border border-border/70 py-0 shadow-sm ring-0">
+              <CardHeader className="border-b bg-muted/30 px-3 py-2">
+                <CardTitle className="flex items-center gap-2 type-card-title">
+                  <UserIcon className="h-4 w-4 text-primary" /> 基本资料
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="grid grid-cols-1 gap-3 p-3 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor="user-name">显示名称</Label>
+                  <Input id="user-name" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="user-email">电子邮箱</Label>
+                  <Input id="user-email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="user-username">登录账号</Label>
+                  <Input id="user-username" value={username} disabled aria-label="登录账号" className="bg-muted opacity-60" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="user-status">账户状态</Label>
+                  <Select
+                    value={form.status}
+                    onValueChange={(v) => setForm({ ...form, status: v })}
+                    disabled={(serverUser.status as string) === 'LOCKED'}
+                  >
+                    <SelectTrigger id="user-status" aria-label="账户状态">
+                      <SelectValue>{STATUS_LABELS[form.status] ?? form.status}</SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ACTIVE">正常</SelectItem>
+                      <SelectItem value="DISABLED">已禁用</SelectItem>
+                      <SelectItem value="LOCKED">已锁定</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {(serverUser.status as string) === 'LOCKED' && (
+                    <p className="text-[11px] text-muted-foreground">已锁定账号不可直接切换状态，请在下方「重置密码 / 解锁」中处理。</p>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* ② 账号安全：把"重置密码/解锁/删除"从页头收进分组，带影响说明 */}
+            <Card className="gap-0 overflow-hidden rounded-lg border border-border/70 py-0 shadow-sm ring-0">
+              <CardHeader className="border-b bg-muted/30 px-3 py-2">
+                <CardTitle className="flex items-center gap-2 type-card-title">
+                  <KeyRound className="h-4 w-4 text-primary" /> 账号安全
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="divide-y p-0">
+                <div className="flex items-center justify-between gap-3 px-3 py-2.5">
+                  <div className="min-w-0">
+                    <p className="text-[13px] font-medium">重置密码</p>
+                    <p className="text-[11px] text-muted-foreground">重置后该用户所有活跃会话会被撤销，需要用新密码重新登录。</p>
+                  </div>
+                  <PermissionGuard permission={USER_PERMISSIONS.RESET_PASSWORD}>
+                    <ResetPasswordDialog userId={id} userName={form.name} />
+                  </PermissionGuard>
+                </div>
                 {(serverUser.status as string) === 'LOCKED' && (
-                  <p className="text-xs text-muted-foreground">
-                    已锁定账号不可直接切换状态，请使用右上角「解锁」恢复为正常。
-                  </p>
+                  <div className="flex items-center justify-between gap-3 px-3 py-2.5">
+                    <div className="min-w-0">
+                      <p className="text-[13px] font-medium">解锁账号</p>
+                      <p className="text-[11px] text-muted-foreground">登录失败次数过多会被临时锁定；解锁后恢复为正常状态。</p>
+                    </div>
+                    <PermissionGuard permission={USER_PERMISSIONS.UPDATE}>
+                      <Button variant="outline" size="sm" onClick={handleUnlock} disabled={saving}>
+                        <ShieldCheck className="h-3.5 w-3.5" /> 解锁
+                      </Button>
+                    </PermissionGuard>
+                  </div>
                 )}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+                <div className="flex items-center justify-between gap-3 px-3 py-2.5">
+                  <div className="min-w-0">
+                    <p className="text-[13px] font-medium text-destructive">删除用户</p>
+                    <p className="text-[11px] text-muted-foreground">立即注销该用户全部权限与活跃会话，不可撤销。</p>
+                  </div>
+                  <PermissionGuard permission={USER_PERMISSIONS.DELETE}>
+                    <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
+                      <DialogTrigger render={<Button variant="outline" size="sm" className="border-destructive/30 text-destructive hover:bg-destructive/10" />}>
+                        <Trash2 className="h-3.5 w-3.5" /> 删除用户
+                      </DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle className="text-destructive">确认永久删除？</DialogTitle>
+                          <DialogDescription>
+                            此操作将立即注销用户 <strong>{form.name}</strong> 的所有访问权限。该操作不可撤销。
+                          </DialogDescription>
+                        </DialogHeader>
+                        <DialogFooter>
+                          <Button variant="outline" onClick={() => setIsDeleteOpen(false)}>取消</Button>
+                          <Button variant="destructive" onClick={handleDelete}>确认删除</Button>
+                        </DialogFooter>
+                      </DialogContent>
+                    </Dialog>
+                  </PermissionGuard>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
 
-        <div className="space-y-6 lg:col-span-4">
-          <Card className="overflow-hidden rounded-xl border-none bg-card shadow-sm ring-1 ring-border/50">
-            <CardHeader className="pb-2">
-              <CardTitle>系统信息</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-muted rounded-lg text-muted-foreground"><Building className="h-4 w-4" /></div>
-                <div>
-                  <p className="text-xs text-muted-foreground">所属部门</p>
-                  <p className="text-sm font-medium">{deptName || '未分配'}</p>
+          <div className="space-y-3 lg:col-span-4">
+            {/* ③ 部门与角色：只读摘要 + 分配入口 */}
+            <Card className="gap-0 overflow-hidden rounded-lg border border-border/70 py-0 shadow-sm ring-0">
+              <CardHeader className="border-b bg-muted/30 px-3 py-2">
+                <CardTitle className="flex items-center gap-2 type-card-title">
+                  <Building className="h-4 w-4 text-primary" /> 部门与角色
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3 p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] text-muted-foreground">所属部门</span>
+                  <span className="text-[13px] font-medium">{deptName || '未分配'}</span>
                 </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-muted rounded-lg text-muted-foreground"><Calendar className="h-4 w-4" /></div>
-                <div>
-                  <p className="text-xs text-muted-foreground">创建于</p>
-                  <p className="text-sm font-medium">{formatDateTime(createdAt)}</p>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] text-muted-foreground">角色</span>
+                  <PermissionGuard permission={USER_PERMISSIONS.ASSIGN_ROLE}>
+                    <Button asChild variant="outline" size="sm">
+                      <Link href={`/users/${id}/roles`}>
+                        <Shield className="mr-1.5 h-3.5 w-3.5" /> 分配角色
+                      </Link>
+                    </Button>
+                  </PermissionGuard>
                 </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-muted rounded-lg text-muted-foreground"><Shield className="h-4 w-4" /></div>
-                <div>
-                  <p className="text-xs text-muted-foreground">安全角色</p>
-                  <p className="text-sm text-muted-foreground">通过右上角「分配角色」管理</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+                <p className="text-[11px] leading-5 text-muted-foreground">
+                  角色决定可访问的菜单与操作权限；部门决定数据范围（子树）。
+                </p>
+              </CardContent>
+            </Card>
 
-          <div className="flex items-start gap-4 rounded-xl border border-warning/20 bg-warning/10 p-6">
-            <div className="p-2 bg-card rounded-xl shadow-sm text-warning"><AlertTriangle className="h-5 w-5" /></div>
-            <div className="space-y-1">
-              <h3 className="text-sm font-bold text-warning">高风险操作</h3>
-              <p className="text-xs text-warning/80 leading-relaxed">
+            {/* ④ 系统信息：排障需要，提供复制 */}
+            <Card className="gap-0 overflow-hidden rounded-lg border border-border/70 py-0 shadow-sm ring-0">
+              <CardHeader className="border-b bg-muted/30 px-3 py-2">
+                <CardTitle className="flex items-center gap-2 type-card-title">
+                  <Calendar className="h-4 w-4 text-primary" /> 系统信息
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2.5 p-3">
+                <div>
+                  <p className="text-[11px] text-muted-foreground">用户 ID</p>
+                  <div className="flex items-center gap-1.5">
+                    <code className="min-w-0 flex-1 truncate font-mono text-[11px]">{String(serverUser.id ?? id)}</code>
+                    <Button variant="ghost" size="icon-sm" aria-label="复制用户 ID" title="复制用户 ID" onClick={copyUserId}>
+                      <Copy className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] text-muted-foreground">创建于</span>
+                  <span className="text-[13px]">{formatDateTime(createdAt)}</span>
+                </div>
+              </CardContent>
+            </Card>
+
+            <div className="flex items-start gap-2 rounded-lg border border-warning/20 bg-warning/10 px-3 py-2.5">
+              <AlertTriangle className="h-4 w-4 shrink-0 text-warning" />
+              <p className="text-[11px] leading-5 text-warning/90">
                 禁用或删除用户会立即撤销其在所有接入子系统中的活跃 Session，请谨慎操作。
               </p>
             </div>
           </div>
         </div>
-      </div>
       </fieldset>
 
       {/* U-UD01：390px 下页头按钮组会被挤出视口；关键保存操作在移动端固定底部，避免"改完没法保存"。 */}
       {canUpdate && (
-        <div className="sticky bottom-0 z-20 -mx-4 flex gap-2 border-t border-border bg-background/95 px-4 py-3 backdrop-blur lg:hidden">
-          {(serverUser.status as string) === 'LOCKED' && (
-            <Button variant="outline" className="flex-1" onClick={handleUnlock} disabled={saving}>
-              解锁
-            </Button>
-          )}
+        <div className="sticky bottom-0 z-20 -mx-3 flex gap-2 border-t border-border bg-background/95 px-3 py-2 backdrop-blur lg:hidden">
           <Button className="flex-1" onClick={handleUpdate} disabled={saving}>
             {saving ? '保存中...' : <><Save className="h-4 w-4" /> 保存修改</>}
           </Button>

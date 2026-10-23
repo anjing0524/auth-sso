@@ -28,6 +28,7 @@ interface PermissionItem {
   type: string;
   parentId?: string | null;
   clientId?: string | null;
+  status?: string;
 }
 
 export interface RolePermissionsPageProps {
@@ -52,6 +53,7 @@ export default function RolePermissionsPage({ role }: RolePermissionsPageProps) 
   const [keyword, setKeyword] = useState('');
   const [scopeId, setScopeId] = useState('all');
   const [onlySelected, setOnlySelected] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'DISABLED'>('ALL');
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -167,10 +169,11 @@ export default function RolePermissionsPage({ role }: RolePermissionsPageProps) 
     return permissions
       .filter((p) => set.has(p.id))
       .filter((p) => (onlySelected ? assignedIds.has(p.id) : true))
+      .filter((p) => (statusFilter === 'ALL' ? true : (p.status ?? 'ACTIVE') === statusFilter))
       .filter((p) => (kw ? p.name.toLowerCase().includes(kw) || p.code.toLowerCase().includes(kw) : true))
       .map((p) => ({ ...p, depth: p.type === 'API' ? 0 : depthOf(p) }))
       .sort((a, b) => a.type.localeCompare(b.type) || a.code.localeCompare(b.code));
-  }, [permissions, scope, assignedIds, keyword, onlySelected]);
+  }, [permissions, scope, assignedIds, keyword, onlySelected, statusFilter]);
 
   const scopeItemIds = scopedItems.map((p) => p.id);
   const allScopeSelected = scopeItemIds.length > 0 && scopeItemIds.every((id) => assignedIds.has(id));
@@ -278,7 +281,13 @@ export default function RolePermissionsPage({ role }: RolePermissionsPageProps) 
             {loading ? (
               <div className="flex justify-center py-10"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
             ) : (
-              renderTree(tree)
+              <>
+                {renderTree(tree.slice(0, 2))}
+                <div className="mt-2 px-2 py-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground/70">接口应用</div>
+                {renderTree(tree.filter((n) => n.kind === 'app'))}
+                <div className="mt-2 px-2 py-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground/70">菜单目录</div>
+                {renderTree(tree.filter((n) => n.kind === 'dir' || n.kind === 'page'))}
+              </>
             )}
           </div>
         </aside>
@@ -290,6 +299,19 @@ export default function RolePermissionsPage({ role }: RolePermissionsPageProps) 
             <Button variant="ghost" size="sm" onClick={() => setOnlySelected((v) => !v)}>
               {onlySelected ? '显示全部' : '仅看已选'}
             </Button>
+            <div className="flex items-center gap-1">
+              {([['ALL', '全部'], ['ACTIVE', '已启用'], ['DISABLED', '已禁用']] as const).map(([v, t]) => (
+                <button
+                  key={v}
+                  type="button"
+                  aria-pressed={statusFilter === v}
+                  onClick={() => setStatusFilter(v)}
+                  className={`h-6 rounded px-1.5 text-[11px] transition-colors ${statusFilter === v ? 'bg-primary/10 font-medium text-primary' : 'text-muted-foreground hover:bg-muted'}`}
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
             <Button
               variant="ghost"
               size="sm"
@@ -334,6 +356,9 @@ export default function RolePermissionsPage({ role }: RolePermissionsPageProps) 
                         <span className="shrink-0 rounded bg-muted px-1 text-[10px] text-muted-foreground">
                           {TYPE_LABELS[p.type] ?? p.type}
                         </span>
+                        {(p.status ?? 'ACTIVE') !== 'ACTIVE' && (
+                          <span className="shrink-0 rounded bg-destructive/10 px-1 text-[10px] text-destructive">已禁用</span>
+                        )}
                       </span>
                       <span className="block truncate font-mono text-[11px] text-muted-foreground">{p.code}</span>
                     </span>

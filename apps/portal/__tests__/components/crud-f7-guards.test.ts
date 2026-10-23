@@ -197,3 +197,30 @@ describe('表格滚动与吸顶契约（2026-10-23 UI 重做）', () => {
     expect(userRoles).toContain('UserRolesPage');
   });
 });
+
+describe('产品化页面结构（2026-10-23，UX-GUIDELINES §3）', () => {
+  it('注册应用按任务分三块，并给 scope/TTL 预设（减少输入）', () => {
+    const src = read('src/app/(dashboard)/clients/new/page.tsx');
+    for (const t of ['应用身份', '登录与回调', '安全与令牌']) expect(src).toContain(t);
+    expect(src).toContain('SCOPE_PRESETS');
+    expect(src).toContain('aria-pressed={active}');
+    expect(src).toContain('确认注册');
+  });
+
+  it('用户详情按 section 分组（基本/安全/部门角色/系统信息），危险操作带影响说明', () => {
+    const src = read('src/app/(dashboard)/users/[id]/UserDetailForm.tsx');
+    for (const t of ['基本资料', '账号安全', '部门与角色', '系统信息']) expect(src).toContain(t);
+    expect(src).toContain('重置后该用户所有活跃会话会被撤销');
+    expect(src).toContain('不可撤销');
+    expect(src).toContain('复制用户 ID');
+  });
+
+  it('权限分配作用域树带分组与状态过滤（产品方案而非逐项点选）', () => {
+    const src = read('src/app/(dashboard)/roles/[id]/permissions/permissions-client.tsx');
+    expect(src).toContain('接口应用');
+    expect(src).toContain('菜单目录');
+    expect(src).toContain('全选本域');
+    expect(src).toContain('仅看已选');
+    expect(src).toContain('已禁用');
+  });
+});
