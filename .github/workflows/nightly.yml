@@ -1,0 +1,22 @@
+name: Nightly Acceptance
+
+# 夜间验收：把高成本、易受外部环境影响的验证从每次 push/PR 里移出来。
+# - Pebble ACME 全生命周期（~14min，Pebble/challtestsrv 容器 + 自签 CA）
+# - 完整 e2e（Docker 发布栈闭环）
+# 结果作为发布前的稳定性证据；失败不阻塞当日开发推送，但需在 24h 内修复。
+on:
+  schedule:
+    - cron: '0 18 * * *' # UTC 18:00 = Asia/Shanghai 02:00
+  workflow_dispatch:
+
+concurrency:
+  group: nightly-acceptance
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    uses: ./.github/workflows/validation-suite.yml
+    with:
+      artifact_name: nightly-e2e-evidence
+      artifact_retention_days: 7
+      run_acme: true

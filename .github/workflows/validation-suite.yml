@@ -10,6 +10,12 @@ on:
         required: false
         type: number
         default: 14
+      # Pebble ACME 全生命周期（约 14min、需要 Pebble/challtestsrv 容器与自签 CA）
+      # 只在 release 验证与夜间验收里跑；push/PR 只跑便宜的 staging 预检。
+      run_acme:
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   full-check:
@@ -124,10 +130,12 @@ jobs:
         continue-on-error: true
         run: cargo audit
 
-  gateway-acme-e2e:
-    name: Gateway ACME Lifecycle
+  # 每次 push/PR 都跑：纯脚本预检（校验工具链、环境变量与公网前提），秒级、无容器。
+  # 它证明"ACME 验收脚本自身可用"，但不承担 Pebble 全生命周期的高成本。
+  acme-preflight:
+    name: Gateway ACME staging preflight
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 5
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -172,9 +180,6 @@ jobs:
           grep -qx "letsencrypt_staging_domain=invalid" \
             .context/compound-engineering/acme-staging/preflight/ip-literal/summary.txt
 
-      - name: Run Pebble ACME lifecycle
-        run: ./scripts/e2e/acme-e2e.sh
-
       - name: Upload public staging preflight evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -183,6 +188,20 @@ jobs:
           path: .context/compound-engineering/acme-staging/preflight/
           retention-days: ${{ inputs.artifact_retention_days }}
           if-no-files-found: error
+
+  # 高成本层：Pebble 驱动的完整 ACME 生命周期（HTTP-01 签发/续期/吊销证据）。
+  # 仅 release 验证（tag/workflow_dispatch）与夜间验收触发；push/PR 的 run_acme=false 会跳过整个 job。
+  gateway-acme-e2e:
+    name: Gateway ACME Lifecycle (Pebble)
+    if: ${{ inputs.run_acme }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run Pebble ACME lifecycle
+        run: ./scripts/e2e/acme-e2e.sh
 
       - name: Upload ACME lifecycle evidence
         if: always()
