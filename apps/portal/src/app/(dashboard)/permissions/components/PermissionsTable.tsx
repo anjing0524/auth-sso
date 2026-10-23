@@ -149,19 +149,6 @@ export default function PermissionsTable({ permissions, pagination, activeTab, i
     { key: 'actions', header: '操作', className: 'text-right' },
   ];
 
-  const cardHeader = (
-    <TableToolbar
-      left={<SearchInput placeholder="搜索权限名称或编码..." value={keyword} onChange={handleSearch} />}
-      right={
-        <PermissionGuard permission={PERMISSION_PERMISSIONS.CREATE}>
-          <Button asChild>
-            <Link href="/permissions/new"><Plus className="h-4 w-4" /> 新建权限</Link>
-          </Button>
-        </PermissionGuard>
-      }
-    />
-  );
-
   /** 类型筛选独立成行（与审计日志页签同形态，不再挤在工具条里） */
   const tabsBar = (
     <Tabs value={activeTab} onValueChange={handleTabChange} className="w-fit">
@@ -171,6 +158,26 @@ export default function PermissionsTable({ permissions, pagination, activeTab, i
         ))}
       </TabsList>
     </Tabs>
+  );
+
+  // 标题/页签/搜索同处一行：页签是筛选器，不与工具栏各占一行
+  const cardHeader = (
+    <TableToolbar
+      left={
+        <div className="flex flex-wrap items-center gap-2">
+          <h1 className="type-section-title shrink-0 text-foreground">权限管理</h1>
+          {tabsBar}
+          <SearchInput placeholder="搜索权限名称或编码..." value={keyword} onChange={handleSearch} />
+        </div>
+      }
+      right={
+        <PermissionGuard permission={PERMISSION_PERMISSIONS.CREATE}>
+          <Button asChild>
+            <Link href="/permissions/new"><Plus className="h-4 w-4" /> 新建权限</Link>
+          </Button>
+        </PermissionGuard>
+      }
+    />
   );
 
   const renderRow = (p: PermissionRow) => (
@@ -229,10 +236,6 @@ export default function PermissionsTable({ permissions, pagination, activeTab, i
 
   return (
     <>
-      <div className="flex shrink-0 flex-wrap items-center gap-3">
-        <h1 className="type-section-title text-foreground">权限管理</h1>
-        {tabsBar}
-      </div>
       <div className="flex min-h-0 flex-1 flex-col">
       <DataTable
         columns={columns}

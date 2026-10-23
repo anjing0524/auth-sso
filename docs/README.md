@@ -42,7 +42,7 @@
 
 ## 四、目录速览
 
-> **计数以目录为准**：本节的 `(N)` 是 `ls docs/<dir>/*.md | wc -l` 的实测值（2026-10-23：adr 26 / research 3 / spec 7）。
+> **计数以目录为准**：本节的 `(N)` 是 `ls docs/<dir>/*.md | wc -l` 的实测值（2026-10-23：adr 26 / research 3 / spec 9）。
 > 新增或删除文档后请同步本节；数字与目录不一致时，以目录内容为准。
 
 ```
@@ -54,7 +54,7 @@ docs/
 ├── roadmap.md           里程碑与取舍（时间倒序）
 ├── adr/ (26)            决策记录
 ├── research/ (3)        调研笔记
-└── spec/ (7)            需求规格
+└── spec/ (9)            需求规格
 docker/                  Docker 配置入口（compose / Dockerfile / README）
 scripts/                 工具脚本（docker / e2e / ci / bench，见 scripts/README.md）
 ```
