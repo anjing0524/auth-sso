@@ -204,23 +204,12 @@ jobs:
       - name: Build and start immutable Gateway stack
         run: docker compose -f docker/compose/test.yml up --detach --build --wait --wait-timeout 600 postgres redis cert-init db-init portal gateway
 
-      # 浏览器版本必须由**本仓 lockfile** 决定：Playwright 镜像自带的是镜像发布版本的浏览器，
-      # 与 `@playwright/test` 依赖版本不一致时（实测 v1.60.0 镜像 vs 1.64.1 依赖）会报
-      # `Executable doesn't exist at /ms-playwright/chromium_headless_shell-1248/...`。
-      # 因此在容器内显式安装与 lockfile 匹配的 Chromium（镜像里 PLAYWRIGHT_BROWSERS_PATH
-      # 默认指向 /ms-playwright，root 可写），并跑 tests/e2e 下**全部** spec。
-      - name: Install matching Playwright browsers
-        run: >
-          docker run --rm
-          -v "$PWD:/work"
-          -w /work
-          mcr.microsoft.com/playwright:v1.60.0-noble
-          bash -lc "npm install -g pnpm@10.12.4 &&
-          printf 'manage-package-manager-versions=false\nregistry=https://registry.npmmirror.com\n' > .npmrc &&
-          pnpm install --frozen-lockfile &&
-          pnpm exec playwright install chromium"
-
       - name: Run Gateway release journey
+        # 浏览器版本必须由**本仓 lockfile** 决定：Playwright 镜像自带镜像发布版本的浏览器，
+        # 与 `@playwright/test` 依赖版本不一致时（实测 v1.60.0 镜像 vs 1.64.1 依赖）会报
+        # `Executable doesn't exist at /ms-playwright/chromium_headless_shell-1248/...`。
+        # 关键：安装必须发生在**运行测试的同一个容器**里——`--rm` 容器的可写层随容器销毁，
+        # 上一步单独 `docker run` 安装的浏览器不会保留到下一条命令（实测仍报同一错误）。
         run: >
           docker run --rm
           --network host
@@ -233,6 +222,7 @@ jobs:
           bash -lc "npm install -g pnpm@10.12.4 &&
           printf 'manage-package-manager-versions=false\nregistry=https://registry.npmmirror.com\n' > .npmrc &&
           pnpm install --frozen-lockfile &&
+          pnpm exec playwright install chromium &&
           pnpm exec playwright test tests/e2e"
 
       - name: Collect Gateway stack logs
