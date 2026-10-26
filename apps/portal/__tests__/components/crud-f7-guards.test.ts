@@ -224,3 +224,18 @@ describe('产品化页面结构（2026-10-23，UX-GUIDELINES §3）', () => {
     expect(src).toContain('已禁用');
   });
 });
+
+describe('审计调查筛选（2026-10-26，UX-GUIDELINES §3.5）', () => {
+  it('时间范围走白名单 + 数据层过滤 + 导出沿用筛选', () => {
+    const page = read('src/app/(dashboard)/audit-logs/page.tsx');
+    expect(page).toContain("const TIME_RANGES = ['24h', '7d', '30d']");
+    expect(page).toContain('startDate');
+    expect(page).toContain('endDate');
+    expect(page).toContain('&startDate=');
+    expect(page).toContain('range');
+    const filters = read('src/app/(dashboard)/audit-logs/components/audit-filters.tsx');
+    expect(filters).toContain('时间范围筛选');
+    expect(filters).toContain('近 7 天');
+    expect(filters).toContain("params.set('range'");
+  });
+});

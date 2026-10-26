@@ -27,23 +27,48 @@ interface Props {
   tab: 'login' | 'operation';
   eventType?: LoginEventType | null;
   operation?: AuditOperation | null;
+  /** 时间范围（24h/7d/30d）；与 tab/类型筛选一起写进 URL */
+  range?: '24h' | '7d' | '30d' | null;
 }
 
-export function AuditFilters({ tab, eventType, operation }: Props) {
+const TIME_RANGE_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: 'ALL', label: '全部时间' },
+  { value: '24h', label: '近 24 小时' },
+  { value: '7d', label: '近 7 天' },
+  { value: '30d', label: '近 30 天' },
+];
+
+export function AuditFilters({ tab, eventType, operation, range }: Props) {
   const router = useRouter();
 
-  const push = (next: { eventType?: string | null; operation?: string | null }) => {
+  const push = (next: { eventType?: string | null; operation?: string | null; range?: string | null }) => {
     const params = new URLSearchParams();
     params.set('tab', tab);
     const ev = next.eventType !== undefined ? next.eventType : eventType;
     const op = next.operation !== undefined ? next.operation : operation;
+    const rg = next.range !== undefined ? next.range : range;
     if (tab === 'login' && ev) params.set('eventType', ev);
     if (tab === 'operation' && op) params.set('operation', op);
+    if (rg) params.set('range', rg);
     router.push(`/audit-logs?${params.toString()}`);
   };
 
+  const timeRangeSelect = (
+    <Select value={range ?? 'ALL'} onValueChange={(v) => push({ range: v === 'ALL' ? null : v })}>
+      <SelectTrigger aria-label="时间范围筛选" className="w-36">
+        <SelectValue>{TIME_RANGE_OPTIONS.find((o) => o.value === (range ?? 'ALL'))?.label ?? '全部时间'}</SelectValue>
+      </SelectTrigger>
+      <SelectContent>
+        {TIME_RANGE_OPTIONS.map((o) => (
+          <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+
   if (tab === 'login') {
     return (
+      <div className="flex items-center gap-2">
       <Select value={eventType ?? 'ALL'} onValueChange={(v) => push({ eventType: v === 'ALL' ? null : v })}>
         <SelectTrigger aria-label="事件类型筛选" className="w-48">
           <SelectValue>{eventType ? LOGIN_EVENT_LABELS[eventType] : '全部事件类型'}</SelectValue>
@@ -55,10 +80,13 @@ export function AuditFilters({ tab, eventType, operation }: Props) {
           ))}
         </SelectContent>
       </Select>
+      {timeRangeSelect}
+      </div>
     );
   }
 
   return (
+    <div className="flex items-center gap-2">
     <Select value={operation ?? 'ALL'} onValueChange={(v) => push({ operation: v === 'ALL' ? null : v })}>
       <SelectTrigger aria-label="操作类型筛选" className="w-48">
         <SelectValue>{operation ? AUDIT_OPERATION_LABELS[operation] : '全部操作类型'}</SelectValue>
@@ -70,5 +98,7 @@ export function AuditFilters({ tab, eventType, operation }: Props) {
         ))}
       </SelectContent>
     </Select>
+    {timeRangeSelect}
+    </div>
   );
 }

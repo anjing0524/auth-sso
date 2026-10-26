@@ -26,6 +26,21 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
 }));
 
+// 审计页在渲染期读取身份与权限（canExport）；UI 测试不依赖真实 Redis/DB，直接给定已登录+有导出权限
+// @allow-module-mock @/lib/auth auth-bypass: 页面只消费"已登录用户"这一输入，鉴权语义由 API 测试覆盖
+vi.mock(import('@/lib/auth'), async (importOriginal): Promise<Partial<typeof authModule>> => {
+  const actual = await importOriginal();
+  return { ...actual, resolveIdentity: vi.fn(async () => ({ userId: 'user-1', claims: { sub: 'user-1' } })) as unknown as typeof actual.resolveIdentity };
+});
+// @allow-module-mock @/lib/permissions auth-bypass: 权限上下文由本 mock 提供"有 audit:export"输入，真实映射由 permission 测试覆盖
+vi.mock(import('@/lib/permissions'), async (importOriginal): Promise<Partial<typeof permissionsModule>> => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    getUserPermissionContext: vi.fn(async () => ({ roles: [{ code: 'SUPER_ADMIN' }], permissions: ['portal:audit:read', 'portal:audit:export'] })) as unknown as typeof actual.getUserPermissionContext,
+  };
+});
+
 // Mock auth (audit-logs page 在 layout 层鉴权，但 resolveIdentity 可能间接调用)
 // @allow-module-mock @/lib/auth/verify-jwt auth-bypass: 本文件测 UI 行为，登录态解析由 mock 提供"已登录用户"这一输入（依赖它的断言：audit-logs.test.tsx 全部用例）
 vi.mock(import('@/lib/auth/verify-jwt'), async (importOriginal): Promise<Partial<typeof authVerifyJwtModule>> => {
@@ -41,6 +56,8 @@ import AuditLogsPage, { metadata } from '@/app/(dashboard)/audit-logs/page';
 import { AuditTabs } from '@/app/(dashboard)/audit-logs/components/audit-tabs';
 import type * as auditDataModule from '@/app/audit/data';
 import type * as authVerifyJwtModule from '@/lib/auth/verify-jwt';
+import type * as authModule from '@/lib/auth';
+import type * as permissionsModule from '@/lib/permissions';
 
 
 describe('AuditLogsPage', () => {
