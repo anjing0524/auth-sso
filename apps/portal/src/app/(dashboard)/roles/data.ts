@@ -82,7 +82,7 @@ export async function getRoles(params: RolesListParams) {
   if (isScopeDenied(scope)) return { data: [], pagination: paginationMeta(page, pageSize, 0) };
   const whereClause = buildRoleConditions(keyword, status, scope);
 
-  return withPagination(
+  const result = await withPagination(
     page,
     pageSize,
     db.select().from(schema.roles).where(whereClause)
@@ -91,6 +91,12 @@ export async function getRoles(params: RolesListParams) {
     countRows(schema.roles, whereClause),
     toRoleDTO,
   );
+  // 列表权限数：角色分配页需要据此提示"0 权限角色无法登录"；与角色管理列共用同一聚合
+  const permissionCounts = await getRolePermissionCounts(result.data.map((r) => r.id));
+  return {
+    ...result,
+    data: result.data.map((r) => ({ ...r, permissionCount: permissionCounts[r.id] ?? 0 })),
+  };
 }
 
 /**

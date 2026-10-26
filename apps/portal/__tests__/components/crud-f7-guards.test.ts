@@ -474,3 +474,16 @@ describe('建号/登录语义一致（2026-10-26，第十七轮）', () => {
     expect(roles).toContain('至少有一个含权限的角色');
   });
 });
+
+describe('角色分配权限数/零权限警告（2026-10-26，第十八轮）', () => {
+  it('角色行显示权限数，全零权限组合在保存前警告', () => {
+    const page = read('src/app/(dashboard)/users/[id]/roles/roles-client.tsx');
+    expect(page).toContain('permissionCount');
+    expect(page).toContain('0 权限');
+    expect(page).toContain('所选角色均没有任何权限');
+    expect(page).toContain('所选角色均无权限');
+    const data = read('src/app/(dashboard)/roles/data.ts');
+    expect(data).toContain('permissionCounts');
+    expect(data).toContain('permissionCount');
+  });
+});

@@ -30,6 +30,8 @@ interface Role {
   deptId: string;
   isSystem?: boolean;
   status?: string;
+  /** 角色当前绑定的权限数（0 = 分配后用户无法登录门户） */
+  permissionCount?: number;
 }
 
 export interface UserRolesPageProps {
@@ -120,6 +122,9 @@ export default function UserRolesPage({ user }: UserRolesPageProps) {
   }, [assignedRoleIds, savedRoleIds]);
   const changeCount = addedIds.size + removedIds.size;
   const displayRoles = onlySelected ? filteredRoles.filter((r) => assignedRoleIds.has(r.id)) : filteredRoles;
+  const selectedRoles = roles.filter((r) => assignedRoleIds.has(r.id));
+  const selectedPermTotal = selectedRoles.reduce((sum, r) => sum + (r.permissionCount ?? 0), 0);
+  const allSelectedRolesEmpty = selectedRoles.length > 0 && selectedRoles.every((r) => (r.permissionCount ?? 0) === 0);
 
   const toggleRole = (roleId: string) => {
     setAssignedRoleIds((prev) => {
@@ -189,6 +194,16 @@ export default function UserRolesPage({ user }: UserRolesPageProps) {
           </div>
         </div>
 
+        {allSelectedRolesEmpty && (
+          <div className="border-b bg-destructive/10 px-3 py-1.5 text-[11px] text-destructive">
+            所选角色均没有任何权限（合计 0 项）：保存后该用户将无法登录门户。请继续为角色配置权限或改选其他角色。
+          </div>
+        )}
+        {!allSelectedRolesEmpty && selectedRoles.length > 0 && (
+          <div className="border-b bg-muted/30 px-3 py-1.5 text-[11px] text-muted-foreground">
+            所选 {selectedRoles.length} 个角色合计 {selectedPermTotal} 项权限
+          </div>
+        )}
         <div className="scrollbar-slim min-h-0 flex-1 overflow-y-auto p-3">
           {loading ? (
             <div className="flex items-center justify-center py-24">
@@ -224,7 +239,12 @@ export default function UserRolesPage({ user }: UserRolesPageProps) {
                       {addedIds.has(role.id) && <Badge variant="success" className="h-5 shrink-0 px-1.5 text-[10px]">待新增</Badge>}
                       {removedIds.has(role.id) && <Badge variant="destructive" className="h-5 shrink-0 px-1.5 text-[10px]">待移除</Badge>}
                     </span>
-                    <span className="block truncate font-mono text-[11px] text-muted-foreground">{role.code}</span>
+                    <span className="block truncate font-mono text-[11px] text-muted-foreground">
+                      {role.code}
+                      <span className={`ml-1.5 rounded px-1 text-[10px] ${(role.permissionCount ?? 0) === 0 ? 'bg-destructive/10 text-destructive' : 'bg-muted text-muted-foreground'}`}>
+                        {(role.permissionCount ?? 0) === 0 ? '0 权限' : `${role.permissionCount} 项`}
+                      </span>
+                    </span>
                   </span>
                   <Shield className="h-3.5 w-3.5 shrink-0 text-muted-foreground/50" aria-hidden="true" />
                 </label>
@@ -240,6 +260,7 @@ export default function UserRolesPage({ user }: UserRolesPageProps) {
             <DialogTitle>确认保存角色变更？</DialogTitle>
             <DialogDescription>
               用户「{user.name}」：将新增 {addedIds.size} 个、移除 {removedIds.size} 个角色；保存后权限即时生效。
+              {allSelectedRolesEmpty && ' 注意：所选角色均无权限，保存后该用户将无法登录门户。'}
             </DialogDescription>
           </DialogHeader>
           <div className="max-h-56 space-y-2 overflow-y-auto text-[12px]">
