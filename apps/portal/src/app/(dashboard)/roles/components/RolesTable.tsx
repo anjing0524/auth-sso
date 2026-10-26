@@ -178,11 +178,11 @@ export default function RolesTable({ roles, pagination, initialKeyword, initialS
   const cardHeader = (
     <TableToolbar
       left={
-        <div className="flex min-w-0 items-center gap-3">
-          <h1 className="shrink-0 text-[15px] font-semibold tracking-tight text-foreground">角色管理</h1>
-          <SearchInput placeholder="搜索角色名称或编码..." value={keyword} onChange={handleSearch} busy={isPending} />
+        <div className="flex min-w-0 flex-wrap items-center gap-2 md:flex-nowrap md:gap-3">
+          <h1 className="w-full shrink-0 text-[15px] font-semibold tracking-tight text-foreground md:w-auto">角色管理</h1>
+          <SearchInput placeholder="搜索角色名称或编码..." value={keyword} onChange={handleSearch} busy={isPending} className="w-full md:w-64" />
           <Select value={initialSort} onValueChange={applySort}>
-            <SelectTrigger aria-label="角色排序" className="w-full md:w-40">
+            <SelectTrigger aria-label="角色排序" className="w-[calc(50%-0.25rem)] md:w-40">
               <SelectValue>
                 {initialSort === 'permissions-asc' ? '权限数最少' : initialSort === 'permissions-desc' ? '权限数最多' : '默认排序'}
               </SelectValue>
@@ -194,7 +194,7 @@ export default function RolesTable({ roles, pagination, initialKeyword, initialS
             </SelectContent>
           </Select>
           <Select value={initialStatus || 'ALL'} onValueChange={(v) => applyStatus(v === 'ALL' ? '' : v)}>
-            <SelectTrigger aria-label="过滤角色状态" className="w-full md:w-32">
+            <SelectTrigger aria-label="过滤角色状态" className="w-[calc(50%-0.25rem)] md:w-32">
               <SelectValue>
                 {initialStatus === 'ACTIVE' ? '已启用' : initialStatus === 'DISABLED' ? '已禁用' : '全部状态'}
               </SelectValue>

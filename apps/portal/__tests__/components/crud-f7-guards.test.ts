@@ -919,3 +919,13 @@ describe('错误页统一出口（续一百五十八）', () => {
     expect(shared).toContain('返回工作台');
   });
 });
+
+describe('角色移动端工具栏（续一百五十九）', () => {
+  it('title/search 整行，排序/状态两列，桌面恢复单行', () => {
+    const src = read('src/app/(dashboard)/roles/components/RolesTable.tsx');
+    expect(src).toContain('flex min-w-0 flex-wrap items-center gap-2 md:flex-nowrap');
+    expect(src).toContain('w-full shrink-0 text-[15px]');
+    expect(src).toContain('w-[calc(50%-0.25rem)] md:w-40');
+    expect(src).toContain('w-[calc(50%-0.25rem)] md:w-32');
+  });
+});
