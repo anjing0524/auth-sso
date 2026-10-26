@@ -96,7 +96,7 @@
 
 | 指标 | 预算 | 验证方式 |
 |---|---|---|
-| 页面级滚动条 | **0**（登录页含；600px 高视口） | Playwright：**document 与主内容区两层** `scrollHeight > clientHeight`（只查 document 会漏掉 main 内层滚动） |
+| 内容区纵向滚动 | **列表页/工作台 = 0**（600/700/800）；**详情/表单/个人中心允许纵向滚动**（不得横向溢出） | Playwright：`#main-content` 首子元素 `scrollHeight > clientHeight`（外层 shell `<main>` 的首子元素是 header，不能用它判断） |
 | 首数据行距顶（chrome） | ≥800h：≤20%；600h：≤30% | 量 `tbody tr` top / innerHeight |
 | 列表可见行 | 600h ≥ 8 行；800h ≥ 14 行 | 量完整可见行数 |
 | 控件高度 | 工具栏 32px；表单 36px；触控目标 ≥32px | 量 `getBoundingClientRect().height` |

@@ -39,7 +39,7 @@ const round = (n) => (n == null ? '-' : Math.round(n));
 async function measurePage(page) {
   return page.evaluate(() => {
     const doc = document.scrollingElement;
-    const main = document.querySelector('main');
+    const main = document.querySelector('#main-content') ?? document.querySelector('main');
     // 主内容区自身是滚动容器（main overflow-hidden，内层 div overflow-auto）；
     // 只查 document 会漏掉内容溢出，导致"无页面滚动"假绿。
     const content = main?.firstElementChild;

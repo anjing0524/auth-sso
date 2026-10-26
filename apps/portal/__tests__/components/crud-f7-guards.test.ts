@@ -695,7 +695,7 @@ describe('移动端列表（续一百四十）', () => {
     const page = read('src/app/(dashboard)/users/page.tsx');
     expect(page).toContain('grid w-full grid-cols-2');
     const filters = read('src/app/(dashboard)/users/components/UserFilters.tsx');
-    expect(filters).toContain('col-span-2 md:w-64');
+    expect(filters).toContain('col-span-2 md:w-56');
   });
 });
 
@@ -793,6 +793,7 @@ describe('个人中心会话可辨识（续一百四十八）', () => {
     const src = read('src/app/(dashboard)/profile/ProfileClient.tsx');
     expect(src).toContain('登录于');
     expect(src).toContain('撤销会话 ${formatDateTime(item.createdAt)}');
+    expect(src).toContain('item.id.slice(0, 8)');
     expect(src).toContain('sessions.find((s) => s.id === revokeTarget)');
   });
 });

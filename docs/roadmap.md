@@ -21,6 +21,8 @@
 
 ## 变更记录
 
+- 2026-10-26（续一百四十九）: **布局巡检：测量脚本假绿修正 + 用户工具栏 + 个人中心操作位置**。**①测量脚本修正**：`measure.mjs` 用 `document.querySelector("main")` 命中的是外层 shell，首子元素是 header（47px），导致内容区滚动长期被误判为 0。改用 `#main-content` 后，1139×600 真实结果：dashboard/users/roles/audit 内容区 0，profile 与用户详情为「有」（允许纵向滚动）；规范 §4 改为「列表/工作台=0，详情/表单/个人中心允许纵向滚动」。**②用户工具栏**：1139 下四筛选 + 新建按钮重叠（新建按钮盖住部门筛选）。收紧宽度（search 224、Select 128）并给右侧按钮 `shrink-0`；实测四控件同一行、按钮不重叠。**③个人中心**：「退出当前会话」从会话列表底部移到当前会话卡下方，600 高首屏可见（top 342）；e2e 又暴露「同一秒登录的会话 aria-label 仍相同」，给会话行加短 ID（可见 `#xxxxxxxx` 与 aria 名均含 ID），同名歧义消除。
+
 - 2026-10-26（续一百四十八）: **个人中心会话可辨识 + 撤销 e2e**。会话列表原来只显示 clientId `portal`、scope、到期时间，多设备行几乎一样；撤销按钮 aria-label 全是「撤销会话 portal」，读屏无法区分，用户也难以判断撤销哪台设备。**①可辨识**：每行增加「登录于 <时间>」；撤销按钮 `aria-label=撤销会话 <登录时间>（portal）`；确认弹窗明确目标会话的登录时间。**②e2e**：新增 `tests/e2e/profile-sessions.spec.ts`——两台 context 分别登录 → 目标行在第二台列表中同样可见 → 第一台撤销 → 第一台刷新目标行消失 → 第二台刷新目标行也消失（证明撤销命中的就是该设备）→ finally logout。**③验证**：e2e **13/13（41.0s）**；全量 vitest **1231 passed**；a11y 0；measure 0。说明：AT 剩余 >5min 时 refresh 返回 skipped（设计），故 e2e 不以 refresh 401 作为撤销判据。
 
 - 2026-10-26（续一百四十七）: **应用注册 TTL 选中态 + 注册闭环 e2e**。**①TTL 预设可辨认**：Access/Refresh 有效期预设按钮此前全部同款描边，用户无法判断当前值是否命中；按 `formData` 值切 default/outline 并加 `aria-pressed`。**②注册 e2e**：新增 `tests/e2e/client-registration.spec.ts`——填名/回调 → 确认注册 → 一次性凭证弹窗（Client ID + Secret 长度校验）→ 复制 Secret（按钮变「已复制」）→ 前往列表 → 行内注销；finally 清理。**③验证**：e2e **12/12（34.6s）**；全量 vitest **1230 passed**；a11y 0；measure 0；执行后 e2e_app_* 残留 0；typecheck/lint/build 0。

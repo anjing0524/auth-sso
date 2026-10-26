@@ -34,7 +34,7 @@ test.describe('个人中心会话', () => {
       const labels = await revokeButtons.evaluateAll((els) => els.map((e) => e.getAttribute('aria-label') ?? ''));
       expect(new Set(labels).size).toBe(labels.length); // 每行 aria-label 唯一
       const targetLabel = labels[0]!;
-      expect(targetLabel).toMatch(/撤销会话 .*（portal）/);
+      expect(targetLabel).toMatch(/撤销会话 .*（portal · [0-9a-f]{8}）/);
 
       // 目标会话同时出现在第二台设备的列表里（证明它就是该设备的会话）
       await page2.goto('/profile', { waitUntil: 'networkidle' });

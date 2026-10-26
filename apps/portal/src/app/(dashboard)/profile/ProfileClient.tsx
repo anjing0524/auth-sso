@@ -437,6 +437,10 @@ export default function ProfileClient({
               )}
 
               <div className="border-t pt-2.5">
+              <Button variant="outline" size="sm" className="w-full" onClick={() => setLogoutConfirmOpen(true)}>
+                退出当前会话
+              </Button>
+
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-[12px] font-medium">活跃登录会话</p>
                   <span className="text-[11px] text-muted-foreground">共 {sessions.length} 个</span>
@@ -449,12 +453,12 @@ export default function ProfileClient({
                       <li key={item.id} className="flex items-start justify-between gap-2 px-2 py-1.5">
                         <div className="min-w-0">
                           <p className="truncate font-mono text-[11px]">{item.clientId}</p>
-                          <p className="truncate text-[10px] text-muted-foreground">登录于 {formatDateTime(item.createdAt)}</p>
+                          <p className="truncate text-[10px] text-muted-foreground">登录于 {formatDateTime(item.createdAt)} · #{item.id.slice(0, 8)}</p>
                           <p className="truncate text-[10px] text-muted-foreground">scope: {item.scopes} · 到期 {formatDateTime(item.expiresAt)}</p>
                         </div>
                         <Button
                           variant="ghost" size="sm" className="h-6 shrink-0 px-1.5 text-[10px] text-destructive hover:bg-destructive/10"
-                          aria-label={`撤销会话 ${formatDateTime(item.createdAt)}（${item.clientId}）`}
+                          aria-label={`撤销会话 ${formatDateTime(item.createdAt)}（${item.clientId} · ${item.id.slice(0, 8)}）`}
                           onClick={() => setRevokeTarget(item.id)}
                         >
                           撤销
@@ -469,10 +473,6 @@ export default function ProfileClient({
                   </Button>
                 )}
               </div>
-
-              <Button variant="outline" size="sm" className="w-full" onClick={() => setLogoutConfirmOpen(true)}>
-                退出当前会话
-              </Button>
 
               {/* U-PF02：二次确认，避免误点即清会话 */}
               <Dialog open={logoutConfirmOpen} onOpenChange={setLogoutConfirmOpen}>
