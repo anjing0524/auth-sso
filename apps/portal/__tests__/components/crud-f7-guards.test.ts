@@ -896,3 +896,26 @@ describe('部门批量移动顶层优先（续一百五十七）', () => {
     expect(tree).toContain('moveCount');
   });
 });
+
+describe('错误页统一出口（续一百五十八）', () => {
+  it('7 个路由错误边界复用 RouteError；404 不再对已登录用户显示去登录', () => {
+    const files = [
+      'src/app/(dashboard)/error.tsx',
+      'src/app/(dashboard)/users/error.tsx',
+      'src/app/(dashboard)/roles/error.tsx',
+      'src/app/(dashboard)/permissions/error.tsx',
+      'src/app/(dashboard)/audit-logs/error.tsx',
+      'src/app/(dashboard)/clients/error.tsx',
+      'src/app/(dashboard)/dashboard/error.tsx',
+    ];
+    for (const f of files) {
+      expect(read(f)).toContain("from '@/components/shared/route-error'");
+    }
+    const notFound = read('src/app/not-found.tsx');
+    expect(notFound).not.toContain('去登录');
+    expect(notFound).toContain('返回工作台');
+    const shared = read('src/components/shared/route-error.tsx');
+    expect(shared).toContain('复制 Error ID');
+    expect(shared).toContain('返回工作台');
+  });
+});

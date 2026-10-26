@@ -25,9 +25,6 @@ export default function NotFound() {
         <Button asChild>
           <Link href="/dashboard">返回工作台</Link>
         </Button>
-        <Button variant="outline" asChild>
-          <Link href="/login">去登录</Link>
-        </Button>
       </div>
     </div>
   );
