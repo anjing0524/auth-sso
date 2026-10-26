@@ -213,3 +213,25 @@ export async function getAccessLogs(params: PaginationParams & {
     createdAt: log.createdAt,
   }));
 }
+
+// ========================================
+// 单条日志详情（审计详情页）
+// ========================================
+
+/** 操作审计单条（按主键；审计详情页使用）。username 快照为空时回退 users 表。 */
+export async function getAuditLogById(id: string) {
+  const [row] = await db.select().from(schema.auditLogs).where(eq(schema.auditLogs.id, id)).limit(1);
+  if (!row) return null;
+  if (!row.username && row.userId) {
+    const [operator] = await db.select({ username: schema.users.username }).from(schema.users)
+      .where(eq(schema.users.id, row.userId)).limit(1);
+    return { ...row, username: operator?.username ?? null };
+  }
+  return row;
+}
+
+/** 登录日志单条（按主键；审计详情页使用） */
+export async function getLoginLogById(id: string) {
+  const [row] = await db.select().from(schema.loginLogs).where(eq(schema.loginLogs.id, id)).limit(1);
+  return row ?? null;
+}

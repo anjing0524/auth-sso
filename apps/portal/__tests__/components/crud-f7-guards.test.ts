@@ -596,3 +596,16 @@ describe('产品审计二：操作与布局修复（2026-10-26）', () => {
     expect(spec).toContain("getByLabel('密码', { exact: true })");
   });
 });
+
+describe('审计详情独立页（2026-10-26，续一百三十七）', () => {
+  it('详情页存在、列表用 Link 进入、无弹窗内滚动', () => {
+    const page = read('src/app/(dashboard)/audit-logs/[id]/page.tsx');
+    expect(page).toContain('getAuditLogById');
+    expect(page).toContain('变更参数');
+    expect(page).toContain('返回审计日志');
+    const list = read('src/app/(dashboard)/audit-logs/page.tsx');
+    expect(list).toContain('/audit-logs/${loginLog.id}?tab=login');
+    expect(list).toContain('/audit-logs/${opLog.id}?tab=operation');
+    expect(list).not.toContain('AuditLogDetailDialog');
+  });
+});

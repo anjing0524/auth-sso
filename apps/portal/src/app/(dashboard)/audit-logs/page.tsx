@@ -7,7 +7,7 @@
  *
  * v2 — shadcn Table + 设计 Token + 暗黑模式支持
  */
-import { Download, X } from 'lucide-react';
+import { Download, X, Eye } from 'lucide-react';
 import Link from 'next/link';
 import { LOGIN_EVENT_LABELS, AUDIT_OPERATION_LABELS, LOGIN_EVENT_VALUES, AUDIT_OPERATION_VALUES, AUDIT_PERMISSIONS, can, type AuditOperation, type LoginEventType } from '@auth-sso/contracts';
 import { AuditFilters } from './components/audit-filters';
@@ -22,7 +22,6 @@ import { Card, CardContent } from '@/components/ui/card';
 import { EmptyState } from '@/components/shared/empty-state';
 import { TablePagination } from '@/components/shared/table-pagination';
 import { Badge } from '@/components/ui/badge';
-import { AuditLogDetailDialog } from './components/audit-log-detail-dialog';
 import { AuditTabs } from './components/audit-tabs';
 
 import { Button } from '@/components/ui/button';
@@ -288,17 +287,9 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
                           {loginLog.failReason || '-'}
                         </TableCell>
                         <TableCell className="text-right">
-                          <AuditLogDetailDialog
-                            title="登录日志详情"
-                            description="该条登录事件的完整记录"
-                            fields={[
-                              { label: '时间', value: formatDate(loginLog.createdAt) },
-                              { label: '用户', value: loginLog.username },
-                              { label: '事件类型', value: LOGIN_EVENT_LABELS[loginLog.eventType as keyof typeof LOGIN_EVENT_LABELS] || loginLog.eventType },
-                              { label: 'IP 地址', value: loginLog.ip || '-', mono: true },
-                              { label: '失败原因', value: loginLog.failReason || '-', mono: true },
-                            ]}
-                          />
+                          <Button asChild variant="ghost" size="icon-sm" aria-label="查看日志详情">
+                            <Link href={`/audit-logs/${loginLog.id}?tab=login`}><Eye className="h-4 w-4" /></Link>
+                          </Button>
                         </TableCell>
                       </TableRow>
                     );
@@ -382,20 +373,9 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
                           {opLog.ip || '-'}
                         </TableCell>
                         <TableCell className="text-right">
-                          <AuditLogDetailDialog
-                            title="操作日志详情"
-                            description="该次管理操作的完整上下文"
-                            fields={[
-                              { label: '时间', value: formatDate(opLog.createdAt) },
-                              { label: '操作人', value: opLog.username || '-' },
-                              { label: '操作类型', value: AUDIT_OPERATION_LABELS[opLog.operation as keyof typeof AUDIT_OPERATION_LABELS] || opLog.operation },
-                              { label: '请求地址', value: opLog.url || '-', mono: true },
-                              { label: '状态码', value: String(opLog.status ?? '-') },
-                              { label: '错误信息', value: opLog.errorMsg || '-', mono: true },
-                              { label: 'IP 地址', value: opLog.ip || '-', mono: true },
-                              { label: '变更参数', value: opLog.params ? JSON.stringify(opLog.params, null, 2) : '无', mono: true },
-                            ]}
-                          />
+                          <Button asChild variant="ghost" size="icon-sm" aria-label="查看日志详情">
+                            <Link href={`/audit-logs/${opLog.id}?tab=operation`}><Eye className="h-4 w-4" /></Link>
+                          </Button>
                         </TableCell>
                       </TableRow>
                     );

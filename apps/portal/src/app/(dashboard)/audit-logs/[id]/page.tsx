@@ -1,0 +1,146 @@
+import Link from 'next/link';
+import { notFound } from 'next/navigation';
+import { ArrowLeft, ScrollText } from 'lucide-react';
+import {
+  AUDIT_OPERATION_LABELS,
+  LOGIN_EVENT_LABELS,
+  type AuditOperation,
+  type LoginEventType,
+} from '@auth-sso/contracts';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { formatDateTime } from '@/lib/format-date';
+import { getAuditLogById, getLoginLogById } from '@/app/audit/data';
+
+/** 读取会话/动态数据：与审计列表同口径，声明非 instant 路由 */
+export const instant = false;
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+interface PageProps {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ tab?: string }>;
+}
+
+function Field({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <div className="grid grid-cols-[92px_1fr] gap-3 border-b border-border/50 py-2 last:border-0">
+      <dt className="text-xs text-muted-foreground">{label}</dt>
+      <dd className={`break-all ${mono ? 'font-mono text-xs' : 'text-sm'}`}>{value}</dd>
+    </div>
+  );
+}
+
+function DetailHeader({ title, tab, id, children }: { title: string; tab: 'login' | 'operation'; id: string; children?: React.ReactNode }) {
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <Button asChild variant="ghost" size="icon-sm" aria-label="返回审计日志">
+        <Link href={`/audit-logs?tab=${tab}`}><ArrowLeft className="h-4 w-4" /></Link>
+      </Button>
+      <h1 className="type-section-title">{title}</h1>
+      {children}
+      <span className="type-meta text-muted-foreground">ID {id}</span>
+    </div>
+  );
+}
+
+export default async function AuditLogDetailPage({ params, searchParams }: PageProps) {
+  const { id } = await params;
+  const { tab } = await searchParams;
+  if (!UUID_RE.test(id)) notFound();
+
+  if (tab === 'login') {
+    const row = await getLoginLogById(id);
+    if (!row) notFound();
+    const label = LOGIN_EVENT_LABELS[row.eventType as LoginEventType] ?? row.eventType;
+    return (
+      <div className="flex min-h-0 flex-1 flex-col gap-3">
+        <DetailHeader title="登录日志详情" tab="login" id={row.id}>
+          <Badge variant="secondary">{label}</Badge>
+        </DetailHeader>
+        <Card className="border border-border/70 ring-0">
+          <CardHeader><CardTitle className="type-card-title">事件信息</CardTitle></CardHeader>
+          <CardContent>
+            <dl>
+              <Field label="时间" value={formatDateTime(row.createdAt)} />
+              <Field label="用户" value={row.username} />
+              <Field label="事件类型" value={label} />
+              <Field label="IP 地址" value={row.ip ?? '-'} mono />
+              <Field label="地理位置" value={row.location || '-'} />
+              <Field label="失败原因" value={row.failReason || '-'} mono />
+              <Field label="User-Agent" value={row.userAgent || '-'} mono />
+            </dl>
+            <div className="mt-3 text-xs">
+              <Link className="text-primary hover:underline" href={`/audit-logs?tab=login&keyword=${encodeURIComponent(row.username)}`}>
+                查看该用户的登录记录 →
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  const row = await getAuditLogById(id);
+  if (!row) notFound();
+  const opLabel = AUDIT_OPERATION_LABELS[row.operation as AuditOperation] ?? row.operation;
+  return (
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
+      <DetailHeader title="操作日志详情" tab="operation" id={row.id}>
+        <Badge>{opLabel}</Badge>
+      </DetailHeader>
+      <div className="grid gap-3 lg:grid-cols-3">
+        <Card className="border border-border/70 ring-0 lg:col-span-2">
+          <CardHeader><CardTitle className="type-card-title">请求上下文</CardTitle></CardHeader>
+          <CardContent>
+            <dl>
+              <Field label="时间" value={formatDateTime(row.createdAt)} />
+              <Field label="操作人" value={row.username || (row.userId ? '未知用户（可能已删除）' : '-')} />
+              <Field label="操作类型" value={opLabel} />
+              <Field label="请求方法" value={row.method || '-'} mono />
+              <Field label="请求地址" value={row.url || '-'} mono />
+              <Field label="状态码" value={String(row.status ?? '-')} />
+              <Field label="耗时" value={row.duration != null ? `${row.duration} ms` : '-'} />
+              <Field label="错误信息" value={row.errorMsg || '-'} mono />
+            </dl>
+          </CardContent>
+        </Card>
+        <Card className="border border-border/70 ring-0">
+          <CardHeader><CardTitle className="type-card-title">来源</CardTitle></CardHeader>
+          <CardContent>
+            <dl>
+              <Field label="IP 地址" value={row.ip || '-'} mono />
+              <Field label="User-Agent" value={row.userAgent || '-'} mono />
+            </dl>
+            {row.userId && (
+              <div className="mt-3 text-xs">
+                <Link className="text-primary hover:underline" href={`/audit-logs?tab=operation&keyword=${encodeURIComponent(row.userId)}`}>
+                  查看该目标用户的变更记录 →
+                </Link>
+              </div>
+            )}
+            {row.username && (
+              <div className="mt-2 text-xs">
+                <Link className="text-primary hover:underline" href={`/audit-logs?tab=operation&keyword=${encodeURIComponent(row.username)}`}>
+                  查看该操作人的审计记录 →
+                </Link>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+      <Card className="border border-border/70 ring-0">
+        <CardHeader className="flex flex-row items-center gap-2">
+          <ScrollText className="h-4 w-4 text-muted-foreground" />
+          <CardTitle className="type-card-title">变更参数</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <pre className="overflow-x-auto rounded-md border border-border/60 bg-muted/40 p-3 font-mono text-xs leading-relaxed whitespace-pre-wrap break-all">
+            {row.params ? JSON.stringify(row.params, null, 2) : '无（该操作未记录结构化参数）'}
+          </pre>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
