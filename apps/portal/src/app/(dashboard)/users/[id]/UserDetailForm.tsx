@@ -14,7 +14,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import {
-  User as UserIcon, Save, Trash2, Shield, Building, Calendar, AlertTriangle, ShieldCheck, Copy, KeyRound,
+  User as UserIcon, Save, Trash2, Shield, Building, Calendar, AlertTriangle, ShieldCheck, Copy, KeyRound, History,
 } from 'lucide-react';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -27,7 +27,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription, DialogTrigger,
 } from '@/components/ui/dialog';
-import { USER_PERMISSIONS } from '@auth-sso/contracts';
+import { AUDIT_PERMISSIONS, USER_PERMISSIONS } from '@auth-sso/contracts';
 import { updateUserAction, deleteUserAction, unlockUserAction } from '../actions';
 
 import { PageHeader } from '@/components/shared/page-header';
@@ -329,6 +329,17 @@ export default function UserDetailForm({ id, initialUser: serverUser, canUpdate 
                   <span className="text-[11px] text-muted-foreground">创建于</span>
                   <span className="text-[13px]">{formatDateTime(createdAt)}</span>
                 </div>
+                {/* 审计追溯：操作日志的 url/params 含目标用户 ID，用 keyword 精确过滤 */}
+                <PermissionGuard permission={AUDIT_PERMISSIONS.READ}>
+                  <Button asChild variant="outline" size="sm" className="mt-1 w-full">
+                    <Link
+                      href={`/audit-logs?tab=operation&keyword=${encodeURIComponent(String(serverUser.id ?? id))}`}
+                      title="按目标 ID 匹配角色/部门/状态等变更记录（新建事件本身不含目标 ID）"
+                    >
+                      <History className="h-3.5 w-3.5" /> 查看变更审计
+                    </Link>
+                  </Button>
+                </PermissionGuard>
               </CardContent>
             </Card>
 

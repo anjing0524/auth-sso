@@ -500,3 +500,13 @@ describe('应用列表状态筛选（2026-10-26，第十九轮）', () => {
     expect(table).toContain('全部状态');
   });
 });
+
+describe('用户详情审计追溯（2026-10-26，第二十轮）', () => {
+  it('入口按 audit:read 渲染，关键词=目标用户 ID，文案诚实说明匹配范围', () => {
+    const src = read('src/app/(dashboard)/users/[id]/UserDetailForm.tsx');
+    expect(src).toContain('查看变更审计');
+    expect(src).toContain('tab=operation&keyword=');
+    expect(src).toContain('AUDIT_PERMISSIONS.READ');
+    expect(src).toContain('新建事件本身不含目标 ID');
+  });
+});
