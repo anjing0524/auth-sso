@@ -814,3 +814,12 @@ describe('访问日志状态/资源筛选（续一百五十）', () => {
     expect(route).toContain('resourceType');
   });
 });
+
+describe('个人中心移动端布局（续一百五十一）', () => {
+  it('列容器 min-w-0，身份头动作移动端整行，资料值可截断', () => {
+    const src = read('src/app/(dashboard)/profile/ProfileClient.tsx');
+    expect(src.match(/min-w-0 space-y-3/g)?.length).toBe(2);
+    expect(src).toContain('w-full flex-wrap items-center gap-2 sm:w-auto');
+    expect(src).toContain('min-w-0 flex-1 truncate text-right');
+  });
+});

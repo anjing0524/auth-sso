@@ -326,7 +326,7 @@ export default function ProfileClient({
               <span className="flex items-center gap-1"><ShieldCheck className="h-3 w-3" />{roles.length} 个角色 · {permissions.length} 个权限点</span>
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end [&_button]:flex-1 sm:[&_button]:flex-none">
             <EditProfileDialog user={user} />
             <ChangePasswordDialog />
           </div>
@@ -334,7 +334,7 @@ export default function ProfileClient({
       </Card>
 
       <div className="grid gap-3 lg:grid-cols-3">
-        <div className="space-y-3 lg:col-span-2">
+        <div className="min-w-0 space-y-3 lg:col-span-2">
           {/* 账户资料：只读身份 + 可复制的技术标识 */}
           <Card className="gap-0 overflow-hidden rounded-lg border border-border/70 py-0 shadow-sm ring-0">
             <CardHeader className="border-b bg-muted/30 px-3 py-2">
@@ -344,15 +344,15 @@ export default function ProfileClient({
               <dl className="grid gap-x-6 gap-y-2.5 sm:grid-cols-2">
                 <div className="flex items-baseline justify-between gap-3 sm:block">
                   <dt className="text-[11px] text-muted-foreground">姓名</dt>
-                  <dd className="text-[13px]">{user.name}</dd>
+                  <dd className="min-w-0 flex-1 truncate text-right text-[13px] sm:flex-none sm:text-left">{user.name}</dd>
                 </div>
                 <div className="flex items-baseline justify-between gap-3 sm:block">
                   <dt className="text-[11px] text-muted-foreground">邮箱</dt>
-                  <dd className="truncate text-[13px]">{user.email}</dd>
+                  <dd className="min-w-0 flex-1 truncate text-right text-[13px] sm:flex-none sm:text-left" title={user.email}>{user.email}</dd>
                 </div>
                 <div className="flex items-baseline justify-between gap-3 sm:block">
                   <dt className="text-[11px] text-muted-foreground">所属部门</dt>
-                  <dd className="text-[13px]">{user.deptName || '未分配部门'}</dd>
+                  <dd className="min-w-0 flex-1 truncate text-right text-[13px] sm:flex-none sm:text-left">{user.deptName || '未分配部门'}</dd>
                 </div>
                 <div className="flex items-baseline justify-between gap-3 sm:block">
                   <dt className="text-[11px] text-muted-foreground">账号状态</dt>
@@ -373,11 +373,11 @@ export default function ProfileClient({
 
           {/* 权限摘要：角色 → 权限点，默认只展示高频 10 个，避免长列表压过安全信息 */}
           <Card className="gap-0 overflow-hidden rounded-lg border border-border/70 py-0 shadow-sm ring-0">
-            <CardHeader className="flex flex-row items-center justify-between border-b bg-muted/30 px-3 py-2">
+            <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-1 border-b bg-muted/30 px-3 py-2">
               <CardTitle className="flex items-center gap-2 type-card-title">
                 <Key className="h-4 w-4 text-primary" /> 权限摘要
               </CardTitle>
-              <span className="text-[11px] text-muted-foreground">共 {permissions.length} 项 · 由角色决定</span>
+              <span className="shrink-0 text-[11px] text-muted-foreground">共 {permissions.length} 项 · 由角色决定</span>
             </CardHeader>
             <CardContent className="space-y-2 p-3">
               <div className="flex flex-wrap gap-1.5">
@@ -403,7 +403,7 @@ export default function ProfileClient({
           </Card>
         </div>
 
-        <div className="space-y-3">
+        <div className="min-w-0 space-y-3">
           {/* 登录会话：当前会话 + 活跃 refresh 会话，危险动作二次确认 */}
           <Card className="gap-0 overflow-hidden rounded-lg border border-border/70 py-0 shadow-sm ring-0">
             <CardHeader className="flex flex-row items-center justify-between border-b bg-muted/30 px-3 py-2">

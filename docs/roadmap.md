@@ -21,6 +21,8 @@
 
 ## 变更记录
 
+- 2026-10-26（续一百五十一）: **个人中心移动端列溢出修复（390px）**。390 截图发现身份头被动作按钮挤成窄列、账户资料只显示「adm」（部门/状态不可见）。**根因**：profile 的两个 grid 子项缺 `min-w-0`，长内容（权限码/UA 等）把 grid 列撑到 **488px**（视口 390），右侧值被裁在卡片外；dd 也未 `min-w-0` 无法截断。**修复**：两个列容器 `min-w-0`；身份头动作按钮移动端整行（`w-full sm:w-auto`）；账户资料 dd 改 `min-w-0 flex-1 truncate text-right sm:text-left`。**验证**：390 grid/card 宽 **366px**、无横向溢出，邮箱/部门/状态完整，身份头动作整行；全量 **1235 passed**、e2e **13/13（41.4s）**、a11y 0、measure 0。
+
 - 2026-10-26（续一百五十）: **访问日志状态/资源类型筛选（URL/chips/导出同口径）**。**①数据层**：`getAccessLogs` 增 `status`（成功<400 / 失败≥400）与 `resourceType` 条件；新增 `getAccessLogResourceTypes()` 从真实数据 distinct 出筛选项（user/role_permissions/user_roles/...）。**②UI**：访问日志页签增加「访问状态」「资源类型」Select；筛选写 URL，chips 可单独移除，分页/页签切换保留；导出链接与 CSV API 同样支持两个参数。**③验证**：`resourceType=user&status=SUCCESS` → URL/chips 正确、列表 20 行；导出 **428 行**且不含其他资源；API 测试 type=access 过滤通过；e2e 通过筛选后进详情；全量 **1234 passed**、e2e **13/13（41.5s）**、a11y 0、measure 0。
 
 - 2026-10-26（续一百四十九）: **布局巡检：测量脚本假绿修正 + 用户工具栏 + 个人中心操作位置**。**①测量脚本修正**：`measure.mjs` 用 `document.querySelector("main")` 命中的是外层 shell，首子元素是 header（47px），导致内容区滚动长期被误判为 0。改用 `#main-content` 后，1139×600 真实结果：dashboard/users/roles/audit 内容区 0，profile 与用户详情为「有」（允许纵向滚动）；规范 §4 改为「列表/工作台=0，详情/表单/个人中心允许纵向滚动」。**②用户工具栏**：1139 下四筛选 + 新建按钮重叠（新建按钮盖住部门筛选）。收紧宽度（search 224、Select 128）并给右侧按钮 `shrink-0`；实测四控件同一行、按钮不重叠。**③个人中心**：「退出当前会话」从会话列表底部移到当前会话卡下方，600 高首屏可见（top 342）；e2e 又暴露「同一秒登录的会话 aria-label 仍相同」，给会话行加短 ID（可见 `#xxxxxxxx` 与 aria 名均含 ID），同名歧义消除。
