@@ -235,13 +235,13 @@ export default function DepartmentTree({ departments, deletionStats = {} }: Prop
                     <Plus className="h-4 w-4" /> 新建部门
                   </Button>
                 </PermissionGuard>
-                <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <label className="flex items-center gap-1.5 text-xs text-muted-foreground max-md:w-full">
                   排序
                   <select
                     aria-label="部门排序方式"
                     value={sortKey}
                     onChange={(e) => setSortKey(e.target.value as DepartmentSortKey)}
-                    className="h-8 rounded-md border border-border bg-background px-2 text-sm text-foreground"
+                    className="h-8 rounded-md border border-border bg-background px-2 text-sm text-foreground max-md:flex-1"
                   >
                     <option value="default">默认顺序</option>
                     <option value="name">按名称</option>

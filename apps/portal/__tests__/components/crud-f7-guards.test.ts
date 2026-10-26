@@ -823,3 +823,14 @@ describe('个人中心移动端布局（续一百五十一）', () => {
     expect(src).toContain('min-w-0 flex-1 truncate text-right');
   });
 });
+
+describe('移动端工具条换行（续一百五十二）', () => {
+  it('TableToolbar 右槽可换行；部门排序控件移动端整行', () => {
+    const toolbar = read('src/components/shared/table-toolbar.tsx');
+    expect(toolbar).toContain('flex-wrap');
+    expect(toolbar).toContain('md:flex-nowrap');
+    const tree = read('src/app/(dashboard)/departments/components/DepartmentTree.tsx');
+    expect(tree).toContain('max-md:w-full');
+    expect(tree).toContain('max-md:flex-1');
+  });
+});

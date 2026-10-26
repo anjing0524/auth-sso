@@ -21,6 +21,8 @@
 
 ## 变更记录
 
+- 2026-10-26（续一百五十二）: **部门移动端工具栏裁切修复**。390 下部门工具栏 6 个控件（新建/排序/展开/收起/全选可移动）挤一行，右侧「收起全部」等被卡片裁掉、不可点。**修复**：TableToolbar 右槽允许换行（`flex-wrap`，桌面恢复 `md:flex-nowrap`）；部门排序 label/select 移动端整行；按钮沿用整行宽度。**验证**：390 所有按钮右边界 ≤365（卡片 366），无横向溢出；新建/排序/展开/收起/全选全部可点；全量 **1236 passed**、e2e **13/13（44.5s）**、a11y 0、measure 0；typecheck/lint/build 0。
+
 - 2026-10-26（续一百五十一）: **个人中心移动端列溢出修复（390px）**。390 截图发现身份头被动作按钮挤成窄列、账户资料只显示「adm」（部门/状态不可见）。**根因**：profile 的两个 grid 子项缺 `min-w-0`，长内容（权限码/UA 等）把 grid 列撑到 **488px**（视口 390），右侧值被裁在卡片外；dd 也未 `min-w-0` 无法截断。**修复**：两个列容器 `min-w-0`；身份头动作按钮移动端整行（`w-full sm:w-auto`）；账户资料 dd 改 `min-w-0 flex-1 truncate text-right sm:text-left`。**验证**：390 grid/card 宽 **366px**、无横向溢出，邮箱/部门/状态完整，身份头动作整行；全量 **1235 passed**、e2e **13/13（41.4s）**、a11y 0、measure 0。
 
 - 2026-10-26（续一百五十）: **访问日志状态/资源类型筛选（URL/chips/导出同口径）**。**①数据层**：`getAccessLogs` 增 `status`（成功<400 / 失败≥400）与 `resourceType` 条件；新增 `getAccessLogResourceTypes()` 从真实数据 distinct 出筛选项（user/role_permissions/user_roles/...）。**②UI**：访问日志页签增加「访问状态」「资源类型」Select；筛选写 URL，chips 可单独移除，分页/页签切换保留；导出链接与 CSV API 同样支持两个参数。**③验证**：`resourceType=user&status=SUCCESS` → URL/chips 正确、列表 20 行；导出 **428 行**且不含其他资源；API 测试 type=access 过滤通过；e2e 通过筛选后进详情；全量 **1234 passed**、e2e **13/13（41.5s）**、a11y 0、measure 0。
