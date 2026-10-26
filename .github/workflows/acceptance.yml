@@ -1,0 +1,40 @@
+name: Docker Acceptance
+
+# 类别：发布验收（验收层，每次 push/PR 阻断）。
+# 起 docker/compose/test.yml 的不可变栈，在 Playwright 官方镜像里跑 tests/e2e 全部 spec —
+# 这是仓库文档定义的发布判据（本地入口 `pnpm test:e2e`）。
+# 实现细节（为什么浏览器必须与测试同容器）在 scripts/ci/e2e.sh；与本地路径的差异见 docker/README.md §7.7。
+on:
+  workflow_call:
+    inputs:
+      artifact_name:
+        description: 证据 artifact 名称（日志 + Playwright 报告）
+        required: true
+        type: string
+      artifact_retention_days:
+        required: false
+        type: number
+        default: 14
+
+jobs:
+  docker-release:
+    name: Gateway Release Journey
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build stack and run e2e in Playwright container
+        run: ./scripts/ci/e2e.sh
+
+      - name: Upload stack logs and Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.artifact_name }}
+          path: |
+            gateway-e2e.log
+            playwright-report/
+            test-results/
+          retention-days: ${{ inputs.artifact_retention_days }}

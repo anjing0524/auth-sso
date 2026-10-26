@@ -1,0 +1,67 @@
+name: ACME Acceptance
+
+# 类别：ACME 专项（证书生命周期相关验证）。
+# - preflight（快层，每次 push/PR）：证明 scripts/e2e/acme-staging.sh 的前置判定与证据格式可用，
+#   秒级、无容器（实现：scripts/ci/acme-preflight.sh）；
+# - lifecycle（高成本层，仅 release tag / 夜间）：Pebble 全生命周期（HTTP-01 签发/续期/吊销，
+#   ~14min，Pebble/challtestsrv 容器 + 自签 CA；本地等价命令 `pnpm test:e2e:acme`）。
+#
+# 高成本部分由 `lifecycle` 输入控制：调用方决定是否启用（见 docker/README.md §7.7）。
+on:
+  workflow_call:
+    inputs:
+      lifecycle:
+        description: 是否跑 Pebble 全生命周期（高成本，~14min）
+        required: false
+        type: boolean
+        default: false
+      artifact_name:
+        description: 证据 artifact 名称前缀
+        required: true
+        type: string
+      artifact_retention_days:
+        required: false
+        type: number
+        default: 14
+
+jobs:
+  preflight:
+    name: Staging Preflight (script contract)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify staging preflight evidence
+        run: ./scripts/ci/acme-preflight.sh
+
+      - name: Upload preflight evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.artifact_name }}-acme-staging-preflight
+          path: .context/compound-engineering/acme-staging/preflight/
+          retention-days: ${{ inputs.artifact_retention_days }}
+          if-no-files-found: error
+
+  lifecycle:
+    name: Pebble Lifecycle
+    if: ${{ inputs.lifecycle }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run Pebble ACME lifecycle
+        run: ./scripts/e2e/acme-e2e.sh
+
+      - name: Upload lifecycle evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.artifact_name }}-acme
+          path: .context/compound-engineering/acme-e2e/latest/
+          retention-days: ${{ inputs.artifact_retention_days }}
+          if-no-files-found: error

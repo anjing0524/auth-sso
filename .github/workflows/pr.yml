@@ -1,5 +1,8 @@
 name: PR Check
 
+# 触发文件：只声明「何时跑、跑哪些类别、产物参数」，不含任何作业实现。
+# 类别文件：quality.yml（质量门禁）/ acceptance.yml（发布验收）/ acme.yml（ACME 专项）。
+# 分类约定见 .github/workflows/README.md；分层理由见 docker/README.md §7.7。
 on:
   pull_request:
     branches: [main]
@@ -9,8 +12,15 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  validate:
-    uses: ./.github/workflows/validation-suite.yml
+  quality:
+    uses: ./.github/workflows/quality.yml
+
+  acceptance:
+    uses: ./.github/workflows/acceptance.yml
     with:
-      artifact_name: gateway-e2e-pr
-      artifact_retention_days: 14
+      artifact_name: pr-e2e-evidence
+
+  acme:
+    uses: ./.github/workflows/acme.yml
+    with:
+      artifact_name: pr-e2e-evidence

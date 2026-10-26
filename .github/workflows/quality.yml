@@ -1,0 +1,126 @@
+name: Quality Gate
+
+# 类别：代码质量门禁（快层，每次 push/PR 阻断）。
+# 只跑仓库已有命令（pnpm / cargo），不碰 Docker 发布栈；验收与 ACME 见同目录其他类别文件。
+# 复用方：pr.yml / main.yml / nightly.yml / release-validation.yml。
+#
+# 命名与阻断点：作业名只列**真正阻断**的步骤。覆盖率不在其中——本仓 CI 从未跑 `--coverage`
+# （根 `vitest.config.ts` 的 coverage 配置供本地 `pnpm exec vitest run --coverage`，
+# 且未设 thresholds，本来就不构成门禁）。见 CODING_STANDARDS.md 第 7 条。
+on:
+  workflow_call:
+
+jobs:
+  node:
+    name: Node (Lint + Typecheck + Test + 追溯清单)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      # API project 以真实 PostgreSQL/Redis 为基线（ADR-022 §5）；命令前缀只在这里出现一次。
+      COMPOSE: docker compose -f docker/compose/test.yml
+      NODE_TEST: docker compose -f docker/compose/test.yml run --rm node-test
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build test image and start PostgreSQL/Redis
+        run: $COMPOSE build node-test && $COMPOSE up -d --wait postgres redis
+
+      - name: Run lint
+        run: $NODE_TEST pnpm lint
+
+      - name: Run typecheck
+        run: $NODE_TEST pnpm typecheck
+
+      # 有意**不阻断**：审计库的传递依赖常出现无法修复的告警，且审计服务本身可能不可达
+      # ——阻断会让每次构建随机变红。结论按报告看待。
+      # 审计必须打官方 registry：pnpm 的 registry 配置是 npmmirror（镜像无 audit 端点，
+      # 会返回 ERR_PNPM_AUDIT_ENDPOINT_NOT_EXISTS ⇒ 该步骤变成永远不产出结论的假步骤）。
+      # 2026-10-23 取证与修复：本步骤此前**每次都以 exit 1 结束**（10 个漏洞 / 2 critical，全在 next@16.3.6），
+      # 被 continue-on-error 保持绿色；已升级 next@16.4.2，复跑输出 "No known vulnerabilities found"（exit 0）。
+      # 仍是报告型：critical 出现时应升级依赖，而不是关掉本步骤（需要时另加一个 critical 阻断检查）。
+      - name: Run dependency audit
+        continue-on-error: true
+        run: $NODE_TEST pnpm --registry=https://registry.npmjs.org audit --prod --audit-level=high
+
+      - name: Migrate empty database
+        run: $NODE_TEST pnpm db:migrate
+
+      - name: Seed database
+        run: $NODE_TEST pnpm db:seed
+
+      - name: Run unit, API, and component tests
+        run: $NODE_TEST pnpm test
+
+      - name: Generate traceability inventory
+        run: $NODE_TEST pnpm test:report
+
+      - name: Collect infrastructure logs
+        if: always()
+        run: $COMPOSE logs --no-color postgres redis
+
+      - name: Tear down infrastructure
+        if: always()
+        run: $COMPOSE down --volumes --remove-orphans
+
+  rust:
+    name: Gateway (fmt + clippy + test + audit)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/gateway
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            apps/gateway/target
+          key: cargo-${{ runner.os }}-${{ hashFiles('apps/gateway/Cargo.lock') }}
+
+      - name: Run cargo fmt --check
+        run: cargo fmt --all -- --check
+
+      - name: Run cargo clippy (self-managed TLS)
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: Run cargo clippy (platform TLS)
+        run: cargo clippy --all-targets --no-default-features -- -D warnings
+
+      - name: Run cargo test (self-managed TLS)
+        run: cargo test --lib --bins --all-features
+
+      - name: Run cargo test (platform TLS)
+        run: cargo test --lib --bins --no-default-features
+
+      - name: Build Vercel Gateway profile
+        run: cargo build --release --bin gateway --no-default-features
+
+      - name: Verify platform build excludes ACME client
+        run: |
+          if cargo tree --no-default-features --edges normal --prefix none | rg -q '^instant-acme '; then
+            echo "instant-acme must not be present in the platform TLS dependency graph"
+            exit 1
+          fi
+
+      # 报告型：cargo audit 不阻断构建（unmaintained/advisory 常无可修版本）。
+      # 2026-10-23 取证：GitHub runner 未预装 cargo-audit，此前 `cargo audit` 每次都是
+      # `error: no such command: audit`（exit 101），被 continue-on-error 吞成绿色 ⇒ 从未真正审计过。
+      # 改为预编译安装（GitHub Releases，不引入本地依赖），让这一步真的执行。
+      - name: Install cargo-audit
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-audit
+
+      - name: Run cargo audit
+        continue-on-error: true
+        run: cargo audit

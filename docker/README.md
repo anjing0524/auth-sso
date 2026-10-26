@@ -3,7 +3,7 @@
 > **本文是 Docker 的唯一出处**（`AGENTS.md` 只留摘要与指针）。分两条路径：
 > - **生产部署**（§1–§6）：Gateway 内建 ACME + 自托管证书；
 > - **本地开发 / 发布验收**（§7）：`docker/compose/test.yml` 自签证书栈，`pnpm test:e2e` 的正式路径；
->   与 CI 的 `validation-suite.yml` 同一条路径。
+>   与 CI 的 `quality.yml` / `acceptance.yml` 同一条路径（分类见 [`.github/workflows/README.md`](../.github/workflows/README.md)）。
 >
 > 日常命令与验收命令**只在 §7.2 维护**（本文不重复列表，避免两处漂移）。
 
@@ -41,7 +41,7 @@ docker/
 | 文件 | 职责 | 消费者（证据） | 结论 |
 |---|---|---|---|
 | `compose/local.yml` | 本地 PG16 + Redis7，`redis-commander` 在 `tools` profile 下可选 | `AGENTS.md` / `README.md` 的 `docker compose -f … up -d`；`pnpm test` 前置 | 必需（开发） |
-| `compose/test.yml` | 发布验收 / CI 栈：postgres/redis/cert-init/db-init/portal/gateway；`node-test`（`workspace` target，CI lint/typecheck/test 用）；acme profile（pebble/challtestsrv/gateway-acme） | `scripts/docker/stack.sh`（仅前 6 个服务）、`scripts/e2e/acme-e2e.sh`、CI `validation-suite.yml`（`node-test` 与 acme 服务） | 必需（CI / 验收） |
+| `compose/test.yml` | 发布验收 / CI 栈：postgres/redis/cert-init/db-init/portal/gateway；`node-test`（`workspace` target，CI lint/typecheck/test 用）；acme profile（pebble/challtestsrv/gateway-acme） | `scripts/docker/stack.sh`（仅前 6 个服务）、`scripts/e2e/acme-e2e.sh`、CI `quality.yml` / `acceptance.yml` / `acme.yml`（`node-test` 与 acme 服务） | 必需（CI / 验收） |
 | `compose/prod.yml` | 生产形态（ACME、健康检查、db-init、数据卷） | `scripts/docker/deploy.sh`、`apps/portal/__tests__/api/delivery-config-guard.test.ts` | 必需（生产） |
 | `compose/acme-staging.yml` | 公网 staging ACME 联调 | `scripts/e2e/acme-staging.sh` | 可选（首次上线演练） |
 | `images/portal.Dockerfile` | portal 镜像（`workspace` / `builder` / `runner` 三个 target） | `compose/test.yml`、`compose/prod.yml` | 必需 |
@@ -317,31 +317,37 @@ portal 仅在 compose 网络内暴露 4000，不映射宿主端口。
 | 想保留现场（**数据会被删**） | `E2E_KEEP_STACK=1 pnpm test:e2e`，或 `pnpm stack:up` 后跑 `pnpm test:e2e:release` |
 | 想保留**数据卷** | 不要在排查中跑 `pnpm stack:down` / `clean`（两者都是 `--volumes`）；只停容器用 `docker compose -f docker/compose/test.yml stop` |
 
-### 7.7 CI 对应关系（三层）
+### 7.7 CI 对应关系
 
-CI 不走 `stack.sh`，而是直接 `docker compose` + Playwright 容器（`.github/workflows/validation-suite.yml`）。
-**按成本/稳定性分层，避免高成本、外部依赖重的验证阻塞每次 push/PR**：
+CI 配置在 [`.github/workflows/`](../.github/workflows/)：**触发文件**（`pr.yml` / `main.yml` / `nightly.yml` /
+`release-validation.yml`）只声明触发与产物参数，**类别文件**（`quality.yml` / `acceptance.yml` / `acme.yml`）
+各承担一类验证。文件分类、触发矩阵与「CI 步骤 → 现有命令」的唯一维护处是
+[`.github/workflows/README.md`](../.github/workflows/README.md)；本节只写 **Docker 侧**的对应关系。
 
-| 层 | 触发 | 内容 | 作业 |
-|---|---|---|---|
-| 快层（每次 push/PR） | `main.yml` / `pr.yml` | lint、typecheck、单测/API 测试、追溯清单；Rust fmt/clippy/test；ACME **staging 预检**（纯脚本，秒级） | `full-check` / `gateway-full` / `acme-preflight` |
-| 验收层（每次 push/PR） | 同上 | Docker 发布栈起栈 + 全部 `tests/e2e` spec（仓库定义的验收判据） | `gateway-e2e` |
-| 高成本层（release/夜间） | `release-validation.yml`（tag/手动）、新增 `nightly.yml`（每日 02:00 北京时间） | Pebble ACME 全生命周期（HTTP-01 签发/续期/吊销，~14min，Pebble/challtestsrv + 自签 CA） | `gateway-acme-e2e`（`run_acme: true` 才跑） |
+CI 复用 `stack.sh up --build` / `down` 管理验收栈（与本地同一份 compose 与服务列表），只有**浏览器运行器**不同：
+宿主机没有 Node/Playwright 依赖，改在 Playwright 官方镜像里跑：
 
-高成本层的取舍：Pebble 生命周期与公网 staging 依赖容器编排、外部 CA 与更长的环境准备，
-放在每次 push 里会让反馈周期膨胀到 15min+，且失败多来自环境而非代码；因此降级为 release 门禁 + 夜间验收，
-失败不阻塞当日开发推送，但**必须在 24h 内修复**（release 前必须为绿）。
+| 类别 / 作业 | 用到的 compose 服务 | 说明 |
+|---|---|---|
+| `quality.yml` / `node` | `docker/compose/test.yml` 的 `node-test` + `postgres` + `redis` | lint / typecheck / migrate / seed / test / 追溯都在 `node-test` 容器内（API project 需要真实 PG/Redis） |
+| `quality.yml` / `rust` | 无 | 宿主 `cargo fmt/clippy/test/build/audit` |
+| `acme.yml` / `preflight` | 无 | 只跑 `scripts/e2e/acme-staging.sh` 的前置判定分支（秒级、无容器） |
+| `acceptance.yml` / `docker-release` | `postgres redis cert-init db-init portal gateway` | 实现 = `scripts/ci/e2e.sh`（见下） |
+| `acme.yml` / `lifecycle` | `test.yml` 的 acme profile：`pebble` / `challtestsrv` / `gateway-acme` | 实现 = `scripts/e2e/acme-e2e.sh`（本地等价 `pnpm test:e2e:acme`） |
 
-`gateway-e2e` 执行细节：
+快层 / 验收层 / 高成本层的分层与触发取舍见 [`.github/workflows/README.md`](../.github/workflows/README.md)：
+高成本层（Pebble 生命周期与公网 staging）依赖容器编排、外部 CA 与更长的环境准备，放在每次 push 里会让反馈周期
+膨胀到 15min+，且失败多来自环境而非代码；因此降级为 release 门禁 + 夜间验收，失败不阻塞当日开发推送，
+但**必须在 24h 内修复**（release 前必须为绿）。
+
+`acceptance.yml` 执行细节（实现 = `scripts/ci/e2e.sh`）：
 
 ```bash
-docker compose -f docker/compose/test.yml up --detach --build --wait --wait-timeout 600 \
-  postgres redis cert-init db-init portal gateway
-docker run --rm --network host -v "$PWD:/work" -w /work \
-  -e E2E_TARGET=docker -e E2E_BASE_URL=https://127.0.0.1:19443 -e E2E_SKIP_SEED=true \
-  mcr.microsoft.com/playwright:v1.60.0-noble bash -lc \
-  "pnpm install --frozen-lockfile && pnpm exec playwright install chromium && pnpm exec playwright test tests/e2e"
-docker compose -f docker/compose/test.yml logs --no-color > gateway-e2e.log
+./scripts/ci/e2e.sh
+# = scripts/docker/stack.sh up --build（起栈并等待健康，服务列表由 stack.sh 维护）
+# + docker run --rm --network host ... Playwright 镜像内 pnpm install && playwright install chromium
+#   && playwright test tests/e2e
+# + trap 先收日志（gateway-e2e.log）再 stack.sh down
 ```
 
 > **浏览器安装必须与测试在同一个容器**：Playwright 镜像自带的是镜像发布版本的浏览器，与
@@ -350,7 +356,7 @@ docker compose -f docker/compose/test.yml logs --no-color > gateway-e2e.log
 > `--rm` 容器的可写层随容器销毁，**不能**用独立 `docker run` 装浏览器（会丢），必须在测试容器内
 > `install && test`。
 
-本地 `pnpm test:e2e` 与它是同一条路径（同 compose、同 base URL），差别有三处：
-①本地多了退出清理（`stack.sh down`）与 buildx 兜底（`BUILDX_CONFIG`）；
-②浏览器用本机已安装的 Playwright（CI 在容器内按 lockfile 补装）；
-③本地可用 `E2E_KEEP_STACK=1` 保留现场，CI 总是清理。
+本地 `pnpm test:e2e` 与它是同一条验收路径（同 `stack.sh` 管栈、同 base URL），差别有三处：
+①本地在宿主执行 Playwright（`stack.sh e2e --build`），CI 在官方镜像内执行（`stack.sh up --build` + 容器）；
+②本地可用 `E2E_KEEP_STACK=1` 保留现场，CI 总是清理；
+③清理都在 trap 里：本地由 `release.sh` 调 `stack.sh down`，CI 由 `scripts/ci/e2e.sh` 先收日志再 `stack.sh down`。
