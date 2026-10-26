@@ -845,3 +845,14 @@ describe('只读用户工作台门禁（续一百五十三）', () => {
     expect(src).not.toContain('当前账号无创建类操作权限。');
   });
 });
+
+describe('应用详情 dirty 状态（续一百五十四）', () => {
+  it('无改动保存禁用、未保存提示、放弃修改', () => {
+    const src = read('src/app/(dashboard)/clients/[id]/ClientDetailClient.tsx');
+    expect(src).toContain('savedForm');
+    expect(src).toContain('JSON.stringify(formData) !== JSON.stringify(savedForm)');
+    expect(src).toContain('未保存的修改');
+    expect(src).toContain('放弃修改');
+    expect(src).toContain("!isDirty ? '无修改' : '保存修改'");
+  });
+});

@@ -83,6 +83,8 @@ export function ClientDetailClient({ client, initialTokens, canUpdate }: ClientD
     accessTokenTtl: client.accessTokenTtl ?? 3600,
     refreshTokenTtl: client.refreshTokenTtl ?? 604800,
   });
+  const [savedForm, setSavedForm] = useState(formData);
+  const isDirty = JSON.stringify(formData) !== JSON.stringify(savedForm);
 
   const handleSave = async () => {
     setSaving(true);
@@ -97,6 +99,7 @@ export function ClientDetailClient({ client, initialTokens, canUpdate }: ClientD
         refreshTokenTtl: formData.refreshTokenTtl,
       });
       if (res.success) {
+        setSavedForm(formData);
         router.refresh();
         toast.success('应用配置已保存');
       } else {
@@ -180,7 +183,13 @@ export function ClientDetailClient({ client, initialTokens, canUpdate }: ClientD
         description={`${client.status === 'ACTIVE' ? '已启用' : '已禁用'} · Client ID：${client.clientId}`}
         actions={
           <PermissionGuard permission={CLIENT_PERMISSIONS.UPDATE}>
-            <div className="flex gap-3">
+            <div className="flex flex-wrap items-center gap-2">
+              {isDirty && (
+                <span role="status" className="rounded bg-warning/10 px-2 py-1 text-[11px] font-medium text-warning">未保存的修改</span>
+              )}
+              {isDirty && (
+                <Button variant="outline" size="sm" onClick={() => setFormData(savedForm)} disabled={saving}>放弃修改</Button>
+              )}
               <Button
                 variant="outline"
                 onClick={() => setPendingAction('toggle-status')}
@@ -191,8 +200,8 @@ export function ClientDetailClient({ client, initialTokens, canUpdate }: ClientD
               >
                 {client.status === 'ACTIVE' ? '禁用' : '启用'}
               </Button>
-              <Button onClick={handleSave} disabled={saving || client.clientId === PORTAL_CLIENT_ID}>
-                {saving ? '保存中...' : '保存修改'}
+              <Button onClick={handleSave} disabled={saving || client.clientId === PORTAL_CLIENT_ID || !isDirty}>
+                {saving ? '保存中...' : !isDirty ? '无修改' : '保存修改'}
               </Button>
             </div>
           </PermissionGuard>

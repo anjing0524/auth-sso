@@ -42,6 +42,39 @@ test.describe('应用注册', () => {
       await dialog.getByRole('button', { name: '我已保存，前往应用列表' }).click();
       await expect(page).toHaveURL(/\/clients$/, { timeout: 15_000 });
 
+      // 详情页核心操作：禁用 → 启用 → 轮换 Secret → 授权记录
+      await page.getByPlaceholder('搜索应用名称或 Client ID...').fill(name);
+      await expect(page.getByRole('row').filter({ hasText: name })).toBeVisible({ timeout: 15_000 });
+      await page.getByRole('row').filter({ hasText: name }).getByRole('link', { name: '编辑 OAuth 配置' }).click();
+      await expect(page).toHaveURL(new RegExp(`/clients/${clientId}$`));
+
+      // 无改动不可保存；编辑后出现未保存状态，可放弃修改
+      await expect(page.getByRole('button', { name: '无修改' })).toBeDisabled();
+      await page.getByRole('textbox', { name: '名称 应用名称 *' }).fill(`${name}2`);
+      await expect(page.getByText('未保存的修改')).toBeVisible();
+      await expect(page.getByRole('button', { name: '保存修改' })).toBeEnabled();
+      await page.getByRole('button', { name: '放弃修改' }).click();
+      await expect(page.getByRole('textbox', { name: '名称 应用名称 *' })).toHaveValue(name);
+
+      await page.getByRole('button', { name: '禁用', exact: true }).click();
+      await expect(page.getByRole('dialog')).toContainText('切换应用状态？');
+      await page.getByRole('button', { name: '确认切换' }).click();
+      await expect(page.getByText('应用已禁用').first()).toBeVisible({ timeout: 15_000 });
+      await page.getByRole('button', { name: '启用', exact: true }).click();
+      await expect(page.getByRole('dialog')).toContainText('切换应用状态？');
+      await page.getByRole('button', { name: '确认切换' }).click();
+      await expect(page.getByText('应用已启用').first()).toBeVisible({ timeout: 15_000 });
+
+      await page.getByRole('button', { name: '重新生成 Secret' }).click();
+      await expect(page.getByRole('dialog')).toContainText('重新生成 Client Secret？');
+      await page.getByRole('button', { name: '确认重新生成' }).click();
+      await expect(page.getByText('新 Secret 已生成，请立即保存（只显示一次）').first()).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByRole('button', { name: '复制新 Secret' })).toBeVisible();
+
+      await page.getByRole('tab', { name: '授权记录' }).click();
+      await expect(page.getByText(/暂无.*Token|暂无授权|暂无记录/).first()).toBeVisible({ timeout: 15_000 });
+
+      await page.goto('/clients', { waitUntil: 'networkidle' });
       await page.getByPlaceholder('搜索应用名称或 Client ID...').fill(name);
       await expect(page.getByRole('row').filter({ hasText: name })).toBeVisible({ timeout: 15_000 });
       await page.getByRole('row').filter({ hasText: name }).getByRole('button', { name: '注销应用' }).click();
