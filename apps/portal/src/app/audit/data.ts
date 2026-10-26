@@ -7,7 +7,7 @@
 import 'server-only';
 
 import { db, schema } from '@/infrastructure/db';
-import { eq, desc, and, gte, lte, count } from 'drizzle-orm';
+import { eq, desc, and, gte, lte, count, sql } from 'drizzle-orm';
 import type { AnyColumn, SQL } from 'drizzle-orm';
 import type { PgTable } from 'drizzle-orm/pg-core';
 import type { AuditOperation, LoginEventType } from '@auth-sso/contracts';
@@ -36,6 +36,18 @@ function addDateRangeConditions(
 interface PaginationParams {
   page: number;
   pageSize: number;
+}
+
+/** 关键词过滤（用户名/IP/URL 的模糊匹配）：统一转义 LIKE 通配符，长度上限 100。
+ *  注意 `ip` 列是 PostgreSQL `inet` 类型，必须先 `::text` 才能 ilike（否则 operator does not exist）。 */
+function addKeywordConditions(conditions: SQL[], keyword: string | undefined, columns: AnyColumn[]): void {
+  const kw = keyword?.trim().slice(0, 100);
+  if (!kw) return;
+  const escaped = kw.replace(/[\\%_]/g, '\\$&');
+  const pattern = `%${escaped}%`;
+  const parts = columns.map((column) => sql`${column}::text ilike ${pattern}`);
+  const combined = parts.length === 1 ? parts[0]! : sql.join(parts, sql` or `);
+  conditions.push(sql`(${combined})`);
 }
 
 interface PaginatedResult<T> {
@@ -92,11 +104,14 @@ export async function getAuditLogs(params: PaginationParams & {
   operation?: AuditOperation;
   startDate?: string;
   endDate?: string;
+  /** 关键词：操作人 / IP / 请求地址 */
+  keyword?: string;
 }) {
-  const conditions: ReturnType<typeof eq>[] = [];
+  const conditions: SQL[] = [];
   if (params.userId) conditions.push(eq(schema.auditLogs.userId, params.userId));
   if (params.operation) conditions.push(eq(schema.auditLogs.operation, params.operation));
   addDateRangeConditions(conditions, schema.auditLogs.createdAt, params.startDate, params.endDate);
+  addKeywordConditions(conditions, params.keyword, [schema.auditLogs.username, schema.auditLogs.ip, schema.auditLogs.url]);
 
   // 操作人：优先取写入时的 username 快照；历史数据 username 为空时左连 users 补登录账号
   const page = clampPage(params.page);
@@ -143,11 +158,14 @@ export async function getLoginLogs(params: PaginationParams & {
   eventType?: LoginEventType;
   startDate?: string;
   endDate?: string;
+  /** 关键词：用户名 / IP */
+  keyword?: string;
 }) {
-  const conditions: ReturnType<typeof eq>[] = [];
+  const conditions: SQL[] = [];
   if (params.userId) conditions.push(eq(schema.loginLogs.userId, params.userId));
   if (params.eventType) conditions.push(eq(schema.loginLogs.eventType, params.eventType));
   addDateRangeConditions(conditions, schema.loginLogs.createdAt, params.startDate, params.endDate);
+  addKeywordConditions(conditions, params.keyword, [schema.loginLogs.username, schema.loginLogs.ip]);
 
   return paginatedSelect(schema.loginLogs, schema.loginLogs.createdAt, conditions, params, (log) => ({
     id: log.id,

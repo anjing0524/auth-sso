@@ -52,6 +52,7 @@ interface PageProps {
     eventType?: string;
     operation?: string;
     range?: string;
+    keyword?: string;
   }>;
 }
 
@@ -69,12 +70,13 @@ function resolveRange(value?: string): { range: TimeRange | null; startDate?: st
 
 /** 生成分页链接的 href：保留当前 tab 与筛选条件（规模数据下必须可分享/可刷新） */
 function pageHref(
-  tab: string, page: number, eventType?: string | null, operation?: string | null, range?: TimeRange | null,
+  tab: string, page: number, eventType?: string | null, operation?: string | null, range?: TimeRange | null, keyword?: string | null,
 ): string {
   const params = new URLSearchParams({ tab });
   if (tab === 'login' && eventType) params.set('eventType', eventType);
   if (tab === 'operation' && operation) params.set('operation', operation);
   if (range) params.set('range', range);
+  if (keyword) params.set('keyword', keyword);
   if (page > 1) params.set('page', String(page));
   return `/audit-logs?${params.toString()}`;
 }
@@ -98,12 +100,14 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
   const operation = AUDIT_OPERATION_VALUES.includes(params.operation as AuditOperation)
     ? (params.operation as AuditOperation) : null;
   const { range, startDate, endDate } = resolveRange(params.range);
+  // 关键词长度上限 100（与导出 route 同口径），去除首尾空白
+  const keyword = params.keyword?.trim().slice(0, 100) || null;
 
   // 按当前 tab 仅查询所需数据源，互斥取数；时间范围在数据层过滤（不是先取全量再前端筛）
   const { data, pagination } =
     tab === 'login'
-      ? await getLoginLogs({ page, pageSize: PAGE_SIZE, ...(eventType ? { eventType } : {}), ...(startDate ? { startDate, endDate } : {}) })
-      : await getAuditLogs({ page, pageSize: PAGE_SIZE, ...(operation ? { operation } : {}), ...(startDate ? { startDate, endDate } : {}) });
+      ? await getLoginLogs({ page, pageSize: PAGE_SIZE, ...(eventType ? { eventType } : {}), ...(startDate ? { startDate, endDate } : {}), ...(keyword ? { keyword } : {}) })
+      : await getAuditLogs({ page, pageSize: PAGE_SIZE, ...(operation ? { operation } : {}), ...(startDate ? { startDate, endDate } : {}), ...(keyword ? { keyword } : {}) });
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
@@ -111,17 +115,17 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
       {/* 标题 + 页签 + 类型筛选 + 导出：压缩为同一行（搜索/标题不应各占一整行） */}
       <div className="flex shrink-0 flex-wrap items-center gap-3">
         <h1 className="type-section-title shrink-0 text-foreground">审计日志</h1>
-        <AuditTabs tab={tab} hrefs={{ login: pageHref('login', 1, null, null, range), operation: pageHref('operation', 1, null, null, range) }} />
-        <AuditFilters tab={tab} eventType={eventType} operation={operation} range={range} />
+        <AuditTabs tab={tab} hrefs={{ login: pageHref('login', 1, null, null, range, keyword), operation: pageHref('operation', 1, null, null, range, keyword) }} />
+        <AuditFilters tab={tab} eventType={eventType} operation={operation} range={range} keyword={keyword} />
         {canExport ? (
           <div className="ml-auto flex items-center gap-2">
             <Button variant="outline" size="sm" asChild>
-              <a href={`/api/audit/export?type=login${eventType ? `&eventType=${eventType}` : ''}${startDate ? `&startDate=${startDate}&endDate=${endDate}` : ''}`}>
+              <a href={`/api/audit/export?type=login${eventType ? `&eventType=${eventType}` : ''}${startDate ? `&startDate=${startDate}&endDate=${endDate}` : ''}${keyword ? `&keyword=${encodeURIComponent(keyword)}` : ''}`}>
                 <Download className="h-3.5 w-3.5" /> 导出登录
               </a>
             </Button>
             <Button variant="outline" size="sm" asChild>
-              <a href={`/api/audit/export?type=operation${operation ? `&operation=${operation}` : ''}${startDate ? `&startDate=${startDate}&endDate=${endDate}` : ''}`}>
+              <a href={`/api/audit/export?type=operation${operation ? `&operation=${operation}` : ''}${startDate ? `&startDate=${startDate}&endDate=${endDate}` : ''}${keyword ? `&keyword=${encodeURIComponent(keyword)}` : ''}`}>
                 <Download className="h-3.5 w-3.5" /> 导出操作
               </a>
             </Button>
@@ -318,9 +322,9 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
           page={page}
           totalPages={pagination.totalPages}
           total={pagination.total}
-          hrefFor={(p) => pageHref(tab, p, eventType, operation, range)}
+          hrefFor={(p) => pageHref(tab, p, eventType, operation, range, keyword)}
           jumpAction="/audit-logs"
-          jumpParams={{ tab, ...(eventType ? { eventType } : {}), ...(operation ? { operation } : {}), ...(range ? { range } : {}) }}
+          jumpParams={{ tab, ...(eventType ? { eventType } : {}), ...(operation ? { operation } : {}), ...(range ? { range } : {}), ...(keyword ? { keyword } : {}) }}
         />
       )}
     </div>

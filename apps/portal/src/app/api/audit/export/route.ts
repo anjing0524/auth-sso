@@ -120,6 +120,11 @@ export async function GET(request: NextRequest) {
       const startDate = searchParams.get('startDate') || undefined;
       const endDate = searchParams.get('endDate') || undefined;
       const userId = searchParams.get('userId') || undefined;
+      const keywordParam = searchParams.get('keyword') || undefined;
+      if (keywordParam && keywordParam.length > 100) {
+        return restError(COMMON_ERRORS.VALIDATION_ERROR, 'keyword 最长 100 字符', 400);
+      }
+      const keyword = keywordParam?.trim() || undefined;
       if ((startDate && !DATE_REGEX.test(startDate)) || (endDate && !DATE_REGEX.test(endDate))) {
         return restError(COMMON_ERRORS.VALIDATION_ERROR, 'startDate/endDate 必须是 YYYY-MM-DD', 400);
       }
@@ -136,6 +141,7 @@ export async function GET(request: NextRequest) {
               ...(startDate ? { startDate } : {}),
               ...(endDate ? { endDate } : {}),
               ...(userId ? { userId } : {}),
+              ...(keyword ? { keyword } : {}),
             });
             return {
               rows: res.data.map((l) => [l.createdAt, l.username, l.eventType, l.ip, l.userAgent, l.failReason]),
@@ -150,6 +156,7 @@ export async function GET(request: NextRequest) {
               ...(startDate ? { startDate } : {}),
               ...(endDate ? { endDate } : {}),
               ...(userId ? { userId } : {}),
+              ...(keyword ? { keyword } : {}),
             });
             // 字段名必须取自行形状（getAuditLogs 的 mapRow）：原为
             // `l.operator || l.username`、`l.resource`、`l.detail` —— 三者都不存在，

@@ -11,6 +11,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { ChevronDown, ChevronRight, Layers, Loader2, Save } from 'lucide-react';
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -50,9 +53,13 @@ interface ScopeNode {
 export default function RolePermissionsPage({ role }: RolePermissionsPageProps) {
   const [permissions, setPermissions] = useState<PermissionItem[]>([]);
   const [assignedIds, setAssignedIds] = useState<Set<string>>(new Set());
+  /** 读取时的已授权快照：用于差异（待新增/待移除）与保存确认 */
+  const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
   const [keyword, setKeyword] = useState('');
   const [scopeId, setScopeId] = useState('all');
   const [onlySelected, setOnlySelected] = useState(false);
+  const [onlyChanged, setOnlyChanged] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'DISABLED'>('ALL');
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
@@ -81,7 +88,9 @@ export default function RolePermissionsPage({ role }: RolePermissionsPageProps) 
       ]);
       const assigned: PermissionItem[] = Array.isArray(assignedRaw) ? assignedRaw : (assignedRaw.data ?? []);
       setPermissions(all);
-      setAssignedIds(new Set(assigned.map((p) => p.id)));
+      const ids = new Set(assigned.map((p) => p.id));
+      setAssignedIds(ids);
+      setSavedIds(new Set(ids));
     } catch {
       toast.error('加载权限数据失败');
     } finally {
@@ -151,6 +160,15 @@ export default function RolePermissionsPage({ role }: RolePermissionsPageProps) 
     return find(tree) ?? tree[0]!;
   }, [tree, scopeId]);
 
+  const { addedIds, removedIds } = useMemo(() => {
+    const added = new Set<string>();
+    const removed = new Set<string>();
+    for (const id of assignedIds) if (!savedIds.has(id)) added.add(id);
+    for (const id of savedIds) if (!assignedIds.has(id)) removed.add(id);
+    return { addedIds: added, removedIds: removed };
+  }, [assignedIds, savedIds]);
+  const changeCount = addedIds.size + removedIds.size;
+
   const scopedItems = useMemo(() => {
     const set = new Set(scope.itemIds);
     const byId = new Map(permissions.map((p) => [p.id, p]));
@@ -169,11 +187,12 @@ export default function RolePermissionsPage({ role }: RolePermissionsPageProps) 
     return permissions
       .filter((p) => set.has(p.id))
       .filter((p) => (onlySelected ? assignedIds.has(p.id) : true))
+      .filter((p) => (onlyChanged ? addedIds.has(p.id) || removedIds.has(p.id) : true))
       .filter((p) => (statusFilter === 'ALL' ? true : (p.status ?? 'ACTIVE') === statusFilter))
       .filter((p) => (kw ? p.name.toLowerCase().includes(kw) || p.code.toLowerCase().includes(kw) : true))
       .map((p) => ({ ...p, depth: p.type === 'API' ? 0 : depthOf(p) }))
       .sort((a, b) => a.type.localeCompare(b.type) || a.code.localeCompare(b.code));
-  }, [permissions, scope, assignedIds, keyword, onlySelected, statusFilter]);
+  }, [permissions, scope, assignedIds, savedIds, keyword, onlySelected, onlyChanged, addedIds, removedIds, statusFilter]);
 
   const scopeItemIds = scopedItems.map((p) => p.id);
   const allScopeSelected = scopeItemIds.length > 0 && scopeItemIds.every((id) => assignedIds.has(id));
@@ -194,8 +213,13 @@ export default function RolePermissionsPage({ role }: RolePermissionsPageProps) 
     setSaving(true);
     try {
       const res = await updateRolePermissionsAction(role.id, Array.from(assignedIds));
-      if (res.success) toast.success(`已更新角色「${role.name}」的权限（${assignedIds.size} 项）`);
-      else reportFailure(res);
+      if (res.success) {
+        setSavedIds(new Set(assignedIds));
+        setConfirmOpen(false);
+        toast.success(`已更新角色「${role.name}」的权限（+${addedIds.size} / -${removedIds.size}）`);
+      } else {
+        reportFailure(res);
+      }
     } finally {
       setSaving(false);
     }
@@ -299,6 +323,13 @@ export default function RolePermissionsPage({ role }: RolePermissionsPageProps) 
             <Button variant="ghost" size="sm" onClick={() => setOnlySelected((v) => !v)}>
               {onlySelected ? '显示全部' : '仅看已选'}
             </Button>
+            <Button variant="ghost" size="sm" onClick={() => setOnlyChanged((v) => !v)}>
+              {onlyChanged ? '显示全部' : '仅看变更'}
+            </Button>
+            <span className="flex items-center gap-1 text-[11px]">
+              <span className="rounded bg-success/10 px-1.5 py-0.5 font-medium text-success">待新增 +{addedIds.size}</span>
+              <span className="rounded bg-destructive/10 px-1.5 py-0.5 font-medium text-destructive">待移除 -{removedIds.size}</span>
+            </span>
             <div className="flex items-center gap-1">
               {([['ALL', '全部'], ['ACTIVE', '已启用'], ['DISABLED', '已禁用']] as const).map(([v, t]) => (
                 <button
@@ -328,9 +359,13 @@ export default function RolePermissionsPage({ role }: RolePermissionsPageProps) 
                 总已选 <span className="font-semibold tabular-nums text-foreground">{assignedIds.size}</span>
               </span>
               <Button variant="outline" size="sm" asChild><Link href="/roles">取消</Link></Button>
-              <Button size="sm" onClick={handleSave} disabled={loading || saving || role.isSystem}>
+              <Button
+                size="sm"
+                onClick={() => setConfirmOpen(true)}
+                disabled={loading || saving || role.isSystem || changeCount === 0}
+              >
                 <Save className="h-3.5 w-3.5" />
-                {saving ? '保存中...' : role.isSystem ? '系统角色只读' : '保存'}
+                {saving ? '保存中...' : role.isSystem ? '系统角色只读' : changeCount === 0 ? '无变更' : `保存变更（${changeCount}）`}
               </Button>
             </div>
           </div>
@@ -347,7 +382,9 @@ export default function RolePermissionsPage({ role }: RolePermissionsPageProps) 
                 {scopedItems.map((p) => (
                   <label
                     key={p.id}
-                    className="flex cursor-pointer items-center gap-2.5 border-b border-border/30 px-3 py-1.5 hover:bg-muted/40"
+                    className={`flex cursor-pointer items-center gap-2.5 border-b border-border/30 px-3 py-1.5 hover:bg-muted/40 ${
+                      addedIds.has(p.id) ? 'bg-success/5' : removedIds.has(p.id) ? 'bg-destructive/5' : ''
+                    }`}
                   >
                     <Checkbox checked={assignedIds.has(p.id)} onCheckedChange={() => toggle(p.id)} disabled={role.isSystem} />
                     <span className="min-w-0 flex-1" style={{ paddingLeft: p.depth * 12 }}>
@@ -359,6 +396,12 @@ export default function RolePermissionsPage({ role }: RolePermissionsPageProps) 
                         {(p.status ?? 'ACTIVE') !== 'ACTIVE' && (
                           <span className="shrink-0 rounded bg-destructive/10 px-1 text-[10px] text-destructive">已禁用</span>
                         )}
+                        {addedIds.has(p.id) && (
+                          <span className="shrink-0 rounded bg-success/10 px-1 text-[10px] text-success">待新增</span>
+                        )}
+                        {removedIds.has(p.id) && (
+                          <span className="shrink-0 rounded bg-destructive/10 px-1 text-[10px] text-destructive">待移除</span>
+                        )}
                       </span>
                       <span className="block truncate font-mono text-[11px] text-muted-foreground">{p.code}</span>
                     </span>
@@ -369,6 +412,46 @@ export default function RolePermissionsPage({ role }: RolePermissionsPageProps) 
           </div>
         </div>
       </div>
+
+      {/* 保存前确认：明确影响面（待新增/待移除），避免“点了保存才发现改多/改少” */}
+      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>确认保存权限变更？</DialogTitle>
+            <DialogDescription>
+              角色「{role.name}」：将新增 {addedIds.size} 项、移除 {removedIds.size} 项权限；保存后绑定该角色的用户权限即时生效。
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-64 space-y-2 overflow-y-auto text-[12px]">
+            {addedIds.size > 0 && (
+              <div>
+                <p className="mb-1 font-medium text-success">待新增（{addedIds.size}）</p>
+                <ul className="space-y-0.5 text-muted-foreground">
+                  {permissions.filter((p) => addedIds.has(p.id)).slice(0, 8).map((p) => (
+                    <li key={p.id} className="truncate font-mono">+ {p.code}</li>
+                  ))}
+                  {addedIds.size > 8 && <li className="text-muted-foreground">… 其余 {addedIds.size - 8} 项</li>}
+                </ul>
+              </div>
+            )}
+            {removedIds.size > 0 && (
+              <div>
+                <p className="mb-1 font-medium text-destructive">待移除（{removedIds.size}）</p>
+                <ul className="space-y-0.5 text-muted-foreground">
+                  {permissions.filter((p) => removedIds.has(p.id)).slice(0, 8).map((p) => (
+                    <li key={p.id} className="truncate font-mono">- {p.code}</li>
+                  ))}
+                  {removedIds.size > 8 && <li className="text-muted-foreground">… 其余 {removedIds.size - 8} 项</li>}
+                </ul>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmOpen(false)} disabled={saving}>取消</Button>
+            <Button onClick={handleSave} disabled={saving}>{saving ? '保存中...' : '确认保存'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

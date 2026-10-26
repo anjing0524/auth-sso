@@ -249,3 +249,24 @@ describe('应用详情分区（2026-10-26，UX-GUIDELINES §3.2）', () => {
     expect(src).toContain('formatTTL');
   });
 });
+
+describe('产品级批量授权与审计搜索（2026-10-26，第三轮）', () => {
+  it('权限分配有变更差异（待新增/待移除/确认弹窗/仅看变更）', () => {
+    const src = read('src/app/(dashboard)/roles/[id]/permissions/permissions-client.tsx');
+    expect(src).toContain('待新增');
+    expect(src).toContain('待移除');
+    expect(src).toContain('仅看变更');
+    expect(src).toContain('确认保存权限变更？');
+    expect(src).toContain('savedIds');
+  });
+
+  it('审计关键词搜索：inet 列需 ::text，导出沿用 keyword', () => {
+    const data = read('src/app/audit/data.ts');
+    expect(data).toContain('::text ilike');
+    const page = read('src/app/(dashboard)/audit-logs/page.tsx');
+    expect(page).toContain('keyword');
+    expect(page).toContain('&keyword=');
+    const filters = read('src/app/(dashboard)/audit-logs/components/audit-filters.tsx');
+    expect(filters).toContain('搜索用户 / IP');
+  });
+});
