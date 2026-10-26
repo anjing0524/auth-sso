@@ -5,7 +5,7 @@
  * 职责：搜索/复制/下拉菜单等浏览器交互，写操作通过 Server Actions 直调
  */
 import React, { useState, useCallback, useTransition, useEffect, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { useFieldFailure } from '@/hooks/use-field-failure';
@@ -28,6 +28,9 @@ import { CLIENT_PERMISSIONS, PORTAL_CLIENT_ID } from '@auth-sso/contracts';
 import { deleteClientAction } from '../actions';
 
 import { SearchInput } from '@/components/shared/search-input';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
 import { TableToolbar } from '@/components/shared/table-toolbar';
 import { TablePagination } from '@/components/shared/table-pagination';
 import { PermissionGuard } from '@/components/shared/permission-guard';
@@ -53,15 +56,24 @@ interface Props {
   clients: ClientRow[];
   pagination: { page: number; pageSize: number; total: number; totalPages: number };
   initialKeyword: string;
+  /** 状态筛选：'' | ACTIVE | DISABLED */
+  initialStatus?: string;
   /** 是否处于搜索态（U-G02：空态文案与「清除筛选」出口据此区分） */
   isFiltered?: boolean;
   /** 「清除筛选」目标地址（回第 1 页、清空 keyword） */
   clearHref?: string;
 }
 
-export default function ClientsTable({ clients, pagination, initialKeyword, isFiltered = false, clearHref = '/clients' }: Props) {
+export default function ClientsTable({ clients, pagination, initialKeyword, initialStatus = '', isFiltered = false, clearHref = '/clients' }: Props) {
   const router = useRouter();
   const [keyword, setKeyword] = useState(initialKeyword);
+  const searchParams = useSearchParams();
+  const applyStatus = (value: string) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (value) params.set('status', value); else params.delete('status');
+    params.set('page', '1');
+    startTransition(() => router.push(`/clients?${params.toString()}`));
+  };
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -70,14 +82,14 @@ export default function ClientsTable({ clients, pagination, initialKeyword, isFi
     setKeyword(value);
     if (searchTimer.current) clearTimeout(searchTimer.current);
     searchTimer.current = setTimeout(() => {
-      const params = new URLSearchParams();
-      if (value.trim()) params.set('keyword', value.trim());
+      const params = new URLSearchParams(searchParams.toString());
+      if (value.trim()) params.set('keyword', value.trim()); else params.delete('keyword');
       params.set('page', '1');
       startTransition(() => {
         router.push(`/clients?${params.toString()}`);
       });
     }, 300);
-  }, [router]);
+  }, [router, searchParams]);
   useEffect(() => () => { if (searchTimer.current) clearTimeout(searchTimer.current); }, []);
 
   const timerRef = useRef<ReturnType<typeof setTimeout>>(null);
@@ -155,6 +167,18 @@ export default function ClientsTable({ clients, pagination, initialKeyword, isFi
         <div className="flex min-w-0 items-center gap-3">
           <h1 className="shrink-0 text-[15px] font-semibold tracking-tight text-foreground">应用管理</h1>
           <SearchInput placeholder="搜索应用名称或 Client ID..." value={keyword} onChange={handleSearch} busy={isPending} />
+          <Select value={initialStatus || 'ALL'} onValueChange={(v) => applyStatus(v === 'ALL' ? '' : v)} disabled={isPending}>
+            <SelectTrigger aria-label="过滤应用状态" className="w-full md:w-36">
+              <SelectValue>
+                {initialStatus === 'ACTIVE' ? '运行中' : initialStatus === 'DISABLED' ? '已禁用' : '全部状态'}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">全部状态</SelectItem>
+              <SelectItem value="ACTIVE">运行中</SelectItem>
+              <SelectItem value="DISABLED">已禁用</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       }
       right={

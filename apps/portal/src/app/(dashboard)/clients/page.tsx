@@ -21,6 +21,7 @@ export const metadata = { title: '应用管理 | Auth-SSO' };
 interface PageProps {
   searchParams: Promise<{
     keyword?: string;
+    status?: string;
     page?: string;
   }>;
 }
@@ -28,21 +29,23 @@ interface PageProps {
 export default async function ClientsPage({ searchParams }: PageProps) {
   const params = await searchParams;
   const keyword = params.keyword || '';
+  // 状态白名单：非法值不得下沉到 PG enum（22P02 → 500）
+  const status = params.status === 'ACTIVE' || params.status === 'DISABLED' ? params.status : '';
   const page = clampPage(params.page);
 
   const { data: clients, pagination } = await getClients({
     page,
     pageSize: 20,
     keyword,
-    status: '',
+    status,
   });
 
   // U-G02：搜索无结果与"系统还没有应用"是两种语义（空态文案/出口不同）。
-  const isFiltered = keyword.length > 0;
+  const isFiltered = keyword.length > 0 || status !== '';
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
-      <ClientsTable clients={clients} pagination={pagination} initialKeyword={keyword} isFiltered={isFiltered} clearHref="/clients" />
+      <ClientsTable clients={clients} pagination={pagination} initialKeyword={keyword} initialStatus={status} isFiltered={isFiltered} clearHref="/clients" />
     </div>
   );
 }

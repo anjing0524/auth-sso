@@ -487,3 +487,16 @@ describe('角色分配权限数/零权限警告（2026-10-26，第十八轮）',
     expect(data).toContain('permissionCount');
   });
 });
+
+describe('应用列表状态筛选（2026-10-26，第十九轮）', () => {
+  it('状态白名单 + URL 持久化 + 空态纳入筛选', () => {
+    const page = read('src/app/(dashboard)/clients/page.tsx');
+    expect(page).toContain("params.status === 'ACTIVE'");
+    expect(page).toContain('status,');
+    expect(page).toContain('status !==');
+    const table = read('src/app/(dashboard)/clients/components/ClientsTable.tsx');
+    expect(table).toContain('过滤应用状态');
+    expect(table).toContain('applyStatus');
+    expect(table).toContain('全部状态');
+  });
+});
