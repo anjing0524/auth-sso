@@ -11,6 +11,9 @@ import Link from 'next/link';
 import { toast } from 'sonner';
 import { Loader2, Save, Shield } from 'lucide-react';
 
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -41,9 +44,13 @@ export interface UserRolesPageProps {
 export default function UserRolesPage({ user }: UserRolesPageProps) {
   const [roles, setRoles] = useState<Role[]>([]);
   const [assignedRoleIds, setAssignedRoleIds] = useState<Set<string>>(new Set());
+  /** 读取时的已分配快照：用于差异（待新增/待移除）与保存确认 */
+  const [savedRoleIds, setSavedRoleIds] = useState<Set<string>>(new Set());
   const [keyword, setKeyword] = useState('');
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [onlySelected, setOnlySelected] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const { reportFailure } = useFieldFailure();
 
   const loadData = useCallback(async () => {
@@ -82,7 +89,9 @@ export default function UserRolesPage({ user }: UserRolesPageProps) {
       const assigned: Array<{ id: string; roleId?: string }> = Array.isArray(userRolesData)
         ? userRolesData
         : (userRolesData.data ?? []);
-      setAssignedRoleIds(new Set(assigned.map((r) => r.roleId ?? r.id)));
+      const ids = new Set(assigned.map((r) => r.roleId ?? r.id));
+      setAssignedRoleIds(new Set(ids));
+      setSavedRoleIds(new Set(ids));
     } catch {
       toast.error('加载角色数据失败');
     } finally {
@@ -102,6 +111,16 @@ export default function UserRolesPage({ user }: UserRolesPageProps) {
     );
   }, [roles, keyword]);
 
+  const { addedIds, removedIds } = useMemo(() => {
+    const added = new Set<string>();
+    const removed = new Set<string>();
+    for (const id of assignedRoleIds) if (!savedRoleIds.has(id)) added.add(id);
+    for (const id of savedRoleIds) if (!assignedRoleIds.has(id)) removed.add(id);
+    return { addedIds: added, removedIds: removed };
+  }, [assignedRoleIds, savedRoleIds]);
+  const changeCount = addedIds.size + removedIds.size;
+  const displayRoles = onlySelected ? filteredRoles.filter((r) => assignedRoleIds.has(r.id)) : filteredRoles;
+
   const toggleRole = (roleId: string) => {
     setAssignedRoleIds((prev) => {
       const next = new Set(prev);
@@ -117,7 +136,9 @@ export default function UserRolesPage({ user }: UserRolesPageProps) {
       const roleIds = Array.from(assignedRoleIds);
       const res = await updateUserRolesAction(user.id, roleIds);
       if (res.success) {
-        toast.success(`已为用户「${user.name}」更新角色（${roleIds.length} 个）`);
+        setSavedRoleIds(new Set(assignedRoleIds));
+        setConfirmOpen(false);
+        toast.success(`已更新角色（+${addedIds.size} / -${removedIds.size}）`);
       } else {
         reportFailure(res);
       }
@@ -140,14 +161,30 @@ export default function UserRolesPage({ user }: UserRolesPageProps) {
         <div className="flex flex-wrap items-center gap-3 border-b bg-muted/30 px-3 py-2">
           <SearchInput placeholder="搜索角色名称或编码..." value={keyword} onChange={setKeyword} />
           <Badge variant="secondary" className="h-6">{loading ? '加载中' : `可选 ${roles.length} 个`}</Badge>
+          <Button variant="ghost" size="sm" onClick={() => setOnlySelected((v) => !v)}>
+            {onlySelected ? '显示全部' : '仅看已选'}
+          </Button>
+          <Button
+            variant="ghost" size="sm" disabled={loading || filteredRoles.length === 0}
+            onClick={() => setAssignedRoleIds((prev) => new Set([...prev, ...filteredRoles.map((r) => r.id)]))}
+          >
+            全选当前筛选
+          </Button>
+          <Button variant="ghost" size="sm" disabled={loading || assignedRoleIds.size === 0} onClick={() => setAssignedRoleIds(new Set())}>
+            清空全部
+          </Button>
+          <span className="flex items-center gap-1 text-[11px]">
+            <span className="rounded bg-success/10 px-1.5 py-0.5 font-medium text-success">待新增 +{addedIds.size}</span>
+            <span className="rounded bg-destructive/10 px-1.5 py-0.5 font-medium text-destructive">待移除 -{removedIds.size}</span>
+          </span>
           <span className="text-xs text-muted-foreground">已选 <span className="font-semibold tabular-nums text-foreground">{assignedRoleIds.size}</span> 个</span>
           <div className="ml-auto flex items-center gap-2">
             <Button variant="outline" size="sm" asChild>
               <Link href={`/users/${user.id}`}>取消</Link>
             </Button>
-            <Button size="sm" onClick={handleSave} disabled={loading || saving || !user.deptId}>
+            <Button size="sm" onClick={() => setConfirmOpen(true)} disabled={loading || saving || !user.deptId || changeCount === 0}>
               <Save className="h-3.5 w-3.5" />
-              {saving ? '保存中...' : '保存变更'}
+              {saving ? '保存中...' : changeCount === 0 ? '无变更' : `保存变更（${changeCount}）`}
             </Button>
           </div>
         </div>
@@ -157,7 +194,7 @@ export default function UserRolesPage({ user }: UserRolesPageProps) {
             <div className="flex items-center justify-center py-24">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
-          ) : filteredRoles.length === 0 ? (
+          ) : displayRoles.length === 0 ? (
             <p className="py-16 text-center text-sm text-muted-foreground">
               {!user.deptId
                 ? '请先为该用户分配部门，再分配角色'
@@ -167,10 +204,12 @@ export default function UserRolesPage({ user }: UserRolesPageProps) {
             </p>
           ) : (
             <div className="grid gap-2 xl:grid-cols-2">
-              {filteredRoles.map((role) => (
+              {displayRoles.map((role) => (
                 <label
                   key={role.id}
-                  className="flex cursor-pointer items-center gap-2.5 rounded-md border border-border/60 px-3 py-2 transition-colors hover:bg-muted/40"
+                  className={`flex cursor-pointer items-center gap-2.5 rounded-md border px-3 py-2 transition-colors hover:bg-muted/40 ${
+                    addedIds.has(role.id) ? 'border-success/30 bg-success/5' : removedIds.has(role.id) ? 'border-destructive/30 bg-destructive/5' : 'border-border/60'
+                  }`}
                 >
                   <Checkbox
                     checked={assignedRoleIds.has(role.id)}
@@ -182,6 +221,8 @@ export default function UserRolesPage({ user }: UserRolesPageProps) {
                       {role.isSystem && (
                         <Badge variant="secondary" className="h-5 shrink-0 px-1.5 text-[10px] font-normal">系统</Badge>
                       )}
+                      {addedIds.has(role.id) && <Badge variant="success" className="h-5 shrink-0 px-1.5 text-[10px]">待新增</Badge>}
+                      {removedIds.has(role.id) && <Badge variant="destructive" className="h-5 shrink-0 px-1.5 text-[10px]">待移除</Badge>}
                     </span>
                     <span className="block truncate font-mono text-[11px] text-muted-foreground">{role.code}</span>
                   </span>
@@ -192,6 +233,45 @@ export default function UserRolesPage({ user }: UserRolesPageProps) {
           )}
         </div>
       </div>
+
+      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>确认保存角色变更？</DialogTitle>
+            <DialogDescription>
+              用户「{user.name}」：将新增 {addedIds.size} 个、移除 {removedIds.size} 个角色；保存后权限即时生效。
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-56 space-y-2 overflow-y-auto text-[12px]">
+            {addedIds.size > 0 && (
+              <div>
+                <p className="mb-1 font-medium text-success">待新增（{addedIds.size}）</p>
+                <ul className="space-y-0.5 text-muted-foreground">
+                  {[...addedIds].map((id) => {
+                    const r = roles.find((x) => x.id === id);
+                    return r ? <li key={id} className="truncate">{r.name} <span className="font-mono text-[11px]">({r.code})</span></li> : null;
+                  })}
+                </ul>
+              </div>
+            )}
+            {removedIds.size > 0 && (
+              <div>
+                <p className="mb-1 font-medium text-destructive">待移除（{removedIds.size}）</p>
+                <ul className="space-y-0.5 text-muted-foreground">
+                  {[...removedIds].map((id) => {
+                    const r = roles.find((x) => x.id === id);
+                    return r ? <li key={id} className="truncate">{r.name} <span className="font-mono text-[11px]">({r.code})</span></li> : null;
+                  })}
+                </ul>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmOpen(false)} disabled={saving}>取消</Button>
+            <Button onClick={handleSave} disabled={saving}>{saving ? '保存中...' : '确认保存'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
