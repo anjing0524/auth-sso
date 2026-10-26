@@ -51,9 +51,11 @@ interface Props {
   departments: Array<{ id: string; name: string }>;
   /** 删除确认的影响面：roleId → 绑定用户数（U-ROLES03） */
   boundUserCounts?: Record<string, number>;
+  /** 角色 → 权限条数（空壳/高权角色判断） */
+  permissionCounts?: Record<string, number>;
 }
 
-export default function RolesTable({ roles, pagination, initialKeyword, departments, boundUserCounts = {} }: Props) {
+export default function RolesTable({ roles, pagination, initialKeyword, departments, boundUserCounts = {}, permissionCounts = {} }: Props) {
   const router = useRouter();
   const [keyword, setKeyword] = useState(initialKeyword);
   const [isPending, startTransition] = useTransition();
@@ -147,6 +149,7 @@ export default function RolesTable({ roles, pagination, initialKeyword, departme
     { key: 'name', header: '角色名称', className: 'min-w-[240px]' },
     { key: 'code', header: '编码', className: 'hidden w-[150px] md:table-cell' },
     { key: 'dept', header: '所属部门', className: 'hidden w-[150px] lg:table-cell' },
+    { key: 'permissions', header: '权限数', className: 'hidden w-[84px] sm:table-cell' },
     { key: 'status', header: '状态', className: 'hidden w-[96px] sm:table-cell' },
     { key: 'actions', header: '操作', className: 'w-[116px] text-right' },
   ];
@@ -201,6 +204,17 @@ export default function RolesTable({ roles, pagination, initialKeyword, departme
       </TableCell>
       <TableCell className="hidden lg:table-cell">
         <span className="block max-w-[150px] truncate text-[13px] text-muted-foreground">{getDeptName(r.deptId)}</span>
+      </TableCell>
+      <TableCell className="hidden sm:table-cell">
+        <Link
+          href={`/roles/${r.id}/permissions`}
+          title={`配置权限（当前 ${permissionCounts[r.id] ?? 0} 项）`}
+          className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[12px] tabular-nums hover:bg-primary/10 hover:text-primary ${
+            (permissionCounts[r.id] ?? 0) === 0 ? 'text-muted-foreground' : 'font-medium text-foreground'
+          }`}
+        >
+          {permissionCounts[r.id] ?? 0} 项
+        </Link>
       </TableCell>
       <TableCell className="hidden sm:table-cell">
         <Badge variant={enableStatus(r.status).variant} className="text-[11px]">{enableStatus(r.status).label}</Badge>

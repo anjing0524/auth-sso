@@ -2,7 +2,7 @@
  * 角色管理页面 — Server Component 读模型入口
  * 写操作通过 Server Actions (actions.ts) 执行
  */
-import { getRoles, getRoleBoundUserCounts } from './data';
+import { getRoles, getRoleBoundUserCounts, getRolePermissionCounts } from './data';
 import { db } from '@/infrastructure/db';
 import { getDepartmentOptions } from '@/app/(dashboard)/users/data';
 import { resolveIdentity } from '@/lib/auth';
@@ -40,6 +40,7 @@ export default async function RolesPage({ searchParams }: PageProps) {
   ]);
   // 删除确认的影响面（U-ROLES03）：只统计当前页角色，避免全表聚合
   const boundUserCounts = await getRoleBoundUserCounts(roles.map((r) => r.id));
+  const permissionCounts = await getRolePermissionCounts(roles.map((r) => r.id));
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
@@ -49,6 +50,7 @@ export default async function RolesPage({ searchParams }: PageProps) {
         initialKeyword={keyword}
         departments={departments}
         boundUserCounts={boundUserCounts}
+        permissionCounts={permissionCounts}
       />
     </div>
   );

@@ -166,3 +166,21 @@ export async function getRoleBoundUserCounts(
     .groupBy(schema.userRoles.roleId);
   return Object.fromEntries(rows.map((r) => [r.roleId, Number(r.boundUsers)]));
 }
+
+/**
+ * 角色权限数（当前页角色 → 绑定权限条数）。
+ *
+ * 用途：列表直接区分"空壳角色"（0 项，可能创建后没配权）与"高权角色"；
+ * 计数走 role_permissions 聚合，只统计当前页角色，避免全表扫描。
+ */
+export async function getRolePermissionCounts(
+  roleIds: readonly string[],
+): Promise<Record<string, number>> {
+  if (roleIds.length === 0) return {};
+  const rows = await db
+    .select({ roleId: schema.rolePermissions.roleId, amount: count() })
+    .from(schema.rolePermissions)
+    .where(inArray(schema.rolePermissions.roleId, [...roleIds]))
+    .groupBy(schema.rolePermissions.roleId);
+  return Object.fromEntries(rows.map((r) => [r.roleId, Number(r.amount)]));
+}

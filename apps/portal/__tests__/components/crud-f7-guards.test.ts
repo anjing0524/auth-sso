@@ -432,3 +432,15 @@ describe('用户分配角色批量/差异（2026-10-26，第十四轮）', () =>
     expect(src).toContain('savedRoleIds');
   });
 });
+
+describe('角色列表权限数（2026-10-26，第十五轮）', () => {
+  it('角色行展示权限数并可进入配置，空壳角色可识别', () => {
+    const table = read('src/app/(dashboard)/roles/components/RolesTable.tsx');
+    expect(table).toContain("header: '权限数'");
+    expect(table).toContain('permissionCounts');
+    expect(table).toContain('配置权限（当前');
+    const data = read('src/app/(dashboard)/roles/data.ts');
+    expect(data).toContain('getRolePermissionCounts');
+    expect(data).toContain('schema.rolePermissions');
+  });
+});
