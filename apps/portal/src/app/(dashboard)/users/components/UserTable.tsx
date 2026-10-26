@@ -15,7 +15,8 @@ import {
   UserMinus,
   UserCheck,
   Shield,
-  Building
+  Building,
+  MoreHorizontal,
 } from 'lucide-react';
 
 import {
@@ -32,6 +33,9 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { DataTable } from '@/components/shared/data-table';
@@ -229,10 +233,10 @@ export default function UserTable({ users, pagination, filters, isFiltered = fal
         />
       ),
     }] : []),
-    { key: 'user', header: '用户信息', className: 'w-[300px]' },
-    { key: 'dept', header: '部门' },
-    { key: 'status', header: '状态' },
-    { key: 'createdAt', header: '创建时间' },
+    { key: 'user', header: '用户信息', className: 'w-[190px] md:w-[300px]' },
+    { key: 'dept', header: '部门', className: 'hidden md:table-cell' },
+    { key: 'status', header: '状态', className: 'hidden md:table-cell' },
+    { key: 'createdAt', header: '创建时间', className: 'hidden md:table-cell' },
     { key: 'actions', header: '操作', className: 'text-right' },
   ];
 
@@ -260,31 +264,34 @@ export default function UserTable({ users, pagination, filters, isFiltered = fal
             <span className="block max-w-[240px] truncate text-[10px] leading-3 text-muted-foreground" title={`${user.username} • ${user.email}`}>
               {user.username} • {user.email}
             </span>
+            <span className="mt-0.5 md:hidden">
+              <Badge variant={accountStatus(user.status).variant}>{accountStatus(user.status).label}</Badge>
+            </span>
           </div>
         </div>
       </TableCell>
-      <TableCell>
+      <TableCell className="hidden md:table-cell">
         <div className="flex items-center gap-1.5 text-sm text-foreground/80">
           <Building className="h-3.5 w-3.5 text-muted-foreground" />
           {user.deptName || <span className="italic text-muted-foreground">未分配</span>}
         </div>
       </TableCell>
-      <TableCell>
+      <TableCell className="hidden md:table-cell">
         <Badge variant={accountStatus(user.status).variant}>
           {accountStatus(user.status).label}
         </Badge>
       </TableCell>
-      <TableCell className="font-mono text-xs text-muted-foreground">
+      <TableCell className="hidden font-mono text-xs text-muted-foreground md:table-cell">
         {formatDate(user.createdAt)}
       </TableCell>
       <TableCell className="text-right">
-        <div className="flex items-center justify-end gap-0.5">
+        <div className="hidden items-center justify-end gap-0.5 md:flex">
           {/* U-USERS01：详情入口按 user:read 渲染——此前包在 user:update 里，只有 read 的
               只读角色在列表行没有任何入口（而详情页本身已支持只读模式）。是否有编辑权限
               由详情页内部 canUpdate 决定（只读横幅 + fieldset 禁用）。 */}
           <PermissionGuard permission={USER_PERMISSIONS.READ}>
             <Button asChild variant="ghost" size="sm" className="h-8 gap-1.5 px-2" aria-label="查看详情" title="查看详情">
-              <Link href={`/users/${user.id}`}><Eye className="h-4 w-4" /><span>详情</span></Link>
+              <Link href={`/users/${user.id}`}><Eye className="h-4 w-4" /><span className="hidden md:inline">详情</span></Link>
             </Button>
           </PermissionGuard>
           <PermissionGuard permission={USER_PERMISSIONS.ASSIGN_ROLE}>
@@ -296,7 +303,7 @@ export default function UserTable({ users, pagination, filters, isFiltered = fal
               aria-label={`分配角色 ${user.name}`}
               title="分配角色"
             >
-              <Link href={`/users/${user.id}/roles`}><Shield className="h-4 w-4" /><span>分配角色</span></Link>
+              <Link href={`/users/${user.id}/roles`}><Shield className="h-4 w-4" /><span className="hidden md:inline">分配角色</span></Link>
             </Button>
           </PermissionGuard>
           <PermissionGuard permission={USER_PERMISSIONS.UPDATE}>
@@ -309,9 +316,37 @@ export default function UserTable({ users, pagination, filters, isFiltered = fal
               onClick={() => handleToggleStatus(user)}
             >
               {user.status === 'ACTIVE' ? <UserMinus className="h-4 w-4" /> : <UserCheck className="h-4 w-4" />}
-              <span>{user.status === 'ACTIVE' ? '禁用' : user.status === 'LOCKED' ? '解锁' : '恢复'}</span>
+              <span className="hidden md:inline">{user.status === 'ACTIVE' ? '禁用' : user.status === 'LOCKED' ? '解锁' : '恢复'}</span>
             </Button>
           </PermissionGuard>
+        </div>
+        {/* 移动端：操作收进菜单，避免第三颗图标被裁切 */}
+        <div className="flex justify-end md:hidden">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon-sm" aria-label={`更多操作 ${user.name}`} title="更多操作">
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-40">
+              <PermissionGuard permission={USER_PERMISSIONS.READ}>
+                <DropdownMenuItem asChild>
+                  <Link href={`/users/${user.id}`}><Eye className="mr-2 h-4 w-4" />详情</Link>
+                </DropdownMenuItem>
+              </PermissionGuard>
+              <PermissionGuard permission={USER_PERMISSIONS.ASSIGN_ROLE}>
+                <DropdownMenuItem asChild>
+                  <Link href={`/users/${user.id}/roles`}><Shield className="mr-2 h-4 w-4" />分配角色</Link>
+                </DropdownMenuItem>
+              </PermissionGuard>
+              <PermissionGuard permission={USER_PERMISSIONS.UPDATE}>
+                <DropdownMenuItem onSelect={() => handleToggleStatus(user)}>
+                  {user.status === 'ACTIVE' ? <UserMinus className="mr-2 h-4 w-4 text-destructive" /> : <UserCheck className="mr-2 h-4 w-4 text-success" />}
+                  {user.status === 'ACTIVE' ? '禁用' : user.status === 'LOCKED' ? '解锁' : '恢复'}
+                </DropdownMenuItem>
+              </PermissionGuard>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </TableCell>
     </TableRow>

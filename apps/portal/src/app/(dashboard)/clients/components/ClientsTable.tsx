@@ -176,8 +176,8 @@ export default function ClientsTable({ clients, pagination, initialKeyword, init
 
   const columns = [
     { key: 'detail', header: '应用详情', className: 'w-[280px]' },
-    { key: 'clientId', header: '身份标识 (Client ID)' },
-    { key: 'redirectUris', header: '回调白名单 (Redirect URIs)' },
+    { key: 'clientId', header: '身份标识 (Client ID)', className: 'hidden md:table-cell' },
+    { key: 'redirectUris', header: '回调白名单 (Redirect URIs)', className: 'hidden md:table-cell' },
     { key: 'lastUsed', header: '最近使用', className: 'hidden w-[110px] md:table-cell' },
     { key: 'status', header: '运行状态' },
     { key: 'actions', header: '操作', className: 'text-right' },
@@ -186,33 +186,37 @@ export default function ClientsTable({ clients, pagination, initialKeyword, init
   const cardHeader = (
     <TableToolbar
       left={
-        <div className="flex min-w-0 items-center gap-3">
-          <h1 className="shrink-0 text-[15px] font-semibold tracking-tight text-foreground">应用管理</h1>
-          <SearchInput placeholder="搜索应用名称或 Client ID..." value={keyword} onChange={handleSearch} busy={isPending} />
-          <Select value={initialStatus || 'ALL'} onValueChange={(v) => applyStatus(v === 'ALL' ? '' : v)} disabled={isPending}>
-            <SelectTrigger aria-label="过滤应用状态" className="w-full md:w-36">
-              <SelectValue>
-                {initialStatus === 'ACTIVE' ? '运行中' : initialStatus === 'DISABLED' ? '已禁用' : '全部状态'}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ALL">全部状态</SelectItem>
-              <SelectItem value="ACTIVE">运行中</SelectItem>
-              <SelectItem value="DISABLED">已禁用</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select value={initialSort} onValueChange={applySort} disabled={isPending}>
-            <SelectTrigger aria-label="应用排序" className="w-full md:w-32">
-              <SelectValue>
-                {initialSort === 'name' ? '按名称' : initialSort === 'updated' ? '最近更新' : '最近创建'}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="recent">最近创建</SelectItem>
-              <SelectItem value="updated">最近更新</SelectItem>
-              <SelectItem value="name">按名称</SelectItem>
-            </SelectContent>
-          </Select>
+        <div className="flex min-w-0 flex-col gap-2 md:flex-row md:items-center md:gap-3">
+          <div className="flex items-center justify-between gap-2">
+            <h1 className="shrink-0 text-[15px] font-semibold tracking-tight text-foreground">应用管理</h1>
+          </div>
+          <div className="grid w-full grid-cols-2 gap-2 md:flex md:w-auto md:items-center md:gap-2">
+            <SearchInput className="col-span-2 md:w-64" placeholder="搜索应用名称或 Client ID..." value={keyword} onChange={handleSearch} busy={isPending} />
+            <Select value={initialStatus || 'ALL'} onValueChange={(v) => applyStatus(v === 'ALL' ? '' : v)} disabled={isPending}>
+              <SelectTrigger aria-label="过滤应用状态" className="w-full md:w-36">
+                <SelectValue>
+                  {initialStatus === 'ACTIVE' ? '运行中' : initialStatus === 'DISABLED' ? '已禁用' : '全部状态'}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">全部状态</SelectItem>
+                <SelectItem value="ACTIVE">运行中</SelectItem>
+                <SelectItem value="DISABLED">已禁用</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={initialSort} onValueChange={applySort} disabled={isPending}>
+              <SelectTrigger aria-label="应用排序" className="w-full md:w-32">
+                <SelectValue>
+                  {initialSort === 'name' ? '按名称' : initialSort === 'updated' ? '最近更新' : '最近创建'}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="recent">最近创建</SelectItem>
+                <SelectItem value="updated">最近更新</SelectItem>
+                <SelectItem value="name">按名称</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
       }
       right={
@@ -264,7 +268,7 @@ export default function ClientsTable({ clients, pagination, initialKeyword, init
           </div>
         </div>
       </TableCell>
-      <TableCell>
+      <TableCell className="hidden md:table-cell">
         <div className="flex items-center gap-2">
           <code className="block max-w-[150px] truncate rounded-md border border-border/50 bg-muted px-2 py-1 font-mono text-xs text-foreground/70" title={client.clientId}>
             {client.clientId}
@@ -280,7 +284,7 @@ export default function ClientsTable({ clients, pagination, initialKeyword, init
           </Button>
         </div>
       </TableCell>
-      <TableCell>
+      <TableCell className="hidden md:table-cell">
         <div className="flex flex-wrap gap-1 max-w-[200px]">
           {client.redirectUris.slice(0, 1).map((uri, i) => (
             <Badge key={i} variant="outline" title={uri} className="h-auto max-w-[210px] justify-start overflow-hidden border-border bg-card font-mono font-normal shadow-sm">
@@ -306,7 +310,7 @@ export default function ClientsTable({ clients, pagination, initialKeyword, init
         <div className="flex items-center justify-end gap-0.5">
           <PermissionGuard permission={CLIENT_PERMISSIONS.UPDATE}>
             <Button asChild variant="ghost" size="sm" className="h-8 gap-1.5 px-2" aria-label="编辑 OAuth 配置" title="编辑 OAuth 配置">
-              <Link href={`/clients/${client.clientId}`}><Edit className="h-4 w-4" /><span>编辑配置</span></Link>
+              <Link href={`/clients/${client.clientId}`}><Edit className="h-4 w-4" /><span className="hidden md:inline">编辑配置</span></Link>
             </Button>
           </PermissionGuard>
           <PermissionGuard permission={CLIENT_PERMISSIONS.DELETE}>
@@ -319,7 +323,7 @@ export default function ClientsTable({ clients, pagination, initialKeyword, init
               className="h-8 gap-1.5 px-2 text-destructive hover:bg-destructive/10 hover:text-destructive disabled:opacity-40"
               onClick={() => setDeleteTarget(client)}
             >
-              <Trash2 className="h-4 w-4" /><span>注销</span>
+              <Trash2 className="h-4 w-4" /><span className="hidden md:inline">注销</span>
             </Button>
           </PermissionGuard>
         </div>

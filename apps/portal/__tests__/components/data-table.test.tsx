@@ -4,7 +4,7 @@
  * @req R2
  */
 import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { DataTable } from '@/components/shared/data-table';
 
 interface TestItem {
@@ -84,13 +84,34 @@ describe('DataTable', () => {
     expect(screen.getByText('搜索栏测试')).toBeInTheDocument();
   });
 
-  it('宽表滚动提示在 ≥1024 仍可见（U-G05：lg:hidden，而非 md:hidden）', () => {
-    render(
-      <DataTable columns={columns} data={items} renderRow={renderRow} />
-    );
+  it('只在真实溢出时显示滚动提示（≥1024 用 lg:hidden）', async () => {
+    const callbacks: Array<() => void> = [];
+    const OriginalRO = globalThis.ResizeObserver;
+    class MockResizeObserver {
+      constructor(cb: () => void) { callbacks.push(cb); }
+      observe() {}
+      disconnect() {}
+    }
+    globalThis.ResizeObserver = MockResizeObserver as unknown as typeof ResizeObserver;
+    try {
+      const { container } = render(
+        <DataTable columns={columns} data={items} renderRow={renderRow} />
+      );
+      const scroller = container.querySelector('.scrollbar-slim') as HTMLElement;
+      Object.defineProperty(scroller, 'scrollWidth', { value: 520, configurable: true });
+      Object.defineProperty(scroller, 'clientWidth', { value: 320, configurable: true });
+      for (const cb of callbacks) cb();
+      await waitFor(() => expect(screen.getByText('左右滑动查看完整表格')).toBeInTheDocument());
+      const hint = screen.getByText('左右滑动查看完整表格');
+      expect(hint.className).toContain('lg:hidden');
+      expect(hint.className).not.toContain('md:hidden');
+    } finally {
+      globalThis.ResizeObserver = OriginalRO;
+    }
+  });
 
-    const hint = screen.getByText('左右滑动查看完整表格');
-    expect(hint.className).toContain('lg:hidden');
-    expect(hint.className).not.toContain('md:hidden');
+  it('表格未溢出时不显示滚动提示', () => {
+    render(<DataTable columns={columns} data={items} renderRow={renderRow} />);
+    expect(screen.queryByText('左右滑动查看完整表格')).not.toBeInTheDocument();
   });
 });

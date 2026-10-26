@@ -671,3 +671,28 @@ describe('工作台风险与角色筛选（续一百三十九）', () => {
     expect(measure).toContain('main?.firstElementChild');
   });
 });
+
+describe('移动端列表（续一百四十）', () => {
+  it('横向滚动提示按真实溢出显示（不再始终显示）', () => {
+    const src = read('src/components/shared/data-table.tsx');
+    expect(src).toContain('overflowing');
+    expect(src).toContain('scrollWidth > el.clientWidth');
+  });
+  it('用户列表移动端隐藏次级列，操作收进更多菜单', () => {
+    const src = read('src/app/(dashboard)/users/components/UserTable.tsx');
+    expect(src).toContain('hidden md:table-cell');
+    expect(src).toContain('更多操作');
+    expect(src).toContain('md:hidden');
+  });
+  it('应用列表移动端隐藏 Client ID/回调/最近使用列', () => {
+    const src = read('src/app/(dashboard)/clients/components/ClientsTable.tsx');
+    expect(src).toContain('hidden md:table-cell');
+    expect(src).toContain("className: 'hidden md:table-cell'");
+  });
+  it('用户工具栏移动端两列（搜索跨列、筛选不压缩）', () => {
+    const page = read('src/app/(dashboard)/users/page.tsx');
+    expect(page).toContain('grid w-full grid-cols-2');
+    const filters = read('src/app/(dashboard)/users/components/UserFilters.tsx');
+    expect(filters).toContain('col-span-2 md:w-64');
+  });
+});
