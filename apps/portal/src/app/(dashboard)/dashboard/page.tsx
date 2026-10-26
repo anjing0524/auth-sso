@@ -7,18 +7,15 @@ import {
   Users,
   ShieldCheck,
   AppWindow,
-  Plus,
   ArrowRight,
-  ArrowUpRight,
   Activity,
-  TrendingUp,
-  History
+  History,
+  Building2,
 } from 'lucide-react';
 
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
@@ -44,7 +41,7 @@ import {
   can,
 } from '@auth-sso/contracts';
 import { formatTime } from '@/lib/format-date';
-import { getDashboardStats, getRecentAuditLogs } from './data';
+import { getDashboardStats, getLoginSummary7d, getRecentAuditLogs } from './data';
 import { db } from '@/infrastructure/db';
 import { resolveIdentity } from '@/lib/auth/verify-jwt';
 import { resolveScope } from '@/lib/authz';
@@ -78,10 +75,11 @@ export default async function DashboardPage() {
   const canRoles = can(subject, ROLE_PERMISSIONS.LIST);
   const canClients = can(subject, CLIENT_PERMISSIONS.LIST);
   const canDepartments = can(subject, DEPARTMENT_PERMISSIONS.LIST);
-  const [stats, recentLogs] = await Promise.all([
+  const [stats, recentLogs, loginSummary] = await Promise.all([
     getDashboardStats(scope),
     // 审计动态是跨部门敏感数据：没有 audit:read 的用户不查询、不渲染（此前任何 dashboard 用户都能看到）。
-    canAudit ? getRecentAuditLogs() : Promise.resolve([]),
+    canAudit ? getRecentAuditLogs(6) : Promise.resolve([]),
+    canAudit ? getLoginSummary7d() : Promise.resolve(null),
   ]);
 
   /**
@@ -118,192 +116,168 @@ export default async function DashboardPage() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* 1. Header Area */}
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
       <PageHeader
         icon="LayoutDashboard"
         title="工作台"
-        description="全域身份认证概览与系统健康度"
+        description="按数据范围展示的概览与待办入口"
         actions={
           canAudit ? (
-            <Button asChild>
-              <Link href="/audit-logs"><TrendingUp className="h-4 w-4" /> 查看日志</Link>
+            <Button variant="outline" size="sm" asChild>
+              <Link href="/audit-logs"><History className="h-3.5 w-3.5" /> 查看审计日志</Link>
             </Button>
           ) : undefined
         }
       />
 
-      {/* 2. Key Metrics - Shadcn Block-01 Grid */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                {canUsers && (
-<Card className="rounded-xl border-none shadow-sm ring-1 ring-border/50 hover:bg-primary-subtle transition-all duration-200 ease-out">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground">用户总数</CardTitle>
-            <Users className="h-4 w-4 text-primary opacity-70" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-black">{stats.users}</div>
-            <p className="mt-1 text-xs text-muted-foreground">活跃用户</p>
-          </CardContent>
-        </Card>
+      {/* 指标卡：整卡可点，直接进入对应列表（不是纯装饰数字） */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {canUsers && (
+          <MetricCard href="/users" icon={<Users className="h-4 w-4" />} label="用户总数" value={stats.users} hint="查看用户与状态" />
         )}
-                {canRoles && (
-<Card className="rounded-xl border-none shadow-sm ring-1 ring-border/50 hover:bg-primary-subtle transition-all duration-200 ease-out">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground">活跃角色</CardTitle>
-            <ShieldCheck className="h-4 w-4 text-primary opacity-70" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-black">{stats.roles}</div>
-            <p className="mt-1 text-xs text-muted-foreground">已配置角色</p>
-          </CardContent>
-        </Card>
+        {canRoles && (
+          <MetricCard href="/roles" icon={<ShieldCheck className="h-4 w-4" />} label="角色数" value={stats.roles} hint="管理系统角色与权限" />
         )}
-                {canClients && (
-<Card className="rounded-xl border-none shadow-sm ring-1 ring-border/50 hover:bg-primary-subtle transition-all duration-200 ease-out">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground">受控应用</CardTitle>
-            <AppWindow className="h-4 w-4 text-primary opacity-70" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-black">{stats.clients}</div>
-            <p className="mt-1 text-xs text-muted-foreground">已注册应用</p>
-          </CardContent>
-        </Card>
+        {canClients && (
+          <MetricCard href="/clients" icon={<AppWindow className="h-4 w-4" />} label="受控应用" value={stats.clients} hint="OAuth 客户端接入" />
         )}
-        <Card className="rounded-xl border-none shadow-sm ring-1 ring-border/50 hover:bg-primary-subtle transition-all duration-200 ease-out">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground">认证状态</CardTitle>
-            <Activity className="h-4 w-4 text-primary opacity-70" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-black text-success">正常</div>
-            <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
-              <span className="h-2 w-2 rounded-full bg-success animate-pulse" /> 服务节点正常
-            </p>
-          </CardContent>
-        </Card>
+        {canAudit && loginSummary && (
+          <Link
+            href="/audit-logs?tab=login&range=7d"
+            className="rounded-lg border border-border/70 bg-card p-3 shadow-sm transition-colors hover:border-primary/30 hover:bg-primary/[0.02]"
+          >
+            <div className="flex items-center justify-between">
+              <span className="type-meta">近 7 日登录</span>
+              <Activity className="h-4 w-4 text-primary" />
+            </div>
+            <div className="mt-1 flex items-baseline gap-1.5">
+              <span className="text-[22px] font-semibold tabular-nums leading-none">{loginSummary.success}</span>
+              <span className="text-[11px] text-muted-foreground">成功</span>
+              <span className={`ml-auto text-[12px] font-medium tabular-nums ${loginSummary.failed > 0 ? 'text-destructive' : 'text-muted-foreground'}`}>
+                失败 {loginSummary.failed}
+              </span>
+            </div>
+            <p className="mt-1 text-[11px] text-muted-foreground">查看登录审计</p>
+          </Link>
+        )}
       </div>
 
-      {/* 3. Detailed Data - Non-symmetric Layout */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-        
-        {/* Left: Main Activity Table */}
+      <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-3">
+        {/* 最近动态：只展示可行动的关键列，点击可进入审计并按用户过滤 */}
         {canAudit && (
-        <Card className="flex flex-col overflow-hidden rounded-xl border-none shadow-sm ring-1 ring-border/50 lg:col-span-4">
-          <CardHeader className="flex flex-row items-center px-6 py-6">
-            <div className="grid gap-1">
-              <CardTitle className="flex items-center gap-2">
-                <History className="h-5 w-5 text-info" />
-                安全审计动态
+          <Card className="gap-0 overflow-hidden rounded-lg border border-border/70 py-0 shadow-sm ring-0 lg:col-span-2">
+            <CardHeader className="flex flex-row items-center justify-between border-b bg-muted/30 px-3 py-2">
+              <CardTitle className="flex items-center gap-2 type-card-title">
+                <History className="h-4 w-4 text-primary" /> 最近操作
               </CardTitle>
-              <CardDescription className="text-xs font-medium text-muted-foreground">实时审计日志</CardDescription>
-            </div>
-            <Button size="sm" variant="ghost" className="ml-auto" asChild>
-              <Link href="/audit-logs">
-                查看全部 <ArrowRight className="ml-1 h-3 w-3" />
-              </Link>
-            </Button>
-          </CardHeader>
-          <CardContent className="px-0 flex-1">
-            <Table>
-              <TableHeader className="bg-muted/50">
-                <TableRow className="hover:bg-transparent border-none">
-                  <TableHead className="w-[140px]">操作用户</TableHead>
-                  <TableHead>行为内容</TableHead>
-                  <TableHead className="text-center">结果</TableHead>
-                  <TableHead className="text-right">发生时间</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {recentLogs.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={4} className="h-64 p-0 relative">
-                      <div className="absolute inset-0 flex flex-col items-center justify-center bg-card/60 backdrop-blur-[2px] z-10 space-y-3">
-                        <div className="bg-muted p-3 rounded-full">
-                          <History className="h-6 w-6 text-muted-foreground" />
-                        </div>
-                        <p className="text-sm font-medium text-muted-foreground">暂无活动记录</p>
-                        <p className="text-xs text-muted-foreground/70">系统的最新安全审计日志将在这里显示</p>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  recentLogs.map((log) => {
-                    return (
-                      <TableRow key={log.id} className="group hover:bg-muted/50 transition-colors border-none">
-                        <TableCell className="font-medium">{log.username || '未知'}</TableCell>
-                        <TableCell className="text-muted-foreground">
+              <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" asChild>
+                <Link href="/audit-logs">查看全部 <ArrowRight className="ml-1 h-3 w-3" /></Link>
+              </Button>
+            </CardHeader>
+            <CardContent className="p-0">
+              {recentLogs.length === 0 ? (
+                <p className="px-3 py-10 text-center text-[13px] text-muted-foreground">暂无操作记录</p>
+              ) : (
+                <Table>
+                  <TableHeader className="[&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:bg-card">
+                    <TableRow>
+                      <TableHead>操作人</TableHead>
+                      <TableHead>行为</TableHead>
+                      <TableHead>结果</TableHead>
+                      <TableHead className="text-right">时间</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {recentLogs.map((log) => (
+                      <TableRow key={log.id}>
+                        <TableCell>
+                          {log.username ? (
+                            <Link
+                              href={`/audit-logs?tab=operation&keyword=${encodeURIComponent(log.username)}`}
+                              className="text-[13px] font-medium hover:text-primary hover:underline"
+                            >
+                              {log.username}
+                            </Link>
+                          ) : (
+                            <span className="text-[13px] text-muted-foreground">未知</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-[13px] text-muted-foreground">
                           {AUDIT_OPERATION_LABELS[log.operation as keyof typeof AUDIT_OPERATION_LABELS] ?? log.operation}
                         </TableCell>
-                        <TableCell className="text-center">
-                          <Badge variant={log.status === 200 ? 'success' : 'destructive'}>
+                        <TableCell>
+                          <Badge variant={log.status === 200 ? 'success' : 'destructive'} className="text-[11px]">
                             {log.status === 200 ? '成功' : '失败'}
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-right font-mono text-xs text-muted-foreground">
-                          {formatTime(log.createdAt)}
-                        </TableCell>
+                        <TableCell className="text-right font-mono text-[11px] text-muted-foreground">{formatTime(log.createdAt)}</TableCell>
                       </TableRow>
-                    );
-                  })
-                )}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
         )}
 
-        {/* Right: Quick Actions & Status */}
-        <div className={canAudit ? 'lg:col-span-3 space-y-4' : 'space-y-4 lg:col-span-7'}>
-           <Card className="overflow-hidden rounded-xl border-none bg-muted/50 p-2 shadow-sm ring-1 ring-border/50">
-              <CardHeader className="pb-4">
-                 <CardTitle>快捷功能直达</CardTitle>
-              </CardHeader>
-              <CardContent className="grid gap-3">
-                 {canUserCreate && (
-                 <Button variant="outline" className="group h-16 justify-start rounded-xl border-none bg-card px-6 shadow-sm ring-1 ring-border/50 transition-all hover:border-primary/50" asChild>
-                    <Link href="/users">
-                       <div className="p-2 bg-info/10 text-info rounded-lg mr-4 group-hover:scale-110 transition-transform"><Plus className="h-4 w-4" /></div>
-                       <div className="text-left">
-                          <div className="text-sm font-medium">新建用户</div>
-                          <div className="text-[10px] text-muted-foreground font-medium">配置基本身份与角色</div>
-                       </div>
-                    </Link>
-                 </Button>
-                 )}
-                 {canClientCreate && (
-                 <Button variant="outline" className="group h-16 justify-start rounded-xl border-none bg-card px-6 shadow-sm ring-1 ring-border/50 transition-all hover:border-success/50" asChild>
-                    <Link href="/clients">
-                       <div className="p-2 bg-success/10 text-success rounded-lg mr-4 group-hover:scale-110 transition-transform"><ArrowUpRight className="h-4 w-4" /></div>
-                       <div className="text-left">
-                          <div className="text-sm font-bold">应用接入</div>
-                          <div className="text-[10px] text-muted-foreground font-medium">生成 OAuth 2.1 凭证</div>
-                       </div>
-                    </Link>
-                 </Button>
-                 )}
-              </CardContent>
-           </Card>
+        {/* 快捷入口：按"创建动作"权限渲染，只保留高频动作 */}
+        <div className={canAudit ? 'space-y-3' : 'space-y-3 lg:col-span-3'}>
+          <Card className="gap-0 overflow-hidden rounded-lg border border-border/70 py-0 shadow-sm ring-0">
+            <CardHeader className="border-b bg-muted/30 px-3 py-2">
+              <CardTitle className="type-card-title">快捷操作</CardTitle>
+            </CardHeader>
+            <CardContent className="p-1.5">
+              <QuickLink href="/users" show={canUserCreate} icon={<Users className="h-4 w-4" />} title="新建用户" hint="配置身份、部门与角色" />
+              <QuickLink href="/clients/new" show={canClientCreate} icon={<AppWindow className="h-4 w-4" />} title="注册应用" hint="生成 OAuth 2.1 凭证" />
+              <QuickLink href="/roles" show={canRoles} icon={<ShieldCheck className="h-4 w-4" />} title="角色与权限" hint="维护 RBAC 与数据范围" />
+              <QuickLink href="/departments" show={canDepartments} icon={<Building2 className="h-4 w-4" />} title="组织架构" hint="部门树与数据沙箱" />
+              {!canUserCreate && !canClientCreate && !canRoles && !canDepartments && (
+                <p className="px-2 py-3 text-[11px] text-muted-foreground">当前账号无创建类操作权限。</p>
+              )}
+            </CardContent>
+          </Card>
 
-           {canDepartments && (
-           <Card className="group relative overflow-hidden rounded-xl border-none bg-primary p-6 text-primary-foreground shadow-2xl shadow-primary/20">
-              <div className="relative z-10 space-y-4">
-                 <div className="h-10 w-10 bg-white/20 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
-                    <ShieldCheck className="h-6 w-6" />
-                 </div>
-                 <div className="space-y-1">
-                    <h2 className="text-lg font-black tracking-tight leading-tight">数据沙箱<br/>管控引擎</h2>
-                    <p className="text-xs opacity-80 font-medium">组织架构层级鉴权已全局开启。</p>
-                 </div>
-                 <Button size="sm" variant="secondary" className="w-full rounded-lg font-bold text-xs h-10 shadow-lg shadow-black/10" asChild>
-                    <Link href="/departments">进入架构管理</Link>
-                 </Button>
-              </div>
-           </Card>
-           )}
+          <div className="rounded-lg border border-border/60 bg-muted/30 px-3 py-2.5 text-[11px] leading-5 text-muted-foreground">
+            <p className="font-medium text-foreground">数据范围说明</p>
+            <p>本页指标按你的部门数据范围统计；越权数据不会出现在列表与审计中。</p>
+          </div>
         </div>
       </div>
     </div>
+  );
+}
+
+/** 指标卡：整卡可点，避免"数字不能操作" */
+function MetricCard({ href, icon, label, value, hint }: { href: string; icon: React.ReactNode; label: string; value: number; hint: string }) {
+  return (
+    <Link
+      href={href}
+      className="rounded-lg border border-border/70 bg-card p-3 shadow-sm transition-colors hover:border-primary/30 hover:bg-primary/[0.02]"
+    >
+      <div className="flex items-center justify-between">
+        <span className="type-meta">{label}</span>
+        <span className="text-primary">{icon}</span>
+      </div>
+      <div className="mt-1 text-[22px] font-semibold tabular-nums leading-none">{value}</div>
+      <p className="mt-1 text-[11px] text-muted-foreground">{hint}</p>
+    </Link>
+  );
+}
+
+/** 快捷入口行：图标 + 标题 + 说明 + 箭头 */
+function QuickLink({ href, show, icon, title, hint }: { href: string; show: boolean; icon: React.ReactNode; title: string; hint: string }) {
+  if (!show) return null;
+  return (
+    <Link
+      href={href}
+      className="flex items-center gap-2.5 rounded-md px-2 py-2 transition-colors hover:bg-muted/60"
+    >
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">{icon}</span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-[13px] font-medium">{title}</span>
+        <span className="block truncate text-[11px] text-muted-foreground">{hint}</span>
+      </span>
+      <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+    </Link>
   );
 }

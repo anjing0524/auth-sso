@@ -70,8 +70,8 @@ describe('U-DASH01 — dashboard 快捷入口按 CREATE 权限裁剪', () => {
     const source = read('src/app/(dashboard)/dashboard/page.tsx');
     expect(source).toContain('USER_PERMISSIONS.CREATE');
     expect(source).toContain('CLIENT_PERMISSIONS.CREATE');
-    expect(source).toContain('{canUserCreate && (');
-    expect(source).toContain('{canClientCreate && (');
+    expect(source).toContain('show={canUserCreate}');
+    expect(source).toContain('show={canClientCreate}');
   });
 });
 
@@ -268,5 +268,25 @@ describe('产品级批量授权与审计搜索（2026-10-26，第三轮）', () 
     expect(page).toContain('&keyword=');
     const filters = read('src/app/(dashboard)/audit-logs/components/audit-filters.tsx');
     expect(filters).toContain('搜索用户 / IP');
+  });
+});
+
+describe('工作台与用户筛选（2026-10-26，第四轮）', () => {
+  it('工作台指标可点、近 7 日登录为真实聚合、无假状态卡', () => {
+    const src = read('src/app/(dashboard)/dashboard/page.tsx');
+    expect(src).toContain('getLoginSummary7d');
+    expect(src).toContain('MetricCard');
+    expect(src).toContain('最近操作');
+    expect(src).toContain('快捷操作');
+    expect(src).not.toContain('服务节点正常');
+  });
+
+  it('用户列表支持部门筛选（URL deptId + 数据层 deptId）', () => {
+    const page = read('src/app/(dashboard)/users/page.tsx');
+    expect(page).toContain('deptId');
+    expect(page).toContain('isUuid');
+    const filters = read('src/app/(dashboard)/users/components/UserFilters.tsx');
+    expect(filters).toContain('过滤部门');
+    expect(filters).toContain('全部部门');
   });
 });

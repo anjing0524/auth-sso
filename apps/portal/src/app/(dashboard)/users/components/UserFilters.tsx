@@ -22,6 +22,8 @@ import { SearchInput } from '@/components/shared/search-input';
 interface UserFiltersProps {
   initialKeyword?: string;
   initialStatus?: string;
+  initialDeptId?: string;
+  departments?: Array<{ id: string; name: string }>;
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -31,7 +33,7 @@ const STATUS_LABELS: Record<string, string> = {
   LOCKED: '已锁定',
 };
 
-export default function UserFilters({ initialKeyword = '', initialStatus = 'ALL' }: UserFiltersProps) {
+export default function UserFilters({ initialKeyword = '', initialStatus = 'ALL', initialDeptId = 'ALL', departments = [] }: UserFiltersProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -71,6 +73,17 @@ export default function UserFilters({ initialKeyword = '', initialStatus = 'ALL'
           <SelectItem value="ACTIVE">正常</SelectItem>
           <SelectItem value="DISABLED">已禁用</SelectItem>
           <SelectItem value="LOCKED">已锁定</SelectItem>
+        </SelectContent>
+      </Select>
+      <Select value={initialDeptId} onValueChange={(value) => applyFilter('deptId', value)} disabled={isPending}>
+        <SelectTrigger aria-label="过滤部门" className="w-full md:w-44">
+          <SelectValue>{departments.find((d) => d.id === initialDeptId)?.name ?? '全部部门'}</SelectValue>
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="ALL">全部部门</SelectItem>
+          {departments.map((d) => (
+            <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+          ))}
         </SelectContent>
       </Select>
     </>

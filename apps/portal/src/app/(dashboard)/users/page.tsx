@@ -8,6 +8,7 @@ import { resolveIdentity } from '@/lib/auth';
 import { resolveScope } from '@/lib/authz';
 import { clampPage } from '@/lib/pagination';
 import { getUsers, getDepartmentOptions } from './data';
+import { isUuid } from '@/lib/uuid';
 import { db } from '@/infrastructure/db';
 import UserFilters from './components/UserFilters';
 import CreateUserDialog from './components/CreateUserDialog';
@@ -26,6 +27,7 @@ interface PageProps {
     page?: string;
     keyword?: string;
     status?: string;
+    deptId?: string;
   }>;
 }
 
@@ -38,6 +40,8 @@ export default async function UsersPage({ searchParams }: PageProps) {
   const status = (['ALL', 'ACTIVE', 'DISABLED', 'LOCKED'] as const).includes(params.status as never)
     ? (params.status as string)
     : 'ALL';
+  // 部门筛选：非 UUID 直接忽略（不得下沉到 PG uuid 比较）
+  const deptId = params.deptId && isUuid(params.deptId) ? params.deptId : undefined;
   const page = clampPage(params.page);
   const pageSize = 20;
 
@@ -46,7 +50,7 @@ export default async function UsersPage({ searchParams }: PageProps) {
   const scope = identity ? await resolveScope(db, identity.userId) : { deptIds: [] };
   const userId = identity?.userId ?? '';
   const [{ data: users, pagination }, departments] = await Promise.all([
-    getUsers(scope, userId, { page, pageSize, keyword, status }),
+    getUsers(scope, userId, { page, pageSize, keyword, status, ...(deptId ? { deptId } : {}) }),
     getDepartmentOptions(scope),
   ]);
 
@@ -56,12 +60,13 @@ export default async function UsersPage({ searchParams }: PageProps) {
     const params = new URLSearchParams();
     if (keyword) params.set('keyword', keyword);
     if (status !== 'ALL') params.set('status', status);
+    if (deptId) params.set('deptId', deptId);
     params.set('page', String(pagination.totalPages));
     redirect(`/users?${params.toString()}`);
   }
 
   // U-G02：区分"系统无数据"与"筛选/搜索无结果"，后者给"清除筛选"出口。
-  const isFiltered = keyword.length > 0 || status !== 'ALL';
+  const isFiltered = keyword.length > 0 || status !== 'ALL' || Boolean(deptId);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
@@ -75,7 +80,13 @@ export default async function UsersPage({ searchParams }: PageProps) {
             left={
               <div className="flex min-w-0 items-center gap-3">
                 <h1 className="shrink-0 text-[15px] font-semibold tracking-tight text-foreground">用户管理</h1>
-                <UserFilters key={keyword} initialKeyword={keyword} initialStatus={status} />
+                <UserFilters
+                  key={`${keyword}-${status}-${deptId ?? 'ALL'}`}
+                  initialKeyword={keyword}
+                  initialStatus={status}
+                  initialDeptId={deptId ?? 'ALL'}
+                  departments={departments}
+                />
               </div>
             }
             right={<CreateUserDialog departments={departments} />}

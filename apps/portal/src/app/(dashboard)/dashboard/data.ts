@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { db, schema } from '@/infrastructure/db';
-import { eq, ne, desc, count, and } from 'drizzle-orm';
+import { eq, ne, desc, count, and, gte, inArray } from 'drizzle-orm';
 import { USER_DELETED } from '@auth-sso/contracts';
 import { scopeFilter, isScopeDenied } from '@/lib/authz';
 import type { UserScope } from '@/lib/authz';
@@ -64,4 +64,29 @@ export async function getRecentAuditLogs(limit = 8): Promise<RecentAuditLog[]> {
     .leftJoin(schema.users, eq(schema.auditLogs.userId, schema.users.id))
     .orderBy(desc(schema.auditLogs.createdAt))
     .limit(limit);
+}
+
+export interface LoginSummary {
+  success: number;
+  failed: number;
+}
+
+/**
+ * 近 7 日登录概览（成功/失败）。
+ *
+ * 登录日志是安全敏感数据：调用方必须先具备 audit:read（页面层门禁），
+ * 这里只返回聚合计数，不返回明细。
+ */
+export async function getLoginSummary7d(): Promise<LoginSummary> {
+  const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const rows = await db
+    .select({ eventType: schema.loginLogs.eventType, value: count() })
+    .from(schema.loginLogs)
+    .where(and(gte(schema.loginLogs.createdAt, since), inArray(schema.loginLogs.eventType, ['LOGIN_SUCCESS', 'LOGIN_FAILED'])))
+    .groupBy(schema.loginLogs.eventType);
+  const byType = new Map(rows.map((r) => [r.eventType, Number(r.value ?? 0)]));
+  return {
+    success: byType.get('LOGIN_SUCCESS') ?? 0,
+    failed: byType.get('LOGIN_FAILED') ?? 0,
+  };
 }
