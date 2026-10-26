@@ -884,3 +884,15 @@ describe('重复实体错误中文化（续一百五十六）', () => {
     expect(users).toContain("'用户'");
   });
 });
+
+describe('部门批量移动顶层优先（续一百五十七）', () => {
+  it('服务端过滤被选中祖先覆盖的子部门；UI 只计顶层数量', () => {
+    const action = read('src/app/(dashboard)/departments/bulk-actions.ts');
+    expect(action).toContain('roots = unique.filter');
+    expect(action).toContain('ancestors');
+    expect(action).toContain('skipped');
+    const tree = read('src/app/(dashboard)/departments/components/DepartmentTree.tsx');
+    expect(tree).toContain('selectedRootIds');
+    expect(tree).toContain('moveCount');
+  });
+});

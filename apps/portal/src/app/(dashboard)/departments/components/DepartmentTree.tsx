@@ -162,6 +162,17 @@ export default function DepartmentTree({ departments, deletionStats = {} }: Prop
   const movableDepts = flatDepts.filter((d) => d.depth > 0);
   const moveTargets = flatDepts.filter((d) => !selectedDepts.has(d.id));
   const selectedCount = selectedDepts.size;
+  // 选中父+子时只把顶层部门作为移动项；子部门随父级移动
+  const parentById = new Map(flattenTree(departments).map((d) => [d.id, d.parentId]));
+  const selectedRootIds = [...selectedDepts].filter((id) => {
+    let parent = parentById.get(id) ?? null;
+    while (parent) {
+      if (selectedDepts.has(parent)) return false;
+      parent = parentById.get(parent) ?? null;
+    }
+    return true;
+  });
+  const moveCount = selectedRootIds.length;
 
   const expandableIds = useMemo(
     () => flatList.filter((d) => (d.children?.length ?? 0) > 0).map((d) => d.id),
@@ -263,7 +274,7 @@ export default function DepartmentTree({ departments, deletionStats = {} }: Prop
                 </Button>
                 {selectedCount > 0 && (
                   <Button variant="outline" onClick={() => { setMoveParentId(''); setMoveOpen(true); }}>
-                    <MoveRight className="h-4 w-4" /> 移动到…（{selectedCount}）
+                    <MoveRight className="h-4 w-4" /> 移动到…（{moveCount}）
                   </Button>
                 )}
               </>
@@ -368,9 +379,9 @@ export default function DepartmentTree({ departments, deletionStats = {} }: Prop
       <Dialog open={moveOpen} onOpenChange={setMoveOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><MoveRight className="h-4 w-4 text-primary" /> 移动 {selectedCount} 个部门</DialogTitle>
+            <DialogTitle className="flex items-center gap-2"><MoveRight className="h-4 w-4 text-primary" /> 移动 {moveCount} 个部门</DialogTitle>
             <DialogDescription>
-              选择新的父部门；循环挂载、越权或父级不可用的部门会被跳过，并在结果中反馈失败数量。
+              选择新的父部门。已选中的子部门会随父级一起移动，无需单独勾选；循环挂载、越权或父级不可用的部门会被跳过。
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2 py-2">
