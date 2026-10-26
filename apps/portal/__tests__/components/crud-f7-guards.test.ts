@@ -834,3 +834,14 @@ describe('移动端工具条换行（续一百五十二）', () => {
     expect(tree).toContain('max-md:flex-1');
   });
 });
+
+describe('只读用户工作台门禁（续一百五十三）', () => {
+  it('风险条按可操作权限显示；无快捷动作时显示只读说明而非空卡', () => {
+    const src = read('src/app/(dashboard)/dashboard/page.tsx');
+    expect(src).toContain('canUsersAction');
+    expect(src).toContain('hasActionableRisks');
+    expect(src).toContain('hasQuickActions');
+    expect(src).toContain('只读视图：当前账号可查看工作台与已授权列表');
+    expect(src).not.toContain('当前账号无创建类操作权限。');
+  });
+});

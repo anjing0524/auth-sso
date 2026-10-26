@@ -76,6 +76,12 @@ export default async function DashboardPage() {
   const canRoles = can(subject, ROLE_PERMISSIONS.LIST);
   const canClients = can(subject, CLIENT_PERMISSIONS.LIST);
   const canDepartments = can(subject, DEPARTMENT_PERMISSIONS.LIST);
+  // "需要关注"是待办：只有能处理的人才展示（只读用户看到会误以为可处理）
+  const canUsersAction = can(subject, USER_PERMISSIONS.UPDATE) || can(subject, USER_PERMISSIONS.ASSIGN_ROLE);
+  const canRolesAction = can(subject, ROLE_PERMISSIONS.ASSIGN_PERMISSION);
+  const canClientsAction = can(subject, CLIENT_PERMISSIONS.UPDATE);
+  const hasQuickActions = canUserCreate || canClientCreate || canRoles || canDepartments;
+  const hasActionableRisks = canUsersAction || canRolesAction || canClientsAction || canAudit;
   const [stats, recentLogs, loginSummary, risks, failed24h] = await Promise.all([
     getDashboardStats(scope),
     // 审计动态是跨部门敏感数据：没有 audit:read 的用户不查询、不渲染（此前任何 dashboard 用户都能看到）。
@@ -231,6 +237,7 @@ export default async function DashboardPage() {
 
         {/* 快捷入口：按"创建动作"权限渲染，只保留高频动作 */}
         <div className={canAudit ? 'space-y-3' : 'space-y-3 lg:col-span-3'}>
+          {hasQuickActions ? (
           <Card className="gap-0 overflow-hidden rounded-lg border border-border/70 py-0 shadow-sm ring-0">
             <CardHeader className="border-b bg-muted/30 px-3 py-2">
               <CardTitle className="type-card-title">快捷操作</CardTitle>
@@ -240,31 +247,34 @@ export default async function DashboardPage() {
               <QuickLink href="/clients/new" show={canClientCreate} icon={<AppWindow className="h-4 w-4" />} title="注册应用" hint="生成 OAuth 2.1 凭证" />
               <QuickLink href="/roles" show={canRoles} icon={<ShieldCheck className="h-4 w-4" />} title="角色与权限" hint="维护 RBAC 与数据范围" />
               <QuickLink href="/departments" show={canDepartments} icon={<Building2 className="h-4 w-4" />} title="组织架构" hint="部门树与数据沙箱" />
-              {!canUserCreate && !canClientCreate && !canRoles && !canDepartments && (
-                <p className="px-2 py-3 text-[11px] text-muted-foreground">当前账号无创建类操作权限。</p>
-              )}
             </CardContent>
           </Card>
+          ) : (
+            <div className="flex items-start gap-2 rounded-lg border border-border/70 bg-muted/30 px-3 py-2.5 text-[11px] leading-5 text-muted-foreground">
+              <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
+              <span>只读视图：当前账号可查看工作台与已授权列表；创建、编辑或授权请联系管理员。</span>
+            </div>
+          )}
 
         </div>
       </div>
 
-      {(canUsers || canRoles || canClients) && (
+      {hasActionableRisks && (
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border border-border/70 bg-card px-3 py-2 text-[12px] shadow-sm">
           <span className="flex items-center gap-1.5 font-medium text-foreground">
             <AlertTriangle className="h-3.5 w-3.5 text-warning" /> 需要关注
           </span>
-          {canUsers && (
+          {canUsersAction && (
             <Link href="/users?noRole=1" className="text-muted-foreground hover:text-primary hover:underline">
               未分配角色 <RiskCount value={risks.usersWithoutRoles} /> 人
             </Link>
           )}
-          {canRoles && (
+          {canRolesAction && (
             <Link href="/roles?sort=permissions-asc" className="text-muted-foreground hover:text-primary hover:underline">
               无权限角色 <RiskCount value={risks.rolesWithoutPermissions} /> 个
             </Link>
           )}
-          {canClients && (
+          {canClientsAction && (
             <Link href="/clients?status=DISABLED" className="text-muted-foreground hover:text-primary hover:underline">
               已禁用应用 <RiskCount value={risks.disabledClients} /> 个
             </Link>
