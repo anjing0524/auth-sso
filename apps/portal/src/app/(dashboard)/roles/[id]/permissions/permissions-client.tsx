@@ -10,10 +10,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { toast } from 'sonner';
-import { ChevronDown, ChevronRight, Layers, Loader2, Save } from 'lucide-react';
+import { ChevronDown, ChevronRight, Layers, Loader2, Save, Sparkles } from 'lucide-react';
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -39,6 +42,40 @@ export interface RolePermissionsPageProps {
 }
 
 const TYPE_LABELS: Record<string, string> = { API: '接口', PAGE: '页面', DIRECTORY: '目录' };
+
+/**
+ * 权限模板：把"常用角色组合"变成一键起点，再用已有的待新增/待移除差异确认。
+ * 只列真实存在的权限码（按当前权限清单过滤），不存在的不算数。
+ */
+const PERMISSION_TEMPLATES: Array<{ id: string; name: string; description: string; codes: string[] }> = [
+  {
+    id: 'audit-viewer', name: '审计只读', description: '进入审计日志并查看事件',
+    codes: ['portal:menu:audit-logs', 'portal:audit:read'],
+  },
+  {
+    id: 'audit-investigator', name: '审计调查员', description: '查看 + 导出审计日志（取证）',
+    codes: ['portal:menu:audit-logs', 'portal:audit:read', 'portal:audit:export'],
+  },
+  {
+    id: 'user-admin', name: '用户管理员', description: '找人、建号、改资料/重置密码',
+    codes: [
+      'portal:menu:users', 'portal:user:list', 'portal:user:read', 'portal:user:create',
+      'portal:user:update', 'portal:user:reset_password',
+      'portal:department:list', 'portal:department:read',
+    ],
+  },
+  {
+    id: 'client-admin', name: '应用管理员', description: '应用注册/配置/密钥轮换',
+    codes: [
+      'portal:menu:clients', 'portal:client:list', 'portal:client:read', 'portal:client:create',
+      'portal:client:update', 'portal:client:delete', 'portal:client:rotate_secret',
+    ],
+  },
+  {
+    id: 'dept-viewer', name: '组织架构查看', description: '只读查看部门树',
+    codes: ['portal:menu:departments', 'portal:department:list', 'portal:department:read'],
+  },
+];
 
 interface ScopeNode {
   id: string;
@@ -168,6 +205,14 @@ export default function RolePermissionsPage({ role }: RolePermissionsPageProps) 
     return { addedIds: added, removedIds: removed };
   }, [assignedIds, savedIds]);
   const changeCount = addedIds.size + removedIds.size;
+
+  const templateItems = useMemo(
+    () => PERMISSION_TEMPLATES.map((t) => {
+      const ids = permissions.filter((p) => t.codes.includes(p.code)).map((p) => p.id);
+      return { ...t, ids };
+    }),
+    [permissions],
+  );
 
   const scopedItems = useMemo(() => {
     const set = new Set(scope.itemIds);
@@ -358,6 +403,36 @@ export default function RolePermissionsPage({ role }: RolePermissionsPageProps) 
               <span className="text-xs text-muted-foreground">
                 总已选 <span className="font-semibold tabular-nums text-foreground">{assignedIds.size}</span>
               </span>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" disabled={loading || role.isSystem}>
+                    <Sparkles className="h-3.5 w-3.5" /> 权限模板
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-64">
+                  <DropdownMenuLabel>套用常用组合（可继续调整）</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {templateItems.map((t) => (
+                    <DropdownMenuItem
+                      key={t.id}
+                      disabled={t.ids.length === 0}
+                      onClick={() => {
+                        setAssignedIds(new Set(t.ids));
+                        setOnlyChanged(true);
+                        toast.success(`已套用「${t.name}」模板（${t.ids.length} 项），保存后生效`);
+                      }}
+                    >
+                      <div className="flex w-full items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-[13px] font-medium">{t.name}</p>
+                          <p className="truncate text-[11px] text-muted-foreground">{t.description}</p>
+                        </div>
+                        <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">{t.ids.length} 项</span>
+                      </div>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
               <Button variant="outline" size="sm" asChild><Link href="/roles">取消</Link></Button>
               <Button
                 size="sm"

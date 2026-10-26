@@ -364,3 +364,16 @@ describe('用户批量状态操作（2026-10-26，第九轮）', () => {
     expect(page).toContain('USER_PERMISSIONS.UPDATE');
   });
 });
+
+describe('权限模板（2026-10-26，第十轮）', () => {
+  it('模板只列真实权限码、套用后进入差异确认', () => {
+    const src = read('src/app/(dashboard)/roles/[id]/permissions/permissions-client.tsx');
+    expect(src).toContain('PERMISSION_TEMPLATES');
+    expect(src).toContain('审计调查员');
+    expect(src).toContain('用户管理员');
+    expect(src).toContain('应用管理员');
+    expect(src).toContain('权限模板');
+    expect(src).toContain('setAssignedIds(new Set(t.ids))');
+    expect(src).toContain('已套用');
+  });
+});
