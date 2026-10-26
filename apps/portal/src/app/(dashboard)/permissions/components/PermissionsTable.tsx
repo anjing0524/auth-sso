@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   TableCell, TableRow,
 } from '@/components/ui/table';
@@ -26,6 +27,7 @@ import { TablePagination } from '@/components/shared/table-pagination';
 import { enableStatus } from '@/lib/status-label';
 import { useFieldFailure } from '@/hooks/use-field-failure';
 import { deletePermissionAction } from '../actions';
+import { bulkDeletePermissionsAction } from '../bulk-actions';
 
 import { SearchInput } from '@/components/shared/search-input';
 import { TableToolbar } from '@/components/shared/table-toolbar';
@@ -107,6 +109,11 @@ export default function PermissionsTable({ permissions, pagination, activeTab, i
   // 删除确认（新建/编辑已页面化：弹窗不允许滚动）
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [selected, setSelected] = useState<PermissionRow | null>(null);
+  // 批量删除：只删除当前页可见选中项，避免跨页误删
+  const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulking, setBulking] = useState(false);
+  const visibleChecked = permissions.filter((p) => checkedIds.has(p.id));
   /** 删除影响面（打开确认弹窗时按需读取，不缓存） */
   const [deleteImpact, setDeleteImpact] = useState<{ descendants: number; roles: number; users: number } | null>(null);
   const [impactLoading, setImpactLoading] = useState(false);
@@ -142,6 +149,19 @@ export default function PermissionsTable({ permissions, pagination, activeTab, i
   };
 
   const columns = [
+    {
+      key: 'select',
+      className: 'w-8',
+      header: (
+        <PermissionGuard permission={PERMISSION_PERMISSIONS.DELETE}>
+          <Checkbox
+            aria-label="全选本页权限"
+            checked={permissions.length > 0 && permissions.every((p) => checkedIds.has(p.id))}
+            onCheckedChange={(checked) => setCheckedIds(checked === true ? new Set(permissions.map((p) => p.id)) : new Set())}
+          />
+        </PermissionGuard>
+      ),
+    },
     { key: 'name', header: '名称' },
     { key: 'code', header: '权限编码' },
     { key: 'type', header: '类型' },
@@ -181,7 +201,20 @@ export default function PermissionsTable({ permissions, pagination, activeTab, i
   );
 
   const renderRow = (p: PermissionRow) => (
-    <TableRow key={p.id} className="hover:bg-muted/50">
+    <TableRow key={p.id} className={`hover:bg-muted/50 ${checkedIds.has(p.id) ? 'bg-primary/[0.03]' : ''}`}>
+      <TableCell className="w-8 pr-0">
+        <PermissionGuard permission={PERMISSION_PERMISSIONS.DELETE}>
+          <Checkbox
+            aria-label={`选择权限 ${p.name}`}
+            checked={checkedIds.has(p.id)}
+            onCheckedChange={(checked) => setCheckedIds((prev) => {
+              const next = new Set(prev);
+              if (checked === true) next.add(p.id); else next.delete(p.id);
+              return next;
+            })}
+          />
+        </PermissionGuard>
+      </TableCell>
       <TableCell className="font-medium">
         <span className="block max-w-[240px] truncate" title={p.name}>{p.name}</span>
         {p.type !== 'API' && (
@@ -260,7 +293,16 @@ export default function PermissionsTable({ permissions, pagination, activeTab, i
           )
         }
         renderRow={renderRow}
-        cardHeader={cardHeader}
+        cardHeader={<>
+          {cardHeader}
+          {visibleChecked.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2 border-b bg-primary/[0.04] px-3 py-1.5">
+              <span className="text-[12px] font-medium">已选 {visibleChecked.length} 个权限</span>
+              <Button size="sm" variant="destructive" className="h-7" onClick={() => setBulkOpen(true)}>批量删除</Button>
+              <Button size="sm" variant="ghost" className="h-7" onClick={() => setCheckedIds(new Set())}>取消选择</Button>
+            </div>
+          )}
+        </>}
       />
 
       <TablePagination
@@ -290,6 +332,47 @@ export default function PermissionsTable({ permissions, pagination, activeTab, i
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsDeleteOpen(false)}>取消</Button>
             <Button variant="destructive" onClick={handleDelete}>确认删除</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 批量删除确认：目录/页面会级联子菜单，内置权限服务端会拒绝 */}
+      <Dialog open={bulkOpen} onOpenChange={setBulkOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>批量删除 {visibleChecked.length} 个权限？</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            内置权限会被跳过；删除目录/页面会级联删除其子菜单，并清除角色绑定、刷新受影响用户权限缓存。
+          </p>
+          <ul className="max-h-40 space-y-0.5 overflow-y-auto text-[12px] text-muted-foreground">
+            {visibleChecked.slice(0, 8).map((p) => (
+              <li key={p.id} className="truncate">{p.name} <span className="font-mono text-[11px]">({p.code})</span></li>
+            ))}
+            {visibleChecked.length > 8 && <li>… 其余 {visibleChecked.length - 8} 个</li>}
+          </ul>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBulkOpen(false)} disabled={bulking}>取消</Button>
+            <Button
+              variant="destructive"
+              disabled={bulking}
+              onClick={async () => {
+                setBulking(true);
+                try {
+                  const res = await bulkDeletePermissionsAction(visibleChecked.map((p) => p.id));
+                  if (res.success) {
+                    toast.success(res.message ?? '批量删除完成');
+                    setBulkOpen(false);
+                    setCheckedIds(new Set());
+                    router.refresh();
+                  } else {
+                    toast.error(res.message || '批量删除失败');
+                  }
+                } finally {
+                  setBulking(false);
+                }
+              }}
+            >
+              {bulking ? '删除中...' : '确认批量删除'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

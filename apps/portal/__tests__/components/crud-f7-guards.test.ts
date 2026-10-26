@@ -510,3 +510,17 @@ describe('用户详情审计追溯（2026-10-26，第二十轮）', () => {
     expect(src).toContain('新建事件本身不含目标 ID');
   });
 });
+
+describe('权限点批量删除（2026-10-26，第二十一轮）', () => {
+  it('多选+确认+复用单条删除校验，失败计数', () => {
+    const table = read('src/app/(dashboard)/permissions/components/PermissionsTable.tsx');
+    expect(table).toContain('全选本页权限');
+    expect(table).toContain('批量删除');
+    expect(table).toContain('确认批量删除');
+    expect(table).toContain('级联删除其子菜单');
+    const action = read('src/app/(dashboard)/permissions/bulk-actions.ts');
+    expect(action).toContain('bulkDeletePermissionsAction');
+    expect(action).toContain('deletePermissionAction');
+    expect(action).toContain('MAX_BULK');
+  });
+});
