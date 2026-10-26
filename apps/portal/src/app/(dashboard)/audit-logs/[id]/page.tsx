@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { formatDateTime } from '@/lib/format-date';
-import { getAuditLogById, getLoginLogById } from '@/app/audit/data';
+import { getAccessLogById, getAuditLogById, getLoginLogById } from '@/app/audit/data';
 import { AuditParamsActions } from './params-actions';
 
 /** 读取会话/动态数据：与审计列表同口径，声明非 instant 路由 */
@@ -33,7 +33,7 @@ function Field({ label, value, mono }: { label: string; value: string; mono?: bo
   );
 }
 
-function DetailHeader({ title, tab, id, children }: { title: string; tab: 'login' | 'operation'; id: string; children?: React.ReactNode }) {
+function DetailHeader({ title, tab, id, children }: { title: string; tab: 'login' | 'operation' | 'access'; id: string; children?: React.ReactNode }) {
   return (
     <div className="flex flex-wrap items-center gap-2">
       <Button asChild variant="ghost" size="icon-sm" aria-label="返回审计日志">
@@ -79,6 +79,51 @@ export default async function AuditLogDetailPage({ params, searchParams }: PageP
             </div>
           </CardContent>
         </Card>
+      </div>
+    );
+  }
+
+  if (tab === 'access') {
+    const row = await getAccessLogById(id);
+    if (!row) notFound();
+    return (
+      <div className="flex min-h-0 flex-1 flex-col gap-3">
+        <DetailHeader title="访问日志详情" tab="access" id={row.id}>
+          <Badge variant="outline" className="font-mono">{row.method}</Badge>
+        </DetailHeader>
+        <div className="grid gap-3 lg:grid-cols-3">
+          <Card className="border border-border/70 ring-0 lg:col-span-2">
+            <CardHeader><CardTitle className="type-card-title">访问上下文</CardTitle></CardHeader>
+            <CardContent>
+              <dl>
+                <Field label="时间" value={formatDateTime(row.createdAt)} />
+                <Field label="用户" value={row.username || (row.userId ? '未知用户（可能已删除）' : '匿名')} />
+                <Field label="请求方法" value={row.method} mono />
+                <Field label="路径" value={row.path} mono />
+                <Field label="资源类型" value={row.resourceType || '-'} />
+                <Field label="资源 ID" value={row.resourceId || '-'} mono />
+                <Field label="状态码" value={String(row.status ?? '-')} />
+                <Field label="耗时" value={row.duration != null ? `${row.duration} ms` : '-'} />
+              </dl>
+            </CardContent>
+          </Card>
+          <Card className="border border-border/70 ring-0">
+            <CardHeader><CardTitle className="type-card-title">来源</CardTitle></CardHeader>
+            <CardContent>
+              <dl>
+                <Field label="IP 地址" value={row.ip || '-'} mono />
+                <Field label="User-Agent" value={row.userAgent || '-'} mono />
+              </dl>
+              {row.username && (
+                <div className="mt-3 text-xs">
+                  <Link className="text-primary hover:underline" href={`/audit-logs?tab=access&keyword=${encodeURIComponent(row.username)}`}>
+                    查看该用户的访问记录 →
+                  </Link>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       </div>
     );
   }

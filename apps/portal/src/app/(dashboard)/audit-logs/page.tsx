@@ -11,7 +11,7 @@ import { Download, X, Eye } from 'lucide-react';
 import Link from 'next/link';
 import { LOGIN_EVENT_LABELS, AUDIT_OPERATION_LABELS, LOGIN_EVENT_VALUES, AUDIT_OPERATION_VALUES, AUDIT_PERMISSIONS, can, type AuditOperation, type LoginEventType } from '@auth-sso/contracts';
 import { AuditFilters } from './components/audit-filters';
-import { getLoginLogs, getAuditLogs } from '@/app/audit/data';
+import { getLoginLogs, getAuditLogs, getAccessLogs } from '@/app/audit/data';
 import { clampPage } from '@/lib/pagination';
 import { resolveIdentity } from '@/lib/auth';
 import { getUserPermissionContext, toPermissionContextOrNull } from '@/lib/permissions';
@@ -109,7 +109,7 @@ function pageHref(
 
 export default async function AuditLogsPage({ searchParams }: PageProps) {
   const params = await searchParams;
-  const tab: 'login' | 'operation' = params.tab === 'operation' ? 'operation' : 'login';
+  const tab: 'login' | 'operation' | 'access' = params.tab === 'operation' ? 'operation' : params.tab === 'access' ? 'access' : 'login';
   const page = clampPage(params.page);
 
   // 导出是独立权限（audit:export）；只有 audit:read 的用户不应看到会 403 的按钮。
@@ -136,17 +136,19 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
   const { data, pagination } =
     tab === 'login'
       ? await getLoginLogs({ page, pageSize: PAGE_SIZE, ...(eventType ? { eventType } : {}), ...(startDate ? { startDate, endDate } : {}), ...(keyword ? { keyword } : {}) })
-      : await getAuditLogs({ page, pageSize: PAGE_SIZE, ...(operation ? { operation } : {}), ...(startDate ? { startDate, endDate } : {}), ...(keyword ? { keyword } : {}) });
+      : tab === 'operation'
+        ? await getAuditLogs({ page, pageSize: PAGE_SIZE, ...(operation ? { operation } : {}), ...(startDate ? { startDate, endDate } : {}), ...(keyword ? { keyword } : {}) })
+        : await getAccessLogs({ page, pageSize: PAGE_SIZE, ...(startDate ? { startDate, endDate } : {}), ...(keyword ? { keyword } : {}) });
 
   // 当前筛选摘要：让"为什么列表是这些"可解释，并支持单个移除/一键清空
   const filterChips: Array<{ label: string; href: string }> = [];
-  if (eventType) {
+  if (tab === 'login' && eventType) {
     filterChips.push({
       label: LOGIN_EVENT_LABELS[eventType] ?? eventType,
       href: pageHref(tab, 1, null, operation, range, keyword, chipStartDate, chipEndDate),
     });
   }
-  if (operation) {
+  if (tab === 'operation' && operation) {
     filterChips.push({
       label: AUDIT_OPERATION_LABELS[operation] ?? operation,
       href: pageHref(tab, 1, eventType, null, range, keyword, chipStartDate, chipEndDate),
@@ -178,7 +180,7 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
       {/* 标题 + 页签 + 类型筛选 + 导出：压缩为同一行（搜索/标题不应各占一整行） */}
       <div className="flex shrink-0 flex-wrap items-center gap-3">
         <h1 className="type-section-title shrink-0 text-foreground">审计日志</h1>
-        <AuditTabs tab={tab} hrefs={{ login: pageHref('login', 1, null, null, range, keyword, chipStartDate, chipEndDate), operation: pageHref('operation', 1, null, null, range, keyword, chipStartDate, chipEndDate) }} />
+        <AuditTabs tab={tab} hrefs={{ login: pageHref('login', 1, null, null, range, keyword, chipStartDate, chipEndDate), operation: pageHref('operation', 1, null, null, range, keyword, chipStartDate, chipEndDate), access: pageHref('access', 1, null, null, range, keyword, chipStartDate, chipEndDate) }} />
         <AuditFilters tab={tab} eventType={eventType} operation={operation} range={range} keyword={keyword} startDate={chipStartDate} endDate={chipEndDate} />
         {canExport ? (
           <div className="ml-auto flex items-center gap-2">
@@ -198,6 +200,11 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
                 <DropdownMenuItem asChild>
                   <a href={`/api/audit/export?type=operation${operation ? `&operation=${operation}` : ''}${startDate ? `&startDate=${startDate}&endDate=${endDate}` : ''}${keyword ? `&keyword=${encodeURIComponent(keyword)}` : ''}`}>
                     导出操作日志（CSV）
+                  </a>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <a href={`/api/audit/export?type=access${startDate ? `&startDate=${startDate}&endDate=${endDate}` : ''}${keyword ? `&keyword=${encodeURIComponent(keyword)}` : ''}`}>
+                    导出访问日志（CSV）
                   </a>
                 </DropdownMenuItem>
               </DropdownMenuContent>
@@ -303,7 +310,7 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
             </OverflowHint>
           </CardContent>
         </Card>
-      ) : (
+      ) : tab === 'operation' ? (
         <Card className="gap-0 overflow-hidden rounded-lg border border-border/70 py-0 shadow-sm ring-0">
           <CardContent className="p-0">
             <OverflowHint>
@@ -380,6 +387,82 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
                         <TableCell className="text-right">
                           <Button asChild variant="ghost" size="icon-sm" aria-label="查看日志详情">
                             <Link href={`/audit-logs/${opLog.id}?tab=operation`}><Eye className="h-4 w-4" /></Link>
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                )}
+              </TableBody>
+            </Table>
+            </div>
+            </OverflowHint>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card className="gap-0 overflow-hidden rounded-lg border border-border/70 py-0 shadow-sm ring-0">
+          <CardContent className="p-0">
+            <OverflowHint>
+            <div className="scrollbar-slim max-h-[calc(100svh-19rem)] overflow-auto">
+            <Table containerClassName="overflow-visible">
+              <TableHeader className="[&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:bg-card">
+                <TableRow>
+                  <TableHead className="hidden md:table-cell">时间</TableHead>
+                  <TableHead>用户</TableHead>
+                  <TableHead className="hidden md:table-cell">方法</TableHead>
+                  <TableHead className="hidden md:table-cell">路径 / 资源</TableHead>
+                  <TableHead>状态</TableHead>
+                  <TableHead className="hidden md:table-cell">IP</TableHead>
+                  <TableHead className="text-right">详情</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="p-0">
+                      {keyword ? (
+                        <EmptyState variant="simple" kind="filtered" icon="FileText" clearAction={{ label: '清除筛选', href: '/audit-logs?tab=access' }} />
+                      ) : (
+                        <EmptyState variant="simple" icon="FileText" title="暂无日志记录" description="当前没有访问日志" />
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  data.map((log) => {
+                    const accessLog = log as {
+                      id: string; createdAt: Date | string; username: string | null; method: string;
+                      path: string; resourceType: string | null; status: number | null; ip: string | null;
+                    };
+                    return (
+                      <TableRow key={accessLog.id}>
+                        <TableCell className="hidden text-foreground md:table-cell">
+                          <span className="hidden md:inline">{formatDate(accessLog.createdAt)}</span>
+                        </TableCell>
+                        <TableCell className="text-foreground">
+                          <span className="block max-w-[120px] truncate md:max-w-none" title={accessLog.username ?? undefined}>{accessLog.username || '-'}</span>
+                          <span className="mt-0.5 block text-[10px] text-muted-foreground md:hidden">
+                            {formatDateOnly(accessLog.createdAt)} {formatTime(accessLog.createdAt)}
+                          </span>
+                          <span className="mt-0.5 block max-w-[140px] truncate font-mono text-[10px] text-muted-foreground md:hidden" title={accessLog.path}>
+                            {accessLog.method} {accessLog.path}
+                          </span>
+                        </TableCell>
+                        <TableCell className="hidden md:table-cell">
+                          <Badge variant="outline" className="font-mono text-[10px]">{accessLog.method}</Badge>
+                        </TableCell>
+                        <TableCell className="hidden max-w-xs truncate font-mono text-[11px] text-muted-foreground md:table-cell" title={accessLog.path}>
+                          {accessLog.path}
+                          {accessLog.resourceType ? ` · ${accessLog.resourceType}` : ''}
+                        </TableCell>
+                        <TableCell>
+                          <span className={`text-sm ${accessLog.status === 200 ? 'text-success' : 'text-destructive'}`}>
+                            {accessLog.status ?? '-'}
+                          </span>
+                        </TableCell>
+                        <TableCell className="hidden text-muted-foreground md:table-cell">{accessLog.ip || '-'}</TableCell>
+                        <TableCell className="text-right">
+                          <Button asChild variant="ghost" size="icon-sm" aria-label="查看日志详情">
+                            <Link href={`/audit-logs/${accessLog.id}?tab=access`}><Eye className="h-4 w-4" /></Link>
                           </Button>
                         </TableCell>
                       </TableRow>

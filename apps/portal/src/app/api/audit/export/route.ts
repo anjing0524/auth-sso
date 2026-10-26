@@ -19,7 +19,7 @@ import {
 } from '@auth-sso/contracts';
 import { withPermission } from '@/lib/auth';
 import { restError } from '@/lib/response';
-import { getAuditLogs, getLoginLogs } from '@/app/audit/data';
+import { getAccessLogs, getAuditLogs, getLoginLogs } from '@/app/audit/data';
 import { isUuid } from '@/lib/uuid';
 
 /** 导出上限：防止一次拉爆内存（10 万行 ≈ 权限表 2000 页也远超实际）。 */
@@ -148,25 +148,39 @@ export async function GET(request: NextRequest) {
               hasMore: pageNo < res.pagination.totalPages,
             };
           })
-        : createCsvStream('时间,操作人,操作类型,目标资源,详情,IP地址', async (pageNo) => {
-            const res = await getAuditLogs({
-              page: pageNo,
-              pageSize: MAX_PAGE_SIZE,
-              ...(operation ? { operation } : {}),
-              ...(startDate ? { startDate } : {}),
-              ...(endDate ? { endDate } : {}),
-              ...(userId ? { userId } : {}),
-              ...(keyword ? { keyword } : {}),
+        : type === 'operation'
+          ? createCsvStream('时间,操作人,操作类型,目标资源,详情,IP地址', async (pageNo) => {
+              const res = await getAuditLogs({
+                page: pageNo,
+                pageSize: MAX_PAGE_SIZE,
+                ...(operation ? { operation } : {}),
+                ...(startDate ? { startDate } : {}),
+                ...(endDate ? { endDate } : {}),
+                ...(userId ? { userId } : {}),
+                ...(keyword ? { keyword } : {}),
+              });
+              return {
+                rows: res.data.map((l) => [l.createdAt, l.username, l.operation, l.url, l.params, l.ip]),
+                hasMore: pageNo < res.pagination.totalPages,
+              };
+            })
+          : createCsvStream('时间,用户,方法,路径,资源类型,资源ID,状态码,耗时(ms),IP地址,User-Agent', async (pageNo) => {
+              const res = await getAccessLogs({
+                page: pageNo,
+                pageSize: MAX_PAGE_SIZE,
+                ...(startDate ? { startDate } : {}),
+                ...(endDate ? { endDate } : {}),
+                ...(userId ? { userId } : {}),
+                ...(keyword ? { keyword } : {}),
+              });
+              return {
+                rows: res.data.map((l) => [
+                  l.createdAt, l.username, l.method, l.path, l.resourceType, l.resourceId,
+                  l.status, l.duration, l.ip, l.userAgent,
+                ]),
+                hasMore: pageNo < res.pagination.totalPages,
+              };
             });
-            // 字段名必须取自行形状（getAuditLogs 的 mapRow）：原为
-            // `l.operator || l.username`、`l.resource`、`l.detail` —— 三者都不存在，
-            // 而 `l: Record<string, unknown>` 的强制转换让编译器无法发现 ⇒ 导出的 CSV
-            // 有 3 列恒为 `undefined`（2026-10-13 修复，架构评审 R2 次级候选）。
-            return {
-              rows: res.data.map((l) => [l.createdAt, l.username, l.operation, l.url, l.params, l.ip]),
-              hasMore: pageNo < res.pagination.totalPages,
-            };
-          });
 
       return new NextResponse(stream, {
         headers: {

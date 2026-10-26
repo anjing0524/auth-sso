@@ -27,7 +27,7 @@ import { SearchInput } from '@/components/shared/search-input';
 import { Input } from '@/components/ui/input';
 
 interface Props {
-  tab: 'login' | 'operation';
+  tab: 'login' | 'operation' | 'access';
   eventType?: LoginEventType | null;
   operation?: AuditOperation | null;
   /** 时间范围（24h/7d/30d）；与 tab/类型筛选一起写进 URL */
@@ -127,6 +127,15 @@ export function AuditFilters({ tab, eventType, operation, range, keyword, startD
       )}
     </div>
   );
+
+  if (tab === 'access') {
+    return (
+      <div className="flex flex-wrap items-center gap-2">
+        <SearchInput placeholder="搜索用户 / 路径 / IP..." value={kw} onChange={setKw} className="w-full md:w-48" />
+        {timeRangeSelect}
+      </div>
+    );
+  }
 
   if (tab === 'login') {
     return (

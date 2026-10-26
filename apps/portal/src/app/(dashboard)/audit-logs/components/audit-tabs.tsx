@@ -17,18 +17,20 @@
 import Link from 'next/link';
 import { useRef, useState } from 'react';
 
-export type AuditTab = 'login' | 'operation';
+export type AuditTab = 'login' | 'operation' | 'access';
 
-const TAB_ORDER: readonly AuditTab[] = ['login', 'operation'];
+const TAB_ORDER: readonly AuditTab[] = ['login', 'operation', 'access'];
 const TAB_LABELS: Record<AuditTab, string> = {
   login: '登录日志',
   operation: '操作日志',
+  access: '访问日志',
 };
 
 export function AuditTabs({ tab, hrefs }: { tab: AuditTab; hrefs: Record<AuditTab, string> }) {
   const itemRefs = useRef<Record<AuditTab, HTMLAnchorElement | null>>({
     login: null,
     operation: null,
+    access: null,
   });
   // 焦点位置（roving tabindex 的"可 Tab 进入项"始终是当前 tab 或用户移动后的焦点项）
   const [focused, setFocused] = useState<AuditTab>(tab);

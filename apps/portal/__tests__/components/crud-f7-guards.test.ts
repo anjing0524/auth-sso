@@ -168,10 +168,10 @@ describe('表格滚动与吸顶契约（2026-10-23 UI 重做）', () => {
     expect(dataTable).not.toContain('flex min-h-0 flex-1 flex-col');
   });
 
-  it('审计页两张裸表同样使用 overflow-visible + sticky th', () => {
+  it('审计页三张裸表同样使用 overflow-visible + sticky th', () => {
     const auditPage = read('src/app/(dashboard)/audit-logs/page.tsx');
-    expect(auditPage.match(/containerClassName="overflow-visible"/g)?.length).toBe(2);
-    expect(auditPage.match(/\[&_th\]:sticky \[&_th\]:top-0/g)?.length).toBe(2);
+    expect(auditPage.match(/containerClassName="overflow-visible"/g)?.length).toBe(3);
+    expect(auditPage.match(/\[&_th\]:sticky \[&_th\]:top-0/g)?.length).toBe(3);
   });
 
   it('表头不再用 uppercase + tracking-widest（中文会被拆散）', () => {
@@ -717,5 +717,22 @@ describe('移动端权限/审计 + 审计取证（续一百四十二）', () => 
     expect(actions).toContain('复制变更参数');
     expect(actions).toContain('下载变更参数');
     expect(actions).toContain('URL.createObjectURL');
+  });
+});
+
+describe('访问日志第三页签（续一百四十三）', () => {
+  it('访问日志有页签/列表/详情/导出完整链路', () => {
+    const tabs = read('src/app/(dashboard)/audit-logs/components/audit-tabs.tsx');
+    expect(tabs).toContain("access: '访问日志'");
+    const page = read('src/app/(dashboard)/audit-logs/page.tsx');
+    expect(page).toContain('getAccessLogs');
+    expect(page).toContain("tab === 'access'");
+    expect(page).toContain('type=access');
+    const detail = read('src/app/(dashboard)/audit-logs/[id]/page.tsx');
+    expect(detail).toContain('getAccessLogById');
+    expect(detail).toContain('访问日志详情');
+    const exportRoute = read('src/app/api/audit/export/route.ts');
+    expect(exportRoute).toContain('getAccessLogs');
+    expect(exportRoute).toContain('type === \'operation\'');
   });
 });

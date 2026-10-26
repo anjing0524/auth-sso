@@ -191,12 +191,15 @@ export async function getAccessLogs(params: PaginationParams & {
   resourceId?: string;
   startDate?: string;
   endDate?: string;
+  /** 关键词：用户名 / 路径 / IP */
+  keyword?: string;
 }) {
   const conditions: ReturnType<typeof eq>[] = [];
   if (params.userId) conditions.push(eq(schema.accessLogs.userId, params.userId));
   if (params.resourceType) conditions.push(eq(schema.accessLogs.resourceType, params.resourceType));
   if (params.resourceId) conditions.push(eq(schema.accessLogs.resourceId, params.resourceId));
   addDateRangeConditions(conditions, schema.accessLogs.createdAt, params.startDate, params.endDate);
+  addKeywordConditions(conditions, params.keyword, [schema.accessLogs.username, schema.accessLogs.path, schema.accessLogs.ip]);
 
   return paginatedSelect(schema.accessLogs, schema.accessLogs.createdAt, conditions, params, (log) => ({
     id: log.id,
@@ -233,5 +236,12 @@ export async function getAuditLogById(id: string) {
 /** 登录日志单条（按主键；审计详情页使用） */
 export async function getLoginLogById(id: string) {
   const [row] = await db.select().from(schema.loginLogs).where(eq(schema.loginLogs.id, id)).limit(1);
+  return row ?? null;
+}
+
+
+/** 访问日志单条（按主键；审计详情页使用） */
+export async function getAccessLogById(id: string) {
+  const [row] = await db.select().from(schema.accessLogs).where(eq(schema.accessLogs.id, id)).limit(1);
   return row ?? null;
 }

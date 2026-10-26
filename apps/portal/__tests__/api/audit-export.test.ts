@@ -71,7 +71,7 @@ function assertNoUndefinedCells(csv: string): void {
   }
 }
 
-async function exportCsv(type: 'login' | 'operation', query = '') {
+async function exportCsv(type: 'login' | 'operation' | 'access', query = '') {
   const res = await GET(new NextRequest(`http://localhost:4100/api/audit/export?type=${type}${query}`));
   return { status: res.status, csv: await res.text() };
 }
@@ -162,6 +162,37 @@ describe('GET /api/audit/export — CSV 列取自真实行形状', () => {
     expect(filtered.status).toBe(200);
     expect(filtered.csv).toContain('user-a');
     expect(filtered.csv).not.toContain('user-b');
+  });
+
+  it('type=access：访问日志有独立 CSV 列（路径/资源/状态/耗时）', async () => {
+    await td.db.insert(schema.accessLogs).values({
+      userId: '00000000-0000-4000-8000-000000000303',
+      username: 'access-user',
+      method: 'GET',
+      path: '/users/abc',
+      resourceType: 'user',
+      resourceId: 'abc',
+      ip: '10.0.0.9',
+      userAgent: 'vitest-access',
+      status: 200,
+      duration: 8,
+      createdAt: now,
+    });
+
+    const { status, csv } = await exportCsv('access');
+
+    expect(status).toBe(200);
+    expect(csv).toContain('时间,用户,方法,路径,资源类型,资源ID,状态码,耗时(ms),IP地址,User-Agent');
+    assertNoUndefinedCells(csv);
+    const row = csv.trim().split('\n')[1]!.split(',');
+    expect(row[1]).toBe('access-user');
+    expect(row[2]).toBe('GET');
+    expect(row[3]).toBe('/users/abc');
+    expect(row[4]).toBe('user');
+    expect(row[6]).toBe('200');
+    expect(row[7]).toBe('8');
+    expect(row[8]).toBe('10.0.0.9');
+    expect(row[0]).toMatch(ISO_8601);
   });
 
   it('H-28：非法日期 → 400（显式校验，不静默忽略）', async () => {

@@ -102,9 +102,11 @@ describe('AuditLogsPage', () => {
 
     expect(container.querySelector('[role="tablist"]')).toBeTruthy();
     const tabs = container.querySelectorAll('[role="tab"]');
-    expect(tabs.length).toBe(2);
+    expect(tabs.length).toBe(3);
     const loginTab = container.querySelector('#audit-tab-login')!;
     const opTab = container.querySelector('#audit-tab-operation')!;
+    const accessTab = container.querySelector('#audit-tab-access')!;
+    expect(accessTab.getAttribute('aria-selected')).toBe('false');
     expect(opTab.getAttribute('aria-selected')).toBe('true');
     expect(loginTab.getAttribute('aria-selected')).toBe('false');
     expect(opTab.getAttribute('aria-controls')).toBe('audit-tabpanel');
@@ -145,7 +147,7 @@ describe('AuditLogsPage', () => {
 });
 
 describe('AuditTabs（WAI-ARIA tabs 键盘语义补全）', () => {
-  const hrefs = { login: '/audit-logs?tab=login', operation: '/audit-logs?tab=operation' } as const;
+  const hrefs = { login: '/audit-logs?tab=login', operation: '/audit-logs?tab=operation', access: '/audit-logs?tab=access' } as const;
 
   it('roving tabindex：选中项 0、其余 -1', () => {
     render(<AuditTabs tab="login" hrefs={hrefs} />);
@@ -157,6 +159,7 @@ describe('AuditTabs（WAI-ARIA tabs 键盘语义补全）', () => {
     render(<AuditTabs tab="login" hrefs={hrefs} />);
     const login = screen.getByRole('tab', { name: '登录日志' });
     const operation = screen.getByRole('tab', { name: '操作日志' });
+    const access = screen.getByRole('tab', { name: '访问日志' });
 
     login.focus();
     fireEvent.keyDown(login, { key: 'ArrowRight' });
@@ -167,9 +170,9 @@ describe('AuditTabs（WAI-ARIA tabs 键盘语义补全）', () => {
     expect(document.activeElement).toBe(login);
 
     fireEvent.keyDown(login, { key: 'End' });
-    expect(document.activeElement).toBe(operation);
+    expect(document.activeElement).toBe(access);
 
-    fireEvent.keyDown(operation, { key: 'Home' });
+    fireEvent.keyDown(access, { key: 'Home' });
     expect(document.activeElement).toBe(login);
   });
 });
