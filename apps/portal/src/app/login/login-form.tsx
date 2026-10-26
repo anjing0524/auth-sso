@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { ShieldCheck, AlertCircle, Loader2, ArrowRight } from 'lucide-react';
+import { ShieldCheck, AlertCircle, Loader2, ArrowRight, Eye, EyeOff } from 'lucide-react';
 import {
   Card,
   CardContent,
@@ -29,6 +29,7 @@ export default function LoginForm({ sessionId, initialError }: LoginFormProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(initialError ?? null);
   const [formData, setFormData] = useState({ email: '', password: '' });
+  const [showPassword, setShowPassword] = useState(false);
 
   const getErrorMessage = (err: string | null) => {
     if (!err) return null;
@@ -144,17 +145,28 @@ export default function LoginForm({ sessionId, initialError }: LoginFormProps) {
 
             <div className="space-y-2">
               <Label htmlFor="password">密码</Label>
-              <Input
-                id="password"
-                type="password"
-                autoComplete="current-password"
-                placeholder="••••••••"
-                required
-                value={formData.password}
-                onChange={(e) => setFormData((prev) => ({ ...prev, password: e.target.value }))}
-                disabled={isLoading}
-                className="h-10"
-              />
+              <div className="relative">
+                <Input
+                  id="password"
+                  type={showPassword ? 'text' : 'password'}
+                  autoComplete="current-password"
+                  placeholder="••••••••"
+                  required
+                  value={formData.password}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, password: e.target.value }))}
+                  disabled={isLoading}
+                  className="h-10 pr-10"
+                />
+                <button
+                  type="button"
+                  aria-label={showPassword ? '隐藏密码' : '显示密码'}
+                  title={showPassword ? '隐藏密码' : '显示密码'}
+                  onClick={() => setShowPassword((v) => !v)}
+                  className="absolute right-1 top-1 flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
             </div>
           </CardContent>
 

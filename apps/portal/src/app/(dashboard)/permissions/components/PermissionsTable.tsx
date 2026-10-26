@@ -18,6 +18,7 @@ import {
   TableCell, TableRow,
 } from '@/components/ui/table';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
@@ -60,6 +61,8 @@ interface Props {
   activeTab: string;
   /** URL 同步的搜索关键词初始值 */
   initialKeyword?: string;
+  /** 状态筛选：'' | ACTIVE | DISABLED */
+  initialStatus?: string;
 }
 
 const TYPE_ICONS: Record<string, React.ReactNode> = {
@@ -81,16 +84,17 @@ const TABS: Array<{ value: string; label: string }> = [
   { value: 'API', label: '接口' },
 ];
 
-export default function PermissionsTable({ permissions, pagination, activeTab, initialKeyword = '', menuOptions = [] }: Props) {
+export default function PermissionsTable({ permissions, pagination, activeTab, initialKeyword = '', initialStatus = '', menuOptions = [] }: Props) {
   const router = useRouter();
   const [keyword, setKeyword] = useState(initialKeyword);
   const [isPending, startTransition] = useTransition();
 
   /** 统一构造 URL：type / keyword / page 都是服务端查询参数（可分享、可后退） */
-  const buildHref = (nextPage: number, nextKeyword = keyword, nextType = activeTab) => {
+  const buildHref = (nextPage: number, nextKeyword = keyword, nextType = activeTab, nextStatus = initialStatus) => {
     const params = new URLSearchParams();
     if (nextType !== 'ALL') params.set('type', nextType);
     if (nextKeyword) params.set('keyword', nextKeyword);
+    if (nextStatus) params.set('status', nextStatus);
     if (nextPage > 1) params.set('page', String(nextPage));
     const qs = params.toString();
     return `/permissions${qs ? `?${qs}` : ''}`;
@@ -188,6 +192,18 @@ export default function PermissionsTable({ permissions, pagination, activeTab, i
           <h1 className="type-section-title shrink-0 text-foreground">权限管理</h1>
           {tabsBar}
           <SearchInput placeholder="搜索权限名称或编码..." value={keyword} onChange={handleSearch} />
+          <Select value={initialStatus || 'ALL'} onValueChange={(v) => startTransition(() => router.push(buildHref(1, keyword, activeTab, v === 'ALL' ? '' : v)))}>
+            <SelectTrigger aria-label="过滤权限状态" className="w-full md:w-32">
+              <SelectValue>
+                {initialStatus === 'ACTIVE' ? '已启用' : initialStatus === 'DISABLED' ? '已禁用' : '全部状态'}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">全部状态</SelectItem>
+              <SelectItem value="ACTIVE">已启用</SelectItem>
+              <SelectItem value="DISABLED">已禁用</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       }
       right={
@@ -275,7 +291,7 @@ export default function PermissionsTable({ permissions, pagination, activeTab, i
         data={permissions}
         loading={isPending}
         emptyState={
-          keyword.trim() || activeTab !== 'ALL' ? (
+          keyword.trim() || activeTab !== 'ALL' || initialStatus !== '' ? (
             <EmptyState
               variant="simple"
               kind="filtered"

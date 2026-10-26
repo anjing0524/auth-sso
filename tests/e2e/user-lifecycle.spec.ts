@@ -27,7 +27,7 @@ test.describe('用户生命周期', () => {
     const loginAdmin = async () => {
       await page.goto('/login');
       await page.getByLabel(/登录邮箱|账号.*邮箱/i).fill(ADMIN_EMAIL);
-      await page.getByLabel('密码').fill(ADMIN_PASSWORD);
+      await page.getByLabel('密码', { exact: true }).fill(ADMIN_PASSWORD);
       await page.getByRole('button', { name: '安全登录' }).click();
       await expect(page).toHaveURL(/\/dashboard$/, { timeout: 30_000 });
     };
@@ -64,7 +64,7 @@ test.describe('用户生命周期', () => {
       const userPage = await userCtx.newPage();
       await userPage.goto('/login');
       await userPage.getByLabel(/登录邮箱|账号.*邮箱/i).fill(email);
-      await userPage.getByLabel('密码').fill(password);
+      await userPage.getByLabel('密码', { exact: true }).fill(password);
       await userPage.getByRole('button', { name: '安全登录' }).click();
       await expect(userPage).toHaveURL(/\/dashboard$/, { timeout: 30_000 });
       await expect(userPage.getByText('Auth-SSO').first()).toBeVisible();

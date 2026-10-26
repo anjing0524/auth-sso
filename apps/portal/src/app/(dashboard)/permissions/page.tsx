@@ -3,6 +3,7 @@
  * 写操作通过 Server Actions (actions.ts) 执行
  */
 import { getPermissionPage, getPermissions } from './data';
+import { ENTITY_STATUS_VALUES } from '@auth-sso/contracts';
 import { clampPage } from '@/lib/pagination';
 import PermissionsTable from './components/PermissionsTable';
 
@@ -18,6 +19,7 @@ interface PageProps {
   searchParams: Promise<{
     type?: string;
     keyword?: string;
+    status?: string;
     page?: string;
   }>;
 }
@@ -29,12 +31,14 @@ export default async function PermissionsPage({ searchParams }: PageProps) {
     ? (params.type as string)
     : 'ALL';
   const keyword = (params.keyword || '').slice(0, 100);
+  const status = (ENTITY_STATUS_VALUES as readonly string[]).includes(params.status ?? '') ? params.status! : '';
   const page = clampPage(params.page);
 
   // 服务端分页/过滤：与 users/roles/audit 一致（此前全量下发、浏览器内过滤分页）
   const { data: permissions, pagination } = await getPermissionPage({
     type: activeTab === 'ALL' ? undefined : activeTab,
     keyword,
+    status: status || undefined,
     page,
     pageSize: 20,
   });
@@ -49,6 +53,7 @@ export default async function PermissionsPage({ searchParams }: PageProps) {
         pagination={pagination}
         activeTab={activeTab}
         initialKeyword={keyword}
+        initialStatus={status}
         menuOptions={menuOptions}
       />
     </div>

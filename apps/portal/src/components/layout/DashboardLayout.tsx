@@ -19,7 +19,7 @@ import {
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb';
 import { usePathname } from 'next/navigation';
-import { Keyboard } from 'lucide-react';
+import { CommandPaletteTrigger } from './command-palette-trigger';
 import { CommandPalette } from '@/components/shared/command-palette';
 
 /** 侧边栏菜单项 */
@@ -116,9 +116,7 @@ export default function DashboardLayout({
             </BreadcrumbList>
           </Breadcrumb>
           <div className="ml-auto flex items-center gap-2">
-            <kbd className="hidden md:inline-flex h-6 select-none items-center gap-1 rounded border bg-muted px-1.5 text-[10px] font-medium text-muted-foreground">
-              <Keyboard className="h-3 w-3" />K
-            </kbd>
+            <CommandPaletteTrigger />
           </div>
         </header>
         <main id="main-content" className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-muted/30 p-3 lg:px-4 lg:py-3" style={{ height: 'calc(100svh - 3rem)' }}>

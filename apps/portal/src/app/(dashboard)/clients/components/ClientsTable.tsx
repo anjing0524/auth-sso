@@ -35,6 +35,16 @@ import {
 import { TableToolbar } from '@/components/shared/table-toolbar';
 import { TablePagination } from '@/components/shared/table-pagination';
 import { PermissionGuard } from '@/components/shared/permission-guard';
+/** 回调 URI 列表展示：去协议显示 host+path（完整值放 title），避免长 URL 被截成 "ps://…" */
+function formatRedirectUri(uri: string): string {
+  try {
+    const u = new URL(uri);
+    return `${u.host}${u.pathname === '/' ? '' : u.pathname}`;
+  } catch {
+    return uri;
+  }
+}
+
 /** 头像兜底文案：中文取首字，拉丁名取前两位（"系统管理员"→"系"，"Auth-SSO Portal"→"AU"） */
 function avatarFallback(name: string): string {
   const trimmed = name.trim();
@@ -273,8 +283,8 @@ export default function ClientsTable({ clients, pagination, initialKeyword, init
       <TableCell>
         <div className="flex flex-wrap gap-1 max-w-[200px]">
           {client.redirectUris.slice(0, 1).map((uri, i) => (
-            <Badge key={i} variant="outline" title={uri} className="max-w-[180px] truncate border-border bg-card font-mono font-normal shadow-sm">
-              {uri}
+            <Badge key={i} variant="outline" title={uri} className="h-auto max-w-[210px] justify-start overflow-hidden border-border bg-card font-mono font-normal shadow-sm">
+              <span className="truncate">{formatRedirectUri(uri)}</span>
             </Badge>
           ))}
           {client.redirectUris.length > 1 && (

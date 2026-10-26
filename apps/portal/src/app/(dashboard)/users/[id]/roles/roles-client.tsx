@@ -9,7 +9,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { toast } from 'sonner';
-import { Loader2, Save, Shield } from 'lucide-react';
+import { Loader2, Save } from 'lucide-react';
 
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
@@ -246,7 +246,7 @@ export default function UserRolesPage({ user }: UserRolesPageProps) {
                       </span>
                     </span>
                   </span>
-                  <Shield className="h-3.5 w-3.5 shrink-0 text-muted-foreground/50" aria-hidden="true" />
+
                 </label>
               ))}
             </div>

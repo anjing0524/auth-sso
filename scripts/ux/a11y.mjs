@@ -18,7 +18,7 @@ const context = await browser.newContext({ ignoreHTTPSErrors: true, viewport: { 
 const page = await context.newPage();
 await page.goto(`${BASE}/login`);
 await page.getByLabel(/登录邮箱|账号.*邮箱/i).fill(EMAIL);
-await page.getByLabel('密码').fill(PASSWORD);
+await page.getByLabel('密码', { exact: true }).fill(PASSWORD);
 await page.getByRole('button', { name: '安全登录' }).click();
 await page.waitForURL(/dashboard$/);
 

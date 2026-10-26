@@ -11,7 +11,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import {
-  ShieldCheck, Plus, Edit, Trash2, KeyRound,
+  ShieldCheck, Plus, Edit, Trash2, KeyRound, Eye,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -50,6 +50,8 @@ interface Props {
   initialKeyword: string;
   /** 排序：default | permissions-asc | permissions-desc */
   initialSort?: string;
+  /** 状态筛选：'' | ACTIVE | DISABLED */
+  initialStatus?: string;
   departments: Array<{ id: string; name: string }>;
   /** 删除确认的影响面：roleId → 绑定用户数（U-ROLES03） */
   boundUserCounts?: Record<string, number>;
@@ -57,7 +59,7 @@ interface Props {
   permissionCounts?: Record<string, number>;
 }
 
-export default function RolesTable({ roles, pagination, initialKeyword, initialSort = 'default', departments, boundUserCounts = {}, permissionCounts = {} }: Props) {
+export default function RolesTable({ roles, pagination, initialKeyword, initialSort = 'default', initialStatus = '', departments, boundUserCounts = {}, permissionCounts = {} }: Props) {
   const router = useRouter();
   const [keyword, setKeyword] = useState(initialKeyword);
   const [isPending, startTransition] = useTransition();
@@ -150,7 +152,16 @@ export default function RolesTable({ roles, pagination, initialKeyword, initialS
   const applySort = (value: string) => {
     const params = new URLSearchParams();
     if (keyword.trim()) params.set('keyword', keyword.trim());
+    if (initialStatus) params.set('status', initialStatus);
     if (value !== 'default') params.set('sort', value);
+    params.set('page', '1');
+    router.push(`/roles?${params.toString()}`);
+  };
+  const applyStatus = (value: string) => {
+    const params = new URLSearchParams();
+    if (keyword.trim()) params.set('keyword', keyword.trim());
+    if (initialSort !== 'default') params.set('sort', initialSort);
+    if (value) params.set('status', value);
     params.set('page', '1');
     router.push(`/roles?${params.toString()}`);
   };
@@ -180,6 +191,18 @@ export default function RolesTable({ roles, pagination, initialKeyword, initialS
               <SelectItem value="default">默认排序</SelectItem>
               <SelectItem value="permissions-asc">权限数最少</SelectItem>
               <SelectItem value="permissions-desc">权限数最多</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={initialStatus || 'ALL'} onValueChange={(v) => applyStatus(v === 'ALL' ? '' : v)}>
+            <SelectTrigger aria-label="过滤角色状态" className="w-full md:w-32">
+              <SelectValue>
+                {initialStatus === 'ACTIVE' ? '已启用' : initialStatus === 'DISABLED' ? '已禁用' : '全部状态'}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">全部状态</SelectItem>
+              <SelectItem value="ACTIVE">已启用</SelectItem>
+              <SelectItem value="DISABLED">已禁用</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -244,7 +267,11 @@ export default function RolesTable({ roles, pagination, initialKeyword, initialS
       {/* 操作列：图标按钮 + 原生 title 提示，节省横宽；aria-label 保留完整语义（读屏/自动化不受影响）。 */}
       <TableCell className="text-right">
         {r.isSystem ? (
-          <span className="pr-1 text-[11px] text-muted-foreground">系统内置</span>
+          <PermissionGuard permission={ROLE_PERMISSIONS.ASSIGN_PERMISSION}>
+            <Button asChild variant="ghost" size="icon-sm" aria-label={`查看权限 ${r.name}`} title="查看权限（系统角色只读）">
+              <Link href={`/roles/${r.id}/permissions`}><Eye className="h-4 w-4" /></Link>
+            </Button>
+          </PermissionGuard>
         ) : (
           <div className="flex items-center justify-end gap-0.5">
             <PermissionGuard permission={ROLE_PERMISSIONS.UPDATE}>
@@ -285,7 +312,7 @@ export default function RolesTable({ roles, pagination, initialKeyword, initialS
         data={roles}
         loading={isPending}
         emptyState={
-          keyword.trim() ? (
+          keyword.trim() || initialStatus !== '' ? (
             <EmptyState
               variant="simple"
               kind="filtered"

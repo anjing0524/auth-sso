@@ -34,8 +34,14 @@ export function CommandPalette({ menus }: { menus: MenuItem[] }) {
         toggle();
       }
     };
+    // 顶栏触发器：让不熟悉快捷键的鼠标/触屏用户也能打开
+    const open = () => setOpen(true);
     document.addEventListener('keydown', down);
-    return () => document.removeEventListener('keydown', down);
+    window.addEventListener('open-command-palette', open);
+    return () => {
+      document.removeEventListener('keydown', down);
+      window.removeEventListener('open-command-palette', open);
+    };
   }, [toggle]);
 
   // Cleanup timer on unmount

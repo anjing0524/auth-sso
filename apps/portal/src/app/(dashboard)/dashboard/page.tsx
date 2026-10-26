@@ -168,7 +168,7 @@ export default async function DashboardPage() {
         )}
       </div>
 
-      <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-3">
+      <div className="grid min-h-0 flex-1 items-start gap-3 lg:grid-cols-3">
         {/* 最近动态：只展示可行动的关键列，点击可进入审计并按用户过滤 */}
         {canAudit && (
           <Card className="gap-0 overflow-hidden rounded-lg border border-border/70 py-0 shadow-sm ring-0 lg:col-span-2">

@@ -10,7 +10,7 @@ import 'server-only';
 
 import { cacheLife, cacheTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
-import { asc, count, eq, and, inArray } from 'drizzle-orm';
+import { asc, count, eq, and, inArray, isNull } from 'drizzle-orm';
 import { departmentFromPersistence } from '@/domain/department/department';
 import { buildTree } from '@/domain/shared/tree-utils';
 import { scopeFilter, isScopeDenied } from '@/lib/authz';
@@ -168,7 +168,7 @@ export async function getDepartmentDeletionStats(
       .groupBy(schema.departments.parentId),
     db.select({ deptId: schema.users.deptId, amount: count() })
       .from(schema.users)
-      .where(inArray(schema.users.deptId, [...deptIds]))
+      .where(and(inArray(schema.users.deptId, [...deptIds]), isNull(schema.users.deletedAt)))
       .groupBy(schema.users.deptId),
     db.select({ deptId: schema.roles.deptId, amount: count() })
       .from(schema.roles)

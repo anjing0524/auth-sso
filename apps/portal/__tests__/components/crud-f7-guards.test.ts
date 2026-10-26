@@ -554,3 +554,45 @@ describe('角色按权限数排序（2026-10-26，第二十七/二十八轮）',
     expect(page).toContain("permissions-asc");
   });
 });
+
+describe('产品审计二：操作与布局修复（2026-10-26）', () => {
+  it('部门成员数/删除守卫排除软删除用户', () => {
+    const data = read('src/app/(dashboard)/departments/data.ts');
+    expect(data).toContain('isNull(schema.users.deletedAt)');
+    const actions = read('src/app/(dashboard)/departments/actions.ts');
+    expect(actions).toContain('isNull(schema.users.deletedAt)');
+  });
+  it('顶栏命令面板是真实可点击按钮（不是死 kbd）', () => {
+    const trigger = read('src/components/layout/command-palette-trigger.tsx');
+    expect(trigger).toContain('open-command-palette');
+    expect(trigger).toContain('aria-label');
+    const layout = read('src/components/layout/DashboardLayout.tsx');
+    expect(layout).toContain('CommandPaletteTrigger');
+    const palette = read('src/components/shared/command-palette.tsx');
+    expect(palette).toContain("addEventListener('open-command-palette'");
+  });
+  it('客户端回调 URI 去协议显示 host+path，完整值进 title', () => {
+    const table = read('src/app/(dashboard)/clients/components/ClientsTable.tsx');
+    expect(table).toContain('formatRedirectUri');
+    expect(table).toContain('u.host');
+    expect(table).toContain('title={uri}');
+  });
+  it('角色/权限有状态筛选，且 URL 保留其它条件', () => {
+    expect(read('src/app/(dashboard)/roles/page.tsx')).toContain('initialStatus');
+    expect(read('src/app/(dashboard)/roles/components/RolesTable.tsx')).toContain('过滤角色状态');
+    expect(read('src/app/(dashboard)/permissions/page.tsx')).toContain('initialStatus');
+    expect(read('src/app/(dashboard)/permissions/components/PermissionsTable.tsx')).toContain('过滤权限状态');
+  });
+  it('系统角色可查看权限（只读入口），Dashboard 卡片不再被拉伸', () => {
+    const roles = read('src/app/(dashboard)/roles/components/RolesTable.tsx');
+    expect(roles).toContain('查看权限（系统角色只读）');
+    expect(read('src/app/(dashboard)/dashboard/page.tsx')).toContain('items-start');
+  });
+  it('登录密码可见性切换且测试选择器用 exact 避免歧义', () => {
+    const login = read('src/app/login/login-form.tsx');
+    expect(login).toContain('显示密码');
+    expect(login).toContain('隐藏密码');
+    const spec = read('../../tests/e2e/user-lifecycle.spec.ts');
+    expect(spec).toContain("getByLabel('密码', { exact: true })");
+  });
+});

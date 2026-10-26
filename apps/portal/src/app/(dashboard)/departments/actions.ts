@@ -12,7 +12,7 @@
  */
 import { schema } from '@/infrastructure/db';
 import type { DbTxHandle } from '@/infrastructure/db';
-import { eq, isNull, sql, count } from 'drizzle-orm';
+import { and, eq, isNull, sql, count } from 'drizzle-orm';
 import { withAuth, type AuthContext } from '@/lib/auth';
 import {
   createDepartment,
@@ -205,7 +205,7 @@ export const deleteDepartmentAction = withAuth(
         const [userResult] = await tx
           .select({ count: count() })
           .from(schema.users)
-          .where(eq(schema.users.deptId, row.id));
+          .where(and(eq(schema.users.deptId, row.id), isNull(schema.users.deletedAt)));
         // 检查是否有角色关联（v3.2: roles.dept_id FK）
         const [roleResult] = await tx
           .select({ count: count() })

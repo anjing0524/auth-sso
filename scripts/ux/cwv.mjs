@@ -30,7 +30,7 @@ const loginCtx = await browser.newContext({ ignoreHTTPSErrors: true });
 const loginPage = await loginCtx.newPage();
 await loginPage.goto(`${BASE}/login`);
 await loginPage.getByLabel(/登录邮箱|账号.*邮箱/i).fill(EMAIL);
-await loginPage.getByLabel('密码').fill(PASSWORD);
+await loginPage.getByLabel('密码', { exact: true }).fill(PASSWORD);
 await loginPage.getByRole('button', { name: '安全登录' }).click();
 await loginPage.waitForURL(/dashboard$/);
 const storageState = await loginCtx.storageState();
