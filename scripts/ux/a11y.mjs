@@ -11,7 +11,11 @@ import { chromium } from '@playwright/test';
 const BASE = process.env.E2E_BASE_URL || 'https://127.0.0.1:19443';
 const EMAIL = process.env.E2E_ADMIN_EMAIL || 'admin@example.com';
 const PASSWORD = process.env.E2E_ADMIN_PASSWORD || 'Admin@123456';
-const PATHS = ['/dashboard', '/users', '/audit-logs', '/profile', '/permissions'];
+const PATHS = [
+  '/dashboard', '/users', '/roles', '/permissions', '/departments', '/clients',
+  '/audit-logs', '/audit-logs?tab=operation', '/audit-logs?tab=access',
+  '/profile', '/permissions/new', '/clients/new',
+];
 
 const browser = await chromium.launch({ channel: 'chrome' });
 const context = await browser.newContext({ ignoreHTTPSErrors: true, viewport: { width: 1139, height: 700 } });

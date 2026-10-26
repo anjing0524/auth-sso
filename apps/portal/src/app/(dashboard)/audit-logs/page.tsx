@@ -413,9 +413,9 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
                           {opLog.url || (opLog.params ? JSON.stringify(opLog.params) : '') || '-'}
                         </TableCell>
                         <TableCell>
-                          <span className={`text-sm ${opLog.status === 200 ? 'text-success' : 'text-destructive'}`}>
+                          <Badge variant={opLog.status === 200 ? 'success' : 'destructive'} className="tabular-nums">
                             {opLog.status || '-'}
-                          </span>
+                          </Badge>
                           {opLog.errorMsg && (
                             <span className="ml-2 text-xs text-destructive">({opLog.errorMsg})</span>
                           )}
@@ -494,9 +494,9 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
                           {accessLog.resourceType ? ` · ${accessLog.resourceType}` : ''}
                         </TableCell>
                         <TableCell>
-                          <span className={`text-sm ${accessLog.status === 200 ? 'text-success' : 'text-destructive'}`}>
+                          <Badge variant={accessLog.status === 200 ? 'success' : 'destructive'} className="tabular-nums">
                             {accessLog.status ?? '-'}
-                          </span>
+                          </Badge>
                         </TableCell>
                         <TableCell className="hidden text-muted-foreground md:table-cell">{accessLog.ip || '-'}</TableCell>
                         <TableCell className="text-right">

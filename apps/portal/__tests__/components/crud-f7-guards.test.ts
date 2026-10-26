@@ -856,3 +856,18 @@ describe('应用详情 dirty 状态（续一百五十四）', () => {
     expect(src).toContain("!isDirty ? '无修改' : '保存修改'");
   });
 });
+
+describe('审计状态对比度与 a11y 覆盖（续一百五十五）', () => {
+  it('审计状态码用语义徽章（success/destructive），不用 text-success', () => {
+    const page = read('src/app/(dashboard)/audit-logs/page.tsx');
+    expect(page).toContain("variant={opLog.status === 200 ? 'success' : 'destructive'}");
+    expect(page).toContain("variant={accessLog.status === 200 ? 'success' : 'destructive'}");
+    expect(page).not.toContain('text-success}`}>{opLog.status');
+  });
+  it('a11y 脚本覆盖 roles/clients/departments/访问与操作页签/表单页', () => {
+    const script = read('../../scripts/ux/a11y.mjs');
+    for (const path of ["'/roles'", "'/clients'", "'/departments'", "'/audit-logs?tab=access'", "'/clients/new'"]) {
+      expect(script).toContain(path);
+    }
+  });
+});
