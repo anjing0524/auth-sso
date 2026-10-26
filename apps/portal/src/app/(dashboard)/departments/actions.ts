@@ -33,33 +33,28 @@ import { EntityNotFoundError, BusinessRuleViolationError } from '@/domain/shared
 import { generateUUID } from '@/lib/crypto';
 import { validate } from '@/lib/validation';
 import { invalidateResource } from '@/lib/cache-invalidation';
-import { resolveScope, withScopedRow, withScopedWrite } from '@/lib/authz';
+import { withScopedRow, withScopedWrite, withGlobalWrite } from '@/lib/authz';
 import { assertDepartmentUsable } from '@/lib/department-availability';
 import { DEPARTMENT_PERMISSIONS, type ApiResponse } from '@auth-sso/contracts';
 
 /**
- * 根部门创建前的两道服务端守卫（H-21，UI 隐藏按钮不足以保证）。
+ * 根部门创建前的服务端守卫（H-21，UI 隐藏按钮不足以保证）。
  *
  * 1. **单例**（ADR-002 / `docs/roadmap.md` 2026-10-19）：根部门全局唯一。
- * 2. **空 targets 不得创建全局资源**：创建根部门时 `targets` 必然为空
- *    （没有父部门可施加范围断言），若不额外校验，任何持 `department:create`
- *    的部门范围操作员都能造出一个自己看不见、却落在所有角色子树之外的根。
- *    因此要求操作者自身具备非空数据范围（空范围 = 无任何部门授权）。
+ * 2. **非空数据范围**：不再在这里手写 `resolveScope`——已收进 `withGlobalWrite`
+ *    （ADR-028）：全局资源写必须经具名入口，且操作者必须拥有非空数据范围；
+ *    "空 targets"不再能表达"跳过范围校验"。
  *
  * 说明：空树引导期没有"已登录且持角色"的操作者（角色 `dept_id` NOT NULL 且外键
- * 引部门），所以这两条守卫不会阻塞首次播种；根部门由 seed 建立。
+ * 引部门），所以这些守卫不会阻塞首次播种；根部门由 seed 建立。
  */
-async function assertRootCreationAllowed(tx: DbTxHandle, operatorId: string): Promise<void> {
+async function assertRootSingleton(tx: DbTxHandle): Promise<void> {
   const existingRoot = await tx.query.departments.findFirst({
     where: isNull(schema.departments.parentId),
     columns: { id: true },
   });
   if (existingRoot) {
     throw new BusinessRuleViolationError('根部门已存在：根部门是 ADR-002 的单例，不能创建第二个根部门');
-  }
-  const scope = await resolveScope(tx, operatorId);
-  if (scope.deptIds.length === 0) {
-    throw new BusinessRuleViolationError('当前操作者没有部门数据范围，不能创建全局资源（根部门）');
   }
 }
 
@@ -70,19 +65,7 @@ export const createDepartmentAction = withAuth(
     const v = validate(CreateDepartmentInputSchema, input);
     if (!v.ok) return v.response;
 
-    const dept = await withScopedWrite(
-      {
-        operatorId: ctx.userId,
-        // 子部门：父部门必须在操作者范围内；根部门：targets 为空，由 preflight 施加全局守卫
-        targets: v.data.parentId
-          ? [{ deptId: v.data.parentId, message: '无权在指定父部门下创建子部门' }]
-          : [],
-        // H-23：父部门必须存在且 ACTIVE（禁用部门是生命周期门禁，不追既往）
-        preflight: (tx: DbTxHandle) => v.data.parentId
-          ? assertDepartmentUsable(tx, v.data.parentId, '在其下创建子部门')
-          : assertRootCreationAllowed(tx, ctx.userId),
-      },
-      async (tx) => {
+    const create = async (tx: DbTxHandle) => {
       // 查询父级 ancestors 在事务内完成，消除读-写竞争窗口
       const parentAncestors = v.data.parentId
         ? await (async () => {
@@ -97,7 +80,23 @@ export const createDepartmentAction = withAuth(
       const d = createDepartment(v.data, generateUUID, parentAncestors);
       await tx.insert(schema.departments).values(departmentToInsertRow(d));
       return d;
-    });
+    };
+
+    // 子部门：父部门必须在操作者范围内；根部门：全局资源写（显式入口，操作者须有非空范围）
+    const dept = v.data.parentId
+      ? await withScopedWrite(
+          {
+            operatorId: ctx.userId,
+            targets: [{ deptId: v.data.parentId, message: '无权在指定父部门下创建子部门' }],
+            // H-23：父部门必须存在且 ACTIVE（禁用部门是生命周期门禁，不追既往）
+            preflight: (tx: DbTxHandle) => assertDepartmentUsable(tx, v.data.parentId!, '在其下创建子部门'),
+          },
+          create,
+        )
+      : await withGlobalWrite(
+          { operatorId: ctx.userId, resource: '根部门', preflight: assertRootSingleton },
+          create,
+        );
 
     invalidateResource('departments');
     return { success: true, data: { id: dept.id }, message: '部门创建成功' };

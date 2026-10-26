@@ -70,7 +70,7 @@ vi.mock('@/infrastructure/redis', () => ({}));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn(), updateTag: vi.fn() }));
 
 import { db } from '@/infrastructure/db';
-import { createRoleAction, updateRoleAction, deleteRoleAction } from '@/app/(dashboard)/roles/actions';
+import { createRoleAction, updateRoleAction, deleteRoleAction, updateRolePermissionsAction } from '@/app/(dashboard)/roles/actions';
 import type * as verifyJwtModule from '@/lib/auth/verify-jwt';
 import type * as cryptoModule from '@/lib/crypto';
 import type * as permissionsModule from '@/lib/permissions';
@@ -235,6 +235,15 @@ describe('Role Server Actions', () => {
       // 顺序固定：先撤销（安全相关），后刷新（缓存性）
       expect(effectsMocks.revokeUsers.mock.invocationCallOrder[0]!)
         .toBeLessThan(effectsMocks.refreshUsers.mock.invocationCallOrder[0]!);
+    });
+  });
+
+  describe('updateRolePermissionsAction', () => {
+    it('角色不存在 → 失败信封 NOT_FOUND（withScopedRow 单次加载后的 404 语义）', async () => {
+      const r = await updateRolePermissionsAction('00000000-0000-4000-8000-000000000999', []);
+
+      if (r.success) expect.unreachable('不存在的角色必须被拒绝');
+      expect(r.error).toBe(COMMON_ERRORS.NOT_FOUND);
     });
   });
 });

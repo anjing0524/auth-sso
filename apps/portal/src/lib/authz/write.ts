@@ -18,7 +18,17 @@ import 'server-only';
  */
 import { db } from '@/infrastructure/db';
 import type { DbTxHandle } from '@/infrastructure/db';
+import { ForbiddenError } from '@/domain/shared/errors';
 import { resolveScope, assertWithinScope, type AccessTarget, type UserScope } from './data-scope';
+
+/**
+ * 非空目标集合。
+ *
+ * 空数组在类型层面无法表达，是因为「没有目标」与「跳过校验」曾共用同一个值
+ * （ADR-028）：`withScopedWrite({ targets: [] }, …)` 看起来有守卫、实际零守卫。
+ * 确需操作全局资源（根部门、历史遗留的无部门用户）时用 {@link withGlobalWrite}。
+ */
+export type NonEmptyTargets = readonly [AccessTarget, ...AccessTarget[]];
 
 /**
  * 守卫目标来源：
@@ -26,11 +36,12 @@ import { resolveScope, assertWithinScope, type AccessTarget, type UserScope } fr
  * - 函数：目标需要在事务内先加载才能知道其部门（例如按 id 查用户）
  *
  * 函数形式接收 `tx`，因此"加载目标"与"断言范围"天然在同一事务内。
- * 若目标不存在，守卫无法表达 404 —— 由 handler 在事务内自行加载并返回对应错误。
+ * 若目标不存在，守卫无法表达 404 —— 由 handler 在事务内自行加载并返回对应错误；
+ * **需要「加载行 → 404 → 断言 → handler」时用 {@link withScopedRow}**，不要用空 targets。
  */
 export type ScopeTargets =
-  | readonly AccessTarget[]
-  | ((tx: DbTxHandle) => Promise<readonly AccessTarget[]>);
+  | NonEmptyTargets
+  | ((tx: DbTxHandle) => Promise<NonEmptyTargets>);
 
 export interface ScopedWriteOptions {
   /** 操作者用户 ID（通常由 withPermission 提供） */
@@ -88,6 +99,46 @@ export async function withScopedWrite<T>(
       ? await options.targets(tx)
       : options.targets;
     assertWithinScope(scope, targets);
+    return handler(tx);
+  });
+}
+
+export interface GlobalWriteOptions {
+  /** 操作者用户 ID */
+  readonly operatorId: string;
+  /** 全局资源名（用于无范围时的拒绝消息，例如「根部门」） */
+  readonly resource: string;
+  /** 守卫**之前**的领域校验（同一事务内），例如根部门单例检查 */
+  readonly preflight?: (tx: DbTxHandle) => Promise<void>;
+}
+
+/**
+ * **显式全局资源写入口**：没有具体目标部门，但操作者必须拥有非空数据范围。
+ *
+ * 为什么需要它（而不是 `withScopedWrite({ targets: [] })`）：
+ * 空 targets 在 {@link withScopedWrite} 里已经不可表达——「没有目标」不能再被当成
+ * 「跳过校验」。根部门创建、历史遗留的无部门用户创建这类操作需要一条**具名**路径，
+ * 把「全局资源」与「有目标的范围校验」在代码形状上分开（ADR-028 / H-21）。
+ *
+ * 操作者无任何部门范围时 fail-close（403）：全局资源写不允许由"零授权"的操作者发起。
+ *
+ * @param options.operatorId 操作者用户 ID
+ * @param options.resource   全局资源名（仅用于错误消息）
+ * @param options.preflight  守卫之前的领域校验（同一事务）
+ * @param handler            业务写入，只接收事务句柄
+ */
+export async function withGlobalWrite<T>(
+  options: GlobalWriteOptions,
+  handler: (tx: DbTxHandle) => Promise<T>,
+): Promise<T> {
+  return db.transaction(async (tx) => {
+    if (options.preflight) {
+      await options.preflight(tx);
+    }
+    const scope = await resolveScope(tx, options.operatorId);
+    if (scope.deptIds.length === 0) {
+      throw new ForbiddenError(`无权操作全局资源：${options.resource}（操作者没有部门数据范围）`);
+    }
     return handler(tx);
   });
 }

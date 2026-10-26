@@ -232,4 +232,24 @@ describe('用户角色绑定 API', () => {
       .from(schema.userRoles).where(eq(schema.userRoles.userId, OUT_OF_SCOPE_USER_ID));
     expect(rows.map((r) => r.roleId)).toEqual([OLD_ROLE_ID]);
   });
+
+  it('目标用户不存在 → POST 返回 404（不是 403；ADR-028 单次加载后 404 语义保持）', async () => {
+    const missingId = '00000000-0000-4000-8000-000000000999';
+    const response = await assignRoles(
+      createTestRequest(`/api/users/${missingId}/roles`, { method: 'POST', body: { roleIds: [ROLE_ID] } }),
+      { params: Promise.resolve({ id: missingId }) },
+    );
+
+    expect(response.status).toBe(404);
+  });
+
+  it('目标用户不存在 → DELETE 返回 404（不是 403）', async () => {
+    const missingId = '00000000-0000-4000-8000-000000000999';
+    const response = await removeRole(
+      createTestRequest(`/api/users/${missingId}/roles`, { method: 'DELETE', body: { roleId: OLD_ROLE_ID } }),
+      { params: Promise.resolve({ id: missingId }) },
+    );
+
+    expect(response.status).toBe(404);
+  });
 });

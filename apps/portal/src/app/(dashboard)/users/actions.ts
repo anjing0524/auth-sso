@@ -49,8 +49,9 @@ import {
   revokeAndRefreshAuthorization,
 } from '@/lib/auth/authorization-effects';
 import { revokeUserAccessByUserId } from '@/lib/session/revoke';
+import { recordActionAuditDetail } from '@/lib/audit';
 
-import { withScopedRow, withScopedWrite } from '@/lib/authz';
+import { withScopedRow, withScopedWrite, withGlobalWrite } from '@/lib/authz';
 import { assertDepartmentUsable } from '@/lib/department-availability';
 import type { DbTxHandle } from '@/infrastructure/db';
 import {
@@ -96,7 +97,7 @@ import type { ApiResponse } from '@auth-sso/contracts';
  * - React 19 Form Action：createUserAction(null, formData)
  */
 export const createUserAction = withAuth(
-  { permissions: [USER_PERMISSIONS.CREATE], audit: 'USER_CREATE' },
+  { permissions: [USER_PERMISSIONS.CREATE] },
   async (
     ctx: AuthContext,
     firstArg: CreateUserInput | null | undefined,
@@ -111,52 +112,61 @@ export const createUserAction = withAuth(
     const passwordHash = await hashPassword(v.data.password);
 
     // 范围守卫 + 查重 + 插入同一事务（消除 TOCTOU，ADR-014）。
-    // deptId 已在 Zod .preprocess() 中归一化 ('ALL' → null)，Controller 层不重复判定；
-    // deptId 为 null 时 targets 为空数组，守卫不构成限制（与既有语义一致）。
-    const result = await withScopedWrite(
-      {
-        operatorId: ctx.userId,
-        targets: v.data.deptId
-          ? [{ deptId: v.data.deptId, message: '无权在指定部门下创建用户' }]
-          : [],
-        // H-23：部门必须存在且 ACTIVE（禁用部门不接收新用户）；存在性先于范围判定
-        preflight: async (tx: DbTxHandle) => {
-          if (v.data.deptId) await assertDepartmentUsable(tx, v.data.deptId, '在该部门下创建用户');
-        },
-      },
-      async (tx) => {
-        // 只看**未删除**行：与 `ux_users_email` / `ux_users_mobile` 的部分唯一索引同口径
-        // （`WHERE deleted_at IS NULL`）。用户名没有部分索引（完整唯一约束），
-        // 因此软删除用户的用户名仍会被数据库挡住并映射为 `USERNAME_ALREADY_EXISTS`。
-        const existing = await tx.query.users.findFirst({
-          where: and(
-            or(eq(schema.users.username, v.data.username), eq(schema.users.email, v.data.email)),
-            isNull(schema.users.deletedAt),
-          ),
-          columns: { username: true, email: true },
-        });
-        if (existing) {
-          // 一次查询即可，但要**分别报码**：客户端表单需要定位到具体输入框（#82）
-          const usernameTaken = existing.username === v.data.username;
-          throw new DuplicateEntityError(
-            'User',
-            usernameTaken ? 'username' : 'email',
-            usernameTaken
-              ? USER_ERRORS.USERNAME_ALREADY_EXISTS
-              : USER_ERRORS.EMAIL_ALREADY_EXISTS,
-          );
-        }
+    // deptId 有值时：目标部门必须在操作者范围内；deptId 为空是历史遗留的"无部门用户"，
+    // 属于全局资源写——走具名 `withGlobalWrite`（操作者仍须有非空数据范围），
+    // 不再用 `targets: []` 静默关闭守卫（ADR-028）。是否允许无部门用户仍是产品决策（Q2）。
+    const createUserInTx = async (tx: DbTxHandle) => {
+      // 只看**未删除**行：与 `ux_users_email` / `ux_users_mobile` 的部分唯一索引同口径
+      // （`WHERE deleted_at IS NULL`）。用户名没有部分索引（完整唯一约束），
+      // 因此软删除用户的用户名仍会被数据库挡住并映射为 `USERNAME_ALREADY_EXISTS`。
+      const existing = await tx.query.users.findFirst({
+        where: and(
+          or(eq(schema.users.username, v.data.username), eq(schema.users.email, v.data.email)),
+          isNull(schema.users.deletedAt),
+        ),
+        columns: { username: true, email: true },
+      });
+      if (existing) {
+        // 一次查询即可，但要**分别报码**：客户端表单需要定位到具体输入框（#82）
+        const usernameTaken = existing.username === v.data.username;
+        throw new DuplicateEntityError(
+          'User',
+          usernameTaken ? 'username' : 'email',
+          usernameTaken
+            ? USER_ERRORS.USERNAME_ALREADY_EXISTS
+            : USER_ERRORS.EMAIL_ALREADY_EXISTS,
+        );
+      }
 
-        const user = createUser(v.data, generateUUID);
-        await tx.insert(schema.users).values({
-          ...userToInsertRow(user),
-          passwordHash,
-        });
-        return user;
-      },
-    );
+      const user = createUser(v.data, generateUUID);
+      await tx.insert(schema.users).values({
+        ...userToInsertRow(user),
+        passwordHash,
+      });
+      return user;
+    };
+
+    const result = v.data.deptId
+      ? await withScopedWrite(
+          {
+            operatorId: ctx.userId,
+            targets: [{ deptId: v.data.deptId, message: '无权在指定部门下创建用户' }],
+            // H-23：部门必须存在且 ACTIVE（禁用部门不接收新用户）；存在性先于范围判定
+            preflight: (tx: DbTxHandle) => assertDepartmentUsable(tx, v.data.deptId!, '在该部门下创建用户'),
+          },
+          createUserInTx,
+        )
+      : await withGlobalWrite(
+          { operatorId: ctx.userId, resource: '无部门用户' },
+          createUserInTx,
+        );
 
     invalidateResource('users');
+    // 创建事件也要能按目标用户追溯：referer 只有 /users，显式记录 targetUserId/url。
+    await recordActionAuditDetail(ctx.userId, 'USER_CREATE', {
+      url: `/users/${result.id}`,
+      params: { targetUserId: result.id, username: v.data.username },
+    });
     return { success: true, data: { id: result.id }, message: '用户创建成功' };
   },
 );

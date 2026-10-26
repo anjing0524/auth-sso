@@ -112,7 +112,7 @@ src/（路径别名 @/ = src/）
 │   │                check-permission.ts、authorization-effects.ts、brute-force.ts、gateway-hmac.ts、
 │   │                client-credentials.ts、oauth-{body,grant,helpers}.ts、navigation-trust.ts、index.ts
 │   ├── authz/       数据范围门面（ADR-014）：data-scope.ts（resolveScope / isWithinScope）、
-│   │                query.ts（scopeFilter / isScopeDenied）、write.ts（withScopedWrite / withScopedRow）、index.ts
+│   │                query.ts（scopeFilter / isScopeDenied）、write.ts（withScopedWrite / withScopedRow / withGlobalWrite）、index.ts
 │   ├── session/     cookies.ts（只读取）、jwt.ts（不验签解码）、revoke.ts（jti 黑名单）、
 │   │                auth-request-store.ts（Redis 暂存授权参数）、index.ts
 │   ├── permissions.ts     权限上下文查询 + Redis 旁路缓存（getUserPermissionContext 等）
@@ -458,7 +458,8 @@ Auth-SSO 的请求处理全链路由 **11 层** 组成，按职责划分为三�
 │   （ACTIVE 角色的 dept_id 经 ancestors 物化路径展开子树）│
 │ · 读：scopeFilter → inArray(deptIdCol, deptIds)    │
 │   空范围 → 恒 FALSE（绝不退化为"不过滤"）            │
-│ · 写：withScopedWrite / withScopedRow 在事务内断言   │
+│ · 写：withScopedWrite（targets 非空）/ withScopedRow 在事务内断言  │
+│   withGlobalWrite 承载根部门等全局资源写（要求非空范围）            │
 │   isWithinScope(scope, targetDeptId)               │
 └──────────────┬──────────────────────────────────┘
                │ SQL WHERE 条件已注入

@@ -141,6 +141,7 @@ async function recordControlPlaneAudit(
   userId: string,
   operation: AuditOperation,
   fallbackMethod: string,
+  detail?: { url?: string | null; params?: Record<string, unknown> | null },
 ): Promise<void> {
   try {
     const { headers } = await import('next/headers');
@@ -152,7 +153,8 @@ async function recordControlPlaneAudit(
       // 写进 `audit_logs.method varchar(10)` 会超长 → 插入失败（档②吞掉，表现为审计静默缺失）。
       // method 的语义是 HTTP 方法：Server Action 一律 POST；API 路由用调用方给的兜底值。
       method: fallbackMethod,
-      url: refererPath(h),
+      url: detail?.url ?? refererPath(h),
+      params: detail?.params ?? null,
       ip: extractClientIP(h),
       userAgent: extractUserAgent(h),
       status: 200,
@@ -190,6 +192,18 @@ function refererPath(h: Headers): string | null {
 /** Server Action 的控制面审计补记。**永不抛出**（档②）。 */
 export async function recordActionAudit(userId: string, operation: AuditOperation): Promise<void> {
   await recordControlPlaneAudit(userId, operation, 'POST');
+}
+
+/**
+ * 带目标信息的 Action 审计（如创建类操作需要记录 targetUserId）。
+ * detail.url 优先于 referer：创建用户的 referer 只有 `/users`，无法追溯目标。
+ */
+export async function recordActionAuditDetail(
+  userId: string,
+  operation: AuditOperation,
+  detail: { url?: string | null; params?: Record<string, unknown> | null },
+): Promise<void> {
+  await recordControlPlaneAudit(userId, operation, 'POST', detail);
 }
 
 /** API 路由的控制面审计补记。**永不抛出**（档②）。 */

@@ -46,8 +46,12 @@ export interface UserScope {
  * 1. 取用户全部 **ACTIVE** 角色的 `dept_id`（与 `getUserPermissionContext` 同一口径）
  * 2. 对每个 `dept_id` 用物化路径 `ancestors` 展开子树，去重返回
  *
- * 首参 executor 决定连接归属：读路径传 `db`；事务内写守卫传 `tx`（消除
- * "校验后、提交前操作者被降权"的 TOCTOU 窗口，H-ACL-002）。
+ * 首参 executor 决定连接归属：读路径传 `db`；事务内写守卫传 `tx`。
+ *
+ * **不要把「同一事务」当成「同一快照」**：PostgreSQL 默认 READ COMMITTED 下同一事务内
+ * 每条语句各取新快照，因此门面只是把「校验后、提交前操作者被降权」的窗口**收窄**到
+ * 同一事务的语句之间，**并未消除**；真正的强保证需要对操作者授权行加锁或串行化
+ * （ADR-028 / ADR-014「代价」节）。
  *
  * ## 子树谓词必须逐段判定（两次踩坑的教训）
  *
@@ -134,8 +138,9 @@ async function expandRoleDeptSubtrees(
  * 获取操作者的数据范围快照（唯一合法来源）。
  *
  * **executor 决定快照的连接归属**：
- * - 写路径必须传 `tx`——快照与业务写入在同一事务上，消除"校验后、提交前
- *   操作者被降权"的 TOCTOU 窗口（H-ACL-002 / ADR-014）。
+ * - 写路径必须传 `tx`——快照与业务写入在同一事务上，把「校验后、提交前操作者被降权」
+ *   的窗口**收窄**到同一事务的语句之间（**不等于消除**；强保证需加锁/串行化，
+ *   见 ADR-028 / ADR-014 残余风险）。
  * - 读路径传 `db`——只用于构造列表过滤条件。
  *
  * 这是 `requireDeptAccess(tx, ...)` 背后的同一个原语，只是把"取快照"与
@@ -182,12 +187,19 @@ export function isWithinScope(scope: UserScope, targetDeptId: string | null | un
  * 断言全部目标都在操作者范围内，任一越界即抛 {@link ForbiddenError}
  * （经 `mapDomainError` 统一映射为 403）。
  *
+ * **空目标集合不是「无需校验」，而是「没有守卫」**：直接 fail-close 拒绝，
+ * 避免 `targets: []` 把 PEP 静默关闭（ADR-028）。非空约束同时体现在
+ * `ScopeTargets` 类型与 {@link withScopedWrite} 上。
+ *
  * 纯函数，不取快照——调用方必须先经 {@link resolveScope} 拿到 scope，
  * 且两者必须共享同一个 executor。这一约束由 {@link withScopedWrite} 保证。
  *
- * @throws ForbiddenError 任一目标越界
+ * @throws ForbiddenError 目标集合为空，或任一目标越界
  */
 export function assertWithinScope(scope: UserScope, targets: readonly AccessTarget[]): void {
+  if (targets.length === 0) {
+    throw new ForbiddenError('数据范围守卫未提供任何目标：空目标等于跳过校验');
+  }
   for (const target of targets) {
     if (!isWithinScope(scope, target.deptId)) {
       throw new ForbiddenError(target.message);

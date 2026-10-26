@@ -26,7 +26,7 @@ vi.mock('@/infrastructure/db', () => ({
 }));
 
 // ── 被测模块 ────────────────────────────────────────
-import { withScopedWrite, resolveScope, isWithinScope, assertWithinScope } from '@/lib/authz';
+import { withScopedWrite, withGlobalWrite, resolveScope, isWithinScope, assertWithinScope, type ScopeTargets } from '@/lib/authz';
 import { ForbiddenError } from '@/domain/shared/errors';
 
 const ROOT_DEPT_ID = '00000000-0000-4000-8000-000000000001';
@@ -107,6 +107,11 @@ describe('isWithinScope / assertWithinScope — 纯判定', () => {
       { deptId: MKT_DEPT_ID, message: '无权将用户迁移至该部门' },
     ])).toThrow('无权将用户迁移至该部门');
   });
+
+  it('空目标集合 fail-close：空 targets 不等于"无需校验"（ADR-028）', () => {
+    expect(() => assertWithinScope({ deptIds: [FE_DEPT_ID] }, [])).toThrow(ForbiddenError);
+    expect(() => assertWithinScope({ deptIds: [FE_DEPT_ID] }, [])).toThrow('未提供任何目标');
+  });
 });
 
 describe('withScopedWrite — 快照与写入同事务', () => {
@@ -159,6 +164,59 @@ describe('withScopedWrite — 快照与写入同事务', () => {
       where: eq(schema.users.id, TARGET_ID), columns: { name: true },
     });
     expect(target?.name).toBe('已更新');
+  });
+
+  it('函数式 targets 运行时返回空集合 → fail-close（即使类型被 as 绕过）', async () => {
+    await expect(
+      withScopedWrite(
+        { operatorId: OPERATOR_ID, targets: (async () => []) as unknown as ScopeTargets },
+        async () => '不应执行',
+      ),
+    ).rejects.toThrow('未提供任何目标');
+  });
+});
+
+describe('withGlobalWrite — 全局资源写的显式入口（ADR-028）', () => {
+  it('操作者有非空范围 → 执行 handler', async () => {
+    const result = await withGlobalWrite(
+      { operatorId: OPERATOR_ID, resource: '根部门' },
+      async () => 'global-written',
+    );
+    expect(result).toBe('global-written');
+  });
+
+  it('操作者范围为空（降权后）→ ForbiddenError，且不执行 handler', async () => {
+    await demoteOperator();
+    let ran = false;
+
+    await expect(
+      withGlobalWrite(
+        { operatorId: OPERATOR_ID, resource: '根部门' },
+        async () => {
+          ran = true;
+          return '不应执行';
+        },
+      ),
+    ).rejects.toThrow(ForbiddenError);
+    expect(ran).toBe(false);
+  });
+
+  it('preflight 先于范围判定执行（单例/存在性检查可先返回专属错误）', async () => {
+    const order: string[] = [];
+    await withGlobalWrite(
+      {
+        operatorId: OPERATOR_ID,
+        resource: '根部门',
+        preflight: async () => {
+          order.push('preflight');
+        },
+      },
+      async () => {
+        order.push('handler');
+        return 'ok';
+      },
+    );
+    expect(order).toEqual(['preflight', 'handler']);
   });
 });
 

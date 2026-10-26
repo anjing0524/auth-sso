@@ -25,7 +25,7 @@
 > 5. **追溯报告不是门禁**：`tests/traceability/generate-report.mjs` 生成
 >    `tests/traceability/.generated/coverage-report.md`（本地生成、不提交），产物是**需求映射清单**；
 >    阻断门禁是 Vitest / lint / typecheck / Docker 发布验收（`AGENTS.md`「追溯（`@req`）」节）。
->    CI 只跑该脚本产出清单（`validation-suite.yml` 的 "Generate traceability inventory" 步骤），
+>    CI 只跑该脚本产出清单（`quality.yml` 的 "Generate traceability inventory" 步骤），
 >    不传 `--threshold`，脚本因此永不因覆盖率不足而失败。
 
 

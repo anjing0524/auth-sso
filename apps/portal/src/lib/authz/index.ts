@@ -13,8 +13,10 @@
  *
  * ## 使用约定
  *
- * - **写路径**：只能经 {@link withScopedWrite}。它把事务、快照、守卫绑在一起，
- *   handler 只拿得到 `tx`。
+ * - **写路径**：有具体目标部门时经 {@link withScopedWrite}（`targets` 类型上非空）；
+ *   需要「加载行 → 404 → 断言」时经 {@link withScopedRow}；全局资源写（根部门、
+ *   历史遗留的无部门用户）经具名的 {@link withGlobalWrite}。空 targets 不再可表达
+ *   （ADR-028）——「没有目标」与「跳过校验」必须分开。
  * - **读路径**：用 {@link resolveScope} 取范围（必须在 `"use cache"` 作用域**外**，
  *   Cache Components 要求），用 {@link scopeFilter} 构造过滤条件——它**已经在本门面里**
  *   （此文案原写"待读路径迁移时加入"，早已过期；2026-10-15 巡检候选 3 更正）。
@@ -36,9 +38,12 @@ export {
 export {
   withScopedWrite,
   withScopedRow,
+  withGlobalWrite,
   type ScopedWriteOptions,
   type ScopeTargets,
+  type NonEmptyTargets,
   type LoadedScopeGuardOptions,
+  type GlobalWriteOptions,
 } from './write';
 
 export { scopeFilter, isScopeDenied } from './query';

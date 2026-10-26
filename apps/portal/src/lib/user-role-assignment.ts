@@ -22,8 +22,9 @@ import 'server-only';
  *
  * ## 语义（与原路由逐条一致，勿轻改）
  *
- * - 范围快照与写入**同一事务**（ADR-014 / H-ACL-002）：原实现快照取在事务外，
- *   操作者被降权后仍会放行。
+ * - 范围快照与写入**同一事务**（ADR-014 / H-ACL-002），且目标行**只加载一次**：
+ *   `withScopedRow` 的 load → 404 → 范围断言 → handler 是同一份 row，
+ *   不再出现"守卫加载的行 ≠ handler 再次加载的行"的窗口（ADR-028）。
  * - 角色必须属于该用户部门且为 `ACTIVE`（R-USER-ROLE）。
  * - 分配属于**权限决策变更** ⇒ 收敛（撤销 AT 强制重登 + 刷缓存）。
  *
@@ -34,7 +35,8 @@ import { z } from 'zod';
 import type { ErrorCode } from '@auth-sso/contracts';
 import { COMMON_ERRORS, ENTITY_ACTIVE } from '@auth-sso/contracts';
 import { type db, schema } from '@/infrastructure/db';
-import { withScopedWrite } from '@/lib/authz';
+import { EntityNotFoundError } from '@/domain/shared/errors';
+import { withScopedRow } from '@/lib/authz';
 import { appendSecurityAudit } from '@/lib/audit';
 import { revokeAndRefreshAuthorization } from '@/lib/auth/authorization-effects';
 
@@ -67,7 +69,7 @@ export type RoleWriteResult<T> =
   | ({ ok: true } & T)
   | { ok: false; error: ErrorCode; message: string; status: number };
 
-/** 事务句柄类型（与 `withScopedWrite` 的 handler 入参一致） */
+/** 事务句柄类型（与 `withScopedRow` 的 handler 入参一致） */
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 /**
@@ -90,18 +92,6 @@ async function validateRoleAssignment(
   return invalid.length > 0 ? '部分角色不属于该用户所属部门或已禁用，无法分配' : null;
 }
 
-/** 用户是否在操作者数据范围内（不存在时返回空目标 ⇒ 由调用方按 404 处理） */
-function scopedTargets(targetUserId: string) {
-  return async (tx: Tx) => {
-    const target = await tx.query.users.findFirst({
-      where: eq(schema.users.id, targetUserId),
-      columns: { deptId: true },
-    });
-    if (!target) return [];
-    return [{ deptId: target.deptId, message: '无权操作该用户' }];
-  };
-}
-
 /**
  * 为用户分配角色（覆盖式：删旧插新）。
  *
@@ -113,47 +103,57 @@ export async function assignUserRoles(
   roleIds: readonly string[],
   audit: RoleWriteAuditContext,
 ): Promise<RoleWriteResult<{ assignedCount: readonly string[] }>> {
-  const result = await withScopedWrite(
-    { operatorId, targets: scopedTargets(targetUserId) },
-    async (tx) => {
-      const userRow = await tx.query.users.findFirst({
-        where: eq(schema.users.id, targetUserId),
-        columns: { id: true, deptId: true },
-      });
-      if (!userRow) {
-        return { success: false as const, error: COMMON_ERRORS.NOT_FOUND, message: '用户不存在', status: 404 };
-      }
+  try {
+    const result = await withScopedRow(
+      {
+        operatorId,
+        load: (tx) =>
+          tx.query.users.findFirst({
+            where: eq(schema.users.id, targetUserId),
+            columns: { id: true, deptId: true },
+          }),
+        deptOf: (userRow) => userRow.deptId,
+        message: '无权操作该用户',
+        notFound: () => new EntityNotFoundError('User', targetUserId),
+      },
+      async (tx, userRow) => {
+        const errMsg = await validateRoleAssignment(tx, userRow.deptId, roleIds);
+        if (errMsg) {
+          return { success: false as const, error: COMMON_ERRORS.VALIDATION_ERROR, message: errMsg, status: 400 };
+        }
 
-      const errMsg = await validateRoleAssignment(tx, userRow.deptId, roleIds);
-      if (errMsg) {
-        return { success: false as const, error: COMMON_ERRORS.VALIDATION_ERROR, message: errMsg, status: 400 };
-      }
+        await tx.delete(schema.userRoles).where(eq(schema.userRoles.userId, userRow.id));
+        await tx.insert(schema.userRoles).values(
+          roleIds.map((roleId) => ({ userId: userRow.id, roleId, createdAt: new Date() })),
+        );
+        await appendSecurityAudit(tx, {
+          userId: operatorId,
+          operation: 'USER_ROLE_ASSIGN',
+          method: audit.method,
+          url: audit.url,
+          params: { targetUserId: userRow.id, roleIds: [...roleIds] },
+          ip: audit.ip,
+          userAgent: audit.userAgent,
+          status: 200,
+        });
+        return { success: true as const, assignedCount: roleIds };
+      },
+    );
 
-      await tx.delete(schema.userRoles).where(eq(schema.userRoles.userId, userRow.id));
-      await tx.insert(schema.userRoles).values(
-        roleIds.map((roleId) => ({ userId: userRow.id, roleId, createdAt: new Date() })),
-      );
-      await appendSecurityAudit(tx, {
-        userId: operatorId,
-        operation: 'USER_ROLE_ASSIGN',
-        method: audit.method,
-        url: audit.url,
-        params: { targetUserId: userRow.id, roleIds: [...roleIds] },
-        ip: audit.ip,
-        userAgent: audit.userAgent,
-        status: 200,
-      });
-      return { success: true as const, assignedCount: roleIds };
-    },
-  );
+    if (!result.success) {
+      return { ok: false, error: result.error, message: result.message, status: result.status };
+    }
 
-  if (!result.success) {
-    return { ok: false, error: result.error, message: result.message, status: result.status };
+    // 权限决策变更 ⇒ 收敛（撤销 AT 强制重登 + 刷权限缓存），顺序由该 module 固定
+    await revokeAndRefreshAuthorization([targetUserId]);
+    return { ok: true, assignedCount: result.assignedCount };
+  } catch (err) {
+    // 目标不存在是业务 404（与既有的 handler 语义一致）；范围越界（ForbiddenError）继续上抛给信封映射
+    if (err instanceof EntityNotFoundError) {
+      return { ok: false, error: COMMON_ERRORS.NOT_FOUND, message: '用户不存在', status: 404 };
+    }
+    throw err;
   }
-
-  // 权限决策变更 ⇒ 收敛（撤销 AT 强制重登 + 刷权限缓存），顺序由该 module 固定
-  await revokeAndRefreshAuthorization([targetUserId]);
-  return { ok: true, assignedCount: result.assignedCount };
 }
 
 /** 移除用户的指定角色（精准比对，绝不误删该用户的其他角色） */
@@ -163,38 +163,43 @@ export async function removeUserRole(
   roleId: string,
   audit: RoleWriteAuditContext,
 ): Promise<RoleWriteResult<{ userId: string }>> {
-  const result = await withScopedWrite(
-    { operatorId, targets: scopedTargets(targetUserId) },
-    async (tx) => {
-      const userRow = await tx.query.users.findFirst({
-        where: eq(schema.users.id, targetUserId),
-        columns: { id: true },
-      });
-      if (!userRow) {
-        return { success: false as const, error: COMMON_ERRORS.NOT_FOUND, message: '用户不存在', status: 404 };
-      }
+  try {
+    const result = await withScopedRow(
+      {
+        operatorId,
+        load: (tx) =>
+          tx.query.users.findFirst({
+            where: eq(schema.users.id, targetUserId),
+            columns: { id: true, deptId: true },
+          }),
+        deptOf: (userRow) => userRow.deptId,
+        message: '无权操作该用户',
+        notFound: () => new EntityNotFoundError('User', targetUserId),
+      },
+      async (tx, userRow) => {
+        await tx.delete(schema.userRoles).where(
+          and(eq(schema.userRoles.userId, userRow.id), eq(schema.userRoles.roleId, roleId)),
+        );
+        await appendSecurityAudit(tx, {
+          userId: operatorId,
+          operation: 'USER_ROLE_ASSIGN',
+          method: audit.method,
+          url: audit.url,
+          params: { targetUserId: userRow.id, roleId },
+          ip: audit.ip,
+          userAgent: audit.userAgent,
+          status: 200,
+        });
+        return { success: true as const, userId: userRow.id };
+      },
+    );
 
-      await tx.delete(schema.userRoles).where(
-        and(eq(schema.userRoles.userId, userRow.id), eq(schema.userRoles.roleId, roleId)),
-      );
-      await appendSecurityAudit(tx, {
-        userId: operatorId,
-        operation: 'USER_ROLE_ASSIGN',
-        method: audit.method,
-        url: audit.url,
-        params: { targetUserId: userRow.id, roleId },
-        ip: audit.ip,
-        userAgent: audit.userAgent,
-        status: 200,
-      });
-      return { success: true as const, userId: userRow.id };
-    },
-  );
-
-  if (!result.success) {
-    return { ok: false, error: result.error, message: result.message, status: result.status };
+    await revokeAndRefreshAuthorization([result.userId]);
+    return { ok: true, userId: result.userId };
+  } catch (err) {
+    if (err instanceof EntityNotFoundError) {
+      return { ok: false, error: COMMON_ERRORS.NOT_FOUND, message: '用户不存在', status: 404 };
+    }
+    throw err;
   }
-
-  await revokeAndRefreshAuthorization([result.userId]);
-  return { ok: true, userId: result.userId };
 }

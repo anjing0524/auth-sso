@@ -48,11 +48,13 @@ describe('@/lib/auth 公开面', () => {
 });
 
 describe('@/lib/authz 门面公开面', () => {
-  it('提供写路径唯一入口与读路径原语', async () => {
+  it('提供写路径入口与读路径原语（含全局资源写入口）', async () => {
     const authz = await import('@/lib/authz');
 
-    // 写路径
+    // 写路径：有目标范围 / 先加载行 / 全局资源
     expect(typeof authz.withScopedWrite).toBe('function');
+    expect(typeof authz.withScopedRow).toBe('function');
+    expect(typeof authz.withGlobalWrite).toBe('function');
     // 读路径
     expect(typeof authz.resolveScope).toBe('function');
     expect(typeof authz.scopeFilter).toBe('function');

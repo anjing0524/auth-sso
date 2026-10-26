@@ -118,9 +118,9 @@ src/
 │   │   ├── token.ts  token/          #     * JWT 签发与验签（verifyAccessToken）、signing-keys、revocation
 │   │   └── oauth-*.ts  brute-force.ts  gateway-hmac.ts  client-credentials.ts …
 │   ├── authz/                        #   - 数据范围授权门面（ADR-014，写/读/纯判定三类原语）
-│   │   ├── index.ts                  #     * 唯一公开入口（scopeFilter / resolveScope / withScopedWrite / withScopedRow）
+│   │   ├── index.ts                  #     * 唯一公开入口（scopeFilter / resolveScope / withScopedWrite / withScopedRow / withGlobalWrite）
 │   │   ├── data-scope.ts             #     * resolveScope / isWithinScope / assertWithinScope（子树展开私有）
-│   │   ├── write.ts                  #     * withScopedWrite / withScopedRow（事务 + 快照 + 守卫）
+│   │   ├── write.ts                  #     * withScopedWrite（targets 非空）/ withScopedRow / withGlobalWrite（事务 + 快照 + 守卫）
 │   │   └── query.ts                  #     * scopeFilter（空范围恒 FALSE）/ isScopeDenied
 │   ├── session/                      #   - JWT/Session 模块（按职责拆分为子模块）
 │   │   ├── index.ts                  #     * 统一 Barrel
@@ -811,7 +811,7 @@ export default [
 | **Server Action** | `actions.ts` | `next/cache`（经 `lib/cache-invalidation`）, `domain/`, `lib/auth` (`withAuth`), `lib/authz`, `lib/validation`, `infrastructure/db` | **不得含业务逻辑判断**，只做「编排 + 映射」（见 ADR-019）。`validate(schema, input)` 校验入参，`xxxToInsertRow()` 统一 DB 映射，Drizzle 直调 + 事务 | `complexity`(15) / `max-depth`(4) |
 | **API 路由** | `route.ts` | `next/server`, `domain/`, `lib/auth` (`withPermission`), `lib/authz`, `lib/response`, `infrastructure/db` | REST 写网关，约束同上（不得含业务逻辑判断）。使用 `withPermission()` 包装 | `complexity`(15) / `max-depth`(4) |
 | **领域操作（编排）** | `lib/<area>/<operation>.ts` | `domain/`, `infrastructure/db`, 其他 `lib/*` | 一个具名业务操作的步骤编排（bcrypt/DB/会话撤销/外部副作用）。**Controller 变薄的正确途径是给操作起名字**，而不是削行数（ADR-019）。现有实例：`lib/account/{change-password,reset-password}.ts` | — |
-| **数据范围门面** | `lib/authz/{index,data-scope,write,query}.ts` | `infrastructure/db`, `drizzle-orm`, `domain/shared/errors` | 范围快照与使用必须绑定同一执行器（ADR-014）：写路径只用 `withScopedWrite` / `withScopedRow`，读路径只用 `scopeFilter` / `isScopeDenied`，纯判定用 `isWithinScope` / `assertWithinScope`。**不导出** `getUserRoleDeptIds` / `canAccessDept` | — |
+| **数据范围门面** | `lib/authz/{index,data-scope,write,query}.ts` | `infrastructure/db`, `drizzle-orm`, `domain/shared/errors` | 范围快照与使用必须绑定同一执行器（ADR-014 / ADR-028）：写路径用 `withScopedWrite`（targets 非空）/ `withScopedRow`（先加载行）/ `withGlobalWrite`（根部门等全局资源），读路径只用 `scopeFilter` / `isScopeDenied`，纯判定用 `isWithinScope` / `assertWithinScope`。**不导出** `getUserRoleDeptIds` / `canAccessDept` | — |
 | **领域层核心** | `domain/*/*.ts` | **仅限 `@auth-sso/contracts` + `zod` + `bcryptjs` + `jose`（类型）+ `node:crypto`** | 纯函数计算 + `xxxToInsertRow`/`xxxToUpdateRow`/`xxxFromPersistence` DB 行转换。枚举值必须从 contracts 导入 | 人工（boundaries 未启用） |
 | **领域实体接口** | `domain/*/types.ts` | 纯 TS `interface`，`zod` | 替代旧 `UserPropsSchema`。Interface 不绑 Zod，仅描述实体结构。与 Drizzle `$inferSelect` 的兼容性由编译期守卫保证（`db/schema/index.ts` 底部） | — |
 | **领域错误** | `domain/shared/errors.ts` | 仅限纯 TypeScript + contracts 的错误码 | DomainError 基类及子类（各自携带 status） | 人工 |
@@ -840,7 +840,7 @@ export default [
 4. **Server Action 入参手动 `if (!field)` 判空而非 Zod 校验** —— 遗漏字段校验路径，必须使用 `validate()` 作为唯一门禁。
 5. **领域层抛出 `throw new Error(...)` 而非领域错误类型** —— 丢失结构化错误语义。
 6. **Controller 层手写 `if (err instanceof XxxError)`** —— 错误由 `withAuth` / `withPermission` 统一交给 `mapServerError`（其内部委托 `mapDomainError`），Controller 不写映射分支。
-7. **涉及多表写入的 Controller 未使用 `db.transaction()` 包裹** —— 数据一致性风险。写路径**优先用 `withScopedWrite` / `withScopedRow`**（它们内部已开事务并绑定范围快照，见 §八 8.4）。
+7. **涉及多表写入的 Controller 未使用 `db.transaction()` 包裹** —— 数据一致性风险。写路径**优先用 `withScopedWrite`（targets 非空）/ `withScopedRow`，全局资源写用 `withGlobalWrite`**（它们内部已开事务并绑定范围快照，见 §八 8.4）。
 8. **读路径中重复编写部门范围过滤分支（手写 `inArray(users.deptId, deptIds)` / 空范围 `sql\`FALSE\`` 判定）** —— 必须复用 `lib/authz` 的 `scopeFilter()` / `isScopeDenied()`。
 9. **`domain/` 或 `db/` 中手写枚举字面量（`z.enum(['ACTIVE',...])` / `pgEnum('...', ['ACTIVE',...])`）** —— 枚举值必须从 `@auth-sso/contracts` 常值数组派生，单一真相源。
 10. **`domain/` 中保留 `XxxPropsSchema`（如 `UserPropsSchema`）** —— 已废除。Domain 实体用纯 `interface`，不再用 Zod Schema 描述实体全貌。
@@ -850,7 +850,7 @@ export default [
 14. ~~**`data.ts` 函数使用 `db.query.xxx.findFirst()`**~~ —— **已废除**。两类风格并存且各有明确适用场景：列表/聚合查询用 `db.select().from().where()`；关系加载（用户 + 角色 + 部门）用 `db.query.*.findFirst({ with: … })`（`users/data.ts`、`roles/data.ts`、`oauth2/authorize/data.ts` 均为后者）。
 15. **REST route.ts 响应体中出现 `success: true` / `success: false`** —— REST HTTP 状态码即成功/失败语义，`{ success, data }` 包裹是协议层冗余反模式。Server Actions 的 `ApiResponse<T>` 格式仅适用于 RPC 调用。
 16. **Route Handler 里调用 `invalidateResource()`（内部 `updateTag`）** —— `updateTag` 在 route 上下文必抛 Next.js `E872`，抛出点在事务提交之后 ⇒ 写成功 + 响应 5xx。改用 `invalidateResourceFromRoute()`（`revalidateTag(tag, { expire: 0 })`）。机械守卫：`__tests__/api/cache-invalidation-site-guard.test.ts`。
-17. **`withScopedWrite({...}, async () => undefined)` 形式的空 handler** —— 看着加了守卫，实为零守卫（断言在一个事务里、写入落在另一个事务，快照与写入不再同事务）。需要先加载目标行时用 `withScopedRow`。机械守卫：`__tests__/api/scoped-write-guard.test.ts`。
+17. **`withScopedWrite` / `withScopedRow` 的空 handler**（如 `async () => undefined`）—— 看着加了守卫，实为零写入（断言在一个事务里、真正的写入落在另一个事务，快照与写入不再同事务）。需要先加载目标行时用 `withScopedRow`，并让 handler 真正使用 `tx` / `row`。**空 targets 同样不可**：`targets: []` 在类型与运行时都被拒绝（ADR-028）；全局资源写用 `withGlobalWrite`。机械守卫：`__tests__/api/scoped-write-guard.test.ts`。
 
 ---
 
@@ -993,7 +993,7 @@ Controller (Server Actions 和 Route Handlers) 必须只做**编排 (Orchestrati
 
 ### 9.2 防线二：事务边界由 `db.transaction()` 或 `lib/authz` 门面持有
 由于去掉了持久化层接口，涉及多表操作或多步骤的写入时，其事务边界显式暴露在 Controller 层。
-*   **编写原则**：普通的无范围写操作通过 Drizzle 的 `db.transaction(async (tx) => { ... })` 显式包裹；**涉及数据范围的写操作改用 `withScopedWrite` / `withScopedRow`**——它们内部开事务、在事务内取范围快照并断言，handler 只拿得到 `tx`（ADR-014）。
+*   **编写原则**：普通的无范围写操作通过 Drizzle 的 `db.transaction(async (tx) => { ... })` 显式包裹；**涉及数据范围的写操作改用 `withScopedWrite`（targets 非空）/ `withScopedRow`；根部门、无部门用户这类全局资源写用 `withGlobalWrite`**——它们内部开事务、在事务内取范围快照并断言，handler 只拿得到 `tx`（ADR-014 / ADR-028）。
 *   **依赖传递**：事务内所有的数据库操作均必须使用回调提供的 `tx` 实例，严禁混用全局 `db` 实例，确保操作的原子性与数据一致性。
 
 ### 9.3 防线三：读模型 (Read Model) 极速直调与去重
@@ -1011,7 +1011,7 @@ Controller **不写 catch，也不判断错误类型**。`withAuth` / `withPermi
 
 ### 9.5 防线五：数据范围过滤统一经 `lib/authz` 门面
 `data.ts`、各 GET Route、各 BC 的读路径中**严禁**重复编写部门范围过滤分支（如手写“空范围直接拒绝”“`inArray(users.deptId, deptIds)`”“二次 deptId 叠加筛选”）。
-*   **正确做法**：读路径先 `resolveScope(db, userId)` 取快照，再用 `scopeFilter(scope, column)`（空范围恒 `FALSE`）/ `isScopeDenied(scope)`；写路径用 `withScopedWrite` / `withScopedRow` 做越权拦截（越界抛 `ForbiddenError` → 403）。
+*   **正确做法**：读路径先 `resolveScope(db, userId)` 取快照，再用 `scopeFilter(scope, column)`（空范围恒 `FALSE`）/ `isScopeDenied(scope)`；写路径用 `withScopedWrite`（targets 非空）/ `withScopedRow` / `withGlobalWrite` 做越权拦截（越界抛 `ForbiddenError` → 403）。
 *   **不得自行取快照再判定**：`getUserRoleDeptIds` / `canAccessDept` / `requireDeptAccess` 已从公开面撤下，理由是“事务外取快照、事务内复用”的 TOCTOU（`lib/authz/data-scope.ts`）。
 
 ### 9.6 防线六：Auth Guard 包装器统一鉴权 (withAuth)

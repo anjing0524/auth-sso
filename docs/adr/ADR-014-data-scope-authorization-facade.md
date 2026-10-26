@@ -258,3 +258,16 @@ like(schema.departments.ancestors, `${deptId}/%`),   // 只匹配二级及更深
 该测试的头注释还把当时那处越权的**可触发路径**写明：`(dashboard)/users/[id]/page.tsx` 直接
 `getUser(id, …)` 渲染，**改 URL 里的 id 即可跨部门读任意用户** ⇒ 本 ADR 修订的是一处真实可触发的
 越权，且修复与回归测试**都在位**。
+
+## 后续修订（2026-10-23，ADR-028）
+
+治理试运行（ADR-027）对 `lib/authz` 的审计发现写路径有两处同源缺口：`ScopeTargets` 允许空数组
+（空 targets = 静默跳过范围校验），以及权限授予路径「守卫行 ≠ 写入行」的二次加载。ADR-028 已修订：
+
+- `ScopeTargets` 改为非空元组；`assertWithinScope` 对空集合 fail-close；
+- 新增显式 `withGlobalWrite`（根部门、无部门用户等全局资源写；操作者须有非空范围）；
+- 权限授予写路径收敛到 `withScopedRow` 单次加载。
+
+**本 ADR 的残余窗口未在本轮消除**：`withScopedWrite` 的「同事务」不等于「同一快照」——未对操作者
+授权行加锁、未提升隔离级别（Q3）。若需要「降权后不可写」的强保证，仍按本 ADR「代价」节的方案
+（`FOR SHARE` / Serializable + 40001 重试）单独决策；只改 REPEATABLE READ 或只加 Serializable 都不够。
