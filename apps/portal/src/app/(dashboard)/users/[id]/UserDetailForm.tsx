@@ -334,7 +334,7 @@ export default function UserDetailForm({ id, initialUser: serverUser, canUpdate 
                   <Button asChild variant="outline" size="sm" className="mt-1 w-full">
                     <Link
                       href={`/audit-logs?tab=operation&keyword=${encodeURIComponent(String(serverUser.id ?? id))}`}
-                      title="按目标 ID 匹配角色/部门/状态等变更记录（新建事件本身不含目标 ID）"
+                      title="按目标 ID 匹配该用户的创建与角色/部门/状态等变更记录"
                     >
                       <History className="h-3.5 w-3.5" /> 查看变更审计
                     </Link>

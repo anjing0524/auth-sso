@@ -364,7 +364,7 @@ export default function PermissionsTable({ permissions, pagination, activeTab, i
                     setCheckedIds(new Set());
                     router.refresh();
                   } else {
-                    toast.error(res.message || '批量删除失败');
+                    reportFailure(res, '批量删除失败');
                   }
                 } finally {
                   setBulking(false);

@@ -276,6 +276,7 @@ export default function ProfileClient({
   const [loggingOut, setLoggingOut] = React.useState(false);
   // 会话列表可能很多（每端每次刷新一条）：默认只展示 3 条，避免把安全信息挤出首屏
   const router = useRouter();
+  const { reportFailure } = useFieldFailure();
   const [showAllSessions, setShowAllSessions] = React.useState(false);
   /** 待确认撤销的单个会话（自助安全操作，需二次确认） */
   const [revokeTarget, setRevokeTarget] = React.useState<string | null>(null);
@@ -530,7 +531,7 @@ export default function ProfileClient({
                             setRevokeTarget(null);
                             router.refresh();
                           } else {
-                            toast.error(res.message || '撤销失败');
+                            reportFailure(res, '撤销失败');
                           }
                         } finally {
                           setRevoking(false);

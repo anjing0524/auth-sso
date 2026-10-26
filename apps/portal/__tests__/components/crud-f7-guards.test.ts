@@ -508,7 +508,7 @@ describe('用户详情审计追溯（2026-10-26，第二十轮）', () => {
     expect(src).toContain('查看变更审计');
     expect(src).toContain('tab=operation&keyword=');
     expect(src).toContain('AUDIT_PERMISSIONS.READ');
-    expect(src).toContain('新建事件本身不含目标 ID');
+    expect(src).toContain('创建与角色/部门/状态等变更记录');
   });
 });
 

@@ -27,12 +27,12 @@ vi.mock('next/navigation', () => ({
 }));
 
 // 审计页在渲染期读取身份与权限（canExport）；UI 测试不依赖真实 Redis/DB，直接给定已登录+有导出权限
-// @allow-module-mock @/lib/auth auth-bypass: 页面只消费"已登录用户"这一输入，鉴权语义由 API 测试覆盖
+// @allow-module-mock @/lib/auth auth-bypass: 依赖 audit-logs.test.tsx 的页面渲染；页面只消费"已登录用户"这一输入，鉴权语义由 API 测试覆盖
 vi.mock(import('@/lib/auth'), async (importOriginal): Promise<Partial<typeof authModule>> => {
   const actual = await importOriginal();
   return { ...actual, resolveIdentity: vi.fn(async () => ({ userId: 'user-1', claims: { sub: 'user-1' } })) as unknown as typeof actual.resolveIdentity };
 });
-// @allow-module-mock @/lib/permissions auth-bypass: 权限上下文由本 mock 提供"有 audit:export"输入，真实映射由 permission 测试覆盖
+// @allow-module-mock @/lib/permissions auth-bypass: 依赖 audit-logs.test.tsx 的页面渲染；权限上下文由本 mock 提供"有 audit:export"输入，真实映射由 permission 测试覆盖
 vi.mock(import('@/lib/permissions'), async (importOriginal): Promise<Partial<typeof permissionsModule>> => {
   const actual = await importOriginal();
   return {

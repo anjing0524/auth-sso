@@ -402,7 +402,7 @@ export default function DepartmentTree({ departments, deletionStats = {} }: Prop
                     setMoveOpen(false);
                     router.refresh();
                   } else {
-                    toast.error(res.message || '移动失败');
+                    reportFailure(res, '移动失败');
                   }
                 } finally {
                   setMoving(false);
