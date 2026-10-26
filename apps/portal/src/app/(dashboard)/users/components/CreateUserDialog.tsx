@@ -122,15 +122,15 @@ export default function CreateUserDialog({ departments }: CreateUserDialogProps)
 
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
         <DialogContent>
-          <form action={formAction} className="space-y-4">
+          <form action={formAction} className="space-y-3">
             <DialogHeader>
               <DialogTitle>新建用户</DialogTitle>
               <DialogDescription className="text-muted-foreground font-medium">
-                输入用户的基本信息以创建新的系统账号。
+                创建后请把<strong>登录邮箱</strong>告知用户；用户名用于审计与接口标识。
               </DialogDescription>
             </DialogHeader>
 
-            <div className="grid gap-4">
+            <div className="grid gap-3">
               <div className="space-y-2">
                 <Label htmlFor="name" >显示名称</Label>
                 <Input
@@ -156,7 +156,6 @@ export default function CreateUserDialog({ departments }: CreateUserDialogProps)
                   value={values.username}
                   onChange={setField('username')}
                 />
-                <p className="text-[11px] text-muted-foreground">用于审计与接口标识；<strong>登录时使用下方邮箱</strong>。</p>
                 <FieldError failure={fieldError} field="username" />
               </div>
               <div className="space-y-2">

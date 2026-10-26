@@ -466,7 +466,8 @@ describe('建号/登录语义一致（2026-10-26，第十七轮）', () => {
     expect(login).not.toContain('账号（邮箱）');
     const create = read('src/app/(dashboard)/users/components/CreateUserDialog.tsx');
     expect(create).toContain('用户名（唯一标识）');
-    expect(create).toContain('登录时使用下方邮箱');
+    expect(create).toContain('创建后请把');
+    expect(create).toContain('登录邮箱');
     expect(create).toContain('登录邮箱：');
     const detail = read('src/app/(dashboard)/users/[id]/UserDetailForm.tsx');
     expect(detail).toContain('用户名');
