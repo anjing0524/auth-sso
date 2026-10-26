@@ -787,3 +787,12 @@ describe('应用注册 TTL 选中态（续一百四十七）', () => {
     expect(src).toContain("formData.refreshTokenTtl === p.v");
   });
 });
+
+describe('个人中心会话可辨识（续一百四十八）', () => {
+  it('会话行显示登录时间，撤销按钮 aria-label 唯一', () => {
+    const src = read('src/app/(dashboard)/profile/ProfileClient.tsx');
+    expect(src).toContain('登录于');
+    expect(src).toContain('撤销会话 ${formatDateTime(item.createdAt)}');
+    expect(src).toContain('sessions.find((s) => s.id === revokeTarget)');
+  });
+});

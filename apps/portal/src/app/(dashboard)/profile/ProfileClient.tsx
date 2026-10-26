@@ -449,12 +449,12 @@ export default function ProfileClient({
                       <li key={item.id} className="flex items-start justify-between gap-2 px-2 py-1.5">
                         <div className="min-w-0">
                           <p className="truncate font-mono text-[11px]">{item.clientId}</p>
-                          <p className="truncate text-[10px] text-muted-foreground">scope: {item.scopes}</p>
-                          <p className="text-[10px] text-muted-foreground">到期 {formatDateTime(item.expiresAt)}</p>
+                          <p className="truncate text-[10px] text-muted-foreground">登录于 {formatDateTime(item.createdAt)}</p>
+                          <p className="truncate text-[10px] text-muted-foreground">scope: {item.scopes} · 到期 {formatDateTime(item.expiresAt)}</p>
                         </div>
                         <Button
                           variant="ghost" size="sm" className="h-6 shrink-0 px-1.5 text-[10px] text-destructive hover:bg-destructive/10"
-                          aria-label={`撤销会话 ${item.clientId}`}
+                          aria-label={`撤销会话 ${formatDateTime(item.createdAt)}（${item.clientId}）`}
                           onClick={() => setRevokeTarget(item.id)}
                         >
                           撤销
@@ -512,7 +512,8 @@ export default function ProfileClient({
                       <LogOut className="h-4 w-4 text-destructive" /> 撤销该会话？
                     </DialogTitle>
                     <DialogDescription>
-                      撤销后该设备将无法再刷新登录状态（已签发的访问令牌最长 1 小时后失效）。
+                      将撤销「{sessions.find((s) => s.id === revokeTarget) ? formatDateTime(sessions.find((s) => s.id === revokeTarget)!.createdAt) : '该'}」创建的会话；
+                      该设备将无法再刷新登录状态（已签发的访问令牌最长 1 小时后失效）。
                       如需让本机立即退出，请使用「退出当前会话」。
                     </DialogDescription>
                   </DialogHeader>
