@@ -3,7 +3,7 @@
 > 生成方式：`node scripts/ux/measure.mjs`（真浏览器 + 验收栈）。生成日期：2026-10-23。
 > 规范与预算见 `docs/spec/UX-GUIDELINES.md` §4；本文件是**改动前后对比的基线**，不构成 CI 门禁。
 
-## 1. 本轮基线（弹窗页脚对齐轮，2026-10-26）
+## 1. 本轮基线（短视口弹窗轮，2026-10-26）
 
 | 视口 | 路由 | 页面滚动 | 横向溢出 | chrome% | 可见行 | 控件高(输入/按钮) | 表头吸顶 |
 |---|---|---|---|---|---|---|---|
@@ -74,12 +74,12 @@
 
 | 视口 | 弹窗 | 高度 | 是否完整在视口内 | 底部操作可见 | overflowY |
 |---|---|---|---|---|---|
-| 1512x700 | dialog:roles-create | 400 | ✓ | ✓ | visible |
-| 1512x700 | dialog:users-create | 546 | ✓ | ✓ | visible |
-| 1512x700 | dialog:permissions-delete | 224 | ✓ | ✓ | visible |
-| 1139x600 | dialog:roles-create | 400 | ✓ | ✓ | visible |
-| 1139x600 | dialog:users-create | 546 | ✓ | ✓ | visible |
-| 1139x600 | dialog:permissions-delete | 224 | ✓ | ✓ | visible |
+| 1512x700 | dialog:roles-create | 400 | ✓ | ✓ | auto |
+| 1512x700 | dialog:users-create | 546 | ✓ | ✓ | auto |
+| 1512x700 | dialog:permissions-delete | 224 | ✓ | ✓ | auto |
+| 1139x600 | dialog:roles-create | 400 | ✓ | ✓ | auto |
+| 1139x600 | dialog:users-create | 546 | ✓ | ✓ | auto |
+| 1139x600 | dialog:permissions-delete | 224 | ✓ | ✓ | auto |
 
 ## 2. 解读与目标
 
@@ -454,3 +454,11 @@
 | 根因 | 修复 | 验证 |
 |---|---|---|
 | `DialogContent` 内边距 `p-5`（20px），`DialogFooter` 仍用 `-mx-6 -mb-6 p-6`（24px），页脚向外多出 4px | 页脚统一为 `-mx-5 -mb-5 p-5` | 4 类弹窗 `scroll=false`、内部元素越界 0；页脚与圆角对齐；55 处 DialogFooter 全局受益 |
+
+### 9.28 产品审计二十四：200% 缩放/短视口弹窗（2026-10-26）
+
+模拟 1440×900 的 200% 缩放（720×450）：`新建用户` 弹窗高 546px，**top=-48 / bottom=498**，标题、关闭、提交按钮全部在视口外。
+
+| 修复 | 验证 |
+|---|---|
+| `DialogContent` 加 `max-h-[calc(100dvh-2rem)] overflow-y-auto`；`DialogFooter` 加 `sticky bottom-0`，短视口可滚动且主操作始终可见 | 720×450：top **16** / bottom **434**、`clipped=false`、页脚/提交可见；390×844：`scroll=false` 不变 |

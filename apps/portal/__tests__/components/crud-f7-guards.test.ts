@@ -934,7 +934,16 @@ describe('Dialog 页脚与内容内边距一致（续一百六十）', () => {
   it('DialogContent p-5 与 DialogFooter -mx-5/-mb-5/p-5 对齐，不产生 4px 溢出', () => {
     const src = read('src/components/ui/dialog.tsx');
     expect(src).toContain('rounded-2xl bg-popover p-5');
-    expect(src).toContain('-mx-5 -mb-5 flex flex-col-reverse gap-2 rounded-b-2xl border-t bg-muted/50 p-5');
+    expect(src).toContain('-mx-5 -mb-5 sticky bottom-0 flex flex-col-reverse gap-2 rounded-b-2xl border-t bg-muted/50 p-5');
     expect(src).not.toContain('-mx-6 -mb-6');
+  });
+});
+
+describe('短视口弹窗不裁切（续一百六十一）', () => {
+  it('DialogContent 限制 100dvh 并可滚动；页脚 sticky 保持主操作可见', () => {
+    const src = read('src/components/ui/dialog.tsx');
+    expect(src).toContain('max-h-[calc(100dvh-2rem)]');
+    expect(src).toContain('overflow-y-auto');
+    expect(src).toContain('sticky bottom-0');
   });
 });
