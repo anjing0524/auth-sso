@@ -132,7 +132,7 @@ export default function UserDetailForm({ id, initialUser: serverUser, canUpdate 
       <PageHeader
         backHref="/users"
         title={form.name}
-        description={`账号：${username} · 状态：${STATUS_LABELS[form.status] ?? form.status}`}
+        description={`用户名：${username} · 状态：${STATUS_LABELS[form.status] ?? form.status}`}
         actions={
           <div className="flex flex-wrap items-center justify-start gap-2 lg:justify-end">
             <PermissionGuard permission={USER_PERMISSIONS.UPDATE}>
@@ -171,8 +171,8 @@ export default function UserDetailForm({ id, initialUser: serverUser, canUpdate 
                   <Input id="user-email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="user-username">登录账号</Label>
-                  <Input id="user-username" value={username} disabled aria-label="登录账号" className="bg-muted opacity-60" />
+                  <Label htmlFor="user-username">用户名</Label>
+                  <Input id="user-username" value={username} disabled aria-label="用户名" className="bg-muted opacity-60" />
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="user-status">账户状态</Label>

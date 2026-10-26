@@ -458,3 +458,19 @@ describe('部门批量移动（2026-10-26，第十六轮）', () => {
     expect(action).toContain('MAX_BULK');
   });
 });
+
+describe('建号/登录语义一致（2026-10-26，第十七轮）', () => {
+  it('登录明确“登录邮箱”，建号用户名说明用途，成功提示登录邮箱', () => {
+    const login = read('src/app/login/login-form.tsx');
+    expect(login).toContain('登录邮箱');
+    expect(login).not.toContain('账号（邮箱）');
+    const create = read('src/app/(dashboard)/users/components/CreateUserDialog.tsx');
+    expect(create).toContain('用户名（唯一标识）');
+    expect(create).toContain('登录时使用下方邮箱');
+    expect(create).toContain('登录邮箱：');
+    const detail = read('src/app/(dashboard)/users/[id]/UserDetailForm.tsx');
+    expect(detail).toContain('用户名');
+    const roles = read('src/app/(dashboard)/users/[id]/roles/roles-client.tsx');
+    expect(roles).toContain('至少有一个含权限的角色');
+  });
+});

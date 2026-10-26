@@ -70,7 +70,7 @@ describe('CreateUserDialog · 校验失败保留输入', () => {
 
     await user.click(screen.getByRole('button', { name: '新建用户' }));
     await user.type(screen.getByLabelText('显示名称'), '张三');
-    await user.type(screen.getByLabelText('登录账号'), 'zhangsan');
+    await user.type(screen.getByLabelText('用户名（唯一标识）'), 'zhangsan');
     await user.type(screen.getByLabelText('电子邮箱'), 'admin@example.com');
     await user.type(screen.getByLabelText('初始密码'), 'Init@123456');
 
@@ -85,7 +85,7 @@ describe('CreateUserDialog · 校验失败保留输入', () => {
 
     // 回归点：失败后输入不得被清空（非受控表单会被 React reset）
     expect((screen.getByLabelText('显示名称') as HTMLInputElement).value).toBe('张三');
-    expect((screen.getByLabelText('登录账号') as HTMLInputElement).value).toBe('zhangsan');
+    expect((screen.getByLabelText('用户名（唯一标识）') as HTMLInputElement).value).toBe('zhangsan');
     expect((screen.getByLabelText('初始密码') as HTMLInputElement).value).toBe('Init@123456');
 
     const emailInput = screen.getByLabelText('电子邮箱') as HTMLInputElement;

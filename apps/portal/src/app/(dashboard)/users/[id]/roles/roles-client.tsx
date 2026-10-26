@@ -154,7 +154,7 @@ export default function UserRolesPage({ user }: UserRolesPageProps) {
         backLabel="返回用户详情"
         icon="Users"
         title="分配角色"
-        description={`用户：${user.name}${user.deptName ? `（${user.deptName}）` : '（未分配部门）'}｜仅展示所属部门的启用角色`}
+        description={`用户：${user.name}${user.deptName ? `（${user.deptName}）` : '（未分配部门）'}｜仅展示所属部门的启用角色；用户需至少有一个含权限的角色才能登录门户`}
       />
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border/70 bg-card shadow-sm ring-0">

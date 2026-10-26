@@ -118,7 +118,7 @@ for (const vp of VIEWPORTS) {
   }));
   results.push({ viewport: `${vp.width}x${vp.height}`, route: '/login（未登录）', ...login });
 
-  await page.getByLabel(/账号.*邮箱/i).fill(EMAIL);
+  await page.getByLabel(/登录邮箱|账号.*邮箱/i).fill(EMAIL);
   await page.getByLabel('密码').fill(PASSWORD);
   await page.getByRole('button', { name: '安全登录' }).click();
   await page.waitForURL(/\/dashboard$/, { timeout: 30000 });

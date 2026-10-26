@@ -27,7 +27,7 @@ test.describe('SSR 权限快照与网关健康探针', () => {
 
     await page.goto('/dashboard');
     await expect(page).toHaveURL(/\/login\?session_id=/);
-    await page.getByLabel(/账号.*邮箱/i).fill(ADMIN.email);
+    await page.getByLabel(/登录邮箱|账号.*邮箱/i).fill(ADMIN.email);
     await page.getByLabel('密码').fill(ADMIN.password);
     await page.getByRole('button', { name: '安全登录' }).click();
     await expect(page).toHaveURL(/\/dashboard$/, { timeout: 30_000 });

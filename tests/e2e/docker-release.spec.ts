@@ -11,7 +11,7 @@ test.describe('Docker release acceptance', () => {
     await page.goto('/dashboard');
     await expect(page).toHaveURL(/\/login\?session_id=/);
 
-    await page.getByLabel(/账号.*邮箱/i).fill('admin@example.com');
+    await page.getByLabel(/登录邮箱|账号.*邮箱/i).fill('admin@example.com');
     await page.getByLabel('密码').fill('Admin@123456');
     await page.getByRole('button', { name: '安全登录' }).click();
 

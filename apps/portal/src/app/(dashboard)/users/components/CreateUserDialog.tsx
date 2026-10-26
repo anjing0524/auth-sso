@@ -98,7 +98,7 @@ export default function CreateUserDialog({ departments }: CreateUserDialogProps)
     if (!state) return;
     queueMicrotask(() => {
       if (state.success) {
-        toast.success(state.message || '用户创建成功');
+        toast.success(`用户创建成功；登录邮箱：${values.email}`);
         setIsOpen(false);
         setDeptId('');
         setValues({ name: '', username: '', email: '', password: '' });
@@ -144,7 +144,7 @@ export default function CreateUserDialog({ departments }: CreateUserDialogProps)
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="username" >登录账号</Label>
+                <Label htmlFor="username" >用户名（唯一标识）</Label>
                 <Input
                   aria-invalid={fieldError?.field === 'username'}
                   id="username"
@@ -156,6 +156,7 @@ export default function CreateUserDialog({ departments }: CreateUserDialogProps)
                   value={values.username}
                   onChange={setField('username')}
                 />
+                <p className="text-[11px] text-muted-foreground">用于审计与接口标识；<strong>登录时使用下方邮箱</strong>。</p>
                 <FieldError failure={fieldError} field="username" />
               </div>
               <div className="space-y-2">

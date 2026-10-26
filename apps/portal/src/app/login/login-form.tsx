@@ -128,12 +128,12 @@ export default function LoginForm({ sessionId, initialError }: LoginFormProps) {
             ) : null}
 
             <div className="space-y-2">
-              <Label htmlFor="email">账号（邮箱）</Label>
+              <Label htmlFor="email">登录邮箱</Label>
               <Input
                 id="email"
                 type="text"
                 autoComplete="username"
-                placeholder="admin@example.com"
+                placeholder="you@company.com"
                 required
                 value={formData.email}
                 onChange={(e) => setFormData((prev) => ({ ...prev, email: e.target.value }))}

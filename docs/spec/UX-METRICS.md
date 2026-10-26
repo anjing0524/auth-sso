@@ -3,7 +3,7 @@
 > 生成方式：`node scripts/ux/measure.mjs`（真浏览器 + 验收栈）。生成日期：2026-10-23。
 > 规范与预算见 `docs/spec/UX-GUIDELINES.md` §4；本文件是**改动前后对比的基线**，不构成 CI 门禁。
 
-## 1. 本轮基线（部门批量移动轮，2026-10-26）
+## 1. 本轮基线（建号-登录语义回归轮，2026-10-26）
 
 | 视口 | 路由 | 页面滚动 | 横向溢出 | chrome% | 可见行 | 控件高(输入/按钮) | 表头吸顶 |
 |---|---|---|---|---|---|---|---|
@@ -75,10 +75,10 @@
 | 视口 | 弹窗 | 高度 | 是否完整在视口内 | 底部操作可见 | overflowY |
 |---|---|---|---|---|---|
 | 1512x700 | dialog:roles-create | 404 | ✓ | ✓ | visible |
-| 1512x700 | dialog:users-create | 574 | ✓ | ✓ | visible |
+| 1512x700 | dialog:users-create | 598 | ✓ | ✓ | visible |
 | 1512x700 | dialog:permissions-delete | 228 | ✓ | ✓ | visible |
 | 1139x600 | dialog:roles-create | 404 | ✓ | ✓ | visible |
-| 1139x600 | dialog:users-create | 574 | ✓ | ✓ | visible |
+| 1139x600 | dialog:users-create | 598 | ✓ | ✓ | visible |
 | 1139x600 | dialog:permissions-delete | 228 | ✓ | ✓ | visible |
 
 ## 2. 解读与目标
