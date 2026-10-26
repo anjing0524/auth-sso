@@ -195,6 +195,19 @@ describe('GET /api/audit/export — CSV 列取自真实行形状', () => {
     expect(row[0]).toMatch(ISO_8601);
   });
 
+  it('type=access：resourceType/status 筛选生效（与列表同口径）', async () => {
+    await td.db.insert(schema.accessLogs).values([
+      { username: 'user-a', method: 'GET', path: '/users/a', resourceType: 'user', status: 200, createdAt: now },
+      { username: 'role-a', method: 'GET', path: '/roles/a', resourceType: 'role', status: 200, createdAt: now },
+    ]);
+
+    const filtered = await exportCsv('access', '&resourceType=user&status=SUCCESS');
+
+    expect(filtered.status).toBe(200);
+    expect(filtered.csv).toContain('user-a');
+    expect(filtered.csv).not.toContain('role-a');
+  });
+
   it('H-28：非法日期 → 400（显式校验，不静默忽略）', async () => {
     const res = await exportCsv('login', '&startDate=2026/01/01');
     expect(res.status).toBe(400);

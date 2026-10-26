@@ -30,6 +30,11 @@ test.describe('审计详情页', () => {
     // 访问日志：第三页签 → 独立详情页（读操作审计）
     await page.goto('/audit-logs?tab=access', { waitUntil: 'networkidle' });
     await expect(page.getByRole('tab', { name: '访问日志' })).toHaveAttribute('aria-selected', 'true');
+    // 访问日志筛选：资源类型进 URL/chips
+    await page.getByRole('combobox', { name: '资源类型筛选' }).click();
+    await page.getByRole('option', { name: 'user', exact: true }).click();
+    await expect(page).toHaveURL(/tab=access.*resourceType=user/);
+    await expect(page.getByTitle('移除筛选：资源：user')).toBeVisible();
     await page.getByRole('link', { name: '查看日志详情' }).first().click();
     await expect(page).toHaveURL(/\/audit-logs\/[0-9a-f-]{36}\?tab=access/);
     await expect(page.getByRole('heading', { name: '访问日志详情' })).toBeVisible();

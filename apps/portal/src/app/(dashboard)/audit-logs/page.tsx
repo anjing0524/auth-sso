@@ -11,7 +11,7 @@ import { Download, X, Eye } from 'lucide-react';
 import Link from 'next/link';
 import { LOGIN_EVENT_LABELS, AUDIT_OPERATION_LABELS, LOGIN_EVENT_VALUES, AUDIT_OPERATION_VALUES, AUDIT_PERMISSIONS, can, type AuditOperation, type LoginEventType } from '@auth-sso/contracts';
 import { AuditFilters } from './components/audit-filters';
-import { getLoginLogs, getAuditLogs, getAccessLogs } from '@/app/audit/data';
+import { getLoginLogs, getAuditLogs, getAccessLogs, getAccessLogResourceTypes } from '@/app/audit/data';
 import { clampPage } from '@/lib/pagination';
 import { resolveIdentity } from '@/lib/auth';
 import { getUserPermissionContext, toPermissionContextOrNull } from '@/lib/permissions';
@@ -62,6 +62,8 @@ interface PageProps {
     keyword?: string;
     startDate?: string;
     endDate?: string;
+    status?: string;
+    resourceType?: string;
   }>;
 }
 
@@ -95,10 +97,13 @@ function resolveDateFilters(
 function pageHref(
   tab: string, page: number, eventType?: string | null, operation?: string | null, range?: TimeRange | null,
   keyword?: string | null, startDate?: string | null, endDate?: string | null,
+  accessStatus?: string | null, accessResourceType?: string | null,
 ): string {
   const params = new URLSearchParams({ tab });
   if (tab === 'login' && eventType) params.set('eventType', eventType);
   if (tab === 'operation' && operation) params.set('operation', operation);
+  if (tab === 'access' && accessStatus) params.set('status', accessStatus);
+  if (tab === 'access' && accessResourceType) params.set('resourceType', accessResourceType);
   if (range) params.set('range', range);
   if (keyword) params.set('keyword', keyword);
   if (startDate) params.set('startDate', startDate);
@@ -131,6 +136,11 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
   const chipEndDate = range ? undefined : endDate;
   // 关键词长度上限 100（与导出 route 同口径），去除首尾空白
   const keyword = params.keyword?.trim().slice(0, 100) || null;
+  const accessStatus = params.status === 'SUCCESS' || params.status === 'FAILURE' ? params.status : null;
+  const accessResourceType = params.resourceType?.trim().slice(0, 50) || null;
+  const accessResourceTypes = tab === 'access' ? await getAccessLogResourceTypes() : [];
+  const validAccessResourceType = accessResourceType && accessResourceTypes.includes(accessResourceType)
+    ? accessResourceType : null;
 
   // 按当前 tab 仅查询所需数据源，互斥取数；时间范围在数据层过滤（不是先取全量再前端筛）
   const { data, pagination } =
@@ -138,7 +148,13 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
       ? await getLoginLogs({ page, pageSize: PAGE_SIZE, ...(eventType ? { eventType } : {}), ...(startDate ? { startDate, endDate } : {}), ...(keyword ? { keyword } : {}) })
       : tab === 'operation'
         ? await getAuditLogs({ page, pageSize: PAGE_SIZE, ...(operation ? { operation } : {}), ...(startDate ? { startDate, endDate } : {}), ...(keyword ? { keyword } : {}) })
-        : await getAccessLogs({ page, pageSize: PAGE_SIZE, ...(startDate ? { startDate, endDate } : {}), ...(keyword ? { keyword } : {}) });
+        : await getAccessLogs({
+            page, pageSize: PAGE_SIZE,
+            ...(startDate ? { startDate, endDate } : {}),
+            ...(keyword ? { keyword } : {}),
+            ...(accessStatus ? { status: accessStatus } : {}),
+            ...(validAccessResourceType ? { resourceType: validAccessResourceType } : {}),
+          });
 
   // 当前筛选摘要：让"为什么列表是这些"可解释，并支持单个移除/一键清空
   const filterChips: Array<{ label: string; href: string }> = [];
@@ -170,7 +186,19 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
   if (keyword) {
     filterChips.push({
       label: `关键词：${keyword}`,
-      href: pageHref(tab, 1, eventType, operation, range, null, chipStartDate, chipEndDate),
+      href: pageHref(tab, 1, eventType, operation, range, null, chipStartDate, chipEndDate, accessStatus, validAccessResourceType),
+    });
+  }
+  if (tab === 'access' && accessStatus) {
+    filterChips.push({
+      label: accessStatus === 'SUCCESS' ? '状态：成功' : '状态：失败',
+      href: pageHref(tab, 1, eventType, operation, range, keyword, chipStartDate, chipEndDate, null, validAccessResourceType),
+    });
+  }
+  if (tab === 'access' && validAccessResourceType) {
+    filterChips.push({
+      label: `资源：${validAccessResourceType}`,
+      href: pageHref(tab, 1, eventType, operation, range, keyword, chipStartDate, chipEndDate, accessStatus, null),
     });
   }
 
@@ -180,8 +208,19 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
       {/* 标题 + 页签 + 类型筛选 + 导出：压缩为同一行（搜索/标题不应各占一整行） */}
       <div className="flex shrink-0 flex-wrap items-center gap-3">
         <h1 className="type-section-title shrink-0 text-foreground">审计日志</h1>
-        <AuditTabs tab={tab} hrefs={{ login: pageHref('login', 1, null, null, range, keyword, chipStartDate, chipEndDate), operation: pageHref('operation', 1, null, null, range, keyword, chipStartDate, chipEndDate), access: pageHref('access', 1, null, null, range, keyword, chipStartDate, chipEndDate) }} />
-        <AuditFilters tab={tab} eventType={eventType} operation={operation} range={range} keyword={keyword} startDate={chipStartDate} endDate={chipEndDate} />
+        <AuditTabs tab={tab} hrefs={{ login: pageHref('login', 1, null, null, range, keyword, chipStartDate, chipEndDate), operation: pageHref('operation', 1, null, null, range, keyword, chipStartDate, chipEndDate), access: pageHref('access', 1, null, null, range, keyword, chipStartDate, chipEndDate, accessStatus, validAccessResourceType) }} />
+        <AuditFilters
+          tab={tab}
+          eventType={eventType}
+          operation={operation}
+          range={range}
+          keyword={keyword}
+          startDate={chipStartDate}
+          endDate={chipEndDate}
+          accessStatus={accessStatus}
+          accessResourceType={validAccessResourceType}
+          accessResourceTypes={accessResourceTypes}
+        />
         {canExport ? (
           <div className="ml-auto flex items-center gap-2">
             {/* 导出是次要动作：合并为一个下拉，避免两个按钮把筛选行挤换行（chrome 33%→≤30%） */}
@@ -203,7 +242,7 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
                   </a>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
-                  <a href={`/api/audit/export?type=access${startDate ? `&startDate=${startDate}&endDate=${endDate}` : ''}${keyword ? `&keyword=${encodeURIComponent(keyword)}` : ''}`}>
+                  <a href={`/api/audit/export?type=access${startDate ? `&startDate=${startDate}&endDate=${endDate}` : ''}${keyword ? `&keyword=${encodeURIComponent(keyword)}` : ''}${accessStatus ? `&status=${accessStatus}` : ''}${validAccessResourceType ? `&resourceType=${encodeURIComponent(validAccessResourceType)}` : ''}`}>
                     导出访问日志（CSV）
                   </a>
                 </DropdownMenuItem>
@@ -484,7 +523,7 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
           page={page}
           totalPages={pagination.totalPages}
           total={pagination.total}
-          hrefFor={(p) => pageHref(tab, p, eventType, operation, range, keyword, chipStartDate, chipEndDate)}
+          hrefFor={(p) => pageHref(tab, p, eventType, operation, range, keyword, chipStartDate, chipEndDate, accessStatus, validAccessResourceType)}
           jumpAction="/audit-logs"
           jumpParams={{ tab, ...(eventType ? { eventType } : {}), ...(operation ? { operation } : {}), ...(range ? { range } : {}), ...(keyword ? { keyword } : {}), ...(chipStartDate ? { startDate: chipStartDate } : {}), ...(chipEndDate ? { endDate: chipEndDate } : {}) }}
         />

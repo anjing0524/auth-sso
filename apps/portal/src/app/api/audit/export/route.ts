@@ -120,6 +120,10 @@ export async function GET(request: NextRequest) {
       const startDate = searchParams.get('startDate') || undefined;
       const endDate = searchParams.get('endDate') || undefined;
       const userId = searchParams.get('userId') || undefined;
+      // 访问日志专属筛选（状态/资源类型）；非法状态忽略
+      const statusParam = searchParams.get('status');
+      const accessStatus = statusParam === 'SUCCESS' || statusParam === 'FAILURE' ? statusParam : undefined;
+      const resourceType = searchParams.get('resourceType')?.trim().slice(0, 50) || undefined;
       const keywordParam = searchParams.get('keyword') || undefined;
       if (keywordParam && keywordParam.length > 100) {
         return restError(COMMON_ERRORS.VALIDATION_ERROR, 'keyword 最长 100 字符', 400);
@@ -172,6 +176,8 @@ export async function GET(request: NextRequest) {
                 ...(endDate ? { endDate } : {}),
                 ...(userId ? { userId } : {}),
                 ...(keyword ? { keyword } : {}),
+                ...(accessStatus ? { status: accessStatus } : {}),
+                ...(resourceType ? { resourceType } : {}),
               });
               return {
                 rows: res.data.map((l) => [

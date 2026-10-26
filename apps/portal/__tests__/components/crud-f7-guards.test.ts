@@ -797,3 +797,20 @@ describe('个人中心会话可辨识（续一百四十八）', () => {
     expect(src).toContain('sessions.find((s) => s.id === revokeTarget)');
   });
 });
+
+describe('访问日志状态/资源筛选（续一百五十）', () => {
+  it('列表/筛选/导出三处同口径', () => {
+    const data = read('src/app/audit/data.ts');
+    expect(data).toContain("params.status === 'SUCCESS'");
+    expect(data).toContain('getAccessLogResourceTypes');
+    const page = read('src/app/(dashboard)/audit-logs/page.tsx');
+    expect(page).toContain('validAccessResourceType');
+    expect(page).toContain('状态：成功');
+    const filters = read('src/app/(dashboard)/audit-logs/components/audit-filters.tsx');
+    expect(filters).toContain('访问状态筛选');
+    expect(filters).toContain('资源类型筛选');
+    const route = read('src/app/api/audit/export/route.ts');
+    expect(route).toContain('accessStatus');
+    expect(route).toContain('resourceType');
+  });
+});

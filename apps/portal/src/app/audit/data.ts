@@ -7,7 +7,7 @@
 import 'server-only';
 
 import { db, schema } from '@/infrastructure/db';
-import { eq, desc, and, gte, lte, count, sql, inArray } from 'drizzle-orm';
+import { eq, desc, and, gte, lt, lte, count, sql, inArray, isNotNull, asc } from 'drizzle-orm';
 import type { AnyColumn, SQL } from 'drizzle-orm';
 import type { PgTable } from 'drizzle-orm/pg-core';
 import type { AuditOperation, LoginEventType } from '@auth-sso/contracts';
@@ -193,6 +193,8 @@ export async function getAccessLogs(params: PaginationParams & {
   endDate?: string;
   /** 关键词：用户名 / 路径 / IP */
   keyword?: string;
+  /** 状态：成功（<400）/ 失败（>=400） */
+  status?: 'SUCCESS' | 'FAILURE';
 }) {
   const conditions: ReturnType<typeof eq>[] = [];
   if (params.userId) conditions.push(eq(schema.accessLogs.userId, params.userId));
@@ -200,6 +202,9 @@ export async function getAccessLogs(params: PaginationParams & {
   if (params.resourceId) conditions.push(eq(schema.accessLogs.resourceId, params.resourceId));
   addDateRangeConditions(conditions, schema.accessLogs.createdAt, params.startDate, params.endDate);
   addKeywordConditions(conditions, params.keyword, [schema.accessLogs.username, schema.accessLogs.path, schema.accessLogs.ip]);
+  if (params.resourceType) conditions.push(eq(schema.accessLogs.resourceType, params.resourceType));
+  if (params.status === 'SUCCESS') conditions.push(and(isNotNull(schema.accessLogs.status), lt(schema.accessLogs.status, 400))!);
+  if (params.status === 'FAILURE') conditions.push(and(isNotNull(schema.accessLogs.status), gte(schema.accessLogs.status, 400))!);
 
   const result = await paginatedSelect(schema.accessLogs, schema.accessLogs.createdAt, conditions, params, (log) => ({
     id: log.id,
@@ -266,4 +271,15 @@ export async function getAccessLogById(id: string) {
     return { ...row, username: operator?.username ?? null };
   }
   return row;
+}
+
+
+/** 访问日志出现过的资源类型（筛选项；去重且非空） */
+export async function getAccessLogResourceTypes(): Promise<string[]> {
+  const rows = await db
+    .selectDistinct({ resourceType: schema.accessLogs.resourceType })
+    .from(schema.accessLogs)
+    .where(isNotNull(schema.accessLogs.resourceType))
+    .orderBy(asc(schema.accessLogs.resourceType));
+  return rows.map((r) => r.resourceType!).filter(Boolean);
 }

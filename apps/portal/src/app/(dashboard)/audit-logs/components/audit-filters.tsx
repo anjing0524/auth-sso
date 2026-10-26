@@ -28,6 +28,10 @@ import { Input } from '@/components/ui/input';
 
 interface Props {
   tab: 'login' | 'operation' | 'access';
+  /** 访问日志：状态 / 资源类型 */
+  accessStatus?: 'SUCCESS' | 'FAILURE' | null;
+  accessResourceType?: string | null;
+  accessResourceTypes?: string[];
   eventType?: LoginEventType | null;
   operation?: AuditOperation | null;
   /** 时间范围（24h/7d/30d）；与 tab/类型筛选一起写进 URL */
@@ -47,14 +51,14 @@ const TIME_RANGE_OPTIONS: Array<{ value: string; label: string }> = [
   { value: 'CUSTOM', label: '自定义日期' },
 ];
 
-export function AuditFilters({ tab, eventType, operation, range, keyword, startDate, endDate }: Props) {
+export function AuditFilters({ tab, eventType, operation, range, keyword, startDate, endDate, accessStatus, accessResourceType, accessResourceTypes = [] }: Props) {
   const [kw, setKw] = useState(keyword ?? '');
   // 自定义区间是独立模式：进入后保留已填日期，切回预置/全部时清空
   const [customMode, setCustomMode] = useState(!range && Boolean(startDate || endDate));
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const router = useRouter();
 
-  const push = (next: { eventType?: string | null; operation?: string | null; range?: string | null; keyword?: string | null; startDate?: string | null; endDate?: string | null }) => {
+  const push = (next: { eventType?: string | null; operation?: string | null; range?: string | null; keyword?: string | null; startDate?: string | null; endDate?: string | null; status?: string | null; resourceType?: string | null }) => {
     const params = new URLSearchParams();
     params.set('tab', tab);
     const ev = next.eventType !== undefined ? next.eventType : eventType;
@@ -62,6 +66,10 @@ export function AuditFilters({ tab, eventType, operation, range, keyword, startD
     const rg = next.range !== undefined ? next.range : range;
     if (tab === 'login' && ev) params.set('eventType', ev);
     if (tab === 'operation' && op) params.set('operation', op);
+    const st = next.status !== undefined ? next.status : accessStatus;
+    const rt = next.resourceType !== undefined ? next.resourceType : accessResourceType;
+    if (tab === 'access' && st) params.set('status', st);
+    if (tab === 'access' && rt) params.set('resourceType', rt);
     if (rg) params.set('range', rg);
     const kwd = next.keyword !== undefined ? next.keyword : keyword;
     if (kwd) params.set('keyword', kwd);
@@ -131,7 +139,26 @@ export function AuditFilters({ tab, eventType, operation, range, keyword, startD
   if (tab === 'access') {
     return (
       <div className="flex flex-wrap items-center gap-2">
-        <SearchInput placeholder="搜索用户 / 路径 / IP..." value={kw} onChange={setKw} className="w-full md:w-48" />
+        <SearchInput placeholder="搜索用户 / 路径 / IP..." value={kw} onChange={setKw} className="w-full md:w-44" />
+        <Select value={accessStatus ?? 'ALL'} onValueChange={(v) => push({ status: v === 'ALL' ? null : v })}>
+          <SelectTrigger aria-label="访问状态筛选" className="w-32">
+            <SelectValue>{accessStatus === 'SUCCESS' ? '成功' : accessStatus === 'FAILURE' ? '失败' : '全部状态'}</SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ALL">全部状态</SelectItem>
+            <SelectItem value="SUCCESS">成功</SelectItem>
+            <SelectItem value="FAILURE">失败</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={accessResourceType ?? 'ALL'} onValueChange={(v) => push({ resourceType: v === 'ALL' ? null : v })}>
+          <SelectTrigger aria-label="资源类型筛选" className="w-40">
+            <SelectValue>{accessResourceType ?? '全部资源类型'}</SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ALL">全部资源类型</SelectItem>
+            {accessResourceTypes.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+          </SelectContent>
+        </Select>
         {timeRangeSelect}
       </div>
     );
