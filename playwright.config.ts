@@ -10,6 +10,9 @@ import { defineConfig, devices } from '@playwright/test';
 export default defineConfig({
   testDir: './tests/e2e',
   fullyParallel: false,
+  // e2e 共享同一验收栈与 admin 会话/限流状态：文件级并行会让登录/登出/建号互相干扰
+  // （实测：并行 7 passed + 1 failed，workers=1 全量 8 passed）。
+  workers: 1,
   timeout: 30_000,
   reporter: 'html',
   use: {
