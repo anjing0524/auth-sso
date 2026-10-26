@@ -115,6 +115,8 @@ export async function signAccessToken(
   clientId: string,
   scope?: string,
   clientAccessTokenTtl?: number | null,
+  /** 当前 refresh 会话 id（写入 sid claim；个人中心据此标记“当前设备”） */
+  sessionId?: string,
 ): Promise<{ token: string; jti: string; expiresIn: number }> {
   const { keyId, privateKey } = await getActiveSigningKey();
   const ttl = clampTokenTtl(clientAccessTokenTtl, ACCESS_TOKEN_TTL, ACCESS_TOKEN_TTL_BOUNDS);
@@ -125,7 +127,12 @@ export async function signAccessToken(
   // 处在续期边界上的客户端会拿到 401。
   const now = Math.floor(Date.now() / 1000);
 
-  const token = await new SignJWT({ sub: userId, client_id: clientId, ...(scope ? { scope } : {}) })
+  const token = await new SignJWT({
+    sub: userId,
+    client_id: clientId,
+    ...(scope ? { scope } : {}),
+    ...(sessionId ? { sid: sessionId } : {}),
+  })
     .setProtectedHeader({ alg: 'ES256', kid: keyId, typ: JWT_TYP.ACCESS_TOKEN })
     .setIssuedAt(now)
     .setIssuer(getIssuer())
@@ -289,8 +296,10 @@ export async function issueRefreshToken(
   clientId: string,
   scopes: string = DEFAULT_SCOPES,
   clientRefreshTokenTtl?: number | null,
+  /** 由调用方生成的会话 id（与 access token sid 一致；缺省则自生成） */
+  sessionId?: string,
 ): Promise<string> {
-  const id = generateUUID();
+  const id = sessionId ?? generateUUID();
   const token = `rt_${generateId(32)}`;
   const ttl = clampTokenTtl(clientRefreshTokenTtl, REFRESH_TOKEN_TTL, REFRESH_TOKEN_TTL_BOUNDS);
   const now = new Date();
@@ -411,6 +420,7 @@ export async function rotateRefreshToken(
       rt.clientId,
       rt.scopes,
       accessTtl,
+      newRtId,
     );
 
     // scope 一并返回：协议响应必须回报授予范围（RFC 6749 §5.1），

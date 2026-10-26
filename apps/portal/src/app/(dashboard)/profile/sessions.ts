@@ -20,10 +20,12 @@ export interface OwnSession {
   createdAt: string;
   expiresAt: string;
   authTime: string | null;
+  /** 该行是否就是当前浏览器设备（AT sid == refresh session id） */
+  isCurrent: boolean;
 }
 
 /** 当前用户仍然活跃的会话（按建立时间倒序，最多 10 条） */
-export async function getOwnSessions(userId: string): Promise<OwnSession[]> {
+export async function getOwnSessions(userId: string, currentSessionId?: string): Promise<OwnSession[]> {
   const now = new Date();
   const rows = await db
     .select({
@@ -52,5 +54,6 @@ export async function getOwnSessions(userId: string): Promise<OwnSession[]> {
     createdAt: row.createdAt.toISOString(),
     expiresAt: row.expiresAt.toISOString(),
     authTime: row.authTime ? row.authTime.toISOString() : null,
+    isCurrent: Boolean(currentSessionId) && row.id === currentSessionId,
   }));
 }

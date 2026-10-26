@@ -3,7 +3,7 @@
 > 生成方式：`node scripts/ux/measure.mjs`（真浏览器 + 验收栈）。生成日期：2026-10-23。
 > 规范与预算见 `docs/spec/UX-GUIDELINES.md` §4；本文件是**改动前后对比的基线**，不构成 CI 门禁。
 
-## 1. 本轮基线（短视口弹窗轮，2026-10-26）
+## 1. 本轮基线（当前设备标记轮，2026-10-26）
 
 | 视口 | 路由 | 页面滚动 | 横向溢出 | chrome% | 可见行 | 控件高(输入/按钮) | 表头吸顶 |
 |---|---|---|---|---|---|---|---|
@@ -462,3 +462,12 @@
 | 修复 | 验证 |
 |---|---|
 | `DialogContent` 加 `max-h-[calc(100dvh-2rem)] overflow-y-auto`；`DialogFooter` 加 `sticky bottom-0`，短视口可滚动且主操作始终可见 | 720×450：top **16** / bottom **434**、`clipped=false`、页脚/提交可见；390×844：`scroll=false` 不变 |
+
+### 9.29 产品审计二十五：当前设备标记（2026-10-26）
+
+此前因 Gateway 剥离 refresh cookie，Portal 无法比对当前会话。改为**签发链路带会话标识**：
+
+| 实现 | 验证 |
+|---|---|
+| `signAccessToken` 增可选 `sessionId` 并写入 `sid` claim；授权码兑换生成 sessionId，同时作为新 refresh 行 id；轮换时 `sid=newRtId` | API 测试：传 sessionId 时 claims.sid 一致，未传无 sid |
+| 个人中心用 `claims.sid` 与 refresh_tokens.id 比对，行显示「当前设备」徽章并隐藏撤销（引导用「退出当前会话」） | e2e：ctx1 当前设备徽章可见；ctx2 目标会话行标记当前设备、无撤销按钮；ctx1 撤销后两台设备该行均消失 |

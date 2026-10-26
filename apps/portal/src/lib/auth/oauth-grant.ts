@@ -13,7 +13,7 @@ import { eq, and, gt } from 'drizzle-orm';
 import type { OAuthTokenResponse } from '@/domain/auth/types';
 import { verifyPKCE } from '@/domain/auth/oauth-code';
 import { parseScopes } from '@/domain/auth/oauth-authorize';
-import { hashToken } from '@/lib/crypto';
+import { generateUUID, hashToken } from '@/lib/crypto';
 import { resolveIssuancePermission } from '@/lib/permissions';
 // 从 ./token 导入而非直接 ./token/revocation：token.ts 是 token 族的模块边界
 // （re-export 撤销原语），经它导入也让测试对 @/lib/auth/token 的 mock 生效。
@@ -172,18 +172,22 @@ export async function exchangeAuthorizationCode(
   }
 
   // ── 4. 签发 ──
+  // 会话 id：AT 的 sid 与 RT 行 id 同值，个人中心据此标记“当前设备”。
+  const grantedScopes = parseScopes(authCode.scope);
+  const sessionId = grantedScopes.includes('offline_access') ? generateUUID() : undefined;
+
   // AT：aud / client_id = 授权对象 client（ADR-013）；TTL 取 client 配置（H-16）
   const { token: accessToken, expiresIn } = await signAccessToken(
     authCode.userId,
     clientId,
     authCode.scope,
     client.accessTokenTtl,
+    sessionId,
   );
 
   // RT：按 offline_access 门控（OIDC Core §11：长期凭证仅在明确请求时发放）
-  const grantedScopes = parseScopes(authCode.scope);
-  const refreshToken = grantedScopes.includes('offline_access')
-    ? await issueRefreshToken(authCode.userId, clientId, authCode.scope, client.refreshTokenTtl)
+  const refreshToken = sessionId
+    ? await issueRefreshToken(authCode.userId, clientId, authCode.scope, client.refreshTokenTtl, sessionId)
     : undefined;
 
   // ID Token：scope 含 openid 时签发

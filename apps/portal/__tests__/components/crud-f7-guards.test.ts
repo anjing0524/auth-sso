@@ -947,3 +947,16 @@ describe('短视口弹窗不裁切（续一百六十一）', () => {
     expect(src).toContain('sticky bottom-0');
   });
 });
+
+describe('当前设备识别（续一百六十二）', () => {
+  it('AT 写 sid；会话行按 id 标记 isCurrent；当前设备禁用撤销', () => {
+    const token = read('src/lib/auth/token.ts');
+    expect(token).toContain('sessionId?: string');
+    expect(token).toContain('...(sessionId ? { sid: sessionId } : {})');
+    const sessions = read('src/app/(dashboard)/profile/sessions.ts');
+    expect(sessions).toContain('currentSessionId');
+    expect(sessions).toContain('row.id === currentSessionId');
+    const profile = read('src/app/(dashboard)/profile/ProfileClient.tsx');
+    expect(profile).toContain('当前设备请使用下方');
+  });
+});

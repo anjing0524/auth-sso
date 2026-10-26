@@ -235,6 +235,14 @@ describe('令牌寿命与 iat/exp 的一致性（OAuth 2.1 §5.1 expires_in）',
     return fn().finally(() => spy.mockRestore());
   }
 
+  it('AT 携带 refresh 会话 sid；未提供时不含 sid', async () => {
+    const { token: withSid } = await signAccessToken(USER_ID, CLIENT_A, 'openid', null, 'session-123');
+    expect(decodeJwt(withSid).sid).toBe('session-123');
+
+    const { token: withoutSid } = await signAccessToken(USER_ID, CLIENT_A, 'openid');
+    expect(decodeJwt(withoutSid).sid).toBeUndefined();
+  });
+
   it('**AT 的 exp - iat 必须精确等于 ACCESS_TOKEN_TTL**（不含时钟抖动）', async () => {
     const { token } = await withFrozenDateNow(() =>
       signAccessToken(USER_ID, CLIENT_A, 'openid'),

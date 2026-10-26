@@ -25,8 +25,8 @@ export interface PortalJwtClaims extends JWTPayload {
   /** Token 唯一标识（用于 jti 黑名单撤销） */
   jti: string;
   /**
-   * 登录会话绑定的授权请求 session_id（仅 LoginSession 携带；H-02）。
-   * authorize 分支 A 用它拒绝"被第三方注入的 session_id"。
+   * 会话绑定：LoginSession 为授权请求 session_id（H-02）；AccessToken 为
+   * 当前 refresh 会话行 id（个人中心“当前设备”标记）。二者都只在对应 typ 下使用。
    */
   sid?: string;
   /** OAuth 已授予 scope（空格分隔） */

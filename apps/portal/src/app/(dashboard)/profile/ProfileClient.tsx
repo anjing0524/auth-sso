@@ -64,6 +64,8 @@ interface ProfileClientProps {
     createdAt: string;
     expiresAt: string;
     authTime: string | null;
+    /** 当前浏览器设备（AT sid 匹配） */
+    isCurrent?: boolean;
   }>;
 }
 
@@ -452,17 +454,26 @@ export default function ProfileClient({
                     {visibleSessions.map((item) => (
                       <li key={item.id} className="flex items-start justify-between gap-2 px-2 py-1.5">
                         <div className="min-w-0">
-                          <p className="truncate font-mono text-[11px]">{item.clientId}</p>
+                          <p className="flex items-center gap-1.5 truncate font-mono text-[11px]">
+                            {item.clientId}
+                            {item.isCurrent && <Badge variant="success" className="shrink-0 text-[9px]">当前设备</Badge>}
+                          </p>
                           <p className="truncate text-[10px] text-muted-foreground">登录于 {formatDateTime(item.createdAt)} · #{item.id.slice(0, 8)}</p>
                           <p className="truncate text-[10px] text-muted-foreground">scope: {item.scopes} · 到期 {formatDateTime(item.expiresAt)}</p>
                         </div>
-                        <Button
-                          variant="ghost" size="sm" className="h-6 shrink-0 px-1.5 text-[10px] text-destructive hover:bg-destructive/10"
-                          aria-label={`撤销会话 ${formatDateTime(item.createdAt)}（${item.clientId} · ${item.id.slice(0, 8)}）`}
-                          onClick={() => setRevokeTarget(item.id)}
-                        >
-                          撤销
-                        </Button>
+                        {item.isCurrent ? (
+                          <span className="shrink-0 text-[10px] text-muted-foreground" title="当前设备请使用下方「退出当前会话」">
+                            当前设备
+                          </span>
+                        ) : (
+                          <Button
+                            variant="ghost" size="sm" className="h-6 shrink-0 px-1.5 text-[10px] text-destructive hover:bg-destructive/10"
+                            aria-label={`撤销会话 ${formatDateTime(item.createdAt)}（${item.clientId} · ${item.id.slice(0, 8)}）`}
+                            onClick={() => setRevokeTarget(item.id)}
+                          >
+                            撤销
+                          </Button>
+                        )}
                       </li>
                     ))}
                   </ul>

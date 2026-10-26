@@ -37,12 +37,12 @@ async function ProfileContent() {
 
   const cookieStore = await cookies();
   const jwt = cookieStore.get(COOKIE_NAMES.JWT)?.value;
-  const [user, permCtx, claims, headerStore, sessions] = await Promise.all([
+  const claims = jwt ? await verifyAccessToken(jwt, PORTAL_CLIENT_ID) : null;
+  const [user, permCtx, headerStore, sessions] = await Promise.all([
     getOwnUser(identity.userId),
     getUserPermissionContext(identity.userId).then(toPermissionContextOrNull),
-    jwt ? verifyAccessToken(jwt, PORTAL_CLIENT_ID) : Promise.resolve(null),
     headers(),
-    getOwnSessions(identity.userId),
+    getOwnSessions(identity.userId, typeof claims?.sid === 'string' ? claims.sid : undefined),
   ]);
   const session = claims
     ? {

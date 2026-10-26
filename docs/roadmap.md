@@ -21,6 +21,8 @@
 
 ## 变更记录
 
+- 2026-10-26（续一百六十二）: **当前设备标记（sid 方案）**。此前因 Gateway 在受保护路径剥离 refresh cookie，Portal 无法读取当前会话；改用签发链路：AT 增 `sid` claim（= 当前 refresh 行 id），授权码兑换生成 sessionId 并落 RT 行；轮换时 `sid=newRtId`。**UI**：个人中心用 `claims.sid` 与会话 id 比对，显示「当前设备」徽章并隐藏撤销（引导用「退出当前会话」）。**验证**：API 单测 sid 写入/缺省；e2e 两台设备当前设备标记正确，撤销最新会话后两台设备该行均消失；全量 **1248 passed**、e2e **13/13（42.8s）**、a11y 0、measure 0；typecheck/lint/build 0。
+
 - 2026-10-26（续一百六十一）: **200% 缩放/短视口弹窗裁切修复**。模拟 1440×900 的 200% 缩放（720×450）：「新建用户」弹窗高 546px，top=-48、bottom=498，标题/关闭/提交均在视口外。**修复**：`DialogContent` 加 `max-h-[calc(100dvh-2rem)] overflow-y-auto`；`DialogFooter` 加 `sticky bottom-0`。常规高度仍不滚动；仅内容真实超出时允许受限滚动，主操作始终可见。**验证**：720×450 top 16 / bottom 434、clipped=false、页脚/提交可见；390×844 scroll=false 不变；全量 **1246 passed**、e2e **13/13（45.1s）**、a11y 0、measure 0。
 
 - 2026-10-26（续一百六十）: **弹窗页脚 4px 溢出修复（全局）**。390 巡检编辑资料/重置密码/删除用户/删除权限：内容未超视口，但 `scrollHeight>clientHeight`，截图页脚比圆角卡片宽/高 4px——`DialogContent p-5` 与 `DialogFooter -mx-6 -mb-6 p-6` 不一致。**修复**：`DialogFooter` 统一为 `-mx-5 -mb-5 p-5`，与内容 padding/圆角对齐；55 处使用全局受益。**验证**：4 类弹窗 `scroll=false`、内部元素越界 0；截图页脚与卡片对齐；全量 **1245 passed**、e2e **13/13（44.3s）**、a11y 0、measure 0。
