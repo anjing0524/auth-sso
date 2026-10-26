@@ -524,3 +524,18 @@ describe('权限点批量删除（2026-10-26，第二十一轮）', () => {
     expect(action).toContain('MAX_BULK');
   });
 });
+
+describe('应用最近使用/排序（2026-10-26，第二十二轮）', () => {
+  it('列表聚合 token 最近签发时间，支持最近创建/更新/名称排序', () => {
+    const data = read('src/app/(dashboard)/clients/data.ts');
+    expect(data).toContain('lastUsedAt');
+    expect(data).toContain('schema.refreshTokens.createdAt');
+    expect(data).toContain("params.sort === 'name'");
+    const table = read('src/app/(dashboard)/clients/components/ClientsTable.tsx');
+    expect(table).toContain('最近使用');
+    expect(table).toContain('应用排序');
+    expect(table).toContain('按名称');
+    const page = read('src/app/(dashboard)/clients/page.tsx');
+    expect(page).toContain("['recent', 'updated', 'name']");
+  });
+});

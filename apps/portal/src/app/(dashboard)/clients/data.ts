@@ -5,7 +5,7 @@ import 'server-only';
 
 import { cacheLife, cacheTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
-import { ilike, eq, or, desc, and, gt, isNull } from 'drizzle-orm';
+import { ilike, eq, or, desc, asc, and, gt, isNull, inArray, max } from 'drizzle-orm';
 import { ENTITY_STATUS_VALUES, type EntityStatus } from '@auth-sso/contracts';
 import { asEntityStatus } from '@/lib/type-guards';
 import { withPagination, countRows, offsetFor, normalizePagination } from '@/lib/pagination';
@@ -29,6 +29,8 @@ export interface ClientDTO {
   status: EntityStatus;
   createdAt: string;
   updatedAt: string | null;
+  /** 最近一次签发 token 的时间（判断应用是否仍在使用；null=从未使用） */
+  lastUsedAt?: string | null;
 }
 
 /** Client 行 → DTO（日期序列化）；列表与详情共用 */
@@ -70,6 +72,8 @@ export interface ClientListParams {
   pageSize: number;
   keyword: string;
   status: string;
+  /** 排序：recent（最近创建，默认）| updated（最近更新）| name（名称） */
+  sort?: string;
 }
 
 export async function getClients(params: ClientListParams) {
@@ -80,16 +84,33 @@ export async function getClients(params: ClientListParams) {
   const { keyword, status } = params;
   const { page, pageSize } = normalizePagination(params.page, params.pageSize);
   const whereClause = buildClientConditions(keyword, status);
+  const orderBy = params.sort === 'name'
+    ? [asc(schema.clients.name)]
+    : params.sort === 'updated'
+      ? [desc(schema.clients.updatedAt)]
+      : [desc(schema.clients.createdAt)];
 
-  return withPagination(
+  const result = await withPagination(
     page,
     pageSize,
     db.select().from(schema.clients).where(whereClause)
-      .orderBy(desc(schema.clients.createdAt))
+      .orderBy(...orderBy)
       .limit(pageSize).offset(offsetFor(page, pageSize)),
     countRows(schema.clients, whereClause),
     toClientDTO,
   );
+  // 最近使用：按当前页 clientId 聚合 refresh_tokens 的最后签发时间（避免全表）
+  const ids = result.data.map((c) => c.clientId);
+  const usage = ids.length === 0 ? [] : await db
+    .select({ clientId: schema.refreshTokens.clientId, lastUsedAt: max(schema.refreshTokens.createdAt) })
+    .from(schema.refreshTokens)
+    .where(inArray(schema.refreshTokens.clientId, ids))
+    .groupBy(schema.refreshTokens.clientId);
+  const lastUsed = new Map(usage.map((u) => [u.clientId, u.lastUsedAt?.toISOString() ?? null]));
+  return {
+    ...result,
+    data: result.data.map((c) => ({ ...c, lastUsedAt: lastUsed.get(c.clientId) ?? null })),
+  };
 }
 
 /**

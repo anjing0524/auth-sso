@@ -24,6 +24,7 @@ import {
 } from '@/components/ui/dialog';
 import { EmptyState } from '@/components/shared/empty-state';
 import { enableStatus } from '@/lib/status-label';
+import { formatDate } from '@/lib/format-date';
 import { CLIENT_PERMISSIONS, PORTAL_CLIENT_ID } from '@auth-sso/contracts';
 import { deleteClientAction } from '../actions';
 
@@ -50,6 +51,8 @@ interface ClientRow {
   logoUrl: string | null;
   status: string;
   createdAt: string;
+  /** 最近一次 token 签发时间；null=从未使用 */
+  lastUsedAt?: string | null;
 }
 
 interface Props {
@@ -58,19 +61,27 @@ interface Props {
   initialKeyword: string;
   /** 状态筛选：'' | ACTIVE | DISABLED */
   initialStatus?: string;
+  /** 排序：recent | updated | name */
+  initialSort?: string;
   /** 是否处于搜索态（U-G02：空态文案与「清除筛选」出口据此区分） */
   isFiltered?: boolean;
   /** 「清除筛选」目标地址（回第 1 页、清空 keyword） */
   clearHref?: string;
 }
 
-export default function ClientsTable({ clients, pagination, initialKeyword, initialStatus = '', isFiltered = false, clearHref = '/clients' }: Props) {
+export default function ClientsTable({ clients, pagination, initialKeyword, initialStatus = '', initialSort = 'recent', isFiltered = false, clearHref = '/clients' }: Props) {
   const router = useRouter();
   const [keyword, setKeyword] = useState(initialKeyword);
   const searchParams = useSearchParams();
   const applyStatus = (value: string) => {
     const params = new URLSearchParams(searchParams.toString());
     if (value) params.set('status', value); else params.delete('status');
+    params.set('page', '1');
+    startTransition(() => router.push(`/clients?${params.toString()}`));
+  };
+  const applySort = (value: string) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (value && value !== 'recent') params.set('sort', value); else params.delete('sort');
     params.set('page', '1');
     startTransition(() => router.push(`/clients?${params.toString()}`));
   };
@@ -157,6 +168,7 @@ export default function ClientsTable({ clients, pagination, initialKeyword, init
     { key: 'detail', header: '应用详情', className: 'w-[280px]' },
     { key: 'clientId', header: '身份标识 (Client ID)' },
     { key: 'redirectUris', header: '回调白名单 (Redirect URIs)' },
+    { key: 'lastUsed', header: '最近使用', className: 'hidden w-[110px] md:table-cell' },
     { key: 'status', header: '运行状态' },
     { key: 'actions', header: '操作', className: 'text-right' },
   ];
@@ -177,6 +189,18 @@ export default function ClientsTable({ clients, pagination, initialKeyword, init
               <SelectItem value="ALL">全部状态</SelectItem>
               <SelectItem value="ACTIVE">运行中</SelectItem>
               <SelectItem value="DISABLED">已禁用</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={initialSort} onValueChange={applySort} disabled={isPending}>
+            <SelectTrigger aria-label="应用排序" className="w-full md:w-32">
+              <SelectValue>
+                {initialSort === 'name' ? '按名称' : initialSort === 'updated' ? '最近更新' : '最近创建'}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="recent">最近创建</SelectItem>
+              <SelectItem value="updated">最近更新</SelectItem>
+              <SelectItem value="name">按名称</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -257,6 +281,11 @@ export default function ClientsTable({ clients, pagination, initialKeyword, init
             <Badge variant="secondary">+{client.redirectUris.length - 1}</Badge>
           )}
         </div>
+      </TableCell>
+      <TableCell className="hidden md:table-cell">
+        <span className="text-[12px] text-muted-foreground" title={client.lastUsedAt ?? '尚未签发过 token'}>
+          {client.lastUsedAt ? formatDate(client.lastUsedAt) : '从未'}
+        </span>
       </TableCell>
       <TableCell>
         <Badge variant={enableStatus(client.status).variant}>

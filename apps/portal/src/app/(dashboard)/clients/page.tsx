@@ -22,6 +22,7 @@ interface PageProps {
   searchParams: Promise<{
     keyword?: string;
     status?: string;
+    sort?: string;
     page?: string;
   }>;
 }
@@ -31,6 +32,7 @@ export default async function ClientsPage({ searchParams }: PageProps) {
   const keyword = params.keyword || '';
   // 状态白名单：非法值不得下沉到 PG enum（22P02 → 500）
   const status = params.status === 'ACTIVE' || params.status === 'DISABLED' ? params.status : '';
+  const sort = (['recent', 'updated', 'name'] as const).includes(params.sort as never) ? (params.sort as string) : 'recent';
   const page = clampPage(params.page);
 
   const { data: clients, pagination } = await getClients({
@@ -38,6 +40,7 @@ export default async function ClientsPage({ searchParams }: PageProps) {
     pageSize: 20,
     keyword,
     status,
+    sort,
   });
 
   // U-G02：搜索无结果与"系统还没有应用"是两种语义（空态文案/出口不同）。
@@ -45,7 +48,7 @@ export default async function ClientsPage({ searchParams }: PageProps) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
-      <ClientsTable clients={clients} pagination={pagination} initialKeyword={keyword} initialStatus={status} isFiltered={isFiltered} clearHref="/clients" />
+      <ClientsTable clients={clients} pagination={pagination} initialKeyword={keyword} initialStatus={status} initialSort={sort} isFiltered={isFiltered} clearHref="/clients" />
     </div>
   );
 }
