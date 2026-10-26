@@ -390,3 +390,14 @@ describe('个人中心会话逐个撤销（2026-10-26，第十一轮）', () => 
     expect(action).toContain('withAuth');
   });
 });
+
+describe('用户详情"看人"完整性（2026-10-26，第十二轮）', () => {
+  it('直接展示角色、未分配语义、最近登录与邮箱验证', () => {
+    const src = read('src/app/(dashboard)/users/[id]/UserDetailForm.tsx');
+    expect(src).toContain('角色（');
+    expect(src).toContain('未分配角色');
+    expect(src).toContain('最近登录');
+    expect(src).toContain('邮箱验证');
+    expect(src).toContain('serverUser.roles');
+  });
+});

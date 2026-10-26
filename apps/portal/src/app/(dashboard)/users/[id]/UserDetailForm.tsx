@@ -19,6 +19,7 @@ import {
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useFieldFailure } from '@/hooks/use-field-failure';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -74,6 +75,10 @@ export default function UserDetailForm({ id, initialUser: serverUser, canUpdate 
   };
   const deptName = (serverUser.deptName as string) || null;
   const createdAt = serverUser.createdAt as string;
+  const lastLoginAt = (serverUser.lastLoginAt as string | null) ?? null;
+  const emailVerified = Boolean(serverUser.emailVerified);
+  // getUser 读口已返回角色（含删除标记），这里只做展示，不额外查询
+  const roles = (serverUser.roles as Array<{ id: string; code: string; name: string }> | undefined) ?? [];
 
   const handleUpdate = async () => {
     setSaving(true);
@@ -264,15 +269,30 @@ export default function UserDetailForm({ id, initialUser: serverUser, canUpdate 
                   <span className="text-[11px] text-muted-foreground">所属部门</span>
                   <span className="text-[13px] font-medium">{deptName || '未分配'}</span>
                 </div>
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-[11px] text-muted-foreground">角色</span>
-                  <PermissionGuard permission={USER_PERMISSIONS.ASSIGN_ROLE}>
-                    <Button asChild variant="outline" size="sm">
-                      <Link href={`/users/${id}/roles`}>
-                        <Shield className="mr-1.5 h-3.5 w-3.5" /> 分配角色
-                      </Link>
-                    </Button>
-                  </PermissionGuard>
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[11px] text-muted-foreground">角色（{roles.length}）</span>
+                    <PermissionGuard permission={USER_PERMISSIONS.ASSIGN_ROLE}>
+                      <Button asChild variant="outline" size="sm">
+                        <Link href={`/users/${id}/roles`}>
+                          <Shield className="mr-1.5 h-3.5 w-3.5" /> 管理角色
+                        </Link>
+                      </Button>
+                    </PermissionGuard>
+                  </div>
+                  {roles.length === 0 ? (
+                    <p className="rounded border border-dashed px-2 py-2 text-[11px] text-muted-foreground">
+                      未分配角色：该用户登录后只能看到基础页面。
+                    </p>
+                  ) : (
+                    <div className="flex flex-wrap gap-1">
+                      {roles.map((r) => (
+                        <span key={r.id} title={r.code} className="rounded border border-border/60 bg-muted/40 px-1.5 py-0.5 text-[11px] text-foreground">
+                          {r.name}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <p className="text-[11px] leading-5 text-muted-foreground">
                   角色决定可访问的菜单与操作权限；部门决定数据范围（子树）。
@@ -296,6 +316,14 @@ export default function UserDetailForm({ id, initialUser: serverUser, canUpdate 
                       <Copy className="h-3.5 w-3.5" />
                     </Button>
                   </div>
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] text-muted-foreground">邮箱验证</span>
+                  <Badge variant={emailVerified ? 'success' : 'secondary'} className="text-[10px]">{emailVerified ? '已验证' : '未验证'}</Badge>
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] text-muted-foreground">最近登录</span>
+                  <span className="text-[13px]">{lastLoginAt ? formatDateTime(lastLoginAt) : '从未登录'}</span>
                 </div>
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-[11px] text-muted-foreground">创建于</span>
