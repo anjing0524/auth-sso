@@ -80,7 +80,7 @@ export function ClientInfoSection({
           </CardHeader>
           <CardContent className="space-y-3 p-3">
             {readOnly ? (
-              <div className="rounded-md border border-warning/30 bg-warning/10 px-2.5 py-2 text-[11px] leading-5 text-warning">
+              <div className="rounded-md border border-badge-warning-fg/30 bg-badge-warning-bg px-2.5 py-2 text-[11px] leading-5 text-badge-warning-fg">
                 这是 <strong>Portal 自身登录客户端</strong>：修改配置、轮换 Secret、禁用或注销都会中断全站登录，因此为只读。
               </div>
             ) : null}
@@ -229,7 +229,7 @@ export function ClientInfoSection({
               <p className="text-[11px] text-muted-foreground">Client Secret</p>
               {newSecret ? (
                 <div className="space-y-2">
-                  <div className="rounded-md border border-warning/20 bg-warning/10 px-2 py-1.5 text-[11px] text-warning">
+                  <div className="rounded-md border border-badge-warning-fg/20 bg-badge-warning-bg px-2 py-1.5 text-[11px] text-badge-warning-fg">
                     新 Secret 仅显示这一次，请立即保存。
                   </div>
                   <div className="flex items-center gap-1.5">

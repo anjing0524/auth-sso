@@ -43,13 +43,13 @@ export const instant = false;
 export const metadata = { title: '审计日志 | Auth-SSO' };
 const PAGE_SIZE = 20;
 
-/** 登录事件 -> 徽章配色（使用 design token，支持暗黑模式） */
-const EVENT_TYPE_COLORS: Record<string, string> = {
-  LOGIN_SUCCESS: 'bg-success/10 text-success dark:bg-success/20 dark:text-success',
-  LOGIN_FAILED: 'bg-destructive/10 text-destructive dark:bg-destructive/20 dark:text-destructive',
-  LOGOUT: 'bg-muted text-muted-foreground',
-  TOKEN_REFRESH: 'bg-info/10 text-info dark:bg-info/20 dark:text-info',
-  TOKEN_REFRESH_FAILED: 'bg-warning/10 text-warning dark:bg-warning/20 dark:text-warning',
+/** 登录事件 → Badge 语义变体（软底 token 的前景已满足 WCAG 4.5:1） */
+const EVENT_TYPE_VARIANTS: Record<string, 'success' | 'destructive' | 'secondary' | 'outline' | 'warning'> = {
+  LOGIN_SUCCESS: 'success',
+  LOGIN_FAILED: 'destructive',
+  LOGOUT: 'secondary',
+  TOKEN_REFRESH: 'outline',
+  TOKEN_REFRESH_FAILED: 'warning',
 };
 
 interface PageProps {
@@ -277,7 +277,7 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
                           {loginLog.username}
                         </TableCell>
                         <TableCell>
-                          <Badge className={`border-none ${EVENT_TYPE_COLORS[loginLog.eventType] || 'bg-muted text-muted-foreground'}`}>
+                          <Badge variant={EVENT_TYPE_VARIANTS[loginLog.eventType] ?? 'secondary'}>
                             {LOGIN_EVENT_LABELS[loginLog.eventType as keyof typeof LOGIN_EVENT_LABELS] || loginLog.eventType}
                           </Badge>
                         </TableCell>

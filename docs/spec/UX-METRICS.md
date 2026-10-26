@@ -184,3 +184,38 @@
 - **弹窗**：用户创建 550、角色创建 404、权限删除 228，均 ≤600 视口且无内部滚动。
 - **仍存在的非布局缺口**：建号→分配→登录 e2e 未固化；审计 USER_CREATE 未记录 targetUserId；角色按权限数排序未做。
 
+## 7. 无障碍抽检（2026-10-26）
+
+> 工具：`node scripts/ux/a11y.mjs`（Playwright + canvas sRGB 合成；正确处理 oklch/lab；跳过 `aria-hidden` 装饰元素）。
+
+### 7.1 对比度（正文 ≥4.5:1 / 大字 ≥3:1）
+
+| 路由 | 修复前失败项（示例） | 修复后 |
+|---|---|---|
+| /dashboard | muted 文字在 muted 底 4.35（K 快捷键提示） | **0** |
+| /users | 同上 4.35 | **0** |
+| /audit-logs | 「登录成功」软底徽章 **2.42**；非激活页签 4.35 | **0** |
+| /profile | muted 文字 4.35 | **0** |
+| /permissions | —（抽检新增） | **0** |
+
+修复：
+- `--muted-foreground` 0.556→0.50、`--destructive` 0.577→0.52（全局 token，浅色模式）
+- 审计登录事件徽章改用语义 `Badge` 变体（success/warning 软底 token 自带达标前景），不再用亮色 `text-success` 叠 `bg-success/10`
+- 应用详情警告块改用 `badge-warning-bg/fg`
+- PageHeader 装饰点改为 `aria-hidden` 后直接移除（无意义装饰不参与朗读/对比度）
+
+### 7.2 键盘可达性
+
+| 检查 | 结果 |
+|---|---|
+| 首个 Tab 焦点 | **「跳转到主内容」skip-link** |
+| 焦点可见 | 按钮/输入有 `boxShadow` 焦点环（`focus-visible`） |
+| Enter 打开弹窗 | 新建用户弹窗可键盘打开 |
+| Esc 关闭 + 焦点归还 | 关闭后焦点回到「新建用户」触发按钮 |
+
+### 7.3 说明与边界
+
+- 对比度按 canvas 合成后的实际前景/背景计算；渐变背景不参与（当前已无装饰渐变卡）。
+- 表单/复选框的可访问名来自 `label[for]`/`aria-label`；Base UI Checkbox 的内部 input 不计入"未命名"。
+- 未覆盖：读屏软件实机、放大 200% 重排、禁用态对比度（WCAG 不要求禁用态）。
+
