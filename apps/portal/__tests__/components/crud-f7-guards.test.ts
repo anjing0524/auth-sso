@@ -239,3 +239,13 @@ describe('审计调查筛选（2026-10-26，UX-GUIDELINES §3.5）', () => {
     expect(filters).toContain("params.set('range'");
   });
 });
+
+describe('应用详情分区（2026-10-26，UX-GUIDELINES §3.2）', () => {
+  it('按 资料/回调/令牌/凭证/状态 分区，并提供 scope/TTL 预设', () => {
+    const src = read('src/app/(dashboard)/clients/[id]/components/ClientInfoSection.tsx');
+    for (const t of ['应用资料', '登录与回调', '令牌有效期', '客户端凭证', '状态与时间']) expect(src).toContain(t);
+    expect(src).toContain('SCOPE_PRESETS');
+    expect(src).toContain('aria-pressed={active}');
+    expect(src).toContain('formatTTL');
+  });
+});

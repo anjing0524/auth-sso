@@ -173,11 +173,11 @@ export function ClientDetailClient({ client, initialTokens, canUpdate }: ClientD
 
   const meta = pendingAction ? CONFIRM_META[pendingAction] : null;
   return (
-    <div className="space-y-6">
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
       <PageHeader
         backHref="/clients"
         title={client.name}
-        description={`Client ID：${client.clientId}`}
+        description={`${client.status === 'ACTIVE' ? '已启用' : '已禁用'} · Client ID：${client.clientId}`}
         actions={
           <PermissionGuard permission={CLIENT_PERMISSIONS.UPDATE}>
             <div className="flex gap-3">
@@ -200,12 +200,12 @@ export function ClientDetailClient({ client, initialTokens, canUpdate }: ClientD
       />
 
       {/* 标签页：与 Tabs 组件同一套分段式视觉 */}
-      <div role="tablist" aria-label="应用详情" className="inline-flex h-10 items-center rounded-lg bg-muted p-1">
+      <div role="tablist" aria-label="应用详情" className="inline-flex h-8 items-center rounded-lg bg-muted p-0.5">
         <button
           role="tab"
           aria-selected={activeTab === 'info'}
           onClick={() => setActiveTab('info')}
-          className={`inline-flex h-8 items-center rounded-md px-3 text-sm font-medium transition-colors ${
+          className={`inline-flex h-7 items-center rounded-md px-2.5 text-xs font-medium transition-colors ${
             activeTab === 'info' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
           }`}
         >
@@ -215,7 +215,7 @@ export function ClientDetailClient({ client, initialTokens, canUpdate }: ClientD
           role="tab"
           aria-selected={activeTab === 'tokens'}
           onClick={() => setActiveTab('tokens')}
-          className={`inline-flex h-8 items-center rounded-md px-3 text-sm font-medium transition-colors ${
+          className={`inline-flex h-7 items-center rounded-md px-2.5 text-xs font-medium transition-colors ${
             activeTab === 'tokens' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
           }`}
         >
