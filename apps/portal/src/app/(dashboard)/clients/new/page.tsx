@@ -274,12 +274,16 @@ export default function NewClientPage() {
                   onChange={e => setFormData({ ...formData, accessTokenTtl: parseInt(e.target.value) || 0 })}
                 />
                 <div className="flex gap-1.5">
-                  {[{ v: 1800, t: '30 分钟' }, { v: 3600, t: '1 小时' }, { v: 86400, t: '24 小时' }].map((p) => (
-                    <Button key={p.v} type="button" variant="outline" size="sm" className="h-6 px-2 text-[11px]"
-                      onClick={() => setFormData({ ...formData, accessTokenTtl: p.v })}>
-                      {p.t}
-                    </Button>
-                  ))}
+                  {[{ v: 1800, t: '30 分钟' }, { v: 3600, t: '1 小时' }, { v: 86400, t: '24 小时' }].map((p) => {
+                    const active = formData.accessTokenTtl === p.v;
+                    return (
+                      <Button key={p.v} type="button" variant={active ? 'default' : 'outline'} size="sm"
+                        aria-pressed={active} className="h-6 px-2 text-[11px]"
+                        onClick={() => setFormData({ ...formData, accessTokenTtl: p.v })}>
+                        {p.t}
+                      </Button>
+                    );
+                  })}
                 </div>
               </div>
               <div className="space-y-1.5">
@@ -292,12 +296,16 @@ export default function NewClientPage() {
                   onChange={e => setFormData({ ...formData, refreshTokenTtl: parseInt(e.target.value) || 0 })}
                 />
                 <div className="flex gap-1.5">
-                  {[{ v: 86400, t: '1 天' }, { v: 604800, t: '7 天' }, { v: 2592000, t: '30 天' }].map((p) => (
-                    <Button key={p.v} type="button" variant="outline" size="sm" className="h-6 px-2 text-[11px]"
-                      onClick={() => setFormData({ ...formData, refreshTokenTtl: p.v })}>
-                      {p.t}
-                    </Button>
-                  ))}
+                  {[{ v: 86400, t: '1 天' }, { v: 604800, t: '7 天' }, { v: 2592000, t: '30 天' }].map((p) => {
+                    const active = formData.refreshTokenTtl === p.v;
+                    return (
+                      <Button key={p.v} type="button" variant={active ? 'default' : 'outline'} size="sm"
+                        aria-pressed={active} className="h-6 px-2 text-[11px]"
+                        onClick={() => setFormData({ ...formData, refreshTokenTtl: p.v })}>
+                        {p.t}
+                      </Button>
+                    );
+                  })}
                 </div>
               </div>
               <div className="rounded-md border border-border/60 bg-muted/30 p-2.5 text-[11px] leading-5 text-muted-foreground">

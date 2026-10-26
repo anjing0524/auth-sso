@@ -21,6 +21,8 @@
 
 ## 变更记录
 
+- 2026-10-26（续一百四十七）: **应用注册 TTL 选中态 + 注册闭环 e2e**。**①TTL 预设可辨认**：Access/Refresh 有效期预设按钮此前全部同款描边，用户无法判断当前值是否命中；按 `formData` 值切 default/outline 并加 `aria-pressed`。**②注册 e2e**：新增 `tests/e2e/client-registration.spec.ts`——填名/回调 → 确认注册 → 一次性凭证弹窗（Client ID + Secret 长度校验）→ 复制 Secret（按钮变「已复制」）→ 前往列表 → 行内注销；finally 清理。**③验证**：e2e **12/12（34.6s）**；全量 vitest **1230 passed**；a11y 0；measure 0；执行后 e2e_app_* 残留 0；typecheck/lint/build 0。
+
 - 2026-10-26（续一百四十六）: **创建后下一步 + 工作台 24h 失败入口**。**①创建用户成功引导**：新用户默认无角色（无法登录），此前 toast 只告知登录邮箱，管理员需自行找"分配角色"。现在成功 toast 增「分配角色」行动（仅 `user:assign_role` 显示），直达 `/users/<id>/roles`；e2e 生命周期改为走该行动，验证建号→授权不断链。**②工作台 24h 失败**：风险条新增「近 24h 登录失败 N 次」→ `/audit-logs?tab=login&eventType=LOGIN_FAILED&range=24h`，与 7 日失败卡互补；1139×600 内容区无滚动。**验证**：全量 **1230 passed**；e2e **11/11（30.8s，lifecycle 走创建 CTA）**；a11y 0；measure 0；typecheck/lint/build 0。
 
 - 2026-10-26（续一百四十五）: **用户列表补“可登录性”信号（角色数/未分配警示）**。此前列表只有账号状态：`正常` 但未分配角色的用户实际无法登录门户，管理员只能逐个进详情才能发现。**①读模型**：`getUsers` 对当前页批量聚合 `user_roles` 角色数（不 JOIN 全表），DTO 增 `roleCount`。**②UI**：桌面新增「角色」列——0 显示 warning「未分配」，>0 显示「N 个角色」；移动端在身份行状态徽章旁显示「未分配角色」；行内「分配角色」入口保留。**③实测**：qa_wang/qa_lin 显示「未分配」、admin「1 个角色」；1440/1139/390 无横向溢出，390 表宽 364px。**验证**：全量 **1228 passed**；e2e **11/11（31.9s）**；a11y 0；measure 0（390 users chrome 35%、表宽 364）；typecheck/lint/build 0。

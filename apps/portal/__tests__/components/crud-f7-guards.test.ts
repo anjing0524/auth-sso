@@ -777,3 +777,13 @@ describe('创建后下一步与 24h 失败入口（续一百四十六）', () =>
     expect(page).toContain('eventType=LOGIN_FAILED&range=24h');
   });
 });
+
+describe('应用注册 TTL 选中态（续一百四十七）', () => {
+  it('TTL 预设按钮有 aria-pressed 选中态，不再是无法辨认的等宽按钮', () => {
+    const src = read('src/app/(dashboard)/clients/new/page.tsx');
+    expect(src).toContain('aria-pressed={active}');
+    expect(src).toContain("variant={active ? 'default' : 'outline'}");
+    expect(src).toContain("formData.accessTokenTtl === p.v");
+    expect(src).toContain("formData.refreshTokenTtl === p.v");
+  });
+});
