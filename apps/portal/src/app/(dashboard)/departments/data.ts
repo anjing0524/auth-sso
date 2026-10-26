@@ -135,6 +135,7 @@ export async function getDepartmentMembers(departmentId: string, scope: UserScop
     .from(schema.users)
     .where(and(
       eq(schema.users.deptId, departmentId),
+      isNull(schema.users.deletedAt),
       scopeFilter(scope, schema.users.deptId),
     ));
 }
@@ -143,7 +144,7 @@ export async function getDepartmentMembers(departmentId: string, scope: UserScop
 export interface DepartmentDeletionStats {
   /** 直接子部门数 */
   childCount: number;
-  /** 直属用户数（含软删，与服务端删除守卫 `count(*)` 同口径） */
+  /** 直属活跃用户数（软删除不计，与服务端删除守卫同口径） */
   userCount: number;
   /** 关联角色数 */
   roleCount: number;

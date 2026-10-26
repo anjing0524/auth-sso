@@ -50,7 +50,11 @@ export default function UserDetailForm({ id, initialUser: serverUser, canUpdate 
     email: (user.email as string) || '',
     status: (user.status as string) || 'ACTIVE',
   });
+  const [savedForm, setSavedForm] = useState(form);
   const [saving, setSaving] = useState(false);
+  // 未保存修改：避免"没改也保存"产生无意义的审计记录，也避免误以为已保存
+  const isDirty =
+    form.name !== savedForm.name || form.email !== savedForm.email || form.status !== savedForm.status;
   // 失败处置只有一个入口（本表单不渲染 <FieldError> ⇒ 传空字段 ⇒ 一律 toast）
   const { reportFailure } = useFieldFailure();
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
@@ -84,6 +88,7 @@ export default function UserDetailForm({ id, initialUser: serverUser, canUpdate 
     setSaving(true);
     const res = await updateUserAction(id, form);
     if (res.success) {
+      setSavedForm(form);
       toast.success('用户信息更新成功');
       router.refresh(); // 刷新 Server Component 数据，prop 更新只读展示区
     } else {
@@ -99,6 +104,7 @@ export default function UserDetailForm({ id, initialUser: serverUser, canUpdate 
     if (res.success) {
       toast.success('用户已解锁');
       setForm((prev) => ({ ...prev, status: 'ACTIVE' }));
+      setSavedForm((prev) => ({ ...prev, status: 'ACTIVE' }));
       router.refresh();
     } else {
       reportFailure({ error: res.error, message: userFacingMessage(res, '解锁失败') });
@@ -135,9 +141,19 @@ export default function UserDetailForm({ id, initialUser: serverUser, canUpdate 
         description={`用户名：${username} · 状态：${STATUS_LABELS[form.status] ?? form.status}`}
         actions={
           <div className="flex flex-wrap items-center justify-start gap-2 lg:justify-end">
+            {isDirty && (
+              <span role="status" className="rounded bg-warning/10 px-2 py-1 text-[11px] font-medium text-warning">
+                未保存的修改
+              </span>
+            )}
             <PermissionGuard permission={USER_PERMISSIONS.UPDATE}>
-              <Button size="sm" onClick={handleUpdate} disabled={saving}>
-                {saving ? '保存中...' : <><Save className="h-3.5 w-3.5" /> 保存修改</>}
+              {isDirty && (
+                <Button variant="outline" size="sm" onClick={() => setForm(savedForm)} disabled={saving}>
+                  放弃修改
+                </Button>
+              )}
+              <Button size="sm" onClick={handleUpdate} disabled={saving || !isDirty}>
+                {saving ? '保存中...' : <><Save className="h-3.5 w-3.5" /> {isDirty ? '保存修改' : '无修改'}</>}
               </Button>
             </PermissionGuard>
           </div>
@@ -192,6 +208,12 @@ export default function UserDetailForm({ id, initialUser: serverUser, canUpdate 
                   </Select>
                   {(serverUser.status as string) === 'LOCKED' && (
                     <p className="text-[11px] text-muted-foreground">已锁定账号不可直接切换状态，请在下方「重置密码 / 解锁」中处理。</p>
+                  )}
+                  {form.status === 'DISABLED' && savedForm.status !== 'DISABLED' && (
+                    <p className="text-[11px] text-destructive">保存后将立即注销该用户所有活跃会话，并禁止其登录。</p>
+                  )}
+                  {form.status === 'ACTIVE' && savedForm.status === 'DISABLED' && (
+                    <p className="text-[11px] text-success">保存后恢复登录能力，原有角色保持不变。</p>
                   )}
                 </div>
               </CardContent>
@@ -356,8 +378,13 @@ export default function UserDetailForm({ id, initialUser: serverUser, canUpdate 
       {/* U-UD01：390px 下页头按钮组会被挤出视口；关键保存操作在移动端固定底部，避免"改完没法保存"。 */}
       {canUpdate && (
         <div className="sticky bottom-0 z-20 -mx-3 flex gap-2 border-t border-border bg-background/95 px-3 py-2 backdrop-blur lg:hidden">
-          <Button className="flex-1" onClick={handleUpdate} disabled={saving}>
-            {saving ? '保存中...' : <><Save className="h-4 w-4" /> 保存修改</>}
+          {isDirty && (
+            <Button variant="outline" className="flex-1" onClick={() => setForm(savedForm)} disabled={saving}>
+              放弃修改
+            </Button>
+          )}
+          <Button className="flex-1" onClick={handleUpdate} disabled={saving || !isDirty}>
+            {saving ? '保存中...' : <><Save className="h-4 w-4" /> {isDirty ? '保存修改' : '无修改'}</>}
           </Button>
         </div>
       )}

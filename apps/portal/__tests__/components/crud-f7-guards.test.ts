@@ -609,3 +609,37 @@ describe('审计详情独立页（2026-10-26，续一百三十七）', () => {
     expect(list).not.toContain('AuditLogDetailDialog');
   });
 });
+
+describe('弹窗不滚动（续一百三十八）', () => {
+  it('确认/成员弹窗不再使用 max-h + overflow-y-auto（内容过长改为摘要+页面入口）', () => {
+    const files = [
+      'src/app/(dashboard)/users/components/UserTable.tsx',
+      'src/app/(dashboard)/permissions/components/PermissionsTable.tsx',
+      'src/app/(dashboard)/roles/[id]/permissions/permissions-client.tsx',
+      'src/app/(dashboard)/users/[id]/roles/roles-client.tsx',
+    ];
+    for (const file of files) {
+      expect(read(file), file).not.toMatch(/max-h-(?:\d+|\[[^\]]+\])[^"\n]*overflow-y-auto/);
+    }
+  });
+  it('部门成员入口进入用户管理部门筛选（不再用可滚动成员弹窗）', () => {
+    const tree = read('src/app/(dashboard)/departments/components/DepartmentTree.tsx');
+    expect(tree).toContain('/users?deptId=');
+    expect(tree).not.toContain('DepartmentMembersDialog');
+    const data = read('src/app/(dashboard)/departments/data.ts');
+    expect(data).toContain('isNull(schema.users.deletedAt)');
+  });
+  it('用户详情有未保存状态与放弃修改，避免无改动保存', () => {
+    const src = read('src/app/(dashboard)/users/[id]/UserDetailForm.tsx');
+    expect(src).toContain('isDirty');
+    expect(src).toContain('未保存的修改');
+    expect(src).toContain('放弃修改');
+    expect(src).toContain('disabled={saving || !isDirty}');
+  });
+  it('角色权限页操作栏固定在底部，作用域操作与筛选分离', () => {
+    const src = read('src/app/(dashboard)/roles/[id]/permissions/permissions-client.tsx');
+    expect(src).toContain('待新增');
+    expect(src).toContain('权限模板');
+    expect(src).toContain('border-t bg-card');
+  });
+});

@@ -371,10 +371,6 @@ export default function RolePermissionsPage({ role }: RolePermissionsPageProps) 
             <Button variant="ghost" size="sm" onClick={() => setOnlyChanged((v) => !v)}>
               {onlyChanged ? '显示全部' : '仅看变更'}
             </Button>
-            <span className="flex items-center gap-1 text-[11px]">
-              <span className="rounded bg-success/10 px-1.5 py-0.5 font-medium text-success">待新增 +{addedIds.size}</span>
-              <span className="rounded bg-destructive/10 px-1.5 py-0.5 font-medium text-destructive">待移除 -{removedIds.size}</span>
-            </span>
             <div className="flex items-center gap-1">
               {([['ALL', '全部'], ['ACTIVE', '已启用'], ['DISABLED', '已禁用']] as const).map(([v, t]) => (
                 <button
@@ -388,59 +384,18 @@ export default function RolePermissionsPage({ role }: RolePermissionsPageProps) 
                 </button>
               ))}
             </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              disabled={role.isSystem || scopeItemIds.length === 0}
-              onClick={() => setIds(scopeItemIds, !allScopeSelected)}
-            >
-              {allScopeSelected ? '取消本域全选' : '全选本域'}
-            </Button>
-            <Button variant="ghost" size="sm" disabled={role.isSystem || scopeItemIds.length === 0} onClick={() => setIds(scopeItemIds, false)}>
-              清空本域
-            </Button>
-            <div className="ml-auto flex items-center gap-2">
-              <span className="text-xs text-muted-foreground">
-                总已选 <span className="font-semibold tabular-nums text-foreground">{assignedIds.size}</span>
-              </span>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm" disabled={loading || role.isSystem}>
-                    <Sparkles className="h-3.5 w-3.5" /> 权限模板
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-64">
-                  <DropdownMenuLabel>套用常用组合（可继续调整）</DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  {templateItems.map((t) => (
-                    <DropdownMenuItem
-                      key={t.id}
-                      disabled={t.ids.length === 0}
-                      onClick={() => {
-                        setAssignedIds(new Set(t.ids));
-                        setOnlyChanged(true);
-                        toast.success(`已套用「${t.name}」模板（${t.ids.length} 项），保存后生效`);
-                      }}
-                    >
-                      <div className="flex w-full items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="text-[13px] font-medium">{t.name}</p>
-                          <p className="truncate text-[11px] text-muted-foreground">{t.description}</p>
-                        </div>
-                        <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">{t.ids.length} 项</span>
-                      </div>
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-              <Button variant="outline" size="sm" asChild><Link href="/roles">取消</Link></Button>
+            {/* 作用域级批量操作与当前作用域绑定，放在右侧避免与筛选混排 */}
+            <div className="ml-auto flex items-center gap-1">
               <Button
+                variant="ghost"
                 size="sm"
-                onClick={() => setConfirmOpen(true)}
-                disabled={loading || saving || role.isSystem || changeCount === 0}
+                disabled={role.isSystem || scopeItemIds.length === 0}
+                onClick={() => setIds(scopeItemIds, !allScopeSelected)}
               >
-                <Save className="h-3.5 w-3.5" />
-                {saving ? '保存中...' : role.isSystem ? '系统角色只读' : changeCount === 0 ? '无变更' : `保存变更（${changeCount}）`}
+                {allScopeSelected ? '取消本域全选' : '全选本域'}
+              </Button>
+              <Button variant="ghost" size="sm" disabled={role.isSystem || scopeItemIds.length === 0} onClick={() => setIds(scopeItemIds, false)}>
+                清空本域
               </Button>
             </div>
           </div>
@@ -485,6 +440,58 @@ export default function RolePermissionsPage({ role }: RolePermissionsPageProps) 
               </div>
             )}
           </div>
+
+          {/* 底部固定操作栏：差异摘要 + 模板/取消/保存（列表独立滚动，不挤压内容） */}
+          <div className="flex flex-wrap items-center gap-2 border-t bg-card px-3 py-2">
+            <span className="text-xs text-muted-foreground">
+              总已选 <span className="font-semibold tabular-nums text-foreground">{assignedIds.size}</span>
+            </span>
+            <span className="flex items-center gap-1 text-[11px]">
+              <span className="rounded bg-success/10 px-1.5 py-0.5 font-medium text-success">待新增 {addedIds.size > 0 ? `+${addedIds.size}` : '0'}</span>
+              <span className="rounded bg-destructive/10 px-1.5 py-0.5 font-medium text-destructive">待移除 {removedIds.size > 0 ? `-${removedIds.size}` : '0'}</span>
+            </span>
+            <div className="ml-auto flex items-center gap-2">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" disabled={loading || role.isSystem}>
+                    <Sparkles className="h-3.5 w-3.5" /> 权限模板
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-64">
+                  <DropdownMenuLabel>套用常用组合（可继续调整）</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {templateItems.map((t) => (
+                    <DropdownMenuItem
+                      key={t.id}
+                      disabled={t.ids.length === 0}
+                      onClick={() => {
+                        setAssignedIds(new Set(t.ids));
+                        setOnlyChanged(true);
+                        toast.success(`已套用「${t.name}」模板（${t.ids.length} 项），保存后生效`);
+                      }}
+                    >
+                      <div className="flex w-full items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-[13px] font-medium">{t.name}</p>
+                          <p className="truncate text-[11px] text-muted-foreground">{t.description}</p>
+                        </div>
+                        <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">{t.ids.length} 项</span>
+                      </div>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <Button variant="outline" size="sm" asChild><Link href="/roles">取消</Link></Button>
+              <Button
+                size="sm"
+                onClick={() => setConfirmOpen(true)}
+                disabled={loading || saving || role.isSystem || changeCount === 0}
+              >
+                <Save className="h-3.5 w-3.5" />
+                {saving ? '保存中...' : role.isSystem ? '系统角色只读' : changeCount === 0 ? '无变更' : `保存变更（${changeCount}）`}
+              </Button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -497,7 +504,7 @@ export default function RolePermissionsPage({ role }: RolePermissionsPageProps) 
               角色「{role.name}」：将新增 {addedIds.size} 项、移除 {removedIds.size} 项权限；保存后绑定该角色的用户权限即时生效。
             </DialogDescription>
           </DialogHeader>
-          <div className="max-h-64 space-y-2 overflow-y-auto text-[12px]">
+          <div className="space-y-2 text-[12px]">
             {addedIds.size > 0 && (
               <div>
                 <p className="mb-1 font-medium text-success">待新增（{addedIds.size}）</p>

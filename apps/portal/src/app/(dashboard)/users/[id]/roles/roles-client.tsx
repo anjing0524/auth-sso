@@ -263,15 +263,16 @@ export default function UserRolesPage({ user }: UserRolesPageProps) {
               {allSelectedRolesEmpty && ' 注意：所选角色均无权限，保存后该用户将无法登录门户。'}
             </DialogDescription>
           </DialogHeader>
-          <div className="max-h-56 space-y-2 overflow-y-auto text-[12px]">
+          <div className="space-y-2 text-[12px]">
             {addedIds.size > 0 && (
               <div>
                 <p className="mb-1 font-medium text-success">待新增（{addedIds.size}）</p>
                 <ul className="space-y-0.5 text-muted-foreground">
-                  {[...addedIds].map((id) => {
+                  {[...addedIds].slice(0, 6).map((id) => {
                     const r = roles.find((x) => x.id === id);
                     return r ? <li key={id} className="truncate">{r.name} <span className="font-mono text-[11px]">({r.code})</span></li> : null;
                   })}
+                  {addedIds.size > 6 && <li className="text-muted-foreground">… 其余 {addedIds.size - 6} 个</li>}
                 </ul>
               </div>
             )}
@@ -279,10 +280,11 @@ export default function UserRolesPage({ user }: UserRolesPageProps) {
               <div>
                 <p className="mb-1 font-medium text-destructive">待移除（{removedIds.size}）</p>
                 <ul className="space-y-0.5 text-muted-foreground">
-                  {[...removedIds].map((id) => {
+                  {[...removedIds].slice(0, 6).map((id) => {
                     const r = roles.find((x) => x.id === id);
                     return r ? <li key={id} className="truncate">{r.name} <span className="font-mono text-[11px]">({r.code})</span></li> : null;
                   })}
+                  {removedIds.size > 6 && <li className="text-muted-foreground">… 其余 {removedIds.size - 6} 个</li>}
                 </ul>
               </div>
             )}

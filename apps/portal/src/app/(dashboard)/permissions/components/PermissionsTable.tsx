@@ -359,7 +359,7 @@ export default function PermissionsTable({ permissions, pagination, activeTab, i
           <p className="text-sm text-muted-foreground">
             内置权限会被跳过；删除目录/页面会级联删除其子菜单，并清除角色绑定、刷新受影响用户权限缓存。
           </p>
-          <ul className="max-h-40 space-y-0.5 overflow-y-auto text-[12px] text-muted-foreground">
+          <ul className="space-y-0.5 text-[12px] text-muted-foreground">
             {visibleChecked.slice(0, 8).map((p) => (
               <li key={p.id} className="truncate">{p.name} <span className="font-mono text-[11px]">({p.code})</span></li>
             ))}

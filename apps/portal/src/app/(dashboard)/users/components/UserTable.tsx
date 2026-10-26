@@ -374,7 +374,7 @@ export default function UserTable({ users, pagination, filters, isFiltered = fal
             {bulkTarget === 'DISABLED' ? '：禁用会立即撤销其所有活跃会话，无法登录' : '：恢复后用户可正常登录并保留原有角色'}。
           </DialogDescription>
         </DialogHeader>
-        <ul className="max-h-40 space-y-0.5 overflow-y-auto text-[12px] text-muted-foreground">
+        <ul className="space-y-0.5 text-[12px] text-muted-foreground">
           {users.filter((u) => selected.has(u.id)).slice(0, 8).map((u) => (
             <li key={u.id} className="truncate">{u.name} <span className="font-mono text-[11px]">({u.username})</span></li>
           ))}

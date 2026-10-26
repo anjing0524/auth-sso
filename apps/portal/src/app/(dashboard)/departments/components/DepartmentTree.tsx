@@ -4,6 +4,7 @@
  * 部门树交互组件 — 展开/折叠、搜索、增删改
  * 写操作通过 Server Actions 直调，不调 REST API
  */
+import Link from 'next/link';
 import React, { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
@@ -23,7 +24,6 @@ import { EmptyState } from '@/components/shared/empty-state';
 import { PermissionGuard } from '@/components/shared/permission-guard';
 import { DEPARTMENT_PERMISSIONS, USER_PERMISSIONS } from '@auth-sso/contracts';
 import { enableStatus } from '@/lib/status-label';
-import { DepartmentMembersDialog } from './DepartmentMembersDialog';
 import { createDepartmentAction, updateDepartmentAction, deleteDepartmentAction } from '../actions';
 import { bulkMoveDepartmentsAction } from '../bulk-actions';
 import { useFieldFailure } from '@/hooks/use-field-failure';
@@ -103,7 +103,6 @@ export default function DepartmentTree({ departments, deletionStats = {} }: Prop
   const [selected, setSelected] = useState<DeptTreeNode | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<DeptTreeNode | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [membersTarget, setMembersTarget] = useState<DeptTreeNode | null>(null);
   const [form, setForm] = useState({ name: '', code: '', sort: 0, parentId: '' as string | null });
   /** 具体错误码（如 DEPARTMENT_ALREADY_EXISTS）落到对应输入框（#92） */
   const { fieldError, reportFailure, clearFailure } = useFieldFailure(['code']);
@@ -324,8 +323,10 @@ export default function DepartmentTree({ departments, deletionStats = {} }: Prop
                   <Button variant="ghost" size="sm" className="h-7 gap-1.5 px-2" aria-label={`添加子部门 ${dept.name}`} onClick={() => openAdd(dept.id)} title="添加子部门"><Plus className="h-4 w-4" /><span>子部门</span></Button>
                 </PermissionGuard>
                 <PermissionGuard permission={USER_PERMISSIONS.LIST}>
-                  <Button variant="ghost" size="sm" className="h-7 gap-1.5 px-2" aria-label={`查看成员 ${dept.name}`} title="查看成员" onClick={() => setMembersTarget(dept)}>
-                    <Users className="h-3.5 w-3.5" /><span>成员 {deletionStats[dept.id]?.userCount ?? 0}</span>
+                  <Button asChild variant="ghost" size="sm" className="h-7 gap-1.5 px-2" aria-label={`查看成员 ${dept.name}`} title="在用户管理中查看直属成员">
+                    <Link href={`/users?deptId=${encodeURIComponent(dept.id)}`}>
+                      <Users className="h-3.5 w-3.5" /><span>成员 {deletionStats[dept.id]?.userCount ?? 0}</span>
+                    </Link>
                   </Button>
                 </PermissionGuard>
                 <PermissionGuard permission={DEPARTMENT_PERMISSIONS.UPDATE}>
@@ -472,15 +473,6 @@ export default function DepartmentTree({ departments, deletionStats = {} }: Prop
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      {membersTarget && (
-        <DepartmentMembersDialog
-          open={!!membersTarget}
-          onOpenChange={(open) => { if (!open) setMembersTarget(null); }}
-          departmentId={membersTarget.id}
-          departmentName={membersTarget.name}
-        />
-      )}
     </Card>
   );
 }
