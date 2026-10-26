@@ -24,7 +24,7 @@ export default function PermissionsError({ error, reset }: ErrorProps) {
 
   return (
     <div className="flex items-center justify-center min-h-[60vh] p-8">
-      <Card className="max-w-md w-full border-none shadow-sm ring-1 ring-border/50 rounded-xl overflow-hidden text-center">
+      <Card className="max-w-md w-full border border-border/70 shadow-sm rounded-lg ring-0 overflow-hidden text-center">
         <CardHeader className="pb-2 pt-6">
           <div className="mx-auto p-3 bg-warning/10 rounded-xl w-fit mb-4">
             <AlertTriangle className="h-8 w-8 text-warning" />

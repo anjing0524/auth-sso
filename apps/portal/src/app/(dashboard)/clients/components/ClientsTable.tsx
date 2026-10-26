@@ -186,11 +186,11 @@ export default function ClientsTable({ clients, pagination, initialKeyword, isFi
           <div className="relative">
             <Avatar className="h-9 w-9 rounded-lg ring-2 ring-background shadow-sm border border-border/40">
               <AvatarImage src={client.logoUrl || ''} />
-              <AvatarFallback className="bg-gradient-to-br from-muted to-muted/50 text-muted-foreground font-black text-xs uppercase">
+              <AvatarFallback className="bg-gradient-to-br from-muted to-muted/50 text-muted-foreground font-semibold text-xs">
                 {avatarFallback(client.name)}
               </AvatarFallback>
             </Avatar>
-            <div className="absolute -bottom-1 -right-1 h-4 w-4 bg-card rounded-full flex items-center justify-center ring-1 ring-border/20 shadow-sm">
+            <div className="absolute -bottom-1 -right-1 h-4 w-4 bg-card rounded-full flex items-center justify-center border border-border/60 shadow-sm">
               <Globe className="h-2.5 w-2.5 text-primary" />
             </div>
           </div>

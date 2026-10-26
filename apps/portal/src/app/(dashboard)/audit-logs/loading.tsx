@@ -10,7 +10,7 @@ import { Card, CardContent } from '@/components/ui/card';
 
 export default function AuditLogsLoading() {
   return (
-    <div className="space-y-6 p-1 pt-2">
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
       {/* Header skeleton */}
       <div className="flex items-center justify-between px-1">
         <div className="space-y-2">
@@ -26,7 +26,7 @@ export default function AuditLogsLoading() {
       </div>
 
       {/* Content card skeleton */}
-      <Card className="border-none shadow-sm ring-1 ring-border/50 rounded-xl overflow-hidden">
+      <Card className="gap-0 overflow-hidden rounded-lg border border-border/70 py-0 shadow-sm ring-0">
         <CardContent className="p-0">
           <div className="space-y-0">
             {Array.from({ length: 8 }).map((_, i) => (

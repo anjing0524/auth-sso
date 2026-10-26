@@ -307,9 +307,9 @@ export default function RolePermissionsPage({ role }: RolePermissionsPageProps) 
             ) : (
               <>
                 {renderTree(tree.slice(0, 2))}
-                <div className="mt-2 px-2 py-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground/70">接口应用</div>
+                <div className="mt-2 px-2 py-1 text-[10px] font-medium tracking-wide text-muted-foreground/70">接口应用</div>
                 {renderTree(tree.filter((n) => n.kind === 'app'))}
-                <div className="mt-2 px-2 py-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground/70">菜单目录</div>
+                <div className="mt-2 px-2 py-1 text-[10px] font-medium tracking-wide text-muted-foreground/70">菜单目录</div>
                 {renderTree(tree.filter((n) => n.kind === 'dir' || n.kind === 'page'))}
               </>
             )}

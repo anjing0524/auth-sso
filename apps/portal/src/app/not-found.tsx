@@ -17,7 +17,7 @@ export default function NotFound() {
         <DynamicIcon name="FileText" className="h-8 w-8" />
       </div>
       <div className="space-y-2">
-        <p className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">404</p>
+        <p className="text-sm font-semibold text-muted-foreground">404</p>
         <h1 className="text-2xl font-bold tracking-tight">页面不存在</h1>
         <p className="text-sm text-muted-foreground">你访问的地址可能已被移动或删除。</p>
       </div>

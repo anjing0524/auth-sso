@@ -332,7 +332,7 @@ export default function ProfileClient({
           <div className="relative">
             <Avatar className="h-28 w-28 rounded-full border-4 border-card shadow-2xl ring-1 ring-primary/20 md:h-32 md:w-32">
               <AvatarImage src={user.picture ?? undefined} />
-              <AvatarFallback className="text-3xl font-black bg-gradient-to-br from-primary to-primary/70 text-primary-foreground">
+              <AvatarFallback className="text-3xl font-semibold bg-gradient-to-br from-primary to-primary/70 text-primary-foreground">
                 {user.name.charAt(0).toUpperCase()}
               </AvatarFallback>
             </Avatar>
@@ -362,9 +362,9 @@ export default function ProfileClient({
       <div className="grid gap-10 lg:grid-cols-3">
         {/* 2. 左侧：核心凭证卡片 */}
         <div className="lg:col-span-1 space-y-6">
-          <Card className="overflow-hidden rounded-xl border-none bg-muted/50 shadow-sm ring-1 ring-border/50">
+          <Card className="overflow-hidden rounded-lg border border-border/70 bg-muted/30 shadow-sm ring-0">
             <CardHeader className="bg-card/50 border-b py-6">
-              <CardTitle className="text-sm font-black uppercase tracking-[0.2em] text-muted-foreground flex items-center gap-2">
+              <CardTitle className="text-sm font-semibold tracking-[0.2em] text-muted-foreground flex items-center gap-2">
                 <Fingerprint className="h-4 w-4 text-primary" />
                 身份凭证
               </CardTitle>
@@ -391,24 +391,24 @@ export default function ProfileClient({
                 <Label>所属部门</Label>
                 <div className="flex items-center gap-3 p-1">
                   <div className="p-2 bg-primary/10 text-primary rounded-xl"><Building2 className="h-4 w-4" /></div>
-                  <span className="text-sm font-black text-foreground">{user.deptName || 'Global Operations'}</span>
+                  <span className="text-sm font-semibold text-foreground">{user.deptName || 'Global Operations'}</span>
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          <Card className="overflow-hidden rounded-xl border-none bg-gradient-to-br from-foreground to-foreground/80 text-background shadow-sm ring-1 ring-border/50">
+          <Card className="overflow-hidden rounded-xl border-none bg-gradient-to-br from-foreground to-foreground/80 text-background shadow-sm border border-border/70">
             <CardHeader className="pb-2">
-              <CardTitle className="text-xs font-bold uppercase tracking-widest text-muted-foreground">安全摘要</CardTitle>
+              <CardTitle className="type-meta">安全摘要</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4 pt-4">
               <div className="flex items-center justify-between">
                 <span className="text-sm opacity-60">有效角色</span>
-                <span className="text-sm font-black">{roles.length}</span>
+                <span className="text-sm font-semibold">{roles.length}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm opacity-60">权限点</span>
-                <span className="text-sm font-black">{permissions.length}</span>
+                <span className="text-sm font-semibold">{permissions.length}</span>
               </div>
               {/* FR-USR-10：自助修改密码入口 */}
               <ChangePasswordDialog />
@@ -425,7 +425,7 @@ export default function ProfileClient({
             </TabsList>
 
             <TabsContent value="permissions" className="pt-6 animate-in slide-in-from-bottom-4 duration-500">
-              <Card className="overflow-hidden rounded-xl border-none shadow-sm ring-1 ring-border/50">
+              <Card className="overflow-hidden rounded-lg border border-border/70 shadow-sm ring-0">
                 <CardHeader className="pt-6">
                   <div className="flex items-center justify-between">
                     <CardTitle className="flex items-center gap-3">
@@ -459,7 +459,7 @@ export default function ProfileClient({
             </TabsContent>
 
             <TabsContent value="security" className="pt-6">
-              <Card className="overflow-hidden rounded-xl border-none shadow-sm ring-1 ring-border/50">
+              <Card className="overflow-hidden rounded-lg border border-border/70 shadow-sm ring-0">
                 <CardHeader className="pt-6">
                   <CardTitle className="flex items-center gap-3">
                     <Clock className="h-6 w-6 text-warning" />

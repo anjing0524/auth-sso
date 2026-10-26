@@ -25,6 +25,12 @@ import { AuditLogDetailDialog } from './components/audit-log-detail-dialog';
 import { AuditTabs } from './components/audit-tabs';
 
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { formatDateTime as formatDate } from '@/lib/format-date';
 
 /**
@@ -119,16 +125,26 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
         <AuditFilters tab={tab} eventType={eventType} operation={operation} range={range} keyword={keyword} />
         {canExport ? (
           <div className="ml-auto flex items-center gap-2">
-            <Button variant="outline" size="sm" asChild>
-              <a href={`/api/audit/export?type=login${eventType ? `&eventType=${eventType}` : ''}${startDate ? `&startDate=${startDate}&endDate=${endDate}` : ''}${keyword ? `&keyword=${encodeURIComponent(keyword)}` : ''}`}>
-                <Download className="h-3.5 w-3.5" /> 导出登录
-              </a>
-            </Button>
-            <Button variant="outline" size="sm" asChild>
-              <a href={`/api/audit/export?type=operation${operation ? `&operation=${operation}` : ''}${startDate ? `&startDate=${startDate}&endDate=${endDate}` : ''}${keyword ? `&keyword=${encodeURIComponent(keyword)}` : ''}`}>
-                <Download className="h-3.5 w-3.5" /> 导出操作
-              </a>
-            </Button>
+            {/* 导出是次要动作：合并为一个下拉，避免两个按钮把筛选行挤换行（chrome 33%→≤30%） */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <Download className="h-3.5 w-3.5" /> 导出 CSV
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem asChild>
+                  <a href={`/api/audit/export?type=login${eventType ? `&eventType=${eventType}` : ''}${startDate ? `&startDate=${startDate}&endDate=${endDate}` : ''}${keyword ? `&keyword=${encodeURIComponent(keyword)}` : ''}`}>
+                    导出登录日志（CSV）
+                  </a>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <a href={`/api/audit/export?type=operation${operation ? `&operation=${operation}` : ''}${startDate ? `&startDate=${startDate}&endDate=${endDate}` : ''}${keyword ? `&keyword=${encodeURIComponent(keyword)}` : ''}`}>
+                    导出操作日志（CSV）
+                  </a>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         ) : null}
       </div>

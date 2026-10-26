@@ -191,7 +191,7 @@ export default function UserTable({ users, pagination, filters, isFiltered = fal
         <div className="flex items-center gap-3">
           <Avatar className="h-10 w-10 ring-2 ring-background transition-transform duration-300 group-hover:scale-110 shadow-sm">
             <AvatarImage src={user.avatarUrl || ''} />
-            <AvatarFallback className="bg-primary/5 text-primary text-[10px] font-black uppercase">
+            <AvatarFallback className="bg-primary/5 text-primary text-[10px] font-semibold">
               {avatarFallback(user.name)}
             </AvatarFallback>
           </Avatar>

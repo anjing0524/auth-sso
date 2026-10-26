@@ -76,7 +76,7 @@ export function AuditFilters({ tab, eventType, operation, range, keyword }: Prop
 
   const timeRangeSelect = (
     <Select value={range ?? 'ALL'} onValueChange={(v) => push({ range: v === 'ALL' ? null : v })}>
-      <SelectTrigger aria-label="时间范围筛选" className="w-36">
+      <SelectTrigger aria-label="时间范围筛选" className="w-32">
         <SelectValue>{TIME_RANGE_OPTIONS.find((o) => o.value === (range ?? 'ALL'))?.label ?? '全部时间'}</SelectValue>
       </SelectTrigger>
       <SelectContent>
@@ -90,9 +90,9 @@ export function AuditFilters({ tab, eventType, operation, range, keyword }: Prop
   if (tab === 'login') {
     return (
       <div className="flex flex-wrap items-center gap-2">
-      <SearchInput placeholder="搜索用户 / IP..." value={kw} onChange={setKw} className="w-full md:w-52" />
+      <SearchInput placeholder="搜索用户 / IP..." value={kw} onChange={setKw} className="w-full md:w-44" />
       <Select value={eventType ?? 'ALL'} onValueChange={(v) => push({ eventType: v === 'ALL' ? null : v })}>
-        <SelectTrigger aria-label="事件类型筛选" className="w-48">
+        <SelectTrigger aria-label="事件类型筛选" className="w-40">
           <SelectValue>{eventType ? LOGIN_EVENT_LABELS[eventType] : '全部事件类型'}</SelectValue>
         </SelectTrigger>
         <SelectContent>
@@ -109,9 +109,9 @@ export function AuditFilters({ tab, eventType, operation, range, keyword }: Prop
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-    <SearchInput placeholder="搜索用户 / IP / 地址..." value={kw} onChange={setKw} className="w-full md:w-52" />
+    <SearchInput placeholder="搜索用户 / IP / 地址..." value={kw} onChange={setKw} className="w-full md:w-44" />
     <Select value={operation ?? 'ALL'} onValueChange={(v) => push({ operation: v === 'ALL' ? null : v })}>
-      <SelectTrigger aria-label="操作类型筛选" className="w-48">
+      <SelectTrigger aria-label="操作类型筛选" className="w-40">
         <SelectValue>{operation ? AUDIT_OPERATION_LABELS[operation] : '全部操作类型'}</SelectValue>
       </SelectTrigger>
       <SelectContent>

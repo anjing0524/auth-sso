@@ -195,11 +195,16 @@ export default function DepartmentTree({ departments, deletionStats = {} }: Prop
   }, [sortedTree, expanded, keyword]);
 
   return (
-    <Card className="overflow-hidden">
+    <Card className="gap-0 overflow-hidden rounded-lg border border-border/70 py-0 shadow-sm ring-0">
       {/* 根部门是 ADR-002 的单例（系统预置角色绑在根、根不可删）：非空树里再建根
           会落在所有角色子树之外 ⇒ 对任何管理员都不可见（审计 P1-1）。仅空树引导期放出。 */}
       <TableToolbar
-        left={<SearchInput placeholder="搜索部门..." value={keyword} onChange={setKeyword} />}
+        left={
+          <div className="flex min-w-0 items-center gap-3">
+            <h1 className="type-section-title shrink-0 text-foreground">部门管理</h1>
+            <SearchInput placeholder="搜索部门..." value={keyword} onChange={setKeyword} />
+          </div>
+        }
         right={
           <>
             {departments.length > 0 ? (
@@ -251,18 +256,18 @@ export default function DepartmentTree({ departments, deletionStats = {} }: Prop
               data-dept-row={dept.id}
               // 390px：允许换行（操作组整体折到第二行），并以 min-w 守住名称宽度，
               // 避免操作列把名称挤成逐字竖排 / 操作被 Card overflow-hidden 裁掉（U-DEP01）
-              className="flex flex-wrap items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/50 sm:px-6"
+              className="flex flex-wrap items-center gap-2 px-3 py-1.5 transition-colors hover:bg-muted/40"
               style={{ paddingLeft: `${16 + dept.depth * 20}px` }}
             >
               {(dept.children?.length ?? 0) > 0 ? (
-                <Button variant="ghost" size="icon" aria-label={expanded.has(dept.id) ? '收起子部门' : '展开子部门'} aria-expanded={expanded.has(dept.id)} className="h-8 w-8 shrink-0 rounded-lg" onClick={() => toggleExpand(dept.id)}>
+                <Button variant="ghost" size="icon-sm" aria-label={expanded.has(dept.id) ? '收起子部门' : '展开子部门'} aria-expanded={expanded.has(dept.id)} className="shrink-0" onClick={() => toggleExpand(dept.id)}>
                   {expanded.has(dept.id) ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                 </Button>
               ) : <div className="w-8 shrink-0" />}
               <Building2 className="hidden h-4 w-4 shrink-0 text-primary sm:block" />
               <div data-dept-name className="min-w-[8rem] flex-1">
                 <div className="flex min-w-0 items-center gap-2">
-                  <span className="truncate text-sm font-medium" title={dept.name}>{dept.name}</span>
+                  <span className="truncate text-[13px] font-medium" title={dept.name}>{dept.name}</span>
                   {dept.code && <code className="hidden truncate font-mono text-xs text-muted-foreground sm:inline">{dept.code}</code>}
                 </div>
               </div>
@@ -272,15 +277,15 @@ export default function DepartmentTree({ departments, deletionStats = {} }: Prop
               ) : (
               <div className="ml-auto flex flex-wrap items-center justify-end gap-1">
                 <PermissionGuard permission={DEPARTMENT_PERMISSIONS.CREATE}>
-                  <Button variant="ghost" size="sm" className="h-8 gap-1.5 px-2" aria-label={`添加子部门 ${dept.name}`} onClick={() => openAdd(dept.id)} title="添加子部门"><Plus className="h-4 w-4" /><span>子部门</span></Button>
+                  <Button variant="ghost" size="sm" className="h-7 gap-1.5 px-2" aria-label={`添加子部门 ${dept.name}`} onClick={() => openAdd(dept.id)} title="添加子部门"><Plus className="h-4 w-4" /><span>子部门</span></Button>
                 </PermissionGuard>
                 <PermissionGuard permission={USER_PERMISSIONS.LIST}>
-                  <Button variant="ghost" size="sm" className="h-8 gap-1.5 px-2" aria-label={`查看成员 ${dept.name}`} title="查看成员" onClick={() => setMembersTarget(dept)}>
-                    <Users className="h-4 w-4" /><span>成员</span>
+                  <Button variant="ghost" size="sm" className="h-7 gap-1.5 px-2" aria-label={`查看成员 ${dept.name}`} title="查看成员" onClick={() => setMembersTarget(dept)}>
+                    <Users className="h-3.5 w-3.5" /><span>成员 {deletionStats[dept.id]?.userCount ?? 0}</span>
                   </Button>
                 </PermissionGuard>
                 <PermissionGuard permission={DEPARTMENT_PERMISSIONS.UPDATE}>
-                  <Button variant="ghost" size="sm" className="h-8 gap-1.5 px-2" aria-label={`编辑部门 ${dept.name}`} title="编辑部门" onClick={() => openEdit(dept)}>
+                  <Button variant="ghost" size="sm" className="h-7 gap-1.5 px-2" aria-label={`编辑部门 ${dept.name}`} title="编辑部门" onClick={() => openEdit(dept)}>
                     <Edit className="h-4 w-4" /><span>编辑</span>
                   </Button>
                 </PermissionGuard>
@@ -292,7 +297,7 @@ export default function DepartmentTree({ departments, deletionStats = {} }: Prop
                       size="sm"
                       aria-label={`删除部门 ${dept.name}`}
                       title="删除部门"
-                      className="h-8 gap-1.5 px-2 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                      className="h-7 gap-1.5 px-2 text-destructive hover:bg-destructive/10 hover:text-destructive"
                       onClick={() => setDeleteTarget(dept)}
                     >
                       <Trash2 className="h-4 w-4" /><span>删除</span>

@@ -10,7 +10,6 @@ import { getDepartments, getDepartmentDeletionStats } from './data';
 import { db } from '@/infrastructure/db';
 import DepartmentTree from './components/DepartmentTree';
 
-import { PageHeader } from '@/components/shared/page-header';
 
 /**
  * 该路由读取会话/动态数据，**保留服务端阻塞**（Cache Components 的 instant 导航校验）。
@@ -33,13 +32,7 @@ export default async function DepartmentsPage() {
   const deletionStats = await getDepartmentDeletionStats(flattenIds);
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        icon="Building2"
-        title="部门管理"
-        description="管理组织架构，支持树形层级与无限子部门嵌套。"
-      />
-
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
       <DepartmentTree departments={departments} deletionStats={deletionStats} />
     </div>
   );

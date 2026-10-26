@@ -68,8 +68,8 @@ export function AppSidebar({ user, dynamicMenus = [] }: {
             <ShieldCheck className="h-6 w-6" />
           </div>
           <div className="flex flex-col group-data-[collapsible=icon]:hidden">
-            <span className="font-black text-lg leading-tight tracking-tight text-foreground">Auth-SSO</span>
-            <span className="text-[10px] uppercase tracking-[0.2em] text-primary/70 font-black">Identity OS</span>
+            <span className="font-semibold text-lg leading-tight tracking-tight text-foreground">Auth-SSO</span>
+            <span className="text-[10px] tracking-[0.2em] text-primary/70 font-semibold">Identity OS</span>
           </div>
         </Link>
       </SidebarHeader>
@@ -126,7 +126,7 @@ export function AppSidebar({ user, dynamicMenus = [] }: {
                     >
                       <Link href={item.url} className="flex items-center gap-3">
                         <DynamicIcon name={item.icon || 'LayoutGrid'} className={`h-4.5 w-4.5 ${isActive ? 'text-primary' : 'opacity-60'}`} />
-                        <span className={`truncate text-sm ${isActive ? 'font-black' : 'font-bold'}`} title={item.title}>{item.title}</span>
+                        <span className={`truncate text-sm ${isActive ? 'font-semibold' : 'font-bold'}`} title={item.title}>{item.title}</span>
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
@@ -146,14 +146,14 @@ export function AppSidebar({ user, dynamicMenus = [] }: {
                   size="lg"
                   className="w-full hover:bg-card hover:shadow-md transition-all duration-300 rounded-2xl h-14 border border-transparent hover:border-border/50"
                 >
-                  <Avatar className="h-9 w-9 rounded-xl border-2 border-card ring-1 ring-border/20 shadow-sm">
+                  <Avatar className="h-9 w-9 rounded-xl border-2 border-card shadow-sm">
                     <AvatarImage src={userData.picture ?? undefined} />
-                    <AvatarFallback className="bg-gradient-to-br from-primary to-primary/70 text-primary-foreground text-xs font-black">
+                    <AvatarFallback className="bg-primary text-primary-foreground text-xs font-semibold">
                       {userData.name?.charAt(0) || 'U'}
                     </AvatarFallback>
                   </Avatar>
                   <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden ml-3">
-                    <span className="truncate font-black text-foreground leading-none mb-1">{userData.name}</span>
+                    <span className="truncate font-semibold text-foreground leading-none mb-1">{userData.name}</span>
                     <span className="truncate text-[10px] text-muted-foreground opacity-70">{userData.email}</span>
                   </div>
                   <MenuIcon className="h-4 w-4 ml-auto opacity-30 group-data-[collapsible=icon]:hidden" />
@@ -179,7 +179,7 @@ export function AppSidebar({ user, dynamicMenus = [] }: {
                 <DropdownMenuItem asChild className="rounded-xl cursor-pointer text-destructive focus:bg-destructive/5 focus:text-destructive">
                   <a href="/api/auth/logout?callbackUrl=/login" className="flex items-center gap-3 py-3 px-3">
                     <div className="p-2 bg-destructive/10 text-destructive rounded-lg"><LogOut className="h-4 w-4" /></div>
-                    <span className="font-black text-sm uppercase tracking-tight">退出登录</span>
+                    <span className="font-semibold text-sm tracking-tight">退出登录</span>
                   </a>
                 </DropdownMenuItem>
               </DropdownMenuContent>

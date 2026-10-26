@@ -9,7 +9,7 @@
  * @vitest-environment node
  */
 import { describe, it, expect } from 'vitest';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { USER_ERRORS } from '@auth-sso/contracts';
 import { userFacingMessage } from '@/app/(dashboard)/users/components/user-error-copy';
@@ -288,5 +288,36 @@ describe('工作台与用户筛选（2026-10-26，第四轮）', () => {
     const filters = read('src/app/(dashboard)/users/components/UserFilters.tsx');
     expect(filters).toContain('过滤部门');
     expect(filters).toContain('全部部门');
+  });
+});
+
+describe('全站视觉一致性守卫（2026-10-26）', () => {
+  it('后台/认证页不得再出现旧视觉 token（ring-border 描边、大写表头、font-black）', () => {
+    const walk = (dir: string): string[] => {
+      const out: string[] = [];
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const abs = join(dir, entry.name);
+        if (entry.isDirectory()) out.push(...walk(abs));
+        else if (entry.name.endsWith('.tsx')) out.push(abs);
+      }
+      return out;
+    };
+    const files = walk(join(portalRoot, 'src/app'));
+    const offenders: string[] = [];
+    for (const file of files) {
+      const text = readFileSync(file, 'utf8');
+      if (/ring-1 ring-border/.test(text)) offenders.push(`${file}: ring-border`);
+      if (/uppercase tracking-(wider|widest)/.test(text)) offenders.push(`${file}: uppercase tracking`);
+      if (/font-black/.test(text)) offenders.push(`${file}: font-black`);
+    }
+    expect(offenders, offenders.join('\n')).toEqual([]);
+  });
+
+  it('四个列表页有与模板一致的 loading 骨架（不再白屏等待）', () => {
+    for (const route of ['roles', 'users', 'clients', 'permissions']) {
+      const src = read(`src/app/(dashboard)/${route}/loading.tsx`);
+      expect(src).toContain('Skeleton');
+      expect(src).toContain('rounded-lg border border-border/70');
+    }
   });
 });

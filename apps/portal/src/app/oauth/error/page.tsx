@@ -23,11 +23,11 @@ function ErrorContent() {
           </div>
           <div className="flex items-center justify-center gap-2 mb-2">
             <div className="h-6 w-6 bg-primary rounded-lg flex items-center justify-center shadow-lg shadow-primary/20">
-               <span className="text-[10px] text-primary-foreground font-black">A</span>
+               <span className="text-[10px] text-primary-foreground font-semibold">A</span>
             </div>
-            <span className="text-sm font-black tracking-tighter text-foreground uppercase">Auth-SSO <span className="text-primary">Identity</span></span>
+            <span className="text-sm font-semibold tracking-tighter text-foreground">Auth-SSO <span className="text-primary">Identity</span></span>
           </div>
-          <h2 className="text-2xl font-black text-foreground tracking-tight">
+          <h2 className="text-2xl font-semibold text-foreground tracking-tight">
             访问受限
           </h2>
           <p className="mt-2 text-sm font-medium text-muted-foreground">
@@ -42,7 +42,7 @@ function ErrorContent() {
             </p>
             {clientId && (
               <div className="flex items-center justify-center gap-2">
-                <span className="text-[10px] font-black uppercase text-muted-foreground tracking-widest text-center">Target App:</span>
+                <span className="text-[10px] font-semibold text-muted-foreground tracking-widest text-center">Target App:</span>
                 <code className="text-[11px] bg-card px-2 py-0.5 rounded border border-border text-primary font-mono font-bold shadow-sm">
                   {clientId}
                 </code>
@@ -80,7 +80,7 @@ function ErrorContent() {
 
 export default function ErrorPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center font-black text-muted-foreground/30 animate-pulse text-4xl italic">AUTH-SSO</div>}>
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center font-semibold text-muted-foreground/30 animate-pulse text-4xl italic">AUTH-SSO</div>}>
       <ErrorContent />
     </Suspense>
   );
