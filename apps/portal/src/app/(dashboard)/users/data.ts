@@ -16,7 +16,7 @@ import 'server-only';
 
 import { cacheLife, cacheTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
-import { eq, desc, and, notExists, type SQL } from 'drizzle-orm';
+import { eq, desc, and, notExists, inArray, count, type SQL } from 'drizzle-orm';
 import { USER_LIST_COLUMNS, buildUserListConditions } from '@/db/user-queries';
 import { isScopeDenied, scopeFilter } from '@/lib/authz';
 import type { UserScope } from '@/lib/authz';
@@ -85,7 +85,7 @@ export async function getUsers(
   }
   const where = and(...conditions);
 
-  return withPagination(
+  const result = await withPagination(
     page,
     pageSize,
     db.select(USER_LIST_COLUMNS).from(schema.users)
@@ -95,6 +95,21 @@ export async function getUsers(
     countRows(schema.users, where),
     toUserListItem,
   );
+
+  // 列表需要"是否可登录"的信号：0 角色用户即使状态正常也无法登录门户。
+  // 只聚合当前页，避免全表 JOIN 影响分页查询。
+  const ids = result.data.map((u) => u.id);
+  const roleCounts = ids.length === 0 ? [] : await db
+    .select({ userId: schema.userRoles.userId, amount: count() })
+    .from(schema.userRoles)
+    .where(inArray(schema.userRoles.userId, ids))
+    .groupBy(schema.userRoles.userId);
+  const countByUser = new Map(roleCounts.map((r) => [r.userId, Number(r.amount)]));
+
+  return {
+    ...result,
+    data: result.data.map((u) => ({ ...u, roleCount: countByUser.get(u.id) ?? 0 })),
+  };
 }
 
 /**

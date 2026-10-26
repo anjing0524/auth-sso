@@ -70,6 +70,8 @@ interface User {
   deptName: string | null;
   createdAt: string;
   lastLoginAt: string | null;
+  /** 已分配角色数；0 = 无法登录门户（状态正常也进不去） */
+  roleCount: number;
 }
 
 /**
@@ -235,6 +237,7 @@ export default function UserTable({ users, pagination, filters, isFiltered = fal
     }] : []),
     { key: 'user', header: '用户信息', className: 'w-[190px] md:w-[300px]' },
     { key: 'dept', header: '部门', className: 'hidden md:table-cell' },
+    { key: 'roles', header: '角色', className: 'hidden md:table-cell' },
     { key: 'status', header: '状态', className: 'hidden md:table-cell' },
     { key: 'createdAt', header: '创建时间', className: 'hidden md:table-cell' },
     { key: 'actions', header: '操作', className: 'text-right' },
@@ -264,8 +267,9 @@ export default function UserTable({ users, pagination, filters, isFiltered = fal
             <span className="block max-w-[240px] truncate text-[10px] leading-3 text-muted-foreground" title={`${user.username} • ${user.email}`}>
               {user.username} • {user.email}
             </span>
-            <span className="mt-0.5 md:hidden">
+            <span className="mt-0.5 flex flex-wrap items-center gap-1 md:hidden">
               <Badge variant={accountStatus(user.status).variant}>{accountStatus(user.status).label}</Badge>
+              {user.roleCount === 0 && <Badge variant="warning">未分配角色</Badge>}
             </span>
           </div>
         </div>
@@ -275,6 +279,13 @@ export default function UserTable({ users, pagination, filters, isFiltered = fal
           <Building className="h-3.5 w-3.5 text-muted-foreground" />
           {user.deptName || <span className="italic text-muted-foreground">未分配</span>}
         </div>
+      </TableCell>
+      <TableCell className="hidden md:table-cell">
+        {user.roleCount === 0 ? (
+          <Badge variant="warning" title="未分配角色：即使状态正常也无法登录门户">未分配</Badge>
+        ) : (
+          <span className="text-[12px] text-muted-foreground"><span className="tabular-nums text-foreground">{user.roleCount}</span> 个角色</span>
+        )}
       </TableCell>
       <TableCell className="hidden md:table-cell">
         <Badge variant={accountStatus(user.status).variant}>

@@ -748,3 +748,15 @@ describe('访问日志用户名质量（续一百四十四）', () => {
     expect(data).toContain('getAccessLogById');
   });
 });
+
+describe('用户列表角色信号（续一百四十五）', () => {
+  it('列表聚合当前页角色数，0 角色显式警示（状态正常也可能登不进）', () => {
+    const data = read('src/app/(dashboard)/users/data.ts');
+    expect(data).toContain('roleCount');
+    expect(data).toContain('schema.userRoles');
+    const table = read('src/app/(dashboard)/users/components/UserTable.tsx');
+    expect(table).toContain("header: '角色'");
+    expect(table).toContain('未分配角色');
+    expect(table).toContain('roleCount === 0');
+  });
+});

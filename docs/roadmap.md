@@ -21,6 +21,8 @@
 
 ## 变更记录
 
+- 2026-10-26（续一百四十五）: **用户列表补“可登录性”信号（角色数/未分配警示）**。此前列表只有账号状态：`正常` 但未分配角色的用户实际无法登录门户，管理员只能逐个进详情才能发现。**①读模型**：`getUsers` 对当前页批量聚合 `user_roles` 角色数（不 JOIN 全表），DTO 增 `roleCount`。**②UI**：桌面新增「角色」列——0 显示 warning「未分配」，>0 显示「N 个角色」；移动端在身份行状态徽章旁显示「未分配角色」；行内「分配角色」入口保留。**③实测**：qa_wang/qa_lin 显示「未分配」、admin「1 个角色」；1440/1139/390 无横向溢出，390 表宽 364px。**验证**：全量 **1228 passed**；e2e **11/11（31.9s）**；a11y 0；measure 0（390 users chrome 35%、表宽 364）；typecheck/lint/build 0。
+
 - 2026-10-26（续一百四十四）: **访问日志用户名质量修复（UUID→真实用户名）**。`logServerDataRead` 把 `claims.sub`（恒等于 userId）当 username 写入，导致审计列表"用户"列显示裸 UUID，取证不可读也不符合语义。**①写入侧**：`logServerDataRead` 查一次 users 表取真实 username（PK 索引，fire-and-forget 成本可接受）；不再把 userId 冒充 username。**②历史数据读回退**：`getAccessLogs` 对当前页 `username === userId` 的行批量查 users 替换；`getAccessLogById` 单条回退；导出复用读模型，历史 CSV 同样可读。**③验证**：触发新访问后 DB 最新行 `username=admin`；列表/详情显示 admin、页面无裸 UUID；全量 **1227 passed**、e2e **11/11（1.1m）**、a11y 0、measure 0、typecheck/lint/build 0。
 
 - 2026-10-26（续一百四十三）: **审计「访问日志」闭环（第三页签 + 详情 + 导出）**。`access_logs` 已有 814 条读操作审计，但 UI 只有登录/操作两页签——数据在、链路断。**①页签/列表**：新增「访问日志」页签；筛选为关键词（用户/路径/IP）+ 时间范围；列表列含时间/用户/方法/路径/状态/IP/详情，移动端把时间/方法并入用户行、隐藏路径/IP 列，390 表宽 **364px**。**②详情页**：`/audit-logs/[id]?tab=access` 展示访问上下文（方法/路径/资源/状态/耗时）与来源（IP/UA），并可按用户跳访问记录；无弹窗。**③导出**：`/api/audit/export?type=access` 输出 10 列 CSV（时间/用户/方法/路径/资源类型/资源ID/状态/耗时/IP/UA）；`getAccessLogs` 支持 keyword；API 测试覆盖真实行。**④验证**：全量 **1225 passed**；e2e **11/11**（audit-detail 增访问链路）；a11y 0；measure 0；导出实测 816 行；typecheck/lint/build 0。
