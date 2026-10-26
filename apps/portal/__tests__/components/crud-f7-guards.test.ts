@@ -321,3 +321,14 @@ describe('全站视觉一致性守卫（2026-10-26）', () => {
     }
   });
 });
+
+describe('个人中心信息架构（2026-10-26）', () => {
+  it('分区为 账户资料/权限摘要/登录会话，会话默认折叠', () => {
+    const src = read('src/app/(dashboard)/profile/ProfileClient.tsx');
+    for (const t of ['账户资料', '权限摘要', '登录会话']) expect(src).toContain(t);
+    expect(src).toContain('visibleSessions');
+    expect(src).toContain('查看全部');
+    expect(src).toContain('shrink-0');
+    expect(src).not.toContain('权限矩阵');
+  });
+});
