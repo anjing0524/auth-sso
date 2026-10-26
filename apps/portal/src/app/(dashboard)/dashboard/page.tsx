@@ -42,7 +42,7 @@ import {
   can,
 } from '@auth-sso/contracts';
 import { formatTime } from '@/lib/format-date';
-import { getDashboardStats, getDashboardRisks, getLoginSummary7d, getRecentAuditLogs } from './data';
+import { getDashboardStats, getDashboardRisks, getFailedLogins24h, getLoginSummary7d, getRecentAuditLogs } from './data';
 import { db } from '@/infrastructure/db';
 import { resolveIdentity } from '@/lib/auth/verify-jwt';
 import { resolveScope } from '@/lib/authz';
@@ -76,12 +76,13 @@ export default async function DashboardPage() {
   const canRoles = can(subject, ROLE_PERMISSIONS.LIST);
   const canClients = can(subject, CLIENT_PERMISSIONS.LIST);
   const canDepartments = can(subject, DEPARTMENT_PERMISSIONS.LIST);
-  const [stats, recentLogs, loginSummary, risks] = await Promise.all([
+  const [stats, recentLogs, loginSummary, risks, failed24h] = await Promise.all([
     getDashboardStats(scope),
     // 审计动态是跨部门敏感数据：没有 audit:read 的用户不查询、不渲染（此前任何 dashboard 用户都能看到）。
     canAudit ? getRecentAuditLogs(6) : Promise.resolve([]),
     canAudit ? getLoginSummary7d() : Promise.resolve(null),
     getDashboardRisks(scope),
+    canAudit ? getFailedLogins24h() : Promise.resolve(0),
   ]);
 
   /**
@@ -266,6 +267,15 @@ export default async function DashboardPage() {
           {canClients && (
             <Link href="/clients?status=DISABLED" className="text-muted-foreground hover:text-primary hover:underline">
               已禁用应用 <RiskCount value={risks.disabledClients} /> 个
+            </Link>
+          )}
+          {canAudit && loginSummary && (
+            <Link
+              href="/audit-logs?tab=login&eventType=LOGIN_FAILED&range=24h"
+              className="text-muted-foreground hover:text-primary hover:underline"
+              title="查看近 24 小时登录失败"
+            >
+              近 24h 登录失败 <RiskCount value={failed24h} /> 次
             </Link>
           )}
           <span className="ml-auto text-[10px] text-muted-foreground">按你的部门数据范围统计</span>

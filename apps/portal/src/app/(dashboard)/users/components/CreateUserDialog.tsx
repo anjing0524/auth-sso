@@ -6,6 +6,7 @@
  */
 
 import { useState, useEffect, useActionState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useFormStatus } from 'react-dom';
 import { toast } from 'sonner';
 import { UserPlus } from 'lucide-react';
@@ -53,9 +54,12 @@ function SubmitButton() {
 interface CreateUserDialogProps {
   /** 部门列表，用于下拉选择 */
   departments: { id: string; name: string }[];
+  /** 有 user:assign_role 才显示"下一步分配角色"行动 */
+  canAssignRole?: boolean;
 }
 
-export default function CreateUserDialog({ departments }: CreateUserDialogProps) {
+export default function CreateUserDialog({ departments, canAssignRole = false }: CreateUserDialogProps) {
+  const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
   /**
    * 部门**必填**：ADR-002 的数据范围 = 角色部门子树，`users.dept_id = NULL` 的用户
@@ -98,7 +102,13 @@ export default function CreateUserDialog({ departments }: CreateUserDialogProps)
     if (!state) return;
     queueMicrotask(() => {
       if (state.success) {
-        toast.success(`用户创建成功；登录邮箱：${values.email}`);
+        // 新用户默认无角色 ⇒ 无法登录；创建成功时直接给"下一步"行动，避免建完就断链。
+        const createdId = state.data?.id;
+        toast.success(`用户创建成功；登录邮箱：${values.email}`, {
+          ...(canAssignRole && createdId
+            ? { action: { label: '分配角色', onClick: () => router.push(`/users/${createdId}/roles`) } }
+            : {}),
+        });
         setIsOpen(false);
         setDeptId('');
         setValues({ name: '', username: '', email: '', password: '' });

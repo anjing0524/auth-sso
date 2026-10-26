@@ -55,10 +55,9 @@ export default async function UsersPage({ searchParams }: PageProps) {
   const userId = identity?.userId ?? '';
   // 批量操作入口按 user:update 渲染；无权限时不显示多选列（服务端仍二次校验）
   const permCtx = identity ? toPermissionContextOrNull(await getUserPermissionContext(identity.userId)) : null;
-  const canUpdate = can(
-    { roleCodes: permCtx?.roles.map((r) => r.code) ?? [], permissionCodes: permCtx?.permissions ?? [] },
-    USER_PERMISSIONS.UPDATE,
-  );
+  const subject = { roleCodes: permCtx?.roles.map((r) => r.code) ?? [], permissionCodes: permCtx?.permissions ?? [] };
+  const canUpdate = can(subject, USER_PERMISSIONS.UPDATE);
+  const canAssignRole = can(subject, USER_PERMISSIONS.ASSIGN_ROLE);
   const [{ data: users, pagination }, departments] = await Promise.all([
     getUsers(scope, userId, { page, pageSize, keyword, status, ...(deptId ? { deptId } : {}), ...(noRole ? { noRole } : {}) }),
     getDepartmentOptions(scope),
@@ -104,7 +103,7 @@ export default async function UsersPage({ searchParams }: PageProps) {
                 </div>
               </div>
             }
-            right={<CreateUserDialog departments={departments} />}
+            right={<CreateUserDialog departments={departments} canAssignRole={canAssignRole} />}
           />
         }
       />

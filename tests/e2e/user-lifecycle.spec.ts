@@ -45,14 +45,13 @@ test.describe('用户生命周期', () => {
       await page.getByRole('button', { name: '创建', exact: true }).click();
       await expect(page.getByText(/用户创建成功/)).toBeVisible({ timeout: 15_000 });
 
-      await page.goto(`/users?keyword=${encodeURIComponent(username)}`, { waitUntil: 'networkidle' });
-      await expect(page.getByText(username).first()).toBeVisible();
-      const detailHref = await page.getByRole('link', { name: '查看详情' }).first().getAttribute('href');
-      expect(detailHref).toContain('/users/');
-      userId = detailHref!.split('/').pop()!;
+      // 1.1 创建成功的 toast 直接给「分配角色」下一步（避免建完就断链）
+      await page.getByRole('button', { name: '分配角色' }).click();
+      await expect(page).toHaveURL(/\/users\/[0-9a-f-]+\/roles$/, { timeout: 15_000 });
+      userId = page.url().match(/\/users\/([0-9a-f-]+)\/roles$/)?.[1] ?? null;
+      expect(userId).toBeTruthy();
 
       // 2. 分配「系统管理员」角色（有权限，才能登录门户）
-      await page.goto(`/users/${userId}/roles`, { waitUntil: 'networkidle' });
       await expect(page.getByText(/仅展示所属部门的启用角色/)).toBeVisible();
       await page.locator('label').filter({ hasText: '系统管理员' }).click();
       await page.getByRole('button', { name: /保存变更/ }).click();

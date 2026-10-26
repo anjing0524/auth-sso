@@ -760,3 +760,20 @@ describe('用户列表角色信号（续一百四十五）', () => {
     expect(table).toContain('roleCount === 0');
   });
 });
+
+describe('创建后下一步与 24h 失败入口（续一百四十六）', () => {
+  it('创建用户成功 toast 提供分配角色行动（有权限时）', () => {
+    const dialog = read('src/app/(dashboard)/users/components/CreateUserDialog.tsx');
+    expect(dialog).toContain('canAssignRole');
+    expect(dialog).toContain("label: '分配角色'");
+    expect(dialog).toContain('router.push(`/users/${createdId}/roles`)');
+    const page = read('src/app/(dashboard)/users/page.tsx');
+    expect(page).toContain('canAssignRole={canAssignRole}');
+  });
+  it('工作台风险条含近 24h 登录失败直达链接', () => {
+    const page = read('src/app/(dashboard)/dashboard/page.tsx');
+    expect(page).toContain('getFailedLogins24h');
+    expect(page).toContain('近 24h 登录失败');
+    expect(page).toContain('eventType=LOGIN_FAILED&range=24h');
+  });
+});

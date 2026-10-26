@@ -16,6 +16,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
+// next/navigation：创建成功后 toast 的「分配角色」行动使用 useRouter
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
+}));
+
 // @allow-module-mock @/hooks/use-permissions infra-boundary: 本用例只测表单输入保持，权限 hook 恒为已授权
 vi.mock(import('@/hooks/use-permissions'), async (importOriginal): Promise<Partial<typeof usePermissionsModule>> => {
   const actual = await importOriginal();

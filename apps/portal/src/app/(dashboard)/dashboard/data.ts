@@ -131,3 +131,16 @@ export async function getDashboardRisks(scope: UserScope): Promise<DashboardRisk
     disabledClients: Number(c?.count ?? 0),
   };
 }
+
+
+/** 近 24 小时登录失败数（风险条直达筛选用；无明细） */
+export async function getFailedLogins24h(): Promise<number> {
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const [row] = await db.select({ value: count() })
+    .from(schema.loginLogs)
+    .where(and(
+      gte(schema.loginLogs.createdAt, since),
+      eq(schema.loginLogs.eventType, 'LOGIN_FAILED'),
+    ));
+  return Number(row?.value ?? 0);
+}
