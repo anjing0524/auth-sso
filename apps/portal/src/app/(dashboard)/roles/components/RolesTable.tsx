@@ -48,6 +48,8 @@ interface Props {
   roles: RoleRow[];
   pagination: Pagination;
   initialKeyword: string;
+  /** 排序：default | permissions-asc | permissions-desc */
+  initialSort?: string;
   departments: Array<{ id: string; name: string }>;
   /** 删除确认的影响面：roleId → 绑定用户数（U-ROLES03） */
   boundUserCounts?: Record<string, number>;
@@ -55,7 +57,7 @@ interface Props {
   permissionCounts?: Record<string, number>;
 }
 
-export default function RolesTable({ roles, pagination, initialKeyword, departments, boundUserCounts = {}, permissionCounts = {} }: Props) {
+export default function RolesTable({ roles, pagination, initialKeyword, initialSort = 'default', departments, boundUserCounts = {}, permissionCounts = {} }: Props) {
   const router = useRouter();
   const [keyword, setKeyword] = useState(initialKeyword);
   const [isPending, startTransition] = useTransition();
@@ -145,6 +147,14 @@ export default function RolesTable({ roles, pagination, initialKeyword, departme
 
   // 列宽/响应式：角色名是主信息占弹性宽度；编码、部门是辅助信息，窄屏逐级隐藏，
   // 操作列固定宽度（三个图标按钮），避免 1024px 下操作列被挤到视野外。
+  const applySort = (value: string) => {
+    const params = new URLSearchParams();
+    if (keyword.trim()) params.set('keyword', keyword.trim());
+    if (value !== 'default') params.set('sort', value);
+    params.set('page', '1');
+    router.push(`/roles?${params.toString()}`);
+  };
+
   const columns = [
     { key: 'name', header: '角色名称', className: 'min-w-[240px]' },
     { key: 'code', header: '编码', className: 'hidden w-[150px] md:table-cell' },
@@ -160,6 +170,18 @@ export default function RolesTable({ roles, pagination, initialKeyword, departme
         <div className="flex min-w-0 items-center gap-3">
           <h1 className="shrink-0 text-[15px] font-semibold tracking-tight text-foreground">角色管理</h1>
           <SearchInput placeholder="搜索角色名称或编码..." value={keyword} onChange={handleSearch} busy={isPending} />
+          <Select value={initialSort} onValueChange={applySort}>
+            <SelectTrigger aria-label="角色排序" className="w-full md:w-40">
+              <SelectValue>
+                {initialSort === 'permissions-asc' ? '权限数最少' : initialSort === 'permissions-desc' ? '权限数最多' : '默认排序'}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="default">默认排序</SelectItem>
+              <SelectItem value="permissions-asc">权限数最少</SelectItem>
+              <SelectItem value="permissions-desc">权限数最多</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       }
       right={

@@ -5,7 +5,7 @@ import 'server-only';
 
 import { cacheLife, cacheTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
-import { eq, ilike, inArray, or, asc, desc, and, count } from 'drizzle-orm';
+import { eq, ilike, inArray, or, asc, desc, and, count, getTableColumns } from 'drizzle-orm';
 
 import { scopeFilter, isScopeDenied } from '@/lib/authz';
 import type { UserScope } from '@/lib/authz';
@@ -68,6 +68,8 @@ export interface RolesListParams {
    * 而省略与传空数组在语义上完全不同（后者是"无权限"，前者是"不过滤"）。
    */
   scope: UserScope;
+  /** 列表排序：permissions-asc/desc = 按权限数（空壳角色优先/高权优先） */
+  sort?: 'permissions-asc' | 'permissions-desc';
 }
 
 export async function getRoles(params: RolesListParams) {
@@ -81,6 +83,29 @@ export async function getRoles(params: RolesListParams) {
   // 数据范围：空范围即空集（无可见部门 → 不得返回任何角色）
   if (isScopeDenied(scope)) return { data: [], pagination: paginationMeta(page, pageSize, 0) };
   const whereClause = buildRoleConditions(keyword, status, scope);
+
+  // 按权限数排序：需要 LEFT JOIN role_permissions 聚合后排序（分页必须在排序之后）
+  if (params.sort === 'permissions-asc' || params.sort === 'permissions-desc') {
+    const permissionCountExpr = count(schema.rolePermissions.permissionId);
+    const rows = await db
+      .select({ ...getTableColumns(schema.roles), permissionCount: permissionCountExpr })
+      .from(schema.roles)
+      .leftJoin(schema.rolePermissions, eq(schema.rolePermissions.roleId, schema.roles.id))
+      .where(whereClause)
+      .groupBy(schema.roles.id)
+      .orderBy(
+        params.sort === 'permissions-asc' ? asc(permissionCountExpr) : desc(permissionCountExpr),
+        asc(schema.roles.sort),
+        desc(schema.roles.createdAt),
+      )
+      .limit(pageSize)
+      .offset(offsetFor(page, pageSize));
+    const total = await countRows(schema.roles, whereClause);
+    return {
+      data: rows.map((r) => ({ ...toRoleDTO(r), permissionCount: Number(r.permissionCount) })),
+      pagination: paginationMeta(page, pageSize, total),
+    };
+  }
 
   const result = await withPagination(
     page,

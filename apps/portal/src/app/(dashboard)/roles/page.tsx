@@ -22,6 +22,7 @@ interface PageProps {
   searchParams: Promise<{
     page?: string;
     keyword?: string;
+    sort?: string;
   }>;
 }
 
@@ -29,13 +30,14 @@ export default async function RolesPage({ searchParams }: PageProps) {
   const params = await searchParams;
   const page = clampPage(params.page);
   const keyword = params.keyword || '';
+  const sort = params.sort === 'permissions-asc' || params.sort === 'permissions-desc' ? params.sort : undefined;
 
   // 鉴权由 roles/layout.tsx 负责（requirePermission(['role:list'])），此处只取身份信息。
   const identity = await resolveIdentity();
   const scope = identity ? await resolveScope(db, identity.userId) : { deptIds: [] };
 
   const [{ data: roles, pagination }, departments] = await Promise.all([
-    getRoles({ page, pageSize: 20, keyword, status: '', scope }),
+    getRoles({ page, pageSize: 20, keyword, status: '', scope, ...(sort ? { sort } : {}) }),
     getDepartmentOptions(scope),
   ]);
   // 删除确认的影响面（U-ROLES03）：只统计当前页角色，避免全表聚合
@@ -48,6 +50,7 @@ export default async function RolesPage({ searchParams }: PageProps) {
         roles={roles}
         pagination={pagination}
         initialKeyword={keyword}
+        initialSort={sort ?? 'default'}
         departments={departments}
         boundUserCounts={boundUserCounts}
         permissionCounts={permissionCounts}

@@ -540,3 +540,17 @@ describe('应用最近使用/排序（2026-10-26，第二十二轮）', () => {
     expect(page).toContain("['recent', 'updated', 'name']");
   });
 });
+
+describe('角色按权限数排序（2026-10-26，第二十七/二十八轮）', () => {
+  it('SQL 聚合排序 + URL 白名单 + 空壳角色优先', () => {
+    const data = read('src/app/(dashboard)/roles/data.ts');
+    expect(data).toContain("permissions-asc");
+    expect(data).toContain('getTableColumns');
+    expect(data).toContain('schema.rolePermissions.permissionId');
+    const table = read('src/app/(dashboard)/roles/components/RolesTable.tsx');
+    expect(table).toContain('角色排序');
+    expect(table).toContain('权限数最少');
+    const page = read('src/app/(dashboard)/roles/page.tsx');
+    expect(page).toContain("permissions-asc");
+  });
+});
