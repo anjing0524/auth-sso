@@ -232,7 +232,7 @@ export default function ClientsTable({ clients, pagination, initialKeyword, init
       <TableCell>
         <div className="flex items-center gap-4">
           <div className="relative">
-            <Avatar className="h-9 w-9 rounded-lg ring-2 ring-background shadow-sm border border-border/40">
+            <Avatar className="h-7 w-7 shrink-0 rounded-md border border-border/40 shadow-sm">
               <AvatarImage src={client.logoUrl || ''} />
               <AvatarFallback className="bg-gradient-to-br from-muted to-muted/50 text-muted-foreground font-semibold text-xs">
                 {avatarFallback(client.name)}
@@ -243,13 +243,13 @@ export default function ClientsTable({ clients, pagination, initialKeyword, init
             </div>
           </div>
           <div className="flex min-w-0 flex-col gap-0.5">
-            <span className="block max-w-[180px] truncate text-sm font-bold leading-tight text-foreground transition-colors group-hover:text-primary" title={client.name}>{client.name}</span>
+            <span className="block max-w-[180px] truncate text-[12px] font-semibold leading-4 text-foreground transition-colors group-hover:text-primary" title={client.name}>{client.name}</span>
             {client.homepageUrl ? (
-              <a href={client.homepageUrl} target="_blank" className="flex max-w-[180px] items-center gap-1 truncate text-xs text-muted-foreground transition-colors hover:text-primary" rel="noreferrer" title={client.homepageUrl}>
+              <a href={client.homepageUrl} target="_blank" className="flex max-w-[180px] items-center gap-1 truncate text-[10px] leading-3 text-muted-foreground transition-colors hover:text-primary" rel="noreferrer" title={client.homepageUrl}>
                 <span className="truncate">{client.homepageUrl}</span> <ExternalLink className="h-2 w-2 shrink-0" />
               </a>
             ) : (
-              <span className="text-xs text-muted-foreground">内部应用</span>
+              <span className="text-[10px] leading-3 text-muted-foreground">内部应用</span>
             )}
           </div>
         </div>

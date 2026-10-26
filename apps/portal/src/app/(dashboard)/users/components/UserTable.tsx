@@ -249,15 +249,15 @@ export default function UserTable({ users, pagination, filters, isFiltered = fal
       )}
       <TableCell>
         <div className="flex items-center gap-3">
-          <Avatar className="h-10 w-10 ring-2 ring-background transition-transform duration-300 group-hover:scale-110 shadow-sm">
+          <Avatar className="h-7 w-7 shrink-0 shadow-sm">
             <AvatarImage src={user.avatarUrl || ''} />
             <AvatarFallback className="bg-primary/5 text-primary text-[10px] font-semibold">
               {avatarFallback(user.name)}
             </AvatarFallback>
           </Avatar>
           <div className="flex flex-col">
-            <span className="block max-w-[240px] truncate text-sm font-medium leading-tight text-foreground" title={user.name}>{user.name}</span>
-            <span className="block max-w-[240px] truncate text-xs text-muted-foreground" title={`${user.username} • ${user.email}`}>
+            <span className="block max-w-[240px] truncate text-[12px] font-medium leading-4 text-foreground" title={user.name}>{user.name}</span>
+            <span className="block max-w-[240px] truncate text-[10px] leading-3 text-muted-foreground" title={`${user.username} • ${user.email}`}>
               {user.username} • {user.email}
             </span>
           </div>
