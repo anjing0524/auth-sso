@@ -444,3 +444,17 @@ describe('角色列表权限数（2026-10-26，第十五轮）', () => {
     expect(data).toContain('schema.rolePermissions');
   });
 });
+
+describe('部门批量移动（2026-10-26，第十六轮）', () => {
+  it('多选非根部门 + 选择父级 + 复用单条移动校验/失败计数', () => {
+    const tree = read('src/app/(dashboard)/departments/components/DepartmentTree.tsx');
+    expect(tree).toContain('选择部门');
+    expect(tree).toContain('移动到…');
+    expect(tree).toContain('全选可移动');
+    expect(tree).toContain('bulkMoveDepartmentsAction');
+    const action = read('src/app/(dashboard)/departments/bulk-actions.ts');
+    expect(action).toContain('updateDepartmentAction');
+    expect(action).toContain('isUuid');
+    expect(action).toContain('MAX_BULK');
+  });
+});

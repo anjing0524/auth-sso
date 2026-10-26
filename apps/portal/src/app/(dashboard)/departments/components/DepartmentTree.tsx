@@ -8,12 +8,13 @@ import React, { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import {
-  Building2, Plus, ChevronRight, ChevronDown, Edit, Trash2, Users,
+  Building2, Plus, ChevronRight, ChevronDown, Edit, Trash2, Users, MoveRight,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
@@ -24,6 +25,7 @@ import { DEPARTMENT_PERMISSIONS, USER_PERMISSIONS } from '@auth-sso/contracts';
 import { enableStatus } from '@/lib/status-label';
 import { DepartmentMembersDialog } from './DepartmentMembersDialog';
 import { createDepartmentAction, updateDepartmentAction, deleteDepartmentAction } from '../actions';
+import { bulkMoveDepartmentsAction } from '../bulk-actions';
 import { useFieldFailure } from '@/hooks/use-field-failure';
 import { FieldError } from '@/components/shared/field-error';
 
@@ -92,6 +94,11 @@ export default function DepartmentTree({ departments, deletionStats = {} }: Prop
 
   // 弹窗
   const [isAddOpen, setIsAddOpen] = useState(false);
+  // 批量移动：仅非根部门可移动；目标父级不能是选中项（服务端还会做循环/作用域校验）
+  const [selectedDepts, setSelectedDepts] = useState<Set<string>>(new Set());
+  const [moveOpen, setMoveOpen] = useState(false);
+  const [moveParentId, setMoveParentId] = useState('');
+  const [moving, setMoving] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [selected, setSelected] = useState<DeptTreeNode | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<DeptTreeNode | null>(null);
@@ -142,6 +149,21 @@ export default function DepartmentTree({ departments, deletionStats = {} }: Prop
   const sortedTree = useMemo(() => sortDepartmentTree(departments, sortKey), [departments, sortKey]);
 
   const flatList = useMemo(() => flattenTree(sortedTree), [sortedTree]);
+  const flatDepts = useMemo(() => {
+    const out: Array<{ id: string; name: string; depth: number }> = [];
+    const walk = (nodes: DeptTreeNode[], depth: number) => {
+      for (const n of nodes) {
+        out.push({ id: n.id, name: n.name, depth });
+        walk(n.children, depth + 1);
+      }
+    };
+    walk(departments, 0);
+    return out;
+  }, [departments]);
+  const movableDepts = flatDepts.filter((d) => d.depth > 0);
+  const moveTargets = flatDepts.filter((d) => !selectedDepts.has(d.id));
+  const selectedCount = selectedDepts.size;
+
   const expandableIds = useMemo(
     () => flatList.filter((d) => (d.children?.length ?? 0) > 0).map((d) => d.id),
     [flatList],
@@ -233,6 +255,18 @@ export default function DepartmentTree({ departments, deletionStats = {} }: Prop
                 <Button variant="outline" onClick={() => setExpanded(new Set())}>
                   收起全部
                 </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setSelectedDepts((prev) => prev.size === movableDepts.length ? new Set() : new Set(movableDepts.map((d) => d.id)))}
+                  disabled={movableDepts.length === 0}
+                >
+                  {selectedCount === movableDepts.length && movableDepts.length > 0 ? '取消全选' : '全选可移动'}
+                </Button>
+                {selectedCount > 0 && (
+                  <Button variant="outline" onClick={() => { setMoveParentId(''); setMoveOpen(true); }}>
+                    <MoveRight className="h-4 w-4" /> 移动到…（{selectedCount}）
+                  </Button>
+                )}
               </>
             ) : null}
             {departments.length === 0 ? (
@@ -259,6 +293,16 @@ export default function DepartmentTree({ departments, deletionStats = {} }: Prop
               className="flex flex-wrap items-center gap-2 px-3 py-1.5 transition-colors hover:bg-muted/40"
               style={{ paddingLeft: `${16 + dept.depth * 20}px` }}
             >
+              <Checkbox
+                aria-label={`选择部门 ${dept.name}`}
+                checked={selectedDepts.has(dept.id)}
+                disabled={dept.depth === 0}
+                onCheckedChange={(checked) => setSelectedDepts((prev) => {
+                  const next = new Set(prev);
+                  if (checked === true) next.add(dept.id); else next.delete(dept.id);
+                  return next;
+                })}
+              />
               {(dept.children?.length ?? 0) > 0 ? (
                 <Button variant="ghost" size="icon-sm" aria-label={expanded.has(dept.id) ? '收起子部门' : '展开子部门'} aria-expanded={expanded.has(dept.id)} className="shrink-0" onClick={() => toggleExpand(dept.id)}>
                   {expanded.has(dept.id) ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
@@ -318,6 +362,58 @@ export default function DepartmentTree({ departments, deletionStats = {} }: Prop
           )}
         </div>
       </CardContent>
+
+      {/* 批量移动对话框 */}
+      <Dialog open={moveOpen} onOpenChange={setMoveOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><MoveRight className="h-4 w-4 text-primary" /> 移动 {selectedCount} 个部门</DialogTitle>
+            <DialogDescription>
+              选择新的父部门；循环挂载、越权或父级不可用的部门会被跳过，并在结果中反馈失败数量。
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-2">
+            <Label htmlFor="move-parent">目标父部门</Label>
+            <select
+              id="move-parent"
+              aria-label="目标父部门"
+              value={moveParentId}
+              onChange={(e) => setMoveParentId(e.target.value)}
+              className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-[13px]"
+            >
+              <option value="">请选择目标父部门</option>
+              {moveTargets.map((d) => (
+                <option key={d.id} value={d.id}>{'　'.repeat(d.depth)}{d.name}</option>
+              ))}
+            </select>
+            <p className="text-[11px] text-muted-foreground">已选：{movableDepts.filter((d) => selectedDepts.has(d.id)).map((d) => d.name).join('、') || '—'}</p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setMoveOpen(false)} disabled={moving}>取消</Button>
+            <Button
+              disabled={moving || !moveParentId}
+              onClick={async () => {
+                setMoving(true);
+                try {
+                  const res = await bulkMoveDepartmentsAction([...selectedDepts], moveParentId);
+                  if (res.success) {
+                    toast.success((res as { message?: string }).message ?? '部门已移动');
+                    setSelectedDepts(new Set());
+                    setMoveOpen(false);
+                    router.refresh();
+                  } else {
+                    toast.error(res.message || '移动失败');
+                  }
+                } finally {
+                  setMoving(false);
+                }
+              }}
+            >
+              {moving ? '移动中...' : '确认移动'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* 新增对话框 */}
       <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
