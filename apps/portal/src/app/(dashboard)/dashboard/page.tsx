@@ -142,23 +142,29 @@ export default async function DashboardPage() {
           <MetricCard href="/clients" icon={<AppWindow className="h-4 w-4" />} label="受控应用" value={stats.clients} hint="OAuth 客户端接入" />
         )}
         {canAudit && loginSummary && (
-          <Link
-            href="/audit-logs?tab=login&range=7d"
-            className="rounded-lg border border-border/70 bg-card p-3 shadow-sm transition-colors hover:border-primary/30 hover:bg-primary/[0.02]"
-          >
+          <div className="rounded-lg border border-border/70 bg-card p-3 shadow-sm">
             <div className="flex items-center justify-between">
-              <span className="type-meta">近 7 日登录</span>
+              <Link href="/audit-logs?tab=login&range=7d" className="type-meta transition-colors hover:text-primary">
+                近 7 日登录
+              </Link>
               <Activity className="h-4 w-4 text-primary" />
             </div>
             <div className="mt-1 flex items-baseline gap-1.5">
               <span className="text-[22px] font-semibold tabular-nums leading-none">{loginSummary.success}</span>
               <span className="text-[11px] text-muted-foreground">成功</span>
-              <span className={`ml-auto text-[12px] font-medium tabular-nums ${loginSummary.failed > 0 ? 'text-destructive' : 'text-muted-foreground'}`}>
+              {/* 失败是安全运营第一入口：直接落到"登录失败"筛选，而不是全部登录 */}
+              <Link
+                href="/audit-logs?tab=login&eventType=LOGIN_FAILED&range=7d"
+                title="查看近 7 日登录失败"
+                className={`ml-auto text-[12px] font-medium tabular-nums underline-offset-2 hover:underline ${loginSummary.failed > 0 ? 'text-destructive' : 'text-muted-foreground'}`}
+              >
                 失败 {loginSummary.failed}
-              </span>
+              </Link>
             </div>
-            <p className="mt-1 text-[11px] text-muted-foreground">查看登录审计</p>
-          </Link>
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              <Link href="/audit-logs?tab=login&range=7d" className="hover:text-primary">查看登录审计 →</Link>
+            </p>
+          </div>
         )}
       </div>
 

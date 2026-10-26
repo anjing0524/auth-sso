@@ -7,7 +7,8 @@
  *
  * v2 — shadcn Table + 设计 Token + 暗黑模式支持
  */
-import { Download } from 'lucide-react';
+import { Download, X } from 'lucide-react';
+import Link from 'next/link';
 import { LOGIN_EVENT_LABELS, AUDIT_OPERATION_LABELS, LOGIN_EVENT_VALUES, AUDIT_OPERATION_VALUES, AUDIT_PERMISSIONS, can, type AuditOperation, type LoginEventType } from '@auth-sso/contracts';
 import { AuditFilters } from './components/audit-filters';
 import { getLoginLogs, getAuditLogs } from '@/app/audit/data';
@@ -125,6 +126,9 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
   const operation = AUDIT_OPERATION_VALUES.includes(params.operation as AuditOperation)
     ? (params.operation as AuditOperation) : null;
   const { range, startDate, endDate } = resolveDateFilters(params.range, params.startDate, params.endDate);
+  // 预置 range 的 startDate/endDate 是派生值：只用于查询/导出，不写回 URL（否则 chips 出现"近7天 + 日期"重复）
+  const chipStartDate = range ? undefined : startDate;
+  const chipEndDate = range ? undefined : endDate;
   // 关键词长度上限 100（与导出 route 同口径），去除首尾空白
   const keyword = params.keyword?.trim().slice(0, 100) || null;
 
@@ -134,14 +138,48 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
       ? await getLoginLogs({ page, pageSize: PAGE_SIZE, ...(eventType ? { eventType } : {}), ...(startDate ? { startDate, endDate } : {}), ...(keyword ? { keyword } : {}) })
       : await getAuditLogs({ page, pageSize: PAGE_SIZE, ...(operation ? { operation } : {}), ...(startDate ? { startDate, endDate } : {}), ...(keyword ? { keyword } : {}) });
 
+  // 当前筛选摘要：让"为什么列表是这些"可解释，并支持单个移除/一键清空
+  const filterChips: Array<{ label: string; href: string }> = [];
+  if (eventType) {
+    filterChips.push({
+      label: LOGIN_EVENT_LABELS[eventType] ?? eventType,
+      href: pageHref(tab, 1, null, operation, range, keyword, chipStartDate, chipEndDate),
+    });
+  }
+  if (operation) {
+    filterChips.push({
+      label: AUDIT_OPERATION_LABELS[operation] ?? operation,
+      href: pageHref(tab, 1, eventType, null, range, keyword, chipStartDate, chipEndDate),
+    });
+  }
+  if (range) {
+    const rangeLabel = range === '24h' ? '近 24 小时' : range === '7d' ? '近 7 天' : '近 30 天';
+    filterChips.push({
+      label: rangeLabel,
+      href: pageHref(tab, 1, eventType, operation, null, keyword, undefined, undefined),
+    });
+  }
+  if (!range && (startDate || endDate)) {
+    filterChips.push({
+      label: `日期 ${startDate ?? '…'} ~ ${endDate ?? '…'}`,
+      href: pageHref(tab, 1, eventType, operation, null, keyword, null, null),
+    });
+  }
+  if (keyword) {
+    filterChips.push({
+      label: `关键词：${keyword}`,
+      href: pageHref(tab, 1, eventType, operation, range, null, chipStartDate, chipEndDate),
+    });
+  }
+
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
 
       {/* 标题 + 页签 + 类型筛选 + 导出：压缩为同一行（搜索/标题不应各占一整行） */}
       <div className="flex shrink-0 flex-wrap items-center gap-3">
         <h1 className="type-section-title shrink-0 text-foreground">审计日志</h1>
-        <AuditTabs tab={tab} hrefs={{ login: pageHref('login', 1, null, null, range, keyword, startDate, endDate), operation: pageHref('operation', 1, null, null, range, keyword, startDate, endDate) }} />
-        <AuditFilters tab={tab} eventType={eventType} operation={operation} range={range} keyword={keyword} startDate={startDate} endDate={endDate} />
+        <AuditTabs tab={tab} hrefs={{ login: pageHref('login', 1, null, null, range, keyword, chipStartDate, chipEndDate), operation: pageHref('operation', 1, null, null, range, keyword, chipStartDate, chipEndDate) }} />
+        <AuditFilters tab={tab} eventType={eventType} operation={operation} range={range} keyword={keyword} startDate={chipStartDate} endDate={chipEndDate} />
         {canExport ? (
           <div className="ml-auto flex items-center gap-2">
             {/* 导出是次要动作：合并为一个下拉，避免两个按钮把筛选行挤换行（chrome 33%→≤30%） */}
@@ -167,6 +205,26 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
           </div>
         ) : null}
       </div>
+
+      {filterChips.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5 rounded-md border border-border/60 bg-muted/30 px-2 py-1 text-[11px] text-muted-foreground">
+          <span className="shrink-0">当前筛选</span>
+          {filterChips.map((chip) => (
+            <Link
+              key={chip.label}
+              href={chip.href}
+              title={`移除筛选：${chip.label}`}
+              className="inline-flex items-center gap-1 rounded border border-border/60 bg-card px-1.5 py-0.5 text-foreground transition-colors hover:border-destructive/40 hover:text-destructive"
+            >
+              {chip.label}
+              <X className="h-3 w-3" />
+            </Link>
+          ))}
+          <Link href={`/audit-logs?tab=${tab}`} className="ml-auto shrink-0 text-muted-foreground hover:text-destructive">
+            清除全部
+          </Link>
+        </div>
+      )}
 
       {/* U-G05（F3 遗留）：本页用裸 Table，无法复用 DataTable 内部提示；此处保留**唯一一份**
           与共享组件同口径的 lg:hidden 提示（此前两个分支各内联一份窄屏断点提示，窄桌面不可见）。 */}
@@ -357,9 +415,9 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
           page={page}
           totalPages={pagination.totalPages}
           total={pagination.total}
-          hrefFor={(p) => pageHref(tab, p, eventType, operation, range, keyword, startDate, endDate)}
+          hrefFor={(p) => pageHref(tab, p, eventType, operation, range, keyword, chipStartDate, chipEndDate)}
           jumpAction="/audit-logs"
-          jumpParams={{ tab, ...(eventType ? { eventType } : {}), ...(operation ? { operation } : {}), ...(range ? { range } : {}), ...(keyword ? { keyword } : {}), ...(startDate ? { startDate } : {}), ...(endDate ? { endDate } : {}) }}
+          jumpParams={{ tab, ...(eventType ? { eventType } : {}), ...(operation ? { operation } : {}), ...(range ? { range } : {}), ...(keyword ? { keyword } : {}), ...(chipStartDate ? { startDate: chipStartDate } : {}), ...(chipEndDate ? { endDate: chipEndDate } : {}) }}
         />
       )}
     </div>

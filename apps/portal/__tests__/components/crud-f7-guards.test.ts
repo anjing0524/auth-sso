@@ -401,3 +401,21 @@ describe('用户详情"看人"完整性（2026-10-26，第十二轮）', () => {
     expect(src).toContain('serverUser.roles');
   });
 });
+
+describe('审计筛选可解释 + 失败登录入口（2026-10-26，第十三轮）', () => {
+  it('筛选 chips 可单个移除/清空，预置范围不重复日期', () => {
+    const src = read('src/app/(dashboard)/audit-logs/page.tsx');
+    expect(src).toContain('filterChips');
+    expect(src).toContain('当前筛选');
+    expect(src).toContain('清除全部');
+    expect(src).toContain('chipStartDate');
+    const filters = read('src/app/(dashboard)/audit-logs/components/audit-filters.tsx');
+    expect(filters).toContain('自定义日期');
+  });
+
+  it('工作台失败数直达“登录失败”筛选', () => {
+    const src = read('src/app/(dashboard)/dashboard/page.tsx');
+    expect(src).toContain('查看近 7 日登录失败');
+    expect(src).toContain('eventType=LOGIN_FAILED');
+  });
+});
