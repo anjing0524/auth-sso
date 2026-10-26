@@ -736,3 +736,15 @@ describe('访问日志第三页签（续一百四十三）', () => {
     expect(exportRoute).toContain('type === \'operation\'');
   });
 });
+
+describe('访问日志用户名质量（续一百四十四）', () => {
+  it('写入用真实 username；历史 userId 行读时回退', () => {
+    const writer = read('src/lib/auth/server-logger.ts');
+    expect(writer).toContain('schema.users.username');
+    expect(writer).not.toContain('username: identity.userId');
+    const data = read('src/app/audit/data.ts');
+    expect(data).toContain('l.username === l.userId');
+    expect(data).toContain('byId.get(l.userId)');
+    expect(data).toContain('getAccessLogById');
+  });
+});

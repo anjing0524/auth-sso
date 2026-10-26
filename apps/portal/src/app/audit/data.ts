@@ -7,7 +7,7 @@
 import 'server-only';
 
 import { db, schema } from '@/infrastructure/db';
-import { eq, desc, and, gte, lte, count, sql } from 'drizzle-orm';
+import { eq, desc, and, gte, lte, count, sql, inArray } from 'drizzle-orm';
 import type { AnyColumn, SQL } from 'drizzle-orm';
 import type { PgTable } from 'drizzle-orm/pg-core';
 import type { AuditOperation, LoginEventType } from '@auth-sso/contracts';
@@ -201,7 +201,7 @@ export async function getAccessLogs(params: PaginationParams & {
   addDateRangeConditions(conditions, schema.accessLogs.createdAt, params.startDate, params.endDate);
   addKeywordConditions(conditions, params.keyword, [schema.accessLogs.username, schema.accessLogs.path, schema.accessLogs.ip]);
 
-  return paginatedSelect(schema.accessLogs, schema.accessLogs.createdAt, conditions, params, (log) => ({
+  const result = await paginatedSelect(schema.accessLogs, schema.accessLogs.createdAt, conditions, params, (log) => ({
     id: log.id,
     userId: log.userId,
     username: log.username,
@@ -215,6 +215,22 @@ export async function getAccessLogs(params: PaginationParams & {
     duration: log.duration,
     createdAt: log.createdAt,
   }));
+
+  // 历史行把 userId 当 username 写入：批量回退真实用户名（只查当前页）
+  const unresolved = [...new Set(result.data
+    .filter((l) => (!l.username || l.username === l.userId) && l.userId)
+    .map((l) => l.userId!))];
+  if (unresolved.length > 0) {
+    const users = await db.select({ id: schema.users.id, username: schema.users.username })
+      .from(schema.users).where(inArray(schema.users.id, unresolved));
+    const byId = new Map(users.map((u) => [u.id, u.username]));
+    result.data = result.data.map((l) => (
+      (!l.username || l.username === l.userId) && l.userId
+        ? { ...l, username: byId.get(l.userId) ?? null }
+        : l
+    ));
+  }
+  return result;
 }
 
 // ========================================
@@ -243,5 +259,11 @@ export async function getLoginLogById(id: string) {
 /** 访问日志单条（按主键；审计详情页使用） */
 export async function getAccessLogById(id: string) {
   const [row] = await db.select().from(schema.accessLogs).where(eq(schema.accessLogs.id, id)).limit(1);
-  return row ?? null;
+  if (!row) return null;
+  if ((!row.username || row.username === row.userId) && row.userId) {
+    const [operator] = await db.select({ username: schema.users.username }).from(schema.users)
+      .where(eq(schema.users.id, row.userId)).limit(1);
+    return { ...row, username: operator?.username ?? null };
+  }
+  return row;
 }

@@ -21,6 +21,8 @@
 
 ## 变更记录
 
+- 2026-10-26（续一百四十四）: **访问日志用户名质量修复（UUID→真实用户名）**。`logServerDataRead` 把 `claims.sub`（恒等于 userId）当 username 写入，导致审计列表"用户"列显示裸 UUID，取证不可读也不符合语义。**①写入侧**：`logServerDataRead` 查一次 users 表取真实 username（PK 索引，fire-and-forget 成本可接受）；不再把 userId 冒充 username。**②历史数据读回退**：`getAccessLogs` 对当前页 `username === userId` 的行批量查 users 替换；`getAccessLogById` 单条回退；导出复用读模型，历史 CSV 同样可读。**③验证**：触发新访问后 DB 最新行 `username=admin`；列表/详情显示 admin、页面无裸 UUID；全量 **1227 passed**、e2e **11/11（1.1m）**、a11y 0、measure 0、typecheck/lint/build 0。
+
 - 2026-10-26（续一百四十三）: **审计「访问日志」闭环（第三页签 + 详情 + 导出）**。`access_logs` 已有 814 条读操作审计，但 UI 只有登录/操作两页签——数据在、链路断。**①页签/列表**：新增「访问日志」页签；筛选为关键词（用户/路径/IP）+ 时间范围；列表列含时间/用户/方法/路径/状态/IP/详情，移动端把时间/方法并入用户行、隐藏路径/IP 列，390 表宽 **364px**。**②详情页**：`/audit-logs/[id]?tab=access` 展示访问上下文（方法/路径/资源/状态/耗时）与来源（IP/UA），并可按用户跳访问记录；无弹窗。**③导出**：`/api/audit/export?type=access` 输出 10 列 CSV（时间/用户/方法/路径/资源类型/资源ID/状态/耗时/IP/UA）；`getAccessLogs` 支持 keyword；API 测试覆盖真实行。**④验证**：全量 **1225 passed**；e2e **11/11**（audit-detail 增访问链路）；a11y 0；measure 0；导出实测 816 行；typecheck/lint/build 0。
 
 - 2026-10-26（续一百四十二）: **权限/审计移动端列裁剪 + 审计参数取证**。**①权限表**：390 下表宽 790px，编码/类型/操作在屏外。移动端把「类型 · 编码」并入名称行，隐藏编码/类型列，操作图标化；表宽 **364px**，无横向滚动。**②审计表**：登录表 405px、操作表 364px 但静态“左右滑动”提示仍显示。登录事件列并入用户行（移动端徽章）、时间改两行（日期/时间）、IP/失败原因/URL 移动端隐藏；新增 `OverflowHint`（ResizeObserver 真实溢出才提示）替换静态提示。两表均 **364px**、无提示。**③审计取证**：详情页变更参数增加「复制 / 下载 JSON」，aria-label 明示；实测复制 toast、下载 `audit-params-<id>.json`。**验证**：全量 vitest **1224 passed**；e2e **11/11（30.2s）**；a11y exit 0；measure 文档/内容区/横向均 0；typecheck/lint/build 0。

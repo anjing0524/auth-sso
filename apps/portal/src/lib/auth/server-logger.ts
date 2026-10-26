@@ -1,6 +1,8 @@
 import 'server-only';
 
 import { headers } from 'next/headers';
+import { eq } from 'drizzle-orm';
+import { db, schema } from '@/infrastructure/db';
 import { resolveIdentity } from './verify-jwt';
 import { writeAccessLog, extractClientIP, extractUserAgent } from '@/lib/audit';
 import { createLogger } from '@/lib/logger';
@@ -37,10 +39,14 @@ export async function logServerDataRead(resourceType: string, resourceId: string
     // 数据读取日志与网关侧日志可凭此 ID 全链路关联
     const requestId = reqHeaders.get('x-request-id') ?? null;
 
+    // 旧实现把 claims.sub（= userId）当 username 写，审计列表显示 UUID；
+    // 这里查一次用户表拿真实用户名（索引 PK，代价可接受），历史行由读模型回退。
+    const [operator] = await db.select({ username: schema.users.username }).from(schema.users)
+      .where(eq(schema.users.id, identity.userId)).limit(1);
+
     writeAccessLog({
       userId: identity.userId,
-      // 该路径下没有独立用户名可用；此前填的是 claims.sub，而它恒等于 userId
-      username: identity.userId,
+      username: operator?.username ?? null,
       method: 'GET',
       path,
       resourceType,
