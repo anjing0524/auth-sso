@@ -151,7 +151,7 @@ export const createPermissionAction = withAuth(
         .from(schema.permissions)
         .where(eq(schema.permissions.code, v.data.code))
         .limit(1);
-      if (existing[0]) throw new DuplicateEntityError('Permission', 'code', PERMISSION_ERRORS.PERMISSION_ALREADY_EXISTS);
+      if (existing[0]) throw new DuplicateEntityError('权限', '编码', PERMISSION_ERRORS.PERMISSION_ALREADY_EXISTS);
 
       // Portal 管理页创建的权限都属于 portal 命名空间（PAGE/DIRECTORY 菜单，或 code 以 portal: 开头的 API）。
       // 之前 clientId 一直为 NULL ⇒ 角色带这些权限也拿不到 portal client 绑定，非管理员无法登录（权限审计 2026-10-21）。

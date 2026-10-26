@@ -67,7 +67,7 @@ export class DuplicateEntityError extends DomainError {
    * 而不是解析 "${entity} 的 ${field} 已存在" 这段中文。
    */
   constructor(entity: string, field: string, code: ErrorCode = COMMON_ERRORS.VALIDATION_ERROR) {
-    super(code, `${entity} 的 ${field} 已存在`, 409);
+    super(code, `${entity}${field}已存在`, 409);
   }
 }
 

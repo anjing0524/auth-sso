@@ -130,8 +130,8 @@ export const createUserAction = withAuth(
         // 一次查询即可，但要**分别报码**：客户端表单需要定位到具体输入框（#82）
         const usernameTaken = existing.username === v.data.username;
         throw new DuplicateEntityError(
-          'User',
-          usernameTaken ? 'username' : 'email',
+          '用户',
+          usernameTaken ? '用户名' : '邮箱',
           usernameTaken
             ? USER_ERRORS.USERNAME_ALREADY_EXISTS
             : USER_ERRORS.EMAIL_ALREADY_EXISTS,

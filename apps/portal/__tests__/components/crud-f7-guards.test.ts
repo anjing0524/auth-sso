@@ -871,3 +871,16 @@ describe('审计状态对比度与 a11y 覆盖（续一百五十五）', () => {
     }
   });
 });
+
+describe('重复实体错误中文化（续一百五十六）', () => {
+  it('领域模板去空格；角色/权限/用户传中文实体字段', () => {
+    const errors = read('src/domain/shared/errors.ts');
+    expect(errors).toContain('`${entity}${field}已存在`');
+    const roles = read('src/app/(dashboard)/roles/actions.ts');
+    expect(roles).toContain("DuplicateEntityError('角色', '编码'");
+    const perms = read('src/app/(dashboard)/permissions/actions.ts');
+    expect(perms).toContain("DuplicateEntityError('权限', '编码'");
+    const users = read('src/app/(dashboard)/users/actions.ts');
+    expect(users).toContain("'用户'");
+  });
+});

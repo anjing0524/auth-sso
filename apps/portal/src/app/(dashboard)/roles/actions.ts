@@ -68,7 +68,7 @@ export const createRoleAction = withAuth(
           .from(schema.roles)
           .where(eq(schema.roles.code, v.data.code))
           .limit(1);
-        if (existing[0]) throw new DuplicateEntityError('Role', 'code', ROLE_ERRORS.ROLE_ALREADY_EXISTS);
+        if (existing[0]) throw new DuplicateEntityError('角色', '编码', ROLE_ERRORS.ROLE_ALREADY_EXISTS);
 
         const r = createRole(v.data, generateUUID);
         await tx.insert(schema.roles).values(roleToInsertRow(r));
