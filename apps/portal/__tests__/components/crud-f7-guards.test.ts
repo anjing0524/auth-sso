@@ -643,3 +643,31 @@ describe('弹窗不滚动（续一百三十八）', () => {
     expect(src).toContain('border-t bg-card');
   });
 });
+
+describe('工作台风险与角色筛选（续一百三十九）', () => {
+  it('工作台风险条使用真实聚合，且每项带筛选链接', () => {
+    const data = read('src/app/(dashboard)/dashboard/data.ts');
+    expect(data).toContain('usersWithoutRoles');
+    expect(data).toContain('rolesWithoutPermissions');
+    expect(data).toContain('disabledClients');
+    const page = read('src/app/(dashboard)/dashboard/page.tsx');
+    expect(page).toContain('/users?noRole=1');
+    expect(page).toContain('/roles?sort=permissions-asc');
+    expect(page).toContain('/clients?status=DISABLED');
+    expect(page).toContain("variant=\"warning\""); // 风险数字对比度（text-warning 不达标）
+  });
+  it('用户列表支持未分配角色筛选（URL + SQL + UI）', () => {
+    const page = read('src/app/(dashboard)/users/page.tsx');
+    expect(page).toContain("params.noRole === '1'");
+    const data = read('src/app/(dashboard)/users/data.ts');
+    expect(data).toContain('notExists');
+    const filters = read('src/app/(dashboard)/users/components/UserFilters.tsx');
+    expect(filters).toContain('过滤角色分配');
+    expect(filters).toContain('未分配角色');
+  });
+  it('measure 脚本检测主内容区滚动（不再只查 document）', () => {
+    const measure = read('../../scripts/ux/measure.mjs');
+    expect(measure).toContain('contentScroll');
+    expect(measure).toContain('main?.firstElementChild');
+  });
+});

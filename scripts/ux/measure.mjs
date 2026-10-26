@@ -40,6 +40,9 @@ async function measurePage(page) {
   return page.evaluate(() => {
     const doc = document.scrollingElement;
     const main = document.querySelector('main');
+    // 主内容区自身是滚动容器（main overflow-hidden，内层 div overflow-auto）；
+    // 只查 document 会漏掉内容溢出，导致"无页面滚动"假绿。
+    const content = main?.firstElementChild;
     const row = document.querySelector('tbody tr');
     const rowTop = row ? row.getBoundingClientRect().top : null;
     const rows = [...document.querySelectorAll('tbody tr')].filter((tr) => {
@@ -52,6 +55,7 @@ async function measurePage(page) {
     return {
       docScroll: doc ? doc.scrollHeight > innerHeight + 1 : false,
       mainScroll: main ? main.scrollHeight > main.clientHeight + 1 : false,
+      contentScroll: content ? content.scrollHeight > content.clientHeight + 1 : false,
       docOverflowX: doc ? doc.scrollWidth > innerWidth + 1 : false,
       chromePct: rowTop == null ? null : Math.round((rowTop / innerHeight) * 100),
       visibleRows: rows,
@@ -167,7 +171,7 @@ lines.push('| 视口 | 路由 | 页面滚动 | 横向溢出 | chrome% | 可见�
 lines.push('|---|---|---|---|---|---|---|---|');
 for (const r of results) {
   lines.push(
-    `| ${r.viewport} | \`${r.route}\` | ${r.docScroll ? '**有**' : '无'} | ${r.docOverflowX ? '**有**' : '无'} | ${round(r.chromePct)} | ${round(r.visibleRows)} | ${round(r.inputH)}/${round(r.btnH)} | ${r.sticky === true ? '✓' : r.sticky === false ? '✗' : '-'} |`,
+    `| ${r.viewport} | \`${r.route}\` | ${r.docScroll ? '**有**' : '无'} | ${r.contentScroll ? '**有**' : '无'} | ${r.docOverflowX ? '**有**' : '无'} | ${round(r.chromePct)} | ${round(r.visibleRows)} | ${round(r.inputH)}/${round(r.btnH)} | ${r.sticky === true ? '✓' : r.sticky === false ? '✗' : '-'} |`,
   );
 }
 const dialogs = results.filter((r) => r.route.startsWith('dialog:') && r.height != null);

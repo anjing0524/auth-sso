@@ -30,6 +30,7 @@ interface PageProps {
     keyword?: string;
     status?: string;
     deptId?: string;
+    noRole?: string;
   }>;
 }
 
@@ -44,6 +45,7 @@ export default async function UsersPage({ searchParams }: PageProps) {
     : 'ALL';
   // 部门筛选：非 UUID 直接忽略（不得下沉到 PG uuid 比较）
   const deptId = params.deptId && isUuid(params.deptId) ? params.deptId : undefined;
+  const noRole = params.noRole === '1';
   const page = clampPage(params.page);
   const pageSize = 20;
 
@@ -58,7 +60,7 @@ export default async function UsersPage({ searchParams }: PageProps) {
     USER_PERMISSIONS.UPDATE,
   );
   const [{ data: users, pagination }, departments] = await Promise.all([
-    getUsers(scope, userId, { page, pageSize, keyword, status, ...(deptId ? { deptId } : {}) }),
+    getUsers(scope, userId, { page, pageSize, keyword, status, ...(deptId ? { deptId } : {}), ...(noRole ? { noRole } : {}) }),
     getDepartmentOptions(scope),
   ]);
 
@@ -69,12 +71,13 @@ export default async function UsersPage({ searchParams }: PageProps) {
     if (keyword) params.set('keyword', keyword);
     if (status !== 'ALL') params.set('status', status);
     if (deptId) params.set('deptId', deptId);
+    if (noRole) params.set('noRole', '1');
     params.set('page', String(pagination.totalPages));
     redirect(`/users?${params.toString()}`);
   }
 
   // U-G02：区分"系统无数据"与"筛选/搜索无结果"，后者给"清除筛选"出口。
-  const isFiltered = keyword.length > 0 || status !== 'ALL' || Boolean(deptId);
+  const isFiltered = keyword.length > 0 || status !== 'ALL' || Boolean(deptId) || noRole;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
@@ -90,10 +93,11 @@ export default async function UsersPage({ searchParams }: PageProps) {
               <div className="flex min-w-0 items-center gap-3">
                 <h1 className="shrink-0 text-[15px] font-semibold tracking-tight text-foreground">用户管理</h1>
                 <UserFilters
-                  key={`${keyword}-${status}-${deptId ?? 'ALL'}`}
+                  key={`${keyword}-${status}-${deptId ?? 'ALL'}-${noRole}`}
                   initialKeyword={keyword}
                   initialStatus={status}
                   initialDeptId={deptId ?? 'ALL'}
+                  initialNoRole={noRole ? 'NONE' : 'ALL'}
                   departments={departments}
                 />
               </div>

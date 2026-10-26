@@ -167,6 +167,7 @@ export default function LoginForm({ sessionId, initialError }: LoginFormProps) {
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
+              <p className="text-[11px] text-muted-foreground">忘记密码？请联系管理员重置（当前不支持自助找回）。</p>
             </div>
           </CardContent>
 

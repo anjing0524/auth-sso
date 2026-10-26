@@ -16,7 +16,7 @@ import 'server-only';
 
 import { cacheLife, cacheTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
-import { eq, desc, and, type SQL } from 'drizzle-orm';
+import { eq, desc, and, notExists, type SQL } from 'drizzle-orm';
 import { USER_LIST_COLUMNS, buildUserListConditions } from '@/db/user-queries';
 import { isScopeDenied, scopeFilter } from '@/lib/authz';
 import type { UserScope } from '@/lib/authz';
@@ -58,13 +58,15 @@ export async function getUsers(
     status: string;
     /** 可选：按部门 ID 过滤（在数据范围已授权的基础上叠加筛选） */
     deptId?: string;
+    /** 只看未分配角色的用户（工作台风险入口） */
+    noRole?: boolean;
   }
 ) {
   'use cache';
   cacheLife('minutes');
   cacheTag('users-list');
 
-  const { keyword, status, deptId } = params;
+  const { keyword, status, deptId, noRole } = params;
   // 非法页码在入口归一：LIMIT / OFFSET / 返回元信息三处共用同一值
   const { page, pageSize } = normalizePagination(params.page, params.pageSize);
   if (isScopeDenied(scope)) {
@@ -74,6 +76,13 @@ export async function getUsers(
   const conditions = buildUserListConditions({ keyword, status, scope, userId });
   // 部门 ID 二次筛选（在已授权范围内叠加）
   if (deptId) conditions.push(eq(schema.users.deptId, deptId));
+  if (noRole) {
+    conditions.push(notExists(
+      db.select({ userId: schema.userRoles.userId })
+        .from(schema.userRoles)
+        .where(eq(schema.userRoles.userId, schema.users.id)),
+    ));
+  }
   const where = and(...conditions);
 
   return withPagination(

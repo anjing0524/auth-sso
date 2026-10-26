@@ -11,6 +11,7 @@ import {
   Activity,
   History,
   Building2,
+  AlertTriangle,
 } from 'lucide-react';
 
 import {
@@ -41,7 +42,7 @@ import {
   can,
 } from '@auth-sso/contracts';
 import { formatTime } from '@/lib/format-date';
-import { getDashboardStats, getLoginSummary7d, getRecentAuditLogs } from './data';
+import { getDashboardStats, getDashboardRisks, getLoginSummary7d, getRecentAuditLogs } from './data';
 import { db } from '@/infrastructure/db';
 import { resolveIdentity } from '@/lib/auth/verify-jwt';
 import { resolveScope } from '@/lib/authz';
@@ -75,11 +76,12 @@ export default async function DashboardPage() {
   const canRoles = can(subject, ROLE_PERMISSIONS.LIST);
   const canClients = can(subject, CLIENT_PERMISSIONS.LIST);
   const canDepartments = can(subject, DEPARTMENT_PERMISSIONS.LIST);
-  const [stats, recentLogs, loginSummary] = await Promise.all([
+  const [stats, recentLogs, loginSummary, risks] = await Promise.all([
     getDashboardStats(scope),
     // 审计动态是跨部门敏感数据：没有 audit:read 的用户不查询、不渲染（此前任何 dashboard 用户都能看到）。
     canAudit ? getRecentAuditLogs(6) : Promise.resolve([]),
     canAudit ? getLoginSummary7d() : Promise.resolve(null),
+    getDashboardRisks(scope),
   ]);
 
   /**
@@ -243,14 +245,40 @@ export default async function DashboardPage() {
             </CardContent>
           </Card>
 
-          <div className="rounded-lg border border-border/60 bg-muted/30 px-3 py-2.5 text-[11px] leading-5 text-muted-foreground">
-            <p className="font-medium text-foreground">数据范围说明</p>
-            <p>本页指标按你的部门数据范围统计；越权数据不会出现在列表与审计中。</p>
-          </div>
         </div>
       </div>
+
+      {(canUsers || canRoles || canClients) && (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border border-border/70 bg-card px-3 py-2 text-[12px] shadow-sm">
+          <span className="flex items-center gap-1.5 font-medium text-foreground">
+            <AlertTriangle className="h-3.5 w-3.5 text-warning" /> 需要关注
+          </span>
+          {canUsers && (
+            <Link href="/users?noRole=1" className="text-muted-foreground hover:text-primary hover:underline">
+              未分配角色 <RiskCount value={risks.usersWithoutRoles} /> 人
+            </Link>
+          )}
+          {canRoles && (
+            <Link href="/roles?sort=permissions-asc" className="text-muted-foreground hover:text-primary hover:underline">
+              无权限角色 <RiskCount value={risks.rolesWithoutPermissions} /> 个
+            </Link>
+          )}
+          {canClients && (
+            <Link href="/clients?status=DISABLED" className="text-muted-foreground hover:text-primary hover:underline">
+              已禁用应用 <RiskCount value={risks.disabledClients} /> 个
+            </Link>
+          )}
+          <span className="ml-auto text-[10px] text-muted-foreground">按你的部门数据范围统计</span>
+        </div>
+      )}
     </div>
   );
+}
+
+/** 风险数字：>0 用语义 warning 徽章（对比度达标），0 用 muted 文本 */
+function RiskCount({ value }: { value: number }) {
+  if (value <= 0) return <span className="tabular-nums text-muted-foreground">{value}</span>;
+  return <Badge variant="warning" className="mx-0.5 inline-flex h-5 min-w-5 justify-center px-1 text-[11px] tabular-nums">{value}</Badge>;
 }
 
 /** 指标卡：整卡可点，避免"数字不能操作" */

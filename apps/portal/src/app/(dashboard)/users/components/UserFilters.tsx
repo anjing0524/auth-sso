@@ -23,6 +23,8 @@ interface UserFiltersProps {
   initialKeyword?: string;
   initialStatus?: string;
   initialDeptId?: string;
+  /** ALL | NONE：是否只看未分配角色的用户 */
+  initialNoRole?: string;
   departments?: Array<{ id: string; name: string }>;
 }
 
@@ -33,7 +35,7 @@ const STATUS_LABELS: Record<string, string> = {
   LOCKED: '已锁定',
 };
 
-export default function UserFilters({ initialKeyword = '', initialStatus = 'ALL', initialDeptId = 'ALL', departments = [] }: UserFiltersProps) {
+export default function UserFilters({ initialKeyword = '', initialStatus = 'ALL', initialDeptId = 'ALL', initialNoRole = 'ALL', departments = [] }: UserFiltersProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -73,6 +75,15 @@ export default function UserFilters({ initialKeyword = '', initialStatus = 'ALL'
           <SelectItem value="ACTIVE">正常</SelectItem>
           <SelectItem value="DISABLED">已禁用</SelectItem>
           <SelectItem value="LOCKED">已锁定</SelectItem>
+        </SelectContent>
+      </Select>
+      <Select value={initialNoRole} onValueChange={(value) => applyFilter('noRole', value === 'NONE' ? '1' : '')} disabled={isPending}>
+        <SelectTrigger aria-label="过滤角色分配" className="w-full md:w-36">
+          <SelectValue>{initialNoRole === 'NONE' ? '未分配角色' : '全部角色'}</SelectValue>
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="ALL">全部角色</SelectItem>
+          <SelectItem value="NONE">未分配角色</SelectItem>
         </SelectContent>
       </Select>
       <Select value={initialDeptId} onValueChange={(value) => applyFilter('deptId', value)} disabled={isPending}>

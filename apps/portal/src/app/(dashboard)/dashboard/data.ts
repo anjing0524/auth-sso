@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { db, schema } from '@/infrastructure/db';
-import { eq, ne, desc, count, and, gte, inArray } from 'drizzle-orm';
+import { eq, ne, desc, count, and, gte, inArray, isNull } from 'drizzle-orm';
 import { USER_DELETED } from '@auth-sso/contracts';
 import { scopeFilter, isScopeDenied } from '@/lib/authz';
 import type { UserScope } from '@/lib/authz';
@@ -88,5 +88,46 @@ export async function getLoginSummary7d(): Promise<LoginSummary> {
   return {
     success: byType.get('LOGIN_SUCCESS') ?? 0,
     failed: byType.get('LOGIN_FAILED') ?? 0,
+  };
+}
+
+
+export interface DashboardRisks {
+  /** 活跃但未分配任何角色的用户 */
+  usersWithoutRoles: number;
+  /** 没有任何权限的角色（空壳角色） */
+  rolesWithoutPermissions: number;
+  /** 已禁用但仍在列表中的应用 */
+  disabledClients: number;
+}
+
+/**
+ * 工作台“需要关注”：只返回聚合计数，明细通过对应列表筛选页查看。
+ * 用户/角色按数据范围过滤；应用为全局资源（与 stats.clients 同口径）。
+ */
+export async function getDashboardRisks(scope: UserScope): Promise<DashboardRisks> {
+  if (isScopeDenied(scope)) {
+    return { usersWithoutRoles: 0, rolesWithoutPermissions: 0, disabledClients: 0 };
+  }
+  const [[u], [r], [c]] = await Promise.all([
+    db.select({ count: count() })
+      .from(schema.users)
+      .leftJoin(schema.userRoles, eq(schema.userRoles.userId, schema.users.id))
+      .where(and(
+        ne(schema.users.status, USER_DELETED),
+        isNull(schema.users.deletedAt),
+        isNull(schema.userRoles.userId),
+        scopeFilter(scope, schema.users.deptId),
+      )),
+    db.select({ count: count() })
+      .from(schema.roles)
+      .leftJoin(schema.rolePermissions, eq(schema.rolePermissions.roleId, schema.roles.id))
+      .where(and(isNull(schema.rolePermissions.roleId), scopeFilter(scope, schema.roles.deptId))),
+    db.select({ count: count() }).from(schema.clients).where(eq(schema.clients.status, 'DISABLED')),
+  ]);
+  return {
+    usersWithoutRoles: Number(u?.count ?? 0),
+    rolesWithoutPermissions: Number(r?.count ?? 0),
+    disabledClients: Number(c?.count ?? 0),
   };
 }
