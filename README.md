@@ -140,6 +140,7 @@ Gateway 在进程内完成 ACME HTTP-01 验证、证书签发与热加载，无�
 
 - [文档地图 (docs/README.md)](docs/README.md) — 先看这里：每份文档的职责与权威性
 - [工程约定 (AGENTS.md)](AGENTS.md) — 项目结构、环境、测试体系与门禁规则（唯一出处）
+- [AI Agent 治理工作流与技能标准 (docs/agent-governance.md)](docs/agent-governance.md) — 技能格式与路由、六阶段治理工作流、守卫台账
 - [产品需求 (docs/spec/PRD.md)](docs/spec/PRD.md) — 核心功能、业务范围与用户模型
 - [系统架构 (docs/spec/ARCHITECTURE.md)](docs/spec/ARCHITECTURE.md) — 系统组成、技术选型、认证与 SSO 流程
 - [架构约束指南 (docs/spec/ARCHITECTURE_CONSTRAINTS.md)](docs/spec/ARCHITECTURE_CONSTRAINTS.md) — 代码规范、分层约束与 Code Review 红线
@@ -147,7 +148,7 @@ Gateway 在进程内完成 ACME HTTP-01 验证、证书签发与热加载，无�
 - [接口契约 (docs/spec/API.md)](docs/spec/API.md) — 核心接口清单与字段级契约
 - [第三方集成说明 (docs/spec/third-party-integration.md)](docs/spec/third-party-integration.md) — 企微、飞书、钉钉等三方登录集成规范
 - [需求追踪矩阵 (docs/spec/REQUIREMENTS_MATRIX.md)](docs/spec/REQUIREMENTS_MATRIX.md) — 需求→验收标准全覆盖
-- [架构决策记录 (docs/adr/)](docs/adr/) — ADR-001～026（共 26 篇）：与代码冲突时先信代码，再查这里的理由
+- [架构决策记录 (docs/adr/)](docs/adr/) — ADR-001～028（共 28 篇）：与代码冲突时先信代码，再查这里的理由
 - [里程碑与取舍 (docs/roadmap.md)](docs/roadmap.md) — 变更记录（按时间倒序）
 - [领域词汇表 (docs/glossary.md)](docs/glossary.md) — 领域概念的唯一真相源
 - [接入验证指南 (docs/INTEGRATION_GUIDE.md)](docs/INTEGRATION_GUIDE.md) — Gateway 代理模式与子应用接入

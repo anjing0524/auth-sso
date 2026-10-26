@@ -154,7 +154,9 @@ API 层里生产业务模块的模块级 mock 必须是**类型化工厂**（`vi
 ## 文档与流程
 
 - 议题在 GitHub Issues（`anjing0524/auth-sso`，走 `gh` CLI）；五个 triage 标签保持默认。
-- 领域词汇唯一真相源：`docs/glossary.md`；架构决策：`docs/adr/`（ADR-001~026）。
+- 领域词汇唯一真相源：`docs/glossary.md`；架构决策：`docs/adr/`（ADR-001~028）。
+- 任务级治理流程：`.dsh/skills/`（`governance-*` 技能，按 whenToUse 加载）；技能标准与路由唯一出处 `docs/agent-governance.md`（勿在本文件重复规则）。
+- 执行位置：能在主会话完成的工作不派子 agent；仅当任务可独立并行、且隔离或吞吐有明确收益时才使用 subagent / workflow，并说明理由。
 
 ## Portal 架构要点
 
@@ -163,7 +165,7 @@ API 层里生产业务模块的模块级 mock 必须是**类型化工厂**（`vi
 - **分层**: `src/app/(dashboard)/` 等页面目录（page.tsx + data.ts + actions.ts） → `src/domain/`（纯函数） → Drizzle 直调。无 Repository/Mapper 层
 - **单控制器原则**: 内部页面写操作只用 Server Actions（actions.ts），不用 REST API 路由。外部系统/跨域/OIDC 回调才写 route.ts
 - **读模型**: `data.ts` 中用 `"use cache"` + `cacheLife()` + `cacheTag()`（Next.js 16 Cache Components）
-- **Controller 职责约束**（唯一硬性）：不得出现业务规则判定（`instanceof` 错误分支 / 权限判定 / 状态机 / 配额计算），只允许「编排 + 映射」两类语句；必须经 `withAuth` + `validate()` + `withScopedWrite/withScopedRow`，多表写入同一事务。**不设行数上限**——行数不是复杂度的好代理（见 ADR-019）。复杂度由 lint 强制：`complexity ≤ 15`、`max-depth ≤ 4`；`@/` 路径别名 = `src/`
+- **Controller 职责约束**（唯一硬性）：不得出现业务规则判定（`instanceof` 错误分支 / 权限判定 / 状态机 / 配额计算），只允许「编排 + 映射」两类语句；必须经 `withAuth` + `validate()` + `withScopedWrite`（targets 非空）/ `withScopedRow` / `withGlobalWrite`，多表写入同一事务。**不设行数上限**——行数不是复杂度的好代理（见 ADR-019）。复杂度由 lint 强制：`complexity ≤ 15`、`max-depth ≤ 4`；`@/` 路径别名 = `src/`
 - **domain 层纯 TS**: 禁止 import `next/*` 或 Drizzle；多表写入必须 `db.transaction()`
 - **枚举值**: 从 `@auth-sso/contracts` 常值数组派生 `z.enum(ARR)` / `pgEnum(...)`，禁止手写字面量
 - **错误处理**: `DomainError` 类体系 + `mapDomainError()` 统一映射，Controller 不手写 `instanceof` 分支
@@ -184,7 +186,7 @@ API 层里生产业务模块的模块级 mock 必须是**类型化工厂**（`vi
 - pnpm@10.12.4，CI 使用 `--frozen-lockfile`
 - ESLint flat config (`eslint.base.mjs`)，`consistent-type-imports` 使用 `inline-type-imports` 风格
 - Next.js 16: Middleware 改名为 Proxy，Server Function 公开可达（三层防御原因）
-- **Docker 是构建 / 部署 / 验收的主路径**（CI 亦然，见 `validation-suite.yml`）。唯一入口与文件矩阵：**`docker/README.md` §7**（生产部署在 §1–§6）。
+- **Docker 是构建 / 部署 / 验收的主路径**（CI 亦然，见 `.github/workflows/`，分类见其 `README.md`）。唯一入口与文件矩阵：**`docker/README.md` §7**（生产部署在 §1–§6）。
   常用：`pnpm stack:up|build|status|logs|down`（== `./scripts/docker/stack.sh`）、`pnpm test:e2e`
   （== `scripts/e2e/release.sh`：构建 → 起 `auth-sso-test` 栈 → Playwright release 闭环 → 清理）。
   入口 `https://127.0.0.1:19443`（自签证书，`curl -k` / Playwright `ignoreHTTPSErrors`）。
