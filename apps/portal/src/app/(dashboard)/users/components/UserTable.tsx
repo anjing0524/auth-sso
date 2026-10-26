@@ -5,7 +5,7 @@
  * 采用 React 19 useTransition 绑定 Server Action Controller，安全下沉领域逻辑
  */
 
-import { useOptimistic, useTransition } from 'react';
+import { useOptimistic, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
@@ -27,6 +27,10 @@ import {
   TableRow
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -36,6 +40,7 @@ import { TablePagination } from '@/components/shared/table-pagination';
 import { PermissionGuard } from '@/components/shared/permission-guard';
 import { USER_PERMISSIONS, type UserStatus } from '@auth-sso/contracts';
 import { toggleUserStatusAction, unlockUserAction } from '../actions';
+import { bulkUpdateUserStatusAction } from '../bulk-actions';
 
 import { formatDate } from '@/lib/format-date';
 import { accountStatus } from '@/lib/status-label';
@@ -84,6 +89,8 @@ interface UserTableProps {
   isFiltered?: boolean;
   /** 「清除筛选」目标地址（回第 1 页、清空 keyword/status） */
   clearHref?: string;
+  /** 是否有 user:update（无权限时不显示多选与批量操作） */
+  canUpdate?: boolean;
 }
 
 /**
@@ -128,7 +135,7 @@ export function UserTableSkeleton() {
   );
 }
 
-export default function UserTable({ users, pagination, filters, isFiltered = false, clearHref = '/users' }: UserTableProps) {
+export default function UserTable({ users, pagination, filters, isFiltered = false, clearHref = '/users', canUpdate = false }: UserTableProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -151,6 +158,39 @@ export default function UserTable({ users, pagination, filters, isFiltered = fal
   );
 
   const [, startTransition] = useTransition();
+
+  // 多选：仅当有 user:update 时启用；翻页/筛选后清空，避免"选了第一页却批量改了不可见的人"
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkTarget, setBulkTarget] = useState<'DISABLED' | 'ACTIVE' | null>(null);
+  const [bulking, setBulking] = useState(false);
+  // 只对"当前页可见"的选中项生效：翻页/筛选后旧选择自然失效，避免改到看不见的人
+  const selectedIds = canUpdate ? users.filter((u) => selected.has(u.id)).map((u) => u.id) : [];
+  const selectedCount = selectedIds.length;
+  const allSelected = canUpdate && users.length > 0 && users.every((u) => selected.has(u.id));
+  const toggleSelect = (id: string, checked: boolean) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(id); else next.delete(id);
+      return next;
+    });
+  };
+  const toggleSelectAll = (checked: boolean) => {
+    setSelected(checked ? new Set(users.map((u) => u.id)) : new Set());
+  };
+  const runBulk = async () => {
+    if (!bulkTarget) return;
+    setBulking(true);
+    try {
+      const res = await bulkUpdateUserStatusAction(selectedIds, bulkTarget);
+      if (!res.success) reportFailure(res, '批量操作失败');
+      else toast.success(res.message ?? '批量操作完成');
+      setSelected(new Set());
+      setBulkTarget(null);
+      router.refresh();
+    } finally {
+      setBulking(false);
+    }
+  };
 
   const handleToggleStatus = (user: User) => {
     startTransition(async () => {
@@ -178,6 +218,17 @@ export default function UserTable({ users, pagination, filters, isFiltered = fal
   };
 
   const columns = [
+    ...(canUpdate ? [{
+      key: 'select',
+      className: 'w-8',
+      header: (
+        <Checkbox
+          aria-label="全选本页用户"
+          checked={allSelected}
+          onCheckedChange={(checked) => toggleSelectAll(checked === true)}
+        />
+      ),
+    }] : []),
     { key: 'user', header: '用户信息', className: 'w-[300px]' },
     { key: 'dept', header: '部门' },
     { key: 'status', header: '状态' },
@@ -186,7 +237,16 @@ export default function UserTable({ users, pagination, filters, isFiltered = fal
   ];
 
   const renderRow = (user: User) => (
-    <TableRow key={user.id} className="group hover:bg-muted/50 transition-colors border-b last:border-none">
+    <TableRow key={user.id} className={`group hover:bg-muted/50 transition-colors border-b last:border-none ${selected.has(user.id) ? 'bg-primary/[0.03]' : ''}`}>
+      {canUpdate && (
+        <TableCell className="w-8 pr-0">
+          <Checkbox
+            aria-label={`选择用户 ${user.name}`}
+            checked={selected.has(user.id)}
+            onCheckedChange={(checked) => toggleSelect(user.id, checked === true)}
+          />
+        </TableCell>
+      )}
       <TableCell>
         <div className="flex items-center gap-3">
           <Avatar className="h-10 w-10 ring-2 ring-background transition-transform duration-300 group-hover:scale-110 shadow-sm">
@@ -280,7 +340,21 @@ export default function UserTable({ users, pagination, filters, isFiltered = fal
         )
       }
       renderRow={renderRow}
-      cardHeader={filters}
+      cardHeader={<>
+        {filters}
+        {canUpdate && selectedCount > 0 && (
+          <div className="flex flex-wrap items-center gap-2 border-b bg-primary/[0.04] px-3 py-1.5">
+            <span className="text-[12px] font-medium">已选 {selectedCount} 人</span>
+            <Button size="sm" className="h-7 bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => setBulkTarget('DISABLED')}>
+              批量禁用
+            </Button>
+            <Button size="sm" variant="outline" className="h-7" onClick={() => setBulkTarget('ACTIVE')}>
+              批量恢复
+            </Button>
+            <Button size="sm" variant="ghost" className="h-7" onClick={() => setSelected(new Set())}>取消选择</Button>
+          </div>
+        )}
+      </>}
     />
 
     <TablePagination
@@ -289,6 +363,35 @@ export default function UserTable({ users, pagination, filters, isFiltered = fal
       total={pagination.total}
       onPageChange={handlePageChange}
     />
+
+    {/* 批量启用/禁用确认：明确人数与影响（禁用会立即撤销活跃会话） */}
+    <Dialog open={bulkTarget !== null} onOpenChange={(open) => { if (!open) setBulkTarget(null); }}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{bulkTarget === 'DISABLED' ? '批量禁用用户？' : '批量恢复用户？'}</DialogTitle>
+          <DialogDescription>
+            将对已选的 {selectedCount} 个用户执行{bulkTarget === 'DISABLED' ? '禁用' : '恢复'}
+            {bulkTarget === 'DISABLED' ? '：禁用会立即撤销其所有活跃会话，无法登录' : '：恢复后用户可正常登录并保留原有角色'}。
+          </DialogDescription>
+        </DialogHeader>
+        <ul className="max-h-40 space-y-0.5 overflow-y-auto text-[12px] text-muted-foreground">
+          {users.filter((u) => selected.has(u.id)).slice(0, 8).map((u) => (
+            <li key={u.id} className="truncate">{u.name} <span className="font-mono text-[11px]">({u.username})</span></li>
+          ))}
+          {selectedCount > 8 && <li>… 其余 {selectedCount - 8} 人</li>}
+        </ul>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setBulkTarget(null)} disabled={bulking}>取消</Button>
+          <Button
+            variant={bulkTarget === 'DISABLED' ? 'destructive' : 'default'}
+            onClick={runBulk}
+            disabled={bulking}
+          >
+            {bulking ? '处理中...' : `确认${bulkTarget === 'DISABLED' ? '禁用' : '恢复'} ${selectedCount} 人`}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
     </div>
   </>);
 }

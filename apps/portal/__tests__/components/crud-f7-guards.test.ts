@@ -345,3 +345,22 @@ describe('审计自定义时间区间（2026-10-26，第八轮）', () => {
     expect(filters).toContain('结束日期');
   });
 });
+
+describe('用户批量状态操作（2026-10-26，第九轮）', () => {
+  it('列表有全选/多选 + 批量禁用/恢复确认 + 独立 action', () => {
+    const table = read('src/app/(dashboard)/users/components/UserTable.tsx');
+    expect(table).toContain('全选本页用户');
+    expect(table).toContain('批量禁用');
+    expect(table).toContain('批量恢复');
+    expect(table).toContain('已选');
+    expect(table).toContain('selectedIds');
+    const action = read('src/app/(dashboard)/users/bulk-actions.ts');
+    expect(action).toContain('bulkUpdateUserStatusAction');
+    expect(action).toContain('withScopedRow');
+    expect(action).toContain('CANNOT_DISABLE_SELF');
+    expect(action).toContain('revokeUserAccessByUserId');
+    const page = read('src/app/(dashboard)/users/page.tsx');
+    expect(page).toContain('canUpdate');
+    expect(page).toContain('USER_PERMISSIONS.UPDATE');
+  });
+});

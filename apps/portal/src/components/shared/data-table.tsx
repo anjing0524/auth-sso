@@ -17,8 +17,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 
 export interface DataTableProps<T> {
-  /** 表格列头定义 */
-  columns: { key: string; header: string; className?: string }[];
+  /** 表格列头定义（header 允许传 Checkbox 等交互元素） */
+  columns: { key: string; header: React.ReactNode; className?: string }[];
   /** 数据行 */
   data: T[];
   /** 加载中（显示骨架屏） */

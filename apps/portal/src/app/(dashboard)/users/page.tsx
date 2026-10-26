@@ -4,6 +4,7 @@
  * 鉴权由 layout.tsx 统一处理，本组件零鉴权样板，专注数据获取与渲染。
  */
 import { redirect } from 'next/navigation';
+import { USER_PERMISSIONS, can } from '@auth-sso/contracts';
 import { resolveIdentity } from '@/lib/auth';
 import { resolveScope } from '@/lib/authz';
 import { clampPage } from '@/lib/pagination';
@@ -15,6 +16,7 @@ import CreateUserDialog from './components/CreateUserDialog';
 import UserTable from './components/UserTable';
 
 import { TableToolbar } from '@/components/shared/table-toolbar';
+import { getUserPermissionContext, toPermissionContextOrNull } from '@/lib/permissions';
 
 /**
  * 该路由读取会话/动态数据，**保留服务端阻塞**（Cache Components 的 instant 导航校验）。
@@ -49,6 +51,12 @@ export default async function UsersPage({ searchParams }: PageProps) {
   const identity = await resolveIdentity();
   const scope = identity ? await resolveScope(db, identity.userId) : { deptIds: [] };
   const userId = identity?.userId ?? '';
+  // 批量操作入口按 user:update 渲染；无权限时不显示多选列（服务端仍二次校验）
+  const permCtx = identity ? toPermissionContextOrNull(await getUserPermissionContext(identity.userId)) : null;
+  const canUpdate = can(
+    { roleCodes: permCtx?.roles.map((r) => r.code) ?? [], permissionCodes: permCtx?.permissions ?? [] },
+    USER_PERMISSIONS.UPDATE,
+  );
   const [{ data: users, pagination }, departments] = await Promise.all([
     getUsers(scope, userId, { page, pageSize, keyword, status, ...(deptId ? { deptId } : {}) }),
     getDepartmentOptions(scope),
@@ -73,6 +81,7 @@ export default async function UsersPage({ searchParams }: PageProps) {
       <UserTable
         users={users}
         pagination={pagination}
+        canUpdate={canUpdate}
         isFiltered={isFiltered}
         clearHref="/users"
         filters={
