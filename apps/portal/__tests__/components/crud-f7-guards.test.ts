@@ -929,3 +929,12 @@ describe('角色移动端工具栏（续一百五十九）', () => {
     expect(src).toContain('w-[calc(50%-0.25rem)] md:w-32');
   });
 });
+
+describe('Dialog 页脚与内容内边距一致（续一百六十）', () => {
+  it('DialogContent p-5 与 DialogFooter -mx-5/-mb-5/p-5 对齐，不产生 4px 溢出', () => {
+    const src = read('src/components/ui/dialog.tsx');
+    expect(src).toContain('rounded-2xl bg-popover p-5');
+    expect(src).toContain('-mx-5 -mb-5 flex flex-col-reverse gap-2 rounded-b-2xl border-t bg-muted/50 p-5');
+    expect(src).not.toContain('-mx-6 -mb-6');
+  });
+});
