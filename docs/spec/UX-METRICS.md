@@ -182,7 +182,7 @@
 - **数据稀疏页**：roles 行 49px（含描述占位）但 800h 仍为 14 行；users/roles/clients 现在均有 60 条规模数据验证。
 - **dashboard** 非列表页不适用 chrome 预算；首屏无滚动。
 - **弹窗**：用户创建 550、角色创建 404、权限删除 228，均 ≤600 视口且无内部滚动。
-- **仍存在的非布局缺口**：建号→分配→登录 e2e 未固化；审计 USER_CREATE 未记录 targetUserId；角色按权限数排序未做。
+- **非布局缺口（更新）**：建号→分配→登录 e2e 已固化为 `tests/e2e/user-lifecycle.spec.ts`（本地 14s 通过）；剩余：审计 USER_CREATE 未记录 targetUserId、角色按权限数排序未做。
 
 ## 7. 无障碍抽检（2026-10-26）
 
