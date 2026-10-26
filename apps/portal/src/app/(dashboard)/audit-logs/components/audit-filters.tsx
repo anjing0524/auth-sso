@@ -24,6 +24,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { SearchInput } from '@/components/shared/search-input';
+import { Input } from '@/components/ui/input';
 
 interface Props {
   tab: 'login' | 'operation';
@@ -33,6 +34,9 @@ interface Props {
   range?: '24h' | '7d' | '30d' | null;
   /** 关键词（用户名/IP/URL）；300ms 防抖后写 URL */
   keyword?: string | null;
+  /** 自定义区间（YYYY-MM-DD）；与预置 range 互斥 */
+  startDate?: string | null;
+  endDate?: string | null;
 }
 
 const TIME_RANGE_OPTIONS: Array<{ value: string; label: string }> = [
@@ -40,14 +44,17 @@ const TIME_RANGE_OPTIONS: Array<{ value: string; label: string }> = [
   { value: '24h', label: '近 24 小时' },
   { value: '7d', label: '近 7 天' },
   { value: '30d', label: '近 30 天' },
+  { value: 'CUSTOM', label: '自定义日期' },
 ];
 
-export function AuditFilters({ tab, eventType, operation, range, keyword }: Props) {
+export function AuditFilters({ tab, eventType, operation, range, keyword, startDate, endDate }: Props) {
   const [kw, setKw] = useState(keyword ?? '');
+  // 自定义区间是独立模式：进入后保留已填日期，切回预置/全部时清空
+  const [customMode, setCustomMode] = useState(!range && Boolean(startDate || endDate));
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const router = useRouter();
 
-  const push = (next: { eventType?: string | null; operation?: string | null; range?: string | null; keyword?: string | null }) => {
+  const push = (next: { eventType?: string | null; operation?: string | null; range?: string | null; keyword?: string | null; startDate?: string | null; endDate?: string | null }) => {
     const params = new URLSearchParams();
     params.set('tab', tab);
     const ev = next.eventType !== undefined ? next.eventType : eventType;
@@ -58,6 +65,10 @@ export function AuditFilters({ tab, eventType, operation, range, keyword }: Prop
     if (rg) params.set('range', rg);
     const kwd = next.keyword !== undefined ? next.keyword : keyword;
     if (kwd) params.set('keyword', kwd);
+    const sd = next.startDate !== undefined ? next.startDate : startDate;
+    const ed = next.endDate !== undefined ? next.endDate : endDate;
+    if (sd) params.set('startDate', sd);
+    if (ed) params.set('endDate', ed);
     router.push(`/audit-logs?${params.toString()}`);
   };
 
@@ -74,17 +85,47 @@ export function AuditFilters({ tab, eventType, operation, range, keyword }: Prop
   }, [kw]);
 
 
+  const selectValue = range ?? (customMode ? 'CUSTOM' : 'ALL');
   const timeRangeSelect = (
-    <Select value={range ?? 'ALL'} onValueChange={(v) => push({ range: v === 'ALL' ? null : v })}>
-      <SelectTrigger aria-label="时间范围筛选" className="w-32">
-        <SelectValue>{TIME_RANGE_OPTIONS.find((o) => o.value === (range ?? 'ALL'))?.label ?? '全部时间'}</SelectValue>
-      </SelectTrigger>
-      <SelectContent>
-        {TIME_RANGE_OPTIONS.map((o) => (
-          <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+    <div className="flex flex-wrap items-center gap-2">
+      <Select
+        value={selectValue}
+        onValueChange={(v) => {
+          if (v === 'CUSTOM') {
+            setCustomMode(true);
+            push({ range: null });
+          } else if (v === 'ALL') {
+            setCustomMode(false);
+            push({ range: null, startDate: null, endDate: null });
+          } else {
+            setCustomMode(false);
+            push({ range: v, startDate: null, endDate: null });
+          }
+        }}
+      >
+        <SelectTrigger aria-label="时间范围筛选" className="w-32">
+          <SelectValue>{TIME_RANGE_OPTIONS.find((o) => o.value === selectValue)?.label ?? '全部时间'}</SelectValue>
+        </SelectTrigger>
+        <SelectContent>
+          {TIME_RANGE_OPTIONS.map((o) => (
+            <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      {customMode && (
+        <>
+          <Input
+            type="date" aria-label="开始日期" value={startDate ?? ''} className="w-32"
+            onChange={(e) => push({ startDate: e.target.value || null })}
+          />
+          <span className="text-[11px] text-muted-foreground">至</span>
+          <Input
+            type="date" aria-label="结束日期" value={endDate ?? ''} className="w-32"
+            onChange={(e) => push({ endDate: e.target.value || null })}
+          />
+        </>
+      )}
+    </div>
   );
 
   if (tab === 'login') {

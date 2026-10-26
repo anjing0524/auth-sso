@@ -332,3 +332,16 @@ describe('个人中心信息架构（2026-10-26）', () => {
     expect(src).not.toContain('权限矩阵');
   });
 });
+
+describe('审计自定义时间区间（2026-10-26，第八轮）', () => {
+  it('自定义 startDate/endDate 走校验、URL、导出与分页', () => {
+    const page = read('src/app/(dashboard)/audit-logs/page.tsx');
+    expect(page).toContain('resolveDateFilters');
+    expect(page).toContain('startDate');
+    expect(page).toContain('endDate');
+    const filters = read('src/app/(dashboard)/audit-logs/components/audit-filters.tsx');
+    expect(filters).toContain('自定义日期');
+    expect(filters).toContain('开始日期');
+    expect(filters).toContain('结束日期');
+  });
+});

@@ -59,12 +59,16 @@ interface PageProps {
     operation?: string;
     range?: string;
     keyword?: string;
+    startDate?: string;
+    endDate?: string;
   }>;
 }
 
 /** 时间范围白名单（URL 参数值 → 距今天数）；非法值不下沉到 SQL */
 const TIME_RANGES = ['24h', '7d', '30d'] as const;
 type TimeRange = (typeof TIME_RANGES)[number];
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 function resolveRange(value?: string): { range: TimeRange | null; startDate?: string; endDate?: string } {
   if (!value || !(TIME_RANGES as readonly string[]).includes(value)) return { range: null };
@@ -74,15 +78,30 @@ function resolveRange(value?: string): { range: TimeRange | null; startDate?: st
   return { range: value as TimeRange, startDate: start, endDate: end };
 }
 
+/** 自定义日期区间：预置范围优先；日期需 YYYY-MM-DD 且 start ≤ end，否则忽略（不下沉 SQL） */
+function resolveDateFilters(
+  rangeValue?: string, startParam?: string, endParam?: string,
+): { range: TimeRange | null; startDate?: string; endDate?: string } {
+  const preset = resolveRange(rangeValue);
+  if (preset.range) return preset;
+  const start = startParam && DATE_RE.test(startParam) ? startParam : undefined;
+  const end = endParam && DATE_RE.test(endParam) ? endParam : undefined;
+  if (start && end && start > end) return { range: null };
+  return { range: null, startDate: start, endDate: end };
+}
+
 /** 生成分页链接的 href：保留当前 tab 与筛选条件（规模数据下必须可分享/可刷新） */
 function pageHref(
-  tab: string, page: number, eventType?: string | null, operation?: string | null, range?: TimeRange | null, keyword?: string | null,
+  tab: string, page: number, eventType?: string | null, operation?: string | null, range?: TimeRange | null,
+  keyword?: string | null, startDate?: string | null, endDate?: string | null,
 ): string {
   const params = new URLSearchParams({ tab });
   if (tab === 'login' && eventType) params.set('eventType', eventType);
   if (tab === 'operation' && operation) params.set('operation', operation);
   if (range) params.set('range', range);
   if (keyword) params.set('keyword', keyword);
+  if (startDate) params.set('startDate', startDate);
+  if (endDate) params.set('endDate', endDate);
   if (page > 1) params.set('page', String(page));
   return `/audit-logs?${params.toString()}`;
 }
@@ -105,7 +124,7 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
     ? (params.eventType as LoginEventType) : null;
   const operation = AUDIT_OPERATION_VALUES.includes(params.operation as AuditOperation)
     ? (params.operation as AuditOperation) : null;
-  const { range, startDate, endDate } = resolveRange(params.range);
+  const { range, startDate, endDate } = resolveDateFilters(params.range, params.startDate, params.endDate);
   // 关键词长度上限 100（与导出 route 同口径），去除首尾空白
   const keyword = params.keyword?.trim().slice(0, 100) || null;
 
@@ -121,8 +140,8 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
       {/* 标题 + 页签 + 类型筛选 + 导出：压缩为同一行（搜索/标题不应各占一整行） */}
       <div className="flex shrink-0 flex-wrap items-center gap-3">
         <h1 className="type-section-title shrink-0 text-foreground">审计日志</h1>
-        <AuditTabs tab={tab} hrefs={{ login: pageHref('login', 1, null, null, range, keyword), operation: pageHref('operation', 1, null, null, range, keyword) }} />
-        <AuditFilters tab={tab} eventType={eventType} operation={operation} range={range} keyword={keyword} />
+        <AuditTabs tab={tab} hrefs={{ login: pageHref('login', 1, null, null, range, keyword, startDate, endDate), operation: pageHref('operation', 1, null, null, range, keyword, startDate, endDate) }} />
+        <AuditFilters tab={tab} eventType={eventType} operation={operation} range={range} keyword={keyword} startDate={startDate} endDate={endDate} />
         {canExport ? (
           <div className="ml-auto flex items-center gap-2">
             {/* 导出是次要动作：合并为一个下拉，避免两个按钮把筛选行挤换行（chrome 33%→≤30%） */}
@@ -338,9 +357,9 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
           page={page}
           totalPages={pagination.totalPages}
           total={pagination.total}
-          hrefFor={(p) => pageHref(tab, p, eventType, operation, range, keyword)}
+          hrefFor={(p) => pageHref(tab, p, eventType, operation, range, keyword, startDate, endDate)}
           jumpAction="/audit-logs"
-          jumpParams={{ tab, ...(eventType ? { eventType } : {}), ...(operation ? { operation } : {}), ...(range ? { range } : {}), ...(keyword ? { keyword } : {}) }}
+          jumpParams={{ tab, ...(eventType ? { eventType } : {}), ...(operation ? { operation } : {}), ...(range ? { range } : {}), ...(keyword ? { keyword } : {}), ...(startDate ? { startDate } : {}), ...(endDate ? { endDate } : {}) }}
         />
       )}
     </div>
