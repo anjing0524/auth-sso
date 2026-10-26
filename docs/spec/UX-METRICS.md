@@ -213,6 +213,14 @@
 | Enter 打开弹窗 | 新建用户弹窗可键盘打开 |
 | Esc 关闭 + 焦点归还 | 关闭后焦点回到「新建用户」触发按钮 |
 
+### 7.4 重排（Reflow，320px ≈ 200% 缩放等效）
+
+| 路由 | scrollWidth | innerWidth | 横向溢出 |
+|---|---|---|---|
+| dashboard / users / roles / permissions / departments / clients / audit-logs / profile / permissions/new / clients/new | 320 | 320 | **无**（10/10） |
+
+依据 WCAG 1.4.10：320 CSS px 下无需双向滚动即可阅读/操作。
+
 ### 7.3 说明与边界
 
 - 对比度按 canvas 合成后的实际前景/背景计算；渐变背景不参与（当前已无装饰渐变卡）。

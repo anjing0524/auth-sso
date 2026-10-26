@@ -21,6 +21,8 @@
 
 ## 变更记录
 
+- 2026-10-26（续一百三十三）: **WCAG 重排验收（320px）+ 规范收尾**。**①Reflow 检查**：320×640（≈200% 缩放等效宽度）下 10 条核心路由 `scrollWidth = innerWidth = 320`，**全部无横向溢出**（WCAG 1.4.10）。**②文档收口**：UX-METRICS §7.4 记录重排结果；UX-GUIDELINES 任务预算中过期的"审计时间/结果筛选待补"更新为已实现（预置/自定义时间 + 类型 + 关键词 + chips）。**③验收总账**：§8 矩阵核心页面全部落地；§6 布局/密度/弹窗（含 60 条规模数据）、§7 对比度/键盘、e2e 用户生命周期均已通过或固化。**已知非阻塞缺口**：审计 USER_CREATE 写入侧未记录 targetUserId（变更类事件已可追溯）；读屏实机与 200% 放大的人工走查未做（自动重排已覆盖）。
+
 - 2026-10-26（续一百三十二）: **角色按权限数排序（空壳角色优先治理）**。角色列表已有"权限数"列，但无法按它排序；清理 0 权限角色仍需逐页找。**①SQL 聚合排序**：`getRoles` 新增 `permissions-asc/desc`——LEFT JOIN `role_permissions` + `count(permissionId)` + `GROUP BY roles.id`，**先排序再分页**（不是页内前端排序），返回 DTO 一并带 `permissionCount`；默认排序路径保持不变。**②URL/UI**：`/roles?sort=permissions-asc|permissions-desc` 白名单；工具栏「角色排序」下拉（默认/权限数最少/权限数最多），切换保留关键词并回第 1 页。**③实测**：默认顺序 超级管理员(39)/质量测试(0)/系统管理员(39)；切「权限数最少」→ URL `?sort=permissions-asc&page=1`，**质量测试角色(0 项)排第一**，其余 39 项随后；1139×600 chrome 24%、3 行、无滚动（新增控件未挤换行）。**④验证**：UI 组件测试 **341 passed**；typecheck 0 / lint 0 error / build 0；UX 矩阵与基线更新。
 
 - 2026-10-26（续一百三十一）: **用户生命周期 e2e 固化**。此前"建号→分配角色→邮箱登录→审计→删除"依赖手工真浏览器回归，容易随改动失效。**①新增 `tests/e2e/user-lifecycle.spec.ts`**：唯一后缀避免重复数据；admin 建号（用户名+邮箱+初始密码）→ 断言创建成功与列表可搜 → 详情取 ID → 分配「系统管理员」并确认差异 → **新 context 用登录邮箱登录**到 /dashboard → 审计登录日志按用户名命中「登录成功」→ finally 删除用户并断言回到列表。**②可移植性**：使用标准 Playwright API 与现有 config（CI 自带 chromium）；本地因只装了系统 Chrome，用 node_modules 内临时 `.mjs` 覆盖 config `channel=chrome` 验证，**1 passed / 14.0s**，不修改仓库 config。**③价值**：把两次真实回归（0 权限角色被拒、用户名≠登录凭据）固化成可重放断言；清理放 finally，失败也不长期污染验收库（本轮执行后活跃残留=0（删除为逻辑删除，保留 1 行 deleted_at，符合产品删除语义））。**④验证**：测试通过；lint 0 error（新增 spec 纳入规则）；UX-METRICS §6 的 e2e 缺口标记为已固化。
