@@ -377,3 +377,16 @@ describe('权限模板（2026-10-26，第十轮）', () => {
     expect(src).toContain('已套用');
   });
 });
+
+describe('个人中心会话逐个撤销（2026-10-26，第十一轮）', () => {
+  it('撤销需归属校验 + 二次确认 + 诚实文案', () => {
+    const src = read('src/app/(dashboard)/profile/ProfileClient.tsx');
+    expect(src).toContain('撤销会话');
+    expect(src).toContain('revokeOwnSessionAction');
+    expect(src).toContain('已签发的访问令牌最长 1 小时后失效');
+    const action = read('src/app/(dashboard)/profile/session-actions.ts');
+    expect(action).toContain('revokeRefreshTokenById');
+    expect(action).toContain('schema.refreshTokens.userId');
+    expect(action).toContain('withAuth');
+  });
+});

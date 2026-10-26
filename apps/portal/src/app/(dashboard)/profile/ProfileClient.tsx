@@ -11,7 +11,7 @@
  */
 import React, { useTransition } from 'react';
 import { useFieldFailure } from '@/hooks/use-field-failure';
-import { Mail, ShieldCheck, Building2, Key, Clock, Lock, Pencil, Copy } from 'lucide-react';
+import { Mail, ShieldCheck, Building2, Key, Clock, Lock, Pencil, Copy, LogOut } from 'lucide-react';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -29,7 +29,9 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { updateOwnProfileAction, changeOwnPasswordAction } from './actions';
+import { revokeOwnSessionAction } from './session-actions';
 import { toast } from 'sonner';
+import { useRouter } from 'next/navigation';
 import { isAdminRole } from '@auth-sso/contracts';
 import { accountStatus } from '@/lib/status-label';
 import { formatDateTime } from '@/lib/format-date';
@@ -273,7 +275,11 @@ export default function ProfileClient({
   const [logoutConfirmOpen, setLogoutConfirmOpen] = React.useState(false);
   const [loggingOut, setLoggingOut] = React.useState(false);
   // 会话列表可能很多（每端每次刷新一条）：默认只展示 3 条，避免把安全信息挤出首屏
+  const router = useRouter();
   const [showAllSessions, setShowAllSessions] = React.useState(false);
+  /** 待确认撤销的单个会话（自助安全操作，需二次确认） */
+  const [revokeTarget, setRevokeTarget] = React.useState<string | null>(null);
+  const [revoking, setRevoking] = React.useState(false);
   const visibleSessions = showAllSessions ? sessions : sessions.slice(0, 3);
   const visiblePermissions = showAllPermissions ? permissions : permissions.slice(0, 10);
 
@@ -439,10 +445,19 @@ export default function ProfileClient({
                 ) : (
                   <ul className="mt-1.5 divide-y rounded border border-border/60">
                     {visibleSessions.map((item) => (
-                      <li key={item.id} className="px-2 py-1.5">
-                        <p className="truncate font-mono text-[11px]">{item.clientId}</p>
-                        <p className="truncate text-[10px] text-muted-foreground">scope: {item.scopes}</p>
-                        <p className="text-[10px] text-muted-foreground">到期 {formatDateTime(item.expiresAt)}</p>
+                      <li key={item.id} className="flex items-start justify-between gap-2 px-2 py-1.5">
+                        <div className="min-w-0">
+                          <p className="truncate font-mono text-[11px]">{item.clientId}</p>
+                          <p className="truncate text-[10px] text-muted-foreground">scope: {item.scopes}</p>
+                          <p className="text-[10px] text-muted-foreground">到期 {formatDateTime(item.expiresAt)}</p>
+                        </div>
+                        <Button
+                          variant="ghost" size="sm" className="h-6 shrink-0 px-1.5 text-[10px] text-destructive hover:bg-destructive/10"
+                          aria-label={`撤销会话 ${item.clientId}`}
+                          onClick={() => setRevokeTarget(item.id)}
+                        >
+                          撤销
+                        </Button>
                       </li>
                     ))}
                   </ul>
@@ -483,6 +498,46 @@ export default function ProfileClient({
                       }}
                     >
                       {loggingOut ? '退出中...' : '确认退出'}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+
+              {/* 单个会话撤销：refresh token 失效，已签发 AT 自然过期（≤1h） */}
+              <Dialog open={revokeTarget !== null} onOpenChange={(open) => { if (!open) setRevokeTarget(null); }}>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2">
+                      <LogOut className="h-4 w-4 text-destructive" /> 撤销该会话？
+                    </DialogTitle>
+                    <DialogDescription>
+                      撤销后该设备将无法再刷新登录状态（已签发的访问令牌最长 1 小时后失效）。
+                      如需让本机立即退出，请使用「退出当前会话」。
+                    </DialogDescription>
+                  </DialogHeader>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setRevokeTarget(null)} disabled={revoking}>取消</Button>
+                    <Button
+                      variant="destructive"
+                      disabled={revoking}
+                      onClick={async () => {
+                        if (!revokeTarget) return;
+                        setRevoking(true);
+                        try {
+                          const res = await revokeOwnSessionAction(revokeTarget);
+                          if (res.success) {
+                            toast.success((res as { message?: string }).message ?? '会话已撤销');
+                            setRevokeTarget(null);
+                            router.refresh();
+                          } else {
+                            toast.error(res.message || '撤销失败');
+                          }
+                        } finally {
+                          setRevoking(false);
+                        }
+                      }}
+                    >
+                      {revoking ? '撤销中...' : '确认撤销'}
                     </Button>
                   </DialogFooter>
                 </DialogContent>
