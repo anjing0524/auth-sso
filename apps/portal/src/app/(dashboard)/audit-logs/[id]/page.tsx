@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { formatDateTime } from '@/lib/format-date';
 import { getAuditLogById, getLoginLogById } from '@/app/audit/data';
+import { AuditParamsActions } from './params-actions';
 
 /** 读取会话/动态数据：与审计列表同口径，声明非 instant 路由 */
 export const instant = false;
@@ -134,6 +135,7 @@ export default async function AuditLogDetailPage({ params, searchParams }: PageP
         <CardHeader className="flex flex-row items-center gap-2">
           <ScrollText className="h-4 w-4 text-muted-foreground" />
           <CardTitle className="type-card-title">变更参数</CardTitle>
+          <AuditParamsActions id={row.id} params={row.params} />
         </CardHeader>
         <CardContent>
           <pre className="overflow-x-auto rounded-md border border-border/60 bg-muted/40 p-3 font-mono text-xs leading-relaxed whitespace-pre-wrap break-all">

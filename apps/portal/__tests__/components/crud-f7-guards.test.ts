@@ -77,10 +77,12 @@ describe('U-DASH01 — dashboard 快捷入口按 CREATE 权限裁剪', () => {
 
 describe('U-SEA01/U-LOG02 — 审计页提示与页签语义', () => {
   const source = read('src/app/(dashboard)/audit-logs/page.tsx');
-  it('只保留一份 lg:hidden 滚动提示，且无 md:hidden 残留', () => {
-    expect(source.match(/data-scroll-hint/g)?.length).toBe(1);
-    expect(source).toContain('lg:hidden');
-    expect(source).not.toContain('md:hidden');
+  it('滚动提示由 OverflowHint 按真实溢出渲染（不再静态常显）', () => {
+    expect(source).toContain('<OverflowHint>');
+    expect(source).not.toContain('data-scroll-hint');
+    const hint = read('src/app/(dashboard)/audit-logs/components/overflow-hint.tsx');
+    expect(hint).toContain('lg:hidden');
+    expect(hint).toContain('scrollWidth > scroller.clientWidth');
   });
   it('页签具备 role=tab / aria-selected / tabpanel + roving tabindex', () => {
     // 2026-10-23（本轮 U-DEP04/U-LOG02 补全）：页签从 page 内联抽出为
@@ -694,5 +696,26 @@ describe('移动端列表（续一百四十）', () => {
     expect(page).toContain('grid w-full grid-cols-2');
     const filters = read('src/app/(dashboard)/users/components/UserFilters.tsx');
     expect(filters).toContain('col-span-2 md:w-64');
+  });
+});
+
+describe('移动端权限/审计 + 审计取证（续一百四十二）', () => {
+  it('权限表移动端隐藏编码/类型列，编码并入名称行', () => {
+    const src = read('src/app/(dashboard)/permissions/components/PermissionsTable.tsx');
+    expect(src).toContain("key: 'code', header: '权限编码', className: 'hidden md:table-cell'");
+    expect(src).toContain("TYPE_LABELS[p.type] ?? p.type} · {p.code}");
+  });
+  it('审计表用真实溢出提示，登录事件列移动端并入用户行', () => {
+    const page = read('src/app/(dashboard)/audit-logs/page.tsx');
+    expect(page).toContain('OverflowHint');
+    expect(page).not.toContain('data-scroll-hint');
+    const hint = read('src/app/(dashboard)/audit-logs/components/overflow-hint.tsx');
+    expect(hint).toContain('scrollWidth > scroller.clientWidth');
+  });
+  it('审计详情参数支持复制/下载', () => {
+    const actions = read('src/app/(dashboard)/audit-logs/[id]/params-actions.tsx');
+    expect(actions).toContain('复制变更参数');
+    expect(actions).toContain('下载变更参数');
+    expect(actions).toContain('URL.createObjectURL');
   });
 });

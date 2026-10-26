@@ -23,6 +23,7 @@ import { EmptyState } from '@/components/shared/empty-state';
 import { TablePagination } from '@/components/shared/table-pagination';
 import { Badge } from '@/components/ui/badge';
 import { AuditTabs } from './components/audit-tabs';
+import { OverflowHint } from './components/overflow-hint';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -31,7 +32,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { formatDateTime as formatDate } from '@/lib/format-date';
+import { formatDate as formatDateOnly, formatTime, formatDateTime as formatDate } from '@/lib/format-date';
 
 /**
  * 该路由读取会话/动态数据，**保留服务端阻塞**（Cache Components 的 instant 导航校验）。
@@ -225,33 +226,28 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
         </div>
       )}
 
-      {/* U-G05（F3 遗留）：本页用裸 Table，无法复用 DataTable 内部提示；此处保留**唯一一份**
-          与共享组件同口径的 lg:hidden 提示（此前两个分支各内联一份窄屏断点提示，窄桌面不可见）。 */}
-      <p data-scroll-hint className="border-b bg-muted/30 px-4 py-1.5 text-[11px] text-muted-foreground lg:hidden">
-        左右滑动查看完整表格
-      </p>
-
       {/* 日志列表（U-LOG02：页签内容与 role=tablist 关联） */}
       <div id="audit-tabpanel" role="tabpanel" aria-labelledby={`audit-tab-${tab}`} className="flex min-h-0 flex-1 flex-col">
       {tab === 'login' ? (
         <Card className="gap-0 overflow-hidden rounded-lg border border-border/70 py-0 shadow-sm ring-0">
           <CardContent className="p-0">
+            <OverflowHint>
             <div className="scrollbar-slim max-h-[calc(100svh-19rem)] overflow-auto">
             <Table containerClassName="overflow-visible">
               <TableHeader className="[&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:bg-card">
                 <TableRow>
                   <TableHead>时间</TableHead>
                   <TableHead>用户</TableHead>
-                  <TableHead>事件类型</TableHead>
-                  <TableHead>IP 地址</TableHead>
-                  <TableHead>失败原因</TableHead>
+                  <TableHead className="hidden md:table-cell">事件类型</TableHead>
+                  <TableHead className="hidden md:table-cell">IP 地址</TableHead>
+                  <TableHead className="hidden md:table-cell">失败原因</TableHead>
                   <TableHead className="text-right">详情</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {data.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="p-0">
+                    <TableCell colSpan={6} className="p-0">
                       {eventType ? (
                         <EmptyState
                           variant="simple"
@@ -270,20 +266,26 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
                     return (
                       <TableRow key={loginLog.id}>
                         <TableCell className="text-foreground">
-                          {formatDate(loginLog.createdAt)}
+                          <span className="md:hidden">{formatDateOnly(loginLog.createdAt)}<br />{formatTime(loginLog.createdAt)}</span>
+                          <span className="hidden md:inline">{formatDate(loginLog.createdAt)}</span>
                         </TableCell>
                         <TableCell className="text-foreground">
                           {loginLog.username}
+                          <span className="mt-0.5 block md:hidden">
+                            <Badge variant={EVENT_TYPE_VARIANTS[loginLog.eventType] ?? 'secondary'}>
+                              {LOGIN_EVENT_LABELS[loginLog.eventType as keyof typeof LOGIN_EVENT_LABELS] || loginLog.eventType}
+                            </Badge>
+                          </span>
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="hidden md:table-cell">
                           <Badge variant={EVENT_TYPE_VARIANTS[loginLog.eventType] ?? 'secondary'}>
                             {LOGIN_EVENT_LABELS[loginLog.eventType as keyof typeof LOGIN_EVENT_LABELS] || loginLog.eventType}
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-muted-foreground">
+                        <TableCell className="hidden text-muted-foreground md:table-cell">
                           {loginLog.ip || '-'}
                         </TableCell>
-                        <TableCell className={loginLog.failReason ? 'text-destructive' : 'text-muted-foreground'}>
+                        <TableCell className={`hidden md:table-cell ${loginLog.failReason ? 'text-destructive' : 'text-muted-foreground'}`}>
                           {loginLog.failReason || '-'}
                         </TableCell>
                         <TableCell className="text-right">
@@ -298,11 +300,13 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
               </TableBody>
             </Table>
             </div>
+            </OverflowHint>
           </CardContent>
         </Card>
       ) : (
         <Card className="gap-0 overflow-hidden rounded-lg border border-border/70 py-0 shadow-sm ring-0">
           <CardContent className="p-0">
+            <OverflowHint>
             <div className="max-h-[calc(100svh-19rem)] overflow-auto">
             <Table containerClassName="overflow-visible">
               <TableHeader className="[&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:bg-card">
@@ -310,9 +314,9 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
                   <TableHead>时间</TableHead>
                   <TableHead>操作人</TableHead>
                   <TableHead>操作类型</TableHead>
-                  <TableHead>请求地址</TableHead>
+                  <TableHead className="hidden md:table-cell">请求地址</TableHead>
                   <TableHead>状态</TableHead>
-                  <TableHead>IP</TableHead>
+                  <TableHead className="hidden md:table-cell">IP</TableHead>
                   <TableHead className="text-right">详情</TableHead>
                 </TableRow>
               </TableHeader>
@@ -348,7 +352,8 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
                     return (
                       <TableRow key={opLog.id}>
                         <TableCell className="text-foreground">
-                          {formatDate(opLog.createdAt)}
+                          <span className="md:hidden">{formatDateOnly(opLog.createdAt)}<br />{formatTime(opLog.createdAt)}</span>
+                          <span className="hidden md:inline">{formatDate(opLog.createdAt)}</span>
                         </TableCell>
                         <TableCell className="text-foreground">
                           {opLog.username || '-'}
@@ -358,7 +363,7 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
                             {AUDIT_OPERATION_LABELS[opLog.operation as keyof typeof AUDIT_OPERATION_LABELS] || opLog.operation}
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-muted-foreground max-w-xs truncate">
+                        <TableCell className="hidden max-w-xs truncate text-muted-foreground md:table-cell">
                           {opLog.url || (opLog.params ? JSON.stringify(opLog.params) : '') || '-'}
                         </TableCell>
                         <TableCell>
@@ -369,7 +374,7 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
                             <span className="ml-2 text-xs text-destructive">({opLog.errorMsg})</span>
                           )}
                         </TableCell>
-                        <TableCell className="text-muted-foreground">
+                        <TableCell className="hidden text-muted-foreground md:table-cell">
                           {opLog.ip || '-'}
                         </TableCell>
                         <TableCell className="text-right">
@@ -384,6 +389,7 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
               </TableBody>
             </Table>
             </div>
+            </OverflowHint>
           </CardContent>
         </Card>
       )}

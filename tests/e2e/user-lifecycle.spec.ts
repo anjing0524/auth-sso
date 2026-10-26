@@ -73,7 +73,7 @@ test.describe('用户生命周期', () => {
       // 4. 审计可追溯：登录日志按用户名命中
       await page.goto(`/audit-logs?tab=login&keyword=${encodeURIComponent(username)}`, { waitUntil: 'networkidle' });
       await expect(page.getByText(username).first()).toBeVisible({ timeout: 15_000 });
-      await expect(page.getByText('登录成功').first()).toBeVisible();
+      await expect(page.getByRole('row').filter({ hasText: username }).first()).toContainText('登录成功');
     } finally {
       // 5. 清理：删除测试用户（即使上面断言失败也尝试）
       try {

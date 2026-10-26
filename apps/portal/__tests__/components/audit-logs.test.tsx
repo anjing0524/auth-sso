@@ -112,14 +112,13 @@ describe('AuditLogsPage', () => {
     expect(panel.getAttribute('aria-labelledby')).toBe('audit-tab-operation');
   });
 
-  it('U-G05：页面只保留一份 lg:hidden 滚动提示（不再有重复的 md:hidden）', async () => {
+  it('U-G05：滚动提示改由 OverflowHint 按真实溢出渲染（不再静态常显）', async () => {
     const page = await AuditLogsPage({ searchParams: Promise.resolve({}) });
     const { container } = render(page);
 
-    const hints = container.querySelectorAll('[data-scroll-hint]');
-    expect(hints.length).toBe(1);
-    expect(hints[0]!.className).toContain('lg:hidden');
-    expect(container.innerHTML).not.toContain('md:hidden');
+    // 静态提示已移除；OverflowHint 在 jsdom（无溢出）下不渲染提示
+    expect(container.querySelectorAll('[data-scroll-hint]').length).toBe(0);
+    expect(container.querySelector('#audit-tabpanel')).toBeTruthy();
   });
 
   it('U-G02：筛选无结果时空态为 filtered + 「清除筛选」出口；无筛选时保持"暂无"', async () => {

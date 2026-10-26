@@ -167,8 +167,8 @@ export default function PermissionsTable({ permissions, pagination, activeTab, i
       ),
     },
     { key: 'name', header: '名称' },
-    { key: 'code', header: '权限编码' },
-    { key: 'type', header: '类型' },
+    { key: 'code', header: '权限编码', className: 'hidden md:table-cell' },
+    { key: 'type', header: '类型', className: 'hidden md:table-cell' },
     { key: 'status', header: '状态' },
     { key: 'actions', header: '操作', className: 'text-right' },
   ];
@@ -232,7 +232,10 @@ export default function PermissionsTable({ permissions, pagination, activeTab, i
         </PermissionGuard>
       </TableCell>
       <TableCell className="font-medium">
-        <span className="block max-w-[240px] truncate" title={p.name}>{p.name}</span>
+        <span className="block max-w-[135px] truncate md:max-w-[240px]" title={p.name}>{p.name}</span>
+        <span className="mt-0.5 block max-w-[135px] truncate font-mono text-[10px] font-normal text-muted-foreground md:hidden" title={p.code}>
+          {TYPE_LABELS[p.type] ?? p.type} · {p.code}
+        </span>
         {p.type !== 'API' && (
           <span
             className="block max-w-[240px] truncate text-xs font-normal text-muted-foreground"
@@ -243,7 +246,7 @@ export default function PermissionsTable({ permissions, pagination, activeTab, i
           </span>
         )}
       </TableCell>
-      <TableCell>
+      <TableCell className="hidden md:table-cell">
         <code className="rounded-md bg-muted px-2 py-0.5 text-xs">{p.code}</code>
         {p.type === 'API' && (
           <span className="ml-2 text-[11px] text-muted-foreground" title="归属应用（决定角色能否通过该 Client 的 OAuth 准入）">
@@ -251,7 +254,7 @@ export default function PermissionsTable({ permissions, pagination, activeTab, i
           </span>
         )}
       </TableCell>
-      <TableCell>
+      <TableCell className="hidden md:table-cell">
         <Badge variant="outline" className="gap-1">
           {TYPE_ICONS[p.type] || null} {TYPE_LABELS[p.type] ?? p.type}
         </Badge>
@@ -263,7 +266,7 @@ export default function PermissionsTable({ permissions, pagination, activeTab, i
         <div className="flex items-center justify-end gap-0.5">
           <PermissionGuard permission={PERMISSION_PERMISSIONS.UPDATE}>
             <Button asChild variant="ghost" size="sm" className="h-8 gap-1.5 px-2" aria-label={`编辑权限 ${p.name}`} title="编辑">
-              <Link href={`/permissions/${p.id}/edit`}><Edit className="h-4 w-4" /><span>编辑</span></Link>
+              <Link href={`/permissions/${p.id}/edit`}><Edit className="h-4 w-4" /><span className="hidden md:inline">编辑</span></Link>
             </Button>
           </PermissionGuard>
           <PermissionGuard permission={PERMISSION_PERMISSIONS.DELETE}>
@@ -275,7 +278,7 @@ export default function PermissionsTable({ permissions, pagination, activeTab, i
               className="h-8 gap-1.5 px-2 text-destructive hover:bg-destructive/10 hover:text-destructive"
               onClick={() => openDeleteDialog(p)}
             >
-              <Trash2 className="h-4 w-4" /><span>删除</span>
+              <Trash2 className="h-4 w-4" /><span className="hidden md:inline">删除</span>
             </Button>
           </PermissionGuard>
         </div>
