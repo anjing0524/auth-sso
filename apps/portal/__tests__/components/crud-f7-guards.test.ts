@@ -1255,3 +1255,11 @@ describe('系统角色只读一致性（续一百八十九）', () => {
     expect(src).toContain('if (role.isSystem) return;');
   });
 });
+
+describe('系统角色只读说明（续一百九十）', () => {
+  it('系统角色权限页显示只读原因 banner', () => {
+    const src = read('src/app/(dashboard)/roles/[id]/permissions/permissions-client.tsx');
+    expect(src).toContain('系统角色由平台维护');
+    expect(src).toContain('{role.isSystem && (');
+  });
+});

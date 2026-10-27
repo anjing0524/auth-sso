@@ -331,6 +331,12 @@ export default function RolePermissionsPage({ role }: RolePermissionsPageProps) 
         description={`角色：${role.name}｜左侧选作用域，右侧一键全选后保存`}
       />
 
+      {role.isSystem && (
+        <div className="rounded-lg border border-border/70 bg-muted/50 px-3 py-2 text-[11px] leading-5 text-foreground">
+          系统角色由平台维护，权限只读；如需调整请创建自定义角色。下方勾选项与保存按钮均已禁用。
+        </div>
+      )}
+
       {/* 窄屏：作用域树折叠为下拉 */}
       <div className="lg:hidden">
         <select
