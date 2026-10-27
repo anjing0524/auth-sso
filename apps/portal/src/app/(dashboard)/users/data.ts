@@ -16,7 +16,7 @@ import 'server-only';
 
 import { cacheLife, cacheTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
-import { eq, desc, and, notExists, inArray, count, type SQL } from 'drizzle-orm';
+import { eq, desc, and, notExists, inArray, count, gt, isNull, type SQL } from 'drizzle-orm';
 import { USER_LIST_COLUMNS, buildUserListConditions } from '@/db/user-queries';
 import { isScopeDenied, scopeFilter } from '@/lib/authz';
 import type { UserScope } from '@/lib/authz';
@@ -205,6 +205,19 @@ export async function getUser(lookupId: string, scope: UserScope) {
     and(eq(schema.users.id, lookupId), scopeFilter(scope, schema.users.deptId)),
   );
   return user ? toUserDetail(user) : null;
+}
+
+/** 用户活跃会话数（未撤销且未过期的 Refresh Token）；用于强制下线影响面 */
+export async function getUserActiveSessionCount(userId: string): Promise<number> {
+  const [row] = await db
+    .select({ amount: count() })
+    .from(schema.refreshTokens)
+    .where(and(
+      eq(schema.refreshTokens.userId, userId),
+      isNull(schema.refreshTokens.revoked),
+      gt(schema.refreshTokens.expiresAt, new Date()),
+    ));
+  return Number(row?.amount ?? 0);
 }
 
 /**

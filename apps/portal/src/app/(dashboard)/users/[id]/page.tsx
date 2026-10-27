@@ -14,7 +14,7 @@ import { PermissionGate } from '@/components/layout/permission-gate';
 import { resolveIdentity } from '@/lib/auth';
 import { resolveScope } from '@/lib/authz';
 import { db } from '@/infrastructure/db';
-import { getUser, getDepartmentOptions } from '../data';
+import { getUser, getDepartmentOptions, getUserActiveSessionCount } from '../data';
 import { isUuid } from '@/lib/uuid';
 import { safeReturnPath } from '@/lib/safe-return';
 import { getUserPermissionContext, toPermissionContextOrNull } from '@/lib/permissions';
@@ -44,6 +44,7 @@ export default async function UserDetailPage({ params, searchParams }: PageProps
 
   const [user, departments] = await Promise.all([getUser(id, scope), getDepartmentOptions(scope)]);
   if (!user) notFound();
+  const activeSessionCount = await getUserActiveSessionCount(id);
 
   const permCtx = identity ? toPermissionContextOrNull(await getUserPermissionContext(identity.userId)) : null;
   const canUpdate = can(
@@ -54,7 +55,7 @@ export default async function UserDetailPage({ params, searchParams }: PageProps
   // 详情页要求 user:read（LIST 只允许看列表）：只有 list 的角色不能靠改 URL 读取他人详情。
   return (
     <PermissionGate options={{ permissions: [USER_PERMISSIONS.READ] }}>
-      <UserDetailForm id={id} initialUser={user} canUpdate={canUpdate} isSelf={identity?.userId === id} departments={departments} returnHref={returnHref} />
+      <UserDetailForm id={id} initialUser={user} canUpdate={canUpdate} isSelf={identity?.userId === id} departments={departments} returnHref={returnHref} activeSessionCount={activeSessionCount} />
     </PermissionGate>
   );
 }

@@ -47,9 +47,11 @@ interface Props {
   departments?: Array<{ id: string; name: string }>;
   /** 返回列表（保留筛选） */
   returnHref?: string;
+  /** 当前活跃会话数（强制下线影响面） */
+  activeSessionCount?: number;
 }
 
-export default function UserDetailForm({ id, initialUser: serverUser, canUpdate, isSelf = false, departments = [], returnHref = '/users' }: Props) {
+export default function UserDetailForm({ id, initialUser: serverUser, canUpdate, isSelf = false, departments = [], returnHref = '/users', activeSessionCount = 0 }: Props) {
   const router = useRouter();
   const user = serverUser ?? {};
   const [form, setForm] = useState({
@@ -245,7 +247,7 @@ export default function UserDetailForm({ id, initialUser: serverUser, canUpdate,
                   <div className="flex items-center justify-between gap-3 px-3 py-2.5">
                     <div className="min-w-0">
                       <p className="text-[13px] font-medium">强制下线</p>
-                      <p className="text-[11px] text-muted-foreground">撤销该用户全部 Refresh / Access Token，所有设备立即退出登录；不会重置密码。</p>
+                      <p className="text-[11px] text-muted-foreground">该用户当前有 {activeSessionCount} 个活跃会话；将撤销全部 Refresh / Access Token，所有设备立即退出登录，不重置密码。</p>
                     </div>
                     <PermissionGuard permission={USER_PERMISSIONS.MANAGE}>
                       <Button variant="outline" size="sm" onClick={() => setForceLogoutOpen(true)}>
@@ -333,7 +335,7 @@ export default function UserDetailForm({ id, initialUser: serverUser, canUpdate,
                       <DialogHeader>
                         <DialogTitle>强制下线用户？</DialogTitle>
                         <DialogDescription>
-                          将撤销该用户全部 Refresh Token 与 Access Token；所有设备立即退出登录，但不会重置密码，用户可用原密码重新登录。
+                          将撤销该用户当前 {activeSessionCount} 个活跃会话及其全部 Refresh / Access Token；所有设备立即退出登录，不重置密码，用户可用原密码重新登录。
                         </DialogDescription>
                       </DialogHeader>
                       <DialogFooter>
@@ -442,6 +444,10 @@ export default function UserDetailForm({ id, initialUser: serverUser, canUpdate,
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-[11px] text-muted-foreground">最近登录</span>
                   <span className="text-[13px]">{lastLoginAt ? formatDateTime(lastLoginAt) : '从未登录'}</span>
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] text-muted-foreground">活跃会话</span>
+                  <Badge variant={activeSessionCount > 0 ? 'secondary' : 'outline'} className="text-[10px]">{activeSessionCount} 个</Badge>
                 </div>
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-[11px] text-muted-foreground">创建于</span>

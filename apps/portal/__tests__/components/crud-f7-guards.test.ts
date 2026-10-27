@@ -1663,3 +1663,16 @@ describe('管理员强制下线入口（续二百三十二）', () => {
     expect(detail).toContain('{!isSelf && (');
   });
 });
+
+describe('强制下线影响面计数（续二百三十三）', () => {
+  it('详情读活跃会话数并显示在系统信息/确认框', () => {
+    const data = read('src/app/(dashboard)/users/data.ts');
+    expect(data).toContain('getUserActiveSessionCount');
+    expect(data).toContain('isNull(schema.refreshTokens.revoked)');
+    const page = read('src/app/(dashboard)/users/[id]/page.tsx');
+    expect(page).toContain('activeSessionCount={activeSessionCount}');
+    const form = read('src/app/(dashboard)/users/[id]/UserDetailForm.tsx');
+    expect(form).toContain('活跃会话');
+    expect(form).toContain('当前有 {activeSessionCount} 个活跃会话');
+  });
+});
