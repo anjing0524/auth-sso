@@ -71,7 +71,7 @@ export default function RolesTable({ roles, pagination, initialKeyword, initialS
   const [selected, setSelected] = useState<RoleRow | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<RoleRow | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [form, setForm] = useState({ name: '', code: '', description: '', deptId: '', sort: 0 });
+  const [form, setForm] = useState({ name: '', code: '', description: '', deptId: '', sort: 0, status: 'ACTIVE' });
   /** 具体错误码（如 ROLE_ALREADY_EXISTS）落到对应输入框（#92；hook 供四处表单复用） */
   const { fieldError, reportFailure, clearFailure } = useFieldFailure(['code']);
 
@@ -96,7 +96,7 @@ export default function RolesTable({ roles, pagination, initialKeyword, initialS
 
   const openEdit = (r: RoleRow) => {
     setSelected(r);
-    setForm({ name: r.name, code: r.code, description: r.description || '', deptId: r.deptId, sort: r.sort });
+    setForm({ name: r.name, code: r.code, description: r.description || '', deptId: r.deptId, sort: r.sort, status: r.status });
     setIsEditOpen(true);
   };
 
@@ -210,7 +210,7 @@ export default function RolesTable({ roles, pagination, initialKeyword, initialS
       }
       right={
         <PermissionGuard permission={ROLE_PERMISSIONS.CREATE}>
-          <Button onClick={() => { setForm({ name: '', code: '', description: '', deptId: getDefaultDeptId(), sort: 0 }); setIsAddOpen(true); }}>
+          <Button onClick={() => { setForm({ name: '', code: '', description: '', deptId: getDefaultDeptId(), sort: 0, status: 'ACTIVE' }); setIsAddOpen(true); }}>
             <Plus className="h-4 w-4" /> 新建角色
           </Button>
         </PermissionGuard>
@@ -332,7 +332,7 @@ export default function RolesTable({ roles, pagination, initialKeyword, initialS
               icon="ShieldCheck"
               title="暂无角色"
               description="创建角色以开始管理权限"
-              action={{ label: '新建角色', onClick: () => { setForm({ name: '', code: '', description: '', deptId: getDefaultDeptId(), sort: 0 }); setIsAddOpen(true); } }}
+              action={{ label: '新建角色', onClick: () => { setForm({ name: '', code: '', description: '', deptId: getDefaultDeptId(), sort: 0, status: 'ACTIVE' }); setIsAddOpen(true); } }}
             />
           )
         }
@@ -361,6 +361,7 @@ export default function RolesTable({ roles, pagination, initialKeyword, initialS
               <FieldError failure={fieldError} field="code" />
               <div className="space-y-2"><Label htmlFor="role-description">描述（可选）</Label><Textarea id="role-description" value={form.description} maxLength={500} rows={2} onChange={e => setForm({...form, description: e.target.value})} placeholder="例如：可管理用户、角色与审计日志" /></div>
               <div className="space-y-2"><Label htmlFor="role-dept">所属部门</Label>{renderDeptSelect(form.deptId, v => setForm({...form, deptId: v}), 'role-dept')}</div>
+              <div className="space-y-2"><Label htmlFor="role-sort">排序（越小越靠前）</Label><Input id="role-sort" type="number" value={form.sort} onChange={e => setForm({...form, sort: Number(e.target.value)})} /></div>
             </div>
             <DialogFooter><Button type="button" variant="outline" onClick={() => setIsAddOpen(false)}>取消</Button><Button type="submit" disabled={saving}>创建</Button></DialogFooter>
           </form>
@@ -382,6 +383,22 @@ export default function RolesTable({ roles, pagination, initialKeyword, initialS
                 {selected && (boundUserCounts[selected.id] ?? 0) > 0 && (
                   <p className="rounded bg-badge-warning-bg px-2 py-1 text-[10px] leading-4 text-badge-warning-fg">
                     该角色已绑定 {boundUserCounts[selected.id]} 个用户；迁移部门前需先解除绑定，否则保存会被拒绝。
+                  </p>
+                )}
+              </div>
+              <div className="space-y-2"><Label htmlFor="role-edit-sort">排序（越小越靠前）</Label><Input id="role-edit-sort" type="number" value={form.sort} onChange={e => setForm({...form, sort: Number(e.target.value)})} /></div>
+              <div className="space-y-2">
+                <Label htmlFor="role-edit-status">状态</Label>
+                <Select value={form.status} onValueChange={(v) => setForm({...form, status: v})}>
+                  <SelectTrigger id="role-edit-status"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ACTIVE">启用</SelectItem>
+                    <SelectItem value="DISABLED">停用</SelectItem>
+                  </SelectContent>
+                </Select>
+                {form.status === 'DISABLED' && (
+                  <p className="rounded bg-badge-warning-bg px-2 py-1 text-[10px] leading-4 text-badge-warning-fg">
+                    停用后绑定用户立即失去该角色权限，可能无法登录门户；角色配置保留，可随时恢复。
                   </p>
                 )}
               </div>

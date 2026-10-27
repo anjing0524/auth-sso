@@ -1375,3 +1375,13 @@ describe('应用 Logo 入口（续二百〇二）', () => {
     expect(detail).toContain('id="client-detail-logo"');
   });
 });
+
+describe('角色排序/状态入口（续二百〇三）', () => {
+  it('新建有排序；编辑有排序/状态；停用有影响提示', () => {
+    const src = read('src/app/(dashboard)/roles/components/RolesTable.tsx');
+    expect(src).toContain('id="role-sort"');
+    expect(src).toContain('id="role-edit-sort"');
+    expect(src).toContain('id="role-edit-status"');
+    expect(src).toContain('停用后绑定用户立即失去该角色权限');
+  });
+});

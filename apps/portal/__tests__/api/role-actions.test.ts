@@ -189,6 +189,22 @@ describe('Role Server Actions', () => {
       expect(updated!.name).toBe('Updated');
     });
 
+    it('可停用并恢复角色（status）', async () => {
+      await seedTestData(td.db, { roles: seedTestRole() });
+
+      const off: any = await updateRoleAction(ROLE_ID_UPDATE, { status: 'DISABLED' } as any);
+      expect(off.success).toBe(true);
+      let rows = await db.select().from(schema.roles);
+      let row = rows.find((r) => r.id === ROLE_ID_UPDATE);
+      expect(row?.status).toBe('DISABLED');
+
+      const on: any = await updateRoleAction(ROLE_ID_UPDATE, { status: 'ACTIVE' } as any);
+      expect(on.success).toBe(true);
+      rows = await db.select().from(schema.roles);
+      row = rows.find((r) => r.id === ROLE_ID_UPDATE);
+      expect(row?.status).toBe('ACTIVE');
+    });
+
     it('角色不存在 → 失败信封 NOT_FOUND（生产契约）', async () => {
       const r = await updateRoleAction('00000000-0000-4000-8000-000000000999', { name: 'X' } as any);
 
