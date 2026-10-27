@@ -41,11 +41,8 @@ if (await detailLink.count()) {
   paths.push(`${new URL(page.url()).pathname}${new URL(page.url()).search}`);
 }
 
-const report = { contrast: {}, keyboard: null };
-for (const path of paths) {
-  await page.goto(BASE + path, { waitUntil: 'networkidle' });
-  await page.waitForTimeout(300);
-  report.contrast[path] = await page.evaluate(() => {
+const measureContrast = async (targetPage, selector = 'main *, aside *, header *') =>
+  targetPage.evaluate((scopeSelector) => {
     const cv = document.createElement('canvas'); cv.width = cv.height = 1;
     const ctx = cv.getContext('2d', { willReadFrequently: true });
     const toRgba = (css) => {
@@ -71,7 +68,7 @@ for (const path of paths) {
       return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
     };
     const offenders = []; const seen = new Set();
-    for (const el of document.querySelectorAll('main *, aside *, header *')) {
+    for (const el of document.querySelectorAll(scopeSelector)) {
       if (el.closest('[aria-hidden="true"]')) continue;
       let hidden = false;
       for (let n = el; n; n = n.parentElement) {
@@ -94,8 +91,21 @@ for (const path of paths) {
       }
     }
     return offenders;
-  });
+  }, selector);
+
+const report = { contrast: {}, keyboard: null };
+for (const path of paths) {
+  await page.goto(BASE + path, { waitUntil: 'networkidle' });
+  await page.waitForTimeout(300);
+  report.contrast[path] = await measureContrast(page);
 }
+// 未登录登录页（独立上下文；登录页不在 dashboard 布局内）
+const loginContext = await browser.newContext({ ignoreHTTPSErrors: true, viewport: { width: 390, height: 844 }, colorScheme });
+const loginPage = await loginContext.newPage();
+await loginPage.goto(`${BASE}/login`, { waitUntil: 'networkidle' });
+await loginPage.waitForTimeout(300);
+report.contrast['/login'] = await measureContrast(loginPage, 'body *');
+await loginContext.close();
 
 // 键盘：跳转链接 → 新建用户 → Enter 打开 → Esc 关闭 + 焦点归还
 await page.goto(`${BASE}/users`, { waitUntil: 'networkidle' });

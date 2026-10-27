@@ -211,7 +211,7 @@ export default function LoginForm({ sessionId, initialError }: LoginFormProps) {
         </form>
       </Card>
 
-      <p className="mt-4 text-xs text-white/45">
+      <p className="mt-4 text-xs text-white/60">
         登录遇到问题请联系企业 IT 管理员
       </p>
       </div>

@@ -1236,3 +1236,14 @@ describe('链接对比度 token（续一百八十七）', () => {
     expect(script).toContain('查看日志详情');
   });
 });
+
+describe('登录页对比度（续一百八十八）', () => {
+  it('a11y 独立上下文测 /login；页脚白字不低于 /60', () => {
+    const script = read('../../scripts/ux/a11y.mjs');
+    expect(script).toContain("report.contrast['/login']");
+    expect(script).toContain("measureContrast(loginPage");
+    const login = read('src/app/login/login-form.tsx');
+    expect(login).not.toContain('text-white/45');
+    expect(login).toContain('text-white/60');
+  });
+});
