@@ -20,6 +20,8 @@ import { schema } from '@/infrastructure/db';
 import { RoleAssignmentSchema, assignUserRoles } from '@/lib/user-role-assignment';
 import { invalidateResource } from '@/lib/cache-invalidation';
 import { clearUserBruteForceCounters } from '@/lib/auth/brute-force';
+import { forceLogoutUser } from '@/lib/auth/force-logout';
+import { clearUserPermissionCache } from '@/lib/permissions';
 import { and, eq, isNull, or } from 'drizzle-orm';
 import { withAuth, type AuthContext } from '@/lib/auth';
 import {
@@ -340,6 +342,23 @@ export const updateUserAction = withAuth(
 /**
  * 逻辑删除用户 Action Controller
  */
+/** 强制下线：撤销该用户全部会话，但不重置密码（安全事件处置） */
+export const forceLogoutUserAction = withAuth(
+  { permissions: [USER_PERMISSIONS.MANAGE], audit: 'TOKEN_REVOKE' },
+  async (ctx: AuthContext, userId: string): Promise<ApiResponse<{ userId: string; revokedJtiCount: number }>> => {
+    const jti = await forceLogoutUser(ctx.userId, userId);
+    await clearUserPermissionCache(userId);
+    invalidateResource('users');
+    return {
+      success: true,
+      data: { userId, revokedJtiCount: jti.revokedJtiCount },
+      message: jti.jtiRevocationFailed
+        ? '已强制下线该用户；Access Token 撤销未能执行（Redis 不可用），旧 AT 在自然过期前仍然有效'
+        : `已强制下线该用户，撤销 ${jti.revokedJtiCount} 个 Access Token JTI`,
+    };
+  },
+);
+
 export const deleteUserAction = withAuth(
   { permissions: [USER_PERMISSIONS.DELETE], audit: 'USER_DELETE' },
   async (ctx: AuthContext, userIdStr: string): Promise<ApiResponse<{ id: string }>> => {

@@ -14,7 +14,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import {
-  User as UserIcon, Save, Trash2, Shield, Building, Calendar, AlertTriangle, ShieldCheck, Copy, KeyRound, History,
+  User as UserIcon, Save, Trash2, Shield, Building, Calendar, AlertTriangle, ShieldCheck, Copy, KeyRound, History, LogOut,
 } from 'lucide-react';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -29,7 +29,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription, DialogTrigger,
 } from '@/components/ui/dialog';
 import { AUDIT_PERMISSIONS, USER_PERMISSIONS } from '@auth-sso/contracts';
-import { updateUserAction, deleteUserAction, unlockUserAction } from '../actions';
+import { updateUserAction, deleteUserAction, unlockUserAction, forceLogoutUserAction } from '../actions';
 
 import { PageHeader } from '@/components/shared/page-header';
 import { formatDateTime } from '@/lib/format-date';
@@ -68,6 +68,8 @@ export default function UserDetailForm({ id, initialUser: serverUser, canUpdate,
   const { reportFailure } = useFieldFailure();
   const leaveGuard = useUnsavedChangesGuard(isDirty);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [forceLogoutOpen, setForceLogoutOpen] = useState(false);
+  const [forceLogoutBusy, setForceLogoutBusy] = useState(false);
 
   // 用户不存在时：在 useEffect 中执行副作用（toast + 导航），避免在 render 中直接调用
   // React StrictMode 下 render 可能双触发，副作用统一收敛至 Effect 中是安全的
@@ -135,6 +137,20 @@ export default function UserDetailForm({ id, initialUser: serverUser, canUpdate,
     } else {
       reportFailure({ error: res.error, message: userFacingMessage(res, '删除失败') });
     }
+  };
+
+  /** 安全事件处置：只踢全部会话，不重置密码 */
+  const handleForceLogout = async () => {
+    setForceLogoutBusy(true);
+    const res = await forceLogoutUserAction(id);
+    if (res.success) {
+      toast.success(res.message ?? '已强制下线该用户');
+      setForceLogoutOpen(false);
+      router.refresh();
+    } else {
+      reportFailure({ error: res.error, message: userFacingMessage(res, '强制下线失败') });
+    }
+    setForceLogoutBusy(false);
   };
 
   /** 复制用户 ID（排障/对接工单常用，减少手抄） */
@@ -225,7 +241,20 @@ export default function UserDetailForm({ id, initialUser: serverUser, canUpdate,
                       <SelectItem value="LOCKED" disabled={isSelf}>已锁定</SelectItem>
                     </SelectContent>
                   </Select>
-                  {(serverUser.status as string) === 'LOCKED' && (
+                  {!isSelf && (
+                  <div className="flex items-center justify-between gap-3 px-3 py-2.5">
+                    <div className="min-w-0">
+                      <p className="text-[13px] font-medium">强制下线</p>
+                      <p className="text-[11px] text-muted-foreground">撤销该用户全部 Refresh / Access Token，所有设备立即退出登录；不会重置密码。</p>
+                    </div>
+                    <PermissionGuard permission={USER_PERMISSIONS.MANAGE}>
+                      <Button variant="outline" size="sm" onClick={() => setForceLogoutOpen(true)}>
+                        <LogOut className="h-3.5 w-3.5" /> 强制下线
+                      </Button>
+                    </PermissionGuard>
+                  </div>
+                )}
+                {(serverUser.status as string) === 'LOCKED' && (
                     <p className="text-[11px] text-muted-foreground">已锁定账号不可直接切换状态，请在下方「重置密码 / 解锁」中处理。</p>
                   )}
                   {isSelf && (
@@ -297,6 +326,24 @@ export default function UserDetailForm({ id, initialUser: serverUser, canUpdate,
                     </Dialog>
                   </PermissionGuard>
                 </div>
+                )}
+                {!isSelf && (
+                  <Dialog open={forceLogoutOpen} onOpenChange={setForceLogoutOpen}>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>强制下线用户？</DialogTitle>
+                        <DialogDescription>
+                          将撤销该用户全部 Refresh Token 与 Access Token；所有设备立即退出登录，但不会重置密码，用户可用原密码重新登录。
+                        </DialogDescription>
+                      </DialogHeader>
+                      <DialogFooter>
+                        <Button variant="outline" onClick={() => setForceLogoutOpen(false)} disabled={forceLogoutBusy}>取消</Button>
+                        <Button variant="destructive" onClick={handleForceLogout} disabled={forceLogoutBusy}>
+                          {forceLogoutBusy ? '下线中...' : '确认强制下线'}
+                        </Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
                 )}
               </CardContent>
             </Card>

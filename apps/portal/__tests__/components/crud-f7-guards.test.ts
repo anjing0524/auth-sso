@@ -1651,3 +1651,15 @@ describe('授权 Token 单条撤销（续二百三十一）', () => {
     expect(client).toContain('revokeClientTokensAction(client.clientId, [revokeTokenTarget.id], false)');
   });
 });
+
+describe('管理员强制下线入口（续二百三十二）', () => {
+  it('共享实现 + Server Action + 详情确认框；自己隐藏', () => {
+    const lib = read('src/lib/auth/force-logout.ts');
+    expect(lib).toContain('forceLogoutUser');
+    const actions = read('src/app/(dashboard)/users/actions.ts');
+    expect(actions).toContain('forceLogoutUserAction');
+    const detail = read('src/app/(dashboard)/users/[id]/UserDetailForm.tsx');
+    expect(detail).toContain('确认强制下线');
+    expect(detail).toContain('{!isSelf && (');
+  });
+});
