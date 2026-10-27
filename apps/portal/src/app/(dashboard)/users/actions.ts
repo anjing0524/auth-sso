@@ -86,7 +86,7 @@ function loadUserScoped(
     notFound: () => new EntityNotFoundError('User', userId),
   };
 }
-import { USER_ACTIVE, USER_ERRORS, USER_PERMISSIONS } from '@auth-sso/contracts';
+import { COMMON_ERRORS, USER_ACTIVE, USER_ERRORS, USER_PERMISSIONS } from '@auth-sso/contracts';
 import type { ApiResponse } from '@auth-sso/contracts';
 
 /**
@@ -437,6 +437,10 @@ export const updateUserRolesAction = withAuth(
     targetUserId: string,
     roleIds: string[],
   ): Promise<ApiResponse<{ assignedCount: number }>> => {
+    // 防自我锁死：管理员不能修改自己的角色（尤其最后一个管理员/管理角色），必须由另一位管理员操作
+    if (ctx.userId === targetUserId) {
+      return { success: false, error: COMMON_ERRORS.FORBIDDEN, message: '不能修改自己的角色，请由其他管理员操作' };
+    }
     const v = validate(RoleAssignmentSchema, { roleIds });
     if (!v.ok) return v.response;
 

@@ -44,7 +44,7 @@ export interface UserRolesPageProps {
   };
 }
 
-export default function UserRolesPage({ user }: UserRolesPageProps) {
+export default function UserRolesPage({ user, isSelf = false }: UserRolesPageProps & { isSelf?: boolean }) {
   const [roles, setRoles] = useState<Role[]>([]);
   const [assignedRoleIds, setAssignedRoleIds] = useState<Set<string>>(new Set());
   /** 读取时的已分配快照：用于差异（待新增/待移除）与保存确认 */
@@ -55,6 +55,7 @@ export default function UserRolesPage({ user }: UserRolesPageProps) {
   const [onlySelected, setOnlySelected] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const { reportFailure } = useFieldFailure();
+  const readOnly = isSelf;
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -129,6 +130,7 @@ export default function UserRolesPage({ user }: UserRolesPageProps) {
   const allSelectedRolesEmpty = selectedRoles.length > 0 && selectedRoles.every((r) => (r.permissionCount ?? 0) === 0);
 
   const toggleRole = (roleId: string) => {
+    if (readOnly) return;
     setAssignedRoleIds((prev) => {
       const next = new Set(prev);
       if (next.has(roleId)) next.delete(roleId);
@@ -164,6 +166,12 @@ export default function UserRolesPage({ user }: UserRolesPageProps) {
         description={`用户：${user.name}${user.deptName ? `（${user.deptName}）` : '（未分配部门）'}｜仅展示所属部门的启用角色；用户需至少有一个含权限的角色才能登录门户`}
       />
 
+      {readOnly && (
+        <div className="rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-[11px] text-warning">
+          这是你自己的账号，不能修改自己的角色（防止移除最后一个管理角色后自我锁死）。请由其他管理员操作。
+        </div>
+      )}
+
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border/70 bg-card shadow-sm ring-0">
         <div className="flex flex-wrap items-center gap-3 border-b bg-muted/30 px-3 py-2">
           <SearchInput placeholder="搜索角色名称或编码..." value={keyword} onChange={setKeyword} />
@@ -172,12 +180,12 @@ export default function UserRolesPage({ user }: UserRolesPageProps) {
             {onlySelected ? '显示全部' : '仅看已选'}
           </Button>
           <Button
-            variant="ghost" size="sm" disabled={loading || filteredRoles.length === 0}
+            variant="ghost" size="sm" disabled={readOnly || loading || filteredRoles.length === 0}
             onClick={() => setAssignedRoleIds((prev) => new Set([...prev, ...filteredRoles.map((r) => r.id)]))}
           >
             全选当前筛选
           </Button>
-          <Button variant="ghost" size="sm" disabled={loading || assignedRoleIds.size === 0} onClick={() => setAssignedRoleIds(new Set())}>
+          <Button variant="ghost" size="sm" disabled={readOnly || loading || assignedRoleIds.size === 0} onClick={() => setAssignedRoleIds(new Set())}>
             清空全部
           </Button>
           <span className="flex items-center gap-1 text-[11px]">
@@ -189,9 +197,9 @@ export default function UserRolesPage({ user }: UserRolesPageProps) {
             <Button variant="outline" size="sm" asChild>
               <Link href={`/users/${user.id}`}>取消</Link>
             </Button>
-            <Button size="sm" onClick={() => setConfirmOpen(true)} disabled={loading || saving || !user.deptId || changeCount === 0}>
+            <Button size="sm" onClick={() => setConfirmOpen(true)} disabled={readOnly || loading || saving || !user.deptId || changeCount === 0}>
               <Save className="h-3.5 w-3.5" />
-              {saving ? '保存中...' : changeCount === 0 ? '无变更' : `保存变更（${changeCount}）`}
+              {saving ? '保存中...' : readOnly ? '不能修改自己的角色' : changeCount === 0 ? '无变更' : `保存变更（${changeCount}）`}
             </Button>
           </div>
         </div>
@@ -230,6 +238,7 @@ export default function UserRolesPage({ user }: UserRolesPageProps) {
                 >
                   <Checkbox
                     checked={assignedRoleIds.has(role.id)}
+                    disabled={readOnly}
                     onCheckedChange={() => toggleRole(role.id)}
                   />
                   <span className="min-w-0 flex-1">

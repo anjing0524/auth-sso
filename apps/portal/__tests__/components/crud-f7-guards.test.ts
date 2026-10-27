@@ -1148,3 +1148,16 @@ describe('用户列表自我保护（续一百八十）', () => {
     expect(table).toContain('selectableUsers.length === 0');
   });
 });
+
+describe('禁止修改自己的角色（续一百八十一）', () => {
+  it('服务端拒绝 self 角色变更；自己的角色页只读', () => {
+    const actions = read('src/app/(dashboard)/users/actions.ts');
+    expect(actions).toContain("ctx.userId === targetUserId");
+    expect(actions).toContain('不能修改自己的角色');
+    const page = read('src/app/(dashboard)/users/[id]/roles/page.tsx');
+    expect(page).toContain('isSelf={identity?.userId === id}');
+    const client = read('src/app/(dashboard)/users/[id]/roles/roles-client.tsx');
+    expect(client).toContain('const readOnly = isSelf');
+    expect(client).toContain('不能修改自己的角色');
+  });
+});

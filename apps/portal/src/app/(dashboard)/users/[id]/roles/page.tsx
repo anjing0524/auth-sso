@@ -35,6 +35,7 @@ export default async function UserRolesRoute({ params }: PageProps) {
   return (
     <PermissionGate options={{ permissions: [USER_PERMISSIONS.ASSIGN_ROLE] }}>
       <UserRolesPage
+        isSelf={identity?.userId === id}
         user={{
           id: user.id,
           name: user.name,
