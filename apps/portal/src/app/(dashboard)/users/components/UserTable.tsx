@@ -266,7 +266,7 @@ export default function UserTable({ users, pagination, filters, isFiltered = fal
     { key: 'dept', header: '部门', className: 'hidden md:table-cell' },
     { key: 'roles', header: '角色', className: 'hidden md:table-cell' },
     { key: 'status', header: '状态', className: 'hidden md:table-cell' },
-    { key: 'createdAt', header: '创建时间', className: 'hidden md:table-cell' },
+    { key: 'createdAt', header: '创建时间', className: 'hidden xl:table-cell' },
     { key: 'actions', header: '操作', className: 'text-right' },
   ];
 
@@ -324,7 +324,7 @@ export default function UserTable({ users, pagination, filters, isFiltered = fal
           {accountStatus(user.status).label}
         </Badge>
       </TableCell>
-      <TableCell className="hidden font-mono text-xs text-muted-foreground md:table-cell">
+      <TableCell className="hidden font-mono text-xs text-muted-foreground xl:table-cell">
         {formatDate(user.createdAt)}
       </TableCell>
       <TableCell className="text-right">

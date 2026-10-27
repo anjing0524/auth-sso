@@ -180,8 +180,8 @@ export default function ClientsTable({ clients, pagination, initialKeyword, init
   const columns = [
     { key: 'detail', header: '应用详情', className: 'w-[280px]' },
     { key: 'clientId', header: '身份标识 (Client ID)', className: 'hidden md:table-cell' },
-    { key: 'redirectUris', header: '回调白名单 (Redirect URIs)', className: 'hidden md:table-cell' },
-    { key: 'lastUsed', header: '最近使用', className: 'hidden w-[110px] md:table-cell' },
+    { key: 'redirectUris', header: '回调白名单 (Redirect URIs)', className: 'hidden xl:table-cell' },
+    { key: 'lastUsed', header: '最近使用', className: 'hidden w-[110px] lg:table-cell' },
     { key: 'status', header: '运行状态' },
     { key: 'actions', header: '操作', className: 'text-right' },
   ];
@@ -281,7 +281,7 @@ export default function ClientsTable({ clients, pagination, initialKeyword, init
           </Button>
         </div>
       </TableCell>
-      <TableCell className="hidden md:table-cell">
+      <TableCell className="hidden xl:table-cell">
         <div className="flex flex-wrap gap-1 max-w-[200px]">
           {client.redirectUris.slice(0, 1).map((uri, i) => (
             <Badge key={i} variant="outline" title={uri} className="h-auto max-w-[210px] justify-start overflow-hidden border-border bg-card font-mono font-normal shadow-sm">
@@ -293,7 +293,7 @@ export default function ClientsTable({ clients, pagination, initialKeyword, init
           )}
         </div>
       </TableCell>
-      <TableCell className="hidden md:table-cell">
+      <TableCell className="hidden lg:table-cell">
         <span className="text-[12px] text-muted-foreground" title={client.lastUsedAt ?? '尚未签发过 token'}>
           {client.lastUsedAt ? formatDate(client.lastUsedAt) : '从未'}
         </span>

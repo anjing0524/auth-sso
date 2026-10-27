@@ -1536,3 +1536,14 @@ describe('新建用户弹窗 600px 不滚动（续二百一十九）', () => {
     expect(src).toContain('grid gap-2.5');
   });
 });
+
+describe('1024 桌面列表不裁切（续二百二十）', () => {
+  it('用户创建时间/应用回调列延后到 xl，最近使用到 lg', () => {
+    const users = read('src/app/(dashboard)/users/components/UserTable.tsx');
+    expect(users).toContain("key: 'createdAt'");
+    expect(users).toContain('hidden xl:table-cell');
+    const clients = read('src/app/(dashboard)/clients/components/ClientsTable.tsx');
+    expect(clients).toContain('hidden xl:table-cell');
+    expect(clients).toContain('hidden w-[110px] lg:table-cell');
+  });
+});
