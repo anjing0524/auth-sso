@@ -1594,3 +1594,11 @@ describe('1024 审计工具栏两行（续二百二十五）', () => {
     expect(filters).not.toContain('搜索用户 / IP...');
   });
 });
+
+describe('1024 用户工具栏顶部对齐（续二百二十六）', () => {
+  it('TableToolbar 与左侧标题组均 items-start', () => {
+    const page = read('src/app/(dashboard)/users/page.tsx');
+    expect(page).toContain('className="md:items-start"');
+    expect(page).toContain('md:items-start md:gap-3');
+  });
+});
