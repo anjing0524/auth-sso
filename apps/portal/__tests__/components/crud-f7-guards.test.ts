@@ -1247,3 +1247,11 @@ describe('登录页对比度（续一百八十八）', () => {
     expect(login).toContain('text-white/60');
   });
 });
+
+describe('系统角色只读一致性（续一百八十九）', () => {
+  it('权限模板菜单项对系统角色 disabled，并在 onClick 防御', () => {
+    const src = read('src/app/(dashboard)/roles/[id]/permissions/permissions-client.tsx');
+    expect(src).toContain('disabled={role.isSystem || t.ids.length === 0}');
+    expect(src).toContain('if (role.isSystem) return;');
+  });
+});

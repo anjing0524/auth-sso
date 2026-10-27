@@ -465,8 +465,9 @@ export default function RolePermissionsPage({ role }: RolePermissionsPageProps) 
                   {templateItems.map((t) => (
                     <DropdownMenuItem
                       key={t.id}
-                      disabled={t.ids.length === 0}
+                      disabled={role.isSystem || t.ids.length === 0}
                       onClick={() => {
+                        if (role.isSystem) return;
                         setAssignedIds(new Set(t.ids));
                         setOnlyChanged(true);
                         toast.success(`已套用「${t.name}」模板（${t.ids.length} 项），保存后生效`);

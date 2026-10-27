@@ -33,12 +33,14 @@ await page.waitForURL(/dashboard$/);
 
 const paths = [...PATHS];
 // 动态详情：审计日志详情页（id 每次验收会变），先点进一条再纳入对比度检查
-await page.goto(`${BASE}/audit-logs`, { waitUntil: 'networkidle' });
-const detailLink = page.getByRole('link', { name: '查看日志详情' }).first();
-if (await detailLink.count()) {
-  await detailLink.click();
-  await page.waitForURL(/\/audit-logs\/[0-9a-f-]{36}/);
-  paths.push(`${new URL(page.url()).pathname}${new URL(page.url()).search}`);
+for (const tab of ['login', 'operation', 'access']) {
+  await page.goto(`${BASE}/audit-logs?tab=${tab}`, { waitUntil: 'networkidle' });
+  const detailLink = page.getByRole('link', { name: '查看日志详情' }).first();
+  if (await detailLink.count()) {
+    await detailLink.click();
+    await page.waitForURL(/\/audit-logs\/[0-9a-f-]{36}/);
+    paths.push(`${new URL(page.url()).pathname}${new URL(page.url()).search}`);
+  }
 }
 
 const measureContrast = async (targetPage, selector = 'main *, aside *, header *') =>
