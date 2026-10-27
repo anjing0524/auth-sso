@@ -147,6 +147,7 @@ export default function UserTable({ users, pagination, filters, isFiltered = fal
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const currentListHref = `${pathname}${searchParams.toString() ? `?${searchParams.toString()}` : ''}`;
 
   // 角色分配对话框状态
   const { reportFailure } = useFieldFailure();
@@ -333,7 +334,7 @@ export default function UserTable({ users, pagination, filters, isFiltered = fal
               由详情页内部 canUpdate 决定（只读横幅 + fieldset 禁用）。 */}
           <PermissionGuard permission={USER_PERMISSIONS.READ}>
             <Button asChild variant="ghost" size="sm" className="h-8 gap-1.5 px-2" aria-label="查看详情" title="查看详情">
-              <Link href={`/users/${user.id}`}><Eye className="h-4 w-4" /><span className="hidden md:inline">详情</span></Link>
+              <Link href={`/users/${user.id}?returnTo=${encodeURIComponent(currentListHref)}`}><Eye className="h-4 w-4" /><span className="hidden md:inline">详情</span></Link>
             </Button>
           </PermissionGuard>
           <PermissionGuard permission={USER_PERMISSIONS.ASSIGN_ROLE}>
@@ -375,7 +376,7 @@ export default function UserTable({ users, pagination, filters, isFiltered = fal
             <DropdownMenuContent align="end" className="w-40">
               <PermissionGuard permission={USER_PERMISSIONS.READ}>
                 <DropdownMenuItem asChild>
-                  <Link href={`/users/${user.id}`}><Eye className="mr-2 h-4 w-4" />详情</Link>
+                  <Link href={`/users/${user.id}?returnTo=${encodeURIComponent(currentListHref)}`}><Eye className="mr-2 h-4 w-4" />详情</Link>
                 </DropdownMenuItem>
               </PermissionGuard>
               <PermissionGuard permission={USER_PERMISSIONS.ASSIGN_ROLE}>

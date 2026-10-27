@@ -12,6 +12,7 @@ import { PermissionGate } from '@/components/layout/permission-gate';
 
 import { getClientById, getClientTokens } from '../data';
 import { resolveIdentity } from '@/lib/auth';
+import { safeReturnPath } from '@/lib/safe-return';
 import { getUserPermissionContext, toPermissionContextOrNull } from '@/lib/permissions';
 import { ClientDetailClient } from './ClientDetailClient';
 
@@ -25,10 +26,12 @@ export const instant = false;
 export const metadata = { title: '应用详情 | Auth-SSO' };
 interface PageProps {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ returnTo?: string }>;
 }
 
-export default async function ClientDetailPage({ params }: PageProps) {
+export default async function ClientDetailPage({ params, searchParams }: PageProps) {
   const { id } = await params;
+  const returnHref = safeReturnPath((await searchParams).returnTo, '/clients', '/clients');
   // client_id 是 `client_` 前缀的业务 ID（varchar），不是 UUID 列：这里不能套 UUID 判定，
   // 否则会把所有新建应用当成"不存在"（2026-10-20 改动时踩到过）。
   const client = await getClientById(id);
@@ -48,7 +51,7 @@ export default async function ClientDetailPage({ params }: PageProps) {
   // 详情页要求 client:read；未授权时不得靠直接改 URL 读取应用配置（含回调/密钥状态）。
   return (
     <PermissionGate options={{ permissions: [CLIENT_PERMISSIONS.READ] }}>
-      <ClientDetailClient client={client} initialTokens={tokens.data} canUpdate={canUpdate} />
+      <ClientDetailClient client={client} initialTokens={tokens.data} canUpdate={canUpdate} returnHref={returnHref} />
     </PermissionGate>
   );
 }

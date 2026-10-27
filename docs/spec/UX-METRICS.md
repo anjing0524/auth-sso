@@ -832,3 +832,9 @@ a11y 对比度函数提取复用，增加未登录 `/login`（390×844，独立�
 | 问题 | 修复 | 验证 |
 |---|---|---|
 | 从筛选后的审计列表进入详情，返回固定 `/audit-logs?tab=login`，筛选/时间/关键词全丢 | 详情链接带 returnTo；详情返回仅接受站内 `/audit-logs` | 返回 href 保留 tab/eventType/range/keyword；a11y 亮/暗 0 |
+
+### 9.80 产品审计七十六：列表下钻返回上下文（2026-10-27）
+
+| 问题 | 修复 | 验证 |
+|---|---|---|
+| 用户/应用/角色权限详情返回固定列表，筛选/关键词/页码丢失 | 三类列表详情链接带 returnTo；详情返回经 safeReturnPath 校验 | 用户回 `/users?keyword=qa_lin`、应用回 `/clients?keyword=portal`、角色回 `/roles?status=ACTIVE`；UI 162 passed |

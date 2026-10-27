@@ -1463,3 +1463,20 @@ describe('审计详情返回上下文（续二百一十二）', () => {
     expect(detail).toContain('returnHref={returnHref}');
   });
 });
+
+describe('列表下钻返回上下文（续二百一十三）', () => {
+  it('用户/应用/角色权限详情链接带 returnTo，详情用安全返回', () => {
+    const users = read('src/app/(dashboard)/users/components/UserTable.tsx');
+    expect(users).toContain('returnTo=${encodeURIComponent(currentListHref)}');
+    const userPage = read('src/app/(dashboard)/users/[id]/page.tsx');
+    expect(userPage).toContain('safeReturnPath');
+    const clients = read('src/app/(dashboard)/clients/components/ClientsTable.tsx');
+    expect(clients).toContain('returnTo=${encodeURIComponent(currentListHref)}');
+    const clientPage = read('src/app/(dashboard)/clients/[id]/page.tsx');
+    expect(clientPage).toContain('safeReturnPath');
+    const roles = read('src/app/(dashboard)/roles/components/RolesTable.tsx');
+    expect(roles).toContain('returnTo=${encodeURIComponent(currentListHref)}');
+    const rolePage = read('src/app/(dashboard)/roles/[id]/permissions/page.tsx');
+    expect(rolePage).toContain('safeReturnPath');
+  });
+});

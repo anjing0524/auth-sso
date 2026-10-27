@@ -42,6 +42,8 @@ interface ClientDetailClientProps {
   initialTokens: Token[];
   /** 是否具备 client:update；无权限时配置区只读、Token 撤销入口隐藏 */
   canUpdate: boolean;
+  /** 返回列表（保留筛选） */
+  returnHref?: string;
 }
 
 /** 需要二次确认的危险操作 */
@@ -65,7 +67,7 @@ const CONFIRM_META: Record<Exclude<PendingAction, null>, { title: string; descri
   },
 };
 
-export function ClientDetailClient({ client, initialTokens, canUpdate }: ClientDetailClientProps) {
+export function ClientDetailClient({ client, initialTokens, canUpdate, returnHref = '/clients' }: ClientDetailClientProps) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [newSecret, setNewSecret] = useState<string | null>(null);
@@ -189,7 +191,7 @@ export function ClientDetailClient({ client, initialTokens, canUpdate }: ClientD
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
       <PageHeader
-        backHref="/clients"
+        backHref={returnHref}
         title={client.name}
         description={`${client.status === 'ACTIVE' ? '已启用' : '已禁用'} · Client ID：${client.clientId}`}
         actions={

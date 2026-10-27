@@ -16,6 +16,7 @@ import { resolveScope } from '@/lib/authz';
 import { db } from '@/infrastructure/db';
 import { getUser, getDepartmentOptions } from '../data';
 import { isUuid } from '@/lib/uuid';
+import { safeReturnPath } from '@/lib/safe-return';
 import { getUserPermissionContext, toPermissionContextOrNull } from '@/lib/permissions';
 import UserDetailForm from './UserDetailForm';
 
@@ -29,10 +30,12 @@ export const instant = false;
 export const metadata = { title: '用户详情 | Auth-SSO' };
 interface PageProps {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ returnTo?: string }>;
 }
 
-export default async function UserDetailPage({ params }: PageProps) {
+export default async function UserDetailPage({ params, searchParams }: PageProps) {
   const { id } = await params;
+  const returnHref = safeReturnPath((await searchParams).returnTo, '/users', '/users');
   // 非 UUID 直接 404：否则会以 22P02 的形式炸在数据库层
   if (!isUuid(id)) notFound();
 
@@ -51,7 +54,7 @@ export default async function UserDetailPage({ params }: PageProps) {
   // 详情页要求 user:read（LIST 只允许看列表）：只有 list 的角色不能靠改 URL 读取他人详情。
   return (
     <PermissionGate options={{ permissions: [USER_PERMISSIONS.READ] }}>
-      <UserDetailForm id={id} initialUser={user} canUpdate={canUpdate} isSelf={identity?.userId === id} departments={departments} />
+      <UserDetailForm id={id} initialUser={user} canUpdate={canUpdate} isSelf={identity?.userId === id} departments={departments} returnHref={returnHref} />
     </PermissionGate>
   );
 }

@@ -21,6 +21,8 @@
 
 ## 变更记录
 
+- 2026-10-27（续二百一十三）: **列表下钻返回上下文**。用户/应用/角色权限详情返回固定列表，丢筛选。**修复**：三类列表详情链接带 returnTo；详情返回 safeReturnPath 校验；用户/应用/角色页面透传 returnHref。**验证**：三类返回 url 均保留筛选；UI 162 passed；typecheck/build 0。
+
 - 2026-10-27（续二百一十二）: **审计详情返回上下文**。详情返回固定 tab，筛选丢失。**修复**：列表详情链接带 returnTo；详情安全校验只接受 /audit-logs。**验证**：返回保留 tab/eventType/range/keyword；a11y 亮/暗 0；审计 UI/守卫 147 passed。
 
 - 2026-10-27（续二百一十一）: **管理员用户头像入口**。avatarUrl 服务端支持、列表使用，但管理员详情无入口。**修复**：用户详情基本资料补头像 URL，计入 dirty/提交；API 测试更新头像。**验证**：字段存在；user-actions 32 passed；a11y 亮/暗 0；typecheck/build 0。

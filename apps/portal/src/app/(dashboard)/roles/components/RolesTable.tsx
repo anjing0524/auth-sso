@@ -8,7 +8,7 @@
  */
 import React, { useEffect, useRef, useState, useTransition } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import {
   ShieldCheck, Plus, Edit, Trash2, KeyRound, Eye,
@@ -62,6 +62,8 @@ interface Props {
 
 export default function RolesTable({ roles, pagination, initialKeyword, initialSort = 'default', initialStatus = '', departments, boundUserCounts = {}, permissionCounts = {} }: Props) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const currentListHref = `/roles${searchParams.toString() ? `?${searchParams.toString()}` : ''}`;
   const [keyword, setKeyword] = useState(initialKeyword);
   const [isPending, startTransition] = useTransition();
   const [saving, setSaving] = useState(false);
@@ -259,7 +261,7 @@ export default function RolesTable({ roles, pagination, initialKeyword, initialS
       </TableCell>
       <TableCell className="hidden sm:table-cell">
         <Link
-          href={`/roles/${r.id}/permissions`}
+          href={`/roles/${r.id}/permissions?returnTo=${encodeURIComponent(currentListHref)}`}
           title={
             (permissionCounts[r.id] ?? 0) === 0
               ? '该角色没有任何权限，绑定用户将无法登录门户；点击配置权限'
@@ -282,7 +284,7 @@ export default function RolesTable({ roles, pagination, initialKeyword, initialS
         {r.isSystem ? (
           <PermissionGuard permission={ROLE_PERMISSIONS.ASSIGN_PERMISSION}>
             <Button asChild variant="ghost" size="icon-sm" aria-label={`查看权限 ${r.name}`} title="查看权限（系统角色只读）">
-              <Link href={`/roles/${r.id}/permissions`}><Eye className="h-4 w-4" /></Link>
+              <Link href={`/roles/${r.id}/permissions?returnTo=${encodeURIComponent(currentListHref)}`}><Eye className="h-4 w-4" /></Link>
             </Button>
           </PermissionGuard>
         ) : (
@@ -294,7 +296,7 @@ export default function RolesTable({ roles, pagination, initialKeyword, initialS
             </PermissionGuard>
             <PermissionGuard permission={ROLE_PERMISSIONS.ASSIGN_PERMISSION}>
               <Button asChild variant="ghost" size="icon-sm" aria-label={`配置权限 ${r.name}`} title={`配置权限 ${r.name}`}>
-                <Link href={`/roles/${r.id}/permissions`}>
+                <Link href={`/roles/${r.id}/permissions?returnTo=${encodeURIComponent(currentListHref)}`}>
                   <KeyRound className="h-4 w-4" />
                 </Link>
               </Button>

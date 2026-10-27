@@ -85,6 +85,7 @@ export default function ClientsTable({ clients, pagination, initialKeyword, init
   const router = useRouter();
   const [keyword, setKeyword] = useState(initialKeyword);
   const searchParams = useSearchParams();
+  const currentListHref = `/clients${searchParams.toString() ? `?${searchParams.toString()}` : ''}`;
   const applyStatus = (value: string) => {
     const params = new URLSearchParams(searchParams.toString());
     if (value) params.set('status', value); else params.delete('status');
@@ -306,7 +307,7 @@ export default function ClientsTable({ clients, pagination, initialKeyword, init
         <div className="flex items-center justify-end gap-0.5">
           <PermissionGuard permission={CLIENT_PERMISSIONS.UPDATE}>
             <Button asChild variant="ghost" size="sm" className="h-8 gap-1.5 px-2" aria-label="编辑 OAuth 配置" title="编辑 OAuth 配置">
-              <Link href={`/clients/${client.clientId}`}><Edit className="h-4 w-4" /><span className="hidden md:inline">编辑配置</span></Link>
+              <Link href={`/clients/${client.clientId}?returnTo=${encodeURIComponent(currentListHref)}`}><Edit className="h-4 w-4" /><span className="hidden md:inline">编辑配置</span></Link>
             </Button>
           </PermissionGuard>
           <PermissionGuard permission={CLIENT_PERMISSIONS.DELETE}>

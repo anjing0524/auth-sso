@@ -45,9 +45,11 @@ interface Props {
   isSelf?: boolean;
   /** 操作者数据范围内的部门（用于迁移） */
   departments?: Array<{ id: string; name: string }>;
+  /** 返回列表（保留筛选） */
+  returnHref?: string;
 }
 
-export default function UserDetailForm({ id, initialUser: serverUser, canUpdate, isSelf = false, departments = [] }: Props) {
+export default function UserDetailForm({ id, initialUser: serverUser, canUpdate, isSelf = false, departments = [], returnHref = '/users' }: Props) {
   const router = useRouter();
   const user = serverUser ?? {};
   const [form, setForm] = useState({
@@ -72,7 +74,7 @@ export default function UserDetailForm({ id, initialUser: serverUser, canUpdate,
   useEffect(() => {
     if (!serverUser) {
       toast.error('用户不存在');
-      router.push('/users');
+      router.push(returnHref);
     }
   }, [serverUser, router]);
 
@@ -148,7 +150,7 @@ export default function UserDetailForm({ id, initialUser: serverUser, canUpdate,
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
       <PageHeader
-        backHref="/users"
+        backHref={returnHref}
         title={form.name}
         description={`用户名：${username} · 状态：${STATUS_LABELS[form.status] ?? form.status}`}
         actions={

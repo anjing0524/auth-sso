@@ -23,6 +23,7 @@ import { resolve } from 'node:path';
 vi.mock('next/navigation', () => ({
   redirect: vi.fn(),
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn(), back: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(),
 }));
 vi.mock('sonner', () => ({
   toast: { success: vi.fn(), error: vi.fn(), message: vi.fn() },

@@ -40,6 +40,8 @@ interface PermissionItem {
 
 export interface RolePermissionsPageProps {
   role: { id: string; name: string; isSystem?: boolean };
+  /** 返回角色列表（保留筛选） */
+  returnHref?: string;
 }
 
 const TYPE_LABELS: Record<string, string> = { API: '接口', PAGE: '页面', DIRECTORY: '目录' };
@@ -88,7 +90,7 @@ interface ScopeNode {
   depth: number;
 }
 
-export default function RolePermissionsPage({ role }: RolePermissionsPageProps) {
+export default function RolePermissionsPage({ role, returnHref = '/roles' }: RolePermissionsPageProps) {
   const [permissions, setPermissions] = useState<PermissionItem[]>([]);
   const [assignedIds, setAssignedIds] = useState<Set<string>>(new Set());
   /** 读取时的已授权快照：用于差异（待新增/待移除）与保存确认 */
@@ -324,7 +326,7 @@ export default function RolePermissionsPage({ role }: RolePermissionsPageProps) 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
       <PageHeader
-        backHref="/roles"
+        backHref={returnHref}
         backLabel="返回角色列表"
         icon="Key"
         title="配置功能权限"

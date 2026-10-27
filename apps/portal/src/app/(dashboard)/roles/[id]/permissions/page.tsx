@@ -12,6 +12,7 @@ import { eq } from 'drizzle-orm';
 
 import { db, schema } from '@/infrastructure/db';
 import { isUuid } from '@/lib/uuid';
+import { safeReturnPath } from '@/lib/safe-return';
 import { PermissionGate } from '@/components/layout/permission-gate';
 
 import RolePermissionsPage from './permissions-client';
@@ -21,10 +22,12 @@ export const metadata = { title: '配置角色权限 | Auth-SSO' };
 
 interface PageProps {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ returnTo?: string }>;
 }
 
-export default async function RolePermissionsRoute({ params }: PageProps) {
+export default async function RolePermissionsRoute({ params, searchParams }: PageProps) {
   const { id } = await params;
+  const returnHref = safeReturnPath((await searchParams).returnTo, '/roles', '/roles');
   if (!isUuid(id)) notFound();
 
   const role = await db.query.roles.findFirst({
@@ -37,6 +40,7 @@ export default async function RolePermissionsRoute({ params }: PageProps) {
     <PermissionGate options={{ permissions: [ROLE_PERMISSIONS.ASSIGN_PERMISSION] }}>
       <RolePermissionsPage
         role={{ id: role.id, name: role.name, isSystem: role.isSystem ?? false }}
+        returnHref={returnHref}
       />
     </PermissionGate>
   );
