@@ -12,6 +12,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ refresh: vi.fn(), push: vi.fn(), replace: vi.fn() }),
+}));
+
 // @allow-module-mock @/app/(dashboard)/users/actions infra-boundary: 写操作不在本文件断言范围（只测预勾选读取）
 vi.mock(import('@/app/(dashboard)/users/actions'), async (importOriginal): Promise<Partial<typeof usersActionsModule>> => {
   const actual = await importOriginal();
