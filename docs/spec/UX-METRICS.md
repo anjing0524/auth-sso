@@ -3,7 +3,7 @@
 > 生成方式：`node scripts/ux/measure.mjs`（真浏览器 + 验收栈）。生成日期：2026-10-23。
 > 规范与预算见 `docs/spec/UX-GUIDELINES.md` §4；本文件是**改动前后对比的基线**，不构成 CI 门禁。
 
-## 1. 本轮基线（客户端 tabs 语义轮，2026-10-27）
+## 1. 本轮基线（用户角色守卫轮，2026-10-27）
 
 | 视口 | 路由 | 页面滚动 | 横向溢出 | chrome% | 可见行 | 控件高(输入/按钮) | 表头吸顶 |
 |---|---|---|---|---|---|---|---|
@@ -566,3 +566,11 @@ a11y 脚本支持 `E2E_COLOR_SCHEME=dark`。暗色首跑 9 个失败项，修复
 | 问题 | 修复 | 验证 |
 |---|---|---|
 | tab 只有 role/aria-selected，无 aria-controls/tabpanel，无方向键支持 | 补 id/aria-controls/roving tabindex + ArrowLeft/Right/Home/End；内容区 role=tabpanel + aria-labelledby | 方向键切到授权记录并聚焦，Home 回基本信息；tabpanel 关联正确；e2e 覆盖 |
+
+### 9.42 产品审计三十八：用户角色分配离开守卫（2026-10-27）
+
+用户「分配角色」页有 changeCount 未保存状态，但未接离开守卫；点侧栏会丢失勾选。
+
+| 修复 | 验证 |
+|---|---|
+| `useUnsavedChangesGuard(changeCount > 0)` 接入 `/users/[id]/roles` | 勾选角色 → 侧栏 → 弹窗；取消后仍在本页且勾选保留（2 项） |

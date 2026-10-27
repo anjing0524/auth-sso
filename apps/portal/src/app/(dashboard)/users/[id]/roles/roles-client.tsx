@@ -20,6 +20,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { PageHeader } from '@/components/shared/page-header';
 import { SearchInput } from '@/components/shared/search-input';
 import { useFieldFailure } from '@/hooks/use-field-failure';
+import { useUnsavedChangesGuard } from '@/hooks/use-unsaved-changes-guard';
 
 import { updateUserRolesAction } from '../../actions';
 
@@ -121,6 +122,7 @@ export default function UserRolesPage({ user }: UserRolesPageProps) {
     return { addedIds: added, removedIds: removed };
   }, [assignedRoleIds, savedRoleIds]);
   const changeCount = addedIds.size + removedIds.size;
+  const leaveGuard = useUnsavedChangesGuard(changeCount > 0);
   const displayRoles = onlySelected ? filteredRoles.filter((r) => assignedRoleIds.has(r.id)) : filteredRoles;
   const selectedRoles = roles.filter((r) => assignedRoleIds.has(r.id));
   const selectedPermTotal = selectedRoles.reduce((sum, r) => sum + (r.permissionCount ?? 0), 0);
@@ -295,6 +297,7 @@ export default function UserRolesPage({ user }: UserRolesPageProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {leaveGuard}
     </div>
   );
 }

@@ -21,6 +21,8 @@
 
 ## 变更记录
 
+- 2026-10-27（续一百七十五）: **用户角色分配页离开守卫**。`/users/[id]/roles` 有 changeCount 未保存状态但未接入守卫，点侧栏即丢失勾选。**修复**：按 `changeCount > 0` 接入 `useUnsavedChangesGuard`。**验证**：勾选角色 → 侧栏 → 弹窗；取消后仍在本页且勾选保留；全量 **1261 passed**、e2e **18/18（52.6s）**、a11y 亮/暗 0、measure 0。
+
 - 2026-10-27（续一百七十四）: **客户端详情页签 WAI-ARIA 语义**。tab 只有 role/aria-selected，无 aria-controls/tabpanel，无方向键。**修复**：补 id/aria-controls/roving tabindex + ArrowLeft/Right/Home/End；内容区 role=tabpanel + aria-labelledby。**验证**：方向键切到授权记录并聚焦，Home 回基本信息；tabpanel 关联正确；e2e 覆盖；全量 **1260 passed**、e2e **18/18（50.3s）**、a11y 亮/暗 0、measure 0。
 
 - 2026-10-27（续一百七十三）: **移动侧栏无障碍语义/焦点**。侧栏 dialog 无 `aria-label`/`aria-modal`，Tab 到最后一项后焦点曾逃逸到 body。**修复**：SheetContent 补「主导航」名称与 `aria-modal=true`；复测 Tab 12 次全部在 dialog 内并循环。**验证**：e2e 增加 aria 断言；导航后自动收起保持；全量 **1259 passed**、e2e **18/18（52.7s）**、a11y 亮/暗 0、measure 0。

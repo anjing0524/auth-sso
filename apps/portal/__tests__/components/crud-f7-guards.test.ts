@@ -1087,3 +1087,11 @@ describe('客户端详情 tabs 语义（续一百七十四）', () => {
     expect(src).toContain('handleTabKeyDown');
   });
 });
+
+describe('用户角色分配守卫（续一百七十五）', () => {
+  it('分配角色页按 changeCount 接入守卫', () => {
+    const src = read('src/app/(dashboard)/users/[id]/roles/roles-client.tsx');
+    expect(src).toContain('useUnsavedChangesGuard(changeCount > 0)');
+    expect(src).toContain('{leaveGuard}');
+  });
+});
