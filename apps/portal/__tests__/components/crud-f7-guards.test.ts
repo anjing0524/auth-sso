@@ -1306,3 +1306,12 @@ describe('内置权限类型锁定（续一百九十六）', () => {
     expect(table).toContain('内置');
   });
 });
+
+describe('空权限角色警告（续一百九十七）', () => {
+  it('权限数为 0 时显示无权限警告并可进入配置', () => {
+    const table = read('src/app/(dashboard)/roles/components/RolesTable.tsx');
+    expect(table).toContain('无权限');
+    expect(table).toContain('variant="warning"');
+    expect(table).toContain('绑定用户将无法登录门户');
+  });
+});

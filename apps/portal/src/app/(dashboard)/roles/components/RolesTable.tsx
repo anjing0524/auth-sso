@@ -253,12 +253,18 @@ export default function RolesTable({ roles, pagination, initialKeyword, initialS
       <TableCell className="hidden sm:table-cell">
         <Link
           href={`/roles/${r.id}/permissions`}
-          title={`配置权限（当前 ${permissionCounts[r.id] ?? 0} 项）`}
-          className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[12px] tabular-nums hover:bg-primary/10 hover:text-primary ${
-            (permissionCounts[r.id] ?? 0) === 0 ? 'text-muted-foreground' : 'font-medium text-foreground'
-          }`}
+          title={
+            (permissionCounts[r.id] ?? 0) === 0
+              ? '该角色没有任何权限，绑定用户将无法登录门户；点击配置权限'
+              : `配置权限（当前 ${permissionCounts[r.id] ?? 0} 项）`
+          }
+          className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[12px] tabular-nums hover:bg-primary/10"
         >
-          {permissionCounts[r.id] ?? 0} 项
+          {(permissionCounts[r.id] ?? 0) === 0 ? (
+            <Badge variant="warning" className="h-5 px-1.5 text-[10px]">无权限</Badge>
+          ) : (
+            <span className="font-medium text-foreground">{permissionCounts[r.id]} 项</span>
+          )}
         </Link>
       </TableCell>
       <TableCell className="hidden sm:table-cell">
