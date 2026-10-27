@@ -21,6 +21,8 @@
 
 ## 变更记录
 
+- 2026-10-27（续一百六十八）: **移动端侧栏导航后自动收起**。390 打开侧栏点击「用户管理」后 URL 已切换，但侧栏仍开且 `body overflow:hidden`，页面持续被遮挡；Esc/遮罩关闭正常。**修复**：`SidebarProvider` 用 `usePathname` 监听路由变化，自动 `setOpenMobile(false)`。**验证**：导航后 `dialog=false`、`body overflow=visible`；新增 `mobile-nav.spec.ts`（390）固化；全量 **1254 passed**、e2e **15/15（45.2s）**、a11y 亮/暗 0、measure 0。
+
 - 2026-10-27（续一百六十七）: **暗色模式对比度门禁**。a11y 脚本支持 `E2E_COLOR_SCHEME=dark`；暗色首跑 9 个失败项：主按钮/头像 4.21、操作徽章/scope chip 3.71、用户头像 3.22。**修复**：暗色 `--color-primary` 0.58→0.53（白字达标）；`bg-primary/10` 上的 `text-primary` 改 `text-foreground`（操作类型徽章/scope chip/头像）。**验证**：暗色 12 路由对比度失败 **0**；亮色回归 **0**；键盘流程通过；全量 **1253 passed**、e2e **14/14（43.8s）**、measure 0。
 
 - 2026-10-27（续一百六十六）: **destructive 前景 token 缺失修复**。失败登录日志使审计「登录失败」徽章进入 a11y 扫描，报对比度 **3.29**；根因是 `--destructive-foreground` 只被引用未定义，所有 destructive 徽章/危险按钮继承黑字红底。**修复**：亮色补 `oklch(0.985 0 0)`、暗色补 `oklch(0.205 0 0)`，并映射 `--color-destructive-foreground`。**验证**：a11y 12 路由对比度失败 0；删除确认按钮/失败徽章前景恢复；全量 **1252 passed**、e2e **14/14（43.1s）**、measure 0。

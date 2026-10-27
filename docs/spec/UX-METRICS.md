@@ -3,7 +3,7 @@
 > 生成方式：`node scripts/ux/measure.mjs`（真浏览器 + 验收栈）。生成日期：2026-10-23。
 > 规范与预算见 `docs/spec/UX-GUIDELINES.md` §4；本文件是**改动前后对比的基线**，不构成 CI 门禁。
 
-## 1. 本轮基线（暗色对比度轮，2026-10-27）
+## 1. 本轮基线（移动侧栏轮，2026-10-27）
 
 | 视口 | 路由 | 页面滚动 | 横向溢出 | chrome% | 可见行 | 控件高(输入/按钮) | 表头吸顶 |
 |---|---|---|---|---|---|---|---|
@@ -513,3 +513,11 @@ a11y 脚本支持 `E2E_COLOR_SCHEME=dark`。暗色首跑 9 个失败项，修复
 | 主按钮/头像白字在暗色品牌蓝上 **4.21** | 暗色 `--color-primary` 0.58→0.53，白字达标 |
 | 操作日志类型徽章、scope 选中 chip `text-primary` 在 `bg-primary/10` 上 **3.71** | 改 `text-foreground`（浅色底仍用蓝 tint 表达选中） |
 | 用户列表头像 `bg-primary/5 text-primary` **3.22** | 改 `bg-primary/10 text-foreground` |
+
+### 9.35 产品审计三十一：移动端侧栏导航收起（2026-10-27）
+
+| 观察（390） | 结论/修复 |
+|---|---|
+| 打开侧栏 → 点「用户管理」→ URL 变为 /users，但侧栏仍开、`body overflow:hidden`，页面持续被遮挡 | ❌ 已修：`SidebarProvider` 监听 `pathname` 变化自动 `setOpenMobile(false)` |
+| Esc / 点遮罩关闭 | ✅ 正常 |
+| 复测 | 导航后 `dialog=false`、`body overflow=visible`；新增 `mobile-nav.spec.ts` 固化 |

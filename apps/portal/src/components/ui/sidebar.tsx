@@ -4,6 +4,7 @@ import * as React from "react"
 import { Slot } from "@radix-ui/react-slot"
 import { type VariantProps, cva } from "class-variance-authority"
 import { PanelLeft } from "lucide-react"
+import { usePathname } from "next/navigation"
 
 import { useIsMobile } from "@/hooks/use-mobile"
 import { cn } from "@/lib/utils"
@@ -70,7 +71,13 @@ const SidebarProvider = React.forwardRef<
     ref
   ) => {
     const isMobile = useIsMobile()
+    const pathname = usePathname()
     const [openMobile, setOpenMobile] = React.useState(false)
+
+    // 移动端导航后自动收起：否则侧栏仍覆盖页面且 body 保持 overflow:hidden。
+    React.useEffect(() => {
+      setOpenMobile(false)
+    }, [pathname])
 
     const [_open, _setOpen] = React.useState(defaultOpen)
     const open = openProp ?? _open

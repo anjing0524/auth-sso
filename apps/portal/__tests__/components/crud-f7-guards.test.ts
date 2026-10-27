@@ -1020,3 +1020,12 @@ describe('暗色模式对比度（续一百六十七）', () => {
     expect(users).toContain('bg-primary/10 text-foreground');
   });
 });
+
+describe('移动端侧栏导航收起（续一百六十八）', () => {
+  it('SidebarProvider 监听 pathname 关闭 openMobile', () => {
+    const src = read('src/components/ui/sidebar.tsx');
+    expect(src).toContain('usePathname');
+    expect(src).toContain('setOpenMobile(false)');
+    expect(src).toContain('[pathname]');
+  });
+});
