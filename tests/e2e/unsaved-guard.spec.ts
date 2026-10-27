@@ -44,3 +44,22 @@ test('新建应用未保存时离开需确认', async ({ page }) => {
   await expect(page).toHaveURL(/\/clients$/);
   await expect(page.getByRole('dialog')).toHaveCount(0);
 });
+
+test('命令面板跳转同样受未保存守卫', async ({ page }) => {
+  await page.goto('/login');
+  await page.getByLabel('登录邮箱').fill('admin@example.com');
+  await page.getByLabel('密码', { exact: true }).fill('Admin@123456');
+  await page.getByRole('button', { name: '安全登录' }).click();
+  await page.waitForURL(/dashboard$/);
+
+  await page.goto('/users/00000000-0000-0000-0000-000000000001', { waitUntil: 'networkidle' });
+  await page.locator('#user-name').fill('临时未保存名称');
+  await page.getByRole('button', { name: /搜索功能/ }).first().click();
+  await page.keyboard.type('用户管理');
+  await page.keyboard.press('Enter');
+
+  await expect(page.getByRole('dialog')).toContainText('离开并放弃未保存的修改？');
+  await expect(page).toHaveURL(/\/users\/00000000-0000-0000-0000-000000000001$/);
+  await page.getByRole('button', { name: '放弃并离开' }).click();
+  await expect(page).toHaveURL(/\/users$/);
+});

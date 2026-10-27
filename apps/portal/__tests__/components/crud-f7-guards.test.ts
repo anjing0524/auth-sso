@@ -1059,3 +1059,14 @@ describe('长表单未保存守卫（续一百七十一）', () => {
     expect(read('src/app/(dashboard)/permissions/permission-form.tsx')).toContain('useUnsavedChangesGuard(isDirty)');
   });
 });
+
+describe('命令面板导航守卫（续一百七十二）', () => {
+  it('面板先派发可取消导航事件；守卫监听并可阻止', () => {
+    const palette = read('src/components/shared/command-palette.tsx');
+    expect(palette).toContain('UNSAVED_NAVIGATION_EVENT');
+    expect(palette).toContain('request.defaultPrevented');
+    const hook = read('src/hooks/use-unsaved-changes-guard.tsx');
+    expect(hook).toContain('UNSAVED_NAVIGATION_EVENT');
+    expect(hook).toContain('event.preventDefault()');
+  });
+});

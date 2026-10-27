@@ -19,6 +19,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 
+export const UNSAVED_NAVIGATION_EVENT = 'unsaved-guard:request-navigation';
+
 export function useUnsavedChangesGuard(isDirty: boolean): React.ReactNode {
   const dirtyRef = useRef(isDirty);
   useEffect(() => {
@@ -55,11 +57,21 @@ export function useUnsavedChangesGuard(isDirty: boolean): React.ReactNode {
       setPendingHref(`${url.pathname}${url.search}${url.hash}`);
     };
 
+    // 非链接导航（命令面板/按钮 router.push）统一先请求守卫；未脏时不拦截。
+    const onRequestNavigation = (event: Event) => {
+      if (!dirtyRef.current || !event.cancelable) return;
+      event.preventDefault();
+      const href = (event as CustomEvent<string>).detail;
+      if (href) setPendingHref(href);
+    };
+
     window.addEventListener('beforeunload', onBeforeUnload);
     document.addEventListener('click', onClick, true);
+    window.addEventListener(UNSAVED_NAVIGATION_EVENT, onRequestNavigation);
     return () => {
       window.removeEventListener('beforeunload', onBeforeUnload);
       document.removeEventListener('click', onClick, true);
+      window.removeEventListener(UNSAVED_NAVIGATION_EVENT, onRequestNavigation);
     };
   }, []);
 

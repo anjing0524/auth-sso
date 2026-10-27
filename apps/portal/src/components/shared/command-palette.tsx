@@ -7,6 +7,7 @@ import {
   CommandItem, CommandList,
 } from '@/components/ui/command';
 import { DynamicIcon } from '@/lib/icon-map';
+import { UNSAVED_NAVIGATION_EVENT } from '@/hooks/use-unsaved-changes-guard';
 
 interface MenuItem {
   id: string; title: string; url: string; icon?: string | null;
@@ -53,6 +54,10 @@ export function CommandPalette({ menus }: { menus: MenuItem[] }) {
 
   const handleSelect = useCallback((url: string) => {
     setOpen(false); // 立即关闭面板
+    // 先让未保存守卫决定是否拦截；未拦截才真正导航
+    const request = new CustomEvent(UNSAVED_NAVIGATION_EVENT, { detail: url, cancelable: true });
+    window.dispatchEvent(request);
+    if (request.defaultPrevented) return;
     router.push(url); // 不等动画
   }, [router]);
 
