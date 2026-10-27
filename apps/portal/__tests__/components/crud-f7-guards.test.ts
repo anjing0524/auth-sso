@@ -1185,3 +1185,13 @@ describe('越界分页回退末页（续一百八十三）', () => {
     }
   });
 });
+
+describe('内置权限删除保护（续一百八十四）', () => {
+  it('ALL_PERMISSIONS 内的权限隐藏删除并禁用勾选；全选只选可删项', () => {
+    const src = read('src/app/(dashboard)/permissions/components/PermissionsTable.tsx');
+    expect(src).toContain('ALL_PERMISSIONS');
+    expect(src).toContain('isBuiltinPermission');
+    expect(src).toContain('deletablePermissions');
+    expect(src).toContain('内置权限不可删除');
+  });
+});

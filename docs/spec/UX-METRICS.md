@@ -624,3 +624,9 @@ a11y 脚本支持 `E2E_COLOR_SCHEME=dark`。暗色首跑 9 个失败项，修复
 | 问题 | 修复 | 验证 |
 |---|---|---|
 | `?page=999` 时 roles/clients/permissions/audit 返回空列表并显示「暂无数据 / 创建…」，但总数 >0；用户误判无数据 | 查询后若 `page > totalPages`，重定向到末页并保留筛选 | users→page1、roles→page1、clients→page1、permissions→page3、audit→page149；均有数据 |
+
+### 9.51 产品审计四十七：内置权限删除入口（2026-10-27）
+
+| 问题 | 修复 | 验证 |
+|---|---|---|
+| `ALL_PERMISSIONS` 内的内置权限仍显示删除按钮、可勾选批量删，服务端才拒绝 | 内置权限隐藏删除、勾选 disabled；全选/批量只针对可删除权限；无可删项时全选禁用 | 权限页 API 内置项删除按钮 0、勾选 disabled；菜单类可删项保持可用 |

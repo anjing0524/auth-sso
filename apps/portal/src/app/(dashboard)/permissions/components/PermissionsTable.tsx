@@ -33,7 +33,7 @@ import { bulkDeletePermissionsAction } from '../bulk-actions';
 import { SearchInput } from '@/components/shared/search-input';
 import { TableToolbar } from '@/components/shared/table-toolbar';
 import { PermissionGuard } from '@/components/shared/permission-guard';
-import { PERMISSION_PERMISSIONS } from '@auth-sso/contracts';
+import { ALL_PERMISSIONS, PERMISSION_PERMISSIONS } from '@auth-sso/contracts';
 interface PermissionRow {
   id: string;
   name: string;
@@ -118,6 +118,8 @@ export default function PermissionsTable({ permissions, pagination, activeTab, i
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulking, setBulking] = useState(false);
   const visibleChecked = permissions.filter((p) => checkedIds.has(p.id));
+  const isBuiltinPermission = (code: string) => (ALL_PERMISSIONS as readonly string[]).includes(code);
+  const deletablePermissions = permissions.filter((p) => !isBuiltinPermission(p.code));
   /** 删除影响面（打开确认弹窗时按需读取，不缓存） */
   const [deleteImpact, setDeleteImpact] = useState<{ descendants: number; roles: number; users: number } | null>(null);
   const [impactLoading, setImpactLoading] = useState(false);
@@ -160,8 +162,10 @@ export default function PermissionsTable({ permissions, pagination, activeTab, i
         <PermissionGuard permission={PERMISSION_PERMISSIONS.DELETE}>
           <Checkbox
             aria-label="全选本页权限"
-            checked={permissions.length > 0 && permissions.every((p) => checkedIds.has(p.id))}
-            onCheckedChange={(checked) => setCheckedIds(checked === true ? new Set(permissions.map((p) => p.id)) : new Set())}
+            checked={deletablePermissions.length > 0 && deletablePermissions.every((p) => checkedIds.has(p.id))}
+            disabled={deletablePermissions.length === 0}
+            title={deletablePermissions.length === 0 ? '当前页没有可删除的权限' : undefined}
+            onCheckedChange={(checked) => setCheckedIds(checked === true ? new Set(deletablePermissions.map((p) => p.id)) : new Set())}
           />
         </PermissionGuard>
       ),
@@ -223,6 +227,8 @@ export default function PermissionsTable({ permissions, pagination, activeTab, i
           <Checkbox
             aria-label={`选择权限 ${p.name}`}
             checked={checkedIds.has(p.id)}
+            disabled={isBuiltinPermission(p.code)}
+            title={isBuiltinPermission(p.code) ? '内置权限不可删除' : undefined}
             onCheckedChange={(checked) => setCheckedIds((prev) => {
               const next = new Set(prev);
               if (checked === true) next.add(p.id); else next.delete(p.id);
@@ -269,6 +275,7 @@ export default function PermissionsTable({ permissions, pagination, activeTab, i
               <Link href={`/permissions/${p.id}/edit`}><Edit className="h-4 w-4" /><span className="hidden md:inline">编辑</span></Link>
             </Button>
           </PermissionGuard>
+          {!isBuiltinPermission(p.code) && (
           <PermissionGuard permission={PERMISSION_PERMISSIONS.DELETE}>
             <Button
               variant="ghost"
@@ -281,6 +288,7 @@ export default function PermissionsTable({ permissions, pagination, activeTab, i
               <Trash2 className="h-4 w-4" /><span className="hidden md:inline">删除</span>
             </Button>
           </PermissionGuard>
+          )}
         </div>
       </TableCell>
     </TableRow>

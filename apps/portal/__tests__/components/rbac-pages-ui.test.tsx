@@ -447,13 +447,21 @@ describe('U-DEP03 非空树新建入口', () => {
 // U-PRM03 / U-G11 术语统一 + aria-label 区分对象
 // ═══════════════════════════════════════════════════
 describe('U-PRM03/U-G11 术语与 aria-label', () => {
-  it('permissions 行内编辑是链接（页面）/删除是按钮（确认弹窗），aria-label 携带对象名', () => {
-    renderPermissions({ permissions: [PERMISSION_API], pagination: PAGINATION(1) });
+  it('permissions 行内编辑是链接；内置权限无删除，自定义权限有删除', () => {
+    const custom = {
+      ...PERMISSION_API,
+      id: '00000000-0000-4000-8000-000000000913',
+      name: '自定义权限',
+      code: 'custom:demo:read',
+    };
+    renderPermissions({ permissions: [PERMISSION_API, custom], pagination: PAGINATION(1) });
     expect(screen.getByRole('link', { name: `编辑权限 ${PERMISSION_API.name}` })).toHaveAttribute(
       'href',
       `/permissions/${PERMISSION_API.id}/edit`,
     );
-    expect(screen.getByRole('button', { name: `删除权限 ${PERMISSION_API.name}` })).toBeInTheDocument();
+    // 内置权限（ALL_PERMISSIONS）不可删：UI 提前隐藏，不再等服务端拒绝
+    expect(screen.queryByRole('button', { name: `删除权限 ${PERMISSION_API.name}` })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: `删除权限 ${custom.name}` })).toBeInTheDocument();
   });
 
   it('roles 行内操作 aria-label 携带角色名', () => {
