@@ -1453,3 +1453,13 @@ describe('管理员用户头像入口（续二百一十一）', () => {
     expect(src).toContain('avatarUrl: form.avatarUrl.trim()');
   });
 });
+
+describe('审计详情返回上下文（续二百一十二）', () => {
+  it('详情链接带 returnTo；详情返回仅接受站内 /audit-logs', () => {
+    const list = read('src/app/(dashboard)/audit-logs/page.tsx');
+    expect(list).toContain('returnTo=${encodeURIComponent(currentListHref)}');
+    const detail = read('src/app/(dashboard)/audit-logs/[id]/page.tsx');
+    expect(detail).toContain("rawReturn.startsWith('/audit-logs')");
+    expect(detail).toContain('returnHref={returnHref}');
+  });
+});

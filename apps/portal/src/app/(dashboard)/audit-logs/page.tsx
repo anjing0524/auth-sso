@@ -212,6 +212,8 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
     });
   }
 
+  const currentListHref = pageHref(tab, page, eventType, operation, range, keyword, chipStartDate, chipEndDate, accessStatus, validAccessResourceType);
+
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
 
@@ -346,7 +348,7 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
                         </TableCell>
                         <TableCell className="text-right">
                           <Button asChild variant="ghost" size="icon-sm" aria-label="查看日志详情">
-                            <Link href={`/audit-logs/${loginLog.id}?tab=login`}><Eye className="h-4 w-4" /></Link>
+                            <Link href={`/audit-logs/${loginLog.id}?tab=login&returnTo=${encodeURIComponent(currentListHref)}`}><Eye className="h-4 w-4" /></Link>
                           </Button>
                         </TableCell>
                       </TableRow>
@@ -435,7 +437,7 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
                         </TableCell>
                         <TableCell className="text-right">
                           <Button asChild variant="ghost" size="icon-sm" aria-label="查看日志详情">
-                            <Link href={`/audit-logs/${opLog.id}?tab=operation`}><Eye className="h-4 w-4" /></Link>
+                            <Link href={`/audit-logs/${opLog.id}?tab=operation&returnTo=${encodeURIComponent(currentListHref)}`}><Eye className="h-4 w-4" /></Link>
                           </Button>
                         </TableCell>
                       </TableRow>
@@ -511,7 +513,7 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
                         <TableCell className="hidden text-muted-foreground md:table-cell">{accessLog.ip || '-'}</TableCell>
                         <TableCell className="text-right">
                           <Button asChild variant="ghost" size="icon-sm" aria-label="查看日志详情">
-                            <Link href={`/audit-logs/${accessLog.id}?tab=access`}><Eye className="h-4 w-4" /></Link>
+                            <Link href={`/audit-logs/${accessLog.id}?tab=access&returnTo=${encodeURIComponent(currentListHref)}`}><Eye className="h-4 w-4" /></Link>
                           </Button>
                         </TableCell>
                       </TableRow>

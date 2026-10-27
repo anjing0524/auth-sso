@@ -21,7 +21,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-
 
 interface PageProps {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ tab?: string }>;
+  searchParams: Promise<{ tab?: string; returnTo?: string }>;
 }
 
 function Field({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
@@ -33,11 +33,11 @@ function Field({ label, value, mono }: { label: string; value: string; mono?: bo
   );
 }
 
-function DetailHeader({ title, tab, id, children }: { title: string; tab: 'login' | 'operation' | 'access'; id: string; children?: React.ReactNode }) {
+function DetailHeader({ title, tab, id, returnHref, children }: { title: string; tab: 'login' | 'operation' | 'access'; id: string; returnHref: string; children?: React.ReactNode }) {
   return (
     <div className="flex flex-wrap items-center gap-2">
       <Button asChild variant="ghost" size="icon-sm" aria-label="返回审计日志">
-        <Link href={`/audit-logs?tab=${tab}`}><ArrowLeft className="h-4 w-4" /></Link>
+        <Link href={returnHref}><ArrowLeft className="h-4 w-4" /></Link>
       </Button>
       <h1 className="type-section-title">{title}</h1>
       {children}
@@ -48,8 +48,12 @@ function DetailHeader({ title, tab, id, children }: { title: string; tab: 'login
 
 export default async function AuditLogDetailPage({ params, searchParams }: PageProps) {
   const { id } = await params;
-  const { tab } = await searchParams;
+  const { tab, returnTo: rawReturn } = await searchParams;
   if (!UUID_RE.test(id)) notFound();
+  const fallbackTab = tab === 'login' || tab === 'access' ? tab : 'operation';
+  const returnHref = rawReturn && rawReturn.startsWith('/audit-logs') && !rawReturn.startsWith('//')
+    ? rawReturn
+    : `/audit-logs?tab=${fallbackTab}`;
 
   if (tab === 'login') {
     const row = await getLoginLogById(id);
@@ -57,7 +61,7 @@ export default async function AuditLogDetailPage({ params, searchParams }: PageP
     const label = LOGIN_EVENT_LABELS[row.eventType as LoginEventType] ?? row.eventType;
     return (
       <div className="flex min-h-0 flex-1 flex-col gap-3">
-        <DetailHeader title="登录日志详情" tab="login" id={row.id}>
+        <DetailHeader title="登录日志详情" tab="login" id={row.id} returnHref={returnHref}>
           <Badge variant="secondary">{label}</Badge>
         </DetailHeader>
         <Card className="border border-border/70 ring-0">
@@ -88,7 +92,7 @@ export default async function AuditLogDetailPage({ params, searchParams }: PageP
     if (!row) notFound();
     return (
       <div className="flex min-h-0 flex-1 flex-col gap-3">
-        <DetailHeader title="访问日志详情" tab="access" id={row.id}>
+        <DetailHeader title="访问日志详情" tab="access" id={row.id} returnHref={returnHref}>
           <Badge variant="outline" className="font-mono">{row.method}</Badge>
         </DetailHeader>
         <div className="grid gap-3 lg:grid-cols-3">
@@ -133,7 +137,7 @@ export default async function AuditLogDetailPage({ params, searchParams }: PageP
   const opLabel = AUDIT_OPERATION_LABELS[row.operation as AuditOperation] ?? row.operation;
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
-      <DetailHeader title="操作日志详情" tab="operation" id={row.id}>
+      <DetailHeader title="操作日志详情" tab="operation" id={row.id} returnHref={returnHref}>
         <Badge>{opLabel}</Badge>
       </DetailHeader>
       <div className="grid gap-3 lg:grid-cols-3">
