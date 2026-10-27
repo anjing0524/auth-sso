@@ -31,8 +31,18 @@ await page.getByLabel('密码', { exact: true }).fill(PASSWORD);
 await page.getByRole('button', { name: '安全登录' }).click();
 await page.waitForURL(/dashboard$/);
 
+const paths = [...PATHS];
+// 动态详情：审计日志详情页（id 每次验收会变），先点进一条再纳入对比度检查
+await page.goto(`${BASE}/audit-logs`, { waitUntil: 'networkidle' });
+const detailLink = page.getByRole('link', { name: '查看日志详情' }).first();
+if (await detailLink.count()) {
+  await detailLink.click();
+  await page.waitForURL(/\/audit-logs\/[0-9a-f-]{36}/);
+  paths.push(`${new URL(page.url()).pathname}${new URL(page.url()).search}`);
+}
+
 const report = { contrast: {}, keyboard: null };
-for (const path of PATHS) {
+for (const path of paths) {
   await page.goto(BASE + path, { waitUntil: 'networkidle' });
   await page.waitForTimeout(300);
   report.contrast[path] = await page.evaluate(() => {

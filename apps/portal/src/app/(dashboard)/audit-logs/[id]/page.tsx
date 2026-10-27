@@ -73,7 +73,7 @@ export default async function AuditLogDetailPage({ params, searchParams }: PageP
               <Field label="User-Agent" value={row.userAgent || '-'} mono />
             </dl>
             <div className="mt-3 text-xs">
-              <Link className="text-primary hover:underline" href={`/audit-logs?tab=login&keyword=${encodeURIComponent(row.username)}`}>
+              <Link className="text-link hover:underline" href={`/audit-logs?tab=login&keyword=${encodeURIComponent(row.username)}`}>
                 查看该用户的登录记录 →
               </Link>
             </div>
@@ -116,7 +116,7 @@ export default async function AuditLogDetailPage({ params, searchParams }: PageP
               </dl>
               {row.username && (
                 <div className="mt-3 text-xs">
-                  <Link className="text-primary hover:underline" href={`/audit-logs?tab=access&keyword=${encodeURIComponent(row.username)}`}>
+                  <Link className="text-link hover:underline" href={`/audit-logs?tab=access&keyword=${encodeURIComponent(row.username)}`}>
                     查看该用户的访问记录 →
                   </Link>
                 </div>
@@ -161,14 +161,14 @@ export default async function AuditLogDetailPage({ params, searchParams }: PageP
             </dl>
             {row.userId && (
               <div className="mt-3 text-xs">
-                <Link className="text-primary hover:underline" href={`/audit-logs?tab=operation&keyword=${encodeURIComponent(row.userId)}`}>
+                <Link className="text-link hover:underline" href={`/audit-logs?tab=operation&keyword=${encodeURIComponent(row.userId)}`}>
                   查看该目标用户的变更记录 →
                 </Link>
               </div>
             )}
             {row.username && (
               <div className="mt-2 text-xs">
-                <Link className="text-primary hover:underline" href={`/audit-logs?tab=operation&keyword=${encodeURIComponent(row.username)}`}>
+                <Link className="text-link hover:underline" href={`/audit-logs?tab=operation&keyword=${encodeURIComponent(row.username)}`}>
                   查看该操作人的审计记录 →
                 </Link>
               </div>

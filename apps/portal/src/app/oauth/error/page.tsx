@@ -25,7 +25,7 @@ function ErrorContent() {
             <div className="h-6 w-6 bg-primary rounded-lg flex items-center justify-center shadow-lg shadow-primary/20">
                <span className="text-[10px] text-primary-foreground font-semibold">A</span>
             </div>
-            <span className="text-sm font-semibold tracking-tighter text-foreground">Auth-SSO <span className="text-primary">Identity</span></span>
+            <span className="text-sm font-semibold tracking-tighter text-foreground">Auth-SSO <span className="text-link">Identity</span></span>
           </div>
           <h2 className="text-2xl font-semibold text-foreground tracking-tight">
             访问受限
@@ -43,7 +43,7 @@ function ErrorContent() {
             {clientId && (
               <div className="flex items-center justify-center gap-2">
                 <span className="text-[10px] font-semibold text-muted-foreground tracking-widest text-center">Target App:</span>
-                <code className="text-[11px] bg-card px-2 py-0.5 rounded border border-border text-primary font-mono font-bold shadow-sm">
+                <code className="text-[11px] bg-card px-2 py-0.5 rounded border border-border text-link font-mono font-bold shadow-sm">
                   {clientId}
                 </code>
               </div>

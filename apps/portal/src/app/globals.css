@@ -7,6 +7,7 @@
 :root {
   /* 基础颜色 - 基于 DESIGN.md v2.0（hex 值已转为 oklch） */
   --color-primary: oklch(0.52 0.23 257);
+  --link: oklch(0.52 0.23 257);
   --color-primary-hover: oklch(0.43 0.21 257);
   --color-primary-subtle: oklch(0.95 0.03 250);
 
@@ -139,6 +140,7 @@
   --color-text-secondary: oklch(0.68 0.03 250);
   --color-text-muted: oklch(0.52 0.03 250);
   --color-primary: oklch(0.53 0.21 257);
+  --link: oklch(0.78 0.14 257);
   --color-border: oklch(0.32 0.03 260);
 
   --background: oklch(0.145 0 0);
@@ -213,6 +215,7 @@
 
   /* 自定义颜色映射 */
   --color-primary: var(--color-primary);
+  --color-link: var(--link);
   --color-primary-hover: var(--color-primary-hover);
   --color-primary-subtle: var(--color-primary-subtle);
   --color-surface: var(--color-surface);

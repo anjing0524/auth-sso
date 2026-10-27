@@ -1223,3 +1223,16 @@ describe('详情页对比度 token（续一百八十六）', () => {
     expect(client).toContain('font-medium text-foreground');
   });
 });
+
+describe('链接对比度 token（续一百八十七）', () => {
+  it('--link 亮/暗有定义并映射；审计详情链接使用 text-link；a11y 含动态详情', () => {
+    const css = read('src/app/globals.css');
+    expect(css).toContain('--link: oklch(0.52 0.23 257)');
+    expect(css).toContain('--link: oklch(0.78 0.14 257)');
+    expect(css).toContain('--color-link: var(--link)');
+    const detail = read('src/app/(dashboard)/audit-logs/[id]/page.tsx');
+    expect(detail).toContain('text-link');
+    const script = read('../../scripts/ux/a11y.mjs');
+    expect(script).toContain('查看日志详情');
+  });
+});
