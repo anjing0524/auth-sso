@@ -97,6 +97,8 @@ interface UserTableProps {
   clearHref?: string;
   /** 是否有 user:update（无权限时不显示多选与批量操作） */
   canUpdate?: boolean;
+  /** 当前登录用户 id（禁止勾选/禁用自己） */
+  currentUserId?: string;
 }
 
 /**
@@ -141,7 +143,7 @@ export function UserTableSkeleton() {
   );
 }
 
-export default function UserTable({ users, pagination, filters, isFiltered = false, clearHref = '/users', canUpdate = false }: UserTableProps) {
+export default function UserTable({ users, pagination, filters, isFiltered = false, clearHref = '/users', canUpdate = false, currentUserId }: UserTableProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -175,8 +177,10 @@ export default function UserTable({ users, pagination, filters, isFiltered = fal
   const selectedUsers = users.filter((u) => selected.has(u.id));
   const lockedSelectedCount = selectedUsers.filter((u) => u.status === 'LOCKED').length;
   const disableEffectiveCount = selectedCount - lockedSelectedCount;
-  const allSelected = canUpdate && users.length > 0 && users.every((u) => selected.has(u.id));
+  const selectableUsers = users.filter((u) => u.id !== currentUserId);
+  const allSelected = canUpdate && selectableUsers.length > 0 && selectableUsers.every((u) => selected.has(u.id));
   const toggleSelect = (id: string, checked: boolean) => {
+    if (id === currentUserId) return;
     setSelected((prev) => {
       const next = new Set(prev);
       if (checked) next.add(id); else next.delete(id);
@@ -184,7 +188,7 @@ export default function UserTable({ users, pagination, filters, isFiltered = fal
     });
   };
   const toggleSelectAll = (checked: boolean) => {
-    setSelected(checked ? new Set(users.map((u) => u.id)) : new Set());
+    setSelected(checked ? new Set(selectableUsers.map((u) => u.id)) : new Set());
   };
   const runBulk = async () => {
     if (!bulkTarget) return;
@@ -234,6 +238,8 @@ export default function UserTable({ users, pagination, filters, isFiltered = fal
         <Checkbox
           aria-label="全选本页用户"
           checked={allSelected}
+          disabled={selectableUsers.length === 0}
+          title={selectableUsers.length === 0 ? '当前页没有可选择的用户' : undefined}
           onCheckedChange={(checked) => toggleSelectAll(checked === true)}
         />
       ),
@@ -253,6 +259,8 @@ export default function UserTable({ users, pagination, filters, isFiltered = fal
           <Checkbox
             aria-label={`选择用户 ${user.name}`}
             checked={selected.has(user.id)}
+            disabled={user.id === currentUserId}
+            title={user.id === currentUserId ? '不能选择当前登录账号' : undefined}
             onCheckedChange={(checked) => toggleSelect(user.id, checked === true)}
           />
         </TableCell>
@@ -266,7 +274,10 @@ export default function UserTable({ users, pagination, filters, isFiltered = fal
             </AvatarFallback>
           </Avatar>
           <div className="flex flex-col">
-            <span className="block max-w-[240px] truncate text-[12px] font-medium leading-4 text-foreground" title={user.name}>{user.name}</span>
+            <span className="flex items-center gap-1.5">
+              <span className="block max-w-[220px] truncate text-[12px] font-medium leading-4 text-foreground" title={user.name}>{user.name}</span>
+              {user.id === currentUserId && <Badge variant="secondary" className="h-4 shrink-0 px-1 text-[9px]">当前账号</Badge>}
+            </span>
             <span className="block max-w-[240px] truncate text-[10px] leading-3 text-muted-foreground" title={`${user.username} • ${user.email}`}>
               {user.username} • {user.email}
             </span>
@@ -320,6 +331,7 @@ export default function UserTable({ users, pagination, filters, isFiltered = fal
               <Link href={`/users/${user.id}/roles`}><Shield className="h-4 w-4" /><span className="hidden md:inline">分配角色</span></Link>
             </Button>
           </PermissionGuard>
+          {user.id !== currentUserId && (
           <PermissionGuard permission={USER_PERMISSIONS.UPDATE}>
             <Button
               variant="ghost"
@@ -333,6 +345,7 @@ export default function UserTable({ users, pagination, filters, isFiltered = fal
               <span className="hidden md:inline">{user.status === 'ACTIVE' ? '禁用' : user.status === 'LOCKED' ? '解锁' : '恢复'}</span>
             </Button>
           </PermissionGuard>
+          )}
         </div>
         {/* 移动端：操作收进菜单，避免第三颗图标被裁切 */}
         <div className="flex justify-end md:hidden">
@@ -353,12 +366,14 @@ export default function UserTable({ users, pagination, filters, isFiltered = fal
                   <Link href={`/users/${user.id}/roles`}><Shield className="mr-2 h-4 w-4" />分配角色</Link>
                 </DropdownMenuItem>
               </PermissionGuard>
+              {user.id !== currentUserId && (
               <PermissionGuard permission={USER_PERMISSIONS.UPDATE}>
                 <DropdownMenuItem onSelect={() => handleToggleStatus(user)}>
                   {user.status === 'ACTIVE' ? <UserMinus className="mr-2 h-4 w-4 text-destructive" /> : <UserCheck className="mr-2 h-4 w-4 text-success" />}
                   {user.status === 'ACTIVE' ? '禁用' : user.status === 'LOCKED' ? '解锁' : '恢复'}
                 </DropdownMenuItem>
               </PermissionGuard>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>

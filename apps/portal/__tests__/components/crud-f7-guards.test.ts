@@ -1135,3 +1135,16 @@ describe('自我账号保护（续一百七十九）', () => {
     expect(form).toContain('{!isSelf && (');
   });
 });
+
+describe('用户列表自我保护（续一百八十）', () => {
+  it('当前账号不可勾选/禁用；全选排除自己', () => {
+    const page = read('src/app/(dashboard)/users/page.tsx');
+    expect(page).toContain('currentUserId={userId}');
+    const table = read('src/app/(dashboard)/users/components/UserTable.tsx');
+    expect(table).toContain('selectableUsers');
+    expect(table).toContain('disabled={user.id === currentUserId}');
+    expect(table).toContain('当前账号');
+    expect(table).toContain('user.id !== currentUserId');
+    expect(table).toContain('selectableUsers.length === 0');
+  });
+});
