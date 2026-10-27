@@ -21,6 +21,10 @@
 
 ## 变更记录
 
+- 2026-10-27（续一百六十六）: **destructive 前景 token 缺失修复**。失败登录日志使审计「登录失败」徽章进入 a11y 扫描，报对比度 **3.29**；根因是 `--destructive-foreground` 只被引用未定义，所有 destructive 徽章/危险按钮继承黑字红底。**修复**：亮色补 `oklch(0.985 0 0)`、暗色补 `oklch(0.205 0 0)`，并映射 `--color-destructive-foreground`。**验证**：a11y 12 路由对比度失败 0；删除确认按钮/失败徽章前景恢复；全量 **1252 passed**、e2e **14/14（43.1s）**、measure 0。
+
+- 2026-10-27（续一百六十五）: **登录失败交互修复**。错密码后邮箱保留、密码也保留且焦点丢到 body；用户需手动清空/点输入框才能重试。**修复**：失败后清空密码、保留邮箱，并在 loading 结束/输入框恢复可用后聚焦密码框（disabled 时 focus 无效，改用 effect）。**验证**：新增 `login-errors.spec.ts`：错误可见、邮箱保留、密码为空、密码框聚焦；通过；全量 **1252 passed**、e2e **14/14（43.1s）**、a11y 0、measure 0。
+
 - 2026-10-27（续一百六十四）: **跨路由表单 id 唯一化**。静态扫描发现登录/新建用户共用 `email/password`，客户端创建/详情共用 5 个字段 id；Next 路由过渡期会短暂同屏，形成重复 id（此前仅修了 client-name）。**修复**：登录 `login-*`、创建用户 `create-user-*`（含部门 Select）、客户端创建/详情分别 `client-create-*` / `client-detail-*`。**验证**：依次打开用户弹窗、客户端创建、客户端详情，DOM 重复 id **0**；标签关联正常；全量 **1250 passed**、e2e **13/13（45.0s）**、a11y 0、measure 0。
 
 - 2026-10-27（续一百六十三）: **审计导出移动端对齐 + 客户端表单 id 唯一化**。390 审计页「导出 CSV」孤立右对齐；新建应用与详情页都用 `id="client-name"`，Next 路由过渡期间 DOM 短暂重复 id。**修复**：导出容器/按钮移动端 `w-full`；创建页/详情页 id 分别改为 `client-create-name` / `client-detail-name`。**验证**：390 导出按钮宽 366、无溢出；路由过渡后客户端表单 id 唯一；注册 e2e 改用 `#client-detail-name` 通过；全量 **1249 passed**、e2e **13/13（50.4s）**、a11y 0、measure 0。

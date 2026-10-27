@@ -991,3 +991,21 @@ describe('跨路由表单 id 唯一（续一百六十四）', () => {
     }
   });
 });
+
+describe('登录失败交互（续一百六十五）', () => {
+  it('失败清空密码、保留邮箱、loading 结束后聚焦密码框', () => {
+    const src = read('src/app/login/login-form.tsx');
+    expect(src).toContain('focusPasswordAfterError');
+    expect(src).toContain("setFormData((prev) => ({ ...prev, password: '' }))");
+    expect(src).toContain("if (!isLoading && error && focusPasswordAfterError.current)");
+  });
+});
+
+describe('destructive 语义 token（续一百六十六）', () => {
+  it('destructive-foreground 在亮/暗主题均有定义并映射到 color token', () => {
+    const css = read('src/app/globals.css');
+    expect(css).toContain('--destructive-foreground: oklch(0.985 0 0)');
+    expect(css).toContain('--destructive-foreground: oklch(0.205 0 0)');
+    expect(css).toContain('--color-destructive-foreground: var(--destructive-foreground)');
+  });
+});

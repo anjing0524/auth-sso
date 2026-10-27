@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ShieldCheck, AlertCircle, Loader2, ArrowRight, Eye, EyeOff } from 'lucide-react';
 import {
   Card,
@@ -30,6 +30,8 @@ export default function LoginForm({ sessionId, initialError }: LoginFormProps) {
   const [error, setError] = useState<string | null>(initialError ?? null);
   const [formData, setFormData] = useState({ email: '', password: '' });
   const [showPassword, setShowPassword] = useState(false);
+  const passwordRef = useRef<HTMLInputElement>(null);
+  const focusPasswordAfterError = useRef(false);
 
   const getErrorMessage = (err: string | null) => {
     if (!err) return null;
@@ -92,10 +94,21 @@ export default function LoginForm({ sessionId, initialError }: LoginFormProps) {
       const error = err as Error;
       log.error('登录失败', { message: error.message });
       setError(error.message);
+      // 失败后清空密码（降低偷窥/复用风险），保留邮箱并聚焦密码框（重试成本最低）
+      setFormData((prev) => ({ ...prev, password: '' }));
+      focusPasswordAfterError.current = true;
     } finally {
       setIsLoading(false);
     }
   };
+
+  // 失败时在 loading 结束、输入框恢复可用后再聚焦密码框（disabled 时 focus 无效）
+  useEffect(() => {
+    if (!isLoading && error && focusPasswordAfterError.current) {
+      focusPasswordAfterError.current = false;
+      passwordRef.current?.focus();
+    }
+  }, [error, isLoading]);
 
   const formattedError = getErrorMessage(error);
 
@@ -147,6 +160,7 @@ export default function LoginForm({ sessionId, initialError }: LoginFormProps) {
               <Label htmlFor="login-password">密码</Label>
               <div className="relative">
                 <Input
+                  ref={passwordRef}
                   id="login-password"
                   type={showPassword ? 'text' : 'password'}
                   autoComplete="current-password"
