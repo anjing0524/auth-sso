@@ -116,6 +116,7 @@ const DIALOG_CASES = [
   { path: '/permissions', name: 'permissions-delete', open: async () => page.locator('button[aria-label^="删除权限"]').first().click() },
   { path: '/profile', name: 'profile-password', open: async () => page.getByRole('button', { name: '修改密码' }).click() },
   { path: '/users/00000000-0000-0000-0000-000000000001', name: 'user-reset-password', open: async () => page.getByRole('button', { name: '重置密码' }).click() },
+  { path: '/departments', name: 'department-edit', open: async () => page.getByRole('button', { name: /编辑部门/ }).first().click() },
 ];
 for (const item of DIALOG_CASES) {
   await page.goto(BASE + item.path, { waitUntil: 'networkidle' });

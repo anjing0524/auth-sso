@@ -20,6 +20,7 @@ import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { EmptyState } from '@/components/shared/empty-state';
 import { PermissionGuard } from '@/components/shared/permission-guard';
 import { DEPARTMENT_PERMISSIONS, USER_PERMISSIONS } from '@auth-sso/contracts';
@@ -103,7 +104,7 @@ export default function DepartmentTree({ departments, deletionStats = {} }: Prop
   const [selected, setSelected] = useState<DeptTreeNode | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<DeptTreeNode | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [form, setForm] = useState({ name: '', code: '', sort: 0, parentId: '' as string | null });
+  const [form, setForm] = useState({ name: '', code: '', sort: 0, parentId: '' as string | null, status: 'ACTIVE' });
   /** 具体错误码（如 DEPARTMENT_ALREADY_EXISTS）落到对应输入框（#92） */
   const { fieldError, reportFailure, clearFailure } = useFieldFailure(['code']);
 
@@ -111,11 +112,11 @@ export default function DepartmentTree({ departments, deletionStats = {} }: Prop
     setExpanded(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
   };
 
-  const openAdd = (parent?: string) => { setForm({ name: '', code: '', sort: 0, parentId: parent || null }); setIsAddOpen(true); };
+  const openAdd = (parent?: string) => { setForm({ name: '', code: '', sort: 0, parentId: parent || null, status: 'ACTIVE' }); setIsAddOpen(true); };
   /** 对话框统一改为 `<form>` 提交（U-G06）：Enter 与点击主按钮行为一致 */
   const submitCreate = (e: React.FormEvent) => { e.preventDefault(); void handleCreate(); };
   const submitUpdate = (e: React.FormEvent) => { e.preventDefault(); void handleUpdate(); };
-  const openEdit = (dept: DeptTreeNode) => { setSelected(dept); setForm({ name: dept.name, code: dept.code || '', sort: dept.sort, parentId: dept.parentId }); setIsEditOpen(true); };
+  const openEdit = (dept: DeptTreeNode) => { setSelected(dept); setForm({ name: dept.name, code: dept.code || '', sort: dept.sort, parentId: dept.parentId, status: dept.status }); setIsEditOpen(true); };
 
   const handleCreate = async () => {
     if (!form.name) { toast.error('请填写部门名称'); return; }
@@ -450,6 +451,7 @@ export default function DepartmentTree({ departments, deletionStats = {} }: Prop
               <div className="space-y-2"><Label htmlFor="dept-name">部门名称</Label><Input id="dept-name" value={form.name} maxLength={100} onChange={e => setForm({...form, name: e.target.value})} placeholder="技术部" /></div>
               <div className="space-y-2"><Label htmlFor="dept-code">部门编码</Label><Input id="dept-code" value={form.code} maxLength={50} aria-invalid={fieldError?.field === 'code'} onChange={e => setForm({...form, code: e.target.value})} placeholder="tech" /></div>
               <FieldError failure={fieldError} field="code" />
+              <div className="space-y-2"><Label htmlFor="dept-sort">排序（越小越靠前）</Label><Input id="dept-sort" type="number" value={form.sort} onChange={e => setForm({...form, sort: Number(e.target.value)})} /></div>
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setIsAddOpen(false)}>取消</Button>
@@ -468,6 +470,24 @@ export default function DepartmentTree({ departments, deletionStats = {} }: Prop
               <div className="space-y-2"><Label htmlFor="dept-edit-name">部门名称</Label><Input id="dept-edit-name" value={form.name} onChange={e => setForm({...form, name: e.target.value})} /></div>
               <div className="space-y-2"><Label htmlFor="dept-edit-code">部门编码</Label><Input id="dept-edit-code" value={form.code} aria-invalid={fieldError?.field === 'code'} onChange={e => setForm({...form, code: e.target.value})} /></div>
               <FieldError failure={fieldError} field="code" />
+              <div className="space-y-2"><Label htmlFor="dept-edit-sort">排序（越小越靠前）</Label><Input id="dept-edit-sort" type="number" value={form.sort} onChange={e => setForm({...form, sort: Number(e.target.value)})} /></div>
+              <div className="space-y-2">
+                <Label htmlFor="dept-edit-status">状态</Label>
+                <Select value={form.status} onValueChange={(v) => setForm({...form, status: v})} disabled={selected?.parentId === null}>
+                  <SelectTrigger id="dept-edit-status"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ACTIVE">启用</SelectItem>
+                    <SelectItem value="DISABLED">停用</SelectItem>
+                  </SelectContent>
+                </Select>
+                {selected?.parentId === null ? (
+                  <p className="text-[10px] leading-4 text-muted-foreground">根部门为组织树单例，不可停用。</p>
+                ) : form.status === 'DISABLED' ? (
+                  <p className="rounded bg-badge-warning-bg px-2 py-1 text-[10px] leading-4 text-badge-warning-fg">
+                    停用后不能再向该部门新增用户/角色/子部门；已有对象保留，可随时恢复启用。
+                  </p>
+                ) : null}
+              </div>
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setIsEditOpen(false)}>取消</Button>

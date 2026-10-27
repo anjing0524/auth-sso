@@ -1338,3 +1338,16 @@ describe('角色描述可编辑（续一百九十九）', () => {
     expect(src).toContain('迁移部门前需先解除绑定');
   });
 });
+
+describe('部门排序/状态入口（续二百）', () => {
+  it('编辑可改排序/状态；根部门不可停用；停用有影响提示', () => {
+    const tree = read('src/app/(dashboard)/departments/components/DepartmentTree.tsx');
+    expect(tree).toContain('id="dept-sort"');
+    expect(tree).toContain('id="dept-edit-sort"');
+    expect(tree).toContain('id="dept-edit-status"');
+    expect(tree).toContain('根部门为组织树单例');
+    expect(tree).toContain('停用后不能再向该部门新增');
+    const actions = read('src/app/(dashboard)/departments/actions.ts');
+    expect(actions).toContain('根部门不可停用');
+  });
+});

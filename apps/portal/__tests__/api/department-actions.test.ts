@@ -151,6 +151,29 @@ describe('Department Server Actions', () => {
       expect(updated!.name).toBe('Updated Tech');
     });
 
+    it('根部门不可停用', async () => {
+      const r: any = await updateDepartmentAction(ROOT_DEPT_ID, { status: 'DISABLED' } as any);
+
+      expect(r.success).toBe(false);
+      expect(String(r.message)).toContain('根部门不可停用');
+      const row = await db.query.departments.findFirst({ where: eq(schema.departments.id, ROOT_DEPT_ID) });
+      expect(row?.status).toBe('ACTIVE');
+    });
+
+    it('子部门可停用并恢复', async () => {
+      await seedTestData(td.db, { departments: seedSubDept() });
+
+      const off: any = await updateDepartmentAction(TECH_DEPT_ID, { status: 'DISABLED' } as any);
+      expect(off.success).toBe(true);
+      let row = await db.query.departments.findFirst({ where: eq(schema.departments.id, TECH_DEPT_ID) });
+      expect(row?.status).toBe('DISABLED');
+
+      const on: any = await updateDepartmentAction(TECH_DEPT_ID, { status: 'ACTIVE' } as any);
+      expect(on.success).toBe(true);
+      row = await db.query.departments.findFirst({ where: eq(schema.departments.id, TECH_DEPT_ID) });
+      expect(row?.status).toBe('ACTIVE');
+    });
+
     it('不存在部门 → 失败信封 NOT_FOUND（生产契约）', async () => {
       const r = await updateDepartmentAction(
         '00000000-0000-4000-8000-000000000999',

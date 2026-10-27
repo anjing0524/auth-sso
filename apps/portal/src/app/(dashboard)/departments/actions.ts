@@ -179,6 +179,10 @@ export const updateDepartmentAction = withAuth(
         if (v.data.parentId === null && row.parentId !== null) {
           throw new BusinessRuleViolationError('根部门是 ADR-002 的单例：不能把已有部门迁出为新的根部门');
         }
+        // 根部门是组织树单例（ADR-002），停用会让整个组织失去可用的顶层归属
+        if (row.parentId === null && v.data.status === 'DISABLED') {
+          throw new BusinessRuleViolationError('根部门不可停用');
+        }
         // H-23：迁入的父部门必须存在且 ACTIVE
         if (v.data.parentId) {
           await assertDepartmentUsable(tx, v.data.parentId, '将部门迁移至该父部门');
