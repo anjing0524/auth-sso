@@ -1113,3 +1113,13 @@ describe('批量恢复锁定用户语义（续一百七十七）', () => {
     expect(src).toContain('已锁定的用户请先解锁');
   });
 });
+
+describe('批量操作锁定提示（续一百七十八）', () => {
+  it('禁用提示跳过锁定用户，恢复提示解锁并清计数；无有效禁用时按钮禁用', () => {
+    const src = read('src/app/(dashboard)/users/components/UserTable.tsx');
+    expect(src).toContain('lockedSelectedCount');
+    expect(src).toContain('无法直接禁用，将被跳过');
+    expect(src).toContain('将同时解锁，并清除登录失败计数');
+    expect(src).toContain('无可禁用用户');
+  });
+});

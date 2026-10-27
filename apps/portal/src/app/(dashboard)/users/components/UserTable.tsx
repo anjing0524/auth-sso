@@ -172,6 +172,9 @@ export default function UserTable({ users, pagination, filters, isFiltered = fal
   // 只对"当前页可见"的选中项生效：翻页/筛选后旧选择自然失效，避免改到看不见的人
   const selectedIds = canUpdate ? users.filter((u) => selected.has(u.id)).map((u) => u.id) : [];
   const selectedCount = selectedIds.length;
+  const selectedUsers = users.filter((u) => selected.has(u.id));
+  const lockedSelectedCount = selectedUsers.filter((u) => u.status === 'LOCKED').length;
+  const disableEffectiveCount = selectedCount - lockedSelectedCount;
   const allSelected = canUpdate && users.length > 0 && users.every((u) => selected.has(u.id));
   const toggleSelect = (id: string, checked: boolean) => {
     setSelected((prev) => {
@@ -419,6 +422,13 @@ export default function UserTable({ users, pagination, filters, isFiltered = fal
             将对已选的 {selectedCount} 个用户执行{bulkTarget === 'DISABLED' ? '禁用' : '恢复'}
             {bulkTarget === 'DISABLED' ? '：禁用会立即撤销其所有活跃会话，无法登录' : '：恢复后用户可正常登录并保留原有角色'}。
           </DialogDescription>
+          {lockedSelectedCount > 0 && (
+            <p className="rounded-md bg-warning/10 px-2 py-1.5 text-[11px] text-warning">
+              {bulkTarget === 'DISABLED'
+                ? `其中 ${lockedSelectedCount} 个已锁定用户无法直接禁用，将被跳过。`
+                : `其中 ${lockedSelectedCount} 个已锁定用户将同时解锁，并清除登录失败计数。`}
+            </p>
+          )}
         </DialogHeader>
         <ul className="space-y-0.5 text-[12px] text-muted-foreground">
           {users.filter((u) => selected.has(u.id)).slice(0, 8).map((u) => (
@@ -431,9 +441,13 @@ export default function UserTable({ users, pagination, filters, isFiltered = fal
           <Button
             variant={bulkTarget === 'DISABLED' ? 'destructive' : 'default'}
             onClick={runBulk}
-            disabled={bulking}
+            disabled={bulking || (bulkTarget === 'DISABLED' && disableEffectiveCount === 0)}
           >
-            {bulking ? '处理中...' : `确认${bulkTarget === 'DISABLED' ? '禁用' : '恢复'} ${selectedCount} 人`}
+            {bulking
+              ? '处理中...'
+              : bulkTarget === 'DISABLED' && disableEffectiveCount === 0
+                ? '无可禁用用户'
+                : `确认${bulkTarget === 'DISABLED' ? '禁用' : '恢复'} ${bulkTarget === 'DISABLED' ? disableEffectiveCount : selectedCount} 人`}
           </Button>
         </DialogFooter>
       </DialogContent>
