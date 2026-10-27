@@ -3,7 +3,7 @@
 > 生成方式：`node scripts/ux/measure.mjs`（真浏览器 + 验收栈）。生成日期：2026-10-23。
 > 规范与预算见 `docs/spec/UX-GUIDELINES.md` §4；本文件是**改动前后对比的基线**，不构成 CI 门禁。
 
-## 1. 本轮基线（越界分页轮，2026-10-27）
+## 1. 本轮基线（里程碑完整回归，2026-10-27）
 
 | 视口 | 路由 | 页面滚动 | 横向溢出 | chrome% | 可见行 | 控件高(输入/按钮) | 表头吸顶 |
 |---|---|---|---|---|---|---|---|
@@ -75,11 +75,11 @@
 | 视口 | 弹窗 | 高度 | 是否完整在视口内 | 底部操作可见 | overflowY |
 |---|---|---|---|---|---|
 | 1512x700 | dialog:roles-create | 400 | ✓ | ✓ | auto |
-| 1512x700 | dialog:users-create | 546 | ✓ | ✓ | auto |
-| 1512x700 | dialog:permissions-delete | 224 | ✓ | ✓ | auto |
+| 1512x700 | dialog:users-create | 570 | ✓ | ✓ | auto |
+| 1512x700 | dialog:permissions-delete | 244 | ✓ | ✓ | auto |
 | 1139x600 | dialog:roles-create | 400 | ✓ | ✓ | auto |
-| 1139x600 | dialog:users-create | 546 | ✓ | ✓ | auto |
-| 1139x600 | dialog:permissions-delete | 224 | ✓ | ✓ | auto |
+| 1139x600 | dialog:users-create | 568 | ✓ | ✓ | auto |
+| 1139x600 | dialog:permissions-delete | 244 | ✓ | ✓ | auto |
 
 ## 2. 解读与目标
 
@@ -696,3 +696,14 @@ a11y 对比度函数提取复用，增加未登录 `/login`（390×844，独立�
 | 问题 | 修复 | 验证 |
 |---|---|---|
 | 改密/重置密码有策略提示，创建用户初始密码只有提交后错误，没有可见规则 | 初始密码下补「至少 10 位，含大写/小写/数字/特殊字符中的至少三类」；H-C-08 守卫扩展到创建用户 | 受影响测试 5 passed；弹窗亮/暗 a11y 0 |
+
+### 9.60 产品审计五十六：里程碑完整回归（2026-10-27）
+
+多轮定向改动后执行一次完整回归：
+
+- vitest：**135 files / 1278 passed**
+- e2e：**19/19（54.5s）**
+- a11y：亮/暗 **20 路由 + 5 弹窗** 对比度 0
+- measure：内容区滚动/横向溢出 0
+- CWV：24 组合（桌面/移动 × 6 路由 × 2）全部 **PASS**；最高 LCP 596ms（desktop /login），CLS 0–0.01
+- 运行时扫描：14 路由 pageerror/console error/4xx/5xx 0
