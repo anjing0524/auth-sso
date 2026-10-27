@@ -195,6 +195,7 @@ export default function CreateUserDialog({ departments, canAssignRole = false }:
                   value={values.password}
                   onChange={setField('password')}
                 />
+                <p className="text-[11px] text-muted-foreground">至少 10 位，含大写/小写字母、数字、特殊字符中的至少三类</p>
                 <FieldError failure={fieldError} field="password" />
               </div>
               <div className="space-y-2">

@@ -38,4 +38,10 @@ describe('H-C-08 — UI 密码提示与后端策略一致（10 位/至少三类�
     expect(source).toContain('至少 10 位');
     expect(source).not.toContain('至少 8 位');
   });
+
+  it('创建用户初始密码提示', () => {
+    const source = read('src/app/(dashboard)/users/components/CreateUserDialog.tsx');
+    expect(source).toContain('至少 10 位');
+    expect(source).toContain('至少三类');
+  });
 });
