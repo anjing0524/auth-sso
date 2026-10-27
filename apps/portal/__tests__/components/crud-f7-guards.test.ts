@@ -1273,3 +1273,10 @@ describe('a11y 弹窗覆盖（续一百九十一）', () => {
     expect(script).toContain('user-reset-password');
   });
 });
+
+describe('桌面侧栏宽度（续一百九十四）', () => {
+  it('默认侧栏 14rem，把宽度让给数据区', () => {
+    const src = read('src/components/ui/sidebar.tsx');
+    expect(src).toContain('const SIDEBAR_WIDTH = "14rem"');
+  });
+});
