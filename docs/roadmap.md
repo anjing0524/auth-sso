@@ -21,6 +21,8 @@
 
 ## 变更记录
 
+- 2026-10-27（续一百八十五）: **a11y 扩到角色分配/权限页 + 对比度修复**。14 路由首跑发现警告条 2.25、待新增 2.36、分组标题 3.15、暗色选中项 2.99。**修复**：警告条/待新增改 badge 成对 token；去掉 muted-foreground/70；浅底 text-primary→text-foreground。**验证**：亮/暗 14 路由对比度失败 0；受影响 UI/守卫测试 **137 passed**；typecheck/build 0。
+
 - 2026-10-27（续一百八十四）: **内置权限删除入口保护**。`ALL_PERMISSIONS` 内置权限仍显示删除/可勾选，服务端才拒绝。**修复**：内置权限隐藏删除、勾选 disabled；全选/批量只针对可删项，无可删项时全选禁用。**验证**：权限页 API 内置项删除按钮 0、勾选 disabled；菜单类可删项保持可用；受影响 UI/守卫测试 **136 passed**；e2e **19/19**、a11y 亮/暗 0、measure 0（构建后已验证）。
 
 - 2026-10-27（续一百八十三）: **越界分页假空态修复**。`?page=999` 时 roles/clients/permissions/audit 空列表 + 「暂无数据」，但总数 >0。**修复**：查询后 `page > totalPages` 重定向到末页并保留筛选。**验证**：users→1、roles→1、clients→1、permissions→3、audit→149，均有数据；全量 **1269 passed**、e2e **19/19（55.8s）**、a11y 亮/暗 0、measure 0。

@@ -167,7 +167,7 @@ export default function UserRolesPage({ user, isSelf = false }: UserRolesPagePro
       />
 
       {readOnly && (
-        <div className="rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-[11px] text-warning">
+        <div className="rounded-lg border border-badge-warning-fg/30 bg-badge-warning-bg px-3 py-2 text-[11px] text-badge-warning-fg">
           这是你自己的账号，不能修改自己的角色（防止移除最后一个管理角色后自我锁死）。请由其他管理员操作。
         </div>
       )}
@@ -189,7 +189,7 @@ export default function UserRolesPage({ user, isSelf = false }: UserRolesPagePro
             清空全部
           </Button>
           <span className="flex items-center gap-1 text-[11px]">
-            <span className="rounded bg-success/10 px-1.5 py-0.5 font-medium text-success">待新增 +{addedIds.size}</span>
+            <span className="rounded bg-badge-success-bg px-1.5 py-0.5 font-medium text-badge-success-fg">待新增 +{addedIds.size}</span>
             <span className="rounded bg-destructive/10 px-1.5 py-0.5 font-medium text-destructive">待移除 -{removedIds.size}</span>
           </span>
           <span className="text-xs text-muted-foreground">已选 <span className="font-semibold tabular-nums text-foreground">{assignedRoleIds.size}</span> 个</span>
@@ -277,7 +277,7 @@ export default function UserRolesPage({ user, isSelf = false }: UserRolesPagePro
           <div className="space-y-2 text-[12px]">
             {addedIds.size > 0 && (
               <div>
-                <p className="mb-1 font-medium text-success">待新增（{addedIds.size}）</p>
+                <p className="mb-1 font-medium text-badge-success-fg">待新增（{addedIds.size}）</p>
                 <ul className="space-y-0.5 text-muted-foreground">
                   {[...addedIds].slice(0, 6).map((id) => {
                     const r = roles.find((x) => x.id === id);

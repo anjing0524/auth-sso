@@ -1195,3 +1195,17 @@ describe('内置权限删除保护（续一百八十四）', () => {
     expect(src).toContain('内置权限不可删除');
   });
 });
+
+describe('角色页对比度 token（续一百八十五）', () => {
+  it('a11y 覆盖角色分配/权限页；警告条与待新增用 badge 语义对', () => {
+    const script = read('../../scripts/ux/a11y.mjs');
+    expect(script).toContain('/users/00000000-0000-0000-0000-000000000001/roles');
+    expect(script).toContain('/roles/ed11e8cd-0261-4985-a201-006c05a19f20/permissions');
+    const roles = read('src/app/(dashboard)/users/[id]/roles/roles-client.tsx');
+    expect(roles).toContain('text-badge-warning-fg');
+    expect(roles).toContain('bg-badge-success-bg');
+    const perms = read('src/app/(dashboard)/roles/[id]/permissions/permissions-client.tsx');
+    expect(perms).not.toContain('text-muted-foreground/70');
+    expect(perms).toContain('text-badge-success-fg');
+  });
+});

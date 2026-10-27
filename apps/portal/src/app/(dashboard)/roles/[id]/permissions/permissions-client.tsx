@@ -281,7 +281,7 @@ export default function RolePermissionsPage({ role }: RolePermissionsPageProps) 
         <div key={node.id}>
           <div
             className={`flex items-center rounded transition-colors hover:bg-muted/60 ${
-              scopeId === node.id ? 'bg-primary/10 font-medium text-primary' : 'text-foreground'
+              scopeId === node.id ? 'bg-primary/10 font-medium text-foreground' : 'text-foreground'
             }`}
           >
             {hasChildren ? (
@@ -354,9 +354,9 @@ export default function RolePermissionsPage({ role }: RolePermissionsPageProps) 
             ) : (
               <>
                 {renderTree(tree.slice(0, 2))}
-                <div className="mt-2 px-2 py-1 text-[10px] font-medium tracking-wide text-muted-foreground/70">接口应用</div>
+                <div className="mt-2 px-2 py-1 text-[10px] font-medium tracking-wide text-muted-foreground">接口应用</div>
                 {renderTree(tree.filter((n) => n.kind === 'app'))}
-                <div className="mt-2 px-2 py-1 text-[10px] font-medium tracking-wide text-muted-foreground/70">菜单目录</div>
+                <div className="mt-2 px-2 py-1 text-[10px] font-medium tracking-wide text-muted-foreground">菜单目录</div>
                 {renderTree(tree.filter((n) => n.kind === 'dir' || n.kind === 'page'))}
               </>
             )}
@@ -380,7 +380,7 @@ export default function RolePermissionsPage({ role }: RolePermissionsPageProps) 
                   type="button"
                   aria-pressed={statusFilter === v}
                   onClick={() => setStatusFilter(v)}
-                  className={`h-6 rounded px-1.5 text-[11px] transition-colors ${statusFilter === v ? 'bg-primary/10 font-medium text-primary' : 'text-muted-foreground hover:bg-muted'}`}
+                  className={`h-6 rounded px-1.5 text-[11px] transition-colors ${statusFilter === v ? 'bg-primary/10 font-medium text-foreground' : 'text-muted-foreground hover:bg-muted'}`}
                 >
                   {t}
                 </button>
@@ -429,7 +429,7 @@ export default function RolePermissionsPage({ role }: RolePermissionsPageProps) 
                           <span className="shrink-0 rounded bg-destructive/10 px-1 text-[10px] text-destructive">已禁用</span>
                         )}
                         {addedIds.has(p.id) && (
-                          <span className="shrink-0 rounded bg-success/10 px-1 text-[10px] text-success">待新增</span>
+                          <span className="shrink-0 rounded bg-badge-success-bg px-1 text-[10px] text-badge-success-fg">待新增</span>
                         )}
                         {removedIds.has(p.id) && (
                           <span className="shrink-0 rounded bg-destructive/10 px-1 text-[10px] text-destructive">待移除</span>
@@ -449,7 +449,7 @@ export default function RolePermissionsPage({ role }: RolePermissionsPageProps) 
               总已选 <span className="font-semibold tabular-nums text-foreground">{assignedIds.size}</span>
             </span>
             <span className="flex items-center gap-1 text-[11px]">
-              <span className="rounded bg-success/10 px-1.5 py-0.5 font-medium text-success">待新增 {addedIds.size > 0 ? `+${addedIds.size}` : '0'}</span>
+              <span className="rounded bg-badge-success-bg px-1.5 py-0.5 font-medium text-badge-success-fg">待新增 {addedIds.size > 0 ? `+${addedIds.size}` : '0'}</span>
               <span className="rounded bg-destructive/10 px-1.5 py-0.5 font-medium text-destructive">待移除 {removedIds.size > 0 ? `-${removedIds.size}` : '0'}</span>
             </span>
             <div className="ml-auto flex items-center gap-2">
@@ -509,7 +509,7 @@ export default function RolePermissionsPage({ role }: RolePermissionsPageProps) 
           <div className="space-y-2 text-[12px]">
             {addedIds.size > 0 && (
               <div>
-                <p className="mb-1 font-medium text-success">待新增（{addedIds.size}）</p>
+                <p className="mb-1 font-medium text-badge-success-fg">待新增（{addedIds.size}）</p>
                 <ul className="space-y-0.5 text-muted-foreground">
                   {permissions.filter((p) => addedIds.has(p.id)).slice(0, 8).map((p) => (
                     <li key={p.id} className="truncate font-mono">+ {p.code}</li>
