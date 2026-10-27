@@ -1417,3 +1417,12 @@ describe('权限返回上下文/批量失败保留（续二百〇六）', () => 
     expect(users).toContain('return;');
   });
 });
+
+describe('用户单条禁用确认（续二百〇七）', () => {
+  it('ACTIVE 禁用先确认；启用/解锁直接执行', () => {
+    const src = read('src/app/(dashboard)/users/components/UserTable.tsx');
+    expect(src).toContain('禁用用户「');
+    expect(src).toContain('确认禁用');
+    expect(src).toContain('if (user.status === \'ACTIVE\')');
+  });
+});

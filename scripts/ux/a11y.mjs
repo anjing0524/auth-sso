@@ -118,6 +118,7 @@ const DIALOG_CASES = [
   { path: '/profile', name: 'profile-edit', open: async () => page.getByRole('button', { name: '编辑资料' }).click() },
   { path: '/users/00000000-0000-0000-0000-000000000001', name: 'user-reset-password', open: async () => page.getByRole('button', { name: '重置密码' }).click() },
   { path: '/departments', name: 'department-edit', open: async () => page.getByRole('button', { name: /编辑部门/ }).first().click() },
+  { path: '/users', name: 'user-disable-confirm', open: async () => page.locator('tbody tr').first().getByRole('button', { name: /^禁用/ }).click() },
 ];
 for (const item of DIALOG_CASES) {
   await page.goto(BASE + item.path, { waitUntil: 'networkidle' });

@@ -171,6 +171,8 @@ export default function UserTable({ users, pagination, filters, isFiltered = fal
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkTarget, setBulkTarget] = useState<'DISABLED' | 'ACTIVE' | null>(null);
   const [bulking, setBulking] = useState(false);
+  /** 单条禁用确认（禁用会立即撤销会话，必须二次确认） */
+  const [statusConfirmTarget, setStatusConfirmTarget] = useState<User | null>(null);
   // 只对"当前页可见"的选中项生效：翻页/筛选后旧选择自然失效，避免改到看不见的人
   const selectedIds = canUpdate ? users.filter((u) => selected.has(u.id)).map((u) => u.id) : [];
   const selectedCount = selectedIds.length;
@@ -209,7 +211,8 @@ export default function UserTable({ users, pagination, filters, isFiltered = fal
     }
   };
 
-  const handleToggleStatus = (user: User) => {
+  /** 真正执行状态切换（仅启用/解锁；禁用由确认框触发） */
+  const performToggleStatus = (user: User) => {
     startTransition(async () => {
       setOptimisticUser(user.id); // 即时翻转 UI
       // H-C-02：LOCKED 用户必须走解锁动作（toggle 对 LOCKED 会被域层拒绝，
@@ -221,8 +224,18 @@ export default function UserTable({ users, pagination, filters, isFiltered = fal
         reportFailure(res, '操作失败');
       } else {
         toast.success(user.status === 'LOCKED' ? '用户已解锁' : '用户状态已更新');
+        router.refresh();
       }
     });
+  };
+
+  const handleToggleStatus = (user: User) => {
+    // 禁用会立即撤销全部会话，必须先确认；启用/解锁是恢复性操作，直接执行
+    if (user.status === 'ACTIVE') {
+      setStatusConfirmTarget(user);
+      return;
+    }
+    performToggleStatus(user);
   };
 
   /**
@@ -431,6 +444,32 @@ export default function UserTable({ users, pagination, filters, isFiltered = fal
       total={pagination.total}
       onPageChange={handlePageChange}
     />
+
+    {/* 单条禁用确认：与批量同语义，禁用立即撤销会话 */}
+    <Dialog open={!!statusConfirmTarget} onOpenChange={(open) => { if (!open) setStatusConfirmTarget(null); }}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>禁用用户「{statusConfirmTarget?.name}」？</DialogTitle>
+          <DialogDescription>
+            禁用后立即撤销该用户在所有接入子系统中的活跃会话，用户将无法登录；账号与角色配置保留，可随时恢复。
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setStatusConfirmTarget(null)}>取消</Button>
+          <Button
+            variant="destructive"
+            onClick={() => {
+              const target = statusConfirmTarget;
+              if (!target) return;
+              setStatusConfirmTarget(null);
+              performToggleStatus(target);
+            }}
+          >
+            确认禁用
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
 
     {/* 批量启用/禁用确认：明确人数与影响（禁用会立即撤销活跃会话） */}
     <Dialog open={bulkTarget !== null} onOpenChange={(open) => { if (!open) setBulkTarget(null); }}>
