@@ -234,7 +234,7 @@ export default function NewClientPage() {
                         aria-pressed={active}
                         onClick={() => toggleScope(s.value)}
                         className={`h-7 rounded-md border px-2 text-xs transition-colors ${
-                          active ? 'border-primary/40 bg-primary/10 font-medium text-primary' : 'border-border text-muted-foreground hover:bg-muted'
+                          active ? 'border-primary/40 bg-primary/10 font-medium text-foreground' : 'border-border text-muted-foreground hover:bg-muted'
                         }`}
                       >
                         {s.label}

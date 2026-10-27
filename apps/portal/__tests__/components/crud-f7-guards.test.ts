@@ -1009,3 +1009,14 @@ describe('destructive 语义 token（续一百六十六）', () => {
     expect(css).toContain('--color-destructive-foreground: var(--destructive-foreground)');
   });
 });
+
+describe('暗色模式对比度（续一百六十七）', () => {
+  it('a11y 支持 dark；暗色主色/浅色底文字有可读 token', () => {
+    const script = read('../../scripts/ux/a11y.mjs');
+    expect(script).toContain("E2E_COLOR_SCHEME === 'dark'");
+    const css = read('src/app/globals.css');
+    expect(css).toContain('--color-primary: oklch(0.53 0.21 257)');
+    const users = read('src/app/(dashboard)/users/components/UserTable.tsx');
+    expect(users).toContain('bg-primary/10 text-foreground');
+  });
+});

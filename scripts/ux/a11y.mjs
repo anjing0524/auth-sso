@@ -18,7 +18,8 @@ const PATHS = [
 ];
 
 const browser = await chromium.launch({ channel: 'chrome' });
-const context = await browser.newContext({ ignoreHTTPSErrors: true, viewport: { width: 1139, height: 700 } });
+const colorScheme = process.env.E2E_COLOR_SCHEME === 'dark' ? 'dark' : 'light';
+const context = await browser.newContext({ ignoreHTTPSErrors: true, viewport: { width: 1139, height: 700 }, colorScheme });
 const page = await context.newPage();
 await page.goto(`${BASE}/login`);
 await page.getByLabel(/登录邮箱|账号.*邮箱/i).fill(EMAIL);

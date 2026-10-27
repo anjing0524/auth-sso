@@ -405,7 +405,7 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
                           {opLog.username || '-'}
                         </TableCell>
                         <TableCell>
-                          <Badge className="border-none bg-primary/10 text-primary">
+                          <Badge className="border-none bg-primary/10 text-foreground">
                             {AUDIT_OPERATION_LABELS[opLog.operation as keyof typeof AUDIT_OPERATION_LABELS] || opLog.operation}
                           </Badge>
                         </TableCell>
