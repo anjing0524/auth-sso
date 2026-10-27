@@ -18,16 +18,18 @@ import type { ClientTokenDTO as Token } from '../../data';
 import { formatDate } from '@/lib/format-date';
 export interface ClientTokensSectionProps {
   tokens: Token[];
+  /** 有效授权总数（tokens 可能只含最近 10 条） */
+  total?: number;
   onRevokeAll: () => Promise<void> | void;
   /** 缺少 client:update 时只读：不渲染撤销入口 */
   canRevoke?: boolean;
 }
 
-export function ClientTokensSection({ tokens, onRevokeAll, canRevoke = true }: ClientTokensSectionProps) {
+export function ClientTokensSection({ tokens, total = tokens.length, onRevokeAll, canRevoke = true }: ClientTokensSectionProps) {
   return (
     <Card>
       <CardHeader className="flex-row items-center justify-between border-b pb-4">
-        <CardTitle>授权 Token 列表</CardTitle>
+        <div className="flex items-center gap-2"><CardTitle>有效授权 Token</CardTitle><span className="text-xs text-muted-foreground">共 {total} 条</span></div>
         {canRevoke && (
           <Button
             variant="destructive"
@@ -38,6 +40,11 @@ export function ClientTokensSection({ tokens, onRevokeAll, canRevoke = true }: C
           </Button>
         )}
       </CardHeader>
+      {total > tokens.length && (
+        <p className="border-b bg-muted/30 px-3 py-1.5 text-[11px] text-muted-foreground">
+          仅显示最近 {tokens.length} 条，共 {total} 条有效授权；如需清理请使用「撤销所有」。
+        </p>
+      )}
       <CardContent className="p-0">
         <Table>
           <TableHeader>
@@ -52,7 +59,7 @@ export function ClientTokensSection({ tokens, onRevokeAll, canRevoke = true }: C
             {tokens.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={4} className="h-24 text-center text-muted-foreground">
-                  暂无授权记录
+                  暂无有效授权
                 </TableCell>
               </TableRow>
             ) : (

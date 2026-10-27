@@ -40,6 +40,8 @@ const log = createClientLogger('ClientDetail');
 interface ClientDetailClientProps {
   client: Client;
   initialTokens: Token[];
+  /** 有效授权总数（列表可能只取最近 10 条） */
+  initialTokenTotal: number;
   /** 是否具备 client:update；无权限时配置区只读、Token 撤销入口隐藏 */
   canUpdate: boolean;
   /** 返回列表（保留筛选） */
@@ -67,7 +69,7 @@ const CONFIRM_META: Record<Exclude<PendingAction, null>, { title: string; descri
   },
 };
 
-export function ClientDetailClient({ client, initialTokens, canUpdate, returnHref = '/clients' }: ClientDetailClientProps) {
+export function ClientDetailClient({ client, initialTokens, initialTokenTotal, canUpdate, returnHref = '/clients' }: ClientDetailClientProps) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [newSecret, setNewSecret] = useState<string | null>(null);

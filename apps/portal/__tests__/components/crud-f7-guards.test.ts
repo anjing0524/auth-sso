@@ -1510,3 +1510,14 @@ describe('权限影响面用户口径（续二百一十六）', () => {
     expect(data).toContain('u.deleted_at IS NULL');
   });
 });
+
+describe('授权 Token 总数可见性（续二百一十七）', () => {
+  it('详情传总数；卡片显示有效授权总数与截断说明', () => {
+    const page = read('src/app/(dashboard)/clients/[id]/page.tsx');
+    expect(page).toContain('initialTokenTotal={tokens.pagination.total}');
+    const section = read('src/app/(dashboard)/clients/[id]/components/ClientTokensSection.tsx');
+    expect(section).toContain('有效授权 Token');
+    expect(section).toContain('total > tokens.length');
+    expect(section).toContain('仅显示最近');
+  });
+});

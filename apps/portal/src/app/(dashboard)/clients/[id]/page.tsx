@@ -51,7 +51,7 @@ export default async function ClientDetailPage({ params, searchParams }: PagePro
   // 详情页要求 client:read；未授权时不得靠直接改 URL 读取应用配置（含回调/密钥状态）。
   return (
     <PermissionGate options={{ permissions: [CLIENT_PERMISSIONS.READ] }}>
-      <ClientDetailClient client={client} initialTokens={tokens.data} canUpdate={canUpdate} returnHref={returnHref} />
+      <ClientDetailClient client={client} initialTokens={tokens.data} initialTokenTotal={tokens.pagination.total} canUpdate={canUpdate} returnHref={returnHref} />
     </PermissionGate>
   );
 }
