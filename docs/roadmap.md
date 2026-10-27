@@ -21,6 +21,8 @@
 
 ## 变更记录
 
+- 2026-10-27（续二百一十六）: **权限影响面用户口径**。删除确认受影响用户数含软删用户历史绑定。**修复**：递归子树用户统计 join users 过滤 deleted_at。**验证**：portal:user:list 历史 68、未删除 1；API users=1；守卫 142 passed；typecheck/build 0。
+
 - 2026-10-27（续二百一十五）: **角色绑定用户口径**。角色列表用户数暴露软删用户仍计入：系统管理员 67 vs 实际 1。**修复**：getRoleBoundUserCounts join users 过滤 deletedAt；列表紧凑展示用户数。**验证**：列表 67/1/1 → 1/0/0；守卫 141 passed；typecheck/build 0。
 
 - 2026-10-27（续二百一十四）: **用户角色页二级返回**。详情→管理角色→返回详情后列表筛选丢失；列表直达角色页也丢筛选。**修复**：详情链接嵌套 returnTo；列表直达带 returnTo；角色页 safeReturnPath 透传。**验证**：roles→详情→列表全链路 returnTo 正确；UI/守卫 164 passed；typecheck/build 0。

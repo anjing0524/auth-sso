@@ -137,7 +137,9 @@ export async function getPermissionDeletionImpact(
       (SELECT count(DISTINCT ur.user_id)
          FROM user_roles ur
          JOIN role_permissions rp ON rp.role_id = ur.role_id
-         JOIN subtree s ON rp.permission_id = s.id) AS users
+         JOIN subtree s ON rp.permission_id = s.id
+         JOIN users u ON u.id = ur.user_id
+        WHERE u.deleted_at IS NULL) AS users
   `);
 
   const row = (rows as unknown as Array<Record<string, string | number>>)[0] ?? {};

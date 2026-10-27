@@ -1503,3 +1503,10 @@ describe('角色绑定用户口径（续二百一十五）', () => {
     expect(table).toContain('{boundUserCounts[r.id] ?? 0} 用户');
   });
 });
+
+describe('权限影响面用户口径（续二百一十六）', () => {
+  it('受影响用户 SQL 排除逻辑删除用户', () => {
+    const data = read('src/app/(dashboard)/permissions/data.ts');
+    expect(data).toContain('u.deleted_at IS NULL');
+  });
+});
