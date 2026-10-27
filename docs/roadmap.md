@@ -21,6 +21,8 @@
 
 ## 变更记录
 
+- 2026-10-27（续二百三十）: **归属应用仅接口 tab**。非 API tab 仍显示并过滤，切 tab 易空态。**修复**：页面忽略非 API clientId；工具栏仅在 API 渲染应用筛选；URL 移除。**验证**：API→页面 URL `?type=PAGE`、6 行页面权限正常；a11y 亮/暗 0；UI/守卫 177 passed。
+
 - 2026-10-27（续二百二十九）: **权限按归属应用筛选**。API 权限有 clientId，列表无法按应用筛选。**修复**：数据 clientId/NONE；页面加载 clients；工具栏应用筛选；1024 两行/1139 单行；顶部对齐。**验证**：URL 保留 type/status/clientId；a11y 亮/暗 0；UI/守卫 176 passed。
 
 - 2026-10-27（续二百二十八）: **角色按部门筛选**。列表缺部门筛选，用户角色空态引导后仍需手动找。**修复**：getRoles deptId 条件；页面 UUID 校验；工具栏部门筛选；1024 两行/1139 单行；顶部对齐。**验证**：URL 保留 sort/status/deptId/page；a11y 亮/暗 0；UI/守卫 176 passed。

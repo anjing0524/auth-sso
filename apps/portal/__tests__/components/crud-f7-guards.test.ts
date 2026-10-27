@@ -1630,3 +1630,13 @@ describe('权限归属应用筛选（续二百二十九）', () => {
     expect(table).toContain('order-3 flex w-full');
   });
 });
+
+describe('权限归属应用仅接口 tab（续二百三十）', () => {
+  it('页面忽略非 API 的 clientId；工具栏条件渲染；URL 不保留', () => {
+    const page = read('src/app/(dashboard)/permissions/page.tsx');
+    expect(page).toContain("activeTab === 'API' ? (params.clientId");
+    const table = read('src/app/(dashboard)/permissions/components/PermissionsTable.tsx');
+    expect(table).toContain("if (nextClientId && nextType === 'API')");
+    expect(table).toContain("{activeTab === 'API' ? (");
+  });
+});

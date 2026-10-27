@@ -35,7 +35,8 @@ export default async function PermissionsPage({ searchParams }: PageProps) {
   const keyword = (params.keyword || '').slice(0, 100);
   const status = (ENTITY_STATUS_VALUES as readonly string[]).includes(params.status ?? '') ? params.status! : '';
   const page = clampPage(params.page);
-  const clientId = (params.clientId || '').slice(0, 100);
+  // 归属应用只对接口权限有意义：其他 tab 即使 URL 带 clientId 也忽略，避免误空态
+  const clientId = activeTab === 'API' ? (params.clientId || '').slice(0, 100) : '';
 
   // 服务端分页/过滤：与 users/roles/audit 一致（此前全量下发、浏览器内过滤分页）
   const [{ data: permissions, pagination }, clients] = await Promise.all([

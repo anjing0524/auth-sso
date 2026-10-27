@@ -104,7 +104,7 @@ export default function PermissionsTable({ permissions, pagination, activeTab, i
     if (nextType !== 'ALL') params.set('type', nextType);
     if (nextKeyword) params.set('keyword', nextKeyword);
     if (nextStatus) params.set('status', nextStatus);
-    if (nextClientId) params.set('clientId', nextClientId);
+    if (nextClientId && nextType === 'API') params.set('clientId', nextClientId);
     if (nextPage > 1) params.set('page', String(nextPage));
     const qs = params.toString();
     return `/permissions${qs ? `?${qs}` : ''}`;
@@ -210,8 +210,35 @@ export default function PermissionsTable({ permissions, pagination, activeTab, i
           <h1 className="type-section-title shrink-0 text-foreground">权限管理</h1>
           {tabsBar}
           <SearchInput className="md:w-[190px] xl:w-64" placeholder="搜索名称或编码" value={keyword} onChange={handleSearch} />
-          <div className="order-3 flex w-full flex-wrap items-center gap-2 min-[1100px]:order-2 min-[1100px]:w-auto">
-            <Select value={initialStatus || 'ALL'} onValueChange={(v) => startTransition(() => router.push(buildHref(1, keyword, activeTab, v === 'ALL' ? '' : v, initialClientId)))}>
+          {activeTab === 'API' ? (
+            <div className="order-3 flex w-full flex-wrap items-center gap-2 min-[1100px]:order-2 min-[1100px]:w-auto">
+              <Select value={initialStatus || 'ALL'} onValueChange={(v) => startTransition(() => router.push(buildHref(1, keyword, activeTab, v === 'ALL' ? '' : v, initialClientId)))}>
+                <SelectTrigger aria-label="过滤权限状态" className="w-[calc(50%-0.25rem)] md:w-28">
+                  <SelectValue>
+                    {initialStatus === 'ACTIVE' ? '已启用' : initialStatus === 'DISABLED' ? '已禁用' : '全部状态'}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">全部状态</SelectItem>
+                  <SelectItem value="ACTIVE">已启用</SelectItem>
+                  <SelectItem value="DISABLED">已禁用</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={initialClientId || 'ALL'} onValueChange={(v) => startTransition(() => router.push(buildHref(1, keyword, activeTab, initialStatus, v === 'ALL' ? '' : v)))}>
+                <SelectTrigger aria-label="过滤归属应用" className="w-[calc(50%-0.25rem)] md:w-32">
+                  <SelectValue>{initialClientId === 'NONE' ? '未绑定应用' : clients.find((c) => c.id === initialClientId)?.name ?? '全部应用'}</SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">全部应用</SelectItem>
+                  <SelectItem value="NONE">未绑定应用</SelectItem>
+                  {clients.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>{c.name}（{c.id}）</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          ) : (
+            <Select value={initialStatus || 'ALL'} onValueChange={(v) => startTransition(() => router.push(buildHref(1, keyword, activeTab, v === 'ALL' ? '' : v, '')))}>
               <SelectTrigger aria-label="过滤权限状态" className="w-[calc(50%-0.25rem)] md:w-28">
                 <SelectValue>
                   {initialStatus === 'ACTIVE' ? '已启用' : initialStatus === 'DISABLED' ? '已禁用' : '全部状态'}
@@ -223,19 +250,7 @@ export default function PermissionsTable({ permissions, pagination, activeTab, i
                 <SelectItem value="DISABLED">已禁用</SelectItem>
               </SelectContent>
             </Select>
-            <Select value={initialClientId || 'ALL'} onValueChange={(v) => startTransition(() => router.push(buildHref(1, keyword, activeTab, initialStatus, v === 'ALL' ? '' : v)))}>
-              <SelectTrigger aria-label="过滤归属应用" className="w-[calc(50%-0.25rem)] md:w-32">
-                <SelectValue>{initialClientId === 'NONE' ? '未绑定应用' : clients.find((c) => c.id === initialClientId)?.name ?? '全部应用'}</SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL">全部应用</SelectItem>
-                <SelectItem value="NONE">未绑定应用</SelectItem>
-                {clients.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>{c.name}（{c.id}）</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          )}
         </div>
       }
       right={
