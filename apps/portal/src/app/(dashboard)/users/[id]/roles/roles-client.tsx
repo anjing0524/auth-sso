@@ -43,9 +43,11 @@ export interface UserRolesPageProps {
     deptId: string | null;
     deptName: string | null;
   };
+  /** 返回详情/列表（保留来源上下文） */
+  returnHref?: string;
 }
 
-export default function UserRolesPage({ user, isSelf = false }: UserRolesPageProps & { isSelf?: boolean }) {
+export default function UserRolesPage({ user, isSelf = false, returnHref }: UserRolesPageProps & { isSelf?: boolean }) {
   const router = useRouter();
   const [roles, setRoles] = useState<Role[]>([]);
   const [assignedRoleIds, setAssignedRoleIds] = useState<Set<string>>(new Set());
@@ -162,7 +164,7 @@ export default function UserRolesPage({ user, isSelf = false }: UserRolesPagePro
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
       <PageHeader
-        backHref={`/users/${user.id}`}
+        backHref={returnHref ?? `/users/${user.id}`}
         backLabel="返回用户详情"
         icon="Users"
         title="分配角色"

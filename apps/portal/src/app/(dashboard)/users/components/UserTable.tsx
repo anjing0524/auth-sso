@@ -346,7 +346,7 @@ export default function UserTable({ users, pagination, filters, isFiltered = fal
               aria-label={`分配角色 ${user.name}`}
               title="分配角色"
             >
-              <Link href={`/users/${user.id}/roles`}><Shield className="h-4 w-4" /><span className="hidden md:inline">分配角色</span></Link>
+              <Link href={`/users/${user.id}/roles?returnTo=${encodeURIComponent(currentListHref)}`}><Shield className="h-4 w-4" /><span className="hidden md:inline">分配角色</span></Link>
             </Button>
           </PermissionGuard>
           {user.id !== currentUserId && (
@@ -381,7 +381,7 @@ export default function UserTable({ users, pagination, filters, isFiltered = fal
               </PermissionGuard>
               <PermissionGuard permission={USER_PERMISSIONS.ASSIGN_ROLE}>
                 <DropdownMenuItem asChild>
-                  <Link href={`/users/${user.id}/roles`}><Shield className="mr-2 h-4 w-4" />分配角色</Link>
+                  <Link href={`/users/${user.id}/roles?returnTo=${encodeURIComponent(currentListHref)}`}><Shield className="mr-2 h-4 w-4" />分配角色</Link>
                 </DropdownMenuItem>
               </PermissionGuard>
               {user.id !== currentUserId && (

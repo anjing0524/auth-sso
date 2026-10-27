@@ -838,3 +838,9 @@ a11y 对比度函数提取复用，增加未登录 `/login`（390×844，独立�
 | 问题 | 修复 | 验证 |
 |---|---|---|
 | 用户/应用/角色权限详情返回固定列表，筛选/关键词/页码丢失 | 三类列表详情链接带 returnTo；详情返回经 safeReturnPath 校验 | 用户回 `/users?keyword=qa_lin`、应用回 `/clients?keyword=portal`、角色回 `/roles?status=ACTIVE`；UI 162 passed |
+
+### 9.81 产品审计七十七：用户角色页二级返回（2026-10-27）
+
+| 问题 | 修复 | 验证 |
+|---|---|---|
+| 用户详情→管理角色→返回详情后，来时的列表筛选丢失；列表直达分配角色返回也丢筛选 | 详情链接嵌套 returnTo；列表直达 returnTo；角色页返回安全透传 | 实测 roles→详情 `/users/<id>?returnTo=/users?keyword=qa_lin`→列表 `/users?keyword=qa_lin` |

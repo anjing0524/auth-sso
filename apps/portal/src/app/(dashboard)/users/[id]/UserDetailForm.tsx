@@ -345,7 +345,7 @@ export default function UserDetailForm({ id, initialUser: serverUser, canUpdate,
                     <span className="text-[11px] text-muted-foreground">角色（{roles.length}）</span>
                     <PermissionGuard permission={USER_PERMISSIONS.ASSIGN_ROLE}>
                       <Button asChild variant="outline" size="sm">
-                        <Link href={`/users/${id}/roles`}>
+                        <Link href={`/users/${id}/roles?returnTo=${encodeURIComponent(`/users/${id}?returnTo=${encodeURIComponent(returnHref)}`)}`}>
                           <Shield className="mr-1.5 h-3.5 w-3.5" /> 管理角色
                         </Link>
                       </Button>

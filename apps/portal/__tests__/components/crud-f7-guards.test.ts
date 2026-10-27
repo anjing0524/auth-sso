@@ -1480,3 +1480,17 @@ describe('列表下钻返回上下文（续二百一十三）', () => {
     expect(rolePage).toContain('safeReturnPath');
   });
 });
+
+describe('用户角色页二级返回（续二百一十四）', () => {
+  it('详情→角色分配→详情→列表的嵌套 returnTo 链完整', () => {
+    const detail = read('src/app/(dashboard)/users/[id]/UserDetailForm.tsx');
+    expect(detail).toContain('/users/${id}/roles?returnTo=');
+    const route = read('src/app/(dashboard)/users/[id]/roles/page.tsx');
+    expect(route).toContain('safeReturnPath');
+    expect(route).toContain('returnHref={returnHref}');
+    const client = read('src/app/(dashboard)/users/[id]/roles/roles-client.tsx');
+    expect(client).toContain('backHref={returnHref ??');
+    const list = read('src/app/(dashboard)/users/components/UserTable.tsx');
+    expect(list).toContain('/users/${user.id}/roles?returnTo=');
+  });
+});

@@ -11,6 +11,7 @@ import { db } from '@/infrastructure/db';
 import { resolveIdentity } from '@/lib/auth';
 import { resolveScope } from '@/lib/authz';
 import { isUuid } from '@/lib/uuid';
+import { safeReturnPath } from '@/lib/safe-return';
 import { getUser } from '../../data';
 import { PermissionGate } from '@/components/layout/permission-gate';
 
@@ -21,10 +22,12 @@ export const metadata = { title: '分配角色 | Auth-SSO' };
 
 interface PageProps {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ returnTo?: string }>;
 }
 
-export default async function UserRolesRoute({ params }: PageProps) {
+export default async function UserRolesRoute({ params, searchParams }: PageProps) {
   const { id } = await params;
+  const returnHref = safeReturnPath((await searchParams).returnTo, `/users/${id}`, '/users');
   if (!isUuid(id)) notFound();
 
   const identity = await resolveIdentity();
@@ -36,6 +39,7 @@ export default async function UserRolesRoute({ params }: PageProps) {
     <PermissionGate options={{ permissions: [USER_PERMISSIONS.ASSIGN_ROLE] }}>
       <UserRolesPage
         isSelf={identity?.userId === id}
+        returnHref={returnHref}
         user={{
           id: user.id,
           name: user.name,
