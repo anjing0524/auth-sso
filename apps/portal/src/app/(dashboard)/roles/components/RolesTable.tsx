@@ -189,7 +189,7 @@ export default function RolesTable({ roles, pagination, initialKeyword, initialS
       left={
         <div className="flex min-w-0 flex-wrap items-center gap-2 md:flex-nowrap md:gap-3">
           <h1 className="w-full shrink-0 text-[15px] font-semibold tracking-tight text-foreground md:w-auto">角色管理</h1>
-          <SearchInput placeholder="搜索角色名称或编码..." value={keyword} onChange={handleSearch} busy={isPending} className="w-full md:w-64" />
+          <SearchInput placeholder="搜索角色名称或编码" value={keyword} onChange={handleSearch} busy={isPending} className="w-full md:w-64" />
           <Select value={initialSort} onValueChange={applySort}>
             <SelectTrigger aria-label="角色排序" className="w-[calc(50%-0.25rem)] md:w-40">
               <SelectValue>

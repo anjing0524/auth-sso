@@ -63,7 +63,7 @@ export default function UserFilters({ initialKeyword = '', initialStatus = 'ALL'
     <>
       <SearchInput
         className="col-span-2 md:w-56"
-        placeholder="搜索用户名、邮箱或姓名..."
+        placeholder="搜索姓名/邮箱/用户名"
         value={keyword}
         onChange={setKeyword}
       />

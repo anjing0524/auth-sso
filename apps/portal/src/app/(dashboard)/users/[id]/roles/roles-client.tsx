@@ -179,7 +179,7 @@ export default function UserRolesPage({ user, isSelf = false, returnHref }: User
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border/70 bg-card shadow-sm ring-0">
         <div className="flex flex-wrap items-center gap-3 border-b bg-muted/30 px-3 py-2">
-          <SearchInput placeholder="搜索角色名称或编码..." value={keyword} onChange={setKeyword} />
+          <SearchInput placeholder="搜索角色名称或编码" value={keyword} onChange={setKeyword} />
           <Badge variant="secondary" className="h-6">{loading ? '加载中' : `可选 ${roles.length} 个`}</Badge>
           <Button variant="ghost" size="sm" onClick={() => setOnlySelected((v) => !v)}>
             {onlySelected ? '显示全部' : '仅看已选'}

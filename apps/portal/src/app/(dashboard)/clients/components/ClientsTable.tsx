@@ -192,11 +192,13 @@ export default function ClientsTable({ clients, pagination, initialKeyword, init
         <div className="flex min-w-0 flex-col gap-2 md:flex-row md:items-center md:gap-3">
           <div className="flex items-center gap-2">
             <h1 className="shrink-0 text-[15px] font-semibold tracking-tight text-foreground">应用管理</h1>
-            <Badge variant="success" className="h-5 px-1.5 text-[10px]">启用 {activeCount}</Badge>
-            <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">停用 {disabledCount}</Badge>
+            <div className="hidden items-center gap-2 min-[1100px]:flex">
+              <Badge variant="success" className="h-5 px-1.5 text-[10px]">启用 {activeCount}</Badge>
+              <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">停用 {disabledCount}</Badge>
+            </div>
           </div>
           <div className="grid w-full grid-cols-2 gap-2 md:flex md:w-auto md:items-center md:gap-2">
-            <SearchInput className="col-span-2 md:w-56 xl:w-64" placeholder="搜索应用名称或 Client ID..." value={keyword} onChange={handleSearch} busy={isPending} />
+            <SearchInput className="col-span-2 md:w-56 xl:w-64" placeholder="搜索应用或 Client ID" value={keyword} onChange={handleSearch} busy={isPending} />
             <Select value={initialStatus || 'ALL'} onValueChange={(v) => applyStatus(v === 'ALL' ? '' : v)} disabled={isPending}>
               <SelectTrigger aria-label="过滤应用状态" className="w-full md:w-36">
                 <SelectValue>

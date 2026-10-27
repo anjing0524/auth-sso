@@ -238,7 +238,7 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
             {/* 导出是次要动作：合并为一个下拉，避免两个按钮把筛选行挤换行（chrome 33%→≤30%） */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="max-md:w-full">
+                <Button variant="outline" size="sm" className="max-md:w-full" aria-label="导出 CSV" title="导出 CSV">
                   <Download className="h-3.5 w-3.5" /> 导出 CSV
                 </Button>
               </DropdownMenuTrigger>

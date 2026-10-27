@@ -1565,3 +1565,13 @@ describe('空态出口/UA 完整值（续二百二十二）', () => {
     expect(profile).toContain('title={session.userAgent ??');
   });
 });
+
+describe('1024 工具栏占位/计数（续二百二十三）', () => {
+  it('搜索占位缩短；应用计数 <1100 隐藏', () => {
+    const users = read('src/app/(dashboard)/users/components/UserFilters.tsx');
+    expect(users).toContain('搜索姓名/邮箱/用户名');
+    const clients = read('src/app/(dashboard)/clients/components/ClientsTable.tsx');
+    expect(clients).toContain('搜索应用或 Client ID');
+    expect(clients).toContain('hidden items-center gap-2 min-[1100px]:flex');
+  });
+});

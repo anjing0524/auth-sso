@@ -43,7 +43,7 @@ test.describe('应用注册', () => {
       await expect(page).toHaveURL(/\/clients$/, { timeout: 15_000 });
 
       // 详情页核心操作：禁用 → 启用 → 轮换 Secret → 授权记录
-      await page.getByPlaceholder('搜索应用名称或 Client ID...').fill(name);
+      await page.getByPlaceholder('搜索应用或 Client ID').fill(name);
       await expect(page.getByRole('row').filter({ hasText: name })).toBeVisible({ timeout: 15_000 });
       await page.getByRole('row').filter({ hasText: name }).getByRole('link', { name: '编辑 OAuth 配置' }).click();
       await expect(page).toHaveURL(new RegExp(`/clients/${clientId}$`));
@@ -85,7 +85,7 @@ test.describe('应用注册', () => {
       await expect(page.getByText(/暂无.*Token|暂无授权|暂无记录/).first()).toBeVisible({ timeout: 15_000 });
 
       await page.goto('/clients', { waitUntil: 'networkidle' });
-      await page.getByPlaceholder('搜索应用名称或 Client ID...').fill(name);
+      await page.getByPlaceholder('搜索应用或 Client ID').fill(name);
       await expect(page.getByRole('row').filter({ hasText: name })).toBeVisible({ timeout: 15_000 });
       await page.getByRole('row').filter({ hasText: name }).getByRole('button', { name: '注销应用' }).click();
       await expect(page.getByRole('dialog')).toContainText(`注销应用「${name}」？`);
@@ -96,7 +96,7 @@ test.describe('应用注册', () => {
       if (clientId) {
         try {
           await page.goto('/clients', { waitUntil: 'networkidle' });
-          await page.getByPlaceholder('搜索应用名称或 Client ID...').fill(name);
+          await page.getByPlaceholder('搜索应用或 Client ID').fill(name);
           await page.waitForTimeout(400);
           const row = page.getByRole('row').filter({ hasText: name });
           if (await row.count()) {
