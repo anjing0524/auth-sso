@@ -175,6 +175,15 @@ export function ClientDetailClient({ client, initialTokens, canUpdate }: ClientD
     }
   };
 
+  const handleTabKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
+    const keys = ['ArrowLeft', 'ArrowRight', 'Home', 'End'];
+    if (!keys.includes(event.key)) return;
+    event.preventDefault();
+    const next = event.key === 'Home' ? 'info' : event.key === 'End' ? 'tokens' : activeTab === 'info' ? 'tokens' : 'info';
+    setActiveTab(next);
+    requestAnimationFrame(() => document.getElementById(`client-tab-${next}`)?.focus());
+  };
+
   const meta = pendingAction ? CONFIRM_META[pendingAction] : null;
   const leaveGuard = useUnsavedChangesGuard(isDirty);
   return (
@@ -213,9 +222,13 @@ export function ClientDetailClient({ client, initialTokens, canUpdate }: ClientD
       {/* 标签页：与 Tabs 组件同一套分段式视觉 */}
       <div role="tablist" aria-label="应用详情" className="inline-flex h-8 items-center rounded-lg bg-muted p-0.5">
         <button
+          id="client-tab-info"
           role="tab"
           aria-selected={activeTab === 'info'}
+          aria-controls="client-panel-info"
+          tabIndex={activeTab === 'info' ? 0 : -1}
           onClick={() => setActiveTab('info')}
+          onKeyDown={handleTabKeyDown}
           className={`inline-flex h-7 items-center rounded-md px-2.5 text-xs font-medium transition-colors ${
             activeTab === 'info' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
           }`}
@@ -223,9 +236,13 @@ export function ClientDetailClient({ client, initialTokens, canUpdate }: ClientD
           基本信息
         </button>
         <button
+          id="client-tab-tokens"
           role="tab"
           aria-selected={activeTab === 'tokens'}
+          aria-controls="client-panel-tokens"
+          tabIndex={activeTab === 'tokens' ? 0 : -1}
           onClick={() => setActiveTab('tokens')}
+          onKeyDown={handleTabKeyDown}
           className={`inline-flex h-7 items-center rounded-md px-2.5 text-xs font-medium transition-colors ${
             activeTab === 'tokens' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
           }`}
@@ -235,6 +252,7 @@ export function ClientDetailClient({ client, initialTokens, canUpdate }: ClientD
       </div>
 
       {activeTab === 'info' && (
+        <div role="tabpanel" id="client-panel-info" aria-labelledby="client-tab-info" tabIndex={0}>
         <ClientInfoSection
           client={client}
           formData={formData}
@@ -244,14 +262,17 @@ export function ClientDetailClient({ client, initialTokens, canUpdate }: ClientD
           onCopy={copyToClipboard}
           readOnly={client.clientId === PORTAL_CLIENT_ID || !canUpdate}
         />
+        </div>
       )}
 
       {activeTab === 'tokens' && (
+        <div role="tabpanel" id="client-panel-tokens" aria-labelledby="client-tab-tokens" tabIndex={0}>
         <ClientTokensSection
           tokens={initialTokens}
           onRevokeAll={() => setPendingAction('revoke-tokens')}
           canRevoke={canUpdate}
         />
+        </div>
       )}
 
       {/* 危险操作二次确认（统一弹窗，替代原生 confirm） */}

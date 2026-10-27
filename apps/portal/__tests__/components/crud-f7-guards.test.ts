@@ -1078,3 +1078,12 @@ describe('移动侧栏无障碍语义（续一百七十三）', () => {
     expect(src).toContain('aria-modal="true"');
   });
 });
+
+describe('客户端详情 tabs 语义（续一百七十四）', () => {
+  it('tabpanel/aria-controls/方向键', () => {
+    const src = read('src/app/(dashboard)/clients/[id]/ClientDetailClient.tsx');
+    expect(src).toContain('role="tabpanel"');
+    expect(src).toContain('aria-controls="client-panel-info"');
+    expect(src).toContain('handleTabKeyDown');
+  });
+});

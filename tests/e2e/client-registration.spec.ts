@@ -48,6 +48,16 @@ test.describe('应用注册', () => {
       await page.getByRole('row').filter({ hasText: name }).getByRole('link', { name: '编辑 OAuth 配置' }).click();
       await expect(page).toHaveURL(new RegExp(`/clients/${clientId}$`));
 
+      // WAI-ARIA tabs：方向键切换、tabpanel 关联
+      const infoTab = page.getByRole('tab', { name: '基本信息' });
+      await expect(infoTab).toHaveAttribute('aria-controls', 'client-panel-info');
+      await infoTab.focus();
+      await page.keyboard.press('ArrowRight');
+      await expect(page.getByRole('tab', { name: '授权记录' })).toHaveAttribute('aria-selected', 'true');
+      await expect(page.getByRole('tabpanel')).toHaveAttribute('aria-labelledby', 'client-tab-tokens');
+      await page.keyboard.press('Home');
+      await expect(infoTab).toHaveAttribute('aria-selected', 'true');
+
       // 无改动不可保存；编辑后出现未保存状态，可放弃修改
       await expect(page.getByRole('button', { name: '无修改' })).toBeDisabled();
       await page.locator('#client-detail-name').fill(`${name}2`);
