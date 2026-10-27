@@ -3,7 +3,7 @@
 > 生成方式：`node scripts/ux/measure.mjs`（真浏览器 + 验收栈）。生成日期：2026-10-23。
 > 规范与预算见 `docs/spec/UX-GUIDELINES.md` §4；本文件是**改动前后对比的基线**，不构成 CI 门禁。
 
-## 1. 本轮基线（新目标第 17 轮完整回归，2026-10-27）
+## 1. 本轮基线（新目标第 36 轮完整回归，2026-10-27）
 
 | 视口 | 路由 | 页面滚动 | 横向溢出 | chrome% | 可见行 | 控件高(输入/按钮) | 表头吸顶 |
 |---|---|---|---|---|---|---|---|
@@ -18,9 +18,9 @@
 | 1512x800 | `/profile` | 无 | 无 | 无 | - | 0 | -/32 | - |
 | 1512x800 | `/permissions/new` | 无 | 无 | 无 | - | 0 | 36/32 | - |
 | 1512x800 | `/clients/new` | 无 | 无 | 无 | - | 0 | 36/32 | - |
-| 1512x800 | `/users/9e4b63cc-583e-49ba-8719-0b28833a80a7` | 无 | 无 | 无 | - | 0 | 36/32 | - |
-| 1512x800 | `/roles/ed11e8cd-0261-4985-a201-006c05a19f20/permissions` | 无 | 无 | 无 | - | 0 | 32/32 | - |
-| 1512x800 | `/users/9e4b63cc-583e-49ba-8719-0b28833a80a7/roles` | 无 | 无 | 无 | - | 0 | 32/32 | - |
+| 1512x800 | `/users/9e4b63cc-583e-49ba-8719-0b28833a80a7?returnTo=%2Fusers` | 无 | 无 | 无 | - | 0 | 36/32 | - |
+| 1512x800 | `/roles/ed11e8cd-0261-4985-a201-006c05a19f20/permissions?returnTo=%2Froles` | 无 | 无 | 无 | - | 0 | 32/32 | - |
+| 1512x800 | `/users/9e4b63cc-583e-49ba-8719-0b28833a80a7?returnTo=%2Fusers/roles` | 无 | 无 | 无 | - | 0 | 36/32 | - |
 | 1512x700 | `/login（未登录）` | 无 | 无 | 无 | - | - | -/- | - |
 | 1512x700 | `/dashboard` | 无 | 无 | 无 | 42 | 6 | -/32 | - |
 | 1512x700 | `/users` | 无 | 无 | 无 | 20 | 3 | 32/32 | - |
@@ -32,9 +32,9 @@
 | 1512x700 | `/profile` | 无 | 无 | 无 | - | 0 | -/32 | - |
 | 1512x700 | `/permissions/new` | 无 | 无 | 无 | - | 0 | 36/32 | - |
 | 1512x700 | `/clients/new` | 无 | **有** | 无 | - | 0 | 36/32 | - |
-| 1512x700 | `/users/9e4b63cc-583e-49ba-8719-0b28833a80a7` | 无 | 无 | 无 | - | 0 | 36/32 | - |
-| 1512x700 | `/roles/ed11e8cd-0261-4985-a201-006c05a19f20/permissions` | 无 | 无 | 无 | - | 0 | 32/32 | - |
-| 1512x700 | `/users/9e4b63cc-583e-49ba-8719-0b28833a80a7/roles` | 无 | 无 | 无 | - | 0 | 32/32 | - |
+| 1512x700 | `/users/9e4b63cc-583e-49ba-8719-0b28833a80a7?returnTo=%2Fusers` | 无 | 无 | 无 | - | 0 | 36/32 | - |
+| 1512x700 | `/roles/ed11e8cd-0261-4985-a201-006c05a19f20/permissions?returnTo=%2Froles` | 无 | 无 | 无 | - | 0 | 32/32 | - |
+| 1512x700 | `/users/9e4b63cc-583e-49ba-8719-0b28833a80a7?returnTo=%2Fusers/roles` | 无 | 无 | 无 | - | 0 | 36/32 | - |
 | 1512x700 | `dialog:roles-create` | 无 | 无 | 无 | - | - | -/- | - |
 | 1512x700 | `dialog:users-create` | 无 | 无 | 无 | - | - | -/- | - |
 | 1512x700 | `dialog:permissions-delete` | 无 | 无 | 无 | - | - | -/- | - |
@@ -49,9 +49,9 @@
 | 1139x600 | `/profile` | 无 | **有** | 无 | - | 0 | -/32 | - |
 | 1139x600 | `/permissions/new` | 无 | 无 | 无 | - | 0 | 36/32 | - |
 | 1139x600 | `/clients/new` | 无 | **有** | 无 | - | 0 | 36/32 | - |
-| 1139x600 | `/users/9e4b63cc-583e-49ba-8719-0b28833a80a7` | 无 | **有** | 无 | - | 0 | 36/32 | - |
-| 1139x600 | `/roles/ed11e8cd-0261-4985-a201-006c05a19f20/permissions` | 无 | 无 | 无 | - | 0 | 32/32 | - |
-| 1139x600 | `/users/9e4b63cc-583e-49ba-8719-0b28833a80a7/roles` | 无 | 无 | 无 | - | 0 | 32/32 | - |
+| 1139x600 | `/users/9e4b63cc-583e-49ba-8719-0b28833a80a7?returnTo=%2Fusers` | 无 | **有** | 无 | - | 0 | 36/32 | - |
+| 1139x600 | `/roles/ed11e8cd-0261-4985-a201-006c05a19f20/permissions?returnTo=%2Froles` | 无 | 无 | 无 | - | 0 | 32/32 | - |
+| 1139x600 | `/users/9e4b63cc-583e-49ba-8719-0b28833a80a7?returnTo=%2Fusers/roles` | 无 | **有** | 无 | - | 0 | 36/32 | - |
 | 1139x600 | `dialog:roles-create` | 无 | 无 | 无 | - | - | -/- | - |
 | 1139x600 | `dialog:users-create` | 无 | 无 | 无 | - | - | -/- | - |
 | 1139x600 | `dialog:permissions-delete` | 无 | 无 | 无 | - | - | -/- | - |
@@ -62,23 +62,23 @@
 | 390x844 | `/permissions` | 无 | 无 | 无 | 32 | 10 | 32/32 | - |
 | 390x844 | `/departments` | 无 | 无 | 无 | - | 0 | 32/32 | - |
 | 390x844 | `/clients` | 无 | 无 | 无 | 34 | 4 | 32/32 | - |
-| 390x844 | `/audit-logs` | 无 | 无 | 无 | 31 | 10 | 32/32 | - |
+| 390x844 | `/audit-logs` | 无 | 无 | 无 | 35 | 9 | 32/32 | - |
 | 390x844 | `/profile` | 无 | **有** | 无 | - | 0 | -/32 | - |
 | 390x844 | `/permissions/new` | 无 | 无 | 无 | - | 0 | 36/32 | - |
 | 390x844 | `/clients/new` | 无 | **有** | 无 | - | 0 | 36/32 | - |
-| 390x844 | `/users/9e4b63cc-583e-49ba-8719-0b28833a80a7` | 无 | **有** | 无 | - | 0 | 36/32 | - |
-| 390x844 | `/roles/ed11e8cd-0261-4985-a201-006c05a19f20/permissions` | 无 | 无 | 无 | - | 0 | 32/32 | - |
-| 390x844 | `/users/9e4b63cc-583e-49ba-8719-0b28833a80a7/roles` | 无 | 无 | 无 | - | 0 | 32/32 | - |
+| 390x844 | `/users/9e4b63cc-583e-49ba-8719-0b28833a80a7?returnTo=%2Fusers` | 无 | **有** | 无 | - | 0 | 36/32 | - |
+| 390x844 | `/roles/ed11e8cd-0261-4985-a201-006c05a19f20/permissions?returnTo=%2Froles` | 无 | 无 | 无 | - | 0 | 32/32 | - |
+| 390x844 | `/users/9e4b63cc-583e-49ba-8719-0b28833a80a7?returnTo=%2Fusers/roles` | 无 | **有** | 无 | - | 0 | 36/32 | - |
 
 **弹窗（600/700px 高）**
 
 | 视口 | 弹窗 | 高度 | 是否完整在视口内 | 底部操作可见 | overflowY |
 |---|---|---|---|---|---|
-| 1512x700 | dialog:roles-create | 578 | ✓ | ✓ | auto |
-| 1512x700 | dialog:users-create | 570 | ✓ | ✓ | auto |
+| 1512x700 | dialog:roles-create | 420 | ✓ | ✓ | auto |
+| 1512x700 | dialog:users-create | 558 | ✓ | ✓ | auto |
 | 1512x700 | dialog:permissions-delete | 244 | ✓ | ✓ | auto |
-| 1139x600 | dialog:roles-create | 568 | ✓ | ✓ | auto |
-| 1139x600 | dialog:users-create | 568 | ✓ | ✓ | auto |
+| 1139x600 | dialog:roles-create | 420 | ✓ | ✓ | auto |
+| 1139x600 | dialog:users-create | 558 | ✓ | ✓ | auto |
 | 1139x600 | dialog:permissions-delete | 244 | ✓ | ✓ | auto |
 
 ## 2. 解读与目标
@@ -922,3 +922,11 @@ a11y 对比度函数提取复用，增加未登录 `/login`（390×844，独立�
 | 问题 | 修复 | 验证 |
 |---|---|---|
 | 左侧过滤两行时标题被垂直居中、CTA 顶部对齐，形成错位 | TableToolbar 与标题组均 `md:items-start` | 1024 标题/CTA y=67、搜索 y=69；部门筛选 y=111；1139 全单行 |
+
+### 9.94 产品审计九十：里程碑完整回归（新目标第 36 轮，2026-10-27）
+
+- vitest：**135 files / 1317 passed**
+- e2e：首跑 18/19，唯一失败为应用详情 URL 断言未允许 `returnTo`（产品已按设计携带返回上下文）；更新断言后 **19/19**
+- a11y：最近一轮亮/暗 **0**
+- measure：内容区滚动/横向溢出 0
+- CWV：**24/24 PASS**
