@@ -366,11 +366,10 @@ export default function RolesTable({ roles, pagination, initialKeyword, initialS
         <DialogContent>
           <DialogHeader><DialogTitle className="flex items-center gap-2"><ShieldCheck className="h-5 w-5 text-primary" /> 新建角色</DialogTitle></DialogHeader>
           <form onSubmit={submitCreate}>
-            <div className="space-y-4 py-4">
+            <div className="grid gap-3 py-4 sm:grid-cols-2">
               <div className="space-y-2"><Label htmlFor="role-name">角色名称</Label><Input id="role-name" value={form.name} maxLength={100} onChange={e => setForm({...form, name: e.target.value})} placeholder="管理员" /></div>
-              <div className="space-y-2"><Label htmlFor="role-code">角色编码</Label><Input id="role-code" value={form.code} maxLength={50} aria-invalid={fieldError?.field === 'code'} onChange={e => setForm({...form, code: e.target.value})} placeholder="admin" /></div>
-              <FieldError failure={fieldError} field="code" />
-              <div className="space-y-2"><Label htmlFor="role-description">描述（可选）</Label><Textarea id="role-description" value={form.description} maxLength={500} rows={2} onChange={e => setForm({...form, description: e.target.value})} placeholder="例如：可管理用户、角色与审计日志" /></div>
+              <div className="space-y-2"><Label htmlFor="role-code">角色编码</Label><Input id="role-code" value={form.code} maxLength={50} aria-invalid={fieldError?.field === 'code'} onChange={e => setForm({...form, code: e.target.value})} placeholder="admin" /><FieldError failure={fieldError} field="code" /></div>
+              <div className="space-y-2 sm:col-span-2"><Label htmlFor="role-description">描述（可选）</Label><Textarea id="role-description" value={form.description} maxLength={500} rows={2} onChange={e => setForm({...form, description: e.target.value})} placeholder="例如：可管理用户、角色与审计日志" /></div>
               <div className="space-y-2"><Label htmlFor="role-dept">所属部门</Label>{renderDeptSelect(form.deptId, v => setForm({...form, deptId: v}), 'role-dept')}</div>
               <div className="space-y-2"><Label htmlFor="role-sort">排序（越小越靠前）</Label><Input id="role-sort" type="number" value={form.sort} onChange={e => setForm({...form, sort: Number(e.target.value)})} /></div>
             </div>
@@ -383,14 +382,11 @@ export default function RolesTable({ roles, pagination, initialKeyword, initialS
         <DialogContent>
           <DialogHeader><DialogTitle>编辑角色</DialogTitle></DialogHeader>
           <form onSubmit={submitUpdate}>
-            <div className="space-y-4 py-4">
+            <div className="grid gap-3 py-4 sm:grid-cols-2">
               <div className="space-y-2"><Label htmlFor="role-edit-name">角色名称</Label><Input id="role-edit-name" value={form.name} onChange={e => setForm({...form, name: e.target.value})} /></div>
-              <div className="space-y-2"><Label htmlFor="role-edit-code">角色编码</Label><Input id="role-edit-code" value={form.code} disabled /></div>
-              {/* 编辑态的 code 是 disabled（不可改、也不会产生冲突码），但仍渲染错误——
-                  否则 update 失败时既不弹 toast 也不内联，正是要消灭的静默路径 */}
-              <FieldError failure={fieldError} field="code" />
-              <div className="space-y-2"><Label htmlFor="role-edit-description">描述（可选）</Label><Textarea id="role-edit-description" value={form.description} maxLength={500} rows={2} onChange={e => setForm({...form, description: e.target.value})} placeholder="例如：可管理用户、角色与审计日志" /></div>
-              <div className="space-y-2"><Label htmlFor="role-edit-dept">所属部门</Label>{renderDeptSelect(form.deptId, v => setForm({...form, deptId: v}), 'role-edit-dept')}
+              <div className="space-y-2"><Label htmlFor="role-edit-code">角色编码</Label><Input id="role-edit-code" value={form.code} disabled /><FieldError failure={fieldError} field="code" /></div>
+              <div className="space-y-2 sm:col-span-2"><Label htmlFor="role-edit-description">描述（可选）</Label><Textarea id="role-edit-description" value={form.description} maxLength={500} rows={2} onChange={e => setForm({...form, description: e.target.value})} placeholder="例如：可管理用户、角色与审计日志" /></div>
+              <div className="space-y-2 sm:col-span-2"><Label htmlFor="role-edit-dept">所属部门</Label>{renderDeptSelect(form.deptId, v => setForm({...form, deptId: v}), 'role-edit-dept')}
                 {selected && (boundUserCounts[selected.id] ?? 0) > 0 && (
                   <p className="rounded bg-badge-warning-bg px-2 py-1 text-[10px] leading-4 text-badge-warning-fg">
                     该角色已绑定 {boundUserCounts[selected.id]} 个用户；迁移部门前需先解除绑定，否则保存会被拒绝。

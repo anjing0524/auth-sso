@@ -1521,3 +1521,10 @@ describe('授权 Token 总数可见性（续二百一十七）', () => {
     expect(section).toContain('仅显示最近');
   });
 });
+
+describe('角色弹窗 600px 不滚动（续二百一十八）', () => {
+  it('新建/编辑表单使用两列网格压缩高度', () => {
+    const src = read('src/app/(dashboard)/roles/components/RolesTable.tsx');
+    expect(src).toContain('grid gap-3 py-4 sm:grid-cols-2');
+  });
+});
