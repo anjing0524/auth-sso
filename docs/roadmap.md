@@ -21,6 +21,8 @@
 
 ## 变更记录
 
+- 2026-10-27（续一百七十三）: **移动侧栏无障碍语义/焦点**。侧栏 dialog 无 `aria-label`/`aria-modal`，Tab 到最后一项后焦点曾逃逸到 body。**修复**：SheetContent 补「主导航」名称与 `aria-modal=true`；复测 Tab 12 次全部在 dialog 内并循环。**验证**：e2e 增加 aria 断言；导航后自动收起保持；全量 **1259 passed**、e2e **18/18（52.7s）**、a11y 亮/暗 0、measure 0。
+
 - 2026-10-27（续一百七十二）: **命令面板导航纳入未保存守卫**。命令面板用 `router.push`，未保存时可绕过守卫直接离开。**修复**：面板跳转先派发 `unsaved-guard:request-navigation`（cancelable）；守卫监听并阻止，弹确认后整页导航；未脏时照常跳转。**验证**：用户详情脏 → 面板跳转：URL 不变、弹窗出现；确认后到 /users；e2e 覆盖；全量 **1258 passed**、e2e **18/18（53.6s）**、a11y 亮/暗 0、measure 0。
 
 - 2026-10-27（续一百七十一）: **长表单离开守卫扩展**。新建应用、权限新建/编辑也是长表单，未保存离开仍会丢失。**实现**：新建应用按 `INITIAL_CLIENT_FORM`、权限表单按 `savedForm` 快照计算 dirty，接入 `useUnsavedChangesGuard`。**验证**：填写应用名/权限名后点侧栏均弹确认；新增新建应用离开 e2e；全量 **1257 passed**、e2e **17/17（50.9s）**、a11y 亮/暗 0、measure 0。

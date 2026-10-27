@@ -15,6 +15,8 @@ test('移动端侧栏导航后自动收起', async ({ page }) => {
 
   await page.getByRole('button', { name: '切换侧边栏' }).click();
   await expect(page.getByRole('dialog')).toBeVisible();
+  await expect(page.getByRole('dialog')).toHaveAttribute('aria-label', '主导航');
+  await expect(page.getByRole('dialog')).toHaveAttribute('aria-modal', 'true');
   await page.getByRole('link', { name: '用户管理' }).first().click();
 
   await expect(page).toHaveURL(/\/users$/);

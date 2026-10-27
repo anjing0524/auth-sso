@@ -1070,3 +1070,11 @@ describe('命令面板导航守卫（续一百七十二）', () => {
     expect(hook).toContain('event.preventDefault()');
   });
 });
+
+describe('移动侧栏无障碍语义（续一百七十三）', () => {
+  it('SheetContent 有可访问名称与 aria-modal', () => {
+    const src = read('src/components/ui/sidebar.tsx');
+    expect(src).toContain('aria-label="主导航"');
+    expect(src).toContain('aria-modal="true"');
+  });
+});
