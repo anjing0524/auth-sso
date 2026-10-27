@@ -86,9 +86,9 @@ export function ClientInfoSection({
             ) : null}
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <Label htmlFor="client-name">名称</Label>
+                <Label htmlFor="client-detail-name">名称</Label>
                 <Input
-                  id="client-name"
+                  id="client-detail-name"
                   disabled={readOnly}
                   value={formData.name}
                   onChange={(e) => onFormChange({ name: e.target.value })}

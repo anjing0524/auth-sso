@@ -222,11 +222,11 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
           accessResourceTypes={accessResourceTypes}
         />
         {canExport ? (
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex items-center gap-2 max-md:ml-0 max-md:w-full">
             {/* 导出是次要动作：合并为一个下拉，避免两个按钮把筛选行挤换行（chrome 33%→≤30%） */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm">
+                <Button variant="outline" size="sm" className="max-md:w-full">
                   <Download className="h-3.5 w-3.5" /> 导出 CSV
                 </Button>
               </DropdownMenuTrigger>

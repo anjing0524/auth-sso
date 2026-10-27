@@ -50,11 +50,11 @@ test.describe('应用注册', () => {
 
       // 无改动不可保存；编辑后出现未保存状态，可放弃修改
       await expect(page.getByRole('button', { name: '无修改' })).toBeDisabled();
-      await page.getByRole('textbox', { name: '名称 应用名称 *' }).fill(`${name}2`);
+      await page.locator('#client-detail-name').fill(`${name}2`);
       await expect(page.getByText('未保存的修改')).toBeVisible();
       await expect(page.getByRole('button', { name: '保存修改' })).toBeEnabled();
       await page.getByRole('button', { name: '放弃修改' }).click();
-      await expect(page.getByRole('textbox', { name: '名称 应用名称 *' })).toHaveValue(name);
+      await expect(page.locator('#client-detail-name')).toHaveValue(name);
 
       await page.getByRole('button', { name: '禁用', exact: true }).click();
       await expect(page.getByRole('dialog')).toContainText('切换应用状态？');

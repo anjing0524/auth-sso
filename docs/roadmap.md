@@ -21,6 +21,8 @@
 
 ## 变更记录
 
+- 2026-10-27（续一百六十三）: **审计导出移动端对齐 + 客户端表单 id 唯一化**。390 审计页「导出 CSV」孤立右对齐；新建应用与详情页都用 `id="client-name"`，Next 路由过渡期间 DOM 短暂重复 id。**修复**：导出容器/按钮移动端 `w-full`；创建页/详情页 id 分别改为 `client-create-name` / `client-detail-name`。**验证**：390 导出按钮宽 366、无溢出；路由过渡后客户端表单 id 唯一；注册 e2e 改用 `#client-detail-name` 通过；全量 **1249 passed**、e2e **13/13（50.4s）**、a11y 0、measure 0。
+
 - 2026-10-26（续一百六十二）: **当前设备标记（sid 方案）**。此前因 Gateway 在受保护路径剥离 refresh cookie，Portal 无法读取当前会话；改用签发链路：AT 增 `sid` claim（= 当前 refresh 行 id），授权码兑换生成 sessionId 并落 RT 行；轮换时 `sid=newRtId`。**UI**：个人中心用 `claims.sid` 与会话 id 比对，显示「当前设备」徽章并隐藏撤销（引导用「退出当前会话」）。**验证**：API 单测 sid 写入/缺省；e2e 两台设备当前设备标记正确，撤销最新会话后两台设备该行均消失；全量 **1248 passed**、e2e **13/13（42.8s）**、a11y 0、measure 0；typecheck/lint/build 0。
 
 - 2026-10-26（续一百六十一）: **200% 缩放/短视口弹窗裁切修复**。模拟 1440×900 的 200% 缩放（720×450）：「新建用户」弹窗高 546px，top=-48、bottom=498，标题/关闭/提交均在视口外。**修复**：`DialogContent` 加 `max-h-[calc(100dvh-2rem)] overflow-y-auto`；`DialogFooter` 加 `sticky bottom-0`。常规高度仍不滚动；仅内容真实超出时允许受限滚动，主操作始终可见。**验证**：720×450 top 16 / bottom 434、clipped=false、页脚/提交可见；390×844 scroll=false 不变；全量 **1246 passed**、e2e **13/13（45.1s）**、a11y 0、measure 0。

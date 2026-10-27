@@ -960,3 +960,17 @@ describe('当前设备识别（续一百六十二）', () => {
     expect(profile).toContain('当前设备请使用下方');
   });
 });
+
+describe('审计导出一致性/客户端唯一 id（续一百六十三）', () => {
+  it('移动端导出整行；创建/详情表单 id 不重复', () => {
+    const audit = read('src/app/(dashboard)/audit-logs/page.tsx');
+    expect(audit).toContain('max-md:ml-0 max-md:w-full');
+    expect(audit).toContain('导出 CSV');
+    const create = read('src/app/(dashboard)/clients/new/page.tsx');
+    expect(create).toContain('id="client-create-name"');
+    expect(create).not.toContain('id="client-name"');
+    const detail = read('src/app/(dashboard)/clients/[id]/components/ClientInfoSection.tsx');
+    expect(detail).toContain('id="client-detail-name"');
+    expect(detail).not.toContain('id="client-name"');
+  });
+});

@@ -165,9 +165,9 @@ export default function NewClientPage() {
             </CardHeader>
             <CardContent className="grid gap-3 p-3 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <Label htmlFor="client-name">应用名称 <span className="text-destructive">*</span></Label>
+                <Label htmlFor="client-create-name">应用名称 <span className="text-destructive">*</span></Label>
                 <Input
-                  id="client-name"
+                  id="client-create-name"
                   placeholder="我的业务系统"
                   maxLength={100}
                   aria-invalid={!!errors.name}
