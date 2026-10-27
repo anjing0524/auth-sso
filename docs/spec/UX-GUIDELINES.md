@@ -68,6 +68,7 @@
 - 弹窗内边距：`DialogFooter` 的负边距/内边距必须与 `DialogContent` 对齐，页脚不得比卡片多出 1px（否则产生内部滚动与阴影错位）。
 - 短视口兜底：常规高度弹窗不得内部滚动；200% 缩放/矮屏（内容真实超出 `100dvh`）允许 `DialogContent` 受限滚动 + `DialogFooter` sticky，优先保证不裁切、主操作可见。
 - 表单 id：跨路由复用的字段必须带页面前缀（如 `login-email` / `create-user-email` / `client-detail-*`），避免 Next 路由过渡期重复 id。
+- 未保存守卫：编辑页有未保存修改时，站内链接离开必须二次确认（继续编辑/放弃并离开），刷新/关闭用 beforeunload 兜底；确认后整页导航，避免旧页面弹窗残留。
 - 移动端抽屉导航：点击导航项完成路由切换后必须自动收起，不能继续 `body overflow:hidden` 遮挡页面；Esc/遮罩关闭需保留。
 - 语义色成对定义：使用 `bg-X` 必须同时定义并映射 `X-foreground`（亮/暗各一份），否则前景会继承黑色，危险操作对比度不达标。
 - 暗色与浅色同样纳入对比度门禁：`bg-primary/10` 这类浅底上的 `text-primary` 在暗色不达标，应改用 `text-foreground`；暗色品牌色需按白字 4.5:1 调深。

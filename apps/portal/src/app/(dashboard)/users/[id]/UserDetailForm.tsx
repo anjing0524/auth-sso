@@ -19,6 +19,7 @@ import {
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useFieldFailure } from '@/hooks/use-field-failure';
+import { useUnsavedChangesGuard } from '@/hooks/use-unsaved-changes-guard';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -57,6 +58,7 @@ export default function UserDetailForm({ id, initialUser: serverUser, canUpdate 
     form.name !== savedForm.name || form.email !== savedForm.email || form.status !== savedForm.status;
   // 失败处置只有一个入口（本表单不渲染 <FieldError> ⇒ 传空字段 ⇒ 一律 toast）
   const { reportFailure } = useFieldFailure();
+  const leaveGuard = useUnsavedChangesGuard(isDirty);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
 
   // 用户不存在时：在 useEffect 中执行副作用（toast + 导航），避免在 render 中直接调用
@@ -388,6 +390,7 @@ export default function UserDetailForm({ id, initialUser: serverUser, canUpdate 
           </Button>
         </div>
       )}
+      {leaveGuard}
     </div>
   );
 }

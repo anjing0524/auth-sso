@@ -21,6 +21,7 @@ import { CLIENT_PERMISSIONS, PORTAL_CLIENT_ID } from '@auth-sso/contracts';
 import { ClientTokensSection } from './components/ClientTokensSection';
 import { createClientLogger } from '@/lib/logger-client';
 import { useFieldFailure } from '@/hooks/use-field-failure';
+import { useUnsavedChangesGuard } from '@/hooks/use-unsaved-changes-guard';
 
 import { PageHeader } from '@/components/shared/page-header';
 import { PermissionGuard } from '@/components/shared/permission-guard';
@@ -175,6 +176,7 @@ export function ClientDetailClient({ client, initialTokens, canUpdate }: ClientD
   };
 
   const meta = pendingAction ? CONFIRM_META[pendingAction] : null;
+  const leaveGuard = useUnsavedChangesGuard(isDirty);
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
       <PageHeader
@@ -269,6 +271,7 @@ export function ClientDetailClient({ client, initialTokens, canUpdate }: ClientD
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {leaveGuard}
     </div>
   );
 }

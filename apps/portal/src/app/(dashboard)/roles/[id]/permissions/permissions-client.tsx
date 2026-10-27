@@ -24,6 +24,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { PageHeader } from '@/components/shared/page-header';
 import { SearchInput } from '@/components/shared/search-input';
 import { useFieldFailure } from '@/hooks/use-field-failure';
+import { useUnsavedChangesGuard } from '@/hooks/use-unsaved-changes-guard';
 
 import { updateRolePermissionsAction } from '../../actions';
 
@@ -205,6 +206,7 @@ export default function RolePermissionsPage({ role }: RolePermissionsPageProps) 
     return { addedIds: added, removedIds: removed };
   }, [assignedIds, savedIds]);
   const changeCount = addedIds.size + removedIds.size;
+  const leaveGuard = useUnsavedChangesGuard(changeCount > 0);
 
   const templateItems = useMemo(
     () => PERMISSION_TEMPLATES.map((t) => {
@@ -534,6 +536,7 @@ export default function RolePermissionsPage({ role }: RolePermissionsPageProps) 
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {leaveGuard}
     </div>
   );
 }

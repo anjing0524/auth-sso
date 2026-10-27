@@ -1038,3 +1038,17 @@ describe('会话当前设备提示不重复（续一百六十九）', () => {
     expect(src).not.toMatch(/当前设备请使用下方「退出当前会话」">\s*当前设备/);
   });
 });
+
+describe('未保存离开守卫（续一百七十）', () => {
+  it('三个编辑页接入；确认使用整页导航卸载旧 portal', () => {
+    for (const f of [
+      'src/app/(dashboard)/users/[id]/UserDetailForm.tsx',
+      'src/app/(dashboard)/clients/[id]/ClientDetailClient.tsx',
+      'src/app/(dashboard)/roles/[id]/permissions/permissions-client.tsx',
+    ]) expect(read(f)).toContain('useUnsavedChangesGuard');
+    const hook = read('src/hooks/use-unsaved-changes-guard.tsx');
+    expect(hook).toContain('window.location.assign(href)');
+    expect(hook).toContain('beforeunload');
+    expect(hook).toContain('离开并放弃未保存的修改？');
+  });
+});

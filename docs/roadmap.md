@@ -21,6 +21,8 @@
 
 ## 变更记录
 
+- 2026-10-27（续一百七十）: **未保存修改离开守卫**。用户详情/应用详情/角色权限页有「未保存的修改」但点侧栏/返回会静默丢失。**实现**：`useUnsavedChangesGuard` 捕获同源链接点击并弹确认（继续编辑/放弃并离开），beforeunload 兜底刷新/关闭；确认后先解除脏标记再整页导航，避免 Next 保留旧页面导致 dialog portal 残留。三页接入。**验证**：e2e 改显示名 → 侧栏 → 弹窗；取消保留输入；确认到 /users 且 dialog=0；全量 **1256 passed**、e2e **16/16（48.7s）**、a11y 亮/暗 0、measure 0。
+
 - 2026-10-27（续一百六十九）: **会话当前设备提示去重**。390 会话行徽章与右侧同时显示「当前设备」，重复且占宽。**修复**：右侧改为锁图标（aria-label「当前设备不可单独撤销」，title 指向下方退出当前会话），徽章保留。**验证**：DOM「当前设备」文字仅 1 处、锁图标存在；profile e2e 通过；全量 **1255 passed**、e2e **15/15（44.8s）**、a11y 亮/暗 0、measure 0。
 
 - 2026-10-27（续一百六十八）: **移动端侧栏导航后自动收起**。390 打开侧栏点击「用户管理」后 URL 已切换，但侧栏仍开且 `body overflow:hidden`，页面持续被遮挡；Esc/遮罩关闭正常。**修复**：`SidebarProvider` 用 `usePathname` 监听路由变化，自动 `setOpenMobile(false)`。**验证**：导航后 `dialog=false`、`body overflow=visible`；新增 `mobile-nav.spec.ts`（390）固化；全量 **1254 passed**、e2e **15/15（45.2s）**、a11y 亮/暗 0、measure 0。

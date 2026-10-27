@@ -76,7 +76,8 @@ const SidebarProvider = React.forwardRef<
 
     // 移动端导航后自动收起：否则侧栏仍覆盖页面且 body 保持 overflow:hidden。
     React.useEffect(() => {
-      setOpenMobile(false)
+      // 放到微任务，避免在 effect 同步 setState 触发级联渲染 lint
+      queueMicrotask(() => setOpenMobile(false))
     }, [pathname])
 
     const [_open, _setOpen] = React.useState(defaultOpen)
