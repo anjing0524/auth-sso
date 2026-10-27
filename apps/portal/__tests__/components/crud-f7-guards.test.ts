@@ -1617,3 +1617,16 @@ describe('角色部门筛选（续二百二十八）', () => {
     expect(table).toContain('className="md:items-start"');
   });
 });
+
+describe('权限归属应用筛选（续二百二十九）', () => {
+  it('数据支持 clientId/NONE；页面传 clients；工具栏两行/单行', () => {
+    const data = read('src/app/(dashboard)/permissions/data.ts');
+    expect(data).toContain("clientId === 'NONE'");
+    expect(data).toContain('getClientOptions');
+    const page = read('src/app/(dashboard)/permissions/page.tsx');
+    expect(page).toContain('clients={clients}');
+    const table = read('src/app/(dashboard)/permissions/components/PermissionsTable.tsx');
+    expect(table).toContain('aria-label="过滤归属应用"');
+    expect(table).toContain('order-3 flex w-full');
+  });
+});

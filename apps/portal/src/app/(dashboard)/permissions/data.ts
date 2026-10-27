@@ -6,7 +6,7 @@ import 'server-only';
 import { cacheLife, cacheTag } from 'next/cache';
 import { sql } from 'drizzle-orm';
 import { db, schema } from '@/infrastructure/db';
-import { and, asc, eq, ilike, or, type SQL } from 'drizzle-orm';
+import { and, asc, eq, ilike, isNull, or, type SQL } from 'drizzle-orm';
 import { asEntityStatus, asPermissionType } from '@/lib/type-guards';
 import { logServerDataRead } from '@/lib/auth';
 import { withPagination, countRows, offsetFor, normalizePagination, type PaginationMeta } from '@/lib/pagination';
@@ -45,10 +45,15 @@ function toPermissionListItem(p: typeof schema.permissions.$inferSelect): Permis
  * 2026-10-21：权限列表改为**服务端查询**（此前把全量 45+ 行一次性传给客户端，
  * 在浏览器里做过滤与分页——与 users/roles/audit 的服务端分页不一致，且数据量随权限增长线性下发）。
  */
-function buildPermissionConditions(type?: string, keyword?: string, status?: string) {
+function buildPermissionConditions(type?: string, keyword?: string, status?: string, clientId?: string) {
   const conditions: SQL[] = [];
   if (type) conditions.push(eq(schema.permissions.type, asPermissionType(type)));
   if (status) conditions.push(eq(schema.permissions.status, asEntityStatus(status)));
+  if (clientId === 'NONE') {
+    conditions.push(isNull(schema.permissions.clientId));
+  } else if (clientId) {
+    conditions.push(eq(schema.permissions.clientId, clientId));
+  }
   const kw = keyword?.trim();
   if (kw) {
     conditions.push(or(
@@ -73,8 +78,8 @@ export async function getPermissions(type?: string): Promise<PermissionListItem[
   return rows.map(toPermissionListItem);
 }
 
-export async function getPermissionPage({ type, keyword, status, page: rawPage, pageSize: rawPageSize }:
-  { type?: string; keyword?: string; status?: string; page: number; pageSize: number }
+export async function getPermissionPage({ type, keyword, status, clientId, page: rawPage, pageSize: rawPageSize }:
+  { type?: string; keyword?: string; status?: string; clientId?: string; page: number; pageSize: number }
 ): Promise<{ data: PermissionListItem[]; pagination: PaginationMeta }> {
   'use cache';
   cacheLife('hours');
@@ -82,7 +87,7 @@ export async function getPermissionPage({ type, keyword, status, page: rawPage, 
 
   const { page, pageSize } = normalizePagination(rawPage, rawPageSize);
 
-  const conditions = buildPermissionConditions(type, keyword, status);
+  const conditions = buildPermissionConditions(type, keyword, status, clientId);
 
   return withPagination(
     page,

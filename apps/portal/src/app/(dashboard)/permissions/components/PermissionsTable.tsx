@@ -63,6 +63,9 @@ interface Props {
   initialKeyword?: string;
   /** 状态筛选：'' | ACTIVE | DISABLED */
   initialStatus?: string;
+  /** 归属应用筛选：'' | NONE | clientId */
+  initialClientId?: string;
+  clients?: Array<{ id: string; name: string }>;
 }
 
 const TYPE_ICONS: Record<string, React.ReactNode> = {
@@ -84,24 +87,31 @@ const TABS: Array<{ value: string; label: string }> = [
   { value: 'API', label: '接口' },
 ];
 
-export default function PermissionsTable({ permissions, pagination, activeTab, initialKeyword = '', initialStatus = '', menuOptions = [] }: Props) {
+export default function PermissionsTable({ permissions, pagination, activeTab, initialKeyword = '', initialStatus = '', initialClientId = '', clients = [], menuOptions = [] }: Props) {
   const router = useRouter();
   const [keyword, setKeyword] = useState(initialKeyword);
   const [isPending, startTransition] = useTransition();
 
   /** 统一构造 URL：type / keyword / page 都是服务端查询参数（可分享、可后退） */
-  const buildHref = (nextPage: number, nextKeyword = keyword, nextType = activeTab, nextStatus = initialStatus) => {
+  const buildHref = (
+    nextPage: number,
+    nextKeyword = keyword,
+    nextType = activeTab,
+    nextStatus = initialStatus,
+    nextClientId = initialClientId,
+  ) => {
     const params = new URLSearchParams();
     if (nextType !== 'ALL') params.set('type', nextType);
     if (nextKeyword) params.set('keyword', nextKeyword);
     if (nextStatus) params.set('status', nextStatus);
+    if (nextClientId) params.set('clientId', nextClientId);
     if (nextPage > 1) params.set('page', String(nextPage));
     const qs = params.toString();
     return `/permissions${qs ? `?${qs}` : ''}`;
   };
 
-  const returnTo = buildHref(pagination.page, keyword, activeTab, initialStatus);
-  const createReturnTo = buildHref(1, keyword, activeTab, initialStatus);
+  const returnTo = buildHref(pagination.page, keyword, activeTab, initialStatus, initialClientId);
+  const createReturnTo = buildHref(1, keyword, activeTab, initialStatus, initialClientId);
 
   // 搜索防抖：400ms 后按服务端查询刷新（与 UserFilters 同语义）
   useEffect(() => {
@@ -128,7 +138,7 @@ export default function PermissionsTable({ permissions, pagination, activeTab, i
   const [impactLoading, setImpactLoading] = useState(false);
   const { reportFailure } = useFieldFailure();
   const handleTabChange = (tab: string) => {
-    startTransition(() => router.push(buildHref(1, keyword, tab)));
+    startTransition(() => router.push(buildHref(1, keyword, tab, initialStatus, initialClientId)));
   };
 
   const handleSearch = (value: string) => {
@@ -194,23 +204,38 @@ export default function PermissionsTable({ permissions, pagination, activeTab, i
   // 标题/页签/搜索同处一行：页签是筛选器，不与工具栏各占一行
   const cardHeader = (
     <TableToolbar
+      className="md:items-start"
       left={
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-1.5">
           <h1 className="type-section-title shrink-0 text-foreground">权限管理</h1>
           {tabsBar}
           <SearchInput className="md:w-[190px] xl:w-64" placeholder="搜索名称或编码" value={keyword} onChange={handleSearch} />
-          <Select value={initialStatus || 'ALL'} onValueChange={(v) => startTransition(() => router.push(buildHref(1, keyword, activeTab, v === 'ALL' ? '' : v)))}>
-            <SelectTrigger aria-label="过滤权限状态" className="w-full md:w-32">
-              <SelectValue>
-                {initialStatus === 'ACTIVE' ? '已启用' : initialStatus === 'DISABLED' ? '已禁用' : '全部状态'}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ALL">全部状态</SelectItem>
-              <SelectItem value="ACTIVE">已启用</SelectItem>
-              <SelectItem value="DISABLED">已禁用</SelectItem>
-            </SelectContent>
-          </Select>
+          <div className="order-3 flex w-full flex-wrap items-center gap-2 min-[1100px]:order-2 min-[1100px]:w-auto">
+            <Select value={initialStatus || 'ALL'} onValueChange={(v) => startTransition(() => router.push(buildHref(1, keyword, activeTab, v === 'ALL' ? '' : v, initialClientId)))}>
+              <SelectTrigger aria-label="过滤权限状态" className="w-[calc(50%-0.25rem)] md:w-28">
+                <SelectValue>
+                  {initialStatus === 'ACTIVE' ? '已启用' : initialStatus === 'DISABLED' ? '已禁用' : '全部状态'}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">全部状态</SelectItem>
+                <SelectItem value="ACTIVE">已启用</SelectItem>
+                <SelectItem value="DISABLED">已禁用</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={initialClientId || 'ALL'} onValueChange={(v) => startTransition(() => router.push(buildHref(1, keyword, activeTab, initialStatus, v === 'ALL' ? '' : v)))}>
+              <SelectTrigger aria-label="过滤归属应用" className="w-[calc(50%-0.25rem)] md:w-32">
+                <SelectValue>{initialClientId === 'NONE' ? '未绑定应用' : clients.find((c) => c.id === initialClientId)?.name ?? '全部应用'}</SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">全部应用</SelectItem>
+                <SelectItem value="NONE">未绑定应用</SelectItem>
+                {clients.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>{c.name}（{c.id}）</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
       }
       right={
@@ -312,7 +337,7 @@ export default function PermissionsTable({ permissions, pagination, activeTab, i
         data={permissions}
         loading={isPending}
         emptyState={
-          keyword.trim() || activeTab !== 'ALL' || initialStatus !== '' ? (
+          keyword.trim() || activeTab !== 'ALL' || initialStatus !== '' || initialClientId !== '' ? (
             <EmptyState
               variant="simple"
               kind="filtered"

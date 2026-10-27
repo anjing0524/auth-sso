@@ -3,7 +3,7 @@
  * 写操作通过 Server Actions (actions.ts) 执行
  */
 import { redirect } from 'next/navigation';
-import { getPermissionPage, getPermissions } from './data';
+import { getPermissionPage, getPermissions, getClientOptions } from './data';
 import { ENTITY_STATUS_VALUES } from '@auth-sso/contracts';
 import { clampPage } from '@/lib/pagination';
 import PermissionsTable from './components/PermissionsTable';
@@ -21,6 +21,7 @@ interface PageProps {
     type?: string;
     keyword?: string;
     status?: string;
+    clientId?: string;
     page?: string;
   }>;
 }
@@ -34,20 +35,26 @@ export default async function PermissionsPage({ searchParams }: PageProps) {
   const keyword = (params.keyword || '').slice(0, 100);
   const status = (ENTITY_STATUS_VALUES as readonly string[]).includes(params.status ?? '') ? params.status! : '';
   const page = clampPage(params.page);
+  const clientId = (params.clientId || '').slice(0, 100);
 
   // 服务端分页/过滤：与 users/roles/audit 一致（此前全量下发、浏览器内过滤分页）
-  const { data: permissions, pagination } = await getPermissionPage({
-    type: activeTab === 'ALL' ? undefined : activeTab,
-    keyword,
-    status: status || undefined,
-    page,
-    pageSize: 20,
-  });
+  const [{ data: permissions, pagination }, clients] = await Promise.all([
+    getPermissionPage({
+      type: activeTab === 'ALL' ? undefined : activeTab,
+      keyword,
+      status: status || undefined,
+      clientId: clientId || undefined,
+      page,
+      pageSize: 20,
+    }),
+    getClientOptions(),
+  ]);
   if (pagination.totalPages > 0 && page > pagination.totalPages) {
     const q = new URLSearchParams();
     if (activeTab !== 'ALL') q.set('type', activeTab);
     if (keyword) q.set('keyword', keyword);
     if (status) q.set('status', status);
+    if (clientId) q.set('clientId', clientId);
     q.set('page', String(pagination.totalPages));
     redirect(`/permissions?${q.toString()}`);
   }
@@ -63,6 +70,8 @@ export default async function PermissionsPage({ searchParams }: PageProps) {
         activeTab={activeTab}
         initialKeyword={keyword}
         initialStatus={status}
+        initialClientId={clientId}
+        clients={clients}
         menuOptions={menuOptions}
       />
     </div>
