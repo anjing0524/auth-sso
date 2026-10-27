@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import {
   TableCell, TableRow,
@@ -358,6 +359,7 @@ export default function RolesTable({ roles, pagination, initialKeyword, initialS
               <div className="space-y-2"><Label htmlFor="role-name">角色名称</Label><Input id="role-name" value={form.name} maxLength={100} onChange={e => setForm({...form, name: e.target.value})} placeholder="管理员" /></div>
               <div className="space-y-2"><Label htmlFor="role-code">角色编码</Label><Input id="role-code" value={form.code} maxLength={50} aria-invalid={fieldError?.field === 'code'} onChange={e => setForm({...form, code: e.target.value})} placeholder="admin" /></div>
               <FieldError failure={fieldError} field="code" />
+              <div className="space-y-2"><Label htmlFor="role-description">描述（可选）</Label><Textarea id="role-description" value={form.description} maxLength={500} rows={2} onChange={e => setForm({...form, description: e.target.value})} placeholder="例如：可管理用户、角色与审计日志" /></div>
               <div className="space-y-2"><Label htmlFor="role-dept">所属部门</Label>{renderDeptSelect(form.deptId, v => setForm({...form, deptId: v}), 'role-dept')}</div>
             </div>
             <DialogFooter><Button type="button" variant="outline" onClick={() => setIsAddOpen(false)}>取消</Button><Button type="submit" disabled={saving}>创建</Button></DialogFooter>
@@ -375,7 +377,14 @@ export default function RolesTable({ roles, pagination, initialKeyword, initialS
               {/* 编辑态的 code 是 disabled（不可改、也不会产生冲突码），但仍渲染错误——
                   否则 update 失败时既不弹 toast 也不内联，正是要消灭的静默路径 */}
               <FieldError failure={fieldError} field="code" />
-              <div className="space-y-2"><Label htmlFor="role-edit-dept">所属部门</Label>{renderDeptSelect(form.deptId, v => setForm({...form, deptId: v}), 'role-edit-dept')}</div>
+              <div className="space-y-2"><Label htmlFor="role-edit-description">描述（可选）</Label><Textarea id="role-edit-description" value={form.description} maxLength={500} rows={2} onChange={e => setForm({...form, description: e.target.value})} placeholder="例如：可管理用户、角色与审计日志" /></div>
+              <div className="space-y-2"><Label htmlFor="role-edit-dept">所属部门</Label>{renderDeptSelect(form.deptId, v => setForm({...form, deptId: v}), 'role-edit-dept')}
+                {selected && (boundUserCounts[selected.id] ?? 0) > 0 && (
+                  <p className="rounded bg-badge-warning-bg px-2 py-1 text-[10px] leading-4 text-badge-warning-fg">
+                    该角色已绑定 {boundUserCounts[selected.id]} 个用户；迁移部门前需先解除绑定，否则保存会被拒绝。
+                  </p>
+                )}
+              </div>
             </div>
             <DialogFooter><Button type="button" variant="outline" onClick={() => setIsEditOpen(false)}>取消</Button><Button type="submit" disabled={saving}>保存</Button></DialogFooter>
           </form>

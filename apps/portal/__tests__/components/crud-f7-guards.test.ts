@@ -1329,3 +1329,12 @@ describe('用户部门迁移（续一百九十八）', () => {
     expect(actions).toContain('不能修改自己的部门');
   });
 });
+
+describe('角色描述可编辑（续一百九十九）', () => {
+  it('新建/编辑都有描述输入；绑定用户时提示迁移约束', () => {
+    const src = read('src/app/(dashboard)/roles/components/RolesTable.tsx');
+    expect(src).toContain('id="role-description"');
+    expect(src).toContain('id="role-edit-description"');
+    expect(src).toContain('迁移部门前需先解除绑定');
+  });
+});
