@@ -198,7 +198,7 @@ export default function PermissionsTable({ permissions, pagination, activeTab, i
         <div className="flex flex-wrap items-center gap-2">
           <h1 className="type-section-title shrink-0 text-foreground">权限管理</h1>
           {tabsBar}
-          <SearchInput placeholder="搜索权限名称或编码..." value={keyword} onChange={handleSearch} />
+          <SearchInput className="md:w-[190px] xl:w-64" placeholder="搜索名称或编码" value={keyword} onChange={handleSearch} />
           <Select value={initialStatus || 'ALL'} onValueChange={(v) => startTransition(() => router.push(buildHref(1, keyword, activeTab, v === 'ALL' ? '' : v)))}>
             <SelectTrigger aria-label="过滤权限状态" className="w-full md:w-32">
               <SelectValue>

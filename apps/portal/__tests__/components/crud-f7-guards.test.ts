@@ -1575,3 +1575,11 @@ describe('1024 工具栏占位/计数（续二百二十三）', () => {
     expect(clients).toContain('hidden items-center gap-2 min-[1100px]:flex');
   });
 });
+
+describe('1024 权限工具栏一行（续二百二十四）', () => {
+  it('搜索收窄到 190 并缩短占位，状态筛选不再掉行', () => {
+    const src = read('src/app/(dashboard)/permissions/components/PermissionsTable.tsx');
+    expect(src).toContain('md:w-[190px] xl:w-64');
+    expect(src).toContain('搜索名称或编码');
+  });
+});
