@@ -21,6 +21,8 @@
 
 ## 变更记录
 
+- 2026-10-27（续二百〇四）: **个人资料头像/刷新**。action 支持 avatarUrl 但弹窗无字段；保存后不 refresh，页头仍旧。**修复**：编辑资料补头像 URL；保存后 router.refresh；头像留空清空。**验证**：设置头像保存后页头 img 更新，清空后 DB null；a11y 亮/暗 0；守卫 131 passed。
+
 - 2026-10-27（续二百〇三）: **角色排序/状态入口**。sort 决定默认顺序但无输入；status 支持停用但只能看徽章。**修复**：新建补排序；编辑补排序/状态；停用提示权限影响；API 测试补停用/恢复。**验证**：编辑 697px/创建 578px 正常；role action 11、rbac UI 23、守卫 130 passed；a11y 亮/暗 0；typecheck/build 0。
 
 - 2026-10-27（续二百〇二）: **应用 Logo 入口**。logoUrl 服务端支持且列表头像使用，但新建/详情没有输入。**修复**：新建补 Logo URL（可选+URL 校验），详情补 Logo URL（Portal 只读 disabled）。**验证**：新建/详情字段存在、详情 disabled；a11y 亮/暗 0；守卫 129 passed；typecheck/build 0。

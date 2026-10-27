@@ -186,9 +186,10 @@ function ChangePasswordDialog() {
  */
 function EditProfileDialog({ user }: { user: NonNullable<ProfileClientProps['user']> }) {
   const { reportFailure } = useFieldFailure();
+  const router = useRouter();
   const [open, setOpen] = React.useState(false);
   const [isPending, startTransition] = useTransition();
-  const [form, setForm] = React.useState({ name: user.name, email: user.email });
+  const [form, setForm] = React.useState({ name: user.name, email: user.email, avatarUrl: user.picture ?? '' });
 
   /** 处理表单字段变更 */
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -199,10 +200,11 @@ function EditProfileDialog({ user }: { user: NonNullable<ProfileClientProps['use
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     startTransition(async () => {
-      const res = await updateOwnProfileAction(form);
+      const res = await updateOwnProfileAction({ ...form, avatarUrl: form.avatarUrl.trim() || null });
       if (res.success) {
         toast.success(res.message ?? '资料已更新');
         setOpen(false);
+        router.refresh();
       } else {
         reportFailure(res);
       }
@@ -250,6 +252,18 @@ function EditProfileDialog({ user }: { user: NonNullable<ProfileClientProps['use
               onChange={handleChange}
               required
             />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="profile-avatar">头像 URL（可选）</Label>
+            <Input
+              id="profile-avatar"
+              name="avatarUrl"
+              type="url"
+              placeholder="https://example.com/avatar.png"
+              value={form.avatarUrl}
+              onChange={handleChange}
+            />
+            <p className="text-[10px] leading-4 text-muted-foreground">留空则显示姓名首字母。</p>
           </div>
           <DialogFooter className="pt-2">
             <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={isPending}>

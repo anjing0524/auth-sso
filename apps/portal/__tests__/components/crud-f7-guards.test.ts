@@ -1385,3 +1385,12 @@ describe('角色排序/状态入口（续二百〇三）', () => {
     expect(src).toContain('停用后绑定用户立即失去该角色权限');
   });
 });
+
+describe('个人资料头像/刷新（续二百〇四）', () => {
+  it('编辑资料有头像 URL；保存后刷新页面数据', () => {
+    const src = read('src/app/(dashboard)/profile/ProfileClient.tsx');
+    expect(src).toContain('id="profile-avatar"');
+    expect(src).toContain('avatarUrl: form.avatarUrl.trim() || null');
+    expect(src).toContain('router.refresh()');
+  });
+});
