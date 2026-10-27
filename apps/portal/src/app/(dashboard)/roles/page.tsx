@@ -2,6 +2,7 @@
  * 角色管理页面 — Server Component 读模型入口
  * 写操作通过 Server Actions (actions.ts) 执行
  */
+import { redirect } from 'next/navigation';
 import { getRoles, getRoleBoundUserCounts, getRolePermissionCounts } from './data';
 import { ENTITY_STATUS_VALUES } from '@auth-sso/contracts';
 import { db } from '@/infrastructure/db';
@@ -43,6 +44,14 @@ export default async function RolesPage({ searchParams }: PageProps) {
     getRoles({ page, pageSize: 20, keyword, status, scope, ...(sort ? { sort } : {}) }),
     getDepartmentOptions(scope),
   ]);
+  if (pagination.totalPages > 0 && page > pagination.totalPages) {
+    const q = new URLSearchParams();
+    if (keyword) q.set('keyword', keyword);
+    if (status) q.set('status', status);
+    if (sort) q.set('sort', sort);
+    q.set('page', String(pagination.totalPages));
+    redirect(`/roles?${q.toString()}`);
+  }
   // 删除确认的影响面（U-ROLES03）：只统计当前页角色，避免全表聚合
   const boundUserCounts = await getRoleBoundUserCounts(roles.map((r) => r.id));
   const permissionCounts = await getRolePermissionCounts(roles.map((r) => r.id));

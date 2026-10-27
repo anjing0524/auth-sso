@@ -6,6 +6,7 @@
  * - ClientsTable 为 Client Component，承载浏览器交互（搜索/复制/操作菜单）
  * - 写操作通过 Server Actions (actions.ts) 执行
  */
+import { redirect } from 'next/navigation';
 import { getClients } from './data';
 import { clampPage } from '@/lib/pagination';
 import ClientsTable from './components/ClientsTable';
@@ -43,6 +44,14 @@ export default async function ClientsPage({ searchParams }: PageProps) {
     sort,
   });
 
+  if (pagination.totalPages > 0 && page > pagination.totalPages) {
+    const q = new URLSearchParams();
+    if (keyword) q.set('keyword', keyword);
+    if (status) q.set('status', status);
+    if (sort) q.set('sort', sort);
+    q.set('page', String(pagination.totalPages));
+    redirect(`/clients?${q.toString()}`);
+  }
   // U-G02：搜索无结果与"系统还没有应用"是两种语义（空态文案/出口不同）。
   const isFiltered = keyword.length > 0 || status !== '';
 

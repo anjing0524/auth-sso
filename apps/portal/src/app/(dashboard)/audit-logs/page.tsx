@@ -12,6 +12,7 @@ import Link from 'next/link';
 import { LOGIN_EVENT_LABELS, AUDIT_OPERATION_LABELS, LOGIN_EVENT_VALUES, AUDIT_OPERATION_VALUES, AUDIT_PERMISSIONS, can, type AuditOperation, type LoginEventType } from '@auth-sso/contracts';
 import { AuditFilters } from './components/audit-filters';
 import { getLoginLogs, getAuditLogs, getAccessLogs, getAccessLogResourceTypes } from '@/app/audit/data';
+import { redirect } from 'next/navigation';
 import { clampPage } from '@/lib/pagination';
 import { resolveIdentity } from '@/lib/auth';
 import { getUserPermissionContext, toPermissionContextOrNull } from '@/lib/permissions';
@@ -155,6 +156,15 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
             ...(accessStatus ? { status: accessStatus } : {}),
             ...(validAccessResourceType ? { resourceType: validAccessResourceType } : {}),
           });
+
+  if (pagination.totalPages > 0 && page > pagination.totalPages) {
+    const q = new URLSearchParams();
+    for (const [key, value] of Object.entries(params)) {
+      if (key !== 'page' && typeof value === 'string' && value) q.set(key, value);
+    }
+    q.set('page', String(pagination.totalPages));
+    redirect(`/audit-logs?${q.toString()}`);
+  }
 
   // 当前筛选摘要：让"为什么列表是这些"可解释，并支持单个移除/一键清空
   const filterChips: Array<{ label: string; href: string }> = [];

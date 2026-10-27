@@ -2,6 +2,7 @@
  * 权限管理页面 — Server Component 读模型入口
  * 写操作通过 Server Actions (actions.ts) 执行
  */
+import { redirect } from 'next/navigation';
 import { getPermissionPage, getPermissions } from './data';
 import { ENTITY_STATUS_VALUES } from '@auth-sso/contracts';
 import { clampPage } from '@/lib/pagination';
@@ -42,6 +43,14 @@ export default async function PermissionsPage({ searchParams }: PageProps) {
     page,
     pageSize: 20,
   });
+  if (pagination.totalPages > 0 && page > pagination.totalPages) {
+    const q = new URLSearchParams();
+    if (activeTab !== 'ALL') q.set('type', activeTab);
+    if (keyword) q.set('keyword', keyword);
+    if (status) q.set('status', status);
+    q.set('page', String(pagination.totalPages));
+    redirect(`/permissions?${q.toString()}`);
+  }
   // 父级菜单候选需要全量目录/页面（getPermissions 是 "use cache" 读模型）
   const allPermissions = await getPermissions();
   const menuOptions = allPermissions.filter((p) => p.type === 'DIRECTORY' || p.type === 'PAGE');

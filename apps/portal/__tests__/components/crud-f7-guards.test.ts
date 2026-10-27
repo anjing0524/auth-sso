@@ -1170,3 +1170,18 @@ describe('部门移动目标过滤（续一百八十二）', () => {
     expect(src).toContain('目标列表已排除选中部门及其子部门');
   });
 });
+
+describe('越界分页回退末页（续一百八十三）', () => {
+  it('roles/clients/permissions/audit 在 page>totalPages 时 redirect 保留筛选', () => {
+    for (const f of [
+      'src/app/(dashboard)/roles/page.tsx',
+      'src/app/(dashboard)/clients/page.tsx',
+      'src/app/(dashboard)/permissions/page.tsx',
+      'src/app/(dashboard)/audit-logs/page.tsx',
+    ]) {
+      const src = read(f);
+      expect(src).toContain('page > pagination.totalPages');
+      expect(src).toContain('redirect(');
+    }
+  });
+});
