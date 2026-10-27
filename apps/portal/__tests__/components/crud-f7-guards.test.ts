@@ -1583,3 +1583,14 @@ describe('1024 权限工具栏一行（续二百二十四）', () => {
     expect(src).toContain('搜索名称或编码');
   });
 });
+
+describe('1024 审计工具栏两行（续二百二十五）', () => {
+  it('<1100 首行标题/页签/导出，次行筛选；占位缩短', () => {
+    const page = read('src/app/(dashboard)/audit-logs/page.tsx');
+    expect(page).toContain('order-2 ml-auto');
+    expect(page).toContain('order-3 w-full');
+    const filters = read('src/app/(dashboard)/audit-logs/components/audit-filters.tsx');
+    expect(filters).toContain('搜索用户 / IP');
+    expect(filters).not.toContain('搜索用户 / IP...');
+  });
+});
