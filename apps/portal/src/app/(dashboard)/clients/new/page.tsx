@@ -66,7 +66,7 @@ export default function NewClientPage() {
   /** 创建成功后的**一次性**凭证（H-C-03）：Secret 仅此刻可见 */
   const [created, setCreated] = useState<{ clientId: string; clientSecret: string | null } | null>(null);
   const [copied, setCopied] = useState(false);
-  const [errors, setErrors] = useState<{ name?: string; redirectUris?: string }>({});
+  const [errors, setErrors] = useState<{ name?: string; redirectUris?: string; logoUrl?: string }>({});
   const { reportFailure } = useFieldFailure();
   const [formData, setFormData] = useState(INITIAL_CLIENT_FORM);
   const isDirty = JSON.stringify(formData) !== JSON.stringify(INITIAL_CLIENT_FORM);
@@ -77,7 +77,7 @@ export default function NewClientPage() {
    * 且错误落不到字段上）。与服务端 Zod 同口径做一层快速反馈。
    */
   const validate = (): boolean => {
-    const next: { name?: string; redirectUris?: string } = {};
+    const next: { name?: string; redirectUris?: string; logoUrl?: string } = {};
     const name = formData.name.trim();
     if (!name) next.name = '应用名称不能为空';
     else if (name.length > 100) next.name = '应用名称最多 100 个字符';
@@ -89,6 +89,9 @@ export default function NewClientPage() {
       const invalid = uris.find((u) => !isHttpUrl(u) || u.length > 500);
       if (invalid) next.redirectUris = `回调地址格式不合法：${invalid.slice(0, 80)}`;
     }
+
+    const logo = formData.logoUrl.trim();
+    if (logo && (!isHttpUrl(logo) || logo.length > 500)) next.logoUrl = 'Logo 地址必须是合法的 http(s) URL';
 
     setErrors(next);
     return Object.keys(next).length === 0;
@@ -195,6 +198,19 @@ export default function NewClientPage() {
                   value={formData.homepageUrl}
                   onChange={e => setFormData({ ...formData, homepageUrl: e.target.value })}
                 />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="client-create-logo">Logo URL（可选）</Label>
+                <Input
+                  id="client-create-logo"
+                  type="url"
+                  placeholder="https://example.com/logo.png"
+                  aria-invalid={!!errors.logoUrl}
+                  value={formData.logoUrl}
+                  onChange={e => setFormData({ ...formData, logoUrl: e.target.value })}
+                />
+                {errors.logoUrl ? <p className="text-[11px] text-destructive">{errors.logoUrl}</p> : null}
+                <p className="text-[10px] text-muted-foreground">用于应用列表头像；不填则显示名称首字母。</p>
               </div>
             </CardContent>
           </Card>

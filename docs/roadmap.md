@@ -21,6 +21,8 @@
 
 ## 变更记录
 
+- 2026-10-27（续二百〇二）: **应用 Logo 入口**。logoUrl 服务端支持且列表头像使用，但新建/详情没有输入。**修复**：新建补 Logo URL（可选+URL 校验），详情补 Logo URL（Portal 只读 disabled）。**验证**：新建/详情字段存在、详情 disabled；a11y 亮/暗 0；守卫 129 passed；typecheck/build 0。
+
 - 2026-10-27（续二百〇一）: **权限状态/归属应用**。编辑页无状态控件（与 banner 矛盾）；API 权限 clientId 只能看不能绑定。**修复**：编辑补状态；API 补归属应用 Select；内置权限 type/clientId 双端锁定；校验归属应用。**验证**：内置 type/client disabled+hint；API 可选应用；action 8、UI/守卫 151 passed；a11y 亮/暗 0；typecheck/build 0。
 
 - 2026-10-27（续二百）: **部门排序/状态入口**。服务端支持 sort/status，但 UI 只能改名称/编码，状态徽章不可操作。**修复**：新建/编辑补排序；编辑补状态；根部门不可停用（UI+服务端）；停用影响提示；部门编辑弹窗纳入 a11y。**验证**：根部门 disabled+hint、子部门提示；部门 action 15、UI/守卫 150 passed；a11y 亮/暗 0；typecheck/build 0。

@@ -107,6 +107,18 @@ export function ClientInfoSection({
               </div>
             </div>
             <div className="space-y-1.5">
+              <Label htmlFor="client-detail-logo">Logo URL（可选）</Label>
+              <Input
+                id="client-detail-logo"
+                disabled={readOnly}
+                type="url"
+                value={formData.logoUrl}
+                onChange={(e) => onFormChange({ logoUrl: e.target.value })}
+                placeholder="https://example.com/logo.png"
+              />
+              <p className="text-[10px] leading-4 text-muted-foreground">用于应用列表头像；不填则显示名称首字母。</p>
+            </div>
+            <div className="space-y-1.5">
               <Label htmlFor="client-detail-scopes">默认权限范围（Scopes）</Label>
               <div className="flex flex-wrap gap-1.5">
                 {SCOPE_PRESETS.map((s) => {

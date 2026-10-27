@@ -1365,3 +1365,13 @@ describe('权限状态/归属应用入口（续二百〇一）', () => {
     expect(edit).toContain('clientId: permission.clientId');
   });
 });
+
+describe('应用 Logo 入口（续二百〇二）', () => {
+  it('新建/详情都有 Logo URL 输入并提交 logoUrl', () => {
+    const create = read('src/app/(dashboard)/clients/new/page.tsx');
+    expect(create).toContain('id="client-create-logo"');
+    expect(create).toContain('Logo 地址必须是合法的');
+    const detail = read('src/app/(dashboard)/clients/[id]/components/ClientInfoSection.tsx');
+    expect(detail).toContain('id="client-detail-logo"');
+  });
+});
