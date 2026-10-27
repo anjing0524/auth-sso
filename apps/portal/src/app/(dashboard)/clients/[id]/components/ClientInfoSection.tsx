@@ -118,8 +118,8 @@ export function ClientInfoSection({
                       aria-pressed={active}
                       disabled={readOnly}
                       onClick={() => toggleScope(s.value)}
-                      className={`h-7 rounded-md border px-2 text-xs transition-colors disabled:opacity-50 ${
-                        active ? 'border-primary/40 bg-primary/10 font-medium text-primary' : 'border-border text-muted-foreground hover:bg-muted'
+                      className={`h-7 rounded-md border px-2 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-100 ${
+                        active ? 'border-primary/40 bg-primary/10 font-medium text-foreground' : 'border-border text-muted-foreground hover:bg-muted'
                       }`}
                     >
                       {s.label}

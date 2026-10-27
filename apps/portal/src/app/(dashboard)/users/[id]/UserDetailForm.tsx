@@ -146,7 +146,7 @@ export default function UserDetailForm({ id, initialUser: serverUser, canUpdate,
         actions={
           <div className="flex flex-wrap items-center justify-start gap-2 lg:justify-end">
             {isDirty && (
-              <span role="status" className="rounded bg-warning/10 px-2 py-1 text-[11px] font-medium text-warning">
+              <span role="status" className="rounded bg-badge-warning-bg px-2 py-1 text-[11px] font-medium text-badge-warning-fg">
                 未保存的修改
               </span>
             )}
@@ -374,9 +374,9 @@ export default function UserDetailForm({ id, initialUser: serverUser, canUpdate,
               </CardContent>
             </Card>
 
-            <div className="flex items-start gap-2 rounded-lg border border-warning/20 bg-warning/10 px-3 py-2.5">
-              <AlertTriangle className="h-4 w-4 shrink-0 text-warning" />
-              <p className="text-[11px] leading-5 text-warning/90">
+            <div className="flex items-start gap-2 rounded-lg border border-badge-warning-fg/30 bg-badge-warning-bg px-3 py-2.5">
+              <AlertTriangle className="h-4 w-4 shrink-0 text-badge-warning-fg" />
+              <p className="text-[11px] leading-5 text-badge-warning-fg">
                 禁用或删除用户会立即撤销其在所有接入子系统中的活跃 Session，请谨慎操作。
               </p>
             </div>

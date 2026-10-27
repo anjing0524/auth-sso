@@ -438,7 +438,7 @@ export default function UserTable({ users, pagination, filters, isFiltered = fal
             {bulkTarget === 'DISABLED' ? '：禁用会立即撤销其所有活跃会话，无法登录' : '：恢复后用户可正常登录并保留原有角色'}。
           </DialogDescription>
           {lockedSelectedCount > 0 && (
-            <p className="rounded-md bg-warning/10 px-2 py-1.5 text-[11px] text-warning">
+            <p className="rounded-md bg-badge-warning-bg px-2 py-1.5 text-[11px] text-badge-warning-fg">
               {bulkTarget === 'DISABLED'
                 ? `其中 ${lockedSelectedCount} 个已锁定用户无法直接禁用，将被跳过。`
                 : `其中 ${lockedSelectedCount} 个已锁定用户将同时解锁，并清除登录失败计数。`}

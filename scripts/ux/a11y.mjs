@@ -15,6 +15,8 @@ const PATHS = [
   '/dashboard', '/users', '/roles', '/permissions', '/departments', '/clients',
   '/audit-logs', '/audit-logs?tab=operation', '/audit-logs?tab=access',
   '/profile', '/permissions/new', '/clients/new',
+  '/users/00000000-0000-0000-0000-000000000001',
+  '/clients/portal',
   '/users/00000000-0000-0000-0000-000000000001/roles',
   '/roles/ed11e8cd-0261-4985-a201-006c05a19f20/permissions',
 ];

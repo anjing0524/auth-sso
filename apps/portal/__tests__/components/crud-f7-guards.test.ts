@@ -1209,3 +1209,17 @@ describe('角色页对比度 token（续一百八十五）', () => {
     expect(perms).toContain('text-badge-success-fg');
   });
 });
+
+describe('详情页对比度 token（续一百八十六）', () => {
+  it('a11y 覆盖 16 路由；warning 软底统一 badge token；scope 选中不透明', () => {
+    const script = read('../../scripts/ux/a11y.mjs');
+    expect(script).toContain("'/clients/portal'");
+    expect(script).toContain("'/users/00000000-0000-0000-0000-000000000001'");
+    const detail = read('src/app/(dashboard)/users/[id]/UserDetailForm.tsx');
+    expect(detail).not.toContain('text-warning/90');
+    expect(detail).toContain('text-badge-warning-fg');
+    const client = read('src/app/(dashboard)/clients/[id]/components/ClientInfoSection.tsx');
+    expect(client).toContain('disabled:opacity-100');
+    expect(client).toContain('font-medium text-foreground');
+  });
+});

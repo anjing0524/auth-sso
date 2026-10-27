@@ -196,7 +196,7 @@ export function ClientDetailClient({ client, initialTokens, canUpdate }: ClientD
           <PermissionGuard permission={CLIENT_PERMISSIONS.UPDATE}>
             <div className="flex flex-wrap items-center gap-2">
               {isDirty && (
-                <span role="status" className="rounded bg-warning/10 px-2 py-1 text-[11px] font-medium text-warning">未保存的修改</span>
+                <span role="status" className="rounded bg-badge-warning-bg px-2 py-1 text-[11px] font-medium text-badge-warning-fg">未保存的修改</span>
               )}
               {isDirty && (
                 <Button variant="outline" size="sm" onClick={() => setFormData(savedForm)} disabled={saving}>放弃修改</Button>
