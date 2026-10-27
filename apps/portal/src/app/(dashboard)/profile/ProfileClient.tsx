@@ -445,7 +445,7 @@ export default function ProfileClient({
                   </div>
                   <div>
                     <dt className="text-[11px] text-muted-foreground">设备 / 客户端</dt>
-                    <dd className="mt-0.5 line-clamp-2 break-all text-[11px] text-muted-foreground">{session.userAgent ?? '-'}</dd>
+                    <dd className="mt-0.5 line-clamp-2 break-all text-[11px] text-muted-foreground" title={session.userAgent ?? '-'}>{session.userAgent ?? '-'}</dd>
                   </div>
                 </dl>
               ) : (

@@ -225,13 +225,24 @@ export default function UserRolesPage({ user, isSelf = false, returnHref }: User
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
           ) : displayRoles.length === 0 ? (
-            <p className="py-16 text-center text-sm text-muted-foreground">
-              {!user.deptId
-                ? '请先为该用户分配部门，再分配角色'
-                : keyword
-                  ? '没有匹配的角色'
-                  : '该部门下暂无可用角色，请先为部门创建角色'}
-            </p>
+            <div className="space-y-3 py-16 text-center">
+              <p className="text-sm text-muted-foreground">
+                {!user.deptId
+                  ? '请先为该用户分配部门，再分配角色'
+                  : keyword
+                    ? '没有匹配的角色'
+                    : '该部门下暂无可用角色，请先为部门创建角色'}
+              </p>
+              {!keyword && (
+                <Button asChild size="sm" variant="outline">
+                  {user.deptId ? (
+                    <Link href="/roles">前往角色管理</Link>
+                  ) : (
+                    <Link href={`/users/${user.id}`}>返回用户详情分配部门</Link>
+                  )}
+                </Button>
+              )}
+            </div>
           ) : (
             <div className="grid gap-2 xl:grid-cols-2">
               {displayRoles.map((role) => (

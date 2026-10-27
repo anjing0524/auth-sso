@@ -1556,3 +1556,12 @@ describe('1024 权限/应用表操作列（续二百二十一）', () => {
     expect(client).toContain('hidden w-[110px] min-[1100px]:table-cell');
   });
 });
+
+describe('空态出口/UA 完整值（续二百二十二）', () => {
+  it('无可用角色提供角色管理出口；UA 提供 title', () => {
+    const roles = read('src/app/(dashboard)/users/[id]/roles/roles-client.tsx');
+    expect(roles).toContain('前往角色管理');
+    const profile = read('src/app/(dashboard)/profile/ProfileClient.tsx');
+    expect(profile).toContain('title={session.userAgent ??');
+  });
+});
