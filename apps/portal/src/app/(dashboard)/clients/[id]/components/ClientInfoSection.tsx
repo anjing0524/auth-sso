@@ -95,9 +95,9 @@ export function ClientInfoSection({
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="client-homepage">主页 URL</Label>
+                <Label htmlFor="client-detail-homepage">主页 URL</Label>
                 <Input
-                  id="client-homepage"
+                  id="client-detail-homepage"
                   disabled={readOnly}
                   type="url"
                   value={formData.homepageUrl}
@@ -107,7 +107,7 @@ export function ClientInfoSection({
               </div>
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="client-scopes">默认权限范围（Scopes）</Label>
+              <Label htmlFor="client-detail-scopes">默认权限范围（Scopes）</Label>
               <div className="flex flex-wrap gap-1.5">
                 {SCOPE_PRESETS.map((s) => {
                   const active = selectedScopes.has(s.value);
@@ -128,7 +128,7 @@ export function ClientInfoSection({
                 })}
               </div>
               <Input
-                id="client-scopes"
+                id="client-detail-scopes"
                 disabled={readOnly}
                 value={formData.scopes}
                 onChange={(e) => onFormChange({ scopes: e.target.value })}
@@ -145,9 +145,9 @@ export function ClientInfoSection({
           </CardHeader>
           <CardContent className="space-y-3 p-3">
             <div className="space-y-1.5">
-              <Label htmlFor="client-redirect-uris">回调地址（每行一个）</Label>
+              <Label htmlFor="client-detail-redirect-uris">回调地址（每行一个）</Label>
               <Textarea
-                id="client-redirect-uris"
+                id="client-detail-redirect-uris"
                 disabled={readOnly}
                 rows={3}
                 value={formData.redirectUris}
@@ -165,9 +165,9 @@ export function ClientInfoSection({
           </CardHeader>
           <CardContent className="grid gap-3 p-3 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <Label htmlFor="client-at-ttl">Access Token 有效期（秒）</Label>
+              <Label htmlFor="client-detail-at-ttl">Access Token 有效期（秒）</Label>
               <Input
-                id="client-at-ttl"
+                id="client-detail-at-ttl"
                 disabled={readOnly}
                 type="number"
                 value={formData.accessTokenTtl}
@@ -186,9 +186,9 @@ export function ClientInfoSection({
               </div>
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="client-rt-ttl">Refresh Token 有效期（秒）</Label>
+              <Label htmlFor="client-detail-rt-ttl">Refresh Token 有效期（秒）</Label>
               <Input
-                id="client-rt-ttl"
+                id="client-detail-rt-ttl"
                 disabled={readOnly}
                 type="number"
                 value={formData.refreshTokenTtl}

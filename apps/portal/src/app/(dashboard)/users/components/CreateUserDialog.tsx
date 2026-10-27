@@ -142,9 +142,9 @@ export default function CreateUserDialog({ departments, canAssignRole = false }:
 
             <div className="grid gap-3">
               <div className="space-y-2">
-                <Label htmlFor="name" >显示名称</Label>
+                <Label htmlFor="create-user-name" >显示名称</Label>
                 <Input
-                  id="name"
+                  id="create-user-name"
                   name="name"
                   required
                   maxLength={100}
@@ -154,10 +154,10 @@ export default function CreateUserDialog({ departments, canAssignRole = false }:
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="username" >用户名（唯一标识）</Label>
+                <Label htmlFor="create-user-username" >用户名（唯一标识）</Label>
                 <Input
                   aria-invalid={fieldError?.field === 'username'}
-                  id="username"
+                  id="create-user-username"
                   name="username"
                   required
                   maxLength={50}
@@ -169,10 +169,10 @@ export default function CreateUserDialog({ departments, canAssignRole = false }:
                 <FieldError failure={fieldError} field="username" />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="email" >电子邮箱</Label>
+                <Label htmlFor="create-user-email" >电子邮箱</Label>
                 <Input
                   aria-invalid={fieldError?.field === 'email'}
-                  id="email"
+                  id="create-user-email"
                   name="email"
                   type="email"
                   required
@@ -184,10 +184,10 @@ export default function CreateUserDialog({ departments, canAssignRole = false }:
                 <FieldError failure={fieldError} field="email" />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="password" >初始密码</Label>
+                <Label htmlFor="create-user-password" >初始密码</Label>
                 <Input
                   aria-invalid={fieldError?.field === 'password'}
-                  id="password"
+                  id="create-user-password"
                   name="password"
                   type="password"
                   required
@@ -198,9 +198,9 @@ export default function CreateUserDialog({ departments, canAssignRole = false }:
                 <FieldError failure={fieldError} field="password" />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="deptId" >所属部门</Label>
+                <Label htmlFor="create-user-deptId" >所属部门</Label>
                 <Select value={deptId} onValueChange={setDeptId}>
-                  <SelectTrigger aria-label="所属部门">
+                  <SelectTrigger id="create-user-deptId" aria-label="所属部门">
                     <SelectValue>
                       {departments.find(d => d.id === deptId)?.name ?? departments[0]?.name}
                     </SelectValue>

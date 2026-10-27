@@ -129,9 +129,9 @@ export default function LoginForm({ sessionId, initialError }: LoginFormProps) {
             ) : null}
 
             <div className="space-y-2">
-              <Label htmlFor="email">登录邮箱</Label>
+              <Label htmlFor="login-email">登录邮箱</Label>
               <Input
-                id="email"
+                id="login-email"
                 type="text"
                 autoComplete="username"
                 placeholder="you@company.com"
@@ -144,10 +144,10 @@ export default function LoginForm({ sessionId, initialError }: LoginFormProps) {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="password">密码</Label>
+              <Label htmlFor="login-password">密码</Label>
               <div className="relative">
                 <Input
-                  id="password"
+                  id="login-password"
                   type={showPassword ? 'text' : 'password'}
                   autoComplete="current-password"
                   placeholder="••••••••"

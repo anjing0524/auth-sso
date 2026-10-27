@@ -21,6 +21,8 @@
 
 ## 变更记录
 
+- 2026-10-27（续一百六十四）: **跨路由表单 id 唯一化**。静态扫描发现登录/新建用户共用 `email/password`，客户端创建/详情共用 5 个字段 id；Next 路由过渡期会短暂同屏，形成重复 id（此前仅修了 client-name）。**修复**：登录 `login-*`、创建用户 `create-user-*`（含部门 Select）、客户端创建/详情分别 `client-create-*` / `client-detail-*`。**验证**：依次打开用户弹窗、客户端创建、客户端详情，DOM 重复 id **0**；标签关联正常；全量 **1250 passed**、e2e **13/13（45.0s）**、a11y 0、measure 0。
+
 - 2026-10-27（续一百六十三）: **审计导出移动端对齐 + 客户端表单 id 唯一化**。390 审计页「导出 CSV」孤立右对齐；新建应用与详情页都用 `id="client-name"`，Next 路由过渡期间 DOM 短暂重复 id。**修复**：导出容器/按钮移动端 `w-full`；创建页/详情页 id 分别改为 `client-create-name` / `client-detail-name`。**验证**：390 导出按钮宽 366、无溢出；路由过渡后客户端表单 id 唯一；注册 e2e 改用 `#client-detail-name` 通过；全量 **1249 passed**、e2e **13/13（50.4s）**、a11y 0、measure 0。
 
 - 2026-10-26（续一百六十二）: **当前设备标记（sid 方案）**。此前因 Gateway 在受保护路径剥离 refresh cookie，Portal 无法读取当前会话；改用签发链路：AT 增 `sid` claim（= 当前 refresh 行 id），授权码兑换生成 sessionId 并落 RT 行；轮换时 `sid=newRtId`。**UI**：个人中心用 `claims.sid` 与会话 id 比对，显示「当前设备」徽章并隐藏撤销（引导用「退出当前会话」）。**验证**：API 单测 sid 写入/缺省；e2e 两台设备当前设备标记正确，撤销最新会话后两台设备该行均消失；全量 **1248 passed**、e2e **13/13（42.8s）**、a11y 0、measure 0；typecheck/lint/build 0。

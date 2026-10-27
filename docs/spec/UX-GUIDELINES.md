@@ -67,6 +67,7 @@
 - 底部主操作固定可见；校验就地显示；提交中禁用并显示进度文案。
 - 弹窗内边距：`DialogFooter` 的负边距/内边距必须与 `DialogContent` 对齐，页脚不得比卡片多出 1px（否则产生内部滚动与阴影错位）。
 - 短视口兜底：常规高度弹窗不得内部滚动；200% 缩放/矮屏（内容真实超出 `100dvh`）允许 `DialogContent` 受限滚动 + `DialogFooter` sticky，优先保证不裁切、主操作可见。
+- 表单 id：跨路由复用的字段必须带页面前缀（如 `login-email` / `create-user-email` / `client-detail-*`），避免 Next 路由过渡期重复 id。
 - **禁止把多字段表单塞进弹窗**（600px 视口高度放不下就必须页面）。
 
 ### 3.4 分配/授权页（Assignment）

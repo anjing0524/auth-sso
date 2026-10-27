@@ -974,3 +974,20 @@ describe('审计导出一致性/客户端唯一 id（续一百六十三）', () 
     expect(detail).not.toContain('id="client-name"');
   });
 });
+
+describe('跨路由表单 id 唯一（续一百六十四）', () => {
+  it('登录/创建用户/客户端创建与详情使用页面前缀 id', () => {
+    const login = read('src/app/login/login-form.tsx');
+    expect(login).toContain('id="login-email"');
+    expect(login).toContain('id="login-password"');
+    const createUser = read('src/app/(dashboard)/users/components/CreateUserDialog.tsx');
+    expect(createUser).toContain('id="create-user-email"');
+    expect(createUser).toContain('id="create-user-deptId"');
+    const clientCreate = read('src/app/(dashboard)/clients/new/page.tsx');
+    const clientDetail = read('src/app/(dashboard)/clients/[id]/components/ClientInfoSection.tsx');
+    for (const f of ['homepage', 'redirect-uris', 'scopes', 'at-ttl', 'rt-ttl']) {
+      expect(clientCreate).toContain(`id="client-create-${f}"`);
+      expect(clientDetail).toContain(`id="client-detail-${f}"`);
+    }
+  });
+});

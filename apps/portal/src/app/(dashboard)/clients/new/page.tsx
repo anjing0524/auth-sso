@@ -182,9 +182,9 @@ export default function NewClientPage() {
                 ) : null}
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="client-homepage">主页 URL（可选）</Label>
+                <Label htmlFor="client-create-homepage">主页 URL（可选）</Label>
                 <Input
-                  id="client-homepage"
+                  id="client-create-homepage"
                   type="url"
                   placeholder="https://example.com"
                   value={formData.homepageUrl}
@@ -203,9 +203,9 @@ export default function NewClientPage() {
             </CardHeader>
             <CardContent className="space-y-3 p-3">
               <div className="space-y-1.5">
-                <Label htmlFor="client-redirect-uris">回调地址（每行一个） <span className="text-destructive">*</span></Label>
+                <Label htmlFor="client-create-redirect-uris">回调地址（每行一个） <span className="text-destructive">*</span></Label>
                 <Textarea
-                  id="client-redirect-uris"
+                  id="client-create-redirect-uris"
                   placeholder={'https://your-app.example.com/api/auth/callback\nhttp://localhost:3000/api/auth/callback'}
                   maxLength={2000}
                   aria-invalid={!!errors.redirectUris}
@@ -223,7 +223,7 @@ export default function NewClientPage() {
                 )}
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="client-scopes">默认权限范围（Scopes）</Label>
+                <Label htmlFor="client-create-scopes">默认权限范围（Scopes）</Label>
                 <div className="flex flex-wrap gap-1.5">
                   {SCOPE_PRESETS.map((s) => {
                     const active = selectedScopes.has(s.value);
@@ -243,7 +243,7 @@ export default function NewClientPage() {
                   })}
                 </div>
                 <Input
-                  id="client-scopes"
+                  id="client-create-scopes"
                   value={formData.scopes}
                   onChange={e => setFormData({ ...formData, scopes: e.target.value })}
                   aria-label="Scopes（空格分隔）"
@@ -265,9 +265,9 @@ export default function NewClientPage() {
             </CardHeader>
             <CardContent className="space-y-3 p-3">
               <div className="space-y-1.5">
-                <Label htmlFor="client-at-ttl">Access Token 有效期（秒）</Label>
+                <Label htmlFor="client-create-at-ttl">Access Token 有效期（秒）</Label>
                 <Input
-                  id="client-at-ttl"
+                  id="client-create-at-ttl"
                   type="number"
                   min={60}
                   value={formData.accessTokenTtl}
@@ -287,9 +287,9 @@ export default function NewClientPage() {
                 </div>
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="client-rt-ttl">Refresh Token 有效期（秒）</Label>
+                <Label htmlFor="client-create-rt-ttl">Refresh Token 有效期（秒）</Label>
                 <Input
-                  id="client-rt-ttl"
+                  id="client-create-rt-ttl"
                   type="number"
                   min={300}
                   value={formData.refreshTokenTtl}
