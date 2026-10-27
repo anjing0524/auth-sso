@@ -1263,3 +1263,13 @@ describe('系统角色只读说明（续一百九十）', () => {
     expect(src).toContain('{role.isSystem && (');
   });
 });
+
+describe('a11y 弹窗覆盖（续一百九十一）', () => {
+  it('脚本打开用户/角色/权限/改密/重置弹窗并测量 dialog 对比度', () => {
+    const script = read('../../scripts/ux/a11y.mjs');
+    expect(script).toContain('DIALOG_CASES');
+    expect(script).toContain("dialog:${item.name}");
+    expect(script).toContain('users-create');
+    expect(script).toContain('user-reset-password');
+  });
+});

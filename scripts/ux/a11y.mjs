@@ -109,6 +109,30 @@ await loginPage.waitForTimeout(300);
 report.contrast['/login'] = await measureContrast(loginPage, 'body *');
 await loginContext.close();
 
+// 弹窗内容对比度（默认页面路径覆盖不到）
+const DIALOG_CASES = [
+  { path: '/users', name: 'users-create', open: async () => page.getByRole('button', { name: '新建用户' }).click() },
+  { path: '/roles', name: 'roles-create', open: async () => page.getByRole('button', { name: '新建角色' }).click() },
+  { path: '/permissions', name: 'permissions-delete', open: async () => page.locator('button[aria-label^="删除权限"]').first().click() },
+  { path: '/profile', name: 'profile-password', open: async () => page.getByRole('button', { name: '修改密码' }).click() },
+  { path: '/users/00000000-0000-0000-0000-000000000001', name: 'user-reset-password', open: async () => page.getByRole('button', { name: '重置密码' }).click() },
+];
+for (const item of DIALOG_CASES) {
+  await page.goto(BASE + item.path, { waitUntil: 'networkidle' });
+  await page.waitForTimeout(200);
+  try {
+    await item.open();
+    await page.waitForTimeout(200);
+    if (await page.locator('[role="dialog"]').count()) {
+      report.contrast[`dialog:${item.name}`] = await measureContrast(page, '[role="dialog"] *');
+    }
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(150);
+  } catch {
+    // 权限/数据差异导致入口不存在时跳过
+  }
+}
+
 // 键盘：跳转链接 → 新建用户 → Enter 打开 → Esc 关闭 + 焦点归还
 await page.goto(`${BASE}/users`, { waitUntil: 'networkidle' });
 await page.keyboard.press('Tab');
