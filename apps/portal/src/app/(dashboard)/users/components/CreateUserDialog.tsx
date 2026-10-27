@@ -133,7 +133,7 @@ export default function CreateUserDialog({ departments, canAssignRole = false }:
 
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
         <DialogContent>
-          <form action={formAction} className="space-y-3">
+          <form action={formAction} className="space-y-2.5">
             <DialogHeader>
               <DialogTitle>新建用户</DialogTitle>
               <DialogDescription className="text-muted-foreground font-medium">
@@ -141,7 +141,7 @@ export default function CreateUserDialog({ departments, canAssignRole = false }:
               </DialogDescription>
             </DialogHeader>
 
-            <div className="grid gap-3">
+            <div className="grid gap-2.5">
               <div className="space-y-2">
                 <Label htmlFor="create-user-name" >显示名称</Label>
                 <Input

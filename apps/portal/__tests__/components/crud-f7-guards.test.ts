@@ -1528,3 +1528,11 @@ describe('角色弹窗 600px 不滚动（续二百一十八）', () => {
     expect(src).toContain('grid gap-3 py-4 sm:grid-cols-2');
   });
 });
+
+describe('新建用户弹窗 600px 不滚动（续二百一十九）', () => {
+  it('表单与字段网格使用 2.5 间距', () => {
+    const src = read('src/app/(dashboard)/users/components/CreateUserDialog.tsx');
+    expect(src).toContain('space-y-2.5');
+    expect(src).toContain('grid gap-2.5');
+  });
+});
