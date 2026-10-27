@@ -8,6 +8,7 @@
  * 因此改为独立路由：/permissions/new 与 /permissions/:id/edit。
  */
 import { useMemo, useState } from 'react';
+import { useUnsavedChangesGuard } from '@/hooks/use-unsaved-changes-guard';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
@@ -64,6 +65,9 @@ export default function PermissionForm({ mode, menuOptions, permission }: Permis
     parentId: permission?.parentId ?? '',
     sort: permission?.sort ?? 0,
   });
+  const [savedForm] = useState(form);
+  const isDirty = JSON.stringify(form) !== JSON.stringify(savedForm);
+  const leaveGuard = useUnsavedChangesGuard(isDirty);
   const [saving, setSaving] = useState(false);
   const isMenu = form.type !== 'API';
   const { fieldError, reportFailure, clearFailure } = useFieldFailure(['code']);
@@ -219,6 +223,7 @@ export default function PermissionForm({ mode, menuOptions, permission }: Permis
           <Button type="submit" size="sm" disabled={saving}>{saving ? '保存中...' : mode === 'create' ? '创建' : '保存'}</Button>
         </div>
       </form>
+      {leaveGuard}
     </div>
   );
 }

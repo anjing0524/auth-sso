@@ -1052,3 +1052,10 @@ describe('未保存离开守卫（续一百七十）', () => {
     expect(hook).toContain('离开并放弃未保存的修改？');
   });
 });
+
+describe('长表单未保存守卫（续一百七十一）', () => {
+  it('新建应用/权限表单接入离开守卫', () => {
+    expect(read('src/app/(dashboard)/clients/new/page.tsx')).toContain('useUnsavedChangesGuard(isDirty)');
+    expect(read('src/app/(dashboard)/permissions/permission-form.tsx')).toContain('useUnsavedChangesGuard(isDirty)');
+  });
+});

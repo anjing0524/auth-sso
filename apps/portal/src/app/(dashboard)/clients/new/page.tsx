@@ -10,6 +10,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useUnsavedChangesGuard } from '@/hooks/use-unsaved-changes-guard';
 import { useRouter } from 'next/navigation';
 import { useFieldFailure } from '@/hooks/use-field-failure';
 import { AppWindow, Check, Copy, Plus, ShieldCheck, Timer } from 'lucide-react';
@@ -49,6 +50,16 @@ const SCOPE_PRESETS = [
   { value: 'offline_access', label: 'offline_access（离线刷新）' },
 ];
 
+const INITIAL_CLIENT_FORM = {
+  name: '',
+  redirectUris: '',
+  scopes: 'openid profile email',
+  homepageUrl: '',
+  logoUrl: '',
+  accessTokenTtl: 3600,
+  refreshTokenTtl: 604800,
+};
+
 export default function NewClientPage() {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
@@ -57,15 +68,9 @@ export default function NewClientPage() {
   const [copied, setCopied] = useState(false);
   const [errors, setErrors] = useState<{ name?: string; redirectUris?: string }>({});
   const { reportFailure } = useFieldFailure();
-  const [formData, setFormData] = useState({
-    name: '',
-    redirectUris: '',
-    scopes: 'openid profile email',
-    homepageUrl: '',
-    logoUrl: '',
-    accessTokenTtl: 3600,
-    refreshTokenTtl: 604800,
-  });
+  const [formData, setFormData] = useState(INITIAL_CLIENT_FORM);
+  const isDirty = JSON.stringify(formData) !== JSON.stringify(INITIAL_CLIENT_FORM);
+  const leaveGuard = useUnsavedChangesGuard(isDirty);
 
   /**
    * U-CLIENT02：前端格式校验（此前只有"必填 toast"，非法回调地址要等服务端往返后才报错，
@@ -360,6 +365,7 @@ export default function NewClientPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {leaveGuard}
     </div>
   );
 }
