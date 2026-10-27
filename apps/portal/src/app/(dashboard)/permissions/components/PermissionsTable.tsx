@@ -175,7 +175,7 @@ export default function PermissionsTable({ permissions, pagination, activeTab, i
     },
     { key: 'name', header: '名称' },
     { key: 'code', header: '权限编码', className: 'hidden md:table-cell' },
-    { key: 'type', header: '类型', className: 'hidden md:table-cell' },
+    { key: 'type', header: '类型', className: 'hidden min-[1100px]:table-cell' },
     { key: 'status', header: '状态' },
     { key: 'actions', header: '操作', className: 'text-right' },
   ];
@@ -270,7 +270,7 @@ export default function PermissionsTable({ permissions, pagination, activeTab, i
           </span>
         )}
       </TableCell>
-      <TableCell className="hidden md:table-cell">
+      <TableCell className="hidden min-[1100px]:table-cell">
         <Badge variant="outline" className="gap-1">
           {TYPE_ICONS[p.type] || null} {TYPE_LABELS[p.type] ?? p.type}
         </Badge>

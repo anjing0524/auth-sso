@@ -1544,6 +1544,15 @@ describe('1024 桌面列表不裁切（续二百二十）', () => {
     expect(users).toContain('hidden xl:table-cell');
     const clients = read('src/app/(dashboard)/clients/components/ClientsTable.tsx');
     expect(clients).toContain('hidden xl:table-cell');
-    expect(clients).toContain('hidden w-[110px] lg:table-cell');
+    expect(clients).toContain('hidden w-[110px] min-[1100px]:table-cell');
+  });
+});
+
+describe('1024 权限/应用表操作列（续二百二十一）', () => {
+  it('权限类型/应用最近使用在 <1100 隐藏，操作列不裁切', () => {
+    const perm = read('src/app/(dashboard)/permissions/components/PermissionsTable.tsx');
+    expect(perm).toContain('hidden min-[1100px]:table-cell');
+    const client = read('src/app/(dashboard)/clients/components/ClientsTable.tsx');
+    expect(client).toContain('hidden w-[110px] min-[1100px]:table-cell');
   });
 });

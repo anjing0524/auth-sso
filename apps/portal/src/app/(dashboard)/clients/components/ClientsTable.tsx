@@ -181,7 +181,7 @@ export default function ClientsTable({ clients, pagination, initialKeyword, init
     { key: 'detail', header: '应用详情', className: 'w-[280px]' },
     { key: 'clientId', header: '身份标识 (Client ID)', className: 'hidden md:table-cell' },
     { key: 'redirectUris', header: '回调白名单 (Redirect URIs)', className: 'hidden xl:table-cell' },
-    { key: 'lastUsed', header: '最近使用', className: 'hidden w-[110px] lg:table-cell' },
+    { key: 'lastUsed', header: '最近使用', className: 'hidden w-[110px] min-[1100px]:table-cell' },
     { key: 'status', header: '运行状态' },
     { key: 'actions', header: '操作', className: 'text-right' },
   ];
@@ -293,7 +293,7 @@ export default function ClientsTable({ clients, pagination, initialKeyword, init
           )}
         </div>
       </TableCell>
-      <TableCell className="hidden lg:table-cell">
+      <TableCell className="hidden min-[1100px]:table-cell">
         <span className="text-[12px] text-muted-foreground" title={client.lastUsedAt ?? '尚未签发过 token'}>
           {client.lastUsedAt ? formatDate(client.lastUsedAt) : '从未'}
         </span>
