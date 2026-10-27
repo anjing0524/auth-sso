@@ -126,6 +126,15 @@ describe('Permission Server Actions', () => {
       if (r.success) expect.unreachable('应当被拒绝（生产契约：失败信封）');
       expect(r.error).toBe(COMMON_ERRORS.NOT_FOUND);
     });
+
+    it('内置权限不可修改类型（编码被服务端引用）', async () => {
+      await seedTestData(td.db, { permissions: seedTestPermission({ code: 'portal:user:list' }) });
+
+      const r: any = await updatePermissionAction(PERM_ID, { type: 'PAGE', path: '/x' } as any);
+
+      if (r.success) expect.unreachable('内置权限改类型应被拒绝');
+      expect(r.message).toContain('内置权限不可修改类型');
+    });
   });
 
   describe('deletePermissionAction', () => {

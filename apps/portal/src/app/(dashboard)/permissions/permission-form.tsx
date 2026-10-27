@@ -22,6 +22,7 @@ import { PageHeader } from '@/components/shared/page-header';
 import { FieldError } from '@/components/shared/field-error';
 import { ICON_MAP } from '@/lib/icon-map';
 import { useFieldFailure } from '@/hooks/use-field-failure';
+import { ALL_PERMISSIONS } from '@auth-sso/contracts';
 
 import { createPermissionAction, updatePermissionAction } from './actions';
 
@@ -69,6 +70,7 @@ export default function PermissionForm({ mode, menuOptions, permission }: Permis
   const isDirty = JSON.stringify(form) !== JSON.stringify(savedForm);
   const leaveGuard = useUnsavedChangesGuard(isDirty);
   const [saving, setSaving] = useState(false);
+  const isBuiltin = mode === 'edit' && permission ? (ALL_PERMISSIONS as readonly string[]).includes(permission.code) : false;
   const isMenu = form.type !== 'API';
   const { fieldError, reportFailure, clearFailure } = useFieldFailure(['code']);
 
@@ -142,6 +144,12 @@ export default function PermissionForm({ mode, menuOptions, permission }: Permis
         description={mode === 'create' ? '权限编码创建后不可变更；页面/目录类型需要路由与图标' : `编码：${form.code}（创建后不可变更）`}
       />
 
+      {isBuiltin && (
+        <div className="rounded-lg border border-border/70 bg-muted/50 px-3 py-2 text-[11px] leading-5 text-foreground">
+          内置权限：编码被服务端代码引用，不可修改编码、不可删除；可调整名称/描述/状态，禁用后立即影响所有已授权角色。
+        </div>
+      )}
+
       <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col gap-3">
         <div className="rounded-lg border border-border/70 bg-card shadow-sm">
           <div className="border-b bg-muted/30 px-3 py-2 text-[13px] font-medium">基本信息</div>
@@ -161,7 +169,7 @@ export default function PermissionForm({ mode, menuOptions, permission }: Permis
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="perm-type">类型</Label>
-              <Select value={form.type} onValueChange={v => setForm({ ...form, type: v })}>
+              <Select value={form.type} onValueChange={v => setForm({ ...form, type: v })} disabled={isBuiltin}>
                 <SelectTrigger id="perm-type"><SelectValue>{TYPE_LABELS[form.type] ?? form.type}</SelectValue></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="API">接口（API）</SelectItem>

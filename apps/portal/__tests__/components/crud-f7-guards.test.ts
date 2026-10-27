@@ -1294,3 +1294,15 @@ describe('桌面工具栏层级（续一百九十五）', () => {
     expect(table).toContain('statusCounts?.active');
   });
 });
+
+describe('内置权限类型锁定（续一百九十六）', () => {
+  it('UI 禁用类型 + 服务端拒绝内置 type 变更', () => {
+    const form = read('src/app/(dashboard)/permissions/permission-form.tsx');
+    expect(form).toContain('disabled={isBuiltin}');
+    expect(form).toContain('内置权限：编码被服务端代码引用');
+    const actions = read('src/app/(dashboard)/permissions/actions.ts');
+    expect(actions).toContain('内置权限不可修改类型');
+    const table = read('src/app/(dashboard)/permissions/components/PermissionsTable.tsx');
+    expect(table).toContain('内置');
+  });
+});

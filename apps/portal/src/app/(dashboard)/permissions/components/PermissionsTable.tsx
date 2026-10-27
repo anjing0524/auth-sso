@@ -238,7 +238,14 @@ export default function PermissionsTable({ permissions, pagination, activeTab, i
         </PermissionGuard>
       </TableCell>
       <TableCell className="font-medium">
-        <span className="block max-w-[135px] truncate md:max-w-[240px]" title={p.name}>{p.name}</span>
+        <span className="flex items-center gap-1.5">
+          <span className="block max-w-[120px] truncate md:max-w-[210px]" title={p.name}>{p.name}</span>
+          {isBuiltinPermission(p.code) && (
+            <Badge variant="secondary" className="h-4 shrink-0 px-1 text-[9px]" title="服务端代码引用，不可删除；可修改名称/状态">
+              内置
+            </Badge>
+          )}
+        </span>
         <span className="mt-0.5 block max-w-[135px] truncate font-mono text-[10px] font-normal text-muted-foreground md:hidden" title={p.code}>
           {TYPE_LABELS[p.type] ?? p.type} · {p.code}
         </span>

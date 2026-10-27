@@ -191,6 +191,11 @@ export const updatePermissionAction = withAuth(
 
       await assertParentAssignment(tx, row.id, v.data.parentId);
 
+      // 内置权限的 type 是结构性字段（编码被服务端引用）；只允许改名/描述/状态，不允许切换类型
+      if (RESERVED_PERMISSION_CODES.has(row.code) && v.data.type && v.data.type !== row.type) {
+        throw new BusinessRuleViolationError('内置权限不可修改类型；如需不同形态请新建权限');
+      }
+
       const merged = applyPermissionUpdate(permissionFromPersistence(row), v.data);
       // 类型转换归一（H-B-04）：先按 type 清理专属字段，再校验该类型必填字段
       const normalized = normalizePermissionTypeFields(merged);
