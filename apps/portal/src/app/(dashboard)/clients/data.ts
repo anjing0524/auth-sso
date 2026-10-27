@@ -5,7 +5,7 @@ import 'server-only';
 
 import { cacheLife, cacheTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
-import { ilike, eq, or, desc, asc, and, gt, isNull, inArray, max } from 'drizzle-orm';
+import { ilike, eq, or, desc, asc, and, gt, isNull, inArray, max, count } from 'drizzle-orm';
 import { ENTITY_STATUS_VALUES, type EntityStatus } from '@auth-sso/contracts';
 import { asEntityStatus } from '@/lib/type-guards';
 import { withPagination, countRows, offsetFor, normalizePagination } from '@/lib/pagination';
@@ -198,4 +198,20 @@ export async function getClientTokens(
     countRows(schema.refreshTokens, whereClause),
     toClientTokenDTO,
   );
+}
+
+
+/** 应用状态全局计数（与列表分页解耦；用于列表标题处的状态概览） */
+export async function getClientStatusCounts(): Promise<{ active: number; disabled: number }> {
+  'use cache';
+  cacheLife('minutes');
+  cacheTag('clients-list');
+
+  const rows = await db
+    .select({ status: schema.clients.status, count: count() })
+    .from(schema.clients)
+    .groupBy(schema.clients.status);
+  const active = Number(rows.find((r) => r.status === 'ACTIVE')?.count ?? 0);
+  const disabled = Number(rows.find((r) => r.status === 'DISABLED')?.count ?? 0);
+  return { active, disabled };
 }

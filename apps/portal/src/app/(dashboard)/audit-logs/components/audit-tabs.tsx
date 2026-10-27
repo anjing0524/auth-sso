@@ -81,7 +81,7 @@ export function AuditTabs({ tab, hrefs }: { tab: AuditTab; hrefs: Record<AuditTa
             href={hrefs[value]}
             onFocus={() => setFocused(value)}
             onKeyDown={(event) => onKeyDown(event, value)}
-            className={`inline-flex h-8 items-center rounded-md px-3 text-sm font-medium transition-colors ${
+            className={`inline-flex h-8 items-center rounded-md px-2.5 text-sm font-medium transition-colors ${
               selected
                 ? 'bg-background text-foreground shadow-sm'
                 : 'text-muted-foreground hover:text-foreground'

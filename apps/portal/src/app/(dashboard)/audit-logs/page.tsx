@@ -216,7 +216,7 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
     <div className="flex min-h-0 flex-1 flex-col gap-3">
 
       {/* 标题 + 页签 + 类型筛选 + 导出：压缩为同一行（搜索/标题不应各占一整行） */}
-      <div className="flex shrink-0 flex-wrap items-center gap-3">
+      <div className="flex shrink-0 flex-wrap items-center gap-1.5 xl:gap-3">
         <h1 className="type-section-title shrink-0 text-foreground">审计日志</h1>
         <AuditTabs tab={tab} hrefs={{ login: pageHref('login', 1, null, null, range, keyword, chipStartDate, chipEndDate), operation: pageHref('operation', 1, null, null, range, keyword, chipStartDate, chipEndDate), access: pageHref('access', 1, null, null, range, keyword, chipStartDate, chipEndDate, accessStatus, validAccessResourceType) }} />
         <AuditFilters

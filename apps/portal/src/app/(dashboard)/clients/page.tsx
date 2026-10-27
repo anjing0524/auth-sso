@@ -7,7 +7,7 @@
  * - 写操作通过 Server Actions (actions.ts) 执行
  */
 import { redirect } from 'next/navigation';
-import { getClients } from './data';
+import { getClients, getClientStatusCounts } from './data';
 import { clampPage } from '@/lib/pagination';
 import ClientsTable from './components/ClientsTable';
 
@@ -36,13 +36,10 @@ export default async function ClientsPage({ searchParams }: PageProps) {
   const sort = (['recent', 'updated', 'name'] as const).includes(params.sort as never) ? (params.sort as string) : 'recent';
   const page = clampPage(params.page);
 
-  const { data: clients, pagination } = await getClients({
-    page,
-    pageSize: 20,
-    keyword,
-    status,
-    sort,
-  });
+  const [{ data: clients, pagination }, statusCounts] = await Promise.all([
+    getClients({ page, pageSize: 20, keyword, status, sort }),
+    getClientStatusCounts(),
+  ]);
 
   if (pagination.totalPages > 0 && page > pagination.totalPages) {
     const q = new URLSearchParams();
@@ -57,7 +54,7 @@ export default async function ClientsPage({ searchParams }: PageProps) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
-      <ClientsTable clients={clients} pagination={pagination} initialKeyword={keyword} initialStatus={status} initialSort={sort} isFiltered={isFiltered} clearHref="/clients" />
+      <ClientsTable clients={clients} pagination={pagination} initialKeyword={keyword} initialStatus={status} initialSort={sort} isFiltered={isFiltered} clearHref="/clients" statusCounts={statusCounts} />
     </div>
   );
 }

@@ -1280,3 +1280,17 @@ describe('桌面侧栏宽度（续一百九十四）', () => {
     expect(src).toContain('const SIDEBAR_WIDTH = "14rem"');
   });
 });
+
+describe('桌面工具栏层级（续一百九十五）', () => {
+  it('审计头部紧凑类；应用计数用全局数据源', () => {
+    const audit = read('src/app/(dashboard)/audit-logs/page.tsx');
+    expect(audit).toContain('gap-1.5 xl:gap-3');
+    const filters = read('src/app/(dashboard)/audit-logs/components/audit-filters.tsx');
+    expect(filters).toContain('md:w-36 xl:w-44');
+    const page = read('src/app/(dashboard)/clients/page.tsx');
+    expect(page).toContain('getClientStatusCounts');
+    expect(page).toContain('statusCounts={statusCounts}');
+    const table = read('src/app/(dashboard)/clients/components/ClientsTable.tsx');
+    expect(table).toContain('statusCounts?.active');
+  });
+});

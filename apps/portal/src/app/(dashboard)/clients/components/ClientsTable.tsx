@@ -77,9 +77,11 @@ interface Props {
   isFiltered?: boolean;
   /** 「清除筛选」目标地址（回第 1 页、清空 keyword） */
   clearHref?: string;
+  /** 全局状态计数（与分页无关，用于标题处概览） */
+  statusCounts?: { active: number; disabled: number };
 }
 
-export default function ClientsTable({ clients, pagination, initialKeyword, initialStatus = '', initialSort = 'recent', isFiltered = false, clearHref = '/clients' }: Props) {
+export default function ClientsTable({ clients, pagination, initialKeyword, initialStatus = '', initialSort = 'recent', isFiltered = false, clearHref = '/clients' , statusCounts}: Props) {
   const router = useRouter();
   const [keyword, setKeyword] = useState(initialKeyword);
   const searchParams = useSearchParams();
@@ -171,8 +173,8 @@ export default function ClientsTable({ clients, pagination, initialKeyword, init
     }
   };
 
-  const activeCount = clients.filter(c => c.status === 'ACTIVE').length;
-  const disabledCount = clients.filter(c => c.status === 'DISABLED').length;
+  const activeCount = statusCounts?.active ?? clients.filter(c => c.status === 'ACTIVE').length;
+  const disabledCount = statusCounts?.disabled ?? clients.filter(c => c.status === 'DISABLED').length;
 
   const columns = [
     { key: 'detail', header: '应用详情', className: 'w-[280px]' },
@@ -187,11 +189,13 @@ export default function ClientsTable({ clients, pagination, initialKeyword, init
     <TableToolbar
       left={
         <div className="flex min-w-0 flex-col gap-2 md:flex-row md:items-center md:gap-3">
-          <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
             <h1 className="shrink-0 text-[15px] font-semibold tracking-tight text-foreground">应用管理</h1>
+            <Badge variant="success" className="h-5 px-1.5 text-[10px]">启用 {activeCount}</Badge>
+            <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">停用 {disabledCount}</Badge>
           </div>
           <div className="grid w-full grid-cols-2 gap-2 md:flex md:w-auto md:items-center md:gap-2">
-            <SearchInput className="col-span-2 md:w-64" placeholder="搜索应用名称或 Client ID..." value={keyword} onChange={handleSearch} busy={isPending} />
+            <SearchInput className="col-span-2 md:w-56 xl:w-64" placeholder="搜索应用名称或 Client ID..." value={keyword} onChange={handleSearch} busy={isPending} />
             <Select value={initialStatus || 'ALL'} onValueChange={(v) => applyStatus(v === 'ALL' ? '' : v)} disabled={isPending}>
               <SelectTrigger aria-label="过滤应用状态" className="w-full md:w-36">
                 <SelectValue>
@@ -221,14 +225,6 @@ export default function ClientsTable({ clients, pagination, initialKeyword, init
       }
       right={
         <>
-          <div className="flex items-center gap-3 text-xs text-muted-foreground">
-            <span className="flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-full bg-success" />已启用: {activeCount}
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-full bg-muted-foreground/30" />已禁用: {disabledCount}
-            </span>
-          </div>
           <PermissionGuard permission={CLIENT_PERMISSIONS.CREATE}>
             <Button asChild>
               <Link href="/clients/new">
