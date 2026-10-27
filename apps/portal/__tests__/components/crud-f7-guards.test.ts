@@ -1123,3 +1123,15 @@ describe('批量操作锁定提示（续一百七十八）', () => {
     expect(src).toContain('无可禁用用户');
   });
 });
+
+describe('自我账号保护（续一百七十九）', () => {
+  it('详情页传 isSelf；禁用/锁定选项禁用；删除入口隐藏', () => {
+    const page = read('src/app/(dashboard)/users/[id]/page.tsx');
+    expect(page).toContain('isSelf={identity?.userId === id}');
+    const form = read('src/app/(dashboard)/users/[id]/UserDetailForm.tsx');
+    expect(form).toContain('isSelf = false');
+    expect(form).toContain('disabled={isSelf}');
+    expect(form).toContain('不能禁用或锁定自己的账号');
+    expect(form).toContain('{!isSelf && (');
+  });
+});

@@ -41,9 +41,11 @@ interface Props {
   initialUser: Record<string, unknown> | null;
   /** 是否具备 user:update；无权限时页面进入只读模式（字段禁用 + 横幅） */
   canUpdate: boolean;
+  /** 是否在编辑当前登录账号自己（禁止自禁用/自锁/自删） */
+  isSelf?: boolean;
 }
 
-export default function UserDetailForm({ id, initialUser: serverUser, canUpdate }: Props) {
+export default function UserDetailForm({ id, initialUser: serverUser, canUpdate, isSelf = false }: Props) {
   const router = useRouter();
   const user = serverUser ?? {};
   const [form, setForm] = useState({
@@ -204,12 +206,15 @@ export default function UserDetailForm({ id, initialUser: serverUser, canUpdate 
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="ACTIVE">正常</SelectItem>
-                      <SelectItem value="DISABLED">已禁用</SelectItem>
-                      <SelectItem value="LOCKED">已锁定</SelectItem>
+                      <SelectItem value="DISABLED" disabled={isSelf}>已禁用</SelectItem>
+                      <SelectItem value="LOCKED" disabled={isSelf}>已锁定</SelectItem>
                     </SelectContent>
                   </Select>
                   {(serverUser.status as string) === 'LOCKED' && (
                     <p className="text-[11px] text-muted-foreground">已锁定账号不可直接切换状态，请在下方「重置密码 / 解锁」中处理。</p>
+                  )}
+                  {isSelf && (
+                    <p className="text-[11px] text-muted-foreground">不能禁用或锁定自己的账号。</p>
                   )}
                   {form.status === 'DISABLED' && savedForm.status !== 'DISABLED' && (
                     <p className="text-[11px] text-destructive">保存后将立即注销该用户所有活跃会话，并禁止其登录。</p>
@@ -251,6 +256,7 @@ export default function UserDetailForm({ id, initialUser: serverUser, canUpdate 
                     </PermissionGuard>
                   </div>
                 )}
+                {!isSelf && (
                 <div className="flex items-center justify-between gap-3 px-3 py-2.5">
                   <div className="min-w-0">
                     <p className="text-[13px] font-medium text-destructive">删除用户</p>
@@ -276,6 +282,7 @@ export default function UserDetailForm({ id, initialUser: serverUser, canUpdate 
                     </Dialog>
                   </PermissionGuard>
                 </div>
+                )}
               </CardContent>
             </Card>
           </div>

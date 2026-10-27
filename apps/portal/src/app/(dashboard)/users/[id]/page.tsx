@@ -51,7 +51,7 @@ export default async function UserDetailPage({ params }: PageProps) {
   // 详情页要求 user:read（LIST 只允许看列表）：只有 list 的角色不能靠改 URL 读取他人详情。
   return (
     <PermissionGate options={{ permissions: [USER_PERMISSIONS.READ] }}>
-      <UserDetailForm id={id} initialUser={user} canUpdate={canUpdate} />
+      <UserDetailForm id={id} initialUser={user} canUpdate={canUpdate} isSelf={identity?.userId === id} />
     </PermissionGate>
   );
 }
