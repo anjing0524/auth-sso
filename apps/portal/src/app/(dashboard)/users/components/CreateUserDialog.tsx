@@ -110,6 +110,7 @@ export default function CreateUserDialog({ departments, canAssignRole = false }:
             : {}),
         });
         setIsOpen(false);
+        router.refresh();
         setDeptId('');
         setValues({ name: '', username: '', email: '', password: '' });
       } else {

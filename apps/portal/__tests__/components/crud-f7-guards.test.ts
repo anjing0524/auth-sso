@@ -1394,3 +1394,12 @@ describe('个人资料头像/刷新（续二百〇四）', () => {
     expect(src).toContain('router.refresh()');
   });
 });
+
+describe('创建用户/角色保存后刷新（续二百〇五）', () => {
+  it('创建用户成功与角色保存成功后 router.refresh', () => {
+    const create = read('src/app/(dashboard)/users/components/CreateUserDialog.tsx');
+    expect(create).toContain('router.refresh()');
+    const roles = read('src/app/(dashboard)/users/[id]/roles/roles-client.tsx');
+    expect(roles).toContain('router.refresh()');
+  });
+});

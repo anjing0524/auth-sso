@@ -8,6 +8,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { Loader2, Save } from 'lucide-react';
 
@@ -45,6 +46,7 @@ export interface UserRolesPageProps {
 }
 
 export default function UserRolesPage({ user, isSelf = false }: UserRolesPageProps & { isSelf?: boolean }) {
+  const router = useRouter();
   const [roles, setRoles] = useState<Role[]>([]);
   const [assignedRoleIds, setAssignedRoleIds] = useState<Set<string>>(new Set());
   /** 读取时的已分配快照：用于差异（待新增/待移除）与保存确认 */
@@ -147,6 +149,7 @@ export default function UserRolesPage({ user, isSelf = false }: UserRolesPagePro
       if (res.success) {
         setSavedRoleIds(new Set(assignedRoleIds));
         setConfirmOpen(false);
+        router.refresh();
         toast.success(`已更新角色（+${addedIds.size} / -${removedIds.size}）`);
       } else {
         reportFailure(res);
