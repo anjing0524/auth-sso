@@ -1095,3 +1095,12 @@ describe('用户角色分配守卫（续一百七十五）', () => {
     expect(src).toContain('{leaveGuard}');
   });
 });
+
+describe('浏览器后退历史哨兵（续一百七十六）', () => {
+  it('脏时 push __dirtyGuard，popstate 弹确认，保存后移除', () => {
+    const src = read('src/hooks/use-unsaved-changes-guard.tsx');
+    expect(src).toContain('__dirtyGuard');
+    expect(src).toContain("addEventListener('popstate'");
+    expect(src).toContain('window.history.back()');
+  });
+});

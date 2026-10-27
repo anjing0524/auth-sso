@@ -63,3 +63,27 @@ test('命令面板跳转同样受未保存守卫', async ({ page }) => {
   await page.getByRole('button', { name: '放弃并离开' }).click();
   await expect(page).toHaveURL(/\/users$/);
 });
+
+test('浏览器后退触发未保存确认', async ({ page }) => {
+  await page.goto('/login');
+  await page.getByLabel('登录邮箱').fill('admin@example.com');
+  await page.getByLabel('密码', { exact: true }).fill('Admin@123456');
+  await page.getByRole('button', { name: '安全登录' }).click();
+  await page.waitForURL(/dashboard$/);
+
+  await page.goto('/users/00000000-0000-0000-0000-000000000001', { waitUntil: 'networkidle' });
+  await page.locator('#user-name').fill('后退未保存探针');
+  await expect(page.getByText('未保存的修改')).toBeVisible();
+
+  await page.evaluate(() => history.back());
+  await expect(page.getByRole('dialog')).toContainText('离开并放弃未保存的修改？');
+  await expect(page).toHaveURL(/\/users\/00000000-0000-0000-0000-000000000001$/);
+  await page.getByRole('button', { name: '继续编辑' }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+
+  await page.evaluate(() => history.back());
+  await expect(page.getByRole('dialog')).toContainText('离开并放弃未保存的修改？');
+  await page.getByRole('button', { name: '放弃并离开' }).click();
+  await expect(page).not.toHaveURL(/\/users\/00000000-0000-0000-0000-000000000001$/);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+});

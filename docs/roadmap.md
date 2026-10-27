@@ -21,6 +21,8 @@
 
 ## 变更记录
 
+- 2026-10-27（续一百七十六）: **浏览器后退未保存守卫**。此前只覆盖站内链接/命令面板/刷新关闭；Navigation API 尝试因 traverse 不可取消失败。**实现**：脏时 push 同 URL 历史哨兵（`__dirtyGuard`），popstate 弹确认；取消恢复哨兵，确认 `history.back()`；脏变 false 时移除哨兵。**验证**：后退 URL 不变 + 弹窗；取消仍在本页；确认到 dashboard 且 dialog=0；e2e 覆盖；全量 **1262 passed**、e2e **19/19（56.5s）**、a11y 亮/暗 0、measure 0。
+
 - 2026-10-27（续一百七十五）: **用户角色分配页离开守卫**。`/users/[id]/roles` 有 changeCount 未保存状态但未接入守卫，点侧栏即丢失勾选。**修复**：按 `changeCount > 0` 接入 `useUnsavedChangesGuard`。**验证**：勾选角色 → 侧栏 → 弹窗；取消后仍在本页且勾选保留；全量 **1261 passed**、e2e **18/18（52.6s）**、a11y 亮/暗 0、measure 0。
 
 - 2026-10-27（续一百七十四）: **客户端详情页签 WAI-ARIA 语义**。tab 只有 role/aria-selected，无 aria-controls/tabpanel，无方向键。**修复**：补 id/aria-controls/roving tabindex + ArrowLeft/Right/Home/End；内容区 role=tabpanel + aria-labelledby。**验证**：方向键切到授权记录并聚焦，Home 回基本信息；tabpanel 关联正确；e2e 覆盖；全量 **1260 passed**、e2e **18/18（50.3s）**、a11y 亮/暗 0、measure 0。

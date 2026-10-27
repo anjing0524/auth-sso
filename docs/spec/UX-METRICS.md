@@ -3,7 +3,7 @@
 > 生成方式：`node scripts/ux/measure.mjs`（真浏览器 + 验收栈）。生成日期：2026-10-23。
 > 规范与预算见 `docs/spec/UX-GUIDELINES.md` §4；本文件是**改动前后对比的基线**，不构成 CI 门禁。
 
-## 1. 本轮基线（用户角色守卫轮，2026-10-27）
+## 1. 本轮基线（浏览器后退守卫轮，2026-10-27）
 
 | 视口 | 路由 | 页面滚动 | 横向溢出 | chrome% | 可见行 | 控件高(输入/按钮) | 表头吸顶 |
 |---|---|---|---|---|---|---|---|
@@ -574,3 +574,11 @@ a11y 脚本支持 `E2E_COLOR_SCHEME=dark`。暗色首跑 9 个失败项，修复
 | 修复 | 验证 |
 |---|---|
 | `useUnsavedChangesGuard(changeCount > 0)` 接入 `/users/[id]/roles` | 勾选角色 → 侧栏 → 弹窗；取消后仍在本页且勾选保留（2 项） |
+
+### 9.43 产品审计三十九：浏览器后退守卫（2026-10-27）
+
+此前未保存守卫不拦截浏览器前进/后退。用 Navigation API 的尝试失败（traverse `cancelable=false`），改用历史哨兵。
+
+| 实现 | 验证 |
+|---|---|
+| 脏时 `pushState` 同 URL 哨兵（标记 `__dirtyGuard`）；popstate 弹确认；取消恢复哨兵，确认 `history.back()`；脏变 false 时移除哨兵 | 后退：URL 不变 + 弹窗；取消仍在本页；确认到 dashboard 且 dialog=0；e2e 覆盖 |

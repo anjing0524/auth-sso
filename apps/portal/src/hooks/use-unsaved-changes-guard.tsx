@@ -27,6 +27,7 @@ export function useUnsavedChangesGuard(isDirty: boolean): React.ReactNode {
     dirtyRef.current = isDirty;
   }, [isDirty]);
   const [pendingHref, setPendingHref] = useState<string | null>(null);
+  const [pendingHistory, setPendingHistory] = useState(false);
 
   useEffect(() => {
     const onBeforeUnload = (event: BeforeUnloadEvent) => {
@@ -75,21 +76,56 @@ export function useUnsavedChangesGuard(isDirty: boolean): React.ReactNode {
     };
   }, []);
 
+  // 历史哨兵：脏时在当前位置再压一条同 URL 记录；后退先落到同 URL，拦下后弹确认。
+  useEffect(() => {
+    if (!isDirty) return;
+    const sentinel = { ...(window.history.state ?? {}), __dirtyGuard: true };
+    window.history.pushState(sentinel, '', window.location.href);
+    const onPopState = () => {
+      if (!dirtyRef.current) return;
+      setPendingHistory(true);
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, [isDirty]);
+
+  // 保存后移除哨兵（同 URL 后退一次），避免下一次 Back 空点。
+  useEffect(() => {
+    if (isDirty) return;
+    if (window.history.state?.__dirtyGuard) window.history.back();
+  }, [isDirty]);
+
   return (
-    <Dialog open={pendingHref !== null} onOpenChange={(open) => { if (!open) setPendingHref(null); }}>
+    <Dialog open={pendingHref !== null || pendingHistory} onOpenChange={(open) => { if (!open) { setPendingHref(null); setPendingHistory(false); } }}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>离开并放弃未保存的修改？</DialogTitle>
           <DialogDescription>当前页面有未保存的修改，离开后这些修改会丢失。</DialogDescription>
         </DialogHeader>
         <DialogFooter>
-          <Button variant="outline" onClick={() => setPendingHref(null)}>继续编辑</Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              if (pendingHistory) {
+                window.history.pushState({ ...(window.history.state ?? {}), __dirtyGuard: true }, '', window.location.href);
+              }
+              setPendingHref(null);
+              setPendingHistory(false);
+            }}
+          >
+            继续编辑
+          </Button>
           <Button
             variant="destructive"
             onClick={() => {
               const href = pendingHref;
+              const wasHistory = pendingHistory;
               setPendingHref(null);
-              if (href) {
+              setPendingHistory(false);
+              if (wasHistory) {
+                dirtyRef.current = false;
+                window.history.back();
+              } else if (href) {
                 // 先解除脏标记，避免整页导航触发 beforeunload；整页导航保证旧页面（含本弹窗）卸载
                 dirtyRef.current = false;
                 window.location.assign(href);
