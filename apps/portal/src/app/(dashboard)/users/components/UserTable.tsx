@@ -195,8 +195,12 @@ export default function UserTable({ users, pagination, filters, isFiltered = fal
     setBulking(true);
     try {
       const res = await bulkUpdateUserStatusAction(selectedIds, bulkTarget);
-      if (!res.success) reportFailure(res, '批量操作失败');
-      else toast.success(res.message ?? '批量操作完成');
+      if (!res.success) {
+        // 失败时保留选择与确认框，用户可直接重试，不必重新逐行勾选
+        reportFailure(res, '批量操作失败');
+        return;
+      }
+      toast.success(res.message ?? '批量操作完成');
       setSelected(new Set());
       setBulkTarget(null);
       router.refresh();

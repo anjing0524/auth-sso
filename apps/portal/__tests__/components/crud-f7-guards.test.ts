@@ -1403,3 +1403,17 @@ describe('创建用户/角色保存后刷新（续二百〇五）', () => {
     expect(roles).toContain('router.refresh()');
   });
 });
+
+describe('权限返回上下文/批量失败保留（续二百〇六）', () => {
+  it('列表带 returnTo；表单保存/返回用它；用户批量失败不丢选择', () => {
+    const table = read('src/app/(dashboard)/permissions/components/PermissionsTable.tsx');
+    expect(table).toContain('returnTo=${encodeURIComponent(returnTo)}');
+    expect(table).toContain('createReturnTo');
+    const form = read('src/app/(dashboard)/permissions/permission-form.tsx');
+    expect(form).toContain('router.push(returnHref)');
+    expect(form).toContain('backHref={returnHref}');
+    const users = read('src/app/(dashboard)/users/components/UserTable.tsx');
+    expect(users).toContain('// 失败时保留选择与确认框');
+    expect(users).toContain('return;');
+  });
+});

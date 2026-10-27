@@ -19,8 +19,10 @@ interface PageProps {
   params: Promise<{ id: string }>;
 }
 
-export default async function EditPermissionPage({ params }: PageProps) {
+export default async function EditPermissionPage({ params, searchParams }: PageProps & { searchParams: Promise<{ returnTo?: string }> }) {
   await connection();
+  const raw = (await searchParams).returnTo;
+  const returnHref = raw && raw.startsWith('/permissions') && !raw.startsWith('//') ? raw : '/permissions';
   const { id } = await params;
   if (!isUuid(id)) notFound();
 
@@ -53,6 +55,7 @@ export default async function EditPermissionPage({ params }: PageProps) {
           clientId: permission.clientId,
         }}
         clients={clients}
+        returnHref={returnHref}
       />
     </PermissionGate>
   );

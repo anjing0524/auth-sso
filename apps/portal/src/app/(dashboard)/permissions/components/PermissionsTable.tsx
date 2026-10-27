@@ -100,6 +100,9 @@ export default function PermissionsTable({ permissions, pagination, activeTab, i
     return `/permissions${qs ? `?${qs}` : ''}`;
   };
 
+  const returnTo = buildHref(pagination.page, keyword, activeTab, initialStatus);
+  const createReturnTo = buildHref(1, keyword, activeTab, initialStatus);
+
   // 搜索防抖：400ms 后按服务端查询刷新（与 UserFilters 同语义）
   useEffect(() => {
     if (keyword === initialKeyword) return;
@@ -213,7 +216,7 @@ export default function PermissionsTable({ permissions, pagination, activeTab, i
       right={
         <PermissionGuard permission={PERMISSION_PERMISSIONS.CREATE}>
           <Button asChild>
-            <Link href="/permissions/new"><Plus className="h-4 w-4" /> 新建权限</Link>
+            <Link href={`/permissions/new?returnTo=${encodeURIComponent(createReturnTo)}`}><Plus className="h-4 w-4" /> 新建权限</Link>
           </Button>
         </PermissionGuard>
       }
@@ -279,7 +282,7 @@ export default function PermissionsTable({ permissions, pagination, activeTab, i
         <div className="flex items-center justify-end gap-0.5">
           <PermissionGuard permission={PERMISSION_PERMISSIONS.UPDATE}>
             <Button asChild variant="ghost" size="sm" className="h-8 gap-1.5 px-2" aria-label={`编辑权限 ${p.name}`} title="编辑">
-              <Link href={`/permissions/${p.id}/edit`}><Edit className="h-4 w-4" /><span className="hidden md:inline">编辑</span></Link>
+              <Link href={`/permissions/${p.id}/edit?returnTo=${encodeURIComponent(returnTo)}`}><Edit className="h-4 w-4" /><span className="hidden md:inline">编辑</span></Link>
             </Button>
           </PermissionGuard>
           {!isBuiltinPermission(p.code) && (
@@ -322,7 +325,7 @@ export default function PermissionsTable({ permissions, pagination, activeTab, i
               icon="ShieldCheck"
               title="暂无权限"
               description="新增权限点以控制功能访问"
-              action={{ label: '新建权限', href: '/permissions/new' }}
+              action={{ label: '新建权限', href: `/permissions/new?returnTo=${encodeURIComponent(createReturnTo)}` }}
             />
           )
         }

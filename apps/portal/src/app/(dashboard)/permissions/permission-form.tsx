@@ -54,9 +54,11 @@ export interface PermissionFormProps {
     clientId?: string | null;
   };
   clients?: Array<{ id: string; name: string }>;
+  /** 保存/取消后返回列表；默认 /permissions */
+  returnHref?: string;
 }
 
-export default function PermissionForm({ mode, menuOptions, permission, clients = [] }: PermissionFormProps) {
+export default function PermissionForm({ mode, menuOptions, permission, clients = [], returnHref = '/permissions' }: PermissionFormProps) {
   const router = useRouter();
   const [form, setForm] = useState({
     name: permission?.name ?? '',
@@ -130,7 +132,7 @@ export default function PermissionForm({ mode, menuOptions, permission, clients 
             : { name: form.name, type: form.type, description: form.description || null, ...menuPayload(), status: form.status });
       if (r.success) {
         toast.success(r.message);
-        router.push('/permissions');
+        router.push(returnHref);
       } else {
         reportFailure(r);
       }
@@ -142,7 +144,7 @@ export default function PermissionForm({ mode, menuOptions, permission, clients 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
       <PageHeader
-        backHref="/permissions"
+        backHref={returnHref}
         backLabel="返回权限列表"
         icon="Key"
         title={mode === 'create' ? `新建${TYPE_LABELS[form.type] ?? ''}权限` : `编辑${TYPE_LABELS[form.type] ?? ''}权限`}

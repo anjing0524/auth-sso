@@ -11,8 +11,10 @@ import PermissionForm from '../permission-form';
 export const instant = false;
 export const metadata = { title: '新建权限 | Auth-SSO' };
 
-export default async function NewPermissionPage() {
+export default async function NewPermissionPage({ searchParams }: { searchParams: Promise<{ returnTo?: string }> }) {
   await connection();
+  const raw = (await searchParams).returnTo;
+  const returnHref = raw && raw.startsWith('/permissions') && !raw.startsWith('//') ? raw : '/permissions';
   const [all, clients] = await Promise.all([getPermissions(), getClientOptions()]);
   const menuOptions = all
     .filter((p) => p.type === 'DIRECTORY' || p.type === 'PAGE')
@@ -20,7 +22,7 @@ export default async function NewPermissionPage() {
 
   return (
     <PermissionGate options={{ permissions: [PERMISSION_PERMISSIONS.CREATE] }}>
-      <PermissionForm mode="create" menuOptions={menuOptions} clients={clients} />
+      <PermissionForm mode="create" menuOptions={menuOptions} clients={clients} returnHref={returnHref} />
     </PermissionGate>
   );
 }

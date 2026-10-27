@@ -282,9 +282,9 @@ describe('U-G03 对话框 Label 关联', () => {
 
     // 2026-10-23 规则：弹窗不允许滚动；页面/目录类型 8 字段在 600px 视口放不下 → 独立页面
     const newLink = screen.getByRole('link', { name: /新建权限/ });
-    expect(newLink).toHaveAttribute('href', '/permissions/new');
+    expect(newLink).toHaveAttribute('href', '/permissions/new?returnTo=%2Fpermissions');
     const editLink = screen.getByRole('link', { name: `编辑权限 ${PERMISSION_PAGE.name}` });
-    expect(editLink.getAttribute('href')).toBe(`/permissions/${PERMISSION_PAGE.id}/edit`);
+    expect(editLink.getAttribute('href')).toBe(`/permissions/${PERMISSION_PAGE.id}/edit?returnTo=%2Fpermissions`);
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
@@ -457,7 +457,7 @@ describe('U-PRM03/U-G11 术语与 aria-label', () => {
     renderPermissions({ permissions: [PERMISSION_API, custom], pagination: PAGINATION(1) });
     expect(screen.getByRole('link', { name: `编辑权限 ${PERMISSION_API.name}` })).toHaveAttribute(
       'href',
-      `/permissions/${PERMISSION_API.id}/edit`,
+      `/permissions/${PERMISSION_API.id}/edit?returnTo=%2Fpermissions`,
     );
     // 内置权限（ALL_PERMISSIONS）不可删：UI 提前隐藏，不再等服务端拒绝
     expect(screen.queryByRole('button', { name: `删除权限 ${PERMISSION_API.name}` })).not.toBeInTheDocument();
