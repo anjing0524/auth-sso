@@ -5,7 +5,7 @@ import { connection } from 'next/server';
 import { PERMISSION_PERMISSIONS } from '@auth-sso/contracts';
 
 import { PermissionGate } from '@/components/layout/permission-gate';
-import { getPermissions } from '../data';
+import { getPermissions, getClientOptions } from '../data';
 import PermissionForm from '../permission-form';
 
 export const instant = false;
@@ -13,14 +13,14 @@ export const metadata = { title: '新建权限 | Auth-SSO' };
 
 export default async function NewPermissionPage() {
   await connection();
-  const all = await getPermissions();
+  const [all, clients] = await Promise.all([getPermissions(), getClientOptions()]);
   const menuOptions = all
     .filter((p) => p.type === 'DIRECTORY' || p.type === 'PAGE')
     .map((p) => ({ id: p.id, name: p.name, type: p.type, parentId: p.parentId ?? null }));
 
   return (
     <PermissionGate options={{ permissions: [PERMISSION_PERMISSIONS.CREATE] }}>
-      <PermissionForm mode="create" menuOptions={menuOptions} />
+      <PermissionForm mode="create" menuOptions={menuOptions} clients={clients} />
     </PermissionGate>
   );
 }

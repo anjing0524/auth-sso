@@ -191,9 +191,17 @@ export const updatePermissionAction = withAuth(
 
       await assertParentAssignment(tx, row.id, v.data.parentId);
 
-      // 内置权限的 type 是结构性字段（编码被服务端引用）；只允许改名/描述/状态，不允许切换类型
+      // 内置权限的 type/clientId 是结构性字段（编码与 Client 准入被服务端引用）；
+      // 只允许改名/描述/状态，不允许切换类型或归属应用
       if (RESERVED_PERMISSION_CODES.has(row.code) && v.data.type && v.data.type !== row.type) {
         throw new BusinessRuleViolationError('内置权限不可修改类型；如需不同形态请新建权限');
+      }
+      if (
+        RESERVED_PERMISSION_CODES.has(row.code)
+        && Object.prototype.hasOwnProperty.call(input, 'clientId')
+        && (v.data.clientId ?? null) !== row.clientId
+      ) {
+        throw new BusinessRuleViolationError('内置权限不可修改归属应用');
       }
 
       const merged = applyPermissionUpdate(permissionFromPersistence(row), v.data);

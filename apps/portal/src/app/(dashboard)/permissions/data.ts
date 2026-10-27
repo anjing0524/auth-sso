@@ -168,3 +168,15 @@ export async function getPermissionById(lookupId: string) {
     createdAt: row.createdAt.toISOString(),
   };
 }
+
+/** API 权限可绑定的应用选项（归属应用；与 clients-list 共用缓存失效标签） */
+export async function getClientOptions(): Promise<Array<{ id: string; name: string }>> {
+  'use cache';
+  cacheLife('minutes');
+  cacheTag('clients-list');
+
+  return await db
+    .select({ id: schema.clients.clientId, name: schema.clients.name })
+    .from(schema.clients)
+    .orderBy(asc(schema.clients.name));
+}

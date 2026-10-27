@@ -9,7 +9,7 @@ import { PermissionGate } from '@/components/layout/permission-gate';
 import { isUuid } from '@/lib/uuid';
 import { eq } from 'drizzle-orm';
 import { db, schema } from '@/infrastructure/db';
-import { getPermissions } from '../../data';
+import { getPermissions, getClientOptions } from '../../data';
 import PermissionForm from '../../permission-form';
 
 export const instant = false;
@@ -24,7 +24,7 @@ export default async function EditPermissionPage({ params }: PageProps) {
   const { id } = await params;
   if (!isUuid(id)) notFound();
 
-  const all = await getPermissions();
+  const [all, clients] = await Promise.all([getPermissions(), getClientOptions()]);
   const permission = await db.query.permissions.findFirst({
     where: eq(schema.permissions.id, id),
   });
@@ -49,7 +49,10 @@ export default async function EditPermissionPage({ params }: PageProps) {
           visible: permission.visible,
           parentId: permission.parentId,
           sort: permission.sort,
+          status: permission.status,
+          clientId: permission.clientId,
         }}
+        clients={clients}
       />
     </PermissionGate>
   );

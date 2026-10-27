@@ -135,6 +135,15 @@ describe('Permission Server Actions', () => {
       if (r.success) expect.unreachable('内置权限改类型应被拒绝');
       expect(r.message).toContain('内置权限不可修改类型');
     });
+
+    it('内置权限不可修改归属应用', async () => {
+      await seedTestData(td.db, { permissions: seedTestPermission({ code: 'portal:user:list' }) });
+
+      const r: any = await updatePermissionAction(PERM_ID, { clientId: 'other-client' } as any);
+
+      if (r.success) expect.unreachable('内置权限改归属应用应被拒绝');
+      expect(r.message).toContain('内置权限不可修改归属应用');
+    });
   });
 
   describe('deletePermissionAction', () => {

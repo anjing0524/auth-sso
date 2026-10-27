@@ -1351,3 +1351,17 @@ describe('部门排序/状态入口（续二百）', () => {
     expect(actions).toContain('根部门不可停用');
   });
 });
+
+describe('权限状态/归属应用入口（续二百〇一）', () => {
+  it('编辑可改状态；API 可选归属应用；内置两者锁定', () => {
+    const form = read('src/app/(dashboard)/permissions/permission-form.tsx');
+    expect(form).toContain('id="perm-status"');
+    expect(form).toContain('id="perm-client"');
+    expect(form).toContain('disabled={isBuiltin}');
+    const actions = read('src/app/(dashboard)/permissions/actions.ts');
+    expect(actions).toContain('内置权限不可修改归属应用');
+    const edit = read('src/app/(dashboard)/permissions/[id]/edit/page.tsx');
+    expect(edit).toContain('status: permission.status');
+    expect(edit).toContain('clientId: permission.clientId');
+  });
+});

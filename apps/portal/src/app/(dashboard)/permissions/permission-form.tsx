@@ -50,10 +50,13 @@ export interface PermissionFormProps {
     visible?: boolean | null;
     parentId?: string | null;
     sort?: number;
+    status?: string;
+    clientId?: string | null;
   };
+  clients?: Array<{ id: string; name: string }>;
 }
 
-export default function PermissionForm({ mode, menuOptions, permission }: PermissionFormProps) {
+export default function PermissionForm({ mode, menuOptions, permission, clients = [] }: PermissionFormProps) {
   const router = useRouter();
   const [form, setForm] = useState({
     name: permission?.name ?? '',
@@ -65,6 +68,8 @@ export default function PermissionForm({ mode, menuOptions, permission }: Permis
     visible: permission?.visible ?? true,
     parentId: permission?.parentId ?? '',
     sort: permission?.sort ?? 0,
+    status: permission?.status ?? 'ACTIVE',
+    clientId: permission?.clientId ?? '',
   });
   const [savedForm] = useState(form);
   const isDirty = JSON.stringify(form) !== JSON.stringify(savedForm);
@@ -117,12 +122,12 @@ export default function PermissionForm({ mode, menuOptions, permission }: Permis
       const r = mode === 'create'
         ? await createPermissionAction(
             form.type === 'API'
-              ? { name: form.name, code: form.code, type: 'API', description: form.description || undefined }
+              ? { name: form.name, code: form.code, type: 'API', description: form.description || undefined, clientId: form.clientId || undefined }
               : { name: form.name, code: form.code, type: form.type as 'DIRECTORY' | 'PAGE', description: form.description || undefined, ...menuPayload() },
           )
         : await updatePermissionAction(permission!.id, form.type === 'API'
-            ? { name: form.name, type: 'API' as const, description: form.description || null }
-            : { name: form.name, type: form.type, description: form.description || null, ...menuPayload() });
+            ? { name: form.name, type: 'API' as const, description: form.description || null, clientId: form.clientId || null, status: form.status }
+            : { name: form.name, type: form.type, description: form.description || null, ...menuPayload(), status: form.status });
       if (r.success) {
         toast.success(r.message);
         router.push('/permissions');
@@ -178,6 +183,38 @@ export default function PermissionForm({ mode, menuOptions, permission }: Permis
                 </SelectContent>
               </Select>
             </div>
+            {mode === 'edit' && (
+              <div className="space-y-1.5">
+                <Label htmlFor="perm-status">状态</Label>
+                <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v })}>
+                  <SelectTrigger id="perm-status"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ACTIVE">启用</SelectItem>
+                    <SelectItem value="DISABLED">停用</SelectItem>
+                  </SelectContent>
+                </Select>
+                {form.status === 'DISABLED' && (
+                  <p className="rounded bg-badge-warning-bg px-2 py-1 text-[10px] leading-4 text-badge-warning-fg">
+                    停用后立即影响所有已授权角色；权限本身保留，可随时恢复。
+                  </p>
+                )}
+              </div>
+            )}
+            {form.type === 'API' && (
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label htmlFor="perm-client">归属应用（可选）</Label>
+                <Select value={form.clientId || 'NONE'} onValueChange={(v) => setForm({ ...form, clientId: v === 'NONE' ? '' : v })} disabled={isBuiltin}>
+                  <SelectTrigger id="perm-client"><SelectValue>{(form.clientId && clients.find((c) => c.id === form.clientId)?.name) || '不绑定'}</SelectValue></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="NONE">不绑定</SelectItem>
+                    {clients.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>{c.name}（{c.id}）</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-[10px] leading-4 text-muted-foreground">{isBuiltin ? '内置权限的归属应用由服务端代码固定，不可修改。' : '归属应用决定该权限属于哪个 OAuth Client；接口编码建议以 Client ID 开头。'}</p>
+              </div>
+            )}
             {isMenu && (
               <div className="space-y-1.5">
                 <Label htmlFor="perm-parent">父级权限</Label>
