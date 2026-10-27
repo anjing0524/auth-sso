@@ -21,6 +21,8 @@
 
 ## 变更记录
 
+- 2026-10-27（续一百六十九）: **会话当前设备提示去重**。390 会话行徽章与右侧同时显示「当前设备」，重复且占宽。**修复**：右侧改为锁图标（aria-label「当前设备不可单独撤销」，title 指向下方退出当前会话），徽章保留。**验证**：DOM「当前设备」文字仅 1 处、锁图标存在；profile e2e 通过；全量 **1255 passed**、e2e **15/15（44.8s）**、a11y 亮/暗 0、measure 0。
+
 - 2026-10-27（续一百六十八）: **移动端侧栏导航后自动收起**。390 打开侧栏点击「用户管理」后 URL 已切换，但侧栏仍开且 `body overflow:hidden`，页面持续被遮挡；Esc/遮罩关闭正常。**修复**：`SidebarProvider` 用 `usePathname` 监听路由变化，自动 `setOpenMobile(false)`。**验证**：导航后 `dialog=false`、`body overflow=visible`；新增 `mobile-nav.spec.ts`（390）固化；全量 **1254 passed**、e2e **15/15（45.2s）**、a11y 亮/暗 0、measure 0。
 
 - 2026-10-27（续一百六十七）: **暗色模式对比度门禁**。a11y 脚本支持 `E2E_COLOR_SCHEME=dark`；暗色首跑 9 个失败项：主按钮/头像 4.21、操作徽章/scope chip 3.71、用户头像 3.22。**修复**：暗色 `--color-primary` 0.58→0.53（白字达标）；`bg-primary/10` 上的 `text-primary` 改 `text-foreground`（操作类型徽章/scope chip/头像）。**验证**：暗色 12 路由对比度失败 **0**；亮色回归 **0**；键盘流程通过；全量 **1253 passed**、e2e **14/14（43.8s）**、measure 0。

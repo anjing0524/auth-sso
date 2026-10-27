@@ -462,8 +462,12 @@ export default function ProfileClient({
                           <p className="truncate text-[10px] text-muted-foreground">scope: {item.scopes} · 到期 {formatDateTime(item.expiresAt)}</p>
                         </div>
                         {item.isCurrent ? (
-                          <span className="shrink-0 text-[10px] text-muted-foreground" title="当前设备请使用下方「退出当前会话」">
-                            当前设备
+                          <span
+                            className="flex shrink-0 items-center text-muted-foreground"
+                            title="当前设备请使用下方「退出当前会话」"
+                            aria-label="当前设备不可单独撤销"
+                          >
+                            <Lock className="h-3 w-3" />
                           </span>
                         ) : (
                           <Button

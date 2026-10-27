@@ -1029,3 +1029,12 @@ describe('移动端侧栏导航收起（续一百六十八）', () => {
     expect(src).toContain('[pathname]');
   });
 });
+
+describe('会话当前设备提示不重复（续一百六十九）', () => {
+  it('当前行只保留徽章 + 锁图标，不重复“当前设备”文字', () => {
+    const src = read('src/app/(dashboard)/profile/ProfileClient.tsx');
+    expect(src).toContain('aria-label="当前设备不可单独撤销"');
+    expect(src).toContain('<Lock className="h-3 w-3" />');
+    expect(src).not.toMatch(/当前设备请使用下方「退出当前会话」">\s*当前设备/);
+  });
+});
