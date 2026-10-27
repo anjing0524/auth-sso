@@ -10,6 +10,7 @@ import { getDepartmentOptions } from '@/app/(dashboard)/users/data';
 import { resolveIdentity } from '@/lib/auth';
 import { resolveScope } from '@/lib/authz';
 import { clampPage } from '@/lib/pagination';
+import { isUuid } from '@/lib/uuid';
 import RolesTable from './components/RolesTable';
 
 
@@ -26,6 +27,7 @@ interface PageProps {
     keyword?: string;
     sort?: string;
     status?: string;
+    deptId?: string;
   }>;
 }
 
@@ -35,13 +37,14 @@ export default async function RolesPage({ searchParams }: PageProps) {
   const keyword = params.keyword || '';
   const sort = params.sort === 'permissions-asc' || params.sort === 'permissions-desc' ? params.sort : undefined;
   const status = (ENTITY_STATUS_VALUES as readonly string[]).includes(params.status ?? '') ? params.status! : '';
+  const deptId = params.deptId && isUuid(params.deptId) ? params.deptId : '';
 
   // 鉴权由 roles/layout.tsx 负责（requirePermission(['role:list'])），此处只取身份信息。
   const identity = await resolveIdentity();
   const scope = identity ? await resolveScope(db, identity.userId) : { deptIds: [] };
 
   const [{ data: roles, pagination }, departments] = await Promise.all([
-    getRoles({ page, pageSize: 20, keyword, status, scope, ...(sort ? { sort } : {}) }),
+    getRoles({ page, pageSize: 20, keyword, status, scope, ...(sort ? { sort } : {}), ...(deptId ? { deptId } : {}) }),
     getDepartmentOptions(scope),
   ]);
   if (pagination.totalPages > 0 && page > pagination.totalPages) {
@@ -49,6 +52,7 @@ export default async function RolesPage({ searchParams }: PageProps) {
     if (keyword) q.set('keyword', keyword);
     if (status) q.set('status', status);
     if (sort) q.set('sort', sort);
+    if (deptId) q.set('deptId', deptId);
     q.set('page', String(pagination.totalPages));
     redirect(`/roles?${q.toString()}`);
   }
@@ -64,6 +68,7 @@ export default async function RolesPage({ searchParams }: PageProps) {
         initialKeyword={keyword}
         initialSort={sort ?? 'default'}
         initialStatus={status}
+        initialDeptId={deptId}
         departments={departments}
         boundUserCounts={boundUserCounts}
         permissionCounts={permissionCounts}

@@ -34,7 +34,7 @@ function toRoleDTO(r: {
  * 此处仍对空数组兜底 `sql\`FALSE\``：安全约束必须在 SQL 层始终存在，
  * 不能依赖调用方——`and()` 在无有效条件时返回 undefined，会静默退化成全表查询。
  */
-function buildRoleConditions(keyword: string, status: string, scope: UserScope) {
+function buildRoleConditions(keyword: string, status: string, scope: UserScope, deptId?: string) {
   const conditions = [];
   // 数据范围过滤：由 scopeFilter 统一施加（空范围恒 FALSE）
   conditions.push(scopeFilter(scope, schema.roles.deptId));
@@ -46,6 +46,9 @@ function buildRoleConditions(keyword: string, status: string, scope: UserScope) 
   }
   if (status) {
     conditions.push(eq(schema.roles.status, asEntityStatus(status)));
+  }
+  if (deptId) {
+    conditions.push(eq(schema.roles.deptId, deptId));
   }
   // 使用 COUNT(*) 聚合查询，避免拉取全部 ID 到内存再统计
   return conditions.length > 0 ? and(...conditions) : undefined;
@@ -61,6 +64,8 @@ export interface RolesListParams {
   pageSize: number;
   keyword: string;
   status: string;
+  /** 部门筛选（可选，必须仍在 scope 内） */
+  deptId?: string;
   /**
    * 操作者数据范围（必填）。
    *
@@ -77,12 +82,12 @@ export async function getRoles(params: RolesListParams) {
   cacheLife('minutes');
   cacheTag('roles-list');
 
-  const { keyword, status, scope } = params;
+  const { keyword, status, scope, deptId } = params;
   // 非法页码在入口归一：LIMIT / OFFSET / 返回元信息三处共用同一值
   const { page, pageSize } = normalizePagination(params.page, params.pageSize);
   // 数据范围：空范围即空集（无可见部门 → 不得返回任何角色）
   if (isScopeDenied(scope)) return { data: [], pagination: paginationMeta(page, pageSize, 0) };
-  const whereClause = buildRoleConditions(keyword, status, scope);
+  const whereClause = buildRoleConditions(keyword, status, scope, deptId);
 
   // 按权限数排序：需要 LEFT JOIN role_permissions 聚合后排序（分页必须在排序之后）
   if (params.sort === 'permissions-asc' || params.sort === 'permissions-desc') {

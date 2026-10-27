@@ -920,13 +920,14 @@ describe('错误页统一出口（续一百五十八）', () => {
   });
 });
 
-describe('角色移动端工具栏（续一百五十九）', () => {
-  it('title/search 整行，排序/状态两列，桌面恢复单行', () => {
+describe('角色工具栏（续一百五十九/二百二十八）', () => {
+  it('title/search 首行，排序/状态/部门第二行；≥1100 恢复单行', () => {
     const src = read('src/app/(dashboard)/roles/components/RolesTable.tsx');
-    expect(src).toContain('flex min-w-0 flex-wrap items-center gap-2 md:flex-nowrap');
-    expect(src).toContain('w-full shrink-0 text-[15px]');
-    expect(src).toContain('w-[calc(50%-0.25rem)] md:w-40');
-    expect(src).toContain('w-[calc(50%-0.25rem)] md:w-32');
+    expect(src).toContain('flex w-full min-w-0 flex-wrap items-center gap-2');
+    expect(src).toContain('w-full sm:w-auto md:w-56');
+    expect(src).toContain('order-3 flex w-full flex-wrap items-center gap-2 min-[1100px]:order-2');
+    expect(src).toContain('md:w-32');
+    expect(src).toContain('aria-label="过滤角色部门"');
   });
 });
 
@@ -1600,5 +1601,19 @@ describe('1024 用户工具栏顶部对齐（续二百二十六）', () => {
     const page = read('src/app/(dashboard)/users/page.tsx');
     expect(page).toContain('className="md:items-start"');
     expect(page).toContain('md:items-start md:gap-3');
+  });
+});
+
+describe('角色部门筛选（续二百二十八）', () => {
+  it('数据过滤、页面解析、工具栏选择与顶部对齐', () => {
+    const data = read('src/app/(dashboard)/roles/data.ts');
+    expect(data).toContain('deptId?: string');
+    expect(data).toContain('eq(schema.roles.deptId, deptId)');
+    const page = read('src/app/(dashboard)/roles/page.tsx');
+    expect(page).toContain('isUuid(params.deptId)');
+    expect(page).toContain('initialDeptId={deptId}');
+    const table = read('src/app/(dashboard)/roles/components/RolesTable.tsx');
+    expect(table).toContain('aria-label="过滤角色部门"');
+    expect(table).toContain('className="md:items-start"');
   });
 });

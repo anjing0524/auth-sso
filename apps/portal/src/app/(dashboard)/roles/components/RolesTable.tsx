@@ -53,6 +53,8 @@ interface Props {
   initialSort?: string;
   /** 状态筛选：'' | ACTIVE | DISABLED */
   initialStatus?: string;
+  /** 部门筛选（''=全部） */
+  initialDeptId?: string;
   departments: Array<{ id: string; name: string }>;
   /** 删除确认的影响面：roleId → 绑定用户数（U-ROLES03） */
   boundUserCounts?: Record<string, number>;
@@ -60,7 +62,7 @@ interface Props {
   permissionCounts?: Record<string, number>;
 }
 
-export default function RolesTable({ roles, pagination, initialKeyword, initialSort = 'default', initialStatus = '', departments, boundUserCounts = {}, permissionCounts = {} }: Props) {
+export default function RolesTable({ roles, pagination, initialKeyword, initialSort = 'default', initialStatus = '', initialDeptId = '', departments, boundUserCounts = {}, permissionCounts = {} }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const currentListHref = `/roles${searchParams.toString() ? `?${searchParams.toString()}` : ''}`;
@@ -84,6 +86,9 @@ export default function RolesTable({ roles, pagination, initialKeyword, initialS
     searchTimer.current = setTimeout(() => {
       const params = new URLSearchParams();
       if (value.trim()) params.set('keyword', value.trim());
+      if (initialSort !== 'default') params.set('sort', initialSort);
+      if (initialStatus) params.set('status', initialStatus);
+      if (initialDeptId) params.set('deptId', initialDeptId);
       params.set('page', '1');
       startTransition(() => router.push(`/roles?${params.toString()}`));
     }, 300);
@@ -162,6 +167,7 @@ export default function RolesTable({ roles, pagination, initialKeyword, initialS
     const params = new URLSearchParams();
     if (keyword.trim()) params.set('keyword', keyword.trim());
     if (initialStatus) params.set('status', initialStatus);
+    if (initialDeptId) params.set('deptId', initialDeptId);
     if (value !== 'default') params.set('sort', value);
     params.set('page', '1');
     router.push(`/roles?${params.toString()}`);
@@ -170,7 +176,17 @@ export default function RolesTable({ roles, pagination, initialKeyword, initialS
     const params = new URLSearchParams();
     if (keyword.trim()) params.set('keyword', keyword.trim());
     if (initialSort !== 'default') params.set('sort', initialSort);
+    if (initialDeptId) params.set('deptId', initialDeptId);
     if (value) params.set('status', value);
+    params.set('page', '1');
+    router.push(`/roles?${params.toString()}`);
+  };
+  const applyDept = (value: string) => {
+    const params = new URLSearchParams();
+    if (keyword.trim()) params.set('keyword', keyword.trim());
+    if (initialSort !== 'default') params.set('sort', initialSort);
+    if (initialStatus) params.set('status', initialStatus);
+    if (value !== 'ALL') params.set('deptId', value);
     params.set('page', '1');
     router.push(`/roles?${params.toString()}`);
   };
@@ -186,34 +202,48 @@ export default function RolesTable({ roles, pagination, initialKeyword, initialS
 
   const cardHeader = (
     <TableToolbar
+      className="md:items-start"
       left={
-        <div className="flex min-w-0 flex-wrap items-center gap-2 md:flex-nowrap md:gap-3">
-          <h1 className="w-full shrink-0 text-[15px] font-semibold tracking-tight text-foreground md:w-auto">角色管理</h1>
-          <SearchInput placeholder="搜索角色名称或编码" value={keyword} onChange={handleSearch} busy={isPending} className="w-full md:w-64" />
-          <Select value={initialSort} onValueChange={applySort}>
-            <SelectTrigger aria-label="角色排序" className="w-[calc(50%-0.25rem)] md:w-40">
-              <SelectValue>
-                {initialSort === 'permissions-asc' ? '权限数最少' : initialSort === 'permissions-desc' ? '权限数最多' : '默认排序'}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="default">默认排序</SelectItem>
-              <SelectItem value="permissions-asc">权限数最少</SelectItem>
-              <SelectItem value="permissions-desc">权限数最多</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select value={initialStatus || 'ALL'} onValueChange={(v) => applyStatus(v === 'ALL' ? '' : v)}>
-            <SelectTrigger aria-label="过滤角色状态" className="w-[calc(50%-0.25rem)] md:w-32">
-              <SelectValue>
-                {initialStatus === 'ACTIVE' ? '已启用' : initialStatus === 'DISABLED' ? '已禁用' : '全部状态'}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ALL">全部状态</SelectItem>
-              <SelectItem value="ACTIVE">已启用</SelectItem>
-              <SelectItem value="DISABLED">已禁用</SelectItem>
-            </SelectContent>
-          </Select>
+        <div className="flex w-full min-w-0 flex-wrap items-center gap-2">
+          <h1 className="shrink-0 text-[15px] font-semibold tracking-tight text-foreground">角色管理</h1>
+          <SearchInput placeholder="搜索角色名称或编码" value={keyword} onChange={handleSearch} busy={isPending} className="w-full sm:w-auto md:w-56" />
+          <div className="order-3 flex w-full flex-wrap items-center gap-2 min-[1100px]:order-2 min-[1100px]:w-auto">
+            <Select value={initialSort} onValueChange={applySort}>
+              <SelectTrigger aria-label="角色排序" className="w-[calc(50%-0.25rem)] md:w-32">
+                <SelectValue>
+                  {initialSort === 'permissions-asc' ? '权限数最少' : initialSort === 'permissions-desc' ? '权限数最多' : '默认排序'}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="default">默认排序</SelectItem>
+                <SelectItem value="permissions-asc">权限数最少</SelectItem>
+                <SelectItem value="permissions-desc">权限数最多</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={initialStatus || 'ALL'} onValueChange={(v) => applyStatus(v === 'ALL' ? '' : v)}>
+              <SelectTrigger aria-label="过滤角色状态" className="w-[calc(50%-0.25rem)] md:w-28">
+                <SelectValue>
+                  {initialStatus === 'ACTIVE' ? '已启用' : initialStatus === 'DISABLED' ? '已禁用' : '全部状态'}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">全部状态</SelectItem>
+                <SelectItem value="ACTIVE">已启用</SelectItem>
+                <SelectItem value="DISABLED">已禁用</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={initialDeptId || 'ALL'} onValueChange={applyDept}>
+              <SelectTrigger aria-label="过滤角色部门" className="w-[calc(50%-0.25rem)] md:w-32">
+                <SelectValue>{departments.find((d) => d.id === initialDeptId)?.name ?? '全部部门'}</SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">全部部门</SelectItem>
+                {departments.map((d) => (
+                  <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
       }
       right={
@@ -330,7 +360,7 @@ export default function RolesTable({ roles, pagination, initialKeyword, initialS
         data={roles}
         loading={isPending}
         emptyState={
-          keyword.trim() || initialStatus !== '' ? (
+          keyword.trim() || initialStatus !== '' || initialDeptId !== '' ? (
             <EmptyState
               variant="simple"
               kind="filtered"
