@@ -1104,3 +1104,12 @@ describe('浏览器后退历史哨兵（续一百七十六）', () => {
     expect(src).toContain('window.history.back()');
   });
 });
+
+describe('批量恢复锁定用户语义（续一百七十七）', () => {
+  it('LOCKED→ACTIVE 清计数；LOCKED→DISABLED 拒绝', () => {
+    const src = read('src/app/(dashboard)/users/bulk-actions.ts');
+    expect(src).toContain('USER_LOCKED');
+    expect(src).toContain('clearUserBruteForceCounters');
+    expect(src).toContain('已锁定的用户请先解锁');
+  });
+});

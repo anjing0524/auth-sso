@@ -9,7 +9,7 @@
  * 不因个体失败而回滚已经成功的其他用户（并返回真实成功/失败计数）。
  */
 import { eq } from 'drizzle-orm';
-import { COMMON_ERRORS, USER_ACTIVE, USER_ERRORS, USER_PERMISSIONS, type ApiResponse } from '@auth-sso/contracts';
+import { COMMON_ERRORS, USER_ACTIVE, USER_ERRORS, USER_LOCKED, USER_PERMISSIONS, type ApiResponse } from '@auth-sso/contracts';
 
 import { schema } from '@/infrastructure/db';
 import type { DbTxHandle } from '@/infrastructure/db';
@@ -17,6 +17,7 @@ import { withAuth, type AuthContext } from '@/lib/auth';
 import { withScopedRow } from '@/lib/authz';
 import { invalidateResource } from '@/lib/cache-invalidation';
 import { revokeUserAccessByUserId } from '@/lib/session/revoke';
+import { clearUserBruteForceCounters } from '@/lib/auth/brute-force';
 import { validate } from '@/lib/validation';
 import { UserIdentityInputSchema } from '@/domain/user/types';
 import { BusinessRuleViolationError } from '@/domain/shared/errors';
@@ -66,15 +67,31 @@ export const bulkUpdateUserStatusAction = withAuth(
     let updated = 0;
     let failed = 0;
     for (const id of unique) {
+      let unlocked = false;
       try {
         const changed = await withScopedRow(loadUserScoped(ctx.userId, id), async (tx, row) => {
           if (!row || row.status === status) return false;
+          // LOCKED 只能通过解锁语义恢复；批量禁用锁定用户直接失败，避免绕过状态机
+          if (row.status === USER_LOCKED) {
+            if (status !== USER_ACTIVE) {
+              throw new BusinessRuleViolationError('已锁定的用户请先解锁，不能直接禁用');
+            }
+            unlocked = true;
+          }
           await tx.update(schema.users).set({ status }).where(eq(schema.users.id, id));
           return true;
         });
         if (changed) {
           // 状态变更即时生效：撤销该用户活跃 JWT（失败由 lib/session/revoke 记日志，不阻断）
           await revokeUserAccessByUserId(id);
+          // 批量恢复锁定账号时同步清空暴力破解计数，否则界面已恢复但窗口期内仍被锁
+          if (unlocked) {
+            try {
+              await clearUserBruteForceCounters(id);
+            } catch {
+              // 计数清理失败不阻断状态恢复；下次登录仍按窗口继续限制
+            }
+          }
           updated += 1;
         }
       } catch {
@@ -87,7 +104,7 @@ export const bulkUpdateUserStatusAction = withAuth(
     return {
       success: true,
       data: { updated, failed },
-      message: `已${targetLabel} ${updated} 个用户${failed > 0 ? `，${failed} 个失败（越权或不存在）` : ''}`,
+      message: `已${targetLabel} ${updated} 个用户${failed > 0 ? `，${failed} 个失败（越权、不存在或锁定需先解锁）` : ''}`,
     };
   },
 );

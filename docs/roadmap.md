@@ -21,6 +21,8 @@
 
 ## 变更记录
 
+- 2026-10-27（续一百七十七）: **批量恢复锁定用户语义修复**。批量 action 直接写状态，LOCKED→ACTIVE 绕过解锁且不清 Redis 失败计数；界面恢复成功但窗口期内仍锁。**修复**：LOCKED 批量恢复按解锁语义处理并 `clearUserBruteForceCounters`；LOCKED 批量禁用抛错计失败。**验证**：手工锁定+计数 5 → 批量恢复：状态 ACTIVE、计数键 0；toast「已恢复 1 个用户」；全量 **1263 passed**、e2e **19/19（55.5s）**、a11y 亮/暗 0、measure 0。
+
 - 2026-10-27（续一百七十六）: **浏览器后退未保存守卫**。此前只覆盖站内链接/命令面板/刷新关闭；Navigation API 尝试因 traverse 不可取消失败。**实现**：脏时 push 同 URL 历史哨兵（`__dirtyGuard`），popstate 弹确认；取消恢复哨兵，确认 `history.back()`；脏变 false 时移除哨兵。**验证**：后退 URL 不变 + 弹窗；取消仍在本页；确认到 dashboard 且 dialog=0；e2e 覆盖；全量 **1262 passed**、e2e **19/19（56.5s）**、a11y 亮/暗 0、measure 0。
 
 - 2026-10-27（续一百七十五）: **用户角色分配页离开守卫**。`/users/[id]/roles` 有 changeCount 未保存状态但未接入守卫，点侧栏即丢失勾选。**修复**：按 `changeCount > 0` 接入 `useUnsavedChangesGuard`。**验证**：勾选角色 → 侧栏 → 弹窗；取消后仍在本页且勾选保留；全量 **1261 passed**、e2e **18/18（52.6s）**、a11y 亮/暗 0、measure 0。
