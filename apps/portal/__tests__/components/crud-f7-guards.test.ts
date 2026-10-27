@@ -1444,3 +1444,12 @@ describe('创建用户默认部门（续二百〇九）', () => {
     expect(src).toContain('setDeptId(departments[0]?.id ?? \'\')');
   });
 });
+
+describe('管理员用户头像入口（续二百一十一）', () => {
+  it('详情可编辑 avatarUrl 并计入 dirty/提交', () => {
+    const src = read('src/app/(dashboard)/users/[id]/UserDetailForm.tsx');
+    expect(src).toContain('id="user-avatar"');
+    expect(src).toContain('form.avatarUrl !== savedForm.avatarUrl');
+    expect(src).toContain('avatarUrl: form.avatarUrl.trim()');
+  });
+});

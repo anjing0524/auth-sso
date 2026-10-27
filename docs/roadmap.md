@@ -21,6 +21,8 @@
 
 ## 变更记录
 
+- 2026-10-27（续二百一十一）: **管理员用户头像入口**。avatarUrl 服务端支持、列表使用，但管理员详情无入口。**修复**：用户详情基本资料补头像 URL，计入 dirty/提交；API 测试更新头像。**验证**：字段存在；user-actions 32 passed；a11y 亮/暗 0；typecheck/build 0。
+
 - 2026-10-27（续二百一十）: **新目标第 17 轮里程碑回归**。vitest 首跑 1299/1300：user-roles 页测试缺 next/navigation mock。**修复**：补 router mock；复跑 1300/1300。e2e 19/19、a11y 亮/暗 0、measure 0、CWV 24/24 PASS。
 
 - 2026-10-27（续二百〇九）: **创建用户默认部门**。成功后部门置空，再打开不回填，连续建人需反复选部门。**修复**：打开弹窗时回填首个部门。**验证**：连续两次打开均显示总公司；create-user-dialog 1 passed；typecheck/build 0。

@@ -55,12 +55,13 @@ export default function UserDetailForm({ id, initialUser: serverUser, canUpdate,
     email: (user.email as string) || '',
     status: (user.status as string) || 'ACTIVE',
     deptId: (user.deptId as string) || '',
+    avatarUrl: (user.avatarUrl as string) || '',
   });
   const [savedForm, setSavedForm] = useState(form);
   const [saving, setSaving] = useState(false);
   // 未保存修改：避免"没改也保存"产生无意义的审计记录，也避免误以为已保存
   const isDirty =
-    form.name !== savedForm.name || form.email !== savedForm.email || form.status !== savedForm.status || form.deptId !== savedForm.deptId;
+    form.name !== savedForm.name || form.email !== savedForm.email || form.status !== savedForm.status || form.deptId !== savedForm.deptId || form.avatarUrl !== savedForm.avatarUrl;
   // 失败处置只有一个入口（本表单不渲染 <FieldError> ⇒ 传空字段 ⇒ 一律 toast）
   const { reportFailure } = useFieldFailure();
   const leaveGuard = useUnsavedChangesGuard(isDirty);
@@ -97,7 +98,7 @@ export default function UserDetailForm({ id, initialUser: serverUser, canUpdate,
 
   const handleUpdate = async () => {
     setSaving(true);
-    const res = await updateUserAction(id, { ...form, deptId: form.deptId || null });
+    const res = await updateUserAction(id, { ...form, deptId: form.deptId || null, avatarUrl: form.avatarUrl.trim() });
     if (res.success) {
       setSavedForm(form);
       toast.success('用户信息更新成功');
@@ -196,6 +197,11 @@ export default function UserDetailForm({ id, initialUser: serverUser, canUpdate,
                 <div className="space-y-1.5">
                   <Label htmlFor="user-email">电子邮箱</Label>
                   <Input id="user-email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
+                </div>
+                <div className="space-y-1.5 sm:col-span-2">
+                  <Label htmlFor="user-avatar">头像 URL（可选）</Label>
+                  <Input id="user-avatar" type="url" value={form.avatarUrl} onChange={e => setForm({ ...form, avatarUrl: e.target.value })} placeholder="https://example.com/avatar.png" />
+                  <p className="text-[10px] leading-4 text-muted-foreground">用于列表头像；留空显示姓名首字母。</p>
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="user-username">用户名</Label>

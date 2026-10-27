@@ -486,6 +486,17 @@ describe('H-18 邮箱规范化', () => {
     expect(rows).toHaveLength(1);
   });
 
+  it('管理员可更新用户头像 URL', async () => {
+    const target = seedTestUser({ id: '00000000-0000-4000-8000-000000000202', username: 'avataruser', email: 'avatar@example.com' });
+    await seedTestData(td.db, { users: target });
+
+    const r: any = await updateUserAction('00000000-0000-4000-8000-000000000202', { avatarUrl: 'https://example.com/avatar.png' } as any);
+
+    expect(r.success).toBe(true);
+    const rows = await db.select().from(schema.users);
+    expect(rows.find((u) => u.id === '00000000-0000-4000-8000-000000000202')?.avatarUrl).toBe('https://example.com/avatar.png');
+  });
+
   it('编辑用户邮箱同样归一化', async () => {
     const created: any = await createUserAction({
       username: 'editmail', name: 'Edit Mail',
