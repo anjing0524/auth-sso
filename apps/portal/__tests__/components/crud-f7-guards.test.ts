@@ -1640,3 +1640,14 @@ describe('权限归属应用仅接口 tab（续二百三十）', () => {
     expect(table).toContain("{activeTab === 'API' ? (");
   });
 });
+
+describe('授权 Token 单条撤销（续二百三十一）', () => {
+  it('行操作传入 tokenId，二次确认后调用撤销', () => {
+    const section = read('src/app/(dashboard)/clients/[id]/components/ClientTokensSection.tsx');
+    expect(section).toContain('onRevokeToken');
+    expect(section).toContain('撤销 ${token.username');
+    const client = read('src/app/(dashboard)/clients/[id]/ClientDetailClient.tsx');
+    expect(client).toContain("'revoke-token'");
+    expect(client).toContain('revokeClientTokensAction(client.clientId, [revokeTokenTarget.id], false)');
+  });
+});

@@ -21,11 +21,13 @@ export interface ClientTokensSectionProps {
   /** 有效授权总数（tokens 可能只含最近 10 条） */
   total?: number;
   onRevokeAll: () => Promise<void> | void;
+  /** 撤销单条授权（可选；传入时显示行操作） */
+  onRevokeToken?: (token: Token) => void;
   /** 缺少 client:update 时只读：不渲染撤销入口 */
   canRevoke?: boolean;
 }
 
-export function ClientTokensSection({ tokens, total = tokens.length, onRevokeAll, canRevoke = true }: ClientTokensSectionProps) {
+export function ClientTokensSection({ tokens, total = tokens.length, onRevokeAll, onRevokeToken, canRevoke = true }: ClientTokensSectionProps) {
   return (
     <Card>
       <CardHeader className="flex-row items-center justify-between border-b pb-4">
@@ -53,12 +55,13 @@ export function ClientTokensSection({ tokens, total = tokens.length, onRevokeAll
               <TableHead>Scopes</TableHead>
               <TableHead>创建时间</TableHead>
               <TableHead>过期时间</TableHead>
+              {canRevoke && onRevokeToken ? <TableHead className="text-right">操作</TableHead> : null}
             </TableRow>
           </TableHeader>
           <TableBody>
             {tokens.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={4} className="h-24 text-center text-muted-foreground">
+                <TableCell colSpan={canRevoke && onRevokeToken ? 5 : 4} className="h-24 text-center text-muted-foreground">
                   暂无有效授权
                 </TableCell>
               </TableRow>
@@ -75,6 +78,19 @@ export function ClientTokensSection({ tokens, total = tokens.length, onRevokeAll
                   <TableCell className="text-muted-foreground">
                     {formatDate(token.expiresAt)}
                   </TableCell>
+                  {canRevoke && onRevokeToken ? (
+                    <TableCell className="text-right">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 text-[11px] text-destructive hover:bg-destructive/10 hover:text-destructive"
+                        aria-label={`撤销 ${token.username ?? '该用户'} 的授权`}
+                        onClick={() => onRevokeToken(token)}
+                      >
+                        撤销
+                      </Button>
+                    </TableCell>
+                  ) : null}
                 </TableRow>
               ))
             )}

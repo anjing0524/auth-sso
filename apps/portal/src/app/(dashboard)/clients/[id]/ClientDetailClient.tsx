@@ -49,7 +49,7 @@ interface ClientDetailClientProps {
 }
 
 /** 需要二次确认的危险操作 */
-type PendingAction = 'regenerate-secret' | 'revoke-tokens' | 'toggle-status' | null;
+type PendingAction = 'regenerate-secret' | 'revoke-tokens' | 'revoke-token' | 'toggle-status' | null;
 
 const CONFIRM_META: Record<Exclude<PendingAction, null>, { title: string; description: string; confirmLabel: string }> = {
   'regenerate-secret': {
@@ -60,6 +60,11 @@ const CONFIRM_META: Record<Exclude<PendingAction, null>, { title: string; descri
   'revoke-tokens': {
     title: '撤销全部授权 Token？',
     description: '该应用当前所有用户的 Refresh Token 会被立即吊销，需要重新授权。',
+    confirmLabel: '确认撤销',
+  },
+  'revoke-token': {
+    title: '撤销该条授权 Token？',
+    description: '该用户的这次授权会立即失效，需要重新授权后才能继续访问。',
     confirmLabel: '确认撤销',
   },
   'toggle-status': {
@@ -75,6 +80,7 @@ export function ClientDetailClient({ client, initialTokens, initialTokenTotal, c
   const [newSecret, setNewSecret] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'info' | 'tokens'>('info');
   const [pendingAction, setPendingAction] = useState<PendingAction>(null);
+  const [revokeTokenTarget, setRevokeTokenTarget] = useState<Token | null>(null);
   const [busy, setBusy] = useState(false);
   // 失败分类点：Server Action 失败必须经 reportFailure（form-failure-handling-guard 强制）
   const { reportFailure } = useFieldFailure();
@@ -140,6 +146,15 @@ export function ClientDetailClient({ client, initialTokens, initialTokenTotal, c
         } else {
           reportFailure(res, '撤销 Token 失败');
         }
+      } else if (pendingAction === 'revoke-token') {
+        if (!revokeTokenTarget) return;
+        const res = await revokeClientTokensAction(client.clientId, [revokeTokenTarget.id], false);
+        if (res.success) {
+          router.refresh();
+          toast.success('已撤销该条授权');
+        } else {
+          reportFailure(res, '撤销授权失败');
+        }
       } else {
         const newStatus = client.status === 'ACTIVE' ? 'DISABLED' : 'ACTIVE';
         const res = await updateClientAction(client.clientId, { status: newStatus });
@@ -156,6 +171,7 @@ export function ClientDetailClient({ client, initialTokens, initialTokenTotal, c
     } finally {
       setBusy(false);
       setPendingAction(null);
+      setRevokeTokenTarget(null);
     }
   };
 
@@ -274,17 +290,18 @@ export function ClientDetailClient({ client, initialTokens, initialTokenTotal, c
         <ClientTokensSection
           tokens={initialTokens}
           onRevokeAll={() => setPendingAction('revoke-tokens')}
+          onRevokeToken={(token) => { setRevokeTokenTarget(token); setPendingAction('revoke-token'); }}
           canRevoke={canUpdate}
         />
         </div>
       )}
 
       {/* 危险操作二次确认（统一弹窗，替代原生 confirm） */}
-      <Dialog open={pendingAction !== null} onOpenChange={(open) => { if (!open) setPendingAction(null); }}>
+      <Dialog open={pendingAction !== null} onOpenChange={(open) => { if (!open) { setPendingAction(null); setRevokeTokenTarget(null); } }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{meta?.title}</DialogTitle>
-            <DialogDescription>{meta?.description}</DialogDescription>
+            <DialogDescription>{pendingAction === 'revoke-token' && revokeTokenTarget ? `撤销「${revokeTokenTarget.username ?? '该用户'}」的这次授权后，该会话立即失效。` : meta?.description}</DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setPendingAction(null)} disabled={busy}>
