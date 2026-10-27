@@ -263,7 +263,7 @@ export default function UserDetailForm({ id, initialUser: serverUser, canUpdate,
                     <p className="text-[11px] text-muted-foreground">不能禁用或锁定自己的账号。</p>
                   )}
                   {form.status === 'DISABLED' && savedForm.status !== 'DISABLED' && (
-                    <p className="text-[11px] text-destructive">保存后将立即注销该用户所有活跃会话，并禁止其登录。</p>
+                    <p className="text-[11px] text-destructive">保存后{activeSessionCount > 0 ? `将立即注销该用户当前 ${activeSessionCount} 个活跃会话，` : '将注销该用户全部会话，'}并禁止其登录。</p>
                   )}
                   {form.status === 'ACTIVE' && savedForm.status === 'DISABLED' && (
                     <p className="rounded bg-badge-success-bg px-2 py-1 text-[11px] text-badge-success-fg">保存后恢复登录能力，原有角色保持不变。</p>
@@ -286,7 +286,7 @@ export default function UserDetailForm({ id, initialUser: serverUser, canUpdate,
                     <p className="text-[11px] text-muted-foreground">重置后该用户所有活跃会话会被撤销，需要用新密码重新登录。</p>
                   </div>
                   <PermissionGuard permission={USER_PERMISSIONS.RESET_PASSWORD}>
-                    <ResetPasswordDialog userId={id} userName={form.name} />
+                    <ResetPasswordDialog userId={id} userName={form.name} activeSessionCount={activeSessionCount} />
                   </PermissionGuard>
                 </div>
                 {(serverUser.status as string) === 'LOCKED' && (
@@ -317,7 +317,7 @@ export default function UserDetailForm({ id, initialUser: serverUser, canUpdate,
                         <DialogHeader>
                           <DialogTitle className="text-destructive">确认永久删除？</DialogTitle>
                           <DialogDescription>
-                            此操作将立即注销用户 <strong>{form.name}</strong> 的所有访问权限。该操作不可撤销。
+                            此操作将永久删除用户 <strong>{form.name}</strong>：移除 {roles.length} 个角色绑定{activeSessionCount > 0 ? `，并撤销当前 ${activeSessionCount} 个活跃会话` : ''}。该操作不可撤销。
                           </DialogDescription>
                         </DialogHeader>
                         <DialogFooter>

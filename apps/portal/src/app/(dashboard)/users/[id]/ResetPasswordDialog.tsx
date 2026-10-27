@@ -30,9 +30,11 @@ import { resetPasswordAction } from '../actions';
 export function ResetPasswordDialog({
   userId,
   userName,
+  activeSessionCount = 0,
 }: {
   userId: string;
   userName: string;
+  activeSessionCount?: number;
 }) {
   const [open, setOpen] = useState(false);
   const [password, setPassword] = useState('');
@@ -71,7 +73,10 @@ export function ResetPasswordDialog({
         <DialogHeader>
           <DialogTitle>重置用户密码</DialogTitle>
           <DialogDescription>
-            为「{userName}」设置新密码。重置后该用户的所有活跃会话立即失效，须用新密码重新登录。
+            为「{userName}」设置新密码。
+            {activeSessionCount > 0
+              ? `重置后其 ${activeSessionCount} 个活跃会话及全部访问令牌立即失效，须用新密码重新登录。`
+              : '重置后其全部访问令牌立即失效，须用新密码重新登录。'}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">

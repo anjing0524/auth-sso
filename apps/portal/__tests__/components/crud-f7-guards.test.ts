@@ -1676,3 +1676,13 @@ describe('强制下线影响面计数（续二百三十三）', () => {
     expect(form).toContain('当前有 {activeSessionCount} 个活跃会话');
   });
 });
+
+describe('危险操作影响面文案（续二百三十四）', () => {
+  it('重置/删除在 0 会话时不显示 0 个；有会话时显示数量', () => {
+    const reset = read('src/app/(dashboard)/users/[id]/ResetPasswordDialog.tsx');
+    expect(reset).toContain('activeSessionCount > 0');
+    const form = read('src/app/(dashboard)/users/[id]/UserDetailForm.tsx');
+    expect(form).toContain('activeSessionCount > 0 ?');
+    expect(form).toContain('移除 {roles.length} 个角色绑定');
+  });
+});
