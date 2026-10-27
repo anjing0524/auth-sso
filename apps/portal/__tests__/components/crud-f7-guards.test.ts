@@ -1315,3 +1315,17 @@ describe('空权限角色警告（续一百九十七）', () => {
     expect(table).toContain('绑定用户将无法登录门户');
   });
 });
+
+describe('用户部门迁移（续一百九十八）', () => {
+  it('详情页可改部门；自己不可改；服务端兜底', () => {
+    const page = read('src/app/(dashboard)/users/[id]/page.tsx');
+    expect(page).toContain('getDepartmentOptions');
+    expect(page).toContain('departments={departments}');
+    const form = read('src/app/(dashboard)/users/[id]/UserDetailForm.tsx');
+    expect(form).toContain('aria-label="所属部门"');
+    expect(form).toContain('不能修改自己的部门');
+    expect(form).toContain('迁移部门前需确保');
+    const actions = read('src/app/(dashboard)/users/actions.ts');
+    expect(actions).toContain('不能修改自己的部门');
+  });
+});

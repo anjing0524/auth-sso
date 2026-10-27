@@ -288,6 +288,10 @@ export const updateUserAction = withAuth(
         }
         const nextDeptId = v.data.deptId;
         const deptChanged = hasDeptChanged(row.deptId, v.data.deptId);
+        // 自己的部门 = 数据范围来源；禁止自助迁移，避免把自身移出可见范围（UI 同步禁用）
+        if (deptChanged && row.id === ctx.userId) {
+          throw new BusinessRuleViolationError('不能修改自己的部门，请由其他管理员操作');
+        }
         // H-23：迁入部门必须存在且 ACTIVE（禁用部门是生命周期门禁）
         if (deptChanged && nextDeptId) {
           await assertDepartmentUsable(tx, nextDeptId, '将用户迁移至该部门');

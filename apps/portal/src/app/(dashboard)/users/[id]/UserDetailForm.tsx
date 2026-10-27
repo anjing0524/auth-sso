@@ -41,23 +41,26 @@ interface Props {
   initialUser: Record<string, unknown> | null;
   /** 是否具备 user:update；无权限时页面进入只读模式（字段禁用 + 横幅） */
   canUpdate: boolean;
-  /** 是否在编辑当前登录账号自己（禁止自禁用/自锁/自删） */
+  /** 是否在编辑当前登录账号自己（禁止自禁用/自锁/自删/自迁部门） */
   isSelf?: boolean;
+  /** 操作者数据范围内的部门（用于迁移） */
+  departments?: Array<{ id: string; name: string }>;
 }
 
-export default function UserDetailForm({ id, initialUser: serverUser, canUpdate, isSelf = false }: Props) {
+export default function UserDetailForm({ id, initialUser: serverUser, canUpdate, isSelf = false, departments = [] }: Props) {
   const router = useRouter();
   const user = serverUser ?? {};
   const [form, setForm] = useState({
     name: user.name as string,
     email: (user.email as string) || '',
     status: (user.status as string) || 'ACTIVE',
+    deptId: (user.deptId as string) || '',
   });
   const [savedForm, setSavedForm] = useState(form);
   const [saving, setSaving] = useState(false);
   // 未保存修改：避免"没改也保存"产生无意义的审计记录，也避免误以为已保存
   const isDirty =
-    form.name !== savedForm.name || form.email !== savedForm.email || form.status !== savedForm.status;
+    form.name !== savedForm.name || form.email !== savedForm.email || form.status !== savedForm.status || form.deptId !== savedForm.deptId;
   // 失败处置只有一个入口（本表单不渲染 <FieldError> ⇒ 传空字段 ⇒ 一律 toast）
   const { reportFailure } = useFieldFailure();
   const leaveGuard = useUnsavedChangesGuard(isDirty);
@@ -82,6 +85,10 @@ export default function UserDetailForm({ id, initialUser: serverUser, canUpdate,
     LOCKED: '已锁定',
   };
   const deptName = (serverUser.deptName as string) || null;
+  // 当前部门可能因范围变化不在列表里：保底保留当前项，避免 Select 显示空
+  const deptOptions = form.deptId && !departments.some((d) => d.id === form.deptId)
+    ? [{ id: form.deptId, name: deptName ?? form.deptId }, ...departments]
+    : departments;
   const createdAt = serverUser.createdAt as string;
   const lastLoginAt = (serverUser.lastLoginAt as string | null) ?? null;
   const emailVerified = Boolean(serverUser.emailVerified);
@@ -90,7 +97,7 @@ export default function UserDetailForm({ id, initialUser: serverUser, canUpdate,
 
   const handleUpdate = async () => {
     setSaving(true);
-    const res = await updateUserAction(id, form);
+    const res = await updateUserAction(id, { ...form, deptId: form.deptId || null });
     if (res.success) {
       setSavedForm(form);
       toast.success('用户信息更新成功');
@@ -298,8 +305,33 @@ export default function UserDetailForm({ id, initialUser: serverUser, canUpdate,
               <CardContent className="space-y-3 p-3">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-[11px] text-muted-foreground">所属部门</span>
-                  <span className="text-[13px] font-medium">{deptName || '未分配'}</span>
+                  {canUpdate && !isSelf ? (
+                    <Select
+                      value={form.deptId}
+                      onValueChange={(v) => setForm({ ...form, deptId: v })}
+                      disabled={saving || deptOptions.length === 0}
+                    >
+                      <SelectTrigger aria-label="所属部门" className="h-8 w-[180px]">
+                        <SelectValue placeholder="未分配" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {deptOptions.map((d) => (
+                          <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <span className="text-[13px] font-medium">{deptName || '未分配'}</span>
+                  )}
                 </div>
+                {canUpdate && isSelf && (
+                  <p className="text-[10px] leading-4 text-muted-foreground">不能修改自己的部门，请由其他管理员操作。</p>
+                )}
+                {canUpdate && !isSelf && form.deptId !== savedForm.deptId && (
+                  <p className="rounded bg-badge-warning-bg px-2 py-1 text-[10px] leading-4 text-badge-warning-fg">
+                    迁移部门前需确保该用户角色都属于目标部门，否则会提示先解除角色。
+                  </p>
+                )}
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-[11px] text-muted-foreground">角色（{roles.length}）</span>

@@ -501,6 +501,20 @@ describe('H-18 邮箱规范化', () => {
   });
 });
 
+// ── 自己的部门 = 数据范围来源，禁止自助迁移 ──
+describe('self dept guard', () => {
+  it('修改自己的部门 → 失败且部门不变', async () => {
+    await seedTestData(td.db, { departments: seedSubDept() });
+
+    const r: any = await updateUserAction(ADMIN_ID, { deptId: '00000000-0000-4000-8000-000000000002' } as any);
+
+    expect(r.success).toBe(false);
+    expect(String(r.message)).toContain('自己的部门');
+    const row = await db.query.users.findFirst({ where: eq(schema.users.id, ADMIN_ID) });
+    expect(row?.deptId).toBe(DEPT_ID);
+  });
+});
+
 // ── H-23：用户不能创建在/迁入 DISABLED 部门 ──
 describe('H-23 部门 DISABLED 与用户', () => {
   const DISABLED_DEPT_ID = '00000000-0000-4000-8000-0000000000d2';
