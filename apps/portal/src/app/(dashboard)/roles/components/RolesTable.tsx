@@ -131,8 +131,14 @@ export default function RolesTable({ roles, pagination, initialKeyword, initialS
     setDeleting(true);
     const res = await deleteRoleAction(deleteTarget.id);
     setDeleting(false);
-    setDeleteTarget(null);
-    if (res.success) { toast.success(res.message); router.refresh(); } else { reportFailure(res); }
+    if (res.success) {
+      toast.success(res.message);
+      setDeleteTarget(null);
+      router.refresh();
+    } else {
+      // 失败保留确认框，避免用户反复重开
+      reportFailure(res);
+    }
   };
 
   const getDeptName = (deptId: string) => departments.find(d => d.id === deptId)?.name ?? deptId;

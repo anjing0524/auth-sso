@@ -1426,3 +1426,14 @@ describe('用户单条禁用确认（续二百〇七）', () => {
     expect(src).toContain('if (user.status === \'ACTIVE\')');
   });
 });
+
+describe('删除失败保留确认框（续二百〇八）', () => {
+  it('角色/部门仅在成功时关闭确认框', () => {
+    const roles = read('src/app/(dashboard)/roles/components/RolesTable.tsx');
+    const roleBlock = roles.slice(roles.indexOf('const handleDelete'), roles.indexOf('const getDeptName'));
+    expect(roleBlock.indexOf('setDeleteTarget(null)')).toBeGreaterThan(roleBlock.indexOf('if (res.success)'));
+    const dept = read('src/app/(dashboard)/departments/components/DepartmentTree.tsx');
+    const deptBlock = dept.slice(dept.indexOf('const handleDelete'), dept.indexOf('const sortedTree'));
+    expect(deptBlock.indexOf('setDeleteTarget(null)')).toBeGreaterThan(deptBlock.indexOf('if (r.success)'));
+  });
+});

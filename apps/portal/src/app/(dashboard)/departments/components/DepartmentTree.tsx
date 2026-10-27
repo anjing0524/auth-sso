@@ -142,8 +142,14 @@ export default function DepartmentTree({ departments, deletionStats = {} }: Prop
     setDeleting(true);
     const r = await deleteDepartmentAction(deleteTarget.id);
     setDeleting(false);
-    setDeleteTarget(null);
-    if (r.success) { toast.success(r.message); router.refresh(); } else { reportFailure(r); }
+    if (r.success) {
+      toast.success(r.message);
+      setDeleteTarget(null);
+      router.refresh();
+    } else {
+      // 失败（有子部门/用户/角色、根部门等）保留确认框，用户能读完原因再决定
+      reportFailure(r);
+    }
   };
 
   const sortedTree = useMemo(() => sortDepartmentTree(departments, sortKey), [departments, sortKey]);
