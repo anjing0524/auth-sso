@@ -1161,3 +1161,12 @@ describe('禁止修改自己的角色（续一百八十一）', () => {
     expect(client).toContain('不能修改自己的角色');
   });
 });
+
+describe('部门移动目标过滤（续一百八十二）', () => {
+  it('排除选中部门后代与禁用部门', () => {
+    const src = read('src/app/(dashboard)/departments/components/DepartmentTree.tsx');
+    expect(src).toContain('isDescendantOfSelectedRoot');
+    expect(src).toContain("statusById.get(d.id) === 'ACTIVE'");
+    expect(src).toContain('目标列表已排除选中部门及其子部门');
+  });
+});

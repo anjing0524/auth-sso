@@ -160,10 +160,11 @@ export default function DepartmentTree({ departments, deletionStats = {} }: Prop
     return out;
   }, [departments]);
   const movableDepts = flatDepts.filter((d) => d.depth > 0);
-  const moveTargets = flatDepts.filter((d) => !selectedDepts.has(d.id));
   const selectedCount = selectedDepts.size;
   // 选中父+子时只把顶层部门作为移动项；子部门随父级移动
-  const parentById = new Map(flattenTree(departments).map((d) => [d.id, d.parentId]));
+  const allNodes = flattenTree(departments);
+  const parentById = new Map(allNodes.map((d) => [d.id, d.parentId]));
+  const statusById = new Map(allNodes.map((d) => [d.id, d.status]));
   const selectedRootIds = [...selectedDepts].filter((id) => {
     let parent = parentById.get(id) ?? null;
     while (parent) {
@@ -173,6 +174,19 @@ export default function DepartmentTree({ departments, deletionStats = {} }: Prop
     return true;
   });
   const moveCount = selectedRootIds.length;
+  const selectedRootSet = new Set(selectedRootIds);
+  const isDescendantOfSelectedRoot = (id: string) => {
+    let parent = parentById.get(id) ?? null;
+    while (parent) {
+      if (selectedRootSet.has(parent)) return true;
+      parent = parentById.get(parent) ?? null;
+    }
+    return false;
+  };
+  // 目标不能是已选部门、其后代（会成环）或已禁用部门（服务端会拒）
+  const moveTargets = flatDepts.filter(
+    (d) => !selectedDepts.has(d.id) && statusById.get(d.id) === 'ACTIVE' && !isDescendantOfSelectedRoot(d.id),
+  );
 
   const expandableIds = useMemo(
     () => flatList.filter((d) => (d.children?.length ?? 0) > 0).map((d) => d.id),
@@ -381,7 +395,7 @@ export default function DepartmentTree({ departments, deletionStats = {} }: Prop
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2"><MoveRight className="h-4 w-4 text-primary" /> 移动 {moveCount} 个部门</DialogTitle>
             <DialogDescription>
-              选择新的父部门。已选中的子部门会随父级一起移动，无需单独勾选；循环挂载、越权或父级不可用的部门会被跳过。
+              选择新的父部门。已选中的子部门会随父级一起移动，无需单独勾选；目标列表已排除选中部门及其子部门、以及已禁用部门。
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2 py-2">
