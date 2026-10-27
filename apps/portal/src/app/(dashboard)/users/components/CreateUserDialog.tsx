@@ -125,7 +125,7 @@ export default function CreateUserDialog({ departments, canAssignRole = false }:
       <PermissionGuard permission={USER_PERMISSIONS.CREATE}>
         <Button
           aria-label="新建用户"
-          onClick={() => { clearFailure(); setValues({ name: '', username: '', email: '', password: '' }); setIsOpen(true); }}
+          onClick={() => { clearFailure(); setValues({ name: '', username: '', email: '', password: '' }); setDeptId(departments[0]?.id ?? ''); setIsOpen(true); }}
         >
           <UserPlus className="h-4 w-4" /> 新建用户
         </Button>

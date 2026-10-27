@@ -1437,3 +1437,10 @@ describe('删除失败保留确认框（续二百〇八）', () => {
     expect(deptBlock.indexOf('setDeleteTarget(null)')).toBeGreaterThan(deptBlock.indexOf('if (r.success)'));
   });
 });
+
+describe('创建用户默认部门（续二百〇九）', () => {
+  it('重新打开弹窗时回填默认部门，不要求每次重选', () => {
+    const src = read('src/app/(dashboard)/users/components/CreateUserDialog.tsx');
+    expect(src).toContain('setDeptId(departments[0]?.id ?? \'\')');
+  });
+});
