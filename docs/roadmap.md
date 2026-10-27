@@ -21,6 +21,8 @@
 
 ## 变更记录
 
+- 2026-10-27（续二百一十五）: **角色绑定用户口径**。角色列表用户数暴露软删用户仍计入：系统管理员 67 vs 实际 1。**修复**：getRoleBoundUserCounts join users 过滤 deletedAt；列表紧凑展示用户数。**验证**：列表 67/1/1 → 1/0/0；守卫 141 passed；typecheck/build 0。
+
 - 2026-10-27（续二百一十四）: **用户角色页二级返回**。详情→管理角色→返回详情后列表筛选丢失；列表直达角色页也丢筛选。**修复**：详情链接嵌套 returnTo；列表直达带 returnTo；角色页 safeReturnPath 透传。**验证**：roles→详情→列表全链路 returnTo 正确；UI/守卫 164 passed；typecheck/build 0。
 
 - 2026-10-27（续二百一十三）: **列表下钻返回上下文**。用户/应用/角色权限详情返回固定列表，丢筛选。**修复**：三类列表详情链接带 returnTo；详情返回 safeReturnPath 校验；用户/应用/角色页面透传 returnHref。**验证**：三类返回 url 均保留筛选；UI 162 passed；typecheck/build 0。

@@ -240,6 +240,9 @@ export default function RolesTable({ roles, pagination, initialKeyword, initialS
               {r.isSystem && (
                 <Badge variant="secondary" className="h-5 shrink-0 px-1.5 text-[10px] font-normal">系统</Badge>
               )}
+              <Badge variant="outline" className="h-5 shrink-0 px-1.5 text-[10px] font-normal" title="当前绑定用户数">
+                {boundUserCounts[r.id] ?? 0} 用户
+              </Badge>
             </div>
             {r.description && (
               <p className="line-clamp-1 text-[11px] leading-4 text-muted-foreground" title={r.description}>{r.description}</p>

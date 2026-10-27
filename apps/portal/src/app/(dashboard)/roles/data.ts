@@ -5,7 +5,7 @@ import 'server-only';
 
 import { cacheLife, cacheTag } from 'next/cache';
 import { db, schema } from '@/infrastructure/db';
-import { eq, ilike, inArray, or, asc, desc, and, count, getTableColumns } from 'drizzle-orm';
+import { eq, ilike, inArray, or, asc, desc, and, count, getTableColumns, isNull } from 'drizzle-orm';
 
 import { scopeFilter, isScopeDenied } from '@/lib/authz';
 import type { UserScope } from '@/lib/authz';
@@ -190,10 +190,13 @@ export async function getRoleBoundUserCounts(
   roleIds: readonly string[],
 ): Promise<Record<string, number>> {
   if (roleIds.length === 0) return {};
+  // 逻辑删除用户仍可能保留 user_roles 行；影响面只统计未删除用户，
+  // 否则角色列表/删除确认会把已离职（软删）账号算进"绑定用户数"。
   const rows = await db
     .select({ roleId: schema.userRoles.roleId, boundUsers: count() })
     .from(schema.userRoles)
-    .where(inArray(schema.userRoles.roleId, [...roleIds]))
+    .innerJoin(schema.users, eq(schema.users.id, schema.userRoles.userId))
+    .where(and(inArray(schema.userRoles.roleId, [...roleIds]), isNull(schema.users.deletedAt)))
     .groupBy(schema.userRoles.roleId);
   return Object.fromEntries(rows.map((r) => [r.roleId, Number(r.boundUsers)]));
 }

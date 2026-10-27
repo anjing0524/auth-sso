@@ -235,7 +235,7 @@ export default function UserDetailForm({ id, initialUser: serverUser, canUpdate,
                     <p className="text-[11px] text-destructive">保存后将立即注销该用户所有活跃会话，并禁止其登录。</p>
                   )}
                   {form.status === 'ACTIVE' && savedForm.status === 'DISABLED' && (
-                    <p className="text-[11px] text-success">保存后恢复登录能力，原有角色保持不变。</p>
+                    <p className="rounded bg-badge-success-bg px-2 py-1 text-[11px] text-badge-success-fg">保存后恢复登录能力，原有角色保持不变。</p>
                   )}
                 </div>
               </CardContent>

@@ -1494,3 +1494,12 @@ describe('用户角色页二级返回（续二百一十四）', () => {
     expect(list).toContain('/users/${user.id}/roles?returnTo=');
   });
 });
+
+describe('角色绑定用户口径（续二百一十五）', () => {
+  it('计数排除逻辑删除用户；角色列表展示用户数', () => {
+    const data = read('src/app/(dashboard)/roles/data.ts');
+    expect(data).toContain('isNull(schema.users.deletedAt)');
+    const table = read('src/app/(dashboard)/roles/components/RolesTable.tsx');
+    expect(table).toContain('{boundUserCounts[r.id] ?? 0} 用户');
+  });
+});
