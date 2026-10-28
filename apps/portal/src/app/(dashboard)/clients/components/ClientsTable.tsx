@@ -150,6 +150,7 @@ export default function ClientsTable({ clients, pagination, initialKeyword, init
       return;
     }
     setCopiedId(id);
+    toast.success('已复制 Client ID');
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => setCopiedId(null), 2000);
   };
@@ -277,7 +278,8 @@ export default function ClientsTable({ clients, pagination, initialKeyword, init
           <Button
             variant="ghost"
             size="icon"
-            aria-label="复制 Client ID"
+            aria-label={copiedId === client.clientId ? 'Client ID 已复制' : '复制 Client ID'}
+            title={copiedId === client.clientId ? 'Client ID 已复制' : '复制 Client ID'}
             className="h-8 w-8 rounded-md hover:bg-card hover:shadow-sm transition-all"
             onClick={() => handleCopy(client.clientId, client.clientId)}
           >

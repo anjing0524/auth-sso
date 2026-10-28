@@ -2269,3 +2269,11 @@ describe('审计详情技术字段复制（续三百零四）', () => {
     expect(src).toContain('value={row.url || \'-\'} mono copy');
   });
 });
+
+describe('Client ID 复制反馈（续三百零五）', () => {
+  it('成功 toast + 动态 aria-label', () => {
+    const src = read('src/app/(dashboard)/clients/components/ClientsTable.tsx');
+    expect(src).toContain("toast.success('已复制 Client ID')");
+    expect(src).toContain("'Client ID 已复制'");
+  });
+});

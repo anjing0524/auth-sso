@@ -21,6 +21,8 @@
 
 ## 变更记录
 
+- 2026-10-29（续三百零五）: **Client ID 复制反馈**。无 toast/动态名称。**修复**：toast + aria-label。**验证**：toast/aria 生效；守卫 223 passed。
+
 - 2026-10-29（续三百零四）: **审计详情技术字段复制**。证据字段无法复制。**修复**：Field copy + CopyTextButton。**验证**：UA/IP 复制/toast；守卫 222 passed。
 
 - 2026-10-29（续三百零三）: **编码复制入口**。编辑态无复制。**修复**：权限/角色编码 CopyTextButton。**验证**：两处 toast 已复制；守卫 221 passed。
