@@ -2339,3 +2339,11 @@ describe('日期校验统一（续三百一十四）', () => {
     }
   });
 });
+
+describe('登录密码切换语义（续三百一十五）', () => {
+  it('密码显隐按钮 aria-pressed + 动态名称', () => {
+    const src = read('src/app/login/login-form.tsx');
+    expect(src).toContain('aria-pressed={showPassword}');
+    expect(src).toContain("showPassword ? '隐藏密码' : '显示密码'");
+  });
+});

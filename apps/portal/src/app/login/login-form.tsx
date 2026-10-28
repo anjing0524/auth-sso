@@ -174,6 +174,7 @@ export default function LoginForm({ sessionId, initialError }: LoginFormProps) {
                 <button
                   type="button"
                   aria-label={showPassword ? '隐藏密码' : '显示密码'}
+                  aria-pressed={showPassword}
                   title={showPassword ? '隐藏密码' : '显示密码'}
                   onClick={() => setShowPassword((v) => !v)}
                   className="absolute right-1 top-1 flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
