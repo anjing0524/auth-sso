@@ -21,6 +21,8 @@
 
 ## 变更记录
 
+- 2026-10-29（续三百六十六）: **skip link 有效性**。跳转后焦点丢失。**修复**：main tabIndex=-1。**验证**：焦点到 main；守卫 276 passed。
+
 - 2026-10-29（续三百六十五）: **地标唯一性**。主导航缺失/双 main。**修复**：导航地标；SidebarInset div。**验证**：nav/main 各 1；守卫 275 passed。
 
 - 2026-10-29（续三百六十四）: **客户端 tabpanel 常驻**。aria-controls 断裂。**修复**：双 panel 常驻 hidden 切换。**验证**：引用 0/e2e 通过；守卫 274 passed。

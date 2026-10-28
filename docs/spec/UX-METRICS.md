@@ -1771,3 +1771,9 @@ a11y 对比度函数提取复用，增加未登录 `/login`（390×844，独立�
 | 问题 | 修复 | 验证 |
 |---|---|---|
 | 桌面侧边栏无导航地标；布局嵌套两个 `<main>` | 侧边栏补主导航；SidebarInset 改 div | 主导航 1、main 1、id=main-content；布局不变 |
+
+### 9.233 产品审计二百二十八：skip link 有效性（2026-10-29）
+
+| 问题 | 修复 | 验证 |
+|---|---|---|
+| 「跳转到主内容」链接跳到 #main-content 后焦点落回 body | main 加 tabIndex=-1 | 首次 Tab→链接，Enter 后焦点=MAIN#main-content |

@@ -2725,3 +2725,11 @@ describe('地标唯一性（续三百六十五）', () => {
     expect(src).not.toContain('React.ComponentProps<"main">');
   });
 });
+
+describe('skip link 有效性（续三百六十六）', () => {
+  it('main 可聚焦以接收 skip link', () => {
+    const src = read('src/components/layout/DashboardLayout.tsx');
+    expect(src).toContain('id="main-content" tabIndex={-1}');
+    expect(src).toContain('href="#main-content"');
+  });
+});
