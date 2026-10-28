@@ -57,6 +57,8 @@ export function AuditFilters({ tab, eventType, operation, range, keyword, startD
   useEffect(() => { setKw(keyword ?? ''); }, [keyword]);
   // 自定义区间是独立模式：进入后保留已填日期，切回预置/全部时清空
   const [customMode, setCustomMode] = useState(!range && Boolean(startDate || endDate));
+  // 后退/前进到预置区间时退出自定义模式，避免日期控件残留
+  useEffect(() => { setCustomMode(!range && Boolean(startDate || endDate)); }, [range, startDate, endDate]);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const router = useRouter();
   const [isPending, startTransition] = useTransition();

@@ -1871,3 +1871,10 @@ describe('搜索框随 URL 后退同步（续二百五十五）', () => {
     expect(audit).toContain("useEffect(() => { setKw(keyword ?? ''); }, [keyword]);");
   });
 });
+
+describe('审计自定义日期随 URL 同步（续二百五十六）', () => {
+  it('customMode 跟随 range/startDate/endDate', () => {
+    const src = read('src/app/(dashboard)/audit-logs/components/audit-filters.tsx');
+    expect(src).toContain('useEffect(() => { setCustomMode(!range && Boolean(startDate || endDate)); }, [range, startDate, endDate]);');
+  });
+});
