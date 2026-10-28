@@ -99,6 +99,8 @@ interface UserTableProps {
   canUpdate?: boolean;
   /** 是否有 user:create（空态显示新建入口） */
   canCreate?: boolean;
+  /** 每页条数 */
+  pageSize?: number;
   /** 当前登录用户 id（禁止勾选/禁用自己） */
   currentUserId?: string;
 }
@@ -145,7 +147,7 @@ export function UserTableSkeleton() {
   );
 }
 
-export default function UserTable({ users, pagination, filters, isFiltered = false, clearHref = '/users', canUpdate = false, canCreate = false, currentUserId }: UserTableProps) {
+export default function UserTable({ users, pagination, filters, isFiltered = false, clearHref = '/users', canUpdate = false, canCreate = false, pageSize = 20, currentUserId }: UserTableProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -453,6 +455,14 @@ export default function UserTable({ users, pagination, filters, isFiltered = fal
       total={pagination.total}
       onPageChange={handlePageChange}
       disabled={isPending}
+      pageSize={pageSize}
+      pageSizeOptions={[20, 50, 100].map((size) => {
+        const next = new URLSearchParams(searchParams.toString());
+        next.delete('page');
+        if (size === 20) next.delete('pageSize'); else next.set('pageSize', String(size));
+        const qs = next.toString();
+        return { value: size, href: `${pathname}${qs ? `?${qs}` : ''}` };
+      })}
     />
 
     {/* 单条禁用确认：与批量同语义，禁用立即撤销会话 */}

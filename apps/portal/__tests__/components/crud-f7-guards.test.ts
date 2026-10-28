@@ -1992,3 +1992,14 @@ describe('权限每页条数（续二百六十九）', () => {
     expect(pg).toContain('{pageSizeNode}');
   });
 });
+
+describe('用户每页条数（续二百七十）', () => {
+  it('用户查询/分页保留 pageSize，页大小链接保留筛选', () => {
+    const page = read('src/app/(dashboard)/users/page.tsx');
+    expect(page).toContain('[20, 50, 100].includes(Number(params.pageSize))');
+    expect(page).toContain('pageSize={pageSize}');
+    const table = read('src/app/(dashboard)/users/components/UserTable.tsx');
+    expect(table).toContain('pageSizeOptions={[20, 50, 100].map');
+    expect(table).toContain("next.delete('page')");
+  });
+});

@@ -31,6 +31,7 @@ interface PageProps {
     status?: string;
     deptId?: string;
     noRole?: string;
+    pageSize?: string;
     create?: string;
   }>;
 }
@@ -48,7 +49,7 @@ export default async function UsersPage({ searchParams }: PageProps) {
   const deptId = params.deptId && isUuid(params.deptId) ? params.deptId : undefined;
   const noRole = params.noRole === '1';
   const page = clampPage(params.page);
-  const pageSize = 20;
+  const pageSize = [20, 50, 100].includes(Number(params.pageSize)) ? Number(params.pageSize) : 20;
 
   // 鉴权由 users/layout.tsx 负责（requirePermission(['user:list'])），此处只取身份信息。
   const identity = await resolveIdentity();
@@ -73,6 +74,7 @@ export default async function UsersPage({ searchParams }: PageProps) {
     if (status !== 'ALL') params.set('status', status);
     if (deptId) params.set('deptId', deptId);
     if (noRole) params.set('noRole', '1');
+    if (pageSize !== 20) params.set('pageSize', String(pageSize));
     params.set('page', String(pagination.totalPages));
     redirect(`/users?${params.toString()}`);
   }
@@ -88,6 +90,7 @@ export default async function UsersPage({ searchParams }: PageProps) {
         pagination={pagination}
         canUpdate={canUpdate}
         canCreate={canCreateUser}
+        pageSize={pageSize}
         isFiltered={isFiltered}
         clearHref="/users"
         filters={
