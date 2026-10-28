@@ -493,8 +493,13 @@ describe('H-18 邮箱规范化', () => {
     const r: any = await updateUserAction('00000000-0000-4000-8000-000000000202', { avatarUrl: 'https://example.com/avatar.png' } as any);
 
     expect(r.success).toBe(true);
-    const rows = await db.select().from(schema.users);
+    let rows = await db.select().from(schema.users);
     expect(rows.find((u) => u.id === '00000000-0000-4000-8000-000000000202')?.avatarUrl).toBe('https://example.com/avatar.png');
+
+    const cleared: any = await updateUserAction('00000000-0000-4000-8000-000000000202', { avatarUrl: null } as any);
+    expect(cleared.success).toBe(true);
+    rows = await db.select().from(schema.users);
+    expect(rows.find((u) => u.id === '00000000-0000-4000-8000-000000000202')?.avatarUrl).toBeNull();
   });
 
   it('编辑用户邮箱同样归一化', async () => {

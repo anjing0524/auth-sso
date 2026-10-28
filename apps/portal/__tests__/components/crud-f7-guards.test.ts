@@ -1451,7 +1451,7 @@ describe('管理员用户头像入口（续二百一十一）', () => {
     const src = read('src/app/(dashboard)/users/[id]/UserDetailForm.tsx');
     expect(src).toContain('id="user-avatar"');
     expect(src).toContain('form.avatarUrl !== savedForm.avatarUrl');
-    expect(src).toContain('avatarUrl: form.avatarUrl.trim()');
+    expect(src).toContain('avatarUrl: form.avatarUrl.trim() || null');
   });
 });
 

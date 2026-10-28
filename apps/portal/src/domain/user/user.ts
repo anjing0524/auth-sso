@@ -84,7 +84,7 @@ export function applyUserUpdate(
     email: patch.email ?? user.email,
     status: nextStatus,
     deptId: patch.deptId !== undefined ? patch.deptId : user.deptId,
-    avatarUrl: patch.avatarUrl ?? user.avatarUrl,
+    avatarUrl: patch.avatarUrl === undefined ? user.avatarUrl : patch.avatarUrl,
   };
 }
 

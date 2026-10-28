@@ -104,7 +104,7 @@ export default function UserDetailForm({ id, initialUser: serverUser, canUpdate,
 
   const handleUpdate = async () => {
     setSaving(true);
-    const res = await updateUserAction(id, { ...form, deptId: form.deptId || null, avatarUrl: form.avatarUrl.trim() });
+    const res = await updateUserAction(id, { ...form, deptId: form.deptId || null, avatarUrl: form.avatarUrl.trim() || null });
     if (res.success) {
       setSavedForm(form);
       toast.success('用户信息更新成功');

@@ -30,7 +30,7 @@ export const UpdateUserInputSchema = z.object({
   email: EmailSchema.optional(),
   status: userStatusEnum.optional(),
   deptId: z.string().nullable().optional(),
-  avatarUrl: z.string().max(500, '头像地址最多 500 个字符').optional(),
+  avatarUrl: z.string().url('头像 URL 格式不合法').max(500, '头像地址最多 500 个字符').nullable().optional(),
 });
 
 export const UserIdentityInputSchema = z.object({
