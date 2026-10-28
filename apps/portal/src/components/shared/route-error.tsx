@@ -11,7 +11,7 @@ import Link from 'next/link';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { createClientLogger } from '@/lib/logger-client';
 import { CopyTextButton } from '@/components/shared/copy-text-button';
 
@@ -37,7 +37,7 @@ export function RouteError({ error, reset, loggerName }: RouteErrorProps) {
           <div className="mx-auto mb-4 w-fit rounded-xl bg-warning/10 p-3">
             <AlertTriangle className="h-8 w-8 text-warning" />
           </div>
-          <CardTitle className="text-xl font-bold">页面加载出错</CardTitle>
+          <h1 className="font-heading text-xl font-bold">页面加载出错</h1>
         </CardHeader>
         <CardContent className="space-y-4 pb-8">
           <p role="alert" className="text-sm text-muted-foreground">服务器在处理请求时遇到了问题，请稍后重试。</p>

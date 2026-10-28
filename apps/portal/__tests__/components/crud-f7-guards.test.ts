@@ -3157,3 +3157,11 @@ describe('403 视图主标题（续四百一十八）', () => {
     expect(src).not.toContain('<h2');
   });
 });
+
+describe('错误边界主标题（续四百一十九）', () => {
+  it('使用 h1', () => {
+    const src = read('src/components/shared/route-error.tsx');
+    expect(src).toContain('<h1');
+    expect(src).not.toContain('<CardTitle className="text-xl font-bold">页面加载出错');
+  });
+});
