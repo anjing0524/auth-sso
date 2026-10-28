@@ -64,13 +64,13 @@ export default function UserFilters({ initialKeyword = '', initialStatus = 'ALL'
   return (
     <>
       <SearchInput
-        className="col-span-2 md:w-56"
+        className="col-span-2 md:w-[12.5rem] xl:w-56"
         placeholder="搜索姓名/邮箱/用户名"
         value={keyword}
         onChange={setKeyword}
       />
       <Select value={initialStatus} onValueChange={(value) => applyFilter('status', value)} disabled={isPending}>
-        <SelectTrigger aria-label="过滤状态" className="w-full md:w-32">
+        <SelectTrigger aria-label="过滤状态" className="w-full md:w-28">
           <SelectValue>{STATUS_LABELS[initialStatus] ?? '全部状态'}</SelectValue>
         </SelectTrigger>
         <SelectContent>
@@ -81,7 +81,7 @@ export default function UserFilters({ initialKeyword = '', initialStatus = 'ALL'
         </SelectContent>
       </Select>
       <Select value={initialNoRole} onValueChange={(value) => applyFilter('noRole', value === 'NONE' ? '1' : '')} disabled={isPending}>
-        <SelectTrigger aria-label="过滤角色分配" className="w-full md:w-32">
+        <SelectTrigger aria-label="过滤角色分配" className="w-full md:w-28">
           <SelectValue>{initialNoRole === 'NONE' ? '未分配角色' : '全部'}</SelectValue>
         </SelectTrigger>
         <SelectContent>
@@ -90,7 +90,7 @@ export default function UserFilters({ initialKeyword = '', initialStatus = 'ALL'
         </SelectContent>
       </Select>
       <Select value={initialDeptId} onValueChange={(value) => applyFilter('deptId', value)} disabled={isPending}>
-        <SelectTrigger aria-label="过滤部门" className="w-full md:w-32">
+        <SelectTrigger aria-label="过滤部门" className="w-full md:w-28">
           <SelectValue>{departments.find((d) => d.id === initialDeptId)?.name ?? '全部部门'}</SelectValue>
         </SelectTrigger>
         <SelectContent>

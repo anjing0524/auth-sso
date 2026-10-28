@@ -695,7 +695,7 @@ describe('移动端列表（续一百四十）', () => {
     const page = read('src/app/(dashboard)/users/page.tsx');
     expect(page).toContain('grid w-full grid-cols-2');
     const filters = read('src/app/(dashboard)/users/components/UserFilters.tsx');
-    expect(filters).toContain('col-span-2 md:w-56');
+    expect(filters).toContain('col-span-2 md:w-[12.5rem] xl:w-56');
   });
 });
 
