@@ -2634,3 +2634,11 @@ describe('工具栏分组名称（续三百五十四）', () => {
     expect(src).toContain('role="group" aria-label="筛选与操作"');
   });
 });
+
+describe('部门批量选择播报（续三百五十五）', () => {
+  it('aria-live 状态包含已选/可移动', () => {
+    const src = read('src/app/(dashboard)/departments/components/DepartmentTree.tsx');
+    expect(src).toContain('aria-live="polite"');
+    expect(src).toContain('已选 ${selectedCount} 个部门，其中可移动 ${moveCount} 个');
+  });
+});

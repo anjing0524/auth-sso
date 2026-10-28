@@ -345,6 +345,9 @@ export default function DepartmentTree({ departments, deletionStats = {}, autoOp
                     <MoveRight className="h-4 w-4" /> 移动到…（{moveCount}）
                   </Button>
                 )}
+                <span role="status" aria-live="polite" className="sr-only">
+                  {selectedCount > 0 ? `已选 ${selectedCount} 个部门，其中可移动 ${moveCount} 个` : ''}
+                </span>
               </>
             ) : null}
             {departments.length === 0 ? (
