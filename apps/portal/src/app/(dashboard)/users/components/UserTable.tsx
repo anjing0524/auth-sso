@@ -422,6 +422,7 @@ export default function UserTable({ users, pagination, filters, isFiltered = fal
     <div className="flex min-h-0 flex-1 flex-col">
     <DataTable
       tableLabel="用户列表"
+      emptyAnnouncement="未找到匹配结果"
       columns={columns}
       data={optimisticUsers}
       loading={isPending}

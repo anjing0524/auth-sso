@@ -44,6 +44,8 @@ export interface DataTableProps<T> {
   maxHeightClass?: string;
   /** 表格可访问名称（读屏列表地标） */
   tableLabel?: string;
+  /** 空结果时的读屏播报文案 */
+  emptyAnnouncement?: string;
 }
 
 export function DataTable<T>({
@@ -57,6 +59,7 @@ export function DataTable<T>({
   cardHeader,
   maxHeightClass = 'max-h-[calc(100svh-13rem)]',
   tableLabel,
+  emptyAnnouncement = '列表为空',
 }: DataTableProps<T>) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [overflowing, setOverflowing] = useState(false);
@@ -74,7 +77,7 @@ export function DataTable<T>({
 
   return (
     <Card className="gap-0 overflow-hidden rounded-lg border border-border/70 py-0 shadow-sm ring-0">
-      <p role="status" aria-live="polite" className="sr-only">{loading ? '正在加载列表…' : ''}</p>
+      <p role="status" aria-live="polite" className="sr-only">{loading ? '正在加载列表…' : data.length === 0 ? emptyAnnouncement : ''}</p>
       {cardHeader}
       <CardContent className="p-0">
         {/* 横向滚动提示：宽表在卡片内横向滚动（U-G05）。

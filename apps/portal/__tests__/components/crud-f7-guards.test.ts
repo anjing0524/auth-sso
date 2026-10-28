@@ -2885,3 +2885,17 @@ describe('错误边界播报（续三百八十四）', () => {
     expect(src).toContain('服务器在处理请求时遇到了问题');
   });
 });
+
+describe('空结果播报（续三百八十五）', () => {
+  it('DataTable 支持 emptyAnnouncement，列表已接入', () => {
+    expect(read('src/components/shared/data-table.tsx')).toContain('emptyAnnouncement = ');
+    for (const f of [
+      'src/app/(dashboard)/users/components/UserTable.tsx',
+      'src/app/(dashboard)/roles/components/RolesTable.tsx',
+      'src/app/(dashboard)/permissions/components/PermissionsTable.tsx',
+      'src/app/(dashboard)/clients/components/ClientsTable.tsx',
+    ]) {
+      expect(read(f)).toContain('emptyAnnouncement="未找到匹配结果"');
+    }
+  });
+});
