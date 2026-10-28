@@ -3021,3 +3021,12 @@ describe('侧边栏账号完整值（续四百年）', () => {
     expect(src).toContain('title={userData.email ?? undefined}');
   });
 });
+
+describe('dashboard 内 404（续四百零一）', () => {
+  it('不嵌套 main，并声明正确标题', () => {
+    const src = read('src/app/(dashboard)/not-found.tsx');
+    expect(src).not.toContain('<main');
+    expect(src).toContain('<title>页面不存在 | Auth-SSO</title>');
+    expect(src).toContain('返回工作台');
+  });
+});
