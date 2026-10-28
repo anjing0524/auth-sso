@@ -146,6 +146,15 @@ export default function PermissionsTable({ permissions, pagination, activeTab, i
   };
 
 
+  /** 删除权限的影响面文案：0 影响时说明未被使用，不堆 0 */
+  const impactText = (impact: { roles: number; users: number; descendants: number }) => {
+    const parts: string[] = [];
+    if (impact.roles > 0) parts.push(`${impact.roles} 个角色`);
+    if (impact.users > 0) parts.push(`${impact.users} 个用户`);
+    if (impact.descendants > 0) parts.push(`级联删除 ${impact.descendants} 个子菜单`);
+    return parts.length > 0 ? parts.join('、') : '暂未被角色或用户使用';
+  };
+
   const openDeleteDialog = (p: PermissionRow) => {
     setSelected(p);
     setIsDeleteOpen(true);
@@ -402,8 +411,7 @@ export default function PermissionsTable({ permissions, pagination, activeTab, i
             <p className="text-xs text-muted-foreground">正在统计影响面…</p>
           ) : deleteImpact ? (
             <div className="rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2 text-xs text-destructive">
-              影响面：{deleteImpact.roles} 个角色、{deleteImpact.users} 个用户
-              {deleteImpact.descendants > 0 ? `，并级联删除 ${deleteImpact.descendants} 个子菜单` : ''}
+              影响面：{impactText(deleteImpact)}
             </div>
           ) : null}
           <DialogFooter>

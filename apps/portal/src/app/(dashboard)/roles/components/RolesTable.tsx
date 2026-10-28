@@ -148,6 +148,15 @@ export default function RolesTable({ roles, pagination, initialKeyword, initialS
     }
   };
 
+  /** 删除角色的影响面文案：0 用户/0 权限时不展示无意义数字 */
+  const deletionImpactText = (roleId: string) => {
+    const users = boundUserCounts[roleId] ?? 0;
+    const perms = permissionCounts[roleId] ?? 0;
+    const userText = users > 0 ? `${users} 个用户` : '暂无绑定用户';
+    const permText = perms > 0 ? `将清除 ${perms} 条权限绑定` : '该角色无权限绑定';
+    return `${userText}；${permText}`;
+  };
+
   const getDeptName = (deptId: string) => departments.find(d => d.id === deptId)?.name ?? deptId;
 
   const renderDeptSelect = (value: string, onChange: (v: string) => void, id?: string) => (
@@ -456,7 +465,7 @@ export default function RolesTable({ roles, pagination, initialKeyword, initialS
           </DialogHeader>
           {deleteTarget && (
             <div className="rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2 text-xs text-destructive" data-delete-impact>
-              影响面：{boundUserCounts[deleteTarget.id] ?? 0} 个用户；该角色的权限绑定将同步清除。
+              影响面：{deletionImpactText(deleteTarget.id)}。
             </div>
           )}
           <DialogFooter>

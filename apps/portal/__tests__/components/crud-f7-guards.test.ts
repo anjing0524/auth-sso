@@ -1686,3 +1686,13 @@ describe('危险操作影响面文案（续二百三十四）', () => {
     expect(form).toContain('移除 {roles.length} 个角色绑定');
   });
 });
+
+describe('删除影响面 0 文案（续二百三十五）', () => {
+  it('角色/权限在 0 影响时不堆 0', () => {
+    const roles = read('src/app/(dashboard)/roles/components/RolesTable.tsx');
+    expect(roles).toContain('暂无绑定用户');
+    expect(roles).toContain('该角色无权限绑定');
+    const perms = read('src/app/(dashboard)/permissions/components/PermissionsTable.tsx');
+    expect(perms).toContain('暂未被角色或用户使用');
+  });
+});
