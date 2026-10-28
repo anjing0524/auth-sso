@@ -2777,3 +2777,12 @@ describe('命令面板快捷键关闭回焦（续三百七十二）', () => {
     expect(src).not.toContain('setOpen(prev => !prev)');
   });
 });
+
+describe('路由切换焦点管理（续三百七十三）', () => {
+  it('pathname 变化后聚焦 main，首次挂载跳过', () => {
+    const src = read('src/components/layout/DashboardLayout.tsx');
+    expect(src).toContain('initialRenderRef');
+    expect(src).toContain("document.getElementById('main-content')?.focus()");
+    expect(src).toContain('}, [pathname]);');
+  });
+});

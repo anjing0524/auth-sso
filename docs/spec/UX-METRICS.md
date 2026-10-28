@@ -1815,3 +1815,9 @@ a11y 对比度函数提取复用，增加未登录 `/login`（390×844，独立�
 | 问题 | 修复 | 验证 |
 |---|---|---|
 | 用 Cmd+K 再次关闭面板绕过 onOpenChange，焦点落回 body | toggle 统一走 handleOpenChange | 快捷键关闭/Escape 关闭焦点均回触发器 |
+
+### 9.240 产品审计二百三十五：路由切换焦点管理（2026-10-29）
+
+| 问题 | 修复 | 验证 |
+|---|---|---|
+| 命令面板/侧边栏跨页导航后焦点落到 body | pathname 变化聚焦 main；首屏跳过 | /users、/roles 导航后焦点均 MAIN#main-content |

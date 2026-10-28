@@ -6,7 +6,7 @@
  * 用户数据和菜单由 Server Component (dashboard)/layout.tsx 服务端获取并通过 props 传入，
  * 不再在客户端 useEffect + fetch('/api/me')，消灭客户端数据瀑布。
  */
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import { SidebarProvider, SidebarInset, SidebarTrigger } from '@/components/ui/sidebar';
 import { AppSidebar } from './app-sidebar';
 import { Separator } from '@/components/ui/separator';
@@ -49,6 +49,17 @@ export default function DashboardLayout({
   children,
 }: DashboardProps & { children: React.ReactNode }) {
   const pathname = usePathname();
+  const initialRenderRef = useRef(true);
+
+  // SPA 路由切换后把焦点移回主内容，读屏用户能直接进入新页面；
+  // 初次挂载不抢焦点（首屏仍从 skip link/导航开始）。
+  useEffect(() => {
+    if (initialRenderRef.current) {
+      initialRenderRef.current = false;
+      return;
+    }
+    requestAnimationFrame(() => document.getElementById('main-content')?.focus());
+  }, [pathname]);
 
   const breadcrumbs = useMemo(() => {
     const segments = pathname.split('/').filter(Boolean);
