@@ -2521,3 +2521,11 @@ describe('字段错误关联（续三百四十）', () => {
     expect(client).toContain('client-create-redirect-error');
   });
 });
+
+describe('客户端首错聚焦（续三百四十一）', () => {
+  it('校验失败聚焦第一个错误字段', () => {
+    const src = read('src/app/(dashboard)/clients/new/page.tsx');
+    expect(src).toContain("(['name', 'logoUrl', 'redirectUris'] as const)");
+    expect(src).toContain("document.getElementById(inputId)?.focus()");
+  });
+});

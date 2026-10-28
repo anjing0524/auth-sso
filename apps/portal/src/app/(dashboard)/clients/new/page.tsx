@@ -98,6 +98,15 @@ export default function NewClientPage() {
     if (logo && (!isHttpUrl(logo) || logo.length > 500)) next.logoUrl = 'Logo 地址必须是合法的 http(s) URL';
 
     setErrors(next);
+    const first = (['name', 'logoUrl', 'redirectUris'] as const).find((field) => next[field]);
+    if (first) {
+      const inputId = first === 'name'
+        ? 'client-create-name'
+        : first === 'logoUrl'
+          ? 'client-create-logo'
+          : 'client-create-redirect-uris';
+      requestAnimationFrame(() => document.getElementById(inputId)?.focus());
+    }
     return Object.keys(next).length === 0;
   };
 
