@@ -1812,3 +1812,16 @@ describe('权限选择/用户角色搜索空态（续二百四十九）', () => 
     expect(ur).toContain("setKeyword('')");
   });
 });
+
+describe('筛选加载反馈（续二百五十一）', () => {
+  it('角色筛选/分页、审计筛选走 transition；权限/审计搜索显示 busy', () => {
+    const roles = read('src/app/(dashboard)/roles/components/RolesTable.tsx');
+    expect(roles).toContain('startTransition(() => router.push(`/roles?${params.toString()}`))');
+    expect(roles).toContain('startTransition(() => router.push(`/roles?${p.toString()}`))');
+    const perms = read('src/app/(dashboard)/permissions/components/PermissionsTable.tsx');
+    expect(perms).toContain('busy={isPending}');
+    const audit = read('src/app/(dashboard)/audit-logs/components/audit-filters.tsx');
+    expect(audit).toContain('useTransition');
+    expect(audit).toContain('busy={isPending}');
+  });
+});

@@ -7,7 +7,7 @@
  * 数据层 `getLoginLogs(eventType)` / `getAuditLogs(operation)` 早已支持，只是 UI 没接。
  * 本组件把筛选写进 URL（tab + eventType/operation），支持刷新/分享/后退，并重置页码。
  */
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   AUDIT_OPERATION_LABELS,
@@ -57,6 +57,7 @@ export function AuditFilters({ tab, eventType, operation, range, keyword, startD
   const [customMode, setCustomMode] = useState(!range && Boolean(startDate || endDate));
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const router = useRouter();
+  const [isPending, startTransition] = useTransition();
 
   const push = (next: { eventType?: string | null; operation?: string | null; range?: string | null; keyword?: string | null; startDate?: string | null; endDate?: string | null; status?: string | null; resourceType?: string | null }) => {
     const params = new URLSearchParams();
@@ -77,7 +78,7 @@ export function AuditFilters({ tab, eventType, operation, range, keyword, startD
     const ed = next.endDate !== undefined ? next.endDate : endDate;
     if (sd) params.set('startDate', sd);
     if (ed) params.set('endDate', ed);
-    router.push(`/audit-logs?${params.toString()}`);
+    startTransition(() => router.push(`/audit-logs?${params.toString()}`));
   };
 
   // 关键词：本地即时回显，300ms 后同步 URL（避免每字符一次导航）
@@ -139,7 +140,7 @@ export function AuditFilters({ tab, eventType, operation, range, keyword, startD
   if (tab === 'access') {
     return (
       <div className="flex flex-wrap items-center gap-2">
-        <SearchInput placeholder="搜索用户 / 路径 / IP" value={kw} onChange={setKw} className="w-full md:w-36 xl:w-44" />
+        <SearchInput placeholder="搜索用户 / 路径 / IP" value={kw} onChange={setKw} busy={isPending} className="w-full md:w-36 xl:w-44" />
         <Select value={accessStatus ?? 'ALL'} onValueChange={(v) => push({ status: v === 'ALL' ? null : v })}>
           <SelectTrigger aria-label="访问状态筛选" className="w-32">
             <SelectValue>{accessStatus === 'SUCCESS' ? '成功' : accessStatus === 'FAILURE' ? '失败' : '全部状态'}</SelectValue>
@@ -167,7 +168,7 @@ export function AuditFilters({ tab, eventType, operation, range, keyword, startD
   if (tab === 'login') {
     return (
       <div className="flex flex-wrap items-center gap-2">
-      <SearchInput placeholder="搜索用户 / IP" value={kw} onChange={setKw} className="w-full md:w-36 xl:w-44" />
+      <SearchInput placeholder="搜索用户 / IP" value={kw} onChange={setKw} busy={isPending} className="w-full md:w-36 xl:w-44" />
       <Select value={eventType ?? 'ALL'} onValueChange={(v) => push({ eventType: v === 'ALL' ? null : v })}>
         <SelectTrigger aria-label="事件类型筛选" className="w-40">
           <SelectValue>{eventType ? LOGIN_EVENT_LABELS[eventType] : '全部事件类型'}</SelectValue>
@@ -186,7 +187,7 @@ export function AuditFilters({ tab, eventType, operation, range, keyword, startD
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-    <SearchInput placeholder="搜索用户 / IP / 地址" value={kw} onChange={setKw} className="w-full md:w-36 xl:w-44" />
+    <SearchInput placeholder="搜索用户 / IP / 地址" value={kw} onChange={setKw} busy={isPending} className="w-full md:w-36 xl:w-44" />
     <Select value={operation ?? 'ALL'} onValueChange={(v) => push({ operation: v === 'ALL' ? null : v })}>
       <SelectTrigger aria-label="操作类型筛选" className="w-40">
         <SelectValue>{operation ? AUDIT_OPERATION_LABELS[operation] : '全部操作类型'}</SelectValue>

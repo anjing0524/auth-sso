@@ -222,7 +222,7 @@ export default function PermissionsTable({ permissions, pagination, activeTab, i
         <div className="flex flex-wrap items-center gap-1.5">
           <h1 className="type-section-title shrink-0 text-foreground">权限管理</h1>
           {tabsBar}
-          <SearchInput className="md:w-[190px] xl:w-64" placeholder="搜索名称或编码" value={keyword} onChange={handleSearch} />
+          <SearchInput className="md:w-[190px] xl:w-64" placeholder="搜索名称或编码" value={keyword} onChange={handleSearch} busy={isPending} />
           {activeTab === 'API' ? (
             <div className="order-3 flex w-full flex-wrap items-center gap-2 min-[1100px]:order-2 min-[1100px]:w-auto">
               <Select value={initialStatus || 'ALL'} onValueChange={(v) => startTransition(() => router.push(buildHref(1, keyword, activeTab, v === 'ALL' ? '' : v, initialClientId)))}>

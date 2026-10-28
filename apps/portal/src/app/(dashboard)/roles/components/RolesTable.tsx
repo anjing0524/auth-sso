@@ -183,7 +183,7 @@ export default function RolesTable({ roles, pagination, initialKeyword, initialS
     if (initialDeptId) params.set('deptId', initialDeptId);
     if (value !== 'default') params.set('sort', value);
     params.set('page', '1');
-    router.push(`/roles?${params.toString()}`);
+    startTransition(() => router.push(`/roles?${params.toString()}`));
   };
   const applyStatus = (value: string) => {
     const params = new URLSearchParams();
@@ -192,7 +192,7 @@ export default function RolesTable({ roles, pagination, initialKeyword, initialS
     if (initialDeptId) params.set('deptId', initialDeptId);
     if (value) params.set('status', value);
     params.set('page', '1');
-    router.push(`/roles?${params.toString()}`);
+    startTransition(() => router.push(`/roles?${params.toString()}`));
   };
   const applyDept = (value: string) => {
     const params = new URLSearchParams();
@@ -201,7 +201,7 @@ export default function RolesTable({ roles, pagination, initialKeyword, initialS
     if (initialStatus) params.set('status', initialStatus);
     if (value !== 'ALL') params.set('deptId', value);
     params.set('page', '1');
-    router.push(`/roles?${params.toString()}`);
+    startTransition(() => router.push(`/roles?${params.toString()}`));
   };
 
   const columns = [
@@ -400,7 +400,7 @@ export default function RolesTable({ roles, pagination, initialKeyword, initialS
         onPageChange={(next) => {
           const p = new URLSearchParams(window.location.search);
           p.set('page', String(next));
-          router.push(`/roles?${p.toString()}`);
+          startTransition(() => router.push(`/roles?${p.toString()}`));
         }}
       />
       </div>
