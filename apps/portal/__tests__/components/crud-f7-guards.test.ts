@@ -2230,3 +2230,11 @@ describe('回调 URI +N 完整值（续二百九十九）', () => {
     expect(src).toContain('client.redirectUris.slice(1).join');
   });
 });
+
+describe('Scopes/回调复制入口（续三百）', () => {
+  it('应用详情提供复制按钮', () => {
+    const src = read('src/app/(dashboard)/clients/[id]/components/ClientInfoSection.tsx');
+    expect(src).toContain('aria-label="复制 Scopes"');
+    expect(src).toContain('aria-label="复制回调地址"');
+  });
+});

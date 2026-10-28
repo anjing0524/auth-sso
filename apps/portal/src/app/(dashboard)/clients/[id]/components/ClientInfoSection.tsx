@@ -119,7 +119,12 @@ export function ClientInfoSection({
               <p className="text-[10px] leading-4 text-muted-foreground">用于应用列表头像；不填则显示名称首字母。</p>
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="client-detail-scopes">默认权限范围（Scopes）</Label>
+              <div className="flex items-center justify-between gap-2">
+                <Label htmlFor="client-detail-scopes">默认权限范围（Scopes）</Label>
+                <Button variant="ghost" size="icon-sm" aria-label="复制 Scopes" title="复制 Scopes" disabled={!formData.scopes} onClick={() => onCopy(formData.scopes)}>
+                  <Copy className="h-3.5 w-3.5" />
+                </Button>
+              </div>
               <div className="flex flex-wrap gap-1.5">
                 {SCOPE_PRESETS.map((s) => {
                   const active = selectedScopes.has(s.value);
@@ -157,7 +162,12 @@ export function ClientInfoSection({
           </CardHeader>
           <CardContent className="space-y-3 p-3">
             <div className="space-y-1.5">
-              <Label htmlFor="client-detail-redirect-uris">回调地址（每行一个）</Label>
+              <div className="flex items-center justify-between gap-2">
+                <Label htmlFor="client-detail-redirect-uris">回调地址（每行一个）</Label>
+                <Button variant="ghost" size="icon-sm" aria-label="复制回调地址" title="复制回调地址" disabled={!formData.redirectUris} onClick={() => onCopy(formData.redirectUris)}>
+                  <Copy className="h-3.5 w-3.5" />
+                </Button>
+              </div>
               <Textarea
                 id="client-detail-redirect-uris"
                 disabled={readOnly}
