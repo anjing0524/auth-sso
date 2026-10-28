@@ -254,7 +254,7 @@ export function ClientInfoSection({
               ) : (
                 <div className="space-y-1.5">
                   <p className="text-[11px] text-muted-foreground">出于安全原因无法查看；丢失后可轮换。</p>
-                  <Button variant="outline" size="sm" onClick={onRegenerateSecret} disabled={readOnly}>
+                  <Button variant="outline" size="sm" onClick={onRegenerateSecret} disabled={readOnly} title={readOnly ? 'Portal 自身登录客户端不可轮换 Secret' : undefined}>
                     重新生成 Secret
                   </Button>
                 </div>

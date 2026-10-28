@@ -2191,3 +2191,13 @@ describe('权限创建继承筛选（续二百九十四）', () => {
     expect(form).toContain("permission?.type ?? initialType ?? 'API'");
   });
 });
+
+describe('Portal 客户端禁用说明（续二百九十五）', () => {
+  it('禁用/只读/轮换禁用态都有 title 原因', () => {
+    const detail = read('src/app/(dashboard)/clients/[id]/ClientDetailClient.tsx');
+    expect(detail).toContain('Portal 自身登录客户端不可禁用');
+    expect(detail).toContain('Portal 自身登录客户端为只读');
+    const info = read('src/app/(dashboard)/clients/[id]/components/ClientInfoSection.tsx');
+    expect(info).toContain('Portal 自身登录客户端不可轮换 Secret');
+  });
+});

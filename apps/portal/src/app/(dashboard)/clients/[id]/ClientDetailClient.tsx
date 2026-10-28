@@ -225,13 +225,18 @@ export function ClientDetailClient({ client, initialTokens, initialTokenTotal, c
                 variant="outline"
                 onClick={() => setPendingAction('toggle-status')}
                 disabled={saving || client.clientId === PORTAL_CLIENT_ID}
+                title={client.clientId === PORTAL_CLIENT_ID ? 'Portal 自身登录客户端不可禁用' : undefined}
                 className={client.status === 'ACTIVE'
                   ? 'border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive'
                   : 'border-success/40 text-success hover:bg-success/10 hover:text-success'}
               >
                 {client.status === 'ACTIVE' ? '禁用' : '启用'}
               </Button>
-              <Button onClick={handleSave} disabled={saving || client.clientId === PORTAL_CLIENT_ID || !isDirty}>
+              <Button
+                onClick={handleSave}
+                disabled={saving || client.clientId === PORTAL_CLIENT_ID || !isDirty}
+                title={client.clientId === PORTAL_CLIENT_ID ? 'Portal 自身登录客户端为只读' : !isDirty ? '没有未保存的修改' : undefined}
+              >
                 {saving ? '保存中...' : !isDirty ? '无修改' : '保存修改'}
               </Button>
             </div>
