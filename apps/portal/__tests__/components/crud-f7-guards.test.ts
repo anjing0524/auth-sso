@@ -2146,3 +2146,12 @@ describe('用户角色空态部门筛选（续二百八十八）', () => {
     expect(src).toContain('/roles?deptId=${user.deptId}');
   });
 });
+
+describe('部门名筛选入口（续二百八十九）', () => {
+  it('用户/角色行部门名链接到对应 deptId', () => {
+    const users = read('src/app/(dashboard)/users/components/UserTable.tsx');
+    expect(users).toContain('/users?deptId=${encodeURIComponent(user.deptId)}');
+    const roles = read('src/app/(dashboard)/roles/components/RolesTable.tsx');
+    expect(roles).toContain('/roles?deptId=${encodeURIComponent(r.deptId)}');
+  });
+});

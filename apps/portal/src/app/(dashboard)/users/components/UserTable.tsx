@@ -316,7 +316,17 @@ export default function UserTable({ users, pagination, filters, isFiltered = fal
       <TableCell className="hidden md:table-cell">
         <div className="flex items-center gap-1.5 text-sm text-foreground/80">
           <Building className="h-3.5 w-3.5 text-muted-foreground" />
-          {user.deptName || <span className="italic text-muted-foreground">未分配</span>}
+          {user.deptId && user.deptName ? (
+            <Link
+              href={`/users?deptId=${encodeURIComponent(user.deptId)}${pageSize !== 20 ? `&pageSize=${pageSize}` : ''}`}
+              className="hover:text-primary hover:underline"
+              title="按该部门筛选用户"
+            >
+              {user.deptName}
+            </Link>
+          ) : (
+            <span className="italic text-muted-foreground">未分配</span>
+          )}
         </div>
       </TableCell>
       <TableCell className="hidden md:table-cell">

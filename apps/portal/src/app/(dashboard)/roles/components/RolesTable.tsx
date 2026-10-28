@@ -314,7 +314,13 @@ export default function RolesTable({ roles, pagination, initialKeyword, initialS
         </code>
       </TableCell>
       <TableCell className="hidden lg:table-cell">
-        <span className="block max-w-[150px] truncate text-[13px] text-muted-foreground">{getDeptName(r.deptId)}</span>
+        <Link
+          href={`/roles?deptId=${encodeURIComponent(r.deptId)}${initialSort !== 'default' ? `&sort=${initialSort}` : ''}`}
+          className="block max-w-[150px] truncate text-[13px] text-muted-foreground hover:text-primary hover:underline"
+          title="按该部门筛选角色"
+        >
+          {getDeptName(r.deptId)}
+        </Link>
       </TableCell>
       <TableCell className="hidden sm:table-cell">
         <Link
