@@ -439,7 +439,7 @@ export default function UserDetailForm({ id, initialUser: serverUser, canUpdate,
                 <div>
                   <p className="text-[11px] text-muted-foreground">用户 ID</p>
                   <div className="flex items-center gap-1.5">
-                    <code className="min-w-0 flex-1 truncate font-mono text-[11px]">{String(serverUser.id ?? id)}</code>
+                    <code className="min-w-0 flex-1 truncate font-mono text-[11px]" title={String(serverUser.id ?? id)}>{String(serverUser.id ?? id)}</code>
                     <Button variant="ghost" size="icon-sm" aria-label="复制用户 ID" title="复制用户 ID" onClick={copyUserId}>
                       <Copy className="h-3.5 w-3.5" />
                     </Button>

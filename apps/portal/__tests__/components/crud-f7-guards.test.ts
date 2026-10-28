@@ -2208,3 +2208,11 @@ describe('会话 ID 完整值（续二百九十六）', () => {
     expect(src).toContain('title={`会话 ID：${item.id}`}');
   });
 });
+
+describe('技术标识完整 title（续二百九十七）', () => {
+  it('用户 ID/角色编码/权限编码都有 title', () => {
+    expect(read('src/app/(dashboard)/users/[id]/UserDetailForm.tsx')).toContain('title={String(serverUser.id ?? id)}');
+    expect(read('src/app/(dashboard)/roles/components/RolesTable.tsx')).toContain('title={r.code}');
+    expect(read('src/app/(dashboard)/permissions/components/PermissionsTable.tsx')).toContain('title={p.code}');
+  });
+});

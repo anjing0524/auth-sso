@@ -333,7 +333,7 @@ export default function PermissionsTable({ permissions, pagination, activeTab, i
         )}
       </TableCell>
       <TableCell className="hidden md:table-cell">
-        <code className="rounded-md bg-muted px-2 py-0.5 text-xs">{p.code}</code>
+        <code className="rounded-md bg-muted px-2 py-0.5 text-xs" title={p.code}>{p.code}</code>
         {p.type === 'API' && (
           <span className="ml-2 text-[11px] text-muted-foreground" title="归属应用（决定角色能否通过该 Client 的 OAuth 准入）">
             归属应用：{p.clientId ?? '未绑定'}

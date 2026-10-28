@@ -309,7 +309,7 @@ export default function RolesTable({ roles, pagination, initialKeyword, initialS
         </div>
       </TableCell>
       <TableCell className="hidden md:table-cell">
-        <code className="inline-flex max-w-full items-center truncate rounded border border-border/70 bg-muted/60 px-1.5 py-0.5 font-mono text-[11px] text-foreground/80">
+        <code className="inline-flex max-w-full items-center truncate rounded border border-border/70 bg-muted/60 px-1.5 py-0.5 font-mono text-[11px] text-foreground/80" title={r.code}>
           {r.code}
         </code>
       </TableCell>
