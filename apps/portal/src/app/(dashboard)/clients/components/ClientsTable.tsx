@@ -278,8 +278,8 @@ export default function ClientsTable({ clients, pagination, initialKeyword, init
           <Button
             variant="ghost"
             size="icon"
-            aria-label={copiedId === client.clientId ? 'Client ID 已复制' : '复制 Client ID'}
-            title={copiedId === client.clientId ? 'Client ID 已复制' : '复制 Client ID'}
+            aria-label={copiedId === client.clientId ? `已复制 ${client.name} 的 Client ID` : `复制 ${client.name} 的 Client ID`}
+            title={copiedId === client.clientId ? `已复制 ${client.name} 的 Client ID` : `复制 ${client.name} 的 Client ID`}
             className="h-8 w-8 rounded-md hover:bg-card hover:shadow-sm transition-all"
             onClick={() => handleCopy(client.clientId, client.clientId)}
           >
@@ -312,7 +312,7 @@ export default function ClientsTable({ clients, pagination, initialKeyword, init
       <TableCell className="text-right">
         <div className="flex items-center justify-end gap-0.5">
           <PermissionGuard permission={CLIENT_PERMISSIONS.UPDATE}>
-            <Button asChild variant="ghost" size="sm" className="h-8 gap-1.5 px-2" aria-label="编辑 OAuth 配置" title="编辑 OAuth 配置">
+            <Button asChild variant="ghost" size="sm" className="h-8 gap-1.5 px-2" aria-label={`编辑 ${client.name} 的 OAuth 配置`} title={`编辑 ${client.name} 的 OAuth 配置`}>
               <Link href={`/clients/${client.clientId}?returnTo=${encodeURIComponent(currentListHref)}`}><Edit className="h-4 w-4" /><span className="hidden md:inline">编辑配置</span></Link>
             </Button>
           </PermissionGuard>
@@ -320,8 +320,8 @@ export default function ClientsTable({ clients, pagination, initialKeyword, init
             <Button
               variant="ghost"
               size="sm"
-              aria-label="注销应用"
-              title={client.clientId === PORTAL_CLIENT_ID ? 'Portal 自身客户端不可注销' : '注销应用'}
+              aria-label={`注销应用 ${client.name}`}
+              title={client.clientId === PORTAL_CLIENT_ID ? 'Portal 自身客户端不可注销' : `注销应用 ${client.name}`}
               disabled={client.clientId === PORTAL_CLIENT_ID}
               className="h-8 gap-1.5 px-2 text-destructive hover:bg-destructive/10 hover:text-destructive disabled:opacity-40"
               onClick={() => setDeleteTarget(client)}

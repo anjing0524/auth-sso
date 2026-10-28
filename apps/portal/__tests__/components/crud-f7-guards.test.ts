@@ -2274,7 +2274,7 @@ describe('Client ID 复制反馈（续三百零五）', () => {
   it('成功 toast + 动态 aria-label', () => {
     const src = read('src/app/(dashboard)/clients/components/ClientsTable.tsx');
     expect(src).toContain("toast.success('已复制 Client ID')");
-    expect(src).toContain("'Client ID 已复制'");
+    expect(src).toContain('已复制 ${client.name} 的 Client ID');
   });
 });
 
@@ -2372,5 +2372,14 @@ describe('部门展开按钮名称（续三百一十八）', () => {
     const src = read('src/app/(dashboard)/departments/components/DepartmentTree.tsx');
     expect(src).toContain('收起 ${dept.name} 的子部门');
     expect(src).toContain('展开 ${dept.name} 的子部门');
+  });
+});
+
+describe('客户端行操作上下文（续三百一十九）', () => {
+  it('复制/编辑/注销名称包含应用名', () => {
+    const src = read('src/app/(dashboard)/clients/components/ClientsTable.tsx');
+    expect(src).toContain('复制 ${client.name} 的 Client ID');
+    expect(src).toContain('编辑 ${client.name} 的 OAuth 配置');
+    expect(src).toContain('注销应用 ${client.name}');
   });
 });
