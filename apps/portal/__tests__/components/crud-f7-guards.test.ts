@@ -2816,3 +2816,13 @@ describe('禁用原因补充（续三百七十七）', () => {
     expect((info.match(/Portal 自身登录客户端为只读/g) ?? []).length).toBeGreaterThanOrEqual(2);
   });
 });
+
+describe('用户角色页禁用原因（续三百七十八）', () => {
+  it('全选/清空/保存 disabled 带 title', () => {
+    const src = read('src/app/(dashboard)/users/[id]/roles/roles-client.tsx');
+    expect(src).toContain('当前筛选没有可选角色');
+    expect(src).toContain('当前没有已选角色');
+    expect(src).toContain('没有未保存的修改');
+    expect(src).toContain('不能修改自己的角色');
+  });
+});

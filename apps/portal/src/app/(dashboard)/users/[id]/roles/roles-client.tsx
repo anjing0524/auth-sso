@@ -186,11 +186,12 @@ export default function UserRolesPage({ user, isSelf = false, returnHref }: User
           </Button>
           <Button
             variant="ghost" size="sm" disabled={readOnly || loading || filteredRoles.length === 0}
+            title={readOnly ? '没有分配角色的权限' : loading ? '加载中…' : filteredRoles.length === 0 ? '当前筛选没有可选角色' : undefined}
             onClick={() => setAssignedRoleIds((prev) => new Set([...prev, ...filteredRoles.map((r) => r.id)]))}
           >
             全选当前筛选
           </Button>
-          <Button variant="ghost" size="sm" disabled={readOnly || loading || assignedRoleIds.size === 0} onClick={() => setAssignedRoleIds(new Set())}>
+          <Button variant="ghost" size="sm" disabled={readOnly || loading || assignedRoleIds.size === 0} title={readOnly ? '没有分配角色的权限' : loading ? '加载中…' : assignedRoleIds.size === 0 ? '当前没有已选角色' : undefined} onClick={() => setAssignedRoleIds(new Set())}>
             清空全部
           </Button>
           <span className="flex items-center gap-1 text-[11px]">
@@ -202,7 +203,7 @@ export default function UserRolesPage({ user, isSelf = false, returnHref }: User
             <Button variant="outline" size="sm" asChild>
               <Link href={`/users/${user.id}`}>取消</Link>
             </Button>
-            <Button size="sm" onClick={() => setConfirmOpen(true)} disabled={readOnly || loading || saving || !user.deptId || changeCount === 0}>
+            <Button size="sm" onClick={() => setConfirmOpen(true)} disabled={readOnly || loading || saving || !user.deptId || changeCount === 0} title={readOnly ? '不能修改自己的角色' : loading ? '加载中…' : saving ? '保存中…' : !user.deptId ? '用户未分配部门，无法分配角色' : changeCount === 0 ? '没有未保存的修改' : undefined}>
               <Save className="h-3.5 w-3.5" />
               {saving ? '保存中...' : readOnly ? '不能修改自己的角色' : changeCount === 0 ? '无变更' : `保存变更（${changeCount}）`}
             </Button>
