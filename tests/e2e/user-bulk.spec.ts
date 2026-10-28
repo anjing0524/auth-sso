@@ -41,7 +41,7 @@ test.describe('用户批量操作', () => {
       await page.goto(`/users?keyword=${encodeURIComponent(prefix)}`, { waitUntil: 'networkidle' });
       await expect(page.getByText(`${prefix}_1`)).toBeVisible();
       await expect(page.getByText(`${prefix}_2`)).toBeVisible();
-      const detailLinks = page.getByRole('link', { name: '查看详情' });
+      const detailLinks = page.getByRole('link', { name: /查看详情/ });
       // 详情链接带 ?returnTo=...；只取 pathname 末段，避免把查询串当成 ID
       const idFromHref = (href: string) => new URL(href, 'https://127.0.0.1').pathname.split('/').pop()!;
       ids.push(idFromHref((await detailLinks.nth(0).getAttribute('href'))!));

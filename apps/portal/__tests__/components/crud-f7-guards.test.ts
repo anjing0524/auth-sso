@@ -2401,3 +2401,10 @@ describe('用户状态按钮行上下文（续三百二十一）', () => {
     expect(src).toContain('恢复账号 ${user.name}');
   });
 });
+
+describe('用户详情按钮行上下文（续三百二十二）', () => {
+  it('查看详情名称包含姓名', () => {
+    const src = read('src/app/(dashboard)/users/components/UserTable.tsx');
+    expect(src).toContain('查看详情 ${user.name}');
+  });
+});

@@ -350,7 +350,7 @@ export default function UserTable({ users, pagination, filters, isFiltered = fal
               只读角色在列表行没有任何入口（而详情页本身已支持只读模式）。是否有编辑权限
               由详情页内部 canUpdate 决定（只读横幅 + fieldset 禁用）。 */}
           <PermissionGuard permission={USER_PERMISSIONS.READ}>
-            <Button asChild variant="ghost" size="sm" className="h-8 gap-1.5 px-2" aria-label="查看详情" title="查看详情">
+            <Button asChild variant="ghost" size="sm" className="h-8 gap-1.5 px-2" aria-label={`查看详情 ${user.name}`} title={`查看详情 ${user.name}`}>
               <Link href={`/users/${user.id}?returnTo=${encodeURIComponent(currentListHref)}`}><Eye className="h-4 w-4" /><span className="hidden md:inline">详情</span></Link>
             </Button>
           </PermissionGuard>
