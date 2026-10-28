@@ -110,7 +110,7 @@ describe('U-USERS01 — 行内详情入口按 user:read 渲染', () => {
     const detail = screen.getByRole('link', { name: /查看详情/ });
     expect(detail).toHaveAttribute('href', `/users/${USER_ROW.id}?returnTo=%2Fusers`);
     // 写操作仍需各自权限：只读角色不应看到「禁用/分配角色」
-    expect(screen.queryByRole('button', { name: '禁用账号' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /禁用账号/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '分配角色' })).not.toBeInTheDocument();
   });
 
@@ -120,7 +120,7 @@ describe('U-USERS01 — 行内详情入口按 user:read 渲染', () => {
     render(<UserTable users={[USER_ROW]} pagination={{ ...PAGINATION, total: 1, totalPages: 1 }} />);
 
     expect(screen.getByRole('link', { name: /查看详情/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '禁用账号' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /禁用账号/ })).toBeInTheDocument();
   });
 });
 

@@ -2392,3 +2392,12 @@ describe('审计详情行上下文（续三百二十）', () => {
     expect(src).toContain('查看 ${accessLog.method} ${accessLog.path} 的访问日志详情');
   });
 });
+
+describe('用户状态按钮行上下文（续三百二十一）', () => {
+  it('禁用/解锁/恢复名称包含姓名', () => {
+    const src = read('src/app/(dashboard)/users/components/UserTable.tsx');
+    expect(src).toContain('禁用账号 ${user.name}');
+    expect(src).toContain('解锁账号 ${user.name}');
+    expect(src).toContain('恢复账号 ${user.name}');
+  });
+});
