@@ -377,11 +377,23 @@ export default function RolePermissionsPage({ role, returnHref = '/roles' }: Rol
           <div className="flex flex-wrap items-center gap-2 border-b bg-muted/30 px-3 py-1.5">
             <SearchInput placeholder="搜索当前作用域内权限..." value={keyword} onChange={setKeyword} />
             <Badge variant="secondary" className="h-6">{loading ? '加载中' : `${scope.label} · ${scopedItems.length} 项`}</Badge>
-            <Button variant="ghost" size="sm" onClick={() => setOnlySelected((v) => !v)}>
-              {onlySelected ? '显示全部' : '仅看已选'}
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-pressed={onlySelected}
+              className={onlySelected ? 'bg-muted text-foreground' : undefined}
+              onClick={() => setOnlySelected((v) => !v)}
+            >
+              仅看已选
             </Button>
-            <Button variant="ghost" size="sm" onClick={() => setOnlyChanged((v) => !v)}>
-              {onlyChanged ? '显示全部' : '仅看变更'}
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-pressed={onlyChanged}
+              className={onlyChanged ? 'bg-muted text-foreground' : undefined}
+              onClick={() => setOnlyChanged((v) => !v)}
+            >
+              仅看变更
             </Button>
             <div className="flex items-center gap-1">
               {([['ALL', '全部'], ['ACTIVE', '已启用'], ['DISABLED', '已禁用']] as const).map(([v, t]) => (

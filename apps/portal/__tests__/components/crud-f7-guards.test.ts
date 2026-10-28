@@ -2958,3 +2958,13 @@ describe('用户角色筛选状态（续三百九十三）', () => {
     expect(src).toContain('aria-pressed={onlySelected}');
   });
 });
+
+describe('角色权限筛选切换（续三百九十四）', () => {
+  it('仅看已选/变更 aria-pressed 且标签固定', () => {
+    const src = read('src/app/(dashboard)/roles/[id]/permissions/permissions-client.tsx');
+    expect(src).toContain('aria-pressed={onlySelected}');
+    expect(src).toContain('aria-pressed={onlyChanged}');
+    expect(src).toContain('仅看已选');
+    expect(src).toContain('仅看变更');
+  });
+});
