@@ -21,6 +21,8 @@
 
 ## 变更记录
 
+- 2026-10-29（续三百五十八）: **表格可访问名称**。表格无名称。**修复**：DataTable tableLabel + 指定表格 aria-label。**验证**：8 处名称正确；守卫 268 passed。
+
 - 2026-10-29（续三百五十七）: **审计芯片保留 pageSize**。移除/清空丢 pageSize。**修复**：chips/clear 带 pageSize。**验证**：50 保留；审计 URL 10 + 守卫 266 passed。
 
 - 2026-10-29（续三百五十六）: **部门工具栏禁用原因**。无效按钮可点。**修复**：disabled + title。**验证**：收起后 disabled/title；守卫 266 passed。

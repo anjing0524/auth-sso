@@ -48,7 +48,7 @@ export function ClientTokensSection({ tokens, total = tokens.length, onRevokeAll
         </p>
       )}
       <CardContent className="p-0">
-        <Table>
+        <Table aria-label="访问令牌列表">
           <TableHeader>
             <TableRow>
               <TableHead>用户</TableHead>

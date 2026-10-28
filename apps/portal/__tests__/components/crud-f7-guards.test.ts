@@ -2659,3 +2659,12 @@ describe('审计芯片保留 pageSize（续三百五十七）', () => {
     expect(src).toContain('pageSize !== DEFAULT_PAGE_SIZE ? `&pageSize=${pageSize}`');
   });
 });
+
+describe('表格可访问名称（续三百五十八）', () => {
+  it('DataTable 支持 tableLabel，列表/审计/令牌/仪表盘有名称', () => {
+    expect(read('src/components/shared/data-table.tsx')).toContain('aria-label={tableLabel}');
+    expect(read('src/app/(dashboard)/users/components/UserTable.tsx')).toContain('tableLabel="用户列表"');
+    expect(read('src/app/(dashboard)/audit-logs/page.tsx')).toContain('aria-label="登录日志列表"');
+    expect(read('src/app/(dashboard)/dashboard/page.tsx')).toContain('aria-label="最近操作记录"');
+  });
+});

@@ -42,6 +42,8 @@ export interface DataTableProps<T> {
    * 行数多时由这里的 max-height 让表格内部滚动（表头 sticky 依然生效）。
    */
   maxHeightClass?: string;
+  /** 表格可访问名称（读屏列表地标） */
+  tableLabel?: string;
 }
 
 export function DataTable<T>({
@@ -54,6 +56,7 @@ export function DataTable<T>({
   renderRow,
   cardHeader,
   maxHeightClass = 'max-h-[calc(100svh-13rem)]',
+  tableLabel,
 }: DataTableProps<T>) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [overflowing, setOverflowing] = useState(false);
@@ -85,7 +88,7 @@ export function DataTable<T>({
             会把 flex 父级撑宽（实测 390px 视口下 document.scrollWidth=557）。 */}
         {/* 唯一滚动容器：横向 + 纵向都由这里承担；Table 内层不再自建 overflow（否则 sticky 表头失效）。 */}
         <div ref={scrollRef} aria-busy={loading || undefined} className={`${maxHeightClass} scrollbar-slim w-full overflow-auto`}>
-        <Table containerClassName="overflow-visible">
+        <Table aria-label={tableLabel} containerClassName="overflow-visible">
           <TableHeader className="[&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:bg-card">
             <TableRow>
               {columns.map((col) => (

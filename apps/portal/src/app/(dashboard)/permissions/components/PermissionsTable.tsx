@@ -378,6 +378,7 @@ export default function PermissionsTable({ permissions, pagination, activeTab, i
     <>
       <div className="flex min-h-0 flex-1 flex-col">
       <DataTable
+      tableLabel="权限列表"
         columns={columns}
         data={permissions}
         loading={isPending}

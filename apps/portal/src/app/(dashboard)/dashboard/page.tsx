@@ -193,7 +193,7 @@ export default async function DashboardPage() {
               {recentLogs.length === 0 ? (
                 <p className="px-3 py-10 text-center text-[13px] text-muted-foreground">暂无操作记录</p>
               ) : (
-                <Table>
+                <Table aria-label="最近操作记录">
                   <TableHeader className="[&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:bg-card">
                     <TableRow>
                       <TableHead>操作人</TableHead>

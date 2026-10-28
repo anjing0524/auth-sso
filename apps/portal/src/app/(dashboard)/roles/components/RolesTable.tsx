@@ -408,6 +408,7 @@ export default function RolesTable({ roles, pagination, initialKeyword, initialS
     <>
       <div className="flex min-h-0 flex-1 flex-col">
       <DataTable
+      tableLabel="角色列表"
         columns={columns}
         data={roles}
         loading={isPending}

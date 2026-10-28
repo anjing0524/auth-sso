@@ -299,7 +299,7 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
           <CardContent className="p-0">
             <OverflowHint>
             <div className="scrollbar-slim max-h-[calc(100svh-19rem)] overflow-auto">
-            <Table containerClassName="overflow-visible">
+            <Table aria-label="登录日志列表" containerClassName="overflow-visible">
               <TableHeader className="[&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:bg-card">
                 <TableRow>
                   <TableHead>时间</TableHead>
@@ -374,7 +374,7 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
           <CardContent className="p-0">
             <OverflowHint>
             <div className="max-h-[calc(100svh-19rem)] overflow-auto">
-            <Table containerClassName="overflow-visible">
+            <Table aria-label="操作日志列表" containerClassName="overflow-visible">
               <TableHeader className="[&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:bg-card">
                 <TableRow>
                   <TableHead>时间</TableHead>
@@ -463,7 +463,7 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
           <CardContent className="p-0">
             <OverflowHint>
             <div className="scrollbar-slim max-h-[calc(100svh-19rem)] overflow-auto">
-            <Table containerClassName="overflow-visible">
+            <Table aria-label="访问日志列表" containerClassName="overflow-visible">
               <TableHeader className="[&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:bg-card">
                 <TableRow>
                   <TableHead className="hidden md:table-cell">时间</TableHead>
