@@ -2114,3 +2114,11 @@ describe('审计访问表 1024 列宽（续二百八十四）', () => {
     expect(filters).toContain('md:w-56 xl:w-64');
   });
 });
+
+describe('审计操作表 1024 列宽（续二百八十五）', () => {
+  it('IP 列 ≥1100；请求地址限宽', () => {
+    const page = read('src/app/(dashboard)/audit-logs/page.tsx');
+    expect(page).toContain('{opLog.ip ||');
+    expect(page).toContain('min-[1100px]:max-w-xs');
+  });
+});

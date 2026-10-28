@@ -383,7 +383,7 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
                   <TableHead>操作类型</TableHead>
                   <TableHead className="hidden md:table-cell">请求地址</TableHead>
                   <TableHead>状态</TableHead>
-                  <TableHead className="hidden md:table-cell">IP</TableHead>
+                  <TableHead className="hidden min-[1100px]:table-cell">IP</TableHead>
                   <TableHead className="text-right">详情</TableHead>
                 </TableRow>
               </TableHeader>
@@ -430,7 +430,7 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
                             {AUDIT_OPERATION_LABELS[opLog.operation as keyof typeof AUDIT_OPERATION_LABELS] || opLog.operation}
                           </Badge>
                         </TableCell>
-                        <TableCell className="hidden max-w-xs truncate text-muted-foreground md:table-cell">
+                        <TableCell className="hidden max-w-[200px] truncate text-muted-foreground md:table-cell min-[1100px]:max-w-xs">
                           {opLog.url || (opLog.params ? JSON.stringify(opLog.params) : '') || '-'}
                         </TableCell>
                         <TableCell>
@@ -441,7 +441,7 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
                             <span className="ml-2 text-xs text-destructive">({opLog.errorMsg})</span>
                           )}
                         </TableCell>
-                        <TableCell className="hidden text-muted-foreground md:table-cell">
+                        <TableCell className="hidden text-muted-foreground min-[1100px]:table-cell">
                           {opLog.ip || '-'}
                         </TableCell>
                         <TableCell className="text-right">
