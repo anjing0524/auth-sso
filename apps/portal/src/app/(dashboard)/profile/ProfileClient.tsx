@@ -324,7 +324,7 @@ export default function ProfileClient({
       <Card className="shrink-0 gap-0 rounded-lg border border-border/70 py-0 shadow-sm ring-0">
         <CardContent className="flex flex-wrap items-center gap-3 p-3">
           <Avatar className="h-12 w-12 shrink-0 rounded-full border-2 border-card shadow-sm">
-            <AvatarImage src={user.picture ?? undefined} />
+            <AvatarImage src={user.picture ?? undefined} alt="" />
             <AvatarFallback className="bg-primary text-base font-semibold text-primary-foreground">
               {user.name.charAt(0)}
             </AvatarFallback>

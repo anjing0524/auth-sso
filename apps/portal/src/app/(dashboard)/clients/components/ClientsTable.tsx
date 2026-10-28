@@ -248,7 +248,7 @@ export default function ClientsTable({ clients, pagination, initialKeyword, init
         <div className="flex items-center gap-4">
           <div className="relative">
             <Avatar className="h-7 w-7 shrink-0 rounded-md border border-border/40 shadow-sm">
-              <AvatarImage src={client.logoUrl || ''} />
+              <AvatarImage src={client.logoUrl || ''} alt="" />
               <AvatarFallback className="bg-gradient-to-br from-muted to-muted/50 text-muted-foreground font-semibold text-xs">
                 {avatarFallback(client.name)}
               </AvatarFallback>

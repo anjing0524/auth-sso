@@ -293,7 +293,7 @@ export default function UserTable({ users, pagination, filters, isFiltered = fal
       <TableCell>
         <div className="flex items-center gap-3">
           <Avatar className="h-7 w-7 shrink-0 shadow-sm">
-            <AvatarImage src={user.avatarUrl || ''} />
+            <AvatarImage src={user.avatarUrl || ''} alt="" />
             <AvatarFallback className="bg-primary/10 text-foreground text-[10px] font-semibold">
               {avatarFallback(user.name)}
             </AvatarFallback>

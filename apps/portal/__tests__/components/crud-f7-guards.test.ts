@@ -2053,3 +2053,17 @@ describe('空态装饰图标（续二百七十六）', () => {
     expect(src).toContain('aria-hidden="true"');
   });
 });
+
+describe('头像装饰语义（续二百七十七）', () => {
+  it('行内/资料头像 alt 为空', () => {
+    for (const f of [
+      'src/app/(dashboard)/clients/components/ClientsTable.tsx',
+      'src/app/(dashboard)/profile/ProfileClient.tsx',
+      'src/app/(dashboard)/users/components/UserTable.tsx',
+      'src/components/layout/app-sidebar.tsx',
+    ]) {
+      expect(read(f)).toContain('<AvatarImage');
+      expect(read(f)).toContain('alt=""');
+    }
+  });
+});

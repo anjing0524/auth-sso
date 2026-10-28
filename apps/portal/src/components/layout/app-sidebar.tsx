@@ -147,7 +147,7 @@ export function AppSidebar({ user, dynamicMenus = [] }: {
                   className="w-full hover:bg-card hover:shadow-md transition-all duration-300 rounded-2xl h-14 border border-transparent hover:border-border/50"
                 >
                   <Avatar className="h-9 w-9 rounded-xl border-2 border-card shadow-sm">
-                    <AvatarImage src={userData.picture ?? undefined} />
+                    <AvatarImage src={userData.picture ?? undefined} alt="" />
                     <AvatarFallback className="bg-primary text-primary-foreground text-xs font-semibold">
                       {userData.name?.charAt(0) || 'U'}
                     </AvatarFallback>
