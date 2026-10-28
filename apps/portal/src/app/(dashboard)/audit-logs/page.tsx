@@ -14,6 +14,7 @@ import { AuditFilters } from './components/audit-filters';
 import { getLoginLogs, getAuditLogs, getAccessLogs, getAccessLogResourceTypes } from '@/app/audit/data';
 import { redirect } from 'next/navigation';
 import { clampPage } from '@/lib/pagination';
+import { isIsoDate } from '@/lib/iso-date';
 import { resolveIdentity } from '@/lib/auth';
 import { getUserPermissionContext, toPermissionContextOrNull } from '@/lib/permissions';
 import {
@@ -74,8 +75,6 @@ interface PageProps {
 const TIME_RANGES = ['24h', '7d', '30d'] as const;
 type TimeRange = (typeof TIME_RANGES)[number];
 
-const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-
 function resolveRange(value?: string): { range: TimeRange | null; startDate?: string; endDate?: string } {
   if (!value || !(TIME_RANGES as readonly string[]).includes(value)) return { range: null };
   const days = value === '24h' ? 1 : value === '7d' ? 7 : 30;
@@ -90,8 +89,8 @@ function resolveDateFilters(
 ): { range: TimeRange | null; startDate?: string; endDate?: string } {
   const preset = resolveRange(rangeValue);
   if (preset.range) return preset;
-  const start = startParam && DATE_RE.test(startParam) ? startParam : undefined;
-  const end = endParam && DATE_RE.test(endParam) ? endParam : undefined;
+  const start = isIsoDate(startParam) ? startParam : undefined;
+  const end = isIsoDate(endParam) ? endParam : undefined;
   if (start && end && start > end) return { range: null };
   return { range: null, startDate: start, endDate: end };
 }

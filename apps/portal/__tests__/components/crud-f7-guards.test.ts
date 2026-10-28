@@ -2324,3 +2324,18 @@ describe('returnTo 校验统一（续三百一十三）', () => {
     }
   });
 });
+
+describe('日期校验统一（续三百一十四）', () => {
+  it('审计页/读模型/导出路由复用 isIsoDate', () => {
+    for (const f of [
+      'src/app/(dashboard)/audit-logs/page.tsx',
+      'src/app/audit/data.ts',
+      'src/app/api/audit/export/route.ts',
+    ]) {
+      const src = read(f);
+      expect(src).toContain('isIsoDate');
+      expect(src).not.toContain('DATE_RE');
+      expect(src).not.toContain('DATE_REGEX =');
+    }
+  });
+});

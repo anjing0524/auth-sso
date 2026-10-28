@@ -8,6 +8,7 @@
  * @permission audit:export
  */
 import { type NextRequest, NextResponse } from 'next/server';
+import { isIsoDate } from '@/lib/iso-date';
 import {
   AUDIT_PERMISSIONS,
   COMMON_ERRORS,
@@ -115,8 +116,7 @@ export async function GET(request: NextRequest) {
         ? (operationParam as AuditOperation) : undefined;
 
       // H-28：日期 / 用户筛选此前完全没有解析（列表支持、导出丢弃，导出结果与列表不一致）。
-      // 与 audit/data.ts 的 DATE_REGEX 同口径；非法值显式 400 而不是静默忽略。
-      const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+      // 与审计读模型共用 isIsoDate；非法值显式 400 而不是静默忽略。
       const startDate = searchParams.get('startDate') || undefined;
       const endDate = searchParams.get('endDate') || undefined;
       const userId = searchParams.get('userId') || undefined;
@@ -129,7 +129,7 @@ export async function GET(request: NextRequest) {
         return restError(COMMON_ERRORS.VALIDATION_ERROR, 'keyword 最长 100 字符', 400);
       }
       const keyword = keywordParam?.trim() || undefined;
-      if ((startDate && !DATE_REGEX.test(startDate)) || (endDate && !DATE_REGEX.test(endDate))) {
+      if ((startDate && !isIsoDate(startDate)) || (endDate && !isIsoDate(endDate))) {
         return restError(COMMON_ERRORS.VALIDATION_ERROR, 'startDate/endDate 必须是 YYYY-MM-DD', 400);
       }
       if (userId && !isUuid(userId)) {

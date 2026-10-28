@@ -12,9 +12,7 @@ import type { AnyColumn, SQL } from 'drizzle-orm';
 import type { PgTable } from 'drizzle-orm/pg-core';
 import type { AuditOperation, LoginEventType } from '@auth-sso/contracts';
 import { clampPage, clampPageSize, offsetFor, paginationMeta, type PaginationMeta } from '@/lib/pagination';
-
-/** 日期格式正则：防止 SQL 注入和异常参数穿透 */
-const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+import { isIsoDate } from '@/lib/iso-date';
 
 /**
  * 为分页查询构建日期范围过滤条件 — 消除 getAuditLogs / getLoginLogs / getAccessLogs 三处重复
@@ -25,10 +23,10 @@ function addDateRangeConditions(
   startDate?: string,
   endDate?: string,
 ): void {
-  if (startDate && DATE_REGEX.test(startDate)) {
+  if (isIsoDate(startDate)) {
     conditions.push(gte(column, new Date(`${startDate}T00:00:00`)));
   }
-  if (endDate && DATE_REGEX.test(endDate)) {
+  if (isIsoDate(endDate)) {
     conditions.push(lte(column, new Date(`${endDate}T23:59:59.999`)));
   }
 }
