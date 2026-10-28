@@ -1749,3 +1749,15 @@ describe('工作台最近操作跳转（续二百四十三）', () => {
     expect(page).toContain('href="/audit-logs?tab=operation"');
   });
 });
+
+describe('工作台快捷新建用户（续二百四十四）', () => {
+  it('链接带 create=1，页面自动打开，取消清理 URL', () => {
+    const dash = read('src/app/(dashboard)/dashboard/page.tsx');
+    expect(dash).toContain('href="/users?create=1"');
+    const page = read('src/app/(dashboard)/users/page.tsx');
+    expect(page).toContain("autoOpen={params.create === '1'}");
+    const dialog = read('src/app/(dashboard)/users/components/CreateUserDialog.tsx');
+    expect(dialog).toContain('useState(autoOpen)');
+    expect(dialog).toContain("if (autoOpen) router.replace('/users')");
+  });
+});

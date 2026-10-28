@@ -56,11 +56,17 @@ interface CreateUserDialogProps {
   departments: { id: string; name: string }[];
   /** 有 user:assign_role 才显示"下一步分配角色"行动 */
   canAssignRole?: boolean;
+  /** 工作台快捷操作 /users?create=1 直达创建 */
+  autoOpen?: boolean;
 }
 
-export default function CreateUserDialog({ departments, canAssignRole = false }: CreateUserDialogProps) {
+export default function CreateUserDialog({ departments, canAssignRole = false, autoOpen = false }: CreateUserDialogProps) {
   const router = useRouter();
-  const [isOpen, setIsOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(autoOpen);
+  const closeDialog = () => {
+    setIsOpen(false);
+    if (autoOpen) router.replace('/users');
+  };
   /**
    * 部门**必填**：ADR-002 的数据范围 = 角色部门子树，`users.dept_id = NULL` 的用户
    * 不在任何角色子树内 ⇒ 创建后对所有管理员都不可见（审计 P1-2 实测）。
@@ -110,6 +116,7 @@ export default function CreateUserDialog({ departments, canAssignRole = false }:
             : {}),
         });
         setIsOpen(false);
+        if (autoOpen) router.replace('/users');
         router.refresh();
         setDeptId('');
         setValues({ name: '', username: '', email: '', password: '' });
@@ -131,7 +138,7 @@ export default function CreateUserDialog({ departments, canAssignRole = false }:
         </Button>
       </PermissionGuard>
 
-      <Dialog open={isOpen} onOpenChange={setIsOpen}>
+      <Dialog open={isOpen} onOpenChange={(open) => { setIsOpen(open); if (!open && autoOpen) router.replace('/users'); }}>
         <DialogContent>
           <form action={formAction} className="space-y-2.5">
             <DialogHeader>
@@ -220,7 +227,7 @@ export default function CreateUserDialog({ departments, canAssignRole = false }:
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => setIsOpen(false)}
+                onClick={closeDialog}
                 disabled={isPending}
               >
                 取消

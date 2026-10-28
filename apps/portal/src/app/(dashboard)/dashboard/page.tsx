@@ -243,7 +243,7 @@ export default async function DashboardPage() {
               <CardTitle className="type-card-title">快捷操作</CardTitle>
             </CardHeader>
             <CardContent className="p-1.5">
-              <QuickLink href="/users" show={canUserCreate} icon={<Users className="h-4 w-4" />} title="新建用户" hint="配置身份、部门与角色" />
+              <QuickLink href="/users?create=1" show={canUserCreate} icon={<Users className="h-4 w-4" />} title="新建用户" hint="配置身份、部门与角色" />
               <QuickLink href="/clients/new" show={canClientCreate} icon={<AppWindow className="h-4 w-4" />} title="注册应用" hint="生成 OAuth 2.1 凭证" />
               <QuickLink href="/roles" show={canRoles} icon={<ShieldCheck className="h-4 w-4" />} title="角色与权限" hint="维护 RBAC 与数据范围" />
               <QuickLink href="/departments" show={canDepartments} icon={<Building2 className="h-4 w-4" />} title="组织架构" hint="部门树与数据沙箱" />

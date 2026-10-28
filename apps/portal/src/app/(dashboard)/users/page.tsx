@@ -31,6 +31,7 @@ interface PageProps {
     status?: string;
     deptId?: string;
     noRole?: string;
+    create?: string;
   }>;
 }
 
@@ -105,7 +106,7 @@ export default async function UsersPage({ searchParams }: PageProps) {
                 </div>
               </div>
             }
-            right={<CreateUserDialog departments={departments} canAssignRole={canAssignRole} />}
+            right={<CreateUserDialog departments={departments} canAssignRole={canAssignRole} autoOpen={params.create === '1'} />}
           />
         }
       />
