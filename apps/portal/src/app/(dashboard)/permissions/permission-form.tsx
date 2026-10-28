@@ -169,14 +169,14 @@ export default function PermissionForm({ mode, menuOptions, permission, clients 
           <div className="grid gap-3 p-3 sm:grid-cols-2">
             <div className="space-y-1.5">
               <div className="flex items-center gap-1"><Label htmlFor="perm-name">权限名称</Label><RequiredMark /></div>
-              <Input id="perm-name" value={form.name} maxLength={100} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="用户列表" />
+              <Input id="perm-name" aria-required="true" value={form.name} maxLength={100} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="用户列表" />
             </div>
             <div className="space-y-1.5">
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-1"><Label htmlFor="perm-code">权限编码{mode === 'edit' ? '（不可变更）' : ''}</Label>{mode === 'create' && <RequiredMark />}</div>
                 {mode === 'edit' && <CopyTextButton text={form.code} label="复制权限编码" />}
               </div>
-              <Input id="perm-code" value={form.code} maxLength={150} disabled={mode === 'edit'} aria-invalid={fieldError?.field === 'code'} onChange={e => setForm({ ...form, code: e.target.value })} placeholder="user:list" />
+              <Input id="perm-code" aria-required={mode === 'create'} value={form.code} maxLength={150} disabled={mode === 'edit'} aria-invalid={fieldError?.field === 'code'} onChange={e => setForm({ ...form, code: e.target.value })} placeholder="user:list" />
             </div>
             <FieldError failure={fieldError} field="code" />
             <div className="space-y-1.5 sm:col-span-2">
@@ -249,7 +249,7 @@ export default function PermissionForm({ mode, menuOptions, permission, clients 
             <div className="grid gap-3 p-3 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label htmlFor="perm-path">路由路径{form.type === 'PAGE' ? '（必填）' : '（可选）'}</Label>
-                <Input id="perm-path" value={form.path} maxLength={200} onChange={e => setForm({ ...form, path: e.target.value })} placeholder="/users" />
+                <Input id="perm-path" aria-required={form.type === 'PAGE'} value={form.path} maxLength={200} onChange={e => setForm({ ...form, path: e.target.value })} placeholder="/users" />
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="perm-icon">图标</Label>

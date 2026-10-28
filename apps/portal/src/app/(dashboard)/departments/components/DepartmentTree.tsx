@@ -496,8 +496,8 @@ export default function DepartmentTree({ departments, deletionStats = {}, autoOp
           <form onSubmit={submitCreate}>
             <p className="pt-3 text-[11px] text-muted-foreground"><RequiredLegend /></p>
             <div className="space-y-4 py-4">
-              <div className="space-y-2"><div className="flex items-center gap-1"><Label htmlFor="dept-name">部门名称</Label><RequiredMark /></div><Input id="dept-name" value={form.name} maxLength={100} onChange={e => setForm({...form, name: e.target.value})} placeholder="技术部" /></div>
-              <div className="space-y-2"><div className="flex items-center gap-1"><Label htmlFor="dept-code">部门编码</Label><RequiredMark /></div><Input id="dept-code" value={form.code} maxLength={50} aria-invalid={fieldError?.field === 'code'} onChange={e => setForm({...form, code: e.target.value})} placeholder="tech" /></div>
+              <div className="space-y-2"><div className="flex items-center gap-1"><Label htmlFor="dept-name">部门名称</Label><RequiredMark /></div><Input id="dept-name" aria-required="true" value={form.name} maxLength={100} onChange={e => setForm({...form, name: e.target.value})} placeholder="技术部" /></div>
+              <div className="space-y-2"><div className="flex items-center gap-1"><Label htmlFor="dept-code">部门编码</Label><RequiredMark /></div><Input id="dept-code" aria-required="true" value={form.code} maxLength={50} aria-invalid={fieldError?.field === 'code'} onChange={e => setForm({...form, code: e.target.value})} placeholder="tech" /></div>
               <FieldError failure={fieldError} field="code" />
               <div className="space-y-2"><Label htmlFor="dept-sort">排序（越小越靠前）</Label><Input id="dept-sort" type="number" value={form.sort} onChange={e => setForm({...form, sort: Number(e.target.value)})} /></div>
             </div>
@@ -516,7 +516,7 @@ export default function DepartmentTree({ departments, deletionStats = {}, autoOp
           <form onSubmit={submitUpdate}>
             <p className="pt-3 text-[11px] text-muted-foreground"><RequiredLegend /></p>
             <div className="space-y-4 py-4">
-              <div className="space-y-2"><div className="flex items-center gap-1"><Label htmlFor="dept-edit-name">部门名称</Label><RequiredMark /></div><Input id="dept-edit-name" value={form.name} onChange={e => setForm({...form, name: e.target.value})} /></div>
+              <div className="space-y-2"><div className="flex items-center gap-1"><Label htmlFor="dept-edit-name">部门名称</Label><RequiredMark /></div><Input id="dept-edit-name" aria-required="true" value={form.name} onChange={e => setForm({...form, name: e.target.value})} /></div>
               <div className="space-y-2"><div className="flex items-center gap-1"><Label htmlFor="dept-edit-code">部门编码</Label><RequiredMark /></div><Input id="dept-edit-code" value={form.code} aria-invalid={fieldError?.field === 'code'} onChange={e => setForm({...form, code: e.target.value})} /></div>
               <FieldError failure={fieldError} field="code" />
               <div className="space-y-2"><Label htmlFor="dept-edit-sort">排序（越小越靠前）</Label><Input id="dept-edit-sort" type="number" value={form.sort} onChange={e => setForm({...form, sort: Number(e.target.value)})} /></div>

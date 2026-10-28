@@ -2476,3 +2476,11 @@ describe('客户端必填语义（续三百三十四）', () => {
     expect((src.match(/aria-required="true"/g) ?? []).length).toBe(2);
   });
 });
+
+describe('必填语义推广（续三百三十五）', () => {
+  it('角色/部门/权限必填输入 aria-required', () => {
+    expect(read('src/app/(dashboard)/roles/components/RolesTable.tsx')).toContain('id="role-name" aria-required="true"');
+    expect(read('src/app/(dashboard)/departments/components/DepartmentTree.tsx')).toContain('id="dept-name" aria-required="true"');
+    expect(read('src/app/(dashboard)/permissions/permission-form.tsx')).toContain('id="perm-name" aria-required="true"');
+  });
+});
