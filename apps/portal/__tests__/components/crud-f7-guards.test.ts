@@ -916,7 +916,7 @@ describe('错误页统一出口（续一百五十八）', () => {
     expect(notFound).not.toContain('去登录');
     expect(notFound).toContain('返回工作台');
     const shared = read('src/components/shared/route-error.tsx');
-    expect(shared).toContain('复制 Error ID');
+    expect(shared).toContain('复制错误 ID');
     expect(shared).toContain('返回工作台');
   });
 });
@@ -2739,5 +2739,15 @@ describe('面包屑导航名称（续三百六十七）', () => {
     const src = read('src/components/ui/breadcrumb.tsx');
     expect(src).toContain('aria-label="面包屑导航"');
     expect(src).not.toContain('aria-label="breadcrumb"');
+  });
+});
+
+describe('错误页 ID 文案（续三百六十八）', () => {
+  it('用户可见文案统一为错误 ID', () => {
+    const src = read('src/components/shared/route-error.tsx');
+    expect(src).toContain('错误 ID：');
+    expect(src).toContain('错误 ID 已复制');
+    expect(src).not.toContain('Error ID:');
+    expect(src).not.toContain('aria-label="复制 Error ID"');
   });
 });
