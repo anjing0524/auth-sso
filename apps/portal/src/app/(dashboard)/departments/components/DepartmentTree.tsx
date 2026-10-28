@@ -93,8 +93,21 @@ export default function DepartmentTree({ departments, deletionStats = {}, autoOp
   const searchParams = useSearchParams();
   const [keyword, setKeyword] = useState('');
   const [sortKey, setSortKey] = useState<DepartmentSortKey>('default');
-  /** 默认展开根节点（否则 40+ 部门只显示 root，用户需逐层点开） */
-  const [expanded, setExpanded] = useState<Set<string>>(() => new Set(departments.filter((d) => !d.parentId).map((d) => d.id)));
+  /**
+   * 默认展开：小规模组织架构（≤10 个部门）全展开，避免新建子部门后刷新看不到；
+   * 大规模（40+）只展开根，避免一次渲染过长列表。
+   */
+  const [expanded, setExpanded] = useState<Set<string>>(() => {
+    const allIds: string[] = [];
+    const walk = (nodes: DeptTreeNode[]) => {
+      for (const node of nodes) {
+        allIds.push(node.id);
+        walk(node.children ?? []);
+      }
+    };
+    walk(departments);
+    return new Set(allIds.length <= 10 ? allIds : departments.filter((d) => !d.parentId).map((d) => d.id));
+  });
   const [saving, setSaving] = useState(false);
 
   // 弹窗
@@ -151,7 +164,20 @@ export default function DepartmentTree({ departments, deletionStats = {}, autoOp
     setSaving(true);
     const r = await createDepartmentAction({ name: form.name, code: form.code.trim() || undefined, sort: form.sort, parentId: form.parentId });
     setSaving(false);
-    if (r.success) { toast.success(r.message); closeAddDialog(); router.refresh(); } else { reportFailure(r); }
+    if (r.success) {
+      // 父部门可能是折叠的：创建成功后自动展开，否则用户看不到新子部门，误以为没保存
+      if (form.parentId) {
+        setExpanded((prev) => {
+          if (prev.has(form.parentId!)) return prev;
+          const next = new Set(prev);
+          next.add(form.parentId!);
+          return next;
+        });
+      }
+      toast.success(r.message);
+      closeAddDialog();
+      router.refresh();
+    } else { reportFailure(r); }
   };
 
   const handleUpdate = async () => {
@@ -501,6 +527,13 @@ export default function DepartmentTree({ departments, deletionStats = {}, autoOp
                   const res = await bulkMoveDepartmentsAction([...selectedDepts], moveParentId);
                   if (res.success) {
                     toast.success((res as { message?: string }).message ?? '部门已移动');
+                    // 目标父部门展开，避免移动后节点“消失”
+                    setExpanded((prev) => {
+                      if (prev.has(moveParentId)) return prev;
+                      const next = new Set(prev);
+                      next.add(moveParentId);
+                      return next;
+                    });
                     setSelectedDepts(new Set());
                     setMoveOpen(false);
                     router.refresh();
