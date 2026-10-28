@@ -1925,3 +1925,11 @@ describe('最近操作详情链路（续二百六十一）', () => {
     expect(page).toContain('`/audit-logs/${log.id}?tab=operation`');
   });
 });
+
+describe('用户删除返回筛选上下文（续二百六十三）', () => {
+  it('删除成功后跳 returnHref 而非固定 /users', () => {
+    const src = read('src/app/(dashboard)/users/[id]/UserDetailForm.tsx');
+    expect(src).toContain('router.push(returnHref)');
+    expect(src).not.toContain("router.push('/users')");
+  });
+});

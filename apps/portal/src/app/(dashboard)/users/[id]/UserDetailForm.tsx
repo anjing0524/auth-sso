@@ -138,7 +138,7 @@ export default function UserDetailForm({ id, initialUser: serverUser, canUpdate,
       if (res.success) {
         toast.success('用户已成功删除');
         setIsDeleteOpen(false);
-        router.push('/users');
+        router.push(returnHref);
       } else {
         reportFailure({ error: res.error, message: userFacingMessage(res, '删除失败') });
       }
