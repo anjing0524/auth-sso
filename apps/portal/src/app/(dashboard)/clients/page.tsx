@@ -51,10 +51,12 @@ export default async function ClientsPage({ searchParams }: PageProps) {
   }
   // U-G02：搜索无结果与"系统还没有应用"是两种语义（空态文案/出口不同）。
   const isFiltered = keyword.length > 0 || status !== '';
+  // 清除筛选保留排序偏好（视图状态，不是筛选条件）
+  const clearHref = sort !== 'recent' ? `/clients?sort=${sort}` : '/clients';
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
-      <ClientsTable clients={clients} pagination={pagination} initialKeyword={keyword} initialStatus={status} initialSort={sort} isFiltered={isFiltered} clearHref="/clients" statusCounts={statusCounts} />
+      <ClientsTable clients={clients} pagination={pagination} initialKeyword={keyword} initialStatus={status} initialSort={sort} isFiltered={isFiltered} clearHref={clearHref} statusCounts={statusCounts} />
     </div>
   );
 }

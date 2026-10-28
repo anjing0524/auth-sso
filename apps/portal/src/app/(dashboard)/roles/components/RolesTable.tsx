@@ -68,6 +68,8 @@ export default function RolesTable({ roles, pagination, initialKeyword, initialS
   const router = useRouter();
   const searchParams = useSearchParams();
   const currentListHref = `/roles${searchParams.toString() ? `?${searchParams.toString()}` : ''}`;
+  // 清除筛选保留排序偏好
+  const clearFilterHref = initialSort !== 'default' ? `/roles?sort=${initialSort}` : '/roles';
   const [keyword, setKeyword] = useState(initialKeyword);
   // 浏览器后退/前进时，URL 是唯一真相源：输入框跟随 initialKeyword
   useEffect(() => { setKeyword(initialKeyword); }, [initialKeyword]);
@@ -380,7 +382,7 @@ export default function RolesTable({ roles, pagination, initialKeyword, initialS
               variant="simple"
               kind="filtered"
               icon="ShieldCheck"
-              clearAction={{ label: '清除搜索', href: '/roles' }}
+              clearAction={{ label: '清除筛选', href: clearFilterHref }}
             />
           ) : (
             <EmptyState

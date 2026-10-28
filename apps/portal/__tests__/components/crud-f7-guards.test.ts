@@ -2067,3 +2067,12 @@ describe('头像装饰语义（续二百七十七）', () => {
     }
   });
 });
+
+describe('清空筛选保留排序（续二百七十九）', () => {
+  it('客户端/角色 clearHref 带 sort', () => {
+    const clients = read('src/app/(dashboard)/clients/page.tsx');
+    expect(clients).toContain("sort !== 'recent' ? `/clients?sort=${sort}`");
+    const roles = read('src/app/(dashboard)/roles/components/RolesTable.tsx');
+    expect(roles).toContain("initialSort !== 'default' ? `/roles?sort=${initialSort}`");
+  });
+});
