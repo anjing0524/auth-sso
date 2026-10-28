@@ -469,7 +469,7 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
                 <TableRow>
                   <TableHead className="hidden md:table-cell">时间</TableHead>
                   <TableHead>用户</TableHead>
-                  <TableHead className="hidden md:table-cell">方法</TableHead>
+                  <TableHead className="hidden min-[1100px]:table-cell">方法</TableHead>
                   <TableHead className="hidden md:table-cell">路径 / 资源</TableHead>
                   <TableHead>状态</TableHead>
                   <TableHead className="hidden md:table-cell">IP</TableHead>
@@ -507,10 +507,10 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
                             {accessLog.method} {accessLog.path}
                           </span>
                         </TableCell>
-                        <TableCell className="hidden md:table-cell">
+                        <TableCell className="hidden min-[1100px]:table-cell">
                           <Badge variant="outline" className="font-mono text-[10px]">{accessLog.method}</Badge>
                         </TableCell>
-                        <TableCell className="hidden max-w-xs truncate font-mono text-[11px] text-muted-foreground md:table-cell" title={accessLog.path}>
+                        <TableCell className="hidden max-w-[200px] truncate font-mono text-[11px] text-muted-foreground md:table-cell min-[1100px]:max-w-xs" title={accessLog.path}>
                           {accessLog.path}
                           {accessLog.resourceType ? ` · ${accessLog.resourceType}` : ''}
                         </TableCell>

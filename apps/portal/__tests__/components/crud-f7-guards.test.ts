@@ -1287,7 +1287,7 @@ describe('桌面工具栏层级（续一百九十五）', () => {
     const audit = read('src/app/(dashboard)/audit-logs/page.tsx');
     expect(audit).toContain('gap-1.5 xl:gap-3');
     const filters = read('src/app/(dashboard)/audit-logs/components/audit-filters.tsx');
-    expect(filters).toContain('md:w-36 xl:w-44');
+    expect(filters).toContain('md:w-56 xl:w-64');
     const page = read('src/app/(dashboard)/clients/page.tsx');
     expect(page).toContain('getClientStatusCounts');
     expect(page).toContain('statusCounts={statusCounts}');
@@ -2102,5 +2102,15 @@ describe('每页条数视觉分隔（续二百八十二）', () => {
     const src = read('src/components/shared/table-pagination.tsx');
     expect(src).toContain('index < pageSizeOptions.length - 1');
     expect(src).toContain('>/</span>');
+  });
+});
+
+describe('审计访问表 1024 列宽（续二百八十四）', () => {
+  it('方法列 ≥1100；路径 1024 限宽；搜索框 224', () => {
+    const page = read('src/app/(dashboard)/audit-logs/page.tsx');
+    expect(page).toContain('<TableHead className="hidden min-[1100px]:table-cell">方法</TableHead>');
+    expect(page).toContain('max-w-[200px]');
+    const filters = read('src/app/(dashboard)/audit-logs/components/audit-filters.tsx');
+    expect(filters).toContain('md:w-56 xl:w-64');
   });
 });
