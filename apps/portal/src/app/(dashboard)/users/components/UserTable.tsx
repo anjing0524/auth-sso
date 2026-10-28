@@ -435,8 +435,8 @@ export default function UserTable({ users, pagination, filters, isFiltered = fal
       cardHeader={<>
         {filters}
         {canUpdate && selectedCount > 0 && (
-          <div className="flex flex-wrap items-center gap-2 border-b bg-primary/[0.04] px-3 py-1.5">
-            <span className="text-[12px] font-medium">已选 {selectedCount} 人（当前页）</span>
+          <div role="region" aria-label="批量操作" className="flex flex-wrap items-center gap-2 border-b bg-primary/[0.04] px-3 py-1.5">
+            <span role="status" aria-live="polite" className="text-[12px] font-medium">已选 {selectedCount} 人（当前页）</span>
             <Button size="sm" className="h-7 bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => setBulkTarget('DISABLED')}>
               批量禁用
             </Button>

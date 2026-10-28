@@ -398,8 +398,8 @@ export default function PermissionsTable({ permissions, pagination, activeTab, i
         cardHeader={<>
           {cardHeader}
           {visibleChecked.length > 0 && (
-            <div className="flex flex-wrap items-center gap-2 border-b bg-primary/[0.04] px-3 py-1.5">
-              <span className="text-[12px] font-medium">已选 {visibleChecked.length} 个权限（当前页）</span>
+            <div role="region" aria-label="批量操作" className="flex flex-wrap items-center gap-2 border-b bg-primary/[0.04] px-3 py-1.5">
+              <span role="status" aria-live="polite" className="text-[12px] font-medium">已选 {visibleChecked.length} 个权限（当前页）</span>
               <Button size="sm" variant="destructive" className="h-7" onClick={() => setBulkOpen(true)}>批量删除</Button>
               <Button size="sm" variant="ghost" className="h-7" onClick={() => setCheckedIds(new Set())}>取消选择</Button>
             </div>

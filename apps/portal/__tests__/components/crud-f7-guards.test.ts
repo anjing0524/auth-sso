@@ -2018,3 +2018,14 @@ describe('每页条数无障碍组（续二百七十二）', () => {
     expect(src).toContain('aria-label="每页条数"');
   });
 });
+
+describe('批量操作栏无障碍语义（续二百七十三）', () => {
+  it('用户/权限批量栏 region + live 状态', () => {
+    const users = read('src/app/(dashboard)/users/components/UserTable.tsx');
+    expect(users).toContain('role="region" aria-label="批量操作"');
+    expect(users).toContain('role="status" aria-live="polite"');
+    const perms = read('src/app/(dashboard)/permissions/components/PermissionsTable.tsx');
+    expect(perms).toContain('role="region" aria-label="批量操作"');
+    expect(perms).toContain('role="status" aria-live="polite"');
+  });
+});
