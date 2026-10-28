@@ -8,6 +8,7 @@
  * 见 `IconName`）。
  */
 import type { ReactNode } from 'react';
+import Link from 'next/link';
 
 import { DynamicIcon, type IconName } from '@/lib/icon-map';
 import { cn } from '@/lib/utils';
@@ -38,7 +39,7 @@ export function PageHeader({
     <div className={cn('flex flex-col gap-2 md:flex-row md:items-center md:justify-between', className)}>
       <div className="flex min-w-0 items-center gap-2">
         {backHref ? (
-          <a
+          <Link
             href={backHref}
             aria-label={backLabel}
             className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
@@ -46,7 +47,7 @@ export function PageHeader({
             <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4" aria-hidden="true">
               <path d="M15 19l-7-7 7-7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
-          </a>
+          </Link>
         ) : icon ? (
           <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-primary">
             <DynamicIcon name={icon} aria-hidden="true" className="h-4 w-4" />

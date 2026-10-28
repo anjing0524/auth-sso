@@ -2030,3 +2030,9 @@ a11y 对比度函数提取复用，增加未登录 `/login`（390×844，独立�
 | 问题 | 修复 | 验证 |
 |---|---|---|
 | 个人会话 clientId 截断且无 title | 补 title | 3 条会话 clientId title=portal |
+
+### 9.274 产品审计二百六十九：页头返回客户端导航（2026-10-29）
+
+| 问题 | 修复 | 验证 |
+|---|---|---|
+| PageHeader 返回使用原生 a，整页刷新并丢失 SPA 状态 | 改用 next/link | 返回 /users 后 window marker 保留 |

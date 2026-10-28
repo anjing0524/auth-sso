@@ -3068,3 +3068,12 @@ describe('会话 clientId 完整值（续四百零六）', () => {
     expect(src).toContain('truncate font-mono text-[11px]" title={item.clientId}');
   });
 });
+
+describe('页头返回客户端导航（续四百零七）', () => {
+  it('PageHeader 使用 next/link 而非原生 a', () => {
+    const src = read('src/components/shared/page-header.tsx');
+    expect(src).toContain("import Link from 'next/link'");
+    expect(src).toContain('<Link');
+    expect(src).not.toContain('<a\n            href={backHref}');
+  });
+});
