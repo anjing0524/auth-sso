@@ -6,14 +6,14 @@
  * 此前 6 个路由各自复制同一段错误卡（只有「重试」）：用户无法返回、无法把
  * Error ID 交给管理员；错误文案与样式也容易出现分叉。
  */
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import Link from 'next/link';
-import { AlertTriangle, Check, Copy, RefreshCw } from 'lucide-react';
-import { toast } from 'sonner';
+import { AlertTriangle, RefreshCw } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { createClientLogger } from '@/lib/logger-client';
+import { CopyTextButton } from '@/components/shared/copy-text-button';
 
 export interface RouteErrorProps {
   error: Error & { digest?: string };
@@ -23,26 +23,12 @@ export interface RouteErrorProps {
 }
 
 export function RouteError({ error, reset, loggerName }: RouteErrorProps) {
-  const [copied, setCopied] = useState(false);
-
   useEffect(() => {
     createClientLogger(loggerName).error('路由渲染错误', {
       message: error.message,
       digest: error.digest,
     });
   }, [error, loggerName]);
-
-  const copyErrorId = async () => {
-    const id = error.digest || `无错误 ID（${error.message.slice(0, 80)}）`;
-    try {
-      await navigator.clipboard.writeText(id);
-      setCopied(true);
-      toast.success('错误 ID 已复制');
-      setTimeout(() => setCopied(false), 1500);
-    } catch {
-      toast.error('复制失败，请手动选择');
-    }
-  };
 
   return (
     <div className="flex min-h-[60vh] items-center justify-center p-8">
@@ -60,16 +46,11 @@ export function RouteError({ error, reset, loggerName }: RouteErrorProps) {
               <code className="rounded bg-muted px-2 py-1 font-mono text-[10px] text-muted-foreground">
                 错误 ID：{error.digest}
               </code>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                aria-label="复制错误 ID"
-                title="复制错误 ID"
-                onClick={copyErrorId}
-              >
-                {copied ? <Check className="h-3.5 w-3.5 text-success" /> : <Copy className="h-3.5 w-3.5" />}
-              </Button>
+              <CopyTextButton
+                text={error.digest || `无错误 ID（${error.message.slice(0, 80)}）`}
+                label="复制错误 ID"
+                successMessage="错误 ID 已复制"
+              />
             </div>
           )}
           <div className="flex flex-wrap items-center justify-center gap-2">

@@ -2987,3 +2987,12 @@ describe('客户端只读原因区分（续三百九十六）', () => {
     expect(read('src/app/(dashboard)/clients/[id]/ClientDetailClient.tsx')).toContain("readOnlyKind={client.clientId === PORTAL_CLIENT_ID ? 'portal' : 'permission'}");
   });
 });
+
+describe('错误页复制组件复用（续三百九十七）', () => {
+  it('错误 ID 复制走 CopyTextButton', () => {
+    const src = read('src/components/shared/route-error.tsx');
+    expect(src).toContain('CopyTextButton');
+    expect(src).toContain('successMessage="错误 ID 已复制"');
+    expect(src).not.toContain('copyErrorId');
+  });
+});
