@@ -2088,3 +2088,11 @@ describe('自动弹窗关闭保留查询（续二百八十）', () => {
     }
   });
 });
+
+describe('用户角色筛选文案（续二百八十一）', () => {
+  it('仅“全部/未分配角色”，不再写全部角色', () => {
+    const src = read('src/app/(dashboard)/users/components/UserFilters.tsx');
+    expect(src).toContain("'未分配角色' : '全部'");
+    expect(src).not.toContain('全部角色');
+  });
+});

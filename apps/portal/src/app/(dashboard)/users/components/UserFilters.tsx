@@ -82,10 +82,10 @@ export default function UserFilters({ initialKeyword = '', initialStatus = 'ALL'
       </Select>
       <Select value={initialNoRole} onValueChange={(value) => applyFilter('noRole', value === 'NONE' ? '1' : '')} disabled={isPending}>
         <SelectTrigger aria-label="过滤角色分配" className="w-full md:w-32">
-          <SelectValue>{initialNoRole === 'NONE' ? '未分配角色' : '全部角色'}</SelectValue>
+          <SelectValue>{initialNoRole === 'NONE' ? '未分配角色' : '全部'}</SelectValue>
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="ALL">全部角色</SelectItem>
+          <SelectItem value="ALL">全部</SelectItem>
           <SelectItem value="NONE">未分配角色</SelectItem>
         </SelectContent>
       </Select>
