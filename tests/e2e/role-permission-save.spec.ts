@@ -25,7 +25,7 @@ test.describe('角色权限保存', () => {
     await expect(page).toHaveURL(/\/roles\/[0-9a-f-]+\/permissions/);
 
     const permissionCheckbox = page.getByRole('checkbox', { name: /导出审计日志/ });
-    await page.getByPlaceholder('搜索当前作用域内权限...').fill('导出审计日志');
+    await page.getByPlaceholder('搜索权限名称或编码').fill('导出审计日志');
     await expect(permissionCheckbox).toBeVisible();
     await expect(permissionCheckbox).not.toBeChecked();
 
@@ -39,7 +39,7 @@ test.describe('角色权限保存', () => {
 
       // 刷新页面后仍保持勾选
       await page.reload({ waitUntil: 'networkidle' });
-      await page.getByPlaceholder('搜索当前作用域内权限...').fill('导出审计日志');
+      await page.getByPlaceholder('搜索权限名称或编码').fill('导出审计日志');
       await expect(permissionCheckbox).toBeChecked();
 
       // 还原：取消勾选并保存
@@ -48,7 +48,7 @@ test.describe('角色权限保存', () => {
       await page.getByRole('button', { name: '确认保存' }).click();
       await expect(page.getByText(/已更新角色/).first()).toBeVisible({ timeout: 15_000 });
       await page.reload({ waitUntil: 'networkidle' });
-      await page.getByPlaceholder('搜索当前作用域内权限...').fill('导出审计日志');
+      await page.getByPlaceholder('搜索权限名称或编码').fill('导出审计日志');
       await expect(permissionCheckbox).not.toBeChecked();
     } finally {
       // 若中途失败且已勾选，尽量还原

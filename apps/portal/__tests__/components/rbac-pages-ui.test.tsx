@@ -421,7 +421,7 @@ describe('U-DEP02 搜索态危险操作', () => {
     const user = userEvent.setup();
     renderDepartments();
 
-    await user.type(screen.getByPlaceholderText('搜索部门...'), 'FE');
+    await user.type(screen.getByPlaceholderText('搜索部门名称'), 'FE');
 
     // 命中的叶子行保留操作
     expect(screen.getByRole('button', { name: '删除部门 前端组' })).toBeInTheDocument();
