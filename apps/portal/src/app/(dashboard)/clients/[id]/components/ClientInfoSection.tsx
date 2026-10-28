@@ -13,6 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import { RequiredMark } from '@/components/shared/required-mark';
 import { Badge } from '@/components/ui/badge';
 import type { ClientDTO as Client } from '../../data';
 
@@ -86,9 +87,10 @@ export function ClientInfoSection({
             ) : null}
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <Label htmlFor="client-detail-name">名称</Label>
+                <div className="flex items-center gap-1"><Label htmlFor="client-detail-name">名称</Label><RequiredMark /></div>
                 <Input
                   id="client-detail-name"
+                  aria-required="true"
                   disabled={readOnly}
                   value={formData.name}
                   onChange={(e) => onFormChange({ name: e.target.value })}
@@ -163,13 +165,14 @@ export function ClientInfoSection({
           <CardContent className="space-y-3 p-3">
             <div className="space-y-1.5">
               <div className="flex items-center justify-between gap-2">
-                <Label htmlFor="client-detail-redirect-uris">回调地址（每行一个）</Label>
+                <div className="flex items-center gap-1"><Label htmlFor="client-detail-redirect-uris">回调地址（每行一个）</Label><RequiredMark /></div>
                 <Button variant="ghost" size="icon-sm" aria-label="复制回调地址" title="复制回调地址" disabled={!formData.redirectUris} onClick={() => onCopy(formData.redirectUris)}>
                   <Copy className="h-3.5 w-3.5" />
                 </Button>
               </div>
               <Textarea
                 id="client-detail-redirect-uris"
+                aria-required="true"
                 disabled={readOnly}
                 rows={3}
                 value={formData.redirectUris}

@@ -24,6 +24,7 @@ import { useFieldFailure } from '@/hooks/use-field-failure';
 import { useUnsavedChangesGuard } from '@/hooks/use-unsaved-changes-guard';
 
 import { PageHeader } from '@/components/shared/page-header';
+import { RequiredLegend } from '@/components/shared/required-mark';
 import { PermissionGuard } from '@/components/shared/permission-guard';
 import { Button } from '@/components/ui/button';
 import {
@@ -278,6 +279,7 @@ export function ClientDetailClient({ client, initialTokens, initialTokenTotal, c
 
       {activeTab === 'info' && (
         <div role="tabpanel" id="client-panel-info" aria-labelledby="client-tab-info" tabIndex={0}>
+        <p className="mb-2 text-[11px] text-muted-foreground"><RequiredLegend /></p>
         <ClientInfoSection
           client={client}
           formData={formData}

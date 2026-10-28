@@ -21,6 +21,8 @@
 
 ## 变更记录
 
+- 2026-10-29（续三百三十六）: **编辑态必填语义**。详情/部门编辑缺语义。**修复**：RequiredMark/legend + aria-required。**验证**：客户端/部门 edit true；守卫 270 passed。
+
 - 2026-10-29（续三百三十五）: **必填语义推广**。角色/部门/权限缺 required 语义。**修复**：aria-required；PAGE 路径条件。**验证**：6 输入 true；测试/守卫 269 passed。
 
 - 2026-10-29（续三百三十四）: **客户端必填语义**。星号无 required 语义。**修复**：两控件 aria-required。**验证**：均为 true；守卫 245 passed。

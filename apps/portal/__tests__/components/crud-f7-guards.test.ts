@@ -2484,3 +2484,12 @@ describe('必填语义推广（续三百三十五）', () => {
     expect(read('src/app/(dashboard)/permissions/permission-form.tsx')).toContain('id="perm-name" aria-required="true"');
   });
 });
+
+describe('编辑态必填语义（续三百三十六）', () => {
+  it('客户端详情/部门编辑 required', () => {
+    const info = read('src/app/(dashboard)/clients/[id]/components/ClientInfoSection.tsx');
+    expect((info.match(/aria-required="true"/g) ?? []).length).toBe(2);
+    const dept = read('src/app/(dashboard)/departments/components/DepartmentTree.tsx');
+    expect(dept).toContain('id="dept-edit-code" aria-required="true"');
+  });
+});
