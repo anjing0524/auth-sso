@@ -293,7 +293,7 @@ export default function ClientsTable({ clients, pagination, initialKeyword, init
             </Badge>
           ))}
           {client.redirectUris.length > 1 && (
-            <Badge variant="secondary">+{client.redirectUris.length - 1}</Badge>
+            <Badge variant="secondary" title={client.redirectUris.slice(1).join('\n')}>+{client.redirectUris.length - 1}</Badge>
           )}
         </div>
       </TableCell>

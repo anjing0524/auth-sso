@@ -2223,3 +2223,10 @@ describe('会话 scopes 完整值（续二百九十八）', () => {
     expect(src).toContain('title={`scope：${item.scopes}`}');
   });
 });
+
+describe('回调 URI +N 完整值（续二百九十九）', () => {
+  it('+N 徽章 title 列出其余回调', () => {
+    const src = read('src/app/(dashboard)/clients/components/ClientsTable.tsx');
+    expect(src).toContain('client.redirectUris.slice(1).join');
+  });
+});
