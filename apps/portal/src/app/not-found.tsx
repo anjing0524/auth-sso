@@ -14,7 +14,7 @@ export const metadata = { title: '页面不存在 | Auth-SSO' };
 
 export default function NotFound() {
   return (
-    <div className="flex min-h-svh flex-col items-center justify-center gap-6 p-8 text-center">
+    <main className="flex min-h-svh flex-col items-center justify-center gap-6 p-8 text-center">
       <div className="flex h-16 w-16 items-center justify-center rounded-xl bg-muted text-muted-foreground">
         <DynamicIcon name="FileText" className="h-8 w-8" />
       </div>
@@ -28,6 +28,6 @@ export default function NotFound() {
           <Link href="/dashboard">返回工作台</Link>
         </Button>
       </div>
-    </div>
+    </main>
   );
 }

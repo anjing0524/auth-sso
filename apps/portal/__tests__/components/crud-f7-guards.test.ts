@@ -2915,3 +2915,11 @@ describe('404 页面标题（续三百八十七）', () => {
     expect(src).toContain("title: '页面不存在 | Auth-SSO'");
   });
 });
+
+describe('404 页地标（续三百八十八）', () => {
+  it('根容器为 main', () => {
+    const src = read('src/app/not-found.tsx');
+    expect(src).toContain('<main className="flex min-h-svh');
+    expect(src).toContain('</main>');
+  });
+});
