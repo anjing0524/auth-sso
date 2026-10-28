@@ -552,7 +552,7 @@ export default function DepartmentTree({ departments, deletionStats = {}, autoOp
               <div className="space-y-2">
                 <Label htmlFor="dept-edit-status">状态</Label>
                 <Select value={form.status} onValueChange={(v) => setForm({...form, status: v})} disabled={selected?.parentId === null}>
-                  <SelectTrigger id="dept-edit-status"><SelectValue /></SelectTrigger>
+                  <SelectTrigger id="dept-edit-status" aria-label="状态"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="ACTIVE">启用</SelectItem>
                     <SelectItem value="DISABLED">停用</SelectItem>

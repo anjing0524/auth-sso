@@ -483,7 +483,7 @@ export default function RolesTable({ roles, pagination, initialKeyword, initialS
               <div className="space-y-2">
                 <Label htmlFor="role-edit-status">状态</Label>
                 <Select value={form.status} onValueChange={(v) => setForm({...form, status: v})}>
-                  <SelectTrigger id="role-edit-status"><SelectValue /></SelectTrigger>
+                  <SelectTrigger id="role-edit-status" aria-label="状态"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="ACTIVE">启用</SelectItem>
                     <SelectItem value="DISABLED">停用</SelectItem>

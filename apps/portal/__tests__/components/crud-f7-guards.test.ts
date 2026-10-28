@@ -2699,3 +2699,10 @@ describe('当前账号状态限制提示（续三百六十二）', () => {
     expect(src).toContain('当前登录账号不能禁用或锁定自己。');
   });
 });
+
+describe('状态选择可访问名称（续三百六十三）', () => {
+  it('部门/角色编辑状态 combobox aria-label=状态', () => {
+    expect(read('src/app/(dashboard)/departments/components/DepartmentTree.tsx')).toContain('id="dept-edit-status" aria-label="状态"');
+    expect(read('src/app/(dashboard)/roles/components/RolesTable.tsx')).toContain('id="role-edit-status" aria-label="状态"');
+  });
+});
