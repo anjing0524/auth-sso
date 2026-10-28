@@ -38,8 +38,8 @@ export function CopyTextButton({ text, label, disabled = false }: CopyTextButton
       type="button"
       variant="ghost"
       size="icon-sm"
-      aria-label={label}
-      title={label}
+      aria-label={copied ? '已复制' : label}
+      title={copied ? '已复制' : label}
       disabled={disabled}
       onClick={copy}
     >

@@ -2277,3 +2277,10 @@ describe('Client ID 复制反馈（续三百零五）', () => {
     expect(src).toContain("'Client ID 已复制'");
   });
 });
+
+describe('复制按钮动态名称（续三百零六）', () => {
+  it('CopyTextButton 成功态 aria-label 为已复制', () => {
+    const src = read('src/components/shared/copy-text-button.tsx');
+    expect(src).toContain("aria-label={copied ? '已复制' : label}");
+  });
+});
