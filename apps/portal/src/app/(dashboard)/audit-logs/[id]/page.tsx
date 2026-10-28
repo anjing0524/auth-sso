@@ -11,16 +11,13 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { formatDateTime } from '@/lib/format-date';
+import { isUuid } from '@/lib/uuid';
 import { getAccessLogById, getAuditLogById, getLoginLogById } from '@/app/audit/data';
 import { AuditParamsActions } from './params-actions';
 import { CopyTextButton } from '@/components/shared/copy-text-button';
 
 /** 读取会话/动态数据：与审计列表同口径，声明非 instant 路由 */
 export const instant = false;
-
-// PG uuid 只要求 canonical 8-4-4-4-12 十六进制；版本/变体位不受约束。
-// 只校验版本 1-5 会把库中合法 ID（含固定测试/导入数据）判为非法并 404。
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -55,7 +52,7 @@ function DetailHeader({ title, tab, id, returnHref, children }: { title: string;
 export default async function AuditLogDetailPage({ params, searchParams }: PageProps) {
   const { id } = await params;
   const { tab, returnTo: rawReturn } = await searchParams;
-  if (!UUID_RE.test(id)) notFound();
+  if (!isUuid(id)) notFound();
   const fallbackTab = tab === 'login' || tab === 'access' ? tab : 'operation';
   const returnHref = rawReturn && rawReturn.startsWith('/audit-logs') && !rawReturn.startsWith('//')
     ? rawReturn
