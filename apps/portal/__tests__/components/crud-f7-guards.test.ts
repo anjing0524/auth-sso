@@ -1696,3 +1696,11 @@ describe('删除影响面 0 文案（续二百三十五）', () => {
     expect(perms).toContain('暂未被角色或用户使用');
   });
 });
+
+describe('部门删除 0 影响文案（续二百三十六）', () => {
+  it('只列非零依赖；无依赖时说明可直接删除', () => {
+    const src = read('src/app/(dashboard)/departments/components/DepartmentTree.tsx');
+    expect(src).toContain("parts.length > 0 ? parts.join('、') : '无子部门、直属用户或角色'");
+    expect(src).toContain('可直接删除');
+  });
+});

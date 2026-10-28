@@ -247,6 +247,20 @@ export default function DepartmentTree({ departments, deletionStats = {} }: Prop
     return searchWalk(sortedTree, 0);
   }, [sortedTree, expanded, keyword]);
 
+  /** 删除影响面：只列出非零依赖；无依赖时明确可直接删除 */
+  const deletionImpactFor = (deptId: string) => {
+    const stats = deletionStats[deptId] ?? { childCount: 0, userCount: 0, roleCount: 0 };
+    const parts: string[] = [];
+    if (stats.childCount > 0) parts.push(`子部门 ${stats.childCount} 个`);
+    if (stats.userCount > 0) parts.push(`直属用户 ${stats.userCount} 人`);
+    if (stats.roleCount > 0) parts.push(`角色 ${stats.roleCount} 个`);
+    return {
+      text: parts.length > 0 ? parts.join('、') : '无子部门、直属用户或角色',
+      hasDependency: parts.length > 0,
+    };
+  };
+  const deleteImpact = deleteTarget ? deletionImpactFor(deleteTarget.id) : null;
+
   return (
     <Card className="gap-0 overflow-hidden rounded-lg border border-border/70 py-0 shadow-sm ring-0">
       {/* 根部门是 ADR-002 的单例（系统预置角色绑在根、根不可删）：非空树里再建根
@@ -510,10 +524,9 @@ export default function DepartmentTree({ departments, deletionStats = {} }: Prop
             <DialogTitle>删除部门「{deleteTarget?.name}」？</DialogTitle>
             <DialogDescription>删除前请确认该部门下没有子部门、用户与角色，此操作不可撤销。</DialogDescription>
           </DialogHeader>
-          {deleteTarget && (
+          {deleteTarget && deleteImpact && (
             <div className="rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2 text-xs text-destructive" data-delete-impact>
-              影响面：子部门 {deletionStats[deleteTarget.id]?.childCount ?? 0} 个、直属用户 {deletionStats[deleteTarget.id]?.userCount ?? 0} 人、角色 {deletionStats[deleteTarget.id]?.roleCount ?? 0} 个。
-              存在依赖时服务端会拒绝删除。
+              影响面：{deleteImpact.text}。{deleteImpact.hasDependency ? '存在依赖时服务端会拒绝删除。' : '可直接删除。'}
             </div>
           )}
           <DialogFooter>
