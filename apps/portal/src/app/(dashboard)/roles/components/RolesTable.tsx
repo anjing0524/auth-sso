@@ -223,7 +223,7 @@ export default function RolesTable({ roles, pagination, initialKeyword, initialS
           <h1 className="shrink-0 text-[15px] font-semibold tracking-tight text-foreground">角色管理</h1>
           <SearchInput placeholder="搜索角色名称或编码" value={keyword} onChange={handleSearch} busy={isPending} className="w-full sm:w-auto md:w-56" />
           <div className="order-3 flex w-full flex-wrap items-center gap-2 min-[1100px]:order-2 min-[1100px]:w-auto">
-            <Select value={initialSort} onValueChange={applySort}>
+            <Select value={initialSort} onValueChange={applySort} disabled={isPending}>
               <SelectTrigger aria-label="角色排序" className="w-[calc(50%-0.25rem)] md:w-32">
                 <SelectValue>
                   {initialSort === 'permissions-asc' ? '权限数最少' : initialSort === 'permissions-desc' ? '权限数最多' : '默认排序'}
@@ -235,7 +235,7 @@ export default function RolesTable({ roles, pagination, initialKeyword, initialS
                 <SelectItem value="permissions-desc">权限数最多</SelectItem>
               </SelectContent>
             </Select>
-            <Select value={initialStatus || 'ALL'} onValueChange={(v) => applyStatus(v === 'ALL' ? '' : v)}>
+            <Select value={initialStatus || 'ALL'} onValueChange={(v) => applyStatus(v === 'ALL' ? '' : v)} disabled={isPending}>
               <SelectTrigger aria-label="过滤角色状态" className="w-[calc(50%-0.25rem)] md:w-28">
                 <SelectValue>
                   {initialStatus === 'ACTIVE' ? '已启用' : initialStatus === 'DISABLED' ? '已禁用' : '全部状态'}
@@ -247,7 +247,7 @@ export default function RolesTable({ roles, pagination, initialKeyword, initialS
                 <SelectItem value="DISABLED">已禁用</SelectItem>
               </SelectContent>
             </Select>
-            <Select value={initialDeptId || 'ALL'} onValueChange={applyDept}>
+            <Select value={initialDeptId || 'ALL'} onValueChange={applyDept} disabled={isPending}>
               <SelectTrigger aria-label="过滤角色部门" className="w-[calc(50%-0.25rem)] md:w-32">
                 <SelectValue>{departments.find((d) => d.id === initialDeptId)?.name ?? '全部部门'}</SelectValue>
               </SelectTrigger>

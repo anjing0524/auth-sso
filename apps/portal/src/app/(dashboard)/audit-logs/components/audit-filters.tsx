@@ -103,6 +103,7 @@ export function AuditFilters({ tab, eventType, operation, range, keyword, startD
     <div className="flex flex-wrap items-center gap-2">
       <Select
         value={selectValue}
+        disabled={isPending}
         onValueChange={(v) => {
           if (v === 'CUSTOM') {
             setCustomMode(true);
@@ -128,12 +129,12 @@ export function AuditFilters({ tab, eventType, operation, range, keyword, startD
       {customMode && (
         <>
           <Input
-            type="date" aria-label="开始日期" value={startDate ?? ''} className="w-32"
+            type="date" aria-label="开始日期" value={startDate ?? ''} disabled={isPending} className="w-32"
             onChange={(e) => push({ startDate: e.target.value || null })}
           />
           <span className="text-[11px] text-muted-foreground">至</span>
           <Input
-            type="date" aria-label="结束日期" value={endDate ?? ''} className="w-32"
+            type="date" aria-label="结束日期" value={endDate ?? ''} disabled={isPending} className="w-32"
             onChange={(e) => push({ endDate: e.target.value || null })}
           />
         </>
@@ -145,7 +146,7 @@ export function AuditFilters({ tab, eventType, operation, range, keyword, startD
     return (
       <div className="flex flex-wrap items-center gap-2">
         <SearchInput placeholder="搜索用户 / 路径 / IP" value={kw} onChange={setKw} busy={isPending} className="w-full md:w-36 xl:w-44" />
-        <Select value={accessStatus ?? 'ALL'} onValueChange={(v) => push({ status: v === 'ALL' ? null : v })}>
+        <Select value={accessStatus ?? 'ALL'} onValueChange={(v) => push({ status: v === 'ALL' ? null : v })} disabled={isPending}>
           <SelectTrigger aria-label="访问状态筛选" className="w-32">
             <SelectValue>{accessStatus === 'SUCCESS' ? '成功' : accessStatus === 'FAILURE' ? '失败' : '全部状态'}</SelectValue>
           </SelectTrigger>
@@ -155,7 +156,7 @@ export function AuditFilters({ tab, eventType, operation, range, keyword, startD
             <SelectItem value="FAILURE">失败</SelectItem>
           </SelectContent>
         </Select>
-        <Select value={accessResourceType ?? 'ALL'} onValueChange={(v) => push({ resourceType: v === 'ALL' ? null : v })}>
+        <Select value={accessResourceType ?? 'ALL'} onValueChange={(v) => push({ resourceType: v === 'ALL' ? null : v })} disabled={isPending}>
           <SelectTrigger aria-label="资源类型筛选" className="w-40">
             <SelectValue>{accessResourceType ?? '全部资源类型'}</SelectValue>
           </SelectTrigger>
@@ -173,7 +174,7 @@ export function AuditFilters({ tab, eventType, operation, range, keyword, startD
     return (
       <div className="flex flex-wrap items-center gap-2">
       <SearchInput placeholder="搜索用户 / IP" value={kw} onChange={setKw} busy={isPending} className="w-full md:w-36 xl:w-44" />
-      <Select value={eventType ?? 'ALL'} onValueChange={(v) => push({ eventType: v === 'ALL' ? null : v })}>
+      <Select value={eventType ?? 'ALL'} onValueChange={(v) => push({ eventType: v === 'ALL' ? null : v })} disabled={isPending}>
         <SelectTrigger aria-label="事件类型筛选" className="w-40">
           <SelectValue>{eventType ? LOGIN_EVENT_LABELS[eventType] : '全部事件类型'}</SelectValue>
         </SelectTrigger>
@@ -192,7 +193,7 @@ export function AuditFilters({ tab, eventType, operation, range, keyword, startD
   return (
     <div className="flex flex-wrap items-center gap-2">
     <SearchInput placeholder="搜索用户 / IP / 地址" value={kw} onChange={setKw} busy={isPending} className="w-full md:w-36 xl:w-44" />
-    <Select value={operation ?? 'ALL'} onValueChange={(v) => push({ operation: v === 'ALL' ? null : v })}>
+    <Select value={operation ?? 'ALL'} onValueChange={(v) => push({ operation: v === 'ALL' ? null : v })} disabled={isPending}>
       <SelectTrigger aria-label="操作类型筛选" className="w-40">
         <SelectValue>{operation ? AUDIT_OPERATION_LABELS[operation] : '全部操作类型'}</SelectValue>
       </SelectTrigger>

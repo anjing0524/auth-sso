@@ -233,7 +233,7 @@ export default function PermissionsTable({ permissions, pagination, activeTab, i
           <SearchInput className="md:w-[190px] xl:w-64" placeholder="搜索名称或编码" value={keyword} onChange={handleSearch} busy={isPending} />
           {activeTab === 'API' ? (
             <div className="order-3 flex w-full flex-wrap items-center gap-2 min-[1100px]:order-2 min-[1100px]:w-auto">
-              <Select value={initialStatus || 'ALL'} onValueChange={(v) => startTransition(() => router.push(buildHref(1, keyword, activeTab, v === 'ALL' ? '' : v, initialClientId)))}>
+              <Select value={initialStatus || 'ALL'} onValueChange={(v) => startTransition(() => router.push(buildHref(1, keyword, activeTab, v === 'ALL' ? '' : v, initialClientId)))} disabled={isPending}>
                 <SelectTrigger aria-label="过滤权限状态" className="w-[calc(50%-0.25rem)] md:w-28">
                   <SelectValue>
                     {initialStatus === 'ACTIVE' ? '已启用' : initialStatus === 'DISABLED' ? '已禁用' : '全部状态'}
@@ -245,7 +245,7 @@ export default function PermissionsTable({ permissions, pagination, activeTab, i
                   <SelectItem value="DISABLED">已禁用</SelectItem>
                 </SelectContent>
               </Select>
-              <Select value={initialClientId || 'ALL'} onValueChange={(v) => startTransition(() => router.push(buildHref(1, keyword, activeTab, initialStatus, v === 'ALL' ? '' : v)))}>
+              <Select value={initialClientId || 'ALL'} onValueChange={(v) => startTransition(() => router.push(buildHref(1, keyword, activeTab, initialStatus, v === 'ALL' ? '' : v)))} disabled={isPending}>
                 <SelectTrigger aria-label="过滤归属应用" className="w-[calc(50%-0.25rem)] md:w-32">
                   <SelectValue>{initialClientId === 'NONE' ? '未绑定应用' : clients.find((c) => c.id === initialClientId)?.name ?? '全部应用'}</SelectValue>
                 </SelectTrigger>

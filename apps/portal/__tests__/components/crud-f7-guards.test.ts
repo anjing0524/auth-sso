@@ -1899,3 +1899,14 @@ describe('分页跳页 pending（续二百五十八）', () => {
     expect(pg).toContain('disabled={disabled}');
   });
 });
+
+describe('筛选控件 pending 禁用（续二百五十九）', () => {
+  it('角色/权限下拉与审计下拉/日期绑定 isPending', () => {
+    const roles = read('src/app/(dashboard)/roles/components/RolesTable.tsx');
+    expect(roles).toContain('onValueChange={applySort} disabled={isPending}');
+    const perms = read('src/app/(dashboard)/permissions/components/PermissionsTable.tsx');
+    expect(perms).toContain('disabled={isPending}');
+    const audit = read('src/app/(dashboard)/audit-logs/components/audit-filters.tsx');
+    expect(audit).toContain("aria-label=\"开始日期\" value={startDate ?? ''} disabled={isPending}");
+  });
+});
