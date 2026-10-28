@@ -3,10 +3,12 @@
  */
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent } from '@/components/ui/card';
+import { LoadingAnnouncer } from '@/components/shared/loading-announcer';
 
 export default function ClientsLoading() {
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
+      <LoadingAnnouncer />
       <Card className="gap-0 overflow-hidden rounded-lg border border-border/70 py-0 shadow-sm ring-0">
         <div className="flex items-center gap-3 border-b bg-muted/30 px-3 py-1.5">
           <Skeleton className="h-5 w-24 rounded" />

@@ -8,10 +8,12 @@
  */
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { LoadingAnnouncer } from '@/components/shared/loading-announcer';
 
 export default function DashboardLoading() {
   return (
     <div className="space-y-6 p-1 pt-2">
+      <LoadingAnnouncer />
       {/* Header skeleton */}
       <div className="flex items-center justify-between">
         <div className="space-y-2">

@@ -7,10 +7,12 @@
  */
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent } from '@/components/ui/card';
+import { LoadingAnnouncer } from '@/components/shared/loading-announcer';
 
 export default function AuditLogsLoading() {
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
+      <LoadingAnnouncer />
       {/* Header skeleton */}
       <div className="flex items-center justify-between px-1">
         <div className="space-y-2">

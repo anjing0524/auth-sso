@@ -2859,3 +2859,21 @@ describe('列表加载播报（续三百八十二）', () => {
     expect(src).toContain('aria-live="polite"');
   });
 });
+
+describe('路由加载播报（续三百八十三）', () => {
+  it('所有 dashboard loading 都渲染 LoadingAnnouncer', () => {
+    const files = [
+      'src/app/(dashboard)/loading.tsx',
+      'src/app/(dashboard)/users/loading.tsx',
+      'src/app/(dashboard)/roles/loading.tsx',
+      'src/app/(dashboard)/permissions/loading.tsx',
+      'src/app/(dashboard)/clients/loading.tsx',
+      'src/app/(dashboard)/audit-logs/loading.tsx',
+      'src/app/(dashboard)/dashboard/loading.tsx',
+    ];
+    for (const f of files) {
+      expect(read(f)).toContain('<LoadingAnnouncer />');
+    }
+    expect(read('src/components/shared/loading-announcer.tsx')).toContain('正在加载页面…');
+  });
+});
