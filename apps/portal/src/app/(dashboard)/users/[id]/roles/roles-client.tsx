@@ -233,7 +233,9 @@ export default function UserRolesPage({ user, isSelf = false, returnHref }: User
                     ? '没有匹配的角色'
                     : '该部门下暂无可用角色，请先为部门创建角色'}
               </p>
-              {!keyword && (
+              {keyword ? (
+                <Button size="sm" variant="outline" onClick={() => setKeyword('')}>清除搜索</Button>
+              ) : (
                 <Button asChild size="sm" variant="outline">
                   {user.deptId ? (
                     <Link href="/roles">前往角色管理</Link>

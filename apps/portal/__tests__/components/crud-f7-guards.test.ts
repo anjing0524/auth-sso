@@ -1801,3 +1801,14 @@ describe('审计筛选空态覆盖全部筛选（续二百四十八）', () => {
     expect(page).toContain('keyword || accessStatus || validAccessResourceType || startDate');
   });
 });
+
+describe('权限选择/用户角色搜索空态（续二百四十九）', () => {
+  it('区分作用域无权限/搜索无匹配，并提供清除搜索', () => {
+    const rp = read('src/app/(dashboard)/roles/[id]/permissions/permissions-client.tsx');
+    expect(rp).toContain("'当前作用域没有可选权限'");
+    expect(rp).toContain('清除搜索');
+    expect(rp).toContain("onClick={() => setKeyword('')}");
+    const ur = read('src/app/(dashboard)/users/[id]/roles/roles-client.tsx');
+    expect(ur).toContain("setKeyword('')");
+  });
+});

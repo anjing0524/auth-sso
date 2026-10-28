@@ -414,9 +414,18 @@ export default function RolePermissionsPage({ role, returnHref = '/roles' }: Rol
             {loading ? (
               <div className="flex items-center justify-center py-24"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
             ) : scopedItems.length === 0 ? (
-              <p className="py-16 text-center text-sm text-muted-foreground">
-                {onlySelected ? '当前作用域还没有已选权限' : '没有匹配的权限'}
-              </p>
+              <div className="space-y-3 py-16 text-center">
+                <p className="text-sm text-muted-foreground">
+                  {keyword
+                    ? '没有匹配的权限'
+                    : onlySelected
+                      ? '当前作用域还没有已选权限'
+                      : '当前作用域没有可选权限'}
+                </p>
+                {keyword && (
+                  <Button variant="outline" size="sm" onClick={() => setKeyword('')}>清除搜索</Button>
+                )}
+              </div>
             ) : (
               <div className="grid xl:grid-cols-2">
                 {scopedItems.map((p) => (
