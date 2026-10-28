@@ -138,6 +138,19 @@ export default function CreateUserDialog({ departments, canAssignRole = false, a
     });
   }, [state, reportFailure]);
 
+  // 服务端字段错误落到具体输入后，把焦点带过去，键盘/读屏用户无需自行查找。
+  useEffect(() => {
+    if (!fieldError) return;
+    const inputId = fieldError.field === 'username'
+      ? 'create-user-username'
+      : fieldError.field === 'email'
+        ? 'create-user-email'
+        : fieldError.field === 'password'
+          ? 'create-user-password'
+          : null;
+    if (inputId) requestAnimationFrame(() => document.getElementById(inputId)?.focus());
+  }, [fieldError]);
+
   return (
     <>
       <PermissionGuard permission={USER_PERMISSIONS.CREATE}>

@@ -2529,3 +2529,11 @@ describe('客户端首错聚焦（续三百四十一）', () => {
     expect(src).toContain("document.getElementById(inputId)?.focus()");
   });
 });
+
+describe('用户创建字段错误聚焦（续三百四十二）', () => {
+  it('fieldError 变化时聚焦对应输入', () => {
+    const src = read('src/app/(dashboard)/users/components/CreateUserDialog.tsx');
+    expect(src).toContain('if (!fieldError) return;');
+    expect(src).toContain("document.getElementById(inputId)?.focus()");
+  });
+});
