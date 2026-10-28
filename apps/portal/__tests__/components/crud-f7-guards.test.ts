@@ -2238,3 +2238,11 @@ describe('Scopes/回调复制入口（续三百）', () => {
     expect(src).toContain('aria-label="复制回调地址"');
   });
 });
+
+describe('审计日志 ID 复制（续三百零一）', () => {
+  it('详情页头复用 CopyTextButton', () => {
+    const src = read('src/app/(dashboard)/audit-logs/[id]/page.tsx');
+    expect(src).toContain('CopyTextButton text={id} label="复制日志 ID"');
+    expect(read('src/components/shared/copy-text-button.tsx')).toContain("toast.success('已复制')");
+  });
+});

@@ -13,6 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { formatDateTime } from '@/lib/format-date';
 import { getAccessLogById, getAuditLogById, getLoginLogById } from '@/app/audit/data';
 import { AuditParamsActions } from './params-actions';
+import { CopyTextButton } from '@/components/shared/copy-text-button';
 
 /** 读取会话/动态数据：与审计列表同口径，声明非 instant 路由 */
 export const instant = false;
@@ -41,7 +42,7 @@ function DetailHeader({ title, tab, id, returnHref, children }: { title: string;
       </Button>
       <h1 className="type-section-title">{title}</h1>
       {children}
-      <span className="type-meta text-muted-foreground">ID {id}</span>
+      <span className="flex items-center gap-1 type-meta text-muted-foreground">ID {id}<CopyTextButton text={id} label="复制日志 ID" /></span>
     </div>
   );
 }
