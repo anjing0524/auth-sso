@@ -127,8 +127,21 @@ export default function PermissionForm({ mode, menuOptions, permission, clients 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     clearFailure();
-    if (!form.name || !form.code) { toast.error('请填写完整信息'); return; }
-    if (form.type === 'PAGE' && !form.path.trim()) { toast.error('页面类型必须填写路由路径'); return; }
+    if (!form.name.trim()) {
+      toast.error('请填写权限名称');
+      requestAnimationFrame(() => document.getElementById('perm-name')?.focus());
+      return;
+    }
+    if (mode === 'create' && !form.code.trim()) {
+      toast.error('请填写权限编码');
+      requestAnimationFrame(() => document.getElementById('perm-code')?.focus());
+      return;
+    }
+    if (form.type === 'PAGE' && !form.path.trim()) {
+      toast.error('页面类型必须填写路由路径');
+      requestAnimationFrame(() => document.getElementById('perm-path')?.focus());
+      return;
+    }
     setSaving(true);
     try {
       const r = mode === 'create'

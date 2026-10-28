@@ -2491,7 +2491,7 @@ describe('编辑态必填语义（续三百三十六）', () => {
     const info = read('src/app/(dashboard)/clients/[id]/components/ClientInfoSection.tsx');
     expect((info.match(/aria-required="true"/g) ?? []).length).toBe(2);
     const dept = read('src/app/(dashboard)/departments/components/DepartmentTree.tsx');
-    expect(dept).toContain('id="dept-edit-code" aria-required="true"');
+    expect(dept).not.toContain('id="dept-edit-code" aria-required');
   });
 });
 
@@ -2576,5 +2576,14 @@ describe('用户详情保存前校验（续三百四十七）', () => {
     const src = read('src/app/(dashboard)/users/[id]/UserDetailForm.tsx');
     expect(src).toContain('validateUserBasics(form)');
     expect(src).toContain("firstError === 'name' ? 'user-name' : 'user-email'");
+  });
+});
+
+describe('角色/权限本地首错聚焦（续三百四十八）', () => {
+  it('空名称→名称；空编码→编码', () => {
+    expect(read('src/app/(dashboard)/roles/components/RolesTable.tsx')).toContain("document.getElementById('role-name')?.focus()");
+    expect(read('src/app/(dashboard)/roles/components/RolesTable.tsx')).toContain("document.getElementById('role-code')?.focus()");
+    expect(read('src/app/(dashboard)/permissions/permission-form.tsx')).toContain("document.getElementById('perm-name')?.focus()");
+    expect(read('src/app/(dashboard)/permissions/permission-form.tsx')).toContain("document.getElementById('perm-code')?.focus()");
   });
 });

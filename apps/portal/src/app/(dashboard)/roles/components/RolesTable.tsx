@@ -131,8 +131,21 @@ export default function RolesTable({ roles, pagination, initialKeyword, initialS
   };
 
   const handleCreate = async () => {
-    if (!form.name || !form.code) { toast.error('请填写完整信息'); return; }
-    if (!form.deptId) { toast.error('请选择所属部门'); return; }
+    if (!form.name.trim()) {
+      toast.error('请填写角色名称');
+      requestAnimationFrame(() => document.getElementById('role-name')?.focus());
+      return;
+    }
+    if (!form.code.trim()) {
+      toast.error('请填写角色编码');
+      requestAnimationFrame(() => document.getElementById('role-code')?.focus());
+      return;
+    }
+    if (!form.deptId) {
+      toast.error('请选择所属部门');
+      requestAnimationFrame(() => document.getElementById('role-dept')?.focus());
+      return;
+    }
     clearFailure();
     setSaving(true);
     const res = await createRoleAction({ name: form.name, code: form.code, description: form.description.trim() || undefined, deptId: form.deptId, sort: form.sort });
