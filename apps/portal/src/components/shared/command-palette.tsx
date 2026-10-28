@@ -32,19 +32,21 @@ export function CommandPalette({ menus }: { menus: MenuItem[] }) {
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        // 已有其他模态（弹窗）打开时不让全局命令面板叠加到其上
+        if (!open && document.querySelector('[role="dialog"]')) return;
         e.preventDefault();
         toggle();
       }
     };
     // 顶栏触发器：让不熟悉快捷键的鼠标/触屏用户也能打开
-    const open = () => setOpen(true);
+    const openPalette = () => setOpen(true);
     document.addEventListener('keydown', down);
-    window.addEventListener('open-command-palette', open);
+    window.addEventListener('open-command-palette', openPalette);
     return () => {
       document.removeEventListener('keydown', down);
-      window.removeEventListener('open-command-palette', open);
+      window.removeEventListener('open-command-palette', openPalette);
     };
-  }, [toggle]);
+  }, [toggle, open]);
 
   // Cleanup timer on unmount
   useEffect(() => {

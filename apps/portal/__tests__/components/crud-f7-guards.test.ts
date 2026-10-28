@@ -2760,3 +2760,12 @@ describe('命令面板关闭回焦（续三百七十）', () => {
     expect(read('src/components/layout/command-palette-trigger.tsx')).toContain('id="command-palette-trigger"');
   });
 });
+
+describe('命令面板防模态叠加（续三百七十一）', () => {
+  it('已有 dialog 时不响应全局快捷键，且无变量遮蔽', () => {
+    const src = read('src/components/shared/command-palette.tsx');
+    expect(src).toContain(`if (!open && document.querySelector('[role="dialog"]')) return;`);
+    expect(src).toContain('const openPalette = () => setOpen(true);');
+    expect(src).not.toContain('const open = () => setOpen(true);');
+  });
+});
