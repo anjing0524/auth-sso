@@ -53,6 +53,8 @@ const TIME_RANGE_OPTIONS: Array<{ value: string; label: string }> = [
 
 export function AuditFilters({ tab, eventType, operation, range, keyword, startDate, endDate, accessStatus, accessResourceType, accessResourceTypes = [] }: Props) {
   const [kw, setKw] = useState(keyword ?? '');
+  // 后退/前进时 URL 变化，输入框跟随
+  useEffect(() => { setKw(keyword ?? ''); }, [keyword]);
   // 自定义区间是独立模式：进入后保留已填日期，切回预置/全部时清空
   const [customMode, setCustomMode] = useState(!range && Boolean(startDate || endDate));
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);

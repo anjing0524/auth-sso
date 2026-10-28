@@ -41,6 +41,8 @@ export default function UserFilters({ initialKeyword = '', initialStatus = 'ALL'
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
   const [keyword, setKeyword] = useState(initialKeyword);
+  // 浏览器后退/前进时 URL 变化，输入框跟随
+  useEffect(() => { setKeyword(initialKeyword); }, [initialKeyword]);
 
   const applyFilter = (name: string, value: string) => {
     const params = new URLSearchParams(searchParams.toString());

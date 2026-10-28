@@ -90,6 +90,8 @@ const TABS: Array<{ value: string; label: string }> = [
 export default function PermissionsTable({ permissions, pagination, activeTab, initialKeyword = '', initialStatus = '', initialClientId = '', clients = [], menuOptions = [] }: Props) {
   const router = useRouter();
   const [keyword, setKeyword] = useState(initialKeyword);
+  // 浏览器后退/前进时，URL 是唯一真相源：输入框跟随 initialKeyword
+  useEffect(() => { setKeyword(initialKeyword); }, [initialKeyword]);
   const [isPending, startTransition] = useTransition();
   const searchParams = useSearchParams();
   const listQueryKey = searchParams.toString();

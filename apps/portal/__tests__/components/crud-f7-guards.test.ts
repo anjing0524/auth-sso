@@ -1856,3 +1856,18 @@ describe('自动打开创建态权限门禁（续二百五十四）', () => {
     expect(depts).toContain('DEPARTMENT_PERMISSIONS.CREATE');
   });
 });
+
+describe('搜索框随 URL 后退同步（续二百五十五）', () => {
+  it('五个列表的搜索状态跟随 initialKeyword', () => {
+    const roles = read('src/app/(dashboard)/roles/components/RolesTable.tsx');
+    expect(roles).toContain('useEffect(() => { setKeyword(initialKeyword); }, [initialKeyword]);');
+    const clients = read('src/app/(dashboard)/clients/components/ClientsTable.tsx');
+    expect(clients).toContain('useEffect(() => { setKeyword(initialKeyword); }, [initialKeyword]);');
+    const perms = read('src/app/(dashboard)/permissions/components/PermissionsTable.tsx');
+    expect(perms).toContain('useEffect(() => { setKeyword(initialKeyword); }, [initialKeyword]);');
+    const users = read('src/app/(dashboard)/users/components/UserFilters.tsx');
+    expect(users).toContain('useEffect(() => { setKeyword(initialKeyword); }, [initialKeyword]);');
+    const audit = read('src/app/(dashboard)/audit-logs/components/audit-filters.tsx');
+    expect(audit).toContain("useEffect(() => { setKw(keyword ?? ''); }, [keyword]);");
+  });
+});

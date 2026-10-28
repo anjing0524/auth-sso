@@ -84,6 +84,8 @@ interface Props {
 export default function ClientsTable({ clients, pagination, initialKeyword, initialStatus = '', initialSort = 'recent', isFiltered = false, clearHref = '/clients' , statusCounts}: Props) {
   const router = useRouter();
   const [keyword, setKeyword] = useState(initialKeyword);
+  // 浏览器后退/前进时，URL 是唯一真相源：输入框跟随 initialKeyword
+  useEffect(() => { setKeyword(initialKeyword); }, [initialKeyword]);
   const searchParams = useSearchParams();
   const currentListHref = `/clients${searchParams.toString() ? `?${searchParams.toString()}` : ''}`;
   const applyStatus = (value: string) => {
