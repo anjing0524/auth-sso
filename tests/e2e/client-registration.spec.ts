@@ -45,7 +45,7 @@ test.describe('应用注册', () => {
       // 详情页核心操作：禁用 → 启用 → 轮换 Secret → 授权记录
       await page.getByPlaceholder('搜索应用或 Client ID').fill(name);
       await expect(page.getByRole('row').filter({ hasText: name })).toBeVisible({ timeout: 15_000 });
-      await page.getByRole('row').filter({ hasText: name }).getByRole('link', { name: '编辑 OAuth 配置' }).click();
+      await page.getByRole('row').filter({ hasText: name }).getByRole('link', { name: /编辑 .* 的 OAuth 配置/ }).click();
       await expect(page).toHaveURL(new RegExp(`/clients/${clientId}(\\?|$)`));
 
       // WAI-ARIA tabs：方向键切换、tabpanel 关联
@@ -87,7 +87,7 @@ test.describe('应用注册', () => {
       await page.goto('/clients', { waitUntil: 'networkidle' });
       await page.getByPlaceholder('搜索应用或 Client ID').fill(name);
       await expect(page.getByRole('row').filter({ hasText: name })).toBeVisible({ timeout: 15_000 });
-      await page.getByRole('row').filter({ hasText: name }).getByRole('button', { name: '注销应用' }).click();
+      await page.getByRole('row').filter({ hasText: name }).getByRole('button', { name: /注销应用/ }).click();
       await expect(page.getByRole('dialog')).toContainText(`注销应用「${name}」？`);
       await page.getByRole('button', { name: '确认注销' }).click();
       await expect(page.getByRole('row').filter({ hasText: name })).toHaveCount(0, { timeout: 15_000 });
@@ -100,7 +100,7 @@ test.describe('应用注册', () => {
           await page.waitForTimeout(400);
           const row = page.getByRole('row').filter({ hasText: name });
           if (await row.count()) {
-            await row.getByRole('button', { name: '注销应用' }).click();
+            await row.getByRole('button', { name: /注销应用/ }).click();
             await page.getByRole('button', { name: '确认注销' }).click();
           }
         } catch { /* 尽力清理 */ }
