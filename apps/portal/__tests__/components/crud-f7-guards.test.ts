@@ -1770,9 +1770,9 @@ describe('新手引导四步直达动作（续二百四十五）', () => {
     expect(dash).toContain("href: '/roles?create=1'");
     expect(dash).toContain("href: '/clients/new'");
     const roles = read('src/app/(dashboard)/roles/page.tsx');
-    expect(roles).toContain('autoOpenCreate={params.create');
+    expect(roles).toContain('autoOpenCreate={canCreateRole && params.create');
     const depts = read('src/app/(dashboard)/departments/page.tsx');
-    expect(depts).toContain('autoOpenCreate={params.create');
+    expect(depts).toContain('autoOpenCreate={canCreateDept && params.create');
   });
 });
 
@@ -1845,5 +1845,14 @@ describe('审计跳页保留访问筛选（续二百五十三）', () => {
     const page = read('src/app/(dashboard)/audit-logs/page.tsx');
     expect(page).toContain('...(accessStatus ? { status: accessStatus } : {})');
     expect(page).toContain('...(validAccessResourceType ? { resourceType: validAccessResourceType } : {})');
+  });
+});
+
+describe('自动打开创建态权限门禁（续二百五十四）', () => {
+  it('角色/部门 autoOpen 受 create 权限控制', () => {
+    const roles = read('src/app/(dashboard)/roles/page.tsx');
+    expect(roles).toContain('ROLE_PERMISSIONS.CREATE');
+    const depts = read('src/app/(dashboard)/departments/page.tsx');
+    expect(depts).toContain('DEPARTMENT_PERMISSIONS.CREATE');
   });
 });

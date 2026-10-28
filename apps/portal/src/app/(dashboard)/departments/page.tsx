@@ -6,6 +6,8 @@
 import { resolveIdentity } from '@/lib/auth';
 import { resolveScope } from '@/lib/authz';
 import { getDepartments, getDepartmentDeletionStats } from './data';
+import { DEPARTMENT_PERMISSIONS, can } from '@auth-sso/contracts';
+import { getUserPermissionContext, toPermissionContextOrNull } from '@/lib/permissions';
 
 import { db } from '@/infrastructure/db';
 import DepartmentTree from './components/DepartmentTree';
@@ -29,6 +31,11 @@ export default async function DepartmentsPage({ searchParams }: PageProps) {
   const identity = await resolveIdentity();
   const scope = identity ? await resolveScope(db, identity.userId) : { deptIds: [] };
   const userId = identity?.userId ?? '';
+  const permCtx = identity ? toPermissionContextOrNull(await getUserPermissionContext(identity.userId)) : null;
+  const canCreateDept = can(
+    { roleCodes: permCtx?.roles.map((r) => r.code) ?? [], permissionCodes: permCtx?.permissions ?? [] },
+    DEPARTMENT_PERMISSIONS.CREATE,
+  );
   const departments = await getDepartments(scope, userId);
   // 删除确认的影响面（U-DEP05）：统计当前可见部门（与服务端删除守卫同口径）
   const flattenIds: string[] = [];
@@ -38,7 +45,7 @@ export default async function DepartmentsPage({ searchParams }: PageProps) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
-      <DepartmentTree departments={departments} deletionStats={deletionStats} autoOpenCreate={params.create === '1'} />
+      <DepartmentTree departments={departments} deletionStats={deletionStats} autoOpenCreate={canCreateDept && params.create === '1'} />
     </div>
   );
 }

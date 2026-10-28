@@ -21,6 +21,8 @@
 
 ## 变更记录
 
+- 2026-10-28（续二百五十四）: **自动打开创建态权限门禁**。只读用户可经 URL 看到创建表单。**修复**：角色/部门 autoOpen 受 create 权限约束。**验证**：源码守卫 176 passed；管理员角色/部门仍自动打开。
+
 - 2026-10-28（续二百五十三）: **审计跳页保留访问筛选**。跳页丢 status/resourceType。**修复**：jumpParams 补齐。**验证**：access+SUCCESS 跳页后 URL 保留；守卫 175 passed。
 
 - 2026-10-28（续二百五十二）: **分页 pending 禁用**。分页可重复点击，用户/应用无 loading。**修复**：分页组件 disabled；用户/应用 transition + loading/disabled。**验证**：分页组件 8 passed；守卫 174 passed。

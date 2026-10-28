@@ -4,11 +4,12 @@
  */
 import { redirect } from 'next/navigation';
 import { getRoles, getRoleBoundUserCounts, getRolePermissionCounts } from './data';
-import { ENTITY_STATUS_VALUES } from '@auth-sso/contracts';
+import { ENTITY_STATUS_VALUES, ROLE_PERMISSIONS, can } from '@auth-sso/contracts';
 import { db } from '@/infrastructure/db';
 import { getDepartmentOptions } from '@/app/(dashboard)/users/data';
 import { resolveIdentity } from '@/lib/auth';
 import { resolveScope } from '@/lib/authz';
+import { getUserPermissionContext, toPermissionContextOrNull } from '@/lib/permissions';
 import { clampPage } from '@/lib/pagination';
 import { isUuid } from '@/lib/uuid';
 import RolesTable from './components/RolesTable';
@@ -43,6 +44,11 @@ export default async function RolesPage({ searchParams }: PageProps) {
   // 鉴权由 roles/layout.tsx 负责（requirePermission(['role:list'])），此处只取身份信息。
   const identity = await resolveIdentity();
   const scope = identity ? await resolveScope(db, identity.userId) : { deptIds: [] };
+  const permCtx = identity ? toPermissionContextOrNull(await getUserPermissionContext(identity.userId)) : null;
+  const canCreateRole = can(
+    { roleCodes: permCtx?.roles.map((r) => r.code) ?? [], permissionCodes: permCtx?.permissions ?? [] },
+    ROLE_PERMISSIONS.CREATE,
+  );
 
   const [{ data: roles, pagination }, departments] = await Promise.all([
     getRoles({ page, pageSize: 20, keyword, status, scope, ...(sort ? { sort } : {}), ...(deptId ? { deptId } : {}) }),
@@ -70,7 +76,7 @@ export default async function RolesPage({ searchParams }: PageProps) {
         initialSort={sort ?? 'default'}
         initialStatus={status}
         initialDeptId={deptId}
-        autoOpenCreate={params.create === '1'}
+        autoOpenCreate={canCreateRole && params.create === '1'}
         departments={departments}
         boundUserCounts={boundUserCounts}
         permissionCounts={permissionCounts}
