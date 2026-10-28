@@ -56,7 +56,7 @@ export default function RootLayout({
           {"(function(){try{var m=window.matchMedia('(prefers-color-scheme: dark)');var a=function(){document.documentElement.classList.toggle('dark',m.matches);document.documentElement.style.colorScheme=m.matches?'dark':'light'};a();m.addEventListener('change',a)}catch(e){}})();"}
         </Script>
         {children}
-        <Toaster position="top-right" richColors />
+        <Toaster position="top-right" richColors containerAriaLabel="通知" />
       </body>
     </html>
   );

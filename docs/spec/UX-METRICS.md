@@ -2154,3 +2154,9 @@ a11y 对比度函数提取复用，增加未登录 `/login`（390×844，独立�
 | 问题 | 修复 | 验证 |
 |---|---|---|
 | 命令面板沿用英文默认标题「Command Palette / Search for a command」 | 传入中文 title/description | dialog 名称=命令面板；说明正确 |
+
+### 9.294 产品审计二百八十九：通知区域中文名称（2026-10-29）
+
+| 问题 | 修复 | 验证 |
+|---|---|---|
+| Sonner 通知区域可访问名称为英文「Notifications alt+T」 | containerAriaLabel=通知 | 实际为「通知 alt+T」 |

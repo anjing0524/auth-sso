@@ -3227,3 +3227,9 @@ describe('命令面板可访问名称（续四百二十六）', () => {
     expect(src).toContain('description="搜索页面或功能，使用上下方向键选择，回车打开。"');
   });
 });
+
+describe('通知区域中文名称（续四百二十七）', () => {
+  it('Toaster containerAriaLabel=通知', () => {
+    expect(read('src/app/layout.tsx')).toContain('containerAriaLabel="通知"');
+  });
+});
