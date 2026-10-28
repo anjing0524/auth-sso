@@ -25,6 +25,7 @@ interface PageProps {
     status?: string;
     sort?: string;
     page?: string;
+    pageSize?: string;
   }>;
 }
 
@@ -35,9 +36,10 @@ export default async function ClientsPage({ searchParams }: PageProps) {
   const status = params.status === 'ACTIVE' || params.status === 'DISABLED' ? params.status : '';
   const sort = (['recent', 'updated', 'name'] as const).includes(params.sort as never) ? (params.sort as string) : 'recent';
   const page = clampPage(params.page);
+  const pageSize = [20, 50, 100].includes(Number(params.pageSize)) ? Number(params.pageSize) : 20;
 
   const [{ data: clients, pagination }, statusCounts] = await Promise.all([
-    getClients({ page, pageSize: 20, keyword, status, sort }),
+    getClients({ page, pageSize, keyword, status, sort }),
     getClientStatusCounts(),
   ]);
 
@@ -46,13 +48,14 @@ export default async function ClientsPage({ searchParams }: PageProps) {
     if (keyword) q.set('keyword', keyword);
     if (status) q.set('status', status);
     if (sort) q.set('sort', sort);
+    if (pageSize !== 20) q.set('pageSize', String(pageSize));
     q.set('page', String(pagination.totalPages));
     redirect(`/clients?${q.toString()}`);
   }
   // U-G02：搜索无结果与"系统还没有应用"是两种语义（空态文案/出口不同）。
   const isFiltered = keyword.length > 0 || status !== '';
   // 清除筛选保留排序偏好（视图状态，不是筛选条件）
-  const clearHref = sort !== 'recent' ? `/clients?sort=${sort}` : '/clients';
+  const clearHref = `/clients?${[sort !== 'recent' ? `sort=${sort}` : '', pageSize !== 20 ? `pageSize=${pageSize}` : ''].filter(Boolean).join('&')}`.replace(/\?$/, '');
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">

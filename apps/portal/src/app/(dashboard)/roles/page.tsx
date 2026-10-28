@@ -29,6 +29,7 @@ interface PageProps {
     sort?: string;
     status?: string;
     deptId?: string;
+    pageSize?: string;
     create?: string;
   }>;
 }
@@ -36,6 +37,7 @@ interface PageProps {
 export default async function RolesPage({ searchParams }: PageProps) {
   const params = await searchParams;
   const page = clampPage(params.page);
+  const pageSize = [20, 50, 100].includes(Number(params.pageSize)) ? Number(params.pageSize) : 20;
   const keyword = params.keyword || '';
   const sort = params.sort === 'permissions-asc' || params.sort === 'permissions-desc' ? params.sort : undefined;
   const status = (ENTITY_STATUS_VALUES as readonly string[]).includes(params.status ?? '') ? params.status! : '';
@@ -51,7 +53,7 @@ export default async function RolesPage({ searchParams }: PageProps) {
   );
 
   const [{ data: roles, pagination }, departments] = await Promise.all([
-    getRoles({ page, pageSize: 20, keyword, status, scope, ...(sort ? { sort } : {}), ...(deptId ? { deptId } : {}) }),
+    getRoles({ page, pageSize, keyword, status, scope, ...(sort ? { sort } : {}), ...(deptId ? { deptId } : {}) }),
     getDepartmentOptions(scope),
   ]);
   if (pagination.totalPages > 0 && page > pagination.totalPages) {
@@ -60,6 +62,7 @@ export default async function RolesPage({ searchParams }: PageProps) {
     if (status) q.set('status', status);
     if (sort) q.set('sort', sort);
     if (deptId) q.set('deptId', deptId);
+    if (pageSize !== 20) q.set('pageSize', String(pageSize));
     q.set('page', String(pagination.totalPages));
     redirect(`/roles?${q.toString()}`);
   }

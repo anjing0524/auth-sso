@@ -374,6 +374,14 @@ export default function ClientsTable({ clients, pagination, initialKeyword, init
           startTransition(() => router.push(`/clients${params.toString() ? `?${params.toString()}` : ''}`));
         }}
         disabled={isPending}
+        pageSize={pagination.pageSize}
+        pageSizeOptions={[20, 50, 100].map((size) => {
+          const next = new URLSearchParams(searchParams.toString());
+          next.delete('page');
+          if (size === 20) next.delete('pageSize'); else next.set('pageSize', String(size));
+          const qs = next.toString();
+          return { value: size, href: `/clients${qs ? `?${qs}` : ''}` };
+        })}
       />
       </div>
 

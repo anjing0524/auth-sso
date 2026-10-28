@@ -71,7 +71,16 @@ export default function RolesTable({ roles, pagination, initialKeyword, initialS
   const searchParams = useSearchParams();
   const currentListHref = `/roles${searchParams.toString() ? `?${searchParams.toString()}` : ''}`;
   // 清除筛选保留排序偏好
-  const clearFilterHref = initialSort !== 'default' ? `/roles?sort=${initialSort}` : '/roles';
+  const pageSize = pagination.pageSize;
+  const runtimePageSize = pageSize !== 20 ? `pageSize=${pageSize}` : '';
+  const clearFilterHref = `/roles?${[initialSort !== 'default' ? `sort=${initialSort}` : '', runtimePageSize].filter(Boolean).join('&')}`.replace(/\?$/, '');
+  const pageSizeOptions = [20, 50, 100].map((size) => {
+    const next = new URLSearchParams(searchParams.toString());
+    next.delete('page');
+    if (size === 20) next.delete('pageSize'); else next.set('pageSize', String(size));
+    const qs = next.toString();
+    return { value: size, href: `/roles${qs ? `?${qs}` : ''}` };
+  });
   const [keyword, setKeyword] = useState(initialKeyword);
   // 浏览器后退/前进时，URL 是唯一真相源：输入框跟随 initialKeyword
   useEffect(() => { setKeyword(initialKeyword); }, [initialKeyword]);
@@ -444,6 +453,8 @@ export default function RolesTable({ roles, pagination, initialKeyword, initialS
           startTransition(() => router.push(`/roles?${p.toString()}`));
         }}
         disabled={isPending}
+        pageSize={pageSize}
+        pageSizeOptions={pageSizeOptions}
       />
       </div>
 
