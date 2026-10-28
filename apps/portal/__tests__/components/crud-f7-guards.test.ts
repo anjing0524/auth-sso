@@ -2932,3 +2932,14 @@ describe('登录页语义（续三百九十）', () => {
     expect(form).toContain('aria-label="登录表单"');
   });
 });
+
+describe('OAuth 错误页语义（续三百九十一）', () => {
+  it('metadata/main/h1/alert/目标应用', () => {
+    expect(read('src/app/oauth/error/layout.tsx')).toContain("title: '访问受限 | Auth-SSO'");
+    const src = read('src/app/oauth/error/page.tsx');
+    expect(src).toContain('<main ');
+    expect(src).toContain('<h1 ');
+    expect(src).toContain('role="alert"');
+    expect(src).toContain('目标应用：');
+  });
+});

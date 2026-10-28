@@ -21,6 +21,8 @@
 
 ## 变更记录
 
+- 2026-10-29（续三百九十一）: **OAuth 错误页语义**。缺标题/main/h1/alert。**修复**：layout metadata + 结构 + 中文。**验证**：四处正确；守卫 299 passed。
+
 - 2026-10-29（续三百九十）: **登录页语义**。无 main/表单名/标题。**修复**：main + aria-label + metadata。**验证**：三处正确；守卫 298 passed。
 
 - 2026-10-29（续三百八十九）: **新目标第 200 轮里程碑回归**。首跑 8 失败：layout 缺 instant；live region 文案与可视空态重复。修复后 vitest 1471 passed、e2e 19/19、a11y 0、measure 0、CWV 24/24。

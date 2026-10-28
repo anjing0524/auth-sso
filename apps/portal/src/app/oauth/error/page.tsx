@@ -12,7 +12,7 @@ function ErrorContent() {
   const clientId = searchParams.get('client_id');
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-muted py-12 px-4 sm:px-6 lg:px-8 font-sans">
+    <main className="min-h-screen flex items-center justify-center bg-muted py-12 px-4 sm:px-6 lg:px-8 font-sans">
       <div className="max-w-md w-full space-y-8 bg-card p-10 rounded-xl shadow-2xl shadow-muted-foreground/10 border border-border relative overflow-hidden">
         {/* Brand Header */}
         <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-primary to-primary-hover" />
@@ -27,9 +27,9 @@ function ErrorContent() {
             </div>
             <span className="text-sm font-semibold tracking-tighter text-foreground">Auth-SSO <span className="text-link">Identity</span></span>
           </div>
-          <h2 className="text-2xl font-semibold text-foreground tracking-tight">
+          <h1 className="text-2xl font-semibold text-foreground tracking-tight">
             访问受限
-          </h2>
+          </h1>
           <p className="mt-2 text-sm font-medium text-muted-foreground">
             {error === 'unauthorized_client' ? '该账户无权访问目标系统' : '授权流程中断'}
           </p>
@@ -37,12 +37,12 @@ function ErrorContent() {
 
         <div className="bg-muted rounded-xl p-6 border border-border">
           <div className="flex flex-col gap-3">
-            <p className="text-sm font-bold text-foreground/80 leading-relaxed text-center">
+            <p role="alert" className="text-sm font-bold text-foreground/80 leading-relaxed text-center">
               {message}
             </p>
             {clientId && (
               <div className="flex items-center justify-center gap-2">
-                <span className="text-[10px] font-semibold text-muted-foreground tracking-widest text-center">Target App:</span>
+                <span className="text-[10px] font-semibold text-muted-foreground tracking-widest text-center">目标应用：</span>
                 <code className="text-[11px] bg-card px-2 py-0.5 rounded border border-border text-link font-mono font-bold shadow-sm">
                   {clientId}
                 </code>
@@ -74,7 +74,7 @@ function ErrorContent() {
           </p>
         </div>
       </div>
-    </div>
+    </main>
   );
 }
 
