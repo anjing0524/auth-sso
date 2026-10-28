@@ -246,7 +246,7 @@ export default function NewClientPage() {
                 {errors.redirectUris ? (
                   <p id="client-create-redirect-error" role="alert" className="text-xs font-medium text-destructive">{errors.redirectUris}</p>
                 ) : (
-                  <p className="text-[11px] text-muted-foreground">每行一个 http(s) URL，必须与接入方配置完全一致（含端口与路径）。</p>
+                  <p className="text-[11px] text-muted-foreground">每行一个 http(s) URL，单个最多 500 字符；必须与接入方配置完全一致（含端口与路径）。</p>
                 )}
               </div>
               <div className="space-y-1.5">

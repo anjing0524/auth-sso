@@ -3203,3 +3203,12 @@ describe('详情字段上限（续四百二十三）', () => {
     expect(read('src/app/(dashboard)/clients/[id]/components/ClientInfoSection.tsx')).toContain('maxLength={100}');
   });
 });
+
+describe('回调地址双约束提示（续四百二十四）', () => {
+  it('两页都说明单行上限，详情有总长', () => {
+    expect(read('src/app/(dashboard)/clients/new/page.tsx')).toContain('单个最多 500 字符');
+    const detail = read('src/app/(dashboard)/clients/[id]/components/ClientInfoSection.tsx');
+    expect(detail).toContain('单个最多 500 字符');
+    expect(detail).toContain('maxLength={2000}');
+  });
+});

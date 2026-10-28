@@ -187,11 +187,12 @@ export function ClientInfoSection({
                 aria-required="true"
                 disabled={readOnly}
                 rows={3}
+                maxLength={2000}
                 value={formData.redirectUris}
                 onChange={(e) => onFormChange({ redirectUris: e.target.value })}
                 placeholder="https://your-app.example.com/callback"
               />
-              <p className="text-[11px] text-muted-foreground">按精确匹配校验（含端口与路径）；新增/删除回调后需重新登录。</p>
+              <p className="text-[11px] text-muted-foreground">按精确匹配校验（含端口与路径），单个最多 500 字符；新增/删除回调后需重新登录。</p>
             </div>
           </CardContent>
         </Card>
