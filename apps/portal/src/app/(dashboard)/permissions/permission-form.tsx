@@ -194,7 +194,12 @@ export default function PermissionForm({ mode, menuOptions, permission, clients 
                 <div className="flex items-center gap-1"><Label htmlFor="perm-code">权限编码{mode === 'edit' ? '（不可变更）' : ''}</Label>{mode === 'create' && <RequiredMark />}</div>
                 {mode === 'edit' && <CopyTextButton text={form.code} label="复制权限编码" />}
               </div>
-              <Input id="perm-code" aria-required={mode === 'create'} aria-describedby={fieldError?.field === 'code' ? 'perm-code-error' : undefined} value={form.code} maxLength={150} disabled={mode === 'edit'} aria-invalid={fieldError?.field === 'code'} onChange={e => setForm({ ...form, code: e.target.value })} placeholder="user:list" />
+              <Input id="perm-code" aria-required={mode === 'create'} aria-describedby={fieldError?.field === 'code' ? 'perm-code-error' : undefined} value={form.code} maxLength={150} disabled={mode === 'edit'} aria-invalid={fieldError?.field === 'code'} onChange={e => setForm({ ...form, code: e.target.value })} placeholder={form.type === 'API' ? 'portal:user:list' : 'portal:menu:users'} />
+              <p className="text-[10px] text-muted-foreground">
+                {form.type === 'API'
+                  ? '格式：{应用标识}:{资源}:{动作}，例如 portal:user:list'
+                  : '建议格式：portal:menu:{页面}，例如 portal:menu:users'}
+              </p>
             </div>
             <FieldError failure={fieldError} field="code" id="perm-code-error" />
             <div className="space-y-1.5 sm:col-span-2">

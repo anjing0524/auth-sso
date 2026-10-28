@@ -2602,3 +2602,12 @@ describe('用户名约束提示（续三百五十）', () => {
     expect(src).toContain('3–50 位，创建后不可修改');
   });
 });
+
+describe('编码格式提示（续三百五十一）', () => {
+  it('权限按类型示例；角色说明大写', () => {
+    const perm = read('src/app/(dashboard)/permissions/permission-form.tsx');
+    expect(perm).toContain('portal:user:list');
+    expect(perm).toContain('portal:menu:users');
+    expect(read('src/app/(dashboard)/roles/components/RolesTable.tsx')).toContain('自动转为大写');
+  });
+});
