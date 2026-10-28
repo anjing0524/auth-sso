@@ -3111,3 +3111,10 @@ describe('授权记录时间可区分（续四百一十二）', () => {
     expect(src).toContain('创建的授权');
   });
 });
+
+describe('权限保存按钮固定标签（续四百一十三）', () => {
+  it('系统角色/无变更时仍显示保存动作', () => {
+    const src = read('src/app/(dashboard)/roles/[id]/permissions/permissions-client.tsx');
+    expect(src).toContain("changeCount > 0 ? `保存变更（${changeCount}）` : '保存变更'");
+  });
+});

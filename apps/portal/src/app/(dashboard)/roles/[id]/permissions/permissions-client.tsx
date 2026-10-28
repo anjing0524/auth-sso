@@ -525,7 +525,7 @@ export default function RolePermissionsPage({ role, returnHref = '/roles' }: Rol
                 title={role.isSystem ? '系统角色只读' : changeCount === 0 ? '没有未保存的修改' : loading ? '加载中…' : saving ? '保存中…' : undefined}
               >
                 <Save className="h-3.5 w-3.5" />
-                {saving ? '保存中...' : role.isSystem ? '系统角色只读' : changeCount === 0 ? '无变更' : `保存变更（${changeCount}）`}
+                {saving ? '保存中...' : changeCount > 0 ? `保存变更（${changeCount}）` : '保存变更'}
               </Button>
             </div>
           </div>
