@@ -320,6 +320,7 @@ export default function UserTable({ users, pagination, filters, isFiltered = fal
             <Link
               href={`/users?deptId=${encodeURIComponent(user.deptId)}${pageSize !== 20 ? `&pageSize=${pageSize}` : ''}`}
               className="hover:text-primary hover:underline"
+              aria-label={`查看 ${user.name} 所在的 ${user.deptName} 成员`}
               title="按该部门筛选用户"
             >
               {user.deptName}

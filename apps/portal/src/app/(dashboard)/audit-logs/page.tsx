@@ -355,7 +355,7 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
                           {loginLog.failReason || '-'}
                         </TableCell>
                         <TableCell className="text-right">
-                          <Button asChild variant="ghost" size="icon-sm" aria-label={`查看 ${loginLog.username} 的登录日志详情`}>
+                          <Button asChild variant="ghost" size="icon-sm" aria-label={`查看 ${loginLog.username} 于 ${formatDate(loginLog.createdAt)} 的登录日志详情（#${loginLog.id.slice(0, 8)}）`}>
                             <Link href={`/audit-logs/${loginLog.id}?tab=login&returnTo=${encodeURIComponent(currentListHref)}`}><Eye className="h-4 w-4" /></Link>
                           </Button>
                         </TableCell>
@@ -444,7 +444,7 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
                           {opLog.ip || '-'}
                         </TableCell>
                         <TableCell className="text-right">
-                          <Button asChild variant="ghost" size="icon-sm" aria-label={`查看 ${opLog.username || '未知用户'} 的 ${AUDIT_OPERATION_LABELS[opLog.operation as keyof typeof AUDIT_OPERATION_LABELS] || opLog.operation} 操作日志详情`}>
+                          <Button asChild variant="ghost" size="icon-sm" aria-label={`查看 ${opLog.username || '未知用户'} 于 ${formatDate(opLog.createdAt)} 的 ${AUDIT_OPERATION_LABELS[opLog.operation as keyof typeof AUDIT_OPERATION_LABELS] || opLog.operation} 操作日志详情（#${opLog.id.slice(0, 8)}）`}>
                             <Link href={`/audit-logs/${opLog.id}?tab=operation&returnTo=${encodeURIComponent(currentListHref)}`}><Eye className="h-4 w-4" /></Link>
                           </Button>
                         </TableCell>
@@ -520,7 +520,7 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
                         </TableCell>
                         <TableCell className="hidden text-muted-foreground md:table-cell">{accessLog.ip || '-'}</TableCell>
                         <TableCell className="text-right">
-                          <Button asChild variant="ghost" size="icon-sm" aria-label={`查看 ${accessLog.method} ${accessLog.path} 的访问日志详情`}>
+                          <Button asChild variant="ghost" size="icon-sm" aria-label={`查看 ${accessLog.method} ${accessLog.path} 于 ${formatDate(accessLog.createdAt)} 的访问日志详情（#${accessLog.id.slice(0, 8)}）`}>
                             <Link href={`/audit-logs/${accessLog.id}?tab=access&returnTo=${encodeURIComponent(currentListHref)}`}><Eye className="h-4 w-4" /></Link>
                           </Button>
                         </TableCell>

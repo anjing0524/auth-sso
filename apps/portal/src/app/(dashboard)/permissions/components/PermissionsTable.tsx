@@ -298,7 +298,7 @@ export default function PermissionsTable({ permissions, pagination, activeTab, i
       <TableCell className="w-8 pr-0">
         <PermissionGuard permission={PERMISSION_PERMISSIONS.DELETE}>
           <Checkbox
-            aria-label={`选择权限 ${p.name}`}
+            aria-label={`选择权限 ${p.name}（${p.code}）`}
             checked={checkedIds.has(p.id)}
             disabled={isBuiltinPermission(p.code)}
             title={isBuiltinPermission(p.code) ? '内置权限不可删除' : undefined}
@@ -351,7 +351,7 @@ export default function PermissionsTable({ permissions, pagination, activeTab, i
       <TableCell className="text-right">
         <div className="flex items-center justify-end gap-0.5">
           <PermissionGuard permission={PERMISSION_PERMISSIONS.UPDATE}>
-            <Button asChild variant="ghost" size="sm" className="h-8 gap-1.5 px-2" aria-label={`编辑权限 ${p.name}`} title="编辑">
+            <Button asChild variant="ghost" size="sm" className="h-8 gap-1.5 px-2" aria-label={`编辑权限 ${p.name}（${p.code}）`} title={`编辑权限 ${p.name}（${p.code}）`}>
               <Link href={`/permissions/${p.id}/edit?returnTo=${encodeURIComponent(returnTo)}`}><Edit className="h-4 w-4" /><span className="hidden md:inline">编辑</span></Link>
             </Button>
           </PermissionGuard>
@@ -360,8 +360,8 @@ export default function PermissionsTable({ permissions, pagination, activeTab, i
             <Button
               variant="ghost"
               size="sm"
-              aria-label={`删除权限 ${p.name}`}
-              title="删除"
+              aria-label={`删除权限 ${p.name}（${p.code}）`}
+              title={`删除权限 ${p.name}（${p.code}）`}
               className="h-8 gap-1.5 px-2 text-destructive hover:bg-destructive/10 hover:text-destructive"
               onClick={() => openDeleteDialog(p)}
             >

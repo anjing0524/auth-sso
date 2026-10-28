@@ -2387,9 +2387,9 @@ describe('客户端行操作上下文（续三百一十九）', () => {
 describe('审计详情行上下文（续三百二十）', () => {
   it('详情按钮名称包含用户/操作/路径', () => {
     const src = read('src/app/(dashboard)/audit-logs/page.tsx');
-    expect(src).toContain('查看 ${loginLog.username} 的登录日志详情');
-    expect(src).toContain('操作日志详情`');
-    expect(src).toContain('查看 ${accessLog.method} ${accessLog.path} 的访问日志详情');
+    expect(src).toContain('查看 ${loginLog.username} 于 ${formatDate(loginLog.createdAt)} 的登录日志详情（#${loginLog.id.slice(0, 8)}）');
+    expect(src).toContain('操作日志详情（#${opLog.id.slice(0, 8)}）');
+    expect(src).toContain('查看 ${accessLog.method} ${accessLog.path} 于 ${formatDate(accessLog.createdAt)} 的访问日志详情（#${accessLog.id.slice(0, 8)}）');
   });
 });
 
