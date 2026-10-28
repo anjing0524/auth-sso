@@ -355,8 +355,8 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
                         <TableCell className="hidden text-muted-foreground md:table-cell">
                           {loginLog.ip || '-'}
                         </TableCell>
-                        <TableCell className={`hidden md:table-cell ${loginLog.failReason ? 'text-destructive' : 'text-muted-foreground'}`}>
-                          {loginLog.failReason || '-'}
+                        <TableCell className={`hidden max-w-[200px] md:table-cell ${loginLog.failReason ? 'text-destructive' : 'text-muted-foreground'}`}>
+                          <span className="line-clamp-2 break-words" title={loginLog.failReason ?? undefined}>{loginLog.failReason || '-'}</span>
                         </TableCell>
                         <TableCell className="text-right">
                           <Button asChild variant="ghost" size="icon-sm" aria-label={`查看 ${loginLog.username} 于 ${formatDate(loginLog.createdAt)} 的登录日志详情（#${loginLog.id.slice(0, 8)}）`}>
@@ -441,7 +441,7 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
                             {opLog.status || '-'}
                           </Badge>
                           {opLog.errorMsg && (
-                            <span className="ml-2 text-xs text-destructive">({opLog.errorMsg})</span>
+                            <span className="ml-2 inline-block max-w-[200px] break-all align-middle text-xs text-destructive" title={opLog.errorMsg}>({opLog.errorMsg})</span>
                           )}
                         </TableCell>
                         <TableCell className="hidden text-muted-foreground min-[1100px]:table-cell">

@@ -3038,3 +3038,11 @@ describe('OAuth 错误长文案（续四百零二）', () => {
     expect(src).toContain('break-all');
   });
 });
+
+describe('审计错误文本截断（续四百零三）', () => {
+  it('失败原因/错误信息有宽度与断行', () => {
+    const src = read('src/app/(dashboard)/audit-logs/page.tsx');
+    expect(src).toContain('line-clamp-2 break-words');
+    expect(src).toContain('max-w-[200px] break-all');
+  });
+});
