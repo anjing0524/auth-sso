@@ -2000,3 +2000,9 @@ a11y 对比度函数提取复用，增加未登录 `/login`（390×844，独立�
 | 问题 | 修复 | 验证 |
 |---|---|---|
 | 非法 UUID 在 dashboard 内触发根 404，导致嵌套两个 main、标题仍为「用户详情」 | 新增 dashboard 级 not-found（无 main）+ title | main=1；标题「页面不存在」；顶层 404 仍正常 |
+
+### 9.269 产品审计二百六十四：OAuth 错误长文案（2026-10-29）
+
+| 问题 | 修复 | 验证 |
+|---|---|---|
+| 长错误消息/Client ID 无断行，卡片内部溢出到 2585px | break-words / break-all | card scrollWidth=clientWidth=446；无溢出 |

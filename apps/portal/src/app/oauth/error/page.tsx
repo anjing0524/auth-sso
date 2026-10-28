@@ -37,13 +37,13 @@ function ErrorContent() {
 
         <div className="bg-muted rounded-xl p-6 border border-border">
           <div className="flex flex-col gap-3">
-            <p role="alert" className="text-sm font-bold text-foreground/80 leading-relaxed text-center">
+            <p role="alert" className="break-words text-sm font-bold text-foreground/80 leading-relaxed text-center">
               {message}
             </p>
             {clientId && (
               <div className="flex items-center justify-center gap-2">
                 <span className="text-[10px] font-semibold text-muted-foreground tracking-widest text-center">目标应用：</span>
-                <code className="text-[11px] bg-card px-2 py-0.5 rounded border border-border text-link font-mono font-bold shadow-sm">
+                <code className="break-all text-[11px] bg-card px-2 py-0.5 rounded border border-border text-link font-mono font-bold shadow-sm">
                   {clientId}
                 </code>
               </div>

@@ -3030,3 +3030,11 @@ describe('dashboard 内 404（续四百零一）', () => {
     expect(src).toContain('返回工作台');
   });
 });
+
+describe('OAuth 错误长文案（续四百零二）', () => {
+  it('消息/Client ID 可断行', () => {
+    const src = read('src/app/oauth/error/page.tsx');
+    expect(src).toContain('break-words');
+    expect(src).toContain('break-all');
+  });
+});
