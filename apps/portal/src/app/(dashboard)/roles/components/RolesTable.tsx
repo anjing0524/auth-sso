@@ -177,7 +177,7 @@ export default function RolesTable({ roles, pagination, initialKeyword, initialS
 
   const renderDeptSelect = (value: string, onChange: (v: string) => void, id?: string) => (
     <Select value={value || undefined} onValueChange={onChange}>
-      <SelectTrigger id={id}><SelectValue placeholder="选择部门" /></SelectTrigger>
+      <SelectTrigger id={id} aria-label="所属部门"><SelectValue placeholder="选择部门" /></SelectTrigger>
       <SelectContent>
         {departments.map(d => (
           <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>

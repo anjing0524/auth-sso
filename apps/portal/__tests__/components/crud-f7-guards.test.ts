@@ -2422,3 +2422,10 @@ describe('仪表盘/会话唯一名称（续三百二十八）', () => {
     expect(read('src/app/(dashboard)/profile/ProfileClient.tsx')).toContain('复制会话 ${item.id.slice(0, 8)} 的 ID');
   });
 });
+
+describe('角色部门选择可访问名称（续三百二十九）', () => {
+  it('SelectTrigger aria-label 所属部门', () => {
+    const src = read('src/app/(dashboard)/roles/components/RolesTable.tsx');
+    expect(src).toContain('<SelectTrigger id={id} aria-label="所属部门">');
+  });
+});
