@@ -69,7 +69,7 @@ export function ClientTokensSection({ tokens, total = tokens.length, onRevokeAll
               tokens.map((token) => (
                 <TableRow key={token.id}>
                   <TableCell className="font-medium">{token.username ?? '—'}</TableCell>
-                  <TableCell className="text-muted-foreground">
+                  <TableCell className="max-w-[260px] truncate text-muted-foreground" title={token.scopes.join(', ')}>
                     {token.scopes.join(', ')}
                   </TableCell>
                   <TableCell className="text-muted-foreground">

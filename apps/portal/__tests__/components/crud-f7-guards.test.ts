@@ -2155,3 +2155,11 @@ describe('部门名筛选入口（续二百八十九）', () => {
     expect(roles).toContain('/roles?deptId=${encodeURIComponent(r.deptId)}');
   });
 });
+
+describe('授权 Token 表 1024 列宽（续二百九十一）', () => {
+  it('Scopes 限宽并带 title，操作列完整', () => {
+    const src = read('src/app/(dashboard)/clients/[id]/components/ClientTokensSection.tsx');
+    expect(src).toContain('max-w-[260px] truncate');
+    expect(src).toContain('title={token.scopes.join');
+  });
+});
