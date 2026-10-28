@@ -2429,3 +2429,11 @@ describe('角色部门选择可访问名称（续三百二十九）', () => {
     expect(src).toContain('<SelectTrigger id={id} aria-label="所属部门">');
   });
 });
+
+describe('权限选择可访问名称（续三百三十）', () => {
+  it('类型/归属应用 combobox aria-label', () => {
+    const src = read('src/app/(dashboard)/permissions/permission-form.tsx');
+    expect(src).toContain('aria-label="权限类型"');
+    expect(src).toContain('aria-label="归属应用"');
+  });
+});

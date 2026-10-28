@@ -184,7 +184,7 @@ export default function PermissionForm({ mode, menuOptions, permission, clients 
             <div className="space-y-1.5">
               <Label htmlFor="perm-type">类型</Label>
               <Select value={form.type} onValueChange={v => setForm({ ...form, type: v })} disabled={isBuiltin}>
-                <SelectTrigger id="perm-type"><SelectValue>{TYPE_LABELS[form.type] ?? form.type}</SelectValue></SelectTrigger>
+                <SelectTrigger id="perm-type" aria-label="权限类型"><SelectValue>{TYPE_LABELS[form.type] ?? form.type}</SelectValue></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="API">接口（API）</SelectItem>
                   <SelectItem value="PAGE">页面（PAGE）</SelectItem>
@@ -213,7 +213,7 @@ export default function PermissionForm({ mode, menuOptions, permission, clients 
               <div className="space-y-1.5 sm:col-span-2">
                 <Label htmlFor="perm-client">归属应用（可选）</Label>
                 <Select value={form.clientId || 'NONE'} onValueChange={(v) => setForm({ ...form, clientId: v === 'NONE' ? '' : v })} disabled={isBuiltin}>
-                  <SelectTrigger id="perm-client"><SelectValue>{(form.clientId && clients.find((c) => c.id === form.clientId)?.name) || '不绑定'}</SelectValue></SelectTrigger>
+                  <SelectTrigger id="perm-client" aria-label="归属应用"><SelectValue>{(form.clientId && clients.find((c) => c.id === form.clientId)?.name) || '不绑定'}</SelectValue></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="NONE">不绑定</SelectItem>
                     {clients.map((c) => (
