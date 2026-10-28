@@ -19,6 +19,7 @@ import { CopyTextButton } from '@/components/shared/copy-text-button';
 
 /** 读取会话/动态数据：与审计列表同口径，声明非 instant 路由 */
 export const instant = false;
+export const metadata = { title: '审计日志详情 | Auth-SSO' };
 
 interface PageProps {
   params: Promise<{ id: string }>;

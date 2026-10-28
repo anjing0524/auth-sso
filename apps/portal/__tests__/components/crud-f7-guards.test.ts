@@ -2793,3 +2793,10 @@ describe('客户端创建页标题（续三百七十四）', () => {
     expect(src).toContain("title: '注册新应用 | Auth-SSO'");
   });
 });
+
+describe('审计详情标题（续三百七十五）', () => {
+  it('详情页导出 metadata', () => {
+    const src = read('src/app/(dashboard)/audit-logs/[id]/page.tsx');
+    expect(src).toContain("title: '审计日志详情 | Auth-SSO'");
+  });
+});
