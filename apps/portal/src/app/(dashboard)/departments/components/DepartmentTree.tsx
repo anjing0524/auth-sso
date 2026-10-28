@@ -122,7 +122,7 @@ export default function DepartmentTree({ departments, deletionStats = {} }: Prop
     if (!form.name) { toast.error('请填写部门名称'); return; }
     clearFailure();
     setSaving(true);
-    const r = await createDepartmentAction({ name: form.name, code: form.code || undefined, sort: form.sort, parentId: form.parentId });
+    const r = await createDepartmentAction({ name: form.name, code: form.code.trim() || undefined, sort: form.sort, parentId: form.parentId });
     setSaving(false);
     if (r.success) { toast.success(r.message); setIsAddOpen(false); router.refresh(); } else { reportFailure(r); }
   };
@@ -131,7 +131,7 @@ export default function DepartmentTree({ departments, deletionStats = {} }: Prop
     if (!selected) return;
     clearFailure();
     setSaving(true);
-    const r = await updateDepartmentAction(selected.id, form);
+    const r = await updateDepartmentAction(selected.id, { ...form, code: form.code.trim() || null });
     setSaving(false);
     if (r.success) { toast.success(r.message); setIsEditOpen(false); router.refresh(); } else { reportFailure(r); }
   };

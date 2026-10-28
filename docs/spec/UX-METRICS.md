@@ -1010,3 +1010,9 @@ a11y 对比度函数提取复用，增加未登录 `/login`（390×844，独立�
 | 问题 | 修复 | 验证 |
 |---|---|---|
 | 管理员清空头像写入空字符串，个人中心清空写 NULL；同一字段两种空值 | admin Update schema URL+nullable；applyUserUpdate 支持 null；表单空值提交 null | API 测试：设置后清空 → DB NULL；32 passed |
+
+### 9.108 产品审计一百零三：可空字段清空语义（2026-10-28）
+
+| 问题 | 修复 | 验证 |
+|---|---|---|
+| 角色描述、部门编码清空时写空字符串；创建路径写 NULL，同一字段两种空值 | 更新提交 null；创建 trim 后 undefined | API 测试清空后 DB 为 NULL；role/dept actions 28 passed |

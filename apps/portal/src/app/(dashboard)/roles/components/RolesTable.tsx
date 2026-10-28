@@ -112,7 +112,7 @@ export default function RolesTable({ roles, pagination, initialKeyword, initialS
     if (!form.deptId) { toast.error('请选择所属部门'); return; }
     clearFailure();
     setSaving(true);
-    const res = await createRoleAction({ name: form.name, code: form.code, description: form.description || undefined, deptId: form.deptId, sort: form.sort });
+    const res = await createRoleAction({ name: form.name, code: form.code, description: form.description.trim() || undefined, deptId: form.deptId, sort: form.sort });
     setSaving(false);
     if (res.success) { toast.success(res.message); setIsAddOpen(false); router.refresh(); } else { reportFailure(res); }
   };
@@ -121,7 +121,7 @@ export default function RolesTable({ roles, pagination, initialKeyword, initialS
     if (!selected) return;
     setSaving(true);
     clearFailure();
-    const res = await updateRoleAction(selected.id, form);
+    const res = await updateRoleAction(selected.id, { ...form, description: form.description.trim() || null });
     setSaving(false);
     if (res.success) { toast.success(res.message); setIsEditOpen(false); router.refresh(); } else { reportFailure(res); }
   };

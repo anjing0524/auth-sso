@@ -1724,3 +1724,12 @@ describe('批量选择随上下文清空（续二百三十九）', () => {
     expect(perms).toContain('个权限（当前页）');
   });
 });
+
+describe('可空字段清空语义（续二百四十一）', () => {
+  it('角色描述/部门编码清空提交 null', () => {
+    const roles = read('src/app/(dashboard)/roles/components/RolesTable.tsx');
+    expect(roles).toContain('description: form.description.trim() || null');
+    const depts = read('src/app/(dashboard)/departments/components/DepartmentTree.tsx');
+    expect(depts).toContain('code: form.code.trim() || null');
+  });
+});

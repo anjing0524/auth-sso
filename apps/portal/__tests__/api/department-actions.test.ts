@@ -151,6 +151,15 @@ describe('Department Server Actions', () => {
       expect(updated!.name).toBe('Updated Tech');
     });
 
+    it('清空部门编码写入 NULL', async () => {
+      await seedTestData(td.db, { departments: seedSubDept({ code: 'TMP_CODE' }) });
+
+      const r: any = await updateDepartmentAction(TECH_DEPT_ID, { code: null } as any);
+      expect(r.success).toBe(true);
+      const rows = await db.select().from(schema.departments);
+      expect(rows.find((d) => d.id === TECH_DEPT_ID)?.code).toBeNull();
+    });
+
     it('根部门不可停用', async () => {
       const r: any = await updateDepartmentAction(ROOT_DEPT_ID, { status: 'DISABLED' } as any);
 

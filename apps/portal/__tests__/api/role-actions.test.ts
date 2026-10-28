@@ -205,6 +205,15 @@ describe('Role Server Actions', () => {
       expect(row?.status).toBe('ACTIVE');
     });
 
+    it('清空角色描述写入 NULL', async () => {
+      await seedTestData(td.db, { roles: seedTestRole({ description: '旧描述' }) });
+
+      const r: any = await updateRoleAction(ROLE_ID_UPDATE, { description: null } as any);
+      expect(r.success).toBe(true);
+      const rows = await db.select().from(schema.roles);
+      expect(rows.find((x) => x.id === ROLE_ID_UPDATE)?.description).toBeNull();
+    });
+
     it('角色不存在 → 失败信封 NOT_FOUND（生产契约）', async () => {
       const r = await updateRoleAction('00000000-0000-4000-8000-000000000999', { name: 'X' } as any);
 
