@@ -2096,3 +2096,11 @@ describe('用户角色筛选文案（续二百八十一）', () => {
     expect(src).not.toContain('全部角色');
   });
 });
+
+describe('每页条数视觉分隔（续二百八十二）', () => {
+  it('选项间有分隔符且当前项高亮', () => {
+    const src = read('src/components/shared/table-pagination.tsx');
+    expect(src).toContain('index < pageSizeOptions.length - 1');
+    expect(src).toContain('>/</span>');
+  });
+});

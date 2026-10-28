@@ -108,14 +108,17 @@ export function TablePagination({
   const nextTo = hrefFor?.(page + 1);
   const items = pageItems(page, pages);
   const pageSizeNode = pageSize && pageSizeOptions && pageSizeOptions.length > 0 ? (
-    <div role="group" className="flex items-center gap-0.5 text-[11px] text-muted-foreground" aria-label="每页条数">
+    <div role="group" className="flex items-center gap-1 text-[11px] text-muted-foreground" aria-label="每页条数">
       <span>每页</span>
-      {pageSizeOptions.map((option) => (
-        option.value === pageSize ? (
-          <span key={option.value} aria-current="true" aria-label={`每页 ${option.value} 条（当前）`} className="rounded bg-card px-1 font-medium text-foreground">{option.value}</span>
-        ) : (
-          <Link key={option.value} href={option.href} aria-label={`每页 ${option.value} 条`} className="rounded px-1 hover:bg-muted hover:text-foreground">{option.value}</Link>
-        )
+      {pageSizeOptions.map((option, index) => (
+        <span key={option.value} className="flex items-center gap-1">
+          {option.value === pageSize ? (
+            <span aria-current="true" aria-label={`每页 ${option.value} 条（当前）`} className="rounded bg-card px-1 font-medium text-foreground">{option.value}</span>
+          ) : (
+            <Link href={option.href} aria-label={`每页 ${option.value} 条`} className="rounded px-1 hover:bg-muted hover:text-foreground">{option.value}</Link>
+          )}
+          {index < pageSizeOptions.length - 1 ? <span aria-hidden="true" className="text-border">/</span> : null}
+        </span>
       ))}
     </div>
   ) : null;
