@@ -65,6 +65,8 @@ interface Props {
   initialStatus?: string;
   /** 归属应用筛选：'' | NONE | clientId */
   initialClientId?: string;
+  /** 每页条数 */
+  pageSize?: number;
   clients?: Array<{ id: string; name: string }>;
 }
 
@@ -87,7 +89,7 @@ const TABS: Array<{ value: string; label: string }> = [
   { value: 'API', label: '接口' },
 ];
 
-export default function PermissionsTable({ permissions, pagination, activeTab, initialKeyword = '', initialStatus = '', initialClientId = '', clients = [], menuOptions = [] }: Props) {
+export default function PermissionsTable({ permissions, pagination, activeTab, initialKeyword = '', initialStatus = '', initialClientId = '', pageSize = 20, clients = [], menuOptions = [] }: Props) {
   const router = useRouter();
   const [keyword, setKeyword] = useState(initialKeyword);
   // 浏览器后退/前进时，URL 是唯一真相源：输入框跟随 initialKeyword
@@ -103,12 +105,14 @@ export default function PermissionsTable({ permissions, pagination, activeTab, i
     nextType = activeTab,
     nextStatus = initialStatus,
     nextClientId = initialClientId,
+    nextPageSize = pageSize,
   ) => {
     const params = new URLSearchParams();
     if (nextType !== 'ALL') params.set('type', nextType);
     if (nextKeyword) params.set('keyword', nextKeyword);
     if (nextStatus) params.set('status', nextStatus);
     if (nextClientId && nextType === 'API') params.set('clientId', nextClientId);
+    if (nextPageSize !== 20) params.set('pageSize', String(nextPageSize));
     if (nextPage > 1) params.set('page', String(nextPage));
     const qs = params.toString();
     return `/permissions${qs ? `?${qs}` : ''}`;
@@ -378,7 +382,7 @@ export default function PermissionsTable({ permissions, pagination, activeTab, i
               variant="simple"
               kind="filtered"
               icon="ShieldCheck"
-              clearAction={{ label: '查看全部', href: '/permissions' }}
+              clearAction={{ label: '查看全部', href: pageSize !== 20 ? `/permissions?pageSize=${pageSize}` : '/permissions' }}
             />
           ) : (
             <EmptyState
@@ -409,6 +413,8 @@ export default function PermissionsTable({ permissions, pagination, activeTab, i
         total={pagination.total}
         onPageChange={(next) => startTransition(() => router.push(buildHref(next)))}
         disabled={isPending}
+        pageSize={pageSize}
+        pageSizeOptions={[20, 50, 100].map((size) => ({ value: size, href: buildHref(1, keyword, activeTab, initialStatus, initialClientId, size) }))}
       />
       </div>
 

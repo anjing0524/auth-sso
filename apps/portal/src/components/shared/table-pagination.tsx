@@ -107,6 +107,19 @@ export function TablePagination({
   const prevTo = hrefFor?.(page - 1);
   const nextTo = hrefFor?.(page + 1);
   const items = pageItems(page, pages);
+  const pageSizeNode = pageSize && pageSizeOptions && pageSizeOptions.length > 0 ? (
+    <div className="flex items-center gap-0.5 text-[11px] text-muted-foreground" aria-label="每页条数">
+      <span>每页</span>
+      {pageSizeOptions.map((option) => (
+        option.value === pageSize ? (
+          <span key={option.value} className="rounded bg-card px-1 font-medium text-foreground">{option.value}</span>
+        ) : (
+          <Link key={option.value} href={option.href} className="rounded px-1 hover:bg-muted hover:text-foreground">{option.value}</Link>
+        )
+      ))}
+    </div>
+  ) : null;
+
 
   const pageNode = (n: number) => {
     const isCurrent = n === page;
@@ -133,10 +146,11 @@ export function TablePagination({
   // 保留总数文案（用户仍需要知道规模），多页时保持全部功能。
   if (pages <= 1) {
     return (
-      <div className="-mt-px flex items-center rounded-b-lg border-t bg-muted/30 px-3 py-1.5">
+      <div className="-mt-px flex flex-wrap items-center justify-between gap-2 rounded-b-lg border-t bg-muted/30 px-3 py-1.5">
         <p className="text-xs text-muted-foreground">
           共 <span className="font-semibold tabular-nums text-foreground">{total}</span> 条记录
         </p>
+        {pageSizeNode}
       </div>
     );
   }
@@ -147,18 +161,7 @@ export function TablePagination({
         <p className="text-xs text-muted-foreground">
           共 <span className="font-semibold tabular-nums text-foreground">{total}</span> 条记录
         </p>
-        {pageSize && pageSizeOptions && pageSizeOptions.length > 0 ? (
-          <div className="flex items-center gap-0.5 text-[11px] text-muted-foreground" aria-label="每页条数">
-            <span>每页</span>
-            {pageSizeOptions.map((option) => (
-              option.value === pageSize ? (
-                <span key={option.value} className="rounded bg-card px-1 font-medium text-foreground">{option.value}</span>
-              ) : (
-                <Link key={option.value} href={option.href} className="rounded px-1 hover:bg-muted hover:text-foreground">{option.value}</Link>
-              )
-            ))}
-          </div>
-        ) : null}
+        {pageSizeNode}
       </div>
       <div className="flex flex-wrap items-center gap-1.5">
         {pages > 7 ? (

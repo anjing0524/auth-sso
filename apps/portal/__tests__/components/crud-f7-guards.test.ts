@@ -1980,3 +1980,15 @@ describe('审计每页条数（续二百六十八）', () => {
     expect(filters).toContain("if (pageSize !== 20) params.set('pageSize'");
   });
 });
+
+describe('权限每页条数（续二百六十九）', () => {
+  it('权限查询/链接保留 pageSize；分页单页仍显示页大小', () => {
+    const page = read('src/app/(dashboard)/permissions/page.tsx');
+    expect(page).toContain('pageSize,');
+    expect(page).toContain("pageSize !== 20");
+    const table = read('src/app/(dashboard)/permissions/components/PermissionsTable.tsx');
+    expect(table).toContain('pageSizeOptions={[20, 50, 100].map');
+    const pg = read('src/components/shared/table-pagination.tsx');
+    expect(pg).toContain('{pageSizeNode}');
+  });
+});

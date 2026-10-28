@@ -22,6 +22,7 @@ interface PageProps {
     keyword?: string;
     status?: string;
     clientId?: string;
+    pageSize?: string;
     page?: string;
   }>;
 }
@@ -35,6 +36,7 @@ export default async function PermissionsPage({ searchParams }: PageProps) {
   const keyword = (params.keyword || '').slice(0, 100);
   const status = (ENTITY_STATUS_VALUES as readonly string[]).includes(params.status ?? '') ? params.status! : '';
   const page = clampPage(params.page);
+  const pageSize = [20, 50, 100].includes(Number(params.pageSize)) ? Number(params.pageSize) : 20;
   // 归属应用只对接口权限有意义：其他 tab 即使 URL 带 clientId 也忽略，避免误空态
   const clientId = activeTab === 'API' ? (params.clientId || '').slice(0, 100) : '';
 
@@ -46,7 +48,7 @@ export default async function PermissionsPage({ searchParams }: PageProps) {
       status: status || undefined,
       clientId: clientId || undefined,
       page,
-      pageSize: 20,
+      pageSize,
     }),
     getClientOptions(),
   ]);
@@ -56,6 +58,7 @@ export default async function PermissionsPage({ searchParams }: PageProps) {
     if (keyword) q.set('keyword', keyword);
     if (status) q.set('status', status);
     if (clientId) q.set('clientId', clientId);
+    if (pageSize !== 20) q.set('pageSize', String(pageSize));
     q.set('page', String(pagination.totalPages));
     redirect(`/permissions?${q.toString()}`);
   }
@@ -73,6 +76,7 @@ export default async function PermissionsPage({ searchParams }: PageProps) {
         initialStatus={status}
         initialClientId={clientId}
         clients={clients}
+        pageSize={pageSize}
         menuOptions={menuOptions}
       />
     </div>
