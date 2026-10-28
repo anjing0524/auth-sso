@@ -2024,3 +2024,9 @@ a11y 对比度函数提取复用，增加未登录 `/login`（390×844，独立�
 | 问题 | 修复 | 验证 |
 |---|---|---|
 | PageHeader 描述行 truncate 但无 title | 补 description title | 角色权限页描述 title 完整 |
+
+### 9.273 产品审计二百六十八：会话 clientId 完整值（2026-10-29）
+
+| 问题 | 修复 | 验证 |
+|---|---|---|
+| 个人会话 clientId 截断且无 title | 补 title | 3 条会话 clientId title=portal |

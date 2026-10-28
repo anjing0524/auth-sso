@@ -3061,3 +3061,10 @@ describe('页头描述完整值（续四百零五）', () => {
     expect(src).toContain('title={description}');
   });
 });
+
+describe('会话 clientId 完整值（续四百零六）', () => {
+  it('clientId 行带 title', () => {
+    const src = read('src/app/(dashboard)/profile/ProfileClient.tsx');
+    expect(src).toContain('truncate font-mono text-[11px]" title={item.clientId}');
+  });
+});

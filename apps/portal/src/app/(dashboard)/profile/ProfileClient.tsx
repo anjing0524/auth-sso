@@ -463,7 +463,7 @@ export default function ProfileClient({
                     {visibleSessions.map((item) => (
                       <li key={item.id} className="flex items-start justify-between gap-2 px-2 py-1.5">
                         <div className="min-w-0">
-                          <p className="flex items-center gap-1.5 truncate font-mono text-[11px]">
+                          <p className="flex items-center gap-1.5 truncate font-mono text-[11px]" title={item.clientId}>
                             {item.clientId}
                             {item.isCurrent && <Badge variant="success" className="shrink-0 text-[9px]">当前设备</Badge>}
                           </p>
