@@ -10,6 +10,8 @@ import { DynamicIcon } from '@/lib/icon-map';
  * 都会渲染 Next 默认的英文 404（"This page could not be found."），与中文产品风格割裂，
  * 且没有任何返回入口（审计 P2-5）。
  */
+export const metadata = { title: '页面不存在 | Auth-SSO' };
+
 export default function NotFound() {
   return (
     <div className="flex min-h-svh flex-col items-center justify-center gap-6 p-8 text-center">

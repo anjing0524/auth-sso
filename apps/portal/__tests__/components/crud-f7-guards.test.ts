@@ -2908,3 +2908,10 @@ describe('审计空结果播报（续三百八十六）', () => {
     expect(src).toContain('aria-live="polite"');
   });
 });
+
+describe('404 页面标题（续三百八十七）', () => {
+  it('not-found 导出 metadata', () => {
+    const src = read('src/app/not-found.tsx');
+    expect(src).toContain("title: '页面不存在 | Auth-SSO'");
+  });
+});
