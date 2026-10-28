@@ -146,6 +146,7 @@ export default function LoginForm({ sessionId, initialError }: LoginFormProps) {
               <Input
                 id="login-email"
                 type="text"
+                maxLength={255}
                 autoComplete="username"
                 placeholder="you@company.com"
                 required

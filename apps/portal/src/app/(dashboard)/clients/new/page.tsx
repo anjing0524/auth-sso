@@ -195,6 +195,7 @@ export default function NewClientPage() {
                 <Input
                   id="client-create-homepage"
                   type="url"
+                  maxLength={500}
                   placeholder="https://example.com"
                   value={formData.homepageUrl}
                   onChange={e => setFormData({ ...formData, homepageUrl: e.target.value })}
@@ -205,6 +206,7 @@ export default function NewClientPage() {
                 <Input
                   id="client-create-logo"
                   type="url"
+                  maxLength={500}
                   aria-describedby={errors.logoUrl ? 'client-create-logo-error' : undefined}
                   placeholder="https://example.com/logo.png"
                   aria-invalid={!!errors.logoUrl}
@@ -269,6 +271,7 @@ export default function NewClientPage() {
                 </div>
                 <Input
                   id="client-create-scopes"
+                  maxLength={200}
                   value={formData.scopes}
                   onChange={e => setFormData({ ...formData, scopes: e.target.value })}
                   className="mt-1 font-mono text-xs"

@@ -3173,3 +3173,15 @@ describe('搜索长度上限（续四百二十）', () => {
     expect(src).toContain('maxLength={maxLength}');
   });
 });
+
+describe('服务端字段上限对齐（续四百二十一）', () => {
+  it('登录邮箱/客户端 URL/Scopes 有 maxLength', () => {
+    expect(read('src/app/login/login-form.tsx')).toContain('maxLength={255}');
+    const create = read('src/app/(dashboard)/clients/new/page.tsx');
+    expect(create).toContain('maxLength={500}');
+    expect(create).toContain('maxLength={200}');
+    const detail = read('src/app/(dashboard)/clients/[id]/components/ClientInfoSection.tsx');
+    expect(detail).toContain('maxLength={500}');
+    expect(detail).toContain('maxLength={200}');
+  });
+});

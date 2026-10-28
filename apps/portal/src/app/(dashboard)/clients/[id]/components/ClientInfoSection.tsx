@@ -109,6 +109,7 @@ export function ClientInfoSection({
                   id="client-detail-homepage"
                   disabled={readOnly}
                   type="url"
+                  maxLength={500}
                   value={formData.homepageUrl}
                   onChange={(e) => onFormChange({ homepageUrl: e.target.value })}
                   placeholder="https://example.com"
@@ -121,6 +122,7 @@ export function ClientInfoSection({
                 id="client-detail-logo"
                 disabled={readOnly}
                 type="url"
+                maxLength={500}
                 value={formData.logoUrl}
                 onChange={(e) => onFormChange({ logoUrl: e.target.value })}
                 placeholder="https://example.com/logo.png"
@@ -157,6 +159,7 @@ export function ClientInfoSection({
               <Input
                 id="client-detail-scopes"
                 disabled={readOnly}
+                maxLength={200}
                 value={formData.scopes}
                 onChange={(e) => onFormChange({ scopes: e.target.value })}
                 placeholder="openid profile email"
