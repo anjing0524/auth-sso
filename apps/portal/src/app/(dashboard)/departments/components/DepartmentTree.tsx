@@ -327,16 +327,27 @@ export default function DepartmentTree({ departments, deletionStats = {}, autoOp
                     <option value="code">按编码</option>
                   </select>
                 </label>
-                <Button variant="outline" onClick={() => setExpanded(new Set(expandableIds))}>
+                <Button
+                  variant="outline"
+                  onClick={() => setExpanded(new Set(expandableIds))}
+                  disabled={expandableIds.length === 0}
+                  title={expandableIds.length === 0 ? '没有可展开的部门' : undefined}
+                >
                   展开全部
                 </Button>
-                <Button variant="outline" onClick={() => setExpanded(new Set())}>
+                <Button
+                  variant="outline"
+                  onClick={() => setExpanded(new Set())}
+                  disabled={expanded.size === 0}
+                  title={expanded.size === 0 ? '当前没有已展开的部门' : undefined}
+                >
                   收起全部
                 </Button>
                 <Button
                   variant="outline"
                   onClick={() => setSelectedDepts((prev) => prev.size === movableDepts.length ? new Set() : new Set(movableDepts.map((d) => d.id)))}
                   disabled={movableDepts.length === 0}
+                  title={movableDepts.length === 0 ? '没有可移动的部门（根部门不可移动）' : undefined}
                 >
                   {selectedCount === movableDepts.length && movableDepts.length > 0 ? '取消全选' : '全选可移动'}
                 </Button>

@@ -2642,3 +2642,12 @@ describe('部门批量选择播报（续三百五十五）', () => {
     expect(src).toContain('已选 ${selectedCount} 个部门，其中可移动 ${moveCount} 个');
   });
 });
+
+describe('部门工具栏禁用原因（续三百五十六）', () => {
+  it('展开/收起/全选 disabled 带 title 原因', () => {
+    const src = read('src/app/(dashboard)/departments/components/DepartmentTree.tsx');
+    expect(src).toContain('没有可展开的部门');
+    expect(src).toContain('当前没有已展开的部门');
+    expect(src).toContain('没有可移动的部门（根部门不可移动）');
+  });
+});
