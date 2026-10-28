@@ -182,6 +182,7 @@ export default function NewClientPage() {
                 <Input
                   id="client-create-name"
                   aria-required="true"
+                  aria-describedby={errors.name ? 'client-create-name-error' : undefined}
                   placeholder="我的业务系统"
                   maxLength={100}
                   aria-invalid={!!errors.name}
@@ -192,7 +193,7 @@ export default function NewClientPage() {
                   }}
                 />
                 {errors.name ? (
-                  <p role="alert" className="text-xs font-medium text-destructive">{errors.name}</p>
+                  <p id="client-create-name-error" role="alert" className="text-xs font-medium text-destructive">{errors.name}</p>
                 ) : null}
               </div>
               <div className="space-y-1.5">
@@ -210,12 +211,13 @@ export default function NewClientPage() {
                 <Input
                   id="client-create-logo"
                   type="url"
+                  aria-describedby={errors.logoUrl ? 'client-create-logo-error' : undefined}
                   placeholder="https://example.com/logo.png"
                   aria-invalid={!!errors.logoUrl}
                   value={formData.logoUrl}
                   onChange={e => setFormData({ ...formData, logoUrl: e.target.value })}
                 />
-                {errors.logoUrl ? <p className="text-[11px] text-destructive">{errors.logoUrl}</p> : null}
+                {errors.logoUrl ? <p id="client-create-logo-error" role="alert" className="text-[11px] text-destructive">{errors.logoUrl}</p> : null}
                 <p className="text-[10px] text-muted-foreground">用于应用列表头像；不填则显示名称首字母。</p>
               </div>
             </CardContent>
@@ -234,6 +236,7 @@ export default function NewClientPage() {
                 <Textarea
                   id="client-create-redirect-uris"
                   aria-required="true"
+                  aria-describedby={errors.redirectUris ? 'client-create-redirect-error' : undefined}
                   placeholder={'https://your-app.example.com/api/auth/callback\nhttp://localhost:3000/api/auth/callback'}
                   maxLength={2000}
                   aria-invalid={!!errors.redirectUris}
@@ -245,7 +248,7 @@ export default function NewClientPage() {
                   className="min-h-20"
                 />
                 {errors.redirectUris ? (
-                  <p role="alert" className="text-xs font-medium text-destructive">{errors.redirectUris}</p>
+                  <p id="client-create-redirect-error" role="alert" className="text-xs font-medium text-destructive">{errors.redirectUris}</p>
                 ) : (
                   <p className="text-[11px] text-muted-foreground">每行一个 http(s) URL，必须与接入方配置完全一致（含端口与路径）。</p>
                 )}

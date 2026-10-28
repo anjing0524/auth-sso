@@ -15,11 +15,11 @@
 import type { ErrorField } from '@/domain/shared/error-fields';
 import type { FieldFailure } from '@/hooks/use-field-failure';
 
-export function FieldError({ failure, field }: { failure: FieldFailure | null; field: ErrorField }) {
+export function FieldError({ failure, field, id }: { failure: FieldFailure | null; field: ErrorField; id?: string }) {
   if (!failure || failure.field !== field) return null;
 
   return (
-    <p role="alert" className="text-xs font-medium text-destructive">
+    <p id={id} role="alert" className="text-xs font-medium text-destructive">
       {failure.message}
     </p>
   );

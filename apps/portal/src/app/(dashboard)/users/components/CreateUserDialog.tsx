@@ -176,6 +176,7 @@ export default function CreateUserDialog({ departments, canAssignRole = false, a
                 <div className="flex items-center gap-1"><Label htmlFor="create-user-username" >用户名（唯一标识）</Label><RequiredMark /></div>
                 <Input
                   aria-invalid={fieldError?.field === 'username'}
+                  aria-describedby={fieldError?.field === 'username' ? 'create-user-username-error' : undefined}
                   id="create-user-username"
                   name="username"
                   required
@@ -185,12 +186,13 @@ export default function CreateUserDialog({ departments, canAssignRole = false, a
                   value={values.username}
                   onChange={setField('username')}
                 />
-                <FieldError failure={fieldError} field="username" />
+                <FieldError failure={fieldError} field="username" id="create-user-username-error" />
               </div>
               <div className="space-y-2">
                 <div className="flex items-center gap-1"><Label htmlFor="create-user-email" >电子邮箱</Label><RequiredMark /></div>
                 <Input
                   aria-invalid={fieldError?.field === 'email'}
+                  aria-describedby={fieldError?.field === 'email' ? 'create-user-email-error' : undefined}
                   id="create-user-email"
                   name="email"
                   type="email"
@@ -200,12 +202,13 @@ export default function CreateUserDialog({ departments, canAssignRole = false, a
                   value={values.email}
                   onChange={setField('email')}
                 />
-                <FieldError failure={fieldError} field="email" />
+                <FieldError failure={fieldError} field="email" id="create-user-email-error" />
               </div>
               <div className="space-y-2">
                 <div className="flex items-center gap-1"><Label htmlFor="create-user-password" >初始密码</Label><RequiredMark /></div>
                 <Input
                   aria-invalid={fieldError?.field === 'password'}
+                  aria-describedby={fieldError?.field === 'password' ? 'create-user-password-error' : undefined}
                   id="create-user-password"
                   name="password"
                   type="password"
@@ -215,7 +218,7 @@ export default function CreateUserDialog({ departments, canAssignRole = false, a
                   onChange={setField('password')}
                 />
                 <p className="text-[11px] text-muted-foreground">至少 10 位，含大写/小写字母、数字、特殊字符中的至少三类</p>
-                <FieldError failure={fieldError} field="password" />
+                <FieldError failure={fieldError} field="password" id="create-user-password-error" />
               </div>
               <div className="space-y-2">
                 <div className="flex items-center gap-1"><Label htmlFor="create-user-deptId" >所属部门</Label><RequiredMark /></div>

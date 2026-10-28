@@ -89,9 +89,10 @@ export function ResetPasswordDialog({
               placeholder="至少 10 位，含大写/小写字母、数字、特殊字符中的至少三类"
               value={password}
               aria-invalid={fieldError?.field === 'password'}
+              aria-describedby={fieldError?.field === 'password' ? 'reset-password-error' : undefined}
               onChange={(e) => setPassword(e.target.value)}
             />
-            <FieldError failure={fieldError} field="password" />
+            <FieldError failure={fieldError} field="password" id="reset-password-error" />
           </div>
           <div className="space-y-2">
             <Label htmlFor="reset-password-confirm">确认新密码</Label>

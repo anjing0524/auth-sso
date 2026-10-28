@@ -2510,3 +2510,14 @@ describe('用户详情必填（续三百三十八）', () => {
     expect(src).toContain('<RequiredLegend />');
   });
 });
+
+describe('字段错误关联（续三百四十）', () => {
+  it('FieldError 支持 id，关键表单 aria-describedby 接线', () => {
+    expect(read('src/components/shared/field-error.tsx')).toContain('<p id={id}');
+    const user = read('src/app/(dashboard)/users/components/CreateUserDialog.tsx');
+    expect(user).toContain("aria-describedby={fieldError?.field === 'email' ? 'create-user-email-error' : undefined}");
+    const client = read('src/app/(dashboard)/clients/new/page.tsx');
+    expect(client).toContain('client-create-name-error');
+    expect(client).toContain('client-create-redirect-error');
+  });
+});
