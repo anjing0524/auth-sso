@@ -2968,3 +2968,12 @@ describe('角色权限筛选切换（续三百九十四）', () => {
     expect(src).toContain('仅看变更');
   });
 });
+
+describe('用户角色切换固定标签（续三百九十五）', () => {
+  it('仅看已选不再改成显示全部，保留 pressed + 选中底色', () => {
+    const src = read('src/app/(dashboard)/users/[id]/roles/roles-client.tsx');
+    expect(src).toContain('aria-pressed={onlySelected}');
+    expect(src).toContain('仅看已选');
+    expect(src).not.toContain("onlySelected ? '显示全部' : '仅看已选'");
+  });
+});
