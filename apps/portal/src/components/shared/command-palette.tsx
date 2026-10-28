@@ -18,6 +18,7 @@ export function CommandPalette({ menus }: { menus: MenuItem[] }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
 
   const toggle = useCallback(() => {
     // 200ms debounce to prevent double-tap flicker
@@ -74,8 +75,19 @@ export function CommandPalette({ menus }: { menus: MenuItem[] }) {
   // 按 title 字母排序（菜单层级已保留路径前缀作为上下文）
   const flatMenus = [...flattenMenus(menus)].sort((a, b) => a.title.localeCompare(b.title, 'zh-CN'));
 
+  const handleOpenChange = (next: boolean) => {
+    if (next) {
+      previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    } else {
+      const previous = previousFocusRef.current;
+      const target = previous && previous !== document.body ? previous : document.getElementById('command-palette-trigger');
+      requestAnimationFrame(() => target?.focus());
+    }
+    setOpen(next);
+  };
+
   return (
-    <CommandDialog open={open} onOpenChange={setOpen}>
+    <CommandDialog open={open} onOpenChange={handleOpenChange}>
       <CommandInput placeholder="搜索功能..." />
       <CommandList>
         <CommandEmpty>

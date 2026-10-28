@@ -2751,3 +2751,12 @@ describe('错误页 ID 文案（续三百六十八）', () => {
     expect(src).not.toContain('aria-label="复制 Error ID"');
   });
 });
+
+describe('命令面板关闭回焦（续三百七十）', () => {
+  it('记录打开前焦点，关闭回退到触发器', () => {
+    const src = read('src/components/shared/command-palette.tsx');
+    expect(src).toContain('previousFocusRef');
+    expect(src).toContain("document.getElementById('command-palette-trigger')");
+    expect(read('src/components/layout/command-palette-trigger.tsx')).toContain('id="command-palette-trigger"');
+  });
+});

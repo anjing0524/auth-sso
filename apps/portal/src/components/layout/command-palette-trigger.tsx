@@ -12,6 +12,7 @@ import { Search } from 'lucide-react';
 export function CommandPaletteTrigger() {
   return (
     <button
+      id="command-palette-trigger"
       type="button"
       aria-label="搜索功能（Ctrl 或 Command + K）"
       title="搜索功能（Ctrl / ⌘ + K）"
