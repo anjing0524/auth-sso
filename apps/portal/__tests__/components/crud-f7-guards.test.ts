@@ -2844,3 +2844,10 @@ describe('分页边界禁用原因（续三百八十）', () => {
     expect(src).toContain('title={disabled ? disabledReason : undefined}');
   });
 });
+
+describe('侧边栏当前项语义（续三百八十一）', () => {
+  it('菜单按钮/子菜单设置 aria-current', () => {
+    const src = read('src/components/ui/sidebar.tsx');
+    expect((src.match(/aria-current={isActive \? 'page' : undefined}/g) ?? []).length).toBe(2);
+  });
+});
