@@ -52,7 +52,7 @@ export function PageHeader({
             <DynamicIcon name={icon} aria-hidden="true" className="h-4 w-4" />
           </span>
         ) : null}
-        <h1 className="type-page-title shrink-0 text-foreground">{title}</h1>
+        <h1 className="type-page-title min-w-0 truncate text-foreground" title={title}>{title}</h1>
         {description ? (
           <p className="type-meta hidden min-w-0 truncate lg:block">
             {description}

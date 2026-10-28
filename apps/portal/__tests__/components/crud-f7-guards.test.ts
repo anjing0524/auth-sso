@@ -3046,3 +3046,11 @@ describe('审计错误文本截断（续四百零三）', () => {
     expect(src).toContain('max-w-[200px] break-all');
   });
 });
+
+describe('页头长标题（续四百零四）', () => {
+  it('h1 可收缩、truncate、title 完整', () => {
+    const src = read('src/components/shared/page-header.tsx');
+    expect(src).toContain('type-page-title min-w-0 truncate text-foreground');
+    expect(src).toContain('title={title}');
+  });
+});
