@@ -2769,3 +2769,11 @@ describe('命令面板防模态叠加（续三百七十一）', () => {
     expect(src).not.toContain('const open = () => setOpen(true);');
   });
 });
+
+describe('命令面板快捷键关闭回焦（续三百七十二）', () => {
+  it('toggle 走 handleOpenChange，统一回焦', () => {
+    const src = read('src/components/shared/command-palette.tsx');
+    expect(src).toContain('handleOpenChange(!open)');
+    expect(src).not.toContain('setOpen(prev => !prev)');
+  });
+});
