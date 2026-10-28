@@ -262,7 +262,6 @@ export default function NewClientPage() {
                   id="client-create-scopes"
                   value={formData.scopes}
                   onChange={e => setFormData({ ...formData, scopes: e.target.value })}
-                  aria-label="Scopes（空格分隔）"
                   className="mt-1 font-mono text-xs"
                 />
                 <p className="text-[11px] text-muted-foreground">点选常用值会自动写入；特殊 scope 可直接编辑上面的输入框。</p>

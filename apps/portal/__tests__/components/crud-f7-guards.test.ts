@@ -2676,3 +2676,11 @@ describe('不可变字段说明（续三百五十九）', () => {
     expect(read('src/app/(dashboard)/roles/components/RolesTable.tsx')).toContain('角色编码（不可变更）');
   });
 });
+
+describe('Scopes 标签命名（续三百六十）', () => {
+  it('不再用 aria-label 覆盖可见标签', () => {
+    const src = read('src/app/(dashboard)/clients/new/page.tsx');
+    expect(src).not.toContain('aria-label="Scopes（空格分隔）"');
+    expect(src).toContain('默认权限范围（Scopes）');
+  });
+});
