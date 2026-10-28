@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { DynamicIcon } from '@/lib/icon-map';
 
+export const instant = false;
 export const metadata = { title: '页面不存在 | Auth-SSO' };
 
 /**
