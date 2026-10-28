@@ -2835,3 +2835,12 @@ describe('角色权限页禁用原因（续三百七十九）', () => {
     expect(src).toContain("changeCount === 0 ? '没有未保存的修改'");
   });
 });
+
+describe('分页边界禁用原因（续三百八十）', () => {
+  it('首/末页边界带 title 原因', () => {
+    const src = read('src/components/shared/table-pagination.tsx');
+    expect(src).toContain("已在第一页");
+    expect(src).toContain("已在最后一页");
+    expect(src).toContain('title={disabled ? disabledReason : undefined}');
+  });
+});

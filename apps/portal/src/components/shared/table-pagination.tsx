@@ -45,12 +45,14 @@ function NavButton({
   label,
   to,
   disabled,
+  disabledReason,
   onClick,
   children,
 }: {
   label: string;
   to?: string;
   disabled: boolean;
+  disabledReason?: string;
   onClick?: () => void;
   children: React.ReactNode;
 }) {
@@ -68,6 +70,7 @@ function NavButton({
       className={navButtonClass}
       aria-label={label}
       disabled={disabled}
+      title={disabled ? disabledReason : undefined}
       onClick={onClick}
     >
       {children}
@@ -168,11 +171,11 @@ export function TablePagination({
       </div>
       <div className="flex flex-wrap items-center gap-1.5">
         {pages > 7 ? (
-          <NavButton label="首页" to={hrefFor?.(1)} disabled={disabled || page <= 1} onClick={onPageChange ? () => onPageChange(1) : undefined}>
+          <NavButton label="首页" to={hrefFor?.(1)} disabled={disabled || page <= 1} disabledReason={page <= 1 ? '已在第一页' : '加载中…'} onClick={onPageChange ? () => onPageChange(1) : undefined}>
             <ChevronsLeft className="h-3.5 w-3.5" />
           </NavButton>
         ) : null}
-        <NavButton label="上一页" to={prevTo} disabled={disabled || page <= 1} onClick={onPageChange ? () => onPageChange(page - 1) : undefined}>
+        <NavButton label="上一页" to={prevTo} disabled={disabled || page <= 1} disabledReason={page <= 1 ? '已在第一页' : '加载中…'} onClick={onPageChange ? () => onPageChange(page - 1) : undefined}>
           <ChevronLeft className="h-3.5 w-3.5" />
           <span className="hidden text-xs sm:inline">上一页</span>
         </NavButton>
@@ -186,12 +189,12 @@ export function TablePagination({
         </div>
         <span className="text-xs text-muted-foreground sm:hidden">{page} / {pages}</span>
 
-        <NavButton label="下一页" to={nextTo} disabled={disabled || page >= pages} onClick={onPageChange ? () => onPageChange(page + 1) : undefined}>
+        <NavButton label="下一页" to={nextTo} disabled={disabled || page >= pages} disabledReason={page >= pages ? '已在最后一页' : '加载中…'} onClick={onPageChange ? () => onPageChange(page + 1) : undefined}>
           <span className="hidden text-xs sm:inline">下一页</span>
           <ChevronRight className="h-3.5 w-3.5" />
         </NavButton>
         {pages > 7 ? (
-          <NavButton label="末页" to={hrefFor?.(pages)} disabled={disabled || page >= pages} onClick={onPageChange ? () => onPageChange(pages) : undefined}>
+          <NavButton label="末页" to={hrefFor?.(pages)} disabled={disabled || page >= pages} disabledReason={page >= pages ? '已在最后一页' : '加载中…'} onClick={onPageChange ? () => onPageChange(pages) : undefined}>
             <ChevronsRight className="h-3.5 w-3.5" />
           </NavButton>
         ) : null}
