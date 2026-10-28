@@ -168,6 +168,7 @@ export default function DepartmentTree({ departments, deletionStats = {} }: Prop
   }, [departments]);
   const movableDepts = flatDepts.filter((d) => d.depth > 0);
   const selectedCount = selectedDepts.size;
+  const selectedMoveNames = movableDepts.filter((d) => selectedDepts.has(d.id)).map((d) => d.name);
   // 选中父+子时只把顶层部门作为移动项；子部门随父级移动
   const allNodes = flattenTree(departments);
   const parentById = new Map(allNodes.map((d) => [d.id, d.parentId]));
@@ -433,7 +434,10 @@ export default function DepartmentTree({ departments, deletionStats = {} }: Prop
                 <option key={d.id} value={d.id}>{'　'.repeat(d.depth)}{d.name}</option>
               ))}
             </select>
-            <p className="text-[11px] text-muted-foreground">已选：{movableDepts.filter((d) => selectedDepts.has(d.id)).map((d) => d.name).join('、') || '—'}</p>
+            <p className="text-[11px] text-muted-foreground" title={selectedMoveNames.join('、') || '—'}>
+              已选：{selectedMoveNames.slice(0, 5).join('、') || '—'}
+              {selectedMoveNames.length > 5 ? ` 等 ${selectedMoveNames.length} 个部门` : ''}
+            </p>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setMoveOpen(false)} disabled={moving}>取消</Button>

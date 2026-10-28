@@ -1704,3 +1704,12 @@ describe('部门删除 0 影响文案（续二百三十六）', () => {
     expect(src).toContain('可直接删除');
   });
 });
+
+describe('部门批量移动长列表（续二百三十七）', () => {
+  it('已选名称只显示前 5 个，其余给数量，title 含全量', () => {
+    const src = read('src/app/(dashboard)/departments/components/DepartmentTree.tsx');
+    expect(src).toContain('selectedMoveNames.slice(0, 5)');
+    expect(src).toContain('等 ${selectedMoveNames.length} 个部门');
+    expect(src).toContain('title={selectedMoveNames.join');
+  });
+});
