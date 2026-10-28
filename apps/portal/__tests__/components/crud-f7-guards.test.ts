@@ -2706,3 +2706,12 @@ describe('状态选择可访问名称（续三百六十三）', () => {
     expect(read('src/app/(dashboard)/roles/components/RolesTable.tsx')).toContain('id="role-edit-status" aria-label="状态"');
   });
 });
+
+describe('客户端 tabpanel 常驻（续三百六十四）', () => {
+  it('两个 panel 始终渲染，用 hidden 切换', () => {
+    const src = read('src/app/(dashboard)/clients/[id]/ClientDetailClient.tsx');
+    expect(src).toContain("hidden={activeTab !== 'info'}");
+    expect(src).toContain("hidden={activeTab !== 'tokens'}");
+    expect(src).not.toContain("{activeTab === 'info' && (");
+  });
+});

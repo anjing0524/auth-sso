@@ -45,7 +45,7 @@ test.describe('应用注册', () => {
       // 详情页核心操作：禁用 → 启用 → 轮换 Secret → 授权记录
       await page.getByPlaceholder('搜索应用或 Client ID').fill(name);
       await expect(page.getByRole('row').filter({ hasText: name })).toBeVisible({ timeout: 15_000 });
-      await page.getByRole('row').filter({ hasText: name }).getByRole('link', { name: /编辑 .* 的 OAuth 配置/ }).click();
+      await page.getByRole('row').filter({ hasText: name }).getByRole('link', { name: /编辑配置/ }).click();
       await expect(page).toHaveURL(new RegExp(`/clients/${clientId}(\\?|$)`));
 
       // WAI-ARIA tabs：方向键切换、tabpanel 关联

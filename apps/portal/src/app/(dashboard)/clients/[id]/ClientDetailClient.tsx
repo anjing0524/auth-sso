@@ -290,8 +290,7 @@ export function ClientDetailClient({ client, initialTokens, initialTokenTotal, c
         </button>
       </div>
 
-      {activeTab === 'info' && (
-        <div role="tabpanel" id="client-panel-info" aria-labelledby="client-tab-info" tabIndex={0}>
+      <div role="tabpanel" id="client-panel-info" aria-labelledby="client-tab-info" tabIndex={0} hidden={activeTab !== 'info'}>
         <p className="mb-2 text-[11px] text-muted-foreground"><RequiredLegend /></p>
         <ClientInfoSection
           client={client}
@@ -303,10 +302,8 @@ export function ClientDetailClient({ client, initialTokens, initialTokenTotal, c
           readOnly={client.clientId === PORTAL_CLIENT_ID || !canUpdate}
         />
         </div>
-      )}
 
-      {activeTab === 'tokens' && (
-        <div role="tabpanel" id="client-panel-tokens" aria-labelledby="client-tab-tokens" tabIndex={0}>
+      <div role="tabpanel" id="client-panel-tokens" aria-labelledby="client-tab-tokens" tabIndex={0} hidden={activeTab !== 'tokens'}>
         <ClientTokensSection
           tokens={initialTokens}
           onRevokeAll={() => setPendingAction('revoke-tokens')}
@@ -314,7 +311,6 @@ export function ClientDetailClient({ client, initialTokens, initialTokenTotal, c
           canRevoke={canUpdate}
         />
         </div>
-      )}
 
       {/* 危险操作二次确认（统一弹窗，替代原生 confirm） */}
       <Dialog open={pendingAction !== null} onOpenChange={(open) => { if (!open) { setPendingAction(null); setRevokeTokenTarget(null); } }}>
