@@ -501,7 +501,7 @@ export default function RolePermissionsPage({ role, returnHref = '/roles' }: Rol
                   ))}
                 </DropdownMenuContent>
               </DropdownMenu>
-              <Button variant="outline" size="sm" asChild><Link href="/roles">取消</Link></Button>
+              <Button variant="outline" size="sm" asChild><Link href={returnHref}>取消</Link></Button>
               <Button
                 size="sm"
                 onClick={() => setConfirmOpen(true)}

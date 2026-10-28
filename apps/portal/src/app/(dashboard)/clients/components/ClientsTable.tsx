@@ -232,7 +232,7 @@ export default function ClientsTable({ clients, pagination, initialKeyword, init
         <>
           <PermissionGuard permission={CLIENT_PERMISSIONS.CREATE}>
             <Button asChild>
-              <Link href="/clients/new">
+              <Link href={`/clients/new?returnTo=${encodeURIComponent(currentListHref)}`}>
                 <Plus className="h-4 w-4" /> 注册新应用
               </Link>
             </Button>
@@ -353,7 +353,7 @@ export default function ClientsTable({ clients, pagination, initialKeyword, init
               icon="AppWindow"
               title="暂无 OAuth 应用"
               description="注册 OAuth 客户端以开始集成"
-              action={{ label: '注册应用', href: '/clients/new' }}
+              action={{ label: '注册应用', href: `/clients/new?returnTo=${encodeURIComponent(currentListHref)}` }}
             />
           )
         }

@@ -1933,3 +1933,16 @@ describe('用户删除返回筛选上下文（续二百六十三）', () => {
     expect(src).not.toContain("router.push('/users')");
   });
 });
+
+describe('创建/编辑取消返回上下文（续二百六十四）', () => {
+  it('权限表单/角色权限取消用 returnHref；应用新建携带并校验 returnTo', () => {
+    const perm = read('src/app/(dashboard)/permissions/permission-form.tsx');
+    expect(perm).toContain('<Link href={returnHref}>取消</Link>');
+    const rp = read('src/app/(dashboard)/roles/[id]/permissions/permissions-client.tsx');
+    expect(rp).toContain('<Link href={returnHref}>取消</Link>');
+    const newPage = read('src/app/(dashboard)/clients/new/page.tsx');
+    expect(newPage).toContain("safeReturnPath(searchParams.get('returnTo'), '/clients', '/clients')");
+    const list = read('src/app/(dashboard)/clients/components/ClientsTable.tsx');
+    expect(list).toContain('/clients/new?returnTo=');
+  });
+});

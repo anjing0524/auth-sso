@@ -265,7 +265,7 @@ export default function PermissionForm({ mode, menuOptions, permission, clients 
 
         <div className="flex items-center justify-end gap-2">
           <Button type="button" variant="outline" size="sm" asChild>
-            <Link href="/permissions">取消</Link>
+            <Link href={returnHref}>取消</Link>
           </Button>
           <Button type="submit" size="sm" disabled={saving}>{saving ? '保存中...' : mode === 'create' ? '创建' : '保存'}</Button>
         </div>

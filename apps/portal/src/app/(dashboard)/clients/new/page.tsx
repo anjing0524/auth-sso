@@ -11,7 +11,7 @@
 
 import React, { useState } from 'react';
 import { useUnsavedChangesGuard } from '@/hooks/use-unsaved-changes-guard';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useFieldFailure } from '@/hooks/use-field-failure';
 import { AppWindow, Check, Copy, Plus, ShieldCheck, Timer } from 'lucide-react';
 import Link from 'next/link';
@@ -31,6 +31,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { PageHeader } from '@/components/shared/page-header';
+import { safeReturnPath } from '@/lib/safe-return';
 
 /** 回调地址必须是绝对 http(s) URL（与服务端 Zod `.url()` 同口径的前端近似） */
 function isHttpUrl(value: string): boolean {
@@ -62,6 +63,8 @@ const INITIAL_CLIENT_FORM = {
 
 export default function NewClientPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const returnHref = safeReturnPath(searchParams.get('returnTo'), '/clients', '/clients');
   const [saving, setSaving] = useState(false);
   /** 创建成功后的**一次性**凭证（H-C-03）：Secret 仅此刻可见 */
   const [created, setCreated] = useState<{ clientId: string; clientSecret: string | null } | null>(null);
@@ -143,7 +146,7 @@ export default function NewClientPage() {
   const closeCreated = () => {
     setCreated(null);
     setCopied(false);
-    router.push('/clients');
+    router.push(returnHref);
   };
 
   const selectedScopes = new Set(formData.scopes.split(/\s+/).filter(Boolean));
@@ -342,7 +345,7 @@ export default function NewClientPage() {
       {/* 提交栏：窄屏固定底部，长表单不必回滚到顶部 */}
       <div className="sticky bottom-0 z-10 -mx-3 flex items-center justify-end gap-2 border-t bg-background/95 px-3 py-2 backdrop-blur lg:static lg:mx-0 lg:border-0 lg:bg-transparent lg:px-0 lg:py-0">
         <Button variant="outline" size="sm" asChild>
-          <Link href="/clients">取消</Link>
+          <Link href={returnHref}>取消</Link>
         </Button>
         <Button size="sm" onClick={handleCreate} disabled={saving}>
           {saving ? '注册中...' : <><Plus className="h-3.5 w-3.5" /> 确认注册</>}
