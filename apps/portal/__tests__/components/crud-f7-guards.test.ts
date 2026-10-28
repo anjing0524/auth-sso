@@ -2163,3 +2163,10 @@ describe('授权 Token 表 1024 列宽（续二百九十一）', () => {
     expect(src).toContain('title={token.scopes.join');
   });
 });
+
+describe('角色创建默认部门（续二百九十二）', () => {
+  it('默认部门优先使用当前 deptId 筛选', () => {
+    const src = read('src/app/(dashboard)/roles/components/RolesTable.tsx');
+    expect(src).toContain('const getDefaultDeptId = () => initialDeptId || departments[0]?.id');
+  });
+});

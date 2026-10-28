@@ -81,7 +81,7 @@ export default function RolesTable({ roles, pagination, initialKeyword, initialS
   const [selected, setSelected] = useState<RoleRow | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<RoleRow | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [form, setForm] = useState({ name: '', code: '', description: '', deptId: autoOpenCreate ? (departments[0]?.id ?? '') : '', sort: 0, status: 'ACTIVE' });
+  const [form, setForm] = useState({ name: '', code: '', description: '', deptId: initialDeptId || departments[0]?.id || '', sort: 0, status: 'ACTIVE' });
   /** 具体错误码（如 ROLE_ALREADY_EXISTS）落到对应输入框（#92；hook 供四处表单复用） */
   const { fieldError, reportFailure, clearFailure } = useFieldFailure(['code']);
 
@@ -110,7 +110,7 @@ export default function RolesTable({ roles, pagination, initialKeyword, initialS
   };
   useEffect(() => () => { if (searchTimer.current) clearTimeout(searchTimer.current); }, []);
 
-  const getDefaultDeptId = () => departments.length > 0 ? departments[0]!.id : '';
+  const getDefaultDeptId = () => initialDeptId || departments[0]?.id || '';
 
   /** 对话框统一改为 `<form>` 提交（U-G06/U-ROLES02）：Enter 与点击主按钮行为一致 */
   const submitCreate = (e: React.FormEvent) => { e.preventDefault(); void handleCreate(); };
