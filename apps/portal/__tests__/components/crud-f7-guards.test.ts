@@ -3212,3 +3212,10 @@ describe('回调地址双约束提示（续四百二十四）', () => {
     expect(detail).toContain('maxLength={2000}');
   });
 });
+
+describe('描述字段字数提示（续四百二十五）', () => {
+  it('角色/权限描述提示最多 500', () => {
+    expect((read('src/app/(dashboard)/roles/components/RolesTable.tsx').match(/最多 500 字符/g) ?? []).length).toBeGreaterThanOrEqual(2);
+    expect(read('src/app/(dashboard)/permissions/permission-form.tsx')).toContain('最多 500 字符');
+  });
+});

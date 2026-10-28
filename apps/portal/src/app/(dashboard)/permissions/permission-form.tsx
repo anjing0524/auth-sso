@@ -205,6 +205,7 @@ export default function PermissionForm({ mode, menuOptions, permission, clients 
             <div className="space-y-1.5 sm:col-span-2">
               <Label htmlFor="perm-desc">描述（可选）</Label>
               <Input id="perm-desc" value={form.description} maxLength={500} onChange={e => setForm({ ...form, description: e.target.value })} placeholder="用于说明该权限的用途" />
+              <p className="text-[10px] text-muted-foreground">最多 500 字符</p>
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="perm-type">类型</Label>
