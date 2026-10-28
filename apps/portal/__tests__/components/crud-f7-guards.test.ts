@@ -1713,3 +1713,14 @@ describe('部门批量移动长列表（续二百三十七）', () => {
     expect(src).toContain('title={selectedMoveNames.join');
   });
 });
+
+describe('批量选择随上下文清空（续二百三十九）', () => {
+  it('用户/权限选择在 URL 变化时清空，并标注当前页', () => {
+    const users = read('src/app/(dashboard)/users/components/UserTable.tsx');
+    expect(users).toContain('useEffect(() => { setSelected(new Set()); }, [listQueryKey])');
+    expect(users).toContain('（当前页）');
+    const perms = read('src/app/(dashboard)/permissions/components/PermissionsTable.tsx');
+    expect(perms).toContain('useEffect(() => { setCheckedIds(new Set()); }, [listQueryKey])');
+    expect(perms).toContain('个权限（当前页）');
+  });
+});

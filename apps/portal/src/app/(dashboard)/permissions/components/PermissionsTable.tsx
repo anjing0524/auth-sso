@@ -6,7 +6,7 @@
  */
 import React, { useEffect, useState, useTransition } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import {
   Plus, Edit, Trash2, Globe, Code, Folder,
@@ -91,6 +91,8 @@ export default function PermissionsTable({ permissions, pagination, activeTab, i
   const router = useRouter();
   const [keyword, setKeyword] = useState(initialKeyword);
   const [isPending, startTransition] = useTransition();
+  const searchParams = useSearchParams();
+  const listQueryKey = searchParams.toString();
 
   /** 统一构造 URL：type / keyword / page 都是服务端查询参数（可分享、可后退） */
   const buildHref = (
@@ -128,6 +130,8 @@ export default function PermissionsTable({ permissions, pagination, activeTab, i
   const [selected, setSelected] = useState<PermissionRow | null>(null);
   // 批量删除：只删除当前页可见选中项，避免跨页误删
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
+  // 选择仅对当前列表上下文生效：翻页/筛选后清空
+  useEffect(() => { setCheckedIds(new Set()); }, [listQueryKey]);
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulking, setBulking] = useState(false);
   const visibleChecked = permissions.filter((p) => checkedIds.has(p.id));
@@ -383,7 +387,7 @@ export default function PermissionsTable({ permissions, pagination, activeTab, i
           {cardHeader}
           {visibleChecked.length > 0 && (
             <div className="flex flex-wrap items-center gap-2 border-b bg-primary/[0.04] px-3 py-1.5">
-              <span className="text-[12px] font-medium">已选 {visibleChecked.length} 个权限</span>
+              <span className="text-[12px] font-medium">已选 {visibleChecked.length} 个权限（当前页）</span>
               <Button size="sm" variant="destructive" className="h-7" onClick={() => setBulkOpen(true)}>批量删除</Button>
               <Button size="sm" variant="ghost" className="h-7" onClick={() => setCheckedIds(new Set())}>取消选择</Button>
             </div>

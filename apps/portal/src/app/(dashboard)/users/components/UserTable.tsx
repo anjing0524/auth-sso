@@ -5,7 +5,7 @@
  * 采用 React 19 useTransition 绑定 Server Action Controller，安全下沉领域逻辑
  */
 
-import { useOptimistic, useState, useTransition } from 'react';
+import { useEffect, useOptimistic, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
@@ -147,6 +147,7 @@ export default function UserTable({ users, pagination, filters, isFiltered = fal
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const listQueryKey = searchParams.toString();
   const currentListHref = `${pathname}${searchParams.toString() ? `?${searchParams.toString()}` : ''}`;
 
   // 角色分配对话框状态
@@ -172,6 +173,8 @@ export default function UserTable({ users, pagination, filters, isFiltered = fal
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkTarget, setBulkTarget] = useState<'DISABLED' | 'ACTIVE' | null>(null);
   const [bulking, setBulking] = useState(false);
+  // 选择仅对当前列表上下文生效：翻页/筛选后清空，避免返回原页时旧选择“复活”
+  useEffect(() => { setSelected(new Set()); }, [listQueryKey]);
   /** 单条禁用确认（禁用会立即撤销会话，必须二次确认） */
   const [statusConfirmTarget, setStatusConfirmTarget] = useState<User | null>(null);
   // 只对"当前页可见"的选中项生效：翻页/筛选后旧选择自然失效，避免改到看不见的人
@@ -426,7 +429,7 @@ export default function UserTable({ users, pagination, filters, isFiltered = fal
         {filters}
         {canUpdate && selectedCount > 0 && (
           <div className="flex flex-wrap items-center gap-2 border-b bg-primary/[0.04] px-3 py-1.5">
-            <span className="text-[12px] font-medium">已选 {selectedCount} 人</span>
+            <span className="text-[12px] font-medium">已选 {selectedCount} 人（当前页）</span>
             <Button size="sm" className="h-7 bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => setBulkTarget('DISABLED')}>
               批量禁用
             </Button>
