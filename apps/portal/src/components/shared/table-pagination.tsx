@@ -108,7 +108,7 @@ export function TablePagination({
   const nextTo = hrefFor?.(page + 1);
   const items = pageItems(page, pages);
   const pageSizeNode = pageSize && pageSizeOptions && pageSizeOptions.length > 0 ? (
-    <div className="flex items-center gap-0.5 text-[11px] text-muted-foreground" aria-label="每页条数">
+    <div role="group" className="flex items-center gap-0.5 text-[11px] text-muted-foreground" aria-label="每页条数">
       <span>每页</span>
       {pageSizeOptions.map((option) => (
         option.value === pageSize ? (

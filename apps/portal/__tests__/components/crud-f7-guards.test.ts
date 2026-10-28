@@ -2010,3 +2010,11 @@ describe('用户清空筛选保留页大小（续二百七十一）', () => {
     expect(src).toContain("clearHref={pageSize !== 20 ? `/users?pageSize=${pageSize}` : '/users'}");
   });
 });
+
+describe('每页条数无障碍组（续二百七十二）', () => {
+  it('pageSize 容器 role=group + aria-label', () => {
+    const src = read('src/components/shared/table-pagination.tsx');
+    expect(src).toContain('role="group"');
+    expect(src).toContain('aria-label="每页条数"');
+  });
+});
