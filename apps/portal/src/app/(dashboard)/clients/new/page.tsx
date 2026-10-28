@@ -181,6 +181,7 @@ export default function NewClientPage() {
                 <div className="flex items-center gap-1"><Label htmlFor="client-create-name">应用名称</Label><RequiredMark /></div>
                 <Input
                   id="client-create-name"
+                  aria-required="true"
                   placeholder="我的业务系统"
                   maxLength={100}
                   aria-invalid={!!errors.name}
@@ -232,6 +233,7 @@ export default function NewClientPage() {
                 <div className="flex items-center gap-1"><Label htmlFor="client-create-redirect-uris">回调地址（每行一个）</Label><RequiredMark /></div>
                 <Textarea
                   id="client-create-redirect-uris"
+                  aria-required="true"
                   placeholder={'https://your-app.example.com/api/auth/callback\nhttp://localhost:3000/api/auth/callback'}
                   maxLength={2000}
                   aria-invalid={!!errors.redirectUris}

@@ -2469,3 +2469,10 @@ describe('客户端创建必填标记（续三百三十三）', () => {
     expect(src).not.toContain('应用名称 <span');
   });
 });
+
+describe('客户端必填语义（续三百三十四）', () => {
+  it('名称/回调 aria-required', () => {
+    const src = read('src/app/(dashboard)/clients/new/page.tsx');
+    expect((src.match(/aria-required="true"/g) ?? []).length).toBe(2);
+  });
+});
