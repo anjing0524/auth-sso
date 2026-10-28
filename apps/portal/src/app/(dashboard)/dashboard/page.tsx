@@ -186,7 +186,7 @@ export default async function DashboardPage() {
                 <History className="h-4 w-4 text-primary" /> 最近操作
               </CardTitle>
               <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" asChild>
-                <Link href="/audit-logs">查看全部 <ArrowRight className="ml-1 h-3 w-3" /></Link>
+                <Link href="/audit-logs?tab=operation">查看全部 <ArrowRight className="ml-1 h-3 w-3" /></Link>
               </Button>
             </CardHeader>
             <CardContent className="p-0">

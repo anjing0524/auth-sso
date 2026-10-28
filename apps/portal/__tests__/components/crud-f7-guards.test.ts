@@ -1742,3 +1742,10 @@ describe('权限路径清空语义（续二百四十二）', () => {
     expect(form).toContain("menuPayload('create')");
   });
 });
+
+describe('工作台最近操作跳转（续二百四十三）', () => {
+  it('查看全部落到操作日志 tab', () => {
+    const page = read('src/app/(dashboard)/dashboard/page.tsx');
+    expect(page).toContain('href="/audit-logs?tab=operation"');
+  });
+});

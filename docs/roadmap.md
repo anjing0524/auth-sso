@@ -21,6 +21,8 @@
 
 ## 变更记录
 
+- 2026-10-28（续二百四十三）: **最近操作跳转**。查看全部落登录日志，看不到操作记录。**修复**：链接带 tab=operation。**验证**：点击后激活「操作日志」；守卫 166 passed。
+
 - 2026-10-28（续二百四十二）: **权限路径清空语义**。目录清空路径提交 undefined，旧值保留。**修复**：更新模式 null、创建 undefined。**验证**：目录 path 清空后 DB NULL；permission actions 9/守卫 165 passed。
 
 - 2026-10-28（续二百四十一）: **可空字段清空语义**。角色描述/部门编码清空写空串，创建写 NULL。**修复**：更新提交 null；创建 trim undefined。**验证**：清空后 DB NULL；role/dept actions 28/守卫 164 passed。
