@@ -195,9 +195,9 @@ export default function RolesTable({ roles, pagination, initialKeyword, initialS
 
   const getDeptName = (deptId: string) => departments.find(d => d.id === deptId)?.name ?? deptId;
 
-  const renderDeptSelect = (value: string, onChange: (v: string) => void, id?: string) => (
+  const renderDeptSelect = (value: string, onChange: (v: string) => void, id?: string, required = false) => (
     <Select value={value || undefined} onValueChange={onChange}>
-      <SelectTrigger id={id} aria-label="所属部门"><SelectValue placeholder="选择部门" /></SelectTrigger>
+      <SelectTrigger id={id} aria-label="所属部门" aria-required={required || undefined}><SelectValue placeholder="选择部门" /></SelectTrigger>
       <SelectContent>
         {departments.map(d => (
           <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
@@ -454,7 +454,7 @@ export default function RolesTable({ roles, pagination, initialKeyword, initialS
               <div className="space-y-2"><div className="flex items-center gap-1"><Label htmlFor="role-name">角色名称</Label><RequiredMark /></div><Input id="role-name" aria-required="true" value={form.name} maxLength={100} onChange={e => setForm({...form, name: e.target.value})} placeholder="管理员" /></div>
               <div className="space-y-2"><div className="flex items-center gap-1"><Label htmlFor="role-code">角色编码</Label><RequiredMark /></div><Input id="role-code" aria-required="true" aria-describedby={fieldError?.field === 'code' ? 'role-code-error' : undefined} value={form.code} maxLength={50} aria-invalid={fieldError?.field === 'code'} onChange={e => setForm({...form, code: e.target.value})} placeholder="admin" /><FieldError failure={fieldError} field="code" id="role-code-error" /></div>
               <div className="space-y-2 sm:col-span-2"><Label htmlFor="role-description">描述（可选）</Label><Textarea id="role-description" value={form.description} maxLength={500} rows={2} onChange={e => setForm({...form, description: e.target.value})} placeholder="例如：可管理用户、角色与审计日志" /></div>
-              <div className="space-y-2"><Label htmlFor="role-dept">所属部门</Label>{renderDeptSelect(form.deptId, v => setForm({...form, deptId: v}), 'role-dept')}</div>
+              <div className="space-y-2"><div className="flex items-center gap-1"><Label htmlFor="role-dept">所属部门</Label><RequiredMark /></div>{renderDeptSelect(form.deptId, v => setForm({...form, deptId: v}), 'role-dept', true)}</div>
               <div className="space-y-2"><Label htmlFor="role-sort">排序（越小越靠前）</Label><Input id="role-sort" type="number" value={form.sort} onChange={e => setForm({...form, sort: Number(e.target.value)})} /></div>
             </div>
             <DialogFooter><Button type="button" variant="outline" onClick={closeAddDialog}>取消</Button><Button type="submit" disabled={saving}>创建</Button></DialogFooter>

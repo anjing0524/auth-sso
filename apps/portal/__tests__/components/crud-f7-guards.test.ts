@@ -2427,7 +2427,7 @@ describe('仪表盘/会话唯一名称（续三百二十八）', () => {
 describe('角色部门选择可访问名称（续三百二十九）', () => {
   it('SelectTrigger aria-label 所属部门', () => {
     const src = read('src/app/(dashboard)/roles/components/RolesTable.tsx');
-    expect(src).toContain('<SelectTrigger id={id} aria-label="所属部门">');
+    expect(src).toContain('<SelectTrigger id={id} aria-label="所属部门" aria-required={required || undefined}>');
   });
 });
 
@@ -2585,5 +2585,13 @@ describe('角色/权限本地首错聚焦（续三百四十八）', () => {
     expect(read('src/app/(dashboard)/roles/components/RolesTable.tsx')).toContain("document.getElementById('role-code')?.focus()");
     expect(read('src/app/(dashboard)/permissions/permission-form.tsx')).toContain("document.getElementById('perm-name')?.focus()");
     expect(read('src/app/(dashboard)/permissions/permission-form.tsx')).toContain("document.getElementById('perm-code')?.focus()");
+  });
+});
+
+describe('角色创建部门必填（续三百四十九）', () => {
+  it('创建部门 combobox aria-required，编辑不标', () => {
+    const src = read('src/app/(dashboard)/roles/components/RolesTable.tsx');
+    expect(src).toContain("'role-dept', true");
+    expect(src).toContain('aria-required={required || undefined}');
   });
 });
