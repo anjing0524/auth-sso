@@ -54,7 +54,7 @@ export function PageHeader({
         ) : null}
         <h1 className="type-page-title min-w-0 truncate text-foreground" title={title}>{title}</h1>
         {description ? (
-          <p className="type-meta hidden min-w-0 truncate lg:block">
+          <p className="type-meta hidden min-w-0 truncate lg:block" title={description}>
             {description}
           </p>
         ) : null}

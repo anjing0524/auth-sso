@@ -3054,3 +3054,10 @@ describe('页头长标题（续四百零四）', () => {
     expect(src).toContain('title={title}');
   });
 });
+
+describe('页头描述完整值（续四百零五）', () => {
+  it('description 截断带 title', () => {
+    const src = read('src/components/shared/page-header.tsx');
+    expect(src).toContain('title={description}');
+  });
+});
