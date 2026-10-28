@@ -366,7 +366,7 @@ export default function DepartmentTree({ departments, deletionStats = {}, autoOp
                 })}
               />
               {(dept.children?.length ?? 0) > 0 ? (
-                <Button variant="ghost" size="icon-sm" aria-label={expanded.has(dept.id) ? '收起子部门' : '展开子部门'} aria-expanded={expanded.has(dept.id)} className="shrink-0" onClick={() => toggleExpand(dept.id)}>
+                <Button variant="ghost" size="icon-sm" aria-label={expanded.has(dept.id) ? `收起 ${dept.name} 的子部门` : `展开 ${dept.name} 的子部门`} aria-expanded={expanded.has(dept.id)} className="shrink-0" onClick={() => toggleExpand(dept.id)}>
                   {expanded.has(dept.id) ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                 </Button>
               ) : <div className="w-8 shrink-0" />}

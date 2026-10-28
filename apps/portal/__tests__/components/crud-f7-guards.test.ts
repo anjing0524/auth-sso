@@ -2366,3 +2366,11 @@ describe('个人中心展开语义（续三百一十七）', () => {
     expect(src).toContain('id="profile-sessions"');
   });
 });
+
+describe('部门展开按钮名称（续三百一十八）', () => {
+  it('展开/收起名称包含部门名', () => {
+    const src = read('src/app/(dashboard)/departments/components/DepartmentTree.tsx');
+    expect(src).toContain('收起 ${dept.name} 的子部门');
+    expect(src).toContain('展开 ${dept.name} 的子部门');
+  });
+});

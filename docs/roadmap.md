@@ -21,6 +21,8 @@
 
 ## 变更记录
 
+- 2026-10-29（续三百一十八）: **部门展开按钮名称**。缺部门上下文。**修复**：名称包含部门名。**验证**：总公司按钮名称正确；守卫 233 passed。
+
 - 2026-10-29（续三百一十七）: **个人中心展开语义**。缺 expanded/controls。**修复**：补状态与 id。**验证**：false→true；守卫 232 passed。
 
 - 2026-10-29（续三百一十六）: **侧边栏切换语义**。缺 expanded/controls。**修复**：aria-expanded/controls + id。**验证**：true/false 与 controls；守卫 231 passed。
