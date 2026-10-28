@@ -97,6 +97,8 @@ interface UserTableProps {
   clearHref?: string;
   /** 是否有 user:update（无权限时不显示多选与批量操作） */
   canUpdate?: boolean;
+  /** 是否有 user:create（空态显示新建入口） */
+  canCreate?: boolean;
   /** 当前登录用户 id（禁止勾选/禁用自己） */
   currentUserId?: string;
 }
@@ -143,7 +145,7 @@ export function UserTableSkeleton() {
   );
 }
 
-export default function UserTable({ users, pagination, filters, isFiltered = false, clearHref = '/users', canUpdate = false, currentUserId }: UserTableProps) {
+export default function UserTable({ users, pagination, filters, isFiltered = false, clearHref = '/users', canUpdate = false, canCreate = false, currentUserId }: UserTableProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -421,6 +423,7 @@ export default function UserTable({ users, pagination, filters, isFiltered = fal
             icon="UserPlus"
             title="暂无用户"
             description="系统中还没有用户账号"
+            action={canCreate ? { label: '新建用户', href: '/users?create=1' } : undefined}
           />
         )
       }

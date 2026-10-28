@@ -1775,3 +1775,13 @@ describe('新手引导四步直达动作（续二百四十五）', () => {
     expect(depts).toContain('autoOpenCreate={params.create');
   });
 });
+
+describe('用户空态创建入口（续二百四十六）', () => {
+  it('无用户时有新建入口且受 create 权限控制', () => {
+    const table = read('src/app/(dashboard)/users/components/UserTable.tsx');
+    expect(table).toContain("label: '新建用户', href: '/users?create=1'");
+    expect(table).toContain('canCreate ?');
+    const page = read('src/app/(dashboard)/users/page.tsx');
+    expect(page).toContain('canCreate={canCreateUser}');
+  });
+});

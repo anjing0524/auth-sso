@@ -87,6 +87,7 @@ export default async function UsersPage({ searchParams }: PageProps) {
         users={users}
         pagination={pagination}
         canUpdate={canUpdate}
+        canCreate={canCreateUser}
         isFiltered={isFiltered}
         clearHref="/users"
         filters={
