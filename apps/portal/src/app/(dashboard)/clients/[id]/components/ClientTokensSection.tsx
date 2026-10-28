@@ -37,6 +37,8 @@ export function ClientTokensSection({ tokens, total = tokens.length, onRevokeAll
             variant="destructive"
             size="sm"
             onClick={onRevokeAll}
+            disabled={total === 0}
+            title={total === 0 ? '当前没有有效授权可撤销' : undefined}
           >
             撤销所有
           </Button>

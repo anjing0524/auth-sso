@@ -2800,3 +2800,11 @@ describe('审计详情标题（续三百七十五）', () => {
     expect(src).toContain("title: '审计日志详情 | Auth-SSO'");
   });
 });
+
+describe('撤销全部禁用（续三百七十六）', () => {
+  it('无有效授权时禁用并说明', () => {
+    const src = read('src/app/(dashboard)/clients/[id]/components/ClientTokensSection.tsx');
+    expect(src).toContain('disabled={total === 0}');
+    expect(src).toContain('当前没有有效授权可撤销');
+  });
+});
