@@ -3093,3 +3093,12 @@ describe('个人中心完整值（续四百一十）', () => {
     expect(src).toContain('登录于 ${formatDateTime(item.createdAt)} · 会话 ID：${item.id}');
   });
 });
+
+describe('详情面包屑（续四百一十一）', () => {
+  it('用户/应用/注册/审计详情都有当前页', () => {
+    const src = read('src/components/layout/DashboardLayout.tsx');
+    for (const t of ['用户详情', '应用详情', '注册应用', '审计日志详情']) {
+      expect(src).toContain(`title: '${t}'`);
+    }
+  });
+});

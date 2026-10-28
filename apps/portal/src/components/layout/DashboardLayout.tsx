@@ -84,6 +84,16 @@ export default function DashboardLayout({
       }
       if (segments[0] === 'users' && segments[2] === 'roles') {
         crumbs.push({ title: '分配角色', url: pathname });
+      } else if (segments[0] === 'users' && segments[1]) {
+        crumbs.push({ title: '用户详情', url: pathname });
+      }
+      if (segments[0] === 'clients' && segments[1] === 'new') {
+        crumbs.push({ title: '注册应用', url: pathname });
+      } else if (segments[0] === 'clients' && segments[1]) {
+        crumbs.push({ title: '应用详情', url: pathname });
+      }
+      if (segments[0] === 'audit-logs' && segments[1]) {
+        crumbs.push({ title: '审计日志详情', url: pathname });
       }
       if (segments[0] === 'permissions' && segments[1] === 'new') {
         crumbs.push({ title: '新建权限', url: pathname });
