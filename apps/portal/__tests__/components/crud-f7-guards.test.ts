@@ -2813,7 +2813,8 @@ describe('禁用原因补充（续三百七十七）', () => {
   it('用户无修改保存/客户端只读预设均有 title', () => {
     expect(read('src/app/(dashboard)/users/[id]/UserDetailForm.tsx')).toContain('没有未保存的修改');
     const info = read('src/app/(dashboard)/clients/[id]/components/ClientInfoSection.tsx');
-    expect((info.match(/Portal 自身登录客户端为只读/g) ?? []).length).toBeGreaterThanOrEqual(2);
+    expect(info).toContain('const readOnlyTitle');
+    expect(info.split('title={readOnly ? readOnlyTitle : undefined}').length - 1).toBeGreaterThanOrEqual(2);
   });
 });
 
@@ -2975,5 +2976,14 @@ describe('用户角色切换固定标签（续三百九十五）', () => {
     expect(src).toContain('aria-pressed={onlySelected}');
     expect(src).toContain('仅看已选');
     expect(src).not.toContain("onlySelected ? '显示全部' : '仅看已选'");
+  });
+});
+
+describe('客户端只读原因区分（续三百九十六）', () => {
+  it('权限只读不再复用 Portal 文案', () => {
+    const src = read('src/app/(dashboard)/clients/[id]/components/ClientInfoSection.tsx');
+    expect(src).toContain("readOnlyKind === 'permission'");
+    expect(src).toContain('当前账号缺少客户端编辑权限（client:update）');
+    expect(read('src/app/(dashboard)/clients/[id]/ClientDetailClient.tsx')).toContain("readOnlyKind={client.clientId === PORTAL_CLIENT_ID ? 'portal' : 'permission'}");
   });
 });

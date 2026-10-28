@@ -300,6 +300,7 @@ export function ClientDetailClient({ client, initialTokens, initialTokenTotal, c
           onRegenerateSecret={() => setPendingAction('regenerate-secret')}
           onCopy={copyToClipboard}
           readOnly={client.clientId === PORTAL_CLIENT_ID || !canUpdate}
+          readOnlyKind={client.clientId === PORTAL_CLIENT_ID ? 'portal' : 'permission'}
         />
         </div>
 

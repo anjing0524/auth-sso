@@ -34,8 +34,9 @@ export interface ClientInfoSectionProps {
   onFormChange: (data: Partial<ClientInfoSectionProps['formData']>) => void;
   onRegenerateSecret: () => Promise<void> | void;
   onCopy: (text: string) => Promise<void> | void;
-  /** Portal 自身客户端只读（登录链路依赖），禁止修改/轮换/禁用 */
+  /** 只读；原因决定提示文案 */
   readOnly?: boolean;
+  readOnlyKind?: 'portal' | 'permission';
 }
 
 const SCOPE_PRESETS = [
@@ -63,7 +64,11 @@ export function ClientInfoSection({
   onRegenerateSecret,
   onCopy,
   readOnly = false,
+  readOnlyKind = 'portal',
 }: ClientInfoSectionProps) {
+  const readOnlyTitle = readOnlyKind === 'permission'
+    ? '当前账号缺少客户端编辑权限'
+    : 'Portal 自身登录客户端为只读';
   const selectedScopes = new Set(formData.scopes.split(/\s+/).filter(Boolean));
   const toggleScope = (value: string) => {
     const next = new Set(selectedScopes);
@@ -82,7 +87,9 @@ export function ClientInfoSection({
           <CardContent className="space-y-3 p-3">
             {readOnly ? (
               <div className="rounded-md border border-badge-warning-fg/30 bg-badge-warning-bg px-2.5 py-2 text-[11px] leading-5 text-badge-warning-fg">
-                这是 <strong>Portal 自身登录客户端</strong>：修改配置、轮换 Secret、禁用或注销都会中断全站登录，因此为只读。
+                {readOnlyKind === 'permission'
+                  ? '当前账号缺少客户端编辑权限（client:update），配置为只读。'
+                  : <>这是 <strong>Portal 自身登录客户端</strong>：修改配置、轮换 Secret、禁用或注销都会中断全站登录，因此为只读。</>}
               </div>
             ) : null}
             <div className="grid gap-3 sm:grid-cols-2">
@@ -136,7 +143,7 @@ export function ClientInfoSection({
                       type="button"
                       aria-pressed={active}
                       disabled={readOnly}
-                      title={readOnly ? 'Portal 自身登录客户端为只读' : undefined}
+                      title={readOnly ? readOnlyTitle : undefined}
                       onClick={() => toggleScope(s.value)}
                       className={`h-7 rounded-md border px-2 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-100 ${
                         active ? 'border-primary/40 bg-primary/10 font-medium text-foreground' : 'border-border text-muted-foreground hover:bg-muted'
@@ -204,7 +211,7 @@ export function ClientInfoSection({
                 <div className="flex gap-1">
                   {[{ v: 1800, t: '30m' }, { v: 3600, t: '1h' }, { v: 86400, t: '24h' }].map((p) => (
                     <Button key={p.v} type="button" variant="outline" size="sm" className="h-6 px-1.5 text-[10px]"
-                      disabled={readOnly} title={readOnly ? 'Portal 自身登录客户端为只读' : undefined} onClick={() => onFormChange({ accessTokenTtl: p.v })}>
+                      disabled={readOnly} title={readOnly ? readOnlyTitle : undefined} onClick={() => onFormChange({ accessTokenTtl: p.v })}>
                       {p.t}
                     </Button>
                   ))}
@@ -225,7 +232,7 @@ export function ClientInfoSection({
                 <div className="flex gap-1">
                   {[{ v: 86400, t: '1d' }, { v: 604800, t: '7d' }, { v: 2592000, t: '30d' }].map((p) => (
                     <Button key={p.v} type="button" variant="outline" size="sm" className="h-6 px-1.5 text-[10px]"
-                      disabled={readOnly} title={readOnly ? 'Portal 自身登录客户端为只读' : undefined} onClick={() => onFormChange({ refreshTokenTtl: p.v })}>
+                      disabled={readOnly} title={readOnly ? readOnlyTitle : undefined} onClick={() => onFormChange({ refreshTokenTtl: p.v })}>
                       {p.t}
                     </Button>
                   ))}
