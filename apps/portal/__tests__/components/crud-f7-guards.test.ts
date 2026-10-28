@@ -107,7 +107,8 @@ describe('U-CLIENT01/02 — 应用页 404 与注册校验', () => {
   it('注册页前端校验 + 名称 maxLength', () => {
     const source = read('src/app/(dashboard)/clients/new/page.tsx');
     expect(source).toContain('maxLength={100}');
-    expect(source).toContain('isHttpUrl');
+    expect(source).toContain('validateClientBasics');
+    expect(read('src/lib/client-validation.ts')).toContain('isHttpUrl');
     expect(source).toContain('role="alert"');
   });
 });
@@ -1371,7 +1372,7 @@ describe('应用 Logo 入口（续二百〇二）', () => {
   it('新建/详情都有 Logo URL 输入并提交 logoUrl', () => {
     const create = read('src/app/(dashboard)/clients/new/page.tsx');
     expect(create).toContain('id="client-create-logo"');
-    expect(create).toContain('Logo 地址必须是合法的');
+    expect(read('src/lib/client-validation.ts')).toContain('Logo 地址必须是合法的');
     const detail = read('src/app/(dashboard)/clients/[id]/components/ClientInfoSection.tsx');
     expect(detail).toContain('id="client-detail-logo"');
   });
@@ -2559,5 +2560,13 @@ describe('个人改密焦点（续三百四十五）', () => {
     const src = read('src/app/(dashboard)/profile/ProfileClient.tsx');
     expect(src).toContain("document.getElementById('confirmPassword')?.focus()");
     expect(src).toContain("document.getElementById('currentPassword')?.focus()");
+  });
+});
+
+describe('客户端详情保存前校验（续三百四十六）', () => {
+  it('详情复用 validateClientBasics 并聚焦首个错误', () => {
+    const src = read('src/app/(dashboard)/clients/[id]/ClientDetailClient.tsx');
+    expect(src).toContain('validateClientBasics(formData)');
+    expect(src).toContain("document.getElementById(inputId)?.focus()");
   });
 });

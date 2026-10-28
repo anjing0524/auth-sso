@@ -33,16 +33,7 @@ import {
 import { PageHeader } from '@/components/shared/page-header';
 import { RequiredLegend, RequiredMark } from '@/components/shared/required-mark';
 import { safeReturnPath } from '@/lib/safe-return';
-
-/** 回调地址必须是绝对 http(s) URL（与服务端 Zod `.url()` 同口径的前端近似） */
-function isHttpUrl(value: string): boolean {
-  try {
-    const url = new URL(value);
-    return url.protocol === 'https:' || url.protocol === 'http:';
-  } catch {
-    return false;
-  }
-}
+import { validateClientBasics } from '@/lib/client-validation';
 
 /** 常用 scope 预设：点选写入空格分隔字符串（OAuth 标准写法） */
 const SCOPE_PRESETS = [
@@ -81,22 +72,7 @@ export default function NewClientPage() {
    * 且错误落不到字段上）。与服务端 Zod 同口径做一层快速反馈。
    */
   const validate = (): boolean => {
-    const next: { name?: string; redirectUris?: string; logoUrl?: string } = {};
-    const name = formData.name.trim();
-    if (!name) next.name = '应用名称不能为空';
-    else if (name.length > 100) next.name = '应用名称最多 100 个字符';
-
-    const uris = formData.redirectUris.split('\n').map((u) => u.trim()).filter(Boolean);
-    if (uris.length === 0) {
-      next.redirectUris = '至少需要一个回调地址';
-    } else {
-      const invalid = uris.find((u) => !isHttpUrl(u) || u.length > 500);
-      if (invalid) next.redirectUris = `回调地址格式不合法：${invalid.slice(0, 80)}`;
-    }
-
-    const logo = formData.logoUrl.trim();
-    if (logo && (!isHttpUrl(logo) || logo.length > 500)) next.logoUrl = 'Logo 地址必须是合法的 http(s) URL';
-
+    const next = validateClientBasics(formData);
     setErrors(next);
     const first = (['name', 'logoUrl', 'redirectUris'] as const).find((field) => next[field]);
     if (first) {

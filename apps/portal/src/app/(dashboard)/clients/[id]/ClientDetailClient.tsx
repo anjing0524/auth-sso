@@ -22,6 +22,7 @@ import { ClientTokensSection } from './components/ClientTokensSection';
 import { createClientLogger } from '@/lib/logger-client';
 import { useFieldFailure } from '@/hooks/use-field-failure';
 import { useUnsavedChangesGuard } from '@/hooks/use-unsaved-changes-guard';
+import { validateClientBasics } from '@/lib/client-validation';
 
 import { PageHeader } from '@/components/shared/page-header';
 import { RequiredLegend } from '@/components/shared/required-mark';
@@ -99,6 +100,18 @@ export function ClientDetailClient({ client, initialTokens, initialTokenTotal, c
   const isDirty = JSON.stringify(formData) !== JSON.stringify(savedForm);
 
   const handleSave = async () => {
+    const validation = validateClientBasics(formData);
+    const firstError = (['name', 'logoUrl', 'redirectUris'] as const).find((field) => validation[field]);
+    if (firstError) {
+      const inputId = firstError === 'name'
+        ? 'client-detail-name'
+        : firstError === 'logoUrl'
+          ? 'client-detail-logo'
+          : 'client-detail-redirect-uris';
+      toast.error(validation[firstError]!);
+      requestAnimationFrame(() => document.getElementById(inputId)?.focus());
+      return;
+    }
     setSaving(true);
     try {
       const res = await updateClientAction(client.clientId, {
