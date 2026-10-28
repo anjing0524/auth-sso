@@ -365,8 +365,9 @@ export default function ClientsTable({ clients, pagination, initialKeyword, init
         onPageChange={(next) => {
           const params = new URLSearchParams(window.location.search);
           if (next > 1) params.set('page', String(next)); else params.delete('page');
-          router.push(`/clients${params.toString() ? `?${params.toString()}` : ''}`);
+          startTransition(() => router.push(`/clients${params.toString() ? `?${params.toString()}` : ''}`));
         }}
+        disabled={isPending}
       />
       </div>
 

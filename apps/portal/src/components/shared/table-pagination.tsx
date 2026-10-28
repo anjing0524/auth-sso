@@ -31,6 +31,8 @@ export interface TablePaginationProps {
   jumpParams?: Record<string, string>;
   /** 服务端模式跳页的导航注入点（组件测试用）；默认 window.location.assign */
   navigate?: (url: string) => void;
+  /** 父级导航 pending 时禁用翻页，避免重复触发 */
+  disabled?: boolean;
 }
 
 const navButtonClass = 'h-7 gap-1 rounded-md px-2 text-xs';
@@ -93,6 +95,7 @@ export function TablePagination({
   jumpAction,
   jumpParams,
   navigate,
+  disabled = false,
 }: TablePaginationProps) {
   const pages = Math.max(totalPages, 1);
   const prevTo = hrefFor?.(page - 1);
@@ -104,7 +107,7 @@ export function TablePagination({
     const cls = `inline-flex h-7 min-w-7 items-center justify-center rounded-md px-2 text-xs outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${
       isCurrent
         ? 'border border-border bg-card font-bold shadow-sm'
-        : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+        : 'text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50'
     }`;
     if (isCurrent) {
       return <span key={n} className={cls} aria-current="page" aria-label={`第 ${n} 页（当前）`}>{n}</span>;
@@ -114,7 +117,7 @@ export function TablePagination({
       return <Link key={n} href={to} className={cls} aria-label={`第 ${n} 页`}>{n}</Link>;
     }
     return (
-      <button key={n} type="button" className={cls} aria-label={`第 ${n} 页`} onClick={() => onPageChange?.(n)}>
+      <button key={n} type="button" className={cls} aria-label={`第 ${n} 页`} disabled={disabled} onClick={() => onPageChange?.(n)}>
         {n}
       </button>
     );
@@ -139,11 +142,11 @@ export function TablePagination({
       </p>
       <div className="flex flex-wrap items-center gap-1.5">
         {pages > 7 ? (
-          <NavButton label="首页" to={hrefFor?.(1)} disabled={page <= 1} onClick={onPageChange ? () => onPageChange(1) : undefined}>
+          <NavButton label="首页" to={hrefFor?.(1)} disabled={disabled || page <= 1} onClick={onPageChange ? () => onPageChange(1) : undefined}>
             <ChevronsLeft className="h-3.5 w-3.5" />
           </NavButton>
         ) : null}
-        <NavButton label="上一页" to={prevTo} disabled={page <= 1} onClick={onPageChange ? () => onPageChange(page - 1) : undefined}>
+        <NavButton label="上一页" to={prevTo} disabled={disabled || page <= 1} onClick={onPageChange ? () => onPageChange(page - 1) : undefined}>
           <ChevronLeft className="h-3.5 w-3.5" />
           <span className="hidden text-xs sm:inline">上一页</span>
         </NavButton>
@@ -157,12 +160,12 @@ export function TablePagination({
         </div>
         <span className="text-xs text-muted-foreground sm:hidden">{page} / {pages}</span>
 
-        <NavButton label="下一页" to={nextTo} disabled={page >= pages} onClick={onPageChange ? () => onPageChange(page + 1) : undefined}>
+        <NavButton label="下一页" to={nextTo} disabled={disabled || page >= pages} onClick={onPageChange ? () => onPageChange(page + 1) : undefined}>
           <span className="hidden text-xs sm:inline">下一页</span>
           <ChevronRight className="h-3.5 w-3.5" />
         </NavButton>
         {pages > 7 ? (
-          <NavButton label="末页" to={hrefFor?.(pages)} disabled={page >= pages} onClick={onPageChange ? () => onPageChange(pages) : undefined}>
+          <NavButton label="末页" to={hrefFor?.(pages)} disabled={disabled || page >= pages} onClick={onPageChange ? () => onPageChange(pages) : undefined}>
             <ChevronsRight className="h-3.5 w-3.5" />
           </NavButton>
         ) : null}

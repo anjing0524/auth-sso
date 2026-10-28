@@ -400,6 +400,7 @@ export default function PermissionsTable({ permissions, pagination, activeTab, i
         totalPages={pagination.totalPages}
         total={pagination.total}
         onPageChange={(next) => startTransition(() => router.push(buildHref(next)))}
+        disabled={isPending}
       />
       </div>
 

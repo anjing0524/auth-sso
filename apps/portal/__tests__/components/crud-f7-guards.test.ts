@@ -1825,3 +1825,17 @@ describe('筛选加载反馈（续二百五十一）', () => {
     expect(audit).toContain('busy={isPending}');
   });
 });
+
+describe('分页 pending 禁用（续二百五十二）', () => {
+  it('分页支持 disabled；用户/应用分页走 transition 并禁用', () => {
+    const pg = read('src/components/shared/table-pagination.tsx');
+    expect(pg).toContain('disabled?: boolean');
+    expect(pg).toContain('disabled || page <= 1');
+    const users = read('src/app/(dashboard)/users/components/UserTable.tsx');
+    expect(users).toContain('startTransition(() => router.push(`${pathname}?${params.toString()}`))');
+    expect(users).toContain('disabled={isPending}');
+    const clients = read('src/app/(dashboard)/clients/components/ClientsTable.tsx');
+    expect(clients).toContain('startTransition(() => router.push(`/clients');
+    expect(clients).toContain('disabled={isPending}');
+  });
+});

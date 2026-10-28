@@ -169,7 +169,7 @@ export default function UserTable({ users, pagination, filters, isFiltered = fal
       }),
   );
 
-  const [, startTransition] = useTransition();
+  const [isPending, startTransition] = useTransition();
 
   // 多选：仅当有 user:update 时启用；翻页/筛选后清空，避免"选了第一页却批量改了不可见的人"
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -250,7 +250,7 @@ export default function UserTable({ users, pagination, filters, isFiltered = fal
   const handlePageChange = (newPage: number) => {
     const params = new URLSearchParams(searchParams.toString());
     params.set('page', newPage.toString());
-    router.push(`${pathname}?${params.toString()}`);
+    startTransition(() => router.push(`${pathname}?${params.toString()}`));
   };
 
   const columns = [
@@ -409,6 +409,7 @@ export default function UserTable({ users, pagination, filters, isFiltered = fal
     <DataTable
       columns={columns}
       data={optimisticUsers}
+      loading={isPending}
       emptyState={
         isFiltered ? (
           <EmptyState
@@ -450,6 +451,7 @@ export default function UserTable({ users, pagination, filters, isFiltered = fal
       totalPages={pagination.totalPages}
       total={pagination.total}
       onPageChange={handlePageChange}
+      disabled={isPending}
     />
 
     {/* 单条禁用确认：与批量同语义，禁用立即撤销会话 */}

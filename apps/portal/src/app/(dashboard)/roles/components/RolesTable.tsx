@@ -402,6 +402,7 @@ export default function RolesTable({ roles, pagination, initialKeyword, initialS
           p.set('page', String(next));
           startTransition(() => router.push(`/roles?${p.toString()}`));
         }}
+        disabled={isPending}
       />
       </div>
 
