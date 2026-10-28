@@ -2545,3 +2545,11 @@ describe('角色/部门/权限错误聚焦（续三百四十三）', () => {
     expect(read('src/app/(dashboard)/permissions/permission-form.tsx')).toContain("document.getElementById('perm-code')?.focus()");
   });
 });
+
+describe('重置密码焦点（续三百四十四）', () => {
+  it('不一致聚焦确认；服务端错误聚焦新密码', () => {
+    const src = read('src/app/(dashboard)/users/[id]/ResetPasswordDialog.tsx');
+    expect(src).toContain("document.getElementById('reset-password-confirm')?.focus()");
+    expect(src).toContain("document.getElementById('reset-password')?.focus()");
+  });
+});

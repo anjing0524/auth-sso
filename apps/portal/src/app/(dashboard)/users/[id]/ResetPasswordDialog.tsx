@@ -6,7 +6,7 @@
  * 后端 `resetPasswordAction` 早已存在（含密码策略、历史密码校验、会话全量失效），
  * 但**没有 UI 入口**——属于"后端能力未接线"。本组件补上入口。
  */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { KeyRound } from 'lucide-react';
 
@@ -42,9 +42,15 @@ export function ResetPasswordDialog({
   const [saving, setSaving] = useState(false);
   const { fieldError, reportFailure, clearFailure } = useFieldFailure(['password']);
 
+  useEffect(() => {
+    if (!fieldError) return;
+    requestAnimationFrame(() => document.getElementById('reset-password')?.focus());
+  }, [fieldError]);
+
   const submit = async () => {
     if (password !== confirm) {
       toast.error('两次输入的密码不一致');
+      requestAnimationFrame(() => document.getElementById('reset-password-confirm')?.focus());
       return;
     }
     clearFailure();
