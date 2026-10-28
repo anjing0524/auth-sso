@@ -16,9 +16,11 @@ interface SearchInputProps {
   className?: string;
   /** 服务端查询进行中（配合 300ms 防抖，给出可见反馈） */
   busy?: boolean;
+  /** 与服务端 keyword 上限一致，避免静默截断 */
+  maxLength?: number;
 }
 
-export function SearchInput({ value, onChange, placeholder, className, busy = false }: SearchInputProps) {
+export function SearchInput({ value, onChange, placeholder, className, busy = false, maxLength = 100 }: SearchInputProps) {
   return (
     <div className={cn('relative w-full md:w-64', className)}>
       <Search
@@ -28,6 +30,7 @@ export function SearchInput({ value, onChange, placeholder, className, busy = fa
       <Input
         aria-label={placeholder}
         placeholder={placeholder}
+        maxLength={maxLength}
         value={value}
         aria-busy={busy || undefined}
         onChange={(e) => onChange(e.target.value)}

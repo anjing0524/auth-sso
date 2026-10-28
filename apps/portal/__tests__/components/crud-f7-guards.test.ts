@@ -3165,3 +3165,11 @@ describe('错误边界主标题（续四百一十九）', () => {
     expect(src).not.toContain('<CardTitle className="text-xl font-bold">页面加载出错');
   });
 });
+
+describe('搜索长度上限（续四百二十）', () => {
+  it('SearchInput 默认 100 并传给 input', () => {
+    const src = read('src/components/shared/search-input.tsx');
+    expect(src).toContain('maxLength = 100');
+    expect(src).toContain('maxLength={maxLength}');
+  });
+});
