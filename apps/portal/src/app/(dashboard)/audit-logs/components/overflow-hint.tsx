@@ -24,7 +24,7 @@ export function OverflowHint({ children }: { children: ReactNode }) {
   }, [children]);
 
   return (
-    <div ref={ref}>
+    <div ref={ref} className="flex min-h-0 flex-1 flex-col">
       {overflowing && (
         <p className="border-b bg-muted/30 px-4 py-1.5 text-[11px] text-muted-foreground lg:hidden">
           左右滑动查看完整表格

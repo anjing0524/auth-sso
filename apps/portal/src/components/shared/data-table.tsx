@@ -57,7 +57,6 @@ export function DataTable<T>({
   emptyState,
   renderRow,
   cardHeader,
-  maxHeightClass = 'max-h-[calc(100svh-13rem)]',
   tableLabel,
   emptyAnnouncement = '列表为空',
 }: DataTableProps<T>) {
@@ -76,10 +75,10 @@ export function DataTable<T>({
   }, [data, columns]);
 
   return (
-    <Card className="gap-0 overflow-hidden rounded-lg border border-border/70 py-0 shadow-sm ring-0">
+    <Card className="flex min-h-0 flex-1 flex-col gap-0 overflow-hidden rounded-lg border border-border/70 py-0 shadow-sm ring-0">
       <p role="status" aria-live="polite" className="sr-only">{loading ? '正在加载列表…' : data.length === 0 ? emptyAnnouncement : ''}</p>
-      {cardHeader}
-      <CardContent className="p-0">
+      {cardHeader ? <div className="shrink-0">{cardHeader}</div> : null}
+      <CardContent className="flex min-h-0 flex-1 flex-col p-0">
         {/* 横向滚动提示：宽表在卡片内横向滚动（U-G05）。
             md:hidden 会在 ≥768px 隐藏，但 1024 宽度下宽表仍溢出（实测 clients 720/967），
             因此用 lg:hidden：平板/窄桌面也能看到“可横向滚动”的可发现性提示。 */}
@@ -91,7 +90,7 @@ export function DataTable<T>({
         {/* 窄屏下宽表在卡片内横向滚动：根因修复——此前表格没有滚动容器，
             会把 flex 父级撑宽（实测 390px 视口下 document.scrollWidth=557）。 */}
         {/* 唯一滚动容器：横向 + 纵向都由这里承担；Table 内层不再自建 overflow（否则 sticky 表头失效）。 */}
-        <div ref={scrollRef} aria-busy={loading || undefined} className={`${maxHeightClass} scrollbar-slim w-full overflow-auto`}>
+        <div ref={scrollRef} aria-busy={loading || undefined} className="scrollbar-slim min-h-0 w-full flex-1 overflow-auto">
         <Table aria-label={tableLabel} containerClassName="overflow-visible">
           <TableHeader className="[&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:bg-card">
             <TableRow>

@@ -303,10 +303,10 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
       {/* 日志列表（U-LOG02：页签内容与 role=tablist 关联） */}
       <div id="audit-tabpanel" role="tabpanel" aria-labelledby={`audit-tab-${tab}`} className="flex min-h-0 flex-1 flex-col">
       {tab === 'login' ? (
-        <Card className="gap-0 overflow-hidden rounded-lg border border-border/70 py-0 shadow-sm ring-0">
-          <CardContent className="p-0">
+        <Card className="flex min-h-0 flex-1 flex-col gap-0 overflow-hidden rounded-lg border border-border/70 py-0 shadow-sm ring-0">
+          <CardContent className="flex min-h-0 flex-1 flex-col p-0">
             <OverflowHint>
-            <div className="scrollbar-slim max-h-[calc(100svh-19rem)] overflow-auto">
+            <div className="scrollbar-slim min-h-0 flex-1 overflow-auto">
             <Table aria-label="登录日志列表" containerClassName="overflow-visible">
               <TableHeader className="[&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:bg-card">
                 <TableRow>
@@ -378,8 +378,8 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
           </CardContent>
         </Card>
       ) : tab === 'operation' ? (
-        <Card className="gap-0 overflow-hidden rounded-lg border border-border/70 py-0 shadow-sm ring-0">
-          <CardContent className="p-0">
+        <Card className="flex min-h-0 flex-1 flex-col gap-0 overflow-hidden rounded-lg border border-border/70 py-0 shadow-sm ring-0">
+          <CardContent className="flex min-h-0 flex-1 flex-col p-0">
             <OverflowHint>
             <div className="max-h-[calc(100svh-19rem)] overflow-auto">
             <Table aria-label="操作日志列表" containerClassName="overflow-visible">
@@ -467,10 +467,10 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
           </CardContent>
         </Card>
       ) : (
-        <Card className="gap-0 overflow-hidden rounded-lg border border-border/70 py-0 shadow-sm ring-0">
-          <CardContent className="p-0">
+        <Card className="flex min-h-0 flex-1 flex-col gap-0 overflow-hidden rounded-lg border border-border/70 py-0 shadow-sm ring-0">
+          <CardContent className="flex min-h-0 flex-1 flex-col p-0">
             <OverflowHint>
-            <div className="scrollbar-slim max-h-[calc(100svh-19rem)] overflow-auto">
+            <div className="scrollbar-slim min-h-0 flex-1 overflow-auto">
             <Table aria-label="访问日志列表" containerClassName="overflow-visible">
               <TableHeader className="[&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:bg-card">
                 <TableRow>

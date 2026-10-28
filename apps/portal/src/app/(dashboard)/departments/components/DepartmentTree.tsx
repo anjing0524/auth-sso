@@ -295,7 +295,7 @@ export default function DepartmentTree({ departments, deletionStats = {}, autoOp
   const deleteImpact = deleteTarget ? deletionImpactFor(deleteTarget.id) : null;
 
   return (
-    <Card className="gap-0 overflow-hidden rounded-lg border border-border/70 py-0 shadow-sm ring-0">
+    <Card className="flex min-h-0 flex-1 flex-col gap-0 overflow-hidden rounded-lg border border-border/70 py-0 shadow-sm ring-0">
       {/* 根部门是 ADR-002 的单例（系统预置角色绑在根、根不可删）：非空树里再建根
           会落在所有角色子树之外 ⇒ 对任何管理员都不可见（审计 P1-1）。仅空树引导期放出。 */}
       <TableToolbar
@@ -371,8 +371,8 @@ export default function DepartmentTree({ departments, deletionStats = {}, autoOp
           </>
         }
       />
-      <CardContent className="p-0">
-        <div className="divide-y">
+      <CardContent className="flex min-h-0 flex-1 flex-col p-0">
+        <div className="scrollbar-slim min-h-0 flex-1 divide-y overflow-y-auto">
           {filtered.map(dept => {
             // 搜索态下未命中的可见行只是祖先路径：只作路径展示，不渲染编辑/删除（U-DEP02）
             const pathOnly = searchMatchIds !== null && !searchMatchIds.has(dept.id);
