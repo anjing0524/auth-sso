@@ -17,7 +17,7 @@ export function Forbidden() {
           <DynamicIcon name="ShieldAlert" className="h-7 w-7" />
         </div>
         <div className="space-y-1.5">
-          <h2 className="text-lg font-bold">无权限访问</h2>
+          <h1 className="text-lg font-bold">无权限访问</h1>
           <p className="text-sm text-muted-foreground">
             当前账号没有访问该页面的权限。如需使用，请联系管理员为你的角色分配对应权限。
           </p>

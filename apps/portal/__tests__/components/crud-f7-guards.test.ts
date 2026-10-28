@@ -3149,3 +3149,11 @@ describe('审计导出范围说明（续四百一十七）', () => {
     expect(src).toContain('按当前筛选条件导出');
   });
 });
+
+describe('403 视图主标题（续四百一十八）', () => {
+  it('使用 h1', () => {
+    const src = read('src/components/shared/forbidden.tsx');
+    expect(src).toContain('<h1');
+    expect(src).not.toContain('<h2');
+  });
+});
