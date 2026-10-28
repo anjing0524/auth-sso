@@ -21,6 +21,8 @@
 
 ## 变更记录
 
+- 2026-10-28（续二百四十二）: **权限路径清空语义**。目录清空路径提交 undefined，旧值保留。**修复**：更新模式 null、创建 undefined。**验证**：目录 path 清空后 DB NULL；permission actions 9/守卫 165 passed。
+
 - 2026-10-28（续二百四十一）: **可空字段清空语义**。角色描述/部门编码清空写空串，创建写 NULL。**修复**：更新提交 null；创建 trim undefined。**验证**：清空后 DB NULL；role/dept actions 28/守卫 164 passed。
 
 - 2026-10-28（续二百四十）: **头像清空写入 NULL**。admin 写空串、自助写 NULL，字段空值不一致。**修复**：UpdateUserInputSchema URL+nullable；应用层支持 null；表单空值提交 null。**验证**：设置后清空 DB 为 NULL；user-actions 32/守卫 163 passed。

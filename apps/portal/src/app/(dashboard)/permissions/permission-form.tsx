@@ -106,9 +106,9 @@ export default function PermissionForm({ mode, menuOptions, permission, clients 
     return excluded;
   }, [permission, menuOptions]);
 
-  const menuPayload = () => ({
-    path: form.path || undefined,
-    icon: form.icon || undefined,
+  const menuPayload = (mode: 'create' | 'update') => ({
+    path: form.path || (mode === 'update' ? null : undefined),
+    icon: form.icon || (mode === 'update' ? null : undefined),
     visible: form.visible,
     parentId: form.parentId || null,
     sort: Number(form.sort) || 0,
@@ -125,11 +125,11 @@ export default function PermissionForm({ mode, menuOptions, permission, clients 
         ? await createPermissionAction(
             form.type === 'API'
               ? { name: form.name, code: form.code, type: 'API', description: form.description || undefined, clientId: form.clientId || undefined }
-              : { name: form.name, code: form.code, type: form.type as 'DIRECTORY' | 'PAGE', description: form.description || undefined, ...menuPayload() },
+              : { name: form.name, code: form.code, type: form.type as 'DIRECTORY' | 'PAGE', description: form.description || undefined, ...menuPayload('create') },
           )
         : await updatePermissionAction(permission!.id, form.type === 'API'
             ? { name: form.name, type: 'API' as const, description: form.description || null, clientId: form.clientId || null, status: form.status }
-            : { name: form.name, type: form.type, description: form.description || null, ...menuPayload(), status: form.status });
+            : { name: form.name, type: form.type, description: form.description || null, ...menuPayload('update'), status: form.status });
       if (r.success) {
         toast.success(r.message);
         router.push(returnHref);

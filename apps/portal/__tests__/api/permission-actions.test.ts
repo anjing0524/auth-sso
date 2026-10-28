@@ -127,6 +127,15 @@ describe('Permission Server Actions', () => {
       expect(r.error).toBe(COMMON_ERRORS.NOT_FOUND);
     });
 
+    it('目录权限清空路由路径写入 NULL', async () => {
+      await seedTestData(td.db, { permissions: seedTestPermission({ type: 'DIRECTORY', path: '/dir' } as any) });
+
+      const r: any = await updatePermissionAction(PERM_ID, { path: null } as any);
+      expect(r.success).toBe(true);
+      const rows = await db.select().from(schema.permissions);
+      expect(rows.find((p) => p.id === PERM_ID)?.path).toBeNull();
+    });
+
     it('内置权限不可修改类型（编码被服务端引用）', async () => {
       await seedTestData(td.db, { permissions: seedTestPermission({ code: 'portal:user:list' }) });
 

@@ -1733,3 +1733,12 @@ describe('可空字段清空语义（续二百四十一）', () => {
     expect(depts).toContain('code: form.code.trim() || null');
   });
 });
+
+describe('权限路径清空语义（续二百四十二）', () => {
+  it('更新模式路径清空写 null，创建仍 undefined', () => {
+    const form = read('src/app/(dashboard)/permissions/permission-form.tsx');
+    expect(form).toContain("path: form.path || (mode === 'update' ? null : undefined)");
+    expect(form).toContain("menuPayload('update')");
+    expect(form).toContain("menuPayload('create')");
+  });
+});

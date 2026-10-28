@@ -1016,3 +1016,9 @@ a11y 对比度函数提取复用，增加未登录 `/login`（390×844，独立�
 | 问题 | 修复 | 验证 |
 |---|---|---|
 | 角色描述、部门编码清空时写空字符串；创建路径写 NULL，同一字段两种空值 | 更新提交 null；创建 trim 后 undefined | API 测试清空后 DB 为 NULL；role/dept actions 28 passed |
+
+### 9.109 产品审计一百零四：权限路径清空语义（2026-10-28）
+
+| 问题 | 修复 | 验证 |
+|---|---|---|
+| 目录权限清空路由路径时提交 undefined，服务端保留旧路径，用户无法清除 | 更新模式空路径提交 null；创建仍 undefined | API：目录 path 清空后 DB NULL；permission actions 9 passed |
