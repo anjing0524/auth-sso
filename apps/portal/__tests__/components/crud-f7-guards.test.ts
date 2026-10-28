@@ -2553,3 +2553,11 @@ describe('重置密码焦点（续三百四十四）', () => {
     expect(src).toContain("document.getElementById('reset-password')?.focus()");
   });
 });
+
+describe('个人改密焦点（续三百四十五）', () => {
+  it('不一致聚焦确认；服务端失败聚焦当前密码', () => {
+    const src = read('src/app/(dashboard)/profile/ProfileClient.tsx');
+    expect(src).toContain("document.getElementById('confirmPassword')?.focus()");
+    expect(src).toContain("document.getElementById('currentPassword')?.focus()");
+  });
+});

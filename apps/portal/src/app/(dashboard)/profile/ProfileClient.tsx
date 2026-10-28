@@ -94,6 +94,7 @@ function ChangePasswordDialog() {
     e.preventDefault();
     if (form.newPassword !== form.confirmPassword) {
       toast.error('两次输入的新密码不一致');
+      requestAnimationFrame(() => document.getElementById('confirmPassword')?.focus());
       return;
     }
     startTransition(async () => {
@@ -108,6 +109,7 @@ function ChangePasswordDialog() {
         setTimeout(() => window.location.assign('/login'), 1500);
       } else {
         reportFailure(res);
+        requestAnimationFrame(() => document.getElementById('currentPassword')?.focus());
       }
     });
   };
