@@ -308,7 +308,7 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
                 {data.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={6} className="p-0">
-                      {eventType ? (
+                      {eventType || keyword || startDate ? (
                         <EmptyState
                           variant="simple"
                           kind="filtered"
@@ -384,7 +384,7 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
                 {data.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={7} className="p-0">
-                      {operation ? (
+                      {operation || keyword || startDate ? (
                         <EmptyState
                           variant="simple"
                           kind="filtered"
@@ -473,7 +473,7 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
                 {data.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={7} className="p-0">
-                      {keyword ? (
+                      {keyword || accessStatus || validAccessResourceType || startDate ? (
                         <EmptyState variant="simple" kind="filtered" icon="FileText" clearAction={{ label: '清除筛选', href: '/audit-logs?tab=access' }} />
                       ) : (
                         <EmptyState variant="simple" icon="FileText" title="暂无日志记录" description="当前没有访问日志" />

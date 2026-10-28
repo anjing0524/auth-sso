@@ -1792,3 +1792,12 @@ describe('部门搜索空态清除（续二百四十七）', () => {
     expect(src).toContain("label: '清除搜索', onClick: () => setKeyword('')");
   });
 });
+
+describe('审计筛选空态覆盖全部筛选（续二百四十八）', () => {
+  it('登录/操作/访问 tab 均按全部生效筛选判断', () => {
+    const page = read('src/app/(dashboard)/audit-logs/page.tsx');
+    expect(page).toContain('eventType || keyword || startDate');
+    expect(page).toContain('operation || keyword || startDate');
+    expect(page).toContain('keyword || accessStatus || validAccessResourceType || startDate');
+  });
+});
