@@ -95,7 +95,7 @@ export default async function AuditLogDetailPage({ params, searchParams }: PageP
         <DetailHeader title="访问日志详情" tab="access" id={row.id} returnHref={returnHref}>
           <Badge variant="outline" className="font-mono">{row.method}</Badge>
         </DetailHeader>
-        <div className="grid gap-3 lg:grid-cols-3">
+        <div className="grid gap-3 xl:grid-cols-3">
           <Card className="border border-border/70 ring-0 lg:col-span-2">
             <CardHeader><CardTitle className="type-card-title">访问上下文</CardTitle></CardHeader>
             <CardContent>
@@ -140,7 +140,7 @@ export default async function AuditLogDetailPage({ params, searchParams }: PageP
       <DetailHeader title="操作日志详情" tab="operation" id={row.id} returnHref={returnHref}>
         <Badge>{opLabel}</Badge>
       </DetailHeader>
-      <div className="grid gap-3 lg:grid-cols-3">
+      <div className="grid gap-3 xl:grid-cols-3">
         <Card className="border border-border/70 ring-0 lg:col-span-2">
           <CardHeader><CardTitle className="type-card-title">请求上下文</CardTitle></CardHeader>
           <CardContent>

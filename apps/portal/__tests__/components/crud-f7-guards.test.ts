@@ -2122,3 +2122,11 @@ describe('审计操作表 1024 列宽（续二百八十五）', () => {
     expect(page).toContain('min-[1100px]:max-w-xs');
   });
 });
+
+describe('审计详情 1024 堆叠（续二百八十六）', () => {
+  it('两栏延后到 xl，避免窄来源栏拆 UA', () => {
+    const src = read('src/app/(dashboard)/audit-logs/[id]/page.tsx');
+    expect(src).toContain('xl:grid-cols-3');
+    expect(src).not.toContain('lg:grid-cols-3');
+  });
+});
