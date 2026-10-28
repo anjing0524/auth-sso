@@ -3129,3 +3129,9 @@ describe('保存按钮动作标签统一（续四百一十四）', () => {
     expect(roles).toContain("changeCount > 0 ? `保存变更（${changeCount}）` : '保存变更'");
   });
 });
+
+describe('部门搜索占位（续四百一十五）', () => {
+  it('使用完整文案', () => {
+    expect(read('src/app/(dashboard)/departments/components/DepartmentTree.tsx')).toContain('placeholder="搜索部门名称"');
+  });
+});

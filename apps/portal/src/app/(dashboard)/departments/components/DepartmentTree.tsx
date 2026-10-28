@@ -302,7 +302,7 @@ export default function DepartmentTree({ departments, deletionStats = {}, autoOp
         left={
           <div className="flex min-w-0 items-center gap-3">
             <h1 className="type-section-title shrink-0 text-foreground">部门管理</h1>
-            <SearchInput placeholder="搜索部门..." value={keyword} onChange={setKeyword} />
+            <SearchInput placeholder="搜索部门名称" value={keyword} onChange={setKeyword} />
           </div>
         }
         right={
