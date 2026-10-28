@@ -216,7 +216,7 @@ export default function PermissionsTable({ permissions, pagination, activeTab, i
     <Tabs value={activeTab} onValueChange={handleTabChange} className="w-fit">
       <TabsList>
         {TABS.map((tab) => (
-          <TabsTrigger key={tab.value} value={tab.value}>{tab.label}</TabsTrigger>
+          <TabsTrigger key={tab.value} value={tab.value} disabled={isPending}>{tab.label}</TabsTrigger>
         ))}
       </TabsList>
     </Tabs>

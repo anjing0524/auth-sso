@@ -1961,3 +1961,10 @@ describe('权限非 API 状态筛选 pending（续二百六十六）', () => {
     expect(src).toContain("v === 'ALL' ? '' : v, '')))} disabled={isPending}");
   });
 });
+
+describe('权限 tab pending 禁用（续二百六十七）', () => {
+  it('TabsTrigger 绑定 isPending', () => {
+    const src = read('src/app/(dashboard)/permissions/components/PermissionsTable.tsx');
+    expect(src).toContain('value={tab.value} disabled={isPending}');
+  });
+});

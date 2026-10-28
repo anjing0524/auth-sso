@@ -1170,3 +1170,9 @@ a11y 对比度函数提取复用，增加未登录 `/login`（390×844，独立�
 | 问题 | 修复 | 验证 |
 |---|---|---|
 | 权限列表只有 API tab 的状态下拉禁用了 pending，目录/页面/全部 tab 仍可操作 | 非 API 状态下拉补 disabled={isPending} | 源码守卫；typecheck/build 0 |
+
+### 9.134 产品审计一百二十九：权限 tab pending（2026-10-28）
+
+| 问题 | 修复 | 验证 |
+|---|---|---|
+| 权限 tab 切换走 transition，但页签未禁用，可连续切换 | TabsTrigger disabled={isPending} | 源码守卫；typecheck/build 0 |
