@@ -25,11 +25,14 @@ interface PageProps {
   searchParams: Promise<{ tab?: string; returnTo?: string }>;
 }
 
-function Field({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+function Field({ label, value, mono, copy }: { label: string; value: string; mono?: boolean; copy?: boolean }) {
   return (
     <div className="grid grid-cols-[92px_1fr] gap-3 border-b border-border/50 py-2 last:border-0">
       <dt className="text-xs text-muted-foreground">{label}</dt>
-      <dd className={`break-all ${mono ? 'font-mono text-xs' : 'text-sm'}`}>{value}</dd>
+      <dd className={`flex min-w-0 items-start gap-1 ${mono ? 'font-mono text-xs' : 'text-sm'}`}>
+        <span className="min-w-0 flex-1 break-all">{value}</span>
+        {copy && value !== '-' ? <CopyTextButton text={value} label={`复制${label}`} /> : null}
+      </dd>
     </div>
   );
 }
@@ -72,10 +75,10 @@ export default async function AuditLogDetailPage({ params, searchParams }: PageP
               <Field label="时间" value={formatDateTime(row.createdAt)} />
               <Field label="用户" value={row.username} />
               <Field label="事件类型" value={label} />
-              <Field label="IP 地址" value={row.ip ?? '-'} mono />
+              <Field label="IP 地址" value={row.ip ?? '-'} mono copy />
               <Field label="地理位置" value={row.location || '-'} />
               <Field label="失败原因" value={row.failReason || '-'} mono />
-              <Field label="User-Agent" value={row.userAgent || '-'} mono />
+              <Field label="User-Agent" value={row.userAgent || '-'} mono copy />
             </dl>
             <div className="mt-3 text-xs">
               <Link className="text-link hover:underline" href={`/audit-logs?tab=login&keyword=${encodeURIComponent(row.username)}`}>
@@ -104,7 +107,7 @@ export default async function AuditLogDetailPage({ params, searchParams }: PageP
                 <Field label="时间" value={formatDateTime(row.createdAt)} />
                 <Field label="用户" value={row.username || (row.userId ? '未知用户（可能已删除）' : '匿名')} />
                 <Field label="请求方法" value={row.method} mono />
-                <Field label="路径" value={row.path} mono />
+                <Field label="路径" value={row.path} mono copy />
                 <Field label="资源类型" value={row.resourceType || '-'} />
                 <Field label="资源 ID" value={row.resourceId || '-'} mono />
                 <Field label="状态码" value={String(row.status ?? '-')} />
@@ -116,8 +119,8 @@ export default async function AuditLogDetailPage({ params, searchParams }: PageP
             <CardHeader><CardTitle className="type-card-title">来源</CardTitle></CardHeader>
             <CardContent>
               <dl>
-                <Field label="IP 地址" value={row.ip || '-'} mono />
-                <Field label="User-Agent" value={row.userAgent || '-'} mono />
+                <Field label="IP 地址" value={row.ip || '-'} mono copy />
+                <Field label="User-Agent" value={row.userAgent || '-'} mono copy />
               </dl>
               {row.username && (
                 <div className="mt-3 text-xs">
@@ -150,7 +153,7 @@ export default async function AuditLogDetailPage({ params, searchParams }: PageP
               <Field label="操作人" value={row.username || (row.userId ? '未知用户（可能已删除）' : '-')} />
               <Field label="操作类型" value={opLabel} />
               <Field label="请求方法" value={row.method || '-'} mono />
-              <Field label="请求地址" value={row.url || '-'} mono />
+              <Field label="请求地址" value={row.url || '-'} mono copy />
               <Field label="状态码" value={String(row.status ?? '-')} />
               <Field label="耗时" value={row.duration != null ? `${row.duration} ms` : '-'} />
               <Field label="错误信息" value={row.errorMsg || '-'} mono />
@@ -161,8 +164,8 @@ export default async function AuditLogDetailPage({ params, searchParams }: PageP
           <CardHeader><CardTitle className="type-card-title">来源</CardTitle></CardHeader>
           <CardContent>
             <dl>
-              <Field label="IP 地址" value={row.ip || '-'} mono />
-              <Field label="User-Agent" value={row.userAgent || '-'} mono />
+              <Field label="IP 地址" value={row.ip || '-'} mono copy />
+              <Field label="User-Agent" value={row.userAgent || '-'} mono copy />
             </dl>
             {row.userId && (
               <div className="mt-3 text-xs">

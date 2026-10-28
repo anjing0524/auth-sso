@@ -2260,3 +2260,12 @@ describe('编码复制入口（续三百零三）', () => {
     expect(read('src/app/(dashboard)/roles/components/RolesTable.tsx')).toContain('复制角色编码');
   });
 });
+
+describe('审计详情技术字段复制（续三百零四）', () => {
+  it('IP/UA/路径/请求地址可复制', () => {
+    const src = read('src/app/(dashboard)/audit-logs/[id]/page.tsx');
+    expect(src).toContain('copy?: boolean');
+    expect(src).toContain('label={`复制${label}`}');
+    expect(src).toContain('value={row.url || \'-\'} mono copy');
+  });
+});
