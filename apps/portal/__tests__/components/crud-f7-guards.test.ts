@@ -2293,3 +2293,11 @@ describe('用户/主体 ID 复制统一（续三百零七）', () => {
     expect(profile).toContain('successMessage="已复制主体 ID"');
   });
 });
+
+describe('共享复制组件回退（续三百零八）', () => {
+  it('clipboard 失败时 execCommand 回退', () => {
+    const src = read('src/components/shared/copy-text-button.tsx');
+    expect(src).toContain("document.execCommand('copy')");
+    expect(src).toContain('if (!copied)');
+  });
+});

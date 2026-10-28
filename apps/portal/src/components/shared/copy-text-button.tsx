@@ -25,14 +25,28 @@ export function CopyTextButton({ text, label, successMessage = '已复制', disa
   const [copied, setCopied] = useState(false);
 
   const copy = async () => {
+    let copied = false;
     try {
       await navigator.clipboard.writeText(text);
-      setCopied(true);
-      toast.success(successMessage);
-      setTimeout(() => setCopied(false), 1500);
+      copied = true;
     } catch {
-      toast.error('复制失败，请手动选择');
+      // 非安全上下文/iframe/权限被拒时回退；只有真的成功才提示
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      copied = document.execCommand('copy');
+      document.body.removeChild(textarea);
     }
+    if (!copied) {
+      toast.error('复制失败，请手动选择');
+      return;
+    }
+    setCopied(true);
+    toast.success(successMessage);
+    setTimeout(() => setCopied(false), 1500);
   };
 
   return (
