@@ -13,7 +13,7 @@ test.describe('审计详情页', () => {
     await page.waitForURL(/dashboard$/);
 
     await page.goto('/audit-logs?tab=operation', { waitUntil: 'networkidle' });
-    await page.getByRole('link', { name: '查看日志详情' }).first().click();
+    await page.getByRole('link', { name: /查看 .*日志详情/ }).first().click();
     await expect(page).toHaveURL(/\/audit-logs\/[0-9a-f-]{36}\?tab=operation/);
     await expect(page.getByRole('heading', { name: '操作日志详情' })).toBeVisible();
     await expect(page.getByText('请求上下文')).toBeVisible();
@@ -22,7 +22,7 @@ test.describe('审计详情页', () => {
     await expect(page).toHaveURL(/\/audit-logs\?tab=operation/);
 
     await page.goto('/audit-logs?tab=login', { waitUntil: 'networkidle' });
-    await page.getByRole('link', { name: '查看日志详情' }).first().click();
+    await page.getByRole('link', { name: /查看 .*日志详情/ }).first().click();
     await expect(page).toHaveURL(/\/audit-logs\/[0-9a-f-]{36}\?tab=login/);
     await expect(page.getByRole('heading', { name: '登录日志详情' })).toBeVisible();
     await expect(page.getByRole('dialog')).toHaveCount(0);
@@ -35,7 +35,7 @@ test.describe('审计详情页', () => {
     await page.getByRole('option', { name: 'user', exact: true }).click();
     await expect(page).toHaveURL(/tab=access.*resourceType=user/);
     await expect(page.getByTitle('移除筛选：资源：user')).toBeVisible();
-    await page.getByRole('link', { name: '查看日志详情' }).first().click();
+    await page.getByRole('link', { name: /查看 .*日志详情/ }).first().click();
     await expect(page).toHaveURL(/\/audit-logs\/[0-9a-f-]{36}\?tab=access/);
     await expect(page.getByRole('heading', { name: '访问日志详情' })).toBeVisible();
     await expect(page.getByText('访问上下文')).toBeVisible();

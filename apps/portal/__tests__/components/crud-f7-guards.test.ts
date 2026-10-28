@@ -2383,3 +2383,12 @@ describe('客户端行操作上下文（续三百一十九）', () => {
     expect(src).toContain('注销应用 ${client.name}');
   });
 });
+
+describe('审计详情行上下文（续三百二十）', () => {
+  it('详情按钮名称包含用户/操作/路径', () => {
+    const src = read('src/app/(dashboard)/audit-logs/page.tsx');
+    expect(src).toContain('查看 ${loginLog.username} 的登录日志详情');
+    expect(src).toContain('操作日志详情`');
+    expect(src).toContain('查看 ${accessLog.method} ${accessLog.path} 的访问日志详情');
+  });
+});
