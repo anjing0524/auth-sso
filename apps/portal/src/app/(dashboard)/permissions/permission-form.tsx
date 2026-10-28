@@ -56,14 +56,17 @@ export interface PermissionFormProps {
   clients?: Array<{ id: string; name: string }>;
   /** 保存/取消后返回列表；默认 /permissions */
   returnHref?: string;
+  /** 新建时继承列表的类型/归属应用筛选 */
+  initialType?: string;
+  initialClientId?: string;
 }
 
-export default function PermissionForm({ mode, menuOptions, permission, clients = [], returnHref = '/permissions' }: PermissionFormProps) {
+export default function PermissionForm({ mode, menuOptions, permission, clients = [], returnHref = '/permissions', initialType, initialClientId }: PermissionFormProps) {
   const router = useRouter();
   const [form, setForm] = useState({
     name: permission?.name ?? '',
     code: permission?.code ?? '',
-    type: permission?.type ?? 'API',
+    type: permission?.type ?? initialType ?? 'API',
     description: permission?.description ?? '',
     path: permission?.path ?? '',
     icon: permission?.icon ?? '',
@@ -71,7 +74,7 @@ export default function PermissionForm({ mode, menuOptions, permission, clients 
     parentId: permission?.parentId ?? '',
     sort: permission?.sort ?? 0,
     status: permission?.status ?? 'ACTIVE',
-    clientId: permission?.clientId ?? '',
+    clientId: permission?.clientId ?? initialClientId ?? '',
   });
   const [savedForm] = useState(form);
   const isDirty = JSON.stringify(form) !== JSON.stringify(savedForm);

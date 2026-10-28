@@ -2179,3 +2179,15 @@ describe('用户创建默认部门（续二百九十三）', () => {
     expect(page).toContain('initialDeptId={deptId && departments.some');
   });
 });
+
+describe('权限创建继承筛选（续二百九十四）', () => {
+  it('新建链接带 type/clientId，表单接收初始值', () => {
+    const table = read('src/app/(dashboard)/permissions/components/PermissionsTable.tsx');
+    expect(table).toContain("createParams.set('type', activeTab)");
+    expect(table).toContain('const createNewHref');
+    const page = read('src/app/(dashboard)/permissions/new/page.tsx');
+    expect(page).toContain('initialType={initialType}');
+    const form = read('src/app/(dashboard)/permissions/permission-form.tsx');
+    expect(form).toContain("permission?.type ?? initialType ?? 'API'");
+  });
+});

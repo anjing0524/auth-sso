@@ -120,6 +120,11 @@ export default function PermissionsTable({ permissions, pagination, activeTab, i
 
   const returnTo = buildHref(pagination.page, keyword, activeTab, initialStatus, initialClientId);
   const createReturnTo = buildHref(1, keyword, activeTab, initialStatus, initialClientId);
+  const createParams = new URLSearchParams();
+  if (activeTab !== 'ALL') createParams.set('type', activeTab);
+  if (activeTab === 'API' && initialClientId) createParams.set('clientId', initialClientId);
+  createParams.set('returnTo', createReturnTo);
+  const createNewHref = `/permissions/new?${createParams.toString()}`;
 
   // 搜索防抖：400ms 后按服务端查询刷新（与 UserFilters 同语义）
   useEffect(() => {
@@ -281,7 +286,7 @@ export default function PermissionsTable({ permissions, pagination, activeTab, i
       right={
         <PermissionGuard permission={PERMISSION_PERMISSIONS.CREATE}>
           <Button asChild>
-            <Link href={`/permissions/new?returnTo=${encodeURIComponent(createReturnTo)}`}><Plus className="h-4 w-4" /> 新建权限</Link>
+            <Link href={createNewHref}><Plus className="h-4 w-4" /> 新建权限</Link>
           </Button>
         </PermissionGuard>
       }
@@ -390,7 +395,7 @@ export default function PermissionsTable({ permissions, pagination, activeTab, i
               icon="ShieldCheck"
               title="暂无权限"
               description="新增权限点以控制功能访问"
-              action={{ label: '新建权限', href: `/permissions/new?returnTo=${encodeURIComponent(createReturnTo)}` }}
+              action={{ label: '新建权限', href: createNewHref }}
             />
           )
         }
