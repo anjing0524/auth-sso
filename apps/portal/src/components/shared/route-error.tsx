@@ -54,7 +54,7 @@ export function RouteError({ error, reset, loggerName }: RouteErrorProps) {
           <CardTitle className="text-xl font-bold">页面加载出错</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4 pb-8">
-          <p className="text-sm text-muted-foreground">服务器在处理请求时遇到了问题，请稍后重试。</p>
+          <p role="alert" className="text-sm text-muted-foreground">服务器在处理请求时遇到了问题，请稍后重试。</p>
           {error.digest && (
             <div className="flex items-center justify-center gap-1.5">
               <code className="rounded bg-muted px-2 py-1 font-mono text-[10px] text-muted-foreground">

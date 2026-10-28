@@ -2877,3 +2877,11 @@ describe('路由加载播报（续三百八十三）', () => {
     expect(read('src/components/shared/loading-announcer.tsx')).toContain('正在加载页面…');
   });
 });
+
+describe('错误边界播报（续三百八十四）', () => {
+  it('错误说明 role=alert', () => {
+    const src = read('src/components/shared/route-error.tsx');
+    expect(src).toContain('role="alert"');
+    expect(src).toContain('服务器在处理请求时遇到了问题');
+  });
+});
