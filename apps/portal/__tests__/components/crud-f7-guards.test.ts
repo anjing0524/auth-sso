@@ -3077,3 +3077,11 @@ describe('页头返回客户端导航（续四百零七）', () => {
     expect(src).not.toContain('<a\n            href={backHref}');
   });
 });
+
+describe('详情返回链接名称（续四百零八）', () => {
+  it('用户/应用返回标签具体', () => {
+    expect(read('src/app/(dashboard)/users/[id]/UserDetailForm.tsx')).toContain('backLabel="返回用户列表"');
+    expect(read('src/app/(dashboard)/clients/[id]/ClientDetailClient.tsx')).toContain('backLabel="返回应用列表"');
+    expect(read('src/app/(dashboard)/clients/new/page.tsx')).toContain('backLabel="返回应用列表"');
+  });
+});

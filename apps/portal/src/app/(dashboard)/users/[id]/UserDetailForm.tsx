@@ -177,6 +177,7 @@ export default function UserDetailForm({ id, initialUser: serverUser, canUpdate,
     <div className="flex min-h-0 flex-1 flex-col gap-3">
       <PageHeader
         backHref={returnHref}
+        backLabel="返回用户列表"
         title={form.name}
         description={`用户名：${username} · 状态：${STATUS_LABELS[form.status] ?? form.status}`}
         actions={

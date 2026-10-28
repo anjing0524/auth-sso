@@ -224,6 +224,7 @@ export function ClientDetailClient({ client, initialTokens, initialTokenTotal, c
     <div className="flex min-h-0 flex-1 flex-col gap-3">
       <PageHeader
         backHref={returnHref}
+        backLabel="返回应用列表"
         title={client.name}
         description={`${client.status === 'ACTIVE' ? '已启用' : '已禁用'} · Client ID：${client.clientId}`}
         actions={

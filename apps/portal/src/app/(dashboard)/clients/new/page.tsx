@@ -155,6 +155,7 @@ export default function NewClientPage() {
     <div className="flex min-h-0 flex-1 flex-col gap-3">
       <PageHeader
         backHref="/clients"
+        backLabel="返回应用列表"
         title="注册新应用"
         description="注册 OAuth 2.1 客户端；Client ID / Secret 由系统生成，Secret 仅展示一次"
       />
