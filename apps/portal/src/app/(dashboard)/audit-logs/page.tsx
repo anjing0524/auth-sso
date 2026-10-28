@@ -176,44 +176,44 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
   if (tab === 'login' && eventType) {
     filterChips.push({
       label: LOGIN_EVENT_LABELS[eventType] ?? eventType,
-      href: pageHref(tab, 1, null, operation, range, keyword, chipStartDate, chipEndDate),
+      href: pageHref(tab, 1, null, operation, range, keyword, chipStartDate, chipEndDate, undefined, undefined, pageSize),
     });
   }
   if (tab === 'operation' && operation) {
     filterChips.push({
       label: AUDIT_OPERATION_LABELS[operation] ?? operation,
-      href: pageHref(tab, 1, eventType, null, range, keyword, chipStartDate, chipEndDate),
+      href: pageHref(tab, 1, eventType, null, range, keyword, chipStartDate, chipEndDate, undefined, undefined, pageSize),
     });
   }
   if (range) {
     const rangeLabel = range === '24h' ? '近 24 小时' : range === '7d' ? '近 7 天' : '近 30 天';
     filterChips.push({
       label: rangeLabel,
-      href: pageHref(tab, 1, eventType, operation, null, keyword, undefined, undefined),
+      href: pageHref(tab, 1, eventType, operation, null, keyword, undefined, undefined, undefined, undefined, pageSize),
     });
   }
   if (!range && (startDate || endDate)) {
     filterChips.push({
       label: `日期 ${startDate ?? '…'} ~ ${endDate ?? '…'}`,
-      href: pageHref(tab, 1, eventType, operation, null, keyword, null, null),
+      href: pageHref(tab, 1, eventType, operation, null, keyword, null, null, undefined, undefined, pageSize),
     });
   }
   if (keyword) {
     filterChips.push({
       label: `关键词：${keyword}`,
-      href: pageHref(tab, 1, eventType, operation, range, null, chipStartDate, chipEndDate, accessStatus, validAccessResourceType),
+      href: pageHref(tab, 1, eventType, operation, range, null, chipStartDate, chipEndDate, accessStatus, validAccessResourceType, pageSize),
     });
   }
   if (tab === 'access' && accessStatus) {
     filterChips.push({
       label: accessStatus === 'SUCCESS' ? '状态：成功' : '状态：失败',
-      href: pageHref(tab, 1, eventType, operation, range, keyword, chipStartDate, chipEndDate, null, validAccessResourceType),
+      href: pageHref(tab, 1, eventType, operation, range, keyword, chipStartDate, chipEndDate, null, validAccessResourceType, pageSize),
     });
   }
   if (tab === 'access' && validAccessResourceType) {
     filterChips.push({
       label: `资源：${validAccessResourceType}`,
-      href: pageHref(tab, 1, eventType, operation, range, keyword, chipStartDate, chipEndDate, accessStatus, null),
+      href: pageHref(tab, 1, eventType, operation, range, keyword, chipStartDate, chipEndDate, accessStatus, null, pageSize),
     });
   }
 
@@ -286,7 +286,7 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
               <X className="h-3 w-3" />
             </Link>
           ))}
-          <Link href={`/audit-logs?tab=${tab}`} className="ml-auto shrink-0 text-muted-foreground hover:text-destructive">
+          <Link href={`/audit-logs?tab=${tab}${pageSize !== DEFAULT_PAGE_SIZE ? `&pageSize=${pageSize}` : ''}`} className="ml-auto shrink-0 text-muted-foreground hover:text-destructive">
             清除全部
           </Link>
         </div>

@@ -2651,3 +2651,11 @@ describe('部门工具栏禁用原因（续三百五十六）', () => {
     expect(src).toContain('没有可移动的部门（根部门不可移动）');
   });
 });
+
+describe('审计芯片保留 pageSize（续三百五十七）', () => {
+  it('单个移除/清除全部都带 pageSize', () => {
+    const src = read('src/app/(dashboard)/audit-logs/page.tsx');
+    expect(src).toContain('accessStatus, validAccessResourceType, pageSize)');
+    expect(src).toContain('pageSize !== DEFAULT_PAGE_SIZE ? `&pageSize=${pageSize}`');
+  });
+});
