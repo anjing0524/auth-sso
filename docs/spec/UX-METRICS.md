@@ -1476,3 +1476,9 @@ a11y 对比度函数提取复用，增加未登录 `/login`（390×844，独立�
 | 问题 | 修复 | 验证 |
 |---|---|---|
 | 侧边栏折叠按钮缺少展开状态与控制目标 | aria-expanded + aria-controls，容器补 id | 展开 true、折叠 false，controls=app-sidebar |
+
+### 9.184 产品审计一百七十九：个人中心展开语义（2026-10-29）
+
+| 问题 | 修复 | 验证 |
+|---|---|---|
+| 「展开全部权限/查看全部会话」按钮缺 aria-expanded/controls | 补状态与目标 id | 两按钮 false→true，controls 指向列表 |

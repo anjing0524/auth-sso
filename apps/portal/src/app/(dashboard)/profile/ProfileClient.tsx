@@ -393,7 +393,7 @@ export default function ProfileClient({
                   <Badge key={r.code} variant="secondary" className="text-[11px]">{r.name}</Badge>
                 ))}
               </div>
-              <div className="grid gap-1.5 sm:grid-cols-2">
+              <div id="profile-permissions" className="grid gap-1.5 sm:grid-cols-2">
                 {visiblePermissions.map((perm) => (
                   <code key={perm} className="truncate rounded border border-border/60 bg-muted/30 px-2 py-1 font-mono text-[11px] text-muted-foreground" title={perm}>
                     {perm}
@@ -401,7 +401,7 @@ export default function ProfileClient({
                 ))}
               </div>
               {permissions.length > 10 && (
-                <Button variant="ghost" size="sm" className="h-7 px-2 text-[11px]" onClick={() => setShowAllPermissions((v) => !v)}>
+                <Button variant="ghost" size="sm" className="h-7 px-2 text-[11px]" aria-expanded={showAllPermissions} aria-controls="profile-permissions" onClick={() => setShowAllPermissions((v) => !v)}>
                   {showAllPermissions ? '收起' : `展开全部（共 ${permissions.length} 项）`}
                 </Button>
               )}
@@ -454,7 +454,7 @@ export default function ProfileClient({
                 {sessions.length === 0 ? (
                   <p className="mt-1.5 rounded border border-dashed px-2 py-3 text-center text-[11px] text-muted-foreground">暂无其他活跃会话</p>
                 ) : (
-                  <ul className="mt-1.5 divide-y rounded border border-border/60">
+                  <ul id="profile-sessions" className="mt-1.5 divide-y rounded border border-border/60">
                     {visibleSessions.map((item) => (
                       <li key={item.id} className="flex items-start justify-between gap-2 px-2 py-1.5">
                         <div className="min-w-0">
@@ -490,7 +490,7 @@ export default function ProfileClient({
                   </ul>
                 )}
                 {sessions.length > 3 && (
-                  <Button variant="ghost" size="sm" className="mt-1 h-7 w-full px-2 text-[11px]" onClick={() => setShowAllSessions((v) => !v)}>
+                  <Button variant="ghost" size="sm" className="mt-1 h-7 w-full px-2 text-[11px]" aria-expanded={showAllSessions} aria-controls="profile-sessions" onClick={() => setShowAllSessions((v) => !v)}>
                     {showAllSessions ? '收起' : `查看全部 ${sessions.length} 个会话`}
                   </Button>
                 )}

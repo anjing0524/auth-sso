@@ -2356,3 +2356,13 @@ describe('侧边栏切换语义（续三百一十六）', () => {
     expect(src).toContain('id="app-sidebar"');
   });
 });
+
+describe('个人中心展开语义（续三百一十七）', () => {
+  it('权限/会话展开按钮 aria-expanded + controls', () => {
+    const src = read('src/app/(dashboard)/profile/ProfileClient.tsx');
+    expect(src).toContain('aria-controls="profile-permissions"');
+    expect(src).toContain('aria-controls="profile-sessions"');
+    expect(src).toContain('id="profile-permissions"');
+    expect(src).toContain('id="profile-sessions"');
+  });
+});
