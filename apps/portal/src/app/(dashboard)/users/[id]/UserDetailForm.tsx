@@ -253,7 +253,7 @@ export default function UserDetailForm({ id, initialUser: serverUser, canUpdate,
                   <div className="flex items-center justify-between gap-3 px-3 py-2.5">
                     <div className="min-w-0">
                       <p className="text-[13px] font-medium">强制下线</p>
-                      <p className="text-[11px] text-muted-foreground">该用户当前有 {activeSessionCount} 个活跃会话；将撤销全部 Refresh / Access Token，所有设备立即退出登录，不重置密码。</p>
+                      <p className="text-[11px] text-muted-foreground">{activeSessionCount > 0 ? `当前 ${activeSessionCount} 个活跃会话；` : '当前无活跃会话；'}将撤销全部 Token 并让所有设备退出，不重置密码。</p>
                     </div>
                     <PermissionGuard permission={USER_PERMISSIONS.MANAGE}>
                       <Button variant="outline" size="sm" onClick={() => setForceLogoutOpen(true)}>
@@ -369,14 +369,14 @@ export default function UserDetailForm({ id, initialUser: serverUser, canUpdate,
               </CardHeader>
               <CardContent className="space-y-3 p-3">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-[11px] text-muted-foreground">所属部门</span>
+                  <span className="shrink-0 whitespace-nowrap text-[11px] text-muted-foreground">所属部门</span>
                   {canUpdate && !isSelf ? (
                     <Select
                       value={form.deptId}
                       onValueChange={(v) => setForm({ ...form, deptId: v })}
                       disabled={saving || deptOptions.length === 0}
                     >
-                      <SelectTrigger aria-label="所属部门" className="h-8 w-[180px]">
+                      <SelectTrigger aria-label="所属部门" className="h-8 w-[150px]">
                         <SelectValue placeholder="未分配" />
                       </SelectTrigger>
                       <SelectContent>

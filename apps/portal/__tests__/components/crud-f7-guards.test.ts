@@ -1673,7 +1673,7 @@ describe('强制下线影响面计数（续二百三十三）', () => {
     expect(page).toContain('activeSessionCount={activeSessionCount}');
     const form = read('src/app/(dashboard)/users/[id]/UserDetailForm.tsx');
     expect(form).toContain('活跃会话');
-    expect(form).toContain('当前有 {activeSessionCount} 个活跃会话');
+    expect(form).toContain('当前 ${activeSessionCount} 个活跃会话');
   });
 });
 
@@ -2128,5 +2128,14 @@ describe('审计详情 1024 堆叠（续二百八十六）', () => {
     const src = read('src/app/(dashboard)/audit-logs/[id]/page.tsx');
     expect(src).toContain('xl:grid-cols-3');
     expect(src).not.toContain('lg:grid-cols-3');
+  });
+});
+
+describe('用户详情 1024 排版（续二百八十七）', () => {
+  it('部门标签不折行、选择框 150；强制下线文案缩短', () => {
+    const src = read('src/app/(dashboard)/users/[id]/UserDetailForm.tsx');
+    expect(src).toContain('shrink-0 whitespace-nowrap text-[11px] text-muted-foreground">所属部门');
+    expect(src).toContain('className="h-8 w-[150px]"');
+    expect(src).toContain('将撤销全部 Token 并让所有设备退出');
   });
 });
