@@ -937,7 +937,8 @@ describe('Dialog 页脚与内容内边距一致（续一百六十）', () => {
   it('DialogContent p-5 与 DialogFooter -mx-5/-mb-5/p-5 对齐，不产生 4px 溢出', () => {
     const src = read('src/components/ui/dialog.tsx');
     expect(src).toContain('rounded-2xl bg-popover p-5');
-    expect(src).toContain('-mx-5 -mb-5 sticky bottom-0 flex flex-col-reverse gap-2 rounded-b-2xl border-t bg-muted/50 p-5');
+    expect(src).toContain('sticky bottom-0 flex flex-col-reverse gap-2 rounded-b-2xl border-t bg-popover p-5');
+    expect(src).toContain('[@media(max-height:500px)]:static');
     expect(src).not.toContain('-mx-6 -mb-6');
   });
 });
@@ -1563,7 +1564,7 @@ describe('1024 权限/应用表操作列（续二百二十一）', () => {
 describe('空态出口/UA 完整值（续二百二十二）', () => {
   it('无可用角色提供角色管理出口；UA 提供 title', () => {
     const roles = read('src/app/(dashboard)/users/[id]/roles/roles-client.tsx');
-    expect(roles).toContain('前往角色管理');
+    expect(roles).toContain('为「{user.deptName ?? \'该部门\'}」创建角色');
     const profile = read('src/app/(dashboard)/profile/ProfileClient.tsx');
     expect(profile).toContain('title={session.userAgent ??');
   });
@@ -2145,7 +2146,7 @@ describe('用户详情 1024 排版（续二百八十七）', () => {
 describe('用户角色空态部门筛选（续二百八十八）', () => {
   it('前往角色管理携带 deptId', () => {
     const src = read('src/app/(dashboard)/users/[id]/roles/roles-client.tsx');
-    expect(src).toContain('/roles?deptId=${user.deptId}');
+    expect(src).toContain('/roles?deptId=${encodeURIComponent(user.deptId)}&create=1');
   });
 });
 

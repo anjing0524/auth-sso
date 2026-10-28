@@ -32,10 +32,24 @@ test.describe('角色权限保存', () => {
     try {
       await permissionCheckbox.check();
       await expect(page.getByRole('button', { name: /保存变更（1）/ })).toBeVisible();
+      // 回归：保存后不得因“仅看变更”仍开启而把列表筛空（用户感知为数据消失）
+      await page.getByRole('button', { name: '仅看变更' }).click();
+      await expect(page.getByRole('button', { name: '仅看变更' })).toHaveAttribute('aria-pressed', 'true');
       await page.getByRole('button', { name: /保存变更（1）/ }).click();
       await expect(page.getByRole('dialog')).toContainText('确认保存权限变更？');
-      await page.getByRole('button', { name: '确认保存' }).click();
+      // 短视口下确认弹窗的底部动作必须仍可见（弹窗滚动区不得把按钮挡住）
+      await page.setViewportSize({ width: 1024, height: 400 });
+      const confirm = page.getByRole('button', { name: '确认保存' });
+      await expect(confirm).toBeVisible();
+      const confirmBox = await confirm.boundingBox();
+      expect(confirmBox).not.toBeNull();
+      expect(confirmBox!.y + confirmBox!.height).toBeLessThanOrEqual(400);
+      await confirm.click();
+      await page.setViewportSize({ width: 1512, height: 700 });
       await expect(page.getByText(/已更新角色/).first()).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByRole('button', { name: '仅看变更' })).toHaveAttribute('aria-pressed', 'false');
+      await expect(permissionCheckbox).toBeVisible();
+      await expect(permissionCheckbox).toBeChecked();
 
       // 刷新页面后仍保持勾选
       await page.reload({ waitUntil: 'networkidle' });

@@ -245,7 +245,9 @@ export default function UserRolesPage({ user, isSelf = false, returnHref }: User
               ) : (
                 <Button asChild size="sm" variant="outline">
                   {user.deptId ? (
-                    <Link href={`/roles?deptId=${user.deptId}`}>前往角色管理</Link>
+                    <Link href={`/roles?deptId=${encodeURIComponent(user.deptId)}&create=1`}>
+                      为「{user.deptName ?? '该部门'}」创建角色
+                    </Link>
                   ) : (
                     <Link href={`/users/${user.id}`}>返回用户详情分配部门</Link>
                   )}

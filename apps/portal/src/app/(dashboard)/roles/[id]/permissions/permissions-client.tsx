@@ -264,6 +264,9 @@ export default function RolePermissionsPage({ role, returnHref = '/roles' }: Rol
       const res = await updateRolePermissionsAction(role.id, Array.from(assignedIds));
       if (res.success) {
         setSavedIds(new Set(assignedIds));
+        // 保存后清除“仅看变更/已选”，否则列表会被筛空，看起来像数据消失
+        setOnlyChanged(false);
+        setOnlySelected(false);
         setConfirmOpen(false);
         toast.success(`已更新角色「${role.name}」的权限（+${addedIds.size} / -${removedIds.size}）`);
       } else {
@@ -433,9 +436,13 @@ export default function RolePermissionsPage({ role, returnHref = '/roles' }: Rol
                 <p className="text-sm text-muted-foreground">
                   {keyword
                     ? '没有匹配的权限'
-                    : onlySelected
-                      ? '当前作用域还没有已选权限'
-                      : '当前作用域没有可选权限'}
+                    : onlyChanged
+                      ? '没有未保存的变更'
+                      : onlySelected
+                        ? '当前作用域还没有已选权限'
+                        : statusFilter !== 'ALL'
+                          ? '当前筛选状态没有权限'
+                          : '当前作用域没有可选权限'}
                 </p>
                 {keyword && (
                   <Button variant="outline" size="sm" onClick={() => setKeyword('')}>清除搜索</Button>
