@@ -199,6 +199,7 @@ const Sidebar = React.forwardRef<
       return (
         <Sheet open={openMobile} onOpenChange={setOpenMobile} {...props}>
           <SheetContent
+            id="app-sidebar-mobile"
             data-sidebar="sidebar"
             data-mobile="true"
             aria-label="主导航"
@@ -232,6 +233,7 @@ const Sidebar = React.forwardRef<
           )}
         />
         <div
+          id="app-sidebar"
           className={cn(
             "duration-200 fixed inset-y-0 z-10 hidden h-svh w-[var(--sidebar-width)] transition-[left,right,width] ease-linear md:flex",
             side === "left"
@@ -261,7 +263,7 @@ const SidebarTrigger = React.forwardRef<
   React.ElementRef<typeof Button>,
   React.ComponentProps<typeof Button>
 >(({ className, onClick, ...props }, ref) => {
-  const { toggleSidebar } = useSidebar()
+  const { toggleSidebar, state, isMobile } = useSidebar()
 
   return (
     <Button
@@ -270,6 +272,8 @@ const SidebarTrigger = React.forwardRef<
       variant="ghost"
       size="icon"
       aria-label="切换侧边栏"
+      aria-expanded={state === 'expanded'}
+      aria-controls={isMobile ? 'app-sidebar-mobile' : 'app-sidebar'}
       className={cn("h-8 w-8", className)}
       onClick={(event) => {
         onClick?.(event)

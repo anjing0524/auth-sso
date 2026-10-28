@@ -21,6 +21,8 @@
 
 ## 变更记录
 
+- 2026-10-29（续三百一十六）: **侧边栏切换语义**。缺 expanded/controls。**修复**：aria-expanded/controls + id。**验证**：true/false 与 controls；守卫 231 passed。
+
 - 2026-10-29（续三百一十五）: **登录密码切换语义**。缺 aria-pressed。**修复**：aria-pressed。**验证**：false→true；守卫 230 passed。
 
 - 2026-10-29（续三百一十四）: **日期校验统一**。三份重复正则。**修复**：共享 isIsoDate。**验证**：iso/审计 19 + 守卫 229 passed。

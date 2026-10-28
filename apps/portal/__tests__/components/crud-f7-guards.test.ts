@@ -2347,3 +2347,12 @@ describe('登录密码切换语义（续三百一十五）', () => {
     expect(src).toContain("showPassword ? '隐藏密码' : '显示密码'");
   });
 });
+
+describe('侧边栏切换语义（续三百一十六）', () => {
+  it('触发器 aria-expanded/controls，容器有 id', () => {
+    const src = read('src/components/ui/sidebar.tsx');
+    expect(src).toContain("aria-expanded={state === 'expanded'}");
+    expect(src).toContain("aria-controls={isMobile ? 'app-sidebar-mobile' : 'app-sidebar'}");
+    expect(src).toContain('id="app-sidebar"');
+  });
+});
