@@ -259,7 +259,7 @@ export default function PermissionsTable({ permissions, pagination, activeTab, i
               </Select>
             </div>
           ) : (
-            <Select value={initialStatus || 'ALL'} onValueChange={(v) => startTransition(() => router.push(buildHref(1, keyword, activeTab, v === 'ALL' ? '' : v, '')))}>
+            <Select value={initialStatus || 'ALL'} onValueChange={(v) => startTransition(() => router.push(buildHref(1, keyword, activeTab, v === 'ALL' ? '' : v, '')))} disabled={isPending}>
               <SelectTrigger aria-label="过滤权限状态" className="w-[calc(50%-0.25rem)] md:w-28">
                 <SelectValue>
                   {initialStatus === 'ACTIVE' ? '已启用' : initialStatus === 'DISABLED' ? '已禁用' : '全部状态'}

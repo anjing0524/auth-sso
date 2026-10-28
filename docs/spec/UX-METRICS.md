@@ -1164,3 +1164,9 @@ a11y 对比度函数提取复用，增加未登录 `/login`（390×844，独立�
 | 问题 | 修复 | 验证 |
 |---|---|---|
 | 用户行「禁用/解锁/恢复」走 transition，但按钮未禁用，可重复触发 | status 按钮 disabled={isPending} | 源码守卫 |
+
+### 9.133 产品审计一百二十八：权限非 API 状态筛选 pending（2026-10-28）
+
+| 问题 | 修复 | 验证 |
+|---|---|---|
+| 权限列表只有 API tab 的状态下拉禁用了 pending，目录/页面/全部 tab 仍可操作 | 非 API 状态下拉补 disabled={isPending} | 源码守卫；typecheck/build 0 |

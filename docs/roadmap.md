@@ -21,6 +21,8 @@
 
 ## 变更记录
 
+- 2026-10-28（续二百六十六）: **权限非 API 状态筛选 pending**。非 API tab 状态下拉未禁用。**修复**：补 disabled。**验证**：守卫 187 passed；typecheck/build 0。
+
 - 2026-10-28（续二百六十五）: **用户行状态操作 pending**。按钮未禁用。**修复**：disabled={isPending}。**验证**：守卫 186 passed；typecheck/build 0。
 
 - 2026-10-28（续二百六十四）: **创建/编辑取消返回上下文**。权限/角色权限/应用新建取消丢筛选。**修复**：取消 returnHref；应用新建 safeReturnPath。**验证**：权限取消回原筛选、应用取消回 status；守卫 185 passed。

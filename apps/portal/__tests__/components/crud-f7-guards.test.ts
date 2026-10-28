@@ -1954,3 +1954,10 @@ describe('用户行状态操作 pending（续二百六十五）', () => {
     expect(src).toContain('onClick={() => handleToggleStatus(user)}');
   });
 });
+
+describe('权限非 API 状态筛选 pending（续二百六十六）', () => {
+  it('目录/页面/全部 tab 的状态下拉也禁用', () => {
+    const src = read('src/app/(dashboard)/permissions/components/PermissionsTable.tsx');
+    expect(src).toContain("v === 'ALL' ? '' : v, '')))} disabled={isPending}");
+  });
+});
