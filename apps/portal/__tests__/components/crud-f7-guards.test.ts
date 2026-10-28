@@ -2627,3 +2627,10 @@ describe('分页导航语义（续三百五十三）', () => {
     expect(src).toContain('role="navigation" aria-label="分页"');
   });
 });
+
+describe('工具栏分组名称（续三百五十四）', () => {
+  it('TableToolbar role=group aria-label', () => {
+    const src = read('src/components/shared/table-toolbar.tsx');
+    expect(src).toContain('role="group" aria-label="筛选与操作"');
+  });
+});
