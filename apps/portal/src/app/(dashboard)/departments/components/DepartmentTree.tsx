@@ -416,7 +416,7 @@ export default function DepartmentTree({ departments, deletionStats = {}, autoOp
                   <Button variant="ghost" size="sm" className="h-7 gap-1.5 px-2" aria-label={`添加子部门 ${dept.name}`} onClick={() => openAdd(dept.id)} title="添加子部门"><Plus className="h-4 w-4" /><span>子部门</span></Button>
                 </PermissionGuard>
                 <PermissionGuard permission={USER_PERMISSIONS.LIST}>
-                  <Button asChild variant="ghost" size="sm" className="h-7 gap-1.5 px-2" aria-label={`查看成员 ${dept.name}`} title="在用户管理中查看直属成员">
+                  <Button asChild variant="ghost" size="sm" className="h-7 gap-1.5 px-2" aria-label={`查看成员 ${deletionStats[dept.id]?.userCount ?? 0}（${dept.name}）`} title="在用户管理中查看直属成员">
                     <Link href={`/users?deptId=${encodeURIComponent(dept.id)}`}>
                       <Users className="h-3.5 w-3.5" /><span>成员 {deletionStats[dept.id]?.userCount ?? 0}</span>
                     </Link>

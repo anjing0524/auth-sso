@@ -312,7 +312,7 @@ export default function ClientsTable({ clients, pagination, initialKeyword, init
       <TableCell className="text-right">
         <div className="flex items-center justify-end gap-0.5">
           <PermissionGuard permission={CLIENT_PERMISSIONS.UPDATE}>
-            <Button asChild variant="ghost" size="sm" className="h-8 gap-1.5 px-2" aria-label={`编辑 ${client.name} 的 OAuth 配置`} title={`编辑 ${client.name} 的 OAuth 配置`}>
+            <Button asChild variant="ghost" size="sm" className="h-8 gap-1.5 px-2" aria-label={`编辑配置 ${client.name}`} title={`编辑 ${client.name} 的 OAuth 配置`}>
               <Link href={`/clients/${client.clientId}?returnTo=${encodeURIComponent(currentListHref)}`}><Edit className="h-4 w-4" /><span className="hidden md:inline">编辑配置</span></Link>
             </Button>
           </PermissionGuard>

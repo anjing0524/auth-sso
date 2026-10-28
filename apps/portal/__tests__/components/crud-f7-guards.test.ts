@@ -2684,3 +2684,11 @@ describe('Scopes 标签命名（续三百六十）', () => {
     expect(src).toContain('默认权限范围（Scopes）');
   });
 });
+
+describe('Label in Name（续三百六十一）', () => {
+  it('客户端编辑/部门成员/无权限链接名称包含可见文字', () => {
+    expect(read('src/app/(dashboard)/clients/components/ClientsTable.tsx')).toContain('编辑配置 ${client.name}');
+    expect(read('src/app/(dashboard)/departments/components/DepartmentTree.tsx')).toContain('查看成员 ${deletionStats[dept.id]?.userCount ?? 0}（${dept.name}）');
+    expect(read('src/app/(dashboard)/roles/components/RolesTable.tsx')).toContain('（无权限）');
+  });
+});

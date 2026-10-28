@@ -346,7 +346,7 @@ export default function RolesTable({ roles, pagination, initialKeyword, initialS
       <TableCell className="hidden sm:table-cell">
         <Link
           href={`/roles/${r.id}/permissions?returnTo=${encodeURIComponent(currentListHref)}`}
-          aria-label={`配置 ${r.name} 的权限（当前 ${permissionCounts[r.id] ?? 0} 项）`}
+          aria-label={(permissionCounts[r.id] ?? 0) === 0 ? `配置 ${r.name} 的权限（无权限）` : `配置 ${r.name} 的权限（当前 ${permissionCounts[r.id] ?? 0} 项）`}
           title={
             (permissionCounts[r.id] ?? 0) === 0
               ? '该角色没有任何权限，绑定用户将无法登录门户；点击配置权限'

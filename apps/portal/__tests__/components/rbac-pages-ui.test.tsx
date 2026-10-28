@@ -274,7 +274,7 @@ describe('U-G03 对话框 Label 关联', () => {
 
     await user.click(screen.getByRole('button', { name: `编辑角色 ${ROLE.name}` }));
     expect(screen.getByLabelText('角色名称')).toBeInTheDocument();
-    expect(screen.getByLabelText('角色编码')).toHaveAttribute('disabled');
+    expect(screen.getByRole('textbox', { name: /角色编码/ })).toHaveAttribute('disabled');
     expect(screen.getByLabelText('所属部门')).toBeInTheDocument();
   });
 
