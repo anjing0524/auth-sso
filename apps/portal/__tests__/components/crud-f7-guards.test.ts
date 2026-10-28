@@ -2253,3 +2253,10 @@ describe('会话 ID 一键复制（续三百零二）', () => {
     expect(src).toContain('<CopyTextButton text={item.id} label="复制会话 ID" />');
   });
 });
+
+describe('编码复制入口（续三百零三）', () => {
+  it('权限/角色编辑态可复制编码', () => {
+    expect(read('src/app/(dashboard)/permissions/permission-form.tsx')).toContain('复制权限编码');
+    expect(read('src/app/(dashboard)/roles/components/RolesTable.tsx')).toContain('复制角色编码');
+  });
+});

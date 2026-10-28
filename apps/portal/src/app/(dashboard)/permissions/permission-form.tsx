@@ -9,6 +9,7 @@
  */
 import { useMemo, useState } from 'react';
 import { useUnsavedChangesGuard } from '@/hooks/use-unsaved-changes-guard';
+import { CopyTextButton } from '@/components/shared/copy-text-button';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
@@ -169,7 +170,10 @@ export default function PermissionForm({ mode, menuOptions, permission, clients 
               <Input id="perm-name" value={form.name} maxLength={100} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="用户列表" />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="perm-code">权限编码{mode === 'edit' ? '（不可变更）' : ''}</Label>
+              <div className="flex items-center justify-between gap-2">
+                <Label htmlFor="perm-code">权限编码{mode === 'edit' ? '（不可变更）' : ''}</Label>
+                {mode === 'edit' && <CopyTextButton text={form.code} label="复制权限编码" />}
+              </div>
               <Input id="perm-code" value={form.code} maxLength={150} disabled={mode === 'edit'} aria-invalid={fieldError?.field === 'code'} onChange={e => setForm({ ...form, code: e.target.value })} placeholder="user:list" />
             </div>
             <FieldError failure={fieldError} field="code" />
