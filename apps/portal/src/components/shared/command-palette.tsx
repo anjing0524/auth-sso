@@ -90,7 +90,7 @@ export function CommandPalette({ menus }: { menus: MenuItem[] }) {
 
   return (
     <CommandDialog open={open} onOpenChange={handleOpenChange}>
-      <CommandInput placeholder="搜索功能..." />
+      <CommandInput placeholder="搜索页面、功能或操作" />
       <CommandList>
         <CommandEmpty>
           <div className="py-6 text-center text-sm text-muted-foreground">

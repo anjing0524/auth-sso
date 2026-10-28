@@ -3135,3 +3135,10 @@ describe('部门搜索占位（续四百一十五）', () => {
     expect(read('src/app/(dashboard)/departments/components/DepartmentTree.tsx')).toContain('placeholder="搜索部门名称"');
   });
 });
+
+describe('搜索占位无省略号（续四百一十六）', () => {
+  it('角色权限/命令面板使用完整文案', () => {
+    expect(read('src/app/(dashboard)/roles/[id]/permissions/permissions-client.tsx')).toContain('placeholder="搜索权限名称或编码"');
+    expect(read('src/components/shared/command-palette.tsx')).toContain('placeholder="搜索页面、功能或操作"');
+  });
+});
