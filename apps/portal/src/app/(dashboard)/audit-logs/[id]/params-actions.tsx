@@ -16,14 +16,28 @@ export function AuditParamsActions({ id, params }: { id: string; params: Record<
   const text = JSON.stringify(params, null, 2);
 
   const copy = async () => {
+    let copied = false;
     try {
       await navigator.clipboard.writeText(text);
-      setCopied(true);
-      toast.success('参数已复制');
-      setTimeout(() => setCopied(false), 1500);
+      copied = true;
     } catch {
-      toast.error('复制失败，请手动选择');
+      // 非安全上下文/权限被拒时回退；只有真实成功才提示
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      copied = document.execCommand('copy');
+      document.body.removeChild(textarea);
     }
+    if (!copied) {
+      toast.error('复制失败，请手动选择');
+      return;
+    }
+    setCopied(true);
+    toast.success('参数已复制');
+    setTimeout(() => setCopied(false), 1500);
   };
 
   const download = () => {

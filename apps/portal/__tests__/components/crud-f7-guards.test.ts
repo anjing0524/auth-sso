@@ -3005,3 +3005,11 @@ describe('Secret 复制反馈（续三百九十八）', () => {
     expect(src).toContain('Client Secret 已复制');
   });
 });
+
+describe('审计参数复制回退（续三百九十九）', () => {
+  it('clipboard 失败回退 execCommand，真实成功才提示', () => {
+    const src = read('src/app/(dashboard)/audit-logs/[id]/params-actions.tsx');
+    expect(src).toContain("document.execCommand('copy')");
+    expect(src).toContain('if (!copied)');
+  });
+});
