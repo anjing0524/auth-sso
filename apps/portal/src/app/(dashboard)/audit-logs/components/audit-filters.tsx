@@ -39,6 +39,8 @@ interface Props {
   range?: '24h' | '7d' | '30d' | null;
   /** 关键词（用户名/IP/URL）；300ms 防抖后写 URL */
   keyword?: string | null;
+  /** 每页条数（服务端列表） */
+  pageSize?: number;
   /** 自定义区间（YYYY-MM-DD）；与预置 range 互斥 */
   startDate?: string | null;
   endDate?: string | null;
@@ -52,7 +54,7 @@ const TIME_RANGE_OPTIONS: Array<{ value: string; label: string }> = [
   { value: 'CUSTOM', label: '自定义日期' },
 ];
 
-export function AuditFilters({ tab, eventType, operation, range, keyword, startDate, endDate, accessStatus, accessResourceType, accessResourceTypes = [] }: Props) {
+export function AuditFilters({ tab, eventType, operation, range, keyword, startDate, endDate, accessStatus, accessResourceType, accessResourceTypes = [], pageSize = 20 }: Props) {
   const [kw, setKw] = useState(keyword ?? '');
   // 后退/前进时 URL 变化，输入框跟随
   useEffect(() => { setKw(keyword ?? ''); }, [keyword]);
@@ -67,6 +69,7 @@ export function AuditFilters({ tab, eventType, operation, range, keyword, startD
   const push = (next: { eventType?: string | null; operation?: string | null; range?: string | null; keyword?: string | null; startDate?: string | null; endDate?: string | null; status?: string | null; resourceType?: string | null }) => {
     const params = new URLSearchParams();
     params.set('tab', tab);
+    if (pageSize !== 20) params.set('pageSize', String(pageSize));
     const ev = next.eventType !== undefined ? next.eventType : eventType;
     const op = next.operation !== undefined ? next.operation : operation;
     const rg = next.range !== undefined ? next.range : range;

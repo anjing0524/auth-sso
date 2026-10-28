@@ -33,6 +33,10 @@ export interface TablePaginationProps {
   navigate?: (url: string) => void;
   /** 父级导航 pending 时禁用翻页，避免重复触发 */
   disabled?: boolean;
+  /** 服务端列表每页条数（当前值） */
+  pageSize?: number;
+  /** 服务端列表每页条数选项；href 由页面生成并保留其它筛选 */
+  pageSizeOptions?: Array<{ value: number; href: string }>;
 }
 
 const navButtonClass = 'h-7 gap-1 rounded-md px-2 text-xs';
@@ -96,6 +100,8 @@ export function TablePagination({
   jumpParams,
   navigate,
   disabled = false,
+  pageSize,
+  pageSizeOptions,
 }: TablePaginationProps) {
   const pages = Math.max(totalPages, 1);
   const prevTo = hrefFor?.(page - 1);
@@ -137,9 +143,23 @@ export function TablePagination({
 
   return (
     <div className="-mt-px flex flex-col gap-2 rounded-b-lg border-t bg-muted/30 px-3 py-1.5 sm:flex-row sm:items-center sm:justify-between">
-      <p className="text-xs text-muted-foreground">
-        共 <span className="font-semibold tabular-nums text-foreground">{total}</span> 条记录
-      </p>
+      <div className="flex flex-wrap items-center gap-2">
+        <p className="text-xs text-muted-foreground">
+          共 <span className="font-semibold tabular-nums text-foreground">{total}</span> 条记录
+        </p>
+        {pageSize && pageSizeOptions && pageSizeOptions.length > 0 ? (
+          <div className="flex items-center gap-0.5 text-[11px] text-muted-foreground" aria-label="每页条数">
+            <span>每页</span>
+            {pageSizeOptions.map((option) => (
+              option.value === pageSize ? (
+                <span key={option.value} className="rounded bg-card px-1 font-medium text-foreground">{option.value}</span>
+              ) : (
+                <Link key={option.value} href={option.href} className="rounded px-1 hover:bg-muted hover:text-foreground">{option.value}</Link>
+              )
+            ))}
+          </div>
+        ) : null}
+      </div>
       <div className="flex flex-wrap items-center gap-1.5">
         {pages > 7 ? (
           <NavButton label="首页" to={hrefFor?.(1)} disabled={disabled || page <= 1} onClick={onPageChange ? () => onPageChange(1) : undefined}>

@@ -21,6 +21,8 @@
 
 ## 变更记录
 
+- 2026-10-28（续二百六十八）: **审计每页条数**。固定 20 条，数百页。**修复**：20/50/100；所有导航保留 pageSize。**验证**：50 条生效、筛选/tab 保留、1024 无溢出；分页/守卫 197 passed。
+
 - 2026-10-28（续二百六十七）: **权限 tab pending**。页签未禁用。**修复**：TabsTrigger disabled。**验证**：守卫 188 passed；typecheck/build 0。
 
 - 2026-10-28（续二百六十六）: **权限非 API 状态筛选 pending**。非 API tab 状态下拉未禁用。**修复**：补 disabled。**验证**：守卫 187 passed；typecheck/build 0。

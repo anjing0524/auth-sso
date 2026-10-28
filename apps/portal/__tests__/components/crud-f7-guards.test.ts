@@ -1968,3 +1968,15 @@ describe('权限 tab pending 禁用（续二百六十七）', () => {
     expect(src).toContain('value={tab.value} disabled={isPending}');
   });
 });
+
+describe('审计每页条数（续二百六十八）', () => {
+  it('分页支持 pageSizeOptions；审计查询/链接/筛选保留 pageSize', () => {
+    const pg = read('src/components/shared/table-pagination.tsx');
+    expect(pg).toContain('pageSizeOptions?: Array<{ value: number; href: string }>');
+    const page = read('src/app/(dashboard)/audit-logs/page.tsx');
+    expect(page).toContain('PAGE_SIZE_OPTIONS');
+    expect(page).toContain('pageSizeOptions={PAGE_SIZE_OPTIONS.map');
+    const filters = read('src/app/(dashboard)/audit-logs/components/audit-filters.tsx');
+    expect(filters).toContain("if (pageSize !== 20) params.set('pageSize'");
+  });
+});

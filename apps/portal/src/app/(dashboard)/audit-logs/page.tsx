@@ -42,7 +42,8 @@ import { formatDate as formatDateOnly, formatTime, formatDateTime as formatDate 
  */
 export const instant = false;
 export const metadata = { title: '审计日志 | Auth-SSO' };
-const PAGE_SIZE = 20;
+const PAGE_SIZE_OPTIONS = [20, 50, 100] as const;
+const DEFAULT_PAGE_SIZE = 20;
 
 /** 登录事件 → Badge 语义变体（软底 token 的前景已满足 WCAG 4.5:1） */
 const EVENT_TYPE_VARIANTS: Record<string, 'success' | 'destructive' | 'secondary' | 'outline' | 'warning'> = {
@@ -65,6 +66,7 @@ interface PageProps {
     endDate?: string;
     status?: string;
     resourceType?: string;
+    pageSize?: string;
   }>;
 }
 
@@ -98,7 +100,7 @@ function resolveDateFilters(
 function pageHref(
   tab: string, page: number, eventType?: string | null, operation?: string | null, range?: TimeRange | null,
   keyword?: string | null, startDate?: string | null, endDate?: string | null,
-  accessStatus?: string | null, accessResourceType?: string | null,
+  accessStatus?: string | null, accessResourceType?: string | null, pageSize?: number,
 ): string {
   const params = new URLSearchParams({ tab });
   if (tab === 'login' && eventType) params.set('eventType', eventType);
@@ -109,6 +111,7 @@ function pageHref(
   if (keyword) params.set('keyword', keyword);
   if (startDate) params.set('startDate', startDate);
   if (endDate) params.set('endDate', endDate);
+  if (pageSize && pageSize !== DEFAULT_PAGE_SIZE) params.set('pageSize', String(pageSize));
   if (page > 1) params.set('page', String(page));
   return `/audit-logs?${params.toString()}`;
 }
@@ -117,6 +120,9 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
   const params = await searchParams;
   const tab: 'login' | 'operation' | 'access' = params.tab === 'operation' ? 'operation' : params.tab === 'access' ? 'access' : 'login';
   const page = clampPage(params.page);
+  const pageSize = PAGE_SIZE_OPTIONS.includes(Number(params.pageSize) as 20 | 50 | 100)
+    ? Number(params.pageSize)
+    : DEFAULT_PAGE_SIZE;
 
   // 导出是独立权限（audit:export）；只有 audit:read 的用户不应看到会 403 的按钮。
   const identity = await resolveIdentity();
@@ -146,11 +152,11 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
   // 按当前 tab 仅查询所需数据源，互斥取数；时间范围在数据层过滤（不是先取全量再前端筛）
   const { data, pagination } =
     tab === 'login'
-      ? await getLoginLogs({ page, pageSize: PAGE_SIZE, ...(eventType ? { eventType } : {}), ...(startDate ? { startDate, endDate } : {}), ...(keyword ? { keyword } : {}) })
+      ? await getLoginLogs({ page, pageSize, ...(eventType ? { eventType } : {}), ...(startDate ? { startDate, endDate } : {}), ...(keyword ? { keyword } : {}) })
       : tab === 'operation'
-        ? await getAuditLogs({ page, pageSize: PAGE_SIZE, ...(operation ? { operation } : {}), ...(startDate ? { startDate, endDate } : {}), ...(keyword ? { keyword } : {}) })
+        ? await getAuditLogs({ page, pageSize, ...(operation ? { operation } : {}), ...(startDate ? { startDate, endDate } : {}), ...(keyword ? { keyword } : {}) })
         : await getAccessLogs({
-            page, pageSize: PAGE_SIZE,
+            page, pageSize,
             ...(startDate ? { startDate, endDate } : {}),
             ...(keyword ? { keyword } : {}),
             ...(accessStatus ? { status: accessStatus } : {}),
@@ -220,7 +226,7 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
       {/* 标题 + 页签 + 类型筛选 + 导出：压缩为同一行（搜索/标题不应各占一整行） */}
       <div className="flex shrink-0 flex-wrap items-center gap-1.5 xl:gap-3">
         <h1 className="type-section-title shrink-0 text-foreground">审计日志</h1>
-        <AuditTabs tab={tab} hrefs={{ login: pageHref('login', 1, null, null, range, keyword, chipStartDate, chipEndDate), operation: pageHref('operation', 1, null, null, range, keyword, chipStartDate, chipEndDate), access: pageHref('access', 1, null, null, range, keyword, chipStartDate, chipEndDate, accessStatus, validAccessResourceType) }} />
+        <AuditTabs tab={tab} hrefs={{ login: pageHref('login', 1, null, null, range, keyword, chipStartDate, chipEndDate, accessStatus, validAccessResourceType, pageSize), operation: pageHref('operation', 1, null, null, range, keyword, chipStartDate, chipEndDate, accessStatus, validAccessResourceType, pageSize), access: pageHref('access', 1, null, null, range, keyword, chipStartDate, chipEndDate, accessStatus, validAccessResourceType, pageSize) }} />
         <div className="order-3 w-full min-[1100px]:order-3 min-[1100px]:w-auto">
           <AuditFilters
             tab={tab}
@@ -233,6 +239,7 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
             accessStatus={accessStatus}
             accessResourceType={validAccessResourceType}
             accessResourceTypes={accessResourceTypes}
+            pageSize={pageSize}
           />
         </div>
         {canExport ? (
@@ -313,7 +320,7 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
                           variant="simple"
                           kind="filtered"
                           icon="FileText"
-                          clearAction={{ label: '清除筛选', href: '/audit-logs?tab=login' }}
+                          clearAction={{ label: '清除筛选', href: `/audit-logs?tab=login${pageSize !== DEFAULT_PAGE_SIZE ? `&pageSize=${pageSize}` : ''}` }}
                         />
                       ) : (
                         <EmptyState variant="simple" icon="FileText" title="暂无日志记录" description="当前没有登录日志" />
@@ -389,7 +396,7 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
                           variant="simple"
                           kind="filtered"
                           icon="FileText"
-                          clearAction={{ label: '清除筛选', href: '/audit-logs?tab=operation' }}
+                          clearAction={{ label: '清除筛选', href: `/audit-logs?tab=operation${pageSize !== DEFAULT_PAGE_SIZE ? `&pageSize=${pageSize}` : ''}` }}
                         />
                       ) : (
                         <EmptyState variant="simple" icon="FileText" title="暂无日志记录" description="当前没有操作日志" />
@@ -474,7 +481,7 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
                   <TableRow>
                     <TableCell colSpan={7} className="p-0">
                       {keyword || accessStatus || validAccessResourceType || startDate ? (
-                        <EmptyState variant="simple" kind="filtered" icon="FileText" clearAction={{ label: '清除筛选', href: '/audit-logs?tab=access' }} />
+                        <EmptyState variant="simple" kind="filtered" icon="FileText" clearAction={{ label: '清除筛选', href: `/audit-logs?tab=access${pageSize !== DEFAULT_PAGE_SIZE ? `&pageSize=${pageSize}` : ''}` }} />
                       ) : (
                         <EmptyState variant="simple" icon="FileText" title="暂无日志记录" description="当前没有访问日志" />
                       )}
@@ -537,9 +544,11 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
           page={page}
           totalPages={pagination.totalPages}
           total={pagination.total}
-          hrefFor={(p) => pageHref(tab, p, eventType, operation, range, keyword, chipStartDate, chipEndDate, accessStatus, validAccessResourceType)}
+          hrefFor={(p) => pageHref(tab, p, eventType, operation, range, keyword, chipStartDate, chipEndDate, accessStatus, validAccessResourceType, pageSize)}
           jumpAction="/audit-logs"
-          jumpParams={{ tab, ...(eventType ? { eventType } : {}), ...(operation ? { operation } : {}), ...(range ? { range } : {}), ...(keyword ? { keyword } : {}), ...(chipStartDate ? { startDate: chipStartDate } : {}), ...(chipEndDate ? { endDate: chipEndDate } : {}), ...(accessStatus ? { status: accessStatus } : {}), ...(validAccessResourceType ? { resourceType: validAccessResourceType } : {}) }}
+          pageSize={pageSize}
+          pageSizeOptions={PAGE_SIZE_OPTIONS.map((size) => ({ value: size, href: pageHref(tab, 1, eventType, operation, range, keyword, chipStartDate, chipEndDate, accessStatus, validAccessResourceType, size) }))}
+          jumpParams={{ tab, ...(eventType ? { eventType } : {}), ...(operation ? { operation } : {}), ...(range ? { range } : {}), ...(keyword ? { keyword } : {}), ...(chipStartDate ? { startDate: chipStartDate } : {}), ...(chipEndDate ? { endDate: chipEndDate } : {}), ...(accessStatus ? { status: accessStatus } : {}), ...(validAccessResourceType ? { resourceType: validAccessResourceType } : {}), ...(pageSize !== DEFAULT_PAGE_SIZE ? { pageSize: String(pageSize) } : {}) }}
         />
       )}
     </div>
