@@ -3233,3 +3233,14 @@ describe('通知区域中文名称（续四百二十七）', () => {
     expect(read('src/app/layout.tsx')).toContain('containerAriaLabel="通知"');
   });
 });
+
+describe('共享原语中文化（续四百二十八）', () => {
+  it('command 默认标题与面包屑 More 已中文化', () => {
+    const cmd = read('src/components/ui/command.tsx');
+    expect(cmd).toContain('title = "命令面板"');
+    expect(cmd).not.toContain('Command Palette');
+    const bc = read('src/components/ui/breadcrumb.tsx');
+    expect(bc).toContain('更多面包屑');
+    expect(bc).not.toContain('>More<');
+  });
+});
