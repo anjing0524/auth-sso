@@ -3013,3 +3013,11 @@ describe('审计参数复制回退（续三百九十九）', () => {
     expect(src).toContain('if (!copied)');
   });
 });
+
+describe('侧边栏账号完整值（续四百年）', () => {
+  it('姓名/邮箱都有 title', () => {
+    const src = read('src/components/layout/app-sidebar.tsx');
+    expect(src).toContain('title={userData.name}');
+    expect(src).toContain('title={userData.email ?? undefined}');
+  });
+});

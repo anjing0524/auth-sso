@@ -153,8 +153,8 @@ export function AppSidebar({ user, dynamicMenus = [] }: {
                     </AvatarFallback>
                   </Avatar>
                   <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden ml-3">
-                    <span className="truncate font-semibold text-foreground leading-none mb-1">{userData.name}</span>
-                    <span className="truncate text-[10px] text-muted-foreground opacity-70">{userData.email}</span>
+                    <span className="truncate font-semibold text-foreground leading-none mb-1" title={userData.name}>{userData.name}</span>
+                    <span className="truncate text-[10px] text-muted-foreground opacity-70" title={userData.email ?? undefined}>{userData.email}</span>
                   </div>
                   <MenuIcon className="h-4 w-4 ml-auto opacity-30 group-data-[collapsible=icon]:hidden" />
                 </SidebarMenuButton>
