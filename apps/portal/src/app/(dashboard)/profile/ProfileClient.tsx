@@ -436,7 +436,7 @@ export default function ProfileClient({
                   </div>
                   <div className="flex justify-between gap-3">
                     <dt className="text-[11px] text-muted-foreground">来源 IP</dt>
-                    <dd className="truncate font-mono text-[11px]">{session.ip ?? '-'}</dd>
+                    <dd className="truncate font-mono text-[11px]" title={session.ip ?? undefined}>{session.ip ?? '-'}</dd>
                   </div>
                   <div>
                     <dt className="text-[11px] text-muted-foreground">设备 / 客户端</dt>
@@ -468,7 +468,7 @@ export default function ProfileClient({
                             {item.isCurrent && <Badge variant="success" className="shrink-0 text-[9px]">当前设备</Badge>}
                           </p>
                           <div className="flex items-center gap-1">
-                            <p className="min-w-0 flex-1 truncate text-[10px] text-muted-foreground" title={`会话 ID：${item.id}`}>登录于 {formatDateTime(item.createdAt)} · #{item.id.slice(0, 8)}</p>
+                            <p className="min-w-0 flex-1 truncate text-[10px] text-muted-foreground" title={`登录于 ${formatDateTime(item.createdAt)} · 会话 ID：${item.id}`}>登录于 {formatDateTime(item.createdAt)} · #{item.id.slice(0, 8)}</p>
                             <CopyTextButton text={item.id} label={`复制会话 ${item.id.slice(0, 8)} 的 ID`} />
                           </div>
                           <p className="truncate text-[10px] text-muted-foreground" title={`scope：${item.scopes}`}>scope: {item.scopes} · 到期 {formatDateTime(item.expiresAt)}</p>

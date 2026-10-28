@@ -2206,7 +2206,7 @@ describe('Portal 客户端禁用说明（续二百九十五）', () => {
 describe('会话 ID 完整值（续二百九十六）', () => {
   it('截断展示带 title 完整会话 ID', () => {
     const src = read('src/app/(dashboard)/profile/ProfileClient.tsx');
-    expect(src).toContain('title={`会话 ID：${item.id}`}');
+    expect(src).toContain('title={`登录于 ${formatDateTime(item.createdAt)} · 会话 ID：${item.id}`}');
   });
 });
 
@@ -3083,5 +3083,13 @@ describe('详情返回链接名称（续四百零八）', () => {
     expect(read('src/app/(dashboard)/users/[id]/UserDetailForm.tsx')).toContain('backLabel="返回用户列表"');
     expect(read('src/app/(dashboard)/clients/[id]/ClientDetailClient.tsx')).toContain('backLabel="返回应用列表"');
     expect(read('src/app/(dashboard)/clients/new/page.tsx')).toContain('backLabel="返回应用列表"');
+  });
+});
+
+describe('个人中心完整值（续四百一十）', () => {
+  it('来源 IP 与会话行 title 完整', () => {
+    const src = read('src/app/(dashboard)/profile/ProfileClient.tsx');
+    expect(src).toContain('title={session.ip ?? undefined}');
+    expect(src).toContain('登录于 ${formatDateTime(item.createdAt)} · 会话 ID：${item.id}');
   });
 });
