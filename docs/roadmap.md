@@ -21,6 +21,8 @@
 
 ## 变更记录
 
+- 2026-10-28（续二百五十三）: **审计跳页保留访问筛选**。跳页丢 status/resourceType。**修复**：jumpParams 补齐。**验证**：access+SUCCESS 跳页后 URL 保留；守卫 175 passed。
+
 - 2026-10-28（续二百五十二）: **分页 pending 禁用**。分页可重复点击，用户/应用无 loading。**修复**：分页组件 disabled；用户/应用 transition + loading/disabled。**验证**：分页组件 8 passed；守卫 174 passed。
 
 - 2026-10-28（续二百五十一）: **筛选加载反馈**。角色筛选/分页无 loading；权限/审计搜索无 busy。**修复**：角色排序/状态/部门/分页与审计筛选 transition；搜索 busy。**验证**：亮 a11y 0；守卫 173 passed。

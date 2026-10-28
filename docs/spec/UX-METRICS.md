@@ -1084,3 +1084,9 @@ a11y 对比度函数提取复用，增加未登录 `/login`（390×844，独立�
 | 问题 | 修复 | 验证 |
 |---|---|---|
 | 用户/应用分页不显示 loading 且可重复点击；各列表分页 pending 时按钮仍可点 | 分页组件支持 disabled；用户/应用分页走 transition + loading/disabled，权限/角色分页禁用 | 分页组件测试 8 passed；守卫 174 passed |
+
+### 9.120 产品审计一百一十五：审计跳页保留访问筛选（2026-10-28）
+
+| 问题 | 修复 | 验证 |
+|---|---|---|
+| 访问 tab 跳页表单未带 status/resourceType，跳页后筛选丢失 | jumpParams 补 status/resourceType | `?tab=access&status=SUCCESS` 跳第 2 页后 URL 仍含 status |

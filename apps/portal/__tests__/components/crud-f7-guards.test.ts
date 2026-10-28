@@ -1839,3 +1839,11 @@ describe('分页 pending 禁用（续二百五十二）', () => {
     expect(clients).toContain('disabled={isPending}');
   });
 });
+
+describe('审计跳页保留访问筛选（续二百五十三）', () => {
+  it('jumpParams 含 status/resourceType', () => {
+    const page = read('src/app/(dashboard)/audit-logs/page.tsx');
+    expect(page).toContain('...(accessStatus ? { status: accessStatus } : {})');
+    expect(page).toContain('...(validAccessResourceType ? { resourceType: validAccessResourceType } : {})');
+  });
+});

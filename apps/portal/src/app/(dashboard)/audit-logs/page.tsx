@@ -539,7 +539,7 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
           total={pagination.total}
           hrefFor={(p) => pageHref(tab, p, eventType, operation, range, keyword, chipStartDate, chipEndDate, accessStatus, validAccessResourceType)}
           jumpAction="/audit-logs"
-          jumpParams={{ tab, ...(eventType ? { eventType } : {}), ...(operation ? { operation } : {}), ...(range ? { range } : {}), ...(keyword ? { keyword } : {}), ...(chipStartDate ? { startDate: chipStartDate } : {}), ...(chipEndDate ? { endDate: chipEndDate } : {}) }}
+          jumpParams={{ tab, ...(eventType ? { eventType } : {}), ...(operation ? { operation } : {}), ...(range ? { range } : {}), ...(keyword ? { keyword } : {}), ...(chipStartDate ? { startDate: chipStartDate } : {}), ...(chipEndDate ? { endDate: chipEndDate } : {}), ...(accessStatus ? { status: accessStatus } : {}), ...(validAccessResourceType ? { resourceType: validAccessResourceType } : {}) }}
         />
       )}
     </div>
