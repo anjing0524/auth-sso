@@ -49,7 +49,7 @@ export function PageHeader({
           </a>
         ) : icon ? (
           <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-primary">
-            <DynamicIcon name={icon} className="h-4 w-4" />
+            <DynamicIcon name={icon} aria-hidden="true" className="h-4 w-4" />
           </span>
         ) : null}
         <h1 className="type-page-title shrink-0 text-foreground">{title}</h1>

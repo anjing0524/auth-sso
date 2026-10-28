@@ -2408,3 +2408,10 @@ describe('用户详情按钮行上下文（续三百二十二）', () => {
     expect(src).toContain('查看详情 ${user.name}');
   });
 });
+
+describe('页头装饰图标（续三百二十五）', () => {
+  it('PageHeader 的 DynamicIcon aria-hidden', () => {
+    const src = read('src/components/shared/page-header.tsx');
+    expect(src).toContain('<DynamicIcon name={icon} aria-hidden="true"');
+  });
+});
