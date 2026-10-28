@@ -3102,3 +3102,12 @@ describe('详情面包屑（续四百一十一）', () => {
     }
   });
 });
+
+describe('授权记录时间可区分（续四百一十二）', () => {
+  it('创建/过期显示时分，撤销名称含时间', () => {
+    const src = read('src/app/(dashboard)/clients/[id]/components/ClientTokensSection.tsx');
+    expect(src).toContain('formatDateTime(token.createdAt)');
+    expect(src).toContain('formatDateTime(token.expiresAt)');
+    expect(src).toContain('创建的授权');
+  });
+});

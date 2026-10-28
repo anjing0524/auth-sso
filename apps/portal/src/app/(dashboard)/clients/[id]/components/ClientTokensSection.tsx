@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/table';
 import type { ClientTokenDTO as Token } from '../../data';
 
-import { formatDate } from '@/lib/format-date';
+import { formatDateTime } from '@/lib/format-date';
 export interface ClientTokensSectionProps {
   tokens: Token[];
   /** 有效授权总数（tokens 可能只含最近 10 条） */
@@ -75,10 +75,10 @@ export function ClientTokensSection({ tokens, total = tokens.length, onRevokeAll
                     {token.scopes.join(', ')}
                   </TableCell>
                   <TableCell className="text-muted-foreground">
-                    {formatDate(token.createdAt)}
+                    {formatDateTime(token.createdAt)}
                   </TableCell>
                   <TableCell className="text-muted-foreground">
-                    {formatDate(token.expiresAt)}
+                    {formatDateTime(token.expiresAt)}
                   </TableCell>
                   {canRevoke && onRevokeToken ? (
                     <TableCell className="text-right">
@@ -86,7 +86,7 @@ export function ClientTokensSection({ tokens, total = tokens.length, onRevokeAll
                         variant="ghost"
                         size="sm"
                         className="h-7 px-2 text-[11px] text-destructive hover:bg-destructive/10 hover:text-destructive"
-                        aria-label={`撤销 ${token.username ?? '该用户'} 的授权`}
+                        aria-label={`撤销 ${token.username ?? '该用户'} 于 ${formatDateTime(token.createdAt)} 创建的授权`}
                         onClick={() => onRevokeToken(token)}
                       >
                         撤销
