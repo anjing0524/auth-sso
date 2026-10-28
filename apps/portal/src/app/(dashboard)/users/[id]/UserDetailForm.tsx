@@ -33,6 +33,7 @@ import { AUDIT_PERMISSIONS, USER_PERMISSIONS } from '@auth-sso/contracts';
 import { updateUserAction, deleteUserAction, unlockUserAction, forceLogoutUserAction } from '../actions';
 
 import { PageHeader } from '@/components/shared/page-header';
+import { RequiredLegend, RequiredMark } from '@/components/shared/required-mark';
 import { formatDateTime } from '@/lib/format-date';
 import { PermissionGuard } from '@/components/shared/permission-guard';
 import { ResetPasswordDialog } from './ResetPasswordDialog';
@@ -207,13 +208,14 @@ export default function UserDetailForm({ id, initialUser: serverUser, canUpdate,
                 </CardTitle>
               </CardHeader>
               <CardContent className="grid grid-cols-1 gap-3 p-3 sm:grid-cols-2">
+                <p className="text-[11px] text-muted-foreground sm:col-span-2"><RequiredLegend /></p>
                 <div className="space-y-1.5">
-                  <Label htmlFor="user-name">显示名称</Label>
-                  <Input id="user-name" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
+                  <div className="flex items-center gap-1"><Label htmlFor="user-name">显示名称</Label><RequiredMark /></div>
+                  <Input id="user-name" aria-required="true" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="user-email">电子邮箱</Label>
-                  <Input id="user-email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
+                  <div className="flex items-center gap-1"><Label htmlFor="user-email">电子邮箱</Label><RequiredMark /></div>
+                  <Input id="user-email" aria-required="true" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
                 </div>
                 <div className="space-y-1.5 sm:col-span-2">
                   <Label htmlFor="user-avatar">头像 URL（可选）</Label>

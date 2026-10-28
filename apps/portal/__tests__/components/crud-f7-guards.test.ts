@@ -2501,3 +2501,12 @@ describe('个人中心必填标记（续三百三十七）', () => {
     expect((src.match(/<RequiredLegend \/>/g) ?? []).length).toBe(2);
   });
 });
+
+describe('用户详情必填（续三百三十八）', () => {
+  it('显示名称/邮箱标记与 required', () => {
+    const src = read('src/app/(dashboard)/users/[id]/UserDetailForm.tsx');
+    expect((src.match(/<\/Label><RequiredMark \/>/g) ?? []).length).toBe(2);
+    expect((src.match(/aria-required="true"/g) ?? []).length).toBe(2);
+    expect(src).toContain('<RequiredLegend />');
+  });
+});
