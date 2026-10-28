@@ -112,9 +112,9 @@ export function TablePagination({
       <span>每页</span>
       {pageSizeOptions.map((option) => (
         option.value === pageSize ? (
-          <span key={option.value} className="rounded bg-card px-1 font-medium text-foreground">{option.value}</span>
+          <span key={option.value} aria-current="true" aria-label={`每页 ${option.value} 条（当前）`} className="rounded bg-card px-1 font-medium text-foreground">{option.value}</span>
         ) : (
-          <Link key={option.value} href={option.href} className="rounded px-1 hover:bg-muted hover:text-foreground">{option.value}</Link>
+          <Link key={option.value} href={option.href} aria-label={`每页 ${option.value} 条`} className="rounded px-1 hover:bg-muted hover:text-foreground">{option.value}</Link>
         )
       ))}
     </div>

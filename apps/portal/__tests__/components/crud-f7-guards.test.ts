@@ -2038,3 +2038,11 @@ describe('动态加载无障碍（续二百七十四）', () => {
     expect(perms).toContain('role="status" aria-live="polite"');
   });
 });
+
+describe('每页条数当前值语义（续二百七十五）', () => {
+  it('当前值 aria-current，链接有明确名称', () => {
+    const src = read('src/components/shared/table-pagination.tsx');
+    expect(src).toContain('aria-current="true"');
+    expect(src).toContain('aria-label={`每页 ${option.value} 条`}');
+  });
+});
