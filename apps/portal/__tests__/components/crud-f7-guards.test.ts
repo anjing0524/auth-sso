@@ -2437,3 +2437,12 @@ describe('权限选择可访问名称（续三百三十）', () => {
     expect(src).toContain('aria-label="归属应用"');
   });
 });
+
+describe('用户创建必填标记（续三百三十一）', () => {
+  it('5 个必填字段有 * 与部门 aria-required', () => {
+    const src = read('src/app/(dashboard)/users/components/CreateUserDialog.tsx');
+    expect(src).toContain('为必填');
+    expect(src).toContain('aria-required="true"');
+    expect((src.match(/<\/Label><span aria-hidden="true" className="text-destructive">\*<\/span>/g) ?? []).length).toBe(5);
+  });
+});
