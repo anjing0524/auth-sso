@@ -303,7 +303,7 @@ describe('U-G03 对话框 Label 关联', () => {
     expect(screen.getByLabelText('图标')).toBeInTheDocument();
     expect(screen.getByLabelText('排序')).toBeInTheDocument();
     // H-19：编码创建后不可变更 → 只读 disabled 输入，而不是“不存在”
-    expect(screen.getByLabelText(/权限编码/)).toBeDisabled();
+    expect(screen.getByRole('textbox', { name: /权限编码/ })).toBeDisabled();
   });
 
   it('departments 新建/编辑对话框：getByLabelText 可定位名称/编码', async () => {
