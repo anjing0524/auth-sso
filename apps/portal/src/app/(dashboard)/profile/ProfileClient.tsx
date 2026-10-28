@@ -32,6 +32,7 @@ import { updateOwnProfileAction, changeOwnPasswordAction } from './actions';
 import { revokeOwnSessionAction } from './session-actions';
 import { toast } from 'sonner';
 import { CopyTextButton } from '@/components/shared/copy-text-button';
+import { RequiredLegend, RequiredMark } from '@/components/shared/required-mark';
 import { useRouter } from 'next/navigation';
 import { isAdminRole } from '@auth-sso/contracts';
 import { accountStatus } from '@/lib/status-label';
@@ -129,8 +130,9 @@ function ChangePasswordDialog() {
           </DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 py-2">
+          <p className="text-[11px] text-muted-foreground"><RequiredLegend /></p>
           <div className="space-y-1.5">
-            <Label htmlFor="currentPassword">当前密码</Label>
+            <div className="flex items-center gap-1"><Label htmlFor="currentPassword">当前密码</Label><RequiredMark /></div>
             <Input
               id="currentPassword"
               name="currentPassword"
@@ -143,7 +145,7 @@ function ChangePasswordDialog() {
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="newPassword">新密码</Label>
+            <div className="flex items-center gap-1"><Label htmlFor="newPassword">新密码</Label><RequiredMark /></div>
             <Input
               id="newPassword"
               name="newPassword"
@@ -156,7 +158,7 @@ function ChangePasswordDialog() {
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="confirmPassword">确认新密码</Label>
+            <div className="flex items-center gap-1"><Label htmlFor="confirmPassword">确认新密码</Label><RequiredMark /></div>
             <Input
               id="confirmPassword"
               name="confirmPassword"
@@ -230,8 +232,9 @@ function EditProfileDialog({ user }: { user: NonNullable<ProfileClientProps['use
           </DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 py-2">
+          <p className="text-[11px] text-muted-foreground"><RequiredLegend /></p>
           <div className="space-y-1.5">
-            <Label htmlFor="profile-name">姓名</Label>
+            <div className="flex items-center gap-1"><Label htmlFor="profile-name">姓名</Label><RequiredMark /></div>
             <Input
               id="profile-name"
               name="name"
@@ -243,7 +246,7 @@ function EditProfileDialog({ user }: { user: NonNullable<ProfileClientProps['use
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="profile-email">邮箱</Label>
+            <div className="flex items-center gap-1"><Label htmlFor="profile-email">邮箱</Label><RequiredMark /></div>
             <Input
               id="profile-email"
               name="email"

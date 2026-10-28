@@ -2493,3 +2493,11 @@ describe('编辑态必填语义（续三百三十六）', () => {
     expect(dept).toContain('id="dept-edit-code" aria-required="true"');
   });
 });
+
+describe('个人中心必填标记（续三百三十七）', () => {
+  it('改密 3 字段/编辑资料 2 字段有标记与图例', () => {
+    const src = read('src/app/(dashboard)/profile/ProfileClient.tsx');
+    expect((src.match(/<\/Label><RequiredMark \/>/g) ?? []).length).toBe(5);
+    expect((src.match(/<RequiredLegend \/>/g) ?? []).length).toBe(2);
+  });
+});
