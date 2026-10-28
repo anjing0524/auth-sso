@@ -220,6 +220,7 @@ export default async function DashboardPage() {
                         <TableCell className="text-[13px]">
                           <Link
                             href={`/audit-logs/${log.id}?tab=operation`}
+                            aria-label={`查看 ${AUDIT_OPERATION_LABELS[log.operation as keyof typeof AUDIT_OPERATION_LABELS] ?? log.operation} 操作日志详情（#${log.id.slice(0, 8)}）`}
                             className="text-muted-foreground hover:text-primary hover:underline"
                           >
                             {AUDIT_OPERATION_LABELS[log.operation as keyof typeof AUDIT_OPERATION_LABELS] ?? log.operation}

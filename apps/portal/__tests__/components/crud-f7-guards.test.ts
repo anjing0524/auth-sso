@@ -2250,7 +2250,7 @@ describe('审计日志 ID 复制（续三百零一）', () => {
 describe('会话 ID 一键复制（续三百零二）', () => {
   it('会话行复用 CopyTextButton', () => {
     const src = read('src/app/(dashboard)/profile/ProfileClient.tsx');
-    expect(src).toContain('<CopyTextButton text={item.id} label="复制会话 ID" />');
+    expect(src).toContain('<CopyTextButton text={item.id} label={`复制会话 ${item.id.slice(0, 8)} 的 ID`} />');
   });
 });
 
@@ -2413,5 +2413,12 @@ describe('页头装饰图标（续三百二十五）', () => {
   it('PageHeader 的 DynamicIcon aria-hidden', () => {
     const src = read('src/components/shared/page-header.tsx');
     expect(src).toContain('<DynamicIcon name={icon} aria-hidden="true"');
+  });
+});
+
+describe('仪表盘/会话唯一名称（续三百二十八）', () => {
+  it('最近操作链接含短 ID；会话复制含短 ID', () => {
+    expect(read('src/app/(dashboard)/dashboard/page.tsx')).toContain('操作日志详情（#${log.id.slice(0, 8)}）');
+    expect(read('src/app/(dashboard)/profile/ProfileClient.tsx')).toContain('复制会话 ${item.id.slice(0, 8)} 的 ID');
   });
 });

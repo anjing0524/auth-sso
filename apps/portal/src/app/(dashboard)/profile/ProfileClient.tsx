@@ -464,7 +464,7 @@ export default function ProfileClient({
                           </p>
                           <div className="flex items-center gap-1">
                             <p className="min-w-0 flex-1 truncate text-[10px] text-muted-foreground" title={`会话 ID：${item.id}`}>登录于 {formatDateTime(item.createdAt)} · #{item.id.slice(0, 8)}</p>
-                            <CopyTextButton text={item.id} label="复制会话 ID" />
+                            <CopyTextButton text={item.id} label={`复制会话 ${item.id.slice(0, 8)} 的 ID`} />
                           </div>
                           <p className="truncate text-[10px] text-muted-foreground" title={`scope：${item.scopes}`}>scope: {item.scopes} · 到期 {formatDateTime(item.expiresAt)}</p>
                         </div>
