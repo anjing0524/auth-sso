@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { formatDateTime } from '@/lib/format-date';
 import { isUuid } from '@/lib/uuid';
+import { safeReturnPath } from '@/lib/safe-return';
 import { getAccessLogById, getAuditLogById, getLoginLogById } from '@/app/audit/data';
 import { AuditParamsActions } from './params-actions';
 import { CopyTextButton } from '@/components/shared/copy-text-button';
@@ -54,9 +55,7 @@ export default async function AuditLogDetailPage({ params, searchParams }: PageP
   const { tab, returnTo: rawReturn } = await searchParams;
   if (!isUuid(id)) notFound();
   const fallbackTab = tab === 'login' || tab === 'access' ? tab : 'operation';
-  const returnHref = rawReturn && rawReturn.startsWith('/audit-logs') && !rawReturn.startsWith('//')
-    ? rawReturn
-    : `/audit-logs?tab=${fallbackTab}`;
+  const returnHref = safeReturnPath(rawReturn, `/audit-logs?tab=${fallbackTab}`, '/audit-logs');
 
   if (tab === 'login') {
     const row = await getLoginLogById(id);

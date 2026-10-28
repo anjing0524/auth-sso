@@ -1460,7 +1460,7 @@ describe('审计详情返回上下文（续二百一十二）', () => {
     const list = read('src/app/(dashboard)/audit-logs/page.tsx');
     expect(list).toContain('returnTo=${encodeURIComponent(currentListHref)}');
     const detail = read('src/app/(dashboard)/audit-logs/[id]/page.tsx');
-    expect(detail).toContain("rawReturn.startsWith('/audit-logs')");
+    expect(detail).toContain("safeReturnPath(rawReturn, `/audit-logs?tab=${fallbackTab}`, '/audit-logs')");
     expect(detail).toContain('returnHref={returnHref}');
   });
 });
@@ -2308,5 +2308,19 @@ describe('审计详情 UUID 校验（续三百一十/三百一十二）', () => 
     expect(src).toContain("import { isUuid } from '@/lib/uuid'");
     expect(src).toContain('if (!isUuid(id)) notFound()');
     expect(src).not.toContain('UUID_RE');
+  });
+});
+
+describe('returnTo 校验统一（续三百一十三）', () => {
+  it('审计详情/权限新建/编辑复用 safeReturnPath', () => {
+    for (const f of [
+      'src/app/(dashboard)/audit-logs/[id]/page.tsx',
+      'src/app/(dashboard)/permissions/new/page.tsx',
+      'src/app/(dashboard)/permissions/[id]/edit/page.tsx',
+    ]) {
+      const src = read(f);
+      expect(src).toContain('safeReturnPath(');
+      expect(src).not.toContain("startsWith('//')");
+    }
   });
 });

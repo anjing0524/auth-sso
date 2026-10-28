@@ -7,6 +7,7 @@ import { PERMISSION_PERMISSIONS } from '@auth-sso/contracts';
 
 import { PermissionGate } from '@/components/layout/permission-gate';
 import { isUuid } from '@/lib/uuid';
+import { safeReturnPath } from '@/lib/safe-return';
 import { eq } from 'drizzle-orm';
 import { db, schema } from '@/infrastructure/db';
 import { getPermissions, getClientOptions } from '../../data';
@@ -22,7 +23,7 @@ interface PageProps {
 export default async function EditPermissionPage({ params, searchParams }: PageProps & { searchParams: Promise<{ returnTo?: string }> }) {
   await connection();
   const raw = (await searchParams).returnTo;
-  const returnHref = raw && raw.startsWith('/permissions') && !raw.startsWith('//') ? raw : '/permissions';
+  const returnHref = safeReturnPath(raw, '/permissions', '/permissions');
   const { id } = await params;
   if (!isUuid(id)) notFound();
 

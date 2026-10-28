@@ -21,6 +21,8 @@
 
 ## 变更记录
 
+- 2026-10-29（续三百一十三）: **returnTo 校验统一**。三处重复 startsWith。**修复**：复用 safeReturnPath。**验证**：守卫 228 passed；构建通过。
+
 - 2026-10-29（续三百一十二）: **审计复用共享 UUID 校验**。本地正则漂移。**修复**：复用 isUuid。**验证**：守卫 227 passed；构建通过。
 
 - 2026-10-29（续三百一十一）: **审计参数下载可靠性**。即时 revoke 可能取消下载。**修复**：挂载 anchor + 延迟 revoke。**验证**：download 事件/filename/failure null；守卫 227 passed。

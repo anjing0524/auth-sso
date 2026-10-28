@@ -7,6 +7,7 @@ import { PERMISSION_PERMISSIONS } from '@auth-sso/contracts';
 import { PermissionGate } from '@/components/layout/permission-gate';
 import { getPermissions, getClientOptions } from '../data';
 import PermissionForm from '../permission-form';
+import { safeReturnPath } from '@/lib/safe-return';
 
 export const instant = false;
 export const metadata = { title: '新建权限 | Auth-SSO' };
@@ -15,7 +16,7 @@ export default async function NewPermissionPage({ searchParams }: { searchParams
   await connection();
   const params = await searchParams;
   const raw = params.returnTo;
-  const returnHref = raw && raw.startsWith('/permissions') && !raw.startsWith('//') ? raw : '/permissions';
+  const returnHref = safeReturnPath(raw, '/permissions', '/permissions');
   const [all, clients] = await Promise.all([getPermissions(), getClientOptions()]);
   const initialType = params.type === 'API' || params.type === 'DIRECTORY' || params.type === 'PAGE'
     ? params.type
