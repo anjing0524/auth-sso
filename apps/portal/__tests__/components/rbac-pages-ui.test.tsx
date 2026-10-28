@@ -221,12 +221,12 @@ beforeEach(() => {
 // U-G02 空态：筛选/搜索无结果 vs 真正无数据
 // ═══════════════════════════════════════════════════
 describe('U-G02 空态语义', () => {
-  it('roles 搜索无结果：filtered 空态 + 清除搜索，不再引导新建', () => {
+  it('roles 搜索无结果：filtered 空态 + 清除筛选，不再引导新建', () => {
     const { container } = renderRoles({ roles: [], initialKeyword: 'zzz-no-role' });
 
     expect(container.querySelector('[data-empty-kind="filtered"]')).toBeTruthy();
     expect(screen.getByText('未找到匹配结果')).toBeInTheDocument();
-    const clear = screen.getByRole('link', { name: '清除搜索' });
+    const clear = screen.getByRole('link', { name: '清除筛选' });
     expect(clear).toHaveAttribute('href', '/roles');
     expect(screen.queryByText('创建角色以开始管理权限')).not.toBeInTheDocument();
   });
