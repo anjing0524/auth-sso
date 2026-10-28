@@ -2139,3 +2139,10 @@ describe('用户详情 1024 排版（续二百八十七）', () => {
     expect(src).toContain('将撤销全部 Token 并让所有设备退出');
   });
 });
+
+describe('用户角色空态部门筛选（续二百八十八）', () => {
+  it('前往角色管理携带 deptId', () => {
+    const src = read('src/app/(dashboard)/users/[id]/roles/roles-client.tsx');
+    expect(src).toContain('/roles?deptId=${user.deptId}');
+  });
+});
