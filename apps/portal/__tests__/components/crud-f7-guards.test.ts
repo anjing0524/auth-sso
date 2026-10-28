@@ -2620,3 +2620,10 @@ describe('权限菜单字段可访问名称（续三百五十二）', () => {
     expect(src).toContain('以 / 开头，如 /users');
   });
 });
+
+describe('分页导航语义（续三百五十三）', () => {
+  it('多页分页容器 role=navigation aria-label=分页', () => {
+    const src = read('src/components/shared/table-pagination.tsx');
+    expect(src).toContain('role="navigation" aria-label="分页"');
+  });
+});

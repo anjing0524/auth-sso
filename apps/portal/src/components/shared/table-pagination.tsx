@@ -159,7 +159,7 @@ export function TablePagination({
   }
 
   return (
-    <div className="-mt-px flex flex-col gap-2 rounded-b-lg border-t bg-muted/30 px-3 py-1.5 sm:flex-row sm:items-center sm:justify-between">
+    <div role="navigation" aria-label="分页" className="-mt-px flex flex-col gap-2 rounded-b-lg border-t bg-muted/30 px-3 py-1.5 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex flex-wrap items-center gap-2">
         <p className="text-xs text-muted-foreground">
           共 <span className="font-semibold tabular-nums text-foreground">{total}</span> 条记录
