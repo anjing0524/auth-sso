@@ -199,6 +199,7 @@ export default function CreateUserDialog({ departments, canAssignRole = false, a
                   value={values.username}
                   onChange={setField('username')}
                 />
+                <p className="text-[11px] text-muted-foreground">3–50 位，创建后不可修改；用于审计与接口标识。</p>
                 <FieldError failure={fieldError} field="username" id="create-user-username-error" />
               </div>
               <div className="space-y-2">

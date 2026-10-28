@@ -2595,3 +2595,10 @@ describe('角色创建部门必填（续三百四十九）', () => {
     expect(src).toContain('aria-required={required || undefined}');
   });
 });
+
+describe('用户名约束提示（续三百五十）', () => {
+  it('创建弹窗说明 3–50 位且不可修改', () => {
+    const src = read('src/app/(dashboard)/users/components/CreateUserDialog.tsx');
+    expect(src).toContain('3–50 位，创建后不可修改');
+  });
+});
