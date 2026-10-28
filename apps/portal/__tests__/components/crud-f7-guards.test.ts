@@ -3185,3 +3185,11 @@ describe('服务端字段上限对齐（续四百二十一）', () => {
     expect(detail).toContain('maxLength={200}');
   });
 });
+
+describe('客户端长度提示（续四百二十二）', () => {
+  it('超长与格式错误分开提示', () => {
+    const src = read('src/lib/client-validation.ts');
+    expect(src).toContain('单个回调地址最多 500 个字符');
+    expect(src).toContain('Logo 地址最多 500 个字符');
+  });
+});

@@ -14,6 +14,8 @@ describe('client-validation', () => {
     expect(validateClientBasics({ name: 'a', redirectUris: '' }).redirectUris).toBe('至少需要一个回调地址');
     expect(validateClientBasics({ name: 'a', redirectUris: 'ftp://x' }).redirectUris).toContain('格式不合法');
     expect(validateClientBasics({ name: 'a', redirectUris: 'https://x/cb', logoUrl: 'bad' }).logoUrl).toContain('合法');
+    expect(validateClientBasics({ name: 'a', redirectUris: `https://x/${'a'.repeat(500)}` }).redirectUris).toContain('最多 500 个字符');
+    expect(validateClientBasics({ name: 'a', redirectUris: 'https://x/cb', logoUrl: `https://x/${'a'.repeat(500)}` }).logoUrl).toContain('最多 500 个字符');
     expect(validateClientBasics({ name: 'a', redirectUris: 'https://x/cb' })).toEqual({});
   });
 });

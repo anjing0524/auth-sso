@@ -34,13 +34,17 @@ export function validateClientBasics(input: ClientBasicsInput): ClientBasicsErro
   if (uris.length === 0) {
     errors.redirectUris = '至少需要一个回调地址';
   } else {
-    const invalid = uris.find((u) => !isHttpUrl(u) || u.length > 500);
-    if (invalid) errors.redirectUris = `回调地址格式不合法：${invalid.slice(0, 80)}`;
+    const tooLong = uris.find((u) => u.length > 500);
+    const invalid = uris.find((u) => !isHttpUrl(u));
+    if (tooLong) errors.redirectUris = `单个回调地址最多 500 个字符（当前 ${tooLong.length}）`;
+    else if (invalid) errors.redirectUris = `回调地址格式不合法：${invalid.slice(0, 80)}`;
   }
 
   const logo = (input.logoUrl ?? '').trim();
-  if (logo && (!isHttpUrl(logo) || logo.length > 500)) {
+  if (logo && !isHttpUrl(logo)) {
     errors.logoUrl = 'Logo 地址必须是合法的 http(s) URL';
+  } else if (logo.length > 500) {
+    errors.logoUrl = 'Logo 地址最多 500 个字符';
   }
 
   return errors;
