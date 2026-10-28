@@ -3193,3 +3193,13 @@ describe('客户端长度提示（续四百二十二）', () => {
     expect(src).toContain('Logo 地址最多 500 个字符');
   });
 });
+
+describe('详情字段上限（续四百二十三）', () => {
+  it('用户名称/邮箱/头像与客户端名称有 maxLength', () => {
+    const u = read('src/app/(dashboard)/users/[id]/UserDetailForm.tsx');
+    expect(u).toContain('maxLength={100}');
+    expect(u).toContain('maxLength={255}');
+    expect(u).toContain('maxLength={500}');
+    expect(read('src/app/(dashboard)/clients/[id]/components/ClientInfoSection.tsx')).toContain('maxLength={100}');
+  });
+});

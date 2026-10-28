@@ -98,6 +98,7 @@ export function ClientInfoSection({
                 <Input
                   id="client-detail-name"
                   aria-required="true"
+                  maxLength={100}
                   disabled={readOnly}
                   value={formData.name}
                   onChange={(e) => onFormChange({ name: e.target.value })}
