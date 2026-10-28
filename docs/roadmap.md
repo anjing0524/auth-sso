@@ -21,6 +21,8 @@
 
 ## 变更记录
 
+- 2026-10-29（续三百九十三）: **用户角色筛选状态**。无 pressed。**修复**：aria-pressed。**验证**：false→true；守卫 301 passed。
+
 - 2026-10-29（续三百九十二）: **角色权限作用域语义**。无 pressed/expanded。**修复**：aria 状态。**验证**：pressed 正确；测试/守卫 323 passed。
 
 - 2026-10-29（续三百九十一）: **OAuth 错误页语义**。缺标题/main/h1/alert。**修复**：layout metadata + 结构 + 中文。**验证**：四处正确；守卫 299 passed。

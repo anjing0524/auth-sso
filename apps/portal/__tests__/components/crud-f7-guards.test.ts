@@ -2951,3 +2951,10 @@ describe('角色权限作用域语义（续三百九十二）', () => {
     expect(src).toContain('aria-expanded={!isCollapsed}');
   });
 });
+
+describe('用户角色筛选状态（续三百九十三）', () => {
+  it('仅看已选 aria-pressed', () => {
+    const src = read('src/app/(dashboard)/users/[id]/roles/roles-client.tsx');
+    expect(src).toContain('aria-pressed={onlySelected}');
+  });
+});
