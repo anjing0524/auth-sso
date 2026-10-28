@@ -253,7 +253,7 @@ export default function PermissionForm({ mode, menuOptions, permission, clients 
               <div className="space-y-1.5">
                 <Label htmlFor="perm-parent">父级权限</Label>
                 <Select value={form.parentId || 'ROOT'} onValueChange={(v) => setForm({ ...form, parentId: v === 'ROOT' ? '' : v })}>
-                  <SelectTrigger id="perm-parent"><SelectValue>{menuOptions.find((m) => m.id === form.parentId)?.name ?? '顶层权限'}</SelectValue></SelectTrigger>
+                  <SelectTrigger id="perm-parent" aria-label="父级权限"><SelectValue>{menuOptions.find((m) => m.id === form.parentId)?.name ?? '顶层权限'}</SelectValue></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="ROOT">顶层权限</SelectItem>
                     {menuOptions.filter((m) => !excludedParentIds.has(m.id)).map((m) => (
@@ -273,11 +273,12 @@ export default function PermissionForm({ mode, menuOptions, permission, clients 
               <div className="space-y-1.5">
                 <Label htmlFor="perm-path">路由路径{form.type === 'PAGE' ? '（必填）' : '（可选）'}</Label>
                 <Input id="perm-path" aria-required={form.type === 'PAGE'} value={form.path} maxLength={200} onChange={e => setForm({ ...form, path: e.target.value })} placeholder="/users" />
+                <p className="text-[10px] leading-4 text-muted-foreground">以 / 开头，如 /users；PAGE 类型用于侧边栏跳转。</p>
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="perm-icon">图标</Label>
                 <Select value={form.icon || 'LayoutGrid'} onValueChange={(v) => setForm({ ...form, icon: v })}>
-                  <SelectTrigger id="perm-icon"><SelectValue>{ICON_LABELS[form.icon || 'LayoutGrid'] ?? (form.icon || '工作台')}</SelectValue></SelectTrigger>
+                  <SelectTrigger id="perm-icon" aria-label="图标"><SelectValue>{ICON_LABELS[form.icon || 'LayoutGrid'] ?? (form.icon || '工作台')}</SelectValue></SelectTrigger>
                   <SelectContent>
                     {Object.keys(ICON_MAP).map((name) => (<SelectItem key={name} value={name}>{ICON_LABELS[name] ?? name}</SelectItem>))}
                   </SelectContent>

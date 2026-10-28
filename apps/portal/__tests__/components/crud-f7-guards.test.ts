@@ -2611,3 +2611,12 @@ describe('编码格式提示（续三百五十一）', () => {
     expect(read('src/app/(dashboard)/roles/components/RolesTable.tsx')).toContain('自动转为大写');
   });
 });
+
+describe('权限菜单字段可访问名称（续三百五十二）', () => {
+  it('父级/图标 combobox aria-label，路径有提示', () => {
+    const src = read('src/app/(dashboard)/permissions/permission-form.tsx');
+    expect(src).toContain('aria-label="父级权限"');
+    expect(src).toContain('aria-label="图标"');
+    expect(src).toContain('以 / 开头，如 /users');
+  });
+});
