@@ -13,6 +13,7 @@ import { UserPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { RequiredLegend, RequiredMark } from '@/components/shared/required-mark';
 import { PermissionGuard } from '@/components/shared/permission-guard';
 import {
   Dialog,
@@ -154,13 +155,13 @@ export default function CreateUserDialog({ departments, canAssignRole = false, a
             <DialogHeader>
               <DialogTitle>新建用户</DialogTitle>
               <DialogDescription className="text-muted-foreground font-medium">
-                创建后请把<strong>登录邮箱</strong>告知用户；用户名用于审计与接口标识。<span className="whitespace-nowrap">（<span aria-hidden="true" className="text-destructive">*</span> 为必填）</span>
+                创建后请把<strong>登录邮箱</strong>告知用户；用户名用于审计与接口标识。<RequiredLegend />
               </DialogDescription>
             </DialogHeader>
 
             <div className="grid gap-2.5">
               <div className="space-y-2">
-                <div className="flex items-center gap-1"><Label htmlFor="create-user-name" >显示名称</Label><span aria-hidden="true" className="text-destructive">*</span></div>
+                <div className="flex items-center gap-1"><Label htmlFor="create-user-name" >显示名称</Label><RequiredMark /></div>
                 <Input
                   id="create-user-name"
                   name="name"
@@ -172,7 +173,7 @@ export default function CreateUserDialog({ departments, canAssignRole = false, a
                 />
               </div>
               <div className="space-y-2">
-                <div className="flex items-center gap-1"><Label htmlFor="create-user-username" >用户名（唯一标识）</Label><span aria-hidden="true" className="text-destructive">*</span></div>
+                <div className="flex items-center gap-1"><Label htmlFor="create-user-username" >用户名（唯一标识）</Label><RequiredMark /></div>
                 <Input
                   aria-invalid={fieldError?.field === 'username'}
                   id="create-user-username"
@@ -187,7 +188,7 @@ export default function CreateUserDialog({ departments, canAssignRole = false, a
                 <FieldError failure={fieldError} field="username" />
               </div>
               <div className="space-y-2">
-                <div className="flex items-center gap-1"><Label htmlFor="create-user-email" >电子邮箱</Label><span aria-hidden="true" className="text-destructive">*</span></div>
+                <div className="flex items-center gap-1"><Label htmlFor="create-user-email" >电子邮箱</Label><RequiredMark /></div>
                 <Input
                   aria-invalid={fieldError?.field === 'email'}
                   id="create-user-email"
@@ -202,7 +203,7 @@ export default function CreateUserDialog({ departments, canAssignRole = false, a
                 <FieldError failure={fieldError} field="email" />
               </div>
               <div className="space-y-2">
-                <div className="flex items-center gap-1"><Label htmlFor="create-user-password" >初始密码</Label><span aria-hidden="true" className="text-destructive">*</span></div>
+                <div className="flex items-center gap-1"><Label htmlFor="create-user-password" >初始密码</Label><RequiredMark /></div>
                 <Input
                   aria-invalid={fieldError?.field === 'password'}
                   id="create-user-password"
@@ -217,7 +218,7 @@ export default function CreateUserDialog({ departments, canAssignRole = false, a
                 <FieldError failure={fieldError} field="password" />
               </div>
               <div className="space-y-2">
-                <div className="flex items-center gap-1"><Label htmlFor="create-user-deptId" >所属部门</Label><span aria-hidden="true" className="text-destructive">*</span></div>
+                <div className="flex items-center gap-1"><Label htmlFor="create-user-deptId" >所属部门</Label><RequiredMark /></div>
                 <Select value={deptId} onValueChange={setDeptId}>
                   <SelectTrigger id="create-user-deptId" aria-label="所属部门" aria-required="true">
                     <SelectValue>

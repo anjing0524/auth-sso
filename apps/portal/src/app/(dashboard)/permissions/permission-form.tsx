@@ -10,6 +10,7 @@
 import { useMemo, useState } from 'react';
 import { useUnsavedChangesGuard } from '@/hooks/use-unsaved-changes-guard';
 import { CopyTextButton } from '@/components/shared/copy-text-button';
+import { RequiredLegend, RequiredMark } from '@/components/shared/required-mark';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
@@ -162,16 +163,17 @@ export default function PermissionForm({ mode, menuOptions, permission, clients 
       )}
 
       <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col gap-3">
+        <p className="text-[11px] text-muted-foreground"><RequiredLegend /></p>
         <div className="rounded-lg border border-border/70 bg-card shadow-sm">
           <div className="border-b bg-muted/30 px-3 py-2 text-[13px] font-medium">基本信息</div>
           <div className="grid gap-3 p-3 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <Label htmlFor="perm-name">权限名称</Label>
+              <div className="flex items-center gap-1"><Label htmlFor="perm-name">权限名称</Label><RequiredMark /></div>
               <Input id="perm-name" value={form.name} maxLength={100} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="用户列表" />
             </div>
             <div className="space-y-1.5">
               <div className="flex items-center justify-between gap-2">
-                <Label htmlFor="perm-code">权限编码{mode === 'edit' ? '（不可变更）' : ''}</Label>
+                <div className="flex items-center gap-1"><Label htmlFor="perm-code">权限编码{mode === 'edit' ? '（不可变更）' : ''}</Label>{mode === 'create' && <RequiredMark />}</div>
                 {mode === 'edit' && <CopyTextButton text={form.code} label="复制权限编码" />}
               </div>
               <Input id="perm-code" value={form.code} maxLength={150} disabled={mode === 'edit'} aria-invalid={fieldError?.field === 'code'} onChange={e => setForm({ ...form, code: e.target.value })} placeholder="user:list" />

@@ -37,6 +37,7 @@ import { SearchInput } from '@/components/shared/search-input';
 import { TableToolbar } from '@/components/shared/table-toolbar';
 import { PermissionGuard } from '@/components/shared/permission-guard';
 import { CopyTextButton } from '@/components/shared/copy-text-button';
+import { RequiredLegend, RequiredMark } from '@/components/shared/required-mark';
 import { ROLE_PERMISSIONS } from '@auth-sso/contracts';
 interface RoleRow {
   id: string;  name: string; code: string;
@@ -429,9 +430,10 @@ export default function RolesTable({ roles, pagination, initialKeyword, initialS
         <DialogContent>
           <DialogHeader><DialogTitle className="flex items-center gap-2"><ShieldCheck className="h-5 w-5 text-primary" /> 新建角色</DialogTitle></DialogHeader>
           <form onSubmit={submitCreate}>
+            <p className="pt-3 text-[11px] text-muted-foreground"><RequiredLegend /></p>
             <div className="grid gap-3 py-4 sm:grid-cols-2">
-              <div className="space-y-2"><Label htmlFor="role-name">角色名称</Label><Input id="role-name" value={form.name} maxLength={100} onChange={e => setForm({...form, name: e.target.value})} placeholder="管理员" /></div>
-              <div className="space-y-2"><Label htmlFor="role-code">角色编码</Label><Input id="role-code" value={form.code} maxLength={50} aria-invalid={fieldError?.field === 'code'} onChange={e => setForm({...form, code: e.target.value})} placeholder="admin" /><FieldError failure={fieldError} field="code" /></div>
+              <div className="space-y-2"><div className="flex items-center gap-1"><Label htmlFor="role-name">角色名称</Label><RequiredMark /></div><Input id="role-name" value={form.name} maxLength={100} onChange={e => setForm({...form, name: e.target.value})} placeholder="管理员" /></div>
+              <div className="space-y-2"><div className="flex items-center gap-1"><Label htmlFor="role-code">角色编码</Label><RequiredMark /></div><Input id="role-code" value={form.code} maxLength={50} aria-invalid={fieldError?.field === 'code'} onChange={e => setForm({...form, code: e.target.value})} placeholder="admin" /><FieldError failure={fieldError} field="code" /></div>
               <div className="space-y-2 sm:col-span-2"><Label htmlFor="role-description">描述（可选）</Label><Textarea id="role-description" value={form.description} maxLength={500} rows={2} onChange={e => setForm({...form, description: e.target.value})} placeholder="例如：可管理用户、角色与审计日志" /></div>
               <div className="space-y-2"><Label htmlFor="role-dept">所属部门</Label>{renderDeptSelect(form.deptId, v => setForm({...form, deptId: v}), 'role-dept')}</div>
               <div className="space-y-2"><Label htmlFor="role-sort">排序（越小越靠前）</Label><Input id="role-sort" type="number" value={form.sort} onChange={e => setForm({...form, sort: Number(e.target.value)})} /></div>
@@ -445,9 +447,10 @@ export default function RolesTable({ roles, pagination, initialKeyword, initialS
         <DialogContent>
           <DialogHeader><DialogTitle>编辑角色</DialogTitle></DialogHeader>
           <form onSubmit={submitUpdate}>
+            <p className="pt-3 text-[11px] text-muted-foreground"><RequiredLegend /></p>
             <div className="grid gap-3 py-4 sm:grid-cols-2">
-              <div className="space-y-2"><Label htmlFor="role-edit-name">角色名称</Label><Input id="role-edit-name" value={form.name} onChange={e => setForm({...form, name: e.target.value})} /></div>
-              <div className="space-y-2"><div className="flex items-center justify-between gap-2"><Label htmlFor="role-edit-code">角色编码</Label><CopyTextButton text={form.code} label="复制角色编码" /></div><Input id="role-edit-code" value={form.code} disabled /><FieldError failure={fieldError} field="code" /></div>
+              <div className="space-y-2"><div className="flex items-center gap-1"><Label htmlFor="role-edit-name">角色名称</Label><RequiredMark /></div><Input id="role-edit-name" value={form.name} onChange={e => setForm({...form, name: e.target.value})} /></div>
+              <div className="space-y-2"><div className="flex items-center justify-between gap-2"><div className="flex items-center gap-1"><Label htmlFor="role-edit-code">角色编码</Label><RequiredMark /></div><CopyTextButton text={form.code} label="复制角色编码" /></div><Input id="role-edit-code" value={form.code} disabled /><FieldError failure={fieldError} field="code" /></div>
               <div className="space-y-2 sm:col-span-2"><Label htmlFor="role-edit-description">描述（可选）</Label><Textarea id="role-edit-description" value={form.description} maxLength={500} rows={2} onChange={e => setForm({...form, description: e.target.value})} placeholder="例如：可管理用户、角色与审计日志" /></div>
               <div className="space-y-2 sm:col-span-2"><Label htmlFor="role-edit-dept">所属部门</Label>{renderDeptSelect(form.deptId, v => setForm({...form, deptId: v}), 'role-edit-dept')}
                 {selected && (boundUserCounts[selected.id] ?? 0) > 0 && (

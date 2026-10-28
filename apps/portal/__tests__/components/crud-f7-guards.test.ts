@@ -2441,8 +2441,22 @@ describe('权限选择可访问名称（续三百三十）', () => {
 describe('用户创建必填标记（续三百三十一）', () => {
   it('5 个必填字段有 * 与部门 aria-required', () => {
     const src = read('src/app/(dashboard)/users/components/CreateUserDialog.tsx');
-    expect(src).toContain('为必填');
+    expect(src).toContain('RequiredLegend');
     expect(src).toContain('aria-required="true"');
-    expect((src.match(/<\/Label><span aria-hidden="true" className="text-destructive">\*<\/span>/g) ?? []).length).toBe(5);
+    expect((src.match(/<\/Label><RequiredMark \/>/g) ?? []).length).toBe(5);
+  });
+});
+
+describe('必填标记推广（续三百三十二）', () => {
+  it('权限/部门/角色接入共享 RequiredMark', () => {
+    for (const f of [
+      'src/app/(dashboard)/permissions/permission-form.tsx',
+      'src/app/(dashboard)/departments/components/DepartmentTree.tsx',
+      'src/app/(dashboard)/roles/components/RolesTable.tsx',
+    ]) {
+      const src = read(f);
+      expect(src).toContain('RequiredMark');
+      expect(src).toContain('RequiredLegend');
+    }
   });
 });
