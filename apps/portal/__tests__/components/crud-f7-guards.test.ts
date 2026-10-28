@@ -2537,3 +2537,11 @@ describe('用户创建字段错误聚焦（续三百四十二）', () => {
     expect(src).toContain("document.getElementById(inputId)?.focus()");
   });
 });
+
+describe('角色/部门/权限错误聚焦（续三百四十三）', () => {
+  it('三表单 fieldError 聚焦编码输入', () => {
+    expect(read('src/app/(dashboard)/roles/components/RolesTable.tsx')).toContain("const inputId = isEditOpen ? 'role-edit-code' : 'role-code'");
+    expect(read('src/app/(dashboard)/departments/components/DepartmentTree.tsx')).toContain("const inputId = isEditOpen ? 'dept-edit-code' : 'dept-code'");
+    expect(read('src/app/(dashboard)/permissions/permission-form.tsx')).toContain("document.getElementById('perm-code')?.focus()");
+  });
+});

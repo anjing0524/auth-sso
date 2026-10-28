@@ -5,7 +5,7 @@
  * 写操作通过 Server Actions 直调，不调 REST API
  */
 import Link from 'next/link';
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import {
@@ -115,6 +115,12 @@ export default function DepartmentTree({ departments, deletionStats = {}, autoOp
   });
   /** 具体错误码（如 DEPARTMENT_ALREADY_EXISTS）落到对应输入框（#92） */
   const { fieldError, reportFailure, clearFailure } = useFieldFailure(['code']);
+
+  useEffect(() => {
+    if (!fieldError) return;
+    const inputId = isEditOpen ? 'dept-edit-code' : 'dept-code';
+    requestAnimationFrame(() => document.getElementById(inputId)?.focus());
+  }, [fieldError, isEditOpen]);
 
   const toggleExpand = (id: string) => {
     setExpanded(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });

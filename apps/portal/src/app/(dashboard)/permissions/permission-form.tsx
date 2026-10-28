@@ -7,7 +7,7 @@
  * 「页面/目录」类型的权限有 8 个字段，在 600px 高的浏览器内容区里弹窗放不下，
  * 因此改为独立路由：/permissions/new 与 /permissions/:id/edit。
  */
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useUnsavedChangesGuard } from '@/hooks/use-unsaved-changes-guard';
 import { CopyTextButton } from '@/components/shared/copy-text-button';
 import { RequiredLegend, RequiredMark } from '@/components/shared/required-mark';
@@ -85,6 +85,11 @@ export default function PermissionForm({ mode, menuOptions, permission, clients 
   const isBuiltin = mode === 'edit' && permission ? (ALL_PERMISSIONS as readonly string[]).includes(permission.code) : false;
   const isMenu = form.type !== 'API';
   const { fieldError, reportFailure, clearFailure } = useFieldFailure(['code']);
+
+  useEffect(() => {
+    if (!fieldError) return;
+    requestAnimationFrame(() => document.getElementById('perm-code')?.focus());
+  }, [fieldError]);
 
   /** 编辑时父级候选排除自身及后代（H-19 环检测的 UI 侧防线） */
   const excludedParentIds = useMemo(() => {

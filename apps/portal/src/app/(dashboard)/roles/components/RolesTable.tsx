@@ -87,6 +87,12 @@ export default function RolesTable({ roles, pagination, initialKeyword, initialS
   /** 具体错误码（如 ROLE_ALREADY_EXISTS）落到对应输入框（#92；hook 供四处表单复用） */
   const { fieldError, reportFailure, clearFailure } = useFieldFailure(['code']);
 
+  useEffect(() => {
+    if (!fieldError) return;
+    const inputId = isEditOpen ? 'role-edit-code' : 'role-code';
+    requestAnimationFrame(() => document.getElementById(inputId)?.focus());
+  }, [fieldError, isEditOpen]);
+
   const closeAddDialog = () => {
     setIsAddOpen(false);
     if (!autoOpenCreate) return;
