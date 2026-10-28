@@ -211,7 +211,7 @@ export default function UserRolesPage({ user, isSelf = false, returnHref }: User
             </Button>
             <Button size="sm" onClick={() => setConfirmOpen(true)} disabled={readOnly || loading || saving || !user.deptId || changeCount === 0} title={readOnly ? '不能修改自己的角色' : loading ? '加载中…' : saving ? '保存中…' : !user.deptId ? '用户未分配部门，无法分配角色' : changeCount === 0 ? '没有未保存的修改' : undefined}>
               <Save className="h-3.5 w-3.5" />
-              {saving ? '保存中...' : readOnly ? '不能修改自己的角色' : changeCount === 0 ? '无变更' : `保存变更（${changeCount}）`}
+              {saving ? '保存中...' : changeCount > 0 ? `保存变更（${changeCount}）` : '保存变更'}
             </Button>
           </div>
         </div>

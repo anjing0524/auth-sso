@@ -252,7 +252,7 @@ export function ClientDetailClient({ client, initialTokens, initialTokenTotal, c
                 disabled={saving || client.clientId === PORTAL_CLIENT_ID || !isDirty}
                 title={client.clientId === PORTAL_CLIENT_ID ? 'Portal 自身登录客户端为只读' : !isDirty ? '没有未保存的修改' : undefined}
               >
-                {saving ? '保存中...' : !isDirty ? '无修改' : '保存修改'}
+                {saving ? '保存中...' : '保存修改'}
               </Button>
             </div>
           </PermissionGuard>

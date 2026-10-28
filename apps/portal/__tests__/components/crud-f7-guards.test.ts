@@ -854,7 +854,8 @@ describe('应用详情 dirty 状态（续一百五十四）', () => {
     expect(src).toContain('JSON.stringify(formData) !== JSON.stringify(savedForm)');
     expect(src).toContain('未保存的修改');
     expect(src).toContain('放弃修改');
-    expect(src).toContain("!isDirty ? '无修改' : '保存修改'");
+    expect(src).toContain("'保存修改'");
+    expect(src).toContain("'没有未保存的修改'");
   });
 });
 
@@ -3116,5 +3117,15 @@ describe('权限保存按钮固定标签（续四百一十三）', () => {
   it('系统角色/无变更时仍显示保存动作', () => {
     const src = read('src/app/(dashboard)/roles/[id]/permissions/permissions-client.tsx');
     expect(src).toContain("changeCount > 0 ? `保存变更（${changeCount}）` : '保存变更'");
+  });
+});
+
+describe('保存按钮动作标签统一（续四百一十四）', () => {
+  it('用户/客户端/用户角色保存按钮不再显示状态', () => {
+    expect(read('src/app/(dashboard)/users/[id]/UserDetailForm.tsx')).not.toContain("'无修改'");
+    expect(read('src/app/(dashboard)/clients/[id]/ClientDetailClient.tsx')).not.toContain("'无修改'");
+    const roles = read('src/app/(dashboard)/users/[id]/roles/roles-client.tsx');
+    expect(roles).not.toContain("'无变更'");
+    expect(roles).toContain("changeCount > 0 ? `保存变更（${changeCount}）` : '保存变更'");
   });
 });

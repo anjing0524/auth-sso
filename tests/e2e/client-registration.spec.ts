@@ -59,7 +59,7 @@ test.describe('应用注册', () => {
       await expect(infoTab).toHaveAttribute('aria-selected', 'true');
 
       // 无改动不可保存；编辑后出现未保存状态，可放弃修改
-      await expect(page.getByRole('button', { name: '无修改' })).toBeDisabled();
+      await expect(page.getByRole('button', { name: '保存修改' }).first()).toBeDisabled();
       await page.locator('#client-detail-name').fill(`${name}2`);
       await expect(page.getByText('未保存的修改')).toBeVisible();
       await expect(page.getByRole('button', { name: '保存修改' })).toBeEnabled();
