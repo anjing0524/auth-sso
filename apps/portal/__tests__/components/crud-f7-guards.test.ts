@@ -2246,3 +2246,10 @@ describe('审计日志 ID 复制（续三百零一）', () => {
     expect(read('src/components/shared/copy-text-button.tsx')).toContain("toast.success('已复制')");
   });
 });
+
+describe('会话 ID 一键复制（续三百零二）', () => {
+  it('会话行复用 CopyTextButton', () => {
+    const src = read('src/app/(dashboard)/profile/ProfileClient.tsx');
+    expect(src).toContain('<CopyTextButton text={item.id} label="复制会话 ID" />');
+  });
+});
