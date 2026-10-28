@@ -89,7 +89,12 @@ export function CommandPalette({ menus }: { menus: MenuItem[] }) {
   const flatMenus = [...flattenMenus(menus)].sort((a, b) => a.title.localeCompare(b.title, 'zh-CN'));
 
   return (
-    <CommandDialog open={open} onOpenChange={handleOpenChange}>
+    <CommandDialog
+      open={open}
+      onOpenChange={handleOpenChange}
+      title="命令面板"
+      description="搜索页面或功能，使用上下方向键选择，回车打开。"
+    >
       <CommandInput placeholder="搜索页面、功能或操作" />
       <CommandList>
         <CommandEmpty>

@@ -3219,3 +3219,11 @@ describe('描述字段字数提示（续四百二十五）', () => {
     expect(read('src/app/(dashboard)/permissions/permission-form.tsx')).toContain('最多 500 字符');
   });
 });
+
+describe('命令面板可访问名称（续四百二十六）', () => {
+  it('传入中文标题与说明', () => {
+    const src = read('src/components/shared/command-palette.tsx');
+    expect(src).toContain('title="命令面板"');
+    expect(src).toContain('description="搜索页面或功能，使用上下方向键选择，回车打开。"');
+  });
+});
