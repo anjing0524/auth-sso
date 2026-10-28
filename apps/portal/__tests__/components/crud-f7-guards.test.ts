@@ -2733,3 +2733,11 @@ describe('skip link 有效性（续三百六十六）', () => {
     expect(src).toContain('href="#main-content"');
   });
 });
+
+describe('面包屑导航名称（续三百六十七）', () => {
+  it('使用中文 aria-label', () => {
+    const src = read('src/components/ui/breadcrumb.tsx');
+    expect(src).toContain('aria-label="面包屑导航"');
+    expect(src).not.toContain('aria-label="breadcrumb"');
+  });
+});
