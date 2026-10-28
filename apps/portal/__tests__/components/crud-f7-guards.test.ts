@@ -2570,3 +2570,11 @@ describe('客户端详情保存前校验（续三百四十六）', () => {
     expect(src).toContain("document.getElementById(inputId)?.focus()");
   });
 });
+
+describe('用户详情保存前校验（续三百四十七）', () => {
+  it('复用 validateUserBasics 并聚焦 name/email', () => {
+    const src = read('src/app/(dashboard)/users/[id]/UserDetailForm.tsx');
+    expect(src).toContain('validateUserBasics(form)');
+    expect(src).toContain("firstError === 'name' ? 'user-name' : 'user-email'");
+  });
+});

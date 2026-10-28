@@ -34,6 +34,7 @@ import { updateUserAction, deleteUserAction, unlockUserAction, forceLogoutUserAc
 
 import { PageHeader } from '@/components/shared/page-header';
 import { RequiredLegend, RequiredMark } from '@/components/shared/required-mark';
+import { validateUserBasics } from '@/lib/user-validation';
 import { formatDateTime } from '@/lib/format-date';
 import { PermissionGuard } from '@/components/shared/permission-guard';
 import { ResetPasswordDialog } from './ResetPasswordDialog';
@@ -106,6 +107,15 @@ export default function UserDetailForm({ id, initialUser: serverUser, canUpdate,
   const roles = (serverUser.roles as Array<{ id: string; code: string; name: string }> | undefined) ?? [];
 
   const handleUpdate = async () => {
+    const validation = validateUserBasics(form);
+    const firstError = (['name', 'email'] as const).find((field) => validation[field]);
+    if (firstError) {
+      toast.error(validation[firstError]!);
+      requestAnimationFrame(() => document.getElementById(
+        firstError === 'name' ? 'user-name' : 'user-email',
+      )?.focus());
+      return;
+    }
     setSaving(true);
     const res = await updateUserAction(id, { ...form, deptId: form.deptId || null, avatarUrl: form.avatarUrl.trim() || null });
     if (res.success) {
