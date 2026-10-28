@@ -73,6 +73,8 @@ interface Props {
   departments: DeptTreeNode[];
   /** deptId → 子部门/直属用户/角色数量（删除确认弹窗展示，U-DEP05） */
   deletionStats?: Record<string, DepartmentDeletionStats>;
+  /** 工作台快捷入口 /departments?create=1 自动打开 */
+  autoOpenCreate?: boolean;
 }
 
 /** 扁平化树节点（含深度） */
@@ -85,7 +87,7 @@ function flattenTree(nodes: DeptTreeNode[], depth = 0): Array<DeptTreeNode & { d
   return result;
 }
 
-export default function DepartmentTree({ departments, deletionStats = {} }: Props) {
+export default function DepartmentTree({ departments, deletionStats = {}, autoOpenCreate = false }: Props) {
   const router = useRouter();
   const [keyword, setKeyword] = useState('');
   const [sortKey, setSortKey] = useState<DepartmentSortKey>('default');
@@ -94,7 +96,7 @@ export default function DepartmentTree({ departments, deletionStats = {} }: Prop
   const [saving, setSaving] = useState(false);
 
   // 弹窗
-  const [isAddOpen, setIsAddOpen] = useState(false);
+  const [isAddOpen, setIsAddOpen] = useState(autoOpenCreate);
   // 批量移动：仅非根部门可移动；目标父级不能是选中项（服务端还会做循环/作用域校验）
   const [selectedDepts, setSelectedDepts] = useState<Set<string>>(new Set());
   const [moveOpen, setMoveOpen] = useState(false);
@@ -104,13 +106,19 @@ export default function DepartmentTree({ departments, deletionStats = {} }: Prop
   const [selected, setSelected] = useState<DeptTreeNode | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<DeptTreeNode | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [form, setForm] = useState({ name: '', code: '', sort: 0, parentId: '' as string | null, status: 'ACTIVE' });
+  const [form, setForm] = useState({
+    name: '', code: '', sort: 0,
+    parentId: (autoOpenCreate ? departments.find((d) => !d.parentId)?.id ?? null : null) as string | null,
+    status: 'ACTIVE',
+  });
   /** 具体错误码（如 DEPARTMENT_ALREADY_EXISTS）落到对应输入框（#92） */
   const { fieldError, reportFailure, clearFailure } = useFieldFailure(['code']);
 
   const toggleExpand = (id: string) => {
     setExpanded(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
   };
+
+  const closeAddDialog = () => { setIsAddOpen(false); if (autoOpenCreate) router.replace('/departments'); };
 
   const openAdd = (parent?: string) => { setForm({ name: '', code: '', sort: 0, parentId: parent || null, status: 'ACTIVE' }); setIsAddOpen(true); };
   /** 对话框统一改为 `<form>` 提交（U-G06）：Enter 与点击主按钮行为一致 */
@@ -124,7 +132,7 @@ export default function DepartmentTree({ departments, deletionStats = {} }: Prop
     setSaving(true);
     const r = await createDepartmentAction({ name: form.name, code: form.code.trim() || undefined, sort: form.sort, parentId: form.parentId });
     setSaving(false);
-    if (r.success) { toast.success(r.message); setIsAddOpen(false); router.refresh(); } else { reportFailure(r); }
+    if (r.success) { toast.success(r.message); setIsAddOpen(false); if (autoOpenCreate) router.replace('/departments'); router.refresh(); } else { reportFailure(r); }
   };
 
   const handleUpdate = async () => {
@@ -467,7 +475,7 @@ export default function DepartmentTree({ departments, deletionStats = {} }: Prop
       </Dialog>
 
       {/* 新增对话框 */}
-      <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
+      <Dialog open={isAddOpen} onOpenChange={(open) => { setIsAddOpen(open); if (!open) closeAddDialog(); }}>
         <DialogContent>
           <DialogHeader><DialogTitle className="flex items-center gap-2"><Building2 className="h-5 w-5 text-primary" /> 新建部门</DialogTitle></DialogHeader>
           <form onSubmit={submitCreate}>
@@ -478,7 +486,7 @@ export default function DepartmentTree({ departments, deletionStats = {} }: Prop
               <div className="space-y-2"><Label htmlFor="dept-sort">排序（越小越靠前）</Label><Input id="dept-sort" type="number" value={form.sort} onChange={e => setForm({...form, sort: Number(e.target.value)})} /></div>
             </div>
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setIsAddOpen(false)}>取消</Button>
+              <Button type="button" variant="outline" onClick={closeAddDialog}>取消</Button>
               <Button type="submit" disabled={saving}>{saving ? '创建中...' : '创建'}</Button>
             </DialogFooter>
           </form>

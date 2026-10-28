@@ -59,6 +59,7 @@ export default async function UsersPage({ searchParams }: PageProps) {
   const subject = { roleCodes: permCtx?.roles.map((r) => r.code) ?? [], permissionCodes: permCtx?.permissions ?? [] };
   const canUpdate = can(subject, USER_PERMISSIONS.UPDATE);
   const canAssignRole = can(subject, USER_PERMISSIONS.ASSIGN_ROLE);
+  const canCreateUser = can(subject, USER_PERMISSIONS.CREATE);
   const [{ data: users, pagination }, departments] = await Promise.all([
     getUsers(scope, userId, { page, pageSize, keyword, status, ...(deptId ? { deptId } : {}), ...(noRole ? { noRole } : {}) }),
     getDepartmentOptions(scope),
@@ -106,7 +107,7 @@ export default async function UsersPage({ searchParams }: PageProps) {
                 </div>
               </div>
             }
-            right={<CreateUserDialog departments={departments} canAssignRole={canAssignRole} autoOpen={params.create === '1'} />}
+            right={<CreateUserDialog departments={departments} canAssignRole={canAssignRole} autoOpen={canCreateUser && params.create === '1'} />}
           />
         }
       />

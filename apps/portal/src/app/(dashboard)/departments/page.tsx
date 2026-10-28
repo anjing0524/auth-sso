@@ -19,7 +19,12 @@ import DepartmentTree from './components/DepartmentTree';
 export const instant = false;
 export const metadata = { title: '部门管理 | Auth-SSO' };
 
-export default async function DepartmentsPage() {
+interface PageProps {
+  searchParams: Promise<{ create?: string }>;
+}
+
+export default async function DepartmentsPage({ searchParams }: PageProps) {
+  const params = await searchParams;
   // 鉴权由 departments/layout.tsx 负责（requirePermission(['department:list'])），此处只取身份信息。
   const identity = await resolveIdentity();
   const scope = identity ? await resolveScope(db, identity.userId) : { deptIds: [] };
@@ -33,7 +38,7 @@ export default async function DepartmentsPage() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
-      <DepartmentTree departments={departments} deletionStats={deletionStats} />
+      <DepartmentTree departments={departments} deletionStats={deletionStats} autoOpenCreate={params.create === '1'} />
     </div>
   );
 }

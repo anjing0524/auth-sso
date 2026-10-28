@@ -28,6 +28,7 @@ interface PageProps {
     sort?: string;
     status?: string;
     deptId?: string;
+    create?: string;
   }>;
 }
 
@@ -69,6 +70,7 @@ export default async function RolesPage({ searchParams }: PageProps) {
         initialSort={sort ?? 'default'}
         initialStatus={status}
         initialDeptId={deptId}
+        autoOpenCreate={params.create === '1'}
         departments={departments}
         boundUserCounts={boundUserCounts}
         permissionCounts={permissionCounts}

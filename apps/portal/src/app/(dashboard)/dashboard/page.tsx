@@ -112,10 +112,10 @@ export default async function DashboardPage() {
               title="欢迎使用 Auth-SSO"
               description="完成以下步骤以开始管理您的身份平台"
               steps={[
-                ...(canDepartments ? [{ label: '创建组织架构', href: '/departments' }] : []),
-                ...(canUserCreate ? [{ label: '创建用户账号', href: '/users' }] : []),
-                ...(canRoles ? [{ label: '配置角色权限', href: '/roles' }] : []),
-                ...(canClientCreate ? [{ label: '注册 OAuth 应用', href: '/clients' }] : []),
+                ...(canDepartments ? [{ label: '创建组织架构', href: '/departments?create=1' }] : []),
+                ...(canUserCreate ? [{ label: '创建用户账号', href: '/users?create=1' }] : []),
+                ...(canRoles ? [{ label: '配置角色权限', href: '/roles?create=1' }] : []),
+                ...(canClientCreate ? [{ label: '注册 OAuth 应用', href: '/clients/new' }] : []),
               ]}
             />
           </div>

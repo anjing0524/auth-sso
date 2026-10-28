@@ -1755,9 +1755,23 @@ describe('工作台快捷新建用户（续二百四十四）', () => {
     const dash = read('src/app/(dashboard)/dashboard/page.tsx');
     expect(dash).toContain('href="/users?create=1"');
     const page = read('src/app/(dashboard)/users/page.tsx');
-    expect(page).toContain("autoOpen={params.create === '1'}");
+    expect(page).toContain("autoOpen={canCreateUser && params.create === '1'}");
     const dialog = read('src/app/(dashboard)/users/components/CreateUserDialog.tsx');
     expect(dialog).toContain('useState(autoOpen)');
     expect(dialog).toContain("if (autoOpen) router.replace('/users')");
+  });
+});
+
+describe('新手引导四步直达动作（续二百四十五）', () => {
+  it('组织/用户/角色/应用分别到创建态或新建页', () => {
+    const dash = read('src/app/(dashboard)/dashboard/page.tsx');
+    expect(dash).toContain("href: '/departments?create=1'");
+    expect(dash).toContain("href: '/users?create=1'");
+    expect(dash).toContain("href: '/roles?create=1'");
+    expect(dash).toContain("href: '/clients/new'");
+    const roles = read('src/app/(dashboard)/roles/page.tsx');
+    expect(roles).toContain('autoOpenCreate={params.create');
+    const depts = read('src/app/(dashboard)/departments/page.tsx');
+    expect(depts).toContain('autoOpenCreate={params.create');
   });
 });

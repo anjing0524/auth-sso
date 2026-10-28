@@ -55,6 +55,8 @@ interface Props {
   initialStatus?: string;
   /** 部门筛选（''=全部） */
   initialDeptId?: string;
+  /** 工作台快捷入口 /roles?create=1 自动打开 */
+  autoOpenCreate?: boolean;
   departments: Array<{ id: string; name: string }>;
   /** 删除确认的影响面：roleId → 绑定用户数（U-ROLES03） */
   boundUserCounts?: Record<string, number>;
@@ -62,7 +64,7 @@ interface Props {
   permissionCounts?: Record<string, number>;
 }
 
-export default function RolesTable({ roles, pagination, initialKeyword, initialSort = 'default', initialStatus = '', initialDeptId = '', departments, boundUserCounts = {}, permissionCounts = {} }: Props) {
+export default function RolesTable({ roles, pagination, initialKeyword, initialSort = 'default', initialStatus = '', initialDeptId = '', autoOpenCreate = false, departments, boundUserCounts = {}, permissionCounts = {} }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const currentListHref = `/roles${searchParams.toString() ? `?${searchParams.toString()}` : ''}`;
@@ -70,14 +72,16 @@ export default function RolesTable({ roles, pagination, initialKeyword, initialS
   const [isPending, startTransition] = useTransition();
   const [saving, setSaving] = useState(false);
 
-  const [isAddOpen, setIsAddOpen] = useState(false);
+  const [isAddOpen, setIsAddOpen] = useState(autoOpenCreate);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [selected, setSelected] = useState<RoleRow | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<RoleRow | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [form, setForm] = useState({ name: '', code: '', description: '', deptId: '', sort: 0, status: 'ACTIVE' });
+  const [form, setForm] = useState({ name: '', code: '', description: '', deptId: autoOpenCreate ? (departments[0]?.id ?? '') : '', sort: 0, status: 'ACTIVE' });
   /** 具体错误码（如 ROLE_ALREADY_EXISTS）落到对应输入框（#92；hook 供四处表单复用） */
   const { fieldError, reportFailure, clearFailure } = useFieldFailure(['code']);
+
+  const closeAddDialog = () => { setIsAddOpen(false); if (autoOpenCreate) router.replace('/roles'); };
 
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleSearch = (value: string) => {
@@ -114,7 +118,7 @@ export default function RolesTable({ roles, pagination, initialKeyword, initialS
     setSaving(true);
     const res = await createRoleAction({ name: form.name, code: form.code, description: form.description.trim() || undefined, deptId: form.deptId, sort: form.sort });
     setSaving(false);
-    if (res.success) { toast.success(res.message); setIsAddOpen(false); router.refresh(); } else { reportFailure(res); }
+    if (res.success) { toast.success(res.message); setIsAddOpen(false); if (autoOpenCreate) router.replace('/roles'); router.refresh(); } else { reportFailure(res); }
   };
 
   const handleUpdate = async () => {
@@ -401,7 +405,7 @@ export default function RolesTable({ roles, pagination, initialKeyword, initialS
       />
       </div>
 
-      <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
+      <Dialog open={isAddOpen} onOpenChange={(open) => { setIsAddOpen(open); if (!open) closeAddDialog(); }}>
         <DialogContent>
           <DialogHeader><DialogTitle className="flex items-center gap-2"><ShieldCheck className="h-5 w-5 text-primary" /> 新建角色</DialogTitle></DialogHeader>
           <form onSubmit={submitCreate}>
@@ -412,7 +416,7 @@ export default function RolesTable({ roles, pagination, initialKeyword, initialS
               <div className="space-y-2"><Label htmlFor="role-dept">所属部门</Label>{renderDeptSelect(form.deptId, v => setForm({...form, deptId: v}), 'role-dept')}</div>
               <div className="space-y-2"><Label htmlFor="role-sort">排序（越小越靠前）</Label><Input id="role-sort" type="number" value={form.sort} onChange={e => setForm({...form, sort: Number(e.target.value)})} /></div>
             </div>
-            <DialogFooter><Button type="button" variant="outline" onClick={() => setIsAddOpen(false)}>取消</Button><Button type="submit" disabled={saving}>创建</Button></DialogFooter>
+            <DialogFooter><Button type="button" variant="outline" onClick={closeAddDialog}>取消</Button><Button type="submit" disabled={saving}>创建</Button></DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
