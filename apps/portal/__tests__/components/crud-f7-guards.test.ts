@@ -2201,3 +2201,10 @@ describe('Portal 客户端禁用说明（续二百九十五）', () => {
     expect(info).toContain('Portal 自身登录客户端不可轮换 Secret');
   });
 });
+
+describe('会话 ID 完整值（续二百九十六）', () => {
+  it('截断展示带 title 完整会话 ID', () => {
+    const src = read('src/app/(dashboard)/profile/ProfileClient.tsx');
+    expect(src).toContain('title={`会话 ID：${item.id}`}');
+  });
+});
