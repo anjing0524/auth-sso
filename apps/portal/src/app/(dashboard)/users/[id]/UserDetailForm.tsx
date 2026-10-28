@@ -233,8 +233,8 @@ export default function UserDetailForm({ id, initialUser: serverUser, canUpdate,
                   <p className="text-[10px] leading-4 text-muted-foreground">用于列表头像；留空显示姓名首字母。</p>
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="user-username">用户名</Label>
-                  <Input id="user-username" value={username} disabled aria-label="用户名" className="bg-muted opacity-60" />
+                  <Label htmlFor="user-username">用户名（不可修改）</Label>
+                  <Input id="user-username" value={username} disabled className="bg-muted opacity-60" />
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="user-status">账户状态</Label>

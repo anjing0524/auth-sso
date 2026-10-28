@@ -2668,3 +2668,11 @@ describe('表格可访问名称（续三百五十八）', () => {
     expect(read('src/app/(dashboard)/dashboard/page.tsx')).toContain('aria-label="最近操作记录"');
   });
 });
+
+describe('不可变字段说明（续三百五十九）', () => {
+  it('用户名/角色编码标注不可改', () => {
+    expect(read('src/app/(dashboard)/users/[id]/UserDetailForm.tsx')).toContain('用户名（不可修改）');
+    expect(read('src/app/(dashboard)/users/[id]/UserDetailForm.tsx')).not.toContain('aria-label="用户名" className="bg-muted');
+    expect(read('src/app/(dashboard)/roles/components/RolesTable.tsx')).toContain('角色编码（不可变更）');
+  });
+});
