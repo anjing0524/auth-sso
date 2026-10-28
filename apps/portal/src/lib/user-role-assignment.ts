@@ -45,7 +45,10 @@ export const MAX_ASSIGNED_ROLES = 100;
 /** 分配角色的入参（REST 路由与 Server Action 共用同一份 zod，避免第二份漂移） */
 export const RoleAssignmentSchema = z
   .object({
-    roleIds: z.array(z.string().uuid()).min(1).max(MAX_ASSIGNED_ROLES),
+    roleIds: z
+    .array(z.string().uuid())
+    .min(1, '用户至少需要保留一个角色；如需停用账号，请在用户详情使用「禁用账号」')
+    .max(MAX_ASSIGNED_ROLES),
   })
   .superRefine(({ roleIds }, ctx) => {
     if (new Set(roleIds).size !== roleIds.length) {

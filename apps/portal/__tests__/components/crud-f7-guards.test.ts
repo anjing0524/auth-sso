@@ -427,7 +427,8 @@ describe('用户分配角色批量/差异（2026-10-26，第十四轮）', () =>
   it('支持搜索+全选筛选/清空/仅看已选，保存前确认差异', () => {
     const src = read('src/app/(dashboard)/users/[id]/roles/roles-client.tsx');
     expect(src).toContain('全选当前筛选');
-    expect(src).toContain('清空全部');
+    expect(src).toContain('撤销未保存选择');
+    expect(src).toContain('用户至少需要保留一个角色');
     expect(src).toContain('仅看已选');
     expect(src).toContain('待新增');
     expect(src).toContain('待移除');

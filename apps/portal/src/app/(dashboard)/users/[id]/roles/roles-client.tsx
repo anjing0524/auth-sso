@@ -133,8 +133,15 @@ export default function UserRolesPage({ user, isSelf = false, returnHref }: User
   const selectedPermTotal = selectedRoles.reduce((sum, r) => sum + (r.permissionCount ?? 0), 0);
   const allSelectedRolesEmpty = selectedRoles.length > 0 && selectedRoles.every((r) => (r.permissionCount ?? 0) === 0);
 
+  /** 最后一个已选角色不可取消：服务端要求至少保留一个角色 */
+  const lastAssignedRoleId = assignedRoleIds.size === 1 ? [...assignedRoleIds][0]! : null;
+
   const toggleRole = (roleId: string) => {
     if (readOnly) return;
+    if (assignedRoleIds.size === 1 && assignedRoleIds.has(roleId)) {
+      toast.info('用户至少需要保留一个角色；如需停用账号，请在用户详情使用「禁用账号」');
+      return;
+    }
     setAssignedRoleIds((prev) => {
       const next = new Set(prev);
       if (next.has(roleId)) next.delete(roleId);
@@ -144,6 +151,11 @@ export default function UserRolesPage({ user, isSelf = false, returnHref }: User
   };
 
   const handleSave = async () => {
+    if (assignedRoleIds.size === 0) {
+      setConfirmOpen(false);
+      toast.error('用户至少需要保留一个角色；如需停用账号，请在用户详情使用「禁用账号」');
+      return;
+    }
     setSaving(true);
     try {
       const roleIds = Array.from(assignedRoleIds);
@@ -197,8 +209,14 @@ export default function UserRolesPage({ user, isSelf = false, returnHref }: User
           >
             全选当前筛选
           </Button>
-          <Button variant="ghost" size="sm" disabled={readOnly || loading || assignedRoleIds.size === 0} title={readOnly ? '没有分配角色的权限' : loading ? '加载中…' : assignedRoleIds.size === 0 ? '当前没有已选角色' : undefined} onClick={() => setAssignedRoleIds(new Set())}>
-            清空全部
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={readOnly || loading || changeCount === 0}
+            title={readOnly ? '没有分配角色的权限' : loading ? '加载中…' : changeCount === 0 ? '没有未保存的修改' : '恢复为已保存的角色'}
+            onClick={() => setAssignedRoleIds(new Set(savedRoleIds))}
+          >
+            撤销未保存选择
           </Button>
           <span className="flex items-center gap-1 text-[11px]">
             <span className="rounded bg-badge-success-bg px-1.5 py-0.5 font-medium text-badge-success-fg">待新增 +{addedIds.size}</span>
@@ -226,6 +244,11 @@ export default function UserRolesPage({ user, isSelf = false, returnHref }: User
             所选 {selectedRoles.length} 个角色合计 {selectedPermTotal} 项权限
           </div>
         )}
+        {!readOnly && assignedRoleIds.size === 1 ? (
+          <p className="border-b bg-badge-warning-bg px-3 py-1.5 text-[11px] text-badge-warning-fg">
+            已保留最后一个角色：至少需要一个角色才能保存。如需禁止该用户登录，请到用户详情使用「禁用账号」。
+          </p>
+        ) : null}
         <div className="scrollbar-slim min-h-0 flex-1 overflow-y-auto p-3">
           {loading ? (
             <div className="flex items-center justify-center py-24">
@@ -259,13 +282,16 @@ export default function UserRolesPage({ user, isSelf = false, returnHref }: User
               {displayRoles.map((role) => (
                 <label
                   key={role.id}
-                  className={`flex cursor-pointer items-center gap-2.5 rounded-md border px-3 py-2 transition-colors hover:bg-muted/40 ${
+                  title={lastAssignedRoleId === role.id ? '用户至少需要保留一个角色；如需停用账号，请在用户详情使用「禁用账号」' : undefined}
+                  className={`flex items-center gap-2.5 rounded-md border px-3 py-2 transition-colors ${
+                    lastAssignedRoleId === role.id ? 'cursor-not-allowed opacity-80' : 'cursor-pointer hover:bg-muted/40'
+                  } ${
                     addedIds.has(role.id) ? 'border-success/30 bg-success/5' : removedIds.has(role.id) ? 'border-destructive/30 bg-destructive/5' : 'border-border/60'
                   }`}
                 >
                   <Checkbox
                     checked={assignedRoleIds.has(role.id)}
-                    disabled={readOnly}
+                    disabled={readOnly || lastAssignedRoleId === role.id}
                     onCheckedChange={() => toggleRole(role.id)}
                   />
                   <span className="min-w-0 flex-1">

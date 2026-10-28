@@ -188,6 +188,8 @@ export default function RolePermissionsPage({ role, returnHref = '/roles' }: Rol
     ];
   }, [permissions, assignedIds]);
 
+  const hasScopeFilters = Boolean(keyword) || onlySelected || onlyChanged || statusFilter !== 'ALL';
+
   const scope = useMemo(() => {
     const find = (nodes: ScopeNode[]): ScopeNode | null => {
       for (const n of nodes) {
@@ -379,7 +381,13 @@ export default function RolePermissionsPage({ role, returnHref = '/roles' }: Rol
         <div className="flex min-w-0 flex-1 flex-col">
           <div className="flex flex-wrap items-center gap-2 border-b bg-muted/30 px-3 py-1.5">
             <SearchInput placeholder="搜索权限名称或编码" value={keyword} onChange={setKeyword} />
-            <Badge variant="secondary" className="h-6">{loading ? '加载中' : `${scope.label} · ${scopedItems.length} 项`}</Badge>
+            <Badge variant="secondary" className="h-6">
+              {loading
+                ? '加载中'
+                : hasScopeFilters
+                  ? `${scope.label} · 共 ${scope.count} 项，筛选 ${scopedItems.length} 项`
+                  : `${scope.label} · ${scope.count} 项`}
+            </Badge>
             <Button
               variant="ghost"
               size="sm"
