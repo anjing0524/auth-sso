@@ -1940,3 +1940,9 @@ a11y 对比度函数提取复用，增加未登录 `/login`（390×844，独立�
 | 问题 | 修复 | 验证 |
 |---|---|---|
 | OAuth 错误页无标题/main、用 h2、无 alert、英文 Target App | layout metadata + main/h1/alert + 中文 | 标题访问受限、main/h1/alert 正确 |
+
+### 9.259 产品审计二百五十四：角色权限作用域语义（2026-10-29）
+
+| 问题 | 修复 | 验证 |
+|---|---|---|
+| 作用域选择只有视觉高亮；折叠按钮无 aria-expanded | 补 aria-pressed / aria-expanded | 全部权限 aria-pressed=true；折叠状态可读 |

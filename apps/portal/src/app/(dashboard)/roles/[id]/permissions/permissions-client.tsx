@@ -290,6 +290,7 @@ export default function RolePermissionsPage({ role, returnHref = '/roles' }: Rol
               <button
                 type="button"
                 aria-label={isCollapsed ? `展开 ${node.label}` : `折叠 ${node.label}`}
+                aria-expanded={!isCollapsed}
                 onClick={() =>
                   setCollapsed((prev) => {
                     const next = new Set(prev);
@@ -307,6 +308,7 @@ export default function RolePermissionsPage({ role, returnHref = '/roles' }: Rol
             )}
             <button
               type="button"
+              aria-pressed={scopeId === node.id}
               onClick={() => setScopeId(node.id)}
               className="flex min-w-0 flex-1 items-center gap-1.5 py-1.5 pr-2 text-left text-[13px]"
               style={{ paddingLeft: 2 + depth * 12 }}

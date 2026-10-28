@@ -2943,3 +2943,11 @@ describe('OAuth 错误页语义（续三百九十一）', () => {
     expect(src).toContain('目标应用：');
   });
 });
+
+describe('角色权限作用域语义（续三百九十二）', () => {
+  it('作用域 aria-pressed；折叠 aria-expanded', () => {
+    const src = read('src/app/(dashboard)/roles/[id]/permissions/permissions-client.tsx');
+    expect(src).toContain('aria-pressed={scopeId === node.id}');
+    expect(src).toContain('aria-expanded={!isCollapsed}');
+  });
+});
