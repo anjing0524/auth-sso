@@ -1910,3 +1910,11 @@ describe('筛选控件 pending 禁用（续二百五十九）', () => {
     expect(audit).toContain("aria-label=\"开始日期\" value={startDate ?? ''} disabled={isPending}");
   });
 });
+
+describe('审计日期顺序校验（续二百六十）', () => {
+  it('开始晚于结束时提示并阻止写 URL', () => {
+    const src = read('src/app/(dashboard)/audit-logs/components/audit-filters.tsx');
+    expect(src).toContain("toast.error('开始日期不能晚于结束日期')");
+    expect(src).toContain("toast.error('结束日期不能早于开始日期')");
+  });
+});

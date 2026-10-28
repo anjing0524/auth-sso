@@ -9,6 +9,7 @@
  */
 import { useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
 import {
   AUDIT_OPERATION_LABELS,
   LOGIN_EVENT_LABELS,
@@ -130,12 +131,20 @@ export function AuditFilters({ tab, eventType, operation, range, keyword, startD
         <>
           <Input
             type="date" aria-label="开始日期" value={startDate ?? ''} disabled={isPending} className="w-32"
-            onChange={(e) => push({ startDate: e.target.value || null })}
+            onChange={(e) => {
+              const next = e.target.value;
+              if (next && endDate && next > endDate) { toast.error('开始日期不能晚于结束日期'); return; }
+              push({ startDate: next || null });
+            }}
           />
           <span className="text-[11px] text-muted-foreground">至</span>
           <Input
             type="date" aria-label="结束日期" value={endDate ?? ''} disabled={isPending} className="w-32"
-            onChange={(e) => push({ endDate: e.target.value || null })}
+            onChange={(e) => {
+              const next = e.target.value;
+              if (next && startDate && next < startDate) { toast.error('结束日期不能早于开始日期'); return; }
+              push({ endDate: next || null });
+            }}
           />
         </>
       )}
