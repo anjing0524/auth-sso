@@ -42,8 +42,10 @@ test.describe('用户批量操作', () => {
       await expect(page.getByText(`${prefix}_1`)).toBeVisible();
       await expect(page.getByText(`${prefix}_2`)).toBeVisible();
       const detailLinks = page.getByRole('link', { name: '查看详情' });
-      ids.push((await detailLinks.nth(0).getAttribute('href'))!.split('/').pop()!);
-      ids.push((await detailLinks.nth(1).getAttribute('href'))!.split('/').pop()!);
+      // 详情链接带 ?returnTo=...；只取 pathname 末段，避免把查询串当成 ID
+      const idFromHref = (href: string) => new URL(href, 'https://127.0.0.1').pathname.split('/').pop()!;
+      ids.push(idFromHref((await detailLinks.nth(0).getAttribute('href'))!));
+      ids.push(idFromHref((await detailLinks.nth(1).getAttribute('href'))!));
 
       // 批量禁用：确认弹窗需列出两人
       await page.getByRole('checkbox', { name: /选择用户/ }).nth(0).check();
