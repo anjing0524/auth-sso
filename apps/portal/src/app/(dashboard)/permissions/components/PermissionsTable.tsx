@@ -427,7 +427,7 @@ export default function PermissionsTable({ permissions, pagination, activeTab, i
             {selected?.type !== 'API' ? '；删除目录/页面会级联删除其子菜单' : ''}。
           </p>
           {impactLoading ? (
-            <p className="text-xs text-muted-foreground">正在统计影响面…</p>
+            <p role="status" aria-live="polite" className="text-xs text-muted-foreground">正在统计影响面…</p>
           ) : deleteImpact ? (
             <div className="rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2 text-xs text-destructive">
               影响面：{impactText(deleteImpact)}

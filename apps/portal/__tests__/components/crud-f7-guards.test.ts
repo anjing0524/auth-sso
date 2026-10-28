@@ -2029,3 +2029,12 @@ describe('批量操作栏无障碍语义（续二百七十三）', () => {
     expect(perms).toContain('role="status" aria-live="polite"');
   });
 });
+
+describe('动态加载无障碍（续二百七十四）', () => {
+  it('表格 aria-busy；影响面统计 role=status', () => {
+    const table = read('src/components/shared/data-table.tsx');
+    expect(table).toContain('aria-busy={loading || undefined}');
+    const perms = read('src/app/(dashboard)/permissions/components/PermissionsTable.tsx');
+    expect(perms).toContain('role="status" aria-live="polite"');
+  });
+});
