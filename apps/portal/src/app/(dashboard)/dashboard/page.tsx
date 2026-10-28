@@ -217,8 +217,13 @@ export default async function DashboardPage() {
                             <span className="text-[13px] text-muted-foreground">未知</span>
                           )}
                         </TableCell>
-                        <TableCell className="text-[13px] text-muted-foreground">
-                          {AUDIT_OPERATION_LABELS[log.operation as keyof typeof AUDIT_OPERATION_LABELS] ?? log.operation}
+                        <TableCell className="text-[13px]">
+                          <Link
+                            href={`/audit-logs/${log.id}?tab=operation`}
+                            className="text-muted-foreground hover:text-primary hover:underline"
+                          >
+                            {AUDIT_OPERATION_LABELS[log.operation as keyof typeof AUDIT_OPERATION_LABELS] ?? log.operation}
+                          </Link>
                         </TableCell>
                         <TableCell>
                           <Badge variant={log.status === 200 ? 'success' : 'destructive'} className="text-[11px]">

@@ -1918,3 +1918,10 @@ describe('审计日期顺序校验（续二百六十）', () => {
     expect(src).toContain("toast.error('结束日期不能早于开始日期')");
   });
 });
+
+describe('最近操作详情链路（续二百六十一）', () => {
+  it('行为列链接到操作日志详情', () => {
+    const page = read('src/app/(dashboard)/dashboard/page.tsx');
+    expect(page).toContain('`/audit-logs/${log.id}?tab=operation`');
+  });
+});
