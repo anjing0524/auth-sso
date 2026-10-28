@@ -2460,3 +2460,12 @@ describe('必填标记推广（续三百三十二）', () => {
     }
   });
 });
+
+describe('客户端创建必填标记（续三百三十三）', () => {
+  it('名称/回调接入共享标记，星号不再进入 label', () => {
+    const src = read('src/app/(dashboard)/clients/new/page.tsx');
+    expect(src).toContain('<RequiredLegend />');
+    expect((src.match(/<\/Label><RequiredMark \/>/g) ?? []).length).toBe(2);
+    expect(src).not.toContain('应用名称 <span');
+  });
+});

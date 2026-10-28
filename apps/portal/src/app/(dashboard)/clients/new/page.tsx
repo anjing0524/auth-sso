@@ -31,6 +31,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { PageHeader } from '@/components/shared/page-header';
+import { RequiredLegend, RequiredMark } from '@/components/shared/required-mark';
 import { safeReturnPath } from '@/lib/safe-return';
 
 /** 回调地址必须是绝对 http(s) URL（与服务端 Zod `.url()` 同口径的前端近似） */
@@ -164,6 +165,7 @@ export default function NewClientPage() {
         title="注册新应用"
         description="注册 OAuth 2.1 客户端；Client ID / Secret 由系统生成，Secret 仅展示一次"
       />
+      <p className="text-[11px] text-muted-foreground"><RequiredLegend /></p>
 
       <div className="grid items-start gap-3 lg:grid-cols-3">
         <div className="space-y-3 lg:col-span-2">
@@ -176,7 +178,7 @@ export default function NewClientPage() {
             </CardHeader>
             <CardContent className="grid gap-3 p-3 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <Label htmlFor="client-create-name">应用名称 <span className="text-destructive">*</span></Label>
+                <div className="flex items-center gap-1"><Label htmlFor="client-create-name">应用名称</Label><RequiredMark /></div>
                 <Input
                   id="client-create-name"
                   placeholder="我的业务系统"
@@ -227,7 +229,7 @@ export default function NewClientPage() {
             </CardHeader>
             <CardContent className="space-y-3 p-3">
               <div className="space-y-1.5">
-                <Label htmlFor="client-create-redirect-uris">回调地址（每行一个） <span className="text-destructive">*</span></Label>
+                <div className="flex items-center gap-1"><Label htmlFor="client-create-redirect-uris">回调地址（每行一个）</Label><RequiredMark /></div>
                 <Textarea
                   id="client-create-redirect-uris"
                   placeholder={'https://your-app.example.com/api/auth/callback\nhttp://localhost:3000/api/auth/callback'}

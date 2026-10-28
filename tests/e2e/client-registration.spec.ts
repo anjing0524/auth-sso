@@ -23,8 +23,8 @@ test.describe('应用注册', () => {
 
     try {
       await page.goto('/clients/new', { waitUntil: 'networkidle' });
-      await page.getByLabel('应用名称 *').fill(name);
-      await page.getByLabel('回调地址（每行一个） *').fill('https://example.com/api/auth/callback');
+      await page.getByLabel('应用名称').fill(name);
+      await page.getByLabel('回调地址（每行一个）').fill('https://example.com/api/auth/callback');
       // TTL 预设应有选中态（aria-pressed）
       await expect(page.getByRole('button', { name: '1 小时' })).toHaveAttribute('aria-pressed', 'true');
       await page.getByRole('button', { name: '确认注册' }).click();
