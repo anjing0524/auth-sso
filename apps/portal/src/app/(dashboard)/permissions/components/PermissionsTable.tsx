@@ -129,6 +129,7 @@ export default function PermissionsTable({ permissions, pagination, activeTab, i
 
   // 删除确认（新建/编辑已页面化：弹窗不允许滚动）
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [selected, setSelected] = useState<PermissionRow | null>(null);
   // 批量删除：只删除当前页可见选中项，避免跨页误删
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
@@ -177,9 +178,14 @@ export default function PermissionsTable({ permissions, pagination, activeTab, i
 
   const handleDelete = async () => {
     if (!selected) return;
-    const r = await deletePermissionAction(selected.id);
-    if (r.success) { toast.success(r.message); setIsDeleteOpen(false); router.refresh(); }
-    else { reportFailure(r); }
+    setDeleting(true);
+    try {
+      const r = await deletePermissionAction(selected.id);
+      if (r.success) { toast.success(r.message); setIsDeleteOpen(false); router.refresh(); }
+      else { reportFailure(r); }
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const columns = [
@@ -422,8 +428,10 @@ export default function PermissionsTable({ permissions, pagination, activeTab, i
             </div>
           ) : null}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsDeleteOpen(false)}>取消</Button>
-            <Button variant="destructive" onClick={handleDelete}>确认删除</Button>
+            <Button variant="outline" onClick={() => setIsDeleteOpen(false)} disabled={deleting}>取消</Button>
+            <Button variant="destructive" onClick={handleDelete} disabled={deleting}>
+              {deleting ? '删除中...' : '确认删除'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -70,6 +70,7 @@ export default function UserDetailForm({ id, initialUser: serverUser, canUpdate,
   const { reportFailure } = useFieldFailure();
   const leaveGuard = useUnsavedChangesGuard(isDirty);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [deletingUser, setDeletingUser] = useState(false);
   const [forceLogoutOpen, setForceLogoutOpen] = useState(false);
   const [forceLogoutBusy, setForceLogoutBusy] = useState(false);
 
@@ -131,13 +132,18 @@ export default function UserDetailForm({ id, initialUser: serverUser, canUpdate,
   };
 
   const handleDelete = async () => {
-    const res = await deleteUserAction(id);
-    if (res.success) {
-      toast.success('用户已成功删除');
-      setIsDeleteOpen(false);
-      router.push('/users');
-    } else {
-      reportFailure({ error: res.error, message: userFacingMessage(res, '删除失败') });
+    setDeletingUser(true);
+    try {
+      const res = await deleteUserAction(id);
+      if (res.success) {
+        toast.success('用户已成功删除');
+        setIsDeleteOpen(false);
+        router.push('/users');
+      } else {
+        reportFailure({ error: res.error, message: userFacingMessage(res, '删除失败') });
+      }
+    } finally {
+      setDeletingUser(false);
     }
   };
 
@@ -321,8 +327,10 @@ export default function UserDetailForm({ id, initialUser: serverUser, canUpdate,
                           </DialogDescription>
                         </DialogHeader>
                         <DialogFooter>
-                          <Button variant="outline" onClick={() => setIsDeleteOpen(false)}>取消</Button>
-                          <Button variant="destructive" onClick={handleDelete}>确认删除</Button>
+                          <Button variant="outline" onClick={() => setIsDeleteOpen(false)} disabled={deletingUser}>取消</Button>
+                          <Button variant="destructive" onClick={handleDelete} disabled={deletingUser}>
+                            {deletingUser ? '删除中...' : '确认删除'}
+                          </Button>
                         </DialogFooter>
                       </DialogContent>
                     </Dialog>

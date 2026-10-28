@@ -1878,3 +1878,14 @@ describe('审计自定义日期随 URL 同步（续二百五十六）', () => {
     expect(src).toContain('useEffect(() => { setCustomMode(!range && Boolean(startDate || endDate)); }, [range, startDate, endDate]);');
   });
 });
+
+describe('删除确认 pending（续二百五十七）', () => {
+  it('权限/用户单条删除禁用重复提交', () => {
+    const perms = read('src/app/(dashboard)/permissions/components/PermissionsTable.tsx');
+    expect(perms).toContain('const [deleting, setDeleting] = useState(false)');
+    expect(perms).toContain("{deleting ? '删除中...' : '确认删除'}");
+    const user = read('src/app/(dashboard)/users/[id]/UserDetailForm.tsx');
+    expect(user).toContain('const [deletingUser, setDeletingUser] = useState(false)');
+    expect(user).toContain("{deletingUser ? '删除中...' : '确认删除'}");
+  });
+});
