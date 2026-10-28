@@ -18,7 +18,9 @@ import { CopyTextButton } from '@/components/shared/copy-text-button';
 /** 读取会话/动态数据：与审计列表同口径，声明非 instant 路由 */
 export const instant = false;
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+// PG uuid 只要求 canonical 8-4-4-4-12 十六进制；版本/变体位不受约束。
+// 只校验版本 1-5 会把库中合法 ID（含固定测试/导入数据）判为非法并 404。
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 interface PageProps {
   params: Promise<{ id: string }>;

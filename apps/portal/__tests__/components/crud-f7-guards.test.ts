@@ -2301,3 +2301,11 @@ describe('共享复制组件回退（续三百零八）', () => {
     expect(src).toContain('if (!copied)');
   });
 });
+
+describe('审计详情 UUID 校验（续三百一十）', () => {
+  it('只校验 canonical 格式，不限制版本位', () => {
+    const src = read('src/app/(dashboard)/audit-logs/[id]/page.tsx');
+    expect(src).toContain('[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}');
+    expect(src).not.toContain('[1-5][0-9a-f]{3}');
+  });
+});

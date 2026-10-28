@@ -32,8 +32,12 @@ export function AuditParamsActions({ id, params }: { id: string; params: Record<
     const a = document.createElement('a');
     a.href = url;
     a.download = `audit-params-${id}.json`;
+    a.rel = 'noopener';
+    // 挂载后再点击，并延迟释放，兼容对即时 revoke 敏感的浏览器
+    document.body.appendChild(a);
     a.click();
-    URL.revokeObjectURL(url);
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
   return (
