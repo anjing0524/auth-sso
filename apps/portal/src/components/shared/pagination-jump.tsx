@@ -24,9 +24,11 @@ const JUMP_NOTICE_ID = `${JUMP_INPUT_ID}-notice`;
 export function PaginationJump({
   totalPages,
   onPageChange,
+  disabled = false,
 }: {
   totalPages: number;
   onPageChange: (page: number) => void;
+  disabled?: boolean;
 }) {
   const [value, setValue] = useState('');
   const [notice, setNotice] = useState('');
@@ -57,6 +59,7 @@ export function PaginationJump({
         data-compact="true"
         placeholder="页码"
         value={value}
+        disabled={disabled}
         onChange={(event) => {
           setValue(event.target.value);
           if (notice) setNotice('');
@@ -64,7 +67,7 @@ export function PaginationJump({
         aria-describedby={notice ? JUMP_NOTICE_ID : undefined}
         className="h-8 w-16 px-2 text-xs"
       />
-      <Button type="submit" variant="outline" size="sm" className="h-8 px-2 text-xs" aria-label="跳转">
+      <Button type="submit" variant="outline" size="sm" className="h-8 px-2 text-xs" aria-label="跳转" disabled={disabled}>
         跳转
       </Button>
       {notice ? (

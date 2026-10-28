@@ -1889,3 +1889,13 @@ describe('删除确认 pending（续二百五十七）', () => {
     expect(user).toContain("{deletingUser ? '删除中...' : '确认删除'}");
   });
 });
+
+describe('分页跳页 pending（续二百五十八）', () => {
+  it('PaginationJump 接收 disabled 并禁用输入/按钮', () => {
+    const jump = read('src/components/shared/pagination-jump.tsx');
+    expect(jump).toContain('disabled?: boolean');
+    expect(jump).toContain('disabled={disabled}');
+    const pg = read('src/components/shared/table-pagination.tsx');
+    expect(pg).toContain('disabled={disabled}');
+  });
+});

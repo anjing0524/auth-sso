@@ -171,7 +171,7 @@ export function TablePagination({
         ) : null}
 
         {onPageChange ? (
-          <PaginationJump totalPages={pages} onPageChange={onPageChange} />
+          <PaginationJump totalPages={pages} onPageChange={onPageChange} disabled={disabled} />
         ) : jumpAction ? (
           <PaginationJumpForm
             action={jumpAction}
