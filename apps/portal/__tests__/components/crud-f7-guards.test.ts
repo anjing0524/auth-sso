@@ -2715,3 +2715,13 @@ describe('客户端 tabpanel 常驻（续三百六十四）', () => {
     expect(src).not.toContain("{activeTab === 'info' && (");
   });
 });
+
+describe('地标唯一性（续三百六十五）', () => {
+  it('桌面侧边栏是主导航；SidebarInset 不再是 main', () => {
+    const src = read('src/components/ui/sidebar.tsx');
+    expect(src).toContain('role="navigation"');
+    expect(src).toContain('aria-label="主导航"');
+    expect(src).toContain('const SidebarInset = React.forwardRef<');
+    expect(src).not.toContain('React.ComponentProps<"main">');
+  });
+});

@@ -234,6 +234,8 @@ const Sidebar = React.forwardRef<
         />
         <div
           id="app-sidebar"
+          role="navigation"
+          aria-label="主导航"
           className={cn(
             "duration-200 fixed inset-y-0 z-10 hidden h-svh w-[var(--sidebar-width)] transition-[left,right,width] ease-linear md:flex",
             side === "left"
@@ -318,10 +320,10 @@ SidebarRail.displayName = "SidebarRail"
 
 const SidebarInset = React.forwardRef<
   HTMLDivElement,
-  React.ComponentProps<"main">
+  React.ComponentProps<"div">
 >(({ className, ...props }, ref) => {
   return (
-    <main
+    <div
       ref={ref}
       className={cn(
         "relative flex min-h-svh min-w-0 flex-1 flex-col bg-background",
