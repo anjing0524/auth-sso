@@ -1158,3 +1158,9 @@ a11y 对比度函数提取复用，增加未登录 `/login`（390×844，独立�
 | 问题 | 修复 | 验证 |
 |---|---|---|
 | 权限编辑/角色权限取消固定回 `/permissions`、`/roles`；应用新建不携带来源筛选 | 取消用 returnHref；应用新建携带 safeReturnPath | 权限编辑取消回 `type/status/clientId`；应用新建取消回 `status=DISABLED` |
+
+### 9.132 产品审计一百二十七：用户行状态操作 pending（2026-10-28）
+
+| 问题 | 修复 | 验证 |
+|---|---|---|
+| 用户行「禁用/解锁/恢复」走 transition，但按钮未禁用，可重复触发 | status 按钮 disabled={isPending} | 源码守卫 |

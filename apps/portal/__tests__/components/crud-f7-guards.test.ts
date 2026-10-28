@@ -1946,3 +1946,11 @@ describe('创建/编辑取消返回上下文（续二百六十四）', () => {
     expect(list).toContain('/clients/new?returnTo=');
   });
 });
+
+describe('用户行状态操作 pending（续二百六十五）', () => {
+  it('禁用/解锁/恢复按钮随 transition 禁用', () => {
+    const src = read('src/app/(dashboard)/users/components/UserTable.tsx');
+    expect(src).toContain('disabled={isPending}');
+    expect(src).toContain('onClick={() => handleToggleStatus(user)}');
+  });
+});

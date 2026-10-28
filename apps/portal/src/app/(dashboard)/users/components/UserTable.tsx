@@ -362,6 +362,7 @@ export default function UserTable({ users, pagination, filters, isFiltered = fal
               aria-label={user.status === 'ACTIVE' ? '禁用账号' : user.status === 'LOCKED' ? '解锁账号' : '恢复账号'}
               title={user.status === 'ACTIVE' ? '禁用账号' : user.status === 'LOCKED' ? '解锁账号' : '恢复账号'}
               className={`h-8 gap-1.5 px-2 ${user.status === 'ACTIVE' ? 'text-destructive hover:bg-destructive/10 hover:text-destructive' : 'text-success hover:bg-success/10 hover:text-success'}`}
+              disabled={isPending}
               onClick={() => handleToggleStatus(user)}
             >
               {user.status === 'ACTIVE' ? <UserMinus className="h-4 w-4" /> : <UserCheck className="h-4 w-4" />}
