@@ -2826,3 +2826,12 @@ describe('用户角色页禁用原因（续三百七十八）', () => {
     expect(src).toContain('不能修改自己的角色');
   });
 });
+
+describe('角色权限页禁用原因（续三百七十九）', () => {
+  it('全选/清空/模板/保存带 title', () => {
+    const src = read('src/app/(dashboard)/roles/[id]/permissions/permissions-client.tsx');
+    expect(src).toContain("role.isSystem ? '系统角色只读' : scopeItemIds.length === 0");
+    expect(src).toContain("该模板在当前作用域没有权限");
+    expect(src).toContain("changeCount === 0 ? '没有未保存的修改'");
+  });
+});

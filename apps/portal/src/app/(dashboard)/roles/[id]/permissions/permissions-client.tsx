@@ -400,11 +400,12 @@ export default function RolePermissionsPage({ role, returnHref = '/roles' }: Rol
                 variant="ghost"
                 size="sm"
                 disabled={role.isSystem || scopeItemIds.length === 0}
+                title={role.isSystem ? '系统角色只读' : scopeItemIds.length === 0 ? '当前作用域没有权限' : undefined}
                 onClick={() => setIds(scopeItemIds, !allScopeSelected)}
               >
                 {allScopeSelected ? '取消本域全选' : '全选本域'}
               </Button>
-              <Button variant="ghost" size="sm" disabled={role.isSystem || scopeItemIds.length === 0} onClick={() => setIds(scopeItemIds, false)}>
+              <Button variant="ghost" size="sm" disabled={role.isSystem || scopeItemIds.length === 0} title={role.isSystem ? '系统角色只读' : scopeItemIds.length === 0 ? '当前作用域没有权限' : undefined} onClick={() => setIds(scopeItemIds, false)}>
                 清空本域
               </Button>
             </div>
@@ -472,7 +473,7 @@ export default function RolePermissionsPage({ role, returnHref = '/roles' }: Rol
             <div className="ml-auto flex items-center gap-2">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm" disabled={loading || role.isSystem}>
+                  <Button variant="outline" size="sm" disabled={loading || role.isSystem} title={role.isSystem ? '系统角色只读' : loading ? '加载中…' : undefined}>
                     <Sparkles className="h-3.5 w-3.5" /> 权限模板
                   </Button>
                 </DropdownMenuTrigger>
@@ -483,6 +484,7 @@ export default function RolePermissionsPage({ role, returnHref = '/roles' }: Rol
                     <DropdownMenuItem
                       key={t.id}
                       disabled={role.isSystem || t.ids.length === 0}
+                      title={role.isSystem ? '系统角色只读' : t.ids.length === 0 ? '该模板在当前作用域没有权限' : undefined}
                       onClick={() => {
                         if (role.isSystem) return;
                         setAssignedIds(new Set(t.ids));
@@ -506,6 +508,7 @@ export default function RolePermissionsPage({ role, returnHref = '/roles' }: Rol
                 size="sm"
                 onClick={() => setConfirmOpen(true)}
                 disabled={loading || saving || role.isSystem || changeCount === 0}
+                title={role.isSystem ? '系统角色只读' : changeCount === 0 ? '没有未保存的修改' : loading ? '加载中…' : saving ? '保存中…' : undefined}
               >
                 <Save className="h-3.5 w-3.5" />
                 {saving ? '保存中...' : role.isSystem ? '系统角色只读' : changeCount === 0 ? '无变更' : `保存变更（${changeCount}）`}
