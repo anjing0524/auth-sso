@@ -2216,3 +2216,10 @@ describe('技术标识完整 title（续二百九十七）', () => {
     expect(read('src/app/(dashboard)/permissions/components/PermissionsTable.tsx')).toContain('title={p.code}');
   });
 });
+
+describe('会话 scopes 完整值（续二百九十八）', () => {
+  it('截断 scopes 带 title', () => {
+    const src = read('src/app/(dashboard)/profile/ProfileClient.tsx');
+    expect(src).toContain('title={`scope：${item.scopes}`}');
+  });
+});

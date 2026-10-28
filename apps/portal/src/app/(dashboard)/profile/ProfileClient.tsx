@@ -473,7 +473,7 @@ export default function ProfileClient({
                             {item.isCurrent && <Badge variant="success" className="shrink-0 text-[9px]">当前设备</Badge>}
                           </p>
                           <p className="truncate text-[10px] text-muted-foreground" title={`会话 ID：${item.id}`}>登录于 {formatDateTime(item.createdAt)} · #{item.id.slice(0, 8)}</p>
-                          <p className="truncate text-[10px] text-muted-foreground">scope: {item.scopes} · 到期 {formatDateTime(item.expiresAt)}</p>
+                          <p className="truncate text-[10px] text-muted-foreground" title={`scope：${item.scopes}`}>scope: {item.scopes} · 到期 {formatDateTime(item.expiresAt)}</p>
                         </div>
                         {item.isCurrent ? (
                           <span

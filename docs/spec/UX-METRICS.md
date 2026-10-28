@@ -1360,3 +1360,9 @@ a11y 对比度函数提取复用，增加未登录 `/login`（390×844，独立�
 | 问题 | 修复 | 验证 |
 |---|---|---|
 | 用户 ID/角色编码/权限编码截断或长值但无完整 title | 三处补 title 完整值 | 用户 UUID、SUPER_ADMIN、portal:user:list 均正确 |
+
+### 9.165 产品审计一百六十：会话 scopes 完整值（2026-10-29）
+
+| 问题 | 修复 | 验证 |
+|---|---|---|
+| 个人会话 scopes 截断展示，无完整列表 | scope 行补 title | 3 条会话 title 为完整 `openid profile email offline_access` |
