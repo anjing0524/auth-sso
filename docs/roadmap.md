@@ -21,6 +21,8 @@
 
 ## 变更记录
 
+- 2026-10-29（续三百零七）: **用户/主体 ID 复制统一**。自定义复制无状态。**修复**：迁移 CopyTextButton + successMessage。**验证**：toast/aria 正确；守卫 225 passed。
+
 - 2026-10-29（续三百零六）: **复制按钮动态名称**。成功态名称不变。**修复**：aria-label/title 已复制。**验证**：名称切换；守卫 224 passed。
 
 - 2026-10-29（续三百零五）: **Client ID 复制反馈**。无 toast/动态名称。**修复**：toast + aria-label。**验证**：toast/aria 生效；守卫 223 passed。

@@ -11,7 +11,7 @@
  */
 import React, { useTransition } from 'react';
 import { useFieldFailure } from '@/hooks/use-field-failure';
-import { Mail, ShieldCheck, Building2, Key, Clock, Lock, Pencil, Copy, LogOut } from 'lucide-react';
+import { Mail, ShieldCheck, Building2, Key, Clock, Lock, Pencil, LogOut } from 'lucide-react';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -310,15 +310,6 @@ export default function ProfileClient({
   }
 
   const isAdmin = isAdminRole(roles.map((r) => r.code));
-  const copySubjectId = async () => {
-    try {
-      await navigator.clipboard.writeText(user.id);
-      toast.success('已复制主体 ID');
-    } catch {
-      toast.error('复制失败，请手动选择');
-    }
-  };
-
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
       {/* 紧凑身份头：头像/姓名/角色/邮箱/部门 + 高频动作（编辑资料/改密） */}
@@ -379,9 +370,7 @@ export default function ProfileClient({
                   <dt className="text-[11px] text-muted-foreground">主体 ID（排障/工单用）</dt>
                   <dd className="mt-1 flex items-center gap-1.5">
                     <code className="min-w-0 flex-1 truncate rounded bg-muted px-2 py-1 font-mono text-[11px]">{user.id}</code>
-                    <Button variant="ghost" size="icon-sm" aria-label="复制主体 ID" title="复制主体 ID" onClick={copySubjectId}>
-                      <Copy className="h-3.5 w-3.5" />
-                    </Button>
+                    <CopyTextButton text={user.id} label="复制主体 ID" successMessage="已复制主体 ID" />
                   </dd>
                 </div>
               </dl>

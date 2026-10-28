@@ -2243,7 +2243,7 @@ describe('审计日志 ID 复制（续三百零一）', () => {
   it('详情页头复用 CopyTextButton', () => {
     const src = read('src/app/(dashboard)/audit-logs/[id]/page.tsx');
     expect(src).toContain('CopyTextButton text={id} label="复制日志 ID"');
-    expect(read('src/components/shared/copy-text-button.tsx')).toContain("toast.success('已复制')");
+    expect(read('src/components/shared/copy-text-button.tsx')).toContain('toast.success(successMessage)');
   });
 });
 
@@ -2282,5 +2282,14 @@ describe('复制按钮动态名称（续三百零六）', () => {
   it('CopyTextButton 成功态 aria-label 为已复制', () => {
     const src = read('src/components/shared/copy-text-button.tsx');
     expect(src).toContain("aria-label={copied ? '已复制' : label}");
+  });
+});
+
+describe('用户/主体 ID 复制统一（续三百零七）', () => {
+  it('两处复用 CopyTextButton 并保留专属成功文案', () => {
+    const user = read('src/app/(dashboard)/users/[id]/UserDetailForm.tsx');
+    expect(user).toContain('successMessage="已复制用户 ID"');
+    const profile = read('src/app/(dashboard)/profile/ProfileClient.tsx');
+    expect(profile).toContain('successMessage="已复制主体 ID"');
   });
 });

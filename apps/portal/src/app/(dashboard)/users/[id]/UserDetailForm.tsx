@@ -14,10 +14,11 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import {
-  User as UserIcon, Save, Trash2, Shield, Building, Calendar, AlertTriangle, ShieldCheck, Copy, KeyRound, History, LogOut,
+  User as UserIcon, Save, Trash2, Shield, Building, Calendar, AlertTriangle, ShieldCheck, KeyRound, History, LogOut,
 } from 'lucide-react';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { CopyTextButton } from '@/components/shared/copy-text-button';
 import { useFieldFailure } from '@/hooks/use-field-failure';
 import { useUnsavedChangesGuard } from '@/hooks/use-unsaved-changes-guard';
 import { Badge } from '@/components/ui/badge';
@@ -159,16 +160,6 @@ export default function UserDetailForm({ id, initialUser: serverUser, canUpdate,
       reportFailure({ error: res.error, message: userFacingMessage(res, '强制下线失败') });
     }
     setForceLogoutBusy(false);
-  };
-
-  /** 复制用户 ID（排障/对接工单常用，减少手抄） */
-  const copyUserId = async () => {
-    try {
-      await navigator.clipboard.writeText(String(serverUser.id ?? id));
-      toast.success('已复制用户 ID');
-    } catch {
-      toast.error('复制失败，请手动选择');
-    }
   };
 
   return (
@@ -440,9 +431,7 @@ export default function UserDetailForm({ id, initialUser: serverUser, canUpdate,
                   <p className="text-[11px] text-muted-foreground">用户 ID</p>
                   <div className="flex items-center gap-1.5">
                     <code className="min-w-0 flex-1 truncate font-mono text-[11px]" title={String(serverUser.id ?? id)}>{String(serverUser.id ?? id)}</code>
-                    <Button variant="ghost" size="icon-sm" aria-label="复制用户 ID" title="复制用户 ID" onClick={copyUserId}>
-                      <Copy className="h-3.5 w-3.5" />
-                    </Button>
+                    <CopyTextButton text={String(serverUser.id ?? id)} label="复制用户 ID" successMessage="已复制用户 ID" />
                   </div>
                 </div>
                 <div className="flex items-center justify-between gap-2">

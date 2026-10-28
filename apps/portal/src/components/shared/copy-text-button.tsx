@@ -16,17 +16,19 @@ interface CopyTextButtonProps {
   text: string;
   /** 可访问名称，例如「复制日志 ID」 */
   label: string;
+  /** 成功提示文案，默认「已复制」 */
+  successMessage?: string;
   disabled?: boolean;
 }
 
-export function CopyTextButton({ text, label, disabled = false }: CopyTextButtonProps) {
+export function CopyTextButton({ text, label, successMessage = '已复制', disabled = false }: CopyTextButtonProps) {
   const [copied, setCopied] = useState(false);
 
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
-      toast.success('已复制');
+      toast.success(successMessage);
       setTimeout(() => setCopied(false), 1500);
     } catch {
       toast.error('复制失败，请手动选择');
