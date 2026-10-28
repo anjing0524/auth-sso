@@ -2692,3 +2692,10 @@ describe('Label in Name（续三百六十一）', () => {
     expect(read('src/app/(dashboard)/roles/components/RolesTable.tsx')).toContain('（无权限）');
   });
 });
+
+describe('当前账号状态限制提示（续三百六十二）', () => {
+  it('isSelf 时说明不能禁用/锁定自己', () => {
+    const src = read('src/app/(dashboard)/users/[id]/UserDetailForm.tsx');
+    expect(src).toContain('当前登录账号不能禁用或锁定自己。');
+  });
+});
