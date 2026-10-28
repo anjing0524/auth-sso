@@ -223,7 +223,7 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
       <p role="status" aria-live="polite" className="sr-only">
-        {data.length === 0 ? (hasFilters ? '未找到匹配的日志' : '暂无日志记录') : ''}
+        {data.length === 0 ? (hasFilters ? '当前筛选没有匹配的日志' : '当前没有日志记录') : ''}
       </p>
 
       {/* 标题 + 页签 + 类型筛选 + 导出：压缩为同一行（搜索/标题不应各占一整行） */}

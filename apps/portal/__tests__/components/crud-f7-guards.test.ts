@@ -2895,7 +2895,7 @@ describe('空结果播报（续三百八十五）', () => {
       'src/app/(dashboard)/permissions/components/PermissionsTable.tsx',
       'src/app/(dashboard)/clients/components/ClientsTable.tsx',
     ]) {
-      expect(read(f)).toContain('emptyAnnouncement="未找到匹配结果"');
+      expect(read(f)).toContain('emptyAnnouncement="当前列表为空"');
     }
   });
 });
@@ -2903,8 +2903,8 @@ describe('空结果播报（续三百八十五）', () => {
 describe('审计空结果播报（续三百八十六）', () => {
   it('筛选无结果时 role=status 有文案', () => {
     const src = read('src/app/(dashboard)/audit-logs/page.tsx');
-    expect(src).toContain("'未找到匹配的日志'");
-    expect(src).toContain("'暂无日志记录'");
+    expect(src).toContain("'当前筛选没有匹配的日志'");
+    expect(src).toContain("'当前没有日志记录'");
     expect(src).toContain('aria-live="polite"');
   });
 });

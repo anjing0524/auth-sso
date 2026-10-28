@@ -339,7 +339,7 @@ export default function ClientsTable({ clients, pagination, initialKeyword, init
       <div className="flex min-h-0 flex-1 flex-col">
       <DataTable
       tableLabel="应用列表"
-      emptyAnnouncement="未找到匹配结果"
+      emptyAnnouncement="当前列表为空"
         columns={columns}
         data={clients}
         loading={isPending}
