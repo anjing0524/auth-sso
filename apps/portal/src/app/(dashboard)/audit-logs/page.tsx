@@ -32,6 +32,8 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { formatDate as formatDateOnly, formatTime, formatDateTime as formatDate } from '@/lib/format-date';
@@ -255,6 +257,8 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
+                <DropdownMenuLabel className="text-[11px] font-normal text-muted-foreground">按当前筛选条件导出</DropdownMenuLabel>
+                <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
                   <a href={`/api/audit/export?type=login${eventType ? `&eventType=${eventType}` : ''}${startDate ? `&startDate=${startDate}&endDate=${endDate}` : ''}${keyword ? `&keyword=${encodeURIComponent(keyword)}` : ''}`}>
                     导出登录日志（CSV）

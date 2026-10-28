@@ -3142,3 +3142,10 @@ describe('搜索占位无省略号（续四百一十六）', () => {
     expect(read('src/components/shared/command-palette.tsx')).toContain('placeholder="搜索页面、功能或操作"');
   });
 });
+
+describe('审计导出范围说明（续四百一十七）', () => {
+  it('导出菜单说明按当前筛选', () => {
+    const src = read('src/app/(dashboard)/audit-logs/page.tsx');
+    expect(src).toContain('按当前筛选条件导出');
+  });
+});
