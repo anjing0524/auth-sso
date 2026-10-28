@@ -74,6 +74,7 @@ export function DataTable<T>({
 
   return (
     <Card className="gap-0 overflow-hidden rounded-lg border border-border/70 py-0 shadow-sm ring-0">
+      <p role="status" aria-live="polite" className="sr-only">{loading ? '正在加载列表…' : ''}</p>
       {cardHeader}
       <CardContent className="p-0">
         {/* 横向滚动提示：宽表在卡片内横向滚动（U-G05）。

@@ -2851,3 +2851,11 @@ describe('侧边栏当前项语义（续三百八十一）', () => {
     expect((src.match(/aria-current={isActive \? 'page' : undefined}/g) ?? []).length).toBe(2);
   });
 });
+
+describe('列表加载播报（续三百八十二）', () => {
+  it('DataTable 提供 aria-live 加载状态', () => {
+    const src = read('src/components/shared/data-table.tsx');
+    expect(src).toContain('正在加载列表…');
+    expect(src).toContain('aria-live="polite"');
+  });
+});
