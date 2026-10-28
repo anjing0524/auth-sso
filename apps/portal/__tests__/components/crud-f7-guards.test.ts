@@ -2923,3 +2923,12 @@ describe('404 页地标（续三百八十八）', () => {
     expect(src).toContain('</main>');
   });
 });
+
+describe('登录页语义（续三百九十）', () => {
+  it('metadata/main/具名表单', () => {
+    expect(read('src/app/login/page.tsx')).toContain("title: '登录 | Auth-SSO'");
+    const form = read('src/app/login/login-form.tsx');
+    expect(form).toContain('<main ');
+    expect(form).toContain('aria-label="登录表单"');
+  });
+});

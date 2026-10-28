@@ -21,6 +21,7 @@ import LoginForm from './login-form';
  * 否则 Turbopack 运行时会报 "encountered uncached data during prerendering or a navigation"。
  */
 export const instant = false;
+export const metadata = { title: '登录 | Auth-SSO' };
 interface SearchParams {
   searchParams: Promise<{
     session_id?: string;

@@ -113,7 +113,7 @@ export default function LoginForm({ sessionId, initialError }: LoginFormProps) {
   const formattedError = getErrorMessage(error);
 
   return (
-    <div className="relative flex min-h-[100svh] flex-col items-center justify-center overflow-hidden bg-[#04122B] px-4 py-5">
+    <main className="relative flex min-h-[100svh] flex-col items-center justify-center overflow-hidden bg-[#04122B] px-4 py-5">
       <LoginBackground />
       <div className="relative z-10 flex w-full flex-col items-center">
       <div className="mb-3 flex flex-col items-center gap-1 text-white">
@@ -131,7 +131,7 @@ export default function LoginForm({ sessionId, initialError }: LoginFormProps) {
           </CardDescription>
         </CardHeader>
 
-        <form onSubmit={handleSubmit}>
+        <form aria-label="登录表单" onSubmit={handleSubmit}>
           <CardContent className="space-y-3 pt-4">
             {formattedError ? (
               <Alert variant="destructive" className="animate-in head-shake duration-300">
@@ -216,6 +216,6 @@ export default function LoginForm({ sessionId, initialError }: LoginFormProps) {
         登录遇到问题请联系企业 IT 管理员
       </p>
       </div>
-    </div>
+    </main>
   );
 }
