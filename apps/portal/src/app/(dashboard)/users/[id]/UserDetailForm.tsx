@@ -192,7 +192,7 @@ export default function UserDetailForm({ id, initialUser: serverUser, canUpdate,
                   放弃修改
                 </Button>
               )}
-              <Button size="sm" onClick={handleUpdate} disabled={saving || !isDirty}>
+              <Button size="sm" onClick={handleUpdate} disabled={saving || !isDirty} title={!canUpdate ? '当前账号没有编辑权限' : !isDirty ? '没有未保存的修改' : undefined}>
                 {saving ? '保存中...' : <><Save className="h-3.5 w-3.5" /> {isDirty ? '保存修改' : '无修改'}</>}
               </Button>
             </PermissionGuard>
@@ -497,7 +497,7 @@ export default function UserDetailForm({ id, initialUser: serverUser, canUpdate,
               放弃修改
             </Button>
           )}
-          <Button className="flex-1" onClick={handleUpdate} disabled={saving || !isDirty}>
+          <Button className="flex-1" onClick={handleUpdate} disabled={saving || !isDirty} title={!canUpdate ? '当前账号没有编辑权限' : !isDirty ? '没有未保存的修改' : undefined}>
             {saving ? '保存中...' : <><Save className="h-4 w-4" /> {isDirty ? '保存修改' : '无修改'}</>}
           </Button>
         </div>

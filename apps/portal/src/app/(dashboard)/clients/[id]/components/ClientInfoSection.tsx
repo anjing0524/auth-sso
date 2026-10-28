@@ -136,6 +136,7 @@ export function ClientInfoSection({
                       type="button"
                       aria-pressed={active}
                       disabled={readOnly}
+                      title={readOnly ? 'Portal 自身登录客户端为只读' : undefined}
                       onClick={() => toggleScope(s.value)}
                       className={`h-7 rounded-md border px-2 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-100 ${
                         active ? 'border-primary/40 bg-primary/10 font-medium text-foreground' : 'border-border text-muted-foreground hover:bg-muted'
@@ -203,7 +204,7 @@ export function ClientInfoSection({
                 <div className="flex gap-1">
                   {[{ v: 1800, t: '30m' }, { v: 3600, t: '1h' }, { v: 86400, t: '24h' }].map((p) => (
                     <Button key={p.v} type="button" variant="outline" size="sm" className="h-6 px-1.5 text-[10px]"
-                      disabled={readOnly} onClick={() => onFormChange({ accessTokenTtl: p.v })}>
+                      disabled={readOnly} title={readOnly ? 'Portal 自身登录客户端为只读' : undefined} onClick={() => onFormChange({ accessTokenTtl: p.v })}>
                       {p.t}
                     </Button>
                   ))}
@@ -224,7 +225,7 @@ export function ClientInfoSection({
                 <div className="flex gap-1">
                   {[{ v: 86400, t: '1d' }, { v: 604800, t: '7d' }, { v: 2592000, t: '30d' }].map((p) => (
                     <Button key={p.v} type="button" variant="outline" size="sm" className="h-6 px-1.5 text-[10px]"
-                      disabled={readOnly} onClick={() => onFormChange({ refreshTokenTtl: p.v })}>
+                      disabled={readOnly} title={readOnly ? 'Portal 自身登录客户端为只读' : undefined} onClick={() => onFormChange({ refreshTokenTtl: p.v })}>
                       {p.t}
                     </Button>
                   ))}

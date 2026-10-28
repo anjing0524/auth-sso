@@ -2808,3 +2808,11 @@ describe('撤销全部禁用（续三百七十六）', () => {
     expect(src).toContain('当前没有有效授权可撤销');
   });
 });
+
+describe('禁用原因补充（续三百七十七）', () => {
+  it('用户无修改保存/客户端只读预设均有 title', () => {
+    expect(read('src/app/(dashboard)/users/[id]/UserDetailForm.tsx')).toContain('没有未保存的修改');
+    const info = read('src/app/(dashboard)/clients/[id]/components/ClientInfoSection.tsx');
+    expect((info.match(/Portal 自身登录客户端为只读/g) ?? []).length).toBeGreaterThanOrEqual(2);
+  });
+});
