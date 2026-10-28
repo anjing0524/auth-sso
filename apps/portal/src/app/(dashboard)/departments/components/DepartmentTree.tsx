@@ -411,7 +411,13 @@ export default function DepartmentTree({ departments, deletionStats = {}, autoOp
           })}
           {filtered.length === 0 && (
             keyword ? (
-              <EmptyState variant="simple" icon="Building2" title="没有匹配的部门" description={`未找到名称或编码包含「${keyword}」的部门`} />
+              <EmptyState
+                variant="simple"
+                icon="Building2"
+                title="没有匹配的部门"
+                description={`未找到名称或编码包含「${keyword}」的部门`}
+                clearAction={{ label: '清除搜索', onClick: () => setKeyword('') }}
+              />
             ) : (
               <EmptyState variant="simple" icon="Building2" title="暂无部门" description="创建组织架构以开始管理" action={{ label: '创建根部门', onClick: () => openAdd() }} />
             )

@@ -1785,3 +1785,10 @@ describe('用户空态创建入口（续二百四十六）', () => {
     expect(page).toContain('canCreate={canCreateUser}');
   });
 });
+
+describe('部门搜索空态清除（续二百四十七）', () => {
+  it('空态提供清除搜索并清空 keyword', () => {
+    const src = read('src/app/(dashboard)/departments/components/DepartmentTree.tsx');
+    expect(src).toContain("label: '清除搜索', onClick: () => setKeyword('')");
+  });
+});
