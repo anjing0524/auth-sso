@@ -1976,3 +1976,9 @@ a11y 对比度函数提取复用，增加未登录 `/login`（390×844，独立�
 | 问题 | 修复 | 验证 |
 |---|---|---|
 | 错误页复制 ID 使用自定义 clipboard，无 execCommand 回退 | 迁移 CopyTextButton | 源码守卫；构建通过 |
+
+### 9.265 产品审计二百六十：Secret 复制反馈（2026-10-29）
+
+| 问题 | 修复 | 验证 |
+|---|---|---|
+| 创建成功的 Secret 复制在 execCommand 失败时仍显示已复制 | 记录真实结果；失败提示；成功 toast | client-registration e2e 通过 |

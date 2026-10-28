@@ -2996,3 +2996,12 @@ describe('错误页复制组件复用（续三百九十七）', () => {
     expect(src).not.toContain('copyErrorId');
   });
 });
+
+describe('Secret 复制反馈（续三百九十八）', () => {
+  it('只有真实成功才 setCopied', () => {
+    const src = read('src/app/(dashboard)/clients/new/page.tsx');
+    expect(src).toContain('if (!copied)');
+    expect(src).toContain('复制失败，请手动选择 Secret');
+    expect(src).toContain('Client Secret 已复制');
+  });
+});

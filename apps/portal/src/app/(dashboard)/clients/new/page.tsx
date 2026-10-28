@@ -34,6 +34,7 @@ import { PageHeader } from '@/components/shared/page-header';
 import { RequiredLegend, RequiredMark } from '@/components/shared/required-mark';
 import { safeReturnPath } from '@/lib/safe-return';
 import { validateClientBasics } from '@/lib/client-validation';
+import { toast } from 'sonner';
 
 /** 常用 scope 预设：点选写入空格分隔字符串（OAuth 标准写法） */
 const SCOPE_PRESETS = [
@@ -113,20 +114,27 @@ export default function NewClientPage() {
 
   const copySecret = async () => {
     if (!created?.clientSecret) return;
+    let copied = false;
     try {
       await navigator.clipboard.writeText(created.clientSecret);
+      copied = true;
     } catch {
-      // 回退：非安全上下文 / 权限被拒时用 execCommand
+      // 回退：非安全上下文 / 权限被拒时用 execCommand；只有真实成功才提示
       const textarea = document.createElement('textarea');
       textarea.value = created.clientSecret;
       textarea.style.position = 'fixed';
       textarea.style.opacity = '0';
       document.body.appendChild(textarea);
       textarea.select();
-      document.execCommand('copy');
+      copied = document.execCommand('copy');
       document.body.removeChild(textarea);
     }
+    if (!copied) {
+      toast.error('复制失败，请手动选择 Secret');
+      return;
+    }
     setCopied(true);
+    toast.success('Client Secret 已复制');
   };
 
   const closeCreated = () => {
