@@ -6,7 +6,7 @@
  */
 import Link from 'next/link';
 import React, { useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import {
   Building2, Plus, ChevronRight, ChevronDown, Edit, Trash2, Users, MoveRight,
@@ -89,6 +89,7 @@ function flattenTree(nodes: DeptTreeNode[], depth = 0): Array<DeptTreeNode & { d
 
 export default function DepartmentTree({ departments, deletionStats = {}, autoOpenCreate = false }: Props) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [keyword, setKeyword] = useState('');
   const [sortKey, setSortKey] = useState<DepartmentSortKey>('default');
   /** 默认展开根节点（否则 40+ 部门只显示 root，用户需逐层点开） */
@@ -118,7 +119,14 @@ export default function DepartmentTree({ departments, deletionStats = {}, autoOp
     setExpanded(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
   };
 
-  const closeAddDialog = () => { setIsAddOpen(false); if (autoOpenCreate) router.replace('/departments'); };
+  const closeAddDialog = () => {
+    setIsAddOpen(false);
+    if (!autoOpenCreate) return;
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete('create');
+    const qs = params.toString();
+    router.replace(`/departments${qs ? `?${qs}` : ''}`);
+  };
 
   const openAdd = (parent?: string) => { setForm({ name: '', code: '', sort: 0, parentId: parent || null, status: 'ACTIVE' }); setIsAddOpen(true); };
   /** 对话框统一改为 `<form>` 提交（U-G06）：Enter 与点击主按钮行为一致 */
@@ -132,7 +140,7 @@ export default function DepartmentTree({ departments, deletionStats = {}, autoOp
     setSaving(true);
     const r = await createDepartmentAction({ name: form.name, code: form.code.trim() || undefined, sort: form.sort, parentId: form.parentId });
     setSaving(false);
-    if (r.success) { toast.success(r.message); setIsAddOpen(false); if (autoOpenCreate) router.replace('/departments'); router.refresh(); } else { reportFailure(r); }
+    if (r.success) { toast.success(r.message); closeAddDialog(); router.refresh(); } else { reportFailure(r); }
   };
 
   const handleUpdate = async () => {

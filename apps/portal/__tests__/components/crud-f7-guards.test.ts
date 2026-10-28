@@ -1758,7 +1758,7 @@ describe('工作台快捷新建用户（续二百四十四）', () => {
     expect(page).toContain("autoOpen={canCreateUser && params.create === '1'}");
     const dialog = read('src/app/(dashboard)/users/components/CreateUserDialog.tsx');
     expect(dialog).toContain('useState(autoOpen)');
-    expect(dialog).toContain("if (autoOpen) router.replace('/users')");
+    expect(dialog).toContain("params.delete('create')");
   });
 });
 
@@ -2074,5 +2074,17 @@ describe('清空筛选保留排序（续二百七十九）', () => {
     expect(clients).toContain("sort !== 'recent' ? `/clients?sort=${sort}`");
     const roles = read('src/app/(dashboard)/roles/components/RolesTable.tsx');
     expect(roles).toContain("initialSort !== 'default' ? `/roles?sort=${initialSort}`");
+  });
+});
+
+describe('自动弹窗关闭保留查询（续二百八十）', () => {
+  it('关闭只删除 create，保留其他筛选', () => {
+    for (const f of [
+      'src/app/(dashboard)/users/components/CreateUserDialog.tsx',
+      'src/app/(dashboard)/roles/components/RolesTable.tsx',
+      'src/app/(dashboard)/departments/components/DepartmentTree.tsx',
+    ]) {
+      expect(read(f)).toContain("params.delete('create')");
+    }
   });
 });

@@ -6,7 +6,7 @@
  */
 
 import { useState, useEffect, useActionState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useFormStatus } from 'react-dom';
 import { toast } from 'sonner';
 import { UserPlus } from 'lucide-react';
@@ -62,10 +62,15 @@ interface CreateUserDialogProps {
 
 export default function CreateUserDialog({ departments, canAssignRole = false, autoOpen = false }: CreateUserDialogProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [isOpen, setIsOpen] = useState(autoOpen);
   const closeDialog = () => {
     setIsOpen(false);
-    if (autoOpen) router.replace('/users');
+    if (!autoOpen) return;
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete('create');
+    const qs = params.toString();
+    router.replace(`/users${qs ? `?${qs}` : ''}`);
   };
   /**
    * 部门**必填**：ADR-002 的数据范围 = 角色部门子树，`users.dept_id = NULL` 的用户
@@ -116,7 +121,7 @@ export default function CreateUserDialog({ departments, canAssignRole = false, a
             : {}),
         });
         setIsOpen(false);
-        if (autoOpen) router.replace('/users');
+        closeDialog();
         router.refresh();
         setDeptId('');
         setValues({ name: '', username: '', email: '', password: '' });
@@ -138,7 +143,7 @@ export default function CreateUserDialog({ departments, canAssignRole = false, a
         </Button>
       </PermissionGuard>
 
-      <Dialog open={isOpen} onOpenChange={(open) => { setIsOpen(open); if (!open && autoOpen) router.replace('/users'); }}>
+      <Dialog open={isOpen} onOpenChange={(open) => { setIsOpen(open); if (!open) closeDialog(); }}>
         <DialogContent>
           <form action={formAction} className="space-y-2.5">
             <DialogHeader>

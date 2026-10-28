@@ -85,7 +85,14 @@ export default function RolesTable({ roles, pagination, initialKeyword, initialS
   /** 具体错误码（如 ROLE_ALREADY_EXISTS）落到对应输入框（#92；hook 供四处表单复用） */
   const { fieldError, reportFailure, clearFailure } = useFieldFailure(['code']);
 
-  const closeAddDialog = () => { setIsAddOpen(false); if (autoOpenCreate) router.replace('/roles'); };
+  const closeAddDialog = () => {
+    setIsAddOpen(false);
+    if (!autoOpenCreate) return;
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete('create');
+    const qs = params.toString();
+    router.replace(`/roles${qs ? `?${qs}` : ''}`);
+  };
 
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleSearch = (value: string) => {
@@ -122,7 +129,7 @@ export default function RolesTable({ roles, pagination, initialKeyword, initialS
     setSaving(true);
     const res = await createRoleAction({ name: form.name, code: form.code, description: form.description.trim() || undefined, deptId: form.deptId, sort: form.sort });
     setSaving(false);
-    if (res.success) { toast.success(res.message); setIsAddOpen(false); if (autoOpenCreate) router.replace('/roles'); router.refresh(); } else { reportFailure(res); }
+    if (res.success) { toast.success(res.message); closeAddDialog(); router.refresh(); } else { reportFailure(res); }
   };
 
   const handleUpdate = async () => {
