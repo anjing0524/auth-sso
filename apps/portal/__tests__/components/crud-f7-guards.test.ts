@@ -2046,3 +2046,10 @@ describe('每页条数当前值语义（续二百七十五）', () => {
     expect(src).toContain('aria-label={`每页 ${option.value} 条`}');
   });
 });
+
+describe('空态装饰图标（续二百七十六）', () => {
+  it('DynamicIcon aria-hidden', () => {
+    const src = read('src/components/shared/empty-state.tsx');
+    expect(src).toContain('aria-hidden="true"');
+  });
+});

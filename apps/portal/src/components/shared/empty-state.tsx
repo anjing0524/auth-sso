@@ -175,7 +175,7 @@ export function EmptyState({
       className={cn('flex flex-col items-center justify-center py-16 px-4 text-center', className)}
     >
       <div className="bg-muted/50 p-4 rounded-full mb-4">
-        <DynamicIcon name={icon} className="h-8 w-8 text-muted-foreground" />
+        <DynamicIcon name={icon} aria-hidden="true" className="h-8 w-8 text-muted-foreground" />
       </div>
       <h2 className="mb-1 text-lg font-bold text-foreground">{resolvedTitle}</h2>
       <p className="text-sm text-muted-foreground max-w-sm mb-6">{resolvedDescription}</p>
