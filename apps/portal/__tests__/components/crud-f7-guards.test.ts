@@ -1442,7 +1442,7 @@ describe('删除失败保留确认框（续二百〇八）', () => {
 describe('创建用户默认部门（续二百〇九）', () => {
   it('重新打开弹窗时回填默认部门，不要求每次重选', () => {
     const src = read('src/app/(dashboard)/users/components/CreateUserDialog.tsx');
-    expect(src).toContain('setDeptId(departments[0]?.id ?? \'\')');
+    expect(src).toContain('setDeptId(defaultDeptId)');
   });
 });
 
@@ -2168,5 +2168,14 @@ describe('角色创建默认部门（续二百九十二）', () => {
   it('默认部门优先使用当前 deptId 筛选', () => {
     const src = read('src/app/(dashboard)/roles/components/RolesTable.tsx');
     expect(src).toContain('const getDefaultDeptId = () => initialDeptId || departments[0]?.id');
+  });
+});
+
+describe('用户创建默认部门（续二百九十三）', () => {
+  it('创建用户继承当前 deptId 筛选', () => {
+    const dialog = read('src/app/(dashboard)/users/components/CreateUserDialog.tsx');
+    expect(dialog).toContain('initialDeptId');
+    const page = read('src/app/(dashboard)/users/page.tsx');
+    expect(page).toContain('initialDeptId={deptId && departments.some');
   });
 });

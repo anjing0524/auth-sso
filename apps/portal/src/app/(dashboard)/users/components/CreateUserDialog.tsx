@@ -58,9 +58,11 @@ interface CreateUserDialogProps {
   canAssignRole?: boolean;
   /** 工作台快捷操作 /users?create=1 直达创建 */
   autoOpen?: boolean;
+  /** 当前部门筛选，创建时优先作为默认部门 */
+  initialDeptId?: string;
 }
 
-export default function CreateUserDialog({ departments, canAssignRole = false, autoOpen = false }: CreateUserDialogProps) {
+export default function CreateUserDialog({ departments, canAssignRole = false, autoOpen = false, initialDeptId }: CreateUserDialogProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isOpen, setIsOpen] = useState(autoOpen);
@@ -77,7 +79,10 @@ export default function CreateUserDialog({ departments, canAssignRole = false, a
    * 不在任何角色子树内 ⇒ 创建后对所有管理员都不可见（审计 P1-2 实测）。
    * 因此默认选中第一个部门，不再提供「不分配部门」。
    */
-  const [deptId, setDeptId] = useState(departments[0]?.id ?? '');
+  const defaultDeptId = initialDeptId && departments.some((d) => d.id === initialDeptId)
+    ? initialDeptId
+    : departments[0]?.id ?? '';
+  const [deptId, setDeptId] = useState(defaultDeptId);
   /**
    * **受控字段**：React 19 的 `<form action={fn}>` 在 action 结束后会自动 reset 表单。
    * 若不接管 value，一次校验失败就会把用户填的姓名/账号/邮箱/密码全部清空
@@ -137,7 +142,7 @@ export default function CreateUserDialog({ departments, canAssignRole = false, a
       <PermissionGuard permission={USER_PERMISSIONS.CREATE}>
         <Button
           aria-label="新建用户"
-          onClick={() => { clearFailure(); setValues({ name: '', username: '', email: '', password: '' }); setDeptId(departments[0]?.id ?? ''); setIsOpen(true); }}
+          onClick={() => { clearFailure(); setValues({ name: '', username: '', email: '', password: '' }); setDeptId(defaultDeptId); setIsOpen(true); }}
         >
           <UserPlus className="h-4 w-4" /> 新建用户
         </Button>

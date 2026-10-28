@@ -111,7 +111,7 @@ export default async function UsersPage({ searchParams }: PageProps) {
                 </div>
               </div>
             }
-            right={<CreateUserDialog departments={departments} canAssignRole={canAssignRole} autoOpen={canCreateUser && params.create === '1'} />}
+            right={<CreateUserDialog departments={departments} canAssignRole={canAssignRole} autoOpen={canCreateUser && params.create === '1'} initialDeptId={deptId && departments.some((d) => d.id === deptId) ? deptId : undefined} />}
           />
         }
       />
