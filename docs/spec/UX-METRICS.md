@@ -1821,3 +1821,9 @@ a11y 对比度函数提取复用，增加未登录 `/login`（390×844，独立�
 | 问题 | 修复 | 验证 |
 |---|---|---|
 | 命令面板/侧边栏跨页导航后焦点落到 body | pathname 变化聚焦 main；首屏跳过 | /users、/roles 导航后焦点均 MAIN#main-content |
+
+### 9.241 产品审计二百三十六：客户端创建页标题（2026-10-29）
+
+| 问题 | 修复 | 验证 |
+|---|---|---|
+| `/clients/new` 浏览器标题为默认「Auth-SSO Portal」，与其他页不一致 | 新增 server layout metadata | 标题「注册新应用 | Auth-SSO」 |

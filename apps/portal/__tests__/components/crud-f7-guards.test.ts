@@ -2786,3 +2786,10 @@ describe('路由切换焦点管理（续三百七十三）', () => {
     expect(src).toContain('}, [pathname]);');
   });
 });
+
+describe('客户端创建页标题（续三百七十四）', () => {
+  it('client 页面通过 layout 提供 metadata', () => {
+    const src = read('src/app/(dashboard)/clients/new/layout.tsx');
+    expect(src).toContain("title: '注册新应用 | Auth-SSO'");
+  });
+});
