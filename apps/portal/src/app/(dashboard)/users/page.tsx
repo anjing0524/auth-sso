@@ -92,7 +92,7 @@ export default async function UsersPage({ searchParams }: PageProps) {
         canCreate={canCreateUser}
         pageSize={pageSize}
         isFiltered={isFiltered}
-        clearHref="/users"
+        clearHref={pageSize !== 20 ? `/users?pageSize=${pageSize}` : '/users'}
         filters={
           <TableToolbar
             className="md:items-start"

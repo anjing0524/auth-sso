@@ -2003,3 +2003,10 @@ describe('用户每页条数（续二百七十）', () => {
     expect(table).toContain("next.delete('page')");
   });
 });
+
+describe('用户清空筛选保留页大小（续二百七十一）', () => {
+  it('clearHref 保留 pageSize', () => {
+    const src = read('src/app/(dashboard)/users/page.tsx');
+    expect(src).toContain("clearHref={pageSize !== 20 ? `/users?pageSize=${pageSize}` : '/users'}");
+  });
+});
