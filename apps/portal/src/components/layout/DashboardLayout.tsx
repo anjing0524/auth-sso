@@ -143,7 +143,7 @@ export default function DashboardLayout({
         <main id="main-content" tabIndex={-1} className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-muted/30 p-3 lg:px-4 lg:py-3" style={{ height: 'calc(100svh - 3rem)' }}>
           {/* 主内容区自身是滚动容器：列表页 flex-1 填满可视高度（表格内部滚动、分页固定在底部），
               详情页/工作台内容超出时在同一个容器内滚动 */}
-          <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto">
+          <div className="mx-auto flex min-h-0 w-full max-w-[1680px] flex-1 flex-col gap-3 overflow-auto">
             {children}
           </div>
         </main>
