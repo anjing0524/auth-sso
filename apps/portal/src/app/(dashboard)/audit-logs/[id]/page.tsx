@@ -41,7 +41,7 @@ function Field({ label, value, mono, copy }: { label: string; value: string; mon
 
 function DetailHeader({ title, tab, id, returnHref, children }: { title: string; tab: 'login' | 'operation' | 'access'; id: string; returnHref: string; children?: React.ReactNode }) {
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="sticky top-0 z-20 -mx-3 flex flex-wrap items-center gap-2 border-b border-border/50 bg-background/95 px-3 py-2 backdrop-blur">
       <Button asChild variant="ghost" size="icon-sm" aria-label="返回审计日志">
         <Link href={returnHref}><ArrowLeft className="h-4 w-4" /></Link>
       </Button>
