@@ -21,6 +21,8 @@
 
 ## 变更记录
 
+- 2026-10-29（续四百七十五）: **发布门禁收口**。UI 契约守卫对齐当前实现（UI 358/358）、全量 Vitest **1525/1525**；E2E-only seed 补齐 QA_TEST/qa_lin/审计/访问日志夹具，验收栈 E2E **24/24**（系统 Chrome）。
+
 - 2026-10-29（续四百七十四）: **高权目标策略定案 + 逐路径回归**。保留保护、不默认委派；新增 6 条逐路径测试；下一批 fail-open/CSRF/OAuth 并发；随后跑全量 Vitest/E2E 门禁。
 
 - 2026-10-29（续四百七十三）: **身份读口状态过滤**。Redis 撤销失败时旧 AT 仍可验签；`getOwnUser`/`getUserProfile` 过滤 DISABLED/DELETED，Dashboard 无有效用户重定向，`/api/me` 回归覆盖。

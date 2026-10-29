@@ -25,6 +25,65 @@ function parseRedirectUrls(envValue: string | undefined, defaults: string[]): st
   return defaults;
 }
 
+/**
+ * E2E 专用夹具（E2E_SEED_QA=1 时启用）。
+ *
+ * 为什么需要：部分 E2E 用例依赖“部门无角色”“QA_TEST 基线 0”“已有审计/访问日志”
+ * 这些人工验收时手工造的数据；干净 db:seed 不包含它们，发布门禁因此不可复现。
+ * 生产/开发默认不设置该环境变量，故不会写入。
+ */
+async function seedE2eFixtures(defaultDeptId: string, adminId: string): Promise<void> {
+  console.log('🧪 Seeding E2E-only fixtures...');
+  const rdDeptId = crypto.randomUUID();
+  await db.insert(schema.departments).values({
+    id: rdDeptId,
+    name: '研发部',
+    code: 'E2E_RD',
+    parentId: defaultDeptId,
+    ancestors: defaultDeptId,
+    status: 'ACTIVE',
+  });
+
+  const qaPassword = await bcrypt.hash('Qa@123456', 10);
+  await db.insert(schema.users).values({
+    id: crypto.randomUUID(),
+    username: 'qa_lin',
+    email: 'qa_lin@example.com',
+    name: 'QA 林',
+    status: 'ACTIVE',
+    passwordHash: qaPassword,
+    deptId: rdDeptId,
+  });
+
+  // 基线 0 权限，供角色权限保存 e2e 使用；非系统角色可修改
+  await db.insert(schema.roles).values({
+    id: crypto.randomUUID(),
+    name: '质量测试角色',
+    code: 'QA_TEST',
+    description: 'E2E fixture，默认无权限',
+    deptId: defaultDeptId,
+    isSystem: false,
+    status: 'ACTIVE',
+    sort: 99,
+  });
+
+  const now = new Date();
+  await db.insert(schema.auditLogs).values({
+    id: crypto.randomUUID(), userId: adminId, username: 'admin',
+    operation: 'USER_UPDATE', method: 'POST', url: '/users', ip: '127.0.0.1',
+    userAgent: 'E2E', status: 200, duration: 12, createdAt: now,
+  });
+  await db.insert(schema.accessLogs).values({
+    id: crypto.randomUUID(), userId: adminId, username: 'admin', method: 'GET',
+    path: '/api/users', resourceType: 'user', resourceId: adminId,
+    ip: '127.0.0.1', userAgent: 'E2E', status: 200, duration: 8, createdAt: now,
+  });
+  await db.insert(schema.loginLogs).values({
+    id: crypto.randomUUID(), userId: adminId, username: 'admin',
+    eventType: 'LOGIN_SUCCESS', ip: '127.0.0.1', userAgent: 'E2E', createdAt: now,
+  });
+}
+
 async function main() {
   console.log('🌱 Seeding clean database...');
 
@@ -109,6 +168,11 @@ async function main() {
       console.log('✅ Admin user successfully bound to SUPER_ADMIN role');
     } else {
       console.warn('⚠️  SUPER_ADMIN role not found, failed to bind admin user');
+    }
+
+    // 6. E2E-only fixtures：仅测试栈启用；生产/默认 seed 不写 QA 数据
+    if (process.env.E2E_SEED_QA === '1') {
+      await seedE2eFixtures(defaultDeptId, adminId);
     }
 
     console.log('\n✅ Seeding completed.');

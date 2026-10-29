@@ -75,6 +75,7 @@ services:
       REDIS_URL: redis://redis:6379
       PORTAL_CLIENT_SECRET: portal-secret
       PORTAL_REDIRECT_URL: https://127.0.0.1:19443/api/auth/callback
+      E2E_SEED_QA: "1"
     depends_on:
       postgres:
         condition: service_healthy
