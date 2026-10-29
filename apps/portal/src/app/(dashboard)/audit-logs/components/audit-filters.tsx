@@ -157,7 +157,7 @@ export function AuditFilters({ tab, eventType, operation, range, keyword, startD
   if (tab === 'access') {
     return (
       <div className="flex flex-wrap items-center gap-2">
-        <SearchInput placeholder="搜索用户 / 路径 / IP" value={kw} onChange={setKw} busy={isPending} className="w-full md:w-56 xl:w-64" />
+        <SearchInput placeholder="搜索用户 / 路径 / IP" value={kw} onChange={setKw} busy={isPending} className="w-full md:w-52 xl:w-64" />
         <Select value={accessStatus ?? 'ALL'} onValueChange={(v) => push({ status: v === 'ALL' ? null : v })} disabled={isPending}>
           <SelectTrigger aria-label="访问状态筛选" className="w-32">
             <SelectValue>{accessStatus === 'SUCCESS' ? '成功' : accessStatus === 'FAILURE' ? '失败' : '全部状态'}</SelectValue>
@@ -185,7 +185,7 @@ export function AuditFilters({ tab, eventType, operation, range, keyword, startD
   if (tab === 'login') {
     return (
       <div className="flex flex-wrap items-center gap-2">
-      <SearchInput placeholder="搜索用户 / IP" value={kw} onChange={setKw} busy={isPending} className="w-full md:w-56 xl:w-64" />
+      <SearchInput placeholder="搜索用户 / IP" value={kw} onChange={setKw} busy={isPending} className="w-full md:w-52 xl:w-64" />
       <Select value={eventType ?? 'ALL'} onValueChange={(v) => push({ eventType: v === 'ALL' ? null : v })} disabled={isPending}>
         <SelectTrigger aria-label="事件类型筛选" className="w-40">
           <SelectValue>{eventType ? LOGIN_EVENT_LABELS[eventType] : '全部事件类型'}</SelectValue>
@@ -204,7 +204,7 @@ export function AuditFilters({ tab, eventType, operation, range, keyword, startD
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-    <SearchInput placeholder="搜索用户 / IP / 地址" value={kw} onChange={setKw} busy={isPending} className="w-full md:w-56 xl:w-64" />
+    <SearchInput placeholder="搜索用户 / IP / 地址" value={kw} onChange={setKw} busy={isPending} className="w-full md:w-52 xl:w-64" />
     <Select value={operation ?? 'ALL'} onValueChange={(v) => push({ operation: v === 'ALL' ? null : v })} disabled={isPending}>
       <SelectTrigger aria-label="操作类型筛选" className="w-40">
         <SelectValue>{operation ? AUDIT_OPERATION_LABELS[operation] : '全部操作类型'}</SelectValue>
