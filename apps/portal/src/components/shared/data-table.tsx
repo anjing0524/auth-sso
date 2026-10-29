@@ -91,7 +91,7 @@ export function DataTable<T>({
             会把 flex 父级撑宽（实测 390px 视口下 document.scrollWidth=557）。 */}
         {/* 唯一滚动容器：横向 + 纵向都由这里承担；Table 内层不再自建 overflow（否则 sticky 表头失效）。 */}
         <div ref={scrollRef} aria-busy={loading || undefined} className="scrollbar-slim min-h-0 w-full flex-1 overflow-auto">
-        <Table aria-label={tableLabel} containerClassName="overflow-visible">
+        <Table aria-label={tableLabel} className={data.length === 0 && emptyState ? 'h-full' : undefined} containerClassName={data.length === 0 && emptyState ? 'h-full overflow-visible' : 'overflow-visible'}>
           <TableHeader className="[&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:bg-card">
             <TableRow>
               {columns.map((col) => (
@@ -115,8 +115,8 @@ export function DataTable<T>({
             ) : data.length === 0 ? (
               emptyState ? (
                 <TableRow>
-                  <TableCell colSpan={Math.max(1, columns.length)} className="p-0">
-                    {emptyState}
+                  <TableCell colSpan={Math.max(1, columns.length)} className="h-full p-0">
+                    <div className="flex h-full items-center justify-center">{emptyState}</div>
                   </TableCell>
                 </TableRow>
               ) : (
