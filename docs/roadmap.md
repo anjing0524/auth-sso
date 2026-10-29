@@ -21,6 +21,8 @@
 
 ## 变更记录
 
+- 2026-10-29（续四百九十）: **package.json 命令收口**。删除无消费者的 `deploy:down` / `db:generate` / `db:push` / `db:studio` / `test:watch` / `test:e2e:ui`；保留本地、测试、验收、部署稳定入口；AGENTS 同步“schema 变更走迁移文件”。
+
 - 2026-10-29（续四百八十九）: **删除无效脚本**。`scripts/ci/push-main.sh` 仍走 `gh`+HTTPS，与当前 SSH-only 推送策略相反且无 package/workflow 消费者；删除并更新脚本索引；其余 sh 均保留。
 
 - 2026-10-29（续四百八十八）: **命令入口统一**。新增 `scripts/local/{dev,infra,reset}.sh` 与 `pnpm dev/dev:infra/dev:reset`；生产统一 `pnpm deploy:*`；本地原生 4100、Docker 验收 19443 分界写清；本地实测 200、reset/seed 通过。
