@@ -26,7 +26,7 @@ nodejs@26（nvm default；**Temporal 在 v26.10.0 已默认开启，不需要任
   取值真跑一次 `node -e ""`，被拒即红）；冒烟 = Docker 验收栈上 `https://127.0.0.1:19443/login`
   拿到**真实 HTTP 200**（`pnpm stack:up` + `curl -k`），**只看日志 Ready 会假绿**。
 nextjs@16
-Rust 1.93.0+
+Rust 1.99.0+
 git 身份/远程：GitHub 推送走 **SSH**（`origin = git@github.com:anjing0524/auth-sso.git`；已实测 `ssh -T git@github.com` 鉴权为账号 anjing0524，`git push origin main` 即可）。**不要**改用 HTTPS / `gh` 凭据助手——此前"勿走 SSH、改用 gh HTTPS"的指引是错的（2026-10-23 用户纠正）。Docker 命令当前用户已入 docker 组（旧会话内用 `sg docker -c` 或 sudo 兜底）
 
 ## 优先
@@ -196,7 +196,7 @@ API 层里生产业务模块的模块级 mock 必须是**类型化工厂**（`vi
 
 ## 其他约束
 
-- pnpm@10.12.4，CI 使用 `--frozen-lockfile`
+- pnpm@12.14.0，CI 使用 `--frozen-lockfile`
 - ESLint flat config (`eslint.base.mjs`)，`consistent-type-imports` 使用 `inline-type-imports` 风格
 - Next.js 16: Middleware 改名为 Proxy，Server Function 公开可达（三层防御原因）
 - **Docker 是构建 / 部署 / 验收的主路径**（CI 亦然，见 `.github/workflows/`，分类见其 `README.md`）。唯一入口与文件矩阵：**`docker/README.md` §7**（生产部署在 §1–§6）。
@@ -207,7 +207,7 @@ API 层里生产业务模块的模块级 mock 必须是**类型化工厂**（`vi
   `✓ Compiled successfully in 10.5s`；gateway `cargo build --release`）、`stack.sh up` 全健康、
   `pnpm test:e2e` **1/1 通过**。**旧结论"本机 e2e / 镜像构建不可用"已作废**——真实原因只是 buildx
   配置目录只读（`BUILDX_CONFIG=$PWD/.tmp-buildx`，`stack.sh` 已自动处理），不是 registry 不可达。
-- 本地基础设施（仅跑 `pnpm test` 时需要；验收栈自带 PG/Redis）: `docker compose -f docker/compose/local.yml up -d`（PostgreSQL 16 + Redis 7）。
+- 本地基础设施（仅跑 `pnpm test` 时需要；验收栈自带 PG/Redis）: `docker compose -f docker/compose/local.yml up -d`（PostgreSQL 18 + Redis 8）。
 - 数据库初始化顺序: `pnpm db:migrate` → `pnpm db:seed`；`db:push` 只允许本地临时试验，不进入 CI/发布路径。
 - **host 进程入口已移除**（2026-10-20 清理）：不再有 `pnpm dev` / `dev:*` / `check-portal-boot.sh` /
   `dev-gateway-stack.sh` / `verify-turbopack-container.sh`。原因：验收必须打到构建产物，且宿主 glibc

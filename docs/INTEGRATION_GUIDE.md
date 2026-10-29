@@ -44,7 +44,7 @@ Portal 仅 `expose` 4000（`docker/compose/prod.yml`）；Vercel 由平台终结
 
 ## 前提条件
 
-Docker 运行中即可——PostgreSQL 16 + Redis 7 + Portal + Gateway 都由 `docker/compose/test.yml` 提供
+Docker 运行中即可——PostgreSQL 18 + Redis 8 + Portal + Gateway 都由 `docker/compose/test.yml` 提供
 （`docker/compose/test.yml` 的 postgres/redis，`docker/compose/test.yml` 的 portal/gateway），与 CI / 生产同形态
 （host `pnpm dev` 入口已移除，原因见 [`docker/README.md`](../docker/README.md) §7.5）。
 

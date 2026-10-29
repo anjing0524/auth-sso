@@ -44,7 +44,7 @@ docker run --rm --network host \
   -e E2E_BASE_URL="$E2E_BASE_URL" \
   -e E2E_SKIP_SEED=true \
   "$PLAYWRIGHT_IMAGE" \
-  bash -lc "npm install -g pnpm@10.12.4 &&
+  bash -lc "npm install -g pnpm@12.14.0 &&
     printf 'manage-package-manager-versions=false\nregistry=https://registry.npmmirror.com\n' > .npmrc &&
     pnpm install --frozen-lockfile &&
     pnpm exec playwright install chromium &&

@@ -20,7 +20,7 @@
 ```text
 docker/
 ├── compose/                # 编排：按生命周期分档
-│   ├── local.yml           # 本地 PG16 + Redis7（pnpm test 前置）
+│   ├── local.yml           # 本地 PG18 + Redis8（pnpm test 前置）
 │   ├── test.yml            # 发布验收 / CI 栈（含 acme profile）
 │   ├── prod.yml            # 自托管生产（唯一日常运维主路径）
 │   └── acme-staging.yml    # 公网 Let's Encrypt staging 验证（非部署）
@@ -48,7 +48,7 @@ docker/
 
 | 文件 | 职责 | 消费者（证据） | 结论 |
 |---|---|---|---|
-| `compose/local.yml` | 本地 PG16 + Redis7，`redis-commander` 在 `tools` profile 下可选 | `AGENTS.md` / `README.md` 的 `docker compose -f … up -d`；`pnpm test` 前置 | 必需（开发） |
+| `compose/local.yml` | 本地 PG18 + Redis8，`redis-commander` 在 `tools` profile 下可选 | `AGENTS.md` / `README.md` 的 `docker compose -f … up -d`；`pnpm test` 前置 | 必需（开发） |
 | `compose/test.yml` | 发布验收 / CI 栈：postgres/redis/cert-init/db-init/portal/gateway；`node-test`（`workspace` target，CI lint/typecheck/test 用）；acme profile（pebble/challtestsrv/gateway-acme） | `scripts/docker/stack.sh`（仅前 6 个服务）、`scripts/e2e/acme-e2e.sh`、CI `quality.yml` / `acceptance.yml` / `acme.yml`（`node-test` 与 acme 服务） | 必需（CI / 验收） |
 | `compose/prod.yml` | 生产形态（ACME、健康检查、db-init、数据卷） | `scripts/docker/deploy.sh`、`apps/portal/__tests__/api/delivery-config-guard.test.ts` | 必需（生产） |
 | `compose/acme-staging.yml` | 公网 staging ACME 验证（非部署） | `scripts/e2e/acme-staging.sh` | 可选（首次上线演练） |
@@ -139,6 +139,8 @@ GATEWAY_SHARED_SECRET=<随机串>
 
 生产环境强制要求 `LETSENCRYPT_DOMAIN`、`LETSENCRYPT_EMAIL` 和 `GATEWAY_SHARED_SECRET`。域名必须是有效 DNS 名，ACME directory 必须使用 HTTPS。
 生产 Compose 将 `ACME_STATE_DIR` 固定为 `/var/lib/gateway/acme` 并挂载 `gateway_acme` volume，无需在 `.env.prod` 重复配置。
+
+> **PostgreSQL 18 升级注意**：PG 18 不能直接复用 PG 16 的 `data/postgres` 数据目录；从旧版本升级必须先 `pg_dump`，清空旧目录后用新容器初始化再 `pg_restore`。Redis 8 沿用兼容协议，但仍建议升级前做快照。
 
 首次上线建议先把 `ACME_DIRECTORY_URL` 临时设为 Let's Encrypt staging：
 
@@ -298,8 +300,8 @@ portal 仅在 compose 网络内暴露 4000，不映射宿主端口。
 
 | 服务 | 镜像 | 端口 | 健康检查 |
 |---|---|---|---|
-| postgres | postgres:16-alpine | 内部 5432 | `pg_isready` |
-| redis | redis:7-alpine | 内部 6379 | `redis-cli ping` |
+| postgres | postgres:18-alpine | 内部 5432 | `pg_isready` |
+| redis | redis:8-alpine | 内部 6379 | `redis-cli ping` |
 | cert-init / db-init（一次性） | 本仓构建 | - | 退出码 0（`Exited (0)` 属正常） |
 | portal | `auth-sso-test-portal` | 内部 4000 | `/api/health` 200 |
 | gateway | `auth-sso-test-gateway` | 容器内 80/443；**宿主只映射 19443 → 443**（80 不映射，宿主跑 `stack.sh` 时不受 80 占用影响） | `wget --no-check-certificate https://127.0.0.1:443/login` |

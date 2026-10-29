@@ -31,7 +31,7 @@ Portal **本身就是**身份提供者（Identity Provider）。不存在独立�
 | **认证引擎** | 通过 `jose` 库的纯自定义实现 | 完全掌控 OIDC 流程，无框架锁定 |
 | **JWT 签名** | ES256（ECDSA P-256），密钥存储在 PostgreSQL `jwks` 表中 | 非对称加密——支持离线验证，无需共享密钥 |
 | **API 网关** | Rust + Pingora | 高并发、零成本抽象、离线 JWKS 验证 |
-| **数据库** | PostgreSQL 16+ | 认证域与业务域共用 |
+| **数据库** | PostgreSQL 18+ | 认证域与业务域共用 |
 | **ORM** | Drizzle ORM | 直接查询模式、类型安全、无仓储层抽象 |
 | **缓存 / 黑名单** | Portal：ioredis（`apps/portal/src/infrastructure/redis/index.ts`，全局单例）；Gateway：bb8 连接池 + redis crate（`apps/gateway/src/redis.rs`） | jti 黑名单（紧急吊销）+ 权限上下文缓存。权限缓存是**旁路缓存**（cache-aside）：key = `portal:user_perms:{userId}`（`REDIS_KEY_PREFIX.USER_PERMS`，见 `packages/contracts/src/oidc.ts` 的 `REDIS_KEY_PREFIX`），TTL = 3600s ± 300s 随机抖动（`apps/portal/src/lib/permissions.ts` 的 `PERM_CACHE_TTL_BASE` / `PERM_CACHE_TTL_JITTER` / `jitteredCacheTtl`），未命中回查 DB 并回填；Gateway **不读**该 key |
 | **样式** | Tailwind CSS 4 + shadcn/ui | 实用优先（Utility-first）、组件库 |
@@ -57,7 +57,7 @@ Gateway（Rust/Pingora）
   |
   v
 Portal（BFF + OIDC 提供商 + 管理后台 UI）
-  |-- PostgreSQL 16+（用户、角色、权限、部门、客户端、jwks、refresh_tokens、authorization_codes、审计表）
+  |-- PostgreSQL 18+（用户、角色、权限、部门、客户端、jwks、refresh_tokens、authorization_codes、审计表）
   |-- Redis（jti 黑名单、user_jti 映射、权限缓存 portal:user_perms:、授权请求暂存、登录失败计数、续签去重）
   |
   v

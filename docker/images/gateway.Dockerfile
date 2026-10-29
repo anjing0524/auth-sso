@@ -1,9 +1,9 @@
-FROM alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d AS cert-init
+FROM alpine:3.24@sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a AS cert-init
 
 RUN apk add --no-cache openssl
 
 # Build stage
-FROM rust:1.93-alpine@sha256:4fec02de605563c297c78a31064c8335bc004fa2b0bf406b1b99441da64e2d2d AS builder
+FROM rust:1.99-alpine@sha256:b1d5dd5a22a09404d3e798c0cf051b689077360374eb505fa5bb93c479693d87 AS builder
 
 # 安装构建依赖（添加 alpine-sdk 以及构建 vendored openssl 所需的基础工具）
 RUN apk add --no-cache musl-dev pkgconfig perl make cmake clang-dev clang alpine-sdk
@@ -29,7 +29,7 @@ COPY apps/gateway/src ./src
 RUN touch src/main.rs && cargo build --release
 
 # Runner stage
-FROM alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d
+FROM alpine:3.24@sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a
 
 # 创建固定 UID/GID 的非 root 用户，确保 ACME 持久化卷权限稳定。
 RUN addgroup -S -g 10001 gateway && adduser -S -u 10001 gateway -G gateway

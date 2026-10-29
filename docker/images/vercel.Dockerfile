@@ -1,4 +1,4 @@
-FROM rust:1.93-alpine AS gateway-builder
+FROM rust:1.99-alpine AS gateway-builder
 
 RUN apk add --no-cache alpine-sdk clang clang-dev cmake make musl-dev perl pkgconfig
 
@@ -16,7 +16,7 @@ FROM node:26-alpine AS portal-builder
 
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
-RUN npm install -g pnpm@10.12.4
+RUN npm install -g pnpm@12.14.0
 
 WORKDIR /app
 COPY pnpm-lock.yaml pnpm-workspace.yaml ./

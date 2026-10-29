@@ -52,8 +52,8 @@ auth-sso/
 | 运行时 | Node.js 26、pnpm 10.12.4、TypeScript 6 |
 | 应用框架 | Next.js 16（App Router / Cache Components / Turbopack 构建）、React 19、Tailwind CSS 4 |
 | 认证与协议 | 自建 OIDC Provider、OAuth 2.1 + PKCE、`jose`（ES256）、bcryptjs |
-| 数据 | PostgreSQL 16 + Drizzle ORM、Redis 7（JWT 撤销黑名单 / 权限缓存 / 授权请求状态） |
-| 网关 | Rust 1.93+（edition 2024）、Pingora 0.9、OpenSSL（vendored） |
+| 数据 | PostgreSQL 18 + Drizzle ORM、Redis 8（JWT 撤销黑名单 / 权限缓存 / 授权请求状态） |
+| 网关 | Rust 1.99+（edition 2024）、Pingora 0.9、OpenSSL（vendored） |
 | 测试与工程 | Vitest 4（Projects 模式）、Playwright（仅 Chromium）、ESLint 9 flat config、Docker Compose |
 
 ## 环境要求
@@ -61,7 +61,7 @@ auth-sso/
 - **Node.js >= 26**（`package.json` 的 `engines`；Temporal 在该版本默认开启，不需要 V8 旗标）。
 - **pnpm 10.12.4**（CI 使用 `--frozen-lockfile`）。
 - **Docker + Docker Compose v2**：构建、部署、验收的主路径。
-- **Rust 1.93+**（可选）：仅在宿主机直接编译 `apps/gateway` 时需要；走 Docker 构建无需安装。
+- **Rust 1.99+**（可选）：仅在宿主机直接编译 `apps/gateway` 时需要；走 Docker 构建无需安装。
 
 ## 快速开始（Docker —— 与 CI / 生产同形态）
 
@@ -103,7 +103,7 @@ pnpm test:e2e   # 构建 → 起栈 → tests/e2e 全部 spec（登录/OAuth 回
 ### 5. 只跑单元 / API 测试
 
 ```bash
-docker compose -f docker/compose/local.yml up -d postgres redis   # 测试用基础设施（PG 16 + Redis 7）
+docker compose -f docker/compose/local.yml up -d postgres redis   # 测试用基础设施（PG 18 + Redis 8）
 pnpm test
 ```
 
