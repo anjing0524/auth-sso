@@ -227,7 +227,7 @@ describe('U-G02 空态语义', () => {
     expect(container.querySelector('[data-empty-kind="filtered"]')).toBeTruthy();
     expect(screen.getByText('未找到匹配结果')).toBeInTheDocument();
     const clear = screen.getByRole('link', { name: '清除筛选' });
-    expect(clear).toHaveAttribute('href', '/roles');
+    expect(clear).toHaveAttribute('href', '/roles?pageSize=10');
     expect(screen.queryByText('创建角色以开始管理权限')).not.toBeInTheDocument();
   });
 

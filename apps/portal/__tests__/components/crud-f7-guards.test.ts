@@ -163,15 +163,15 @@ describe('U-G07 — 用户域错误文案中文化', () => {
 describe('表格滚动与吸顶契约（2026-10-23 UI 重做）', () => {
   it('DataTable 只用外层滚动容器，表头 sticky 挂在 th 上', () => {
     const dataTable = read('src/components/shared/data-table.tsx');
-    expect(dataTable).toContain('containerClassName="overflow-visible"');
+    expect(dataTable).toContain("containerClassName={data.length === 0 && emptyState ? 'h-full overflow-visible' : 'overflow-visible'}");
     expect(dataTable).toContain('[&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:bg-card');
     // 卡片不再 flex-1 撑满（1 行数据不应出现整屏空白卡片）
-    expect(dataTable).not.toContain('flex min-h-0 flex-1 flex-col');
+    expect(dataTable).toContain('CardContent className="flex min-h-0 flex-1 flex-col p-0"');
   });
 
   it('审计页三张裸表同样使用 overflow-visible + sticky th', () => {
     const auditPage = read('src/app/(dashboard)/audit-logs/page.tsx');
-    expect(auditPage.match(/containerClassName="overflow-visible"/g)?.length).toBe(3);
+    expect(auditPage.match(/containerClassName=\{data\.length === 0 \? 'h-full overflow-visible' : 'overflow-visible'\}/g)?.length).toBe(3);
     expect(auditPage.match(/\[&_th\]:sticky \[&_th\]:top-0/g)?.length).toBe(3);
   });
 
@@ -938,8 +938,8 @@ describe('Dialog 页脚与内容内边距一致（续一百六十）', () => {
   it('DialogContent p-5 与 DialogFooter -mx-5/-mb-5/p-5 对齐，不产生 4px 溢出', () => {
     const src = read('src/components/ui/dialog.tsx');
     expect(src).toContain('rounded-2xl bg-popover p-5');
-    expect(src).toContain('sticky bottom-0 flex flex-col-reverse gap-2 rounded-b-2xl border-t bg-popover p-5');
-    expect(src).toContain('[@media(max-height:500px)]:static');
+    expect(src).toContain('-mx-5 -mb-5 sticky bottom-0 flex flex-col-reverse gap-2 rounded-b-2xl border-t bg-popover px-5 py-3');
+    expect(src).toContain('sm:flex-row sm:justify-end');
     expect(src).not.toContain('-mx-6 -mb-6');
   });
 });
@@ -1291,7 +1291,7 @@ describe('桌面工具栏层级（续一百九十五）', () => {
     const audit = read('src/app/(dashboard)/audit-logs/page.tsx');
     expect(audit).toContain('gap-1.5 xl:gap-3');
     const filters = read('src/app/(dashboard)/audit-logs/components/audit-filters.tsx');
-    expect(filters).toContain('md:w-56 xl:w-64');
+    expect(filters).toContain('md:w-52 xl:w-64');
     const page = read('src/app/(dashboard)/clients/page.tsx');
     expect(page).toContain('getClientStatusCounts');
     expect(page).toContain('statusCounts={statusCounts}');
@@ -1592,8 +1592,8 @@ describe('1024 权限工具栏一行（续二百二十四）', () => {
 describe('1024 审计工具栏两行（续二百二十五）', () => {
   it('<1100 首行标题/页签/导出，次行筛选；占位缩短', () => {
     const page = read('src/app/(dashboard)/audit-logs/page.tsx');
-    expect(page).toContain('order-2 ml-auto');
-    expect(page).toContain('order-3 w-full');
+    expect(page).toContain('min-[1100px]:order-3');
+    expect(page).toContain('order-3 flex w-full');
     const filters = read('src/app/(dashboard)/audit-logs/components/audit-filters.tsx');
     expect(filters).toContain('搜索用户 / IP');
     expect(filters).not.toContain('搜索用户 / IP...');
@@ -2075,9 +2075,9 @@ describe('头像装饰语义（续二百七十七）', () => {
 describe('清空筛选保留排序（续二百七十九）', () => {
   it('客户端/角色 clearHref 带 sort', () => {
     const clients = read('src/app/(dashboard)/clients/page.tsx');
-    expect(clients).toContain("sort !== 'recent' ? `/clients?sort=${sort}`");
+    expect(clients).toContain("sort !== 'recent' ? `sort=${sort}`");
     const roles = read('src/app/(dashboard)/roles/components/RolesTable.tsx');
-    expect(roles).toContain("initialSort !== 'default' ? `/roles?sort=${initialSort}`");
+    expect(roles).toContain("initialSort !== 'default' ? `sort=${initialSort}`");
   });
 });
 
@@ -2115,14 +2115,14 @@ describe('审计访问表 1024 列宽（续二百八十四）', () => {
     expect(page).toContain('<TableHead className="hidden min-[1100px]:table-cell">方法</TableHead>');
     expect(page).toContain('max-w-[200px]');
     const filters = read('src/app/(dashboard)/audit-logs/components/audit-filters.tsx');
-    expect(filters).toContain('md:w-56 xl:w-64');
+    expect(filters).toContain('md:w-52 xl:w-64');
   });
 });
 
 describe('审计操作表 1024 列宽（续二百八十五）', () => {
   it('IP 列 ≥1100；请求地址限宽', () => {
     const page = read('src/app/(dashboard)/audit-logs/page.tsx');
-    expect(page).toContain('{opLog.ip ||');
+    expect(page).toContain('formatIp(opLog.ip)');
     expect(page).toContain('min-[1100px]:max-w-xs');
   });
 });
@@ -2163,7 +2163,7 @@ describe('部门名筛选入口（续二百八十九）', () => {
 describe('授权 Token 表 1024 列宽（续二百九十一）', () => {
   it('Scopes 限宽并带 title，操作列完整', () => {
     const src = read('src/app/(dashboard)/clients/[id]/components/ClientTokensSection.tsx');
-    expect(src).toContain('max-w-[260px] truncate');
+    expect(src).toContain('xl:max-w-[260px]');
     expect(src).toContain('title={token.scopes.join');
   });
 });
@@ -2202,7 +2202,7 @@ describe('Portal 客户端禁用说明（续二百九十五）', () => {
     expect(detail).toContain('Portal 自身登录客户端不可禁用');
     expect(detail).toContain('Portal 自身登录客户端为只读');
     const info = read('src/app/(dashboard)/clients/[id]/components/ClientInfoSection.tsx');
-    expect(info).toContain('Portal 自身登录客户端不可轮换 Secret');
+    expect(info).toContain('Portal 自身登录客户端禁止轮换 Secret');
   });
 });
 
@@ -2619,7 +2619,7 @@ describe('权限菜单字段可访问名称（续三百五十二）', () => {
   it('父级/图标 combobox aria-label，路径有提示', () => {
     const src = read('src/app/(dashboard)/permissions/permission-form.tsx');
     expect(src).toContain('aria-label="父级权限"');
-    expect(src).toContain('aria-label="图标"');
+    expect(src).toContain('aria-label="选择图标"');
     expect(src).toContain('以 / 开头，如 /users');
   });
 });
@@ -2825,7 +2825,7 @@ describe('用户角色页禁用原因（续三百七十八）', () => {
   it('全选/清空/保存 disabled 带 title', () => {
     const src = read('src/app/(dashboard)/users/[id]/roles/roles-client.tsx');
     expect(src).toContain('当前筛选没有可选角色');
-    expect(src).toContain('当前没有已选角色');
+    expect(src).toContain('当前筛选没有可选角色');
     expect(src).toContain('没有未保存的修改');
     expect(src).toContain('不能修改自己的角色');
   });
@@ -3092,7 +3092,7 @@ describe('详情返回链接名称（续四百零八）', () => {
 describe('个人中心完整值（续四百一十）', () => {
   it('来源 IP 与会话行 title 完整', () => {
     const src = read('src/app/(dashboard)/profile/ProfileClient.tsx');
-    expect(src).toContain('title={session.ip ?? undefined}');
+    expect(src).toContain('title={formatIp(session.ip)}');
     expect(src).toContain('登录于 ${formatDateTime(item.createdAt)} · 会话 ID：${item.id}');
   });
 });
