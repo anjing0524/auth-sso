@@ -61,6 +61,12 @@ auth-sso/
 - **Docker + Docker Compose v2**：构建、部署、验收的主路径。
 - **Rust 1.99+**（可选）：仅在宿主机直接编译 `apps/gateway` 时需要；走 Docker 构建无需安装。
 
+## 依赖组织（pnpm workspace）
+
+- 根 `package.json` 只放**仓库级 dev 工具**（Playwright、tsx、vitest、wait-on），不重复声明应用依赖；
+- 运行时依赖在 `apps/portal`、`apps/demo-app`、`packages/config`，由 `pnpm-workspace.yaml` 统一安装；
+- 查看完整依赖：`pnpm -r list --depth 0`；冻结安装：`pnpm install --frozen-lockfile`。
+
 ## 本地启动（开发）
 
 ```bash
