@@ -141,6 +141,7 @@ GATEWAY_SHARED_SECRET=<随机串>
 生产 Compose 将 `ACME_STATE_DIR` 固定为 `/var/lib/gateway/acme` 并挂载 `gateway_acme` volume，无需在 `.env.prod` 重复配置。
 
 > **PostgreSQL 18 升级注意**：PG 18 不能直接复用 PG 16 的 `data/postgres` 数据目录；从旧版本升级必须先 `pg_dump`，清空旧目录后用新容器初始化再 `pg_restore`。Redis 8 沿用兼容协议，但仍建议升级前做快照。
+> **PG 18 挂载路径**：Docker 官方 18 镜像的数据目录是 `/var/lib/postgresql`（数据实际落在版本子目录），不能继续挂 `/var/lib/postgresql/data`；`prod.yml` / `test.yml` / `local.yml` / `acme-staging.yml` 已同步。
 
 首次上线建议先把 `ACME_DIRECTORY_URL` 临时设为 Let's Encrypt staging：
 

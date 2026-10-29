@@ -76,3 +76,6 @@ test-mcp
 
 # Docker buildx 本地配置（~/.docker/buildx 只读时的重定向目录，见 docs/docker.md）
 .tmp-buildx/
+# 本地 agent / UI 巡检临时产物（不属于交付物）
+/.tmp-*/
+/gui-test-screenshots/
