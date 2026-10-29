@@ -21,6 +21,8 @@
 
 ## 变更记录
 
+- 2026-10-29（续四百八十六）: **artifacts 移出版本库**。4.9MB 生成型巡检视频/GIF/索引全部删除并加入 `.gitignore`；README 只保留 GitHub user-attachments 播放器，UX-METRICS 历史引用改为说明。
+
 - 2026-10-29（续四百八十五）: **PG18 数据卷重建 + 仓库清理**。删除本地/验收旧 PG16 数据卷，按 PG18 挂载路径（`/var/lib/postgresql`）重新 migrate+seed；`.gitignore` 增加 `.tmp-*`/`gui-test-screenshots`，清理未跟踪巡检产物；Pod 账号与角色实测恢复。
 
 - 2026-10-29（续四百八十四）: **Docker 工具链升级到最新稳定线**。Alpine 3.21→3.24、Rust 1.93→1.99、PostgreSQL 16→18、Redis 7→8、Vercel Dockerfile pnpm 10.12.4→12.14.0；网关/Portal 镜像构建、PG18 迁移+seed、全量 1535 tests、E2E 24/24 通过；补充 PG16→18 数据目录不可直接复用的升级注意。

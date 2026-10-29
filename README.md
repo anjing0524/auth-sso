@@ -20,11 +20,9 @@ Portal 自身即是 OIDC Provider；Gateway 作为唯一公网入口，完成 HT
 
 https://github.com/user-attachments/assets/5bf2ee77-d1e3-45de-98dd-8bd87c5c8922
 
-[![管理端 Walkthrough 预览](artifacts/ux-walkthrough/portal-walkthrough-2026-10-29-preview.gif)](artifacts/ux-walkthrough/portal-walkthrough-2026-10-29-1080p.mp4)
+完整 1080p 视频由 GitHub user-attachments 托管；上面的 bare URL 在 README 中直接渲染播放器。
 
-完整 1080p 视频由 GitHub user-attachments 托管；上面的 bare URL 在 README 中直接渲染播放器。本地备份：[`portal-walkthrough-2026-10-29-1080p.mp4`](artifacts/ux-walkthrough/portal-walkthrough-2026-10-29-1080p.mp4)。
-
-覆盖登录 → 工作台 → 用户 → 角色 → 权限 → 审计 → 应用 → 个人中心；更多分辨率与专项巡检见 [walkthrough 索引](artifacts/ux-walkthrough/index.html)。
+覆盖登录 → 工作台 → 用户 → 角色 → 权限 → 审计 → 应用 → 个人中心。
 
 ## 项目结构
 

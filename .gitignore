@@ -79,3 +79,5 @@ test-mcp
 # 本地 agent / UI 巡检临时产物（不属于交付物）
 /.tmp-*/
 /gui-test-screenshots/
+# 生成的演示/巡检资产（不提交；视频走 GitHub user-attachments）
+/artifacts/
