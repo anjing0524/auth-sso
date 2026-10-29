@@ -22,7 +22,7 @@ Browser → Gateway（唯一公网入口）→ Portal（OIDC Provider + JWT 签�
 | 自托管生产（P1） | `apps/gateway/gateway.docker.toml`（`docker/compose/test.yml` 只在验收栈挂 e2e 配置；`prod.yml` 的 gateway 未覆盖配置 ⇒ 镜像内 `/app/gateway.toml` = `gateway.docker.toml`） | 域名 80/443，Gateway 内建 ACME（`docker/compose/prod.yml`） | `portal:4000`（`apps/gateway/gateway.docker.toml`） |
 | Vercel 平台（P2） | `apps/gateway/gateway.vercel.toml`（`external_tls_termination = true`） | 平台域名（外部 TLS 终结） | 同镜像内 `127.0.0.1:4100`（`gateway.vercel.toml`、`docker/images/vercel.Dockerfile`） |
 
-host 进程入口已移除（`apps/gateway/gateway.toml` 仅作为本地模板保留，不属于部署目标）；
+`apps/gateway/gateway.toml` 仅作为本地 Gateway 模板保留；`pnpm dev` 只启动 Portal，不属于部署目标；
 目标收敛依据见 [ADR-030](adr/ADR-030-deployment-targets.md)。
 
 Gateway 启动时读的是**工作目录下的 `gateway.toml`**（`apps/gateway/src/main.rs`，默认值 `gateway.toml`）：
@@ -39,7 +39,7 @@ Portal 仅 `expose` 4000（`docker/compose/prod.yml`）；Vercel 由平台终结
 > 任何 `/demo/*` 请求会被路由到一个不存在的上游。**该声明已于 2026-10-23 从 `gateway.docker.toml` 移除**
 > （避免生产形态静默 502；同一提交在文件内保留注释与恢复示例）。host 模板 `apps/gateway/gateway.toml`
 > 仍保留指向 `127.0.0.1:3100` 的条目（与 `apps/demo-app/package.json` 的 `next dev -p 3100` 对得上），
-> 但 host 进程入口已移除（[`docker/README.md`](../docker/README.md) §7.5），demo 链路需要按下文
+> 但 host 原生启动只用于本地开发（`pnpm dev`，见 [`docs/local-development.md`](local-development.md)），demo 链路需要按下文
 > 「Gateway 代理模式完整验证」自行搭三条腿。
 
 ## 前提条件

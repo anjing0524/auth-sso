@@ -61,7 +61,18 @@ auth-sso/
 - **Docker + Docker Compose v2**：构建、部署、验收的主路径。
 - **Rust 1.99+**（可选）：仅在宿主机直接编译 `apps/gateway` 时需要；走 Docker 构建无需安装。
 
-## 快速开始（Docker —— 与 CI / 生产同形态）
+## 本地启动（开发）
+
+```bash
+pnpm install
+pnpm dev:reset   # 首次/清空本地数据：本地 PG18/Redis8 + migrate + seed
+pnpm dev         # 启动本地 PG/Redis + migrate + Next dev（http://localhost:4100）
+```
+
+本地只启动 Portal（4100）；完整 OIDC/Gateway 登录与验收走 Docker 栈：
+`pnpm stack:up` → `https://127.0.0.1:19443/login`。详见 [`docs/local-development.md`](docs/local-development.md)。
+
+## Docker 验收 / 生产同形态
 
 ### 1. 安装依赖（构建镜像前需要）
 
@@ -145,10 +156,10 @@ node scripts/bench/gateway.mjs --url https://127.0.0.1:19443 --n 200 --c 20   # 
 
 ```bash
 cp .env.example .env.prod            # 再按 docker/README.md §3 补齐必填项
-./scripts/docker/deploy.sh --check   # 逐项校验环境文件与 compose 配置，不启动
-./scripts/docker/deploy.sh           # 构建 → db-init（migrate + seed）→ 启动 → 健康检查
-./scripts/docker/deploy.sh --status  # 容器状态
-./scripts/docker/deploy.sh --rollback # 切回上次镜像（数据不回滚，需自行备份）
+pnpm deploy:check                    # 逐项校验环境文件与 compose 配置，不启动
+pnpm deploy:up                       # 构建 → db-init（migrate + seed）→ 启动 → 健康检查
+pnpm deploy:status                   # 容器状态
+pnpm deploy:rollback                 # 切回上次镜像（数据不回滚，需自行备份）
 ```
 
 Gateway 在进程内完成 ACME HTTP-01 验证、证书签发与热加载，无需 Certbot 或宿主证书脚本。

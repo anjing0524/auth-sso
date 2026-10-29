@@ -256,13 +256,13 @@ pnpm test:e2e:acme:staging
 
 ## 7. 本地开发 / 发布验收（`docker/compose/test.yml`，与 CI 同路径）
 
-> 结论：**构建、部署、验收 e2e 全部走 Docker**。host 进程只用于断点调试。
+> 结论：**验收与生产全部走 Docker**；本地原生启动只用于 Portal UI 开发（`pnpm dev`，不进入验收入口）。
 > 2026-10-20 实测（离线镜像）：`pnpm stack:build` 成功（portal 的 `next build` 走 Next 16 默认
 > **Turbopack**：`✓ Compiled successfully in 10.5s`；gateway `cargo build --release`）、
 > `pnpm stack:up` 全健康、`pnpm test:e2e` **1/1 通过**。
 >
-> **host 进程入口已移除**：`pnpm dev` / `dev:*` / `dev-gateway-stack.sh` / `check-portal-boot.sh` /
-> `verify-turbopack-container.sh` 全部删除；`tests/e2e` 只保留 Docker 验收闭环（无 host `next dev` webServer）。
+> **本地开发入口**：`pnpm dev` / `pnpm dev:reset` 启动本地 PG18/Redis8 + Portal（4100），
+> 见 [`docs/local-development.md`](../docs/local-development.md)；它不是验收入口，`tests/e2e` 仍只打 Docker 栈。
 
 ### 7.1 运行入口
 

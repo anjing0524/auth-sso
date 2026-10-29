@@ -17,7 +17,7 @@ v2.1 — 权限码统一 `portal:` 前缀（ADR-008）、响应格式澄清、Ga
 
 | 环境 | Base URL |
 |------|---------|
-| 本地开发 | `http://localhost:4100`（Portal 直连；**host 进程入口已移除**，仅用于容器内探针，见 AGENTS.md） |
+| 本地开发 | `http://localhost:4100`（`pnpm dev` 原生启动；仅开发，不是验收入口，见 `docs/local-development.md`） |
 | Docker（验收栈） | 唯一入口 `https://127.0.0.1:19443`（Gateway，自签证书） |
 | Docker（Compose 内网） | `http://portal:4000`（仅供 Gateway / 容器内探针） |
 | 生产环境 | `https://<your-domain>`（经 Gateway HTTPS；`docker/compose/prod.yml` 只发布 Gateway 的 80/443，Portal 无宿主端口） |

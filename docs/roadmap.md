@@ -21,6 +21,8 @@
 
 ## 变更记录
 
+- 2026-10-29（续四百八十八）: **命令入口统一**。新增 `scripts/local/{dev,infra,reset}.sh` 与 `pnpm dev/dev:infra/dev:reset`；生产统一 `pnpm deploy:*`；本地原生 4100、Docker 验收 19443 分界写清；本地实测 200、reset/seed 通过。
+
 - 2026-10-29（续四百八十七）: **测试报告不入库确认**。`test-results/`、`playwright-report/`、`tests/e2e-report/`、`tests/traceability/.generated/`、`coverage/`、`*.junit.xml` 统一为根路径 ignore；本地生成物已删除，当前 Git 无测试报告跟踪。
 
 - 2026-10-29（续四百八十六）: **artifacts 移出版本库**。4.9MB 生成型巡检视频/GIF/索引全部删除并加入 `.gitignore`；README 只保留 GitHub user-attachments 播放器，UX-METRICS 历史引用改为说明。

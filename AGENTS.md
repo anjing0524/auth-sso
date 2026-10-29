@@ -209,11 +209,10 @@ API 层里生产业务模块的模块级 mock 必须是**类型化工厂**（`vi
   配置目录只读（`BUILDX_CONFIG=$PWD/.tmp-buildx`，`stack.sh` 已自动处理），不是 registry 不可达。
 - 本地基础设施（仅跑 `pnpm test` 时需要；验收栈自带 PG/Redis）: `docker compose -f docker/compose/local.yml up -d`（PostgreSQL 18 + Redis 8）。
 - 数据库初始化顺序: `pnpm db:migrate` → `pnpm db:seed`；`db:push` 只允许本地临时试验，不进入 CI/发布路径。
-- **host 进程入口已移除**（2026-10-20 清理）：不再有 `pnpm dev` / `dev:*` / `check-portal-boot.sh` /
-  `dev-gateway-stack.sh` / `verify-turbopack-container.sh`。原因：验收必须打到构建产物，且宿主 glibc
-  2.28 跑不了 Turbopack；容器内 glibc 2.36 无此问题，镜像里的 `next build`（默认 Turbopack）就是
-  Turbopack 的可用性证明。**唯一判据**：`pnpm stack:up` 后 `https://127.0.0.1:19443/login` 真实 200 +
-  `pnpm test:e2e` 闭环通过。`NODE_OPTIONS` 里的 V8 旗标问题已修（2026-10-19，Temporal 在 node@26 默认开启）。
+- **本地启动**：`pnpm dev` = 本地 PG18/Redis8 + `next dev`(4100)，`pnpm dev:reset` 清本地数据并 migrate+seed；
+  它不是验收入口，验收/生产仍必须 Docker。**验收唯一判据**：`pnpm stack:up` 后
+  `https://127.0.0.1:19443/login` 真实 200 + `pnpm test:e2e` 闭环通过。`NODE_OPTIONS` 的 V8 旗标问题
+  已修（2026-10-19，Temporal 在 node@26 默认开启）。
 - **装新依赖**：`pnpm add` 若报 `ERR_PNPM_EROFS`（pnpm store 只读）⇒ 报告并请用户代跑，保持包管理器、锁文件与 CI 的 `--frozen-lockfile` 原样（实测：`eslint-plugin-sonarjs` 因此装不上，#89 只给结论不落地）
 - **长作业先固化 SHA，再单独启动**：`scripts/ci/verify.sh <sha>` 在提交**之后**单独跑；脚本一旦启动就当它只读（要改就停下重跑）。本会话两种竞态各踩一次：`git rev-parse` 落在旧提交上、bash 增量读到半行。
 - **门禁结论取退出码**（加末尾的 `✖ N problems (X errors…)` 汇总行）；grep 只用来筛行、不当结论：`grep '^\s*[0-9]+:[0-9]+\s+error'` 曾把 1 个 lint error 读成「0 error」（真实输出带 `apps/portal lint:` 前缀）；同理**别把校验脚本塞进管道**——`| tail` 会让退出码变成 `tail` 的（实测：一个被取代成 `cancelled` 的 run 因此被读成 exit 0；`scripts/ci/verify.sh` 有运行级判据，直接跑、看它的退出码）。**一次推送只验一个**：同一分支的新推送会取消旧 run（本会话三个连续提交的 run 都被取代成 `cancelled`，于是"绿"永远拿不到）⇒ 上一轮绿了再推下一轮。

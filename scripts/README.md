@@ -1,14 +1,16 @@
 # scripts/ 脚本索引
 
 > 本目录只放**可执行工具**，按职责分目录；每个脚本只做一件事（下表与目录一一对应，不写死篇数）。
-> 根 `package.json` 的命令是**稳定入口**（`pnpm test:e2e`、`pnpm test:e2e:acme[:staging]`、`pnpm stack:*`），脚本路径属于实现细节。
+> 根 `package.json` 的命令是**稳定入口**：本地 `pnpm dev[:reset]`、测试 `pnpm test[:e2e]`、
+> 验收 `pnpm stack:*`、生产 `pnpm deploy:*`；脚本路径属于实现细节。
 > 落单的例外：`clean` 只有脚本入口（`scripts/docker/stack.sh clean`），没有 pnpm 别名。
 
 ## 目录与职责
 
 | 目录 | 职责 | 脚本 |
 |---|---|---|
-| `docker/` | Docker 栈生命周期与生产部署 | `stack.sh`（验收栈生命周期统一入口：`up\|build\|status\|logs\|e2e\|down\|clean`）、`deploy.sh`（生产部署：校验 → 构建 → migrate/seed → 启动 → 健康检查，支持 `--check\|--no-build\|--status\|--rollback\|--down`） |
+| `local/` | 本地原生开发（**本地 = 本地启动**） | `dev.sh`（infra up + migrate + Next dev 4100）、`infra.sh`（本地 PG18/Redis8 生命周期）、`reset.sh`（删本地卷 + migrate + seed） |
+| `docker/` | Docker 验收栈生命周期与生产部署 | `stack.sh`（验收栈生命周期统一入口：`up\|build\|status\|logs\|e2e\|down\|clean`）、`deploy.sh`（生产部署：校验 → 构建 → migrate/seed → 启动 → 健康检查，支持 `--check\|--no-build\|--status\|--rollback\|--down`） |
 | `e2e/` | 发布验收（全部打 Docker 栈） | `release.sh`（`pnpm test:e2e`：`stack.sh e2e --build` → 跑 `tests/e2e` 全部 spec → 退出清理；`SKIP_BUILD=1` / `E2E_KEEP_STACK=1`）、`acme-e2e.sh`（Pebble 本地 ACME 闭环）、`acme-staging.sh`（公网 Let's Encrypt staging 联调） |
 | `ci/` | CI 专用编排（状态校验、推送、CI 步骤实现） | `verify.sh`（校验某提交的 GitHub Actions 真全绿，`cancelled`/失败一律非零退出）、`push-main.sh`（推送 main，网络失败重试、永久拒绝立即失败）、`acme-preflight.sh`（`acme.yml` 的预检作业：断言 `e2e/acme-staging.sh` 的预检契约）、`e2e.sh`（`acceptance.yml` 的验收作业：复用 `docker/stack.sh` 起栈 + Playwright 容器内跑 `tests/e2e`） |
 | `bench/` | 性能基准（不参与门禁） | `gateway.mjs`（`/healthz`、`/login`、`/_next/static/*.js` 的 RPS/延迟；有失败请求则退出码非 0） |
@@ -28,6 +30,15 @@
 - 新增脚本：放进对应职责目录并更新本表；若是常规开发入口，再在根 `package.json` 加一个 `pnpm` 命令。
 - CI 步骤只调用**一行**命令：跨多步编排（起栈、跑浏览器测试、证据断言）放 `ci/*.sh`，
   约定见 [`.github/workflows/README.md`](../.github/workflows/README.md)「修改规则」。
+
+## 命令入口（唯一推荐）
+
+| 阶段 | 命令 |
+|---|---|
+| 开发（本地原生） | `pnpm dev` / `pnpm dev:reset` / `pnpm dev:infra` |
+| 测试 | `pnpm test` / `pnpm test:api` / `pnpm test:components` |
+| 验收 | `pnpm stack:up` / `pnpm stack:status` / `pnpm test:e2e` |
+| 生产 | `pnpm deploy:check` / `pnpm deploy:up` / `pnpm deploy:status` / `pnpm deploy:rollback` |
 
 ## 与 Docker 配置的关系
 
