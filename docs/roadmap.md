@@ -21,6 +21,8 @@
 
 ## 变更记录
 
+- 2026-10-29（续四百七十三）: **身份读口状态过滤**。Redis 撤销失败时旧 AT 仍可验签；`getOwnUser`/`getUserProfile` 过滤 DISABLED/DELETED，Dashboard 无有效用户重定向，`/api/me` 回归覆盖。
+
 - 2026-10-29（续四百七十二）: **解锁动作补高权目标保护**。`unlockUserAction` 同步使用 `assertCanMutateAdminTarget`，破坏性用户操作覆盖完整。
 
 - 2026-10-29（续四百七十一）: **高权目标保护扩展**。仅按 ADMIN/SUPER_ADMIN 角色码不够，自定义高权角色同样可被 `reset_password` 接管；守卫改为“目标权限码集合必须是操作者子集”，回归 60 tests passed。

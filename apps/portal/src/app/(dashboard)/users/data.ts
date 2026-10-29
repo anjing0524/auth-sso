@@ -21,6 +21,7 @@ import { USER_LIST_COLUMNS, buildUserListConditions } from '@/db/user-queries';
 import { isScopeDenied, scopeFilter } from '@/lib/authz';
 import type { UserScope } from '@/lib/authz';
 import { paginationMeta, withPagination, countRows, offsetFor, normalizePagination } from '@/lib/pagination';
+import { ENTITY_ACTIVE } from '@auth-sso/contracts';
 
 /** 列表行 → 列表项 DTO（日期序列化 + 展示名/部门名兜底）；泛型透传保留其余列 */
 function toUserListItem<
@@ -132,7 +133,11 @@ export async function getUserProfile(userId: string) {
       avatarUrl: schema.users.avatarUrl,
     })
     .from(schema.users)
-    .where(eq(schema.users.id, userId))
+    .where(and(
+      eq(schema.users.id, userId),
+      eq(schema.users.status, ENTITY_ACTIVE),
+      isNull(schema.users.deletedAt),
+    ))
     .limit(1);
   return rows[0] ?? null;
 }
@@ -231,7 +236,13 @@ export async function getUserActiveSessionCount(userId: string): Promise<number>
  * @returns 用户详情；不存在时为 null
  */
 export async function getOwnUser(userId: string) {
-  const user = await findUserWithRoles(eq(schema.users.id, userId));
+  // 身份读口只返回 ACTIVE 且未删除的用户：即使 Redis 撤销失败、旧 AT 仍在，
+  // 被禁用/删除的账号也不能继续读取 /api/me、profile 或 dashboard 外壳。
+  const user = await findUserWithRoles(and(
+    eq(schema.users.id, userId),
+    eq(schema.users.status, ENTITY_ACTIVE),
+    isNull(schema.users.deletedAt),
+  ));
   return user ? toUserDetail(user) : null;
 }
 

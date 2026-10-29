@@ -10,6 +10,7 @@
  * @vitest-environment node
  */
 import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest';
+import { eq } from 'drizzle-orm';
 import { createTestRequest } from '../helpers/test-utils';
 import {
   createTestDbHandle,
@@ -22,6 +23,7 @@ import {
   seedTestPermission,
   seedUserRoleBinding,
 } from '../helpers/seed-fixtures';
+import * as schema from '@/db/schema';
 import type * as authModule from '@/lib/auth';
 import type * as menuTreeModule from '@/lib/menu-tree';
 
@@ -148,6 +150,13 @@ describe('Me Endpoints', () => {
 
       const body = await response.json();
       expect(body.error).toBeDefined();
+    });
+
+    it('账号被禁用后返回 401（即使旧 AT 仍通过验签）', async () => {
+      await td.db.update(schema.users).set({ status: 'DISABLED' }).where(eq(schema.users.id, USER_ID));
+
+      const response = await GetMe(createTestRequest('/api/me'));
+      expect(response.status).toBe(401);
     });
 
     it('返回 tokenInfo.expiresAt 用于前端静默刷新调度', async () => {

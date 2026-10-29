@@ -56,6 +56,8 @@ async function DashboardContent({ children }: { children: React.ReactNode }) {
 
   // 并行获取用户数据（仅用于 UI 展示）——读的是自己，用身份读口，不受数据范围约束
   const user = await getOwnUser(identity.userId);
+  // 身份读口已过滤 DISABLED/DELETED；旧 AT 未撤销时也必须拒绝渲染受保护外壳
+  if (!user) redirect('/login');
 
   return (
     <PermissionsProvider roleCodes={roles} permissionCodes={permissions}>

@@ -636,6 +636,8 @@ GET /api/me
 
 **认证：** Cookie `portal_jwt_token` 或 `Authorization: Bearer <JWT>`（有 `X-User-Id` 时信任网关注入、
 零验签快速解码；否则自验签兜底）。未登录 → 401 `AUTH_SSO_1002`。
+账号被禁用或删除时，即使旧 Access Token 仍能通过验签，`/api/me` 也返回 **401**：身份读口只取
+`ACTIVE` 且未删除用户（`getOwnUser` / `getUserProfile`）。
 
 **响应（200，`restSuccess` 直出，无 `success`/`data` 包裹）：**
 ```json
