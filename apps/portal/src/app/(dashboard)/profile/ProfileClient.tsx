@@ -37,6 +37,7 @@ import { useRouter } from 'next/navigation';
 import { isAdminRole } from '@auth-sso/contracts';
 import { accountStatus } from '@/lib/status-label';
 import { formatDateTime } from '@/lib/format-date';
+import { formatIp } from '@/lib/format-ip';
 
 interface ProfileClientProps {
   user: null | {
@@ -436,7 +437,7 @@ export default function ProfileClient({
                   </div>
                   <div className="flex justify-between gap-3">
                     <dt className="text-[11px] text-muted-foreground">来源 IP</dt>
-                    <dd className="truncate font-mono text-[11px]" title={session.ip ?? undefined}>{session.ip ?? '-'}</dd>
+                    <dd className="truncate font-mono text-[11px]" title={formatIp(session.ip)}>{formatIp(session.ip)}</dd>
                   </div>
                   <div>
                     <dt className="text-[11px] text-muted-foreground">设备 / 客户端</dt>

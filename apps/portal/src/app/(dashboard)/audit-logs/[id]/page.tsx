@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { formatDateTime } from '@/lib/format-date';
+import { formatIp } from '@/lib/format-ip';
 import { isUuid } from '@/lib/uuid';
 import { safeReturnPath } from '@/lib/safe-return';
 import { getAccessLogById, getAuditLogById, getLoginLogById } from '@/app/audit/data';
@@ -74,7 +75,7 @@ export default async function AuditLogDetailPage({ params, searchParams }: PageP
               <Field label="时间" value={formatDateTime(row.createdAt)} />
               <Field label="用户" value={row.username} />
               <Field label="事件类型" value={label} />
-              <Field label="IP 地址" value={row.ip ?? '-'} mono copy />
+              <Field label="IP 地址" value={formatIp(row.ip)} mono copy />
               <Field label="地理位置" value={row.location || '-'} />
               <Field label="失败原因" value={row.failReason || '-'} mono />
               <Field label="User-Agent" value={row.userAgent || '-'} mono copy />
@@ -118,7 +119,7 @@ export default async function AuditLogDetailPage({ params, searchParams }: PageP
             <CardHeader><CardTitle className="type-card-title">来源</CardTitle></CardHeader>
             <CardContent>
               <dl>
-                <Field label="IP 地址" value={row.ip || '-'} mono copy />
+                <Field label="IP 地址" value={formatIp(row.ip)} mono copy />
                 <Field label="User-Agent" value={row.userAgent || '-'} mono copy />
               </dl>
               {row.username && (
@@ -163,7 +164,7 @@ export default async function AuditLogDetailPage({ params, searchParams }: PageP
           <CardHeader><CardTitle className="type-card-title">来源</CardTitle></CardHeader>
           <CardContent>
             <dl>
-              <Field label="IP 地址" value={row.ip || '-'} mono copy />
+              <Field label="IP 地址" value={formatIp(row.ip)} mono copy />
               <Field label="User-Agent" value={row.userAgent || '-'} mono copy />
             </dl>
             {row.userId && (

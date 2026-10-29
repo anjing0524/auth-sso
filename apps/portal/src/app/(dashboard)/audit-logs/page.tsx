@@ -37,6 +37,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { formatDate as formatDateOnly, formatTime, formatDateTime as formatDate } from '@/lib/format-date';
+import { formatIp } from '@/lib/format-ip';
 
 /**
  * 该路由读取会话/动态数据，**保留服务端阻塞**（Cache Components 的 instant 导航校验）。
@@ -357,7 +358,7 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
                           </Badge>
                         </TableCell>
                         <TableCell className="hidden text-muted-foreground md:table-cell">
-                          {loginLog.ip || '-'}
+                          {formatIp(loginLog.ip)}
                         </TableCell>
                         <TableCell className={`hidden max-w-[200px] md:table-cell ${loginLog.failReason ? 'text-destructive' : 'text-muted-foreground'}`}>
                           <span className="line-clamp-2 break-words" title={loginLog.failReason ?? undefined}>{loginLog.failReason || '-'}</span>
@@ -449,7 +450,7 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
                           )}
                         </TableCell>
                         <TableCell className="hidden text-muted-foreground min-[1100px]:table-cell">
-                          {opLog.ip || '-'}
+                          {formatIp(opLog.ip)}
                         </TableCell>
                         <TableCell className="text-right">
                           <Button asChild variant="ghost" size="icon-sm" aria-label={`查看 ${opLog.username || '未知用户'} 于 ${formatDate(opLog.createdAt)} 的 ${AUDIT_OPERATION_LABELS[opLog.operation as keyof typeof AUDIT_OPERATION_LABELS] || opLog.operation} 操作日志详情（#${opLog.id.slice(0, 8)}）`}>
@@ -526,7 +527,7 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
                             {accessLog.status ?? '-'}
                           </Badge>
                         </TableCell>
-                        <TableCell className="hidden text-muted-foreground md:table-cell">{accessLog.ip || '-'}</TableCell>
+                        <TableCell className="hidden text-muted-foreground md:table-cell">{formatIp(accessLog.ip)}</TableCell>
                         <TableCell className="text-right">
                           <Button asChild variant="ghost" size="icon-sm" aria-label={`查看 ${accessLog.method} ${accessLog.path} 于 ${formatDate(accessLog.createdAt)} 的访问日志详情（#${accessLog.id.slice(0, 8)}）`}>
                             <Link href={`/audit-logs/${accessLog.id}?tab=access&returnTo=${encodeURIComponent(currentListHref)}`}><Eye className="h-4 w-4" /></Link>
