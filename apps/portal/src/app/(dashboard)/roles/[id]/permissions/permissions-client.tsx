@@ -457,7 +457,7 @@ export default function RolePermissionsPage({ role, returnHref = '/roles' }: Rol
                 )}
               </div>
             ) : (
-              <div className="grid xl:grid-cols-2">
+              <div className="grid lg:grid-cols-2">
                 {scopedItems.map((p) => (
                   <label
                     key={p.id}
