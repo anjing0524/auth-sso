@@ -8,7 +8,6 @@ import {
   CardDescription,
   CardFooter,
   CardHeader,
-  CardTitle,
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -120,12 +119,12 @@ export default function LoginForm({ sessionId, initialError }: LoginFormProps) {
         <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-lg shadow-primary/20">
           <ShieldCheck className="h-5 w-5" />
         </div>
-        <h1 className="text-lg font-semibold tracking-tight text-white">Auth-SSO Portal</h1>
+        <p className="text-lg font-semibold tracking-tight text-white">Auth-SSO Portal</p>
       </div>
 
       <Card className="w-full max-w-[400px] overflow-hidden border-none shadow-2xl shadow-black/40 ring-1 ring-white/20">
         <CardHeader className="space-y-0.5 border-b bg-muted/30 py-4 text-center">
-          <CardTitle className="text-xl">企业统一身份认证</CardTitle>
+          <h1 className="text-xl font-semibold leading-none tracking-tight">企业统一身份认证</h1>
           <CardDescription>
             {sessionId ? '正在完成 OAuth 授权登录' : '使用您的企业账号登录管理门户'}
           </CardDescription>
