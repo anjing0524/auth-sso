@@ -500,18 +500,20 @@ export default function DepartmentTree({ departments, deletionStats = {}, autoOp
           </DialogHeader>
           <div className="space-y-2 py-2">
             <Label htmlFor="move-parent">目标父部门</Label>
-            <select
-              id="move-parent"
-              aria-label="目标父部门"
-              value={moveParentId}
-              onChange={(e) => setMoveParentId(e.target.value)}
-              className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-[13px]"
+            <Select
+              value={moveParentId || 'NONE'}
+              onValueChange={(value) => setMoveParentId(value === 'NONE' ? '' : value)}
             >
-              <option value="">请选择目标父部门</option>
-              {moveTargets.map((d) => (
-                <option key={d.id} value={d.id}>{'　'.repeat(d.depth)}{d.name}</option>
-              ))}
-            </select>
+              <SelectTrigger id="move-parent" aria-label="目标父部门" className="w-full">
+                <SelectValue placeholder="请选择目标父部门" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="NONE">请选择目标父部门</SelectItem>
+                {moveTargets.map((d) => (
+                  <SelectItem key={d.id} value={d.id}>{'　'.repeat(d.depth)}{d.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <p className="text-[11px] text-muted-foreground" title={selectedMoveNames.join('、') || '—'}>
               已选：{selectedMoveNames.slice(0, 5).join('、') || '—'}
               {selectedMoveNames.length > 5 ? ` 等 ${selectedMoveNames.length} 个部门` : ''}
