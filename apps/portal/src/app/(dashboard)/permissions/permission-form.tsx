@@ -236,7 +236,7 @@ export default function PermissionForm({ mode, menuOptions, permission, clients 
               </div>
             )}
             {form.type === 'API' && (
-              <div className="space-y-1.5 sm:col-span-2">
+              <div className="space-y-1.5">
                 <Label htmlFor="perm-client">归属应用（可选）</Label>
                 <Select value={form.clientId || 'NONE'} onValueChange={(v) => setForm({ ...form, clientId: v === 'NONE' ? '' : v })} disabled={isBuiltin}>
                   <SelectTrigger id="perm-client" aria-label="归属应用"><SelectValue>{(form.clientId && clients.find((c) => c.id === form.clientId)?.name) || '不绑定'}</SelectValue></SelectTrigger>
