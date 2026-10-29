@@ -14,6 +14,7 @@ import { RequiredLegend, RequiredMark } from '@/components/shared/required-mark'
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
+import { ChevronDown } from 'lucide-react';
 
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -21,6 +22,8 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { PageHeader } from '@/components/shared/page-header';
+import { Popover, PopoverTrigger, PopoverContent, PopoverClose } from '@/components/ui/popover';
+import { DynamicIcon } from '@/lib/icon-map';
 import { FieldError } from '@/components/shared/field-error';
 import { ICON_MAP } from '@/lib/icon-map';
 import { useFieldFailure } from '@/hooks/use-field-failure';
@@ -31,7 +34,7 @@ import { createPermissionAction, updatePermissionAction } from './actions';
 const TYPE_LABELS: Record<string, string> = { API: '接口', PAGE: '页面', DIRECTORY: '目录' };
 
 const ICON_LABELS: Record<string, string> = {
-  LayoutGrid: '工作台', LayoutDashboard: '仪表盘', Users: '用户', UserPlus: '新增用户', Building2: '部门',
+  LayoutGrid: '工作台', LayoutDashboard: '仪表盘', Users: '用户组', UserPlus: '新增用户', Building2: '部门',
   ShieldCheck: '角色', AppWindow: '应用', Menu: '菜单', ShieldAlert: '审计', FileText: '文档', Key: '权限',
   Lock: '锁', Globe: '全局', Bell: '通知', HelpCircle: '帮助', Settings: '设置', User: '用户', Inbox: '收件箱',
 };
@@ -279,12 +282,50 @@ export default function PermissionForm({ mode, menuOptions, permission, clients 
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="perm-icon">图标</Label>
-                <Select value={form.icon || 'LayoutGrid'} onValueChange={(v) => setForm({ ...form, icon: v })}>
-                  <SelectTrigger id="perm-icon" aria-label="图标"><SelectValue>{ICON_LABELS[form.icon || 'LayoutGrid'] ?? (form.icon || '工作台')}</SelectValue></SelectTrigger>
-                  <SelectContent>
-                    {Object.keys(ICON_MAP).map((name) => (<SelectItem key={name} value={name}>{ICON_LABELS[name] ?? name}</SelectItem>))}
-                  </SelectContent>
-                </Select>
+                <Popover>
+                  <PopoverTrigger
+                    render={
+                      <button
+                        type="button"
+                        id="perm-icon"
+                        aria-label="选择图标"
+                        disabled={isBuiltin}
+                        className="flex h-9 w-full items-center justify-between gap-2 rounded-lg border border-input bg-transparent px-3 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50"
+                      >
+                        <span className="flex min-w-0 items-center gap-2">
+                          <DynamicIcon name={form.icon || 'LayoutGrid'} className="h-4 w-4 shrink-0" />
+                          <span className="truncate">{ICON_LABELS[form.icon || 'LayoutGrid'] ?? (form.icon || '工作台')}</span>
+                        </span>
+                        <ChevronDown className="h-4 w-4 shrink-0 opacity-50" />
+                      </button>
+                    }
+                  />
+                  <PopoverContent className="w-[352px]" align="start" aria-label="选择图标">
+                    <p className="px-1 pb-2 text-[11px] text-muted-foreground">选择图标</p>
+                    <div className="grid grid-cols-4 gap-1">
+                      {Object.keys(ICON_MAP).map((name) => {
+                        const active = (form.icon || 'LayoutGrid') === name;
+                        return (
+                          <PopoverClose
+                            key={name}
+                            type="button"
+                            aria-label={`选择图标 ${ICON_LABELS[name] ?? name}`}
+                            aria-pressed={active}
+                            onClick={() => setForm({ ...form, icon: name })}
+                            className={`flex min-w-0 flex-col items-center gap-1 rounded-md border p-2 text-[11px] transition-colors ${
+                              active
+                                ? 'border-primary/50 bg-primary/10 font-medium text-foreground'
+                                : 'border-transparent text-muted-foreground hover:border-border hover:bg-muted'
+                            }`}
+                          >
+                            <DynamicIcon name={name} className="h-5 w-5" />
+                            <span className="w-full truncate text-center">{ICON_LABELS[name] ?? name}</span>
+                          </PopoverClose>
+                        );
+                      })}
+                    </div>
+                  </PopoverContent>
+                </Popover>
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="perm-sort">排序</Label>
