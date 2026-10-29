@@ -44,7 +44,8 @@ async function seedE2eFixtures(defaultDeptId: string, adminId: string): Promise<
     status: 'ACTIVE',
   });
 
-  const qaPassword = await bcrypt.hash('Qa@123456', 10);
+  // E2E 夹具不需要可登录凭据；随机密码避免已知口令进入任何环境
+  const qaPassword = await bcrypt.hash(crypto.randomUUID(), 10);
   await db.insert(schema.users).values({
     id: crypto.randomUUID(),
     username: 'qa_lin',
