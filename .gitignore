@@ -32,8 +32,13 @@ apps/gateway/target
 apps/gateway/ssl
 apps/gateway/logs
 
-# Coverage
-coverage
+# 测试运行产物（本地 / CI artifact，不入库）
+/test-results/
+/playwright-report/
+/tests/e2e-report/
+/tests/traceability/.generated/
+/coverage/
+*.junit.xml
 
 # Certs
 *.pem
@@ -53,11 +58,6 @@ yarn-error.log*
 # Next.js auto-generated type declarations
 next-env.d.ts
 
-test-results
-playwright-report
-feat
-tests/e2e-report
-tests/traceability/.generated/
 apps/portal/tsc_output.txt
 
 data
@@ -76,8 +76,10 @@ test-mcp
 
 # Docker buildx 本地配置（~/.docker/buildx 只读时的重定向目录，见 docs/docker.md）
 .tmp-buildx/
+
 # 本地 agent / UI 巡检临时产物（不属于交付物）
 /.tmp-*/
 /gui-test-screenshots/
+
 # 生成的演示/巡检资产（不提交；视频走 GitHub user-attachments）
 /artifacts/
