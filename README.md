@@ -16,6 +16,12 @@ Portal 自身即是 OIDC Provider；Gateway 作为唯一公网入口，完成 HT
 - **信创网关 (Rust/Pingora)**：HTTPS 终结、JWKS 离线验签、Cookie↔Bearer 转换、限流与 `/healthz` 存活探针；Gateway 内建 ACME 客户端，Let's Encrypt 自动签发/续期并原子热加载证书。
 - **子应用零改造接入**：Gateway 注入 `X-User-Id` / `X-User-Jti` 并转发 `Authorization: Bearer`；权限上下文缓存 `portal:user_perms:{userId}` **由 Portal 在签发路径写入**（Gateway 不读写权限缓存，ADR-006），子应用自行读取。`apps/demo-app` 是读取侧的最小示例；该示例当前没有接入任何 compose 栈（见 `docs/INTEGRATION_GUIDE.md`）。
 
+## 演示
+
+[▶ 观看管理端 Walkthrough（2026-10-29，1440×900，19s，5fps）](artifacts/ux-walkthrough/portal-walkthrough-2026-10-29-5fps.webm)
+
+覆盖登录 → 工作台 → 用户 → 角色 → 权限 → 审计 → 应用 → 个人中心；更多分辨率与专项巡检见 [walkthrough 索引](artifacts/ux-walkthrough/index.html)。
+
 ## 项目结构
 
 ```
