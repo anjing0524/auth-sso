@@ -322,6 +322,10 @@ export default function PermissionsTable({ permissions, pagination, activeTab, i
         <span className="mt-0.5 block max-w-[135px] truncate font-mono text-[10px] font-normal text-muted-foreground md:hidden" title={p.code}>
           {TYPE_LABELS[p.type] ?? p.type} · {p.code}
         </span>
+        {/* 768–1099：类型列被隐藏，用行内标签保留类型信息 */}
+        <span className="mt-0.5 hidden text-[10px] font-normal text-muted-foreground md:block min-[1100px]:hidden">
+          {TYPE_LABELS[p.type] ?? p.type}
+        </span>
         {p.type !== 'API' && (
           <span
             className="block max-w-[240px] truncate text-xs font-normal text-muted-foreground"
