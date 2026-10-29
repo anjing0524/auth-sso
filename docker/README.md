@@ -168,7 +168,7 @@ cp .env.example .env.prod   # 按 §3 填写生产参数（LETSENCRYPT_DOMAIN �
 
 部署顺序（Compose 依赖已声明，无需手工干预）：
 
-1. `postgres`/`redis` 健康后，一次性 `db-init` 执行 `pnpm db:migrate && pnpm db:seed`
+1. `postgres`/`redis` 健康后，一次性 `db-init` 执行 `pnpm --filter @auth-sso/portal db:migrate && pnpm --filter @auth-sso/portal db:seed`
    （schema、内置 RBAC、portal client 幂等就绪）；
 2. `portal` 在 `db-init` 成功后才启动，并通过 `/api/health` 健康检查；
 3. `gateway` 在 `portal` healthy 后才启动，监听 80/443 并恢复/创建 ACME 账户。

@@ -69,7 +69,7 @@ services:
       target: builder
       args:
         NEXT_PUBLIC_APP_URL: https://127.0.0.1:19443
-    command: sh -c 'pnpm db:migrate && pnpm db:seed && pnpm --filter @auth-sso/portal db:seed:e2e'
+    command: sh -c 'pnpm --filter @auth-sso/portal db:migrate && pnpm --filter @auth-sso/portal db:seed && pnpm --filter @auth-sso/portal db:seed:e2e'
     environment:
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/auth_sso
       REDIS_URL: redis://redis:6379

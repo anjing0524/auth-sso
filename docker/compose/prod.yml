@@ -78,7 +78,7 @@ services:
       target: builder
       args:
         NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL}
-    command: sh -c 'pnpm db:migrate && pnpm db:seed'
+    command: sh -c 'pnpm --filter @auth-sso/portal db:migrate && pnpm --filter @auth-sso/portal db:seed'
     restart: "no"
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/auth_sso

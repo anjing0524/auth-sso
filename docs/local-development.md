@@ -37,9 +37,9 @@ pnpm dev              # 启动本地 PG/Redis + migrate + Next dev（4100）
 | `pnpm dev:reset` | 清空本地数据卷并 migrate + seed（不影响验收/生产） |
 | `pnpm dev -- --no-migrate` | 跳过迁移直接启动 |
 | `pnpm stack up` / `pnpm stack down` | Docker 验收栈（自签证书，19443） |
-| `pnpm test` / `pnpm test:api` / `pnpm test:components` | Vitest 分层测试 |
+| `pnpm test` | Vitest 全量测试 |
 | `pnpm test:e2e` | Docker 验收栈上的 Playwright E2E |
-| `pnpm deploy -- --check` / `pnpm deploy` / `pnpm deploy -- --status` | 生产部署（`prod.yml` + `deploy.sh`） |
+| `pnpm deploy` | 生产部署；`-- --check` / `-- --status` / `-- --rollback` 为子模式 |
 
 ## 本地认证边界
 

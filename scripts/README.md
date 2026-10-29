@@ -37,9 +37,9 @@
 | 阶段 | 命令 |
 |---|---|
 | 开发（本地原生） | `pnpm dev` / `pnpm dev:reset` |
-| 测试 | `pnpm test` / `pnpm test:api` / `pnpm test:components` |
+| 测试 | `pnpm test` |
 | 验收 | `pnpm stack up` / `pnpm stack status` / `pnpm test:e2e` |
-| 生产 | `pnpm deploy -- --check` / `pnpm deploy` / `pnpm deploy -- --status` / `pnpm deploy -- --rollback` |
+| 生产 | `pnpm deploy`（`-- --check` / `-- --status` / `-- --rollback`） |
 
 ## 与 Docker 配置的关系
 

@@ -10,11 +10,7 @@
     "lint": "pnpm -r lint",
     "typecheck": "pnpm -r typecheck",
     "test": "vitest run",
-    "test:api": "vitest run --project @auth-sso/portal-api",
-    "test:components": "vitest run --project @auth-sso/portal-ui",
     "test:e2e": "./scripts/e2e/release.sh",
-    "db:migrate": "pnpm --filter @auth-sso/portal db:migrate",
-    "db:seed": "pnpm --filter @auth-sso/portal db:seed",
     "stack": "./scripts/docker/stack.sh",
     "deploy": "./scripts/docker/deploy.sh"
   },

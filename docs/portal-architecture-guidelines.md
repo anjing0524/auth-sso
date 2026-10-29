@@ -748,7 +748,7 @@ describe('User 领域核心规则 TDD 测试', () => {
 });
 ```
 
-> 测试分层与命令（`pnpm test:components` / `test:api` / `test:e2e`）、`@req` 追溯与模块 mock 纪律的唯一出处是 `AGENTS.md`「测试体系」一节。
+> 测试分层与命令（`pnpm test` / `pnpm test:e2e`）、`@req` 追溯与模块 mock 纪律的唯一出处是 `AGENTS.md`「测试体系」一节。
 
 ---
 

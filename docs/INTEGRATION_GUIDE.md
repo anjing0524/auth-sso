@@ -64,11 +64,11 @@ pnpm stack status    # == ./scripts/docker/stack.sh status
 
 ## 第二步：确认初始化数据
 
-`db-init` 已自动执行 migrate + seed（`docker/compose/test.yml` 的 `pnpm db:migrate && pnpm db:seed`）；如需在**有数据库连接**的环境里单独操作：
+`db-init` 已自动执行 migrate + seed（`docker/compose/test.yml` 的 `pnpm --filter @auth-sso/portal db:migrate && pnpm --filter @auth-sso/portal db:seed`）；如需在**有数据库连接**的环境里单独操作：
 
 ```bash
-pnpm db:migrate   # == pnpm --filter @auth-sso/portal db:migrate（根 `package.json` 的 `db:migrate` 脚本）
-pnpm db:seed      # == pnpm --filter @auth-sso/portal db:seed（根 `package.json` 的 `db:seed` 脚本）
+pnpm --filter @auth-sso/portal db:migrate
+pnpm --filter @auth-sso/portal db:seed
 ```
 
 > 种子密码是 `Admin@123456`、邮箱 `admin@example.com` 这两个值来自 `apps/portal/scripts/seed.ts`（`bcrypt.hash('Admin@123456', 10)`）

@@ -24,7 +24,7 @@
 
 | 层 | 类别 / 作业 | CI 调用的命令 | 本地等价 |
 |---|---|---|---|
-| 快层（每次 push/PR，阻断） | `quality.yml` / `node` | `pnpm lint` · `pnpm typecheck` · `pnpm db:migrate` · `pnpm db:seed` · `pnpm test` · `node tests/traceability/generate-report.mjs`（均在 `node-test` 容器内） | 同左（先 `docker compose -f docker/compose/local.yml up -d`） |
+| 快层（每次 push/PR，阻断） | `quality.yml` / `node` | `pnpm lint` · `pnpm typecheck` · `pnpm --filter @auth-sso/portal db:migrate` · `pnpm --filter @auth-sso/portal db:seed` · `pnpm test` · `node tests/traceability/generate-report.mjs`（均在 `node-test` 容器内） | 同左（先 `docker compose -f docker/compose/local.yml up -d`） |
 | 快层 | `quality.yml` / `rust` | `cargo fmt --check` · `cargo clippy` · `cargo test` · `cargo build --release` · `cargo audit` | 同左（工作目录 `apps/gateway`） |
 | 快层 | `acme.yml` / `preflight` | `scripts/ci/acme-preflight.sh` | CI 专用（断言 `acme-staging.sh` 的预检契约，无容器） |
 | 验收层（每次 push/PR，阻断） | `acceptance.yml` / `docker-release` | `scripts/ci/e2e.sh` | `pnpm test:e2e`（`scripts/e2e/release.sh`） |

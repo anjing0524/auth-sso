@@ -30,7 +30,7 @@ describe('生产交付配置', () => {
 
   it('首次部署包含 db-init（migrate + seed），Portal 等它成功', () => {
     expect(compose).toMatch(/db-init:/);
-    expect(compose).toMatch(/pnpm db:migrate && pnpm db:seed/);
+    expect(compose).toMatch(/pnpm --filter @auth-sso\/portal db:migrate && pnpm --filter @auth-sso\/portal db:seed/);
     expect(compose).toMatch(/db-init:\s*\n\s*condition: service_completed_successfully/);
   });
 

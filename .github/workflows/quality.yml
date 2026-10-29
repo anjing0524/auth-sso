@@ -44,10 +44,10 @@ jobs:
         run: $NODE_TEST pnpm --registry=https://registry.npmjs.org audit --prod --audit-level=high
 
       - name: Migrate empty database
-        run: $NODE_TEST pnpm db:migrate
+        run: $NODE_TEST pnpm --filter @auth-sso/portal db:migrate
 
       - name: Seed database
-        run: $NODE_TEST pnpm db:seed
+        run: $NODE_TEST pnpm --filter @auth-sso/portal db:seed
 
       - name: Run unit, API, and component tests
         run: $NODE_TEST pnpm test

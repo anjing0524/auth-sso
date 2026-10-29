@@ -65,7 +65,7 @@
 
 ### 2.3 系统初始化（Bootstrap）
 
-首次部署时，系统通过数据库初始化入口 `pnpm db:migrate && pnpm db:seed` 创建首个超级管理员账户（`db:seed` → `apps/portal/scripts/seed.ts`，RBAC 初始化委托 `seed-rbac.ts`）：
+首次部署时，系统通过数据库初始化入口 `pnpm --filter @auth-sso/portal db:migrate && pnpm --filter @auth-sso/portal db:seed` 创建首个超级管理员账户（`db:seed` → `apps/portal/scripts/seed.ts`，RBAC 初始化委托 `seed-rbac.ts`）：
 
 - 内置 `SUPER_ADMIN`（超级管理员）与 `ADMIN` 角色归属**已存在的根部门**（`parent_id IS NULL`；seed 主脚本先创建根部门「总公司」（code `ROOT`），随后 `seed-rbac` 把该根部门绑为角色所属部门，并给两个角色绑定全部 API 权限）。管理员角色在 **OAuth 客户端准入**上直接放行（`domain/auth/oauth-authorize.ts` 的 `isAdminRole`）；**数据范围仍走 ADR-014 门面 `resolveScope` 的部门子树规则，不存在"超管绕过数据范围"的特殊分支**（`lib/authz/data-scope.ts` 无角色码旁路）——管理员之所以看起来"全量可见"，是因为其角色挂在根部门上。
 - 种子管理员账号的**用户名/邮箱/密码是硬编码的初值**（`username=admin`、`email=admin@example.com`、密码 `Admin@123456`，`apps/portal/scripts/seed.ts`），**不经环境变量配置**；OAuth 客户端的 `PORTAL_CLIENT_SECRET` / `PORTAL_REDIRECT_URL` 才可由环境变量覆盖。**生产部署必须先改掉这些初值**（`db:seed` 只用于初始化与本地/验收环境）。

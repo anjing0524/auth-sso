@@ -135,8 +135,8 @@ packages/config/    共享 env 配置 (Zod + URL 推导)
 
 | 层 | 位置 | 环境 / 框架 | 范围 | 命令 |
 |---|---|---|---|---|
-| 单元 / 组件 | `apps/*/__tests__/{components,domain,helpers}` | jsdom + Vitest | 渲染、交互、纯函数；外部 UI 原语与数据源可 mock | `pnpm test:components` |
-| API | `apps/*/__tests__/api/*.test.ts` | node + **真实 PostgreSQL / Redis** | route 与 action 的校验、鉴权、CRUD、数据范围过滤 | `pnpm test:api` |
+| 单元 / 组件 | `apps/*/__tests__/{components,domain,helpers}` | jsdom + Vitest | 渲染、交互、纯函数；外部 UI 原语与数据源可 mock | 随 `pnpm test` |
+| API | `apps/*/__tests__/api/*.test.ts` | node + **真实 PostgreSQL / Redis** | route 与 action 的校验、鉴权、CRUD、数据范围过滤 | 随 `pnpm test` |
 | E2E | `tests/e2e/*.spec.ts` | Playwright（仅 Chromium） | 登录冒烟与 Docker 发布栈闭环 | `pnpm test:e2e` |
 
 API 层里生产业务模块的模块级 mock 必须是**类型化工厂**（`vi.mock(import('…'), (): Partial<typeof xModule> => …)`）
@@ -208,7 +208,7 @@ API 层里生产业务模块的模块级 mock 必须是**类型化工厂**（`vi
   `pnpm test:e2e` **1/1 通过**。**旧结论"本机 e2e / 镜像构建不可用"已作废**——真实原因只是 buildx
   配置目录只读（`BUILDX_CONFIG=$PWD/.tmp-buildx`，`stack.sh` 已自动处理），不是 registry 不可达。
 - 本地基础设施（仅跑 `pnpm test` 时需要；验收栈自带 PG/Redis）: `docker compose -f docker/compose/local.yml up -d`（PostgreSQL 18 + Redis 8）。
-- 数据库初始化顺序: `pnpm db:migrate` → `pnpm db:seed`；schema 变更走迁移文件，不使用 `db:push`。
+- 数据库初始化顺序: `pnpm --filter @auth-sso/portal db:migrate` → `pnpm --filter @auth-sso/portal db:seed`；schema 变更走迁移文件，不使用 `db:push`。
 - **本地启动**：`pnpm dev` = 本地 PG18/Redis8 + `next dev`(4100)，`pnpm dev:reset` 清本地数据并 migrate+seed；
   它不是验收入口，验收/生产仍必须 Docker。**验收唯一判据**：`pnpm stack up` 后
   `https://127.0.0.1:19443/login` 真实 200 + `pnpm test:e2e` 闭环通过。`NODE_OPTIONS` 的 V8 旗标问题

@@ -123,14 +123,12 @@ pnpm test
 
 Vitest 4 以 Projects 模式聚合 `apps/portal` 与 `packages/contracts` 的测试；E2E 只跑 Docker 验收栈。
 
-| 层 | 位置 | 命令 | 说明 |
-|---|---|---|---|
-| 单元 / 组件 | `apps/portal/__tests__/{components,domain,helpers}`、`apps/portal/src/**/*.test.ts` | `pnpm test:components` | jsdom；不依赖数据库 |
-| 契约 | `packages/contracts/src/*.test.ts` | `pnpm test` | 随根配置聚合 |
-| API | `apps/portal/__tests__/api/*.test.ts` | `pnpm test:api` | 真实 PostgreSQL / Redis（node 环境） |
-| E2E | `tests/e2e/*.spec.ts` | `pnpm test:e2e` | Playwright（仅 Chromium），Docker 验收栈 |
-| 全量 | 以上全部 | `pnpm test` | 阻断门禁 |
-| 需求追溯 | `tests/traceability/generate-report.mjs` | `node tests/traceability/generate-report.mjs` | 生成 `tests/traceability/.generated/coverage-report.md`（本地生成、不提交，非门禁） |
+| 层 | 位置 | 运行方式 |
+|---|---|---|
+| 单元 / 组件 / 契约 / API | `apps/portal/__tests__/{components,domain,api,helpers}`、`apps/portal/src/**/*.test.ts`、`packages/contracts/src/*.test.ts` | 随 `pnpm test`（jsdom + 真实 PostgreSQL/Redis） |
+| E2E | `tests/e2e/*.spec.ts` | `pnpm test:e2e`（Playwright，Docker 验收栈） |
+| 全量 | 以上全部 | `pnpm test`（阻断门禁） |
+| 需求追溯 | `tests/traceability/generate-report.mjs` | `node tests/traceability/generate-report.mjs`（生成物不提交，非门禁） |
 
 补充命令（基准类需先起验收栈）：
 

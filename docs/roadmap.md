@@ -21,6 +21,8 @@
 
 ## 变更记录
 
+- 2026-10-29（续四百九十三）: **根命令最终只保留 9 条**（含自动 `prepare`）。去掉 `test:api`/`test:components`（并入 `pnpm test`）与 `db:migrate`/`db:seed`（内部走 app filter）；CI、compose、文档同步；交付守卫改为断言 compose 的 filter 形式。
+
 - 2026-10-29（续四百九十二）: **package.json 最终收敛为 13 条根命令**。`stack:*`→`stack <cmd>`；`deploy:*`→`deploy [flags]`；移除 `test:e2e:acme*`/`test:e2e:release`/`test:report`/`db:seed:e2e`/`dev:infra` 根包装；ACME/追溯改脚本直调；CI 与 README/docker 文档同步。
 
 - 2026-10-29（续四百九十一）: **命令进一步按真实意图收敛**。`stack:*` 收敛为 `pnpm stack <cmd>`，`deploy:*` 收敛为 `pnpm deploy [flags]`，移除 `dev:infra`/`test:e2e:acme*`/`test:e2e:release`/`test:report`/`db:seed:e2e` 根包装；ACME 直接走脚本，追溯报告走 node；共 13 个根命令。
