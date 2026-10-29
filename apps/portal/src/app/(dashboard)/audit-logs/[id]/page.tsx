@@ -56,10 +56,26 @@ export default async function AuditLogDetailPage({ params, searchParams }: PageP
   const { id } = await params;
   const { tab, returnTo: rawReturn } = await searchParams;
   if (!isUuid(id)) notFound();
-  const fallbackTab = tab === 'login' || tab === 'access' ? tab : 'operation';
+  /**
+   * 深链可分享：详情页真实类型可能有登录/操作/访问三种，内部链接总是带 tab，
+   * 但用户复制 URL 去掉 tab 后不应 404。显式 tab 优先；缺省时按 ID 探测，
+   * 探测不到才 404（三个查询都走主键，成本可控）。
+   */
+  let effectiveTab: 'login' | 'operation' | 'access' | null =
+    tab === 'login' || tab === 'operation' || tab === 'access' ? tab : null;
+  if (!effectiveTab) {
+    const [loginRow, operationRow, accessRow] = await Promise.all([
+      getLoginLogById(id),
+      getAuditLogById(id),
+      getAccessLogById(id),
+    ]);
+    effectiveTab = loginRow ? 'login' : operationRow ? 'operation' : accessRow ? 'access' : null;
+  }
+  if (!effectiveTab) notFound();
+  const fallbackTab = effectiveTab;
   const returnHref = safeReturnPath(rawReturn, `/audit-logs?tab=${fallbackTab}`, '/audit-logs');
 
-  if (tab === 'login') {
+  if (effectiveTab === 'login') {
     const row = await getLoginLogById(id);
     if (!row) notFound();
     const label = LOGIN_EVENT_LABELS[row.eventType as LoginEventType] ?? row.eventType;
@@ -91,7 +107,7 @@ export default async function AuditLogDetailPage({ params, searchParams }: PageP
     );
   }
 
-  if (tab === 'access') {
+  if (effectiveTab === 'access') {
     const row = await getAccessLogById(id);
     if (!row) notFound();
     return (
