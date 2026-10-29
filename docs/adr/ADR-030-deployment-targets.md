@@ -48,4 +48,5 @@
 
 - 文档守卫（`docs-claims` / `docs-references`）通过；
 - 根 README / docker README / INTEGRATION_GUIDE 不再把 host/test/local/staging 称为生产部署方向；
-- ADR 计数同步为 30 篇。
+- ADR 计数同步为 30 篇；
+- `deployment-targets-guard` 4 条用例锁住两个生产目标与非部署分类。
