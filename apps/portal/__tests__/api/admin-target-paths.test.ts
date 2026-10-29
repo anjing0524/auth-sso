@@ -22,7 +22,7 @@ vi.mock('@/infrastructure/db', () => ({
   get schema() { return td.schema; },
 }));
 
-// @allow-module-mock @/lib/auth/verify-jwt auth-bypass: 只提供“低权操作者已登录”输入；权限判定、范围、目标高权判断均走生产代码
+// @allow-module-mock @/lib/auth/verify-jwt auth-bypass: 只提供“低权操作者已登录”输入；本文件 admin-target-paths.test.ts 全部用例依赖它；权限判定、范围、目标高权判断均走生产代码
 vi.mock(import('@/lib/auth/verify-jwt'), async (importOriginal): Promise<Partial<typeof verifyJwtModule>> => {
   const actual = await importOriginal();
   return {
