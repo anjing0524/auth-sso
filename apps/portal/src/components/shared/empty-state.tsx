@@ -172,7 +172,7 @@ export function EmptyState({
   return (
     <div
       data-empty-kind={kind}
-      className={cn('flex flex-col items-center justify-center py-16 px-4 text-center', className)}
+      className={cn('flex flex-col items-center justify-center px-4 py-8 text-center [@media(min-height:600px)]:py-16', className)}
     >
       <div className="bg-muted/50 p-4 rounded-full mb-4">
         <DynamicIcon name={icon} aria-hidden="true" className="h-8 w-8 text-muted-foreground" />
