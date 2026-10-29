@@ -39,6 +39,16 @@
 8. **身份读口状态过滤**：旧 AT 在 Redis 撤销失败时仍可能通过验签；`getOwnUser` / `getUserProfile` 只返回 ACTIVE 且未删除用户，Dashboard 布局在身份读口为空时重定向登录，避免禁用/删除账号继续读取 `/api/me`、profile 或 UserInfo。
 9. **高权目标保护**：`user:reset_password` 单独就能重置同范围 SUPER_ADMIN 密码，等价于账号接管。新增 `assertCanMutateAdminTarget`（与写入同事务）：目标持有 ADMIN/SUPER_ADMIN，或其权限码集合超出操作者时，非管理员禁止重置密码、禁用/删除、修改资料、修改角色、解锁、强制下线；管理员保留全部能力。
 
+## 补充决策（2026-10-29，基于业内最小权限/特权账号保护实践）
+
+- **保留**“高权目标只能由管理员操作”的收紧策略，不提供默认的委派管理管理员例外。
+- 若业务确认需要委派，单独立 ADR 设计受控流程（双人审批、break-glass、时限与审计），
+  不在本策略上直接放宽；当前不引入未确认需求的例外分支。
+- B 类测试补齐：新增 `apps/portal/__tests__/api/admin-target-paths.test.ts`，逐路径覆盖
+  toggle/update/delete/reset/unlock/force-logout，6/6 通过。
+- fail-open（Redis 撤销 / 缓存刷新）、CSRF 无 Origin、OAuth 并发授权码兑换列为下一批
+  安全专项，不在本次扩大范围。
+
 ## 不在本 ADR 范围
 
 - 职责分离（SoD）：同一操作者仍可同时拥有管理+分配权限；这是组织授权策略，不在本轮强加。
