@@ -221,6 +221,21 @@ export async function removeUserRole(
         notFound: () => new EntityNotFoundError('User', targetUserId),
       },
       async (tx, userRow) => {
+        // 与 RoleAssignmentSchema.min(1) 对齐：服务端也必须保证用户至少保留一个角色。
+        // UI 的“最后一个角色”保护不能替代 API 不变量——直接调用 DELETE 仍可能把
+        // 用户锁死（可用性/权限决策变更），且会让 RoleAssignmentSchema 的约束失真。
+        const bound = await tx
+          .select({ roleId: schema.userRoles.roleId })
+          .from(schema.userRoles)
+          .where(eq(schema.userRoles.userId, userRow.id));
+        if (bound.length <= 1 && bound.some((row) => row.roleId === roleId)) {
+          return {
+            success: false as const,
+            error: COMMON_ERRORS.VALIDATION_ERROR,
+            message: '用户至少需要保留一个角色；如需停用账号，请在用户详情使用「禁用账号」',
+            status: 400,
+          };
+        }
         await tx.delete(schema.userRoles).where(
           and(eq(schema.userRoles.userId, userRow.id), eq(schema.userRoles.roleId, roleId)),
         );
@@ -238,6 +253,9 @@ export async function removeUserRole(
       },
     );
 
+    if (!result.success) {
+      return { ok: false, error: result.error, message: result.message, status: result.status };
+    }
     await revokeAndRefreshAuthorization([result.userId]);
     return { ok: true, userId: result.userId };
   } catch (err) {

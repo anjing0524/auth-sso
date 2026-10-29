@@ -244,6 +244,16 @@ describe('用户角色绑定 API', () => {
     expect(response.status).toBe(404);
   });
 
+  it('DELETE 最后一个角色 → 400 且不改变绑定（服务端不变量）', async () => {
+    const response = await removeRole(
+      createTestRequest(`/api/users/${USER_ID}/roles`, { method: 'DELETE', body: { roleId: OLD_ROLE_ID } }),
+      params(),
+    );
+
+    expect(response.status).toBe(400);
+    expect(await roleIds()).toEqual([OLD_ROLE_ID]);
+  });
+
   it('非管理员不得分配系统角色（反提权回归）', async () => {
     const LOW_OPERATOR = '00000000-0000-4000-8000-000000000401';
     const LOW_ROLE = '00000000-0000-4000-8000-000000000402';
