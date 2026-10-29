@@ -21,6 +21,8 @@
 
 ## 变更记录
 
+- 2026-10-29（续四百七十一）: **高权目标保护扩展**。仅按 ADMIN/SUPER_ADMIN 角色码不够，自定义高权角色同样可被 `reset_password` 接管；守卫改为“目标权限码集合必须是操作者子集”，回归 60 tests passed。
+
 - 2026-10-29（续四百七十）: **自我角色变更下沉到共享写路径**。REST 可绕过 Action 的“不能改自己角色”检查；统一 403；回归 47 tests passed。
 
 - 2026-10-29（续四百六十九）: **系统管理员目标保护**。`reset_password` 单权限可重置 SUPER_ADMIN 密码（账号接管）；新增 `assertCanMutateAdminTarget`，覆盖重置/禁用/删除/改资料/角色变更/强制下线；回归 46 tests passed。

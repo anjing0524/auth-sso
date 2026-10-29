@@ -283,6 +283,38 @@ describe('用户角色绑定 API', () => {
     ).rejects.toThrow('系统管理员账号只能由管理员操作');
   });
 
+  it('非管理员不得操作权限高于自身的自定义高权用户', async () => {
+    const LOW_OPERATOR = '00000000-0000-4000-8000-000000000421';
+    const LOW_ROLE = '00000000-0000-4000-8000-000000000422';
+    const TARGET_PRIV = '00000000-0000-4000-8000-000000000423';
+    const PRIV_ROLE = '00000000-0000-4000-8000-000000000424';
+    const PRIV_PERM = '00000000-0000-4000-8000-000000000425';
+    await seedTestData(td.db, {
+      users: [
+        { ...(seedTestUser() ?? [])[0]!, id: LOW_OPERATOR, username: 'low_operator3', email: 'low_operator3@example.com' },
+        { ...(seedTestUser() ?? [])[0]!, id: TARGET_PRIV, username: 'target_priv', email: 'target_priv@example.com' },
+      ],
+      roles: [
+        { id: LOW_ROLE, name: '低权操作者3', code: 'LOW_OPERATOR_3', deptId: ROOT_DEPT_ID, isSystem: false, status: 'ACTIVE', sort: 0 },
+        { id: PRIV_ROLE, name: '自定义高权', code: 'CUSTOM_PRIV', deptId: ROOT_DEPT_ID, isSystem: false, status: 'ACTIVE', sort: 1 },
+      ],
+      userRoles: [
+        ...seedUserRoleBinding(LOW_OPERATOR, LOW_ROLE),
+        ...seedUserRoleBinding(TARGET_PRIV, PRIV_ROLE),
+      ],
+    });
+    await td.db.insert(schema.permissions).values({
+      id: PRIV_PERM, code: 'test:high:perm', name: '高权测试权限', type: 'API', status: 'ACTIVE',
+    });
+    await td.db.insert(schema.rolePermissions).values({ roleId: PRIV_ROLE, permissionId: PRIV_PERM });
+
+    await expect(
+      assignUserRoles(LOW_OPERATOR, TARGET_PRIV, [ROLE_ID], {
+        method: 'POST', url: '/api/users/' + TARGET_PRIV + '/roles', ip: null, userAgent: null,
+      }),
+    ).rejects.toThrow('不能操作权限高于自身的用户');
+  });
+
   it('DELETE 最后一个角色 → 400 且不改变绑定（服务端不变量）', async () => {
     const response = await removeRole(
       createTestRequest(`/api/users/${USER_ID}/roles`, { method: 'DELETE', body: { roleId: OLD_ROLE_ID } }),

@@ -850,7 +850,7 @@ GET /api/users/:id
 POST /api/users/:id/reset-password    （REST）
 ```
 
-`resetPasswordAction` — Server Action（Portal 表单调用），权限 `portal:user:reset_password`。**目标为系统管理员（ADMIN/SUPER_ADMIN）时，操作者也必须是管理员；否则 403。**
+`resetPasswordAction` — Server Action（Portal 表单调用），权限 `portal:user:reset_password`。**目标为系统管理员（ADMIN/SUPER_ADMIN）或权限高于操作者的用户时，非管理员返回 403。**
 
 **请求体：**
 ```json
@@ -899,7 +899,7 @@ DELETE /api/users/:id/roles   — 移除指定角色
 POST /api/users/:id/force-logout
 ```
 
-**权限：** `portal:user:manage`。目标为系统管理员时，操作者也必须是管理员，否则 403。
+**权限：** `portal:user:manage`。目标为系统管理员或权限高于操作者时，非管理员返回 403。
 
 **行为：** 撤销目标用户所有活跃 Token（jti 入黑名单）。
 

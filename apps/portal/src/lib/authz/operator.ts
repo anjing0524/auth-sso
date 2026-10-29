@@ -83,22 +83,51 @@ export async function targetHasAdminRole(
   return isAdminRole(rows.map((row) => row.code));
 }
 
+/** 目标用户当前持有的 ACTIVE 权限码集合（不按目标账号状态过滤，保护禁用中的管理员也生效） */
+async function loadTargetPermissionCodes(
+  tx: DbTxHandle,
+  targetUserId: string,
+): Promise<ReadonlySet<string>> {
+  const rows = await tx
+    .select({ code: schema.permissions.code })
+    .from(schema.userRoles)
+    .innerJoin(schema.roles, eq(schema.roles.id, schema.userRoles.roleId))
+    .innerJoin(schema.rolePermissions, eq(schema.rolePermissions.roleId, schema.roles.id))
+    .innerJoin(schema.permissions, eq(schema.permissions.id, schema.rolePermissions.permissionId))
+    .where(and(
+      eq(schema.userRoles.userId, targetUserId),
+      eq(schema.roles.status, ENTITY_ACTIVE),
+      eq(schema.permissions.status, ENTITY_ACTIVE),
+    ));
+  return new Set(rows.map((row) => row.code));
+}
+
 /**
  * 破坏性/凭证类用户操作的统一前置守卫。
  *
- * 目标为系统管理员且操作者不是管理员 → 403。必须在与写入相同的事务内调用。
+ * 非管理员不得操作：
+ * - 持 ADMIN / SUPER_ADMIN 的系统管理员；
+ * - 权限码集合超出自身权限的用户（自定义高权角色同样不能被低权操作者重置密码/降权/删除）。
+ *
+ * 必须在与写入相同的事务内调用。
  */
 export async function assertCanMutateAdminTarget(
   tx: DbTxHandle,
   operatorId: string,
   targetUserId: string,
 ): Promise<void> {
-  const [operator, targetIsAdmin] = await Promise.all([
-    loadOperatorAuthorization(tx, operatorId),
+  const operator = await loadOperatorAuthorization(tx, operatorId);
+  if (!operator) throw new ForbiddenError('操作者账号不可用');
+
+  const [targetIsAdmin, targetPermissions] = await Promise.all([
     targetHasAdminRole(tx, targetUserId),
+    loadTargetPermissionCodes(tx, targetUserId),
   ]);
-  if (!targetIsAdmin) return;
-  if (!operator || !operator.isAdmin) {
+  if (operator.isAdmin) return;
+  if (targetIsAdmin) {
     throw new ForbiddenError('系统管理员账号只能由管理员操作');
+  }
+  if ([...targetPermissions].some((code) => !operator.permissions.has(code))) {
+    throw new ForbiddenError('不能操作权限高于自身的用户');
   }
 }
