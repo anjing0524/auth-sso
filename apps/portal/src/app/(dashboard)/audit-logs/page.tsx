@@ -310,7 +310,7 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
           <CardContent className="flex min-h-0 flex-1 flex-col p-0">
             <OverflowHint>
             <div className="scrollbar-slim min-h-0 flex-1 overflow-auto">
-            <Table aria-label="登录日志列表" containerClassName="overflow-visible">
+            <Table aria-label="登录日志列表" className={data.length === 0 ? 'h-full' : undefined} containerClassName={data.length === 0 ? 'h-full overflow-visible' : 'overflow-visible'}>
               <TableHeader className="[&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:bg-card">
                 <TableRow>
                   <TableHead>时间</TableHead>
@@ -324,7 +324,8 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
               <TableBody>
                 {data.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="p-0">
+                    <TableCell colSpan={6} className="h-full p-0">
+                      <div className="flex h-full items-center justify-center">
                       {eventType || keyword || startDate ? (
                         <EmptyState
                           variant="simple"
@@ -335,6 +336,7 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
                       ) : (
                         <EmptyState variant="simple" icon="FileText" title="暂无日志记录" description="当前没有登录日志" />
                       )}
+                    </div>
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -385,7 +387,7 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
           <CardContent className="flex min-h-0 flex-1 flex-col p-0">
             <OverflowHint>
             <div className="max-h-[calc(100svh-19rem)] overflow-auto">
-            <Table aria-label="操作日志列表" containerClassName="overflow-visible">
+            <Table aria-label="操作日志列表" className={data.length === 0 ? 'h-full' : undefined} containerClassName={data.length === 0 ? 'h-full overflow-visible' : 'overflow-visible'}>
               <TableHeader className="[&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:bg-card">
                 <TableRow>
                   <TableHead>时间</TableHead>
@@ -400,7 +402,8 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
               <TableBody>
                 {data.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="p-0">
+                    <TableCell colSpan={7} className="h-full p-0">
+                      <div className="flex h-full items-center justify-center">
                       {operation || keyword || startDate ? (
                         <EmptyState
                           variant="simple"
@@ -411,6 +414,7 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
                       ) : (
                         <EmptyState variant="simple" icon="FileText" title="暂无日志记录" description="当前没有操作日志" />
                       )}
+                    </div>
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -474,7 +478,7 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
           <CardContent className="flex min-h-0 flex-1 flex-col p-0">
             <OverflowHint>
             <div className="scrollbar-slim min-h-0 flex-1 overflow-auto">
-            <Table aria-label="访问日志列表" containerClassName="overflow-visible">
+            <Table aria-label="访问日志列表" className={data.length === 0 ? 'h-full' : undefined} containerClassName={data.length === 0 ? 'h-full overflow-visible' : 'overflow-visible'}>
               <TableHeader className="[&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:bg-card">
                 <TableRow>
                   <TableHead className="hidden md:table-cell">时间</TableHead>
@@ -489,12 +493,14 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
               <TableBody>
                 {data.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="p-0">
+                    <TableCell colSpan={7} className="h-full p-0">
+                      <div className="flex h-full items-center justify-center">
                       {keyword || accessStatus || validAccessResourceType || startDate ? (
                         <EmptyState variant="simple" kind="filtered" icon="FileText" clearAction={{ label: '清除筛选', href: `/audit-logs?tab=access${pageSize !== DEFAULT_PAGE_SIZE ? `&pageSize=${pageSize}` : ''}` }} />
                       ) : (
                         <EmptyState variant="simple" icon="FileText" title="暂无日志记录" description="当前没有访问日志" />
                       )}
+                    </div>
                     </TableCell>
                   </TableRow>
                 ) : (
