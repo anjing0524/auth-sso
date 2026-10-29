@@ -234,6 +234,18 @@ describe('用户角色绑定 API', () => {
     expect(rows.map((r) => r.roleId)).toEqual([OLD_ROLE_ID]);
   });
 
+  it('REST 也不能修改自己的角色（自我变更保护）', async () => {
+    const response = await assignRoles(
+      createTestRequest(`/api/users/${ADMIN_ID}/roles`, { method: 'POST', body: { roleIds: [ROLE_ID] } }),
+      { params: Promise.resolve({ id: ADMIN_ID }) },
+    );
+
+    expect(response.status).toBe(403);
+    const rows = await td.db.select({ roleId: schema.userRoles.roleId })
+      .from(schema.userRoles).where(eq(schema.userRoles.userId, ADMIN_ID));
+    expect(rows.map((row) => row.roleId)).toEqual([ADMIN_ROLE_ID]);
+  });
+
   it('目标用户不存在 → POST 返回 404（不是 403；ADR-028 单次加载后 404 语义保持）', async () => {
     const missingId = '00000000-0000-4000-8000-000000000999';
     const response = await assignRoles(

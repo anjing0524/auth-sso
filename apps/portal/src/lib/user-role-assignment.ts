@@ -147,6 +147,16 @@ export async function assignUserRoles(
   roleIds: readonly string[],
   audit: RoleWriteAuditContext,
 ): Promise<RoleWriteResult<{ assignedCount: readonly string[] }>> {
+  // 自我角色变更是特权操作：必须由另一位管理员完成，避免自我提权/自锁死。
+  // 此前只在 Server Action 检查，REST 直接调用共享写路径可绕过。
+  if (operatorId === targetUserId) {
+    return {
+      ok: false,
+      error: COMMON_ERRORS.FORBIDDEN,
+      message: '不能修改自己的角色，请由其他管理员操作',
+      status: 403,
+    };
+  }
   try {
     const result = await withScopedRow(
       {
@@ -208,6 +218,15 @@ export async function removeUserRole(
   roleId: string,
   audit: RoleWriteAuditContext,
 ): Promise<RoleWriteResult<{ userId: string }>> {
+  // 自我角色变更必须由另一位管理员完成；REST 与 Action 共用此写路径。
+  if (operatorId === targetUserId) {
+    return {
+      ok: false,
+      error: COMMON_ERRORS.FORBIDDEN,
+      message: '不能修改自己的角色，请由其他管理员操作',
+      status: 403,
+    };
+  }
   try {
     const result = await withScopedRow(
       {

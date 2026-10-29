@@ -880,8 +880,8 @@ DELETE /api/users/:id/roles   — 移除指定角色
 
 | 方法 | 请求体 | 说明 |
 |---|---|---|
-| POST | `{ "roleIds": ["<uuid>", ...] }` | 覆盖式（`RoleAssignmentSchema`），非法 → 400 |
-| DELETE | `{ "roleId": "<uuid>" }` | **精准移除单个角色**（`RoleRemovalSchema`），绝不误删该用户其他角色；移除最后一个角色 → **400**（服务端不变量，与 RoleAssignmentSchema.min(1) 对齐） |
+| POST | `{ "roleIds": ["<uuid>", ...] }` | 覆盖式（`RoleAssignmentSchema`），非法 → 400；操作者不能修改**自己的**角色 → 403 |
+| DELETE | `{ "roleId": "<uuid>" }` | **精准移除单个角色**（`RoleRemovalSchema`），绝不误删该用户其他角色；移除最后一个角色 → **400**；操作者不能修改**自己的**角色 → 403 |
 
 - 用户不存在 / 超出数据范围 → 404 `AUTH_SSO_1004`（范围外与不存在同形，ADR-014）。
 - 成功：POST 直出 `{ "assignedCount": <number> }`；DELETE 直出 `{}`。

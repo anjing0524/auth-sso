@@ -35,7 +35,8 @@
 4. **系统管理员目标保护**：非管理员即使持有 `reset_password` / `update` / `delete` / `manage` 等单权限，也不能对系统管理员执行凭证类或破坏性操作。
 5. **越权拒绝返回 403**：系统角色/权限子集失败抛 `ForbiddenError`，不再伪装成 400 参数校验失败。
 5. **角色权限页补数据范围**：页面入口使用 `getRoleById(id, scope)`，范围外与不存在同形 404，关闭 IDOR 名称泄露。
-6. **系统管理员目标保护**：`user:reset_password` 单独就能重置同范围 SUPER_ADMIN 密码，等价于账号接管。新增 `assertCanMutateAdminTarget`（与写入同事务）：目标持有 ADMIN/SUPER_ADMIN 且操作者不是管理员时，禁止重置密码、禁用/删除、修改资料、修改角色、强制下线；管理员保留全部能力。
+6. **自我角色变更下沉**：Server Action 原有“不能修改自己的角色”仅在 Action 层；REST 直接调用共享 `assignUserRoles`/`removeUserRole` 可绕过。检查下沉到共享写路径，REST/Action 统一 403。
+7. **系统管理员目标保护**：`user:reset_password` 单独就能重置同范围 SUPER_ADMIN 密码，等价于账号接管。新增 `assertCanMutateAdminTarget`（与写入同事务）：目标持有 ADMIN/SUPER_ADMIN 且操作者不是管理员时，禁止重置密码、禁用/删除、修改资料、修改角色、强制下线；管理员保留全部能力。
 
 ## 不在本 ADR 范围
 
