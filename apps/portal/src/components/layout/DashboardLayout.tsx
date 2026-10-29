@@ -115,7 +115,8 @@ export default function DashboardLayout({
       <AppSidebar user={user} dynamicMenus={menus} />
       <CommandPalette menus={menus} />
       <SidebarInset>
-        <header className="flex h-12 shrink-0 items-center gap-2 border-b bg-background px-4 sticky top-0 z-10">
+        <header className="flex h-12 shrink-0 items-center border-b bg-background px-4 sticky top-0 z-10">
+          <div className="mx-auto flex h-full w-full max-w-[1680px] items-center gap-2">
           <SidebarTrigger className="-ml-1" />
           <Separator orientation="vertical" className="mr-2 h-4" />
           <Breadcrumb>
@@ -138,6 +139,7 @@ export default function DashboardLayout({
           </Breadcrumb>
           <div className="ml-auto flex items-center gap-2">
             <CommandPaletteTrigger />
+          </div>
           </div>
         </header>
         <main id="main-content" tabIndex={-1} className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-muted/30 p-3 lg:px-4 lg:py-3" style={{ height: 'calc(100svh - 3rem)' }}>
