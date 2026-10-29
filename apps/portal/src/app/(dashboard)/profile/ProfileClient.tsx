@@ -347,8 +347,8 @@ export default function ProfileClient({
         </CardContent>
       </Card>
 
-      <div className="grid gap-3 lg:grid-cols-3">
-        <div className="min-w-0 space-y-3 lg:col-span-2">
+      <div className="grid gap-3 xl:grid-cols-3">
+        <div className="min-w-0 space-y-3 xl:col-span-2">
           {/* 账户资料：只读身份 + 可复制的技术标识 */}
           <Card className="gap-0 overflow-hidden rounded-lg border border-border/70 py-0 shadow-sm ring-0">
             <CardHeader className="border-b bg-muted/30 px-3 py-2">
