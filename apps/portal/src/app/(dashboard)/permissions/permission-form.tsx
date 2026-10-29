@@ -182,6 +182,7 @@ export default function PermissionForm({ mode, menuOptions, permission, clients 
 
       <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col gap-3">
         <p className="text-[11px] text-muted-foreground"><RequiredLegend /></p>
+        <div className="scrollbar-slim min-h-0 flex-1 space-y-3 overflow-y-auto pr-0.5">
         <div className="rounded-lg border border-border/70 bg-card shadow-sm">
           <div className="border-b bg-muted/30 px-3 py-2 text-[13px] font-medium">基本信息</div>
           <div className="grid gap-3 p-3 sm:grid-cols-2">
@@ -297,7 +298,8 @@ export default function PermissionForm({ mode, menuOptions, permission, clients 
           </div>
         )}
 
-        <div className="flex items-center justify-end gap-2">
+        </div>
+        <div className="flex shrink-0 items-center justify-end gap-2 border-t pt-2">
           <Button type="button" variant="outline" size="sm" asChild>
             <Link href={returnHref}>取消</Link>
           </Button>
