@@ -104,7 +104,7 @@ if (options.roles?.length) {
 - `packages/contracts/src/__tests__/authorization.test.ts`：15 个用例，覆盖管理员绕过、`can` 与 `hasRole` 的语义差异、`canAny`/`canAll` 两种模式、空需求、大小写敏感。
 - `permission-enforcement.test.ts`（22 例）全绿——证明 `roles`/`requireAll` 语义在迁移后**逐位保持**。
 - 全量：`tsc` 0 错误；`pnpm test` 52 文件 / 436 用例全绿；`lint` 0 errors。
-- 追溯：`pnpm test:report` 已将新测试识别为 `H-ACL-001` 的覆盖来源。
+- 追溯：`node tests/traceability/generate-report.mjs` 已将新测试识别为 `H-ACL-001` 的覆盖来源。
 
 ## 相关 ADR
 

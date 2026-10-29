@@ -2,7 +2,7 @@
 
 > 本目录只放**可执行工具**，按职责分目录；每个脚本只做一件事（下表与目录一一对应，不写死篇数）。
 > 根 `package.json` 的命令是**稳定入口**：本地 `pnpm dev[:reset]`、测试 `pnpm test[:e2e]`、
-> 验收 `pnpm stack:*`、生产 `pnpm deploy:*`；脚本路径属于实现细节。
+> 验收 `pnpm stack <cmd>`、生产 `pnpm deploy [flags]`；脚本路径属于实现细节。
 > 落单的例外：`clean` 只有脚本入口（`scripts/docker/stack.sh clean`），没有 pnpm 别名。
 > 已删除 `scripts/ci/push-main.sh`：与当前 SSH-only 推送策略冲突且无消费者。
 
@@ -36,10 +36,10 @@
 
 | 阶段 | 命令 |
 |---|---|
-| 开发（本地原生） | `pnpm dev` / `pnpm dev:reset` / `pnpm dev:infra` |
+| 开发（本地原生） | `pnpm dev` / `pnpm dev:reset` |
 | 测试 | `pnpm test` / `pnpm test:api` / `pnpm test:components` |
-| 验收 | `pnpm stack:up` / `pnpm stack:status` / `pnpm test:e2e` |
-| 生产 | `pnpm deploy:check` / `pnpm deploy:up` / `pnpm deploy:status` / `pnpm deploy:rollback` |
+| 验收 | `pnpm stack up` / `pnpm stack status` / `pnpm test:e2e` |
+| 生产 | `pnpm deploy -- --check` / `pnpm deploy` / `pnpm deploy -- --status` / `pnpm deploy -- --rollback` |
 
 ## 与 Docker 配置的关系
 

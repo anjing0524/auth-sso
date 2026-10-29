@@ -3,8 +3,8 @@
 # 本地原生启动：本地 PG/Redis + 迁移 + Next dev（4100）。
 #
 # 这是开发入口，不是验收入口；验收/部署仍用 Docker：
-#   pnpm test:e2e / pnpm stack:*（验收）
-#   pnpm deploy:up（生产）
+#   pnpm test:e2e / pnpm stack <cmd>（验收）
+#   pnpm deploy（生产）
 #
 # 用法：
 #   ./scripts/local/dev.sh            # 启动基础设施 + migrate + Next dev

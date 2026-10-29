@@ -70,7 +70,7 @@ pnpm dev         # 启动本地 PG/Redis + migrate + Next dev（http://localhost
 ```
 
 本地只启动 Portal（4100）；完整 OIDC/Gateway 登录与验收走 Docker 栈：
-`pnpm stack:up` → `https://127.0.0.1:19443/login`。详见 [`docs/local-development.md`](docs/local-development.md)。
+`pnpm stack up` → `https://127.0.0.1:19443/login`。详见 [`docs/local-development.md`](docs/local-development.md)。
 
 ## Docker 验收 / 生产同形态
 
@@ -83,14 +83,14 @@ pnpm install
 ### 2. 构建镜像
 
 ```bash
-pnpm stack:build     # portal（Next 16 / Turbopack build）+ gateway（cargo release）+ cert-init / db-init
+pnpm stack build     # portal（Next 16 / Turbopack build）+ gateway（cargo release）+ cert-init / db-init
 ```
 
 ### 3. 启动完整栈
 
 ```bash
-pnpm stack:up        # postgres + redis + cert-init + db-init + portal + gateway
-pnpm stack:status    # 确认全部 healthy（一次性服务 Exited (0) 属正常）
+pnpm stack up        # postgres + redis + cert-init + db-init + portal + gateway
+pnpm stack status    # 确认全部 healthy（一次性服务 Exited (0) 属正常）
 ```
 
 浏览器打开 **https://127.0.0.1:19443**（Gateway 统一入口，自签证书，点一次"继续访问"）。
@@ -99,8 +99,8 @@ pnpm stack:status    # 确认全部 healthy（一次性服务 Exited (0) 属正�
 Portal 只在 compose 网络内提供 4000 端口，不对宿主暴露；宿主入口只有 Gateway。
 
 ```bash
-pnpm stack:logs portal   # 跟随日志（gateway/postgres/redis 同理）
-pnpm stack:down          # 停机并删卷（compose down --volumes；要保留数据请改跑 stop，见 docker/README.md §7.2）
+pnpm stack logs portal   # 跟随日志（gateway/postgres/redis 同理）
+pnpm stack down          # 停机并删卷（compose down --volumes；要保留数据请改跑 stop，见 docker/README.md §7.2）
 ```
 
 ### 4. 验收
@@ -130,13 +130,13 @@ Vitest 4 以 Projects 模式聚合 `apps/portal` 与 `packages/contracts` 的测
 | API | `apps/portal/__tests__/api/*.test.ts` | `pnpm test:api` | 真实 PostgreSQL / Redis（node 环境） |
 | E2E | `tests/e2e/*.spec.ts` | `pnpm test:e2e` | Playwright（仅 Chromium），Docker 验收栈 |
 | 全量 | 以上全部 | `pnpm test` | 阻断门禁 |
-| 需求追溯 | `tests/traceability/generate-report.mjs` | `pnpm test:report` | 生成 `tests/traceability/.generated/coverage-report.md`（本地生成、不提交，非门禁） |
+| 需求追溯 | `tests/traceability/generate-report.mjs` | `node tests/traceability/generate-report.mjs` | 生成 `tests/traceability/.generated/coverage-report.md`（本地生成、不提交，非门禁） |
 
 补充命令（基准类需先起验收栈）：
 
 ```bash
-pnpm test:e2e:acme           # 本地 Pebble ACME 闭环（首签 / 重启恢复 / 续期失败保留旧证书）
-pnpm test:e2e:acme:staging   # 公网 Let's Encrypt staging 联调（需真实 DNS 与 80/443 可达）
+./scripts/e2e/acme-e2e.sh           # 本地 Pebble ACME 闭环（首签 / 重启恢复 / 续期失败保留旧证书）
+./scripts/e2e/acme-staging.sh   # 公网 Let's Encrypt staging 联调（需真实 DNS 与 80/443 可达）
 node scripts/bench/gateway.mjs --url https://127.0.0.1:19443 --n 200 --c 20   # Gateway 性能基准
 ```
 
@@ -156,10 +156,10 @@ node scripts/bench/gateway.mjs --url https://127.0.0.1:19443 --n 200 --c 20   # 
 
 ```bash
 cp .env.example .env.prod            # 再按 docker/README.md §3 补齐必填项
-pnpm deploy:check                    # 逐项校验环境文件与 compose 配置，不启动
-pnpm deploy:up                       # 构建 → db-init（migrate + seed）→ 启动 → 健康检查
-pnpm deploy:status                   # 容器状态
-pnpm deploy:rollback                 # 切回上次镜像（数据不回滚，需自行备份）
+pnpm deploy -- --check                    # 逐项校验环境文件与 compose 配置，不启动
+pnpm deploy                       # 构建 → db-init（migrate + seed）→ 启动 → 健康检查
+pnpm deploy -- --status                   # 容器状态
+pnpm deploy -- --rollback                 # 切回上次镜像（数据不回滚，需自行备份）
 ```
 
 Gateway 在进程内完成 ACME HTTP-01 验证、证书签发与热加载，无需 Certbot 或宿主证书脚本。

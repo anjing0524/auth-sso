@@ -53,7 +53,7 @@ jobs:
         run: $NODE_TEST pnpm test
 
       - name: Generate traceability inventory
-        run: $NODE_TEST pnpm test:report
+        run: $NODE_TEST node tests/traceability/generate-report.mjs
 
       - name: Collect infrastructure logs
         if: always()

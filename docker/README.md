@@ -227,7 +227,7 @@ Gateway 优先使用 ACME Renewal Information（ARI）建议窗口，并以证�
 CI 使用 Pebble v2.8.0 真实执行 HTTP-01 协议，不向公共 CA 消耗速率限制：
 
 ```bash
-pnpm test:e2e:acme
+./scripts/e2e/acme-e2e.sh
 ```
 
 该门禁从无证书状态启动真实 Gateway，依次断言首次签发、HTTPS 同进程热上线、TLS 链与域名、`0700/0600` 状态权限、进程重启恢复，以及 CA 停止后保留上一证书。证据写入 `.context/compound-engineering/acme-e2e/latest/`，CI 同步上传 artifact。Pebble 官方发布包按 v2.8.0 和 SHA-256 固定；测试根证书只能通过 `ACME_CA_CERT_PATH` 在非生产环境加载，生产配置显式拒绝该变量。
@@ -238,12 +238,12 @@ pnpm test:e2e:acme
 LETSENCRYPT_STAGING_DOMAIN=staging-sso.example.com \
 LETSENCRYPT_STAGING_EMAIL=ops@example.com \
 ACME_STAGING_PUBLIC_REACHABLE=true \
-pnpm test:e2e:acme:staging
+./scripts/e2e/acme-staging.sh
 ```
 
 该脚本使用公共 staging directory，验证首次签发无需重启和持久化证书的重启恢复，实际演练证据写入 `.context/compound-engineering/acme-staging/latest/`。公网 staging 依赖真实 DNS 与网络条件，不进入普通 CI。脚本会在访问 Docker 和公共 CA 前拒绝单标签域名及 `.local`、`.localhost`、`.test`、`.example`、`.invalid` 保留后缀，校验联系邮箱，并要求 `ACME_STAGING_PUBLIC_REACHABLE=true` 作为“DNS 已生效且公网 80/443 已放通”的操作员声明；该声明只防止误操作，最终可达性仍由 Let's Encrypt HTTP-01 验证证明。前置条件缺失或无效时在独立的 `acme-staging/preflight/summary.txt` 写入对应阻塞状态并以状态码 2 退出，不覆盖既有公网通过证据；进入执行但未完成时保留 `status=failed_or_incomplete`；全部断言通过后才写入 `status=passed`。
 
-`8.8.8.8` 是递归 DNS 解析器地址，不能替代域名的 A/AAAA 记录，也不能让外部 CA 访问本机。没有公网入口时继续使用 `pnpm test:e2e:acme` 的 Pebble 本地闭环，不能把它记为公共 staging 通过。
+`8.8.8.8` 是递归 DNS 解析器地址，不能替代域名的 A/AAAA 记录，也不能让外部 CA 访问本机。没有公网入口时继续使用 `./scripts/e2e/acme-e2e.sh` 的 Pebble 本地闭环，不能把它记为公共 staging 通过。
 
 本地开发和发布 E2E 继续使用只包含 loopback SAN 的运行时临时自签证书，因为 Let's Encrypt 不为 `localhost` 签发证书；该路径位于 `docker/compose/test.yml`，与生产 ACME 路径隔离——完整用法见 **§7**。
 
@@ -257,9 +257,9 @@ pnpm test:e2e:acme:staging
 ## 7. 本地开发 / 发布验收（`docker/compose/test.yml`，与 CI 同路径）
 
 > 结论：**验收与生产全部走 Docker**；本地原生启动只用于 Portal UI 开发（`pnpm dev`，不进入验收入口）。
-> 2026-10-20 实测（离线镜像）：`pnpm stack:build` 成功（portal 的 `next build` 走 Next 16 默认
+> 2026-10-20 实测（离线镜像）：`pnpm stack build` 成功（portal 的 `next build` 走 Next 16 默认
 > **Turbopack**：`✓ Compiled successfully in 10.5s`；gateway `cargo build --release`）、
-> `pnpm stack:up` 全健康、`pnpm test:e2e` **1/1 通过**。
+> `pnpm stack up` 全健康、`pnpm test:e2e` **1/1 通过**。
 >
 > **本地开发入口**：`pnpm dev` / `pnpm dev:reset` 启动本地 PG18/Redis8 + Portal（4100），
 > 见 [`docs/local-development.md`](../docs/local-development.md)；它不是验收入口，`tests/e2e` 仍只打 Docker 栈。
@@ -270,23 +270,23 @@ pnpm test:e2e:acme:staging
 |---|---|---|
 | **`scripts/docker/stack.sh`** | **统一入口**：`up / build / status / logs / e2e / down / clean` | 日常 |
 | `scripts/e2e/release.sh` | `pnpm test:e2e` 实现（`stack.sh e2e --build` + 退出清理；`E2E_KEEP_STACK=1` 保留） | 验收闭环 |
-| `scripts/e2e/acme-e2e.sh` / `scripts/e2e/acme-staging.sh` | ACME 验收 | `pnpm test:e2e:acme[:staging]` |
+| `scripts/e2e/acme-e2e.sh` / `scripts/e2e/acme-staging.sh` | ACME 验收 | `./scripts/e2e/acme-e2e.sh` / `acme-staging.sh` |
 | `scripts/docker/deploy.sh` | 生产部署（§4） | 上线 / 回滚 |
 
 > 文件职责与有效性见文首「文件有效性审计」；脚本归属规则见 [`scripts/README.md`](../scripts/README.md)。
 
 ### 7.2 常用命令（命令的唯一维护处；其他文档只引用本节）
 
-`pnpm stack:*` 只是 `scripts/docker/stack.sh` 的薄封装（见根 `package.json`）；`clean` 没有 pnpm 别名，只能走脚本。
+`pnpm stack <cmd>` 只是 `scripts/docker/stack.sh` 的薄封装（见根 `package.json`）；`clean` 没有 pnpm 别名，只能走脚本。
 下面每条都对应脚本里的真实分支（`scripts/docker/stack.sh` 的 `case`）；改脚本时同步本表——这是命令的唯一维护处。
 
 ```bash
-pnpm stack:build         # 只构建：portal + gateway + cert-init + db-init（test.yml 前 6 个服务里的 4 个可构建项）
-pnpm stack:up            # 起栈并等待健康（复用镜像；缺镜像请先 build）
+pnpm stack build         # 只构建：portal + gateway + cert-init + db-init（test.yml 前 6 个服务里的 4 个可构建项）
+pnpm stack up            # 起栈并等待健康（复用镜像；缺镜像请先 build）
 ./scripts/docker/stack.sh up --build   # 先构建再启动
-pnpm stack:status        # 服务状态（compose ps）
-pnpm stack:logs portal   # 跟随日志（不传服务名=全部；gateway/postgres/redis 同理）
-pnpm stack:down          # 停机并删卷（compose down --volumes --remove-orphans；脚本注释写的是"保留卷"，行为以代码为准，见 7.6）
+pnpm stack status        # 服务状态（compose ps）
+pnpm stack logs portal   # 跟随日志（不传服务名=全部；gateway/postgres/redis 同理）
+pnpm stack down          # 停机并删卷（compose down --volumes --remove-orphans；脚本注释写的是"保留卷"，行为以代码为准，见 7.6）
 ./scripts/docker/stack.sh clean        # down + 删本仓镜像（--rmi local）；无 pnpm 别名
 ./scripts/docker/stack.sh e2e [--build]  # 起栈后跑 tests/e2e 下全部 spec；**不自动停机**
 pnpm test:e2e            # release.sh：stack.sh e2e --build → 跑完自动 stack.sh down（默认构建）
@@ -331,13 +331,13 @@ portal 仅在 compose 网络内暴露 4000，不映射宿主端口。
 | 现象 | 原因 / 处理 |
 |---|---|
 | build 报 `read-only file system`（buildx） | 用 `stack.sh`（已设 `BUILDX_CONFIG`）；手工命令加 `BUILDX_CONFIG=$PWD/.tmp-buildx` |
-| `Bind for 0.0.0.0:19443 failed` | 宿主有旧 gateway/进程占用：`ss -ltn \| grep 19443` 后停掉，或先 `pnpm stack:down` 再起 |
-| `up` 报缺镜像 | 先 `pnpm stack:build` |
-| cert-init/db-init `Exited` | 正常（一次性任务）；失败才看 `pnpm stack:logs db-init` |
+| `Bind for 0.0.0.0:19443 failed` | 宿主有旧 gateway/进程占用：`ss -ltn \| grep 19443` 后停掉，或先 `pnpm stack down` 再起 |
+| `up` 报缺镜像 | 先 `pnpm stack build` |
+| cert-init/db-init `Exited` | 正常（一次性任务）；失败才看 `pnpm stack logs db-init` |
 | 浏览器证书告警 | 自签证书；验收用 `ignoreHTTPSErrors` / `curl -k` |
-| e2e 连不上 | `pnpm stack:status`；确认 gateway healthy 且宿主 19443 映射存在 |
-| 想保留现场（**数据会被删**） | `E2E_KEEP_STACK=1 pnpm test:e2e`，或 `pnpm stack:up` 后跑 `pnpm test:e2e:release` |
-| 想保留**数据卷** | 不要在排查中跑 `pnpm stack:down` / `clean`（两者都是 `--volumes`）；只停容器用 `docker compose -f docker/compose/test.yml stop` |
+| e2e 连不上 | `pnpm stack status`；确认 gateway healthy 且宿主 19443 映射存在 |
+| 想保留现场（**数据会被删**） | `E2E_KEEP_STACK=1 pnpm test:e2e`，或 `pnpm stack up` 后跑 `pnpm exec playwright test tests/e2e/docker-release.spec.ts` |
+| 想保留**数据卷** | 不要在排查中跑 `pnpm stack down` / `clean`（两者都是 `--volumes`）；只停容器用 `docker compose -f docker/compose/test.yml stop` |
 
 ### 7.7 CI 对应关系
 
@@ -355,7 +355,7 @@ CI 复用 `stack.sh up --build` / `down` 管理验收栈（与本地同一份 co
 | `quality.yml` / `rust` | 无 | 宿主 `cargo fmt/clippy/test/build/audit` |
 | `acme.yml` / `preflight` | 无 | 只跑 `scripts/e2e/acme-staging.sh` 的前置判定分支（秒级、无容器） |
 | `acceptance.yml` / `docker-release` | `postgres redis cert-init db-init portal gateway` | 实现 = `scripts/ci/e2e.sh`（见下） |
-| `acme.yml` / `lifecycle` | `test.yml` 的 acme profile：`pebble` / `challtestsrv` / `gateway-acme` | 实现 = `scripts/e2e/acme-e2e.sh`（本地等价 `pnpm test:e2e:acme`） |
+| `acme.yml` / `lifecycle` | `test.yml` 的 acme profile：`pebble` / `challtestsrv` / `gateway-acme` | 实现 = `scripts/e2e/acme-e2e.sh`（本地等价 `./scripts/e2e/acme-e2e.sh`） |
 
 快层 / 验收层 / 高成本层的分层与触发取舍见 [`.github/workflows/README.md`](../.github/workflows/README.md)：
 高成本层（Pebble 生命周期与公网 staging）依赖容器编排、外部 CA 与更长的环境准备，放在每次 push 里会让反馈周期

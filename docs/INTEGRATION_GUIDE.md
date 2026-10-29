@@ -51,9 +51,9 @@ Docker 运行中即可——PostgreSQL 18 + Redis 8 + Portal + Gateway 都由 `d
 ## 第一步：构建并启动验收栈
 
 ```bash
-pnpm stack:build     # == ./scripts/docker/stack.sh build（构建 postgres redis cert-init db-init portal gateway）
-pnpm stack:up        # == ./scripts/docker/stack.sh up（起栈并等待健康，WAIT_TIMEOUT 默认 600s）
-pnpm stack:status    # == ./scripts/docker/stack.sh status
+pnpm stack build     # == ./scripts/docker/stack.sh build（构建 postgres redis cert-init db-init portal gateway）
+pnpm stack up        # == ./scripts/docker/stack.sh up（起栈并等待健康，WAIT_TIMEOUT 默认 600s）
+pnpm stack status    # == ./scripts/docker/stack.sh status
 ```
 
 三条命令的定义在根 `package.json`；`stack.sh` 构建/启动的服务列表是
@@ -126,7 +126,7 @@ pnpm test:e2e
 ```bash
 E2E_KEEP_STACK=1 pnpm test:e2e   # 保留栈，不执行退出清理（`scripts/e2e/release.sh` 的 `E2E_KEEP_STACK` 分支）
 SKIP_BUILD=1 pnpm test:e2e       # 复用已构建镜像（`scripts/e2e/release.sh` 的 `SKIP_BUILD` 分支）
-pnpm stack:down                  # 看完清理
+pnpm stack down                  # 看完清理
 ```
 
 ### Gateway 代理模式完整验证
@@ -167,7 +167,7 @@ public_paths = ["/demo/landing"]
 Vercel 平台是 `127.0.0.1:4100`（`gateway.vercel.toml`）。
 
 > **注意**：上表中 `127.0.0.1:3100` 的 `/demo/` 条目指向的 Demo App **不在任何 compose 文件里**（见文首说明），
-> 因此在 `pnpm stack:up` 起的验收栈里 `/demo/` 路由**无可用节点**，访问会得到 502；
+> 因此在 `pnpm stack up` 起的验收栈里 `/demo/` 路由**无可用节点**，访问会得到 502；
 > 要重建这条链路，需要同时满足三件事：在 host 上起 `apps/demo-app`（`pnpm --filter @auth-sso/demo-app dev`，端口 3100，见 `apps/demo-app/package.json`）、
 > 让它的 `REDIS_URL`（`apps/demo-app/src/lib/permissions.ts`）指向与 Portal 相同的 Redis、并在 host 上以
 > `apps/gateway/gateway.toml` 起 Gateway 进程——而 host 进程入口已不在交付路径内（[`docker/README.md`](../docker/README.md) §7.5）。

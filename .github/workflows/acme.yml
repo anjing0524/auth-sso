@@ -4,7 +4,7 @@ name: ACME Acceptance
 # - preflight（快层，每次 push/PR）：证明 scripts/e2e/acme-staging.sh 的前置判定与证据格式可用，
 #   秒级、无容器（实现：scripts/ci/acme-preflight.sh）；
 # - lifecycle（高成本层，仅 release tag / 夜间）：Pebble 全生命周期（HTTP-01 签发/续期/吊销，
-#   ~14min，Pebble/challtestsrv 容器 + 自签 CA；本地等价命令 `pnpm test:e2e:acme`）。
+#   ~14min，Pebble/challtestsrv 容器 + 自签 CA；本地等价命令 `./scripts/e2e/acme-e2e.sh`）。
 #
 # 高成本部分由 `lifecycle` 输入控制：调用方决定是否启用（见 docker/README.md §7.7）。
 on:

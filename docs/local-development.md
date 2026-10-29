@@ -34,13 +34,12 @@ pnpm dev              # 启动本地 PG/Redis + migrate + Next dev（4100）
 | 命令 | 用途 |
 |---|---|
 | `pnpm dev` | 本地原生启动（infra up + migrate + Next dev） |
-| `pnpm dev:infra` | 只启动本地 PG/Redis |
 | `pnpm dev:reset` | 清空本地数据卷并 migrate + seed（不影响验收/生产） |
 | `pnpm dev -- --no-migrate` | 跳过迁移直接启动 |
-| `pnpm stack:up` / `pnpm stack:down` | Docker 验收栈（自签证书，19443） |
+| `pnpm stack up` / `pnpm stack down` | Docker 验收栈（自签证书，19443） |
 | `pnpm test` / `pnpm test:api` / `pnpm test:components` | Vitest 分层测试 |
 | `pnpm test:e2e` | Docker 验收栈上的 Playwright E2E |
-| `pnpm deploy:check` / `pnpm deploy:up` / `pnpm deploy:status` | 生产部署（`prod.yml` + `deploy.sh`） |
+| `pnpm deploy -- --check` / `pnpm deploy` / `pnpm deploy -- --status` | 生产部署（`prod.yml` + `deploy.sh`） |
 
 ## 本地认证边界
 
@@ -57,4 +56,4 @@ pnpm dev              # 启动本地 PG/Redis + migrate + Next dev（4100）
 
 - 改样式、交互、文案、表格：`pnpm dev`（本地 4100）。
 - 改 Server Action / OIDC / Gateway / 会话安全：Docker 验收栈 + 对应 API/E2E。
-- 上线/回滚：`pnpm deploy:*`（自托管生产，见 [`docker/README.md`](../docker/README.md) §0–§6）。
+- 上线/回滚：`pnpm deploy [flags]`（自托管生产，见 [`docker/README.md`](../docker/README.md) §0–§6）。
