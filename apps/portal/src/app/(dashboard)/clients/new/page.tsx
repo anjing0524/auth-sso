@@ -161,6 +161,7 @@ export default function NewClientPage() {
       />
       <p className="text-[11px] text-muted-foreground"><RequiredLegend /></p>
 
+      <div className="scrollbar-slim min-h-0 flex-1 overflow-y-auto pr-0.5">
       <div className="grid items-start gap-3 lg:grid-cols-3">
         <div className="space-y-3 lg:col-span-2">
           {/* ① 应用身份 */}
@@ -344,9 +345,10 @@ export default function NewClientPage() {
           </Card>
         </div>
       </div>
+      </div>
 
-      {/* 提交栏：窄屏固定底部，长表单不必回滚到顶部 */}
-      <div className="sticky bottom-0 z-10 -mx-3 flex items-center justify-end gap-2 border-t bg-background/95 px-3 py-2 backdrop-blur lg:static lg:mx-0 lg:border-0 lg:bg-transparent lg:px-0 lg:py-0">
+      {/* 提交栏：内容区独立滚动，窄屏和长表单下始终可见 */}
+      <div className="flex shrink-0 items-center justify-end gap-2 border-t bg-background/95 px-0 py-2">
         <Button variant="outline" size="sm" asChild>
           <Link href={returnHref}>取消</Link>
         </Button>
