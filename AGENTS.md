@@ -24,7 +24,7 @@ nodejs@26（nvm default；**Temporal 在 v26.10.0 已默认开启，不需要任
   镜像里 Node 26 同样默认开启 Temporal，2026-10-20 清理时一并删掉）。
   回归守卫：`apps/portal/__tests__/api/node-options-guard.test.ts`（对每个 `NODE_OPTIONS`
   取值真跑一次 `node -e ""`，被拒即红）；冒烟 = Docker 验收栈上 `https://127.0.0.1:19443/login`
-  拿到**真实 HTTP 200**（`pnpm stack up` + `curl -k`），**只看日志 Ready 会假绿**。
+  拿到**真实 HTTP 200**（`docker compose -f docker/compose/test.yml up -d --wait --wait-timeout 600` + `curl -k`），**只看日志 Ready 会假绿**。
 nextjs@16
 Rust 1.99.0+
 git 身份/远程：GitHub 推送走 **SSH**（`origin = git@github.com:anjing0524/auth-sso.git`；已实测 `ssh -T git@github.com` 鉴权为账号 anjing0524，`git push origin main` 即可）。**不要**改用 HTTPS / `gh` 凭据助手——此前"勿走 SSH、改用 gh HTTPS"的指引是错的（2026-10-23 用户纠正）。Docker 命令当前用户已入 docker 组（旧会话内用 `sg docker -c` 或 sudo 兜底）
@@ -200,17 +200,14 @@ API 层里生产业务模块的模块级 mock 必须是**类型化工厂**（`vi
 - ESLint flat config (`eslint.base.mjs`)，`consistent-type-imports` 使用 `inline-type-imports` 风格
 - Next.js 16: Middleware 改名为 Proxy，Server Function 公开可达（三层防御原因）
 - **Docker 是构建 / 部署 / 验收的主路径**（CI 亦然，见 `.github/workflows/`，分类见其 `README.md`）。唯一入口与文件矩阵：**`docker/README.md` §7**（生产部署在 §1–§6）。
-  常用：`pnpm stack up|build|status|logs|down`（== `./scripts/docker/stack.sh`）、`pnpm test:e2e`
-  （== `scripts/e2e/release.sh`：构建 → 起 `auth-sso-test` 栈 → Playwright release 闭环 → 清理）。
+  常用：验收栈用标准 `docker compose -f docker/compose/test.yml build|up|ps|logs|down`；
+  验收闭环一条命令 `pnpm test:e2e`（`scripts/e2e/release.sh` 直接 compose + Playwright + 清理）。
   入口 `https://127.0.0.1:19443`（自签证书，`curl -k` / Playwright `ignoreHTTPSErrors`）。
-  2026-10-20 实测：`stack.sh build` 成功（portal 的 `next build` 走 Next 16 默认 **Turbopack**，
-  `✓ Compiled successfully in 10.5s`；gateway `cargo build --release`）、`stack.sh up` 全健康、
-  `pnpm test:e2e` **1/1 通过**。**旧结论"本机 e2e / 镜像构建不可用"已作废**——真实原因只是 buildx
-  配置目录只读（`BUILDX_CONFIG=$PWD/.tmp-buildx`，`stack.sh` 已自动处理），不是 registry 不可达。
+  buildx 配置只读时用 `BUILDX_CONFIG=$PWD/.tmp-buildx`（`test:e2e` 已自动设置）。
 - 本地基础设施（仅跑 `pnpm test` 时需要；验收栈自带 PG/Redis）: `docker compose -f docker/compose/local.yml up -d`（PostgreSQL 18 + Redis 8）。
 - 数据库初始化顺序: `pnpm --filter @auth-sso/portal db:migrate` → `pnpm --filter @auth-sso/portal db:seed`；schema 变更走迁移文件，不使用 `db:push`。
-- **本地启动**：`pnpm dev` = 本地 PG18/Redis8 + `next dev`(4100)，`pnpm dev:reset` 清本地数据并 migrate+seed；
-  它不是验收入口，验收/生产仍必须 Docker。**验收唯一判据**：`pnpm stack up` 后
+- **本地启动**：`pnpm dev` = 本地 PG18/Redis8 + `next dev`(4100)，`pnpm dev -- --reset` 清本地数据并 migrate+seed；
+  它不是验收入口，验收/生产仍必须 Docker。**验收唯一判据**：`docker compose -f docker/compose/test.yml up -d --wait --wait-timeout 600` 后
   `https://127.0.0.1:19443/login` 真实 200 + `pnpm test:e2e` 闭环通过。`NODE_OPTIONS` 的 V8 旗标问题
   已修（2026-10-19，Temporal 在 node@26 默认开启）。
 - **装新依赖**：`pnpm add` 若报 `ERR_PNPM_EROFS`（pnpm store 只读）⇒ 报告并请用户代跑，保持包管理器、锁文件与 CI 的 `--frozen-lockfile` 原样（实测：`eslint-plugin-sonarjs` 因此装不上，#89 只给结论不落地）

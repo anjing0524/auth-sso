@@ -1,15 +1,13 @@
 #!/usr/bin/env bash
 #
-# 本地原生启动：本地 PG/Redis + 迁移 + Next dev（4100）。
+# 本地原生启动：本地 PG18/Redis8 + 迁移 + Next dev（4100）。
 #
-# 这是开发入口，不是验收入口；验收/部署仍用 Docker：
-#   pnpm test:e2e / pnpm stack <cmd>（验收）
-#   pnpm deploy（生产）
+# 这是唯一本地入口；基础设施用标准 docker compose，不再包一层 infra 脚本。
+#   pnpm dev                 # 启动本地依赖 + migrate + Next dev
+#   pnpm dev -- --reset      # 删本地数据卷 + migrate + seed，再启动
+#   pnpm dev -- --no-migrate # 跳过迁移
 #
-# 用法：
-#   ./scripts/local/dev.sh            # 启动基础设施 + migrate + Next dev
-#   ./scripts/local/dev.sh --reset    # 先删本地数据卷 + migrate + seed，再启动
-#   ./scripts/local/dev.sh --no-migrate
+# 验收/生产是另外两条命令：pnpm test:e2e / pnpm deploy。
 #
 set -euo pipefail
 
@@ -20,10 +18,11 @@ RESET=0
 MIGRATE=1
 for arg in "$@"; do
   case "$arg" in
+    --) ;; # pnpm 的 `--` 参数分隔符
     --reset) RESET=1 ;;
     --no-migrate) MIGRATE=0 ;;
     -h|--help) sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
-    *) echo "未知参数: $arg（--help 查看用法）" >&2; exit 2 ;;
+    *) echo "未知参数: ${arg}（--help 查看用法）" >&2; exit 2 ;;
   esac
 done
 
@@ -32,11 +31,13 @@ export REDIS_URL="${REDIS_URL:-redis://localhost:6379}"
 export NEXT_PUBLIC_APP_URL="${NEXT_PUBLIC_APP_URL:-http://localhost:4100}"
 export PORTAL_ISSUER="${PORTAL_ISSUER:-http://localhost:4100}"
 
+COMPOSE=(docker compose -f docker/compose/local.yml)
+
 if (( RESET )); then
-  "$ROOT/scripts/local/infra.sh" reset
-else
-  "$ROOT/scripts/local/infra.sh" up
+  "${COMPOSE[@]}" down -v --remove-orphans
 fi
+"${COMPOSE[@]}" up -d --wait postgres redis
+"${COMPOSE[@]}" ps
 
 if (( MIGRATE )); then
   echo "▶ 应用本地数据库迁移"

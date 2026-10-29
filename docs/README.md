@@ -16,9 +16,9 @@
 
 | 你要做的事 | 读这份 |
 |---|---|
-| 起服务、跑测试（本地开发 `pnpm dev`；验收/生产走 Docker） | [`docs/local-development.md`](local-development.md)（`pnpm dev:reset` → `pnpm dev` → `http://localhost:4100`）；验收 [`docs/INTEGRATION_GUIDE.md`](INTEGRATION_GUIDE.md)（`pnpm stack up` → `https://127.0.0.1:19443/login`） |
+| 起服务、跑测试（本地开发 `pnpm dev`；验收/生产走 Docker） | [`docs/local-development.md`](local-development.md)（`pnpm dev -- --reset` → `pnpm dev` → `http://localhost:4100`）；验收 [`docs/INTEGRATION_GUIDE.md`](INTEGRATION_GUIDE.md)（`docker compose -f docker/compose/test.yml up -d --wait --wait-timeout 600` → `https://127.0.0.1:19443/login`） |
 | 登录后的子应用接入验证（Gateway 代理模式、`X-User-Id`、Redis 权限） | [`docs/INTEGRATION_GUIDE.md`](INTEGRATION_GUIDE.md) |
-| Docker 构建 / 部署 / 验收（部署目标矩阵：自托管 P1 / Vercel P2 / 验收栈；`deploy.sh` / `stack.sh` / e2e / 故障排查） | `docker/README.md`（**唯一出处**：§0–§6 生产、§7 本地验收；命令只在 §7.2） |
+| Docker 构建 / 部署 / 验收（部署目标矩阵：自托管 P1 / Vercel P2 / 验收栈；`deploy` / `test:e2e` / 标准 compose / 故障排查） | `docker/README.md`（**唯一出处**：§0–§6 生产、§7 本地验收；命令只在 §7.2） |
 | 改 Portal 的代码结构（分层、目录、错误体系、三层安全） | [`docs/portal-architecture-guidelines.md`](portal-architecture-guidelines.md) |
 | 改 UI（颜色/字体/间距/组件规范） | 根 `DESIGN.md`（设计系统） |
 | 查历史取舍与里程碑 | 根 `docs/roadmap.md`（变更记录按时间倒序） |

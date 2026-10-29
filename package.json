@@ -6,12 +6,10 @@
   "scripts": {
     "prepare": "git config core.hooksPath .githooks || true",
     "dev": "./scripts/local/dev.sh",
-    "dev:reset": "./scripts/local/reset.sh",
     "lint": "pnpm -r lint",
     "typecheck": "pnpm -r typecheck",
     "test": "vitest run",
     "test:e2e": "./scripts/e2e/release.sh",
-    "stack": "./scripts/docker/stack.sh",
     "deploy": "./scripts/docker/deploy.sh"
   },
   "engines": {

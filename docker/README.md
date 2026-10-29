@@ -9,7 +9,7 @@
 |---|---|---|
 | **自托管生产（P1）** | `docker/compose/prod.yml` + `scripts/docker/deploy.sh`（§0–§6） | **唯一日常运维主路径**：ACME、TLS、备份、升级、回滚 |
 | **Vercel 平台（P2）** | `vercel.json` + `docker/images/vercel.Dockerfile` | NFR-SEC-01 要求的平台托管变体；平台 TLS，不是日常运维路径 |
-| 发布验收 / CI | `docker/compose/test.yml` + `scripts/docker/stack.sh`（§7） | 非生产部署 |
+| 发布验收 / CI | `docker/compose/test.yml` + `pnpm test:e2e`（§7） | 非生产部署 |
 | 本地依赖 | `docker/compose/local.yml` | 非部署：仅本地 PG/Redis |
 | ACME staging 演练 | `docker/compose/acme-staging.yml` + `scripts/e2e/acme-staging.sh` | 非部署：首次公网签发验证 |
 
@@ -49,7 +49,7 @@ docker/
 | 文件 | 职责 | 消费者（证据） | 结论 |
 |---|---|---|---|
 | `compose/local.yml` | 本地 PG18 + Redis8，`redis-commander` 在 `tools` profile 下可选 | `AGENTS.md` / `README.md` 的 `docker compose -f … up -d`；`pnpm test` 前置 | 必需（开发） |
-| `compose/test.yml` | 发布验收 / CI 栈：postgres/redis/cert-init/db-init/portal/gateway；`node-test`（`workspace` target，CI lint/typecheck/test 用）；acme profile（pebble/challtestsrv/gateway-acme） | `scripts/docker/stack.sh`（仅前 6 个服务）、`scripts/e2e/acme-e2e.sh`、CI `quality.yml` / `acceptance.yml` / `acme.yml`（`node-test` 与 acme 服务） | 必需（CI / 验收） |
+| `compose/test.yml` | 发布验收 / CI 栈：postgres/redis/cert-init/db-init/portal/gateway；`node-test`（`workspace` target，CI lint/typecheck/test 用）；acme profile（pebble/challtestsrv/gateway-acme） | `docker compose -f docker/compose/test.yml`（仅前 6 个服务）、`scripts/e2e/acme-e2e.sh`、CI `quality.yml` / `acceptance.yml` / `acme.yml`（`node-test` 与 acme 服务） | 必需（CI / 验收） |
 | `compose/prod.yml` | 生产形态（ACME、健康检查、db-init、数据卷） | `scripts/docker/deploy.sh`、`apps/portal/__tests__/api/delivery-config-guard.test.ts` | 必需（生产） |
 | `compose/acme-staging.yml` | 公网 staging ACME 验证（非部署） | `scripts/e2e/acme-staging.sh` | 可选（首次上线演练） |
 | `images/portal.Dockerfile` | portal 镜像（`workspace` / `builder` / `runner` 三个 target） | `compose/test.yml`、`compose/prod.yml` | 必需 |
@@ -257,42 +257,50 @@ ACME_STAGING_PUBLIC_REACHABLE=true \
 ## 7. 本地开发 / 发布验收（`docker/compose/test.yml`，与 CI 同路径）
 
 > 结论：**验收与生产全部走 Docker**；本地原生启动只用于 Portal UI 开发（`pnpm dev`，不进入验收入口）。
-> 2026-10-20 实测（离线镜像）：`pnpm stack build` 成功（portal 的 `next build` 走 Next 16 默认
+> 2026-10-20 实测（离线镜像）：`docker compose -f docker/compose/test.yml build` 成功（portal 的 `next build` 走 Next 16 默认
 > **Turbopack**：`✓ Compiled successfully in 10.5s`；gateway `cargo build --release`）、
-> `pnpm stack up` 全健康、`pnpm test:e2e` **1/1 通过**。
+> `docker compose -f docker/compose/test.yml up -d --wait --wait-timeout 600` 全健康、`pnpm test:e2e` **1/1 通过**。
 >
-> **本地开发入口**：`pnpm dev` / `pnpm dev:reset` 启动本地 PG18/Redis8 + Portal（4100），
+> **本地开发入口**：`pnpm dev` / `pnpm dev -- --reset` 启动本地 PG18/Redis8 + Portal（4100），
 > 见 [`docs/local-development.md`](../docs/local-development.md)；它不是验收入口，`tests/e2e` 仍只打 Docker 栈。
 
 ### 7.1 运行入口
 
 | 入口 | 用途 | 何时用 |
 |---|---|---|
-| **`scripts/docker/stack.sh`** | **统一入口**：`up / build / status / logs / e2e / down / clean` | 日常 |
-| `scripts/e2e/release.sh` | `pnpm test:e2e` 实现（`stack.sh e2e --build` + 退出清理；`E2E_KEEP_STACK=1` 保留） | 验收闭环 |
-| `scripts/e2e/acme-e2e.sh` / `scripts/e2e/acme-staging.sh` | ACME 验收 | `./scripts/e2e/acme-e2e.sh` / `acme-staging.sh` |
+| `docker compose -f docker/compose/test.yml` | 验收栈的标准生命周期：`build / up / ps / logs / down` | 日常排查 |
+| `pnpm test:e2e` | 验收闭环：构建 → 起栈 → Playwright → 清理 | 提交前 |
+| `scripts/e2e/acme-e2e.sh` / `scripts/e2e/acme-staging.sh` | ACME 验收 | ACME 改动 |
 | `scripts/docker/deploy.sh` | 生产部署（§4） | 上线 / 回滚 |
 
 > 文件职责与有效性见文首「文件有效性审计」；脚本归属规则见 [`scripts/README.md`](../scripts/README.md)。
 
 ### 7.2 常用命令（命令的唯一维护处；其他文档只引用本节）
 
-`pnpm stack <cmd>` 只是 `scripts/docker/stack.sh` 的薄封装（见根 `package.json`）；`clean` 没有 pnpm 别名，只能走脚本。
-下面每条都对应脚本里的真实分支（`scripts/docker/stack.sh` 的 `case`）；改脚本时同步本表——这是命令的唯一维护处。
+标准 Docker Compose 就是验收栈接口，不再套一层脚本。先定义一次：
 
 ```bash
-pnpm stack build         # 只构建：portal + gateway + cert-init + db-init（test.yml 前 6 个服务里的 4 个可构建项）
-pnpm stack up            # 起栈并等待健康（复用镜像；缺镜像请先 build）
-./scripts/docker/stack.sh up --build   # 先构建再启动
-pnpm stack status        # 服务状态（compose ps）
-pnpm stack logs portal   # 跟随日志（不传服务名=全部；gateway/postgres/redis 同理）
-pnpm stack down          # 停机并删卷（compose down --volumes --remove-orphans；脚本注释写的是"保留卷"，行为以代码为准，见 7.6）
-./scripts/docker/stack.sh clean        # down + 删本仓镜像（--rmi local）；无 pnpm 别名
-./scripts/docker/stack.sh e2e [--build]  # 起栈后跑 tests/e2e 下全部 spec；**不自动停机**
-pnpm test:e2e            # release.sh：stack.sh e2e --build → 跑完自动 stack.sh down（默认构建）
-SKIP_BUILD=1 pnpm test:e2e          # 复用镜像（不传 --build）；该变量只被 release.sh 读取
-E2E_KEEP_STACK=1 pnpm test:e2e      # 跑完保留栈（跳过退出清理），便于继续看 UI
+export COMPOSE="docker compose -f docker/compose/test.yml"
 ```
+
+```bash
+$COMPOSE build                              # 构建：portal + gateway + cert-init + db-init
+$COMPOSE up -d --wait --wait-timeout 600    # 起栈并等待健康（缺镜像先 build）
+$COMPOSE ps                                 # 服务状态
+$COMPOSE logs -f portal                     # 跟随日志（gateway/postgres/redis 同理）
+$COMPOSE down --volumes --remove-orphans    # 停机并删卷
+```
+
+验收闭环只保留一个脚本入口：
+
+```bash
+pnpm test:e2e                  # 构建 → 起栈 → 跑 tests/e2e 全部 spec → 清理（默认构建）
+SKIP_BUILD=1 pnpm test:e2e     # 复用已构建镜像
+E2E_KEEP_STACK=1 pnpm test:e2e # 跑完保留栈，便于继续看 UI
+E2E_CHANNEL=chrome pnpm test:e2e # 本机只有系统 Chrome、未装 Playwright Chromium 时
+```
+
+需要“保留现场但用新代码”时，先用 `$COMPOSE build`，再 `SKIP_BUILD=1 E2E_KEEP_STACK=1 pnpm test:e2e`。
 
 **入口**：`https://127.0.0.1:19443`（gateway，自签证书；`curl -k` / Playwright `ignoreHTTPSErrors`）。
 portal 仅在 compose 网络内暴露 4000，不映射宿主端口。
@@ -305,15 +313,15 @@ portal 仅在 compose 网络内暴露 4000，不映射宿主端口。
 | redis | redis:8-alpine | 内部 6379 | `redis-cli ping` |
 | cert-init / db-init（一次性） | 本仓构建 | - | 退出码 0（`Exited (0)` 属正常） |
 | portal | `auth-sso-test-portal` | 内部 4000 | `/api/health` 200 |
-| gateway | `auth-sso-test-gateway` | 容器内 80/443；**宿主只映射 19443 → 443**（80 不映射，宿主跑 `stack.sh` 时不受 80 占用影响） | `wget --no-check-certificate https://127.0.0.1:443/login` |
+| gateway | `auth-sso-test-gateway` | 容器内 80/443；**宿主只映射 19443 → 443**（80 不映射，避免宿主 80 占用干扰） | `wget --no-check-certificate https://127.0.0.1:443/login` |
 
 一次性服务显示 `Exited (0)` 是正常现象，`docker compose up --wait` 会正确放行。
 
 ### 7.4 构建注意
 
 - **`BUILDX_CONFIG` 必须可写**：部分沙箱/CI 里 `~/.docker/buildx` 只读，直接 build 会报
-  `open .../buildx/...: read-only file system`。`stack.sh` 默认把它指向 `<repo>/.tmp-buildx`（已 gitignore）
-  ——这不是"构建不可用"，只是配置目录要可写。CI 直接调 `docker compose build`，不经过 `stack.sh`，故不受影响。
+  `open .../buildx/...: read-only file system`。手工命令加 `BUILDX_CONFIG=$PWD/.tmp-buildx`；`pnpm test:e2e` 与 CI 脚本已自动设置。
+  ——这不是"构建不可用"，只是配置目录要可写。
 - portal 镜像里的 `next build` 走 **Next 16 默认 Turbopack**；gateway 镜像里 `cargo build --release`。
 - 镜像名由 compose 项目名（`name: auth-sso-test`）+ 服务名决定，`docker compose build` 产出的镜像带 `latest` 标签：
   `auth-sso-test-portal:latest`、`auth-sso-test-gateway:latest`、`auth-sso-test-db-init:latest`、`auth-sso-test-cert-init:latest`
@@ -330,14 +338,14 @@ portal 仅在 compose 网络内暴露 4000，不映射宿主端口。
 
 | 现象 | 原因 / 处理 |
 |---|---|
-| build 报 `read-only file system`（buildx） | 用 `stack.sh`（已设 `BUILDX_CONFIG`）；手工命令加 `BUILDX_CONFIG=$PWD/.tmp-buildx` |
-| `Bind for 0.0.0.0:19443 failed` | 宿主有旧 gateway/进程占用：`ss -ltn \| grep 19443` 后停掉，或先 `pnpm stack down` 再起 |
-| `up` 报缺镜像 | 先 `pnpm stack build` |
-| cert-init/db-init `Exited` | 正常（一次性任务）；失败才看 `pnpm stack logs db-init` |
+| build 报 `read-only file system`（buildx） | 命令前加 `BUILDX_CONFIG=$PWD/.tmp-buildx`；`pnpm test:e2e` 已自动设置 |
+| `Bind for 0.0.0.0:19443 failed` | 宿主有旧 gateway/进程占用：`ss -ltn \| grep 19443` 后停掉，或先 `docker compose -f docker/compose/test.yml down --volumes --remove-orphans` 再起 |
+| `up` 报缺镜像 | 先 `docker compose -f docker/compose/test.yml build` |
+| cert-init/db-init `Exited` | 正常（一次性任务）；失败才看 `docker compose -f docker/compose/test.yml logs -f db-init` |
 | 浏览器证书告警 | 自签证书；验收用 `ignoreHTTPSErrors` / `curl -k` |
-| e2e 连不上 | `pnpm stack status`；确认 gateway healthy 且宿主 19443 映射存在 |
-| 想保留现场（**数据会被删**） | `E2E_KEEP_STACK=1 pnpm test:e2e`，或 `pnpm stack up` 后跑 `pnpm exec playwright test tests/e2e/docker-release.spec.ts` |
-| 想保留**数据卷** | 不要在排查中跑 `pnpm stack down` / `clean`（两者都是 `--volumes`）；只停容器用 `docker compose -f docker/compose/test.yml stop` |
+| e2e 连不上 | `docker compose -f docker/compose/test.yml ps`；确认 gateway healthy 且宿主 19443 映射存在 |
+| 想保留现场（**数据会被删**） | `E2E_KEEP_STACK=1 pnpm test:e2e`；或手动 `docker compose ... up` 后跑 `pnpm exec playwright test tests/e2e/` |
+| 想保留**数据卷** | 不要在排查中跑 `docker compose -f docker/compose/test.yml down --volumes --remove-orphans` / `clean`（两者都是 `--volumes`）；只停容器用 `docker compose -f docker/compose/test.yml stop` |
 
 ### 7.7 CI 对应关系
 
@@ -346,7 +354,7 @@ CI 配置在 [`.github/workflows/`](../.github/workflows/)：**触发文件**（
 各承担一类验证。文件分类、触发矩阵与「CI 步骤 → 现有命令」的唯一维护处是
 [`.github/workflows/README.md`](../.github/workflows/README.md)；本节只写 **Docker 侧**的对应关系。
 
-CI 复用 `stack.sh up --build` / `down` 管理验收栈（与本地同一份 compose 与服务列表），只有**浏览器运行器**不同：
+CI 复用同一份 compose 与服务列表，只有**浏览器运行器**不同：
 宿主机没有 Node/Playwright 依赖，改在 Playwright 官方镜像里跑：
 
 | 类别 / 作业 | 用到的 compose 服务 | 说明 |
@@ -366,10 +374,10 @@ CI 复用 `stack.sh up --build` / `down` 管理验收栈（与本地同一份 co
 
 ```bash
 ./scripts/ci/e2e.sh
-# = scripts/docker/stack.sh up --build（起栈并等待健康，服务列表由 stack.sh 维护）
+# = docker compose -f docker/compose/test.yml build && up -d --wait（服务列表固定）
 # + docker run --rm --network host ... Playwright 镜像内 pnpm install && playwright install chromium
 #   && playwright test tests/e2e
-# + trap 先收日志（gateway-e2e.log）再 stack.sh down
+# + trap 先收日志（gateway-e2e.log）再 compose down
 ```
 
 > **浏览器安装必须与测试在同一个容器**：Playwright 镜像自带的是镜像发布版本的浏览器，与
@@ -378,7 +386,7 @@ CI 复用 `stack.sh up --build` / `down` 管理验收栈（与本地同一份 co
 > `--rm` 容器的可写层随容器销毁，**不能**用独立 `docker run` 装浏览器（会丢），必须在测试容器内
 > `install && test`。
 
-本地 `pnpm test:e2e` 与它是同一条验收路径（同 `stack.sh` 管栈、同 base URL），差别有三处：
-①本地在宿主执行 Playwright（`stack.sh e2e --build`），CI 在官方镜像内执行（`stack.sh up --build` + 容器）；
+本地 `pnpm test:e2e` 与它是同一条验收路径（同 compose / 服务列表 / base URL），差别有三处：
+①本地在宿主执行 Playwright，CI 在官方镜像内执行；
 ②本地可用 `E2E_KEEP_STACK=1` 保留现场，CI 总是清理；
-③清理都在 trap 里：本地由 `release.sh` 调 `stack.sh down`，CI 由 `scripts/ci/e2e.sh` 先收日志再 `stack.sh down`。
+③清理都在 trap 里：本地由 `release.sh` 直接 `compose down`，CI 由 `scripts/ci/e2e.sh` 先收日志再 down。

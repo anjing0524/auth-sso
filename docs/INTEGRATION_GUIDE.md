@@ -46,18 +46,18 @@ Portal 仅 `expose` 4000（`docker/compose/prod.yml`）；Vercel 由平台终结
 
 Docker 运行中即可——PostgreSQL 18 + Redis 8 + Portal + Gateway 都由 `docker/compose/test.yml` 提供
 （`docker/compose/test.yml` 的 postgres/redis，`docker/compose/test.yml` 的 portal/gateway），与 CI / 生产同形态
-（host `pnpm dev` 入口已移除，原因见 [`docker/README.md`](../docker/README.md) §7.5）。
+（本地原生 `pnpm dev` 只用于开发，验收入口仍是 Docker；见 [`docs/local-development.md`](local-development.md)）。
 
 ## 第一步：构建并启动验收栈
 
 ```bash
-pnpm stack build     # == ./scripts/docker/stack.sh build（构建 postgres redis cert-init db-init portal gateway）
-pnpm stack up        # == ./scripts/docker/stack.sh up（起栈并等待健康，WAIT_TIMEOUT 默认 600s）
-pnpm stack status    # == ./scripts/docker/stack.sh status
+export COMPOSE="docker compose -f docker/compose/test.yml"
+$COMPOSE build
+$COMPOSE up -d --wait --wait-timeout 600
+$COMPOSE ps
 ```
 
-三条命令的定义在根 `package.json`；`stack.sh` 构建/启动的服务列表是
-`(postgres redis cert-init db-init portal gateway)`（`scripts/docker/stack.sh`），默认超时 600s（`scripts/docker/stack.sh`）。
+服务列表固定为 `postgres redis cert-init db-init portal gateway`；超时 600s。
 
 > 一次性服务 `cert-init` / `db-init` 显示 `Exited (0)` 是正常的：它们各自完成"生成自签证书"
 > 与"迁移 + 种子数据"后退出（`docker/compose/test.yml` / `docker/compose/test.yml`），`up --wait` 会正确放行。
@@ -83,7 +83,7 @@ pnpm --filter @auth-sso/portal db:seed
 3. 未认证直接访问 `/dashboard` → 302 到 `/login?session_id=...`（`tests/e2e/docker-release.spec.ts`、`tests/e2e/docker-release.spec.ts`）。
 
 > Portal 容器端口 4000 只在 compose 网络内，不对宿主暴露（`test.yml` 的 `portal` 服务无 `ports:`，只有 `docker/compose/test.yml` 的容器内健康检查）；
-> 浏览器入口只有 Gateway。直连 Portal 的"调试路径"已随 host dev 一起移除，避免把绕过 Gateway 的路径当成交付拓扑。
+> 浏览器入口只有 Gateway。本地 `pnpm dev` 直连 4100 仅用于 UI 开发；验收入口不绕过 Gateway。
 
 ### OIDC 机器端点怎么走（2026-10-23 更正，ADR-010 更正段）
 
@@ -114,19 +114,17 @@ pnpm --filter @auth-sso/portal db:seed
 pnpm test:e2e
 ```
 
-`pnpm test:e2e` == `./scripts/e2e/release.sh`（`package.json`）：它先 `stack.sh e2e --build` 构建并拉起
-`docker/compose/test.yml` 的发布拓扑（`postgres`/`redis`/`cert-init`/`db-init`/`portal`/`gateway`，
-`scripts/docker/stack.sh`），再用 Playwright 跑 **`tests/e2e` 下全部 spec**（`scripts/docker/stack.sh`）：
-登录 → OAuth 回调 → 会话下发 → 登出（`tests/e2e/docker-release.spec.ts`）、OIDC 机器端点凭证透传
-（`tests/e2e/oidc-machine-endpoints.spec.ts`）、SSR 权限快照 / `/healthz` 探针（`tests/e2e/ssr-permission-snapshot.spec.ts`），
-跑完自动 `stack.sh down`（`scripts/e2e/release.sh`）。
+`pnpm test:e2e` == `./scripts/e2e/release.sh`：直接构建并拉起 `docker/compose/test.yml` 的
+`postgres`/`redis`/`cert-init`/`db-init`/`portal`/`gateway`，再用 Playwright 跑 `tests/e2e` 全部 spec：
+登录 → OAuth 回调 → 会话下发 → 登出、OIDC 机器端点凭证透传、SSR 权限快照 / `/healthz` 探针，
+跑完自动 `docker compose -f docker/compose/test.yml down --volumes --remove-orphans`。
 
 想保留现场继续手动看 UI：
 
 ```bash
 E2E_KEEP_STACK=1 pnpm test:e2e   # 保留栈，不执行退出清理（`scripts/e2e/release.sh` 的 `E2E_KEEP_STACK` 分支）
 SKIP_BUILD=1 pnpm test:e2e       # 复用已构建镜像（`scripts/e2e/release.sh` 的 `SKIP_BUILD` 分支）
-pnpm stack down                  # 看完清理
+docker compose -f docker/compose/test.yml down --volumes --remove-orphans                  # 看完清理
 ```
 
 ### Gateway 代理模式完整验证
@@ -167,7 +165,7 @@ public_paths = ["/demo/landing"]
 Vercel 平台是 `127.0.0.1:4100`（`gateway.vercel.toml`）。
 
 > **注意**：上表中 `127.0.0.1:3100` 的 `/demo/` 条目指向的 Demo App **不在任何 compose 文件里**（见文首说明），
-> 因此在 `pnpm stack up` 起的验收栈里 `/demo/` 路由**无可用节点**，访问会得到 502；
+> 因此在 `docker compose -f docker/compose/test.yml up -d --wait --wait-timeout 600` 起的验收栈里 `/demo/` 路由**无可用节点**，访问会得到 502；
 > 要重建这条链路，需要同时满足三件事：在 host 上起 `apps/demo-app`（`pnpm --filter @auth-sso/demo-app dev`，端口 3100，见 `apps/demo-app/package.json`）、
 > 让它的 `REDIS_URL`（`apps/demo-app/src/lib/permissions.ts`）指向与 Portal 相同的 Redis、并在 host 上以
 > `apps/gateway/gateway.toml` 起 Gateway 进程——而 host 进程入口已不在交付路径内（[`docker/README.md`](../docker/README.md) §7.5）。

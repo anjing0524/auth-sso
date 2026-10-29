@@ -17,7 +17,7 @@
 
 ```bash
 pnpm install          # 首次
-pnpm dev:reset        # 首次/需要清空本地数据：删本地卷 + migrate + seed
+pnpm dev -- --reset        # 首次/需要清空本地数据：删本地卷 + migrate + seed
 pnpm dev              # 启动本地 PG/Redis + migrate + Next dev（4100）
 ```
 
@@ -34,11 +34,11 @@ pnpm dev              # 启动本地 PG/Redis + migrate + Next dev（4100）
 | 命令 | 用途 |
 |---|---|
 | `pnpm dev` | 本地原生启动（infra up + migrate + Next dev） |
-| `pnpm dev:reset` | 清空本地数据卷并 migrate + seed（不影响验收/生产） |
+| `pnpm dev -- --reset` | 清空本地数据卷并 migrate + seed（不影响验收/生产） |
 | `pnpm dev -- --no-migrate` | 跳过迁移直接启动 |
-| `pnpm stack up` / `pnpm stack down` | Docker 验收栈（自签证书，19443） |
+| `docker compose -f docker/compose/test.yml up -d --wait` / `... down --volumes` | Docker 验收栈（自签证书，19443） |
 | `pnpm test` | Vitest 全量测试 |
-| `pnpm test:e2e` | Docker 验收栈上的 Playwright E2E |
+| `pnpm test:e2e` | Docker 验收栈上的 Playwright E2E；本机只有系统 Chrome 时加 `E2E_CHANNEL=chrome` |
 | `pnpm deploy` | 生产部署；`-- --check` / `-- --status` / `-- --rollback` 为子模式 |
 
 ## 本地认证边界

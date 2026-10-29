@@ -9,7 +9,7 @@
  *   node scripts/ux/measure.mjs                    # 输出 Markdown
  *   BASE_URL=... ADMIN_EMAIL=... ADMIN_PASSWORD=... node scripts/ux/measure.mjs
  *
- * 前置：验收栈已启动（`pnpm stack up` 或 docker compose test.yml up）。
+ * 前置：验收栈已启动（`docker compose -f docker/compose/test.yml up -d --wait --wait-timeout 600` 或 docker compose test.yml up）。
  */
 import { chromium } from '@playwright/test';
 

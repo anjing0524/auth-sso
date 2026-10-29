@@ -3,7 +3,7 @@ import { defineConfig, devices } from '@playwright/test';
 /**
  * E2E 只跑 **Docker 验收栈**（与 CI/生产同形态）。
  *
- * - 栈由 `pnpm stack up` / `pnpm test:e2e` 提供，入口默认 `https://127.0.0.1:19443`（自签证书）；
+ * - 栈由 `docker compose -f docker/compose/test.yml up -d --wait --wait-timeout 600` / `pnpm test:e2e` 提供，入口默认 `https://127.0.0.1:19443`（自签证书）；
  * - 不再有 host `next dev` 的 webServer：验收必须打到已构建镜像（原因见 docker/README.md §7.5）；
  * - 可用 `E2E_BASE_URL` 覆盖入口（CI 显式设置为同一地址）。
  */

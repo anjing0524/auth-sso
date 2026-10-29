@@ -2,7 +2,7 @@
 
 企业级统一身份认证平台 (SSO)，实现 OIDC/OAuth 2.1 Provider 能力，提供一体化的身份与权限管理方案。
 
-Portal 自身即是 OIDC Provider；Gateway 作为唯一公网入口，完成 HTTPS 终结、ES256 JWKS 离线验签、Cookie 与 Bearer 令牌转换。构建、部署与验收全部走 Docker（与 CI 同形态）。
+Portal 自身即是 OIDC Provider；Gateway 作为唯一公网入口，完成 HTTPS 终结、ES256 JWKS 离线验签、Cookie 与 Bearer 令牌转换。生产与验收走 Docker（与 CI 同形态）；本地开发用 `pnpm dev`。
 
 ## 核心能力
 
@@ -36,7 +36,7 @@ auth-sso/
 │   ├── contracts/     # 共享类型、错误码、权限码、OIDC 常量（枚举唯一真相源）
 │   └── config/        # 共享 env 配置：Zod 校验 + 公开 URL 推导
 ├── docker/            # compose / 镜像 / ACME fixture（唯一出处见 docker/README.md）
-├── scripts/           # 可执行脚本：docker / e2e / ci / bench（索引见 scripts/README.md）
+├── scripts/           # 本地 / 部署 / 验收 / CI 脚本（索引见 scripts/README.md）
 ├── tests/             # E2E（Playwright）+ 需求追溯
 └── docs/              # ADR、需求规格、roadmap、术语表（入口见 docs/README.md）
 ```
@@ -47,7 +47,7 @@ auth-sso/
 
 | 类别 | 选型 |
 |---|---|
-| 运行时 | Node.js 26、pnpm 10.12.4、TypeScript 6 |
+| 运行时 | Node.js 26、pnpm 12.14.0、TypeScript 6 |
 | 应用框架 | Next.js 16（App Router / Cache Components / Turbopack 构建）、React 19、Tailwind CSS 4 |
 | 认证与协议 | 自建 OIDC Provider、OAuth 2.1 + PKCE、`jose`（ES256）、bcryptjs |
 | 数据 | PostgreSQL 18 + Drizzle ORM、Redis 8（JWT 撤销黑名单 / 权限缓存 / 授权请求状态） |
@@ -57,7 +57,7 @@ auth-sso/
 ## 环境要求
 
 - **Node.js >= 26**（`package.json` 的 `engines`；Temporal 在该版本默认开启，不需要 V8 旗标）。
-- **pnpm 10.12.4**（CI 使用 `--frozen-lockfile`）。
+- **pnpm 12.14.0**（CI 使用 `--frozen-lockfile`）。
 - **Docker + Docker Compose v2**：构建、部署、验收的主路径。
 - **Rust 1.99+**（可选）：仅在宿主机直接编译 `apps/gateway` 时需要；走 Docker 构建无需安装。
 
@@ -65,14 +65,14 @@ auth-sso/
 
 ```bash
 pnpm install
-pnpm dev:reset   # 首次/清空本地数据：本地 PG18/Redis8 + migrate + seed
-pnpm dev         # 启动本地 PG/Redis + migrate + Next dev（http://localhost:4100）
+pnpm dev -- --reset   # 首次/清空本地数据：本地 PG18/Redis8 + migrate + seed
+pnpm dev              # 启动本地 PG/Redis + migrate + Next dev（http://localhost:4100）
 ```
 
 本地只启动 Portal（4100）；完整 OIDC/Gateway 登录与验收走 Docker 栈：
-`pnpm stack up` → `https://127.0.0.1:19443/login`。详见 [`docs/local-development.md`](docs/local-development.md)。
+`docker compose -f docker/compose/test.yml up -d --wait --wait-timeout 600` → `https://127.0.0.1:19443/login`。详见 [`docs/local-development.md`](docs/local-development.md)。
 
-## Docker 验收 / 生产同形态
+## Docker 验收栈（与 CI 同形态）
 
 ### 1. 安装依赖（构建镜像前需要）
 
@@ -83,14 +83,14 @@ pnpm install
 ### 2. 构建镜像
 
 ```bash
-pnpm stack build     # portal（Next 16 / Turbopack build）+ gateway（cargo release）+ cert-init / db-init
+docker compose -f docker/compose/test.yml build     # portal（Next 16 / Turbopack build）+ gateway（cargo release）+ cert-init / db-init
 ```
 
 ### 3. 启动完整栈
 
 ```bash
-pnpm stack up        # postgres + redis + cert-init + db-init + portal + gateway
-pnpm stack status    # 确认全部 healthy（一次性服务 Exited (0) 属正常）
+docker compose -f docker/compose/test.yml up -d --wait --wait-timeout 600        # postgres + redis + cert-init + db-init + portal + gateway
+docker compose -f docker/compose/test.yml ps    # 确认全部 healthy（一次性服务 Exited (0) 属正常）
 ```
 
 浏览器打开 **https://127.0.0.1:19443**（Gateway 统一入口，自签证书，点一次"继续访问"）。
@@ -99,15 +99,17 @@ pnpm stack status    # 确认全部 healthy（一次性服务 Exited (0) 属正�
 Portal 只在 compose 网络内提供 4000 端口，不对宿主暴露；宿主入口只有 Gateway。
 
 ```bash
-pnpm stack logs portal   # 跟随日志（gateway/postgres/redis 同理）
-pnpm stack down          # 停机并删卷（compose down --volumes；要保留数据请改跑 stop，见 docker/README.md §7.2）
+docker compose -f docker/compose/test.yml logs -f portal   # 跟随日志（gateway/postgres/redis 同理）
+docker compose -f docker/compose/test.yml down --volumes --remove-orphans          # 停机并删卷（compose down --volumes；要保留数据请改跑 stop，见 docker/README.md §7.2）
 ```
 
-### 4. 验收
+### 4. 一条命令跑完整验收
 
 ```bash
-pnpm test:e2e   # 构建 → 起栈 → tests/e2e 全部 spec（登录/OAuth 回调/会话/登出 + 边界回归）→ 清理
+pnpm test:e2e   # 构建 → 起栈 → tests/e2e 全部 spec → 清理
 ```
+
+上面 2/3 步只用于需要手工看 UI 或排查栈；日常验收直接用 `pnpm test:e2e`。
 
 ### 5. 只跑单元 / API 测试
 
