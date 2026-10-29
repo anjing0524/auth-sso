@@ -16,7 +16,7 @@
 
 | 你要做的事 | 读这份 |
 |---|---|
-| 起服务、跑测试（**没有 host 进程入口**：`pnpm dev` 已移除） | [`docs/INTEGRATION_GUIDE.md`](INTEGRATION_GUIDE.md)（`pnpm stack:build` → `pnpm stack:up` → 浏览器验 `https://127.0.0.1:19443/login`）+ 根 `README.md`「快速开始（Docker）」 |
+| 起服务、跑测试（完整栈走 Docker；Portal UI 可本机 4100 热更新） | [`docs/INTEGRATION_GUIDE.md`](INTEGRATION_GUIDE.md)（`pnpm stack:build` → `pnpm stack:up` → 浏览器验 `https://127.0.0.1:19443/login`）+ 根 `README.md`「快速开始（Docker）」；本地 UI 迭代见 [`docs/local-development.md`](local-development.md) |
 | 登录后的子应用接入验证（Gateway 代理模式、`X-User-Id`、Redis 权限） | [`docs/INTEGRATION_GUIDE.md`](INTEGRATION_GUIDE.md) |
 | Docker 构建 / 部署 / 验收（生产 ACME + 本地 test 栈 / `stack.sh` / e2e / 故障排查） | `docker/README.md`（**唯一出处**：§0–§6 生产、§7 本地验收；命令只在 §7.2） |
 | 改 Portal 的代码结构（分层、目录、错误体系、三层安全） | [`docs/portal-architecture-guidelines.md`](portal-architecture-guidelines.md) |
