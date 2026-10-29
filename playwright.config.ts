@@ -20,5 +20,12 @@ export default defineConfig({
     ignoreHTTPSErrors: true,
     trace: 'on-first-retry',
   },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  projects: [{
+    name: 'chromium',
+    use: {
+      ...devices['Desktop Chrome'],
+      // 本机/受限环境可显式复用系统 Chrome；CI 仍默认下载 Chromium。
+      ...(process.env.E2E_CHANNEL ? { channel: process.env.E2E_CHANNEL as 'chrome' } : {}),
+    },
+  }],
 });
