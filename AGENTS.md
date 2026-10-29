@@ -153,10 +153,23 @@ API 层里生产业务模块的模块级 mock 必须是**类型化工厂**（`vi
 
 ## 文档与流程
 
-- 议题在 GitHub Issues（`anjing0524/auth-sso`，走 `gh` CLI）；五个 triage 标签保持默认。
-- 领域词汇唯一真相源：`docs/glossary.md`；架构决策：`docs/adr/`（ADR-001~028）。
+- 领域词汇唯一真相源：`docs/glossary.md`；架构决策：`docs/adr/`（ADR-001~030）。
 - 任务级治理流程：`.dsh/skills/`（`governance-*` 技能，按 whenToUse 加载）；技能标准与路由唯一出处 `docs/agent-governance.md`（勿在本文件重复规则）。
 - 执行位置：能在主会话完成的工作不派子 agent；仅当任务可独立并行、且隔离或吞吐有明确收益时才使用 subagent / workflow，并说明理由。
+
+## Agent skills
+
+### Issue tracker
+
+议题在 GitHub Issues（`anjing0524/auth-sso`，`gh` CLI）。See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+五个默认 triage 标签：`needs-triage` / `needs-info` / `ready-for-agent` / `ready-for-human` / `wontfix`。See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+单上下文布局。See `docs/agents/domain.md`.
 
 ## Portal 架构要点
 
