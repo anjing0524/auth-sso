@@ -233,7 +233,8 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
       <div className="flex shrink-0 flex-wrap items-center gap-1.5 xl:gap-3">
         <h1 className="type-section-title shrink-0 text-foreground">审计日志</h1>
         <AuditTabs tab={tab} hrefs={{ login: pageHref('login', 1, null, null, range, keyword, chipStartDate, chipEndDate, accessStatus, validAccessResourceType, pageSize), operation: pageHref('operation', 1, null, null, range, keyword, chipStartDate, chipEndDate, accessStatus, validAccessResourceType, pageSize), access: pageHref('access', 1, null, null, range, keyword, chipStartDate, chipEndDate, accessStatus, validAccessResourceType, pageSize) }} />
-        <div className="order-3 flex w-full min-w-0 flex-wrap items-center gap-1.5 min-[1100px]:order-3 min-[1100px]:w-auto">
+        <div className="order-3 flex w-full min-w-0 flex-wrap items-start gap-1.5 min-[1100px]:order-3 min-[1100px]:w-auto">
+          <div className="min-w-0 flex-1">
           <AuditFilters
             tab={tab}
             eventType={eventType}
@@ -247,6 +248,7 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
             accessResourceTypes={accessResourceTypes}
             pageSize={pageSize}
           />
+          </div>
           {canExport ? (
             <div className="ml-auto flex items-center gap-2 max-md:ml-0 max-md:w-full">
             {/* 导出是次要动作：合并为一个下拉，避免两个按钮把筛选行挤换行（chrome 33%→≤30%） */}
