@@ -36,6 +36,13 @@
 - Redis 运行时故障 = 已认证流量 401（fail-close 的显式代价）。缓解：启动期 readiness 门控、2s 超时防饿死、`inc_redis_acquire_failures` 指标、Redis HA。
 - 权限上下文在 Redis 故障期退化为每请求 DB 查询（约 2 次往返），性能降级但不拒绝服务。
 
+## 2026-10-29 补充：撤销写入与缓存刷新残余（已接受）
+
+- **JTI 黑名单读取**仍按本 ADR fail-close（Gateway 不可用即拒绝），本次未改。
+- **撤销写入 / 权限缓存刷新失败**保持降级：`revokeAndRefreshAuthorization` 只记录失败计数，不阻断已提交的权限变更；补偿控制为短 AT TTL（≤1h）、`checkPermission` 在权限上下文不可用时 fail-close、身份读口过滤 DISABLED/DELETED 用户。
+- 残余窗口：Redis 缓存仍持有旧权限时，降权用户可能保留旧权限至缓存 TTL；本轮**接受**该风险，不引入运行时 fail-open 开关。
+- **CI 浏览器预装**：`scripts/ci/e2e.sh` 在 Playwright 官方镜像内执行 `pnpm exec playwright install chromium` 后再跑全量 E2E；本地可用 `E2E_CHANNEL=chrome` 复用系统 Chrome。
+
 ## 相关 ADR
 
 - ADR-004: 无状态 JWT + Redis jti 黑名单（fail-open 条款由本 ADR 取代）
