@@ -173,7 +173,7 @@ export const updateRoleAction = withAuth(
  * 再叠加 withAuth 的通用审计会得到两条语义重复的记录。
  */
 export const updateRolePermissionsAction = withAuth(
-  { permissions: [ROLE_PERMISSIONS.ASSIGN_PERMISSION] },
+  { permissions: [ROLE_PERMISSIONS.MANAGE, ROLE_PERMISSIONS.ASSIGN_PERMISSION], requireAll: true },
   async (ctx: AuthContext, roleId: string, permissionIds: string[]): Promise<ApiResponse<{ roleId: string; permissionIds: string[] }>> => {
     const v = validate(RolePermissionAssignmentSchema, { permissionIds });
     if (!v.ok) return v.response;

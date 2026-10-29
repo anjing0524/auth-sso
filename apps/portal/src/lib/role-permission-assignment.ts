@@ -27,7 +27,7 @@ import type { ErrorCode } from '@auth-sso/contracts';
 import { COMMON_ERRORS, ENTITY_ACTIVE, ROLE_ERRORS } from '@auth-sso/contracts';
 import { schema } from '@/infrastructure/db';
 import { EntityNotFoundError } from '@/domain/shared/errors';
-import { withScopedRow } from '@/lib/authz';
+import { withScopedRow, loadOperatorAuthorization } from '@/lib/authz';
 import { appendSecurityAudit } from '@/lib/audit';
 import { revokeAndRefreshAuthorization } from '@/lib/auth/authorization-effects';
 
@@ -90,9 +90,10 @@ export async function assignRolePermissions(
           };
         }
 
+        let found: Array<{ id: string; code: string }> = [];
         if (permissionIds.length > 0) {
-          const found = await tx
-            .select({ id: schema.permissions.id })
+          found = await tx
+            .select({ id: schema.permissions.id, code: schema.permissions.code })
             .from(schema.permissions)
             .where(
               and(
@@ -106,6 +107,28 @@ export async function assignRolePermissions(
               error: COMMON_ERRORS.VALIDATION_ERROR,
               message: '存在无效或已停用的权限',
               status: 400,
+            };
+          }
+        }
+
+        // 授权决策的授权：非管理员不能把自身没有的权限授予任何角色（含自己所属角色）。
+        const operator = await loadOperatorAuthorization(tx, operatorId);
+        if (!operator) {
+          return {
+            success: false as const,
+            error: COMMON_ERRORS.FORBIDDEN,
+            message: '操作者账号不可用',
+            status: 403,
+          };
+        }
+        if (!operator.isAdmin) {
+          const overreach = found.filter((permission) => !operator.permissions.has(permission.code));
+          if (overreach.length > 0) {
+            return {
+              success: false as const,
+              error: COMMON_ERRORS.FORBIDDEN,
+              message: '不能授予超出自身权限范围的权限',
+              status: 403,
             };
           }
         }

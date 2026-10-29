@@ -83,6 +83,7 @@ vi.mock(import('@/lib/audit'), async (importOriginal): Promise<Partial<typeof au
 });
 
 import { POST as assignRoles, DELETE as removeRole } from '@/app/api/users/[id]/roles/route';
+import { assignUserRoles } from '@/lib/user-role-assignment';
 import type * as authModule from '@/lib/auth';
 import type * as permissionsModule from '@/lib/permissions';
 import type * as sessionRevokeModule from '@/lib/session/revoke';
@@ -241,6 +242,26 @@ describe('用户角色绑定 API', () => {
     );
 
     expect(response.status).toBe(404);
+  });
+
+  it('非管理员不得分配系统角色（反提权回归）', async () => {
+    const LOW_OPERATOR = '00000000-0000-4000-8000-000000000401';
+    const LOW_ROLE = '00000000-0000-4000-8000-000000000402';
+    const SYSTEM_ROLE = '00000000-0000-4000-8000-000000000403';
+    await seedTestData(td.db, {
+      users: [{ ...(seedTestUser() ?? [])[0]!, id: LOW_OPERATOR, username: 'low_operator', email: 'low_operator@example.com' }],
+      roles: [
+        { id: LOW_ROLE, name: '低权操作者', code: 'LOW_OPERATOR', deptId: ROOT_DEPT_ID, isSystem: false, status: 'ACTIVE', sort: 0 },
+        { id: SYSTEM_ROLE, name: '测试系统角色', code: 'TEST_SYSTEM_ROLE', deptId: ROOT_DEPT_ID, isSystem: true, status: 'ACTIVE', sort: 1 },
+      ],
+      userRoles: seedUserRoleBinding(LOW_OPERATOR, LOW_ROLE),
+    });
+
+    await expect(
+      assignUserRoles(LOW_OPERATOR, USER_ID, [SYSTEM_ROLE], {
+        method: 'POST', url: '/api/users/' + USER_ID + '/roles', ip: null, userAgent: null,
+      }),
+    ).rejects.toThrow('仅系统管理员可以分配系统内置角色');
   });
 
   it('目标用户不存在 → DELETE 返回 404（不是 403）', async () => {

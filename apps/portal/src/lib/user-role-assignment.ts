@@ -35,8 +35,8 @@ import { z } from 'zod';
 import type { ErrorCode } from '@auth-sso/contracts';
 import { COMMON_ERRORS, ENTITY_ACTIVE } from '@auth-sso/contracts';
 import { type db, schema } from '@/infrastructure/db';
-import { EntityNotFoundError } from '@/domain/shared/errors';
-import { withScopedRow } from '@/lib/authz';
+import { EntityNotFoundError, ForbiddenError } from '@/domain/shared/errors';
+import { withScopedRow, loadOperatorAuthorization } from '@/lib/authz';
 import { appendSecurityAudit } from '@/lib/audit';
 import { revokeAndRefreshAuthorization } from '@/lib/auth/authorization-effects';
 
@@ -84,15 +84,56 @@ async function validateRoleAssignment(
   tx: Tx,
   userDeptId: string | null,
   roleIds: readonly string[],
+  operatorId: string,
 ): Promise<string | null> {
   if (!userDeptId) return '该用户尚未分配部门，请先为用户分配部门后再分配角色';
   const roles = await tx
-    .select({ id: schema.roles.id, deptId: schema.roles.deptId, status: schema.roles.status })
+    .select({
+      id: schema.roles.id,
+      name: schema.roles.name,
+      deptId: schema.roles.deptId,
+      status: schema.roles.status,
+      isSystem: schema.roles.isSystem,
+    })
     .from(schema.roles)
     .where(inArray(schema.roles.id, roleIds));
   if (roles.length !== roleIds.length) return '存在无效角色';
   const invalid = roles.filter((r) => r.deptId !== userDeptId || r.status !== ENTITY_ACTIVE);
-  return invalid.length > 0 ? '部分角色不属于该用户所属部门或已禁用，无法分配' : null;
+  if (invalid.length > 0) return '部分角色不属于该用户所属部门或已禁用，无法分配';
+
+  // 授权决策的授权：操作者不能分配系统角色，也不能把自己权限边界之外的能力授出。
+  // 管理员（ADMIN/SUPER_ADMIN）保留平台级分配能力。
+  const operator = await loadOperatorAuthorization(tx, operatorId);
+  if (!operator) throw new ForbiddenError('操作者账号不可用');
+  if (operator.isAdmin) return null;
+
+  if (roles.some((role) => role.isSystem)) {
+    throw new ForbiddenError('仅系统管理员可以分配系统内置角色');
+  }
+  const targetPermissions = await tx
+    .select({ roleId: schema.rolePermissions.roleId, code: schema.permissions.code })
+    .from(schema.rolePermissions)
+    .innerJoin(schema.permissions, eq(schema.permissions.id, schema.rolePermissions.permissionId))
+    .where(
+      and(
+        inArray(schema.rolePermissions.roleId, roleIds),
+        eq(schema.permissions.status, ENTITY_ACTIVE),
+      ),
+    );
+  const byRole = new Map<string, Set<string>>();
+  for (const row of targetPermissions) {
+    const set = byRole.get(row.roleId) ?? new Set<string>();
+    set.add(row.code);
+    byRole.set(row.roleId, set);
+  }
+  const overreach = roles.find((role) => {
+    const codes = byRole.get(role.id);
+    return codes ? [...codes].some((code) => !operator.permissions.has(code)) : false;
+  });
+  if (overreach) {
+    throw new ForbiddenError(`不能分配超出自身权限的角色「${overreach.name}」`);
+  }
+  return null;
 }
 
 /**
@@ -120,7 +161,7 @@ export async function assignUserRoles(
         notFound: () => new EntityNotFoundError('User', targetUserId),
       },
       async (tx, userRow) => {
-        const errMsg = await validateRoleAssignment(tx, userRow.deptId, roleIds);
+        const errMsg = await validateRoleAssignment(tx, userRow.deptId, roleIds, operatorId);
         if (errMsg) {
           return { success: false as const, error: COMMON_ERRORS.VALIDATION_ERROR, message: errMsg, status: 400 };
         }

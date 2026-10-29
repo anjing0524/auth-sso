@@ -51,7 +51,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
  * （反之亦然），所以它留在适配器里，而写编排在共享模块里。
  */
 export async function POST(request: NextRequest, { params }: RouteParams) {
-  return withPermission({ permissions: [USER_PERMISSIONS.ASSIGN_ROLE] }, async (adminUserId) => {
+  return withPermission({ permissions: [USER_PERMISSIONS.MANAGE, USER_PERMISSIONS.ASSIGN_ROLE], requireAll: true }, async (adminUserId) => {
     const { id } = await params;
     const parsed = RoleAssignmentSchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) return restError(COMMON_ERRORS.VALIDATION_ERROR, '角色ID列表格式不合法', 400);
@@ -75,7 +75,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
  * 权限要求: user:assign_role
  */
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
-  return withPermission({ permissions: [USER_PERMISSIONS.ASSIGN_ROLE] }, async (adminUserId) => {
+  return withPermission({ permissions: [USER_PERMISSIONS.MANAGE, USER_PERMISSIONS.ASSIGN_ROLE], requireAll: true }, async (adminUserId) => {
     const { id } = await params;
     const parsed = RoleRemovalSchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) return restError(COMMON_ERRORS.VALIDATION_ERROR, '角色ID格式不合法', 400);

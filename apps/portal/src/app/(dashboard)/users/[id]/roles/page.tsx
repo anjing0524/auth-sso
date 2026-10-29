@@ -36,7 +36,7 @@ export default async function UserRolesRoute({ params, searchParams }: PageProps
   if (!user) notFound();
 
   return (
-    <PermissionGate options={{ permissions: [USER_PERMISSIONS.ASSIGN_ROLE] }}>
+    <PermissionGate options={{ permissions: [USER_PERMISSIONS.MANAGE, USER_PERMISSIONS.ASSIGN_ROLE], requireAll: true }}>
       <UserRolesPage
         isSelf={identity?.userId === id}
         returnHref={returnHref}

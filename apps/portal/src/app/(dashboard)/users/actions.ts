@@ -454,7 +454,7 @@ export const resetPasswordAction = withAuth(
  * 为什么不是手写一遍编排：那是同一件事两种形状，正是 `lib/authz` 当初要消灭的形态。
  */
 export const updateUserRolesAction = withAuth(
-  { permissions: [USER_PERMISSIONS.ASSIGN_ROLE] },
+  { permissions: [USER_PERMISSIONS.MANAGE, USER_PERMISSIONS.ASSIGN_ROLE], requireAll: true },
   async (
     ctx: AuthContext,
     targetUserId: string,

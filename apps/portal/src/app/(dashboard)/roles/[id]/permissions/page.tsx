@@ -8,9 +8,10 @@
  */
 import { notFound } from 'next/navigation';
 import { ROLE_PERMISSIONS } from '@auth-sso/contracts';
-import { eq } from 'drizzle-orm';
-
-import { db, schema } from '@/infrastructure/db';
+import { db } from '@/infrastructure/db';
+import { resolveIdentity } from '@/lib/auth';
+import { resolveScope } from '@/lib/authz';
+import { getRoleById } from '../../data';
 import { isUuid } from '@/lib/uuid';
 import { safeReturnPath } from '@/lib/safe-return';
 import { PermissionGate } from '@/components/layout/permission-gate';
@@ -30,14 +31,13 @@ export default async function RolePermissionsRoute({ params, searchParams }: Pag
   const returnHref = safeReturnPath((await searchParams).returnTo, '/roles', '/roles');
   if (!isUuid(id)) notFound();
 
-  const role = await db.query.roles.findFirst({
-    where: eq(schema.roles.id, id),
-    columns: { id: true, name: true, isSystem: true },
-  });
+  const identity = await resolveIdentity();
+  const scope = identity ? await resolveScope(db, identity.userId) : { deptIds: [] };
+  const role = await getRoleById(id, scope);
   if (!role) notFound();
 
   return (
-    <PermissionGate options={{ permissions: [ROLE_PERMISSIONS.ASSIGN_PERMISSION] }}>
+    <PermissionGate options={{ permissions: [ROLE_PERMISSIONS.MANAGE, ROLE_PERMISSIONS.ASSIGN_PERMISSION], requireAll: true }}>
       <RolePermissionsPage
         role={{ id: role.id, name: role.name, isSystem: role.isSystem ?? false }}
         returnHref={returnHref}

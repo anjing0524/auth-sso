@@ -139,12 +139,12 @@ Portal 存在两种不同的调用协议：
 | 12 | `GET /api/me/permissions` | `api/me/permissions/route.ts` | 会话 | §4.2 |
 | 13 | `GET /api/users` | `api/users/route.ts` | `portal:user:list` | §5.1 |
 | 14 | `GET /api/users/[id]` | `api/users/[id]/route.ts` | `portal:user:read` | §5.3 |
-| 15 | `GET` / `POST` / `DELETE /api/users/[id]/roles` | `api/users/[id]/roles/route.ts` | `portal:user:read` 或 `portal:user:assign_role`（GET）/ `portal:user:assign_role`（写） | §5.9 |
+| 15 | `GET` / `POST` / `DELETE /api/users/[id]/roles` | `api/users/[id]/roles/route.ts` | `portal:user:read` 或 `portal:user:assign_role`（GET）/ `portal:user:manage` 且 `portal:user:assign_role`（写） | §5.9 |
 | 16 | `POST /api/users/[id]/force-logout` | `api/users/[id]/force-logout/route.ts` | `portal:user:manage` | §5.10 |
 | 17 | `POST /api/users/[id]/reset-password` | `api/users/[id]/reset-password/route.ts` | `portal:user:reset_password` | §5.8 |
 | 18 | `GET /api/roles` | `api/roles/route.ts` | `portal:role:list` 或 `portal:user:assign_role` | §6.1 |
 | 19 | `GET /api/roles/[id]` | `api/roles/[id]/route.ts` | `portal:role:read` | §6.3 |
-| 20 | `GET` / `POST` / `PUT /api/roles/[id]/permissions` | `api/roles/[id]/permissions/route.ts` | `portal:role:read`（GET）/ `portal:role:assign_permission`（写） | §6.6 |
+| 20 | `GET` / `POST` / `PUT /api/roles/[id]/permissions` | `api/roles/[id]/permissions/route.ts` | `portal:role:read`（GET）/ `portal:role:manage` 且 `portal:role:assign_permission`（写） | §6.6 |
 | 21 | `GET /api/permissions` | `api/permissions/route.ts` | `portal:permission:list` | §7.1 |
 | 22 | `GET /api/permissions/[id]` | `api/permissions/[id]/route.ts` | `portal:permission:read` | §7.3 |
 | 23 | `GET /api/permissions/[id]/impact` | `api/permissions/[id]/impact/route.ts` | `portal:permission:delete` 或 `portal:permission:manage` | §7.7 |
@@ -874,7 +874,7 @@ DELETE /api/users/:id/roles   — 移除指定角色
 ```
 
 **权限：** `portal:user:read` **或** `portal:user:assign_role`（GET，满足其一即可——分配对话框
-需读"当前已绑定角色"）/ `portal:user:assign_role`（POST、DELETE）。
+需读"当前已绑定角色"）/ `portal:user:manage` **且** `portal:user:assign_role`（POST、DELETE，H-ACL-003 组合权限）。
 
 **请求体：**
 
@@ -889,7 +889,7 @@ DELETE /api/users/:id/roles   — 移除指定角色
   `USER_ROLE_ASSIGN` / 权限收敛），REST 与 Server Action **共用同一实现**。
 
 **Server Action：** `updateUserRolesAction(user.id, roleIds)` —— 由 Portal「分配角色」对话框
-（`users/components/AssignRoleDialog.tsx`）调用，权限 `portal:user:assign_role`，
+（`users/components/AssignRoleDialog.tsx`）调用，权限 `portal:user:manage` 且 `portal:user:assign_role`，
 返回 `{ success: true, data: { assignedCount } }`。**不存在**名为 `assignUserRolesAction`
 的行动（2026-10-23 核对：全仓只有 `updateUserRolesAction`）。
 
@@ -977,7 +977,7 @@ POST /api/roles/:id/permissions   — 覆盖式设置角色权限
 PUT  /api/roles/:id/permissions   — 更新角色权限（与 POST 同一写路径）
 ```
 
-**权限：** `portal:role:read`（GET）/ `portal:role:assign_permission`（POST、PUT）
+**权限：** `portal:role:read`（GET）/ `portal:role:manage` **且** `portal:role:assign_permission`（POST、PUT，H-ACL-003 同类组合权限）
 
 **GET：** 角色不存在或超出数据范围 → 404 `AUTH_SSO_1004`；成功 `restSuccess(permissions)` 直出。
 

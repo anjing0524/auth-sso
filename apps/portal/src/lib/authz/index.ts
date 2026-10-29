@@ -47,3 +47,5 @@ export {
 } from './write';
 
 export { scopeFilter, isScopeDenied } from './query';
+
+export { loadOperatorAuthorization, type OperatorAuthorization } from './operator';

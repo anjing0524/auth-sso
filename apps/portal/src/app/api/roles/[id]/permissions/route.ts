@@ -67,7 +67,7 @@ async function setPermissions(request: NextRequest, roleId: string, userId: stri
 
 /** POST /api/roles/[id]/permissions — 为角色分配权限（覆盖式） */
 export async function POST(request: NextRequest, { params }: RouteParams) {
-  return withPermission({ permissions: [ROLE_PERMISSIONS.ASSIGN_PERMISSION] }, async (userId) => {
+  return withPermission({ permissions: [ROLE_PERMISSIONS.MANAGE, ROLE_PERMISSIONS.ASSIGN_PERMISSION], requireAll: true }, async (userId) => {
     const { id } = await params;
     return setPermissions(request, id, userId, 'POST');
   });
@@ -75,7 +75,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
 /** PUT /api/roles/[id]/permissions — 更新角色权限（与 POST 同一写路径） */
 export async function PUT(request: NextRequest, { params }: RouteParams) {
-  return withPermission({ permissions: [ROLE_PERMISSIONS.ASSIGN_PERMISSION] }, async (userId) => {
+  return withPermission({ permissions: [ROLE_PERMISSIONS.MANAGE, ROLE_PERMISSIONS.ASSIGN_PERMISSION], requireAll: true }, async (userId) => {
     const { id } = await params;
     return setPermissions(request, id, userId, 'PUT');
   });
