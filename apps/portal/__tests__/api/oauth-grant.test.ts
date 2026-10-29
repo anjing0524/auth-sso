@@ -253,6 +253,18 @@ describe('exchangeAuthorizationCode — 成功路径（真实签发）', () => {
     await expect(selectRefreshTokens()).resolves.toHaveLength(1);
   });
 
+  it('同一授权码两路并发兑换：只有一个成功', async () => {
+    await seedAuthCode();
+
+    const [first, second] = await Promise.all([exchange(), exchange()]);
+    const successes = [first, second].filter((r) => r.ok);
+    expect(successes).toHaveLength(1);
+    expect([first, second].filter((r) => !r.ok)).toHaveLength(1);
+
+    // 只允许一条 RT 行；失败方不得二次签发
+    await expect(selectRefreshTokens()).resolves.toHaveLength(1);
+  });
+
   it('授权码在成功兑换后被置为已消费（不可二次使用）', async () => {
     await seedAuthCode();
     await exchange();
