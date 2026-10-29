@@ -54,6 +54,10 @@ function isCrossSiteWrite(request: NextRequest): boolean {
   if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method)) {
     return false;
   }
+  // 无 Origin 的跨站请求（老浏览器/特殊客户端）：Sec-Fetch-Site 是浏览器强制头，
+  // 不能由页面脚本伪造；cross-site 直接拒绝，服务端到服务端（无该头）保持放行。
+  if (request.headers.get('sec-fetch-site') === 'cross-site') return true;
+
   const origin = request.headers.get('origin');
   if (!origin) return false;
 
