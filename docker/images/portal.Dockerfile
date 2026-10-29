@@ -2,7 +2,10 @@
 FROM node:26-alpine AS base
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
-RUN npm install -g pnpm@10.12.4
+# 同 workspace 阶段的 .npmrc 决策：构建机无法直连 npmjs（CN 网络实测 TLS RST），
+# 装 pnpm 本身也必须走 npmmirror，否则整条镜像构建在第一步就断。
+# 与本地/CI 对齐 pnpm 主版本（旧 pin 10.12.4 是本机 12.14.0 的落后点）。
+RUN npm install -g pnpm@12.14.0 --registry=https://registry.npmmirror.com
 
 FROM base AS workspace
 WORKDIR /app
