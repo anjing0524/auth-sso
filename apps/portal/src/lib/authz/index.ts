@@ -48,4 +48,4 @@ export {
 
 export { scopeFilter, isScopeDenied } from './query';
 
-export { loadOperatorAuthorization, type OperatorAuthorization } from './operator';
+export { loadOperatorAuthorization, targetHasAdminRole, assertCanMutateAdminTarget, type OperatorAuthorization } from './operator';

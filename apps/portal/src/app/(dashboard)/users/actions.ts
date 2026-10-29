@@ -53,7 +53,7 @@ import {
 import { revokeUserAccessByUserId } from '@/lib/session/revoke';
 import { recordActionAuditDetail } from '@/lib/audit';
 
-import { withScopedRow, withScopedWrite, withGlobalWrite } from '@/lib/authz';
+import { withScopedRow, withScopedWrite, withGlobalWrite, assertCanMutateAdminTarget } from '@/lib/authz';
 import { assertDepartmentUsable } from '@/lib/department-availability';
 import type { DbTxHandle } from '@/infrastructure/db';
 import {
@@ -186,6 +186,7 @@ export const toggleUserStatusAction = withAuth(
     const updated = await withScopedRow(
       loadUserScoped(ctx.userId, v.data.id),
       async (tx, row) => {
+        await assertCanMutateAdminTarget(tx, ctx.userId, v.data.id);
         const target = toggleUserStatus(userFromPersistence(row));
         // `USER_ERRORS.CANNOT_DISABLE_SELF` 对应的规则（此前从未实现）：
         // 只拦"把自己禁用"；自己处于禁用态时再启用是自救，必须允许。
@@ -282,6 +283,7 @@ export const updateUserAction = withAuth(
           : [],
       },
       async (tx, row) => {
+        await assertCanMutateAdminTarget(tx, ctx.userId, v.data.id);
         // H-24：禁止把已有部门的用户清空——会主动制造上面那种"谁都改不了"的死锁状态。
         if (row.deptId !== null && v.data.deptId === null) {
           throw new BusinessRuleViolationError(
@@ -374,6 +376,7 @@ export const deleteUserAction = withAuth(
     await withScopedRow(
       loadUserScoped(ctx.userId, v.data.id),
       async (tx, row) => {
+        await assertCanMutateAdminTarget(tx, ctx.userId, v.data.id);
         const deleted = deleteUser(userFromPersistence(row));
         // **用领域映射写回全部可变列**（而非只手写 status）：`deleteUser` 会算出的
         // `deletedAt` 此前被丢弃 ⇒ `deleted_at` 永远为 NULL ⇒ schema 的
@@ -420,6 +423,7 @@ export const resetPasswordAction = withAuth(
         passwordHistory: true,
       }),
       async (tx, row) => {
+        await assertCanMutateAdminTarget(tx, ctx.userId, v.data.id);
         const state = {
           currentHash: row.passwordHash ?? null,
           history: row.passwordHistory ?? null,

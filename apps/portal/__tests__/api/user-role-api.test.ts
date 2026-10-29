@@ -244,6 +244,33 @@ describe('用户角色绑定 API', () => {
     expect(response.status).toBe(404);
   });
 
+  it('非管理员不得修改系统管理员的目标账号（管理员目标保护）', async () => {
+    const LOW_OPERATOR = '00000000-0000-4000-8000-000000000411';
+    const LOW_ROLE = '00000000-0000-4000-8000-000000000412';
+    const TARGET_ADMIN = '00000000-0000-4000-8000-000000000413';
+    const TARGET_ADMIN_ROLE = '00000000-0000-4000-8000-000000000414';
+    await seedTestData(td.db, {
+      users: [
+        { ...(seedTestUser() ?? [])[0]!, id: LOW_OPERATOR, username: 'low_operator2', email: 'low_operator2@example.com' },
+        { ...(seedTestUser() ?? [])[0]!, id: TARGET_ADMIN, username: 'target_admin', email: 'target_admin@example.com' },
+      ],
+      roles: [
+        { id: LOW_ROLE, name: '低权操作者2', code: 'LOW_OPERATOR_2', deptId: ROOT_DEPT_ID, isSystem: false, status: 'ACTIVE', sort: 0 },
+        { id: TARGET_ADMIN_ROLE, name: '目标管理员', code: 'SUPER_ADMIN', deptId: ROOT_DEPT_ID, isSystem: true, status: 'ACTIVE', sort: 1 },
+      ],
+      userRoles: [
+        ...seedUserRoleBinding(LOW_OPERATOR, LOW_ROLE),
+        ...seedUserRoleBinding(TARGET_ADMIN, TARGET_ADMIN_ROLE),
+      ],
+    });
+
+    await expect(
+      assignUserRoles(LOW_OPERATOR, TARGET_ADMIN, [ROLE_ID], {
+        method: 'POST', url: '/api/users/' + TARGET_ADMIN + '/roles', ip: null, userAgent: null,
+      }),
+    ).rejects.toThrow('系统管理员账号只能由管理员操作');
+  });
+
   it('DELETE 最后一个角色 → 400 且不改变绑定（服务端不变量）', async () => {
     const response = await removeRole(
       createTestRequest(`/api/users/${USER_ID}/roles`, { method: 'DELETE', body: { roleId: OLD_ROLE_ID } }),

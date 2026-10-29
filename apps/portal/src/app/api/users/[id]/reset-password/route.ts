@@ -9,7 +9,7 @@
  */
 import { type NextRequest } from 'next/server';
 import { withPermission } from '@/lib/auth';
-import { withScopedRow } from '@/lib/authz';
+import { withScopedRow, assertCanMutateAdminTarget } from '@/lib/authz';
 import { schema } from '@/infrastructure/db';
 import { eq } from 'drizzle-orm';
 import { hashPassword, isPasswordReused } from '@/domain/auth/password';
@@ -78,6 +78,7 @@ export async function POST(
         notFound: () => new EntityNotFoundError('用户', id),
       },
       async (tx, target) => {
+        await assertCanMutateAdminTarget(tx, adminUserId, id);
         // NFR-SEC-15: 禁止重用最近 5 次密码（H-C-06：比较集合含**当前密码**——
         // history 只在改密时推入旧 hash，不含正在使用的密码，漏掉会允许"重置为原密码"）。
         // bcrypt 比对（最多 6 次）也在事务内——这正是原先最长的敞口窗口。

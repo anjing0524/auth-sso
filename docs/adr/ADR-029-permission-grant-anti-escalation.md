@@ -32,8 +32,10 @@
    - 非管理员分配的角色，其权限码必须是操作者当前权限码的子集；
    - 非管理员授予角色的权限码必须是操作者当前权限码的子集。
    管理员（ADMIN/SUPER_ADMIN）保留平台级分配能力。
-4. **越权拒绝返回 403**：系统角色/权限子集失败抛 `ForbiddenError`，不再伪装成 400 参数校验失败。
+4. **系统管理员目标保护**：非管理员即使持有 `reset_password` / `update` / `delete` / `manage` 等单权限，也不能对系统管理员执行凭证类或破坏性操作。
+5. **越权拒绝返回 403**：系统角色/权限子集失败抛 `ForbiddenError`，不再伪装成 400 参数校验失败。
 5. **角色权限页补数据范围**：页面入口使用 `getRoleById(id, scope)`，范围外与不存在同形 404，关闭 IDOR 名称泄露。
+6. **系统管理员目标保护**：`user:reset_password` 单独就能重置同范围 SUPER_ADMIN 密码，等价于账号接管。新增 `assertCanMutateAdminTarget`（与写入同事务）：目标持有 ADMIN/SUPER_ADMIN 且操作者不是管理员时，禁止重置密码、禁用/删除、修改资料、修改角色、强制下线；管理员保留全部能力。
 
 ## 不在本 ADR 范围
 
@@ -50,6 +52,7 @@
 ## 验证
 
 - 渗透复现（修复前）：低权账号 `POST /api/users/{lisi}/roles` 分配 `SUPER_ADMIN` → **200**，`user_roles` 写入 SUPER_ADMIN。
+- 同类面：仅持 `reset_password` 的账号可重置同范围 SUPER_ADMIN 密码 → 管理员账号接管；现由 `assertCanMutateAdminTarget` 拦截（回归测试覆盖低权操作者修改管理员目标）。
 - 修复后：
   - 无 `user:manage`：同一请求 → **403 `AUTH_SSO_1003`**；
   - 有 `user:manage` 时分配系统角色 → **400/403 明确拒绝**（系统角色守卫；最终代码为 403）；

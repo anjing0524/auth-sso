@@ -36,7 +36,7 @@ import type { ErrorCode } from '@auth-sso/contracts';
 import { COMMON_ERRORS, ENTITY_ACTIVE } from '@auth-sso/contracts';
 import { type db, schema } from '@/infrastructure/db';
 import { EntityNotFoundError, ForbiddenError } from '@/domain/shared/errors';
-import { withScopedRow, loadOperatorAuthorization } from '@/lib/authz';
+import { withScopedRow, loadOperatorAuthorization, assertCanMutateAdminTarget } from '@/lib/authz';
 import { appendSecurityAudit } from '@/lib/audit';
 import { revokeAndRefreshAuthorization } from '@/lib/auth/authorization-effects';
 
@@ -161,6 +161,7 @@ export async function assignUserRoles(
         notFound: () => new EntityNotFoundError('User', targetUserId),
       },
       async (tx, userRow) => {
+        await assertCanMutateAdminTarget(tx, operatorId, userRow.id);
         const errMsg = await validateRoleAssignment(tx, userRow.deptId, roleIds, operatorId);
         if (errMsg) {
           return { success: false as const, error: COMMON_ERRORS.VALIDATION_ERROR, message: errMsg, status: 400 };
@@ -221,6 +222,7 @@ export async function removeUserRole(
         notFound: () => new EntityNotFoundError('User', targetUserId),
       },
       async (tx, userRow) => {
+        await assertCanMutateAdminTarget(tx, operatorId, userRow.id);
         // 与 RoleAssignmentSchema.min(1) 对齐：服务端也必须保证用户至少保留一个角色。
         // UI 的“最后一个角色”保护不能替代 API 不变量——直接调用 DELETE 仍可能把
         // 用户锁死（可用性/权限决策变更），且会让 RoleAssignmentSchema 的约束失真。

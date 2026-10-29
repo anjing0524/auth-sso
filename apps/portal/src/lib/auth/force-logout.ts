@@ -9,7 +9,7 @@ import 'server-only';
 import { eq } from 'drizzle-orm';
 
 import { schema } from '@/infrastructure/db';
-import { withScopedRow } from '@/lib/authz';
+import { withScopedRow, assertCanMutateAdminTarget } from '@/lib/authz';
 import { revokeAllRefreshTokens } from '@/lib/auth/token';
 import { EntityNotFoundError } from '@/domain/shared/errors';
 
@@ -42,7 +42,10 @@ export async function forceLogoutUser(
       message: '无权操作该用户',
       notFound: () => new EntityNotFoundError('用户', targetUserId),
     },
-    async (tx, target) => revokeAllRefreshTokens(tx, target.id),
+    async (tx, target) => {
+      await assertCanMutateAdminTarget(tx, operatorId, target.id);
+      return revokeAllRefreshTokens(tx, target.id);
+    },
   );
 
   return { revokedJtiCount: jti.revoked, jtiRevocationFailed: jti.failed };
