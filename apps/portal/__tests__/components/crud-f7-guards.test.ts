@@ -166,7 +166,8 @@ describe('表格滚动与吸顶契约（2026-10-23 UI 重做）', () => {
     expect(dataTable).toContain("containerClassName={data.length === 0 && emptyState ? 'h-full overflow-visible' : 'overflow-visible'}");
     expect(dataTable).toContain('[&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:bg-card');
     // 卡片不再 flex-1 撑满（1 行数据不应出现整屏空白卡片）
-    expect(dataTable).toContain('CardContent className="flex min-h-0 flex-1 flex-col p-0"');
+    expect(dataTable).toContain('const shortContent = !loading && data.length <= 5;');
+    expect(dataTable).toContain("shortContent ? '' : 'flex-1'");
   });
 
   it('审计页三张裸表同样使用 overflow-visible + sticky th', () => {

@@ -39,6 +39,23 @@ describe('DataTable', () => {
     expect(screen.getByText('Bar')).toBeInTheDocument();
   });
 
+  it('少量数据时卡片不撑满，分页/后续内容可紧跟表格', () => {
+    const { container } = render(
+      <DataTable columns={columns} data={items} renderRow={renderRow} />
+    );
+    expect((container.firstElementChild as HTMLElement).className).not.toContain('flex-1');
+    expect((container.querySelector('.scrollbar-slim') as HTMLElement).className).not.toContain('flex-1');
+  });
+
+  it('数据超过 5 条时卡片填满可用高度并内部滚动', () => {
+    const many = Array.from({ length: 6 }, (_, i) => ({ id: String(i), name: `Item ${i}` }));
+    const { container } = render(
+      <DataTable columns={columns} data={many} renderRow={renderRow} />
+    );
+    expect((container.firstElementChild as HTMLElement).className).toContain('flex-1');
+    expect((container.querySelector('.scrollbar-slim') as HTMLElement).className).toContain('flex-1');
+  });
+
   it('loading=true 时显示骨架屏', () => {
     render(
       <DataTable columns={columns} data={[]} loading={true} skeletonRows={2} renderRow={renderRow} />

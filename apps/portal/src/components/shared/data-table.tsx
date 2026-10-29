@@ -62,6 +62,9 @@ export function DataTable<T>({
 }: DataTableProps<T>) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [overflowing, setOverflowing] = useState(false);
+  // 少量数据时不要让卡片 flex-1 填满视口把分页推到底部；只有接近整页数据时才
+  // 填满可用高度并在卡片内滚动。空状态/3–5 行时卡片贴合内容，分页紧跟表格。
+  const shortContent = !loading && data.length <= 5;
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
@@ -75,10 +78,10 @@ export function DataTable<T>({
   }, [data, columns]);
 
   return (
-    <Card className="flex min-h-0 flex-1 flex-col gap-0 overflow-hidden rounded-lg border border-border/70 py-0 shadow-sm ring-0">
+    <Card className={`flex min-h-0 flex-col gap-0 overflow-hidden rounded-lg border border-border/70 py-0 shadow-sm ring-0 ${shortContent ? '' : 'flex-1'}`}>
       <p role="status" aria-live="polite" className="sr-only">{loading ? '正在加载列表…' : data.length === 0 ? emptyAnnouncement : ''}</p>
       {cardHeader ? <div className="shrink-0">{cardHeader}</div> : null}
-      <CardContent className="flex min-h-0 flex-1 flex-col p-0">
+      <CardContent className={`flex min-h-0 flex-col p-0 ${shortContent ? '' : 'flex-1'}`}>
         {/* 横向滚动提示：宽表在卡片内横向滚动（U-G05）。
             md:hidden 会在 ≥768px 隐藏，但 1024 宽度下宽表仍溢出（实测 clients 720/967），
             因此用 lg:hidden：平板/窄桌面也能看到“可横向滚动”的可发现性提示。 */}
@@ -90,7 +93,7 @@ export function DataTable<T>({
         {/* 窄屏下宽表在卡片内横向滚动：根因修复——此前表格没有滚动容器，
             会把 flex 父级撑宽（实测 390px 视口下 document.scrollWidth=557）。 */}
         {/* 唯一滚动容器：横向 + 纵向都由这里承担；Table 内层不再自建 overflow（否则 sticky 表头失效）。 */}
-        <div ref={scrollRef} aria-busy={loading || undefined} className="scrollbar-slim min-h-0 w-full flex-1 overflow-auto">
+        <div ref={scrollRef} aria-busy={loading || undefined} className={`scrollbar-slim min-h-0 w-full overflow-auto ${shortContent ? '' : 'flex-1'}`}>
         <Table aria-label={tableLabel} className={data.length === 0 && emptyState ? 'h-full' : undefined} containerClassName={data.length === 0 && emptyState ? 'h-full overflow-visible' : 'overflow-visible'}>
           <TableHeader className="[&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:bg-card">
             <TableRow>
