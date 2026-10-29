@@ -21,6 +21,8 @@
 
 ## 变更记录
 
+- 2026-10-29（续四百七十七）: **E2E 夹具与生产 seed 解耦**。新增独立 `seed-e2e.ts` 与 `db:seed:e2e`，测试栈 db-init 单独调用；生产 seed 不再包含 QA 数据；标准 E2E 24/24。
+
 - 2026-10-29（续四百七十六）: **发布门禁最终结果**。全量 Vitest **1525/1525**；标准 `pnpm test:e2e`（`E2E_CHANNEL=chrome`）**24/24**；支持受限环境复用系统 Chrome，CI 默认仍是 Playwright Chromium。
 
 - 2026-10-29（续四百七十五）: **发布门禁收口**。UI 契约守卫对齐当前实现（UI 358/358）、全量 Vitest **1525/1525**；E2E-only seed 补齐 QA_TEST/qa_lin/审计/访问日志夹具，验收栈 E2E **24/24**（系统 Chrome）。

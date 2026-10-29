@@ -14,6 +14,7 @@
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "db:seed": "NODE_OPTIONS='--require ./scripts/preload-mock.cjs' node --import tsx scripts/seed.ts",
+    "db:seed:e2e": "NODE_OPTIONS='--require ./scripts/preload-mock.cjs' node --import tsx scripts/seed-e2e.ts",
     "db:maintain-partitions": "npx tsx scripts/maintain-access-log-partitions.ts"
   },
   "dependencies": {

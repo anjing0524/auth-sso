@@ -12,6 +12,7 @@
     "db:push": "pnpm --filter @auth-sso/portal db:push",
     "db:studio": "pnpm --filter @auth-sso/portal db:studio",
     "db:seed": "pnpm --filter @auth-sso/portal db:seed",
+    "db:seed:e2e": "pnpm --filter @auth-sso/portal db:seed:e2e",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:api": "vitest run --project @auth-sso/portal-api",
