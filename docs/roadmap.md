@@ -21,6 +21,8 @@
 
 ## 变更记录
 
+- 2026-10-29（续四百八十九）: **删除无效脚本**。`scripts/ci/push-main.sh` 仍走 `gh`+HTTPS，与当前 SSH-only 推送策略相反且无 package/workflow 消费者；删除并更新脚本索引；其余 sh 均保留。
+
 - 2026-10-29（续四百八十八）: **命令入口统一**。新增 `scripts/local/{dev,infra,reset}.sh` 与 `pnpm dev/dev:infra/dev:reset`；生产统一 `pnpm deploy:*`；本地原生 4100、Docker 验收 19443 分界写清；本地实测 200、reset/seed 通过。
 
 - 2026-10-29（续四百八十七）: **测试报告不入库确认**。`test-results/`、`playwright-report/`、`tests/e2e-report/`、`tests/traceability/.generated/`、`coverage/`、`*.junit.xml` 统一为根路径 ignore；本地生成物已删除，当前 Git 无测试报告跟踪。
