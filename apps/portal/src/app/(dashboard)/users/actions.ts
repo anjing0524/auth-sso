@@ -227,6 +227,7 @@ export const unlockUserAction = withAuth(
     const updated = await withScopedRow(
       loadUserScoped(ctx.userId, v.data.id),
       async (tx, row) => {
+        await assertCanMutateAdminTarget(tx, ctx.userId, v.data.id);
         const target = unlockUser(userFromPersistence(row));
         await tx.update(schema.users)
           .set({ status: target.status })
