@@ -133,7 +133,17 @@ node scripts/bench/gateway.mjs --url https://127.0.0.1:19443 --n 200 --c 20   # 
 
 ## 部署
 
-生产环境统一入口是 **[docker/README.md](docker/README.md)**；最简流程：
+生产部署只有两类目标；**日常运维主路径是自托管 Docker Compose**（唯一备份/升级/回滚/ACME 流程）：
+
+| 目标 | 入口 | 定位 |
+|---|---|---|
+| 自托管生产 | `docker/compose/prod.yml` + `scripts/docker/deploy.sh` | 唯一日常运维主路径 |
+| Vercel 平台 | `vercel.json` + `docker/images/vercel.Dockerfile` | NFR-SEC-01 要求的平台托管变体，非日常运维 |
+
+`test.yml`（发布验收/CI）、`local.yml`（本地 PG/Redis）、`acme-staging.yml`（首次公网 ACME 演练）
+都不是生产部署方向。决策见 [ADR-030](docs/adr/ADR-030-deployment-targets.md)。
+
+最简自托管流程：
 
 ```bash
 cp .env.example .env.prod            # 再按 docker/README.md §3 补齐必填项
@@ -144,7 +154,7 @@ cp .env.example .env.prod            # 再按 docker/README.md §3 补齐必填�
 ```
 
 Gateway 在进程内完成 ACME HTTP-01 验证、证书签发与热加载，无需 Certbot 或宿主证书脚本。
-另有 Vercel 单镜像变体（`vercel.json` + `docker/images/vercel.Dockerfile`），仅用于 Vercel 部署。
+Vercel 单镜像变体仅作为平台托管目标保留，不替代上述自托管运维流程。
 
 ## 文档指引
 
@@ -158,7 +168,7 @@ Gateway 在进程内完成 ACME HTTP-01 验证、证书签发与热加载，无�
 - [接口契约 (docs/spec/API.md)](docs/spec/API.md) — 核心接口清单与字段级契约
 - [第三方集成说明 (docs/spec/third-party-integration.md)](docs/spec/third-party-integration.md) — 企微、飞书、钉钉等三方登录集成规范
 - [需求追踪矩阵 (docs/spec/REQUIREMENTS_MATRIX.md)](docs/spec/REQUIREMENTS_MATRIX.md) — 需求→验收标准全覆盖
-- [架构决策记录 (docs/adr/)](docs/adr/) — ADR-001～029（共 29 篇）：与代码冲突时先信代码，再查这里的理由
+- [架构决策记录 (docs/adr/)](docs/adr/) — ADR-001～030（共 30 篇）：与代码冲突时先信代码，再查这里的理由
 - [里程碑与取舍 (docs/roadmap.md)](docs/roadmap.md) — 变更记录（按时间倒序）
 - [领域词汇表 (docs/glossary.md)](docs/glossary.md) — 领域概念的唯一真相源
 - [接入验证指南 (docs/INTEGRATION_GUIDE.md)](docs/INTEGRATION_GUIDE.md) — Gateway 代理模式与子应用接入

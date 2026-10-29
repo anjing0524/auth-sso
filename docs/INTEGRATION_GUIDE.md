@@ -14,21 +14,23 @@ Browser → Gateway（唯一公网入口）→ Portal（OIDC Provider + JWT 签�
                                 → 其它 [[upstreams]] 后端（哑服务，读 Header + Redis）
 ```
 
-端口按**部署形态**不同，不要混成一条链路：
+端口按**目标**不同，不要混成一条链路（只有两个生产目标；验收栈不是部署方向）：
 
-| 形态 | 配置文件 | 入口 | Portal 地址 |
+| 目标 | 配置文件 | 入口 | Portal 地址 |
 |---|---|---|---|
-| Docker 验收栈 | `apps/gateway/gateway.e2e.toml`（`ssl_port = 443`，`apps/gateway/gateway.e2e.toml`；只声明 `/` 一条 upstream） | 宿主 `https://127.0.0.1:19443`（`19443:443`，`docker/compose/test.yml`） | `portal:4000`（容器网络内，不映射宿主端口；`docker/compose/test.yml` 是容器内健康检查） |
-| 生产 | `apps/gateway/gateway.docker.toml`（`docker/compose/test.yml` 只在验收栈挂 e2e 配置；`prod.yml` 的 gateway 未覆盖配置 ⇒ 镜像内 `/app/gateway.toml` = `gateway.docker.toml`） | 域名 80/443，Gateway 内建 ACME（`docker/compose/prod.yml`） | `portal:4000`（`apps/gateway/gateway.docker.toml`） |
-| Vercel 单镜像 | `apps/gateway/gateway.vercel.toml`（`external_tls_termination = true`，`apps/gateway/gateway.vercel.toml`） | 平台域名（外部 TLS 终结） | 同镜像内 `127.0.0.1:4100`（`apps/gateway/gateway.vercel.toml`、`docker/images/vercel.Dockerfile:62`） |
-| host 本地 | `apps/gateway/gateway.toml`（`ssl_port = 19443`，`apps/gateway/gateway.toml`） | `https://localhost:19443` | `127.0.0.1:4100`（`apps/gateway/gateway.toml`）——但 **host 进程入口已移除**，见 [`docker/README.md`](../docker/README.md) §7.5 |
+| Docker 验收栈（非部署） | `apps/gateway/gateway.e2e.toml`（`ssl_port = 443`；只声明 `/` 一条 upstream） | 宿主 `https://127.0.0.1:19443`（`19443:443`，`docker/compose/test.yml`） | `portal:4000`（容器网络内，不映射宿主端口；`docker/compose/test.yml` 是容器内健康检查） |
+| 自托管生产（P1） | `apps/gateway/gateway.docker.toml`（`docker/compose/test.yml` 只在验收栈挂 e2e 配置；`prod.yml` 的 gateway 未覆盖配置 ⇒ 镜像内 `/app/gateway.toml` = `gateway.docker.toml`） | 域名 80/443，Gateway 内建 ACME（`docker/compose/prod.yml`） | `portal:4000`（`apps/gateway/gateway.docker.toml`） |
+| Vercel 平台（P2） | `apps/gateway/gateway.vercel.toml`（`external_tls_termination = true`） | 平台域名（外部 TLS 终结） | 同镜像内 `127.0.0.1:4100`（`gateway.vercel.toml`、`docker/images/vercel.Dockerfile`） |
+
+host 进程入口已移除（`apps/gateway/gateway.toml` 仅作为本地模板保留，不属于部署目标）；
+目标收敛依据见 [ADR-030](adr/ADR-030-deployment-targets.md)。
 
 Gateway 启动时读的是**工作目录下的 `gateway.toml`**（`apps/gateway/src/main.rs`，默认值 `gateway.toml`）：
 compose 通过只读挂载或镜像内置决定它到底是哪一份（`docker/compose/test.yml` 挂 `gateway.e2e.toml`；
 `docker/images/gateway.Dockerfile:46` 把 `gateway.docker.toml` 拷成 `/app/gateway.toml`）。
 
-**所有部署形态都只有 Gateway 一个公网入口**：生产 `docker/compose/prod.yml` 只发布 Gateway 的 80/443，
-Portal 仅 `expose` 4000（`docker/compose/prod.yml`）。
+**两个生产目标都只有 Gateway 一个公网入口**：自托管生产 `docker/compose/prod.yml` 只发布 Gateway 的 80/443，
+Portal 仅 `expose` 4000（`docker/compose/prod.yml`）；Vercel 由平台终结 TLS。
 
 > **关于 Demo App（`apps/demo-app/`）**：它**不在任何 compose 文件里**
 > （`grep -l demo-app docker/compose/*.yml` 零命中），镜像构建也不会构建它
@@ -161,8 +163,8 @@ addresses = "127.0.0.1:3100"
 public_paths = ["/demo/landing"]
 ```
 
-不同部署形态的同一段路由表**地址不同**，别照抄：验收/生产它是 `portal:4000`（`apps/gateway/gateway.docker.toml`、
-`apps/gateway/gateway.e2e.toml`），Vercel 是 `127.0.0.1:4100`（`apps/gateway/gateway.vercel.toml`）。
+不同目标的同一段路由表**地址不同**，别照抄：验收/自托管生产是 `portal:4000`（`gateway.docker.toml`、`gateway.e2e.toml`），
+Vercel 平台是 `127.0.0.1:4100`（`gateway.vercel.toml`）。
 
 > **注意**：上表中 `127.0.0.1:3100` 的 `/demo/` 条目指向的 Demo App **不在任何 compose 文件里**（见文首说明），
 > 因此在 `pnpm stack:up` 起的验收栈里 `/demo/` 路由**无可用节点**，访问会得到 502；

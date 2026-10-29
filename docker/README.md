@@ -1,11 +1,19 @@
 # Auth-SSO Docker 构建 / 部署 / 运行
 
-> **本文是 Docker 的唯一出处**（`AGENTS.md` 只留摘要与指针）。分两条路径：
-> - **生产部署**（§1–§6）：Gateway 内建 ACME + 自托管证书；
-> - **本地开发 / 发布验收**（§7）：`docker/compose/test.yml` 自签证书栈，`pnpm test:e2e` 的正式路径；
->   与 CI 的 `quality.yml` / `acceptance.yml` 同一条路径（分类见 [`.github/workflows/README.md`](../.github/workflows/README.md)）。
->
+> **本文是 Docker 的唯一出处**（`AGENTS.md` 只留摘要与指针）。
 > 日常命令与验收命令**只在 §7.2 维护**（本文不重复列表，避免两处漂移）。
+
+## 部署目标矩阵（先看这张表）
+
+| 目标 | 入口 | 性质 |
+|---|---|---|
+| **自托管生产（P1）** | `docker/compose/prod.yml` + `scripts/docker/deploy.sh`（§0–§6） | **唯一日常运维主路径**：ACME、TLS、备份、升级、回滚 |
+| **Vercel 平台（P2）** | `vercel.json` + `docker/images/vercel.Dockerfile` | NFR-SEC-01 要求的平台托管变体；平台 TLS，不是日常运维路径 |
+| 发布验收 / CI | `docker/compose/test.yml` + `scripts/docker/stack.sh`（§7） | 非生产部署 |
+| 本地依赖 | `docker/compose/local.yml` | 非部署：仅本地 PG/Redis |
+| ACME staging 演练 | `docker/compose/acme-staging.yml` + `scripts/e2e/acme-staging.sh` | 非部署：首次公网签发验证 |
+
+决策依据：[ADR-030](../docs/adr/ADR-030-deployment-targets.md)。
 
 ## 目录结构
 
@@ -14,9 +22,9 @@ docker/
 ├── compose/                # 编排：按生命周期分档
 │   ├── local.yml           # 本地 PG16 + Redis7（pnpm test 前置）
 │   ├── test.yml            # 发布验收 / CI 栈（含 acme profile）
-│   ├── prod.yml            # 生产部署（deploy.sh）
-│   └── acme-staging.yml    # 公网 Let's Encrypt staging 联调
-├── images/                 # 镜像定义（被 compose / vercel.json 引用）
+│   ├── prod.yml            # 自托管生产（唯一日常运维主路径）
+│   └── acme-staging.yml    # 公网 Let's Encrypt staging 验证（非部署）
+├── images/                 # 镜像定义（自托管 + Vercel 平台变体）
 │   ├── portal.Dockerfile
 │   ├── gateway.Dockerfile
 │   ├── pebble.Dockerfile
@@ -43,11 +51,11 @@ docker/
 | `compose/local.yml` | 本地 PG16 + Redis7，`redis-commander` 在 `tools` profile 下可选 | `AGENTS.md` / `README.md` 的 `docker compose -f … up -d`；`pnpm test` 前置 | 必需（开发） |
 | `compose/test.yml` | 发布验收 / CI 栈：postgres/redis/cert-init/db-init/portal/gateway；`node-test`（`workspace` target，CI lint/typecheck/test 用）；acme profile（pebble/challtestsrv/gateway-acme） | `scripts/docker/stack.sh`（仅前 6 个服务）、`scripts/e2e/acme-e2e.sh`、CI `quality.yml` / `acceptance.yml` / `acme.yml`（`node-test` 与 acme 服务） | 必需（CI / 验收） |
 | `compose/prod.yml` | 生产形态（ACME、健康检查、db-init、数据卷） | `scripts/docker/deploy.sh`、`apps/portal/__tests__/api/delivery-config-guard.test.ts` | 必需（生产） |
-| `compose/acme-staging.yml` | 公网 staging ACME 联调 | `scripts/e2e/acme-staging.sh` | 可选（首次上线演练） |
+| `compose/acme-staging.yml` | 公网 staging ACME 验证（非部署） | `scripts/e2e/acme-staging.sh` | 可选（首次上线演练） |
 | `images/portal.Dockerfile` | portal 镜像（`workspace` / `builder` / `runner` 三个 target） | `compose/test.yml`、`compose/prod.yml` | 必需 |
 | `images/gateway.Dockerfile` | gateway 镜像（`cert-init` / builder / runtime） | `compose/test.yml`、`compose/prod.yml`、`compose/acme-staging.yml` | 必需 |
 | `images/pebble.Dockerfile` | Pebble / challtestsrv 测试镜像 | `compose/test.yml` 的 acme profile、`scripts/e2e/acme-e2e.sh` | 必需（ACME 验收） |
-| `images/vercel.Dockerfile` | Vercel 单镜像变体（gateway + portal 同进程组） | `vercel.json` 的 `entrypoint` | 可选（仅 Vercel 部署） |
+| `images/vercel.Dockerfile` | Vercel 平台托管变体（gateway + portal 同进程组） | `vercel.json` 的 `entrypoint` | NFR-SEC-01 平台目标 |
 | `acme/pebble-config.json` 等 4 个 fixture | Pebble 配置与测试根证书 | `compose/test.yml`、`scripts/e2e/acme-e2e.sh` | 必需（ACME 验收） |
 | `init-db.sql` | 创建 `auth_sso_test`（API 测试库） | `compose/local.yml`、`compose/test.yml`、`apps/portal/vitest.globalSetup.ts`（该文件会补建缺失的测试库） | 必需（本地 / CI 测试） |
 
@@ -56,6 +64,17 @@ docker/
 生产拓扑以 Gateway 为唯一公网入口。Gateway 的 Rust 进程内建 ACME 客户端，直接向 Let's Encrypt 申请和自动续期证书；不依赖 Certbot、宿主机脚本或本地自签证书。
 
 > 编号说明：§0 是生产路径的总纲（一句话结论 + 本文档分工），**生产部署的具体步骤在 §1–§6**；§7 是本地开发 / 发布验收栈。根 `README.md` 与 `AGENTS.md` 里的「§0–§6 / §1–§6」指的就是这一套编号。
+
+### 0.1 运维职责边界
+
+| 职责 | 唯一入口 / 证据 | 说明 |
+|---|---|---|
+| 健康检查 | `deploy.sh --status`；Gateway `/healthz`、Portal `/api/health` | 部署脚本等待 healthy 后再退出 |
+| 备份 | 宿主 `pg_dump` / `data/postgres` 停机快照 | 部署前必须备份；镜像回滚不等于数据回滚 |
+| 升级 / 回滚 | `deploy.sh` / `deploy.sh --rollback` | 只切镜像，schema 不回退 |
+| 证书 | Gateway 内建 ACME（prod.yml） | 不引入 Certbot；staging 仅演练 |
+| 日志 | `docker compose … logs` + 审计表 | 本仓库不绑定外部监控平台 |
+| 高可用 / 水平扩展 | 不在当前范围 | 单域名单 Gateway；扩展需证书 leader election |
 
 ## 1. 拓扑
 

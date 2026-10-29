@@ -10,7 +10,7 @@
 | `AGENTS.md` | 工程约定、项目结构、测试体系、环境与门禁规则（**唯一出处**） | **每次动手前** |
 | `CODING_STANDARDS.md` | 编码标准（含"单一真相源""数字必须被断言"等） | 写/评审代码前 |
 | `docs/glossary.md` | 领域词汇唯一真相源（有界上下文、实体、生命周期） | 涉及领域概念时 |
-| `docs/adr/`（29 篇） | 架构决策记录（**每条都有结论与理由**）；多数已补「验证」段。编号 ADR-001～029 连续；最新五篇：ADR-025 暴力破解双维度、ADR-026 邮箱规范化、ADR-027 AI 治理工作流与技能标准化、ADR-028 写路径非空 targets 与全局写入口、ADR-029 权限授予反提权 | 想知道"为什么长这样"时 |
+| `docs/adr/`（30 篇） | 架构决策记录（**每条都有结论与理由**）；多数已补「验证」段。编号 ADR-001～030 连续；最新五篇：ADR-026 邮箱规范化、ADR-027 AI 治理工作流与技能标准化、ADR-028 写路径非空 targets 与全局写入口、ADR-029 权限授予反提权、ADR-030 部署目标收敛为两个生产目标 | 想知道"为什么长这样"时 |
 
 ## 二、按任务找文档
 
@@ -18,13 +18,14 @@
 |---|---|
 | 起服务、跑测试（完整栈走 Docker；Portal UI 可本机 4100 热更新） | [`docs/INTEGRATION_GUIDE.md`](INTEGRATION_GUIDE.md)（`pnpm stack:build` → `pnpm stack:up` → 浏览器验 `https://127.0.0.1:19443/login`）+ 根 `README.md`「快速开始（Docker）」；本地 UI 迭代见 [`docs/local-development.md`](local-development.md) |
 | 登录后的子应用接入验证（Gateway 代理模式、`X-User-Id`、Redis 权限） | [`docs/INTEGRATION_GUIDE.md`](INTEGRATION_GUIDE.md) |
-| Docker 构建 / 部署 / 验收（生产 ACME + 本地 test 栈 / `stack.sh` / e2e / 故障排查） | `docker/README.md`（**唯一出处**：§0–§6 生产、§7 本地验收；命令只在 §7.2） |
+| Docker 构建 / 部署 / 验收（部署目标矩阵：自托管 P1 / Vercel P2 / 验收栈；`deploy.sh` / `stack.sh` / e2e / 故障排查） | `docker/README.md`（**唯一出处**：§0–§6 生产、§7 本地验收；命令只在 §7.2） |
 | 改 Portal 的代码结构（分层、目录、错误体系、三层安全） | [`docs/portal-architecture-guidelines.md`](portal-architecture-guidelines.md) |
 | 改 UI（颜色/字体/间距/组件规范） | 根 `DESIGN.md`（设计系统） |
 | 查历史取舍与里程碑 | 根 `docs/roadmap.md`（变更记录按时间倒序） |
 | 查需求与追溯 | [`docs/spec/`](spec/) + `tests/traceability/` |
 | 技术调研笔记 | [`docs/research/`](research/) |
 | 优化 AI Agent 的工作方式（治理工作流、技能标准、守卫台账） | [`docs/agent-governance.md`](agent-governance.md)（标准与路由）+ `.dsh/skills/`（`governance-*` 技能，按需加载） |
+| 用 Matt Pocock 技能套件（issue tracker / triage 标签 / domain docs 消费规则） | [`docs/agents/`](agents/)（`issue-tracker.md` · `triage-labels.md` · `domain.md`；本仓治理标准仍是 [`docs/agent-governance.md`](agent-governance.md)，两者分工不同） |
 
 > **历史产物已清理**：`docs/archive/`（旧审计/旧计划/旧经验库）与 `docs/solution/`（按会话记录的决策与教训）
 > 已于 2026-10-22 移出仓库，**当前仓库根目录的 `docs/` 下不存在这两个目录**（以 `ls docs/` 为准）。
@@ -43,7 +44,7 @@
 
 ## 四、目录速览
 
-> **计数以目录为准**：本节的 `(N)` 是 `ls docs/<dir>/*.md | wc -l` 的实测值（2026-10-23：adr 29 / research 3 / spec 9）。
+> **计数以目录为准**：本节的 `(N)` 是 `ls docs/<dir>/*.md | wc -l` 的实测值（2026-10-23：adr 30 / research 3 / spec 9）。
 > 新增或删除文档后请同步本节；数字与目录不一致时，以目录内容为准。
 
 ```
@@ -54,7 +55,8 @@ docs/
 ├── portal-architecture-guidelines.md  Portal 结构与分层
 ├── roadmap.md           里程碑与取舍（时间倒序）
 ├── agent-governance.md  AI 治理技能标准与工作流（任务级流程见 .dsh/skills/）
-├── adr/ (29)            决策记录
+├── agents/ (3)          Matt Pocock 技能套件的仓库级配置（issue tracker / triage 标签 / domain docs）
+├── adr/ (30)            决策记录
 ├── research/ (3)        调研笔记
 └── spec/ (9)            需求规格
 docker/                  Docker 配置入口（compose / Dockerfile / README）
