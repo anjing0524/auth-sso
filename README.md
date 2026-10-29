@@ -18,7 +18,7 @@ Portal 自身即是 OIDC Provider；Gateway 作为唯一公网入口，完成 HT
 
 ## 演示
 
-[▶ 观看管理端 Walkthrough（2026-10-29，1440×900，19s，5fps）](artifacts/ux-walkthrough/portal-walkthrough-2026-10-29-5fps.webm)
+[▶ 观看管理端 Walkthrough（2026-10-29，1920×1080，21.7s，25fps）](artifacts/ux-walkthrough/portal-walkthrough-2026-10-29-1080p.webm)
 
 覆盖登录 → 工作台 → 用户 → 角色 → 权限 → 审计 → 应用 → 个人中心；更多分辨率与专项巡检见 [walkthrough 索引](artifacts/ux-walkthrough/index.html)。
 
