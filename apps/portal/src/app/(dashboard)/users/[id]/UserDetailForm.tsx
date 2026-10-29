@@ -256,19 +256,6 @@ export default function UserDetailForm({ id, initialUser: serverUser, canUpdate,
                   {isSelf && (
                     <p className="text-[11px] text-muted-foreground">当前登录账号不能禁用或锁定自己。</p>
                   )}
-                  {!isSelf && (
-                  <div className="flex items-center justify-between gap-3 px-3 py-2.5">
-                    <div className="min-w-0">
-                      <p className="text-[13px] font-medium">强制下线</p>
-                      <p className="text-[11px] text-muted-foreground">{activeSessionCount > 0 ? `当前 ${activeSessionCount} 个活跃会话；` : '当前无活跃会话；'}将撤销全部 Token 并让所有设备退出，不重置密码。</p>
-                    </div>
-                    <PermissionGuard permission={USER_PERMISSIONS.MANAGE}>
-                      <Button variant="outline" size="sm" onClick={() => setForceLogoutOpen(true)}>
-                        <LogOut className="h-3.5 w-3.5" /> 强制下线
-                      </Button>
-                    </PermissionGuard>
-                  </div>
-                )}
                 {(serverUser.status as string) === 'LOCKED' && (
                     <p className="text-[11px] text-muted-foreground">已锁定账号不可直接切换状态，请在下方「重置密码 / 解锁」中处理。</p>
                   )}
@@ -282,6 +269,19 @@ export default function UserDetailForm({ id, initialUser: serverUser, canUpdate,
                     <p className="rounded bg-badge-success-bg px-2 py-1 text-[11px] text-badge-success-fg">保存后恢复登录能力，原有角色保持不变。</p>
                   )}
                 </div>
+                              {!isSelf && (
+                  <div className="flex items-center justify-between gap-3 border-t pt-3 sm:col-span-2">
+                    <div className="min-w-0">
+                      <p className="text-[13px] font-medium">强制下线</p>
+                      <p className="text-[11px] text-muted-foreground">{activeSessionCount > 0 ? `当前 ${activeSessionCount} 个活跃会话；` : '当前无活跃会话；'}将撤销全部 Token 并让所有设备退出，不重置密码。</p>
+                    </div>
+                    <PermissionGuard permission={USER_PERMISSIONS.MANAGE}>
+                      <Button variant="outline" size="sm" onClick={() => setForceLogoutOpen(true)}>
+                        <LogOut className="h-3.5 w-3.5" /> 强制下线
+                      </Button>
+                    </PermissionGuard>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
