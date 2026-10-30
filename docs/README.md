@@ -21,6 +21,7 @@
 | 登录后的子应用接入验证（Gateway 代理模式、`X-User-Id`、Redis 权限） | [`docs/INTEGRATION_GUIDE.md`](INTEGRATION_GUIDE.md) |
 | Docker 构建 / 部署 / 验收（部署目标矩阵：自托管 P1 / Vercel P2 / 验收栈；`deploy` / `test:e2e` / 标准 compose / 故障排查） | [`docs/docker.md`](docker.md)（**唯一出处**：§0–§6 生产、§7 本地验收；命令只在 §7.2） |
 | 上线、备份恢复、故障处置、交付验收证据 | [`docs/operations.md`](operations.md)（生产运维手册） |
+| 商用交付判定 / 客户验收清单 / 已知边界 | [`docs/commercial-readiness.md`](commercial-readiness.md) |
 | CI 工作流分类、触发矩阵与命令对应 | [`docs/ci.md`](ci.md)（`.github/workflows/` 的索引） |
 | 脚本索引（`local/`、`docker/`、`e2e/`、`ci/`、`bench/`、`ux/`） | [`docs/scripts.md`](scripts.md) |
 | 改 Portal 的代码结构（分层、目录、错误体系、三层安全） | [`docs/portal-architecture-guidelines.md`](portal-architecture-guidelines.md) |
@@ -63,6 +64,7 @@ docs/
 ├── design-system.md     设计系统（UI/UX 规范与品牌定义）
 ├── docker.md            Docker 构建 / 部署 / 验收（唯一出处）
 ├── operations.md         生产运维手册（备份/恢复/故障/验收）
+├── commercial-readiness.md 商用就绪矩阵与交付阻断项
 ├── scripts.md           脚本索引
 ├── ci.md                GitHub Actions 索引
 ├── local-development.md 本地开发

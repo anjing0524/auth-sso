@@ -161,7 +161,7 @@ node scripts/bench/gateway.mjs --url https://127.0.0.1:19443 --n 200 --c 20   # 
 最简自托管流程：
 
 ```bash
-cp .env.example .env.prod            # 再按 docs/docker.md §3 补齐必填项
+cp .env.example .env.prod && chmod 600 .env.prod  # 再按 docs/docker.md §3 补齐必填项
 pnpm deploy -- --check                    # 逐项校验环境文件与 compose 配置，不启动
 pnpm deploy                       # 构建 → db-init（migrate + seed）→ 启动 → 健康检查
 pnpm deploy -- --status                   # 容器状态
@@ -191,6 +191,7 @@ Vercel 单镜像变体仅作为平台托管目标保留，不替代上述自托�
 - [Portal 架构规范 (docs/portal-architecture-guidelines.md)](docs/portal-architecture-guidelines.md) — 分层、组件模式与 Next.js 16 适配
 - [Docker 构建 / 部署 / 验收 (docs/docker.md)](docs/docker.md) — 唯一出处
 - [生产运维手册 (docs/operations.md)](docs/operations.md) — 备份恢复、故障处置、交付验收证据
+- [商用就绪清单 (docs/commercial-readiness.md)](docs/commercial-readiness.md) — 交付判定、客户验收清单、已知边界
 - [脚本索引 (docs/scripts.md)](docs/scripts.md) — `docker/`、`e2e/`、`ci/`、`bench/` 的职责与归属
 - [CI 工作流索引 (docs/ci.md)](docs/ci.md) — 触发文件 / 类别文件分类与命令对应
 - [设计规范 (docs/design-system.md)](docs/design-system.md) — UI/UX 规范与品牌定义

@@ -167,6 +167,13 @@ services:
     depends_on:
       portal:
         condition: service_healthy
+    healthcheck:
+      # 首次 ACME 签发前 HTTPS 可能不可用；start_period 覆盖首签窗口。
+      test: ["CMD-SHELL", "wget --no-check-certificate -q -O /dev/null https://127.0.0.1:443/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 300s
     networks:
       - auth-sso-network
     logging:

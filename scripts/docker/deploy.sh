@@ -74,6 +74,17 @@ compose() { "${COMPOSE[@]}" "$@"; }
 check_env() {
   [[ -f "${ENV_FILE}" ]] || fail "缺少 ${ENV_FILE}：请先 cp .env.example ${ENV_FILE} 并填写生产参数"
 
+  # 生产密钥文件不得对 group/other 可读；失败即中止，避免密钥泄露后继续部署。
+  local mode
+  if stat -f '%Lp' "${ENV_FILE}" >/dev/null 2>&1; then
+    mode="$(stat -f '%Lp' "${ENV_FILE}")"
+  else
+    mode="$(stat -c '%a' "${ENV_FILE}")"
+  fi
+  if (( 8#${mode} & 8#077 )); then
+    fail "${ENV_FILE} 权限过宽（${mode}）：执行 chmod 600 ${ENV_FILE} 后重试"
+  fi
+
   local required=(
     POSTGRES_PASSWORD REDIS_PASSWORD
     NEXT_PUBLIC_APP_URL PORTAL_CLIENT_SECRET

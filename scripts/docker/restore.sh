@@ -8,7 +8,9 @@
 # 行为：
 #   1. 校验 dump 可读；
 #   2. 自动为当前库再做一次备份（BACKUP_DIR，失败则中止）；
-#   3. 停 Portal/Gateway → pg_restore --clean --if-exists → 启动 → 健康检查。
+#   3. 停 Portal/Gateway → 隔离库 pg_restore → 原子换名 → 清 Redis → 启动 → 健康检查。
+#
+# 环境变量：SKIP_REDIS_FLUSH=1 可跳过 Redis 清理（不推荐）。
 #
 # 环境变量：ENV_FILE / COMPOSE_FILE / BACKUP_DIR 同 backup.sh。
 #
@@ -49,6 +51,11 @@ echo "▶ 恢复到隔离库 ${RESTORE_DB}（失败不影响现网库）"
 
 echo "▶ 校验通过，原子切换数据库"
 "${COMPOSE[@]}" exec -T postgres sh -c 'psql -U "${POSTGRES_USER:-postgres}" -d postgres -v ON_ERROR_STOP=1 -c "DROP DATABASE auth_sso" -c "ALTER DATABASE auth_sso_restore RENAME TO auth_sso"'
+
+if [[ "${SKIP_REDIS_FLUSH:-0}" != "1" ]]; then
+  echo "▶ 清空 Redis 会话/权限缓存（避免恢复后旧会话仍有效）"
+  "${COMPOSE[@]}" exec -T redis sh -c 'redis-cli -a "$REDIS_PASSWORD" FLUSHALL' >/dev/null
+fi
 
 echo "▶ 启动 Portal/Gateway"
 "${COMPOSE[@]}" up -d portal gateway

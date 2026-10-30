@@ -72,7 +72,8 @@ pnpm deploy -- --rollback  # 只切回上次镜像，不回滚数据库
 3. 停 Portal/Gateway；
 4. 恢复到隔离库 `auth_sso_restore`；
 5. 校验 `users` 可读后，`DROP auth_sso` + `RENAME auth_sso_restore → auth_sso`；
-6. 启动服务并等待 Portal 健康。
+6. 清空 Redis 会话/权限缓存（避免恢复后旧会话仍有效）；
+7. 启动服务并等待 Portal 健康。
 
 失败在换名前会中止，原库仍在；恢复完成后必须做一次登录冒烟。
 

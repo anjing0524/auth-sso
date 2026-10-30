@@ -157,7 +157,7 @@ ACME_DIRECTORY_URL=https://acme-staging-v02.api.letsencrypt.org/directory
 任何一步失败立即退出并打印最近日志，不会静默成功。
 
 ```bash
-cp .env.example .env.prod   # 按 §3 填写生产参数（LETSENCRYPT_DOMAIN 等）
+cp .env.example .env.prod && chmod 600 .env.prod   # 按 §3 填写生产参数（LETSENCRYPT_DOMAIN 等）
 ./scripts/docker/deploy.sh --check # 只校验配置（环境必填项 + compose config），不启动
 ./scripts/docker/deploy.sh         # 构建 + 迁移/seed + 启动 + 健康检查
 ```
