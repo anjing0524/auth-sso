@@ -64,6 +64,9 @@ BACKUP_ENCRYPTION_KEY_FILE=/etc/auth-sso/backup.key ./scripts/docker/backup.sh
 
 备份保留期按客户合规要求设置；至少保留一份**跨主机/跨区域**副本。
 
+可直接使用 [`deploy/systemd/`](../deploy/systemd/) 的 timer 模板启用每日备份与分区维护；
+`backup.env` 中的 `BACKUP_ENCRYPTION_KEY_FILE` 建议指向单独权限的密钥文件。
+
 ### 4.2 恢复（危险操作）
 
 ```bash
@@ -150,7 +153,7 @@ curl -fsS -H "X-Gateway-Metrics-Key: $GATEWAY_METRICS_TOKEN" \
 
 ## 7. 数据保留与容量
 
-- `access_logs` 按月分区；分区维护不是自动任务，需宿主 cron/调度器定期执行项目内维护脚本；
+- `access_logs` 按月分区；分区维护不是自动任务，需宿主 cron/systemd 定期执行（模板见 `deploy/systemd/`）；
 - 审计/登录日志保留期由业务与合规要求决定，当前仓库没有自动归档/删除策略；
 - 备份保留建议：日备 7 天、周备 4 周、月备 12 个月（按客户合规要求调整），并定期做恢复抽样。
 

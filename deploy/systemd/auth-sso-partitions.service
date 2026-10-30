@@ -1,0 +1,12 @@
+[Unit]
+Description=Auth-SSO access_logs partition maintenance
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/auth-sso
+EnvironmentFile=/etc/auth-sso/backup.env
+# 使用生产 compose 内的 Portal 环境执行分区维护（预创建未来 2 个月、删除 >180 天）
+ExecStart=/bin/sh -c 'docker compose --env-file "${ENV_FILE:-.env.prod}" -f "${COMPOSE_FILE:-docker/compose/prod.yml}" run --rm --no-deps db-init pnpm --filter @auth-sso/portal db:maintain-partitions'
+Nice=10

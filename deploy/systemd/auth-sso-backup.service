@@ -1,0 +1,14 @@
+[Unit]
+Description=Auth-SSO PostgreSQL encrypted backup
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/auth-sso
+# ENV_FILE / COMPOSE_FILE / BACKUP_DIR / BACKUP_ENCRYPTION_KEY_FILE 在此文件配置
+EnvironmentFile=/etc/auth-sso/backup.env
+ExecStart=/opt/auth-sso/scripts/docker/backup.sh
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
