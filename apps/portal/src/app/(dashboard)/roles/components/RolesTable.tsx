@@ -459,7 +459,8 @@ export default function RolesTable({ roles, pagination, initialKeyword, initialS
       <Dialog open={isAddOpen} onOpenChange={(open) => { setIsAddOpen(open); if (!open) closeAddDialog(); }}>
         <DialogContent>
           <DialogHeader><DialogTitle className="flex items-center gap-2"><ShieldCheck className="h-5 w-5 text-primary" /> 新建角色</DialogTitle></DialogHeader>
-          <form onSubmit={submitCreate}>
+          <form id="role-create-form" onSubmit={submitCreate}>
+            <button type="submit" className="sr-only" tabIndex={-1} aria-hidden="true" />
             <p className="pt-3 text-[11px] text-muted-foreground"><RequiredLegend /></p>
             <div className="grid gap-3 py-4 sm:grid-cols-2">
               <div className="space-y-2"><div className="flex items-center gap-1"><Label htmlFor="role-name">角色名称</Label><RequiredMark /></div><Input id="role-name" aria-required="true" value={form.name} maxLength={100} onChange={e => setForm({...form, name: e.target.value})} placeholder="管理员" /></div>
@@ -468,15 +469,16 @@ export default function RolesTable({ roles, pagination, initialKeyword, initialS
               <div className="space-y-2"><div className="flex items-center gap-1"><Label htmlFor="role-dept">所属部门</Label><RequiredMark /></div>{renderDeptSelect(form.deptId, v => setForm({...form, deptId: v}), 'role-dept', true)}</div>
               <div className="space-y-2"><Label htmlFor="role-sort">排序（越小越靠前）</Label><Input id="role-sort" type="number" value={form.sort} onChange={e => setForm({...form, sort: Number(e.target.value)})} /></div>
             </div>
-            <DialogFooter><Button type="button" variant="outline" onClick={closeAddDialog}>取消</Button><Button type="submit" disabled={saving}>创建</Button></DialogFooter>
-          </form>
+            </form>
+          <DialogFooter><Button type="button" variant="outline" onClick={closeAddDialog}>取消</Button><Button type="submit" form="role-create-form" disabled={saving}>创建</Button></DialogFooter>
         </DialogContent>
       </Dialog>
 
       <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
         <DialogContent>
           <DialogHeader><DialogTitle>编辑角色</DialogTitle></DialogHeader>
-          <form onSubmit={submitUpdate}>
+          <form id="role-edit-form" onSubmit={submitUpdate}>
+            <button type="submit" className="sr-only" tabIndex={-1} aria-hidden="true" />
             <p className="pt-3 text-[11px] text-muted-foreground"><RequiredLegend /></p>
             <div className="grid gap-3 py-4 sm:grid-cols-2">
               <div className="space-y-2"><div className="flex items-center gap-1"><Label htmlFor="role-edit-name">角色名称</Label><RequiredMark /></div><Input id="role-edit-name" aria-required="true" value={form.name} onChange={e => setForm({...form, name: e.target.value})} /></div>
@@ -506,8 +508,8 @@ export default function RolesTable({ roles, pagination, initialKeyword, initialS
                 )}
               </div>
             </div>
-            <DialogFooter><Button type="button" variant="outline" onClick={() => setIsEditOpen(false)}>取消</Button><Button type="submit" disabled={saving}>保存</Button></DialogFooter>
-          </form>
+            </form>
+          <DialogFooter><Button type="button" variant="outline" onClick={() => setIsEditOpen(false)}>取消</Button><Button type="submit" form="role-edit-form" disabled={saving}>保存</Button></DialogFooter>
         </DialogContent>
       </Dialog>
 

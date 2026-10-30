@@ -557,7 +557,8 @@ export default function DepartmentTree({ departments, deletionStats = {}, autoOp
       <Dialog open={isAddOpen} onOpenChange={(open) => { setIsAddOpen(open); if (!open) closeAddDialog(); }}>
         <DialogContent>
           <DialogHeader><DialogTitle className="flex items-center gap-2"><Building2 className="h-5 w-5 text-primary" /> 新建部门</DialogTitle></DialogHeader>
-          <form onSubmit={submitCreate}>
+          <form id="dept-create-form" onSubmit={submitCreate}>
+            <button type="submit" className="sr-only" tabIndex={-1} aria-hidden="true" />
             <p className="pt-3 text-[11px] text-muted-foreground"><RequiredLegend /></p>
             <div className="space-y-4 py-4">
               <div className="space-y-2"><div className="flex items-center gap-1"><Label htmlFor="dept-name">部门名称</Label><RequiredMark /></div><Input id="dept-name" aria-required="true" value={form.name} maxLength={100} onChange={e => setForm({...form, name: e.target.value})} placeholder="技术部" /></div>
@@ -565,11 +566,11 @@ export default function DepartmentTree({ departments, deletionStats = {}, autoOp
               <FieldError failure={fieldError} field="code" id="dept-code-error" />
               <div className="space-y-2"><Label htmlFor="dept-sort">排序（越小越靠前）</Label><Input id="dept-sort" type="number" value={form.sort} onChange={e => setForm({...form, sort: Number(e.target.value)})} /></div>
             </div>
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={closeAddDialog}>取消</Button>
-              <Button type="submit" disabled={saving}>{saving ? '创建中...' : '创建'}</Button>
-            </DialogFooter>
           </form>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={closeAddDialog}>取消</Button>
+            <Button type="submit" form="dept-create-form" disabled={saving}>{saving ? '创建中...' : '创建'}</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
@@ -577,7 +578,8 @@ export default function DepartmentTree({ departments, deletionStats = {}, autoOp
       <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
         <DialogContent>
           <DialogHeader><DialogTitle>编辑部门</DialogTitle></DialogHeader>
-          <form onSubmit={submitUpdate}>
+          <form id="dept-edit-form" onSubmit={submitUpdate}>
+            <button type="submit" className="sr-only" tabIndex={-1} aria-hidden="true" />
             <p className="pt-3 text-[11px] text-muted-foreground"><RequiredLegend /></p>
             <div className="space-y-4 py-4">
               <div className="space-y-2"><div className="flex items-center gap-1"><Label htmlFor="dept-edit-name">部门名称</Label><RequiredMark /></div><Input id="dept-edit-name" aria-required="true" value={form.name} onChange={e => setForm({...form, name: e.target.value})} /></div>
@@ -602,11 +604,11 @@ export default function DepartmentTree({ departments, deletionStats = {}, autoOp
                 ) : null}
               </div>
             </div>
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setIsEditOpen(false)}>取消</Button>
-              <Button type="submit" disabled={saving}>{saving ? '保存中...' : '保存'}</Button>
-            </DialogFooter>
           </form>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setIsEditOpen(false)}>取消</Button>
+            <Button type="submit" form="dept-edit-form" disabled={saving}>{saving ? '保存中...' : '保存'}</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

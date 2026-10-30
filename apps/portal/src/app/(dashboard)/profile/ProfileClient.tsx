@@ -132,7 +132,8 @@ function ChangePasswordDialog() {
             修改登录密码
           </DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4 py-2">
+        <form id="change-password-form" onSubmit={handleSubmit} className="space-y-4 py-2">
+          <button type="submit" className="sr-only" tabIndex={-1} aria-hidden="true" />
           <p className="text-[11px] text-muted-foreground"><RequiredLegend /></p>
           <div className="space-y-1.5">
             <div className="flex items-center gap-1"><Label htmlFor="currentPassword">当前密码</Label><RequiredMark /></div>
@@ -173,15 +174,15 @@ function ChangePasswordDialog() {
               required
             />
           </div>
-          <DialogFooter className="pt-2">
-            <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={isPending}>
-              取消
-            </Button>
-            <Button type="submit" disabled={isPending} id="btn-change-password-submit">
-              {isPending ? '修改中...' : '确认修改'}
-            </Button>
-          </DialogFooter>
         </form>
+        <DialogFooter className="pt-2">
+          <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={isPending}>
+            取消
+          </Button>
+          <Button type="submit" form="change-password-form" disabled={isPending} id="btn-change-password-submit">
+            {isPending ? '修改中...' : '确认修改'}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
@@ -241,7 +242,8 @@ function EditProfileDialog({ user }: { user: NonNullable<ProfileClientProps['use
             编辑个人资料
           </DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4 py-2">
+        <form id="edit-profile-form" onSubmit={handleSubmit} className="space-y-4 py-2">
+          <button type="submit" className="sr-only" tabIndex={-1} aria-hidden="true" />
           <p className="text-[11px] text-muted-foreground"><RequiredLegend /></p>
           <div className="space-y-1.5">
             <div className="flex items-center gap-1"><Label htmlFor="profile-name">姓名</Label><RequiredMark /></div>
@@ -279,15 +281,15 @@ function EditProfileDialog({ user }: { user: NonNullable<ProfileClientProps['use
             />
             <p className="text-[10px] leading-4 text-muted-foreground">留空则显示姓名首字母。</p>
           </div>
-          <DialogFooter className="pt-2">
-            <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={isPending}>
-              取消
-            </Button>
-            <Button type="submit" disabled={isPending} id="btn-edit-profile-submit">
-              {isPending ? '保存中...' : '保存'}
-            </Button>
-          </DialogFooter>
         </form>
+        <DialogFooter className="pt-2">
+          <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={isPending}>
+            取消
+          </Button>
+          <Button type="submit" form="edit-profile-form" disabled={isPending} id="btn-edit-profile-submit">
+            {isPending ? '保存中...' : '保存'}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
