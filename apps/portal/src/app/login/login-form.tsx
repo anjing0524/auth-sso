@@ -164,7 +164,7 @@ export default function LoginForm({ sessionId, initialError }: LoginFormProps) {
                   id="login-password"
                   type={showPassword ? 'text' : 'password'}
                   autoComplete="current-password"
-                  placeholder="••••••••"
+                  placeholder="请输入密码"
                   required
                   value={formData.password}
                   onChange={(e) => setFormData((prev) => ({ ...prev, password: e.target.value }))}

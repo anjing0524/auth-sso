@@ -13,7 +13,7 @@
 | `ci/` | CI 专用 | `verify.sh`、`acme-preflight.sh`、`e2e.sh`（直接 compose + Playwright 容器） |
 | `ops/` | 商用验收冒烟 | `smoke.sh`（HTTPS/登录页/安全头/证书/metrics） |
 | `bench/` | 性能基准 | `gateway.mjs` |
-| `ux/` | 交互/可访问性测量 | `a11y.mjs`、`cwv.mjs`、`measure.mjs` |
+| `ux/` | 交互/可访问性测量 | `a11y.mjs`、`cwv.mjs`、`measure.mjs`、`audit-ui.mjs`（桌面全路由 console/溢出巡检）、`interactions.mjs`（桌面关键交互巡检） |
 
 ## 入口
 

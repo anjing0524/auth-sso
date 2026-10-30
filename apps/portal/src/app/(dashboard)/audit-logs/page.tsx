@@ -174,6 +174,9 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
     redirect(`/audit-logs?${q.toString()}`);
   }
 
+  // ≤5 行时卡片贴合内容，避免短列表被 flex-1 撑成整屏空白（与 DataTable 同规则）
+  const listFlex = data.length <= 8 ? '' : 'flex-1';
+
   // 当前筛选摘要：让"为什么列表是这些"可解释，并支持单个移除/一键清空
   const filterChips: Array<{ label: string; href: string }> = [];
   if (tab === 'login' && eventType) {
@@ -305,12 +308,12 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
       )}
 
       {/* 日志列表（U-LOG02：页签内容与 role=tablist 关联） */}
-      <div id="audit-tabpanel" role="tabpanel" aria-labelledby={`audit-tab-${tab}`} className="flex min-h-0 flex-1 flex-col">
+      <div id="audit-tabpanel" role="tabpanel" aria-labelledby={`audit-tab-${tab}`} className={`flex min-h-0 flex-col ${listFlex}`}>
       {tab === 'login' ? (
-        <Card className="flex min-h-0 flex-1 flex-col gap-0 overflow-hidden rounded-lg border border-border/70 py-0 shadow-sm ring-0">
-          <CardContent className="flex min-h-0 flex-1 flex-col p-0">
+        <Card className={`flex min-h-0 flex-col gap-0 overflow-hidden rounded-lg border border-border/70 py-0 shadow-sm ring-0 ${listFlex}`}>
+          <CardContent className={`flex min-h-0 flex-col p-0 ${listFlex}`}>
             <OverflowHint>
-            <div className="scrollbar-slim min-h-0 flex-1 overflow-auto">
+            <div className={`scrollbar-slim min-h-0 overflow-auto ${listFlex}`}>
             <Table aria-label="登录日志列表" className={data.length === 0 ? 'h-full' : undefined} containerClassName={data.length === 0 ? 'h-full overflow-visible' : 'overflow-visible'}>
               <TableHeader className="[&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:bg-card">
                 <TableRow>
@@ -384,10 +387,10 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
           </CardContent>
         </Card>
       ) : tab === 'operation' ? (
-        <Card className="flex min-h-0 flex-1 flex-col gap-0 overflow-hidden rounded-lg border border-border/70 py-0 shadow-sm ring-0">
-          <CardContent className="flex min-h-0 flex-1 flex-col p-0">
+        <Card className={`flex min-h-0 flex-col gap-0 overflow-hidden rounded-lg border border-border/70 py-0 shadow-sm ring-0 ${listFlex}`}>
+          <CardContent className={`flex min-h-0 flex-col p-0 ${listFlex}`}>
             <OverflowHint>
-            <div className="scrollbar-slim min-h-0 flex-1 overflow-auto">
+            <div className={`scrollbar-slim min-h-0 overflow-auto ${listFlex}`}>
             <Table aria-label="操作日志列表" className={data.length === 0 ? 'h-full' : undefined} containerClassName={data.length === 0 ? 'h-full overflow-visible' : 'overflow-visible'}>
               <TableHeader className="[&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:bg-card">
                 <TableRow>
@@ -475,10 +478,10 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
           </CardContent>
         </Card>
       ) : (
-        <Card className="flex min-h-0 flex-1 flex-col gap-0 overflow-hidden rounded-lg border border-border/70 py-0 shadow-sm ring-0">
-          <CardContent className="flex min-h-0 flex-1 flex-col p-0">
+        <Card className={`flex min-h-0 flex-col gap-0 overflow-hidden rounded-lg border border-border/70 py-0 shadow-sm ring-0 ${listFlex}`}>
+          <CardContent className={`flex min-h-0 flex-col p-0 ${listFlex}`}>
             <OverflowHint>
-            <div className="scrollbar-slim min-h-0 flex-1 overflow-auto">
+            <div className={`scrollbar-slim min-h-0 overflow-auto ${listFlex}`}>
             <Table aria-label="访问日志列表" className={data.length === 0 ? 'h-full' : undefined} containerClassName={data.length === 0 ? 'h-full overflow-visible' : 'overflow-visible'}>
               <TableHeader className="[&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:bg-card">
                 <TableRow>

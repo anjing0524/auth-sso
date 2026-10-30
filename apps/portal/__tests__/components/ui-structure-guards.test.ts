@@ -22,7 +22,9 @@ describe('UI 结构回归', () => {
   it('审计 operation 页签与其他页签共用 flex 滚动，不再写死 svh', () => {
     const page = read('apps/portal/src/app/(dashboard)/audit-logs/page.tsx');
     expect(page).not.toContain('max-h-[calc(100svh-19rem)]');
-    expect(page).toContain('scrollbar-slim min-h-0 flex-1 overflow-auto');
+    // 短列表贴合内容，长列表才 flex-1；滚动容器本身始终可用
+    expect(page).toContain("const listFlex = data.length <= 8");
+    expect(page).toContain('scrollbar-slim min-h-0 overflow-auto ${listFlex}');
     expect(page).not.toContain('pagination.totalPages > 1 &&');
   });
 
