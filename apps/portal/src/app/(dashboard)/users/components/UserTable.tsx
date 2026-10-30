@@ -437,7 +437,7 @@ export default function UserTable({ users, pagination, filters, isFiltered = fal
             icon="UserPlus"
             title="暂无用户"
             description="系统中还没有用户账号"
-            action={canCreate ? { label: '新建用户', href: '/users?create=1' } : undefined}
+            action={canCreate ? { label: '新建用户', href: '/users/new' } : undefined}
           />
         )
       }

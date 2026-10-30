@@ -455,11 +455,7 @@ export default function ProfileClient({
                 <p className="text-[11px] text-muted-foreground">无法解析当前会话信息</p>
               )}
 
-              <div className="border-t pt-2.5">
-              <Button variant="outline" size="sm" className="w-full" onClick={() => setLogoutConfirmOpen(true)}>
-                退出当前会话
-              </Button>
-
+              <div className="space-y-2 border-t pt-2.5">
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-[12px] font-medium">活跃登录会话</p>
                   <span className="text-[11px] text-muted-foreground">共 {sessions.length} 个</span>
@@ -507,6 +503,12 @@ export default function ProfileClient({
                     {showAllSessions ? '收起' : `查看全部 ${sessions.length} 个会话`}
                   </Button>
                 )}
+              </div>
+
+              <div className="border-t pt-2.5">
+                <Button variant="outline" size="sm" className="w-full" onClick={() => setLogoutConfirmOpen(true)}>
+                  退出当前会话
+                </Button>
               </div>
 
               {/* U-PF02：二次确认，避免误点即清会话 */}

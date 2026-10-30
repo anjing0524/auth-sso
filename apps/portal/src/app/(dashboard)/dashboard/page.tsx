@@ -113,7 +113,7 @@ export default async function DashboardPage() {
               description="完成以下步骤以开始管理您的身份平台"
               steps={[
                 ...(canDepartments ? [{ label: '创建组织架构', href: '/departments?create=1' }] : []),
-                ...(canUserCreate ? [{ label: '创建用户账号', href: '/users?create=1' }] : []),
+                ...(canUserCreate ? [{ label: '创建用户账号', href: '/users/new' }] : []),
                 ...(canRoles ? [{ label: '配置角色权限', href: '/roles?create=1' }] : []),
                 ...(canClientCreate ? [{ label: '注册 OAuth 应用', href: '/clients/new' }] : []),
               ]}
@@ -221,7 +221,7 @@ export default async function DashboardPage() {
                           <Link
                             href={`/audit-logs/${log.id}?tab=operation`}
                             aria-label={`查看 ${AUDIT_OPERATION_LABELS[log.operation as keyof typeof AUDIT_OPERATION_LABELS] ?? log.operation} 操作日志详情（#${log.id.slice(0, 8)}）`}
-                            className="text-muted-foreground hover:text-primary hover:underline"
+                            className="block truncate text-muted-foreground hover:text-primary hover:underline"
                           >
                             {AUDIT_OPERATION_LABELS[log.operation as keyof typeof AUDIT_OPERATION_LABELS] ?? log.operation}
                           </Link>
@@ -249,7 +249,7 @@ export default async function DashboardPage() {
               <CardTitle className="type-card-title">快捷操作</CardTitle>
             </CardHeader>
             <CardContent className="p-1.5">
-              <QuickLink href="/users?create=1" show={canUserCreate} icon={<Users className="h-4 w-4" />} title="新建用户" hint="配置身份、部门与角色" />
+              <QuickLink href="/users/new" show={canUserCreate} icon={<Users className="h-4 w-4" />} title="新建用户" hint="配置身份、部门与角色" />
               <QuickLink href="/clients/new" show={canClientCreate} icon={<AppWindow className="h-4 w-4" />} title="注册应用" hint="生成 OAuth 2.1 凭证" />
               <QuickLink href="/roles" show={canRoles} icon={<ShieldCheck className="h-4 w-4" />} title="角色与权限" hint="维护 RBAC 与数据范围" />
               <QuickLink href="/departments" show={canDepartments} icon={<Building2 className="h-4 w-4" />} title="组织架构" hint="部门树与数据沙箱" />

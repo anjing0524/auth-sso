@@ -469,7 +469,7 @@ describe('建号/登录语义一致（2026-10-26，第十七轮）', () => {
     const login = read('src/app/login/login-form.tsx');
     expect(login).toContain('登录邮箱');
     expect(login).not.toContain('账号（邮箱）');
-    const create = read('src/app/(dashboard)/users/components/CreateUserDialog.tsx');
+    const create = read('src/app/(dashboard)/users/components/CreateUserForm.tsx');
     expect(create).toContain('用户名（唯一标识）');
     expect(create).toContain('创建后请把');
     expect(create).toContain('登录邮箱');
@@ -766,12 +766,13 @@ describe('用户列表角色信号（续一百四十五）', () => {
 
 describe('创建后下一步与 24h 失败入口（续一百四十六）', () => {
   it('创建用户成功 toast 提供分配角色行动（有权限时）', () => {
-    const dialog = read('src/app/(dashboard)/users/components/CreateUserDialog.tsx');
+    const dialog = read('src/app/(dashboard)/users/components/CreateUserForm.tsx');
     expect(dialog).toContain('canAssignRole');
     expect(dialog).toContain("label: '分配角色'");
     expect(dialog).toContain('router.push(`/users/${createdId}/roles`)');
     const page = read('src/app/(dashboard)/users/page.tsx');
-    expect(page).toContain('canAssignRole={canAssignRole}');
+    expect(page).toContain('<CreateUserButton deptId={deptId} />');
+    expect(read('src/app/(dashboard)/users/components/CreateUserButton.tsx')).toContain('/users/new');
   });
   it('工作台风险条含近 24h 登录失败直达链接', () => {
     const page = read('src/app/(dashboard)/dashboard/page.tsx');
@@ -994,7 +995,7 @@ describe('跨路由表单 id 唯一（续一百六十四）', () => {
     const login = read('src/app/login/login-form.tsx');
     expect(login).toContain('id="login-email"');
     expect(login).toContain('id="login-password"');
-    const createUser = read('src/app/(dashboard)/users/components/CreateUserDialog.tsx');
+    const createUser = read('src/app/(dashboard)/users/components/CreateUserForm.tsx');
     expect(createUser).toContain('id="create-user-email"');
     expect(createUser).toContain('id="create-user-deptId"');
     const clientCreate = read('src/app/(dashboard)/clients/new/page.tsx');
@@ -1289,9 +1290,9 @@ describe('a11y 弹窗覆盖（续一百九十一）', () => {
 });
 
 describe('桌面侧栏宽度（续一百九十四）', () => {
-  it('默认侧栏 14rem，把宽度让给数据区', () => {
+  it('默认侧栏 13rem，把宽度让给数据区', () => {
     const src = read('src/components/ui/sidebar.tsx');
-    expect(src).toContain('const SIDEBAR_WIDTH = "14rem"');
+    expect(src).toContain('const SIDEBAR_WIDTH = "13rem"');
   });
 });
 
@@ -1453,9 +1454,10 @@ describe('删除失败保留确认框（续二百〇八）', () => {
 });
 
 describe('创建用户默认部门（续二百〇九）', () => {
-  it('重新打开弹窗时回填默认部门，不要求每次重选', () => {
-    const src = read('src/app/(dashboard)/users/components/CreateUserDialog.tsx');
-    expect(src).toContain('setDeptId(defaultDeptId)');
+  it('页面/弹窗均以默认部门初始化，不要求每次重选', () => {
+    const src = read('src/app/(dashboard)/users/components/CreateUserForm.tsx');
+    expect(src).toContain('useState(defaultDeptId)');
+    expect(src).toContain('departments[0]?.id');
   });
 });
 
@@ -1543,11 +1545,10 @@ describe('角色弹窗 600px 不滚动（续二百一十八）', () => {
   });
 });
 
-describe('新建用户弹窗 600px 不滚动（续二百一十九）', () => {
-  it('表单与字段网格使用 2.5 间距', () => {
-    const src = read('src/app/(dashboard)/users/components/CreateUserDialog.tsx');
-    expect(src).toContain('space-y-2.5');
-    expect(src).toContain('grid gap-2.5');
+describe('新建用户页面化（续二百一十九）', () => {
+  it('表单宽度受控且使用紧凑两列布局', () => {
+    expect(read('src/app/(dashboard)/users/new/page.tsx')).toContain('max-w-2xl');
+    expect(read('src/app/(dashboard)/users/components/CreateUserForm.tsx')).toContain('grid gap-3 sm:grid-cols-2');
   });
 });
 
@@ -1766,9 +1767,9 @@ describe('工作台最近操作跳转（续二百四十三）', () => {
 describe('工作台快捷新建用户（续二百四十四）', () => {
   it('链接带 create=1，页面自动打开，取消清理 URL', () => {
     const dash = read('src/app/(dashboard)/dashboard/page.tsx');
-    expect(dash).toContain('href="/users?create=1"');
+    expect(dash).toContain('href="/users/new"');
     const page = read('src/app/(dashboard)/users/page.tsx');
-    expect(page).toContain("autoOpen={canCreateUser && params.create === '1'}");
+    expect(page).toContain("redirect(`/users/new");
     const dialog = read('src/app/(dashboard)/users/components/CreateUserDialog.tsx');
     expect(dialog).toContain('useState(autoOpen)');
     expect(dialog).toContain("params.delete('create')");
@@ -1779,7 +1780,7 @@ describe('新手引导四步直达动作（续二百四十五）', () => {
   it('组织/用户/角色/应用分别到创建态或新建页', () => {
     const dash = read('src/app/(dashboard)/dashboard/page.tsx');
     expect(dash).toContain("href: '/departments?create=1'");
-    expect(dash).toContain("href: '/users?create=1'");
+    expect(dash).toContain("href: '/users/new'");
     expect(dash).toContain("href: '/roles?create=1'");
     expect(dash).toContain("href: '/clients/new'");
     const roles = read('src/app/(dashboard)/roles/page.tsx');
@@ -1792,7 +1793,7 @@ describe('新手引导四步直达动作（续二百四十五）', () => {
 describe('用户空态创建入口（续二百四十六）', () => {
   it('无用户时有新建入口且受 create 权限控制', () => {
     const table = read('src/app/(dashboard)/users/components/UserTable.tsx');
-    expect(table).toContain("label: '新建用户', href: '/users?create=1'");
+    expect(table).toContain("label: '新建用户', href: '/users/new'");
     expect(table).toContain('canCreate ?');
     const page = read('src/app/(dashboard)/users/page.tsx');
     expect(page).toContain('canCreate={canCreateUser}');
@@ -2190,10 +2191,10 @@ describe('角色创建默认部门（续二百九十二）', () => {
 
 describe('用户创建默认部门（续二百九十三）', () => {
   it('创建用户继承当前 deptId 筛选', () => {
-    const dialog = read('src/app/(dashboard)/users/components/CreateUserDialog.tsx');
+    const dialog = read('src/app/(dashboard)/users/components/CreateUserForm.tsx');
     expect(dialog).toContain('initialDeptId');
-    const page = read('src/app/(dashboard)/users/page.tsx');
-    expect(page).toContain('initialDeptId={deptId && departments.some');
+    expect(read('src/app/(dashboard)/users/page.tsx')).toContain('deptId={deptId}');
+    expect(read('src/app/(dashboard)/users/components/CreateUserButton.tsx')).toContain('?deptId=${deptId}');
   });
 });
 
@@ -2457,7 +2458,7 @@ describe('权限选择可访问名称（续三百三十）', () => {
 
 describe('用户创建必填标记（续三百三十一）', () => {
   it('5 个必填字段有 * 与部门 aria-required', () => {
-    const src = read('src/app/(dashboard)/users/components/CreateUserDialog.tsx');
+    const src = read('src/app/(dashboard)/users/components/CreateUserForm.tsx');
     expect(src).toContain('RequiredLegend');
     expect(src).toContain('aria-required="true"');
     expect((src.match(/<\/Label><RequiredMark \/>/g) ?? []).length).toBe(5);
@@ -2531,7 +2532,7 @@ describe('用户详情必填（续三百三十八）', () => {
 describe('字段错误关联（续三百四十）', () => {
   it('FieldError 支持 id，关键表单 aria-describedby 接线', () => {
     expect(read('src/components/shared/field-error.tsx')).toContain('<p id={id}');
-    const user = read('src/app/(dashboard)/users/components/CreateUserDialog.tsx');
+    const user = read('src/app/(dashboard)/users/components/CreateUserForm.tsx');
     expect(user).toContain("aria-describedby={fieldError?.field === 'email' ? 'create-user-email-error' : undefined}");
     const client = read('src/app/(dashboard)/clients/new/page.tsx');
     expect(client).toContain('client-create-name-error');
@@ -2549,7 +2550,7 @@ describe('客户端首错聚焦（续三百四十一）', () => {
 
 describe('用户创建字段错误聚焦（续三百四十二）', () => {
   it('fieldError 变化时聚焦对应输入', () => {
-    const src = read('src/app/(dashboard)/users/components/CreateUserDialog.tsx');
+    const src = read('src/app/(dashboard)/users/components/CreateUserForm.tsx');
     expect(src).toContain('if (!fieldError) return;');
     expect(src).toContain("document.getElementById(inputId)?.focus()");
   });
@@ -2614,7 +2615,7 @@ describe('角色创建部门必填（续三百四十九）', () => {
 
 describe('用户名约束提示（续三百五十）', () => {
   it('创建弹窗说明 3–50 位且不可修改', () => {
-    const src = read('src/app/(dashboard)/users/components/CreateUserDialog.tsx');
+    const src = read('src/app/(dashboard)/users/components/CreateUserForm.tsx');
     expect(src).toContain('3–50 位，创建后不可修改');
   });
 });

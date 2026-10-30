@@ -12,8 +12,8 @@ import { getUsers, getDepartmentOptions } from './data';
 import { isUuid } from '@/lib/uuid';
 import { db } from '@/infrastructure/db';
 import UserFilters from './components/UserFilters';
-import CreateUserDialog from './components/CreateUserDialog';
 import UserTable from './components/UserTable';
+import { CreateUserButton } from './components/CreateUserButton';
 
 import { TableToolbar } from '@/components/shared/table-toolbar';
 import { getUserPermissionContext, toPermissionContextOrNull } from '@/lib/permissions';
@@ -40,6 +40,12 @@ export const metadata = { title: '用户管理 | Auth-SSO' };
 
 export default async function UsersPage({ searchParams }: PageProps) {
   const params = await searchParams;
+  // 旧入口 /users?create=1 → 页面化后的 /users/new
+  if (params.create === '1') {
+    const q = new URLSearchParams();
+    if (params.deptId) q.set('deptId', params.deptId);
+    redirect(`/users/new${q.toString() ? `?${q}` : ''}`);
+  }
   const keyword = params.keyword || '';
   // 非法 status 不能下沉到数据库：users.status 是 PG enum，非法值会触发 22P02（实测 500）
   const status = (['ALL', 'ACTIVE', 'DISABLED', 'LOCKED'] as const).includes(params.status as never)
@@ -59,7 +65,6 @@ export default async function UsersPage({ searchParams }: PageProps) {
   const permCtx = identity ? toPermissionContextOrNull(await getUserPermissionContext(identity.userId)) : null;
   const subject = { roleCodes: permCtx?.roles.map((r) => r.code) ?? [], permissionCodes: permCtx?.permissions ?? [] };
   const canUpdate = can(subject, USER_PERMISSIONS.UPDATE);
-  const canAssignRole = can(subject, USER_PERMISSIONS.ASSIGN_ROLE);
   const canCreateUser = can(subject, USER_PERMISSIONS.CREATE);
   const [{ data: users, pagination }, departments] = await Promise.all([
     getUsers(scope, userId, { page, pageSize, keyword, status, ...(deptId ? { deptId } : {}), ...(noRole ? { noRole } : {}) }),
@@ -112,7 +117,7 @@ export default async function UsersPage({ searchParams }: PageProps) {
                 </div>
               </div>
             }
-            right={<CreateUserDialog departments={departments} canAssignRole={canAssignRole} autoOpen={canCreateUser && params.create === '1'} initialDeptId={deptId && departments.some((d) => d.id === deptId) ? deptId : undefined} />}
+            right={canCreateUser ? <CreateUserButton deptId={deptId} /> : undefined}
           />
         }
       />
