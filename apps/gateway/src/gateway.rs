@@ -571,8 +571,13 @@ impl ProxyHttp for Gateway {
                 self.gateway_shared_secret.as_deref(),
             );
             let authorized = metrics_secret.is_some_and(|secret| {
-                header_str(session, METRICS_KEY_HEADER)
-                    .is_some_and(|provided| crate::http::constant_time_eq(provided, secret))
+                let key_ok = header_str(session, METRICS_KEY_HEADER)
+                    .is_some_and(|provided| crate::http::constant_time_eq(provided, secret));
+                // Prometheus 原生支持 authorization Bearer；X-Gateway-Metrics-Key 保留给 curl/旧抓取器。
+                let bearer_ok = header_str(session, "authorization")
+                    .and_then(|value| value.strip_prefix("Bearer "))
+                    .is_some_and(|provided| crate::http::constant_time_eq(provided, secret));
+                key_ok || bearer_ok
             });
             if !authorized {
                 session.respond_401().await?;

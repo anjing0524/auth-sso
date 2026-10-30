@@ -1,0 +1,21 @@
+# Auth-SSO Gateway 指标抓取模板（Prometheus 2.x/3.x）
+# 部署前替换 <domain>，并把 token 放进 credentials_file（不要写进本文件）。
+global:
+  scrape_interval: 30s
+  evaluation_interval: 30s
+
+rule_files:
+  - /etc/prometheus/alerts.yml
+
+scrape_configs:
+  - job_name: auth-sso-gateway
+    scheme: https
+    metrics_path: /__gateway/metrics
+    authorization:
+      type: Bearer
+      credentials_file: /etc/prometheus/gateway-metrics-token
+    static_configs:
+      - targets: ['<domain>:443']
+    # 生产使用公网 CA 时删除；仅自签/内部 CA 的验收环境保留并配置 ca_file。
+    # tls_config:
+    #   insecure_skip_verify: true

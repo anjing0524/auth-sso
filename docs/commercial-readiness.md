@@ -22,7 +22,7 @@
 | 数据库恢复 | 有条件具备 | `restore.sh` 隔离库恢复 + 原子换名；已在验收栈演练，**客户生产环境未演练** |
 | 升级前自动备份 | 已具备 | `deploy.sh` 调用 `backup.sh --if-running`，失败中止 |
 | 健康检查 | 已具备 | Portal `/api/health` 检查 DB+Redis；Gateway `/healthz`；登录 200 作为业务就绪 |
-| 指标 | 有条件具备 | Gateway `/__gateway/metrics`（Prometheus 文本，令牌保护）；**外部 Prometheus/Grafana 未随仓库交付** |
+| 指标 | 有条件具备 | Gateway `/__gateway/metrics`（Prometheus 文本，Bearer/X-header 保护）；`deploy/observability/` 提供 Prometheus/告警模板 |
 | 告警 | 不具备 | 仓库无 Alertmanager/云监控配置；需交付团队接入 |
 | 运维手册 | 已具备 | `docs/operations.md`：上线、备份恢复、监控、故障、验收 |
 | CI 门禁 | 已具备 | Node/Gateway/ACME/验收全绿 |

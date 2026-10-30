@@ -1,0 +1,34 @@
+# Auth-SSO 最小告警模板；具体阈值按客户容量调整。
+groups:
+  - name: auth-sso-gateway
+    rules:
+      - alert: AuthSsoGatewayDown
+        expr: up{job="auth-sso-gateway"} == 0
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: "Auth-SSO Gateway 指标不可达"
+      - alert: AuthSsoRedisAcquireFailures
+        expr: increase(auth_sso_gateway_redis_acquire_failures_total[5m]) > 0
+        for: 5m
+        labels: { severity: critical }
+        annotations:
+          summary: "Gateway 获取 Redis 连接失败"
+      - alert: AuthSsoAuthFailureSpike
+        expr: rate(auth_sso_gateway_auth_failures_total[5m]) > 1
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "认证失败速率异常"
+      - alert: AuthSsoRateLimitSpike
+        expr: rate(auth_sso_gateway_rate_limited_total[5m]) > 1
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "限流触发速率异常"
+      - alert: AuthSsoJwksCacheStale
+        expr: auth_sso_gateway_jwks_cache_staleness_seconds > 3600
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "JWKS 缓存超过 1 小时未刷新"

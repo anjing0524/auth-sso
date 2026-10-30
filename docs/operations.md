@@ -111,10 +111,16 @@ COMPOSE_FILE=docker/compose/test.yml ENV_FILE=/dev/null \
 Gateway 已提供受保护的 Prometheus 文本端点：
 
 ```bash
+# Prometheus 原生 Bearer
+curl -fsS -H "Authorization: Bearer $GATEWAY_METRICS_TOKEN" \
+  https://<domain>/__gateway/metrics
+
+# curl/旧抓取器也可用
 curl -fsS -H "X-Gateway-Metrics-Key: $GATEWAY_METRICS_TOKEN" \
   https://<domain>/__gateway/metrics
 ```
 
+可直接复用 [`deploy/observability/`](../deploy/observability/) 的 Prometheus 抓取与告警模板。
 `GATEWAY_METRICS_TOKEN` 未配置时会回退 `GATEWAY_SHARED_SECRET`；建议单独配置 ≥16 字符随机值。
 不要把 metrics 端点直接暴露给无鉴权的公网抓取器。
 
