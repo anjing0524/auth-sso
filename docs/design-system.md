@@ -1,7 +1,7 @@
 # Auth-SSO 设计系统
 
-版本: v3.7
-最后更新: 2026-10-23
+版本: v3.8
+最后更新: 2026-10-30
 
 ---
 
@@ -18,7 +18,7 @@
 
 > **⚠️ 架构章节时效声明（2026-09-30）**：本文档"OIDC 授权时序""数据沙箱""CTE 递归防死循环"等架构章节为 v2.1 时代（Better Auth / `role_clients` / `DataScopeType`）的历史快照，所述机制已被 ADR-001/002/006/007/008/010/012 取代——Portal 为自建 OIDC Provider、Client 准入经 `permissions.client_id` 链路、数据范围为角色部门子树（`ancestors` 物化路径，非 CTE 递归）。现行架构唯一真相源：`docs/spec/ARCHITECTURE.md` 与 `docs/adr/`。视觉设计规范章节（色彩/字体/组件规范）仍然有效。
 >
-> **⚠️ v3.4 校正口径（2026-10-23）**：本次按现有代码逐条校正——凡标注"**现实现**"的表格/条目描述的是 `apps/portal` 当前代码行为，供评审比对；未标注的实现细则直接改写成代码事实。代码与本规范确有冲突、但**代码本身违背规范意图**的地方（如表格行高在两条规则间自相矛盾、报错页 `p-8` 孤例），不静默改规范，改列在「规范 vs 实现：待治理清单」中待决策。
+> **⚠️ v3.4 校正口径（2026-10-23）**：本次按现有代码逐条校正——凡标注"**现实现**"的表格/条目描述的是 `apps/portal` 当前代码行为，供评审比对；未标注的实现细则直接改写成代码事实。代码与本规范确有冲突、但**代码本身违背规范意图**的地方（如报错页 `p-8` 孤例），不静默改规范，在对应条目就地写明现状与偏差。
 
 ---
 
@@ -27,13 +27,13 @@
 > **v2.2 更新 (2026-06-26):** 全站颜色体系已统一为 oklch。以下 oklch 值与 `apps/portal/src/app/globals.css` 保持同步。
 > 组件中应使用 Tailwind 工具类（`bg-primary-subtle`、`text-muted-foreground` 等），禁止硬编码 hex 或 oklch 原始值。
 >
-> **v3.4 核对（2026-10-23，与 `apps/portal/src/app/globals.css` 逐条比对）**：本文所有 `--color-*` / `--badge-*` / `--ease-*` 值均已与代码一致；暗色模式下 `--color-primary` 被覆盖为 `oklch(0.58 0.20 257)`（下表已补）。
-> 注意 `--error` 是 `var(--destructive)` 的别名（浅色 `oklch(0.577 0.245 27.325)`、暗色 `oklch(0.704 0.191 22.216)`），**没有**独立的 `--color-error` 暗色值；`--color-primary-hover` / `--color-primary-subtle` / `--color-success` / `--color-warning` / `--color-info` / `--color-gradient-*` 在暗色模式下**不覆盖**（沿用浅色值）。
+> **v3.4 核对（2026-10-23；2026-10-30 复对，与 `apps/portal/src/app/globals.css` 逐条比对）**：本文所有 `--color-*` / `--badge-*` / `--ease-*` 值均已与代码一致；暗色模式下 `--color-primary` 被覆盖为 `oklch(0.53 0.21 257)`（下表已补）。
+> 注意 `--error` 是 `var(--destructive)` 的别名（浅色 `oklch(0.52 0.22 27.325)`、暗色 `oklch(0.704 0.191 22.216)`），**没有**独立的 `--color-error` 暗色值；`--color-primary-hover` / `--color-primary-subtle` / `--color-success` / `--color-warning` / `--color-info` / `--color-gradient-*` 在暗色模式下**不覆盖**（沿用浅色值）。
 
 ### 品牌色 (Brand — oklch)
 | 变量名 | 浅色模式 | 暗黑模式 | 用途 |
 |--------|---------|---------|------|
-| `--color-primary` | `oklch(0.52 0.23 257)` | `oklch(0.58 0.20 257)` | 品牌蓝 — 按钮、链接、强调色 |
+| `--color-primary` | `oklch(0.52 0.23 257)` | `oklch(0.53 0.21 257)` | 品牌蓝 — 按钮、链接、强调色 |
 | `--color-primary-hover` | `oklch(0.43 0.21 257)` | 同左（不覆盖） | 悬停/激活态 |
 | `--color-primary-subtle` | `oklch(0.95 0.03 250)` | 同左（不覆盖） | 浅背景、卡片悬停 |
 
@@ -76,7 +76,7 @@
 --primary:         oklch(0.205 0 0)   (浅色) / oklch(0.922 0 0) (暗黑)
 --primary-foreground: oklch(0.985 0 0) (浅色) / oklch(0.205 0 0) (暗黑)
 --muted:           oklch(0.97 0 0)    (浅色) / oklch(0.269 0 0) (暗黑)
---muted-foreground: oklch(0.556 0 0)  (浅色) / oklch(0.708 0 0) (暗黑)
+--muted-foreground: oklch(0.50 0 0)    (浅色) / oklch(0.708 0 0) (暗黑)
 ```
 
 ### 状态徽章色（Badge 语义变体唯一来源，H-39）
@@ -94,7 +94,7 @@
 
 ### 租户品牌变量（可在管理面覆盖）
 
-`globals.css` 另外定义了四个租户级变量，默认全部继承品牌色，供白标场景覆盖（当前代码中只有 `:root` 的默认声明，尚无组件读取）：
+`globals.css` 另外定义了五个租户级变量，默认全部继承品牌色，供白标场景覆盖（当前代码中只有 `:root` 的默认声明，尚无组件读取）：
 
 ```
 --tenant-logo-url:       none
@@ -150,7 +150,7 @@
 | sm | 13px | 20px | 表格、列表项 — 更紧凑 | `text-sm` = **14px** / 1.25rem |
 | base | 15px | 24px | 正文 — 比 16px 更现代 | 基类 = **16px** / 1.5rem |
 | lg | 17px | 28px | 副标题 | `text-lg` = 18px / 1.75rem |
-| xl | 21px | 28px | 卡片标题 / **页面标题（`PageHeader`，2026-10-23 起）** | `text-xl` = 20px / 1.75rem |
+| xl | 21px | 28px | 卡片标题（页面标题自 v3.7 起改走 `.type-page-title` 17px，见下） | `text-xl` = 20px / 1.75rem |
 | 2xl | 27px | 36px | 特大标题（当前未使用） | `text-2xl` = 24px / 2rem |
 | 3xl | 35px | 40px | 大标题 | `text-3xl` = 30px / 2.25rem |
 | 4xl | 45px | 52px | 登录页品牌名 | `text-4xl` = 36px / 2.5rem |
@@ -176,8 +176,8 @@
 |------|-----|------|
 | regular | 400 | 正文 |
 | medium | 500 | 表格标题、按钮 |
-| semibold | 600 | 卡片标题、导航（`globals.css` 对 h1–h6 全局施加 `font-semibold`） |
-| bold | 700 | 页面标题、品牌名 |
+| semibold | 600 | 卡片标题、导航、语义标题 token（`globals.css` 对 h1–h6 全局施加 `font-semibold`） |
+| bold | 700 | 品牌名、错误页标题（`RouteError` 用 `font-bold`） |
 | black | 900 | 品牌名等强调；**表头自 2026-10-23 起为 `text-xs font-medium`**（中文禁用 `uppercase` + `tracking-widest`，会把汉字拆散） |
 
 ---
@@ -209,8 +209,8 @@
 | 卡片间距 | 12px (`gap-3`) 页面级；卡片内 24px (`gap-6`) |
 | 表单字段间距 | 16px |
 | 按钮间距 | 12px (组内) / 24px (组间) |
-| 导航高度 | 48px (顶部 `h-12`，v3.6 再收紧) / 240px (侧边栏展开 `--sidebar-width: 16rem`)；折叠态 48px (`--sidebar-width-icon: 3rem`) |
-| 最大内容宽度 | 不设上限（管理后台 `main` 铺满，无 `max-w-[1440px]` 居中容器） / 400px (登录卡片 `max-w-[400px]`) |
+| 导航高度 | 48px (顶部 `h-12`，v3.6 再收紧) / 224px (侧边栏展开 `--sidebar-width: 14rem`)；折叠态 48px (`--sidebar-width-icon: 3rem`) |
+| 最大内容宽度 | 内容容器 `max-w-[1680px]` 居中（`DashboardLayout` 顶栏与 `<main>` 内层，v3.7 之后的实测值） / 400px (登录卡片 `max-w-[400px]`) |
 
 > **导航高度口径（现实现）**：`components/ui/sidebar.tsx` 的 `SidebarProvider` 用 `min-h-svh`，而 `LayoutDashboard` 外壳（`components/layout/DashboardLayout.tsx`）在它上面再加 `h-svh overflow-hidden`、`<main>` 用 `height: calc(100svh - 3rem)` 固定视口高度——**应用壳以这条更严格的口径为准**（见「布局与间距体系」）。
 
@@ -224,7 +224,7 @@
 |------|-----|----------|------|
 | sm | 6px | `rounded-sm` | 极小标签、分组标题 |
 | md | 8px | `rounded-md` | 按钮（基类）、下拉条目（`DropdownMenuItem`）、页签触发器 |
-| lg | 8px | `rounded-lg` | 输入框 / Select / Textarea / 行内图标按钮 / 页签容器（与 md 计算值相同，基类按此分工） |
+| lg | 8px | `rounded-lg` | 输入框 / Select / Textarea（与 md 计算值相同，基类按此分工）；`Button` 基类用 `rounded-md`，行内图标按钮同样是 `rounded-md` |
 | xl | 12px | `rounded-xl` | 卡片、表格容器、模态框（`Dialog`）、侧边栏 |
 | 2xl | 16px | `rounded-2xl` | 登录卡片、推广卡片、403 图标底 |
 | full | 9999px | `rounded-full` | 徽章、头像 |
@@ -281,10 +281,10 @@
 | size | 高度 | 水平内边距 | 字号 |
 |------|------|-----------|------|
 | `sm` | 32px (`h-8`) | 12px (`px-3`) | **`text-xs` = 12px** |
-| `default` | 40px (`h-10`) | 16px (`px-4`) | 14px (`text-sm`) |
+| `default` | 36px (`h-9`) | 14px (`px-3.5`) | 14px (`text-sm`) |
 | `lg` | 48px (`h-12`) | 24px (`px-6`) | 16px (`text-base`) |
-| `icon` | 40×40px | — | — |
-| `icon-sm` | 32×32px | — | — |
+| `icon` | 36×36px (`h-9 w-9`) | — | — |
+| `icon-sm` | 32×32px (`h-8 w-8`) | — | — |
 
 **变体（`variant`）:**
 
@@ -302,7 +302,7 @@
 
 **交互态:**
 - 所有变体：`transition-all`，仅改背景/边框色（不缩放、不加渐变）
-- 品牌蓝按钮：`bg-primary`（shadcn 前景色，**不是**品牌蓝）配 `hover:bg-primary-hover` 是**当前代码的既有用法**；`globals.css` 注释（`bg-color-primary` / `text-color-primary`）与它不一致，两处口径停留在「待治理清单」第 1 条
+- 品牌蓝按钮：`bg-primary`（shadcn 前景色，**不是**品牌蓝）配 `hover:bg-primary-hover` 是**当前代码的既有用法**；`globals.css` 的 `bg-color-primary` / `text-color-primary` 注释与它口径不一致，以代码为准，新增按钮不要使用这两个类名。
 - 焦点：`focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2`
 - 禁用：`disabled:pointer-events-none disabled:opacity-50`
 
@@ -310,10 +310,10 @@
 
 | 属性 | 值 |
 |------|-----|
-| 默认高度 | 40px (`h-10`) |
-| 登录页高度 | 48px (`h-12`，页面覆写) |
+| 默认高度 | 36px (`h-9`；`SelectTrigger` / `Textarea` 基类同为 36px 起，Textarea `min-h-16`) |
+| 登录页高度 | 40px (`h-10`，页面覆写) |
 | 圆角 | 8px (`rounded-lg`) |
-| 内边距 | `px-3 py-2`（左右 12px） |
+| 内边距 | `px-3 py-1.5`（左右 12px） |
 
 **状态（`components/ui/input.tsx` 基类实际 token）:**
 
@@ -367,8 +367,8 @@ DataTable 是共享表格组件，所有列表页统一使用。
 | 表头颜色 | `text-muted-foreground` |
 | 表头背景 | `bg-card`（不透明，保证吸顶时遮挡下方行）；`sticky` 必须加在 **`th`** 上（`[&_th]:sticky [&_th]:top-0 [&_th]:z-20`），不要加在 `thead` 上 |
 | 数据行字号 | 13–14px（主信息 `text-[13px] font-semibold`；次要信息 11–12px） |
-| 圆角 | 12px (`rounded-xl`) — 同 Card；边框用 `border border-border/70`，**不要** `ring-1 ring-border/*`（该写法在本仓 Tailwind 配置下会落成 `currentColor` 黑描边） |
-| 卡片高度 | **随内容自适应**：卡片用 `py-0 gap-0` 清掉 Card 基类自带的 24px 内边距/16px 间距（否则表格卡片无端多出约 64px 空白）；表格区滚动由 `maxHeightClass` 限制（默认 `calc(100svh-13rem)`） |
+| 圆角 | **8px (`rounded-lg`)** — `DataTable` 的 Card 显式覆写基类（`rounded-lg border border-border/70 py-0 shadow-sm ring-0`）；边框用 `border border-border/70`，**不要** `ring-1 ring-border/*`（该写法在本仓 Tailwind 配置下会落成 `currentColor` 黑描边） |
+| 卡片高度 | **随内容自适应**：卡片用 `py-0 gap-0` 清掉 Card 基类自带的 24px 内边距/16px 间距（否则表格卡片无端多出约 64px 空白）；≤5 行时卡片贴合内容，多行时由 flex 撑满可用高度并在表格区内部滚动（**没有**按视口估算的默认 `max-h`，见「分页器」） |
 
 > **滚动容器契约（2026-10-23 修复「表格滑动表头消失」）**：列表页只允许**一个**滚动容器。
 > `Table` 的默认内层 `overflow-x-auto` 会自成滚动上下文，使 `sticky` 表头相对它定位、随外层内容滚走；
@@ -386,7 +386,7 @@ DataTable 是共享表格组件，所有列表页统一使用。
 | 可访问性 | 纯图标按钮必须 `aria-label` + `title`（图标按钮无文字） |
 | 列宽 | 操作列右对齐，图标间距 2px；用户/角色/应用 3 个以内，权限 2 个 |
 
-> 口径说明：本文「按钮文字与中文优先」要求行内**操作**按钮带可见中文文字；`TablePagination` 现行做法是「图标 + `sr-only`/`aria-label`」加 `sm` 以上可见的「上一页/下一页」文字。两者按各自适用面执行，见「待治理清单」第 3 条。
+> 口径说明：本文「按钮文字与中文优先」要求行内**操作**按钮带可见中文文字；`TablePagination` 现行做法是「图标 + `sr-only`/`aria-label`」加 `sm` 以上可见的「上一页/下一页」文字。两者按各自适用面执行：行内操作用图标 + `aria-label`/`title`，分页保留 `sm` 以上可见的中文。
 
 **空状态:**
 
@@ -411,9 +411,9 @@ DataTable 是共享表格组件，所有列表页统一使用。
 |------|-----|
 | 位置 | 表格卡片底部，`-mt-px` 与卡片贴合，`bg-muted/30` 背景，`px-3 py-1.5` |
 | 首屏可见 | 列表页分页必须**无需滚动页面**即可看到：页面高度 ≤ 视口高度 |
-| 表格滚动 | 卡片高度随内容自适应；表格区 `max-h-[calc(100svh-13rem)] overflow-auto`（`DataTable` 默认 `maxHeightClass`；审计页 `-14rem`）——行少不撑空、行多内部滚动；列表 `pageSize=20`，一屏约 15–18 行 |
+| 表格滚动 | 卡片高度随内容自适应；`DataTable` 内部唯一的 `overflow-auto` 容器承担纵向/横向滚动（≤5 行时卡片贴合内容，多行时 `flex-1` 撑满主区）——行少不撑空、行多内部滚动；**不再按视口估算 `max-h-[calc(100svh-13rem)]`**（`maxHeightClass` 仍声明但已无默认值、当前无调用方传入）；列表 `pageSize=20`，一屏约 15–18 行 |
 | 吸顶表头 | 滚动容器内 **`th`** 必须 `sticky top-0 z-20 bg-card`，配合 `Table containerClassName="overflow-visible"`；滚动时列头不丢（含横向滚动） |
-| 页码按钮 | `h-7 min-w-7 rounded-md px-2`（v3.6 收紧）；当前页 `border border-border bg-card font-semibold shadow-sm`；**仅 1 页时隐藏全部翻页/跳页控件**（保留「共 N 条记录」） |
+| 页码按钮 | `h-7 min-w-7 rounded-md px-2`（v3.6 收紧）；当前页 `border border-border bg-card font-bold shadow-sm`；**仅 1 页时隐藏全部翻页/跳页控件**（保留「共 N 条记录」） |
 | 页码指示器 | `bg-card border border-border rounded-lg` |
 
 ### 按钮圆角（全局统一）
@@ -450,7 +450,9 @@ DataTable 是共享表格组件，所有列表页统一使用。
 
 具体案例（2026-10-23 落地）：`角色权限配置`（按应用/目录分组 + 组级全选）、`用户角色分配`、
 `权限新建/编辑`（页面/目录类型 8 字段，600px 视口内弹窗放不下）全部改为独立页面：
-页面有面包屑、返回、固定保存条；全局 `DialogContent` 不再提供 `overflow-y`（禁止用滚动兜底）。
+页面有面包屑、返回、固定保存条。**现状核对（2026-10-30）**：`components/ui/dialog.tsx` 的
+`DialogContent` 仍保留 `max-h-[calc(100dvh-2rem)] + overflow-y-auto` 作为兜底，但规范要求新内容按
+「弹窗内不出现滚动」设计——出现滚动就说明它应该是独立页面。
 
 ### 状态徽章 (Badge)
 
@@ -498,22 +500,22 @@ DataTable 是共享表格组件，所有列表页统一使用。
 
 | 元素 | 尺寸 | 说明 |
 |---|---|---|
-| Input / Select / Textarea | 40px 高（`h-10`）；圆角 8px；边框 `border-input`；背景透明（浅色）/ `dark:bg-input/30` | 聚焦：`border-ring + ring-3 ring-ring/50`，**不使用** ring-offset |
-| 登录页输入框 / 主按钮 | 48px 高（`h-12`） | 登录页专属，提高首次触达面积 |
-| Button `sm / default / lg` | 32 / 40 / 48px | `sm` 字号为 `text-xs`(12px)；图标按钮：`icon`=40、`icon-sm`=32；工具栏主操作必须 `default`（40）与输入框齐平 |
+| Input / Select / Textarea | 36px 高（`h-9`，`Textarea` 为 `min-h-16`）；圆角 8px；边框 `border-input`；背景透明（浅色）/ `dark:bg-input/30` | 聚焦：`border-ring + ring-3 ring-ring/50`，**不使用** ring-offset |
+| 登录页输入框 / 主按钮 | 40px 高（`h-10`） | 登录页专属覆写（`login-form.tsx` 的 `className="h-10"`），提高首次触达面积 |
+| Button `sm / default / lg` | 32 / 36 / 48px | `sm` 字号为 `text-xs`(12px)；图标按钮：`icon`=36、`icon-sm`=32；工具条主操作必须 `default`（36）与输入框齐平（`TableToolbar` 再用 `[&_button]:h-8` 收到 32） |
 | Badge | 11px / `font-medium` / `px-2.5 py-0.5` / `rounded-full` | 状态必须经 `apps/portal/src/lib/status-label.ts`（`accountStatus` / `enableStatus`）中文化，禁止直出 `ACTIVE` 等枚举 |
 | Tab | 容器 40px（`group-data-horizontal/tabs:h-10 ... rounded-lg bg-muted p-1`）；触发器 32px（`h-8 px-3 rounded-md`，`text-sm`） | 所有页签同一形态；服务端页签用同款样式的 `Link`；`variant="line"` 时容器去圆角/背景/内边距 |
-| DropdownMenu | 面板 `rounded-md` `p-1`；条目 36px（`h-9`）`rounded-lg`；分组标题 10px `font-black uppercase tracking-widest text-muted-foreground` | 页面不再覆写菜单圆角/内边距 |
+| DropdownMenu | 面板 `rounded-md`（8px）`p-1`；条目 36px（`h-9`）`rounded-lg`；分组标题 `px-2 py-1.5 type-meta`（11px，`DropdownMenuLabel`） | 页面不再覆写菜单圆角/内边距 |
 
 **容器**
 
 | 元素 | 口径 |
 |---|---|
 | Card | 12px 圆角；内边距 24px（`py-6` + `CardHeader/CardContent px-6`）；表格卡用 `CardContent p-0` 例外 |
-| Dialog | 宽 448px（`sm:max-w-md`；窄屏 `max-w-[calc(100%-2rem)]`）、16px 圆角、24px 内边距（`p-6`）；`DialogFooter` 由基类提供「上边框 + `bg-muted/50` + 右对齐按钮」；**页面不再覆写宽度/圆角/内边距** |
-| Table | 表头 36px（`h-9`）、12px `font-medium text-muted-foreground`（中文不用 uppercase）；单元格 `px-4 py-2`，行高 `h-11` 起；滚动容器契约见「数据表格」；行内操作 32×32；分页统一用 `components/shared/table-pagination.tsx` |
-| PageHeader | `text-2xl`(24px)/700 标题 + `text-sm` 描述 + 右侧操作（操作按钮 40px）；图标底 40×40 `rounded-xl bg-primary/10 text-primary` |
-| Toast | sonner，**全局挂在 `app/layout.tsx`：`position="top-right" richColors`**；不逐页定制位置/宽度 |
+| Dialog | 宽 448px（`sm:max-w-md`；窄屏 `max-w-[calc(100%-2rem)]`）、16px 圆角（`rounded-2xl`）、20px 内边距（`p-5`）；`DialogFooter` 由基类提供「上边框 + `bg-popover` + 阴影 + 右对齐按钮」；**页面不再覆写宽度/圆角/内边距**。基类仍保留 `max-h-[calc(100dvh-2rem)] + overflow-y-auto` 兜底（见「交互载体的选择」） |
+| Table | 表头 32px（`h-8`）、`type-table-head`（11px / 500 / `text-muted-foreground`，中文不用 uppercase）；单元格 `px-3 py-1.5`，行高 `h-10`（40px）起；表格文本基准 13px；滚动容器契约见「数据表格」；行内操作 32×32；分页统一用 `components/shared/table-pagination.tsx` |
+| PageHeader | `.type-page-title`（17px / 24px / 600）标题 + `.type-meta`（11px，`lg` 以上显示）描述 + 右侧操作（操作按钮 `h-8`）；图标为 24×24（`h-6 w-6` 容器内 `h-4 w-4`，`rounded-md text-primary`） |
+| Toast | sonner，**全局挂在 `app/layout.tsx`：`position="top-center" richColors`**；不逐页定制位置/宽度 |
 
 **页面长度与数据真实性（2026-10-20 补）**
 
@@ -535,10 +537,10 @@ DataTable 是共享表格组件，所有列表页统一使用。
   （如 `/api/roles` 接受 `role:list` 或 `user:assign_role`），不要逼操作员额外持有无关的管理权限。
 - **破坏性操作必须显示影响面**：级联删除（如权限删除）的确认弹窗要按需读取并展示受影响角色/用户/
   子节点数量；影响面加载失败不得阻断操作，但必须在弹窗中说明“影响未知”。
-- **发布验收包含边界回归**：`scripts/docker/stack.sh e2e` 运行 `tests/e2e` 下**全部 spec**（当前 3 个：`docker-release` / `oidc-machine-endpoints` / `ssr-permission-snapshot`；另有 `scripts/e2e/release.sh` = `pnpm test:e2e` 走同一批 spec）；新增的服务端/客户端
+- **发布验收包含边界回归**：`pnpm test:e2e`（`scripts/e2e/release.sh`：直接 compose 构建/启动 → Playwright → 清理）运行 `tests/e2e` 下**全部 spec**（当前 14 个），不再有 `scripts/docker/stack.sh` 这一中间包装（该脚本已于 2026-10-29 删除，验收栈直接用 `docker compose -f docker/compose/test.yml`，见 `docs/scripts.md`）；新增的服务端/客户端
   边界行为（如权限快照零请求、SSR 按钮）必须有 E2E 或单测钉住。
 
-**生产交付规则（2026-10-22；权威来源 `docker/README.md`，本节只摘与应用层相关的条目）**
+**生产交付规则（2026-10-22；权威来源 `docs/docker.md`，本节只摘与应用层相关的条目）**
 
 - 生产 Compose **不得向宿主机发布** PostgreSQL/Redis 端口；数据库仅 Compose 内网可达。
 - 迁移 + seed 必须由一次性 `db-init` 服务在应用启动前完成（幂等），Portal 通过
@@ -590,13 +592,13 @@ DataTable 是共享表格组件，所有列表页统一使用。
 - **应用壳固定视口高度**：`components/layout/DashboardLayout.tsx` 的 `SidebarProvider` 加 `h-svh overflow-hidden`，
   `<main id="main-content">` 用 `height: calc(100svh - 3rem)`（顶栏 48px）+ `overflow-hidden`，其内层
   `div.flex-1.overflow-auto` 是唯一滚动容器；`components/ui/sidebar.tsx` 基类自身只有 `min-h-svh`，**不要**只依赖它。
-- **列表页填满主内容区**：wrapper `flex min-h-0 flex-1 flex-col gap-6`；`DataTable fill` 模式（卡片 `flex min-h-0 flex-1`
-  + 表格区 `min-h-0 flex-1 overflow-auto`、表头 sticky、分页接在卡片底部）。
-  例外：`DataTable` 统一用默认 `maxHeightClass = 'max-h-[calc(100svh-17rem)]'`（审计页 `-19rem`）——卡片高度自适应，只有表格区限高滚动；
-  `max-h-[calc(100vh-30rem)]` / `calc(100vh-25rem)` 这类按页估算高度**禁止**。
+- **列表页填满主内容区**：wrapper `flex min-h-0 flex-1 flex-col gap-3`；`DataTable` 卡片 `flex min-h-0 flex-1`（≤5 行时贴合内容）
+  + 表格区 `min-h-0 flex-1 overflow-auto`、表头 sticky、分页接在卡片底部；内容容器 `max-w-[1680px]` 居中。
+  表格区高度由 flex 布局决定，**禁止** `max-h-[calc(100vh-30rem)]` / `calc(100svh-17rem)` 这类按页估算高度
+  （`DataTable` 的 `maxHeightClass` 已无默认值、当前无调用方传入；历史 `-13/-14/-17/-19rem` 口径作废）。
 - **详情页主操作放 PageHeader 右侧**（保存=主按钮，禁用/危险切换=outline 危险色）；主操作不得落在首屏之外。
 - **间距只有六档**：4 / 8 / 12 / 16 / 24 / 32 px。区块间距 24、卡片内边距 24、栅格间距 24；
-  禁止 `gap-8`（32）、`px-8`、`p-8`、`pt-8` 这类孤例（错误页统一 `pt-6`）。现实现残例见「待治理清单」第 4 条。
+  禁止 `gap-8`（32）、`px-8`、`p-8`、`pt-8` 这类孤例（错误页统一 `pt-6`）。现实现仍有错误页/全屏页使用 `p-8` 的残例（全屏页允许 32px 这一档，列表/详情页不适用）。
 - **空状态页居中**：引导/空态在可用区域内垂直居中，不顶部对齐留整屏空白（`flex flex-1 items-center justify-center`）。
 
 **查询架构（分清客户端/服务端）**
@@ -664,37 +666,37 @@ DataTable 是共享表格组件，所有列表页统一使用。
 ### 登录页
 
 > **现实现**（`apps/portal/src/app/login/`：`page.tsx` + `login-form.tsx` + `login-background.tsx`）：
-> 布局为 `min-h-screen` 纵向居中，卡片外的品牌区在卡片**上方**（不是卡片内的品牌名），副标题在卡片头里。
+> 根容器 `min-h-[100svh]` 纵向居中（`flex-col`，`px-4 py-5`），卡片外的品牌区在卡片**上方**（不是卡片内的品牌名），副标题在卡片头里。
 
 ```
 ┌─────────────────────────────────────────────┐
 │                                             │
 │     深色动态品牌背景（Canvas，见下）           │
 │                                             │
-│              (盾牌图标 48×48)                │
-│              Auth-SSO Portal  ← 品牌名 (text-2xl) │
+│              (盾牌图标 36×36)                │
+│              Auth-SSO Portal  ← 品牌名 (text-lg) │
 │                                             │
 │     ┌─────────────────────────┐             │
-│     │   企业统一身份认证        │ ← CardTitle │
+│     │   企业统一身份认证        │ ← CardTitle (text-xl) │
 │     │   使用您的企业账号登录…   │ ← CardDesc  │
 │     ├─────────────────────────┤             │
 │     │  账号（邮箱）            │             │
-│     │  ┌─────────────────┐    │ ← 输入框 48px│
+│     │  ┌─────────────────┐    │ ← 输入框 40px│
 │     │  密码                   │             │
 │     │  ┌─────────────────┐    │             │
-│     │  │    安全登录      │    │ ← 主按钮 48px│
+│     │  │    安全登录      │    │ ← 主按钮 40px│
 │     │  │ OAuth 2.1 · OIDC 1.0 │  │ ← 页脚说明  │
 │     └─────────────────────────┘             │
 │          白色卡片 + shadow-2xl + ring-white/20│
 │                                             │
-│        登录遇到问题请联系企业 IT 管理员  (white/45) │
+│        登录遇到问题请联系企业 IT 管理员  (white/60) │
 └─────────────────────────────────────────────┘
 ```
 
-- 垂直居中布局（`flex min-h-screen items-center justify-center p-4`）
+- 垂直居中布局（`relative flex min-h-[100svh] flex-col items-center justify-center overflow-hidden bg-[#04122B] px-4 py-5`）
 - 卡片最大宽度 400px（`max-w-[400px]`）
 - 白色卡片（`Card bg-card`）+ `shadow-2xl shadow-black/40` + 深色背景上的白色描边（`ring-1 ring-white/20`）
-- 登录页输入框与主按钮 48px（`h-12`），主按钮文案「安全登录」，加载中「验证中...」
+- 登录页输入框与主按钮 40px（`h-10`，页面覆写；基类 36px），主按钮文案「安全登录」，加载中「验证中...」
 - **动态品牌背景**（2026-10-20 返工：此前整屏高饱和亮蓝非常丑）：
   - 深海军蓝 → 品牌蓝纵向渐变（`#04122B`(0) → `#0A2E63`(0.45) → `#0B3C86`(0.75) → `#050D1F`(1)，`login-background.tsx` 的 Canvas `addColorStop`）；
   - 3 团低速漂移极光（蓝/青/湖绿，`lighter` 叠加，**不用紫色**）+ 细网格 + 微粒星点 + 四周暗角；
@@ -718,7 +720,7 @@ DataTable 是共享表格组件，所有列表页统一使用。
 ├──────────┬──────────────────────────────────────────────┤
 │          │ ← main: calc(100svh - 3rem)，内层唯一滚动区     │
 │ 侧边栏   │   PageHeader（图标+标题+描述+右侧操作）        │
-│ (240px)  │                                              │
+│ (224px)  │                                              │
 │ 可折叠    │  ┌──────────┐ ┌──────────┐ ┌──────────┐      │
 │ ▸ 工作台 │  │ 用户总数  │ │ 角色总数  │ │ 应用总数  │      │
 │   用户   │  └──────────┘ └──────────┘ └──────────┘      │
@@ -730,8 +732,8 @@ DataTable 是共享表格组件，所有列表页统一使用。
 └──────────┴──────────────────────────────────────────────┘
 ```
 
-- 顶栏 (48px, `h-12`) + 侧边栏 (240px = `--sidebar-width: 16rem`，可折叠为 48px 图标条) + 工作区
-- 工作区**不设最大宽度**（`main` 铺满剩余空间；旧规范写的 1440px 在代码中不存在）
+- 顶栏 (48px, `h-12`) + 侧边栏 (224px = `--sidebar-width: 14rem`，可折叠为 48px 图标条) + 工作区
+- 工作区内容容器 `max-w-[1680px]` 居中（`DashboardLayout` 顶栏与 `<main>` 内层；旧规范写的 1440px 在代码中不存在）
 - 侧边栏菜单由 `ROUTE_ACCESS` + 动态菜单树驱动，固定首项「工作台」；顶栏右侧是 `⌘K` 命令面板提示
 - 数据密度优先
 
@@ -865,10 +867,6 @@ WITH RECURSIVE sub_depts AS (
 
 ### 4. 前端权限页面级强拦截防卫
 
-为防御未授权用户或 Session 超时用户越权窥探管理系统的 UI 布局框架，前端实施了页面级鉴权拦截：
-- **主动式 401 拦截**：在 `DashboardLayout` 组件的 React `useEffect` 初始化中，并发拉取 `/api/me` 和 `/api/me/menus` 接口。若获取账户上下文时 API 返回 `401 Unauthorized` 状态，前端拦截器将强行阻断页面渲染并清空状态。
-- **连贯体验 (callbackUrl) 流转**：在触发 401 拦截时，前端会自动将当前访问的完整路径（`pathname + search`）进行安全编码为 `callbackUrl` 附加在重定向地址中。登录页接收此参数并动态拼接到 OAuth 授权接口的 `redirect` 中，从而保障用户在身份验证成功后能够平滑、无缝地回弹至原本访问的目标页面。
-
 > **现行实现（2026-10-23 核对，`apps/portal/src/app/(dashboard)/layout.tsx`）**：
 > - 鉴权在**服务端**完成：`resolveIdentity()`（网关已注入 `X-User-Id`，零验签）为空即 `redirect('/login?callbackUrl=' + encodeURIComponent('/dashboard'))`；随后服务端取权限快照（`getUserPermissionContext`）→ 经 `<PermissionsProvider>` 单次传给客户端 → 服务端构建菜单树。
 > - **不再有**客户端 `useEffect` 并发拉 `/api/me` 与 `/api/me/menus` 的主动式 401 拦截（这两条请求已删除，权限快照零请求由 `tests/e2e/ssr-permission-snapshot.spec.ts` 钉住）。
@@ -877,30 +875,11 @@ WITH RECURSIVE sub_depts AS (
 
 ---
 
-## 规范 vs 实现：待治理清单（2026-10-23 校正时发现，**未**静默改规范）
-
-> 下列条目是**代码与规范意图的矛盾**，或代码里明显违背本规范的孤例。本次校正只把"描述当前实现"的文字改成代码事实；
-> 这几条涉及产品/视觉决策，留给评审决定改代码还是改规范。每条的「建议处置」列是建议，不是结论。
-
-| # | 冲突点 | 规范怎么说 | 代码实际怎样 | 证据 | 建议处置 |
-|---|---|---|---|---|---|
-| 1 | 品牌蓝按钮 token | `globals.css` 注释称品牌蓝要用 `bg-color-primary` / `text-color-primary` | 全仓**没有任何一处**使用 `bg-color-primary`；`Button default` 是 `bg-primary`（shadcn 前景色，近黑）；`app/oauth/error/page.tsx` 用 `bg-primary hover:bg-primary-hover` 才显蓝（靠 `--color-primary` 覆盖 shadcn 映射） | `grep -rn bg-color-primary apps/portal/src` 无结果；`components/ui/button.tsx`；`globals.css` vs `:213` | **需决策**：要么规范改口"品牌蓝按钮 = `bg-primary`（并核对 `@theme inline` 里 `--color-primary` 的映射意图）"，要么给 `Button` 加品牌变体并清掉 `globals.css` 的误导性注释 |
-| 2 | 表格单元格 `py` | 表格规范统一为 `px-4 py-2` | `Table` 基类 `px-4 py-2`，行高 `h-11` 起 | `components/ui/table.tsx` | ✅ 2026-10-23 已决策：三处口径统一为 `py-2`，历史变更日志保留不追改 |
-| 3 | 行内操作按钮文案 | 「行内操作、分页、复制等操作按钮**必须有可见中文文字**」 | 表格行内操作为图标按钮（`size="icon-sm"` + `aria-label`/`title`）；角色页 2026-10-23 收敛为 3 个图标按钮（此前"编辑/配置权限/删除"文字按钮占满横宽、把操作列挤出视野） | `components/shared/table-pagination.tsx`、`components/shared/page-header.tsx`、`(dashboard)/roles/components/RolesTable.tsx` | ✅ 2026-10-23 已决策：**行内操作 = 图标 + `aria-label`/`title` 可接受**；分页在 ≤7 页时隐藏首/末页，单页时隐藏整套翻页控件 |
-| 4 | 间距六档与 `p-8` 孤例 | 「间距只有 4/8/12/16/24/32 六档；禁止 `gap-8`、`px-8`、`p-8`、`pt-8` 孤例（错误页统一 `pt-6`）」 | 7 个 `error.tsx`/`not-found.tsx` 仍用 `p-8`；`dashboard/loading.tsx` 用 `p-8 pt-6`；`profile` 有 `lg:p-8`；`oauth/error` 有 `lg:px-8` | `app/not-found.tsx`、`app/(dashboard)/*/error.tsx`、`app/(dashboard)/dashboard/loading.tsx` | 建议按规范改代码（统一 `p-6` / 错误页 `pt-6`），或把「错误页/全屏页可用 32px」写进规范 |
-| 5 | 圆角 token 用途分工 | 「圆角 token 映射」把 `rounded-md` 标为「按钮 / 输入框」，`rounded-lg` 标为「表单控件（基类统一用它）」 | `Button` 用 `rounded-md`，`Input`/`Select`/`Textarea` 用 `rounded-lg`；两者计算值都是 8px，但同一行里"输入框"与"表单控件统一用 lg"两种说法并存 | `components/ui/button.tsx`、`components/ui/input.tsx` | 建议统一为「按钮 `rounded-md`、表单控件 `rounded-lg`、两者计算值 8px」；用途列已按此改写，分工描述待评审定型 |
-| 6 | `DropdownMenu` 面板圆角 | 「面板 12px 圆角 `p-1`」 | `DropdownMenuContent` 是 `rounded-md`(8px)，只有 `SubContent` 是 `rounded-xl`(12px) | `components/ui/dropdown-menu.tsx` | 二选一：改基类为 `rounded-xl`，或规范改为"面板 8px、子菜单 12px" |
-| 7 | Toast 位置 | 原写「sonner 默认位置/宽度」 | `app/layout.tsx` 全局 `position="top-right" richColors` | `apps/portal/src/app/layout.tsx` 的 `<Toaster />` | 已按代码改写为「top-right + richColors，不逐页定制」 |
-| 8 | 字号刻度 `sm=13px` / `base=15px` | 规范给出 13px / 15px 定制刻度 | Tailwind 4 默认 `text-sm`=14px、base=16px；`globals.css` 未覆盖 `--text-*` | `globals.css` 无 `--text-*` 定义；`text-sm` 广泛用于表格/按钮 | 若坚持 13/15px，需在 `globals.css` 定义 `--text-sm` / `--text-base`；否则规范改为 Tailwind 默认 |
-| 9 | 模态框动效时长 | 「模态框 … 300ms」 | `DialogContent` 用 `duration-100` | `components/ui/dialog.tsx` 的 `DialogContent` | 建议以代码 100ms 为准，改掉规范的"300ms" |
-| 10 | 管理后台最大宽度 1440px | 「工作区最大宽度 1440px」 | `<main>` 铺满（`h-svh` 固定外壳 + `overflow-auto`），全仓无 `max-w-[1440px]` | `components/layout/DashboardLayout.tsx` | 已按代码改为"不设上限"；若产品要回到 1440 居中，需在 `main` 内加容器 |
-
----
-
 ## 更新日志
 
 | 日期 | 版本 | 变更 |
 |------|------|------|
+| 2026-10-30 | v3.8 | **文档审计轮（与代码逐条对账）**：①暗色 `--color-primary`、浅色 `--muted-foreground` / `--destructive` 改为 `globals.css` 实测值；②组件规范按基类实测校正（Button default `h-9`、Input/Select `h-9`、Dialog `rounded-2xl p-5`、Table 表头 `h-8`/行 `h-10`、PageHeader `.type-page-title`、Toast `top-center`）；③侧边栏 224px（`--sidebar-width: 14rem`）、内容容器 `max-w-[1680px]`、`DataTable` 圆角 `rounded-lg` 且不再有默认 `max-h`；④登录页输入/按钮 40px；⑤删除描述已移除的客户端 401 拦截旧段，只保留服务端鉴权现行实现；⑥删除 2026-10-23 的「规范 vs 实现：待治理清单」（多数条目已被实现取代或与现行规范矛盾）。 |
 | 2026-10-23 | v3.7 | **真实交互与自适应轮（用户量化要求：步骤/点击/输入次数）**：①**弹窗硬规则**——弹窗不允许滚动；溢出即改页面。移除全局 Dialog 的 `max-h + overflow-y` 兜底；`新建/编辑权限` 改为 `/permissions/new`、`/permissions/[id]/edit`（服务端 `connection()` + `PermissionGate`，面包屑/返回/表单页布局）；600px 高实测弹窗全部放得下（用户新建 574px、角色新建 404px、删除确认 228px 等）。②**登录页自适应**——`100svh` + 品牌区/卡片/输入框压缩：1139×600 内容 669→600（无滚动条），390×844 无滚动。③**权限分配步骤量化**——由"每项一点"改为按应用（clientId）/菜单根目录分组：组头全选（1 击可选 39 项）+ 组折叠 + 搜索 + 全选所有/清空；配齐一个应用由 39 次点击 → **2 步（组全选 + 保存）**。④**字体层级固定**——新增 6 个语义 token（`.type-page-title` 17px、`.type-section-title` 15px、`.type-card-title` 13px、`.type-body` 13px、`.type-meta` 11px、`.type-table-head` 11px），PageHeader/列表标题/表头/表格基准字号改用 token；禁止页面散写字号。⑤**中文化**——权限图标下拉改为中文（工作台/用户/角色…），类型下拉保持「页面（PAGE）」双语可辨。⑥**滚动条**——新增 `.scrollbar-slim` 细滚动条，36 项（登录 + 11 路由 × 3 视口）页面级滚动条审计 = 0。 |
 | 2026-10-23 | v3.6 | **专业后台密度第二轮（用户实测：有效内容太少、标题间距吃掉半屏、搜索与按钮不同高、重内容弹窗不适合）**：①**主区结构**——顶栏 56→48px、`main` padding 16→12px、页面级 gap 24→12px；**列表页取消独立大页头**（图标块 + 24px 标题 + 描述整行），`h1` 15px 并入表格工具条左侧，首行距顶 `280px→146px`（982px 视口 chrome 占比 29%→15%；556px 短屏 50%→26%，可见行 5→8）。②**表格卡片**——清掉 Card 基类 `py-6 + gap-4`（无端 64px 空白）；表头 36→32px / 11px、行高 44→40px、单元格 `px-3 py-1.5`。③**控件**——Button/Input/Select 默认 36px；工具条内统一 32px（搜索与主按钮逐像素同高）；分页按钮 28px。④**数据密度**——列表 `pageSize` 10/15→20，一屏 15–18 行。⑤**搜索**——300ms 防抖（此前每个字符一次 `router.push`）、`busy` 转圈、`Esc` 清空、自动回到第 1 页。⑥**弹窗→页面**——角色权限配置、用户角色分配改为独立页面（新增「交互载体选择」硬规则）；面包屑补两级。⑦审计页标题/页签/筛选/导出合并为一行，卡片与分页贴合。 |
 | 2026-10-23 | v3.5 | **UI 密度与滚动可用性重做（用户实测反馈：主体表格显小、字号/间距失衡、横向滚动后表头消失）**：①**主次层级**——页头标题 24→20px、图标 40→36px、描述 14→13px；顶栏 64→56px；页面级间距 24→16px、main 纵向 padding 收紧；列表表格成为视觉主体。②**密度**——行高 48→44px 起、单元格 `py-2`、表头 40→36px 且字号 10px `font-black uppercase tracking-widest` → 12px `font-medium`（中文不再被拆散）；工具条控件 40→36px、搜索框 320→288px；角色页操作列三家文字按钮收敛为 3 个图标按钮（`aria-label`+`title`）。③**滚动 bug 修复**——根因是 `Table` 内层 `overflow-x-auto` 自成滚动上下文，`thead sticky` 相对它定位、外层滚动时表头随内容滚走（实测滚动 205px 后表头从容器顶 219px 漂到 14px）；现列表页只保留**一个**滚动容器（`Table containerClassName="overflow-visible"` + `th` 上 `sticky top-0 z-20 bg-card`），横向/纵向滚动表头都钉住（实测 thTop 恒定 219px）。④**卡片高度**——取消 `fill` 强制撑满，改随内容自适应 + 表格区 `max-h-[calc(100svh-17rem)]`，1–2 行数据不再出现整屏空白卡片（实测 1 行卡片 220px）。⑤**分页收敛**——`totalPages<=1` 时隐藏整套翻页/跳页控件只保留总数；≤7 页隐藏首/末页按钮。⑥**描边修正**——`ring-1 ring-border/*` 在本仓 Tailwind 配置下落到 `currentColor` 生成近黑 1px 描边，列表卡片统一改为 `border border-border/70`。⑦**响应式**——390px 下操作列不再被裁切（状态列 <sm 隐藏并在名称下补行内徽章，操作列 116px），主操作按钮占满一行；1024/1440 无横向溢出。 |

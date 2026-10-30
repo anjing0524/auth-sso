@@ -7,7 +7,7 @@
  * 的 POST（三处都在提交后抛错）。
  *
  * **为什么造机械检查而不是写进规范**：这是只由 diff 就能判定的模式
- * （`CODING_STANDARDS.md` §7）。而且它的失败模式在单测里不可观测——
+ * （`docs/coding-standards.md` §7）。而且它的失败模式在单测里不可观测——
  * `vitest.setup.ts` 把 `next/cache` 整体换成空实现，`updateTag` 永不抛。
  *
  * 纯 fs 扫描，无需基础设施（与 `module-mock-guard.test.ts` 同一形状）。

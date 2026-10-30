@@ -6,7 +6,7 @@ name: Quality Gate
 #
 # 命名与阻断点：作业名只列**真正阻断**的步骤。覆盖率不在其中——本仓 CI 从未跑 `--coverage`
 # （根 `vitest.config.ts` 的 coverage 配置供本地 `pnpm exec vitest run --coverage`，
-# 且未设 thresholds，本来就不构成门禁）。见 CODING_STANDARDS.md 第 7 条。
+# 且未设 thresholds，本来就不构成门禁）。见 docs/coding-standards.md 第 7 条。
 on:
   workflow_call:
 

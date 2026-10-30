@@ -2,7 +2,7 @@ name: Release Validation
 
 # 触发文件：只声明「何时跑、跑哪些类别、产物参数」，不含任何作业实现。
 # 发布门禁：与夜间验收同一套内容（含 ACME 全生命周期），产物保留 30 天作为发布证据。
-# 分类约定见 .github/workflows/README.md；分层理由见 docker/README.md §7.7。
+# 分类约定见 docs/ci.md；分层理由见 docs/docker.md §7.7。
 on:
   push:
     tags: ['v*']

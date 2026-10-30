@@ -1,8 +1,10 @@
 # Auth-SSO 架构约束指南 (Architecture Constraints Guide)
 
-**版本**: v1.2 · **状态**: 正式生效 · **最后更新**: 2026-10-23
+**版本**: v1.3 · **状态**: 正式生效 · **最后更新**: 2026-10-29
 
 > 本文档定义了 Auth-SSO 项目所有代码贡献者**必须遵守**的架构约束。每条约束具有**一票否决权 (One-Vote Veto)**——违反任意一条的 PR 不得合并。本文档是 Code Review 与质量门禁的核心依据。
+>
+> **v1.3 变更（2026-10-29 文档审计，以代码为准）**：R2 改写为「Controller 不写 try/catch，异常统一经 `withAuth` / `withPermission` 交 `mapServerError` 映射」（旧文教人写 catch + `mapDomainError`，与 §四及 `lib/auth/guard.ts` 相反）；R12 守卫路径补仓库相对前缀；§四 去掉 `guard.ts:48` 行号引用（行号必漂移）；§五 补 `Sec-Fetch-Site: cross-site` 写请求直接 403（2026-10-29 `proxy.ts`）；删除与 `AGENTS.md`「Gateway (Rust) 要点」重复的 §七（该处为 Rust 异步 Trait 写法的唯一出处）。
 >
 > **v1.2 变更（2026-10-23 文档校正，以代码为准）**：R7 改用 `lib/authz` 门面（`getUserRoleDeptIds`/`canAccessDept` 已撤下，ADR-014）；R8 的 Layout 层改为 `<PermissionGate>` 装载、补 `requirePermission` 真实返回；R9 时间转换收口到 `domain/shared/time.ts`；R13 补 domain 层白名单实测；R11/R14/骨架模板改用 `validate()` 与 `withAuth`/`withPermission` 真实签名（`mapServerError` 统一映射，Controller 不写 try/catch）；§五 重写为 `proxy.ts` 实际职责（同源校验 403 + 白名单 `/oauth/error`）；§三「多层 layout」条目改写为 `PermissionGate` 与外壳单点包裹；红线表补 #14/#15。
 
@@ -45,21 +47,20 @@ export const createUserAction = withAuth(..., async (ctx, input) => {
 
 ### R2. 统一错误映射
 
-Controller 的 catch 块**必须**使用 `mapDomainError(err)`，**严禁**手写 `if (err instanceof XxxError)` 链。
+Controller **不写 try/catch**：`withAuth` / `withPermission` 已把异常交给 `mapServerError`（`apps/portal/src/lib/server-error.ts`，先认 PG 唯一约束 `23505` → 409，再委托 `mapDomainError`）并统一映射为 `ApiError` / `restError()`。**严禁**手写 `if (err instanceof XxxError)` 链，也**严禁**在 Controller 内自行决定状态码。
 
 ```typescript
-// ❌ 错误：手写 instanceof 分支
+// ❌ 错误：手写 catch + instanceof 分支（状态码散落在 Controller）
 catch (err) {
   if (err instanceof EntityNotFoundError) return { status: 404 };
   if (err instanceof DuplicateEntityError) return { status: 409 };
   return { status: 500 };
 }
 
-// ✅ 正确：委托 mapDomainError
-catch (err) {
-  const mapped = mapDomainError(err);
-  return NextResponse.json({ error: mapped.error, message: mapped.message }, { status: mapped.status });
-}
+// ✅ 正确：交给包装器（withAuth 返回 ApiError；withPermission 返回 restError）
+export const createXxxAction = withAuth({ permissions: [...] }, async (ctx, rawInput) => {
+  // 只编排；领域错误直接 throw，映射在包装器内完成
+});
 ```
 
 ### R3. 事务包裹多表/多行写入
@@ -262,7 +263,7 @@ export async function GET(request: NextRequest) {
   - Server Action → `invalidateResource(resource)`（内部 `updateTag`，立即过期）
   - Route Handler → `invalidateResourceFromRoute(resource)`（内部 `revalidateTag(tag, { expire: 0 })`）
   - ⚠️ `updateTag` **只能**在 Server Action 里调用；在 Route Handler 里**必抛**（Next.js `E872`），而抛出点在写事务提交之后 —— 形态是「写成功 + 失效未发生 + 响应 5xx」并诱使调用方重试
-  - 机械守卫：`__tests__/api/cache-invalidation-site-guard.test.ts` 扫描全部 `route.ts`，命中即红
+  - 机械守卫：`apps/portal/__tests__/api/cache-invalidation-site-guard.test.ts` 扫描全部 `route.ts`，命中即红
 - **严禁**在 `'use cache'` 作用域内访问 `cookies()` / `headers()` / `searchParams`
 - 动态 API 必须包裹在 `<Suspense>` 边界内
 
@@ -333,7 +334,7 @@ Code Review 中发现以下任意模式，**立即停止合并，必须重构**�
 
 ## 四、Controller 骨架 (Skeleton Templates)
 
-> 签名唯一出处：`apps/portal/src/lib/auth/guard.ts`（`withAuth`）、`:48`（`withPermission`）、`apps/portal/src/lib/validation.ts`（`validate`）。
+> 签名唯一出处：`apps/portal/src/lib/auth/guard.ts`（`withAuth` / `withPermission`）、`apps/portal/src/lib/validation.ts`（`validate`）。
 
 ### Server Action
 
@@ -429,7 +430,7 @@ export async function POST(request: NextRequest) {
 
 `apps/portal/src/proxy.ts` 是 Next.js Proxy 层（源码根，不在 `lib/` 下），PKCE 生成已上移到 Gateway（Rust/Pingora）统一完成。proxy.ts 职责：
 
-- **做**: 同源校验（`isCrossSiteWrite()`）——`POST/PUT/PATCH/DELETE` 带 `Origin` 时比对信任来源 / `X-Forwarded-Host` / 自身 `Host`，跨站返回 **403**；无 `Origin` 的服务端调用放行；`GET/HEAD` 不校验（ADR-005 第 2 层承诺）
+- **做**: 同源校验（`isCrossSiteWrite()`）——`POST/PUT/PATCH/DELETE` 先看 `Sec-Fetch-Site`：`cross-site` 直接 **403**（2026-10-29 起，补无 `Origin` 的老浏览器/特殊客户端）；有 `Origin` 时再比对信任来源 / `X-Forwarded-Host` / 自身 `Host`，跨站返回 **403**；无 `Origin` 且非跨站的服务端调用放行；`GET/HEAD` 不校验（ADR-005 第 2 层承诺）
 - **做**: 路径白名单放行（`PUBLIC_PATHS = ['/login','/oauth/error','/.well-known']`、`SKIP_PREFIXES = ['/_next','/favicon','/images','/fonts']`、根路径 `/`、以及 `pathname.startsWith('/api/')`）
 - **做**: Cookie 存在性检查（`COOKIE_NAMES.JWT` 无值 → 302 `/login`）
 - **不做**: JWT 签名验证（由 `lib/auth/verify-jwt.ts` 的 `resolveIdentity()` 处理，内含 Gateway HMAC 信任路径与自验签兜底）
@@ -532,9 +533,3 @@ export const config = { matcher: ['/((?!_next|favicon\\.ico|images|fonts).*)'] }
 ---
 
 > **本指南与 ARCHITECTURE.md 形成互补：ARCHITECTURE.md 描述"系统是什么样"，本文档定义"代码该怎么写"。两者不一致时以本文档为准。**
-
-## 七、Gateway Rust 异步 Trait 边界
-
-项目自定义且需要跨线程调度的异步 Trait，必须使用 `-> impl std::future::Future<Output = T> + Send`；实现块直接使用 `async fn`，禁止引入 `#[async_trait]` 的 Box 分配。
-
-唯一例外是 Pingora 等第三方 Trait 的实现：当上游 Trait 定义要求 `#[async_trait]` 时，可在其适配实现上使用该宏。此例外不得扩展至项目自定义 Trait，也不得作为新增动态分发抽象的理由。

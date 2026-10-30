@@ -1,8 +1,15 @@
 # 数据库设计 - Auth-SSO
 
-版本：v3.5
+版本：v3.6
 状态：已发布
-最后更新：2026-10-23
+最后更新：2026-10-30
+
+> **v3.6 变更 — 文档审计轮（2026-10-30）**：①`authorization_codes.code` 实际存 **SHA-256 哈希**而非明文
+> （明文只经 302 交给 RP；`apps/portal/src/app/api/auth/oauth2/authorize/route.ts` 写 `hashToken(code)`，
+> `lib/auth/oauth-grant.ts` 用同一哈希领取）；②`audit_operation` 枚举为 **19** 种操作（契约
+> `AUDIT_OPERATION_VALUES` 与 `0000_initial.sql` 一致，旧文误写「18 种」）；③`portal:user_perms:`
+> 的 TTL 基准是**全局默认 AT TTL**，缓存 TTL 固定，不随 per-client `access_token_ttl` 变化
+> （`apps/portal/src/lib/permissions.ts` 的 `PERM_CACHE_TTL_BASE` / `PERM_CACHE_TTL_JITTER`）。
 
 > **v3.2 重大变更 — RBAC 权限模型重构**：删除 `data_scope_type` 枚举和 `role_data_scopes`、`role_clients` 两张关联表；角色新增 `dept_id` 字段（FK → `departments.id`），以「角色所属部门」替代独立的数据范围配置。数据访问控制从「dataScopeType 五种分支」简化为「角色部门 ID 列表 + 子树展开」的单一模型（决策见 ADR-002）。
 >

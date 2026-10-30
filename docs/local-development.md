@@ -56,4 +56,4 @@ pnpm dev              # 启动本地 PG/Redis + migrate + Next dev（4100）
 
 - 改样式、交互、文案、表格：`pnpm dev`（本地 4100）。
 - 改 Server Action / OIDC / Gateway / 会话安全：Docker 验收栈 + 对应 API/E2E。
-- 上线/回滚：`pnpm deploy [flags]`（自托管生产，见 [`docker/README.md`](../docker/README.md) §0–§6）。
+- 上线/回滚：`pnpm deploy [flags]`（自托管生产，见 [`docs/docker.md`](docker.md) §0–§6）。

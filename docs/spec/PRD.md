@@ -1,9 +1,14 @@
 # 产品需求文档 (PRD) - Auth-SSO
 
-版本号：v1.2
+版本号：v1.3
 状态：已发布
-最后更新：2026-10-23
+最后更新：2026-10-29
 目标读者：产品、工程、QA、运维团队
+
+> **v1.3 变更（2026-10-29，文档审计）**：只删除/更正与现行代码矛盾的表述，需求 ID、优先级与需求总数不变。
+> ①§4.1 会话令牌按 per-client TTL（ADR-024）修正；②§6.1 量化口径改为代码事实（5 项指标、3 项 P95）；
+> ③§8.2 文档篇数按 `docs/spec/` 实测改为 9 份（原写 7 份）；④§8.4 基线规模改为引用最新实测，不抄死数字；
+> ⑤§6.1/§6.2/§8 的测量方法与文档计数按当前代码与目录重算。
 
 > **v1.2 变更（2026-10-23，对照代码校正）**：只修正"文档描述 = 代码实际行为"，需求 ID、优先级与需求总数不变。
 > ①§2.3 Bootstrap 的强制改密**未实现**（代码中无 `password_changed_at` 拦截，见该节注记）；②§2.1 Cookie-to-Bearer
@@ -49,7 +54,7 @@
 - 标准 OIDC/OAuth 2.1 流程（Authorization Code + PKCE）。
 - 基于角色所属部门的 RBAC 数据范围控制（权限 × 角色部门交集）。
 - 登录及管理操作的审计日志。
-- 会话生命周期采用**静默续签 + 令牌到期**模型、而非"空闲/绝对超时"模型：访问令牌 1 小时过期，Gateway 在其剩余不足 5 分钟时用刷新令牌静默续签（`apps/gateway/src/auth/verify.rs` 的 `REFRESH_THRESHOLD_SEC=300`）；刷新令牌 7 天有效并按轮换使用。**代码中不存在"空闲超时/绝对超时"判定**（原文档此条为需求意图，尚未落地）。
+- 会话生命周期采用**静默续签 + 令牌到期**模型、而非"空闲/绝对超时"模型：访问令牌默认 1 小时过期（实际值按 client 的 `clients.access_token_ttl`，钳制 60s–24h，ADR-024），Gateway 在其剩余不足 5 分钟时用刷新令牌静默续签（`apps/gateway/src/auth/verify.rs` 的 `REFRESH_THRESHOLD_SEC=300`）；刷新令牌默认 7 天有效（按 client 的 `clients.refresh_token_ttl`，钳制 5min–30d）并按轮换使用。**代码中不存在"空闲超时/绝对超时"判定**（原文档此条为需求意图，尚未落地）。
 - 基于 Rust/Pingora 的 API 网关，用于离线 ES256 JWT 验签、Cookie→Bearer 转换，并在验签成功后向下游注入身份头
   （实际注入 `Authorization: Bearer`、`X-User-Id`、`X-User-Jti`，及可选 HMAC 签名头 `X-Gateway-Timestamp`/`X-Gateway-Signature`；
   **不注入角色/权限/部门头**，权限一律由 Portal 侧查 Redis/DB 实时判定，见 ADR-006 与 `apps/gateway/src/gateway.rs`）。
@@ -274,7 +279,7 @@
 | 实践域 | 能力等级 | 本文档实现 |
 |--------|----------|-----------|
 | **OPM** (Organizational Performance Management) | Level 4 | §8.4 过程性能基线（5 项关键指标 + 上下控制限 UCL/LCL；P-01/P-02/P-03 的均值仍为 2026-07-09 历史值） |
-| **QPM** (Quantitative Project Management) | Level 4 | §6.1 性能需求（5 项 P95 阈值 + 测量方法）+ §6.2 安全需求（**16 项**量化标准，含未实现的 NFR-SEC-16） |
+| **QPM** (Quantitative Project Management) | Level 4 | §6.1 性能需求（5 项性能指标 + 测量方法，其中 3 项带 P95 阈值）+ §6.2 安全需求（**16 项**量化标准，含未实现的 NFR-SEC-16） |
 | **MPM** (Managing Performance & Measurement) | Level 4 | Rust criterion 基准 + 真实栈实测 + 追溯性覆盖率报告（观测指标）。**无 k6**（已删除的 `tests/performance/api-benchmark.mjs` 属历史假绿，见 [roadmap](../roadmap.md) 续九十四）；**无 E2E 计时门禁** |
 
 ### 8.3 成熟度 Level 5（优化级）
@@ -290,8 +295,8 @@
 > 以下基线数据基于项目历史运行数据建立，定期更新。**UCL/LCL = 均值 ± 3σ**（统计过程控制标准）。
 >
 > 数据更新时间：2026-07-09（基于最近 30 天 CI 运行记录）。**表中均值是历史值，未随测试规模增长重算**；
-> 2026-10-23 的真实规模已远大于此（最近一次全量门禁记录：Vitest 131 文件 / 1079 用例，见 [roadmap](../roadmap.md) 续九十五）。
-> 重算基线属独立工作项，本文不臆造新数字。
+> 最近一次全量回归为 2026-10-29 的 Vitest 140 文件 / 1511 用例（记录见 [UX-METRICS §9.296](UX-METRICS.md)）；
+> 测试规模以 CI 实跑为准，本文不抄死数字。重算基线属独立工作项，本文不臆造新数字。
 
 | # | 指标 | 基线均值 | 下限 (LCL) | 目标 (Target) | 上限 (UCL) | 测量频率 |
 |---|------|---------|-----------|--------------|----------|---------|
@@ -301,10 +306,9 @@
 | P-04 | E2E 登录成功流耗时 | 待测量 | — | P95 < 1.5s | 3.0s | 每日构建 |
 | P-05 | Gateway JWT 验签延迟 | 待测量 | — | < 5ms | 10ms | 发布前 |
 
-> **注：P-04 和 P-05 的测量计划**（2026-10-23 核实）
-> - P-04：`tests/e2e/` 现有 3 个 spec（`docker-release.spec.ts` / `oidc-machine-endpoints.spec.ts` /
->   `ssr-permission-snapshot.spec.ts`），均**未埋性能计时点**；原引用的 `auth-flow.spec.ts` **不存在**
->   （host 入口移除时已删），CI 也**没有每日构建的 E2E 计时步骤**。待办：在 `docker-release.spec.ts` 上加计时断言。
+> **注：P-04 和 P-05 的测量计划**（2026-10-29 核实）
+> - P-04：`tests/e2e/` 的 spec 以目录为准（不在此维护清单——清单会过期）；现有 spec 均**未埋性能计时点**，
+>   CI（验收 workflow / nightly）跑全量 e2e 但**没有计时步骤**。待办：给登录链路（`docker-release.spec.ts`）加计时断言。
 > - P-05：可通过 Rust criterion 基准 `apps/gateway/benches/`（`cargo bench`）在发布前执行；当前 CI 跑的是
 >   `cargo fmt` / `clippy` / `test` / `--no-default-features` 构建，**不跑 `cargo bench`**。
 > - 原"目标完成时间：2026-Q3"已过期，改为随 P-04/P-05 待办推进。
@@ -406,7 +410,7 @@
 
 | 成熟度等级 | 特征 | 项目实现 |
 |-----------|------|---------|
-| **Level 2: Managed** | 项目管理、需求管理、质量保证 | 需求基线 + CCB 变更控制 + 分层测试 + CODEOWNERS |
-| **Level 3: Defined** | 标准化过程、组织级资产 | 7 份标准文档 + 架构约束规范 + DDD 模式 + 代码审查清单 |
+| **Level 2: Managed** | 项目管理、需求管理、质量保证 | 需求基线 + CCB 变更控制 + 分层测试 + 文档守门测试（`apps/portal/__tests__/api/docs-*.test.ts`） |
+| **Level 3: Defined** | 标准化过程、组织级资产 | `docs/spec/` 9 份标准文档 + 架构约束规范 + DDD 模式 + 代码审查清单 |
 | **Level 4: Quantitatively Managed** | 量化过程管理、统计基线 | 5 项过程性能基线（UCL/LCL）+ 量化 NFR + 追溯性趋势 |
 | **Level 5: Optimizing** | 持续改进、因果分析、创新 | CAR 程序 + 过程改进部署流程 + 经验教训库 + 架构审计机制 |

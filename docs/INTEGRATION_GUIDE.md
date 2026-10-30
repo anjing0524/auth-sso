@@ -4,8 +4,8 @@
 子应用是 Gateway 后面的哑服务：不实现 OIDC、不管理 Session、不验签 JWT。
 仅读 `X-User-Id` Header（Gateway 注入）+ 自行查 Redis 权限（缓存由 Portal 写，网关不写）。
 
-> **本文只写代码里现有的事实**。凡本文写到的端口、路径、头名、命令，都附了出处（`path:line`）；
-> 引用前请以代码为准（`docs/README.md` §三：代码与测试 > 文档）。
+> **本文只写代码里现有的事实**。凡本文写到的端口、路径、头名、命令，都附了出处（仓库相对路径 + 符号名；
+> 不写行号，见 `AGENTS.md`）。引用前请以代码为准（`docs/README.md` §三：代码与测试 > 文档）。
 
 ## 架构回顾
 
@@ -27,14 +27,14 @@ Browser → Gateway（唯一公网入口）→ Portal（OIDC Provider + JWT 签�
 
 Gateway 启动时读的是**工作目录下的 `gateway.toml`**（`apps/gateway/src/main.rs`，默认值 `gateway.toml`）：
 compose 通过只读挂载或镜像内置决定它到底是哪一份（`docker/compose/test.yml` 挂 `gateway.e2e.toml`；
-`docker/images/gateway.Dockerfile:46` 把 `gateway.docker.toml` 拷成 `/app/gateway.toml`）。
+`docker/images/gateway.Dockerfile` 的 `COPY` 步骤把 `gateway.docker.toml` 拷成 `/app/gateway.toml`）。
 
 **两个生产目标都只有 Gateway 一个公网入口**：自托管生产 `docker/compose/prod.yml` 只发布 Gateway 的 80/443，
 Portal 仅 `expose` 4000（`docker/compose/prod.yml`）；Vercel 由平台终结 TLS。
 
 > **关于 Demo App（`apps/demo-app/`）**：它**不在任何 compose 文件里**
 > （`grep -l demo-app docker/compose/*.yml` 零命中），镜像构建也不会构建它
-> （`docker/images/gateway.Dockerfile:46` 只把 `gateway.docker.toml` 拷成 `/app/gateway.toml`）。
+> （`docker/images/gateway.Dockerfile` 只把 `gateway.docker.toml` 拷成 `/app/gateway.toml`）。
 > 因此 `apps/gateway/gateway.docker.toml` 中 `name = "/demo/"` → `demo:3000` 的声明在 compose 栈里**没有对应服务**：
 > 任何 `/demo/*` 请求会被路由到一个不存在的上游。**该声明已于 2026-10-23 从 `gateway.docker.toml` 移除**
 > （避免生产形态静默 502；同一提交在文件内保留注释与恢复示例）。host 模板 `apps/gateway/gateway.toml`
@@ -45,7 +45,7 @@ Portal 仅 `expose` 4000（`docker/compose/prod.yml`）；Vercel 由平台终结
 ## 前提条件
 
 Docker 运行中即可——PostgreSQL 18 + Redis 8 + Portal + Gateway 都由 `docker/compose/test.yml` 提供
-（`docker/compose/test.yml` 的 postgres/redis，`docker/compose/test.yml` 的 portal/gateway），与 CI / 生产同形态
+（`docker/compose/test.yml` 的 postgres/redis/portal/gateway），与 CI / 生产同形态
 （本地原生 `pnpm dev` 只用于开发，验收入口仍是 Docker；见 [`docs/local-development.md`](local-development.md)）。
 
 ## 第一步：构建并启动验收栈
@@ -60,7 +60,7 @@ $COMPOSE ps
 服务列表固定为 `postgres redis cert-init db-init portal gateway`；超时 600s。
 
 > 一次性服务 `cert-init` / `db-init` 显示 `Exited (0)` 是正常的：它们各自完成"生成自签证书"
-> 与"迁移 + 种子数据"后退出（`docker/compose/test.yml` / `docker/compose/test.yml`），`up --wait` 会正确放行。
+> 与"迁移 + 种子数据"后退出（`docker/compose/test.yml`），`up --wait` 会正确放行。
 
 ## 第二步：确认初始化数据
 
@@ -71,8 +71,8 @@ pnpm --filter @auth-sso/portal db:migrate
 pnpm --filter @auth-sso/portal db:seed
 ```
 
-> 种子密码是 `Admin@123456`、邮箱 `admin@example.com` 这两个值来自 `apps/portal/scripts/seed.ts`（`bcrypt.hash('Admin@123456', 10)`）
-> 与 `apps/portal/scripts/seed.ts`（`email: 'admin@example.com'`）；e2e 也用同一组（`tests/e2e/docker-release.spec.ts`）。
+> 种子密码 `Admin@123456`、邮箱 `admin@example.com` 来自 `apps/portal/scripts/seed.ts`（管理员种子的 bcrypt 哈希与 email 行）；
+> e2e 也用同一组（`tests/e2e/docker-release.spec.ts`）。
 
 ## 第三步：浏览器验证
 
@@ -80,7 +80,7 @@ pnpm --filter @auth-sso/portal db:seed
 
 1. 用 `admin@example.com` / `Admin@123456` 登录 → OAuth 回调后 Gateway 下发 `portal_jwt_token` + `portal_refresh_token` 两个 HttpOnly/Secure/SameSite=Lax Cookie（`apps/gateway/src/cookie.rs`；下发在 `apps/gateway/src/oauth.rs`；e2e 断言 `tests/e2e/docker-release.spec.ts`）；
 2. 访问 `https://127.0.0.1:19443/dashboard` → Portal Dashboard（Gateway 验签通过后转发；e2e 断言 `tests/e2e/docker-release.spec.ts`）；
-3. 未认证直接访问 `/dashboard` → 302 到 `/login?session_id=...`（`tests/e2e/docker-release.spec.ts`、`tests/e2e/docker-release.spec.ts`）。
+3. 未认证直接访问 `/dashboard` → 302 到 `/login?session_id=...`（`tests/e2e/docker-release.spec.ts`）。
 
 > Portal 容器端口 4000 只在 compose 网络内，不对宿主暴露（`test.yml` 的 `portal` 服务无 `ports:`，只有 `docker/compose/test.yml` 的容器内健康检查）；
 > 浏览器入口只有 Gateway。本地 `pnpm dev` 直连 4100 仅用于 UI 开发；验收入口不绕过 Gateway。
@@ -138,7 +138,7 @@ docker compose -f docker/compose/test.yml down --volumes --remove-orphans       
 > 不随路由携带。
 
 路由表长这样（`apps/gateway/gateway.toml`，**Gateway 启动时读取的是工作目录下的 `gateway.toml`**，
-容器里由 Dockerfile 把 `gateway.docker.toml` 拷成 `/app/gateway.toml`，见 `docker/images/gateway.Dockerfile:46`）：
+容器里由 Dockerfile 把 `gateway.docker.toml` 拷成 `/app/gateway.toml`，见 `docker/images/gateway.Dockerfile`）：
 
 ```toml
 # ── 路由表：name 即 path prefix，按长度降序最长前缀匹配 ──
@@ -168,7 +168,7 @@ Vercel 平台是 `127.0.0.1:4100`（`gateway.vercel.toml`）。
 > 因此在 `docker compose -f docker/compose/test.yml up -d --wait --wait-timeout 600` 起的验收栈里 `/demo/` 路由**无可用节点**，访问会得到 502；
 > 要重建这条链路，需要同时满足三件事：在 host 上起 `apps/demo-app`（`pnpm --filter @auth-sso/demo-app dev`，端口 3100，见 `apps/demo-app/package.json`）、
 > 让它的 `REDIS_URL`（`apps/demo-app/src/lib/permissions.ts`）指向与 Portal 相同的 Redis、并在 host 上以
-> `apps/gateway/gateway.toml` 起 Gateway 进程——而 host 进程入口已不在交付路径内（[`docker/README.md`](../docker/README.md) §7.5）。
+> `apps/gateway/gateway.toml` 起 Gateway 进程——而 host 进程入口已不在交付路径内（[`docs/docker.md`](docker.md) §7.5）。
 
 验证一条受保护路径上的身份注入，看 Gateway 实际写入的请求头（头名常量 `apps/gateway/src/gateway.rs`）：
 
@@ -192,12 +192,12 @@ Vercel 平台是 `127.0.0.1:4100`（`gateway.vercel.toml`）。
 **这是本指南最容易写错的一处，按代码现状如实说明：**
 
 - **Gateway 不缓存、不注入任何权限**。它只注入上表四个身份头；`apps/gateway/src` 全仓 grep `user_perms` **零命中**，
-  网关的 Redis 模块只有 `exists` / `acquire_nx_ex` / `del`（`apps/gateway/src/redis.rs`、`apps/gateway/src/redis.rs`、`apps/gateway/src/redis.rs`），
+  网关的 Redis 模块只有 `exists` / `acquire_nx_ex` / `del`（`apps/gateway/src/redis.rs`），
   即 jti 黑名单/去重那一类操作，没有任何权限读取或写入。这是 ADR-006 / ADR-007 的既定设计
   （「Gateway 只做身份断言注入，不做任何权限相关操作」），不是缺失实现。
 - **写这个缓存的是 Portal**，键前缀来自 `REDIS_KEY_PREFIX.USER_PERMS = 'portal:user_perms:'`
   （`packages/contracts/src/oidc.ts`），实现集中在 `apps/portal/src/lib/permissions.ts`：
-  - `cacheUserPermissionContext()`（`apps/portal/src/lib/permissions.ts`）负责写入，TTL = 3600s ±300s 抖动（`apps/portal/src/lib/permissions.ts`、`apps/portal/src/lib/permissions.ts`）；
+  - `cacheUserPermissionContext()`（`apps/portal/src/lib/permissions.ts`）负责写入，TTL = 3600s ±300s 抖动（`apps/portal/src/lib/permissions.ts` 的 `PERM_CACHE_TTL_BASE` / `PERM_CACHE_TTL_JITTER`）；
   - 调用点是**签发路径**：授权码兑换（`apps/portal/src/lib/auth/oauth-grant.ts`）与 RT 轮换
     （`apps/portal/src/lib/auth/token.ts`）都经 `resolveIssuancePermission()`（`apps/portal/src/lib/permissions.ts`）预填充；
     管理员重置密码后还会 `refreshUserPermissionCache()`（`apps/portal/src/app/api/users/[id]/reset-password/route.ts`）。
@@ -212,7 +212,7 @@ Vercel 平台是 `127.0.0.1:4100`（`gateway.vercel.toml`）。
 ## 验证检查清单
 
 > `https://127.0.0.1:19443` 的本地/发布 E2E 证书是仅含 loopback SAN 的临时自签证书（`docker/compose/test.yml`）。
-> 生产环境不复用该证书，统一由 Gateway 的 Rust 内建 ACME 客户端签发和续期 Let's Encrypt 证书（`docker/compose/prod.yml`），详见 [`docker/README.md`](../docker/README.md) §0–§6。
+> 生产环境不复用该证书，统一由 Gateway 的 Rust 内建 ACME 客户端签发和续期 Let's Encrypt 证书（`docker/compose/prod.yml`），详见 [`docs/docker.md`](docker.md) §0–§6。
 
 | # | 检查项 | 预期结果（出处） |
 |---|--------|---------|
@@ -220,9 +220,9 @@ Vercel 平台是 `127.0.0.1:4100`（`gateway.vercel.toml`）。
 | 2 | Portal 登录 → JWT Cookie | `portal_jwt_token` + `portal_refresh_token`，HttpOnly / Secure / SameSite=Lax（`apps/gateway/src/cookie.rs`、`apps/gateway/src/oauth.rs`） |
 | 3 | Gateway 验签 | 受保护路径返回 Portal 内容（非 302） |
 | 4 | Gateway 注入身份头 | 受保护路径上有 `X-User-Id`，值为用户 UUID；同请求还应有 `X-User-Jti`（`apps/gateway/src/gateway.rs`） |
-| 5 | 权限缓存由 Portal 写、子应用读 | `portal:user_perms:{userId}` 由 Portal 在签发时预填充（`apps/portal/src/lib/permissions.ts` 调 `apps/portal/src/lib/permissions.ts`）；**Gateway 不参与**，见上一节 |
+| 5 | 权限缓存由 Portal 写、子应用读 | `portal:user_perms:{userId}` 由 Portal 在签发时预填充（`apps/portal/src/lib/permissions.ts` 的 `resolveIssuancePermission`）；**Gateway 不参与**，见上一节 |
 | 6 | Demo App 零 OIDC | 代码中无 authorize/token/userinfo 调用（`apps/demo-app/src/` 全文核实） |
-| 7 | Demo App 零 Session | 无自定义 Cookie 写入（`apps/demo-app/src/` 全文核实）；注意它会**读** `x-user-id` / `authorization` 请求头（`apps/demo-app/src/app/page.tsx`、`apps/demo-app/src/app/page.tsx`） |
+| 7 | Demo App 零 Session | 无自定义 Cookie 写入（`apps/demo-app/src/` 全文核实）；注意它会**读** `x-user-id` / `authorization` 请求头（`apps/demo-app/src/app/page.tsx`） |
 
 ## 子应用接入模式（标准模板）
 
@@ -249,9 +249,3 @@ const perms = await redis.get(`portal:user_perms:${userId}`);
 > 不能把它直接当作"可见部门集合"，否则会漏掉子部门数据（fail-closed）。Portal 内部唯一展开实现
 > 是 `lib/authz/data-scope.ts` 的 `resolveScope()`。
 
-
-## 踩坑记录
-
-- [ ] Gateway 首次启动耗时：____ 秒（含 JWKS 下载）
-- [ ] 遇到的第一个问题：____
-- [ ] 解决方案：____

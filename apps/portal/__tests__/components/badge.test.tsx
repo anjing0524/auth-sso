@@ -1,7 +1,7 @@
 /**
  * Badge 语义色 token 测试（H-39 回归）
  *
- * 背景（DESIGN.md §使用规则 / H-39）：TSX 中禁止硬编码调色板类
+ * 背景（docs/design-system.md §使用规则 / H-39）：TSX 中禁止硬编码调色板类
  * （如 `bg-green-100` / `text-green-800`），必须引用设计系统 token。
  * 状态徽章改由 `globals.css` 的 `--color-badge-*` token 驱动。
  *

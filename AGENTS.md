@@ -199,7 +199,7 @@ API 层里生产业务模块的模块级 mock 必须是**类型化工厂**（`vi
 - pnpm@12.14.0，CI 使用 `--frozen-lockfile`
 - ESLint flat config (`eslint.base.mjs`)，`consistent-type-imports` 使用 `inline-type-imports` 风格
 - Next.js 16: Middleware 改名为 Proxy，Server Function 公开可达（三层防御原因）
-- **Docker 是构建 / 部署 / 验收的主路径**（CI 亦然，见 `.github/workflows/`，分类见其 `README.md`）。唯一入口与文件矩阵：**`docker/README.md` §7**（生产部署在 §1–§6）。
+- **Docker 是构建 / 部署 / 验收的主路径**（CI 亦然，见 `.github/workflows/`，分类见 `docs/ci.md`）。唯一入口与文件矩阵：**`docs/docker.md` §7**（生产部署在 §1–§6）。
   常用：验收栈用标准 `docker compose -f docker/compose/test.yml build|up|ps|logs|down`；
   验收闭环一条命令 `pnpm test:e2e`（`scripts/e2e/release.sh` 直接 compose + Playwright + 清理）。
   入口 `https://127.0.0.1:19443`（自签证书，`curl -k` / Playwright `ignoreHTTPSErrors`）。

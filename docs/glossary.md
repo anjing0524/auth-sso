@@ -1,7 +1,7 @@
 # Auth-SSO 领域术语表 (Glossary)
 
 > 本文件记录 Auth-SSO 系统的核心领域概念、有界上下文划分及术语定义。
-> 最后更新: 2026-10-23（对照 `apps/portal/src/db/schema/*.ts` + `apps/portal/drizzle/*.sql` 校正：邮箱大小写不敏感 ADR-026、per-client TTL ADR-024、登录会话绑定 ADR-023、暴力破解双维度 ADR-025、Gateway 能力表按真实文件路径与函数归属改写；`clients` 表无 `is_internal` 列）
+> 最后更新: 2026-10-30（文档审计：审计操作类型按 contracts 实测改为 19 种、Gateway 能力计数按表实测改为 13 项、AT 可选携带 `sid`；对照 `apps/portal/src/db/schema/*.ts` + `apps/portal/drizzle/*.sql` 校正）
 
 ---
 
@@ -218,7 +218,7 @@ ES256 密钥对存储。
   jti: string;
   iat: number;
   exp: number;
-  sid?: string;       // 仅 LoginSession 且绑定校验通过时携带（ADR-023）
+  sid?: string;       // LoginSession：绑定校验通过时携带（ADR-023）；AT：refresh 会话 id（个人中心标记当前设备）
 }
 ```
 
@@ -250,7 +250,7 @@ OAuth 2.1 强制安全机制。Gateway 端使用 CSPRNG 生成 32 字节随机�
 ### AuditLog（审计日志）
 Append-only 写操作记录，**无 FK 约束**（确保用户/实体删除后日志可读）。
 
-18 种操作类型：`USER_CREATE/UPDATE/DELETE`, `USER_ROLE_ASSIGN`, `ROLE_CREATE/UPDATE/DELETE`, `ROLE_PERMISSION_ASSIGN`, `PERMISSION_CREATE/UPDATE/DELETE`, `DEPARTMENT_CREATE/UPDATE/DELETE`, `CLIENT_CREATE/UPDATE/DELETE`, `CLIENT_SECRET_REGENERATE`, `TOKEN_REVOKE`
+19 种操作类型：`USER_CREATE/UPDATE/DELETE`, `USER_ROLE_ASSIGN`, `ROLE_CREATE/UPDATE/DELETE`, `ROLE_PERMISSION_ASSIGN`, `PERMISSION_CREATE/UPDATE/DELETE`, `DEPARTMENT_CREATE/UPDATE/DELETE`, `CLIENT_CREATE/UPDATE/DELETE`, `CLIENT_SECRET_REGENERATE`, `TOKEN_REVOKE`
 
 ### LoginLog（登录日志）
 5 种事件：`LOGIN_SUCCESS`, `LOGIN_FAILED`, `LOGOUT`, `TOKEN_REFRESH`, `TOKEN_REFRESH_FAILED`。append-only 永久保留（**不分区**）；复合索引 `(user_id, event_type, created_at)` 支撑暴力破解防护的 Redis 故障回退统计（ADR-025）。
@@ -262,7 +262,7 @@ Append-only 写操作记录，**无 FK 约束**（确保用户/实体删除后�
 
 ## Gateway (Rust) — 边缘安全（ADR-007/009 职责定义）
 
-### 完整业务能力（16 项）
+### 完整业务能力（13 项）
 
 > 路径均相对 `apps/gateway/src/`。ADR-009 落地后 OAuth 编排从 `gateway.rs` 拆出到 `oauth_flow.rs`（A3-2 / ADR-010 二期），下表按**当前实现**归属。
 
@@ -287,15 +287,6 @@ Append-only 写操作记录，**无 FK 约束**（确保用户/实体删除后�
 | 权限查询 | 不查 Redis 权限数据 |
 | 权限注入 | 不注入 X-User-Permissions |
 | 鉴权判断 | 不判断用户是否有某权限 |
-
-### ADR-009 架构决策（已实现，2026-07-23）
-
-- 认证决策收敛为 `AuthDecision` 枚举（Pass / Interrupted / PkceRequired），`request_filter` 中唯一决策点
-- `OAuthConfig` 对所有 upstream 强制必填，`client_secret` 必填
-- PKCE/认证逻辑由 Gateway 独立完成，不再透传 Portal
-- `authenticate::check` 返回 `Result<AuthDecision>`，`match expiry` 替代 `matches!`
-- 已删除项：`respond_auth_failure` HTML 透传、`oauth_passthrough_verifier`、`oidc_provider_name`、`Gateway.oidc_provider_name` 字段
-- 核心实现文件：`apps/gateway/src/auth/mod.rs`（`AuthDecision`）、`apps/gateway/src/authenticate.rs`（`check`）、`apps/gateway/src/config.rs`（`OAuthConfig` 必填）
 
 ---
 

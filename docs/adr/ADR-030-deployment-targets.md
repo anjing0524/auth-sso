@@ -5,7 +5,7 @@
 | **状态** | accepted (2026-10-29) |
 | **日期** | 2026-10-29 |
 | **决策者** | Auth-SSO 运维/部署收敛 |
-| **影响范围** | `README.md`、`docker/README.md`、`docs/INTEGRATION_GUIDE.md`、`docs/README.md`、`vercel.json`、`docker/compose/*` |
+| **影响范围** | `README.md`、`docs/docker.md`、`docs/INTEGRATION_GUIDE.md`、`docs/README.md`、`vercel.json`、`docker/compose/*` |
 
 ## 背景
 
@@ -28,7 +28,7 @@
    - `docker/compose/local.yml`：本地 PostgreSQL/Redis 依赖；
    - `docker/compose/acme-staging.yml` + `scripts/e2e/acme-staging.sh`：首次公网 ACME 演练/验证；
    - host 进程入口：已移除。
-4. **文档单一入口**：`docker/README.md` 顶部维护部署目标矩阵；根 `README.md` 只保留主路径命令与平台变体链接；
+4. **文档单一入口**：`docs/docker.md` 顶部维护部署目标矩阵；根 `README.md` 只保留主路径命令与平台变体链接；
    `docs/INTEGRATION_GUIDE.md` 只列验收栈、自托管生产、Vercel 平台三行拓扑。
 5. **保留 Vercel 的条件**：`docs/spec/REQUIREMENTS_MATRIX.md` 的 NFR-SEC-01 仍要求平台部署与
    `--no-default-features` 双构建门禁；只有该需求被正式取消时，才删除 Vercel 目标及其 CI 构建。

@@ -35,10 +35,10 @@ auth-sso/
 ├── packages/
 │   ├── contracts/     # 共享类型、错误码、权限码、OIDC 常量（枚举唯一真相源）
 │   └── config/        # 共享 env 配置：Zod 校验 + 公开 URL 推导
-├── docker/            # compose / 镜像 / ACME fixture（唯一出处见 docker/README.md）
-├── scripts/           # 本地 / 部署 / 验收 / CI 脚本（索引见 scripts/README.md）
+├── docker/            # compose / 镜像 / ACME fixture（唯一出处见 docs/docker.md）
+├── scripts/           # 本地 / 部署 / 验收 / CI 脚本（索引见 docs/scripts.md）
 ├── tests/             # E2E（Playwright）+ 需求追溯
-└── docs/              # ADR、需求规格、roadmap、术语表（入口见 docs/README.md）
+└── docs/              # 全部项目文档（ADR、规格、设计、运维索引见 docs/README.md）
 ```
 
 > **架构说明**: IDP (身份提供者) 已合并进 Portal。Portal 自身即是 OIDC Provider，不再需要独立的 IDP 服务。
@@ -106,7 +106,7 @@ Portal 只在 compose 网络内提供 4000 端口，不对宿主暴露；宿主�
 
 ```bash
 docker compose -f docker/compose/test.yml logs -f portal   # 跟随日志（gateway/postgres/redis 同理）
-docker compose -f docker/compose/test.yml down --volumes --remove-orphans          # 停机并删卷（compose down --volumes；要保留数据请改跑 stop，见 docker/README.md §7.2）
+docker compose -f docker/compose/test.yml down --volumes --remove-orphans          # 停机并删卷（compose down --volumes；要保留数据请改跑 stop，见 docs/docker.md §7.2）
 ```
 
 ### 4. 一条命令跑完整验收
@@ -124,8 +124,8 @@ docker compose -f docker/compose/local.yml up -d postgres redis   # 测试用基
 pnpm test
 ```
 
-> Docker 文件矩阵、命令、健康检查与故障排查见 **[docker/README.md](docker/README.md)**（唯一出处）；
-> 生产 ACME 部署见 `docker/README.md` §0–§6，本地验收栈见 §7。
+> Docker 文件矩阵、命令、健康检查与故障排查见 **[docs/docker.md](docs/docker.md)**（唯一出处）；
+> 生产 ACME 部署见 `docs/docker.md` §0–§6，本地验收栈见 §7。
 
 ## 自动化测试
 
@@ -161,7 +161,7 @@ node scripts/bench/gateway.mjs --url https://127.0.0.1:19443 --n 200 --c 20   # 
 最简自托管流程：
 
 ```bash
-cp .env.example .env.prod            # 再按 docker/README.md §3 补齐必填项
+cp .env.example .env.prod            # 再按 docs/docker.md §3 补齐必填项
 pnpm deploy -- --check                    # 逐项校验环境文件与 compose 配置，不启动
 pnpm deploy                       # 构建 → db-init（migrate + seed）→ 启动 → 健康检查
 pnpm deploy -- --status                   # 容器状态
@@ -175,6 +175,7 @@ Vercel 单镜像变体仅作为平台托管目标保留，不替代上述自托�
 
 - [文档地图 (docs/README.md)](docs/README.md) — 先看这里：每份文档的职责与权威性
 - [工程约定 (AGENTS.md)](AGENTS.md) — 项目结构、环境、测试体系与门禁规则（唯一出处）
+- [编码标准 (docs/coding-standards.md)](docs/coding-standards.md) — 机器能判的交给守卫，这里只收判断题
 - [AI Agent 治理工作流与技能标准 (docs/agent-governance.md)](docs/agent-governance.md) — 技能格式与路由、六阶段治理工作流、守卫台账
 - [产品需求 (docs/spec/PRD.md)](docs/spec/PRD.md) — 核心功能、业务范围与用户模型
 - [系统架构 (docs/spec/ARCHITECTURE.md)](docs/spec/ARCHITECTURE.md) — 系统组成、技术选型、认证与 SSO 流程
@@ -188,9 +189,10 @@ Vercel 单镜像变体仅作为平台托管目标保留，不替代上述自托�
 - [领域词汇表 (docs/glossary.md)](docs/glossary.md) — 领域概念的唯一真相源
 - [接入验证指南 (docs/INTEGRATION_GUIDE.md)](docs/INTEGRATION_GUIDE.md) — Gateway 代理模式与子应用接入
 - [Portal 架构规范 (docs/portal-architecture-guidelines.md)](docs/portal-architecture-guidelines.md) — 分层、组件模式与 Next.js 16 适配
-- [Docker 构建 / 部署 / 验收 (docker/README.md)](docker/README.md) — 唯一出处
-- [脚本索引 (scripts/README.md)](scripts/README.md) — `docker/`、`e2e/`、`ci/`、`bench/` 的职责与归属
-- [设计规范 (DESIGN.md)](DESIGN.md) — UI/UX 规范与品牌定义
+- [Docker 构建 / 部署 / 验收 (docs/docker.md)](docs/docker.md) — 唯一出处
+- [脚本索引 (docs/scripts.md)](docs/scripts.md) — `docker/`、`e2e/`、`ci/`、`bench/` 的职责与归属
+- [CI 工作流索引 (docs/ci.md)](docs/ci.md) — 触发文件 / 类别文件分类与命令对应
+- [设计规范 (docs/design-system.md)](docs/design-system.md) — UI/UX 规范与品牌定义
 
 ## 安全提醒
 

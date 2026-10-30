@@ -5,7 +5,7 @@
 > - **类别文件**（`workflow_call`）：一个文件一类验证，只调用仓库已有命令（`pnpm …` / `scripts/…`）；
 >   跨多步编排放 `scripts/ci/`（见「修改规则」第 3 条）。
 >
-> 命令细节不在此重复：Docker / 验收命令见 [`docker/README.md`](../../docker/README.md) §7.2，
+> 命令细节不在此重复：Docker / 验收命令见 [`docs/docker.md`](docker.md) §7.2，
 > 其余命令就是根 `package.json` 与 `apps/gateway` 的既有脚本；Docker 侧对应关系见其 §7.7。
 
 ## 文件分类
@@ -32,7 +32,7 @@
 
 > 两层依赖审计（`pnpm audit` / `cargo audit`）**不阻断**：结论看本步日志（取证经过与触发条件写在 `quality.yml` 注释里）。
 > `cargo audit` 需要先装工具（runner 不带），由 `taiki-e/install-action` 安装；`pnpm audit` 必须打官方 registry。
-> 覆盖率不是门禁：本仓 CI 从未跑 `--coverage`（见 `CODING_STANDARDS.md` 第 7 条）。
+> 覆盖率不是门禁：本仓 CI 从未跑 `--coverage`（见 `docs/coding-standards.md` 第 7 条）。
 
 ## 修改规则
 

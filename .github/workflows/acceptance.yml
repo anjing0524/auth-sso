@@ -3,7 +3,7 @@ name: Docker Acceptance
 # 类别：发布验收（验收层，每次 push/PR 阻断）。
 # 起 docker/compose/test.yml 的不可变栈，在 Playwright 官方镜像里跑 tests/e2e 全部 spec —
 # 这是仓库文档定义的发布判据（本地入口 `pnpm test:e2e`）。
-# 实现细节（为什么浏览器必须与测试同容器）在 scripts/ci/e2e.sh；与本地路径的差异见 docker/README.md §7.7。
+# 实现细节（为什么浏览器必须与测试同容器）在 scripts/ci/e2e.sh；与本地路径的差异见 docs/docker.md §7.7。
 on:
   workflow_call:
     inputs:

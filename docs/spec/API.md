@@ -1,9 +1,15 @@
 # Auth-SSO API 接口规范
 
-**版本：** v2.2
+**版本：** v2.3
 **状态：** 正式发布
-**最后更新：** 2026-10-23
-**变更：** v2.2 — 按现存 `route.ts` 重新校准端点清单（新增 `GET /api/permissions/:id/impact`、
+**最后更新：** 2026-10-30
+**变更：** v2.3（2026-10-30，文档审计轮）— 按现行代码校正失效事实与引用：§5.9 REST
+`assignedCount` 实际是**角色 ID 数组**（Action 才取长度）、分配入口改为
+`app/(dashboard)/users/[id]/roles/roles-client.tsx`；§6.4 符号名更正为 `assertDepartmentUsable`；
+§8.6 部门 DISABLED 守卫已覆盖六条写路径（无 backlog）；§10.1 日期判定符号更正为 `isIsoDate`；
+§10.4 CSV 导出已改流式（H-30，原「backlog」声明作废）；§15.2 删除已进 `.gitignore` 的
+`.zcode/` 审计产物引用。
+v2.2 — 按现存 `route.ts` 重新校准端点清单（新增 `GET /api/permissions/:id/impact`、
 `GET /api/health`、`POST /api/auth/oauth2/revoke` 的 hint 语义、`PUT /api/roles/:id/permissions` 等）；
 机器端点经 Gateway 的 `Authorization` 语义、OIDC Discovery 全字段、per-client TTL（ADR-024）、
 邮箱规范化（ADR-026）、错误码附录与状态码口径对齐代码；修正无源码依据的断言与失效的路径引用。
@@ -886,14 +892,16 @@ DELETE /api/users/:id/roles   — 移除指定角色
 | DELETE | `{ "roleId": "<uuid>" }` | **精准移除单个角色**（`RoleRemovalSchema`），绝不误删该用户其他角色；移除最后一个角色 → **400**；操作者不能修改**自己的**角色 → 403 |
 
 - 用户不存在 / 超出数据范围 → 404 `AUTH_SSO_1004`（范围外与不存在同形，ADR-014）。
-- 成功：POST 直出 `{ "assignedCount": <number> }`；DELETE 直出 `{}`。
+- 成功：POST 直出 `{ "assignedCount": ["<roleId>", ...] }`——字段名与值**不一致**：
+  值是本次绑定的**角色 ID 数组**（`lib/user-role-assignment.ts` 的 `assignUserRoles` 返回
+  `assignedCount: roleIds`），不是数量；DELETE 直出 `{}`。
 - 写编排在 `lib/user-role-assignment.ts`（范围守卫 / 事务 / 部门约束 R-USER-ROLE / 审计
   `USER_ROLE_ASSIGN` / 权限收敛），REST 与 Server Action **共用同一实现**。
 
-**Server Action：** `updateUserRolesAction(user.id, roleIds)` —— 由 Portal「分配角色」对话框
-（`users/components/AssignRoleDialog.tsx`）调用，权限 `portal:user:manage` 且 `portal:user:assign_role`，
-返回 `{ success: true, data: { assignedCount } }`。**不存在**名为 `assignUserRolesAction`
-的行动（2026-10-23 核对：全仓只有 `updateUserRolesAction`）。
+**Server Action：** `updateUserRolesAction(user.id, roleIds)` —— 由 Portal 用户详情页的角色分配区
+（`apps/portal/src/app/(dashboard)/users/[id]/roles/roles-client.tsx`）调用，权限 `portal:user:manage` 且 `portal:user:assign_role`，
+返回 `{ success: true, data: { assignedCount: <number> } }`（Action 侧取数组长度，与 REST 的数组值不同）。
+**不存在**名为 `assignUserRolesAction` 的行动（2026-10-23 核对：全仓只有 `updateUserRolesAction`）。
 
 ### 5.10 强制下线用户（REST）
 
@@ -960,7 +968,7 @@ GET /api/roles/:id
 - 系统内置角色（`is_system=true`）禁止修改/删除（专属业务码 `CANNOT_MODIFY_SYSTEM_ROLE` /
   `CANNOT_DELETE_SYSTEM_ROLE`）；
 - 角色 `code` **不可变更**（Update schema 不含 `code`）；
-- 迁入部门必须存在且 `ACTIVE`（`assertDeptUsable`，与创建路径一致）；
+- 迁入部门必须存在且 `ACTIVE`（`assertDepartmentUsable`，`apps/portal/src/lib/department-availability.ts`，与创建路径一致）；
 - 若该角色仍有绑定用户，**禁止**迁往其他部门（避免 `user_roles` 跨部门漂移——审计 H-25）；
 - 部门/状态变化会影响权限决策 ⇒ 撤销该角色全部绑定用户的 AT + 刷新权限缓存；仅改名/描述只刷缓存。
 
@@ -1197,7 +1205,8 @@ GET /api/departments/:id/members
 
 > **部门 `status=DISABLED` 的语义（2026-10-23 决策 D2）**：禁用是"管理动作开关"——禁止在
 > 该部门下新建子部门/用户/角色、禁止把角色/用户迁入；**不追溯**既有用户的登录、授权与数据范围。
-> 角色创建/迁移已实现 ACTIVE 校验；用户与子部门的同口径守卫为 backlog（详见 ADR-002 增补）。
+> 六条写路径（创建/迁移子部门、创建/迁移用户、创建/迁移角色）已统一经
+> `apps/portal/src/lib/department-availability.ts` 的 `assertDepartmentUsable` 校验（H-23），**没有剩余 backlog**。
 
 
 ---
@@ -1334,7 +1343,8 @@ TOKEN_REFRESH_FAILED`）；`startDate`/`endDate` 为 `YYYY-MM-DD`；`userId` 为
 
 > **非法值的真实行为（2026-10-23 按源码校正）：** 本路由对 `eventType` 做的是
 > **白名单过滤**——不在 `LOGIN_EVENT_VALUES` 内的值被**静默忽略**（当未传处理），
-> **不返回 400**；`startDate`/`endDate` 也由读模型的 `DATE_REGEX` 判定，格式不符时**忽略该条件**；
+> **不返回 400**；`startDate`/`endDate` 也由读模型的 `isIsoDate`（`apps/portal/src/lib/iso-date.ts`
+> 的 `ISO_DATE_PATTERN`，唯一实现）判定，格式不符时**忽略该条件**；
 > `userId` 原样透传。只有 §10.4 的导出路由对非法日期/`userId` 显式 400。
 
 ### 10.2 操作日志
@@ -1382,8 +1392,10 @@ GET /api/audit/export?type=login|operation
   `[object Object]`，实测 5205/5238 行"详情"损坏）；
 - 日期/用户筛选与列表同口径并**透传**到导出（修复前被丢弃）；
 - 全量按页循环（每页 100 行），上限 **100,000 行**；CSV 含 BOM、RFC 4180 转义与公式注入防护。
-- **规模实测（D11）**：5,238 行导出耗时 **138ms**（测试栈），当前实现足够；**>3 万行建议改流式**
-  （现为全量驻留内存 + 串行分页），列为 backlog。导出上限/性能非本轮门禁。
+- **流式输出（H-30，2026-10-23 落地）**：导出由 `createCsvStream` 以 `ReadableStream` 逐页产出，
+  首字节在读完第一页后即发出，内存占用与单页（`MAX_PAGE_SIZE` = 100 行）同阶；硬上限
+  `EXPORT_MAX_ROWS` = 100,000 行。此前"全量驻留内存 + 串行分页、>3 万行再改流式"的 backlog
+  已由该实现关闭（历史实测：5,238 行 138ms，仅作规模参考）。
 
 
 ---
@@ -1600,6 +1612,6 @@ Gateway 的路径分类来自 `[[upstreams]].public_paths`。**验收栈**（`ap
 2. 检查的是**错误码**而不只是状态码：`401 invalid_client` 与 `400 invalid_grant` 在状态码层面
    都是 4xx，但前者意味着凭证通道被网关切断。
 
-上述行为由 `tests/e2e/oidc-machine-endpoints.spec.ts` 与审计复现脚本
-（`.zcode/audit/review/A-L01/`、`.zcode/audit/gateway/18-p1-authorization-strip.txt`）钉住。
+上述行为由 `tests/e2e/oidc-machine-endpoints.spec.ts` 钉住（`.zcode/` 为本地审计产物、已进
+`.gitignore`，不作为仓库内导航引用）。
 

@@ -4,7 +4,9 @@
 
 > **版本演进说明**：本指南已针对 Next.js 16 的关键变化完成修订——包括 Cache Components（`use cache` 指令替代 `React.cache()`）、Middleware 更名为 Proxy、Server Functions 安全模型等。
 >
-> **最后更新 2026-10-23（文档校正）**：按现有代码逐条校正路径与行为。删除 `docs/brainstorms/portal-ddd-architecture-requirements.md` 引用（该目录已不在仓库，见 `docs/README.md:27`）；目录树、`packages/contracts` 文件、`lib/authz` 门面职责、`validate()` 签名、`src/proxy.ts` 实际代码、错误映射入口、测试文件路径按代码重写；删除与代码矛盾的「函数体 ≤ 25 行」「`db.query` 一律禁止」「`revalidatePath` + `revalidateTag` 双写」等规则（与 ADR-019 / 现有 `lib/cache-invalidation.ts` 冲突）。
+> **最后更新 2026-10-30（复核）**：删除指向已移出仓库的 brainstorms 需求文档的引用（历史产物清理说明见 `docs/README.md`）；`§2.5 contracts 类型扩展` 按现行 `LOGIN_EVENT_VALUES` / `lib/audit.ts` 改写（该示例的前提已不成立）；`§3.4` 的 `withScopedWrite` 样例改为现行的 `withScopedWrite` / `withGlobalWrite` 二选一（空 `targets` 已被 ADR-028 拒绝）；`lib/authz/operator.ts` 补进目录树；`proxy.ts` 行数改为实测 112；`§9` 标题与子节数对齐；`§10.1` 写后刷新改为现行的 `lib/cache-invalidation` 单一入口。
+>
+> **2026-10-23（文档校正）**：按现有代码逐条校正路径与行为。删除 `docs/brainstorms/` 目录引用（该目录已不在仓库）；目录树、`packages/contracts` 文件、`lib/authz` 门面职责、`validate()` 签名、`src/proxy.ts` 实际代码、错误映射入口、测试文件路径按代码重写；删除与代码矛盾的「函数体 ≤ 25 行」「`db.query` 一律禁止」「`revalidatePath` + `revalidateTag` 双写」等规则（与 ADR-019 / 现有 `lib/cache-invalidation.ts` 冲突）。
 
 ---
 
@@ -116,12 +118,13 @@ src/
 │   │   ├── verify-jwt.ts             #     * resolveIdentity（Gateway HMAC 信任路径 + 自验签兜底）
 │   │   ├── check-permission.ts       #     * checkPermission / requirePermission（经 lib/permissions 查 Redis+DB）
 │   │   ├── token.ts  token/          #     * JWT 签发与验签（verifyAccessToken）、signing-keys、revocation
-│   │   └── oauth-*.ts  brute-force.ts  gateway-hmac.ts  client-credentials.ts …
+│   │   └── oauth-*.ts  brute-force.ts  gateway-hmac.ts  client-credentials.ts  authorization-effects.ts …
 │   ├── authz/                        #   - 数据范围授权门面（ADR-014，写/读/纯判定三类原语）
-│   │   ├── index.ts                  #     * 唯一公开入口（scopeFilter / resolveScope / withScopedWrite / withScopedRow / withGlobalWrite）
+│   │   ├── index.ts                  #     * 唯一公开入口（scopeFilter / resolveScope / withScopedWrite / withScopedRow / withGlobalWrite / operator 三函数）
 │   │   ├── data-scope.ts             #     * resolveScope / isWithinScope / assertWithinScope（子树展开私有）
 │   │   ├── write.ts                  #     * withScopedWrite（targets 非空）/ withScopedRow / withGlobalWrite（事务 + 快照 + 守卫）
-│   │   └── query.ts                  #     * scopeFilter（空范围恒 FALSE）/ isScopeDenied
+│   │   ├── query.ts                  #     * scopeFilter（空范围恒 FALSE）/ isScopeDenied
+│   │   └── operator.ts               #     * loadOperatorAuthorization / targetHasAdminRole / assertCanMutateAdminTarget（管理员目标防提权）
 │   ├── session/                      #   - JWT/Session 模块（按职责拆分为子模块）
 │   │   ├── index.ts                  #     * 统一 Barrel
 │   │   ├── cookies.ts                #     * 只读：getJwtFromCookie / getRefreshTokenFromCookie
@@ -328,22 +331,23 @@ export function clientFromPersistence(client: Omit<Client, 'createdAt'> & { crea
 
 ### 2.5 contracts 类型扩展约定（避免枚举值重复定义）
 
-当 Portal 侧需要用比 `@auth-sso/contracts` 更丰富的类型时（如审计日志的登录事件类型比 contracts 的 `LoginEventType` 多了 `TOKEN_REFRESH`），**不得**在本地重新定义同名类型。应导入基础类型并以别名扩展：
+`@auth-sso/contracts` 是枚举值与类型的唯一真相源。历史上一度需要 Portal 侧在本地扩展登录事件类型（contracts 的 `LoginEventType` 少 `TOKEN_REFRESH` / `TOKEN_REFRESH_FAILED`），现已不需要——这两个值已进入 `LOGIN_EVENT_VALUES`（`packages/contracts/src/index.ts`），`lib/audit.ts` 直接 `import type { LoginEventType } from '@auth-sso/contracts'` 使用，**不存在** `PortalLoginEventType` 这类本地扩展型。
+
+**规则仍然成立**：当 Portal 确实需要比 contracts 更丰富的类型时，**不得**在本地重新定义同名类型，应导入基础类型并以别名扩展：
 
 ```typescript
-// lib/audit.ts  ✅ 正确做法
+// ✅ 正确做法：导入基础类型 + 别名扩展（仅当 contracts 确实不覆盖时）
 import { type LoginEventType as BaseLoginEventType } from '@auth-sso/contracts';
 
-export type PortalLoginEventType =
-  | BaseLoginEventType       // LOGIN_SUCCESS | LOGIN_FAILED | LOGOUT
-  | 'TOKEN_REFRESH'
-  | 'TOKEN_REFRESH_FAILED';
+export type PortalLoginEventType = BaseLoginEventType | '<future_event>';
 ```
 
 ```typescript
 // ❌ 错误做法：重复定义同名类型，与 contracts 脱钩
 export type LoginEventType = 'LOGIN_SUCCESS' | 'LOGIN_FAILED' | ...;
 ```
+
+> 现行状态（2026-10-30 核对）：contracts 已覆盖 Portal 的全部登录事件与审计操作，代码中没有本地扩展类型；新增事件应先改 contracts 的常值数组，而不是在 Portal 侧重定义。
 
 ---
 
@@ -400,7 +404,7 @@ export const UpdateUserInputSchema = z.object({
   email: EmailSchema.optional(),
   status: userStatusEnum.optional(),            // ← 复用，非内联字面量
   deptId: z.string().nullable().optional(),
-  avatarUrl: z.string().max(500, '头像地址最多 500 个字符').optional(),
+  avatarUrl: z.string().url('头像 URL 格式不合法').max(500, '头像地址最多 500 个字符').nullable().optional(),
 });
 export type UpdateUserInput = z.infer<typeof UpdateUserInputSchema>;
 ```
@@ -453,7 +457,7 @@ export class BusinessRuleViolationError extends DomainError {
 
 export class DuplicateEntityError extends DomainError {
   constructor(entity: string, field: string, code: ErrorCode = COMMON_ERRORS.VALIDATION_ERROR) {
-    super(code, `${entity} 的 ${field} 已存在`, 409);
+    super(code, `${entity}${field}已存在`, 409);
   }
 }
 
@@ -592,7 +596,7 @@ import { createUser, userToInsertRow } from '@/domain/user/user';
 import { CreateUserInputSchema, type CreateUserInput } from '@/domain/user/types';
 import { generateUUID } from '@/lib/crypto';
 import { hashPassword } from '@/domain/auth/password';
-import { withScopedWrite } from '@/lib/authz';
+import { withScopedWrite, withGlobalWrite } from '@/lib/authz';
 import { USER_PERMISSIONS } from '@auth-sso/contracts';
 import type { ApiResponse } from '@auth-sso/contracts';
 
@@ -609,17 +613,22 @@ export const createUserAction = withAuth(
 
     const passwordHash = await hashPassword(v.data.password);   // bcrypt 在事务外（不占 DB 连接）
 
-    // 范围守卫 + 查重 + 插入同一事务（ADR-014）；handler 只拿得到 tx
-    const result = await withScopedWrite(
-      {
-        operatorId: ctx.userId,
-        targets: v.data.deptId ? [{ deptId: v.data.deptId, message: '无权在指定部门下创建用户' }] : [],
-        preflight: async (tx) => { if (v.data.deptId) await assertDepartmentUsable(tx, v.data.deptId, '在该部门下创建用户'); },
-      },
-      async (tx) => {
-        /* 查重 → createUser → tx.insert(schema.users).values({ ...userToInsertRow(user), passwordHash }) */
-      },
-    );
+    // 范围守卫 + 查重 + 插入同一事务（ADR-014）；handler 只拿得到 tx。
+    // deptId 为空是历史遗留的"无部门用户"，属于全局资源写——走具名 withGlobalWrite
+    // （ADR-028：空 targets 在类型与运行时都被拒绝，不能用 targets: [] 静默跳过守卫）。
+    const createInTx = async (tx: DbTxHandle) => {
+      /* 查重 → createUser → tx.insert(schema.users).values({ ...userToInsertRow(user), passwordHash }) */
+    };
+    const result = v.data.deptId
+      ? await withScopedWrite(
+          {
+            operatorId: ctx.userId,
+            targets: [{ deptId: v.data.deptId, message: '无权在指定部门下创建用户' }],
+            preflight: async (tx) => assertDepartmentUsable(tx, v.data.deptId!, '在该部门下创建用户'),
+          },
+          createInTx,
+        )
+      : await withGlobalWrite({ operatorId: ctx.userId, resource: '无部门用户' }, createInTx);
 
     invalidateResource('users');                        // 路径 + 标签唯一真相源（SSR 位置用这个）
     return { success: true, data: { id: result.id }, message: '用户创建成功' };
@@ -811,7 +820,7 @@ export default [
 | **Server Action** | `actions.ts` | `next/cache`（经 `lib/cache-invalidation`）, `domain/`, `lib/auth` (`withAuth`), `lib/authz`, `lib/validation`, `infrastructure/db` | **不得含业务逻辑判断**，只做「编排 + 映射」（见 ADR-019）。`validate(schema, input)` 校验入参，`xxxToInsertRow()` 统一 DB 映射，Drizzle 直调 + 事务 | `complexity`(15) / `max-depth`(4) |
 | **API 路由** | `route.ts` | `next/server`, `domain/`, `lib/auth` (`withPermission`), `lib/authz`, `lib/response`, `infrastructure/db` | REST 写网关，约束同上（不得含业务逻辑判断）。使用 `withPermission()` 包装 | `complexity`(15) / `max-depth`(4) |
 | **领域操作（编排）** | `lib/<area>/<operation>.ts` | `domain/`, `infrastructure/db`, 其他 `lib/*` | 一个具名业务操作的步骤编排（bcrypt/DB/会话撤销/外部副作用）。**Controller 变薄的正确途径是给操作起名字**，而不是削行数（ADR-019）。现有实例：`lib/account/{change-password,reset-password}.ts` | — |
-| **数据范围门面** | `lib/authz/{index,data-scope,write,query}.ts` | `infrastructure/db`, `drizzle-orm`, `domain/shared/errors` | 范围快照与使用必须绑定同一执行器（ADR-014 / ADR-028）：写路径用 `withScopedWrite`（targets 非空）/ `withScopedRow`（先加载行）/ `withGlobalWrite`（根部门等全局资源），读路径只用 `scopeFilter` / `isScopeDenied`，纯判定用 `isWithinScope` / `assertWithinScope`。**不导出** `getUserRoleDeptIds` / `canAccessDept` | — |
+| **数据范围门面** | `lib/authz/{index,data-scope,write,query,operator}.ts` | `infrastructure/db`, `drizzle-orm`, `domain/shared/errors` | 范围快照与使用必须绑定同一执行器（ADR-014 / ADR-028）：写路径用 `withScopedWrite`（targets 非空）/ `withScopedRow`（先加载行）/ `withGlobalWrite`（根部门等全局资源），读路径只用 `scopeFilter` / `isScopeDenied`，纯判定用 `isWithinScope` / `assertWithinScope`；管理员目标防提权用 `loadOperatorAuthorization` / `targetHasAdminRole` / `assertCanMutateAdminTarget`。**不导出** `getUserRoleDeptIds` / `canAccessDept` | — |
 | **领域层核心** | `domain/*/*.ts` | **仅限 `@auth-sso/contracts` + `zod` + `bcryptjs` + `jose`（类型）+ `node:crypto`** | 纯函数计算 + `xxxToInsertRow`/`xxxToUpdateRow`/`xxxFromPersistence` DB 行转换。枚举值必须从 contracts 导入 | 人工（boundaries 未启用） |
 | **领域实体接口** | `domain/*/types.ts` | 纯 TS `interface`，`zod` | 替代旧 `UserPropsSchema`。Interface 不绑 Zod，仅描述实体结构。与 Drizzle `$inferSelect` 的兼容性由编译期守卫保证（`db/schema/index.ts` 底部） | — |
 | **领域错误** | `domain/shared/errors.ts` | 仅限纯 TypeScript + contracts 的错误码 | DomainError 基类及子类（各自携带 status） | 人工 |
@@ -916,7 +925,7 @@ Gateway 代码位于 `apps/gateway/src/gateway.rs`（ProxyHttp 五阶段，Cooki
 
 ### 8.2 第二层：Proxy（同源校验 + JWT 存在性）
 
-真实实现见 `apps/portal/src/proxy.ts`（108 行）：`isCrossSiteWrite()` 先做同源校验，再按白名单放行，最后检查 JWT Cookie：
+真实实现见 `apps/portal/src/proxy.ts`（实测 112 行）：`isCrossSiteWrite()` 先做同源校验，再按白名单放行，最后检查 JWT Cookie：
 
 ```typescript
 // apps/portal/src/proxy.ts（节选，签名与顺序与代码一致）
@@ -982,7 +991,7 @@ export function withAuth<TArgs extends unknown[], TData>(
 
 ---
 
-## 九、 极简架构的三个开发防线 (防腐关口)
+## 九、 极简架构的六条开发防线 (防腐关口)
 
 为了防止去掉 Repository/Mapper 等重度抽象后，代码在后续迭代中退化为混乱的“泥潭”，所有全栈开发者必须严格坚守以下三条设计防线：
 
@@ -1044,7 +1053,7 @@ export function withAuth<TArgs extends unknown[], TData>(
 | **Client Component** | 交互状态管理 | `useState`/`useOptimistic`/`useTransition` |
 | **Server Action** | 写操作 | `'use server'` 函数，可被 Client 直接调用 |
 
-**Props 从 Server 流向 Client**：Server Component 获取数据 → Client Component 接收 → Client 管理交互状态 → Server Action 写回 → `revalidatePath` + `router.refresh()` 刷新 Server 数据。
+**Props 从 Server 流向 Client**：Server Component 获取数据 → Client Component 接收 → Client 管理交互状态 → Server Action 写回 → 经 `lib/cache-invalidation.ts` 失效读模型 + `router.refresh()` 刷新 Server 数据（**不是**在调用点写 `revalidatePath`，见 §七 第 13 条）。
 
 ### 10.2 落地模式
 

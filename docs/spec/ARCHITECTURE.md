@@ -1,10 +1,11 @@
 # 系统架构 -- Auth-SSO
 
-**版本：** v5.6
+**版本：** v5.7
 **状态：** 已发布（Released）
-**最后更新：** 2026-10-23
-**上一版：** v5.5 — Gateway TLS 能力按部署拓扑编译：自托管默认构建保留 ACME，平台 TLS 构建在编译期排除 ACME 模块与专属依赖
-**变更：** v5.6（2026-10-23）— 按现有代码校正文档与实现漂移：§2 Redis 用途与权限缓存 TTL（3600s ± 300s 抖动，非固定 5 分钟）；§3.2 分层目录与 CQRS 残段重写为真实路径；§4.x 链路对齐 `lib/authz` 门面与 `authorization-effects`；§6 链路的层间顺序与数字；§7 JWT 载荷（aud=client_id 而非 auth-sso）与私钥 AES-256-GCM 加密存储；§8 端点清单（`/api/auth/callback` 无 Portal handler）；§9.1 metrics 独立令牌已落地。全文代码引用统一为「仓库相对路径 + 符号名」，不写行号（行号必漂移）。
+**最后更新：** 2026-10-29
+**上一版：** v5.6 — 按现有代码校正文档与实现漂移（Redis 用途与 TTL、分层目录、JWT 载荷、端点清单等）
+**变更：** v5.7（2026-10-29）— 文档审计轮，按现行代码删除/改写落后章节：§3.2 目录树（`proxy.ts` 在 `src/` 根、`roles/[id]/permissions/`、`audit-logs/[id]/` 与 `app/audit/data.ts`）与 Layout 守卫改述为 `<PermissionGate>`；§5.1 删除「login 写 `oauth_request_binding`」的错误步骤；§6.3 撤销触发场景计数「五类」更正为六条；§7.2 访问令牌载荷补 `sid`；§8 `api/auth/` 入口计数更正；§10 `packages/config` 职责纠正；附录 `lib/authz` 导出清单补 `withGlobalWrite` 与 `operator.ts`。
+**历史：** v5.6（2026-10-23）— 按现有代码校正文档与实现漂移：§2 Redis 用途与权限缓存 TTL（3600s ± 300s 抖动，非固定 5 分钟）；§3.2 分层目录与 CQRS 残段重写为真实路径；§4.x 链路对齐 `lib/authz` 门面与 `authorization-effects`；§6 链路的层间顺序与数字；§7 JWT 载荷（aud=client_id 而非 auth-sso）与私钥 AES-256-GCM 加密存储；§8 端点清单（`/api/auth/callback` 无 Portal handler）；§9.1 metrics 独立令牌已落地。全文代码引用统一为「仓库相对路径 + 符号名」，不写行号（行号必漂移）。
 
 ---
 
@@ -78,17 +79,17 @@ Portal 遵循四层架构，具有严格的依赖方向：
 
 ```
 src/（路径别名 @/ = src/）
-├── app/（控制层 - Next.js App Router；含根级 proxy.ts）
-│   ├── proxy.ts               路由守卫（Next.js 16 Proxy）：同源写校验 + Cookie 存在性
+├── proxy.ts                   路由守卫（Next.js 16 Proxy）：同源写校验 + Cookie 存在性
+├── app/（控制层 - Next.js App Router）
 │   ├── (dashboard)/           管理后台（路由组）
-│   │     ├── users/           page.tsx + data.ts（读）+ actions.ts（写）+ components/
-│   │     ├── roles/           同上（无 [id]/，编辑走 components/ 对话框）
+│   │     ├── users/           page.tsx + data.ts（读）+ actions.ts（写）+ components/ + [id]/
+│   │     ├── roles/           同上 + [id]/permissions/（编辑走 components/ 对话框）
 │   │     ├── clients/         同上 + [id]/ + new/
 │   │     ├── departments/     同上
-│   │     ├── permissions/     同上
-│   │     ├── audit-logs/      仅 page.tsx + components/（无 data.ts / actions.ts）
+│   │     ├── permissions/     同上 + new/ + [id]/edit/
+│   │     ├── audit-logs/      page.tsx + [id]/ + components/（读模型是 app/audit/data.ts，无 actions.ts）
 │   │     ├── dashboard/       仅 page.tsx + data.ts
-│   │     └── profile/         page.tsx + actions.ts + sessions.ts（写自己资料）
+│   │     └── profile/         page.tsx + actions.ts + session-actions.ts + sessions.ts（写自己资料）
 │   ├── api/auth/              OIDC 提供商 + 会话路由处理器
 │   │     ├── oauth2/{authorize,token,userinfo,introspect,revoke}/route.ts
 │   │     ├── jwks、login、logout、refresh/route.ts
@@ -112,7 +113,8 @@ src/（路径别名 @/ = src/）
 │   │                check-permission.ts、authorization-effects.ts、brute-force.ts、gateway-hmac.ts、
 │   │                client-credentials.ts、oauth-{body,grant,helpers}.ts、navigation-trust.ts、index.ts
 │   ├── authz/       数据范围门面（ADR-014）：data-scope.ts（resolveScope / isWithinScope）、
-│   │                query.ts（scopeFilter / isScopeDenied）、write.ts（withScopedWrite / withScopedRow / withGlobalWrite）、index.ts
+│   │                query.ts（scopeFilter / isScopeDenied）、write.ts（withScopedWrite / withScopedRow / withGlobalWrite）、
+│   │                operator.ts（授权决策的授权：loadOperatorAuthorization / assertCanMutateAdminTarget）、index.ts
 │   ├── session/     cookies.ts（只读取）、jwt.ts（不验签解码）、revoke.ts（jti 黑名单）、
 │   │                auth-request-store.ts（Redis 暂存授权参数）、index.ts
 │   ├── permissions.ts     权限上下文查询 + Redis 旁路缓存（getUserPermissionContext 等）
@@ -141,7 +143,7 @@ src/（路径别名 @/ = src/）
 
 1. `data.ts` — **读模型唯一入口**：`"use cache"` + `cacheLife()` + `cacheTag()` 包裹的 Drizzle 查询，签名接收 `UserScope`（由 `lib/authz` 的 `resolveScope` 在缓存作用域**外**取得）而非自行鉴权。仅 `users` / `roles` / `clients` / `departments` / `permissions` / `dashboard` 有该文件（证据：`apps/portal/src/app/(dashboard)/users/data.ts` 的 `getUsers`）。
 2. `actions.ts` — **写模型**：`'use server'` + `withAuth(...)` 包装，只做 Zod 门禁 → 领域纯函数 → `db.transaction()` → `invalidateResource()`（`lib/cache-invalidation.ts`）。
-3. `page.tsx` / `components/` — 只读渲染与交互组件；页面鉴权在 `layout.tsx` 用 `requirePermission`（`React.cache` 去重）。
+3. `page.tsx` / `components/` — 只读渲染与交互组件；页面鉴权在 `layout.tsx` 由 `<PermissionGate>` 装载（内部 `requirePermission`，`React.cache` 去重）。
 
 例外：外部集成、跨域与 OIDC 回调写操作放在 `app/api/**/route.ts`，用 `withPermission` 包装，写后失效必须用 `invalidateResourceFromRoute()`。
 
@@ -292,8 +294,9 @@ Portal Admin UI 自身的 OAuth Client 职责由 Gateway（Rust/Pingora）统一
 5. [Portal]      POST /api/auth/login → 验证凭据 → 签发 login_session JWT (5min)
                     |- 返回 JSON：绑定成功时 { redirect: "/api/auth/oauth2/authorize?session_id={sid}" }，否则 {}
                        （无 success 字段；失败走 { error, message } + 4xx，见 lib/response.ts 的 restError）
-                    |- Set-Cookie: login_session（Path=/api/auth/oauth2/authorize）
-                    |- 另写 oauth_request_binding（Path=/api/auth，5min；H-02 浏览器维度绑定）
+                    |- Set-Cookie: login_session（Path=/api/auth/oauth2/authorize；`sid` claim 仅在
+                       绑定校验通过时携带。绑定 Cookie `oauth_request_binding` 不在此写，由 authorize
+                       分支 B 更早下发，见 §3.1(5) 与 API §3.3）
 
 6. [浏览器]      JS 导航 → GET /api/auth/oauth2/authorize?session_id={sid}
                     |- 验 login_session（typ=login+jwt、aud=auth-sso）→ sid 与绑定 Cookie 必须匹配
@@ -564,7 +567,7 @@ portal:user_jti:{userId}   → Hash {jti: exp, ...} (按用户批量撤销)
 - 管理员封禁/锁定用户 → `revokeUserAccessByUserId(userId)`（`lib/session/revoke.ts` 的 `revokeUserAccessByUserId`）
 - 密码修改 → 会话双层终止（RT 撤销 + AT 的 jti 批量写黑名单，见 `lib/account/change-password.ts`）
 - **权限决策变更** → 强制相关用户重登，消除凭据与权限缓存的双源不一致：
-  - 以下五类**全部经 `lib/auth/authorization-effects.ts` 收敛**，顺序与配对由该 module 固定为「先撤销 AT、后刷新缓存」：
+  - 以下六类**全部经 `lib/auth/authorization-effects.ts` 收敛**，顺序与配对由该 module 固定为「先撤销 AT、后刷新缓存」：
     - 用户角色分配/移除（`/api/users/[id]/roles` POST 与 DELETE，`lib/user-role-assignment.ts` 的 `revokeAndRefreshAuthorization` 调用点）→ 撤销该用户
     - 用户部门变更（`updateUserAction` 中 `deptId` 实际变化，`users/actions.ts` 的 `revokeAndRefreshAuthorization` 调用点）→ 撤销该用户
     - 角色权限绑定变更（`lib/role-permission-assignment.ts`）→ 该角色全部绑定用户
@@ -621,7 +624,7 @@ revokeAllRefreshTokens(executor, userId)  （lib/auth/token.ts 的 revokeAllRefr
 | **访问令牌（Access Token）** | ES256 JWT | 1 小时（per-client `access_token_ttl`，钳制 60s–24h，ADR-024） | `portal_jwt_token` HttpOnly Cookie | 认证；授权数据在 Redis `portal:user_perms:{userId}`（ADR-006） |
 | **刷新令牌（Refresh Token）** | 不透明（数据库中 SHA-256 哈希存储） | 7 天（per-client `refresh_token_ttl`，钳制 5min–30d，ADR-024） | `portal_refresh_token` HttpOnly Cookie | 静默令牌续期 |
 
-**JWT 载荷**（访问令牌 Access Token，ADR-006 最小化后）仅包含身份/协议字段：`sub`（用户 ID）、`client_id`（签发对象，RFC 9068 形态）、`scope`（授予范围，仅当非空时写入）、`iss`（签发者，env 驱动 URL —— `PORTAL_ISSUER` 优先、默认 `NEXT_PUBLIC_APP_URL`，OIDC Discovery §4.3 要求与 discovery URL 同源，见 ADR-012）、`aud`（= 签发对象 client_id，ADR-013，**已实现**：`apps/portal/src/lib/auth/token.ts` 的 `signAccessToken` 中 `.setAudience(clientId)`）、`jti`（唯一标识）、`iat`（签发时间）、`exp`（过期时间）。已删除 `roles`、`permissions`、`deptIds`——鉴权数据全部存于 Redis（`portal:user_perms:{userId}`）。
+**JWT 载荷**（访问令牌 Access Token，ADR-006 最小化后）仅包含身份/协议字段：`sub`（用户 ID）、`client_id`（签发对象，RFC 9068 形态）、`scope`（授予范围，仅当非空时写入）、`sid`（refresh 会话 id，仅在携带时写入；个人中心据此标记"当前设备"，2026-10-26 起）、`iss`（签发者，env 驱动 URL —— `PORTAL_ISSUER` 优先、默认 `NEXT_PUBLIC_APP_URL`，OIDC Discovery §4.3 要求与 discovery URL 同源，见 ADR-012）、`aud`（= 签发对象 client_id，ADR-013，**已实现**：`apps/portal/src/lib/auth/token.ts` 的 `signAccessToken` 中 `.setAudience(clientId)`）、`jti`（唯一标识）、`iat`（签发时间）、`exp`（过期时间）。已删除 `roles`、`permissions`、`deptIds`——鉴权数据全部存于 Redis（`portal:user_perms:{userId}`）。
 
 > 区别两处 `aud`：Access Token 的 `aud` = 签发对象 `client_id`（Portal 自身流程恒为 `"portal"`，Gateway 校验预期值 = 网关自身 client_id）；`"auth-sso"`（`PORTAL_AUD`）只用于 Login Session Token 的 `aud`（`signLoginSession` 中 `.setAudience(PORTAL_AUD)`）——旧文"AT 的 aud 是体系级固定值"已作废。
 
@@ -654,7 +657,7 @@ revokeAllRefreshTokens(executor, userId)  （lib/auth/token.ts 的 revokeAllRefr
 | 刷新（Refresh） | POST | `/api/auth/refresh` | 令牌刷新（轮换访问令牌 + 刷新令牌对）；仅对验过 Gateway HMAC 的调用在 JSON body 回传 token |
 | Discovery | GET | `/.well-known/openid-configuration` | OIDC Discovery（issuer / jwks_uri / 各端点 + 自定义扩展字段） |
 
-> **Route Handler 目录即清单**：`apps/portal/src/app/api/auth/` 下只有 `jwks/`、`login/`、`logout/`、`oauth2/{authorize,token,userinfo,introspect,revoke}/`、`refresh/` 六个入口，**不存在** `callback/route.ts`。该表因此不维护"是否已实现"的人工状态（那会过期），而以文件系统为准。
+> **Route Handler 目录即清单**：`apps/portal/src/app/api/auth/` 下只有 `jwks/`、`login/`、`logout/`、`oauth2/{authorize,token,userinfo,introspect,revoke}/`、`refresh/` 五个目录入口，**不存在** `callback/route.ts`。该表因此不维护"是否已实现"的人工状态（那会过期），而以文件系统为准。
 
 ---
 
@@ -700,7 +703,7 @@ auth-sso/
   |
   |-- packages/
   |     |-- contracts/    共享类型、错误码、权限码、OIDC 常量
-  |     |-- config/       Zod 环境变量模式、URL 推导、TypeScript/ESLint 配置
+  |     |-- config/       Zod 环境变量模式、URL 推导（TypeScript/ESLint 预设在仓库根：`tsconfig.base.json` / `eslint.base.mjs`）
   |
   |-- scripts/            工具脚本（种子数据、维护）
   |-- tests/              E2E（Playwright）、集成测试、可追溯性
@@ -724,9 +727,10 @@ auth-sso/
 | `apps/portal/src/lib/auth/verify-jwt.ts` | JWT 载荷解码与验证 |
 | `apps/portal/src/lib/auth/guard.ts` | 请求级认证守卫高阶函数（withAuth / withPermission） |
 | `apps/portal/src/lib/auth/check-permission.ts` | 权限校验核心（Redis → DB 级联查询） |
-| `apps/portal/src/lib/authz/index.ts` | 数据范围授权**唯一门面**（ADR-014）：只导出 `resolveScope` / `withScopedWrite` / `withScopedRow` / `scopeFilter` / `isScopeDenied` / `isWithinScope` / `assertWithinScope`；不导出 `getUserRoleDeptIds` / `canAccessDept` |
+| `apps/portal/src/lib/authz/index.ts` | 数据范围授权**唯一门面**（ADR-014）：导出 `resolveScope` / `withScopedWrite` / `withScopedRow` / `withGlobalWrite` / `scopeFilter` / `isScopeDenied` / `isWithinScope` / `assertWithinScope`，以及 operator 助手（`loadOperatorAuthorization` / `targetHasAdminRole` / `assertCanMutateAdminTarget`，ADR-029）；不导出 `getUserRoleDeptIds` / `canAccessDept` |
 | `apps/portal/src/lib/authz/data-scope.ts` | 范围快照与纯判定（`resolveScope` + `ancestors` 物化路径子树展开、`isWithinScope`） |
 | `apps/portal/src/lib/authz/query.ts` / `write.ts` | 读路径条件构造（空范围恒 `FALSE`）/ 写路径事务内快照 + 断言 |
+| `apps/portal/src/lib/authz/operator.ts` | 「授权决策的授权」：事务内操作者授权快照与高权目标保护（`loadOperatorAuthorization` / `assertCanMutateAdminTarget`） |
 | `apps/portal/src/lib/auth/authorization-effects.ts` | 权限决策变更收敛：`revokeAndRefreshAuthorization`（先撤销后刷新）/ `refreshAuthorizationCache` |
 | `apps/portal/src/lib/auth/index.ts` | 鉴权公开入口（直接导出子模块） |
 | `apps/portal/src/lib/session/cookies.ts` | Cookie **只读**工具（`getJwtFromCookie` / `getRefreshTokenFromCookie`；写入分散在 login/refresh/logout handler） |
@@ -734,7 +738,7 @@ auth-sso/
 | `apps/portal/src/lib/session/revoke.ts` | jti 黑名单吊销与撤销 |
 | `apps/portal/src/lib/session/auth-request-store.ts` | OAuth 授权参数暂存（Redis portal:auth_req:） |
 | `apps/portal/src/lib/permissions.ts` | 权限上下文查询 + Redis 缓存层 |
-| `apps/portal/src/lib/crypto.ts` | ID/Secret 随机生成 |
+| `apps/portal/src/lib/crypto.ts` | ID/Secret 随机生成；JWKS 私钥 AES-256-GCM 加解密（`encryptPrivateKey` / `decryptPrivateKey`） |
 | `apps/portal/src/infrastructure/db/index.ts` | Drizzle + postgres-js 连接池 |
 | `apps/portal/src/infrastructure/redis/index.ts` | ioredis 客户端单例 |
 | `apps/gateway/src/tls.rs` | TLS 证书完整性校验、内存快照和握手期热加载 |

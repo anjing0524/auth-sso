@@ -2,7 +2,7 @@ name: Main Branch CI
 
 # 触发文件：只声明「何时跑、跑哪些类别、产物参数」，不含任何作业实现。
 # 类别文件：quality.yml（质量门禁）/ acceptance.yml（发布验收）/ acme.yml（ACME 专项）。
-# 分类约定见 .github/workflows/README.md；分层理由见 docker/README.md §7.7。
+# 分类约定见 docs/ci.md；分层理由见 docs/docker.md §7.7。
 on:
   push:
     branches: [main]

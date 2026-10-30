@@ -29,11 +29,11 @@
 - **只有多步编排才配脚本**：单条 `docker compose` / `pnpm` 能完成的，不新增包装。
 - **验收栈由 Compose 直接管理**：构建、启动、状态、日志、停机都用标准 `docker compose -f docker/compose/test.yml`；
   只有“构建/启动 → Playwright → 清理”这一整套闭环放在 `e2e/release.sh`。
-- **生产部署需要一个安全入口**：`docker/deploy.sh` 负责环境校验、镜像备份、健康检查、回滚；这是有状态操作，不是纯包装。
+- **生产部署需要一个安全入口**：`scripts/docker/deploy.sh` 负责环境校验、镜像备份、健康检查、回滚；这是有状态操作，不是纯包装。
 - **CI 脚本只被 workflow 调用**；本地与 CI 用同一份 compose、同一服务列表、同一 base URL。
 - 脚本先解析仓库根，不依赖调用者 cwd；失败必须非零退出。
 
 ## 与 Docker 配置的关系
 
-`docker/` 放声明式配置（compose / Dockerfile / ACME fixtures / 文档），本目录放命令式编排；
-验收栈说明见 [`docker/README.md`](../docker/README.md) §7。
+`docker/` 放声明式配置（compose / Dockerfile / ACME fixtures），本目录放命令式编排；
+说明见 [`docs/docker.md`](docker.md) §7。

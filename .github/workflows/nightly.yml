@@ -1,7 +1,7 @@
 name: Nightly Acceptance
 
 # 触发文件：只声明「何时跑、跑哪些类别、产物参数」，不含任何作业实现。
-# 夜间验收：把高成本、易受外部环境影响的验证从每次 push/PR 里移出来（分层见 docker/README.md §7.7）。
+# 夜间验收：把高成本、易受外部环境影响的验证从每次 push/PR 里移出来（分层见 docs/docker.md §7.7）。
 # - quality / acceptance：与 push/PR 同一套阻断门禁（复验主干当天状态）；
 # - acme：预检 + Pebble 全生命周期（lifecycle: true，~14min）。
 # 结果作为发布前的稳定性证据；失败不阻塞当日开发推送，但需在 24h 内修复。

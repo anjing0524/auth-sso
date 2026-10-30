@@ -13,7 +13,7 @@
 | 本地依赖 | `docker/compose/local.yml` | 非部署：仅本地 PG/Redis |
 | ACME staging 演练 | `docker/compose/acme-staging.yml` + `scripts/e2e/acme-staging.sh` | 非部署：首次公网签发验证 |
 
-决策依据：[ADR-030](../docs/adr/ADR-030-deployment-targets.md)。
+决策依据：[ADR-030](adr/ADR-030-deployment-targets.md)。
 
 ## 目录结构
 
@@ -31,7 +31,6 @@ docker/
 │   └── vercel.Dockerfile
 ├── acme/                   # Pebble 配置与测试 CA（仅 test.yml 的 acme profile）
 ├── init-db.sql             # PG 首启初始化：创建 auth_sso_test
-└── README.md               # 本文（唯一出处）
 ```
 
 `.dockerignore` 必须留在**仓库根**（构建上下文根约束，见 §2）。
@@ -141,7 +140,7 @@ GATEWAY_SHARED_SECRET=<随机串>
 生产 Compose 将 `ACME_STATE_DIR` 固定为 `/var/lib/gateway/acme` 并挂载 `gateway_acme` volume，无需在 `.env.prod` 重复配置。
 
 > **PostgreSQL 18 升级注意**：PG 18 不能直接复用 PG 16 的 `data/postgres` 数据目录；从旧版本升级必须先 `pg_dump`，清空旧目录后用新容器初始化再 `pg_restore`。Redis 8 沿用兼容协议，但仍建议升级前做快照。
-> **PG 18 挂载路径**：Docker 官方 18 镜像的数据目录是 `/var/lib/postgresql`（数据实际落在版本子目录），不能继续挂 `/var/lib/postgresql/data`；`prod.yml` / `test.yml` / `local.yml` / `acme-staging.yml` 已同步。
+> **PG 18 挂载路径**：Docker 官方 18 镜像的数据目录是 `/var/lib/postgresql`（数据实际落在版本子目录），不能继续挂 `/var/lib/postgresql/data`；`prod.yml` 与 `local.yml` 已同步（`test.yml` 的 PG 数据不持久化、`acme-staging.yml` 不含 PG 服务）。
 
 首次上线建议先把 `ACME_DIRECTORY_URL` 临时设为 Let's Encrypt staging：
 
@@ -257,12 +256,9 @@ ACME_STAGING_PUBLIC_REACHABLE=true \
 ## 7. 本地开发 / 发布验收（`docker/compose/test.yml`，与 CI 同路径）
 
 > 结论：**验收与生产全部走 Docker**；本地原生启动只用于 Portal UI 开发（`pnpm dev`，不进入验收入口）。
-> 2026-10-20 实测（离线镜像）：`docker compose -f docker/compose/test.yml build` 成功（portal 的 `next build` 走 Next 16 默认
-> **Turbopack**：`✓ Compiled successfully in 10.5s`；gateway `cargo build --release`）、
-> `docker compose -f docker/compose/test.yml up -d --wait --wait-timeout 600` 全健康、`pnpm test:e2e` **1/1 通过**。
 >
 > **本地开发入口**：`pnpm dev` / `pnpm dev -- --reset` 启动本地 PG18/Redis8 + Portal（4100），
-> 见 [`docs/local-development.md`](../docs/local-development.md)；它不是验收入口，`tests/e2e` 仍只打 Docker 栈。
+> 见 [`docs/local-development.md`](local-development.md)；它不是验收入口，`tests/e2e` 仍只打 Docker 栈。
 
 ### 7.1 运行入口
 
@@ -273,7 +269,7 @@ ACME_STAGING_PUBLIC_REACHABLE=true \
 | `scripts/e2e/acme-e2e.sh` / `scripts/e2e/acme-staging.sh` | ACME 验收 | ACME 改动 |
 | `scripts/docker/deploy.sh` | 生产部署（§4） | 上线 / 回滚 |
 
-> 文件职责与有效性见文首「文件有效性审计」；脚本归属规则见 [`scripts/README.md`](../scripts/README.md)。
+> 文件职责与有效性见文首「文件有效性审计」；脚本归属规则见 [`docs/scripts.md`](scripts.md)。
 
 ### 7.2 常用命令（命令的唯一维护处；其他文档只引用本节）
 
@@ -345,14 +341,14 @@ portal 仅在 compose 网络内暴露 4000，不映射宿主端口。
 | 浏览器证书告警 | 自签证书；验收用 `ignoreHTTPSErrors` / `curl -k` |
 | e2e 连不上 | `docker compose -f docker/compose/test.yml ps`；确认 gateway healthy 且宿主 19443 映射存在 |
 | 想保留现场（**数据会被删**） | `E2E_KEEP_STACK=1 pnpm test:e2e`；或手动 `docker compose ... up` 后跑 `pnpm exec playwright test tests/e2e/` |
-| 想保留**数据卷** | 不要在排查中跑 `docker compose -f docker/compose/test.yml down --volumes --remove-orphans` / `clean`（两者都是 `--volumes`）；只停容器用 `docker compose -f docker/compose/test.yml stop` |
+| 想保留**数据卷** | 不要在排查中跑 `docker compose -f docker/compose/test.yml down --volumes --remove-orphans`（带 `--volumes` 会删数据卷）；只停容器用 `docker compose -f docker/compose/test.yml stop` |
 
 ### 7.7 CI 对应关系
 
 CI 配置在 [`.github/workflows/`](../.github/workflows/)：**触发文件**（`pr.yml` / `main.yml` / `nightly.yml` /
 `release-validation.yml`）只声明触发与产物参数，**类别文件**（`quality.yml` / `acceptance.yml` / `acme.yml`）
 各承担一类验证。文件分类、触发矩阵与「CI 步骤 → 现有命令」的唯一维护处是
-[`.github/workflows/README.md`](../.github/workflows/README.md)；本节只写 **Docker 侧**的对应关系。
+[`docs/ci.md`](ci.md)；本节只写 **Docker 侧**的对应关系。
 
 CI 复用同一份 compose 与服务列表，只有**浏览器运行器**不同：
 宿主机没有 Node/Playwright 依赖，改在 Playwright 官方镜像里跑：
@@ -365,7 +361,7 @@ CI 复用同一份 compose 与服务列表，只有**浏览器运行器**不同�
 | `acceptance.yml` / `docker-release` | `postgres redis cert-init db-init portal gateway` | 实现 = `scripts/ci/e2e.sh`（见下） |
 | `acme.yml` / `lifecycle` | `test.yml` 的 acme profile：`pebble` / `challtestsrv` / `gateway-acme` | 实现 = `scripts/e2e/acme-e2e.sh`（本地等价 `./scripts/e2e/acme-e2e.sh`） |
 
-快层 / 验收层 / 高成本层的分层与触发取舍见 [`.github/workflows/README.md`](../.github/workflows/README.md)：
+快层 / 验收层 / 高成本层的分层与触发取舍见 [`docs/ci.md`](ci.md)：
 高成本层（Pebble 生命周期与公网 staging）依赖容器编排、外部 CA 与更长的环境准备，放在每次 push 里会让反馈周期
 膨胀到 15min+，且失败多来自环境而非代码；因此降级为 release 门禁 + 夜间验收，失败不阻塞当日开发推送，
 但**必须在 24h 内修复**（release 前必须为绿）。
