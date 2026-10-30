@@ -1412,8 +1412,7 @@ describe('个人资料头像/刷新（续二百〇四）', () => {
 
 describe('创建用户/角色保存后刷新（续二百〇五）', () => {
   it('创建用户成功与角色保存成功后 router.refresh', () => {
-    const create = read('src/app/(dashboard)/users/components/CreateUserDialog.tsx');
-    expect(create).toContain('router.refresh()');
+    expect(read('src/app/(dashboard)/users/components/CreateUserForm.tsx')).toContain('router.push(successHref)');
     const roles = read('src/app/(dashboard)/users/[id]/roles/roles-client.tsx');
     expect(roles).toContain('router.refresh()');
   });
@@ -1770,9 +1769,7 @@ describe('工作台快捷新建用户（续二百四十四）', () => {
     expect(dash).toContain('href="/users/new"');
     const page = read('src/app/(dashboard)/users/page.tsx');
     expect(page).toContain("redirect(`/users/new");
-    const dialog = read('src/app/(dashboard)/users/components/CreateUserDialog.tsx');
-    expect(dialog).toContain('useState(autoOpen)');
-    expect(dialog).toContain("params.delete('create')");
+    expect(read('src/app/(dashboard)/users/components/CreateUserButton.tsx')).toContain("router.push(`/users/new");
   });
 });
 
@@ -2098,7 +2095,6 @@ describe('清空筛选保留排序（续二百七十九）', () => {
 describe('自动弹窗关闭保留查询（续二百八十）', () => {
   it('关闭只删除 create，保留其他筛选', () => {
     for (const f of [
-      'src/app/(dashboard)/users/components/CreateUserDialog.tsx',
       'src/app/(dashboard)/roles/components/RolesTable.tsx',
       'src/app/(dashboard)/departments/components/DepartmentTree.tsx',
     ]) {

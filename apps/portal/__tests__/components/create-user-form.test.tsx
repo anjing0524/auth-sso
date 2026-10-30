@@ -1,5 +1,5 @@
 /**
- * CreateUserDialog — 校验失败后**不得清空用户输入**（回归测试）
+ * CreateUserForm — 校验失败后**不得清空用户输入**（回归测试）
  *
  * 真实缺陷（2026-10-20 闭环验收）：
  * 表单用 React 19 `<form action={serverAction}>` 但字段是非受控的。React 在 action 结束后会
@@ -59,7 +59,7 @@ vi.mock(import('@/app/(dashboard)/users/actions'), async (importOriginal): Promi
   return { ...actual, createUserAction: createUserAction as unknown as typeof usersActionsModule.createUserAction };
 });
 
-import CreateUserDialog from '@/app/(dashboard)/users/components/CreateUserDialog';
+import { CreateUserForm } from '@/app/(dashboard)/users/components/CreateUserForm';
 import type * as usersActionsModule from '@/app/(dashboard)/users/actions';
 import type * as usePermissionsModule from '@/hooks/use-permissions';
 
@@ -69,21 +69,19 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-describe('CreateUserDialog · 校验失败保留输入', () => {
+describe('CreateUserForm · 校验失败保留输入', () => {
   it('重复邮箱报错后，四个字段仍保留，改邮箱可再次提交', async () => {
     const user = userEvent.setup();
-    render(<CreateUserDialog departments={DEPARTMENTS} />);
+    render(<CreateUserForm departments={DEPARTMENTS} />);
 
-    await user.click(screen.getByRole('button', { name: '新建用户' }));
     await user.type(screen.getByLabelText('显示名称'), '张三');
     await user.type(screen.getByLabelText('用户名（唯一标识）'), 'zhangsan');
     await user.type(screen.getByLabelText('电子邮箱'), 'admin@example.com');
     await user.type(screen.getByLabelText('初始密码'), 'Init@123456');
 
     await user.click(screen.getByRole('button', { name: '创建' }));
-    // 第一次提交走失败分支（表单不应被关闭）
+    // 第一次提交走失败分支
     await waitFor(() => expect(createUserAction).toHaveBeenCalledTimes(1));
-    expect(screen.getByRole('dialog')).toBeInTheDocument();
 
     // U-G07：英文领域模板不得直出；按错误码映射为中文并落到邮箱输入框下方
     expect(await screen.findByText('该邮箱已被使用，请换一个')).toBeInTheDocument();
@@ -105,30 +103,19 @@ describe('CreateUserDialog · 校验失败保留输入', () => {
   });
 });
 
-describe('CreateUserDialog · 成功后重置部门', () => {
-  it('再次打开时提交默认部门，而不是显示默认但提交空值', async () => {
+describe('CreateUserForm · 默认部门', () => {
+  it('未选择部门时提交第一个部门，而不是空值', async () => {
     const user = userEvent.setup();
-    render(<CreateUserDialog departments={DEPARTMENTS} />);
+    render(<CreateUserForm departments={DEPARTMENTS} />);
 
-    // 第一次成功创建
-    await user.click(screen.getByRole('button', { name: '新建用户' }));
-    await user.type(screen.getByLabelText('显示名称'), '李四');
-    await user.type(screen.getByLabelText('用户名（唯一标识）'), 'lisi');
-    await user.type(screen.getByLabelText('电子邮箱'), 'lisi@example.com');
-    await user.type(screen.getByLabelText('初始密码'), 'Init@123456');
-    await user.click(screen.getByRole('button', { name: '创建' }));
-    await waitFor(() => expect(createUserAction).toHaveBeenCalledTimes(1));
-    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
-
-    // 重新打开：部门应恢复默认，提交值也必须是默认部门
-    await user.click(screen.getByRole('button', { name: '新建用户' }));
     await user.type(screen.getByLabelText('显示名称'), '王五');
     await user.type(screen.getByLabelText('用户名（唯一标识）'), 'wangwu');
     await user.type(screen.getByLabelText('电子邮箱'), 'wangwu@example.com');
     await user.type(screen.getByLabelText('初始密码'), 'Init@123456');
     await user.click(screen.getByRole('button', { name: '创建' }));
-    await waitFor(() => expect(createUserAction).toHaveBeenCalledTimes(2));
-    const secondForm = createUserAction.mock.calls[1]?.[1] as FormData;
-    expect(secondForm.get('deptId')).toBe(DEPARTMENTS[0]!.id);
+
+    await waitFor(() => expect(createUserAction).toHaveBeenCalledTimes(1));
+    const form = createUserAction.mock.calls[0]?.[1] as FormData;
+    expect(form.get('deptId')).toBe(DEPARTMENTS[0]!.id);
   });
 });

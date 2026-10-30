@@ -3,8 +3,7 @@
 /**
  * 新建用户表单（页面与弹窗共用）
  *
- * 产品规则：长表单优先页面化（/users/new）；CreateUserDialog 仅作为薄包装保留，
- * 不再承载独立表单逻辑。
+ * 产品规则：长表单页面化（/users/new），不再放入弹窗。
  */
 
 import { useEffect, useRef, useState, useActionState } from 'react';
