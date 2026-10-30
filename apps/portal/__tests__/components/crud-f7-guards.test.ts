@@ -936,12 +936,20 @@ describe('角色工具栏（续一百五十九/二百二十八）', () => {
 });
 
 describe('Dialog 页脚与内容内边距一致（续一百六十）', () => {
-  it('DialogContent p-5 与 DialogFooter -mx-5/-mb-5/p-5 对齐，不产生 4px 溢出', () => {
+  it('内层滚动区 p-5 与 DialogFooter -mx-5/-mb-5/p-5 对齐，不产生 4px 溢出', () => {
     const src = read('src/components/ui/dialog.tsx');
-    expect(src).toContain('rounded-2xl bg-popover p-5');
+    expect(src).toContain('rounded-2xl bg-popover text-sm');
+    expect(src).toContain('scrollbar-slim flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-5');
     expect(src).toContain('-mx-5 -mb-5 sticky bottom-0 flex flex-col-reverse gap-2 rounded-b-2xl border-t bg-popover px-5 py-3');
     expect(src).toContain('sm:flex-row sm:justify-end');
     expect(src).not.toContain('-mx-6 -mb-6');
+  });
+
+  it('关闭按钮在独立滚动区外，长弹窗滚动后仍可见', () => {
+    const src = read('src/components/ui/dialog.tsx');
+    expect(src).toContain('data-slot="dialog-scroll"');
+    expect(src).toContain('absolute top-2 right-2 z-10');
+    expect(src).toContain('overflow-hidden rounded-2xl bg-popover');
   });
 });
 

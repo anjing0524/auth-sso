@@ -104,3 +104,30 @@ describe('CreateUserDialog · 校验失败保留输入', () => {
     expect(secondForm.get('email')).toBe('zhangsan@example.com');
   });
 });
+
+describe('CreateUserDialog · 成功后重置部门', () => {
+  it('再次打开时提交默认部门，而不是显示默认但提交空值', async () => {
+    const user = userEvent.setup();
+    render(<CreateUserDialog departments={DEPARTMENTS} />);
+
+    // 第一次成功创建
+    await user.click(screen.getByRole('button', { name: '新建用户' }));
+    await user.type(screen.getByLabelText('显示名称'), '李四');
+    await user.type(screen.getByLabelText('用户名（唯一标识）'), 'lisi');
+    await user.type(screen.getByLabelText('电子邮箱'), 'lisi@example.com');
+    await user.type(screen.getByLabelText('初始密码'), 'Init@123456');
+    await user.click(screen.getByRole('button', { name: '创建' }));
+    await waitFor(() => expect(createUserAction).toHaveBeenCalledTimes(1));
+
+    // 重新打开：部门应恢复默认，提交值也必须是默认部门
+    await user.click(screen.getByRole('button', { name: '新建用户' }));
+    await user.type(screen.getByLabelText('显示名称'), '王五');
+    await user.type(screen.getByLabelText('用户名（唯一标识）'), 'wangwu');
+    await user.type(screen.getByLabelText('电子邮箱'), 'wangwu@example.com');
+    await user.type(screen.getByLabelText('初始密码'), 'Init@123456');
+    await user.click(screen.getByRole('button', { name: '创建' }));
+    await waitFor(() => expect(createUserAction).toHaveBeenCalledTimes(2));
+    const secondForm = createUserAction.mock.calls[1]?.[1] as FormData;
+    expect(secondForm.get('deptId')).toBe(DEPARTMENTS[0]!.id);
+  });
+});

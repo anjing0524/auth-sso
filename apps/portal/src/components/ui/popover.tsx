@@ -28,7 +28,7 @@ function PopoverContent({
         <PopoverPrimitive.Popup
           data-slot="popover-content"
           className={cn(
-            "w-72 rounded-lg border bg-popover p-2 text-popover-foreground shadow-lg outline-none",
+            "max-h-[var(--available-height,24rem)] w-72 overflow-y-auto rounded-lg border bg-popover p-2 text-popover-foreground shadow-lg outline-none",
             className
           )}
           {...props}

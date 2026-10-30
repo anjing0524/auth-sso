@@ -220,7 +220,7 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
     });
   }
 
-  const currentListHref = pageHref(tab, page, eventType, operation, range, keyword, chipStartDate, chipEndDate, accessStatus, validAccessResourceType);
+  const currentListHref = pageHref(tab, page, eventType, operation, range, keyword, chipStartDate, chipEndDate, accessStatus, validAccessResourceType, pageSize);
   const hasFilters = Boolean(eventType || operation || range || keyword || chipStartDate || accessStatus || validAccessResourceType);
 
   return (
@@ -386,7 +386,7 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
         <Card className="flex min-h-0 flex-1 flex-col gap-0 overflow-hidden rounded-lg border border-border/70 py-0 shadow-sm ring-0">
           <CardContent className="flex min-h-0 flex-1 flex-col p-0">
             <OverflowHint>
-            <div className="max-h-[calc(100svh-19rem)] overflow-auto">
+            <div className="scrollbar-slim min-h-0 flex-1 overflow-auto">
             <Table aria-label="操作日志列表" className={data.length === 0 ? 'h-full' : undefined} containerClassName={data.length === 0 ? 'h-full overflow-visible' : 'overflow-visible'}>
               <TableHeader className="[&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:bg-card">
                 <TableRow>
@@ -555,18 +555,16 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
       </div>
 
       {/* 分页 — searchParams 驱动 */}
-      {pagination.totalPages > 1 && (
-        <TablePagination
-          page={page}
-          totalPages={pagination.totalPages}
-          total={pagination.total}
-          hrefFor={(p) => pageHref(tab, p, eventType, operation, range, keyword, chipStartDate, chipEndDate, accessStatus, validAccessResourceType, pageSize)}
-          jumpAction="/audit-logs"
-          pageSize={pageSize}
-          pageSizeOptions={PAGE_SIZE_OPTIONS.map((size) => ({ value: size, href: pageHref(tab, 1, eventType, operation, range, keyword, chipStartDate, chipEndDate, accessStatus, validAccessResourceType, size) }))}
-          jumpParams={{ tab, ...(eventType ? { eventType } : {}), ...(operation ? { operation } : {}), ...(range ? { range } : {}), ...(keyword ? { keyword } : {}), ...(chipStartDate ? { startDate: chipStartDate } : {}), ...(chipEndDate ? { endDate: chipEndDate } : {}), ...(accessStatus ? { status: accessStatus } : {}), ...(validAccessResourceType ? { resourceType: validAccessResourceType } : {}), ...(pageSize !== DEFAULT_PAGE_SIZE ? { pageSize: String(pageSize) } : {}) }}
-        />
-      )}
+      <TablePagination
+        page={page}
+        totalPages={pagination.totalPages}
+        total={pagination.total}
+        hrefFor={(p) => pageHref(tab, p, eventType, operation, range, keyword, chipStartDate, chipEndDate, accessStatus, validAccessResourceType, pageSize)}
+        jumpAction="/audit-logs"
+        pageSize={pageSize}
+        pageSizeOptions={PAGE_SIZE_OPTIONS.map((size) => ({ value: size, href: pageHref(tab, 1, eventType, operation, range, keyword, chipStartDate, chipEndDate, accessStatus, validAccessResourceType, size) }))}
+        jumpParams={{ tab, ...(eventType ? { eventType } : {}), ...(operation ? { operation } : {}), ...(range ? { range } : {}), ...(keyword ? { keyword } : {}), ...(chipStartDate ? { startDate: chipStartDate } : {}), ...(chipEndDate ? { endDate: chipEndDate } : {}), ...(accessStatus ? { status: accessStatus } : {}), ...(validAccessResourceType ? { resourceType: validAccessResourceType } : {}), ...(pageSize !== DEFAULT_PAGE_SIZE ? { pageSize: String(pageSize) } : {}) }}
+      />
     </div>
   );
 }

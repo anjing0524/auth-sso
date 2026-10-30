@@ -336,7 +336,6 @@ export default function ClientsTable({ clients, pagination, initialKeyword, init
 
   return (
     <>
-      <div className="flex min-h-0 flex-1 flex-col">
       <DataTable
       tableLabel="应用列表"
       emptyAnnouncement="当前列表为空"
@@ -369,7 +368,7 @@ export default function ClientsTable({ clients, pagination, initialKeyword, init
         totalPages={pagination.totalPages}
         total={pagination.total}
         onPageChange={(next) => {
-          const params = new URLSearchParams(window.location.search);
+          const params = new URLSearchParams(searchParams.toString());
           if (next > 1) params.set('page', String(next)); else params.delete('page');
           startTransition(() => router.push(`/clients${params.toString() ? `?${params.toString()}` : ''}`));
         }}
@@ -383,7 +382,6 @@ export default function ClientsTable({ clients, pagination, initialKeyword, init
           return { value: size, href: `/clients${qs ? `?${qs}` : ''}` };
         })}
       />
-      </div>
 
       <Dialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}>
         <DialogContent>

@@ -6,6 +6,9 @@
  * - 加载态 Skeleton 行（可配置列数）
  * - 空状态提示
  *
+ * 卡片高度：≤5 行时贴合内容，避免小数据集撑满视口；>5 行时 flex-1 填满，
+ * 由内部滚动容器承担横向/纵向滚动，表头 sticky 保持可见。
+ *
  * 各模块自行管理：列定义、数据获取、搜索/筛选、行操作。
  */
 'use client';
@@ -34,14 +37,6 @@ export interface DataTableProps<T> {
   renderRow: (item: T) => React.ReactNode;
   /** Card header（搜索栏、统计等），可选 */
   cardHeader?: React.ReactNode;
-  /**
-   * 表格滚动区高度上限（默认按无页签列表；带页签页面传更小值）。
-   *
-   * 2026-10-23 UI 重做：**卡片不再 flex-1 撑满**——角色等小数据集（1–3 行）
-   * 被撑成整屏空白卡片是"主体和留白比例失衡"的根源；现在卡片贴合内容，
-   * 行数多时由这里的 max-height 让表格内部滚动（表头 sticky 依然生效）。
-   */
-  maxHeightClass?: string;
   /** 表格可访问名称（读屏列表地标） */
   tableLabel?: string;
   /** 空结果时的读屏播报文案 */

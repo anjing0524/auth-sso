@@ -6,7 +6,7 @@
  * 有的放在筛选器右侧，padding 有 py-4 有 py-3，还夹着 tab/统计文案。
  *
  * 统一口径：
- * - 容器：`border-b bg-muted/50 px-6 py-3`，与表格卡片同宽；
+ * - 容器：`border-b bg-muted/30 px-3 py-1.5`，与表格卡片同宽；
  * - 布局：左槽（搜索 + 筛选）与右槽（统计 + 主操作）在 md 以上两端对齐，窄屏纵向堆叠；
  * - 高度：所有控件 40px（Input/Select/Button 基类保证）；
  * - 间距：槽内 gap-3，槽间 gap-4。

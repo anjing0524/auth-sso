@@ -1,7 +1,7 @@
 /**
  * SearchInput — 列表页统一搜索框（图标 + 输入框 + 清空按钮 + 一致尺寸）
  *
- * 统一口径：宽度默认 `w-full md:w-80`；高度 40px（Input 基类）；圆角 8px；
+ * 统一口径：宽度默认 `w-full md:w-64`；高度 40px（Input 基类）；圆角 8px；
  * 带图标与「清空」按钮（有值时出现），清空按钮 aria-label 固定，便于测试与读屏。
  */
 import { Loader2, Search, X } from 'lucide-react';

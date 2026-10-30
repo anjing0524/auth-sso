@@ -9,7 +9,6 @@ interface PermissionGuardProps {
   adminOnly?: boolean;
   children: ReactNode;
   fallback?: ReactNode;
-  userId?: string;
 }
 
 /**
@@ -24,9 +23,8 @@ export function PermissionGuard({
   adminOnly,
   children,
   fallback = null,
-  userId,
 }: PermissionGuardProps) {
-  const { hasPermission, hasRole, isAdmin, loading } = usePermissions(userId ?? 'anonymous');
+  const { hasPermission, hasRole, isAdmin, loading } = usePermissions();
 
   if (loading) return null;
   if (adminOnly && !isAdmin()) return <>{fallback}</>;

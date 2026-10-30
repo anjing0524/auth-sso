@@ -308,6 +308,7 @@ export function ClientDetailClient({ client, initialTokens, initialTokenTotal, c
       <div role="tabpanel" id="client-panel-tokens" aria-labelledby="client-tab-tokens" tabIndex={0} hidden={activeTab !== 'tokens'}>
         <ClientTokensSection
           tokens={initialTokens}
+          total={initialTokenTotal}
           onRevokeAll={() => setPendingAction('revoke-tokens')}
           onRevokeToken={(token) => { setRevokeTokenTarget(token); setPendingAction('revoke-token'); }}
           canRevoke={canUpdate}

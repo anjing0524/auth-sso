@@ -129,7 +129,7 @@ export default function CreateUserDialog({ departments, canAssignRole = false, a
         setIsOpen(false);
         closeDialog();
         router.refresh();
-        setDeptId('');
+        setDeptId(defaultDeptId);
         setValues({ name: '', username: '', email: '', password: '' });
       } else {
         // 就地显示还是 toast，由 hook 按"本表单字段清单"判断（不依赖上一次的状态）

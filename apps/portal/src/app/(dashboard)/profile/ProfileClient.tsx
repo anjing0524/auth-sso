@@ -218,7 +218,14 @@ function EditProfileDialog({ user }: { user: NonNullable<ProfileClientProps['use
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        // 每次打开都以最新 props 重置，避免管理员改资料后刷新仍显示旧值
+        if (next) setForm({ name: user.name, email: user.email, avatarUrl: user.picture ?? '' });
+      }}
+    >
       <DialogTrigger
         render={
           <Button id="btn-edit-profile" variant="outline" size="sm" aria-label="编辑资料" title="编辑资料">

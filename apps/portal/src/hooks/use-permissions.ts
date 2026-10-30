@@ -35,7 +35,7 @@ async function fetchPermissions(): Promise<PermissionContext> {
  * 兜底路径：组件不在 Provider 内（独立测试、被复用的共享组件）时退化为旧的
  * `/api/me/permissions` 拉取；这条路径在生产布局中不会触发。
  */
-export function usePermissions(_userId: string = 'default') {
+export function usePermissions() {
   const snapshot = usePermissionSnapshot();
   const [fallback, setFallback] = useState<PermissionContext>({ roles: [], permissions: [], loading: true });
   const mountedRef = useRef(true);

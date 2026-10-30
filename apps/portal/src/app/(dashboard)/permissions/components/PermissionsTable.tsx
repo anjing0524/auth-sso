@@ -380,7 +380,6 @@ export default function PermissionsTable({ permissions, pagination, activeTab, i
 
   return (
     <>
-      <div className="flex min-h-0 flex-1 flex-col">
       <DataTable
       tableLabel="权限列表"
       emptyAnnouncement="当前列表为空"
@@ -427,7 +426,6 @@ export default function PermissionsTable({ permissions, pagination, activeTab, i
         pageSize={pageSize}
         pageSizeOptions={[20, 50, 100].map((size) => ({ value: size, href: buildHref(1, keyword, activeTab, initialStatus, initialClientId, size) }))}
       />
-      </div>
 
       {/* 删除确认 */}
       <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>

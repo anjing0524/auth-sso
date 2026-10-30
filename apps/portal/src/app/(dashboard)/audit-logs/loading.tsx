@@ -21,10 +21,14 @@ export default function AuditLogsLoading() {
         </div>
       </div>
 
-      {/* Tab skeleton */}
-      <div className="flex gap-6 border-b border-border pb-4">
-        <Skeleton className="h-8 w-20 rounded-lg" />
-        <Skeleton className="h-8 w-20 rounded-lg" />
+      {/* Tab + filter skeleton */}
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex gap-6 border-b border-border pb-4">
+          <Skeleton className="h-8 w-20 rounded-lg" />
+          <Skeleton className="h-8 w-20 rounded-lg" />
+          <Skeleton className="h-8 w-20 rounded-lg" />
+        </div>
+        <Skeleton className="h-9 w-32 rounded-lg" />
       </div>
 
       {/* Content card skeleton */}
