@@ -236,6 +236,7 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
         <div className="order-3 flex w-full min-w-0 flex-wrap items-start gap-1.5 min-[1100px]:order-3 min-[1100px]:w-auto">
           <div className="min-w-0 flex-1">
           <AuditFilters
+            key={`${tab}|${eventType}|${operation}|${range}|${keyword}|${chipStartDate}|${chipEndDate}|${accessStatus}|${validAccessResourceType}|${pageSize}`}
             tab={tab}
             eventType={eventType}
             operation={operation}

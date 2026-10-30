@@ -24,8 +24,8 @@ describe('部署目标收敛（ADR-030）', () => {
     expect(readme).toContain('ADR-030');
   });
 
-  it('docker README 顶部有部署目标矩阵与非部署分类', () => {
-    const docker = read('docker/README.md');
+  it('docs/docker.md 顶部有部署目标矩阵与非部署分类', () => {
+    const docker = read('docs/docker.md');
     expect(docker).toContain('## 部署目标矩阵');
     expect(docker).toContain('自托管生产（P1）');
     expect(docker).toContain('Vercel 平台（P2）');

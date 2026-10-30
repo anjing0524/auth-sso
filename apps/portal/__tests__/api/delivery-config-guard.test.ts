@@ -1,5 +1,5 @@
 /**
- * 生产交付配置守卫（docker/compose/prod.yml / scripts/docker/deploy.sh / docker/README.md）
+ * 生产交付配置守卫（docker/compose/prod.yml / scripts/docker/deploy.sh / docs/docker.md）
  *
  * 2026-10-22 生产链路审计发现并修复的问题，用测试钉住，避免回退：
  * 1. PostgreSQL 端口不得发布到宿主机（应仅 expose）；
@@ -51,8 +51,8 @@ describe('生产交付配置', () => {
     expect(deploy).toMatch(/\/healthz/);
   });
 
-  it('docker/README.md 把 deploy.sh 作为生产部署唯一入口', () => {
-    const dockerDoc = read('docker/README.md');
+  it('docs/docker.md 把 deploy.sh 作为生产部署唯一入口', () => {
+    const dockerDoc = read('docs/docker.md');
     expect(dockerDoc).toMatch(/scripts\/docker\/deploy\.sh/);
     expect(dockerDoc).toMatch(/db-init/);
   });
