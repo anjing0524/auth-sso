@@ -1,12 +1,12 @@
-FROM alpine:3.24@sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a AS cert-init
+FROM alpine:3.24 AS cert-init
 
 RUN apk add --no-cache openssl
 
 # Build stage
-FROM rust:1.99-alpine@sha256:b1d5dd5a22a09404d3e798c0cf051b689077360374eb505fa5bb93c479693d87 AS builder
+FROM rust:1.99-alpine AS builder
 
-# 安装构建依赖（添加 alpine-sdk 以及构建 vendored openssl 所需的基础工具）
-RUN apk add --no-cache musl-dev pkgconfig perl make cmake clang-dev clang alpine-sdk
+# 构建 vendored OpenSSL 所需的最小工具集
+RUN apk add --no-cache build-base pkgconfig perl cmake clang-dev clang
 
 WORKDIR /app
 
@@ -14,7 +14,6 @@ WORKDIR /app
 COPY apps/gateway/Cargo.toml apps/gateway/Cargo.lock ./apps/gateway/
 COPY apps/gateway/benches ./apps/gateway/benches
 
-# 复制整个项目根目录的 Cargo.lock，如果存在（这里我们是 monorepo，有 apps/gateway/Cargo.lock）
 # 将工作目录切换到网关
 WORKDIR /app/apps/gateway
 
@@ -28,26 +27,23 @@ COPY apps/gateway/src ./src
 # 更新文件修改时间，以防 cargo 认为 src 没有变化而不进行编译
 RUN touch src/main.rs && cargo build --release
 
-# Runner stage
-FROM alpine:3.24@sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a
-
-# 创建固定 UID/GID 的非 root 用户，确保 ACME 持久化卷权限稳定。
-RUN addgroup -S -g 10001 gateway && adduser -S -u 10001 gateway -G gateway
+# Runtime stage
+FROM alpine:3.24
 
 WORKDIR /app
 
-# 安装 ca-certificates 运行时证书支持
-RUN apk add --no-cache ca-certificates
+# 运行时依赖 + 非 root 用户 + 可写目录，合并为一层
+RUN apk add --no-cache ca-certificates \
+    && addgroup -S -g 10001 gateway \
+    && adduser -S -u 10001 gateway -G gateway \
+    && mkdir -p /etc/gateway/ssl /var/lib/gateway/acme /app/logs \
+    && chown -R gateway:gateway /etc/gateway/ssl /var/lib/gateway/acme /app/logs
 
 # 从构建阶段复制二进制文件
 COPY --from=builder /app/apps/gateway/target/release/gateway /usr/local/bin/gateway
 
 # 复制 Docker 环境专用配置文件（upstream/issuer/redis 使用 Docker 内部地址）
 COPY apps/gateway/gateway.docker.toml ./gateway.toml
-
-# 创建运行时必需的可写目录并授予 gateway 用户权限
-RUN mkdir -p /etc/gateway/ssl /var/lib/gateway/acme /app/logs \
-    && chown -R gateway:gateway /etc/gateway/ssl /var/lib/gateway/acme /app/logs
 
 EXPOSE 80 443
 

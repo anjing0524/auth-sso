@@ -2,13 +2,12 @@
 FROM node:26-alpine AS base
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
-# 同 workspace 阶段的 .npmrc 决策：构建机无法直连 npmjs（CN 网络实测 TLS RST），
-# 装 pnpm 本身也必须走 npmmirror，否则整条镜像构建在第一步就断。
-# 与本地/CI 对齐 pnpm 主版本（12.14.0）。
-RUN npm install -g pnpm@12.14.0 --registry=https://registry.npmmirror.com
-
 FROM base AS workspace
 WORKDIR /app
+
+# 只在构建阶段安装 pnpm；runner 不继承，避免把包管理器带进运行镜像。
+# 构建机无法直连 npmjs（CN 网络实测 TLS RST），安装 pnpm 也走 npmmirror。
+RUN npm install -g pnpm@12.14.0 --registry=https://registry.npmmirror.com
 
 # 先复制依赖描述文件 → install → 利用 Docker layer caching（源码变更不重新下载依赖）
 COPY pnpm-lock.yaml pnpm-workspace.yaml ./
@@ -44,9 +43,9 @@ FROM base AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 
-# 创建非 root 用户
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nextjs
+# 创建非 root 用户（合并为一层）
+RUN addgroup --system --gid 1001 nodejs \
+    && adduser --system --uid 1001 nextjs
 
 COPY --from=builder /app/apps/portal/public ./apps/portal/public
 COPY --from=builder --chown=nextjs:nodejs /app/apps/portal/.next/standalone ./
