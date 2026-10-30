@@ -10,8 +10,9 @@
 #   ENV_FILE=.env.prod
 #   COMPOSE_FILE=docker/compose/prod.yml
 #   BACKUP_DIR=<repo>/backups
+#   BACKUP_ENCRYPTION_KEY_FILE=...  可选；设置后输出 .dump.enc（AES-256-CBC/PBKDF2）
 #
-# 产物：auth-sso-YYYYmmdd-HHMMSS.dump + .sha256；pg_restore --list 校验通过才算成功。
+# 产物：auth-sso-YYYYmmdd-HHMMSS.dump[.enc] + .sha256；pg_restore --list 校验通过才算成功。
 #
 set -euo pipefail
 
@@ -21,6 +22,7 @@ cd "$ROOT"
 ENV_FILE="${ENV_FILE:-.env.prod}"
 COMPOSE_FILE="${COMPOSE_FILE:-docker/compose/prod.yml}"
 BACKUP_DIR="${BACKUP_DIR:-$ROOT/backups}"
+KEY_FILE="${BACKUP_ENCRYPTION_KEY_FILE:-}"
 IF_RUNNING=0
 [[ "${1:-}" == "--if-running" ]] && IF_RUNNING=1
 
@@ -59,6 +61,18 @@ chmod 600 "$OUT"
 
 echo "▶ 校验备份可读"
 "${COMPOSE[@]}" exec -T postgres pg_restore --list < "$OUT" >/dev/null
+
+if [[ -n "$KEY_FILE" ]]; then
+  [[ -r "$KEY_FILE" ]] || { rm -f "$OUT"; echo "✗ 备份密钥文件不可读：$KEY_FILE" >&2; exit 1; }
+  command -v openssl >/dev/null 2>&1 || { rm -f "$OUT"; echo "✗ 需要 openssl 加密备份" >&2; exit 1; }
+  echo "▶ AES-256 加密备份"
+  ENC="$OUT.enc"
+  openssl enc -aes-256-cbc -salt -pbkdf2 -pass "file:$KEY_FILE" -in "$OUT" -out "$ENC"
+  rm -f "$OUT"
+  OUT="$ENC"
+fi
+
 if command -v sha256sum >/dev/null 2>&1; then sha256sum "$OUT" > "$OUT.sha256"; else shasum -a 256 "$OUT" > "$OUT.sha256"; fi
-chmod 600 "$OUT.sha256"
+chmod 600 "$OUT" "$OUT.sha256"
 echo "✅ 备份完成：$OUT"
+[[ -n "$KEY_FILE" ]] && echo "   恢复需同一 BACKUP_ENCRYPTION_KEY_FILE"

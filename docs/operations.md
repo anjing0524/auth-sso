@@ -42,6 +42,10 @@ pnpm deploy -- --rollback  # 只切回上次镜像，不回滚数据库
 ```bash
 ./scripts/docker/backup.sh
 # 产物：backups/auth-sso-YYYYmmdd-HHMMSS.dump + .sha256
+
+# 加密备份（推荐，密钥单独保管）
+BACKUP_ENCRYPTION_KEY_FILE=/etc/auth-sso/backup.key ./scripts/docker/backup.sh
+# 产物：*.dump.enc + .sha256
 ```
 
 脚本会：
@@ -51,6 +55,7 @@ pnpm deploy -- --rollback  # 只切回上次镜像，不回滚数据库
 - 生成 SHA-256 校验文件；
 - 目录权限 `700`、文件 `600`。
 
+加密备份使用 `BACKUP_ENCRYPTION_KEY_FILE`（AES-256-CBC/PBKDF2）；密钥必须与备份分开存放，丢失后备份不可恢复。
 备份含用户、审计与密码哈希等敏感数据：必须限制访问权限，并在客户侧启用磁盘/对象存储加密；建议每日至少一次，并把备份复制到**另一台主机/对象存储**；本仓库不提供异地备份。示例 cron：
 
 ```cron
@@ -63,6 +68,7 @@ pnpm deploy -- --rollback  # 只切回上次镜像，不回滚数据库
 
 ```bash
 ./scripts/docker/restore.sh backups/auth-sso-YYYYmmdd-HHMMSS.dump --yes
+# 加密备份需同时提供 BACKUP_ENCRYPTION_KEY_FILE
 ```
 
 恢复流程是安全的“新库恢复 + 原子换名”：

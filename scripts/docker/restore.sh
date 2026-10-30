@@ -24,6 +24,7 @@ YES="${2:-}"
 ENV_FILE="${ENV_FILE:-.env.prod}"
 COMPOSE_FILE="${COMPOSE_FILE:-docker/compose/prod.yml}"
 BACKUP_DIR="${BACKUP_DIR:-$ROOT/backups}"
+KEY_FILE="${BACKUP_ENCRYPTION_KEY_FILE:-}"
 
 if [[ -z "$DUMP" || "$YES" != "--yes" ]]; then
   echo "用法：$0 <backup.dump> --yes" >&2
@@ -40,11 +41,26 @@ if [[ -f "$DUMP.sha256" ]]; then
   fi
 fi
 
+RESTORE_INPUT="$DUMP"
+DECRYPTED=""
+cleanup_decrypted() { [[ -n "$DECRYPTED" && -f "$DECRYPTED" ]] && rm -f "$DECRYPTED"; }
+trap cleanup_decrypted EXIT
+if [[ "$DUMP" == *.enc ]]; then
+  [[ -n "$KEY_FILE" ]] || { echo "✗ 加密备份需要 BACKUP_ENCRYPTION_KEY_FILE" >&2; exit 1; }
+  [[ -r "$KEY_FILE" ]] || { echo "✗ 备份密钥文件不可读：$KEY_FILE" >&2; exit 1; }
+  command -v openssl >/dev/null 2>&1 || { echo "✗ 需要 openssl 解密备份" >&2; exit 1; }
+  echo "▶ 解密备份"
+  DECRYPTED="$(mktemp "${TMPDIR:-/tmp}/auth-sso-restore.XXXXXX")"
+  chmod 600 "$DECRYPTED"
+  openssl enc -d -aes-256-cbc -pbkdf2 -pass "file:$KEY_FILE" -in "$DUMP" -out "$DECRYPTED"
+  RESTORE_INPUT="$DECRYPTED"
+fi
+
 COMPOSE=(docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE")
 docker compose version >/dev/null 2>&1 || { echo "未安装 Docker Compose v2" >&2; exit 1; }
 
 echo "▶ 校验 dump"
-"${COMPOSE[@]}" exec -T postgres pg_restore --list < "$DUMP" >/dev/null
+"${COMPOSE[@]}" exec -T postgres pg_restore --list < "$RESTORE_INPUT" >/dev/null
 
 echo "▶ 恢复前先备份当前库"
 COMPOSE_FILE="$COMPOSE_FILE" ENV_FILE="$ENV_FILE" BACKUP_DIR="$BACKUP_DIR" "$ROOT/scripts/docker/backup.sh"
@@ -55,7 +71,7 @@ echo "▶ 停止 Portal/Gateway（保留 PostgreSQL）"
 RESTORE_DB="auth_sso_restore"
 echo "▶ 恢复到隔离库 ${RESTORE_DB}（失败不影响现网库）"
 "${COMPOSE[@]}" exec -T postgres sh -c 'dropdb --if-exists -U "${POSTGRES_USER:-postgres}" auth_sso_restore; createdb -U "${POSTGRES_USER:-postgres}" auth_sso_restore'
-"${COMPOSE[@]}" exec -T postgres sh -c 'pg_restore -U "${POSTGRES_USER:-postgres}" -d auth_sso_restore --no-owner --no-privileges' < "$DUMP"
+"${COMPOSE[@]}" exec -T postgres sh -c 'pg_restore -U "${POSTGRES_USER:-postgres}" -d auth_sso_restore --no-owner --no-privileges' < "$RESTORE_INPUT"
 "${COMPOSE[@]}" exec -T postgres sh -c 'psql -U "${POSTGRES_USER:-postgres}" -d auth_sso_restore -tAc "SELECT count(*) FROM users" >/dev/null'
 
 echo "▶ 校验通过，原子切换数据库"

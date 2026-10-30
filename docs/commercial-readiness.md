@@ -18,7 +18,7 @@
 | 登录、OIDC/OAuth、RBAC、审计、客户端管理 | 已具备 | 1545 项测试 + 24 条 E2E；CI 全绿 |
 | 安全基线（JWT/撤销/限流/反提权/HSTS/安全头） | 已具备 | 安全 ADR、API 测试、Gateway 测试、`pnpm audit` 无已知漏洞 |
 | 自托管部署脚本 | 已具备 | `deploy.sh` 校验/构建/迁移/健康/回滚；生产 Compose 校验通过 |
-| 数据库备份 | 已具备 | `backup.sh`：dump + `pg_restore --list` + SHA-256 |
+| 数据库备份 | 已具备 | `backup.sh`：dump + `pg_restore --list` + SHA-256；可选 AES-256 加密 |
 | 数据库恢复 | 有条件具备 | `restore.sh` 隔离库恢复 + 原子换名；已在验收栈演练，**客户生产环境未演练** |
 | 升级前自动备份 | 已具备 | `deploy.sh` 调用 `backup.sh --if-running`，失败中止 |
 | 健康检查 | 已具备 | Portal `/api/health` 检查 DB+Redis；Gateway `/healthz`；登录 200 作为业务就绪 |
