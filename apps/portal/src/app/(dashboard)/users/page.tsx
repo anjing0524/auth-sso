@@ -85,6 +85,7 @@ export default async function UsersPage({ searchParams }: PageProps) {
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
       <UserTable
+        key={`${keyword}|${status}|${deptId ?? ''}|${noRole}|${page}|${pageSize}`}
               currentUserId={userId}
         users={users}
         pagination={pagination}

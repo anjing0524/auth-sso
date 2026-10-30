@@ -6,7 +6,7 @@
  */
 import React, { useEffect, useState, useTransition } from 'react';
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import {
   Plus, Edit, Trash2, Globe, Code, Folder,
@@ -92,11 +92,7 @@ const TABS: Array<{ value: string; label: string }> = [
 export default function PermissionsTable({ permissions, pagination, activeTab, initialKeyword = '', initialStatus = '', initialClientId = '', pageSize = 20, clients = [], menuOptions = [] }: Props) {
   const router = useRouter();
   const [keyword, setKeyword] = useState(initialKeyword);
-  // 浏览器后退/前进时，URL 是唯一真相源：输入框跟随 initialKeyword
-  useEffect(() => { setKeyword(initialKeyword); }, [initialKeyword]);
   const [isPending, startTransition] = useTransition();
-  const searchParams = useSearchParams();
-  const listQueryKey = searchParams.toString();
 
   /** 统一构造 URL：type / keyword / page 都是服务端查询参数（可分享、可后退） */
   const buildHref = (
@@ -142,8 +138,6 @@ export default function PermissionsTable({ permissions, pagination, activeTab, i
   const [selected, setSelected] = useState<PermissionRow | null>(null);
   // 批量删除：只删除当前页可见选中项，避免跨页误删
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
-  // 选择仅对当前列表上下文生效：翻页/筛选后清空
-  useEffect(() => { setCheckedIds(new Set()); }, [listQueryKey]);
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulking, setBulking] = useState(false);
   const visibleChecked = permissions.filter((p) => checkedIds.has(p.id));

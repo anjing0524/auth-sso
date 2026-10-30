@@ -59,7 +59,7 @@ export default async function ClientsPage({ searchParams }: PageProps) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
-      <ClientsTable clients={clients} pagination={pagination} initialKeyword={keyword} initialStatus={status} initialSort={sort} isFiltered={isFiltered} clearHref={clearHref} statusCounts={statusCounts} />
+      <ClientsTable key={`${keyword}|${status}|${sort}|${page}|${pageSize}`} clients={clients} pagination={pagination} initialKeyword={keyword} initialStatus={status} initialSort={sort} isFiltered={isFiltered} clearHref={clearHref} statusCounts={statusCounts} />
     </div>
   );
 }

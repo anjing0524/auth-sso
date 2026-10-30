@@ -1728,13 +1728,13 @@ describe('部门批量移动长列表（续二百三十七）', () => {
 });
 
 describe('批量选择随上下文清空（续二百三十九）', () => {
-  it('用户/权限选择在 URL 变化时清空，并标注当前页', () => {
+  it('用户/权限选择由父级 key 重置，并标注当前页', () => {
     const users = read('src/app/(dashboard)/users/components/UserTable.tsx');
-    expect(users).toContain('useEffect(() => { setSelected(new Set()); }, [listQueryKey])');
     expect(users).toContain('（当前页）');
+    expect(users).not.toContain('useEffect(() => { setSelected');
     const perms = read('src/app/(dashboard)/permissions/components/PermissionsTable.tsx');
-    expect(perms).toContain('useEffect(() => { setCheckedIds(new Set()); }, [listQueryKey])');
     expect(perms).toContain('个权限（当前页）');
+    expect(perms).not.toContain('useEffect(() => { setCheckedIds');
   });
 });
 
@@ -1871,24 +1871,28 @@ describe('自动打开创建态权限门禁（续二百五十四）', () => {
 });
 
 describe('搜索框随 URL 后退同步（续二百五十五）', () => {
-  it('五个列表的搜索状态跟随 initialKeyword', () => {
-    const roles = read('src/app/(dashboard)/roles/components/RolesTable.tsx');
-    expect(roles).toContain('useEffect(() => { setKeyword(initialKeyword); }, [initialKeyword]);');
-    const clients = read('src/app/(dashboard)/clients/components/ClientsTable.tsx');
-    expect(clients).toContain('useEffect(() => { setKeyword(initialKeyword); }, [initialKeyword]);');
-    const perms = read('src/app/(dashboard)/permissions/components/PermissionsTable.tsx');
-    expect(perms).toContain('useEffect(() => { setKeyword(initialKeyword); }, [initialKeyword]);');
-    const users = read('src/app/(dashboard)/users/components/UserFilters.tsx');
-    expect(users).toContain('useEffect(() => { setKeyword(initialKeyword); }, [initialKeyword]);');
-    const audit = read('src/app/(dashboard)/audit-logs/components/audit-filters.tsx');
-    expect(audit).toContain("useEffect(() => { setKw(keyword ?? ''); }, [keyword]);");
+  it('不在 effect 中同步 state，改由父级 key 重置', () => {
+    const components = [
+      'src/app/(dashboard)/roles/components/RolesTable.tsx',
+      'src/app/(dashboard)/clients/components/ClientsTable.tsx',
+      'src/app/(dashboard)/permissions/components/PermissionsTable.tsx',
+      'src/app/(dashboard)/users/components/UserFilters.tsx',
+    ];
+    for (const file of components) {
+      expect(read(file), file).not.toContain('setKeyword(initialKeyword)');
+    }
+    expect(read('src/app/(dashboard)/audit-logs/components/audit-filters.tsx')).not.toContain("setKw(keyword ?? '')");
+    expect(read('src/app/(dashboard)/clients/page.tsx')).toContain('key={`${keyword}|${status}|${sort}|${page}|${pageSize}`}');
+    expect(read('src/app/(dashboard)/roles/page.tsx')).toContain('key={`${keyword}|${sort');
+    expect(read('src/app/(dashboard)/permissions/page.tsx')).toContain('key={`${activeTab}|${keyword}');
   });
 });
 
 describe('审计自定义日期随 URL 同步（续二百五十六）', () => {
-  it('customMode 跟随 range/startDate/endDate', () => {
+  it('不在 effect 中同步 customMode，改由父级 key 重置', () => {
     const src = read('src/app/(dashboard)/audit-logs/components/audit-filters.tsx');
-    expect(src).toContain('useEffect(() => { setCustomMode(!range && Boolean(startDate || endDate)); }, [range, startDate, endDate]);');
+    expect(src).not.toContain('setCustomMode(!range && Boolean(startDate || endDate))');
+    expect(read('src/app/(dashboard)/audit-logs/page.tsx')).toContain('key={`${tab}|${eventType}');
   });
 });
 

@@ -69,6 +69,7 @@ export default async function PermissionsPage({ searchParams }: PageProps) {
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
       <PermissionsTable
+        key={`${activeTab}|${keyword}|${status}|${clientId ?? ''}|${page}|${pageSize}`}
         permissions={permissions}
         pagination={pagination}
         activeTab={activeTab}

@@ -39,7 +39,7 @@ function Field({ label, value, mono, copy }: { label: string; value: string; mon
   );
 }
 
-function DetailHeader({ title, tab, id, returnHref, children }: { title: string; tab: 'login' | 'operation' | 'access'; id: string; returnHref: string; children?: React.ReactNode }) {
+function DetailHeader({ title, id, returnHref, children }: { title: string; id: string; returnHref: string; children?: React.ReactNode }) {
   return (
     <div className="sticky top-0 z-20 -mx-3 flex flex-wrap items-center gap-2 border-b border-border/50 bg-background/95 px-3 py-2 backdrop-blur">
       <Button asChild variant="ghost" size="icon-sm" aria-label="返回审计日志">
@@ -81,7 +81,7 @@ export default async function AuditLogDetailPage({ params, searchParams }: PageP
     const label = LOGIN_EVENT_LABELS[row.eventType as LoginEventType] ?? row.eventType;
     return (
       <div className="flex min-h-0 flex-1 flex-col gap-3">
-        <DetailHeader title="登录日志详情" tab="login" id={row.id} returnHref={returnHref}>
+        <DetailHeader title="登录日志详情" id={row.id} returnHref={returnHref}>
           <Badge variant="secondary">{label}</Badge>
         </DetailHeader>
         <Card className="border border-border/70 ring-0">
@@ -112,7 +112,7 @@ export default async function AuditLogDetailPage({ params, searchParams }: PageP
     if (!row) notFound();
     return (
       <div className="flex min-h-0 flex-1 flex-col gap-3">
-        <DetailHeader title="访问日志详情" tab="access" id={row.id} returnHref={returnHref}>
+        <DetailHeader title="访问日志详情" id={row.id} returnHref={returnHref}>
           <Badge variant="outline" className="font-mono">{row.method}</Badge>
         </DetailHeader>
         <div className="grid gap-3 xl:grid-cols-3">
@@ -157,7 +157,7 @@ export default async function AuditLogDetailPage({ params, searchParams }: PageP
   const opLabel = AUDIT_OPERATION_LABELS[row.operation as AuditOperation] ?? row.operation;
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
-      <DetailHeader title="操作日志详情" tab="operation" id={row.id} returnHref={returnHref}>
+      <DetailHeader title="操作日志详情" id={row.id} returnHref={returnHref}>
         <Badge>{opLabel}</Badge>
       </DetailHeader>
       <div className="grid gap-3 xl:grid-cols-3">

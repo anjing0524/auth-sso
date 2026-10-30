@@ -82,8 +82,6 @@ export default function RolesTable({ roles, pagination, initialKeyword, initialS
     return { value: size, href: `/roles${qs ? `?${qs}` : ''}` };
   });
   const [keyword, setKeyword] = useState(initialKeyword);
-  // 浏览器后退/前进时，URL 是唯一真相源：输入框跟随 initialKeyword
-  useEffect(() => { setKeyword(initialKeyword); }, [initialKeyword]);
   const [isPending, startTransition] = useTransition();
   const [saving, setSaving] = useState(false);
 

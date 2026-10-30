@@ -118,6 +118,7 @@ describe('CreateUserDialog · 成功后重置部门', () => {
     await user.type(screen.getByLabelText('初始密码'), 'Init@123456');
     await user.click(screen.getByRole('button', { name: '创建' }));
     await waitFor(() => expect(createUserAction).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
 
     // 重新打开：部门应恢复默认，提交值也必须是默认部门
     await user.click(screen.getByRole('button', { name: '新建用户' }));
