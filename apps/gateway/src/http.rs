@@ -182,10 +182,19 @@ pub(crate) const BAD_REQUEST_BODY: &str = "Bad Request\n";
 pub(crate) const HSTS_HEADER: &str = "Strict-Transport-Security";
 pub(crate) const HSTS_VALUE: &str = "max-age=31536000";
 
-/// 向响应头注入 HSTS（Gateway 生成的全部响应共用；已存在则不覆盖）。
+/// 向 Gateway 生成的响应注入统一安全头（已存在则不覆盖）。
+///
+/// 上游 Next 响应自身也带 X-Content-Type-Options / Referrer-Policy；
+/// 本函数覆盖 Gateway 自己生成的 400/401/302/429，避免错误响应成为缺口。
 pub(crate) fn insert_hsts(header: &mut ResponseHeader) -> Result<()> {
-    if header.headers.get(HSTS_HEADER).is_none() {
-        header.insert_header(HSTS_HEADER, HSTS_VALUE)?;
+    for (name, value) in [
+        (HSTS_HEADER, HSTS_VALUE),
+        ("X-Content-Type-Options", "nosniff"),
+        ("Referrer-Policy", "strict-origin-when-cross-origin"),
+    ] {
+        if header.headers.get(name).is_none() {
+            header.insert_header(name, value)?;
+        }
     }
     Ok(())
 }
@@ -537,6 +546,31 @@ mod tests {
         );
         assert_eq!(hsts(&build_400_headers().unwrap()), Some(HSTS_VALUE));
         assert_eq!(hsts(&build_429_headers(60).unwrap()), Some(HSTS_VALUE));
+    }
+
+    fn has_header(header: &ResponseHeader, name: &str, expected: &str) -> bool {
+        header
+            .headers
+            .get(name)
+            .and_then(|value| value.to_str().ok())
+            == Some(expected)
+    }
+
+    #[test]
+    fn gateway_generated_responses_carry_nosniff_and_referrer() {
+        for header in [
+            build_401_headers(&[]).unwrap(),
+            build_302_headers("/login", &[]).unwrap(),
+            build_400_headers().unwrap(),
+            build_429_headers(60).unwrap(),
+        ] {
+            assert!(has_header(&header, "x-content-type-options", "nosniff"));
+            assert!(has_header(
+                &header,
+                "referrer-policy",
+                "strict-origin-when-cross-origin"
+            ));
+        }
     }
 
     // ── H-D-05：400 响应构造（Host 缺失 / dot-segment 拒绝共用）────────
