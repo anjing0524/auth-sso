@@ -11,6 +11,7 @@
 | `docker/` | 生产部署与数据保护 | `deploy.sh`（生产校验/构建/migrate+seed/健康检查/回滚）、`backup.sh`（pg_dump + 校验 + sha256）、`restore.sh`（新库恢复 + 原子换名） |
 | `e2e/` | 验收闭环 | `release.sh`（`pnpm test:e2e`：直接 compose 构建/启动 → Playwright → 清理）、`acme-e2e.sh`、`acme-staging.sh` |
 | `ci/` | CI 专用 | `verify.sh`、`acme-preflight.sh`、`e2e.sh`（直接 compose + Playwright 容器） |
+| `ops/` | 商用验收冒烟 | `smoke.sh`（HTTPS/登录页/安全头/证书/metrics） |
 | `bench/` | 性能基准 | `gateway.mjs` |
 | `ux/` | 交互/可访问性测量 | `a11y.mjs`、`cwv.mjs`、`measure.mjs` |
 
@@ -24,6 +25,7 @@
 备份         ./scripts/docker/backup.sh
 恢复         ./scripts/docker/restore.sh <dump> --yes
 验收栈排查   docker compose -f docker/compose/test.yml <build|up|ps|logs|down>
+商业冒烟     BASE_URL=... GATEWAY_METRICS_TOKEN=... ./scripts/ops/smoke.sh
 ```
 
 ## 归属规则

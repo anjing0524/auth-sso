@@ -169,7 +169,12 @@ pnpm test:e2e
 pnpm deploy -- --check
 ./scripts/docker/backup.sh
 # 在验收环境执行 restore.sh 并完成登录冒烟
-curl -fsS https://<domain>/api/health
+
+# 商业冒烟（生产/验收环境）
+BASE_URL=https://<domain> \
+GATEWAY_METRICS_TOKEN=<token> \
+./scripts/ops/smoke.sh
+
 curl -fsS https://<domain>/healthz
 ```
 
