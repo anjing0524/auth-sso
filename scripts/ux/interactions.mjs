@@ -75,6 +75,25 @@ await step('权限列表 → 新建权限页面', async () => {
   await page.getByRole('link', { name: /新建权限/ }).first().click();
   await page.waitForURL(/\/permissions\/new/, { timeout: 10000 });
 });
+await step('用户搜索过滤', async () => {
+  await page.goto(`${BASE}/users`, { waitUntil: 'networkidle' });
+  await page.getByPlaceholder('搜索姓名/邮箱/用户名').fill('qa');
+  await page.keyboard.press('Enter');
+  await page.waitForURL(/keyword=qa/, { timeout: 10000 });
+  await page.getByText('QA 林').first().waitFor();
+});
+await step('审计 CSV 导出', async () => {
+  await page.goto(`${BASE}/audit-logs?tab=operation`, { waitUntil: 'networkidle' });
+  await page.getByRole('button', { name: '导出 CSV' }).click();
+  const [download] = await Promise.all([
+    page.waitForEvent('download', { timeout: 15000 }),
+    page.getByRole('menuitem', { name: /导出操作日志/ }).click(),
+  ]);
+  const path = await download.path();
+  if (!path) throw new Error('下载文件为空');
+  const fs = await import('node:fs');
+  if (fs.statSync(path).size === 0) throw new Error('CSV 为空');
+});
 await step('命令面板开合', async () => {
   await page.goto(`${BASE}/dashboard`, { waitUntil: 'networkidle' });
   await page.keyboard.press('Control+k');
