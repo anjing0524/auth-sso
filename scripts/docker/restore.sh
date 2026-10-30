@@ -31,6 +31,15 @@ if [[ -z "$DUMP" || "$YES" != "--yes" ]]; then
 fi
 [[ -s "$DUMP" ]] || { echo "✗ 备份文件不存在或为空：$DUMP" >&2; exit 1; }
 
+if [[ -f "$DUMP.sha256" ]]; then
+  echo "▶ 校验 SHA-256"
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum -c "$DUMP.sha256" >/dev/null || { echo "✗ SHA-256 校验失败" >&2; exit 1; }
+  else
+    shasum -a 256 -c "$DUMP.sha256" >/dev/null || { echo "✗ SHA-256 校验失败" >&2; exit 1; }
+  fi
+fi
+
 COMPOSE=(docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE")
 docker compose version >/dev/null 2>&1 || { echo "未安装 Docker Compose v2" >&2; exit 1; }
 

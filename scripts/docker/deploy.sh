@@ -76,10 +76,10 @@ check_env() {
 
   # 生产密钥文件不得对 group/other 可读；失败即中止，避免密钥泄露后继续部署。
   local mode
-  if stat -f '%Lp' "${ENV_FILE}" >/dev/null 2>&1; then
-    mode="$(stat -f '%Lp' "${ENV_FILE}")"
-  else
+  if stat -c '%a' "${ENV_FILE}" >/dev/null 2>&1; then
     mode="$(stat -c '%a' "${ENV_FILE}")"
+  else
+    mode="$(stat -f '%Lp' "${ENV_FILE}")"
   fi
   if (( 8#${mode} & 8#077 )); then
     fail "${ENV_FILE} 权限过宽（${mode}）：执行 chmod 600 ${ENV_FILE} 后重试"
