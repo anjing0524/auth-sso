@@ -190,6 +190,7 @@ Vercel 单镜像变体仅作为平台托管目标保留，不替代上述自托�
 - [接入验证指南 (docs/INTEGRATION_GUIDE.md)](docs/INTEGRATION_GUIDE.md) — Gateway 代理模式与子应用接入
 - [Portal 架构规范 (docs/portal-architecture-guidelines.md)](docs/portal-architecture-guidelines.md) — 分层、组件模式与 Next.js 16 适配
 - [Docker 构建 / 部署 / 验收 (docs/docker.md)](docs/docker.md) — 唯一出处
+- [生产运维手册 (docs/operations.md)](docs/operations.md) — 备份恢复、故障处置、交付验收证据
 - [脚本索引 (docs/scripts.md)](docs/scripts.md) — `docker/`、`e2e/`、`ci/`、`bench/` 的职责与归属
 - [CI 工作流索引 (docs/ci.md)](docs/ci.md) — 触发文件 / 类别文件分类与命令对应
 - [设计规范 (docs/design-system.md)](docs/design-system.md) — UI/UX 规范与品牌定义

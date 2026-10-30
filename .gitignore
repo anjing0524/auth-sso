@@ -83,3 +83,6 @@ test-mcp
 
 # 生成的演示/巡检资产（不提交；视频走 GitHub user-attachments）
 /artifacts/
+
+# 数据库备份（本地/生产，禁止入库）
+/backups/

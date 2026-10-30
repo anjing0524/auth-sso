@@ -184,8 +184,10 @@ docker compose --env-file .env.prod -f docker/compose/prod.yml logs -f gateway
 
 - **镜像回滚**：`./scripts/docker/deploy.sh --rollback` 把 `auth-sso-portal:previous` / `auth-sso-gateway:previous`
   切回 `:latest` 并重启；**数据库 schema/数据不会自动回退**。
-- **部署前必须备份**：`data/postgres/` 是宿主机 bind mount，建议在升级前 `pg_dump` 或停机快照；
-  回滚镜像后若 schema 已前滚，需用备份恢复数据。
+- **部署前自动备份**：`deploy.sh` 在升级前调用 `scripts/docker/backup.sh --if-running`；备份失败会中止部署。
+  备份产物在 `backups/`（已 gitignore），包含 `pg_dump -Fc`、`pg_restore --list` 校验和 SHA-256。
+- **手动恢复**：`scripts/docker/restore.sh <dump> --yes` 采用“新库恢复 + 原子换名”，失败不会破坏现网库；
+  详细步骤与演练见 [`docs/operations.md`](operations.md) §4。
 - 健康检查失败时脚本只打印日志并退出，不自动重建/清空数据——避免把可恢复故障放大成数据事故。
 
 启动顺序无需人工干预：

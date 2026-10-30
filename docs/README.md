@@ -20,6 +20,7 @@
 | 起服务、跑测试（本地开发 `pnpm dev`；验收/生产走 Docker） | [`docs/local-development.md`](local-development.md)（`pnpm dev -- --reset` → `pnpm dev` → `http://localhost:4100`）；验收 [`docs/INTEGRATION_GUIDE.md`](INTEGRATION_GUIDE.md)（`docker compose -f docker/compose/test.yml up -d --wait --wait-timeout 600` → `https://127.0.0.1:19443/login`） |
 | 登录后的子应用接入验证（Gateway 代理模式、`X-User-Id`、Redis 权限） | [`docs/INTEGRATION_GUIDE.md`](INTEGRATION_GUIDE.md) |
 | Docker 构建 / 部署 / 验收（部署目标矩阵：自托管 P1 / Vercel P2 / 验收栈；`deploy` / `test:e2e` / 标准 compose / 故障排查） | [`docs/docker.md`](docker.md)（**唯一出处**：§0–§6 生产、§7 本地验收；命令只在 §7.2） |
+| 上线、备份恢复、故障处置、交付验收证据 | [`docs/operations.md`](operations.md)（生产运维手册） |
 | CI 工作流分类、触发矩阵与命令对应 | [`docs/ci.md`](ci.md)（`.github/workflows/` 的索引） |
 | 脚本索引（`local/`、`docker/`、`e2e/`、`ci/`、`bench/`、`ux/`） | [`docs/scripts.md`](scripts.md) |
 | 改 Portal 的代码结构（分层、目录、错误体系、三层安全） | [`docs/portal-architecture-guidelines.md`](portal-architecture-guidelines.md) |
@@ -61,6 +62,7 @@ docs/
 ├── coding-standards.md  编码标准
 ├── design-system.md     设计系统（UI/UX 规范与品牌定义）
 ├── docker.md            Docker 构建 / 部署 / 验收（唯一出处）
+├── operations.md         生产运维手册（备份/恢复/故障/验收）
 ├── scripts.md           脚本索引
 ├── ci.md                GitHub Actions 索引
 ├── local-development.md 本地开发

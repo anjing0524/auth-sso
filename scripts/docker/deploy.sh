@@ -20,6 +20,7 @@
 #   COMPOSE_FILE=...   默认 docker/compose/prod.yml
 #   WAIT_PORTAL_SECS   默认 120
 #   WAIT_GATEWAY_SECS  默认 300（首次 ACME 签发可能较慢）
+#   SKIP_BACKUP=1      跳过部署前自动备份（不推荐）
 #
 set -euo pipefail
 
@@ -194,6 +195,11 @@ case "${MODE}" in
   deploy)
     check_env
     mkdir -p data/postgres data/redis
+    if [[ "${SKIP_BACKUP:-0}" != "1" ]]; then
+      log "部署前备份数据库（SKIP_BACKUP=1 可跳过）…"
+      ENV_FILE="$ENV_FILE" COMPOSE_FILE="$COMPOSE_FILE" "$SCRIPT_DIR/backup.sh" --if-running \
+        || fail "部署前备份失败，已中止（SKIP_BACKUP=1 可显式跳过）"
+    fi
     tag_previous_images
     check_compose_config
     if (( NO_BUILD == 1 )); then
