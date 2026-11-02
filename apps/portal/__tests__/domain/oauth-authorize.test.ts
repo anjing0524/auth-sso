@@ -10,6 +10,7 @@ import {
   validateRequestedScopes,
   validateAuthorization,
   InvalidScopeError,
+  type AuthorizeUserInput,
 } from '@/domain/auth/oauth-authorize';
 import { ENTITY_ACTIVE } from '@auth-sso/contracts';
 
@@ -21,12 +22,12 @@ const role = (overrides: Partial<Parameters<typeof validateAuthorization>[0]['ro
   ...overrides,
 });
 
-const base = {
+const base: AuthorizeUserInput = {
   userId: 'user-1',
   clientId: 'client-1',
   status: ENTITY_ACTIVE,
   roles: [role()],
-} as const;
+};
 
 describe('parseScopes', () => {
   it('去空白、按空白拆分并去重', () => {
