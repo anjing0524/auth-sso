@@ -1,18 +1,19 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { ShieldCheck, AlertCircle, Loader2, ArrowRight, Eye, EyeOff } from 'lucide-react';
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-} from '@/components/ui/card';
+  ShieldCheck,
+  AlertCircle,
+  Loader2,
+  ArrowRight,
+  Eye,
+  EyeOff,
+  KeyRound,
+  ScrollText,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Input } from '@/components/ui/input';
-import { LoginBackground } from './login-background';
 import { Label } from '@/components/ui/label';
 import { createClientLogger } from '@/lib/logger-client';
 
@@ -23,6 +24,25 @@ interface LoginFormProps {
   sessionId?: string;
   initialError?: string | null;
 }
+
+/** 左侧品牌区的固定能力说明：三条足以建立信任，不再堆营销文案。 */
+const brandPoints = [
+  {
+    icon: KeyRound,
+    title: '统一身份',
+    description: '一次登录，访问全部已接入系统',
+  },
+  {
+    icon: ShieldCheck,
+    title: '细粒度权限',
+    description: '角色、部门与数据范围统一治理',
+  },
+  {
+    icon: ScrollText,
+    title: '全链路审计',
+    description: '登录、操作与访问记录可追溯',
+  },
+];
 
 export default function LoginForm({ sessionId, initialError }: LoginFormProps) {
   const [isLoading, setIsLoading] = useState(false);
@@ -112,26 +132,106 @@ export default function LoginForm({ sessionId, initialError }: LoginFormProps) {
   const formattedError = getErrorMessage(error);
 
   return (
-    <main className="relative flex min-h-[100svh] flex-col items-center justify-center overflow-hidden bg-[#04122B] px-4 py-5">
-      <LoginBackground />
-      <div className="relative z-10 flex w-full flex-col items-center">
-      <div className="mb-3 flex flex-col items-center gap-1 text-white">
-        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-lg shadow-primary/20">
-          <ShieldCheck className="h-5 w-5" />
+    <main className="min-h-[100svh] bg-[#F4F7FB] lg:grid lg:grid-cols-[minmax(0,46%)_1fr]">
+      {/* 品牌区：静态深色面板，不跑动画，不抢表单焦点 */}
+      <aside className="relative hidden overflow-hidden bg-[#091A32] lg:flex lg:flex-col">
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 opacity-60"
+          style={{
+            backgroundImage:
+              'linear-gradient(to right, rgba(255,255,255,0.055) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.055) 1px, transparent 1px)',
+            backgroundSize: '44px 44px',
+          }}
+        />
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute -right-24 top-[-12%] h-[520px] w-[520px] rounded-full bg-[#1D5BFF]/25 blur-[130px]"
+        />
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute -bottom-28 -left-20 h-[420px] w-[420px] rounded-full bg-[#0C9CB8]/15 blur-[110px]"
+        />
+        <ShieldCheck
+          aria-hidden="true"
+          strokeWidth={1}
+          className="pointer-events-none absolute -right-16 bottom-8 h-80 w-80 text-white/[0.045]"
+        />
+
+        <div className="relative z-10 flex h-full flex-col p-8 xl:p-12">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/10 ring-1 ring-white/15">
+              <ShieldCheck className="h-5 w-5 text-white" />
+            </div>
+            <div className="leading-tight">
+              <p className="text-[17px] font-semibold tracking-tight text-white">Auth-SSO</p>
+              <p className="mt-1 text-[10px] font-medium uppercase tracking-[0.2em] text-white/60">
+                Identity OS
+              </p>
+            </div>
+          </div>
+
+          <div className="my-auto max-w-[420px] py-6 xl:py-10">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-white/60">
+              Identity & Access
+            </p>
+            <h2 className="mt-5 text-[32px] font-semibold leading-[1.28] tracking-tight text-white xl:text-[36px]">
+              一个入口，
+              <br />
+              管理所有身份与权限。
+            </h2>
+            <p className="mt-5 max-w-[360px] text-sm leading-6 text-white/60">
+              面向企业接入场景的统一身份认证、权限治理与审计追踪平台。
+            </p>
+
+            <ul className="mt-8 space-y-4">
+              {brandPoints.map(({ icon: Icon, title, description }) => (
+                <li key={title} className="flex items-start gap-3.5">
+                  <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/[0.07] ring-1 ring-white/10">
+                    <Icon className="h-4 w-4 text-white/70" />
+                  </span>
+                  <span>
+                    <span className="block text-[13px] font-medium text-white/85">{title}</span>
+                    <span className="mt-1 block text-xs leading-5 text-white/60">{description}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div className="flex items-center justify-between gap-4 border-t border-white/10 pt-5 text-[11px] text-white/60">
+            <span>© 2026 Auth-SSO</span>
+            <span>身份与访问管理</span>
+          </div>
         </div>
-        <p className="text-lg font-semibold tracking-tight text-white">Auth-SSO Portal</p>
-      </div>
+      </aside>
 
-      <Card className="w-full max-w-[400px] overflow-hidden border-none shadow-2xl shadow-black/40 ring-1 ring-white/20">
-        <CardHeader className="space-y-0.5 border-b bg-muted/30 py-4 text-center">
-          <h1 className="text-xl font-semibold leading-none tracking-tight">企业统一身份认证</h1>
-          <CardDescription>
-            {sessionId ? '正在完成 OAuth 授权登录' : '使用您的企业账号登录管理门户'}
-          </CardDescription>
-        </CardHeader>
+      {/* 登录区：浅色、无重卡片；把视觉焦点留给输入与主按钮 */}
+      <section className="flex min-h-[100svh] flex-col px-6 py-4 lg:min-h-0 lg:px-14 xl:px-20">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 lg:hidden">
+            <ShieldCheck className="h-4 w-4 text-color-primary" />
+            <span className="text-sm font-semibold">Auth-SSO</span>
+          </div>
+          <p className="ml-auto text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+            企业统一身份认证
+          </p>
+        </div>
 
-        <form aria-label="登录表单" onSubmit={handleSubmit}>
-          <CardContent className="space-y-3 pt-4">
+        <div className="mx-auto flex w-full max-w-[380px] flex-1 flex-col justify-center py-4">
+          <div className="mb-6">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-color-primary">
+              Admin Console
+            </p>
+            <h1 className="mt-3 text-[30px] font-semibold leading-tight tracking-tight text-foreground">
+              登录管理控制台
+            </h1>
+            <p className="mt-3 text-sm leading-6 text-muted-foreground">
+              {sessionId ? '正在完成 OAuth 授权登录，请验证企业账号。' : '使用企业账号继续访问。'}
+            </p>
+          </div>
+
+          <form aria-label="登录表单" onSubmit={handleSubmit} className="space-y-4">
             {formattedError ? (
               <Alert variant="destructive" className="animate-in head-shake duration-300">
                 <AlertCircle className="h-4 w-4" />
@@ -152,7 +252,7 @@ export default function LoginForm({ sessionId, initialError }: LoginFormProps) {
                 value={formData.email}
                 onChange={(e) => setFormData((prev) => ({ ...prev, email: e.target.value }))}
                 disabled={isLoading}
-                className="h-10"
+                className="h-11 border-border/80 bg-white shadow-none"
               />
             </div>
 
@@ -169,7 +269,7 @@ export default function LoginForm({ sessionId, initialError }: LoginFormProps) {
                   value={formData.password}
                   onChange={(e) => setFormData((prev) => ({ ...prev, password: e.target.value }))}
                   disabled={isLoading}
-                  className="h-10 pr-10"
+                  className="h-11 border-border/80 bg-white pr-11 shadow-none"
                 />
                 <button
                   type="button"
@@ -177,19 +277,19 @@ export default function LoginForm({ sessionId, initialError }: LoginFormProps) {
                   aria-pressed={showPassword}
                   title={showPassword ? '隐藏密码' : '显示密码'}
                   onClick={() => setShowPassword((v) => !v)}
-                  className="absolute right-1 top-1 flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                  className="absolute right-1.5 top-1.5 flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
-              <p className="text-[11px] text-muted-foreground">忘记密码？请联系管理员重置（当前不支持自助找回）。</p>
+              <p className="text-[11px] leading-5 text-muted-foreground">
+                忘记密码？请联系管理员重置（当前不支持自助找回）。
+              </p>
             </div>
-          </CardContent>
 
-          <CardFooter className="mt-6 flex flex-col gap-4 border-t bg-muted/30 py-4">
             <Button
               type="submit"
-              className="h-10 w-full text-sm font-medium transition-all"
+              className="group h-11 w-full text-sm font-medium shadow-sm"
               disabled={isLoading}
             >
               {isLoading ? (
@@ -200,22 +300,22 @@ export default function LoginForm({ sessionId, initialError }: LoginFormProps) {
               ) : (
                 <>
                   安全登录
-                  <ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform" />
+                  <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-0.5" />
                 </>
               )}
             </Button>
+          </form>
 
-            <div className="text-center text-xs text-muted-foreground w-full">
-              <p className="font-mono opacity-60">OAuth 2.1 · OpenID Connect 1.0</p>
-            </div>
-          </CardFooter>
-        </form>
-      </Card>
+          <p className="mt-6 text-center text-xs leading-5 text-muted-foreground">
+            登录遇到问题请联系企业 IT 管理员
+          </p>
+        </div>
 
-      <p className="mt-4 text-xs text-white/60">
-        登录遇到问题请联系企业 IT 管理员
-      </p>
-      </div>
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/70 pt-4 text-[11px] text-muted-foreground">
+          <span>OAuth 2.1 · OpenID Connect 1.0</span>
+          <span>安全连接</span>
+        </div>
+      </section>
     </main>
   );
 }

@@ -63,9 +63,7 @@ export default function LoginPage({ searchParams }: SearchParams) {
   return (
     <Suspense
       fallback={
-        <div className="flex min-h-screen items-center justify-center bg-background">
-          <div className="animate-pulse text-muted-foreground">安全认证加载中...</div>
-        </div>
+        <div className="min-h-[100svh] bg-[#F4F7FB]" aria-busy="true" />
       }
     >
       <LoginContent searchParams={searchParams} />

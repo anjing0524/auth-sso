@@ -210,7 +210,7 @@
 | 表单字段间距 | 16px |
 | 按钮间距 | 12px (组内) / 24px (组间) |
 | 导航高度 | 48px (顶部 `h-12`，v3.6 再收紧) / 224px (侧边栏展开 `--sidebar-width: 14rem`)；折叠态 48px (`--sidebar-width-icon: 3rem`) |
-| 最大内容宽度 | 内容容器 `max-w-[1680px]` 居中（`DashboardLayout` 顶栏与 `<main>` 内层，v3.7 之后的实测值） / 400px (登录卡片 `max-w-[400px]`) |
+| 最大内容宽度 | 内容容器 `max-w-[1680px]` 居中（`DashboardLayout` 顶栏与 `<main>` 内层，v3.7 之后的实测值） / 380px (登录表单 `max-w-[380px]`) |
 
 > **导航高度口径（现实现）**：`components/ui/sidebar.tsx` 的 `SidebarProvider` 用 `min-h-svh`，而 `LayoutDashboard` 外壳（`components/layout/DashboardLayout.tsx`）在它上面再加 `h-svh overflow-hidden`、`<main>` 用 `height: calc(100svh - 3rem)` 固定视口高度——**应用壳以这条更严格的口径为准**（见「布局与间距体系」）。
 
@@ -491,7 +491,7 @@ DataTable 是共享表格组件，所有列表页统一使用。
 | `rounded-md` | 8px | 按钮（`Button` 基类）/ 下拉条目（`DropdownMenuItem`、`SubTrigger`）/ 页签触发器 / 行内图标按钮 |
 | `rounded-lg` | 8px | 表单控件（`Input` / `SelectTrigger` / `Textarea` / `Checkbox` 之外的 8px 控件，与 md 等价）/ 页签容器 `TabsList` / 分页页码按钮 |
 | `rounded-xl` | 12px | 卡片、表格容器、下拉面板（`DropdownMenuContent` 仍是 `rounded-md`，见下行） |
-| `rounded-2xl` | 16px | 对话框（`DialogContent`）、登录卡片、403 图标底 |
+| `rounded-2xl` | 16px | 对话框（`DialogContent`）、403 图标底 |
 | `rounded-full` | 9999px | 徽章、头像 |
 
 > 现实现小注：`DropdownMenuContent` 基类为 `rounded-md`、`DropdownMenuSubContent` 为 `rounded-xl`；`TooltipContent` 为 `rounded-md`；`Checkbox` 为 `rounded-[4px]`。
@@ -665,52 +665,35 @@ DataTable 是共享表格组件，所有列表页统一使用。
 
 ### 登录页
 
-> **现实现**（`apps/portal/src/app/login/`：`page.tsx` + `login-form.tsx` + `login-background.tsx`）：
-> 根容器 `min-h-[100svh]` 纵向居中（`flex-col`，`px-4 py-5`），卡片外的品牌区在卡片**上方**（不是卡片内的品牌名），副标题在卡片头里。
+> **现实现**（`apps/portal/src/app/login/`：`page.tsx` + `login-form.tsx`）：
+> 桌面分栏布局，左 46% 品牌区、右 54% 登录区；**不再有 Canvas/极光/粒子背景**。
 
 ```
-┌─────────────────────────────────────────────┐
-│                                             │
-│     深色动态品牌背景（Canvas，见下）           │
-│                                             │
-│              (盾牌图标 36×36)                │
-│              Auth-SSO Portal  ← 品牌名 (text-lg) │
-│                                             │
-│     ┌─────────────────────────┐             │
-│     │   企业统一身份认证        │ ← CardTitle (text-xl) │
-│     │   使用您的企业账号登录…   │ ← CardDesc  │
-│     ├─────────────────────────┤             │
-│     │  账号（邮箱）            │             │
-│     │  ┌─────────────────┐    │ ← 输入框 40px│
-│     │  密码                   │             │
-│     │  ┌─────────────────┐    │             │
-│     │  │    安全登录      │    │ ← 主按钮 40px│
-│     │  │ OAuth 2.1 · OIDC 1.0 │  │ ← 页脚说明  │
-│     └─────────────────────────┘             │
-│          白色卡片 + shadow-2xl + ring-white/20│
-│                                             │
-│        登录遇到问题请联系企业 IT 管理员  (white/60) │
-└─────────────────────────────────────────────┘
+┌──────────────────────────────┬──────────────────────────────┐
+│  品牌区（深色 #091A32）       │  登录区（浅色 #F4F7FB）        │
+│                              │                              │
+│  [盾牌] Auth-SSO             │          企业统一身份认证      │
+│         IDENTITY OS          │                              │
+│                              │         ADMIN CONSOLE         │
+│  IDENTITY & ACCESS           │         登录管理控制台         │
+│  一个入口，                   │         使用企业账号继续访问。  │
+│  管理所有身份与权限。          │                              │
+│                              │         登录邮箱 [        ]   │
+│  统一身份 / 细粒度权限 /       │         密码     [     👁 ]   │
+│  全链路审计                   │                              │
+│                              │         [    安全登录 →    ]   │
+│  © 2026 Auth-SSO             │          登录遇到问题…         │
+│                              │  OAuth 2.1 · OIDC 1.0  安全连接│
+└──────────────────────────────┴──────────────────────────────┘
 ```
 
-- 垂直居中布局（`relative flex min-h-[100svh] flex-col items-center justify-center overflow-hidden bg-[#04122B] px-4 py-5`）
-- 卡片最大宽度 400px（`max-w-[400px]`）
-- 白色卡片（`Card bg-card`）+ `shadow-2xl shadow-black/40` + 深色背景上的白色描边（`ring-1 ring-white/20`）
-- 登录页输入框与主按钮 40px（`h-10`，页面覆写；基类 36px），主按钮文案「安全登录」，加载中「验证中...」
-- **动态品牌背景**（2026-10-20 返工：此前整屏高饱和亮蓝非常丑）：
-  - 深海军蓝 → 品牌蓝纵向渐变（`#04122B`(0) → `#0A2E63`(0.45) → `#0B3C86`(0.75) → `#050D1F`(1)，`login-background.tsx` 的 Canvas `addColorStop`）；
-  - 3 团低速漂移极光（蓝/青/湖绿，`lighter` 叠加，**不用紫色**）+ 细网格 + 微粒星点 + 四周暗角；
-  - 实现为**零依赖 Canvas 2D**（`apps/portal/src/app/login/login-background.tsx`），不引入 PixiJS：纯装饰层不值得
-    +150–400KB JS/WebGL 上下文；DPR ≤2、30fps 节流、`document.hidden` 暂停、
-    `prefers-reduced-motion` 只画静态一帧、`aria-hidden`；
-  - 文字在深底上用白色/`white/45`，卡片保持白底保证输入对比度。
-  - **例外说明**：容器底色写死 `bg-[#04122B]`、渐变起点用 hex——这是"深色品牌底"的既定例外（Canvas 渐变无法走 Tailwind token，且必须与首帧底色一致以防闪烁）；其余界面仍按「禁止硬编码 hex」执行。
-
-### 登录页（v3.7）
-
-- 根容器用 `min-h-[100svh]`（不是 `100vh`/`min-h-screen`）：浏览器工具栏/任务栏占用后仍以**可见视口**为准。
-- 必须保证 **1139×600 视口无页面滚动条**（实测 600px 高时内容 669px → 压缩品牌区/卡片内边距/输入框到 40px 后 scrollHeight=600）。
-- 登录卡片宽度 400px 上限；窄屏 `px-4 py-5`，不出现横向滚动。
+- 左侧为**静态**深色品牌面板：细网格 + 两团低透明径向光 + 大号盾牌水印；不跑动画，不抢表单焦点。
+- 右侧浅色登录区：无重卡片、无大阴影；表单最大宽度 380px，桌面垂直居中。
+- 登录页输入框与主按钮 44px（`h-11`），主按钮文案「安全登录」，加载中「验证中...」。
+- 左侧小字统一不低于 `text-white/60`；右侧说明使用 `text-muted-foreground`，避免深色底小字对比度不足。
+- 桌面 1139×600 视口必须无页面滚动条（实测 `scrollHeight=clientHeight=600`）；1440/1280 同样不产生横向/纵向溢出。
+- **例外说明**：左侧品牌底色写死 `bg-[#091A32]`、右侧浅底 `#F4F7FB`，属于登录页品牌面板的既定例外；其余界面仍按「禁止硬编码 hex」执行。
+- 旧版 `login-background.tsx`（Canvas 深蓝渐变/极光）已删除，不要再恢复动画背景。
 
 ### 管理后台
 
