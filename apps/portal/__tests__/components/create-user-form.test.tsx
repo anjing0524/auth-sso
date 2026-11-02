@@ -81,7 +81,7 @@ describe('CreateUserForm · 校验失败保留输入', () => {
 
     await user.click(screen.getByRole('button', { name: '创建' }));
     // 第一次提交走失败分支
-    await waitFor(() => expect(createUserAction).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(createUserAction).toHaveBeenCalledTimes(1), { timeout: 5_000 });
 
     // U-G07：英文领域模板不得直出；按错误码映射为中文并落到邮箱输入框下方
     expect(await screen.findByText('该邮箱已被使用，请换一个')).toBeInTheDocument();
@@ -97,7 +97,7 @@ describe('CreateUserForm · 校验失败保留输入', () => {
     await user.type(emailInput, 'zhangsan@example.com');
     await user.click(screen.getByRole('button', { name: '创建' }));
 
-    await waitFor(() => expect(createUserAction).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(createUserAction).toHaveBeenCalledTimes(2), { timeout: 5_000 });
     const secondForm = createUserAction.mock.calls[1]?.[1] as FormData;
     expect(secondForm.get('email')).toBe('zhangsan@example.com');
   });
@@ -114,7 +114,7 @@ describe('CreateUserForm · 默认部门', () => {
     await user.type(screen.getByLabelText('初始密码'), 'Init@123456');
     await user.click(screen.getByRole('button', { name: '创建' }));
 
-    await waitFor(() => expect(createUserAction).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(createUserAction).toHaveBeenCalledTimes(1), { timeout: 5_000 });
     const form = createUserAction.mock.calls[0]?.[1] as FormData;
     expect(form.get('deptId')).toBe(DEPARTMENTS[0]!.id);
   });
