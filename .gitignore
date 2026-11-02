@@ -86,3 +86,8 @@ test-mcp
 
 # 数据库备份（本地/生产，禁止入库）
 /backups/
+
+# Stryker mutation 产物（基线报告不提交）
+.stryker-tmp/
+reports/
+

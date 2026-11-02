@@ -33,7 +33,9 @@ afterAll(() => {
 
 describe('repo-scan —— 仓库根', () => {
   it('REPO_ROOT 指向含 pnpm-workspace.yaml 的目录（与调用方所在层级无关）', () => {
-    expect(walk(REPO_ROOT, (n) => n === 'pnpm-workspace.yaml')).toEqual([
+    expect(walk(REPO_ROOT, (n) => n === 'pnpm-workspace.yaml', new Set([
+      'node_modules', '.git', '.next', '.turbo', '.stryker-tmp', 'coverage', 'reports',
+    ]))).toEqual([
       join(REPO_ROOT, 'pnpm-workspace.yaml'),
     ]);
   });

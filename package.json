@@ -13,13 +13,16 @@
     "deploy": "./scripts/docker/deploy.sh",
     "test:coverage": "vitest run --coverage --coverage.reporter=text --coverage.reporter=json-summary && node scripts/ci/coverage-gate.mjs",
     "test:visual": "E2E_VISUAL=1 pnpm test:e2e",
-    "test:a11y": "node scripts/ux/a11y.mjs"
+    "test:a11y": "node scripts/ux/a11y.mjs",
+    "test:mutation": "stryker run stryker.config.json; rc=$?; rm -rf .stryker-tmp; exit $rc"
   },
   "engines": {
     "node": ">=26.0.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.60.0",
+    "@stryker-mutator/core": "10.1.1",
+    "@stryker-mutator/vitest-runner": "10.1.1",
     "@vitest/coverage-v8": "^4.1.12",
     "tsx": "^4.22.4",
     "vitest": "^4.1.9",

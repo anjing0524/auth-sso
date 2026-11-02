@@ -52,6 +52,9 @@ jobs:
       - name: Run unit, API, and component tests with coverage gate
         run: $NODE_TEST pnpm test:coverage
 
+      - name: Run mutation gate (auth domain)
+        run: $NODE_TEST pnpm test:mutation
+
       - name: Generate traceability inventory
         run: $NODE_TEST node tests/traceability/generate-report.mjs
 

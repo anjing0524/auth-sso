@@ -1,0 +1,33 @@
+{
+  "$schema": "https://stryker-mutator.io/schema/stryker-schema.json",
+  "testRunner": "vitest",
+  "vitest": {
+    "configFile": "vitest.mutation.config.ts"
+  },
+  "mutate": [
+    "apps/portal/src/domain/auth/login.ts",
+    "apps/portal/src/domain/auth/oauth-authorize.ts",
+    "apps/portal/src/domain/auth/oauth-client.ts",
+    "apps/portal/src/domain/auth/oauth-code.ts",
+    "apps/portal/src/domain/auth/password-change.ts",
+    "apps/portal/src/domain/auth/password.ts"
+  ],
+  "coverageAnalysis": "perTest",
+  "reporters": [
+    "clear-text",
+    "html"
+  ],
+  "htmlReporter": {
+    "fileName": "reports/mutation/auth.html"
+  },
+  "thresholds": {
+    "high": 80,
+    "low": 70,
+    "break": 65
+  },
+  "timeoutMS": 20000,
+  "concurrency": 2,
+  "plugins": [
+    "@stryker-mutator/vitest-runner"
+  ]
+}
