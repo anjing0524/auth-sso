@@ -37,7 +37,7 @@ docker run --rm --network host \
   -e E2E_TARGET=docker \
   -e E2E_BASE_URL="$E2E_BASE_URL" \
   -e E2E_SKIP_SEED=true \
-  -e E2E_VISUAL="${E2E_VISUAL:-0}" \
+  -e E2E_VISUAL="${E2E_VISUAL:-1}" \
   "$PLAYWRIGHT_IMAGE" \
   bash -lc "npm install -g pnpm@12.14.0 &&
     printf 'manage-package-manager-versions=false\nregistry=https://registry.npmmirror.com\n' > .npmrc &&

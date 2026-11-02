@@ -82,3 +82,15 @@ README 声称"生成时脚本断言无重复"而**根本不存在**这样的脚�
     `module-mock-guard` 管豁免集相等、`gate-inventory-guard` 管禁令表、`docs-api-error-codes` 管错误组完整性）。
 - **反例的可执行判据**：当你写下"必须/全部/每一个"时，问一句 **"如果我少写一条，谁会红？"**
   —— 答不上来，就说明这句话只是**愿望**，不是约束。
+
+## 9. 测试质量口径：不拿用例数当质量
+
+- **禁止**用“1545 passed / 145 files”作为商用交付结论。用例数只说明回归网规模。
+- **源码字符串守卫**只允许保留**无法用行为/浏览器验证**的架构不变量（如禁止原生 `alert`、禁止 `dangerouslySetInnerHTML`、长表单必须页面化）；类名、文案、`toContain` 不得再新增为测试。
+- 测试分层必须分开汇报：
+  - `pnpm test:coverage`：逻辑回归 + auth/permission/oauth 行覆盖阈值；
+  - `pnpm test:e2e`：Docker 栈关键路径；
+  - `pnpm test:visual`：桌面 1440/1280 截图基线；
+  - `E2E_CHANNEL=chrome pnpm test:a11y`：对比度/键盘门禁；
+  - 客户环境验收：ACME、备份恢复、回滚、UAT。
+- **交付报告**至少列出：关键路径 E2E 结果、安全负向测试、视觉基线、覆盖率数字、客户环境验收状态；用例总数可附但不得单独作为结论。
