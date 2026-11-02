@@ -173,6 +173,8 @@ export default function UserRolesPage({ user, isSelf = false, returnHref }: User
     }
   };
 
+  const listFlex = displayRoles.length <= 8 ? '' : 'flex-1';
+
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
       <PageHeader
@@ -189,7 +191,7 @@ export default function UserRolesPage({ user, isSelf = false, returnHref }: User
         </div>
       )}
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border/70 bg-card shadow-sm ring-0">
+      <div className={`flex min-h-0 flex-col overflow-hidden rounded-lg border border-border/70 bg-card shadow-sm ring-0 ${listFlex}`}>
         <div className="flex flex-wrap items-center gap-3 border-b bg-muted/30 px-3 py-2">
           <SearchInput placeholder="搜索角色名称或编码" value={keyword} onChange={setKeyword} />
           <Badge variant="secondary" className="h-6">{loading ? '加载中' : `可选 ${roles.length} 个`}</Badge>
@@ -249,7 +251,7 @@ export default function UserRolesPage({ user, isSelf = false, returnHref }: User
             已保留最后一个角色：至少需要一个角色才能保存。如需禁止该用户登录，请到用户详情使用「禁用账号」。
           </p>
         ) : null}
-        <div className="scrollbar-slim min-h-0 flex-1 overflow-y-auto p-3">
+        <div className={`scrollbar-slim min-h-0 overflow-y-auto p-3 ${listFlex}`}>
           {loading ? (
             <div className="flex items-center justify-center py-24">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />

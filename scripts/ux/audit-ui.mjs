@@ -4,7 +4,7 @@ const BASE = 'https://127.0.0.1:19443';
 const ADMIN = { email: 'admin@example.com', password: 'Admin@123456' };
 const USER_ID = '00000000-0000-0000-0000-000000000001';
 const routes = [
-  '/dashboard', '/users', '/users/new', `/users/${USER_ID}`, '/roles', '/permissions',
+  '/dashboard', '/users', '/users/new', `/users/${USER_ID}`, `/users/${USER_ID}/roles`, '/roles', '/permissions',
   '/departments', '/clients', '/clients/portal', '/clients/new', '/permissions/new',
   '/audit-logs?tab=login', '/audit-logs?tab=operation', '/audit-logs?tab=access', '/profile',
   '/login', '/nonexistent', '/users/00000000-0000-0000-0000-0000000000ff', '/clients/unknown',
@@ -42,7 +42,26 @@ for (const vp of viewports) {
   await page.getByRole('button', { name: '安全登录' }).click();
   await page.waitForURL(/\/dashboard$/, { timeout: 60000 });
 
-  for (const route of routes) {
+  // 详情页 ID 每次验收会变：从列表页真实链接发现，而不是硬编码
+  const dynamicRoutes = [];
+  const collect = async (pagePath, selector, limit = 2) => {
+    await page.goto(`${BASE}${pagePath}`, { waitUntil: 'networkidle' });
+    const hrefs = await page.locator(selector).evaluateAll((els) =>
+      els.map((el) => el.getAttribute('href')).filter(Boolean),
+    );
+    for (const href of [...new Set(hrefs)].slice(0, limit)) {
+      if (href.startsWith('/')) dynamicRoutes.push(href);
+    }
+  };
+  await collect('/roles', 'a[href*="/permissions"]');
+  await collect('/users', 'a[href$="/roles"]', 1);
+  for (const tab of ['login', 'operation', 'access']) {
+    await page.goto(`${BASE}/audit-logs?tab=${tab}`, { waitUntil: 'networkidle' });
+    const href = await page.locator('a[href^="/audit-logs/"]').first().getAttribute('href').catch(() => null);
+    if (href) dynamicRoutes.push(href);
+  }
+
+  for (const route of [...routes, ...dynamicRoutes]) {
     const pageErrors = [];
     const pageFailed = [];
     const onErr = e => pageErrors.push(`pageerror: ${e.message}`);
