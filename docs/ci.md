@@ -33,7 +33,7 @@
 > 两层依赖审计（`pnpm audit` / `cargo audit`）**不阻断**：结论看本步日志（取证经过与触发条件写在 `quality.yml` 注释里）。
 > `cargo audit` 需要先装工具（runner 不带），由 `taiki-e/install-action` 安装；`pnpm audit` 必须打官方 registry。
 > **覆盖率是门禁**：`pnpm test:coverage` 生成 `coverage/coverage-summary.json`，再由
-> `scripts/ci/coverage-gate.mjs` 校验 auth / permission / oauth 与总行覆盖阈值；基线见脚本头注释。
+> `scripts/ci/coverage-gate.mjs` 校验 auth / permission / oauth 与总行/分支覆盖阈值；基线见脚本头注释。
 >
 > **验证分层（不要混为一谈）**：
 > - `pnpm test`：逻辑/API/组件回归，证明服务端与组件行为；不代表页面好看。

@@ -8,6 +8,11 @@
  */
 import { vi } from 'vitest';
 import '@testing-library/jest-dom/vitest';
+import { configure } from '@testing-library/dom';
+
+// 全量 145 文件并行时，默认 1s 的异步断言窗口会造成偶发假红；统一放宽到 5s。
+// 这是测试稳定性配置，不放宽业务断言本身。
+configure({ asyncUtilTimeout: 5_000 });
 
 // Mock server-only：该包在非 Next.js 服务器环境中会抛出异常，测试环境需要空 mock
 vi.mock('server-only', () => ({}));

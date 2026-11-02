@@ -149,10 +149,10 @@ for (let i = 0; i < 40; i++) {
   await page.keyboard.press('Tab');
 }
 await page.keyboard.press('Enter');
-await page.waitForTimeout(600);
+await page.getByRole('dialog').waitFor({ state: 'visible', timeout: 5_000 }).catch(() => {});
 opened = (await page.locator('[role="dialog"]').count()) > 0;
 await page.keyboard.press('Escape');
-await page.waitForTimeout(800);
+await page.getByRole('dialog').waitFor({ state: 'detached', timeout: 5_000 }).catch(() => {});
 restored = await page.evaluate(() => ({
   dialog: document.querySelectorAll('[role="dialog"]').length,
   focus: document.activeElement?.getAttribute('aria-label') || document.activeElement?.textContent?.trim().slice(0, 20),
