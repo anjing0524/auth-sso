@@ -4,9 +4,9 @@ name: Quality Gate
 # 只跑仓库已有命令（pnpm / cargo），不碰 Docker 发布栈；验收与 ACME 见同目录其他类别文件。
 # 复用方：pr.yml / main.yml / nightly.yml / release-validation.yml。
 #
-# 命名与阻断点：作业名只列**真正阻断**的步骤。覆盖率不在其中——本仓 CI 从未跑 `--coverage`
-# （根 `vitest.config.ts` 的 coverage 配置供本地 `pnpm exec vitest run --coverage`，
-# 且未设 thresholds，本来就不构成门禁）。见 docs/coding-standards.md 第 7 条。
+# 命名与阻断点：作业名只列**真正阻断**的步骤。
+# 覆盖率是阻断步骤：核心安全域（auth/permission/oauth）由 scripts/ci/coverage-gate.mjs 校验阈值，
+# 证据在 coverage/coverage-summary.json；阈值基线见该脚本头注释。见 docs/coding-standards.md 第 7 条。
 on:
   workflow_call:
 
@@ -49,8 +49,8 @@ jobs:
       - name: Seed database
         run: $NODE_TEST pnpm --filter @auth-sso/portal db:seed
 
-      - name: Run unit, API, and component tests
-        run: $NODE_TEST pnpm test
+      - name: Run unit, API, and component tests with coverage gate
+        run: $NODE_TEST pnpm test:coverage
 
       - name: Generate traceability inventory
         run: $NODE_TEST node tests/traceability/generate-report.mjs

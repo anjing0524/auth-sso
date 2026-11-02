@@ -24,15 +24,24 @@
 
 | 层 | 类别 / 作业 | CI 调用的命令 | 本地等价 |
 |---|---|---|---|
-| 快层（每次 push/PR，阻断） | `quality.yml` / `node` | `pnpm lint` · `pnpm typecheck` · `pnpm --filter @auth-sso/portal db:migrate` · `pnpm --filter @auth-sso/portal db:seed` · `pnpm test` · `node tests/traceability/generate-report.mjs`（均在 `node-test` 容器内） | 同左（先 `docker compose -f docker/compose/local.yml up -d`） |
+| 快层（每次 push/PR，阻断） | `quality.yml` / `node` | `pnpm lint` · `pnpm typecheck` · `pnpm --filter @auth-sso/portal db:migrate` · `pnpm --filter @auth-sso/portal db:seed` · `pnpm test:coverage`（逻辑回归 + auth/permission/oauth 覆盖率阈值）· `node tests/traceability/generate-report.mjs`（均在 `node-test` 容器内） | 同左（先 `docker compose -f docker/compose/local.yml up -d`） |
 | 快层 | `quality.yml` / `rust` | `cargo fmt --check` · `cargo clippy` · `cargo test` · `cargo build --release` · `cargo audit` | 同左（工作目录 `apps/gateway`） |
 | 快层 | `acme.yml` / `preflight` | `scripts/ci/acme-preflight.sh` | CI 专用（断言 `acme-staging.sh` 的预检契约，无容器） |
-| 验收层（每次 push/PR，阻断） | `acceptance.yml` / `docker-release` | `scripts/ci/e2e.sh` | `pnpm test:e2e`（`scripts/e2e/release.sh`） |
+| 验收层（每次 push/PR，阻断） | `acceptance.yml` / `docker-release` | `scripts/ci/e2e.sh`（关键路径 E2E + 桌面视觉基线 + a11y） | `pnpm test:e2e`；独立门禁 `pnpm test:visual` / `E2E_CHANNEL=chrome pnpm test:a11y` |
 | 高成本层（release/夜间） | `acme.yml` / `lifecycle` | `scripts/e2e/acme-e2e.sh` | `./scripts/e2e/acme-e2e.sh` |
 
 > 两层依赖审计（`pnpm audit` / `cargo audit`）**不阻断**：结论看本步日志（取证经过与触发条件写在 `quality.yml` 注释里）。
 > `cargo audit` 需要先装工具（runner 不带），由 `taiki-e/install-action` 安装；`pnpm audit` 必须打官方 registry。
-> 覆盖率不是门禁：本仓 CI 从未跑 `--coverage`（见 `docs/coding-standards.md` 第 7 条）。
+> **覆盖率是门禁**：`pnpm test:coverage` 生成 `coverage/coverage-summary.json`，再由
+> `scripts/ci/coverage-gate.mjs` 校验 auth / permission / oauth 与总行覆盖阈值；基线见脚本头注释。
+>
+> **验证分层（不要混为一谈）**：
+> - `pnpm test`：逻辑/API/组件回归，证明服务端与组件行为；不代表页面好看。
+> - `pnpm test:coverage`：逻辑回归 + 核心安全域覆盖率阈值。
+> - `pnpm test:e2e`：真实 Docker 栈的关键用户路径；默认不跑视觉基线。
+> - `pnpm test:visual`：桌面 1440/1280 截图基线（`E2E_VISUAL=1`），独立门禁。
+> - `E2E_CHANNEL=chrome pnpm test:a11y`：对比度/键盘门禁，独立门禁。
+> - 客户环境验收：ACME、备份恢复、回滚、UAT；仓库测试不能替代。
 
 ## 修改规则
 

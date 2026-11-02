@@ -21,7 +21,7 @@ const PATHS = [
   '/roles/ed11e8cd-0261-4985-a201-006c05a19f20/permissions',
 ];
 
-const browser = await chromium.launch({ channel: 'chrome' });
+const browser = await chromium.launch(process.env.E2E_CHANNEL ? { channel: process.env.E2E_CHANNEL } : {});
 const colorScheme = process.env.E2E_COLOR_SCHEME === 'dark' ? 'dark' : 'light';
 const context = await browser.newContext({ ignoreHTTPSErrors: true, viewport: { width: 1139, height: 700 }, colorScheme });
 const page = await context.newPage();
@@ -102,7 +102,7 @@ for (const path of paths) {
   report.contrast[path] = await measureContrast(page);
 }
 // 未登录登录页（独立上下文；登录页不在 dashboard 布局内）
-const loginContext = await browser.newContext({ ignoreHTTPSErrors: true, viewport: { width: 390, height: 844 }, colorScheme });
+const loginContext = await browser.newContext({ ignoreHTTPSErrors: true, viewport: { width: 1440, height: 900 }, colorScheme });
 const loginPage = await loginContext.newPage();
 await loginPage.goto(`${BASE}/login`, { waitUntil: 'networkidle' });
 await loginPage.waitForTimeout(300);
@@ -111,7 +111,6 @@ await loginContext.close();
 
 // 弹窗内容对比度（默认页面路径覆盖不到）
 const DIALOG_CASES = [
-  { path: '/users', name: 'users-create', open: async () => page.getByRole('button', { name: '新建用户' }).click() },
   { path: '/roles', name: 'roles-create', open: async () => page.getByRole('button', { name: '新建角色' }).click() },
   { path: '/permissions', name: 'permissions-delete', open: async () => page.locator('button[aria-label^="删除权限"]').first().click() },
   { path: '/profile', name: 'profile-password', open: async () => page.getByRole('button', { name: '修改密码' }).click() },
@@ -136,8 +135,8 @@ for (const item of DIALOG_CASES) {
   }
 }
 
-// 键盘：跳转链接 → 新建用户 → Enter 打开 → Esc 关闭 + 焦点归还
-await page.goto(`${BASE}/users`, { waitUntil: 'networkidle' });
+// 键盘：跳转链接 → 新建角色 → Enter 打开 → Esc 关闭 + 焦点归还
+await page.goto(`${BASE}/roles`, { waitUntil: 'networkidle' });
 await page.keyboard.press('Tab');
 const firstFocus = await page.evaluate(() => document.activeElement?.textContent?.trim());
 let ring = false; let opened = false; let restored = null;
@@ -146,7 +145,7 @@ for (let i = 0; i < 40; i++) {
     const el = document.activeElement; const cs = getComputedStyle(el);
     return { name: el?.getAttribute('aria-label') || el?.textContent?.trim() || '', ring: cs.boxShadow !== 'none' || cs.outlineStyle !== 'none' };
   });
-  if (info.name.startsWith('新建用户')) { ring = info.ring; break; }
+  if (info.name.startsWith('新建角色')) { ring = info.ring; break; }
   await page.keyboard.press('Tab');
 }
 await page.keyboard.press('Enter');

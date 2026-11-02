@@ -193,9 +193,9 @@
 
 ## 9. 设计债与优先级
 
-> **视觉一致性守卫**（2026-10-26 起）：`crud-f7-guards.test.ts` 扫描 `src/app/**/*.tsx`，
+> **视觉一致性保障**（2026-11-02 起）：删除源码字符串守卫 `crud-f7-guards.test.ts`；页面视觉由 `tests/e2e/00-visual.spec.ts` 的桌面截图基线覆盖，布局/交互由组件测试、E2E 与浏览器巡检覆盖。
 > 禁止 `ring-1 ring-border*`（会解析成 currentColor 黑描边）、`uppercase tracking-wider/widest`
-> （中文散字）、`font-black`（与字重体系冲突）；残留 = 测试红。
+> （中文散字）、`font-black`（与字重体系冲突）；由视觉基线/代码评审拦截，不再新增源码字符串守卫。
 
 1. **P0**：权限分配树/过滤（本轮）、用户批量操作、审计时间/结果筛选。
 2. **P1**：应用配置表单分组、详情页 section 统一、工作台指标接真实数据。

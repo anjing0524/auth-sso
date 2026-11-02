@@ -1,0 +1,29 @@
+name: Visual Baseline (Linux)
+
+# 仅手动触发：在 Playwright Linux 镜像里更新桌面截图基线，下载 artifact 后提交。
+# 正常门禁由 acceptance.yml 使用已提交的 linux 基线执行。
+on:
+  workflow_dispatch:
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build stack and update visual snapshots
+        env:
+          E2E_VISUAL: '1'
+          E2E_VISUAL_UPDATE: '1'
+        run: ./scripts/ci/e2e.sh
+
+      - name: Upload visual baselines
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-baselines-linux
+          path: tests/e2e/00-visual.spec.ts-snapshots/*-linux.png
+          if-no-files-found: error
+          retention-days: 7
