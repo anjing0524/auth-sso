@@ -46,6 +46,12 @@ function routeFiles(dir: string): string[] {
 }
 
 describe('API 路由授权接线', () => {
+  it('公开/手工 allowlist 不引用不存在的 route（防止 stale allowlist 静默跳过）', () => {
+    const all = new Set(routeFiles(API_ROOT));
+    const stale = [...PUBLIC, ...MANUAL_AUTH].filter((route) => !all.has(route));
+    expect(stale, stale.join('\n')).toEqual([]);
+  });
+
   it('每个受保护 route 都接了 withPermission/withAuth；新增 route 不得静默裸奔', () => {
     const violations: string[] = [];
     for (const route of routeFiles(API_ROOT)) {

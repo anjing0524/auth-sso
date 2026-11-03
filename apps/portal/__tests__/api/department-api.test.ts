@@ -51,7 +51,7 @@ const { mockWithPermission } = vi.hoisted(() => {
 // 2026-10-14（#84，沿用 #71 已验证的修法）：`withAuth` **不再被替换**，跑真身——
 // 整体替换会连带删掉错误映射（生产 `withAuth` 返回 `{ success:false, error, message }`，从不抛出），
 // 使断言钉住与生产相反的契约。`withPermission` 仍作为**输入夹具**保留（有测试用它模拟拒绝）。
-// @allow-module-mock @/lib/auth auth-bypass: 只覆盖 `withPermission`（构造"已授权/被拒"这两种路由输入）与数据读取日志；本文件依赖它的断言：路由用例与 `mockWithPermission.mockImplementationOnce` 的拒绝用例。`withAuth` 走真身；合法理由见 ADR-022（reason 点名本文件 department-api.test.ts）
+// @allow-module-mock @/lib/auth auth-bypass: 只覆盖 `withPermission`（构造"已授权/被拒"这两种路由输入）与数据读取日志；本文件依赖它的断言：路由成功用例与 withPermission 接线。`withAuth` 走真身；合法理由见 ADR-022（reason 点名本文件 department-api.test.ts）
 vi.mock(import('@/lib/auth'), async (importOriginal): Promise<Partial<typeof authModule>> => {
   const actual = await importOriginal();
   return {
