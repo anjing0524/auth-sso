@@ -22,9 +22,9 @@
     "fileName": "reports/mutation/auth.html"
   },
   "thresholds": {
-    "high": 95,
-    "low": 90,
-    "break": 90
+    "high": 97,
+    "low": 95,
+    "break": 92
   },
   "timeoutMS": 20000,
   "concurrency": 2,

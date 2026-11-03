@@ -4,11 +4,13 @@
  * Mutation 发现：isPasswordReused / pushPasswordHistory / DUMMY 哈希原先没有直接覆盖，
  * oauth/密码域 mutation score 被这些空洞拉低。本文件只补领域边界，不重复 auth.test.ts。
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+import bcrypt from 'bcryptjs';
 import {
   DUMMY_PASSWORD_HASH,
   PASSWORD_HISTORY_MAX,
   hashPassword,
+  verifyPasswordForUnknownUser,
   isPasswordReused,
   pushPasswordHistory,
 } from '@/domain/auth/password';
@@ -42,15 +44,19 @@ describe('password history', () => {
   it('默认历史上限为 5', () => {
     expect(PASSWORD_HISTORY_MAX).toBe(5);
   });
+
+  it('未注入 config 时使用默认 bcrypt rounds', async () => {
+    const hash = await hashPassword('default-rounds');
+    expect(hash).toMatch(/^\$2[aby]\$12\$/);
+  }, 30_000);
 });
 
 describe('unknown-user timing hash', () => {
-  it('是合法 bcrypt hash，且比对不会抛异常', async () => {
+  it('是合法 bcrypt hash，且真正执行等价比对', async () => {
     expect(DUMMY_PASSWORD_HASH).toMatch(/^\$2[aby]\$\d{2}\$/);
-    await expect(
-      import('@/domain/auth/password').then(({ verifyPasswordForUnknownUser }) =>
-        verifyPasswordForUnknownUser('anything'),
-      ),
-    ).resolves.toBeUndefined();
+    const compare = vi.spyOn(bcrypt, 'compare');
+    await expect(verifyPasswordForUnknownUser('anything')).resolves.toBeUndefined();
+    expect(compare).toHaveBeenCalledWith('anything', DUMMY_PASSWORD_HASH);
+    compare.mockRestore();
   });
 });
