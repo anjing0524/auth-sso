@@ -23,6 +23,7 @@ export default defineConfig({
       'apps/portal/__tests__/domain/password.test.ts',
       'apps/portal/__tests__/domain/oauth-authorize.test.ts',
       'apps/portal/__tests__/domain/oauth-client.test.ts',
+      'apps/portal/__tests__/domain/oauth-code.test.ts',
     ],
     fileParallelism: false,
     testTimeout: 10_000,

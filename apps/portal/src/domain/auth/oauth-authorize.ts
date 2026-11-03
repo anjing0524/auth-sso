@@ -50,23 +50,14 @@ export interface AuthorizationResult {
 function checkUserClientAccess(input: AuthorizationInput): AuthorizationResult {
   const { clientId, roles } = input;
 
-  const activeRoles = roles.filter((r) => r.status === ENTITY_ACTIVE);
-
-  if (activeRoles.length === 0) {
-    return {
-      allowed: false,
-      errorCode: 'no_roles',
-      message: '您的账号尚未分配任何有效角色，无法访问系统。',
-    };
-  }
-
-  const isAdmin = isAdminRole(activeRoles.map((r) => r.code));
+  // 调用方 validateAuthorization 已保证 roles 全是 ACTIVE；此处不再重复过滤。
+  const isAdmin = isAdminRole(roles.map((r) => r.code));
   if (isAdmin) {
     return { allowed: true };
   }
 
   // v3.2: 检查是否有活跃角色的 clientIds 包含目标 clientId
-  const hasClientBinding = activeRoles.some(
+  const hasClientBinding = roles.some(
     (r) => r.clientIds && r.clientIds.includes(clientId),
   );
 

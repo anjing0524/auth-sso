@@ -3,8 +3,8 @@
  * 覆盖率门禁：只对核心安全域设最低线，不追求全仓高覆盖。
  *
  * 基线（2026-11-02，主分支）：
- *   lines: total 60.55 · auth 88.51 · permission 91.63 · oauth 84.23%
- *   branch: total 48.68 · auth 79.23 · permission 87.77 · oauth 73.27%
+ *   lines: total 60.55 · auth 88.58 · permission 91.63 · oauth 84.39%
+ *   branch: total 48.70 · auth 79.49 · permission 87.77 · oauth 74.00%
  *
  * 阈值刻意贴着基线下方 1% 左右：允许正常波动，但关键域掉下来必须红。
  * 数据来源：vitest --coverage --coverage.reporter=json-summary 的 coverage-summary.json。

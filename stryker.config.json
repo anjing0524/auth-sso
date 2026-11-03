@@ -15,19 +15,23 @@
   "coverageAnalysis": "perTest",
   "reporters": [
     "clear-text",
-    "html"
+    "html",
+    "json"
   ],
   "htmlReporter": {
     "fileName": "reports/mutation/auth.html"
   },
   "thresholds": {
-    "high": 90,
-    "low": 85,
-    "break": 80
+    "high": 95,
+    "low": 90,
+    "break": 90
   },
   "timeoutMS": 20000,
   "concurrency": 2,
   "plugins": [
     "@stryker-mutator/vitest-runner"
-  ]
+  ],
+  "jsonReporter": {
+    "fileName": "reports/mutation/auth.json"
+  }
 }

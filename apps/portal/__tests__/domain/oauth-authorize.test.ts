@@ -96,5 +96,7 @@ describe('validateAuthorization', () => {
       .toContain('尚未分配任何有效角色');
     expect(validateAuthorization({ ...base, clientId: 'other' }).message)
       .toContain('没有访问该系统的权限');
+    expect(validateAuthorization({ ...base, status: 'DISABLED' }).message)
+      .toContain('已被锁定或禁用');
   });
 });

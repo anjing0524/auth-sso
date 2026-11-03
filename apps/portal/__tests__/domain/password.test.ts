@@ -27,6 +27,12 @@ describe('password history', () => {
     await expect(isPasswordReused('new-password', [oldHash])).resolves.toBe(false);
   });
 
+  it('多历史中任一命中即复用（不是 every）', async () => {
+    const oldHash = await hashPassword('old-password', CONFIG);
+    const otherHash = await hashPassword('other-password', CONFIG);
+    await expect(isPasswordReused('old-password', [oldHash, otherHash])).resolves.toBe(true);
+  });
+
   it('push 保留最新在前，并按配置截断', () => {
     const next = pushPasswordHistory(['old-2', 'old-3'], 'old-1', CONFIG);
     expect(next).toEqual(['old-1', 'old-2']);

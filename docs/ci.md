@@ -38,7 +38,7 @@
 > **验证分层（不要混为一谈）**：
 > - `pnpm test`：逻辑/API/组件回归，证明服务端与组件行为；不代表页面好看。
 > - `pnpm test:coverage`：逻辑回归 + 核心安全域覆盖率阈值。
-> - `pnpm test:mutation`：auth 领域 mutation（Stryker），当前基线 85.92%，break 80；全量 hookTimeout 30s；不是覆盖率替代品。
+> - `pnpm test:mutation`：auth 领域 mutation（Stryker），当前基线 93.00%，break 90；全量 hookTimeout 30s；不是覆盖率替代品。
 - `pnpm test:e2e`：真实 Docker 栈的关键用户路径；默认不跑视觉基线。
 > - `pnpm test:visual`：桌面 1440/1280 截图基线（`E2E_VISUAL=1`），独立门禁。
 > - `E2E_CHANNEL=chrome pnpm test:a11y`：对比度/键盘门禁，独立门禁。
