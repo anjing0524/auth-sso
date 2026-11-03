@@ -13,7 +13,7 @@
 import './load-env';
 
 import bcrypt from 'bcryptjs';
-import { eq, isNull } from 'drizzle-orm';
+import { isNull } from 'drizzle-orm';
 import { db, schema } from '@/infrastructure/db';
 
 const demoId = (group: number, index: number) =>
