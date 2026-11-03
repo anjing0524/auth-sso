@@ -14,7 +14,10 @@
     "test:coverage": "vitest run --coverage --coverage.reporter=text --coverage.reporter=json-summary && node scripts/ci/coverage-gate.mjs",
     "test:visual": "E2E_VISUAL=1 pnpm test:e2e",
     "test:a11y": "node scripts/ux/a11y.mjs",
-    "test:mutation": "stryker run stryker.config.json; rc=$?; rm -rf .stryker-tmp; exit $rc"
+    "test:mutation": "stryker run stryker.config.json; rc=$?; rm -rf .stryker-tmp; exit $rc",
+    "test:api": "vitest run --project @auth-sso/portal-api",
+    "test:ui": "vitest run --project @auth-sso/portal-ui",
+    "test:contracts": "vitest run --project @auth-sso/contracts"
   },
   "engines": {
     "node": ">=26.0.0"
