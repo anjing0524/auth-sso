@@ -20,6 +20,11 @@ const demoId = (group: number, index: number) =>
   `10000000-0000-4000-8000-${String(group * 1000 + index).padStart(12, '0')}`;
 
 async function main() {
+  if (process.env.DEMO_SEED_CONFIRM !== '1') {
+    console.error('❌ demo seed 会写入演示账号/日志；请显式设置 DEMO_SEED_CONFIRM=1（仅测试库）');
+    process.exit(1);
+  }
+
   const root = await db.query.departments.findFirst({
     where: isNull(schema.departments.parentId),
     columns: { id: true },
