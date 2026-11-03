@@ -75,4 +75,6 @@ fi
 if command -v sha256sum >/dev/null 2>&1; then sha256sum "$OUT" > "$OUT.sha256"; else shasum -a 256 "$OUT" > "$OUT.sha256"; fi
 chmod 600 "$OUT" "$OUT.sha256"
 echo "✅ 备份完成：$OUT"
-[[ -n "$KEY_FILE" ]] && echo "   恢复需同一 BACKUP_ENCRYPTION_KEY_FILE"
+if [[ -n "$KEY_FILE" ]]; then
+  echo "   恢复需同一 BACKUP_ENCRYPTION_KEY_FILE"
+fi

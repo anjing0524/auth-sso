@@ -43,7 +43,9 @@ fi
 
 RESTORE_INPUT="$DUMP"
 DECRYPTED=""
-cleanup_decrypted() { [[ -n "$DECRYPTED" && -f "$DECRYPTED" ]] && rm -f "$DECRYPTED"; }
+cleanup_decrypted() {
+  if [[ -n "$DECRYPTED" && -f "$DECRYPTED" ]]; then rm -f "$DECRYPTED"; fi
+}
 trap cleanup_decrypted EXIT
 if [[ "$DUMP" == *.enc ]]; then
   [[ -n "$KEY_FILE" ]] || { echo "✗ 加密备份需要 BACKUP_ENCRYPTION_KEY_FILE" >&2; exit 1; }
