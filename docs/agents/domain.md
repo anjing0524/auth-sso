@@ -1,11 +1,11 @@
 # Domain Docs
 
-工程技能探索本仓时如何消费领域文档（本文件由 `/setup-matt-pocock-skills` 生成；本仓治理标准见 `docs/agent-governance.md`）。
+工程技能探索本仓时如何消费领域文档（本文件由 `/setup-matt-pocock-skills` 生成）。
 
 ## Before exploring, read these
 
 - **`docs/glossary.md`**：本仓**领域词汇唯一真相源**。**不要新建根 `GLOSSARY.md`** —— 本仓 glossary 只有这一份（`AGENTS.md` 声明）。
-- **`docs/adr/`**：架构决策记录（`ADR-NNN-*.md`，编号连续，当前 ADR-001～030）。只读与即将改动区域相关的条目。
+- **`docs/adr/`**：架构决策记录（`ADR-NNN-*.md`，编号连续，当前 ADR-001～031）。只读与即将改动区域相关的条目。
 - **`docs/roadmap.md`**：里程碑与取舍（时间倒序），需要「以前做到哪一步」时读。
 
 文件不存在时**静默继续**：不提示缺失、不建议先创建；术语或决策真正落定时才更新。

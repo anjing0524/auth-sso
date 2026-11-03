@@ -2,7 +2,7 @@
 
 | 属性 | 值 |
 |---|---|
-| **状态** | implemented (2026-10-23) |
+| **状态** | **superseded (2026-11-03)** —— 用户判定技能质量不合格，技能套件、标准文档与专属守卫已删除（见 ADR-031）；本文保留为历史决策记录 |
 | **日期** | 2026-10-23 |
 | **决策者** | Auth-SSO 团队（用户指派：创造治理工作流 + 标准化 skills） |
 | **影响范围** | `.dsh/skills/`、`docs/agent-governance.md`、`AGENTS.md`、`docs/README.md`、根 `README.md`、`docs/roadmap.md`、新增守卫测试 |
