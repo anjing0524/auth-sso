@@ -111,6 +111,9 @@ describe('CreateUserForm · 默认部门', () => {
     await user.type(screen.getByLabelText('显示名称'), '王五');
     await user.type(screen.getByLabelText('用户名（唯一标识）'), 'wangwu');
     await user.type(screen.getByLabelText('电子邮箱'), 'wangwu@example.com');
+    expect(screen.getByText(/至少 10 位/)).toBeInTheDocument();
+    expect(screen.getByText(/至少三类/)).toBeInTheDocument();
+
     await user.type(screen.getByLabelText('初始密码'), 'Init@123456');
     await user.click(screen.getByRole('button', { name: '创建' }));
 
