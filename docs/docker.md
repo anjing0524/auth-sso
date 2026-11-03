@@ -300,6 +300,14 @@ E2E_CHANNEL=chrome pnpm test:e2e # 本机只有系统 Chrome、未装 Playwright
 
 需要“保留现场但用新代码”时，先用 `$COMPOSE build`，再 `SKIP_BUILD=1 E2E_KEEP_STACK=1 pnpm test:e2e`。
 
+需要更多分页/筛选/人工验收数据时，可叠加可选的 demo seed（幂等，不改变默认 E2E 最小夹具）：
+
+```bash
+$COMPOSE run --rm --no-deps db-init pnpm --filter @auth-sso/portal db:seed:demo
+```
+
+它增加 10 个部门、36 个用户、6 个角色、6 个应用和 280 条日志；默认 `pnpm test:e2e` 不会自动执行，避免破坏视觉基线与确定性断言。
+
 **入口**：`https://127.0.0.1:19443`（gateway，自签证书；`curl -k` / Playwright `ignoreHTTPSErrors`）。
 portal 仅在 compose 网络内暴露 4000，不映射宿主端口。
 
