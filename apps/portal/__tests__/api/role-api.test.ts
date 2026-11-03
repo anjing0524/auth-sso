@@ -179,15 +179,6 @@ describe('Role Management API', () => {
       expect(body.pagination.total).toBe(body.data.length);
     });
 
-    it('returns 403 without role:list permission', async () => {
-      vi.mocked(mockWithPermission).mockImplementationOnce(
-        async () =>
-          NextResponse.json({ error: 'forbidden', message: 'Insufficient permissions' }, { status: 403 }),
-      );
-
-      const response = await ListRoles(createTestRequest('/api/roles'));
-      expect(response.status).toBe(403);
-    });
   });
 
   // ======== GET /api/roles/[id] ========

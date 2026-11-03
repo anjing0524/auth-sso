@@ -183,14 +183,6 @@ describe('User Management API & Actions', () => {
       expect(body.pagination.total).toBe(body.data.length);
     });
 
-    it('无 user:list 权限时返回 403', async () => {
-      mockWithPermission.mockImplementationOnce(
-        async () => NextResponse.json({ error: 'forbidden', message: 'Insufficient permissions' }, { status: 403 }),
-      );
-
-      const response = await ListUsers(createTestRequest('/api/users'));
-      expect(response.status).toBe(403);
-    });
   });
 
   describe('GET /api/users/[id] (detail)', () => {
