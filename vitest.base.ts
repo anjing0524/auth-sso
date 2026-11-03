@@ -10,4 +10,6 @@
 export const sharedVitestConfig = {
   // 测试超时（毫秒）
   testTimeout: 10_000,
+  // API 集成测试的 beforeEach 会 TRUNCATE 真实 PG；全量并行时 10s 不够。
+  hookTimeout: 30_000,
 };
