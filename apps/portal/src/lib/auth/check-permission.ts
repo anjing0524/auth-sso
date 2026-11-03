@@ -81,7 +81,19 @@ export async function checkPermission(
     permissionCodes: ctx?.permissions ?? [],
   };
 
-  // 管理员绕过权限码检查（ADR-001 既有语义）。角色归属**不**因此绕过。
+  // 角色归属是显式业务要求，break-glass 也不能绕过；权限码检查才由
+  // SUPER_ADMIN 旁路（ADR-032：日常 ADMIN 走显式 RBAC）。
+  if (options.roles?.length) {
+    const matched = options.roles.some((code) => hasRoleShared(subject, code));
+    const ok = options.requireAll
+      ? options.roles.every((code) => hasRoleShared(subject, code))
+      : matched;
+    if (!ok) {
+      return { authorized: false, reason: new ForbiddenError('角色权限不足') };
+    }
+  }
+
+  // 唯一 break-glass：SUPER_ADMIN 绕过权限码检查。
   if (isAdminRole(subject.roleCodes)) {
     return { authorized: true, userId };
   }
@@ -92,16 +104,6 @@ export async function checkPermission(
       : canAny(subject, options.permissions);
     if (!ok) {
       return { authorized: false, reason: new ForbiddenError('权限不足') };
-    }
-  }
-
-  if (options.roles?.length) {
-    const matched = options.roles.some((code) => hasRoleShared(subject, code));
-    const ok = options.requireAll
-      ? options.roles.every((code) => hasRoleShared(subject, code))
-      : matched;
-    if (!ok) {
-      return { authorized: false, reason: new ForbiddenError('角色权限不足') };
     }
   }
 

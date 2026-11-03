@@ -38,9 +38,9 @@ const USER: AuthorizationSubject = {
 const NONE: AuthorizationSubject = { roleCodes: [], permissionCodes: [] };
 
 describe('isAdminRole', () => {
-  it('SUPER_ADMIN 与 ADMIN 均判定为管理员', () => {
+  it('只有 SUPER_ADMIN 是 break-glass 管理员', () => {
     expect(isAdminRole(['SUPER_ADMIN'])).toBe(true);
-    expect(isAdminRole(['ADMIN'])).toBe(true);
+    expect(isAdminRole(['ADMIN'])).toBe(false);
   });
 
   it('普通角色与空集合不是管理员', () => {
@@ -49,7 +49,7 @@ describe('isAdminRole', () => {
   });
 
   it('多角色中只要含管理员即为真', () => {
-    expect(isAdminRole(['USER', 'ADMIN'])).toBe(true);
+    expect(isAdminRole(['USER', 'SUPER_ADMIN'])).toBe(true);
   });
 
   it('大小写敏感（不对角色码做归一化）', () => {
@@ -58,9 +58,10 @@ describe('isAdminRole', () => {
 });
 
 describe('can — 单条权限规则（服务端与客户端共用）', () => {
-  it('管理员恒通过，即使不持有该权限码', () => {
+  it('只有 break-glass 管理员恒通过；普通 ADMIN 按显式权限码判定', () => {
     expect(can(ROOT, 'portal:audit:read')).toBe(true);
-    expect(can(ADMIN, 'portal:audit:read')).toBe(true);
+    expect(can(ADMIN, 'portal:audit:read')).toBe(false);
+    expect(can({ roleCodes: ['ADMIN'], permissionCodes: ['portal:audit:read'] }, 'portal:audit:read')).toBe(true);
   });
 
   it('非管理员按权限码判定', () => {
@@ -111,8 +112,8 @@ describe('canAny / canAll — 多条权限的两种模式', () => {
   });
 
   it('管理员对两种模式均通过', () => {
-    expect(canAny(ADMIN, required)).toBe(true);
-    expect(canAll(ADMIN, required)).toBe(true);
+    expect(canAny(ADMIN, required)).toBe(false);
+    expect(canAll(ADMIN, required)).toBe(false);
   });
 });
 

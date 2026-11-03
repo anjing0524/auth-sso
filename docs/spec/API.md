@@ -858,7 +858,7 @@ GET /api/users/:id
 POST /api/users/:id/reset-password    （REST）
 ```
 
-`resetPasswordAction` — Server Action（Portal 表单调用），权限 `portal:user:reset_password`。**目标为系统管理员（ADMIN/SUPER_ADMIN）或权限高于操作者的用户时，非管理员返回 403。**
+`resetPasswordAction` — Server Action（Portal 表单调用），权限 `portal:user:reset_password`。**目标为 SUPER_ADMIN（break-glass）或权限高于操作者的用户时，非 break-glass 返回 403。**
 
 **请求体：**
 ```json

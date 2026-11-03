@@ -21,6 +21,8 @@
 
 ## 变更记录
 
+- 2026-11-03: **SUPER_ADMIN 唯一 break-glass，ADMIN 回到显式 RBAC（ADR-032）**。`ADMIN_ROLE_CODES` 收敛为 `['SUPER_ADMIN']`；`ADMIN` 保留系统角色但必须由 `role_permissions` 显式授权（seed 绑定全部 API + PAGE 菜单）；`checkPermission` 先检查显式角色、再由 SUPER_ADMIN 绕过权限码；新增角色管理高权目标保护 `assertCanMutateRoleTarget`、内置权限启停 break-glass 校验、保留角色编码拒绝。**验证**：全量 150 文件 / 1231 用例通过，新增角色/权限非管理员回归。
+
 - 2026-11-03: **本机 Docker 部署验收发现并修复备份/恢复退出码缺陷**。`backup.sh` 未启用加密时最后一行 `[[ -n "$KEY_FILE" ]] && echo ...` 返回 1，导致 `deploy.sh` 自动备份与 `restore.sh` 恢复前备份误判失败；`restore.sh` 的 EXIT trap `[[ -n "$DECRYPTED" && -f "$DECRYPTED" ]] && rm` 同样在无临时文件时返回 1，恢复成功但退出码为 1。改为显式 `if` 块。**验证**：本机 Docker 栈 `backup.sh` exit 0、`restore.sh` exit 0、恢复后 `scripts/ops/smoke.sh` 全通过。
 
 - 2026-11-03: **退役 Agent 治理技能套件（用户判定技能质量不合格，要求直接删除）**。删除 `.dsh/`（5 个 `governance-*` 技能、`references/`、`governance-audit.workflow.mjs`、`.dsh/README.md`）、`docs/agent-governance.md` 与专属守卫 `apps/portal/__tests__/api/agent-governance-skills.test.ts`；同步 `AGENTS.md`（移除技能指针，保留「Agent 配置唯一入口」约束）、`docs/README.md`（含「已退役资产」取回说明与 ADR 计数 30→31）、根 `README.md`、`docs/agents/domain.md`；ADR-027 标记 **superseded**，新增 ADR-031 记录删除决策与残余风险；本文件与 ADR 的历史条目不改写。**验证**：见 ADR-031「验证」段（文档守卫与全量 `pnpm test` 真实执行）。**残余风险**：单入口约束此后无确定性守卫；六阶段工作流/台账标准只保留在 ADR-027 与 git 历史。

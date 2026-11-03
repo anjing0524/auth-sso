@@ -35,9 +35,9 @@ import {
 } from '@/lib/auth/authorization-effects';
 import { invalidateResource } from '@/lib/cache-invalidation';
 import { assignRolePermissions, RolePermissionAssignmentSchema } from '@/lib/role-permission-assignment';
-import { withScopedRow, withScopedWrite } from '@/lib/authz';
+import { withScopedRow, withScopedWrite, assertCanMutateRoleTarget } from '@/lib/authz';
 import { assertDepartmentUsable } from '@/lib/department-availability';
-import { ROLE_PERMISSIONS, ROLE_ERRORS } from '@auth-sso/contracts';
+import { ROLE_PERMISSIONS, ROLE_ERRORS, RESERVED_ROLE_CODES } from '@auth-sso/contracts';
 import type { ApiResponse } from '@auth-sso/contracts';
 
 /** 查询绑定某角色的所有用户 ID（受影响用户集之一：按**角色**求） */
@@ -54,6 +54,13 @@ export const createRoleAction = withAuth(
   async (ctx: AuthContext, input: CreateRoleInput): Promise<ApiResponse<{ id: string }>> => {
     const v = validate(CreateRoleInputSchema, input);
     if (!v.ok) return v.response;
+    if (RESERVED_ROLE_CODES.includes(v.data.code as (typeof RESERVED_ROLE_CODES)[number])) {
+      return {
+        success: false,
+        error: ROLE_ERRORS.ROLE_ALREADY_EXISTS,
+        message: '系统保留角色编码不可创建',
+      };
+    }
 
     // 范围守卫 + 部门存在性/ACTIVE 校验 + 插入同一事务（ADR-014）
     const role = await withScopedWrite(
@@ -124,6 +131,7 @@ export const updateRoleAction = withAuth(
       async (tx, row) => {
         const role = roleFromPersistence(row);
         guardNotSystemRole(role, 'modify');
+        await assertCanMutateRoleTarget(tx, ctx.userId, roleId);
         // H-B-05：迁入部门必须存在且 ACTIVE（与创建同口径）
         // H-25（roles 侧）：跨部门绑定不变量——角色迁往新部门时，已绑定用户必须
         // 全部属于该部门，否则会留下 `user_roles` 跨部门行（数据范围漂移，且此后
@@ -205,6 +213,7 @@ export const deleteRoleAction = withAuth(
     await withScopedRow(loadRoleScoped(ctx.userId, roleId),
       async (tx, row) => {
         guardNotSystemRole(roleFromPersistence(row), 'delete');
+        await assertCanMutateRoleTarget(tx, ctx.userId, roleId);
 
         // 事务内删除前预取绑定用户，事务后清除缓存
         boundUsers = await tx.select({ userId: schema.userRoles.userId })

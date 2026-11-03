@@ -102,7 +102,7 @@ async function validateRoleAssignment(
   if (invalid.length > 0) return '部分角色不属于该用户所属部门或已禁用，无法分配';
 
   // 授权决策的授权：操作者不能分配系统角色，也不能把自己权限边界之外的能力授出。
-  // 管理员（ADMIN/SUPER_ADMIN）保留平台级分配能力。
+  // 唯一 break-glass SUPER_ADMIN 保留平台级分配能力；ADMIN 回到显式权限子集。
   const operator = await loadOperatorAuthorization(tx, operatorId);
   if (!operator) throw new ForbiddenError('操作者账号不可用');
   if (operator.isAdmin) return null;

@@ -52,11 +52,11 @@ describe('validateRequestedScopes', () => {
 });
 
 describe('validateAuthorization', () => {
-  it('管理员角色无需 client 绑定即可放行', () => {
-    for (const code of ['ADMIN', 'SUPER_ADMIN']) {
-      expect(validateAuthorization({ ...base, roles: [role({ code, clientIds: [] })] }).allowed)
-        .toBe(true);
-    }
+  it('只有 SUPER_ADMIN break-glass 无需 client 绑定；ADMIN 走显式 RBAC', () => {
+    expect(validateAuthorization({ ...base, roles: [role({ code: 'SUPER_ADMIN', clientIds: [] })] }).allowed)
+      .toBe(true);
+    expect(validateAuthorization({ ...base, roles: [role({ code: 'ADMIN', clientIds: [] })] }))
+      .toMatchObject({ allowed: false, errorCode: 'unauthorized_client' });
   });
 
   it('非管理员必须在活跃角色中命中 client 绑定', () => {

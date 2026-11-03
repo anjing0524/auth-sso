@@ -27,6 +27,7 @@ import { db, schema } from '@/infrastructure/db';
 import type { DbTxHandle } from '@/infrastructure/db';
 import { eq, inArray, sql } from 'drizzle-orm';
 import { withAuth, type AuthContext } from '@/lib/auth';
+import { assertBreakGlass } from '@/lib/authz';
 import {
   createPermission,
   applyPermissionUpdate,
@@ -171,7 +172,7 @@ export const createPermissionAction = withAuth(
 /** 更新权限 */
 export const updatePermissionAction = withAuth(
   { permissions: [PERMISSION_PERMISSIONS.UPDATE], audit: 'PERMISSION_UPDATE' },
-  async (_ctx: AuthContext, permId: string, input: Record<string, unknown>): Promise<ApiResponse<{ id: string }>> => {
+  async (ctx: AuthContext, permId: string, input: Record<string, unknown>): Promise<ApiResponse<{ id: string }>> => {
     // code 不可变更：显式拒绝（不静默忽略，避免调用方误以为改名成功）
     if (input && Object.prototype.hasOwnProperty.call(input, 'code')) {
       return {
@@ -190,6 +191,16 @@ export const updatePermissionAction = withAuth(
       if (!row) throw new EntityNotFoundError('Permission', permId);
 
       await assertParentAssignment(tx, row.id, v.data.parentId);
+
+      // 内置权限的启停是平台级结构变更：普通 ADMIN 也走显式 RBAC，不能停用
+      // 被服务端硬编码引用的核心权限（否则所有非 break-glass 用户一起 403）。
+      if (
+        RESERVED_PERMISSION_CODES.has(row.code)
+        && v.data.status
+        && v.data.status !== row.status
+      ) {
+        await assertBreakGlass(tx, ctx.userId, '内置权限状态只能由 SUPER_ADMIN 修改');
+      }
 
       // 内置权限的 type/clientId 是结构性字段（编码与 Client 准入被服务端引用）；
       // 只允许改名/描述/状态，不允许切换类型或归属应用

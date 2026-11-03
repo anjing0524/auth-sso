@@ -46,7 +46,7 @@ export const PERMISSION_DIRECTORY: PermissionType = 'DIRECTORY';
  * 系统管理员角色编码集合（硬编码业务常量）。
  * 定义已移至 ./admin-roles，以便 authorization.ts 在不形成循环依赖的前提下引用它。
  */
-export { ADMIN_ROLE_CODES } from './admin-roles';
+export { ADMIN_ROLE_CODES, RESERVED_ROLE_CODES } from './admin-roles';
 
 // Cookie 名称 — Portal 与 Gateway 共享的 HttpOnly Cookie Key
 export const COOKIE_NAMES = {

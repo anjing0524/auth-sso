@@ -204,15 +204,14 @@ export async function main() {
     1,
   );
 
-  // 4. 为 SUPER_ADMIN 和 ADMIN 绑定全部 API 权限
-  //    菜单节点不绑定到角色（管理员 isAdmin 绕过 menu-tree 可见性检查）
+  // 4. SUPER_ADMIN 是唯一 break-glass；ADMIN 是普通 RBAC 角色，必须显式绑定
+  //    全部权限（含 PAGE 菜单），不能依赖 isAdmin 绕过。
+  const allPermIds = [...new Set([...apiPermIds, ...menuPermIds])];
   console.log('\n🔗 绑定权限...');
-  await bindPermissions(superAdminId, apiPermIds);
-  process.stdout.write(`  ✅ SUPER_ADMIN ← ${apiPermIds.length} 个 API 权限\n`);
-  await bindPermissions(adminId, apiPermIds);
-  process.stdout.write(`  ✅ ADMIN ← ${apiPermIds.length} 个 API 权限\n`);
-
-  console.log(`  📱 菜单节点: ${menuPermIds.length} 个 PAGE（管理员 isAdmin 绕过可见性检查）`);
+  await bindPermissions(superAdminId, allPermIds);
+  process.stdout.write(`  ✅ SUPER_ADMIN ← ${allPermIds.length} 个权限（break-glass）\n`);
+  await bindPermissions(adminId, allPermIds);
+  process.stdout.write(`  ✅ ADMIN ← ${allPermIds.length} 个显式权限（含菜单）\n`);
 
   console.log('\n✅ RBAC 初始化完成！');
   console.log('   提示：用已有超级管理员账号登录，或手工执行以下 SQL 为指定用户分配 SUPER_ADMIN 角色：');

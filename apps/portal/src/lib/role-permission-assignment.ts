@@ -27,7 +27,7 @@ import type { ErrorCode } from '@auth-sso/contracts';
 import { COMMON_ERRORS, ENTITY_ACTIVE, ROLE_ERRORS } from '@auth-sso/contracts';
 import { schema } from '@/infrastructure/db';
 import { EntityNotFoundError } from '@/domain/shared/errors';
-import { withScopedRow, loadOperatorAuthorization } from '@/lib/authz';
+import { withScopedRow, loadOperatorAuthorization, assertCanMutateRoleTarget } from '@/lib/authz';
 import { appendSecurityAudit } from '@/lib/audit';
 import { revokeAndRefreshAuthorization } from '@/lib/auth/authorization-effects';
 
@@ -89,6 +89,9 @@ export async function assignRolePermissions(
             status: 400,
           };
         }
+
+        // 角色管理面的高权目标保护：不能清空/改写权限高于自身的角色。
+        await assertCanMutateRoleTarget(tx, operatorId, role.id);
 
         let found: Array<{ id: string; code: string }> = [];
         if (permissionIds.length > 0) {

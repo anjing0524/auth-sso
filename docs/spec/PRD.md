@@ -72,7 +72,7 @@
 
 首次部署时，系统通过数据库初始化入口 `pnpm --filter @auth-sso/portal db:migrate && pnpm --filter @auth-sso/portal db:seed` 创建首个超级管理员账户（`db:seed` → `apps/portal/scripts/seed.ts`，RBAC 初始化委托 `seed-rbac.ts`）：
 
-- 内置 `SUPER_ADMIN`（超级管理员）与 `ADMIN` 角色归属**已存在的根部门**（`parent_id IS NULL`；seed 主脚本先创建根部门「总公司」（code `ROOT`），随后 `seed-rbac` 把该根部门绑为角色所属部门，并给两个角色绑定全部 API 权限）。管理员角色在 **OAuth 客户端准入**上直接放行（`domain/auth/oauth-authorize.ts` 的 `isAdminRole`）；**数据范围仍走 ADR-014 门面 `resolveScope` 的部门子树规则，不存在"超管绕过数据范围"的特殊分支**（`lib/authz/data-scope.ts` 无角色码旁路）——管理员之所以看起来"全量可见"，是因为其角色挂在根部门上。
+- 内置 `SUPER_ADMIN`（超级管理员，唯一 break-glass）与 `ADMIN` 角色归属**已存在的根部门**（`parent_id IS NULL`；seed 主脚本先创建根部门「总公司」（code `ROOT`），随后 `seed-rbac` 把该根部门绑为角色所属部门，并给两个角色绑定全部 API + PAGE 权限）。只有 `SUPER_ADMIN` 在 **OAuth 客户端准入**上直接放行（`domain/auth/oauth-authorize.ts` 的 `isAdminRole`）；`ADMIN` 是普通 RBAC 角色，必须由显式权限的 `client_id` 命中目标 client。**数据范围仍走 ADR-014 门面 `resolveScope` 的部门子树规则，不存在"超管绕过数据范围"的特殊分支**（`lib/authz/data-scope.ts` 无角色码旁路）——管理员之所以看起来"全量可见"，是因为其角色挂在根部门上。
 - 种子管理员账号的**用户名/邮箱/密码是硬编码的初值**（`username=admin`、`email=admin@example.com`、密码 `Admin@123456`，`apps/portal/scripts/seed.ts`），**不经环境变量配置**；OAuth 客户端的 `PORTAL_CLIENT_SECRET` / `PORTAL_REDIRECT_URL` 才可由环境变量覆盖。**生产部署必须先改掉这些初值**（`db:seed` 只用于初始化与本地/验收环境）。
 - 后续 `SUPER_ADMIN` 的授予通过既有的用户角色分配链路（FR-USR-08）完成，由现有超级管理员执行。
 - ⚠️ **未实现**：原需求"首次登录强制修改密码（`password_changed_at` 为空时拦截）"在代码中**无对应拦截**——`users.password_changed_at` 列存在（`apps/portal/src/db/schema/users.ts`），但只在自助改密成功时写入（`lib/account/change-password.ts`），登录/鉴权路径从不读取它做判定 ⇒ 当前行为是"种子账号可一直用初值密码登录"。列为待实现项（不在本轮文档校正范围内改代码）。

@@ -446,8 +446,8 @@ Auth-SSO 的请求处理全链路由 **11 层** 组成，按职责划分为三�
                ▼
 ┌─────────────────────────────────────────────────┐
 │ 第 5 层：checkPermission() 权限校验               │
-│ · Admin 角色（SUPER_ADMIN/ADMIN）绕过权限码检查     │
-│   ⚠️ 角色码检查**不**因管理员而绕过                  │
+│ · 仅 SUPER_ADMIN（break-glass）绕过权限码检查        │
+│   ⚠️ 角色码检查**不**因 break-glass 而绕过            │
 │ · 权限码匹配：canAny（默认）/ canAll（requireAll）  │
 │ · 角色码匹配：some / every                          │
 │ · 数据源：getUserPermissionContext（Redis → DB 降级）│

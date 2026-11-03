@@ -431,7 +431,7 @@ describe('Permission Enforcement', () => {
       expect(mapDomainError(failureReason(result)).status).toBe(403);
     });
 
-    it('超级管理员角色（ADMIN）绕过所有权限检查', async () => {
+    it('普通 ADMIN 角色不再绕过权限检查：无显式权限码时 403', async () => {
       await givenValidToken();
       mockGetUserPermissionContext.mockResolvedValueOnce( { kind: 'ok', context:{
         roles: [{ id: ADMIN_ROLE_ID, code: 'ADMIN', name: '管理员' }],
@@ -443,8 +443,9 @@ describe('Permission Enforcement', () => {
         permissions: ['portal:nonexistent:permission'],
       });
 
-      expect(result.authorized).toBe(true);
-      expect(passUserId(result)).toBe(USER_ID);
+      expect(result.authorized).toBe(false);
+      expect(failureReason(result)).toBeInstanceOf(ForbiddenError);
+      expect(mapDomainError(failureReason(result)).status).toBe(403);
     });
 
     it('超级管理员角色（SUPER_ADMIN）绕过所有权限检查', async () => {
@@ -460,6 +461,20 @@ describe('Permission Enforcement', () => {
       });
 
       expect(result.authorized).toBe(true);
+    });
+
+    it('SUPER_ADMIN 也不能绕过显式角色要求（角色归属是业务要求）', async () => {
+      await givenValidToken();
+      mockGetUserPermissionContext.mockResolvedValueOnce( { kind: 'ok', context:{
+        roles: [{ id: SUPER_ADMIN_ROLE_ID, code: 'SUPER_ADMIN', name: '超级管理员' }],
+        permissions: [],
+        deptIds: [ROOT_DEPT_ID],
+      } });
+
+      const result = await checkPermission({ roles: ['AUDITOR'] });
+
+      expect(result.authorized).toBe(false);
+      expect(failureReason(result)).toBeInstanceOf(ForbiddenError);
     });
 
     it('无权限列表且无角色列表时仅要求登录', async () => {
@@ -664,10 +679,10 @@ describe('Permission Enforcement', () => {
       expect(body.error).toBe('AUTH_SSO_1006');
     });
 
-    it('超级管理员角色即使无指定权限也能通过', async () => {
+    it('SUPER_ADMIN 角色即使无指定权限也能通过', async () => {
       await givenValidToken();
       mockGetUserPermissionContext.mockResolvedValueOnce( { kind: 'ok', context:{
-        roles: [{ id: ADMIN_ROLE_ID, code: 'ADMIN', name: '管理员' }],
+        roles: [{ id: SUPER_ADMIN_ROLE_ID, code: 'SUPER_ADMIN', name: '超级管理员' }],
         permissions: [],
         deptIds: [ROOT_DEPT_ID],
       } });

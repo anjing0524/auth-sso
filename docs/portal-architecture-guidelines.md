@@ -975,7 +975,7 @@ export function withAuth<TArgs extends unknown[], TData>(
 }
 ```
 
-`PermissionCheckOptions`（`lib/auth/check-permission.ts`）：`permissions?` / `roles?` / `requireAll?` / `audit?`。管理员角色绕过**权限码**检查，但**不绕过** `roles` 检查。
+`PermissionCheckOptions`（`lib/auth/check-permission.ts`）：`permissions?` / `roles?` / `requireAll?` / `audit?`。仅 `SUPER_ADMIN`（break-glass）绕过权限码检查，**不绕过** `roles` 检查；`ADMIN` 走显式权限。
 
 ### 8.4 其他安全措施
 

@@ -149,6 +149,12 @@ describe('Role Server Actions', () => {
       expect(r.error).toBe(COMMON_ERRORS.VALIDATION_ERROR);
     });
 
+    it('系统保留角色编码不可创建（SUPER_ADMIN/ADMIN）', async () => {
+      const r = await createRoleAction({ name: '伪管理员', code: 'SUPER_ADMIN', sort: 1, deptId: DEPT_ID });
+      if (r.success) expect.unreachable('保留编码必须被拒绝');
+      expect(r.message).toBe('系统保留角色编码不可创建');
+    });
+
     it('部门不存在 → 失败信封 NOT_FOUND（生产契约）', async () => {
       const r = await createRoleAction({ name: 'X', code: 'XX', sort: 1, deptId: '00000000-0000-4000-8000-000000000999' });
 

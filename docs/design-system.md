@@ -552,7 +552,7 @@ DataTable 是共享表格组件，所有列表页统一使用。
 
 **权限模型规则（2026-10-21 权限设计审计）**
 
-- **角色准入**：非管理员角色必须至少有一个带 `clientId` 的**API** 权限（`permissions.client_id`）
+- **角色准入**：非 break-glass 角色必须至少有一个带 `clientId` 的**API** 权限（`permissions.client_id`）
   才能通过 OAuth 授权准入；`portal:*` 权限视为可访问 portal（数据层兜底，因 `DIRECTORY/PAGE`
   菜单权限受 CHECK 约束必须 `client_id IS NULL`）。seed 与迁移必须为 `portal:*` API 权限写入 `portal`。
 - **唯一路由权限源**：`apps/portal/src/lib/route-access.ts` 的 `ROUTE_ACCESS`（现为 `/dashboard` 不设门槛，`/users` `/roles` `/permissions` `/departments` `/clients` 要求各自 `*.list`，`/audit-logs` 要求 `audit:read`）同时驱动 layout 守卫与菜单过滤（`canAccessPath`）；
@@ -750,7 +750,7 @@ DataTable 是共享表格组件，所有列表页统一使用。
 - **动态应用准入**：除超级管理员（SUPER_ADMIN）外，普通用户必须绑定了包含目标客户端的角色关系，否则拒绝准入并重定向至未授权错误页。
 
 > **现行实现（2026-10-23 核对，`apps/portal/src/domain/auth/oauth-authorize.ts` + `app/api/auth/oauth2/authorize/`）**：
-> 端点实际路径是 **`/api/auth/oauth2/authorize`**，准入顺序为 ① 客户端必须是 ACTIVE（`resolveActiveClient`，未知/停用走本地错误页）→ ② `redirect_uri` 白名单（`validateRedirectUri`）→ ③ scope 校验 → ④ 用户状态仅 `ACTIVE` 可过（否则 `user_inactive`）→ ⑤ 至少一个 `ACTIVE` 角色（否则 `no_roles`）→ ⑥ 管理员角色（`ADMIN` / `SUPER_ADMIN`，`isAdminRole`）直接放行，其余角色需 `permissions.client_id` 链路命中目标 client（否则 `unauthorized_client`）。④⑤⑥ 之后所有拒绝一律按 RFC 6749 §4.1.2.1 **302 回 RP 的 `redirect_uri`**（带 `error` / `state` / `iss`），不再跳 `/error?error=…`。**不存在** `skipConsent` 同意页概念，也没有 `role_clients` 表。
+> 端点实际路径是 **`/api/auth/oauth2/authorize`**，准入顺序为 ① 客户端必须是 ACTIVE（`resolveActiveClient`，未知/停用走本地错误页）→ ② `redirect_uri` 白名单（`validateRedirectUri`）→ ③ scope 校验 → ④ 用户状态仅 `ACTIVE` 可过（否则 `user_inactive`）→ ⑤ 至少一个 `ACTIVE` 角色（否则 `no_roles`）→ ⑥ 仅 `SUPER_ADMIN`（`isAdminRole`）直接放行，其余角色需 `permissions.client_id` 链路命中目标 client（否则 `unauthorized_client`）。④⑤⑥ 之后所有拒绝一律按 RFC 6749 §4.1.2.1 **302 回 RP 的 `redirect_uri`**（带 `error` / `state` / `iss`），不再跳 `/error?error=…`。**不存在** `skipConsent` 同意页概念，也没有 `role_clients` 表。
 
 **历史时序图（v2.1，Better Auth 时代；路径 / 表名 / 重定向形式均已被上图说明取代）：**
 
@@ -774,7 +774,7 @@ sequenceDiagram
     else 账号状态正常 (ACTIVE)
         Portal->>DB: 5. 获取用户拥有的角色，并过滤非 ACTIVE 角色
         DB-->>Portal: 返回活跃角色列表
-        alt 角色为管理员 (ADMIN / SUPER_ADMIN)
+        alt 角色为 SUPER_ADMIN（break-glass）
             Portal-->>Browser: 6a. 绕过授权关系校验，发放授权码
         else 普通用户角色
             Portal->>DB: 7. 检查角色客户端关联 (role_clients)

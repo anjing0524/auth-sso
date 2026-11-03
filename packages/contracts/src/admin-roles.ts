@@ -9,5 +9,8 @@
  * @module admin-roles
  */
 
-/** 系统管理员角色编码集合（硬编码业务常量，ADR-001 既有语义） */
-export const ADMIN_ROLE_CODES = ['SUPER_ADMIN', 'ADMIN'] as const;
+/** 唯一 break-glass 角色编码：只有它可以绕过显式 RBAC 判定（ADR-032）。 */
+export const ADMIN_ROLE_CODES = ['SUPER_ADMIN'] as const;
+
+/** 系统预置/保留角色编码：任何运行期入口都不得创建同名角色（ADR-032）。 */
+export const RESERVED_ROLE_CODES = ['SUPER_ADMIN', 'ADMIN'] as const;

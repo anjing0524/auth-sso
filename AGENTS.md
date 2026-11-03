@@ -153,7 +153,7 @@ API 层里生产业务模块的模块级 mock 必须是**类型化工厂**（`vi
 
 ## 文档与流程
 
-- 领域词汇唯一真相源：`docs/glossary.md`；架构决策：`docs/adr/`（ADR-001~031）。
+- 领域词汇唯一真相源：`docs/glossary.md`；架构决策：`docs/adr/`（ADR-001~032）。
 - Agent 配置唯一入口：根 `AGENTS.md`；不新增 `.claude/`、`.agents/`、`CLAUDE.md`、`skills-lock.json` 等第二套配置。任务级治理技能已按用户指令退役（ADR-031），不再从 `.dsh/skills/` 加载。
 - 执行位置：能在主会话完成的工作不派子 agent；仅当任务可独立并行、且隔离或吞吐有明确收益时才使用 subagent / workflow，并说明理由。
 
