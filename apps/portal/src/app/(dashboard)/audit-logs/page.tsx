@@ -175,7 +175,7 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
   }
 
   // ≤5 行时卡片贴合内容，避免短列表被 flex-1 撑成整屏空白（与 DataTable 同规则）
-  const listFlex = data.length <= 8 ? '' : 'flex-1';
+  const listFlex = data.length <= 5 ? '' : 'flex-1';
 
   // 当前筛选摘要：让"为什么列表是这些"可解释，并支持单个移除/一键清空
   const filterChips: Array<{ label: string; href: string }> = [];

@@ -45,7 +45,7 @@ function DetailHeader({ title, id, returnHref, children }: { title: string; id: 
       <Button asChild variant="ghost" size="icon-sm" aria-label="返回审计日志">
         <Link href={returnHref}><ArrowLeft className="h-4 w-4" /></Link>
       </Button>
-      <h1 className="type-section-title">{title}</h1>
+      <h1 className="type-page-title">{title}</h1>
       {children}
       <span className="flex items-center gap-1 type-meta text-muted-foreground">ID {id}<CopyTextButton text={id} label="复制日志 ID" /></span>
     </div>
@@ -73,6 +73,8 @@ export default async function AuditLogDetailPage({ params, searchParams }: PageP
   }
   if (!effectiveTab) notFound();
   const fallbackTab = effectiveTab;
+  const DETAIL_CARD = 'gap-0 overflow-hidden rounded-lg border border-border/70 py-0 shadow-sm ring-0';
+  const DETAIL_HEADER = 'border-b bg-muted/30 px-3 py-2';
   const returnHref = safeReturnPath(rawReturn, `/audit-logs?tab=${fallbackTab}`, '/audit-logs');
 
   if (effectiveTab === 'login') {
@@ -84,9 +86,9 @@ export default async function AuditLogDetailPage({ params, searchParams }: PageP
         <DetailHeader title="登录日志详情" id={row.id} returnHref={returnHref}>
           <Badge variant="secondary">{label}</Badge>
         </DetailHeader>
-        <Card className="border border-border/70 ring-0">
-          <CardHeader><CardTitle className="type-card-title">事件信息</CardTitle></CardHeader>
-          <CardContent>
+        <Card className={DETAIL_CARD}>
+          <CardHeader className={DETAIL_HEADER}><CardTitle className="type-card-title">事件信息</CardTitle></CardHeader>
+          <CardContent className="p-3">
             <dl>
               <Field label="时间" value={formatDateTime(row.createdAt)} />
               <Field label="用户" value={row.username} />
@@ -116,9 +118,9 @@ export default async function AuditLogDetailPage({ params, searchParams }: PageP
           <Badge variant="outline" className="font-mono">{row.method}</Badge>
         </DetailHeader>
         <div className="grid gap-3 xl:grid-cols-3">
-          <Card className="border border-border/70 ring-0 lg:col-span-2">
-            <CardHeader><CardTitle className="type-card-title">访问上下文</CardTitle></CardHeader>
-            <CardContent>
+          <Card className={`${DETAIL_CARD} lg:col-span-2`}>
+            <CardHeader className={DETAIL_HEADER}><CardTitle className="type-card-title">访问上下文</CardTitle></CardHeader>
+            <CardContent className="p-3">
               <dl>
                 <Field label="时间" value={formatDateTime(row.createdAt)} />
                 <Field label="用户" value={row.username || (row.userId ? '未知用户（可能已删除）' : '匿名')} />
@@ -131,9 +133,9 @@ export default async function AuditLogDetailPage({ params, searchParams }: PageP
               </dl>
             </CardContent>
           </Card>
-          <Card className="border border-border/70 ring-0">
-            <CardHeader><CardTitle className="type-card-title">来源</CardTitle></CardHeader>
-            <CardContent>
+          <Card className={DETAIL_CARD}>
+            <CardHeader className={DETAIL_HEADER}><CardTitle className="type-card-title">来源</CardTitle></CardHeader>
+            <CardContent className="p-3">
               <dl>
                 <Field label="IP 地址" value={formatIp(row.ip)} mono copy />
                 <Field label="User-Agent" value={row.userAgent || '-'} mono copy />
@@ -161,9 +163,9 @@ export default async function AuditLogDetailPage({ params, searchParams }: PageP
         <Badge>{opLabel}</Badge>
       </DetailHeader>
       <div className="grid gap-3 xl:grid-cols-3">
-        <Card className="border border-border/70 ring-0 lg:col-span-2">
-          <CardHeader><CardTitle className="type-card-title">请求上下文</CardTitle></CardHeader>
-          <CardContent>
+        <Card className={`${DETAIL_CARD} lg:col-span-2`}>
+          <CardHeader className={DETAIL_HEADER}><CardTitle className="type-card-title">请求上下文</CardTitle></CardHeader>
+          <CardContent className="p-3">
             <dl>
               <Field label="时间" value={formatDateTime(row.createdAt)} />
               <Field label="操作人" value={row.username || (row.userId ? '未知用户（可能已删除）' : '-')} />
@@ -176,9 +178,9 @@ export default async function AuditLogDetailPage({ params, searchParams }: PageP
             </dl>
           </CardContent>
         </Card>
-        <Card className="border border-border/70 ring-0">
-          <CardHeader><CardTitle className="type-card-title">来源</CardTitle></CardHeader>
-          <CardContent>
+        <Card className={DETAIL_CARD}>
+          <CardHeader className={DETAIL_HEADER}><CardTitle className="type-card-title">来源</CardTitle></CardHeader>
+          <CardContent className="p-3">
             <dl>
               <Field label="IP 地址" value={formatIp(row.ip)} mono copy />
               <Field label="User-Agent" value={row.userAgent || '-'} mono copy />
@@ -200,13 +202,13 @@ export default async function AuditLogDetailPage({ params, searchParams }: PageP
           </CardContent>
         </Card>
       </div>
-      <Card className="border border-border/70 ring-0">
-        <CardHeader className="flex flex-row items-center gap-2">
+      <Card className={DETAIL_CARD}>
+        <CardHeader className={`${DETAIL_HEADER} flex flex-row items-center gap-2`}>
           <ScrollText className="h-4 w-4 text-muted-foreground" />
           <CardTitle className="type-card-title">变更参数</CardTitle>
           <AuditParamsActions id={row.id} params={row.params} />
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-3">
           <pre className="overflow-x-auto rounded-md border border-border/60 bg-muted/40 p-3 font-mono text-xs leading-relaxed whitespace-pre-wrap break-all">
             {row.params ? JSON.stringify(row.params, null, 2) : '无（该操作未记录结构化参数）'}
           </pre>

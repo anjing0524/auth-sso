@@ -320,7 +320,7 @@ export default function DepartmentTree({ departments, deletionStats = {}, autoOp
   };
   const deleteImpact = deleteTarget ? deletionImpactFor(deleteTarget.id) : null;
   // 与用户/角色/权限/应用列表页统一：列表型页面卡片填满剩余高度。
-  const listFlex = 'flex-1';
+  const listFlex = filtered.length <= 5 ? '' : 'flex-1';
 
   return (
     <Card className={`flex min-h-0 flex-col gap-0 overflow-hidden rounded-lg border border-border/70 py-0 shadow-sm ring-0 ${listFlex}`}>

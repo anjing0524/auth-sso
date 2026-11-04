@@ -29,8 +29,8 @@ export interface ClientTokensSectionProps {
 
 export function ClientTokensSection({ tokens, total = tokens.length, onRevokeAll, onRevokeToken, canRevoke = true }: ClientTokensSectionProps) {
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between border-b pb-4">
+    <Card className="gap-0 overflow-hidden rounded-lg border border-border/70 py-0 shadow-sm ring-0">
+      <CardHeader className="flex flex-row items-center justify-between border-b bg-muted/30 px-3 py-2">
         <div className="flex items-center gap-2"><CardTitle>有效授权 Token</CardTitle><span className="text-xs text-muted-foreground">共 {total} 条</span></div>
         {canRevoke && (
           <Button

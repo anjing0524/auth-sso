@@ -8,7 +8,7 @@
  * 统一口径：
  * - 容器：`border-b bg-muted/30 px-3 py-1.5`，与表格卡片同宽；
  * - 布局：左槽（搜索 + 筛选）与右槽（统计 + 主操作）在 md 以上两端对齐，窄屏纵向堆叠；
- * - 高度：所有控件 40px（Input/Select/Button 基类保证）；
+ * - 高度：所有控件 36px（Input/Select/Button 统一）；
  * - 间距：槽内 gap-3，槽间 gap-4。
  */
 import type { ReactNode } from 'react';
@@ -27,7 +27,7 @@ export function TableToolbar({
   return (
     <div role="group" aria-label="筛选与操作" className={cn('flex flex-col gap-2 border-b bg-muted/30 px-3 py-1.5 md:flex-row md:items-center md:justify-between', className)}>
       <div className="flex w-full min-w-0 flex-col gap-2 md:w-auto md:flex-row md:items-center">{left}</div>
-      {right ? <div className="flex w-full shrink-0 flex-wrap items-center justify-between gap-2 md:w-auto md:flex-nowrap md:justify-end [&_button]:h-8 [&_button]:px-2.5 [&_button]:max-md:w-full">{right}</div> : null}
+      {right ? <div className="flex w-full shrink-0 flex-wrap items-center justify-between gap-2 md:w-auto md:flex-nowrap md:justify-end [&_button]:h-9 [&_button]:px-3 [&_button]:max-md:w-full">{right}</div> : null}
     </div>
   );
 }

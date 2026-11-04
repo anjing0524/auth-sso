@@ -21,6 +21,8 @@
 
 ## 变更记录
 
+- 2026-11-04: **展示区域设计系统收口**。页头/工具栏操作按钮统一 36px；列表页标题统一 `type-section-title` token；审计详情改用 `type-page-title` 与紧凑 panel 卡片（8px 圆角/12px padding/统一 section header）；客户端 Token 卡片、新建用户页卡片统一 panel；列表卡片短内容阈值统一为 ≤5 行；仪表盘/新建用户页间距统一 gap-3；用户详情字段间距/提示字号统一；loading skeleton 圆角对齐真实卡片；同步 UI 结构守卫阈值。**验证**：151 文件/1233 用例、typecheck、lint、build 通过；视觉基线由 visual-baseline.yml 重新生成后核对。
+
 - 2026-11-04: **表单控件设计系统收口**。共享 SearchInput 统一为 36px/14px 与 Input/SelectTrigger 同高；部门排序与权限作用域两个原生 `<select>` 改为共享 Select；用户详情部门选择去掉 32px 局部覆盖；权限描述由单行 Input 改为 Textarea；Select 弹层圆角与触发器统一为 `rounded-lg`；客户端/角色/用户/权限表单的字段间距统一为 8px、辅助说明统一 11px；新增原生 select/搜索框高度架构守卫与 Radix Select 测试 polyfill。**验证**：151 文件 / 1233 用例、覆盖率、类型、lint、build 通过。
 
 - 2026-11-04: **功能主页面 UI/UX 审计后一次性修复**。部门管理主操作移到工具栏最右并恢复统一列表卡片高度；用户角色筛选「全部」改为「全部角色」，已分配角色改为中性 Badge、仅未分配保留黄色警示；审计日志导出按钮右对齐；角色描述去掉 `break-glass` 工程术语；应用回调地址增加复制入口；侧栏当前项补 `aria-current="page"`；个人中心 User-Agent 收敛为「Chrome · macOS」可读标签；保留角色操作图标的既有 aria-label/title。**验证**：150 文件/1231 用例、覆盖率、视觉 2/2、a11y 通过；修复前后 1440 截图人工比对。

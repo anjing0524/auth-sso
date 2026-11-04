@@ -220,24 +220,24 @@ export default function UserDetailForm({ id, initialUser: serverUser, canUpdate,
               </CardHeader>
               <CardContent className="grid grid-cols-1 gap-3 p-3 sm:grid-cols-2">
                 <p className="text-[11px] text-muted-foreground sm:col-span-2"><RequiredLegend /></p>
-                <div className="space-y-1.5">
+                <div className="space-y-2">
                   <div className="flex items-center gap-1"><Label htmlFor="user-name">显示名称</Label><RequiredMark /></div>
                   <Input id="user-name" aria-required="true" maxLength={100} value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
                 </div>
-                <div className="space-y-1.5">
+                <div className="space-y-2">
                   <div className="flex items-center gap-1"><Label htmlFor="user-email">电子邮箱</Label><RequiredMark /></div>
                   <Input id="user-email" aria-required="true" maxLength={255} value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
                 </div>
-                <div className="space-y-1.5 sm:col-span-2">
+                <div className="space-y-2 sm:col-span-2">
                   <Label htmlFor="user-avatar">头像 URL（可选）</Label>
                   <Input id="user-avatar" type="url" maxLength={500} value={form.avatarUrl} onChange={e => setForm({ ...form, avatarUrl: e.target.value })} placeholder="https://example.com/avatar.png" />
-                  <p className="text-[10px] leading-4 text-muted-foreground">用于列表头像；留空显示姓名首字母。</p>
+                  <p className="text-[11px] leading-4 text-muted-foreground">用于列表头像；留空显示姓名首字母。</p>
                 </div>
-                <div className="space-y-1.5">
+                <div className="space-y-2">
                   <Label htmlFor="user-username">用户名（不可修改）</Label>
                   <Input id="user-username" value={username} disabled className="bg-muted opacity-60" />
                 </div>
-                <div className="space-y-1.5">
+                <div className="space-y-2">
                   <Label htmlFor="user-status">账户状态</Label>
                   <Select
                     value={form.status}
@@ -397,14 +397,14 @@ export default function UserDetailForm({ id, initialUser: serverUser, canUpdate,
                   )}
                 </div>
                 {canUpdate && isSelf && (
-                  <p className="text-[10px] leading-4 text-muted-foreground">不能修改自己的部门，请由其他管理员操作。</p>
+                  <p className="text-[11px] leading-4 text-muted-foreground">不能修改自己的部门，请由其他管理员操作。</p>
                 )}
                 {canUpdate && !isSelf && form.deptId !== savedForm.deptId && (
                   <p className="rounded bg-badge-warning-bg px-2 py-1 text-[10px] leading-4 text-badge-warning-fg">
                     迁移部门前需确保该用户角色都属于目标部门，否则会提示先解除角色。
                   </p>
                 )}
-                <div className="space-y-1.5">
+                <div className="space-y-2">
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-[11px] text-muted-foreground">角色（{roles.length}）</span>
                     <PermissionGuard permission={USER_PERMISSIONS.ASSIGN_ROLE}>

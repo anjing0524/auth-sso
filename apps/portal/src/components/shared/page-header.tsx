@@ -60,7 +60,7 @@ export function PageHeader({
           </p>
         ) : null}
       </div>
-      {actions ? <div className="flex shrink-0 flex-wrap items-center gap-2 [&_a]:h-8 [&_button]:h-8 [&_a]:px-3 [&_button]:px-3">{actions}</div> : null}
+      {actions ? <div className="flex shrink-0 flex-wrap items-center gap-2 [&_a]:h-9 [&_button]:h-9 [&_a]:px-3 [&_button]:px-3">{actions}</div> : null}
     </div>
   );
 }

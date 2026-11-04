@@ -17,21 +17,21 @@ export default function DashboardLoading() {
       {/* Header skeleton */}
       <div className="flex items-center justify-between">
         <div className="space-y-2">
-          <Skeleton className="h-8 w-48 rounded-xl" />
+          <Skeleton className="h-8 w-48 rounded-lg" />
           <Skeleton className="h-4 w-64 rounded-lg" />
         </div>
-        <Skeleton className="h-10 w-32 rounded-xl" />
+        <Skeleton className="h-10 w-32 rounded-lg" />
       </div>
 
       {/* Content card skeleton */}
-      <Card className="border-none shadow-sm border border-border/70 rounded-xl overflow-hidden">
+      <Card className="border-none shadow-sm border border-border/70 rounded-lg overflow-hidden">
         <CardHeader className="border-b bg-muted/30 px-6 py-4">
-          <Skeleton className="h-10 w-full max-w-md rounded-xl" />
+          <Skeleton className="h-10 w-full max-w-md rounded-lg" />
         </CardHeader>
         <CardContent className="p-6">
           <div className="space-y-3">
             {Array.from({ length: 8 }).map((_, i) => (
-              <Skeleton key={i} className="h-14 w-full rounded-xl" />
+              <Skeleton key={i} className="h-14 w-full rounded-lg" />
             ))}
           </div>
         </CardContent>

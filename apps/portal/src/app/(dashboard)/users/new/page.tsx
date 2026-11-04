@@ -37,9 +37,9 @@ export default async function NewUserPage({ searchParams }: PageProps) {
   const initialDeptId = params.deptId && departments.some((d) => d.id === params.deptId) ? params.deptId : undefined;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto">
+    <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto">
       <PageHeader title="新建用户" description="创建后请把登录邮箱告知用户；新用户默认无角色。" backHref={returnHref} />
-      <Card className="mx-auto w-full max-w-2xl">
+      <Card className="mx-auto w-full max-w-2xl gap-0 overflow-hidden rounded-lg border border-border/70 py-0 shadow-sm ring-0">
         <CardContent className="p-4 sm:p-6">
           <CreateUserForm
             departments={departments}

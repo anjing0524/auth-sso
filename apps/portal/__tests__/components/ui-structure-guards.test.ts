@@ -23,7 +23,7 @@ describe('UI 结构回归', () => {
     const page = read('apps/portal/src/app/(dashboard)/audit-logs/page.tsx');
     expect(page).not.toContain('max-h-[calc(100svh-19rem)]');
     // 短列表贴合内容，长列表才 flex-1；滚动容器本身始终可用
-    expect(page).toContain("const listFlex = data.length <= 8");
+    expect(page).toContain("const listFlex = data.length <= 5");
     expect(page).toContain('scrollbar-slim min-h-0 overflow-auto ${listFlex}');
     expect(page).not.toContain('pagination.totalPages > 1 &&');
   });

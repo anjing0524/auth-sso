@@ -8,12 +8,12 @@ export default function DashboardLoading() {
       <LoadingAnnouncer />
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {[1, 2, 3, 4].map((i) => (
-          <Skeleton key={i} className="h-32 rounded-xl" />
+          <Skeleton key={i} className="h-32 rounded-lg" />
         ))}
       </div>
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-        <Skeleton className="col-span-4 h-[400px] rounded-xl" />
-        <Skeleton className="col-span-3 h-[400px] rounded-xl" />
+        <Skeleton className="col-span-4 h-[400px] rounded-lg" />
+        <Skeleton className="col-span-3 h-[400px] rounded-lg" />
       </div>
     </div>
   );

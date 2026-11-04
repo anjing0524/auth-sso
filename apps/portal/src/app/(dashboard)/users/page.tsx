@@ -104,7 +104,7 @@ export default async function UsersPage({ searchParams }: PageProps) {
             className="md:items-start"
             left={
               <div className="flex min-w-0 flex-col gap-2 md:flex-row md:items-start md:gap-3">
-                <h1 className="shrink-0 text-[15px] font-semibold tracking-tight text-foreground">用户管理</h1>
+                <h1 className="type-section-title shrink-0 text-foreground">用户管理</h1>
                 <div className="grid w-full grid-cols-2 gap-2 md:flex md:w-auto md:flex-wrap md:items-center md:gap-2">
                 <UserFilters
                   key={`${keyword}-${status}-${deptId ?? 'ALL'}-${noRole}`}

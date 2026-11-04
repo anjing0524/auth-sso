@@ -110,7 +110,7 @@ interface UserTableProps {
  */
 export function UserTableSkeleton() {
   return (
-    <div className="border border-border rounded-xl overflow-hidden bg-card">
+    <div className="border border-border rounded-lg overflow-hidden bg-card">
       <Table>
         <TableHeader className="bg-muted/50">
           <TableRow className="border-b">
