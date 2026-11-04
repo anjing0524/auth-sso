@@ -10,7 +10,7 @@
 ## 背景
 
 
-> **2026-11-03 语义更新（ADR-032）**：自 ADR-032 起 `ADMIN` 不再是 break-glass，只有 `SUPER_ADMIN` 保留“管理员”绕过能力；本文中“管理员（ADMIN/SUPER_ADMIN）”的保留能力现仅指 `SUPER_ADMIN`。反提权规则与用户高权目标保护不变，并已扩展到角色管理面。
+> **2026-11-03 语义更新（ADR-032）**：自 ADR-032 起 `ADMIN`/`PLATFORM_ADMIN` 不再是 break-glass，只有 `SUPER_ADMIN` 保留“管理员”绕过能力；本文中“管理员（ADMIN/SUPER_ADMIN）”的保留能力现仅指 `SUPER_ADMIN`。反提权规则与用户高权目标保护不变，并已扩展到角色管理面。
 
 授权渗透测试在验收栈用真实低权账号复现了提权：
 

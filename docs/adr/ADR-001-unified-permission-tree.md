@@ -22,7 +22,7 @@ v2 版本中，`menus`（菜单树）和 `permissions`（权限码）是两张�
 ## 决策
 
 
-> **2026-11-03 语义更新（ADR-032）**：管理员绕过已收窄为唯一 `SUPER_ADMIN` break-glass；`ADMIN` 回到显式 RBAC。本文的权限树决策不变。
+> **2026-11-03 语义更新（ADR-032）**：管理员绕过已收窄为唯一 `SUPER_ADMIN` break-glass；`PLATFORM_ADMIN` 回到显式 RBAC。本文的权限树决策不变。
 
 **保持统一权限树，不拆分为 `permissions` + `menus` 两张表。**
 

@@ -109,7 +109,7 @@ RBAC 权限载体，必须属于一个部门（OBAC 分组容器）。
 **数据范围语义**：用户的数据访问范围 = 所有被分配角色的 `dept_id` 子树并集。
 
 **约束**：
-- `ADMIN_ROLE_CODES = ['SUPER_ADMIN']` 是唯一 break-glass；`ADMIN` 是显式 RBAC 系统角色
+- `ADMIN_ROLE_CODES = ['SUPER_ADMIN']` 是唯一 break-glass；`PLATFORM_ADMIN` 是显式 RBAC 系统角色
 - `is_system` 仅标记不可删除/不可修改，非绕过鉴权的概念
 
 ### Permission（权限）

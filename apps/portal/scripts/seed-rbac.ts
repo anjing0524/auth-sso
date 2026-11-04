@@ -6,7 +6,7 @@
  * 职责：
  * - 从 `@auth-sso/contracts` 写入 API 权限常量
  * - 写入 Portal 侧边栏所需的 PAGE 菜单节点
- * - 幂等创建 SUPER_ADMIN / ADMIN 系统角色
+ * - 幂等创建 SUPER_ADMIN（break-glass）/ PLATFORM_ADMIN（显式 RBAC）系统角色
  * - 用 role_permissions 复合主键表为系统角色重建 API 权限绑定
  *
  * 幂等性：可重复执行；已存在记录跳过，角色权限绑定采用先删后建。
@@ -197,21 +197,21 @@ export async function main() {
     0,
   );
   const adminId = await seedRole(
-    'ADMIN',
-    '系统管理员',
-    '拥有所有权限，管理全平台',
+    'PLATFORM_ADMIN',
+    '平台管理员',
+    '显式拥有全部权限，管理全平台（非 break-glass）',
     rootDeptId,
     1,
   );
 
-  // 4. SUPER_ADMIN 是唯一 break-glass；ADMIN 是普通 RBAC 角色，必须显式绑定
+  // 4. SUPER_ADMIN 是唯一 break-glass；PLATFORM_ADMIN 是普通 RBAC 角色，必须显式绑定
   //    全部权限（含 PAGE 菜单），不能依赖 isAdmin 绕过。
   const allPermIds = [...new Set([...apiPermIds, ...menuPermIds])];
   console.log('\n🔗 绑定权限...');
   await bindPermissions(superAdminId, allPermIds);
   process.stdout.write(`  ✅ SUPER_ADMIN ← ${allPermIds.length} 个权限（break-glass）\n`);
   await bindPermissions(adminId, allPermIds);
-  process.stdout.write(`  ✅ ADMIN ← ${allPermIds.length} 个显式权限（含菜单）\n`);
+  process.stdout.write(`  ✅ PLATFORM_ADMIN ← ${allPermIds.length} 个显式权限（含菜单）\n`);
 
   console.log('\n✅ RBAC 初始化完成！');
   console.log('   提示：用已有超级管理员账号登录，或手工执行以下 SQL 为指定用户分配 SUPER_ADMIN 角色：');

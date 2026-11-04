@@ -51,9 +51,9 @@ test.describe('用户生命周期', () => {
       userId = page.url().match(/\/users\/([0-9a-f-]+)\/roles$/)?.[1] ?? null;
       expect(userId).toBeTruthy();
 
-      // 2. 分配「系统管理员」角色（有权限，才能登录门户）
+      // 2. 分配「平台管理员」角色（有权限，才能登录门户）
       await expect(page.getByText(/仅展示所属部门的启用角色/)).toBeVisible();
-      await page.locator('label').filter({ hasText: '系统管理员' }).click();
+      await page.locator('label').filter({ hasText: '平台管理员' }).click();
       await page.getByRole('button', { name: /保存变更/ }).click();
       await page.getByRole('button', { name: '确认保存' }).click();
       await expect(page.getByText(/已更新角色/)).toBeVisible({ timeout: 15_000 });

@@ -13,4 +13,4 @@
 export const ADMIN_ROLE_CODES = ['SUPER_ADMIN'] as const;
 
 /** 系统预置/保留角色编码：任何运行期入口都不得创建同名角色（ADR-032）。 */
-export const RESERVED_ROLE_CODES = ['SUPER_ADMIN', 'ADMIN'] as const;
+export const RESERVED_ROLE_CODES = ['SUPER_ADMIN', 'PLATFORM_ADMIN', 'ADMIN'] as const;
