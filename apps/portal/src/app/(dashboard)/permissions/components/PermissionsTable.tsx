@@ -12,6 +12,7 @@ import {
   Plus, Edit, Trash2, Globe, Code, Folder,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { PageHeader } from '@/components/shared/page-header';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -231,7 +232,7 @@ export default function PermissionsTable({ permissions, pagination, activeTab, i
       className="md:items-start"
       left={
         <div className="flex flex-wrap items-center gap-1.5">
-          <h1 className="type-section-title shrink-0 text-foreground">权限管理</h1>
+          <PageHeader variant="section" title="权限管理" className="shrink-0" />
           {tabsBar}
           <SearchInput className="md:w-[190px] xl:w-64" placeholder="搜索名称或编码" value={keyword} onChange={handleSearch} busy={isPending} />
           {activeTab === 'API' ? (

@@ -20,6 +20,7 @@ import { getUserPermissionContext, toPermissionContextOrNull } from '@/lib/permi
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
+import { PageHeader } from '@/components/shared/page-header';
 import { Card, CardContent } from '@/components/ui/card';
 import { EmptyState } from '@/components/shared/empty-state';
 import { TablePagination } from '@/components/shared/table-pagination';
@@ -234,7 +235,7 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
 
       {/* 标题 + 页签 + 类型筛选 + 导出：压缩为同一行（搜索/标题不应各占一整行） */}
       <div className="flex shrink-0 flex-wrap items-center gap-1.5 xl:gap-3">
-        <h1 className="type-section-title shrink-0 text-foreground">审计日志</h1>
+        <PageHeader variant="section" title="审计日志" className="shrink-0" />
         <AuditTabs tab={tab} hrefs={{ login: pageHref('login', 1, null, null, range, keyword, chipStartDate, chipEndDate, accessStatus, validAccessResourceType, pageSize), operation: pageHref('operation', 1, null, null, range, keyword, chipStartDate, chipEndDate, accessStatus, validAccessResourceType, pageSize), access: pageHref('access', 1, null, null, range, keyword, chipStartDate, chipEndDate, accessStatus, validAccessResourceType, pageSize) }} />
         <div className="order-3 flex w-full min-w-0 flex-wrap items-start gap-1.5 min-[1100px]:order-3 min-[1100px]:w-auto min-[1100px]:flex-1">
           <div className="min-w-0 flex-1">

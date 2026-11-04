@@ -15,6 +15,7 @@ import {
 import {
   TableCell, TableRow,
 } from '@/components/ui/table';
+import { PageHeader } from '@/components/shared/page-header';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -193,7 +194,7 @@ export default function ClientsTable({ clients, pagination, initialKeyword, init
       left={
         <div className="flex min-w-0 flex-col gap-2 md:flex-row md:items-center md:gap-3">
           <div className="flex items-center gap-2">
-            <h1 className="type-section-title shrink-0 text-foreground">应用管理</h1>
+            <PageHeader variant="section" title="应用管理" className="shrink-0" />
             <div className="hidden items-center gap-2 min-[1100px]:flex">
               <Badge variant="success" size="sm">启用 {activeCount}</Badge>
               <Badge variant="secondary" size="sm">停用 {disabledCount}</Badge>

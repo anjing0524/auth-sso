@@ -14,6 +14,7 @@ import {
   ShieldCheck, Plus, Edit, Trash2, KeyRound, Eye,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { PageHeader } from '@/components/shared/page-header';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
@@ -257,7 +258,7 @@ export default function RolesTable({ roles, pagination, initialKeyword, initialS
       className="md:items-start"
       left={
         <div className="flex w-full min-w-0 flex-wrap items-center gap-2">
-          <h1 className="type-section-title shrink-0 text-foreground">角色管理</h1>
+          <PageHeader variant="section" title="角色管理" className="shrink-0" />
           <SearchInput placeholder="搜索角色名称或编码" value={keyword} onChange={handleSearch} busy={isPending} className="w-full sm:w-auto md:w-56" />
           <div className="order-3 flex w-full flex-wrap items-center gap-2 min-[1100px]:order-2 min-[1100px]:w-auto">
             <Select value={initialSort} onValueChange={applySort} disabled={isPending}>

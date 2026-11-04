@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft, ScrollText } from 'lucide-react';
+import { ScrollText } from 'lucide-react';
 import {
   AUDIT_OPERATION_LABELS,
   LOGIN_EVENT_LABELS,
@@ -8,7 +8,6 @@ import {
   type LoginEventType,
 } from '@auth-sso/contracts';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { formatDateTime } from '@/lib/format-date';
 import { formatIp } from '@/lib/format-ip';
@@ -17,6 +16,7 @@ import { safeReturnPath } from '@/lib/safe-return';
 import { getAccessLogById, getAuditLogById, getLoginLogById } from '@/app/audit/data';
 import { AuditParamsActions } from './params-actions';
 import { CopyTextButton } from '@/components/shared/copy-text-button';
+import { PageHeader } from '@/components/shared/page-header';
 
 /** 读取会话/动态数据：与审计列表同口径，声明非 instant 路由 */
 export const instant = false;
@@ -39,18 +39,6 @@ function Field({ label, value, mono, copy }: { label: string; value: string; mon
   );
 }
 
-function DetailHeader({ title, id, returnHref, children }: { title: string; id: string; returnHref: string; children?: React.ReactNode }) {
-  return (
-    <div className="sticky top-0 z-20 -mx-3 flex flex-wrap items-center gap-2 border-b border-border/50 bg-background/95 px-3 py-2 backdrop-blur">
-      <Button asChild variant="ghost" size="icon-sm" aria-label="返回审计日志">
-        <Link href={returnHref}><ArrowLeft className="h-4 w-4" /></Link>
-      </Button>
-      <h1 className="type-page-title">{title}</h1>
-      {children}
-      <span className="flex items-center gap-1 type-meta text-muted-foreground">ID {id}<CopyTextButton text={id} label="复制日志 ID" /></span>
-    </div>
-  );
-}
 
 export default async function AuditLogDetailPage({ params, searchParams }: PageProps) {
   const { id } = await params;
@@ -83,9 +71,13 @@ export default async function AuditLogDetailPage({ params, searchParams }: PageP
     const label = LOGIN_EVENT_LABELS[row.eventType as LoginEventType] ?? row.eventType;
     return (
       <div className="flex min-h-0 flex-1 flex-col gap-3">
-        <DetailHeader title="登录日志详情" id={row.id} returnHref={returnHref}>
-          <Badge variant="secondary">{label}</Badge>
-        </DetailHeader>
+        <PageHeader
+          variant="sticky"
+          title="登录日志详情"
+          backHref={returnHref}
+          backLabel="返回审计日志"
+          meta={<><Badge variant="secondary">{label}</Badge><span className="flex items-center gap-1 type-meta text-muted-foreground">ID {row.id}<CopyTextButton text={row.id} label="复制日志 ID" /></span></>}
+        />
         <Card className={DETAIL_CARD}>
           <CardHeader className={DETAIL_HEADER}><CardTitle className="type-card-title">事件信息</CardTitle></CardHeader>
           <CardContent className="p-3">
@@ -114,9 +106,13 @@ export default async function AuditLogDetailPage({ params, searchParams }: PageP
     if (!row) notFound();
     return (
       <div className="flex min-h-0 flex-1 flex-col gap-3">
-        <DetailHeader title="访问日志详情" id={row.id} returnHref={returnHref}>
-          <Badge variant="outline" className="font-mono">{row.method}</Badge>
-        </DetailHeader>
+        <PageHeader
+          variant="sticky"
+          title="访问日志详情"
+          backHref={returnHref}
+          backLabel="返回审计日志"
+          meta={<><Badge variant="outline" size="sm" className="font-mono">{row.method}</Badge><span className="flex items-center gap-1 type-meta text-muted-foreground">ID {row.id}<CopyTextButton text={row.id} label="复制日志 ID" /></span></>}
+        />
         <div className="grid gap-3 xl:grid-cols-3">
           <Card className={`${DETAIL_CARD} lg:col-span-2`}>
             <CardHeader className={DETAIL_HEADER}><CardTitle className="type-card-title">访问上下文</CardTitle></CardHeader>
@@ -159,9 +155,13 @@ export default async function AuditLogDetailPage({ params, searchParams }: PageP
   const opLabel = AUDIT_OPERATION_LABELS[row.operation as AuditOperation] ?? row.operation;
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
-      <DetailHeader title="操作日志详情" id={row.id} returnHref={returnHref}>
-        <Badge>{opLabel}</Badge>
-      </DetailHeader>
+      <PageHeader
+        variant="sticky"
+        title="操作日志详情"
+        backHref={returnHref}
+        backLabel="返回审计日志"
+        meta={<><Badge size="sm">{opLabel}</Badge><span className="flex items-center gap-1 type-meta text-muted-foreground">ID {row.id}<CopyTextButton text={row.id} label="复制日志 ID" /></span></>}
+      />
       <div className="grid gap-3 xl:grid-cols-3">
         <Card className={`${DETAIL_CARD} lg:col-span-2`}>
           <CardHeader className={DETAIL_HEADER}><CardTitle className="type-card-title">请求上下文</CardTitle></CardHeader>

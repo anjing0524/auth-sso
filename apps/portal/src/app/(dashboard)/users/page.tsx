@@ -16,6 +16,7 @@ import UserTable from './components/UserTable';
 import { CreateUserButton } from './components/CreateUserButton';
 
 import { TableToolbar } from '@/components/shared/table-toolbar';
+import { PageHeader } from '@/components/shared/page-header';
 import { getUserPermissionContext, toPermissionContextOrNull } from '@/lib/permissions';
 
 /**
@@ -104,7 +105,7 @@ export default async function UsersPage({ searchParams }: PageProps) {
             className="md:items-start"
             left={
               <div className="flex min-w-0 flex-col gap-2 md:flex-row md:items-start md:gap-3">
-                <h1 className="type-section-title shrink-0 text-foreground">用户管理</h1>
+                <PageHeader variant="section" title="用户管理" className="shrink-0" />
                 <div className="grid w-full grid-cols-2 gap-2 md:flex md:w-auto md:flex-wrap md:items-center md:gap-2">
                 <UserFilters
                   key={`${keyword}-${status}-${deptId ?? 'ALL'}-${noRole}`}

@@ -21,6 +21,8 @@
 
 ## 变更记录
 
+- 2026-11-04: **PageHeader 三变体收口**。新增 `variant="page" | "section" | "sticky"`：详情/新建用 page、列表工具栏用 section、审计详情用 sticky；列表页 6 个手写 h1 改为共享 PageHeader；审计详情自定义 DetailHeader 删除并接入 sticky 变体，保留返回/Badge/ID/复制。**验证**：151 文件/1233 用例、typecheck、lint、build；视觉基线重新生成。
+
 - 2026-11-04: **组件层视觉收口**。Button 圆角统一为 8px（含 sm/lg）；EmptyState 去掉 `rounded-xl` 覆盖；Card 基类圆角改为 8px；Tabs/审计页签/客户端页签统一 h-10 + h-8 触发项与 8px 圆角；分页按钮/页码/PageHeader 返回按钮统一 8px；Badge 增加 xs/sm/md 尺寸并迁移当前账号、系统、权限数、在线状态等徽标；审计 loading skeleton 与遮罩层同步。**验证**：151 文件/1233 用例、typecheck、lint、build；视觉基线由 workflow 重新生成。
 
 - 2026-11-04: **展示区域设计系统收口**。页头/工具栏操作按钮统一 36px；列表页标题统一 `type-section-title` token；审计详情改用 `type-page-title` 与紧凑 panel 卡片（8px 圆角/12px padding/统一 section header）；客户端 Token 卡片、新建用户页卡片统一 panel；列表卡片短内容阈值统一为 ≤5 行；仪表盘/新建用户页间距统一 gap-3；用户详情字段间距/提示字号统一；loading skeleton 圆角对齐真实卡片；同步 UI 结构守卫阈值。**验证**：151 文件/1233 用例、typecheck、lint、build 通过；视觉基线由 visual-baseline.yml 重新生成后核对。

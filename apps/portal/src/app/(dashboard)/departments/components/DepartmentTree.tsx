@@ -12,6 +12,7 @@ import {
   Building2, Plus, ChevronRight, ChevronDown, Edit, Trash2, Users, MoveRight,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
+import { PageHeader } from '@/components/shared/page-header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -329,7 +330,7 @@ export default function DepartmentTree({ departments, deletionStats = {}, autoOp
       <TableToolbar
         left={
           <div className="flex min-w-0 items-center gap-3">
-            <h1 className="type-section-title shrink-0 text-foreground">部门管理</h1>
+            <PageHeader variant="section" title="部门管理" className="shrink-0" />
             <SearchInput placeholder="搜索部门名称" value={keyword} onChange={setKeyword} />
           </div>
         }
