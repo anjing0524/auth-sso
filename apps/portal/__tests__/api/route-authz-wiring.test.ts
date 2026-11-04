@@ -8,7 +8,7 @@
  * @vitest-environment node
  */
 import { describe, it, expect } from 'vitest';
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { REPO_ROOT } from '../helpers/repo-scan';
 

@@ -12,7 +12,6 @@ import { createTestDbHandle, seedTestData } from '../helpers/test-db';
 import {
   seedRootDept, seedTestUser, seedUserRoleBinding,
 } from '../helpers/seed-fixtures';
-import * as schema from '@/db/schema';
 import type * as verifyJwtModule from '@/lib/auth/verify-jwt';
 
 const td = createTestDbHandle();

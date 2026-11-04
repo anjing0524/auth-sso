@@ -23,7 +23,7 @@ import { createTestDbHandle, seedTestData } from '../helpers/test-db';
 import { seedAdminUser, seedPortalClient, seedRootDept } from '../helpers/seed-fixtures';
 import * as schema from '@/db/schema';
 import { hashToken } from '@/lib/crypto';
-import { COOKIE_NAMES, JWT_TYP, PORTAL_CLIENT_ID, TOKEN_TTL } from '@auth-sso/contracts';
+import { COOKIE_NAMES, JWT_TYP, PORTAL_CLIENT_ID } from '@auth-sso/contracts';
 
 const SHARED_SECRET = 'test-gateway-shared-secret-32chars!!';
 

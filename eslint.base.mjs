@@ -24,8 +24,8 @@ export const sharedRules = [
       // ── 复杂度约束（ADR-019 修订）────────────────────────────
       // 行数不是复杂度的好代理：本项目实测 22 个 Server Action 的**最大圈复杂度
       // 仅 8**，而超 20 行的有 14 个——长度来自声明式配置与多行参数，不是逻辑。
-      // 故以复杂度为主约束、行数为软兜底（对齐 Checkstyle 150 / SonarJS 200 的
-      // 量级，本仓库实测最大 40 逻辑行）。
+      // 故以复杂度为主约束，不再保留行数上限（2026-11-04 移除 150 行软兜底：
+      // 它只对声明式 JSX 噪声告警，且与 ADR-019「行数不是复杂度代理」的结论冲突）。
       //
       // 不引入 `max-params`：实测其违规全部是"恰好 5 参数"的既有工具函数
       // （如 withPagination、verifySignature），改造属纯负担、收益不明。
@@ -34,7 +34,6 @@ export const sharedRules = [
       // 且该度量的独立学术验证不完整（见 ADR-019），故记为待评估项。
       "complexity": ["warn", 15],
       "max-depth": ["warn", 4],
-      "max-lines-per-function": ["warn", { max: 150, skipBlankLines: true, skipComments: true }],
       "@typescript-eslint/no-explicit-any": "warn",
     },
   },

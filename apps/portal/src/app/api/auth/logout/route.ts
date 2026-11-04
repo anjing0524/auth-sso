@@ -35,82 +35,72 @@ import { AUTH_REQUEST_BINDING_COOKIE } from '@/lib/session/auth-request-store';
 import { writeLoginLog, extractClientIP, extractUserAgent } from '@/lib/audit';
 import { hashToken } from '@/lib/crypto';
 
-async function performRevocation(cookieStore: Awaited<ReturnType<typeof cookies>>): Promise<{ userId?: string; username?: string }> {
-  let userId: string | undefined;
-  let username: string | undefined;
-
-  // 1. 解码 JWT 获取 userId/jti/exp（非关键路径：失败不影响后续撤销步骤）
+async function revokeAccessJwt(cookieStore: Awaited<ReturnType<typeof cookies>>): Promise<string | undefined> {
   try {
     const jwtToken = cookieStore.get(COOKIE_NAMES.JWT)?.value;
-    if (jwtToken) {
-      const claims = await verifyAccessToken(jwtToken, PORTAL_CLIENT_ID, JWT_TYP.ACCESS_TOKEN);
-      if (claims?.sub) {
-        userId = claims.sub;
-        const jti = claims.jti;
-        const jtiExp = claims.exp;
-        // jti 黑名单写入（Gateway 离线验签即时拦截）。
-        // `revokeJti` 与 `revokeUserAccessByUserId` 同属"内部整体 try/catch、永不抛出"
-        // 的尽力而为原语（ADR-011），失败由 lib/session/revoke 自行记日志，
-        // 故此处不写 catch——此前那个 catch 不可达。
-        if (jti && jtiExp) {
-          await revokeJti(jti, jtiExp);
-        }
-      }
-    }
+    if (!jwtToken) return undefined;
+    const claims = await verifyAccessToken(jwtToken, PORTAL_CLIENT_ID, JWT_TYP.ACCESS_TOKEN);
+    if (!claims?.sub) return undefined;
+    if (claims.jti && claims.exp) await revokeJti(claims.jti, claims.exp);
+    return claims.sub;
   } catch (err) {
     const mapped = mapDomainError(err);
     log.error('JWT 解码异常', { error: mapped.error, message: mapped.message });
+    return undefined;
   }
+}
 
-  // 2. 撤销 login_session 的 jti（独立 try/catch）
+async function revokeLoginSessionJti(cookieStore: Awaited<ReturnType<typeof cookies>>): Promise<void> {
   try {
     const loginSession = cookieStore.get(COOKIE_NAMES.LOGIN_SESSION)?.value;
-    if (loginSession) {
-      const payload = decodeJwtPayload(loginSession);
-      if (payload?.jti && payload.exp) {
-        await revokeJti(payload.jti, payload.exp);
-      }
-    }
+    if (!loginSession) return;
+    const payload = decodeJwtPayload(loginSession);
+    if (payload?.jti && payload.exp) await revokeJti(payload.jti, payload.exp);
   } catch (e) {
     log.error('Login Session jti 撤销失败', { error: (e as Error).message });
   }
+}
 
-  // 3. DB: 标记当前 Refresh Token revoked（阻止 refresh 端点续期）
+async function revokeCurrentRefresh(): Promise<void> {
   try {
     const refreshToken = await getRefreshTokenFromCookie();
-    if (refreshToken) {
-      // tokenHash 存储的是 SHA256(token)，查询时需同样 hash 匹配
-      await revokeRefreshTokenByTokenHash(db, hashToken(refreshToken));
-    }
+    if (refreshToken) await revokeRefreshTokenByTokenHash(db, hashToken(refreshToken));
   } catch (e) {
     log.error('Refresh Token 撤销失败', { error: (e as Error).message });
   }
+}
 
-  // 4. DB: 按用户 ID 撤销全部 Refresh Token + 批量撤销 Access Token（防御纵深）
-  if (userId) {
-    try {
-      await revokeUserRefreshTokens(db, userId);
-    } catch (e) {
-      log.error('批量撤销 Refresh Token 失败', { error: (e as Error).message });
-    }
-
-    // jti 层（尽力而为）：ADR-011 分级下 Redis 故障不阻断登出；失败由
-    // lib/session/revoke 在发生处记日志（含 userId），故此处不写 catch。
-    await revokeUserAccessByUserId(userId);
-
-    // 5. 查询用户名用于日志（撤销完成后查询，失败不阻断）
-    try {
-      const user = await db
-        .select({ username: schema.users.username })
-        .from(schema.users)
-        .where(eq(schema.users.id, userId))
-        .limit(1);
-      username = user[0]?.username || userId;
-    } catch {
-      username = userId;
-    }
+async function revokeAllUserTokens(userId: string): Promise<string> {
+  try {
+    await revokeUserRefreshTokens(db, userId);
+  } catch (e) {
+    log.error('批量撤销 Refresh Token 失败', { error: (e as Error).message });
   }
+  await revokeUserAccessByUserId(userId);
+  try {
+    const user = await db
+      .select({ username: schema.users.username })
+      .from(schema.users)
+      .where(eq(schema.users.id, userId))
+      .limit(1);
+    return user[0]?.username || userId;
+  } catch {
+    return userId;
+  }
+}
 
+async function performRevocation(cookieStore: Awaited<ReturnType<typeof cookies>>): Promise<{ userId?: string; username?: string }> {
+  // 1. Access JWT：jti 黑名单（Gateway 离线验签即时拦截）
+  const userId = await revokeAccessJwt(cookieStore);
+
+  // 2. Login Session jti 黑名单
+  await revokeLoginSessionJti(cookieStore);
+
+  // 3. 当前 Refresh Token 标记 revoked
+  await revokeCurrentRefresh();
+
+  // 4. 按用户撤销全部 RT + 批量撤销 AT（防御纵深）
+  const username = userId ? await revokeAllUserTokens(userId) : undefined;
   return { userId, username };
 }
 

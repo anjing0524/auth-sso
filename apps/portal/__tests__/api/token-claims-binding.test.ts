@@ -119,19 +119,6 @@ beforeEach(async () => {
  * `currentDate` 传入被冻结的时刻：jose 的时间校验（nbf/exp/iat）以它为"现在"，
  * 否则在冻结时钟下会把令牌判为"尚未生效"。
  */
-async function verifyIdTokenAgainstJwksWithAud(
-  token: string,
-  clientId: string,
-  currentDate?: Date,
-) {
-  const publicKey = await importJWK(JSON.parse(jwksRow.publicKey), 'ES256');
-  const { payload } = await jwtVerify(token, publicKey, {
-    issuer: ISSUER,
-    audience: clientId,
-    ...(currentDate ? { currentDate } : {}),
-  });
-  return { payload };
-}
 
 describe('ID Token 的 claims 契约（对外 OIDC 契约，OIDC Core §2）', () => {
   /**

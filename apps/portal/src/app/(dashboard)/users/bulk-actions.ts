@@ -46,52 +46,73 @@ function loadUserScoped(operatorId: string, userId: string) {
  * - 禁止把操作者自己禁用（与单条 toggle 规则一致；启用自己允许）；
  * - 每个用户独立事务 + 作用域守卫；成功后撤销其活跃 JWT，状态即时生效。
  */
+function validateBulkRequest(
+  ids: string[],
+  status: BulkStatus,
+  operatorId: string,
+): { ok: true; unique: string[] } | { ok: false; message: string } {
+  if (!Array.isArray(ids) || ids.length === 0 || ids.length > MAX_BULK) {
+    return { ok: false, message: `一次最多操作 ${MAX_BULK} 个用户` };
+  }
+  if (status !== 'ACTIVE' && status !== 'DISABLED') {
+    return { ok: false, message: '非法的目标状态' };
+  }
+  const unique = [...new Set(ids)];
+  for (const id of unique) {
+    const v = validate(UserIdentityInputSchema, { id });
+    if (!v.ok) return { ok: false, message: v.response.message };
+  }
+  if (status === 'DISABLED' && unique.includes(operatorId)) {
+    throw new BusinessRuleViolationError('不能禁用自己的账号', USER_ERRORS.CANNOT_DISABLE_SELF);
+  }
+  return { ok: true, unique };
+}
+
+async function applyUserStatus(
+  operatorId: string,
+  userId: string,
+  status: BulkStatus,
+): Promise<{ changed: boolean; unlocked: boolean }> {
+  let unlocked = false;
+  const changed = await withScopedRow(loadUserScoped(operatorId, userId), async (tx, row) => {
+    if (!row || row.status === status) return false;
+    if (row.status === USER_LOCKED) {
+      if (status !== USER_ACTIVE) {
+        throw new BusinessRuleViolationError('已锁定的用户请先解锁，不能直接禁用');
+      }
+      unlocked = true;
+    }
+    await tx.update(schema.users).set({ status }).where(eq(schema.users.id, userId));
+    return true;
+  });
+  return { changed, unlocked };
+}
+
+async function afterStatusChange(userId: string, unlocked: boolean): Promise<void> {
+  await revokeUserAccessByUserId(userId);
+  if (!unlocked) return;
+  try {
+    await clearUserBruteForceCounters(userId);
+  } catch {
+    // 计数清理失败不阻断状态恢复；下次登录仍按窗口继续限制
+  }
+}
+
 export const bulkUpdateUserStatusAction = withAuth(
   { permissions: [USER_PERMISSIONS.UPDATE], audit: 'USER_UPDATE' },
   async (ctx: AuthContext, ids: string[], status: BulkStatus): Promise<ApiResponse<{ updated: number; failed: number }>> => {
-    if (!Array.isArray(ids) || ids.length === 0 || ids.length > MAX_BULK) {
-      return { success: false, error: COMMON_ERRORS.VALIDATION_ERROR, message: `一次最多操作 ${MAX_BULK} 个用户` };
-    }
-    if (status !== 'ACTIVE' && status !== 'DISABLED') {
-      return { success: false, error: COMMON_ERRORS.VALIDATION_ERROR, message: '非法的目标状态' };
-    }
-    const unique = [...new Set(ids)];
-    for (const id of unique) {
-      const v = validate(UserIdentityInputSchema, { id });
-      if (!v.ok) return v.response;
-    }
-    if (status === 'DISABLED' && unique.includes(ctx.userId)) {
-      throw new BusinessRuleViolationError('不能禁用自己的账号', USER_ERRORS.CANNOT_DISABLE_SELF);
+    const v = validateBulkRequest(ids, status, ctx.userId);
+    if (!v.ok) {
+      return { success: false, error: COMMON_ERRORS.VALIDATION_ERROR, message: v.message };
     }
 
     let updated = 0;
     let failed = 0;
-    for (const id of unique) {
-      let unlocked = false;
+    for (const id of v.unique) {
       try {
-        const changed = await withScopedRow(loadUserScoped(ctx.userId, id), async (tx, row) => {
-          if (!row || row.status === status) return false;
-          // LOCKED 只能通过解锁语义恢复；批量禁用锁定用户直接失败，避免绕过状态机
-          if (row.status === USER_LOCKED) {
-            if (status !== USER_ACTIVE) {
-              throw new BusinessRuleViolationError('已锁定的用户请先解锁，不能直接禁用');
-            }
-            unlocked = true;
-          }
-          await tx.update(schema.users).set({ status }).where(eq(schema.users.id, id));
-          return true;
-        });
-        if (changed) {
-          // 状态变更即时生效：撤销该用户活跃 JWT（失败由 lib/session/revoke 记日志，不阻断）
-          await revokeUserAccessByUserId(id);
-          // 批量恢复锁定账号时同步清空暴力破解计数，否则界面已恢复但窗口期内仍被锁
-          if (unlocked) {
-            try {
-              await clearUserBruteForceCounters(id);
-            } catch {
-              // 计数清理失败不阻断状态恢复；下次登录仍按窗口继续限制
-            }
-          }
+        const result = await applyUserStatus(ctx.userId, id, status);
+        if (result.changed) {
+          await afterStatusChange(id, result.unlocked);
           updated += 1;
         }
       } catch {

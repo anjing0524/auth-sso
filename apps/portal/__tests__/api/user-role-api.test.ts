@@ -18,7 +18,7 @@ import { createTestRequest } from '../helpers/test-utils';
 import * as schema from '@/db/schema';
 
 // vi.mock 工厂会被提升；使用 var 避免它在 ESM 模块初始化期间触发 TDZ。
-var td = createTestDbHandle();
+const td = createTestDbHandle();
 
 vi.mock('@/infrastructure/db', () => ({
   get db() { return td.db; },

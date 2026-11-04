@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   ShieldCheck,
   AlertCircle,
@@ -45,6 +46,7 @@ const brandPoints = [
 ];
 
 export default function LoginForm({ sessionId, initialError }: LoginFormProps) {
+  const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(initialError ?? null);
   const [formData, setFormData] = useState({ email: '', password: '' });
@@ -107,7 +109,7 @@ export default function LoginForm({ sessionId, initialError }: LoginFormProps) {
       if (data.redirect) {
         window.location.href = data.redirect;
       } else {
-        window.location.href = '/dashboard';
+        router.replace('/dashboard');
       }
     } catch (err) {
       const error = err as Error;

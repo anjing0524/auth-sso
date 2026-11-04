@@ -13,7 +13,7 @@
  * @vitest-environment node
  */
 import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest';
-import { and, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { NextRequest } from 'next/server';
 import { createTestDbHandle, seedTestData } from '../helpers/test-db';
 import { seedAdminUser, seedPortalClient, seedRootDept } from '../helpers/seed-fixtures';

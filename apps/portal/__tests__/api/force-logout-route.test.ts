@@ -25,10 +25,8 @@
  * @vitest-environment node
  */
 import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest';
-import { eq } from 'drizzle-orm';
 import { createTestDbHandle, seedTestData } from '../helpers/test-db';
 import { seedRootDept, seedAdminUser, seedSuperAdminRole, seedUserRoleBinding } from '../helpers/seed-fixtures';
-import * as schema from '@/db/schema';
 
 const { mocks, tdHolder, faultHolder } = vi.hoisted(() => ({
   mocks: {

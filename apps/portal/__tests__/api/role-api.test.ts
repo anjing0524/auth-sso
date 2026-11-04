@@ -12,7 +12,6 @@
  * @vitest-environment node
  */
 import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest';
-import { NextResponse } from 'next/server';
 import { createTestDbHandle, seedTestData } from '../helpers/test-db';
 import { seedAdminUser, seedRootDept, seedSuperAdminRole, seedUserRoleBinding } from '../helpers/seed-fixtures';
 import { createTestRequest } from '../helpers/test-utils';

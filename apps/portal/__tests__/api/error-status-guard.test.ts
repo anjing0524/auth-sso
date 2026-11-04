@@ -48,7 +48,7 @@ describe('领域错误状态码（压缩安全）', () => {
     const classes = parseSubclassSupers(readFileSync(join(DOMAIN_DIR, 'errors.ts'), 'utf-8'));
     expect(classes.length).toBeGreaterThanOrEqual(10);
     const missing = classes
-      .filter(({ name, superArgs }) => !/,\s*[1-5]\d\d\s*$/.test(superArgs))
+      .filter(({ superArgs }) => !/,\s*[1-5]\d\d\s*$/.test(superArgs))
       .map(({ name }) => name);
     expect(missing, `缺少显式状态码的子类：${missing.join(', ')}`).toEqual([]);
   });

@@ -66,37 +66,85 @@ async function resolveBoundSessionId(
   }
 }
 
+
+type LoginInput = z.infer<typeof LoginSchema>;
+
+type LoginInputResult =
+  | { ok: true; data: LoginInput }
+  | { ok: false; response: NextResponse };
+
+/** 解析请求体 + Zod 门禁；错误全部在入口返回，Controller 主流程保持线性。 */
+async function readLoginInput(request: NextRequest): Promise<LoginInputResult> {
+  const body: unknown = await request.json().catch(() => null);
+  if (body === null || typeof body !== 'object') {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        { error: COMMON_ERRORS.VALIDATION_ERROR, message: '请求体不是合法的 JSON 对象' },
+        { status: 400 },
+      ),
+    };
+  }
+  const parsed = LoginSchema.safeParse(body);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        { error: COMMON_ERRORS.VALIDATION_ERROR, message: parsed.error.issues[0]!.message },
+        { status: 400 },
+      ),
+    };
+  }
+  return { ok: true, data: parsed.data };
+}
+
+/** IP 维度限流；命中时记录失败日志并返回 429。 */
+async function checkIpLimitGate(ip: string, email: string, ua: string | null): Promise<NextResponse | null> {
+  const message = await checkIpRateLimit(ip);
+  if (!message) return null;
+  writeLoginLog({ username: email, eventType: 'LOGIN_FAILED', ip, userAgent: ua, failReason: 'IP 登录失败次数过多' });
+  return NextResponse.json(
+    { error: COMMON_ERRORS.RATE_LIMITED, message },
+    { status: 429, headers: { 'Retry-After': '900' } },
+  );
+}
+
+/** 账户 × IP 锁定；命中时计入 IP 维度并返回 429/423。 */
+async function checkBruteForceGate(
+  user: { id: string },
+  ip: string,
+): Promise<NextResponse | null> {
+  const bruteCheck = await checkBruteForce(user.id, ip);
+  if (bruteCheck.rateLimited) {
+    await incrementBruteForce(null, ip);
+    return NextResponse.json(
+      { error: COMMON_ERRORS.RATE_LIMITED, message: bruteCheck.message },
+      { status: 429, headers: { 'Retry-After': String(bruteCheck.retryAfterSeconds ?? 900) } },
+    );
+  }
+  if (bruteCheck.locked) {
+    await incrementBruteForce(null, ip);
+    return NextResponse.json(
+      { error: AUTH_ERRORS.ACCOUNT_LOCKED, message: bruteCheck.message },
+      { status: 423, headers: { 'Retry-After': String(bruteCheck.retryAfterSeconds ?? 900) } },
+    );
+  }
+  return null;
+}
+
 export async function POST(request: NextRequest) {
   try {
     // 1. Zod 门禁（H-31：malformed JSON / 非 JSON body 必须 400，而不是落 500）
-    const body: unknown = await request.json().catch(() => null);
-    if (body === null || typeof body !== 'object') {
-      return NextResponse.json(
-        { error: COMMON_ERRORS.VALIDATION_ERROR, message: '请求体不是合法的 JSON 对象' },
-        { status: 400 },
-      );
-    }
-    const parsed = LoginSchema.safeParse(body);
-    if (!parsed.success) {
-      return NextResponse.json(
-        { error: COMMON_ERRORS.VALIDATION_ERROR, message: parsed.error.issues[0]!.message },
-        { status: 400 },
-      );
-    }
-    const { email, password, session_id } = parsed.data;
+    const input = await readLoginInput(request);
+    if (!input.ok) return input.response;
+    const { email, password, session_id } = input.data;
     // ADR-025：IP 维度计数键的占位值必须与 brute-force 模块一致（缺失 → 'unknown'）
     const ip = extractClientIP(request.headers) ?? 'unknown';
     const ua = extractUserAgent(request.headers);
 
     // 2. IP 维度限流（ADR-025）：在触达用户表之前削峰，使撞库/枚举有成本
-    const ipLimited = await checkIpRateLimit(ip);
-    if (ipLimited) {
-      writeLoginLog({ username: email, eventType: 'LOGIN_FAILED', ip, userAgent: ua, failReason: 'IP 登录失败次数过多' });
-      return NextResponse.json(
-        { error: COMMON_ERRORS.RATE_LIMITED, message: ipLimited },
-        { status: 429, headers: { 'Retry-After': '900' } },
-      );
-    }
+    const ipLimited = await checkIpLimitGate(ip, email, ua);
+    if (ipLimited) return ipLimited;
 
     // 3. DB 查询用户（提前查询，userId 供后续暴力破解+校验复用，消除双查）
     const rows = await db.select().from(schema.users).where(eq(schema.users.email, email)).limit(1);
@@ -111,22 +159,8 @@ export async function POST(request: NextRequest) {
     const user = rows[0]!;
 
     // 4. 账户 × IP 维度锁定（ADR-025：单 IP 锁不死账户；同时受 IP 总量约束）
-    const bruteCheck = await checkBruteForce(user.id, ip);
-    if (bruteCheck.rateLimited) {
-      await incrementBruteForce(null, ip);
-      return NextResponse.json(
-        { error: COMMON_ERRORS.RATE_LIMITED, message: bruteCheck.message },
-        { status: 429, headers: { 'Retry-After': String(bruteCheck.retryAfterSeconds ?? 900) } },
-      );
-    }
-    if (bruteCheck.locked) {
-      // 被锁期间继续尝试的来源要计入 IP 维度（否则锁定期成了攻击者的免费窗口）
-      await incrementBruteForce(null, ip);
-      return NextResponse.json(
-        { error: AUTH_ERRORS.ACCOUNT_LOCKED, message: bruteCheck.message },
-        { status: 423, headers: { 'Retry-After': String(bruteCheck.retryAfterSeconds ?? 900) } },
-      );
-    }
+    const bruteLimited = await checkBruteForceGate(user, ip);
+    if (bruteLimited) return bruteLimited;
 
     // 5. 领域校验：状态 + 密码
     try {

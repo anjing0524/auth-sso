@@ -21,7 +21,7 @@
  *
  * @module apps/portal/__tests__/helpers/repo-scan
  */
-import { existsSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 

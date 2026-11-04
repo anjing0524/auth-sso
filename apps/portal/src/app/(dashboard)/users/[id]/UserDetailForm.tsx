@@ -84,7 +84,7 @@ export default function UserDetailForm({ id, initialUser: serverUser, canUpdate,
       toast.error('用户不存在');
       router.push(returnHref);
     }
-  }, [serverUser, router]);
+  }, [serverUser, router, returnHref]);
 
   if (!serverUser) return null;
 

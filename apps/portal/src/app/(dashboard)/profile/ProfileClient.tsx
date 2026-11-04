@@ -94,6 +94,7 @@ interface ProfileClientProps {
  * 修改密码 Dialog 组件
  */
 function ChangePasswordDialog() {
+  const router = useRouter();
   const { reportFailure } = useFieldFailure();
   const [open, setOpen] = React.useState(false);
   const [isPending, startTransition] = useTransition();
@@ -125,7 +126,7 @@ function ChangePasswordDialog() {
         toast.success(res.message ?? '密码已更新，请重新登录');
         setOpen(false);
         // 服务端已失效会话，短暂延迟后刷新页面引导用户重登
-        setTimeout(() => window.location.assign('/login'), 1500);
+        setTimeout(() => router.replace('/login'), 1500);
       } else {
         reportFailure(res);
         requestAnimationFrame(() => document.getElementById('currentPassword')?.focus());
@@ -549,7 +550,7 @@ export default function ProfileClient({
                         setLoggingOut(true);
                         try {
                           await fetch('/api/auth/logout', { method: 'POST' });
-                          window.location.href = '/login';
+                          router.replace('/login');
                         } finally {
                           setLoggingOut(false);
                         }

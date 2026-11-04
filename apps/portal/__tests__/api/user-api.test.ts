@@ -11,7 +11,6 @@
  * @vitest-environment node
  */
 import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest';
-import { NextResponse } from 'next/server';
 import { USER_ERRORS } from '@auth-sso/contracts';
 import { createTestRequest } from '../helpers/test-utils';
 import { createTestDbHandle, seedTestData } from '../helpers/test-db';

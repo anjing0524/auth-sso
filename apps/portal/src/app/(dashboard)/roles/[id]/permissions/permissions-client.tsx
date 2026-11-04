@@ -244,7 +244,7 @@ export default function RolePermissionsPage({ role, returnHref = '/roles' }: Rol
       .filter((p) => (kw ? p.name.toLowerCase().includes(kw) || p.code.toLowerCase().includes(kw) : true))
       .map((p) => ({ ...p, depth: p.type === 'API' ? 0 : depthOf(p) }))
       .sort((a, b) => a.type.localeCompare(b.type) || a.code.localeCompare(b.code));
-  }, [permissions, scope, assignedIds, savedIds, keyword, onlySelected, onlyChanged, addedIds, removedIds, statusFilter]);
+  }, [permissions, scope, assignedIds, keyword, onlySelected, onlyChanged, addedIds, removedIds, statusFilter]);
 
   const scopeItemIds = scopedItems.map((p) => p.id);
   const allScopeSelected = scopeItemIds.length > 0 && scopeItemIds.every((id) => assignedIds.has(id));

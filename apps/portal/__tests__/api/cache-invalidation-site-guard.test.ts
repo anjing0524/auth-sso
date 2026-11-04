@@ -16,10 +16,9 @@
  * @vitest-environment node
  */
 import { describe, it, expect } from 'vitest';
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { REPO_ROOT, assertScannedNonEmpty, isCommentLine, walk } from '../helpers/repo-scan';
-import { dirname, join, relative, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join, relative } from 'node:path';
 
 const API_DIR = join(REPO_ROOT, 'apps/portal/src/app/api');
 

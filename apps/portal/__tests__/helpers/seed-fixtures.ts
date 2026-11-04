@@ -154,7 +154,7 @@ export function seedPortalClient(overrides: Partial<NonNullable<SeedData['client
  * 生成一次即缓存：每次调用现生成会让"同一测试里签发再验签"失败。
  */
 const fixtureKeyPair = (() => {
-  const { privateKey, publicKey } = crypto.generateKeyPairSync('ec', {
+  const { privateKey } = crypto.generateKeyPairSync('ec', {
     namedCurve: 'prime256v1',
   });
   const priv = privateKey.export({ format: 'jwk' }) as JsonWebKey;

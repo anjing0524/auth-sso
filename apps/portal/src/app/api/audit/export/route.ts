@@ -102,97 +102,137 @@ function createCsvStream(
   });
 }
 
+
+interface ExportFilters {
+  eventType?: LoginEventType;
+  operation?: AuditOperation;
+  startDate?: string;
+  endDate?: string;
+  userId?: string;
+  accessStatus?: 'SUCCESS' | 'FAILURE';
+  resourceType?: string;
+  keyword?: string;
+}
+
+type ParsedExport = { ok: true; type: string; filters: ExportFilters } | { ok: false; response: NextResponse };
+
+function readEnumParam<T extends string>(raw: string | null, values: readonly T[]): T | undefined {
+  return values.includes(raw as T) ? (raw as T) : undefined;
+}
+
+function readExportFilters(searchParams: URLSearchParams): ExportFilters {
+  const statusParam = searchParams.get('status');
+  return {
+    eventType: readEnumParam(searchParams.get('eventType'), LOGIN_EVENT_VALUES),
+    operation: readEnumParam(searchParams.get('operation'), AUDIT_OPERATION_VALUES),
+    startDate: searchParams.get('startDate') || undefined,
+    endDate: searchParams.get('endDate') || undefined,
+    userId: searchParams.get('userId') || undefined,
+    accessStatus: statusParam === 'SUCCESS' || statusParam === 'FAILURE' ? statusParam : undefined,
+    resourceType: searchParams.get('resourceType')?.trim().slice(0, 50) || undefined,
+    keyword: searchParams.get('keyword')?.trim() || undefined,
+  };
+}
+
+function validateExportFilters(searchParams: URLSearchParams, filters: ExportFilters): NextResponse | null {
+  const keywordParam = searchParams.get('keyword');
+  if (keywordParam && keywordParam.length > 100) {
+    return restError(COMMON_ERRORS.VALIDATION_ERROR, 'keyword 最长 100 字符', 400);
+  }
+  if ((filters.startDate && !isIsoDate(filters.startDate)) || (filters.endDate && !isIsoDate(filters.endDate))) {
+    return restError(COMMON_ERRORS.VALIDATION_ERROR, 'startDate/endDate 必须是 YYYY-MM-DD', 400);
+  }
+  if (filters.userId && !isUuid(filters.userId)) {
+    return restError(COMMON_ERRORS.VALIDATION_ERROR, 'userId 必须是 UUID', 400);
+  }
+  return null;
+}
+
+/** 解析并校验导出筛选；错误直接返回 400 信封。 */
+function parseExportQuery(searchParams: URLSearchParams): ParsedExport {
+  const type = searchParams.get('type') || 'login';
+  const filters = readExportFilters(searchParams);
+  const validationError = validateExportFilters(searchParams, filters);
+  return validationError
+    ? { ok: false, response: validationError }
+    : { ok: true, type, filters };
+}
+
+function commonFilterParams(filters: ExportFilters) {
+  return {
+    ...(filters.startDate ? { startDate: filters.startDate } : {}),
+    ...(filters.endDate ? { endDate: filters.endDate } : {}),
+    ...(filters.userId ? { userId: filters.userId } : {}),
+    ...(filters.keyword ? { keyword: filters.keyword } : {}),
+  };
+}
+
+function loginExportStream(filters: ExportFilters): ReadableStream<Uint8Array> {
+  return createCsvStream('时间,用户,事件类型,IP地址,User-Agent,失败原因', async (pageNo) => {
+    const res = await getLoginLogs({
+      page: pageNo,
+      pageSize: MAX_PAGE_SIZE,
+      ...(filters.eventType ? { eventType: filters.eventType } : {}),
+      ...commonFilterParams(filters),
+    });
+    return {
+      rows: res.data.map((l) => [l.createdAt, l.username, l.eventType, l.ip, l.userAgent, l.failReason]),
+      hasMore: pageNo < res.pagination.totalPages,
+    };
+  });
+}
+
+function operationExportStream(filters: ExportFilters): ReadableStream<Uint8Array> {
+  return createCsvStream('时间,操作人,操作类型,目标资源,详情,IP地址', async (pageNo) => {
+    const res = await getAuditLogs({
+      page: pageNo,
+      pageSize: MAX_PAGE_SIZE,
+      ...(filters.operation ? { operation: filters.operation } : {}),
+      ...commonFilterParams(filters),
+    });
+    return {
+      rows: res.data.map((l) => [l.createdAt, l.username, l.operation, l.url, l.params, l.ip]),
+      hasMore: pageNo < res.pagination.totalPages,
+    };
+  });
+}
+
+function accessExportStream(filters: ExportFilters): ReadableStream<Uint8Array> {
+  return createCsvStream('时间,用户,方法,路径,资源类型,资源ID,状态码,耗时(ms),IP地址,User-Agent', async (pageNo) => {
+    const res = await getAccessLogs({
+      page: pageNo,
+      pageSize: MAX_PAGE_SIZE,
+      ...commonFilterParams(filters),
+      ...(filters.accessStatus ? { status: filters.accessStatus } : {}),
+      ...(filters.resourceType ? { resourceType: filters.resourceType } : {}),
+    });
+    return {
+      rows: res.data.map((l) => [
+        l.createdAt, l.username, l.method, l.path, l.resourceType, l.resourceId,
+        l.status, l.duration, l.ip, l.userAgent,
+      ]),
+      hasMore: pageNo < res.pagination.totalPages,
+    };
+  });
+}
+
+function buildExportStream(type: string, filters: ExportFilters): ReadableStream<Uint8Array> {
+  if (type === 'login') return loginExportStream(filters);
+  if (type === 'operation') return operationExportStream(filters);
+  return accessExportStream(filters);
+}
+
 export async function GET(request: NextRequest) {
   return withPermission(
     { permissions: [AUDIT_PERMISSIONS.EXPORT] },
     async () => {
-      const { searchParams } = new URL(request.url);
-      const type = searchParams.get('type') || 'login';
-      const eventTypeParam = searchParams.get('eventType');
-      const operationParam = searchParams.get('operation');
-      const eventType = LOGIN_EVENT_VALUES.includes(eventTypeParam as LoginEventType)
-        ? (eventTypeParam as LoginEventType) : undefined;
-      const operation = AUDIT_OPERATION_VALUES.includes(operationParam as AuditOperation)
-        ? (operationParam as AuditOperation) : undefined;
-
-      // H-28：日期 / 用户筛选此前完全没有解析（列表支持、导出丢弃，导出结果与列表不一致）。
-      // 与审计读模型共用 isIsoDate；非法值显式 400 而不是静默忽略。
-      const startDate = searchParams.get('startDate') || undefined;
-      const endDate = searchParams.get('endDate') || undefined;
-      const userId = searchParams.get('userId') || undefined;
-      // 访问日志专属筛选（状态/资源类型）；非法状态忽略
-      const statusParam = searchParams.get('status');
-      const accessStatus = statusParam === 'SUCCESS' || statusParam === 'FAILURE' ? statusParam : undefined;
-      const resourceType = searchParams.get('resourceType')?.trim().slice(0, 50) || undefined;
-      const keywordParam = searchParams.get('keyword') || undefined;
-      if (keywordParam && keywordParam.length > 100) {
-        return restError(COMMON_ERRORS.VALIDATION_ERROR, 'keyword 最长 100 字符', 400);
-      }
-      const keyword = keywordParam?.trim() || undefined;
-      if ((startDate && !isIsoDate(startDate)) || (endDate && !isIsoDate(endDate))) {
-        return restError(COMMON_ERRORS.VALIDATION_ERROR, 'startDate/endDate 必须是 YYYY-MM-DD', 400);
-      }
-      if (userId && !isUuid(userId)) {
-        return restError(COMMON_ERRORS.VALIDATION_ERROR, 'userId 必须是 UUID', 400);
-      }
-
-      const stream = type === 'login'
-        ? createCsvStream('时间,用户,事件类型,IP地址,User-Agent,失败原因', async (pageNo) => {
-            const res = await getLoginLogs({
-              page: pageNo,
-              pageSize: MAX_PAGE_SIZE,
-              ...(eventType ? { eventType } : {}),
-              ...(startDate ? { startDate } : {}),
-              ...(endDate ? { endDate } : {}),
-              ...(userId ? { userId } : {}),
-              ...(keyword ? { keyword } : {}),
-            });
-            return {
-              rows: res.data.map((l) => [l.createdAt, l.username, l.eventType, l.ip, l.userAgent, l.failReason]),
-              hasMore: pageNo < res.pagination.totalPages,
-            };
-          })
-        : type === 'operation'
-          ? createCsvStream('时间,操作人,操作类型,目标资源,详情,IP地址', async (pageNo) => {
-              const res = await getAuditLogs({
-                page: pageNo,
-                pageSize: MAX_PAGE_SIZE,
-                ...(operation ? { operation } : {}),
-                ...(startDate ? { startDate } : {}),
-                ...(endDate ? { endDate } : {}),
-                ...(userId ? { userId } : {}),
-                ...(keyword ? { keyword } : {}),
-              });
-              return {
-                rows: res.data.map((l) => [l.createdAt, l.username, l.operation, l.url, l.params, l.ip]),
-                hasMore: pageNo < res.pagination.totalPages,
-              };
-            })
-          : createCsvStream('时间,用户,方法,路径,资源类型,资源ID,状态码,耗时(ms),IP地址,User-Agent', async (pageNo) => {
-              const res = await getAccessLogs({
-                page: pageNo,
-                pageSize: MAX_PAGE_SIZE,
-                ...(startDate ? { startDate } : {}),
-                ...(endDate ? { endDate } : {}),
-                ...(userId ? { userId } : {}),
-                ...(keyword ? { keyword } : {}),
-                ...(accessStatus ? { status: accessStatus } : {}),
-                ...(resourceType ? { resourceType } : {}),
-              });
-              return {
-                rows: res.data.map((l) => [
-                  l.createdAt, l.username, l.method, l.path, l.resourceType, l.resourceId,
-                  l.status, l.duration, l.ip, l.userAgent,
-                ]),
-                hasMore: pageNo < res.pagination.totalPages,
-              };
-            });
-
-      return new NextResponse(stream, {
+      const parsed = parseExportQuery(new URL(request.url).searchParams);
+      if (!parsed.ok) return parsed.response;
+      const { type, filters } = parsed;
+      return new NextResponse(buildExportStream(type, filters), {
         headers: {
           'Content-Type': 'text/csv; charset=utf-8',
           'Content-Disposition': `attachment; filename="audit-${type}-${new Date().toISOString().slice(0, 10)}.csv"`,
-          // 流式响应无 Content-Length；显式 no-store 防止中间层缓存半截 CSV
           'Cache-Control': 'no-store',
         },
       });

@@ -137,7 +137,12 @@ export default function DepartmentTree({ departments, deletionStats = {}, autoOp
   }, [fieldError, isEditOpen]);
 
   const toggleExpand = (id: string) => {
-    setExpanded(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
+    setExpanded(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   };
 
   const closeAddDialog = () => {

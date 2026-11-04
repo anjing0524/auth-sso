@@ -150,10 +150,11 @@ async function applyStatementIgnoringIdempotentErrors(
 ): Promise<void> {
   try {
     await sql.unsafe(stmt);
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
     // 幂等错误（already exists / duplicate）不告警；判据与 migrate.ts 共用一处
-    if (!isIdempotentMigrationError(String(err.message ?? ''))) {
-      console.warn(`[globalSetup] SQL 警告: ${err.message?.slice(0, 100)}`);
+    if (!isIdempotentMigrationError(message)) {
+      console.warn(`[globalSetup] SQL 警告: ${message.slice(0, 100)}`);
     }
   }
 }
