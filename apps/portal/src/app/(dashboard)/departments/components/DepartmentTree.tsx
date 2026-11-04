@@ -600,7 +600,7 @@ export default function DepartmentTree({ departments, deletionStats = {}, autoOp
                   </SelectContent>
                 </Select>
                 {selected?.parentId === null ? (
-                  <p className="text-[10px] leading-4 text-muted-foreground">根部门为组织树单例，不可停用。</p>
+                  <p className="text-[11px] leading-4 text-muted-foreground">根部门为组织树单例，不可停用。</p>
                 ) : form.status === 'DISABLED' ? (
                   <p className="rounded bg-badge-warning-bg px-2 py-1 text-[10px] leading-4 text-badge-warning-fg">
                     停用后不能再向该部门新增用户/角色/子部门；已有对象保留，可随时恢复启用。

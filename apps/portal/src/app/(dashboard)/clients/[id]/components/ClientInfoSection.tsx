@@ -128,7 +128,7 @@ export function ClientInfoSection({
                 onChange={(e) => onFormChange({ logoUrl: e.target.value })}
                 placeholder="https://example.com/logo.png"
               />
-              <p className="text-[10px] leading-4 text-muted-foreground">用于应用列表头像；不填则显示名称首字母。</p>
+              <p className="text-[11px] leading-4 text-muted-foreground">用于应用列表头像；不填则显示名称首字母。</p>
             </div>
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-2">

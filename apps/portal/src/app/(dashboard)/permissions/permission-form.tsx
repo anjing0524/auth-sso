@@ -252,7 +252,7 @@ export default function PermissionForm({ mode, menuOptions, permission, clients 
                     ))}
                   </SelectContent>
                 </Select>
-                <p className="text-[10px] leading-4 text-muted-foreground">{isBuiltin ? '内置权限的归属应用由服务端代码固定，不可修改。' : '归属应用决定该权限属于哪个 OAuth Client；接口编码建议以 Client ID 开头。'}</p>
+                <p className="text-[11px] leading-4 text-muted-foreground">{isBuiltin ? '内置权限的归属应用由服务端代码固定，不可修改。' : '归属应用决定该权限属于哪个 OAuth Client；接口编码建议以 Client ID 开头。'}</p>
               </div>
             )}
             {isMenu && (
@@ -279,7 +279,7 @@ export default function PermissionForm({ mode, menuOptions, permission, clients 
               <div className="space-y-2">
                 <Label htmlFor="perm-path">路由路径{form.type === 'PAGE' ? '（必填）' : '（可选）'}</Label>
                 <Input id="perm-path" aria-required={form.type === 'PAGE'} value={form.path} maxLength={200} onChange={e => setForm({ ...form, path: e.target.value })} placeholder="/users" />
-                <p className="text-[10px] leading-4 text-muted-foreground">以 / 开头，如 /users；PAGE 类型用于侧边栏跳转。</p>
+                <p className="text-[11px] leading-4 text-muted-foreground">以 / 开头，如 /users；PAGE 类型用于侧边栏跳转。</p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="perm-icon">图标</Label>
