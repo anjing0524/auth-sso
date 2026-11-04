@@ -331,7 +331,9 @@ export default function UserTable({ users, pagination, filters, isFiltered = fal
         {user.roleCount === 0 ? (
           <Badge variant="warning" title="未分配角色：即使状态正常也无法登录门户">未分配</Badge>
         ) : (
-          <span className="text-[12px] text-muted-foreground"><span className="tabular-nums text-foreground">{user.roleCount}</span> 个角色</span>
+          <Badge variant="secondary" title={`已分配 ${user.roleCount} 个角色`}>
+            <span className="tabular-nums">{user.roleCount}</span> 个角色
+          </Badge>
         )}
       </TableCell>
       <TableCell className="hidden md:table-cell">

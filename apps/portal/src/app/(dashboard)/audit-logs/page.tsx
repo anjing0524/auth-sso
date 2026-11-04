@@ -236,7 +236,7 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
       <div className="flex shrink-0 flex-wrap items-center gap-1.5 xl:gap-3">
         <h1 className="type-section-title shrink-0 text-foreground">审计日志</h1>
         <AuditTabs tab={tab} hrefs={{ login: pageHref('login', 1, null, null, range, keyword, chipStartDate, chipEndDate, accessStatus, validAccessResourceType, pageSize), operation: pageHref('operation', 1, null, null, range, keyword, chipStartDate, chipEndDate, accessStatus, validAccessResourceType, pageSize), access: pageHref('access', 1, null, null, range, keyword, chipStartDate, chipEndDate, accessStatus, validAccessResourceType, pageSize) }} />
-        <div className="order-3 flex w-full min-w-0 flex-wrap items-start gap-1.5 min-[1100px]:order-3 min-[1100px]:w-auto">
+        <div className="order-3 flex w-full min-w-0 flex-wrap items-start gap-1.5 min-[1100px]:order-3 min-[1100px]:w-auto min-[1100px]:flex-1">
           <div className="min-w-0 flex-1">
           <AuditFilters
             key={`${tab}|${eventType}|${operation}|${range}|${keyword}|${chipStartDate}|${chipEndDate}|${accessStatus}|${validAccessResourceType}|${pageSize}`}

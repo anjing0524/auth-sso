@@ -319,7 +319,8 @@ export default function DepartmentTree({ departments, deletionStats = {}, autoOp
     };
   };
   const deleteImpact = deleteTarget ? deletionImpactFor(deleteTarget.id) : null;
-  const listFlex = filtered.length <= 8 ? '' : 'flex-1';
+  // 与用户/角色/权限/应用列表页统一：列表型页面卡片填满剩余高度。
+  const listFlex = 'flex-1';
 
   return (
     <Card className={`flex min-h-0 flex-col gap-0 overflow-hidden rounded-lg border border-border/70 py-0 shadow-sm ring-0 ${listFlex}`}>
@@ -336,11 +337,6 @@ export default function DepartmentTree({ departments, deletionStats = {}, autoOp
           <>
             {departments.length > 0 ? (
               <>
-                <PermissionGuard permission={DEPARTMENT_PERMISSIONS.CREATE}>
-                  <Button onClick={() => openAdd(departments.find((d) => !d.parentId)?.id)}>
-                    <Plus className="h-4 w-4" /> 新建部门
-                  </Button>
-                </PermissionGuard>
                 <label className="flex items-center gap-1.5 text-xs text-muted-foreground max-md:w-full">
                   排序
                   <select
@@ -383,6 +379,11 @@ export default function DepartmentTree({ departments, deletionStats = {}, autoOp
                     <MoveRight className="h-4 w-4" /> 移动到…（{moveCount}）
                   </Button>
                 )}
+                <PermissionGuard permission={DEPARTMENT_PERMISSIONS.CREATE}>
+                  <Button onClick={() => openAdd(departments.find((d) => !d.parentId)?.id)}>
+                    <Plus className="h-4 w-4" /> 新建部门
+                  </Button>
+                </PermissionGuard>
                 <span role="status" aria-live="polite" className="sr-only">
                   {selectedCount > 0 ? `已选 ${selectedCount} 个部门，其中可移动 ${moveCount} 个` : ''}
                 </span>

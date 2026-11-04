@@ -28,6 +28,24 @@ import {
   DialogTrigger,
   DialogFooter,
 } from '@/components/ui/dialog';
+
+/** 把原始 User-Agent 收敛成可读标签；完整值保留在 title 中。 */
+function formatUserAgent(ua: string | null): string {
+  if (!ua) return '未知设备';
+  const browser = ua.match(/Edg\/([\d.]+)/) ? 'Edge'
+    : ua.match(/Chrome\/([\d.]+)/) ? 'Chrome'
+    : ua.match(/Firefox\/([\d.]+)/) ? 'Firefox'
+    : ua.match(/Safari\//) ? 'Safari'
+    : null;
+  const os = ua.includes('Windows') ? 'Windows'
+    : ua.includes('Mac OS X') ? 'macOS'
+    : ua.includes('Android') ? 'Android'
+    : ua.includes('iPhone') || ua.includes('iPad') ? 'iOS'
+    : ua.includes('Linux') ? 'Linux'
+    : null;
+  if (!browser && !os) return ua.length > 48 ? `${ua.slice(0, 48)}…` : ua;
+  return [browser, os].filter(Boolean).join(' · ');
+}
 import { updateOwnProfileAction, changeOwnPasswordAction } from './actions';
 import { revokeOwnSessionAction } from './session-actions';
 import { toast } from 'sonner';
@@ -450,7 +468,7 @@ export default function ProfileClient({
                   </div>
                   <div>
                     <dt className="text-[11px] text-muted-foreground">设备 / 客户端</dt>
-                    <dd className="mt-0.5 line-clamp-2 break-all text-[11px] text-muted-foreground" title={session.userAgent ?? '-'}>{session.userAgent ?? '-'}</dd>
+                    <dd className="mt-0.5 truncate text-[11px] text-muted-foreground" title={session.userAgent ?? '-'}>{formatUserAgent(session.userAgent)}</dd>
                   </div>
                 </dl>
               ) : (

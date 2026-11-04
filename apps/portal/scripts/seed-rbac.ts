@@ -199,7 +199,7 @@ export async function main() {
   const adminId = await seedRole(
     'PLATFORM_ADMIN',
     '平台管理员',
-    '显式拥有全部权限，管理全平台（非 break-glass）',
+    '显式拥有全部权限，可管理全平台',
     rootDeptId,
     1,
   );

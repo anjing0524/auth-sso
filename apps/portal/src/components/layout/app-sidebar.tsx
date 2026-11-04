@@ -99,7 +99,7 @@ export function AppSidebar({ user, dynamicMenus = [] }: {
                             {item.children?.map((sub: MenuItem) => (
                               <SidebarMenuSubItem key={sub.id}>
                                 <SidebarMenuSubButton asChild isActive={pathname === sub.url} className="h-9 rounded-lg px-4">
-                                  <Link href={sub.url}>
+                                  <Link href={sub.url} aria-current={isActive ? 'page' : undefined}>
                                     <span className="truncate text-xs font-medium" title={sub.title}>{sub.title}</span>
                                   </Link>
                                 </SidebarMenuSubButton>
@@ -124,7 +124,7 @@ export function AppSidebar({ user, dynamicMenus = [] }: {
                           : 'hover:bg-card hover:shadow-sm text-muted-foreground hover:text-foreground'
                       }`}
                     >
-                      <Link href={item.url} className="flex items-center gap-3">
+                      <Link href={item.url} aria-current={isActive ? 'page' : undefined} className="flex items-center gap-3">
                         <DynamicIcon name={item.icon || 'LayoutGrid'} className={`h-4.5 w-4.5 ${isActive ? 'text-primary' : 'opacity-60'}`} />
                         <span className={`truncate text-sm ${isActive ? 'font-semibold' : 'font-bold'}`} title={item.title}>{item.title}</span>
                       </Link>

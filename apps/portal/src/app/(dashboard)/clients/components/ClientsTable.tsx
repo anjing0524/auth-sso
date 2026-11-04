@@ -35,6 +35,7 @@ import {
 import { TableToolbar } from '@/components/shared/table-toolbar';
 import { TablePagination } from '@/components/shared/table-pagination';
 import { PermissionGuard } from '@/components/shared/permission-guard';
+import { CopyTextButton } from '@/components/shared/copy-text-button';
 /** 回调 URI 列表展示：去协议显示 host+path（完整值放 title），避免长 URL 被截成 "ps://…" */
 function formatRedirectUri(uri: string): string {
   try {
@@ -288,9 +289,12 @@ export default function ClientsTable({ clients, pagination, initialKeyword, init
       <TableCell className="hidden xl:table-cell">
         <div className="flex flex-wrap gap-1 max-w-[200px]">
           {client.redirectUris.slice(0, 1).map((uri, i) => (
-            <Badge key={i} variant="outline" title={uri} className="h-auto max-w-[210px] justify-start overflow-hidden border-border bg-card font-mono font-normal shadow-sm">
-              <span className="truncate">{formatRedirectUri(uri)}</span>
-            </Badge>
+            <span key={i} className="flex min-w-0 items-center gap-0.5">
+              <Badge variant="outline" title={uri} className="h-auto max-w-[190px] justify-start overflow-hidden border-border bg-card font-mono font-normal shadow-sm">
+                <span className="truncate">{formatRedirectUri(uri)}</span>
+              </Badge>
+              <CopyTextButton text={uri} label={`复制 ${client.name} 的回调地址`} />
+            </span>
           ))}
           {client.redirectUris.length > 1 && (
             <Badge variant="secondary" title={client.redirectUris.slice(1).join('\n')}>+{client.redirectUris.length - 1}</Badge>
