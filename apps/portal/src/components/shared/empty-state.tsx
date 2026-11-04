@@ -69,13 +69,13 @@ const KIND_DEFAULTS: Record<EmptyStateKind, { title: string; description: string
 function ActionButton({ action }: { action: EmptyStateAction }) {
   if (action.href) {
     return (
-      <Button asChild className="rounded-xl">
+      <Button asChild>
         <Link href={action.href}>{action.label}</Link>
       </Button>
     );
   }
   return (
-    <Button onClick={action.onClick} className="rounded-xl">
+    <Button onClick={action.onClick}>
       {action.label}
     </Button>
   );
@@ -85,13 +85,13 @@ function ClearFiltersButton({ action }: { action: EmptyStateClearAction }) {
   const label = action.label ?? '清除筛选';
   if (action.href) {
     return (
-      <Button asChild variant="outline" className="rounded-xl">
+      <Button asChild variant="outline">
         <Link href={action.href}>{label}</Link>
       </Button>
     );
   }
   return (
-    <Button variant="outline" className="rounded-xl" onClick={action.onClick}>
+    <Button variant="outline" onClick={action.onClick}>
       {label}
     </Button>
   );
@@ -126,7 +126,7 @@ function OnboardingSteps({
   return (
     <div className="w-full max-w-xs space-y-2">
       {steps.map((step, i) => {
-        const rowClass = 'flex items-center gap-3 rounded-xl bg-muted/30 p-3 text-left';
+        const rowClass = 'flex items-center gap-3 rounded-lg bg-muted/30 p-3 text-left';
         const inner = (
           <>
             <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">

@@ -39,7 +39,7 @@ export interface TablePaginationProps {
   pageSizeOptions?: Array<{ value: number; href: string }>;
 }
 
-const navButtonClass = 'h-7 gap-1 rounded-md px-2 text-xs';
+const navButtonClass = 'h-7 gap-1 rounded-lg px-2 text-xs';
 
 function NavButton({
   label,
@@ -129,7 +129,7 @@ export function TablePagination({
 
   const pageNode = (n: number) => {
     const isCurrent = n === page;
-    const cls = `inline-flex h-7 min-w-7 items-center justify-center rounded-md px-2 text-xs outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${
+    const cls = `inline-flex h-7 min-w-7 items-center justify-center rounded-lg px-2 text-xs outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${
       isCurrent
         ? 'border border-border bg-card font-bold shadow-sm'
         : 'text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50'

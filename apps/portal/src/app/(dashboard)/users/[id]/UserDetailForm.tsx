@@ -452,7 +452,7 @@ export default function UserDetailForm({ id, initialUser: serverUser, canUpdate,
                 </div>
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-[11px] text-muted-foreground">邮箱验证</span>
-                  <Badge variant={emailVerified ? 'success' : 'secondary'} className="text-[10px]">{emailVerified ? '已验证' : '未验证'}</Badge>
+                  <Badge variant={emailVerified ? 'success' : 'secondary'} size="sm">{emailVerified ? '已验证' : '未验证'}</Badge>
                 </div>
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-[11px] text-muted-foreground">最近登录</span>

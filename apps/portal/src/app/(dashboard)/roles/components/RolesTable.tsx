@@ -320,9 +320,9 @@ export default function RolesTable({ roles, pagination, initialKeyword, initialS
             <div className="flex items-center gap-1.5">
               <span className="max-w-[260px] truncate text-[13px] font-semibold text-foreground" title={r.name}>{r.name}</span>
               {r.isSystem && (
-                <Badge variant="secondary" className="h-5 shrink-0 px-1.5 text-[10px] font-normal">系统</Badge>
+                <Badge variant="secondary" size="sm" className="shrink-0 font-normal">系统</Badge>
               )}
-              <Badge variant="outline" className="h-5 shrink-0 px-1.5 text-[10px] font-normal" title="当前绑定用户数">
+              <Badge variant="outline" size="sm" className="shrink-0 font-normal" title="当前绑定用户数">
                 {boundUserCounts[r.id] ?? 0} 用户
               </Badge>
             </div>
@@ -331,7 +331,7 @@ export default function RolesTable({ roles, pagination, initialKeyword, initialS
             )}
             {/* <sm：状态列隐藏（空间优先给名称与操作），状态改用行内小徽章，信息不丢。 */}
             <span className="mt-0.5 sm:hidden">
-              <Badge variant={enableStatus(r.status).variant} className="h-4 px-1 text-[10px]">{enableStatus(r.status).label}</Badge>
+              <Badge variant={enableStatus(r.status).variant} size="xs">{enableStatus(r.status).label}</Badge>
             </span>
           </div>
         </div>
@@ -362,7 +362,7 @@ export default function RolesTable({ roles, pagination, initialKeyword, initialS
           className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[12px] tabular-nums hover:bg-primary/10"
         >
           {(permissionCounts[r.id] ?? 0) === 0 ? (
-            <Badge variant="warning" className="h-5 px-1.5 text-[10px]">无权限</Badge>
+            <Badge variant="warning" size="sm">无权限</Badge>
           ) : (
             <span className="font-medium text-foreground">{permissionCounts[r.id]} 项</span>
           )}

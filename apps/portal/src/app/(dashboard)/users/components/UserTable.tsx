@@ -298,7 +298,7 @@ export default function UserTable({ users, pagination, filters, isFiltered = fal
           <div className="flex flex-col">
             <span className="flex items-center gap-1.5">
               <span className="block max-w-[220px] truncate text-[12px] font-medium leading-4 text-foreground" title={user.name}>{user.name}</span>
-              {user.id === currentUserId && <Badge variant="secondary" className="h-4 shrink-0 px-1 text-[9px]">当前账号</Badge>}
+              {user.id === currentUserId && <Badge variant="secondary" size="xs">当前账号</Badge>}
             </span>
             <span className="block max-w-[240px] truncate text-[10px] leading-3 text-muted-foreground" title={`${user.username} • ${user.email}`}>
               {user.username} • {user.email}

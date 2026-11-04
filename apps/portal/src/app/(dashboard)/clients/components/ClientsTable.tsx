@@ -195,8 +195,8 @@ export default function ClientsTable({ clients, pagination, initialKeyword, init
           <div className="flex items-center gap-2">
             <h1 className="type-section-title shrink-0 text-foreground">应用管理</h1>
             <div className="hidden items-center gap-2 min-[1100px]:flex">
-              <Badge variant="success" className="h-5 px-1.5 text-[10px]">启用 {activeCount}</Badge>
-              <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">停用 {disabledCount}</Badge>
+              <Badge variant="success" size="sm">启用 {activeCount}</Badge>
+              <Badge variant="secondary" size="sm">停用 {disabledCount}</Badge>
             </div>
           </div>
           <div className="grid w-full grid-cols-2 gap-2 md:flex md:w-auto md:items-center md:gap-2">

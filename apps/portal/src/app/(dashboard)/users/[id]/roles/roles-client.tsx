@@ -300,10 +300,10 @@ export default function UserRolesPage({ user, isSelf = false, returnHref }: User
                     <span className="flex items-center gap-1.5">
                       <span className="truncate text-[13px] font-medium">{role.name}</span>
                       {role.isSystem && (
-                        <Badge variant="secondary" className="h-5 shrink-0 px-1.5 text-[10px] font-normal">系统</Badge>
+                        <Badge variant="secondary" size="sm" className="shrink-0 font-normal">系统</Badge>
                       )}
-                      {addedIds.has(role.id) && <Badge variant="success" className="h-5 shrink-0 px-1.5 text-[10px]">待新增</Badge>}
-                      {removedIds.has(role.id) && <Badge variant="destructive" className="h-5 shrink-0 px-1.5 text-[10px]">待移除</Badge>}
+                      {addedIds.has(role.id) && <Badge variant="success" size="sm" className="shrink-0">待新增</Badge>}
+                      {removedIds.has(role.id) && <Badge variant="destructive" size="sm" className="shrink-0">待移除</Badge>}
                     </span>
                     <span className="block truncate font-mono text-[11px] text-muted-foreground">
                       {role.code}

@@ -16,7 +16,7 @@ export default function AuditLogsLoading() {
       {/* Header skeleton */}
       <div className="flex items-center justify-between px-1">
         <div className="space-y-2">
-          <Skeleton className="h-8 w-48 rounded-xl" />
+          <Skeleton className="h-9 w-48 rounded-lg" />
           <Skeleton className="h-4 w-64 rounded-lg" />
         </div>
       </div>

@@ -357,8 +357,8 @@ export default function ProfileClient({
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-[17px] font-semibold leading-6 tracking-tight text-foreground">{user.name}</h1>
-              {isAdmin && <Badge variant="secondary" className="text-[10px]">管理员</Badge>}
-              {roles.map((r) => <Badge key={r.code} variant="outline" className="text-[10px]">{r.name}</Badge>)}
+              {isAdmin && <Badge variant="secondary" size="sm">管理员</Badge>}
+              {roles.map((r) => <Badge key={r.code} variant="outline" size="sm">{r.name}</Badge>)}
               <Badge variant={accountStatus(user.status).variant}>{accountStatus(user.status).label}</Badge>
             </div>
             <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
@@ -449,7 +449,7 @@ export default function ProfileClient({
               <CardTitle className="flex items-center gap-2 type-card-title">
                 <Clock className="h-4 w-4 text-warning" /> 登录会话
               </CardTitle>
-              <Badge variant="success" className="text-[10px]">在线</Badge>
+              <Badge variant="success" size="sm">在线</Badge>
             </CardHeader>
             <CardContent className="space-y-3 p-3">
               {session ? (
@@ -489,7 +489,7 @@ export default function ProfileClient({
                         <div className="min-w-0">
                           <p className="flex items-center gap-1.5 truncate font-mono text-[11px]" title={item.clientId}>
                             {item.clientId}
-                            {item.isCurrent && <Badge variant="success" className="shrink-0 text-[9px]">当前设备</Badge>}
+                            {item.isCurrent && <Badge variant="success" size="xs" className="shrink-0">当前设备</Badge>}
                           </p>
                           <div className="flex items-center gap-1">
                             <p className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground" title={`登录于 ${formatDateTime(item.createdAt)} · 会话 ID：${item.id}`}>登录于 {formatDateTime(item.createdAt)} · #{item.id.slice(0, 8)}</p>

@@ -260,7 +260,7 @@ export function ClientDetailClient({ client, initialTokens, initialTokenTotal, c
       />
 
       {/* 标签页：与 Tabs 组件同一套分段式视觉 */}
-      <div role="tablist" aria-label="应用详情" className="inline-flex h-8 items-center rounded-lg bg-muted p-0.5">
+      <div role="tablist" aria-label="应用详情" className="inline-flex h-10 items-center rounded-lg bg-muted p-1">
         <button
           id="client-tab-info"
           role="tab"
@@ -269,7 +269,7 @@ export function ClientDetailClient({ client, initialTokens, initialTokenTotal, c
           tabIndex={activeTab === 'info' ? 0 : -1}
           onClick={() => setActiveTab('info')}
           onKeyDown={handleTabKeyDown}
-          className={`inline-flex h-7 items-center rounded-md px-2.5 text-xs font-medium transition-colors ${
+          className={`inline-flex h-8 items-center rounded-lg px-2.5 text-sm font-medium transition-colors ${
             activeTab === 'info' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
           }`}
         >
@@ -283,7 +283,7 @@ export function ClientDetailClient({ client, initialTokens, initialTokenTotal, c
           tabIndex={activeTab === 'tokens' ? 0 : -1}
           onClick={() => setActiveTab('tokens')}
           onKeyDown={handleTabKeyDown}
-          className={`inline-flex h-7 items-center rounded-md px-2.5 text-xs font-medium transition-colors ${
+          className={`inline-flex h-8 items-center rounded-lg px-2.5 text-sm font-medium transition-colors ${
             activeTab === 'tokens' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
           }`}
         >

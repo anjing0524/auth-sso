@@ -528,7 +528,7 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
                           </span>
                         </TableCell>
                         <TableCell className="hidden min-[1100px]:table-cell">
-                          <Badge variant="outline" className="font-mono text-[10px]">{accessLog.method}</Badge>
+                          <Badge variant="outline" size="sm" className="font-mono">{accessLog.method}</Badge>
                         </TableCell>
                         <TableCell className="hidden max-w-[200px] truncate font-mono text-[11px] text-muted-foreground md:table-cell min-[1100px]:max-w-xs" title={accessLog.path}>
                           {accessLog.path}
