@@ -21,6 +21,8 @@
 
 ## 变更记录
 
+- 2026-11-04: **依赖一次性升级（除 TypeScript 7 / ESLint 10 两个生态阻塞项）**。升级 Next 16.4.2→16.4.4、React/React-DOM 19.3.0→19.3.1、jose 6.2.13→6.2.15、@types/node 26.6.5→26.6.6、Tailwind 4.3.3→4.3.4、typescript-eslint 8.72.0→8.72.1、lucide-react 1.61.0→1.66.0、shadcn 4.22.1→4.23.0、@vitejs/plugin-react 6.1.2→6.2.1，以及 Vitest/coverage-v8 4.1.12→5.1.0、jsdom 29.1.1→30.1.3、jest-dom 6.10.0→7.0.1、ioredis 5.11.1→6.0.0、postgres 3.4.9→4.0.0、wait-on 8.0.5→9.5.1。**未升级**：TypeScript 7.0.2（typescript-eslint 8.72.1 明确拒绝 TS7）、ESLint 10.14.0（eslint-plugin-import/jsx-a11y/react peer 上限 ^9，pnpm peers check 失败）。**验证**：全量 150 文件/1231 用例、覆盖率门禁、mutation 94.50%、全包 build、Docker E2E 25 passed（含视觉）、a11y 通过；生产依赖 audit 0 vulnerabilities，全量 audit 仍有 9 个 dev-only 传递漏洞（wait-on/shadcn/drizzle-kit/stryker/typescript-eslint 的传递依赖）。
+
 - 2026-11-04: **日常管理员角色改名 `ADMIN` → `PLATFORM_ADMIN`（平台管理员）**。只改系统角色 code/name，`SUPER_ADMIN` 的 code、名称与 break-glass 语义完全不动；`seed-rbac` 创建 `PLATFORM_ADMIN`，迁移 `0005_rename_admin_role.sql` 原地改名（`role_id` 不变，`user_roles`/`role_permissions` 自动跟随），旧 `ADMIN` 编码加入保留集防止复活；E2E 用户生命周期改用「平台管理员」标签。**验证**：迁移连续执行两次幂等、`PLATFORM_ADMIN` 45 权限、全量 1231 passed、本机 Docker E2E 25 passed。
 
 - 2026-11-03: **SUPER_ADMIN 唯一 break-glass，PLATFORM_ADMIN 回到显式 RBAC（ADR-032）**。`ADMIN_ROLE_CODES` 收敛为 `['SUPER_ADMIN']`；`PLATFORM_ADMIN` 保留系统角色但必须由 `role_permissions` 显式授权（seed 绑定全部 API + PAGE 菜单）；`checkPermission` 先检查显式角色、再由 SUPER_ADMIN 绕过权限码；新增角色管理高权目标保护 `assertCanMutateRoleTarget`、内置权限启停 break-glass 校验、保留角色编码拒绝。**验证**：全量 150 文件 / 1231 用例通过，新增角色/权限非管理员回归。

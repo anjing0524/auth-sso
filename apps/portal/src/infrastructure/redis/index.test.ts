@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const redisMock = vi.hoisted(() => {
   const client = {
@@ -41,6 +41,11 @@ vi.mock('@/lib/logger', () => ({
 import { getRedis } from './index';
 
 describe('Redis lazy connection', () => {
+  beforeEach(() => {
+    // Vitest 5 不再保证跨用例保留 mock 调用记录；本用例只断言“本用例内”的 connect 次数。
+    redisMock.client.connect.mockClear();
+  });
+
   it('冷启动首条命令等待连接 ready 后再执行', async () => {
     const redis = getRedis();
 
@@ -57,7 +62,7 @@ describe('Redis lazy connection', () => {
 
     await redis.get('health');
 
-    expect(redisMock.client.connect).toHaveBeenCalledOnce();
+    expect(redisMock.client.connect).not.toHaveBeenCalled();
     expect(redisMock.client.get).toHaveBeenCalledWith('health');
   });
 });

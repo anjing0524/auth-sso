@@ -26,9 +26,9 @@
     "@playwright/test": "^1.60.0",
     "@stryker-mutator/core": "10.1.1",
     "@stryker-mutator/vitest-runner": "10.1.1",
-    "@vitest/coverage-v8": "^4.1.12",
+    "@vitest/coverage-v8": "^5.1.0",
     "tsx": "^4.22.4",
-    "vitest": "^4.1.9",
-    "wait-on": "^8.0.0"
+    "vitest": "^5.1.0",
+    "wait-on": "^9.5.1"
   }
 }
