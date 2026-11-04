@@ -153,7 +153,7 @@ function ChangePasswordDialog() {
         <form id="change-password-form" onSubmit={handleSubmit} className="space-y-4 py-2">
           <button type="submit" className="sr-only" tabIndex={-1} aria-hidden="true" />
           <p className="text-[11px] text-muted-foreground"><RequiredLegend /></p>
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <div className="flex items-center gap-1"><Label htmlFor="currentPassword">当前密码</Label><RequiredMark /></div>
             <Input
               id="currentPassword"
@@ -166,7 +166,7 @@ function ChangePasswordDialog() {
               required
             />
           </div>
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <div className="flex items-center gap-1"><Label htmlFor="newPassword">新密码</Label><RequiredMark /></div>
             <Input
               id="newPassword"
@@ -179,7 +179,7 @@ function ChangePasswordDialog() {
               required
             />
           </div>
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <div className="flex items-center gap-1"><Label htmlFor="confirmPassword">确认新密码</Label><RequiredMark /></div>
             <Input
               id="confirmPassword"
@@ -263,7 +263,7 @@ function EditProfileDialog({ user }: { user: NonNullable<ProfileClientProps['use
         <form id="edit-profile-form" onSubmit={handleSubmit} className="space-y-4 py-2">
           <button type="submit" className="sr-only" tabIndex={-1} aria-hidden="true" />
           <p className="text-[11px] text-muted-foreground"><RequiredLegend /></p>
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <div className="flex items-center gap-1"><Label htmlFor="profile-name">姓名</Label><RequiredMark /></div>
             <Input
               id="profile-name"
@@ -275,7 +275,7 @@ function EditProfileDialog({ user }: { user: NonNullable<ProfileClientProps['use
               required
             />
           </div>
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <div className="flex items-center gap-1"><Label htmlFor="profile-email">邮箱</Label><RequiredMark /></div>
             <Input
               id="profile-email"
@@ -287,7 +287,7 @@ function EditProfileDialog({ user }: { user: NonNullable<ProfileClientProps['use
               required
             />
           </div>
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <Label htmlFor="profile-avatar">头像 URL（可选）</Label>
             <Input
               id="profile-avatar"
@@ -453,7 +453,7 @@ export default function ProfileClient({
             </CardHeader>
             <CardContent className="space-y-3 p-3">
               {session ? (
-                <dl className="space-y-1.5">
+                <dl className="space-y-2">
                   <div className="flex justify-between gap-3">
                     <dt className="text-[11px] text-muted-foreground">登录时间</dt>
                     <dd className="font-mono text-[11px]">{formatDateTime(session.iat ? new Date(session.iat * 1000) : null)}</dd>
@@ -492,10 +492,10 @@ export default function ProfileClient({
                             {item.isCurrent && <Badge variant="success" className="shrink-0 text-[9px]">当前设备</Badge>}
                           </p>
                           <div className="flex items-center gap-1">
-                            <p className="min-w-0 flex-1 truncate text-[10px] text-muted-foreground" title={`登录于 ${formatDateTime(item.createdAt)} · 会话 ID：${item.id}`}>登录于 {formatDateTime(item.createdAt)} · #{item.id.slice(0, 8)}</p>
+                            <p className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground" title={`登录于 ${formatDateTime(item.createdAt)} · 会话 ID：${item.id}`}>登录于 {formatDateTime(item.createdAt)} · #{item.id.slice(0, 8)}</p>
                             <CopyTextButton text={item.id} label={`复制会话 ${item.id.slice(0, 8)} 的 ID`} />
                           </div>
-                          <p className="truncate text-[10px] text-muted-foreground" title={`scope：${item.scopes}`}>scope: {item.scopes} · 到期 {formatDateTime(item.expiresAt)}</p>
+                          <p className="truncate text-[11px] text-muted-foreground" title={`scope：${item.scopes}`}>scope: {item.scopes} · 到期 {formatDateTime(item.expiresAt)}</p>
                         </div>
                         {item.isCurrent ? (
                           <span

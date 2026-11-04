@@ -172,7 +172,7 @@ export default function NewClientPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="grid gap-3 p-3 sm:grid-cols-2">
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <div className="flex items-center gap-1"><Label htmlFor="client-create-name">应用名称</Label><RequiredMark /></div>
                 <Input
                   id="client-create-name"
@@ -191,7 +191,7 @@ export default function NewClientPage() {
                   <p id="client-create-name-error" role="alert" className="text-xs font-medium text-destructive">{errors.name}</p>
                 ) : null}
               </div>
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <Label htmlFor="client-create-homepage">主页 URL（可选）</Label>
                 <Input
                   id="client-create-homepage"
@@ -202,7 +202,7 @@ export default function NewClientPage() {
                   onChange={e => setFormData({ ...formData, homepageUrl: e.target.value })}
                 />
               </div>
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <Label htmlFor="client-create-logo">Logo URL（可选）</Label>
                 <Input
                   id="client-create-logo"
@@ -215,7 +215,7 @@ export default function NewClientPage() {
                   onChange={e => setFormData({ ...formData, logoUrl: e.target.value })}
                 />
                 {errors.logoUrl ? <p id="client-create-logo-error" role="alert" className="text-[11px] text-destructive">{errors.logoUrl}</p> : null}
-                <p className="text-[10px] text-muted-foreground">用于应用列表头像；不填则显示名称首字母。</p>
+                <p className="text-[11px] text-muted-foreground">用于应用列表头像；不填则显示名称首字母。</p>
               </div>
             </CardContent>
           </Card>
@@ -228,7 +228,7 @@ export default function NewClientPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3 p-3">
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <div className="flex items-center gap-1"><Label htmlFor="client-create-redirect-uris">回调地址（每行一个）</Label><RequiredMark /></div>
                 <Textarea
                   id="client-create-redirect-uris"
@@ -250,7 +250,7 @@ export default function NewClientPage() {
                   <p className="text-[11px] text-muted-foreground">每行一个 http(s) URL，单个最多 500 字符；必须与接入方配置完全一致（含端口与路径）。</p>
                 )}
               </div>
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <Label htmlFor="client-create-scopes">默认权限范围（Scopes）</Label>
                 <div className="flex flex-wrap gap-1.5">
                   {SCOPE_PRESETS.map((s) => {
@@ -292,7 +292,7 @@ export default function NewClientPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3 p-3">
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <Label htmlFor="client-create-at-ttl">Access Token 有效期（秒）</Label>
                 <Input
                   id="client-create-at-ttl"
@@ -314,7 +314,7 @@ export default function NewClientPage() {
                   })}
                 </div>
               </div>
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <Label htmlFor="client-create-rt-ttl">Refresh Token 有效期（秒）</Label>
                 <Input
                   id="client-create-rt-ttl"
@@ -369,11 +369,11 @@ export default function NewClientPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <p className="text-sm font-medium">Client ID</p>
               <code className="block break-all rounded-lg bg-muted px-3 py-2 font-mono text-sm">{created?.clientId}</code>
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <p className="text-sm font-medium">Client Secret</p>
               <div className="flex items-center gap-2">
                 <code className="flex-1 break-all rounded-lg bg-muted px-3 py-2 font-mono text-sm">{created?.clientSecret ?? '-'}</code>

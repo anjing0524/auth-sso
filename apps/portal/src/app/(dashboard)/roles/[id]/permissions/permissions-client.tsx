@@ -21,6 +21,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { PageHeader } from '@/components/shared/page-header';
 import { SearchInput } from '@/components/shared/search-input';
 import { useFieldFailure } from '@/hooks/use-field-failure';
@@ -348,16 +349,18 @@ export default function RolePermissionsPage({ role, returnHref = '/roles' }: Rol
 
       {/* 窄屏：作用域树折叠为下拉 */}
       <div className="lg:hidden">
-        <select
-          aria-label="权限作用域"
-          value={scopeId}
-          onChange={(e) => setScopeId(e.target.value)}
-          className="h-9 w-full rounded-lg border border-input bg-transparent px-3 text-[13px]"
-        >
-          {tree.map((n) => (
-            <option key={n.id} value={n.id}>{n.label}（{n.count}）</option>
-          ))}
-        </select>
+        <Select value={scopeId} onValueChange={setScopeId}>
+          <SelectTrigger aria-label="权限作用域" className="w-full">
+            <SelectValue>
+              {tree.find((n) => n.id === scopeId)?.label ?? '选择作用域'}（{tree.find((n) => n.id === scopeId)?.count ?? 0}）
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            {tree.map((n) => (
+              <SelectItem key={n.id} value={n.id}>{n.label}（{n.count}）</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       <div className="flex min-h-0 flex-1 overflow-hidden rounded-lg border border-border/70 bg-card shadow-sm ring-0">

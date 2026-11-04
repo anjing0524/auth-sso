@@ -93,7 +93,7 @@ export function ClientInfoSection({
               </div>
             ) : null}
             <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <div className="flex items-center gap-1"><Label htmlFor="client-detail-name">名称</Label><RequiredMark /></div>
                 <Input
                   id="client-detail-name"
@@ -104,7 +104,7 @@ export function ClientInfoSection({
                   onChange={(e) => onFormChange({ name: e.target.value })}
                 />
               </div>
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <Label htmlFor="client-detail-homepage">主页 URL</Label>
                 <Input
                   id="client-detail-homepage"
@@ -117,7 +117,7 @@ export function ClientInfoSection({
                 />
               </div>
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <Label htmlFor="client-detail-logo">Logo URL（可选）</Label>
               <Input
                 id="client-detail-logo"
@@ -130,7 +130,7 @@ export function ClientInfoSection({
               />
               <p className="text-[10px] leading-4 text-muted-foreground">用于应用列表头像；不填则显示名称首字母。</p>
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <div className="flex items-center justify-between gap-2">
                 <Label htmlFor="client-detail-scopes">默认权限范围（Scopes）</Label>
                 <Button variant="ghost" size="icon-sm" aria-label="复制 Scopes" title="复制 Scopes" disabled={!formData.scopes} onClick={() => onCopy(formData.scopes)}>
@@ -175,7 +175,7 @@ export function ClientInfoSection({
             <CardTitle className="type-card-title">登录与回调</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 p-3">
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-1"><Label htmlFor="client-detail-redirect-uris">回调地址（每行一个）</Label><RequiredMark /></div>
                 <Button variant="ghost" size="icon-sm" aria-label="复制回调地址" title="复制回调地址" disabled={!formData.redirectUris} onClick={() => onCopy(formData.redirectUris)}>
@@ -202,7 +202,7 @@ export function ClientInfoSection({
             <CardTitle className="type-card-title">令牌有效期</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-3 p-3 sm:grid-cols-2">
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <Label htmlFor="client-detail-at-ttl">Access Token 有效期（秒）</Label>
               <Input
                 id="client-detail-at-ttl"
@@ -223,7 +223,7 @@ export function ClientInfoSection({
                 </div>
               </div>
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <Label htmlFor="client-detail-rt-ttl">Refresh Token 有效期（秒）</Label>
               <Input
                 id="client-detail-rt-ttl"
@@ -254,7 +254,7 @@ export function ClientInfoSection({
             <CardTitle className="type-card-title">客户端凭证</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 p-3">
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <p className="text-[11px] text-muted-foreground">Client ID</p>
               <div className="flex items-center gap-1.5">
                 <code className="min-w-0 flex-1 truncate rounded bg-muted px-2 py-1.5 font-mono text-[11px]">{client.clientId}</code>
@@ -263,7 +263,7 @@ export function ClientInfoSection({
                 </Button>
               </div>
             </div>
-            <div className="space-y-1.5 border-t pt-2.5">
+            <div className="space-y-2 border-t pt-2.5">
               <p className="text-[11px] text-muted-foreground">Client Secret</p>
               {newSecret ? (
                 <div className="space-y-2">
@@ -278,7 +278,7 @@ export function ClientInfoSection({
                   </div>
                 </div>
               ) : (
-                <div className="space-y-1.5">
+                <div className="space-y-2">
                   <p className="text-[11px] text-muted-foreground">
                     {readOnly
                       ? readOnlyKind === 'permission'

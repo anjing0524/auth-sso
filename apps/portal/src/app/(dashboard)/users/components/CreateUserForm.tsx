@@ -104,11 +104,11 @@ export function CreateUserForm({
       </p>
 
       <div className="grid gap-3 sm:grid-cols-2">
-        <div className="space-y-1.5 sm:col-span-2">
+        <div className="space-y-2 sm:col-span-2">
           <div className="flex items-center gap-1"><Label htmlFor="create-user-name">显示名称</Label><RequiredMark /></div>
           <Input id="create-user-name" name="name" required maxLength={100} placeholder="例如：张三" value={values.name} onChange={setField('name')} />
         </div>
-        <div className="space-y-1.5">
+        <div className="space-y-2">
           <div className="flex items-center gap-1"><Label htmlFor="create-user-username">用户名（唯一标识）</Label><RequiredMark /></div>
           <Input
             aria-invalid={fieldError?.field === 'username'}
@@ -119,7 +119,7 @@ export function CreateUserForm({
           <p className="text-[11px] text-muted-foreground">3–50 位，创建后不可修改。</p>
           <FieldError failure={fieldError} field="username" id="create-user-username-error" />
         </div>
-        <div className="space-y-1.5">
+        <div className="space-y-2">
           <div className="flex items-center gap-1"><Label htmlFor="create-user-email">电子邮箱</Label><RequiredMark /></div>
           <Input
             aria-invalid={fieldError?.field === 'email'}
@@ -129,7 +129,7 @@ export function CreateUserForm({
           />
           <FieldError failure={fieldError} field="email" id="create-user-email-error" />
         </div>
-        <div className="space-y-1.5">
+        <div className="space-y-2">
           <div className="flex items-center gap-1"><Label htmlFor="create-user-password">初始密码</Label><RequiredMark /></div>
           <Input
             aria-invalid={fieldError?.field === 'password'}
@@ -140,7 +140,7 @@ export function CreateUserForm({
           <p className="text-[11px] text-muted-foreground">至少 10 位，含大写/小写字母、数字、特殊字符中的至少三类</p>
           <FieldError failure={fieldError} field="password" id="create-user-password-error" />
         </div>
-        <div className="space-y-1.5">
+        <div className="space-y-2">
           <div className="flex items-center gap-1"><Label htmlFor="create-user-deptId">所属部门</Label><RequiredMark /></div>
           <Select value={deptId} onValueChange={setDeptId}>
             <SelectTrigger id="create-user-deptId" aria-label="所属部门" aria-required="true">

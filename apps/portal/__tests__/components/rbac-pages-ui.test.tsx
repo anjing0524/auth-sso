@@ -521,24 +521,32 @@ describe('U-DEP04 部门排序', () => {
   const rowNames = (container: HTMLElement) =>
     [...container.querySelectorAll('[data-dept-name]')].map((el) => el.textContent ?? '');
 
-  it('默认顺序保持后端顺序；切换按名称/编码后同级重排', () => {
+  it('默认顺序保持后端顺序；切换按名称/编码后同级重排', async () => {
+    const user = userEvent.setup();
     const { container } = renderDepartments({ departments: SORT_TREE });
 
     // 根默认展开 ⇒ 三行可见；顺序 = 总公司、乙、甲（后端 sort 顺序）
     expect(rowNames(container)[1]).toContain('乙部门');
     expect(rowNames(container)[2]).toContain('甲部门');
 
-    const select = screen.getByRole('combobox', { name: '部门排序方式' });
-    fireEvent.change(select, { target: { value: 'name' } });
+    // jsdom 不实现 Radix Select 依赖的指针捕获/滚动 API
+    Element.prototype.hasPointerCapture = vi.fn(() => false);
+    Element.prototype.releasePointerCapture = vi.fn();
+    Element.prototype.scrollIntoView = vi.fn();
+    const trigger = screen.getByRole('combobox', { name: '部门排序方式' });
+    fireEvent.click(trigger);
+    fireEvent.click(await screen.findByRole('option', { name: '按名称' }));
     expect(rowNames(container)[1]).toContain('甲部门');
     expect(rowNames(container)[2]).toContain('乙部门');
 
-    fireEvent.change(select, { target: { value: 'code' } });
+    fireEvent.click(screen.getByRole('combobox', { name: '部门排序方式' }));
+    fireEvent.click(await screen.findByRole('option', { name: '按编码' }));
     expect(rowNames(container)[1]).toContain('甲部门');
     expect(rowNames(container)[2]).toContain('乙部门');
 
     // 切回默认恢复后端顺序
-    fireEvent.change(select, { target: { value: 'default' } });
+    fireEvent.click(screen.getByRole('combobox', { name: '部门排序方式' }));
+    fireEvent.click(await screen.findByRole('option', { name: '默认顺序' }));
     expect(rowNames(container)[1]).toContain('乙部门');
   });
 });

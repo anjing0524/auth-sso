@@ -383,7 +383,7 @@ export default function UserDetailForm({ id, initialUser: serverUser, canUpdate,
                       onValueChange={(v) => setForm({ ...form, deptId: v })}
                       disabled={saving || deptOptions.length === 0}
                     >
-                      <SelectTrigger aria-label="所属部门" className="h-8 w-[150px]">
+                      <SelectTrigger aria-label="所属部门" className="w-[150px]">
                         <SelectValue placeholder="未分配" />
                       </SelectTrigger>
                       <SelectContent>

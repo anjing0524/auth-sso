@@ -21,6 +21,8 @@
 
 ## 变更记录
 
+- 2026-11-04: **表单控件设计系统收口**。共享 SearchInput 统一为 36px/14px 与 Input/SelectTrigger 同高；部门排序与权限作用域两个原生 `<select>` 改为共享 Select；用户详情部门选择去掉 32px 局部覆盖；权限描述由单行 Input 改为 Textarea；Select 弹层圆角与触发器统一为 `rounded-lg`；客户端/角色/用户/权限表单的字段间距统一为 8px、辅助说明统一 11px；新增原生 select/搜索框高度架构守卫与 Radix Select 测试 polyfill。**验证**：151 文件 / 1233 用例、覆盖率、类型、lint、build 通过。
+
 - 2026-11-04: **功能主页面 UI/UX 审计后一次性修复**。部门管理主操作移到工具栏最右并恢复统一列表卡片高度；用户角色筛选「全部」改为「全部角色」，已分配角色改为中性 Badge、仅未分配保留黄色警示；审计日志导出按钮右对齐；角色描述去掉 `break-glass` 工程术语；应用回调地址增加复制入口；侧栏当前项补 `aria-current="page"`；个人中心 User-Agent 收敛为「Chrome · macOS」可读标签；保留角色操作图标的既有 aria-label/title。**验证**：150 文件/1231 用例、覆盖率、视觉 2/2、a11y 通过；修复前后 1440 截图人工比对。
 
 - 2026-11-04: **依赖一次性升级（除 TypeScript 7 / ESLint 10 两个生态阻塞项）**。升级 Next 16.4.2→16.4.4、React/React-DOM 19.3.0→19.3.1、jose 6.2.13→6.2.15、@types/node 26.6.5→26.6.6、Tailwind 4.3.3→4.3.4、typescript-eslint 8.72.0→8.72.1、lucide-react 1.61.0→1.66.0、shadcn 4.22.1→4.23.0、@vitejs/plugin-react 6.1.2→6.2.1，以及 Vitest/coverage-v8 4.1.12→5.1.0、jsdom 29.1.1→30.1.3、jest-dom 6.10.0→7.0.1、ioredis 5.11.1→6.0.0、postgres 3.4.9→4.0.0、wait-on 8.0.5→9.5.1。**未升级**：TypeScript 7.0.2（typescript-eslint 8.72.1 明确拒绝 TS7）、ESLint 10.14.0（eslint-plugin-import/jsx-a11y/react peer 上限 ^9，pnpm peers check 失败）。**验证**：全量 150 文件/1231 用例、覆盖率门禁、mutation 94.50%、全包 build、Docker E2E 25 passed（含视觉）、a11y 通过；生产依赖 audit 0 vulnerabilities，全量 audit 仍有 9 个 dev-only 传递漏洞（wait-on/shadcn/drizzle-kit/stryker/typescript-eslint 的传递依赖）。

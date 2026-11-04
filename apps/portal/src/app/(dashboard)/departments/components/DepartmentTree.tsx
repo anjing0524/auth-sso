@@ -339,16 +339,18 @@ export default function DepartmentTree({ departments, deletionStats = {}, autoOp
               <>
                 <label className="flex items-center gap-1.5 text-xs text-muted-foreground max-md:w-full">
                   排序
-                  <select
-                    aria-label="部门排序方式"
-                    value={sortKey}
-                    onChange={(e) => setSortKey(e.target.value as DepartmentSortKey)}
-                    className="h-8 rounded-md border border-border bg-background px-2 text-sm text-foreground max-md:flex-1"
-                  >
-                    <option value="default">默认顺序</option>
-                    <option value="name">按名称</option>
-                    <option value="code">按编码</option>
-                  </select>
+                  <Select value={sortKey} onValueChange={(v) => setSortKey(v as DepartmentSortKey)}>
+                    <SelectTrigger aria-label="部门排序方式" className="w-32">
+                      <SelectValue>
+                        {sortKey === 'name' ? '按名称' : sortKey === 'code' ? '按编码' : '默认顺序'}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="default">默认顺序</SelectItem>
+                      <SelectItem value="name">按名称</SelectItem>
+                      <SelectItem value="code">按编码</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </label>
                 <Button
                   variant="outline"

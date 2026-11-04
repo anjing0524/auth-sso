@@ -18,6 +18,7 @@ import { ChevronDown } from 'lucide-react';
 
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -189,29 +190,29 @@ export default function PermissionForm({ mode, menuOptions, permission, clients 
         <div className="rounded-lg border border-border/70 bg-card shadow-sm">
           <div className="border-b bg-muted/30 px-3 py-2 text-[13px] font-medium">基本信息</div>
           <div className="grid gap-3 p-3 sm:grid-cols-2">
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <div className="flex items-center gap-1"><Label htmlFor="perm-name">权限名称</Label><RequiredMark /></div>
               <Input id="perm-name" aria-required="true" value={form.name} maxLength={100} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="用户列表" />
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-1"><Label htmlFor="perm-code">权限编码{mode === 'edit' ? '（不可变更）' : ''}</Label>{mode === 'create' && <RequiredMark />}</div>
                 {mode === 'edit' && <CopyTextButton text={form.code} label="复制权限编码" />}
               </div>
               <Input id="perm-code" aria-required={mode === 'create'} aria-describedby={fieldError?.field === 'code' ? 'perm-code-error' : undefined} value={form.code} maxLength={150} disabled={mode === 'edit'} aria-invalid={fieldError?.field === 'code'} onChange={e => setForm({ ...form, code: e.target.value })} placeholder={form.type === 'API' ? 'portal:user:list' : 'portal:menu:users'} />
-              <p className="text-[10px] text-muted-foreground">
+              <p className="text-[11px] text-muted-foreground">
                 {form.type === 'API'
                   ? '格式：{应用标识}:{资源}:{动作}，例如 portal:user:list'
                   : '建议格式：portal:menu:{页面}，例如 portal:menu:users'}
               </p>
             </div>
             <FieldError failure={fieldError} field="code" id="perm-code-error" />
-            <div className="space-y-1.5 sm:col-span-2">
+            <div className="space-y-2 sm:col-span-2">
               <Label htmlFor="perm-desc">描述（可选）</Label>
-              <Input id="perm-desc" value={form.description} maxLength={500} onChange={e => setForm({ ...form, description: e.target.value })} placeholder="用于说明该权限的用途" />
-              <p className="text-[10px] text-muted-foreground">最多 500 字符</p>
+              <Textarea id="perm-desc" rows={2} value={form.description} maxLength={500} onChange={e => setForm({ ...form, description: e.target.value })} placeholder="用于说明该权限的用途" />
+              <p className="text-[11px] text-muted-foreground">最多 500 字符</p>
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <Label htmlFor="perm-type">类型</Label>
               <Select value={form.type} onValueChange={v => setForm({ ...form, type: v })} disabled={isBuiltin}>
                 <SelectTrigger id="perm-type" aria-label="权限类型"><SelectValue>{TYPE_LABELS[form.type] ?? form.type}</SelectValue></SelectTrigger>
@@ -223,7 +224,7 @@ export default function PermissionForm({ mode, menuOptions, permission, clients 
               </Select>
             </div>
             {mode === 'edit' && (
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <Label htmlFor="perm-status">状态</Label>
                 <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v })}>
                   <SelectTrigger id="perm-status"><SelectValue /></SelectTrigger>
@@ -240,7 +241,7 @@ export default function PermissionForm({ mode, menuOptions, permission, clients 
               </div>
             )}
             {form.type === 'API' && (
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <Label htmlFor="perm-client">归属应用（可选）</Label>
                 <Select value={form.clientId || 'NONE'} onValueChange={(v) => setForm({ ...form, clientId: v === 'NONE' ? '' : v })} disabled={isBuiltin}>
                   <SelectTrigger id="perm-client" aria-label="归属应用"><SelectValue>{(form.clientId && clients.find((c) => c.id === form.clientId)?.name) || '不绑定'}</SelectValue></SelectTrigger>
@@ -255,7 +256,7 @@ export default function PermissionForm({ mode, menuOptions, permission, clients 
               </div>
             )}
             {isMenu && (
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <Label htmlFor="perm-parent">父级权限</Label>
                 <Select value={form.parentId || 'ROOT'} onValueChange={(v) => setForm({ ...form, parentId: v === 'ROOT' ? '' : v })}>
                   <SelectTrigger id="perm-parent" aria-label="父级权限"><SelectValue>{menuOptions.find((m) => m.id === form.parentId)?.name ?? '顶层权限'}</SelectValue></SelectTrigger>
@@ -275,12 +276,12 @@ export default function PermissionForm({ mode, menuOptions, permission, clients 
           <div className="rounded-lg border border-border/70 bg-card shadow-sm">
             <div className="border-b bg-muted/30 px-3 py-2 text-[13px] font-medium">菜单配置</div>
             <div className="grid gap-3 p-3 sm:grid-cols-2">
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <Label htmlFor="perm-path">路由路径{form.type === 'PAGE' ? '（必填）' : '（可选）'}</Label>
                 <Input id="perm-path" aria-required={form.type === 'PAGE'} value={form.path} maxLength={200} onChange={e => setForm({ ...form, path: e.target.value })} placeholder="/users" />
                 <p className="text-[10px] leading-4 text-muted-foreground">以 / 开头，如 /users；PAGE 类型用于侧边栏跳转。</p>
               </div>
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <Label htmlFor="perm-icon">图标</Label>
                 <Popover>
                   <PopoverTrigger
@@ -327,7 +328,7 @@ export default function PermissionForm({ mode, menuOptions, permission, clients 
                   </PopoverContent>
                 </Popover>
               </div>
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <Label htmlFor="perm-sort">排序</Label>
                 <Input id="perm-sort" type="number" value={form.sort} onChange={e => setForm({ ...form, sort: Number(e.target.value) })} />
               </div>
