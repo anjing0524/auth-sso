@@ -65,6 +65,19 @@ test.describe('用户生命周期', () => {
       await userPage.getByLabel(/登录邮箱|账号.*邮箱/i).fill(email);
       await userPage.getByLabel('密码', { exact: true }).fill(password);
       await userPage.getByRole('button', { name: '安全登录' }).click();
+
+      // 新建用户 password_changed_at=NULL：首次登录必须先改密
+      await expect(userPage).toHaveURL(/\/force-password-change$/, { timeout: 30_000 });
+      const newPassword = 'E2e@654321';
+      await userPage.getByLabel('当前密码').fill(password);
+      await userPage.getByLabel('新密码', { exact: true }).fill(newPassword);
+      await userPage.getByLabel('确认新密码').fill(newPassword);
+      await userPage.getByRole('button', { name: '修改密码并重新登录' }).click();
+      await expect(userPage).toHaveURL(/\/login$/, { timeout: 30_000 });
+
+      await userPage.getByLabel(/登录邮箱|账号.*邮箱/i).fill(email);
+      await userPage.getByLabel('密码', { exact: true }).fill(newPassword);
+      await userPage.getByRole('button', { name: '安全登录' }).click();
       await expect(userPage).toHaveURL(/\/dashboard$/, { timeout: 30_000 });
       await expect(userPage.getByText('Auth-SSO').first()).toBeVisible();
       await userCtx.close();
