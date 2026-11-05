@@ -219,7 +219,7 @@ describe('exchangeAuthorizationCode — 成功路径（真实签发）', () => {
 
     const cached = await getRedis().get(PERMISSION_CACHE_KEY);
     expect(cached).not.toBeNull();
-    expect(JSON.parse(cached!)).toEqual({ roles: [], permissions: [], deptIds: [] });
+    expect(JSON.parse(cached!)).toEqual({ roles: [], permissions: [], deptIds: [], mustChangePassword: false });
   });
 
   it('缺少 offline_access → 不发放 refresh_token，且**库中没有任何 RT 行**', async () => {

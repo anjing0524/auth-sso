@@ -96,7 +96,7 @@ function userRow(id: string, deptId: string | null, username: string, email: str
     id, username, email, emailVerified: true, mobile: null, mobileVerified: false,
     name: username, passwordHash: '$2b$10$3NW6cGa0tGI9DCtuGr0leOcsRRUVKd.4hsrs7kWdhuK6.kaEXitVe',
     passwordHistory: null, avatarUrl: null, status: 'ACTIVE' as const, deptId,
-    lastLoginAt: null, deletedAt: null, passwordChangedAt: null, createdAt: now, updatedAt: now,
+    lastLoginAt: null, deletedAt: null, passwordChangedAt: now, createdAt: now, updatedAt: now,
   };
 }
 function roleRow(id: string, code: string, deptId: string, isSystem = false, status: 'ACTIVE' | 'DISABLED' = 'ACTIVE') {

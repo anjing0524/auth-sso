@@ -82,7 +82,7 @@ export const updateOwnProfileAction = withAuth(
  * 审计：TOKEN_REVOKE（withAuth 自动记录）
  */
 export const changeOwnPasswordAction = withAuth(
-  { audit: 'TOKEN_REVOKE' },
+  { audit: 'TOKEN_REVOKE', allowPasswordChangeRequired: true },
   async (
     ctx: AuthContext,
     input: Record<string, unknown>,

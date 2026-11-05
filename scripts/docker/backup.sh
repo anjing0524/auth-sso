@@ -11,6 +11,7 @@
 #   COMPOSE_FILE=docker/compose/prod.yml
 #   BACKUP_DIR=<repo>/backups
 #   BACKUP_ENCRYPTION_KEY_FILE=...  可选；设置后输出 .dump.enc（AES-256-CBC/PBKDF2）
+#   BACKUP_METRICS_FILE=...         可选；成功后写 Prometheus textfile heartbeat
 #
 # 产物：auth-sso-YYYYmmdd-HHMMSS.dump[.enc] + .sha256；pg_restore --list 校验通过才算成功。
 #
@@ -23,6 +24,7 @@ ENV_FILE="${ENV_FILE:-.env.prod}"
 COMPOSE_FILE="${COMPOSE_FILE:-docker/compose/prod.yml}"
 BACKUP_DIR="${BACKUP_DIR:-$ROOT/backups}"
 KEY_FILE="${BACKUP_ENCRYPTION_KEY_FILE:-}"
+METRICS_FILE="${BACKUP_METRICS_FILE:-}"
 IF_RUNNING=0
 [[ "${1:-}" == "--if-running" ]] && IF_RUNNING=1
 
@@ -74,6 +76,12 @@ fi
 
 if command -v sha256sum >/dev/null 2>&1; then sha256sum "$OUT" > "$OUT.sha256"; else shasum -a 256 "$OUT" > "$OUT.sha256"; fi
 chmod 600 "$OUT" "$OUT.sha256"
+if [[ -n "$METRICS_FILE" ]]; then
+  mkdir -p "$(dirname "$METRICS_FILE")"
+  TMP_METRICS="$METRICS_FILE.tmp"
+  printf '# TYPE auth_sso_backup_last_success_timestamp_seconds gauge\nauth_sso_backup_last_success_timestamp_seconds %s\n' "$(date +%s)" > "$TMP_METRICS"
+  mv "$TMP_METRICS" "$METRICS_FILE"
+fi
 echo "✅ 备份完成：$OUT"
 if [[ -n "$KEY_FILE" ]]; then
   echo "   恢复需同一 BACKUP_ENCRYPTION_KEY_FILE"

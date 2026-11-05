@@ -21,6 +21,8 @@
 
 ## 变更记录
 
+- 2026-11-05: **首登强制改密落地**。`password_changed_at IS NULL` 的种子 admin、新建用户、管理员重置用户，OAuth 回调后进入工作台会被重定向到 `/force-password-change`；权限上下文新增 `mustChangePassword`，`checkPermission` 对其余受保护写操作返回 `AUTH_SSO_3010`，强制改密 action 显式放行。迁移 `0007` 用 `schema_migrations` 标记只回填一次存量非 admin 用户；改密/重置后刷新权限缓存并撤销会话；新增 E2E `force-password-change.spec.ts`。验证：152 文件 / 1236 用例（重跑后）、lint 0、typecheck、build；Docker acceptance 待 CI。
+
 - 2026-11-05: **修复登录页首次提交必失败、第二次才成功**。根因：登录成功后使用 Next Router 客户端跳转 `/dashboard`，首次会命中登录前缓存的未认证 RSC/路由结果；第二次因 `login_session` Cookie 已由上一次 POST 写入而成功。登录是认证边界，改为完整文档导航（先让浏览器提交 Set-Cookie，再进入受保护路由），并新增 `login-first-attempt.spec.ts` 真实回归：直接打开 `/login`，admin 第一次提交必须进入工作台。**验证**：全量测试、lint、typecheck；Docker acceptance 执行新 E2E。
 
 - 2026-11-04: **lint warning 清零**。修复生产与测试代码的未使用导入/变量、类型导入、内部导航、hook 依赖、未使用表达式与 any；登录/登出/批量操作/审计导出拆分 helper 降低复杂度；测试/脚本按职责关闭 console 噪声；移除与 ADR-019 冲突的 max-lines 软兜底，complexity 仅约束控制器/领域逻辑（展示组件豁免）。`pnpm -r lint`：**0 warnings / 0 errors**；全量 151 文件/1233 用例、typecheck、build 通过。

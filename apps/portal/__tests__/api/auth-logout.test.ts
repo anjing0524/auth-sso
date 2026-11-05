@@ -122,7 +122,7 @@ function seedTestUsers() {
     status: 'ACTIVE' as const,
     emailVerified: true, mobileVerified: false,
     passwordHistory: null, avatarUrl: null, mobile: null, deptId: null,
-    lastLoginAt: null, deletedAt: null, passwordChangedAt: null,
+    lastLoginAt: null, deletedAt: null, passwordChangedAt: now,
     createdAt: now, updatedAt: now,
   }];
 }

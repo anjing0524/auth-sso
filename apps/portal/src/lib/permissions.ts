@@ -128,7 +128,7 @@ export async function getUserPermissionContext(userId: string): Promise<UserPerm
     // 使用 columns 仅选必要字段，减少 4 层嵌套关联的数据传输量。
     const user = await db.query.users.findFirst({
       where: eq(schema.users.id, userId),
-      columns: { id: true, status: true },
+      columns: { id: true, status: true, passwordChangedAt: true },
       with: {
         userRoles: {
           columns: { roleId: true },
@@ -175,6 +175,7 @@ export async function getUserPermissionContext(userId: string): Promise<UserPerm
         roles: [],
         permissions: [],
         deptIds: [],
+        mustChangePassword: user.passwordChangedAt === null,
       };
 
       // 写入缓存并直接返回
@@ -212,6 +213,7 @@ export async function getUserPermissionContext(userId: string): Promise<UserPerm
       })),
       permissions: activePermissionCodes,
       deptIds,
+      mustChangePassword: user.passwordChangedAt === null,
     };
 
     // 将结果回写至 Redis 缓存，TTL 与 Access Token 对齐

@@ -19,3 +19,32 @@ scrape_configs:
     # 生产使用公网 CA 时删除；仅自签/内部 CA 的验收环境保留并配置 ca_file。
     # tls_config:
     #   insecure_skip_verify: true
+
+  # 需要独立运行 prom/blackbox-exporter；把 <blackbox-host>:9115 替换为实际地址。
+  - job_name: auth-sso-portal
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    static_configs:
+      - targets: ['https://<domain>/login']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: <blackbox-host>:9115
+
+  - job_name: auth-sso-tls
+    metrics_path: /probe
+    params:
+      module: [https_2xx]
+    static_configs:
+      - targets: ['<domain>:443']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: <blackbox-host>:9115

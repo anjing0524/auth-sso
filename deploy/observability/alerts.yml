@@ -32,3 +32,30 @@ groups:
         labels: { severity: warning }
         annotations:
           summary: "JWKS 缓存超过 1 小时未刷新"
+
+  - name: auth-sso-delivery
+    rules:
+      - alert: AuthSsoPortalDown
+        expr: probe_success{job="auth-sso-portal"} == 0
+        for: 3m
+        labels: { severity: critical }
+        annotations:
+          summary: "Portal /login 黑盒探测失败"
+      - alert: AuthSsoTlsCertificateExpiringSoon
+        expr: probe_ssl_earliest_cert_expiry{job="auth-sso-tls"} - time() < 21 * 86400
+        for: 1h
+        labels: { severity: warning }
+        annotations:
+          summary: "TLS 证书将在 21 天内到期（ACME 续期异常时触发）"
+      - alert: AuthSsoBackupStale
+        expr: time() - auth_sso_backup_last_success_timestamp_seconds > 36 * 3600
+        for: 10m
+        labels: { severity: critical }
+        annotations:
+          summary: "最近一次成功备份超过 36 小时"
+      - alert: AuthSsoContainerRestarted
+        expr: changes(container_start_time_seconds{name=~"auth-sso-.*"}[1h]) > 0
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "Auth-SSO 容器 1 小时内发生过重启"

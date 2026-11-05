@@ -1,4 +1,4 @@
-import { AUTH_ERRORS, COMMON_ERRORS, type ErrorCode } from '@auth-sso/contracts';
+import { AUTH_ERRORS, COMMON_ERRORS, USER_ERRORS, type ErrorCode } from '@auth-sso/contracts';
 
 /**
  * 领域错误类型体系
@@ -98,6 +98,13 @@ export class ForbiddenError extends DomainError {
 export class InvalidCredentialsError extends DomainError {
   constructor(message: string = '邮箱或密码错误') {
     super(AUTH_ERRORS.INVALID_CREDENTIALS, message, 401);
+  }
+}
+
+/** 首登/重置后必须先改密；所有受保护写操作在改密前拒绝 */
+export class PasswordChangeRequiredError extends DomainError {
+  constructor(message: string = '请先修改初始密码后再继续') {
+    super(USER_ERRORS.PASSWORD_CHANGE_REQUIRED, message, 403);
   }
 }
 

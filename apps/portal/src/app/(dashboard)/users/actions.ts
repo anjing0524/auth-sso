@@ -19,6 +19,7 @@
 import { schema } from '@/infrastructure/db';
 import { RoleAssignmentSchema, assignUserRoles } from '@/lib/user-role-assignment';
 import { invalidateResource } from '@/lib/cache-invalidation';
+import { refreshUserPermissionCache } from '@/lib/permissions';
 import { clearUserBruteForceCounters } from '@/lib/auth/brute-force';
 import { forceLogoutUser } from '@/lib/auth/force-logout';
 import { clearUserPermissionCache } from '@/lib/permissions';
@@ -432,7 +433,7 @@ export const resetPasswordAction = withAuth(
         // NFR-SEC-15: 禁止重用最近 5 次密码（领域判定与自助改密共用）
         await assertResetAllowed(newPassword, state);
         await tx.update(schema.users)
-          .set({ passwordHash, passwordHistory: nextPasswordHistory(state) })
+          .set({ passwordHash, passwordHistory: nextPasswordHistory(state), passwordChangedAt: null })
           .where(eq(schema.users.id, v.data.id));
         // H-13：RT 撤销与密码写入**同一事务**（fail-close）——撤销失败则整体回滚，
         // 不产生"密码已改但旧 RT 仍可续期"的部分成功。
@@ -443,6 +444,8 @@ export const resetPasswordAction = withAuth(
     // jti 层（尽力而为，ADR-011）：失败不阻断已提交的重置，由 lib/session/revoke 记日志。
     await revokeAccessTokensAfterReset(v.data.id);
 
+    // 目标用户下次登录必须改密；旧缓存立即作废，避免 TTL 内继续放行。
+    await refreshUserPermissionCache(v.data.id);
     invalidateResource('users');
     return { success: true, data: { id: v.data.id }, message: '密码已重置，该用户所有会话已失效' };
   },

@@ -12,6 +12,7 @@ import 'server-only';
  * @module lib/account/change-password
  */
 import { db, schema } from '@/infrastructure/db';
+import { refreshUserPermissionCache } from '@/lib/permissions';
 import { eq } from 'drizzle-orm';
 import { hashPassword, isPasswordReused, verifyPassword } from '@/domain/auth/password';
 import {
@@ -106,6 +107,10 @@ export async function changeOwnPassword(
   // lib/session/revoke 在发生处记日志（含 userId），故此处刻意不写 catch
   // ——此前那个 catch 不可达（该函数没有 throw 出口）。
   await revokeUserAccessByUserId(userId);
+
+  // 强制改密门禁依赖权限上下文里的 mustChangePassword；必须立即刷新，
+  // 否则用户改密成功后仍会在 TTL 内被弹回改密页。
+  await refreshUserPermissionCache(userId);
 
   return { ok: true };
 }

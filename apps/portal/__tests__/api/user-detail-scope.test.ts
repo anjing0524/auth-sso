@@ -86,7 +86,7 @@ function user(id: string, username: string, name: string, deptId: string | null)
     mobile: null, mobileVerified: false, name,
     passwordHash: '$2b$10$3NW6cGa0tGI9DCtuGr0leOcsRRUVKd.4hsrs7kWdhuK6.kaEXitVe',
     passwordHistory: null, avatarUrl: null, status: 'ACTIVE' as const, deptId,
-    lastLoginAt: null, deletedAt: null, passwordChangedAt: null,
+    lastLoginAt: null, deletedAt: null, passwordChangedAt: now,
     createdAt: now, updatedAt: now,
   };
 }

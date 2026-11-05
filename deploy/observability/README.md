@@ -27,3 +27,12 @@ docker run --rm -p 9090:9090 \
 curl -fsS -H "Authorization: Bearer $GATEWAY_METRICS_TOKEN" \
   https://<domain>/__gateway/metrics | head
 ```
+
+## 扩展告警（2026-11-05）
+
+- `auth-sso-portal`：blackbox-exporter `http_2xx` 探测 `/login`；
+- `auth-sso-tls`：blackbox-exporter `https_2xx` 读取 `probe_ssl_earliest_cert_expiry`；
+- `auth_sso_backup_last_success_timestamp_seconds`：`backup.sh` 在
+  `BACKUP_METRICS_FILE` 指向 node_exporter textfile collector 时写入；
+- `container_start_time_seconds`：使用 cAdvisor/node_exporter 容器指标。
+仓库仍**不包含** Alertmanager 实例或通知凭证，规则由客户监控平台加载。

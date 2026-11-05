@@ -44,6 +44,7 @@ async function DashboardContent({ children }: { children: React.ReactNode }) {
 
   // 从 Redis 获取用户角色和权限上下文
   const permCtx = toPermissionContextOrNull(await getUserPermissionContext(identity.userId));
+  if (permCtx?.mustChangePassword) redirect('/force-password-change');
   const roles = permCtx?.roles.map(r => r.code) ?? [];
   const permissions = permCtx?.permissions ?? [];
   const subject = { roleCodes: roles, permissionCodes: permissions };

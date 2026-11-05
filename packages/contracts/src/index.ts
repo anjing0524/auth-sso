@@ -156,6 +156,8 @@ export interface UserPermissionContext {
   permissions: string[];
   /** 用户所有 ACTIVE 角色所属部门的原始 ID 列表（**未展开子树**；子树展开唯一实现是 Portal 的 `resolveScope`，见 ADR-002 增补/ADR-014） */
   deptIds: string[];
+  /** 首次登录 / 管理员重置密码后尚未改密；旧缓存无此字段时按 false 处理 */
+  mustChangePassword?: boolean;
 }
 
 // API 响应类型契约

@@ -25,6 +25,12 @@ async function main() {
     process.exit(1);
   }
 
+  // 现有 E2E 套件默认以 admin 直接进入工作台；测试栈把 admin 标记为已改密，
+  // 首登强制改密由独立 qa_force 用户覆盖。生产 seed 仍保留 admin 为 NULL。
+  await db.update(schema.users)
+    .set({ passwordChangedAt: new Date() })
+    .where(eq(schema.users.id, admin.id));
+
   const rdDeptId = crypto.randomUUID();
   await db.insert(schema.departments).values({
     id: rdDeptId,
@@ -45,6 +51,26 @@ async function main() {
     passwordHash: await bcrypt.hash(crypto.randomUUID(), 10),
     deptId: rdDeptId,
   });
+
+  // 首登强制改密专用用户：初始密码在使用前已知，仅用于测试强制改密链路。
+  const forceUserId = crypto.randomUUID();
+  await db.insert(schema.users).values({
+    id: forceUserId,
+    username: 'qa_force',
+    email: 'qa_force@example.com',
+    name: 'QA 首登',
+    status: 'ACTIVE',
+    passwordHash: await bcrypt.hash('QaForce@123456', 10),
+    deptId: rdDeptId,
+    passwordChangedAt: null,
+  });
+  const superAdmin = await db.query.roles.findFirst({
+    where: eq(schema.roles.code, 'SUPER_ADMIN'),
+    columns: { id: true },
+  });
+  if (superAdmin) {
+    await db.insert(schema.userRoles).values({ userId: forceUserId, roleId: superAdmin.id });
+  }
 
   // 基线 0 权限，供角色权限保存 e2e 使用；非系统角色可修改
   await db.insert(schema.roles).values({

@@ -16,7 +16,7 @@ import { resolveIdentity } from './verify-jwt';
 import { canAll, canAny, hasRole as hasRoleShared, isAdminRole } from '@auth-sso/contracts';
 import type { AuditOperation } from '@auth-sso/contracts';
 import { getUserPermissionContext, toPermissionContextOrNull } from '@/lib/permissions';
-import { ForbiddenError, UnauthenticatedError, type DomainError } from '@/domain/shared/errors';
+import { ForbiddenError, PasswordChangeRequiredError, UnauthenticatedError, type DomainError } from '@/domain/shared/errors';
 
 /**
  * 权限检查选项接口定义
@@ -28,6 +28,8 @@ export interface PermissionCheckOptions {
   roles?: string[];
   /** 为 true 时要求满足所有权限/角色，默认 false（满足任一即可） */
   requireAll?: boolean;
+  /** 仅强制改密 action 使用：允许 mustChangePassword 用户调用 */
+  allowPasswordChangeRequired?: boolean;
   /**
    * 审计操作类型（可选）。
    * 声明后，withAuth / withPermission 包装器在业务函数成功执行后
@@ -53,6 +55,29 @@ export type PermissionCheckResult =
   | { authorized: true; userId: string }
   | { authorized: false; reason: DomainError };
 
+
+interface PermissionSubject {
+  roleCodes: string[];
+  permissionCodes: string[];
+}
+
+function missingRoleError(subject: PermissionSubject, options: PermissionCheckOptions): DomainError | null {
+  if (!options.roles?.length) return null;
+  const matched = options.roles.some((code) => hasRoleShared(subject, code));
+  const ok = options.requireAll
+    ? options.roles.every((code) => hasRoleShared(subject, code))
+    : matched;
+  return ok ? null : new ForbiddenError('角色权限不足');
+}
+
+function missingPermissionError(subject: PermissionSubject, options: PermissionCheckOptions): DomainError | null {
+  if (!options.permissions?.length) return null;
+  const ok = options.requireAll
+    ? canAll(subject, options.permissions)
+    : canAny(subject, options.permissions);
+  return ok ? null : new ForbiddenError('权限不足');
+}
+
 /**
  * 检查当前请求用户的身份有效性及 Portal 细粒度权限
  * 用于 Portal 自身管理 API 路由与 Server Action 的保护
@@ -75,37 +100,25 @@ export async function checkPermission(
   // 双处漂移；用"空数组"误判缓存 miss，导致合法空权限用户每次请求穿透 DB。
   // ctx 为 null（用户不存在/DB 异常）时按无权限处理 = fail-close（ADR-011）。
   const ctx = toPermissionContextOrNull(await getUserPermissionContext(userId));
+  if (ctx?.mustChangePassword && !options.allowPasswordChangeRequired) {
+    return { authorized: false, reason: new PasswordChangeRequiredError() };
+  }
   // 判定统一委托 @auth-sso/contracts 的纯函数（与客户端共用同一实现，ADR-015）。
-  const subject = {
+  const subject: PermissionSubject = {
     roleCodes: ctx?.roles.map((r) => r.code) ?? [],
     permissionCodes: ctx?.permissions ?? [],
   };
 
   // 角色归属是显式业务要求，break-glass 也不能绕过；权限码检查才由
   // SUPER_ADMIN 旁路（ADR-032：日常 ADMIN 走显式 RBAC）。
-  if (options.roles?.length) {
-    const matched = options.roles.some((code) => hasRoleShared(subject, code));
-    const ok = options.requireAll
-      ? options.roles.every((code) => hasRoleShared(subject, code))
-      : matched;
-    if (!ok) {
-      return { authorized: false, reason: new ForbiddenError('角色权限不足') };
-    }
-  }
+  const roleError = missingRoleError(subject, options);
+  if (roleError) return { authorized: false, reason: roleError };
 
   // 唯一 break-glass：SUPER_ADMIN 绕过权限码检查。
-  if (isAdminRole(subject.roleCodes)) {
-    return { authorized: true, userId };
-  }
+  if (isAdminRole(subject.roleCodes)) return { authorized: true, userId };
 
-  if (options.permissions?.length) {
-    const ok = options.requireAll
-      ? canAll(subject, options.permissions)
-      : canAny(subject, options.permissions);
-    if (!ok) {
-      return { authorized: false, reason: new ForbiddenError('权限不足') };
-    }
-  }
+  const permissionError = missingPermissionError(subject, options);
+  if (permissionError) return { authorized: false, reason: permissionError };
 
   return { authorized: true, userId };
 }
