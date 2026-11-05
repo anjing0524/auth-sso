@@ -21,6 +21,8 @@
 
 ## 变更记录
 
+- 2026-11-05: **修复登录页首次提交必失败、第二次才成功**。根因：登录成功后使用 Next Router 客户端跳转 `/dashboard`，首次会命中登录前缓存的未认证 RSC/路由结果；第二次因 `login_session` Cookie 已由上一次 POST 写入而成功。登录是认证边界，改为完整文档导航（先让浏览器提交 Set-Cookie，再进入受保护路由），并新增 `login-first-attempt.spec.ts` 真实回归：直接打开 `/login`，admin 第一次提交必须进入工作台。**验证**：全量测试、lint、typecheck；Docker acceptance 执行新 E2E。
+
 - 2026-11-04: **lint warning 清零**。修复生产与测试代码的未使用导入/变量、类型导入、内部导航、hook 依赖、未使用表达式与 any；登录/登出/批量操作/审计导出拆分 helper 降低复杂度；测试/脚本按职责关闭 console 噪声；移除与 ADR-019 冲突的 max-lines 软兜底，complexity 仅约束控制器/领域逻辑（展示组件豁免）。`pnpm -r lint`：**0 warnings / 0 errors**；全量 151 文件/1233 用例、typecheck、build 通过。
 
 - 2026-11-04: **PageHeader 三变体收口**。新增 `variant="page" | "section" | "sticky"`：详情/新建用 page、列表工具栏用 section、审计详情用 sticky；列表页 6 个手写 h1 改为共享 PageHeader；审计详情自定义 DetailHeader 删除并接入 sticky 变体，保留返回/Badge/ID/复制。**验证**：151 文件/1233 用例、typecheck、lint、build；视觉基线 workflow 通过（PageHeader 变化在 1% 像素阈值内，无需改写基线）。

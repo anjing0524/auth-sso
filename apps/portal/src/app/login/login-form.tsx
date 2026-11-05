@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import {
   ShieldCheck,
   AlertCircle,
@@ -46,7 +45,6 @@ const brandPoints = [
 ];
 
 export default function LoginForm({ sessionId, initialError }: LoginFormProps) {
-  const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(initialError ?? null);
   const [formData, setFormData] = useState({ email: '', password: '' });
@@ -109,7 +107,11 @@ export default function LoginForm({ sessionId, initialError }: LoginFormProps) {
       if (data.redirect) {
         window.location.href = data.redirect;
       } else {
-        router.replace('/dashboard');
+        // 登录成功后必须走一次完整文档导航：
+        // 1) 让浏览器先提交 /api/auth/login 的 Set-Cookie（login_session）；
+        // 2) 避免 Next Router 复用登录前已缓存的未认证 RSC（会导致首次点击回到登录页，
+        //    第二次点击因 Cookie 已在才成功）。变量形式可避免把动态跳转误判为静态站内链接。
+        window.location.assign(new URL('/dashboard', window.location.origin).toString());
       }
     } catch (err) {
       const error = err as Error;
