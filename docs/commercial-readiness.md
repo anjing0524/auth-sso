@@ -15,7 +15,7 @@
 
 | 维度 | 状态 | 证据 / 说明 |
 |---|---|---|
-| 登录、OIDC/OAuth、RBAC、审计、客户端管理 | 已具备 | 逻辑/API/组件回归 + 关键路径 E2E 23 条 + 2 条桌面视觉基线；覆盖率（行/分支）与 auth domain mutation（94.50%，break 92）门禁见 §2/§4；CI 全绿 |
+| 登录、OIDC/OAuth、RBAC、审计、客户端管理 | 已具备 | 逻辑/API/组件回归 + 关键路径 E2E 27 条 + 2 条桌面视觉基线；覆盖率（行/分支）与 auth domain mutation（94.50%，break 92）门禁见 §2/§4；CI 全绿 |
 | 安全基线（JWT/撤销/限流/反提权/HSTS/安全头） | 已具备 | 安全 ADR、API 测试、Gateway 测试、`pnpm audit` 无已知漏洞 |
 | 自托管部署脚本 | 已具备 | `deploy.sh` 校验/构建/迁移/健康/回滚；生产 Compose 校验通过 |
 | 数据库备份 | 已具备 | `backup.sh`：dump + `pg_restore --list` + SHA-256；可选 AES-256 加密 |
@@ -42,6 +42,8 @@
 3. **客户数据迁移**：旧库 `pg_dump → PG18 → pg_restore`，并在客户环境做恢复演练；
 4. **产品范围确认**：若客户要求自助找回、MFA、多租户、HA，以上均为新增项目，不在当前交付范围；
 5. **安全评审/UAT**：渗透测试或客户安全评审、业务 UAT 签字。
+
+> 版本证据见 [`docs/releases/v1.1.2.md`](releases/v1.1.2.md)。
 
 ## 4. 正式上线验收清单
 
