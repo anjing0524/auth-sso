@@ -4,3 +4,9 @@ packages:
 allowBuilds:
   esbuild: true
   unrs-resolver: true
+  sharp: true
+minimumReleaseAgeExclude:
+  - "@midscene/core@1.17.6"
+  - "@midscene/playground@1.17.6"
+  - "@midscene/shared@1.17.6"
+  - "@midscene/web@1.17.6"

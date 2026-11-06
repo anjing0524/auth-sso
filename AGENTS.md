@@ -138,6 +138,7 @@ packages/config/    共享 env 配置 (Zod + URL 推导)
 | 单元 / 组件 | `apps/*/__tests__/{components,domain,helpers}` | jsdom + Vitest | 渲染、交互、纯函数；外部 UI 原语与数据源可 mock | 随 `pnpm test` |
 | API | `apps/*/__tests__/api/*.test.ts` | node + **真实 PostgreSQL / Redis** | route 与 action 的校验、鉴权、CRUD、数据范围过滤 | 随 `pnpm test` |
 | E2E | `tests/e2e/*.spec.ts` | Playwright（仅 Chromium） | 登录冒烟与 Docker 发布栈闭环 | `pnpm test:e2e` |
+| AI 视觉探索（非阻断） | `tests/e2e-ai/*.spec.ts` | Playwright + Midscene（DeepSeek 视觉） | 语义/布局探索，不替代确定性契约 | `pnpm test:ai`（需要模型 Key） |
 
 API 层里生产业务模块的模块级 mock 必须是**类型化工厂**（`vi.mock(import('…'), (): Partial<typeof xModule> => …)`）
 并带 `// @allow-module-mock <target> <kind>: <理由>`；签发/验签/撤销/登录/权限/审计等安全语义**真实驱动**。

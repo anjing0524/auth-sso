@@ -91,3 +91,6 @@ test-mcp
 .stryker-tmp/
 reports/
 
+
+# Midscene AI 探索性测试产物（截图/规划缓存，不入库）
+/midscene_run/

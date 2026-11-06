@@ -42,6 +42,7 @@
 - `pnpm test:e2e`：真实 Docker 栈的关键用户路径；默认不跑视觉基线。
 > - `pnpm test:visual`：桌面 1440/1280 截图基线（`E2E_VISUAL=1`），独立门禁。
 > - `E2E_CHANNEL=chrome pnpm test:a11y`：对比度/键盘门禁，独立门禁。
+> - `pnpm test:ai`：Midscene AI 视觉探索性测试（非阻断，手动运行；需要模型 Key）。
 > - 客户环境验收：ACME、备份恢复、回滚、UAT；仓库测试不能替代。
 
 ## 修改规则

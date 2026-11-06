@@ -10,6 +10,7 @@
 | `local/` | 本地原生开发 | `dev.sh`（本地 PG18/Redis8 + migrate + Next dev；`--reset` 清库重 seed） |
 | `docker/` | 生产部署与数据保护 | `deploy.sh`（生产校验/构建/migrate+seed/健康检查/回滚）、`backup.sh`（pg_dump + 校验 + SHA-256；可选 AES-256 加密）、`restore.sh`（新库恢复 + 原子换名） |
 | `e2e/` | 验收闭环 | `release.sh`（`pnpm test:e2e`：直接 compose 构建/启动 → Playwright → 清理）、`acme-e2e.sh`、`acme-staging.sh` |
+| `e2e-ai/` | AI 视觉探索性试点（非阻断） | `run.sh`（加载 DSH/DeepSeek 模型配置，跑独立 `tests/e2e-ai`） |
 | `ci/` | CI 专用 | `verify.sh`、`acme-preflight.sh`、`e2e.sh`（直接 compose + Playwright 容器） |
 | `ops/` | 商用验收冒烟 | `smoke.sh`（HTTPS/登录页/安全头/证书/metrics） |
 | `bench/` | 性能基准 | `gateway.mjs` |
@@ -21,6 +22,7 @@
 本地开发     pnpm dev  [-- --reset]
 本机测试     pnpm test
 验收闭环     pnpm test:e2e
+AI 视觉试点  pnpm test:ai（非阻断，独立目录）
 生产部署     pnpm deploy [-- --check|--status|--rollback]
 备份         ./scripts/docker/backup.sh
 恢复         ./scripts/docker/restore.sh <dump> --yes

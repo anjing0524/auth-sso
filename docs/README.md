@@ -28,6 +28,7 @@
 | 改 UI（颜色/字体/间距/组件规范） | [`docs/design-system.md`](design-system.md)（设计系统） |
 | 查历史取舍与里程碑 | [`docs/roadmap.md`](roadmap.md)（变更记录按时间倒序） |
 | 查需求与追溯 | [`docs/spec/`](spec/) + `tests/traceability/` |
+| AI 视觉探索性测试（Midscene，非阻断） | [`docs/ai-visual-testing.md`](ai-visual-testing.md) |
 | 技术调研笔记 | [`docs/research/`](research/) |
 | 用 Matt Pocock 技能套件（issue tracker / triage 标签 / domain docs 消费规则） | [`docs/agents/`](agents/)（`issue-tracker.md` · `triage-labels.md` · `domain.md`） |
 

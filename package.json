@@ -17,12 +17,14 @@
     "test:mutation": "stryker run stryker.config.json; rc=$?; rm -rf .stryker-tmp; exit $rc",
     "test:api": "vitest run --project @auth-sso/portal-api",
     "test:ui": "vitest run --project @auth-sso/portal-ui",
-    "test:contracts": "vitest run --project @auth-sso/contracts"
+    "test:contracts": "vitest run --project @auth-sso/contracts",
+    "test:ai": "./scripts/e2e-ai/run.sh"
   },
   "engines": {
     "node": ">=26.0.0"
   },
   "devDependencies": {
+    "@midscene/web": "1.17.6",
     "@playwright/test": "^1.60.0",
     "@stryker-mutator/core": "10.1.1",
     "@stryker-mutator/vitest-runner": "10.1.1",
