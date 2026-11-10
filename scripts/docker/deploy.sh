@@ -107,6 +107,43 @@ check_env() {
   grep -qE '^(NEXT_PUBLIC_APP_URL|PORTAL_REDIRECT_URL)=https://' "${ENV_FILE}" \
     || fail "NEXT_PUBLIC_APP_URL / PORTAL_REDIRECT_URL 必须为 https://"
 
+  # H-D-11（PM-01）：入口 Host 与回调注册强耦合——Gateway 按请求 Host 构造
+  # OAuth redirect_uri，Portal 白名单精确匹配（OAuth 2.1）。对外入口
+  # （NEXT_PUBLIC_APP_URL 与网关规范 Host，缺省 = LETSENCRYPT_DOMAIN）必须已被
+  # PORTAL_REDIRECT_URL 登记，否则用户登录必然 AUTH_SSO_2033 且错误页无法自救。
+  local app_url redirect_value canonical
+  app_url="$(grep -E '^NEXT_PUBLIC_APP_URL=.+' "${ENV_FILE}" | tail -1 | cut -d= -f2- | tr -d '"' || true)"
+  redirect_value="$(grep -E '^PORTAL_REDIRECT_URL=.+' "${ENV_FILE}" | tail -1 | cut -d= -f2- | tr -d '"' || true)"
+  canonical="$(grep -E '^GATEWAY_CANONICAL_HOST=.+' "${ENV_FILE}" | tail -1 | cut -d= -f2- | tr -d '"' || true)"
+  canonical="${canonical:-${domain}}"
+
+  # 提取 authority（host[:port]）：去 scheme、截断首个 '/'（path）
+  local app_authority="${app_url#https://}"
+  app_authority="${app_authority%%/*}"
+
+  local covered_app=0 covered_canonical=0 entry entry_authority
+  while IFS= read -r entry; do
+    entry="${entry//[[:space:]]/}"
+    if [[ -z "${entry}" ]]; then continue; fi
+    entry="${entry#https://}"
+    entry_authority="${entry%%/*}"
+    if [[ "${entry_authority}" == "${app_authority}" ]]; then covered_app=1; fi
+    if [[ "${entry_authority}" == "${canonical}" ]]; then covered_canonical=1; fi
+  done < <(printf '%s\n' "${redirect_value//,/$'\n'}")
+
+  if (( covered_app == 0 )); then
+    fail "PORTAL_REDIRECT_URL 未登记 NEXT_PUBLIC_APP_URL 的入口 Host（${app_authority}）。
+多入口部署请在 PORTAL_REDIRECT_URL 以逗号分隔登记每个对外入口的回调地址，例如：
+  PORTAL_REDIRECT_URL=https://${app_authority}/api/auth/callback,https://${canonical}/api/auth/callback
+登记后需重跑 db:seed（或更新 clients 表 redirect_uris）再重新部署。"
+  fi
+  if (( covered_canonical == 0 )); then
+    fail "PORTAL_REDIRECT_URL 未登记网关规范入口 Host（${canonical}，GATEWAY_CANONICAL_HOST 缺省 = LETSENCRYPT_DOMAIN）。
+Gateway 会把非规范 Host 的请求 302 到 https://${canonical}，该 Host 必须已登记回调，否则登录仍会 AUTH_SSO_2033：
+  PORTAL_REDIRECT_URL=${redirect_value},https://${canonical}/api/auth/callback
+登记后需重跑 db:seed（或更新 clients 表 redirect_uris）再重新部署。"
+  fi
+
   log "环境文件校验通过：${ENV_FILE}（domain=${domain}）"
 }
 

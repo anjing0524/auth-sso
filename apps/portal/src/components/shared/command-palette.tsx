@@ -14,6 +14,27 @@ interface MenuItem {
   children?: MenuItem[];
 }
 
+/**
+ * aria-activedescendant 兜底同步（UX-04）。
+ *
+ * cmdk 1.1.1 只在「用户导航触发 value 变化」的渲染路径里更新 selectedItemId，
+ * 两个场景会缺失：① 面板刚打开（初始选中项由 item 注册时静默写入）；② 输入
+ * 过滤后（候选项重新挂载，value 未变则不重算）。届时 DOM 里 [aria-selected=true]
+ * 的项存在，但 listbox/combobox 上的 aria-activedescendant 为空 —— 读屏用户
+ * 听不到当前高亮项，「上下方向键选择、回车打开」的宣称能力不可验证。
+ *
+ * 兜底策略：cmdk 自己设置的值优先（用户导航后由 React 正常接管），缺失时才从
+ * DOM 的已选项同步到 [cmdk-list] 与 [cmdk-input]。
+ */
+function syncActiveDescendant() {
+  const list = document.querySelector('[cmdk-list]');
+  if (!list || list.getAttribute('aria-activedescendant')) return;
+  const selected = list.querySelector('[cmdk-item][aria-selected="true"]');
+  if (!selected?.id) return;
+  list.setAttribute('aria-activedescendant', selected.id);
+  document.querySelector('[cmdk-input]')?.setAttribute('aria-activedescendant', selected.id);
+}
+
 export function CommandPalette({ menus }: { menus: MenuItem[] }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -65,6 +86,23 @@ export function CommandPalette({ menus }: { menus: MenuItem[] }) {
       if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
     };
   }, []);
+
+  // UX-04：面板打开期间兜底同步 aria-activedescendant。观察两类变更：
+  // - aria-selected：cmdk 给候选项应用选中态（打开时的初始选中）
+  // - childList：过滤时候选项挂载/卸载（选中项可能未变、无 aria-selected 变更）
+  // attributeFilter 限定只观察该属性，面板关闭即断开
+  useEffect(() => {
+    if (!open) return;
+    syncActiveDescendant();
+    const observer = new MutationObserver(syncActiveDescendant);
+    observer.observe(document.body, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+      attributeFilter: ['aria-selected'],
+    });
+    return () => observer.disconnect();
+  }, [open]);
 
   const handleSelect = useCallback((url: string) => {
     setOpen(false); // 立即关闭面板

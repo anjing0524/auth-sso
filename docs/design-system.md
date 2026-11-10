@@ -537,7 +537,7 @@ DataTable 是共享表格组件，所有列表页统一使用。
   （如 `/api/roles` 接受 `role:list` 或 `user:assign_role`），不要逼操作员额外持有无关的管理权限。
 - **破坏性操作必须显示影响面**：级联删除（如权限删除）的确认弹窗要按需读取并展示受影响角色/用户/
   子节点数量；影响面加载失败不得阻断操作，但必须在弹窗中说明“影响未知”。
-- **发布验收包含边界回归**：`pnpm test:e2e`（`scripts/e2e/release.sh`：直接 compose 构建/启动 → Playwright → 清理）运行 `tests/e2e` 下**全部 spec**（当前 14 个），不再有 `scripts/docker/stack.sh` 这一中间包装（该脚本已于 2026-10-29 删除，验收栈直接用 `docker compose -f docker/compose/test.yml`，见 `docs/scripts.md`）；新增的服务端/客户端
+- **发布验收包含边界回归**：`pnpm test:e2e`（`scripts/e2e/release.sh`：直接 compose 构建/启动 → Playwright → 清理）运行 `tests/e2e` 下**全部 spec**（篇数以该目录为准），不再有 `scripts/docker/stack.sh` 这一中间包装（该脚本已于 2026-10-29 删除，验收栈直接用 `docker compose -f docker/compose/test.yml`，见 `docs/scripts.md`）；新增的服务端/客户端
   边界行为（如权限快照零请求、SSR 按钮）必须有 E2E 或单测钉住。
 
 **生产交付规则（2026-10-22；权威来源 `docs/docker.md`，本节只摘与应用层相关的条目）**

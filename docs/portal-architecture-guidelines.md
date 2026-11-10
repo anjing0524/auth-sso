@@ -1098,7 +1098,7 @@ page.tsx (Server)                    UserDetailForm.tsx (Client)
 无初始服务端数据的纯表单页，`useState` 受控组件 + 直接调用 Server Action。
 
 ```typescript
-// app/(dashboard)/clients/new/page.tsx（users 的新建走 CreateUserDialog 对话框）
+// app/(dashboard)/clients/new/page.tsx（users/new/page.tsx 同为独立新建页；长表单不进弹窗）
 'use client';
 export default function NewPage() {
   const [form, setForm] = useState({...});
@@ -1164,7 +1164,7 @@ app/(dashboard)/users/[id]/UserDetailForm.tsx  Client Component — 只管理交
 
 #### `/users` 新建用户
 
-**没有 `/users/new` 路由**：新建走列表页上的 `components/CreateUserDialog.tsx`（对话框形态，受控 state + 直接调用 `createUserAction`）。`/clients` 才有 `clients/new/page.tsx` 的独立新建页。
+**用户与应用的新建都是独立页面**：`users/new/page.tsx`（`/users/new`）与 `clients/new/page.tsx`（`/clients/new`），长表单不进弹窗（`docs/spec/UX-GUIDELINES.md` §3.3）。列表页的 `users/components/CreateUserButton.tsx` 只负责 `router.push('/users/new?deptId=…')`；页面从 `searchParams.deptId` 取 `initialDeptId`（仅在该部门落在当前数据范围内时继承筛选），交给 `users/components/CreateUserForm.tsx`。该形态由 `apps/portal/__tests__/components/ui-architecture-contracts.test.ts` 的「长表单创建保持页面化」用例钉住：`CreateUserDialog.tsx` / `CreateClientDialog.tsx` 必须不存在。
 
 #### `UserTable` 状态切换
 

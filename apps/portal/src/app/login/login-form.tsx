@@ -9,6 +9,7 @@ import {
   Eye,
   EyeOff,
   KeyRound,
+  Lock,
   ScrollText,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -44,11 +45,19 @@ const brandPoints = [
   },
 ];
 
+/**
+ * 环境角标（UX-10）：构建时注入的 NEXT_PUBLIC_ 变量，用于区分本地/预发/生产等
+ * 部署形态（自签证书场景尤其易混）。缺省不渲染，生产可不配置。
+ */
+const ENV_LABEL = process.env.NEXT_PUBLIC_PORTAL_ENV_LABEL;
+
 export default function LoginForm({ sessionId, initialError }: LoginFormProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(initialError ?? null);
   const [formData, setFormData] = useState({ email: '', password: '' });
+  const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({});
   const [showPassword, setShowPassword] = useState(false);
+  const emailRef = useRef<HTMLInputElement>(null);
   const passwordRef = useRef<HTMLInputElement>(null);
   const focusPasswordAfterError = useRef(false);
 
@@ -83,11 +92,22 @@ export default function LoginForm({ sessionId, initialError }: LoginFormProps) {
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    // 空提交走自定义内联校验（UX-05）：noValidate 关掉浏览器原生气泡，
+    // 错误文案与密码错误的红色提示同一视觉语言，读屏可通过 aria-invalid 感知
+    const nextFieldErrors: { email?: string; password?: string } = {};
+    if (!formData.email.trim()) nextFieldErrors.email = '请输入登录邮箱';
+    if (!formData.password) nextFieldErrors.password = '请输入密码';
+    if (nextFieldErrors.email || nextFieldErrors.password) {
+      setFieldErrors(nextFieldErrors);
+      (nextFieldErrors.email ? emailRef.current : passwordRef.current)?.focus();
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
 
     try {
-      const body: Record<string, string> = { email: formData.email, password: formData.password };
+      const body: Record<string, string> = { email: formData.email.trim(), password: formData.password };
       if (sessionId) body.session_id = sessionId;
 
       const response = await fetch('/api/auth/login', {
@@ -98,7 +118,14 @@ export default function LoginForm({ sessionId, initialError }: LoginFormProps) {
 
       const data = await response.json();
       if (!response.ok) {
-        throw new Error(data.message || '登录失败，请检查账号和密码');
+        // 预期业务失败（4xx）用 warn 级 + 结构化 code/message（UX-02），
+        // 不占用 error 级监控信噪比；data.error 为 contracts 闭合词汇表内的码
+        log.warn('登录失败', { code: data?.error ?? 'unknown', message: data?.message ?? '' });
+        setError(data.message || '登录失败，请检查账号和密码');
+        // 失败后清空密码（降低偷窥/复用风险），保留邮箱并聚焦密码框（重试成本最低）
+        setFormData((prev) => ({ ...prev, password: '' }));
+        focusPasswordAfterError.current = true;
+        return;
       }
 
       // 登录成功：login_session 已由 Set-Cookie 写入浏览器（HttpOnly，JS 不可读但已存储）
@@ -114,12 +141,10 @@ export default function LoginForm({ sessionId, initialError }: LoginFormProps) {
         window.location.assign(new URL('/dashboard', window.location.origin).toString());
       }
     } catch (err) {
+      // 网络中断 / 响应非 JSON 等非预期异常才走 error 级
       const error = err as Error;
-      log.error('登录失败', { message: error.message });
+      log.error('登录请求异常', { message: error.message });
       setError(error.message);
-      // 失败后清空密码（降低偷窥/复用风险），保留邮箱并聚焦密码框（重试成本最低）
-      setFormData((prev) => ({ ...prev, password: '' }));
-      focusPasswordAfterError.current = true;
     } finally {
       setIsLoading(false);
     }
@@ -169,22 +194,24 @@ export default function LoginForm({ sessionId, initialError }: LoginFormProps) {
             </div>
             <div className="leading-tight">
               <p className="text-[17px] font-semibold tracking-tight text-white">Auth-SSO</p>
-              <p className="mt-1 text-[10px] font-medium uppercase tracking-[0.2em] text-white/60">
+              <p className="mt-1 text-[10px] font-medium uppercase tracking-[0.2em] text-white/70">
                 Identity OS
               </p>
             </div>
           </div>
 
           <div className="my-auto max-w-[420px] py-6 xl:py-10">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-white/60">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-white/70">
               Identity & Access
             </p>
-            <h2 className="mt-5 text-[32px] font-semibold leading-[1.28] tracking-tight text-white xl:text-[36px]">
+            {/* 品牌主张用 p 而非 h2（UX-10）：页面唯一标题是右侧表单区的 h1，
+                左侧先出现 h2 会让读屏的标题层级跳跃 */}
+            <p className="mt-5 text-[32px] font-semibold leading-[1.28] tracking-tight text-white xl:text-[36px]">
               一个入口，
               <br />
               管理所有身份与权限。
-            </h2>
-            <p className="mt-5 max-w-[360px] text-sm leading-6 text-white/60">
+            </p>
+            <p className="mt-5 max-w-[360px] text-sm leading-6 text-white/75">
               面向企业接入场景的统一身份认证、权限治理与审计追踪平台。
             </p>
 
@@ -192,18 +219,18 @@ export default function LoginForm({ sessionId, initialError }: LoginFormProps) {
               {brandPoints.map(({ icon: Icon, title, description }) => (
                 <li key={title} className="flex items-start gap-3.5">
                   <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/[0.07] ring-1 ring-white/10">
-                    <Icon className="h-4 w-4 text-white/70" />
+                    <Icon className="h-4 w-4 text-white/80" />
                   </span>
                   <span>
                     <span className="block text-[13px] font-medium text-white/85">{title}</span>
-                    <span className="mt-1 block text-xs leading-5 text-white/60">{description}</span>
+                    <span className="mt-1 block text-xs leading-5 text-white/75">{description}</span>
                   </span>
                 </li>
               ))}
             </ul>
           </div>
 
-          <div className="flex items-center justify-between gap-4 border-t border-white/10 pt-5 text-[11px] text-white/60">
+          <div className="flex items-center justify-between gap-4 border-t border-white/10 pt-5 text-[11px] text-white/70">
             <span>© 2026 Auth-SSO</span>
             <span>身份与访问管理</span>
           </div>
@@ -217,9 +244,19 @@ export default function LoginForm({ sessionId, initialError }: LoginFormProps) {
             <ShieldCheck className="h-4 w-4 text-color-primary" />
             <span className="text-sm font-semibold">Auth-SSO</span>
           </div>
-          <p className="ml-auto text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-            企业统一身份认证
-          </p>
+          <div className="ml-auto flex items-center gap-2.5">
+            {ENV_LABEL ? (
+              <span
+                title={`当前环境：${ENV_LABEL}`}
+                className="rounded-full border border-border bg-muted px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground"
+              >
+                {ENV_LABEL}
+              </span>
+            ) : null}
+            <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+              企业统一身份认证
+            </p>
+          </div>
         </div>
 
         <div className="mx-auto flex w-full max-w-[380px] flex-1 flex-col justify-center py-4">
@@ -235,29 +272,45 @@ export default function LoginForm({ sessionId, initialError }: LoginFormProps) {
             </p>
           </div>
 
-          <form aria-label="登录表单" onSubmit={handleSubmit} className="space-y-4">
-            {formattedError ? (
-              <Alert variant="destructive" className="animate-in head-shake duration-300">
-                <AlertCircle className="h-4 w-4" />
-                <AlertTitle>登录遇到问题</AlertTitle>
-                <AlertDescription>{formattedError}</AlertDescription>
-              </Alert>
-            ) : null}
+          {/* noValidate（UX-05）：空提交由自定义内联校验接管，不再弹浏览器原生气泡 */}
+          <form aria-label="登录表单" onSubmit={handleSubmit} noValidate className="space-y-4">
+            {/* 固定高度错误槽位（UX-21）：错误提示插入/消失不再引起表单布局跳动 */}
+            <div className="min-h-[76px]">
+              {formattedError ? (
+                <Alert variant="destructive" className="animate-in head-shake duration-300">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertTitle>登录遇到问题</AlertTitle>
+                  <AlertDescription>{formattedError}</AlertDescription>
+                </Alert>
+              ) : null}
+            </div>
 
             <div className="space-y-2">
               <Label htmlFor="login-email">登录邮箱</Label>
               <Input
+                ref={emailRef}
                 id="login-email"
+                name="email"
                 type="text"
                 maxLength={255}
                 autoComplete="username"
                 placeholder="you@company.com"
                 required
+                aria-invalid={fieldErrors.email ? true : undefined}
+                aria-describedby={fieldErrors.email ? 'login-email-error' : undefined}
                 value={formData.email}
-                onChange={(e) => setFormData((prev) => ({ ...prev, email: e.target.value }))}
+                onChange={(e) => {
+                  setFormData((prev) => ({ ...prev, email: e.target.value }));
+                  setFieldErrors((prev) => (prev.email ? { ...prev, email: undefined } : prev));
+                }}
                 disabled={isLoading}
                 className="h-11 border-border/80 bg-white shadow-none"
               />
+              {fieldErrors.email ? (
+                <p id="login-email-error" role="alert" className="text-xs font-medium text-destructive">
+                  {fieldErrors.email}
+                </p>
+              ) : null}
             </div>
 
             <div className="space-y-2">
@@ -266,12 +319,18 @@ export default function LoginForm({ sessionId, initialError }: LoginFormProps) {
                 <Input
                   ref={passwordRef}
                   id="login-password"
+                  name="password"
                   type={showPassword ? 'text' : 'password'}
                   autoComplete="current-password"
                   placeholder="请输入密码"
                   required
+                  aria-invalid={fieldErrors.password ? true : undefined}
+                  aria-describedby={fieldErrors.password ? 'login-password-error' : undefined}
                   value={formData.password}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, password: e.target.value }))}
+                  onChange={(e) => {
+                    setFormData((prev) => ({ ...prev, password: e.target.value }));
+                    setFieldErrors((prev) => (prev.password ? { ...prev, password: undefined } : prev));
+                  }}
                   disabled={isLoading}
                   className="h-11 border-border/80 bg-white pr-11 shadow-none"
                 />
@@ -286,8 +345,13 @@ export default function LoginForm({ sessionId, initialError }: LoginFormProps) {
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
+              {fieldErrors.password ? (
+                <p id="login-password-error" role="alert" className="text-xs font-medium text-destructive">
+                  {fieldErrors.password}
+                </p>
+              ) : null}
               <p className="text-[11px] leading-5 text-muted-foreground">
-                忘记密码？请联系管理员重置（当前不支持自助找回）。
+                无法自助找回密码。如需重置，请联系企业管理员。
               </p>
             </div>
 
@@ -317,7 +381,10 @@ export default function LoginForm({ sessionId, initialError }: LoginFormProps) {
 
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/70 pt-4 text-[11px] text-muted-foreground">
           <span>OAuth 2.1 · OpenID Connect 1.0</span>
-          <span>安全连接</span>
+          <span className="inline-flex items-center gap-1">
+            <Lock className="h-3 w-3" aria-hidden="true" />
+            安全连接
+          </span>
         </div>
       </section>
     </main>

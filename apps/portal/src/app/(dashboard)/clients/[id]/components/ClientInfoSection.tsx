@@ -97,6 +97,8 @@ export function ClientInfoSection({
                 <div className="flex items-center gap-1"><Label htmlFor="client-detail-name">名称</Label><RequiredMark /></div>
                 <Input
                   id="client-detail-name"
+                  name="name"
+                  autoComplete="off"
                   aria-required="true"
                   maxLength={100}
                   disabled={readOnly}
@@ -108,6 +110,8 @@ export function ClientInfoSection({
                 <Label htmlFor="client-detail-homepage">主页 URL</Label>
                 <Input
                   id="client-detail-homepage"
+                  name="homepageUrl"
+                  autoComplete="url"
                   disabled={readOnly}
                   type="url"
                   maxLength={500}
@@ -121,6 +125,8 @@ export function ClientInfoSection({
               <Label htmlFor="client-detail-logo">Logo URL（可选）</Label>
               <Input
                 id="client-detail-logo"
+                name="logoUrl"
+                autoComplete="photo"
                 disabled={readOnly}
                 type="url"
                 maxLength={500}
@@ -159,6 +165,8 @@ export function ClientInfoSection({
               </div>
               <Input
                 id="client-detail-scopes"
+                name="scopes"
+                autoComplete="off"
                 disabled={readOnly}
                 maxLength={200}
                 value={formData.scopes}
@@ -184,6 +192,8 @@ export function ClientInfoSection({
               </div>
               <Textarea
                 id="client-detail-redirect-uris"
+                name="redirectUris"
+                autoComplete="off"
                 aria-required="true"
                 disabled={readOnly}
                 rows={3}
@@ -206,6 +216,8 @@ export function ClientInfoSection({
               <Label htmlFor="client-detail-at-ttl">Access Token 有效期（秒）</Label>
               <Input
                 id="client-detail-at-ttl"
+                name="accessTokenTtl"
+                autoComplete="off"
                 disabled={readOnly}
                 type="number"
                 value={formData.accessTokenTtl}
@@ -227,6 +239,8 @@ export function ClientInfoSection({
               <Label htmlFor="client-detail-rt-ttl">Refresh Token 有效期（秒）</Label>
               <Input
                 id="client-detail-rt-ttl"
+                name="refreshTokenTtl"
+                autoComplete="off"
                 disabled={readOnly}
                 type="number"
                 value={formData.refreshTokenTtl}

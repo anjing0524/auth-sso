@@ -374,17 +374,24 @@ export default function DepartmentTree({ departments, deletionStats = {}, autoOp
                 >
                   收起全部
                 </Button>
+                {/* UX-17：动作化文案替代「全选可移动」功能描述——
+                    未选中时一键全选可移动部门并直接打开移动弹窗；选中后按钮转为「移动到…（N）」动作 */}
                 <Button
                   variant="outline"
-                  onClick={() => setSelectedDepts((prev) => prev.size === movableDepts.length ? new Set() : new Set(movableDepts.map((d) => d.id)))}
+                  onClick={() => {
+                    setMoveParentId('');
+                    if (selectedCount === 0) setSelectedDepts(new Set(movableDepts.map((d) => d.id)));
+                    setMoveOpen(true);
+                  }}
                   disabled={movableDepts.length === 0}
                   title={movableDepts.length === 0 ? '没有可移动的部门（根部门不可移动）' : undefined}
                 >
-                  {selectedCount === movableDepts.length && movableDepts.length > 0 ? '取消全选' : '全选可移动'}
+                  <MoveRight className="h-4 w-4" />
+                  {selectedCount > 0 ? `移动到…（${moveCount}）` : '批量移动…'}
                 </Button>
                 {selectedCount > 0 && (
-                  <Button variant="outline" onClick={() => { setMoveParentId(''); setMoveOpen(true); }}>
-                    <MoveRight className="h-4 w-4" /> 移动到…（{moveCount}）
+                  <Button variant="ghost" onClick={() => setSelectedDepts(new Set())}>
+                    取消选择
                   </Button>
                 )}
                 <PermissionGuard permission={DEPARTMENT_PERMISSIONS.CREATE}>

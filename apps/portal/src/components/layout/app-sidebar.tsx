@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useEffect } from 'react';
 
 import {
   Sidebar,
@@ -24,6 +25,7 @@ import {
   SidebarMenuSub,
   SidebarMenuSubItem,
   SidebarMenuSubButton,
+  useSidebar,
 } from '@/components/ui/sidebar';
 import {
   DropdownMenu,
@@ -54,6 +56,20 @@ export function AppSidebar({ user, dynamicMenus = [] }: {
 }) {
   const pathname = usePathname();
   const userData = user || {};
+  const { setOpen } = useSidebar();
+
+  // UX-22：≤1024px 自动折叠为图标栏（<768px 由 Sidebar 基类的 Sheet 抽屉接管）。
+  // 768–1024 平板宽度下侧边栏展开会占约 1/4 宽度，内容区被压缩；
+  // 只在进入断点时收起，用户仍可手动展开（首帧不渲染分支，无 hydration 风险）。
+  useEffect(() => {
+    const mql = window.matchMedia('(max-width: 1024px)');
+    const onChange = () => {
+      if (mql.matches) setOpen(false);
+    };
+    onChange();
+    mql.addEventListener('change', onChange);
+    return () => mql.removeEventListener('change', onChange);
+  }, [setOpen]);
 
   // dynamicMenus 来自服务端，已按"菜单权限 + 路由功能权限"双重过滤。
   // **不再用内置菜单兜底**：以前 dynamicMenus 为空（角色没有任何菜单权限）时会展示全部菜单，

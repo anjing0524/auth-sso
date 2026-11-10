@@ -6,6 +6,11 @@
  * - 三块任务区（应用身份 / 登录与回调 / 安全与令牌），而不是"左大卡 + 右小卡"的随意分区；
  * - 常用 scopes 用可点选 chip、Token 有效期给预设，减少手输入与记数字；
  * - 提交栏在窄屏固定在视口底部（长表单不需要滚回顶部找提交）。
+ *
+ * 2026-11-06 走查修复：
+ * - UX-06：提交栏统一为 FormActionBar；UX-08：Scopes 帮助文案方位更正；
+ * - UX-09：Token 有效期给出换算提示，「创建后注意」上移并改警示样式；
+ * - UX-24：控件补 name / autocomplete。
  */
 'use client';
 
@@ -31,7 +36,9 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { PageHeader } from '@/components/shared/page-header';
+import { PAGE_TITLES } from '@/lib/route-titles';
 import { RequiredLegend, RequiredMark } from '@/components/shared/required-mark';
+import { FormActionBar } from '@/components/shared/form-action-bar';
 import { safeReturnPath } from '@/lib/safe-return';
 import { validateClientBasics } from '@/lib/client-validation';
 import { toast } from 'sonner';
@@ -53,6 +60,14 @@ const INITIAL_CLIENT_FORM = {
   accessTokenTtl: 3600,
   refreshTokenTtl: 604800,
 };
+
+/** 秒 → 人话时长（UX-09：输入单位仍是秒，但旁边给出换算，避免 604800 心算） */
+function formatTTL(seconds: number): string {
+  if (seconds >= 86400) return `${Math.floor(seconds / 86400)} 天`;
+  if (seconds >= 3600) return `${Math.floor(seconds / 3600)} 小时`;
+  if (seconds >= 60) return `${Math.floor(seconds / 60)} 分钟`;
+  return `${seconds} 秒`;
+}
 
 export default function NewClientPage() {
   const router = useRouter();
@@ -156,7 +171,7 @@ export default function NewClientPage() {
       <PageHeader
         backHref="/clients"
         backLabel="返回应用列表"
-        title="注册新应用"
+        title={PAGE_TITLES.NEW_CLIENT}
         description="注册 OAuth 2.1 客户端；Client ID / Secret 由系统生成，Secret 仅展示一次"
       />
       <p className="text-[11px] text-muted-foreground"><RequiredLegend /></p>
@@ -176,6 +191,8 @@ export default function NewClientPage() {
                 <div className="flex items-center gap-1"><Label htmlFor="client-create-name">应用名称</Label><RequiredMark /></div>
                 <Input
                   id="client-create-name"
+                  name="name"
+                  autoComplete="off"
                   aria-required="true"
                   aria-describedby={errors.name ? 'client-create-name-error' : undefined}
                   placeholder="我的业务系统"
@@ -195,6 +212,8 @@ export default function NewClientPage() {
                 <Label htmlFor="client-create-homepage">主页 URL（可选）</Label>
                 <Input
                   id="client-create-homepage"
+                  name="homepageUrl"
+                  autoComplete="url"
                   type="url"
                   maxLength={500}
                   placeholder="https://example.com"
@@ -206,6 +225,8 @@ export default function NewClientPage() {
                 <Label htmlFor="client-create-logo">Logo URL（可选）</Label>
                 <Input
                   id="client-create-logo"
+                  name="logoUrl"
+                  autoComplete="photo"
                   type="url"
                   maxLength={500}
                   aria-describedby={errors.logoUrl ? 'client-create-logo-error' : undefined}
@@ -232,6 +253,8 @@ export default function NewClientPage() {
                 <div className="flex items-center gap-1"><Label htmlFor="client-create-redirect-uris">回调地址（每行一个）</Label><RequiredMark /></div>
                 <Textarea
                   id="client-create-redirect-uris"
+                  name="redirectUris"
+                  autoComplete="off"
                   aria-required="true"
                   aria-describedby={errors.redirectUris ? 'client-create-redirect-error' : undefined}
                   placeholder={'https://your-app.example.com/api/auth/callback\nhttp://localhost:3000/api/auth/callback'}
@@ -272,12 +295,14 @@ export default function NewClientPage() {
                 </div>
                 <Input
                   id="client-create-scopes"
+                  name="scopes"
+                  autoComplete="off"
                   maxLength={200}
                   value={formData.scopes}
                   onChange={e => setFormData({ ...formData, scopes: e.target.value })}
                   className="mt-1 font-mono text-xs"
                 />
-                <p className="text-[11px] text-muted-foreground">点选常用值会自动写入；特殊 scope 可直接编辑上面的输入框。</p>
+                <p className="text-[11px] text-muted-foreground">点选常用值会自动写入；特殊 scope 可直接编辑下方的输入框。</p>
               </div>
             </CardContent>
           </Card>
@@ -292,15 +317,24 @@ export default function NewClientPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3 p-3">
+              {/* UX-09：不可逆操作的关键提示从卡片底部上移到最前，并用警示样式提高视觉权重 */}
+              <div className="rounded-md border border-badge-warning-fg/30 bg-badge-warning-bg p-2.5 text-[11px] leading-5 text-badge-warning-fg">
+                <p className="font-medium">创建后注意</p>
+                <p>Client Secret 只显示一次，请立即保存到接入方配置；丢失只能轮换。</p>
+                <p>PKCE 强制 S256；回调地址按精确匹配校验。</p>
+              </div>
               <div className="space-y-2">
                 <Label htmlFor="client-create-at-ttl">Access Token 有效期（秒）</Label>
                 <Input
                   id="client-create-at-ttl"
+                  name="accessTokenTtl"
+                  autoComplete="off"
                   type="number"
                   min={60}
                   value={formData.accessTokenTtl}
                   onChange={e => setFormData({ ...formData, accessTokenTtl: parseInt(e.target.value) || 0 })}
                 />
+                <p className="text-[11px] text-muted-foreground">当前：{formatTTL(formData.accessTokenTtl)}</p>
                 <div className="flex gap-1.5">
                   {[{ v: 1800, t: '30 分钟' }, { v: 3600, t: '1 小时' }, { v: 86400, t: '24 小时' }].map((p) => {
                     const active = formData.accessTokenTtl === p.v;
@@ -318,11 +352,14 @@ export default function NewClientPage() {
                 <Label htmlFor="client-create-rt-ttl">Refresh Token 有效期（秒）</Label>
                 <Input
                   id="client-create-rt-ttl"
+                  name="refreshTokenTtl"
+                  autoComplete="off"
                   type="number"
                   min={300}
                   value={formData.refreshTokenTtl}
                   onChange={e => setFormData({ ...formData, refreshTokenTtl: parseInt(e.target.value) || 0 })}
                 />
+                <p className="text-[11px] text-muted-foreground">当前：{formatTTL(formData.refreshTokenTtl)}</p>
                 <div className="flex gap-1.5">
                   {[{ v: 86400, t: '1 天' }, { v: 604800, t: '7 天' }, { v: 2592000, t: '30 天' }].map((p) => {
                     const active = formData.refreshTokenTtl === p.v;
@@ -336,26 +373,21 @@ export default function NewClientPage() {
                   })}
                 </div>
               </div>
-              <div className="rounded-md border border-border/60 bg-muted/30 p-2.5 text-[11px] leading-5 text-muted-foreground">
-                <p className="font-medium text-foreground">创建后注意</p>
-                <p>Client Secret 只显示一次，请立即保存到接入方配置；丢失只能轮换。</p>
-                <p>PKCE 强制 S256；回调地址按精确匹配校验。</p>
-              </div>
             </CardContent>
           </Card>
         </div>
       </div>
       </div>
 
-      {/* 提交栏：内容区独立滚动，窄屏和长表单下始终可见 */}
-      <div className="flex shrink-0 items-center justify-end gap-2 border-t bg-background/95 px-0 py-2">
+      {/* UX-06：统一底部 sticky 操作条（与新建用户/新建权限同版式） */}
+      <FormActionBar isDirty={isDirty}>
         <Button variant="outline" size="sm" asChild>
           <Link href={returnHref}>取消</Link>
         </Button>
         <Button size="sm" onClick={handleCreate} disabled={saving}>
           {saving ? '注册中...' : <><Plus className="h-3.5 w-3.5" /> 确认注册</>}
         </Button>
-      </div>
+      </FormActionBar>
 
       {/* H-C-03：注册成功的一次性凭证弹窗（Secret 仅显示一次，DB 只存 bcrypt） */}
       <Dialog open={!!created} onOpenChange={(open) => { if (!open) closeCreated(); }}>

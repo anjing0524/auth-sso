@@ -502,6 +502,43 @@ describe('U-G09 页面 metadata', () => {
 });
 
 // ═══════════════════════════════════════════════════
+// UX-17/UX-18（2026-11-06 走查）：动作化文案与列语义
+// ═══════════════════════════════════════════════════
+describe('UX-17 部门批量移动动作化', () => {
+  it('工具栏不再是「全选可移动」功能描述，而是「批量移动…」动作', () => {
+    renderDepartments();
+    expect(screen.getByRole('button', { name: '批量移动…' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '全选可移动' })).not.toBeInTheDocument();
+  });
+
+  it('未选中时点击「批量移动…」自动全选可移动部门并打开移动弹窗', async () => {
+    const user = userEvent.setup();
+    renderDepartments();
+
+    await user.click(screen.getByRole('button', { name: '批量移动…' }));
+
+    // 弹窗标题带选中数量（技术部/前端组为可移动部门被全选）
+    expect(await screen.findByText('移动 2 个部门')).toBeInTheDocument();
+    // 选中后工具栏出现「取消选择」出口
+    expect(screen.getByRole('button', { name: '取消选择' })).toBeInTheDocument();
+  });
+});
+
+describe('UX-18 角色权限数列统一为数字', () => {
+  it('无权限角色显示「0 项」数字，不再混排「无权限」状态标签', () => {
+    renderRoles({ roles: [ROLE], pagination: PAGINATION(1), permissionCounts: {} });
+    expect(screen.getByText('0 项')).toBeInTheDocument();
+    expect(screen.queryByText('无权限')).not.toBeInTheDocument();
+  });
+
+  it('有权限角色显示「N 项」纯数字', () => {
+    renderRoles({ roles: [ROLE], pagination: PAGINATION(1), permissionCounts: { [ROLE.id]: 45 } });
+    expect(screen.getByText('45 项')).toBeInTheDocument();
+    expect(screen.queryByText('无权限')).not.toBeInTheDocument();
+  });
+});
+
+// ═══════════════════════════════════════════════════
 // U-DEP04：部门树排序（同级重排、层级不变）
 // ═══════════════════════════════════════════════════
 describe('U-DEP04 部门排序', () => {

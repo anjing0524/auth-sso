@@ -178,6 +178,12 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
   // ≤5 行时卡片贴合内容，避免短列表被 flex-1 撑成整屏空白（与 DataTable 同规则）
   const listFlex = data.length <= 5 ? '' : 'flex-1';
 
+  // UX-15：登录日志「失败原因」列按事件类型动态隐藏——当前页全为空（成功/登出/刷新）
+  // 时该列只输出一排「-」，纯噪声；有失败记录时恢复渲染。操作/访问日志无此列。
+  const showFailReason = tab === 'login'
+    && data.some((log) => Boolean((log as { failReason?: string | null }).failReason));
+  const loginColumnCount = showFailReason ? 6 : 5;
+
   // 当前筛选摘要：让"为什么列表是这些"可解释，并支持单个移除/一键清空
   const filterChips: Array<{ label: string; href: string }> = [];
   if (tab === 'login' && eventType) {
@@ -322,14 +328,14 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
                   <TableHead>用户</TableHead>
                   <TableHead className="hidden md:table-cell">事件类型</TableHead>
                   <TableHead className="hidden md:table-cell">IP 地址</TableHead>
-                  <TableHead className="hidden md:table-cell">失败原因</TableHead>
+                  {showFailReason && <TableHead className="hidden md:table-cell">失败原因</TableHead>}
                   <TableHead className="text-right">详情</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {data.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="h-full p-0">
+                    <TableCell colSpan={loginColumnCount} className="h-full p-0">
                       <div className="flex h-full items-center justify-center">
                       {eventType || keyword || startDate ? (
                         <EmptyState
@@ -369,12 +375,14 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
                         <TableCell className="hidden text-muted-foreground md:table-cell">
                           {formatIp(loginLog.ip)}
                         </TableCell>
-                        <TableCell className={`hidden max-w-[200px] md:table-cell ${loginLog.failReason ? 'text-destructive' : 'text-muted-foreground'}`}>
-                          <span className="line-clamp-2 break-words" title={loginLog.failReason ?? undefined}>{loginLog.failReason || '-'}</span>
-                        </TableCell>
+                        {showFailReason && (
+                          <TableCell className={`hidden max-w-[200px] md:table-cell ${loginLog.failReason ? 'text-destructive' : 'text-muted-foreground'}`}>
+                            <span className="line-clamp-2 break-words" title={loginLog.failReason ?? undefined}>{loginLog.failReason || '-'}</span>
+                          </TableCell>
+                        )}
                         <TableCell className="text-right">
-                          <Button asChild variant="ghost" size="icon-sm" aria-label={`查看 ${loginLog.username} 于 ${formatDate(loginLog.createdAt)} 的登录日志详情（#${loginLog.id.slice(0, 8)}）`}>
-                            <Link href={`/audit-logs/${loginLog.id}?tab=login&returnTo=${encodeURIComponent(currentListHref)}`}><Eye className="h-4 w-4" /></Link>
+                          <Button asChild variant="ghost" size="sm" className="h-8 gap-1.5 px-2" aria-label={`查看 ${loginLog.username} 于 ${formatDate(loginLog.createdAt)} 的登录日志详情（#${loginLog.id.slice(0, 8)}）`}>
+                            <Link href={`/audit-logs/${loginLog.id}?tab=login&returnTo=${encodeURIComponent(currentListHref)}`}><Eye className="h-4 w-4" /><span className="hidden lg:inline">详情</span></Link>
                           </Button>
                         </TableCell>
                       </TableRow>
@@ -464,8 +472,8 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
                           {formatIp(opLog.ip)}
                         </TableCell>
                         <TableCell className="text-right">
-                          <Button asChild variant="ghost" size="icon-sm" aria-label={`查看 ${opLog.username || '未知用户'} 于 ${formatDate(opLog.createdAt)} 的 ${AUDIT_OPERATION_LABELS[opLog.operation as keyof typeof AUDIT_OPERATION_LABELS] || opLog.operation} 操作日志详情（#${opLog.id.slice(0, 8)}）`}>
-                            <Link href={`/audit-logs/${opLog.id}?tab=operation&returnTo=${encodeURIComponent(currentListHref)}`}><Eye className="h-4 w-4" /></Link>
+                          <Button asChild variant="ghost" size="sm" className="h-8 gap-1.5 px-2" aria-label={`查看 ${opLog.username || '未知用户'} 于 ${formatDate(opLog.createdAt)} 的 ${AUDIT_OPERATION_LABELS[opLog.operation as keyof typeof AUDIT_OPERATION_LABELS] || opLog.operation} 操作日志详情（#${opLog.id.slice(0, 8)}）`}>
+                            <Link href={`/audit-logs/${opLog.id}?tab=operation&returnTo=${encodeURIComponent(currentListHref)}`}><Eye className="h-4 w-4" /><span className="hidden lg:inline">详情</span></Link>
                           </Button>
                         </TableCell>
                       </TableRow>
@@ -542,8 +550,8 @@ export default async function AuditLogsPage({ searchParams }: PageProps) {
                         </TableCell>
                         <TableCell className="hidden text-muted-foreground md:table-cell">{formatIp(accessLog.ip)}</TableCell>
                         <TableCell className="text-right">
-                          <Button asChild variant="ghost" size="icon-sm" aria-label={`查看 ${accessLog.method} ${accessLog.path} 于 ${formatDate(accessLog.createdAt)} 的访问日志详情（#${accessLog.id.slice(0, 8)}）`}>
-                            <Link href={`/audit-logs/${accessLog.id}?tab=access&returnTo=${encodeURIComponent(currentListHref)}`}><Eye className="h-4 w-4" /></Link>
+                          <Button asChild variant="ghost" size="sm" className="h-8 gap-1.5 px-2" aria-label={`查看 ${accessLog.method} ${accessLog.path} 于 ${formatDate(accessLog.createdAt)} 的访问日志详情（#${accessLog.id.slice(0, 8)}）`}>
+                            <Link href={`/audit-logs/${accessLog.id}?tab=access&returnTo=${encodeURIComponent(currentListHref)}`}><Eye className="h-4 w-4" /><span className="hidden lg:inline">详情</span></Link>
                           </Button>
                         </TableCell>
                       </TableRow>

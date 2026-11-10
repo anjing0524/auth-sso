@@ -23,6 +23,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { PageHeader } from '@/components/shared/page-header';
+import { PAGE_TITLES } from '@/lib/route-titles';
 import { SearchInput } from '@/components/shared/search-input';
 import { useFieldFailure } from '@/hooks/use-field-failure';
 import { useUnsavedChangesGuard } from '@/hooks/use-unsaved-changes-guard';
@@ -337,7 +338,7 @@ export default function RolePermissionsPage({ role, returnHref = '/roles' }: Rol
         backHref={returnHref}
         backLabel="返回角色列表"
         icon="Key"
-        title="配置功能权限"
+        title={PAGE_TITLES.ROLE_PERMISSIONS}
         description={`角色：${role.name}｜左侧选作用域，右侧一键全选后保存`}
       />
 

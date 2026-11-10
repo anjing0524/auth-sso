@@ -15,7 +15,7 @@
 
 | 维度 | 状态 | 证据 / 说明 |
 |---|---|---|
-| 登录、OIDC/OAuth、RBAC、审计、客户端管理 | 已具备 | 逻辑/API/组件回归 + 关键路径 E2E 27 条 + 2 条桌面视觉基线；覆盖率（行/分支）与 auth domain mutation（94.50%，break 92）门禁见 §2/§4；CI 全绿 |
+| 登录、OIDC/OAuth、RBAC、审计、客户端管理 | 已具备 | 逻辑/API/组件回归 + Docker 验收栈 E2E 27 条（其中 2 条为桌面视觉基线）；覆盖率（行/分支）与 auth domain mutation（94.50%，break 92）是 CI 门禁，阈值见 `scripts/ci/coverage-gate.mjs` 与 `stryker.config.json`，分层见 [`docs/ci.md`](ci.md)；CI 全绿 |
 | 安全基线（JWT/撤销/限流/反提权/HSTS/安全头） | 已具备 | 安全 ADR、API 测试、Gateway 测试、`pnpm audit` 无已知漏洞 |
 | 自托管部署脚本 | 已具备 | `deploy.sh` 校验/构建/迁移/健康/回滚；生产 Compose 校验通过 |
 | 数据库备份 | 已具备 | `backup.sh`：dump + `pg_restore --list` + SHA-256；可选 AES-256 加密 |

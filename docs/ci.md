@@ -20,11 +20,16 @@
 | `acceptance.yml` | 类别 | `workflow_call` | Docker 发布栈 + `tests/e2e` 全部 spec |
 | `acme.yml` | 类别 | `workflow_call` | ACME staging 预检（`lifecycle: false`）+ Pebble 生命周期（`lifecycle: true`） |
 
+> **表外的第 8 个文件**：`visual-baseline.yml` 是仅 `workflow_dispatch` 的独立维护作业——在 Playwright Linux 镜像里
+> 重建桌面截图基线并上传 artifact（`E2E_VISUAL_UPDATE=1`，复用 `scripts/ci/e2e.sh`），产物由人工下载后提交。
+> 它既不是触发文件（不声明触发矩阵）、也不被 `workflow_call` 调用，故不属于上面两类；
+> 发布门禁里的视觉对比仍由 `acceptance.yml` 使用已提交的 linux 基线执行。
+
 ## 分层与命令
 
 | 层 | 类别 / 作业 | CI 调用的命令 | 本地等价 |
 |---|---|---|---|
-| 快层（每次 push/PR，阻断） | `quality.yml` / `node` | `pnpm lint` · `pnpm typecheck` · `pnpm --filter @auth-sso/portal db:migrate` · `pnpm --filter @auth-sso/portal db:seed` · `pnpm test:coverage`（逻辑回归 + auth/permission/oauth 覆盖率阈值）· `pnpm test:mutation`（auth 领域 mutation，break 65）· `node tests/traceability/generate-report.mjs`（均在 `node-test` 容器内） | 同左（先 `docker compose -f docker/compose/local.yml up -d`） |
+| 快层（每次 push/PR，阻断） | `quality.yml` / `node` | `pnpm lint` · `pnpm typecheck` · `pnpm --filter @auth-sso/portal db:migrate` · `pnpm --filter @auth-sso/portal db:seed` · `pnpm test:coverage`（逻辑回归 + auth/permission/oauth 覆盖率阈值）· `pnpm test:mutation`（auth 领域 mutation，break 92）· `node tests/traceability/generate-report.mjs`（均在 `node-test` 容器内） | 同左（先 `docker compose -f docker/compose/local.yml up -d`） |
 | 快层 | `quality.yml` / `rust` | `cargo fmt --check` · `cargo clippy` · `cargo test` · `cargo build --release` · `cargo audit` | 同左（工作目录 `apps/gateway`） |
 | 快层 | `acme.yml` / `preflight` | `scripts/ci/acme-preflight.sh` | CI 专用（断言 `acme-staging.sh` 的预检契约，无容器） |
 | 验收层（每次 push/PR，阻断） | `acceptance.yml` / `docker-release` | `scripts/ci/e2e.sh`（关键路径 E2E + 桌面视觉基线 + a11y） | `pnpm test:e2e`；独立门禁 `pnpm test:visual` / `E2E_CHANNEL=chrome pnpm test:a11y` |
@@ -39,7 +44,7 @@
 > - `pnpm test`：全部逻辑/API/组件回归；`pnpm test:api` / `test:ui` / `test:contracts` 可按层单独运行。
 > - `pnpm test:coverage`：逻辑回归 + 核心安全域覆盖率阈值。
 > - `pnpm test:mutation`：auth 领域 mutation（Stryker），当前基线 94.50%，break 92；全量 hookTimeout 30s；不是覆盖率替代品。
-- `pnpm test:e2e`：真实 Docker 栈的关键用户路径；默认不跑视觉基线。
+> - `pnpm test:e2e`：真实 Docker 栈的关键用户路径；本地默认不跑视觉基线（CI 的 `scripts/ci/e2e.sh` 会显式设 `E2E_VISUAL=1`，跑基线 + a11y）。
 > - `pnpm test:visual`：桌面 1440/1280 截图基线（`E2E_VISUAL=1`），独立门禁。
 > - `E2E_CHANNEL=chrome pnpm test:a11y`：对比度/键盘门禁，独立门禁。
 > - `pnpm test:ai`：Midscene AI 视觉探索性测试（非阻断，手动运行；需要模型 Key）。

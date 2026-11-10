@@ -114,6 +114,10 @@ services:
     environment:
       NODE_ENV: test
       GATEWAY_SHARED_SECRET: e2e-gateway-shared-secret
+      # H-D-11（PM-01）：规范入口 Host。浏览器经 https://localhost:19443 访问时，
+      # Gateway 会 302 回 https://127.0.0.1:19443（与 PORTAL_REDIRECT_URL 注册的
+      # 回调 host 一致），避免 OAuth redirect_uri 不匹配（AUTH_SSO_2033）。
+      GATEWAY_CANONICAL_HOST: "127.0.0.1:19443"
       # E2E 网关限流抬档（生产默认 20/30，见 config.rs RateLimitConfig）
       RATE_LIMIT_AUTH_MAX: "200"
       RATE_LIMIT_TOKEN_MAX: "300"
@@ -126,7 +130,12 @@ services:
       cert-init:
         condition: service_completed_successfully
     healthcheck:
-      test: ["CMD-SHELL", "wget --no-check-certificate -q -O /dev/null https://127.0.0.1:443/login"]
+      # H-D-11：改探 /healthz（网关自身存活探针，Host 规范化的豁免端点）——
+      # 容器内探测 Host（127.0.0.1:443）≠ 规范入口（127.0.0.1:19443），探 /login
+      # 会被 302 到宿主机端口（容器内不可达）导致健康检查假死；且探针本就不应
+      # 把上游 Portal 健康当网关存活（见 gateway.rs HEALTH_PATH 设计注释）。
+      # 上游链路由 Portal 自身 healthcheck + E2E（https://127.0.0.1:19443/login 200）把关。
+      test: ["CMD-SHELL", "wget --no-check-certificate -q -O /dev/null https://127.0.0.1:443/healthz"]
       interval: 5s
       timeout: 3s
       retries: 24

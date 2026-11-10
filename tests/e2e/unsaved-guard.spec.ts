@@ -45,6 +45,33 @@ test('新建应用未保存时离开需确认', async ({ page }) => {
   await expect(page.getByRole('dialog')).toHaveCount(0);
 });
 
+test('新建用户未保存时离开需确认', async ({ page }) => {
+  await page.goto('/login');
+  await page.getByLabel('登录邮箱').fill('admin@example.com');
+  await page.getByLabel('密码', { exact: true }).fill('Admin@123456');
+  await page.getByRole('button', { name: '安全登录' }).click();
+  await page.waitForURL(/dashboard$/);
+
+  await page.goto('/users/new', { waitUntil: 'networkidle' });
+  // PM-02 验收口径：填 4 个字段后离开必须弹确认
+  await page.getByLabel('显示名称').fill('守卫测试用户');
+  await page.getByLabel('用户名（唯一标识）').fill('guard-probe');
+  await page.getByLabel('电子邮箱').fill('guard-probe@example.com');
+  await page.getByLabel('初始密码').fill('Init@123456');
+
+  await page.getByRole('link', { name: '用户管理' }).first().click();
+  await expect(page.getByRole('dialog')).toContainText('离开并放弃未保存的修改？');
+  // 取消保留输入
+  await page.getByRole('button', { name: '继续编辑' }).click();
+  await expect(page).toHaveURL(/\/users\/new$/);
+  await expect(page.getByLabel('电子邮箱')).toHaveValue('guard-probe@example.com');
+
+  await page.getByRole('link', { name: '用户管理' }).first().click();
+  await page.getByRole('button', { name: '放弃并离开' }).click();
+  await expect(page).toHaveURL(/\/users$/);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+});
+
 test('命令面板跳转同样受未保存守卫', async ({ page }) => {
   await page.goto('/login');
   await page.getByLabel('登录邮箱').fill('admin@example.com');

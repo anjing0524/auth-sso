@@ -159,6 +159,10 @@ services:
       ACME_CHECK_INTERVAL_SECS: ${ACME_CHECK_INTERVAL_SECS:-21600}
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
       GATEWAY_SHARED_SECRET: ${GATEWAY_SHARED_SECRET}
+      # H-D-11（PM-01）：规范入口 Host。非规范 Host（如直连 IP）将被 302 回
+      # 证书域名，保证 OAuth redirect_uri 落在已注册入口上。缺省取证书域名；
+      # 该 Host 必须已被 PORTAL_REDIRECT_URL 登记（deploy.sh 校验）。
+      GATEWAY_CANONICAL_HOST: ${GATEWAY_CANONICAL_HOST:-${LETSENCRYPT_DOMAIN}}
     ports:
       - "80:80"
       - "443:443"

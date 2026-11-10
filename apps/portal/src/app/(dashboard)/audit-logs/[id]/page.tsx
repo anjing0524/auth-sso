@@ -17,10 +17,11 @@ import { getAccessLogById, getAuditLogById, getLoginLogById } from '@/app/audit/
 import { AuditParamsActions } from './params-actions';
 import { CopyTextButton } from '@/components/shared/copy-text-button';
 import { PageHeader } from '@/components/shared/page-header';
+import { PAGE_TITLES } from '@/lib/route-titles';
 
 /** 读取会话/动态数据：与审计列表同口径，声明非 instant 路由 */
 export const instant = false;
-export const metadata = { title: '审计日志详情 | Auth-SSO' };
+export const metadata = { title: `${PAGE_TITLES.AUDIT_DETAIL} | Auth-SSO` };
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -73,7 +74,7 @@ export default async function AuditLogDetailPage({ params, searchParams }: PageP
       <div className="flex min-h-0 flex-1 flex-col gap-3">
         <PageHeader
           variant="sticky"
-          title="登录日志详情"
+          title={PAGE_TITLES.AUDIT_DETAIL}
           backHref={returnHref}
           backLabel="返回审计日志"
           meta={<><Badge variant="secondary">{label}</Badge><span className="flex items-center gap-1 type-meta text-muted-foreground">ID {row.id}<CopyTextButton text={row.id} label="复制日志 ID" /></span></>}
@@ -86,8 +87,9 @@ export default async function AuditLogDetailPage({ params, searchParams }: PageP
               <Field label="用户" value={row.username} />
               <Field label="事件类型" value={label} />
               <Field label="IP 地址" value={formatIp(row.ip)} mono copy />
-              <Field label="地理位置" value={row.location || '-'} />
-              <Field label="失败原因" value={row.failReason || '-'} mono />
+              {/* UX-15：成功/登出等事件的空字段（地理位置 -/失败原因 -）不渲染，只展示有值字段 */}
+              {row.location && <Field label="地理位置" value={row.location} />}
+              {row.failReason && <Field label="失败原因" value={row.failReason} mono />}
               <Field label="User-Agent" value={row.userAgent || '-'} mono copy />
             </dl>
             <div className="mt-3 text-xs">
@@ -108,7 +110,7 @@ export default async function AuditLogDetailPage({ params, searchParams }: PageP
       <div className="flex min-h-0 flex-1 flex-col gap-3">
         <PageHeader
           variant="sticky"
-          title="访问日志详情"
+          title={PAGE_TITLES.AUDIT_DETAIL}
           backHref={returnHref}
           backLabel="返回审计日志"
           meta={<><Badge variant="outline" size="sm" className="font-mono">{row.method}</Badge><span className="flex items-center gap-1 type-meta text-muted-foreground">ID {row.id}<CopyTextButton text={row.id} label="复制日志 ID" /></span></>}
@@ -157,7 +159,7 @@ export default async function AuditLogDetailPage({ params, searchParams }: PageP
     <div className="flex min-h-0 flex-1 flex-col gap-3">
       <PageHeader
         variant="sticky"
-        title="操作日志详情"
+        title={PAGE_TITLES.AUDIT_DETAIL}
         backHref={returnHref}
         backLabel="返回审计日志"
         meta={<><Badge size="sm">{opLabel}</Badge><span className="flex items-center gap-1 type-meta text-muted-foreground">ID {row.id}<CopyTextButton text={row.id} label="复制日志 ID" /></span></>}

@@ -122,3 +122,51 @@ describe('CreateUserForm · 默认部门', () => {
     expect(form.get('deptId')).toBe(DEPARTMENTS[0]!.id);
   });
 });
+
+/** PM-05 / UX-24：初始密码交互（可见性切换 + 生成强密码 + 首登改密说明 + 控件语义） */
+describe('CreateUserForm · 初始密码交互', () => {
+  it('密码默认掩码，切换后可见，再点切回掩码', async () => {
+    const user = userEvent.setup();
+    render(<CreateUserForm departments={DEPARTMENTS} />);
+
+    const input = screen.getByLabelText('初始密码') as HTMLInputElement;
+    await user.type(input, 'Init@123456');
+    expect(input.type).toBe('password');
+
+    await user.click(screen.getByRole('button', { name: '显示密码' }));
+    expect(input.type).toBe('text');
+
+    await user.click(screen.getByRole('button', { name: '隐藏密码' }));
+    expect(input.type).toBe('password');
+  });
+
+  it('「生成强密码」写入满足策略的 16 位密码并自动显示明文', async () => {
+    const user = userEvent.setup();
+    render(<CreateUserForm departments={DEPARTMENTS} />);
+
+    await user.click(screen.getByRole('button', { name: '生成强密码' }));
+    const input = screen.getByLabelText('初始密码') as HTMLInputElement;
+
+    expect(input.value).toHaveLength(16);
+    // 领域密码策略：大写/小写/数字/特殊字符至少三类（生成器实际四类俱全）
+    expect(input.value).toMatch(/[a-z]/);
+    expect(input.value).toMatch(/[A-Z]/);
+    expect(input.value).toMatch(/[0-9]/);
+    expect(input.value).toMatch(/[^A-Za-z0-9]/);
+    // 生成后自动切为可见，便于管理员直接线下告知
+    expect(input.type).toBe('text');
+  });
+
+  it('帮助文案说明首登强制改密，且密码框不引导自动填充登录密码', () => {
+    render(<CreateUserForm departments={DEPARTMENTS} />);
+    expect(screen.getByText(/首次登录会被强制修改密码/)).toBeInTheDocument();
+
+    const password = screen.getByLabelText('初始密码') as HTMLInputElement;
+    expect(password.getAttribute('autocomplete')).toBe('new-password');
+    expect(password.getAttribute('name')).toBe('password');
+
+    const email = screen.getByLabelText('电子邮箱') as HTMLInputElement;
+    expect(email.getAttribute('autocomplete')).toBe('email');
+    expect(email.getAttribute('name')).toBe('email');
+  });
+});

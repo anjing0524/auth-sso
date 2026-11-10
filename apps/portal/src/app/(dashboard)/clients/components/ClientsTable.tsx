@@ -37,16 +37,6 @@ import { TableToolbar } from '@/components/shared/table-toolbar';
 import { TablePagination } from '@/components/shared/table-pagination';
 import { PermissionGuard } from '@/components/shared/permission-guard';
 import { CopyTextButton } from '@/components/shared/copy-text-button';
-/** 回调 URI 列表展示：去协议显示 host+path（完整值放 title），避免长 URL 被截成 "ps://…" */
-function formatRedirectUri(uri: string): string {
-  try {
-    const u = new URL(uri);
-    return `${u.host}${u.pathname === '/' ? '' : u.pathname}`;
-  } catch {
-    return uri;
-  }
-}
-
 /** 头像兜底文案：中文取首字，拉丁名取前两位（"系统管理员"→"系"，"Auth-SSO Portal"→"AU"） */
 function avatarFallback(name: string): string {
   const trimmed = name.trim();
@@ -288,11 +278,12 @@ export default function ClientsTable({ clients, pagination, initialKeyword, init
         </div>
       </TableCell>
       <TableCell className="hidden xl:table-cell">
-        <div className="flex flex-wrap gap-1 max-w-[200px]">
+        {/* UX-13：安全敏感的回调白名单完整显示（换行不截断），协议也参与精确匹配 */}
+        <div className="flex flex-wrap gap-1 max-w-[220px]">
           {client.redirectUris.slice(0, 1).map((uri, i) => (
-            <span key={i} className="flex min-w-0 items-center gap-0.5">
-              <Badge variant="outline" title={uri} className="h-auto max-w-[190px] justify-start overflow-hidden border-border bg-card font-mono font-normal shadow-sm">
-                <span className="truncate">{formatRedirectUri(uri)}</span>
+            <span key={i} className="flex min-w-0 items-start gap-0.5">
+              <Badge variant="outline" title={uri} className="h-auto max-w-[210px] justify-start whitespace-normal break-all border-border bg-card text-left font-mono font-normal leading-4 shadow-sm">
+                {uri}
               </Badge>
               <CopyTextButton text={uri} label={`复制 ${client.name} 的回调地址`} />
             </span>
@@ -308,7 +299,13 @@ export default function ClientsTable({ clients, pagination, initialKeyword, init
         </span>
       </TableCell>
       <TableCell>
-        <Badge variant={enableStatus(client.status).variant}>
+        {/* UX-13：停用状态徽章悬停可见原因（数据层无逐条禁用原因，说明禁用后果与恢复入口） */}
+        <Badge
+          variant={enableStatus(client.status).variant}
+          title={client.status === 'ACTIVE'
+            ? undefined
+            : '已禁用：该应用无法发起新的授权，已签发的 Token 在过期前仍有效；可在「编辑配置」中重新启用'}
+        >
           {enableStatus(client.status).label}
         </Badge>
       </TableCell>
@@ -323,7 +320,7 @@ export default function ClientsTable({ clients, pagination, initialKeyword, init
             <Button
               variant="ghost"
               size="sm"
-              aria-label={`注销应用 ${client.name}`}
+              aria-label={client.clientId === PORTAL_CLIENT_ID ? `注销应用 ${client.name}（Portal 自身客户端不可注销）` : `注销应用 ${client.name}`}
               title={client.clientId === PORTAL_CLIENT_ID ? 'Portal 自身客户端不可注销' : `注销应用 ${client.name}`}
               disabled={client.clientId === PORTAL_CLIENT_ID}
               className="h-8 gap-1.5 px-2 text-destructive hover:bg-destructive/10 hover:text-destructive disabled:opacity-40"
@@ -387,7 +384,7 @@ export default function ClientsTable({ clients, pagination, initialKeyword, init
       />
 
       <Dialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}>
-        <DialogContent>
+        <DialogContent showCloseButton={false}>
           <DialogHeader>
             <DialogTitle>注销应用「{deleteTarget?.name}」？</DialogTitle>
             <DialogDescription>

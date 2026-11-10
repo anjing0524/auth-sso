@@ -9,6 +9,7 @@
 import React, { useEffect, useMemo, useRef } from 'react';
 import { SidebarProvider, SidebarInset, SidebarTrigger } from '@/components/ui/sidebar';
 import { AppSidebar } from './app-sidebar';
+import { buildBreadcrumbTrail } from './breadcrumbs';
 import { Separator } from '@/components/ui/separator';
 import {
   Breadcrumb,
@@ -61,50 +62,8 @@ export default function DashboardLayout({
     requestAnimationFrame(() => document.getElementById('main-content')?.focus());
   }, [pathname]);
 
-  const breadcrumbs = useMemo(() => {
-    const segments = pathname.split('/').filter(Boolean);
-    const crumbs = [{ title: '工作台', url: '/dashboard' }];
-
-    if (segments[0] !== 'dashboard') {
-      const titleMap: Record<string, string> = {
-        users: '用户管理',
-        roles: '角色管理',
-        departments: '部门管理',
-        clients: '应用管理',
-        'audit-logs': '审计日志',
-        permissions: '权限管理',
-        profile: '个人中心',
-        menus: '菜单配置',
-      };
-      const title = titleMap[segments[0]!] || segments[0] || '';
-      crumbs.push({ title, url: `/${segments[0]}` });
-      // 角色权限配置页（/roles/:id/permissions）：补一级可读面包屑
-      if (segments[0] === 'roles' && segments[2] === 'permissions') {
-        crumbs.push({ title: '配置权限', url: pathname });
-      }
-      if (segments[0] === 'users' && segments[2] === 'roles') {
-        crumbs.push({ title: '分配角色', url: pathname });
-      } else if (segments[0] === 'users' && segments[1]) {
-        crumbs.push({ title: '用户详情', url: pathname });
-      }
-      if (segments[0] === 'clients' && segments[1] === 'new') {
-        crumbs.push({ title: '注册应用', url: pathname });
-      } else if (segments[0] === 'clients' && segments[1]) {
-        crumbs.push({ title: '应用详情', url: pathname });
-      }
-      if (segments[0] === 'audit-logs' && segments[1]) {
-        crumbs.push({ title: '审计日志详情', url: pathname });
-      }
-      if (segments[0] === 'permissions' && segments[1] === 'new') {
-        crumbs.push({ title: '新建权限', url: pathname });
-      }
-      if (segments[0] === 'permissions' && segments[2] === 'edit') {
-        crumbs.push({ title: '编辑权限', url: pathname });
-      }
-    }
-
-    return crumbs;
-  }, [pathname]);
+  // UX-07：面包屑末级与页面 H1 同名，轨迹由纯函数统一生成（见 breadcrumbs.ts）
+  const breadcrumbs = useMemo(() => buildBreadcrumbTrail(pathname), [pathname]);
 
   return (
     <SidebarProvider defaultOpen={true} className="h-svh overflow-hidden">

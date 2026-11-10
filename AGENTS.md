@@ -123,15 +123,15 @@ packages/contracts/ 共享类型、错误码、权限码、OIDC 常量（枚举�
 packages/config/    共享 env 配置 (Zod + URL 推导)
 ```
 
-## 测试体系 (Vitest 4 Projects 模式)
+## 测试体系 (Vitest 5 Projects 模式)
 
-- Vitest 4.x 使用 `test.projects` 聚合（根 `vitest.config.ts` → `apps/portal/vitest.api.config.ts` + `apps/portal/vitest.ui.config.ts` + `packages/contracts/vitest.config.ts`），非 `vitest.workspace.ts`
+- Vitest 5.x 使用 `test.projects` 聚合（根 `vitest.config.ts` → `apps/portal/vitest.api.config.ts` + `apps/portal/vitest.ui.config.ts` + `packages/contracts/vitest.config.ts`），非 `vitest.workspace.ts`
 - 测试环境按 project 划分：API project 全局 `node`（`vitest.api.config.ts`），UI/domain project 全局 `jsdom`（`vitest.ui.config.ts`）；UI project 下个别需 node 的文件用 `// @vitest-environment node` 行级覆盖
 - Vite 8 原生支持 tsconfig paths 解析（无需 `vite-tsconfig-paths` 插件）
 - API project 以 Docker Compose 暴露的 PostgreSQL/Redis 作为真实基础设施基线；UI/domain project 不依赖数据库
 - E2E Playwright 仅 Chromium，**只跑 Docker 验收栈**：默认 baseURL `https://127.0.0.1:19443`（可用 `E2E_BASE_URL` 覆盖），无 host `next dev` webServer
 - 需求追溯: 测试文件用 `@req` 注解标记覆盖的需求 ID
-- 共享配置: `vitest.base.ts`（仅 testTimeout，coverage 在根 `vitest.config.ts`）+ `drizzle.base.ts`
+- 共享配置: `vitest.base.ts`（testTimeout + hookTimeout，coverage 在根 `vitest.config.ts`）+ `drizzle.base.ts`
 
 | 层 | 位置 | 环境 / 框架 | 范围 | 命令 |
 |---|---|---|---|---|

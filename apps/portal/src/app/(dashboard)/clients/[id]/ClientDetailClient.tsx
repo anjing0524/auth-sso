@@ -315,9 +315,9 @@ export function ClientDetailClient({ client, initialTokens, initialTokenTotal, c
         />
         </div>
 
-      {/* 危险操作二次确认（统一弹窗，替代原生 confirm） */}
+      {/* 危险操作二次确认（统一弹窗，替代原生 confirm）；UX-12：取消只留底部按钮 */}
       <Dialog open={pendingAction !== null} onOpenChange={(open) => { if (!open) { setPendingAction(null); setRevokeTokenTarget(null); } }}>
-        <DialogContent>
+        <DialogContent showCloseButton={false}>
           <DialogHeader>
             <DialogTitle>{meta?.title}</DialogTitle>
             <DialogDescription>{pendingAction === 'revoke-token' && revokeTokenTarget ? `撤销「${revokeTokenTarget.username ?? '该用户'}」的这次授权后，该会话立即失效。` : meta?.description}</DialogDescription>

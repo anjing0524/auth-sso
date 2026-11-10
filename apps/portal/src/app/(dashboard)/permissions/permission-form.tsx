@@ -23,6 +23,8 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { PageHeader } from '@/components/shared/page-header';
+import { PAGE_TITLES } from '@/lib/route-titles';
+import { FormActionBar } from '@/components/shared/form-action-bar';
 import { Popover, PopoverTrigger, PopoverContent, PopoverClose } from '@/components/ui/popover';
 import { DynamicIcon } from '@/lib/icon-map';
 import { FieldError } from '@/components/shared/field-error';
@@ -174,8 +176,10 @@ export default function PermissionForm({ mode, menuOptions, permission, clients 
         backHref={returnHref}
         backLabel="返回权限列表"
         icon="Key"
-        title={mode === 'create' ? `新建${TYPE_LABELS[form.type] ?? ''}权限` : `编辑${TYPE_LABELS[form.type] ?? ''}权限`}
-        description={mode === 'create' ? '权限编码创建后不可变更；页面/目录类型需要路由与图标' : `编码：${form.code}（创建后不可变更）`}
+        title={mode === 'create' ? PAGE_TITLES.NEW_PERMISSION : PAGE_TITLES.EDIT_PERMISSION}
+        description={mode === 'create'
+          ? `新建${TYPE_LABELS[form.type] ?? ''}权限；权限编码创建后不可变更；页面/目录类型需要路由与图标`
+          : `${TYPE_LABELS[form.type] ?? ''}权限；编码：${form.code}（创建后不可变更）`}
       />
 
       {isBuiltin && (
@@ -192,14 +196,14 @@ export default function PermissionForm({ mode, menuOptions, permission, clients 
           <div className="grid gap-3 p-3 sm:grid-cols-2">
             <div className="space-y-2">
               <div className="flex items-center gap-1"><Label htmlFor="perm-name">权限名称</Label><RequiredMark /></div>
-              <Input id="perm-name" aria-required="true" value={form.name} maxLength={100} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="用户列表" />
+              <Input id="perm-name" name="name" autoComplete="off" aria-required="true" value={form.name} maxLength={100} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="用户列表" />
             </div>
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-1"><Label htmlFor="perm-code">权限编码{mode === 'edit' ? '（不可变更）' : ''}</Label>{mode === 'create' && <RequiredMark />}</div>
                 {mode === 'edit' && <CopyTextButton text={form.code} label="复制权限编码" />}
               </div>
-              <Input id="perm-code" aria-required={mode === 'create'} aria-describedby={fieldError?.field === 'code' ? 'perm-code-error' : undefined} value={form.code} maxLength={150} disabled={mode === 'edit'} aria-invalid={fieldError?.field === 'code'} onChange={e => setForm({ ...form, code: e.target.value })} placeholder={form.type === 'API' ? 'portal:user:list' : 'portal:menu:users'} />
+              <Input id="perm-code" name="code" autoComplete="off" aria-required={mode === 'create'} aria-describedby={fieldError?.field === 'code' ? 'perm-code-error' : undefined} value={form.code} maxLength={150} disabled={mode === 'edit'} aria-invalid={fieldError?.field === 'code'} onChange={e => setForm({ ...form, code: e.target.value })} placeholder={form.type === 'API' ? 'portal:user:list' : 'portal:menu:users'} />
               <p className="text-[11px] text-muted-foreground">
                 {form.type === 'API'
                   ? '格式：{应用标识}:{资源}:{动作}，例如 portal:user:list'
@@ -209,7 +213,7 @@ export default function PermissionForm({ mode, menuOptions, permission, clients 
             <FieldError failure={fieldError} field="code" id="perm-code-error" />
             <div className="space-y-2 sm:col-span-2">
               <Label htmlFor="perm-desc">描述（可选）</Label>
-              <Textarea id="perm-desc" rows={2} value={form.description} maxLength={500} onChange={e => setForm({ ...form, description: e.target.value })} placeholder="用于说明该权限的用途" />
+              <Textarea id="perm-desc" name="description" autoComplete="off" rows={2} value={form.description} maxLength={500} onChange={e => setForm({ ...form, description: e.target.value })} placeholder="用于说明该权限的用途" />
               <p className="text-[11px] text-muted-foreground">最多 500 字符</p>
             </div>
             <div className="space-y-2">
@@ -278,7 +282,7 @@ export default function PermissionForm({ mode, menuOptions, permission, clients 
             <div className="grid gap-3 p-3 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="perm-path">路由路径{form.type === 'PAGE' ? '（必填）' : '（可选）'}</Label>
-                <Input id="perm-path" aria-required={form.type === 'PAGE'} value={form.path} maxLength={200} onChange={e => setForm({ ...form, path: e.target.value })} placeholder="/users" />
+                <Input id="perm-path" name="path" autoComplete="off" aria-required={form.type === 'PAGE'} value={form.path} maxLength={200} onChange={e => setForm({ ...form, path: e.target.value })} placeholder="/users" />
                 <p className="text-[11px] leading-4 text-muted-foreground">以 / 开头，如 /users；PAGE 类型用于侧边栏跳转。</p>
               </div>
               <div className="space-y-2">
@@ -330,10 +334,10 @@ export default function PermissionForm({ mode, menuOptions, permission, clients 
               </div>
               <div className="space-y-2">
                 <Label htmlFor="perm-sort">排序</Label>
-                <Input id="perm-sort" type="number" value={form.sort} onChange={e => setForm({ ...form, sort: Number(e.target.value) })} />
+                <Input id="perm-sort" name="sort" autoComplete="off" type="number" value={form.sort} onChange={e => setForm({ ...form, sort: Number(e.target.value) })} />
               </div>
-              <label className="flex items-center gap-2 pb-2 text-sm sm:pt-6">
-                <Checkbox checked={form.visible} onCheckedChange={(v) => setForm({ ...form, visible: v === true })} />
+              <label htmlFor="perm-visible" className="flex items-center gap-2 pb-2 text-sm sm:pt-6">
+                <Checkbox id="perm-visible" name="visible" checked={form.visible} onCheckedChange={(v) => setForm({ ...form, visible: v === true })} />
                 在侧边栏显示
               </label>
             </div>
@@ -341,12 +345,16 @@ export default function PermissionForm({ mode, menuOptions, permission, clients 
         )}
 
         </div>
-        <div className="flex shrink-0 items-center justify-end gap-2 border-t pt-2">
+        {/* UX-06：表单页统一底部 sticky 操作条（与新建用户/注册应用同版式） */}
+        <FormActionBar
+          isDirty={isDirty}
+          hint={<span className="text-[11px] text-muted-foreground">{mode === 'create' ? '权限编码创建后不可变更。' : '停用权限会立即影响所有已授权角色。'}</span>}
+        >
           <Button type="button" variant="outline" size="sm" asChild>
             <Link href={returnHref}>取消</Link>
           </Button>
           <Button type="submit" size="sm" disabled={saving}>{saving ? '保存中...' : mode === 'create' ? '创建' : '保存'}</Button>
-        </div>
+        </FormActionBar>
       </form>
       {leaveGuard}
     </div>

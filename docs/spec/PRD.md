@@ -1,8 +1,8 @@
 # 产品需求文档 (PRD) - Auth-SSO
 
-版本号：v1.3
+版本号：v1.4
 状态：已发布
-最后更新：2026-10-29
+最后更新：2026-11-05
 目标读者：产品、工程、QA、运维团队
 
 > **v1.4 变更（2026-11-05，首登强制改密落地）**：§2.3 的“强制改密未实现”已修复——OAuth 回调后
@@ -80,7 +80,7 @@
 - 内置 `SUPER_ADMIN`（超级管理员，唯一 break-glass）与 `PLATFORM_ADMIN`（平台管理员）角色归属**已存在的根部门**（`parent_id IS NULL`；seed 主脚本先创建根部门「总公司」（code `ROOT`），随后 `seed-rbac` 把该根部门绑为角色所属部门，并给两个角色绑定全部 API + PAGE 权限）。只有 `SUPER_ADMIN` 在 **OAuth 客户端准入**上直接放行（`domain/auth/oauth-authorize.ts` 的 `isAdminRole`）；`PLATFORM_ADMIN` 是普通 RBAC 角色，必须由显式权限的 `client_id` 命中目标 client。**数据范围仍走 ADR-014 门面 `resolveScope` 的部门子树规则，不存在"超管绕过数据范围"的特殊分支**（`lib/authz/data-scope.ts` 无角色码旁路）——管理员之所以看起来"全量可见"，是因为其角色挂在根部门上。
 - 种子管理员账号的**用户名/邮箱/密码是硬编码的初值**（`username=admin`、`email=admin@example.com`、密码 `Admin@123456`，`apps/portal/scripts/seed.ts`），**不经环境变量配置**；OAuth 客户端的 `PORTAL_CLIENT_SECRET` / `PORTAL_REDIRECT_URL` 才可由环境变量覆盖。**生产部署必须先改掉这些初值**（`db:seed` 只用于初始化与本地/验收环境）。
 - 后续 `SUPER_ADMIN` 的授予通过既有的用户角色分配链路（FR-USR-08）完成，由现有超级管理员执行。
-- ⚠️ **未实现**：原需求"首次登录强制修改密码（`password_changed_at` 为空时拦截）"在代码中**无对应拦截**——`users.password_changed_at` 列存在（`apps/portal/src/db/schema/users.ts`），但只在自助改密成功时写入（`lib/account/change-password.ts`），登录/鉴权路径从不读取它做判定 ⇒ 当前行为是"种子账号可一直用初值密码登录"。列为待实现项（不在本轮文档校正范围内改代码）。
+- **首登强制改密（2026-11-05 已交付）**：`users.password_changed_at` 为空的用户登录后不能进入工作台——权限上下文 `mustChangePassword` 由 `apps/portal/src/lib/permissions.ts` 的 `getUserPermissionContext` 以 `user.passwordChangedAt === null` 判定；`apps/portal/src/app/(dashboard)/layout.tsx` 的 `DashboardContent` 据此 `redirect('/force-password-change')`（该页 `apps/portal/src/app/force-password-change/page.tsx` 对已改密用户反向回 `/dashboard`）；`apps/portal/src/lib/auth/check-permission.ts` 的 `checkPermission` 对该状态默认拒绝，只有改密动作 `changeOwnPasswordAction`（`apps/portal/src/app/(dashboard)/profile/actions.ts`）显式带 `allowPasswordChangeRequired`，因此绕过页面直调其余写操作同样被拦。改密成功写回 `passwordChangedAt` 并撤销旧会话（`apps/portal/src/lib/account/change-password.ts`）。存量用户由迁移 `apps/portal/drizzle/0007_password_change_required.sql` 一次性回填（种子 `admin` 保留 NULL），新建用户与管理员重置密码的写路径保持 NULL ⇒ 首次登录必须改密。闭环用例：`tests/e2e/force-password-change.spec.ts`（种子账号改密后重新登录）与 `tests/e2e/user-lifecycle.spec.ts`（新建用户首登改密）。
 
 ---
 
@@ -261,9 +261,9 @@
 
 ## 7. 版本与路线图
 
-- **v1.x（当前线，仓库 `package.json` 版本 1.1.1.1）**：核心 SSO（Portal 内建 OIDC Provider）+ RBAC + Gateway 离线 JWT 验证 + 内部应用集成。
+- **v1.x（当前线，版本以仓库 `package.json` 为准，当前 1.1.2）**：核心 SSO（Portal 内建 OIDC Provider）+ RBAC + Gateway 离线 JWT 验证 + 内部应用集成。
 - **未来规划**：MFA（多因素认证）、Passkeys、社交登录、多租户、SAML 2.0（见 §2.2）、自助找回密码（见 §2.2）。
-- **已列出但未交付（backlog）**：首次登录强制改密（§2.3）、会话并发上限 NFR-SEC-16、`audit_logs`/`login_logs` 分区与归档（NFR-COMP-01）、E2E 计时埋点（§8.4 P-04）。逐条状态以 [REQUIREMENTS_MATRIX.md](REQUIREMENTS_MATRIX.md) 与 [roadmap](../roadmap.md) 为准。
+- **已列出但未交付（backlog）**：会话并发上限 NFR-SEC-16、`audit_logs`/`login_logs` 分区与归档（NFR-COMP-01）、E2E 计时埋点（§8.4 P-04）。逐条状态以 [REQUIREMENTS_MATRIX.md](REQUIREMENTS_MATRIX.md) 与 [roadmap](../roadmap.md) 为准。
 
 ---
 
@@ -284,7 +284,7 @@
 | 实践域 | 能力等级 | 本文档实现 |
 |--------|----------|-----------|
 | **OPM** (Organizational Performance Management) | Level 4 | §8.4 过程性能基线（5 项关键指标 + 上下控制限 UCL/LCL；P-01/P-02/P-03 的均值仍为 2026-07-09 历史值） |
-| **QPM** (Quantitative Project Management) | Level 4 | §6.1 性能需求（5 项性能指标 + 测量方法，其中 3 项带 P95 阈值）+ §6.2 安全需求（**16 项**量化标准，含未实现的 NFR-SEC-16） |
+| **QPM** (Quantitative Project Management) | Level 4 | §6.1 性能需求（5 项性能指标 + 测量方法，其中 3 项带 P95 阈值）+ §6.2 安全需求（**17 项**量化标准，含未实现的 NFR-SEC-16） |
 | **MPM** (Managing Performance & Measurement) | Level 4 | Rust criterion 基准 + 真实栈实测 + 追溯性覆盖率报告（观测指标）。**无 k6**（已删除的 `tests/performance/api-benchmark.mjs` 属历史假绿，见 [roadmap](../roadmap.md) 续九十四）；**无 E2E 计时门禁** |
 
 ### 8.3 成熟度 Level 5（优化级）

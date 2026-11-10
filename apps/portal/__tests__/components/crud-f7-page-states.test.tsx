@@ -124,6 +124,29 @@ describe('U-USERS01 — 行内详情入口按 user:read 渲染', () => {
   });
 });
 
+// ═══════════════════════════════════════════════════
+// UX-23（2026-11-06 走查）：窄屏用户列表信息补全
+// ═══════════════════════════════════════════════════
+describe('UX-23 — 窄屏用户列表信息补全', () => {
+  it('用户单元格保留部门/角色数/创建时间精简行（md 以下可见）', () => {
+    render(<UserTable users={[USER_ROW]} pagination={{ ...PAGINATION, total: 1, totalPages: 1 }} />);
+
+    // md:hidden 精简行：部门 · N 个角色 · 创建于 YYYY-MM-DD（零填充格式见 UX-14）
+    const meta = screen.getByText(/个角色/);
+    expect(meta.textContent).toContain('总公司');
+    expect(meta.textContent).toContain('1 个角色');
+    expect(meta.textContent).toContain('创建于 2026-01-01');
+    expect(meta.className).toContain('md:hidden');
+  });
+
+  it('窄屏操作入口是带「操作」文字的按钮（非纯「…」图标）', () => {
+    render(<UserTable users={[USER_ROW]} pagination={{ ...PAGINATION, total: 1, totalPages: 1 }} />);
+
+    const more = screen.getByRole('button', { name: `更多操作 ${USER_ROW.name}` });
+    expect(more.textContent).toContain('操作');
+  });
+});
+
 describe('U-G02 — clients 空态语义', () => {
   const CLIENT_ROW = {
     clientId: 'client_test_000001',

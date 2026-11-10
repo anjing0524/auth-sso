@@ -52,6 +52,7 @@ import { toast } from 'sonner';
 import { CopyTextButton } from '@/components/shared/copy-text-button';
 import { RequiredLegend, RequiredMark } from '@/components/shared/required-mark';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { isAdminRole } from '@auth-sso/contracts';
 import { accountStatus } from '@/lib/status-label';
 import { formatDateTime } from '@/lib/format-date';
@@ -321,7 +322,6 @@ export default function ProfileClient({
   session = null,
   sessions = [],
 }: ProfileClientProps) {
-  const [showAllPermissions, setShowAllPermissions] = React.useState(false);
   /** U-PF02：退出会话是会话级安全操作，需二次确认（防误点） */
   const [logoutConfirmOpen, setLogoutConfirmOpen] = React.useState(false);
   const [loggingOut, setLoggingOut] = React.useState(false);
@@ -329,11 +329,14 @@ export default function ProfileClient({
   const router = useRouter();
   const { reportFailure } = useFieldFailure();
   const [showAllSessions, setShowAllSessions] = React.useState(false);
+  /** UX-16：主体 ID 属排障用技术细节，默认折叠 */
+  const [showSubjectId, setShowSubjectId] = React.useState(false);
+  /** UX-16：权限编码对普通员工是技术细节，默认折叠 */
+  const [showPermissionCodes, setShowPermissionCodes] = React.useState(false);
   /** 待确认撤销的单个会话（自助安全操作，需二次确认） */
   const [revokeTarget, setRevokeTarget] = React.useState<string | null>(null);
   const [revoking, setRevoking] = React.useState(false);
   const visibleSessions = showAllSessions ? sessions : sessions.slice(0, 3);
-  const visiblePermissions = showAllPermissions ? permissions : permissions.slice(0, 10);
 
   if (!user) {
     return (
@@ -401,11 +404,22 @@ export default function ProfileClient({
                   <dd><Badge variant={accountStatus(user.status).variant}>{accountStatus(user.status).label}</Badge></dd>
                 </div>
                 <div className="sm:col-span-2">
-                  <dt className="text-[11px] text-muted-foreground">主体 ID（排障/工单用）</dt>
-                  <dd className="mt-1 flex items-center gap-1.5">
-                    <code className="min-w-0 flex-1 truncate rounded bg-muted px-2 py-1 font-mono text-[11px]">{user.id}</code>
-                    <CopyTextButton text={user.id} label="复制主体 ID" successMessage="已复制主体 ID" />
-                  </dd>
+                  {/* UX-16：超长主体 ID 属排障技术细节，默认折叠不干扰普通用户 */}
+                  <button
+                    type="button"
+                    className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
+                    aria-expanded={showSubjectId}
+                    aria-controls="profile-subject-id"
+                    onClick={() => setShowSubjectId((v) => !v)}
+                  >
+                    技术信息（主体 ID）{showSubjectId ? '▾' : '▸'}
+                  </button>
+                  {showSubjectId && (
+                    <div className="mt-1 flex items-center gap-1.5">
+                      <code className="min-w-0 flex-1 truncate rounded bg-muted px-2 py-1 font-mono text-[11px]" title={user.id}>{user.id}</code>
+                      <CopyTextButton text={user.id} label="复制主体 ID" successMessage="已复制主体 ID" />
+                    </div>
+                  )}
                 </div>
               </dl>
             </CardContent>
@@ -417,7 +431,11 @@ export default function ProfileClient({
               <CardTitle className="flex items-center gap-2 type-card-title">
                 <Key className="h-4 w-4 text-primary" /> 权限摘要
               </CardTitle>
-              <span className="shrink-0 text-[11px] text-muted-foreground">共 {permissions.length} 项 · 由角色决定</span>
+              <span className="flex shrink-0 items-center gap-2 text-[11px] text-muted-foreground">
+                共 {permissions.length} 项 · 由角色决定
+                {/* UX-16：「由角色决定」给出去向——跳转角色管理查看权限归属 */}
+                <Link href="/roles" className="text-link hover:underline">查看角色 →</Link>
+              </span>
             </CardHeader>
             <CardContent className="space-y-2 p-3">
               <div className="flex flex-wrap gap-1.5">
@@ -427,17 +445,29 @@ export default function ProfileClient({
                   <Badge key={r.code} variant="secondary" className="text-[11px]">{r.name}</Badge>
                 ))}
               </div>
-              <div id="profile-permissions" className="grid gap-1.5 sm:grid-cols-2">
-                {visiblePermissions.map((perm) => (
-                  <code key={perm} className="truncate rounded border border-border/60 bg-muted/30 px-2 py-1 font-mono text-[11px] text-muted-foreground" title={perm}>
-                    {perm}
-                  </code>
-                ))}
-              </div>
-              {permissions.length > 10 && (
-                <Button variant="ghost" size="sm" className="h-7 px-2 text-[11px]" aria-expanded={showAllPermissions} aria-controls="profile-permissions" onClick={() => setShowAllPermissions((v) => !v)}>
-                  {showAllPermissions ? '收起' : `展开全部（共 ${permissions.length} 项）`}
-                </Button>
+              {/* UX-16：权限编码是技术细节，默认折叠；普通用户看角色名即可理解权限来源 */}
+              {permissions.length > 0 && (
+                <>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2 text-[11px]"
+                    aria-expanded={showPermissionCodes}
+                    aria-controls="profile-permissions"
+                    onClick={() => setShowPermissionCodes((v) => !v)}
+                  >
+                    {showPermissionCodes ? '收起权限编码' : `展开权限编码（共 ${permissions.length} 项）`}
+                  </Button>
+                  {showPermissionCodes && (
+                    <div id="profile-permissions" className="grid gap-1.5 sm:grid-cols-2">
+                      {permissions.map((perm) => (
+                        <code key={perm} className="truncate rounded border border-border/60 bg-muted/30 px-2 py-1 font-mono text-[11px] text-muted-foreground" title={perm}>
+                          {perm}
+                        </code>
+                      ))}
+                    </div>
+                  )}
+                </>
               )}
             </CardContent>
           </Card>
@@ -501,7 +531,7 @@ export default function ProfileClient({
                         {item.isCurrent ? (
                           <span
                             className="flex shrink-0 items-center text-muted-foreground"
-                            title="当前设备请使用下方「退出当前会话」"
+                            title="当前设备请使用下方「撤销此会话」"
                             aria-label="当前设备不可单独撤销"
                           >
                             <Lock className="h-3 w-3" />
@@ -527,16 +557,21 @@ export default function ProfileClient({
               </div>
 
               <div className="border-t pt-2.5">
+                {/* UX-16：「退出当前会话」与用户菜单「退出登录」措辞过近易误读；
+                    统一为「撤销此会话」并在按钮下方说明去向（清除本设备登录态并返回登录页） */}
                 <Button variant="outline" size="sm" className="w-full" onClick={() => setLogoutConfirmOpen(true)}>
-                  退出当前会话
+                  撤销此会话
                 </Button>
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  撤销本设备的登录会话并返回登录页，不影响其他设备。
+                </p>
               </div>
 
               {/* U-PF02：二次确认，避免误点即清会话 */}
               <Dialog open={logoutConfirmOpen} onOpenChange={setLogoutConfirmOpen}>
                 <DialogContent>
                   <DialogHeader>
-                    <DialogTitle>退出当前会话？</DialogTitle>
+                    <DialogTitle>撤销此会话？</DialogTitle>
                     <DialogDescription>
                       将清除本设备的登录会话并返回登录页。其他设备上的会话不受影响。
                     </DialogDescription>
@@ -556,7 +591,7 @@ export default function ProfileClient({
                         }
                       }}
                     >
-                      {loggingOut ? '退出中...' : '确认退出'}
+                      {loggingOut ? '撤销中...' : '确认撤销'}
                     </Button>
                   </DialogFooter>
                 </DialogContent>
@@ -572,7 +607,7 @@ export default function ProfileClient({
                     <DialogDescription>
                       将撤销「{sessions.find((s) => s.id === revokeTarget) ? formatDateTime(sessions.find((s) => s.id === revokeTarget)!.createdAt) : '该'}」创建的会话；
                       该设备将无法再刷新登录状态（已签发的访问令牌最长 1 小时后失效）。
-                      如需让本机立即退出，请使用「退出当前会话」。
+                      如需让本机立即退出，请使用「撤销此会话」。
                     </DialogDescription>
                   </DialogHeader>
                   <DialogFooter>

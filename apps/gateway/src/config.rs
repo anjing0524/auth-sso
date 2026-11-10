@@ -86,6 +86,15 @@ pub struct GatewayConfig {
     pub upstream_server_name: Option<String>,
     /// 转发给上游的 Host。未配置时沿用浏览器请求 Host。
     pub upstream_host_header: Option<String>,
+    /// 对外规范入口 Host（`host[:port]`，如 `127.0.0.1:19443` / `sso.example.com`）。
+    ///
+    /// H-D-11（PM-01）：OAuth redirect_uri 按请求 Host 逐字节构造，而 Portal 的
+    /// 回调白名单是精确匹配（OAuth 2.1 安全要求）——用户经未注册 Host（如
+    /// localhost）入口登录必然 `AUTH_SSO_2033` 且错误页无法自救。配置后 Gateway
+    /// 把 Host ≠ 规范值的对外请求 302 到 `https://<规范Host>` + 原 path/query；
+    /// 未配置时保持既有行为（不重定向）。可通过 `GATEWAY_CANONICAL_HOST`
+    /// 环境变量覆盖；空串视为未配置（compose `${VAR:-}` 缺省展开为空时用）。
+    pub canonical_host: Option<String>,
     /// JWKS 刷新成功后的标准间隔（秒，默认 300）。
     /// 可通过 JWKS_REFRESH_INTERVAL_SECS 环境变量覆盖。
     pub jwks_refresh_interval_secs: u64,
@@ -119,6 +128,7 @@ impl Default for GatewayConfig {
             upstream_scheme: "http".to_string(),
             upstream_server_name: None,
             upstream_host_header: None,
+            canonical_host: None,
             jwks_refresh_interval_secs: 300,
             environment: Environment::default(),
             rate_limit: RateLimitConfig::default(),
@@ -381,6 +391,11 @@ impl Config {
             resolve_optional_env(&self.gateway.metrics_token, "GATEWAY_METRICS_TOKEN");
         self.gateway.upstream_scheme =
             resolve_env_str(&self.gateway.upstream_scheme, "UPSTREAM_SCHEME");
+        // H-D-11：空串视为未配置（compose `${GATEWAY_CANONICAL_HOST:-…}` 缺省展开
+        // 可能得到空串；显式 None 保持"未配置即不重定向"的单一定义）
+        self.gateway.canonical_host =
+            resolve_optional_env(&self.gateway.canonical_host, "GATEWAY_CANONICAL_HOST")
+                .filter(|host| !host.is_empty());
         self.redis.pool_max_size = resolve_env(self.redis.pool_max_size, "REDIS_POOL_MAX_SIZE")?;
         self.redis.pool_min_idle = resolve_env(self.redis.pool_min_idle, "REDIS_POOL_MIN_IDLE")?;
         self.redis.pool_max_lifetime_sec = resolve_env(
@@ -656,6 +671,20 @@ fn validate_production_security(config: &Config, node_env: Option<&str>) -> anyh
         && token.len() < 16
     {
         bail!("GATEWAY_METRICS_TOKEN 长度必须 ≥16（否则比共享密钥更弱，失去分离意义）");
+    }
+    // H-D-11：规范入口 Host 只接受 `host[:port]`。误填完整 URL / 带路径 / 空串
+    // 会在运行时产出畸形 Location（如 `https:///path`），启动期直接拒绝。
+    if let Some(host) = config.gateway.canonical_host.as_deref() {
+        let malformed = host.is_empty()
+            || host.contains("://")
+            || host.contains('/')
+            || host.chars().any(char::is_whitespace);
+        if malformed {
+            bail!(
+                "GATEWAY_CANONICAL_HOST 只接受 host[:port]（如 sso.example.com 或 \
+                 127.0.0.1:19443），不得含协议、路径或空白: {host:?}"
+            );
+        }
     }
     Ok(())
 }
@@ -1159,6 +1188,45 @@ mod tests {
     }
 
     // ── H-D-10：metrics 独立令牌一旦配置必须足够长 ────────────────
+    // ── H-D-11：canonical_host 只接受 host[:port] ──────────────────
+    fn config_with_canonical_host(host: &str) -> Config {
+        let mut config = Config::default();
+        // 平台 TLS 构建（`--no-default-features`）会先因 EXTERNAL_TLS_TERMINATION
+        // 未开启而提前 bail；显式开启，让本测试在两种 feature 组合下都验证规则。
+        config.gateway.external_tls_termination = true;
+        config.gateway.canonical_host = Some(host.to_string());
+        config
+    }
+
+    #[test]
+    fn canonical_host_accepts_host_and_host_with_port() {
+        for host in ["sso.example.com", "127.0.0.1:19443", "[::1]:8443"] {
+            let config = config_with_canonical_host(host);
+            assert!(
+                validate_production_security(&config, Some("development")).is_ok(),
+                "{host} 应被接受"
+            );
+        }
+    }
+
+    #[test]
+    fn canonical_host_rejects_url_path_or_whitespace_forms() {
+        for host in [
+            "",
+            "https://sso.example.com",
+            "sso.example.com/api/auth/callback",
+            "sso.example.com ",
+        ] {
+            let config = config_with_canonical_host(host);
+            let err = validate_production_security(&config, Some("development"))
+                .expect_err(&format!("{host:?} 必须被拒绝"));
+            assert!(
+                err.to_string().contains("GATEWAY_CANONICAL_HOST"),
+                "{host:?} 被拒的原因不是 canonical_host 形态: {err}"
+            );
+        }
+    }
+
     #[test]
     fn metrics_token_must_be_long_enough_when_configured() {
         let mut config = Config::default();

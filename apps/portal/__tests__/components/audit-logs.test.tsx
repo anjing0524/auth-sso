@@ -17,6 +17,10 @@ vi.mock(import('@/app/audit/data'), async (importOriginal): Promise<Partial<type
   return { ...actual,
   getLoginLogs: vi.fn().mockResolvedValue({ data: [], pagination: { page: 1, pageSize: 20, total: 0 } }),
   getAuditLogs: vi.fn().mockResolvedValue({ data: [], pagination: { page: 1, pageSize: 20, total: 0 } }),
+  // 详情页三个按主键查询的读模型：默认 null（notFound），UX-15 用例按需覆写
+  getLoginLogById: vi.fn().mockResolvedValue(null),
+  getAuditLogById: vi.fn().mockResolvedValue(null),
+  getAccessLogById: vi.fn().mockResolvedValue(null),
 };
 });
 
@@ -53,6 +57,7 @@ vi.mock(import('@/lib/auth/verify-jwt'), async (importOriginal): Promise<Partial
 });
 
 import AuditLogsPage, { metadata } from '@/app/(dashboard)/audit-logs/page';
+import AuditLogDetailPage from '@/app/(dashboard)/audit-logs/[id]/page';
 import { AuditTabs } from '@/app/(dashboard)/audit-logs/components/audit-tabs';
 import type * as auditDataModule from '@/app/audit/data';
 import type * as authVerifyJwtModule from '@/lib/auth/verify-jwt';
@@ -174,5 +179,101 @@ describe('AuditTabs（WAI-ARIA tabs 键盘语义补全）', () => {
 
     fireEvent.keyDown(access, { key: 'Home' });
     expect(document.activeElement).toBe(login);
+  });
+});
+
+// ═══════════════════════════════════════════════════
+// UX-15（2026-11-06 走查）：空列与空字段噪声
+// ═══════════════════════════════════════════════════
+describe('UX-15 登录日志「失败原因」列按事件类型动态隐藏', () => {
+  const LOGIN_ROW_BASE = {
+    createdAt: '2026-11-01T00:00:00.000Z',
+    ip: '192.168.107.1',
+    username: 'alice',
+  };
+
+  it('当前页全为成功/登出/刷新事件时不渲染「失败原因」列', async () => {
+    const { getLoginLogs } = await import('@/app/audit/data');
+    vi.mocked(getLoginLogs).mockResolvedValue({
+      data: [
+        { id: '00000000-0000-4000-8000-00000000a001', ...LOGIN_ROW_BASE, eventType: 'LOGIN_SUCCESS', failReason: null },
+        { id: '00000000-0000-4000-8000-00000000a002', ...LOGIN_ROW_BASE, eventType: 'LOGOUT', failReason: null },
+      ],
+      pagination: { page: 1, pageSize: 20, total: 2, totalPages: 1 },
+    } as never);
+
+    const page = await AuditLogsPage({ searchParams: Promise.resolve({ tab: 'login' }) });
+    render(page);
+
+    expect(screen.queryByText('失败原因')).not.toBeInTheDocument();
+    // 两条 mock 记录 username 均为 alice，断言行数据仍正常渲染
+    expect(screen.getAllByText('alice')).toHaveLength(2);
+  });
+
+  it('存在失败记录时恢复「失败原因」列并展示原因', async () => {
+    const { getLoginLogs } = await import('@/app/audit/data');
+    vi.mocked(getLoginLogs).mockResolvedValue({
+      data: [
+        { id: '00000000-0000-4000-8000-00000000a003', ...LOGIN_ROW_BASE, eventType: 'LOGIN_SUCCESS', failReason: null },
+        { id: '00000000-0000-4000-8000-00000000a004', ...LOGIN_ROW_BASE, eventType: 'LOGIN_FAILED', failReason: '密码错误' },
+      ],
+      pagination: { page: 1, pageSize: 20, total: 2, totalPages: 1 },
+    } as never);
+
+    const page = await AuditLogsPage({ searchParams: Promise.resolve({ tab: 'login' }) });
+    render(page);
+
+    expect(screen.getByText('失败原因')).toBeInTheDocument();
+    expect(screen.getByText('密码错误')).toBeInTheDocument();
+  });
+});
+
+describe('UX-15 登录日志详情空字段隐藏', () => {
+  const UUID = '00000000-0000-4000-8000-00000000b001';
+  const DETAIL_ROW_BASE = {
+    id: UUID,
+    createdAt: new Date('2026-11-01T00:00:00.000Z'),
+    username: 'alice',
+    ip: '192.168.107.1',
+    userAgent: 'Mozilla/5.0 (Macintosh)',
+  };
+
+  it('LOGIN_SUCCESS 详情不渲染「地理位置 -」「失败原因 -」占位行', async () => {
+    const { getLoginLogById } = await import('@/app/audit/data');
+    vi.mocked(getLoginLogById).mockResolvedValue({
+      ...DETAIL_ROW_BASE,
+      eventType: 'LOGIN_SUCCESS',
+      location: null,
+      failReason: null,
+    } as never);
+
+    const page = await AuditLogDetailPage({
+      params: Promise.resolve({ id: UUID }),
+      searchParams: Promise.resolve({ tab: 'login' }),
+    });
+    render(page);
+
+    expect(screen.queryByText('地理位置')).not.toBeInTheDocument();
+    expect(screen.queryByText('失败原因')).not.toBeInTheDocument();
+    expect(screen.getByText('User-Agent')).toBeInTheDocument();
+  });
+
+  it('LOGIN_FAILED 详情渲染失败原因字段', async () => {
+    const { getLoginLogById } = await import('@/app/audit/data');
+    vi.mocked(getLoginLogById).mockResolvedValue({
+      ...DETAIL_ROW_BASE,
+      eventType: 'LOGIN_FAILED',
+      location: null,
+      failReason: '密码错误',
+    } as never);
+
+    const page = await AuditLogDetailPage({
+      params: Promise.resolve({ id: UUID }),
+      searchParams: Promise.resolve({ tab: 'login' }),
+    });
+    render(page);
+
+    expect(screen.getByText('失败原因')).toBeInTheDocument();
+    expect(screen.getByText('密码错误')).toBeInTheDocument();
   });
 });

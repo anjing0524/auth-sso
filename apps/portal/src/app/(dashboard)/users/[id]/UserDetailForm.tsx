@@ -222,20 +222,20 @@ export default function UserDetailForm({ id, initialUser: serverUser, canUpdate,
                 <p className="text-[11px] text-muted-foreground sm:col-span-2"><RequiredLegend /></p>
                 <div className="space-y-2">
                   <div className="flex items-center gap-1"><Label htmlFor="user-name">显示名称</Label><RequiredMark /></div>
-                  <Input id="user-name" aria-required="true" maxLength={100} value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
+                  <Input id="user-name" name="name" autoComplete="name" aria-required="true" maxLength={100} value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
                 </div>
                 <div className="space-y-2">
                   <div className="flex items-center gap-1"><Label htmlFor="user-email">电子邮箱</Label><RequiredMark /></div>
-                  <Input id="user-email" aria-required="true" maxLength={255} value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
+                  <Input id="user-email" name="email" type="email" autoComplete="email" aria-required="true" maxLength={255} value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
                 </div>
                 <div className="space-y-2 sm:col-span-2">
                   <Label htmlFor="user-avatar">头像 URL（可选）</Label>
-                  <Input id="user-avatar" type="url" maxLength={500} value={form.avatarUrl} onChange={e => setForm({ ...form, avatarUrl: e.target.value })} placeholder="https://example.com/avatar.png" />
+                  <Input id="user-avatar" name="avatarUrl" autoComplete="photo" type="url" maxLength={500} value={form.avatarUrl} onChange={e => setForm({ ...form, avatarUrl: e.target.value })} placeholder="https://example.com/avatar.png" />
                   <p className="text-[11px] leading-4 text-muted-foreground">用于列表头像；留空显示姓名首字母。</p>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="user-username">用户名（不可修改）</Label>
-                  <Input id="user-username" value={username} disabled className="bg-muted opacity-60" />
+                  <Input id="user-username" name="username" autoComplete="off" value={username} disabled className="bg-muted opacity-60" />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="user-status">账户状态</Label>
@@ -323,10 +323,12 @@ export default function UserDetailForm({ id, initialUser: serverUser, canUpdate,
                   </div>
                   <PermissionGuard permission={USER_PERMISSIONS.DELETE}>
                     <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
-                      <DialogTrigger render={<Button variant="outline" size="sm" className="border-destructive/30 text-destructive hover:bg-destructive/10" />}>
+                      {/* UX-12：不可逆操作用实心 destructive 按钮与描边的重置/下线拉开层级 */}
+                      <DialogTrigger render={<Button variant="destructive" size="sm" />}>
                         <Trash2 className="h-3.5 w-3.5" /> 删除用户
                       </DialogTrigger>
-                      <DialogContent>
+                      {/* UX-12：取消途径只留一个（底部「取消」），隐藏右上角 X */}
+                      <DialogContent showCloseButton={false}>
                         <DialogHeader>
                           <DialogTitle className="text-destructive">确认永久删除？</DialogTitle>
                           <DialogDescription>
@@ -346,7 +348,7 @@ export default function UserDetailForm({ id, initialUser: serverUser, canUpdate,
                 )}
                 {!isSelf && (
                   <Dialog open={forceLogoutOpen} onOpenChange={setForceLogoutOpen}>
-                    <DialogContent>
+                    <DialogContent showCloseButton={false}>
                       <DialogHeader>
                         <DialogTitle>强制下线用户？</DialogTitle>
                         <DialogDescription>

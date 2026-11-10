@@ -305,8 +305,15 @@ export default function UserTable({ users, pagination, filters, isFiltered = fal
             </span>
             <span className="mt-0.5 flex flex-wrap items-center gap-1 md:hidden">
               <Badge variant={accountStatus(user.status).variant}>{accountStatus(user.status).label}</Badge>
-              {user.roleCount === 0 && <Badge variant="warning">未分配角色</Badge>}
             </span>
+            {/* UX-23：窄屏卡片化后保留部门/角色/创建时间精简行，列表仍可扫描关键字段 */}
+            <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-[10px] leading-3 text-muted-foreground md:hidden">
+              <span className="max-w-[120px] truncate" title={user.deptName ?? undefined}>{user.deptName || '未分配部门'}</span>
+              <span aria-hidden="true">·</span>
+              <span className="tabular-nums">{user.roleCount} 个角色</span>
+              <span aria-hidden="true">·</span>
+              <span>创建于 {formatDate(user.createdAt)}</span>
+            </p>
           </div>
         </div>
       </TableCell>
@@ -316,7 +323,8 @@ export default function UserTable({ users, pagination, filters, isFiltered = fal
           {user.deptId && user.deptName ? (
             <Link
               href={`/users?deptId=${encodeURIComponent(user.deptId)}${pageSize !== 20 ? `&pageSize=${pageSize}` : ''}`}
-              className="hover:text-primary hover:underline"
+              // UX-20：触控目标 ≥24px（h-6），此前行内链接仅 ~20px 高
+              className="inline-flex h-6 items-center hover:text-primary hover:underline"
               aria-label={`查看 ${user.name} 所在的 ${user.deptName} 成员`}
               title="按该部门筛选用户"
             >
@@ -383,12 +391,12 @@ export default function UserTable({ users, pagination, filters, isFiltered = fal
           </PermissionGuard>
           )}
         </div>
-        {/* 移动端：操作收进菜单，避免第三颗图标被裁切 */}
+        {/* 移动端：操作收进菜单，避免第三颗图标被裁切（UX-23：按钮带「操作」文字 + 36px 触控区） */}
         <div className="flex justify-end md:hidden">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon-sm" aria-label={`更多操作 ${user.name}`} title="更多操作">
-                <MoreHorizontal className="h-4 w-4" />
+              <Button variant="ghost" size="sm" className="h-9 gap-1 px-2.5" aria-label={`更多操作 ${user.name}`} title="更多操作">
+                操作<MoreHorizontal className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-40">

@@ -59,8 +59,8 @@ MIDSCENE_MODEL_FAMILY=deepseek
 
 ## 本地结果（2026-11-06）
 
-- 首次修 prompt 后连续 2 次：**3/3 passed**
-- 单次约 **13–14s**
+- 首次修 prompt 后连续 3 次：**3/3 passed**
+- 单次约 **13–17s**
 - 使用 DSH DeepSeek key；报告/日志在 `midscene_run/`（已 gitignore）
 - 未发现密钥写入报告
 

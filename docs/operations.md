@@ -144,6 +144,15 @@ curl -fsS -H "X-Gateway-Metrics-Key: $GATEWAY_METRICS_TOKEN" \
 
 日志：容器 `json-file` 已限制 10MB × 3；业务日志走结构化日志/审计表。不要只依赖 `docker logs` 做长期留存。
 
+### 5.3 客户端 IP 取值语义
+
+审计日志与登录日志里的「来源 IP」由 Gateway 判定，不是浏览器自报的地址：
+
+- **自管 TLS（自托管生产默认，`EXTERNAL_TLS_TERMINATION` 未开启）**：Gateway 是 TLS 终结的第一跳，只信任 socket 对端地址（`apps/gateway/src/http.rs` 的 `SessionExt::client_ip`），**不读取**入站 `X-Forwarded-For` / `X-Real-IP`；转发前 `apps/gateway/src/gateway.rs` 的 `upstream_request_filter` 先删除这两个头，再按该地址权威覆写 `X-Forwarded-For` / `X-Real-IP` / `X-Client-IP`，客户端无法伪造来源 IP。
+- **平台 TLS（`EXTERNAL_TLS_TERMINATION` 开启，Vercel 等平台终结 TLS）**：才信任平台在容器边界覆写的 `X-Vercel-Forwarded-For`；`apps/gateway/src/gateway.rs` 的 `parse_platform_client_ip` 只接受单个合法 IP 字面量，逗号链与任意文本一律丢弃并回退到 socket 地址。
+- **因此**：经反向代理或 Docker 桥接访问时，socket 对端是代理/网桥地址，Portal 侧 `apps/portal/src/lib/audit.ts` 的 `extractClientIP` 取到的就是代理/网桥地址 ⇒ 审计与登录日志记录的来源 IP 为代理/网桥地址，这是防伪造的**预期行为**，不是缺陷。
+- **要记录真实客户端 IP**：让 Gateway 直接面对客户端（推荐，自管 TLS 即该形态）；或改用平台 TLS 模式，由平台权威覆写专用头。当前实现只有「信任 socket 对端」与「信任平台专用头」两档，**没有可配置的可信代理列表**——在自管 TLS 模式的前置代理上追加 `X-Forwarded-For` 不会生效。
+
 ## 6. 证书与 ACME
 
 - 首次部署由 Gateway 内建 ACME 签发；首次 HTTPS 握手前短暂不可用是预期；

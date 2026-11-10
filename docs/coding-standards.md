@@ -83,14 +83,14 @@ README 声称"生成时脚本断言无重复"而**根本不存在**这样的脚�
 - **反例的可执行判据**：当你写下"必须/全部/每一个"时，问一句 **"如果我少写一条，谁会红？"**
   —— 答不上来，就说明这句话只是**愿望**，不是约束。
 
-## 9. 测试质量口径：不拿用例数当质量
+## 12. 测试质量口径：不拿用例数当质量
 
 - **禁止**用“1545 passed / 145 files”作为商用交付结论。用例数只说明回归网规模。
 - **源码字符串守卫**只允许保留**无法用行为/浏览器验证**的架构不变量（如禁止原生 `alert`、禁止 `dangerouslySetInnerHTML`、长表单必须页面化）；类名、文案、`toContain` 不得再新增为测试。
 - 测试分层必须分开汇报：
   - `pnpm test` / `test:api` / `test:ui` / `test:contracts`：按层运行逻辑回归；
   - `pnpm test:coverage`：逻辑回归 + auth/permission/oauth 的**行/分支**覆盖阈值；
-- `pnpm test:mutation`：auth 领域 mutation（break 92），验证断言是否真的能杀死缺陷；
+  - `pnpm test:mutation`：auth 领域 mutation（break 92），验证断言是否真的能杀死缺陷；
   - `pnpm test:e2e`：Docker 栈关键路径；
   - `pnpm test:visual`：桌面 1440/1280 截图基线；
   - `E2E_CHANNEL=chrome pnpm test:a11y`：对比度/键盘门禁；

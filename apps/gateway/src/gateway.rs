@@ -5,7 +5,7 @@ use pingora_http::{RequestHeader, ResponseHeader, Version};
 use pingora_proxy::{ProxyHttp, Session};
 use std::net::IpAddr;
 use std::sync::Arc;
-use tracing::{debug, warn};
+use tracing::{debug, info, warn};
 
 use crate::auth::{AuthDecision, JwtVerifier, RefreshedTokens, TokenRefresher};
 use crate::config::{OAuthConfig, RateLimitConfig, Upstreams};
@@ -45,6 +45,55 @@ fn metrics_secret<'a>(
     metrics_token
         .filter(|t| !t.is_empty())
         .or(gateway_shared_secret)
+}
+
+/// 是否为网关自身探针端点（存活 / 指标）——入口 Host 规范化的豁免名单（H-D-11）。
+///
+/// 探针可能来自容器内 / K8s / 负载均衡器，其 Host 常是 IP 或内部地址而非规范入口
+/// （test.yml 容器内探测 Host 为 `127.0.0.1:443`，规范入口却是 `127.0.0.1:19443`），
+/// 对探针做 302 会让健康检查跟随重定向撞上不可达端口、把整个栈判死。探针端点
+/// 不进 OAuth 链路，Host 规范化对它们没有收益。
+fn is_probe_path(path: &str) -> bool {
+    path == HEALTH_PATH || path == METRICS_PATH
+}
+
+/// 入口 Host 规范化决策（H-D-11 / PM-01，纯函数便于穷举测试）。
+///
+/// 返回 `Some(location)` 表示应把请求 302 到 `https://<规范Host> + path?query`：
+/// - `canonical_host` 未配置（`None`）→ 不重定向（保持既有部署行为，零侵入）；
+/// - 请求 Host 与规范 Host **大小写无关、端口敏感**地相等 → 不重定向；
+/// - 探针端点（`/healthz`、`/__gateway/metrics`）豁免（见 [`is_probe_path`]）；
+/// - 请求 Host 缺失（HTTP/1.0 等边缘）→ 不重定向（HTTP/1.1 缺 Host 已由
+///   [`missing_required_host`] 在入口 400，勿在此重复处置）。
+///
+/// **为什么用重定向而不是放宽 redirect_uri 匹配**：OAuth 2.1 要求回调精确匹配
+/// （防授权码劫持），多入口兼容的正确解法是把用户带回**唯一注册过的入口**，
+/// 而不是让每个入口都通过校验。Location 的 Host 恒为配置值、path/query 原样
+/// 保留（重定向发生在 dot-segment 拒绝之后，路径已过 H-D-03 入口校验），
+/// 不引入开放重定向面。
+///
+/// 只作用于对外 TLS 入口（主代理服务的 request_filter；内部转发与
+/// TokenRefresher/JWKS 的上游直连不经过这里），不影响内部转发。
+fn canonical_host_redirect(
+    canonical_host: Option<&str>,
+    request_host: Option<&str>,
+    path: &str,
+    query: Option<&str>,
+) -> Option<String> {
+    let canonical = canonical_host?;
+    if is_probe_path(path) {
+        return None;
+    }
+    let request = request_host?;
+    if request.eq_ignore_ascii_case(canonical) {
+        return None;
+    }
+    let mut location = format!("https://{canonical}{path}");
+    if let Some(q) = query {
+        location.push('?');
+        location.push_str(q);
+    }
+    Some(location)
 }
 
 /// 验签后注入的用户 ID / jti 头名。
@@ -307,6 +356,9 @@ pub struct GatewayDeps {
     pub upstream_server_name: Option<String>,
     /// 发往上游的 Host；`X-Forwarded-Host` 仍保留浏览器访问的公网 Host。
     pub upstream_host_header: Option<String>,
+    /// 对外规范入口 Host（H-D-11 / PM-01）：非规范 Host 的请求 302 到
+    /// `https://<规范Host>`；`None` 表示不启用规范化。
+    pub canonical_host: Option<String>,
     /// 是否信任 Vercel 在容器边界覆写的 `X-Vercel-Forwarded-For`。
     pub trust_platform_client_ip: bool,
     /// 认证端点限流阈值（来自配置，env 可覆盖）
@@ -340,6 +392,8 @@ pub struct Gateway {
     upstream_server_name: Option<String>,
     /// 发往上游的 Host；`X-Forwarded-Host` 仍保留浏览器访问的公网 Host。
     upstream_host_header: Option<String>,
+    /// 对外规范入口 Host（H-D-11 / PM-01）；`None` 表示不启用规范化。
+    canonical_host: Option<String>,
     /// 是否信任 Vercel 在容器边界覆写的 `X-Vercel-Forwarded-For`。
     trust_platform_client_ip: bool,
     /// 认证端点限流阈值（来自配置，env 可覆盖）
@@ -401,6 +455,7 @@ impl Gateway {
     ///     upstream_scheme: "http".to_string(),
     ///     upstream_server_name: None,
     ///     upstream_host_header: None,
+    ///     canonical_host: None,
     ///     trust_platform_client_ip: false,
     ///     rate_limit: Default::default(),
     ///     oauth: Default::default(),
@@ -419,6 +474,7 @@ impl Gateway {
             upstream_scheme: deps.upstream_scheme,
             upstream_server_name: deps.upstream_server_name,
             upstream_host_header: deps.upstream_host_header,
+            canonical_host: deps.canonical_host,
             trust_platform_client_ip: deps.trust_platform_client_ip,
             rate_limit: deps.rate_limit,
             oauth: deps.oauth,
@@ -538,6 +594,23 @@ impl ProxyHttp for Gateway {
         if crate::path_matcher::has_dot_segments(&path) {
             warn!("拒绝含 dot-segment 的请求路径: {path}");
             session.respond_400().await?;
+            return Ok(true);
+        }
+
+        // H-D-11（PM-01）：入口 Host 规范化。OAuth redirect_uri 按请求 Host 逐字节
+        // 构造，而 Portal 回调白名单精确匹配（OAuth 2.1）——经未注册 Host（如
+        // localhost）入口登录必然 AUTH_SSO_2033 且错误页无法自救。在进入任何
+        // 业务 / OAuth 逻辑之前把用户带回规范入口（探针端点豁免，
+        // 见 `canonical_host_redirect`）。重定向发生在 dot-segment 拒绝之后，
+        // Location 的 path/query 已过入口校验。
+        if let Some(location) = canonical_host_redirect(
+            self.canonical_host.as_deref(),
+            request_host(session),
+            &path,
+            session.req_header().uri.query(),
+        ) {
+            info!("入口 Host 规范化重定向 → {location}");
+            session.respond_302_with_cookies(&location, &[]).await?;
             return Ok(true);
         }
 
@@ -1164,5 +1237,97 @@ mod tests {
         );
         assert_eq!(parse_platform_client_ip(Some("unknown")), None);
         assert_eq!(parse_platform_client_ip(None), None);
+    }
+
+    // ── H-D-11（PM-01）：入口 Host 规范化 ──────────────────────────
+    #[test]
+    fn is_probe_path_covers_health_and_metrics_exactly() {
+        assert!(is_probe_path("/healthz"));
+        assert!(is_probe_path(METRICS_PATH));
+        // 非探针路径（含形近变体）一律不豁免
+        assert!(!is_probe_path("/login"));
+        assert!(!is_probe_path("/healthz/"));
+        assert!(!is_probe_path("/health"));
+        assert!(!is_probe_path("/api/health"));
+    }
+
+    #[test]
+    fn canonical_host_redirect_is_disabled_when_unconfigured() {
+        // 未配置 → 保持既有部署行为（不重定向），零侵入
+        assert_eq!(
+            canonical_host_redirect(None, Some("localhost:19443"), "/", None),
+            None
+        );
+    }
+
+    #[test]
+    fn canonical_host_redirect_noop_when_host_matches() {
+        // 精确相等（含端口）
+        assert_eq!(
+            canonical_host_redirect(
+                Some("127.0.0.1:19443"),
+                Some("127.0.0.1:19443"),
+                "/login",
+                None
+            ),
+            None
+        );
+        // Host 大小写无关（DNS 名称大小写不敏感）
+        assert_eq!(
+            canonical_host_redirect(
+                Some("sso.example.com"),
+                Some("SSO.EXAMPLE.COM"),
+                "/dashboard",
+                None
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn canonical_host_redirects_mismatched_host_preserving_path_and_query() {
+        // PM-01 复现场景：localhost 入口 → 回规范入口，path+query 原样保留
+        assert_eq!(
+            canonical_host_redirect(
+                Some("127.0.0.1:19443"),
+                Some("localhost:19443"),
+                "/dashboard",
+                Some("page=2&sort=desc")
+            ),
+            Some("https://127.0.0.1:19443/dashboard?page=2&sort=desc".to_string())
+        );
+        // 无 query 时不产生尾随 '?'
+        assert_eq!(
+            canonical_host_redirect(Some("sso.example.com"), Some("10.0.0.5"), "/login", None),
+            Some("https://sso.example.com/login".to_string())
+        );
+        // 端口敏感：同 host 不同端口是不同入口（redirect_uri 含端口）
+        assert_eq!(
+            canonical_host_redirect(Some("127.0.0.1:19443"), Some("127.0.0.1:29443"), "/", None),
+            Some("https://127.0.0.1:19443/".to_string())
+        );
+    }
+
+    #[test]
+    fn canonical_host_redirect_exempts_probe_paths_even_with_mismatched_host() {
+        // 容器内 / K8s 探针的 Host（如 127.0.0.1:443）≠ 规范入口，
+        // 但探针端点不得被 302（重定向会让健康检查撞上不可达端口）
+        for path in [HEALTH_PATH, METRICS_PATH] {
+            assert_eq!(
+                canonical_host_redirect(Some("127.0.0.1:19443"), Some("127.0.0.1:443"), path, None),
+                None,
+                "探针端点 {path} 不得被重定向"
+            );
+        }
+    }
+
+    #[test]
+    fn canonical_host_redirect_skips_when_request_host_missing() {
+        // HTTP/1.0 等无 Host 边缘：无从比较，不做重定向
+        // （HTTP/1.1 缺 Host 已由 missing_required_host 在入口 400）
+        assert_eq!(
+            canonical_host_redirect(Some("sso.example.com"), None, "/login", None),
+            None
+        );
     }
 }

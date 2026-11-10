@@ -26,9 +26,29 @@ import type * as dropdownMenuModule from '@/components/ui/dropdown-menu';
 // Mocks
 // ============================================================
 const mockUsePathname = vi.fn();
+/** UX-22：断点自动折叠走 useSidebar().setOpen，测试据此断言 */
+const mockSetOpen = vi.fn();
 vi.mock('next/navigation', () => ({
   usePathname: (...args: unknown[]) => mockUsePathname(...args),
 }));
+
+/** jsdom 不实现 matchMedia：AppSidebar 的 ≤1024px 断点折叠依赖它 */
+function stubMatchMedia(matches: boolean) {
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    configurable: true,
+    value: vi.fn().mockImplementation((query: string) => ({
+      matches,
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  });
+}
 
 // 为了绕过 vite hoist 上下文限制，在 vi.mock 外部定义工厂函数
 // 通过 `require('react')` 获取 React.createElement
@@ -57,6 +77,7 @@ function makeSidebarMock(): { [K in keyof typeof sidebarModule]?: (props: any) =
     SidebarMenuSubItem: (p: any) => h('li', { 'data-mock': 'SidebarMenuSubItem' }, p?.children),
     SidebarMenuSubButton: (p: any) =>
       h('button', { 'data-mock': 'SidebarMenuSubButton', 'data-active': p?.isActive }, p?.children),
+    useSidebar: () => ({ setOpen: mockSetOpen, state: 'expanded', open: true, isMobile: false, openMobile: false, setOpenMobile: vi.fn(), toggleSidebar: vi.fn() }),
   };
 }
 
@@ -118,6 +139,8 @@ vi.mock(import('@/components/ui/dropdown-menu'), (): Partial<typeof dropdownMenu
 describe('AppSidebar', () => {
   beforeEach(() => {
     mockUsePathname.mockReturnValue('/dashboard');
+    mockSetOpen.mockClear();
+    stubMatchMedia(false);
   });
 
   // ── User info ─────────────────────────────────────────────
@@ -212,6 +235,19 @@ describe('AppSidebar', () => {
     render(<AppSidebar user={{ name: 'Admin' }} />);
     expect(screen.getByText('Auth-SSO')).toBeInTheDocument();
     expect(screen.getByText('Identity OS')).toBeInTheDocument();
+  });
+
+  // ── UX-22：≤1024px 自动折叠 ────────────────────────────────
+  it('视口 ≤1024px 时挂载即调用 setOpen(false) 折叠为图标栏', () => {
+    stubMatchMedia(true);
+    render(<AppSidebar user={{ name: 'Admin' }} dynamicMenus={[]} />);
+    expect(mockSetOpen).toHaveBeenCalledWith(false);
+  });
+
+  it('视口 >1024px 时不主动收起侧边栏', () => {
+    stubMatchMedia(false);
+    render(<AppSidebar user={{ name: 'Admin' }} dynamicMenus={[]} />);
+    expect(mockSetOpen).not.toHaveBeenCalled();
   });
 
 });

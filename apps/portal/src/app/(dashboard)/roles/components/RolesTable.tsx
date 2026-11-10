@@ -250,7 +250,7 @@ export default function RolesTable({ roles, pagination, initialKeyword, initialS
     { key: 'dept', header: '所属部门', className: 'hidden w-[150px] lg:table-cell' },
     { key: 'permissions', header: '权限数', className: 'hidden w-[84px] sm:table-cell' },
     { key: 'status', header: '状态', className: 'hidden w-[96px] sm:table-cell' },
-    { key: 'actions', header: '操作', className: 'w-[116px] text-right' },
+    { key: 'actions', header: '操作', className: 'w-[116px] text-right lg:w-auto' },
   ];
 
   const cardHeader = (
@@ -345,65 +345,66 @@ export default function RolesTable({ roles, pagination, initialKeyword, initialS
       <TableCell className="hidden lg:table-cell">
         <Link
           href={`/roles?deptId=${encodeURIComponent(r.deptId)}${initialSort !== 'default' ? `&sort=${initialSort}` : ''}`}
-          className="block max-w-[150px] truncate text-[13px] text-muted-foreground hover:text-primary hover:underline"
+          // UX-20：触控目标 ≥24px（h-6），此前行内链接仅 ~19px 高
+          className="inline-flex h-6 max-w-[150px] items-center truncate text-[13px] text-muted-foreground hover:text-primary hover:underline"
           title="按该部门筛选角色"
         >
           {getDeptName(r.deptId)}
         </Link>
       </TableCell>
       <TableCell className="hidden sm:table-cell">
+        {/* UX-18：权限数列统一为数字（含 0 项），不再混排「无权限」状态标签——
+            0 项用警示色 + 提示保留风险信号，状态语义由「状态」列单独承载 */}
         <Link
           href={`/roles/${r.id}/permissions?returnTo=${encodeURIComponent(currentListHref)}`}
-          aria-label={(permissionCounts[r.id] ?? 0) === 0 ? `配置 ${r.name} 的权限（无权限）` : `配置 ${r.name} 的权限（当前 ${permissionCounts[r.id] ?? 0} 项）`}
+          aria-label={(permissionCounts[r.id] ?? 0) === 0 ? `配置 ${r.name} 的权限（当前 0 项）` : `配置 ${r.name} 的权限（当前 ${permissionCounts[r.id] ?? 0} 项）`}
           title={
             (permissionCounts[r.id] ?? 0) === 0
               ? '该角色没有任何权限，绑定用户将无法登录门户；点击配置权限'
               : `配置权限（当前 ${permissionCounts[r.id] ?? 0} 项）`
           }
-          className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[12px] tabular-nums hover:bg-primary/10"
+          className={`inline-flex h-6 items-center rounded px-1.5 text-[12px] tabular-nums hover:bg-primary/10 ${
+            (permissionCounts[r.id] ?? 0) === 0 ? 'font-medium text-badge-warning-fg' : 'text-foreground'
+          }`}
         >
-          {(permissionCounts[r.id] ?? 0) === 0 ? (
-            <Badge variant="warning" size="sm">无权限</Badge>
-          ) : (
-            <span className="font-medium text-foreground">{permissionCounts[r.id]} 项</span>
-          )}
+          <span className="font-medium">{permissionCounts[r.id] ?? 0} 项</span>
         </Link>
       </TableCell>
       <TableCell className="hidden sm:table-cell">
         <Badge variant={enableStatus(r.status).variant} className="text-[11px]">{enableStatus(r.status).label}</Badge>
       </TableCell>
-      {/* 操作列：图标按钮 + 原生 title 提示，节省横宽；aria-label 保留完整语义（读屏/自动化不受影响）。 */}
+      {/* 操作列（UX-20）：lg 及以上高频操作补可见文字标签，窄屏保持图标（32×32 ≥24px 触控下限） */}
       <TableCell className="text-right">
         {r.isSystem ? (
           <PermissionGuard permission={ROLE_PERMISSIONS.ASSIGN_PERMISSION}>
-            <Button asChild variant="ghost" size="icon-sm" aria-label={`查看权限 ${r.name}`} title="查看权限（系统角色只读）">
-              <Link href={`/roles/${r.id}/permissions?returnTo=${encodeURIComponent(currentListHref)}`}><Eye className="h-4 w-4" /></Link>
+            <Button asChild variant="ghost" size="sm" className="h-8 gap-1.5 px-2" aria-label={`查看权限 ${r.name}`} title="查看权限（系统角色只读）">
+              <Link href={`/roles/${r.id}/permissions?returnTo=${encodeURIComponent(currentListHref)}`}><Eye className="h-4 w-4" /><span className="hidden lg:inline">查看权限</span></Link>
             </Button>
           </PermissionGuard>
         ) : (
           <div className="flex items-center justify-end gap-0.5">
             <PermissionGuard permission={ROLE_PERMISSIONS.UPDATE}>
-              <Button variant="ghost" size="icon-sm" aria-label={`编辑角色 ${r.name}`} title={`编辑角色 ${r.name}`} onClick={() => openEdit(r)}>
-                <Edit className="h-4 w-4" />
+              <Button variant="ghost" size="sm" className="h-8 gap-1.5 px-2" aria-label={`编辑角色 ${r.name}`} title={`编辑角色 ${r.name}`} onClick={() => openEdit(r)}>
+                <Edit className="h-4 w-4" /><span className="hidden lg:inline">编辑</span>
               </Button>
             </PermissionGuard>
             <PermissionGuard permission={ROLE_PERMISSIONS.ASSIGN_PERMISSION}>
-              <Button asChild variant="ghost" size="icon-sm" aria-label={`配置权限 ${r.name}`} title={`配置权限 ${r.name}`}>
+              <Button asChild variant="ghost" size="sm" className="h-8 gap-1.5 px-2" aria-label={`配置权限 ${r.name}`} title={`配置权限 ${r.name}`}>
                 <Link href={`/roles/${r.id}/permissions?returnTo=${encodeURIComponent(currentListHref)}`}>
-                  <KeyRound className="h-4 w-4" />
+                  <KeyRound className="h-4 w-4" /><span className="hidden lg:inline">权限</span>
                 </Link>
               </Button>
             </PermissionGuard>
             <PermissionGuard permission={ROLE_PERMISSIONS.DELETE}>
               <Button
                 variant="ghost"
-                size="icon-sm"
+                size="sm"
                 aria-label={`删除角色 ${r.name}`}
                 title={`删除角色 ${r.name}`}
-                className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                className="h-8 gap-1.5 px-2 text-destructive hover:bg-destructive/10 hover:text-destructive"
                 onClick={() => setDeleteTarget(r)}
               >
-                <Trash2 className="h-4 w-4" />
+                <Trash2 className="h-4 w-4" /><span className="hidden lg:inline">删除</span>
               </Button>
             </PermissionGuard>
           </div>

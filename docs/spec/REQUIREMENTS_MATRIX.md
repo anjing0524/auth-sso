@@ -215,7 +215,7 @@
 | **D-POLISH-003** | 审计日志页 shadcn Table + 暗黑模式 | P1 | E2E 快照（无 @req，见附录 B） | 低 | /autoplan | 双 Tab 渲染正确，暗黑模式徽章可读 |
 | **D-POLISH-004** | 登录页品牌渐变 + 圆角收敛 + 标题规范 | P2 | E2E 快照（无 @req，见附录 B） | 低 | /autoplan | 渐变背景 + 白色卡片 + 规范圆角值 |
 | **D-POLISH-005** | Command Palette (Cmd+K) + Toast 反馈 | P2 | 组件测试（`command-palette`） | 低 | /autoplan | Cmd+K 搜索过滤 + 导航跳转正常 |
-| **D-POLISH-006** | 操作入口统一 (Sheet→Dialog) + 视觉快照防线 | P2 | 组件测试 + E2E（无 @req，见附录 B） | 中 | /autoplan | CreateUserDialog 正常，无 Sheet 残留 |
+| **D-POLISH-006** | 操作入口统一 (Sheet→Dialog) + 视觉快照防线 | P2 | 组件测试 + E2E（无 @req，见附录 B） | 中 | /autoplan | 当时以 Dialog 收口；**现行形态**是长表单页面化（`users/new/page.tsx` 与 `clients/new/page.tsx`，由 `ui-architecture-contracts.test.ts` 守卫），无 Sheet 残留 |
 
 ---
 

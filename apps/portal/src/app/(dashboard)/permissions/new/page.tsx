@@ -8,9 +8,10 @@ import { PermissionGate } from '@/components/layout/permission-gate';
 import { getPermissions, getClientOptions } from '../data';
 import PermissionForm from '../permission-form';
 import { safeReturnPath } from '@/lib/safe-return';
+import { PAGE_TITLES } from '@/lib/route-titles';
 
 export const instant = false;
-export const metadata = { title: '新建权限 | Auth-SSO' };
+export const metadata = { title: `${PAGE_TITLES.NEW_PERMISSION} | Auth-SSO` };
 
 export default async function NewPermissionPage({ searchParams }: { searchParams: Promise<{ returnTo?: string; type?: string; clientId?: string }> }) {
   await connection();

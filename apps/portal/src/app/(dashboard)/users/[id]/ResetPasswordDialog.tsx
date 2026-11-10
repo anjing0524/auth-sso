@@ -75,7 +75,7 @@ export function ResetPasswordDialog({
       <DialogTrigger render={<Button variant="outline" />}>
         <KeyRound className="h-4 w-4" /> 重置密码
       </DialogTrigger>
-      <DialogContent>
+      <DialogContent showCloseButton={false}>
         <DialogHeader>
           <DialogTitle>重置用户密码</DialogTitle>
           <DialogDescription>
@@ -90,6 +90,7 @@ export function ResetPasswordDialog({
             <Label htmlFor="reset-password">新密码</Label>
             <Input
               id="reset-password"
+              name="newPassword"
               type="password"
               autoComplete="new-password"
               placeholder="至少 10 位，含大写/小写字母、数字、特殊字符中的至少三类"
@@ -104,6 +105,7 @@ export function ResetPasswordDialog({
             <Label htmlFor="reset-password-confirm">确认新密码</Label>
             <Input
               id="reset-password-confirm"
+              name="confirmPassword"
               type="password"
               autoComplete="new-password"
               placeholder="再次输入新密码"

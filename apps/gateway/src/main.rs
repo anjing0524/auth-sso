@@ -129,6 +129,10 @@ fn main() -> anyhow::Result<()> {
         portal_upstreams.len(),
         portal_upstreams
     );
+    // H-D-11（PM-01）：规范入口 Host 未配置时不输出（默认关闭，保持既有行为）
+    if let Some(ref canonical) = config.gateway.canonical_host {
+        info!("  规范入口 Host（非规范 Host 将 302 到 https://{canonical}）");
+    }
     info!("  路由表 ({} 条 upstream):", upstream_routes.len());
     for uc in upstream_routes {
         info!("    {} → {}", uc.name, uc.addresses);
@@ -175,6 +179,7 @@ fn main() -> anyhow::Result<()> {
             upstream_scheme: config.gateway.upstream_scheme.clone(),
             upstream_server_name: config.gateway.upstream_server_name.clone(),
             upstream_host_header: config.gateway.upstream_host_header.clone(),
+            canonical_host: config.gateway.canonical_host.clone(),
             trust_platform_client_ip: config.gateway.external_tls_termination,
             rate_limit: config.gateway.rate_limit.clone(),
             oauth: config.gateway.oauth.clone(),

@@ -173,27 +173,57 @@ Vercel 单镜像变体仅作为平台托管目标保留，不替代上述自托�
 
 ## 文档指引
 
+> 完整分类、职责与权威性以 [`docs/README.md`](docs/README.md)（文档地图）为准。
+> 以下按交付职责分组，只放入口；**目录本身即清单**的（ADR / research / releases / agents）给目录链接。
+
+**工程约定（动手前必读）**
+
 - [文档地图 (docs/README.md)](docs/README.md) — 先看这里：每份文档的职责与权威性
 - [工程约定 (AGENTS.md)](AGENTS.md) — 项目结构、环境、测试体系与门禁规则（唯一出处）
 - [编码标准 (docs/coding-standards.md)](docs/coding-standards.md) — 机器能判的交给守卫，这里只收判断题
+- [领域词汇表 (docs/glossary.md)](docs/glossary.md) — 领域概念的唯一真相源
+
+**A. 需求与规格**
+
 - [产品需求 (docs/spec/PRD.md)](docs/spec/PRD.md) — 核心功能、业务范围与用户模型
 - [系统架构 (docs/spec/ARCHITECTURE.md)](docs/spec/ARCHITECTURE.md) — 系统组成、技术选型、认证与 SSO 流程
 - [架构约束指南 (docs/spec/ARCHITECTURE_CONSTRAINTS.md)](docs/spec/ARCHITECTURE_CONSTRAINTS.md) — 代码规范、分层约束与 Code Review 红线
 - [数据库设计 (docs/spec/DATABASE.md)](docs/spec/DATABASE.md) — 数据模型、存储落位与物理规范
 - [接口契约 (docs/spec/API.md)](docs/spec/API.md) — 核心接口清单与字段级契约
-- [第三方集成说明 (docs/spec/third-party-integration.md)](docs/spec/third-party-integration.md) — 企微、飞书、钉钉等三方登录集成规范
+- [子系统接入规约 (docs/spec/third-party-integration.md)](docs/spec/third-party-integration.md) — 自研子系统 / 受信任第三方应用基于统一网关鉴权的接入设计（边缘鉴权 + 全局缓存）
 - [需求追踪矩阵 (docs/spec/REQUIREMENTS_MATRIX.md)](docs/spec/REQUIREMENTS_MATRIX.md) — 需求→验收标准全覆盖
-- [架构决策记录 (docs/adr/)](docs/adr/) — ADR-001～032（共 32 篇）：与代码冲突时先信代码，再查这里的理由
+- [UI/UX 规范 (docs/spec/UX-GUIDELINES.md)](docs/spec/UX-GUIDELINES.md) — 任务模型、设计原则、逐页要求矩阵
+- [UX 量化基线 (docs/spec/UX-METRICS.md)](docs/spec/UX-METRICS.md) — 每轮改动的对比基准
+
+**B. 架构决策与演进**
+
+- [架构决策记录 (docs/adr/)](docs/adr/) — ADR-001～033（共 33 篇）：与代码冲突时先信代码，再查这里的理由
 - [里程碑与取舍 (docs/roadmap.md)](docs/roadmap.md) — 变更记录（按时间倒序）
-- [领域词汇表 (docs/glossary.md)](docs/glossary.md) — 领域概念的唯一真相源
-- [接入验证指南 (docs/INTEGRATION_GUIDE.md)](docs/INTEGRATION_GUIDE.md) — Gateway 代理模式与子应用接入
+- [技术调研笔记 (docs/research/)](docs/research/) — OIDC/OAuth 2.1、Pingora 网关、全仓假绿普查
+
+**C. 实现与设计规范**
+
 - [Portal 架构规范 (docs/portal-architecture-guidelines.md)](docs/portal-architecture-guidelines.md) — 分层、组件模式与 Next.js 16 适配
-- [Docker 构建 / 部署 / 验收 (docs/docker.md)](docs/docker.md) — 唯一出处
-- [生产运维手册 (docs/operations.md)](docs/operations.md) — 备份恢复、故障处置、交付验收证据
-- [商用就绪清单 (docs/commercial-readiness.md)](docs/commercial-readiness.md) — 交付判定、客户验收清单、已知边界
-- [脚本索引 (docs/scripts.md)](docs/scripts.md) — `docker/`、`e2e/`、`ci/`、`bench/` 的职责与归属
-- [CI 工作流索引 (docs/ci.md)](docs/ci.md) — 触发文件 / 类别文件分类与命令对应
 - [设计规范 (docs/design-system.md)](docs/design-system.md) — UI/UX 规范与品牌定义
+
+**D. 构建、部署与运行**
+
+- [本地开发 (docs/local-development.md)](docs/local-development.md) — 原生启动 `pnpm dev`
+- [Docker 构建 / 部署 / 验收 (docs/docker.md)](docs/docker.md) — 唯一出处
+- [脚本索引 (docs/scripts.md)](docs/scripts.md) — `scripts/` 各子目录的职责与归属
+- [CI 工作流索引 (docs/ci.md)](docs/ci.md) — 触发文件 / 类别文件分类与命令对应
+- [生产运维手册 (docs/operations.md)](docs/operations.md) — 备份恢复、故障处置、交付验收证据
+- [接入验证指南 (docs/INTEGRATION_GUIDE.md)](docs/INTEGRATION_GUIDE.md) — Gateway 代理模式与子应用接入
+
+**E. 交付与验收**
+
+- [商用就绪清单 (docs/commercial-readiness.md)](docs/commercial-readiness.md) — 交付判定、客户验收清单、已知边界
+- [版本发布记录 (docs/releases/)](docs/releases/) — 本次交付、验证证据、已知边界、回滚
+- [AI 视觉探索性测试 (docs/ai-visual-testing.md)](docs/ai-visual-testing.md) — Midscene 试点，非阻断
+
+**F. 工程配置**
+
+- [agent 技能配置 (docs/agents/)](docs/agents/) — issue tracker · triage 标签 · domain docs 三份仓库级配置
 
 ## 安全提醒
 

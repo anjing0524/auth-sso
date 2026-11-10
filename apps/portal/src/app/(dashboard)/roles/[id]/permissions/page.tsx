@@ -15,11 +15,12 @@ import { getRoleById } from '../../data';
 import { isUuid } from '@/lib/uuid';
 import { safeReturnPath } from '@/lib/safe-return';
 import { PermissionGate } from '@/components/layout/permission-gate';
+import { PAGE_TITLES } from '@/lib/route-titles';
 
 import RolePermissionsPage from './permissions-client';
 
 export const instant = false;
-export const metadata = { title: '配置角色权限 | Auth-SSO' };
+export const metadata = { title: `${PAGE_TITLES.ROLE_PERMISSIONS} | Auth-SSO` };
 
 interface PageProps {
   params: Promise<{ id: string }>;
