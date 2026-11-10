@@ -518,8 +518,10 @@ describe('UX-17 部门批量移动动作化', () => {
 
     await user.click(screen.getByRole('button', { name: '批量移动…' }));
 
-    // 弹窗标题带选中数量（技术部/前端组为可移动部门被全选）
-    expect(await screen.findByText('移动 2 个部门')).toBeInTheDocument();
+    // 标题按「顶层移动项」计数：技术部与前端组被全选，子部门随父级移动，只算 1 项
+    expect(await screen.findByText('移动 1 个部门')).toBeInTheDocument();
+    // 弹窗打开时背景被 inert/aria-hidden，先关闭弹窗再检查工具栏出口
+    await user.click(screen.getByRole('button', { name: '取消' }));
     // 选中后工具栏出现「取消选择」出口
     expect(screen.getByRole('button', { name: '取消选择' })).toBeInTheDocument();
   });
