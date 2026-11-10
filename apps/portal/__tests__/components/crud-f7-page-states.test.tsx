@@ -132,11 +132,13 @@ describe('UX-23 — 窄屏用户列表信息补全', () => {
     render(<UserTable users={[USER_ROW]} pagination={{ ...PAGINATION, total: 1, totalPages: 1 }} />);
 
     // md:hidden 精简行：部门 · N 个角色 · 创建于 YYYY-MM-DD（零填充格式见 UX-14）
-    const meta = screen.getByText(/个角色/);
-    expect(meta.textContent).toContain('总公司');
-    expect(meta.textContent).toContain('1 个角色');
-    expect(meta.textContent).toContain('创建于 2026-01-01');
-    expect(meta.className).toContain('md:hidden');
+    // 定位精简行本身：桌面列的角色 Badge 同样含「个角色」，用唯一锚点「创建于」再取父级 p
+    const meta = screen.getByText(/创建于/).closest('p');
+    expect(meta).not.toBeNull();
+    expect(meta!.textContent).toContain('总公司');
+    expect(meta!.textContent).toContain('1 个角色');
+    expect(meta!.textContent).toContain('创建于 2026-01-01');
+    expect(meta!.className).toContain('md:hidden');
   });
 
   it('窄屏操作入口是带「操作」文字的按钮（非纯「…」图标）', () => {

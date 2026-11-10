@@ -473,8 +473,9 @@ describe('U-PRM03/U-G11 术语与 aria-label', () => {
 
   it('permissions 表单页标题使用统一术语（接口/页面/目录 + 权限）', () => {
     render(<PermissionForm mode="create" menuOptions={[]} />);
-    // 默认类型 API → 标题「新建接口权限」；不使用旧术语「菜单项」
-    expect(screen.getByRole('heading', { name: '新建接口权限' })).toBeInTheDocument();
+    // UX-07：H1 与面包屑末级同名「新建权限」；类型术语移到描述，避免末级随表单类型漂移
+    expect(screen.getByRole('heading', { name: '新建权限' })).toBeInTheDocument();
+    expect(screen.getByText(/新建接口权限/)).toBeInTheDocument();
     expect(screen.queryByText('新建菜单项')).not.toBeInTheDocument();
   });
 });

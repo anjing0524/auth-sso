@@ -510,7 +510,8 @@ export default function DepartmentTree({ departments, deletionStats = {}, autoOp
       <Dialog open={moveOpen} onOpenChange={setMoveOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><MoveRight className="h-4 w-4 text-primary" /> 移动 {moveCount} 个部门</DialogTitle>
+            {/* 标题保持单一文本节点：读屏读出完整「移动 N 个部门」，而不是被数量打断的碎片 */}
+            <DialogTitle className="flex items-center gap-2"><MoveRight className="h-4 w-4 text-primary" />{`移动 ${moveCount} 个部门`}</DialogTitle>
             <DialogDescription>
               选择新的父部门。已选中的子部门会随父级一起移动，无需单独勾选；目标列表已排除选中部门及其子部门、以及已禁用部门。
             </DialogDescription>
